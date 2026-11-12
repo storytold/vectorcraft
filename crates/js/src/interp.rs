@@ -9,7 +9,8 @@
 //! Before each instruction the interpreter takes one unit of fuel, checks the interrupt flag and,
 //! when the heap has grown past its threshold, collects garbage. Running out of fuel, the heap
 //! limit, the frame limit, the re-entry limit and the interrupt flag each end the run with an
-//! [`Abrupt::Limit`] that unwinds every frame without running catch or finally blocks.
+//! [`Abrupt::Limit`] that unwinds every frame without running catch or finally blocks. Source
+//! compiled during a run takes a unit of fuel for each code unit before it is parsed.
 //!
 //! Collection runs only between instructions. An operation that may run JavaScript in the middle
 //! keeps its operands on the operand stack until it is done, so everything it holds is reachable
@@ -26,6 +27,7 @@ use crate::heap::{
     ArgMap, Binding, CONFIGURABLE, Class, ENUMERABLE, ENV_BYTES, Env, EnvId, ForIn, Func, HIDDEN, Heap, Key, NativeKind, OBJECT_BYTES, OPEN, ObjId,
     Object, PROP_BYTES, Prop, PropMap, ROPE_BYTES, Roots, WRITABLE, code_bytes, key, string_bytes,
 };
+use crate::string_builtins::flat_charged;
 use crate::value::{Str, Value, array_index, index_key, number_to_str, string_to_number, to_int32, to_uint32};
 use crate::{LimitKind, Limits, Options};
 
@@ -198,10 +200,18 @@ pub(crate) struct Interp {
     pub(crate) held_bytes: usize,
     /// Why installing the built-ins failed; a realm with this set runs no script.
     pub(crate) install_error: Option<String>,
+    /// `File` and `Folder`, once a host has added them ([`crate::Realm::define_file_classes`]).
+    pub(crate) files: Option<crate::file_classes::Classes>,
     /// The clock and time zone `Date` reads.
     pub(crate) date_host: crate::date_builtins::DateHost,
     /// The bytes native code holds outside the heap's cells through [`HeldBytes`].
     pub(crate) held: Rc<HeldCount>,
+    /// Bytes of the copies [`Self::get_own_property`] made flattening the rope of a String
+    /// object, which the heap's total adds before the next limit check.
+    flattened: std::cell::Cell<usize>,
+    /// Fuel for the units those copies took and the rope nodes it read in place, which the next
+    /// step takes.
+    pub(crate) flattened_fuel: std::cell::Cell<u64>,
     /// The global code's default XML namespace URI (ECMA-357 section 12.1).
     pub(crate) xml_default_uri: Key,
     /// Set by the host to end the current slice of a resumable run at the next safe point.
@@ -230,6 +240,13 @@ pub(crate) struct Interp {
     /// runs. An entry whose slot no longer holds its exception belongs to a block that `break`,
     /// `continue` or `return` left, and [`Self::drop_left_finally_marks`] removes it.
     pub(crate) finally_marks: Vec<(ObjId, u32, usize)>,
+    /// Where the exceptions `finally` blocks are running for were raised, innermost last, each with
+    /// the stack slot that holds the exception while the block runs. The block's end throws the
+    /// exception on from that site. An entry whose slot is at or above the stack's length belongs to
+    /// a block that was left, and [`Self::drop_left_finally_sites`] removes it at each `Jump`, each
+    /// return and each collection. [`Self::unwind`] removes the entries at or above a handler's slot
+    /// before it adds one, so the slots rise and the list is never longer than the stack.
+    pub(crate) finally_sites: Vec<(ThrowSite, usize)>,
     /// The mark of the host error the last run ended with.
     pub(crate) error_mark: Option<u32>,
     /// [`crate::bytecode::Source::strict_writes`] for the scripts the realm runs.
@@ -291,6 +308,12 @@ pub(crate) const MAX_APPLY_ARGS: usize = 1 << 16;
 /// The estimated bytes of a name's entries in the list and the set `for-in` builds.
 const KEY_ENTRY_BYTES: usize = 32;
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: the [`Interp::finally_sites`] entries that leaving a block or a frame has looked at.
+    pub(crate) static SITE_CHECKS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 /// The estimated bytes of the index names `0` to `len - 1` while `for-in` lists them.
 fn index_keys_bytes(len: usize) -> usize {
     let mut total = 0usize;
@@ -305,13 +328,21 @@ fn index_keys_bytes(len: usize) -> usize {
     total
 }
 
-/// A seed for `Math.random` that differs from realm to realm, from the standard library's
-/// randomly keyed hasher; never zero.
+/// A seed for `Math.random` that differs from realm to realm and from run to run, from the OS
+/// random source (the browser's crypto on the web), or the standard library's randomly keyed
+/// hasher when that fails; never zero.
 fn random_seed() -> u64 {
+    random_seed_from(getrandom::u64())
+}
+
+/// [`random_seed`] from what the OS random source returned.
+pub(crate) fn random_seed_from(os: Result<u64, getrandom::Error>) -> u64 {
     use std::hash::{BuildHasher, Hasher};
-    let mut h = std::collections::hash_map::RandomState::new().build_hasher();
-    h.write_u64(0x9e37_79b9_7f4a_7c15);
-    h.finish() | 1
+    os.unwrap_or_else(|_| {
+        let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+        h.write_u64(0x9e37_79b9_7f4a_7c15);
+        h.finish()
+    }) | 1
 }
 
 /// The estimated bytes of a binding or property named by `len` code units.
@@ -423,8 +454,11 @@ impl Interp {
             join_stack: Vec::new(),
             held_bytes: 0,
             install_error: None,
+            files: None,
             date_host: crate::date_builtins::DateHost::default(),
             held: Rc::default(),
+            flattened: std::cell::Cell::new(0),
+            flattened_fuel: std::cell::Cell::new(0),
             xml_default_uri: Rc::from(Vec::new()),
             pause: Rc::default(),
             in_slice: false,
@@ -437,6 +471,7 @@ impl Interp {
             error_tag: crate::realm::UNKNOWN_SOURCE,
             thrown_mark: None,
             finally_marks: Vec::new(),
+            finally_sites: Vec::new(),
             error_mark: None,
             strict_writes: false,
         };
@@ -543,6 +578,7 @@ impl Interp {
 
     fn tick(&mut self) -> JsResult<()> {
         self.use_fuel()?;
+        crate::regexp_vm::use_fuel_n(self, self.flattened_fuel.replace(0))?;
         self.settle_held();
         if self.heap.bytes > self.gc_threshold {
             self.collect_garbage();
@@ -569,10 +605,12 @@ impl Interp {
         Ok(())
     }
 
-    /// Takes the bytes that dropped [`HeldBytes`] released off the heap's total.
+    /// Takes the bytes that dropped [`HeldBytes`] released off the heap's total, and adds the
+    /// bytes of the ropes [`Self::get_own_property`] flattened.
     fn settle_held(&mut self) {
         let released = self.held.released.replace(0);
-        self.heap.bytes = self.heap.bytes.saturating_sub(released);
+        let flattened = self.flattened.replace(0);
+        self.heap.bytes = self.heap.bytes.saturating_sub(released).saturating_add(flattened);
     }
 
     /// Collects garbage now and sets when the next collection runs.
@@ -592,6 +630,22 @@ impl Interp {
         Ok(())
     }
 
+    /// Prepares for parsing `units` code units of source at run time: takes a unit of fuel for
+    /// each code unit and checks that the source text fits in the heap, before any of it is
+    /// flattened, parsed or compiled. Running out of fuel uses up what was left.
+    pub(crate) fn prepare_source(&mut self, units: usize) -> JsResult<()> {
+        let fuel = u64::try_from(units).unwrap_or(u64::MAX);
+        if fuel > self.fuel {
+            self.fuel = 0;
+            return Err(Abrupt::Limit(LimitKind::Fuel));
+        }
+        self.fuel -= fuel;
+        if self.interrupt.load(Ordering::Relaxed) {
+            return Err(Abrupt::Limit(LimitKind::Interrupted));
+        }
+        self.reserve_heap(string_bytes(units))
+    }
+
     /// Removes the [`Self::finally_marks`] entries of `finally` blocks that `break`, `continue` or
     /// `return` left: those whose stack slot no longer holds their exception.
     fn drop_left_finally_marks(&mut self) {
@@ -599,8 +653,22 @@ impl Interp {
         self.finally_marks.retain(|&(id, _, slot)| matches!(stack.get(slot), Some(Value::Object(o)) if *o == id));
     }
 
+    /// Removes the [`Self::finally_sites`] entries whose stack slot is at or above `len`: those of
+    /// `finally` blocks that were left. The slots rise along the list, so only its end is looked at.
+    fn drop_left_finally_sites(&mut self, len: usize) {
+        while let Some(&(_, slot)) = self.finally_sites.last() {
+            #[cfg(test)]
+            SITE_CHECKS.with(|c| c.set(c.get() + 1));
+            if slot < len {
+                break;
+            }
+            self.finally_sites.pop();
+        }
+    }
+
     pub(crate) fn collect_garbage(&mut self) {
         self.drop_left_finally_marks();
+        self.drop_left_finally_sites(self.stack.len());
         let mut roots = Roots::default();
         roots.values.extend(self.stack.iter());
         roots.values.extend(self.temp_roots.iter());
@@ -608,6 +676,7 @@ impl Interp {
         roots.values.push(&self.last_error);
         roots.values.push(&self.passing);
         roots.objects.extend(self.finally_marks.iter().map(|&(id, _, _)| id));
+        roots.codes.extend(self.finally_sites.iter().map(|((code, _), _)| &**code));
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
@@ -618,10 +687,12 @@ impl Interp {
         }
         roots.objects.push(self.global);
         roots.objects.extend(self.intrinsics.all());
+        roots.objects.extend(self.files.iter().flat_map(crate::file_classes::Classes::objects));
         roots.envs.push(self.global_env);
         self.heap.collect(&roots);
         // The collection counts the live total again, so bytes already released are not in it.
         self.held.released.set(0);
+        self.flattened.set(0);
         self.heap.bytes = self.heap.bytes.saturating_add(self.held_bytes).saturating_add(self.held.now.get());
     }
 
@@ -718,11 +789,15 @@ impl Interp {
                 }
                 self.stack.truncate(target_len);
                 self.drop_left_finally_marks();
+                self.drop_left_finally_sites(target_len);
                 if let (Some(mark), false, Value::Object(id)) = (self.thrown_mark.take(), caught, &v) {
                     self.finally_marks.push((*id, mark, target_len));
                 }
                 self.stack.push(v);
-                self.throw_site = None;
+                let site = self.throw_site.take();
+                if let (false, Some(site)) = (caught, site) {
+                    self.finally_sites.push((site, target_len));
+                }
                 return Ok(());
             }
             let Some(frame) = self.frames.pop() else { return Err(Abrupt::Throw(v)) };
@@ -752,6 +827,8 @@ impl Interp {
     fn return_value(&mut self, v: Value) -> JsResult<Option<Value>> {
         let Some(frame) = self.frames.pop() else { return internal("return without a frame") };
         self.stack.truncate(frame.base);
+        // A `return` in a finally block leaves the block, and the value takes its exception's slot.
+        self.drop_left_finally_sites(frame.base);
         let v = match frame.construct {
             Some(o) if !matches!(v, Value::Object(_)) => Value::Object(o),
             _ => v,
@@ -838,7 +915,11 @@ impl Interp {
             Op::New(n) => self.op_new(n),
             Op::Binary(b) => self.op_binary(b),
             Op::Neg | Op::Plus | Op::BitNot | Op::Not | Op::Typeof | Op::ToNumber => self.op_unary(op),
-            Op::Jump(t) => self.jump_to(t),
+            Op::Jump(t) => {
+                // `break` and `continue` leave a `finally` block by popping its exception and jumping.
+                self.drop_left_finally_sites(self.stack.len());
+                self.jump_to(t)
+            }
             Op::JumpIfFalse(t) | Op::JumpIfTrue(t) => self.op_branch(t, matches!(op, Op::JumpIfTrue(_)), false),
             Op::JumpIfFalseKeep(t) | Op::JumpIfTrueKeep(t) => self.op_branch(t, matches!(op, Op::JumpIfTrueKeep(_)), true),
             Op::Throw => {
@@ -875,11 +956,12 @@ impl Interp {
             Op::XmlEscape(kind) => self.op_xml_escape(kind),
             Op::XmlLiteral { parts, list } => self.op_xml_literal(parts, list),
             Op::XmlScopeGet => self.op_xml_scope_get(),
+            Op::XmlScopeRef => self.op_xml_scope_ref(),
             Op::XmlFilterStart => self.op_xml_filter_start(),
             Op::XmlFilterNext(t) => self.op_xml_filter_next(t),
             Op::XmlFilterTest => self.op_xml_filter_test(),
             Op::XmlFilterEnd => self.op_xml_filter_end(),
-            Op::ForEachValue => self.op_for_each_value(),
+            Op::ForEachValue(n) => self.op_for_each_value(n as usize),
             Op::SetDefaultNamespace => self.op_set_default_namespace(),
             Op::Return | Op::ReturnCompletion => internal("return reached the dispatcher"),
         }
@@ -944,6 +1026,11 @@ impl Interp {
             {
                 self.thrown_mark = self.finally_marks.get(i).map(|&(_, mark, _)| mark);
                 self.finally_marks.truncate(i);
+            }
+            let slot = self.stack.len();
+            if let Some(i) = self.finally_sites.iter().rposition(|&(_, s)| s == slot) {
+                self.throw_site = self.finally_sites.get(i).map(|(site, _)| site.clone());
+                self.finally_sites.truncate(i);
             }
             return Err(Abrupt::Throw(v));
         }
@@ -1161,7 +1248,33 @@ impl Interp {
                 if let Some(i) = array_index(k)
                     && (i as usize) < s.len()
                 {
-                    let unit = s.flat().get(i as usize).copied().unwrap_or(0);
+                    let unit = if s.is_rope() {
+                        let owed = self.flattened_fuel.get();
+                        let flattened = self.flattened.get().saturating_add(string_bytes(s.len()));
+                        if self.heap.bytes.saturating_add(flattened) > self.limits.heap_bytes {
+                            // The copy does not fit without a collection, which needs `&mut self`:
+                            // the unit is read along the rope instead, a unit of fuel per node.
+                            let Some((unit, visited)) = s.unit_at(i as usize, self.fuel.saturating_sub(owed)) else {
+                                return Err(Abrupt::Limit(LimitKind::Fuel));
+                            };
+                            self.flattened_fuel.set(owed.saturating_add(visited));
+                            unit
+                        } else {
+                            // Flattening copies the units. The run ends here when the fuel for
+                            // the copy is not left; otherwise the next step takes it, and the
+                            // next limit check adds the copy's bytes.
+                            let fuel = owed.saturating_add((s.len() / crate::string_builtins::UNITS_PER_FUEL) as u64 + 1);
+                            if fuel > self.fuel {
+                                return Err(Abrupt::Limit(LimitKind::Fuel));
+                            }
+                            self.flattened_fuel.set(fuel);
+                            self.flattened.set(flattened);
+                            s.flat().get(i as usize).copied()
+                        }
+                    } else {
+                        s.flat().get(i as usize).copied()
+                    }
+                    .unwrap_or(0);
                     return Ok(Some(Prop::Data { value: Value::String(Str::from_units(vec![unit])), flags: ENUMERABLE }));
                 }
             }
@@ -1238,7 +1351,7 @@ impl Interp {
             if let Some(i) = array_index(k)
                 && (i as usize) < s.len()
             {
-                let unit = s.flat().get(i as usize).copied().unwrap_or(0);
+                let unit = flat_charged(self, s)?.get(i as usize).copied().unwrap_or(0);
                 return Ok(Value::String(Str::from_units(vec![unit])));
             }
         }
@@ -2345,7 +2458,8 @@ impl Interp {
         };
         let strict = self.strict();
         self.check_source_units(s.len()).map_err(|e| self.compile_error_to_abrupt(e))?;
-        let units = s.flat();
+        self.prepare_source(s.len())?;
+        let units = self.flat_reserved(s)?;
         let code = self.compile_source(&units, strict, CodeKind::Eval).map_err(|e| self.compile_error_to_abrupt(e))?;
         self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES))?;
         let frame = self.frame()?;
@@ -2510,7 +2624,7 @@ impl Interp {
             Value::Null => 0.0,
             Value::Bool(b) => f64::from(u8::from(*b)),
             Value::Number(n) => *n,
-            Value::String(s) => string_to_number(&s.flat()),
+            Value::String(s) => string_to_number(&flat_charged(self, s)?),
             Value::Object(_) => {
                 let p = self.to_primitive(v, Hint::Number)?;
                 return self.to_number(&p);
@@ -2544,17 +2658,26 @@ impl Interp {
     #[allow(clippy::wrong_self_convention)]
     pub(crate) fn to_key(&mut self, v: &Value) -> JsResult<Key> {
         match v {
-            Value::String(s) => {
-                let rope = s.is_rope();
-                let flat = s.flat();
-                if rope {
-                    self.heap.bytes += string_bytes(flat.len());
-                }
-                Ok(flat)
-            }
+            Value::String(s) => self.flat_reserved(s),
             Value::Number(n) if *n >= 0.0 && *n < 4_294_967_295.0 && n.fract() == 0.0 => Ok(index_key(*n as u32)),
-            _ => Ok(self.to_str(v)?.flat()),
+            _ => {
+                let s = self.to_str(v)?;
+                self.flat_reserved(&s)
+            }
         }
+    }
+
+    /// The code units of `s`. Flattening a rope makes a copy of its units, so for a rope that
+    /// copy's bytes are reserved and added to the heap first, without taking fuel. The rope stays
+    /// rooted while the copy is reserved; everything else the caller still needs must be
+    /// reachable from the roots.
+    fn flat_reserved(&mut self, s: &Str) -> JsResult<Key> {
+        if s.is_rope() {
+            let bytes = string_bytes(s.len());
+            self.rooted(&[Value::String(s.clone())], |i| i.reserve_heap(bytes))?;
+            self.heap.bytes = self.heap.bytes.saturating_add(bytes);
+        }
+        Ok(s.flat())
     }
 
     /// ToObject (section 9.9).
@@ -2679,7 +2802,11 @@ impl Interp {
             (self.to_primitive(x, Hint::Number)?, py)
         };
         if let (Value::String(a), Value::String(b)) = (&px, &py) {
-            return Ok(Some(*a.flat() < *b.flat()));
+            // Both stay rooted, so the first copy is still counted while the second is made.
+            return self.rooted(&[px.clone(), py.clone()], |i| {
+                let (a, b) = (flat_charged(i, a)?, flat_charged(i, b)?);
+                Ok(Some(*a < *b))
+            });
         }
         let nx = self.to_number(&px)?;
         let ny = self.to_number(&py)?;
@@ -2704,7 +2831,9 @@ impl Interp {
                 | (Value::String(_), Value::String(_))
                 | (Value::Bool(_), Value::Bool(_))
                 | (Value::Object(_), Value::Object(_)) => return Ok(strict_eq(&x, &y)),
-                (Value::Number(n), Value::String(s)) | (Value::String(s), Value::Number(n)) => return Ok(*n == string_to_number(&s.flat())),
+                (Value::Number(n), Value::String(s)) | (Value::String(s), Value::Number(n)) => {
+                    return Ok(*n == string_to_number(&flat_charged(self, s)?));
+                }
                 (Value::Bool(v), _) => x = Value::Number(f64::from(u8::from(*v))),
                 (_, Value::Bool(v)) => y = Value::Number(f64::from(u8::from(*v))),
                 (Value::Number(_) | Value::String(_), Value::Object(_)) => y = self.to_primitive(&y, Hint::Default)?,

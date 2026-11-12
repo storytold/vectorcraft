@@ -88,7 +88,7 @@ fn dublin_core(doc: &Document) -> Vec<(&'static str, String)> {
     let info = &doc.metadata;
     let mut terms = vec![("format", "image/svg+xml".to_string())];
     let created = info.created.map(vectorcraft_doc::metadata::iso8601).unwrap_or_default();
-    let fields = [("title", doc.title.as_str()), ("creator", info.author.as_str()), ("description", info.description.as_str())];
+    let fields = [("title", doc.info_title()), ("creator", info.author.as_str()), ("description", info.description.as_str())];
     let rights = [("rights", info.copyright_notice.as_str()), ("rights", info.copyright_url.as_str()), ("date", created.as_str())];
     let keywords = info.keywords.iter().map(|k| ("subject", k.as_str()));
     terms.extend(fields.into_iter().chain(keywords).chain(rights).filter(|(_, v)| !v.trim().is_empty()).map(|(k, v)| (k, v.to_string())));
@@ -170,6 +170,10 @@ impl Writer<'_> {
         }
         let mut named: Vec<(NodeId, String)> = Vec::new();
         self.doc.walk(|n| {
+            // Ruler guides are not written, so their names reserve no id.
+            if n.is_ruler_guide() {
+                return;
+            }
             if let Some(name) = &n.name {
                 named.push((n.id, sanitize_id(name)));
             }

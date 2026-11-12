@@ -18,8 +18,8 @@ use super::create::{add_look, insert_look};
 use super::newart::NewArt;
 use super::pathops::{Beside, remove_each};
 use super::{
-    CommandSpec, Result, Session, bad, check_numbers, cmd, f64_or, has_anchors, has_doc, has_selection, id_param, index, number_or, ok, str_param,
-    switch_or,
+    CommandSpec, Result, Session, bad, check_numbers, cmd, f64_or, has_anchors, has_doc, has_selection, index, number_or, object_param, ok,
+    str_param, switch_or,
 };
 use crate::EngineError;
 

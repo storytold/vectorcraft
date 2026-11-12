@@ -124,6 +124,35 @@ fn adjust_balance_refuses_a_channel_that_is_not_a_number() {
     assert_eq!(fill_of(&s, a).to_hex(), "#b38080");
 }
 
+/// The Edit Colors commands refuse a scope switch, `convert` or `mode` of the wrong type, which they
+/// would otherwise replace with the default: `{"fill": "false"}` recolored the fills.
+#[test]
+fn edit_colors_refuse_a_param_of_the_wrong_type() {
+    let mut s = session();
+    let a = rect(&mut s, json!("#ff0000"));
+    let undo = s.doc().unwrap().history.undo.len();
+    let cases = [
+        ("edit.colors.invert", json!({"fill": "false"}), "`fill` must be true or false"),
+        ("edit.colors.toCMYK", json!({"stroke": 0}), "`stroke` must be true or false"),
+        ("edit.colors.toGrayscale", json!({"fill": "false"}), "`fill` must be true or false"),
+        ("edit.colors.toRGB", json!({"includeImages": "no"}), "`includeImages` must be true or false"),
+        ("edit.colors.saturate", json!({"intensity": 50, "includePatterns": 1}), "`includePatterns` must be true or false"),
+        ("edit.colors.adjustBalance", json!({"r": 20, "fill": "false"}), "`fill` must be true or false"),
+        ("edit.colors.adjustBalance", json!({"tint": 20, "convert": "true"}), "`convert` must be true or false"),
+        ("edit.colors.adjustBalance", json!({"tint": 20, "fill": "false"}), "`fill` must be true or false"),
+        ("edit.colors.adjustBalance", json!({"mode": 1, "r": 20}), "`mode` must be a string"),
+    ];
+    for (id, p, want) in cases {
+        let e = s.execute(id, &p).unwrap_err().to_string();
+        assert!(e.contains(want), "{id} {p}: {e}");
+    }
+    assert_eq!(fill_of(&s, a).to_hex(), "#ff0000");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    // A null is read as a switch left out.
+    s.execute("edit.colors.invert", &json!({"fill": null, "stroke": null})).unwrap();
+    assert_eq!(fill_of(&s, a).to_hex(), "#00ffff");
+}
+
 // ---------- meshes, images and patterns ----------
 
 fn mesh_colors(s: &Session, id: NodeId) -> Vec<Color> {

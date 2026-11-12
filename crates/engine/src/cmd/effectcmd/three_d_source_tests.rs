@@ -4,7 +4,7 @@ use vectorcraft_doc::{NodeId, NodeKind};
 
 use crate::Session;
 
-const TYPES: [&str; 5] = ["threeD.extrude", "threeD.classicExtrude", "threeD.inflate", "threeD.rotate", "threeD.revolve"];
+const TYPES: [&str; 6] = ["threeD.extrude", "threeD.classicExtrude", "threeD.inflate", "threeD.rotate", "threeD.classicRotate", "threeD.revolve"];
 
 fn id_of(v: &Value) -> NodeId {
     NodeId(v["id"].as_u64().unwrap())

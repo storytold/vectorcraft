@@ -166,14 +166,14 @@ pub fn check(name: &str, bytes: &[u8], loader: Option<&mut dyn Loader>, limits: 
     if invalid {
         acc.problem(report::NOT_UTF8, None, None, None);
     }
-    let text = analyze::unescaped(text, &mut acc);
+    let (text, braced) = analyze::unescaped(text, &mut acc);
     let declared = analyze::declarations(&text, &mut acc);
     let none = analyze::Known::default();
     // With a loader, this first scan finds the includes and what the script's variables hold; its
     // tallies are left out.
     let mut tallies = report::Acc::new(limits);
     let pre = acc.clone();
-    let scan = analyze::scan(&text, &declared, None, std::rc::Rc::from([]), &none, if loader.is_some() { &mut tallies } else { &mut acc });
+    let scan = analyze::scan(&text, &declared, &braced, None, std::rc::Rc::from([]), &none, if loader.is_some() { &mut tallies } else { &mut acc });
     acc.steps = acc.steps.saturating_add(tallies.steps);
     if scan.module {
         // A module's report holds its kind and its lines, and none of what the scan found.
@@ -183,7 +183,7 @@ pub fn check(name: &str, bytes: &[u8], loader: Option<&mut dyn Loader>, limits: 
         return acc.finish(Kind::Module, scan.lines);
     }
     let Some(loader) = loader else {
-        let mut acc = settle(acc, pre, &text, &declared, scan.known);
+        let mut acc = settle(acc, pre, &text, &declared, &braced, scan.known);
         includes::not_read(&mut acc, scan.includes);
         return acc.finish(Kind::Script, scan.lines);
     };
@@ -191,17 +191,23 @@ pub fn check(name: &str, bytes: &[u8], loader: Option<&mut dyn Loader>, limits: 
     let read = includes::follow(&mut acc, scan.includes, loader, name, bytes.len(), &mut known);
     // Each file's text and the names it declares are worked out once for all the scans below.
     let decoded: Vec<_> = read.iter().map(|file| decode(&file.bytes)).collect();
-    let texts: Vec<_> = decoded.into_iter().map(|(text, invalid)| (analyze::unescaped(text, &mut acc), invalid)).collect();
-    let declarations: Vec<_> = texts.iter().map(|(text, _)| analyze::declarations(text, &mut acc)).collect();
+    let texts: Vec<_> = decoded
+        .into_iter()
+        .map(|(text, invalid)| {
+            let (text, braced) = analyze::unescaped(text, &mut acc);
+            (text, braced, invalid)
+        })
+        .collect();
+    let declarations: Vec<_> = texts.iter().map(|(text, ..)| analyze::declarations(text, &mut acc)).collect();
     // A variable may get what it holds from another file's variable: the files are scanned again,
     // each with what is known so far, while that grows, at most three more times.
     for _ in 0..3 {
         let before = known.len();
         let mut tallies = report::Acc::new(limits);
-        let more = analyze::scan(&text, &declared, None, std::rc::Rc::from([]), &known, &mut tallies).known;
+        let more = analyze::scan(&text, &declared, &[], None, std::rc::Rc::from([]), &known, &mut tallies).known;
         known.add(more, limits.entries);
-        for ((file, (text, _)), declared) in read.iter().zip(&texts).zip(&declarations) {
-            let more = analyze::scan(text, declared, Some(&file.path), std::rc::Rc::clone(&file.paths), &known, &mut tallies).known;
+        for ((file, (text, ..)), declared) in read.iter().zip(&texts).zip(&declarations) {
+            let more = analyze::scan(text, declared, &[], Some(&file.path), std::rc::Rc::clone(&file.paths), &known, &mut tallies).known;
             known.add(more, limits.entries);
         }
         acc.steps = acc.steps.saturating_add(tallies.steps);
@@ -210,12 +216,12 @@ pub fn check(name: &str, bytes: &[u8], loader: Option<&mut dyn Loader>, limits: 
         }
     }
     // The scans for the report: every file starts with what any file's variables hold.
-    let lines = analyze::scan(&text, &declared, None, std::rc::Rc::from([]), &known, &mut acc).lines;
-    for ((file, (text, invalid)), declared) in read.iter().zip(&texts).zip(&declarations) {
+    let lines = analyze::scan(&text, &declared, &braced, None, std::rc::Rc::from([]), &known, &mut acc).lines;
+    for ((file, (text, braced, invalid)), declared) in read.iter().zip(&texts).zip(&declarations) {
         if *invalid {
             acc.problem(report::NOT_UTF8, None, Some(&file.path), None);
         }
-        analyze::scan(text, declared, Some(&file.path), std::rc::Rc::clone(&file.paths), &known, &mut acc);
+        analyze::scan(text, declared, braced, Some(&file.path), std::rc::Rc::clone(&file.paths), &known, &mut acc);
     }
     acc.finish(Kind::Script, lines)
 }
@@ -230,6 +236,7 @@ fn settle<'l>(
     pre: report::Acc<'l>,
     text: &str,
     declared: &analyze::Declared<'_>,
+    braced: &[analyze::Braced],
     mut known: analyze::Known,
 ) -> report::Acc<'l> {
     if known.len() == 0 {
@@ -240,7 +247,7 @@ fn settle<'l>(
     for _ in 0..3 {
         let before = known.len();
         let mut acc = pre.clone();
-        let more = analyze::scan(text, declared, None, std::rc::Rc::from([]), &known, &mut acc).known;
+        let more = analyze::scan(text, declared, braced, None, std::rc::Rc::from([]), &known, &mut acc).known;
         known.add(more, entries);
         if known.len() == before {
             acc.steps = acc.steps.saturating_add(spent);
@@ -249,7 +256,7 @@ fn settle<'l>(
         spent = spent.saturating_add(acc.steps.saturating_sub(pre.steps));
     }
     let mut acc = pre;
-    analyze::scan(text, declared, None, std::rc::Rc::from([]), &known, &mut acc);
+    analyze::scan(text, declared, braced, None, std::rc::Rc::from([]), &known, &mut acc);
     acc.steps = acc.steps.saturating_add(spent);
     acc
 }

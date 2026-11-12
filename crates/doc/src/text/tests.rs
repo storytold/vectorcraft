@@ -1,5 +1,19 @@
 use super::*;
 
+/// Dynamic Text is off for new type and for type saved before it, and saved only when on.
+#[test]
+fn dynamic_text_is_saved_only_when_on() {
+    let t = TextObject::point(Point::ZERO, "Hi", CharStyle::default());
+    assert!(!t.dynamic_text);
+    let off = serde_json::to_value(&t).unwrap();
+    assert!(off.get("dynamicText").is_none());
+    assert!(!serde_json::from_value::<TextObject>(off).unwrap().dynamic_text);
+    let on = TextObject { dynamic_text: true, ..t };
+    let saved = serde_json::to_value(&on).unwrap();
+    assert_eq!(saved["dynamicText"], true);
+    assert!(serde_json::from_value::<TextObject>(saved).unwrap().dynamic_text);
+}
+
 /// Character Direction is saved only when set, and styles written before it existed read as
 /// Default.
 #[test]
@@ -168,6 +182,29 @@ fn justification_options_read_from_a_file_stay_in_range() {
     let mut same = d.clone();
     same.keep_in_range();
     assert_eq!(same, d);
+}
+
+/// Korean Line Break Anywhere is off for a new paragraph and saved only when off; a paragraph
+/// saved before it existed, or a text object saved without paragraph attributes, reads with it on,
+/// and both values read back as saved.
+#[test]
+fn korean_line_break_anywhere_is_saved_only_when_off() {
+    let off = ParaStyle::default();
+    assert!(!off.korean_line_break_anywhere);
+    let saved = serde_json::to_value(&off).unwrap();
+    assert_eq!(saved["korean_line_break_anywhere"], false);
+    assert_eq!(serde_json::from_value::<ParaStyle>(saved).unwrap(), off);
+    let on = ParaStyle { korean_line_break_anywhere: true, ..ParaStyle::default() };
+    let saved = serde_json::to_value(&on).unwrap();
+    assert!(saved.get("korean_line_break_anywhere").is_none());
+    assert_eq!(serde_json::from_value::<ParaStyle>(saved).unwrap(), on);
+    let old: ParaStyle = serde_json::from_str(r#"{"justify":"Left"}"#).unwrap();
+    assert!(old.korean_line_break_anywhere);
+    let mut saved = serde_json::to_value(TextObject::point(Point::ZERO, "가나", CharStyle::default())).unwrap();
+    assert_eq!(saved["para"]["korean_line_break_anywhere"], false);
+    saved.as_object_mut().unwrap().remove("para");
+    let old: TextObject = serde_json::from_value(saved).unwrap();
+    assert_eq!(old.para, ParaStyle { korean_line_break_anywhere: true, ..ParaStyle::default() });
 }
 
 /// Numbered lists: each number style writes its numbers and rolls over (letters after Z,

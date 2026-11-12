@@ -190,6 +190,7 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
             baseline: 0.0,
             x0: 0.0,
             x1: 0.0,
+            trailing: 0.0,
             ascent: m.0,
             descent: m.1,
             first_baseline: 0.0,
@@ -294,6 +295,8 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
             .count()
     };
     let (mut steps, mut s0, mut hung) = arrange(&sg);
+    // What the whole text takes along the path and what the span holds: Dynamic Text's first guess.
+    cx.out.path_fill = Some((steps.iter().sum(), avail + hung.0 + hung.1));
     // Where the text that fits ends: before the first glyph that doesn't, which threaded text
     // flows on from, as from the last line of area type.
     let mut fits = text_len;
@@ -417,6 +420,7 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
         baseline: ps.y,
         x0: ps.x,
         x1: pe.x,
+        trailing: 0.0,
         ascent: m.0,
         descent: m.1,
         first_baseline: 0.0,

@@ -185,7 +185,7 @@ fn objects<'a>(d: &'a Document, scope: &Scope) -> Vec<(&'a Node, Place)> {
 }
 
 fn visit<'a>(n: &'a Node, place: Place, out: &mut Vec<(&'a Node, Place)>) {
-    if !n.visible || n.locked || out.len() >= MAX_OBJECTS {
+    if !n.visible || n.locked || n.is_ruler_guide() || out.len() >= MAX_OBJECTS {
         return;
     }
     let inner = |clip: bool, i: usize, top: bool| Place { clips: clip && i == 0, top, in_compound: false };
@@ -216,7 +216,7 @@ fn is_generated(n: &Node) -> bool {
 }
 
 fn is_guide_or_clip(n: &Node) -> bool {
-    matches!(n.kind, NodeKind::Path { guide: true, .. } | NodeKind::Path { clipping: true, .. })
+    n.is_guide() || matches!(n.kind, NodeKind::Path { clipping: true, .. })
 }
 
 fn is_shape(n: &Node) -> bool {
@@ -484,7 +484,7 @@ fn artboards(d: &mut Document, sel: &mut Selection, scope: &Scope) -> Result<Out
         if i < d.artboards.len() {
             let id = d.artboards.remove(i).id;
             d.retire_artboard_id(id);
-            d.retain_guides(sel, |_, g| g.artboard != Some(id));
+            d.retain_guides(sel, |g| g.artboard != Some(id));
         }
     }
     Ok(Outcome { count: empty.len(), ids: vec![], artboards: empty })

@@ -28,6 +28,10 @@ pub(in crate::ai_editing) const STYLE_LINKS: &str = "links to graphic styles are
 /// How many objects of `doc`'s layers, opacity masks and symbols are linked to a graphic style.
 pub(in crate::ai_editing) fn style_links(doc: &Document) -> usize {
     fn count(n: &Node) -> usize {
+        // Ruler guides are not written as objects.
+        if n.is_ruler_guide() {
+            return 0;
+        }
         let own = usize::from(n.extras().graphic_style.is_some());
         let mask = n.extras().mask.as_ref().map_or(0, |m| count(&m.art));
         own + mask + n.children().map_or(0, |c| c.iter().map(|m| count(m)).sum())
@@ -885,9 +889,16 @@ pub(in crate::ai_editing) fn same_appearance(a: &Appearance, b: &Appearance) -> 
 }
 
 /// Effect `e`'s settings with its defaults filled in, its blending mode in lower case and its color as
-/// `#rrggbb`.
+/// `#rrggbb`. A Warp's map `version` is left out: the file holds the warp's settings, and the reader
+/// gives every warp it reads the newest map, so a warp saved before the version existed is written
+/// with its settings as before.
 fn normalized_params(e: &Effect) -> Value {
     let mut p = vectorcraft_effects::merged_params(&e.id, &e.params);
+    if e.id.starts_with("warp.")
+        && let Value::Object(m) = &mut p
+    {
+        m.remove("version");
+    }
     if let Some(m) = word(&p, "mode") {
         p["mode"] = Value::String(m);
     }

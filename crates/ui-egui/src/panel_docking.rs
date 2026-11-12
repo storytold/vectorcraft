@@ -1238,18 +1238,28 @@ fn palette_window_state(modal: bool, popup: bool, active: bool) -> (egui::Window
 /// Sends the palette windows of `layout` the level and visibility [`palette_window_state`] gives
 /// when they change. craft-ui varies a palette's level through the viewport builder, which egui
 /// applies when the window opens and not to one already on screen, so the commands go explicitly to
-/// the windows there are.
+/// the windows there are. A window that opens while the others are hidden (a panel floated under a
+/// dialog, a menu, a flyout or the drawer) opens shown at its palette level, so it gets the commands
+/// in its first frame.
 #[cfg(not(target_arch = "wasm32"))]
 fn palette_window_levels(ctx: &egui::Context, layout: &Layout<String>, modal: bool, popup: bool) {
     let active = ctx.input(|i| i.focused || i.raw.viewports.values().any(|v| v.focused == Some(true)));
     let key = area_id().with("palette-levels-state");
-    if ctx.data(|d| d.get_temp::<(bool, bool, bool)>(key)) == Some((modal, popup, active)) {
-        return;
-    }
-    ctx.data_mut(|d| d.insert_temp(key, (modal, popup, active)));
-
+    let state = (modal, popup, active);
+    let windows: Vec<u64> = layout.floating.iter().map(|window| window.id).collect();
+    let sent = ctx.data(|d| d.get_temp::<((bool, bool, bool), Vec<u64>)>(key));
     let (level, visible) = palette_window_state(modal, popup, active);
-    for window in &layout.floating {
+    // The windows that already have this state's commands.
+    let known: &[u64] = match &sent {
+        Some((was, ids)) if *was == state && !visible => ids,
+        Some((was, _)) if *was == state => &windows,
+        _ => &[],
+    };
+    let fresh: Vec<u64> = windows.iter().copied().filter(|id| !known.contains(id)).collect();
+    if sent.as_ref().is_none_or(|(was, ids)| *was != state || *ids != windows) {
+        ctx.data_mut(|d| d.insert_temp(key, (state, windows)));
+    }
+    for window in layout.floating.iter().filter(|window| fresh.contains(&window.id)) {
         let viewport = craft_ui::docking::DockArea::<String>::window_viewport(area_id(), window.id);
         ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::WindowLevel(level));
         ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::Visible(visible));

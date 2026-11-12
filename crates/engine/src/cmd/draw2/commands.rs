@@ -92,7 +92,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eraser",
             [],
             None,
-            "{points: [[x,y]…] or [[x,y,pressure]…] (pen pressure 0..1), size?: pt (10), sizeMode?: \"fixed\" (default) | \"pressure\" (Eraser Tool Options' Size set to Pressure: the tip is size − sizeVariation across where the pen presses lightest and size + sizeVariation where it presses hardest, as path.blob), sizeVariation?: pt (0), angle?: ° (0), roundness?: % (100, kept within 1–100)} erase the stroke of an elliptical tip from paths (selected, or all) → {ids}. The tip is `size` across its long axis, which runs at `angle` counter-clockwise from horizontal; its short axis is `roundness` percent of the long one",
+            "{points: [[x,y]…] or [[x,y,pressure]…] (pen pressure 0..1), size?: pt (10), sizeMode?: \"fixed\" (default) | \"pressure\" (Eraser Tool Options' Size set to Pressure: the tip is size − sizeVariation across where the pen presses lightest and size + sizeVariation where it presses hardest, as path.blob), sizeVariation?: pt (0), angle?: ° (0: the tip's long axis counter-clockwise from level), roundness?: % (100, kept within 1–100)} erase the stroke of an elliptical tip from paths (selected, or all) → {ids}. The tip is `size` across its long axis, which runs at `angle` counter-clockwise from horizontal; its short axis is `roundness` percent of the long one",
             has_doc,
             erase_region
         ),

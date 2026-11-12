@@ -15,7 +15,7 @@ use vectorcraft_geom::{Affine, Rect};
 
 use super::{
     CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, checked_id, checked_ids_param, cmd, color_value, f64_or, has_doc,
-    has_selection, id_param, ids_param, index, ok, str_param, switch_or,
+    has_selection, ids_param, index, object_param, ok, str_param, switch_or,
 };
 use crate::EngineError;
 
@@ -243,7 +243,8 @@ pub(crate) fn accepts(d: &Document, parent: Option<NodeId>, n: &Node) -> bool {
         None => n.is_layer(),
         Some(p) => match d.node(p).map(|x| &x.kind) {
             Some(NodeKind::Layer { .. }) => true,
-            Some(NodeKind::Group { .. }) => !n.is_layer(),
+            // A ruler guide stays directly in a layer or sublayer.
+            Some(NodeKind::Group { .. }) => !n.is_layer() && !n.is_ruler_guide(),
             _ => false,
         },
     }
@@ -425,7 +426,7 @@ fn paste_remembers_layers(s: &mut Session, p: &Value) -> Result<Value> {
 /// The Layers panel's target circle.
 fn target(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.target";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let st = s.doc()?;
     let n = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
     if !st.doc.is_editable(id) {
@@ -478,8 +479,12 @@ fn clip_toggle(s: &mut Session, p: &Value) -> Result<Value> {
             super::object::release_clip(d, id);
             return Ok(false);
         }
-        let top =
-            n.children().and_then(|c| c.last()).map(|c| c.id).ok_or_else(|| EngineError::Other("the layer has no objects to clip by".into()))?;
+        // The topmost object: a layer's ruler guides above its art do not clip.
+        let top = n
+            .children()
+            .and_then(|c| c.iter().rev().find(|c| !c.is_ruler_guide()))
+            .map(|c| c.id)
+            .ok_or_else(|| EngineError::Other("the layer has no objects to clip by".into()))?;
         super::object::make_clipping_path(d, top)?;
         d.move_node(top, Some(id), 0)?;
         if let Some(n) = d.node_mut(id) {
@@ -556,9 +561,8 @@ fn delete_rows(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(EngineError::Other("a document needs at least one layer".into()));
     }
     s.edit("Delete Selection", |d, sel| {
-        d.remove_many(&ids)?;
         // The guides on the deleted layers go with them.
-        d.drop_guides_of_deleted_layers(sel);
+        d.remove_many(&ids)?;
         sel.prune(d);
         Ok(())
     })?;
@@ -577,10 +581,10 @@ fn duplicate_rows(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad("layer.duplicate", "no such rows"));
     }
     let copies = s.edit("Duplicate Selection", |d, _| {
-        super::edit::copy_above(d, &ids, |d, n, c| {
+        // A copied layer's ruler guides are copied with it.
+        super::edit::copy_above(d, &ids, |_, n, c| {
             if n.is_layer() {
                 c.name = Some(format!("{} copy", n.display_name()));
-                d.copy_layer_guides(n, c);
             }
         })
     })?;
@@ -590,7 +594,7 @@ fn duplicate_rows(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn set_current(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.setCurrent";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let st = s.doc_mut()?;
     let layer = st.doc.layer_containing(id).ok_or(EngineError::NoNode(id))?;
     st.active_layer = Some(layer);
@@ -696,7 +700,7 @@ fn in_isolation(doc: &Document, isolation: Option<NodeId>, id: NodeId) -> bool {
 /// The selection column: select a row's art.
 fn select_art(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.selectAll";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let add = switch_or(p, "add", false, C)?;
     let st = s.doc()?;
     let n = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
@@ -706,6 +710,9 @@ fn select_art(s: &mut Session, p: &Value) -> Result<Value> {
         vec![]
     } else if n.is_layer() {
         n.layer_art(true)
+    } else if n.is_ruler_guide() {
+        // A ruler guide row selects the guide through `guide.select`, not as art.
+        vec![]
     } else {
         vec![id]
     };
@@ -740,9 +747,12 @@ enum Place {
 /// Drag rows in the Layers panel.
 fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.move";
-    let mut ids = ids_param(p, "ids", C)?.or_else(|| id_param(p, "id").map(|i| vec![i])).ok_or_else(|| bad(C, "missing ids"))?;
+    let mut ids = match ids_param(p, "ids", C)? {
+        Some(ids) => ids,
+        None => vec![object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing ids"))?],
+    };
     ids.truncate(MAX_ROWS);
-    let target = id_param(p, "target").ok_or_else(|| bad(C, "missing target"))?;
+    let target = object_param(p, "target", C)?.ok_or_else(|| bad(C, "missing target"))?;
     let place = match str_param(p, "place").unwrap_or("inside") {
         "above" => Place::Above,
         "below" => Place::Below,
@@ -784,11 +794,8 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
             let mut nodes = vec![];
             for id in &ids {
                 let n = d.node(*id).cloned().ok_or(EngineError::NoNode(*id))?;
-                let c = d.reid(&n);
-                if n.is_layer() {
-                    d.copy_layer_guides(&n, &c);
-                }
-                nodes.push(Arc::new(c));
+                // A copied layer's ruler guides are copied with it.
+                nodes.push(Arc::new(d.reid(&n)));
             }
             nodes
         } else {
@@ -810,6 +817,8 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
         let ch = d.children_mut(parent)?;
         let index = index.min(ch.len());
         ch.splice(index..index, nodes);
+        // A layer's ruler guides stay above its art, each in the order it now has.
+        ch.sort_by_key(|c| c.is_ruler_guide());
         // Copied type whose layout caches `reid` dropped has them again.
         if copy {
             super::typecmd::refresh_bounds_of(d, &out);
@@ -825,8 +834,8 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "node.move";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
-    let parent = id_param(p, "parent");
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
+    let parent = object_param(p, "parent", C)?;
     let index = p.get("index").and_then(Value::as_u64).map_or(usize::MAX, index);
     let d = &s.doc()?.doc;
     let n = d.node(id).ok_or(EngineError::NoNode(id))?;
@@ -972,7 +981,7 @@ fn remove_artboards(d: &mut Document, sel: &mut vectorcraft_doc::Selection, indi
     for &i in indices.iter().rev() {
         let id = d.artboards.remove(i).id;
         d.retire_artboard_id(id);
-        d.retain_guides(sel, |_, g| g.artboard != Some(id));
+        d.retain_guides(sel, |g| g.artboard != Some(id));
     }
     Ok(())
 }

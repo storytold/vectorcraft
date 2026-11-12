@@ -5,6 +5,7 @@ use std::sync::Arc;
 use kurbo::{Affine, Point, Rect};
 use vectorcraft_color::gradient::GradientKind;
 use vectorcraft_color::{BlendMode, Color, Paint};
+use vectorcraft_doc::live::WARP_NET;
 use vectorcraft_doc::{AppearanceItem, ColorMode, Document, Guide, Knockout, LayerColor, LineCap, LineJoin, Node, NodeKind, Unit};
 
 use super::*;
@@ -62,9 +63,14 @@ fn arrays_nested_past_the_depth_limit_are_refused() {
     assert!(nested(100_000));
 }
 
-/// The children of the first layer.
+/// The children of the first layer, its ruler guides left out.
 fn art(doc: &Document) -> Vec<Arc<Node>> {
-    doc.layers.first().and_then(|l| l.children()).cloned().unwrap_or_default()
+    doc.layers.first().and_then(|l| l.children()).into_iter().flatten().filter(|c| !c.is_ruler_guide()).cloned().collect()
+}
+
+/// The ruler guides of `doc` by their line, artboard and layer.
+fn guide_lines(doc: &Document) -> Vec<Guide> {
+    doc.ruler_guides().into_iter().map(|g| Guide { artboard: g.artboard, layer: g.layer, ..Guide::new(g.vertical, g.pos) }).collect()
 }
 
 fn fill(n: &Node) -> Paint {
@@ -7398,15 +7404,16 @@ fn a_warp_envelope_opens_live() {
     for (style, bend, h, v, rotate, id) in
         [(1, 0.5, 0.0, 0.0, 0, "arc"), (1, 0.5, -0.2, 0.3, 1, "arc"), (8, 0.5, 0.0, 0.0, 0, "flag"), (15, 0.5, 0.0, 0.0, 0, "twist")]
     {
-        let want = EnvelopeKind::Warp { style: id.into(), bend: bend * 100.0, h: h * 100.0, v: v * 100.0, horizontal: rotate == 0 };
+        let want =
+            EnvelopeKind::Warp { style: id.into(), bend: bend * 100.0, h: h * 100.0, v: v * 100.0, horizontal: rotate == 0, version: WARP_NET };
         let body =
             envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &warp_keys(style, bend, h, v, rotate), &envelope_content(), 1, &drawn_content(&want));
         let r = read_ok(&layer(&body));
         let a = art(&r.doc);
         assert_eq!(a.len(), 1, "{a:#?}");
         let (content, kind, fidelity, editing, options) = live_envelope(&a[0]);
-        let EnvelopeKind::Warp { style: s, bend: b, h: dh, v: dv, horizontal } = kind else { panic!("{kind:?}") };
-        assert_eq!((s.as_str(), *horizontal), (id, rotate == 0));
+        let EnvelopeKind::Warp { style: s, bend: b, h: dh, v: dv, horizontal, version } = kind else { panic!("{kind:?}") };
+        assert_eq!((s.as_str(), *horizontal, *version), (id, rotate == 0, WARP_NET));
         assert!([(*b, bend), (*dh, h), (*dv, v)].iter().all(|(got, f)| (got - f * 100.0).abs() < 1e-9), "{kind:?}");
         assert_eq!((fidelity, editing, options), (50.0, false, vectorcraft_doc::live::EnvelopeOptions::NEW));
         assert_eq!(content.len(), 1, "{content:#?}");
@@ -7438,7 +7445,7 @@ fn warp_envelopes_read_every_style() {
         "twist",
     ];
     for (n, id) in ids.iter().enumerate() {
-        let want = EnvelopeKind::Warp { style: (*id).into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+        let want = EnvelopeKind::Warp { style: (*id).into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: WARP_NET };
         let keys = warp_keys(n as u32 + 1, 0.3, 0.0, 0.0, 0);
         let r = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &keys, &envelope_content(), 1, &drawn_content(&want))));
         let a = art(&r.doc);
@@ -7969,7 +7976,7 @@ fn an_envelope_that_doesnt_read_keeps_its_drawn_art() {
 #[test]
 fn an_envelope_that_doesnt_come_out_as_drawn_keeps_its_drawn_art() {
     use vectorcraft_doc::live::EnvelopeKind;
-    let other = EnvelopeKind::Warp { style: "arc".into(), bend: -50.0, h: 0.0, v: 0.0, horizontal: true };
+    let other = EnvelopeKind::Warp { style: "arc".into(), bend: -50.0, h: 0.0, v: 0.0, horizontal: true, version: WARP_NET };
     let body = envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &warp_keys(1, 0.5, 0.0, 0.0, 0), &envelope_content(), 1, &drawn_content(&other));
     let r = read_ok(&layer(&body));
     let a = art(&r.doc);
@@ -7984,7 +7991,7 @@ fn an_envelope_that_doesnt_come_out_as_drawn_keeps_its_drawn_art() {
 fn a_white_envelope_that_doesnt_come_out_as_drawn_keeps_its_drawn_art() {
     use vectorcraft_doc::live::EnvelopeKind;
     const WHITE: &str = "0 0 0 0 1 1 1 Xa\n";
-    let other = EnvelopeKind::Warp { style: "arc".into(), bend: -50.0, h: 0.0, v: 0.0, horizontal: true };
+    let other = EnvelopeKind::Warp { style: "arc".into(), bend: -50.0, h: 0.0, v: 0.0, horizontal: true, version: WARP_NET };
     let content = envelope_content().replace(RED, WHITE);
     let drawn = drawn_content(&other).replace(RED, WHITE);
     let body = envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &warp_keys(1, 0.5, 0.0, 0.0, 0), &content, 1, &drawn);
@@ -8459,17 +8466,16 @@ fn canvas_wide_guide_paths_are_ruler_guides_of_their_layer() {
     );
     let doc = read(canvas_stream(&layer(&body)).as_bytes()).unwrap().doc;
     let top = &doc.layers[0];
-    let kids = top.children().unwrap();
+    let kids = art(&doc);
     assert_eq!(kids.len(), 2, "the square and the sublayer");
     assert!(matches!(kids[0].kind, NodeKind::Path { guide: false, .. }));
     let sub = &kids[1];
-    assert!(sub.children().unwrap().is_empty());
-    let want = [
-        Guide { vertical: false, pos: 60.0, artboard: None, layer: Some(top.id) },
-        Guide { vertical: true, pos: 25.0, artboard: None, layer: Some(top.id) },
-        Guide { vertical: false, pos: 10.0, artboard: None, layer: Some(sub.id) },
-    ];
-    assert_eq!(doc.guides, want);
+    assert!(sub.children().unwrap().iter().all(|c| c.is_ruler_guide()));
+    let at = |vertical, pos, layer| Guide { layer: Some(layer), ..Guide::new(vertical, pos) };
+    let want = [at(false, 60.0, top.id), at(true, 25.0, top.id), at(false, 10.0, sub.id)];
+    assert_eq!(guide_lines(&doc), want);
+    // The guides sit above the layers' art.
+    assert!(top.children().unwrap()[2..].iter().all(|c| c.is_ruler_guide()));
 }
 
 /// #779: a straight `(N) *` guide path from edge to edge of one artboard is a ruler guide of that
@@ -8478,7 +8484,7 @@ fn canvas_wide_guide_paths_are_ruler_guides_of_their_layer() {
 fn artboard_wide_guide_paths_are_ruler_guides_of_their_artboard() {
     // The crop marks' artboard, 0 0 200 100.
     let doc = read(canvas_stream(&layer(&guide_line(0.0, 30.0, 200.0, 30.0, "N"))).as_bytes()).unwrap().doc;
-    assert_eq!(doc.guides, [Guide { vertical: false, pos: 70.0, artboard: Some(1), layer: Some(doc.layers[0].id) }]);
+    assert_eq!(guide_lines(&doc), [Guide { artboard: Some(1), layer: Some(doc.layers[0].id), ..Guide::new(false, 70.0) }]);
     assert!(art(&doc).is_empty());
     // The second of two artboards: art space x 400 to 600, y -150 to 0.
     let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
@@ -8487,7 +8493,7 @@ fn artboard_wide_guide_paths_are_ruler_guides_of_their_artboard() {
                   %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
     let doc = read_ok(&format!("{boards}{}", layer(&guide_line(500.0, 0.0, 500.0, -150.0, "N")))).doc;
     assert_eq!(doc.artboards[1].id, 2);
-    assert_eq!(doc.guides, [Guide { vertical: true, pos: 500.0, artboard: Some(2), layer: Some(doc.layers[0].id) }]);
+    assert_eq!(guide_lines(&doc), [Guide { artboard: Some(2), layer: Some(doc.layers[0].id), ..Guide::new(true, 500.0) }]);
 }
 
 /// Guide paths that aren't ruler guides stay guide paths: `(S) *` ones (guides made from objects),
@@ -8506,7 +8512,7 @@ fn other_guide_paths_stay_guide_paths() {
     ];
     for body in cases {
         let doc = read(canvas_stream(&layer(&body)).as_bytes()).unwrap().doc;
-        assert!(doc.guides.is_empty(), "{body}");
+        assert!(doc.ruler_guides().is_empty(), "{body}");
         assert_eq!(art(&doc).len(), 1, "{body}");
     }
 }

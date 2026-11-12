@@ -2,7 +2,7 @@
 //! appearance of objects in the symbol's art and stays linked to the symbol
 //! (`symbol.instance.setAppearance`, `symbol.instance.reset`). The changes live on the instance
 //! ([`vectorcraft_doc::symbol_overrides`]); editing the symbol keeps those whose object is still
-//! there ([`fit_overrides`]).
+//! there and draws them ([`fit_overrides`]).
 
 use std::sync::Arc;
 
@@ -27,7 +27,7 @@ pub(super) fn type_id(dynamic: bool) -> &'static str {
 }
 
 /// Fit the appearance changes of instances `ids` to their symbols: an instance of a static (or
-/// missing) symbol keeps none, an instance of a dynamic one those naming an object of its art.
+/// missing) symbol keeps none, an instance of a dynamic one those its art still draws ([`fit_parts`]).
 pub(super) fn fit_overrides(d: &mut Document, ids: &[NodeId]) {
     for id in ids {
         let art = match d.node(*id) {
@@ -40,7 +40,7 @@ pub(super) fn fit_overrides(d: &mut Document, ids: &[NodeId]) {
         let Some(n) = d.node_mut(*id) else { continue };
         let mut e = n.extras_mut();
         match art {
-            Some(art) => symbol_overrides::retain_parts(&mut e.symbol_overrides, &art),
+            Some(art) => fit_parts(&mut e.symbol_overrides, &art),
             None => e.symbol_overrides.clear(),
         }
     }
@@ -137,7 +137,7 @@ fn path_param(p: &Value, art: &Node, cmd: &str) -> Result<Vec<u32>> {
 /// stroke has a Convert to Shape or Outline Object effect.
 fn paint_refusal(n: &Node, key: &str, cmd: &str) -> Option<EngineError> {
     Some(match &n.kind {
-        NodeKind::Path { guide: true, .. } => bad(cmd, format!("{key} cannot be set on a guide")),
+        NodeKind::Path { guide: true, .. } | NodeKind::RulerGuide { .. } => bad(cmd, format!("{key} cannot be set on a guide")),
         NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_) | NodeKind::Group { .. } | NodeKind::Layer { .. } => return None,
         NodeKind::Image(_) => {
             let effects = if key == "fill" { n.appearance.fill().map(|f| &f.effects) } else { n.appearance.stroke().map(|s| &s.effects) };
@@ -177,16 +177,41 @@ fn check_paint_kinds(p: &Value, art: &Node, path: &[u32], cmd: &str) -> Result<(
 fn solid_fill_check(p: &Value, art: &Node, path: &[u32], fill: Option<&vectorcraft_color::Paint>, cmd: &str) -> Result<()> {
     let asked = p.get("fill").is_some_and(|v| !v.is_null());
     let is_instance = symbol_overrides::part(art, path).is_some_and(|n| matches!(n.kind, NodeKind::SymbolInstance { .. }));
-    let draws_nothing = |f: &vectorcraft_color::Paint| match f {
-        vectorcraft_color::Paint::Gradient(_) => true,
-        vectorcraft_color::Paint::Pattern { .. } => true,
-        vectorcraft_color::Paint::None | vectorcraft_color::Paint::Solid { .. } => false,
-    };
-    if asked && is_instance && fill.is_some_and(draws_nothing) {
+    if asked && is_instance && fill.is_some_and(|f| !stains(f)) {
         return Err(bad(cmd, "fill on a symbol instance must be a solid color or none"));
     }
     Ok(())
 }
+
+/// Can a symbol instance's fill be `f`? An instance stains its art with a solid fill only.
+fn stains(f: &vectorcraft_color::Paint) -> bool {
+    match f {
+        vectorcraft_color::Paint::Gradient(_) => false,
+        vectorcraft_color::Paint::Pattern { .. } => false,
+        vectorcraft_color::Paint::None | vectorcraft_color::Paint::Solid { .. } => true,
+    }
+}
+
+/// Keep the appearance changes `overrides` that name an object of `art` (a symbol's new art), each
+/// without a fill or stroke that object does not draw ([`paint_refusal`], [`stains`]); a change
+/// left with nothing in it is dropped.
+pub(crate) fn fit_parts(overrides: &mut Vec<SymbolOverride>, art: &Node) {
+    symbol_overrides::retain_parts(overrides, art);
+    for o in overrides.iter_mut() {
+        let Some(n) = symbol_overrides::part(art, &o.path) else { continue };
+        let instance = matches!(n.kind, NodeKind::SymbolInstance { .. });
+        if paint_refusal(n, "fill", FIT).is_some() || (instance && o.fill.as_ref().is_some_and(|f| !stains(f))) {
+            o.fill = None;
+        }
+        if paint_refusal(n, "stroke", FIT).is_some() {
+            o.stroke = None;
+        }
+    }
+    overrides.retain(|o| !o.is_empty());
+}
+
+/// The command name [`fit_parts`] gives [`paint_refusal`], whose refusal it does not show.
+const FIT: &str = "symbol.update";
 
 /// `fill` or `stroke` of `p` for override `o`: absent leaves it, null clears it, a colour string or
 /// an object of `paint.setFill`'s paint params sets it.

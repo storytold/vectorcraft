@@ -159,6 +159,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         crate::panels::image_trace::trace_button(app, ui, ui.available_width());
         actions.push((tl!("Crop Image"), "ui.cropImage"));
         actions.push((tl!("Mask"), "object.maskImage"));
+        // Remove Background at once with its defaults, as the reference app's Quick Actions do
+        // (<https://community.adobe.com/announcements-651/ai-powered-image-editing-features-in-illustrator-1624061>).
+        actions.push((tl!("Remove Background"), crate::addons::image::REMOVE_BACKGROUND));
     }
     // Object › Path's Offset Path and Simplify take paths: type alone could only fail, and offsets
     // live through the Appearance panel's Effect › Path › Offset Path (#2238).
@@ -1014,9 +1017,12 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
             });
         }
         super::paragraph::hyphenate_check(app, ui, &para);
+        // Area type: Dynamic Text's Block and its gaps.
+        dynamic_text::rows(app, ui);
     }
 }
 
+pub(crate) mod dynamic_text;
 pub(crate) mod vertical_align;
 
 #[cfg(test)]

@@ -17,7 +17,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Document Setup",
         [],
         None,
-        "{units?: \"Points\"|\"Inches\"|\"Millimeters\"|…, bleed?: pt (all sides)|[top, bottom, left, right]|{top?, bottom?, left?, right?} (0–72 pt), outlineImages?: bool (show images in Outline mode), highlightSubstitutedGlyphs?: bool (Highlight Substituted Fonts is a preference: prefs.set highlightSubstitutedFonts; a highlightSubstitutedFonts key is ignored and the reply carries a warning),gridSize?: \"small\"|\"medium\"|\"large\", gridColors?: \"Light\"|\"Medium\"|\"Dark\"|\"Red\"|\"Orange\"|\"Green\"|\"Blue\"|\"Purple\"|[colour, colour] (transparency grid; the first is also the paper colour; #rrggbbaa and #rgba are refused), simulatePaper?: bool, flattenerPreset?: \"High Resolution\"|\"Medium Resolution\"|\"Low Resolution\"|a saved preset (flattener.presets.list), discardWhiteOverprint?: bool, language?: \"English: USA\"|\"German\"|\"French\"|… (also picks its quotes), quotes?: {double?: \"“”\", single?: \"‘’\"} (beside a language: only if they differ from the current ones), typographersQuotes?: bool (typed straight quotes become the document's quotes), superscript?: {size?: %, position?: %}, subscript?: {size?: %, position?: %}, smallCapsSize?: %, exportText?: \"editable\"|\"appearance\" (SVG text as text or as outlines), backgroundContents?: \"transparent\"|\"white\" (white: raster exports are white behind the art), …the keys of its own reply (it can be passed back; the values it only reports are ignored)} change the document setup in one undo step; no params → the current setup",
+        "{units?: \"Points\"|\"Inches\"|\"Millimeters\"|…, bleed?: pt (all sides)|[top, bottom, left, right]|{top?, bottom?, left?, right?} (0–72 pt), outlineImages?: bool (show images in Outline mode), highlightSubstitutedGlyphs?: bool (Highlight Substituted Fonts is a preference: prefs.set highlightSubstitutedFonts; a highlightSubstitutedFonts key is ignored and the reply carries a warning),gridSize?: \"small\"|\"medium\"|\"large\", gridColors?: \"Light\"|\"Medium\"|\"Dark\"|\"Red\"|\"Orange\"|\"Green\"|\"Blue\"|\"Purple\"|[colour, colour] (transparency grid; the first is also the paper colour; #rrggbbaa and #rgba are refused), simulatePaper?: bool, flattenerPreset?: \"High Resolution\"|\"Medium Resolution\"|\"Low Resolution\"|a saved preset (flattener.presets.list), discardWhiteOverprint?: bool, language?: \"English: USA\"|\"German\"|\"French\"|… (also picks its quotes), quotes?: {double?: \"“”\", single?: \"‘’\"} (beside a language: only if they differ from the current ones), typographersQuotes?: bool (typed straight quotes become the document's quotes), superscript?: {size?: %, position?: %}, subscript?: {size?: %, position?: %}, smallCapsSize?: %, exportText?: \"editable\"|\"appearance\" (SVG text as text or as outlines), backgroundContents?: \"transparent\"|\"white\" (white: raster exports are white behind the art), alignNewObjectsToPixelGrid?: bool (Align New Objects to Pixel Grid: paths and compound paths drawn from then on are pixel-aligned, as object.setPixelAligned; art already in the document, pasted, duplicated or placed keeps its own setting), …the keys of its own reply (it can be passed back; the values it only reports are ignored)} change the document setup in one undo step; no params → the current setup",
         has_doc,
         setup
     )]
@@ -46,6 +46,7 @@ pub(crate) fn setup_json(d: &Document) -> Value {
         "smallCapsSize": s.small_caps_size,
         "exportText": s.export_text.id(),
         "backgroundContents": s.background.id(),
+        "alignNewObjectsToPixelGrid": s.align_new_objects_to_pixel_grid,
     })
 }
 
@@ -140,6 +141,7 @@ fn apply(s: &mut DocSetup, units: &mut vectorcraft_doc::Unit, k: &str, v: &Value
         "smallCapsSize" => s.small_caps_size = percent(k, v, 1.0, vectorcraft_doc::setup::MAX_SMALL_CAPS)?,
         "exportText" => s.export_text = v.as_str().and_then(ExportText::parse).ok_or_else(|| bad(C, "exportText must be editable or appearance"))?,
         "backgroundContents" => s.background = background_param(v, C)?,
+        "alignNewObjectsToPixelGrid" => s.align_new_objects_to_pixel_grid = flag(k, v)?,
         // Read-only values `document.setup` reports.
         "gridColorsName" | "warnings" => {}
         _ => return Err(bad(C, format!("unknown setting `{k}`"))),
