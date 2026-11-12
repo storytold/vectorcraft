@@ -6732,3 +6732,10 @@ breakText	Glyphs	Glyphs
 # Deferred plug-in effects
 	Refresh Deferred Effects	Uitgestelde effecten vernieuwen
 	Deferred Effects	Uitgestelde effecten
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Snijgereedschap
+	Stencil Bridges…	Sjabloonbruggen…
+	Stencil Bridges	Sjabloonbruggen
+	Shortest Crossing	Kortste oversteek
+	Direction	Richting

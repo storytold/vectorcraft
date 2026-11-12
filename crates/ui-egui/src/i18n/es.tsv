@@ -6919,3 +6919,15 @@ breakText	Glyphs	Glifos
 	Deferred Effects	Efectos aplazados
 @msg	no plug-in effect is deferred	no hay ningún efecto de plugin aplazado
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Se abrió con {n} efecto de plugin aplazado. Efecto › Actualizar efectos aplazados lo ejecuta.|Se abrió con {n} efectos de plugin aplazados. Efecto › Actualizar efectos aplazados los ejecuta.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Herramientas de corte
+	Stencil Bridges…	Puentes de plantilla…
+	Stencil Bridges	Puentes de plantilla
+	Shortest Crossing	Cruce más corto
+	Direction	Dirección
+@msg	The selected art has no islands to bridge	La ilustración seleccionada no tiene islas que unir
+@msg	No bridge of this width fits across the selected art	Ningún puente de este ancho cabe en la ilustración seleccionada
+@msg	Some islands could not be joined to the area around the art	Algunas islas no se pudieron unir al área que rodea la ilustración
+@msg	`width` must be from {lo} to {hi} pt	`width` debe estar entre {lo} y {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` debe ser un número entero entre 1 y {MAX_BRIDGES_PER_ISLAND}
