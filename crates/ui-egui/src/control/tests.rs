@@ -120,9 +120,9 @@ fn a_sent_path_replaces_a_hidden_id_for_the_same_path() {
     assert_eq!(hidden.hidden.len(), 3, "{hidden:?}");
 }
 
-/// The paths outside the read root that a request sends, as a path, a `file:` URL, under `~` or
-/// starting with `../`, are hidden by their file names; a URL that names another host, plain text and
-/// a path inside the root are not.
+/// The paths outside the read root that a request sends, as a path, a `file:` URL (also one that names
+/// another host), under `~` or starting with `../`, are hidden by their file names; plain text and a
+/// path inside the root are not.
 #[test]
 fn a_request_sends_paths_that_an_error_hides() {
     let base = std::env::temp_dir().join(format!("vc-sent-paths-{}", std::process::id()));
@@ -130,13 +130,20 @@ fn a_request_sends_paths_that_an_error_hides() {
     std::fs::create_dir_all(&root).unwrap();
     let inside = root.join("a.svg").to_string_lossy().into_owned();
     let keep = json!(["a/b", inside, "file://host/g.svg"]);
-    let params = json!({"path": "/x/my lib/b.svg", "list": ["file:///y/c%20d.svg", "~/e.svg", "../f.svg"], "keep": keep});
+    let params = json!({"path": "/x/my lib/b.svg", "list": ["file:///y/c%20d.svg", "~/e.svg", "../f.svg"], "other": keep});
     let mut sent = Vec::new();
     let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
     vectorcraft_engine::file_access::confine(roots.as_ref(), || super::sent_paths(&params, &mut sent));
     let _ = std::fs::remove_dir_all(base);
     let pair = |path: &str, name: &str| (format!("loaded/{path}"), format!("loaded/{name}"));
-    assert_eq!(sent, [pair("/y/c d.svg", "c d.svg"), pair("~/e.svg", "e.svg"), pair("../f.svg", "f.svg"), pair("/x/my lib/b.svg", "b.svg")]);
+    let want = [
+        pair("/y/c d.svg", "c d.svg"),
+        pair("~/e.svg", "e.svg"),
+        pair("../f.svg", "f.svg"),
+        pair("//host/g.svg", "g.svg"),
+        pair("/x/my lib/b.svg", "b.svg"),
+    ];
+    assert_eq!(sent, want);
 }
 
 /// Under a read root, an absolute path or a `file:` URL outside it is unreadable; an empty string, a
