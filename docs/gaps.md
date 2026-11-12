@@ -321,7 +321,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 - **Done:** Divide splits filled paths along open cutting lines and curves (#1307), preserving the frontmost filled appearance, implicit filled closure, holes, unrelated objects and one Undo/Redo; the existing bounded-map fallback remains.
 
-- **Done:** Numeric fields keep a text drag's start when the pointer gains focus and movement exceeds the click threshold (#1326, in part). A completed focus click selects the whole value; keyboard focus, double-click and numeric stepping remain regression-tested. Short movements still classified as clicks can select all; that case remains open.
+- **Done:** Numeric fields keep a text drag's start when the pointer gains focus, including short movements that egui still classifies as clicks (#1326). A release more than 1 pt from the press keeps the caret; a tap, including one with a pixel of pen or trackpad jitter, selects the whole value. Keyboard focus, double-click and numeric stepping remain regression-tested (`tests/numfields.rs`, `a_short_drag_released_as_a_click_keeps_its_caret` and `a_sub_threshold_movement_released_as_a_click_keeps_its_caret`).
 
 - **Done:** DXF reads control-point SPLINE closure (#1299 follow-up after #1320); open curves keep their open state. DXF export now recognizes circular cubic paths conservatively and writes native CIRCLE/ARC where stroke semantics permit; R12 weighted strokes remain POLYLINE. A closed four-cubic ellipse, or a circle scaled out of proportion, is written as a native ELLIPSE in R13 and later; R12 keeps the existing fallback. Alter Paths for Appearance outlines only the strokes a CAD line can't draw (aligned, profiled, offset dashes, wider than 2.11 mm, or in R13 and R14), so a 1 pt circle or arc stays a CIRCLE or ARC. DXF Options' Preset menu and `document.exportDxf`'s `dxfPreset: "cnc"` set the CNC / CAM options (#5500); VCarve QA remains open. Escape leaves Artboard editing for Selection; during a drag it first cancels the gesture. Headless egui key events cover idle Escape, active-drag cancellation and a subsequent Escape in `tests/distortkeys.rs`.
 
@@ -858,6 +858,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-12 | minor | G11: numeric fields keep the caret when a focus click is released more than 1 pt from its press; a tap within 1 pt still selects the whole value (#6659, follow-up to #1326); short-drag and jitter-tap regressions in `tests/numfields.rs`; estimates unchanged. |
 | 2026-11-03 | minor | An imported document's own title (an SVG's root `<title>`, a PDF's XMP `dc:title` else its Info `Title`) goes into File Info only; the document's name stays the file's name (#3626); no scored gap or estimate reassessed. |
 | 2026-11-11 | minor | Eyedropper copies effective character dimensions between transformed text objects (#6404); scores and estimates unchanged. |
 | 2026-11-11 | minor | Ordinary Save to a location refusing writes offers Save As (#6146); cancellation preserves the original path and modified state; automation receives READ_ONLY_LOCATION. Scores and estimates unchanged. Validation pending. |
