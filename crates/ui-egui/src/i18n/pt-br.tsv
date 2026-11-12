@@ -24,12 +24,12 @@
 # the built-in workspace names and the bracketed perspective grid preset names.
 #
 	Glowing Edges…	Bordas brilhantes…
-	  — missing	  — falha
+	  — missing	  — ausente
 	  — substituted by {style}	  — substituído por {style}
 	  — {n} characters from another font	  — {n} caracteres de outra fonte
 	 a pin to warp  |  	 um pino para distorcer  |  
 	 a point to edit it  |  	 um ponto para editá-lo  |  
-	 a stroke to add a width point  |  	 um traço para adicionar um ponto de largura  |  
+	 a stroke to add a width point  |  	 um traçado para adicionar um ponto de largura  |  
 	 across a selected object to set the gradient direction	 através de um objeto selecionado para definir a direção do gradiente
 	 across paths to push them along  |  	 ao longo de caminhos para empurrá-los  |  
 	 an anchor or path segment to select it  |  	 um ponto de ancoragem ou segmento de caminho para selecioná-lo  |  
@@ -41,7 +41,7 @@
 	 keeps its proportions)	 mantém suas proporções)
 	 near a selected pin to rotate  |  	 perto de um pino selecionado para girar  |  
 	 on the canvas to create one (	 na tela para criar um (
-	 selects several, or draws one inside an artboard)	 seleciona várias ou cria uma dentro de uma mesa de trabalho)
+	 selects several, or draws one inside an artboard)	 seleciona várias ou cria uma dentro de uma prancheta)
 	 over paths to roughen their outlines  |  	 sobre caminhos para enrugar seus contornos  |  
 	 over paths, and hold still to keep going  |  	 sobre caminhos, e mantenha parado para continuar  |  
 	 the art to add a pin  |  	 a arte para adicionar um pino  |  
@@ -70,7 +70,7 @@
 	 to sample a color	 para colher uma cor
 	 to scale in perspective	 para dimensionar em perspectiva
 	 to search every command	 para pesquisar todos os comandos
-	 to select an artboard  |  	 para selecionar uma mesa de trabalho  |  
+	 to select an artboard  |  	 para selecionar uma prancheta  |  
 	 to select more pins  |  	 para selecionar mais pinos  |  
 	 to select more points  |  	 para selecionar mais pontos  |  
 	 to select multiple objects  |  	 para selecionar vários objetos  |  
@@ -90,7 +90,7 @@
 	+ Add Scale	+ Adicionar Escala
 	0.2 (quality) to 100 (speed)	0.2 (qualidade) a 100 (velocidade)
 	1 Color Job…	Trabalho de 1 cor…
-	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} na mesa de trabalho equivale a {real} {unit} na cena.
+	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} na prancheta equivale a {real} {unit} na cena.
 	2 Color Job…	Trabalho de 2 cores…
 	3 Color Job…	Trabalho de 3 cores…
 	30° Angles	Ângulos de 30°
@@ -110,7 +110,7 @@
 	< 1 sec	< 1 segundo
 	<Opacity Mask>	<máscara de opacidade>
 	A File…	Um arquivo…
-	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	Um valor menor segue o traço de perto; um valor maior gera menos pontos e curvas mais suaves.
+	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	Um valor menor segue o traçado de perto; um valor maior gera menos pontos e curvas mais suaves.
 	A new preset starting from the selected one	Um novo predefinido a partir do selecionado
 	A saved copy of the selected preset	Uma cópia salva do predefinido selecionado
 	About VectorCraft	Sobre o VectorCraft
@@ -161,7 +161,7 @@
 	Align Stroke to Outside	Alinhar Traçado para Fora
 	Align Stroke:	Alinhar Traçado:
 	Align To:	Alinhar A:
-	Align to Artboard	Alinhar à Mesa de Trabalho
+	Align to Artboard	Alinhar à Prancheta
 	Align to Glyph Bounds	Alinhar aos Limites do Glifo
 	Align to Key Object	Alinhar ao Objeto-Chave
 	Align to Page	Alinhar à Página
@@ -176,7 +176,7 @@
 	All Categories	Todas as Categorias
 	All Text Objects	Todos os Objetos de Texto
 	All Tools	Todas as Ferramentas
-	All on Active Artboard	Tudo na Mesa de Trabalho Ativa
+	All on Active Artboard	Tudo na Prancheta Ativa
 	All on Same Layers	Tudo nas Mesmas Camadas
 	All printer's marks	Todas as marcas de impressora
 	All the art	Toda a arte
@@ -240,12 +240,12 @@ antiAlias	Sharp	Nítido
 	Art using a deleted global swatch keeps its colour.	A arte que usa uma amostra global excluída mantém sua cor.
 	ArtCraft Website	Site do ArtCraft
 	ArtCraft website	Site do ArtCraft
-	Artboard Options	Opções de Mesa de Trabalho
-	Artboard Options…	Opções de Mesa de Trabalho…
-	Artboard Tool	Ferramenta Mesa de Trabalho
-	Artboard {number}	Mesa de Trabalho {number}
-	Artboard:	Mesa de Trabalho:
-	Artboards	Mesas de Trabalho
+	Artboard Options	Opções de Prancheta
+	Artboard Options…	Opções de Prancheta…
+	Artboard Tool	Ferramenta Prancheta
+	Artboard {number}	Prancheta {number}
+	Artboard:	Prancheta:
+	Artboards	Pranchetas
 	Artwork Colors	Cores da Arte
 	As Multiple Assets	Como Vários Ativos
 	As Single Asset	Como Um Único Ativo
@@ -267,7 +267,7 @@ antiAlias	Sharp	Nítido
 	Auto Spell Check	Verificação Ortográfica Automática
 	Auto-Collapse Iconic Panels	Recolher Automaticamente Painéis Icônicos
 	Show Tool Group Labels	Mostrar Rótulos dos Grupos de Ferramentas
-	Auto-Rotate (turn the paper to each artboard)	Girar Automaticamente (gire o papel para cada mesa de trabalho)
+	Auto-Rotate (turn the paper to each artboard)	Girar Automaticamente (gire o papel para cada prancheta)
 	Automatic	Automático
 	Automatic flatness	Achatamento automático
 	Automatically	Automaticamente
@@ -324,13 +324,13 @@ antiAlias	Sharp	Nítido
 	Brights	Realces
 	Bring Forward	Trazer para Frente
 	Bring to Front	Trazer para a Frente
-	Bristle Brush Strokes	Traços de Pincel de Cerdas
+	Bristle Brush Strokes	Traçados de Pincel de Cerdas
 	Browser	Navegador
 	Brush Affects:	Pincel Afeta:
 	Brush Definition	Definição do Pincel
 	Brush Libraries	Bibliotecas de Pincéis
 	Brush Options…	Opções de Pincel…
-	Brush Strokes	Traços de Pincel
+	Brush Strokes	Traçados de Pincel
 	Brushes	Pincéis
 	Built-in Libraries	Bibliotecas Integradas
 	Built-in presets are read-only: New… starts an editable copy.	Predefinidos integrados são somente leitura: Novo… inicia uma cópia editável.
@@ -468,7 +468,7 @@ antiAlias	Sharp	Nítido
 	Clip	Recortar
 	Clip Complex Regions	Recortar Regiões Complexas
 	Clip to Art	Recortar para a Arte
-	Clip to Artboard	Recortar para a Mesa de Trabalho
+	Clip to Artboard	Recortar para a Prancheta
 	Clip to Bounding Box	Recortar para a Caixa Delimitadora
 	Clipboard Formats	Formatos da Área de Transferência
 	Clipboard Handling	Manuseio da Área de Transferência
@@ -570,7 +570,7 @@ antiAlias	Sharp	Nítido
 	Convert To Area Type	Converter Em Texto de Área
 	Convert To Point Type	Converter Em Texto de Ponto
 	Convert text to outlines	Converter texto em contornos
-	Convert to Artboards	Converter em Mesas de Trabalho
+	Convert to Artboards	Converter em Pranchetas
 	Convert to CMYK	Converter para CMYK
 	Convert to Grayscale	Converter para Escala de Cinza
 	Convert to RGB	Converter para RGB
@@ -674,11 +674,11 @@ antiAlias	Sharp	Nítido
 	Delete All	Excluir Tudo
 	Delete Anchor Point	Excluir Ponto de Ancoragem
 	Delete Anchor Point Tool	Ferramenta Excluir Ponto de Ancoragem
-	Delete Artboard	Excluir Mesa de Trabalho
-	Delete Artboards	Excluir Mesas de Trabalho
+	Delete Artboard	Excluir Prancheta
+	Delete Artboards	Excluir Pranchetas
 	Delete Brush	Excluir Pincel
 	Delete Character Style	Excluir Estilo de Caractere
-	Delete Empty Artboards	Excluir Mesas de Trabalho Vazias
+	Delete Empty Artboards	Excluir Pranchetas Vazias
 	Delete Freeform Point	Excluir Ponto Livre
 	Delete Graphic Style	Excluir Estilo Gráfico
 	Delete Graphic Style (Alt-click: without asking)	Excluir Estilo Gráfico (Alt-clique: sem perguntar)
@@ -820,11 +820,11 @@ antiAlias	Sharp	Nítido
 	Drop Shadow…	Sombra projetada…
 	Duotone Gradients	Gradientes Duotônicos
 	Duplicate	Duplicar
-	Duplicate Artboard	Duplicar Mesa de Trabalho
-	Copy Artboard	Copiar Mesa de Trabalho
-	Cut Artboard	Recortar Mesa de Trabalho
-	Rename Artboards	Renomear Mesas de Trabalho
-	Duplicate Artboards	Duplicar Mesas de Trabalho
+	Duplicate Artboard	Duplicar Prancheta
+	Copy Artboard	Copiar Prancheta
+	Cut Artboard	Recortar Prancheta
+	Rename Artboards	Renomear Pranchetas
+	Duplicate Artboards	Duplicar Pranchetas
 	Duplicate Brush	Duplicar Pincel
 	Duplicate Character Style	Duplicar Estilo de Caractere
 	Duplicate Effect	Duplicar Efeito
@@ -843,7 +843,7 @@ antiAlias	Sharp	Nítido
 	Earth Tones	Tons de Terra
 	East Asian Type	Tipografia do Leste Asiático
 	Edit	Editar
-	Edit Artboards	Editar Mesas de Trabalho
+	Edit Artboards	Editar Pranchetas
 	Edit Clipping Path	Editar Caminho de Recorte
 	Edit Color Group	Editar Grupo de Cores
 	Edit Colors	Editar Cores
@@ -947,7 +947,7 @@ antiAlias	Sharp	Nítido
 	Exit Isolation Mode	Sair do Modo de Isolamento
 	Expand	Expandir
 	Expand Appearance	Expandir Aparência
-	Expand Brush Strokes	Expandir Traços de Pincel
+	Expand Brush Strokes	Expandir Traçados de Pincel
 	Expand Compound Shape	Expandir Forma Composta
 	Expand Gradient Mesh	Expandir Malha de Gradiente
 	Expand Gradient To	Expandir Gradiente Para
@@ -959,7 +959,7 @@ antiAlias	Sharp	Nítido
 	Expand…	Expandir…
 	Export	Exportar
 	Export All…	Exportar Tudo…
-	Export Artboard	Exportar Mesa de Trabalho
+	Export Artboard	Exportar Prancheta
 	A File per Object	Um arquivo por objeto
 	Example: {name}	Exemplo: {name}
 	Export Preset:	Predefinição de exportação:
@@ -1121,7 +1121,7 @@ antiAlias	Sharp	Nítido
 	Fish…	Peixe…
 	Fit All	Ajustar Tudo
 	Fit All in Window	Ajustar Tudo na Janela
-	Fit Artboard in Window	Ajustar Mesa de Trabalho na Janela
+	Fit Artboard in Window	Ajustar Prancheta na Janela
 	Fit Headline	Ajustar Manchete
 	Decrease Font Size	Diminuir Tamanho da Fonte
 	Decrease Font Size by Five Steps	Diminuir Tamanho da Fonte em Cinco Incrementos
@@ -1202,8 +1202,8 @@ antiAlias	Sharp	Nítido
 	Large Gaps	Lacunas Grandes
 	Gap Preview Color:	Cor de Visualização das Lacunas:
 	Close Gaps With Paths	Fechar Lacunas com Caminhos
-	Show Live Paint Gaps	Mostrar Lacunas da Pintura ao Vivo
-	Hide Live Paint Gaps	Ocultar Lacunas da Pintura ao Vivo
+	Show Live Paint Gaps	Mostrar Lacunas da Pintura dinâmica
+	Hide Live Paint Gaps	Ocultar Lacunas da Pintura dinâmica
 	Select Fills	Selecionar Preenchimentos
 	Select Strokes	Selecionar Traçados
 	Paint Fills	Pintar Preenchimentos
@@ -1222,11 +1222,11 @@ antiAlias	Sharp	Nítido
 	Global Process Color	Cor Global de Processo
 	Glyphs	Glifos
 	Go To Link	Ir para o Link
-	Go to Artboard	Ir para Mesa de Trabalho
-	First Artboard	Primeira mesa de trabalho
-	Previous Artboard	Mesa de trabalho anterior
-	Next Artboard	Próxima mesa de trabalho
-	Last Artboard	Última mesa de trabalho
+	Go to Artboard	Ir para Prancheta
+	First Artboard	Primeira prancheta
+	Previous Artboard	Prancheta anterior
+	Next Artboard	Próxima prancheta
+	Last Artboard	Última prancheta
 	Gradient	Gradiente
 	Gradient Fill: click to apply, drag onto art	Preenchimento de Gradiente: clique para aplicar, arraste sobre a arte
 	Gradient Finishes	Finalizações de Gradiente
@@ -1292,7 +1292,7 @@ antiAlias	Sharp	Nítido
 	Help	Ajuda
 	Help › Search Commands…	Ajuda › Pesquisar Comandos…
 	Hide	Ocultar
-	Hide Artboards	Ocultar Mesas de Trabalho
+	Hide Artboards	Ocultar Pranchetas
 	Hide Bounding Box	Ocultar Caixa Delimitadora
 	Hide Code	Ocultar Código
 	Hide Bar	Ocultar Barra
@@ -1351,16 +1351,16 @@ antiAlias	Sharp	Nítido
 	Edit Perspective Grid	Editar Grade de Perspectiva
 	Expand Blend	Expandir Mesclagem
 	Expand Envelope	Expandir Envelope
-	Expand Image Trace	Expandir Rastreamento de Imagem
-	Expand Live Paint	Expandir Pintura ao Vivo
+	Expand Image Trace	Expandir Traçado de imagem
+	Expand Live Paint	Expandir Pintura dinâmica
 	Live Shape	Forma ao Vivo
 	Make Blend	Criar Mesclagem
 	Make Dynamic	Tornar Dinâmico
 	Make Intertwine	Criar Entrelaçamento
-	Make Live Paint	Criar Pintura ao Vivo
+	Make Live Paint	Criar Pintura dinâmica
 	Make Pattern	Criar Padrão
 	Make Slice	Criar Fatia
-	Merge Live Paint	Mesclar Pintura ao Vivo
+	Merge Live Paint	Mesclar Pintura dinâmica
 	Mesh Point Color	Cor do Ponto de Malha
 	Move Envelope Point	Mover Ponto do Envelope
 	Move Plane and Copy Objects	Mover Plano e Copiar Objetos
@@ -1369,7 +1369,7 @@ antiAlias	Sharp	Nítido
 	Move Type on a Path	Mover Texto em um Caminho
 	New Guide	Nova Guia
 	Place from Library	Colocar da Biblioteca
-	Rearrange Artboards	Reorganizar Mesas de Trabalho
+	Rearrange Artboards	Reorganizar Pranchetas
 	Release Blend	Liberar Mesclagem
 	Release Envelope	Liberar Envelope
 	Release Intertwine	Liberar Entrelaçamento
@@ -1381,7 +1381,7 @@ antiAlias	Sharp	Nítido
 	Objects on Path Tool	Ferramenta Objetos no Caminho
 	Attach Objects on Path	Anexar Objetos ao Caminho
 	Expand Objects on Path	Expandir Objetos no Caminho
-	Release Live Paint	Liberar Pintura ao Vivo
+	Release Live Paint	Liberar Pintura dinâmica
 	Release Repeat	Liberar Repetição
 	Release Slice	Liberar Fatia
 	Release Threaded Text	Liberar Texto Encadeado
@@ -1389,9 +1389,9 @@ antiAlias	Sharp	Nítido
 	Rename Style	Renomear Estilo
 	Rename View	Renomear Exibição
 	Reorder Appearance	Reordenar Aparência
-	Reorder Artboards	Reordenar Mesas de Trabalho
+	Reorder Artboards	Reordenar Pranchetas
 	Reshape Spine	Remodelar Coluna
-	Resize Artboard	Redimensionar Mesa de Trabalho
+	Resize Artboard	Redimensionar Prancheta
 	Resize Slice	Redimensionar Fatia
 	Resize Type Area	Redimensionar Área de Texto
 	Scale in Perspective	Dimensionar em Perspectiva
@@ -1436,13 +1436,13 @@ antiAlias	Sharp	Nítido
 	ICC Profile	Perfil ICC
 	Identify Objects By	Identificar Objetos Por
 	Ignore	Ignorar
-	Ignore Artboards (all the art as one page)	Ignorar Mesas de Trabalho (toda a arte como uma página)
+	Ignore Artboards (all the art as one page)	Ignorar Pranchetas (toda a arte como uma página)
 	Ignore Color	Ignorar Cor
 	Image Info	Informações da Imagem
 	Image Map:	Mapa da Imagem:
 	Image Size	Tamanho da Imagem
-	Image Trace	Rastreamento de Imagem
-	Image Trace Presets	Predefinidos de Rastreamento de Imagem
+	Image Trace	Traçado de imagem
+	Image Trace Presets	Predefinidos de Traçado de imagem
 	Image:	Imagem:
 	Images:	Imagens:
 	Import Keyboard Shortcuts…	Importar Atalhos de Teclado…
@@ -1602,11 +1602,11 @@ antiAlias	Sharp	Nítido
 	List Slices	Listar Fatias
 	List View	Exibição de Lista
 	List Workspaces	Listar Espaços de Trabalho
-	Live Paint	Pintura ao Vivo
-	Live Paint Bucket	Balde de Pintura ao Vivo
-	Live Paint Bucket (Stroke)	Balde de Pintura ao Vivo (Traçado)
-	Live Paint Info	Informações da Pintura ao Vivo
-	Live Paint Selection Tool	Ferramenta Seleção de Pintura ao Vivo
+	Live Paint	Pintura dinâmica
+	Live Paint Bucket	Balde de Pintura dinâmica
+	Live Paint Bucket (Stroke)	Balde de Pintura dinâmica (Traçado)
+	Live Paint Info	Informações da Pintura dinâmica
+	Live Paint Selection Tool	Ferramenta Seleção de Pintura dinâmica
 	Live Shape Properties	Propriedades de Forma ao Vivo
 	Load Color Profile…	Carregar Perfil de Cor…
 	Load Character Styles…	Carregar Estilos de Caractere…
@@ -1679,7 +1679,7 @@ antiAlias	Sharp	Nítido
 	Medium Dark	Médio Escuro
 	Medium Light	Médio Claro
 	Menu Dialog	Diálogo de Menu
-	Merge	Mesclar
+	Merge	Unir objetos
 	Merge Graphic Styles	Mesclar Estilos Gráficos
 	Merge Graphic Styles…	Mesclar Estilos Gráficos…
 	Merge Layers	Mesclar Camadas
@@ -1694,8 +1694,8 @@ antiAlias	Sharp	Nítido
 	Millimeters	Milímetros
 	Minify	Minificar
 	Minimize	Minimizar
-	Minus Back	Menos Atrás
-	Minus Front	Menos Frente
+	Minus Back	Minus Back
+	Minus Front	Minus Front
 	Mirror	Espelhar
 	Mirror & Cut	Espelhar e Cortar
 	Mirror & Cut Tool	Ferramenta Espelhar e Cortar
@@ -1712,22 +1712,22 @@ antiAlias	Sharp	Nítido
 	Mono	Mono
 	Monochrome images	Imagens monocromáticas
 	More	Mais
-	More Pathfinder options	Mais opções de Localizador de Caminhos
+	More Pathfinder options	Mais opções de Pathfinder
 	More Align options	Mais opções de alinhamento
 	More Paragraph options	Mais opções de parágrafo
 	More Settings	Mais Configurações
 	Move	Mover
 	Move Anchors	Mover Âncoras
 	Move Appearance	Mover Aparência
-	Move Artboard	Mover Mesa de Trabalho
-	Move Artboard Up/Down	Mover Mesas de Trabalho para Cima/Baixo
+	Move Artboard	Mover Prancheta
+	Move Artboard Up/Down	Mover Pranchetas para Cima/Baixo
 	Move Direction Handle	Mover Alça de Direção
 	Move Down	Mover para Baixo
 	Move Effect	Mover Efeito
 	Move Envelope Mesh Point	Mover Ponto de Malha do Envelope
 	Move Graphic Style	Mover Estilo Gráfico
 	Move Guide	Mover Guia
-	Move Locked and Hidden Artwork with Artboard	Mover Arte Bloqueada e Oculta com a Mesa de Trabalho
+	Move Locked and Hidden Artwork with Artboard	Mover Arte Bloqueada e Oculta com a Prancheta
 	Move Mesh Point	Mover Ponto de Malha
 	Move Mesh Points	Mover Pontos de Malha
 	Move Plane	Mover Plano
@@ -1754,7 +1754,7 @@ antiAlias	Sharp	Nítido
 	New Art Appearance	Nova Aparência de Arte
 	New Art Brush from Selection	Novo Pincel de Arte a partir da Seleção
 	New Art Has Basic Appearance	Nova Arte Tem Aparência Básica
-	New Artboard	Nova Mesa de Trabalho
+	New Artboard	Nova Prancheta
 	New Bristle Brush	Novo Pincel de Cerdas
 	New Brush…	Novo Pincel…
 	New Brush	Novo Pincel
@@ -1850,7 +1850,7 @@ antiAlias	Sharp	Nítido
 	Nothing to print	Nada para imprimir
 	Nudge	Nudge
 	Nudge in Perspective	Nudge em Perspectiva
-	Number of Artboards:	Número de Mesas de Trabalho:
+	Number of Artboards:	Número de Pranchetas:
 	Number of Colors:	Número de Cores:
 	Number of Recent Files to Display	Número de Arquivos Recentes para Exibir
 	Number of Recent Fonts	Número de Fontes Recentes
@@ -1879,8 +1879,8 @@ antiAlias	Sharp	Nítido
 	One Point Perspective Preset 3	Predefinido de Perspectiva de Um Ponto 3
 	One Point Perspective Preset 4	Predefinido de Perspectiva de Um Ponto 4
 	One Point Perspective Preset 5	Predefinido de Perspectiva de Um Ponto 5
-	One file per artboard: <name>-<artboard>.{ext}	Um arquivo por mesa de trabalho: <name>-<artboard>.{ext}
-	One page per artboard.	Uma página por mesa de trabalho.
+	One file per artboard: <name>-<artboard>.{ext}	Um arquivo por prancheta: <name>-<artboard>.{ext}
+	One page per artboard.	Uma página por prancheta.
 	Only Web Colors	Apenas Cores da Web
 	Opacity	Opacidade
 	Opacity & Mask Define Knockout Shape	Opacidade e Máscara Definem Forma de Isolamento
@@ -1932,7 +1932,7 @@ antiAlias	Sharp	Nítido
 	Open a document to navigate it.	Abra um documento para navegá-lo.
 	Open a document to preview its flattening.	Abra um documento para visualizar seu achatamento.
 	Open a document to preview its pages	Abra um documento para visualizar suas páginas
-	Open a document to see its artboards.	Abra um documento para ver suas mesas de trabalho.
+	Open a document to see its artboards.	Abra um documento para ver suas pranchetas.
 	Open a document to see its graphic styles.	Abra um documento para ver seus estilos gráficos.
 	Open a document to see its history.	Abra um documento para ver seu histórico.
 	Open a document to see its swatches.	Abra um documento para ver suas amostras.
@@ -2027,15 +2027,15 @@ antiAlias	Sharp	Nítido
 	Paste in Back	Colar Atrás
 	Paste in Front	Colar na Frente
 	Paste in Place	Colar no Lugar
-	Paste on All Artboards	Colar em Todas as Mesas de Trabalho
+	Paste on All Artboards	Colar em Todas as Pranchetas
 	Paste without Formatting	Colar sem Formatação
 	Pasted	Colado
 	Pastels	Pastéis
 	Path	Caminho
 	Path Eraser	Borracha de Caminho
 	Path Eraser Tool	Ferramenta Borracha de Caminho
-	Pathfinder	Localizador de Caminhos
-	Pathfinder Options…	Opções do Localizador de Caminhos…
+	Pathfinder	Pathfinder
+	Pathfinder Options…	Opções do Pathfinder…
 	Pathfinders:	Localizadores de Caminho:
 	Paths	Caminhos
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Caminhos: {paths}    Âncoras: {anchors}    Cores: {colors}
@@ -2213,9 +2213,9 @@ digits	Malayalam	Malaiala
 	Rating:	Avaliação:
 	Real World:	Mundo Real:
 	Real-time Drawing and Editing	Desenho e Edição em Tempo Real
-	Rearrange All Artboards	Reorganizar Todas as Mesas de Trabalho
+	Rearrange All Artboards	Reorganizar Todas as Pranchetas
 	Rearrange	Reorganizar
-	Select All Artboards	Selecionar Todas as Mesas de Trabalho
+	Select All Artboards	Selecionar Todas as Pranchetas
 	Switch Orientation	Trocar Orientação
 	Rearrange All	Reorganizar Tudo
 	Layout Order:	Ordem do Layout:
@@ -2224,10 +2224,10 @@ digits	Malayalam	Malaiala
 	Grid by Column	Grade por Coluna
 	Arrange by Row	Organizar em Linha
 	Arrange by Column	Organizar em Coluna
-	Move Artwork with Artboard	Mover Arte com a Mesa de Trabalho
-	Scale Artwork with Artboard	Dimensionar Arte com a Mesa de Trabalho
-	Artboards: {n}	Mesas de Trabalho: {n}
-	Rearrange All Artboards…	Reorganizar Todas as Mesas de Trabalho…
+	Move Artwork with Artboard	Mover Arte com a Prancheta
+	Scale Artwork with Artboard	Dimensionar Arte com a Prancheta
+	Artboards: {n}	Pranchetas: {n}
+	Rearrange All Artboards…	Reorganizar Todas as Pranchetas…
 	Recall Selection	Relembrar Seleção
 	Recent Colors	Cores Recentes
 	Recent Files	Arquivos Recentes
@@ -2331,7 +2331,7 @@ digits	Malayalam	Malaiala
 	Remove	Remover
 	Remove Anchor Points	Remover Pontos de Ancoragem
 	Remove Asset	Remover Ativo
-	Remove Brush Stroke	Remover Traço de Pincel
+	Remove Brush Stroke	Remover Traçado de Pincel
 	Remove Effect	Remover Efeito
 	Remove Guide	Remover Guia
 	Remove Item	Remover Item
@@ -2353,7 +2353,7 @@ digits	Malayalam	Malaiala
 	Reorder Appearance Item	Reordenar Item de Aparência
 	Repeat	Repetir
 	Repeat Objects	Objetos de Repetição
-	Repeat Pathfinder	Repetir Localizador de Caminhos
+	Repeat Pathfinder	Repetir Pathfinder
 	Repeat Tab	Repetir Parada de Tabulação
 	Repeat {name}	Repetir {name}
 	Replace	Substituir
@@ -2514,7 +2514,7 @@ digits	Malayalam	Malaiala
 	Save Changes	Salvar alterações
 	Save changes to {name}	Salvar alterações em {name}
 	Save color group to Swatch panel	Salvar grupo de cores no painel Amostras
-	Save each artboard to a separate file	Salvar cada mesa de trabalho em um arquivo separado
+	Save each artboard to a separate file	Salvar cada prancheta em um arquivo separado
 	Save for Office Documents	Salvar para Documentos do Office
 	Save for Office Documents…	Salvar para Documentos do Office…
 	Save for Web	Salvar para a Web
@@ -2567,7 +2567,7 @@ digits	Malayalam	Malaiala
 	Scale Strokes & Effects	Dimensionar Traçados e Efeitos
 	Scale Text Attributes	Dimensionar Atributos de Texto
 	Scale Tool	Ferramenta Escala
-	Scale to Fit Artboard	Dimensionar para Ajustar à Mesa de Trabalho
+	Scale to Fit Artboard	Dimensionar para Ajustar à Prancheta
 	Scale:	Escala:
 	Scale…	Escala…
 	Scaling	Dimensionamento
@@ -2621,7 +2621,7 @@ digits	Malayalam	Malaiala
 	Select a text object to edit its paragraph attributes.	Selecione um objeto de texto para editar seus atributos de parágrafo.
 	Select a text object to set its tab stops.	Selecione um objeto de texto para definir suas paradas de tabulação.
 	Select an image to see its Link Info.	Selecione uma imagem para ver suas Informações de Link.
-	Select an image to trace	Selecione uma imagem para rastrear
+	Select an image to trace	Selecione uma imagem para traçar
 	Select art and choose Object › Pattern › Make.	Selecione arte e escolha Objeto › Padrão › Criar.
 	Select art and click New Symbol to make one.	Selecione arte e clique em Novo Símbolo para criar um.
 	Select art and use New Brush to make one.	Selecione arte e use Novo Pincel para criar um.
@@ -2701,9 +2701,9 @@ digits	Malayalam	Malaiala
 	Shape Properties	Propriedades da Forma
 	Shaper Tool	Ferramenta Formador
 	Shapes	Formas
-	Shear	Cisalhar
-	Shear Tool	Ferramenta Cisalhar
-	Shear…	Cisalhar…
+	Shear	Inclinar
+	Shear Tool	Ferramenta Inclinar
+	Shear…	Inclinar…
 	Shell Lower…	Casca Inferior…
 	Shell Upper…	Casca Superior…
 	Shift	Shift
@@ -2714,7 +2714,7 @@ digits	Malayalam	Malaiala
 	Show All	Mostrar Tudo
 	Show All Hidden Attributes	Mostrar Todos os Atributos Ocultos
 	Show All Plates	Mostrar Todas as Placas
-	Show Artboards	Mostrar Mesas de Trabalho
+	Show Artboards	Mostrar Pranchetas
 	Show Bounding Box	Mostrar Caixa Delimitadora
 	Show Brush Size	Mostrar Tamanho do Pincel
 	Show Center	Mostrar Centro
@@ -2797,7 +2797,7 @@ digits	Malayalam	Malaiala
 	Size: {size}  Tracking: {tracking}	Tamanho: {size}  Rastreamento: {tracking}
 	Skew	Inclinar
 	Skin Tone Ramps	Rampas de Tom de Pele
-	Skip Blank Artboards	Pular Mesas de Trabalho em Branco
+	Skip Blank Artboards	Pular Pranchetas em Branco
 	Sky Gradients	Gradientes de Céu
 	Slice	Fatia
 	Slice Options	Opções de Fatia
@@ -2824,7 +2824,7 @@ digits	Malayalam	Malaiala
 	Snap to Grid	Ajustar à Grade
 	Snap to Pixel	Ajustar ao Pixel
 	Precise Cursors	Cursores Precisos
-	Image Trace Preview	Visualização do Rastreamento de Imagem
+	Image Trace Preview	Visualização do Traçado de imagem
 	Snap to Point	Ajustar ao Ponto
 	Snap to Unit	Ajustar à Unidade
 	Snapping Tolerance	Tolerância de Ajuste
@@ -2996,7 +2996,7 @@ digits	Malayalam	Malaiala
 	Top:	Superior:
 	Total Width:	Largura Total:
 	Touch Type Tool	Ferramenta Texto de Toque
-	Trace	Rastrear
+	Trace	Traçar
 	Tracking	Rastreamento
 	Trademark Symbol	Símbolo de Marca Comercial
 	Transform	Transformar
@@ -3051,11 +3051,11 @@ digits	Malayalam	Malaiala
 	Type Object Selection by Path Only	Seleção de Objetos de Texto Somente por Caminho
 	Type Orientation	Orientação do Texto
 	Type Tool	Ferramenta Texto
-	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	O texto vira contornos, e os traços que uma linha CAD não pode desenhar viram formas preenchidas.
+	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	O texto vira contornos, e os traçados que uma linha CAD não pode desenhar viram formas preenchidas.
 	Type on a Path	Texto em um Caminho
 	Type on a Path Options…	Opções de Texto em um Caminho…
 	Type on a Path Tool	Ferramenta Texto em um Caminho
-	Type stays text, and every stroke is a line with its lineweight and dashes.	O texto permanece texto, e todo traço é uma linha com sua espessura e tracejados.
+	Type stays text, and every stroke is a line with its lineweight and dashes.	O texto permanece texto, e todo traçado é uma linha com sua espessura e tracejados.
 	Type:	Tipo:
 	Type…	Tipo…
 	UI Brightness	Brilho da Interface
@@ -3091,7 +3091,7 @@ digits	Malayalam	Malaiala
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} imagem vinculada alterada no disco. Mostrar a nova versão?|{n} imagens vinculadas alteradas no disco. Mostrar as novas versões?
 	Update Modified Links	Atualizar Links Modificados
 	Use 	Use 
-	Use Artboards	Usar Mesas de Trabalho
+	Use Artboards	Usar Pranchetas
 	Use Black Point Compensation	Usar Compensação de Ponto Preto
 	Use Compression	Usar Compressão
 	Include Editing Data for Other Apps	Incluir Dados de Edição para Outros Aplicativos
@@ -3175,7 +3175,7 @@ digits	Malayalam	Malaiala
 	Vertical Type on a Path Tool	Ferramenta Texto Vertical em um Caminho
 	Vertical:	Vertical:
 	View	Exibir
-	View Artboard Only	Exibir Somente a Mesa de Trabalho
+	View Artboard Only	Exibir Somente a Prancheta
 	View Opacity Mask	Exibir Máscara de Opacidade
 	View PDF after saving	Exibir PDF após salvar
 	Viewing Angle:	Ângulo de Visualização:
@@ -3417,12 +3417,12 @@ lighting	Light	Luz
 	Right	Direita
 	Offset	Deslocamento
 	Accented Edges…	Bordas Acentuadas…
-	Angled Strokes…	Traços Angulares…
+	Angled Strokes…	Traçados Angulares…
 	Crosshatch…	Hachura Cruzada…
-	Dark Strokes…	Traços Escuros…
+	Dark Strokes…	Traçados Escuros…
 	Ink Outlines…	Contornos a Tinta…
 	Spatter…	Respingo…
-	Sprayed Strokes…	Traços Borrifados…
+	Sprayed Strokes…	Traçados Borrifados…
 	Sumi-e…	Sumi-e…
 	Vertical Guide	Guia vertical
 	Horizontal Guide	Guia horizontal
@@ -3446,9 +3446,9 @@ font-technology	Variable	Variáveis
 	Convert Selected Anchor Points to Corner	Converter pontos de ancoragem selecionados em canto
 	Convert Selected Anchor Points to Smooth	Converter pontos de ancoragem selecionados em suaves
 	Convert:	Converter:
-	Cut Path	Cortar traçado
+	Cut Path	Cortar caminho
 	Decorative	Decorativo
-	Default Fill and Stroke (D)	Preenchimento e traço padrão (D)
+	Default Fill and Stroke (D)	Preenchimento e traçado padrão (D)
 	Delete Anchor Points	Excluir pontos de ancoragem
 	Dim Images to:	Esmaecer imagens para:
 	Duplicate Selection	Duplicar seleção
@@ -3468,7 +3468,7 @@ font-technology	Variable	Variáveis
 	Fuzziness:	Difusão:
 	Number:	Número:
 	Longest:	Mais longo:
-	Path:	Traçado:
+	Path:	Caminho:
 	Largest:	Maior:
 	Direction:	Direção:
 	Symbolism Tools Options	Opções das ferramentas de simbolismo
@@ -3482,14 +3482,14 @@ font-technology	Variable	Variáveis
 	Full Tone	Tom completo
 	Document Library	Biblioteca do documento
 	Library:	Biblioteca:
-	Image Tracing	Vetorização de imagem
-	Tracing Presets	Predefinições de vetorização
+	Image Tracing	Traçado de imagem
+	Tracing Presets	Predefinições de traçado
 	Manage Presets	Gerenciar Predefinidos
 	Save as New Preset…	Salvar como Novo Predefinido…
 	Rename…	Renomear…
 	Rename Preset	Renomear Predefinido
-	Save Image Trace Preset	Salvar Predefinido de Rastreamento de Imagem
-	Delete Image Trace Preset	Excluir Predefinido de Rastreamento de Imagem
+	Save Image Trace Preset	Salvar Predefinido de Traçado de imagem
+	Delete Image Trace Preset	Excluir Predefinido de Traçado de imagem
 	Japanese	Japonês
 	Keep a link to an image file instead of only embedding it	Manter um link para o arquivo de imagem em vez de apenas incorporá-lo
 	Latin	Latim
@@ -3525,7 +3525,7 @@ font-technology	Variable	Variáveis
 	Rotation relative to:	Rotação relativa a:
 	Brush Scale Options	Opções de escala do pincel
 	Scale Proportionately	Dimensionar proporcionalmente
-	Stretch to Fit Stroke Length	Esticar para ajustar ao comprimento do traço
+	Stretch to Fit Stroke Length	Esticar para ajustar ao comprimento do traçado
 	Stretch Between Guides	Esticar entre guias
 	Start:	Início:
 	End:	Fim:
@@ -3546,7 +3546,7 @@ font-technology	Variable	Variáveis
 	Fit	Ajustar
 	Stretch to fit	Esticar para ajustar
 	Add space to fit	Adicionar espaço para ajustar
-	Approximate path	Aproximar traçado
+	Approximate path	Aproximar caminho
 	Colorization	Colorização
 	Tints	Matizes
 	Tints and Shades	Matizes e sombras
@@ -3560,12 +3560,12 @@ font-technology	Variable	Variáveis
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	O preto continua preto e o branco continua branco. As outras cores passam a ser sombras da cor do traçado quando são escuras e matizes dela quando são claras.
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	A cor-chave passa a ser a cor do traçado. As outras cores giram na roda de cores tanto quanto a cor-chave e mantêm a saturação e o brilho.
 	Shape:	Forma:
-	New Artboard Options…	Opções de nova mesa de trabalho…
+	New Artboard Options…	Opções de nova prancheta…
 	New Layer Options…	Opções de nova camada…
 	No matching fonts	Nenhuma fonte correspondente
 	Create:	Criar:
 	Fills	Preenchimentos
-	Strokes	Traços
+	Strokes	Traçados
 	Options for Selection…	Opções da seleção…
 	Outline Others	Contornar outros
 	Preview All Layers	Visualizar todas as camadas
@@ -3610,15 +3610,15 @@ font-technology	Variable	Variáveis
 	Relative	Relativo
 	Absolute	Absoluto
 	View:	Exibição:
-	Tracing Result	Resultado da vetorização
-	Tracing Result with Outlines	Resultado da vetorização com contornos
+	Tracing Result	Resultado do traçado
+	Tracing Result with Outlines	Resultado do traçado com contornos
 	Outlines	Contornos
 	Outlines with Source Image	Contornos com imagem de origem
 	Source Image	Imagem de origem
 	Press and hold to view the source image	Mantenha pressionado para ver a imagem de origem
-	Image Trace View	Exibição de vetorização de imagem
-	Stroke (X), double-click for the Color Picker	Traço (X), clique duas vezes para o seletor de cores
-	Swap Fill and Stroke (Shift+X)	Trocar preenchimento e traço (Shift+X)
+	Image Trace View	Exibição de traçado de imagem
+	Stroke (X), double-click for the Color Picker	Traçado (X), clique duas vezes para o seletor de cores
+	Swap Fill and Stroke (Shift+X)	Trocar preenchimento e traçado (Shift+X)
 	Add Content	Adicionar conteúdo
 	Click to apply to the selected type	Clique para aplicar ao texto selecionado
 	Create New Library	Criar nova biblioteca
@@ -3716,7 +3716,7 @@ axis	Both	Ambos
 @msg	Combine Slices: the slices have no bounds	Combinar fatias: as fatias não têm limites
 @msg	Convert to Artboards: selection has no area	Converter em pranchetas: a seleção não tem área
 @msg	Convert to Shape: no rectangles or ellipses selected	Converter em forma: nenhum retângulo ou elipse selecionado
-@msg	Corners edits the corners of a path	Cantos edita os cantos de um traçado
+@msg	Corners edits the corners of a path	Cantos edita os cantos de um caminho
 @msg	Couldn't copy to the system clipboard: {e}	Não foi possível copiar para a área de transferência do sistema: {e}
 @msg	Couldn't open {name}: {e}	Não foi possível abrir {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Não foi possível inserir {name}: o documento em que foi solto foi fechado
@@ -3730,32 +3730,32 @@ axis	Both	Ambos
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	A recuperação de dados não tem onde guardar cópias: defina Preferências → Manipulação de arquivos → Recuperação de dados → Pasta (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	A recuperação de dados não pode guardar cópias em {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Não é possível carregar plug-ins de {path}: {e}
-@msg	direct-select anchor points to cut at (not the end points of open paths)	selecione diretamente os pontos de ancoragem onde cortar (não as extremidades de traçados abertos)
-@msg	Divide Objects Below: select a path	Dividir objetos abaixo: selecione um traçado
-@msg	Divide Objects Below: select exactly one path	Dividir objetos abaixo: selecione exatamente um traçado
+@msg	direct-select anchor points to cut at (not the end points of open paths)	selecione diretamente os pontos de ancoragem onde cortar (não as extremidades de caminhos abertos)
+@msg	Divide Objects Below: select a path	Dividir objetos abaixo: selecione um caminho
+@msg	Divide Objects Below: select exactly one path	Dividir objetos abaixo: selecione exatamente um caminho
 @msg	Downloaded {what}	{what} baixado
 @msg	Expand Appearance: the selection has a basic appearance	Expandir aparência: a seleção tem uma aparência básica
-@msg	Expand: no brush strokes selected	Expandir: nenhum traço de pincel selecionado
+@msg	Expand: no brush strokes selected	Expandir: nenhum traçado de pincel selecionado
 @msg	Expand: no gradient fills	Expandir: nenhum preenchimento em gradiente
 @msg	Expand: nothing to expand	Expandir: nada para expandir
 @msg	Exported {path}	{path} exportado
 @msg	Flatten Transparency: select objects to flatten	Achatar transparência: selecione os objetos a achatar
 @msg	Flatten Transparency: {e}	Achatar transparência: {e}
-@msg	Image Trace: the traced image is missing	Vetorização de imagem: a imagem vetorizada está ausente
+@msg	Image Trace: the traced image is missing	Traçado de imagem: a imagem vetorizada está ausente
 @msg	Imported {what}: {_1}	{what} importado: {_1}
 @msg	Installed plug-in {_1}	Plug-in {_1} instalado
 @msg	Internal error: {msg} (please report this bug)	Erro interno: {msg} (relate este bug)
-@msg	Live Paint Merge: select a Live Paint group and the paths to add	Mesclar Pintura dinâmica: selecione um grupo de Pintura dinâmica e os traçados a adicionar
-@msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	A pintura dinâmica aceita traçados e traçados compostos: converta primeiro texto, imagens e outros objetos em traçados
-@msg	Live Paint: select paths or compound paths	Pintura dinâmica: selecione traçados ou traçados compostos
-@msg	Live Paint: these paths are too degenerate to paint	Pintura dinâmica: estes traçados são degenerados demais para pintar
-@msg	Make Guides: select paths	Criar guias: selecione traçados
+@msg	Live Paint Merge: select a Live Paint group and the paths to add	Mesclar Pintura dinâmica: selecione um grupo de Pintura dinâmica e os caminhos a adicionar
+@msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	A pintura dinâmica aceita caminhos e caminhos compostos: converta primeiro texto, imagens e outros objetos em caminhos
+@msg	Live Paint: select paths or compound paths	Pintura dinâmica: selecione caminhos ou caminhos compostos
+@msg	Live Paint: these paths are too degenerate to paint	Pintura dinâmica: estes caminhos são degenerados demais para pintar
+@msg	Make Guides: select paths	Criar guias: selecione caminhos
 @msg	No saved selections (Select → Save Selection…)	Nenhuma seleção salva (Selecionar → Salvar seleção…)
 @msg	No saved views (View → New View…)	Nenhuma vista salva (Exibir → Nova vista…)
-@msg	Offset Path: select paths	Deslocar traçado: selecione traçados
-@msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Deslocar traçado: o deslocamento não deixa nada dos traçados selecionados (um deslocamento para dentro maior que as formas)
+@msg	Offset Path: select paths	Deslocar caminho: selecione caminhos
+@msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Deslocar caminho: o deslocamento não deixa nada dos caminhos selecionados (um deslocamento para dentro maior que as formas)
 @msg	Opened {url}	{url} aberto
-@msg	Outline Stroke: no stroked paths selected	Contornar traço: nenhum traçado com traço selecionado
+@msg	Outline Stroke: no stroked paths selected	Contornar traçado: nenhum traçado com traçado selecionado
 @msg	PDF settings are not an object	as configurações de PDF não são um objeto
 @msg	PDF security settings are not an object	as configurações de segurança de PDF não são um objeto
 @msg	PDF writer error: {0}	Erro do gravador de PDF: {0}
@@ -3763,9 +3763,9 @@ axis	Both	Ambos
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Visualizar no navegador exige o aplicativo para desktop (na web, os arquivos são baixados)
 @msg	Release Guides: no guides	Liberar guias: não há guias
 @msg	Release: no layer to put the rectangle in	Liberar: não há camada para colocar o retângulo
-@msg	Replace Spine: select a blend and a path	Substituir coluna: selecione uma mesclagem e um traçado
+@msg	Replace Spine: select a blend and a path	Substituir coluna: selecione uma mesclagem e um caminho
 @msg	select two or more objects to distribute	selecione dois ou mais objetos para distribuir
-@msg	select paths or anchor points	selecione traçados ou pontos de ancoragem
+@msg	select paths or anchor points	selecione caminhos ou pontos de ancoragem
 @msg	SVG parse error: {0}	Erro de análise do SVG: {0}
 @msg	Save for Web: the image is empty	Salvar para Web: a imagem está vazia
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Salvar grava {_1}, não {_2}: use document.export para outros formatos
@@ -3776,9 +3776,9 @@ axis	Both	Ambos
 @msg	Saved {path}	{path} salvo
 @msg	Select text or click into text with the Type tool to insert glyphs	Selecione texto ou clique em um texto com a ferramenta Texto para inserir glifos
 @msg	Shape Builder: no region under the pointer	Criador de formas: nenhuma região sob o ponteiro
-@msg	Shape Builder: select paths or compound paths	Criador de formas: selecione traçados ou traçados compostos
+@msg	Shape Builder: select paths or compound paths	Criador de formas: selecione caminhos ou caminhos compostos
 @msg	Show All Hidden Attributes: nothing is hidden	Mostrar todos os atributos ocultos: nada está oculto
-@msg	Split Into Grid: select paths large enough for the grid	Dividir em grade: selecione traçados grandes o bastante para a grade
+@msg	Split Into Grid: select paths large enough for the grid	Dividir em grade: selecione caminhos grandes o bastante para a grade
 @msg	Targa files are RGB: colorModel rgb	arquivos Targa são RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Quebra de texto: selecione um objeto de quebra
 @msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` deve ser "none", "sharp", "crisp" ou "strong"
@@ -3851,7 +3851,7 @@ axis	Both	Ambos
 @msg	the program restores a saved state that was already restored	o programa restaura um estado salvo que já foi restaurado
 @msg	data the program reads is damaged or cut short, or the program asks for a position in a file that has none	os dados que o programa lê estão danificados ou cortados, ou o programa pede uma posição em um arquivo que não tem posição
 @msg	the program goes past one of the reader's limits	o programa ultrapassa um dos limites do leitor de PostScript
-@msg	the path has no point to continue from	o traçado não tem um ponto a partir do qual continuar
+@msg	the path has no point to continue from	o caminho não tem um ponto a partir do qual continuar
 @msg	a value is outside the range the operator takes	um valor está fora do intervalo aceito pelo operador
 @msg	the operator needs more values than the stack holds	o operador precisa de mais valores do que a pilha contém
 @msg	part of the program isn't valid PostScript text	parte do programa não é texto PostScript válido
@@ -3912,7 +3912,7 @@ axis	Both	Ambos
 @msg	can't write .{ext} images	não é possível gravar imagens .{ext}
 @msg	cannot distort a zero-size bounding box	não é possível distorcer uma caixa delimitadora de tamanho zero
 @msg	cannot read PDF: {0}	não foi possível ler o PDF: {0}
-@msg	cannot split an open path at its end point	não é possível dividir um traçado aberto em sua extremidade
+@msg	cannot split an open path at its end point	não é possível dividir um caminho aberto em sua extremidade
 @msg	closing needs three anchors	fechar exige três âncoras
 @msg	check an asset to export	marque um recurso para exportar
 @msg	check an artboard to export	marque uma prancheta para exportar
@@ -3926,21 +3926,21 @@ axis	Both	Ambos
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` não é uma cor como "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: no máximo {MAX_TABLE} cores
 @msg	command `{0}` is not available right now: {1}	o comando `{0}` não está disponível agora: {1}
-@msg	compound paths can only contain paths	traçados compostos só podem conter traçados
+@msg	compound paths can only contain paths	caminhos compostos só podem conter caminhos
 @msg	compressed (RLE) bitmaps can't be read yet	bitmaps compactados (RLE) ainda não podem ser lidos
 @msg	damaged	danificado
 @msg	decimals must be {_1}–{_2} (got {_3})	decimals deve estar entre {_1} e {_2} (recebido {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	divida em 1 a {MAX_PIECES} fatias
 @msg	effect {k} is `{_1}`, not `{id}`	o efeito {k} é `{_1}`, não `{id}`
-@msg	empty brush stroke	traço de pincel vazio
+@msg	empty brush stroke	traçado de pincel vazio
 @msg	empty cutter	cortador vazio
-@msg	empty path	traçado vazio
+@msg	empty path	caminho vazio
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	a versão {0} do arquivo é mais recente do que este VectorCraft suporta ({VERSION})
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	o ponto {i} de forma livre precisa de `at` [x, y] e de uma `color` válida
 @msg	freeform line {i} must be an array of point indices	a linha {i} de forma livre deve ser uma matriz de índices de pontos
 @msg	give both `start` and `end` [x, y] (or neither)	informe `start` e `end` [x, y] (ou nenhum dos dois)
-@msg	give corners of the path: anchors between two straight sides	informe cantos do traçado: âncoras entre dois lados retos
-@msg	give the path `id` and the width point `index`	informe o `id` do traçado e o `index` do ponto de largura
+@msg	give corners of the path: anchors between two straight sides	informe cantos do caminho: âncoras entre dois lados retos
+@msg	give the path `id` and the width point `index`	informe o `id` do caminho e o `index` do ponto de largura
 @msg	guides are locked	as guias estão bloqueadas
 @msg	handle must be in or out	handle deve ser in ou out
 @msg	an image has no pixels and was left out	uma imagem sem pixels foi omitida
@@ -3966,7 +3966,7 @@ axis	Both	Ambos
 @msg	it uses `{at}`, which VectorCraft's PostScript reader doesn't know, in {procs}	usa `{at}`, que o leitor de PostScript do VectorCraft não conhece, em {procs}
 @msg	its Windows metafile preview was opened instead, which may simplify the art	a visualização em metarquivo do Windows foi aberta no lugar, o que pode simplificar a arte
 @msg	its preview was placed instead, at screen resolution	a visualização foi inserida no lugar, em resolução de tela
-@msg	join needs open paths	unir exige traçados abertos
+@msg	join needs open paths	unir exige caminhos abertos
 @msg	lang must be one of {_1}	lang deve ser um de {_1}
 @msg	layers can't be wrap objects	camadas não podem ser objetos de quebra
 @msg	line {line}: value for `{var}` must be true or false	linha {line}: o valor de `{var}` deve ser true ou false
@@ -4012,7 +4012,7 @@ axis	Both	Ambos
 @msg	no document	nenhum documento
 @msg	no document open	nenhum documento aberto
 @msg	no effect applied yet	nenhum efeito aplicado ainda
-@msg	no Pathfinder operation applied yet	nenhuma operação do Localizador de Caminhos aplicada ainda
+@msg	no Pathfinder operation applied yet	nenhuma operação do Pathfinder aplicada ainda
 @msg	no effect at index {k}	nenhum efeito no índice {k}
 @msg	no end record	sem registro final
 @msg	no file manager here	nenhum gerenciador de arquivos aqui
@@ -4124,13 +4124,13 @@ axis	Both	Ambos
 @msg	nothing to warp	nada para deformar
 @msg	nothing to wrap	nada para envolver
 @msg	object {0} cannot have children	o objeto {0} não pode ter filhos
-@msg	object {id} is not a path	o objeto {id} não é um traçado
+@msg	object {id} is not a path	o objeto {id} não é um caminho
 @msg	page size {w} × {h}	tamanho da página {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	a página {0} não existe (o PDF tem {1})
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: a página {n} não existe (o arquivo tem 1)
 @msg	paste unavailable	colar indisponível
-@msg	path is already closed	o traçado já está fechado
-@msg	paths contain invalid coordinates	os traçados contêm coordenadas inválidas
+@msg	path is already closed	o caminho já está fechado
+@msg	paths contain invalid coordinates	os caminhos contêm coordenadas inválidas
 @msg	paths: give at least one file	paths: informe pelo menos um arquivo
 @msg	replace: the object to replace was changed or deleted	replace: o objeto a ser substituído foi alterado ou excluído
 @msg	pattern missing	padrão ausente
@@ -4172,15 +4172,15 @@ axis	Both	Ambos
 @msg	a clipping path can't take objects	um caminho de recorte não pode receber objetos
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objetos dentro de uma mesclagem, envelope, repetição ou grupo entrelaçado não podem ser anexados a um caminho
 @msg	a clipping path can't be attached to a path	um caminho de recorte não pode ser anexado a um caminho
-@msg	select a stroke with a variable width	selecione um traço com largura variável
+@msg	select a stroke with a variable width	selecione um traçado com largura variável
 @msg	select a symbol instance	selecione uma instância de símbolo
 @msg	select instances of one symbol	selecione instâncias de um único símbolo
 @msg	a symbol can't hold an instance of itself	um símbolo não pode conter uma instância de si mesmo
-@msg	select an Image Trace object	selecione um objeto de Vetorização de imagem
+@msg	select an Image Trace object	selecione um objeto de Traçado de imagem
 @msg	could not decode image: {0}	não foi possível decodificar a imagem: {0}
 @msg	image is empty	a imagem está vazia
-@msg	the image is {width} × {height} pixels, more than Image Trace takes ({max} megapixels)	a imagem tem {width} × {height} pixels, mais do que a Vetorização de imagem aceita ({max} megapixels)
-@msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	esta vetorização geraria mais de {max} pontos de ancoragem, mais do que o documento consegue exibir com fluidez: aumente Ruído, reduza Traçados ou Cores, ou escolha uma predefinição de menor fidelidade
+@msg	the image is {width} × {height} pixels, more than Image Trace takes ({max} megapixels)	a imagem tem {width} × {height} pixels, mais do que a Traçado de imagem aceita ({max} megapixels)
+@msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	esta caminho geraria mais de {max} pontos de ancoragem, mais do que o documento consegue exibir com fluidez: aumente Ruído, reduza Caminhos ou Cores, ou escolha uma predefinição de menor fidelidade
 @msg	select an envelope	selecione um envelope
 @msg	select an image	selecione uma imagem
 @msg	`background` must be edges, corners or colors	`background` deve ser edges, corners ou colors
@@ -4203,8 +4203,8 @@ axis	Both	Ambos
 @msg	select at least two objects	selecione pelo menos dois objetos
 @msg	exit isolation mode first	saia do modo de isolamento primeiro
 @msg	select objects, not layers	selecione objetos, não camadas
-@msg	select one path, or give its `id`	selecione um traçado ou informe seu `id`
-@msg	select paths to join	selecione traçados para unir
+@msg	select one path, or give its `id`	selecione um caminho ou informe seu `id`
+@msg	select paths to join	selecione caminhos para unir
 @msg	select the art to repeat	selecione a arte a repetir
 @msg	select the artwork to warp	selecione a arte-final a deformar
 @msg	select the objects to transform in perspective	selecione os objetos a transformar em perspectiva
@@ -4262,7 +4262,7 @@ axis	Both	Ambos
 @msg	the object has no geometry	o objeto não tem geometria
 @msg	the object has no opacity mask	o objeto não tem máscara de opacidade
 @msg	stop editing the opacity mask first	pare de editar a máscara de opacidade primeiro
-@msg	the object has no stroke	o objeto não tem traço
+@msg	the object has no stroke	o objeto não tem traçado
 @msg	the object is beyond the plane's horizon	o objeto está além do horizonte do plano
 @msg	the object isn't in perspective	o objeto não está em perspectiva
 @msg	the object isn't on a perspective plane	o objeto não está em um plano de perspectiva
@@ -4273,13 +4273,13 @@ axis	Both	Ambos
 @msg	the preview image is empty	a imagem de visualização está vazia
 @msg	the print job has no data	o trabalho de impressão não tem dados
 @msg	the scale is not a usable number	a escala não é um número utilizável
-@msg	the selected stroke's profile is already listed as {_1}	o perfil do traço selecionado já está listado como {_1}
+@msg	the selected stroke's profile is already listed as {_1}	o perfil do traçado selecionado já está listado como {_1}
 @msg	the selection has no URL (or they differ)	a seleção não tem URL (ou elas diferem)
 @msg	the selection isn't in perspective	a seleção não está em perspectiva
 @msg	the spine has no segments	a coluna não tem segmentos
-@msg	the stroke has no weight	o traço não tem espessura
+@msg	the stroke has no weight	o traçado não tem espessura
 @msg	the thumbnail image is malformed	a imagem em miniatura está malformada
-@msg	the top object must be a path, compound path or text object to use as a clipping mask	o objeto superior deve ser um traçado, traçado composto ou objeto de texto para ser usado como máscara de recorte
+@msg	the top object must be a path, compound path or text object to use as a clipping mask	o objeto superior deve ser um caminho, caminho composto ou objeto de texto para ser usado como máscara de recorte
 @msg	the {tool} tool has no options	a ferramenta {tool} não tem opções
 @msg	there are no objects to release	não há objetos para liberar
 @msg	there are no printer settings to open here	não há configurações de impressora para abrir aqui
@@ -4355,8 +4355,8 @@ axis	Both	Ambos
 @msg	{command} didn't create an object	{command} não criou um objeto
 @msg	{label} produced an empty result	{label} produziu um resultado vazio
 @msg	{label}: lost track of a shape's style	{label}: perdeu o estilo de uma forma
-@msg	{label}: select paths	{label}: selecione traçados
-@msg	{label}: select paths, compound paths, groups or text	{label}: selecione traçados, traçados compostos, grupos ou texto
+@msg	{label}: select paths	{label}: selecione caminhos
+@msg	{label}: select paths, compound paths, groups or text	{label}: selecione caminhos, caminhos compostos, grupos ou texto
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC não confere
 @msg	{name}: no local header	{name}: sem cabeçalho local
@@ -4434,8 +4434,8 @@ axis	Both	Ambos
 @msg	a mask that covers several layers comes in as a clipping group in each layer it covers	uma máscara que cobre várias camadas entra como um grupo de recorte em cada camada que cobre
 @msg	a graph's records don't end where they should: its art was read as it is	os registros de um gráfico não terminam onde deveriam: sua arte foi lida como está
 @msg	`{w}` takes no operands	`{w}` não aceita operandos
-@msg	a wraparound group is inside a compound path	um grupo de quebra de texto está dentro de um traçado composto
-@msg	a path has too many points	um traçado tem pontos demais
+@msg	a wraparound group is inside a compound path	um grupo de quebra de texto está dentro de um caminho composto
+@msg	a path has too many points	um caminho tem pontos demais
 @msg	it ends inside a group or compound path	termina dentro de um grupo ou caminho composto
 @msg	it ends inside a layer	termina dentro de uma camada
 @msg	it ends inside a multi-layer mask	termina dentro de uma máscara de várias camadas
@@ -4450,7 +4450,7 @@ axis	Both	Ambos
 @msg	its objects are nested too deeply	seus objetos estão aninhados com profundidade excessiva
 @msg	its section ending with `%{end}` doesn't end	sua seção que termina com `%{end}` não termina
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	os pincéis que o VectorCraft ainda não consegue ler ficaram fora do painel Pincéis ({_1})
-@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objetos com vários preenchimentos ou traços, traços de largura variável, efeitos ou pincéis entraram com a aparência desenhada ({_1}): sua aparência ainda não é editável
+@msg	objects with several fills or strokes, variable-width strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objetos com vários preenchimentos ou traçados, traçados de largura variável, efeitos ou pincéis entraram com a aparência desenhada ({_1}): sua aparência ainda não é editável
 @msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	o nome `{name}` não está em UTF-8 e foi lido como {label}: se parecer errado, abra o arquivo com outro legacyNameEncoding
 @msg	the name `{name}` isn't UTF-8, and parts of it aren't valid {label} either: open the file with another legacyNameEncoding	o nome `{name}` não está em UTF-8, e partes dele também não são {label} válido: abra o arquivo com outro legacyNameEncoding
 @msg	more names that aren't UTF-8 were read as {label} ({count})	mais nomes que não estão em UTF-8 foram lidos como {label} ({count})
@@ -4672,9 +4672,9 @@ axis	Both	Ambos
 	Short Lines	Linhas Curtas
 	Medium Lines	Linhas Médias
 	Long Lines	Linhas Longas
-	Short Strokes	Traços Curtos
-	Medium Strokes	Traços Médios
-	Long Strokes	Traços Longos
+	Short Strokes	Traçados Curtos
+	Medium Strokes	Traçados Médios
+	Long Strokes	Traçados Longos
 	Radial Blur	Desfoque Radial
 	Smart Blur	Desfoque Inteligente
 	Unsharp Mask	Máscara de Nitidez
@@ -5248,15 +5248,15 @@ axis	Both	Ambos
 	Variable Options	Opções de Variável
 	Edit Data Set	Editar Conjunto de Dados
 	Accented Edges	Bordas Acentuadas
-	Angled Strokes	Traços Angulares
+	Angled Strokes	Traçados Angulares
 	Crosshatch	Hachura Cruzada
-	Dark Strokes	Traços Escuros
+	Dark Strokes	Traçados Escuros
 	Ink Outlines	Contornos a Tinta
 	Spatter	Respingo
-	Sprayed Strokes	Traços Borrifados
+	Sprayed Strokes	Traçados Borrifados
 	Sumi-e	Sumi-e
 	Direction Balance	Equilíbrio de Direção
-	Stroke Length	Comprimento do Traço
+	Stroke Length	Comprimento do Traçado
 	Sharpness	Nitidez
 	Strength	Força
 	Balance	Equilíbrio
@@ -5264,9 +5264,9 @@ axis	Both	Ambos
 	White Intensity	Intensidade do Branco
 	Dark Intensity	Intensidade do Escuro
 	Spray Radius	Raio do Borrifo
-	Stroke Direction	Direção do Traço
-	Stroke Width	Largura do Traço
-	Stroke Pressure	Pressão do Traço
+	Stroke Direction	Direção do Traçado
+	Stroke Width	Largura do Traçado
+	Stroke Pressure	Pressão do Traçado
 	Right Diagonal	Diagonal Direita
 	Left Diagonal	Diagonal Esquerda
 	Linux Display Server	Servidor de Exibição do Linux
@@ -5592,7 +5592,7 @@ mark-style	Japanese	Japonesas
 	Harmony Rules	Regras de Harmonia
 	Heavy Ink	Tinta Pesada
 	High Fidelity Photo	Foto de Alta Fidelidade
-	Image Trace (Make and Expand)	Rastreamento de Imagem (Criar e Expandir)
+	Image Trace (Make and Expand)	Traçado de imagem (Criar e Expandir)
 	Joins:	Junções:
 	Keeps the document editable: VectorCraft reopens the PDF with nothing lost. For files you'll edit again.	Mantém o documento editável: o VectorCraft reabre o PDF sem perder nada. Para arquivos que você vai editar de novo.
 	Lab Spot Colors	Cores Spot Lab
@@ -5614,12 +5614,12 @@ mark-style	Japanese	Japonesas
 	Pixel	Pixel
 	Points:	Pontos:
 	Purple	Roxo
-	Release Image Trace	Liberar Rastreamento de Imagem
+	Release Image Trace	Liberar Traçado de imagem
 	Release Text Wrap	Liberar Quebra de Texto
 	RGB	RGB
 	Scissors	Tesoura
 	Shades of Gray	Tons de Cinza
-	Shear:	Cisalhamento:
+	Shear:	Inclinação:
 	Shift+Click	Shift+Clique
 	Shift+Drag	Shift+Arrastar
 	Silhouettes	Silhuetas
@@ -5878,14 +5878,14 @@ mark-style	Japanese	Japonesas
 @msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	O modo Logotipo Plano não usa keepColors: ele traça as cores indicadas em logoColors ou as cores que encontra.
 @msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Nada foi traçado: nenhuma das cores que o traçado encontrou corresponde a keepColors ({_1}).
 @msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Nada foi traçado: Ignorar Cor deixa de fora todas as áreas das cores listadas em keepColors.
-@msg	Nothing was traced: the colors that match keepColors produce no paths.	Nada foi traçado: as cores que correspondem a keepColors não geram nenhum caminho.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Nada foi caminho: as cores que correspondem a keepColors não geram nenhum caminho.
 @msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: nenhuma das cores que o traçado encontrou corresponde a {c}, então nada dela é traçado.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` requer `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` requer `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` requer `mode: "color"`
 @msg	no color group `{name}` in the document (see swatch.list)	nenhum grupo de cores `{name}` no documento (veja swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	O modo Logotipo Plano traçou a imagem em {_1} × {_2} pixels, reduzida por média de {_3} × {_4}.
-	Artboard {n} of {total}	Mesa de Trabalho {n} de {total}
+	Artboard {n} of {total}	Prancheta {n} de {total}
 	File {n} of {total}	Arquivo {n} de {total}
 	Encoding and writing the file…	Codificando e gravando o arquivo…
 @plural	{n} more export waiting|{n} more exports waiting	Mais {n} exportação aguardando|Mais {n} exportações aguardando
@@ -5917,7 +5917,7 @@ mark-style	Japanese	Japonesas
 # Select by Color (select.color)
 	Select by Color	Selecionar por Cor
 	Move Anchor Point	Mover Ponto de Ancoragem
-@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} mantém 1 das {n} mesas de trabalho do documento: o arquivo reabre com uma. Ative Preservar Capacidades de Edição para manter todas.
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} mantém 1 das {n} pranchetas do documento: o arquivo reabre com uma. Ative Preservar Capacidades de Edição para manter todas.
 	Chalk & Charcoal…	Giz e carvão…
 	Chalk & Charcoal	Giz e carvão
 	Graphic Pen…	Caneta gráfica…
@@ -5948,8 +5948,8 @@ mark-style	Japanese	Japonesas
 	Shift:	Deslocamento:
 	Fresco…	Afresco…
 	Fresco	Afresco
-	Lock Artboards	Bloquear Mesas de Trabalho
-	Unlock Artboards	Desbloquear Mesas de Trabalho
+	Lock Artboards	Bloquear Pranchetas
+	Unlock Artboards	Desbloquear Pranchetas
 	Lock Selected	Bloquear selecionadas
 	Lock All Except Selected	Bloquear todas exceto as selecionadas
 	Lock All	Bloquear tudo
@@ -6119,12 +6119,12 @@ axis	Y Axis	Eixo Y
 	Global Edit Options	Opções de Edição Global
 	Leave Out of Global Edit	Deixar Fora da Edição Global
 	Match	Corresponder
-	On Artboards	Nas Mesas de Trabalho
-	All Artboards	Todas as Mesas de Trabalho
+	On Artboards	Nas Pranchetas
+	All Artboards	Todas as Pranchetas
 	Include Objects On Canvas	Incluir Objetos na Tela
 @plural	Result: {n}|Results: {n}	Resultado: {n}|Resultados: {n}
 @msg	select one object	selecione um objeto
-@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	A edição global funciona com demarcadores, demarcadores compostos, instâncias de símbolos e grupos deles
+@msg	Global Edit works on paths, compound paths, symbol instances and groups of them	A edição global funciona com caminhos, caminhos compostos, instâncias de símbolos e grupos deles
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nenhum objeto semelhante encontrado (cópias giradas ou refletidas não são correspondidas); altere as opções de edição global e tente novamente
 @msg	Global Edit is off	A edição global está desativada
 @msg	only an object of the Global Edit other than the one it started from can be left out	só é possível deixar fora da edição global um objeto diferente daquele com que ela começou
@@ -6183,7 +6183,7 @@ axis	Y Axis	Eixo Y
 	Rectangular Grid Tool Options	Opções da Ferramenta Grade Retangular
 	Polar Grid Tool Options	Opções da Ferramenta Grade Polar
 	Fill Line	Preencher linha
-	Pathfinder Options	Opções do Localizador de Caminhos
+	Pathfinder Options	Opções do Pathfinder
 	Divide and Outline Will Remove Unpainted Artwork	Dividir e Contorno removem a ilustração sem pintura
 @msg	precision must be from 0.001 to 10 pt	precision deve estar entre 0,001 e 10 pt
 @msg	`pathfinder` must be an object	`pathfinder` deve ser um objeto
@@ -6225,7 +6225,7 @@ axis	Y Axis	Eixo Y
 @msg	no brush `{n}` in `{_1}`	nenhum pincel `{n}` em `{_1}`
 @msg	no brush library `{key}` (see brush.libraries)	nenhuma biblioteca de pincéis `{key}` (consulte brush.libraries)
 @msg	the document has no brushes to save	o documento não tem pincéis para salvar
-@msg	no empty artboards to delete	não há mesas de trabalho vazias para excluir
+@msg	no empty artboards to delete	não há pranchetas vazias para excluir
 	Scale Presets	Predefinições de escala
 @msg	a {width}×{height} screenshot's byte count overflows	a contagem de bytes de uma captura {width}×{height} transborda
 @msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	o {what} da janela ({points} pontos × {scale} DPI) não pode dimensionar uma captura
@@ -6249,7 +6249,7 @@ axis	Y Axis	Eixo Y
 	Average & Join…	Média e união…
 	Average & Join	Média e união
 anchor	Points:	Pontos:
-@msg	select two open path ends, or two open paths, to average and join	selecione duas extremidades de traçados abertos, ou dois traçados abertos, para calcular a média e unir
+@msg	select two open path ends, or two open paths, to average and join	selecione duas extremidades de caminhos abertos, ou dois caminhos abertos, para calcular a média e unir
 
 # Artwork Cleanup add-on (Object › Plug-ins › Artwork Cleanup): its panel, tools, issue kinds and messages.
 	Artwork Cleanup	Limpeza de Arte
@@ -6612,10 +6612,10 @@ breakText	Glyphs	Glifos
 	Fit to Corners and Ends	Ajustar aos cantos e extremidades
 	Remove Gaps	Remover distâncias
 @msg	that makes too many pieces (at most 100000): make the dashes longer	isso gera peças demais (no máximo 100000): aumente os traços
-@msg	select paths, or segments, to divide	selecione demarcadores ou segmentos para dividir
+@msg	select paths, or segments, to divide	selecione caminhos ou segmentos para dividir
 # Path Precision Tools add-on: Expand Dashes into Paths.
-	Expand Dashes into Paths	Expandir traços em demarcadores
-@msg	select paths with dashed strokes to expand	selecione demarcadores com traçado tracejado para expandir
+	Expand Dashes into Paths	Expandir traços em caminhos
+@msg	select paths with dashed strokes to expand	selecione caminhos com traçado tracejado para expandir
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Ferramentas de Documento
 	Save a Timestamped Copy	Salvar uma Cópia com Data e Hora
@@ -6644,7 +6644,7 @@ breakText	Glyphs	Glifos
 @msgplural	Exported {n} document|Exported {n} documents	{n} documento exportado|{n} documentos exportados
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	{n} documento exportado; {title} não foi gravado: {error}|{n} documentos exportados; {title} não foi gravado: {error}
 # Document Tools add-on: Batch Trace Folder (#4921).
-	Batch Trace Folder	Rastrear Pasta em Lote
+	Batch Trace Folder	Traçar Pasta em Lote
 @msgplural	Traced {n} image|Traced {n} images	{n} imagem rastreada|{n} imagens rastreadas
 @msgplural	{n} image couldn't be traced|{n} images couldn't be traced	Não foi possível rastrear {n} imagem|Não foi possível rastrear {n} imagens
 @msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	{n} imagem rastreada; não rastreadas: {failed}|{n} imagens rastreadas; não rastreadas: {failed}
@@ -6692,7 +6692,7 @@ swatch	Aqua	Água
 	Arrow Scale:	Escala da seta:
 	Arrow Style:	Estilo da seta:
 	Art and Bright Colors	Arte e cores vivas
-	Artboard Options: edit with the Artboard tool	Opções de Mesa de Trabalho: editar com a ferramenta Mesa de Trabalho
+	Artboard Options: edit with the Artboard tool	Opções de Prancheta: editar com a ferramenta Prancheta
 	Away from the Line	Longe da linha
 swatch	Azure	Azul-celeste
 	Between Line and Object	Entre a linha e o objeto
@@ -6787,7 +6787,7 @@ swatch	Red	Vermelho
 	Reset Layout	Redefinir layout
 	Reset Painting	Redefinir pintura
 	Reset Printing and Proofing	Redefinir impressão e prova
-	Reset Tracing	Redefinir vetorização
+	Reset Tracing	Redefinir traçado
 	Reset Typography	Redefinir tipografia
 	Reset Web	Redefinir Web
 	Restricted Colors	Cores restritas
@@ -6872,13 +6872,13 @@ swatch	Yellow Green	Verde-amarelado
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	A arte é grande demais para ser copiada como imagem: outros aplicativos não recebem um PNG dela
 
 # Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
-	Select by Artboards	Selecionar por mesas de trabalho
-	Select by Artboards…	Selecionar por mesas de trabalho…
+	Select by Artboards	Selecionar por pranchetas
+	Select by Artboards…	Selecionar por pranchetas…
 	Selection Tools	Ferramentas de seleção
-	Search artboards	Pesquisar mesas de trabalho
+	Search artboards	Pesquisar pranchetas
 	Fully Inside	Totalmente dentro
 	Fully Outside	Totalmente fora
-	No artboards match.	Nenhuma mesa de trabalho corresponde.
+	No artboards match.	Nenhuma prancheta corresponde.
 	Chosen: {n} of {total}	Escolhidas: {n} de {total}
 
 # Contour add-on
