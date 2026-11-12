@@ -537,8 +537,9 @@ pub struct UiState {
     /// The Replace Font request behind the status bar's warning ([`ReplaceFontWarning`]). Not saved.
     #[serde(skip)]
     pub replace_font_warning: Option<ReplaceFontWarning>,
-    /// The notes of the last open that gave any, with the status text that names the first of
-    /// them: hovering that text lists them when there are several. Not saved.
+    /// The notes of the last open that gave any, or of the last save or export, with the status
+    /// text that names the first of them: hovering that text lists them when there are several.
+    /// Not saved.
     #[serde(skip)]
     pub status_notes: Option<(String, Vec<String>)>,
     pub palette_open: bool,
