@@ -1255,6 +1255,35 @@ fn panel_menu_does_not_change_stops_while_an_indent_marker_is_selected() {
     assert_eq!(current(&app).unwrap().1, before);
 }
 
+/// With 256 stops, a click on an empty part of the ruler adds none and shows the limit in the
+/// status bar. Repeat Tab near the end of the list adds copies only up to 256 stops and shows the
+/// limit too.
+#[test]
+fn the_ruler_and_repeat_tab_stop_at_256_stops() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({})).unwrap();
+    app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+    // 250 stops 1 pt apart from 0 pt, then six 2 pt apart from 260 pt.
+    let start: Vec<f64> = (0..250).map(f64::from).chain((0..6).map(|i| 260.0 + 2.0 * f64::from(i))).collect();
+    let stops: Vec<Value> = start.iter().map(|p| json!({"position": p})).collect();
+    app.session.execute("text.tabs.set", &json!({ "stops": stops })).unwrap();
+    let ctx = egui::Context::default();
+    let positions = |app: &VectorcraftApp| current(app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>();
+    set_pstate(&ctx, "tabs-sel", 3usize);
+    drag_on_ruler(&ctx, &mut app, 290.0, 290.0, false);
+    assert_eq!(positions(&app), start);
+    assert_eq!(pstate::<usize>(&ctx, "tabs-sel"), 3);
+    assert_eq!(app.ui.status, "at most 256 tab stops");
+    // Repeat Tab on the stop at 260 pt (11 pt past the one before it): five copies, not 20.
+    app.status("");
+    set_pstate(&ctx, "tabs-sel", 250usize);
+    choose(&ctx, &mut app, "Repeat Tab");
+    let repeated = positions(&app);
+    assert_eq!(repeated.len(), 256);
+    assert_eq!(repeated[249..], [249.0, 260.0, 271.0, 282.0, 293.0, 304.0, 315.0]);
+    assert_eq!(app.ui.status, "at most 256 tab stops");
+}
+
 /// Repeat Tab on the first stop spaces the copies by the stop's distance from the paragraph's
 /// left indent (18 pt further in for each list level past the first), from the paragraph the
 /// caret is in while the Type tool edits text.

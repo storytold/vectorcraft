@@ -1852,6 +1852,7 @@ font-technology	Variable	Μεταβλητές
 	Options…	Επιλογές…
 	Ordinals	Τακτικοί αριθμοί
 	Organic Fades	Οργανικές διαβαθμίσεις
+	Holographic	Ολογραφικά
 	Orientation	Προσανατολισμός
 	Orientation:	Προσανατολισμός:
 	Original	Πρωτότυπο
@@ -4533,6 +4534,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	not a valid plug-in module: {0}	δεν είναι έγκυρη μονάδα προσθέτου: {0}
 @msg	not an EMF or WMF file	δεν είναι αρχείο EMF ή WMF
 @msg	not an HP-GL file	δεν είναι αρχείο HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	το `pens` πρέπει να είναι πίνακας 1 έως 255 χρωμάτων #rrggbb
 @msg	not found	δεν βρέθηκε
 @msg	not in pattern editing mode	δεν βρίσκεστε σε λειτουργία επεξεργασίας μοτίβου
 @msg	finish editing the pattern first	ολοκληρώστε πρώτα την επεξεργασία του μοτίβου
@@ -6264,6 +6266,17 @@ axis	Y Axis	Άξονας Y
 	Charge Wave	Κύμα φόρτισης
 	Spark Trail	Ίχνος σπινθήρων
 	Calligraphic Nibs	Καλλιγραφικές πένες
+	Bristle Brushes	Πινέλα με τρίχες
+	Fine Liner	Λεπτή γραμμή
+	Pointed Flat	Μυτερό πλακέ
+	Stubby Round	Κοντό στρογγυλό
+	Dry Scrub	Ξηρό τρίψιμο
+	Soft Dome	Μαλακός θόλος
+	Filbert	Γλώσσα γάτας
+	Angled Round	Λοξό στρογγυλό
+	Angled Flat	Λοξό πλακέ
+	Fan Blender	Βεντάλια ανάμειξης
+	Grass Fan	Βεντάλια για γρασίδι
 	Pattern Borders	Περιθώρια μοτίβου
 	Scatter Shapes	Σχήματα διασποράς
 	Save Brush Library…	Αποθήκευση βιβλιοθήκης πινέλων…
@@ -6915,3 +6928,15 @@ breakText	Glyphs	Γλύφοι
 	Deferred Effects	Εφέ σε αναμονή
 @msg	no plug-in effect is deferred	κανένα εφέ προσθέτου δεν είναι σε αναμονή
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Άνοιξε με {n} εφέ προσθέτου σε αναμονή. Το Εφέ › Ανανέωση εφέ σε αναμονή το εκτελεί.|Άνοιξε με {n} εφέ προσθέτων σε αναμονή. Το Εφέ › Ανανέωση εφέ σε αναμονή τα εκτελεί.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Εργαλεία κοπής
+	Stencil Bridges…	Γέφυρες στένσιλ…
+	Stencil Bridges	Γέφυρες στένσιλ
+	Shortest Crossing	Συντομότερη διέλευση
+	Direction	Κατεύθυνση
+@msg	The selected art has no islands to bridge	Το επιλεγμένο γραφικό δεν έχει νησίδες για γεφύρωση
+@msg	No bridge of this width fits across the selected art	Καμία γέφυρα αυτού του πλάτους δεν χωράει στο επιλεγμένο γραφικό
+@msg	Some islands could not be joined to the area around the art	Ορισμένες νησίδες δεν ήταν δυνατό να συνδεθούν με την περιοχή γύρω από το γραφικό
+@msg	`width` must be from {lo} to {hi} pt	Το `width` πρέπει να είναι από {lo} έως {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	Το `count` πρέπει να είναι ακέραιος από 1 έως {MAX_BRIDGES_PER_ISLAND}

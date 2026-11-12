@@ -3185,6 +3185,7 @@ mark-style	Japanese	Japán
 	Radial Blur…	Körkörös elmosás…
 	Radial Glows	Körkörös ragyogások
 	Organic Fades	Organikus áttűnések
+	Holographic	Holografikus
 	Radial Gradient	Körkörös színátmenet
 	Conic Gradient	Kúpos színátmenet
 	Diamond Gradient	Rombusz színátmenet
@@ -5263,6 +5264,7 @@ imageTrace	Outline	Körvonal
 @msg	not a blend	nem összemosás
 @msg	not an EMF or WMF file	nem EMF- vagy WMF-fájl
 @msg	not an HP-GL file	nem HP-GL-fájl
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens`: 1–255 #rrggbb szín tömbje kell
 @msg	not found	nem található
 @msg	not in pattern editing mode	nem mintázatszerkesztő módban vagy
 @msg	finish editing the pattern first	előbb fejezd be a mintázat szerkesztését
@@ -6296,6 +6298,17 @@ axis	Y Axis	Y tengely
 	Charge Wave	Töltéshullám
 	Spark Trail	Szikracsík
 	Calligraphic Nibs	Kalligrafikus tollhegyek
+	Bristle Brushes	Sörteecsetek
+	Fine Liner	Finom kontúr
+	Pointed Flat	Hegyes lapos
+	Stubby Round	Rövid kerek
+	Dry Scrub	Száraz dörzsölés
+	Soft Dome	Lágy kupola
+	Filbert	Macskanyelv
+	Angled Round	Ferde kerek
+	Angled Flat	Ferde lapos
+	Fan Blender	Elmosó legyező
+	Grass Fan	Fűlegyező
 	Pattern Borders	Mintázatszegélyek
 	Scatter Shapes	Szórt alakzatok
 	Save Brush Library…	Ecsetkönyvtár mentése…
@@ -6947,3 +6960,15 @@ breakText	Glyphs	Glifák
 	Deferred Effects	Elhalasztott effektusok
 @msg	no plug-in effect is deferred	nincs elhalasztott bővítményeffektus
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Megnyitva, elhalasztott bővítményeffektusok: {n}. Az Effektus › Elhalasztott effektusok frissítése futtatja őket.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Vágóeszközök
+	Stencil Bridges…	Sablonhidak…
+	Stencil Bridges	Sablonhidak
+	Shortest Crossing	Legrövidebb átkelés
+	Direction	Irány
+@msg	The selected art has no islands to bridge	A kijelölt grafikán nincsenek összekötendő szigetek
+@msg	No bridge of this width fits across the selected art	Ilyen széles híd nem fér el a kijelölt grafikán
+@msg	Some islands could not be joined to the area around the art	Egyes szigeteket nem sikerült összekötni a grafikát körülvevő területtel
+@msg	`width` must be from {lo} to {hi} pt	A `width` értéke {lo} és {hi} pt között lehet
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`: 1 és {MAX_BRIDGES_PER_ISLAND} közötti egész szám kell

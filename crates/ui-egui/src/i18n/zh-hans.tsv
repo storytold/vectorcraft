@@ -2264,6 +2264,7 @@ file-filter	Templates	模板
 	Options:	选项：
 	Options…	选项…
 	Organic Fades	自然渐隐
+	Holographic	全息
 	or more spaces with a tab	或多个空格加一个制表符
 	Order:	顺序：
 	Ordinals	序数字
@@ -4397,6 +4398,7 @@ imageTrace	Outline	轮廓
 @msg	{bpp}-bit bitmaps can't be read	无法读取 {bpp} 位位图
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 文件
 @msg	not an HP-GL file	不是 HP-GL 文件
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 必须是由 1 到 255 个 #rrggbb 格式颜色组成的数组
 @msg	its layers use {_1}, which aren't read yet	其图层使用了 {_1}，尚不能读取
 @msg	the EMF header is damaged	EMF 文件头已损坏
 @msg	damaged	已损坏
@@ -6151,6 +6153,17 @@ axis	Y Axis	Y 轴
 	Charge Wave	充能波
 	Spark Trail	火花尾迹
 	Calligraphic Nibs	书法笔尖
+	Bristle Brushes	鬃毛画笔集
+	Fine Liner	细勾线笔
+	Pointed Flat	尖头平笔
+	Stubby Round	短圆笔
+	Dry Scrub	干擦
+	Soft Dome	柔和圆顶
+	Filbert	榛形笔
+	Angled Round	斜圆笔
+	Angled Flat	斜平笔
+	Fan Blender	混色扇形笔
+	Grass Fan	画草扇形笔
 	Pattern Borders	图案边框
 	Scatter Shapes	散布形状
 	Save Brush Library…	保存画笔库…
@@ -6801,3 +6814,15 @@ breakText	Glyphs	字形
 	Deferred Effects	延迟的效果
 @msg	no plug-in effect is deferred	没有延迟的增效工具效果
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	打开时延迟了 {n} 个增效工具效果。效果 › 刷新延迟的效果可运行它们。
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	切割工具
+	Stencil Bridges…	镂空版连接桥…
+	Stencil Bridges	镂空版连接桥
+	Shortest Crossing	最短跨越
+	Direction	方向
+@msg	The selected art has no islands to bridge	所选图稿没有需要连接的孤岛
+@msg	No bridge of this width fits across the selected art	此宽度的连接桥无法放入所选图稿
+@msg	Some islands could not be joined to the area around the art	部分孤岛无法连接到图稿周围的区域
+@msg	`width` must be from {lo} to {hi} pt	`width` 必须介于 {lo} 到 {hi} pt 之间
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必须是 1 到 {MAX_BRIDGES_PER_ISLAND} 之间的整数

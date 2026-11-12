@@ -867,6 +867,7 @@ digits	Malayalam	말라얄람어
 	Sky Gradients	하늘 그레이디언트
 	Neutral Gradients	중간색 그레이디언트
 	Organic Fades	유기적 페이드
+	Holographic	홀로그래픽
 	Duotone Gradients	듀오톤 그레이디언트
 	Radial Glows	방사형 광선
 	Save Swatch Library…	견본 라이브러리 저장…
@@ -4626,6 +4627,7 @@ theme	Appearance	외관
 @msg	{bpp}-bit bitmaps can't be read	{bpp}비트 비트맵은 읽을 수 없습니다
 @msg	not an EMF or WMF file	EMF 또는 WMF 파일이 아닙니다
 @msg	not an HP-GL file	HP-GL 파일이 아닙니다
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens`는 #rrggbb 색상 1~255개의 배열이어야 합니다
 @msg	its layers use {_1}, which aren't read yet	레이어에 {_1}이(가) 있으며, 아직 읽을 수 없습니다
 @msg	the EMF header is damaged	EMF 헤더가 손상되었습니다
 @msg	damaged	손상됨
@@ -5899,6 +5901,17 @@ axis	Y Axis	Y축
 	Charge Wave	차지 웨이브
 	Spark Trail	스파크 트레일
 	Calligraphic Nibs	서예 펜촉
+	Bristle Brushes	강모 브러시 모음
+	Fine Liner	가는 라이너
+	Pointed Flat	뾰족한 평붓
+	Stubby Round	짧은 둥근 붓
+	Dry Scrub	마른 문지르기
+	Soft Dome	부드러운 돔
+	Filbert	필버트
+	Angled Round	사선 둥근 붓
+	Angled Flat	사선 평붓
+	Fan Blender	블렌딩 부채붓
+	Grass Fan	잔디 부채붓
 	Pattern Borders	패턴 테두리
 	Scatter Shapes	흩뿌리기 모양
 	Save Brush Library…	브러시 라이브러리 저장…
@@ -6553,3 +6566,15 @@ breakText	Glyphs	글리프
 	Deferred Effects	보류된 효과
 @msg	no plug-in effect is deferred	보류된 플러그인 효과가 없습니다
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	플러그인 효과 {n}개를 보류하고 열었습니다. 효과 › 보류된 효과 새로 고침으로 실행합니다.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	커팅 도구
+	Stencil Bridges…	스텐실 브리지…
+	Stencil Bridges	스텐실 브리지
+	Shortest Crossing	최단 가로지르기
+	Direction	방향
+@msg	The selected art has no islands to bridge	선택한 아트워크에 연결할 섬이 없습니다
+@msg	No bridge of this width fits across the selected art	이 너비의 브리지가 선택한 아트워크에 들어가지 않습니다
+@msg	Some islands could not be joined to the area around the art	일부 섬을 아트워크 주변 영역에 연결할 수 없습니다
+@msg	`width` must be from {lo} to {hi} pt	`width`는 {lo}에서 {hi}pt 사이여야 합니다
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`는 1에서 {MAX_BRIDGES_PER_ISLAND} 사이의 정수여야 합니다

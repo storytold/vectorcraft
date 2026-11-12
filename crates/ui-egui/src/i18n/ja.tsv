@@ -874,6 +874,7 @@ digits	Malayalam	マラヤーラム数字
 	Sky Gradients	空のグラデーション
 	Neutral Gradients	ニュートラルグラデーション
 	Organic Fades	オーガニックフェード
+	Holographic	ホログラフィック
 	Duotone Gradients	ダブルトーングラデーション
 	Radial Glows	円形グロー
 	Save Swatch Library…	スウォッチライブラリを保存…
@@ -4699,6 +4700,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{bpp}-bit bitmaps can't be read	{bpp} ビットのビットマップは読み込めません
 @msg	not an EMF or WMF file	EMF ファイルでも WMF ファイルでもありません
 @msg	not an HP-GL file	HP-GL ファイルではありません
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` は 1〜255 個の #rrggbb 形式のカラーの配列にしてください
 @msg	its layers use {_1}, which aren't read yet	レイヤーで使用されている {_1} はまだ読み込めません
 @msg	the EMF header is damaged	EMF ヘッダーが破損しています
 @msg	damaged	破損しています
@@ -6003,6 +6005,17 @@ axis	Y Axis	Y 軸
 	Charge Wave	チャージウェーブ
 	Spark Trail	スパークトレイル
 	Calligraphic Nibs	カリグラフィペン先
+	Bristle Brushes	剛毛ブラシ集
+	Fine Liner	細線ライナー
+	Pointed Flat	先細平筆
+	Stubby Round	短丸筆
+	Dry Scrub	ドライスクラブ
+	Soft Dome	ソフトドーム
+	Filbert	フィルバート
+	Angled Round	斜め丸筆
+	Angled Flat	斜め平筆
+	Fan Blender	ぼかし扇筆
+	Grass Fan	草描き扇筆
 	Pattern Borders	パターンボーダー
 	Scatter Shapes	散布シェイプ
 	Save Brush Library…	ブラシライブラリを保存…
@@ -6657,3 +6670,15 @@ breakText	Glyphs	字形
 	Deferred Effects	保留中の効果
 @msg	no plug-in effect is deferred	保留中のプラグイン効果はありません
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	プラグイン効果を {n} 件保留して開きました。「効果 › 保留中の効果を更新」で実行します。
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	カッティングツール
+	Stencil Bridges…	ステンシルブリッジ…
+	Stencil Bridges	ステンシルブリッジ
+	Shortest Crossing	最短の横断
+	Direction	方向
+@msg	The selected art has no islands to bridge	選択したアートワークにはブリッジでつなぐアイランドがありません
+@msg	No bridge of this width fits across the selected art	この幅のブリッジは選択したアートワークに収まりません
+@msg	Some islands could not be joined to the area around the art	一部のアイランドをアートワークの周囲の領域につなげられませんでした
+@msg	`width` must be from {lo} to {hi} pt	`width` は {lo}～{hi} pt の範囲で指定してください
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` には 1 から {MAX_BRIDGES_PER_ISLAND} の整数を指定してください
