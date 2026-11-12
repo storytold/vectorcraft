@@ -156,8 +156,8 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                     center_on_path_items(app, &mut items);
                 }
             }
-            // Dynamic Text turns on or off for type on a path and area type (Block), as the Type menu's item does;
-            // left out for point type and type in a thread, which is VectorCraft's own rule
+            // Dynamic Text turns on or off for type on a path and area type (Block), and turns point type into area
+            // type with Block on, as the Type menu's item does; left out for type in a thread
             // (<https://helpx.adobe.com/photoshop/desktop/text-typography/work-with-dynamic-text/adjust-formatting-and-resize-text-with-dynamic-text.html>).
             if crate::menus::enabled(app, "type.dynamicText") {
                 items.push((tl!("Dynamic Text"), "maximize-2", "type.dynamicText", none()));

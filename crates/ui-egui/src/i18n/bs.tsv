@@ -6126,6 +6126,11 @@ axis	Y Axis	Y osa
 	Grass Fan	Lepeza za travu
 	Pattern Borders	Ivice od uzoraka
 	Scatter Shapes	Raspršeni oblici
+	Dry Media	Suhi mediji
+	Chalk Grain	Zrno krede
+	Graphite Pencil	Grafitna olovka
+	Wax Crayon	Voštana bojica
+	Charcoal Dust	Ugljena prašina
 	Save Brush Library…	Sačuvaj biblioteku četkica…
 @msg	`{_1}` has no brushes to apply	`{_1}` nema četkica za primjenu
 @msg	missing `library` (see brush.libraries)	nedostaje `library` (pogledajte brush.libraries)

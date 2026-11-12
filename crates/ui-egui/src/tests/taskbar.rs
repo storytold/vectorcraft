@@ -260,6 +260,22 @@ fn area_type_offers_dynamic_text() {
     assert!(has(&texts, "Convert To Point Type") && !has(&texts, "Dynamic Text"), "{texts:?}");
 }
 
+/// Point type offers Dynamic Text beside Convert To Area Type, which turns it into area type with
+/// Block on; the bar then offers what area type does.
+#[test]
+fn point_type_offers_dynamic_text() {
+    let mut app = app();
+    let t = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Fit\nme in a frame"})).unwrap());
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    select(&mut app, &[t]);
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Convert To Area Type") && has(&texts, "Dynamic Text"), "{texts:?}");
+    click(&mut app, "Dynamic Text");
+    assert!(matches!(kind(&app, t), NodeKind::Text(ref t) if t.dynamic_text && matches!(t.kind, TextKind::Area { .. })));
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Convert To Point Type") && has(&texts, "Dynamic Text"), "{texts:?}");
+}
+
 /// The path's anchors (its first subpath).
 fn anchors(app: &VectorcraftApp, id: u64) -> Vec<vectorcraft_geom::Anchor> {
     match kind(app, id) {
