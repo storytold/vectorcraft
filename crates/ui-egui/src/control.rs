@@ -572,8 +572,9 @@ struct Rewrite<'a> {
     fold: bool,
 }
 
-/// The keys of encoded file data in a reply.
-const BASE64_FIELDS: [&str; 3] = ["dataBase64", "pngBase64", "thumbnailBase64"];
+/// The keys of encoded file data in a reply. `thumbnail` holds the PNG of a library item in
+/// `library.get` and of a page in `document.pdfInfo`.
+const BASE64_FIELDS: [&str; 4] = ["dataBase64", "pngBase64", "thumbnailBase64", "thumbnail"];
 
 /// Is `s` written in the base64 alphabet, padded to a multiple of 4?
 fn is_base64(s: &str) -> bool {

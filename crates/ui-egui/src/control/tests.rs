@@ -40,14 +40,16 @@ fn hide_under_a_root(tag: &str, reply: &mut Value, hidden: &super::Hiding) {
     let _ = std::fs::remove_dir_all(root);
 }
 
-/// Encoded file data in a reply, a base64 string under `dataBase64`, `pngBase64` or
-/// `thumbnailBase64`, stays as it is when it holds a hidden library's path. Text that is not base64
-/// under such a key, an object or a list under it, and any other key ending in `Base64` are searched.
+/// Encoded file data in a reply, a base64 string under `dataBase64`, `pngBase64`, `thumbnailBase64`
+/// or `thumbnail` (a library item's or a PDF page's PNG), stays as it is when it holds a hidden
+/// library's path. Text that is not base64 under such a key, an object or a list under it, and any
+/// other key ending in `Base64` are searched.
 #[test]
 fn a_reply_keeps_encoded_data_that_holds_a_hidden_path() {
     let hidden = hiding(&[("loaded/assets/icon", "loaded/icon")], &[]);
     let data = "QUJ+assets/iconREVGxQQ==";
     let mut reply = json!({"ok": true, "result": {
+        "graphics": [{"name": "a", "thumbnail": data}, {"name": "b", "thumbnail": "assets/icon.png"}],
         "files": [{"name": "a.png", "dataBase64": data, "pngBase64": "assets/icon.png", "thumbnailBase64": data}],
         "status": "from assets/icon",
         "dataBase64": {"note": "from assets/icon"},
@@ -58,6 +60,8 @@ fn a_reply_keeps_encoded_data_that_holds_a_hidden_path() {
     let files = &reply["result"]["files"][0];
     assert_eq!((&files["dataBase64"], &files["thumbnailBase64"]), (&json!(data), &json!(data)), "{reply}");
     assert_eq!(files["pngBase64"], "icon.png", "{reply}");
+    let graphics = &reply["result"]["graphics"];
+    assert_eq!((&graphics[0]["thumbnail"], &graphics[1]["thumbnail"]), (&json!(data), &json!("icon.png")), "{reply}");
     assert_eq!(reply["result"]["status"], "from icon", "{reply}");
     assert_eq!(reply["result"]["dataBase64"]["note"], "from icon", "{reply}");
     assert_eq!(reply["result"]["pngBase64"][0], "from icon", "{reply}");
