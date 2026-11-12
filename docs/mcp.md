@@ -470,7 +470,9 @@ objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" pr
 In the app's Color panel and Color Picker, RGB, HSB, hex and Web Safe RGB values describe the active working RGB
 space. RGB edits preserve the other native channels; HSB uses those same working RGB components. Colors outside
 display sRGB retain their native numeric values. `ui.colorPanel` selects the panel mode and `ui.colorPicker`
-opens the picker through `run_command` with the remote backend.
+opens the picker through `run_command` with the remote backend. `ui.colorPanel {"recentColors": false}` unchecks
+the panel menu's Show Recent Colors, which hides the Color panel's Recent Colors row, and `true` shows it again;
+applied colors still join the list while it is hidden.
 
 | Tool | Arguments | Notes |
 |---|---|---|
