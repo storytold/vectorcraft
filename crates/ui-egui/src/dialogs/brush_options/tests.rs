@@ -436,13 +436,17 @@ fn each_tips_sample_paints_the_brush_with_its_method() {
     assert!(tints != hue && tints != shades && none != shades, "four different samples");
 }
 
-/// `ui.dialog.set` writes any field, `__def` included. With a brush definition that is not
-/// an object, Brush Options and Colorization Tips still draw.
+/// With a brush definition that is not an object, Brush Options and Colorization Tips still draw.
+/// `ui.dialog.set` refuses `__def`, which holds the brush OK saves.
 #[test]
 fn a_brush_definition_that_is_not_an_object_still_draws() {
     let (mut app, ctx) = (app(), ctx());
     app.run("ui.brushOptions", json!({"name": "Confetti"})).unwrap();
-    crate::tests_synthetic::control(&mut app, &ctx, "ui.dialog.set", json!({"field": "__def", "value": 5}));
+    let (req, _) = crate::control::ControlRequest::new("ui.dialog.set", json!({"field": "__def", "value": 5}));
+    let crate::control::Outcome::Done(r) = crate::control::handle(&mut app, &ctx, &req) else { panic!("not done") };
+    assert_eq!(r["error"], "the `brushOptions` dialog cannot set protected field `__def`", "{r}");
+    assert_ne!(app.ui.dialog.as_ref().unwrap().fields.get("__def"), Some(&json!(5)), "the request is refused");
+    set(&mut app, json!({"__def": 5}));
     crate::tests_synthetic::control(&mut app, &ctx, "ui.dialog.set", json!({"field": "tips", "value": true}));
     let text = shown(&mut app);
     assert!(text.contains("Scatter Brush Options") && text.contains("Colorization Tips"), "{text}");

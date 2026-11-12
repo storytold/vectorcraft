@@ -767,7 +767,8 @@ fn save_and_close_apply_a_merge_on_another_thread_first() {
 
 /// `ui.dialog.set` of a field the open dialog does not have is an error that lists its fields,
 /// and the dialog stays as it was. Fields a dialog may not hold yet are still set: `discard`
-/// with a discard button, `preview` with a live preview, `__` fields and the spec's `inputs`.
+/// with a discard button, `preview` with a live preview and the spec's `inputs`. A `__` field that
+/// is not one of the controls of the dialog's kind is refused.
 #[test]
 fn dialog_set_refuses_a_field_the_dialog_does_not_have() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
@@ -776,8 +777,11 @@ fn dialog_set_refuses_a_field_the_dialog_does_not_have() {
     let r = input_request(&mut app, "ui.dialog.set", json!({"field": "discrad", "value": true}));
     assert_eq!(r["ok"], false, "{r}");
     assert_eq!(r["error"], "the `saveChanges` dialog has no field `discrad`; its fields: discard, index, name, then, uid");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| Value::Object(d.fields.clone())), Some(fields.clone()));
+    let r = input_request(&mut app, "ui.dialog.set", json!({"field": "__note", "value": true}));
+    assert_eq!(r["error"], "the `saveChanges` dialog cannot set protected field `__note`", "{r}");
     assert_eq!(app.ui.dialog.as_ref().map(|d| Value::Object(d.fields.clone())), Some(fields));
-    for field in ["name", "discard", "__note"] {
+    for field in ["name", "discard"] {
         let r = input_request(&mut app, "ui.dialog.set", json!({"field": field, "value": true}));
         assert_eq!(r["ok"], true, "{field}: {r}");
     }
