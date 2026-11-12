@@ -858,6 +858,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | An imported document's own title (an SVG's root `<title>`, a PDF's XMP `dc:title` else its Info `Title`) goes into File Info only; the document's name stays the file's name (#3626); no scored gap or estimate reassessed. |
 | 2026-11-11 | minor | Eyedropper copies effective character dimensions between transformed text objects (#6404); scores and estimates unchanged. |
 | 2026-11-11 | minor | G5: built-in Energy Beams brush library (Laser Bolt, Plasma Arc, Charge Wave, Spark Trail); Missing trimmed; estimate 5–15 → 4–14 h; MCP Brush libraries list Energy Beams. |
 | 2026-11-11 | minor | G5: built-in Skill Icons symbol library (Attack, Defend, Heal, Buff, Ult); Missing trimmed; estimate 6–16 → 5–15 h; MCP Symbol libraries list Skill Icons. |

@@ -592,7 +592,7 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
                 let bytes = renderer.export_region(doc, region, format, &settings).map_err(EngineError::Other)?;
                 // File Info as PNG text chunks.
                 let bytes = if matches!(format, RasterFormat::Png | RasterFormat::Png8) {
-                    vectorcraft_render::encode::png::with_text(bytes, &doc.metadata.png_text(&doc.title))
+                    vectorcraft_render::encode::png::with_text(bytes, &doc.metadata.png_text(doc.info_title()))
                 } else {
                     bytes
                 };
