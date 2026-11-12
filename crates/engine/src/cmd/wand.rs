@@ -8,7 +8,7 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
 use super::select::selectable_ids;
-use super::{CommandSpec, EngineError, Result, Session, always, bad, bool_or, cmd, has_doc, id_param, str_param};
+use super::{CommandSpec, EngineError, Result, Session, always, bad, bool_or, cmd, has_doc, object_param, str_param};
 
 /// Magic Wand panel settings. Tolerances: colours as 0–255 RGB distance, stroke weight in
 /// points, opacity in percent.
@@ -152,7 +152,7 @@ fn paintable(doc: &Document) -> Vec<NodeId> {
 }
 
 fn magic_wand(s: &mut Session, p: &Value) -> Result<Value> {
-    let id = id_param(p, "id").ok_or_else(|| bad("select.magicWand", "missing id"))?;
+    let id = object_param(p, "id", "select.magicWand")?.ok_or_else(|| bad("select.magicWand", "missing id"))?;
     let st = s.doc()?;
     let reference = st.doc.node(id).ok_or(EngineError::NoNode(id))?.clone();
     let w = s.menu.wand.clone();
