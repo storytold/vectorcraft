@@ -299,6 +299,101 @@ fn replacing_a_file_that_opening_left_things_out_of_asks_first() {
 }
 
 #[test]
+fn a_save_does_not_replace_the_file_read_from_through_a_file_written_beside_the_path() {
+    let d = dir("lossy-beside");
+    let path = d.join("Art.eps").to_string_lossy().to_string();
+    let mut app = app();
+    checks_files_there(&mut app);
+    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    rect(&mut app);
+    let options = json!({"useArtboards": true, "previewFormat": "none", "thumbnails": false});
+    let _ = app.run("file.saveAs", json!({"path": path, "options": options}));
+    crate::background::wait_all(&mut app);
+    let siblings = artboard_files(&d);
+    assert_eq!(siblings.len(), 2, "{siblings:?}");
+    let sibling = siblings[0].clone();
+    let saved = std::fs::read(&sibling).unwrap();
+    std::fs::remove_file(&path).unwrap();
+    let st = app.session.doc_mut().unwrap();
+    st.imported_from = Some(sibling.clone());
+    st.import_losses = vec!["hidden type".into()];
+    rect(&mut app);
+    let _ = app.run("file.saveAs", json!({"path": path, "options": options}));
+    crate::background::wait_all(&mut app);
+    // The document's last save wrote the files beside the path, so the save does not ask whether
+    // to replace them: it is refused.
+    assert!(app.ui.dialog.as_ref().is_none_or(|d| d.kind != dialogs::confirm::REPLACE_FILES));
+    assert_eq!(std::fs::read(&sibling).unwrap(), saved);
+    assert!(!std::path::Path::new(&path).exists(), "no file of the set is written when one is refused");
+    let _ = std::fs::remove_dir_all(d);
+}
+
+/// The app checks for files that are there, as the desktop app does.
+fn checks_files_there(app: &mut VectorcraftApp) {
+    app.services.exists = Some(std::sync::Arc::new(|p: &str| std::path::Path::new(p).exists()));
+}
+
+/// The files in `d` that an EPS save of `Art.eps` with Use Artboards wrote beside it, sorted.
+fn artboard_files(d: &std::path::Path) -> Vec<String> {
+    let mut files: Vec<String> = std::fs::read_dir(d)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("Art_")))
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+    files.sort();
+    files
+}
+
+#[test]
+fn an_eps_save_with_use_artboards_asks_before_replacing_an_artboard_file_that_is_there() {
+    let d = dir("eps-artboards-there");
+    let path = d.join("Art.eps").to_string_lossy().to_string();
+    let options = json!({"useArtboards": true, "previewFormat": "none", "thumbnails": false});
+    let save_as = |app: &mut VectorcraftApp| {
+        let _ = app.run("file.saveAs", json!({"path": path, "options": options}));
+        crate::background::wait_all(app);
+    };
+    // Another document's save leaves files with the names of the artboard files.
+    let mut other = app();
+    other.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    save_as(&mut other);
+    let there = artboard_files(&d);
+    assert_eq!(there.len(), 2, "{there:?}");
+    std::fs::remove_file(&path).unwrap();
+    for f in &there {
+        std::fs::write(f, b"other").unwrap();
+    }
+    let mut app = app();
+    checks_files_there(&mut app);
+    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    rect(&mut app);
+    save_as(&mut app);
+    let dialog = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(dialog.kind, dialogs::confirm::REPLACE_FILES);
+    assert_eq!(dialog.fields["files"], json!(there));
+    assert!(!std::path::Path::new(&path).exists(), "nothing is written while it asks");
+    assert!(there.iter().all(|f| std::fs::read(f).unwrap() == b"other"));
+    // Cancel writes nothing.
+    dialogs::cancel(&mut app);
+    assert!(!std::path::Path::new(&path).exists());
+    assert!(there.iter().all(|f| std::fs::read(f).unwrap() == b"other"));
+    // OK writes every file.
+    save_as(&mut app);
+    dialogs::confirm(&mut app).unwrap();
+    crate::background::wait_all(&mut app);
+    assert!(std::path::Path::new(&path).exists());
+    assert!(there.iter().all(|f| std::fs::read(f).unwrap().starts_with(b"%!PS")));
+    // The document's next save writes them again without asking.
+    rect(&mut app);
+    let _ = app.run("file.save", json!({}));
+    crate::background::wait_all(&mut app);
+    assert!(app.ui.dialog.is_none());
+    assert!(!app.session.active().unwrap().is_dirty());
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
 fn native_saves_stream_into_the_file() {
     let d = dir("stream");
     let streamed = std::sync::Arc::new(std::sync::Mutex::new(vec![]));

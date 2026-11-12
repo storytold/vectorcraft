@@ -893,6 +893,12 @@ fn structured_junk() {
         ("addon.pen.reshape", json!({"id": 2, "segment": 0, "t": "x", "dx": 1, "dy": 1, "mode": "symmetric"})),
         ("addon.pen.nextSegment", json!({"curved": "yes"})),
         ("addon.pen.closeJoin", json!({"ids": [u64::MAX]})),
+        // Cutting Tools add-on.
+        ("addon.cutting.weed", json!({"margin": 1e5, "count": 1000, "gap": 1e5, "direction": "both"})),
+        ("addon.cutting.weed", json!({"margin": -1, "count": 1.5, "spacing": 0, "gap": f64::MAX, "weight": 1e308})),
+        ("addon.cutting.weed", json!({"spacing": 1e-300, "box": "no", "direction": ["both"], "swatch": 5})),
+        ("addon.cutting.weed", json!({"spacing": "1 mm", "box": false, "direction": "vertical", "swatch": "no such swatch"})),
+        ("addon.cutting.weed", json!({"count": u64::MAX, "margin": "x", "gap": null, "weight": 0})),
         // Type Tools add-on.
         ("addon.type.textTweaker", json!({"attribute": "size", "from": 1296, "to": 0.1, "shape": "random", "seed": u64::MAX})),
         ("addon.type.textTweaker", json!({"attribute": "tracking", "from": f64::MAX, "to": -1e308, "shape": "spike"})),

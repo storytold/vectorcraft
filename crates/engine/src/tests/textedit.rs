@@ -139,6 +139,54 @@ fn feature_changes_keep_each_runs_other_features() {
     assert_eq!(features(&s), [vec!["smcp", "numr", "liga", "dnom"], vec!["swsh", "numr", "liga", "dnom"], vec!["-onum", "swsh", "dnom"]]);
 }
 
+/// A feature with a value (`salt=2`): `features` and `featureChanges` take it, the next value
+/// replaces it, `salt=1` is a plain `salt` and `salt=0` and `-salt` are off, a value this build
+/// does not know is an error, one undo step each, and the native format keeps the plain string.
+#[test]
+fn feature_values_are_set_replaced_and_saved() {
+    let mut s = session();
+    let id = text(&mut s, "abcd");
+    let features = |s: &Session| obj(s, id).runs.iter().map(|r| (r.text.clone(), r.style.features.clone())).collect::<Vec<_>>();
+    let range = |s: &mut Session, p: Value| {
+        let mut p = p;
+        p["id"] = json!(id.0);
+        p["start"] = json!(1);
+        p["end"] = json!(2);
+        s.execute("text.setRangeStyle", &p).map(|_| ())
+    };
+    let undo = s.doc().unwrap().history.undo.len();
+    range(&mut s, json!({"features": ["salt=2"]})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(features(&s), [("a".into(), vec![]), ("b".into(), vec!["salt=2".to_string()]), ("cd".into(), vec![])]);
+    range(&mut s, json!({"features": ["salt=3"]})).unwrap();
+    assert_eq!(features(&s)[1].1, ["salt=3"], "the next value replaces it");
+    range(&mut s, json!({"featureChanges": ["salt=2", "ss01"]})).unwrap();
+    assert_eq!(features(&s)[1].1, ["ss01", "salt=2"], "written in the canonical order");
+    range(&mut s, json!({"featureChanges": ["salt=1"]})).unwrap();
+    assert_eq!(features(&s)[1].1, ["ss01", "salt"], "salt=1 is a plain salt");
+    range(&mut s, json!({"featureChanges": ["salt=2"]})).unwrap();
+    let saved = vectorcraft_format::save(&s.doc().unwrap().doc, false);
+    let back = vectorcraft_format::load(&saved).unwrap();
+    let Some(NodeKind::Text(t)) = back.node(id).map(|n| &n.kind) else { panic!("the text survives") };
+    assert_eq!(t.runs[1].style.features, ["ss01", "salt=2"], "the native format keeps the string");
+    assert!(String::from_utf8_lossy(&saved).contains("\"salt=2\""));
+    range(&mut s, json!({"featureChanges": ["-salt"]})).unwrap();
+    assert_eq!(features(&s)[1].1, ["ss01"], "-salt turns it off");
+    range(&mut s, json!({"featureChanges": ["salt=2"], "features": null})).unwrap();
+    range(&mut s, json!({"featureChanges": ["salt=0"]})).unwrap();
+    assert_eq!(features(&s)[1].1, ["ss01"], "salt=0 turns it off");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(features(&s)[1].1, ["ss01", "salt=2"], "undo takes it back");
+    let before = features(&s);
+    for tag in ["salt=", "salt=x", "salt=65536", "-salt=2", "liga=2", "salt=2=3", "zzzz=2"] {
+        for key in ["features", "featureChanges"] {
+            let e = range(&mut s, json!({ key: [tag] })).unwrap_err().to_string();
+            assert!(e.contains(&format!("`{tag}`")), "{key} {tag}: {e}");
+        }
+    }
+    assert_eq!(features(&s), before, "the refused commands change nothing");
+}
+
 /// `text.setStyle {stroke, strokeWidth}` sets the character stroke of all the text or of a range, as
 /// `text.setRangeStyle` does, and a call with `fill` and `stroke` sets both in one undo step.
 #[test]
@@ -3166,6 +3214,41 @@ fn a_glyph_alternate_replaces_one_character_through_undo_and_reopen() {
     assert!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 2})).unwrap_err().to_string().contains("is not available"));
 }
 
+/// `glyphAlternate: null` in `text.setRangeStyle` takes a glyph choice away in the same undo step
+/// as the other style it sets (a feature: what the Glyphs panel does for a variant a feature
+/// draws); anything but null is refused.
+#[test]
+fn set_range_style_takes_a_glyph_choice_away_with_a_feature() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    let [u1, ..] = unencoded_glyphs().expect("unencoded glyphs");
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "xay", "size": 20, "font": alternates_family(true)})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": u1})).unwrap();
+    let gids = |s: &Session| vectorcraft_text::layout(db, &obj(s, id)).glyphs.iter().map(|g| g.gid).collect::<Vec<_>>();
+    assert_eq!(gids(&s)[1], u1);
+    let undo = s.doc().unwrap().history.undo.len();
+    let e = s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 1, "end": 2, "glyphAlternate": 5})).unwrap_err().to_string();
+    assert!(e.contains("takes only null"), "{e}");
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 1, "end": 2, "glyphAlternate": null, "featureChanges": ["ss01"]})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert!(obj(&s, id).runs.iter().all(|r| r.style.glyph_alternate.is_none()), "the choice is gone");
+    assert_eq!(
+        gids(&s)[1],
+        face.substitutions(face.glyph_for('a')).iter().find(|x| &x.feature == b"ss01").map(|x| x.glyphs[0]).unwrap(),
+        "ss01 draws its glyph"
+    );
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(gids(&s)[1], u1, "undone: the choice again");
+    // With nothing else to set it is still a change.
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 1, "end": 2, "glyphAlternate": null})).unwrap();
+    assert_eq!(gids(&s)[1], face.glyph_for('a'));
+}
+
 /// The glyph already drawn, chosen again, and null for a character drawn with its default glyph
 /// leave the document and its undo history as they are. An empty run before the character does
 /// not stand in for the character's own choice.
@@ -3556,6 +3639,89 @@ fn an_overflowing_grapheme_keeps_the_styles_of_its_characters() {
     assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
     let r = s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 0, "gid": null})).unwrap();
     assert_eq!(r["gid"], json!(g('b')), "the overflowing Ka is shaped apart from the nukta of another size");
+}
+
+/// A contextual alternate with no feature must name the fallback face that supplies the glyph,
+/// including when the character is outside its frame. Neither another face's glyph nor an
+/// out-of-range id becomes a choice.
+#[test]
+fn a_contextual_fallback_glyph_choice_draws_through_undo_and_reopen() {
+    use vectorcraft_text::test_fonts::{
+        CONTEXTUAL_FALLBACK_CHAR as CH, CONTEXTUAL_FALLBACK_FAMILY, alternates_family, alternates_font, contextual_fallback_font, source_sans_gid,
+    };
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the primary test font builds"));
+    db.add_font(contextual_fallback_font().expect("the fallback test font builds"));
+    let primary = db.face(alternates_family(true), "Regular").expect("the primary face");
+    let fallback = db.face(CONTEXTUAL_FALLBACK_FAMILY, "Regular").expect("the supplying face");
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let (default, alternate) = (g('m'), g('d'));
+    assert_eq!(primary.glyph_for(CH), 0);
+    assert_eq!(db.face_covering(CH).unwrap().id(), fallback.id(), "only the fixture supplies the private-use character");
+    assert!(!fallback.alternates(CH).iter().any(|a| a.gid == alternate), "the alternate belongs to its shaped, not nominal, glyph");
+    assert!(!fallback.is_unlisted_alternate(CH, alternate), "the contextual validation path is required");
+    let text = format!("a{CH}a");
+    let start = 1;
+    let end = start + CH.len_utf8();
+    let drawn = |t: &TextObject| {
+        let mut open = t.clone();
+        open.kind = TextKind::Point;
+        vectorcraft_text::layout(db, &open).glyphs.into_iter().find(|g| g.byte == start).map(|g| (g.font_id, g.gid))
+    };
+    let state = |s: &Session| (s.doc().unwrap().history.undo.len(), s.doc().unwrap().revision);
+
+    for overflow in [false, true] {
+        let mut s = session();
+        let mut spec = json!({"x": 0, "y": 0, "text": text, "size": 20, "font": alternates_family(true)});
+        if overflow {
+            spec["area"] = json!({"width": 200, "height": 2});
+        }
+        let id = NodeId(s.execute("text.create", &spec).unwrap()["id"].as_u64().unwrap());
+        let before = obj(&s, id);
+        assert_eq!(drawn(&before), Some((fallback.id(), default)));
+        if overflow {
+            assert!(vectorcraft_text::layout(db, &before).glyphs.is_empty(), "the original frame overflows");
+        }
+        let contextual = vectorcraft_text::alternates_in_context(db, &before, start).expect("the panel's contextual alternates");
+        assert_eq!((contextual.font_id, contextual.default), (fallback.id(), default));
+        assert!(contextual.alternates.iter().any(|a| a.gid == alternate && a.apply.is_none()));
+
+        let unchanged = state(&s);
+        for gid in [primary.glyph_for('a'), fallback.glyph_count()] {
+            let err = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": start, "gid": gid})).unwrap_err();
+            assert!(err.to_string().contains("is not an alternate"), "{err}");
+            assert_eq!(state(&s), unchanged, "a refused choice makes no edit");
+            assert_eq!(obj(&s, id).runs, before.runs);
+        }
+        let result = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": start, "gid": alternate})).unwrap();
+        assert_eq!(result, json!({"id": id.0, "start": start, "end": end, "gid": alternate}));
+        assert_eq!(state(&s).0, unchanged.0 + 1, "one undo step");
+        let chosen = obj(&s, id);
+        assert_eq!(chosen.plain_text(), text);
+        assert_eq!(drawn(&chosen), Some((fallback.id(), alternate)));
+        let choice = chosen.runs.iter().find_map(|r| r.style.glyph_alternate.as_ref()).expect("the stored choice");
+        assert_eq!(choice, &fallback.choice(CH, alternate), "the choice keeps the supplying face's identity");
+
+        let mut wrong_face = chosen.clone();
+        wrong_face.runs.iter_mut().find(|r| r.style.glyph_alternate.is_some()).unwrap().style.glyph_alternate = Some(primary.choice(CH, alternate));
+        assert_eq!(drawn(&wrong_face), Some((fallback.id(), default)), "another face's choice is not drawn");
+
+        let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
+        let reopened = vectorcraft_format::load(&bytes).unwrap();
+        let NodeKind::Text(reopened) = &reopened.node(id).unwrap().kind else { panic!("text missing") };
+        assert_eq!(drawn(reopened), Some((fallback.id(), alternate)), "native restore retains the face and glyph");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(obj(&s, id).runs, before.runs, "Undo restores the original runs");
+        assert_eq!(drawn(&obj(&s, id)), Some((fallback.id(), default)));
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(drawn(&obj(&s, id)), Some((fallback.id(), alternate)), "Redo restores the choice");
+
+        let result = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": start, "gid": null})).unwrap();
+        assert_eq!(result["gid"], json!(default), "clearing reports the fallback's shaped glyph");
+        assert_eq!(drawn(&obj(&s, id)), Some((fallback.id(), default)));
+        assert!(obj(&s, id).runs.iter().all(|r| r.style.glyph_alternate.is_none()));
+    }
 }
 
 #[test]

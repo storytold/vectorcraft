@@ -1051,6 +1051,17 @@ font-technology	Variable	Biến thiên
 	The selected character's font is not available.	Phông chữ của ký tự đã chọn không khả dụng.
 	No alternates for the selected character.	Ký tự đã chọn không có glyph thay thế.
 	Double-click to replace	Bấm đúp để thay thế
+	Select one character with the Type tool first.	Trước hết hãy chọn một ký tự bằng công cụ Chữ.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} là glyph của {font}, không phải của phông chữ mà văn bản đã chọn đang dùng ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} thuộc về {base} (U+{base_code}) {place}; ký tự bạn chọn là {sel} (U+{code}).
+	at the start of a word	ở đầu từ
+	in the middle of a word	ở giữa từ
+	at the end of a word	ở cuối từ
+	standing alone	khi đứng riêng
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} không phải glyph thay thế của {sel} (U+{code}) như ký tự đó đang đứng trong từ của nó.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Bấm đúp để chèn {base} (U+{code}) thay thế: dạng trình bày không nối, còn chữ cái thì nối.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Đã chèn {base} (U+{code}) thay cho dạng trình bày: phông chữ nối nó với các ký tự bên cạnh theo vị trí.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Không có tính năng OpenType nào vẽ glyph này ở đây, nên nó thay glyph của ký tự và có thể không nối với các ký tự bên cạnh.
 	Double-click to insert	Bấm đúp để chèn
 	Double-click to rename	Bấm đúp để đổi tên
 	Double-click to target the contents	Bấm đúp để chọn nội dung
@@ -3271,6 +3282,7 @@ mark-style	Japanese	Kiểu Nhật
 	Rotate View Tool	Công cụ Xoay chế độ xem
 	Trackpad Gesture to Rotate View	Xoay chế độ xem bằng cử chỉ trên bàn di chuột
 	Hold a Tool Shortcut to Use the Tool Temporarily	Giữ phím tắt của công cụ để tạm thời dùng công cụ đó
+	Show Bounding Box While Moving and Drawing	Hiện hộp bao khi di chuyển và vẽ
 	Rotate…	Xoay…
 	Rotation	Góc xoay
 	Rotation relative to:	Xoay tương đối với:
@@ -6624,3 +6636,8 @@ breakText	Glyphs	Glyph
 @msg	Some islands could not be joined to the area around the art	Không thể nối một số đảo với vùng xung quanh hình vẽ
 @msg	`width` must be from {lo} to {hi} pt	`width` phải từ {lo} đến {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` phải là số nguyên từ 1 đến {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Khung và đường bóc phần thừa…
+	Weed Box and Lines	Khung và đường bóc phần thừa
+	Margin	Lề
+	Box	Khung
+	Swatch	Mẫu màu

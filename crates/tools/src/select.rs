@@ -841,6 +841,10 @@ impl Tool for SelectionTool {
         matches!(self.state, State::Scaling { .. })
     }
 
+    fn moving(&self) -> bool {
+        matches!(self.state, State::Moving { began: true, .. })
+    }
+
     fn transforming(&self) -> bool {
         match &self.state {
             State::Moving { began: true, .. } | State::Scaling { .. } | State::Rotating { .. } => true,
