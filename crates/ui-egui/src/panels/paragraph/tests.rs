@@ -698,6 +698,37 @@ fn the_control_bar_shows_the_paragraph_alignment_of_the_selected_type() {
     assert!(control_bar_node(&nodes, "Justify all lines").is_none(), "a second click closes it");
 }
 
+/// The Control bar's Character and Paragraph groups hold the type controls; each off leaves the
+/// other, and with Paragraph off the Align buttons fit a narrower window.
+#[test]
+fn the_character_and_paragraph_groups_hold_the_type_controls() {
+    let ctx = control_bar_ctx();
+    let mut app = control_bar_app(&[json!({"x": 20, "y": 50, "text": "Point"})]);
+    let set = |app: &mut VectorcraftApp, group: &str, visible: bool| {
+        app.run("window.control.options", json!({ "group": group, "visible": visible })).unwrap();
+    };
+    // The narrowest window, in steps of 10 points, whose bar shows the Align buttons.
+    let narrowest = |app: &mut VectorcraftApp| {
+        (40..=240).map(|w| w as f32 * 10.0).find(|&w| control_bar_node(&control_bar_nodes(&ctx, app, w, vec![]), "Horizontal Align Left").is_some())
+    };
+    let nodes = control_bar_nodes(&ctx, &mut app, 1920.0, vec![]);
+    for name in ["Character:", "Paragraph:", "Align left"] {
+        assert!(control_bar_node(&nodes, name).is_some(), "{name} shows");
+    }
+    let all = narrowest(&mut app).expect("the Align buttons show in a wide window");
+    set(&mut app, "paragraph", false);
+    let nodes = control_bar_nodes(&ctx, &mut app, 1920.0, vec![]);
+    assert!(control_bar_node(&nodes, "Paragraph:").is_none() && control_bar_node(&nodes, "Align left").is_none(), "Paragraph is off");
+    assert!(control_bar_node(&nodes, "Character:").is_some(), "Character stays");
+    let fewer = narrowest(&mut app).expect("the Align buttons show without Paragraph");
+    assert!(fewer < all, "the Align buttons fit {fewer} wide without Paragraph, {all} with it");
+    set(&mut app, "paragraph", true);
+    set(&mut app, "character", false);
+    let nodes = control_bar_nodes(&ctx, &mut app, 1920.0, vec![]);
+    assert!(control_bar_node(&nodes, "Character:").is_none(), "Character is off");
+    assert!(control_bar_node(&nodes, "Paragraph:").is_some(), "Paragraph stays");
+}
+
 /// #5372: at any width the Control bar trims itself from its right end, ending inside its margin.
 /// With type selected the inline X/Y/W/H fields go first, then the Distribute and Align buttons,
 /// area type's vertical alignment, the Paragraph buttons and last the Paragraph: link, while the

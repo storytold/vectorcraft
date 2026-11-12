@@ -1,5 +1,6 @@
-//! New Character Style and New Paragraph Style: the new style's name. OK makes the style from the
-//! text that was selected when the dialog opened (`charStyle.new`, `paraStyle.new`).
+//! New Character Style and New Paragraph Style: the new style's name and the sections of Character
+//! or Paragraph Style Options, filled in from the text that was selected when the dialog opened.
+//! OK makes the style with those attributes (`charStyle.new`, `paraStyle.new`).
 //!
 //! Fields: `name`, `__para` (true for a paragraph style) and `__target` (the `id`, `start` and
 //! `end` of the Type tool's selection, empty for the selected objects, and the `attrs` that text had
@@ -32,12 +33,14 @@ pub fn open(app: &mut VectorcraftApp, para: bool, target: Value) -> Result<Value
     let name = vectorcraft_engine::cmd::textstyles::new_style_name(d, para);
     let mut target = target;
     let selected_attrs = vectorcraft_engine::cmd::textstyles::target_style_attrs(&app.session, &target, para);
-    if let Some(attrs) = selected_attrs.or_else(|| (!para).then(|| vectorcraft_engine::cmd::textstyles::default_new_style_attrs(&app.session, false)))
-    {
-        target["attrs"] = Value::Object(attrs);
-    }
+    let attrs = selected_attrs.unwrap_or_else(|| vectorcraft_engine::cmd::textstyles::default_new_style_attrs(&app.session, para));
+    target["attrs"] = Value::Object(attrs);
     let mut fields = Dialog::new(KIND, json!({ "name": name, "__para": para, "__target": target })).fields;
-    if !para {
+    if para {
+        fields.insert("section".into(), json!("general"));
+        let attrs = target.get("attrs").and_then(Value::as_object).cloned().unwrap_or_default();
+        fields.extend(super::para_style_options::form_fields(&attrs, app.session.general_unit()));
+    } else {
         fields.insert("section".into(), json!("general"));
         fields.insert("__smallCapsSize".into(), json!(d.setup.small_caps_size));
         fields.insert("__superscript".into(), json!(d.setup.superscript));
@@ -85,11 +88,15 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
         return false;
     }
-    grid(ui, |ui| {
-        label(ui, tl!("Style Name:"));
-        form::text(ui, d, "name", 190.0);
-        ui.end_row();
+    ui.horizontal(|ui| {
+        super::para_style_options::section_list(ui, d);
+        ui.separator();
+        ui.vertical(|ui| super::para_style_options::section_body(ui, d));
     });
+    super::para_style_options::reset_button(ui, d);
+    if let Err(why) = super::para_style_options::edited_attrs(d) {
+        super::char_style_options::attrs_error(ui, &why);
+    }
     false
 }
 
@@ -98,9 +105,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut params = d.fields.get("__target").filter(|t| t.is_object()).cloned().unwrap_or_else(|| json!({}));
     params["name"] = json!(d.str("name"));
-    if !para(d) {
-        params["attrs"] = Value::Object(super::char_style_options::edited_attrs(d)?);
-    }
+    params["attrs"] = Value::Object(if para(d) { super::para_style_options::edited_attrs(d)? } else { super::char_style_options::edited_attrs(d)? });
     let r = app.run(if para(d) { "paraStyle.new" } else { "charStyle.new" }, params);
     if let Ok(v) = &r {
         app.ui.dialog = None;

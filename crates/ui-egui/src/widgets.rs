@@ -730,6 +730,23 @@ mod gradient_chip_tests {
         assert_eq!(at(&up, 0, 2), at(&up, 4, 2));
     }
 
+    /// A conic chip sweeps clockwise from its angle, or counterclockwise when the gradient is
+    /// mirrored.
+    #[test]
+    fn conic_chip_sweeps_the_way_the_gradient_turns() {
+        let at = |colors: &[Color32], i: usize, j: usize| colors[j * 5 + i].r();
+        let mut gp = paint(GradientKind::Conic, 0.0);
+        let chip = gradient_chip_colors(&gp, 20.0, 20.0, 4, 4);
+        // From the right: a quarter turn on is below the center, halfway around left of it.
+        assert!(at(&chip, 2, 4).abs_diff(191) <= 2 && at(&chip, 2, 0).abs_diff(64) <= 2, "{chip:?}");
+        assert!(at(&chip, 0, 2).abs_diff(128) <= 2, "{chip:?}");
+        let c = vectorcraft_geom::kurbo::Point::new(50.0, 50.0);
+        gp.geom =
+            Some(vectorcraft_color::GradientGeom { start: c, end: c + vectorcraft_geom::kurbo::Vec2::new(10.0, 0.0), aspect: -1.0, focal: None });
+        let mirrored = gradient_chip_colors(&gp, 20.0, 20.0, 4, 4);
+        assert!(at(&mirrored, 2, 4).abs_diff(64) <= 2 && at(&mirrored, 2, 0).abs_diff(191) <= 2, "{mirrored:?}");
+    }
+
     #[test]
     fn radial_chip_runs_from_the_centre_out() {
         let colors = gradient_chip_colors(&paint(GradientKind::Radial, 0.0), 20.0, 20.0, 4, 4);

@@ -58,6 +58,42 @@ fn state_survives_a_pause_and_a_collection_between_slices() {
     assert_eq!(finish(&mut r, 50).0.unwrap(), JsValue::Number(1500.0));
 }
 
+/// A paused run that is ended leaves no frames behind: the realm starts the next run with its
+/// globals, as many times as it is ended.
+#[test]
+fn an_ended_run_leaves_the_realm_ready_for_the_next() {
+    let mut r = realm(u64::MAX);
+    for _ in 0..3 {
+        r.start("var kept = 'yes'; function deep(n) { return n ? deep(n - 1) : (function () { while (true) {} })(); } deep(50);").unwrap();
+        assert_eq!(r.advance(500).unwrap(), Progress::Paused);
+        r.end();
+        assert!(!r.is_running());
+    }
+    assert!(r.interp().frames.is_empty() && r.interp().stack.is_empty());
+    r.start("kept").unwrap();
+    assert_eq!(finish(&mut r, 1_000).0.unwrap(), JsValue::String("yes".into()));
+    r.end();
+}
+
+/// Setting `Folder.current` back for the next run drops what only the last run's uncaught
+/// exception held, so a full heap from that exception does not stop the next run.
+#[test]
+fn resetting_folder_current_drops_the_last_uncaught_exception() {
+    let mut r = realm(10_000_000);
+    let len = Rc::new(Cell::new(4));
+    let n = len.clone();
+    let current: HostFunction = Rc::new(move |_| Ok(Data::String("d".repeat(n.get()))));
+    r.define_file_classes(vec![("current".into(), HostItem::Function(current))]).unwrap();
+    assert!(r.run("throw (function () { var a = []; for (var i = 0; i < 2000; i++) a.push('item ' + i); return a; })();").is_err());
+    let interp = r.interp();
+    interp.collect_garbage();
+    interp.limits.heap_bytes = interp.heap.bytes;
+    len.set(200);
+    assert_eq!(r.reset_folder_current(), Ok(()));
+    r.set_limits(Limits::default());
+    assert_eq!(r.run("typeof Folder"), Ok(JsValue::String("function".into())));
+}
+
 #[test]
 fn the_fuel_limit_covers_every_slice_together() {
     let mut r = realm(5_000);
@@ -223,6 +259,18 @@ fn a_getter_is_read_each_time() {
     assert_eq!(r.run("host.n + host.n").unwrap(), JsValue::Number(3.0));
 }
 
+/// A frozen getter gives a new value each time it is read, frozen to its leaves.
+#[test]
+fn a_frozen_getter_gives_a_frozen_value_each_time() {
+    let mut r = realm(1_000_000);
+    let f: HostFunction = Rc::new(|_| Ok(Data::Object(vec![("a".into(), Data::Array(vec![Data::Number(1.0)]))])));
+    let g = f.clone();
+    r.define_host_object("host", vec![("v".into(), HostItem::FrozenGetter(f)), ("open".into(), HostItem::Getter(g))]).unwrap();
+    let source = "var v = host.v; v.b = 2; try { v.a.push(2); } catch (e) {} \
+                  [Object.isFrozen(v), Object.isFrozen(v.a), v.b === undefined, v.a.length, host.v === host.v, Object.isFrozen(host.open)].join()";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("true,true,true,1,false,false".into()));
+}
+
 #[test]
 fn a_text_function_takes_each_argument_as_string_gives_it() {
     let mut r = realm(1_000_000);
@@ -323,6 +371,71 @@ fn an_error_says_where_in_the_source_it_was_raised() {
     assert_eq!(e.message, "TypeError: no");
 }
 
+/// An error a `finally` block passes on unchanged is reported where it was raised; one the block
+/// throws itself, or a catch throws again, is reported at that new throw. Each finally block holds
+/// a statement, so its end is not at the throw's position.
+#[test]
+fn an_error_that_passes_through_a_finally_block_says_where_it_was_raised() {
+    let mut r = realm(1_000_000);
+    let cases = [
+        ("try {\n  throw new Error('x');\n} finally {\n  var z=1;\n}", (2, 3), "Error: x"),
+        ("try {\n  null();\n} finally {\n  var z=1;\n}", (2, 3), "TypeError: the value is not a function"),
+        ("try {\n  throw 5;\n} finally {\n  var z=1;\n}", (2, 3), "5"),
+        ("try {\n  try { throw new Error('x'); } finally { var z=1; }\n} catch (e) { throw e; }", (3, 15), "Error: x"),
+        ("try {\n  try { throw new Error('x'); } finally { var z=1; }\n} finally { var z=1; }", (2, 9), "Error: x"),
+        ("function f() {\n  try { throw new Error('x'); } finally { var z=1; }\n}\nf();", (2, 9), "Error: x"),
+        ("try { throw new Error('x'); } catch (e) {\n  throw e;\n}", (2, 3), "Error: x"),
+        ("try { throw new Error('x'); } finally {\n  throw new Error('y');\n}", (2, 3), "Error: y"),
+        ("var e = new Error('x');\ntry {\n  throw e;\n} finally {\n  throw e;\n}", (5, 3), "Error: x"),
+        ("try {\n  throw new Error('outer');\n} finally {\n  try { throw new Error('inner'); } catch (e) {}\n}", (2, 3), "Error: outer"),
+        ("function g(){ try { throw new Error('inner'); } catch(e) {} }\ntry { throw new Error('outer'); } finally { g(); }", (2, 7), "Error: outer"),
+        (
+            "for (var i = 0; i < 2000; i++) { try { throw 1; } finally { continue; } }\ntry {\n  throw new Error('x');\n} finally {\n  var z=1;\n}",
+            (3, 3),
+            "Error: x",
+        ),
+    ];
+    for (source, (line, column), message) in cases {
+        let e = r.run(source).unwrap_err();
+        assert_eq!((e.kind, e.line, e.column, e.message.as_str()), (RunErrorKind::Thrown, line, column, message), "{source}");
+    }
+    let mut nested = String::new();
+    for _ in 0..40 {
+        nested.push_str("try {\n");
+    }
+    nested.push_str("  throw new Error('deep');\n");
+    for _ in 0..40 {
+        nested.push_str("} finally { var z=1; }\n");
+    }
+    let e = r.run(&nested).unwrap_err();
+    assert_eq!((e.line, e.column), (41, 3), "forty finally blocks");
+    for source in [
+        "function f(){ try { throw new Error('x'); } finally { return 4; } }\nf();",
+        "while(true) { try { throw new Error('x'); } finally { break; } }\n7;",
+        "for(var i=0;i<1;i++){ try { throw new Error('x'); } finally { continue; } }\n7;",
+    ] {
+        assert!(r.run(source).is_ok(), "{source}");
+    }
+}
+
+#[test]
+fn a_resumed_run_reports_an_error_that_passes_through_a_finally_block_where_it_was_raised() {
+    let mut r = realm(1_000_000);
+    r.start("try {\n  throw new Error('x');\n} finally {\n  var a=1;\n}").unwrap();
+    let e = finish(&mut r, 1).0.unwrap_err();
+    assert_eq!((e.kind, e.line, e.column), (RunErrorKind::Thrown, 2, 3));
+}
+
+#[test]
+fn a_marked_host_error_that_passes_through_a_finally_block_says_where_it_was_raised() {
+    let mut r = realm(1_000_000);
+    let f: HostFunction = Rc::new(|_| Err(HostError::Marked { error: Box::new(HostError::Syntax("bad file".into())), mark: 7 }));
+    r.define_host_object("host", vec![("f".into(), HostItem::Function(f))]).unwrap();
+    let e = r.run("try {\n  host.f();\n} finally { var z=1; }").unwrap_err();
+    assert_eq!((e.kind, e.line, e.column), (RunErrorKind::Thrown, 2, 3));
+    assert_eq!(r.error_mark(), Some(7));
+}
+
 #[test]
 fn advancing_without_a_run_is_an_error() {
     let mut r = realm(1_000);
@@ -406,6 +519,25 @@ fn a_converted_function_reads_each_argument_as_its_list_says() {
     assert_eq!(*seen.borrow(), want, "arguments past the list are not read");
     let out = r.run("var a = typeof conv; conv = 1; a + ' ' + conv").unwrap();
     assert_eq!(out, JsValue::String("function 1".into()), "a script may replace the function");
+}
+
+#[test]
+fn error_sources_count_from_the_last_script_and_code_from_an_earlier_one_is_unknown() {
+    let mut r = realm(10_000_000);
+    let source: HostFunction = Rc::new(|_| Ok(Data::String("\nthrow new Error('in eval')".into())));
+    let load = HostItem::Evaluator { source, end: Rc::new(|| {}), strict_writes: Rc::new(|| None) };
+    r.define_host_object("host", vec![("load".into(), load)]).unwrap();
+    r.run("function late() { throw new Error('late'); }").unwrap();
+    assert!(r.run("host.load()").is_err());
+    assert_eq!(r.error_source(), 1, "the first source the evaluator gave in this run");
+    assert!(r.run("\nlate()").is_err());
+    assert_eq!(r.error_source(), UNKNOWN_SOURCE, "an earlier script defined late");
+    assert!(r.run("\nthrow 1").is_err());
+    assert_eq!(r.error_source(), 0);
+    assert!(r.run("host.load()").is_err());
+    assert_eq!(r.error_source(), 1, "counted again from this run's script");
+    assert!(r.run("var = 1").is_err());
+    assert_eq!(r.error_source(), 0, "a syntax error is in the script");
 }
 
 proptest::proptest! {

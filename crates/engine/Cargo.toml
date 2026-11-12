@@ -68,6 +68,11 @@ log = { workspace = true }
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["std", "process"] }
 
+# Whether a recovery area's lock file is still the one that was opened (`FolderStore::still_named`).
+# Already in Cargo.lock (walkdir), so this adds no new crate.
+[target.'cfg(windows)'.dependencies]
+same-file = "1.0.6"
+
 # The tiles of a HEIC photo decode in parallel on native; wasm stays single-threaded.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 heic-rs = { version = "=0.1.4", default-features = false, features = ["std", "parallel"], optional = true }

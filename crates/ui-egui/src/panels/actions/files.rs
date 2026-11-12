@@ -34,7 +34,7 @@ pub(super) const MAX_SET_FILE: usize = 8 << 20;
 const MAX_SET_ACTIONS: usize = 1000;
 
 /// The most steps [`read_set`] reads in one action.
-const MAX_ACTION_STEPS: usize = 10_000;
+pub(super) const MAX_ACTION_STEPS: usize = 10_000;
 
 /// The most left-out steps that Load Actions… lists for an action set another app saved.
 const MAX_SKIPPED: usize = 1000;
