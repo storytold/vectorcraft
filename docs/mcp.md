@@ -145,9 +145,10 @@ the suite) keep the agent to the folders you give it:
   documents still being read; in `ui.recent_files`, the recent files; a library panel's `path` in `ui.library_panels`;
   in a recorded action's steps in `ui.action_sets`, also in a batch step's commands, the `path`, `paths`, `file`,
   `files` and `folder` params, a param whose name ends in `Path`, `Paths`, `File`, `Files` or `Folder` (`diffPath`,
-  `destinationFolder`), the entries of a list under such a param, and under any other param or in any list an
-  absolute path or a `file:` URL outside the roots (any case of `file:`, `%XX` escapes decoded; a URL that names
-  another host is always left out); and the folder
+  `destinationFolder`), the entries of a list under such a param, and under any other param, as a key or in any
+  list, an absolute path or a `file:` URL outside the roots (any case of `file:`, `%XX` escapes decoded; a URL that
+  names another host is always left out), and `~`, a path under `~` or a path that starts with `./` or `../`
+  (either separator) that resolves outside the roots from the app's working folder; and the folder
   preferences in `ui.engine_prefs` and in an open Preferences dialog's `ui.dialog.fields`
   (`fontsFolder`, `pluginsFolder`, `scratchPrimary`, `scratchSecondary`, `recoveryFolder`, `templatesFolder`; an
   empty folder and the scratch disk choices `Startup` and `None` stay). A library loaded from a file outside the
@@ -165,9 +166,14 @@ the suite) keep the agent to the folders you give it:
   reopens its panel), and the reply to such a request shows that id and file name wherever the library's id or path
   appears, an error included. Every reply under the read roots shows a hidden library's id as the id shown and its
   path as the file name in every string and key, the status text (`ui.status`), dialogs, the command palette query
-  (`ui.palette_query`) and a script's report (`scriptReport`) included. A longer path that begins with a hidden one
-  keeps its text only when it lies inside the read roots, so a readable library's id that begins with a hidden one
-  stays. Encoded file data (`dataBase64`, `pngBase64`) is sent as it is.
+  (`ui.palette_query`), a script's report (`scriptReport`) and the error from an internal fault included, for the
+  libraries hidden before the request ran and after it. The path is also matched with `%XX` escapes as a `file:`
+  URL writes it, and on Windows in any case of its letters. A longer text that begins with a hidden id or path
+  keeps it only when the longer text is another loaded library's id with no `.` or `..` part, so a readable
+  library's id that begins with a hidden one stays. The error of a failed request also shows a path outside the
+  read roots that the request sent by its file name, whether or not a library was loaded from it, so that the
+  error reads the same either way. Encoded file data, a base64 string under `dataBase64`,
+  `pngBase64` or `thumbnailBase64`, is sent as it is.
 - `swatch.library.list`, `brush.libraries`, `symbol.libraries` and `graphicStyle.libraries` list every library
   but leave out the paths outside the read roots: a library's `path` and the user library folder in `userFolder`
   are `null` there. A library loaded from a file outside the roots is listed as `loaded/<file name>`, numbered

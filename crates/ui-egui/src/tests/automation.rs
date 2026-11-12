@@ -675,6 +675,118 @@ fn ui_inspect_keeps_a_hidden_library_off_a_loaded_librarys_id() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// Hidden libraries with the same file name are numbered in the order they were loaded, not in the
+/// order of their paths.
+#[test]
+fn hidden_libraries_are_numbered_in_load_order() {
+    let (mut app, tx, base) = confined("hidden-load-order");
+    let gpl = "GIMP Palette\nName: p\n0 0 0 Black\n";
+    for dir in ["z", "a"] {
+        std::fs::create_dir_all(base.join("outside").join(dir)).unwrap();
+        let path = base.join("outside").join(dir).join("b.gpl");
+        std::fs::write(&path, gpl).unwrap();
+        app.session.execute("swatch.library.load", &json!({"path": s(path)})).unwrap();
+    }
+    app.ui.color_guide_limit = format!("loaded/{}", s(base.join("outside").join("a").join("b.gpl")));
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.gpl (2)", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A hidden library keeps the id a reply showed for it when another library with the same file name is
+/// loaded later.
+#[test]
+fn a_hidden_library_keeps_its_id_when_another_with_its_name_loads() {
+    let (mut app, tx, base) = confined("hidden-stable-id");
+    let first = format!("loaded/{}", s(base.join("outside").join("a").join("b.gpl")));
+    let panel: crate::panels::library_panel::LibraryPanel = serde_json::from_value(json!({"kind": "swatches", "id": first})).unwrap();
+    app.ui.library_panels = vec![panel];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["library_panels"][0]["id"], "loaded/b.gpl", "{r}");
+    std::fs::create_dir_all(base.join("outside").join("z")).unwrap();
+    let path = base.join("outside").join("z").join("b.gpl");
+    std::fs::write(&path, "GIMP Palette\nName: p\n0 0 0 Black\n").unwrap();
+    app.session.execute("swatch.library.load", &json!({"path": s(path.clone())})).unwrap();
+    app.ui.color_guide_limit = format!("loaded/{}", s(path));
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["library_panels"][0]["id"], "loaded/b.gpl", "{r}");
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.gpl (2)", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An error from a panic hides a hidden library's path, also when the request stopped referring to
+/// the library before it panicked.
+#[test]
+fn a_panic_reply_hides_a_library_hidden_before_the_request() {
+    let (mut app, tx, base) = confined("panic-hidden");
+    let path = s(base.join("outside/b.svg"));
+    app.ui.color_guide_limit = format!("loaded/{path}");
+    app.ui.status = format!("Loaded {path}");
+    let r = request(&mut app, &tx, "test.panic", json!({"forget": true}));
+    assert_eq!(r["error"], "internal error: failed on Loaded b.svg (please report this bug)", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An error shows a path outside the read root that the request sent by its file name, whether or not
+/// a hidden library was loaded from that path, so that it reads the same either way. A path the
+/// request sends does not show the app's own text that holds it, in an error or a result.
+#[test]
+fn an_error_hides_a_sent_path_whether_or_not_a_library_was_loaded_from_it() {
+    let (mut app, tx, base) = confined("client-echo");
+    let path = s(base.join("outside/b.svg"));
+    // Another hidden library with the same file name comes first, so this one shows as `b.svg (2)`.
+    let first = format!("loaded/{}", s(base.join("outside/z/b.svg")));
+    let panel: crate::panels::library_panel::LibraryPanel = serde_json::from_value(json!({"kind": "swatches", "id": first})).unwrap();
+    app.ui.library_panels = vec![panel];
+    app.ui.color_guide_limit = format!("loaded/{path}");
+    app.ui.status = format!("Loaded {path}");
+    let unloaded = [(s(base.join("outside/y/b.svg")), "b.svg"), (s(base.join("outside/c.svg")), "c.svg")];
+    for (sent, name) in [(path.clone(), "b.svg")].into_iter().chain(unloaded) {
+        let r = request(&mut app, &tx, "app.open", json!({"path": sent}));
+        assert!(r["error"].as_str().is_some_and(|e| e.ends_with(&format!(": {name}"))), "{r}");
+    }
+    let r = request(&mut app, &tx, "test.status", json!({"guess": path}));
+    assert_eq!(r["result"], "Loaded b.svg (2)", "{r}");
+    let r = request(&mut app, &tx, "test.panic", json!({"guess": path}));
+    assert_eq!(r["error"], "internal error: failed on Loaded b.svg (please report this bug)", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A reply whose only trace of a hidden library's path is a `file:` URL with every separator escaped
+/// shows the file name.
+#[test]
+fn a_reply_hides_a_path_with_escaped_separators() {
+    let (mut app, tx, base) = confined("escaped-separators");
+    let path = s(base.join("outside/b.svg"));
+    app.ui.color_guide_limit = format!("loaded/{path}");
+    app.ui.status = format!("from file:{}", path.replace('/', "%2F").replace('\\', "%5C"));
+    let r = request(&mut app, &tx, "test.status", json!({}));
+    assert_eq!(r["result"], "from file:b.svg", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` leaves out of a recorded action's steps a path that starts with `./` or `../`, `~` and
+/// a path under `~` outside the read root under any param, as a key too, and in any list. A URL and
+/// other text with a separator stay.
+#[test]
+fn ui_inspect_leaves_out_relative_paths_in_recorded_steps() {
+    let (mut app, tx, base) = confined("inspect-relative");
+    let set: crate::panels::actions::ActionSet = serde_json::from_value(json!({
+        "name": "set",
+        "actions": [{"name": "files", "steps": [
+            ["x.y", {"target": "~/b.svg", "rel": "../outside/b.svg", "home": "~", "text": "a/b", "url": "https://example.com/a"}],
+            ["x.z", {"list": [".\\b.svg", "a/b"], "../k": 1}],
+        ]}],
+    }))
+    .unwrap();
+    app.ui.action_sets = vec![set];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let steps = &r["result"]["ui"]["action_sets"][0]["actions"][0]["steps"];
+    let want = json!([["x.y", {"text": "a/b", "url": "https://example.com/a"}], ["x.z", {"list": ["a/b"]}]]);
+    assert_eq!(steps, &want, "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// A closed panel's former place, as `ui.docking_hidden` keeps it.
 fn hidden_place() -> craft_ui::docking::Location<String> {
     serde_json::from_value(json!({"floating": null, "anchor": null, "placement": {"Tab": {"before": null}}, "size": null, "stack": null})).unwrap()
@@ -735,7 +847,7 @@ fn ui_inspect_and_ui_docking_give_a_hidden_library_the_same_id() {
     let ui = &r["result"]["ui"];
     assert_eq!(
         (ui["color_guide_limit"].as_str(), ui["open_panel"].as_str()),
-        (Some("loaded/b.svg"), Some("library:swatches:loaded/b.svg (2)")),
+        (Some("loaded/b.svg (2)"), Some("library:swatches:loaded/b.svg")),
         "{r}"
     );
     let d = request(&mut app, &tx, "ui.docking", json!({}));
