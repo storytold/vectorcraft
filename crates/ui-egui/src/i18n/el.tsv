@@ -1898,6 +1898,7 @@ font-technology	Variable	Μεταβλητές
 	Quick Actions	Γρήγορες ενέργειες
 	Radial	Ακτινικό
 	Radial Gradient	Ακτινωτό ντεγκραντέ
+	Conic Gradient	Κωνικό ντεγκραντέ
 	Random	Τυχαίο
 	Range:	Εύρος:
 	Rasterize	Μετατροπή σε εικονοστοιχεία
@@ -2204,6 +2205,13 @@ axis	Both	Και τα δύο
 	Dock Panel	Αγκύρωση πάνελ
 	Dock to Top	Αγκύρωση επάνω
 	Dock to Bottom	Αγκύρωση κάτω
+	Control Bar Options	Επιλογές γραμμής ελέγχου
+	Tool Options	Επιλογές εργαλείου
+	Object Options	Επιλογές αντικειμένου
+	Image Options	Επιλογές εικόνας
+	Vertical Alignment	Κατακόρυφη στοίχιση
+	Align and Distribute	Στοίχιση και κατανομή
+	Document Options	Επιλογές εγγράφου
 	Dock Control Bar	Αγκύρωση γραμμής ελέγχου
 @msg	no library `{id}`	Δεν υπάρχει βιβλιοθήκη με αναγνωριστικό `{id}`
 @msg	select some type first	Επιλέξτε πρώτα κάποιο κείμενο
@@ -2347,6 +2355,8 @@ axis	Both	Και τα δύο
 @msg	`groupColors` must be an array	Το `groupColors` πρέπει να είναι πίνακας
 @msg	`library` is a library id or name (see {list})	Το `library` είναι αναγνωριστικό ή όνομα βιβλιοθήκης (δείτε {list})
 @msg	`mode` applies to freeform gradients	Το `mode` ισχύει για ντεγκραντέ ελεύθερης μορφής
+@msg	a negative `aspect` applies to conic gradients	Το αρνητικό `aspect` ισχύει για κωνικά ντεγκραντέ
+@msg	`focal` applies to radial gradients	Το `focal` ισχύει για ακτινικά ντεγκραντέ
 @msg	`preserve` must be an object	Το `preserve` πρέπει να είναι αντικείμενο
 @msg	`globalAdjust` must be an object	Το `globalAdjust` πρέπει να είναι αντικείμενο
 @msg	`sampleSize` must be 1, 3 or 5	Το `sampleSize` πρέπει να είναι 1, 3 ή 5
@@ -3680,6 +3690,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Show Modified	Εμφάνιση τροποποιημένων
 	Show Note	Εμφάνιση σημείωσης
 	Show Options	Εμφάνιση επιλογών
+	Show Recent Colors	Εμφάνιση πρόσφατων χρωμάτων
 	Show Original Path	Εμφάνιση αρχικής διαδρομής
 	Open this dialog with these settings next time	Άνοιγμα αυτού του παραθύρου με αυτές τις ρυθμίσεις την επόμενη φορά
 	Auto-Simplify	Αυτόματη απλοποίηση
@@ -3960,6 +3971,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Toolbar: Single/Double Column	Γραμμή εργαλείων: Μονή/Διπλή στήλη
 	Toolbar: Add Tool	Γραμμή εργαλείων: Προσθήκη εργαλείου
 	Toolbar: Remove Tool	Γραμμή εργαλείων: Αφαίρεση εργαλείου
+	Add Tool…	Προσθήκη εργαλείου…
+	Remove Tool	Αφαίρεση εργαλείου
 	Toolbar: Reset	Γραμμή εργαλείων: Επαναφορά
 	Top in Front	Επάνω μπροστά
 	Top-Justified Tab	Στηλοθέτης επάνω στοίχισης
@@ -4651,7 +4664,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	unknown format	άγνωστη μορφή
 @msg	unknown format `{f}` (Save writes {_1})	άγνωστη μορφή `{f}` (η Αποθήκευση υποστηρίζει {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	άγνωστη λειτουργία ελεύθερης μορφής `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	άγνωστος τύπος ντεγκραντέ `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	άγνωστος τύπος ντεγκραντέ `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	άγνωστη επισήμανση `{h}`
 @msg	unknown option `{path}.{k}`	άγνωστη επιλογή `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	άγνωστη επιλογή υπερεκτύπωσης `{o}` (preserve, simulate ή discard)
@@ -4920,7 +4933,13 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	το αρχείο HEIC ή HEIF περιέχει είδος εικόνας που δεν είναι δυνατό να διαβαστεί
 @msg	HEIC and HEIF images can't be opened in this build	οι εικόνες HEIC και HEIF δεν μπορούν να ανοίξουν σε αυτή την έκδοση
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	η εικόνα PSD είναι πολύ μεγάλη για ανάγνωση ({_1} × {_2} εικονοστοιχεία)
-@msg	zipped 32-bit PSD image data with prediction can't be read	τα συμπιεσμένα δεδομένα εικόνας PSD 32 bit με πρόβλεψη δεν διαβάζονται
+@msg	zipped 1-bit PSD image data with prediction can't be read	τα συμπιεσμένα δεδομένα εικόνας PSD 1 bit με πρόβλεψη δεν διαβάζονται
+@msg	the PSD file's layer data uses an unknown compression ({m})	τα δεδομένα επιπέδων του αρχείου PSD χρησιμοποιούν άγνωστη συμπίεση ({m})
+@msg	the PSD file's layer records are damaged	οι εγγραφές επιπέδων του αρχείου PSD είναι κατεστραμμένες
+@msg	the PSD file's layer groups are nested too deeply	οι ομάδες επιπέδων του αρχείου PSD είναι ένθετες σε υπερβολικό βάθος
+@msg	a layer of the PSD file is too large to read	ένα επίπεδο του αρχείου PSD είναι πολύ μεγάλο για ανάγνωση
+@msg	the PSD file's layers take more memory to read than allowed	τα επίπεδα του αρχείου PSD χρειάζονται περισσότερη μνήμη για ανάγνωση από όση επιτρέπεται
+@msg	the layers can't be read ({e}): the file opened as its merged image	τα επίπεδα δεν μπορούν να διαβαστούν ({e}): το αρχείο άνοιξε ως η συγχωνευμένη εικόνα του
 @msg	{depth}-bit PSD files in this colour mode can't be read	τα αρχεία PSD {depth} bit δεν διαβάζονται σε αυτήν τη λειτουργία χρώματος
 @msg	the PSD file is cut short	το αρχείο PSD είναι περικομμένο
 @msg	the PSD file's header is damaged	η κεφαλίδα του αρχείου PSD είναι κατεστραμμένη
@@ -5388,6 +5407,11 @@ digits	Malayalam	Μαλαγιάλαμ
 	 to set spacing and orientation	 για ορισμό απόστασης και προσανατολισμού
 	:	:
 	Light behind the object	Φως πίσω από το αντικείμενο
+	Shadows	Σκιές
+	Distance from Object	Απόσταση από το αντικείμενο
+	Shadow Bounds	Όρια σκιάς
+	Behind Object	Πίσω από το αντικείμενο
+	Below Object	Κάτω από το αντικείμενο
 	3D Lighting Preset	Προεπιλογή φωτισμού 3D
 	Standard	Τυπικός
 	Diffuse	Διάχυτος
@@ -5738,7 +5762,7 @@ effect	Points	Σημεία
 @msg	span must be "object" or "selection", got {v}	το span πρέπει να είναι "object" ή "selection", δόθηκε {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: το "selection" τοποθετεί ένα `gradient`, όχι δείγμα χρώματος
 @msg	span: "selection" places a gradient: give `gradient`	span: το "selection" τοποθετεί ντεγκραντέ: δώστε `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: το "selection" τοποθετεί γραμμικό ή ακτινικό ντεγκραντέ, όχι ελεύθερης μορφής
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: το "selection" τοποθετεί γραμμικό, ακτινικό ή κωνικό ντεγκραντέ, όχι ελεύθερης μορφής
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: το "selection" τοποθετεί το ίδιο το ντεγκραντέ: παραλείψτε τα `start` και `end` (το τοποθετούν ήδη σε συντεταγμένες εγγράφου)
 @msg	the Color Picker is not open	ο επιλογέας χρώματος δεν είναι ανοιχτός
 @msg	the Simplify slider is not open	ο ρυθμιστής Απλοποίησης δεν είναι ανοιχτός
@@ -6010,6 +6034,11 @@ axis	Y Axis	Άξονας Y
 @msg	`inputs` needs the permission `doc.read`	το `inputs` απαιτεί το δικαίωμα `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	προϋπολογισμός μνήμης (το αντικείμενο {_1} χρειάζεται {size} byte εισόδου, απομένουν {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	προϋπολογισμός αντικειμένων (περισσότερα από {MAX_OBJECTS} αντικείμενα μόνο για ανάγνωση)
+@msg	instruction budget	προϋπολογισμός εντολών
+@msg	time budget	χρονικός προϋπολογισμός
+@msg	memory budget (the selection is too large to hand over)	προϋπολογισμός μνήμης (η επιλογή είναι πολύ μεγάλη για να παραδοθεί)
+@msg	output size ({what} is {len} bytes, limit {max})	μέγεθος εξόδου ({what}: {len} byte, όριο {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	η άδεια του πρόσθετου δεν μπορεί να αφαιρεθεί από τον χώρο αποθήκευσης πρόσθετων
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	το δικαίωμα `{shown}` είναι δεσμευμένο για μεταγενέστερο API προσθέτων· αυτός ο κεντρικός υπολογιστής δεν το παραχωρεί
 @msg	unknown permission `{shown}`	άγνωστο δικαίωμα `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	το «{name}» ζητά τα δικαιώματα {asked}: πρέπει να τα εγκρίνει ένα άτομο στην εφαρμογή επιφάνειας εργασίας ή περάστε `grant` σε μια συνεδρία που ξεκίνησε με --allow-plugin-grants
@@ -6046,6 +6075,16 @@ axis	Y Axis	Άξονας Y
 @msg	message must be text	Το message πρέπει να είναι κείμενο
 @msg	allowContinue must be true or false	Το allowContinue πρέπει να είναι true ή false
 @msg	Batch cannot play an action with a stop	Η μαζική επεξεργασία δεν μπορεί να αναπαράγει ενέργεια με διακοπή
+	Insert Menu Item…	Εισαγωγή στοιχείου μενού…
+	Insert Menu Item	Εισαγωγή στοιχείου μενού
+	Menu Item:	Στοιχείο μενού:
+	No menu item matches.	Κανένα στοιχείο μενού δεν ταιριάζει.
+	Several menu items match. Choose one from the list.	Ταιριάζουν πολλά στοιχεία μενού. Επιλέξτε ένα από τη λίστα.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Τα στοιχεία που ανοίγουν παράθυρο διαλόγου και τα στοιχεία των μενού «Αρχείο», «Παράθυρο» και «Βοήθεια» δεν εμφανίζονται.
+@msg	command must be text	Το command πρέπει να είναι κείμενο
+@msg	no menu item that can be inserted runs this command	κανένα στοιχείο μενού που μπορεί να εισαχθεί δεν εκτελεί αυτή την εντολή
+@msg	the action already has 10,000 steps	η ενέργεια έχει ήδη 10.000 βήματα
+@msg	the action set would be larger than 8 MiB	το σύνολο ενεργειών θα ξεπερνούσε τα 8 MiB
 	Playback Options	Επιλογές αναπαραγωγής
 	Accelerated	Επιταχυμένα
 	Step by Step	Βήμα προς βήμα
@@ -6356,9 +6395,12 @@ anchor	Points:	Σημεία:
 @msg	{label} must be a number	Το {label} πρέπει να είναι αριθμός
 @msg	{label} must be a number of at least 0.1	Το {label} πρέπει να είναι αριθμός τουλάχιστον 0,1
 	Advanced Character Formats	Σύνθετες μορφές χαρακτήρων
+	Basic Paragraph Formats	Βασικές μορφές παραγράφου
+	Composition	Σύνθεση
 	Horizontal Scale	Οριζόντια κλίμακα
 	Vertical Scale	Κατακόρυφη κλίμακα
 @msg	{label} must be a number from {min} to {max}	Το {label} πρέπει να είναι αριθμός από {min} έως {max}
+@msg	{label} must be a whole number from {min} to {max}	Το {label} πρέπει να είναι ακέραιος αριθμός από {min} έως {max}
 	Character Color	Χρώμα χαρακτήρων
 	OpenType Features	Χαρακτηριστικά OpenType
 	Stylistic Sets	Στιλιστικά σύνολα
@@ -6743,6 +6785,7 @@ breakText	Glyphs	Γλύφοι
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Στοίχιση στο πλέγμα εικονοστοιχείων
+	Not Aligned to Pixel Grid	Μη στοιχισμένα στο πλέγμα εικονοστοιχείων
 @msg	only paths and compound paths can be aligned to the pixel grid	μόνο διαδρομές και σύνθετες διαδρομές μπορούν να στοιχιστούν στο πλέγμα εικονοστοιχείων
 @msg	side is left or right, not `{s}`	το side είναι left ή right, όχι `{s}`
 	Ignore All	Παράβλεψη όλων

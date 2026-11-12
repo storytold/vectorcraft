@@ -99,6 +99,33 @@ fn an_unsaved_document_cant_be_packaged() {
 }
 
 #[test]
+fn a_param_of_the_wrong_type_is_refused_and_null_keeps_the_default() {
+    let dir = Folder::new("package-types");
+    let mut s = poster(&dir);
+    let out = dir.file("out");
+    for (p, msg) in [
+        (json!({"folder": out, "copyLinks": "false"}), "`copyLinks` must be true or false"),
+        (json!({"folder": out, "linksFolder": 0}), "`linksFolder` must be true or false"),
+        (json!({"folder": out, "relink": "no"}), "`relink` must be true or false"),
+        (json!({"folder": out, "copyFonts": "false"}), "`copyFonts` must be true or false"),
+        (json!({"folder": out, "report": 1}), "`report` must be true or false"),
+        (json!({"folder": out, "name": 5}), "`name` must be a string"),
+        (json!({"folder": 5}), "`folder` must be a string"),
+    ] {
+        let e = match s.execute("file.package", &p) {
+            Ok(r) => panic!("{p} gave {r}"),
+            Err(e) => e.to_string(),
+        };
+        assert!(e.contains(msg), "{p}: {e}");
+        assert!(!std::path::Path::new(&out).exists(), "{p} wrote nothing");
+    }
+    let r = run(&mut s, "file.package", json!({"folder": null, "name": null, "copyLinks": null, "copyFonts": null, "report": null}));
+    assert_eq!(r["name"], "poster Folder.zip");
+    let files: Vec<&str> = r["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap()).collect();
+    assert_eq!(files, ["poster.vectorcraft", "Links/red.png", "Links/blue.png", "Fonts/SourceSans3-Regular.ttf", "poster Report.txt"]);
+}
+
+#[test]
 fn without_a_folder_the_zip_has_the_same_files() {
     let dir = Folder::new("package-zip");
     let mut s = poster(&dir);
@@ -393,7 +420,7 @@ fn the_document_info_report_has_every_category() {
         "BRUSHES",
         "SPOT COLORS",
         "PATTERN OBJECTS",
-        "GRADIENT SWATCHES",
+        "GRADIENT OBJECTS",
         "SYMBOLS",
         "FONTS",
         "FONT DETAILS",

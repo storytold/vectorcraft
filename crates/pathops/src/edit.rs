@@ -88,7 +88,10 @@ pub fn simplify_with(path: &PathData, opts: &SimplifyOptions) -> PathData {
 /// whose refit is one segment, or lines that enclose no area, is refitted in two parts, cut at the
 /// point farthest from its start, or in three when two still give that. When three parts still give
 /// no area, straight lines follow the subpath within the tolerance, and without straight lines it
-/// stays as it is, as does one of a single segment; one that is all in line keeps the refit.
+/// stays as it is, as does one of a single segment. When no lines within the limits on pieces enclose
+/// an area, it stays as it is, or with straight lines follows the lines between samples of each
+/// curved segment when the limits leave room for lines within the tolerance; one that is all in line
+/// keeps the refit.
 fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
     let mut segs = subpath_segs(sp);
     let n = segs.len();
@@ -139,31 +142,80 @@ fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
         }
         let ctrl: Vec<Point> = segs.iter().flat_map(|s| [s.c.p0, s.c.p1, s.c.p2]).collect();
         if flat(&result) && !in_line(&ctrl) {
-            // Each segment split in 2, 4, 8 and so on, up to 1,024 pieces and 65,536 in all, until every
-            // piece is within the tolerance of the line between its ends and those lines enclose an
-            // area: with straight lines they are the result, and without them the loop stays as it is.
-            // A loop whose points are all in line keeps the lines of the refit.
+            // Each curved segment split in 2, 4, 8 and so on, up to 1,024 pieces and 65,536 pieces in all
+            // with the line segments, until every piece is within the tolerance of the line between its
+            // ends and those lines enclose an area: with straight lines they are the result, and without
+            // them the loop stays as it is. When no split within those limits encloses an area, the loop
+            // stays as it is, or with straight lines each curved segment becomes the lines between its
+            // samples, up to `MAX_RUN_RESULT` lines in all with the line segments; when those do not keep
+            // some curved segment within the tolerance, the loop stays as it is. A loop whose points are
+            // all in line keeps the lines of the refit.
             let near = |c: &CubicBez| [c.p1, c.p2].iter().all(|&p| Line::new(c.p0, c.p3).nearest(p, 1e-9).distance_sq.sqrt() <= opts.tolerance);
+            let curved = segs.iter().filter(|s| !s.line).count();
             for k in 1..=10u32 {
                 let parts = 1u32 << k;
-                if segs.len().saturating_mul(parts as usize) > 1 << 16 {
+                if curved.saturating_mul(parts as usize).saturating_add(n - curved) > 1 << 16 {
                     break;
                 }
                 let at = |i: u32| f64::from(i) / f64::from(parts);
-                let pieces: Vec<CubicBez> = segs.iter().flat_map(|s| (0..parts).map(move |i| s.c.subsegment(at(i)..at(i + 1)))).collect();
+                let pieces: Vec<CubicBez> = segs
+                    .iter()
+                    .flat_map(|s| {
+                        let count = if s.line { 1 } else { parts };
+                        (0..count).map(move |i| if s.line { s.c } else { s.c.subsegment(at(i)..at(i + 1)) })
+                    })
+                    .collect();
                 let lines: Vec<Seg> = pieces.iter().map(|c| Seg::line(c.p0, c.p3)).collect();
                 if pieces.iter().all(near) && !flat(&lines) {
                     if !opts.straight_lines {
                         return Some(sp.clone());
                     }
-                    result = lines;
-                    break;
+                    return segs_to_subpath(&lines, true);
                 }
             }
+            if !opts.straight_lines {
+                return Some(sp.clone());
+            }
+            let Some(room) = sample_room(curved, n - curved) else {
+                return Some(sp.clone());
+            };
+            let mut lines: Vec<Seg> = Vec::new();
+            for s in &segs {
+                if s.line {
+                    lines.push(Seg::line(s.c.p0, s.c.p3));
+                    continue;
+                }
+                let Some(steps) = steps_within(&s.c, opts.tolerance.max(1e-6), room) else {
+                    return Some(sp.clone());
+                };
+                let mut pts = Vec::new();
+                sample(&s.c, steps, &mut pts, true);
+                lines.extend(pts.windows(2).map(|p| Seg::line(p[0], p[1])));
+            }
+            return segs_to_subpath(&lines, true);
         }
     }
     let s = segs_to_subpath(&result, sp.closed)?;
     Some(if opts.straight_lines { s } else { no_worse(sp, s) })
+}
+
+/// Most lines between samples of each of `curved` segments, so that they and the `kept` line segments
+/// make at most [`MAX_RUN_RESULT`] lines, and each has at most [`MAX_SEGMENT_SAMPLES`]. `None` when
+/// that leaves no line for some curved segment.
+fn sample_room(curved: usize, kept: usize) -> Option<usize> {
+    let left = MAX_RUN_RESULT.checked_sub(kept)?;
+    if curved > left {
+        return None;
+    }
+    Some((left / curved.max(1)).min(MAX_SEGMENT_SAMPLES))
+}
+
+/// How many evenly spaced lines along `c`, at most `room`, follow it: [`sample_steps`] when that
+/// fits, or fewer, but never fewer than keep `c` within `tol` of them. `None` when those do not fit
+/// in `room`.
+fn steps_within(c: &CubicBez, tol: f64, room: usize) -> Option<usize> {
+    let need = line_steps(c, tol).max(1);
+    (need <= room).then(|| sample_steps(c, tol).min(room).max(need))
 }
 
 /// How far a segment may be from the lines between its samples, as a share of the tolerance.
@@ -1128,6 +1180,39 @@ mod tests {
         let mut work = 0;
         smooth_points_counted(&pts, 1000.0, &mut work);
         assert!(work <= 400 * pts.len(), "{work} steps for {} samples", pts.len());
+    }
+
+    #[test]
+    fn the_samples_of_a_flat_loop_and_its_line_segments_stay_within_the_result_limit() {
+        for (curved, kept) in [(1, 0), (32, 1), (40, 1_000_000), (1_000, MAX_RUN_RESULT - 1_000), (3, MAX_RUN_RESULT - 7)] {
+            let room = sample_room(curved, kept).unwrap_or_else(|| panic!("{curved} curved, {kept} kept: no room"));
+            assert!((1..=MAX_SEGMENT_SAMPLES).contains(&room), "{curved} curved, {kept} kept: room {room}");
+            assert!(curved * room + kept <= MAX_RUN_RESULT, "{curved} curved, {kept} kept: room {room}");
+        }
+        assert_eq!(sample_room(32, 0), Some(MAX_SEGMENT_SAMPLES));
+        assert_eq!(sample_room(2, MAX_RUN_RESULT - 1), None);
+        assert_eq!(sample_room(1, MAX_RUN_RESULT + 5), None);
+    }
+
+    #[test]
+    fn lines_with_too_little_room_for_the_tolerance_are_not_used() {
+        let c = CubicBez::new((0.0, 0.0), (0.0, 100.0), (100.0, 100.0), (100.0, 0.0));
+        let tol = 0.01;
+        let need = line_steps(&c, tol);
+        assert!(need > 4, "{need}");
+        assert_eq!(steps_within(&c, tol, need - 1), None);
+        for room in [need, need + 3, MAX_SEGMENT_SAMPLES] {
+            let steps = steps_within(&c, tol, room).unwrap_or_else(|| panic!("room {room}: no steps"));
+            assert!((need..=room).contains(&steps), "room {room}: {steps} steps");
+            let mut pts = Vec::new();
+            sample(&c, steps, &mut pts, true);
+            let lines: Vec<Line> = pts.windows(2).map(|p| Line::new(p[0], p[1])).collect();
+            for i in 0..=1000 {
+                let p = c.eval(f64::from(i) / 1000.0);
+                let gap = lines.iter().map(|l| l.nearest(p, 1e-9).distance_sq.sqrt()).fold(f64::INFINITY, f64::min);
+                assert!(gap <= tol + 1e-9, "room {room}, {steps} steps: {gap} at {i}");
+            }
+        }
     }
 
     #[test]
