@@ -44,6 +44,7 @@ mod printadvanced;
 mod reader_compat;
 mod reader_streaming;
 mod realtext;
+mod reshaped;
 mod settings;
 pub(super) mod stroke;
 mod strokeout;
