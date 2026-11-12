@@ -204,6 +204,27 @@ fn a_geometry_effect_before_the_drawn_3d_effect_is_not_applied_again() {
     assert!((both.x0 - alone.x0).abs() < 1e-6 && (both.x1 - alone.x1).abs() < 1e-6, "{alone:?} {both:?}");
 }
 
+/// A clipping group with Revolve and Rotate draws Revolve, which cuts the art's fills as one piece
+/// in the top fill's place. Its wireframe is cut the same way, so art with more fills than a 3D
+/// effect takes members still expands, to the edges of Revolve alone.
+#[test]
+fn a_clipping_group_with_revolve_and_rotate_expands_the_art_revolve_cuts() {
+    let mut art = Node::path(NodeId(3), square(100.0, 100.0, 100.0), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let fill = art.appearance.items.iter().find(|i| matches!(i, AppearanceItem::Fill(_))).cloned().unwrap();
+    art.appearance.items = vec![fill; super::super::MAX_MEMBERS + 4];
+    let mut clip = Node::path(NodeId(2), square(100.0, 100.0, 50.0), Appearance::default());
+    if let vectorcraft_doc::NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let mut n = Node::new(NodeId(1), vectorcraft_doc::NodeKind::Group { children: vec![Arc::new(clip), Arc::new(art)], clip: true });
+    n.appearance.effects.push(crate::new_effect(crate::REVOLVE, &json!({})).unwrap());
+    let alone = segments(&three_d_wireframe_in(None, &n).unwrap());
+    n.appearance.effects.push(crate::new_effect(ROTATE, &json!({})).unwrap());
+    assert!(crate::revolve_art_in(None, &n).is_some(), "the canvas draws Revolve");
+    let both = segments(&three_d_wireframe_in(None, &n).unwrap());
+    assert_eq!(both, alone);
+}
+
 #[test]
 fn an_object_without_a_visible_3d_effect_is_an_error() {
     let mut n = solid_square(super::super::EXTRUDE, json!({}));

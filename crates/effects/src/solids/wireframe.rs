@@ -10,7 +10,7 @@ use vectorcraft_three_d::Facet;
 
 use super::{
     INFLATE, Profile, ROTATE, facets, geometry, has_solid, inflate_options, is_container, is_plane, is_three_d, label_of, members, object_profile,
-    region, reshape_members, resolve, solid, solid_paints, solid_parts, union_bounds, view_options,
+    region, reshape_members, resolve, resolve_for, solid, solid_paints, solid_parts, union_bounds, view_options,
 };
 use crate::{GeomContext, is_geometry};
 
@@ -41,16 +41,18 @@ pub fn three_d_wireframe_in(doc: Option<&Document>, n: &Node) -> Result<Vec<Path
     // is no surface to expand.
     let revolve = crate::has_revolve(n) && crate::revolve_art_in(doc, n).is_some();
     if !revolve && !(has_solid(n) && super::solid_art_in(doc, n).is_some()) {
-        let n = &*resolve(doc, n, label)?;
-        // The builders' own error says why, when there is one.
+        // The builders' own error says why, when there is one. Revolve's art is cut for Revolve,
+        // as the canvas cuts it.
         if crate::has_revolve(n) {
-            crate::revolve::revolve_face_paths(doc, n)?;
+            crate::revolve::revolve_face_paths(doc, &*resolve_for(doc, n, label, false)?)?;
         } else {
-            solid_face_paths(doc, n)?;
+            solid_face_paths(doc, &*resolve(doc, n, label)?)?;
         }
         return Err(format!("{label} draws the source art for this object instead of its 3D surface"));
     }
-    let n = &*resolve(doc, n, label)?;
+    // Revolve's art is cut for Revolve whatever other 3D effect the object carries, as the canvas
+    // cuts it ([`crate::revolve_art_in`]).
+    let n = &*if revolve { resolve_for(doc, n, label, false)? } else { resolve(doc, n, label)? };
     let faces = if revolve { crate::revolve::revolve_face_paths(doc, n)? } else { solid_face_paths(doc, n)? };
     let faces = after_geometry(doc, n, faces, revolve);
     let wire = edges(&faces)?;
