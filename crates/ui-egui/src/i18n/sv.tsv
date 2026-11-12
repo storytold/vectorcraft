@@ -1132,6 +1132,8 @@ font-technology	Variable	Variabla
 	Extrude & Bevel…	Extrudera och fasa…
 	3D (Classic)	3D (klassisk)
 	Extrude & Bevel (Classic)…	Extrudera och fasa (klassisk)…
+	Revolve (Classic)…	Rotera runt axel (klassisk)…
+	Rotate (Classic)…	Rotera (klassisk)…
 	Surface	Yta
 	Wireframe	Trådram
 	No Shading	Ingen skuggning
@@ -1412,6 +1414,14 @@ font-technology	Variable	Variabla
 	Hair Space	Hårfint blanksteg
 	Hand Tool	Handverktyg
 	Hand-Drawn	Handritad
+	Painted and Sketched	Målat och skissat
+	Washed Blue	Urtvättad blå
+	Bristle Ochre	Borstockra
+	Pastel Heather	Pastelljung
+	Charcoal Shade	Kolskugga
+	Ink Contour	Tuschkontur
+	Wet Ink	Våt tusch
+	Fine Pen	Fin penna
 	Handles	Handtag
 	Hard Light	Hårt ljus
 	Hard Mix	Hård blandning
@@ -2296,6 +2306,7 @@ font-technology	Variable	Variabla
 	Options:	Alternativ:
 	Options…	Alternativ…
 	Organic Fades	Organiska toningar
+	Holographic	Holografiska
 	or more spaces with a tab	eller fler blanksteg med en tabb
 	Order:	Ordning:
 	Ordinals	Ordningstal
@@ -2578,6 +2589,8 @@ digits	Malayalam	Malayalam
 	Range:	Omfång:
 	Raster Effects	Rastereffekter
 	Raster File Format:	Rasterfilformat:
+	Include Placed Images	Inkludera placerade bilder
+	Include Fill Hatches	Inkludera skrafferingar av fyllningar
 	Raster Sample Size:	Samplingsstorlek för raster:
 	Raster/Vector Balance:	Raster-/vektorbalans:
 	Rasterize	Rastrera
@@ -2758,6 +2771,10 @@ digits	Malayalam	Malayalam
 	Replace Font	Ersätt typsnitt
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Ersätt den med en annan fil eller ignorera den: dess bilder fortsätter att visa förhandsgranskningen som sparats med dokumentet.
 	Replace Spine	Ersätt ryggrad
+	Create Spine	Skapa ryggrad
+	Create Spine:	Skapa ryggrad:
+	Always	Alltid
+	Never	Aldrig
 	Replace Symbol	Ersätt symbol
 	Reset Transformation	Återställ transformering
 	Replace With Font	Ersätt med typsnitt
@@ -2836,6 +2853,9 @@ digits	Malayalam	Malayalam
 	Rise…	Stigning…
 	Roman Baseline	Baslinje (roman)
 	Roman Hanging Punctuation	Hängande interpunktion (roman)
+	Korean Line Break Anywhere	Koreansk radbrytning var som helst
+	East Asian Composition Settings	Inställningar för östasiatisk sättning
+	Korean Composition Settings	Inställningar för koreansk sättning
 	Rotate	Rotera
 	Rotate 90° CW	Rotera 90° medurs
 	Rotate Tool	Rotationsverktyg
@@ -4155,6 +4175,7 @@ axis	Both	Båda
 @msg	`globalAdjust` must be an object	`globalAdjust` måste vara ett objekt
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` måste vara 1, 3 eller 5
 @msg	`stops` must be an array	`stops` måste vara en array
+@msg	`{key}` must be an array	`{key}` måste vara en array
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` måste vara ett objekt med SVG-alternativ (se document.formats)
 @msg	`{_1}` is no save command	`{_1}` är inget sparkommando
 @msg	`{area}` is no recovery area name	`{area}` är inget namn på ett återställningsområde
@@ -4464,6 +4485,7 @@ axis	Both	Båda
 @msg	not a valid plug-in module: {0}	inte ett giltigt plugin: {0}
 @msg	not an EMF or WMF file	inte en EMF- eller WMF-fil
 @msg	not an HP-GL file	inte en HP-GL-fil
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` måste vara en array med 1 till 255 färger i formatet #rrggbb
 @msg	not found	hittades inte
 @msg	not in pattern editing mode	inte i läget för mönsterredigering
 @msg	finish editing the pattern first	slutför redigeringen av mönstret först
@@ -6041,6 +6063,7 @@ font-script	Japanese	Japanska
 	Ruby	Ruby
 	Geometric Guides	Geometriska stödlinjer
 	Geometric Patterns	Geometriska mönster
+	Grit Textures	Korniga texturer
 	Ease In	Långsam start
 	Ease Out	Långsamt slut
 	Ease In Out	Långsam start och slut
@@ -6099,6 +6122,8 @@ axis	Y Axis	Y-axel
 	Version: {version}	Version: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Installera ”{name}” i stället för det plugin som har samma id?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Den här filen är inte det plugin som tidigare installerades med detta id. Den får de inställningar och den cache som sparats för detta id.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	En automatisering bad om att installera det här pluginet. Välj själv Objekt › Plugins › Installera plugin… för att installera det.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	En automatisering bad om att installera det här pluginet. Välj själv Objekt › Plugins › Installera plugin… för att installera det.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	”{name}” är en annan modul än pluginet med id {_1} och skulle få de inställningar och den cache som sparats för det: installera det med `replace: true` när användaren har godkänt
 	File SHA-256: {hash}	Filens SHA-256: {hash}
 	Read the objects it is given	Läsa objekten den får
@@ -6157,6 +6182,11 @@ axis	Y Axis	Y-axel
 @msg	command {name}: `label` must be 1-64 printable characters	kommando {name}: `label` måste ha 1-64 utskrivbara tecken
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	kommando {name}: använd ett id med 1-{MAX_COMMAND_ID} tecken av a-z 0-9 _ som börjar med en bokstav
 @msg	command {name}: {e}	kommando {name}: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (rad {line}, kolumn {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` måste vara en lista med kommandon, vart och ett med `id` och `label`
+@msg	command {name} must be an object with an `id` and a `label`	kommandot {name} måste vara ett objekt med `id` och `label`
+@msg	missing field `{key}`	fältet `{key}` saknas
+@msg	duplicate field `{key}`	fältet `{key}` förekommer två gånger
 @msg	only a filter or a live effect declares `commands`	bara ett filter eller en live-effekt deklarerar `commands`
 @msg	“{name}” › {label}: {e}	”{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modulen har inte den SHA-256 som `hash` anger: ingenting installerades
@@ -6305,6 +6335,17 @@ axis	Y Axis	Y-axel
 	Charge Wave	Laddningsvåg
 	Spark Trail	Gnistsvår
 	Calligraphic Nibs	Kalligrafiska pennspetsar
+	Bristle Brushes	Borstpenslar
+	Fine Liner	Fin linje
+	Pointed Flat	Spetsig platt
+	Stubby Round	Kort rund
+	Dry Scrub	Torr skrubbning
+	Soft Dome	Mjuk kupol
+	Filbert	Oval platt
+	Angled Round	Sned rund
+	Angled Flat	Sned platt
+	Fan Blender	Blandande solfjäder
+	Grass Fan	Grässolfjäder
 	Pattern Borders	Mönsterbårder
 	Scatter Shapes	Spridningsformer
 	Save Brush Library…	Spara penselbibliotek…
@@ -6543,6 +6584,9 @@ shape	Open	Öppen
 @msg	features lists at most {max} tags	features får innehålla högst {max} taggar
 @msg	unknown OpenType feature `{t}`	okänd OpenType-funktion `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} måste vara ett tal över 0 och högst {max}
+@msg	{label} must be at most {max} characters	{label} får innehålla högst {max} tecken
+@msg	{label} must be one character	{label} måste vara ett tecken
+@msg	at most {max} tab stops	högst {max} tabbstopp
 @msg	no character style `{name}`	Teckenformatet `{name}` hittades inte
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6704,6 +6748,12 @@ breakText	Glyphs	Glyfer
 	Delete the selected brushes?	Radera de valda penslarna?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturer använder en eller flera av de här penslarna. Ta bort penslarna från konturerna och radera penslarna?
 	Remove Strokes	Ta bort konturer
+	Place Brush Art	Placera penselgrafik
+	Replace Brush Art	Ersätt penselgrafik
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturer använder den här penseln. Använd den nya grafiken på konturerna, eller låt dem vara som de är och lägg till en kopia av penseln med den nya grafiken?
+	Apply to Strokes	Använd på konturer
+	Leave Strokes	Behåll konturer
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` har ingen grafik (bara spridnings-, konst- och mönsterpenslar har grafik)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Ordningsverktyg
 	Arrange in Grid…	Ordna i rutnät…
@@ -8389,8 +8439,33 @@ digits	Hindi	Hindi
 @plural	{n} line cut|{n} lines cut	{n} rad avkortad|{n} rader avkortade
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` och `last` måste vara nummer på rader som konsolen har kvar, `first` före `last`
 
+# Learn panel
+	Learn	Lär dig
+	Explore tutorials	Utforska självstudier
+	For you	För dig
+	Skills	Färdigheter
+	Get started	Kom igång
+	Quick skill guide	Snabbguide till färdigheter
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Korta praktiska självstudier för de viktigaste verktygen, ordnade efter färdighet. Välj en färdighet för att se dess självstudier.
+	List Tutorials	Lista självstudier
+	Show Tutorial	Visa självstudie
+@msg	missing `tutorial` (see learn.list)	`tutorial` saknas (se learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	okänd självstudie `{id}` (se learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Uppdatera uppskjutna effekter
 	Deferred Effects	Uppskjutna effekter
 @msg	no plug-in effect is deferred	ingen plugineffekt är uppskjuten
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Öppnades med {n} uppskjuten plugineffekt. Effekt › Uppdatera uppskjutna effekter kör den.|Öppnades med {n} uppskjutna plugineffekter. Effekt › Uppdatera uppskjutna effekter kör dem.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Skärverktyg
+	Stencil Bridges…	Schablonbryggor…
+	Stencil Bridges	Schablonbryggor
+	Shortest Crossing	Kortaste korsning
+	Direction	Riktning
+@msg	The selected art has no islands to bridge	Den markerade teckningen har inga öar att förbinda
+@msg	No bridge of this width fits across the selected art	Ingen brygga med den här bredden får plats över den markerade teckningen
+@msg	Some islands could not be joined to the area around the art	Vissa öar kunde inte förbindas med området runt teckningen
+@msg	`width` must be from {lo} to {hi} pt	`width` måste vara från {lo} till {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` måste vara ett heltal från 1 till {MAX_BRIDGES_PER_ISLAND}

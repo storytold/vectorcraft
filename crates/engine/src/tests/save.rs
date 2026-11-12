@@ -40,6 +40,50 @@ fn objects(s: &Session) -> usize {
     s.doc().unwrap().doc.node_count()
 }
 
+/// A client confined by automation roots: a save without a path writes the document's own file, and
+/// when that file is outside the read roots the reply leaves out its `path` and names the files
+/// written beside it by their file names. A reply without a path leaves out a suggested `folder`
+/// outside them. A path inside the read roots, and one the client gives, stay whole.
+#[test]
+fn a_confined_save_leaves_out_paths_outside_the_read_root() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let d = dir("roots");
+    let (inside, outside) = (d.join("in"), d.join("out"));
+    for f in [&inside, &outside] {
+        std::fs::create_dir_all(f).unwrap();
+    }
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    rect(&mut s);
+    let own = path(&outside, "doc.vectorcraft");
+    s.execute("document.save", &json!({"path": own})).unwrap();
+    let person = s.execute("document.save", &json!({"separateArtboards": true})).unwrap();
+    let files: Vec<String> = person["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap().to_string()).collect();
+    assert_eq!((files.len(), files[0].as_str()), (3, own.as_str()), "{person}");
+
+    let write_only = AutomationRoots::new(&[inside.as_path()], &[outside.as_path()]).unwrap();
+    let both = AutomationRoots::new(&[inside.as_path(), outside.as_path()], &[outside.as_path()]).unwrap();
+    let run = |s: &mut Session, roots: &Option<std::sync::Arc<AutomationRoots>>, id: &str, p: Value| {
+        confine(roots.as_ref(), || s.execute(id, &p)).unwrap_or_else(|e| panic!("{id} {p}: {e}"))
+    };
+    let hidden = outside.to_string_lossy().into_owned();
+    let r = run(&mut s, &write_only, "document.save", json!({}));
+    assert!(r.get("path").is_none() && r["bytes"].as_u64().is_some_and(|n| n > 0), "{r}");
+    assert!(!r.to_string().contains(&hidden), "{r}");
+    let r = run(&mut s, &write_only, "document.save", json!({"separateArtboards": true}));
+    let names: Vec<Value> = files.iter().map(|f| json!(std::path::Path::new(f).file_name().unwrap().to_string_lossy())).collect();
+    assert_eq!((r.get("path"), r["files"].as_array()), (None, Some(&names)), "{r}");
+    // Inside the read roots, or given by the client: whole.
+    assert_eq!(run(&mut s, &both, "document.save", json!({}))["path"], json!(own));
+    assert_eq!(run(&mut s, &write_only, "document.save", json!({"path": own}))["path"], json!(own));
+    // A save without a path known suggests the document's folder.
+    let r = run(&mut s, &write_only, "file.saveCopy", json!({}));
+    assert!(r.get("folder").is_none() && r["name"] == "doc copy.vectorcraft" && r.get("dataBase64").is_some(), "{r}");
+    assert_eq!(run(&mut s, &both, "file.saveCopy", json!({}))["folder"], json!(hidden));
+    let _ = std::fs::remove_dir_all(d);
+}
+
 #[test]
 fn an_svg_path_writes_svg_and_save_writes_it_back() {
     let d = dir("svg");

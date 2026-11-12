@@ -55,7 +55,7 @@ fn needs(n: &Node) -> bool {
 /// a clipping path too complex to cut the art with. `label` is the effect's name. The art is cut
 /// for the solid effect `n` carries ([`resolve_for`]).
 pub(crate) fn resolve<'a>(doc: Option<&Document>, n: &'a Node, label: &str) -> Result<Cow<'a, Node>, String> {
-    let every_fill = super::solid(&n.appearance.effects).is_some_and(|(_, fx)| fx.id == super::ROTATE);
+    let every_fill = super::solid(&n.appearance.effects).is_some_and(|(_, fx)| super::is_plane(&fx.id));
     resolve_for(doc, n, label, every_fill)
 }
 

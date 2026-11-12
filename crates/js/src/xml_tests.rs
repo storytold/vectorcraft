@@ -372,7 +372,7 @@ fn the_xml_methods_behave_as_specified() {
     assert_eq!(string("(<a>1</a>).toString()"), "1");
     assert_eq!(string("(<a><b/></a>).toString()"), "<a>\n  <b/>\n</a>");
     truth("var x = <a/>; x.valueOf() === x");
-    truth("!Object.prototype.hasOwnProperty.call(XML.prototype, 'xpath') && !Object.prototype.hasOwnProperty.call(XMLList.prototype, 'xpath')");
+    truth("typeof XML.prototype.xpath === 'function' && typeof XMLList.prototype.xpath === 'function' && XML.prototype.xpath.length === 1");
     truth("var x = <a><b/></a>; x.b.attributes !== undefined");
 }
 
@@ -686,6 +686,103 @@ fn collections_during_updates_and_queries_keep_new_values() {
 fn a_scope_name_skips_a_list_without_that_name() {
     truth("var outer = <o id='1'/>; var inner = <><i/></>; with (outer) with (inner) { @id == '1' }");
     truth("var outer = <o id='1'/>; var inner = <><i id='2'/></>; with (outer) with (inner) { @id == '2' }");
+}
+
+#[test]
+fn bare_attribute_assignment_uses_nearest_holder() {
+    truth("var x = <a b='1'/>; with (x) { @b = '2'; } x.@b == '2'");
+    truth("var outer = <o id='1'/>; var inner = <i/>; with (outer) with (inner) { @id = '9'; } outer.@id == '9' && inner.@id.length() === 0");
+    truth("var outer = <o id='1'/>; var inner = <i id='2'/>; with (outer) with (inner) { @id = '9'; } outer.@id == '1' && inner.@id == '9'");
+    truth("var outer = <o id='1'/>; var inner = <><i/></>; with (outer) with (inner) { @id = '9'; } outer.@id == '9' && inner.@id.length() === 0");
+    truth("var x = <a b='1'/>; with (x) with ({ b: 7 }) { @b = '3'; } x.@b == '3'");
+    truth("with (<a b='1'/>) { (@b = 5) === 5 }");
+    truth("var x = <a b='1' c='2'/>; with (x) { @b = @c = 'v'; } x.@b == 'v' && x.@c == 'v'");
+    truth("var n = 0; var x = <a b='1'/>; with (x) { @[(n++, 'b')] = 'z'; } n === 1 && x.@b == 'z' && x.attributes().length() === 1");
+    truth("var x = <a><c>1</c></a>; with (x) { *::c = '2'; } x.c == '2' && x.*.length() === 1");
+    truth("var x = <a b='1'/>; x.@b = '4'; x.@b == '4'");
+}
+
+#[test]
+fn bare_qualified_assignment_keeps_namespace() {
+    truth(
+        "var ns = new Namespace('u'); var x = <a xmlns:p='u'><p:c>1</p:c><c>0</c></a>; with (x) { ns::c = '2'; } \
+         x.ns::c == '2' && x.ns::c.name().uri === 'u' && x.c == '0' && x.*.length() === 2",
+    );
+    truth(
+        "var ns = new Namespace('u'); var x = <a xmlns:p='u' p:t='1' t='0'/>; with (x) { @ns::t = '5'; } \
+         x.@ns::t == '5' && x.@ns::t.name().uri === 'u' && x.@t == '0'",
+    );
+}
+
+#[test]
+fn bare_assignment_in_filter_mutates_each_matching_item() {
+    truth("var l = <><i id='1'/><i id='2'/></>; var r = l.(@id = 'z', true); r.length() === 2 && l[0].@id == 'z' && l[1].@id == 'z'");
+    truth("var l = <><i n='1'/><i n='2'/></>; var r = l.(@n = 0); r.length() === 0 && l[0].@n == '0' && l[1].@n == '0'");
+    truth("var l = <><i n='1'/><i n='2'/></>; var r = l.(@n = 'k'); r.length() === 2");
+    truth("var o = <o k='1'/>; var l = <><i/><i/></>; with (o) { l.(@k += 'x', true); } o.@k == '1xx' && l[0].@k.length() === 0");
+}
+
+#[test]
+fn bare_assignment_without_holder_throws_reference_error_before_rhs() {
+    assert_eq!(thrown_name("@a = 1"), "ReferenceError");
+    assert_eq!(thrown_name("with ({ a: 1 }) { @a = 1 }"), "ReferenceError");
+    assert_eq!(thrown_name("with (<x/>) { @a = 1 }"), "ReferenceError");
+    assert_eq!(thrown_name("with (<x/>) { @a += 1 }"), "ReferenceError");
+    assert_eq!(thrown_name("with (<x/>) { @a++ }"), "ReferenceError");
+    assert_eq!(thrown_name("var ns = new Namespace('u'); with (<x><c/></x>) { ns::c = 1 }"), "ReferenceError");
+    truth("var n = 0; var e = ''; try { with (<x/>) { @a = (n++, 1); } } catch (err) { e = err.name; } e === 'ReferenceError' && n === 0");
+    truth(
+        "var b = 'g'; var x = <x/>; var e = ''; try { with (x) { @b = 'w'; } } catch (err) { e = err.name; } \
+         e === 'ReferenceError' && b === 'g' && x.@b.length() === 0 && x.*.length() === 0",
+    );
+}
+
+#[test]
+fn bare_name_read_without_holder_throws_reference_error() {
+    assert_eq!(thrown_name("with (<x/>) { @a }"), "ReferenceError");
+    assert_eq!(thrown_name("var l = <><i id='1'/><i/></>; l.(@id == '1')"), "ReferenceError");
+    truth("var o = <o id='0'/>; var l = <><i id='1'/><i/></>; var r; with (o) { r = l.(@id == '1'); } r.length() === 1");
+}
+
+#[test]
+fn bare_scope_compound_and_updates_resolve_once() {
+    truth("var n = 0; var x = <a t='1'/>; with (x) { @[(n++, 't')] += 1; } n === 1 && x.@t == '11'");
+    truth("var n = 0; var x = <a t='1'/>; with (x) { @[(n++, 't')]++; } n === 1 && x.@t == '2'");
+    truth("var x = <a t='1'/>; var r; with (x) { r = ++@t; } r === 2 && x.@t == '2'");
+    truth("var x = <a t='1'/>; var r; with (x) { r = @t++; } r === 1 && x.@t == '2'");
+    truth("var x = <a t='5'/>; var r; with (x) { r = --@t; } r === 4 && x.@t == '4'");
+    truth("var x = <a t='5'/>; var r; with (x) { r = @t--; } r === 5 && x.@t == '4'");
+}
+
+#[test]
+fn bare_scope_delete_removes_attribute() {
+    truth("var x = <a t='1' u='2'/>; var r; with (x) { r = delete @t; } r === true && x.@t.length() === 0 && x.@u == '2'");
+    truth("var x = <a><c/><d/></a>; with (x) { delete *::c; } x.c.length() === 0 && x.d.length() === 1");
+    assert_eq!(thrown_name("with (<a/>) { delete @t }"), "ReferenceError");
+}
+
+#[test]
+fn bare_scope_for_targets_assign_each_iteration() {
+    truth("var x = <a k=''/>; var s = ''; with (x) { for (@k in { p: 1, q: 2 }) s += @k; } s === 'pq' && x.@k == 'q'");
+    truth("var x = <a k=''/>; var s = ''; with (x) { for each (@k in [3, 4]) s += @k; } s === '34' && x.@k == '4'");
+    assert_eq!(thrown_name("with (<a/>) { for (@k in { p: 1 }); }"), "ReferenceError");
+}
+
+#[test]
+fn for_each_evaluates_its_target_before_reading_the_value() {
+    truth("var o = { p: 1 }; var t = {}; for each ((o.p = 2, t).v in o); t.v === 2");
+    truth("var o = { p: 1 }; var t = {}; for each (t[(o.p = 3, 'w')] in o); t.w === 3");
+    truth("var x = <a k=''/>; var o = { p: 1 }; with (x) { for each (@[(o.p = 2, 'k')] in o); } x.@k == '2'");
+    truth("var o = { p: 1, q: 2 }; var s = ''; for each (var v in o) s += v; var t; for each (t in o) s += t; s === '1212' && t === 2");
+}
+
+#[test]
+fn bare_scope_targets_need_e4x_option() {
+    for src in ["@a = 1", "ns::a = 1", "@a += 1", "++@a", "@a--", "for (@a in o);", "for each (@a in o);", "\"use strict\"; @a = 1"] {
+        assert!(parse(src, &Options::default()).is_err(), "{src}");
+        assert!(parse(src, &e4x()).is_ok(), "{src}");
+    }
+    truth("'use strict'; var l = <><i b='1'/></>; l.(@b = '2', true); l[0].@b == '2'");
 }
 
 #[test]
@@ -1180,6 +1277,471 @@ fn an_interrupt_stops_serialization() {
         Ok(JsValue::Undefined)
     });
     assert_eq!(r.run("stop(); x.toXMLString()").map_err(|e| e.kind), Err(RunErrorKind::Limit(LimitKind::Interrupted)));
+}
+
+// ---- xpath ----
+
+/// A script function that joins the local names of a list's items.
+const NAMES: &str = "function names(l) { var s = ''; for each (var n in l) s += n.localName(); return s; }";
+
+#[test]
+fn xpath_selects_child_attribute_and_text_nodes() {
+    for check in [
+        "xml.xpath('book').length() === 4",
+        "xml.xpath('book[2]/title') == 'Oz'",
+        "xml.xpath('book[last()]/title') == 'Opera'",
+        "xml.xpath('book[position() < 3]').length() === 2",
+        "xml.xpath('book[year > 1890]/title').length() === 3",
+        "xml.xpath('book[count(author) > 1]/title') == 'Alice'",
+        "xml.xpath('book[@category = \"CHILDREN\"]/title').length() === 2",
+        "xml.xpath('//author').length() === 6",
+        "xml.xpath('book/@category').length() === 4 && xml.xpath('book/@category')[0].nodeKind() === 'attribute'",
+        "xml.xpath('book[1]/title/text()')[0].nodeKind() === 'text' && xml.xpath('book[1]/title/text()') == 'Cookbook'",
+        "xml.xpath('book[1]/title/@lang') == 'en'",
+        "xml.xpath('nothing').length() === 0",
+        "xml.xpath('child::book[3]/child::author[2]') == 'B'",
+        "xml.xpath('*').length() === 4 && xml.xpath('book/node()').length() === 14",
+    ] {
+        truth(&format!("{BOOKS} {check}"));
+    }
+}
+
+#[test]
+fn xpath_returns_the_nodes_of_the_tree() {
+    truth(&format!("{BOOKS} xml.book[1].title[0].xpath('..')[0] === xml.book[1]"));
+    truth(&format!("{BOOKS} xml.xpath('book[2]')[0] === xml.book[1] && xml.xpath('.')[0] === xml"));
+    truth(&format!("{BOOKS} xml.xpath('book[1]/year')[0].setChildren('2000'); xml.book[0].year == '2000'"));
+    truth(&format!("{BOOKS} xml.xpath('book/@category')[1].setName('kind'); xml.book[1].@kind == 'CHILDREN'"));
+    truth("var x = <r><a>t</a></r>; x.a.text()[0].xpath('..')[0] === x.a[0]");
+}
+
+#[test]
+fn xpath_absolute_paths_start_above_the_topmost_element() {
+    truth(&format!("{BOOKS} xml.book[0].title[0].xpath('/bookstore/book').length() === 4"));
+    truth(&format!("{BOOKS} xml.book[0].title[0].xpath('/*')[0] === xml"));
+    truth(&format!("{BOOKS} xml.book[0].title[0].xpath('//title').length() === 4"));
+    truth(&format!("{BOOKS} xml.book[0].title[0].xpath('/title').length() === 0"));
+    truth("var d = <d><e/></d>; d.e[0].xpath('/d')[0] === d");
+    for src in ["(<r/>).xpath('/')", "(<r/>).xpath('..')", "(<r/>).xpath('ancestor-or-self::node()')"] {
+        assert_eq!(thrown_name(src), "TypeError", "{src}");
+    }
+}
+
+#[test]
+fn xpath_walks_every_axis() {
+    let tree = "var x = <r><a><b/><c/></a><d><e/></d><f/></r>;";
+    for (expr, want) in [
+        ("x.a[0].xpath('following-sibling::*')", "df"),
+        ("x.f[0].xpath('preceding-sibling::*')", "ad"),
+        ("x.f[0].xpath('preceding-sibling::*[1]')", "d"),
+        ("x.d.e[0].xpath('ancestor::*')", "rd"),
+        ("x.d.e[0].xpath('ancestor::*[1]')", "d"),
+        ("x.d.e[0].xpath('ancestor-or-self::*')", "rde"),
+        ("x.a.b[0].xpath('following::*')", "cdef"),
+        ("x.d.e[0].xpath('preceding::*')", "abc"),
+        ("x.d.e[0].xpath('preceding::*[1]')", "c"),
+        ("x.xpath('descendant::*')", "abcdef"),
+        ("x.xpath('descendant-or-self::*')", "rabcdef"),
+        ("x.a[0].xpath('self::a')", "a"),
+        ("x.a[0].xpath('self::b')", ""),
+        ("x.a.b[0].xpath('parent::*')", "a"),
+        ("x.xpath('//*[2]')", "cd"),
+        ("x.xpath('(//*)[2]')", "a"),
+        ("x.xpath('d/e/../preceding-sibling::*/c')", "c"),
+    ] {
+        assert_eq!(string(&format!("{NAMES} {tree} names({expr})")), want, "{expr}");
+    }
+    let attr = "var x = <r><a p='1'><b/></a><c/></r>;";
+    assert_eq!(string(&format!("{NAMES} {attr} names(x.a.@p[0].xpath('following::*'))")), "bc");
+    assert_eq!(string(&format!("{NAMES} {attr} names(x.a.@p[0].xpath('ancestor::*'))")), "ra");
+    truth(&format!("{attr} x.a.@p[0].xpath('following-sibling::node()').length() === 0 && x.a.@p[0].xpath('preceding::*').length() === 0"));
+}
+
+#[test]
+fn xpath_results_are_in_document_order_without_repeats() {
+    let tree = "var x = <r p='1'><a><b/></a><b/><c/></r>;";
+    for (expr, want) in [
+        ("x.xpath('c | a | //b')", "abbc"),
+        ("x.xpath('a | a')", "a"),
+        ("x.xpath('//b/..')", "ra"),
+        ("x.xpath('//*/ancestor::*')", "ra"),
+        ("x.c[0].xpath('preceding::*[position() < 3]')", "bb"),
+    ] {
+        assert_eq!(string(&format!("{NAMES} {tree} names({expr})")), want, "{expr}");
+    }
+    truth(&format!("{tree} x.xpath('c | @p')[0].nodeKind() === 'attribute' && x.xpath('c | @p').length() === 2"));
+}
+
+#[test]
+fn xpath_names_match_by_namespace_uri() {
+    let tree = "var x = <r xmlns:p='urn:p'><p:a/><a/><q:a xmlns:q='urn:p'/><s:a xmlns:s='urn:s'/></r>;";
+    for check in [
+        "x.xpath('p:a').length() === 2",
+        "x.xpath('a').length() === 1 && x.xpath('a')[0].name().uri === ''",
+        "x.xpath('p:*').length() === 2",
+        "x.xpath('*').length() === 4",
+        "x.xpath('*[local-name() = \"a\"]').length() === 4",
+        "x.xpath('*[namespace-uri() = \"urn:s\"]').length() === 1",
+        "x.xpath('*[name() = \"p:a\"]').length() === 1",
+    ] {
+        truth(&format!("{tree} {check}"));
+    }
+    truth("var x = <r xmlns='urn:d'><a/></r>; x.xpath('a').length() === 0 && x.xpath('*').length() === 1");
+    truth("var x = <r><a/></r>; default xml namespace = 'urn:d'; x.xpath('a').length() === 1");
+    truth("var x = <r><a xml:lang='en'/></r>; x.xpath('a/@xml:lang') == 'en'");
+    let rebound = "var x = <r xmlns:p='urn:1'><p:a/><b xmlns:p='urn:2'><p:a/></b></r>;";
+    truth(&format!("{rebound} x.xpath('//p:a').length() === 1 && x.xpath('//p:a')[0].parent() === x"));
+    truth(&format!("{rebound} x.b[0].xpath('p:a').length() === 1 && x.b[0].xpath('/r/p:a').length() === 0"));
+    assert_eq!(thrown_name("(<r/>).xpath('z:a')"), "TypeError");
+}
+
+#[test]
+fn xpath_namespace_nodes_can_be_tested_but_not_returned() {
+    let tree = "var x = <r xmlns:p='urn:p'><a xmlns:q='urn:q'/></r>;";
+    truth(&format!("{tree} x.xpath('self::*[namespace::xml]').length() === 1"));
+    truth(&format!("{tree} x.xpath('a[count(namespace::*) = 3]').length() === 1"));
+    truth(&format!("{tree} x.xpath('a[namespace::q = \"urn:q\"]').length() === 1 && x.xpath('self::*[namespace::q]').length() === 0"));
+    truth(&format!("{tree} x.xpath('a[namespace::*[name() = \"p\"]/.. = .]').length() === 1"));
+    assert_eq!(thrown_name(&format!("{tree} x.xpath('namespace::*')")), "TypeError");
+}
+
+#[test]
+fn xpath_variables_come_from_the_object_properties() {
+    truth(&format!("{BOOKS} xml.xpath('book[title = $t]/author', {{ t: 'Oz' }}) == 'Baum'"));
+    truth(&format!("{BOOKS} xml.xpath('book[$n]/title', {{ n: 3 }}) == 'Alice'"));
+    truth(&format!("{BOOKS} xml.xpath('book[$yes]', {{ yes: true }}).length() === 4 && xml.xpath('book[$no]', {{ no: false }}).length() === 0"));
+    truth(&format!("{BOOKS} xml.xpath('$b/title', {{ b: xml.book[1] }}) == 'Oz'"));
+    truth(&format!("{BOOKS} xml.xpath('$l/year', {{ l: xml.book.(@category == 'CHILDREN') }}).length() === 2"));
+    truth(&format!("{BOOKS} xml.xpath('book[year = $y]/title', {{ y: {{ toString: function () {{ return '1922'; }} }} }}) == 'Opera'"));
+    truth(&format!(
+        "{BOOKS} var o = {{}}; Object.defineProperty(o, 'v', {{ get: function () {{ return 'Alice'; }} }}); xml.xpath('book[title = $v]', o).length() === 1"
+    ));
+    for src in
+        ["(<r/>).xpath('$v')", "(<r/>).xpath('$v', {})", "(<r/>).xpath('$v', { v: undefined })", "(<r/>).xpath('a', 5)", "(<r/>).xpath('a', null)"]
+    {
+        assert_eq!(thrown_name(src), "TypeError", "{src}");
+    }
+}
+
+#[test]
+fn xpath_keeps_the_items_of_a_list_variable_that_a_later_getter_empties() {
+    let setup = "var l = <><a><b/></a></>;";
+    let action = "var o = { get v() { return l; }, get w() { delete l[0]; l = null; squeeze(100000000); return 1; } };
+        var r = (<r/>).xpath('$v/b | $v[$w]', o); r.length() === 2 && r[0].localName() === 'a' && r[1].localName() === 'b'";
+    assert_eq!(after_setup(setup, action), Ok(JsValue::Bool(true)));
+}
+
+#[test]
+fn xpath_functions_and_operators_follow_xpath_1() {
+    let tree = "var x = <r xml:lang='en-US'><a>1</a><a>2</a><b>x  y</b><n>12.5</n></r>;";
+    let checks = [
+        "last() = 1 and position() = 1",
+        "count(a) = 2",
+        "count(id('a')) = 0",
+        "local-name() = 'r' and name(a) = 'a' and namespace-uri() = ''",
+        "local-name(nothing) = '' and name(@xml:lang) = 'xml:lang'",
+        "string(a) = '1' and string() = '12x  y12.5' and string(nothing) = ''",
+        "concat('a', 'b', 'c') = 'abc'",
+        "starts-with('abc', 'ab') and not(starts-with('abc', 'b'))",
+        "contains('abc', 'bc') and contains('abc', '') and not(contains('abc', 'd'))",
+        "substring-before('1999/04/01', '/') = '1999' and substring-before('abc', 'd') = ''",
+        "substring-after('1999/04/01', '/') = '04/01' and substring-after('abc', '') = 'abc'",
+        "substring('12345', 2, 3) = '234' and substring('12345', 2) = '2345'",
+        "substring('12345', 1.5, 2.6) = '234' and substring('12345', 0, 3) = '12'",
+        "substring('12345', 0 div 0, 3) = '' and substring('12345', 1, 0 div 0) = ''",
+        "substring('12345', -42, 1 div 0) = '12345' and substring('12345', -1 div 0, 1 div 0) = ''",
+        "string-length('abc') = 3 and string-length(b) = 4 and string-length() = 10",
+        "normalize-space(b) = 'x y' and normalize-space('  x \t y ') = 'x y' and normalize-space('  ') = ''",
+        "translate('bar', 'abc', 'ABC') = 'BAr' and translate('--aaa--', 'abc-', 'ABC') = 'AAA'",
+        "boolean(a) and not(boolean(nothing)) and boolean('x') and not(boolean('')) and not(boolean(0)) and not(boolean(0 div 0))",
+        "true() and not(false())",
+        "lang('en') and lang('EN-us') and not(lang('fr')) and a[lang('en')]",
+        "number(n) = 12.5 and number(' -3 ') = -3 and string(number('1e3')) = 'NaN' and string(number('+1')) = 'NaN'",
+        "sum(a) = 3 and sum(nothing) = 0",
+        "floor(2.5) = 2 and ceiling(2.1) = 3 and floor(-2.5) = -3",
+        "round(2.5) = 3 and round(-2.5) = -2 and round(2.4) = 2 and string(round(-0.4)) = '0'",
+        "string(1 div 0) = 'Infinity' and string(-1 div 0) = '-Infinity' and string(0 div 0) = 'NaN'",
+        "string(1.5) = '1.5' and string(2) = '2' and string(-0.25) = '-0.25' and string(1 div 3) = '0.3333333333333333'",
+        "string(1000000 * 1000000 * 1000000 * 1000) = '1000000000000000000000'",
+        "7 mod 3 = 1 and -7 mod 3 = -1 and 5 div 2 = 2.5 and 2 - 3 = -1 and --1 = 1 and -(1 + 1) = -2",
+        "1 + 2 * 3 = 7 and (1 + 2) * 3 = 9 and 3 > 2 > 1 = false()",
+        "a = 2 and a = '1' and a != 1 and a > 1 and not(a > 2) and a < 2 and 1 < a and 2 >= a",
+        "a = a and a != a and not(a[1] != a[1]) and not(nothing = nothing) and not(nothing != a) and a < a",
+        "true() = a and false() = nothing and '1' = 1 and true() = 'x' and 1 = true() and not(0 = true())",
+        "a > false() and not(a > true()) and nothing < true() and not(nothing >= true())",
+        "1 < 2 and 2 > 1 or false()",
+        "false() and 1 div 0 or true()",
+        "'a' < 'b' = false() and '1' < '2'",
+        "*[2] = 2 and *[last()] = 12.5",
+        "(a | b)[2] = 2",
+    ];
+    for check in checks {
+        let expr = format!("self::*[{check}]");
+        truth(&format!("{tree} x.xpath({expr:?}).length() === 1"));
+    }
+}
+
+#[test]
+fn xpath_throws_a_type_error_for_a_value_that_is_not_a_node_set() {
+    for expr in ["count(book)", "string(book)", "1", "'a'", "true()", "book = 1", "-book"] {
+        let src = format!("{BOOKS} try {{ xml.xpath({expr:?}); 'no error' }} catch (e) {{ e.name + ': ' + e.message }}");
+        assert_eq!(string(&src), "TypeError: the XPath expression does not evaluate to a node-set", "{expr}");
+    }
+}
+
+#[test]
+fn xpath_errors_name_their_cause() {
+    for expr in [
+        "",
+        " ",
+        "/[1]",
+        "book[",
+        "book]",
+        "(",
+        ")",
+        "1 +",
+        "book/",
+        "@",
+        "foo::bar",
+        ".[1]",
+        "..[1]",
+        "'abc",
+        "$",
+        "book book",
+        "!",
+        "a//",
+        ",",
+        "count(",
+        "count(1,",
+        "a::",
+        "::a",
+        "a:",
+        "1..2",
+        "book[1]]",
+        "count(book))",
+        "//",
+        "/ /a",
+        "(1)(2)",
+        "processing-instruction(1)",
+        "node(1)",
+        "*:a",
+        "a:b:c",
+    ] {
+        assert_eq!(thrown_name(&format!("{BOOKS} xml.xpath({expr:?})")), "SyntaxError", "{expr:?}");
+    }
+    for expr in
+        ["foo()", "count()", "count(1)", "p:count(book)", "sum('1')", "1 | book", "'a'/b", "'a'[1]", "concat('a')", "name(1)", "substring('a')"]
+    {
+        assert_eq!(thrown_name(&format!("{BOOKS} xml.xpath({expr:?})")), "TypeError", "{expr:?}");
+    }
+    for src in ["(<r/>).xpath()", "(<r/>).xpath(5)", "(<r/>).xpath(new String('a'))", "XML.prototype.xpath.call({}, 'a')"] {
+        assert_eq!(thrown_name(src), "TypeError", "{src}");
+    }
+}
+
+#[test]
+fn xpath_on_an_xml_list_runs_on_each_element_in_turn() {
+    truth(
+        "var l = <><a><b>1</b></a><a><b>2</b><b>3</b></a></>; l.xpath('b').length() === 3 && l.xpath('b').toXMLString() === '<b>1</b>\\n<b>2</b>\\n<b>3</b>'",
+    );
+    truth("var l = <><a><b>1</b></a><a><b>2</b><b>3</b></a></>; l.xpath('b[1]').length() === 2");
+    truth("var x = <r><a/><b/></r>; var l = x.*; var p = l.xpath('..'); p.length() === 2 && p[0] === x && p[1] === x");
+    truth("var x = <r><a>t</a></r>; var l = x.a.text() + x.a; l.xpath('.').length() === 1 && l.xpath('.')[0] === x.a[0]");
+    truth("var x = <r p='1'><!--c--><a/></r>; (x.@p + x.comments()).xpath('.').length() === 0");
+    truth("new XMLList().xpath('a').length() === 0 && new XMLList().xpath('z:a').length() === 0");
+    truth("var l = <><a xmlns:p='urn:1'><p:b/></a><a xmlns:p='urn:2'><p:b/></a></>; l.xpath('p:b').length() === 2");
+    assert_eq!(thrown_name("var l = <><a xmlns:p='urn:1'/><a/></>; l.xpath('p:b')"), "TypeError");
+}
+
+#[test]
+fn xpath_expressions_of_any_depth_use_no_native_stack() {
+    let deep = format!("{}1{}", "(".repeat(100_000), ")".repeat(100_000));
+    assert_eq!(thrown_name(&format!("(<r/>).xpath('{deep}')")), "SyntaxError");
+    let predicates = format!("{}{}", "a[".repeat(100_000), "]".repeat(100_000));
+    assert_eq!(thrown_name(&format!("(<r/>).xpath('{predicates}')")), "SyntaxError");
+    let sum = format!("1{}", " + 1".repeat(100_000));
+    truth(&format!("(<r/>).xpath('self::*[{sum} = 100001]').length() === 1"));
+    let negated = format!("{}1", "-".repeat(100_001));
+    truth(&format!("(<r/>).xpath('self::*[{negated} = -1]').length() === 1"));
+    let union = format!("a{}", " | a".repeat(50_000));
+    truth(&format!("(<r><a/></r>).xpath('{union}').length() === 1"));
+    let mut shallow = Realm::with_options(Options { max_depth: 8, ..e4x() }, Limits::default());
+    let seven = format!("{}1{}", "(".repeat(6), ")".repeat(6));
+    assert_eq!(shallow.run(&format!("(<r/>).xpath('self::*[{seven}]').length()")), Ok(JsValue::Number(1.0)));
+    let eight = format!("{}1{}", "(".repeat(8), ")".repeat(8));
+    assert_eq!(shallow.run(&format!("try {{ (<r/>).xpath('{eight}') }} catch (e) {{ e.message }}")), Ok(JsValue::String("nesting too deep".into())));
+}
+
+#[test]
+fn xpath_stops_at_the_fuel_and_heap_limits_leaving_the_tree() {
+    let setup = "var x = <r/>; for (var i = 0; i < 6; i++) x.appendChild(<a><b>{i}</b></a>);";
+    let check = "x.a.length() === 6 && x.a[5].b == '5' && x.*.length() === 6";
+    assert!(fuel_stops(setup, "x.xpath('//b[. > 2]/preceding::*')", check) > 0);
+    assert!(heap_stops(setup, "x.xpath((SPARE, '//b[contains(concat(., ., .), \"3\")] | //a'))", check) > 0);
+    let mut r = realm();
+    r.run("var x = <r/>; for (var i = 0; i < 500; i++) x.appendChild(<a/>);").unwrap();
+    let interrupt = r.interrupt();
+    r.define_function("stop", move |_| {
+        interrupt.set();
+        Ok(JsValue::Undefined)
+    });
+    assert_eq!(r.run("stop(); x.xpath('//a/following::a')").map_err(|e| e.kind), Err(RunErrorKind::Limit(LimitKind::Interrupted)));
+}
+
+#[test]
+fn xpath_walks_of_deep_trees_and_long_lists_count_against_the_heap_limit() {
+    let deep = "var s = ''; for (var i = 0; i < 5000; i++) s += '<a>'; s += '<b/>'; for (var i = 0; i < 5000; i++) s += '</a>'; var x = new XML(s);";
+    for (action, room) in [
+        ("x.xpath('descendant::c').length()", JsValue::Number(0.0)),
+        ("x.xpath('self::*[string() = \"q\"]').length()", JsValue::Number(0.0)),
+        ("x.xpath('descendant::b | self::a').length()", JsValue::Number(2.0)),
+    ] {
+        for (spare, want) in [(20_000, Err(RunErrorKind::Limit(LimitKind::Heap))), (50_000_000, Ok(room.clone()))] {
+            let mut r = Realm::with_options(Options { max_depth: 1_000_000, ..e4x() }, Limits::default());
+            let interp = r.interp();
+            let global = interp.global;
+            assert!(crate::builtins::method(interp, global, "squeeze", squeeze, 1).is_ok());
+            r.run(deep).unwrap();
+            assert_eq!(r.run(&format!("squeeze({spare}); {action}")).map_err(|e| e.kind), want, "{action} {spare}");
+        }
+    }
+    let long = "var s = '<r>'; for (var i = 0; i < 20000; i++) s += '<a/>'; var l = new XML(s + '</r>').a;";
+    assert_eq!(after_setup(long, "squeeze(50000); l.xpath('self::c').length()"), Err(RunErrorKind::Limit(LimitKind::Heap)));
+    assert_eq!(after_setup(long, "squeeze(50000000); l.xpath('self::c').length()"), Ok(JsValue::Number(0.0)));
+}
+
+#[test]
+fn xpath_reading_a_long_string_takes_fuel_for_its_length() {
+    let setup = "var s = 'x'; for (var i = 0; i < 20; i++) s += s; var x = <r/>; for (var i = 0; i < 200; i++) x.appendChild(<a>y</a>);";
+    for expr in ["a[string-length($s) = 1]", "a[starts-with($s, $s) = false()]", "a[$s = concat('', 'x')]", "a[number($s) = 1]", "a[. = $s]"] {
+        let mut r = realm();
+        r.run(setup).unwrap();
+        let src = format!("x.xpath({expr:?}, {{ s: s }}).length()");
+        assert_eq!(r.run(&src), Ok(JsValue::Number(0.0)), "{expr}");
+        r.set_limits(Limits { fuel: 2_000_000, ..Limits::default() });
+        assert_eq!(r.run(&src).map_err(|e| e.kind), Err(RunErrorKind::Limit(LimitKind::Fuel)), "{expr}");
+    }
+}
+
+#[test]
+fn xpath_string_functions_hold_the_bytes_they_build() {
+    let setup = "var s = 'x'; for (var i = 0; i < 20; i++) s += s; var d = '1'; for (var i = 0; i < 20; i++) d += d; var o = { s: s, d: d };";
+    for (expr, spare) in [("translate('a', 'b', $s) = 'a'", 1_000_000), ("number($d) > 1", 500_000), ("substring($s, 1) != 'z'", 4_000_000)] {
+        let action = |spare: u32| format!("squeeze({spare}); (<r/>).xpath(\"self::*[{expr}]\", o).length()");
+        assert_eq!(after_setup(setup, &action(spare)), Err(RunErrorKind::Limit(LimitKind::Heap)), "{expr}");
+        assert_eq!(after_setup(setup, &action(100_000_000)), Ok(JsValue::Number(1.0)), "{expr}");
+    }
+}
+
+#[test]
+fn xpath_string_variables_hold_the_bytes_of_their_flat_copy() {
+    // The setup ends with `0` so that its completion value does not flatten `s`.
+    let setup = "var s = 'x'; for (var i = 0; i < 20; i++) s += s; var o = { s: s }; 0;";
+    let action = |spare: u32| format!("squeeze({spare}); (<r/>).xpath('self::*[$s]', o).length()");
+    assert_eq!(after_setup(setup, &action(1_000_000)), Err(RunErrorKind::Limit(LimitKind::Heap)));
+    assert_eq!(after_setup(setup, &action(100_000_000)), Ok(JsValue::Number(1.0)));
+}
+
+#[test]
+fn xpath_substring_searches_take_fuel_for_every_position_tried() {
+    let setup = "var h = 'a'; for (var i = 0; i < 16; i++) h += h; var n = h.substring(0, 4095) + 'b'; var o = { h: h, n: n };";
+    for expr in ["contains($h, $n)", "substring-before($h, $n) = ''", "substring-after($h, $n) = ''"] {
+        let mut r = realm();
+        r.run(setup).unwrap();
+        let src = format!("(<r/>).xpath(\"self::*[{expr}]\", o).length()");
+        let want = if expr.starts_with("contains") { 0.0 } else { 1.0 };
+        assert_eq!(r.run(&src), Ok(JsValue::Number(want)), "{expr}");
+        r.set_limits(Limits { fuel: 5_000_000, ..Limits::default() });
+        assert_eq!(r.run(&src).map_err(|e| e.kind), Err(RunErrorKind::Limit(LimitKind::Fuel)), "{expr}");
+    }
+}
+
+#[test]
+fn xpath_lang_takes_fuel_for_every_attribute_it_reads() {
+    let setup = "var s = '<r'; for (var i = 0; i < 10000; i++) s += ' a' + i + '=\"\"'; s += '>'; \
+        for (var i = 0; i < 400; i++) s += '<a/>'; var x = new XML(s + '</r>');";
+    let mut r = realm();
+    r.run(setup).unwrap();
+    let src = "x.xpath('a[lang(\"en\")]').length()";
+    assert_eq!(r.run(src), Ok(JsValue::Number(0.0)));
+    r.set_limits(Limits { fuel: 2_000_000, ..Limits::default() });
+    assert_eq!(r.run(src).map_err(|e| e.kind), Err(RunErrorKind::Limit(LimitKind::Fuel)));
+}
+
+#[test]
+fn xpath_on_a_large_tree_ends_within_the_default_limits() {
+    let setup = "var x = <r/>; for (var i = 0; i < 3000; i++) x.appendChild(<a n={i}><b/></a>);";
+    truth(&format!("{setup} x.xpath('//a[@n = 2999]/b').length() === 1 && x.xpath('//b/..').length() === 3000"));
+    let mut r = realm();
+    r.run("var x = <r/>; for (var i = 0; i < 2000; i++) x.appendChild(<a/>);").unwrap();
+    r.set_limits(Limits { fuel: 2_000_000, ..Limits::default() });
+    assert_eq!(r.run("x.xpath('//a/following::a')").map_err(|e| e.kind), Err(RunErrorKind::Limit(LimitKind::Fuel)));
+}
+
+const XPATH_PIECES: &[&str] = &[
+    "/",
+    "//",
+    "a",
+    "b",
+    "*",
+    "@",
+    "@*",
+    ".",
+    "..",
+    "[",
+    "]",
+    "(",
+    ")",
+    "1",
+    "'x'",
+    "$v",
+    "|",
+    "+",
+    "-",
+    "=",
+    "!=",
+    "<",
+    ">=",
+    " and ",
+    " or ",
+    " div ",
+    " mod ",
+    "child::",
+    "following::",
+    "preceding::",
+    "ancestor::",
+    "namespace::",
+    "node()",
+    "text()",
+    "count(",
+    "last()",
+    "position()",
+    "concat(",
+    "substring(",
+    ",",
+    "p:",
+    "p:*",
+    "xml:lang",
+    "::",
+    ":",
+    "'",
+    " ",
+];
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    #[test]
+    fn random_xpath_expressions_select_nodes_or_throw(parts in proptest::collection::vec(0..XPATH_PIECES.len(), 0..30)) {
+        let expr: String = parts.iter().map(|&i| XPATH_PIECES[i]).collect();
+        let quoted = format!("{expr:?}");
+        let src = format!("var x = <r xmlns:p='urn:p' xml:lang='en'><a p:q='1'><b>2</b><!--c--></a><p:b>3</p:b>t</r>; typeof XML.prototype.xpath === 'function' && x.a[0].xpath({quoted}, {{ v: 1 }}).length() >= 0");
+        let mut r = limited(Limits { fuel: 200_000, heap_bytes: 4 << 20, frames: 200, reentry: 8 });
+        match r.run(&src) {
+            Ok(v) => prop_assert_eq!(v, JsValue::Bool(true), "{}", expr),
+            Err(e) => prop_assert!(matches!(e.kind, RunErrorKind::Thrown | RunErrorKind::Limit(_)), "{expr:?}: {e:?}"),
+        }
+    }
 }
 
 // ---- generated input ----

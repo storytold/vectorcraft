@@ -43,9 +43,13 @@ pub type ReadHeadFn = Box<dyn Fn(&str, usize) -> Result<Vec<u8>, String>>;
 
 pub type WriteFn = Box<dyn FnMut(&str, &[u8]) -> Result<(), String>>;
 
-pub type ExistsFn = Box<dyn Fn(&str) -> bool>;
+/// Shared, so Background Save and Export can check from a worker thread too.
+pub type ExistsFn = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
 pub type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
+
+/// The web open picker's answers in order: the picked file, or `None` when it was canceled.
+pub type PickedInbox = Arc<Mutex<Vec<Option<(String, Vec<u8>)>>>>;
 
 /// Starts a browser download of the bytes under a file name; an error when it couldn't be started
 /// (the save or export then fails as a refused write does: #1693).
@@ -86,14 +90,21 @@ pub struct Services {
     pub read_head: Option<ReadHeadFn>,
     pub write: Option<WriteFn>,
     /// Is there a file or folder at a path (desktop)? The app asks before replacing a file that a
-    /// save panel's name names once the app gives it an extension ([`picks::ask_to_replace`]).
-    /// Without it, no file counts as there.
+    /// save panel's name names once the app gives it an extension ([`picks::ask_to_replace`]), and
+    /// before a save or export replaces a file it writes beside that one (a file per artboard, a
+    /// linked image). Without it, no file counts as there.
     pub exists: Option<ExistsFn>,
-    /// Files that arrived asynchronously (web open / drops): (name, bytes).
+    /// Files that arrived asynchronously (web drops): (name, bytes).
     pub inbox: Option<Inbox>,
+    /// Web: the open picker's answers (`open_async`). A file opens as automation's when automation
+    /// opened a picker that has not answered yet.
+    pub picked_inbox: Option<PickedInbox>,
+    /// Web: files the page's script handed over (`window.vectorcraft.openFile`). They open as
+    /// automation's.
+    pub page_inbox: Option<Inbox>,
     /// Web: trigger a browser download instead of writing a path.
     pub download: Option<DownloadFn>,
-    /// Web: start an async open (bytes arrive via `inbox`).
+    /// Web: start an async open (bytes arrive via `picked_inbox`).
     pub open_async: Option<Box<dyn FnMut()>>,
     /// Read the system clipboard's text (desktop). Without it, pasted text only arrives with
     /// egui's Paste event (web, and keyboard paste everywhere).

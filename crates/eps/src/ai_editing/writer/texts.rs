@@ -385,6 +385,8 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
         if p.justify == Justify::Auto && p.direction.is_none() && rtl_letter {
             return true;
         }
+        let hangul =
+            text.chars().any(|c| matches!(c, '\u{1100}'..='\u{11FF}' | '\u{3130}'..='\u{318F}' | '\u{A960}'..='\u{A97F}' | '\u{AC00}'..='\u{D7FF}' | '\u{FFA0}'..='\u{FFDC}'));
         let held = ParaStyle {
             justify: p.justify,
             left_indent: p.left_indent,
@@ -398,6 +400,9 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
             // Width, Standard burasagari) isn't reported: it changes no other script's lines.
             mojikumi: if p.mojikumi == Mojikumi::LineEndHalf { p.mojikumi } else { ParaStyle::default().mojikumi },
             burasagari: if p.burasagari == Burasagari::Standard { p.burasagari } else { ParaStyle::default().burasagari },
+            // The text document has no Korean Line Break Anywhere: it reads back off, which
+            // changes only the lines of a paragraph with Hangul in it.
+            korean_line_break_anywhere: p.korean_line_break_anywhere && !hangul,
             ..ParaStyle::default()
         };
         *p != held
