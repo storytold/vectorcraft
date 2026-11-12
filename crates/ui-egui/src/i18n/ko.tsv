@@ -2094,6 +2094,7 @@ antiAlias	Sharp	날카롭게
 	Include Hidden Layers	숨겨진 레이어 포함
 	Include Linked Files	링크된 파일 포함
 	Include Metadata	메타데이터 포함
+	Include Variable Data	변수 데이터 포함
 	Include SVG Code	SVG 코드 포함
 	Include Swatches for Tints	농도별 견본 포함
 	Include non-printing layers	인쇄되지 않는 레이어 포함
@@ -2318,6 +2319,7 @@ antiAlias	Sharp	날카롭게
 	Move Slices	슬라이스 이동
 	Move Spine Point	스파인 포인트 이동
 	Reshape Spine Segment	스파인 세그먼트 모양 변경
+	Blend Easing	블렌드 이징
 	Move Brush	브러시 이동
 	Move Swatch	견본 이동
 	Move Up	위로 이동
@@ -2955,6 +2957,7 @@ mark-style	Japanese	일본식
 	Right:	오른쪽:
 	Roman Hanging Punctuation	로마자 걸림 문장 부호
 	Korean Line Break Anywhere	한글 어디서나 줄 바꿈
+	Bunri-Kinshi	분리 금지
 	East Asian Composition Settings	동아시아 조판 설정
 	Korean Composition Settings	한글 조판 설정
 	Rotate	회전
@@ -2962,6 +2965,7 @@ mark-style	Japanese	일본식
 	Rotate View Tool	보기 회전 도구
 	Trackpad Gesture to Rotate View	트랙패드 제스처로 보기 회전
 	Hold a Tool Shortcut to Use the Tool Temporarily	도구 단축키를 누르고 있는 동안 도구를 임시로 사용
+	Show Bounding Box While Moving and Drawing	이동 및 그리기 중 경계 상자 표시
 	Rotation	회전
 	Round Cap	둥근 끝
 	Round Join	둥근 연결
@@ -4813,6 +4817,7 @@ theme	Appearance	외관
 @msg	give only one of onto, below and above	onto, below, above 중 하나만 지정하세요
 @msg	column must be true or a number from 1	column은 true이거나 1 이상의 숫자여야 합니다
 @msg	unknown panel `{raw}`	알 수 없는 패널 `{raw}`
+@msg	panels can't be shown in Presentation Mode	프레젠테이션 모드에서는 패널을 표시할 수 없습니다
 @msg	x and y must both be numbers	x와 y는 모두 숫자여야 합니다
 @msg	Downloaded {what}	{what}을(를) 다운로드했습니다
 @msg	Imported {what}: {_1}	{what}을(를) 가져왔습니다: {_1}
@@ -5709,6 +5714,110 @@ axis	Y Axis	Y축
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	라이브 효과는 문서를 그리는 동안 실행되므로 `heavy`일 수 없습니다
 @msg	an exporter always gets an export's budget: leave `budget` out	내보내기 플러그인은 항상 내보내기 예산을 받습니다. `budget`은 생략하세요
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”은(는) 큰 계산 예산을 요청합니다(실행당 최대 {minutes}분, 평소의 {times}배 명령어). 데스크톱 앱에서 사람이 승인하거나 --allow-plugin-grants로 시작한 세션에서 `allowHeavy: true`를 전달하세요
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	`name`은(는) 인쇄 가능한 문자 1-64자여야 합니다
+@msg	`version`, `description` or `author` is too long	`version`, `description` 또는 `author`가 너무 깁니다
+@msg	`warnings` must be a list of strings	`warnings`는 문자열 목록이어야 합니다
+@msg	`{k}` must be one of {_1}	`{k}`은(는) {_1} 중 하나여야 합니다
+@msg	`{k}` must be {what}	`{k}`은(는) {what}이어야 합니다
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	내보내기 플러그인은 `extensions`를 1~{MAX_EXTENSIONS}개 선언합니다
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	그룹 밖의 매개변수는 최대 {MAX_UNGROUPED}개입니다. 나머지에는 `group`을 지정하세요
+@msg	can't encode the input	입력을 인코딩할 수 없습니다
+@msg	expected {"dataBase64"}	{"dataBase64"} 형식이어야 합니다
+@msg	expected {"objects"}	{"objects"} 형식이어야 합니다
+@msg	export `{name}`: {e}	모듈 내보내기 `{name}`: {e}
+@msg	extension {e} is listed twice	확장자 {e}이(가) 두 번 나열되었습니다
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	확장자 {e}: 점 없이 소문자와 숫자 1-16자를 사용하세요
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	잘못된 ID {_1}: A-Z a-z 0-9 . _ - 중에서 1-64자를 사용하세요
+@msg	invalid parameter name {k}	잘못된 매개변수 이름 {k}
+@msg	manifest is not UTF-8	매니페스트가 UTF-8이 아닙니다
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	매니페스트가 너무 깁니다(한도 {MAX_MANIFEST_BYTES}바이트)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	매니페스트가 {_1}바이트입니다(한도 {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	모듈이 {_1}바이트입니다(한도 {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	승인이 필요합니다. {0}을(를) 요청하며, 사용자가 따로 설치할 때 허용합니다
+@msg	not JSON: {e}	JSON이 아닙니다: {e}
+@msg	not a WebAssembly binary (missing \0asm header)	WebAssembly 바이너리가 아닙니다(\0asm 헤더 없음)
+@msg	parameter `{k}`: {what}	매개변수 `{k}`: {what}
+@msg	parameter `{name}`: {what}	매개변수 `{name}`: {what}
+@msg	plug-in parameters must be a JSON object	플러그인 매개변수는 JSON 개체여야 합니다
+@msg	the module must export its linear memory as `memory`	모듈은 선형 메모리를 `memory`(으)로 내보내야 합니다
+@msg	the objects to change are no longer in the document	변경할 개체가 더 이상 문서에 없습니다
+@msg	the runtime panicked	런타임이 비정상 종료되었습니다
+@msg	unexpected host trap	호스트에서 예기치 않은 트랩이 발생했습니다
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version이 {v}을(를) 반환했습니다. 이 호스트는 버전 {ABI_VERSION}을(를) 구현합니다
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc이 0을 반환했습니다(메모리 부족)
+@msg	vc_alloc returned a block outside memory	vc_alloc이 메모리 밖의 블록을 반환했습니다
+@msg	vc_run returned error code {packed}	vc_run이 오류 코드 {packed}을(를) 반환했습니다
+@msg	{_1} is not a file	{_1}은(는) 파일이 아닙니다
+@msg	{_1} is {_2} bytes (limit {_3})	{_1}이(가) {_2}바이트입니다(한도 {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	개체 {_1}개(한도 {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what}이(가) 메모리 밖을 가리킵니다
+@msg	`angle` must be a number	`angle`은(는) 숫자여야 합니다
+@msg	`aspect` must be from 0.01 to 100	`aspect`은(는) 0.01에서 100 사이여야 합니다
+@msg	`cap` must be "butt", "round" or "square"	`cap`은(는) "butt", "round" 또는 "square"여야 합니다
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule`은(는) "nonzero" 또는 "evenodd"여야 합니다
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl`은(는) {MAX_HELP_URL}바이트 이하의 https:// 주소여야 합니다
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help`은(는) 인쇄 가능한 문자 1-{MAX_HELP}자여야 합니다
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id`은(는) 1-{MAX_EFFECT_ID}바이트의 효과 ID여야 합니다
+@msg	`id` must be the id of an input object	`id`은(는) 입력 개체의 ID여야 합니다
+@msg	`join` must be "miter", "round" or "bevel"	`join`은(는) "miter", "round" 또는 "bevel"이어야 합니다
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label`과 `group`은 인쇄 가능한 문자 1-{MAX_LABEL}자여야 합니다
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength`은(는) 1-{MAX_TEXT}여야 하며 기본값은 그보다 길 수 없습니다
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems`와 `maxItems`는 0-{MAX_LIST}, `maxItems`는 1 이상이어야 하며 기본값의 항목 수도 그 범위여야 합니다
+@msg	`name` must be a string	`name`은(는) 문자열이어야 합니다
+@msg	`opacity` must be a number	`opacity`은(는) 숫자여야 합니다
+@msg	`type` must be "path" or "compound"	`type`은(는) "path" 또는 "compound"여야 합니다
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit`은(는) 인쇄 가능한 문자 1-{MAX_UNIT}자여야 합니다
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`에는 `{other}`의 값을 1-{MAX_CONDITION_VALUES}개 나열해야 합니다
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen`이 지정한 `{other}`은(는) 이 매개변수보다 앞에 선언된 매개변수가 아닙니다
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen`에는 매개변수를 최대 {MAX_CONDITIONS}개까지 지정할 수 있습니다
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen`은 확인란 또는 선택 항목인 `{other}`의 값을 받습니다
+@msg	`visible` must be true or false	`visible`은(는) true 또는 false여야 합니다
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}`은(는) {_1}에서 {_2} 사이의 숫자여야 합니다
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}`은(는) 항목이 최대 {MAX_ITEMS}개인 배열이어야 합니다
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	색상 기본값은 색상 개체 또는 "#3a7bd5" 같은 16진수 문자열이어야 합니다
+@msg	a color object or a hex string such as "#3a7bd5"	색상 개체 또는 "#3a7bd5" 같은 16진수 문자열
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	자유형 그레이디언트에는 점과 선이 최대 {MAX_ITEMS}개까지 있습니다
+@msg	a freeform gradient line names a point it doesn't have	자유형 그레이디언트의 선이 그레이디언트에 없는 점을 지정합니다
+@msg	a gradient needs 1-{MAX_ITEMS} stops	그레이디언트에는 정지점이 1-{MAX_ITEMS}개 필요합니다
+@msg	a list of numbers	숫자 목록
+@msg	a list of {min_items} to {max_items} numbers	숫자 {min_items}-{max_items}개의 목록
+@msg	a new object needs a `path`	새 개체에는 `path`가 필요합니다
+@msg	a number	숫자
+@msg	a painted live effect returns only `objects`	페인트형 라이브 효과는 `objects`만 반환합니다
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	페인트형 라이브 효과의 조각에는 `path`, `fillRule`, `fills`, `strokes`만 있습니다
+@msg	a read-only object was left out	읽기 전용 개체가 빠졌습니다
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	읽기 전용 개체가 빠졌습니다: {"id"}만 있는 형태나 받은 그대로 반환하십시오
+@msg	a string	문자열
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	선에는 `paint`, `width`, `join`, `cap`, `miterLimit`만 있습니다
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	선은 {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} 형태여야 합니다
+@msg	an effect must be {"id", "params"?, "visible"?}	효과는 {"id", "params"?, "visible"?} 형태여야 합니다
+@msg	an effect on a fill returns only `fills`	칠에 적용된 효과는 `fills`만 반환합니다
+@msg	an effect on a stroke returns only `strokes`	선에 적용된 효과는 `strokes`만 반환합니다
+@msg	an object must be a JSON object	개체는 JSON 개체여야 합니다
+@msg	bad range	잘못된 범위
+@msg	choices must be 1-64 non-empty, printable strings	선택 항목은 비어 있지 않은 인쇄 가능한 문자열 1-64개여야 합니다
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	좌표가 범위를 벗어났습니다(한도 ±{MAX_COORD} pt)
+@msg	default is not one of the options	기본값이 옵션 중 하나가 아닙니다
+@msg	each piece needs a `path`	각 조각에는 `path`가 필요합니다
+@msg	is listed twice	두 번 나열되었습니다
+@msg	pattern transform out of range	패턴 변형이 범위를 벗어났습니다
+@msg	read-only field '{field}' changed	읽기 전용 필드 '{field}'이(가) 변경되었습니다
+@msg	stops must be in order of `offset`	정지점은 `offset` 순서여야 합니다
+@msg	the document has no pattern {pattern}	문서에 패턴 {pattern}이(가) 없습니다
+@msg	the document has no swatch {n}	문서에 견본 {n}이(가) 없습니다
+@msg	the output	출력
+@msg	the path has no anchor points	패스에 앵커 포인트가 없습니다
+@msg	too many anchor points (limit {MAX_ANCHORS})	앵커 포인트가 너무 많습니다(한도 {MAX_ANCHORS})
+@msg	true or false	true 또는 false
+@msg	unknown key `{k}`; the keys here are {_1}	알 수 없는 키 `{k}`: 여기서 사용할 수 있는 키: {_1}
+@msg	{_1} is listed twice	{_1}이(가) 두 번 나열되었습니다
+@msg	{_1} is not the id of an input object	{_1}은(는) 입력 개체의 ID가 아닙니다
+@msg	{_1} is read-only	{_1}은(는) 읽기 전용입니다
+@msg	{what} must be from {lo} to {hi}	{what}은(는) {lo}에서 {hi} 사이여야 합니다
+@msg	a color component	색상 구성 요소
+@msg	a plate	인쇄판
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	이 권한을 요청하는 “{name}”을(를) 설치하시겠습니까?
 	ID: {id}	ID: {id}
@@ -5922,6 +6031,11 @@ axis	Y Axis	Y축
 	User Brush Library 9	사용자 브러시 라이브러리 9
 	User Brush Library 10	사용자 브러시 라이브러리 10
 	Art Ribbons	아트 리본
+	Ink and Wash	먹과 담채
+	Tapered Ink	가늘어지는 먹선
+	Brush Pen	붓펜
+	Soft Wash	부드러운 담채
+	Pooling Wash	고임 담채
 	Zigzag	지그재그
 	Burst Ray	버스트 레이
 	Dash Trail	대시 트레일

@@ -294,6 +294,134 @@ fn writing_again_gives_the_same_bytes() {
     assert!(first.warnings.is_empty(), "{:?}", first.warnings);
 }
 
+/// The CMYK equivalent written beside RGB or Lab values is the one of the values as written (to four
+/// decimals, Lab clamped to the range a reader reads), so the reopened file is written with the same
+/// numbers: a new document's swatches, and colors of many decimals in fills, gradient stops, global
+/// process swatches (RGB and Lab), an RGB spot swatch (in a fill and in a stop), Lab spot swatches
+/// and a Lab spot swatch out of range.
+#[test]
+fn cmyk_equivalents_are_written_again_unchanged() {
+    let mut doc = Document::new(300.0, 200.0);
+    let v = |i: u16, s: f32| (f32::from(i) * s + 0.123_456_7).fract();
+    let rgb = |i: u16| Color::rgb(v(i, 0.137_911_3), v(i, 0.271_828_2), v(i, 0.314_159_3));
+    let lab = |i: u16| Color::lab(v(i, 0.137_911_3) * 100.0, v(i, 0.271_828_2) * 200.0 - 100.0, v(i, 0.314_159_3) * 200.0 - 100.0);
+    let glaze = rgb(102);
+    let swatch = |name: String, c: Color, spot: bool| Swatch { name, paint: solid(c), global: true, spot };
+    let mut named: Vec<(String, Color, bool)> =
+        vec![("Glaze".into(), glaze, true), ("Out".into(), Color::lab(104.567_89, -140.123_46, 131.987_65), true)];
+    for i in 0..8u16 {
+        named.push((format!("Leaf {i}"), rgb(i + 110), false));
+        named.push((format!("Fern {i}"), lab(i + 120), false));
+        named.push((format!("Moss {i}"), lab(i + 130), true));
+    }
+    let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+    swatches.extend(named.iter().map(|(name, c, spot)| swatch(name.clone(), *c, *spot)));
+    doc.swatches = swatches.into();
+    let layer = doc.layers[0].id;
+    for i in 0..24u16 {
+        let x = f64::from(i % 8) * 30.0 + 10.0;
+        let y = f64::from(i / 8) * 30.0 + 10.0;
+        let n = square(&mut doc, Rect::new(x, y, x + 20.0, y + 20.0), rgb(i));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let mut stops: Vec<GradientStop> = (0..5u16).map(|i| GradientStop::new(f32::from(i) / 5.0, rgb(i + 50))).collect();
+    let out = named[1].1;
+    stops.push(GradientStop { swatch: Some("Out".into()), tint: 0.5, ..GradientStop::new(0.9, out.tinted(0.5)) });
+    stops.push(GradientStop { swatch: Some("Glaze".into()), tint: 0.7, ..GradientStop::new(1.0, glaze.tinted(0.7)) });
+    let mut fills = vec![gradient_paint(Gradient::new(GradientKind::Linear, stops), None, None)];
+    fills.extend(named.iter().map(|(name, c, spot)| linked(name, *c, if *spot { 1.0 } else { 0.6 })));
+    for (i, fill) in fills.into_iter().enumerate() {
+        let x = (i % 9) as f64 * 30.0 + 10.0;
+        let y = (i / 9) as f64 * 30.0 + 110.0;
+        let n = painted(&mut doc, shapes::rectangle(Rect::new(x, y, x + 20.0, y + 20.0)), vec![AppearanceItem::Fill(FillLayer::new(fill))]);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let first = program(&doc);
+    let again = String::from_utf8(export_ai_editing(&read_back(&doc), &opts()).unwrap().program).unwrap().replace("\r\n", "\n");
+    same_lines(&again.lines().map(String::from).collect::<Vec<_>>(), &first.lines().map(String::from).collect::<Vec<_>>());
+}
+
+/// With a working RGB space other than sRGB, an RGB fill, an RGB gradient stop and an RGB spot
+/// color in a stop are written with their working RGB values, the values the reader reads back, so
+/// the reopened file is written with the same RGB values and CMYK equivalents.
+#[test]
+fn rgb_values_are_written_again_unchanged_in_a_wide_gamut_working_space() {
+    const CHILD: &str = "VECTORCRAFT_TEST_AI_EDITING_WIDE_GAMUT";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings are process-wide: exercise this profile in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "ai_editing::tests::rgb_values_are_written_again_unchanged_in_a_wide_gamut_working_space", "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated color profile test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    use vectorcraft_color::cms;
+    cms::set_active(&cms::ColorSettings { rgb: cms::WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+    assert!(!cms::active().rgb_is_srgb());
+    let mut doc = Document::new(300.0, 200.0);
+    let glaze = Color::rgb(0.812_345_6, 0.234_567_8, 0.456_789_1);
+    let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+    swatches.push(Swatch { name: "Glaze".into(), paint: solid(glaze), global: true, spot: true });
+    doc.swatches = swatches.into();
+    let layer = doc.layers[0].id;
+    let n = square(&mut doc, Rect::new(10.0, 10.0, 30.0, 30.0), Color::rgb(0.8, 0.4, 0.2));
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let stops = vec![
+        GradientStop::new(0.0, Color::rgb(0.1, 0.7, 0.3)),
+        GradientStop { swatch: Some("Glaze".into()), tint: 0.7, ..GradientStop::new(1.0, glaze.tinted(0.7)) },
+    ];
+    let fill = gradient_paint(Gradient::new(GradientKind::Linear, stops), None, None);
+    let n = painted(&mut doc, shapes::rectangle(Rect::new(40.0, 10.0, 60.0, 30.0)), vec![AppearanceItem::Fill(FillLayer::new(fill))]);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let first = program(&doc);
+    assert!(first.contains("0.8 0.4 0.2 Xa"), "the fill's working RGB values are written");
+    let again = String::from_utf8(export_ai_editing(&read_back(&doc), &opts()).unwrap().program).unwrap().replace("\r\n", "\n");
+    same_lines(&again.lines().map(String::from).collect::<Vec<_>>(), &first.lines().map(String::from).collect::<Vec<_>>());
+}
+
+/// A gradient stop of a Lab spot color writes the RGB values of the Lab values as written (to four
+/// decimals, clamped to the range a reader reads), the same Lab values its CMYK equivalent and the
+/// palette's definition come from: for Lab values of many decimals and for Lab values out of range.
+#[test]
+fn a_lab_spot_stop_writes_rgb_values_of_its_lab_values_as_written() {
+    let mut doc = Document::new(300.0, 200.0);
+    let v = |i: u16, s: f32| (f32::from(i) * s + 0.123_456_7).fract();
+    let mut spots: Vec<(String, Color)> = vec![("Out".into(), Color::lab(104.567_89, -140.123_46, 131.987_65))];
+    spots.push(("Rim".into(), Color::lab(55.555_55, 131.234_56, -12.345_67)));
+    for i in 0..8u16 {
+        spots
+            .push((format!("Moss {i}"), Color::lab(v(i, 0.137_911_3) * 100.0, v(i, 0.271_828_2) * 200.0 - 100.0, v(i, 0.314_159_3) * 200.0 - 100.0)));
+    }
+    let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+    swatches.extend(spots.iter().map(|(name, c)| Swatch { name: name.clone(), paint: solid(*c), global: true, spot: true }));
+    doc.swatches = swatches.into();
+    let layer = doc.layers[0].id;
+    for (i, (name, c)) in spots.iter().enumerate() {
+        let stops = vec![
+            GradientStop::new(0.0, Color::rgb(0.1, 0.2, 0.3)),
+            GradientStop { swatch: Some(name.clone()), tint: 0.5, ..GradientStop::new(1.0, c.tinted(0.5)) },
+        ];
+        let fill = gradient_paint(Gradient::new(GradientKind::Linear, stops), None, None);
+        let x = i as f64 * 25.0 + 10.0;
+        let n = painted(&mut doc, shapes::rectangle(Rect::new(x, 10.0, x + 20.0, 30.0)), vec![AppearanceItem::Fill(FillLayer::new(fill))]);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let program = program(&doc);
+    for (name, c) in &spots {
+        let mut want = String::new();
+        crate::ps::push_nums(&mut want, &crate::ai_ops::as_written(*c).to_rgb().map(|v| f64::from(crate::ai_ops::unit(v))));
+        want.push_str(&format!("({name}) 0.5 1 4 "));
+        assert!(program.lines().any(|l| l.contains(&want)), "no stop of {name} writes {want:?}");
+    }
+}
+
 #[test]
 fn the_data_is_zstandard_compressed_with_the_header_as_metadata() {
     let doc = sample();
@@ -3815,6 +3943,42 @@ fn korean_line_break_anywhere_is_reported_only_for_korean_paragraphs() {
     }
 }
 
+/// The text document has no Bunri-Kinshi: a paragraph with it on and an inseparable pair in it is
+/// reported as left out, and comes back off; with it off, or with no pair, nothing is reported.
+#[test]
+fn bunri_kinshi_is_reported_only_for_paragraphs_with_a_pair() {
+    use vectorcraft_doc::TextObject;
+    for (text, on, reported) in [
+        ("Wait——now", true, true),
+        ("Wait——now", false, false),
+        ("Wait—now", true, false),
+        ("Wait……now", true, true),
+        ("Wait‥‥now", true, true),
+        ("あ〳〵い", true, true),
+        ("あ〴〵い", true, true),
+        ("あ〵〳い", true, false),
+    ] {
+        let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), text, style(14.0, Color::BLACK));
+        t.para.bunri_kinshi = on;
+        let mut doc = Document::new(200.0, 200.0);
+        let layer = doc.layers[0].id;
+        let n = text_node(&mut doc, t);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(!out.warnings.is_empty(), reported, "{text} {on}: {:?}", out.warnings);
+        let mut all = vec![];
+        paths(&read_back(&doc).layers, &mut all);
+        let paras: Vec<bool> = all
+            .iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Text(t) => Some(t.para_at(0).bunri_kinshi),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(paras, [false], "{text} {on}");
+    }
+}
+
 #[test]
 fn type_is_written_again_as_the_same_bytes() {
     let doc = typed();
@@ -5872,25 +6036,6 @@ fn outlines(doc: &Document) -> Vec<String> {
     out
 }
 
-/// Fails with the lines where `got` and `want` differ in more than their numbers' last written
-/// decimal (a color read back from four decimals gives its other model's values again from them).
-fn near_lines(got: &str, want: &str) {
-    let near = |a: &str, b: &str| {
-        let (a, b): (Vec<&str>, Vec<&str>) = (a.split(' ').collect(), b.split(' ').collect());
-        a.len() == b.len()
-            && a.iter().zip(&b).all(|(x, y)| match (x.trim_start_matches("%_").parse::<f64>(), y.trim_start_matches("%_").parse::<f64>()) {
-                (Ok(x), Ok(y)) => (x - y).abs() <= 2e-3,
-                _ => x == y,
-            })
-    };
-    let (g, w): (Vec<&str>, Vec<&str>) = (got.lines().collect(), want.lines().collect());
-    let differ: Vec<String> = (0..g.len().max(w.len()))
-        .filter(|&i| !matches!((g.get(i), w.get(i)), (Some(a), Some(b)) if near(a, b)))
-        .map(|i| format!("line {i}:\n  got  {:?}\n  want {:?}", g.get(i), w.get(i)))
-        .collect();
-    assert!(differ.is_empty(), "{}", differ.join("\n"));
-}
-
 #[test]
 fn objects_with_live_effects_and_graphic_styles_are_read_back() {
     let doc = styles_document();
@@ -6212,25 +6357,7 @@ fn art_styles_write_the_same_bytes_again() {
     assert_eq!(private_data(&doc, &opts()).unwrap().0, private_data(&doc, &opts()).unwrap().0);
     // What is read back is written as it was.
     let again = export_ai_editing(&read_back(&doc), &opts()).unwrap().program;
-    near_lines(&rgb_without_cmyk(&shown(&again)), &rgb_without_cmyk(&shown(&first.program)));
-}
-
-/// `program` with the CMYK equivalents of plain RGB colors blanked out: the first four numbers of
-/// `c m y k r g b Xa` (or `XA`) and of an RGB gradient stop's `c m y k r g b 2 ... Bs`. Named and
-/// spot RGB colors (`... (name) tint Xk`, `Xx` and spot stops) are not blanked; the document this
-/// is used on has none. The Generic CMYK separation of a color at the edge of the press gamut can
-/// land on one of two results that differ by up to 0.01 when the RGB changes in its last float
-/// bits, as it does between the first save and the save of the reopened file, and the platform's
-/// float math decides which. The RGB values stay compared.
-fn rgb_without_cmyk(program: &str) -> String {
-    let blank = |line: &str| {
-        let (prefix, rest) = line.strip_prefix("%_").map_or(("", line), |r| ("%_", r));
-        let t: Vec<&str> = rest.split(' ').collect();
-        let color = t.len() == 8 && matches!(t[7], "Xa" | "XA");
-        let stop = t.len() > 8 && t[7] == "2" && t.last() == Some(&"Bs");
-        if color || stop { format!("{prefix}_ _ _ _ {}", t[4..].join(" ")) } else { line.to_string() }
-    };
-    program.lines().map(blank).collect::<Vec<_>>().join("\n")
+    same_lines(&shown(&again).lines().map(String::from).collect::<Vec<_>>(), &shown(&first.program).lines().map(String::from).collect::<Vec<_>>());
 }
 
 /// `n` on the first layer of `doc`.

@@ -1,7 +1,7 @@
 //! Paragraph Style Options fields shared by editing and creating a paragraph style: General, Basic
 //! Paragraph Formats (alignment, indents and spacing), Tabs (the style's tab stops), Composition
 //! (composer and Roman Hanging Punctuation), Hyphenation, Justification and East Asian Composition
-//! Settings (Korean Line Break Anywhere).
+//! Settings (Bunri-Kinshi and Korean Line Break Anywhere).
 //!
 //! Each field is unset (empty, or a checkbox in its unset state) or set, and an unset field leaves
 //! its attribute out of the style. Distances are shown and typed in the General unit and kept in
@@ -105,6 +105,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
             "glyph_max",
             "auto_leading",
             "single_word",
+            "bunri_kinshi",
             "korean_line_break_anywhere",
             "tabs",
             "section",
@@ -234,7 +235,7 @@ pub(crate) fn fields_from_attrs(attrs: &Map<String, Value>, unit: Unit) -> Map<S
         fields.insert(key.into(), distance_field(attrs.get(key), unit));
     }
     fields.insert("composer".into(), attrs.get("composer").filter(|v| v.is_string()).cloned().unwrap_or(Value::Null));
-    for key in ["roman_hanging", "hyphenate", "korean_line_break_anywhere"] {
+    for key in ["roman_hanging", "hyphenate", "bunri_kinshi", "korean_line_break_anywhere"] {
         fields.insert(key.into(), attrs.get(key).filter(|v| v.is_boolean()).cloned().unwrap_or(Value::Null));
     }
     let hyphenation = attrs.get("hyphenation");
@@ -378,8 +379,10 @@ pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
     let value = if same { None } else { tab_stops(d, &original, unit)? };
     keep_or(&mut attrs, "tabs", same, value);
 
-    let same = unchanged("korean_line_break_anywhere", "__resetEastAsian");
-    keep_or(&mut attrs, "korean_line_break_anywhere", same, switch("korean_line_break_anywhere"));
+    for key in ["bunri_kinshi", "korean_line_break_anywhere"] {
+        let same = unchanged(key, "__resetEastAsian");
+        keep_or(&mut attrs, key, same, switch(key));
+    }
     Ok(attrs)
 }
 
@@ -559,9 +562,11 @@ fn reset_tabs(d: &mut Dialog) {
     d.fields.insert("__tabSel".into(), json!(0));
 }
 
-/// Reset Panel in East Asian Composition Settings: Korean Line Break Anywhere becomes unset.
+/// Reset Panel in East Asian Composition Settings: Bunri-Kinshi and Korean Line Break Anywhere
+/// become unset.
 fn reset_east_asian(d: &mut Dialog) {
     d.fields.insert("__resetEastAsian".into(), json!(true));
+    d.fields.insert("bunri_kinshi".into(), Value::Null);
     d.fields.insert("korean_line_break_anywhere".into(), Value::Null);
 }
 
@@ -905,8 +910,12 @@ pub(crate) fn justification_body(ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
-/// East Asian Composition Settings: Korean Composition Settings › Korean Line Break Anywhere.
+/// East Asian Composition Settings: Bunri-Kinshi, and Korean Composition Settings › Korean Line
+/// Break Anywhere.
 pub(crate) fn east_asian_body(ui: &mut egui::Ui, d: &mut Dialog) {
+    egui::Grid::new("paragraph-style-bunri-kinshi").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
+        switch(ui, d, "bunri_kinshi", tl!("Bunri-Kinshi"), true);
+    });
     ui.strong(tl!("Korean Composition Settings"));
     egui::Grid::new("paragraph-style-east-asian").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
         switch(ui, d, "korean_line_break_anywhere", tl!("Korean Line Break Anywhere"), true);

@@ -649,58 +649,19 @@ pub(super) fn export_for_screens(s: &mut Session, p: &Value) -> Result<Value> {
     let p = with_preset(s, p)?;
     let hidden = if given { None } else { str_param(&p, "folder").filter(|f| !f.is_empty() && !super::access::shown(f)) };
     let mut r = export(s, &p).map_err(|e| match hidden {
-        Some(folder) => leave_out_folder_from_error(e, folder),
+        Some(folder) => super::access::naming_in_error(e, folder),
         None => e,
     })?;
     remember(s, &p);
     // A prepared export is written later, maybe on another thread: it names the folder as this
     // request may see it.
     if let (Some(folder), Some(Some(export))) = (hidden, s.screens_hand_off.as_mut()) {
-        export.hidden = Some((folder.to_string(), super::access::shown_path(folder).into_owned()));
+        export.hidden = Some((folder.to_string(), super::access::error_name(folder)));
     }
     if !given && let Some(folder) = str_param(&p, "folder").filter(|f| !f.is_empty()) {
         leave_out_unreadable_folder(&mut r, folder);
     }
     Ok(r)
-}
-
-/// An error of an export into `folder`, a folder outside the read roots that the client did not
-/// give: `folder` as the path the error is about names it by its own name
-/// ([`super::access::shown_path`]), and the rest of the message stays.
-fn leave_out_folder_from_error(e: EngineError, folder: &str) -> EngineError {
-    leave_out_folder_named(e, folder, &super::access::shown_path(folder))
-}
-
-/// [`leave_out_folder_from_error`] with `folder` named `name`.
-fn leave_out_folder_named(e: EngineError, folder: &str, name: &str) -> EngineError {
-    match e {
-        EngineError::Other(msg) => EngineError::Other(leave_out_folder_from_message(&msg, folder, name)),
-        EngineError::BadParams { cmd, msg } => EngineError::BadParams { cmd, msg: leave_out_folder_from_message(&msg, folder, name) },
-        e => e,
-    }
-}
-
-/// `msg` with `folder` given as `name` where it begins a path the message is about: at the start
-/// of `msg` (`<path>: <reason>`), after a `: ` (`... outside the write root <root>: <path>`) or
-/// after `cannot resolve `, followed by the end, a separator, a `:` or a space. A root the message
-/// names stays whole, even one inside `folder`.
-fn leave_out_folder_from_message(msg: &str, folder: &str, name: &str) -> String {
-    const BEFORE: [&str; 2] = [": ", "cannot resolve "];
-    let mut out = String::with_capacity(msg.len());
-    let mut rest = msg;
-    loop {
-        if let Some(after) = rest.strip_prefix(folder)
-            && after.chars().next().is_none_or(|c| matches!(c, '/' | '\\' | ':' | ' '))
-        {
-            out.push_str(name);
-            rest = after;
-        }
-        let Some((i, len)) = BEFORE.iter().filter_map(|b| rest.find(b).map(|i| (i, b.len()))).min() else { break };
-        out.push_str(&rest[..i + len]);
-        rest = &rest[i + len..];
-    }
-    out.push_str(rest);
-    out
 }
 
 /// The reply `r` of an export into `folder`, a folder the client did not give, as the request being
@@ -1162,7 +1123,7 @@ impl ScreenExport {
         let r = encode_and_write(self, writer).map_err(|e| if cmd == C { e } else { crate::cmd::assets::of_cmd(cmd, e) });
         match hidden {
             Some((folder, name)) => {
-                let mut r = r.map_err(|e| leave_out_folder_named(e, &folder, &name))?;
+                let mut r = r.map_err(|e| super::access::naming_as(e, &folder, &name))?;
                 leave_out_folder(&mut r, &folder);
                 Ok(r)
             }
@@ -1516,7 +1477,8 @@ pub(super) fn export_settings(s: &mut Session, _: &Value) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Output, ScreenSize, leave_out_folder_from_message, safe_file_name};
+    use super::super::access::naming_in_message;
+    use super::{Output, ScreenSize, safe_file_name};
 
     /// A hidden export folder is named by its name where a message is about it, and a root that
     /// starts with the same text, or a longer path, stays whole.
@@ -1533,7 +1495,7 @@ mod tests {
             ("automation path rejected: outside the write root /a: /work/outer", "automation path rejected: outside the write root /a: /work/outer"),
         ];
         for (msg, want) in cases {
-            assert_eq!(leave_out_folder_from_message(msg, f, "out"), want, "{msg}");
+            assert_eq!(naming_in_message(msg, f, "out"), want, "{msg}");
         }
     }
 
