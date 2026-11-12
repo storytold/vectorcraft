@@ -6615,3 +6615,8 @@ breakText	Glyphs	글리프
 @msg	Some islands could not be joined to the area around the art	일부 섬을 아트워크 주변 영역에 연결할 수 없습니다
 @msg	`width` must be from {lo} to {hi} pt	`width`는 {lo}에서 {hi}pt 사이여야 합니다
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`는 1에서 {MAX_BRIDGES_PER_ISLAND} 사이의 정수여야 합니다
+	Weed Box and Lines…	위딩 상자 및 선…
+	Weed Box and Lines	위딩 상자 및 선
+	Margin	여백
+	Box	상자
+	Swatch	견본

@@ -8458,3 +8458,8 @@ theme	Appearance	अपीयरेंस
 @msg	Some islands could not be joined to the area around the art	कुछ आइलैंड आर्टवर्क के आसपास के क्षेत्र से नहीं जोड़े जा सके
 @msg	`width` must be from {lo} to {hi} pt	`width` {lo} से {hi} pt तक होना चाहिए
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 से {MAX_BRIDGES_PER_ISLAND} तक पूरी संख्या होना चाहिए
+	Weed Box and Lines…	वीड बॉक्स और लाइनें…
+	Weed Box and Lines	वीड बॉक्स और लाइनें
+	Margin	मार्जिन
+	Box	बॉक्स
+	Swatch	स्वॉच

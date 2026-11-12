@@ -6981,3 +6981,8 @@ breakText	Glyphs	Glifler
 @msg	Some islands could not be joined to the area around the art	Bazı adalar çizimin çevresindeki alana bağlanamadı
 @msg	`width` must be from {lo} to {hi} pt	`width` {lo} ile {hi} pt arasında olmalıdır
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 ile {MAX_BRIDGES_PER_ISLAND} arasında bir tam sayı olmalıdır
+	Weed Box and Lines…	Ayıklama Kutusu ve Çizgileri…
+	Weed Box and Lines	Ayıklama Kutusu ve Çizgileri
+	Margin	Kenar Boşluğu
+	Box	Kutu
+	Swatch	Renk Örneği

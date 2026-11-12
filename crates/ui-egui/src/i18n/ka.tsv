@@ -7139,3 +7139,8 @@ font-script	Japanese	იაპონური
 @msg	Some islands could not be joined to the area around the art	ზოგიერთი კუნძული ვერ დაუკავშირდა ნახატის გარშემო არეს
 @msg	`width` must be from {lo} to {hi} pt	`width` უნდა იყოს {lo}-დან {hi} pt-მდე
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` უნდა იყოს მთელი რიცხვი 1-დან {MAX_BRIDGES_PER_ISLAND}-მდე
+	Weed Box and Lines…	ნარჩენის მოსაცილებელი ჩარჩო და ხაზები…
+	Weed Box and Lines	ნარჩენის მოსაცილებელი ჩარჩო და ხაზები
+	Margin	ზღვარი
+	Box	ჩარჩო
+	Swatch	ფერის ნიმუში

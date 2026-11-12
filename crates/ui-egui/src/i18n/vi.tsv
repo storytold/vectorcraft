@@ -6635,3 +6635,8 @@ breakText	Glyphs	Glyph
 @msg	Some islands could not be joined to the area around the art	Không thể nối một số đảo với vùng xung quanh hình vẽ
 @msg	`width` must be from {lo} to {hi} pt	`width` phải từ {lo} đến {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` phải là số nguyên từ 1 đến {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Khung và đường bóc phần thừa…
+	Weed Box and Lines	Khung và đường bóc phần thừa
+	Margin	Lề
+	Box	Khung
+	Swatch	Mẫu màu

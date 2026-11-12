@@ -7020,3 +7020,8 @@ breakText	Glyphs	Glyphes
 @msg	Some islands could not be joined to the area around the art	Certains îlots n’ont pas pu être reliés à la zone autour de l’illustration
 @msg	`width` must be from {lo} to {hi} pt	`width` doit être compris entre {lo} et {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` doit être un nombre entier compris entre 1 et {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Cadre et lignes d’échenillage…
+	Weed Box and Lines	Cadre et lignes d’échenillage
+	Margin	Marge
+	Box	Cadre
+	Swatch	Nuance
