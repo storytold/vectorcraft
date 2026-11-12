@@ -226,6 +226,10 @@
 	Blend Options…	Opcje przejścia…
 	Expand	Rozszerz
 	Replace Spine	Zastąp grzbiet
+	Create Spine	Utwórz grzbiet
+	Create Spine:	Utwórz grzbiet:
+	Always	Zawsze
+	Never	Nigdy
 	Reverse Spine	Odwróć grzbiet
 	Reverse Front to Back	Odwróć kolejność od przodu do tyłu
 	Envelope Distort	Zniekształcenie kopertowe
@@ -764,6 +768,14 @@
 	Damp Paper	Wilgotny papier
 	Outlines and Rules	Kontury i linie
 	Hand-Drawn	Rysowane odręcznie
+	Painted and Sketched	Malowane i szkicowane
+	Washed Blue	Rozmyty błękit
+	Bristle Ochre	Ochra pędzlem
+	Pastel Heather	Pastelowy wrzos
+	Charcoal Shade	Cień węglem
+	Ink Contour	Kontur tuszem
+	Wet Ink	Mokry tusz
+	Fine Pen	Cienkie pióro
 	Gradient Finishes	Wykończenia gradientowe
 	Shape Effects	Efekty kształtów
 	Blends and Transparency	Przejścia i przezroczystość
@@ -2306,6 +2318,8 @@ digits	Malayalam	Malajalam
 	Export Selected Art Only	Eksportuj tylko zaznaczoną kompozycję
 	Number of Colors:	Liczba kolorów:
 	Raster File Format:	Format pliku rastrowego:
+	Include Placed Images	Uwzględnij umieszczone obrazy
+	Include Fill Hatches	Uwzględnij kreskowania wypełnień
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Pełny kolor wymaga wersji 2004 lub nowszej: zapisywany jest najbliższy z 256 kolorów.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Tekst staje się konturami, a obrysy, których linia CAD nie narysuje, stają się wypełnionymi kształtami.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Tekst pozostaje tekstem, a każdy obrys jest linią z grubością i kreskami.
@@ -4377,6 +4391,7 @@ imageTrace	Outline	Kontur
 @msg	`globalAdjust` must be an object	`globalAdjust` musi być obiektem
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` musi wynosić 1, 3 lub 5
 @msg	`stops` must be an array	`stops` musi być tablicą
+@msg	`{key}` must be an array	`{key}` musi być tablicą
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` musi być obiektem opcji SVG (patrz document.formats)
 @msg	`{_1}` is no save command	`{_1}` nie jest poleceniem zapisu
 @msg	`{area}` is no recovery area name	`{area}` nie jest nazwą obszaru odzyskiwania
@@ -5873,6 +5888,7 @@ mark-style	Japanese	Japońskie
 	Ruby	Ruby
 	Geometric Guides	Geometryczne linie pomocnicze
 	Geometric Patterns	Wzorki geometryczne
+	Grit Textures	Tekstury ziarniste
 	Ease In	Łagodny początek
 	Ease Out	Łagodny koniec
 	Ease In Out	Łagodny początek i koniec
@@ -5931,6 +5947,8 @@ axis	Y Axis	Oś Y
 	Version: {version}	Wersja: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Zainstalować „{name}” zamiast wtyczki o tym samym ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Ten plik nie jest wtyczką zainstalowaną wcześniej z tym ID. Otrzyma ustawienia i pamięć podręczną przechowywane dla tego ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Automatyzacja poprosiła o zainstalowanie tej wtyczki. Aby ją zainstalować, wybierz Obiekt › Wtyczki › Zainstaluj wtyczkę… samodzielnie.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Automatyzacja poprosiła o zainstalowanie tej wtyczki. Aby ją zainstalować, wybierz Obiekt › Wtyczki › Zainstaluj wtyczkę… samodzielnie.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}” to inny moduł niż wtyczka o ID {_1} i otrzymałby przechowywane dla niej ustawienia i pamięć podręczną: zainstaluj go z `replace: true`, gdy użytkownik się zgodzi
 	File SHA-256: {hash}	SHA-256 pliku: {hash}
 	Read the objects it is given	Odczytywać obiekty, które otrzymuje
@@ -5993,6 +6011,12 @@ axis	Y Axis	Oś Y
 @msg	command {name}: `label` must be 1-64 printable characters	polecenie {name}: `label` musi mieć 1-64 drukowalnych znaków
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	polecenie {name}: użyj id z 1-{MAX_COMMAND_ID} znaków spośród a-z 0-9 _, zaczynającego się od litery
 @msg	command {name}: {e}	polecenie {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (wiersz {line}, kolumna {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` musi być listą poleceń, każde z `id` i `label`
+@msg	command {name} must be an object with an `id` and a `label`	polecenie {name} musi być obiektem z `id` i `label`
+@msg	missing field `{key}`	brak pola `{key}`
+@msg	duplicate field `{key}`	zduplikowane pole `{key}`
 @msg	only a filter or a live effect declares `commands`	`commands` deklaruje tylko filtr lub efekt na żywo
 @msg	“{name}” › {label}: {e}	„{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	moduł nie ma skrótu SHA-256 podanego w `hash`: nic nie zainstalowano
@@ -6356,6 +6380,10 @@ anchor	Points:	Punkty:
 @msg	features lists at most {max} tags	features może zawierać najwyżej {max} znaczników
 @msg	unknown OpenType feature `{t}`	nieznana funkcja OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} musi być liczbą większą od 0 i nie większą niż {max}
+@msg	{label} must be at most {max} characters	{label} może mieć najwyżej {max} znaków
+@msg	{label} must be one character	{label} musi być jednym znakiem
+@msg	at most {max} tab stops	najwyżej {max} tabulatorów
+@msg	unknown align `{other}`	nieznane wyrównanie `{other}`
 @msg	no character style `{name}`	Nie znaleziono stylu znakowego `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6518,6 +6546,8 @@ breakText	Glyphs	Glify
 	Delete the selected brushes?	Usunąć zaznaczone pędzle?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Obrysy używają co najmniej jednego z tych pędzli. Zdjąć pędzle z tych obrysów i usunąć pędzle?
 	Remove Strokes	Usuń obrysy
+	Place Brush Art	Umieść kompozycję pędzla
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` nie ma kompozycji (mają ją tylko pędzle rozproszone, artystyczne i wzorka)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Narzędzia układania
 	Arrange in Grid…	Ułóż w siatce…

@@ -1453,6 +1453,14 @@ font-technology	Variable	Variables
 	Hair Space	Espacio fino
 	Hand Tool	Herramienta Mano
 	Hand-Drawn	Dibujado a mano
+	Painted and Sketched	Pintado y bocetado
+	Washed Blue	Azul lavado
+	Bristle Ochre	Ocre de cerdas
+	Pastel Heather	Brezo pastel
+	Charcoal Shade	Sombra al carboncillo
+	Ink Contour	Contorno de tinta
+	Wet Ink	Tinta húmeda
+	Fine Pen	Plumilla fina
 	Handles	Manejadores
 	Hard Light	Luz fuerte
 	Hard Mix	Mezcla definida
@@ -2641,6 +2649,8 @@ digits	Malayalam	Malayálam
 	Range:	Rango:
 	Raster Effects	Efectos de rasterización
 	Raster File Format:	Formato de archivo ráster:
+	Include Placed Images	Incluir imágenes colocadas
+	Include Fill Hatches	Incluir sombreados de relleno
 	Raster Sample Size:	Tamaño de muestra ráster:
 	Raster/Vector Balance:	Equilibrio ráster/vectorial:
 	Rasterize	Rasterizar
@@ -2822,6 +2832,10 @@ digits	Malayalam	Malayálam
 	Replace Font	Reemplazar fuente
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Reemplázalo con otro archivo o ignóralo: sus imágenes seguirán mostrando la vista previa guardada con el documento.
 	Replace Spine	Reemplazar eje
+	Create Spine	Crear eje
+	Create Spine:	Crear eje:
+	Always	Siempre
+	Never	Nunca
 	Replace Symbol	Reemplazar símbolo
 	Reset Transformation	Restablecer transformación
 	Replace With Font	Reemplazar con fuente
@@ -4245,6 +4259,7 @@ axis	Both	Ambos
 @msg	`globalAdjust` must be an object	`globalAdjust` debe ser un objeto
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` debe ser 1, 3 o 5
 @msg	`stops` must be an array	`stops` debe ser una lista
+@msg	`{key}` must be an array	`{key}` debe ser una lista
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` debe ser un objeto con opciones de SVG (consulta document.formats)
 @msg	`{_1}` is no save command	`{_1}` no es un comando de guardado
 @msg	`{area}` is no recovery area name	`{area}` no es el nombre de un área de recuperación
@@ -5961,6 +5976,7 @@ mark-style	Japanese	Japonesas
 	Ruby	Ruby
 	Geometric Guides	Guías geométricas
 	Geometric Patterns	Motivos geométricos
+	Grit Textures	Texturas granuladas
 	Ease In	Entrada suave
 	Ease Out	Salida suave
 	Ease In Out	Entrada y salida suaves
@@ -6019,6 +6035,8 @@ axis	Y Axis	Eje Y
 	Version: {version}	Versión: {version}
 	Install “{name}” in place of the plug-in with the same ID?	¿Instalar “{name}” en lugar del plugin con el mismo ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Este archivo no es el plugin instalado antes con este ID. Recibe la configuración y la caché guardadas para ese ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Una automatización pidió instalar este plugin. Para instalarlo, elige Objeto › Plugins › Instalar plugin… tú mismo.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Una automatización pidió instalar este plugin. Para instalarlo, elige Objeto › Plugins › Instalar plugin… tú mismo.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” es un módulo distinto del plugin con ID {_1} y recibiría la configuración y la caché guardadas para él: instálalo con `replace: true` cuando el usuario lo acepte
 	File SHA-256: {hash}	SHA-256 del archivo: {hash}
 	Read the objects it is given	Leer los objetos que recibe
@@ -6081,6 +6099,12 @@ axis	Y Axis	Eje Y
 @msg	command {name}: `label` must be 1-64 printable characters	comando {name}: `label` debe tener 1-64 caracteres imprimibles
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	comando {name}: usa un id de 1-{MAX_COMMAND_ID} caracteres de a-z 0-9 _ que empiece por una letra
 @msg	command {name}: {e}	comando {name}: {e}
+@msg	manifest: {e}	manifiesto: {e}
+@msg	manifest: {e} at line {line} column {column}	manifiesto: {e} (línea {line}, columna {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` debe ser una lista de comandos, cada uno con `id` y `label`
+@msg	command {name} must be an object with an `id` and a `label`	el comando {name} debe ser un objeto con `id` y `label`
+@msg	missing field `{key}`	falta el campo `{key}`
+@msg	duplicate field `{key}`	el campo `{key}` está repetido
 @msg	only a filter or a live effect declares `commands`	solo un filtro o un efecto interactivo declara `commands`
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	el módulo no tiene el SHA-256 que indica `hash`: no se instaló nada
@@ -6444,6 +6468,10 @@ anchor	Points:	Puntos:
 @msg	features lists at most {max} tags	features admite como máximo {max} etiquetas
 @msg	unknown OpenType feature `{t}`	función OpenType desconocida `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} debe ser un número mayor que 0 y como máximo {max}
+@msg	{label} must be at most {max} characters	{label} debe tener como máximo {max} caracteres
+@msg	{label} must be one character	{label} debe ser un solo carácter
+@msg	at most {max} tab stops	como máximo {max} tabulaciones
+@msg	unknown align `{other}`	alineación desconocida `{other}`
 @msg	no character style `{name}`	No existe el estilo de carácter `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6605,6 +6633,8 @@ breakText	Glyphs	Glifos
 	Delete the selected brushes?	¿Eliminar los pinceles seleccionados?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Algunos trazos usan uno o más de estos pinceles. ¿Quitar los pinceles de esos trazos y eliminar los pinceles?
 	Remove Strokes	Quitar trazos
+	Place Brush Art	Colocar ilustración del pincel
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` no tiene ilustración (solo la tienen los pinceles de dispersión, de arte y de motivo)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Herramientas de organización
 	Arrange in Grid…	Organizar en cuadrícula…

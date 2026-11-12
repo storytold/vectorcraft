@@ -30,7 +30,7 @@ pub use open::{
 #[cfg(test)]
 pub(crate) use open::{open_file, opened_with_notes};
 pub use save::{ask_format_options, ask_pdf_options, remember_active_artboard, remember_view, save, save_pdf};
-pub(crate) use save::{export_path, is_web, report_saved, target_path, write_named, write_reporting, write_to};
+pub(crate) use save::{export_path, is_web, notes_of, report_saved, show_with_notes, target_path, write_named, write_reporting, write_to};
 #[cfg(test)]
 pub(crate) use save::{report_write_error, saved_status};
 
@@ -90,7 +90,7 @@ mod tests {
         use vectorcraft_testkit::ai;
         let (mut app, _) = app();
         let damaged = b"%AI12_CompressedData not zlib";
-        let notes = |r: &Value| -> Vec<String> { r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).map(str::to_string).collect() };
+        let notes = notes_of;
         let pdf = ai::pdf(damaged, "0 g 150 20 100 60 re f");
         let r = open_bytes(&mut app, "damaged.pdf", &pdf, None).unwrap();
         let [page, layers] = &notes(&r)[..] else { panic!("two notes: {r}") };
@@ -123,6 +123,36 @@ mod tests {
         let r = open_bytes(&mut app, "clean.svg", clean, None).unwrap();
         assert_eq!(r["warnings"], json!([]), "{r}");
         assert_eq!((app.ui.status.clone(), app.ui.status_notes.clone()), shown);
+    }
+
+    /// A save and an export with several notes: the status bar names the first, counts them, and
+    /// keeps every one of them, in the reply's order, for its hover. A save without notes keeps
+    /// none.
+    #[test]
+    fn a_save_and_an_export_keep_every_note_for_the_hover() {
+        let (mut app, _) = app();
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let r = app.run("file.save", json!({"path": "/out/a.svg", "compress": true})).unwrap();
+        let notes = notes_of(&r);
+        assert_eq!(notes.len(), 2, "{r}");
+        assert!(notes[0].starts_with("SVG keeps the artwork but not everything"), "{r}");
+        assert_eq!(app.ui.status, saved_status("/out/a.svg", &r));
+        assert!(app.ui.status.contains("with 2 notes"), "{}", app.ui.status);
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
+
+        app.run("file.save", json!({"path": "/out/b.vectorcraft"})).unwrap();
+        assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("Saved /out/b.vectorcraft", &None));
+
+        // A PDF export of a knockout group and of type in a font that isn't installed.
+        app.run("text.create", json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        app.run("object.group", json!({})).unwrap();
+        app.run("transparency.set", json!({"knockout": "on"})).unwrap();
+        let r = export(&mut app, Some("pdf"), Some("/out/c.pdf".into()), &json!({})).unwrap();
+        let notes = notes_of(&r);
+        assert_eq!(notes.len(), 2, "{r}");
+        assert_eq!(app.ui.status, exported_with_notes("/out/c.pdf", notes.len(), &notes[0]));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
     }
 
     /// #1685: a save or an export that can't write its file says so in a dialog that names the
