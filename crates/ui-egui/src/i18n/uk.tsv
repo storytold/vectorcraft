@@ -2397,6 +2397,7 @@ file-filter	Templates	Шаблони
 	Options:	Параметри:
 	Options…	Параметри…
 	Organic Fades	Органічні згасання
+	Holographic	Голографічні
 	or more spaces with a tab	або більше прогалин на табуляцію
 	Order:	Порядок:
 	Ordinals	Порядкові числівники
@@ -4613,6 +4614,7 @@ axis	Both	Обидві
 @msg	not a valid plug-in module: {0}	не є допустимим модулем: {0}
 @msg	not an EMF or WMF file	не є файлом EMF або WMF
 @msg	not an HP-GL file	не є файлом HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` має бути масивом із 1–255 кольорів #rrggbb
 @msg	not found	не знайдено
 @msg	not in pattern editing mode	не в режимі редагування візерунка
 @msg	finish editing the pattern first	спочатку завершіть редагування візерунка
@@ -5918,6 +5920,17 @@ axis	Y Axis	Вісь Y
 	Charge Wave	Хвиля заряду
 	Spark Trail	Слід іскор
 	Calligraphic Nibs	Каліграфічні пера
+	Bristle Brushes	Щетинні пензлі
+	Fine Liner	Тонкий лайнер
+	Pointed Flat	Загострений плаский
+	Stubby Round	Короткий круглий
+	Dry Scrub	Сухе розтирання
+	Soft Dome	М'який купол
+	Filbert	Котячий язик
+	Angled Round	Скошений круглий
+	Angled Flat	Скошений плаский
+	Fan Blender	Віяло для розтушовування
+	Grass Fan	Віяло для трави
 	Pattern Borders	Візерункові облямівки
 	Scatter Shapes	Розсіяні фігури
 	Save Brush Library…	Зберегти бібліотеку пензлів…

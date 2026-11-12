@@ -2178,6 +2178,7 @@ shape	Open	Açık
 	Options:	Seçenekler:
 	Options…	Seçenekler…
 	Organic Fades	Organik Solmalar
+	Holographic	Holografik
 	or more spaces with a tab	veya sekmeli daha fazla alan
 	Order:	Sipariş:
 	Ordinals	Sıra Sayıları
@@ -4336,6 +4337,7 @@ axis	Both	Her İkisi
 @msg	not a valid plug-in module: {0}	geçerli bir eklenti modülü değil: {0}
 @msg	not an EMF or WMF file	EMF veya WMF dosyası değil
 @msg	not an HP-GL file	HP-GL dosyası değil
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 1 ile 255 arasında #rrggbb renginden oluşan bir dizi olmalıdır
 @msg	not an RTF file: it doesn't start with {\\rtf	bir RTF dosyası değil: {\\rtf ile başlamıyor
 @msg	not found	bulunamadı
 @msg	not in pattern editing mode	desen düzenleme modunda değil
@@ -6269,6 +6271,17 @@ axis	Y Axis	Y ekseni
 	Charge Wave	Şarj Dalgası
 	Spark Trail	Kıvılcım İzi
 	Calligraphic Nibs	Kaligrafi Uçları
+	Bristle Brushes	Kıl Fırçalar
+	Fine Liner	İnce Çizgi
+	Pointed Flat	Sivri Düz
+	Stubby Round	Kısa Yuvarlak
+	Dry Scrub	Kuru Ovma
+	Soft Dome	Yumuşak Kubbe
+	Filbert	Kedi Dili
+	Angled Round	Eğik Yuvarlak
+	Angled Flat	Eğik Düz
+	Fan Blender	Harmanlama Yelpazesi
+	Grass Fan	Çim Yelpazesi
 	Pattern Borders	Desen Kenarlıkları
 	Scatter Shapes	Dağılım Şekilleri
 	Save Brush Library…	Fırça Kitaplığını Kaydet…
