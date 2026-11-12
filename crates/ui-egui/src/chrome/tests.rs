@@ -461,6 +461,65 @@ fn a_clipped_status_message_shows_in_full_on_hover() {
     assert_eq!(hovered.iter().filter(|t| t.text.starts_with("Saved")).count(), 1, "a message that fits has no tooltip: {hovered:?}");
 }
 
+/// The status message of an open with several notes lists them all on hover, and screen readers
+/// receive them after the message, while the status bar shows that message. A later message
+/// leaves the list out, and so does an open with one note.
+#[test]
+fn the_message_of_an_open_with_several_notes_lists_them_on_hover() {
+    let (mut app, ctx) = status_readout_app();
+    ctx.enable_accesskit();
+    let notes = vec!["the file's layers weren't read".to_string(), "a brush wasn't read".to_string()];
+    app.ui.status = crate::io::opened_with_notes(2, &notes[0]);
+    app.ui.status_notes = Some((app.ui.status.clone(), notes));
+    let listed = "• the file's layers weren't read\n• a brush wasn't read";
+    let full = format!("{}\n{listed}", app.ui.status);
+    let (texts, nodes, hovered) = bar_hover(&mut app, &ctx, 1400.0, "Opened", super::status_bar);
+    assert!(!status_text(&texts, "Opened").elided);
+    assert!(nodes.iter().any(|n| n.value() == Some(full.as_str())), "screen readers receive the notes: {nodes:?}");
+    assert!(hovered.iter().any(|t| t.text == full), "the tooltip lists the notes: {hovered:?}");
+
+    app.ui.status = "Saved recovery data for Untitled-1".to_owned();
+    let (_, nodes, hovered) = bar_hover(&mut app, &ctx, 1400.0, "Saved", super::status_bar);
+    assert!(!nodes.iter().any(|n| n.value().is_some_and(|v| v.contains("• "))), "{nodes:?}");
+    assert_eq!(hovered.iter().filter(|t| t.text.starts_with("Saved")).count(), 1, "no tooltip: {hovered:?}");
+
+    // One note is the message itself: no list.
+    app.ui.status = crate::io::opened_with_notes(1, "a brush wasn't read");
+    app.ui.status_notes = Some((app.ui.status.clone(), vec!["a brush wasn't read".to_string()]));
+    let (_, nodes, hovered) = bar_hover(&mut app, &ctx, 1400.0, "Opened", super::status_bar);
+    assert!(!nodes.iter().any(|n| n.value().is_some_and(|v| v.contains("• "))), "{nodes:?}");
+    assert_eq!(hovered.iter().filter(|t| t.text.starts_with("Opened")).count(), 1, "no tooltip: {hovered:?}");
+}
+
+/// The list has at most 30 notes, then how many more there are.
+#[test]
+fn the_hover_lists_thirty_notes_and_counts_the_rest() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let notes: Vec<String> = (1..=32).map(|i| format!("note {i}")).collect();
+    let listed = super::status_bar::listed_notes(&notes, usize::MAX);
+    let lines: Vec<&str> = listed.lines().collect();
+    assert_eq!((lines.len(), lines[0], lines[29], lines[30]), (31, "• note 1", "• note 30", "… (+2)"));
+    assert_eq!(super::status_bar::listed_notes(&notes[..2], usize::MAX), "• note 1\n• note 2");
+    assert_eq!(super::status_bar::listed_notes(&notes[..3], 1), "• note 1\n… (+2)");
+}
+
+/// A hover with more long notes than the window can show lists the ones that fit and how many
+/// more there are, inside the window. A window 300 points tall is shorter than the main window's
+/// smallest size (500 points) at UI Scaling 1.5.
+#[test]
+fn the_hover_of_many_notes_stays_inside_a_small_window() {
+    let (mut app, ctx) = status_readout_app();
+    let notes: Vec<String> = (1..=32).map(|i| format!("note {i}: {}", "this file's PostScript couldn't be read ".repeat(3))).collect();
+    app.ui.status = crate::io::opened_with_notes(notes.len(), &notes[0]);
+    app.ui.status_notes = Some((app.ui.status.clone(), notes));
+    let (_, _, hovered) = bar_hover(&mut app, &ctx, 700.0, "Opened", super::status_bar);
+    let tip: Vec<_> = hovered.iter().filter(|t| t.text.contains("\n• note 1:")).collect();
+    let [tip] = &tip[..] else { panic!("one tooltip lists the notes: {hovered:?}") };
+    assert!(tip.bounds.top() >= 0.0 && tip.bounds.bottom() <= 300.0 && tip.bounds.right() <= 700.0, "{tip:?}");
+    let last = tip.text.lines().last().unwrap_or_default();
+    assert!(last.starts_with("… (+") && !tip.text.contains("• note 30:"), "{last:?}");
+}
+
 /// The Help Bar's hint ends in an ellipsis when it is wider than the window and shows in full on
 /// hover, in a tooltip that wraps within the window (#6622). The Dimension tool's hint is wider
 /// than the smallest main window (800 points); 400 points is that window at UI Scaling 2.0.
