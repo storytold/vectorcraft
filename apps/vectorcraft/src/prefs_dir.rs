@@ -89,6 +89,14 @@ pub fn attach_custom_dictionary(session: &mut vectorcraft_engine::Session) {
     }
 }
 
+/// Keep the custom arrowheads (Stroke panel menu › Edit Arrowheads…) in the `Arrowheads.vectorcraft`
+/// file next to the settings, and list the heads it holds.
+pub fn attach_arrowheads(session: &mut vectorcraft_engine::Session) {
+    if let Some(path) = store_dir(vectorcraft_engine::cmd::arrowheads::FILE_NAME) {
+        session.attach_arrowheads_file(path.to_string_lossy().to_string());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

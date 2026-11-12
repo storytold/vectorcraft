@@ -79,6 +79,9 @@ pub(crate) struct SGlyph {
     /// A letter of a Korean word kept whole (Korean Line Break Anywhere off): a CJK character
     /// here doesn't let the line break after it ([`keep_korean_words`]).
     pub keeps_word: bool,
+    /// Bunri-Kinshi (Paragraph panel menu): the glyph's cluster ends with the first character of
+    /// an inseparable pair, so a line may not break after it ([`keep_inseparable_pairs`]).
+    pub keeps_next: bool,
     /// No Break (Character panel menu): keep this glyph on the same line as the neighbouring
     /// glyphs that have it.
     pub no_break: bool,
@@ -347,6 +350,36 @@ pub(crate) fn keep_korean_words(sg: &mut [SGlyph]) {
         }
         start += len + 1;
     }
+}
+
+/// Bunri-Kinshi: mark each glyph of `sg` (a paragraph's glyphs, shaped from `text`, which their
+/// bytes index) whose cluster ends right before the second character of an inseparable pair
+/// ([`inseparable`]) as [`SGlyph::keeps_next`], so a line never breaks inside the pair. A pair is
+/// two neighboring source characters, whatever their fonts and styles; an inline graphic or a
+/// shaped cluster holding both characters is never a pair.
+pub(crate) fn keep_inseparable_pairs(text: &str, sg: &mut [SGlyph]) {
+    for k in 1..sg.len() {
+        let (a, b) = (&sg[k - 1], &sg[k]);
+        if a.byte == b.byte || a.inline.is_some() || b.inline.is_some() || a.byte + a.len != b.byte {
+            continue;
+        }
+        let last = text.get(a.byte..b.byte).and_then(|s| s.chars().next_back()).unwrap_or(a.ch);
+        if inseparable(last, b.ch) {
+            sg[k - 1].keeps_next = true;
+        }
+    }
+}
+
+/// Is `a` followed by `b` an inseparable pair that Bunri-Kinshi keeps on one line? VectorCraft's
+/// set is the pairs W3C JLREQ lists for its class cl-08 (https://www.w3.org/TR/jlreq/#cl-08): two
+/// em dashes, two horizontal ellipses, two two-dot leaders, and the upper half of a vertical kana
+/// repeat mark (U+3033 or U+3034) followed by its lower half (U+3035). File writers call it to
+/// report whether a paragraph's lines depend on Bunri-Kinshi.
+pub fn inseparable(a: char, b: char) -> bool {
+    matches!(
+        (a, b),
+        ('\u{2014}', '\u{2014}') | ('\u{2026}', '\u{2026}') | ('\u{2025}', '\u{2025}') | ('\u{3033}', '\u{3035}') | ('\u{3034}', '\u{3035}')
+    )
 }
 
 /// Is `c` Hangul: a syllable, a jamo or a compatibility jamo (full or half width)?
@@ -1166,6 +1199,7 @@ fn inline_glyph(
         inline: Some(InlineBox { art: drawn, xf }),
         word_end: false,
         keeps_word: false,
+        keeps_next: false,
         no_break: st.no_break,
         vertical_roman: false,
         cursive: false,
@@ -1638,6 +1672,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             inline: None,
             word_end: false,
             keeps_word: false,
+            keeps_next: false,
             no_break: gst.no_break,
             vertical_roman: gst.standard_vertical_roman,
             cursive,

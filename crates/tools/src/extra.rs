@@ -559,10 +559,11 @@ impl Tool for ShaperTool {
                 }
                 let pts = std::mem::take(&mut self.points);
                 if pts.first().is_some_and(|first| pts.iter().all(|p| p.distance(*first) < cx.tol(3.0))) {
-                    // In Construction mode a tap selects a source shape.
+                    // In Construction mode a tap selects a source shape. On a selected group, a tap on a
+                    // source shape's outline enters Construction mode.
                     let construction =
                         cx.isolation.and_then(|id| cx.doc.node(id)).is_some_and(|n| n.name.as_deref() == Some(vectorcraft_doc::shaper::SOURCES));
-                    let mut params = json!({"point": [ev.pos.x, ev.pos.y]});
+                    let mut params = json!({"point": [ev.pos.x, ev.pos.y], "tolerance": cx.tol(3.0).min(1000.0)});
                     if construction {
                         params["source"] = json!(true);
                     }

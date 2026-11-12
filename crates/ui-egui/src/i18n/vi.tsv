@@ -1995,6 +1995,7 @@ digits	Hindi	Hindi
 	Include Hidden Layers	Bao gồm các lớp ẩn
 	Include Linked Files	Bao gồm tệp được liên kết
 	Include Metadata	Bao gồm siêu dữ liệu
+	Include Variable Data	Bao gồm dữ liệu biến
 	Include non-printing layers	Bao gồm các lớp không in
 	Write pages longer than 200 in at full size in points	Ghi các trang dài hơn 200 in ở kích thước đầy đủ, theo điểm
 	Include SVG Code	Bao gồm mã SVG
@@ -3206,6 +3207,10 @@ mark-style	Japanese	Kiểu Nhật
 	Search Preferences	Tìm trong tùy chọn
 	No settings found	Không tìm thấy cài đặt
 	Reset Profiles	Đặt lại hồ sơ màu
+	Arrowheads	Đầu mũi tên
+	Edit Arrowheads	Chỉnh sửa đầu mũi tên
+	Edit Arrowheads…	Chỉnh sửa đầu mũi tên…
+	Reload Arrowheads	Tải lại đầu mũi tên
 	Rotate View	Xoay chế độ xem
 	Reset Rotate View	Đặt lại xoay chế độ xem
 	Rotate View to Selection	Xoay chế độ xem theo vùng chọn
@@ -3227,6 +3232,7 @@ mark-style	Japanese	Kiểu Nhật
 	Reshape	Định hình lại
 	Reshape Segment	Định hình lại đoạn
 	Reshape Spine Segment	Định hình lại đoạn trục
+	Blend Easing	Gia tốc hòa trộn
 	Reshape Tool	Công cụ Định hình lại
 	Reshape Type Area	Định hình lại vùng chữ
 	Resize	Thay đổi kích thước
@@ -3274,6 +3280,7 @@ mark-style	Japanese	Kiểu Nhật
 	Roman Baseline	Đường cơ sở Roman
 	Roman Hanging Punctuation	Dấu câu treo Roman
 	Korean Line Break Anywhere	Ngắt dòng tiếng Hàn ở bất kỳ đâu
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Cài đặt dàn trang Đông Á
 	Korean Composition Settings	Cài đặt dàn trang tiếng Hàn
 	Rotate	Xoay
@@ -3282,6 +3289,7 @@ mark-style	Japanese	Kiểu Nhật
 	Rotate View Tool	Công cụ Xoay chế độ xem
 	Trackpad Gesture to Rotate View	Xoay chế độ xem bằng cử chỉ trên bàn di chuột
 	Hold a Tool Shortcut to Use the Tool Temporarily	Giữ phím tắt của công cụ để tạm thời dùng công cụ đó
+	Show Bounding Box While Moving and Drawing	Hiện hộp bao khi di chuyển và vẽ
 	Rotate…	Xoay…
 	Rotation	Góc xoay
 	Rotation relative to:	Xoay tương đối với:
@@ -5287,6 +5295,7 @@ theme	Appearance	Giao diện
 @msg	unknown option `{path}.{k}`	tùy chọn không xác định `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	chế độ in đè không xác định `{o}` (preserve, simulate hoặc discard)
 @msg	unknown panel `{raw}`	bảng không xác định `{raw}`
+@msg	panels can't be shown in Presentation Mode	không thể hiển thị bảng trong chế độ trình bày
 @msg	unknown parameter `{key}`; did you mean `{near}`?	tham số không xác định `{key}`; ý bạn là `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	tham số không xác định `{key}`; lệnh này không nhận tham số
 @msg	unknown parameter `{key}`; the command takes: {keys}	tham số không xác định `{key}`; lệnh nhận: {keys}
@@ -5729,6 +5738,110 @@ axis	Y Axis	Trục Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	hiệu ứng trực tiếp chạy trong lúc tài liệu được vẽ nên không thể là `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	plug-in xuất luôn nhận ngân sách của một lần xuất: hãy bỏ `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” yêu cầu ngân sách tính toán lớn (mỗi lần chạy tới {minutes} phút và gấp {times} lần số lệnh thông thường): cần một người phê duyệt trong ứng dụng máy tính, hoặc truyền `allowHeavy: true` trong phiên khởi động bằng --allow-plugin-grants
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	`name` phải có 1-64 ký tự in được
+@msg	`version`, `description` or `author` is too long	`version`, `description` hoặc `author` quá dài
+@msg	`warnings` must be a list of strings	`warnings` phải là một danh sách chuỗi
+@msg	`{k}` must be one of {_1}	`{k}` phải là một trong {_1}
+@msg	`{k}` must be {what}	`{k}` phải là {what}
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	plug-in xuất khai báo từ 1 đến {MAX_EXTENSIONS} `extensions`
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	tối đa {MAX_UNGROUPED} tham số nằm ngoài nhóm: hãy đặt `group` cho các tham số còn lại
+@msg	can't encode the input	không thể mã hóa dữ liệu đầu vào
+@msg	expected {"dataBase64"}	cần có {"dataBase64"}
+@msg	expected {"objects"}	cần có {"objects"}
+@msg	export `{name}`: {e}	export `{name}` của mô-đun: {e}
+@msg	extension {e} is listed twice	phần mở rộng {e} được liệt kê hai lần
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	phần mở rộng {e}: dùng 1-16 chữ thường và chữ số, không có dấu chấm
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	ID không hợp lệ {_1}: dùng 1-64 ký tự trong A-Z a-z 0-9 . _ -
+@msg	invalid parameter name {k}	tên tham số không hợp lệ {k}
+@msg	manifest is not UTF-8	manifest không phải UTF-8
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	manifest quá dài (giới hạn {MAX_MANIFEST_BYTES} byte)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	manifest có {_1} byte (giới hạn {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	mô-đun có {_1} byte (giới hạn {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	cần phê duyệt: plug-in yêu cầu {0}, quyền mà người dùng cấp khi cài đặt riêng plug-in đó
+@msg	not JSON: {e}	không phải JSON: {e}
+@msg	not a WebAssembly binary (missing \0asm header)	không phải tệp nhị phân WebAssembly (thiếu phần đầu \0asm)
+@msg	parameter `{k}`: {what}	tham số `{k}`: {what}
+@msg	parameter `{name}`: {what}	tham số `{name}`: {what}
+@msg	plug-in parameters must be a JSON object	tham số plug-in phải là một đối tượng JSON
+@msg	the module must export its linear memory as `memory`	mô-đun phải export bộ nhớ tuyến tính của nó dưới tên `memory`
+@msg	the objects to change are no longer in the document	các đối tượng cần thay đổi không còn trong tài liệu
+@msg	the runtime panicked	môi trường chạy bị lỗi nghiêm trọng
+@msg	unexpected host trap	máy chủ gặp trap không mong muốn
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version trả về {v}; máy chủ này triển khai phiên bản {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc trả về 0 (hết bộ nhớ)
+@msg	vc_alloc returned a block outside memory	vc_alloc trả về một khối nằm ngoài bộ nhớ
+@msg	vc_run returned error code {packed}	vc_run trả về mã lỗi {packed}
+@msg	{_1} is not a file	{_1} không phải là tệp
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} có {_2} byte (giới hạn {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} đối tượng (giới hạn {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what} trỏ ra ngoài bộ nhớ
+@msg	`angle` must be a number	`angle` phải là một số
+@msg	`aspect` must be from 0.01 to 100	`aspect` phải từ 0.01 đến 100
+@msg	`cap` must be "butt", "round" or "square"	`cap` phải là "butt", "round" hoặc "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` phải là "nonzero" hoặc "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` phải là một địa chỉ https:// dài tối đa {MAX_HELP_URL} byte
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` phải có 1-{MAX_HELP} ký tự in được
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` phải là một id hiệu ứng dài 1-{MAX_EFFECT_ID} byte
+@msg	`id` must be the id of an input object	`id` phải là id của một đối tượng đầu vào
+@msg	`join` must be "miter", "round" or "bevel"	`join` phải là "miter", "round" hoặc "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` và `group` phải có 1-{MAX_LABEL} ký tự in được
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` phải là 1-{MAX_TEXT}, và giá trị mặc định không được dài hơn
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` và `maxItems` phải là 0-{MAX_LIST}, `maxItems` ít nhất là 1, và giá trị mặc định phải có đúng số mục đó
+@msg	`name` must be a string	`name` phải là một chuỗi
+@msg	`opacity` must be a number	`opacity` phải là một số
+@msg	`type` must be "path" or "compound"	`type` phải là "path" hoặc "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` phải có 1-{MAX_UNIT} ký tự in được
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` phải liệt kê 1 đến {MAX_CONDITION_VALUES} giá trị cho `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` nêu `{other}`, nhưng đó không phải là tham số được khai báo trước tham số này
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` nêu tối đa {MAX_CONDITIONS} tham số
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` nhận giá trị của `{other}`, là một hộp kiểm hoặc một lựa chọn
+@msg	`visible` must be true or false	`visible` phải là true hoặc false
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` phải là một số từ {_1} đến {_2}
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` phải là một mảng có tối đa {MAX_ITEMS} mục
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	màu mặc định phải là một đối tượng màu hoặc một chuỗi hex như "#3a7bd5"
+@msg	a color object or a hex string such as "#3a7bd5"	một đối tượng màu hoặc một chuỗi hex như "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	chuyển sắc tự do chứa tối đa {MAX_ITEMS} điểm và đường
+@msg	a freeform gradient line names a point it doesn't have	một đường của chuyển sắc tự do nêu một điểm mà chuyển sắc không có
+@msg	a gradient needs 1-{MAX_ITEMS} stops	chuyển sắc cần 1-{MAX_ITEMS} điểm dừng
+@msg	a list of numbers	một danh sách số
+@msg	a list of {min_items} to {max_items} numbers	một danh sách gồm {min_items} đến {max_items} số
+@msg	a new object needs a `path`	đối tượng mới cần một `path`
+@msg	a number	một số
+@msg	a painted live effect returns only `objects`	hiệu ứng động kiểu tô chỉ trả về `objects`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	một phần của hiệu ứng động kiểu tô chỉ có `path`, `fillRule`, `fills` và `strokes`
+@msg	a read-only object was left out	một đối tượng chỉ đọc đã bị bỏ sót
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	một đối tượng chỉ đọc đã bị bỏ sót: hãy trả lại nó dưới dạng chỉ {"id"} hoặc như khi được nhận
+@msg	a string	một chuỗi
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	nét chỉ có `paint`, `width`, `join`, `cap` và `miterLimit`
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	nét phải có dạng {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
+@msg	an effect must be {"id", "params"?, "visible"?}	hiệu ứng phải có dạng {"id", "params"?, "visible"?}
+@msg	an effect on a fill returns only `fills`	hiệu ứng trên phần tô chỉ trả về `fills`
+@msg	an effect on a stroke returns only `strokes`	hiệu ứng trên nét chỉ trả về `strokes`
+@msg	an object must be a JSON object	đối tượng phải là một đối tượng JSON
+@msg	bad range	phạm vi không hợp lệ
+@msg	choices must be 1-64 non-empty, printable strings	các lựa chọn phải là 1-64 chuỗi in được và không rỗng
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	tọa độ vượt ngoài phạm vi (giới hạn ±{MAX_COORD} pt)
+@msg	default is not one of the options	giá trị mặc định không nằm trong các tùy chọn
+@msg	each piece needs a `path`	mỗi phần cần một `path`
+@msg	is listed twice	được liệt kê hai lần
+@msg	pattern transform out of range	phép biến đổi họa tiết vượt ngoài phạm vi
+@msg	read-only field '{field}' changed	trường chỉ đọc '{field}' đã bị thay đổi
+@msg	stops must be in order of `offset`	các điểm dừng phải theo thứ tự của `offset`
+@msg	the document has no pattern {pattern}	tài liệu không có họa tiết {pattern}
+@msg	the document has no swatch {n}	tài liệu không có mẫu màu {n}
+@msg	the output	đầu ra
+@msg	the path has no anchor points	đường dẫn không có điểm neo
+@msg	too many anchor points (limit {MAX_ANCHORS})	quá nhiều điểm neo (giới hạn {MAX_ANCHORS})
+@msg	true or false	true hoặc false
+@msg	unknown key `{k}`; the keys here are {_1}	khóa không xác định `{k}`; các khóa ở đây là {_1}
+@msg	{_1} is listed twice	{_1} được liệt kê hai lần
+@msg	{_1} is not the id of an input object	{_1} không phải là id của một đối tượng đầu vào
+@msg	{_1} is read-only	{_1} là chỉ đọc
+@msg	{what} must be from {lo} to {hi}	{what} phải từ {lo} đến {hi}
+@msg	a color component	một thành phần màu
+@msg	a plate	một bản in
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Cài đặt “{name}”, plug-in yêu cầu các quyền này?
 	ID: {id}	ID: {id}
@@ -5942,6 +6055,11 @@ axis	Y Axis	Trục Y
 	User Brush Library 9	Thư viện cọ người dùng 9
 	User Brush Library 10	Thư viện cọ người dùng 10
 	Art Ribbons	Dải băng nghệ thuật
+	Ink and Wash	Mực và màu loang
+	Tapered Ink	Mực vuốt nhọn
+	Brush Pen	Bút lông
+	Soft Wash	Màu loang mềm
+	Pooling Wash	Màu loang đọng viền
 	Zigzag	Zigzag
 	Burst Ray	Tia va chạm
 	Dash Trail	Vệt đứt đoạn
@@ -6615,6 +6733,8 @@ breakText	Glyphs	Glyph
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Các hướng dẫn thực hành ngắn cho những công cụ thiết yếu, xếp theo kỹ năng. Chọn một kỹ năng để xem các hướng dẫn của nó.
 	List Tutorials	Liệt kê hướng dẫn
 	Show Tutorial	Hiện hướng dẫn
+	Show Tool Location	Hiện vị trí công cụ
+	Show where this tool is	Hiện vị trí của công cụ này
 @msg	missing `tutorial` (see learn.list)	thiếu `tutorial` (xem learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	hướng dẫn không xác định `{id}` (xem learn.list)
 

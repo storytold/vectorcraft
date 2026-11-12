@@ -3,11 +3,29 @@
 
 /// One step of a tutorial: what to do, and the tool it chooses or the command it runs, if any.
 pub struct Step {
+    /// The step as the panel shows it. In a step that names a tool, the tool's name is in square
+    /// brackets, and the panel draws it as a link that shows where the tool is.
     pub text: &'static str,
     /// A tool id ([`vectorcraft_tools::catalog::tool_info`]) the step names.
     pub tool: Option<&'static str>,
     /// A command id the step names.
     pub command: Option<&'static str>,
+}
+
+impl Step {
+    /// The text before the tool's name, the name, and the text after it; none for a step that
+    /// names no tool or has no bracketed name.
+    pub fn tool_name(&self) -> Option<(&'static str, &'static str, &'static str)> {
+        self.tool?;
+        let (before, rest) = self.text.split_once('[')?;
+        let (name, after) = rest.split_once(']')?;
+        Some((before, name, after))
+    }
+
+    /// The text as it reads, without the brackets around the tool's name.
+    pub fn plain(&self) -> String {
+        self.text.replace(['[', ']'], "")
+    }
 }
 
 /// A tutorial: an id for `learn.show`, its title and its numbered steps.
@@ -29,7 +47,7 @@ const fn say(text: &'static str) -> Step {
     Step { text, tool: None, command: None }
 }
 
-/// A step that uses tool `id`.
+/// A step that uses tool `id`, whose name `text` holds in square brackets.
 const fn tool(text: &'static str, id: &'static str) -> Step {
     Step { text, tool: Some(id), command: None }
 }
@@ -49,7 +67,7 @@ pub const SKILLS: &[Skill] = &[
                 id: "draw-and-color",
                 title: "Draw and color a shape",
                 steps: &[
-                    tool("Choose the Rectangle tool in the toolbar.", "rectangle"),
+                    tool("Choose the [Rectangle tool] in the toolbar.", "rectangle"),
                     say("Drag on the artboard to draw a rectangle."),
                     say("With the rectangle still selected, click a color in the Swatches panel to fill it."),
                     command("Click the Stroke box under the tools, then click another swatch to color the outline.", "paint.toggleActive"),
@@ -59,16 +77,16 @@ pub const SKILLS: &[Skill] = &[
                 id: "combine-shapes",
                 title: "Combine shapes into one",
                 steps: &[
-                    tool("Choose the Ellipse tool and draw two circles that overlap.", "ellipse"),
-                    tool("Choose the Selection tool and drag across both circles to select them.", "selection"),
-                    tool("Choose the Shape Builder tool and drag across the parts you want to merge.", "shapeBuilder"),
+                    tool("Choose the [Ellipse tool] and draw two circles that overlap.", "ellipse"),
+                    tool("Choose the [Selection tool] and drag across both circles to select them.", "selection"),
+                    tool("Choose the [Shape Builder tool] and drag across the parts you want to merge.", "shapeBuilder"),
                 ],
             },
             Tutorial {
                 id: "add-headline",
                 title: "Add a headline",
                 steps: &[
-                    tool("Choose the Type tool and click on the artboard.", "type"),
+                    tool("Choose the [Type tool] and click on the artboard.", "type"),
                     say("Type a few words, then press Escape to finish."),
                     say("Pick a font and a size in the Character panel."),
                 ],
@@ -83,7 +101,7 @@ pub const SKILLS: &[Skill] = &[
                 id: "pen-paths",
                 title: "Draw paths with the Pen",
                 steps: &[
-                    tool("Choose the Pen tool.", "pen"),
+                    tool("Choose the [Pen tool].", "pen"),
                     say("Click to place corner points, or drag to pull out a curve."),
                     say("Click the first point again to close the shape, or press Enter to leave it open."),
                 ],
@@ -92,18 +110,18 @@ pub const SKILLS: &[Skill] = &[
                 id: "smooth-curves",
                 title: "Draw smooth curves",
                 steps: &[
-                    tool("Choose the Curvature tool.", "curvature"),
+                    tool("Choose the [Curvature tool].", "curvature"),
                     say("Click to place points: the path bends smoothly through each one."),
-                    tool("Choose the Direct Selection tool and drag a point to reshape the curve.", "directSelection"),
+                    tool("Choose the [Direct Selection tool] and drag a point to reshape the curve.", "directSelection"),
                 ],
             },
             Tutorial {
                 id: "pencil-sketch",
                 title: "Sketch with the Pencil",
                 steps: &[
-                    tool("Choose the Pencil tool.", "pencil"),
+                    tool("Choose the [Pencil tool].", "pencil"),
                     say("Drag to draw a freehand line."),
-                    tool("Choose the Smooth tool and drag along the line to even it out.", "smooth"),
+                    tool("Choose the [Smooth tool] and drag along the line to even it out.", "smooth"),
                 ],
             },
         ],
@@ -116,7 +134,7 @@ pub const SKILLS: &[Skill] = &[
                 id: "fill-and-stroke",
                 title: "Fill and stroke",
                 steps: &[
-                    tool("Select an object with the Selection tool.", "selection"),
+                    tool("Select an object with the [Selection tool].", "selection"),
                     say("Click the Fill box under the tools, then pick a color in the Color panel."),
                     command("Click the double arrow beside the boxes to swap the fill and the stroke.", "paint.swap"),
                 ],
@@ -125,8 +143,8 @@ pub const SKILLS: &[Skill] = &[
                 id: "gradient",
                 title: "Add a gradient",
                 steps: &[
-                    tool("Select an object with the Selection tool.", "selection"),
-                    tool("Choose the Gradient tool and click the object to give it a gradient.", "gradient"),
+                    tool("Select an object with the [Selection tool].", "selection"),
+                    tool("Choose the [Gradient tool] and click the object to give it a gradient.", "gradient"),
                     say("Drag across the object to set the gradient's direction and length."),
                 ],
             },
@@ -134,8 +152,8 @@ pub const SKILLS: &[Skill] = &[
                 id: "copy-colors",
                 title: "Copy colors from other art",
                 steps: &[
-                    tool("Select the object to color with the Selection tool.", "selection"),
-                    tool("Choose the Eyedropper tool and click the art whose colors you want.", "eyedropper"),
+                    tool("Select the object to color with the [Selection tool].", "selection"),
+                    tool("Choose the [Eyedropper tool] and click the art whose colors you want.", "eyedropper"),
                 ],
             },
         ],
@@ -148,8 +166,8 @@ pub const SKILLS: &[Skill] = &[
                 id: "area-type",
                 title: "Flow text into a shape",
                 steps: &[
-                    tool("Draw a rectangle for the text to fill.", "rectangle"),
-                    tool("Choose the Area Type tool and click the rectangle's edge.", "areaType"),
+                    tool("Draw a rectangle for the text to fill with the [Rectangle tool].", "rectangle"),
+                    tool("Choose the [Area Type tool] and click the rectangle's edge.", "areaType"),
                     say("Type or paste your text: it wraps inside the shape."),
                 ],
             },
@@ -157,8 +175,8 @@ pub const SKILLS: &[Skill] = &[
                 id: "type-on-path",
                 title: "Type along a path",
                 steps: &[
-                    tool("Draw a curved path with the Pen tool.", "pen"),
-                    tool("Choose the Type on a Path tool and click the path.", "typeOnPath"),
+                    tool("Draw a curved path with the [Pen tool].", "pen"),
+                    tool("Choose the [Type on a Path tool] and click the path.", "typeOnPath"),
                     say("Type your text: it follows the path."),
                 ],
             },
@@ -166,7 +184,7 @@ pub const SKILLS: &[Skill] = &[
                 id: "outline-type",
                 title: "Turn type into shapes",
                 steps: &[
-                    tool("Select a text object with the Selection tool.", "selection"),
+                    tool("Select a text object with the [Selection tool].", "selection"),
                     command("Choose Type › Create Outlines to turn its letters into paths.", "type.createOutlines"),
                 ],
             },

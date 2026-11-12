@@ -119,6 +119,12 @@ impl BlendSpec {
     pub fn start(&self, i: usize) -> Option<usize> {
         self.starts.get(i).copied().flatten().map(|a| a as usize)
     }
+
+    /// Whether [`Self::ease`] moves the steps: the blend has a spine ([`Self::no_spine`] is off)
+    /// and a replaced spine or Align to Path, the cases where the steps are placed along it.
+    pub fn eases_along_spine(&self) -> bool {
+        !self.no_spine && (self.spine.is_some() || self.orientation == BlendOrientation::AlignToPath)
+    }
 }
 
 /// The Blend panel's Create Spine setting: whether a new blend gets a spine.

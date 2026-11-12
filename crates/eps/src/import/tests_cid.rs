@@ -487,21 +487,29 @@ fn named_cidfonts_over_predefined_cmaps_take_the_show_operators_spacing() {
     measured(&format!("{set} 10 20 moveto <93fa967b> [30 30] xshow currentpoint pop 70 sub abs 0.01 lt"));
     measured(&format!("{set} 10 20 moveto <93fa967b> [10 10] yshow currentpoint 40 sub abs 0.01 lt exch 10 sub abs 0.01 lt and"));
     measured(&format!("{set} 10 20 moveto <93fa967b> [30 10 30 10] xyshow currentpoint 40 sub abs 0.01 lt exch 70 sub abs 0.01 lt and"));
-    // `kshow` runs its procedure between each two codes: it moves the point 100 more here, and a
-    // font it sets stays current.
+    // `kshow` runs its procedure between each two codes: it moves the point 100 more here. The
+    // current font is restored when the procedure completes (PLRM 3rd ed., `kshow`), so a font it
+    // sets doesn't stay current, here or for a font found by name.
     measured(&format!(
         "{set} 10 20 moveto <93fa967b> show currentpoint 10 20 moveto {{pop pop 100 0 rmoveto}} <93fa967b> kshow currentpoint \
          3 -1 roll sub abs 0.01 lt 3 1 roll sub -100 sub abs 0.01 lt and"
     ));
     measured(&format!(
-        "{set} 10 20 moveto {{pop pop /Helvetica findfont 10 scalefont setfont}} <93fa967b> kshow currentfont /FontName get /Helvetica eq"
+        "{set} 10 20 moveto {{pop pop /Helvetica findfont 10 scalefont setfont}} <93fa967b> kshow currentfont /FontName get /Ryumin-Light-90ms-RKSJ-H eq"
     ));
-    // The procedure sees the font the file set as current, and the next one the font an earlier
-    // one set.
+    measured(
+        "/Helvetica findfont 20 scalefont setfont 10 20 moveto {pop pop /Courier findfont 10 scalefont setfont} (AB) kshow currentfont /FontName get /Helvetica eq",
+    );
+    // Each procedure sees the font the file set as current, also after an earlier one set another.
     measured(&format!("{set} 10 20 moveto {{pop pop currentfont /FontName get /seen exch def}} <93fa967b> kshow seen /Ryumin-Light-90ms-RKSJ-H eq"));
     measured(&format!(
         "{set} 10 20 moveto /n 0 def {{pop pop /n n 1 add def n 1 eq {{/Helvetica findfont 10 scalefont setfont}} {{currentfont /FontName get /seen exch def}} ifelse}} \
-         <93fa967b41> kshow seen /Helvetica eq"
+         <93fa967b41> kshow seen /Ryumin-Light-90ms-RKSJ-H eq"
+    ));
+    // A `kshow` the procedure runs in a font it set sees that font.
+    measured(&format!(
+        "{set} 10 20 moveto {{pop pop /Helvetica findfont 10 scalefont setfont {{pop pop currentfont /FontName get /seen exch def}} (AB) kshow}} \
+         <93fa967b> kshow seen /Helvetica eq"
     ));
     // The procedure gets the two codes' values (left on the stack here).
     measured(&format!(
@@ -575,8 +583,9 @@ fn named_cid_type_is_set_alike_by_every_show_operator() {
 
 /// `charpath`, `cshow` and `glyphshow` in a CID-keyed font over a predefined CMap, its CIDFont only
 /// named: `charpath` adds the outlines of the characters the codes stand for and moves the point
-/// as `show` does; `cshow`'s procedure gets each code (two bytes for a two-byte code) with its
-/// width; `glyphshow` sets the named character itself.
+/// as `show` does; `cshow`'s procedure gets each code's last byte with its width and runs with the
+/// CIDFont current, a show in it setting the code's character; `glyphshow` sets the named
+/// character itself.
 #[test]
 fn named_cid_type_in_charpath_cshow_and_glyphshow() {
     let set = "/Ryumin-Light-90ms-RKSJ-H findfont 20 scalefont setfont";
@@ -595,9 +604,35 @@ fn named_cid_type_in_charpath_cshow_and_glyphshow() {
         top("fd41"),
         top("41")
     ));
-    // The procedure leaves each code: 日 (0x93FA), then A.
-    check(&format!("{set} [ {{pop pop}} <93fa41> cshow ] dup length 2 eq exch dup 0 get 16#93fa eq exch 1 get 65 eq and and"));
+    // The procedure leaves each code's last byte (PLRM 3rd ed., `cshow`): 日 (0x93FA), then A.
+    check(&format!("{set} [ {{pop pop}} <93fa41> cshow ] dup length 2 eq exch dup 0 get 16#fa eq exch 1 get 65 eq and and"));
     check(&format!("{set} 0 {{pop exch pop add}} <93fa967b41> cshow <93fa967b41> stringwidth pop sub abs 0.01 lt"));
+    // While the procedure runs, the current font is the CIDFont and `rootfont` gives the composite
+    // font (PLRM 3rd ed., `cshow` and `rootfont`); the current font is restored after each run,
+    // also when the procedure sets another.
+    check(&format!(
+        "{set} {{pop pop pop currentfont dup /FontType get /t exch def /CIDFontName get /seen exch def}} <93fa> cshow \
+         seen /Ryumin-Light eq t 9 eq and"
+    ));
+    check(&format!("{set} {{pop pop pop rootfont /FontName get /seen exch def}} <93fa> cshow seen /Ryumin-Light-90ms-RKSJ-H eq"));
+    check(&format!(
+        "{set} /n 0 def {{pop pop pop /n n 1 add def n 1 eq {{/Helvetica findfont 10 scalefont setfont rootfont /FontName get /r exch def}} \
+         {{currentfont /CIDFontName get /seen exch def}} ifelse}} <93fa41> cshow seen /Ryumin-Light eq r /Helvetica eq and \
+         currentfont /FontName get /Ryumin-Light-90ms-RKSJ-H eq and"
+    ));
+    // A show in the CIDFont shows the character of the code the procedure was given, the string
+    // holding its last byte, and moves the point as far as `show` does. Any other string, an
+    // empty one included, is a `rangecheck` error.
+    for s in ["()", "(AB)", "<41>"] {
+        check(&format!("gsave nulldevice {set} 10 20 moveto {{{{pop pop pop {s} show}} <93fa> cshow}} stopped grestore"));
+    }
+    check(&format!("gsave nulldevice {set} 10 20 moveto {{{{pop pop pop <fa> show}} <93fa> cshow}} stopped not grestore"));
+    let r = super::tests::read(&format!("{set} 10 20 moveto {{pop pop ( ) dup 0 4 -1 roll put show}} <93fa967b> cshow"));
+    assert_eq!(texts(&r).iter().map(|t| t.plain_text()).collect::<String>(), "日本");
+    check(&format!(
+        "gsave nulldevice {set} 10 20 moveto <93fa967b> show currentpoint 10 20 moveto {{pop pop ( ) dup 0 4 -1 roll put show}} <93fa967b> cshow \
+         currentpoint grestore 3 -1 roll sub abs 0.01 lt 3 1 roll sub abs 0.01 lt and"
+    ));
     let r = super::tests::read(&format!("{set} 10 20 moveto /uni00E9 glyphshow"));
     assert_eq!(texts(&r).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["é"]);
 }
@@ -640,6 +675,8 @@ fn latin_names_ending_in_h_and_cmaps_that_cannot_be_read() {
         "/Ryumin-Light-GBT-V findfont 20 scalefont setfont 10 100 moveto <21212121> show currentpoint 60 sub abs 0.01 lt exch 10 sub abs 0.01 lt and",
         // A tab is a code of its own: three codes.
         "/Ryumin-Light-GBT-H findfont 20 scalefont setfont <09092121> stringwidth abs 0.01 lt exch 60 sub abs 0.01 lt and",
+        // A byte that starts no row-and-cell code is a code of its own, also before a tab: three.
+        "/Ryumin-Light-GBT-H findfont 20 scalefont setfont <21092121> stringwidth abs 0.01 lt exch 60 sub abs 0.01 lt and",
     ] {
         let r = super::tests::read(&format!("{cond} {{ 0 0 10 10 rectfill }} if"));
         assert!(all(&r.document).iter().any(|n| matches!(n.kind, NodeKind::Path { .. })), "{cond}");

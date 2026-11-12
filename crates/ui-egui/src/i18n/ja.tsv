@@ -2065,6 +2065,7 @@ antiAlias	Sharp	シャープ
 	Include Hidden Layers	非表示レイヤーを含む
 	Include Linked Files	リンクファイルを含める
 	Include Metadata	メタデータを含む
+	Include Variable Data	変数データを含む
 	Include SVG Code	SVG コードを含める
 	Include Swatches for Tints	ティント用のスウォッチを含める
 	Include non-printing layers	印刷しないレイヤーを含む
@@ -2328,6 +2329,7 @@ antiAlias	Sharp	シャープ
 	Move Slices	スライスを移動
 	Move Spine Point	スパインポイントを移動
 	Reshape Spine Segment	スパインセグメントをシェイプ変形
+	Blend Easing	ブレンドのイージング
 	Move Brush	ブラシを移動
 	Move Swatch	スウォッチを移動
 	Move Up	上へ移動
@@ -2934,6 +2936,10 @@ mark-style	Japanese	日本式
 	Search Preferences	環境設定を検索
 	No settings found	設定が見つかりません
 	Reset Profiles	プロファイルをリセット
+	Arrowheads	矢印
+	Edit Arrowheads	矢印を編集
+	Edit Arrowheads…	矢印を編集…
+	Reload Arrowheads	矢印を再読み込み
 	Reset the rows to the artwork's colors	行をアートワークのカラーにリセット
 	Reset to Default	初期設定に戻す
 	Reset to White, Black	白、黒にリセット
@@ -2966,6 +2972,7 @@ mark-style	Japanese	日本式
 	Right:	右:
 	Roman Hanging Punctuation	欧文ぶら下がり
 	Korean Line Break Anywhere	韓国語の任意位置での改行
+	Bunri-Kinshi	分離禁止
 	East Asian Composition Settings	東アジア言語の組版設定
 	Korean Composition Settings	韓国語の組版設定
 	Rotate	回転
@@ -2973,6 +2980,7 @@ mark-style	Japanese	日本式
 	Rotate View Tool	回転ビューツール
 	Trackpad Gesture to Rotate View	トラックパッドのジェスチャーでビューを回転
 	Hold a Tool Shortcut to Use the Tool Temporarily	ツールのショートカットを押している間だけツールを使用
+	Show Bounding Box While Moving and Drawing	移動中と描画中にバウンディングボックスを表示
 	Rotation	回転
 	Round Cap	丸型線端
 	Round Join	ラウンド結合
@@ -4886,6 +4894,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	give only one of onto, below and above	onto、below、above のうち 1 つだけを指定してください
 @msg	column must be true or a number from 1	column には true または 1 以上の数値を指定してください
 @msg	unknown panel `{raw}`	`{raw}` は不明なパネルです
+@msg	panels can't be shown in Presentation Mode	プレゼンテーションモードではパネルを表示できません
 @msg	x and y must both be numbers	x と y はどちらも数値で指定してください
 @msg	Downloaded {what}	{what} をダウンロードしました
 @msg	Imported {what}: {_1}	{what} を読み込みました: {_1}
@@ -5813,6 +5822,110 @@ axis	Y Axis	Y 軸
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ライブ効果はドキュメントの描画中に実行されるため、`heavy` にはできません
 @msg	an exporter always gets an export's budget: leave `budget` out	書き出しプラグインには常に書き出しの予算が割り当てられます。`budget` は省略してください
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	「{_1}」は大きな計算予算を求めています (1 回の実行につき最大 {minutes} 分、通常の {times} 倍の命令)。デスクトップ アプリで人が承認するか、--allow-plugin-grants を付けて開始したセッションで `allowHeavy: true` を指定してください
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	`name` は印刷可能な 1-64 文字にしてください
+@msg	`version`, `description` or `author` is too long	`version`、`description` または `author` が長すぎます
+@msg	`warnings` must be a list of strings	`warnings` は文字列のリストにしてください
+@msg	`{k}` must be one of {_1}	`{k}` は {_1} のいずれかにしてください
+@msg	`{k}` must be {what}	`{k}` は {what} にしてください
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	書き出しプラグインは `extensions` を 1～{MAX_EXTENSIONS} 個宣言します
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	グループ外のパラメーターは {MAX_UNGROUPED} 個までです。ほかのパラメーターには `group` を指定してください
+@msg	can't encode the input	入力をエンコードできません
+@msg	expected {"dataBase64"}	{"dataBase64"} が必要です
+@msg	expected {"objects"}	{"objects"} が必要です
+@msg	export `{name}`: {e}	モジュールのエクスポート `{name}`: {e}
+@msg	extension {e} is listed twice	拡張子 {e} が 2 回指定されています
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	拡張子 {e}: ドットを付けずに小文字と数字で 1-16 文字にしてください
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	ID {_1} は無効です。A-Z a-z 0-9 . _ - の 1-64 文字にしてください
+@msg	invalid parameter name {k}	パラメーター名 {k} は無効です
+@msg	manifest is not UTF-8	マニフェストが UTF-8 ではありません
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	マニフェストが長すぎます (上限 {MAX_MANIFEST_BYTES} バイト)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	マニフェストは {_1} バイトです (上限 {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	モジュールは {_1} バイトです (上限 {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	承認が必要です: {0} を要求しています。これはユーザーが単独でインストールするときに許可します
+@msg	not JSON: {e}	JSON ではありません: {e}
+@msg	not a WebAssembly binary (missing \0asm header)	WebAssembly バイナリではありません (\0asm ヘッダーがありません)
+@msg	parameter `{k}`: {what}	パラメーター `{k}`: {what}
+@msg	parameter `{name}`: {what}	パラメーター `{name}`: {what}
+@msg	plug-in parameters must be a JSON object	プラグインのパラメーターは JSON オブジェクトにしてください
+@msg	the module must export its linear memory as `memory`	モジュールは線形メモリを `memory` としてエクスポートする必要があります
+@msg	the objects to change are no longer in the document	変更するオブジェクトがドキュメントにもうありません
+@msg	the runtime panicked	ランタイムが異常終了しました
+@msg	unexpected host trap	ホストで予期しないトラップが発生しました
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version が {v} を返しました。このホストが実装するバージョンは {ABI_VERSION} です
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc が 0 を返しました (メモリ不足)
+@msg	vc_alloc returned a block outside memory	vc_alloc がメモリの外のブロックを返しました
+@msg	vc_run returned error code {packed}	vc_run がエラーコード {packed} を返しました
+@msg	{_1} is not a file	{_1} はファイルではありません
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} は {_2} バイトです (上限 {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	オブジェクトが {_1} 個あります (上限 {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what} がメモリの外を指しています
+@msg	`angle` must be a number	`angle` には数値を指定してください
+@msg	`aspect` must be from 0.01 to 100	`aspect` は 0.01 から 100 の範囲にしてください
+@msg	`cap` must be "butt", "round" or "square"	`cap` は "butt"、"round"、"square" のいずれかにしてください
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` は "nonzero" または "evenodd" にしてください
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` は {MAX_HELP_URL} バイト以下の https:// アドレスにしてください
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` は印刷可能な 1-{MAX_HELP} 文字にしてください
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` は 1-{MAX_EFFECT_ID} バイトの効果 ID にしてください
+@msg	`id` must be the id of an input object	`id` は入力オブジェクトの ID にしてください
+@msg	`join` must be "miter", "round" or "bevel"	`join` は "miter"、"round"、"bevel" のいずれかにしてください
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` と `group` は印刷可能な 1-{MAX_LABEL} 文字にしてください
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` は 1-{MAX_TEXT} にし、デフォルト値はそれより長くしないでください
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` と `maxItems` は 0-{MAX_LIST}、`maxItems` は 1 以上にし、デフォルト値の項目数をその範囲にしてください
+@msg	`name` must be a string	`name` は文字列にしてください
+@msg	`opacity` must be a number	`opacity` には数値を指定してください
+@msg	`type` must be "path" or "compound"	`type` は "path" または "compound" にしてください
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` は印刷可能な 1-{MAX_UNIT} 文字にしてください
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` には `{other}` の値を 1 から {MAX_CONDITION_VALUES} 個指定してください
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` が指定した `{other}` は、このパラメーターより前に宣言されたパラメーターではありません
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` に指定できるパラメーターは {MAX_CONDITIONS} 個までです
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` が受け取るのは、チェックボックスか選択肢である `{other}` の値です
+@msg	`visible` must be true or false	`visible` は true または false にしてください
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` は {_1} から {_2} の数値にしてください
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` は {MAX_ITEMS} 項目以下の配列にしてください
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	カラーのデフォルト値はカラーオブジェクトか "#3a7bd5" のような 16 進文字列にしてください
+@msg	a color object or a hex string such as "#3a7bd5"	カラーオブジェクトか "#3a7bd5" のような 16 進文字列
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	フリーフォームグラデーションのポイントとラインは {MAX_ITEMS} 個までです
+@msg	a freeform gradient line names a point it doesn't have	フリーフォームグラデーションのラインが、グラデーションにないポイントを指定しています
+@msg	a gradient needs 1-{MAX_ITEMS} stops	グラデーションには 1-{MAX_ITEMS} 個の分岐点が必要です
+@msg	a list of numbers	数値のリスト
+@msg	a list of {min_items} to {max_items} numbers	{min_items} から {max_items} 個の数値のリスト
+@msg	a new object needs a `path`	新しいオブジェクトには `path` が必要です
+@msg	a number	数値
+@msg	a painted live effect returns only `objects`	ペイント型のライブ効果が返すのは `objects` だけです
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ペイント型のライブ効果のピースに使えるのは `path`、`fillRule`、`fills`、`strokes` だけです
+@msg	a read-only object was left out	読み取り専用のオブジェクトが省かれています
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	読み取り専用のオブジェクトが省かれています: {"id"} だけの形か、渡されたとおりの形で返してください
+@msg	a string	文字列
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	線に使えるのは `paint`、`width`、`join`、`cap`、`miterLimit` だけです
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	線は {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} の形にしてください
+@msg	an effect must be {"id", "params"?, "visible"?}	効果は {"id", "params"?, "visible"?} の形にしてください
+@msg	an effect on a fill returns only `fills`	塗りの効果が返すのは `fills` だけです
+@msg	an effect on a stroke returns only `strokes`	線の効果が返すのは `strokes` だけです
+@msg	an object must be a JSON object	オブジェクトは JSON オブジェクトにしてください
+@msg	bad range	範囲が正しくありません
+@msg	choices must be 1-64 non-empty, printable strings	選択肢は空でない印刷可能な文字列 1-64 個にしてください
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	座標が範囲外です (上限 ±{MAX_COORD} pt)
+@msg	default is not one of the options	デフォルト値が選択肢にありません
+@msg	each piece needs a `path`	各ピースには `path` が必要です
+@msg	is listed twice	2 回指定されています
+@msg	pattern transform out of range	パターンの変形が範囲外です
+@msg	read-only field '{field}' changed	読み取り専用のフィールド '{field}' が変更されています
+@msg	stops must be in order of `offset`	分岐点は `offset` の順に並べてください
+@msg	the document has no pattern {pattern}	ドキュメントにパターン {pattern} がありません
+@msg	the document has no swatch {n}	ドキュメントにスウォッチ {n} がありません
+@msg	the output	出力
+@msg	the path has no anchor points	パスにアンカーポイントがありません
+@msg	too many anchor points (limit {MAX_ANCHORS})	アンカーポイントが多すぎます (上限 {MAX_ANCHORS})
+@msg	true or false	true または false
+@msg	unknown key `{k}`; the keys here are {_1}	`{k}` は不明なキーです。ここで使えるキー: {_1}
+@msg	{_1} is listed twice	{_1} が 2 回指定されています
+@msg	{_1} is not the id of an input object	{_1} は入力オブジェクトの ID ではありません
+@msg	{_1} is read-only	{_1} は読み取り専用です
+@msg	{what} must be from {lo} to {hi}	{what} は {lo} から {hi} の範囲にしてください
+@msg	a color component	カラー成分
+@msg	a plate	版
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	これらの権限を求める「{name}」をインストールしますか？
 	ID: {id}	ID: {id}
@@ -6026,6 +6139,11 @@ axis	Y Axis	Y 軸
 	User Brush Library 9	ユーザーブラシライブラリ 9
 	User Brush Library 10	ユーザーブラシライブラリ 10
 	Art Ribbons	アートリボン
+	Ink and Wash	墨と淡彩
+	Tapered Ink	先細りの墨
+	Brush Pen	筆ペン
+	Soft Wash	柔らかい淡彩
+	Pooling Wash	たまりのある淡彩
 	Zigzag	ジグザグ
 	Burst Ray	バーストレイ
 	Dash Trail	ダッシュトレイル
@@ -6699,6 +6817,8 @@ breakText	Glyphs	字形
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	基本ツールを学ぶ短い実践チュートリアルを、スキルごとにまとめています。スキルを選ぶとチュートリアルが表示されます。
 	List Tutorials	チュートリアルの一覧
 	Show Tutorial	チュートリアルを表示
+	Show Tool Location	ツールの場所を表示
+	Show where this tool is	このツールの場所を表示
 @msg	missing `tutorial` (see learn.list)	`tutorial` が指定されていません (learn.list を参照)
 @msg	unknown tutorial `{id}` (see learn.list)	`{id}` は不明なチュートリアルです (learn.list を参照)
 

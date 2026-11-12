@@ -468,7 +468,7 @@ fn a_shape_tool_drags_the_selected_shapes_widgets() {
             matches!(a.last(), Some(Action::Preview(cmd, v)) if cmd == "object.setLiveShape" && v["radius"].as_f64().is_some_and(|r| r > 0.0)),
             "{id}: {a:?}"
         );
-        assert!(t.transforming(), "{id}");
+        assert!(t.transforming() && !t.drawing_boxed() && !t.moving(), "{id}");
         assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 130.0, 130.0)), vec![Action::Commit], "{id}");
         assert!(!t.busy() && !t.transforming(), "{id}");
         // Escape cancels a widget drag.
@@ -529,14 +529,15 @@ fn a_shape_tool_moves_the_selection_by_its_centre_point_and_turns_it_from_a_corn
         // A drag moves the selection by the pointer's offset.
         let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 170.0, 160.0));
         assert_eq!(a.first(), Some(&Action::Begin("Move".into())), "{id}: {a:?}");
-        assert!(t.transforming(), "{id}");
+        // A move, which the canvas can show the bounding box for.
+        assert!(t.transforming() && t.moving() && !t.resizing() && !t.drawing_boxed(), "{id}");
         assert_eq!(
             a.last(),
             Some(&Action::Preview("object.transform".into(), json!({"matrix": [1.0, 0.0, 0.0, 1.0, 20.0, 10.0], "copy": false}))),
             "{id}"
         );
         assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 170.0, 160.0)), vec![Action::Commit], "{id}");
-        assert!(!t.busy() && !t.transforming(), "{id}");
+        assert!(!t.busy() && !t.transforming() && !t.moving(), "{id}");
     }
     // Alt pressed once the drag has begun copies, and the copy cursor shows, as the Selection
     // tool's do.
@@ -581,6 +582,32 @@ fn a_shape_tool_moves_the_selection_by_its_centre_point_and_turns_it_from_a_corn
     t.pointer(&c, &PointerEvent::new(PointerKind::Down, away.x, away.y));
     let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 350.0, 340.0));
     assert_eq!(a.first(), Some(&Action::Begin("Rectangle".into())), "{a:?}");
+    assert!(t.drawing_boxed() && !t.moving() && !t.transforming());
+}
+
+/// The shape tools that show the selection's bounding box report a shape being drawn once the drag
+/// has begun, until the release or Escape. The Line Segment tool shows no box and reports none.
+#[test]
+fn a_shape_being_drawn_has_its_bounding_box_drawn_by_the_tools_that_show_one() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    for id in ["rectangle", "roundedRectangle", "ellipse", "polygon", "star", "lineSegment"] {
+        let mut t = ShapeTool::new(id);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        assert!(!t.drawing_boxed(), "{id}: not before the drag begins");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 160.0, 140.0));
+        assert_eq!(t.drawing_boxed(), id != "lineSegment", "{id}");
+        assert!(!t.moving() && !t.resizing(), "{id}");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 160.0, 140.0));
+        assert!(!t.drawing_boxed(), "{id}: not after the release");
+        // Escape ends the drag.
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 160.0, 140.0));
+        t.key(&c, ToolKey::Escape, Mods::default());
+        assert!(!t.drawing_boxed(), "{id}: not after Escape");
+    }
 }
 
 /// With a shape tool, a drag on one of the eight handles of the selection's bounding box scales the
@@ -599,7 +626,7 @@ fn a_shape_tool_scales_the_selection_by_its_bounding_box_handles() {
         assert!(t.overlays(&c).is_empty(), "{id}");
         assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, corner.x, corner.y)), vec![Action::Begin("Scale".into())], "{id}");
         // A resize: the canvas keeps the box on show at the changing bounds.
-        assert!(t.busy() && t.transforming() && t.resizing(), "{id}");
+        assert!(t.busy() && t.transforming() && t.resizing() && !t.moving(), "{id}");
         let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 220.0, 230.0));
         let want = scale_for_drag(Rect::new(100.0, 100.0, 200.0, 200.0), Handle::BottomRight, Point::new(220.0, 230.0), false, false);
         assert_eq!(a, vec![Action::Preview("object.transform".into(), json!({"matrix": matrix_json(want), "copy": false}))], "{id}");

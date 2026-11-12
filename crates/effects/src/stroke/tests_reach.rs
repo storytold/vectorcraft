@@ -99,14 +99,27 @@ fn bounds_and_clicks_cover_what_every_stroke_paints() {
     }
 }
 
+/// Custom heads: one wholly behind its tip, and a long one reaching as far in front of its tip as
+/// behind it (its tip sits halfway along it past the end point with Extend).
+fn custom_heads() -> Vec<Arrowhead> {
+    use vectorcraft_geom::{Point as P, SubPath};
+    let head = |name: &str, pts: &[(f64, f64)]| {
+        let pts: Vec<P> = pts.iter().map(|&(x, y)| P::new(x, y)).collect();
+        let path = PathData::single(SubPath::polyline(&pts, true));
+        Arrowhead::Custom(std::sync::Arc::new(vectorcraft_doc::CustomArrowhead::new(name.into(), path)))
+    };
+    vec![head("Wedge", &[(0.0, 0.0), (3.0, 2.0), (3.0, -1.0)]), head("Spindle", &[(-10.0, 0.0), (0.0, 2.0), (10.0, 0.0), (0.0, -2.0)])]
+}
+
 #[test]
 fn bounds_and_clicks_cover_every_arrowhead() {
     let bp = &paths()[0];
-    for kind in Arrowhead::ALL {
+    for kind in Arrowhead::ALL.into_iter().chain(custom_heads()) {
         for align in [ArrowAlign::Extend, ArrowAlign::Tip] {
             for (scale, cap) in [(50.0, LineCap::Round), (100.0, LineCap::Butt), (300.0, LineCap::Square)] {
                 let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 3.0);
-                (st.start_arrow, st.end_arrow, st.arrow_align, st.arrow_scale, st.cap) = (Some(kind), Some(kind), align, (scale, scale), cap);
+                (st.start_arrow, st.end_arrow, st.arrow_align, st.arrow_scale, st.cap) =
+                    (Some(kind.clone()), Some(kind.clone()), align, (scale, scale), cap);
                 check(bp, &st, &format!("{kind:?} {align:?} {scale}%"));
             }
         }
