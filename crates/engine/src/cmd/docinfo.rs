@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in a gradient's stops, at a tint above 0, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else Linear gradient, Radial gradient or Freeform gradient; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient with a stop above opacity 0, at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else Linear gradient, Radial gradient or Freeform gradient; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone",
             has_doc,
             info
         ),
@@ -289,8 +289,8 @@ fn spot_swatches(d: &Document) -> HashSet<&str> {
 
 /// The spot colors paint `p` prints (`spots`: [`spot_swatches`]): the spot swatch a solid color is
 /// linked to, or those a gradient's stops are linked to, each once, in the order of the stops. A
-/// link at a tint of 0 prints no ink, and a color that only looks like a spot color is not linked
-/// to one.
+/// link at a tint of 0 prints no ink, a gradient whose stops are all at an opacity of 0 draws
+/// nothing, and a color that only looks like a spot color is not linked to one.
 fn spot_labels(spots: &HashSet<&str>, p: &Paint) -> Vec<String> {
     let mut out: Vec<String> = vec![];
     let mut add = |swatch: &Option<String>, tint: f32| {
@@ -304,7 +304,7 @@ fn spot_labels(spots: &HashSet<&str>, p: &Paint) -> Vec<String> {
     };
     match p {
         Paint::Solid { swatch, tint, .. } => add(swatch, *tint),
-        Paint::Gradient(g) => g.gradient.stops.iter().for_each(|s| add(&s.swatch, s.tint)),
+        Paint::Gradient(g) if g.gradient.stops.iter().any(|s| s.opacity > 0.0) => g.gradient.stops.iter().for_each(|s| add(&s.swatch, s.tint)),
         _ => {}
     }
     out
@@ -520,6 +520,18 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                                 }
                             }
                         }
+                    }
+                }
+            }
+            // A grayscale or 1-bit image colorized with a spot color prints it, while its pixels take
+            // the color, as the renderer draws it.
+            if let NodeKind::Image(im) = &n.kind
+                && let Some(colorize) = n.extras().colorize.as_deref()
+                && d.image_blob(im).is_some_and(|b| b.takes_colorize())
+            {
+                for name in spot_label(colorize) {
+                    if !used_spots.contains(&name) {
+                        used_spots.insert(0, name);
                     }
                 }
             }
@@ -1172,6 +1184,48 @@ mod tests {
         let text = s.execute("document.info", &json!({"category": "spotColors", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
         assert!(text.contains("\nSPOT COLOR OBJECTS\nBoth: Ink, Gold\n<Rectangle>: Ink\n<Rectangle>: Gold\nType: Ink\n"), "{text}");
         assert!(!text.contains("Spare") && !text.contains("Look"), "{text}");
+    }
+
+    /// Spot Color Objects lists a grayscale image colorized with a spot color, and leaves out a
+    /// gradient whose stops are all at an opacity of 0, which draws nothing.
+    #[test]
+    fn spot_color_objects_take_colorized_images_and_skip_clear_gradients() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        s.execute("swatch.new", &json!({"name": "Ink", "color": {"model": "cmyk", "c": 0, "m": 1, "y": 1, "k": 0}, "spot": true})).unwrap();
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap())
+            .write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
+            .unwrap();
+        let image = s
+            .edit("Place", |d, sel| {
+                d.images.insert("gray".into(), vectorcraft_doc::ImageBlob::png(bytes));
+                let id = d.alloc_id();
+                let im = vectorcraft_doc::ImageObject {
+                    key: "gray".into(),
+                    width: 2,
+                    height: 1,
+                    xf: Default::default(),
+                    link: None,
+                    placement: Default::default(),
+                    pixels: None,
+                };
+                d.insert(d.default_layer(), 0, Node::new(id, NodeKind::Image(Box::new(im))))?;
+                sel.set([id]);
+                Ok(id)
+            })
+            .unwrap();
+        s.execute("paint.setFill", &json!({"swatch": "Ink"})).unwrap();
+        assert!(s.doc().unwrap().doc.node(image).unwrap().extras().colorize.is_some());
+        let clear = s.execute("shape.rectangle", &json!({"x": 0, "y": 50, "width": 10, "height": 10})).unwrap()["id"].clone();
+        let stops =
+            json!([{"offset": 0, "color": "#000", "swatch": "Ink", "opacity": 0}, {"offset": 1, "color": "#fff", "swatch": "Ink", "opacity": 0}]);
+        s.execute("paint.setFill", &json!({"ids": [clear], "gradient": {"kind": "linear", "stops": stops}})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [clear], "none": true})).unwrap();
+        let i = s.execute("document.info", &json!({})).unwrap();
+        let name = s.doc().unwrap().doc.node(image).unwrap().display_name();
+        assert_eq!(i["spotObjects"], json!([{"id": image.0, "name": name, "spotColors": ["Ink"]}]), "{i}");
+        assert_eq!(i["objects"]["spots"].as_u64(), Some(1), "{}", i["objects"]);
     }
 
     /// Document Info › Objects counts an object with a gradient or a pattern on both its fill and
