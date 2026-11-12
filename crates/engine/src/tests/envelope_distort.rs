@@ -601,6 +601,32 @@ fn an_opacity_mask_on_type_bends_as_other_art() {
     assert_eq!(kept, 1, "the type's stroke stays a stroke");
 }
 
+/// An envelope bends the art of a linked opacity mask on its contents with them; an unlinked mask
+/// stays where it is.
+#[test]
+fn an_envelope_bends_a_linked_opacity_mask_and_leaves_an_unlinked_one() {
+    for linked in [true, false] {
+        let mut s = session();
+        let a = rect(&mut s);
+        let m = rect(&mut s);
+        sel(&mut s, &[a, m]);
+        s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+        if !linked {
+            s.execute("transparency.unlinkOpacityMask", &json!({})).unwrap();
+        }
+        let before = node(&s, a).extras().mask.as_ref().unwrap().art.path_data().cloned();
+        sel(&mut s, &[a]);
+        let e = arch(&mut s, 60.0, json!({}));
+        let mut found = vec![];
+        for n in &evaluated(&s, e) {
+            n.walk(&mut |c| found.extend(c.extras().mask.as_ref().map(|k| (c.path_data().cloned(), k.art.path_data().cloned()))));
+        }
+        let [(bent, mask)] = found.as_slice() else { panic!("one masked object: {found:?}") };
+        assert!(bent != &before, "the contents bend");
+        assert_eq!(mask, if linked { bent } else { &before }, "linked: {linked}");
+    }
+}
+
 /// Expand turns an envelope of stroked type into its bent glyph outlines with the stroke on them,
 /// at its own weight, as it draws (#6644).
 #[test]

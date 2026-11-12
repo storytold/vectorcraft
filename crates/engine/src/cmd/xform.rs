@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Free Distort",
             [],
             None,
-            "{corners: [[x,y]×4] (TL, TR, BR, BL), from?: [x0,y0,x1,y1] (default: selection bounds), ids?} projective warp of anchors and handles",
+            "{corners: [[x,y]×4] (TL, TR, BR, BL), from?: [x0,y0,x1,y1] (default: selection bounds), ids?} projective warp of anchors and handles; a linked opacity mask's art is warped with its object, an unlinked one stays",
             has_doc,
             distort
         ),
@@ -104,7 +104,8 @@ impl Projective {
 }
 
 /// Warp `n`'s anchors and handles; gradients (pinned first if unplaced) follow the warp's affine
-/// approximation at their centre.
+/// approximation at their centre. The art of a linked opacity mask is warped with the object it
+/// masks; an unlinked one stays where it is.
 fn warp_node(n: &mut Node, pr: &Projective) {
     n.pin_gradients();
     match &mut n.kind {
@@ -130,6 +131,9 @@ fn warp_node(n: &mut Node, pr: &Projective) {
             }
             return;
         }
+    }
+    if let Some(m) = n.extras_if_any().and_then(|x| x.mask.as_mut()).filter(|m| m.linked) {
+        warp_node(Arc::make_mut(&mut m.art), pr);
     }
     n.appearance.warp_gradients(&|p| pr.affine_near(p));
 }

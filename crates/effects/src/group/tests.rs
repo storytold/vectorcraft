@@ -690,6 +690,269 @@ fn a_transform_on_a_group_paints_each_copy_with_its_own_gradient() {
     }
 }
 
+/// A white 10 pt square with id `id` at the origin.
+fn white_square(id: u64) -> Node {
+    Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(Paint::solid(Color::WHITE), Paint::None, 0.0))
+}
+
+/// `n` masked by `art`, linked or not.
+fn masked_by(mut n: Node, art: Node, linked: bool) -> Node {
+    let mut mask = vectorcraft_doc::OpacityMask::new(art, true);
+    mask.linked = linked;
+    n.extras_mut().mask = Some(Box::new(mask));
+    n
+}
+
+/// The geometry effects that reshape a group's members, one at a time.
+fn reshaping_effects() -> Vec<Effect> {
+    let fx = |id: &str, params: serde_json::Value| Effect { id: id.into(), params, visible: true };
+    let corners = serde_json::json!({"corners": [[1.0 / 3.0, 0.0], [4.0 / 3.0, 0.0], [1.0, 1.0], [0.0, 1.0]]});
+    vec![
+        fx("distort.transform", serde_json::json!({"moveH": 30})),
+        fx("distort.transform", serde_json::json!({"rotate": 90})),
+        fx("distort.twist", serde_json::json!({"angle": 90})),
+        fx("distort.freeDistort", corners),
+        fx("warp.arc", serde_json::json!({})),
+        fx("distort.roughen", serde_json::json!({"size": 5, "seed": 3})),
+        fx("distort.zigZag", serde_json::json!({})),
+        fx("distort.puckerBloat", serde_json::json!({"amount": 50})),
+        fx("distort.tweak", serde_json::json!({})),
+        fx("path.offsetPath", serde_json::json!({"offset": 3})),
+        fx("stylize.roundCorners", serde_json::json!({"radius": 3})),
+    ]
+}
+
+/// A group's geometry effect reshapes the art of a member's linked opacity mask as it reshapes the
+/// member: a mask drawn over the member still covers it. An unlinked mask stays where it is.
+#[test]
+fn a_groups_geometry_effects_reshape_a_members_linked_mask_with_it() {
+    let square = white_square(1);
+    let original = square.path_data().cloned();
+    for e in reshaping_effects() {
+        for linked in [true, false] {
+            let member = masked_by(square.clone(), white_square(4), linked);
+            let mut g = Node::group(NodeId(10), vec![Arc::new(member), sq(2, 20.0, Color::BLACK)]);
+            g.appearance.effects.push(e.clone());
+            let art = evaluate_container(None, &g).unwrap();
+            let member = &art.children().unwrap()[0];
+            let mask = member.extras().mask.as_deref().unwrap();
+            assert!(member.path_data().cloned() != original, "{}: the member is reshaped", e.id);
+            let want = if linked { member.path_data().cloned() } else { original.clone() };
+            assert_eq!(mask.art.path_data().cloned(), want, "{} (linked: {linked})", e.id);
+            assert_eq!(mask.linked, linked);
+        }
+    }
+}
+
+/// The mask of a group inside the group, the mask of a path in it, a mask inside that mask's art and
+/// an inverted mask all take the outer group's effect with the paths they mask.
+#[test]
+fn a_groups_geometry_effects_reshape_nested_and_inverted_masks() {
+    for e in reshaping_effects() {
+        let innermost = masked_by(white_square(7), white_square(8), true);
+        let path = masked_by(white_square(1), masked_by(white_square(6), innermost, true), true);
+        let mut inner = masked_by(Node::group(NodeId(5), vec![Arc::new(path)]), white_square(4), true);
+        if let Some(m) = inner.extras_if_any().and_then(|x| x.mask.as_mut()) {
+            m.invert = true;
+        }
+        let mut g = Node::group(NodeId(10), vec![Arc::new(inner), sq(2, 20.0, Color::BLACK)]);
+        g.appearance.effects.push(e.clone());
+        let art = evaluate_container(None, &g).unwrap();
+        let inner = &art.children().unwrap()[0];
+        let path = &inner.children().unwrap()[0];
+        let want = path.path_data().cloned();
+        let mask_of = |n: &Node| n.extras().mask.as_deref().map(|m| (*m.art).clone()).unwrap();
+        let (outer_mask, path_mask) = (mask_of(inner), mask_of(path));
+        assert!(inner.extras().mask.as_deref().is_some_and(|m| m.invert));
+        assert_eq!(outer_mask.path_data().cloned(), want, "{}: the inner group's inverted mask", e.id);
+        assert_eq!(path_mask.path_data().cloned(), want, "{}: the path's mask", e.id);
+        assert_eq!(mask_of(&path_mask).path_data().cloned(), want, "{}: the mask inside the mask's art", e.id);
+        assert_eq!(mask_of(&mask_of(&path_mask)).path_data().cloned(), want, "{}: one level deeper", e.id);
+    }
+}
+
+/// A Transform effect's copies of a path with a linked mask are objects of their own, each with the
+/// mask moved with it; the original keeps its mask where it was.
+#[test]
+fn each_transform_copy_of_a_masked_member_carries_its_mask() {
+    let member = masked_by(white_square(1), white_square(4), true);
+    let mut g = Node::group(NodeId(10), vec![Arc::new(member)]);
+    let params = serde_json::json!({"moveH": 30, "copies": 2});
+    g.appearance.effects.push(Effect { id: "distort.transform".into(), params, visible: true });
+    let art = evaluate_container(None, &g).unwrap();
+    let copies = art.children().unwrap()[0].children().expect("the object and its copies are objects of their own");
+    assert_eq!(copies.len(), 3);
+    for c in copies {
+        let mask = c.extras().mask.as_deref().unwrap();
+        assert_eq!(mask.art.geometric_bounds(), c.geometric_bounds());
+    }
+}
+
+/// A Transform effect's copies of the paths of a member group give the group's linked mask the same
+/// copies: the mask covers each copy.
+#[test]
+fn a_member_groups_mask_takes_the_transform_copies_of_its_paths() {
+    let inner = masked_by(Node::group(NodeId(2), vec![Arc::new(white_square(1))]), white_square(4), true);
+    let mut g = Node::group(NodeId(10), vec![Arc::new(inner)]);
+    let params = serde_json::json!({"moveH": 30, "copies": 1});
+    g.appearance.effects.push(Effect { id: "distort.transform".into(), params, visible: true });
+    let art = evaluate_container(None, &g).unwrap();
+    let inner = &art.children().unwrap()[0];
+    let want = inner.geometric_bounds();
+    assert_eq!(want, Some(Rect::new(0.0, 0.0, 40.0, 10.0)), "the path and its copy");
+    assert_eq!(inner.extras().mask.as_deref().unwrap().art.geometric_bounds(), want);
+}
+
+/// A mask's art of several objects takes Transform copies whole, as the art it masks does: each copy
+/// of the mask's art is a group of its objects, so the copies do not interleave object by object.
+#[test]
+fn a_masks_art_of_several_objects_is_copied_whole() {
+    let mask_art = Node::group(NodeId(3), vec![Arc::new(white_square(4)), sq(5, 5.0, Color::WHITE)]);
+    let inner = masked_by(Node::group(NodeId(2), vec![Arc::new(white_square(1))]), mask_art, true);
+    let mut g = Node::group(NodeId(10), vec![Arc::new(inner)]);
+    let params = serde_json::json!({"moveH": 30, "copies": 1});
+    g.appearance.effects.push(Effect { id: "distort.transform".into(), params, visible: true });
+    let art = evaluate_container(None, &g).unwrap();
+    let mask = &art.children().unwrap()[0].extras().mask.as_deref().unwrap().art;
+    let copies = mask.children().unwrap();
+    assert_eq!(copies.len(), 2, "the mask's art and its copy");
+    for c in copies {
+        let ids: Vec<NodeId> = c.children().into_iter().flatten().map(|m| m.id).collect();
+        assert_eq!(ids, [NodeId(4), NodeId(5)], "each copy holds the mask's objects");
+    }
+    assert_eq!(mask.geometric_bounds(), Some(Rect::new(0.0, 0.0, 45.0, 10.0)));
+}
+
+/// The linked mask of a mask's art that is copied whole takes the same Transform copies.
+#[test]
+fn the_mask_of_a_masks_art_copied_whole_takes_its_copies() {
+    let parts = Node::group(NodeId(3), vec![Arc::new(white_square(4)), sq(5, 5.0, Color::WHITE)]);
+    let mask_art = masked_by(parts, white_square(6), true);
+    let inner = masked_by(Node::group(NodeId(2), vec![Arc::new(white_square(1))]), mask_art, true);
+    let mut g = Node::group(NodeId(10), vec![Arc::new(inner)]);
+    let params = serde_json::json!({"moveH": 30, "copies": 1});
+    g.appearance.effects.push(Effect { id: "distort.transform".into(), params, visible: true });
+    let art = evaluate_container(None, &g).unwrap();
+    let mask = &art.children().unwrap()[0].extras().mask.as_deref().unwrap().art;
+    assert_eq!(mask.geometric_bounds(), Some(Rect::new(0.0, 0.0, 45.0, 10.0)), "the mask's art and its copy");
+    let own = &mask.extras().mask.as_deref().expect("the mask's art keeps its own mask").art;
+    assert_eq!(own.geometric_bounds(), Some(Rect::new(0.0, 0.0, 40.0, 10.0)), "its mask covers the copy too");
+}
+
+/// When a member group's linked mask can't take all the Transform copies its paths take (past the
+/// budget), the art keeps its shape under the effect, so the mask still covers the paths.
+#[test]
+fn art_whose_mask_would_take_fewer_copies_keeps_its_shape() {
+    let transform = Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 30, "copies": 1}), visible: true };
+    let member = masked_by(Node::group(NodeId(2), vec![Arc::new(white_square(1))]), white_square(4), true);
+    let mut art = Node::group(NodeId(10), vec![Arc::new(member)]);
+    let one = crate::Budget::of(white_square(1).path_data().unwrap()).lines;
+    // Room for the path, its mask and a copy of the path, not for a copy of the mask.
+    let budget = crate::Budget { anchors: usize::MAX / 4, lines: 3 * one };
+    crate::reshape::reshape_leaves_within(&mut art, &[&transform], budget, None);
+    let member = &art.children().unwrap()[0];
+    let square = Some(Rect::new(0.0, 0.0, 10.0, 10.0));
+    assert_eq!(member.geometric_bounds(), square, "the path keeps its shape");
+    assert_eq!(member.extras().mask.as_deref().unwrap().art.geometric_bounds(), square, "and so does its mask");
+}
+
+/// The copies of a path with a linked mask count the art of the mask each copy carries against the
+/// budget: they stop where the masks would pass it.
+#[test]
+fn transform_copies_count_the_art_of_their_masks() {
+    let transform = Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 30, "copies": 2}), visible: true };
+    let member = masked_by(white_square(1), white_square(4), true);
+    let mut art = Node::group(NodeId(10), vec![Arc::new(member)]);
+    let one = crate::Budget::of(white_square(1).path_data().unwrap()).lines;
+    // Room for the path, its mask and one copy of both, not for a second copy.
+    let budget = crate::Budget { anchors: usize::MAX / 4, lines: 4 * one };
+    crate::reshape::reshape_leaves_within(&mut art, &[&transform], budget, None);
+    let copies = art.children().unwrap()[0].children().expect("the object and its copy are objects of their own");
+    assert_eq!(copies.len(), 2);
+    for c in copies {
+        assert_eq!(c.extras().mask.as_deref().unwrap().art.geometric_bounds(), c.geometric_bounds());
+    }
+}
+
+/// A Transform effect that scales strokes moves a group's paths as objects, their masks with them.
+/// The mask of a member group, whose art holds a path with a mask of its own, moves with the group's
+/// paths too.
+#[test]
+fn a_transform_that_moves_paths_as_objects_moves_a_member_groups_nested_mask() {
+    let mask_art = masked_by(white_square(4), white_square(5), true);
+    let inner = masked_by(Node::group(NodeId(2), vec![Arc::new(white_square(1))]), mask_art, true);
+    let mut g = Node::group(NodeId(10), vec![Arc::new(inner), sq(3, 20.0, Color::BLACK)]);
+    let params = serde_json::json!({"moveH": 30, "strokes": true});
+    g.appearance.effects.push(Effect { id: "distort.transform".into(), params, visible: true });
+    let art = evaluate_container(None, &g).unwrap();
+    let inner = &art.children().unwrap()[0];
+    let want = inner.children().unwrap()[0].geometric_bounds();
+    assert_eq!(want, Some(Rect::new(30.0, 0.0, 40.0, 10.0)));
+    let mask = &inner.extras().mask.as_deref().unwrap().art;
+    assert_eq!(mask.geometric_bounds(), want, "the group's mask");
+    assert_eq!(mask.extras().mask.as_deref().unwrap().art.geometric_bounds(), want, "the mask inside its art");
+}
+
+/// A group's Transform effect moves an image member's linked opacity mask with the image, and its
+/// copies' masks with the copies; an unlinked mask stays.
+#[test]
+fn a_groups_transform_moves_an_image_members_linked_mask() {
+    for linked in [true, false] {
+        for copies in [0, 2] {
+            let im = vectorcraft_doc::ImageObject {
+                key: "k".into(),
+                width: 10,
+                height: 10,
+                xf: vectorcraft_geom::Affine::IDENTITY,
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            };
+            let image = masked_by(Node::new(NodeId(1), NodeKind::Image(Box::new(im))), white_square(4), linked);
+            let mut g = Node::group(NodeId(10), vec![Arc::new(image)]);
+            let params = serde_json::json!({"moveH": 30, "copies": copies});
+            g.appearance.effects.push(Effect { id: "distort.transform".into(), params, visible: true });
+            let art = evaluate_container(None, &g).unwrap();
+            let first = &art.children().unwrap()[0];
+            let images: Vec<&Node> = match first.children() {
+                Some(ch) => ch.iter().map(|c| &**c).collect(),
+                None => vec![first],
+            };
+            assert_eq!(images.len(), copies + 1);
+            for im in images {
+                let mask = im.extras().mask.as_deref().unwrap();
+                let want = if linked { im.geometric_bounds() } else { Some(Rect::new(0.0, 0.0, 10.0, 10.0)) };
+                assert_eq!(mask.art.geometric_bounds(), want, "linked {linked}, copies {copies}");
+            }
+        }
+    }
+}
+
+/// When a path in a member's mask art would pass the effects' budget, the whole mask stays as it
+/// was, rather than part of its art moving with the member, and the member keeps its shape with it.
+#[test]
+fn a_mask_whose_art_passes_the_budget_stays_whole() {
+    // Bloat bends a path's sides into curves drawn with more lines the larger they are: many more
+    // on the mask's large square.
+    let bloat = Effect { id: "distort.puckerBloat".into(), params: serde_json::json!({"amount": 50}), visible: true };
+    let large = Node::path(NodeId(5), shapes::rectangle(Rect::new(0.0, 0.0, 1000.0, 1000.0)), Appearance::default());
+    let mask_art = Node::group(NodeId(3), vec![Arc::new(white_square(4)), Arc::new(large.clone())]);
+    let member = masked_by(white_square(1), mask_art.clone(), true);
+    let mut art = Node::group(NodeId(10), vec![Arc::new(member)]);
+    // Room for the member and the mask's small square to take the effect, not for the large one.
+    let bounds = art.geometric_bounds().unwrap();
+    let ctx = crate::GeomContext { seed: 10, ..crate::GeomContext::of(&art) };
+    let square = white_square(1).path_data().cloned().unwrap();
+    let made = crate::Budget::of(&crate::apply_geometry_with(std::slice::from_ref(&bloat), &square, bounds, &ctx)).lines;
+    let budget = crate::Budget { anchors: usize::MAX / 4, lines: 2 * made + crate::Budget::of(large.path_data().unwrap()).lines };
+    let large_made = crate::Budget::of(&crate::apply_geometry_with(std::slice::from_ref(&bloat), large.path_data().unwrap(), bounds, &ctx)).lines;
+    assert!(large_made > crate::Budget::of(large.path_data().unwrap()).lines, "the large square's curves cost more lines");
+    crate::reshape::reshape_leaves_within(&mut art, &[&bloat], budget, None);
+    let member = &art.children().unwrap()[0];
+    assert_eq!(member.path_data(), Some(&square), "the member keeps its shape with its mask");
+    assert_eq!(*member.extras().mask.as_deref().unwrap().art, mask_art, "the mask stays whole");
+}
+
 /// A group with `effect` holding `n` vertical then `n` horizontal bars, 2 wide on a 4-unit
 /// pitch, each crossing every bar of the other direction: n² crossings.
 fn crossing_bars(n: usize, effect: &str) -> Node {
