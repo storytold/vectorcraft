@@ -2675,6 +2675,10 @@ digits	Hindi	Hindi
 	Arch	Vòm
 @msg	select point type or type on a path	chọn chữ điểm hoặc chữ trên đường dẫn
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	chữ trên đường dẫn trong văn bản chuỗi không thể dùng văn bản động: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	không thể căn giữa ở trên hoặc ở dưới chữ trên đường dẫn mở hoặc đường dẫn phức: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	không thể căn giữa chữ trên đường dẫn không có độ dài hoặc không có chiều cao: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	không thể căn giữa ở trên hoặc ở dưới chữ trên đường dẫn trong văn bản chuỗi: {frames}
+@msg	select type on a closed path	hãy chọn chữ trên một đường dẫn khép kín
 	Optimize for fast web view	Tối ưu để xem web nhanh
 	Optimized	Đã tối ưu
 	Options	Tùy chọn
@@ -4145,6 +4149,8 @@ mark-style	Japanese	Kiểu Nhật
 	Type on a Path	Chữ trên đường dẫn
 	Type on a Path Options	Tùy chọn chữ trên đường dẫn
 	Type on a Path Options…	Tùy chọn chữ trên đường dẫn…
+	Center on Top	Căn giữa ở trên
+	Center on Bottom	Căn giữa ở dưới
 	Type on a Path Tool	Công cụ Chữ trên đường dẫn
 	Type Orientation	Hướng chữ
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Chữ vẫn là văn bản, và mỗi nét là đường thẳng với độ dày và nét đứt.

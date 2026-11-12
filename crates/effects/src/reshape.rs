@@ -4,19 +4,22 @@
 //! Geometry effects reach them through outlines: [`outline_art`] turns the object into plain paths
 //! (glyph outlines, the evaluated live object, the symbol's art) and [`reshape`] runs each effect
 //! over all of them as one piece, with the whole art's bounds as the effect's reference box, so a
-//! warp bends a line of type as a whole. An image is clipped by its reshaped frame. Raster effects
-//! (shadows, glows, blur, feather) stay on the result for the renderer and exporters. Type without
+//! warp bends a line of type as a whole. An image is clipped by its reshaped frame, and a Warp
+//! effect bends its pixels with the frame ([`cut_warped_images`]). Raster effects (shadows, glows, blur,
+//! feather) stay on the result for the renderer and exporters. Type without
 //! inline graphics whose own fills or strokes have geometry effects is outlined too: each of those
 //! effects reshapes the whole outline that its fill or stroke paints. An image's own fills and
 //! strokes paint only the shape that a Convert to Shape or Outline Object effect on them gives
 //! them ([`image_rows`]).
 
 use std::collections::HashSet;
+use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use vectorcraft_doc::live::Hooks;
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, Node, NodeId, NodeKind};
-use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Rect, Shape, shapes};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, ImageObject, Node, NodeId, NodeKind};
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Shape, shapes};
 
 use crate::{Budget, GeomContext, OutlineHook, apply_one, is_geometry, merged_params};
 
@@ -548,7 +551,14 @@ fn as_art_opts(
     let mut art = match &n.kind {
         NodeKind::Image(im) => {
             let frame = shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf);
-            let image = Node::new(n.id, n.kind.clone());
+            let mut image = Node::new(n.id, n.kind.clone());
+            // Its pixels draw as the image's do: colorized by a grayscale image's fill color, and
+            // smoothed or not.
+            {
+                let mut e = image.extras_mut();
+                e.colorize = n.extras().colorize.clone();
+                e.pixelated = n.extras().pixelated;
+            }
             let clipped = || {
                 let mut clip = Node::path(n.id, frame.clone(), Appearance::default());
                 if let NodeKind::Path { clipping, .. } = &mut clip.kind {
@@ -632,9 +642,9 @@ pub(crate) fn geometry_effects(n: &Node) -> Vec<&Effect> {
 
 /// Apply `fx` to every path under `art` as one piece: each effect takes the whole art's bounds as
 /// its reference box and the art's seed (a random Transform moves the pieces together). Images and
-/// symbol instances follow a Transform effect the same way ([`transform_placed`]); other geometry
-/// effects leave them as they are (a raster follows a non-affine map only as a mesh warp). The
-/// paths keep to one [`Budget::EFFECTS`] together (or to what they cost, when that is more): a path
+/// symbol instances follow a Transform effect the same way ([`transform_placed`]), and images
+/// follow a Warp effect as a raster mesh warp ([`cut_warped_images`]); other geometry effects leave them
+/// as they are. The paths keep to one [`Budget::EFFECTS`] together (or to what they cost, when that is more): a path
 /// whose effect would pass what the others leave of it keeps its shape. The swatches and patterns
 /// that live-effect plug-ins painting their pieces name are looked up in `doc`, and a deferred one
 /// is listed by its index in `owner`, the effect list `fx` was taken from ([`reshape_leaves_apart`]).
@@ -705,8 +715,9 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], owner: &[Effect], budget
     let max = budget.at_least(used);
     // Read before the effects run: a path's own copies don't make it art of several objects.
     let copy_whole = copies_whole(art);
+    let mut warped = WarpedImages::new();
     for e in fx {
-        let Some(bounds) = art.geometric_bounds() else { break };
+        let Some(bounds) = warped.bounds(art) else { break };
         let params = merged_params(&e.id, &e.params);
         // Where a live-effect plug-in sits, which it is listed by when it is deferred.
         let effect = owner.iter().position(|x| std::ptr::eq(x, *e)).or_else(|| listed.iter().position(|x| std::ptr::eq(*x, *e)));
@@ -739,10 +750,21 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], owner: &[Effect], budget
         }
         let mut groups = vec![];
         if follows {
-            group_marks(art, &mut vec![], &HashSet::new(), &mut groups);
+            group_marks(art, &mut vec![], &HashSet::new(), None, &mut groups);
+            // The images earlier Warps bend are measured by their pieces only when a group's
+            // gradient needs the bounds.
+            if !groups.is_empty()
+                && let Some(images) = warped.when_cut(art)
+            {
+                groups.clear();
+                group_marks(art, &mut vec![], &HashSet::new(), Some(images), &mut groups);
+            }
         }
-        // The ids of the paths that kept their shape (past the budget).
+        // The ids of the paths that kept their shape (past the budget), and their places in the
+        // order [`for_each_leaf`] visits the paths.
         let mut kept_ids = HashSet::new();
+        let mut kept_leaves = HashSet::new();
+        let mut leaf_at = 0usize;
         let transform = (e.id == "distort.transform").then(|| {
             let (m, copies) = crate::distort::transform_map(bounds, &params, seed);
             let options = crate::distort::TransformOptions::of(&params);
@@ -757,6 +779,8 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], owner: &[Effect], budget
             continue;
         }
         for_each_leaf(art, &mut |leaf| {
+            let at = leaf_at;
+            leaf_at += 1;
             let Some((path, rule)) = leaf_geometry(leaf) else { return };
             // What the other paths leave of the budget.
             let before = Budget::of(&path);
@@ -789,6 +813,7 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], owner: &[Effect], budget
             let stage = effect.map(|effect| vectorcraft_plugins::deferred::Stage { object: seed, effect, item: None });
             let Some(out) = apply_one(&e.id, &params, &path, bounds, &GeomContext { seed, stage, ..GeomContext::of(leaf) }, room) else {
                 kept_ids.insert(leaf.id);
+                kept_leaves.insert(at);
                 return;
             };
             used = used.minus(before).plus(Budget::of(&out));
@@ -804,6 +829,16 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], owner: &[Effect], budget
         if boxes {
             rebase_leaves(art, &mut leaves.into_iter());
         }
+        // Warp bends images too: each one's pixels follow the warp's map over the same box. The
+        // images are cut into pieces once, after the last effect ([`cut_warped_images`]). An image
+        // whose clipping frame kept its shape (past the budget) keeps its pixels as they are.
+        if let Some(style) = e.id.strip_prefix("warp.").and_then(crate::warp::WarpStyle::from_id)
+            && crate::warp::bends(&e.id, &params)
+        {
+            let f: WarpMap = Rc::from(crate::warp::warp_map(bounds, style, &params));
+            warped.reserve(art);
+            mark_warped_images(art, &f, &kept_leaves, false, &mut 0, &mut warped);
+        }
         if let Some((m, copies, options, _)) = transform
             && options.objects
         {
@@ -816,14 +851,16 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], owner: &[Effect], budget
         // follow their bounds under Free Distort and Warp (they stay when no path changed them).
         // Each stays when a path under it that its bounds measure kept its shape (past the budget).
         let mut after = vec![];
-        let held = (!groups.is_empty() || !kept_ids.is_empty()) && group_marks(art, &mut vec![], &kept_ids, &mut after).1;
+        let images = if groups.is_empty() { None } else { warped.when_cut(art) };
+        let held = (!groups.is_empty() || !kept_ids.is_empty()) && group_marks(art, &mut vec![], &kept_ids, images, &mut after).1;
         if !groups.is_empty() {
             carry_groups(art, groups, after, &|from, to| crate::Carry::of(&e.id, &params, bounds, from, to, seed));
         }
         if follows && !held {
-            whole.push(crate::Carry::of(&e.id, &params, bounds, Some(bounds), art.geometric_bounds(), seed));
+            whole.push(crate::Carry::of(&e.id, &params, bounds, Some(bounds), warped.bounds(art), seed));
         }
     }
+    cut_warped_images(art, &warped);
     whole
 }
 
@@ -1445,17 +1482,25 @@ type GroupMark = (Vec<usize>, Option<Rect>, bool);
 
 /// The geometric bounds of `n` (as [`Node::geometric_bounds`] gives them) and whether a path or
 /// compound path below it that those bounds measure is in `kept`, measured in one walk. Each group below `n` that
-/// [`GroupMark`] describes goes into `out`, reached from `n` through `at`.
-fn group_marks(n: &Node, at: &mut Vec<usize>, kept: &HashSet<NodeId>, out: &mut Vec<GroupMark>) -> (Option<Rect>, bool) {
+/// [`GroupMark`] describes goes into `out`, reached from `n` through `at`. An image that `images`
+/// lists is measured by the pieces it will be cut into ([`WarpedImages::image_bounds`]).
+fn group_marks(
+    n: &Node,
+    at: &mut Vec<usize>,
+    kept: &HashSet<NodeId>,
+    images: Option<&WarpedImages>,
+    out: &mut Vec<GroupMark>,
+) -> (Option<Rect>, bool) {
     match &n.kind {
         NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => (n.geometric_bounds(), kept.contains(&n.id)),
+        NodeKind::Image(_) => (images.map_or_else(|| n.geometric_bounds(), |w| w.image_bounds(n)), false),
         NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. } if !n.extras().type_outlines => {
             let layer = matches!(n.kind, NodeKind::Layer { .. });
             let skip = children.len().saturating_sub(n.editing_children().len());
             let (mut bounds, mut held) = (None, false);
             for (i, c) in children.iter().enumerate() {
                 at.push(i);
-                let (b, h) = group_marks(c, at, kept, out);
+                let (b, h) = group_marks(c, at, kept, images, out);
                 if is_member_group(c) && (c.appearance.has_positioned_gradient() || c.appearance.has_unplaced_gradient()) {
                     out.push((at.clone(), b, h));
                 }
@@ -1588,6 +1633,225 @@ fn transform_placed(n: &mut Node, m: Affine, copies: usize) {
 pub(crate) fn transform_placed_within(n: &mut Node, m: Affine, copies: usize, max: usize) {
     let mut room = max.saturating_sub(placed_count(n));
     copy_placed(n, m, copies, &mut room);
+}
+
+/// Rows and columns of the pieces a Warp effect cuts an image into (VectorCraft's own number).
+pub(crate) const WARP_IMAGE_CELLS: usize = 10;
+
+/// A Warp effect's point map, shared by the images it bends.
+pub(crate) type WarpMap = Rc<dyn Fn(Point) -> Point>;
+
+/// One image a Warp effect bent: the image's own key, and each warp it took with the placement
+/// the image had when it took it, in order.
+type WarpedImage = (String, Vec<(WarpMap, Affine)>);
+
+/// The images Warp effects bend while [`reshape_leaves_apart`] runs the effects. Each such image's
+/// key is replaced by a key of this table ([`WarpedImages::add`]), which a copy a later Transform
+/// effect makes keeps. The images are cut into pieces once, after the last effect
+/// ([`cut_warped_images`]): the effects after a Warp reshape the image's frame, not each piece,
+/// and a later Warp or Transform moves the one set of pieces.
+pub(crate) struct WarpedImages {
+    /// What this table's keys start with: no image key in the art starts with it
+    /// ([`WarpedImages::reserve`]).
+    prefix: String,
+    /// The prefix was checked against the art's image keys.
+    reserved: bool,
+    images: Vec<WarpedImage>,
+}
+
+impl WarpedImages {
+    pub(crate) fn new() -> Self {
+        static TABLES: AtomicUsize = AtomicUsize::new(0);
+        Self { prefix: format!("\0warp{}:", TABLES.fetch_add(1, Ordering::Relaxed)), reserved: false, images: vec![] }
+    }
+
+    /// Before the first image of `art` is marked: lengthen the prefix until no image key in `art`
+    /// starts with it, so no key from the document is read as one of this table's.
+    pub(crate) fn reserve(&mut self, art: &Node) {
+        if self.reserved {
+            return;
+        }
+        self.reserved = true;
+        let mut keys = vec![];
+        art.walk(&mut |c| {
+            if let NodeKind::Image(im) = &c.kind {
+                keys.push(im.key.clone());
+            }
+        });
+        while keys.iter().any(|k| k.starts_with(self.prefix.as_str())) {
+            self.prefix.push(':');
+        }
+    }
+
+    /// What this table's keys start with.
+    #[cfg(test)]
+    pub(crate) fn prefix(&self) -> &str {
+        &self.prefix
+    }
+
+    /// The image that `key`, a key of this table, stands for.
+    fn get(&self, key: &str) -> Option<&WarpedImage> {
+        self.images.get(key.strip_prefix(self.prefix.as_str())?.parse::<usize>().ok()?)
+    }
+
+    /// Record that the image with key `key`, placed by `xf`, takes warp `f`; returns the image's
+    /// new key.
+    fn add(&mut self, key: &str, xf: Affine, f: &WarpMap) -> String {
+        let (own, mut warps) = self.get(key).cloned().unwrap_or_else(|| (key.to_string(), vec![]));
+        warps.push((f.clone(), xf));
+        self.images.push((own, warps));
+        format!("{}{}", self.prefix, self.images.len() - 1)
+    }
+
+    /// Does the art `n` have room, within `max` nodes, for the pieces of every image under it that
+    /// this table lists?
+    fn fits(&self, n: &Node, max: usize) -> bool {
+        let mut count = 0usize;
+        n.walk(&mut |c| {
+            if let NodeKind::Image(im) = &c.kind
+                && self.get(&im.key).is_some()
+            {
+                count += 1;
+            }
+        });
+        vectorcraft_doc::live::mesh_warp_cost(WARP_IMAGE_CELLS).saturating_mul(count) <= max.saturating_sub(n.count())
+    }
+
+    /// The geometric bounds of `art` as it draws after the effects so far: each image this table
+    /// lists measured by the pieces the warps and moves it took would cut it into, when the art
+    /// has room for them ([`cut_warped_images`]).
+    pub(crate) fn bounds(&self, art: &Node) -> Option<Rect> {
+        if self.images.is_empty() || !self.fits(art, crate::distort::MAX_COPY_OBJECTS) {
+            return art.geometric_bounds();
+        }
+        // The pieces the images would be cut into now: each group of pieces is shown or hidden as
+        // its image is, and hidden objects are left out of a layer's bounds.
+        let mut probe = art.clone();
+        restore_warped_images(&mut probe, self, true);
+        probe.geometric_bounds()
+    }
+
+    /// The geometric bounds of image `n`: when this table lists it, measured by the pieces the
+    /// warps and moves it took would cut it into.
+    fn image_bounds(&self, n: &Node) -> Option<Rect> {
+        let NodeKind::Image(im) = &n.kind else { return n.geometric_bounds() };
+        if self.get(&im.key).is_none() {
+            return n.geometric_bounds();
+        }
+        let mut probe = Node::group(n.id, vec![Arc::new(n.clone())]);
+        restore_warped_images(&mut probe, self, true);
+        probe.geometric_bounds()
+    }
+
+    /// This table when the art `art` has room for the pieces of the images it lists, so that a
+    /// measure of the art takes them bent ([`WarpedImages::bounds`]); `None` otherwise.
+    fn when_cut(&self, art: &Node) -> Option<&Self> {
+        (!self.images.is_empty() && self.fits(art, crate::distort::MAX_COPY_OBJECTS)).then_some(self)
+    }
+}
+
+/// Record in `warped` that each image under `n` takes warp `f`, walking the groups and layers
+/// [`for_each_leaf`] walks and counting the paths it passes in `at`. `kept` holds the places of
+/// the paths that kept their shape (past the budget), in the order [`for_each_leaf`] visits the
+/// paths of the art: an image in a clip group whose clipping art holds one (`held`) does not take
+/// the warp.
+pub(crate) fn mark_warped_images(n: &mut Node, f: &WarpMap, kept: &HashSet<usize>, held: bool, at: &mut usize, warped: &mut WarpedImages) {
+    let (NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. }) = &mut n.kind else { return };
+    let mut held = held;
+    // A clip group's first member is its clipping art: when a path in it kept its shape, it and
+    // the members it clips keep theirs.
+    if *clip && let Some(first) = children.first() {
+        let start = *at;
+        held |= (start..start + leaf_count(first)).any(|p| kept.contains(&p));
+    }
+    for c in children.iter_mut() {
+        match &c.kind {
+            NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => *at += 1,
+            NodeKind::Group { .. } | NodeKind::Layer { .. } => mark_warped_images(Arc::make_mut(c), f, kept, held, at, warped),
+            NodeKind::Image(_) if !held => {
+                if let NodeKind::Image(im) = &mut Arc::make_mut(c).kind {
+                    im.key = warped.add(&im.key, im.xf, f);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Give each image under `n` that `warped` lists its own key back, and cut it into the pieces of
+/// a raster mesh warp ([`vectorcraft_doc::live::mesh_warp_image`], each piece drawn as the image
+/// is, smoothed or not) through the warps it took and the moves between and after them
+/// ([`warped_map`]). The art keeps to [`crate::distort::MAX_COPY_OBJECTS`] nodes: when the pieces
+/// would pass it, no image is cut. An image whose placement has no inverse is not cut either.
+fn cut_warped_images(n: &mut Node, warped: &WarpedImages) {
+    cut_warped_images_within(n, warped, crate::distort::MAX_COPY_OBJECTS);
+}
+
+/// [`cut_warped_images`] with the art keeping to `max` nodes.
+pub(crate) fn cut_warped_images_within(n: &mut Node, warped: &WarpedImages, max: usize) {
+    if warped.images.is_empty() {
+        return;
+    }
+    let cut = warped.fits(n, max);
+    restore_warped_images(n, warped, cut);
+}
+
+/// The walk of [`cut_warped_images`]: each listed image gets its key back, and with `cut` is cut
+/// into pieces.
+fn restore_warped_images(n: &mut Node, warped: &WarpedImages, cut: bool) {
+    let Some(children) = n.children_mut() else { return };
+    for c in children.iter_mut() {
+        let NodeKind::Image(im) = &c.kind else {
+            if c.children().is_some() {
+                restore_warped_images(Arc::make_mut(c), warped, cut);
+            }
+            continue;
+        };
+        let Some((key, warps)) = warped.get(&im.key) else { continue };
+        let mut image = (**c).clone();
+        let NodeKind::Image(own) = &mut image.kind else { continue };
+        own.key = key.clone();
+        // The pieces start from the image as it was placed when it took its first warp.
+        let first = warps.first().map(|(_, at)| ImageObject { xf: *at, ..(**own).clone() });
+        let map = warped_map(warps, own.xf);
+        *c = Arc::new(match (first, map) {
+            (Some(first), Some(map)) if cut => {
+                let pixelated = image.extras().pixelated;
+                vectorcraft_doc::live::mesh_warp_image(&image, &first, &*map, WARP_IMAGE_CELLS, pixelated, false)
+            }
+            _ => image,
+        });
+    }
+}
+
+/// The map that takes a point of an image placed by the first of `warps`' placements to where the
+/// warps and the moves between them take it, for an image now placed by `placed`: each warp in
+/// turn, then the move from the placement the image had when it took that warp to the one it had
+/// at the next, or to `placed` after the last. `None` when a placement has no inverse.
+fn warped_map(warps: &[(WarpMap, Affine)], placed: Affine) -> Option<Box<dyn Fn(Point) -> Point>> {
+    let mut steps: Vec<(WarpMap, Affine)> = Vec::with_capacity(warps.len());
+    for (i, (f, at)) in warps.iter().enumerate() {
+        let det = at.determinant();
+        if !det.is_finite() || det == 0.0 {
+            return None;
+        }
+        let next = warps.get(i + 1).map_or(placed, |(_, at)| *at);
+        let m = next * at.inverse();
+        if !m.is_finite() {
+            return None;
+        }
+        steps.push((f.clone(), m));
+    }
+    Some(Box::new(move |p| steps.iter().fold(p, |q, (f, m)| *m * f(q))))
+}
+
+/// How many paths [`for_each_leaf`] visits in `n`.
+fn leaf_count(n: &Node) -> usize {
+    match &n.kind {
+        NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => 1,
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => children.iter().map(|c| leaf_count(c)).sum(),
+        _ => 0,
+    }
 }
 
 /// An object that a Transform effect places through its transform rather than reshapes: an image

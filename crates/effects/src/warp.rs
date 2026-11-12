@@ -20,25 +20,30 @@ pub fn map_version(p: &Value) -> u32 {
 
 /// Apply a warp to `path` using box `b`, making at most `max` anchors ([`map_nonlinear_within`]).
 pub fn warp(path: &PathData, b: Rect, style: WarpStyle, p: &Value, max: usize) -> PathData {
+    let piece = b.width().hypot(b.height()) / 24.0;
+    map_nonlinear_within(path, piece, max, warp_map(b, style, p))
+}
+
+/// The point map a warp of `style` with params `p` applies to box `b`: what [`warp`] moves each
+/// point of a path to.
+pub(crate) fn warp_map(b: Rect, style: WarpStyle, p: &Value) -> Box<dyn Fn(Point) -> Point> {
     let bend = num(p, "bend", 50.0).clamp(-100.0, 100.0) / 100.0;
     let dh = num(p, "horizontal", 0.0).clamp(-100.0, 100.0) / 100.0;
     let dv = num(p, "vertical", 0.0).clamp(-100.0, 100.0) / 100.0;
     let vertical = text(p, "orientation", "horizontal").eq_ignore_ascii_case("vertical");
-    let piece = b.width().hypot(b.height()) / 24.0;
     if uses_net(map_version(p)) {
         let net = WarpNet::new(style, bend, dh, dv, b.width(), b.height(), vertical);
         let (w, h) = (b.width(), b.height());
         // A box with no width or no height takes the middle of the patch along that side.
-        let f = |q: Point| {
+        return Box::new(move |q: Point| {
             let (u, v) = (if w > 0.0 { (q.x - b.x0) / w } else { 0.5 }, if h > 0.0 { (q.y - b.y0) / h } else { 0.5 });
             b.origin() + net.at(u, v).to_vec2()
-        };
-        return map_nonlinear_within(path, piece, max, f);
+        });
     }
     let c = b.center();
     let hw = (b.width() / 2.0).max(1e-9);
     let hh = (b.height() / 2.0).max(1e-9);
-    let f = |q: Point| {
+    Box::new(move |q: Point| {
         let (x, y) = ((q.x - c.x) / hw, (q.y - c.y) / hh);
         let (x2, y2) = if vertical {
             let (a, b2) = warp_point(style, bend, dh, dv, hw / hh, y, x);
@@ -47,8 +52,7 @@ pub fn warp(path: &PathData, b: Rect, style: WarpStyle, p: &Value, max: usize) -
             warp_point(style, bend, dh, dv, hh / hw, x, y)
         };
         Point::new(c.x + x2 * hw, c.y + y2 * hh)
-    };
-    map_nonlinear_within(path, piece, max, f)
+    })
 }
 
 /// Does warp effect `id` with params `p` move any point? Every style leaves the box as it is with

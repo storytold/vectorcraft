@@ -165,6 +165,14 @@ the suite) keep the agent to the folders you give it:
   and `modified` the document keeps of that file. Each row keeps its id, `name` (`fileName`), status and other
   fields. This applies to every document, also one the person or a client with wider roots opened. The paths a
   client gives `links.relink` and `links.unembed` stay in their replies, and the document's links are not changed.
+- `image.info` gives `link: null` for a linked file outside the read roots, as `links.info` leaves it out; its id,
+  name, `linked` and the other fields stay. `links.findFiles` and `text.findFontFiles` replies, including later
+  `{}` and `{stop: true}` calls on a search another client started, leave out the files found outside the read
+  roots (with their `size` and `match`), a sought link's `path` outside them, and `folder` when the folder searched
+  is outside them; `error` then gives the reason without the path (for example `the folder can't be read`). The
+  rows keep their `name`, `ids`, family, style and status, and the counts stay. `text.addFontFiles` gives
+  `folder: null` when VectorCraft's Fonts folder is outside the read roots, and only the file name in `copied` and
+  `kept` `to` and in `skipped` `file` for a path outside them; the fonts are still copied.
 - `prefs.get`, `prefs.list`, `prefs.set` and `prefs.reset` show a folder preference outside the read roots
   (`fontsFolder`, `pluginsFolder`, `scratchPrimary`, `scratchSecondary`, `recoveryFolder`, `templatesFolder`) as
   `null`; an empty folder and the scratch disk choices `Startup` and `None` stay. In `prefs.get {}` and
@@ -3449,6 +3457,16 @@ that shape, and the effects before it are left out. Its Contents row stands for 
 vector exports write those items as paths, and `effect.expandAppearance` turns them into objects in a group with the
 image.
 Use Preview Bounds measures an image by its frame.
+A Warp effect (`warp.arc` … `warp.twist`) on an image, or on a group that holds one, bends the image's pixels with its
+frame: after the last effect in the list, the image is cut into 10 × 10 cells of two triangles, each a clipped piece of
+the image under its own affine map. The cell count is VectorCraft's own. Effects after the Warp reshape only the frame,
+a second Warp bends the same pieces, and a Transform effect moves them. A placed gradient on a group that holds the
+image follows the group's bounds as the pieces draw them. The pieces keep the
+image's fill color when it colorizes a grayscale image, and so do the pieces an envelope cuts. Under any geometry
+effect, an image keeps that color and is drawn with or without smoothing as the image is. SVG writes the image once and
+draws the pieces with `<use>`; PDF, EPS, `.ai` and PNG write the bent pieces. Removing the warp shows the image as it
+was. The images stay unbent when their pieces would make the art pass 2 million objects, and an image stays unbent when
+its clipping frame keeps its shape because the warp would pass the effects' anchor budget.
 
 ```json
 {"name":"run_command","arguments":{"command":"appearance.addFill","params":{"ids":[7]}}}
@@ -5773,13 +5791,23 @@ They also write the `copyrightNotice` as `dc:rights`, the `copyrightUrl` as `xmp
 `copyrightStatus` as `xmpRights:Marked` (`True` for copyrighted, `False` for public domain, none for unknown) to the
 XMP packet.
 A PDF, `.ai` or `.ait` opened from its pages or its editing copy (`document.open`,
-`file.newFromTemplate`, `file.revert`; not one restored from the document it carries) opens with the `author`,
-`description`, `keywords`, `copyrightStatus`, `copyrightNotice`, `copyrightUrl`, `created` and `modified` that its XMP
-packet (`dc:creator`, `dc:description`, `dc:subject` or `pdf:Keywords`, `xmpRights:Marked`, `dc:rights`,
-`xmpRights:WebStatement`, `xmp:CreateDate`, `xmp:ModifyDate`) and its document information dictionary (`Author`,
-`Subject`, `Keywords`, `CreationDate`, `ModDate`) give, the XMP packet's value where both give one. A value that
-`file.info` would refuse is left out, and the title is set as for any other open (the file name, or a new untitled
-name for a template).
+`file.newFromTemplate`, `file.revert`; not one restored from the document it carries) opens with the `title`,
+`author`, `description`, `keywords`, `copyrightStatus`, `copyrightNotice`, `copyrightUrl`, `created` and `modified`
+that its XMP packet (`dc:title`, `dc:creator`, `dc:description`, `dc:subject` or `pdf:Keywords`, `xmpRights:Marked`,
+`dc:rights`, `xmpRights:WebStatement`, `xmp:CreateDate`, `xmp:ModifyDate`) and its document information dictionary
+(`Title`, `Author`, `Subject`, `Keywords`, `CreationDate`, `ModDate`) give, the XMP packet's value where both give
+one (for `dc:title` and `dc:description`, the `x-default` language item first). An SVG opens with the `title` of its
+root `<title>` element (not a shape's or group's). A title is read with its white space made single spaces and
+without control characters, at most 65,536 characters, as `file.info` takes one. A value that `file.info` would
+refuse is left out. A file that gives no title, a blank one or the `Untitled-N` name New gives leaves File Info with
+the document's name as its title, and a template opens with a new untitled name.
+The title a file gave is File Info's alone: the document's name, which is what its tab shows until it has a file and
+what Save As and the default export names start from, stays the file's name with its extension (`box.svg`), or the
+title a native file holds. File Info's `title` is the one the file gave, else the document's name. It is saved with the
+document (a native file, and the editing data of an SVG, PDF, `.ai` or EPS that carries it), and the files an export
+writes carry it (PDF `Title` and XMP `dc:title`, SVG `<title>` and Dublin Core, PNG text, EPS and `.ai` `%%Title`),
+where the document has one. Changing the `title` with `file.info` sets the document's name, as it always did, and drops
+the title the file gave.
 `document.inspect` (`inspect_document`) and the `document.open` (`open_file`) reply report the File Info title as
 `fileInfoTitle`. Their `title` is the document's tab name, which comes from the file name once the document is saved
 to or opened from a file (with ` [Converted]` or ` [Recovered]` where that applies).
@@ -7942,6 +7970,26 @@ begins or ends, dragging the centre bracket slides the type along its path and, 
 
 ```json
 {"name":"run_command","arguments":{"command":"type.pathOptions","params":{"start":0.25,"end":0.75,"flip":true}}}
+```
+
+`type.pathCenter.top {ids?|id?}` and `type.pathCenter.bottom {ids?|id?}` (Type › Type on a Path › Center on Top and
+Center on Bottom, and the Contextual Task Bar for type on a closed path) slide the selected type on a closed path along
+it so that the middle of the span between its brackets lands on the path's topmost or bottommost point. This is
+VectorCraft's own behavior. The path is measured as the object is drawn, after its transform, so a rotated, scaled or
+skewed circle centers on its drawn top. On a level stretch, such as a rectangle's top edge, the middle of the stretch
+is used; with several separate topmost points, the middle of the shortest part of the path that holds them all is
+used. The span keeps its length, and type that runs once round stays once round. The first paragraph's alignment
+becomes Center unless it is Center or Justify Center, so the type is centered there. The type is not flipped: on the
+bottom of a circle, whose path runs clockwise, it reads upside down outside the circle until `type.pathOptions {flip:
+true}` turns it inside. Point type and area type in the selection are left as they are. Type on an open or compound
+path, type in a thread, and type on a path with no length or no height are refused with an error that names them,
+and nothing changes. The menu items are enabled, and the task bar shows them, only while every selected type on a
+path is on one closed path and none of it is in a thread. Several objects move in one undo step. When every object is
+already centered there, nothing changes and no undo step is recorded. Each replies `{ids, start, end}` with the first
+object's brackets.
+
+```json
+{"name":"run_command","arguments":{"command":"type.pathCenter.top","params":{}}}
 ```
 
 ## Dynamic Text

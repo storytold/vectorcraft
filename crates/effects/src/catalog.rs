@@ -116,7 +116,7 @@ fn lengths_of(id: &str) -> Lengths {
     }
 }
 
-const WARP_DOC: &str = "{bend: % (-100..100, 50; with a bend or a distortion, placed gradients move and scale from the object's bounds to its warped bounds), horizontal: % distortion (0), vertical: % distortion (0), orientation: \"horizontal\"|\"vertical\", version: 0|1 (the map: 1 bends each style as one Bézier patch over the bounds, which new and imported warps get; 0, or none, is VectorCraft's earlier map, which warps saved without a version keep)}";
+const WARP_DOC: &str = "{bend: % (-100..100, 50; with a bend or a distortion, placed gradients move and scale from the object's bounds to its warped bounds, and images bend as 10 × 10 cells of two triangles unless the pieces would make the art pass 2,000,000 objects or the image's frame keeps its shape past the anchor budget), horizontal: % distortion (0), vertical: % distortion (0), orientation: \"horizontal\"|\"vertical\", version: 0|1 (the map: 1 bends each style as one Bézier patch over the bounds, which new and imported warps get; 0, or none, is VectorCraft's earlier map, which warps saved without a version keep)}";
 
 const DT: &[&str] = &["Effect", "Distort & Transform"];
 
