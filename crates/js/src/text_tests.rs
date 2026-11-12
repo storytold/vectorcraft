@@ -310,6 +310,23 @@ fn flattening_a_rope_counts_against_the_heap() {
 }
 
 #[test]
+fn operators_and_builtins_count_a_flattened_rope_against_the_heap() {
+    // Three ropes of about 524,288 units, each 1 MiB once flat, with a 3 MiB heap.
+    let build = "var s = 'x'; for (var i = 0; i < 19; i++) s = s + s; var t = s + 'y', u = s + 'z';";
+    let limits = Limits { heap_bytes: 3 << 20, ..Limits::default() };
+    let not_stopped: Vec<_> =
+        ["X < 'a'", "X == 1", "+X", "X[0]", "({})[{ toString: function () { return X; } }]", "JSON.stringify(0, null, X)", "[1].join(X)"]
+            .into_iter()
+            .filter(|read| {
+                let src = format!("{build} {}; {}; {}; 0", read.replace('X', "s"), read.replace('X', "t"), read.replace('X', "u"));
+                let result = Realm::with_options(Options::default(), limits.clone()).run(&src);
+                !matches!(result, Err(ref e) if e.kind == RunErrorKind::Limit(LimitKind::Heap))
+            })
+            .collect();
+    assert!(not_stopped.is_empty(), "not stopped by the heap limit: {not_stopped:?}");
+}
+
+#[test]
 fn compiling_a_pattern_counts_against_the_heap() {
     let src = "var s = '[\\\\s\\\\S]a*'; for (var i = 0; i < 14; i++) s = s + s; new RegExp(s).source.length";
     let e = fail_with(Realm::with_options(Options::default(), Limits { heap_bytes: 2 << 20, ..Limits::default() }), src);

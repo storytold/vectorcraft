@@ -13,6 +13,7 @@ use super::{
 };
 use crate::heap::{Class, NativeKind, ObjId};
 use crate::interp::{Abrupt, Interp, JsResult, strict_eq};
+use crate::string_builtins::flat_charged;
 use crate::value::{Str, Value, to_uint32};
 
 pub(super) fn install(interp: &mut Interp) -> JsResult<()> {
@@ -278,7 +279,7 @@ fn join_with(interp: &mut Interp, o: ObjId, separator: &Value, item: fn(&mut Int
     if len == 0 {
         return Ok(Value::str(""));
     }
-    let flat = sep.flat();
+    let flat = flat_charged(interp, &sep)?;
     let sep = &flat[..];
     // A result that cannot fit is refused before any element is read.
     let least = (sep.len() as u64).saturating_mul(u64::from(len - 1));
@@ -301,7 +302,8 @@ fn join_elements(interp: &mut Interp, o: ObjId, len: u32, sep: &[u16], item: fn(
         let Some(s) = item(interp, v)? else { continue };
         out.push_repeated(interp, sep, k.saturating_sub(seps))?;
         seps = k;
-        out.push_units(interp, &s.flat())?;
+        let units = flat_charged(interp, &s)?;
+        out.push_units(interp, &units)?;
     }
     out.push_repeated(interp, sep, u64::from(len - 1).saturating_sub(seps))?;
     Ok(out.finish(interp))

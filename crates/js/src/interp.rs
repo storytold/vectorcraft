@@ -26,6 +26,7 @@ use crate::heap::{
     ArgMap, Binding, CONFIGURABLE, Class, ENUMERABLE, ENV_BYTES, Env, EnvId, ForIn, Func, HIDDEN, Heap, Key, NativeKind, OBJECT_BYTES, OPEN, ObjId,
     Object, PROP_BYTES, Prop, PropMap, ROPE_BYTES, Roots, WRITABLE, code_bytes, key, string_bytes,
 };
+use crate::string_builtins::flat_charged;
 use crate::value::{Str, Value, array_index, index_key, number_to_str, string_to_number, to_int32, to_uint32};
 use crate::{LimitKind, Limits, Options};
 
@@ -1290,7 +1291,7 @@ impl Interp {
             if let Some(i) = array_index(k)
                 && (i as usize) < s.len()
             {
-                let unit = s.flat().get(i as usize).copied().unwrap_or(0);
+                let unit = flat_charged(self, s)?.get(i as usize).copied().unwrap_or(0);
                 return Ok(Value::String(Str::from_units(vec![unit])));
             }
         }
@@ -2397,7 +2398,7 @@ impl Interp {
         };
         let strict = self.strict();
         self.check_source_units(s.len()).map_err(|e| self.compile_error_to_abrupt(e))?;
-        let units = s.flat();
+        let units = self.flat_reserved(s)?;
         let code = self.compile_source(&units, strict, CodeKind::Eval).map_err(|e| self.compile_error_to_abrupt(e))?;
         self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES))?;
         let frame = self.frame()?;
@@ -2562,7 +2563,7 @@ impl Interp {
             Value::Null => 0.0,
             Value::Bool(b) => f64::from(u8::from(*b)),
             Value::Number(n) => *n,
-            Value::String(s) => string_to_number(&s.flat()),
+            Value::String(s) => string_to_number(&flat_charged(self, s)?),
             Value::Object(_) => {
                 let p = self.to_primitive(v, Hint::Number)?;
                 return self.to_number(&p);
@@ -2596,17 +2597,25 @@ impl Interp {
     #[allow(clippy::wrong_self_convention)]
     pub(crate) fn to_key(&mut self, v: &Value) -> JsResult<Key> {
         match v {
-            Value::String(s) => {
-                let rope = s.is_rope();
-                let flat = s.flat();
-                if rope {
-                    self.heap.bytes += string_bytes(flat.len());
-                }
-                Ok(flat)
-            }
+            Value::String(s) => self.flat_reserved(s),
             Value::Number(n) if *n >= 0.0 && *n < 4_294_967_295.0 && n.fract() == 0.0 => Ok(index_key(*n as u32)),
-            _ => Ok(self.to_str(v)?.flat()),
+            _ => {
+                let s = self.to_str(v)?;
+                self.flat_reserved(&s)
+            }
         }
+    }
+
+    /// The code units of `s`. Flattening a rope makes a copy of its units, so for a rope that
+    /// copy's bytes are reserved and added to the heap first, without taking fuel. Everything
+    /// the caller still needs must be reachable from the roots.
+    fn flat_reserved(&mut self, s: &Str) -> JsResult<Key> {
+        if s.is_rope() {
+            let bytes = string_bytes(s.len());
+            self.reserve_heap(bytes)?;
+            self.heap.bytes = self.heap.bytes.saturating_add(bytes);
+        }
+        Ok(s.flat())
     }
 
     /// ToObject (section 9.9).
@@ -2731,7 +2740,8 @@ impl Interp {
             (self.to_primitive(x, Hint::Number)?, py)
         };
         if let (Value::String(a), Value::String(b)) = (&px, &py) {
-            return Ok(Some(*a.flat() < *b.flat()));
+            let (a, b) = (flat_charged(self, a)?, flat_charged(self, b)?);
+            return Ok(Some(*a < *b));
         }
         let nx = self.to_number(&px)?;
         let ny = self.to_number(&py)?;
@@ -2756,7 +2766,9 @@ impl Interp {
                 | (Value::String(_), Value::String(_))
                 | (Value::Bool(_), Value::Bool(_))
                 | (Value::Object(_), Value::Object(_)) => return Ok(strict_eq(&x, &y)),
-                (Value::Number(n), Value::String(s)) | (Value::String(s), Value::Number(n)) => return Ok(*n == string_to_number(&s.flat())),
+                (Value::Number(n), Value::String(s)) | (Value::String(s), Value::Number(n)) => {
+                    return Ok(*n == string_to_number(&flat_charged(self, s)?));
+                }
                 (Value::Bool(v), _) => x = Value::Number(f64::from(u8::from(*v))),
                 (_, Value::Bool(v)) => y = Value::Number(f64::from(u8::from(*v))),
                 (Value::Number(_) | Value::String(_), Value::Object(_)) => y = self.to_primitive(&y, Hint::Default)?,
