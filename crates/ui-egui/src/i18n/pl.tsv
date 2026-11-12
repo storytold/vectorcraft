@@ -798,6 +798,7 @@
 	Sky Gradients	Gradienty nieba
 	Neutral Gradients	Gradienty neutralne
 	Organic Fades	Organiczne zanikania
+	Holographic	Holograficzne
 	Duotone Gradients	Gradienty dwutonowe
 	Radial Glows	Blaski promieniste
 	Save Swatch Library…	Zapisz bibliotekę próbek…
@@ -1934,6 +1935,9 @@ digits	Malayalam	Malajalam
 	Right Indent	Wcięcie z prawej
 	Right-to-Left Paragraph Direction	Kierunek akapitu od prawej do lewej
 	Roman Hanging Punctuation	Wysunięta interpunkcja łacińska
+	Korean Line Break Anywhere	Koreański podział wiersza w dowolnym miejscu
+	East Asian Composition Settings	Ustawienia składu wschodnioazjatyckiego
+	Korean Composition Settings	Ustawienia składu koreańskiego
 	Select a text object to edit its paragraph attributes.	Zaznacz obiekt tekstowy, aby edytować atrybuty akapitu.
 	Single-line Composer	Kompozytor jednowierszowy
 	Toggle Line Composer	Przełącz kompozytor wierszy
@@ -4711,6 +4715,7 @@ imageTrace	Outline	Kontur
 @msg	not a valid plug-in module: {0}	nieprawidłowy moduł wtyczki: {0}
 @msg	not an EMF or WMF file	to nie jest plik EMF ani WMF
 @msg	not an HP-GL file	to nie jest plik HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` musi być tablicą od 1 do 255 kolorów #rrggbb
 @msg	not found	nie znaleziono
 @msg	not in pattern editing mode	nie jest w trybie edycji wzorka
 @msg	finish editing the pattern first	najpierw zakończ edycję wzorka
@@ -6167,6 +6172,17 @@ axis	Y Axis	Oś Y
 	Charge Wave	Fala ładunku
 	Spark Trail	Ślad iskier
 	Calligraphic Nibs	Stalówki kaligraficzne
+	Bristle Brushes	Pędzle włosiankowe
+	Fine Liner	Cienka linia
+	Pointed Flat	Szpiczasty płaski
+	Stubby Round	Krótki okrągły
+	Dry Scrub	Suche szorowanie
+	Soft Dome	Miękka kopuła
+	Filbert	Koci język
+	Angled Round	Skośny okrągły
+	Angled Flat	Skośny płaski
+	Fan Blender	Wachlarz do mieszania
+	Grass Fan	Wachlarz do trawy
 	Pattern Borders	Obramowania wzorków
 	Scatter Shapes	Kształty rozproszone
 	Save Brush Library…	Zapisz bibliotekę pędzli…
@@ -6819,3 +6835,15 @@ breakText	Glyphs	Glify
 	Deferred Effects	Odroczone efekty
 @msg	no plug-in effect is deferred	żaden efekt wtyczki nie jest odroczony
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Otwarto z {n} odroczonym efektem wtyczki. Efekt › Odśwież odroczone efekty go uruchamia.|Otwarto z {n} odroczonymi efektami wtyczek. Efekt › Odśwież odroczone efekty je uruchamia.|Otwarto z {n} odroczonymi efektami wtyczek. Efekt › Odśwież odroczone efekty je uruchamia.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Narzędzia do cięcia
+	Stencil Bridges…	Mostki szablonu…
+	Stencil Bridges	Mostki szablonu
+	Shortest Crossing	Najkrótsze przejście
+	Direction	Kierunek
+@msg	The selected art has no islands to bridge	Zaznaczona grafika nie ma wysp do połączenia
+@msg	No bridge of this width fits across the selected art	Żaden mostek o tej szerokości nie mieści się w zaznaczonej grafice
+@msg	Some islands could not be joined to the area around the art	Niektórych wysp nie udało się połączyć z obszarem wokół grafiki
+@msg	`width` must be from {lo} to {hi} pt	`width` musi mieścić się w zakresie od {lo} do {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` musi być liczbą całkowitą od 1 do {MAX_BRIDGES_PER_ISLAND}

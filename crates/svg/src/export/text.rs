@@ -258,6 +258,19 @@ impl Writer<'_> {
                 self.warn("type on a path with glyphs hanging outside its brackets is outlined to keep its look");
                 return self.text_outlines(n, t);
             }
+            // The space before the first character is written as its `dx`; one before a character
+            // after a line break, which the `<textPath>` writes as a space, keeps its look as outlines.
+            let plain = t.plain_text();
+            let mut at = 0;
+            let spaced_break = t.runs.iter().any(|r| {
+                let start = at;
+                at += r.text.len();
+                r.style.kerning_before != 0.0 && (start..at).any(|b| b > 0 && vectorcraft_text::line_start_space(&plain, b, &r.style, false) != 0.0)
+            });
+            if spaced_break {
+                self.warn("type on a path with space before a character after a line break is outlined to keep its look");
+                return self.text_outlines(n, t);
+            }
             // A `<textPath>` holds the characters of the text, not the bullets or numbers drawn
             // before them.
             if !lay.markers.is_empty() {
@@ -559,10 +572,17 @@ impl Writer<'_> {
         let a = self.attrs(&props);
         let offset = fmt_num(at * 100.0, 3);
         let mut s = format!("<text{id} xml:space=\"preserve\"{a}><textPath xlink:href=\"#{pid}\" startOffset=\"{offset}%\">");
-        for run in &drawn.runs {
+        let plain = drawn.plain_text();
+        let first = drawn.runs.iter().position(|r| !r.text.is_empty());
+        for (i, run) in drawn.runs.iter().enumerate() {
             let mut diff = run_diff(&base, self.char_props(&run.style, space));
             diff.extend(direction_props(&run.style));
-            let a = self.attrs(&diff);
+            let mut a = self.attrs(&diff);
+            // The space before the first character (`kerningBefore`) moves it along the path.
+            let before = if first == Some(i) { vectorcraft_text::line_start_space(&plain, 0, &run.style, false) } else { 0.0 };
+            if before != 0.0 && before.is_finite() {
+                a.push_str(&format!(" dx=\"{}\"", fmt_num(before, self.opts.decimals)));
+            }
             s.push_str(&format!("<tspan{a}>{}</tspan>", xml_text(&run.text.replace('\n', " "))));
         }
         s.push_str("</textPath></text>");
@@ -751,6 +771,14 @@ fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -
                     let x = g.xf.translation().x - offset;
                     (advance, if (x - g.origin.x).abs() > PLACE_TOLERANCE { x } else { g.origin.x })
                 }
+                // The space before a line's first character (`kerningBefore`) is in its advance and
+                // moves it along the line: a reader sets it that far along, without it. (Shrink
+                // Text to Fit scales it with the sizes.)
+                None if !lay.vertical && !g.rtl && g.len > 0 && run.style.kerning_before != 0.0 => {
+                    let before = vectorcraft_text::line_start_space(&plain, g.byte, &run.style, false) * lay.fit_scale;
+                    let before = if before.is_finite() { before } else { 0.0 };
+                    (g.advance - before, g.origin.x + before)
+                }
                 None => (g.advance, g.origin.x),
             };
             let src: String = source(line.glyph_start + k, g).chars().filter(|c| *c != '\u{ad}').map(|c| run.style.digits.map(c)).collect();
@@ -838,10 +866,13 @@ fn reader_advances(t: &TextObject, lay: &vectorcraft_text::TextLayout, kerning: 
         // A reader spaces words and letters as the font does.
         p.justification = vectorcraft_doc::JustificationOptions::default();
     }
-    if !kerning {
-        for r in &mut set.runs {
+    for r in &mut set.runs {
+        if !kerning {
             r.style.kerning.get_or_insert(0.0);
         }
+        // A reader puts no space before a line's first character (`kerningBefore`): the segment
+        // starts that much further along instead.
+        r.style.kerning_before = 0.0;
     }
     let relaid;
     let glyphs = if set == *t {
