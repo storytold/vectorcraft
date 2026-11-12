@@ -194,7 +194,40 @@ fn the_arrowheads_file_is_made_opened_and_reloaded_when_saved() {
     let mut empty = serde_json::to_value(Arrowhead::Custom(c)).unwrap();
     empty["Custom"]["path"] = json!({"subpaths": []});
     assert!(s.execute("stroke.set", &json!({"ids": [id.0], "endArrow": empty})).is_err());
+    // One anchor, or anchors on one line, fill nothing.
+    for pts in [vec![Point::new(1.0, 1.0)], vec![Point::new(0.0, 0.0), Point::new(2.0, 0.0), Point::new(4.0, 0.0)]] {
+        let mut flat =
+            serde_json::to_value(Arrowhead::Custom(Arc::new(vectorcraft_doc::CustomArrowhead::new("Flat".into(), PathData::default())))).unwrap();
+        flat["Custom"]["path"] = serde_json::to_value(PathData::single(SubPath::polyline(&pts, false))).unwrap();
+        assert!(s.execute("stroke.set", &json!({"ids": [id.0], "endArrow": flat})).is_err(), "{pts:?}");
+    }
+    // A lone anchor draws no segment, whatever its handles.
+    let mut lone = vectorcraft_geom::Anchor::corner(Point::new(1.0, 0.0));
+    (lone.h_in, lone.h_out) = (Point::new(0.0, 1.0), Point::new(2.0, -1.0));
+    let mut handles =
+        serde_json::to_value(Arrowhead::Custom(Arc::new(vectorcraft_doc::CustomArrowhead::new("Lone".into(), PathData::default())))).unwrap();
+    handles["Custom"]["path"] = serde_json::to_value(PathData::single(SubPath::new(vec![lone], true))).unwrap();
+    assert!(s.execute("stroke.set", &json!({"ids": [id.0], "endArrow": handles.clone()})).is_err(), "a lone anchor");
+    // Two equal squares winding opposite ways cancel out.
+    let sq = [Point::new(0.0, -1.0), Point::new(2.0, -1.0), Point::new(2.0, 1.0), Point::new(0.0, 1.0)];
+    let back: Vec<Point> = sq.iter().rev().copied().collect();
+    let cancel = PathData::new(vec![SubPath::polyline(&sq, true), SubPath::polyline(&back, true)]);
+    handles["Custom"]["path"] = serde_json::to_value(cancel).unwrap();
+    assert!(s.execute("stroke.set", &json!({"ids": [id.0], "endArrow": handles})).is_err(), "opposite squares");
+    // A bow tie's lobes wind opposite ways, so its signed area is 0, and it still fills both.
+    let tie = [Point::new(0.0, -1.0), Point::new(2.0, 1.0), Point::new(2.0, -1.0), Point::new(0.0, 1.0)];
+    let mut bow =
+        serde_json::to_value(Arrowhead::Custom(Arc::new(vectorcraft_doc::CustomArrowhead::new("Bow".into(), PathData::default())))).unwrap();
+    bow["Custom"]["path"] = serde_json::to_value(PathData::single(SubPath::polyline(&tie, true))).unwrap();
     assert!(matches!(stroke(&s, id).end_arrow, Some(Arrowhead::Custom(h)) if h.name == "Square"), "the head stays as it was");
+    s.execute("stroke.set", &json!({"ids": [id.0], "endArrow": bow.clone()})).unwrap();
+    assert!(matches!(stroke(&s, id).end_arrow, Some(Arrowhead::Custom(h)) if h.name == "Bow"));
+    // So does a very thin bar.
+    let bar = [Point::new(0.0, 0.0), Point::new(4.0, 0.0), Point::new(4.0, 0.001), Point::new(0.0, 0.001)];
+    bow["Custom"]["path"] = serde_json::to_value(PathData::single(SubPath::polyline(&bar, true))).unwrap();
+    s.execute("stroke.set", &json!({"ids": [id.0], "endArrow": bow})).unwrap();
+    let Some(Arrowhead::Custom(h)) = stroke(&s, id).end_arrow else { panic!("a custom head") };
+    assert_eq!(h.path.anchor_count(), 4, "the thin bar");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

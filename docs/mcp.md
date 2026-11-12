@@ -3968,9 +3968,11 @@ path, the `skipped` symbols and any read `error`.
 
 `stroke.set {endArrow: {"custom": name}}` puts a custom head on a stroke. The stroke keeps a copy of the head's art,
 so the document draws it, saves it and exports it to SVG and PDF the same way without the arrowheads file.
-`document.inspect` reports such a head as `{"Custom": {name, path}}`, which `stroke.set` takes back unchanged. The
-help page [Apply stroke on an object](https://helpx.adobe.com/illustrator/using/stroke-object.html) describes
-defining custom arrowheads in a separate arrowheads file.
+`document.inspect` reports such a head as `{"Custom": {name, path}}`, which `stroke.set` takes back unchanged. It
+refuses a `path` that fills no area (non-zero rule; parts thinner than a millionth of a head unit count as none) or
+has more than 4,096 anchors or a point more than 64 head units from the tip. The help page
+[Apply stroke on an object](https://helpx.adobe.com/illustrator/using/stroke-object.html) describes defining custom
+arrowheads in a separate arrowheads file.
 
 ```json
 {"name":"run_command","arguments":{"command":"stroke.arrowheads.list","params":{}}}
