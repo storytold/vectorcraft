@@ -639,6 +639,39 @@ fn gradient_libraries_are_listed_and_gradient_swatches_rename_and_take_new_gradi
 }
 
 #[test]
+fn organic_fades_add_with_their_method_midpoints_and_opacities_in_rgb_and_cmyk() {
+    let lib = vectorcraft_color::libraries::builtin_library("organic-fades").unwrap();
+    for mode in ["rgb", "cmyk"] {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 100, "height": 100, "colorMode": mode}));
+        let list = run(&mut s, "swatch.library.list", json!({}));
+        let row = list["libraries"].as_array().unwrap().iter().find(|l| l["id"] == "organic-fades").unwrap().clone();
+        assert_eq!(
+            (row["name"].as_str(), row["category"].as_str(), row["count"].as_u64()),
+            (Some("Organic Fades"), Some("gradients"), Some(lib.len() as u64))
+        );
+        let id = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].clone();
+        let r = run(&mut s, "swatch.library.add", json!({"library": "organic-fades", "names": ["Petal", "Dew"], "apply": "fill"}));
+        assert_eq!((r["added"].clone(), r["applied"].clone()), (json!(["Petal", "Dew"]), json!("Petal")), "{mode}");
+        for name in ["Petal", "Dew"] {
+            // The swatch comes as the library has it: stops (colors as given, opacities, midpoints) and method.
+            let Paint::Gradient(added) = &doc(&s).swatch(name).unwrap().paint else { panic!("{name} is a gradient") };
+            let Paint::Gradient(want) = &lib.swatch(name).unwrap().paint else { panic!("{name} is a gradient") };
+            assert_eq!(added.gradient, want.gradient, "{mode} {name}");
+            assert_eq!(added.gradient.method, vectorcraft_color::GradientMethod::Perceptual);
+            assert!(added.gradient.stops.iter().all(|st| matches!(st.color, Color::Rgb { .. })), "{mode} {name}: the stops stay RGB");
+            assert!(added.gradient.stops.iter().any(|st| st.opacity < 1.0 && (st.midpoint - 0.5).abs() > 0.02), "{mode} {name}");
+        }
+        // The fill takes the fade's method, opacities and midpoints.
+        let fill = doc(&s).node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().appearance.fill_paint();
+        let (Paint::Gradient(fill), Paint::Gradient(want)) = (fill, &lib.swatch("Petal").unwrap().paint) else { panic!("a gradient fill") };
+        assert_eq!(fill.gradient.method, want.gradient.method, "{mode}");
+        let shape = |g: &vectorcraft_color::Gradient| g.stops.iter().map(|st| (st.offset, st.opacity, st.midpoint)).collect::<Vec<_>>();
+        assert_eq!(shape(&fill.gradient), shape(&want.gradient), "{mode}");
+    }
+}
+
+#[test]
 fn pattern_libraries_bring_their_patterns_and_add_each_once() {
     let mut s = session();
     let list = run(&mut s, "swatch.library.list", json!({}));

@@ -108,6 +108,7 @@ pub const NAMES: &str = "object names are left out (legacy .ai files name only l
 const PATTERNS: &str = "pattern fills are written as their tiles, clipped to the shape";
 const FREEFORM: &str = "freeform gradients are written as their average colour";
 const CONIC: &str = "conic gradients are written as solid wedges clipped to the shape (legacy .ai files have no conic gradient)";
+const DIAMOND: &str = "diamond gradients are written as four linear gradients clipped to the shape (legacy .ai files have no diamond gradient)";
 /// Wedges a conic gradient is written as: one a degree.
 const CONIC_WEDGES: usize = 360;
 const STROKES: &str =

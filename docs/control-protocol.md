@@ -217,7 +217,9 @@ export's own parameters); `ui.dialog.confirm` writes the file. An importer plug-
 `pluginImport` dialog when `file.openWith` is given no `params`: one field per parameter, `__plugin`, and `__open`
 (`path` and `importer`); `ui.dialog.confirm` opens the file. `ui.installPlugin {path?}` installs a `.wasm` (without
 a path it asks for one); one that needs approval opens the `pluginInstall` dialog, which only a person can confirm
-(`ui.dialog.confirm` and injected input are refused); see [plugins.md](plugins.md).
+(`ui.dialog.confirm` and injected input are refused). When a control request opened it, directly or through a file
+dialog, the reply adds `approval: "personMustStartInstall"` and nobody can confirm it: the person chooses Object ›
+Plug-ins › Install Plug-in… to install the plug-in; see [plugins.md](plugins.md).
 
 Overprint Black: the Edit → Edit Colors → Overprint Black… menu item opens a `command` parameter dialog for
 `edit.colors.overprintBlack` (fields `remove`, `percentage`, `fill`, `stroke`, `includeCmyBlacks`,
@@ -574,8 +576,12 @@ Document Setup: File → Document Setup… (`file.documentSetup`, Cmd+Alt+P) ope
 are what `document.setup` reports (`units`, `bleed` [top, bottom, left, right] in pt, `outlineImages`,
 `highlightSubstitutedGlyphs`, `gridSize`, `gridColors`, `simulatePaper`, `flattenerPreset`,
 `discardWhiteOverprint`, `language`, `quotes`, `typographersQuotes`, `superscript`, `subscript`, `smallCapsSize`,
-`exportText`, `backgroundContents`) plus `tab` (`General`, `Transparency` or `Type`) and `bleedLinked`.
-`ui.dialog.confirm` runs `document.setup` with them as one undo step; a bad value answers with an error and the dialog
+`exportText`, `backgroundContents`) plus `tab` (`General`, `Transparency`, `Type` or `Color`) and `bleedLinked`, and
+the Color tab's `colorMode` (`rgb` or `cmyk`), `convertColors` (a mode change converts the colors; `false` keeps their
+numbers), `rgbProfile` and `cmykProfile` (a profile name, or null for the working space).
+`ui.dialog.confirm` runs `document.setup` with them as one undo step. When the Color tab's fields differ from the
+document, it runs `document.setup`, then `edit.assignProfile` with the changed profiles, then `file.documentColorMode`
+in one `command.batch`, and the document's changes are one undo step. A bad value answers with an error and the dialog
 stays open.
 
 New Document: File → New… (`file.newDialog`, Cmd+N) opens the `newDocument` dialog. Its fields are `file.new`'s params
@@ -707,8 +713,9 @@ with.
 DXF Options: Export As… with the DXF format (`file.exportAs {format: "dxf"}`, then the save dialog), or
 `ui.dxfOptionsDialog {path?, …document.exportDxf options}` for agents, opens the `dxfOptions` dialog. Its fields are
 `document.export` params: `dxfPreset` (`custom`, `cnc`), `version`, `unit` (a unit name such as `Millimeters`), `scale`,
-`scaleLineweights`, `colors` (`8`, `16`, `256`, `true`), `rasterFormat` (`png`, `jpeg`), `preserve` (`appearance`,
-`editability`), `selectedOnly`, `alterPaths`, `outlineText`, plus `path` and the artboard choice. Setting `dxfPreset` to
+`scaleLineweights`, `colors` (`8`, `16`, `256`, `true`), `rasterFormat` (`png`, `jpeg`), `includeImages` (Include
+Placed Images), `preserve` (`appearance`, `editability`), `selectedOnly`, `alterPaths`, `outlineText`, `includeHatches`
+(Include Fill Hatches), plus `path` and the artboard choice. Setting `dxfPreset` to
 `cnc` sets the fields it sets (see `document.exportDxf`), and `dxfPreset` reads `custom` again once one of them is
 changed; setting it to `custom` puts back the defaults. `ui.dialog.confirm` checks them (a bad value, or
 Export Selected Art Only with nothing selected, keeps the dialog open), remembers them for the next DXF Options and
@@ -790,7 +797,11 @@ artboards' files. A `.ai` file's `aiVersion` comes first: `"pdf"` (the default) 
 Options"), which takes only `transparentImages` (`"flatten"` or `"omit"`), `hiddenObjects` (`"layer"`, `"omit"` or
 `"visible"`, the Hidden Objects menu), `outlineText` (the Text menu: false Editable, true Outlines) and, with several artboards, the artboard
 picker: `boards`, one bool per artboard (default: those last saved, else all), saved as `range`, one file per checked
-artboard. OK is disabled with none checked.
+artboard. OK is disabled with none checked. Save As to an EPS file opens the same dialog after the save panel (heading
+"EPS Options") with `useArtboards`, `all` and `range`, then the options Export's EPS Options shows. Preview
+(`previewFormat`), Overprints (`overprints`), Flattener preset (`flattenerPreset`) and PostScript (`level`) are menus:
+a pick writes the option's value (`"tiffColor"`, `"preserve"`, a built-in preset's id such as `"medium"` or a saved
+preset's name, the level as a number), and a value none of them names shows as it is.
 
 EMF and WMF: Export As… lists both formats (`file.exportAs {format: "emf"}` or `"wmf"`); they have no options
 dialog, so `ui.dialog.confirm` asks for the path and writes the file (one per artboard with Use Artboards). Open and
@@ -1055,7 +1066,7 @@ app:
 | `vectorcraft.docInspect(params)` / `vectorcraft.uiInspect(params)` | `document.inspect` / `ui.inspect` |
 | `vectorcraft.inspect()` | `ui.inspect` (the name before `uiInspect`) |
 | `vectorcraft.screenshot(params)` | `ui.screenshot` (no `path`: the PNG comes back inline, as `data` and as `pngBase64`) |
-| `vectorcraft.openFile(name, bytes)` | opens the bytes the way a dropped file opens (returns `true` once queued) |
+| `vectorcraft.openFile(name, bytes)` | opens the bytes the way a dropped file opens, as automation: a plug-in install it asks for has to be started by the person (returns `true` once queued) |
 | `vectorcraft.captureDownloads(on)` | while on, a save or export is kept in the page instead of downloaded |
 | `vectorcraft.files()` / `vectorcraft.readFile(name)` | the kept files (`{path, size}`) / one of them as a `Uint8Array` |
 

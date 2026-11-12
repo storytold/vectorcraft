@@ -501,6 +501,19 @@ fn declarations_take_fuel() {
 }
 
 #[test]
+fn source_compiled_during_a_run_takes_fuel_before_it_is_parsed() {
+    // Doubling a string 17 times makes 131,072 spaces in about a hundred instructions, so only
+    // the compiled source can use up the fuel.
+    let build = "var s = ' '; for (var i = 0; i < 17; i++) s += s;";
+    let mut realm = small(Limits { fuel: 10_000, ..Limits::default() });
+    for call in ["eval(s)", "(0, eval)(s)", "Function(s)", "new Function('a', s)"] {
+        assert_eq!(limit(&mut realm, &format!("{build} {call};")), LimitKind::Fuel, "{call}");
+    }
+    let mut realm = small(Limits { fuel: 1_000_000, ..Limits::default() });
+    assert_eq!(realm.run(&format!("{build} eval(s + '1') + (0, eval)(s + '2') + Function(s + 'return 3')()")), Ok(JsValue::Number(6.0)));
+}
+
+#[test]
 fn a_lower_heap_limit_applies_to_what_is_already_live() {
     // A heap already past the new limit ends the next run.
     let mut realm = small(Limits::default());
@@ -823,13 +836,14 @@ fn long_property_names_count_toward_the_heap_after_their_strings_are_collected()
     // Each name is a 16,385-unit buffer that only the object's key or the function's binding
     // holds once the string that made it is garbage, so about 32 of them fill the heap well before
     // the fuel runs out. In the second script the property lookup flattens a long string each
-    // time, so collections run.
+    // time, so collections run. Each eval there also takes fuel for its source, so that run has
+    // more fuel.
     let mut realm = small(Limits { heap_bytes: 1 << 20, fuel: 20_000, ..Limits::default() });
     let src = "var s = 'x'; while (s.length < 10000) s += s; var o = {}; for (var i = 0; ; i++) o[s + i] = 1;";
     assert_eq!(limit(&mut realm, src), LimitKind::Heap);
     let src = "var s = 'x'; while (s.length < 10000) s += s; \
         (function () { for (var i = 0; ; i++) { eval('var ' + s + i + ' = 1'); ({})[s + i]; } })();";
-    let mut realm = small(Limits { heap_bytes: 1 << 20, fuel: 20_000, ..Limits::default() });
+    let mut realm = small(Limits { heap_bytes: 1 << 20, fuel: 5_000_000, ..Limits::default() });
     assert_eq!(limit(&mut realm, src), LimitKind::Heap);
 }
 

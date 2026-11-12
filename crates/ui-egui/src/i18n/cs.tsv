@@ -118,6 +118,7 @@
 	PDF Presets…	Přednastavení PDF…
 	Perspective Grid Presets…	Přednastavení perspektivní mřížky…
 	Color Settings…	Nastavení barev…
+	Assign Profile	Přiřadit profil
 	Assign Profile…	Přiřadit profil…
 	Keyboard Shortcuts…	Klávesové zkratky…
 # Import Shortcut Set (Keyboard Shortcuts › Import…, File › Open of a .kys file) and its commands.
@@ -261,6 +262,10 @@
 	Blend Options…	Možnosti prolnutí…
 	Expand	Rozložit
 	Replace Spine	Nahradit páteř
+	Create Spine	Vytvořit páteř
+	Create Spine:	Vytvořit páteř:
+	Always	Vždy
+	Never	Nikdy
 	Reverse Spine	Obrátit páteř
 	Reverse Front to Back	Obrátit pořadí zepředu dozadu
 	Envelope Distort	Deformace obálkou
@@ -416,6 +421,9 @@
 	Create Outlines	Převést na křivky
 	Optical Margin Alignment	Optické zarovnání okrajů
 	Dynamic Text	Dynamický text
+	Dynamic Text Presets	Předvolby dynamického textu
+	Arch	Klenba
+@msg	select point type or type on a path	vyberte bodový text nebo text na cestě
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	text na cestě ve zřetězeném textu nemůže používat dynamický text: {frames}
 	Fill with Placeholder Text	Vyplnit zástupným textem
 	Insert Inline Symbol	Vložit symbol do textu
@@ -561,6 +569,7 @@
 	Gaussian Blur…	Gaussovské rozostření…
 	View	Zobrazení
 	Preview	Náhled
+	Preview:	Náhled:
 	Overprint Preview	Náhled přetisků
 	Pixel Preview	Náhled obrazových bodů
 	Trim View	Oříznuté zobrazení
@@ -801,6 +810,15 @@
 	Stun Pulse	Omráčení
 	Stealth Fade	Plížení
 	Shield Buff	Štít
+	Textures	Textury
+	Fine Grain	Jemné zrno
+	Canvas Weave	Tkané plátno
+	Burlap Sack	Pytlovina
+	Cracked Glaze	Popraskaná glazura
+	Mosaic Floor	Mozaiková podlaha
+	Quilted Squares	Prošívané čtverce
+	Leaded Glass	Olovnaté sklo
+	Damp Paper	Vlhký papír
 	Outlines and Rules	Obrysy a linky
 	Hand-Drawn	Ručně kreslené
 	Gradient Finishes	Přechodové povrchy
@@ -822,6 +840,7 @@
 	Spectrum Gradients	Spektrální přechody
 	Sky Gradients	Přechody oblohy
 	Neutral Gradients	Neutrální přechody
+	Organic Fades	Organické přechody
 	Duotone Gradients	Dvoutónové přechody
 	Radial Glows	Kruhové záře
 	Save Swatch Library…	Uložit knihovnu vzorníku…
@@ -1702,6 +1721,7 @@ digits	Malayalam	Malajálamské
 	Points: clicks add free points	Body: kliknutím přidáte volné body
 	Radial Gradient	Kruhový přechod
 	Conic Gradient	Kuželový přechod
+	Diamond Gradient	Kosočtverečný přechod
 	Reset to White, Black	Obnovit na bílou a černou
 	Reverse Gradient	Obrátit přechod
 	Save to Swatches	Uložit do vzorníku
@@ -2072,6 +2092,7 @@ digits	Malayalam	Malajálamské
 	Simulate Paper	Simulovat papír
 	Use Black Point Compensation	Použít kompenzaci černého bodu
 	Working CMYK (don't tag)	Pracovní CMYK (neoznačovat)
+	Working RGB (don't tag)	Pracovní RGB (neoznačovat)
 	{name} (spot)	{name} (přímá)
 	Add to Profiles…	Přidat do profilů…
 	Align Stroke to Center	Zarovnat tah na střed
@@ -2374,6 +2395,8 @@ digits	Malayalam	Malajálamské
 	Export Selected Art Only	Exportovat jen vybranou kresbu
 	Number of Colors:	Počet barev:
 	Raster File Format:	Formát rastrového souboru:
+	Include Placed Images	Zahrnout umístěné obrazy
+	Include Fill Hatches	Zahrnout šrafy výplní
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Plné barvy vyžadují verzi 2004 nebo novější: zapíše se nejbližší z 256 barev.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Text se převede na křivky a tahy, které čára CAD nedokáže vykreslit, se stanou vyplněnými tvary.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Text zůstane textem a každý tah bude čárou s vlastní tloušťkou a čárkováním.
@@ -4550,6 +4573,7 @@ imageTrace	Outline	Obrys
 @msg	`{key}` must be a number, not {v}	`{key}` musí být číslo, ne {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} musí být unixový čas v sekundách (celé číslo) nebo null
 @msg	`{key}` must be a string	`{key}` musí být řetězec
+@msg	`{key}` must be a profile name or null	`{key}` musí být název profilu nebo null
 @msg	`{key}` must be a whole number	`{key}` musí být celé číslo
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` musí být celé číslo mezi {min} a {max} (zadáno {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` musí být mezi {min} a {max} (zadáno {x})
@@ -5044,7 +5068,7 @@ imageTrace	Outline	Obrys
 @msg	unknown format	neznámý formát
 @msg	unknown format `{f}` (Save writes {_1})	neznámý formát `{f}` (Uložit zapisuje {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	neznámý režim volného přechodu `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	neznámý druh přechodu `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	neznámý druh přechodu `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	neznámé zvýraznění `{h}`
 @msg	unknown option `{path}.{k}`	neznámá možnost `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	neznámé přetisky `{o}` (preserve, simulate nebo discard)
@@ -5818,7 +5842,7 @@ mark-style	Japanese	Japonské
 @msg	span must be "object" or "selection", got {v}	span musí být "object" nebo "selection", ne {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" umísťuje `gradient`, ne vzorník
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" umísťuje přechod: zadejte `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" umísťuje lineární, radiální nebo kuželový přechod, ne volný přechod
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" umísťuje lineární, radiální, kuželový nebo kosočtverečný přechod, ne volný přechod
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" umísťuje samotný přechod: vynechte `start` a `end` (ty ho už umísťují v souřadnicích dokumentu)
 	Make Image Dynamic	Nastavit obraz jako dynamický
 	Import Data Sets…	Importovat sady dat…
@@ -6059,6 +6083,8 @@ axis	Y Axis	osa Y
 	Version: {version}	Verze: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Nainstalovat „{name}“ místo zásuvného modulu se stejným ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Tento soubor není zásuvný modul dříve nainstalovaný s tímto ID. Získá nastavení a mezipaměť uchovávané pro toto ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	O instalaci tohoto zásuvného modulu požádala automatizace. Chcete-li ho nainstalovat, zvolte Objekt › Zásuvné moduly › Nainstalovat zásuvný modul… sami.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	O instalaci tohoto zásuvného modulu požádala automatizace. Chcete-li ho nainstalovat, zvolte Objekt › Zásuvné moduly › Nainstalovat zásuvný modul… sami.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}“ je jiný modul než zásuvný modul s ID {_1} a získal by nastavení a mezipaměť uchovávané pro něj: nainstalujte ho s `replace: true`, jakmile uživatel souhlasí
 	File SHA-256: {hash}	SHA-256 souboru: {hash}
 	Read the objects it is given	Číst objekty, které dostane
@@ -6121,6 +6147,12 @@ axis	Y Axis	osa Y
 @msg	command {name}: `label` must be 1-64 printable characters	příkaz {name}: `label` musí mít 1-64 tisknutelných znaků
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	příkaz {name}: použijte id o 1-{MAX_COMMAND_ID} znacích z a-z 0-9 _, které začíná písmenem
 @msg	command {name}: {e}	příkaz {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (řádek {line}, sloupec {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` musí být seznam příkazů, každý s `id` a `label`
+@msg	command {name} must be an object with an `id` and a `label`	příkaz {name} musí být objekt s `id` a `label`
+@msg	missing field `{key}`	chybí pole `{key}`
+@msg	duplicate field `{key}`	pole `{key}` je uvedeno dvakrát
 @msg	only a filter or a live effect declares `commands`	`commands` deklaruje jen filtr nebo živý efekt
 @msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modul nemá SHA-256 uvedený v `hash`: nic nebylo nainstalováno
@@ -6834,6 +6866,11 @@ breakText	Glyphs	Glyfy
 @msg	only an exporter or an importer declares `extensions`	`extensions` deklaruje jen exportní nebo importní zásuvný modul
 @msg	an importer always gets an import's budget: leave `budget` out	importní zásuvný modul dostává vždy rozpočet importu: vynechte `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Kopírovat informace pro řešení potíží
+@msg	Copied the troubleshooting info	Informace pro řešení potíží zkopírovány
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Poslední relace VectorCraftu přestala odpovídat, než se zavřela. Nápověda › Kopírovat informace pro řešení potíží zkopíruje podrobnosti pro hlášení chyby
+
 # Safe Mode
 	Safe Mode…	Nouzový režim…
 	Safe Mode	Nouzový režim
@@ -6854,6 +6891,7 @@ breakText	Glyphs	Glyfy
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Zarovnat na mřížku obrazových bodů
+	Align New Objects to Pixel Grid	Zarovnat nové objekty na mřížku obrazových bodů
 	Not Aligned to Pixel Grid	Nezarovnané na mřížku obrazových bodů
 @msg	only paths and compound paths can be aligned to the pixel grid	na mřížku obrazových bodů lze zarovnat jen cesty a složené cesty
 @msg	side is left or right, not `{s}`	side je left nebo right, ne `{s}`

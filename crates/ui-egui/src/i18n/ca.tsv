@@ -400,6 +400,7 @@ antiAlias	Sharp	Nítid
 	Asset Export Settings	Configuració d’exportació de recursos
 	Assets	Recursos
 	Assign	Assigna
+	Assign Profile	Assigna el perfil
 	Assign Profile…	Assigna el perfil…
 	Assign:	Assigna:
 	Attach	Adjunta
@@ -2906,6 +2907,9 @@ digits	Malayalam	Malaiàlam
 	Optical	Òptic
 	Optical Margin Alignment	Alineació òptica de marges
 	Dynamic Text	Text dinàmic
+	Dynamic Text Presets	Valors predefinits de text dinàmic
+	Arch	Volta
+@msg	select point type or type on a path	seleccioneu text de punt o text sobre un traçat
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	el text sobre un traçat d’un text enllaçat no pot fer servir el text dinàmic: {frames}
 	Optimize for fast web view	Optimitza per a la visualització web ràpida
 	Optimized	Optimitzat
@@ -2913,6 +2917,7 @@ digits	Malayalam	Malaiàlam
 	Options for Selection…	Opcions per a la selecció…
 	Options:	Opcions:
 	Options…	Opcions…
+	Organic Fades	Esvaïments orgànics
 	or more spaces with a tab	o més espais amb un tabulador
 	Orange	Taronja
 	Order:	Ordre:
@@ -3203,6 +3208,7 @@ digits	Malayalam	Malaiàlam
 	Press Quality	Qualitat d’impressió
 	Pressure	Pressió
 	Preview	Previsualització
+	Preview:	Previsualització:
 	Preview (1 inch on the page)	Previsualització (1 polzada a la pàgina)
 	Preview All Layers	Previsualitza totes les capes
 	Preview in Browser	Previsualitza al navegador
@@ -3287,6 +3293,7 @@ digits	Malayalam	Malaiàlam
 	Radial Glows	Resplendors radials
 	Radial Gradient	Degradat radial
 	Conic Gradient	Degradat cònic
+	Diamond Gradient	Degradat de rombe
 	Radial Repeat	Repetició radial
 	Radius	Radi
 	Radius 1	Radi 1
@@ -3303,6 +3310,8 @@ digits	Malayalam	Malaiàlam
 	Range:	Interval:
 	Raster Effects	Efectes de ràster
 	Raster File Format:	Format de fitxer de ràster:
+	Include Placed Images	Inclou les imatges col·locades
+	Include Fill Hatches	Inclou les trames dels emplenaments
 	Raster Sample Size:	Mida de mostra de ràster:
 	Raster/Vector Balance:	Equilibri ràster/vector:
 	Rasterize	Rasteritza
@@ -3489,6 +3498,10 @@ digits	Malayalam	Malaiàlam
 	Replace Font	Reemplaça el tipus de lletra
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Reemplaça’l per un altre fitxer o ignora’l: les seves imatges continuaran mostrant la previsualització desada amb el document.
 	Replace Spine	Reemplaça l’espina
+	Create Spine	Crea l’espina
+	Create Spine:	Crea l’espina:
+	Always	Sempre
+	Never	Mai
 	Replace Symbol	Reemplaça el símbol
 	Reset Transformation	Restableix la transformació
 	Replace With Font	Reemplaça per un tipus de lletra
@@ -4008,6 +4021,15 @@ digits	Malayalam	Malaiàlam
 	Stun Pulse	Atordiment
 	Stealth Fade	Sigil
 	Shield Buff	Escut
+	Textures	Textures
+	Fine Grain	Gra fi
+	Canvas Weave	Teixit de llenç
+	Burlap Sack	Sac de jute
+	Cracked Glaze	Vidrat esquerdat
+	Mosaic Floor	Terra de mosaic
+	Quilted Squares	Quadrats encoixinats
+	Leaded Glass	Vitrall emplomat
+	Damp Paper	Paper humit
 	Shape	Forma
 	Shape Builder	Constructor de formes
 	Shape Builder Delete	Suprimeix del constructor de formes
@@ -4920,6 +4942,7 @@ digits	Malayalam	Malaiàlam
 	Words Longer Than:	Paraules més llargues de:
 	Working CMYK	CMYK de treball
 	Working CMYK (don't tag)	CMYK de treball (sense etiquetar)
+	Working RGB (don't tag)	RGB de treball (sense etiquetar)
 	Working RGB	RGB de treball
 	Workspace	Espai de treball
 	Workspace {i}	Espai de treball {i}
@@ -5078,6 +5101,7 @@ digits	Malayalam	Malaiàlam
 @msg	`{key}` must be a number not below 0	`{key}` ha de ser un nombre no inferior a 0
 @msg	`{key}` must be a number, not {v}	`{key}` ha de ser un nombre, no {v}
 @msg	`{key}` must be a string	`{key}` ha de ser una cadena
+@msg	`{key}` must be a profile name or null	`{key}` ha de ser un nom de perfil o null
 @msg	`{key}` must be a whole number	`{key}` ha de ser un nombre enter
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` ha de ser un nombre enter entre {min} i {max} (rebut {x})
 @msg	`{key}` must be an array of these names: {_1}	`{key}` ha de ser una matriu d’aquests noms: {_1}
@@ -5815,7 +5839,7 @@ digits	Malayalam	Malaiàlam
 @msg	span must be "object" or "selection", got {v}	span ha de ser "object" o "selection", s’ha rebut {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" col·loca un `gradient`, no una mostra
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" col·loca un degradat: dona `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" col·loca un degradat lineal, radial o cònic, no un de lliure
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" col·loca un degradat lineal, radial, cònic o de rombe, no un de lliure
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" col·loca el degradat mateix: omet `start` i `end` (ja el col·loquen en coordenades del document)
 @msg	Split Into Grid: select paths large enough for the grid	Divideix en quadrícula: selecciona traçats prou grans per a la quadrícula
 @msg	stop {i} needs `offset`	la parada {i} necessita `offset`
@@ -5989,7 +6013,7 @@ digits	Malayalam	Malaiàlam
 @msg	unknown format	format desconegut
 @msg	unknown format `{f}` (Save writes {_1})	format desconegut `{f}` (Desa escriu {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	mode de forma lliure desconegut `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tipus de degradat desconegut `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	tipus de degradat desconegut `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	ressaltat desconegut `{h}`
 @msg	unknown option `{path}.{k}`	opció desconeguda `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressions desconegudes `{o}` (preserve, simulate o discard)
@@ -6106,6 +6130,8 @@ digits	Malayalam	Malaiàlam
 	Version: {version}	Versió: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instal·la «{name}» en lloc del complement amb el mateix ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Aquest fitxer no és el complement instal·lat abans amb aquest ID. Rep la configuració i la memòria cau desades per a aquest ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Una automatització ha demanat d’instal·lar aquest complement. Per instal·lar-lo, tria Objecte › Complements › Instal·la el complement… tu mateix.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Una automatització ha demanat d’instal·lar aquest complement. Per instal·lar-lo, tria Objecte › Complements › Instal·la el complement… tu mateix.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	«{name}» és un mòdul diferent del complement amb l’ID {_1} i rebria la configuració i la memòria cau desades per a aquest: instal·la’l amb `replace: true` quan l’usuari hi estigui d’acord
 	File SHA-256: {hash}	SHA-256 del fitxer: {hash}
 	Read the objects it is given	Llegir els objectes que rep
@@ -6168,6 +6194,12 @@ digits	Malayalam	Malaiàlam
 @msg	command {name}: `label` must be 1-64 printable characters	ordre {name}: `label` ha de tenir 1-64 caràcters imprimibles
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	ordre {name}: fes servir un id d’1-{MAX_COMMAND_ID} caràcters d’a-z 0-9 _ que comenci per una lletra
 @msg	command {name}: {e}	ordre {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (línia {line}, columna {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` ha de ser una llista d’ordres, cadascuna amb `id` i `label`
+@msg	command {name} must be an object with an `id` and a `label`	l’ordre {name} ha de ser un objecte amb `id` i `label`
+@msg	missing field `{key}`	falta el camp `{key}`
+@msg	duplicate field `{key}`	el camp `{key}` està repetit
 @msg	only a filter or a live effect declares `commands`	només un filtre o un efecte dinàmic declara `commands`
 @msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	el mòdul no té el SHA-256 que indica `hash`: no s’ha instal·lat res
@@ -6815,6 +6847,11 @@ breakText	Glyphs	Glifs
 @msg	only an exporter or an importer declares `extensions`	només un exportador o un importador declara `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	un importador sempre rep el pressupost d’una importació: ometeu `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Copia la informació de resolució de problemes
+@msg	Copied the troubleshooting info	S’ha copiat la informació de resolució de problemes
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	La darrera sessió del VectorCraft va deixar de respondre abans de tancar-se. Ajuda › Copia la informació de resolució de problemes copia els detalls per a un informe d’error
+
 # Safe Mode
 	Safe Mode…	Mode segur…
 	Safe Mode	Mode segur
@@ -6835,6 +6872,7 @@ breakText	Glyphs	Glifs
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Alinea a la quadrícula de píxels
+	Align New Objects to Pixel Grid	Alinea els objectes nous a la quadrícula de píxels
 	Not Aligned to Pixel Grid	No alineat a la quadrícula de píxels
 @msg	only paths and compound paths can be aligned to the pixel grid	només els traçats i els traçats compostos es poden alinear a la quadrícula de píxels
 @msg	side is left or right, not `{s}`	side ha de ser left o right, no `{s}`

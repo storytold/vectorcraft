@@ -52,7 +52,7 @@ use vectorcraft_plugins::{Budget, Command, Kind, Plugin, effect, export, objects
 
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param, switch_or};
 
-use vectorcraft_plugins::permissions::{self, Grant, Permission};
+use vectorcraft_plugins::permissions::{self, Grant, GrantToken, Permission};
 
 /// What a plug-in error looks like to the user. A run the caller cancelled changed nothing.
 fn err(e: vectorcraft_plugins::Error) -> EngineError {
@@ -750,7 +750,7 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     let holds_new = |s: &Session| s.stored_plugin_bytes(plugin.id()).is_ok_and(|held| held.as_deref() == Some(&bytes[..]));
     if m.asks_permissions() {
         let g = Grant { id: m.id.clone(), hash: plugin.hash().to_string(), permissions: wanted };
-        registry::grant(g.clone());
+        registry::grant(GrantToken::after_engine_approval(g.clone()));
         if stored && !s.store_grant(&m.id, Some(g)) {
             stored = !s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref()) && holds_new(s);
         }
@@ -760,14 +760,16 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         // When the write failed, the old stored module stays in the folder and needs its grant at
         // the next launch. A grant that can't be removed still approves the old bytes, so the store
         // gets the module it held back. When that module can't be read or written back, or there
-        // was none, no module goes with the grant, and the grant stops counting for this session. A
-        // grants file that is too large or doesn't hold a list approves nothing, and the new module
-        // stays; one that can't be opened or read may approve the old bytes once it reads again.
+        // was none, no module goes with the grant, and the grant stops counting for every session in
+        // the process attached to the folder. A grants file that is too large or doesn't hold a list
+        // approves nothing, and the new module stays; one that can't be opened or read may approve
+        // the old bytes once it reads again.
+        let writes = s.grant_writes();
         if stored && !s.store_grant(&m.id, None) && s.holds_plugin_grant(&m.id) {
             let back = previous.as_ref().is_ok_and(|held| s.put_back_plugin(plugin.id(), held.as_deref()));
             stored = !back && holds_new(s);
             if !back || matches!(previous, Ok(None)) {
-                s.ignore_stored_grant(&m.id);
+                s.ignore_stored_grant(&m.id, writes);
             }
         }
     }
@@ -787,7 +789,8 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     if changed {
         s.store_disabled_plugins();
     }
-    let mut v = describe_installed(&registry::install(plugin));
+    let installed = registry::install(plugin).map_err(err)?;
+    let mut v = describe_installed(&installed);
     if !unknown.is_empty() {
         v["unknownCommands"] = json!(unknown);
     }
@@ -886,7 +889,7 @@ fn load_folder(s: &Session, folder: &str) -> Value {
         None if crate::file_access::current().is_none() => Ok(()),
         None => Err(format!("automation path rejected: {} isn't valid text", f.display())),
     };
-    match registry::load_folder_where(std::path::Path::new(folder), allow, s.plugin_approver()) {
+    match registry::load_folder_where(std::path::Path::new(folder), allow, s.plugin_folder_approver()) {
         Ok(r) => {
             for id in &r.loaded {
                 s.attach_plugin_storage(id);
