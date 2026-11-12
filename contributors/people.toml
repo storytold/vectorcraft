@@ -225,3 +225,7 @@ sync_github_name = true
 real_name = "Hassan Nawaz Khan"
 display_name = "Hassan Nawaz Khan"
 sync_github_name = false
+
+[people.JH3lou]
+real_name = "Justin Helou"
+sync_github_name = true
