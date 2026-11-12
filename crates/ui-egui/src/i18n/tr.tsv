@@ -3057,6 +3057,7 @@ digits	Malayalam	Malayalam
 	Show Modified	Değiştirilenleri Göster
 	Show Note	Notu Göster
 	Show Options	Seçenekleri Göster
+	Show Recent Colors	Son Renkleri Göster
 	Show Original Path	Orijinal Yolu Göster
 	Color Panel Options	Renk Paneli Seçenekleri
 	Show Package	Paketi Göster
@@ -5425,6 +5426,11 @@ theme	Appearance	Görünüm
 	Softness	Yumuşaklık
 	Ambient Light	Ortam Işığı
 	Light behind the object	Nesnenin arkasındaki ışık
+	Shadows	Gölgeler
+	Distance from Object	Nesneden uzaklık
+	Shadow Bounds	Gölge sınırları
+	Behind Object	Nesnenin arkasında
+	Below Object	Nesnenin altında
 	Registration:	Kayıt:
 	Dimension	Boyut
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Çizim : Gerçek boyut — 1:10 etiketler sayfada 10 adet olarak 1 adettir.
@@ -6084,6 +6090,16 @@ axis	Y Axis	Y ekseni
 @msg	message must be text	"message" metin olmalıdır
 @msg	allowContinue must be true or false	"allowContinue" true veya false olmalıdır
 @msg	Batch cannot play an action with a stop	Toplu işlem durak içeren bir eylemi oynatamaz
+	Insert Menu Item…	Menü Öğesi Ekle…
+	Insert Menu Item	Menü Öğesi Ekle
+	Menu Item:	Menü öğesi:
+	No menu item matches.	Eşleşen menü öğesi yok.
+	Several menu items match. Choose one from the list.	Birden çok menü öğesi eşleşiyor. Listeden birini seçin.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	İletişim kutusu açan öğeler ile Dosya, Pencere ve Yardım menülerinin öğeleri listelenmez.
+@msg	command must be text	"command" metin olmalıdır
+@msg	no menu item that can be inserted runs this command	eklenebilen hiçbir menü öğesi bu komutu çalıştırmaz
+@msg	the action already has 10,000 steps	eylemde zaten 10.000 adım var
+@msg	the action set would be larger than 8 MiB	eylem seti 8 MiB'tan büyük olurdu
 	Playback Options	Oynatma Seçenekleri
 	Accelerated	Hızlandırılmış
 	Step by Step	Adım Adım

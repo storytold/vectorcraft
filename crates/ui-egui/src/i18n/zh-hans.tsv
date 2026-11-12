@@ -3094,6 +3094,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Show Modified	显示已修改
 	Show Note	显示注解
 	Show Options	显示选项
+	Show Recent Colors	显示最近使用的颜色
 	Show Original Path	显示原始路径
 	Open this dialog with these settings next time	下次以这些设置打开此对话框
 	Auto-Simplify	自动简化
@@ -5609,6 +5610,11 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	环境光
 	Light behind the object	光源位于对象后方
+	Shadows	阴影
+	Distance from Object	与对象的距离
+	Shadow Bounds	阴影边界
+	Behind Object	对象后方
+	Below Object	对象下方
 	3D Lighting Preset	3D 光照预设
 	Standard	标准
 	Diffuse	漫射
@@ -5966,6 +5972,16 @@ axis	Y Axis	Y 轴
 @msg	message must be text	message 必须是文本
 @msg	allowContinue must be true or false	allowContinue 必须是 true 或 false
 @msg	Batch cannot play an action with a stop	批处理无法播放含有停止的动作
+	Insert Menu Item…	插入菜单项…
+	Insert Menu Item	插入菜单项
+	Menu Item:	菜单项：
+	No menu item matches.	没有匹配的菜单项。
+	Several menu items match. Choose one from the list.	有多个菜单项匹配。请从列表中选择一个。
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	未列出会打开对话框的项目，以及“文件”“窗口”和“帮助”菜单中的项目。
+@msg	command must be text	command 必须是文本
+@msg	no menu item that can be inserted runs this command	没有可插入的菜单项运行此命令
+@msg	the action already has 10,000 steps	该动作已有 10,000 个步骤
+@msg	the action set would be larger than 8 MiB	动作组将超过 8 MiB
 	Playback Options	播放选项
 	Accelerated	加速
 	Step by Step	逐步

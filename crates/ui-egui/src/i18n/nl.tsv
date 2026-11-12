@@ -1485,6 +1485,7 @@ digits	Malayalam	Malayalam
 	Roman Baseline	Romeinse basislijn
 	Select a text object to edit its character attributes.	Selecteer een tekstobject om de tekenkenmerken ervan te bewerken.
 	Show Options	Opties tonen
+	Show Recent Colors	Recente kleuren tonen
 	Small Caps	Kleine kapitalen
 	Small Caps (on the roadmap)	Kleine kapitalen (op de roadmap)
 	Standard Vertical Roman Alignment	Standaard verticale Romeinse uitlijning
@@ -5260,6 +5261,11 @@ mark-style	Japanese	Japans
 	Softness	Zachtheid
 	Ambient Light	Omgevingslicht
 	Light behind the object	Licht achter het object
+	Shadows	Schaduwen
+	Distance from Object	Afstand tot object
+	Shadow Bounds	Schaduwgrenzen
+	Behind Object	Achter object
+	Below Object	Onder object
 	3D Lighting Preset	Voorinstelling 3D-belichting
 	Standard	Standaard
 	Diffuse	Diffuus
@@ -5955,6 +5961,16 @@ axis	Y Axis	Y-as
 @msg	message must be text	message moet tekst zijn
 @msg	allowContinue must be true or false	allowContinue moet true of false zijn
 @msg	Batch cannot play an action with a stop	Batch kan geen actie met een stop afspelen
+	Insert Menu Item…	Menu-item invoegen…
+	Insert Menu Item	Menu-item invoegen
+	Menu Item:	Menu-item:
+	No menu item matches.	Geen menu-item komt overeen.
+	Several menu items match. Choose one from the list.	Meerdere menu-items komen overeen. Kies er een uit de lijst.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Items die een dialoogvenster openen en items uit de menu’s Bestand, Venster en Help worden niet weergegeven.
+@msg	command must be text	command moet tekst zijn
+@msg	no menu item that can be inserted runs this command	geen invoegbaar menu-item voert deze opdracht uit
+@msg	the action already has 10,000 steps	de actie heeft al 10.000 stappen
+@msg	the action set would be larger than 8 MiB	de actieset zou groter worden dan 8 MiB
 	Playback Options	Afspeelopties
 	Accelerated	Versneld
 	Step by Step	Stap voor stap

@@ -1535,6 +1535,7 @@ digits	Malayalam	Malajalam
 	Roman Baseline	Latinična osnovna linija
 	Select a text object to edit its character attributes.	Odaberite tekstualni objekat da uredite njegove atribute znakova.
 	Show Options	Prikaži opcije
+	Show Recent Colors	Prikaži nedavne boje
 	Color Panel Options	Opcije panela boja
 	Small Caps	Mala velika slova
 	Small Caps (on the roadmap)	Mala velika slova (u planu)
@@ -5596,6 +5597,11 @@ mark-style	Japanese	Japanski
 	Softness	Mekoća
 	Ambient Light	Ambijentalno svjetlo
 	Light behind the object	Svjetlo iza objekta
+	Shadows	Sjene
+	Distance from Object	Udaljenost od objekta
+	Shadow Bounds	Granice sjene
+	Behind Object	Iza objekta
+	Below Object	Ispod objekta
 	3D Lighting Preset	Predložak 3D osvjetljenja
 	Standard	Standardno
 	Diffuse	Difuzno
@@ -5928,6 +5934,16 @@ axis	Y Axis	Y osa
 @msg	message must be text	message mora biti tekst
 @msg	allowContinue must be true or false	allowContinue mora biti true ili false
 @msg	Batch cannot play an action with a stop	Paketna obrada ne može reprodukovati akciju sa zaustavljanjem
+	Insert Menu Item…	Umetni stavku menija…
+	Insert Menu Item	Umetni stavku menija
+	Menu Item:	Stavka menija:
+	No menu item matches.	Nijedna stavka menija ne odgovara.
+	Several menu items match. Choose one from the list.	Odgovara više stavki menija. Izaberite jednu sa liste.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Stavke koje otvaraju dijalog i stavke menija Datoteka, Prozor i Pomoć nisu navedene.
+@msg	command must be text	command mora biti tekst
+@msg	no menu item that can be inserted runs this command	nijedna stavka menija koja se može umetnuti ne pokreće ovu naredbu
+@msg	the action already has 10,000 steps	akcija već ima 10.000 koraka
+@msg	the action set would be larger than 8 MiB	skup akcija bio bi veći od 8 MiB
 	Playback Options	Opcije reprodukcije
 	Accelerated	Ubrzano
 	Step by Step	Korak po korak

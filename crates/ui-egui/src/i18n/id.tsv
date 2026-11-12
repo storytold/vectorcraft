@@ -1471,6 +1471,7 @@ digits	Malayalam	Malayalam
 	Roman Baseline	Baseline Romawi
 	Select a text object to edit its character attributes.	Pilih objek teks untuk mengedit atribut karakternya.
 	Show Options	Tampilkan opsi
+	Show Recent Colors	Tampilkan warna terbaru
 	Small Caps	Kapital kecil
 	Small Caps (on the roadmap)	Kapital kecil (masih dalam roadmap)
 	Standard Vertical Roman Alignment	Perataan Romawi vertikal standar
@@ -5248,6 +5249,11 @@ mark-style	Japanese	Jepang
 	Softness	Kelembutan
 	Ambient Light	Cahaya ambient
 	Light behind the object	Cahaya di belakang objek
+	Shadows	Bayangan
+	Distance from Object	Jarak dari objek
+	Shadow Bounds	Batas bayangan
+	Behind Object	Di belakang objek
+	Below Object	Di bawah objek
 	3D Lighting Preset	Preset Pencahayaan 3D
 	Standard	Standar
 	Diffuse	Difus
@@ -5904,6 +5910,16 @@ axis	Y Axis	Sumbu Y
 @msg	message must be text	message harus berupa teks
 @msg	allowContinue must be true or false	allowContinue harus true atau false
 @msg	Batch cannot play an action with a stop	Batch tidak dapat memutar tindakan dengan titik henti
+	Insert Menu Item…	Sisipkan item menu…
+	Insert Menu Item	Sisipkan item menu
+	Menu Item:	Item menu:
+	No menu item matches.	Tidak ada item menu yang cocok.
+	Several menu items match. Choose one from the list.	Beberapa item menu cocok. Pilih salah satu dari daftar.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Item yang membuka dialog, serta item menu Berkas, Jendela, dan Bantuan, tidak dicantumkan.
+@msg	command must be text	command harus berupa teks
+@msg	no menu item that can be inserted runs this command	tidak ada item menu yang dapat disisipkan yang menjalankan perintah ini
+@msg	the action already has 10,000 steps	tindakan sudah memiliki 10.000 langkah
+@msg	the action set would be larger than 8 MiB	set tindakan akan lebih besar dari 8 MiB
 	Playback Options	Opsi pemutaran
 	Accelerated	Dipercepat
 	Step by Step	Langkah demi langkah

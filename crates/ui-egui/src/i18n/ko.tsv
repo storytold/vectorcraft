@@ -3073,6 +3073,7 @@ mark-style	Japanese	일본식
 	Show List View	목록 보기 표시
 	Show Note	메모 표시
 	Show Options	옵션 표시
+	Show Recent Colors	최근 색상 표시
 	Show Original Path	원래 패스 표시
 	Open this dialog with these settings next time	다음에 이 설정으로 이 대화상자 열기
 	Auto-Simplify	자동 단순화
@@ -5308,6 +5309,11 @@ lighting	Light	광원
 	Softness	부드러움
 	Ambient Light	주변광
 	Light behind the object	개체 뒤의 조명
+	Shadows	그림자
+	Distance from Object	개체로부터의 거리
+	Shadow Bounds	그림자 범위
+	Behind Object	개체 뒤
+	Below Object	개체 아래
 	3D Lighting Preset	3D 조명 사전 설정
 	Standard	표준
 	Diffuse	확산
@@ -5706,6 +5712,16 @@ axis	Y Axis	Y축
 @msg	message must be text	message의 값은 텍스트여야 합니다
 @msg	allowContinue must be true or false	allowContinue의 값은 true 또는 false여야 합니다
 @msg	Batch cannot play an action with a stop	일괄 처리에서는 중지가 있는 액션을 재생할 수 없습니다
+	Insert Menu Item…	메뉴 항목 삽입…
+	Insert Menu Item	메뉴 항목 삽입
+	Menu Item:	메뉴 항목:
+	No menu item matches.	일치하는 메뉴 항목이 없습니다.
+	Several menu items match. Choose one from the list.	여러 메뉴 항목이 일치합니다. 목록에서 하나를 선택하세요.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	대화 상자를 여는 항목과 파일, 윈도우, 도움말 메뉴의 항목은 표시되지 않습니다.
+@msg	command must be text	command의 값은 텍스트여야 합니다
+@msg	no menu item that can be inserted runs this command	이 명령을 실행하는 삽입 가능한 메뉴 항목이 없습니다
+@msg	the action already has 10,000 steps	액션에 이미 단계가 10,000개 있습니다
+@msg	the action set would be larger than 8 MiB	액션 세트가 8 MiB를 넘게 됩니다
 	Playback Options	재생 옵션
 	Accelerated	가속
 	Step by Step	단계별

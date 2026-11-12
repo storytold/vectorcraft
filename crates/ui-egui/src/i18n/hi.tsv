@@ -2485,6 +2485,11 @@ antiAlias	Sharp	शार्प
 	Ligatures are off while the text is tracked.	टेक्स्ट पर ट्रैकिंग लागू होने पर लिगेचर ऑफ़ रहते हैं।
 	Light	लाइट
 	Light behind the object	ऑब्जेक्ट के पीछे प्रकाश
+	Shadows	छायाएँ
+	Distance from Object	ऑब्जेक्ट से दूरी
+	Shadow Bounds	छाया सीमाएँ
+	Behind Object	ऑब्जेक्ट के पीछे
+	Below Object	ऑब्जेक्ट के नीचे
 	Light Blue	हल्का नीला
 	Light Direction	लाइट की दिशा
 	Light Gray	हल्का ग्रे
@@ -3391,6 +3396,16 @@ antiAlias	Sharp	शार्प
 @msg	message must be text	message टेक्स्ट होना चाहिए
 @msg	allowContinue must be true or false	allowContinue true या false होना चाहिए
 @msg	Batch cannot play an action with a stop	बैच स्टॉप वाला एक्शन नहीं चला सकता
+	Insert Menu Item…	मेनू आइटम जोड़ें…
+	Insert Menu Item	मेनू आइटम जोड़ें
+	Menu Item:	मेनू आइटम:
+	No menu item matches.	कोई मेनू आइटम मेल नहीं खाता।
+	Several menu items match. Choose one from the list.	कई मेनू आइटम मेल खाते हैं। सूची से एक चुनें।
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	डायलॉग खोलने वाले आइटम और फ़ाइल, विंडो और सहायता मेनू के आइटम सूचीबद्ध नहीं हैं।
+@msg	command must be text	command टेक्स्ट होना चाहिए
+@msg	no menu item that can be inserted runs this command	जोड़ा जा सकने वाला कोई मेनू आइटम यह कमांड नहीं चलाता
+@msg	the action already has 10,000 steps	एक्शन में पहले से 10,000 कदम हैं
+@msg	the action set would be larger than 8 MiB	एक्शन सेट 8 MiB से बड़ा हो जाएगा
 	Playback Options	प्लेबैक ऑप्शन्स
 	Playback Options…	प्लेबैक ऑप्शन्स…
 	Plug-in Info	प्लगइन जानकारी
@@ -4389,6 +4404,7 @@ antiAlias	Sharp	शार्प
 	Show Modified	संशोधित दिखाएँ
 	Show Note	नोट दिखाएं
 	Show Options	ऑप्शन्स दिखाएँ
+	Show Recent Colors	हाल के रंग दिखाएँ
 	Show Original Path	मूल पाथ दिखाएं
 	Show Package	पैकेज करें दिखाएँ
 	Show Panel	शो पैनल

@@ -2706,6 +2706,7 @@ digits	Malayalam	Malaiala
 	Show List View	Mostrar Exibição de Lista
 	Show Note	Mostrar Nota
 	Show Options	Mostrar Opções
+	Show Recent Colors	Mostrar Cores Recentes
 	Show Original Path	Mostrar Caminho Original
 	Open this dialog with these settings next time	Abrir este diálogo com estas configurações na próxima vez
 	Auto-Simplify	Simplificar Automaticamente
@@ -4596,6 +4597,11 @@ axis	Both	Ambos
 	Softness	Suavidade
 	Ambient Light	Luz ambiente
 	Light behind the object	Luz atrás do objeto
+	Shadows	Sombras
+	Distance from Object	Distância do objeto
+	Shadow Bounds	Limites da sombra
+	Behind Object	Atrás do objeto
+	Below Object	Abaixo do objeto
 	3D Lighting Preset	Predefinição de iluminação 3D
 	Standard	Padrão
 	Diffuse	Difusa
@@ -6043,6 +6049,16 @@ axis	Y Axis	Eixo Y
 @msg	message must be text	message deve ser texto
 @msg	allowContinue must be true or false	allowContinue deve ser true ou false
 @msg	Batch cannot play an action with a stop	Lote não pode reproduzir uma ação com uma parada
+	Insert Menu Item…	Inserir Item de Menu…
+	Insert Menu Item	Inserir Item de Menu
+	Menu Item:	Item de menu:
+	No menu item matches.	Nenhum item de menu corresponde.
+	Several menu items match. Choose one from the list.	Vários itens de menu correspondem. Escolha um da lista.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Itens que abrem uma caixa de diálogo e itens dos menus Arquivo, Janela e Ajuda não são listados.
+@msg	command must be text	command deve ser texto
+@msg	no menu item that can be inserted runs this command	nenhum item de menu que possa ser inserido executa este comando
+@msg	the action already has 10,000 steps	a ação já tem 10.000 etapas
+@msg	the action set would be larger than 8 MiB	o conjunto de ações ficaria maior que 8 MiB
 	Playback Options	Opções de Reprodução
 	Accelerated	Acelerada
 	Step by Step	Passo a Passo

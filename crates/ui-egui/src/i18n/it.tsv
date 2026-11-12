@@ -3266,6 +3266,7 @@ digits	Malayalam	Malayalam
 	Show Modified	Mostra modificati
 	Show Note	Mostra nota
 	Show Options	Mostra opzioni
+	Show Recent Colors	Mostra colori recenti
 	Show Original Path	Mostra tracciato originale
 	Open this dialog with these settings next time	Apri questa finestra di dialogo con queste impostazioni la prossima volta
 	Auto-Simplify	Semplifica automaticamente
@@ -5347,6 +5348,11 @@ lighting	Light	Luce
 	Softness	Morbidezza
 	Ambient Light	Luce ambientale
 	Light behind the object	Luce dietro l'oggetto
+	Shadows	Ombre
+	Distance from Object	Distanza dall'oggetto
+	Shadow Bounds	Limiti dell'ombra
+	Behind Object	Dietro l'oggetto
+	Below Object	Sotto l'oggetto
 	3D Lighting Preset	Predefinito illuminazione 3D
 	Standard	Standard
 	Diffuse	Diffusa
@@ -5745,6 +5751,16 @@ axis	Y Axis	Asse Y
 @msg	message must be text	message deve essere testo
 @msg	allowContinue must be true or false	allowContinue deve essere true o false
 @msg	Batch cannot play an action with a stop	L'elaborazione batch non può eseguire un'azione con un'interruzione
+	Insert Menu Item…	Inserisci voce di menu…
+	Insert Menu Item	Inserisci voce di menu
+	Menu Item:	Voce di menu:
+	No menu item matches.	Nessuna voce di menu corrisponde.
+	Several menu items match. Choose one from the list.	Corrispondono più voci di menu. Sceglierne una dall’elenco.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Le voci che aprono una finestra di dialogo e le voci dei menu File, Finestra e Aiuto non sono elencate.
+@msg	command must be text	command deve essere testo
+@msg	no menu item that can be inserted runs this command	nessuna voce di menu inseribile esegue questo comando
+@msg	the action already has 10,000 steps	l’azione ha già 10.000 passaggi
+@msg	the action set would be larger than 8 MiB	il set di azioni supererebbe 8 MiB
 	Playback Options	Opzioni di riproduzione
 	Accelerated	Accelerata
 	Step by Step	Passo per passo
