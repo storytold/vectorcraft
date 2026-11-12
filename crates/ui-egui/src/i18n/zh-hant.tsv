@@ -1126,6 +1126,8 @@ font-technology	Variable	可變
 	Extrude & Bevel…	突出與斜角…
 	3D (Classic)	3D (經典)
 	Extrude & Bevel (Classic)…	突出與斜角 (經典)…
+	Revolve (Classic)…	迴轉 (經典)…
+	Rotate (Classic)…	旋轉 (經典)…
 	Surface	表面
 	Wireframe	線框
 	No Shading	無網底
@@ -1439,6 +1441,14 @@ file-filter	Templates	範本
 	Hair Space	極細空格
 	Hand Tool	手形工具
 	Hand-Drawn	手繪
+	Painted and Sketched	繪畫與素描
+	Washed Blue	水洗藍
+	Bristle Ochre	乾刷土黃
+	Pastel Heather	粉彩淡紫
+	Charcoal Shade	炭筆陰影
+	Ink Contour	墨線輪廓
+	Wet Ink	濕墨
+	Fine Pen	細筆
 	Handles	控制把手
 	Hard Light	實光
 	Hard Mix	實色混合
@@ -1902,6 +1912,7 @@ file-filter	Templates	範本
 @msg	`preserve` must be an object	`preserve` 必須是物件
 @msg	`globalAdjust` must be an object	`globalAdjust` 必須是物件
 @msg	`stops` must be an array	`stops` 必須是陣列
+@msg	`{key}` must be an array	`{key}` 必須是陣列
 @msg	`{k}` must be [x, y]	`{k}` 必須是 [x, y]
 @msg	a gradient needs at least two stops	漸層至少需要兩個色標
 @msg	give both `start` and `end` [x, y] (or neither)	請同時提供 `start` 和 `end` [x, y] (或兩者都不提供)
@@ -2184,6 +2195,7 @@ file-filter	Templates	範本
 @msg	{bpp}-bit bitmaps can't be read	無法讀取 {bpp} 位元點陣圖
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 檔案
 @msg	not an HP-GL file	不是 HP-GL 檔案
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 必須是由 1 到 255 個 #rrggbb 格式顏色組成的陣列
 @msg	its layers use {_1}, which aren't read yet	其圖層使用了 {_1}，目前尚無法讀取
 @msg	the EMF header is damaged	EMF 檔頭已損毀
 @msg	damaged	已損毀
@@ -3364,6 +3376,7 @@ file-filter	Templates	範本
 	Options:	選項：
 	Options…	選項…
 	Organic Fades	自然漸隱
+	Holographic	全像
 	or more spaces with a tab	個以上的空格取代為定位字元
 	Order:	順序：
 	Ordinals	序數字
@@ -3922,6 +3935,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Rise…	上升…
 	Roman Baseline	羅馬基線
 	Roman Hanging Punctuation	羅馬懸掛標點
+	Korean Line Break Anywhere	韓文任意位置換行
+	East Asian Composition Settings	東亞排版設定
+	Korean Composition Settings	韓文排版設定
 	Rotate	旋轉
 	Rotate 90° CW	順時針旋轉 90°
 	Rotate Tool	旋轉工具
@@ -5676,6 +5692,7 @@ lighting	Light	光源
 	Ruby	注音
 	Geometric Guides	幾何參考線
 	Geometric Patterns	幾何圖樣
+	Grit Textures	顆粒紋理
 	Ease In	緩入
 	Ease Out	緩出
 	Ease In Out	緩入緩出
@@ -5954,6 +5971,17 @@ axis	Y Axis	Y 軸
 	Charge Wave	充能波
 	Spark Trail	火花尾跡
 	Calligraphic Nibs	書法筆尖
+	Bristle Brushes	鬃毛筆刷集
+	Fine Liner	細勾線筆
+	Pointed Flat	尖頭平筆
+	Stubby Round	短圓筆
+	Dry Scrub	乾擦
+	Soft Dome	柔和圓頂
+	Filbert	榛形筆
+	Angled Round	斜圓筆
+	Angled Flat	斜平筆
+	Fan Blender	混色扇形筆
+	Grass Fan	畫草扇形筆
 	Pattern Borders	圖樣邊框
 	Scatter Shapes	散佈形狀
 	Save Brush Library…	儲存筆刷資料庫…
@@ -6166,6 +6194,10 @@ anchor	Points:	點：
 @msg	features lists at most {max} tags	features 最多包含 {max} 個標籤
 @msg	unknown OpenType feature `{t}`	未知的 OpenType 功能 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 必須是大於 0 且不超過 {max} 的數字
+@msg	{label} must be at most {max} characters	{label} 最多 {max} 個字元
+@msg	{label} must be one character	{label} 必須是一個字元
+@msg	at most {max} tab stops	最多 {max} 個定位點
+@msg	unknown align `{other}`	未知的對齊方式 `{other}`
 @msg	no character style `{name}`	找不到字元樣式 `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6328,6 +6360,12 @@ breakText	Glyphs	字符
 	Delete the selected brushes?	要刪除選取的筆刷嗎？
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	有筆畫使用了其中一個或多個筆刷。要從這些筆畫移除筆刷並刪除筆刷嗎？
 	Remove Strokes	移除筆畫
+	Place Brush Art	置入筆刷圖稿
+	Replace Brush Art	取代筆刷圖稿
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	有筆畫使用了此筆刷。要將新圖稿套用到這些筆畫，還是保留筆畫不變並加入一個使用新圖稿的筆刷複本？
+	Apply to Strokes	套用至筆畫
+	Leave Strokes	保留筆畫
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` 沒有圖稿 (只有散佈筆刷、藝術筆刷和圖樣筆刷有圖稿)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	排列工具
 	Arrange in Grid…	依格狀排列…
@@ -6577,8 +6615,33 @@ breakText	Glyphs	字符
 @plural	{n} line cut|{n} lines cut	已截斷 {n} 行
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必須是主控台保留的行號，且 `first` 不能在 `last` 之後
 
+# Learn panel
+	Learn	學習
+	Explore tutorials	瀏覽教學課程
+	For you	為你推薦
+	Skills	技能
+	Get started	入門
+	Quick skill guide	快速技能指南
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	針對基本工具的簡短實作教學課程，依技能分組。選擇一項技能即可查看其教學課程。
+	List Tutorials	列出教學課程
+	Show Tutorial	顯示教學課程
+@msg	missing `tutorial` (see learn.list)	未提供 `tutorial` (請參閱 learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	未知的教學課程 `{id}` (請參閱 learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	重新整理延後的效果
 	Deferred Effects	延後的效果
 @msg	no plug-in effect is deferred	沒有延後的增效模組效果
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	開啟時延後了 {n} 個增效模組效果。效果 › 重新整理延後的效果可執行它們。
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	切割工具
+	Stencil Bridges…	鏤空版連接橋…
+	Stencil Bridges	鏤空版連接橋
+	Shortest Crossing	最短跨越
+	Direction	方向
+@msg	The selected art has no islands to bridge	所選圖稿沒有需要連接的孤島
+@msg	No bridge of this width fits across the selected art	此寬度的連接橋無法放入所選圖稿
+@msg	Some islands could not be joined to the area around the art	部分孤島無法連接到圖稿周圍的區域
+@msg	`width` must be from {lo} to {hi} pt	`width` 必須介於 {lo} 到 {hi} pt 之間
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必須是介於 1 到 {MAX_BRIDGES_PER_ISLAND} 的整數

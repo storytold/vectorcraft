@@ -1162,6 +1162,8 @@ font-technology	Variable	Variabili
 	Extrude & Bevel…	Estrusione e smusso…
 	3D (Classic)	3D (classico)
 	Extrude & Bevel (Classic)…	Estrusione e smusso (classico)…
+	Revolve (Classic)…	Rivoluzione (classico)…
+	Rotate (Classic)…	Ruota (classico)…
 	Surface	Superficie
 	Wireframe	Reticolo
 	No Shading	Nessuna ombreggiatura
@@ -1474,6 +1476,14 @@ file-filter	Templates	Modelli
 	Hair Space	Spazio sottilissimo
 	Hand Tool	Strumento Mano
 	Hand-Drawn	Disegnato a mano
+	Painted and Sketched	Dipinto e schizzato
+	Washed Blue	Blu slavato
+	Bristle Ochre	Ocra a setole
+	Pastel Heather	Erica pastello
+	Charcoal Shade	Ombra a carboncino
+	Ink Contour	Contorno a china
+	Wet Ink	China bagnata
+	Fine Pen	Pennino fine
 	Handles	Maniglie
 	Hard Light	Luce intensa
 	Hard Mix	Miscela intensa
@@ -2395,6 +2405,7 @@ file-filter	Templates	Modelli
 	Options:	Opzioni:
 	Options…	Opzioni…
 	Organic Fades	Dissolvenze organiche
+	Holographic	Olografici
 	or more spaces with a tab	o più spazi con una tabulazione
 	Order:	Ordine:
 	Ordinals	Ordinali
@@ -2949,6 +2960,9 @@ digits	Malayalam	Malayalam
 	Rise…	Ascesa…
 	Roman Baseline	Linea di base romana
 	Roman Hanging Punctuation	Punteggiatura sporgente romana
+	Korean Line Break Anywhere	Interruzione di riga coreana ovunque
+	East Asian Composition Settings	Impostazioni di composizione dell’Asia orientale
+	Korean Composition Settings	Impostazioni di composizione coreana
 	Rotate	Ruota
 	Rotate 90° CW	Ruota di 90° in senso orario
 	Rotate Tool	Strumento Ruota
@@ -4302,6 +4316,7 @@ axis	Both	Entrambi
 @msg	`globalAdjust` must be an object	`globalAdjust` deve essere un oggetto
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` deve essere 1, 3 o 5
 @msg	`stops` must be an array	`stops` deve essere un array
+@msg	`{key}` must be an array	`{key}` deve essere un array
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` deve essere un oggetto di opzioni SVG (vedi document.formats)
 @msg	`{_1}` is no save command	`{_1}` non è un comando di salvataggio
 @msg	`{area}` is no recovery area name	`{area}` non è il nome di un'area di recupero
@@ -4618,6 +4633,7 @@ axis	Both	Entrambi
 @msg	not a valid plug-in module: {0}	non è un modulo plug-in valido: {0}
 @msg	not an EMF or WMF file	non è un file EMF o WMF
 @msg	not an HP-GL file	non è un file HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` deve essere un elenco da 1 a 255 colori #rrggbb
 @msg	not found	non trovato
 @msg	not in pattern editing mode	non sei in modalità modifica motivo
 @msg	finish editing the pattern first	termina prima la modifica del motivo
@@ -5658,6 +5674,7 @@ lighting	Light	Luce
 	Ruby	Ruby
 	Geometric Guides	Guide geometriche
 	Geometric Patterns	Motivi geometrici
+	Grit Textures	Texture granulose
 	Ease In	Inizio graduale
 	Ease Out	Fine graduale
 	Ease In Out	Inizio e fine graduali
@@ -5936,6 +5953,17 @@ axis	Y Axis	Asse Y
 	Charge Wave	Onda di carica
 	Spark Trail	Scia di scintille
 	Calligraphic Nibs	Pennini calligrafici
+	Bristle Brushes	Pennelli a setole
+	Fine Liner	Tratto fine
+	Pointed Flat	Piatto appuntito
+	Stubby Round	Tondo corto
+	Dry Scrub	Strofinato secco
+	Soft Dome	Cupola morbida
+	Filbert	Lingua di gatto
+	Angled Round	Tondo obliquo
+	Angled Flat	Piatto obliquo
+	Fan Blender	Ventaglio sfumino
+	Grass Fan	Ventaglio per erba
 	Pattern Borders	Bordi a motivo
 	Scatter Shapes	Forme a dispersione
 	Save Brush Library…	Salva libreria pennelli…
@@ -6148,6 +6176,10 @@ anchor	Points:	Punti:
 @msg	features lists at most {max} tags	features contiene al massimo {max} tag
 @msg	unknown OpenType feature `{t}`	funzione OpenType sconosciuta `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} deve essere un numero maggiore di 0 e al massimo {max}
+@msg	{label} must be at most {max} characters	{label} deve avere al massimo {max} caratteri
+@msg	{label} must be one character	{label} deve essere un solo carattere
+@msg	at most {max} tab stops	al massimo {max} tabulazioni
+@msg	unknown align `{other}`	allineamento sconosciuto `{other}`
 @msg	no character style `{name}`	Stile di carattere `{name}` non trovato
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6310,6 +6342,12 @@ breakText	Glyphs	Glifi
 	Delete the selected brushes?	Eliminare i pennelli selezionati?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Alcune tracce usano uno o più di questi pennelli. Rimuovere i pennelli da queste tracce ed eliminare i pennelli?
 	Remove Strokes	Rimuovi tracce
+	Place Brush Art	Inserisci grafica del pennello
+	Replace Brush Art	Sostituisci grafica del pennello
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Alcune tracce usano questo pennello. Applicare la nuova grafica a queste tracce, o lasciarle come sono e aggiungere una copia del pennello con la nuova grafica?
+	Apply to Strokes	Applica alle tracce
+	Leave Strokes	Lascia le tracce
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` non ha una grafica (ce l’hanno solo i pennelli a dispersione, artistici e motivo)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Strumenti di disposizione
 	Arrange in Grid…	Disponi in griglia…
@@ -6562,8 +6600,33 @@ breakText	Glyphs	Glifi
 @plural	{n} line cut|{n} lines cut	{n} riga tagliata|{n} righe tagliate
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devono essere numeri di righe presenti nella console, `first` prima di `last`
 
+# Learn panel
+	Learn	Impara
+	Explore tutorials	Esplora i tutorial
+	For you	Per te
+	Skills	Competenze
+	Get started	Per iniziare
+	Quick skill guide	Guida rapida alle competenze
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Brevi tutorial pratici sugli strumenti essenziali, raggruppati per competenza. Scegli una competenza per vederne i tutorial.
+	List Tutorials	Elenca tutorial
+	Show Tutorial	Mostra tutorial
+@msg	missing `tutorial` (see learn.list)	manca `tutorial` (vedi learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial sconosciuto `{id}` (vedi learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Aggiorna effetti rimandati
 	Deferred Effects	Effetti rimandati
 @msg	no plug-in effect is deferred	nessun effetto plug-in è rimandato
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Aperto con {n} effetto plug-in rimandato. Effetto › Aggiorna effetti rimandati lo esegue.|Aperto con {n} effetti plug-in rimandati. Effetto › Aggiorna effetti rimandati li esegue.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Strumenti di taglio
+	Stencil Bridges…	Ponti per stencil…
+	Stencil Bridges	Ponti per stencil
+	Shortest Crossing	Attraversamento più breve
+	Direction	Direzione
+@msg	The selected art has no islands to bridge	La grafica selezionata non ha isole da collegare
+@msg	No bridge of this width fits across the selected art	Nessun ponte di questa larghezza entra nella grafica selezionata
+@msg	Some islands could not be joined to the area around the art	Non è stato possibile collegare alcune isole all’area intorno alla grafica
+@msg	`width` must be from {lo} to {hi} pt	`width` deve essere compreso tra {lo} e {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve essere un numero intero compreso tra 1 e {MAX_BRIDGES_PER_ISLAND}

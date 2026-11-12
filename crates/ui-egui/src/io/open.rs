@@ -1,7 +1,7 @@
 use vectorcraft_engine::cmd::plugin::InstallApproval;
 use vectorcraft_plugins::permissions;
 
-use super::save::suggested;
+use super::save::{notes_of, show_with_notes, suggested};
 use super::{Dialog, FilePick, Format, Value, VectorcraftApp, dialogs, fileio, json};
 
 /// Template extensions New from Template's open dialog lists first.
@@ -144,8 +144,8 @@ pub(crate) fn opened(app: &mut VectorcraftApp, r: &Value) {
     app.sync_views();
     let notes = open_notes(app, r);
     if let Some(first) = notes.first() {
-        app.status(opened_with_notes(notes.len(), first));
-        app.ui.status_notes = Some((app.ui.status.clone(), notes));
+        let status = opened_with_notes(notes.len(), first);
+        show_with_notes(app, status, notes);
     }
     crate::dialogs::missing_links::after_open(app, r);
 }
@@ -153,7 +153,7 @@ pub(crate) fn opened(app: &mut VectorcraftApp, r: &Value) {
 /// The notes of the open `r`, those of what reading the file left out (its document's
 /// `import_losses`) first, each group in the order the import gave them.
 fn open_notes(app: &VectorcraftApp, r: &Value) -> Vec<String> {
-    let notes: Vec<String> = r["warnings"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
+    let notes = notes_of(r);
     let index = r["index"].as_u64().and_then(|i| usize::try_from(i).ok());
     let losses = index.and_then(|i| app.session.documents().get(i)).map(|st| st.import_losses.as_slice()).unwrap_or_default();
     let (mut first, rest): (Vec<String>, Vec<String>) = notes.into_iter().partition(|n| losses.contains(n));

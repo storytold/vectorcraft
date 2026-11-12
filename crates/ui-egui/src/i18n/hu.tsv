@@ -1444,6 +1444,8 @@ font-technology	Variable	Változó
 	Extrude & Bevel…	Kihúzás és élletörés…
 	3D (Classic)	3D (klasszikus)
 	Extrude & Bevel (Classic)…	Kihúzás és élletörés (klasszikus)…
+	Revolve (Classic)…	Forgatás tengely körül (klasszikus)…
+	Rotate (Classic)…	Elforgatás (klasszikus)…
 	Surface	Felület
 	Wireframe	Drótváz
 	No Shading	Nincs árnyékolás
@@ -1847,6 +1849,14 @@ file-filter	Templates	Sablonok
 	Hand	Kéz
 	Hand Tool	Kéz
 	Hand-Drawn	Kézzel rajzolt
+	Painted and Sketched	Festett és vázlatos
+	Washed Blue	Kimosott kék
+	Bristle Ochre	Sörteokker
+	Pastel Heather	Pasztell hanga
+	Charcoal Shade	Szénárnyék
+	Ink Contour	Tuskontúr
+	Wet Ink	Nedves tus
+	Fine Pen	Finom toll
 	Handles	Fogantyúk
 	Hard	Szigorú
 	Hard Light	Kemény fény
@@ -3175,6 +3185,7 @@ mark-style	Japanese	Japán
 	Radial Blur…	Körkörös elmosás…
 	Radial Glows	Körkörös ragyogások
 	Organic Fades	Organikus áttűnések
+	Holographic	Holografikus
 	Radial Gradient	Körkörös színátmenet
 	Conic Gradient	Kúpos színátmenet
 	Diamond Gradient	Rombusz színátmenet
@@ -3481,6 +3492,9 @@ mark-style	Japanese	Japán
 	Roman	Latin
 	Roman Baseline	Latin alapvonal
 	Roman Hanging Punctuation	Latin függő írásjelek
+	Korean Line Break Anywhere	Koreai sortörés bárhol
+	East Asian Composition Settings	Kelet-ázsiai szedési beállítások
+	Korean Composition Settings	Koreai szedési beállítások
 	Rotate	Elforgatás
 	Rotate 90° CW	Forgatás 90°-kal jobbra
 	Rotate Tool	Elforgatás
@@ -4759,6 +4773,7 @@ imageTrace	Outline	Körvonal
 @msg	`globalAdjust` must be an object	`globalAdjust`: objektum kell
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize`: 1, 3 vagy 5 kell
 @msg	`stops` must be an array	`stops`: tömb kell
+@msg	`{key}` must be an array	`{key}`: tömb kell
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg`: SVG-beállításokat tartalmazó objektum kell (lásd: document.formats)
 @msg	`to` must be "corner" or "smooth"	`to`: "corner" vagy "smooth" kell
 @msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference`: "emBox", "capHeight", "xHeight" vagy "icfBox" kell
@@ -5252,6 +5267,7 @@ imageTrace	Outline	Körvonal
 @msg	not a blend	nem összemosás
 @msg	not an EMF or WMF file	nem EMF- vagy WMF-fájl
 @msg	not an HP-GL file	nem HP-GL-fájl
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens`: 1–255 #rrggbb szín tömbje kell
 @msg	not found	nem található
 @msg	not in pattern editing mode	nem mintázatszerkesztő módban vagy
 @msg	finish editing the pattern first	előbb fejezd be a mintázat szerkesztését
@@ -6018,6 +6034,7 @@ imageTrace	Outline	Körvonal
 	Ruby	Ruby
 	Geometric Guides	Geometriai segédvonalak
 	Geometric Patterns	Geometriai mintázatok
+	Grit Textures	Szemcsés textúrák
 	Ease In	Lassú kezdés
 	Ease Out	Lassú befejezés
 	Ease In Out	Lassú kezdés és befejezés
@@ -6294,6 +6311,17 @@ axis	Y Axis	Y tengely
 	Charge Wave	Töltéshullám
 	Spark Trail	Szikracsík
 	Calligraphic Nibs	Kalligrafikus tollhegyek
+	Bristle Brushes	Sörteecsetek
+	Fine Liner	Finom kontúr
+	Pointed Flat	Hegyes lapos
+	Stubby Round	Rövid kerek
+	Dry Scrub	Száraz dörzsölés
+	Soft Dome	Lágy kupola
+	Filbert	Macskanyelv
+	Angled Round	Ferde kerek
+	Angled Flat	Ferde lapos
+	Fan Blender	Elmosó legyező
+	Grass Fan	Fűlegyező
 	Pattern Borders	Mintázatszegélyek
 	Scatter Shapes	Szórt alakzatok
 	Save Brush Library…	Ecsetkönyvtár mentése…
@@ -6504,6 +6532,10 @@ anchor	Points:	Pontok:
 @msg	features lists at most {max} tags	a features legfeljebb {max} címkét tartalmazhat
 @msg	unknown OpenType feature `{t}`	ismeretlen OpenType-funkció: `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 0-nál nagyobb és legfeljebb {max} értékű szám kell legyen
+@msg	{label} must be at most {max} characters	{label} legfeljebb {max} karakter lehet
+@msg	{label} must be one character	{label} pontosan egy karakter kell legyen
+@msg	at most {max} tab stops	legfeljebb {max} tabulátor
+@msg	unknown align `{other}`	ismeretlen igazítás: `{other}`
 @msg	no character style `{name}`	A(z) `{name}` karakterstílus nem található
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6665,6 +6697,12 @@ breakText	Glyphs	Glifák
 	Delete the selected brushes?	Törlöd a kijelölt ecseteket?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Körvonalak használnak egyet vagy többet ezek közül az ecsetek közül. Leveszed az ecseteket ezekről a körvonalakról, és törlöd az ecseteket?
 	Remove Strokes	Körvonalak eltávolítása
+	Place Brush Art	Ecsetgrafika elhelyezése
+	Replace Brush Art	Ecsetgrafika cseréje
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Körvonalak használják ezt az ecsetet. Alkalmazod az új grafikát ezekre a körvonalakra, vagy változatlanul hagyod őket, és hozzáadod az ecset egy másolatát az új grafikával?
+	Apply to Strokes	Alkalmazás a körvonalakra
+	Leave Strokes	Körvonalak megtartása
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` ecsetnek nincs grafikája (csak a szóró-, a grafikus és a mintázatecseteknek van)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Elrendezőeszközök
 	Arrange in Grid…	Elrendezés rácsba…
@@ -6917,8 +6955,33 @@ breakText	Glyphs	Glifák
 @plural	{n} line cut|{n} lines cut	{n} sor levágva
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	A `first` és a `last` a konzolban tárolt sorok számai legyenek, a `first` a `last` előtt
 
+# Learn panel
+	Learn	Tanulás
+	Explore tutorials	Oktatóanyagok felfedezése
+	For you	Önnek
+	Skills	Készségek
+	Get started	Első lépések
+	Quick skill guide	Gyors készségkalauz
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Rövid gyakorlati oktatóanyagok az alapvető eszközökhöz, készségek szerint csoportosítva. Válasszon egy készséget az oktatóanyagai megtekintéséhez.
+	List Tutorials	Oktatóanyagok listázása
+	Show Tutorial	Oktatóanyag megjelenítése
+@msg	missing `tutorial` (see learn.list)	hiányzik: `tutorial` (lásd: learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	ismeretlen oktatóanyag: `{id}` (lásd: learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Elhalasztott effektusok frissítése
 	Deferred Effects	Elhalasztott effektusok
 @msg	no plug-in effect is deferred	nincs elhalasztott bővítményeffektus
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Megnyitva, elhalasztott bővítményeffektusok: {n}. Az Effektus › Elhalasztott effektusok frissítése futtatja őket.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Vágóeszközök
+	Stencil Bridges…	Sablonhidak…
+	Stencil Bridges	Sablonhidak
+	Shortest Crossing	Legrövidebb átkelés
+	Direction	Irány
+@msg	The selected art has no islands to bridge	A kijelölt grafikán nincsenek összekötendő szigetek
+@msg	No bridge of this width fits across the selected art	Ilyen széles híd nem fér el a kijelölt grafikán
+@msg	Some islands could not be joined to the area around the art	Egyes szigeteket nem sikerült összekötni a grafikát körülvevő területtel
+@msg	`width` must be from {lo} to {hi} pt	A `width` értéke {lo} és {hi} pt között lehet
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`: 1 és {MAX_BRIDGES_PER_ISLAND} közötti egész szám kell
