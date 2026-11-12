@@ -205,6 +205,11 @@ pub(crate) struct Interp {
     pub(crate) date_host: crate::date_builtins::DateHost,
     /// The bytes native code holds outside the heap's cells through [`HeldBytes`].
     pub(crate) held: Rc<HeldCount>,
+    /// Bytes of the copies [`Self::get_own_property`] made flattening the rope of a String
+    /// object, which the heap's total adds before the next limit check.
+    flattened: std::cell::Cell<usize>,
+    /// Fuel for the units those copies took, which the next step takes.
+    pub(crate) flattened_fuel: std::cell::Cell<u64>,
     /// The global code's default XML namespace URI (ECMA-357 section 12.1).
     pub(crate) xml_default_uri: Key,
     /// Set by the host to end the current slice of a resumable run at the next safe point.
@@ -450,6 +455,8 @@ impl Interp {
             files: None,
             date_host: crate::date_builtins::DateHost::default(),
             held: Rc::default(),
+            flattened: std::cell::Cell::new(0),
+            flattened_fuel: std::cell::Cell::new(0),
             xml_default_uri: Rc::from(Vec::new()),
             pause: Rc::default(),
             in_slice: false,
@@ -569,6 +576,7 @@ impl Interp {
 
     fn tick(&mut self) -> JsResult<()> {
         self.use_fuel()?;
+        crate::regexp_vm::use_fuel_n(self, self.flattened_fuel.replace(0))?;
         self.settle_held();
         if self.heap.bytes > self.gc_threshold {
             self.collect_garbage();
@@ -595,10 +603,12 @@ impl Interp {
         Ok(())
     }
 
-    /// Takes the bytes that dropped [`HeldBytes`] released off the heap's total.
+    /// Takes the bytes that dropped [`HeldBytes`] released off the heap's total, and adds the
+    /// bytes of the ropes [`Self::get_own_property`] flattened.
     fn settle_held(&mut self) {
         let released = self.held.released.replace(0);
-        self.heap.bytes = self.heap.bytes.saturating_sub(released);
+        let flattened = self.flattened.replace(0);
+        self.heap.bytes = self.heap.bytes.saturating_sub(released).saturating_add(flattened);
     }
 
     /// Collects garbage now and sets when the next collection runs.
@@ -664,6 +674,7 @@ impl Interp {
         self.heap.collect(&roots);
         // The collection counts the live total again, so bytes already released are not in it.
         self.held.released.set(0);
+        self.flattened.set(0);
         self.heap.bytes = self.heap.bytes.saturating_add(self.held_bytes).saturating_add(self.held.now.get());
     }
 
@@ -1214,6 +1225,17 @@ impl Interp {
                 if let Some(i) = array_index(k)
                     && (i as usize) < s.len()
                 {
+                    if s.is_rope() {
+                        // Flattening copies the units. The run ends here when the fuel for the
+                        // copy is not left; otherwise the next step takes it, and the next limit
+                        // check adds the copy's bytes.
+                        let fuel = self.flattened_fuel.get().saturating_add((s.len() / crate::string_builtins::UNITS_PER_FUEL) as u64 + 1);
+                        if fuel > self.fuel {
+                            return Err(Abrupt::Limit(LimitKind::Fuel));
+                        }
+                        self.flattened_fuel.set(fuel);
+                        self.flattened.set(self.flattened.get().saturating_add(string_bytes(s.len())));
+                    }
                     let unit = s.flat().get(i as usize).copied().unwrap_or(0);
                     return Ok(Some(Prop::Data { value: Value::String(Str::from_units(vec![unit])), flags: ENUMERABLE }));
                 }
@@ -2216,19 +2238,26 @@ impl Interp {
         let arguments =
             if code.uses_arguments { OBJECT_BYTES.saturating_add(args.len().saturating_add(4).saturating_mul(binding_bytes(10))) } else { 0 };
         let need = declaration_bytes(&code).saturating_add(ENV_BYTES).saturating_add(params).saturating_add(arguments);
-        // The operands are off the stack. Reserving the heap collects, and so can boxing a string
-        // receiver, which flattens it; the operands stay rooted until the frame holds them.
-        let collects = self.heap.bytes.saturating_add(need) > self.limits.heap_bytes || (!code.strict && matches!(this, Value::String(_)));
-        let mark = self.temp_roots.len();
-        if collects {
+        if self.heap.bytes.saturating_add(need) > self.limits.heap_bytes {
+            let mark = self.temp_roots.len();
             self.temp_roots.push(Value::Object(callee));
             self.temp_roots.push(this.clone());
             self.temp_roots.extend(construct.map(Value::Object));
             self.temp_roots.extend(args.iter().cloned());
+            let reserved = self.reserve_heap(need);
+            self.temp_roots.truncate(mark);
+            reserved?;
         }
-        let received = self.receive_call(&code, env, this, &args, callee, need);
-        self.temp_roots.truncate(mark);
-        let (this, fenv) = received?;
+        let this = if code.strict {
+            this
+        } else {
+            match this {
+                Value::Undefined | Value::Null => Value::Object(self.global),
+                Value::Object(_) => this,
+                prim => Value::Object(self.to_object(&prim)?),
+            }
+        };
+        let fenv = self.instantiate_function(&code, env, &args, callee)?;
         let base = self.stack.len();
         self.frames.push(Frame {
             code,
@@ -2244,25 +2273,6 @@ impl Interp {
             boundary,
         });
         Ok(())
-    }
-
-    /// Reserves the `need` bytes of a call, boxes a primitive receiver for non-strict code and
-    /// binds the parameters, returning the receiver and the function's environment.
-    fn receive_call(&mut self, code: &Rc<Code>, env: EnvId, this: Value, args: &[Value], callee: ObjId, need: usize) -> JsResult<(Value, EnvId)> {
-        if self.heap.bytes.saturating_add(need) > self.limits.heap_bytes {
-            self.reserve_heap(need)?;
-        }
-        let this = if code.strict {
-            this
-        } else {
-            match this {
-                Value::Undefined | Value::Null => Value::Object(self.global),
-                Value::Object(_) => this,
-                prim => Value::Object(self.to_object(&prim)?),
-            }
-        };
-        let fenv = self.instantiate_function(code, env, args, callee)?;
-        Ok((this, fenv))
     }
 
     /// Declaration binding instantiation for function code (section 10.5). Each parameter and
@@ -2578,7 +2588,8 @@ impl Interp {
             Value::String(s) => string_to_number(&flat_charged(self, s)?),
             Value::Object(_) => {
                 let p = self.to_primitive(v, Hint::Number)?;
-                return self.to_number(&p);
+                // Rooted, so what a string holds is still counted while its copy is reserved.
+                return self.rooted(std::slice::from_ref(&p), |i| i.to_number(&p));
             }
         })
     }
@@ -2613,7 +2624,8 @@ impl Interp {
             Value::Number(n) if *n >= 0.0 && *n < 4_294_967_295.0 && n.fract() == 0.0 => Ok(index_key(*n as u32)),
             _ => {
                 let s = self.to_str(v)?;
-                self.flat_reserved(&s)
+                // Rooted, so what the string holds is still counted while its copy is reserved.
+                self.rooted(&[Value::String(s.clone())], |i| i.flat_reserved(&s))
             }
         }
     }
@@ -2638,11 +2650,7 @@ impl Interp {
             Value::Undefined | Value::Null => return Err(self.type_error("cannot convert undefined or null to an object")),
             Value::Bool(b) => (Class::Boolean(*b), self.intrinsics.boolean_proto),
             Value::Number(n) => (Class::Number(*n), self.intrinsics.number_proto),
-            // Flattened now, with its copy counted, so reading a character copies nothing.
-            Value::String(s) => {
-                flat_charged(self, s)?;
-                (Class::String(s.clone()), self.intrinsics.string_proto)
-            }
+            Value::String(s) => (Class::String(s.clone()), self.intrinsics.string_proto),
         };
         Ok(self.heap.alloc_object(Object::new(class, Some(proto))))
     }

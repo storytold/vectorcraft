@@ -230,6 +230,7 @@ impl Realm {
             return Err(RunError { kind: RunErrorKind::Internal, message: message.clone(), line: 0, column: 0 });
         }
         interp.fuel = interp.limits.fuel;
+        interp.flattened_fuel.set(0);
         interp.source_units = 0;
         interp.throw_site = None;
         interp.last_thrown = Value::Undefined;

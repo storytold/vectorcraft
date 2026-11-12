@@ -355,22 +355,63 @@ fn a_flattened_temporary_stays_counted_while_the_next_copy_is_made() {
 }
 
 #[test]
-fn a_string_wrapper_counts_what_its_rope_holds_while_the_copy_is_made() {
+fn a_converted_rope_counts_what_it_holds_while_its_copy_is_made() {
     // `mk` returns a rope whose left half is a flat string of about half the heap, held by
     // nothing else. Its flattened copy is the other half, so the two don't fit together.
     let build = "var s = 'x'; for (var i = 0; i < 18; i++) s = s + s; function f(c) { return s + c; } \
                  function mk() { var a = f('a'); a[0]; return a + 'b'; }";
     let limits = Limits { heap_bytes: 4 * 262_146, ..Limits::default() };
-    let src = format!("{build} new String({{ toString: mk }}); 0");
-    let result = Realm::with_options(Options::default(), limits).run(&src);
-    assert!(matches!(result, Err(ref e) if e.kind == RunErrorKind::Limit(LimitKind::Heap)), "{result:?}");
+    let not_stopped: Vec<_> = ["+({ valueOf: mk })", "({})[{ toString: mk }]"]
+        .into_iter()
+        .filter(|read| {
+            let result = Realm::with_options(Options::default(), limits.clone()).run(&format!("{build} {read}; 0"));
+            !matches!(result, Err(ref e) if e.kind == RunErrorKind::Limit(LimitKind::Heap))
+        })
+        .collect();
+    assert!(not_stopped.is_empty(), "not stopped by the heap limit: {not_stopped:?}");
+}
+
+#[test]
+fn a_string_object_counts_its_flattened_rope_against_the_heap() {
+    // The same three ropes, each wrapped in a String object and read by index.
+    let build = "var s = 'x'; for (var i = 0; i < 19; i++) s = s + s; var t = s + 'y', u = s + 'z'; \
+                 String.prototype.first = function () { return this[0]; };";
+    let limits = Limits { heap_bytes: 3 << 20, ..Limits::default() };
+    // Wrapping alone reads no units, so it makes no copy.
+    let lengths =
+        Realm::with_options(Options::default(), limits.clone()).run(&format!("{build} Object(s).length + new String(t).length + Object(u).length"));
+    assert_eq!(lengths, Ok(JsValue::Number(1_572_866.0)));
+    for read in ["Object(X)[0]", "new String(X)[0]", "0 in Object(X)", "Object(X).hasOwnProperty(0)", "X.first()"] {
+        let src = format!("{build} {}; {}; {}; 0", read.replace('X', "s"), read.replace('X', "t"), read.replace('X', "u"));
+        let e = fail_with(Realm::with_options(Options::default(), limits.clone()), &src);
+        assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{read}: {e:?}");
+    }
+    let wrapped =
+        Realm::with_options(Options::default(), Limits::default()).run(&format!("{build} Object(t)[524288] + new String(u)[524288] + t.first()"));
+    assert_eq!(wrapped, Ok(JsValue::String("yzx".into())));
+}
+
+#[test]
+fn a_string_object_takes_fuel_for_the_rope_it_flattens() {
+    let limits = Limits { fuel: 40_000, ..Limits::default() };
+    let build = "var s = ' '; for (var i = 0; i < 20; i++) s = s + s; Object(s).length";
+    assert!(Realm::with_options(Options::default(), limits.clone()).run(build).is_ok());
+    for read in ["Object(s)[0]", "0 in new String(s)"] {
+        let e = fail_with(Realm::with_options(Options::default(), limits.clone()), &format!("{build}; {read}"));
+        assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Fuel), "{read}: {e:?}");
+    }
+    // A run that ends with an error right after the read leaves the next run its whole fuel.
+    let mut realm = Realm::with_options(Options::default(), Limits { fuel: 100_000, ..Limits::default() });
+    let defined = realm.run("var s = ' '; for (var i = 0; i < 20; i++) s = s + s; Object.defineProperty(new String(s), 0, { value: 'a' })");
+    assert!(matches!(defined, Err(ref e) if e.kind == RunErrorKind::Thrown), "{defined:?}");
+    assert!(realm.run("for (var j = 0; j < 5000; j++) {} j").is_ok());
 }
 
 #[test]
 fn a_call_keeps_its_operands_while_a_string_receiver_is_boxed() {
-    // Boxing the rope receiver of a non-strict function flattens it, and reserving the copy
-    // collects the garbage string `g` left. The callee and the argument object are off the
-    // stack by then, and must survive the collection.
+    // `g` leaves a garbage string, so the heap is close to its limit when the rope receiver of a
+    // non-strict function is boxed. The callee and the argument object are off the stack by
+    // then, and must survive anything boxing the receiver does.
     let build = "var s = 'x'; for (var i = 0; i < 17; i++) s = s + s; function f(c) { return s + c; } \
                  function mk() { var a = f('a'); a[0]; return a + 'b'; } 0";
     let mut realm = Realm::with_options(Options::default(), Limits::default());
