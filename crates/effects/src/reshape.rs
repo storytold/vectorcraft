@@ -947,7 +947,11 @@ impl Step<'_> {
                     let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room);
                     *used = used.minus(before).plus(made);
                     if moved {
-                        moved_ids.insert(leaf.id);
+                        // With Transform Objects off the path stays, and its mask takes the
+                        // effect's stroke and pattern changes as its own art.
+                        if options.objects {
+                            moved_ids.insert(leaf.id);
+                        }
                         short |= counts(leaf.id) && copied(leaf) <= copies;
                     } else {
                         kept_ids.insert(leaf.id);

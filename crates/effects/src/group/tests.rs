@@ -1091,6 +1091,24 @@ fn a_transform_with_scale_strokes_scales_the_masks_of_images_and_paths_alike() {
     assert_eq!(width(&ch[0]), width(&ch[1]), "the image's mask");
 }
 
+/// With Transform Objects off and Scale Strokes & Effects on, a group's Transform effect scales the
+/// strokes of a member's linked mask as it scales the member's, and moves neither.
+#[test]
+fn a_transform_of_strokes_only_scales_a_members_mask_strokes() {
+    let stroked = |id: u64| {
+        Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(Paint::None, Paint::solid(Color::WHITE), 2.0))
+    };
+    let mut g = Node::group(NodeId(10), vec![Arc::new(masked_by(stroked(1), stroked(4), true))]);
+    let params = serde_json::json!({"scaleH": 200, "scaleV": 200, "objects": false, "strokes": true});
+    g.appearance.effects.push(Effect { id: "distort.transform".into(), params, visible: true });
+    let art = evaluate_container(None, &g).unwrap();
+    let member = &art.children().unwrap()[0];
+    let mask = &member.extras().mask.as_deref().unwrap().art;
+    assert_eq!(member.appearance.stroke().map(|s| s.width), Some(4.0), "the member's stroke");
+    assert_eq!(mask.appearance.stroke().map(|s| s.width), Some(4.0), "the mask's stroke");
+    assert_eq!(mask.geometric_bounds(), member.geometric_bounds());
+}
+
 /// The art of a member group's mask is copied as it was before the first effect: a mask of one
 /// path takes a second Transform effect's copies path by path, as the path it masks does, though
 /// the first effect (with Scale Strokes & Effects) made it a group of copies.
