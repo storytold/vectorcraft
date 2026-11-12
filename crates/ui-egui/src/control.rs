@@ -356,7 +356,7 @@ fn unreadable_library_ids(app: &VectorcraftApp) -> Hiding {
         .collect();
     // The longest first, so that an id that begins another one does not replace part of it.
     hidden.sort_by_key(|(id, _)| std::cmp::Reverse(id.len()));
-    Hiding { hidden, readable: readable_ids }
+    Hiding { hidden, readable: readable_ids, sent: Vec::new() }
 }
 
 /// What a reply hides ([`hide_library_ids`]).
@@ -368,6 +368,9 @@ struct Hiding {
     /// The other loaded library ids the UI state and the session hold: an occurrence of a hidden id or
     /// path that begins one of them stays ([`begins_known_id`]).
     readable: std::collections::BTreeSet<String>,
+    /// The paths outside the read roots that the request sent ([`sent_paths`]), each as a hidden
+    /// library id with the id shown. They are matched after the hidden libraries.
+    sent: Vec<(String, String)>,
 }
 
 impl Hiding {
@@ -387,16 +390,26 @@ impl Hiding {
         self.hidden.sort_by_key(|(id, _)| std::cmp::Reverse(id.len()));
     }
 
-    /// Adds the hidden ids of `pairs`, each with the id shown, in place of each id this one holds for
-    /// the same path: written with either separator, and in any case of ASCII letters with `fold`.
+    /// Adds the sent paths of `pairs`, each as a hidden id with the id shown. A hidden id this one holds
+    /// for the same path (written with either separator, relative or as the absolute path it reads as
+    /// ([`absolute_form`]), and in any case of ASCII letters with `fold`) is shown as the sent path is.
     fn set_hidden(&mut self, pairs: Vec<(String, String)>, fold: bool) {
         let key = |id: &str| {
-            let id = id.replace('\\', "/");
+            let path = id.strip_prefix("loaded/").unwrap_or(id);
+            let id = absolute_form(path).unwrap_or_else(|| path.to_string()).replace('\\', "/");
             if fold { id.to_ascii_lowercase() } else { id }
         };
         let sent: Vec<String> = pairs.iter().map(|(id, _)| key(id)).collect();
-        self.hidden.retain(|(id, _)| !sent.contains(&key(id)));
-        self.add_hidden(pairs);
+        for (id, shown) in &mut self.hidden {
+            if let Some(at) = sent.iter().position(|k| *k == key(id)) {
+                shown.clone_from(&pairs[at].1);
+            }
+        }
+        for pair in pairs {
+            if !self.sent.iter().any(|(id, _)| *id == pair.0) {
+                self.sent.push(pair);
+            }
+        }
     }
 }
 
@@ -477,31 +490,48 @@ fn collect_library_panel_ids(v: &Value, ids: &mut std::collections::BTreeSet<Str
 /// Windows the ids and paths are matched in any case of ASCII letters.
 fn hide_library_ids(v: &mut Value, hiding: &Hiding) {
     let pairs = hidden_text(hiding);
-    if pairs.is_empty() {
+    if pairs.iter().all(Vec::is_empty) {
         return;
     }
     replace_in_value(v, &Rewrite { pairs, hiding, fold: cfg!(windows) });
 }
 
-/// The text [`hide_library_ids`] replaces, longest first: each hidden id with the id shown, and the
-/// path in it with the file name shown, the path written with either separator too, and as `{:?}`
-/// quotes it (each `\`, quote and control character escaped).
-fn hidden_text(hiding: &Hiding) -> Vec<(String, String)> {
+/// The text [`hide_library_ids`] replaces, in two groups: the hidden libraries' text, then the text of
+/// the paths the request sent ([`Hiding::sent`]), each longest first. For each id, that is the id with
+/// the id shown, and the path in it with the file name shown, the path written with either separator
+/// too, and as `{:?}` quotes it (each `\`, quote and control character escaped). A relative path is
+/// also replaced as the absolute path the file access check reads it as, against the working folder.
+fn hidden_text(hiding: &Hiding) -> Vec<Vec<(String, String)>> {
+    vec![text_pairs(&hiding.hidden), text_pairs(&hiding.sent)]
+}
+
+/// The absolute path that `path`, a relative path (one that does not start with a separator, a drive
+/// or `~`), reads as from the working folder, as the file access check reads it; `None` for any other
+/// path.
+fn absolute_form(path: &str) -> Option<String> {
+    let relative = !path.starts_with(['/', '\\', '~']) && !matches!(path.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic());
+    relative.then(|| std::path::absolute(path).ok()).flatten().map(|p| p.to_string_lossy().into_owned())
+}
+
+/// The text [`hidden_text`] replaces for the ids of `ids`, longest first.
+fn text_pairs(ids: &[(String, String)]) -> Vec<(String, String)> {
     let quoted = |s: &str| {
         let q = format!("{s:?}");
         q[1..q.len() - 1].to_string()
     };
     let mut pairs: Vec<(String, String)> = Vec::new();
-    for (id, shown) in &hiding.hidden {
+    for (id, shown) in ids {
         let path = &id["loaded/".len()..];
         let name = shown.strip_prefix("loaded/").unwrap_or(shown);
-        let (forward, back) = (path.replace('\\', "/"), path.replace('/', "\\"));
-        let debug = [quoted(path), quoted(&forward), quoted(&back)].map(|p| (p, quoted(name)));
-        let plain = [path.to_string(), forward, back].map(|p| (p, name.to_string()));
-        for (path, name) in plain.into_iter().chain(debug) {
-            for (from, to) in [(format!("loaded/{path}"), format!("loaded/{name}")), (path, name)] {
-                if !pairs.iter().any(|(f, _)| *f == from) {
-                    pairs.push((from, to));
+        for path in std::iter::once(path.to_string()).chain(absolute_form(path)) {
+            let (forward, back) = (path.replace('\\', "/"), path.replace('/', "\\"));
+            let debug = [quoted(&path), quoted(&forward), quoted(&back)].map(|p| (p, quoted(name)));
+            let plain = [path, forward, back].map(|p| (p, name.to_string()));
+            for (path, name) in plain.into_iter().chain(debug) {
+                for (from, to) in [(format!("loaded/{path}"), format!("loaded/{name}")), (path, name)] {
+                    if !pairs.iter().any(|(f, _)| *f == from) {
+                        pairs.push((from, to));
+                    }
                 }
             }
         }
@@ -510,10 +540,10 @@ fn hidden_text(hiding: &Hiding) -> Vec<(String, String)> {
     pairs
 }
 
-/// What [`replace_in_value`] writes: the text to replace, what the reply hides, and whether to match
-/// in any case of ASCII letters.
+/// What [`replace_in_value`] writes: the groups of text to replace ([`hidden_text`]), what the reply
+/// hides, and whether to match in any case of ASCII letters.
 struct Rewrite<'a> {
-    pairs: Vec<(String, String)>,
+    pairs: Vec<Vec<(String, String)>>,
     hiding: &'a Hiding,
     fold: bool,
 }
@@ -569,20 +599,23 @@ fn occurrences(text: &str, needle: &str, fold: bool) -> Vec<usize> {
 /// `s` with the `from` texts of the rewrite's pairs written as their `to` texts, at each occurrence
 /// that does not begin another loaded library's id ([`begins_known_id`]). A hidden id or path written
 /// with `%XX` escapes (in a `file:` URL) is replaced too; the escapes around it stay. Every occurrence
-/// is found in `s` as it was given, longest `from` first, and one that overlaps an occurrence already
-/// found, or a loaded library's id that one began, stays: a replacement's text is not searched again.
-/// With the rewrite's `fold`, the ids and paths as written are found first, so that two libraries whose
-/// paths differ only in letter case keep their own ids, and then the ones written in another case.
-/// `None` when nothing changed.
+/// is found in `s` as it was given, the hidden libraries' text before the sent paths' text, each group
+/// longest `from` first, and one that overlaps an occurrence already found, or a loaded library's id
+/// that one began, stays: a replacement's text is not searched again. With the rewrite's `fold`, the
+/// ids and paths of a group as written are found first, so that two libraries whose paths differ only
+/// in letter case keep their own ids, and then the ones written in another case. `None` when nothing
+/// changed.
 fn replace_text(s: &str, r: &Rewrite) -> Option<String> {
     let decoded = if s.contains('%') { decoded_with_spans(s).filter(|(decoded, _)| decoded != s) } else { None };
     let mut found = Found::default();
-    for fold in [false, true].into_iter().take(if r.fold { 2 } else { 1 }) {
-        for (from, to) in &r.pairs {
-            if let Some((text, spans)) = &decoded {
-                found.claim(text, Some(spans.as_slice()), from, to, fold, r);
+    for group in &r.pairs {
+        for fold in [false, true].into_iter().take(if r.fold { 2 } else { 1 }) {
+            for (from, to) in group {
+                if let Some((text, spans)) = &decoded {
+                    found.claim(text, Some(spans.as_slice()), from, to, fold, r);
+                }
+                found.claim(s, None, from, to, fold, r);
             }
-            found.claim(s, None, from, to, fold, r);
         }
     }
     if found.cuts.is_empty() {
