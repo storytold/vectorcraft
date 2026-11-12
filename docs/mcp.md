@@ -4872,6 +4872,30 @@ They list such a command while the user has changed its shortcut (`overridden: t
 shortcut for that command runs what a click on the item runs: Object › Path › Clean Up…, Print Ink Fixes… and Edit ›
 Find and Replace… open their dialogs.
 
+A command without a menu path of its own is listed when an item of the menu bar runs it with no params, or when every
+item that runs it gives it the same params. It is listed in the group named by the first part of its id. These
+commands are listed this way:
+
+- `addon.pathtools.cornerSet` (Object › Plug-ins › Path Precision Tools › Set Corners…, which opens its dialog),
+  under Addon;
+- `perspective.grid.lock`, `perspective.grid.lockStation`, `perspective.grid.rulers` and `perspective.grid.snap`
+  (View › Perspective Grid), and `perspective.attach`, `perspective.editText` and `perspective.plane.matchObject`
+  (Object › Perspective), under Perspective;
+- `text.spelling.dictionary` (Edit › Edit Custom Dictionary…), under Text;
+- the UI commands `ui.recolorDialog` (Edit › Edit Colors › Recolor Artwork…), `ui.flattenerPresetsDialog`,
+  `ui.printPresetsDialog`, `ui.pdfPresetsDialog`, `ui.perspectivePresetsDialog`, `ui.svgFilterDialog`,
+  `ui.saveSwatchLibrary`, `ui.saveBrushLibrary`, `ui.saveGraphicStyleLibrary` and `ui.saveSymbolLibrary`, under Ui;
+  `file.exportAs` and `file.exportSelection`, under File; `links.editOriginal`, under Links; `type.applyBullets` and
+  `type.applyNumbers`, under Type; and `window.toolbar.new`, `window.toolbarColumns`, `window.toolsBesideCanvas`,
+  `window.workspace.new`, `window.arrange.floatInWindow` and `window.arrange.consolidateAllWindows`, under Window.
+
+When such a command has the same group and label as an engine command that no item of the menu bar runs, the
+command the menu item runs keeps the name, and the engine command is listed in the group named by the first part of
+its id: File › Export Selection… runs `file.exportSelection`, as the menu item does, and `document.exportSelection`
+is listed as Document › Export Selection…. A shortcut already given to `document.exportSelection` keeps running it.
+When the other entry is anything else, the command is not listed: `window.learn` is left out, and Window › Learn is
+the Learn panel's entry.
+
 Each installed filter plug-in's Object › Plug-ins item is its own row, with id `plugin:<id>` (the plug-in's id), its
 menu label and no default shortcut, so two filters with the same name have two rows. `shortcuts.set {id:
 "plugin:<id>", shortcut}`, `shortcuts.list` and Import Shortcut Set use that id, `shortcuts.exportText` writes one line
