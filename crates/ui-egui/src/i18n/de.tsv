@@ -3964,6 +3964,13 @@ theme	Appearance	Erscheinungsbild
 	Dock Panel	Bedienfeld andocken
 	Dock to Top	Oben andocken
 	Dock to Bottom	Unten andocken
+	Control Bar Options	Optionen der Steuerungsleiste
+	Tool Options	Werkzeugoptionen
+	Object Options	Objektoptionen
+	Image Options	Bildoptionen
+	Vertical Alignment	Vertikale Ausrichtung
+	Align and Distribute	Ausrichten und verteilen
+	Document Options	Dokumentoptionen
 	Dock Control Bar	Steuerungsleiste andocken
 	Drag to float the toolbar	Ziehen, um die Werkzeugleiste abzulösen
 	Drag to the window's left or right edge to dock	Zum Andocken an den linken oder rechten Fensterrand ziehen

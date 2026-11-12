@@ -477,6 +477,24 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 None => Err(format!("`{key}` must be one of {}", edges.join(", "))),
             }
         }
+        // The Control bar's panel menu: a group of the bar's options on or off.
+        "window.control.options" => {
+            let groups = crate::chrome::CONTROL_BAR_GROUPS;
+            match (groups.iter().find(|g| s("group").as_deref() == Some(**g)), opt_bool(p, "visible")) {
+                (None, _) => Err(format!("`group` must be one of {}", groups.join(", "))),
+                (_, Err(e)) => Err(e),
+                (Some(&group), Ok(visible)) => {
+                    let hidden = &mut app.ui.control_bar_hidden_groups;
+                    let visible = visible.unwrap_or_else(|| hidden.contains(group));
+                    if visible {
+                        hidden.remove(group);
+                    } else {
+                        hidden.insert(group.to_string());
+                    }
+                    Ok(json!({ "group": group, "visible": visible }))
+                }
+            }
+        }
         "window.toolbar" => flag(&mut app.ui.toolbar),
         "window.toolbarColumns" => {
             let toolbar = match crate::custom_toolbars::target(&app.ui, p) {

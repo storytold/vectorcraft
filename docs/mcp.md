@@ -5064,6 +5064,23 @@ Dock to Top and Dock to Bottom, the edge in use checked, and so does a drag of t
 the edge the pointer is released nearer and shows a band along that edge while it moves. The edge is kept with the
 workspace, and a workspace saved without it docks the bar at the top. Another `edge`, or none, fails with "`edge` must
 be one of top, bottom" and leaves the bar where it is.
+`window.control.options {group, visible?}` (desktop app) turns a group of the Control bar's options on (`visible:
+true`), off (`false`) or toggles it (omitted), and returns `{group, visible}`. The groups are `snapping` (the Snapping
+menu), `anchors` (Convert and Anchors), `toolOptions` (the active tool's options), `objectOptions` (Isolate Selected
+Object or Exit Isolation Mode, the envelope controls and the symbol instance controls), `imageOptions` (a selected
+image's or Image Trace object's controls), `fillStroke` (the fill and stroke chips, Stroke and its weight and width
+profile), `opacity`, `graphicStyle` (Style, Recolor Artwork and Global Edit Options), `character`, `paragraph`,
+`verticalAlignment` (area type's vertical alignment), `alignDistribute`, `transform` (the Transform link and the X/Y/W/H
+fields, with the Artboard tool too), `artboardOptions` (the Artboard tool's other controls) and `documentOptions`
+(Document Setup and Preferences, with nothing selected). The bar's panel menu lists the groups above Dock to Top and Dock
+to Bottom, each checked while it is on, and runs the command for the group clicked. A group that is off stays out of
+the bar even while its tool or object is selected, takes no room, and leaves the room to the groups after it; a group
+that is on shows only while the selection or the tool calls for it. With an image or an Image Trace object selected and
+`imageOptions` off, the bar shows neither its controls nor Fill and Stroke. Every group starts on. Which groups are off
+is kept with the preferences and with the workspace; a workspace or preferences saved without them show every group,
+and a group id the bar does not have is dropped when they are read. Another `group`, or none, fails with "`group` must
+be one of …", and a `visible` that is not true or false fails with "`visible` must be true or false"; either leaves
+every group as it is. The groups and their contents are VectorCraft's own.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.new","params":{"preset":"A4","orientation":"landscape","artboards":4,"artboardLayout":{"columns":2},"bleed":9}}}

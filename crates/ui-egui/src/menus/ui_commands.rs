@@ -472,6 +472,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{edge: \"top\"|\"bottom\"} dock the Control bar to the top of the window, under the menu bar, or to its bottom, as the bar's panel menu (Dock to Top, Dock to Bottom) and a drag of its gripper do; kept with the workspace; another edge is an error and changes nothing; returns {edge}",
     ),
+    (
+        "window.control.options",
+        "Control Bar Options",
+        "",
+        "{group: \"snapping\"|\"anchors\"|\"toolOptions\"|\"objectOptions\"|\"imageOptions\"|\"fillStroke\"|\"opacity\"|\"graphicStyle\"|\"character\"|\"paragraph\"|\"verticalAlignment\"|\"alignDistribute\"|\"transform\"|\"artboardOptions\"|\"documentOptions\", visible?: bool} turn a group of the Control bar's options on (true), off (false) or toggle it (omitted), as the bar's panel menu does; a group that is off stays out of the bar even while its tool or object is selected, and one that is on shows only while the selection or the tool calls for it; every group starts on; kept with the workspace; another group or a `visible` that is not true or false is an error and changes nothing; returns {group, visible}",
+    ),
     ("window.toolbar", "Tools", "", "{}"),
     (
         "window.toolbarColumns",

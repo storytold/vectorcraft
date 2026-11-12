@@ -66,6 +66,10 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.control.dock" => {
             p.get("edge").and_then(Value::as_str) == Some(crate::chrome::CONTROL_BAR_EDGES[usize::from(app.ui.control_bar_bottom)])
         }
+        "window.control.options" => p
+            .get("group")
+            .and_then(Value::as_str)
+            .is_some_and(|g| crate::chrome::CONTROL_BAR_GROUPS.contains(&g) && !app.ui.control_bar_hidden_groups.contains(g)),
         "window.toolbar" => app.ui.toolbar,
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
         "window.toolsBesideCanvas" => app.ui.tools_beside_canvas,

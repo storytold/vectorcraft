@@ -194,6 +194,37 @@ fn marquee_selection_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The Control bar panel menu's items, its groups of options and the edges, and the label of the
+/// command that turns a group on or off.
+#[test]
+fn control_bar_panel_menu_labels_are_in_complete_catalogs() {
+    const LABELS: [&str; 18] = [
+        "Snapping",
+        "Anchor Points",
+        "Tool Options",
+        "Object Options",
+        "Image Options",
+        "Fill and Stroke",
+        "Opacity",
+        "Graphic Style",
+        "Character",
+        "Paragraph",
+        "Vertical Alignment",
+        "Align and Distribute",
+        "Transform",
+        "Artboard Options",
+        "Document Options",
+        "Dock to Top",
+        "Dock to Bottom",
+        "Control Bar Options",
+    ];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in LABELS {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// The Character panel's Anti-aliasing Method label and its choices, with the Sharp method's
 /// own `antiAlias` row apart from the plain "Sharp" corner row.
 #[test]

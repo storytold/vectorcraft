@@ -4033,6 +4033,13 @@ axis	Both	両方
 	Dock Panel	パネルをドッキング
 	Dock to Top	上部にドッキング
 	Dock to Bottom	下部にドッキング
+	Control Bar Options	コントロールバーオプション
+	Tool Options	ツールオプション
+	Object Options	オブジェクトオプション
+	Image Options	画像オプション
+	Vertical Alignment	垂直方向の配置
+	Align and Distribute	整列と分布
+	Document Options	ドキュメントオプション
 	Dock Control Bar	コントロールバーをドッキング
 	Drag to float the toolbar	ドラッグしてツールバーをフローティング
 	Drag to the window's left or right edge to dock	ウィンドウの左端または右端までドラッグしてドッキング
