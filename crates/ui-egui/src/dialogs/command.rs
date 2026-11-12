@@ -64,12 +64,12 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 /// Does this dialog show a Preview checkbox? Grid Repeat Options does: the public page for the
 /// grid options lists one, and the radial and mirror pages do not. Type on a Path Options does
 /// too (#5360), as public tutorials of the dialog show, and Type Tools › Release Type on a Path
-/// works the same way (#5532), and so does Image Tools › Remove Background. (Cancel rolls a
-/// preview back whichever dialog started it.)
+/// works the same way (#5532), and so do Image Tools › Remove Background and Cutting Tools › Weed
+/// Box and Lines. (Cancel rolls a preview back whichever dialog started it.)
 fn previews(d: &Dialog) -> bool {
     match d.str("__command").as_str() {
         "object.repeat.options" => d.fields.contains_key("gridType"),
-        "type.pathOptions" | crate::addons::typetools::RELEASE | crate::addons::image::REMOVE_BACKGROUND => true,
+        "type.pathOptions" | crate::addons::typetools::RELEASE | crate::addons::image::REMOVE_BACKGROUND | crate::addons::cutting::WEED => true,
         _ => false,
     }
 }
@@ -87,6 +87,19 @@ fn call(d: &Dialog) -> (String, Value) {
     {
         o.remove("rowGutter");
     }
+    // Weed Box and Lines: a Spacing of 0, or none, leaves the Count in use; any other Spacing is
+    // sent instead of the Count, so the command refuses one below 0.
+    if d.str("__command") == crate::addons::cutting::WEED
+        && let Some(o) = params.as_object_mut()
+    {
+        let zero = |s: &Value| match s {
+            Value::Null => true,
+            Value::String(t) => vectorcraft_doc::Unit::Points.parse(t).or_else(|| t.trim().parse().ok()) == Some(0.0),
+            v => v.as_f64() == Some(0.0),
+        };
+        let by_count = o.get("spacing").is_none_or(zero);
+        o.remove(if by_count { "spacing" } else { "count" });
+    }
     (d.str("__command"), params)
 }
 
@@ -102,6 +115,7 @@ fn lengths(command: &str) -> &'static [&'static str] {
         "graph.create" => &["width", "height"],
         "shape.flare" => &["diameter", "pathLength"],
         "perspective.grid.set" => &["cell", "distance"],
+        crate::addons::cutting::WEED => &["margin", "spacing", "gap", "weight"],
         "object.repeat.options" => &["radius", "hSpacing", "vSpacing"],
         "text.areaOptions" => &["width", "height", "gutter", "rowGutter", "inset", "firstBaselineMin", "lineGap"],
         "type.pathOptions" => &["spacing"],
@@ -115,6 +129,7 @@ fn lengths(command: &str) -> &'static [&'static str] {
 /// names isn't it (the rest follow, by name).
 fn order(command: &str) -> &'static [&'static str] {
     match command {
+        crate::addons::cutting::WEED => &["margin", "box", "direction", "count", "spacing", "gap", "weight", "swatch"],
         // The public Trap options' order.
         "object.pathfinder.trap" => &["thickness", "heightWidth", "tintReduction", "trapsWithProcessColor", "reverseTraps"],
         "addon.color.printFixes" => &["inkLimit", "excludePureBlack", "removeWhiteOverprint", "overprintBlack", "textOnly", "fill", "stroke"],
@@ -135,6 +150,7 @@ fn choices(command: &str, key: &str) -> Option<form::Choices> {
         ("text.areaOptions", "fit") => Some(AREA_FIT),
         ("text.areaOptions", "firstBaseline") => Some(FIRST_BASELINE),
         ("text.areaOptions", "verticalAlign") => Some(VERTICAL_ALIGN),
+        (crate::addons::cutting::WEED, "direction") => Some(crate::addons::cutting::WEED_DIRECTIONS),
         ("graph.setType", "type") => Some(GRAPH_KINDS.as_slice()),
         ("graph.setType", "valueAxis") => Some(GRAPH_VALUE_AXIS),
         ("graph.setType", "tickLength" | "rightTickLength" | "categoryTickLength") => Some(GRAPH_TICK_LENGTH),

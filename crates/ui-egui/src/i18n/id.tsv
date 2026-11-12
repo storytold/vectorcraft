@@ -1613,6 +1613,17 @@ digits	Malayalam	Malayalam
 	The selected character's font is not available.	Font karakter yang dipilih tidak tersedia.
 	No alternates for the selected character.	Tidak ada alternatif untuk karakter yang dipilih.
 	Double-click to replace	Klik ganda untuk mengganti
+	Select one character with the Type tool first.	Pilih satu karakter dengan alat teks terlebih dahulu.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} adalah glif {font}, bukan dari font yang dipakai teks terpilih ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} milik {base} (U+{base_code}) {place}; pilihan Anda adalah {sel} (U+{code}).
+	at the start of a word	di awal kata
+	in the middle of a word	di tengah kata
+	at the end of a word	di akhir kata
+	standing alone	saat berdiri sendiri
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} bukan alternatif {sel} (U+{code}) sebagaimana posisinya di dalam katanya.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Klik ganda untuk menyisipkan {base} (U+{code}) sebagai gantinya: bentuk presentasi tidak menyambung, hurufnya menyambung.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) disisipkan sebagai ganti bentuk presentasi: font menyambungkannya ke huruf di sebelahnya menurut posisi.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Tidak ada fitur OpenType yang menggambar glif ini di sini, jadi glif ini menggantikan glif karakter dan mungkin tidak menyambung dengan karakter di sebelahnya.
 	Double-click to insert	Klik ganda untuk menyisipkan
 	Entire Font	Seluruh font
 	glyph {id}	glif {id}
@@ -6706,4 +6717,9 @@ breakText	Glyphs	Glif
 	Stencil Bridges…	Jembatan Stensil…
 	Stencil Bridges	Jembatan Stensil
 	Shortest Crossing	Persilangan terpendek
+	Weed Box and Lines…	Kotak dan garis pembersih sisa…
+	Weed Box and Lines	Kotak dan garis pembersih sisa
+	Margin	Margin
+	Box	Kotak
+	Swatch	Sampel warna
 	Direction	Arah

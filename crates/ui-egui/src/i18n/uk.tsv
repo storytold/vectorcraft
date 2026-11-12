@@ -896,6 +896,17 @@ font-technology	Variable	Варіативні
 	The selected character's font is not available.	Шрифт виділеного символу недоступний.
 	No alternates for the selected character.	Виділений символ не має альтернатив.
 	Double-click to replace	Двічі клацніть для заміни
+	Select one character with the Type tool first.	Спершу виділіть один символ інструментом «Текст».
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} — гліф шрифту {font}, а не шрифту виділеного тексту ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} належить символу {base} (U+{base_code}) {place}; виділено символ {sel} (U+{code}).
+	at the start of a word	на початку слова
+	in the middle of a word	у середині слова
+	at the end of a word	наприкінці слова
+	standing alone	в окремому вигляді
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} не є альтернативою символу {sel} (U+{code}) у тому вигляді, в якому він стоїть у своєму слові.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Двічі клацніть, щоб вставити замість нього {base} (U+{code}): форма подання не з’єднується, літера з’єднується.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Замість форми подання вставлено {base} (U+{code}): шрифт з’єднує його із сусідніми за положенням.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Жодна функція OpenType не малює тут цей гліф, тому він замінює гліф символу й може не з’єднуватися із сусідніми символами.
 	Double-click to insert	Двічі клацніть для вставки
 	Double-click to rename	Двічі клацніть для перейменування
 	Double-click to target the contents	Двічі клацніть, щоб вибрати вміст як об’єкт
@@ -6623,3 +6634,8 @@ breakText	Glyphs	Гліфи
 @msg	Some islands could not be joined to the area around the art	Деякі острівці не вдалося з’єднати з областю навколо графіки
 @msg	`width` must be from {lo} to {hi} pt	`width` має бути від {lo} до {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` має бути цілим числом від 1 до {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Рамка й лінії вибірки…
+	Weed Box and Lines	Рамка й лінії вибірки
+	Margin	Поле
+	Box	Рамка
+	Swatch	Зразок

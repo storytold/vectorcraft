@@ -881,6 +881,17 @@ font-technology	Variable	Variabla
 	The selected character's font is not available.	Typsnittet för det markerade tecknet är inte tillgängligt.
 	No alternates for the selected character.	Inga alternativ för det markerade tecknet.
 	Double-click to replace	Dubbelklicka för att ersätta
+	Select one character with the Type tool first.	Markera först ett tecken med textverktyget.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} är en glyf i {font}, inte i det typsnitt den markerade texten är satt i ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} hör till {base} (U+{base_code}) {place}; din markering är {sel} (U+{code}).
+	at the start of a word	i början av ett ord
+	in the middle of a word	mitt i ett ord
+	at the end of a word	i slutet av ett ord
+	standing alone	när det står ensamt
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} är inget alternativ till {sel} (U+{code}) som det står i sitt ord.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dubbelklicka för att infoga {base} (U+{code}) i stället: en presentationsform ansluter inte, bokstaven gör det.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) infogades i stället för en presentationsform: typsnittet ansluter det till grannarna efter position.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Ingen OpenType-funktion ritar den här glyfen här, så den ersätter tecknets glyf och ansluter kanske inte till grannteckenen.
 	Double-click to insert	Dubbelklicka för att infoga
 	Double-click to rename	Dubbelklicka för att byta namn
 	Double-click to target the contents	Dubbelklicka för att välja innehållet som mål
@@ -8383,7 +8394,7 @@ digits	Hindi	Hindi
 @msg	width must be positive	width måste vara positiv
 @msg	width out of range	bredden ligger utanför tillåtet omfång
 @msg	width/height must be > 0	bredd/höjd måste vara > 0
-@msg	width/height must be positive and within the canvas	bredd/höjd måste vara positiva och inom arbetsytan
+@msg	width and height must be more than 0 and at most {limit}	bredd och höjd måste vara större än 0 och högst {limit}
 @msg	x and y must be finite numbers	x och y måste vara ändliga tal
 @msg	x and y must be given together	x och y måste anges tillsammans
 @msg	zone needs an anchor: dock beside a panel with anchor, or in a new dock column with side (Start or End)	zone behöver ett ankare: docka bredvid en panel med anchor eller i en ny dockkolumn med side (Start eller End)
@@ -8492,3 +8503,8 @@ digits	Hindi	Hindi
 @msg	Some islands could not be joined to the area around the art	Vissa öar kunde inte förbindas med området runt teckningen
 @msg	`width` must be from {lo} to {hi} pt	`width` måste vara från {lo} till {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` måste vara ett heltal från 1 till {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Rensningsram och rensningslinjer…
+	Weed Box and Lines	Rensningsram och rensningslinjer
+	Margin	Marginal
+	Box	Ram
+	Swatch	Färgruta
