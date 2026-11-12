@@ -5331,6 +5331,11 @@ lighting	Light	Свет
 	Softness	Мягкость
 	Ambient Light	Окружающий свет
 	Light behind the object	Свет позади объекта
+	Shadows	Тени
+	Distance from Object	Расстояние от объекта
+	Shadow Bounds	Границы тени
+	Behind Object	Позади объекта
+	Below Object	Под объектом
 	3D Lighting Preset	Предустановка 3D освещения
 	Standard	Стандартное
 	Diffuse	Рассеянное

@@ -5723,6 +5723,11 @@ theme	Appearance	Apparence
 	Softness	Douceur
 	Ambient Light	Lumière ambiante
 	Light behind the object	Lumière derrière l'objet
+	Shadows	Ombres
+	Distance from Object	Distance de l'objet
+	Shadow Bounds	Limites de l'ombre
+	Behind Object	Derrière l'objet
+	Below Object	Sous l'objet
 	3D Lighting Preset	Préréglage d’éclairage 3D
 	Standard	Standard
 	Diffuse	Diffus

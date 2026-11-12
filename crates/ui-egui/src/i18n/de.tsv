@@ -5302,6 +5302,11 @@ effect	Soft	Weich
 	Softness	Weichheit
 	Ambient Light	Umgebungslicht
 	Light behind the object	Licht hinter dem Objekt
+	Shadows	Schatten
+	Distance from Object	Abstand vom Objekt
+	Shadow Bounds	Schattenbegrenzung
+	Behind Object	Hinter dem Objekt
+	Below Object	Unter dem Objekt
 	3D Lighting Preset	3D-Beleuchtungsvorgabe
 	Standard	Standard
 	Diffuse	Diffus

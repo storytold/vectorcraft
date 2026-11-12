@@ -5625,6 +5625,11 @@ theme	Appearance	Utseende
 	Softness	Mjukhet
 	Ambient Light	Omgivande ljus
 	Light behind the object	Ljus bakom objektet
+	Shadows	Skuggor
+	Distance from Object	Avstånd från objektet
+	Shadow Bounds	Skuggans gränser
+	Behind Object	Bakom objektet
+	Below Object	Under objektet
 	3D Lighting Preset	Förinställning för 3D-belysning
 	Standard	Standard
 	Diffuse	Diffust

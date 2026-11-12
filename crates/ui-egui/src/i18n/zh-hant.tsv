@@ -5420,6 +5420,11 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	環境光
 	Light behind the object	光源位於物件後方
+	Shadows	陰影
+	Distance from Object	與物件的距離
+	Shadow Bounds	陰影邊界
+	Behind Object	物件後方
+	Below Object	物件下方
 	3D Lighting Preset	3D 光照預設
 	Standard	標準
 	Diffuse	漫射

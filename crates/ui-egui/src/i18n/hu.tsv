@@ -5710,6 +5710,11 @@ imageTrace	Outline	Körvonal
 	Softness	Lágyság
 	Ambient Light	Környezeti fény
 	Light behind the object	Fény az objektum mögött
+	Shadows	Árnyékok
+	Distance from Object	Távolság az objektumtól
+	Shadow Bounds	Árnyék határai
+	Behind Object	Az objektum mögött
+	Below Object	Az objektum alatt
 	3D Lighting Preset	3D világítási készlet
 	Standard	Normál
 	Diffuse	Szórt

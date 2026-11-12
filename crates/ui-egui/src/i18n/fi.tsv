@@ -5609,6 +5609,11 @@ mark-style	Japanese	Japanilainen
 	Softness	Pehmeys
 	Ambient Light	Ympäristövalo
 	Light behind the object	Valo objektin takana
+	Shadows	Varjot
+	Distance from Object	Etäisyys objektista
+	Shadow Bounds	Varjon rajat
+	Behind Object	Objektin takana
+	Below Object	Objektin alla
 	3D Lighting Preset	3D-valaistuksen esiasetus
 	Standard	Vakio
 	Diffuse	Hajavalo

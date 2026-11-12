@@ -5379,6 +5379,11 @@ lighting	Light	ライト
 	Softness	柔らかさ
 	Ambient Light	環境光
 	Light behind the object	オブジェクトの背後のライト
+	Shadows	シャドウ
+	Distance from Object	オブジェクトからの距離
+	Shadow Bounds	シャドウの範囲
+	Behind Object	オブジェクトの背後
+	Below Object	オブジェクトの下
 	3D Lighting Preset	3D ライティングプリセット
 	Standard	標準
 	Diffuse	拡散

@@ -5727,6 +5727,11 @@ mark-style	Japanese	Japonské
 	Softness	Měkkost
 	Ambient Light	Okolní světlo
 	Light behind the object	Světlo za objektem
+	Shadows	Stíny
+	Distance from Object	Vzdálenost od objektu
+	Shadow Bounds	Hranice stínu
+	Behind Object	Za objektem
+	Below Object	Pod objektem
 	3D Lighting Preset	Předvolba 3D osvětlení
 	Standard	Standardní
 	Diffuse	Rozptýlené

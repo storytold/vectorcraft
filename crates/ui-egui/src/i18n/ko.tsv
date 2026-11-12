@@ -5298,6 +5298,11 @@ lighting	Light	광원
 	Softness	부드러움
 	Ambient Light	주변광
 	Light behind the object	개체 뒤의 조명
+	Shadows	그림자
+	Distance from Object	개체로부터의 거리
+	Shadow Bounds	그림자 범위
+	Behind Object	개체 뒤
+	Below Object	개체 아래
 	3D Lighting Preset	3D 조명 사전 설정
 	Standard	표준
 	Diffuse	확산
