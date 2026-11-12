@@ -3256,3 +3256,22 @@ fn hebrew_image_trace_perspective_and_artboard_controls_are_translated() {
     assert_eq!(tr(he, "Locked"), "נעול");
     assert_eq!(tr(he, "User canvas object name"), "User canvas object name");
 }
+
+#[test]
+fn hebrew_parallel_round3_selection_values() {
+    let he = Lang::from_code("he").expect("Hebrew locale available");
+    for (source, expected) in [
+        ("Align to Pixel Grid", "יישור לרשת הפיקסלים"),
+        ("Clear Selection", "ניקוי הבחירה"),
+        ("Deselect", "ביטול הבחירה"),
+        ("Isolate Selected Object", "בידוד האובייקט שנבחר"),
+        ("Isolate Selected Group", "בידוד הקבוצה שנבחרה"),
+        ("Copy Selected Style", "העתקת הסגנון שנבחר"),
+        ("Connect Selected End Points", "חיבור נקודות הקצה שנבחרו"),
+        ("Flip Along Horizontal Axis", "היפוך לאורך הציר האופקי"),
+        ("Flip Along Vertical Axis", "היפוך לאורך הציר האנכי"),
+        ("Free Transform", "שינוי צורה חופשי"),
+    ] {
+        assert_eq!(tr(he, source), expected, "Hebrew UI regression for {source}");
+    }
+}

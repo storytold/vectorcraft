@@ -1405,3 +1405,13 @@
 	Close Path…	סגירת נתיב…
 	Document Tools	כלי מסמך
 	New Symbols from Layers	יצירת סמלים חדשים משכבות
+	Align to Pixel Grid	יישור לרשת הפיקסלים
+	Clear Selection	ניקוי הבחירה
+	Deselect	ביטול הבחירה
+	Isolate Selected Object	בידוד האובייקט שנבחר
+	Isolate Selected Group	בידוד הקבוצה שנבחרה
+	Copy Selected Style	העתקת הסגנון שנבחר
+	Connect Selected End Points	חיבור נקודות הקצה שנבחרו
+	Flip Along Horizontal Axis	היפוך לאורך הציר האופקי
+	Flip Along Vertical Axis	היפוך לאורך הציר האנכי
+	Free Transform	שינוי צורה חופשי
