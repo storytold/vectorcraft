@@ -47,6 +47,7 @@ mod docsetup;
 mod document_move;
 mod draw2;
 mod dynamic_symbols;
+mod dynamic_text;
 mod editcolors;
 mod effectedit;
 mod emptytype;
@@ -88,6 +89,7 @@ mod layerclip;
 mod layers;
 mod legacy_ai;
 mod library;
+mod library_roots;
 mod link_paths;
 mod linked_stops;
 mod linkfiles;
@@ -131,6 +133,7 @@ mod placed_document;
 mod plugins;
 mod prefs;
 mod prefs_file;
+mod prefs_roots;
 mod previewbounds;
 mod print;
 mod printadvanced;
@@ -153,10 +156,13 @@ mod scalestrokes;
 mod script_console;
 mod script_dialogs;
 mod script_dollar;
+mod script_engines;
 mod script_folder;
 mod script_include;
+mod script_io;
 mod script_run;
 mod scripts;
+mod select_effects;
 mod select_ids_first;
 mod shaper;
 mod shapetools;
@@ -192,6 +198,7 @@ mod toolsettings;
 mod transformfx;
 mod transparencygrid;
 mod trap;
+mod turn_direction;
 mod typearea;
 mod typeglyphbounds;
 mod typescale;
@@ -213,6 +220,18 @@ fn session() -> Session {
 fn rect(s: &mut Session, x: f64, y: f64, w: f64, h: f64) -> NodeId {
     let r = s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": w, "height": h})).unwrap();
     NodeId(r["id"].as_u64().unwrap())
+}
+
+/// The active document's selected ruler guides, by their `guide.list` indexes.
+pub(crate) fn selected_guides(s: &Session) -> Vec<usize> {
+    let st = s.doc().unwrap();
+    crate::cmd::guide_indexes(&st.doc, &st.selection.guides)
+}
+
+/// The active document's key guide, by its `guide.list` index.
+pub(crate) fn key_guide(s: &Session) -> Option<usize> {
+    let st = s.doc().unwrap();
+    st.selection.key_guide.and_then(|k| crate::cmd::guide_indexes(&st.doc, &[k]).first().copied())
 }
 
 #[test]
@@ -3145,7 +3164,7 @@ fn every_command_survives_empty_params() {
     // The view toggles among them flip the process-wide proof view.
     let _proof_view = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     for sel in [false, true] {
-        for c in command_specs() {
+        for c in command_specs().iter().filter(|c| crate::runs_with_empty_params(c.id)) {
             let mut s = session();
             let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
             rect(&mut s, 20.0, 0.0, 10.0, 10.0);
@@ -4230,8 +4249,8 @@ fn given_targets_are_used_as_given_and_range_style_takes_the_selected_type() {
 
 /// #785: commands whose `ids` or `id` the shared check doesn't read (it reads `id` where it stands
 /// for `ids` of one) refuse one that isn't an object id. They don't act on the selection, the
-/// current layer or a new object instead, and the document, the selection and the undo history
-/// stay as they are.
+/// current layer or a new object instead, and the document, the selection, the undo history,
+/// isolation mode and the shown opacity mask stay as they are.
 #[test]
 fn malformed_ids_are_refused_by_commands_that_default_to_the_selection() {
     let mut s = session();
@@ -4279,17 +4298,19 @@ fn malformed_ids_are_refused_by_commands_that_default_to_the_selection() {
             if let Some(p) = p.as_object_mut() {
                 p.insert(key.into(), bad.clone());
             }
-            let (doc, selection, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().selection.clone(), s.doc().unwrap().history.undo.len());
+            let st = s.doc().unwrap();
+            let (doc, selection, undo, modes) = (st.doc.clone(), st.selection.clone(), st.history.undo.len(), (st.isolation, st.mask_view));
             let r = s.execute(cmd, &p);
             let named = |e: &str| e.contains("object id") || e.contains("step reference") || e.contains(&format!("`{key}` must be"));
             let refused = r.as_ref().err().map(|e| e.to_string()).is_some_and(|e| named(&e));
-            let same = s.doc().unwrap().doc == doc && s.doc().unwrap().selection == selection && s.doc().unwrap().history.undo.len() == undo;
+            let st = s.doc().unwrap();
+            let same = st.doc == doc && st.selection == selection && st.history.undo.len() == undo && (st.isolation, st.mask_view) == modes;
             if !(refused && same) {
                 wrong.push(format!("{cmd} {p}: {r:?}, document unchanged: {same}"));
             }
             if !same {
                 let st = s.doc_mut().unwrap();
-                (st.doc, st.selection) = (doc, selection);
+                (st.doc, st.selection, (st.isolation, st.mask_view)) = (doc, selection, modes);
                 st.history.undo.truncate(undo);
             }
         }

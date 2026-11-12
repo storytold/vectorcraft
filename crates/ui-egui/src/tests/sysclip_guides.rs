@@ -14,7 +14,7 @@ use crate::tests_sysclip::{app, app_with_busy_worker, copy_elsewhere, copy_rect,
 use crate::{Services, VectorcraftApp, background};
 
 fn guides(app: &VectorcraftApp) -> usize {
-    app.session.active().unwrap().doc.guides.len()
+    app.session.active().unwrap().doc.ruler_guides().len()
 }
 
 /// Add a vertical guide at `pos`, select only it and copy it.
@@ -35,7 +35,8 @@ fn a_guides_only_copy_pastes_the_guides_not_what_another_app_copied_before() {
     run(&mut app, "edit.paste", json!({}));
     assert_eq!(guides(&app), 2, "the copied guide was pasted");
     assert_eq!(count(&app), 0, "and not the other app's text");
-    assert_eq!(app.session.active().unwrap().selection.guides, [1]);
+    let st = app.session.active().unwrap();
+    assert_eq!(vectorcraft_engine::cmd::guide_indexes(&st.doc, &st.selection.guides), [1]);
     // A second Paste takes the guides again.
     run(&mut app, "edit.paste", json!({}));
     assert_eq!((guides(&app), count(&app)), (3, 0));

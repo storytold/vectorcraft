@@ -106,6 +106,7 @@
 	PDF Presets…	PDF-voorinstellingen…
 	Perspective Grid Presets…	Voorinstellingen voor perspectiefraster…
 	Color Settings…	Kleurinstellingen…
+	Assign Profile	Profiel toewijzen
 	Assign Profile…	Profiel toewijzen…
 	Keyboard Shortcuts…	Sneltoetsen…
 	Import Shortcut Set	Sneltoetsenset importeren
@@ -203,6 +204,15 @@
 	Expand…	Uitbreiden…
 	Expand Appearance	Uiterlijk uitbreiden
 	Crop Image	Afbeelding bijsnijden
+	Image Tools	Afbeeldingshulpmiddelen
+	Remove Background…	Achtergrond verwijderen…
+	Remove Background	Achtergrond verwijderen
+	Background	Achtergrond
+	Edge Color	Randkleur
+	Picked Colors	Gekozen kleuren
+	Corner Color	Hoekkleur
+	Contiguous	Aaneengesloten
+	Each Channel	Elk kanaal
 	Edit Path	Pad bewerken
 	Mask	Masker
 	Rasterize…	Rasteriseren…
@@ -252,6 +262,10 @@
 	Blend Options…	Vermengopties…
 	Expand	Uitbreiden
 	Replace Spine	Rug vervangen
+	Create Spine	Rug maken
+	Create Spine:	Rug maken:
+	Always	Altijd
+	Never	Nooit
 	Reverse Spine	Rug omkeren
 	Reverse Front to Back	Van voor naar achter omkeren
 	Envelope Distort	Envelopvervorming
@@ -381,6 +395,9 @@
 	Smart Punctuation…	Slimme interpunctie…
 	Create Outlines	Omzetten in curven
 	Optical Margin Alignment	Optische marge-uitlijning
+	Dynamic Text	Dynamische tekst
+	Dynamic Text Presets	Voorinstellingen voor dynamische tekst
+	Arch	Gewelf
 	Fill with Placeholder Text	Vullen met plaatshoudertekst
 	Insert Inline Symbol	Inline-symbool invoegen
 	Show Hidden Characters	Verborgen tekens tonen
@@ -521,6 +538,7 @@
 	Gaussian Blur…	Gaussiaanse vervaging…
 	View	Beeld
 	Preview	Voorbeeld
+	Preview:	Voorbeeld:
 	Overprint Preview	Overprintvoorbeeld
 	Pixel Preview	Pixelvoorbeeld
 	Trim View	Bijsnijweergave
@@ -743,6 +761,15 @@
 	Stun Pulse	Verdoving
 	Stealth Fade	Sluipen
 	Shield Buff	Schild
+	Textures	Texturen
+	Fine Grain	Fijne korrel
+	Canvas Weave	Canvasweefsel
+	Burlap Sack	Jutezak
+	Cracked Glaze	Gecraqueleerd glazuur
+	Mosaic Floor	Mozaïekvloer
+	Quilted Squares	Gequilte vierkanten
+	Leaded Glass	Glas-in-lood
+	Damp Paper	Vochtig papier
 	Outlines and Rules	Omtrekken en lijnen
 	Hand-Drawn	Handgetekend
 	Gradient Finishes	Verloopafwerkingen
@@ -764,6 +791,7 @@
 	Spectrum Gradients	Spectrumverlopen
 	Sky Gradients	Luchtverlopen
 	Neutral Gradients	Neutrale verlopen
+	Organic Fades	Organische vervagingen
 	Duotone Gradients	Duotoonverlopen
 	Radial Glows	Radiale gloed
 	Save Swatch Library…	Staalenbibliotheek opslaan…
@@ -822,6 +850,13 @@
 	Dock Panel	Paneel dokken
 	Dock to Top	Bovenaan dokken
 	Dock to Bottom	Onderaan dokken
+	Control Bar Options	Opties voor bedieningsbalk
+	Tool Options	Gereedschapsopties
+	Object Options	Objectopties
+	Image Options	Afbeeldingsopties
+	Vertical Alignment	Verticale uitlijning
+	Align and Distribute	Uitlijnen en verdelen
+	Document Options	Documentopties
 	Dock Control Bar	Bedieningsbalk dokken
 	Float Tool Group	Gereedschapsgroep laten zweven
 	Services	Diensten
@@ -1096,6 +1131,8 @@ lighting	Light	Licht
 	Toolbar: Single/Double Column	Werkbalk: Enkele/dubbele kolom
 	Toolbar: Add Tool	Werkbalk: gereedschap toevoegen
 	Toolbar: Remove Tool	Werkbalk: gereedschap verwijderen
+	Add Tool…	Gereedschap toevoegen…
+	Remove Tool	Gereedschap verwijderen
 	Toolbar: Reset	Werkbalk: herstellen
 	Two Point Perspective Preset 1	Voorinstelling perspectief met twee vluchtpunten 1
 	Two Point Perspective Preset 2	Voorinstelling perspectief met twee vluchtpunten 2
@@ -1475,6 +1512,7 @@ digits	Malayalam	Malayalam
 	Roman Baseline	Romeinse basislijn
 	Select a text object to edit its character attributes.	Selecteer een tekstobject om de tekenkenmerken ervan te bewerken.
 	Show Options	Opties tonen
+	Show Recent Colors	Recente kleuren tonen
 	Small Caps	Kleine kapitalen
 	Small Caps (on the roadmap)	Kleine kapitalen (op de roadmap)
 	Standard Vertical Roman Alignment	Standaard verticale Romeinse uitlijning
@@ -1502,6 +1540,8 @@ digits	Malayalam	Malayalam
 	Scale at Center	Schalen vanuit het midden
 	Up/Down:	Omhoog/omlaag:
 	Left/Right:	Links/rechts:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko omhoog/omlaag
+	Tate-chu-yoko Left/Right	Tate-chu-yoko links/rechts
 	Underline	Onderstrepen
 	Vertical Scale %	Verticale schaal %
 	Axis	As
@@ -1615,6 +1655,8 @@ digits	Malayalam	Malayalam
 	No gradient swatches	Geen verloopstalen
 	Points: clicks add free points	Punten: klikken voegen vrije punten toe
 	Radial Gradient	Radiaal verloop
+	Conic Gradient	Conisch verloop
+	Diamond Gradient	Ruitverloop
 	Reset to White, Black	Herstellen naar wit, zwart
 	Reverse Gradient	Verloop omkeren
 	Save to Swatches	Opslaan in stalen
@@ -1881,6 +1923,7 @@ digits	Malayalam	Malayalam
 	Simulate Paper	Papier simuleren
 	Use Black Point Compensation	Zwartpuntcompensatie gebruiken
 	Working CMYK (don't tag)	Werk-CMYK (niet taggen)
+	Working RGB (don't tag)	Werk-RGB (niet taggen)
 	{name} (spot)	{name} (spotkleur)
 	Add to Profiles…	Toevoegen aan profielen…
 	Align Stroke to Center	Lijn in het midden uitlijnen
@@ -2180,6 +2223,8 @@ digits	Malayalam	Malayalam
 	Export Selected Art Only	Alleen geselecteerde artwork exporteren
 	Number of Colors:	Aantal kleuren:
 	Raster File Format:	Rasterbestandsindeling:
+	Include Placed Images	Geplaatste afbeeldingen opnemen
+	Include Fill Hatches	Arceringen van vullingen opnemen
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Echte kleur vereist versie 2004 of later: de dichtstbijzijnde van 256 kleuren wordt weggeschreven.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Tekst wordt omlijningen, en lijnen die een CAD-lijn niet kan tekenen, worden gevulde vormen.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Tekst blijft tekst en elke lijn wordt een lijn met zijn eigen lijndikte en streepjes.
@@ -2723,6 +2768,7 @@ antiAlias	Sharp	Scherp
 	General › Thumbnails	Algemeen › Miniaturen
 	Grayscale images	Grijswaardenafbeeldingen
 	Include non-printing layers	Niet-afdrukbare lagen opnemen
+	Write pages longer than 200 in at full size in points	Pagina's langer dan 200 in op ware grootte in punten schrijven
 	Left:	Links:
 	Mark as trapped	Markeren als getrapt
 	Marks and Bleeds	Steker en afloop
@@ -4208,6 +4254,8 @@ imageTrace	Outline	Contour
 @msg	`gradient` must be an object	`gradient` moet een object zijn
 @msg	`library` is a library id or name (see {list})	`library` is een bibliotheek-id of -naam (zie {list})
 @msg	`mode` applies to freeform gradients	`mode` geldt voor verlopen met vrije vorm
+@msg	a negative `aspect` applies to conic gradients	een negatieve `aspect` geldt voor conische verlopen
+@msg	`focal` applies to radial gradients	`focal` geldt voor radiale verlopen
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` moet 1, 3 of 5 zijn
 @msg	`stops` must be an array	`stops` moet een array zijn
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` moet een object met SVG-opties zijn (zie document.formats)
@@ -4474,6 +4522,7 @@ imageTrace	Outline	Contour
 @msg	not a stored central record	geen opgeslagen centraal record
 @msg	not a valid plug-in module: {0}	geen geldige plug-inmodule: {0}
 @msg	not an EMF or WMF file	geen EMF- of WMF-bestand
+@msg	not an HP-GL file	geen HP-GL-bestand
 @msg	not found	niet gevonden
 @msg	not in pattern editing mode	niet in patroonbewerkingsmodus
 @msg	finish editing the pattern first	rond eerst het bewerken van het patroon af
@@ -4641,7 +4690,7 @@ imageTrace	Outline	Contour
 @msg	unknown format	onbekende indeling
 @msg	unknown format `{f}` (Save writes {_1})	onbekende indeling `{f}` (Opslaan schrijft {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	onbekende vrijvormmodus `{m}` (punten, lijnen)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	onbekend verlooptype `{k}` (lineair, radiaal, vrijvorm)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	onbekend verlooptype `{k}` (lineair, radiaal, conisch, ruit, vrijvorm)
 @msg	unknown highlight `{h}`	onbekende markering `{h}`
 @msg	unknown option `{path}.{k}`	onbekende optie `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	onbekende overdruk `{o}` (behouden, simuleren of verwerpen)
@@ -4825,6 +4874,8 @@ imageTrace	Outline	Contour
 @msg	invalid object id {value}: expected a non-negative integer	ongeldige object-id {value}: een niet-negatief geheel getal verwacht
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	item {index} van `{key}` is {value}, geen object-id (een niet-negatief geheel getal)
 @msg	no such object id {value}	er is geen object met id {value}
+@msg	id {value} is a ruler guide, not an object	id {value} is van een hulplijn, niet van een object
+@msg	a ruler guide goes only directly in a layer or sublayer	een hulplijn kan alleen direct in een laag of sublaag staan
 @msg	automation filesystem access is not granted: read authority is absent: {path}	toegang tot het bestandssysteem voor automatisering is niet verleend: de leesbevoegdheid ontbreekt: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	toegang tot het bestandssysteem voor automatisering is niet verleend: de schrijfbevoegdheid ontbreekt: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	automatiseringspad afgewezen: buiten de leesroot {root}: {path}
@@ -4841,7 +4892,13 @@ imageTrace	Outline	Contour
 @msg	the PSD file has an unknown colour mode ({m})	het PSD-bestand heeft een onbekende kleurmodus ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	de afbeeldingsgegevens van het PSD-bestand gebruiken een onbekende compressie ({m})
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	de PSD-afbeelding is te groot om te lezen ({_1} × {_2} pixels)
-@msg	zipped 32-bit PSD image data with prediction can't be read	gezipte 32-bits PSD-afbeeldingsgegevens met voorspelling kunnen niet worden gelezen
+@msg	zipped 1-bit PSD image data with prediction can't be read	gezipte 1-bits PSD-afbeeldingsgegevens met voorspelling kunnen niet worden gelezen
+@msg	the PSD file's layer data uses an unknown compression ({m})	de laaggegevens van het PSD-bestand gebruiken een onbekende compressie ({m})
+@msg	the PSD file's layer records are damaged	de laagrecords van het PSD-bestand zijn beschadigd
+@msg	the PSD file's layer groups are nested too deeply	de laaggroepen van het PSD-bestand zijn te diep genest
+@msg	a layer of the PSD file is too large to read	een laag van het PSD-bestand is te groot om te lezen
+@msg	the PSD file's layers take more memory to read than allowed	de lagen van het PSD-bestand hebben meer geheugen nodig om te lezen dan toegestaan
+@msg	the layers can't be read ({e}): the file opened as its merged image	de lagen kunnen niet worden gelezen ({e}): het bestand is geopend als zijn samengevoegde afbeelding
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bits PSD-bestanden in deze kleurmodus kunnen niet worden gelezen
 @msg	the PSD file is cut short	het PSD-bestand is afgekapt
 @msg	the PSD file's header is damaged	de header van het PSD-bestand is beschadigd
@@ -5249,6 +5306,11 @@ mark-style	Japanese	Japans
 	Softness	Zachtheid
 	Ambient Light	Omgevingslicht
 	Light behind the object	Licht achter het object
+	Shadows	Schaduwen
+	Distance from Object	Afstand tot object
+	Shadow Bounds	Schaduwgrenzen
+	Behind Object	Achter object
+	Below Object	Onder object
 	3D Lighting Preset	Voorinstelling 3D-belichting
 	Standard	Standaard
 	Diffuse	Diffuus
@@ -5392,7 +5454,7 @@ mark-style	Japanese	Japans
 @msg	span must be "object" or "selection", got {v}	span moet "object" of "selection" zijn, maar is {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" plaatst een `gradient`, geen staal
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" plaatst een verloop: geef `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" plaatst een lineair of radiaal verloop, geen vrij verloop
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" plaatst een lineair, radiaal, conisch of ruitvormig verloop, geen vrij verloop
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" plaatst het verloop zelf: laat `start` en `end` weg (die plaatsen het al in documentcoördinaten)
 	Make Image Dynamic	Afbeelding dynamisch maken
 	Import Data Sets…	Gegevenssets importeren…
@@ -5912,6 +5974,7 @@ axis	Y Axis	Y-as
 	Version: {version}	Versie: {version}
 	Install “{name}” in place of the plug-in with the same ID?	„{name}” installeren in plaats van de plug-in met dezelfde ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Dit bestand is niet de plug-in die eerder met deze ID was geïnstalleerd. Het krijgt de instellingen en cache die voor die ID bewaard zijn.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Een automatisering heeft gevraagd deze plug-in te installeren. Kies zelf Object › Plug-ins › Plug-in installeren… om hem te installeren.
 	File SHA-256: {hash}	SHA-256 van het bestand: {hash}
 	Read the objects it is given	De objecten lezen die het krijgt
 	Change, add and delete objects in the document	Objecten in het document wijzigen, toevoegen en verwijderen
@@ -5944,6 +6007,16 @@ axis	Y Axis	Y-as
 @msg	message must be text	message moet tekst zijn
 @msg	allowContinue must be true or false	allowContinue moet true of false zijn
 @msg	Batch cannot play an action with a stop	Batch kan geen actie met een stop afspelen
+	Insert Menu Item…	Menu-item invoegen…
+	Insert Menu Item	Menu-item invoegen
+	Menu Item:	Menu-item:
+	No menu item matches.	Geen menu-item komt overeen.
+	Several menu items match. Choose one from the list.	Meerdere menu-items komen overeen. Kies er een uit de lijst.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Items die een dialoogvenster openen en items uit de menu’s Bestand, Venster en Help worden niet weergegeven.
+@msg	command must be text	command moet tekst zijn
+@msg	no menu item that can be inserted runs this command	geen invoegbaar menu-item voert deze opdracht uit
+@msg	the action already has 10,000 steps	de actie heeft al 10.000 stappen
+@msg	the action set would be larger than 8 MiB	de actieset zou groter worden dan 8 MiB
 	Playback Options	Afspeelopties
 	Accelerated	Versneld
 	Step by Step	Stap voor stap
@@ -5977,6 +6050,12 @@ axis	Y Axis	Y-as
 	Crosshair	Vizier
 	Checkpoint	Controlepunt
 	Inventory Icons	Inventarisiconen
+	Skill Icons	Vaardigheidsiconen
+	Attack	Aanval
+	Defend	Verdediging
+	Heal	Genezen
+	Buff	Buff
+	Ult	Ult
 	Sword	Zwaard
 	Shield	Schild
 	Potion	Drank
@@ -6035,6 +6114,11 @@ axis	Y Axis	Y-as
 	Dash Trail	Streepspoor
 	Speed Line	Snelheidslijn
 	Game Trails	Spelsporen
+	Energy Beams	Energiestralen
+	Laser Bolt	Laserbout
+	Plasma Arc	Plasmaboog
+	Charge Wave	Laadgolf
+	Spark Trail	Vonkenspoor
 	Calligraphic Nibs	Kalligrafische penpunten
 	Pattern Borders	Patroonranden
 	Scatter Shapes	Strooivormen
@@ -6561,6 +6645,11 @@ breakText	Glyphs	Glyphs
 	No importer plug-ins installed	Geen importplug-ins geïnstalleerd
 	Read files you open in its format and make documents from them	Bestanden lezen die u in zijn indeling opent en er documenten van maken
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Probleemoplossingsgegevens kopiëren
+@msg	Copied the troubleshooting info	Probleemoplossingsgegevens gekopieerd
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	De laatste sessie van VectorCraft reageerde niet meer voordat deze werd gesloten. Help › Probleemoplossingsgegevens kopiëren kopieert de details voor een foutrapport
+
 # Safe Mode
 	Safe Mode…	Veilige modus…
 	Safe Mode	Veilige modus
@@ -6581,6 +6670,8 @@ breakText	Glyphs	Glyphs
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Uitlijnen op pixelraster
+	Align New Objects to Pixel Grid	Nieuwe objecten uitlijnen op pixelraster
+	Not Aligned to Pixel Grid	Niet uitgelijnd op pixelraster
 @msg	side is left or right, not `{s}`	side is left of right, niet `{s}`
 	Edit Custom Dictionary	Aangepast woordenboek bewerken
 	Entry:	Item:

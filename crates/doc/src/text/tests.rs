@@ -1,5 +1,19 @@
 use super::*;
 
+/// Dynamic Text is off for new type and for type saved before it, and saved only when on.
+#[test]
+fn dynamic_text_is_saved_only_when_on() {
+    let t = TextObject::point(Point::ZERO, "Hi", CharStyle::default());
+    assert!(!t.dynamic_text);
+    let off = serde_json::to_value(&t).unwrap();
+    assert!(off.get("dynamicText").is_none());
+    assert!(!serde_json::from_value::<TextObject>(off).unwrap().dynamic_text);
+    let on = TextObject { dynamic_text: true, ..t };
+    let saved = serde_json::to_value(&on).unwrap();
+    assert_eq!(saved["dynamicText"], true);
+    assert!(serde_json::from_value::<TextObject>(saved).unwrap().dynamic_text);
+}
+
 /// Character Direction is saved only when set, and styles written before it existed read as
 /// Default.
 #[test]

@@ -2,7 +2,7 @@
 //! save, export and serialize by path or bytes (base64), the format table, `command.batch` and
 //! `action.batch` (the Actions panel menu's Batch…).
 //!
-//! - `load`: `document.open` (native, legacy, SVG/SVGZ, PDF/.ai/.ait, DXF, raster images).
+//! - `load`: `document.open` (native, legacy, SVG/SVGZ, PDF/.ai/.ait, DXF, HP-GL, raster images).
 //! - `action_batch`: play an action on every file in a folder or every data set.
 //! - `encode`: one encoder per writable format, with typed options parsed from the params.
 //! - `svg`: the SVG Options (styling, fonts, images, object ids, artboards…).
@@ -50,6 +50,7 @@ mod pdfimport;
 pub mod pngtext;
 pub mod ppi;
 pub mod progress;
+mod psdlayers;
 pub mod psdread;
 mod pxrread;
 mod save;
@@ -204,6 +205,8 @@ mod tests_eps;
 #[cfg(test)]
 mod tests_dxfimport;
 #[cfg(test)]
+mod tests_hpgl;
+#[cfg(test)]
 mod tests_metafile;
 
 #[cfg(test)]
@@ -217,6 +220,8 @@ mod tests_jxlread;
 mod tests_pdfx;
 #[cfg(test)]
 mod tests_psd;
+#[cfg(test)]
+mod tests_psdlayers;
 #[cfg(test)]
 mod tests_psdread;
 

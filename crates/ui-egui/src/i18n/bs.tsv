@@ -113,6 +113,7 @@
 	PDF Presets…	PDF predlošci…
 	Perspective Grid Presets…	Predlošci mreže perspektive…
 	Color Settings…	Postavke boja…
+	Assign Profile	Dodijeli profil
 	Assign Profile…	Dodijeli profil…
 	Keyboard Shortcuts…	Prečice na tastaturi…
 	Import Shortcut Set	Uvezi skup prečica
@@ -196,6 +197,15 @@
 	Expand…	Proširi…
 	Expand Appearance	Proširi izgled
 	Crop Image	Izreži sliku
+	Image Tools	Alati za slike
+	Remove Background…	Ukloni pozadinu…
+	Remove Background	Ukloni pozadinu
+	Background	Pozadina
+	Edge Color	Boja ruba
+	Picked Colors	Odabrane boje
+	Corner Color	Boja uglova
+	Contiguous	Susjedni
+	Each Channel	Svaki kanal
 	Edit Path	Uredi putanju
 	Mask	Maska
 	Rasterize…	Rasteriziraj…
@@ -246,6 +256,10 @@
 	Blend Options…	Opcije stapanja…
 	Expand	Proširi
 	Replace Spine	Zamijeni kičmu
+	Create Spine	Kreiraj kičmu
+	Create Spine:	Kreiraj kičmu:
+	Always	Uvijek
+	Never	Nikad
 	Reverse Spine	Obrni kičmu
 	Reverse Front to Back	Obrni od naprijed prema nazad
 	Envelope Distort	Izobličenje omotnicom
@@ -399,6 +413,9 @@
 	Smart Punctuation…	Pametna interpunkcija…
 	Create Outlines	Kreiraj obrise
 	Optical Margin Alignment	Optičko poravnanje margina
+	Dynamic Text	Dinamički tekst
+	Dynamic Text Presets	Predlošci dinamičkog teksta
+	Arch	Svod
 	Fill with Placeholder Text	Ispuni tekstom čuvara mjesta
 	Insert Inline Symbol	Umetni simbol u redu
 	Show Hidden Characters	Prikaži skrivene znakove
@@ -543,6 +560,7 @@
 	Gaussian Blur…	Gaussovo zamućenje…
 	View	Prikaz
 	Preview	Pregled
+	Preview:	Pregled:
 	Overprint Preview	Pregled pretiska
 	Pixel Preview	Pregled piksela
 	Trim View	Prikaz obrezivanja
@@ -783,6 +801,15 @@
 	Stun Pulse	Omamljenost
 	Stealth Fade	Nevidljivost
 	Shield Buff	Štit
+	Textures	Teksture
+	Fine Grain	Fino zrno
+	Canvas Weave	Tkano platno
+	Burlap Sack	Jutena vreća
+	Cracked Glaze	Ispucala glazura
+	Mosaic Floor	Mozaični pod
+	Quilted Squares	Prošiveni kvadrati
+	Leaded Glass	Olovno staklo
+	Damp Paper	Vlažni papir
 	Outlines and Rules	Obrisi i linije
 	Hand-Drawn	Ručno crtano
 	Gradient Finishes	Gradijentne završnice
@@ -804,6 +831,7 @@
 	Spectrum Gradients	Gradijenti spektra
 	Sky Gradients	Gradijenti neba
 	Neutral Gradients	Neutralni gradijenti
+	Organic Fades	Organski prelazi
 	Duotone Gradients	Duoton gradijenti
 	Radial Glows	Radijalni sjajevi
 	Save Swatch Library…	Sačuvaj biblioteku uzoraka boja…
@@ -863,6 +891,13 @@
 	Dock Panel	Usidri panel
 	Dock to Top	Usidri na vrh
 	Dock to Bottom	Usidri na dno
+	Control Bar Options	Opcije kontrolne trake
+	Tool Options	Opcije alata
+	Object Options	Opcije objekta
+	Image Options	Opcije slike
+	Vertical Alignment	Okomito poravnanje
+	Align and Distribute	Poravnanje i raspored
+	Document Options	Opcije dokumenta
 	Dock Control Bar	Usidri kontrolnu traku
 	Float Tool Group	Odvoji grupu alata
 	Services	Usluge
@@ -1147,6 +1182,8 @@ lighting	Light	Svjetlo
 	Toolbar: Single/Double Column	Traka s alatima: jedna/dvije kolone
 	Toolbar: Add Tool	Traka s alatima: dodaj alat
 	Toolbar: Remove Tool	Traka s alatima: ukloni alat
+	Add Tool…	Dodaj alat…
+	Remove Tool	Ukloni alat
 	Toolbar: Reset	Traka s alatima: vrati na početno
 	Two Point Perspective Preset 1	Predložak perspektive s dvije tačke 1
 	Two Point Perspective Preset 2	Predložak perspektive s dvije tačke 2
@@ -1525,6 +1562,7 @@ digits	Malayalam	Malajalam
 	Roman Baseline	Latinična osnovna linija
 	Select a text object to edit its character attributes.	Odaberite tekstualni objekat da uredite njegove atribute znakova.
 	Show Options	Prikaži opcije
+	Show Recent Colors	Prikaži nedavne boje
 	Color Panel Options	Opcije panela boja
 	Small Caps	Mala velika slova
 	Small Caps (on the roadmap)	Mala velika slova (u planu)
@@ -1553,6 +1591,8 @@ digits	Malayalam	Malajalam
 	Scale at Center	Skaliraj od centra
 	Up/Down:	Gore/dolje:
 	Left/Right:	Lijevo/desno:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko gore/dolje
+	Tate-chu-yoko Left/Right	Tate-chu-yoko lijevo/desno
 	Underline	Podvučeno
 	Vertical Scale %	Okomita skala %
 	Axis	Osa
@@ -1666,6 +1706,8 @@ digits	Malayalam	Malajalam
 	No gradient swatches	Nema gradijentnih uzoraka boja
 	Points: clicks add free points	Tačke: klikovi dodaju slobodne tačke
 	Radial Gradient	Radijalni gradijent
+	Conic Gradient	Konusni gradijent
+	Diamond Gradient	Rombni gradijent
 	Reset to White, Black	Vrati na bijelu, crnu
 	Reverse Gradient	Obrni gradijent
 	Save to Swatches	Sačuvaj u uzorke boja
@@ -2034,6 +2076,7 @@ digits	Malayalam	Malajalam
 	Simulate Paper	Simuliraj papir
 	Use Black Point Compensation	Koristi kompenzaciju crne tačke
 	Working CMYK (don't tag)	Radni CMYK (bez oznake)
+	Working RGB (don't tag)	Radni RGB (bez oznake)
 	{name} (spot)	{name} (spot)
 	Add to Profiles…	Dodaj u profile…
 	Align Stroke to Center	Poravnaj potez po sredini
@@ -2334,6 +2377,8 @@ digits	Malayalam	Malajalam
 	Export Selected Art Only	Izvezi samo odabrani crtež
 	Number of Colors:	Broj boja:
 	Raster File Format:	Format rasterske datoteke:
+	Include Placed Images	Uključi postavljene slike
+	Include Fill Hatches	Uključi šrafure ispuna
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Prava boja zahtijeva verziju 2004 ili noviju: zapisuje se najbliža od 256 boja.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Tekst postaje obrisi, a potezi koje CAD linija ne može nacrtati postaju ispunjeni oblici.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Tekst ostaje tekst, a svaki potez je linija sa svojom debljinom i crticama.
@@ -2889,6 +2934,7 @@ antiAlias	Sharp	Oštro
 	General › Thumbnails	Općenito › Sličice
 	Grayscale images	Slike u nijansama sive
 	Include non-printing layers	Uključi slojeve koji se ne štampaju
+	Write pages longer than 200 in at full size in points	Upiši stranice duže od 200 in u punoj veličini, u tačkama
 	Left:	Lijevo:
 	Mark as trapped	Označi kao zarobljeno
 	Marks and Bleeds	Oznake i napusti
@@ -4444,6 +4490,8 @@ imageTrace	Outline	Obris
 @msg	`groupColors` must be an array	`groupColors` mora biti niz
 @msg	`library` is a library id or name (see {list})	`library` je ID ili naziv biblioteke (vidi {list})
 @msg	`mode` applies to freeform gradients	`mode` se primjenjuje na gradijente slobodnog oblika
+@msg	a negative `aspect` applies to conic gradients	negativan `aspect` se primjenjuje na konusne gradijente
+@msg	`focal` applies to radial gradients	`focal` se primjenjuje na radijalne gradijente
 @msg	`preserve` must be an object	`preserve` mora biti objekat
 @msg	`globalAdjust` must be an object	`globalAdjust` mora biti objekat
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` mora biti 1, 3 ili 5
@@ -4752,6 +4800,7 @@ imageTrace	Outline	Obris
 @msg	not a stored central record	nije sačuvani centralni zapis
 @msg	not a valid plug-in module: {0}	nije važeći modul dodatka: {0}
 @msg	not an EMF or WMF file	nije EMF ni WMF datoteka
+@msg	not an HP-GL file	nije HP-GL datoteka
 @msg	not an export presets file (format `{_1}`)	nije datoteka predložaka izvoza (format `{_1}`)
 @msg	not an export presets file: {e}	nije datoteka predložaka izvoza: {e}
 @msg	not found	nije pronađeno
@@ -4932,7 +4981,7 @@ imageTrace	Outline	Obris
 @msg	unknown format	nepoznat format
 @msg	unknown format `{f}` (Save writes {_1})	nepoznat format `{f}` (Sačuvaj zapisuje {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	nepoznat način slobodnog oblika `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	nepoznata vrsta gradijenta `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	nepoznata vrsta gradijenta `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	nepoznato isticanje `{h}`
 @msg	unknown option `{path}.{k}`	nepoznata opcija `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	nepoznati pretisci `{o}` (preserve, simulate ili discard)
@@ -5121,6 +5170,8 @@ imageTrace	Outline	Obris
 @msg	invalid object id {value}: expected a non-negative integer	nevažeći ID objekta {value}: očekuje se nenegativan cijeli broj
 @msg	`{key}` entry {index} is {value}, not a non-negative integer object id	stavka {index} u `{key}` je {value}, a ne ID objekta (nenegativan cijeli broj)
 @msg	no such object id {value}	nema objekta s ID-om {value}
+@msg	id {value} is a ruler guide, not an object	ID {value} je vodilica, a ne objekat
+@msg	a ruler guide goes only directly in a layer or sublayer	vodilica može biti samo direktno u sloju ili podsloju
 @msg	id {value} is a layer, not an object	id {value} je sloj, a ne objekat
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} je sloj, a ne objekat; slojeve pomjerajte s layer.move
 @msg	automation filesystem access is not granted: read authority is absent: {path}	pristup datotečnom sistemu za automatizaciju nije odobren: nema ovlaštenja za čitanje: {path}
@@ -5150,7 +5201,13 @@ imageTrace	Outline	Obris
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	datoteka HEIC ili HEIF sadrži vrstu slike koju nije moguće pročitati
 @msg	HEIC and HEIF images can't be opened in this build	HEIC i HEIF slike nije moguće otvoriti u ovoj verziji programa
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD slika je prevelika za čitanje ({_1} × {_2} piksela)
-@msg	zipped 32-bit PSD image data with prediction can't be read	zipovani 32-bitni PSD podaci slike s predviđanjem ne mogu se pročitati
+@msg	zipped 1-bit PSD image data with prediction can't be read	zipovani 1-bitni PSD podaci slike s predviđanjem ne mogu se pročitati
+@msg	the PSD file's layer data uses an unknown compression ({m})	podaci slojeva PSD datoteke koriste nepoznatu kompresiju ({m})
+@msg	the PSD file's layer records are damaged	zapisi slojeva PSD datoteke su oštećeni
+@msg	the PSD file's layer groups are nested too deeply	grupe slojeva PSD datoteke su previše duboko ugniježđene
+@msg	a layer of the PSD file is too large to read	sloj PSD datoteke je prevelik za čitanje
+@msg	the PSD file's layers take more memory to read than allowed	slojevi PSD datoteke zahtijevaju više memorije za čitanje nego što je dozvoljeno
+@msg	the layers can't be read ({e}): the file opened as its merged image	slojevi se ne mogu pročitati ({e}): datoteka je otvorena kao spojena slika
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bitne PSD datoteke u ovom načinu boja ne mogu se pročitati
 @msg	the PSD file is cut short	PSD datoteka je skraćena
 @msg	the PSD file's header is damaged	zaglavlje PSD datoteke je oštećeno
@@ -5585,6 +5642,11 @@ mark-style	Japanese	Japanski
 	Softness	Mekoća
 	Ambient Light	Ambijentalno svjetlo
 	Light behind the object	Svjetlo iza objekta
+	Shadows	Sjene
+	Distance from Object	Udaljenost od objekta
+	Shadow Bounds	Granice sjene
+	Behind Object	Iza objekta
+	Below Object	Ispod objekta
 	3D Lighting Preset	Predložak 3D osvjetljenja
 	Standard	Standardno
 	Diffuse	Difuzno
@@ -5645,7 +5707,7 @@ mark-style	Japanese	Japanski
 @msg	span must be "object" or "selection", got {v}	span mora biti "object" ili "selection", dobiveno {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" postavlja `gradient`, a ne uzorak boje
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" postavlja gradijent: navedite `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" postavlja linearni ili radijalni gradijent, a ne gradijent slobodnog oblika
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" postavlja linearni, radijalni, konusni ili rombni gradijent, a ne gradijent slobodnog oblika
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" postavlja sam gradijent: izostavite `start` i `end` (oni ga već postavljaju u koordinatama dokumenta)
 	Make Image Dynamic	Učini sliku dinamičkom
 	Import Data Sets…	Uvezi skupove podataka…
@@ -5867,6 +5929,8 @@ axis	Y Axis	Y osa
 	Version: {version}	Verzija: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instalirati „{name}” umjesto dodatka s istim ID-om?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Ova datoteka nije dodatak ranije instaliran s ovim ID-om. Dobija postavke i predmemoriju sačuvane za taj ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Automatizacija je zatražila instalaciju ovog dodatka. Da biste ga instalirali, izaberite Objekat › Dodaci › Instaliraj dodatak… sami.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Automatizacija je zatražila instalaciju ovog dodatka. Da biste ga instalirali, izaberite Objekat › Dodaci › Instaliraj dodatak… sami.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}” je drugi modul od dodatka s ID-om {_1} i dobio bi postavke i predmemoriju sačuvane za njega: instalirajte ga s `replace: true` kada korisnik pristane
 	File SHA-256: {hash}	SHA-256 datoteke: {hash}
 	Read the objects it is given	Čitati objekte koje dobije
@@ -5917,6 +5981,16 @@ axis	Y Axis	Y osa
 @msg	message must be text	message mora biti tekst
 @msg	allowContinue must be true or false	allowContinue mora biti true ili false
 @msg	Batch cannot play an action with a stop	Paketna obrada ne može reprodukovati akciju sa zaustavljanjem
+	Insert Menu Item…	Umetni stavku menija…
+	Insert Menu Item	Umetni stavku menija
+	Menu Item:	Stavka menija:
+	No menu item matches.	Nijedna stavka menija ne odgovara.
+	Several menu items match. Choose one from the list.	Odgovara više stavki menija. Izaberite jednu sa liste.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Stavke koje otvaraju dijalog i stavke menija Datoteka, Prozor i Pomoć nisu navedene.
+@msg	command must be text	command mora biti tekst
+@msg	no menu item that can be inserted runs this command	nijedna stavka menija koja se može umetnuti ne pokreće ovu naredbu
+@msg	the action already has 10,000 steps	akcija već ima 10.000 koraka
+@msg	the action set would be larger than 8 MiB	skup akcija bio bi veći od 8 MiB
 	Playback Options	Opcije reprodukcije
 	Accelerated	Ubrzano
 	Step by Step	Korak po korak
@@ -5955,6 +6029,12 @@ axis	Y Axis	Y osa
 	Crosshair	Nišan
 	Checkpoint	Kontrolna tačka
 	Inventory Icons	Ikone inventara
+	Skill Icons	Ikone vještina
+	Attack	Napad
+	Defend	Odbrana
+	Heal	Iscjeljenje
+	Buff	Pojačanje
+	Ult	Ult
 	Sword	Mač
 	Shield	Štit
 	Potion	Napitak
@@ -6019,6 +6099,11 @@ axis	Y Axis	Y osa
 	Dash Trail	Isprekidani trag
 	Speed Line	Linija brzine
 	Game Trails	Tragovi igre
+	Energy Beams	Energetski snopovi
+	Laser Bolt	Laserski metak
+	Plasma Arc	Plazma luk
+	Charge Wave	Talas naboja
+	Spark Trail	Trag iskri
 	Calligraphic Nibs	Kaligrafski vrhovi
 	Pattern Borders	Ivice od uzoraka
 	Scatter Shapes	Raspršeni oblici
@@ -6547,6 +6632,11 @@ shape	Open	Otvoren
 	No importer plug-ins installed	Nisu instalirani dodaci za uvoz
 	Read files you open in its format and make documents from them	Čitati datoteke koje otvarate u njegovom formatu i od njih praviti dokumente
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Kopiraj informacije za rješavanje problema
+@msg	Copied the troubleshooting info	Informacije za rješavanje problema kopirane
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Posljednja sesija VectorCrafta prestala je odgovarati prije zatvaranja. Pomoć › Kopiraj informacije za rješavanje problema kopira detalje za prijavu greške
+
 # Safe Mode
 	Safe Mode…	Sigurni način rada…
 	Safe Mode	Sigurni način rada
@@ -6567,6 +6657,8 @@ shape	Open	Otvoren
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Poravnaj s mrežom piksela
+	Align New Objects to Pixel Grid	Poravnaj nove objekte s mrežom piksela
+	Not Aligned to Pixel Grid	Nije poravnato s mrežom piksela
 @msg	side is left or right, not `{s}`	side je left ili right, a ne `{s}`
 	Edit Custom Dictionary	Uredi prilagođeni rječnik
 	Entry:	Unos:

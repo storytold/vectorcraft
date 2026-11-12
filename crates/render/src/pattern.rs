@@ -361,7 +361,8 @@ impl Renderer {
         let Some(pe) = &f.doc.pattern_edit else { return false };
         let Some(layer) = f.doc.layers.iter().find(|l| l.id == pe.layer) else { return false };
         let Some(def) = f.doc.pattern(&pe.pattern) else { return false };
-        let children: Vec<Arc<Node>> = layer.children().cloned().unwrap_or_default();
+        // The tile's art: the layer's ruler guides are not part of it.
+        let children: Vec<Arc<Node>> = layer.children().into_iter().flatten().filter(|c| !c.is_ruler_guide()).cloned().collect();
         if layer.visible && !children.is_empty() {
             let dim = (def.dim_copies / 100.0).clamp(0.0, 1.0);
             let (before, after) = def.preview_offsets_dimmed_sides();

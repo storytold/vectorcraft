@@ -323,6 +323,39 @@ fn choosing_a_pdfx_standard_sets_its_version_and_writes_the_standard() {
     assert_eq!((get(d, "compatibility"), get(d, "createLayers")), (&json!("1.6"), &json!(true)));
 }
 
+/// "Write pages longer than 200 in at full size in points" is enabled only without a standard, at
+/// PDF 1.5 and later: PDF/X files and PDF 1.3 and 1.4 files write long pages in points anyway, and
+/// PDF/A files keep the `UserUnit`.
+#[test]
+fn the_long_pages_in_points_check_box_is_disabled_with_a_standard() {
+    const LABEL: &str = "Write pages longer than 200 in at full size in points";
+    let (mut app, _, _) = app();
+    app.run("ui.savePdfDialog", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+    let frame = |app: &mut VectorcraftApp| {
+        let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| super::super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out
+    };
+    for s in Standard::ALL.iter().copied() {
+        for c in Compatibility::ALL.iter().copied().filter(|c| s.allows(*c)) {
+            set_field(&mut app, "standard", json!(s.id()));
+            set_field(&mut app, "compatibility", json!(c.id()));
+            frame(&mut app);
+            let out = frame(&mut app);
+            let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+            let node = nodes.iter().find(|(_, n)| n.label() == Some(LABEL) && n.role() == egui::accesskit::Role::CheckBox);
+            let disabled = node.unwrap_or_else(|| panic!("no check box named {LABEL:?}")).1.is_disabled();
+            let enabled = s == Standard::None && !matches!(c, Compatibility::Pdf13 | Compatibility::Pdf14);
+            assert_eq!(disabled, !enabled, "{} {}", s.label(), c.label());
+        }
+    }
+}
+
 #[test]
 fn create_layers_writes_pdf_layers() {
     let (mut app, written, _) = app();

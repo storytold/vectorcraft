@@ -127,6 +127,45 @@ fn to_source_refuses_what_is_not_plain_data() {
 }
 
 #[test]
+fn to_source_refuses_flags_and_extensibility_a_literal_does_not_make() {
+    let mut r = realm();
+    let property = "TypeError: toSource: a property that is not writable or configurable cannot be written as source";
+    let extensible = "TypeError: toSource: a non-extensible object cannot be written as source";
+    let length = "TypeError: toSource: an array with a read-only length cannot be written as source";
+    for (source, want) in [
+        ("var o = {}; Object.defineProperty(o, 'a', {value: 1, enumerable: true, configurable: true}); toSource(o)", property),
+        ("var o = {}; Object.defineProperty(o, 'a', {value: 1, enumerable: true, writable: true}); toSource(o)", property),
+        ("var a = [1, 2]; Object.defineProperty(a, '1', {writable: false}); toSource(a)", property),
+        ("var a = [1, 2]; Object.defineProperty(a, '0', {configurable: false}); a.toSource()", property),
+        ("var o = {}; Object.defineProperty(o, 'a', {value: 1, enumerable: true}); toSource({x: [{b: o}]})", property),
+        ("toSource(Object.preventExtensions({}))", extensible),
+        ("toSource(Object.preventExtensions([]))", extensible),
+        ("toSource(Object.seal({a: 1}))", extensible),
+        ("toSource(Object.freeze({a: 1}))", extensible),
+        ("toSource(Object.seal([1]))", extensible),
+        ("toSource(Object.freeze([1]))", extensible),
+        ("toSource([1, {b: Object.freeze({})}])", extensible),
+        ("var a = []; Object.defineProperty(a, 'length', {writable: false}); toSource(a)", length),
+        ("var a = [1, , 3]; Object.defineProperty(a, 'length', {writable: false}); toSource({a: a})", length),
+    ] {
+        assert_eq!(thrown(&mut r, source), want, "{source}");
+    }
+    // The refused states are ones the literal would lose: evaluated, it is open again.
+    let lost = "var o = Object.freeze({a: 1}); var w = eval('({\"a\":1})');
+        [Object.isExtensible(o), Object.isExtensible(w), Object.getOwnPropertyDescriptor(w, 'a').writable].join()";
+    assert_eq!(text(&mut r, lost), "false,true,true");
+}
+
+#[test]
+fn to_source_writes_properties_defined_with_every_flag_on() {
+    let mut r = realm();
+    let source = "var o = {}; Object.defineProperty(o, 'a', {value: 1, writable: true, enumerable: true, configurable: true});
+        var a = [0]; Object.defineProperty(a, '0', {value: 2, writable: true, enumerable: true, configurable: true});
+        toSource({o: o, a: a, e: {}, f: [], s: [1, , 3]})";
+    assert_eq!(text(&mut r, source), r#"({"o":({"a":1}), "a":[2], "e":({}), "f":[], "s":[1, , 3]})"#);
+}
+
+#[test]
 fn to_source_of_a_string_with_many_escapes_throws_a_range_error_before_the_heap_limit() {
     let mut r = realm();
     // A run's heap in the web build. 2^23 control characters, each written as six, pass a quarter

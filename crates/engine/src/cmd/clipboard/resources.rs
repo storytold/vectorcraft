@@ -1239,7 +1239,7 @@ impl Clipboard {
     /// filter when pasted back into the document it came from, and elsewhere keeps its own under a
     /// name no filter or effect of the document gives, so editing or deleting the document's filter leaves it alone. When that name would
     /// make the filter too long to draw, the free name is a shorter start of its name ("Shif"), else
-    /// a free letter or digit; the filter's id is always its name. An error when no free name fits.
+    /// a free letter, digit or other printable ASCII character; the filter's id is always its name. An error when no free name fits.
     fn filter_links(&self, d: &Document, same_doc: bool) -> Result<BTreeMap<(String, String), (String, String)>> {
         let mut found = BTreeSet::new();
         for n in &self.nodes {
@@ -1281,12 +1281,18 @@ impl Clipboard {
                     }
                 }
                 // Free names made from the starts of the name, longest first, then free letters and
-                // digits: the first under which the filter still draws.
+                // digits, then other single printable ASCII characters: the first under which the
+                // filter still draws.
                 let mut ends: Vec<usize> = name.char_indices().map(|(i, _)| i).skip(1).collect();
                 ends.push(name.len());
                 let starts = ends.iter().rev().filter_map(|&end| name.get(..end).map(str::trim_end)).filter(|b| !b.is_empty());
                 let shorter = starts.map(|b| unique_name(b, |n| taken.contains(n)));
-                let single = ('a'..='z').chain('0'..='9').map(String::from).filter(|n| !taken.contains(n));
+                let single = ('a'..='z')
+                    .chain('0'..='9')
+                    .chain('A'..='Z')
+                    .chain(('!'..='~').filter(|c| !c.is_ascii_alphanumeric()))
+                    .map(String::from)
+                    .filter(|n| !taken.contains(n));
                 let renamed = shorter.chain(single).find_map(|new| {
                     let drawn = vectorcraft_render::effects::svg_filter::with_id(&xml, &new)
                         .filter(|x| vectorcraft_render::effects::svg_filter::check(x).is_ok_and(|id| id == new))?;

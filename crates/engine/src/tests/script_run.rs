@@ -166,7 +166,7 @@ fn an_error_names_the_script_its_place_and_kind() {
     let e = run(&mut s, "var = 1;").unwrap_err().to_string();
     assert!(e.starts_with("t.js: line 1,") && e.ends_with("(syntax)"), "{e}");
     assert!(run(&mut s, "app.activeDocument;").unwrap_err().to_string().contains("`vc`"));
-    assert!(run(&mut s, "#targetengine x\n1").unwrap_err().to_string().contains("unsupported script directive: #targetengine"));
+    assert!(run(&mut s, "#targetengine 9x\n1").unwrap_err().to_string().contains("#targetengine needs a name of letters, digits and _"));
     assert_eq!(s.script_report().unwrap()["line"], 1);
 }
 
@@ -842,6 +842,30 @@ fn a_person_can_let_a_growing_run_go_on_or_stop_it() {
     assert!(!s.script_waiting());
     assert!(s.script_pump().unwrap().is_err());
     TEST_GROWTH.with(|g| g.set(None));
+    assert_eq!(state(&s), before);
+}
+
+#[test]
+fn a_run_waiting_to_grow_stops_at_the_next_slice_once_its_work_is_canceled() {
+    TEST_GROWTH.with(|g| g.set(Some(20)));
+    let mut s = two_docs();
+    let before = state(&s);
+    s.script_frames = true;
+    run(&mut s, "for (var i = 0; i < 25; i++) vc.run('shape.rectangle', {x:i,y:1,width:1,height:1});").unwrap();
+    let token = crate::cancel::CancelToken::new();
+    for _ in 0..1_000 {
+        if s.script_waiting() {
+            break;
+        }
+        assert!(crate::cancel::scope(&token, None, || s.script_pump()).is_none());
+    }
+    assert!(s.script_waiting());
+    token.cancel();
+    let ended = crate::cancel::scope(&token, None, || s.script_pump());
+    TEST_GROWTH.with(|g| g.set(None));
+    assert!(ended.expect("the run goes on waiting for Continue").is_err());
+    assert_eq!(s.script_report().unwrap()["kind"], "stopped");
+    assert!(!s.script_running());
     assert_eq!(state(&s), before);
 }
 

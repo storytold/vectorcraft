@@ -98,7 +98,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "command_list",
             "List commands",
-            "Discover command ids, labels, parameter descriptions and enabled state. A command with a parameter schema also lists it as schema (JSON Schema 2020-12) and as inputSchema (the same schema with an object root, the form of a tool's inputSchema). Returns an array. The whole catalogue is large: narrow it with filter (or query), menu, and brief. list_commands lists the same commands; it takes enabledOnly instead of enabled_only and returns {count, commands}.",
+            "Discover command ids, labels, parameter descriptions and enabled state. Lists engine and plug-in commands, and desktop UI menu commands (ui: true; running a UI-only id headless needs --connect). A command with a parameter schema also lists it as schema (JSON Schema 2020-12) and as inputSchema (the same schema with an object root, the form of a tool's inputSchema). Returns an array. The whole catalogue is large: narrow it with filter (or query), menu, and brief. list_commands lists the same commands; it takes enabledOnly instead of enabled_only and returns {count, commands}. Effect ids (effect.list) are not command ids.",
             obj(
                 json!({"filter": string("Case-insensitive id, label or menu substring"), "query": string("Same as filter"), "menu": string(MENU_FILTER), "enabled_only": {"type":"boolean"}, "brief": {"type":"boolean", "description": BRIEF}}),
                 &[],
@@ -156,7 +156,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "list_commands",
             "List commands",
-            "List VectorCraft commands (id, label, menu path, shortcut, parameter description, enabled state, and schema and inputSchema for a command with a parameter schema). Every editing action is a command; run any of them with run_command. Coordinates are points in document space, y down, origin at the first artboard's top-left. command_list lists the same commands as a bare array and takes enabled_only.",
+            "List VectorCraft commands (id, label, menu path, shortcut, parameter description, enabled state, and schema and inputSchema for a command with a parameter schema). Includes engine commands and desktop UI menu commands (ui: true; a UI-only id run headless needs --connect). Every editing action is a command; run any of them with run_command (or invoke_menu for a menu path). Coordinates are points in document space, y down, origin at the first artboard's top-left. command_list lists the same commands as a bare array and takes enabled_only. Effect ids (effect.list) are not command ids.",
             obj(
                 json!({"filter": string("Case-insensitive substring matched against id, label and menu path (e.g. \"align\", \"Object\")"), "query": string("Same as filter"), "menu": string(MENU_FILTER), "enabledOnly": {"type": "boolean", "description": "Only commands that can run right now"}, "brief": {"type": "boolean", "description": BRIEF}}),
                 &[],
@@ -259,7 +259,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     "radius1": num("Star outer radius"),
                     "radius2": num("Star inner radius"),
                     "points": {"type": "integer", "minimum": 3, "description": "Star points (default 5)"},
-                    "rotation": num("Rotation in degrees (polygon/star)"),
+                    "rotation": num("Rotation in degrees clockwise about the centre (rectangle/ellipse: 0 upright; polygon/star: 0 a corner or point straight up)"),
                     "x1": num("Line start x"),
                     "y1": num("Line start y"),
                     "x2": num("Line end x"),
@@ -471,12 +471,12 @@ pub fn tool_definitions() -> Vec<Value> {
                     "ids": {"type": "array", "items": {"type": "integer"}},
                     "dx": num("Move right"),
                     "dy": num("Move down"),
-                    "rotate": num("Rotation in degrees"),
+                    "rotate": num("Rotation in degrees counter-clockwise"),
                     "scale": num("Uniform scale in %"),
                     "scaleX": num("Horizontal scale in %"),
                     "scaleY": num("Vertical scale in %"),
                     "reflect": {"type": "string", "enum": ["vertical", "horizontal"]},
-                    "shear": num("Shear angle in degrees (horizontal axis)"),
+                    "shear": num("Shear angle in degrees (horizontal axis: positive moves the top to the right, turning the vertical edges clockwise)"),
                     "origin": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
                     "copy": {"type": "boolean"},
                 }),
