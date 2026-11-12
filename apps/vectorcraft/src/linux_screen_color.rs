@@ -1,7 +1,7 @@
 //! Linux: Sample Color from Screen (`vectorcraft_ui_egui::screen_color`) through the XDG desktop
 //! portal's color sampler ([`portal`]). A thread of its own asks the portal and waits for the
 //! person, so the UI keeps drawing; it sends the color to the UI and wakes the window. The dialog's
-//! parent is the window, named on the UI thread as for the portal's save dialog (`portal_save`).
+//! parent is the window, named on that thread as for the portal's save dialog (`portal_save`).
 
 mod portal;
 mod request;
@@ -11,17 +11,17 @@ pub fn sampler(ui: egui::Context, parent: super::host_services::Parent) -> vecto
     Box::new(move || {
         let (tx, rx) = std::sync::mpsc::channel();
         let (ui, window) = (ui.clone(), parent.clone());
-        // The thread holds the window until the export that names it is dropped.
-        let (handle, export) = match window.as_deref() {
-            Some(window) => {
-                let (handle, export) = super::portal_save::exported_parent(window);
-                (handle, Some(export))
-            }
-            None => (String::new(), None),
-        };
         std::thread::Builder::new()
             .name("screen-color".into())
             .spawn(move || {
+                // The thread names the window and holds it until the export that names it is dropped.
+                let (handle, export) = match window.as_deref() {
+                    Some(window) => {
+                        let (handle, export) = super::portal_save::exported_parent(window);
+                        (handle, Some(export))
+                    }
+                    None => (String::new(), None),
+                };
                 let picked = portal::connect(zbus::blocking::connection::Builder::session()).and_then(|conn| portal::pick(&conn, &handle));
                 drop(export);
                 drop(window);
