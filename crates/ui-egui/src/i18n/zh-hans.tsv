@@ -2715,6 +2715,10 @@ digits	Malayalam	马拉雅拉姆数字
 	Replace Font	替换字体
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	将其替换为其他文件，或忽略：其图像继续显示随文档保存的预览。
 	Replace Spine	替换脊线
+	Create Spine	创建脊线
+	Create Spine:	创建脊线：
+	Always	始终
+	Never	从不
 	Replace Symbol	替换符号
 	Reset Transformation	重置变换
 	Replace With Font	替换为字体

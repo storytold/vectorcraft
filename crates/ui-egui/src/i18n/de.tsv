@@ -2773,6 +2773,10 @@ digits	Malayalam	Malayalam
 	Replace Font	Schrift ersetzen
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Ersetzen Sie sie durch eine andere Datei oder ignorieren Sie sie: Ihre Bilder zeigen weiterhin die mit dem Dokument gespeicherte Vorschau.
 	Replace Spine	Achse ersetzen
+	Create Spine	Achse erstellen
+	Create Spine:	Achse erstellen:
+	Always	Immer
+	Never	Nie
 	Replace Symbol	Symbol ersetzen
 	Reset Transformation	Transformation zurücksetzen
 	Replace With Font	Durch Schrift ersetzen

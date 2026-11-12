@@ -2815,6 +2815,10 @@ digits	Malayalam	Malayálam
 	Replace Font	Reemplazar fuente
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Reemplázalo con otro archivo o ignóralo: sus imágenes seguirán mostrando la vista previa guardada con el documento.
 	Replace Spine	Reemplazar eje
+	Create Spine	Crear eje
+	Create Spine:	Crear eje:
+	Always	Siempre
+	Never	Nunca
 	Replace Symbol	Reemplazar símbolo
 	Reset Transformation	Restablecer transformación
 	Replace With Font	Reemplazar con fuente

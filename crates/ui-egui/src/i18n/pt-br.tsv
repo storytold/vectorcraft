@@ -2351,6 +2351,10 @@ digits	Malayalam	Malaiala
 	Replace:	Substituir:
 	Replace Font	Substituir Fonte
 	Replace Spine	Substituir Coluna
+	Create Spine	Criar Coluna
+	Create Spine:	Criar Coluna:
+	Always	Sempre
+	Never	Nunca
 	Replace Symbol	Substituir Símbolo
 	Reset Transformation	Redefinir Transformação
 	Replace With Font	Substituir Com Fonte

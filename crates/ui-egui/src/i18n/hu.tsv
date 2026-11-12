@@ -3355,6 +3355,10 @@ mark-style	Japanese	Japán
 	Replace Font	Betűtípus cseréje
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Cseréld le egy másik fájlra, vagy hagyd ki: a képei a dokumentummal mentett előnézetet mutatják tovább.
 	Replace Spine	Gerinc cseréje
+	Create Spine	Gerinc létrehozása
+	Create Spine:	Gerinc létrehozása:
+	Always	Mindig
+	Never	Soha
 	Replace Symbol	Szimbólum cseréje
 	Reset Transformation	Átalakítás visszaállítása
 	Replace With Font	Helyettesítő betűtípus

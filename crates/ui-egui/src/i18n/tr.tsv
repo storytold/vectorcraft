@@ -2620,6 +2620,10 @@ digits	Malayalam	Malayalam
 	Replace Font	Yazı Tipini Değiştir
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Onu başka bir dosyayla değiştirin veya yok sayın: resimleri, belgeyle birlikte kaydedilen önizlemeyi göstermeye devam eder.
 	Replace Spine	Omurgayı Değiştir
+	Create Spine	Omurga Oluştur
+	Create Spine:	Omurga Oluştur:
+	Always	Her Zaman
+	Never	Asla
 	Replace Symbol	Sembolü Değiştir
 	Reset Transformation	Dönüşümü Sıfırla
 	Replace With Font	Yazı Tipiyle Değiştir

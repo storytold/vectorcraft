@@ -247,6 +247,10 @@
 	Blend Options…	Blandingsindstillinger…
 	Expand	Udvid
 	Replace Spine	Erstat rygrad
+	Create Spine	Opret rygrad
+	Create Spine:	Opret rygrad:
+	Always	Altid
+	Never	Aldrig
 	Reverse Spine	Omvend rygrad
 	Reverse Front to Back	Omvend fortil og bagtil
 	Envelope Distort	Kuvertforvrængning

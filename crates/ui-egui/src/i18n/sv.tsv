@@ -2751,6 +2751,10 @@ digits	Malayalam	Malayalam
 	Replace Font	Ersätt typsnitt
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Ersätt den med en annan fil eller ignorera den: dess bilder fortsätter att visa förhandsgranskningen som sparats med dokumentet.
 	Replace Spine	Ersätt ryggrad
+	Create Spine	Skapa ryggrad
+	Create Spine:	Skapa ryggrad:
+	Always	Alltid
+	Never	Aldrig
 	Replace Symbol	Ersätt symbol
 	Reset Transformation	Återställ transformering
 	Replace With Font	Ersätt med typsnitt
