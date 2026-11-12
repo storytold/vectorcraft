@@ -7,7 +7,15 @@ pub(super) struct SysFallback {
     pub(super) misses: std::collections::HashSet<char>,
     /// Counts the scans of the font folders: a search that a scan overtook doesn't record its miss.
     pub(super) scans: u64,
+    /// Characters that went on to read every cataloged font file (and found nothing, or a face).
+    /// Each such search rereads the catalog, so only [`MAX_FILE_SEARCHES`] are made per scan.
+    pub(super) file_searches: u32,
 }
+
+/// The most characters searched for in the font files themselves between two scans of the font
+/// folders. Real text has a few uncovered characters; a document of thousands of distinct
+/// private-use code points would reread the whole catalog for each.
+pub(super) const MAX_FILE_SEARCHES: u32 = 1024;
 
 /// Fonts made for Thai, tried first (when installed) for Thai the font in use lacks: Windows
 /// (Leelawadee UI; Tahoma before Windows 8), macOS (Thonburi, Sukhumvit Set) and Linux (Noto,

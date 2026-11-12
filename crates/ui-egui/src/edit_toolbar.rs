@@ -416,7 +416,7 @@ fn heading(id: &str) -> &'static str {
 }
 
 /// The headings in order, each with its tools in the toolbar's order.
-fn sections() -> &'static [(&'static str, Vec<&'static ToolInfo>)] {
+pub(crate) fn sections() -> &'static [(&'static str, Vec<&'static ToolInfo>)] {
     static SECTIONS: OnceLock<Vec<(&'static str, Vec<&'static ToolInfo>)>> = OnceLock::new();
     SECTIONS.get_or_init(|| {
         let mut out: Vec<(&'static str, Vec<&'static ToolInfo>)> = crate::toolbar::BASIC.iter().map(|(cat, _)| (*cat, vec![])).collect();

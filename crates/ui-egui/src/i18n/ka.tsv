@@ -161,6 +161,15 @@
 	Expand…	გაშლა…
 	Expand Appearance	იერსახის გაშლა
 	Crop Image	გამოსახულების ჩამოჭრა
+	Image Tools	გამოსახულების ხელსაწყოები
+	Remove Background…	ფონის მოშორება…
+	Remove Background	ფონის მოშორება
+	Background	ფონი
+	Edge Color	კიდის ფერი
+	Picked Colors	არჩეული ფერები
+	Corner Color	კუთხეების ფერი
+	Contiguous	მომიჯნავე
+	Each Channel	თითოეული არხი
 	Mask	ნიღაბი
 	Rasterize…	რასტრირება…
 	Create Gradient Mesh…	გრადიენტული ბადის შექმნა…
@@ -1048,6 +1057,8 @@ lighting	Light	სინათლე
 	Toolbar: Single/Double Column	ხელსაწყოთა ზოლი: ერთი/ორი სვეტი
 	Toolbar: Add Tool	ხელსაწყოთა ზოლი: ხელსაწყოს დამატება
 	Toolbar: Remove Tool	ხელსაწყოთა ზოლი: ხელსაწყოს ამოშლა
+	Add Tool…	ხელსაწყოს დამატება…
+	Remove Tool	ხელსაწყოს ამოშლა
 	Toolbar: Reset	ხელსაწყოთა ზოლი: ჩამოყრა
 	Two Point Perspective Preset 1	ორწერტილიანი პერსპექტივის პრესეტი 1
 	Two Point Perspective Preset 2	ორწერტილიანი პერსპექტივის პრესეტი 2
@@ -1403,6 +1414,7 @@ digits	Malayalam	მალაიალამური
 	Roman Baseline	ლათინური საბაზისო ხაზი
 	Select a text object to edit its character attributes.	სიმბოლოების ატრიბუტების რედაქტირებისთვის მონიშნეთ ტექსტური ობიექტი.
 	Show Options	პარამეტრების ჩვენება
+	Show Recent Colors	ბოლოდროინდელი ფერების ჩვენება
 	Small Caps	პატარა მთავრული
 	Small Caps (on the roadmap)	პატარა მთავრული (სამომავლო გეგმაშია)
 	Standard Vertical Roman Alignment	სტანდარტული ვერტიკალური ლათინური სწორება
@@ -1430,6 +1442,8 @@ digits	Malayalam	მალაიალამური
 	Scale at Center	ცენტრიდან მასშტაბირება
 	Up/Down:	ზემოთ/ქვემოთ:
 	Left/Right:	მარცხნივ/მარჯვნივ:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko ზემოთ/ქვემოთ
+	Tate-chu-yoko Left/Right	Tate-chu-yoko მარცხნივ/მარჯვნივ
 	Underline	ხაზგასმული
 	Vertical Scale %	ვერტიკალური მასშტაბი %
 	Axis	ღერძი
@@ -4148,6 +4162,7 @@ font-technology	Variable	ცვლადი
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	სამუშაო დაფა {n}-ის გვერდი არის {size}, რაც აღემატება PDF-ის გვერდის ლიმიტს 14 400 pt (200 in): ის იწერება UserUnit {unit}-ით, ამიტომ აპები, რომლებიც UserUnit-ს უგულებელყოფენ, მას ამდენჯერ პატარას აჩვენებენ
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	სამუშაო დაფა {n}-ის გვერდი არის {size}, რაც აღემატება PDF-ის გვერდის ლიმიტს 14 400 pt (200 in): {label} გვერდები იწერება UserUnit-ის გარეშე, პუნქტებში, და აპები, რომლებიც ლიმიტს იცავენ, გვერდს 200 in-ზე ჭრიან
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5-ს არ აქვს UserUnit, რომელიც 14 400 pt-ზე (200 in) გრძელ გვერდს ზომის შესანარჩუნებლად სჭირდება: ფაილი იწერება როგორც PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4-ს არ აქვს UserUnit, რომელიც 14 400 pt-ზე (200 in) გრძელ გვერდს PDF/A-2-ის 14 400 ერთეულიანი გვერდის ზღვარში დასარჩენად სჭირდება: ფაილი იწერება როგორც PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	სამუშაო დაფა {n}-ის გვერდი არის {size}, ძალიან გრძელი და ვიწრო PDF-ის 3-დან 14 400 ერთეულამდე გვერდის მხარეებისთვის: ის იწერება UserUnit {unit}-ით, რომელიც მოკლე მხარეს 3 ერთეულზე ან მეტზე ინარჩუნებს, ხოლო ზღვრის დამცველი აპები გრძელ მხარეს 14 400 ერთეულამდე ჭრიან
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} ფაილები ინახავს ნამდვილ რიცხვებს {max}-მდე, სამუშაო დაფა {n}-ის {side} pt სიგრძის გვერდს კი უფრო დიდი სჭირდება: აირჩიეთ PDF 1.6 ან უფრო ახალი PDF/X სტანდარტის გარეშე, ან უფრო პატარა სამუშაო დაფა
 @msg	invalid image data for `{0}`	არასწორი გამოსახულების მონაცემები `{0}`-სთვის
@@ -4287,6 +4302,7 @@ font-technology	Variable	ცვლადი
 @msg	not a stored central record	ეს არ არის შენახული ცენტრალური ჩანაწერი
 @msg	not a valid plug-in module: {0}	ეს არ არის პლაგინის სწორი მოდული: {0}
 @msg	not an EMF or WMF file	ეს არ არის EMF ან WMF ფაილი
+@msg	not an HP-GL file	ეს არ არის HP-GL ფაილი
 @msg	not found	ვერ მოიძებნა
 @msg	not in pattern editing mode	პატერნის რედაქტირების რეჟიმი არ არის ჩართული
 @msg	finish editing the pattern first	ჯერ დაასრულეთ პატერნის რედაქტირება
@@ -4354,6 +4370,14 @@ font-technology	Variable	ცვლადი
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	ეს ვექტორიზაცია {max}-ზე მეტ საყრდენ წერტილს შექმნიდა, რასაც დოკუმენტი შეუფერხებლად ვერ აჩვენებს: გაზარდეთ ხმაური, შეამცირეთ ტრაექტორიები ან ფერები, ან აირჩიეთ ნაკლები სიზუსტის პრესეტი
 @msg	select an envelope	მონიშნეთ გარსი
 @msg	select an image	მონიშნეთ გამოსახულება
+@msg	`background` must be edges, corners or colors	`background` უნდა იყოს edges, corners ან colors
+@msg	`match` must be distance or channels	`match` უნდა იყოს distance ან channels
+@msg	`{key}` must be from 0 to 100	`{key}` უნდა იყოს 0-დან 100-მდე
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` უნდა შეიცავდეს 1-დან 16-მდე ფერს, თითოეულს თექვსმეტობით ფორმატში (#rrggbb ან #rgb) ან როგორც black, white, red, green ან blue
+@msg	the linked image shows its preview: embed or relink it first	დაკავშირებული გამოსახულება გადახედვას აჩვენებს: ჯერ ჩააშენეთ ან ხელახლა მიაბით
+@msg	a CMYK image has no transparency to set	CMYK გამოსახულებას არ აქვს დასაყენებელი გამჭვირვალობა
+@msg	every pixel matches the background: no image would be left	ყველა პიქსელი ემთხვევა ფონს: გამოსახულება აღარ დარჩებოდა
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} პიქსელის გამოსახულება შესაცვლელად ზედმეტად დიდია
 @msg	select an object in perspective	მონიშნეთ ობიექტი პერსპექტივაში
 @msg	select artwork (or a colour group) to recolor	მონიშნეთ ხელახლა შესაფერადებელი ნახატი (ან ფერთა ჯგუფი)
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	ხელახლა შეფერადება დასრულდა; უცვლელი დარჩა: {locked} და {hidden}
@@ -4668,7 +4692,13 @@ font-technology	Variable	ცვლადი
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC ან HEIF ფაილი შეიცავს გამოსახულების ტიპს, რომლის წაკითხვაც შეუძლებელია
 @msg	HEIC and HEIF images can't be opened in this build	ამ ვერსიაში HEIC და HEIF გამოსახულებების გახსნა შეუძლებელია
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD გამოსახულება ზედმეტად დიდია წასაკითხად ({_1} × {_2} პიქსელი)
-@msg	zipped 32-bit PSD image data with prediction can't be read	zip-ით შეკუმშული 32-ბიტიანი PSD გამოსახულების მონაცემების წაკითხვა პროგნოზირებით ვერ ხერხდება
+@msg	zipped 1-bit PSD image data with prediction can't be read	zip-ით შეკუმშული 1-ბიტიანი PSD გამოსახულების მონაცემების წაკითხვა პროგნოზირებით ვერ ხერხდება
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD ფაილის შრეების მონაცემები უცნობ შეკუმშვას იყენებს ({m})
+@msg	the PSD file's layer records are damaged	PSD ფაილის შრეების ჩანაწერები დაზიანებულია
+@msg	the PSD file's layer groups are nested too deeply	PSD ფაილის შრეების ჯგუფები ზედმეტად ღრმადაა ჩადგმული
+@msg	a layer of the PSD file is too large to read	PSD ფაილის შრე ზედმეტად დიდია წასაკითხად
+@msg	the PSD file's layers take more memory to read than allowed	PSD ფაილის შრეების წასაკითხად დაშვებულზე მეტი მეხსიერებაა საჭირო
+@msg	the layers can't be read ({e}): the file opened as its merged image	შრეების წაკითხვა ვერ ხერხდება ({e}): ფაილი გაიხსნა როგორც მისი გაერთიანებული გამოსახულება
 @msg	{depth}-bit PSD files in this colour mode can't be read	ამ ფერის რეჟიმში {depth}-ბიტიანი PSD ფაილების წაკითხვა ვერ ხერხდება
 @msg	the PSD file is cut short	PSD ფაილი შეკვეცილია
 @msg	the PSD file's header is damaged	PSD ფაილის სათაური დაზიანებულია
@@ -5281,6 +5311,11 @@ imageTrace	Outline	კონტური
 	In the File	ფაილში
 	Keys	კლავიშები
 	Light behind the object	სინათლე ობიექტის უკან
+	Shadows	ჩრდილები
+	Distance from Object	მანძილი ობიექტიდან
+	Shadow Bounds	ჩრდილის საზღვრები
+	Behind Object	ობიექტის უკან
+	Below Object	ობიექტის ქვეშ
 	3D Lighting Preset	3D განათების წინასწარი პარამეტრი
 	Standard	სტანდარტული
 	Diffuse	დიფუზური
@@ -6020,6 +6055,11 @@ axis	Y Axis	Y ღერძი
 @msg	`inputs` needs the permission `doc.read`	`inputs`-ს სჭირდება ნებართვა `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	მეხსიერების ბიუჯეტი (ობიექტს {_1} სჭირდება შეყვანის {size} ბაიტი, დარჩენილია {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	ობიექტების ბიუჯეტი ({MAX_OBJECTS}-ზე მეტი მხოლოდ წასაკითხი ობიექტი)
+@msg	instruction budget	ინსტრუქციების ბიუჯეტი
+@msg	time budget	დროის ბიუჯეტი
+@msg	memory budget (the selection is too large to hand over)	მეხსიერების ბიუჯეტი (მონიშნული ზედმეტად დიდია გადასაცემად)
+@msg	output size ({what} is {len} bytes, limit {max})	გამოტანის ზომა ({what}: {len} ბაიტი, ლიმიტი {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	პლაგინის ნებართვის წაშლა პლაგინების საცავიდან შეუძლებელია
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	ნებართვა `{shown}` დაჯავშნილია პლაგინების მომავალი API-სთვის; ეს ჰოსტი მას არ გასცემს
 @msg	unknown permission `{shown}`	უცნობი ნებართვა `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	„{name}“ ითხოვს ნებართვებს {asked}: ისინი დესკტოპის აპში ადამიანმა უნდა დაამტკიცოს, ან გადაეცით `grant` --allow-plugin-grants-ით გაშვებულ სესიაში
@@ -6056,6 +6096,16 @@ axis	Y Axis	Y ღერძი
 @msg	message must be text	message უნდა იყოს ტექსტი
 @msg	allowContinue must be true or false	allowContinue უნდა იყოს true ან false
 @msg	Batch cannot play an action with a stop	პაკეტურ დამუშავებას არ შეუძლია გაჩერების მქონე მოქმედების შესრულება
+	Insert Menu Item…	მენიუს ელემენტის ჩასმა…
+	Insert Menu Item	მენიუს ელემენტის ჩასმა
+	Menu Item:	მენიუს ელემენტი:
+	No menu item matches.	მენიუს არცერთი ელემენტი არ ემთხვევა.
+	Several menu items match. Choose one from the list.	ემთხვევა მენიუს რამდენიმე ელემენტი. აირჩიეთ ერთი სიიდან.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	დიალოგის გამხსნელი ელემენტები და მენიუების „ფაილი“, „ფანჯარა“ და „დახმარება“ ელემენტები სიაში არ არის.
+@msg	command must be text	command უნდა იყოს ტექსტი
+@msg	no menu item that can be inserted runs this command	ჩასმადი მენიუს არცერთი ელემენტი არ უშვებს ამ ბრძანებას
+@msg	the action already has 10,000 steps	მოქმედებას უკვე 10 000 ნაბიჯი აქვს
+@msg	the action set would be larger than 8 MiB	მოქმედებების ნაკრები 8 MiB-ზე დიდი გახდებოდა
 	Playback Options	შესრულების პარამეტრები
 	Accelerated	დაჩქარებული
 	Step by Step	ნაბიჯ-ნაბიჯ

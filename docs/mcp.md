@@ -147,6 +147,12 @@ the suite) keep the agent to the folders you give it:
   others that take `library`), whose replies show it too. `swatch.library.copyToUser` refuses a library whose file
   is outside the read roots without naming the file, and it and the library saves with `user: true` leave out
   `path` when the user library folder is outside the read roots.
+- `links.list`, `links.check`, `links.info` and the `missingLinks`, `modifiedLinks` and `updatedLinks` rows of
+  `document.open` leave out a linked file's path when the file is outside the read roots (a relative path is taken
+  from the document's folder): `path`, `found`, and in `links.info` also `link` and `location`, with the `fileSize`
+  and `modified` the document keeps of that file. Each row keeps its id, `name` (`fileName`), status and other
+  fields. This applies to every document, also one the person or a client with wider roots opened. The paths a
+  client gives `links.relink` and `links.unembed` stay in their replies, and the document's links are not changed.
 - Each flag may be given more than once (#3546): a path inside any of the read roots may be read, one inside any
   of the write roots written, so one session can read a project folder and a shared assets folder, or write to an
   output folder and a scratch folder, without widening a root to their common parent. A folder given twice
@@ -480,7 +486,9 @@ objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" pr
 In the app's Color panel and Color Picker, RGB, HSB, hex and Web Safe RGB values describe the active working RGB
 space. RGB edits preserve the other native channels; HSB uses those same working RGB components. Colors outside
 display sRGB retain their native numeric values. `ui.colorPanel` selects the panel mode and `ui.colorPicker`
-opens the picker through `run_command` with the remote backend.
+opens the picker through `run_command` with the remote backend. `ui.colorPanel {"recentColors": false}` unchecks
+the panel menu's Show Recent Colors, which hides the Color panel's Recent Colors row, and `true` shows it again;
+applied colors still join the list while it is hidden.
 
 | Tool | Arguments | Notes |
 |---|---|---|
@@ -500,7 +508,7 @@ opens the picker through `run_command` with the remote backend.
 | `invoke_menu` | `{command, params?}` | Invokes a menu item by command id. UI commands such as `view.*` and `window.*` are in `command_list` with `ui: true`; running them needs the desktop app (`--connect`). |
 | `open_panel` | `{panel}` | Remote only. `panel` is a panel id (`layers`, `swatches`, `colorGuide`, …, as `window.panel` takes) or its display label (`"Color Guide"`), in any case. |
 | `screenshot` | `{path?, scale?, artboard?, window?, max_side?, traceViews?}` | Returns MCP image content (`image/png`, base64) plus a text block. Renders the artboard with the pixels of a PNG `export` with `background: "white"` at the same scale; `traceViews:true` draws Image Trace objects in the view set with `imageTrace.setView`, as in the app's window; `window:true` captures the app window (remote only), as `ui_screenshot` does, and `max_side` (1–4096, window captures only) scales the returned image down as described for `ui_screenshot`. With `path` the backend (the headless session or the app) writes the PNG there too; a window capture written there keeps its full size with `max_side`. |
-| `open_file` | `{path, importer?, params?}` | Opens any readable file as a new active document: `.vectorcraft`/`.drawcraft`, `.vctemplate`, `.svg`/`.svgz`, `.pdf`/`.ai`, `.ait`, `.eps`/`.epsf`, `.ps`, `.dxf`, `.emf`, `.wmf`, PNG (`.png`/`.pns`), JPEG, GIF, WebP, TIFF, BMP (`.bmp`/`.dib`/`.rle`), Targa (`.tga`/`.vda`/`.icb`/`.vst`), PCX, Pixar (`.pxr`), JPEG 2000 (`.jpf`/`.jpx`/`.jp2`/`.j2k`/`.j2c`/`.jpc`), HEIC/HEIF (`.heic`/`.heif`), JPEG XL (`.jxl`), PSD (`.psd`/`.pdd`)/PSB (an image opens as a document of its pixel size; a Photoshop file as its merged image; a JPEG XL file as its first frame). Templates (`.vctemplate`, `.ait`) open as a new untitled document. PDF, `.ai` and SVG files saved with Preserve Editing reopen as the document they carry. The reply is `document.open`'s: its `warnings` say what didn't come in as it was (an EPS whose PostScript can't be read opens as its preview, and the warning names the PostScript error, the operator and the procedure). A file of an extension only an installed importer plug-in lists opens with that importer ([Plug-ins](#plug-ins)); `importer: "plugin.<id>"` opens the file with the importer it names, which must list the file's extension, also one a built-in format reads (in the app, as File › Open With does), and `params` gives that importer's parameters (their defaults when omitted). `run_command document.formats` lists the formats. |
+| `open_file` | `{path, importer?, params?}` | Opens any readable file as a new active document: `.vectorcraft`/`.drawcraft`, `.vctemplate`, `.svg`/`.svgz`, `.pdf`/`.ai`, `.ait`, `.eps`/`.epsf`, `.ps`, `.dxf`, `.emf`, `.wmf`, HP-GL (`.plt`/`.hpgl`/`.hgl`/`.hpg`, and a file of an extension no other format reads that starts with plotter instructions), PNG (`.png`/`.pns`), JPEG, GIF, WebP, TIFF, BMP (`.bmp`/`.dib`/`.rle`), Targa (`.tga`/`.vda`/`.icb`/`.vst`), PCX, Pixar (`.pxr`), JPEG 2000 (`.jpf`/`.jpx`/`.jp2`/`.j2k`/`.j2c`/`.jpc`), HEIC/HEIF (`.heic`/`.heif`), JPEG XL (`.jxl`), PSD (`.psd`/`.pdd`)/PSB (an image opens as a document of its pixel size; a PSD or PSB file with its layers as layers, or as its merged image through `run_command document.open` with `layers: false`; a JPEG XL file as its first frame). Templates (`.vctemplate`, `.ait`) open as a new untitled document. PDF, `.ai` and SVG files saved with Preserve Editing reopen as the document they carry. The reply is `document.open`'s: its `warnings` say what didn't come in as it was (an EPS whose PostScript can't be read opens as its preview, and the warning names the PostScript error, the operator and the procedure). A file of an extension only an installed importer plug-in lists opens with that importer ([Plug-ins](#plug-ins)); `importer: "plugin.<id>"` opens the file with the importer it names, which must list the file's extension, also one a built-in format reads (in the app, as File › Open With does), and `params` gives that importer's parameters (their defaults when omitted). `run_command document.formats` lists the formats. |
 | `save_file` | `{path?, compress?, version?, preview?, precision?, options?}` | Runs `document.save`: the document's own file in its own format (native `.vectorcraft` unless it was opened from or saved as SVG, PDF or a restorable `.ai`; then `warnings` say what that format loses). A path's extension picks the format (`.vectorcraft`, `.vctemplate`, `.pdf`, `.svg`, `.svgz`, `.ai`: a PDF carrying the native document, which reopens editable). For a native file, `compress: true` gzips it (default: the `useCompression` preference, Preferences › File Handling › Use Compression), `version` (1 to 4) writes it for an older VectorCraft (1 and 2 are never compressed, and `version: 2` with `compress: true` is an error), `preview: true` embeds a PNG of the first artboard, and `precision` (0 to 9) rounds path anchors and handles to that many decimal places for that save only (colors, transforms and type stay exact). `options` passes the format's save options as `run_command document.formats` lists them. When `compress`, `version`, `preview` or `precision` is given both at the top level and in `options` with different values, the call is an error (`` `compress: true` and `options.compress: false` disagree: give the option once ``) and nothing is written. A key in `options` that no save format takes is an error, and nothing is written (see Parameter keys). The save drops each option the written format doesn't read. The reply's `warnings` then name each such option given (for example `` `compress` was not used: SVG files don't read it `` for an `.svg` path, and `` `options.preview` was not used: … `` for a key in `options`; a `.ai` file reads `compress` but not `version`, `preview` or `precision`). For a `.ai` file, these warnings name the kind of `.ai` written: a legacy .ai (version 7) for `aiVersion: "7"`, a non-PDF-compatible .ai for `pdfCompatible: false`, and a PDF-compatible .ai otherwise, including a save that reuses the options the document was last saved with. `run_command document.save` and the other save commands refuse any option given beside the path and in `options` with different values, and give the same warnings for a top-level `compress`, `version`, `preview` or `precision` and for each key in `options` that the format doesn't read. The headless session and the app receive the same `app.save` params, and the app is also sent `wait: true`: the call returns once the file is written, or with the error (such as a path outside the write root), even with Background Save on. When the save asks first (the question before replacing a file that opened with losses, or on macOS and Linux the file dialog for an untitled document without `path`), the reply is `{pending}` or `"cancelled"` as before, and the save that runs after the answer uses the Background Save preference. |
 | `export` | `{path?, format?, scale?, artboard?, range?, selection?, outlineText?, options?}` | `svg`, `svgz`, `pdf`, `ai` (the PDF-compatible `.ai` that Save writes, which carries the document when every artboard is written in order), `eps`, `dxf`, `emf`, `wmf`, `png`, `jpg`, `webp`, `gif`, `png8` (an indexed `.png`), `tiff`, `bmp`, `tga`, `psd` (layered), `txt` (the document's text), `vectorcraft` or `template` (a native template). The tool's `format` enum and `document.formats` list them, generated from the engine's format table. When `format` is omitted, it comes from the path's extension. PDF and `.ai` write one page per artboard: all of them, or `artboard` (0-based) / `range` (`"1-3, 5"`, 1-based). SVG and SVGZ write one file per chosen artboard. EPS writes one file of the visible art; with `artboard`, `range`, `options.artboards` or `options: {"useArtboards": true}` it writes one file per chosen artboard, after a central file of the visible art when there are two or more, and `useArtboards: false` keeps the one file. Rasters, DXF, EMF and WMF write one artboard, or one file per chosen artboard with `options: {"useArtboards": true}`. Rasters also take `options: {"rect": [x, y, width, height]}` (page points, y down): that area of the page at the given `ppi`/`scale`, without an artboard and without changing the document; it is refused with `artboard`, `artboards`, `range` or `useArtboards`, with a non-positive or non-finite size, and for non-raster formats. `options` carries more format options (e.g. `{"quality": 80}` for JPEG). `selection: true` exports the selected objects cropped to their bounds (the reply adds their `bounds`, and reports `format` and the encoder's `warnings` as a whole-document export does); `outlineText: true` writes SVG text as paths. Template layers are left out, live effects are kept, and exporting `vectorcraft` never changes the document's path. Without `path` the bytes come back as `dataBase64`. Both backends run the same `document.export` call. |
 | `add_text` | `{text, x?, y?, width?, height?, fit?, fitMinPercent?, path?, mode?, pathEffect?, size?, font?, color?, justify?, vertical?}` | Point type at (x, y) (`justify`: `left`, `center` or `right` starts, centres or ends each line on x); area type with `width`/`height` (`fit`: `none`, `autoHeight`, `shrinkText`, as `text.areaOptions`); or `path` + `mode` (`area`/`onPath`) to flow text in or along a path, with `pathEffect` (`rainbow`, `skew`, `3dRibbon`, `stairStep`, `gravity`; SVG export writes type on a path with any effect other than `rainbow` as outlines, with a warning); `justify` (also `auto`, `justifyAll`) aligns the paragraphs of every kind, as `text.setStyle` does later. `vertical: true` uses the existing vertical writing mode for every kind (default `false`, horizontal). Returns `{id}`, with `overflow: true` when the text doesn't fit its frame or path. |
@@ -884,14 +892,18 @@ export. PDF/X-1a and PDF/X-3 files are PDF 1.3 files too.
 A page with a side longer than 14,400 pt is written with a `UserUnit` (PDF 1.6): its longer side divided by 14,400,
 rounded up to the next thousandth, with the page's sizes and coordinates in those units, so that no side is longer than
 14,400 units (ISO 32000-1, Annex C.2). A PDF 1.5 file with such a page is written as PDF 1.6, with a warning, and
-keeps PDF 1.5's encryption (128-bit RC4). PDF/X files and PDF 1.3 and 1.4 files write such a page in points, and apps
+keeps PDF 1.5's encryption (128-bit RC4). A PDF/A-2b file at PDF 1.4 with such a page is written as PDF 1.6 too, with a
+warning, whether or not `longPagesInPoints` is on, so that its page boundaries stay within PDF/A-2's limit of 14,400 units
+unless the page is too narrow for that (below)
+([veraPDF rule 6.1.13-11](https://github.com/veraPDF/veraPDF-validation-profiles/wiki/PDFA-Parts-2-and-3-rules#rule-6113-11);
+PDF/A-2 files may declare PDF 1.0 to 1.7, [rule 6.1.2-1](https://github.com/veraPDF/veraPDF-validation-profiles/wiki/PDFA-Parts-2-and-3-rules#rule-612-1)).
+PDF/X files and other PDF 1.3 and 1.4 files write such a page in points, and apps
 that keep to the limit cut it to 200 in. `longPagesInPoints: true` (off by default; "Write pages longer than 200 in at
 full size in points" in the Save PDF dialog's General section) writes such a page in points at every PDF version, without
 a `UserUnit`, and a PDF 1.5 file stays PDF 1.5; the warning then says the page is written in points. The option applies
-only to files without a standard: PDF/X files write such a page in points anyway, and PDF/A files at PDF 1.5 and later keep
-the `UserUnit`, which keeps their page boundaries within PDF/A-2's limit of 14,400 units (ISO 19005-2, 6.1.13). A PDF/A
-file at PDF 1.4 writes such a page in points, as other PDF 1.4 files do, so its page boundaries are longer than that
-limit. The dialog disables the
+only to files without a standard: PDF/X files write such a page in points anyway, and PDF/A files keep the `UserUnit`, which
+keeps their page boundaries within PDF/A-2's limit of 14,400 units (ISO 19005-2, 6.1.13), a PDF/A file at PDF 1.4
+included (written as PDF 1.6). The dialog disables the
 checkbox when a standard is chosen. In PDF 1.3 and 1.4 files, PDF/X-1a and PDF/X-3 among them, a real number can
 be at most 32,767, and whole numbers are written as integers: a page longer than 32,767 pt whose sides aren't whole
 numbers of points fails the export with an error naming the page before the thumbnails are drawn and the transparency is
@@ -1472,6 +1484,14 @@ and `amount` in `color.harmony`; `angle` in `paint.editGradient` and in the `gra
 `width` and `tolerance` in `livePaint.strokeEdge`. A null is read as a key left out. A gradient stop that names a
 swatch refuses a `tint` that is not a number with `` stop 0: `tint` must be a number ``.
 
+The Edit, document, guide and slice commands also check the type of each param and change nothing when one is
+wrong. A value that is not a number gets `` `dx` must be a number, not "10" ``: `dx` and `dy` in `edit.duplicate`,
+`edit.paste`, `guide.move` and `object.slice.duplicate`. A value that is not true or false gets
+`` `toggle` must be true or false ``: `summary` in `document.node`, `cancel` in `edit.undoGroup.end`, `vertical` in
+`guide.add`, `toggle` in `guide.select` and `object.slice.select`, `copy` in `guide.move` and `delete` in
+`select.editSaved`. `name` in `select.save` and `newName` in `select.editSaved` must be strings, and `index` in
+`file.close` must be a non-negative integer. A null is read as a key left out.
+
 `text.setStyle` refuses a `size` that is neither a number nor a length with a unit (`"12 pt"`, `"5 mm"`) with
 `` `size` must be a number, not true ``, and a `tracking` that is neither a number nor a number written as a string
 (`"20"`) with `` `tracking` must be a number, not false ``. It and `text.setRangeStyle` refuse a `font` or `style` that is not a string
@@ -1572,10 +1592,10 @@ top-level `import` or `export`, such as a React `.jsx` file), `notText` (a NUL b
 control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script, the reply holds these lists:
 
 - `needs` lists what the script needs from the app that runs it: `language` (the script language's own objects
-  and directives, such as `$`, `alert`, `UnitValue` and `#target`), `dom` (the reference app's document model),
-  `files`, `menuCommands`, `dialogs`, and `hostOnly` (features only the reference app has: palettes,
-  `#targetengine`, BridgeTalk, sockets, native code, XMP, the XML object and E4X, operator overloading,
-  reflection, actions and `selectTool`).
+  and directives, such as `$`, `alert`, `UnitValue`, `#target` and `#targetengine`), `dom` (the reference app's
+  document model), `files`, `menuCommands`, `dialogs`, and `hostOnly` (features only the reference app has:
+  palettes, BridgeTalk, sockets, native code, XMP, the XML object and E4X, operator overloading, reflection, actions
+  and `selectTool`).
 - `directives` lists the `#include`, `#includepath`, `#script`, `#strict`, `#target` and `#targetengine` lines,
   and `targets` splits each `#target` line's application specifier into `app`, `instance`, `version` and
   `locale`. A directive is read where it starts a line, written `#name` or `//@name`.
@@ -1657,10 +1677,11 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   is read at once and `timeout` is not waited on. The run's fuel and limits apply to the file. An empty path, a
   missing file and a refused path throw errors the script can catch.
 - `$.fileName` is the file being run, which is the file `$.evalFile` is running while it runs, and is empty for a
-  script given as `source`. `$.includePath` is the current `#includepath` list, separated by `;`.
+  script given as `source`. `$.includePath` is the current `#includepath` list, separated by `;`. `$.engineName` is
+  the name `#targetengine` gave the engine the script runs in (`VectorCraft` without the line) and is read-only.
 - `alert(message[, title, errorIcon])`, `confirm(message[, noAsDflt, title])` and `prompt(message, preset[, title])`
   open a dialog, described below. `vc.api.has("dialogs")` is true.
-- `vc.args` is the `args` object.
+- `vc.args` gives a read-only copy of the `args` object each time it is read.
 - `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
 
 Before any of the script runs, its preprocessor lines are read. The help page
@@ -1690,8 +1711,12 @@ VectorCraft reads them by these rules of its own:
   and `Function` compile takes the checks of the code that compiles it. A file `$.evalFile` runs takes the checks of
   its own last `#strict` line, for its code and the functions it defines, or the caller's when it has none; the
   caller's code keeps its own. Any value other than `on` or `off` ends the run with `#strict takes on or off`.
-- `#targetengine` and `#engine` end the run with an unsupported-directive error, and any other `#name` with an
-  unknown-directive error. A `//@` line with another name is a comment.
+- `#targetengine name` and `//@targetengine name` run the script in the named engine. The help page above describes
+  the line: the engine it names lasts for the application session, and a later script that names it sees the globals
+  and functions earlier ones left. A script without the line, and `#targetengine main`, get a new engine for each
+  run, as before. The rest are VectorCraft's own rules, described under Script engines below.
+- `#engine` ends the run with an unsupported-directive error, and any other `#name` with an unknown-directive error.
+  A `//@` line with another name is a comment.
 - A script run from a file reads its included files and the files `$.evalFile` runs only in that file's folder and
   the folders below it. A path with a `..` name, a path that leads out of the folder through a link or a junction, a
   Windows device name or stream, and a computer on the network are refused, and so is every path for a script given as
@@ -1744,7 +1769,9 @@ as it is. A string as the first argument is used as the text.
 objects as the text of an expression that makes the same value, such as `({"a":[1, "x"]})`. A function, a getter, a
 date, a regular expression, an error, a host object such as `vc`, an array with properties besides its elements, an
 object whose prototype is not `Object.prototype`, a property that is not enumerable, or an object that contains
-itself throws a `TypeError`. A value deeper than 64 levels, with more than 1,048,576 entries or with text longer than 16,777,216
+itself throws a `TypeError`. So does a property that is not writable or not configurable, an object or array after
+`Object.preventExtensions`, `Object.seal` or `Object.freeze`, and an array whose `length` is read-only, since the text
+would make each of them writable, configurable and extensible again (VectorCraft's own rule). A value deeper than 64 levels, with more than 1,048,576 entries or with text longer than 16,777,216
 characters throws a `RangeError`.
 
 The run is one transaction. When the script ends, each document it changed gets one undo step named Run Script. A
@@ -1768,6 +1795,40 @@ change anything outside the documents: `script.*` except `script.check`, `plugin
 `edit.clearHistory`: a run keeps each document's undo steps from before it and adds one. Calling one of these throws
 an error. With Data Recovery off for complex documents, a run in the web build does not start while a complex document
 has unsaved changes.
+
+### Script engines
+
+A named engine (`#targetengine`) keeps its globals and functions between the runs that name it, until it is dropped
+or the session ends. Engines stay on the thread that made them: a session used on another thread starts there with
+no engines, and the engines it left are dropped when their own thread next uses engines. These are VectorCraft's own rules:
+
+- The name is either a name of ASCII letters, digits and `_` that does not start with a digit, or a name in single or
+  double quotes of 1 to 64 bytes of UTF-8 without control characters. Names are matched as written: `Session` and
+  `session` are two engines. `main` is the engine of a script without the line, which is new for each run.
+- Only the script itself has the line, once, before its code and its `#include` lines; blanks, comments and the other
+  preprocessor lines may come before it. A second line, a late line, a bad name, or the line in an included file ends
+  the run at that line before any of it runs, and makes no engine. In a file `$.evalFile` runs, the line makes that
+  call throw a `SyntaxError` when the call runs.
+- A session keeps at most 8 named engines. A run that names a ninth ends with a limit error before any of it runs,
+  and the other eight are kept. Each named engine has a heap of 64 MiB, which holds what it keeps between runs; a run
+  that goes past it ends with the heap limit, and the engine stays usable.
+- The documents go back after an uncaught error, a limit or `script.stop` as they do for any run, and the engine keeps
+  the globals the run set before it ended. An internal error drops the engine. An error in a function an earlier run
+  defined is reported without a line and column.
+- `vc`, `$`, `alert`, `confirm` and `prompt` act for the run that calls them, including a copy an earlier run kept in a
+  global. `vc.args` is the calling run's `args`, through a `vc` object an earlier run kept too. An engine
+  holds no document: `vc.document` is a copy, read when it is called. What a run sets on `$` (`$.locale`,
+  `$.localize`, `$.flags`, `$.setenv` values and `$.hiresTimer`) lasts for that run only, as in a run without the line.
+- `File` and `Folder` objects read in the folders of the run that calls them, including objects an earlier run kept in
+  a global. `Folder.current` starts at the script's folder in each run, and a file an earlier run left open is not open
+  in a later one.
+- `script.engines {}` lists the named engines in the order they were made: `{engines: [{name, heapBytes, running}],
+  limit: 8, heapLimit: 67108864}`, where `heapBytes` is the engine's heap after its last run.
+- `script.engine.drop {name}` drops a named engine and its globals, and returns `{dropped: true, name}`. The next run
+  that names it gets a new engine. `main`, a name with no engine, and the engine of the running script are refused;
+  the last one ends with the busy error.
+- A script cannot run `script.engines` or `script.engine.drop`.
+- The web build has no named engines: a run that names one other than `main` ends with an error before any of it runs.
 
 VectorCraft sets these limits itself:
 
@@ -1873,6 +1934,8 @@ script reads files with them:
   objects for the same path are different objects.
 - `name`, `displayName`, `fsName`, `absoluteURI`, `fullName`, `relativeURI`, `path`, `parent` and `toString()` come
   from the path. `exists`, `length`, `created`, `modified`, `hidden`, `readonly` and `alias` read the file system.
+  `exists` is true for a `File` only when the path names something other than a folder, and for a `Folder` only
+  when it names a folder.
   `File.encode`, `File.decode` and `File.isEncodingAvailable` (and the same on `Folder`), `File.fs`, and the folders
   `Folder.temp`, `Folder.desktop`, `Folder.myDocuments`, `Folder.userData` and the others are there too.
 - `open('r')` opens a file to read, and `read([chars])`, `readln()`, `readch()`, `seek(pos[, mode])`, `tell()`, `eof`
@@ -1953,9 +2016,10 @@ way. The listed scripts come first in the menu, above Check Script… and Other 
 
 The rest of this section is VectorCraft's own rules:
 
-- The folder is read when the app starts, each time its window becomes the active one, and, where the menus are in
-  the window (Windows, Linux and BSD), each time the File menu opens. A script added while VectorCraft runs is listed
-  after the next of these. A read takes names only, never a script's text, and runs off the UI thread, one read at a
+- The folder is read when the app starts, each time its window becomes the active one, each time the File menu opens
+  where the menus are in the window (Windows, Linux and BSD), and each time a menu of the macOS menu bar opens. A
+  script added while VectorCraft runs is listed after the next of these; in the macOS menu bar it shows the next time
+  the menu opens. A read takes names only, never a script's text, and runs off the UI thread, one read at a
   time.
 - Each level is sorted by label without regard to case, with scripts and subfolders mixed. A script whose label
   another row of its folder has (`Tidy.js` beside `Tidy.jsx`, or beside a subfolder `Tidy`) shows its whole file name.
@@ -2691,8 +2755,26 @@ already walks Image Trace. Short agent entry points:
   false) offers Continue in the message box. An action with an empty message still waits at the stop, which is
   VectorCraft's own rule. A stop in an action becomes the panel's selected step, and its action and set become the
   selected ones. An index past the last set, action or step, a param of another type, params that are not an
-  object, or no action and no recording is an error, and then nothing changes. The panel menu's Insert Stop… opens the `actionStopRecord` dialog
+  object, no action and no recording, or a stop that would give the action more than 10,000 steps or its set's file
+  more than 8 MiB is an error, and then nothing changes. The limits count the steps that the recording in progress
+  adds to the set. The panel menu's Insert Stop… opens the `actionStopRecord` dialog
   (`message`, `allowContinue`, `set`, `action`, `step`), whose OK runs this.
+- Actions: `ui.action.insertMenuItem {set?, action?, step?, command, params?}` inserts a menu item's command as a step
+  without running it. `command` and `params` (default: `{}`) must be those of an item in the menus that can be a step:
+  an item that runs a document command without opening a dialog first, outside the File, Window and Help menus, and
+  not Undo, Redo, a Paste command, Object › Align (its items add the Align To choice when clicked), Object › Image
+  Trace › Make or Make and Expand (the menu traces off the UI thread, with progress and Cancel), Object › Pattern ›
+  Make or Edit Pattern (the menu also opens the Pattern Options panel), a preference
+  toggle, an Actions command or a recent-font, saved-selection or saved-view slot. Disabled items are listed, and playback checks the step when it runs. With `set` and `action`, the
+  step goes into that action, after step `step`, else after its last step, becomes the panel's selected step, and the
+  command returns `{set, action, step}`. Without them it goes into the recording in progress and returns
+  `{recording: true}`. A command no such item runs, params that are not an object, an index past the last set, action
+  or step, no action and no recording, or a step that would give the action more than 10,000 steps or its set's file
+  more than 8 MiB is an error, and then nothing changes. The limits count the steps that the recording in progress
+  adds to the set. The panel menu's Insert Menu Item… opens the
+  `actionInsertMenuItem` dialog (`find`, `command`, `params`, `set`, `action`, `step`): typing in Find and pressing
+  Find picks the one item whose menu path, shown name or command id holds every word typed, or lists the matches, and
+  OK runs this.
 - Actions: `ui.action.continue {}` plays on from the stop the playing action waits at, on the document active now, and
   closes the stop's message box (`actionStopMessage`). The next step runs at once, or at Accelerated the steps up to
   the next stop as one undo step. It returns `{results, pending, atStop?}`. With no action waiting at a stop it is an
@@ -2983,6 +3065,32 @@ The document stores their numeric settings; manual edits remain possible through
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.lightingPreset","params":{"index":0,"item":null,"preset":"topLeft"}}}
+```
+
+## 3D shadows
+
+Revolve, Extrude & Bevel, Inflate and Rotate take `shadow` (boolean, default false), `shadowPosition` (`"behind"`
+or `"below"`, default `"behind"`), `shadowDistance` (0..100%, default 0) and `shadowBounds` (10..400%, default 100),
+set with `effect.apply` or `effect.setParams` in one undo step. With `shadow` on, the first light casts a
+hard-edged shadow of the solid, drawn behind the solid as one path filled black at 50% opacity times the opacity
+of the art that casts it, in that art's blending mode. `"behind"` puts it
+on a plane square to the view behind the object; `"below"` puts it on the floor under the object, square to the
+object's own vertical axis and turned with it, so with no X rotation the floor is seen edge-on and draws nothing.
+`shadowDistance` moves the plane away from the object by that share of the object's largest size. `shadowBounds`
+limits the plane to a square about the foot of the object's center, four times the object's largest size across
+at 100%. No shadow is drawn when `shade` is false, when the first light's intensity is 0, or when it does not
+reach the plane (a light behind the object for a shadow behind it); a fill, stroke or group member at 0% opacity
+casts none. Values out of range, another `shadowPosition` and a `shadow` that is not a boolean are refused before
+the document changes. A shadow is cast from at most 327,680 faces, the solids of one object together (VectorCraft's
+own limit); past that, a command is refused with "The 3D shadow is too complex; turn Shadows off or simplify the
+art", and a loaded file draws the source path, as it does for a solid past its limits. The color, the opacity and how Distance and Bounds scale are VectorCraft's own; the public
+documentation names the controls and their ranges
+([3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html)).
+The settings are saved in the native file; SVG and PDF exports draw the shadow, and `effect.expandAppearance` keeps
+it as a path. Extrude & Bevel (Classic) has no shadow. See [three-d.md](three-d.md#shadows).
+
+```json
+{"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"shadow":true,"shadowPosition":"below","shadowDistance":10,"shadowBounds":150}}}}
 ```
 
 ## 3D object type
@@ -5819,10 +5927,12 @@ reduced size"; the document keeps the whole file) or, when it can't be read that
 allowance has bytes, drawn as a crossed gray box on the canvas and left out of exports ("too large to draw"); `document.open` and `file.place` say the same in their `warnings`). `links.info {id?}` is the Link Info: `image.info`'s fields plus
 `status`, `format`, the file's `ppi` and the `effectivePpi`, `scale` (% of 100%), `rotation` (degrees,
 counter-clockwise), `placement` and, for a linked file, `fileName`, `location`, `fileSize`, `created`, `modified`.
+With automation read roots, a file outside them has no `path` or `found` in `links.list` and `links.check`, and no
+`link`, `path`, `location`, `fileSize` or `modified` in `links.info`; its row keeps the file's name.
 `links.goTo {id}` selects an image; `links.embed {ids?}` keeps linked files' pixels in the document (an image whose
 file is missing stays linked: relink it first); `links.unembed {id, path}` writes an embedded image to a file
 (another extension converts it) and links to it, and without `path` returns `{name, dataBase64}`.
-`links.placementOptions {ids?, preserve?: transforms|bounds|fileDimensions|fit|fill, align?: topLeftÃ¢â‚¬Â¦bottomRight,
+`links.placementOptions {ids?, preserve?: transforms|bounds|fileDimensions|fit|fill, align?: topLeft…bottomRight,
 clip?}` decides how a relinked or updated file takes an image's place (default `bounds`: stretched into the old
 bounds; `clip` puts it in a clip group of the old bounds when it is larger). The UI commands `links.editOriginal` and
 `links.reveal` open the linked file in its app or show it in its folder (desktop). Edit Original runs only from the app's window,
@@ -6163,6 +6273,33 @@ clipboard service offers it (the Windows desktop service doesn't read metafiles 
 {"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/chart.emf","at":[300,200]}}}
 ```
 
+## HP-GL import
+
+`document.open` and `file.place` read HP-GL/2 plot files (`.plt`, `.hpgl`, `.hgl`, `.hpg`) into one layer, with the
+artboard round the art. A file whose extension no other format reads opens as HP-GL when it starts with plotter
+instructions. Older HP-GL files are read by the HP-GL/2 rules for the instructions the two share. The reader follows
+the [HP-GL/2 and HP RTL Reference Guide](https://support.hp.com/sg-en/document/c01121263).
+
+Plotter units (1016 to the inch, y up) become points through the scaling the file sets (`IP`, `IR`, `SC`) and its
+rotation (`RO`). Each line drawn with the pen down is one stroked path in the pen's color (`SP`, `PC`, `NP`, `CR`)
+and width (`PW`, `WU`; 0.35 mm by default), with the line type (`LT`, `UL`) as a dash pattern and the line attributes
+(`LA`) as caps and joins. Circles, arcs, wedges and Bézier curves (`CI`, `AA`, `AR`, `AT`, `RT`, `EW`, `WG`, `BZ`,
+`BR`) are drawn as curves. Filled rectangles, wedges and polygons (`RA`, `RR`, `WG`, `PM` with `FP`) become filled
+paths, and edged ones (`EA`, `ER`, `EW`, `EP`) become stroked paths. Encoded polylines (`PE`) are read, and printer
+escape sequences and PJL lines around the instructions are skipped.
+
+Two rules are VectorCraft's own: before the first `SP` the pen is pen 1, and the hard-clip limits are 11 × 8.5 in
+from the origin, so P2 lies there when the file sets no scaling points.
+`SP0` draws nothing. Labels, the symbols of symbol mode (`SM`) and raster images are not drawn, the input window
+(`IW`) does not clip the art, the art of later pages is drawn over the first page, and hatched and patterned fills are
+filled solid; `warnings` lists each of these. A file named as a plot file that doesn't start with plotter
+instructions is refused with "not an HP-GL file". VectorCraft does not write HP-GL.
+
+```json
+{"name":"open_file","arguments":{"path":"/tmp/part.plt"}}
+{"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/part.plt","at":[300,200]}}}
+```
+
 ## TIFF, BMP and Targa export
 
 `document.export` (and `export`) writes them like the other raster formats: one artboard (or `useArtboards`, one
@@ -6312,11 +6449,66 @@ appearance of their own or knockout stay one pixel layer. Hidden layers and obje
 `hiddenLayers: true` writes them as hidden layers. `layers: false` writes one flat image, on white where nothing is
 drawn. Files are at most 30000 pixels a side.
 
-Photoshop documents (`.psd`, and `.psb`, the large document format) open and place as their merged image, the
-flattened picture every Photoshop file carries (layers aren't read): Bitmap, Grayscale, Duotone, Indexed, RGB, CMYK
+PSD files (`.psd`, and `.psb`, the large document format) place as their merged image, the
+flattened picture every PSD file carries: Bitmap, Grayscale, Duotone, Indexed, RGB, CMYK
 (converted with the colour settings' CMYK) and Lab, at 1, 8, 16 and 32 bits per channel, sized by their resolution.
 A document with transparency keeps it. `file.place {path}` links the file like any image (`links.update` reads it
 again when it changes); Multichannel files are refused.
+
+`document.open` converts a PSD or PSB file's layers to objects. In
+[PSD import options](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html),
+the option that converts layers to objects keeps as much of the layer structure as it can, merges the layers of a
+clipping mask into one layer and discards hidden layers that require merging; the option that flattens the layers
+imports one image, and Import Hidden Layers brings hidden layers in. `document.open` does the same, with
+`layers: false` for the single image and `hiddenLayers: true` for the hidden layers. The page also merges
+adjustment layers, layers with a knockout option, and layers that hold transparent pixels in some blend modes with
+the layers below them. `document.open` applies neither adjustments nor knockouts, and it merges a layer by its blend
+mode alone, as the rules below say.
+
+The rest are VectorCraft's own rules:
+
+- Each layer becomes a layer of the document holding its pixels as an image, with the layer's name, visibility,
+  opacity and blend mode.
+- A layer group becomes a layer of sublayers. A Pass Through group is not isolated; a group in any other mode is.
+- Layers clipped to the layer below are merged into it as one image, shown where that layer has pixels. Layers
+  clipped to an adjustment layer, or to a fill layer that stores no pixels and isn't drawn, show over the whole
+  canvas, through that layer's mask.
+- Hidden layers are left out unless `hiddenLayers: true`, which brings them in hidden. A hidden layer that would
+  need a merge is always left out, with the layers clipped to it. The `warnings` count the layers left out.
+- `layers: false` opens the merged image.
+- A layer or group in Dissolve, Linear Burn, Linear Dodge, Vivid Light, Linear Light, Pin Light, Hard Mix, Subtract,
+  Divide, Darker Color or Lighter Color is merged with the visible layers below it in its group, whether or not it
+  holds transparent pixels. Layers in Color Dodge, Color Burn and Difference keep their mode. In such a merge, the
+  layers of a Pass Through group blend with the layers below the group, at the group's opacity and through its layer
+  mask.
+- A Dissolve layer's partly transparent pixels are merged as opaque or transparent, opaque at the share of its
+  pixels their transparency gives, in a fixed pattern that differs from layer to layer.
+- A merged layer is named after the layers it holds, joined with ` + `.
+- A layer name the file stores only as a one-byte Pascal string, without its Unicode name, is read as Mac Roman.
+- A layer's opacity is multiplied by its fill opacity, in every blend mode. A layer that others are clipped to keeps
+  its own opacity, and its fill opacity fades only its own pixels.
+- A layer mask becomes the layer's opacity mask: a gray image that hides the layer outside it when the mask's
+  default color is black and shows it when white. A disabled mask is kept, switched off.
+- Type and shape layers, and gradient and pattern fill layers that store pixels, come in as the pixels the file
+  stores. A solid color fill layer that stores no pixels and has no vector mask comes in as an image of its color
+  (RGB, CMYK, Grayscale, Lab or HSB) over the canvas. One whose shape is a vector mask isn't drawn, and the layers
+  clipped to it are left out.
+- Adjustment layers, fill layers that store no pixels and whose fill isn't read, layer effects that are switched on,
+  knockouts and vector masks are not applied; the `warnings` count them.
+- Layer channels may be raw, PackBits or zipped (with or without prediction) at 8, 16 and 32 bits.
+- A file without layers opens as its merged image. A file whose layers can't be read opens as its merged image
+  with a warning, and when the merged image can't be read either, the file is refused with an error.
+
+Each layer's pixels must fit the memory allowed for one image, and the pixels of all the layers and masks, with the
+canvases the merges make, must together fit eight times that; a file past either limit opens as its merged image,
+with a warning. The canvases one step of a merge holds at once must also fit the memory allowed for one image; when
+they don't, the layer that needed the merge comes in alone, with a warning: in the Normal mode, or as a layer of its
+own instead of clipped. File › Open in the app has no PSD import options dialog: it converts the layers and leaves
+hidden layers out.
+
+```json
+{"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/poster.psd","hiddenLayers":true}}}
+```
 
 JPEG XL images (`.jxl`, a bare codestream or the ISOBMFF container) open and place as their first frame, with the
 orientation their header gives, decoded with jxl-oxide and stored as PNG. 16-bit and floating-point samples become 8
@@ -7536,13 +7728,14 @@ Character Style Options uses `charStyle.edit {name, to, attrs}` to replace the n
 attribute map in one undo step. `to` is trimmed and must be unique. The command updates text using the style
 while preserving local overrides; Undo/Redo restores the definition and its users. The `charStyleOptions`
 dialog exposes `name`, `font_family`, `font_style`, `size`, `leading`, `kerning`, `tracking`, `case`,
-`position`, `underline`, `strikethrough`, `charAlign`, `h_scale`, `v_scale`, `baseline_shift`, `rotation`,
-`language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
+`position`, `underline`, `strikethrough`, `charAlign`, `h_scale`, `v_scale`, `baseline_shift`, `tcyUpDown`,
+`tcyLeftRight`, `rotation`, `language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
 `ot_figure`, `ot_position`, `ot_liga`, `ot_calt`, `ot_dlig`, `ot_swsh`, `ot_salt`, `ot_titl`, `ot_ordn`, `ot_frac`,
 `ot_sets`, `section` (`general`, `basic`, `advanced`, `color` or `opentype`), and `preview`. An empty field leaves its
 attribute unset. `leading` and `kerning` also accept `Auto` to store an explicit automatic value.
 Advanced Character Formats holds `h_scale` and `v_scale` (percent, 1 to 10000),
-`baseline_shift` (points, -1296 to 1296), `rotation` (degrees, stored from -180 to 180) and `language` (a name or tag from Document
+`baseline_shift` (points, -1296 to 1296), the Tate-chu-yoko Settings `tcyUpDown` and `tcyLeftRight` (points,
+-1296 to 1296, as `text.setRangeStyle` takes them; an explicit 0 stays distinct from unset), `rotation` (degrees, stored from -180 to 180) and `language` (a name or tag from Document
 Setup's languages; English: USA stores the explicit default `null`, and a tag not in the list that the style
 already has is kept). Language sets the language the characters are shaped in; it does not change hyphenation
 or spelling.
@@ -7572,7 +7765,7 @@ captured attributes. Without selected text, it starts with the character default
 The New Paragraph Style dialog has the sections of Paragraph Style Options, filled in from the selected
 paragraph's attributes, or without selected text from the paragraph defaults for the interface language, and OK
 sends the attributes of its sections as `attrs`. Reset Panel in Basic Character
-Formats removes those fields from the definition, Reset Panel in Advanced Character Formats removes its five, Reset
+Formats removes those fields from the definition, Reset Panel in Advanced Character Formats removes its seven, Reset
 Panel in Character Color removes its five attributes and Reset Panel in OpenType Features removes `features`.
 `ui.charStyleOptions.resetPanel {}` performs that reset for the section selected in either character-style
 dialog; it is disabled on General.
@@ -7727,7 +7920,9 @@ runs it where it is called, so the call may take minutes; `notifications/cancell
 A plug-in whose manifest lists permissions (`permissions` in its `plugin.inspect` entry, with `needsApproval: true`)
 needs a person's approval too, and `plugin.install` refuses `grant: [permission]` from a request. With a desktop
 app connected, `ui.installPlugin` opens the approval dialog and returns `{pending: "pluginInstall"}`; `answer_dialog`,
-`ui.dialog.confirm` and injected input can't confirm it. A `vectorcraft-cli mcp` started with `--allow-plugin-grants`
+`ui.dialog.confirm` and injected input can't confirm it. Its OK takes input only once the question has been on screen
+in the focused window for half a second, counted again for every new question and after the window gets the focus
+back. A `vectorcraft-cli mcp` started with `--allow-plugin-grants`
 accepts `grant` and `allowHeavy` from any request, in that session only (headless; it can't be combined with
 `--connect`, `--automation-read-root` or `--automation-write-root`). A server confined to folders has no plug-in
 store, so it reads no `grants.json`, and a module that lists permissions or asks for a heavy budget does not install
@@ -7746,7 +7941,9 @@ that folder, and the next load, install or `plugin.remove` of the plug-in moves 
 filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
 A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may report its progress, see Cancel and write
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log
-under its id. One that lists `settings` or `cache` keeps settings or a cache of its own in the `Plug-ins` folder
+under its id. With a desktop app connected, `plugin.dialog` runs such a filter (one without a `commandAllowlist`) in the
+background when it runs at once or OK runs it with Preview off, and returns `{background: true, status}`;
+`plugin.cancelRuns` stops it. One that lists `settings` or `cache` keeps settings or a cache of its own in the `Plug-ins` folder
 (VectorCraft's own caps: 256 settings and 1 MiB, 512 MiB of cache): `plugin.list` and `plugin.info` give the cache's
 size as `cacheBytes`, `plugin.clearCache {id?}` empties the cache of one plug-in or of all of them and returns
 `{cleared: [id], bytesFreed}`, replacing a plug-in keeps both, and `plugin.remove` deletes both (also for an id that
@@ -7792,7 +7989,9 @@ pendingItem}`; a command does not turn Safe Mode on or off. `plugin.setEnabled {
 off for the next launch, as Help › Safe Mode's Enable on Re-launch does; it does not load, unload or uninstall anything
 now, and `plugin.install` of a disabled plug-in turns it on. Turning a plug-in on by `id` or by installing it also turns
 on the file it is stored in, which names it when it stopped a launch while loading; when the new version can't be saved
-over that file, the plug-in stays disabled. `plugin.list` reports `safeMode` and `disabled`, and
+over that file, the plug-in stays disabled. When the new version is saved but its grant can't be, and the file can't be
+returned to what it held before (the old module, or no file), the plug-in is turned on, and the next launch skips it
+until it is approved. `plugin.list` reports `safeMode` and `disabled`, and
 `plugin.reload` skips disabled plug-ins. A change to the disabled list is saved on top of the list the file holds at
 that moment, so a change another window saved to the same preferences meanwhile is kept. When the list file can't be
 read (it is too large) or holds another format or version, it is left as it is; a file that isn't JSON is replaced.
@@ -9183,6 +9382,54 @@ there is no step. → `{symbols: [name…], ids: [instance id…], skipped: [{la
 
 ```json
 {"name":"run_command","arguments":{"command":"addon.document.symbolsFromLayers","params":{"replace":true}}}
+```
+
+## Image Tools add-on
+
+Image Tools is a built-in add-on for placed images: its command is `addon.image.removeBackground`, and in the desktop
+app it lives in Object › Plug-ins › Image Tools. It is a VectorCraft addition.
+
+### Remove Background
+
+`addon.image.removeBackground` makes the background of the selected images, or of the images in `ids`, transparent by
+lowering the alpha of their own pixels. The work runs in the app, and no service or model is used.
+
+- With `background: "edges"` (the default), the background is the most common color along the image's edges. When the
+  edges hold at least as many clear pixels as pixels of that color, as after an earlier run, nothing is cleared.
+- With `background: "corners"`, the background is the average color of the image's four corner pixels. A clear corner
+  is left out of the average, and when all four are clear, nothing is cleared.
+- With `background: "colors"`, the background is the colors in `colors`. `colors` lists 1 to 16 colors, as an array or
+  as one string split by commas or spaces. Each is written as other color params take a hex color (`#rrggbb` or `#rgb`,
+  with or without the `#`) or named black, white, red, green or blue.
+- With `contiguous: true` (the default), the background is cleared only where it reaches in from an edge, so the same
+  color inside the subject stays. With `contiguous: false`, it is cleared wherever it is.
+- `tolerance` (0 to 100, default 10) is how near a pixel's color must be to a background color to be cleared, as a
+  percentage. With `match: "distance"` (the default), it is a percentage of the RGB distance from black to white. With
+  `match: "channels"`, it is a percentage of 255 steps on the one of red, green and blue that differs most, so a
+  tolerance of `t / 255 × 100` clears the colors within `t` 8-bit steps on every channel. `softness` (0 to 100,
+  default 10) is the band past the tolerance over which pixels fade from cleared to kept. These ranges and defaults
+  are VectorCraft's own.
+- A value outside 0 to 100, a `background` other than `edges`, `corners` or `colors`, a `match` other than `distance`
+  or `channels`, a `contiguous` that is not true or false, or a `colors` that lists no color, more than 16, or one that
+  is not a color or has an alpha part is refused, and the document stays as it was.
+
+The result stays an image, embedded as a PNG with an alpha channel and the source's color profile and resolution. An
+image of 16-bit samples keeps 16 bits, a grayscale image stays gray, and a linked image is embedded. All the images
+change in one undo step, and an image that `ids` names twice changes once. An image whose pixels do not change is left
+as it is, and when none changes the command adds no undo step and returns `changed: 0`. `cleared` counts the pixels
+made fully clear in the images that changed. The command refuses, and changes nothing, when an image is CMYK, a linked
+image shows its preview (embed or relink it first), an image would need more than the decode allowance while it is
+worked on (2 GiB, or 512 MiB in the web app, counted from the file's header before it is decoded), or every pixel of an
+image would be cleared. Remove Background… opens the command's dialog with Preview off; with Preview on, the canvas
+shows the result for the values in the dialog, and Cancel puts the image back. While a dialog previews the command,
+the session keeps the decoded pixels of the images it changes (at most 128 MiB, or 32 MiB in the web app), so the next
+preview step does not decode them again; it releases them when the dialog closes with OK or Cancel. A run that is not
+a preview step does not keep them.
+→ `{changed, ids, cleared}`
+
+```json
+{"name":"run_command","arguments":{"command":"addon.image.removeBackground","params":{"background":"colors","colors":["#ffffff","#f0f0f0"],"tolerance":5,"softness":15}}}
+{"name":"run_command","arguments":{"command":"addon.image.removeBackground","params":{"background":"corners","contiguous":false,"match":"channels","tolerance":12.55,"softness":0}}}
 ```
 
 ## Type Tools add-on

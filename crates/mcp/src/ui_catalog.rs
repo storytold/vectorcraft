@@ -1212,7 +1212,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.colorPanel",
         "Color Panel Options",
         "",
-        "{mode?: grayscale|rgb|hsb|cmyk|websafe, options?: bool} pick the Color panel's mode as its panel menu does (the active color converts to the mode's model as one undo step), and Show Options (true) or Hide Options (false); both are kept with the preferences; RGB, HSB, Web Safe RGB and hex values use the working RGB space (ui.inspect: ui.color_mode, ui.color_hide_options) → {mode (null: none picked yet), options, shown: the mode the panel shows the color in, or tint for a tint of a global or spot swatch}",
+        "{mode?: grayscale|rgb|hsb|cmyk|websafe, options?: bool, recentColors?: bool} pick the Color panel's mode as its panel menu does (the active color converts to the mode's model as one undo step), Show Options (true) or Hide Options (false), and check (true) or uncheck (false) Show Recent Colors, which shows or hides the panel's Recent Colors row (applied colors still join the list while it is hidden; the Swatches panel keeps its row); all three are kept with the preferences; RGB, HSB, Web Safe RGB and hex values use the working RGB space (ui.inspect: ui.color_mode, ui.color_hide_options, ui.color_show_recent_colors) → {mode (null: none picked yet), options, recentColors, shown: the mode the panel shows the color in, or tint for a tint of a global or spot swatch}",
     ),
     (
         "ui.savePdfDialog",
@@ -1395,7 +1395,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.action.insertStop",
         "Insert Stop",
         "",
-        "{set?: index, action?: index, step?: index, message?, allowContinue?: bool} insert a stop, at which a playing action waits and shows message. With set and action (0 is the top set or action), the stop goes into that action, after step, else after its last step; without them it goes into the recording in progress, after the steps recorded so far. message defaults to none, and allowContinue, which offers Continue in the message box, defaults to false. A stop in an action becomes the panel's selected step, and its action and set become the selected ones. An index past the last set, action or step, a param of another type, params that are not an object, or no action and no recording is an error and changes nothing. The panel menu's Insert Stop… (dialog `actionStopRecord` with message, allowContinue, set, action and step) runs this on OK → {set, action, step}, or {recording: true}",
+        "{set?: index, action?: index, step?: index, message?, allowContinue?: bool} insert a stop, at which a playing action waits and shows message. With set and action (0 is the top set or action), the stop goes into that action, after step, else after its last step; without them it goes into the recording in progress, after the steps recorded so far. message defaults to none, and allowContinue, which offers Continue in the message box, defaults to false. A stop in an action becomes the panel's selected step, and its action and set become the selected ones. An index past the last set, action or step, a param of another type, params that are not an object, no action and no recording, or a stop that would give the action more than 10,000 steps or its set's file more than 8 MiB, counting the steps that the recording in progress adds to the set, is an error and changes nothing. The panel menu's Insert Stop… (dialog `actionStopRecord` with message, allowContinue, set, action and step) runs this on OK → {set, action, step}, or {recording: true}",
+    ),
+    (
+        "ui.action.insertMenuItem",
+        "Insert Menu Item",
+        "",
+        "{set?: index, action?: index, step?: index, command, params?: object} insert the command of a menu item as a step, without running it; the step plays as choosing the item runs it. command and params (default {}) must be those of a menu item that can be a step: one that runs an engine command, whose label does not end with \"…\", outside the VectorCraft, File, Window and Help menus, and that is not Undo, Redo, a Paste, a batch (command.batch), a preference (prefs.*) or action (action.*) command, an Object › Align item, Image Trace's Make or Make and Expand, Pattern's Make or Edit Pattern, a saved selection, saved view or recent font item, or a plug-in's item. The place is as ui.action.insertStop takes it: with set and action, after step, else after the action's last step; without them, the recording in progress. The new step becomes the panel's selected step, and its action and set become the selected ones. A command and params that no such menu item has, a param of another type, params that are not an object, no action and no recording, or a step that would give the action more than 10,000 steps or its set's file more than 8 MiB, counting the steps that the recording in progress adds to the set, is an error and changes nothing. The panel menu's Insert Menu Item… (dialog `actionInsertMenuItem` with find, command, params, set, action and step) runs this on OK → {set, action, step}, or {recording: true}",
     ),
     (
         "ui.action.continue",
@@ -1511,7 +1517,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "plugin.dialog",
         "Plug-in…",
         "",
-        "{id: an object filter plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter, `__plugin` the id, live preview; OK runs plugin.run as one undo step)",
+        "{id: an object filter plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter, `__plugin` the id, live preview; OK runs plugin.run as one undo step). A heavy filter, and a filter that lists `progress` and no commandAllowlist, run in the background when they run at once or OK runs them without a kept preview → {background: true, status} (see plugin.cancelRuns)",
     ),
     (
         "ui.installPlugin",
@@ -1523,13 +1529,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "plugin.cancelRuns",
         "Cancel Plug-in Run",
         "",
-        "{} stop every heavy filter running in the background (its progress window's Cancel): it stops at the next slice of its budget and changes nothing → {cancelled: n}",
+        "{} stop every filter running in the background (its progress window's Cancel): it stops at the next slice of its budget and changes nothing → {cancelled: n}",
     ),
     (
         "plugin.hideRuns",
         "Continue in Background",
         "",
-        "{} close the progress window of the heavy filters running in the background; they go on, shown in the status bar → {hidden: n}",
+        "{} close the progress window of the filters running in the background; they go on, shown in the status bar → {hidden: n}",
     ),
     (
         "imageTrace.cancelRuns",

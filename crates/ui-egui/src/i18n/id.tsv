@@ -189,6 +189,15 @@
 	Expand…	Perluas…
 	Expand Appearance	Perluas tampilan
 	Crop Image	Pangkas gambar
+	Image Tools	Alat Gambar
+	Remove Background…	Hapus latar belakang…
+	Remove Background	Hapus latar belakang
+	Background	Latar belakang
+	Edge Color	Warna tepi
+	Picked Colors	Warna pilihan
+	Corner Color	Warna sudut
+	Contiguous	Bersambung
+	Each Channel	Setiap kanal
 	Edit Path	Edit jalur
 	Mask	Masker
 	Rasterize…	Rasterisasi…
@@ -1090,6 +1099,8 @@ lighting	Light	Cahaya
 	Toolbar: Single/Double Column	Bilah alat: kolom tunggal/ganda
 	Toolbar: Add Tool	Bilah alat: tambahkan alat
 	Toolbar: Remove Tool	Bilah alat: hapus alat
+	Add Tool…	Tambahkan alat…
+	Remove Tool	Hapus alat
 	Toolbar: Reset	Bilah alat: setel ulang
 	Two Point Perspective Preset 1	Preset perspektif dua titik 1
 	Two Point Perspective Preset 2	Preset perspektif dua titik 2
@@ -1469,6 +1480,7 @@ digits	Malayalam	Malayalam
 	Roman Baseline	Baseline Romawi
 	Select a text object to edit its character attributes.	Pilih objek teks untuk mengedit atribut karakternya.
 	Show Options	Tampilkan opsi
+	Show Recent Colors	Tampilkan warna terbaru
 	Small Caps	Kapital kecil
 	Small Caps (on the roadmap)	Kapital kecil (masih dalam roadmap)
 	Standard Vertical Roman Alignment	Perataan Romawi vertikal standar
@@ -1496,6 +1508,8 @@ digits	Malayalam	Malayalam
 	Scale at Center	Skalakan dari tengah
 	Up/Down:	Atas/bawah:
 	Left/Right:	Kiri/kanan:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko atas/bawah
+	Tate-chu-yoko Left/Right	Tate-chu-yoko kiri/kanan
 	Underline	Garis bawah
 	Vertical Scale %	Skala vertikal %
 	Axis	Sumbu
@@ -4463,6 +4477,7 @@ imageTrace	Outline	Kontur
 @msg	not a stored central record	bukan rekaman pusat yang tersimpan
 @msg	not a valid plug-in module: {0}	bukan modul plug-in yang valid: {0}
 @msg	not an EMF or WMF file	bukan berkas EMF atau WMF
+@msg	not an HP-GL file	bukan berkas HP-GL
 @msg	not found	tidak ditemukan
 @msg	not in pattern editing mode	tidak dalam mode pengeditan pola
 @msg	finish editing the pattern first	selesaikan pengeditan pola terlebih dahulu
@@ -4832,7 +4847,13 @@ imageTrace	Outline	Kontur
 @msg	the PSD file has an unknown colour mode ({m})	berkas PSD memiliki mode warna yang tidak dikenal ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	data gambar berkas PSD menggunakan kompresi yang tidak dikenal ({m})
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	gambar PSD terlalu besar untuk dibaca ({_1} × {_2} piksel)
-@msg	zipped 32-bit PSD image data with prediction can't be read	data gambar PSD 32-bit terkompresi zip dengan prediksi tidak dapat dibaca
+@msg	zipped 1-bit PSD image data with prediction can't be read	data gambar PSD 1-bit terkompresi zip dengan prediksi tidak dapat dibaca
+@msg	the PSD file's layer data uses an unknown compression ({m})	data lapisan berkas PSD menggunakan kompresi yang tidak dikenal ({m})
+@msg	the PSD file's layer records are damaged	catatan lapisan berkas PSD rusak
+@msg	the PSD file's layer groups are nested too deeply	grup lapisan berkas PSD bersarang terlalu dalam
+@msg	a layer of the PSD file is too large to read	sebuah lapisan berkas PSD terlalu besar untuk dibaca
+@msg	the PSD file's layers take more memory to read than allowed	lapisan berkas PSD memerlukan lebih banyak memori untuk dibaca daripada yang diizinkan
+@msg	the layers can't be read ({e}): the file opened as its merged image	lapisan tidak dapat dibaca ({e}): berkas dibuka sebagai gambar gabungannya
 @msg	{depth}-bit PSD files in this colour mode can't be read	berkas PSD {depth}-bit dalam mode warna ini tidak dapat dibaca
 @msg	the PSD file is cut short	berkas PSD terpotong
 @msg	the PSD file's header is damaged	header berkas PSD rusak
@@ -5240,6 +5261,11 @@ mark-style	Japanese	Jepang
 	Softness	Kelembutan
 	Ambient Light	Cahaya ambient
 	Light behind the object	Cahaya di belakang objek
+	Shadows	Bayangan
+	Distance from Object	Jarak dari objek
+	Shadow Bounds	Batas bayangan
+	Behind Object	Di belakang objek
+	Below Object	Di bawah objek
 	3D Lighting Preset	Preset Pencahayaan 3D
 	Standard	Standar
 	Diffuse	Difus
@@ -5896,6 +5922,16 @@ axis	Y Axis	Sumbu Y
 @msg	message must be text	message harus berupa teks
 @msg	allowContinue must be true or false	allowContinue harus true atau false
 @msg	Batch cannot play an action with a stop	Batch tidak dapat memutar tindakan dengan titik henti
+	Insert Menu Item…	Sisipkan item menu…
+	Insert Menu Item	Sisipkan item menu
+	Menu Item:	Item menu:
+	No menu item matches.	Tidak ada item menu yang cocok.
+	Several menu items match. Choose one from the list.	Beberapa item menu cocok. Pilih salah satu dari daftar.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Item yang membuka dialog, serta item menu Berkas, Jendela, dan Bantuan, tidak dicantumkan.
+@msg	command must be text	command harus berupa teks
+@msg	no menu item that can be inserted runs this command	tidak ada item menu yang dapat disisipkan yang menjalankan perintah ini
+@msg	the action already has 10,000 steps	tindakan sudah memiliki 10.000 langkah
+@msg	the action set would be larger than 8 MiB	set tindakan akan lebih besar dari 8 MiB
 	Playback Options	Opsi pemutaran
 	Accelerated	Dipercepat
 	Step by Step	Langkah demi langkah

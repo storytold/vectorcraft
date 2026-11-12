@@ -258,6 +258,8 @@ pub struct Session {
     pub recovery: cmd::recovery::Recovery,
     /// The running script's job, while there is one: the mutation lease ([`script`]).
     pub(crate) script_key: Option<script::JobKey>,
+    /// The named script engines this session keeps ([`script`]).
+    pub(crate) script_engines: script::EnginesKey,
     /// Stops the running script at its next instruction; the same flag for every run.
     pub(crate) script_stop: vectorcraft_js::Interrupt,
     /// The report of the run that ended last.
@@ -280,6 +282,9 @@ pub struct Session {
     pub(crate) in_tool_actions: bool,
     /// While [`Session::preview`] runs its command: its edits are the interaction's own.
     previewing: bool,
+    /// The images Remove Background decoded during the interaction's preview steps, emptied when
+    /// it ends ([`cmd::DecodedImages`]).
+    pub(crate) decoded_images: cmd::DecodedImages,
     /// Envelope Options with no envelope selected: the options and fidelity new envelopes get
     /// (`None`: the reference app's defaults, fidelity 50); not saved.
     pub(crate) envelope_defaults: Option<(vectorcraft_doc::live::EnvelopeOptions, f64)>,

@@ -698,6 +698,15 @@ font-technology	Variable	Вариативные
 	Created:	Создано:
 	Crop	Обрезать
 	Crop Image	Обрезать изображение
+	Image Tools	Инструменты изображения
+	Remove Background…	Удалить фон…
+	Remove Background	Удалить фон
+	Background	Фон
+	Edge Color	Цвет края
+	Picked Colors	Выбранные цвета
+	Corner Color	Цвет углов
+	Contiguous	Смежные
+	Each Channel	Каждый канал
 	Edit Path	Редактировать контур
 	Mask	Маска
 	Crop Marks	Метки обрезки
@@ -3261,6 +3270,7 @@ digits	Malayalam	Малаялам
 	Show Modified	Показать изменённые
 	Show Note	Показать примечание
 	Show Options	Показать параметры
+	Show Recent Colors	Показать последние цвета
 	Show Original Path	Показать исходный контур
 	Open this dialog with these settings next time	Открывать это диалоговое окно с этими параметрами в следующий раз
 	Auto-Simplify	Автоматическое упрощение
@@ -3565,6 +3575,8 @@ digits	Malayalam	Малаялам
 	Scale at Center	Масштабировать от центра
 	Up/Down:	Вверх/вниз:
 	Left/Right:	Влево/вправо:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko вверх/вниз
+	Tate-chu-yoko Left/Right	Tate-chu-yoko влево/вправо
 	Temperature	Температура
 	Temperature/Tint…	Температура/оттенок…
 	Template	Шаблон
@@ -3634,6 +3646,8 @@ digits	Malayalam	Малаялам
 	Toolbar: Single/Double Column	Панель инструментов: один/два столбца
 	Toolbar: Add Tool	Панель инструментов: добавить инструмент
 	Toolbar: Remove Tool	Панель инструментов: убрать инструмент
+	Add Tool…	Добавить инструмент…
+	Remove Tool	Убрать инструмент
 	Toolbar: Reset	Панель инструментов: сбросить
 	Toolbars	Панели инструментов
 	Tools	Инструменты
@@ -4416,6 +4430,7 @@ axis	Both	Оба
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	страница монтажной области {n} имеет размер {size}, что больше ограничения PDF на размер страницы в 14 400 pt (200 in): она записывается с UserUnit {unit}, поэтому приложения, которые игнорируют UserUnit, показывают её во столько же раз меньше
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	страница монтажной области {n} имеет размер {size}, что больше ограничения PDF на размер страницы в 14 400 pt (200 in): страницы {label} записываются без UserUnit, в пунктах, и приложения, соблюдающие ограничение, обрезают страницу до 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	в PDF 1.5 нет UserUnit, который нужен странице длиннее 14 400 pt (200 in), чтобы сохранить размер: файл записывается как PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	в PDF 1.4 нет UserUnit, который нужен странице длиннее 14 400 pt (200 in), чтобы уложиться в предел страницы PDF/A-2 в 14 400 единиц: файл записывается как PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	страница монтажной области {n} имеет размер {size} и слишком длинная и узкая для сторон страницы PDF от 3 до 14 400 единиц: она записывается с UserUnit {unit}, которая держит короткую сторону не меньше 3 единиц, а приложения, соблюдающие предел, обрезают длинную сторону до 14 400 единиц
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	файлы {label} вмещают вещественные числа до {max}, а странице монтажной области {n} длиной {side} pt нужны большие: выберите PDF 1.6 или новее без стандарта PDF/X или монтажную область меньшего размера
 @msg	invalid image data for `{0}`	недопустимые данные изображения для `{0}`
@@ -4564,6 +4579,7 @@ axis	Both	Оба
 @msg	not a stored central record	не является сохранённой центральной записью
 @msg	not a valid plug-in module: {0}	не является допустимым модулем: {0}
 @msg	not an EMF or WMF file	не является файлом EMF или WMF
+@msg	not an HP-GL file	не является файлом HP-GL
 @msg	not found	не найдено
 @msg	not in pattern editing mode	не в режиме редактирования узора
 @msg	finish editing the pattern first	сначала завершите редактирование узора
@@ -4643,6 +4659,14 @@ axis	Both	Оба
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	эта трассировка создала бы более {max} опорных точек, что больше, чем документ может плавно отобразить: увеличьте «Шум», уменьшите «Контуры» или «Цвета» либо выберите набор с меньшей точностью
 @msg	select an envelope	выделите оболочку
 @msg	select an image	выделите изображение
+@msg	`background` must be edges, corners or colors	`background` должен быть edges, corners или colors
+@msg	`match` must be distance or channels	`match` должен быть distance или channels
+@msg	`{key}` must be from 0 to 100	`{key}` должен быть от 0 до 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` должен содержать от 1 до 16 цветов, каждый в шестнадцатеричном виде (#rrggbb или #rgb) или как black, white, red, green или blue
+@msg	the linked image shows its preview: embed or relink it first	связанное изображение показывает предпросмотр: сначала внедрите его или восстановите связь
+@msg	a CMYK image has no transparency to set	у изображения CMYK нет прозрачности, которую можно задать
+@msg	every pixel matches the background: no image would be left	каждый пиксель совпадает с фоном: от изображения ничего не осталось бы
+@msg	an image of {w} × {h} pixels is too large to change	изображение размером {w} × {h} пикселей слишком велико для изменения
 @msg	select an object in perspective	выделите объект в перспективе
 @msg	select artwork (or a colour group) to recolor	выделите рисунок (или цветовую группу) для перекрашивания
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Перекрашивание завершено; без изменений: {locked} и {hidden}
@@ -5008,7 +5032,13 @@ axis	Both	Оба
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	файл HEIC или HEIF содержит изображение такого типа, которое не удается прочитать
 @msg	HEIC and HEIF images can't be opened in this build	изображения HEIC и HEIF нельзя открыть в этой сборке
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	изображение PSD слишком велико для чтения ({_1} × {_2} пикс.)
-@msg	zipped 32-bit PSD image data with prediction can't be read	32-битные данные изображения PSD со сжатием ZIP с предсказанием не читаются
+@msg	zipped 1-bit PSD image data with prediction can't be read	1-битные данные изображения PSD со сжатием ZIP с предсказанием не читаются
+@msg	the PSD file's layer data uses an unknown compression ({m})	данные слоёв файла PSD используют неизвестное сжатие ({m})
+@msg	the PSD file's layer records are damaged	записи слоёв файла PSD повреждены
+@msg	the PSD file's layer groups are nested too deeply	группы слоёв файла PSD вложены слишком глубоко
+@msg	a layer of the PSD file is too large to read	слой файла PSD слишком велик для чтения
+@msg	the PSD file's layers take more memory to read than allowed	для чтения слоёв файла PSD нужно больше памяти, чем разрешено
+@msg	the layers can't be read ({e}): the file opened as its merged image	не удаётся прочитать слои ({e}): файл открыт как сведённое изображение
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-битные файлы PSD в этом цветовом режиме не читаются
 @msg	the PSD file is cut short	файл PSD обрезан
 @msg	the PSD file's header is damaged	заголовок файла PSD повреждён
@@ -5323,6 +5353,11 @@ lighting	Light	Свет
 	Softness	Мягкость
 	Ambient Light	Окружающий свет
 	Light behind the object	Свет позади объекта
+	Shadows	Тени
+	Distance from Object	Расстояние от объекта
+	Shadow Bounds	Границы тени
+	Behind Object	Позади объекта
+	Below Object	Под объектом
 	3D Lighting Preset	Предустановка 3D освещения
 	Standard	Стандартное
 	Diffuse	Рассеянное
@@ -5680,6 +5715,11 @@ axis	Y Axis	Ось Y
 @msg	`inputs` needs the permission `doc.read`	для `inputs` нужно разрешение `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	бюджет памяти (объекту {_1} нужно {size} байт входных данных, осталось {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	бюджет объектов (более {MAX_OBJECTS} объектов только для чтения)
+@msg	instruction budget	бюджет инструкций
+@msg	time budget	бюджет времени
+@msg	memory budget (the selection is too large to hand over)	бюджет памяти (выделение слишком велико для передачи)
+@msg	output size ({what} is {len} bytes, limit {max})	размер вывода ({what}: {len} байт, предел {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	разрешение модуля нельзя удалить из хранилища модулей
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	разрешение `{shown}` зарезервировано для будущего API модулей; этот хост его не выдаёт
 @msg	unknown permission `{shown}`	неизвестное разрешение `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	«{name}» запрашивает разрешения {asked}: их должен одобрить человек в настольном приложении, либо передайте `grant` в сеансе, запущенном с --allow-plugin-grants
@@ -5716,6 +5756,16 @@ axis	Y Axis	Ось Y
 @msg	message must be text	message должно быть текстом
 @msg	allowContinue must be true or false	allowContinue должно быть true или false
 @msg	Batch cannot play an action with a stop	Пакет не может воспроизвести действие с остановкой
+	Insert Menu Item…	Вставить пункт меню…
+	Insert Menu Item	Вставить пункт меню
+	Menu Item:	Пункт меню:
+	No menu item matches.	Нет подходящих пунктов меню.
+	Several menu items match. Choose one from the list.	Подходит несколько пунктов меню. Выберите один из списка.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Пункты, открывающие диалоговое окно, и пункты меню «Файл», «Окно» и «Справка» не показаны.
+@msg	command must be text	command должно быть текстом
+@msg	no menu item that can be inserted runs this command	ни один пункт меню, который можно вставить, не выполняет эту команду
+@msg	the action already has 10,000 steps	в действии уже 10 000 шагов
+@msg	the action set would be larger than 8 MiB	набор действий стал бы больше 8 MiB
 	Playback Options	Параметры воспроизведения
 	Accelerated	Ускоренно
 	Step by Step	Пошагово

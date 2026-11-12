@@ -626,6 +626,15 @@ antiAlias	Sharp	Nítido
 	Created:	Criado:
 	Crop	Recortar
 	Crop Image	Recortar Imagem
+	Image Tools	Ferramentas de imagem
+	Remove Background…	Remover Fundo…
+	Remove Background	Remover Fundo
+	Background	Fundo
+	Edge Color	Cor da Borda
+	Picked Colors	Cores Escolhidas
+	Corner Color	Cor dos Cantos
+	Contiguous	Contíguo
+	Each Channel	Cada Canal
 	Edit Path	Editar caminho
 	Mask	Máscara
 	Crop Marks	Marcas de Corte
@@ -2706,6 +2715,7 @@ digits	Malayalam	Malaiala
 	Show List View	Mostrar Exibição de Lista
 	Show Note	Mostrar Nota
 	Show Options	Mostrar Opções
+	Show Recent Colors	Mostrar Cores Recentes
 	Show Original Path	Mostrar Caminho Original
 	Open this dialog with these settings next time	Abrir este diálogo com estas configurações na próxima vez
 	Auto-Simplify	Simplificar Automaticamente
@@ -3923,6 +3933,7 @@ axis	Both	Ambos
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	a página da prancheta {n} tem {size}, mais que o limite de página do PDF de 14.400 pt (200 in): ela é gravada com um UserUnit de {unit}, então apps que ignoram UserUnit a mostram essa quantidade de vezes menor
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	a página da prancheta {n} tem {size}, mais que o limite de página do PDF de 14.400 pt (200 in): páginas {label} são gravadas sem UserUnit, em pontos, e apps que respeitam o limite cortam a página em 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	o PDF 1.5 não tem UserUnit, de que uma página com mais de 14.400 pt (200 in) precisa para manter seu tamanho: o arquivo é gravado como PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	o PDF 1.4 não tem UserUnit, de que uma página com mais de 14.400 pt (200 in) precisa para ficar dentro do limite de página do PDF/A-2, de 14.400 unidades: o arquivo é gravado como PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	a página da prancheta {n} tem {size}, longa e estreita demais para os lados de página do PDF, de 3 a 14.400 unidades: ela é gravada com uma UserUnit de {unit}, que mantém o lado menor em 3 unidades ou mais, e os apps que seguem o limite cortam o lado maior em 14.400 unidades
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	os arquivos {label} aceitam números reais de até {max}, e a página da prancheta {n}, com {side} pt, precisa de números maiores: escolha PDF 1.6 ou posterior sem padrão PDF/X, ou uma prancheta menor
 @msg	invalid image data for `{0}`	dados de imagem inválidos para `{0}`
@@ -4070,6 +4081,7 @@ axis	Both	Ambos
 @msg	not a stored central record	não é um registro central armazenado
 @msg	not a valid plug-in module: {0}	não é um módulo de plug-in válido: {0}
 @msg	not an EMF or WMF file	não é um arquivo EMF ou WMF
+@msg	not an HP-GL file	não é um arquivo HP-GL
 @msg	not found	não encontrado
 @msg	not in pattern editing mode	não está no modo de edição de padrão
 @msg	finish editing the pattern first	termine de editar o padrão primeiro
@@ -4148,6 +4160,14 @@ axis	Both	Ambos
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	esta vetorização geraria mais de {max} pontos de ancoragem, mais do que o documento consegue exibir com fluidez: aumente Ruído, reduza Traçados ou Cores, ou escolha uma predefinição de menor fidelidade
 @msg	select an envelope	selecione um envelope
 @msg	select an image	selecione uma imagem
+@msg	`background` must be edges, corners or colors	`background` deve ser edges, corners ou colors
+@msg	`match` must be distance or channels	`match` deve ser distance ou channels
+@msg	`{key}` must be from 0 to 100	`{key}` deve estar entre 0 e 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` deve listar de 1 a 16 cores, cada uma em hexadecimal (#rrggbb ou #rgb) ou como black, white, red, green ou blue
+@msg	the linked image shows its preview: embed or relink it first	a imagem vinculada mostra sua prévia: incorpore-a ou revincule-a primeiro
+@msg	a CMYK image has no transparency to set	uma imagem CMYK não tem transparência para definir
+@msg	every pixel matches the background: no image would be left	todos os pixels correspondem ao fundo: nenhuma imagem restaria
+@msg	an image of {w} × {h} pixels is too large to change	uma imagem de {w} × {h} pixels é grande demais para ser alterada
 @msg	select an object in perspective	selecione um objeto em perspectiva
 @msg	select artwork (or a colour group) to recolor	selecione uma arte-final (ou um grupo de cores) para recolorir
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloração concluída; sem alteração: {locked} e {hidden}
@@ -4477,7 +4497,13 @@ axis	Both	Ambos
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	o arquivo HEIC ou HEIF contém um tipo de imagem que não pode ser lido
 @msg	HEIC and HEIF images can't be opened in this build	imagens HEIC e HEIF não podem ser abertas nesta versão
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	a imagem PSD é grande demais para ser lida ({_1} × {_2} pixels)
-@msg	zipped 32-bit PSD image data with prediction can't be read	dados de imagem PSD de 32 bits compactados em zip com previsão não podem ser lidos
+@msg	zipped 1-bit PSD image data with prediction can't be read	dados de imagem PSD de 1 bit compactados em zip com previsão não podem ser lidos
+@msg	the PSD file's layer data uses an unknown compression ({m})	os dados de camada do arquivo PSD usam uma compactação desconhecida ({m})
+@msg	the PSD file's layer records are damaged	os registros de camadas do arquivo PSD estão danificados
+@msg	the PSD file's layer groups are nested too deeply	os grupos de camadas do arquivo PSD estão aninhados profundamente demais
+@msg	a layer of the PSD file is too large to read	uma camada do arquivo PSD é grande demais para ser lida
+@msg	the PSD file's layers take more memory to read than allowed	as camadas do arquivo PSD precisam de mais memória do que o permitido para serem lidas
+@msg	the layers can't be read ({e}): the file opened as its merged image	as camadas não podem ser lidas ({e}): o arquivo foi aberto como sua imagem mesclada
 @msg	{depth}-bit PSD files in this colour mode can't be read	arquivos PSD de {depth} bits neste modo de cor não podem ser lidos
 @msg	the PSD file is cut short	o arquivo PSD está incompleto
 @msg	the PSD file's header is damaged	o cabeçalho do arquivo PSD está danificado
@@ -4580,6 +4606,11 @@ axis	Both	Ambos
 	Softness	Suavidade
 	Ambient Light	Luz ambiente
 	Light behind the object	Luz atrás do objeto
+	Shadows	Sombras
+	Distance from Object	Distância do objeto
+	Shadow Bounds	Limites da sombra
+	Behind Object	Atrás do objeto
+	Below Object	Abaixo do objeto
 	3D Lighting Preset	Predefinição de iluminação 3D
 	Standard	Padrão
 	Diffuse	Difusa
@@ -5036,6 +5067,8 @@ axis	Both	Ambos
 	Scale at Center	Dimensionar a partir do centro
 	Up/Down:	Para Cima/Para Baixo:
 	Left/Right:	Esquerda/Direita:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko Para Cima/Para Baixo
+	Tate-chu-yoko Left/Right	Tate-chu-yoko Esquerda/Direita
 	Temperature	Temperatura
 	Templates	Modelos
 	Text Wrap Options	Opções de Quebra de Texto
@@ -5047,6 +5080,8 @@ axis	Both	Ambos
 	Tip on the end point	Ponta no ponto final
 	Toolbar: Add Tool	Barra de Ferramentas: Adicionar Ferramenta
 	Toolbar: Remove Tool	Barra de Ferramentas: Remover Ferramenta
+	Add Tool…	Adicionar Ferramenta…
+	Remove Tool	Remover Ferramenta
 	Toolbar: Reset	Barra de Ferramentas: Redefinir
 	Top	Superior
 	Top in Front	Superior na Frente
@@ -5984,6 +6019,11 @@ axis	Y Axis	Eixo Y
 @msg	`inputs` needs the permission `doc.read`	`inputs` exige a permissão `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	orçamento de memória (o objeto {_1} precisa de {size} bytes de entrada, restam {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	orçamento de objetos (mais de {MAX_OBJECTS} objetos somente leitura)
+@msg	instruction budget	orçamento de instruções
+@msg	time budget	orçamento de tempo
+@msg	memory budget (the selection is too large to hand over)	orçamento de memória (a seleção é grande demais para ser entregue)
+@msg	output size ({what} is {len} bytes, limit {max})	tamanho da saída ({what} tem {len} bytes, limite {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	a permissão do plug-in não pode ser removida do armazenamento de plug-ins
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	a permissão `{shown}` está reservada para uma API de plug-in futura; este host não a concede
 @msg	unknown permission `{shown}`	permissão desconhecida `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” pede as permissões {asked}: uma pessoa precisa aprová-las no aplicativo de desktop, ou passe `grant` em uma sessão iniciada com --allow-plugin-grants
@@ -6020,6 +6060,16 @@ axis	Y Axis	Eixo Y
 @msg	message must be text	message deve ser texto
 @msg	allowContinue must be true or false	allowContinue deve ser true ou false
 @msg	Batch cannot play an action with a stop	Lote não pode reproduzir uma ação com uma parada
+	Insert Menu Item…	Inserir Item de Menu…
+	Insert Menu Item	Inserir Item de Menu
+	Menu Item:	Item de menu:
+	No menu item matches.	Nenhum item de menu corresponde.
+	Several menu items match. Choose one from the list.	Vários itens de menu correspondem. Escolha um da lista.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Itens que abrem uma caixa de diálogo e itens dos menus Arquivo, Janela e Ajuda não são listados.
+@msg	command must be text	command deve ser texto
+@msg	no menu item that can be inserted runs this command	nenhum item de menu que possa ser inserido executa este comando
+@msg	the action already has 10,000 steps	a ação já tem 10.000 etapas
+@msg	the action set would be larger than 8 MiB	o conjunto de ações ficaria maior que 8 MiB
 	Playback Options	Opções de Reprodução
 	Accelerated	Acelerada
 	Step by Step	Passo a Passo

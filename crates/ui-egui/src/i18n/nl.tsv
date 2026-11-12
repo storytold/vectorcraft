@@ -203,6 +203,15 @@
 	Expand…	Uitbreiden…
 	Expand Appearance	Uiterlijk uitbreiden
 	Crop Image	Afbeelding bijsnijden
+	Image Tools	Afbeeldingshulpmiddelen
+	Remove Background…	Achtergrond verwijderen…
+	Remove Background	Achtergrond verwijderen
+	Background	Achtergrond
+	Edge Color	Randkleur
+	Picked Colors	Gekozen kleuren
+	Corner Color	Hoekkleur
+	Contiguous	Aaneengesloten
+	Each Channel	Elk kanaal
 	Edit Path	Pad bewerken
 	Mask	Masker
 	Rasterize…	Rasteriseren…
@@ -1104,6 +1113,8 @@ lighting	Light	Licht
 	Toolbar: Single/Double Column	Werkbalk: Enkele/dubbele kolom
 	Toolbar: Add Tool	Werkbalk: gereedschap toevoegen
 	Toolbar: Remove Tool	Werkbalk: gereedschap verwijderen
+	Add Tool…	Gereedschap toevoegen…
+	Remove Tool	Gereedschap verwijderen
 	Toolbar: Reset	Werkbalk: herstellen
 	Two Point Perspective Preset 1	Voorinstelling perspectief met twee vluchtpunten 1
 	Two Point Perspective Preset 2	Voorinstelling perspectief met twee vluchtpunten 2
@@ -1483,6 +1494,7 @@ digits	Malayalam	Malayalam
 	Roman Baseline	Romeinse basislijn
 	Select a text object to edit its character attributes.	Selecteer een tekstobject om de tekenkenmerken ervan te bewerken.
 	Show Options	Opties tonen
+	Show Recent Colors	Recente kleuren tonen
 	Small Caps	Kleine kapitalen
 	Small Caps (on the roadmap)	Kleine kapitalen (op de roadmap)
 	Standard Vertical Roman Alignment	Standaard verticale Romeinse uitlijning
@@ -1510,6 +1522,8 @@ digits	Malayalam	Malayalam
 	Scale at Center	Schalen vanuit het midden
 	Up/Down:	Omhoog/omlaag:
 	Left/Right:	Links/rechts:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko omhoog/omlaag
+	Tate-chu-yoko Left/Right	Tate-chu-yoko links/rechts
 	Underline	Onderstrepen
 	Vertical Scale %	Verticale schaal %
 	Axis	As
@@ -4475,6 +4489,7 @@ imageTrace	Outline	Contour
 @msg	not a stored central record	geen opgeslagen centraal record
 @msg	not a valid plug-in module: {0}	geen geldige plug-inmodule: {0}
 @msg	not an EMF or WMF file	geen EMF- of WMF-bestand
+@msg	not an HP-GL file	geen HP-GL-bestand
 @msg	not found	niet gevonden
 @msg	not in pattern editing mode	niet in patroonbewerkingsmodus
 @msg	finish editing the pattern first	rond eerst het bewerken van het patroon af
@@ -4844,7 +4859,13 @@ imageTrace	Outline	Contour
 @msg	the PSD file has an unknown colour mode ({m})	het PSD-bestand heeft een onbekende kleurmodus ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	de afbeeldingsgegevens van het PSD-bestand gebruiken een onbekende compressie ({m})
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	de PSD-afbeelding is te groot om te lezen ({_1} × {_2} pixels)
-@msg	zipped 32-bit PSD image data with prediction can't be read	gezipte 32-bits PSD-afbeeldingsgegevens met voorspelling kunnen niet worden gelezen
+@msg	zipped 1-bit PSD image data with prediction can't be read	gezipte 1-bits PSD-afbeeldingsgegevens met voorspelling kunnen niet worden gelezen
+@msg	the PSD file's layer data uses an unknown compression ({m})	de laaggegevens van het PSD-bestand gebruiken een onbekende compressie ({m})
+@msg	the PSD file's layer records are damaged	de laagrecords van het PSD-bestand zijn beschadigd
+@msg	the PSD file's layer groups are nested too deeply	de laaggroepen van het PSD-bestand zijn te diep genest
+@msg	a layer of the PSD file is too large to read	een laag van het PSD-bestand is te groot om te lezen
+@msg	the PSD file's layers take more memory to read than allowed	de lagen van het PSD-bestand hebben meer geheugen nodig om te lezen dan toegestaan
+@msg	the layers can't be read ({e}): the file opened as its merged image	de lagen kunnen niet worden gelezen ({e}): het bestand is geopend als zijn samengevoegde afbeelding
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bits PSD-bestanden in deze kleurmodus kunnen niet worden gelezen
 @msg	the PSD file is cut short	het PSD-bestand is afgekapt
 @msg	the PSD file's header is damaged	de header van het PSD-bestand is beschadigd
@@ -5252,6 +5273,11 @@ mark-style	Japanese	Japans
 	Softness	Zachtheid
 	Ambient Light	Omgevingslicht
 	Light behind the object	Licht achter het object
+	Shadows	Schaduwen
+	Distance from Object	Afstand tot object
+	Shadow Bounds	Schaduwgrenzen
+	Behind Object	Achter object
+	Below Object	Onder object
 	3D Lighting Preset	Voorinstelling 3D-belichting
 	Standard	Standaard
 	Diffuse	Diffuus
@@ -5947,6 +5973,16 @@ axis	Y Axis	Y-as
 @msg	message must be text	message moet tekst zijn
 @msg	allowContinue must be true or false	allowContinue moet true of false zijn
 @msg	Batch cannot play an action with a stop	Batch kan geen actie met een stop afspelen
+	Insert Menu Item…	Menu-item invoegen…
+	Insert Menu Item	Menu-item invoegen
+	Menu Item:	Menu-item:
+	No menu item matches.	Geen menu-item komt overeen.
+	Several menu items match. Choose one from the list.	Meerdere menu-items komen overeen. Kies er een uit de lijst.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Items die een dialoogvenster openen en items uit de menu’s Bestand, Venster en Help worden niet weergegeven.
+@msg	command must be text	command moet tekst zijn
+@msg	no menu item that can be inserted runs this command	geen invoegbaar menu-item voert deze opdracht uit
+@msg	the action already has 10,000 steps	de actie heeft al 10.000 stappen
+@msg	the action set would be larger than 8 MiB	de actieset zou groter worden dan 8 MiB
 	Playback Options	Afspeelopties
 	Accelerated	Versneld
 	Step by Step	Stap voor stap

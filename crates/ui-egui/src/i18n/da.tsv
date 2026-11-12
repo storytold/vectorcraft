@@ -189,6 +189,15 @@
 	Expand…	Udvid…
 	Expand Appearance	Udvid udseende
 	Crop Image	Beskær billede
+	Image Tools	Billedværktøjer
+	Remove Background…	Fjern baggrund…
+	Remove Background	Fjern baggrund
+	Background	Baggrund
+	Edge Color	Kantfarve
+	Picked Colors	Valgte farver
+	Corner Color	Hjørnefarve
+	Contiguous	Sammenhængende
+	Each Channel	Hver kanal
 	Edit Path	Redigér kurve
 	Mask	Maskér
 	Rasterize…	Rasterisér…
@@ -1090,6 +1099,8 @@ lighting	Light	Lys
 	Toolbar: Single/Double Column	Værktøjslinje: Enkelt/dobbelt kolonne
 	Toolbar: Add Tool	Værktøjslinje: Tilføj værktøj
 	Toolbar: Remove Tool	Værktøjslinje: Fjern værktøj
+	Add Tool…	Tilføj værktøj…
+	Remove Tool	Fjern værktøj
 	Toolbar: Reset	Værktøjslinje: Nulstil
 	Two Point Perspective Preset 1	2-punkts perspektivforudindstilling 1
 	Two Point Perspective Preset 2	2-punkts perspektivforudindstilling 2
@@ -1469,6 +1480,7 @@ digits	Malayalam	Malayalam
 	Roman Baseline	Romersk grundlinje
 	Select a text object to edit its character attributes.	Markér et tekstobjekt for at redigere dets tegnattributter.
 	Show Options	Vis indstillinger
+	Show Recent Colors	Vis seneste farver
 	Small Caps	Kapitæler
 	Small Caps (on the roadmap)	Kapitæler (på vejkortet)
 	Standard Vertical Roman Alignment	Standard lodret romersk justering
@@ -1496,6 +1508,8 @@ digits	Malayalam	Malayalam
 	Scale at Center	Skalér fra midten
 	Up/Down:	Op/ned:
 	Left/Right:	Venstre/højre:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko op/ned
+	Tate-chu-yoko Left/Right	Tate-chu-yoko venstre/højre
 	Underline	Understreget
 	Vertical Scale %	Lodret skalering %
 	Axis	Akse
@@ -4463,6 +4477,7 @@ imageTrace	Outline	Kontur
 @msg	not a stored central record	ikke en gemt central post
 @msg	not a valid plug-in module: {0}	ikke et gyldigt plug-in-modul: {0}
 @msg	not an EMF or WMF file	ikke en EMF- eller WMF-fil
+@msg	not an HP-GL file	ikke en HP-GL-fil
 @msg	not found	ikke fundet
 @msg	not in pattern editing mode	ikke i mønsterredigeringstilstand
 @msg	finish editing the pattern first	afslut først redigeringen af mønsteret
@@ -4832,7 +4847,13 @@ imageTrace	Outline	Kontur
 @msg	the PSD file has an unknown colour mode ({m})	PSD-filen har en ukendt farvetilstand ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	PSD-filens billeddata bruger en ukendt komprimering ({m})
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD-billedet er for stort til at læse ({_1} × {_2} pixels)
-@msg	zipped 32-bit PSD image data with prediction can't be read	zippet 32-bit PSD-billeddata med prædiktion kan ikke læses
+@msg	zipped 1-bit PSD image data with prediction can't be read	zippet 1-bit PSD-billeddata med prædiktion kan ikke læses
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD-filens lagdata bruger en ukendt komprimering ({m})
+@msg	the PSD file's layer records are damaged	PSD-filens lagposter er beskadigede
+@msg	the PSD file's layer groups are nested too deeply	PSD-filens laggrupper er indlejret for dybt
+@msg	a layer of the PSD file is too large to read	et lag i PSD-filen er for stort til at læse
+@msg	the PSD file's layers take more memory to read than allowed	PSD-filens lag kræver mere hukommelse at læse end tilladt
+@msg	the layers can't be read ({e}): the file opened as its merged image	lagene kan ikke læses ({e}): filen blev åbnet som sit samlede billede
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bit PSD-filer i denne farvetilstand kan ikke læses
 @msg	the PSD file is cut short	PSD-filen er afkortet
 @msg	the PSD file's header is damaged	PSD-filens header er beskadiget
@@ -5240,6 +5261,11 @@ mark-style	Japanese	Japansk
 	Softness	Blødhed
 	Ambient Light	Omgivelseslys
 	Light behind the object	Lys bag objektet
+	Shadows	Skygger
+	Distance from Object	Afstand fra objektet
+	Shadow Bounds	Skyggegrænser
+	Behind Object	Bag objektet
+	Below Object	Under objektet
 	3D Lighting Preset	Forudindstilling for 3D-belysning
 	Standard	Standard
 	Diffuse	Diffust
@@ -5896,6 +5922,16 @@ axis	Y Axis	Y-akse
 @msg	message must be text	message skal være tekst
 @msg	allowContinue must be true or false	allowContinue skal være true eller false
 @msg	Batch cannot play an action with a stop	Batch kan ikke afspille en handling med et stop
+	Insert Menu Item…	Indsæt menupunkt…
+	Insert Menu Item	Indsæt menupunkt
+	Menu Item:	Menupunkt:
+	No menu item matches.	Intet menupunkt passer.
+	Several menu items match. Choose one from the list.	Flere menupunkter passer. Vælg et fra listen.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Punkter, der åbner en dialogboks, og punkter i menuerne Filer, Vindue og Hjælp vises ikke.
+@msg	command must be text	command skal være tekst
+@msg	no menu item that can be inserted runs this command	intet menupunkt, der kan indsættes, kører denne kommando
+@msg	the action already has 10,000 steps	handlingen har allerede 10.000 trin
+@msg	the action set would be larger than 8 MiB	handlingssættet ville blive større end 8 MiB
 	Playback Options	Afspilningsindstillinger
 	Accelerated	Accelereret
 	Step by Step	Trin for trin

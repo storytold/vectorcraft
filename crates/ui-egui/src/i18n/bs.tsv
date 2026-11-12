@@ -196,6 +196,15 @@
 	Expand…	Proširi…
 	Expand Appearance	Proširi izgled
 	Crop Image	Izreži sliku
+	Image Tools	Alati za slike
+	Remove Background…	Ukloni pozadinu…
+	Remove Background	Ukloni pozadinu
+	Background	Pozadina
+	Edge Color	Boja ruba
+	Picked Colors	Odabrane boje
+	Corner Color	Boja uglova
+	Contiguous	Susjedni
+	Each Channel	Svaki kanal
 	Edit Path	Uredi putanju
 	Mask	Maska
 	Rasterize…	Rasteriziraj…
@@ -1155,6 +1164,8 @@ lighting	Light	Svjetlo
 	Toolbar: Single/Double Column	Traka s alatima: jedna/dvije kolone
 	Toolbar: Add Tool	Traka s alatima: dodaj alat
 	Toolbar: Remove Tool	Traka s alatima: ukloni alat
+	Add Tool…	Dodaj alat…
+	Remove Tool	Ukloni alat
 	Toolbar: Reset	Traka s alatima: vrati na početno
 	Two Point Perspective Preset 1	Predložak perspektive s dvije tačke 1
 	Two Point Perspective Preset 2	Predložak perspektive s dvije tačke 2
@@ -1533,6 +1544,7 @@ digits	Malayalam	Malajalam
 	Roman Baseline	Latinična osnovna linija
 	Select a text object to edit its character attributes.	Odaberite tekstualni objekat da uredite njegove atribute znakova.
 	Show Options	Prikaži opcije
+	Show Recent Colors	Prikaži nedavne boje
 	Color Panel Options	Opcije panela boja
 	Small Caps	Mala velika slova
 	Small Caps (on the roadmap)	Mala velika slova (u planu)
@@ -1561,6 +1573,8 @@ digits	Malayalam	Malajalam
 	Scale at Center	Skaliraj od centra
 	Up/Down:	Gore/dolje:
 	Left/Right:	Lijevo/desno:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko gore/dolje
+	Tate-chu-yoko Left/Right	Tate-chu-yoko lijevo/desno
 	Underline	Podvučeno
 	Vertical Scale %	Okomita skala %
 	Axis	Osa
@@ -4753,6 +4767,7 @@ imageTrace	Outline	Obris
 @msg	not a stored central record	nije sačuvani centralni zapis
 @msg	not a valid plug-in module: {0}	nije važeći modul dodatka: {0}
 @msg	not an EMF or WMF file	nije EMF ni WMF datoteka
+@msg	not an HP-GL file	nije HP-GL datoteka
 @msg	not an export presets file (format `{_1}`)	nije datoteka predložaka izvoza (format `{_1}`)
 @msg	not an export presets file: {e}	nije datoteka predložaka izvoza: {e}
 @msg	not found	nije pronađeno
@@ -5153,7 +5168,13 @@ imageTrace	Outline	Obris
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	datoteka HEIC ili HEIF sadrži vrstu slike koju nije moguće pročitati
 @msg	HEIC and HEIF images can't be opened in this build	HEIC i HEIF slike nije moguće otvoriti u ovoj verziji programa
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD slika je prevelika za čitanje ({_1} × {_2} piksela)
-@msg	zipped 32-bit PSD image data with prediction can't be read	zipovani 32-bitni PSD podaci slike s predviđanjem ne mogu se pročitati
+@msg	zipped 1-bit PSD image data with prediction can't be read	zipovani 1-bitni PSD podaci slike s predviđanjem ne mogu se pročitati
+@msg	the PSD file's layer data uses an unknown compression ({m})	podaci slojeva PSD datoteke koriste nepoznatu kompresiju ({m})
+@msg	the PSD file's layer records are damaged	zapisi slojeva PSD datoteke su oštećeni
+@msg	the PSD file's layer groups are nested too deeply	grupe slojeva PSD datoteke su previše duboko ugniježđene
+@msg	a layer of the PSD file is too large to read	sloj PSD datoteke je prevelik za čitanje
+@msg	the PSD file's layers take more memory to read than allowed	slojevi PSD datoteke zahtijevaju više memorije za čitanje nego što je dozvoljeno
+@msg	the layers can't be read ({e}): the file opened as its merged image	slojevi se ne mogu pročitati ({e}): datoteka je otvorena kao spojena slika
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bitne PSD datoteke u ovom načinu boja ne mogu se pročitati
 @msg	the PSD file is cut short	PSD datoteka je skraćena
 @msg	the PSD file's header is damaged	zaglavlje PSD datoteke je oštećeno
@@ -5588,6 +5609,11 @@ mark-style	Japanese	Japanski
 	Softness	Mekoća
 	Ambient Light	Ambijentalno svjetlo
 	Light behind the object	Svjetlo iza objekta
+	Shadows	Sjene
+	Distance from Object	Udaljenost od objekta
+	Shadow Bounds	Granice sjene
+	Behind Object	Iza objekta
+	Below Object	Ispod objekta
 	3D Lighting Preset	Predložak 3D osvjetljenja
 	Standard	Standardno
 	Diffuse	Difuzno
@@ -5920,6 +5946,16 @@ axis	Y Axis	Y osa
 @msg	message must be text	message mora biti tekst
 @msg	allowContinue must be true or false	allowContinue mora biti true ili false
 @msg	Batch cannot play an action with a stop	Paketna obrada ne može reprodukovati akciju sa zaustavljanjem
+	Insert Menu Item…	Umetni stavku menija…
+	Insert Menu Item	Umetni stavku menija
+	Menu Item:	Stavka menija:
+	No menu item matches.	Nijedna stavka menija ne odgovara.
+	Several menu items match. Choose one from the list.	Odgovara više stavki menija. Izaberite jednu sa liste.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Stavke koje otvaraju dijalog i stavke menija Datoteka, Prozor i Pomoć nisu navedene.
+@msg	command must be text	command mora biti tekst
+@msg	no menu item that can be inserted runs this command	nijedna stavka menija koja se može umetnuti ne pokreće ovu naredbu
+@msg	the action already has 10,000 steps	akcija već ima 10.000 koraka
+@msg	the action set would be larger than 8 MiB	skup akcija bio bi veći od 8 MiB
 	Playback Options	Opcije reprodukcije
 	Accelerated	Ubrzano
 	Step by Step	Korak po korak

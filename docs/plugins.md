@@ -212,7 +212,12 @@ capability model proposed for PhotoCraft plug-ins
   names shown have control and bidirectional characters escaped (`\u{202E}`) and are cut to 64 characters.
   Only a person can press its OK: `ui.dialog.confirm`, MCP's `answer_dialog` and injected input (`ui.key`, `ui.click`)
   are refused and the dialog stays open. Enter confirms it only when OK has the keyboard focus. `ui.dialog.set` can't
-  change what it installs.
+  change what it installs. OK stays disabled until the question has been on screen in the focused window for half a
+  second (VectorCraft's own value, from the delay the security guidance at
+  https://chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/security/security-considerations-for-browser-ui.md
+  gives for dialog boxes), so a click, Enter or Space, or a press begun before then, installs nothing. The half second
+  starts over for every new question, even one that reads the same, and when the window gets the focus back. Cancel
+  and Escape work at once.
 - `plugin.install` refuses the module, naming the permissions it needs, unless this module already has a recorded grant
   (`plugin.inspect`'s `needsApproval` tells it beforehand). A request's `grant` is refused too: `plugin.install` takes
   it only with the approval the dialog gives. A `vectorcraft-cli mcp` or `run` started with `--allow-plugin-grants`
@@ -240,7 +245,9 @@ capability model proposed for PhotoCraft plug-ins
   records the new hash. When the new module or its grant can't be written to the `Plug-ins` folder, the folder keeps
   the old module and its grant, and the old module loads at the next start. If the write that puts the old module back
   fails as well, the folder holds the new module with the old grant, the grant does not cover that module, and the
-  plug-in is skipped at the next start until it is approved again. A grant whose hash is not 64 lower-case
+  plug-in is skipped at the next start until it is approved again. When the folder held no module for that id, that
+  write removes the new module; when the removal fails, the folder holds the new module and no grant covers it. In
+  both cases a disabled plug-in is turned on, as for any install the folder holds. A grant whose hash is not 64 lower-case
   hexadecimal digits covers nothing. `plugin.remove` forgets the grant, and so does a successful `plugin.install` of a
   module that lists no permissions under that id, so the earlier bytes need a new approval. When `plugin.remove` can't
   remove the grant from `grants.json`, it returns an error, the plug-in stays installed, and a second `plugin.remove`
@@ -336,7 +343,11 @@ still returns `1`. `vc_progress`, `vc_cancelled` and `vc_log` need `progress`; t
   and one the manifest doesn't allow (an `api` below 2, or without the import's permission) refuse the module, and the
   error names the import and the permission.
 - A filter's or an exporter's progress is shown as a share: a heavy filter's progress window and the export's progress
-  window draw a bar with a percentage, and Cancel there makes `vc_cancelled` return `1`. A plug-in that checks it can
+  window draw a bar with a percentage, and Cancel there makes `vc_cancelled` return `1`. In the desktop app a light
+  filter that lists `progress` runs in the background as a heavy one does, under its light budget, when it runs at once
+  from Object › Plug-ins or its shortcut, or when OK runs it with Preview off; with Preview on, its dialog keeps the
+  previewed run. A filter that also lists a `commandAllowlist` runs where it is called, since its command calls need
+  the document. A plug-in that checks `vc_cancelled` can
   stop early, and the host discards what it returns after the Cancel or after its time budget ran out; one that
   ignores it is still stopped by the instruction and time budgets. With a known total, a report is passed on only when
   it reaches another tenth of a percent; with an unknown total, each change of `done` is passed on. After 2,000 reports

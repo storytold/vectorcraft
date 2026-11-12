@@ -680,6 +680,15 @@ font-technology	Variable	Değişken
 	Created:	Oluşturuldu:
 	Crop	Kırpma
 	Crop Image	Resmi Kırp
+	Image Tools	Resim Araçları
+	Remove Background…	Arka Planı Kaldır…
+	Remove Background	Arka Planı Kaldır
+	Background	Arka Plan
+	Edge Color	Kenar Rengi
+	Picked Colors	Seçilen Renkler
+	Corner Color	Köşe Rengi
+	Contiguous	Bitişik
+	Each Channel	Her Kanal
 	Mask	Maske
 	Crop Marks	Kırpma İşaretleri
 	Crop To	Kırpma Hedefi
@@ -3057,6 +3066,7 @@ digits	Malayalam	Malayalam
 	Show Modified	Değiştirilenleri Göster
 	Show Note	Notu Göster
 	Show Options	Seçenekleri Göster
+	Show Recent Colors	Son Renkleri Göster
 	Show Original Path	Orijinal Yolu Göster
 	Color Panel Options	Renk Paneli Seçenekleri
 	Show Package	Paketi Göster
@@ -3346,6 +3356,8 @@ digits	Malayalam	Malayalam
 	Scale at Center	Merkezden Ölçekle
 	Up/Down:	Yukarı/Aşağı:
 	Left/Right:	Sol/Sağ:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko Yukarı/Aşağı
+	Tate-chu-yoko Left/Right	Tate-chu-yoko Sol/Sağ
 	Temperature	Sıcaklık
 	Temperature/Tint…	Sıcaklık/Renk Tonu…
 	Template	Şablon
@@ -3413,6 +3425,8 @@ digits	Malayalam	Malayalam
 	Toolbar: Single/Double Column	Araç Çubuğu: Tek/Çift Sütun
 	Toolbar: Add Tool	Araç Çubuğu: Araç Ekle
 	Toolbar: Remove Tool	Araç Çubuğu: Aracı Kaldır
+	Add Tool…	Araç Ekle…
+	Remove Tool	Aracı Kaldır
 	Toolbar: Reset	Araç Çubuğu: Sıfırla
 	Toolbars	Araç çubukları
 	Tools	Araçlar
@@ -4142,6 +4156,7 @@ axis	Both	Her İkisi
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	{n} çalışma yüzeyinin sayfası {size}, PDF'nin 14.400 pt (200 in) sayfa sınırından uzun: {unit} UserUnit değeriyle yazılır, bu yüzden UserUnit'i yok sayan uygulamalar onu o kadar kat küçük gösterir
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	{n} çalışma yüzeyinin sayfası {size}, PDF'nin 14.400 pt (200 in) sayfa sınırından uzun: {label} sayfaları UserUnit olmadan, punto cinsinden yazılır ve sınıra uyan uygulamalar sayfayı 200 in'de keser
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5'te, 14.400 pt (200 in) uzunluğunu aşan bir sayfanın boyutunu koruması için gereken UserUnit yoktur: dosya PDF 1.6 olarak yazılır
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4'te, 14.400 pt (200 in) uzunluğunu aşan bir sayfanın PDF/A-2'nin 14.400 birimlik sayfa sınırı içinde kalması için gereken UserUnit yoktur: dosya PDF 1.6 olarak yazılır
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	{n} çalışma yüzeyinin sayfası {size}, PDF'nin 3 ile 14.400 birim arasındaki sayfa kenarları için fazla uzun ve dar: kısa kenarı en az 3 birimde tutan {unit} UserUnit değeriyle yazılır ve sınıra uyan uygulamalar uzun kenarı 14.400 birimde keser
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} dosyaları en fazla {max} değerinde gerçek sayı tutar ve {n} çalışma yüzeyinin {side} pt uzunluğundaki sayfası daha büyüklerini gerektiriyor: PDF/X standardı olmadan PDF 1.6 veya sonrasını ya da daha küçük bir çalışma yüzeyi seçin
 @msg	invalid image data for `{0}`	`{0}` için geçersiz resim verileri
@@ -4285,6 +4300,7 @@ axis	Both	Her İkisi
 @msg	not a stored central record	saklanan merkezi bir kayıt değil
 @msg	not a valid plug-in module: {0}	geçerli bir eklenti modülü değil: {0}
 @msg	not an EMF or WMF file	EMF veya WMF dosyası değil
+@msg	not an HP-GL file	HP-GL dosyası değil
 @msg	not an RTF file: it doesn't start with {\\rtf	bir RTF dosyası değil: {\\rtf ile başlamıyor
 @msg	not found	bulunamadı
 @msg	not in pattern editing mode	desen düzenleme modunda değil
@@ -4356,6 +4372,14 @@ axis	Both	Her İkisi
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	bu iz, {max} bağlantı noktalarından daha fazlasını, yani belgenin düzgün bir şekilde gösterebileceğinden daha fazlasını oluşturur: Gürültüyü artırın, Yolları veya Renkleri düşürün veya aslına uygunluğu daha düşük bir ön ayar seçin
 @msg	select an envelope	bir zarf seç
 @msg	select an image	bir resim seç
+@msg	`background` must be edges, corners or colors	`background` edges, corners veya colors olmalıdır
+@msg	`match` must be distance or channels	`match` distance veya channels olmalıdır
+@msg	`{key}` must be from 0 to 100	`{key}` 0 ile 100 arasında olmalıdır
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors`, her biri onaltılık (#rrggbb veya #rgb) ya da black, white, red, green veya blue olarak yazılmış 1 ile 16 arasında renk içermelidir
+@msg	the linked image shows its preview: embed or relink it first	bağlantılı resim önizlemesini gösteriyor: önce gömün veya yeniden bağlayın
+@msg	a CMYK image has no transparency to set	CMYK görüntüsünde ayarlanacak saydamlık yok
+@msg	every pixel matches the background: no image would be left	her piksel arka planla eşleşiyor: hiç görüntü kalmaz
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} piksellik bir görüntü değiştirilemeyecek kadar büyük
 @msg	select an object in perspective	perspektifte bir nesne seç
 @msg	select artwork (or a colour group) to recolor	yeniden renklendirilecek resmi (veya bir renk grubunu) seçin
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Yeniden renklendirme tamamlandı; değiştirilmeden kalan: {locked} ve {hidden}
@@ -4714,7 +4738,13 @@ axis	Both	Her İkisi
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC veya HEIF dosyası okunamayan türde bir görüntü içeriyor
 @msg	HEIC and HEIF images can't be opened in this build	HEIC ve HEIF görüntüleri bu derlemede açılamıyor
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD görüntüsü okunamayacak kadar büyük ({_1} × {_2} piksel)
-@msg	zipped 32-bit PSD image data with prediction can't be read	Tahmin içeren sıkıştırılmış 32 bit PSD görüntü verileri okunamıyor
+@msg	zipped 1-bit PSD image data with prediction can't be read	Tahmin içeren sıkıştırılmış 1 bit PSD görüntü verileri okunamıyor
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD dosyasının katman verileri bilinmeyen bir sıkıştırma kullanıyor ({m})
+@msg	the PSD file's layer records are damaged	PSD dosyasının katman kayıtları hasarlı
+@msg	the PSD file's layer groups are nested too deeply	PSD dosyasının katman grupları çok derin iç içe geçmiş
+@msg	a layer of the PSD file is too large to read	PSD dosyasının bir katmanı okunamayacak kadar büyük
+@msg	the PSD file's layers take more memory to read than allowed	PSD dosyasının katmanlarını okumak izin verilenden fazla bellek gerektiriyor
+@msg	the layers can't be read ({e}): the file opened as its merged image	katmanlar okunamıyor ({e}): dosya birleştirilmiş görüntüsü olarak açıldı
 @msg	{depth}-bit PSD files in this colour mode can't be read	Bu renk modunda {depth}-bit PSD dosyaları okunamaz
 @msg	the PSD file is cut short	PSD dosyası kısa kesildi
 @msg	the PSD file's header is damaged	PSD dosyasının başlığı hasarlı
@@ -5407,6 +5437,11 @@ theme	Appearance	Görünüm
 	Softness	Yumuşaklık
 	Ambient Light	Ortam Işığı
 	Light behind the object	Nesnenin arkasındaki ışık
+	Shadows	Gölgeler
+	Distance from Object	Nesneden uzaklık
+	Shadow Bounds	Gölge sınırları
+	Behind Object	Nesnenin arkasında
+	Below Object	Nesnenin altında
 	Registration:	Kayıt:
 	Dimension	Boyut
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Çizim : Gerçek boyut — 1:10 etiketler sayfada 10 adet olarak 1 adettir.
@@ -6025,6 +6060,11 @@ axis	Y Axis	Y ekseni
 @msg	`inputs` needs the permission `doc.read`	`inputs` için `doc.read` izni gerekir
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	bellek bütçesi (nesne {_1} için {size} bayt girdi gerekiyor, {left} kaldı)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	nesne bütçesi ({MAX_OBJECTS} adetten fazla salt okunur nesne)
+@msg	instruction budget	talimat bütçesi
+@msg	time budget	zaman bütçesi
+@msg	memory budget (the selection is too large to hand over)	bellek bütçesi (seçim aktarılamayacak kadar büyük)
+@msg	output size ({what} is {len} bytes, limit {max})	çıktı boyutu ({what}: {len} bayt, sınır {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	eklentinin izni eklenti deposundan kaldırılamıyor
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` izni sonraki bir eklenti API’si için ayrılmıştır; bu ana bilgisayar bu izni vermez
 @msg	unknown permission `{shown}`	bilinmeyen izin `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” {asked} izinlerini istiyor: masaüstü uygulamasında bir kişinin onaylaması gerekir veya --allow-plugin-grants ile başlatılan bir oturumda `grant` geçirin
@@ -6061,6 +6101,16 @@ axis	Y Axis	Y ekseni
 @msg	message must be text	"message" metin olmalıdır
 @msg	allowContinue must be true or false	"allowContinue" true veya false olmalıdır
 @msg	Batch cannot play an action with a stop	Toplu işlem durak içeren bir eylemi oynatamaz
+	Insert Menu Item…	Menü Öğesi Ekle…
+	Insert Menu Item	Menü Öğesi Ekle
+	Menu Item:	Menü öğesi:
+	No menu item matches.	Eşleşen menü öğesi yok.
+	Several menu items match. Choose one from the list.	Birden çok menü öğesi eşleşiyor. Listeden birini seçin.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	İletişim kutusu açan öğeler ile Dosya, Pencere ve Yardım menülerinin öğeleri listelenmez.
+@msg	command must be text	"command" metin olmalıdır
+@msg	no menu item that can be inserted runs this command	eklenebilen hiçbir menü öğesi bu komutu çalıştırmaz
+@msg	the action already has 10,000 steps	eylemde zaten 10.000 adım var
+@msg	the action set would be larger than 8 MiB	eylem seti 8 MiB'tan büyük olurdu
 	Playback Options	Oynatma Seçenekleri
 	Accelerated	Hızlandırılmış
 	Step by Step	Adım Adım

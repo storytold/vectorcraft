@@ -700,6 +700,15 @@ font-technology	Variable	Variabili
 	Created:	Creato:
 	Crop	Ritaglia
 	Crop Image	Ritaglia immagine
+	Image Tools	Strumenti immagine
+	Remove Background…	Rimuovi sfondo…
+	Remove Background	Rimuovi sfondo
+	Background	Sfondo
+	Edge Color	Colore del bordo
+	Picked Colors	Colori scelti
+	Corner Color	Colore degli angoli
+	Contiguous	Contiguo
+	Each Channel	Ogni canale
 	Edit Path	Modifica tracciato
 	Mask	Maschera
 	Crop Marks	Segni di ritaglio
@@ -3266,6 +3275,7 @@ digits	Malayalam	Malayalam
 	Show Modified	Mostra modificati
 	Show Note	Mostra nota
 	Show Options	Mostra opzioni
+	Show Recent Colors	Mostra colori recenti
 	Show Original Path	Mostra tracciato originale
 	Open this dialog with these settings next time	Apri questa finestra di dialogo con queste impostazioni la prossima volta
 	Auto-Simplify	Semplifica automaticamente
@@ -3570,6 +3580,8 @@ digits	Malayalam	Malayalam
 	Scale at Center	Ridimensiona dal centro
 	Up/Down:	Su/giù:
 	Left/Right:	Sinistra/destra:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko su/giù
+	Tate-chu-yoko Left/Right	Tate-chu-yoko sinistra/destra
 	Temperature	Temperatura
 	Temperature/Tint…	Temperatura/tinta…
 	Template	Modello
@@ -3640,6 +3652,8 @@ digits	Malayalam	Malayalam
 	Toolbar: Single/Double Column	Barra degli strumenti: colonna singola/doppia
 	Toolbar: Add Tool	Barra degli strumenti: aggiungi strumento
 	Toolbar: Remove Tool	Barra degli strumenti: rimuovi strumento
+	Add Tool…	Aggiungi strumento…
+	Remove Tool	Rimuovi strumento
 	Toolbar: Reset	Barra degli strumenti: ripristina
 	Toolbars	Barre degli strumenti
 	Tools	Strumenti
@@ -4422,6 +4436,7 @@ axis	Both	Entrambi
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la pagina della tavola da disegno {n} misura {size}, più del limite di pagina PDF di 14.400 pt (200 in): viene scritta con una UserUnit di {unit}, quindi le app che ignorano UserUnit la mostrano altrettante volte più piccola
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la pagina della tavola da disegno {n} misura {size}, più del limite di pagina PDF di 14.400 pt (200 in): le pagine {label} vengono scritte senza UserUnit, in punti, e le app che rispettano il limite tagliano la pagina a 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 non ha UserUnit, che serve a una pagina più lunga di 14.400 pt (200 in) per mantenere le sue dimensioni: il file viene scritto come PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 non ha UserUnit, che serve a una pagina più lunga di 14.400 pt (200 in) per restare entro il limite di pagina di PDF/A-2, di 14.400 unità: il file viene scritto come PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	la pagina della tavola da disegno {n} misura {size}, troppo lunga e stretta per i lati di pagina PDF da 3 a 14.400 unità: viene scritta con una UserUnit di {unit}, che tiene il lato corto a 3 unità o più, e le app che rispettano il limite tagliano il lato lungo a 14.400 unità
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	i file {label} accettano numeri reali fino a {max}, e la pagina della tavola da disegno {n}, lunga {side} pt, ne richiede di più grandi: scegli PDF 1.6 o successivo senza standard PDF/X, oppure una tavola da disegno più piccola
 @msg	invalid image data for `{0}`	dati immagine non validi per `{0}`
@@ -4570,6 +4585,7 @@ axis	Both	Entrambi
 @msg	not a stored central record	non è un record centrale archiviato
 @msg	not a valid plug-in module: {0}	non è un modulo plug-in valido: {0}
 @msg	not an EMF or WMF file	non è un file EMF o WMF
+@msg	not an HP-GL file	non è un file HP-GL
 @msg	not found	non trovato
 @msg	not in pattern editing mode	non sei in modalità modifica motivo
 @msg	finish editing the pattern first	termina prima la modifica del motivo
@@ -4649,6 +4665,14 @@ axis	Both	Entrambi
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	questo ricalco creerebbe più di {max} punti di ancoraggio, più di quanti il documento possa mostrare in modo fluido: aumenta Disturbo, riduci Tracciati o Colori, oppure scegli un preset a fedeltà inferiore
 @msg	select an envelope	seleziona un involucro
 @msg	select an image	seleziona un'immagine
+@msg	`background` must be edges, corners or colors	`background` deve essere edges, corners o colors
+@msg	`match` must be distance or channels	`match` deve essere distance o channels
+@msg	`{key}` must be from 0 to 100	`{key}` deve essere compreso tra 0 e 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` deve elencare da 1 a 16 colori, ciascuno in esadecimale (#rrggbb o #rgb) o come black, white, red, green o blue
+@msg	the linked image shows its preview: embed or relink it first	l’immagine collegata mostra la sua anteprima: incorporala o ricollegala prima
+@msg	a CMYK image has no transparency to set	un'immagine CMYK non ha trasparenza da impostare
+@msg	every pixel matches the background: no image would be left	ogni pixel corrisponde allo sfondo: non resterebbe alcuna immagine
+@msg	an image of {w} × {h} pixels is too large to change	un'immagine di {w} × {h} pixel è troppo grande per essere modificata
 @msg	select an object in perspective	seleziona un oggetto in prospettiva
 @msg	select artwork (or a colour group) to recolor	seleziona la grafica (o un gruppo colori) da ricolorare
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Ricolorazione completata; senza modifiche: {locked} e {hidden}
@@ -5012,7 +5036,13 @@ axis	Both	Entrambi
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	il file HEIC o HEIF contiene un tipo di immagine che non può essere letto
 @msg	HEIC and HEIF images can't be opened in this build	le immagini HEIC e HEIF non possono essere aperte in questa build
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	l'immagine PSD è troppo grande per essere letta ({_1} × {_2} pixel)
-@msg	zipped 32-bit PSD image data with prediction can't be read	i dati immagine PSD a 32 bit compressi ZIP con previsione non possono essere letti
+@msg	zipped 1-bit PSD image data with prediction can't be read	i dati immagine PSD a 1 bit compressi ZIP con previsione non possono essere letti
+@msg	the PSD file's layer data uses an unknown compression ({m})	i dati dei livelli del file PSD usano una compressione sconosciuta ({m})
+@msg	the PSD file's layer records are damaged	i record dei livelli del file PSD sono danneggiati
+@msg	the PSD file's layer groups are nested too deeply	i gruppi di livelli del file PSD sono annidati troppo in profondità
+@msg	a layer of the PSD file is too large to read	un livello del file PSD è troppo grande per essere letto
+@msg	the PSD file's layers take more memory to read than allowed	i livelli del file PSD richiedono più memoria del consentito per essere letti
+@msg	the layers can't be read ({e}): the file opened as its merged image	i livelli non possono essere letti ({e}): il file è stato aperto come immagine unita
 @msg	{depth}-bit PSD files in this colour mode can't be read	i file PSD a {depth} bit in questo metodo colore non possono essere letti
 @msg	the PSD file is cut short	il file PSD è troncato
 @msg	the PSD file's header is damaged	l'intestazione del file PSD è danneggiata
@@ -5329,6 +5359,11 @@ lighting	Light	Luce
 	Softness	Morbidezza
 	Ambient Light	Luce ambientale
 	Light behind the object	Luce dietro l'oggetto
+	Shadows	Ombre
+	Distance from Object	Distanza dall'oggetto
+	Shadow Bounds	Limiti dell'ombra
+	Behind Object	Dietro l'oggetto
+	Below Object	Sotto l'oggetto
 	3D Lighting Preset	Predefinito illuminazione 3D
 	Standard	Standard
 	Diffuse	Diffusa
@@ -5686,6 +5721,11 @@ axis	Y Axis	Asse Y
 @msg	`inputs` needs the permission `doc.read`	`inputs` richiede l’autorizzazione `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	budget di memoria (l’oggetto {_1} richiede {size} byte di input, ne restano {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	budget di oggetti (più di {MAX_OBJECTS} oggetti di sola lettura)
+@msg	instruction budget	budget di istruzioni
+@msg	time budget	budget di tempo
+@msg	memory budget (the selection is too large to hand over)	budget di memoria (la selezione è troppo grande per essere passata)
+@msg	output size ({what} is {len} bytes, limit {max})	dimensione dell’output ({what} è di {len} byte, limite {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	il permesso del plug-in non può essere rimosso dall’archivio dei plug-in
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	l’autorizzazione `{shown}` è riservata a un’API dei plug-in successiva; questo host non la concede
 @msg	unknown permission `{shown}`	autorizzazione sconosciuta `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” chiede le autorizzazioni {asked}: una persona deve approvarle nell’app desktop, oppure passa `grant` in una sessione avviata con --allow-plugin-grants
@@ -5722,6 +5762,16 @@ axis	Y Axis	Asse Y
 @msg	message must be text	message deve essere testo
 @msg	allowContinue must be true or false	allowContinue deve essere true o false
 @msg	Batch cannot play an action with a stop	L'elaborazione batch non può eseguire un'azione con un'interruzione
+	Insert Menu Item…	Inserisci voce di menu…
+	Insert Menu Item	Inserisci voce di menu
+	Menu Item:	Voce di menu:
+	No menu item matches.	Nessuna voce di menu corrisponde.
+	Several menu items match. Choose one from the list.	Corrispondono più voci di menu. Sceglierne una dall’elenco.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Le voci che aprono una finestra di dialogo e le voci dei menu File, Finestra e Aiuto non sono elencate.
+@msg	command must be text	command deve essere testo
+@msg	no menu item that can be inserted runs this command	nessuna voce di menu inseribile esegue questo comando
+@msg	the action already has 10,000 steps	l’azione ha già 10.000 passaggi
+@msg	the action set would be larger than 8 MiB	il set di azioni supererebbe 8 MiB
 	Playback Options	Opzioni di riproduzione
 	Accelerated	Accelerata
 	Step by Step	Passo per passo
