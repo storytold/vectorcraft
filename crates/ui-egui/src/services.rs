@@ -43,7 +43,8 @@ pub type ReadHeadFn = Box<dyn Fn(&str, usize) -> Result<Vec<u8>, String>>;
 
 pub type WriteFn = Box<dyn FnMut(&str, &[u8]) -> Result<(), String>>;
 
-pub type ExistsFn = Box<dyn Fn(&str) -> bool>;
+/// Shared, so Background Save and Export can check from a worker thread too.
+pub type ExistsFn = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
 pub type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
 
@@ -89,8 +90,9 @@ pub struct Services {
     pub read_head: Option<ReadHeadFn>,
     pub write: Option<WriteFn>,
     /// Is there a file or folder at a path (desktop)? The app asks before replacing a file that a
-    /// save panel's name names once the app gives it an extension ([`picks::ask_to_replace`]).
-    /// Without it, no file counts as there.
+    /// save panel's name names once the app gives it an extension ([`picks::ask_to_replace`]), and
+    /// before a save or export replaces a file it writes beside that one (a file per artboard, a
+    /// linked image). Without it, no file counts as there.
     pub exists: Option<ExistsFn>,
     /// Files that arrived asynchronously (web drops): (name, bytes).
     pub inbox: Option<Inbox>,
