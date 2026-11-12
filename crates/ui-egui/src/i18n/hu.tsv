@@ -2106,6 +2106,7 @@ file-filter	Templates	Sablonok
 	Include Hidden Layers	Rejtett rétegek hozzáadása
 	Include Linked Files	Csatolt fájlok hozzáadása
 	Include Metadata	Metaadatok hozzáadása
+	Include Variable Data	Változóadatok hozzáadása
 	Include non-printing layers	Nem nyomtatandó rétegek hozzáadása
 	Write pages longer than 200 in at full size in points	200 in-nél hosszabb oldalak írása teljes méretben, pontban
 	Include SVG Code	SVG-kód hozzáadása

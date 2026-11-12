@@ -1527,6 +1527,7 @@ font-technology	Variable	Değişken
 	Include Hidden Layers	Gizli Katmanları Ekle
 	Include Linked Files	Bağlantılı Dosyaları Ekle
 	Include Metadata	Meta Verileri Ekle
+	Include Variable Data	Değişken Verilerini Ekle
 	Include non-printing layers	Yazdırılmayan katmanları dahil et
 	Write pages longer than 200 in at full size in points	200 in'den uzun sayfaları tam boyutta, punto olarak yaz
 	Include SVG Code	SVG Kodunu Ekle

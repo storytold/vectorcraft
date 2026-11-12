@@ -1693,6 +1693,7 @@ file-filter	Templates	Vorlagen
 	Include Hidden Layers	Ausgeblendete Ebenen einschließen
 	Include Linked Files	Verknüpfte Dateien einschließen
 	Include Metadata	Metadaten einschließen
+	Include Variable Data	Variablendaten einschließen
 	Include non-printing layers	Nicht druckende Ebenen einschließen
 	Write pages longer than 200 in at full size in points	Seiten über 200 in in voller Größe in Punkt schreiben
 	Include SVG Code	SVG-Code einschließen

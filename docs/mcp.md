@@ -823,7 +823,20 @@ lists every option with its default. `encoding` is `utf8`, `utf16` (big-endian a
 a warning). `embedFonts: true` embeds the fonts type uses as `@font-face` rules subset to the characters used; a
 font whose licence (OS/2 `fsType`) forbids subsetting is embedded whole, one that forbids embedding is left out
 with a warning. Type names its faces by numeric `font-weight` (600 for Semibold and for a Japanese face's W6, 300 for Light, `bold` for 700),
-embedded or not. `svgz` takes the same options and writes the SVG gzipped (`.svgz` files also open,
+embedded or not. `variableData: true` (SVG Options › Include Variable Data) writes the document's text variables and
+data sets as a `variableSets` element in the layout `variable.loadLibrary` reads, so the SVG works as a data merge
+template ([help](https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-actions/merge-data.html)).
+Each text variable names its bound type object by the element's id, `docRef="id('…')"` (VectorCraft's own form); an
+unnamed object, or any object with `objectIds: "minimal"`, is given an id for it. A variable bound to several type
+objects names the first by object id. Variables of other kinds, text variables whose names aren't XML names, and data
+sets whose names are blank, have white space at either end, hold characters XML can't hold or repeat a name are left
+out, each with a warning. Only the first 256 text variables and the first 1,000 data sets are written, and variable
+data larger than 8 MiB or holding more than 2,000,000 XML nodes is left out (the limits `variable.loadLibrary`
+reads), each with a warning. With `outlineText`, the bound type is written as outlines, so its text variables open
+unbound (with a warning). `document.open` reads the variable data of an SVG back (unless the SVG reopens from
+Preserve Editing): its text variables and data sets, no active data set, and each text variable bound to the type
+object its `docRef` names; the art stays as the file draws it. Variable data that `variable.loadLibrary` would refuse
+is left out with the warning "the file's variable data wasn't read", and the art opens. `svgz` takes the same options and writes the SVG gzipped (`.svgz` files also open,
 place and paste). `run_command document.save {path: "x.svg", svg: {…}}` saves as SVG (or `.svgz`).
 Colorized grayscale and 1-bit images export in their fill color; linked mode writes a coverage PNG, and Tiny 1.2 writes a colorized PNG.
 

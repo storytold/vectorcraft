@@ -2328,6 +2328,7 @@ antiAlias	Sharp	शार्प
 	Include in playback	प्लेबैक में शामिल करें
 	Include Linked Files	लिंक्ड फ़ाइलें शामिल करें
 	Include Metadata	मेटाडाटा शामिल
+	Include Variable Data	वेरिएबल डेटा शामिल
 	Include non-printing layers	गैर-प्रिंटिंग लेयर्स को शामिल करें
 	Write pages longer than 200 in at full size in points	200 in से लंबे पेज पूरे आकार में, पॉइंट में लिखें
 	Include Objects On Canvas	कैनवास पर ऑब्जेक्ट्स शामिल करें
