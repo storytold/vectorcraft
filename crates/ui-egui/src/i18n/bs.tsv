@@ -487,6 +487,8 @@
 	Extrude & Bevel…	Istiskivanje i zakošenje…
 	3D (Classic)	3D (klasično)
 	Extrude & Bevel (Classic)…	Istiskivanje i zakošenje (klasično)…
+	Revolve (Classic)…	Rotaciono tijelo (klasično)…
+	Rotate (Classic)…	Rotiraj (klasično)…
 	Surface	Površina
 	Wireframe	Žičani model
 	No Shading	Bez sjenčenja
@@ -812,6 +814,14 @@
 	Damp Paper	Vlažni papir
 	Outlines and Rules	Obrisi i linije
 	Hand-Drawn	Ručno crtano
+	Painted and Sketched	Slikano i skicirano
+	Washed Blue	Isprano plavo
+	Bristle Ochre	Oker kistom
+	Pastel Heather	Pastelni vrijesak
+	Charcoal Shade	Sjena ugljenom
+	Ink Contour	Kontura tušem
+	Wet Ink	Mokri tuš
+	Fine Pen	Fino pero
 	Gradient Finishes	Gradijentne završnice
 	Shape Effects	Efekti oblika
 	Blends and Transparency	Stapanja i prozirnost
@@ -5872,6 +5882,7 @@ mark-style	Japanese	Japanski
 	Ruby	Ruby
 	Geometric Guides	Geometrijske vodilice
 	Geometric Patterns	Geometrijski uzorci
+	Grit Textures	Zrnaste teksture
 	Ease In	Ublaži ulaz
 	Ease Out	Ublaži izlaz
 	Ease In Out	Ublaži ulaz i izlaz
@@ -6449,6 +6460,12 @@ shape	Open	Otvoren
 	Delete the selected brushes?	Izbrisati odabrane četkice?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Potezi koriste jednu ili više ovih četkica. Ukloniti četkice s tih poteza i izbrisati četkice?
 	Remove Strokes	Ukloni poteze
+	Place Brush Art	Postavi crtež četkice
+	Replace Brush Art	Zamijeni crtež četkice
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Potezi koriste ovu četkicu. Primijeniti novi crtež na te poteze ili ih ostaviti kakvi jesu i dodati kopiju četkice s novim crtežom?
+	Apply to Strokes	Primijeni na poteze
+	Leave Strokes	Ostavi poteze
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` nema crtež (imaju ga samo raspršene i umjetničke četkice i četkice uzorka)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Alati za raspoređivanje
 	Arrange in Grid…	Rasporedi u mrežu…
@@ -6683,6 +6700,19 @@ shape	Open	Otvoren
 @plural	{n} host call|{n} host calls	{n} poziv hosta|{n} poziva hosta|{n} poziva hosta
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} raniji red uklonjen|{n} ranija reda uklonjena|{n} ranijih redova uklonjeno
 @plural	{n} line cut|{n} lines cut	{n} red skraćen|{n} reda skraćena|{n} redova skraćeno
+
+# Learn panel
+	Learn	Učenje
+	Explore tutorials	Istražite tutorijale
+	For you	Za vas
+	Skills	Vještine
+	Get started	Prvi koraci
+	Quick skill guide	Brzi vodič kroz vještine
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Kratki praktični tutorijali za osnovne alate, grupisani po vještinama. Odaberite vještinu da vidite njene tutorijale.
+	List Tutorials	Izlistaj tutorijale
+	Show Tutorial	Prikaži tutorijal
+@msg	missing `tutorial` (see learn.list)	nedostaje `tutorial` (vidi learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	nepoznat tutorijal `{id}` (vidi learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Osvježi odgođene efekte

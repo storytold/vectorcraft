@@ -1,6 +1,6 @@
 use super::save::{
-    ask_before_losing, export_path, is_web, remember_active_artboard, report_saved, report_write_error, saved_status, target_path,
-    target_path_keeping, view_file, write_encoded, write_named, write_reporting,
+    ask_before_losing, export_path, is_web, notes_of, remember_active_artboard, report_saved, report_write_error, saved_status, show_with_notes,
+    target_path, target_path_keeping, view_file, write_encoded, write_named, write_reporting,
 };
 use super::{EngineError, Progress, Value, VectorcraftApp, Writer, background, cancel, fileio, json, progress};
 
@@ -94,11 +94,12 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
             Some(files) => format!("{} files", files.len()),
             None => r["path"].as_str().unwrap_or_default().to_string(),
         };
-        let warnings: Vec<&str> = r["warnings"].as_array().map(|w| w.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
-        app.status(match warnings.first() {
+        let warnings = notes_of(&r);
+        let status = match warnings.first() {
             Some(first) => exported_with_notes(&what, warnings.len(), first),
             None => format!("Exported {what}"),
-        });
+        };
+        show_with_notes(app, status, warnings);
         Ok(r)
     })?;
     if r.get("path").is_none() {
@@ -115,7 +116,7 @@ pub(crate) fn exported_with_notes(what: &str, n: usize, first: &str) -> String {
 
 /// Run an engine command that returns `{dataBase64}` and write the bytes to a picked path
 /// (Export Selection, Save for Office Documents, Text Export Options and the presets dialogs'
-/// Export…), reported with the first of the command's warnings ([`report_saved`]).
+/// Export…), reported with the command's warnings ([`report_saved`]).
 pub fn save_command_output(app: &mut VectorcraftApp, id: &str, ext: &str, params: Value) -> Result<String, String> {
     let (path, v) = run_to_file(app, id, ext, params)?;
     report_saved(app, &path, &v);
@@ -241,8 +242,9 @@ pub(crate) fn open_original(app: &mut VectorcraftApp, path: &str) -> Result<(), 
 /// File → Export for Screens with `document.exportForScreens` params: the files go into `folder`;
 /// without one the web downloads them (the ZIP, or each file) and the other frontends get them
 /// back as base64. With `openLocation`, the file manager shows the first file written. When an
-/// export into a folder or a download has warnings, the status bar shows the first as
-/// [`report_saved`] shows a save's notes: "Saved <folder, ZIP or first download> with n notes: …".
+/// export into a folder or a download has warnings, the status bar shows them as [`report_saved`]
+/// shows a save's notes: "Saved <folder, ZIP or first download> with n notes: …", and hovering the
+/// message lists up to 30 of them, fewer when the window is small, with how many were left out.
 pub fn export_for_screens(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
     export_files(app, "document.exportForScreens", params)
 }
@@ -312,7 +314,7 @@ fn report_exported(app: &mut VectorcraftApp, r: Value, folder: &str, open_locati
         {
             status = format!("{status} ({e})");
         }
-        app.status(status);
+        show_with_notes(app, status, notes_of(&r));
     } else if let Some(download) = app.services.download.as_mut() {
         // A browser download has no folders: a file from a sub-folder (`2x/Logo@2x.png`) is named alone.
         let returned: Vec<(&str, &str)> = returned.iter().map(|(name, data)| (name.rsplit('/').next().unwrap_or(name), *data)).collect();

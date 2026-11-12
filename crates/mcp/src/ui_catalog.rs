@@ -634,6 +634,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{collapsed?: bool} collapse every expanded dock column to icons (true), expand the outer dock column, Properties | Layers | Libraries (false), or toggle the outer column (omitted), as the double arrow at the top of the dock does; returns the new state",
     ),
+    (
+        "window.learn",
+        "Learn",
+        "",
+        "{show?: bool} show (true), hide (false) or toggle (omitted or null) the Learn panel, as Window › Learn and the app bar's Explore tutorials button do; any other value is an error and changes nothing; returns whether the panel shows",
+    ),
+    (
+        "learn.list",
+        "List Tutorials",
+        "",
+        "{} the Learn panel's skills in the order its Skills tab lists them: {skills: [{id, title, tutorials: [{id, title, steps: number of steps}]}]}",
+    ),
+    (
+        "learn.show",
+        "Show Tutorial",
+        "",
+        "{tutorial: id (see learn.list)} show the Learn panel on its Skills tab with that tutorial's numbered steps, as choosing its skill and then the tutorial does; a missing, non-string or unknown id is an error and changes nothing; returns {skill, tutorial, title, steps: [text]}",
+    ),
     ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
     (
         "window.workspace",
@@ -1492,7 +1510,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "css.exportFile",
         "Export CSS…",
         "",
-        "{path?, scope?: selection|all (default selection), …css.selection options} css.export written to path, else a picked file (the web downloads it), with the pictures of rasterized art next to it (CSS Properties panel: Export Selected CSS…, Export All…) → {path, rules, images: [path…], warnings (css.export's; the status bar shows the first)}",
+        "{path?, scope?: selection|all (default selection), …css.selection options} css.export written to path, else a picked file (the web downloads it), with the pictures of rasterized art next to it (CSS Properties panel: Export Selected CSS…, Export All…) → {path, rules, images: [path…], warnings (css.export's; the status bar shows the first and how many there are, and hovering the message lists up to 30 of them, fewer when the window is small, with how many were left out)}",
     ),
     (
         "file.print",

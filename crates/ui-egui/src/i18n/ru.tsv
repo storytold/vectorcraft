@@ -1162,6 +1162,8 @@ font-technology	Variable	Вариативные
 	Extrude & Bevel…	Выдавливание и фаска…
 	3D (Classic)	3D (классические)
 	Extrude & Bevel (Classic)…	Выдавливание и фаска (классическое)…
+	Revolve (Classic)…	Вращение (классическое)…
+	Rotate (Classic)…	Поворот (классический)…
 	Surface	Поверхность
 	Wireframe	Каркас
 	No Shading	Без затенения
@@ -1474,6 +1476,14 @@ file-filter	Templates	Шаблоны
 	Hair Space	Волосяная шпация
 	Hand Tool	Инструмент «Рука»
 	Hand-Drawn	Нарисованный от руки
+	Painted and Sketched	Живопись и эскизы
+	Washed Blue	Размытый синий
+	Bristle Ochre	Охра кистью
+	Pastel Heather	Пастельный вереск
+	Charcoal Shade	Тень углём
+	Ink Contour	Контур тушью
+	Wet Ink	Влажная тушь
+	Fine Pen	Тонкое перо
 	Handles	Маркеры
 	Hard Light	Жёсткий свет
 	Hard Mix	Жёсткое наложение
@@ -4299,6 +4309,7 @@ axis	Both	Оба
 @msg	`globalAdjust` must be an object	`globalAdjust` должно быть объектом
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` должно быть 1, 3 или 5
 @msg	`stops` must be an array	`stops` должно быть массивом
+@msg	`{key}` must be an array	`{key}` должно быть массивом
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` должно быть объектом параметров SVG (см. document.formats)
 @msg	`{_1}` is no save command	`{_1}` не является командой сохранения
 @msg	`{area}` is no recovery area name	`{area}` не является именем области восстановления
@@ -5645,6 +5656,7 @@ lighting	Light	Свет
 	Ruby	Руби
 	Geometric Guides	Геометрические направляющие
 	Geometric Patterns	Геометрические узоры
+	Grit Textures	Зернистые текстуры
 	Ease In	Плавное начало
 	Ease Out	Плавное окончание
 	Ease In Out	Плавное начало и окончание
@@ -6498,6 +6510,10 @@ anchor	Points:	Точки:
 @msg	features lists at most {max} tags	features содержит не более {max} тегов
 @msg	unknown OpenType feature `{t}`	неизвестная функция OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} должно быть числом больше 0 и не более {max}
+@msg	{label} must be at most {max} characters	{label} должно содержать не более {max} символов
+@msg	{label} must be one character	{label} должно быть одним символом
+@msg	at most {max} tab stops	не более {max} позиций табуляции
+@msg	unknown align `{other}`	неизвестное выравнивание `{other}`
 @msg	no character style `{name}`	Стиль символов `{name}` не найден
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6659,6 +6675,12 @@ breakText	Glyphs	Глифы
 	Delete the selected brushes?	Удалить выбранные кисти?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Обводки используют одну или несколько из этих кистей. Убрать кисти с этих обводок и удалить кисти?
 	Remove Strokes	Убрать обводки
+	Place Brush Art	Поместить рисунок кисти
+	Replace Brush Art	Заменить рисунок кисти
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Обводки используют эту кисть. Применить новый рисунок к этим обводкам или оставить их как есть и добавить копию кисти с новым рисунком?
+	Apply to Strokes	Применить к обводкам
+	Leave Strokes	Оставить обводки
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	у `{name}` нет рисунка (он есть только у кистей-распылений, художественных и узорных кистей)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Инструменты размещения
 	Arrange in Grid…	Разместить по сетке…
@@ -7022,6 +7044,19 @@ shape	Open	Открытый
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} прежняя строка отброшена|{n} прежние строки отброшены|{n} прежних строк отброшено
 @plural	{n} line cut|{n} lines cut	{n} строка обрезана|{n} строки обрезаны|{n} строк обрезано
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` и `last` должны быть номерами строк, которые хранит консоль, причём `first` не позже `last`
+
+# Learn panel
+	Learn	Обучение
+	Explore tutorials	Обзор уроков
+	For you	Для вас
+	Skills	Навыки
+	Get started	Начало работы
+	Quick skill guide	Краткое руководство по навыкам
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Короткие практические уроки по основным инструментам, сгруппированные по навыкам. Выберите навык, чтобы увидеть его уроки.
+	List Tutorials	Перечислить уроки
+	Show Tutorial	Показать урок
+@msg	missing `tutorial` (see learn.list)	отсутствует `tutorial` (см. learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	неизвестный урок `{id}` (см. learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Обновить отложенные эффекты

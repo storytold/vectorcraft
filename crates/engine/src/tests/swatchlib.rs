@@ -798,6 +798,39 @@ fn a_pattern_library_adds_only_the_picked_pattern_and_it_undoes_and_saves() {
     assert_eq!(back.swatch("Checkerboard").map(|w| &w.paint), doc(&s).swatch("Checkerboard").map(|w| &w.paint));
 }
 
+/// Grit Textures is listed after Geometric Patterns. One of its patterns comes in with its swatch
+/// once, as one undo step that also takes both away, and both stay after a save and reopen.
+#[test]
+fn a_grit_texture_adds_once_undoes_and_saves() {
+    let mut s = session();
+    let list = run(&mut s, "swatch.library.list", json!({}));
+    let ids: Vec<&str> =
+        list["libraries"].as_array().unwrap().iter().filter(|l| l["category"] == "patterns").map(|l| l["id"].as_str().unwrap()).collect();
+    assert_eq!(ids, ["geometric-patterns", "grit-textures"]);
+    let got = run(&mut s, "swatch.library.get", json!({"library": "Grit Textures"}));
+    let names: Vec<&str> = got["swatches"].as_array().unwrap().iter().map(|w| w["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Fine Grain", "Coarse Grit", "Sand", "Speckle", "Stipple", "Scratches", "Sparse Flecks", "Dense Flecks"]);
+    let counts = |d: &vectorcraft_doc::Document| (d.patterns.len(), d.swatches_iter().count());
+    let empty = counts(doc(&s));
+    let undo = undo_len(&s);
+    let r = run(&mut s, "swatch.library.add", json!({"library": "grit-textures", "names": ["Stipple"]}));
+    assert_eq!(r["added"], json!(["Stipple"]));
+    assert_eq!((counts(doc(&s)), undo_len(&s)), ((empty.0 + 1, empty.1 + 1), undo + 1));
+    let def = doc(&s).pattern("Stipple").expect("the pattern comes with its swatch").clone();
+    assert!(def.art.len() >= 144, "{} marks", def.art.len());
+    assert!(matches!(doc(&s).swatch("Stipple").map(|w| &w.paint), Some(Paint::Pattern { pattern, .. }) if pattern == "Stipple"));
+    let r = run(&mut s, "swatch.library.add", json!({"library": "grit-textures", "names": ["Stipple"]}));
+    assert_eq!((r["added"].clone(), r["existing"].clone()), (json!([]), json!(["Stipple"])));
+    assert_eq!((counts(doc(&s)), undo_len(&s)), ((empty.0 + 1, empty.1 + 1), undo + 1), "added once");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(counts(doc(&s)), empty);
+    assert!(doc(&s).pattern("Stipple").is_none() && doc(&s).swatch("Stipple").is_none());
+    run(&mut s, "edit.redo", json!({}));
+    let back = vectorcraft_format::load(&vectorcraft_format::save(doc(&s), false)).unwrap();
+    assert_eq!(back.pattern("Stipple"), Some(&def));
+    assert_eq!(back.swatch("Stipple").map(|w| &w.paint), doc(&s).swatch("Stipple").map(|w| &w.paint));
+}
+
 /// A device name is saved with a `-` after it, which can be another library's own name: neither
 /// library replaces the other, and saving either again replaces only itself.
 #[test]

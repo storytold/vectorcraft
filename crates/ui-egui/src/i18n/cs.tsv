@@ -496,6 +496,8 @@
 	Extrude & Bevel…	Vysunutí a zkosení…
 	3D (Classic)	3D (klasické)
 	Extrude & Bevel (Classic)…	Vysunutí a zkosení (klasické)…
+	Revolve (Classic)…	Rotační těleso (klasické)…
+	Rotate (Classic)…	Otočit (klasické)…
 	Surface	Povrch
 	Wireframe	Drátový model
 	No Shading	Bez stínování
@@ -821,6 +823,14 @@
 	Damp Paper	Vlhký papír
 	Outlines and Rules	Obrysy a linky
 	Hand-Drawn	Ručně kreslené
+	Painted and Sketched	Malované a skicované
+	Washed Blue	Rozmytá modrá
+	Bristle Ochre	Okr štětcem
+	Pastel Heather	Pastelový vřes
+	Charcoal Shade	Stín uhlem
+	Ink Contour	Obrys tuší
+	Wet Ink	Mokrá tuš
+	Fine Pen	Jemné pero
 	Gradient Finishes	Přechodové povrchy
 	Shape Effects	Efekty tvarů
 	Blends and Transparency	Prolnutí a průhlednost
@@ -4571,6 +4581,7 @@ imageTrace	Outline	Obrys
 @msg	`globalAdjust` must be an object	`globalAdjust` musí být objekt
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` musí být 1, 3 nebo 5
 @msg	`stops` must be an array	`stops` musí být pole
+@msg	`{key}` must be an array	`{key}` musí být pole
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` musí být objekt s možnostmi SVG (viz document.formats)
 @msg	`{_1}` is no save command	`{_1}` není příkaz pro uložení
 @msg	`{area}` is no recovery area name	`{area}` není název oblasti obnovení
@@ -6036,6 +6047,7 @@ mark-style	Japanese	Japonské
 	Ruby	Ruby
 	Geometric Guides	Geometrická vodítka
 	Geometric Patterns	Geometrické vzorky
+	Grit Textures	Zrnité textury
 	Ease In	Pozvolný začátek
 	Ease Out	Pozvolný konec
 	Ease In Out	Pozvolný začátek a konec
@@ -6521,6 +6533,10 @@ anchor	Points:	Body:
 @msg	features lists at most {max} tags	features obsahuje nejvýše {max} značek
 @msg	unknown OpenType feature `{t}`	neznámá funkce OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} musí být číslo větší než 0 a nejvýše {max}
+@msg	{label} must be at most {max} characters	{label} smí mít nejvýše {max} znaků
+@msg	{label} must be one character	{label} musí být jeden znak
+@msg	at most {max} tab stops	nejvýše {max} zarážek tabulátoru
+@msg	unknown align `{other}`	neznámé zarovnání `{other}`
 @msg	no character style `{name}`	styl znaků `{name}` neexistuje
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6682,6 +6698,12 @@ breakText	Glyphs	Glyfy
 	Delete the selected brushes?	Odstranit vybrané štětce?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Tahy používají jeden nebo více z těchto štětců. Odebrat štětce z těchto tahů a odstranit štětce?
 	Remove Strokes	Odebrat tahy
+	Place Brush Art	Umístit kresbu štětce
+	Replace Brush Art	Nahradit kresbu štětce
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Tahy používají tento štětec. Použít novou kresbu na tyto tahy, nebo je ponechat beze změny a přidat kopii štětce s novou kresbou?
+	Apply to Strokes	Použít na tahy
+	Leave Strokes	Ponechat tahy
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` nemá kresbu (mají ji jen rozptylové, obrazové a vzorkové štětce)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Nástroje uspořádání
 	Arrange in Grid…	Uspořádat do mřížky…
@@ -6933,6 +6955,19 @@ breakText	Glyphs	Glyfy
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} starší řádek zahozen|{n} starší řádky zahozeny|{n} starších řádků zahozeno
 @plural	{n} line cut|{n} lines cut	{n} řádek zkrácen|{n} řádky zkráceny|{n} řádků zkráceno
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` a `last` musí být čísla řádků, které konzole uchovává, `first` před `last`
+
+# Learn panel
+	Learn	Výuka
+	Explore tutorials	Prozkoumat výukové kurzy
+	For you	Pro vás
+	Skills	Dovednosti
+	Get started	Začínáme
+	Quick skill guide	Rychlý průvodce dovednostmi
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Krátké praktické výukové kurzy k základním nástrojům, seřazené podle dovedností. Vyberte dovednost a zobrazí se její kurzy.
+	List Tutorials	Vypsat výukové kurzy
+	Show Tutorial	Zobrazit výukový kurz
+@msg	missing `tutorial` (see learn.list)	chybí `tutorial` (viz learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	neznámý výukový kurz `{id}` (viz learn.list)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Obnovit odložené efekty

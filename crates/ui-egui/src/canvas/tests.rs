@@ -6984,6 +6984,49 @@ fn a_brush_dropped_on_a_path_is_applied_to_it() {
 }
 
 #[test]
+fn a_brush_with_art_dropped_off_the_art_places_a_copy_of_its_art_there() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("path.create", &json!({"anchors": [{"x": 100, "y": 150}, {"x": 300, "y": 150}]})).unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let drop = |app: &mut VectorcraftApp, name: &str, at: Point| {
+        let def = app.session.execute("brush.get", &json!({"name": name})).unwrap();
+        let at = xf.to_screen(at);
+        egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Brush { name: name.into(), def });
+        let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+        frame(app, &ctx, vec![egui::Event::PointerMoved(at), up]);
+    };
+    let undo = app.session.active().unwrap().history.undo.len();
+    // A calligraphic brush has no art: nothing.
+    drop(&mut app, "3 pt. Round", Point::new(200.0, 250.0));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    // An art brush: a copy of its art, centered where it lands, selected.
+    drop(&mut app, "Arrow", Point::new(200.0, 250.0));
+    let st = app.session.active().unwrap();
+    assert_eq!(st.history.undo.len(), undo + 1);
+    assert_eq!(st.history.undo.last().unwrap().label, "Place Brush Art");
+    let [placed] = st.selection.objects.as_slice() else { panic!("one object selected: {:?}", st.selection.objects) };
+    let b = st.doc.node(*placed).unwrap().geometric_bounds().unwrap();
+    assert!((b.center() - Point::new(200.0, 250.0)).hypot() < 0.1, "{b:?}");
+    // A scatter brush and a pattern brush (its tiles, in one group) place their art too.
+    for (i, name) in ["Dots", "Chain"].into_iter().enumerate() {
+        let at = Point::new(80.0 + 200.0 * i as f64, 60.0);
+        drop(&mut app, name, at);
+        let st = app.session.active().unwrap();
+        assert_eq!(st.history.undo.len(), undo + 2 + i, "{name}");
+        let [placed] = st.selection.objects.as_slice() else { panic!("{name}: one object selected: {:?}", st.selection.objects) };
+        let n = st.doc.node(*placed).unwrap();
+        assert!((n.geometric_bounds().unwrap().center() - at).hypot() < 0.1, "{name}");
+        if name == "Chain" {
+            assert_eq!(n.children().unwrap()[0].name.as_deref(), Some("Side Tile"));
+        }
+    }
+}
+
+#[test]
 fn a_library_brush_dropped_on_a_path_is_added_and_applied_in_one_step() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
@@ -7164,6 +7207,36 @@ fn art_moved_off_the_canvas_waits_and_drops_on_the_panel() {
     assert!(st.interaction.is_none());
     assert_eq!(*st.doc, *before);
     assert_eq!(st.history.undo.len(), undo);
+}
+
+/// Art Alt-dragged off the canvas (a copy while it moves there) reaches the panels as the art the
+/// drag started with, which is what stays when the release over a panel takes the copy back.
+#[test]
+fn art_alt_dragged_off_the_canvas_reaches_the_panels_as_the_original() {
+    use egui::{Event, Modifiers};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    let id = vectorcraft_doc::NodeId(id);
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let before = app.session.active().unwrap().doc.clone();
+    let button = |pos: Pos2, pressed: bool| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::ALT };
+    let start = xf.to_screen(Point::new(100.0, 100.0));
+    frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::ALT), Event::PointerMoved(start), button(start, true)]);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(start + vec2(40.0, 0.0))]);
+    let st = app.session.active().unwrap();
+    assert_eq!(st.interaction.as_ref().map(|i| i.label.as_str()), Some("Copy"));
+    assert!(!st.selection.objects.contains(&id), "the copy is selected while it moves");
+    frame(&mut app, &ctx, vec![Event::PointerMoved(pos2(850.0, 100.0))]);
+    assert_eq!(egui::DragAndDrop::payload::<widgets::PanelDrag>(&ctx).as_deref(), Some(&widgets::PanelDrag::Art(vec![id])));
+    frame(&mut app, &ctx, vec![button(pos2(850.0, 100.0), false)]);
+    let st = app.session.active().unwrap();
+    assert!(st.interaction.is_none());
+    assert_eq!(*st.doc, *before, "the copy goes, the original stays");
+    assert!(st.doc.node(id).is_some());
 }
 
 /// #4233: the Direct and Group Selection tools hand art they move whole to the panels too (Asset

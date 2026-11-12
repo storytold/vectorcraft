@@ -647,12 +647,14 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   Direct Selection of a path, compound path or type inside a dynamic instance also takes opacity and blend
   (`transparency.set`) and a gradient or pattern fill or stroke (`paint.setFill` / `paint.setStroke`,
   Eyedropper), for that instance only;
-  graphic style libraries (Window › Graphic Style Libraries; nine original libraries generated in code, including
+  graphic style libraries (Window › Graphic Style Libraries; ten original libraries generated in code, including
   Game HUD with Health Fill, Mana Glow, Damage Flash, Quest Outline, Coin Shine and Boss Alert, Status Effects
-  with Poison Tint, Freeze Edge, Burn Aura, Stun Pulse, Stealth Fade and Shield Buff, and Textures with Fine Grain,
-  Canvas Weave, Burlap Sack, Cracked Glaze, Mosaic Floor, Quilted Squares, Leaded Glass and Damp Paper, painted with
-  the texture effects; User Defined; Other Library…; `graphicStyle.libraries`, `graphicStyle.addFromLibrary`).
-- **Missing:** more built-in brush libraries beyond the six shipped (and further graphic-style libraries beyond the nine shipped, and further symbol libraries beyond Basic
+  with Poison Tint, Freeze Edge, Burn Aura, Stun Pulse, Stealth Fade and Shield Buff, Painted and Sketched with
+  Washed Blue, Bristle Ochre, Pastel Heather, Charcoal Shade, Ink Contour, Wet Ink and Fine Pen, and Textures with
+  Fine Grain, Canvas Weave, Burlap Sack, Cracked Glaze, Mosaic Floor, Quilted Squares, Leaded Glass and Damp Paper,
+  painted with the texture effects; User Defined; Other Library…; `graphicStyle.libraries`,
+  `graphicStyle.addFromLibrary`).
+- **Missing:** more built-in brush libraries beyond the six shipped (and further graphic-style libraries beyond the ten shipped, and further symbol libraries beyond Basic
   Shapes, UI Frames, Map Markers, Inventory Icons and Skill Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write;
   Global Edit of groups holding type or images, rotated copies as matches and highlighting matches before the
   start; 9-slice guides outside the symbol's art (a dragged guide stops at the art's edge).
@@ -664,7 +666,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   Extrude & Bevel, Inflate and Rotate with Position presets ([three-d.md](three-d.md), #1407). Colored Inflate has automatic smooth vector lighting from shared membrane normals. White-light Inflate keeps its existing appearance. All four take one to ten colored directional lights, with neutral ambient applied once, a light list and independent previewing controls. Standard, Diffuse, Top Left and Right select original rigs, shared with commands; manual settings show Custom.
 - **Missing:** materials (base, Substance, graphics), shadows,
   ray-traced rendering, angular cut caps, exact visibility for intersecting and concave surfaces, the rest of 3D
-  Classic (Revolve, Rotate, Map Art), Turntable, textures, map art and shading in 3D export.
+  Classic (Map Art), Turntable, textures, map art and shading in 3D export.
 - **Impact:** specialist; Materials is the one menu stub left.
 - **Estimate:** 25–45 h; plan in `plan/` before coding.
 
