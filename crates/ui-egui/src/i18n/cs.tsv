@@ -6118,6 +6118,16 @@ axis	Y Axis	osa Y
 @msg	message must be text	message musí být text
 @msg	allowContinue must be true or false	allowContinue musí být true nebo false
 @msg	Batch cannot play an action with a stop	Dávka nemůže přehrát akci se zastavením
+	Insert Menu Item…	Vložit položku nabídky…
+	Insert Menu Item	Vložit položku nabídky
+	Menu Item:	Položka nabídky:
+	No menu item matches.	Žádná položka nabídky neodpovídá.
+	Several menu items match. Choose one from the list.	Odpovídá několik položek nabídky. Vyberte jednu ze seznamu.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Položky, které otevírají dialogové okno, a položky nabídek Soubor, Okno a Nápověda nejsou uvedeny.
+@msg	command must be text	command musí být text
+@msg	no menu item that can be inserted runs this command	tento příkaz nespouští žádná položka nabídky, kterou lze vložit
+@msg	the action already has 10,000 steps	akce už má 10 000 kroků
+@msg	the action set would be larger than 8 MiB	sada akcí by byla větší než 8 MiB
 	Playback Options	Možnosti přehrávání
 	Accelerated	Zrychleně
 	Step by Step	Krok za krokem
