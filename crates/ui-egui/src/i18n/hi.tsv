@@ -5409,6 +5409,73 @@ antiAlias	Sharp	शार्प
 @id	pathfinder.add	मिलाएँ
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” अधिक संसाधन माँगता है (हर रन में {minutes} मिनट और सामान्य से {times} गुना निर्देश): इसे डेस्कटॉप ऐप में किसी व्यक्ति को स्वीकृत करना होगा, या --allow-plugin-grants से शुरू किए गए सत्र में `allowHeavy: true` दें
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" एक रंग नहीं है: इसे #rrggbb के रूप में लिखें
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	स्वीकृति आवश्यक: यह {0} माँगता है, जिसे उपयोगकर्ता इसे अलग से स्थापित करते समय देता है
+@msg	`angle` must be a number	`angle` एक संख्या होना चाहिए
+@msg	`aspect` must be from 0.01 to 100	`aspect` 0.01 से 100 तक होना चाहिए
+@msg	`cap` must be "butt", "round" or "square"	`cap` "butt", "round" या "square" होना चाहिए
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` "nonzero" या "evenodd" होना चाहिए
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` अधिकतम {MAX_HELP_URL} बाइट का https:// पता होना चाहिए
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` में 1-{MAX_HELP} प्रिंट करने योग्य वर्ण होने चाहिए
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` 1-{MAX_EFFECT_ID} बाइट का इफ़ेक्ट id होना चाहिए
+@msg	`id` must be the id of an input object	`id` किसी इनपुट ऑब्जेक्ट का id होना चाहिए
+@msg	`join` must be "miter", "round" or "bevel"	`join` "miter", "round" या "bevel" होना चाहिए
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` और `group` में 1-{MAX_LABEL} प्रिंट करने योग्य वर्ण होने चाहिए
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` 1-{MAX_TEXT} होना चाहिए, और डिफ़ॉल्ट उससे लंबा नहीं होना चाहिए
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` और `maxItems` 0-{MAX_LIST} होने चाहिए, `maxItems` कम से कम 1, और डिफ़ॉल्ट में उतने ही आइटम होने चाहिए
+@msg	`name` must be a string	`name` एक स्ट्रिंग होना चाहिए
+@msg	`opacity` must be a number	`opacity` एक संख्या होना चाहिए
+@msg	`type` must be "path" or "compound"	`type` "path" या "compound" होना चाहिए
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` में 1-{MAX_UNIT} प्रिंट करने योग्य वर्ण होने चाहिए
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` में `{other}` के लिए 1 से {MAX_CONDITION_VALUES} मान होने चाहिए
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` में `{other}` दिया गया है, जो इससे पहले घोषित पैरामीटर नहीं है
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` में अधिकतम {MAX_CONDITIONS} पैरामीटर हो सकते हैं
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` `{other}` के मान लेता है, जो चेकबॉक्स या विकल्प होना चाहिए
+@msg	`visible` must be true or false	`visible` true या false होना चाहिए
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` {_1} से {_2} तक की संख्या होना चाहिए
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` अधिकतम {MAX_ITEMS} प्रविष्टियों का ऐरे होना चाहिए
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	रंग का डिफ़ॉल्ट एक रंग ऑब्जेक्ट या "#3a7bd5" जैसी हेक्स स्ट्रिंग होना चाहिए
+@msg	a color object or a hex string such as "#3a7bd5"	एक रंग ऑब्जेक्ट या "#3a7bd5" जैसी हेक्स स्ट्रिंग
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	फ्रीफॉर्म ग्रेडिएंट में अधिकतम {MAX_ITEMS} पॉइंट और लाइनें होती हैं
+@msg	a freeform gradient line names a point it doesn't have	फ्रीफॉर्म ग्रेडिएंट की एक लाइन ऐसे पॉइंट का नाम देती है जो ग्रेडिएंट में नहीं है
+@msg	a gradient needs 1-{MAX_ITEMS} stops	ग्रेडिएंट को 1-{MAX_ITEMS} स्टॉप चाहिए
+@msg	a list of numbers	संख्याओं की एक सूची
+@msg	a list of {min_items} to {max_items} numbers	{min_items} से {max_items} संख्याओं की एक सूची
+@msg	a new object needs a `path`	नए ऑब्जेक्ट को `path` चाहिए
+@msg	a number	एक संख्या
+@msg	a painted live effect returns only `objects`	पेंट करने वाला लाइव इफ़ेक्ट केवल `objects` लौटाता है
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	पेंट करने वाले लाइव इफ़ेक्ट के हिस्से में केवल `path`, `fillRule`, `fills` और `strokes` होते हैं
+@msg	a read-only object was left out	एक केवल-पढ़ने योग्य ऑब्जेक्ट छोड़ दिया गया
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	एक केवल-पढ़ने योग्य ऑब्जेक्ट छोड़ दिया गया: इसे केवल {"id"} के रूप में या जैसा दिया गया था वैसा लौटाएँ
+@msg	a string	एक स्ट्रिंग
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	स्ट्रोक में केवल `paint`, `width`, `join`, `cap` और `miterLimit` होते हैं
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	स्ट्रोक {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} होना चाहिए
+@msg	an effect must be {"id", "params"?, "visible"?}	इफ़ेक्ट {"id", "params"?, "visible"?} होना चाहिए
+@msg	an effect on a fill returns only `fills`	फ़िल पर इफ़ेक्ट केवल `fills` लौटाता है
+@msg	an effect on a stroke returns only `strokes`	स्ट्रोक पर इफ़ेक्ट केवल `strokes` लौटाता है
+@msg	an object must be a JSON object	ऑब्जेक्ट एक JSON ऑब्जेक्ट होना चाहिए
+@msg	bad range	अमान्य सीमा
+@msg	choices must be 1-64 non-empty, printable strings	विकल्प 1-64 खाली नहीं, प्रिंट करने योग्य स्ट्रिंग होने चाहिए
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	निर्देशांक सीमा से बाहर है (सीमा ±{MAX_COORD} pt)
+@msg	default is not one of the options	डिफ़ॉल्ट विकल्पों में से कोई नहीं है
+@msg	each piece needs a `path`	हर हिस्से को `path` चाहिए
+@msg	is listed twice	दो बार सूचीबद्ध है
+@msg	pattern transform out of range	पैटर्न ट्रांसफ़ॉर्म सीमा से बाहर है
+@msg	read-only field '{field}' changed	केवल-पढ़ने योग्य फ़ील्ड '{field}' बदल गया
+@msg	stops must be in order of `offset`	स्टॉप `offset` के क्रम में होने चाहिए
+@msg	the document has no pattern {pattern}	डॉक्यूमेंट में पैटर्न {pattern} नहीं है
+@msg	the document has no swatch {n}	डॉक्यूमेंट में स्वॉच {n} नहीं है
+@msg	the output	आउटपुट
+@msg	the path has no anchor points	पाथ में कोई एंकर पॉइंट नहीं है
+@msg	too many anchor points (limit {MAX_ANCHORS})	बहुत अधिक एंकर पॉइंट (सीमा {MAX_ANCHORS})
+@msg	true or false	true या false
+@msg	unknown key `{k}`; the keys here are {_1}	अज्ञात कुंजी `{k}`; यहाँ की कुंजियाँ {_1} हैं
+@msg	{_1} is listed twice	{_1} दो बार सूचीबद्ध है
+@msg	{_1} is not the id of an input object	{_1} किसी इनपुट ऑब्जेक्ट का id नहीं है
+@msg	{_1} is read-only	{_1} केवल-पढ़ने योग्य है
+@msg	{what} must be from {lo} to {hi}	{what} {lo} से {hi} तक होना चाहिए
+@msg	a color component	एक रंग घटक
+@msg	a plate	एक प्लेट
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	"{name}" स्थापित करें, जो ये अनुमतियां मांगता है?
 	ID: {id}	ID: {id}
@@ -5505,7 +5572,7 @@ antiAlias	Sharp	शार्प
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} समाप्त हो गया, लेकिन डॉक्यूमेंट या प्लग-इन इस बीच बदल गया: इसे फिर से चलाएं
 @msg	{_1} font families available	{_1} फ़ॉन्ट परिवारों उपलब्ध
 @msg	{_1} has no {_2} style	{_1} में कोई {_2} स्टाइल नहीं है
-@msg	{_1} is {_2} bytes (limit {_3})	{_1} {_2} बाइट्स (limit {_3}) है।
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} {_2} बाइट्स का है (सीमा {_3})
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1} एक लाइव इफ़ेक्ट (इफ़ेक्टी> प्लग-इन) है।
 @msg	{_1} is already used by {_2}	{_1} का उपयोग पहले से ही {_2} द्वारा किया जाता है
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1} एक निर्यातक (फ़ाइल> निर्यात › निर्यात As...) है।
@@ -5514,7 +5581,7 @@ antiAlias	Sharp	शार्प
 @msg	{_1} isn't a path	{_1} एक पाथ नहीं है
 @msg	{_1} MB of document, at most {_2} MB	{_1} MB of document, at most {_2} MB
 @msg	{_1} MB of images, at most {_2} MB	{_1} MB of images, at most {_2} MB
-@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} ऑब्जेक्ट्स (limit {MAX_OBJECTS})
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} ऑब्जेक्ट्स (सीमा {MAX_OBJECTS})
 @msg	{_1} options: {e}	{_1} ऑप्शन्स: {e}
 @msg	{_1} paints nothing to rasterize	{_1} कुछ भी नहीं पेंट करता है
 @msg	{_1} passwords can have up to {MAX_LEGACY_PASSWORD} ASCII characters (PDF 1.7 and later take any)	{_1} पासवर्ड के पास {MAX_LEGACY_PASSWORD} ASCII वर्ण (PDF 1.7) और बाद में कोई लेना) हो सकता है।
@@ -5618,7 +5685,7 @@ antiAlias	Sharp	शार्प
 @msg	{v} is not an asset id	{v} एक परिसंपत्ति आईडी नहीं है
 @msg	{what} can't be intertwined	{what} अंतर नहीं किया जा सकता है
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} अपने ब्लेड और मार्क्स के साथ पेपर को फिट नहीं करता है
-@msg	{what} points outside memory	{what} स्मृति के बाहर अंक
+@msg	{what} points outside memory	{what} मेमोरी के बाहर इंगित करता है
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} {MAX_TILES} टाइल्स से अधिक प्रिंट करेगा: इसे नीचे स्केल करें
 @msg	`{_1}` can't be edited or removed	`{_1}` को संपादित या हटाया नहीं जा सकता है
 @msg	`{_1}` has no brushes to apply	`{_1}` को लागू करने के लिए कोई ब्रश नहीं है
@@ -5648,13 +5715,13 @@ antiAlias	Sharp	शार्प
 @msg	`{k}` is true or false	`{k}` true या false है
 @msg	`{k}` isn't an export setting: {_1}	`{k}` एक निर्यात सेटिंग नहीं है: {_1}
 @msg	`{k}` must be [x, y]	`{k}` होना चाहिए [x, y]
-@msg	`{k}` must be {what}	`{k}` होना चाहिए {what}
+@msg	`{k}` must be {what}	`{k}` {what} होना चाहिए
 @msg	`{k}` must be {what}, not {v}	`{k}` होना चाहिए {what}, नहीं {v}
 @msg	`{k}` must be a byte offset	`{k}` को एक बाइट ऑफ़सेट होना चाहिए
-@msg	`{k}` must be a number	`{k}` होना चाहिए
+@msg	`{k}` must be a number	`{k}` एक संख्या होना चाहिए
 @msg	`{k}` must be a number of points	`{k}` को कई अंक होना चाहिए
 @msg	`{k}` must be a string	`{k}` एक स्ट्रिंग होना चाहिए
-@msg	`{k}` must be a whole number	`{k}` होना चाहिए
+@msg	`{k}` must be a whole number	`{k}` एक पूर्ण संख्या होना चाहिए
 @msg	`{k}` must be from {lo} to {hi} for {key}	`{k}` होना चाहिए {lo} से {hi} {key} के लिए
 @msg	`{k}` must be one of {_1}	`{k}` को {_1} में से एक होना चाहिए
 @msg	`{keep}` is not a side of this axis	`{keep}` इस अक्ष का एक पक्ष नहीं है
@@ -5672,13 +5739,13 @@ antiAlias	Sharp	शार्प
 @msg	`{key}` must be a #rrggbb color	`{key}` एक #rrggbb रंग होना चाहिए
 @msg	`{key}` must be a #rrggbb colour	`{key}` एक #rrggbb रंग होना चाहिए
 @msg	`{key}` must be a non-negative integer	`{key}` को एक गैर-नकारात्मक पूर्णांक होना चाहिए
-@msg	`{key}` must be a number	`{key}` होना चाहिए
-@msg	`{key}` must be a number {_1}..{_2}	`{key}` होना चाहिए a number {_1}.{_2}
-@msg	`{key}` must be a number not below 0	`{key}` को 0 से नीचे नहीं होना चाहिए
-@msg	`{key}` must be a number, not {v}	`{key}` एक नंबर होना चाहिए, नहीं {v}
+@msg	`{key}` must be a number	`{key}` एक संख्या होना चाहिए
+@msg	`{key}` must be a number {_1}..{_2}	`{key}` {_1}..{_2} की एक संख्या होना चाहिए
+@msg	`{key}` must be a number not below 0	`{key}` 0 से कम नहीं होने वाली संख्या होना चाहिए
+@msg	`{key}` must be a number, not {v}	`{key}` एक संख्या होना चाहिए, {v} नहीं
 @msg	`{key}` must be a profile name or null	`{key}` को प्रोफ़ाइल नाम या null होना चाहिए
 @msg	`{key}` must be a string	`{key}` एक स्ट्रिंग होना चाहिए
-@msg	`{key}` must be a whole number	`{key}` होना चाहिए
+@msg	`{key}` must be a whole number	`{key}` एक पूर्ण संख्या होना चाहिए
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` को {min} और {max} ({x}) के बीच पूरी संख्या होना चाहिए।
 @msg	`{key}` must be a whole number of at least 0, not {n}	`{key}` को कम से कम 0 की पूरी संख्या होना चाहिए, नहीं {n}
 @msg	`{key}` must be an appearance item index (paint order) or null	`{key}` एक उपस्थिति आइटम सूचकांक (पेंट ऑर्डर) या null होना चाहिए
@@ -5886,7 +5953,7 @@ antiAlias	Sharp	शार्प
 @msg	`mode` must be one of {_1}	`mode` को {_1} में से एक होना चाहिए
 @msg	`mojikumi` must be "none" or "lineEndHalf"	`mojikumi` होना चाहिए "none" or "lineEndHalf"
 @msg	`name` is empty	`name` खाली है
-@msg	`name` must be 1-64 printable characters	`name` को 1-64 प्रिंट करने योग्य वर्ण होना चाहिए
+@msg	`name` must be 1-64 printable characters	`name` में 1-64 प्रिंट करने योग्य वर्ण होने चाहिए
 @msg	`names` is a list of preset names	`names` प्रीसेट नामों की सूची है
 @msg	`names` lists preset names	`names` प्रीसेट नामों की सूची देता है
 @msg	`names` must be a list of names	`names` को नामों की सूची होना चाहिए
@@ -6093,7 +6160,7 @@ antiAlias	Sharp	शार्प
 @msg	an artboard is listed twice	एक आर्टबोर्ड को दो बार सूचीबद्ध किया गया है
 @msg	an empty artboard has no width or height to scale to	एक खाली आर्टबोर्ड में स्केल करने के लिए कोई चौड़ाई या ऊंचाई नहीं है
 @msg	an exporter always gets an export's budget: leave `budget` out	एक निर्यातक हमेशा एक निर्यात बजट हो जाता है: `budget` बाहर छोड़ दें
-@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	एक निर्यातक ने 1 को {MAX_EXTENSIONS} `extensions` को घोषित किया
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	एक्सपोर्टर 1 से {MAX_EXTENSIONS} `extensions` घोषित करता है
 @msg	an image has no pixels and was left out	एक इमेज में कोई पिक्सेल नहीं है और इसे छोड़ दिया गया था
 @msg	an image is too large for DXF and was left out	DXF के लिए एक इमेज बहुत बड़ी है और इसे छोड़ दिया गया था
 @msg	an image of {_1} MB, at most {_2} MB	{_1} MB की एक इमेज, अधिकांश {_2} MB पर
@@ -6147,7 +6214,7 @@ antiAlias	Sharp	शार्प
 @msg	at most {MAX_MATCHES} matches are kept	अधिकांश {MAX_MATCHES} मैचों को रखा जाता है
 @msg	at most {MAX_POINTS} points	{MAX_POINTS} पॉइंट पर
 @msg	at most {MAX_QUEUE} files	सबसे अधिक {MAX_QUEUE} फ़ाइलों में
-@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	अधिकांश {MAX_UNGROUPED} मापदंडों पर समूहों के बाहर: दूसरों को `group` देना
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	समूहों के बाहर अधिकतम {MAX_UNGROUPED} पैरामीटर: बाकी को एक `group` दें
 @msg	at must be [x, y]	at: [x, y] होना चाहिए
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	इस पैमाने पर ड्राइंग {w} × {h} pt है, कैनवास से अधिक रखती है: एक छोटे पैमाने सिलेक्ट करें या इसे आर्टबोर्ड पर फिट करें
 @msg	at/rect lie outside the canvas	कैनवास के बाहर / सही झूठ
@@ -6224,7 +6291,7 @@ antiAlias	Sharp	शार्प
 @msg	can't add the editing data for other apps: {why}	अन्य ऐप्स के लिए संपादन डेटा नहीं जोड़ सकते: {why}
 @msg	can't edit the written PDF: {why}	लिखित PDF संपादित नहीं कर सकता: {why}
 @msg	can't encode the document: {0}	डॉक्यूमेंट को एनकोड नहीं कर सकता: {0}
-@msg	can't encode the input	इनपुट को एनकोड नहीं कर सकता
+@msg	can't encode the input	इनपुट एनकोड नहीं किया जा सकता
 @msg	can't encrypt the PDF: {why}	PDF को एन्क्रिप्ट नहीं कर सकता: {why}
 @msg	can't linearise the PDF: {why}	PDF को रैखिक नहीं कर सकता: {why}
 @msg	can't open `{_1}`: {_2}	`{_1}` नहीं खोल सकते: {_2}
@@ -6455,8 +6522,8 @@ antiAlias	Sharp	शार्प
 @msg	Expand: no gradient fills	विस्तार: कोई ग्रेडिएंट भरता नहीं
 @msg	Expand: nothing to expand	विस्तार: विस्तार करने के लिए कुछ नहीं
 @msg	expanded SVG styles exceed the import size limit	विस्तारित SVG स्टाइल्स आयात आकार सीमा से अधिक है
-@msg	expected {"dataBase64"}	उम्मीद {"dataBase64"}
-@msg	expected {"objects"}	उम्मीद {"objects"}
+@msg	expected {"dataBase64"}	अपेक्षित: {"dataBase64"}
+@msg	expected {"objects"}	अपेक्षित: {"objects"}
 @msg	export `{name}`: {e}	निर्यात `{name}`: {e}
 @msg	Export cancelled	निर्यात रद्द
 @msg	Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft	स्क्रीन के लिए एक्सपोर्ट png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai या vectorcraft लिखता है
@@ -6651,7 +6718,7 @@ antiAlias	Sharp	शार्प
 @msg	Invalid dimension font name	अमान्य आयाम फ़ॉन्ट नाम
 @msg	Invalid dimension offset	अमान्य आयाम ऑफसेट
 @msg	Invalid drawing scale	अमान्य ड्राइंग स्केल
-@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	Invalid id {_1}: A-Z a-z 0-9 से 1-64 अक्षरों का उपयोग करें।
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	अमान्य id {_1}: A-Z a-z 0-9 . _ - में से 1-64 वर्णों का उपयोग करें
 @msg	invalid image data for `{0}`	`{0}` के लिए अमान्य इमेज डेटा
 @msg	invalid native panel set	अमान्य मूल पैनल सेट
 @msg	invalid object id {value}: expected a non-negative integer	अमान्य ऑब्जेक्ट id {value}: एक गैर-नकारात्मक पूर्णांक की उम्मीद
@@ -6753,9 +6820,9 @@ antiAlias	Sharp	शार्प
 @msg	Loading VectorCraft…	वेक्टर क्रेफ्ट लोड हो रहा है ...
 @msg	Lock Workspace is not available in VectorCraft	लॉक वर्कस्पेस VectorCraft में उपलब्ध नहीं है
 @msg	Make Guides: select paths	गाइड बनाना: पाथ सिलेक्ट करें
-@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	प्रकटन {_1} बाइट्स (limit {MAX_MANIFEST_BYTES})
-@msg	manifest is not UTF-8	manifest: प्रकट नहीं है UTF-8
-@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	प्रकटन बहुत लंबा है (सीमा {MAX_MANIFEST_BYTES} बाइट्स)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	मैनिफ़ेस्ट {_1} बाइट्स का है (सीमा {MAX_MANIFEST_BYTES})
+@msg	manifest is not UTF-8	मैनिफ़ेस्ट UTF-8 में नहीं है
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	मैनिफ़ेस्ट बहुत लंबा है (सीमा {MAX_MANIFEST_BYTES} बाइट्स)
 @msg	manifest: {e}	प्रकटन: {e}
 @msg	margin: a {m} pt margin leaves no imageable area on the paper	मार्जिन: एक {m} pt मार्जिन कागज पर कोई इमेजेबल क्षेत्र नहीं छोड़ता है
 @msg	mask art ends outside a mask dictionary	मास्क कला एक मास्क शब्दकोश के बाहर समाप्त होता है
@@ -6852,7 +6919,7 @@ antiAlias	Sharp	शार्प
 @msg	mode is set, add or toggle, not `{other}`	mode set, add या toggle है, `{other}` नहीं
 @msg	mode must be "cmyk" or "rgb"	mode: मोड "cmyk" या "rgb" होना चाहिए
 @msg	mode must be area|onPath, got {o}	mode: मोड होना चाहिए क्षेत्रफल (onPath), {o} मिला
-@msg	module is {_1} bytes (limit {_2})	मॉड्यूल {_1} बाइट्स (सीम {_2}) है।
+@msg	module is {_1} bytes (limit {_2})	मॉड्यूल {_1} बाइट्स का है (सीमा {_2})
 @msg	more than {MAX_BATCH_FILES} data sets	{MAX_BATCH_FILES} डेटा सेट से अधिक
 @msg	more than {MAX_BATCH_FILES} files	{MAX_BATCH_FILES} फ़ाइलों से अधिक
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	{MAX_CSV_COLS} से अधिक चर: आयात डेटा सेट अधिकांश {MAX_CSV_COLS} पर पढ़ा जाता है।
@@ -7148,7 +7215,7 @@ antiAlias	Sharp	शार्प
 @msg	not a valid SVGZ file: {e}	एक मान्य SVGZ फ़ाइल नहीं: {e}
 @msg	not a VectorCraft file: {0}	एक वेक्टर क्रेफ्ट फ़ाइल नहीं: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	एक VectorCraft शॉर्टकट सेट नहीं है ( `overrides`)
-@msg	not a WebAssembly binary (missing \0asm header)	नहीं एक WebAssembly द्विआधारी (missing \0asm header)
+@msg	not a WebAssembly binary (missing \0asm header)	WebAssembly बाइनरी नहीं है (\0asm हेडर नहीं है)
 @msg	not a Word document: its compound file has no WordDocument stream	एक वर्ड डॉक्यूमेंट नहीं: इसकी यौगिक फ़ाइल में WordDocument स्ट्रीम नहीं है
 @msg	not a Word document: its main part is not a WordprocessingML document	वर्ड डॉक्यूमेंट नहीं: इसका मुख्य हिस्सा वर्डप्रोसेसिंगएमएल डॉक्यूमेंट नहीं है
 @msg	not a Word document: its package has no main document part	नहीं एक वर्ड डॉक्यूमेंट: इसके पैकेज में कोई मुख्य डॉक्यूमेंट हिस्सा नहीं है
@@ -7168,7 +7235,7 @@ antiAlias	Sharp	शार्प
 @msg	not editing an opacity mask	एक opacity मास्क संपादित न करें
 @msg	not found	नहीं मिला
 @msg	not in pattern editing mode	पैटर्न संपादन मोड में नहीं
-@msg	not JSON: {e}	नहीं JSON: {e}
+@msg	not JSON: {e}	JSON नहीं है: {e}
 @msg	not type on a path outside perspective	दृष्टिकोण के बाहर एक पाथ पर टाइप न करें
 @msg	nothing encoded	कुछ भी नहीं
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	डेटा सेट {name} में कुछ भी लागू नहीं किया गया था: कोई ऑब्जेक्ट एक चर के लिए बाध्य नहीं है, इसके लिए एक मूल्य है।
@@ -7254,7 +7321,7 @@ antiAlias	Sharp	शार्प
 @msg	Outline Stroke: no stroked paths selected	आउटलाइन स्ट्रोक: सिलेक्टेड कोई स्ट्रोक पाथ नहीं
 @msg	outlineText {v}: true or false	outlineText {v}: true या false
 @msg	output intent profile: {e}	उत्पादन आशय प्रोफ़ाइल: {e}
-@msg	output size ({what} is {len} bytes, limit {max})	उत्पादन का आकार ({what} {len} बाइट्स है, {max} को सीमित करें)
+@msg	output size ({what} is {len} bytes, limit {max})	आउटपुट का आकार ({what} {len} बाइट्स का है, सीमा {max})
 @msg	output.destination: {_1} files are CMYK, and “{name}” is an RGB profile	output.destination: {_1} फ़ाइलें CMYK हैं, और "{name}" एक RGB प्रोफ़ाइल है
 @msg	output.destination: {e}	output.destination: {e}
 @msg	output.destination: no RGB or CMYK profile is called “{name}”	output.destination: "{name}" नाम की कोई RGB या CMYK प्रोफ़ाइल नहीं है
@@ -7325,13 +7392,13 @@ antiAlias	Sharp	शार्प
 @msg	plane must be left|right|ground	plane को left|right|ground होना चाहिए
 @msg	plane must be left|right|ground|none	plane को left|right|ground|none होना चाहिए
 @msg	plug-in ABI: {0}	प्लग-इन ABI: {0}
-@msg	plug-in exceeded its {0}	प्लग-इन अपने {0} से अधिक है
+@msg	plug-in exceeded its {0}	प्लग-इन ने अपना {0} पार कर लिया
 @msg	plug-in failed: {0}	प्लग-इन विफल: {0}
-@msg	plug-in manifest: {0}	प्लग-इन प्रकटन: {0}
+@msg	plug-in manifest: {0}	प्लग-इन मैनिफ़ेस्ट: {0}
 @msg	plug-in output: {0}	प्लग-इन आउटपुट: {0}
 @msg	plug-in parameters must be a JSON object	प्लग-इन पैरामीटर एक JSON ऑब्जेक्ट होना चाहिए
 @msg	plug-in parameters: {0}	प्लग-इन पैरामीटर: {0}
-@msg	plug-in trapped: {0}	प्लग-इन फँसा: {0}
+@msg	plug-in trapped: {0}	प्लग-इन में ट्रैप हुआ: {0}
 @msg	Plug-ins can't be loaded from {path}: {e}	प्लग-इन {path} से लोड नहीं किया जा सकता: {e}
 @msg	point is outside the mesh	बिंदु मेश के बाहर है
 @msg	points must be [t, left, right] with non-negative widths	points: गैर-नकारात्मक चौड़ाई के साथ अंक [t, left, right] होना चाहिए
@@ -7753,7 +7820,7 @@ antiAlias	Sharp	शार्प
 @msg	the object isn't on a perspective plane	ऑब्जेक्ट एक पर्सपेक्टिव विमान पर नहीं है
 @msg	the object would cross the horizon of the perspective plane	ऑब्जेक्ट पर्सपेक्टिव विमान के क्षितिज को पार करेगी
 @msg	the objects don't match the plan	ऑब्जेक्ट्स प्लान से मेल नहीं खाते हैं
-@msg	the objects to change are no longer in the document	ऑब्जेक्ट्स को बदलने के लिए अब डॉक्यूमेंट में नहीं हैं
+@msg	the objects to change are no longer in the document	बदले जाने वाले ऑब्जेक्ट्स अब डॉक्यूमेंट में नहीं हैं
 @msg	the objects would leave the grid	ऑब्जेक्ट्स ग्रिड को छोड़ देंगे
 @msg	the open and permissions passwords must differ	खुला और अनुमति पासवर्ड अलग होना चाहिए
 @msg	the open dialog has no Reset	ओपन संवाद में कोई रीसेट नहीं है
@@ -7813,7 +7880,7 @@ antiAlias	Sharp	शार्प
 @msg	the replacement font is not available	प्रतिस्थापन फ़ॉन्ट उपलब्ध नहीं है
 @msg	the RTF file has too many paragraphs or formatting changes to place as type (at most {MAX_PARAGRAPHS} paragraphs and {MAX_RUNS} runs)	RTF फ़ाइल में कई पैराग्राफ या प्रारूपण परिवर्तन होते हैं जो टाइप (अधिकांश {MAX_PARAGRAPHS} पैराग्राफ और {MAX_RUNS} रन पर) होते हैं।
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF फ़ाइल बहुत बड़े प्रकार के रूप में जगह है (अधिकांश {_1} MB पर)
-@msg	the runtime panicked	रनटाइम panicked
+@msg	the runtime panicked	रनटाइम क्रैश हो गया
 @msg	the Save PDF dialog didn't open	सेव करें PDF संवाद खुला नहीं था
 @msg	the scale is not a usable number	स्केल एक प्रयोग योग्य संख्या नहीं है
 @msg	the screen color sampler is already open	स्क्रीन रंग नमूना पहले से ही खुला है
@@ -7952,7 +8019,7 @@ antiAlias	Sharp	शार्प
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	टेक्स्ट ऑब्जेक्ट के भीतर लेखन दिशा बदलने वाला टेक्स्ट अपने पहले वर्ण की दिशा में खुलता है
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	प्रकार जुड़े क्षेत्रों में एक मास्क के रूप में इस्तेमाल किया, रैपराउंड टेक्स्ट या एक मिश्रित पाथ क्लिप नहीं करता है
 @msg	Unembedded to {_1}	Unembed to {_1}
-@msg	unexpected host trap	अप्रत्याशित मेजबान जाल
+@msg	unexpected host trap	होस्ट में अप्रत्याशित ट्रैप
 @msg	unexpected resources	अप्रत्याशित संसाधन
 @msg	unknown {k} key `{key}` (size, position)	अज्ञात {k} कुंजी `{key}` (आकार, स्थिति)
 @msg	unknown {key} `{v}` (none, short or full)	अज्ञात {key} `{v}` (one, short or full)
@@ -8093,9 +8160,9 @@ antiAlias	Sharp	शार्प
 @msg	variables are locked	चर लॉक कर रहे हैं
 @msg	variables that aren't text were left out: {kinds}	वेरिएबल जो टेक्स्ट नहीं छोड़े गए थे: {kinds}
 @msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version ने {v} लौटाया; यह होस्ट संस्करण {ABI_VERSION} लागू करता है
-@msg	vc_alloc returned 0 (out of memory)	vc_alloc 0 लौटे (मेमोरी से बाहर)
-@msg	vc_alloc returned a block outside memory	vc_alloc स्मृति के बाहर एक ब्लॉक लौटा
-@msg	vc_run returned error code {packed}	vc_run त्रुटि कोड लौटा {packed}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc ने 0 लौटाया (मेमोरी खत्म)
+@msg	vc_alloc returned a block outside memory	vc_alloc ने मेमोरी के बाहर का ब्लॉक लौटाया
+@msg	vc_run returned error code {packed}	vc_run ने त्रुटि कोड {packed} लौटाया
 @msg	VectorCraft doesn't search other apps' or the system's folders: {path}	वेक्टर क्रेफ्ट अन्य एप्लिकेशन या सिस्टम के फ़ोल्डर्स की खोज नहीं करता है: {path}
 @msg	VectorCraft doesn't search the Shared or Public folder in Users: {path}	वेक्टर क्रेफ्ट उपयोगकर्ताओं में साझा या सार्वजनिक फ़ोल्डर की खोज नहीं करता है: {path}
 @msg	VectorCraft failed to start: {e}	वेक्टर क्रेफ्ट शुरू करने में विफल रहा: {e}
