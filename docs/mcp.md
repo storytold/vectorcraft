@@ -7841,8 +7841,9 @@ targeted objects, as before. With a range, the character attributes of `text.set
 that range of characters. When every paragraph that `text.tabs.set` or `text.tabs.clear` targets already has those
 stops, the command changes nothing and records no undo step. `text.tabs.set` rejects a supplied `align`, `leader`, or
 `alignOn` value that is not a string, an empty `alignOn` value or one of more than one character, a leader of more than
-8 characters, a position outside 0 to 100000 pt, and more than 256 stops. It sorts the stops by position and keeps the
-first of stops at one position.
+8 characters, a position outside 0 to 100000 pt, and more than 256 stops unless every paragraph it targets already
+holds at least that many, so stops can be removed from a paragraph that holds more. It sorts the stops by position and
+keeps the first of stops at one position.
 
 `text.tabs.get {start?}` and `paraStyle.new` / `paraStyle.redefine {id, start?}` read the
 paragraph at `start`; `paraStyle.list` counts paragraphs as uses, and `charStyle.list` counts runs; both count the type in
