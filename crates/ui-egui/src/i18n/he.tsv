@@ -932,3 +932,297 @@
 	Save PDF Preset	שמירת ערכת הגדרות PDF
 	Save Print Preset	שמירת ערכת הגדרות הדפסה
 	Save Recovery Data	שמירת נתוני שחזור
+
+# Round 9: shape construction, transforms, color palettes, masks and opacity.
+	Arrange	סידור
+	Arrange: Bring to Front	סידור: הבאה לחזית
+	Blend	מעבר מדורג בין צורות
+	Blend Front to Back	מעבר מדורג מחזית לרקע
+	Blend Horizontally	מעבר מדורג אופקי
+	Blend Info	מידע על מעבר מדורג
+	Blend Options	אפשרויות מעבר מדורג
+	Blend Options…	אפשרויות מעבר מדורג…
+	Blend Tool	כלי מעבר מדורג
+	Blend Vertically	מעבר מדורג אנכי
+	Blending Mode	מצב מיזוג
+	Blends and Transparency	מעברים מדורגים ושקיפות
+	Object types: {names}	סוגי אובייקטים: {names}
+	Move Guide to Layer	העברת קו עזר לשכבה
+	Corner Point Angle Threshold:	סף זווית לנקודת פינה:
+	Corner:	פינה:
+	Curvature	עקמומיות
+	Curvature Tool	כלי עקמומיות
+	Expand Instances	הרחבת מופעים
+	Distribute	פיזור
+	Distribute Objects:	פיזור אובייקטים:
+	Distribute Spacing	פיזור מרווחים
+	Distribute Spacing:	פיזור מרווחים:
+	Divide	חלוקה
+	Divide Horizontally Into	חלוקה אופקית ל
+	Divide Objects Below	חלוקת האובייקטים שמתחת
+	Divide Slices	חלוקת פרוסות
+	Divide Slices…	חלוקת פרוסות…
+	Divide Vertically Into	חלוקה אנכית ל
+	Envelope Distort	עיוות באמצעות מעטפת
+	Envelope Info	מידע על מעטפת
+	Envelope Mesh	רשת מעטפת
+	Envelope Options	אפשרויות מעטפת
+	Envelope Options…	אפשרויות מעטפת…
+	Expand	הרחבה
+	Expand Appearance	הרחבת המראה
+	Expand Brush Strokes	הרחבת משיכות מברשת
+	Expand Compound Shape	הרחבת צורה מורכבת
+	Expand Gradient Mesh	הרחבת רשת מעברי צבע
+	Expand Gradient To	הרחבת מעבר צבע ל
+	Expand Layers Panel Rows	הרחבת שורות חלונית השכבות
+	Expand Options	אפשרויות הרחבה
+	Expand Panels	הרחבת חלוניות
+	Expand Repeat	הרחבת חזרה
+	Expand Shape	הרחבת צורה
+	Expand:	הרחבה:
+	Expand…	הרחבה…
+	Blend Steps	שלבי מעבר מדורג
+	Merge only with selection	מיזוג עם הבחירה בלבד
+	Scale Design	שינוי קנה מידה של העיצוב
+	Expand Blend	הרחבת מעבר מדורג
+	Expand Envelope	הרחבת מעטפת
+	Expand Image Trace	הרחבת מעקב תמונה
+	Expand Live Paint	הרחבת צביעה חיה
+	Merge Live Paint	מיזוג צביעה חיה
+	Move Envelope Point	הזזת נקודת מעטפת
+	Move Plane and Copy Objects	הזזת מישור והעתקת אובייקטים
+	Move Plane and Objects	הזזת מישור ואובייקטים
+	Move Slice	העברת פרוסה
+	Move Type on a Path	הזזת טקסט על נתיב
+	Objects on Path	אובייקטים על נתיב
+	Objects on Path Options	אפשרויות אובייקטים על נתיב
+	Rotate:	סיבוב:
+	Objects on Path Tool	כלי אובייקטים על נתיב
+	Expand Objects on Path	הרחבת אובייקטים על נתיב
+	Scale in Perspective	שינוי קנה מידה בפרספקטיבה
+	Shape Builder Delete	מחיקה באמצעות בונה צורות
+	Intersect	חיתוך
+	Arrange Intertwine Area	סידור אזור שזירה
+	Merge	מיזוג
+	Merge colors into one row	מיזוג צבעים לשורה אחת
+	Merge Graphic Styles	מיזוג סגנונות גרפיים
+	Merge Graphic Styles…	מיזוג סגנונות גרפיים…
+	Merge Layers	מיזוג שכבות
+	Merge Selected	מיזוג הפריטים שנבחרו
+	Merge Swatches	מיזוג דוגמיות צבע
+	Move	העברה
+	Move All Objects	העברת כל האובייקטים
+	Move Anchors	הזזת נקודות עיגון
+	Move Appearance	העברת מראה
+	Move Artboard	הזזת משטח יצירה
+	Move Artboard Up/Down	הזזת משטח יצירה למעלה או למטה
+	Move Direction Handle	הזזת ידית כיוון
+	Move Down	העברה למטה
+	Move Effect	העברת אפקט
+	Move Envelope Mesh Point	הזזת נקודת רשת מעטפת
+	Move Graphic Style	העברת סגנון גרפי
+	Move Guide	הזזת קו עזר
+	Move in Perspective	הזזה בפרספקטיבה
+	Move Locked and Hidden Artwork with Artboard	הזזת יצירה נעולה ומוסתרת עם משטח היצירה
+	Move Mesh Point	הזזת נקודת רשת
+	Move Mesh Points	הזזת נקודות רשת
+	Move Plane	הזזת מישור
+	Move Plane to Match Object	הזזת מישור להתאמה לאובייקט
+	Move Rows	העברת שורות
+	Move Slices	העברת פרוסות
+	Move Spine Point	הזזת נקודת ציר מרכזי
+	Move Brush	העברת מברשת
+	Move Swatch	העברת דוגמית צבע
+	Move Up	העברה למעלה
+	Move…	העברה…
+	Shape:	צורה:
+	Object Highlighting	הדגשת אובייקטים
+	Object IDs:	מזהי אובייקטים:
+	Object Selection by Path Only	בחירת אובייקטים לפי נתיב בלבד
+	Pathfinders:	פעולות על נתיבים:
+	Arrange by Row	סידור לפי שורות
+	Arrange by Column	סידור לפי עמודות
+	Move Artwork with Artboard	הזזת יצירה עם משטח היצירה
+	Scale Artwork with Artboard	שינוי קנה מידה של יצירה עם משטח היצירה
+	Rotate View	סיבוב תצוגה
+	Rotate View to Selection	סיבוב תצוגה לפי הבחירה
+	Scale	שינוי קנה מידה
+	Scale Corners	שינוי קנה מידה של פינות
+	Scale Cursor Proportional to UI	התאמת גודל הסמן לקנה המידה של הממשק
+	Scale Lineweights	שינוי עובי קווים לפי קנה מידה
+	Scale Strokes & Effects	שינוי קנה מידה של קווים ואפקטים
+	Scale Text Attributes	שינוי קנה מידה של מאפייני טקסט
+	Scale to Fit Artboard	התאמה למשטח היצירה באמצעות שינוי קנה מידה
+	Scale Tool	כלי שינוי קנה מידה
+	Scale:	קנה מידה:
+	Scale…	שינוי קנה מידה…
+	Groups	קבוצות
+	Shape	צורה
+	Shape Builder	בונה צורות
+	Shape Builder Regions	אזורים של בונה צורות
+	Shape Builder Tool	כלי בונה צורות
+	Shape Effects	אפקטים של צורות
+	Shape Mode	מצב צורה
+	Shape Modes:	מצבי צורה:
+	Shape Properties:	מאפייני צורה:
+	Shape Properties	מאפייני צורה
+	Shaper Tool	כלי עיצוב צורות
+	Shapes	צורות
+	Shear	הטיה
+	Shear Tool	כלי הטיה
+	Shear…	הטיה…
+	Simplify	פישוט
+	Simplify:	פישוט:
+	Simplify…	פישוט…
+	Skew	הטיה אלכסונית
+	Corner	פינה
+	Transform options	אפשרויות שינוי צורה
+	Subtract	חיסור
+	Scale at Center	שינוי קנה מידה מהמרכז
+	Transform	שינוי צורה
+	Transform Again	חזרה על שינוי הצורה
+	Transform Both	שינוי הצורה של שניהם
+	Transform Each	שינוי צורה של כל פריט
+	Transform Each…	שינוי צורה של כל פריט…
+	Transform in Perspective	שינוי צורה בפרספקטיבה
+	Transform Object Only	שינוי האובייקט בלבד
+	Transform Panel	חלונית שינוי צורה
+	Transform Pattern Only	שינוי הדוגמה בלבד
+	Transform Pattern Tiles	שינוי אריחי דוגמה
+	Transform Patterns	שינוי דוגמאות
+	Transform Tools	כלי שינוי צורה
+	Transforms	שינויי צורה
+	Transform…	שינוי צורה…
+	Trim	חיתוך עודפים
+	Trim mark weight:	עובי סימני חיתוך:
+	Trim marks	סימני חיתוך
+	Trim View	חיתוך התצוגה
+	Ungroup	פירוק קבוצה
+	Ungroup Color Group	פירוק קבוצת צבעים
+	Unite	איחוד
+	Unite and Simplify	איחוד ופישוט
+	Offset	היסט
+	Shaper	מעצב צורות
+	Expand Shaper Group	הרחבת קבוצת עיצוב צורות
+	Move Library Item to Group	העברת פריט ספרייה לקבוצה
+	Move to Group	העברה לקבוצה
+	Scale Proportionately	שינוי קנה מידה באופן יחסי
+	Distort	עיוות
+	Move Panel	העברת חלונית
+	Group with	קיבוץ עם
+	Skew:	הטיה אלכסונית:
+	Transform Objects	שינוי צורה של אובייקטים
+	Move Anchor Point	הזזת נקודת עיגון
+	Move Library Group	העברת קבוצת ספרייה
+	Pathfinder Options	אפשרויות פעולות על נתיבים
+	Divide and Outline Will Remove Unpainted Artwork	חלוקה ויצירת קווי מתאר יסירו יצירה ללא מילוי או קו
+	Scale Presets	ערכות הגדרות קנה מידה
+	Expand Appearance first (Object › Expand Appearance)	תחילה הרחיבו את המראה (אובייקט › הרחבת המראה)
+	Simplify Anchors (Keep Shape)…	פישוט נקודות עיגון (שמירת הצורה)…
+	Simplify Anchors (Keep Shape)	פישוט נקודות עיגון (שמירת הצורה)
+	Path Precision Tools	כלי דיוק נתיבים
+	Corner Tool	כלי פינות
+	Corners selected: {count}	פינות שנבחרו: {count}
+	Merge Shared Edge	מיזוג קצה משותף
+	Path Effects	אפקטים של נתיבים
+	Simplify Anchors	פישוט נקודות עיגון
+	Simplify Anchors…	פישוט נקודות עיגון…
+	Arrange Tools	כלי סידור
+	Arrange in Grid…	סידור ברשת…
+	Arrange in Grid	סידור ברשת
+	Group Overlapping Objects	קיבוץ אובייקטים חופפים
+	Divide into Dashes…	חלוקה למקטעים…
+	Divide into Dashes	חלוקה למקטעים
+	Expand Dashes into Paths	המרת מקטעי קווים לנתיבים
+	Distribute Evenly	פיזור אחיד
+	Path Only	נתיב בלבד
+	Compound Shapes	צורות מורכבות
+	Shape Mode Buttons Make Compound Shapes	לחצני מצבי צורה יוצרים צורות מורכבות
+	Black	שחור
+	Black and White	שחור ולבן
+	Black and White Logo	סמל בשחור ולבן
+	Filled Dot	נקודה מלאה
+	Filled Square	ריבוע מלא
+	Color bars	פסי צבע
+	Color conversion:	המרת צבע:
+	Color Dodge	הבהרת צבע
+	Color Group	קבוצת צבעים
+	Color Group:	קבוצת צבעים:
+	Color Group: {name}	קבוצת צבעים: {name}
+	Color Mixer (Shift-click the chip)	מערבל צבעים (Shift-לחיצה על דוגמית)
+	Color wheel	גלגל צבעים
+	Color Table	טבלת צבעים
+	Color Table ({n} color)	טבלת צבעים ({n} צבע)
+	Color Table ({n} colors)	טבלת צבעים ({n} צבעים)
+	Colors:	צבעים:
+	Paint Fills	צביעת מילויים
+	Paint Strokes	צביעת קווי מתאר
+	Gradient across stroke	מעבר צבע לרוחב קו המתאר
+	Gradient along stroke	מעבר צבע לאורך קו המתאר
+	Gradient and Mesh Resolution:	רזולוציית מעבר צבע ורשת:
+	Gradient Finishes	סיומות מעבר צבע
+	Gradient swatches	דוגמיות מעבר צבע
+	Gradient within stroke	מעבר צבע בתוך קו המתאר
+	Palette:	לוח צבעים:
+	Paint Opacity:	אטימות צבע:
+	Opacity	אטימות
+	Opacity & Mask Define Knockout Shape	אטימות ומסכה מגדירות את צורת החיתוך
+	Opacity Mask	מסכת אטימות
+	Opacity Mask Info	מידע על מסכת אטימות
+	Opacity Mask Options	אפשרויות מסכת אטימות
+	Opacity:	אטימות:
+	Opacity: 50% Multiply	אטימות: 50% במצב הכפלה
+	Opacity: Default	אטימות: ברירת מחדל
+	Opacity: {value}	אטימות: {value}
+	Paintbrush	מברשת ציור
+	Paintbrush Tool	כלי מברשת ציור
+	Pattern	דוגמה
+	Pattern Editing	עריכת דוגמה
+	Pattern Options	אפשרויות דוגמה
+	Pattern options are available in pattern editing mode.	אפשרויות דוגמה זמינות במצב עריכת דוגמה.
+	Recolor	צביעה מחדש
+	Recolor Artwork	צביעה מחדש של יצירה
+	Recolor this row	צביעה מחדש של השורה הזו
+	Recolor with Preset	צביעה מחדש באמצעות ערכת הגדרות
+	Color Panel Options	אפשרויות חלונית צבע
+	Patterns	דוגמאות
+	Stroke options	אפשרויות קו מתאר
+	Swatch Conflict	התנגשות בין דוגמיות צבע
+	Swatch Conflicts	התנגשויות בין דוגמיות צבע
+	Swatch Libraries	ספריות דוגמיות צבע
+	Swatch Libraries Menu	תפריט ספריות דוגמיות צבע
+	Swatch Library	ספריית דוגמיות צבע
+	Swatch Name:	שם דוגמית צבע:
+	Swatch Options	אפשרויות דוגמית צבע
+	Swatch Options…	אפשרויות דוגמית צבע…
+	Swatch Tiles	אריחי דוגמיות צבע
+	Swatches	דוגמיות צבע
+	Tint	גוון מדולל
+	Transparency	שקיפות
+	Transparency Flattener Presets	ערכות השטחת שקיפות
+	Transparency Flattener Presets…	ערכות השטחת שקיפות…
+	Transparency Grid	רשת שקיפות
+	Transparency Info	מידע על שקיפות
+	Transparency Options	אפשרויות שקיפות
+	Tint Reduction	הפחתת עוצמת גוון
+	White	לבן
+	Color Halftone…	רשת נקודות צבע…
+	Pattern Brush Options	אפשרויות מברשת דוגמה
+	Colorization	צביעה
+	Tints	גוונים מדוללים
+	Tints and Shades	גוונים מדוללים וכהים
+	Colorization Tips	טיפים לצביעה
+	Stroke Length	אורך משיכת קו
+	Stroke Direction	כיוון משיכת קו
+	Stroke Width	רוחב משיכת קו
+	Stroke Pressure	לחץ משיכת קו
+	Fill and Stroke Controls	פקדי מילוי וקו מתאר
+	Coloring Controls	פקדי צבע
+	Pattern Type	סוג דוגמה
+	Color Scheme	ערכת צבעים
+	Fill Arc	מילוי קשת
+	Fill Line	מילוי קו
+	Pattern Borders	גבולות דוגמה
+	Filled Open Paths	נתיבים פתוחים בעלי מילוי
+	Color Effects	אפקטי צבע
+	Color Effects Panel	חלונית אפקטי צבע

@@ -3125,7 +3125,7 @@ fn hebrew_document_export_print_and_missing_states_are_translated() {
     let he = Lang::from_code("he").expect("Hebrew locale registered");
     let (rows, errors) = parse_entries(he.0.source);
     assert!(errors.is_empty(), "{errors:?}");
-    assert_eq!(rows.len(), 917, "Hebrew source catalog record count");
+    assert_eq!(rows.len(), 1209, "Hebrew source catalog record count");
     for source in [
         "Document Setup",
         "Export Selection",
@@ -3159,4 +3159,51 @@ fn hebrew_document_export_print_and_missing_states_are_translated() {
     assert_eq!(tr(he, "Print Preview"), "תצוגה מקדימה להדפסה");
     assert_eq!(tr(he, "Package created"), "האריזה נוצרה");
     assert_eq!(tr(he, "User library file name"), "User library file name");
+}
+
+/// Shape, transform, opacity and swatch controls must be presented in Hebrew
+/// while preserving original command names, English fallback and user data.
+#[test]
+fn hebrew_shape_transform_and_color_panels_are_translated() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert_eq!(rows.len(), 1209, "Hebrew catalog source records");
+    for source in [
+        "Arrange",
+        "Blend Tool",
+        "Blending Mode",
+        "Curvature Tool",
+        "Distribute Objects:",
+        "Divide",
+        "Envelope Distort",
+        "Expand Appearance",
+        "Intersect",
+        "Merge Layers",
+        "Pathfinders:",
+        "Rotate View",
+        "Scale Strokes & Effects",
+        "Shape Builder",
+        "Shear Tool",
+        "Simplify…",
+        "Subtract",
+        "Transform Each…",
+        "Transform Panel",
+        "Ungroup",
+        "Unite",
+        "Color wheel",
+        "Opacity Mask",
+        "Recolor Artwork",
+        "Swatches",
+        "Transparency Grid",
+    ] {
+        let translated = tr(he, source);
+        assert_ne!(translated, source, "missing Hebrew visible UI: {source:?}");
+        assert!(translated.chars().any(|c| ('\u{05d0}'..='\u{05ea}').contains(&c)));
+        assert_eq!(tr(Lang::EN, source), source, "source English must be immutable");
+    }
+    assert_eq!(tr(he, "Shape Builder"), "בונה צורות");
+    assert_eq!(tr(he, "Opacity Mask"), "מסכת אטימות");
+    assert_eq!(tr(he, "Unite"), "איחוד");
+    assert_eq!(tr(he, "User-authored shape name"), "User-authored shape name");
 }
