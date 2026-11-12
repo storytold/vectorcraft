@@ -511,26 +511,41 @@ impl Region {
 
     /// The pieces of outline the region shows: every outline of a shape and of a group's members,
     /// and in a clip group the members' outlines inside the clipping path and the clipping path's
-    /// outline where the members' area or outlines are. Errs past [`MAX_PAIRS`].
+    /// outline where the members' area or outlines are. Errs past [`MAX_PAIRS`], counted over
+    /// every clip group in the region together.
     pub(super) fn outline(&self) -> Result<Vec<Segment>, String> {
+        self.outline_counted(&mut 0)
+    }
+
+    /// [`Region::outline`], adding the measure's work to `work`.
+    fn outline_counted(&self, work: &mut usize) -> Result<Vec<Segment>, String> {
         match self {
             Region::Shape { polys, .. } => Ok(polys.iter().flat_map(Poly::segments).collect()),
             Region::Union(parts) => {
                 let mut out = vec![];
                 for r in parts {
-                    out.extend(r.outline()?);
+                    out.extend(r.outline_counted(work)?);
                 }
                 Ok(out)
             }
             Region::Clip { clip, content } => {
                 // Each side's area is bounded by the outlines it shows, so the pieces are cut and
                 // tested against those, never against art a nested clip hides.
-                let (clip_shown, content_shown) = (clip.outline()?, content.outline()?);
-                let mut work = 0;
-                let mut out = within(&content_shown, clip, &clip_shown, &mut work)?;
-                out.extend(within(&clip_shown, content, &content_shown, &mut work)?);
+                let (clip_shown, content_shown) = (clip.outline_counted(work)?, content.outline_counted(work)?);
+                let mut out = within(&content_shown, clip, &clip_shown, work)?;
+                out.extend(within(&clip_shown, content, &content_shown, work)?);
                 Ok(out)
             }
+        }
+    }
+
+    /// The points of the region's closed outlines, those a nested clip hides included: what one
+    /// [`Region::spans`] looks at, at most.
+    fn closed_points(&self) -> usize {
+        match self {
+            Region::Shape { polys, .. } => polys.iter().filter(|p| p.closed).map(|p| p.points.len()).sum(),
+            Region::Union(parts) => parts.iter().map(Region::closed_points).sum(),
+            Region::Clip { clip, content } => clip.closed_points().saturating_add(content.closed_points()),
         }
     }
 }
@@ -541,12 +556,13 @@ fn too_complex_clip() -> String {
 
 /// The pieces of `segments` inside `region` (or on its outlines), cut where they cross
 /// `region_segments`, the outlines the region shows. Each segment, and each piece of one tested
-/// for being inside, adds the region's segment count to `work`, and the measure errs past
-/// [`MAX_PAIRS`].
+/// for being inside, adds the region's closed outline points (hidden ones included) and its
+/// shown segment count to `work`, and the measure errs past [`MAX_PAIRS`].
 fn within(segments: &[Segment], region: &Region, region_segments: &[Segment], work: &mut usize) -> Result<Vec<Segment>, String> {
     let mut out = vec![];
+    let cost = region.closed_points().saturating_add(region_segments.len()).max(1);
     let charge = |work: &mut usize| {
-        *work = work.saturating_add(region_segments.len().max(1));
+        *work = work.saturating_add(cost);
         if *work > MAX_PAIRS { Err(too_complex_clip()) } else { Ok(()) }
     };
     for &(a, b) in segments {

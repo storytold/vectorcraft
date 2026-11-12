@@ -9270,8 +9270,9 @@ The result is one group named "Weeding" (the box is its member "Weed Box"), adde
 selected, as one undo step. While a clip group, or a group inside one, is edited in isolation, the group goes on top of
 the container that holds the outermost clip group around it. With nothing selected, or with a selection that has no
 outlines, the command fails. It also fails when the art's outlines, followed in straight segments, have more than
-200000 points; when groups, symbol instances and live objects are nested more than 128 levels deep; when measuring a
-clip group's outlines against each other takes more than 40000000 tests of one segment against another; when, for the
+200000 points; when groups, symbol instances and live objects are nested more than 128 levels deep; when measuring the
+clip groups' outlines against each other takes more than 40000000 tests of one segment or outline point against another,
+counted over every clip group in the selection together and including the outlines a nested clip group hides; when, for the
 lines one way, more than 10000000 pairs of a line and an outline segment within `gap` of it are found, or closed
 outline segments are checked for crossings with the lines more than 10000000 times; when the lines would be more than
 100000 pieces; and when no line fits outside the art while `box` is false. Result: `{id, box, lines}`: the group's id,

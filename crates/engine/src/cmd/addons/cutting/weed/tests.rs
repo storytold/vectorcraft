@@ -357,6 +357,55 @@ fn art_a_nested_clip_hides_adds_no_outline() {
 }
 
 #[test]
+fn art_a_nested_clip_hides_counts_toward_the_clip_limit() {
+    // A clip group, clipping path A of 20,000 segments, holding a clip group whose small clipping
+    // path B shows a rectangle and hides a closed zigzag C of 20,000 points across every row of A.
+    // The inner group shows four outline pieces, but testing each piece of A for being inside it
+    // looks at all of C.
+    let mut s = session();
+    let parent = s.doc().unwrap().target_parent().unwrap();
+    let id = s
+        .edit("nested clips", |d, sel| {
+            let mut path = |p: BezPath| Arc::new(Node::path(d.alloc_id(), PathData::from_bezpath(&p), Appearance::default()));
+            let mut a = BezPath::new();
+            a.move_to((0.0, 0.0));
+            for i in 1..=20_000 {
+                a.line_to((f64::from(i) * 0.02, if i % 2 == 0 { 0.0 } else { 0.5 }));
+            }
+            a.line_to((400.0, 300.0));
+            a.line_to((0.0, 300.0));
+            a.close_path();
+            let mut c = BezPath::new();
+            c.move_to((300.0, 0.0));
+            for i in 1..=20_000 {
+                c.line_to((300.0 + f64::from(i) * 0.002, if i % 2 == 0 { 0.0 } else { 300.0 }));
+            }
+            c.close_path();
+            let b = path(shapes::rectangle(Rect::new(100.0, 100.0, 150.0, 140.0)).to_bezpath());
+            let shown = path(shapes::rectangle(Rect::new(110.0, 110.0, 140.0, 130.0)).to_bezpath());
+            let (a, c) = (path(a), path(c));
+            let clipped = |mut g: Node| {
+                if let NodeKind::Group { clip, .. } = &mut g.kind {
+                    *clip = true;
+                }
+                g
+            };
+            let inner = Arc::new(clipped(Node::group(d.alloc_id(), vec![b, shown, c])));
+            let outer = clipped(Node::group(d.alloc_id(), vec![a, inner]));
+            let id = outer.id;
+            d.insert(parent, usize::MAX, outer)?;
+            sel.set([id]);
+            Ok(id)
+        })
+        .unwrap();
+    select(&mut s, &[id]);
+    let n = s.doc().unwrap().doc.node_count();
+    let e = s.execute("addon.cutting.weed", &json!({"margin": 10, "count": 0})).unwrap_err();
+    assert!(e.to_string().contains("too many outline segments"), "{e}");
+    assert_eq!(s.doc().unwrap().doc.node_count(), n);
+}
+
+#[test]
 fn art_selected_inside_a_clip_group_is_measured_by_what_shows() {
     // The rectangle runs far outside the clipping path; selected on its own, it still shows only
     // inside it.
