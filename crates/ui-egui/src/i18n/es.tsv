@@ -2346,6 +2346,9 @@ font-technology	Variable	Variables
 	Optical	Óptico
 	Optical Margin Alignment	Alineación óptica de márgenes
 	Dynamic Text	Texto dinámico
+	Dynamic Text Presets	Ajustes preestablecidos de texto dinámico
+	Arch	Bóveda
+@msg	select point type or type on a path	seleccione texto de punto o texto en trazado
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	el texto en trazado de un texto enlazado no puede usar texto dinámico: {frames}
 	Optimize for fast web view	Optimizar para vista web rápida
 	Optimized	Optimizado

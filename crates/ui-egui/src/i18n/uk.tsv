@@ -2368,6 +2368,9 @@ file-filter	Templates	Шаблони
 	Optical	Оптичний
 	Optical Margin Alignment	Оптичне вирівнювання полів
 	Dynamic Text	Динамічний текст
+	Dynamic Text Presets	Набори параметрів динамічного тексту
+	Arch	Арка
+@msg	select point type or type on a path	виберіть точковий текст або текст за контуром
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	текст за контуром у пов’язаному тексті не може використовувати динамічний текст: {frames}
 	Optimize for fast web view	Оптимізувати для швидкого перегляду web
 	Optimized	Оптимізовано

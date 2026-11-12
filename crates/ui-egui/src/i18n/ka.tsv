@@ -343,6 +343,9 @@
 	Create Outlines	კონტურებად გარდაქმნა
 	Optical Margin Alignment	ოპტიკური არშიის სწორება
 	Dynamic Text	დინამიკური ტექსტი
+	Dynamic Text Presets	დინამიკური ტექსტის წინასწარი პარამეტრები
+	Arch	თაღი
+@msg	select point type or type on a path	აირჩიეთ წერტილოვანი ტექსტი ან ტრაექტორიაზე ტექსტი
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	დაკავშირებულ ტექსტში ტრაექტორიაზე ტექსტი ვერ გამოიყენებს დინამიკურ ტექსტს: {frames}
 	Fill with Placeholder Text	შემავსებელი ტექსტით შევსება
 	Insert Inline Symbol	ჩადგმული სიმბოლოს ჩასმა

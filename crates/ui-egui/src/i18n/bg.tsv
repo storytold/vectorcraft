@@ -2274,6 +2274,8 @@ font-technology	Variable	Променливи
 	Optical	Оптично
 	Optical Margin Alignment	Подравняване по оптично поле
 	Dynamic Text	Динамичен текст
+	Dynamic Text Presets	Шаблони за динамичен текст
+	Arch	Арка
 	Optimize for fast web view	Оптимизиране за бърз уеб преглед
 	Optimized	Оптимизирано
 	Options	Опции

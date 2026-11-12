@@ -2300,6 +2300,9 @@ file-filter	Templates	Vorlagen
 	Optical	Optisch
 	Optical Margin Alignment	Optischer Randausgleich
 	Dynamic Text	Dynamischer Text
+	Dynamic Text Presets	Vorgaben für dynamischen Text
+	Arch	Rundbogen
+@msg	select point type or type on a path	wählen Sie Punkttext oder Pfadtext aus
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	Pfadtext in verkettetem Text kann keinen dynamischen Text verwenden: {frames}
 	Optimize for fast web view	Für schnelle Webanzeige optimieren
 	Optimized	Optimiert

@@ -376,6 +376,9 @@
 	Create Outlines	Utwórz kontury
 	Optical Margin Alignment	Optyczne wyrównanie marginesów
 	Dynamic Text	Tekst dynamiczny
+	Dynamic Text Presets	Ustawienia predefiniowane tekstu dynamicznego
+	Arch	Sklepienie
+@msg	select point type or type on a path	zaznacz tekst punktowy lub tekst na ścieżce
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	tekst na ścieżce w tekście wątkowym nie może używać tekstu dynamicznego: {frames}
 	Fill with Placeholder Text	Wypełnij tekstem zastępczym
 	Insert Inline Symbol	Wstaw symbol w tekście

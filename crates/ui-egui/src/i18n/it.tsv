@@ -2376,6 +2376,9 @@ file-filter	Templates	Modelli
 	Optical	Ottica
 	Optical Margin Alignment	Allineamento ottico dei margini
 	Dynamic Text	Testo dinamico
+	Dynamic Text Presets	Predefiniti testo dinamico
+	Arch	Volta
+@msg	select point type or type on a path	seleziona testo per punti o testo su tracciato
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	il testo su tracciato in un testo concatenato non può usare il testo dinamico: {frames}
 	Optimize for fast web view	Ottimizza per visualizzazione web veloce
 	Optimized	Ottimizzato

@@ -445,6 +445,9 @@ digits	Malayalam	マラヤーラム数字
 	Create Outlines	アウトラインを作成
 	Optical Margin Alignment	最適なマージン揃え
 	Dynamic Text	ダイナミックテキスト
+	Dynamic Text Presets	ダイナミックテキストプリセット
+	Arch	アーチ
+@msg	select point type or type on a path	ポイント文字またはパス上文字を選択してください
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	スレッドテキスト内のパス上文字にはダイナミックテキストを使用できません: {frames}
 	Fill with Placeholder Text	サンプルテキストの割り付け
 	Insert Inline Symbol	インラインシンボルを挿入
