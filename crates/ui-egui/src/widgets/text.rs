@@ -147,10 +147,14 @@ pub(crate) fn own_field_shift_enter(ui: &Ui, id: egui::Id, buf: &mut String, sho
     shift_enter_keeps_focus(ui, id)
 }
 
+/// How far, in points, a focus click may move between press and release and still be a tap that
+/// selects the whole numeric value. Covers pen and trackpad jitter; anything further is a drag.
+const TAP_SLOP: f32 = 1.0;
+
 /// Numeric fields select the whole text on keyboard focus, a completed focus click or a
 /// double-click. A pointer press keeps its caret so dragging selects from the pressed position,
 /// and a short drag the toolkit still counts as a click keeps it too (#1326): only a tap
-/// releases into select-all.
+/// (released within [`TAP_SLOP`] of its press) releases into select-all.
 pub(super) fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
     let pending = resp.id.with("select-all-on-focus-click");
     let press_pos = resp.id.with("select-all-on-focus-press");
@@ -171,13 +175,14 @@ pub(super) fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
         });
     }
     let clicked_focus = released && ui.data_mut(|d| d.remove_temp::<bool>(pending)).unwrap_or(false) && resp.clicked_by(egui::PointerButton::Primary);
-    // Any pointer movement from the press is a drag, not a tap. egui still reports a click for
-    // a movement under its click tolerance, and a release inside one character leaves no text
-    // selection, so select-all on release would replace the drag the user just made (#1326).
+    // A pointer released more than a point from its press is a drag, not a tap. egui still
+    // reports a click for a movement under its click tolerance, and a release inside one
+    // character leaves no text selection, so select-all on release would replace the drag the
+    // user just made (#1326). The one point of slack keeps a jittery pen or trackpad tap a tap.
     let dragged = clicked_focus
         && ui
             .data_mut(|d| d.remove_temp::<egui::Pos2>(press_pos))
-            .is_some_and(|p0| ui.input(|i| i.pointer.interact_pos()).is_some_and(|p1| (p1 - p0).length() > 0.0));
+            .is_some_and(|p0| ui.input(|i| i.pointer.interact_pos()).is_some_and(|p1| (p1 - p0).length() > TAP_SLOP));
     if resp.lost_focus() {
         ui.data_mut(|d| {
             d.remove_temp::<bool>(pending);
