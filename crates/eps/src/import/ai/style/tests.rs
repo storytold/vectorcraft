@@ -1027,8 +1027,7 @@ fn affine_corners_are_a_parallelogram_however_far_they_reach() {
 
 #[test]
 fn roughen_keeps_the_drawn_look() {
-    // Its outline is random and the file holds no seed; at a size of 0 the effect still redraws the
-    // path's segments.
+    // Its outline is random and the file holds no seed.
     assert_eq!(read_effect("Adobe Roughen", "30 /Real (size) ,\n"), None);
     assert_eq!(read_effect("Adobe Roughen", ""), None);
 }
