@@ -495,6 +495,8 @@ fn a_stack_of_fills_with_effects_of_their_own_is_read_as_itself() {
     // The warp is the whole object's; the characters paint below every item.
     let [warp] = st.effects.as_slice() else { panic!("{:?}", st.effects) };
     assert_eq!((warp.id.as_str(), &warp.params["bend"], &warp.params["orientation"]), ("warp.arch", &json!(5.0), &json!("horizontal")));
+    // A file's warp bends as its style's Bézier net.
+    assert_eq!(warp.params["version"], json!(vectorcraft_doc::live::WARP_NET));
     assert_eq!(st.contents_index, None);
 }
 
@@ -1025,8 +1027,7 @@ fn affine_corners_are_a_parallelogram_however_far_they_reach() {
 
 #[test]
 fn roughen_keeps_the_drawn_look() {
-    // Its outline is random and the file holds no seed; at a size of 0 the effect still redraws the
-    // path's segments.
+    // Its outline is random and the file holds no seed.
     assert_eq!(read_effect("Adobe Roughen", "30 /Real (size) ,\n"), None);
     assert_eq!(read_effect("Adobe Roughen", ""), None);
 }

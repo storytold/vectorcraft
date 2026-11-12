@@ -68,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Relink",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, scope?: selected (default: ids) | all (ids and every other object in the layers linked to the same file as one of them) | missingInFolder (with path: ids, then every other missing link whose file name is in path's folder, each to the file of its name there; names not there are in notFound; with copy, only images are looked for) | each (with paths), paths?: [{ids, path}] (with scope each, in place of ids, path and folder: each link to its own file; an id in two entries is an error), copy?: false (with path or paths, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard or page of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy)}",
+            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, scope?: selected (default: ids) | all (ids and every other object in the layers linked to the same file as one of them) | missingInFolder (with path: ids, then every other missing link whose file name is in path's folder, each to the file of its name there; names not there are in notFound; with copy, only images are looked for) | each (with paths), paths?: [{ids, path}] (with scope each, in place of ids, path and folder: each link to its own file; an id in two entries is an error), copy?: false (with path or paths, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard or page of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy; to is the file name alone when the document's folder is outside the automation read roots)}",
             has_doc,
             relink
         ),
@@ -436,7 +436,7 @@ pub(crate) fn full_linked_images<'a>(d: &'a Document, base: LinkBase) -> (Cow<'a
             continue;
         };
         let preview = d.images.get(&key).map(|b| b.bytes.clone());
-        // A file read as it is keeps its own type; one turned upright (EXIF orientation) is the PNG it became.
+        // A file read as it is keeps its own type; one turned upright by its orientation is the PNG, or CMYK TIFF, it became.
         let mime = match fileio::format_for_name(g.link.name()) {
             Some(f) if img.blob.bytes.as_slice() == bytes.as_slice() => f.mime.to_string(),
             _ => img.blob.mime.clone(),
@@ -898,12 +898,12 @@ fn rows<'a>(gs: impl Iterator<Item = &'a Group>, doc_path: Option<&str>) -> Vec<
 /// May a reply to the caller asking now carry the link path `path` (of the document saved at
 /// `doc_path`)? Always without read roots in force; with them, only when the file it names (a
 /// relative path taken from the document's folder) lies inside them.
-fn path_shown(path: &str, doc_path: Option<&str>) -> bool {
+pub(crate) fn path_shown(path: &str, doc_path: Option<&str>) -> bool {
     crate::file_access::current().is_none() || fileio::document_path(path, doc_path).is_ok_and(|p| crate::file_access::check_read(&p).is_ok())
 }
 
 /// `row[key] = path` when [`path_shown`] says so; otherwise `row` has no `key`.
-fn note_path(row: &mut Value, key: &str, path: &str, doc_path: Option<&str>) {
+pub(crate) fn note_path(row: &mut Value, key: &str, path: &str, doc_path: Option<&str>) {
     if path_shown(path, doc_path) {
         row[key] = json!(path);
     } else if let Some(o) = row.as_object_mut() {
@@ -1337,7 +1337,9 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
         (true, false) => return Err(bad(C, "copy needs path: the file to copy into the document's folder")),
         (true, true) => {
             let doc = st.path.as_deref().map(absolute_path).ok_or_else(|| bad(C, "save the document first: copy puts the file in its folder"))?;
-            Some(Path::new(&doc).parent().map(Path::to_path_buf).ok_or_else(|| bad(C, format!("{doc} has no folder")))?)
+            // The document's path is not the client's: the error names it as the request may see it.
+            let no_folder = || fileio::naming_in_error(bad(C, format!("{doc} has no folder")), &doc);
+            Some(Path::new(&doc).parent().map(Path::to_path_buf).ok_or_else(no_folder)?)
         }
     };
     // An image or a placed document, with its link.
@@ -1472,6 +1474,12 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     not_found.dedup();
     let mut out = json!({ "relinked": relinked, "notFound": not_found });
     if copy_to.is_some() {
+        // The copies are in the document's folder, which the client did not give.
+        for pair in copied.iter_mut().chain(kept.iter_mut()) {
+            if let Some(to) = pair.get("to").and_then(Value::as_str).map(str::to_string) {
+                pair["to"] = json!(fileio::shown_path(&to));
+            }
+        }
         out["copied"] = json!(copied);
         out["kept"] = json!(kept);
     }
@@ -1521,9 +1529,14 @@ fn copy_into_folder(from: &str, bytes: &[u8], dir: &Path) -> Result<(String, boo
     use std::io::Write as _;
     let source = Path::new(from);
     let name = source.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    // Each name it takes is checked against the automation roots in force.
+    // Each name it takes is checked against the automation roots in force. The folder is the
+    // document's, so a refusal names it and the file as the request may see them.
     let create = |to: &Path| {
-        crate::file_access::check_write(&to.to_string_lossy()).map_err(|e| std::io::Error::new(std::io::ErrorKind::PermissionDenied, e))?;
+        let to_text = to.to_string_lossy();
+        crate::file_access::check_write(&to_text).map_err(|e| {
+            let e = fileio::naming_in_error(EngineError::Other(e), &to_text);
+            std::io::Error::new(std::io::ErrorKind::PermissionDenied, e.to_string())
+        })?;
         vectorcraft_format::write_new_with(to, |f| f.write_all(bytes))
     };
     // A file there that automation may not read isn't taken for the same file.
@@ -1534,7 +1547,10 @@ fn copy_into_folder(from: &str, bytes: &[u8], dir: &Path) -> Result<(String, boo
         Ok(Some(fileio::Placed::Copied(to))) => Ok((to.to_string_lossy().into_owned(), true)),
         Ok(Some(fileio::Placed::Kept(to))) => Ok((to.to_string_lossy().into_owned(), false)),
         Ok(None) => Err(EngineError::Other(format!("every numbered name for {name} is taken in the document's folder"))),
-        Err(e) => Err(EngineError::Other(format!("{}: {e}", dir.display()))),
+        Err(e) => {
+            let dir = dir.to_string_lossy();
+            Err(fileio::naming_in_error(EngineError::Other(format!("{dir}: {e}")), &dir))
+        }
     }
 }
 

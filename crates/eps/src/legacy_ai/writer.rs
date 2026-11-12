@@ -9,7 +9,7 @@ use super::{
     ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
     TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
-use super::{CONIC, CONIC_WEDGES, DIAMOND};
+use super::{CONIC, CONIC_WEDGES, DIAMOND, SPREAD, SPREAD_CAPPED};
 
 pub(super) struct Writer<'a> {
     doc: &'a Document,
@@ -39,6 +39,10 @@ pub(super) struct Writer<'a> {
     in_hidden: bool,
     /// The fonts type is set in: PostScript name, and whether it's TrueType.
     pub(super) fonts: Vec<(String, bool)>,
+    /// The Standard Vertical Roman Alignment the last `Tv` set (it lasts into later text objects).
+    roman: bool,
+    /// Inside a Kumi block `1 TY` began (Tate-chu-yoko in horizontal type).
+    kumi: bool,
 }
 
 impl<'a> Writer<'a> {
@@ -59,6 +63,8 @@ impl<'a> Writer<'a> {
             hidden_art: vec![],
             in_hidden: false,
             fonts: vec![],
+            roman: false,
+            kumi: false,
         }
     }
 
@@ -481,7 +487,8 @@ impl<'a> Writer<'a> {
             self.warn(TRANSPARENCY);
         }
         let area = path.to_bezpath().bounding_box();
-        let wedges = g.resolve(area).conic_wedges(area, CONIC_WEDGES, true);
+        let wedges = g.resolve(area).conic_wedges(area, g.gradient.conic_wedge_count(CONIC_WEDGES), true);
+        let spread = g.gradient.spreader();
         self.line("q");
         self.fill_rule(rule);
         let several = path.subpaths.len() > 1;
@@ -495,7 +502,7 @@ impl<'a> Writer<'a> {
             self.line("*U");
         }
         for (pts, t) in wedges {
-            let (color, _) = g.gradient.sample_keep_model(t as f32);
+            let (color, _) = g.gradient.sample_keep_model(spread(t) as f32);
             let wedge = FillLayer { paint: Paint::solid(color), ..f.clone() };
             self.path_object(&PathData::single(SubPath::polyline(&pts, true)), FillRule::NonZero, Some(&wedge), None);
         }
@@ -626,7 +633,8 @@ impl<'a> Writer<'a> {
             // Grey is ink coverage; the format's grey is lightness.
             Color::Gray { k } => Ink::Gray(unit(1.0 - k)),
             Color::Cmyk { c, m, y, k } => Ink::Cmyk([c, m, y, k].map(unit)),
-            Color::Rgb { r, g, b } => Ink::Rgb(self.cms.to_cmyk(color, intent).map(unit), [r, g, b].map(unit)),
+            // The CMYK equivalent of the RGB values as written.
+            Color::Rgb { r, g, b } => Ink::Rgb(self.cms.to_cmyk(&ai_ops::as_written(*color), intent).map(unit), [r, g, b].map(unit)),
             Color::Lab { .. } => {
                 let rgb = color.to_rgb().map(unit);
                 Ink::Rgb(self.cms.to_cmyk(color, intent).map(unit), rgb)
@@ -672,6 +680,22 @@ impl<'a> Writer<'a> {
     /// (its distance a fraction of the radius, at most 1, §3.5.5; `0 0 0 0 Bh` at the center,
     /// §3.5.6), `1 (name) x y angle length 1 0 0 1 0 0 Bg`.
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect) -> String {
+        // A gradient that repeats or reflects (the format's gradients pad past their ends): its
+        // stops repeated as many times as `bounds` needs, in a definition of its own, no more
+        // stops than the reader reads.
+        if let Some(padded) = g.gradient.padded_within(&g.resolve(bounds), bounds, crate::import::MAX_GRADIENT_STOPS) {
+            self.warn(if padded.capped { SPREAD_CAPPED } else { SPREAD });
+            let geom = padded.geom;
+            let p = GradientPaint { gradient: padded.gradient, geom: Some(geom), angle: geom.angle_deg(), swatch: None, ..g.clone() };
+            return self.gradient(&p, bounds);
+        }
+        // One whose levels over `bounds` are not finite (a vector of no length): its stops
+        // repeated along the vector, padding past it.
+        if g.gradient.is_spread() {
+            self.warn(SPREAD_CAPPED);
+            let p = GradientPaint { gradient: g.gradient.unrolled_within(crate::import::MAX_GRADIENT_STOPS).into_owned(), swatch: None, ..g.clone() };
+            return self.gradient(&p, bounds);
+        }
         let name = self.define(&g.gradient, g.swatch.as_deref());
         for stop in &g.gradient.stops {
             if stop.opacity < 1.0 {
@@ -819,6 +843,10 @@ impl<'a> Writer<'a> {
                 self.line(" Tx");
             }
         }
+        if self.kumi {
+            self.line("0 TY");
+            self.kumi = false;
+        }
         self.line("TO");
     }
 
@@ -838,7 +866,8 @@ impl<'a> Writer<'a> {
     }
 
     /// A run's character attributes and paint style: `Tr`, its fill and stroke, `Tf`, `Ts`, `Tz`,
-    /// `Tt`, `TA`, and the leading with the space before its paragraph, `Tl`.
+    /// `Tt`, `TA`, and the leading with the space before its paragraph, `Tl`; then `Tv` and `TY`
+    /// where Standard Vertical Roman Alignment or Tate-chu-yoko changes.
     fn char_style(&mut self, st: &CharStyle, p: &ParaStyle) {
         let fill = !st.fill.is_none();
         let stroke = st.has_stroke();
@@ -876,6 +905,14 @@ impl<'a> Writer<'a> {
         let leading = st.leading.unwrap_or_else(|| p.justification.auto_leading_for(st.size));
         ps::push_nums(&mut self.body, &[finite(leading, size * 1.2), finite(p.space_before, 0.0)]);
         self.line("Tl");
+        if st.standard_vertical_roman != self.roman {
+            self.roman = st.standard_vertical_roman;
+            self.line(if self.roman { "1 Tv" } else { "0 Tv" });
+        }
+        if st.tate_chu_yoko != self.kumi {
+            self.kumi = st.tate_chu_yoko;
+            self.line(if self.kumi { "1 TY" } else { "0 TY" });
+        }
     }
 
     /// Type as its glyphs' outlines: a group of a compound path for each run, with the run's fill

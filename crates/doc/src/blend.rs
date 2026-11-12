@@ -5,7 +5,8 @@
 //!   winding and to the start points that keep them from twisting, or to the anchors the Blend
 //!   tool clicked.
 //! - **Paint**: colours, gradients (stops resampled to a common set when their counts differ),
-//!   opacity, stroke weight, dashes, miter limit and width profiles interpolate; what can't
+//!   opacity, stroke weight, dashes, miter limit, width profiles and the pen pressure, tilt,
+//!   bearing and rotation that brushes read interpolate; what can't
 //!   (caps, joins, brushes, fonts, symbols, text content) switches halfway.
 //! - **Groups** pair their children in stacking order; the children one group has more of grow
 //!   out of the other group's centre. Compound paths stay compound paths.
@@ -22,7 +23,7 @@ use vectorcraft_color::{Color, Gradient, GradientPaint, GradientStop, Paint};
 use vectorcraft_geom::kurbo::{ParamCurve, ParamCurveArclen, ParamCurveDeriv};
 use vectorcraft_geom::{Affine, Anchor, BezPath, FillRule, PathData, Point, Rect, SubPath, Vec2};
 
-use crate::appearance::{Appearance, AppearanceItem, Dash, StrokeLayer, WidthProfile};
+use crate::appearance::{AngleProfile, Appearance, AppearanceItem, Dash, PressureProfile, StrokeLayer, WidthProfile};
 use crate::live::{BlendOrientation, BlendSpacing, BlendSpec};
 use crate::node::{Node, NodeId, NodeKind};
 use crate::text::TextObject;
@@ -152,6 +153,11 @@ fn lerp_gradient(a: &GradientPaint, b: &GradientPaint, t: f32) -> Option<Gradien
             }
         })
         .collect();
+    // Two gradients that repeat (or reflect) step their count from one to the other; a spread
+    // that differs switches halfway, as the method does.
+    if a.gradient.is_spread() && a.gradient.spread == b.gradient.spread {
+        out.gradient.repeats = lerp_f32(a.gradient.repeat_count() as f32, b.gradient.repeat_count() as f32, t).round() as u32;
+    }
     out.angle = a.angle + (b.angle - a.angle) * t as f64;
     out.swatch = None;
     if let (Some(ga), Some(gb)) = (a.geom, b.geom) {
@@ -250,9 +256,101 @@ fn lerp_profile(x: Option<&WidthProfile>, y: Option<&WidthProfile>, t: f64) -> O
     Some(WidthProfile { points })
 }
 
-/// Interpolate a stroke's paint, weight, opacity, miter limit, dashes, arrowhead scale and width
-/// profile into `o` (a copy of the nearer stroke, so caps, joins, alignment, arrowheads and
-/// brushes switch halfway).
+/// The positions along the stroke where either of two pen recordings has a sample, in order.
+fn sample_positions(x: Option<&[(f64, f64)]>, y: Option<&[(f64, f64)]>) -> Vec<f64> {
+    let mut at: Vec<f64> = x.unwrap_or_default().iter().chain(y.unwrap_or_default()).map(|p| p.0).filter(|p| p.is_finite()).collect();
+    at.sort_by(f64::total_cmp);
+    at.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+    if at.is_empty() {
+        at = vec![0.0, 1.0];
+    }
+    at
+}
+
+/// The value pen recording `p` steps to at position `f`, where two or more of its samples share
+/// that position (reading at `f` gives the first of them); None where it doesn't step.
+fn step_after(p: Option<&[(f64, f64)]>, f: f64) -> Option<f64> {
+    let p = p?;
+    let i = p.partition_point(|q| q.0 < f - 1e-9);
+    let j = p.partition_point(|q| q.0 <= f + 1e-9).checked_sub(1)?;
+    (j > i && (p.get(i)?.0 - f).abs() <= 1e-9).then(|| p.get(j).map(|q| q.1)).flatten()
+}
+
+/// Two pen recordings read at every position either has a sample, as (position, x's value, y's
+/// value): `read_x` and `read_y` read them, and `clean` makes a stepped sample's value one they
+/// would read. A position where either steps gives two, before and after the step.
+fn paired_samples(
+    x: Option<&[(f64, f64)]>,
+    y: Option<&[(f64, f64)]>,
+    read_x: impl Fn(f64) -> f64,
+    read_y: impl Fn(f64) -> f64,
+    clean: impl Fn(f64) -> f64,
+) -> Vec<(f64, f64, f64)> {
+    let mut out = Vec::new();
+    for f in sample_positions(x, y) {
+        let (a, b) = (read_x(f), read_y(f));
+        out.push((f, a, b));
+        let (sa, sb) = (step_after(x, f), step_after(y, f));
+        if sa.is_some() || sb.is_some() {
+            out.push((f, sa.map_or(a, &clean), sb.map_or(b, &clean)));
+        }
+    }
+    out
+}
+
+/// Interpolate pen pressure or tilt recordings at every position either has a sample, keeping
+/// their steps. A stroke without one reads as [`PressureProfile::MID`], as brushes read it; None
+/// when neither has one.
+fn lerp_pressure(x: Option<&PressureProfile>, y: Option<&PressureProfile>, t: f64) -> Option<PressureProfile> {
+    if x.is_none() && y.is_none() {
+        return None;
+    }
+    let read = |p: Option<&PressureProfile>, f: f64| p.map_or(PressureProfile::MID, |p| p.at(f));
+    let clean = |v: f64| if v.is_finite() { v.clamp(0.0, 1.0) } else { PressureProfile::MID };
+    let samples = paired_samples(x.map(|p| p.points.as_slice()), y.map(|p| p.points.as_slice()), |f| read(x, f), |f| read(y, f), clean);
+    PressureProfile::from_samples(samples.into_iter().map(|(f, a, b)| (f, lerp_f64(a, b, t))))
+}
+
+/// Interpolate pen angle recordings (bearing or barrel rotation) at every position either has a
+/// sample: the steps turn from one key's angle to the other's the shorter way round at the
+/// stroke's start, and keep the whole turns each recording makes along the stroke. A stroke
+/// without one reads as 0°, as brushes read it; None when neither has one.
+fn lerp_angle(x: Option<&AngleProfile>, y: Option<&AngleProfile>, t: f64) -> Option<AngleProfile> {
+    if x.is_none() && y.is_none() {
+        return None;
+    }
+    let read = |p: Option<&AngleProfile>, f: f64| p.map_or(0.0, |p| p.unwrapped_at(f));
+    let clean = |v: f64| if v.is_finite() { v } else { 0.0 };
+    let pairs = paired_samples(x.map(|p| p.points.as_slice()), y.map(|p| p.points.as_slice()), |f| read(x, f), |f| read(y, f), clean);
+    // Whole turns that bring the two angles within half a turn of each other at the first position.
+    let d0 = pairs.first().map_or(0.0, |&(_, a, b)| b - a);
+    let turns = vectorcraft_geom::normalize_deg(d0) - d0;
+    let value = |a: f64, b: f64| a + (b - a + turns) * t;
+    // Both curves are straight between two positions; samples are added where the steps turn
+    // through 90° or more between them, since `AngleProfile::from_samples` joins neighbours the
+    // shorter way round. A document's recordings can be long, so the added samples are limited.
+    let mut budget = 4 * PressureProfile::MAX_POINTS;
+    let mut samples = Vec::with_capacity(pairs.len());
+    let mut prev: Option<(f64, f64)> = None;
+    for (f, a, b) in pairs {
+        let v = value(a, b);
+        if let Some((pf, pv)) = prev.filter(|p| f - p.0 > 1e-9) {
+            let parts = ((v - pv).abs() / 90.0).ceil().min((budget + 1) as f64) as usize;
+            for k in 1..parts {
+                let g = pf + (f - pf) * k as f64 / parts as f64;
+                samples.push((g, value(read(x, g), read(y, g))));
+            }
+            budget -= parts.saturating_sub(1).min(budget);
+        }
+        samples.push((f, v));
+        prev = Some((f, v));
+    }
+    AngleProfile::from_samples(samples)
+}
+
+/// Interpolate a stroke's paint, weight, opacity, miter limit, dashes, arrowhead scale, width
+/// profile and the pen pressure, tilt, bearing and rotation its brush reads into `o` (a copy of
+/// the nearer stroke, so caps, joins, alignment, arrowheads and brushes switch halfway).
 fn lerp_stroke(o: &mut StrokeLayer, x: &StrokeLayer, y: &StrokeLayer, t: f64) {
     let tf = t as f32;
     o.paint = lerp_paint(&x.paint, &y.paint, tf);
@@ -262,6 +360,10 @@ fn lerp_stroke(o: &mut StrokeLayer, x: &StrokeLayer, y: &StrokeLayer, t: f64) {
     o.dash = lerp_dash(x.dash.as_ref(), y.dash.as_ref(), t);
     o.arrow_scale = (lerp_f64(x.arrow_scale.0, y.arrow_scale.0, t), lerp_f64(x.arrow_scale.1, y.arrow_scale.1, t));
     o.profile = lerp_profile(x.profile.as_ref(), y.profile.as_ref(), t);
+    o.pressure = lerp_pressure(x.pressure.as_ref(), y.pressure.as_ref(), t);
+    o.tilt = lerp_pressure(x.tilt.as_ref(), y.tilt.as_ref(), t);
+    o.bearing = lerp_angle(x.bearing.as_ref(), y.bearing.as_ref(), t);
+    o.rotation = lerp_angle(x.rotation.as_ref(), y.rotation.as_ref(), t);
 }
 
 /// Interpolate appearance stacks: item by item when their structure matches, else the top fill
@@ -1480,7 +1582,7 @@ pub fn blend_expand(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<Node> {
             // Even position of the step, then where the easing puts its shape and its colours.
             let u = j as f64 / (n + 1) as f64;
             // Easing needs a spine: a blend made without one keeps its steps evenly spaced.
-            let eased = rail.is_some() && !spec.no_spine;
+            let eased = rail.is_some() && spec.eases_along_spine();
             let (t, tc) = (if eased { spec.ease.apply(u) } else { u }, spec.color_position(u));
             let mut s = lerp.at_eased(t, tc);
             if let Some(r) = &rail {
@@ -1656,6 +1758,25 @@ mod tests {
         assert!(pair.at(0.5).bounds().unwrap().height() < 1e-6, "the clicked anchors pair up");
     }
 
+    /// A blend between two gradients that repeat steps the count; one between a gradient that
+    /// pads and one that repeats switches halfway, as the method does.
+    #[test]
+    fn blend_between_repeating_gradients_steps_the_count() {
+        use vectorcraft_color::GradientSpread;
+        let spread = |spread, repeats| Paint::Gradient(Box::new(GradientPaint::new(Gradient { spread, repeats, ..Gradient::default() })));
+        let at = |a: &Paint, b: &Paint, t: f32| match lerp_paint(a, b, t) {
+            Paint::Gradient(g) => (g.gradient.spread, g.gradient.repeat_count()),
+            p => panic!("a gradient, not {p:?}"),
+        };
+        let (two, twenty) = (spread(GradientSpread::Repeat, 2), spread(GradientSpread::Repeat, 20));
+        assert_eq!(at(&two, &twenty, 0.25), (GradientSpread::Repeat, 7));
+        assert_eq!(at(&two, &twenty, 0.5), (GradientSpread::Repeat, 11));
+        assert_eq!(at(&two, &twenty, 1.0), (GradientSpread::Repeat, 20));
+        let pad = spread(GradientSpread::Pad, 1);
+        assert_eq!(at(&pad, &twenty, 0.25), (GradientSpread::Pad, 1));
+        assert_eq!(at(&pad, &twenty, 0.75), (GradientSpread::Repeat, 20));
+    }
+
     #[test]
     fn blend_between_tints_of_one_swatch_keeps_the_link() {
         let tinted = |tint: f32| Paint::Solid { color: Color::cmyk(1.0, 0.7, 0.0, 0.4).tinted(tint), swatch: Some("Spot".into()), tint };
@@ -1729,6 +1850,63 @@ mod tests {
         let p = lerp_profile(Some(&WidthProfile::lens()), None, 0.5).unwrap();
         assert_eq!(p.at(0.0), (0.5, 0.5));
         assert_eq!(p.at(0.5), (1.0, 1.0));
+    }
+
+    #[test]
+    fn pen_pressure_tilt_and_angles_interpolate_for_brushes() {
+        let stroked = |pressure: Option<f64>, tilt: Option<f64>, bearing: Option<f64>| {
+            let mut ap = Appearance::default();
+            ap.set_stroke(Paint::solid(Color::BLACK));
+            if let Some(s) = ap.stroke_mut() {
+                s.brush = Some("Pressure Round".into());
+                s.pressure = pressure.map(|p| PressureProfile { points: vec![(0.0, p), (1.0, p)] });
+                s.tilt = tilt.map(|p| PressureProfile { points: vec![(0.0, p), (1.0, p)] });
+                s.bearing = bearing.map(|a| AngleProfile { points: vec![(0.0, a), (1.0, a)] });
+            }
+            ap
+        };
+        let at = |ap: &Appearance, f: f64| {
+            let s = ap.stroke().cloned().unwrap_or_else(|| panic!("a stroke"));
+            let read = |p: Option<&PressureProfile>| p.map_or(PressureProfile::MID, |p| p.at(f));
+            (read(s.pressure.as_ref()), read(s.tilt.as_ref()), s.bearing.as_ref().map_or(0.0, |p| p.at(f)))
+        };
+        let (light, heavy) = (stroked(Some(0.0), Some(0.2), Some(170.0)), stroked(Some(1.0), Some(0.6), Some(-170.0)));
+        let (p, tilt, bearing) = at(&lerp_appearance(&light, &heavy, 0.25), 0.5);
+        assert!((p - 0.25).abs() < 1e-9 && (tilt - 0.3).abs() < 1e-9, "a quarter of the way: {p} {tilt}");
+        assert!((bearing - 175.0).abs() < 1e-9, "the angle turns the shorter way round, through 180°: {bearing}");
+        assert!((at(&lerp_appearance(&light, &heavy, 0.5), 0.5).2.abs() - 180.0).abs() < 1e-9);
+        // A stroke drawn without a recording reads as half pressure, half tilt and 0°.
+        let plain = stroked(None, None, None);
+        let (p, tilt, bearing) = at(&lerp_appearance(&heavy, &plain, 0.5), 0.0);
+        assert!((p - 0.75).abs() < 1e-9 && (tilt - 0.55).abs() < 1e-9 && (bearing + 85.0).abs() < 1e-9, "{p} {tilt} {bearing}");
+        // Profiles that vary along the stroke interpolate at each position.
+        let mut ramp = stroked(None, None, None);
+        if let Some(s) = ramp.stroke_mut() {
+            s.pressure = Some(PressureProfile { points: vec![(0.0, 0.0), (1.0, 1.0)] });
+        }
+        let mid = lerp_appearance(&ramp, &heavy, 0.5);
+        assert!((at(&mid, 0.0).0 - 0.5).abs() < 1e-9 && (at(&mid, 0.5).0 - 0.75).abs() < 1e-9, "{:?}", mid.stroke().map(|s| &s.pressure));
+        // A step in a recording (two samples at one position) stays a step.
+        let mut stepped = stroked(None, None, None);
+        if let Some(s) = stepped.stroke_mut() {
+            s.pressure = Some(PressureProfile { points: vec![(0.0, 0.0), (0.5, 0.0), (0.5, 1.0), (1.0, 1.0)] });
+        }
+        let mid = lerp_appearance(&stepped, &stepped, 0.5);
+        assert!(at(&mid, 0.25).0.abs() < 1e-9 && (at(&mid, 0.75).0 - 1.0).abs() < 1e-9, "{:?}", mid.stroke().map(|s| &s.pressure));
+        // A whole turn recorded along a stroke stays a whole turn in the steps.
+        let mut turning = stroked(None, None, None);
+        if let Some(s) = turning.stroke_mut() {
+            s.rotation = Some(AngleProfile { points: vec![(0.0, 0.0), (1.0, 360.0)] });
+        }
+        let rot = |ap: &Appearance, f: f64| ap.stroke().and_then(|s| s.rotation.as_ref()).map_or(0.0, |p| p.at(f));
+        let same = lerp_appearance(&turning, &turning, 0.5);
+        assert!((rot(&same, 0.25) - 90.0).abs() < 1e-9 && (rot(&same, 0.5).abs() - 180.0).abs() < 1e-9, "{:?}", same.stroke().map(|s| &s.rotation));
+        let half = lerp_appearance(&turning, &plain, 0.5);
+        assert!((rot(&half, 0.5) - 90.0).abs() < 1e-9 && (rot(&half, 1.0).abs() - 180.0).abs() < 1e-9, "{:?}", half.stroke().map(|s| &s.rotation));
+        // Neither key has a recording: the steps have none either.
+        let none = lerp_appearance(&plain, &plain, 0.5);
+        let s = none.stroke().cloned().unwrap_or_else(|| panic!("a stroke"));
+        assert!(s.pressure.is_none() && s.tilt.is_none() && s.bearing.is_none() && s.rotation.is_none());
     }
 
     #[test]

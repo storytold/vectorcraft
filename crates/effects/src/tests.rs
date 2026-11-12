@@ -209,6 +209,57 @@ fn warp_arc_bends_the_top_edge() {
     assert!(b.x0 < -1.0 || b.x1 > 101.0, "{b:?}");
 }
 
+/// A Warp of `version` 1 bends its bounds as its style's Bézier net; one without a version, as
+/// saved before the version existed, draws as it always did. Flag at 60 % on a 200 × 100 box: the
+/// net moves the top edge up to 6 × 0.6 × 100 × max u(1 - u)(1 - 2u) = 34.64 out, the earlier map
+/// moves it 0.6 × 25 = 15.
+#[test]
+fn a_warp_draws_with_the_map_its_version_names() {
+    let rect = shapes::rectangle(Rect::new(10.0, 20.0, 210.0, 120.0));
+    // u(1 - u)(1 - 2u) peaks at √3 / 18.
+    let peak = 360.0 * 3f64.sqrt() / 18.0;
+    for (version, out) in [(json!(1), peak), (json!(null), 15.0), (json!(0), 15.0)] {
+        let b = run("warp.flag", json!({"bend": 60, "version": version}), &rect).bounds().unwrap();
+        assert!(close(b.y0, 20.0 - out, 0.1) && close(b.y1, 120.0 + out, 0.1), "version {version}: {b:?}");
+        assert!(close(b.x0, 10.0, 1e-9) && close(b.x1, 210.0, 1e-9), "version {version}: {b:?}");
+    }
+}
+
+/// A straight line has a box with no width or no height, and the net bends it as the middle of
+/// the patch along that side: under Arc a vertical line stays vertical, and under Bulge, Fisheye,
+/// Inflate and Squeeze a horizontal line stays straight.
+#[test]
+fn a_warp_bends_a_flat_box_as_the_middle_of_its_patch() {
+    let anchors = |p: &PathData| p.subpaths.iter().flat_map(|s| s.anchors.clone()).collect::<Vec<_>>();
+    let vertical = shapes::line(Point::new(100.0, 0.0), Point::new(100.0, 100.0));
+    let out = run("warp.arc", json!({"bend": 50, "version": 1}), &vertical);
+    assert!(anchors(&out).iter().all(|a| close(a.p.x, 100.0, 1e-9) && close(a.h_in.x, 100.0, 1e-9) && close(a.h_out.x, 100.0, 1e-9)), "{out:?}");
+    let horizontal = shapes::line(Point::new(0.0, 50.0), Point::new(200.0, 50.0));
+    for style in ["bulge", "fisheye", "inflate", "squeeze"] {
+        let out = run(&format!("warp.{style}"), json!({"bend": 50, "version": 1}), &horizontal);
+        assert!(
+            anchors(&out).iter().all(|a| close(a.p.y, 50.0, 1e-9) && close(a.h_in.y, 50.0, 1e-9) && close(a.h_out.y, 50.0, 1e-9)),
+            "{style}: {out:?}"
+        );
+    }
+}
+
+/// A new Warp takes the nets' version unless one is given, and the catalog's defaults carry none,
+/// so a saved warp's params don't gain one.
+#[test]
+fn new_warps_take_the_nets_version() {
+    for (s, _) in WARP_STYLES {
+        let id = format!("warp.{s}");
+        let Some(e) = crate::new_effect(&id, &json!({"bend": 20})) else { panic!("{id}") };
+        assert_eq!(e.params["version"], json!(crate::WARP_NET), "{id}");
+        let Some(e) = crate::new_effect(&id, &json!({"version": 0})) else { panic!("{id}") };
+        assert_eq!(e.params["version"], json!(0), "{id}");
+        assert!(crate::merged_params(&id, &json!({"bend": 20})).get("version").is_none(), "{id}");
+    }
+    let Some(e) = crate::new_effect("distort.twist", &json!({})) else { panic!("twist") };
+    assert!(e.params.get("version").is_none());
+}
+
 #[test]
 fn transform_copies_and_move() {
     let out = run("distort.transform", json!({"moveH": 20, "copies": 3}), &square());
@@ -316,6 +367,317 @@ fn stacked_transform_copies_stay_within_the_image_budget() {
     let mut g = Node::group(id, vec![Arc::new(image())]);
     g.appearance.effects.push(fx("distort.transform", json!({"moveH": 70, "copies": 1000})));
     assert_eq!(count(&evaluate_container(None, &g).unwrap()), 1001);
+}
+
+/// A 40 × 40 px image placed at (0, 0) at one point a pixel, with id `id`.
+fn warp_test_image(id: u64) -> std::sync::Arc<Node> {
+    use vectorcraft_doc::{ImageObject, NodeId};
+    let im = ImageObject { key: "k".into(), width: 40, height: 40, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+    std::sync::Arc::new(Node::new(NodeId(id), NodeKind::Image(Box::new(im))))
+}
+
+/// How many images `art` holds, and the keys they have.
+fn warp_test_images(art: &Node) -> (usize, std::collections::BTreeSet<String>) {
+    let (mut n, mut keys) = (0, std::collections::BTreeSet::new());
+    art.walk(&mut |c| {
+        if let NodeKind::Image(im) = &c.kind {
+            n += 1;
+            keys.insert(im.key.clone());
+        }
+    });
+    (n, keys)
+}
+
+#[test]
+fn warped_images_stay_within_the_object_budget() {
+    use std::rc::Rc;
+    use std::sync::Arc;
+
+    use vectorcraft_doc::NodeId;
+    let lift: crate::reshape::WarpMap = Rc::new(|p: Point| Point::new(p.x, p.y - p.x * 0.1));
+    let cost = vectorcraft_doc::live::mesh_warp_cost(crate::reshape::WARP_IMAGE_CELLS);
+    let none = std::collections::HashSet::new();
+    let k = || std::collections::BTreeSet::from(["k".to_string()]);
+    let warp = |art: &mut Node, warps: usize| {
+        let mut warped = crate::reshape::WarpedImages::new();
+        for _ in 0..warps {
+            crate::reshape::mark_warped_images(art, &lift, &none, false, &mut 0, &mut warped);
+        }
+        warped
+    };
+    // The art has room for one image's pieces only: neither image is cut, and each gets its own
+    // key back.
+    let mut art = Node::group(NodeId(1), vec![warp_test_image(2), warp_test_image(3)]);
+    let warped = warp(&mut art, 1);
+    let max = art.count() + cost;
+    crate::reshape::cut_warped_images_within(&mut art, &warped, max);
+    assert_eq!(warp_test_images(&art), (2, k()));
+    // With room for both, each is cut into 200 pieces once, however many warps it took.
+    let mut art = Node::group(NodeId(1), vec![warp_test_image(2), warp_test_image(3)]);
+    let warped = warp(&mut art, 3);
+    let max = art.count() + 2 * cost;
+    crate::reshape::cut_warped_images_within(&mut art, &warped, max);
+    assert_eq!(warp_test_images(&art), (400, k()));
+    // Images clipped by their frames: the second frame (the second path) kept its shape, so its
+    // image stays whole, and the first is cut. The third's frame is a group of two paths, the
+    // second of them kept, with an image after them, and its image sits in a group of its own:
+    // both stay whole too.
+    let frame = |id: u64| Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 40.0)), Default::default()));
+    let clip_group = |id: u64, children: Vec<Arc<Node>>| Arc::new(Node::new(NodeId(id), NodeKind::Group { children, clip: true }));
+    let nested = clip_group(
+        4,
+        vec![
+            Arc::new(Node::group(NodeId(4), vec![frame(4), frame(4), warp_test_image(5)])),
+            Arc::new(Node::group(NodeId(4), vec![warp_test_image(4)])),
+        ],
+    );
+    let mut art =
+        Node::group(NodeId(1), vec![clip_group(2, vec![frame(2), warp_test_image(2)]), clip_group(3, vec![frame(3), warp_test_image(3)]), nested]);
+    let (mut at, mut warped) = (0, crate::reshape::WarpedImages::new());
+    crate::reshape::mark_warped_images(&mut art, &lift, &std::collections::HashSet::from([1, 3]), false, &mut at, &mut warped);
+    assert_eq!(at, 4);
+    crate::reshape::cut_warped_images_within(&mut art, &warped, usize::MAX);
+    assert_eq!(warp_test_images(&art), (203, k()));
+}
+
+/// An image key from the document that looks like a key of the table is not read as one, and a
+/// hidden image stays out of the bounds the later effects take, as it does before it is warped.
+#[test]
+fn warped_images_keep_document_keys_and_hidden_images_apart() {
+    use std::rc::Rc;
+    use std::sync::Arc;
+
+    use vectorcraft_doc::NodeId;
+    let lift: crate::reshape::WarpMap = Rc::new(|p: Point| Point::new(p.x, p.y - p.x * 0.1));
+    let none = std::collections::HashSet::new();
+    let mut warped = crate::reshape::WarpedImages::new();
+    let lookalike = format!("{}0", warped.prefix());
+    let mut b = (*warp_test_image(3)).clone();
+    if let NodeKind::Image(im) = &mut b.kind {
+        im.key = lookalike.clone();
+    }
+    let mut art = Node::group(NodeId(1), vec![warp_test_image(2), Arc::new(b)]);
+    warped.reserve(&art);
+    crate::reshape::mark_warped_images(&mut art, &lift, &none, false, &mut 0, &mut warped);
+    crate::reshape::cut_warped_images_within(&mut art, &warped, usize::MAX);
+    assert_eq!(warp_test_images(&art), (400, std::collections::BTreeSet::from(["k".to_string(), lookalike])));
+    // A layer of a 10 × 10 square and a hidden 40 × 40 image: the warped image is not measured.
+    let square = Arc::new(Node::path(NodeId(4), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default()));
+    let mut hidden = (*warp_test_image(5)).clone();
+    hidden.visible = false;
+    let mut layer = Node::layer(NodeId(6), "Layer 1", vectorcraft_doc::LayerColor::Preset(0));
+    if let Some(children) = layer.children_mut() {
+        *children = vec![square, Arc::new(hidden)];
+    }
+    let before = layer.geometric_bounds();
+    let mut warped = crate::reshape::WarpedImages::new();
+    warped.reserve(&layer);
+    crate::reshape::mark_warped_images(&mut layer, &lift, &none, false, &mut 0, &mut warped);
+    assert_eq!(warped.bounds(&layer), before);
+    // A shown image is measured by the pieces it is cut into.
+    let mut art = Node::group(NodeId(1), vec![warp_test_image(2)]);
+    let mut warped = crate::reshape::WarpedImages::new();
+    warped.reserve(&art);
+    crate::reshape::mark_warped_images(&mut art, &lift, &none, false, &mut 0, &mut warped);
+    let measured = warped.bounds(&art);
+    crate::reshape::cut_warped_images_within(&mut art, &warped, usize::MAX);
+    assert_eq!(measured, art.geometric_bounds());
+    assert!(measured.is_some_and(|b| b.y0 < -3.9), "{measured:?}");
+    // An image placed at a tiny scale (a placement with a tiny determinant) is cut too; one placed
+    // with no area is not.
+    for (scale, pieces) in [(1e-7, 200), (0.0, 1)] {
+        let mut image = (*warp_test_image(2)).clone();
+        if let NodeKind::Image(im) = &mut image.kind {
+            im.xf = Affine::scale(scale);
+        }
+        let mut art = Node::group(NodeId(1), vec![Arc::new(image)]);
+        let mut warped = crate::reshape::WarpedImages::new();
+        crate::reshape::mark_warped_images(&mut art, &lift, &none, false, &mut 0, &mut warped);
+        crate::reshape::cut_warped_images_within(&mut art, &warped, usize::MAX);
+        assert_eq!(warp_test_images(&art).0, pieces, "{scale}");
+    }
+}
+
+/// An image whose frame keeps its shape because the warp would pass the anchor budget keeps its
+/// pixels as they are; within the budget, both bend.
+#[test]
+fn an_image_whose_frame_passes_the_budget_stays_whole() {
+    use std::sync::Arc;
+
+    use vectorcraft_doc::NodeId;
+    let clipped = || {
+        let mut frame = Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 40.0)), Appearance::default());
+        if let NodeKind::Path { clipping, .. } = &mut frame.kind {
+            *clipping = true;
+        }
+        Node::new(NodeId(1), NodeKind::Group { children: vec![Arc::new(frame), warp_test_image(1)], clip: true })
+    };
+    let arc = fx("warp.arc", json!({"bend": 50, "version": 1}));
+    let k = || std::collections::BTreeSet::from(["k".to_string()]);
+    let mut art = clipped();
+    crate::reshape::reshape_leaves_within(&mut art, &[&arc], Budget { anchors: 0, lines: 0 }, None);
+    assert_eq!(art.children().and_then(|c| c.first()).and_then(|c| c.path_data()).map(|p| p.anchor_count()), Some(4));
+    assert_eq!(warp_test_images(&art), (1, k()));
+    let mut art = clipped();
+    crate::reshape::reshape_leaves_within(&mut art, &[&arc], Budget::EFFECTS, None);
+    assert!(art.children().and_then(|c| c.first()).and_then(|c| c.path_data()).is_some_and(|p| p.anchor_count() > 4));
+    assert_eq!(warp_test_images(&art), (200, k()));
+}
+
+/// The first image under `n` (the first piece of a cut image).
+fn first_image(n: &Node) -> Option<vectorcraft_doc::ImageObject> {
+    let mut first = None;
+    n.walk(&mut |c| {
+        if first.is_none()
+            && let NodeKind::Image(im) = &c.kind
+        {
+            first = Some((**im).clone());
+        }
+    });
+    first
+}
+
+#[test]
+fn effects_after_a_warp_reshape_an_images_frame_and_not_its_pieces() {
+    let image = |effects: Vec<Effect>| {
+        let mut n = (*warp_test_image(1)).clone();
+        n.appearance.effects = effects;
+        n
+    };
+    // Each piece's clipping path, and the image's frame (the outer clip group's clipping path).
+    let clips = |art: &Node| {
+        let (mut pieces, mut frame) = (vec![], None);
+        art.walk(&mut |c| {
+            if let NodeKind::Group { children, clip: true } = &c.kind
+                && let Some(path) = children.first().and_then(|p| p.path_data())
+            {
+                if matches!(children.get(1).map(|i| &i.kind), Some(NodeKind::Image(_))) && path.anchor_count() == 3 {
+                    pieces.push(path.anchor_count());
+                } else if frame.is_none() {
+                    frame = Some(path.anchor_count());
+                }
+            }
+        });
+        (pieces, frame)
+    };
+    let arc = fx("warp.arc", json!({"bend": 50, "version": 1}));
+    for after in [
+        fx("distort.roughen", json!({"size": 5, "detail": 10})),
+        fx("stylize.roundCorners", json!({"radius": 5})),
+        fx("path.offsetPath", json!({"offset": -2})),
+    ] {
+        let art = crate::reshape::reshape(None, &image(vec![arc.clone(), after.clone()]), None).unwrap();
+        let (pieces, frame) = clips(&art);
+        assert_eq!(pieces.len(), 200, "{}", after.id);
+        assert!(frame.is_some_and(|n| n > 4), "{}: {frame:?}", after.id);
+        assert_eq!(warp_test_images(&art), (200, std::collections::BTreeSet::from(["k".to_string()])), "{}", after.id);
+    }
+    // Two warps cut the image once, through both maps; a Transform after them moves the pieces.
+    let flag = fx("warp.flag", json!({"bend": 30, "version": 1}));
+    let mv = fx("distort.transform", json!({"moveH": 100, "moveV": 0}));
+    let art = crate::reshape::reshape(None, &image(vec![arc.clone(), flag.clone()]), None).unwrap();
+    assert_eq!(warp_test_images(&art).0, 200);
+    let moved = crate::reshape::reshape(None, &image(vec![arc.clone(), flag.clone(), mv]), None).unwrap();
+    assert_eq!(warp_test_images(&moved).0, 200);
+    let box1 = Rect::new(0.0, 0.0, 40.0, 40.0);
+    let f1 = crate::warp::warp_map(box1, crate::warp::WarpStyle::Arc, &merged_params("warp.arc", &arc.params));
+    // The flag bends the box the arc leaves, which the arc's frame measures.
+    let box2 = crate::reshape::reshape(None, &image(vec![arc.clone()]), None).unwrap().geometric_bounds().unwrap();
+    let f2 = crate::warp::warp_map(box2, crate::warp::WarpStyle::Flag, &merged_params("warp.flag", &flag.params));
+    // The first piece's corners: the pixels (0, 0), (4, 0) and (4, 4).
+    for (art, by) in [(&art, 0.0), (&moved, 100.0)] {
+        let piece = first_image(art).unwrap();
+        for p in [Point::new(0.0, 0.0), Point::new(4.0, 0.0), Point::new(4.0, 4.0)] {
+            let want = f2(f1(p)) + vectorcraft_geom::Vec2::new(by, 0.0);
+            assert!((piece.xf * p).distance(want) < 1e-6, "{p:?}: {:?} {want:?}", piece.xf * p);
+        }
+    }
+}
+
+/// A warp with no version (VectorCraft's earlier map) bends an image's pixels with that map, as it
+/// bends the frame.
+#[test]
+fn an_images_pixels_take_the_map_their_warps_version_names() {
+    for version in [json!(null), json!(0), json!(1)] {
+        let mut params = json!({"bend": 50});
+        if !version.is_null() {
+            params["version"] = version.clone();
+        }
+        let mut n = (*warp_test_image(1)).clone();
+        n.appearance.effects = vec![fx("warp.arc", params.clone())];
+        let art = crate::reshape::reshape(None, &n, None).unwrap();
+        let f = crate::warp::warp_map(Rect::new(0.0, 0.0, 40.0, 40.0), crate::warp::WarpStyle::Arc, &merged_params("warp.arc", &params));
+        let piece = first_image(&art).unwrap();
+        for p in [Point::new(0.0, 0.0), Point::new(4.0, 0.0), Point::new(4.0, 4.0)] {
+            assert!((piece.xf * p).distance(f(p)) < 1e-6, "{version}: {p:?}");
+        }
+        // The frame has an anchor where the map takes each corner.
+        let frame = art.children().and_then(|c| c.first()).and_then(|c| c.path_data()).unwrap();
+        for corner in [Point::new(0.0, 0.0), Point::new(40.0, 0.0), Point::new(40.0, 40.0), Point::new(0.0, 40.0)] {
+            let near = frame.subpaths.iter().flat_map(|s| &s.anchors).any(|a| a.p.distance(f(corner)) < 1e-6);
+            assert!(near, "{version}: {corner:?}");
+        }
+    }
+}
+
+/// Under a group's Warp effect, a nested group's own placed gradient follows the nested group's
+/// bounds to where its image's pieces draw them.
+#[test]
+fn a_nested_groups_gradient_follows_its_warped_image() {
+    use std::sync::Arc;
+
+    use vectorcraft_color::{Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
+    use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, NodeId};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let geom = GradientGeom { start: (5.0, 20.0).into(), end: (35.0, 20.0).into(), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..GradientPaint::new(Gradient::new(GradientKind::Linear, stops)) }));
+    let mut inner = Node::group(NodeId(5), vec![warp_test_image(1)]);
+    inner.appearance.items.push(AppearanceItem::Fill(FillLayer::new(placed)));
+    let square = Node::path(NodeId(2), shapes::rectangle(Rect::new(60.0, 0.0, 100.0, 40.0)), Appearance::default());
+    let mut g = Node::group(NodeId(10), vec![Arc::new(inner), Arc::new(square)]);
+    g.appearance.effects.push(fx("warp.arc", json!({"bend": 50, "version": 1})));
+    let art = crate::group::evaluate_container(None, &g).unwrap();
+    assert_eq!(warp_test_images(&art).0, 200);
+    let (from, mut to) = (Rect::new(0.0, 0.0, 40.0, 40.0), None);
+    art.walk(&mut |c| {
+        if c.id == NodeId(5) && to.is_none() {
+            to = c.geometric_bounds();
+        }
+    });
+    let to = to.unwrap();
+    assert!(to.y0 < from.y0 - 1.0, "the pieces draw the image bent: {to:?}");
+    let follow = |p: Point| Point::new(to.x0 + (p.x - from.x0) / from.width() * to.width(), to.y0 + (p.y - from.y0) / from.height() * to.height());
+    let mut checked = 0;
+    art.walk(&mut |c| {
+        if c.id != NodeId(5) {
+            return;
+        }
+        for item in &c.appearance.items {
+            let Paint::Gradient(gp) = item.paint() else { continue };
+            let got = gp.geom.unwrap();
+            assert!(got.start.distance(follow(geom.start)) < 1e-6 && got.end.distance(follow(geom.end)) < 1e-6, "{got:?} in {to:?}");
+            checked += 1;
+        }
+    });
+    assert!(checked > 0);
+}
+
+/// An image under a geometry effect other than a Warp draws as the image does: colorized by
+/// a grayscale image's fill color, and smoothed or not.
+#[test]
+fn an_image_under_a_geometry_effect_keeps_its_color_and_smoothing() {
+    let mut n = (*warp_test_image(1)).clone();
+    n.appearance.effects = vec![fx("distort.roughen", json!({"size": 5, "detail": 10}))];
+    n.extras_mut().colorize = Some(Box::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0))));
+    n.extras_mut().pixelated = true;
+    let art = crate::reshape::reshape(None, &n, None).unwrap();
+    let mut seen = vec![];
+    art.walk(&mut |c| {
+        if matches!(c.kind, NodeKind::Image(_)) {
+            seen.push((c.extras().colorize.clone(), c.extras().pixelated));
+        }
+    });
+    assert_eq!(seen, vec![(n.extras().colorize.clone(), true)]);
 }
 
 /// What `effects` make of `path` within `budget`.
@@ -884,6 +1246,96 @@ fn roughen_smooth_makes_no_cusps() {
                 let (prev, next) = (sp.anchors[(i + n - 1) % n].p, sp.anchors[(i + 1) % n].p);
                 let chord = (a.p - prev).hypot().max((next - a.p).hypot());
                 assert!((a.h_out - a.p).hypot() >= chord / 12.0 - 1e-9, "seed {seed}: cusp at {:?}", a.p);
+            }
+        }
+    }
+}
+
+#[test]
+fn roughen_at_size_0_keeps_the_outline_and_spaces_its_points_evenly() {
+    use vectorcraft_geom::AnchorKind;
+    use vectorcraft_geom::kurbo::{ParamCurve, ParamCurveArclen, ParamCurveNearest};
+    let (a, b) = (Point::new(0.0, 0.0), Point::new(300.0, 0.0));
+    let curve = PathData::single(SubPath::new(
+        vec![
+            vectorcraft_geom::Anchor::with_handles(a, a, Point::new(10.0, 40.0)),
+            vectorcraft_geom::Anchor::with_handles(b, Point::new(100.0, 200.0), b),
+        ],
+        false,
+    ));
+    let ellipse = shapes::ellipse(Rect::new(0.0, 0.0, 100.0, 50.0));
+    // Two subpaths with lines and curves: a closed one whose last segment is a line, and an open
+    // one that ends with a line.
+    let (c, d, e, f) = (Point::new(100.0, 100.0), Point::new(200.0, 0.0), Point::new(300.0, 0.0), Point::new(300.0, 100.0));
+    let mixed = PathData::new(vec![
+        SubPath::new(
+            vec![
+                vectorcraft_geom::Anchor::corner(a),
+                vectorcraft_geom::Anchor::with_handles(Point::new(100.0, 0.0), Point::new(100.0, 0.0), Point::new(160.0, 20.0)),
+                vectorcraft_geom::Anchor::with_handles(c, Point::new(160.0, 80.0), c),
+            ],
+            true,
+        ),
+        SubPath::new(
+            vec![
+                vectorcraft_geom::Anchor::with_handles(d, d, Point::new(220.0, 60.0)),
+                vectorcraft_geom::Anchor::with_handles(e, Point::new(280.0, 60.0), e),
+                vectorcraft_geom::Anchor::corner(f),
+            ],
+            false,
+        ),
+    ]);
+    for path in [square(), ellipse, curve, mixed] {
+        let all: Vec<_> = path.subpaths.iter().flat_map(|sp| (0..sp.segment_count()).map(|i| sp.segment(i))).collect();
+        let off = |q: Point| all.iter().map(|c| c.nearest(q, 1e-9).distance_sq).fold(f64::INFINITY, f64::min).sqrt();
+        for params in
+            [json!({"size": 0}), json!({"size": 0, "points": "corner"}), json!({"size": 0, "relative": false, "points": "corner", "seed": 7})]
+        {
+            let out = run("distort.roughen", params.clone(), &path);
+            assert!(out.anchor_count() > path.anchor_count(), "{params}: the points are added");
+            assert_eq!(out.subpaths.len(), path.subpaths.len(), "{params}");
+            for (sp, got) in path.subpaths.iter().zip(&out.subpaths) {
+                assert_eq!(got.closed, sp.closed);
+                // Walk the result one original segment at a time: its pieces end on the segment's end anchor.
+                let mut at = 0;
+                for i in 0..sp.segment_count() {
+                    let (orig, end) = (sp.segment(i), sp.anchors[(i + 1) % sp.anchors.len()]);
+                    let start = got.anchors[at];
+                    let was = sp.anchors[i];
+                    assert_eq!((start.p, start.kind, start.has_in(), start.has_out()), (was.p, was.kind, was.has_in(), was.has_out()), "{params}");
+                    let mut pieces = vec![];
+                    loop {
+                        let piece = got.segment(at);
+                        for j in 0..=8 {
+                            let q = piece.eval(j as f64 / 8.0);
+                            assert!(off(q) < 1e-6, "{params}: {q:?} is {} off the outline", off(q));
+                        }
+                        pieces.push(piece.arclen(1e-6));
+                        at += 1;
+                        if piece.p3.distance(end.p) < 1e-9 {
+                            break;
+                        }
+                        // A point the effect added: a corner without handles on a line, a smooth
+                        // point whose handles follow the curve.
+                        let added = got.anchors[at];
+                        if sp.segment_is_line(i) {
+                            assert_eq!((added.kind, added.has_in(), added.has_out()), (AnchorKind::Corner, false, false), "{params}");
+                        } else {
+                            assert_eq!(added.kind, AnchorKind::Smooth, "{params}");
+                            let (hi, ho) = (added.h_in - added.p, added.h_out - added.p);
+                            assert!(hi.cross(ho).abs() < 1e-6 * hi.hypot() * ho.hypot() && hi.dot(ho) < 0.0, "{params}: {added:?}");
+                        }
+                    }
+                    assert!(pieces.len() > 1, "{params}: segment {i} is split");
+                    assert!(close(pieces.iter().sum::<f64>(), orig.arclen(1e-6), 1e-3), "{params}: {pieces:?}");
+                    let (lo, hi) = pieces.iter().fold((f64::INFINITY, 0.0f64), |(lo, hi), &l| (lo.min(l), hi.max(l)));
+                    assert!(hi - lo < 1e-3, "{params}: segment {i}'s pieces from {lo} to {hi}");
+                }
+                assert_eq!(at, got.segment_count(), "{params}");
+                if !sp.closed {
+                    let (last, was) = (got.anchors[at], sp.anchors[sp.anchors.len() - 1]);
+                    assert_eq!((last.p, last.kind, last.has_in(), last.has_out()), (was.p, was.kind, was.has_in(), was.has_out()), "{params}");
+                }
             }
         }
     }

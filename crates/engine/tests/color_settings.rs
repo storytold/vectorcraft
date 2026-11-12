@@ -57,6 +57,24 @@ fn legacy_profile_name_resolves_in_commands_and_files() {
     cms::set_active(&before).unwrap();
 }
 
+/// Assigning a profile other than the working space replaces the active color settings and raises
+/// the other open documents' revisions.
+#[test]
+fn assigning_another_profile_replaces_the_active_color_settings() {
+    let _g = settings();
+    let mut s = session();
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let before = cms::active_settings();
+    assert_ne!(before.cmyk, cms::DEVICE_CMYK);
+    let active = cms::active();
+    let other = s.documents()[0].revision;
+    exec(&mut s, "edit.assignProfile", json!({"cmyk": cms::DEVICE_CMYK}));
+    assert_eq!(cms::active_settings().cmyk, cms::DEVICE_CMYK);
+    assert!(!std::sync::Arc::ptr_eq(&active, &cms::active()), "the active color settings were not replaced");
+    assert!(s.documents()[0].revision > other, "the other document's revision did not change");
+    cms::set_active(&before).unwrap();
+}
+
 /// Separations Preview follows the Color Settings and the profiles loaded: a renderer draws a gray
 /// square on the Black plate through the new working CMYK profile, and the four process plates
 /// through a proof profile loaded again under the same name, as a new renderer draws them.

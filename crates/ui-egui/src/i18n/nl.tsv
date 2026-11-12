@@ -380,6 +380,8 @@
 	Stair Step	Trap
 	Gravity	Zwaartekracht
 	Type on a Path Options…	Opties voor tekst op pad…
+	Center on Top	Boven centreren
+	Center on Bottom	Onder centreren
 	Threaded Text	Gekoppelde tekst
 	Create	Maken
 	Release Selection	Selectie vrijgeven
@@ -1347,6 +1349,7 @@ lighting	Light	Licht
 	Rotate View Tool	Weergave draaien-gereedschap
 	Trackpad Gesture to Rotate View	Weergave draaien met trackpadgebaar
 	Hold a Tool Shortcut to Use the Tool Temporarily	Sneltoets van een gereedschap ingedrukt houden om het tijdelijk te gebruiken
+	Show Bounding Box While Moving and Drawing	Begrenzingskader tonen tijdens verplaatsen en tekenen
 	Rotate View	Weergave draaien
 	Rounded Rectangle Tool	Afgeronde rechthoek-gereedschap
 	Scale Tool	Schalen-gereedschap
@@ -1625,6 +1628,17 @@ digits	Malayalam	Malayalam
 	The selected character's font is not available.	Het lettertype van het geselecteerde teken is niet beschikbaar.
 	No alternates for the selected character.	Geen alternatieven voor het geselecteerde teken.
 	Double-click to replace	Dubbelklik om te vervangen
+	Select one character with the Type tool first.	Selecteer eerst één teken met het Type-gereedschap.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} is een glyph van {font}, niet van het lettertype van de geselecteerde tekst ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} hoort bij {base} (U+{base_code}) {place}; uw selectie is {sel} (U+{code}).
+	at the start of a word	aan het begin van een woord
+	in the middle of a word	midden in een woord
+	at the end of a word	aan het einde van een woord
+	standing alone	los staand
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} is geen alternatief voor {sel} (U+{code}) zoals het in zijn woord staat.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dubbelklik om in plaats daarvan {base} (U+{code}) in te voegen: een presentatievorm sluit niet aan, de letter wel.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) ingevoegd in plaats van een presentatievorm: het lettertype verbindt het naar positie met de buren.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Geen enkele OpenType-functie tekent deze glyph hier, dus hij vervangt de glyph van het teken en sluit mogelijk niet aan op de buurtekens.
 	Double-click to insert	Dubbelklik om in te voegen
 	Entire Font	Volledig lettertype
 	glyph {id}	glyph {id}
@@ -1706,6 +1720,8 @@ digits	Malayalam	Malayalam
 	Save Image Trace Preset	Voorinstelling voor afbeeldingtracering opslaan
 	Delete Image Trace Preset	Voorinstelling voor afbeeldingtracering verwijderen
 	Method:	Methode:
+	Pad	Doortrekken
+	Repeats	Herhalingen
 	Mode:	Modus:
 	Noise	Ruis
 	Create:	Maken:
@@ -3341,6 +3357,7 @@ theme	Appearance	Vormgeving
 	Move Mesh Points	Maaspunten verplaatsen
 	Move Spine Point	Aspunt verplaatsen
 	Reshape Spine Segment	Segment van de as opnieuw vormgeven
+	Blend Easing	Blend-easing
 	Reset with Mesh	Opnieuw instellen met maas
 	Reset with Warp	Opnieuw instellen met vervorming
 	Set Mesh Point Color	Kleur van maaspunt instellen
@@ -3697,6 +3714,9 @@ theme	Appearance	Vormgeving
 	Select All Unused	Alle ongebruikte selecteren
 	Sort by Kind	Sorteren op soort
 	Sort by Name	Sorteren op naam
+	Spot Color Objects	Objecten met spotkleuren
+	Pattern Objects	Objecten met patronen
+	Gradient Objects	Objecten met verlopen
 	Spot Colors	Spotkleuren
 	Spot Colors (0)	Spotkleuren (0)
 	Swatch Options	Kleurstaalopties
@@ -4371,6 +4391,7 @@ imageTrace	Outline	Contour
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` is geen kleur zoals "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maximaal {MAX_TABLE} kleuren
 @msg	command `{0}` is not available right now: {1}	opdracht `{0}` is nu niet beschikbaar: {1}
+@msg	command `{id}` is not available right now	opdracht `{id}` is nu niet beschikbaar
 @msg	compound paths can only contain paths	samengestelde paden kunnen alleen paden bevatten
 @msg	compressed (RLE) bitmaps can't be read yet	gecomprimeerde (RLE) bitmaps kunnen nog niet gelezen worden
 @msg	damaged	beschadigd
@@ -5521,6 +5542,8 @@ mark-style	Japanese	Japans
 @msg	the Color Picker is not open	de kleurenkiezer is niet open
 @msg	the screen color sampler is already open	de schermkleurkiezer is al open
 @msg	this system has no screen color sampler	dit systeem heeft geen schermkleurkiezer
+@msg	the screen color sampler did not answer	de schermkleurkiezer heeft niet geantwoord
+@msg	the screen color sampler failed	de schermkleurkiezer is mislukt
 swatch	[None]	[Geen]
 swatch	[Registration]	[Passers]
 swatch	White	Wit
@@ -5924,6 +5947,7 @@ swatch	Bright Violet	Felviolet
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometrische hulplijnen
+	Optical Effects	Optische effecten
 	Geometric Patterns	Geometrische patronen
 	Grit Textures	Korrelige texturen
 	Ease In	Langzaam beginnen
@@ -6114,6 +6138,11 @@ axis	Y Axis	Y-as
 	User Brush Library 9	Penseelbibliotheek van gebruiker 9
 	User Brush Library 10	Penseelbibliotheek van gebruiker 10
 	Art Ribbons	Illustratielinten
+	Ink and Wash	Inkt en wassing
+	Tapered Ink	Taps toelopende inkt
+	Brush Pen	Penseelstift
+	Soft Wash	Zachte wassing
+	Pooling Wash	Wassing met rand
 	Zigzag	Zigzag
 	Burst Ray	Inslagstraal
 	Dash Trail	Streepspoor
@@ -6138,6 +6167,11 @@ axis	Y Axis	Y-as
 	Grass Fan	Graswaaier
 	Pattern Borders	Patroonranden
 	Scatter Shapes	Strooivormen
+	Dry Media	Droge media
+	Chalk Grain	Krijtkorrel
+	Graphite Pencil	Grafietpotlood
+	Wax Crayon	Waskrijt
+	Charcoal Dust	Houtskoolstof
 	Save Brush Library…	Penseelbibliotheek opslaan…
 @msg	no empty artboards to delete	geen lege tekengebieden om te verwijderen
 	Scale Presets	Schaalvoorinstellingen
@@ -6741,4 +6775,9 @@ breakText	Glyphs	Glyphs
 	Stencil Bridges…	Sjabloonbruggen…
 	Stencil Bridges	Sjabloonbruggen
 	Shortest Crossing	Kortste oversteek
+	Weed Box and Lines…	Wiedkader en wiedlijnen…
+	Weed Box and Lines	Wiedkader en wiedlijnen
+	Margin	Marge
+	Box	Kader
+	Swatch	Staal
 	Direction	Richting

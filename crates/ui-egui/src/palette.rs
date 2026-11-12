@@ -91,7 +91,10 @@ fn build(lang: crate::i18n::Lang) -> Vec<Entry> {
 }
 
 /// Runs the palette result `id`: selects a tool, or invokes a command with the params its entry
-/// stands for.
+/// stands for. A command whose menu bar item gives params runs what a click on that item runs
+/// ([`crate::shortcut_editor::menu_target_now`]), so Clean Up… and Find and Replace… open their
+/// dialogs. While that item is dimmed, no dialog opens and the status line says why the command
+/// can't run.
 pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
     if let Some(tool) = id.strip_prefix("tool:") {
         app.select_tool(tool);
@@ -99,7 +102,11 @@ pub(crate) fn run_pick(app: &mut VectorcraftApp, id: &str) {
         let command = crate::keymap::command_of(id);
         menus::invoke(app, &command.id, command.params);
     } else {
-        menus::invoke(app, id, json!({}));
+        match crate::shortcut_editor::menu_target_now(app, id) {
+            Some(Ok((id, p))) => menus::invoke(app, &id, p),
+            Some(Err(why)) => app.status(why),
+            None => menus::invoke(app, id, json!({})),
+        }
     }
 }
 
@@ -217,7 +224,7 @@ mod tests {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
         let before = app.session.prefs.use_precise_cursors;
         let first = matches.first().expect("query has a result");
-        menus::invoke(&mut app, &first.id, json!({}));
+        run_pick(&mut app, &first.id);
         assert_ne!(app.session.prefs.use_precise_cursors, before, "first result toggles the preference");
     }
 
@@ -238,8 +245,7 @@ mod tests {
         app.run("select.set", json!({"ids": [a, b]})).unwrap();
         app.run("select.key", json!({"id": b})).unwrap();
         assert!(app.session.active().unwrap().selection.key.is_some());
-        // Run a pick the way `show` runs it.
-        menus::invoke(&mut app, ids[0], json!({}));
+        run_pick(&mut app, ids[0]);
         let st = app.session.active().unwrap();
         assert_eq!((st.selection.len(), st.selection.key), (2, None), "both objects stay selected, without a key");
     }
@@ -255,17 +261,160 @@ mod tests {
             app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
             app.ui.status.clear();
             assert!(!crate::panel_docking::showing(&app.ui, crate::panels::asset_export::ID), "{id}");
-            // Run a pick the way `show` runs it.
-            menus::invoke(&mut app, id, json!({}));
+            run_pick(&mut app, id);
             assert!(crate::panel_docking::showing(&app.ui, crate::panels::asset_export::ID), "{id}: {}", app.ui.status);
             assert!(!app.ui.status.contains("invalid parameters"), "{id}: {}", app.ui.status);
             // A second pick leaves the open panel open, docked or floating.
-            menus::invoke(&mut app, id, json!({}));
+            run_pick(&mut app, id);
             assert!(crate::panel_docking::showing(&app.ui, crate::panels::asset_export::ID), "{id}: picked twice");
             app.run("window.panel.float", json!({"panel": crate::panels::asset_export::ID})).unwrap();
             assert!(crate::panel_docking::showing(&app.ui, crate::panels::asset_export::ID), "{id}: floating");
-            menus::invoke(&mut app, id, json!({}));
+            run_pick(&mut app, id);
             assert!(crate::panel_docking::showing(&app.ui, crate::panels::asset_export::ID), "{id}: floating, picked again");
+        }
+    }
+
+    /// The open dialog's kind and fields, the active document's undo depth and the status line.
+    type Outcome = (Option<(String, serde_json::Map<String, serde_json::Value>)>, Option<usize>, String);
+
+    /// The [`Outcome`] `app` shows.
+    fn outcome(app: &VectorcraftApp) -> Outcome {
+        (
+            app.ui.dialog.as_ref().map(|d| (d.kind.clone(), d.fields.clone())),
+            app.session.active().map(|st| st.history.undo.len()),
+            app.ui.status.clone(),
+        )
+    }
+
+    /// A pick of a "…" command whose menu bar item gives params opens that item's dialog, and Smooth
+    /// opens its slider; nothing changes until the dialog is confirmed.
+    #[test]
+    fn a_pick_opens_the_dialog_its_menu_item_opens() {
+        let expected = [
+            ("object.path.cleanUp", "command"),
+            ("object.mesh.create", "command"),
+            ("type.smartPunctuation", "command"),
+            ("edit.findReplace", "command"),
+            ("object.path.smooth", crate::dialogs::smooth_slider::KIND),
+        ];
+        for (id, kind) in expected {
+            assert!(items().iter().any(|(_, item, _)| item == id), "{id} is in the palette");
+            let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Single.session(), crate::Services::default());
+            app.ui.status.clear();
+            let before = app.session.active().unwrap().history.undo.len();
+            run_pick(&mut app, id);
+            let d = app.ui.dialog.as_ref().unwrap_or_else(|| panic!("{id} opens its dialog: {}", app.ui.status));
+            assert_eq!(d.kind, kind, "{id}");
+            if kind == "command" {
+                assert_eq!(d.fields["__command"], json!(id), "{id}: {:?}", d.fields);
+            }
+            assert_eq!(app.session.active().unwrap().history.undo.len(), before, "{id} changes nothing yet");
+            assert!(app.ui.status.is_empty(), "{id}: {}", app.ui.status);
+        }
+    }
+
+    /// Every palette command whose menu bar items all give it the same params does what a click on
+    /// such an item does, as the menu row shows it ([`menus::entry`]): with no document open, in an
+    /// empty document and with one or several objects selected, the pick opens the same dialog with
+    /// the same fields and leaves the same undo steps and status. While the row is dimmed, the pick
+    /// opens no dialog, changes nothing and says why the command can't run.
+    #[test]
+    fn every_pick_runs_what_its_menu_item_runs() {
+        use vectorcraft_testkit::fixtures::Fixture;
+        fn walk<'a>(items: &'a [menus::Item], out: &mut Vec<&'a menus::Item>) {
+            for it in items {
+                match it {
+                    menus::Item::Sub(_, children) => walk(children, out),
+                    // Items that list an installed plug-in or show a name that is user data come and
+                    // go as tests beside this one install plug-ins or add toolbars, and no shortcut or
+                    // pick reads them.
+                    menus::Item::Cmd(label, id, p) if !menus::lists_plugin(id, p) && !menus::shows_a_name(id, label) => out.push(it),
+                    _ => {}
+                }
+            }
+        }
+        let tree = menus::menu_tree();
+        let mut rows = vec![];
+        for (_, items) in &tree {
+            walk(items, &mut rows);
+        }
+        let mut checked: Vec<(String, &menus::Item)> = vec![];
+        for (_, id, _) in items() {
+            let of_id: Vec<&menus::Item> = rows.iter().copied().filter(|it| matches!(it, menus::Item::Cmd(_, c, _) if *c == id)).collect();
+            let params: Vec<&serde_json::Value> =
+                of_id.iter().filter_map(|it| if let menus::Item::Cmd(_, _, p) = it { Some(p) } else { None }).collect();
+            let Some(first) = params.first() else { continue };
+            if first.as_object().is_none_or(serde_json::Map::is_empty) || params.iter().any(|p| p != first) {
+                continue;
+            }
+            checked.push((id, of_id[0]));
+        }
+        assert!(checked.iter().any(|(id, _)| id == "edit.findReplace"), "{:?}", checked.iter().map(|c| &c.0).collect::<Vec<_>>());
+        let state = |n: usize| match n.checked_sub(1) {
+            None => vectorcraft_engine::Session::new(),
+            Some(k) => Fixture::ALL[k].session(),
+        };
+        let (mut compared, mut dimmed) = (0, 0);
+        for (id, item) in &checked {
+            for n in 0..=Fixture::ALL.len() {
+                let mut picked = VectorcraftApp::new(state(n), crate::Services::default());
+                let mut clicked = VectorcraftApp::new(state(n), crate::Services::default());
+                picked.ui.status.clear();
+                clicked.ui.status.clear();
+                // A row the menu leaves out in this state has no click to compare with.
+                let Some(menus::Entry::Item(row)) = menus::entry(&clicked, item) else { continue };
+                let (target, enabled) = (row.target().expect("the item is implemented"), row.enabled);
+                let before = outcome(&picked);
+                run_pick(&mut picked, id);
+                if enabled {
+                    menus::invoke(&mut clicked, &target.0, target.1);
+                    assert_eq!(outcome(&picked), outcome(&clicked), "{id} [state {n}]");
+                    compared += 1;
+                } else {
+                    let after = outcome(&picked);
+                    assert_eq!((after.0, after.1), (None, before.1), "{id} [state {n}] is dimmed");
+                    assert!(after.2.contains("not available"), "{id} [state {n}]: {}", after.2);
+                    dimmed += 1;
+                }
+            }
+        }
+        assert!(compared > 0 && dimmed > 0, "{compared} compared, {dimmed} dimmed");
+    }
+
+    /// A pick of a "…" command whose menu bar item is dimmed (Remove Background and Object Mosaic
+    /// with no image selected, Find and Replace with no document open) opens no dialog, changes
+    /// nothing and reports why the command can't run.
+    #[test]
+    fn a_pick_of_a_dimmed_command_says_why_it_cannot_run() {
+        let cases = [
+            ("addon.image.removeBackground", vectorcraft_testkit::fixtures::Fixture::Multi.session()),
+            ("object.createObjectMosaic", vectorcraft_testkit::fixtures::Fixture::Multi.session()),
+            ("edit.findReplace", vectorcraft_engine::Session::new()),
+        ];
+        for (id, session) in cases {
+            assert!(crate::shortcut_editor::menu_target(id).is_some(), "{id} has a dialog");
+            let mut app = VectorcraftApp::new(session, crate::Services::default());
+            assert!(!menus::enabled(&app, id), "{id}");
+            app.ui.status.clear();
+            let before = app.session.active().map(|st| st.history.undo.len());
+            run_pick(&mut app, id);
+            assert!(app.ui.dialog.is_none(), "{id}");
+            assert_eq!(app.session.active().map(|st| st.history.undo.len()), before, "{id}");
+            assert!(app.ui.status.contains("not available"), "{id}: {}", app.ui.status);
+        }
+    }
+
+    /// A pick of a command that opens no dialog runs it at once.
+    #[test]
+    fn a_pick_of_a_command_without_a_dialog_runs_at_once() {
+        for id in ["object.group", "paint.swap"] {
+            assert!(items().iter().any(|(_, item, _)| item == id), "{id} is in the palette");
+            assert_eq!(crate::shortcut_editor::menu_target(id), None, "{id}");
+            let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), crate::Services::default());
+            let before = app.session.active().unwrap().history.undo.len();
+            run_pick(&mut app, id);
+            assert!(app.ui.dialog.is_none(), "{id}");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1, "{id}: {}", app.ui.status);
         }
     }
 

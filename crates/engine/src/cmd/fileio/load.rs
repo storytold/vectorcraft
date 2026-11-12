@@ -825,6 +825,9 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// A TIFF with more strips or tiles than the decoder can count
 /// ([`vectorcraft_doc::cmyk::oversized_tiff`]) is refused as too large to draw. JPEG XL images are
 /// read with [`jxlread`] and stored as PNG, with the ICC profile their colors are left in.
+/// A PNG, JPEG, GIF, WebP or TIFF whose orientation ([`exif_orientation`]) turns or flips it is
+/// stored as it is shown, with its resolution's axes swapped when it turns a quarter; a CMYK JPEG
+/// or TIFF keeps its inks, 8 bits each, as a CMYK TIFF ([`vectorcraft_doc::cmyk::turned_cmyk`]).
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let ppi = super::ppi::resolution(bytes);
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
@@ -863,7 +866,16 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let f = image_format(kind).ok_or_else(|| err(format!("{kind:?} images can't be opened (see document.formats)")))?;
     // A photo whose EXIF orientation turns or flips it (a camera held upright) is stored as it is
     // seen, so it places the way it was taken (#4284); the others keep their own bytes.
-    let turned = matches!(f.id, "png" | "jpg" | "gif" | "webp" | "tiff") && exif_orientation(bytes).is_some();
+    let orientation = matches!(f.id, "png" | "jpg" | "gif" | "webp" | "tiff").then(|| exif_orientation(bytes)).flatten();
+    let turned = orientation.is_some();
+    // The resolution describes the stored pixels; a quarter turn swaps its axes.
+    let quarter = orientation.is_some_and(|o| o.to_exif() >= 5);
+    let shown_ppi = ppi.map(|(x, y)| if quarter { (y, x) } else { (x, y) });
+    if let Some(orientation) = orientation.filter(|_| matches!(f.id, "jpg" | "tiff"))
+        && let Some((tiff, size)) = vectorcraft_doc::cmyk::turned_cmyk(bytes, orientation, shown_ppi)
+    {
+        return stored(tiff, "image/tiff", size, shown_ppi);
+    }
     let kept = match f.id {
         _ if turned => None,
         "png" | "jpg" | "gif" | "webp" => Some(bytes.to_vec()),
@@ -879,36 +891,39 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
         vectorcraft_doc::cmyk::extra_samples_tiff_rgba(bytes, |c| cms.cmyk_to_srgb(c, false))
     };
     let mut img = match (f.id == "tiff").then(extra_samples).flatten() {
-        Some(img) => img,
+        Some(img) => image::DynamicImage::ImageRgba8(img),
         None => match (f.id == "tiff").then(|| vectorcraft_doc::cmyk::group3_tiff_rgba(bytes)).flatten() {
-            Some(read) => read.map_err(err)?,
+            Some(read) => image::DynamicImage::ImageRgba8(read.map_err(err)?),
             None => {
                 use image::ImageDecoder as _;
-                let mut decoder = reader.into_decoder().map_err(err)?;
+                let decoder = reader.into_decoder().map_err(err)?;
                 // The allowance counts the decoded samples and the RGBA pixels they become (#1717).
                 let (w, h) = decoder.dimensions();
                 if decoder.total_bytes() > MAX_RASTER_ALLOC || u64::from(w) * u64::from(h) * 4 > MAX_RASTER_ALLOC {
                     return Err(err(format!("an image of {w} × {h} pixels is too large to draw")));
                 }
-                let orientation = decoder.orientation().unwrap_or(image::metadata::Orientation::NoTransforms);
-                let mut img = image::DynamicImage::from_decoder(decoder).map_err(err)?;
-                img.apply_orientation(orientation);
-                img.to_rgba8()
+                image::DynamicImage::from_decoder(decoder).map_err(err)?
             }
         },
     };
+    img.apply_orientation(orientation.unwrap_or(image::metadata::Orientation::NoTransforms));
+    let mut img = img.into_rgba8();
     if f.id == "tga" {
         super::tgaread::fix_alpha(bytes, &mut img);
     }
-    as_png(img, None, ppi)
+    as_png(img, None, shown_ppi)
 }
 
 /// The EXIF orientation of encoded image `bytes` when it turns or flips the pixels; `None` when
-/// it leaves them as stored, or the image has none.
+/// it leaves them as stored, or the image has none. A TIFF the image decoder can't open (one with
+/// extra samples) has its Orientation tag read from its first image
+/// ([`vectorcraft_doc::cmyk::tiff_orientation`]).
 pub(crate) fn exif_orientation(bytes: &[u8]) -> Option<image::metadata::Orientation> {
     use image::ImageDecoder as _;
-    let mut decoder = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_decoder().ok()?;
-    decoder.orientation().ok().filter(|o| *o != image::metadata::Orientation::NoTransforms)
+    use image::metadata::Orientation;
+    let decoded = || image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_decoder().ok()?.orientation().ok();
+    let tagged = || vectorcraft_doc::cmyk::tiff_orientation(bytes).and_then(|v| Orientation::from_exif(u8::try_from(v).ok()?));
+    decoded().or_else(tagged).filter(|o| *o != Orientation::NoTransforms)
 }
 
 /// `img` stored as a PNG that keeps the file's resolution and carries `icc`, the ICC profile its
@@ -1004,13 +1019,38 @@ fn is_loss(note: &str) -> bool {
 /// Another name keeps the original file, with all it has.
 pub(crate) fn check_not_lossy_overwrite(st: &crate::DocState, target: &str, p: &Value, cmd: &str) -> Result<()> {
     let Some(losses) = overwrite_losses(st, target, p) else { return Ok(()) };
+    Err(lossy_overwrite(target, losses, cmd))
+}
+
+/// The refusal to write `target`, the file the document was read from, when reading it left out `losses`.
+fn lossy_overwrite(target: &str, losses: &[String], cmd: &str) -> EngineError {
     let what = losses_summary(losses);
-    Err(bad(
+    bad(
         cmd,
         format!(
             "{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway"
         ),
-    ))
+    )
+}
+
+/// The file the document was read from and what reading it left out, when a write to that file
+/// needs `acknowledgeLoss` and `p` does not have it ([`overwrite_losses`]).
+pub(crate) fn lossy_source(st: &crate::DocState, p: &Value) -> Option<(String, Vec<String>)> {
+    let source = st.imported_from.as_deref().filter(|_| !st.import_losses.is_empty())?;
+    (!bool_or(p, "acknowledgeLoss", false)).then(|| (source.to_string(), st.import_losses.clone()))
+}
+
+/// None of the files `targets` (every file a save writes, before any is written) is the
+/// `source` file that reading left `losses` out of ([`lossy_source`]).
+pub(crate) fn check_files_not_lossy_overwrite<'a>(
+    source: &(String, Vec<String>),
+    targets: impl IntoIterator<Item = &'a str>,
+    cmd: &str,
+) -> Result<()> {
+    match targets.into_iter().find(|t| same_file(&source.0, t)) {
+        Some(target) => Err(lossy_overwrite(target, &source.1, cmd)),
+        None => Ok(()),
+    }
 }
 
 /// What writing the file `target` for document `st` would lose for good: the notes of what reading

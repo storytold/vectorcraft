@@ -902,6 +902,17 @@ font-technology	Variable	Variabili
 	The selected character's font is not available.	Il font del carattere selezionato non è disponibile.
 	No alternates for the selected character.	Nessuna alternativa per il carattere selezionato.
 	Double-click to replace	Fai doppio clic per sostituire
+	Select one character with the Type tool first.	Seleziona prima un carattere con lo strumento Testo.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} è un glifo di {font}, non del font del testo selezionato ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} appartiene a {base} (U+{base_code}) {place}; la tua selezione è {sel} (U+{code}).
+	at the start of a word	all’inizio di una parola
+	in the middle of a word	in mezzo a una parola
+	at the end of a word	alla fine di una parola
+	standing alone	da solo
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} non è un’alternativa di {sel} (U+{code}) così come si trova nella sua parola.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Fai doppio clic per inserire invece {base} (U+{code}): una forma di presentazione non si unisce, la lettera sì.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Inserito {base} (U+{code}) al posto di una forma di presentazione: il font lo unisce ai vicini in base alla posizione.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Nessuna funzione OpenType disegna questo glifo qui: sostituisce il glifo del carattere e potrebbe non unirsi ai caratteri vicini.
 	Double-click to insert	Fai doppio clic per inserire
 	Double-click to rename	Fai doppio clic per rinominare
 	Double-click to target the contents	Fai doppio clic per impostare il contenuto come destinazione
@@ -2032,6 +2043,8 @@ file-filter	Templates	Modelli
 	Metallic Gradients	Sfumature metalliche
 	Meters	Metri
 	Method:	Metodo:
+	Pad	Prolunga
+	Repeats	Ripetizioni
 	Millimeters	Millimetri
 	Minify	Minifica
 	Minimal	Minimale
@@ -2099,6 +2112,7 @@ file-filter	Templates	Modelli
 	Move Slices	Sposta sezioni
 	Move Spine Point	Sposta punto dorsale
 	Reshape Spine Segment	Rimodella segmento della dorsale
+	Blend Easing	Andamento fusione
 	Move Brush	Sposta pennello
 	Move Swatch	Sposta campione
 	Move Up	Sposta su
@@ -2398,6 +2412,10 @@ file-filter	Templates	Modelli
 	Arch	Volta
 @msg	select point type or type on a path	seleziona testo per punti o testo su tracciato
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	il testo su tracciato in un testo concatenato non può usare il testo dinamico: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	il testo su un tracciato aperto o composto non può essere centrato in alto o in basso: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	il testo su un tracciato senza lunghezza o senza altezza non può essere centrato: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	il testo su tracciato in un testo concatenato non può essere centrato in alto o in basso: {frames}
+@msg	select type on a closed path	seleziona del testo su un tracciato chiuso
 	Optimize for fast web view	Ottimizza per visualizzazione web veloce
 	Optimized	Ottimizzato
 	Options	Opzioni
@@ -2969,6 +2987,7 @@ digits	Malayalam	Malayalam
 	Rotate View Tool	Strumento Ruota vista
 	Trackpad Gesture to Rotate View	Ruota vista con un gesto sul trackpad
 	Hold a Tool Shortcut to Use the Tool Temporarily	Tieni premuta la scorciatoia di uno strumento per usarlo temporaneamente
+	Show Bounding Box While Moving and Drawing	Mostra riquadro di delimitazione durante lo spostamento e il disegno
 	Rotate…	Ruota…
 	Rotation	Rotazione
 	Roughen…	Irruvidisci…
@@ -3459,6 +3478,9 @@ digits	Malayalam	Malayalam
 	Split Path	Dividi tracciato
 	spot	spot
 	Spot Color	Colore spot
+	Spot Color Objects	Oggetti con colori spot
+	Pattern Objects	Oggetti con motivi
+	Gradient Objects	Oggetti con sfumature
 	Spot Colors	Colori spot
 	Spot Colors…	Colori spot…
 	Spread:	Estensione:
@@ -3769,6 +3791,8 @@ digits	Malayalam	Malayalam
 	Type on a Path	Testo su tracciato
 	Type on a Path Options	Opzioni testo su tracciato
 	Type on a Path Options…	Opzioni testo su tracciato…
+	Center on Top	Centra in alto
+	Center on Bottom	Centra in basso
 	Type on a Path Tool	Strumento Testo su tracciato
 	Type Orientation	Orientamento testo
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Il testo resta testo e ogni traccia diventa una linea con il suo spessore e i suoi tratteggi.
@@ -4423,6 +4447,8 @@ axis	Both	Entrambi
 @msg	the Smooth slider is not open	il cursore Smussa non è aperto
 @msg	the screen color sampler is already open	il campionatore di colore dello schermo è già aperto
 @msg	this system has no screen color sampler	questo sistema non ha un campionatore di colore dello schermo
+@msg	the screen color sampler did not answer	il campionatore di colore dello schermo non ha risposto
+@msg	the screen color sampler failed	il campionatore di colore dello schermo ha avuto un errore
 @msg	bad colour `{hex}` (#rrggbb)	colore non valido `{hex}` (#rrggbb)
 @msg	bad page tree	albero delle pagine non valido
 @msg	bad shortcut	scelta rapida non valida
@@ -4452,6 +4478,7 @@ axis	Both	Entrambi
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` non è un colore come "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: al massimo {MAX_TABLE} colori
 @msg	command `{0}` is not available right now: {1}	il comando `{0}` non è disponibile in questo momento: {1}
+@msg	command `{id}` is not available right now	il comando `{id}` non è disponibile in questo momento
 @msg	compound paths can only contain paths	i tracciati composti possono contenere solo tracciati
 @msg	compressed (RLE) bitmaps can't be read yet	le bitmap compresse (RLE) non possono ancora essere lette
 @msg	damaged	danneggiato
@@ -5663,6 +5690,7 @@ lighting	Light	Luce
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Guide geometriche
+	Optical Effects	Effetti ottici
 	Geometric Patterns	Motivi geometrici
 	Grit Textures	Texture granulose
 	Ease In	Inizio graduale
@@ -5707,6 +5735,9 @@ axis	Y Axis	Asse Y
 @msg	`dither` must be true or false	`dither` deve essere true o false
 	Perceptual	Percettivo
 @msg	`method` must be classic or perceptual	`method` deve essere classic o perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` deve essere pad, repeat o reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` deve essere un numero intero da 1 a {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` si applica alle sfumature lineari, radiali, coniche e a rombo
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Installare “{name}”, che chiede un budget di calcolo elevato?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Ogni esecuzione può durare fino a {minutes} minuti e svolgere {times} volte il lavoro consentito agli altri plug-in. Viene eseguita in background ed è possibile annullarla.
@@ -5932,6 +5963,11 @@ axis	Y Axis	Asse Y
 	User Brush Library 9	Libreria pennelli utente 9
 	User Brush Library 10	Libreria pennelli utente 10
 	Art Ribbons	Nastri grafici
+	Ink and Wash	Inchiostro e acquerellato
+	Tapered Ink	Inchiostro affusolato
+	Brush Pen	Pennarello a pennello
+	Soft Wash	Velatura morbida
+	Pooling Wash	Velatura con bordo
 	Zigzag	Zigzag
 	Burst Ray	Raggio d’impatto
 	Dash Trail	Scia tratteggiata
@@ -5956,6 +5992,11 @@ axis	Y Axis	Asse Y
 	Grass Fan	Ventaglio per erba
 	Pattern Borders	Bordi a motivo
 	Scatter Shapes	Forme a dispersione
+	Dry Media	Tecniche secche
+	Chalk Grain	Grana di gesso
+	Graphite Pencil	Matita di grafite
+	Wax Crayon	Pastello a cera
+	Charcoal Dust	Polvere di carboncino
 	Save Brush Library…	Salva libreria pennelli…
 @msg	`{_1}` has no brushes to apply	`{_1}` non ha pennelli da applicare
 @msg	missing `library` (see brush.libraries)	manca `library` (vedi brush.libraries)
@@ -6620,3 +6661,8 @@ breakText	Glyphs	Glifi
 @msg	Some islands could not be joined to the area around the art	Non è stato possibile collegare alcune isole all’area intorno alla grafica
 @msg	`width` must be from {lo} to {hi} pt	`width` deve essere compreso tra {lo} e {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve essere un numero intero compreso tra 1 e {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Riquadro e linee di spellicolatura…
+	Weed Box and Lines	Riquadro e linee di spellicolatura
+	Margin	Margine
+	Box	Riquadro
+	Swatch	Campione

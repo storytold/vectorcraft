@@ -426,6 +426,21 @@ fn kinsoku_shori_type_counts_the_gaps_that_close() {
     assert_eq!(split_end(55.0), 7, "five gaps close by 5 pt: 」 is pushed in");
 }
 
+/// A zero-width joiner between two CJK characters takes no gap of its own: the layout closes the
+/// one gap between the characters on either side, so the push-in counts five gaps (5 pt), short of
+/// the 6 pt the line overflows by.
+#[test]
+fn kinsoku_shori_type_counts_no_gap_at_a_format_control() {
+    let text = "一二\u{200D}三四五」六";
+    let mut glyphs = full_width(text);
+    glyphs[2].adv = 0.0;
+    let end = |width: f64| {
+        break_line(text, &glyphs, 0, width, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushInFirst, false, false, &[]).0
+    };
+    assert_eq!(end(54.0), 5, "五 is pushed out with 」");
+    assert_eq!(end(55.0), 7, "five gaps close by 5 pt: 」 is pushed in");
+}
+
 /// Mojikumi: the greedy breaker measures a line as it is set, with its last character narrowed
 /// (`line_end`): 」 set half width ends a measure of three and a half characters. Only the last
 /// glyph of the last cluster counts, and only where the line may end.

@@ -1252,7 +1252,7 @@ fn art_with_live_objects_draws_pattern_layout_edits() {
     d.patterns.push(def);
     let band = vectorcraft_geom::shapes::rectangle(Rect::new(-80.0, -40.0, 80.0, 40.0));
     let filled = Node::path(d.alloc_id(), band, vectorcraft_doc::Appearance::basic(pattern_paint("Checks"), Paint::None, 0.0));
-    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
     let options = EnvelopeOptions { distort_appearance: true, distort_pattern_fills: true, ..Default::default() };
     let envelope = Node::new(
         d.alloc_id(),
@@ -1398,7 +1398,7 @@ fn live_objects_in_symbol_art_draw_symbol_and_pattern_edits() {
 /// An envelope of `d` bending `content` with an arc warp (30%); with `patterns`, Distort
 /// Appearance and Distort Pattern Fills are on, and the tiles of its pattern fills bend with it.
 fn arc_envelope(d: &mut Document, content: Vec<Node>, patterns: bool) -> Node {
-    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
     let options = vectorcraft_doc::live::EnvelopeOptions { distort_appearance: patterns, distort_pattern_fills: patterns, ..Default::default() };
     let content = content.into_iter().map(Arc::new).collect();
     Node::new(

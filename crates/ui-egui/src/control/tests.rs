@@ -12,6 +12,400 @@ fn input_request(app: &mut VectorcraftApp, method: &str, params: Value) -> Value
     r
 }
 
+/// A reply hides a hidden library's id and path at every occurrence, in an error that wraps them in
+/// spaces, brackets or quotes, follows them with more path text, or quotes the path with `{:?}`.
+#[test]
+fn a_reply_hides_a_hidden_library_whatever_surrounds_it() {
+    let path = std::env::temp_dir().join("vc-named-reply").join("b.svg").to_string_lossy().into_owned();
+    let id = format!("loaded/{path}");
+    let hidden = hiding(&[(&id, "loaded/b.svg")], &[]);
+    let mut reply = json!({"ok": false, "error": format!("can't add ( {id} ) or '{id}', from {path}; also {id}.bak and {path:?}")});
+    hide_under_a_root("named-reply", &mut reply, &hidden);
+    assert_eq!(reply["error"], "can't add ( loaded/b.svg ) or 'loaded/b.svg', from b.svg; also loaded/b.svg.bak and \"b.svg\"", "{reply}");
+}
+
+/// A [`super::Hiding`] with `hidden` ids, each with its shown id, and `readable` ids.
+fn hiding(hidden: &[(&str, &str)], readable: &[&str]) -> super::Hiding {
+    let mut hidden: Vec<(String, String)> = hidden.iter().map(|(id, shown)| (id.to_string(), shown.to_string())).collect();
+    hidden.sort_by_key(|(id, _)| std::cmp::Reverse(id.len()));
+    super::Hiding { hidden, readable: readable.iter().map(|id| id.to_string()).collect(), sent: Vec::new() }
+}
+
+/// [`super::hide_library_ids`] on `reply`, under a read root made for `tag`.
+fn hide_under_a_root(tag: &str, reply: &mut Value, hidden: &super::Hiding) {
+    let root = std::env::temp_dir().join(format!("vc-{tag}-root-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || super::hide_library_ids(reply, hidden));
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// Encoded file data in a reply, a base64 string under `dataBase64`, `pngBase64`, `thumbnailBase64`
+/// or `thumbnail` (a library item's or a PDF page's PNG), stays as it is when it holds a hidden
+/// library's path. Text that is not base64 under such a key, an object or a list under it, and any
+/// other key ending in `Base64` are searched.
+#[test]
+fn a_reply_keeps_encoded_data_that_holds_a_hidden_path() {
+    let hidden = hiding(&[("loaded/assets/icon", "loaded/icon")], &[]);
+    let data = "QUJ+assets/iconREVGxQQ==";
+    let mut reply = json!({"ok": true, "result": {
+        "graphics": [{"name": "a", "thumbnail": data}, {"name": "b", "thumbnail": "assets/icon.png"}],
+        "files": [{"name": "a.png", "dataBase64": data, "pngBase64": "assets/icon.png", "thumbnailBase64": data}],
+        "status": "from assets/icon",
+        "dataBase64": {"note": "from assets/icon"},
+        "pngBase64": ["from assets/icon"],
+        "otherBase64": data,
+    }});
+    hide_under_a_root("base64", &mut reply, &hidden);
+    let files = &reply["result"]["files"][0];
+    assert_eq!((&files["dataBase64"], &files["thumbnailBase64"]), (&json!(data), &json!(data)), "{reply}");
+    assert_eq!(files["pngBase64"], "icon.png", "{reply}");
+    let graphics = &reply["result"]["graphics"];
+    assert_eq!((&graphics[0]["thumbnail"], &graphics[1]["thumbnail"]), (&json!(data), &json!("icon.png")), "{reply}");
+    assert_eq!(reply["result"]["status"], "from icon", "{reply}");
+    assert_eq!(reply["result"]["dataBase64"]["note"], "from icon", "{reply}");
+    assert_eq!(reply["result"]["pngBase64"][0], "from icon", "{reply}");
+    assert_eq!(reply["result"]["otherBase64"], "QUJ+iconREVGxQQ==", "{reply}");
+}
+
+/// A hidden path followed by more text stays only when the longer text is another loaded library's
+/// id: text after the path that the request may read, a `..` part and the part of the path before a
+/// space do not keep it.
+#[test]
+fn a_reply_keeps_a_hidden_path_only_inside_a_known_library_id() {
+    let base = std::env::temp_dir().join(format!("vc-continuation-{}", std::process::id()));
+    let root = base.join("in");
+    std::fs::create_dir_all(&root).unwrap();
+    let hidden_path = base.join("in x").join("b.svg").to_string_lossy().into_owned();
+    let other = base.join("outside").join("b.svg").to_string_lossy().into_owned();
+    let known = format!("loaded/{other}{}sub.svg", std::path::MAIN_SEPARATOR);
+    let hidden = hiding(&[(&format!("loaded/{hidden_path}"), "loaded/b.svg"), (&format!("loaded/{other}"), "loaded/b.svg (2)")], &[&known]);
+    let up = ["", "..", "..", "in", "a.svg"].join(std::path::MAIN_SEPARATOR_STR);
+    let mut reply = json!({"error": format!("kept {hidden_path}.bak, {other}{up} and {known}")});
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || super::hide_library_ids(&mut reply, &hidden));
+    let _ = std::fs::remove_dir_all(base);
+    assert_eq!(reply["error"], json!(format!("kept b.svg.bak, b.svg (2){up} and {known}")), "{reply}");
+    // A readable library's id with a space after the hidden part stays whole.
+    // A readable id with a `..` part does not keep the hidden part.
+    let hidden = hiding(&[("loaded//art/in", "loaded/in")], &["loaded//art/in work/a.svg", "loaded//art/in/../ok/c.svg"]);
+    let mut reply = json!({"error": "x loaded//art/in work/a.svg, /art/in work/a.svg and /art/in work; /art/in/../ok/c.svg"});
+    hide_under_a_root("space-continuation", &mut reply, &hidden);
+    assert_eq!(reply["error"], "x loaded//art/in work/a.svg, /art/in work/a.svg and in work; in/../ok/c.svg", "{reply}");
+}
+
+/// With matching in any case (as on Windows), a hidden path written in other letter cases is hidden
+/// too; a path in a `file:` URL with `%XX` escapes is hidden on every platform, the whole URL shown as
+/// the file name.
+#[test]
+fn a_reply_hides_a_path_in_any_case_and_escaped() {
+    let hidden = hiding(&[("loaded/C:/Libs/My Swatches/b.svg", "loaded/b.svg")], &[]);
+    let mut reply = json!({"error": "from c:/LIBS/my swatches/B.SVG and file:///C:/Libs/My%20Swatches/b.svg"});
+    let pairs = super::hidden_text(&hidden);
+    let rewrite = super::Rewrite { pairs, hiding: &hidden, fold: true };
+    super::replace_in_value(&mut reply, &rewrite);
+    assert_eq!(reply["error"], "from b.svg and b.svg", "{reply}");
+    // Two libraries whose paths differ only in letter case keep their own ids.
+    let two = hiding(&[("loaded//libs/b.svg", "loaded/b.svg"), ("loaded//libs/B.svg", "loaded/B.svg")], &[]);
+    let mut reply = json!({"error": "x /libs/B.svg y /libs/b.svg z /LIBS/b.svg"});
+    super::replace_in_value(&mut reply, &super::Rewrite { pairs: super::hidden_text(&two), hiding: &two, fold: true });
+    assert_eq!(reply["error"], "x B.svg y b.svg z b.svg", "{reply}");
+    // A readable id that begins with a hidden one stays whole in any case, `loaded/` included.
+    let nested = hiding(&[("loaded//libs/in", "loaded/in")], &["loaded//libs/in/a.svg"]);
+    let mut reply = json!({"error": "LOADED//LIBS/IN/A.SVG"});
+    super::replace_in_value(&mut reply, &super::Rewrite { pairs: super::hidden_text(&nested), hiding: &nested, fold: true });
+    assert_eq!(reply["error"], "LOADED//LIBS/IN/A.SVG", "{reply}");
+    let mut reply = json!({"error": "file:///C:/Libs/My%20Swatches/b.svg"});
+    hide_under_a_root("escaped", &mut reply, &hidden);
+    assert_eq!(reply["error"], "b.svg", "{reply}");
+    let hidden = hiding(&[("loaded//libs/caf\u{e9}/b.svg", "loaded/b.svg")], &[]);
+    let mut reply = json!({"error": "file:///libs/caf%C3%a9/b.svg and file:///libs%2Fcaf%c3%A9%2Fb.svg?next=%2Fdocs&x=%FF at 100%25"});
+    hide_under_a_root("escaped-mixed", &mut reply, &hidden);
+    assert_eq!(reply["error"], "b.svg and b.svg?next=%2Fdocs&x=%FF at 100%25", "{reply}");
+    // A `file:` URL without escapes is replaced whole too, with `localhost` or another host.
+    let mut reply = json!({"error": "file:///libs/caf\u{e9}/b.svg and FILE://localhost/libs/caf%C3%A9/b.svg"});
+    hide_under_a_root("plain-url", &mut reply, &hidden);
+    assert_eq!(reply["error"], "b.svg and b.svg", "{reply}");
+    let mut reply = json!({"error": "file://remote/libs/caf\u{e9}/b.svg; file:/libs/caf\u{e9}/b.svg; file: x/libs/caf\u{e9}/b.svg"});
+    hide_under_a_root("other-host", &mut reply, &hidden);
+    assert_eq!(reply["error"], "b.svg; b.svg; file: xb.svg", "{reply}");
+    let hidden = hiding(&[("loaded///host/share/c.svg", "loaded/c.svg")], &[]);
+    let mut reply = json!({"error": "file://host/share/c.svg, file:////host/share/c.svg, file://localhost//host/share/c.svg"});
+    hide_under_a_root("host-url", &mut reply, &hidden);
+    assert_eq!(reply["error"], "c.svg, c.svg, c.svg", "{reply}");
+}
+
+/// Only a string with a `%XX` escape is decoded before it is searched: a `%` that begins no escape
+/// leaves the text as it is, and the reply is the same either way.
+#[test]
+fn only_a_percent_escape_is_decoded() {
+    for (text, escaped) in [("width=\"100%\"", false), ("50% off", false), ("%zz%4", false), ("%", false), ("a%2Fb", true), ("%fF", true)] {
+        assert_eq!(super::has_percent_escape(text), escaped, "{text}");
+        let decoded = super::decoded_with_spans(text).map(|(decoded, _)| decoded);
+        assert_eq!(decoded.as_deref() != Some(text), escaped, "{text}: an escape alone changes the decoded text");
+    }
+    let hidden = hiding(&[("loaded//libs/b.svg", "loaded/b.svg")], &[]);
+    let mut reply = json!({"error": "100% of /libs/b.svg and file:///libs%2Fb.svg"});
+    super::replace_in_value(&mut reply, &super::Rewrite { pairs: super::hidden_text(&hidden), hiding: &hidden, fold: false });
+    assert_eq!(reply["error"], "100% of b.svg and b.svg", "{reply}");
+}
+
+/// A path a failed request sent takes the place of a hidden library's id for the same path, written
+/// with the other separator, and in another letter case when matching in any case (as on Windows).
+#[test]
+fn a_sent_path_replaces_a_hidden_id_for_the_same_path() {
+    let mut hidden = hiding(&[(r"loaded/C:\Libs\b.svg", "loaded/b.svg (2)"), ("loaded//other/b.svg", "loaded/b.svg")], &[]);
+    hidden.set_hidden(vec![("loaded/c:/libs/B.svg".to_string(), "loaded/B.svg".to_string())], true);
+    let shown: Vec<&str> = hidden.hidden.iter().map(|(_, shown)| shown.as_str()).collect();
+    assert_eq!(shown, ["loaded/B.svg", "loaded/b.svg"], "{hidden:?}");
+    assert_eq!(hidden.sent, [("loaded/c:/libs/B.svg".to_string(), "loaded/B.svg".to_string())]);
+    hidden.set_hidden(vec![("loaded//OTHER/b.svg".to_string(), "loaded/x.svg".to_string())], false);
+    assert_eq!((hidden.hidden[1].1.as_str(), hidden.sent.len()), ("loaded/b.svg", 2), "{hidden:?}");
+    // A library loaded by a relative path, and the absolute path it reads as, sent: the sent path's
+    // file name is shown for both, not the library's numbered id.
+    let mut hidden = hiding(&[("loaded/data/icon.svg", "loaded/icon.svg (2)")], &[]);
+    let absolute = std::path::absolute("data/icon.svg").unwrap().to_string_lossy().into_owned();
+    hidden.set_hidden(vec![(format!("loaded/{absolute}"), "loaded/icon.svg".to_string())], false);
+    let mut reply = json!({"error": format!("can't read \"data/icon.svg\" or {absolute}")});
+    hide_under_a_root("sent-absolute", &mut reply, &hidden);
+    assert_eq!(reply["error"], "can't read \"icon.svg\" or icon.svg", "{reply}");
+}
+
+/// Outside Windows, a `\` in a native path is part of a name: a sent path that differs from a hidden
+/// library's path only by `/` in place of that `\` names another file, so the library keeps its id
+/// and a reply does not read either path as a spelling of the other.
+#[cfg(not(windows))]
+#[test]
+fn a_backslash_in_a_native_path_keeps_two_paths_apart() {
+    let mut hidden = hiding(&[(r"loaded//out/weird\name.svg", r"loaded/weird\name.svg")], &[]);
+    hidden.set_hidden(vec![("loaded//out/weird/name.svg".to_string(), "loaded/name.svg".to_string())], false);
+    assert_eq!(hidden.hidden[0].1, r"loaded/weird\name.svg", "{hidden:?}");
+    let mut reply = json!({"error": r"no /out/weird\name.svg, /out/weird/name.svg or \out\weird\name.svg"});
+    hide_under_a_root("native-backslash", &mut reply, &hidden);
+    assert_eq!(reply["error"], r"no weird\name.svg, name.svg or \out\weird\name.svg", "{reply}");
+}
+
+/// A sent path whose text overlaps part of a hidden library's path does not keep that library's path
+/// from being hidden: the hidden libraries are matched first.
+#[test]
+fn a_sent_path_does_not_stop_a_hidden_library_path_from_being_hidden() {
+    let mut hidden = hiding(&[("loaded//home/secret/dir/lib", "loaded/lib")], &[]);
+    hidden.set_hidden(vec![("loaded//dir/lib/sent-folder/longer".to_string(), "loaded/longer".to_string())], false);
+    let mut reply = json!({"error": "can't read /home/secret/dir/lib/sent-folder/longer"});
+    hide_under_a_root("sent-overlap", &mut reply, &hidden);
+    assert_eq!(reply["error"], "can't read lib/sent-folder/longer", "{reply}");
+}
+
+/// A hidden relative path is also hidden where a reply shows it as the absolute path it reads as from
+/// the working folder.
+#[test]
+fn a_reply_hides_a_hidden_relative_path_written_as_absolute() {
+    let hidden = hiding(&[("loaded/data/icon.svg", "loaded/icon.svg")], &[]);
+    let absolute = std::path::absolute("data/icon.svg").unwrap().to_string_lossy().into_owned();
+    let mut reply = json!({"error": format!("can't read {absolute}")});
+    hide_under_a_root("relative-absolute", &mut reply, &hidden);
+    assert_eq!(reply["error"], "can't read icon.svg", "{reply}");
+}
+
+/// The paths outside the read root that a request sends, as a path, a `file:` URL (also one that names
+/// another host), under `~` or starting with `../`, or as a relative path in a path param, are hidden
+/// by their file names; plain text and a path inside the root are not.
+#[test]
+fn a_request_sends_paths_that_an_error_hides() {
+    let base = std::env::temp_dir().join(format!("vc-sent-paths-{}", std::process::id()));
+    let root = base.join("in");
+    std::fs::create_dir_all(&root).unwrap();
+    let inside = root.join("a.svg").to_string_lossy().into_owned();
+    let keep = json!(["a/b", inside, "file://host/g.svg"]);
+    let params = json!({"path": "/x/my lib/b.svg", "file": "outside/h.svg", "list": ["file:///y/c%20d.svg", "~/e.svg", "../f.svg"], "other": keep});
+    let mut sent = Vec::new();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || super::sent_paths(&params, &mut sent));
+    let _ = std::fs::remove_dir_all(base);
+    let pair = |path: &str, name: &str| (format!("loaded/{path}"), format!("loaded/{name}"));
+    let want = [
+        pair("outside/h.svg", "h.svg"),
+        pair("/y/c d.svg", "c d.svg"),
+        pair("~/e.svg", "e.svg"),
+        pair("../f.svg", "f.svg"),
+        pair("//host/g.svg", "g.svg"),
+        pair("/x/my lib/b.svg", "b.svg"),
+    ];
+    assert_eq!(sent, want);
+}
+
+/// Under a read root, an absolute path or a `file:` URL outside it is unreadable; an empty string, a
+/// relative name and a path inside the root are not.
+#[test]
+fn an_absolute_path_outside_the_read_root_is_unreadable() {
+    let base = std::env::temp_dir().join(format!("vc-unreadable-absolute-{}", std::process::id()));
+    std::fs::create_dir_all(base.join("in")).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&base.join("in")], &[]).unwrap();
+    let inside = base.join("in").join("a.svg").to_string_lossy().into_owned();
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        assert!(super::unreadable_absolute("/outside/root/x"));
+        assert!(super::unreadable_absolute("file:///outside/root/x"));
+        assert!(super::unreadable_absolute("FILE:///outside/root/x"));
+        assert!(super::unreadable_absolute("file://other-host/share/x"));
+        let url = if inside.starts_with('/') { format!("File://{inside}") } else { format!("File:///{}", inside.replace('\\', "/")) };
+        assert!(!super::unreadable_absolute(&url), "{url}");
+        assert!(super::readable_value(&url), "{url}");
+        let escaped = url.replacen("/in/a.svg", "/%69n/a.svg", 1);
+        assert!(!super::unreadable_absolute(&escaped) && super::readable_value(&escaped), "{escaped}");
+        assert!(super::unreadable_absolute("file:///outside%2Froot/x"));
+        assert!(!super::unreadable_absolute(""));
+        assert!(!super::unreadable_absolute("keep"));
+        assert!(!super::unreadable_absolute(&inside));
+    });
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Without a read root, a `file:` URL that names another host may be read, and a recorded step keeps
+/// it.
+#[test]
+fn a_url_naming_another_host_stays_without_a_read_root() {
+    assert!(!super::unreadable_absolute("file://host/share/a.svg"));
+    assert!(super::readable_value("file://host/share/a.svg"));
+    let mut params = json!({"path": "file://host/share/a.svg", "list": ["file://host/share/b.svg"]});
+    let fields = params.as_object_mut().unwrap();
+    super::leave_out_unreadable_params(fields);
+    assert_eq!(params, json!({"path": "file://host/share/a.svg", "list": ["file://host/share/b.svg"]}));
+}
+
+/// A hidden path quoted with `{:?}` is hidden with its quotes and control characters escaped.
+#[test]
+fn a_reply_hides_a_quoted_path_with_escaped_quotes() {
+    let hidden = hiding(&[("loaded//outside/a\"b\t.svg", "loaded/a\"b\t.svg")], &[]);
+    let mut reply = json!({"error": format!("can't read {:?}", "/outside/a\"b\t.svg")});
+    hide_under_a_root("quoted", &mut reply, &hidden);
+    assert_eq!(reply["error"], "can't read \"a\\\"b\\t.svg\"", "{reply}");
+}
+
+/// Each replacement is chosen from the text as given: a hidden path inside the id shown for another
+/// hidden library is not replaced again, and a readable id written with `%XX` escapes keeps the hidden
+/// path it begins with.
+#[test]
+fn a_reply_replaces_each_hidden_text_once() {
+    let hidden = hiding(&[("loaded//b.svg", "loaded/b.svg")], &[]);
+    let mut reply = json!({"error": "no loaded//b.svg"});
+    hide_under_a_root("root-file", &mut reply, &hidden);
+    assert_eq!(reply["error"], "no loaded/b.svg", "{reply}");
+    let hidden = hiding(&[("loaded//art/in", "loaded/in")], &["loaded//art/in work/a.svg"]);
+    let mut reply = json!({"error": "file:///art/in%20work/a.svg"});
+    hide_under_a_root("escaped-readable", &mut reply, &hidden);
+    assert_eq!(reply["error"], "file:///art/in%20work/a.svg", "{reply}");
+    // A URL whose scheme another hidden path took already is cut at its path.
+    let hidden = hiding(&[("loaded//a", "loaded/a"), ("loaded/file", "loaded/file")], &[]);
+    let mut reply = json!({"error": "file:///a"});
+    hide_under_a_root("scheme-taken", &mut reply, &hidden);
+    assert_eq!(reply["error"], "file://a", "{reply}");
+    // Keys that come to read the same keep every field; a key that is not rewritten keeps its name.
+    let hidden = hiding(&[("loaded//out/a.svg", "loaded/a.svg")], &[]);
+    let mut reply = json!({"result": {"a.svg": 1, "file:///out/a.svg": 2, "/out/a.svg": 3}});
+    hide_under_a_root("same-keys", &mut reply, &hidden);
+    assert_eq!(reply["result"]["a.svg"], 1, "{reply}");
+    let mut values: Vec<_> = reply["result"].as_object().map(|o| o.values().filter_map(Value::as_u64).collect()).unwrap_or_default();
+    values.sort_unstable();
+    assert_eq!(values, [1, 2, 3], "{reply}");
+}
+
+/// A library saved with another platform's absolute path is hidden, also when the working folder is
+/// inside the read root.
+#[test]
+fn a_library_saved_with_another_platforms_path_is_hidden() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.ui.color_guide_limit = r"loaded/C:\Users\someone\b.svg".to_string();
+    let here = std::env::current_dir().unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&here], &[]).unwrap();
+    let hiding = vectorcraft_engine::file_access::confine(roots.as_ref(), || super::unreadable_library_ids(&app));
+    assert_eq!(hiding.hidden, [(r"loaded/C:\Users\someone\b.svg".to_string(), "loaded/b.svg".to_string())], "{hiding:?}");
+}
+
+/// Another platform's absolute path is outside the read root, also when the working folder is inside
+/// it: a request that sends one sees it by its file name.
+#[test]
+fn another_platforms_absolute_path_is_unreadable() {
+    let here = std::env::current_dir().unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&here], &[]).unwrap();
+    let path = r"C:\Users\someone\private.svg";
+    let mut sent = Vec::new();
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        assert!(!super::readable(path) && super::unreadable_absolute(path));
+        super::sent_paths(&json!({"list": [path]}), &mut sent);
+    });
+    assert_eq!(sent, [(format!("loaded/{path}"), "loaded/private.svg".to_string())]);
+}
+
+/// A hidden relative path is hidden where it stands alone or after leading `./` and `../` parts, and
+/// stays where it ends a longer path, also one with a `.` or `..` part before it.
+#[test]
+fn a_reply_keeps_a_longer_path_that_ends_with_a_hidden_relative_path() {
+    let hidden = hiding(&[("loaded/data/icon.svg", "loaded/icon.svg")], &[]);
+    let mut reply = json!({"result": "kept /work/data/icon.svg and xdata/icon.svg, hid ./data/icon.svg, \"data/icon.svg\" and loaded/data/icon.svg"});
+    hide_under_a_root("relative", &mut reply, &hidden);
+    assert_eq!(reply["result"], "kept /work/data/icon.svg and xdata/icon.svg, hid ./icon.svg, \"icon.svg\" and loaded/icon.svg", "{reply}");
+    let mut reply = json!({"result": "kept /allowed/./data/icon.svg, /allowed/../data/icon.svg and a./data/icon.svg, hid ../data/icon.svg and './../data/icon.svg'"});
+    hide_under_a_root("relative-dots", &mut reply, &hidden);
+    assert_eq!(
+        reply["result"], "kept /allowed/./data/icon.svg, /allowed/../data/icon.svg and a./data/icon.svg, hid ../icon.svg and './../icon.svg'",
+        "{reply}"
+    );
+}
+
+/// Outside Windows a `\` is part of a file name: a sent path outside the read root is shown by its
+/// whole file name.
+#[cfg(not(windows))]
+#[test]
+fn a_sent_path_keeps_a_backslash_in_its_file_name() {
+    let root = std::env::temp_dir().join(format!("vc-sent-backslash-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
+    let mut sent = Vec::new();
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || super::sent_paths(&json!({"path": "/out/weird\\name.svg"}), &mut sent));
+    let _ = std::fs::remove_dir_all(root);
+    assert_eq!(sent, [("loaded//out/weird\\name.svg".to_string(), "loaded/weird\\name.svg".to_string())]);
+}
+
+/// `ui.inspect` and `ui.docking` show a hidden library whose file is at the top of the file system
+/// (`/b.svg`) as `loaded/b.svg`, with its separator.
+#[test]
+fn a_hidden_library_at_the_top_of_the_file_system_keeps_its_shown_id() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let panel = "library:swatches:loaded//b.svg".to_string();
+    app.ui.color_guide_limit = "loaded//b.svg".to_string();
+    app.ui.open_panel = Some(panel);
+    let root = std::env::temp_dir().join(format!("vc-top-level-library-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
+    let (inspected, docking) = vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        (input_request(&mut app, "ui.inspect", json!({})), input_request(&mut app, "ui.docking", json!({})))
+    });
+    let _ = std::fs::remove_dir_all(root);
+    assert_eq!(inspected["result"]["ui"]["color_guide_limit"], "loaded/b.svg", "{inspected}");
+    assert_eq!(inspected["result"]["ui"]["open_panel"], "library:swatches:loaded/b.svg", "{inspected}");
+    assert_eq!(docking["result"]["flyout"], "library:swatches:loaded/b.svg", "{docking}");
+}
+
+/// A path outside the read root that a request sent is shown by its file name in a reply that succeeded
+/// as in one that failed.
+#[test]
+fn a_sent_path_reads_the_same_whatever_the_outcome() {
+    let app = VectorcraftApp::new(Session::new(), Services::default());
+    let root = std::env::temp_dir().join(format!("vc-sent-outcome-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
+    let sent = json!({"path": "/outside/b.svg"});
+    let mut done = json!({"ok": true, "result": {"path": "/outside/b.svg"}});
+    let mut failed = json!({"ok": false, "error": "can't read /outside/b.svg"});
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        super::hide_in_reply(&app, &mut done, &sent, super::Hiding::default());
+        super::hide_in_reply(&app, &mut failed, &sent, super::Hiding::default());
+    });
+    let _ = std::fs::remove_dir_all(root);
+    assert_eq!(done["result"]["path"], "b.svg", "{done}");
+    assert_eq!(failed["error"], "can't read b.svg", "{failed}");
+}
+
 #[test]
 fn deferred_pointer_reply_uses_the_gesture_document_after_file_new() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());

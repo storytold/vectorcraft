@@ -239,7 +239,7 @@ fn bar_of(app: &VectorcraftApp) -> Option<(bool, Bar)> {
     let env = st.selection.objects.first().and_then(|id| vectorcraft_doc::live::envelope_of(&st.doc, *id))?;
     let NodeKind::Envelope { kind, editing, .. } = &env.kind else { return None };
     let bar = match &**kind {
-        EnvelopeKind::Warp { style, bend, h, v, horizontal } => {
+        EnvelopeKind::Warp { style, bend, h, v, horizontal, .. } => {
             Bar::Warp { style: style.clone(), bend: *bend, h: *h, v: *v, horizontal: *horizontal }
         }
         EnvelopeKind::Mesh { rows, cols, .. } => Bar::Mesh { rows: *rows, cols: *cols },

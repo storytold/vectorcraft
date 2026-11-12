@@ -787,8 +787,20 @@ fn busy_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo)
     // The arrows while dragging: a polygon's sides, a grid's rows (↑/↓) and columns (←/→)…
     let arrows = [(Key::ArrowUp, ToolKey::Up), (Key::ArrowDown, ToolKey::Down), (Key::ArrowLeft, ToolKey::Left), (Key::ArrowRight, ToolKey::Right)];
     for (k, tk) in arrows {
+        // The press's Shift and Alt (the consume below takes those presses too) go to a tool that
+        // claims the arrow (Shift steps a blend widget by ten); other tools get the plain arrow.
+        let pressed = ctx.input(|i| {
+            i.events.iter().find_map(|e| match e {
+                egui::Event::Key { key, pressed: true, modifiers, .. } if *key == k && !(modifiers.command || modifiers.ctrl) => Some(*modifiers),
+                _ => None,
+            })
+        });
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k)) {
-            let _ = app.session.tool_key(tk, Mods::default(), view);
+            let mods = match pressed {
+                Some(m) if app.session.tool_claims_key(tk, view) => crate::canvas::mods(m, false),
+                _ => Mods::default(),
+            };
+            let _ = app.session.tool_key(tk, mods, view);
         }
     }
     // Digits (5 while dragging with the Perspective Selection tool), once per press.
@@ -985,9 +997,10 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, accept: impl FnMut(&H
 }
 
 /// What a shortcut without params runs when its command's menu bar item gives params
-/// ([`crate::shortcut_editor::menu_target`]): what a click on that item runs.
-fn menu_target(c: &CommandRef) -> Option<(String, serde_json::Value)> {
-    c.params.as_object().is_none_or(serde_json::Map::is_empty).then(|| crate::shortcut_editor::menu_target(&c.id)).flatten()
+/// ([`crate::shortcut_editor::menu_target_now`]): what a click on that item runs, or while the item
+/// is dimmed, why the command can't run.
+fn menu_target(app: &VectorcraftApp, c: &CommandRef) -> Option<Result<(String, serde_json::Value), String>> {
+    c.params.as_object().is_none_or(serde_json::Map::is_empty).then(|| crate::shortcut_editor::menu_target_now(app, &c.id)).flatten()
 }
 
 /// Params used when a shortcut invokes its command. The named panel function keys retain their
@@ -1030,8 +1043,11 @@ fn run_hit(app: &mut VectorcraftApp, ctx: &egui::Context, c: &CommandRef) {
         // every artboard instead of the art.
         crate::panels::artboards::select_all(app);
     } else {
-        let (id, p) = menu_target(c).unwrap_or_else(|| (c.id.clone(), shortcut_params(c)));
-        crate::menus::invoke(app, &id, p);
+        match menu_target(app, c) {
+            Some(Ok((id, p))) => crate::menus::invoke(app, &id, p),
+            Some(Err(why)) => app.status(why),
+            None => crate::menus::invoke(app, &c.id, shortcut_params(c)),
+        }
     }
 }
 
