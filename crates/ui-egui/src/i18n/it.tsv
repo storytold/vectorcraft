@@ -2405,6 +2405,7 @@ file-filter	Templates	Modelli
 	Options:	Opzioni:
 	Options…	Opzioni…
 	Organic Fades	Dissolvenze organiche
+	Holographic	Olografici
 	or more spaces with a tab	o più spazi con una tabulazione
 	Order:	Ordine:
 	Ordinals	Ordinali
@@ -4629,6 +4630,7 @@ axis	Both	Entrambi
 @msg	not a valid plug-in module: {0}	non è un modulo plug-in valido: {0}
 @msg	not an EMF or WMF file	non è un file EMF o WMF
 @msg	not an HP-GL file	non è un file HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` deve essere un elenco da 1 a 255 colori #rrggbb
 @msg	not found	non trovato
 @msg	not in pattern editing mode	non sei in modalità modifica motivo
 @msg	finish editing the pattern first	termina prima la modifica del motivo
@@ -5938,6 +5940,17 @@ axis	Y Axis	Asse Y
 	Charge Wave	Onda di carica
 	Spark Trail	Scia di scintille
 	Calligraphic Nibs	Pennini calligrafici
+	Bristle Brushes	Pennelli a setole
+	Fine Liner	Tratto fine
+	Pointed Flat	Piatto appuntito
+	Stubby Round	Tondo corto
+	Dry Scrub	Strofinato secco
+	Soft Dome	Cupola morbida
+	Filbert	Lingua di gatto
+	Angled Round	Tondo obliquo
+	Angled Flat	Piatto obliquo
+	Fan Blender	Ventaglio sfumino
+	Grass Fan	Ventaglio per erba
 	Pattern Borders	Bordi a motivo
 	Scatter Shapes	Forme a dispersione
 	Save Brush Library…	Salva libreria pennelli…

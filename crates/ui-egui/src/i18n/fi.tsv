@@ -842,6 +842,7 @@
 	Sky Gradients	Taivasliukuvärit
 	Neutral Gradients	Neutraalit liukuvärit
 	Organic Fades	Orgaaniset häivytykset
+	Holographic	Holografiset
 	Duotone Gradients	Kaksisävyliukuvärit
 	Radial Glows	Säteittäiset hehkut
 	Save Swatch Library…	Tallenna värimallikirjasto…
@@ -4794,6 +4795,7 @@ imageTrace	Outline	Ääriviiva
 @msg	not a valid plug-in module: {0}	ei kelvollinen laajennusmoduuli: {0}
 @msg	not an EMF or WMF file	ei EMF- tai WMF-tiedosto
 @msg	not an HP-GL file	ei HP-GL-tiedosto
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` on oltava 1–255 #rrggbb-värin taulukko
 @msg	not found	ei löytynyt
 @msg	not in pattern editing mode	ei kuvion muokkaustilassa
 @msg	finish editing the pattern first	lopeta ensin kuvion muokkaus
@@ -6343,6 +6345,17 @@ axis	Y Axis	Y-akseli
 	Charge Wave	Latausaalto
 	Spark Trail	Kipinävanne
 	Calligraphic Nibs	Kalligrafiakärjet
+	Bristle Brushes	Harjassiveltimet
+	Fine Liner	Ohut viiva
+	Pointed Flat	Suippo litteä
+	Stubby Round	Lyhyt pyöreä
+	Dry Scrub	Kuiva hankaus
+	Soft Dome	Pehmeä kupu
+	Filbert	Kissankieli
+	Angled Round	Vino pyöreä
+	Angled Flat	Vino litteä
+	Fan Blender	Sekoitusviuhka
+	Grass Fan	Ruohoviuhka
 	Pattern Borders	Kuvioreunukset
 	Scatter Shapes	Sirontamuodot
 	Save Brush Library…	Tallenna sivellinkirjasto…

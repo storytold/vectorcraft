@@ -431,6 +431,7 @@ fn export_extensions_name_every_writable_format() {
             "eps",
             "emf",
             "wmf",
+            "plt",
             "tga",
             "psd"
         ]
@@ -466,6 +467,7 @@ fn formats_query_lists_readers_writers_and_options() {
             "eps",
             "emf",
             "wmf",
+            "hpgl",
             "tga",
             "psd"
         ]

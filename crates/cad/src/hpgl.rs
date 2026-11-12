@@ -16,11 +16,18 @@
 //! and the art of every page goes on one artboard; each comes back as a warning. Printer escape
 //! sequences and PJL lines around the instructions are skipped.
 //!
+//! [`export`] writes the visible art over a region as an HP-GL or HP-GL/2 plot, and
+//! [`export_regions`] one plot per region with one pen numbering: see [`write`].
+//!
 //! - `lex`: the bytes as instructions, numbers, labels and PE data.
 //! - `plot`: the instructions played on the pen, as shapes.
+//! - `write`: the writer, paths to pen moves.
 
 mod lex;
 mod plot;
+pub mod write;
+
+pub use write::{HpglOptions, HpglOutput, Origin, Version, export, export_regions};
 
 use std::sync::Arc;
 

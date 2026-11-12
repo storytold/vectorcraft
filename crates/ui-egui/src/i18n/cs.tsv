@@ -851,6 +851,7 @@
 	Sky Gradients	Přechody oblohy
 	Neutral Gradients	Neutrální přechody
 	Organic Fades	Organické přechody
+	Holographic	Holografické
 	Duotone Gradients	Dvoutónové přechody
 	Radial Glows	Kruhové záře
 	Save Swatch Library…	Uložit knihovnu vzorníku…
@@ -4886,6 +4887,7 @@ imageTrace	Outline	Obrys
 @msg	not a valid plug-in module: {0}	neplatný modul zásuvného modulu: {0}
 @msg	not an EMF or WMF file	nejde o soubor EMF ani WMF
 @msg	not an HP-GL file	nejde o soubor HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` musí být pole 1 až 255 barev #rrggbb
 @msg	not found	nenalezeno
 @msg	not in pattern editing mode	není aktivní režim úprav vzorku
 @msg	finish editing the pattern first	nejprve dokončete úpravy vzorku
@@ -6313,6 +6315,17 @@ axis	Y Axis	osa Y
 	Charge Wave	Nabíjecí vlna
 	Spark Trail	Jiskrová stopa
 	Calligraphic Nibs	Kaligrafická pera
+	Bristle Brushes	Štětinové štětce
+	Fine Liner	Jemná linka
+	Pointed Flat	Špičatý plochý
+	Stubby Round	Krátký kulatý
+	Dry Scrub	Suché drhnutí
+	Soft Dome	Měkká kopule
+	Filbert	Plochý oválný
+	Angled Round	Šikmý kulatý
+	Angled Flat	Šikmý plochý
+	Fan Blender	Vějíř na prolínání
+	Grass Fan	Vějíř na trávu
 	Pattern Borders	Vzorkové okraje
 	Scatter Shapes	Rozptýlené tvary
 	Save Brush Library…	Uložit knihovnu štětců…
