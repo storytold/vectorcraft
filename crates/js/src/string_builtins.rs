@@ -98,7 +98,7 @@ fn check_string_room(interp: &mut Interp, len: usize) -> JsResult<()> {
 
 /// Pushes `item` onto `list`, first holding the bytes of the list's new capacity when it must
 /// grow.
-fn push_held<T>(interp: &mut Interp, held: &mut HeldBytes, list: &mut Vec<T>, item: T) -> JsResult<()> {
+pub(crate) fn push_held<T>(interp: &mut Interp, held: &mut HeldBytes, list: &mut Vec<T>, item: T) -> JsResult<()> {
     if list.len() == list.capacity() {
         let more = list.capacity().max(4);
         held.add(interp, more.saturating_mul(size_of::<T>()))?;
@@ -179,7 +179,7 @@ fn clamp(n: f64, len: usize) -> usize {
 
 /// The first index at `from` or after where `needle` occurs in `hay`. Every position tried takes
 /// fuel.
-fn find(interp: &mut Interp, hay: &[u16], needle: &[u16], from: usize) -> JsResult<Option<usize>> {
+pub(crate) fn find(interp: &mut Interp, hay: &[u16], needle: &[u16], from: usize) -> JsResult<Option<usize>> {
     if needle.len() > hay.len() {
         return Ok(None);
     }
