@@ -442,6 +442,35 @@ fn scaled_type_pick_canvas_rejection_preserves_sample_and_defaults() {
     }
 }
 
+/// Changing justification can move explicitly targeted point text outside the canvas even
+/// when character copying is disabled.
+#[test]
+fn paragraph_only_pick_rejects_out_of_bounds_explicit_target() {
+    let mut s = session();
+    let saved = id_of(s.execute("text.create", &json!({"x": 40, "y": 40, "text": "Saved", "color": "#0000ff"})).unwrap());
+    let src = id_of(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Source", "color": "#ff0000"})).unwrap());
+    s.execute("text.setStyle", &json!({"justify": "left"})).unwrap();
+    let dst = id_of(s.execute("text.create", &json!({"x": 100, "y": 200, "text": "WWWW", "size": 16})).unwrap());
+    s.execute("text.setStyle", &json!({"justify": "right"})).unwrap();
+    s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, MAX_COORD - 101.0, 0]})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": saved.0, "ids": []})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let selection = s.doc().unwrap().selection.clone();
+    let paint = s.paint.clone();
+    let sample = s.eyedropper_sample.clone();
+    let history = undo_len(&s);
+
+    let pick = json!({"source": src.0, "ids": [dst.0], "apply": {"character": false}});
+    let error = s.execute("appearance.copyFrom", &pick).unwrap_err();
+    assert!(error.to_string().contains("coordinates out of range"), "{error}");
+    assert_eq!(s.doc().unwrap().doc, doc);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!(s.paint, paint);
+    assert_eq!(s.eyedropper_sample, sample);
+    assert_eq!(undo_len(&s), history);
+}
+
 /// Disabled character copying and append preserve typography; reverse and cached picks convert it.
 #[test]
 fn scaled_type_pick_respects_options_and_reverse_sampling() {

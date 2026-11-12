@@ -1282,12 +1282,12 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
         Some((id, start, end)) if targets.contains(&id) => vec![(id, Some((start, end)))],
         _ => vec![],
     };
+    let target_ids = || targets.iter().copied().filter(|_| ranges.is_empty()).chain(ranges.iter().map(|(id, _)| *id));
     // Prepare every dimensional copy before changing defaults or the remembered sample. A bad
     // source or target transform must refuse the entire pick, including a multi-frame range.
     let characters = if attrs.character && !append {
         let d = &s.doc()?.doc;
-        let ids = targets.iter().copied().filter(|_| ranges.is_empty()).chain(ranges.iter().map(|(id, _)| *id));
-        copied_character_styles(&node, ids.filter_map(|id| d.node(id)))?
+        copied_character_styles(&node, target_ids().filter_map(|id| d.node(id)))?
     } else {
         HashMap::new()
     };
@@ -1305,8 +1305,14 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     // The session's bounds check follows the selection. Check text targets reached through
-    // explicit IDs, a reverse pick, or a highlighted story as well.
-    let text_ids: Vec<_> = characters.keys().copied().collect();
+    // explicit IDs, a reverse pick, or a highlighted story as well. Paragraph changes can
+    // move point text even when character copying is disabled.
+    let text_ids: Vec<_> = if attrs.paragraph && !append && picked.text.is_some() {
+        let d = &s.doc()?.doc;
+        target_ids().filter(|id| d.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)))).collect()
+    } else {
+        characters.keys().copied().collect()
+    };
     let check_text_bounds = |d: &Document| {
         if !text_ids.is_empty() && !crate::sanity::objects_in_range(d, &text_ids) {
             return Err(bad(C, "sampled text would exceed the canvas (coordinates out of range)"));
