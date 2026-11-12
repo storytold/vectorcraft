@@ -243,8 +243,8 @@ pub(super) fn leader_outline(db: &FontDb, g: &SGlyph, leader: &str, origin: f64,
 /// Width of the word starting at glyph `i`: its advances up to the first place a line may break
 /// (spaces left out, the hyphen of a soft hyphen in), the least room a line needs not to break
 /// inside it. As in [`break_line`], kinsoku keeps a character that may not end a line with the one
-/// after it, a No Break run (its spaces inside it included) is one word, and a cluster is never
-/// split. A list marker at `i` (glyphs of length 0) counts whole, with the word after it. A word
+/// after it, a No Break run (its spaces inside it included) is one word up to a forced line break,
+/// and a cluster is never split. A soft hyphen just before a forced line break adds no hyphen. A list marker at `i` (glyphs of length 0) counts whole, with the word after it. A word
 /// that ends where a line may end is measured as the line is set: without the spaces at its end,
 /// and with its last glyph as narrow as `line_end` sets it; one that ends at a soft hyphen or past
 /// the measured glyphs is not.
@@ -262,10 +262,15 @@ pub(super) fn word_width(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: Kins
     let (mut trailing, mut ink) = (0.0, start);
     let set = |w: f64, trailing: f64, ink: usize| w - trailing - line_end_credit(g, line_end, ink);
     while let Some(gl) = g.get(end).filter(|_| end - start < MAX_GLYPHS) {
+        // A forced line break ends the line, inside a No Break run too, as in [`break_line`].
+        if gl.ch == '\u{2028}' {
+            return set(w, trailing, ink);
+        }
         if gl.is_space() && (end == start || !splits_no_break(g, end)) {
             return set(w, trailing, ink);
         }
-        if gl.is_soft_hyphen() && kinsoku_allows(g, end, kinsoku) && !splits_no_break(g, end + 1) {
+        let forced_next = g.get(end + 1).is_some_and(|n| n.ch == '\u{2028}');
+        if gl.is_soft_hyphen() && !forced_next && kinsoku_allows(g, end, kinsoku) && !splits_no_break(g, end + 1) {
             return w + hyphen_glyph(gl).adv;
         }
         w += gl.adv;

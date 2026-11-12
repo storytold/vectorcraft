@@ -287,6 +287,31 @@ fn word_width_measures_across_a_soft_hyphen_inside_a_no_break_run() {
     assert!((marked - 30.0).abs() < 1e-9, "the marked run is measured whole: {marked}");
 }
 
+/// A forced line break ends the word [`breaking::word_width`] measures, inside a No Break run too,
+/// and a soft hyphen just before it adds no hyphen, as [`break_line`] sets the line.
+#[test]
+fn word_width_stops_at_a_forced_line_break() {
+    let mut glyphs = synthetic_glyphs(&[(0, 1, 10.0, 'A'), (1, 3, 5.0, '\u{2028}'), (4, 1, 10.0, 'B'), (5, 1, 10.0, 'C')]);
+    for g in &mut glyphs {
+        g.no_break = true;
+    }
+    let marked = breaking::word_width(&glyphs, 0, &[], Kinsoku::None);
+    assert!((marked - 10.0).abs() < 1e-9, "the marked run ends at the forced line break: {marked}");
+
+    let mut glyphs = synthetic_glyphs(&[(0, 1, 10.0, 'A'), (1, 2, 0.0, '\u{00ad}'), (3, 3, 5.0, '\u{2028}'), (6, 1, 10.0, 'B')]);
+    // The hyphen a soft hyphen adds comes from the face, scaled to well under 10 pt.
+    for g in &mut glyphs {
+        g.sx = 0.001;
+    }
+    let plain = breaking::word_width(&glyphs, 0, &[], Kinsoku::None);
+    assert!((plain - 10.0).abs() < 1e-9, "no hyphen before the forced line break: {plain}");
+    for g in &mut glyphs {
+        g.no_break = true;
+    }
+    let marked = breaking::word_width(&glyphs, 0, &[], Kinsoku::None);
+    assert!((marked - 10.0).abs() < 1e-9, "the marked run ends at the forced line break: {marked}");
+}
+
 /// Synthetic full-width characters `text`, each 10 pt wide on a 10 pt em.
 fn full_width(text: &str) -> Vec<SGlyph> {
     let specs: Vec<(usize, usize, f64, char)> = text.char_indices().map(|(byte, ch)| (byte, ch.len_utf8(), 10.0, ch)).collect();
