@@ -1893,6 +1893,8 @@ digits	Malayalam	Malajalam
 	Modified since it was read: {path}	Muokattu lukemisen jälkeen: {path}
 	No Thumbnails	Ei pikkukuvia
 	Nothing matches the Show filter.	Mikään ei vastaa Näytä-suodinta.
+	Show DCS Transparency Interactions	Näytä DCS-läpinäkyvyyden vuorovaikutukset
+	Transparent, or overlaps transparent objects: check its separations	Läpinäkyvä tai läpinäkyvien objektien päällä: tarkista sen erottelut
 	PPI	PPI
 	Relink…	Linkitä uudelleen…
 	Find Linked Files	Etsi linkitetyt tiedostot

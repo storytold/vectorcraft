@@ -1932,6 +1932,8 @@ digits	Malayalam	Malajálamské
 	Modified since it was read: {path}	Upraveno od načtení: {path}
 	No Thumbnails	Bez miniatur
 	Nothing matches the Show filter.	Filtru Zobrazit nic neodpovídá.
+	Show DCS Transparency Interactions	Zobrazit interakce DCS s průhledností
+	Transparent, or overlaps transparent objects: check its separations	Je průhledný nebo překrývá průhledné objekty: zkontrolujte jeho separace
 	PPI	PPI
 	Relink…	Znovu propojit…
 	Find Linked Files	Najít propojené soubory

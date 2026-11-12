@@ -182,6 +182,49 @@ fn separations_preview_shows_the_image_on_its_spot_plate() {
     assert!(off[..3].iter().all(|v| *v >= 250), "the process plates show paper, got {off:?}");
 }
 
+/// Separations Preview shows an image placed from a DCS file through its own plates: its spot
+/// plate on that ink's plate only, its cyan plate on the cyan plate only. Without the preview it
+/// shows its composite, the spot ink mixed in.
+#[test]
+fn separations_preview_shows_a_dcs_image_through_its_own_plates() {
+    use vectorcraft_doc::separated::{InkPlate, Separated};
+    // Two pixels: the spot ink solid on the left, cyan solid on the right.
+    let plates = vec![
+        InkPlate { name: "Cyan".into(), cmyk: [0.0; 4], data: vec![0, 255] },
+        InkPlate { name: "Ink".into(), cmyk: [0.0, 1.0, 1.0, 0.0], data: vec![255, 0] },
+    ];
+    let s = Separated::new(2, 1, plates).unwrap();
+    let mut d = Document::new_with_mode(40.0, 20.0, vectorcraft_doc::ColorMode::Cmyk);
+    d.swatches.push(vectorcraft_color::Swatch { name: "Ink".into(), paint: Paint::solid(Color::cmyk(0.0, 1.0, 1.0, 0.0)), global: true, spot: true });
+    d.images.insert("pic".into(), ImageBlob::separated_tiff(&s, None, &[]).unwrap());
+    let im = ImageObject { key: "pic".into(), width: 2, height: 1, xf: Affine::scale(20.0), link: None, placement: Default::default(), pixels: None };
+    let (layer, id) = (d.layers[0].id, d.alloc_id());
+    d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
+    let shown = |plates: &[&str]| {
+        let out = Renderer::new().render(&d, 40, 20, Affine::IDENTITY, &separations(plates));
+        (out.pixel(10, 10), out.pixel(30, 10))
+    };
+    let (left, right) = shown(&["Ink"]);
+    assert!(left[..3].iter().all(|v| *v < 20), "the Ink plate shows the spot plate as solid ink, got {left:?}");
+    assert!(right[..3].iter().all(|v| *v >= 250), "and nothing of cyan, got {right:?}");
+    let (left, right) = shown(&["Cyan"]);
+    assert!(left[..3].iter().all(|v| *v >= 250), "the Cyan plate shows nothing of the spot ink, got {left:?}");
+    assert!(right[..3].iter().all(|v| *v < 20), "and the cyan plate as solid ink, got {right:?}");
+    let (left, _) = shown(&["Cyan", "Magenta", "Yellow", "Black"]);
+    assert!(left[..3].iter().all(|v| *v >= 250), "the process plates show paper where only the spot ink prints, got {left:?}");
+    let (left, _) = shown(&["Cyan", "Magenta", "Yellow", "Black", "Ink"]);
+    assert!(left[0] > 150 && left[1] < 100 && left[2] < 100, "with every plate the spot ink shows red, got {left:?}");
+    let composite = Renderer::new().render(&d, 40, 20, Affine::IDENTITY, &RenderOptions { smooth_images: false, ..Default::default() }).pixel(10, 10);
+    assert!(composite[0] > 150 && composite[1] < 100, "the composite mixes the spot ink in, got {composite:?}");
+    // Without a spot swatch of the ink, the job prints no plate for it: it shows on the process
+    // plates as its process equivalent, as it prints.
+    d.swatches.retain(|s| s.name != "Ink");
+    let process = Renderer::new().render(&d, 40, 20, Affine::IDENTITY, &separations(&["Cyan", "Magenta", "Yellow", "Black"])).pixel(10, 10);
+    assert!(process[0] > 150 && process[1] < 100 && process[2] < 100, "the ink's magenta and yellow show, got {process:?}");
+    let magenta = Renderer::new().render(&d, 40, 20, Affine::IDENTITY, &separations(&["Magenta"])).pixel(10, 10);
+    assert!(magenta[..3].iter().all(|v| *v < 20), "the Magenta plate alone shows it as solid ink, got {magenta:?}");
+}
+
 /// Separations Preview showing `plates`, as the canvas draws it.
 fn separations(plates: &[&str]) -> RenderOptions {
     let proof = proof::ProofSetup { separations: Some(plates.iter().map(|p| p.to_string()).collect()), ..Default::default() };

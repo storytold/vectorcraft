@@ -2066,6 +2066,8 @@ font-technology	Variable	Değişken
 	Normal Screen Mode	Normal Ekran Modu
 	Note:	Not:
 	Nothing matches the Show filter.	Hiçbir şey Göster filtresiyle eşleşmiyor.
+	Show DCS Transparency Interactions	DCS Saydamlık Etkileşimlerini Göster
+	Transparent, or overlaps transparent objects: check its separations	Saydam veya saydam nesnelerle çakışıyor: ayrımlarını denetleyin
 	Nothing to print	Yazdırılacak bir şey yok
 	Nudge	Dürt
 	Nudge in Perspective	Perspektifte İtme

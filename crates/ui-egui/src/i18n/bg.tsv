@@ -2184,6 +2184,8 @@ font-technology	Variable	Променливи
 	Normal Screen Mode	Нормален режим на екран
 	Note:	Забележка:
 	Nothing matches the Show filter.	Нищо не отговаря на филтъра за показване.
+	Show DCS Transparency Interactions	Показване на взаимодействията на DCS с прозрачност
+	Transparent, or overlaps transparent objects: check its separations	Прозрачно е или се припокрива с прозрачни обекти: проверете цветоотделянето му
 	Nothing to print	Няма нищо за отпечатване
 	Nudge	Преместване
 	Nudge in Perspective	Преместване в перспектива

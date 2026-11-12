@@ -1,5 +1,6 @@
 //! Separations: the inks of a job ([`print_inks`]) and the document as one ink's plate, every
-//! colour (and image pixel) replaced by the grey of that ink's coverage.
+//! colour (and image pixel) replaced by the grey of that ink's coverage. An image placed from a
+//! DCS file prints its own plates ([`vectorcraft_doc::separated`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -130,7 +131,21 @@ impl<'a> Separator<'a> {
                 kept.insert(colorized_key(&key), blob.clone());
             }
         }
+        // A DCS file's image prints its own plates: a spot plate on its ink when the job prints
+        // that ink, else as its process equivalent.
+        let spots: BTreeSet<String> = if self.set.output.spots_to_process {
+            BTreeSet::new()
+        } else {
+            plates(self.doc).into_iter().filter(|p| p.spot).map(|p| p.name).collect()
+        };
+        let own = |name: &str| spots.contains(name);
         for blob in d.images.values_mut() {
+            if let Some(s) = blob.separated() {
+                if let Some(gray) = s.plate_png(plate, &own) {
+                    *blob = gray;
+                }
+                continue;
+            }
             let gray = blob.map_rgb(|[r, g, b]| {
                 let rgb = |v: u8| v as f32 / 255.0;
                 let v = (255.0 * (1.0 - self.ink(plate, &Color::rgb(rgb(r), rgb(g), rgb(b)), None))).round() as u8;

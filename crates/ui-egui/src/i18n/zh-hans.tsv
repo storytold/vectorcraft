@@ -2153,6 +2153,8 @@ file-filter	Templates	模板
 	Normal Screen Mode	正常屏幕模式
 	Note:	注释：
 	Nothing matches the Show filter.	没有项目符合“显示”筛选条件。
+	Show DCS Transparency Interactions	显示 DCS 透明度交互
+	Transparent, or overlaps transparent objects: check its separations	透明或与透明对象重叠：请检查其分色
 	Nothing to print	没有可打印的内容
 	Nudge	微移
 	Nudge in Perspective	在透视中微移

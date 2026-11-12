@@ -84,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select All Unused",
             ["Window", "Swatches"],
             None,
-            "{} → {names: [the swatches nothing uses, in panel order]}: a colour is used when a paint links to it or an unlinked paint, gradient stop or mesh point has its colour; a gradient when a gradient links to it or has its stops; a pattern when it fills or strokes anything (art, symbols, pattern tiles and graphic styles count). None is never listed",
+            "{} → {names: [the swatches nothing uses, in panel order]}: a colour is used when a paint links to it or an unlinked paint, gradient stop or mesh point has its colour; a gradient when a gradient links to it or has its stops; a pattern when it fills or strokes anything (art, symbols, pattern tiles and graphic styles count); a spot color when an image placed from a DCS file has a plate of its ink. None is never listed",
             has_doc,
             swatch_unused
         ),
@@ -987,8 +987,11 @@ fn swatch_unused(s: &mut Session, _: &Value) -> Result<Value> {
     let colors: HashSet<ColorKey> = colors.iter().filter_map(color_key).collect();
     let patterns: HashSet<&String> = patterns.iter().collect();
     let gradients: HashSet<GradientKey> = gradients.iter().filter_map(gradient_key).collect();
+    // The spot inks the images placed from DCS files have plates for: their swatches print them.
+    let plate_inks: HashSet<String> = d.images.values().flat_map(vectorcraft_doc::ImageBlob::spot_plates).map(|(name, _)| name).collect();
     let used = |w: &Swatch| {
         gradient_links.contains(&w.name)
+            || (w.spot && plate_inks.contains(&w.name))
             || match w.tint_of() {
                 Some((base, tint)) => float_key(tint).is_some_and(|t| link_tints.contains(&(base, t))),
                 None => link_names.contains(w.name.as_str()),

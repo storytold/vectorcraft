@@ -42,6 +42,7 @@ mod containers;
 mod css;
 mod cut;
 mod dashalign;
+mod dcs;
 mod distort;
 mod docsetup;
 mod document_move;

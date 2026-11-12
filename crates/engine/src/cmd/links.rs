@@ -32,7 +32,7 @@ use vectorcraft_doc::{Appearance, Document, ImageBlob, ImageObject, LinkInfo, No
 use vectorcraft_geom::{Affine, PathData, Rect, shapes};
 
 use super::fileio::{self, RasterImage, absolute_path, file_created, file_stamp, read_file, write_file};
-use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_doc, ids_param, object_param, str_param};
+use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_doc, ids_param, object_param, str_param, switch_or};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -77,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Links",
             [],
             None,
-            "{show?: all (default)|missing|modified|embedded, sort?: name|kind (file format)|status (missing, modified, ok, embedded); default: stacking order; top first} every image object and placed document in the layers, as the Links panel lists them → {links: [{id, name, linked, status: ok|modified|missing|embedded, format, pixelWidth, pixelHeight, path?, found?: path (found away from its path), page?, preview?: true (showing the saved preview), note?: said of an image past the decode allowance (shown at reduced size, or too large to draw), document?: true (a placed document: pageWidth and pageHeight in pt instead of pixels)}], missing, modified, embedded}; under automation read roots, path and found are left out when the file they name is outside the roots",
+            "{show?: all (default)|missing|modified|embedded, sort?: name|kind (file format)|status (missing, modified, ok, embedded); default: stacking order; top first, dcsTransparency?: false (Show DCS Transparency Interactions: mark the images placed from DCS files that are transparent, themselves or a group or layer holding them, or that overlap a visible object with its own transparency; it looks at every object, so it takes longer)} every image object and placed document in the layers, as the Links panel lists them → {links: [{id, name, linked, status: ok|modified|missing|embedded, format (DCS for an image placed from a DCS file), pixelWidth, pixelHeight, path?, found?: path (found away from its path), page?, preview?: true (showing the saved preview), note?: said of an image past the decode allowance (shown at reduced size, or too large to draw), document?: true (a placed document: pageWidth and pageHeight in pt instead of pixels), dcsTransparency?: true (with dcsTransparency)}], missing, modified, embedded}; under automation read roots, path and found are left out when the file they name is outside the roots",
             has_doc,
             list
         ),
@@ -95,7 +95,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Embed Image",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: the selected linked ones)} break the links (the Links panel's Break Link): images keep the linked files' pixels in the document; a placed document becomes an editable copy of its art, as placing its file without link gives (its symbols, patterns, swatches and images joining the document). An image whose file can't be found and that shows the saved preview, or a placed document whose file can't be read or changed, stays linked: relink or update it first. One undo step → {embedded: [ids], missing: [ids]}",
+            "{ids?: [image or placed document ids] (default: the selected linked ones)} break the links (the Links panel's Break Link): images keep the linked files' pixels in the document; a placed document becomes an editable copy of its art, as placing its file without link gives (its symbols, patterns, swatches and images joining the document). An image whose file can't be found and that shows the saved preview, or a placed document whose file can't be read or changed, stays linked: relink or update it first. An image placed from a DCS file can't be embedded (an error, and nothing changes). One undo step → {embedded: [ids], missing: [ids]}",
             has_doc,
             embed
         ),
@@ -158,6 +158,8 @@ struct Group {
     ids: Vec<NodeId>,
     /// Placed documents: what they show.
     document: Option<Shown>,
+    /// An image placed from a DCS file: the plate files of their own its plates were read from.
+    plate_files: Vec<vectorcraft_doc::separated::PlateFile>,
 }
 
 /// What a placed document shows: whether the art's bounds (not the artboard or page) are shown,
@@ -187,7 +189,11 @@ fn groups(d: &Document, ids: Option<&[NodeId]>) -> Vec<Group> {
     let wanted: Option<std::collections::HashSet<NodeId>> = ids.map(|ids| ids.iter().copied().collect());
     let mut add = |link: &LinkInfo, key: &str, document: Option<Shown>, id: Option<NodeId>| {
         let i = *index.entry((link.path.clone(), key.to_string(), document.is_some())).or_insert_with(|| {
-            out.push(Group { link: link.clone(), key: key.to_string(), ids: vec![], document });
+            let plate_files = match document {
+                None => d.images.get(key).map(ImageBlob::plate_files).unwrap_or_default(),
+                Some(_) => vec![],
+            };
+            out.push(Group { link: link.clone(), key: key.to_string(), ids: vec![], document, plate_files });
             out.len() - 1
         });
         if let (Some(id), Some(g)) = (id, out.get_mut(i)) {
@@ -333,10 +339,14 @@ fn refused(link: &LinkInfo, doc_path: Option<&str>) -> Option<craft_docpath::Ref
 }
 
 /// Where the file of group `g` (of a document looking from `base`) is and whether it still has
-/// the content shown. Its bytes are read only when its size or modification time changed.
+/// the content shown. Its bytes are read only when its size or modification time changed. An image
+/// placed from a DCS file is modified when one of its plate files of their own changed.
 fn probe(g: &Group, base: LinkBase) -> (Status, Option<Found>) {
     let Some(mut f) = locate(&g.link, base) else { return (Status::Missing, None) };
     let l = &g.link;
+    if !g.plate_files.is_empty() && super::place::dcs::plate_files_changed(&g.plate_files, &f.path) {
+        return (Status::Modified, Some(f));
+    }
     if l.size == Some(f.size) && l.modified.is_some() && l.modified == f.modified {
         return (Status::Ok, Some(f));
     }
@@ -344,7 +354,7 @@ fn probe(g: &Group, base: LinkBase) -> (Status, Option<Found>) {
     let same = match &l.hash {
         Some(h) => *h == hash_bytes(&bytes),
         // Linked before links kept a hash: the image the file decodes to.
-        None => g.document.is_none() && fileio::raster_image(&bytes).is_ok_and(|img| img.key == g.key),
+        None => g.document.is_none() && super::place::dcs::raster(&bytes, Some(&f.path)).is_ok_and(|img| img.key == g.key),
     };
     f.bytes = Some(bytes);
     (if same { Status::Ok } else { Status::Modified }, Some(f))
@@ -431,7 +441,7 @@ pub(crate) fn full_linked_images<'a>(d: &'a Document, base: LinkBase) -> (Cow<'a
             previews.insert(key);
             continue;
         };
-        let Ok(img) = fileio::raster_image(&bytes) else {
+        let Ok(img) = super::place::dcs::raster(&bytes, Some(&f.path)) else {
             previews.insert(key);
             continue;
         };
@@ -510,10 +520,11 @@ pub(crate) fn readable_and_kept(blob: ImageBlob, unread: bool, linked: bool) -> 
     Ok(blob)
 }
 
-/// The linked image file `bytes`, read ([`fileio::raster_image`]) with its preview; an error when
-/// its pixels can't be read ([`readable`]).
-fn linked_image(bytes: &[u8]) -> Result<RasterImage> {
-    let mut img = fileio::raster_image(bytes)?;
+/// The linked image file `bytes` (read from `path`, when there is one), read with its preview: a
+/// DCS file's plates, else its image ([`super::place::dcs::raster`]); an error when its pixels
+/// can't be read ([`readable`]).
+fn linked_image(bytes: &[u8], path: Option<&str>) -> Result<RasterImage> {
+    let mut img = super::place::dcs::raster(bytes, path)?;
     img.blob = readable(img.blob, kept_unread(bytes), true)?;
     Ok(img)
 }
@@ -534,7 +545,7 @@ fn read_image(f: &mut Found, base: &LinkInfo, reads: &mut ImageReads) -> Result<
     let img = match reads.get(&f.path) {
         Some((h, img)) if *h == hash => img.clone(),
         _ => {
-            let img = linked_image(&bytes)?;
+            let img = linked_image(&bytes, Some(&f.path))?;
             reads.insert(f.path.clone(), (hash.clone(), img.clone()));
             img
         }
@@ -799,10 +810,9 @@ fn placed_xf(xf: Affine, old: (f64, f64), old_pt: (f64, f64), new: (f64, f64), n
     (frame * at * Affine::scale_non_uniform(size.0 / nw, size.1 / nh), (o.clip && over).then_some((frame, room)))
 }
 
-/// Clip image `id` of `d` to `room` in `frame`: the clipping path of the clip group holding just
-/// it changes, else the image goes into a new clip group.
-fn clip_image(d: &mut Document, id: NodeId, clip: Clip) -> Result<()> {
-    let path = clip_shape(clip);
+/// The clipping path of the clip group of `d` holding just object `id` becomes `path`; false when
+/// no such clip group holds it.
+fn set_clip_path(d: &mut Document, id: NodeId, path: PathData) -> bool {
     let clip_path = d.parent_of(id).and_then(|p| match &d.node(p)?.kind {
         NodeKind::Group { children, clip: true } => match &children[..] {
             [c, im] if im.id == id && matches!(c.kind, NodeKind::Path { clipping: true, .. }) => Some(c.id),
@@ -810,10 +820,23 @@ fn clip_image(d: &mut Document, id: NodeId, clip: Clip) -> Result<()> {
         },
         _ => None,
     });
-    if let Some(c) = clip_path {
-        if let Some(Node { kind: NodeKind::Path { path: p, .. }, .. }) = d.node_mut(c) {
-            *p = path;
-        }
+    let Some(c) = clip_path else { return false };
+    if let Some(Node { kind: NodeKind::Path { path: p, .. }, .. }) = d.node_mut(c) {
+        *p = path;
+    }
+    true
+}
+
+/// Clip image `id` of `d` to `room` in `frame`: the clipping path of the clip group holding just
+/// it changes, else the image goes into a new clip group.
+fn clip_image(d: &mut Document, id: NodeId, clip: Clip) -> Result<()> {
+    clip_image_to(d, id, clip_shape(clip))
+}
+
+/// Clip object `id` of `d` to `path`: the clipping path of the clip group holding just it changes,
+/// else it goes into a new clip group.
+fn clip_image_to(d: &mut Document, id: NodeId, path: PathData) -> Result<()> {
+    if set_clip_path(d, id, path.clone()) {
         return Ok(());
     }
     let (par, index, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
@@ -837,7 +860,7 @@ pub(crate) fn set_image_from_path(d: &mut Document, id: NodeId, path: &str, doc_
     // the app connect to another computer.
     let path = fileio::document_path(path, doc_path).map_err(|r| EngineError::Other(format!("the image `{path}` isn't followed: {r}")))?;
     let bytes = read_file(&path)?;
-    let read = (link_info(&path, &bytes), linked_image(&bytes)?);
+    let read = (link_info(&path, &bytes), linked_image(&bytes, Some(&path))?);
     install(d, &[id], read, Some(Preserve::Bounds), None)
 }
 
@@ -875,10 +898,14 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
         {
             (im.key, im.width, im.height, im.xf, im.link) = (img.key.clone(), img.width, img.height, xf, Some(link.clone()));
         }
-        clips.extend(clip.map(|c| (*id, c)));
+        // A DCS file's clipping path, read again with its plates, unless Placement Options clip it.
+        let dcs_clip = img.clip.as_ref().map(|path| path.transformed(xf));
+        clips.extend(clip.map(clip_shape).or(dcs_clip).map(|path| (*id, path)));
     }
+    // A DCS file's spot plates print on spot swatches of their inks.
+    super::place::dcs::add_spot_swatches(d, &img.blob.spot_plates());
     store_image(d, &img.key, img.blob, true);
-    clips.into_iter().try_for_each(|(id, clip)| clip_image(d, id, clip))
+    clips.into_iter().try_for_each(|(id, path)| clip_image_to(d, id, path))
 }
 
 /// Groups (of the document saved at `doc_path`) as `{name, path, ids}` rows (those with objects in
@@ -1011,7 +1038,7 @@ pub fn resolve(d: &mut Document, base: LinkBase, update: bool, low_res_proxy_eps
                 // Read when the images show the preview, or when the file's details changed.
                 let bytes = if (preview && !eps_preview) || f.bytes.is_some() { f.read().ok() } else { None };
                 if preview && !eps_preview {
-                    let Some((b, img)) = bytes.as_deref().and_then(|b| Some((b, linked_image(b).ok()?))) else {
+                    let Some((b, img)) = bytes.as_deref().and_then(|b| Some((b, linked_image(b, Some(&f.path)).ok()?))) else {
                         out.missing.extend(row);
                         continue;
                     };
@@ -1430,7 +1457,7 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
         // Read before it is copied: a file that can't be shown isn't copied.
-        let img = if images.is_empty() { None } else { Some(linked_image(&bytes).map_err(|e| bad(C, format!("{path}: {e}")))?) };
+        let img = if images.is_empty() { None } else { Some(linked_image(&bytes, Some(&path)).map_err(|e| bad(C, format!("{path}: {e}")))?) };
         let mut sources = vec![];
         for ((page, bounding, page_box), ids) in documents {
             sources.push((page, ids, super::place::document::source(&path, &bytes, Some(&path), page, bounding, page_box, C)?));
@@ -1615,6 +1642,9 @@ pub(crate) fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option
 
 /// The format of the file image `im` of `d` shows: its link's extension, else its pixels' type.
 fn format_label(d: &Document, im: &ImageObject) -> &'static str {
+    if im.link.is_some() && d.images.get(&im.key).is_some_and(ImageBlob::is_separated) {
+        return "DCS";
+    }
     im.link
         .as_ref()
         .and_then(|l| fileio::format_for_name(l.name()).or_else(|| fileio::readable_format_for_name(l.name())))
@@ -1635,6 +1665,40 @@ fn status_rank(status: &str) -> usize {
     ["missing", "modified", "ok", "embedded"].iter().position(|s| *s == status).unwrap_or(4)
 }
 
+/// The DCS images in the layers of `d` that are transparent (themselves, or a group or layer that
+/// holds them) or overlap an object that is, as Show DCS Transparency Interactions marks them.
+fn dcs_transparency(d: &Document) -> BTreeSet<NodeId> {
+    /// Each visible DCS image's id, bounds and whether it is transparent, and the bounds of each
+    /// other visible object with its own transparency.
+    fn walk(d: &Document, n: &Node, held: bool, images: &mut Vec<(NodeId, Rect, bool)>, see_through: &mut Vec<Rect>) {
+        if !n.visible {
+            return;
+        }
+        let own = n.shows_own_transparency();
+        match &n.kind {
+            NodeKind::Image(im) if d.images.get(&im.key).is_some_and(ImageBlob::is_separated) => {
+                if let Some(b) = n.geometric_bounds() {
+                    images.push((n.id, b, held || own));
+                }
+            }
+            _ if own => see_through.extend(n.geometric_bounds()),
+            _ => {}
+        }
+        for c in n.children().into_iter().flatten() {
+            walk(d, c, held || own, images, see_through);
+        }
+    }
+    let (mut images, mut see_through) = (vec![], vec![]);
+    for l in &d.layers {
+        walk(d, l, false, &mut images, &mut see_through);
+    }
+    images
+        .into_iter()
+        .filter(|(_, b, transparent)| *transparent || see_through.iter().any(|t| t.intersect(*b).area() > 0.0))
+        .map(|(id, ..)| id)
+        .collect()
+}
+
 fn list(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "links.list";
     let st = s.doc()?;
@@ -1642,6 +1706,7 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
     if !matches!(show, "all" | "missing" | "modified" | "embedded") {
         return Err(bad(C, format!("show `{show}`: all, missing, modified or embedded")));
     }
+    let interactions = if switch_or(p, "dcsTransparency", false, C)? { dcs_transparency(&st.doc) } else { BTreeSet::new() };
     let statuses = statuses(st);
     let mut objects = vec![];
     st.doc.walk(|n| {
@@ -1696,6 +1761,9 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
         if preview {
             row["preview"] = json!(true);
         }
+        if interactions.contains(&n.id) {
+            row["dcsTransparency"] = json!(true);
+        }
         rows.push(row);
     }
     let text = |r: &Value, k: &str| r[k].as_str().unwrap_or_default().to_lowercase();
@@ -1734,6 +1802,14 @@ fn embed(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad(C, "select the linked images or placed documents, or pass ids"));
     }
+    // A DCS file's plates print from its file.
+    let separated = |id: &NodeId| match kind(id) {
+        Some(NodeKind::Image(im)) => st.doc.images.get(&im.key).is_some_and(ImageBlob::is_separated),
+        _ => false,
+    };
+    if let Some(id) = ids.iter().find(|id| separated(id)) {
+        return Err(bad(C, format!("object {}: {}", id.0, super::place::dcs::LINK_ONLY)));
+    }
     // Placed documents become editable copies of their art: those whose file can be read.
     let (mut documents, mut missing) = (vec![], vec![]);
     for id in ids.iter().copied() {
@@ -1752,6 +1828,10 @@ fn embed(s: &mut Session, p: &Value) -> Result<Value> {
         }
         match probe(&g, LinkBase::of(st)) {
             (Status::Ok | Status::Modified, Some(mut f)) => match read_image(&mut f, &g.link, &mut image_reads) {
+                // One showing its preview is a DCS file only its file tells.
+                Ok((_, img)) if img.blob.is_separated() => {
+                    return Err(bad(C, format!("object {}: {}", g.ids.first().map_or(0, |id| id.0), super::place::dcs::LINK_ONLY)));
+                }
                 Ok(read) => {
                     done.extend(&g.ids);
                     reads.push((g.ids, read));
@@ -1818,7 +1898,7 @@ fn unembed(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let path = absolute_path(&if fileio::extension(path).is_empty() { format!("{path}.{ext}") } else { path.to_string() });
     // Read before writing: pixels that can't be read leave no file behind.
-    let img = linked_image(&bytes)?;
+    let img = linked_image(&bytes, Some(&path))?;
     write_file(&path, &bytes)?;
     let read = (link_info(&path, &bytes), img);
     s.edit("Unembed", |d, _| install(d, &[id], read, Some(Preserve::Bounds), None))?;

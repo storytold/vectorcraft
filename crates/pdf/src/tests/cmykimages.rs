@@ -322,6 +322,42 @@ fn image_doc(blob: ImageBlob, w: u32, h: u32) -> Document {
     d
 }
 
+/// An image placed from a DCS file prints each of its plates on its own ink: a spot plate on its
+/// spot ink's plate, or as its process equivalent when spots print as process. Its composite, the
+/// CMYK samples every other reader sees, never prints on a separation.
+#[test]
+fn a_dcs_image_prints_each_plate_on_its_own_ink() {
+    use vectorcraft_doc::separated::{InkPlate, Separated};
+    let plate = |name: &str, cmyk: [f32; 4], data: [u8; 2]| InkPlate { name: name.into(), cmyk, data: data.to_vec() };
+    let s = Separated::new(2, 1, vec![plate("Cyan", [0.0; 4], [255, 0]), plate("Orange", [0.0, 0.6, 1.0, 0.0], [128, 0])]).unwrap();
+    let mut d = image_doc(ImageBlob::separated_tiff(&s, None, &[]).unwrap(), 2, 1);
+    d.swatches.push(Swatch { name: "Orange".into(), paint: Paint::solid(Color::cmyk(0.0, 0.6, 1.0, 0.0)), global: true, spot: true });
+    let plates = |spots_to_process: bool| {
+        let settings: PrintSettings = serde_json::from_value(json!({"output": {"mode": "separations", "spotsToProcess": spots_to_process}})).unwrap();
+        let names: Vec<String> = print_inks(&d, &settings).0.into_iter().map(|i| i.name).collect();
+        let job = plan(&d, &PrintOptions { settings, ..Default::default() }).unwrap();
+        let coverage: Vec<Vec<u8>> = job
+            .plates
+            .iter()
+            .map(|p| {
+                let NodeKind::Image(im) = &p.layers[0].children().unwrap()[0].kind else { panic!("an image") };
+                p.image_blob(im).and_then(|b| b.coverage()).unwrap().2
+            })
+            .collect();
+        names.into_iter().zip(coverage).collect::<Vec<_>>()
+    };
+    let own = plates(false);
+    let get = |all: &[(String, Vec<u8>)], name: &str| all.iter().find(|(n, _)| n == name).map(|(_, c)| c.clone());
+    assert_eq!(get(&own, "Cyan"), Some(vec![255, 0]));
+    assert_eq!(get(&own, "Magenta"), Some(vec![0, 0]), "the spot ink stays off the process plates");
+    assert_eq!(get(&own, "Yellow"), Some(vec![0, 0]));
+    assert_eq!(get(&own, "Orange"), Some(vec![128, 0]));
+    let process = plates(true);
+    assert_eq!(get(&process, "Orange"), None);
+    assert_eq!(get(&process, "Magenta"), Some(vec![77, 0]), "60% of the spot plate's 50%");
+    assert_eq!(get(&process, "Yellow"), Some(vec![128, 0]));
+}
+
 #[test]
 fn the_output_settings_convert_cmyk_images_and_compression_recompresses_them_in_cmyk() {
     let ink = [0u8, 102, 255, 0];

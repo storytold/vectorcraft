@@ -143,7 +143,7 @@ fn planar(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>) -> bool {
 /// stores each pixel's samples together or one plane per channel. `None` when they don't decode to
 /// that many samples, which includes images whose planes together need more than the decoder's
 /// limit (256 MB of samples).
-fn read_samples(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>, n: usize, per: usize) -> Option<Vec<u8>> {
+pub(crate) fn read_samples(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>, n: usize, per: usize) -> Option<Vec<u8>> {
     let mut buf = tiff::decoder::DecodingResult::U8(Vec::new());
     let layout = d.read_image_to_buffer(&mut buf).ok()?;
     let data = match buf {

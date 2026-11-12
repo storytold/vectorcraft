@@ -827,21 +827,29 @@ impl Node {
     /// [`Self::shows_transparency`], counting a colorized image by itself only when `colorize`
     /// accepts it, for files that write some colorized images in their colorize paint (EPS).
     pub fn shows_transparency_with(&self, colorize: &dyn Fn(&Node) -> bool) -> bool {
+        self.visible && (self.own_transparency(colorize) || self.children().is_some_and(|ch| ch.iter().any(|c| c.shows_transparency_with(colorize))))
+    }
+
+    /// [`Self::shows_transparency`] of the object alone, what it holds left out.
+    pub fn shows_own_transparency(&self) -> bool {
+        self.visible && self.own_transparency(&|_| true)
+    }
+
+    /// The object's own transparency, as [`Self::shows_transparency_with`] counts it.
+    fn own_transparency(&self, colorize: &dyn Fn(&Node) -> bool) -> bool {
         use vectorcraft_color::Paint;
         let see_through = |p: &Paint| matches!(p, Paint::Gradient(g) if g.gradient.stops.iter().any(|s| s.opacity < 1.0));
         let effects = |fx: &[crate::Effect]| fx.iter().any(|e| e.visible);
-        self.visible
-            && (self.opacity < 1.0
-                || self.blend != BlendMode::Normal
-                || self.extras().mask.as_ref().is_some_and(|m| !m.disabled)
-                || (matches!(self.kind, NodeKind::Image(_)) && self.extras().colorize.is_some() && colorize(self))
-                || effects(&self.appearance.effects)
-                || self
-                    .appearance
-                    .items
-                    .iter()
-                    .any(|i| i.visible() && (i.opacity() < 1.0 || i.blend() != BlendMode::Normal || see_through(i.paint()) || effects(i.effects())))
-                || self.children().is_some_and(|ch| ch.iter().any(|c| c.shows_transparency_with(colorize))))
+        self.opacity < 1.0
+            || self.blend != BlendMode::Normal
+            || self.extras().mask.as_ref().is_some_and(|m| !m.disabled)
+            || (matches!(self.kind, NodeKind::Image(_)) && self.extras().colorize.is_some() && colorize(self))
+            || effects(&self.appearance.effects)
+            || self
+                .appearance
+                .items
+                .iter()
+                .any(|i| i.visible() && (i.opacity() < 1.0 || i.blend() != BlendMode::Normal || see_through(i.paint()) || effects(i.effects())))
     }
 }
 
