@@ -226,6 +226,13 @@ capability model proposed for PhotoCraft plug-ins
   `VECTORCRAFT_NO_PREFS` set there is no store, and a `grant` accepted under the flag lasts for that session only.
   With `--allow-plugin-grants`, pass `hash` set to the `plugin.inspect` entry's `hash` so that the module installed is
   the one the user saw.
+- The approval protects against plug-ins and automation clients (MCP, scripts and CLI requests): none of them can
+  approve a module's permissions. VectorCraft's own code records a grant only after that approval and when it loads
+  `grants.json`, and installs a module that lists permissions only under a grant recorded for this very module,
+  also when it loads the Additional Plug-ins Folder. The approval does not protect against native code linked into
+  VectorCraft or against another program running as the same user, which can change the files in the `Plug-ins`
+  folder. `grants.json` is not signed, so such a program can add a grant to it. `--allow-plugin-grants` is a choice
+  the person starting a headless session makes.
 - **Replacing asks first.** When the file is another module than the plug-in installed with its id, or, with none
   installed, its id has settings and a cache in the `Plug-ins` folder, Install Plug-in… and File › Open show its id
   and SHA-256 and ask whether to install it in place of that plug-in, which gives it the settings and cache kept for

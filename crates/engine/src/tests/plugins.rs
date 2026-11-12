@@ -1587,7 +1587,7 @@ fn a_module_without_permissions_ends_the_grant_of_its_id() {
 /// that holds such a module and a grant for its id has that grant forgotten when it is attached.
 #[test]
 fn a_module_without_permissions_ends_the_grant_kept_in_the_store() {
-    use vectorcraft_plugins::permissions::{Grant, Permission, sha256_hex};
+    use vectorcraft_plugins::permissions::{Grant, GrantToken, Permission, sha256_hex};
     let folder = crate::tests_links::Folder::new("plugin-store-stale-grant");
     let id = "test.engine.permissions.storedstale";
     let other = "test.engine.permissions.storedother";
@@ -1634,7 +1634,11 @@ fn a_module_without_permissions_ends_the_grant_kept_in_the_store() {
     let future = json!({"id": id, "hash": "00", "permissions": ["doc.read", "ui.panel"]});
     std::fs::write(&grants, serde_json::to_vec(&json!([future, other_entry])).unwrap()).unwrap();
     vectorcraft_plugins::registry::remove(id);
-    vectorcraft_plugins::registry::grant(Grant { id: id.into(), hash: sha256_hex(&approved), permissions: vec![Permission::DocRead] });
+    vectorcraft_plugins::registry::grant(GrantToken::after_engine_approval(Grant {
+        id: id.into(),
+        hash: sha256_hex(&approved),
+        permissions: vec![Permission::DocRead],
+    }));
     let mut fourth = session();
     fourth.attach_plugin_store(folder.0.clone());
     assert_eq!(ids(), vec![other.to_string()]);
@@ -2046,7 +2050,7 @@ fn a_plugin_folder_ends_the_process_grant_of_an_id_it_replaces() {
 /// With a store attached, a matching grant held only by the process doesn't count.
 #[test]
 fn a_stored_grant_covers_only_the_stored_module_it_recorded() {
-    use vectorcraft_plugins::permissions::{Grant, Permission, sha256_hex};
+    use vectorcraft_plugins::permissions::{Grant, GrantToken, Permission, sha256_hex};
     let folder = crate::tests_links::Folder::new("plugin-store-recorded-module");
     let id = "test.engine.permissions.storedbytes";
     let first = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
@@ -2091,7 +2095,11 @@ fn a_stored_grant_covers_only_the_stored_module_it_recorded() {
     assert!(starts());
     let mut attached = session();
     attached.attach_plugin_store(folder.0.clone());
-    vectorcraft_plugins::registry::grant(Grant { id: id.into(), hash: sha256_hex(&changed), permissions: vec![Permission::DocRead] });
+    vectorcraft_plugins::registry::grant(GrantToken::after_engine_approval(Grant {
+        id: id.into(),
+        hash: sha256_hex(&changed),
+        permissions: vec![Permission::DocRead],
+    }));
     let inspected = run(&mut attached, "plugin.inspect", json!({"dataBase64": vectorcraft_format::base64_encode(&changed)}));
     assert_eq!(inspected["needsApproval"], true, "a grant held only by the process doesn't count with a store attached");
     run(&mut attached, "plugin.remove", json!({"id": id}));
@@ -2361,8 +2369,15 @@ fn a_run_past_the_memory_budget_fails_before_the_plugin_starts() {
         params.join(",")
     );
     let module = wat::parse_str(tpl::module(&manifest, "unreachable", "", 1)).unwrap();
-    // One page of memory: the input and the parameters share 32 KiB.
-    registry::install(Plugin::load(&module, Limits { max_memory_bytes: 1 << 16, ..Limits::default() }).unwrap());
+    // One page of memory: the input and the parameters share 32 KiB. The module lists permissions,
+    // so its grant is recorded first.
+    let plugin = Plugin::load(&module, Limits { max_memory_bytes: 1 << 16, ..Limits::default() }).unwrap();
+    registry::grant(vectorcraft_plugins::permissions::GrantToken::after_engine_approval(vectorcraft_plugins::permissions::Grant {
+        id: id.into(),
+        hash: plugin.hash().to_string(),
+        permissions: plugin.manifest().permissions(),
+    }));
+    registry::install(plugin).unwrap();
     let mut s = session();
     let small = rect(&mut s, 10.0, "#ff0000");
     let long = rect(&mut s, 30.0, "#00ff00");
@@ -2403,7 +2418,7 @@ fn a_run_past_the_memory_budget_fails_before_the_plugin_starts() {
         assert!(e.contains(says), "{says}: {e}");
         assert_eq!((s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len()), before, "{says}");
     }
-    assert!(registry::remove(id));
+    assert!(registry::remove(id) && registry::revoke(id));
 }
 
 /// What the user granted is kept in the plug-in store with the module: the next session installs
@@ -2492,6 +2507,41 @@ fn granted_permissions_are_kept_and_folders_skip_the_rest() {
     run(&mut granted, "prefs.set", pref);
     assert!(vectorcraft_plugins::registry::get(id).is_some(), "loaded under this store's grant");
     run(&mut granted, "plugin.remove", json!({"id": id}));
+}
+
+/// The registry installs a module that lists permissions only under a grant the process holds, so
+/// a start and a `plugin.reload` record the store's grant for the module they load. A module in the
+/// folder that nobody granted is reported and skipped, and records nothing.
+#[test]
+fn stored_and_reload_grants_still_install() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    let store = crate::tests_links::Folder::new("plugin-store-grants-reload");
+    let id = "test.engine.permissions.reload";
+    let lone = "test.engine.permissions.reload.lone";
+    let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let mut s = session();
+    s.attach_plugin_store(store.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": ["doc.read"]}));
+    let forget = || {
+        vectorcraft_plugins::registry::remove(id);
+        vectorcraft_plugins::registry::revoke(id);
+    };
+    forget();
+    let mut next = session();
+    next.attach_plugin_store(store.0.clone());
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "installed again from the store");
+    assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(vectorcraft_plugins::permissions::sha256_hex(&wasm)));
+    forget();
+    let dir = crate::tests_links::Folder::new("plugin-folder-grants-reload");
+    std::fs::write(dir.0.join("granted.wasm"), &wasm).unwrap();
+    std::fs::write(dir.0.join("lone.wasm"), asking(lone, r#"["doc.read"]"#, &json!({"objects": []}))).unwrap();
+    let r = run(&mut next, "plugin.reload", json!({"path": dir.0.display().to_string()}));
+    assert_eq!(r["loaded"], json!([id]), "{r}");
+    assert!(vectorcraft_plugins::registry::granted(id).is_some(), "the store's grant is the process's too");
+    let why = r["failed"][0]["error"].as_str().unwrap();
+    assert!(why.contains("needs approval") && r["failed"][0]["file"].as_str().unwrap().ends_with("lone.wasm"), "{r}");
+    assert!(vectorcraft_plugins::registry::get(lone).is_none() && vectorcraft_plugins::registry::granted(lone).is_none());
+    run(&mut next, "plugin.remove", json!({"id": id}));
 }
 
 /// A grant covers the module it was given to: another module under the id, listing the same

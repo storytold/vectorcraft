@@ -52,7 +52,7 @@ use vectorcraft_plugins::{Budget, Command, Kind, Plugin, effect, export, objects
 
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param, switch_or};
 
-use vectorcraft_plugins::permissions::{self, Grant, Permission};
+use vectorcraft_plugins::permissions::{self, Grant, GrantToken, Permission};
 
 /// What a plug-in error looks like to the user. A run the caller cancelled changed nothing.
 fn err(e: vectorcraft_plugins::Error) -> EngineError {
@@ -748,7 +748,7 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     let mut stored = (previous.is_ok() || !m.asks_permissions()) && s.store_plugin(plugin.id(), &bytes);
     if m.asks_permissions() {
         let g = Grant { id: m.id.clone(), hash: plugin.hash().to_string(), permissions: wanted };
-        registry::grant(g.clone());
+        registry::grant(GrantToken::after_engine_approval(g.clone()));
         if stored && !s.store_grant(&m.id, Some(g)) {
             s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref());
             stored = false;
@@ -786,7 +786,8 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     if changed {
         s.store_disabled_plugins();
     }
-    let mut v = describe_installed(&registry::install(plugin));
+    let installed = registry::install(plugin).map_err(err)?;
+    let mut v = describe_installed(&installed);
     if !unknown.is_empty() {
         v["unknownCommands"] = json!(unknown);
     }
@@ -885,7 +886,7 @@ fn load_folder(s: &Session, folder: &str) -> Value {
         None if crate::file_access::current().is_none() => Ok(()),
         None => Err(format!("automation path rejected: {} isn't valid text", f.display())),
     };
-    match registry::load_folder_where(std::path::Path::new(folder), allow, s.plugin_approver()) {
+    match registry::load_folder_where(std::path::Path::new(folder), allow, s.plugin_folder_approver()) {
         Ok(r) => {
             for id in &r.loaded {
                 s.attach_plugin_storage(id);

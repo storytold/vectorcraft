@@ -39,6 +39,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::SystemTime;
 
 use vectorcraft_pdf::{PdfPreset, builtin_preset};
+use vectorcraft_plugins::permissions::GrantToken;
 use vectorcraft_plugins::safe_mode;
 use vectorcraft_plugins::storage::{self, Meter, Storage, StorageError};
 
@@ -383,9 +384,11 @@ impl Session {
                     match grants.get(&m.id).filter(|g| grant_covers(g, &plugin)) {
                         Some(g) => {
                             asks_nothing.remove(&m.id);
-                            vectorcraft_plugins::registry::grant(g.clone());
+                            vectorcraft_plugins::registry::grant(GrantToken::from_engine_grants_file(g.clone()));
                             vectorcraft_plugins::registry::set_storage(&m.id, plugin_storage(Some(&dir), &m.id));
-                            vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string()));
+                            if let Err(e) = vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string())) {
+                                log::warn!("skipping the stored plug-in {}: {e}", path.display());
+                            }
                         }
                         None => {
                             log::warn!("skipping the stored plug-in {}: the user hasn't granted this module the permissions it lists", path.display())
@@ -395,7 +398,9 @@ impl Session {
                 Ok(plugin) => {
                     asks_nothing.insert(plugin.id().to_string());
                     vectorcraft_plugins::registry::set_storage(plugin.id(), plugin_storage(Some(&dir), plugin.id()));
-                    vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string()));
+                    if let Err(e) = vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string())) {
+                        log::warn!("skipping the stored plug-in {}: {e}", path.display());
+                    }
                 }
                 Err(e) => log::warn!("skipping the stored plug-in {}: {e}", path.display()),
             }
@@ -464,6 +469,27 @@ impl Session {
             let m = plugin.manifest();
             match &grants {
                 Some(grants) if m.asks_permissions() => grants.get(&m.id).is_some_and(|g| grant_covers(g, plugin)),
+                _ => vectorcraft_plugins::registry::approved(plugin),
+            }
+        }
+    }
+
+    /// [`Session::plugin_approver`] for a folder load: a module the store's grants approve gets
+    /// that grant recorded for the process too, since the registry installs only a module that a
+    /// recorded grant covers ([`vectorcraft_plugins::registry::install`]).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn plugin_folder_approver(&self) -> impl Fn(&vectorcraft_plugins::Plugin) -> bool + use<> {
+        let grants = self.plugin_dir.as_deref().map(|dir| self.counted_grants(dir));
+        move |plugin| {
+            let m = plugin.manifest();
+            match &grants {
+                Some(grants) if m.asks_permissions() => match grants.get(&m.id).filter(|g| grant_covers(g, plugin)) {
+                    Some(g) => {
+                        vectorcraft_plugins::registry::grant(GrantToken::from_engine_grants_file(g.clone()));
+                        true
+                    }
+                    None => false,
+                },
                 _ => vectorcraft_plugins::registry::approved(plugin),
             }
         }
