@@ -42,6 +42,9 @@ const SPOT_GRADIENTS_L2: &str =
     "gradients mixing a spot color with other inks are written in process colors at PostScript Level 2 (Level 3 keeps the spot inks)";
 const SPOT_GRADIENTS_SHARED: &str = "gradients whose spot inks can't share a DeviceN color space are written without the spot inks";
 const SPOT_GRADIENTS_PERCEPTUAL: &str = "Perceptual gradients of spot colors are written in process colors";
+const CONIC_WEDGES: &str = "conic gradients are written as solid wedges (EPS has no conic shading)";
+/// Wedges a conic gradient is written as: one a degree.
+const CONIC_WEDGE_COUNT: usize = 360;
 /// The most colorants a DeviceN color space may have (PostScript's limit).
 const MAX_DEVICE_N: usize = 32;
 const MISSING_PATTERN: &str = "missing patterns are written as mid-grey";
@@ -389,6 +392,8 @@ impl<'a> Scene<'a> {
                     self.node(c, false);
                 }
             }
+            // Ruler guides draw on screen only.
+            NodeKind::RulerGuide { .. } => {}
         }
         if self.body.len() > MAX_BODY {
             self.body.truncate(was);
@@ -929,8 +934,9 @@ impl<'a> Scene<'a> {
         (space, out)
     }
 
-    /// Paint all of `area` (inside the current clip) with linear or radial gradient `g`, placed on
-    /// `bounds`: a smooth shading at Level 3, else stepped fills.
+    /// Paint all of `area` (inside the current clip) with linear, radial or conic gradient `g`,
+    /// placed on `bounds`: a smooth shading at Level 3, else stepped fills (a conic: wedges at
+    /// both levels).
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect, area: Rect) {
         let geom = g.resolve(bounds);
         let (space, stops) = self.gradient_stops(&g.gradient);
@@ -944,6 +950,7 @@ impl<'a> Scene<'a> {
         let space = &space;
         let smooth = self.o.level == Level::Three && !self.o.compatible_gradients;
         match g.gradient.kind {
+            GradientKind::Conic => self.conic_steps(&geom, area, space, &stops),
             GradientKind::Radial => {
                 let r = geom.length().max(1e-6);
                 let squash = geom.radial_squash();
@@ -969,6 +976,26 @@ impl<'a> Scene<'a> {
                     self.linear_steps(s, e, area, space, &stops);
                 }
             }
+        }
+    }
+
+    /// A conic gradient as [`CONIC_WEDGE_COUNT`] solid wedges about its center covering `area`
+    /// (PostScript has no conic shading), each running on to the seam under the next, so no
+    /// hairline shows between neighbors ([`vectorcraft_color::GradientGeom::conic_wedges`]).
+    fn conic_steps(&mut self, geom: &vectorcraft_color::GradientGeom, area: Rect, space: &GradientSpace, stops: &[(f64, Vec<f32>)]) {
+        self.warn(CONIC_WEDGES);
+        let at = |t: f64| match stops.windows(2).find(|w| t <= w[1].0) {
+            Some(w) if w[1].0 > w[0].0 => mix(&w[0].1, &w[1].1, ((t - w[0].0) / (w[1].0 - w[0].0)).clamp(0.0, 1.0) as f32),
+            Some(w) => w[1].1.clone(),
+            None => stops.last().map_or_else(Vec::new, |s| s.1.clone()),
+        };
+        for (pts, t) in geom.conic_wedges(area, CONIC_WEDGE_COUNT, true) {
+            self.set_comps(space, &at(t));
+            for (i, p) in pts.iter().enumerate() {
+                push_nums(&mut self.body, &[p.x, p.y]);
+                self.line(if i == 0 { "newpath moveto" } else { "lineto" });
+            }
+            self.line("closepath fill");
         }
     }
 

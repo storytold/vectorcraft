@@ -78,7 +78,7 @@ fn constrain_angle_turns_the_arrow_keys() {
     let g = s.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap()["index"].as_u64().unwrap();
     s.execute("guide.select", &json!({"indexes": [g]})).unwrap();
     s.execute("object.nudge", &json!({"dx": 1, "dy": 0})).unwrap();
-    let pos = s.doc().unwrap().doc.guides[g as usize].pos;
+    let pos = s.doc().unwrap().doc.ruler_guides()[g as usize].pos;
     assert!(close(pos, 60.0), "a vertical guide moves 10 right: {pos}");
 }
 
@@ -167,7 +167,7 @@ fn constrain_angle_keeps_guides_selected_with_art_on_the_page_axes() {
     let h = s.execute("guide.add", &json!({"vertical": false, "pos": 50})).unwrap()["index"].as_u64().unwrap() as usize;
     s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
     s.execute("guide.select", &json!({"indexes": [v, h], "toggle": true})).unwrap();
-    let pos = |s: &Session| s.doc().unwrap().doc.guides.iter().map(|g| g.pos).collect::<Vec<_>>();
+    let pos = |s: &Session| s.doc().unwrap().doc.ruler_guides().iter().map(|g| g.pos).collect::<Vec<_>>();
     let at = centre(&s, id);
     s.execute("object.nudge", &json!({"dx": 1, "dy": 0})).unwrap();
     assert_eq!(centre(&s, id) - at, Vec2::new(0.0, -10.0), "the art moves along the turned axis");

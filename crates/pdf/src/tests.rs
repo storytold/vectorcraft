@@ -15,6 +15,7 @@ mod cmykblend;
 mod cmykimages;
 mod colorize;
 mod compression;
+mod conic;
 mod dashalign;
 mod editing;
 mod encrypt;

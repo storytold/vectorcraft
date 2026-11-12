@@ -264,6 +264,25 @@ pub(crate) fn downsample(src: &[u8], w: usize, h: usize, k: usize) -> Vec<u8> {
     out
 }
 
+/// For each of `to` pixels spread over `from` (both above 0), the `from` pixels under it and the
+/// share of it each covers (summing to 1).
+fn area_spans(from: usize, to: usize) -> Vec<Vec<(usize, f64)>> {
+    let step = from as f64 / to as f64;
+    (0..to)
+        .map(|i| {
+            let (start, end) = ((i * from) as f64 / to as f64, ((i + 1) * from) as f64 / to as f64);
+            let first = start.floor() as usize;
+            let last = (end.ceil() as usize).max(first + 1).min(from);
+            (first..last)
+                .filter_map(|j| {
+                    let cover = end.min((j + 1) as f64) - start.max(j as f64);
+                    (cover > 0.0).then_some((j, cover / step))
+                })
+                .collect()
+        })
+        .collect()
+}
+
 /// A rendered image (premultiplied RGBA8, row-major).
 pub struct Rendered {
     pub width: u32,
@@ -284,6 +303,49 @@ impl Rendered {
             }
         }
         out
+    }
+    /// This image at `width`×`height` pixels: each new pixel is the average of the area of this one
+    /// under it, the pixels at its edges weighted by how much of them it covers. Colors are averaged
+    /// premultiplied, so transparent pixels add no color. At the same size it is a copy. An error
+    /// when a side is 0 or the pixel buffer doesn't match the image size.
+    pub fn area_resized(&self, width: u32, height: u32) -> Result<Rendered, String> {
+        let (sw, sh) = (self.width as usize, self.height as usize);
+        if sw.checked_mul(sh).and_then(|n| n.checked_mul(4)) != Some(self.pixels.len()) {
+            return Err("the pixel buffer doesn't match the image size".into());
+        }
+        if sw == 0 || sh == 0 || width == 0 || height == 0 {
+            return Err(format!("a {sw} × {sh} image can't be resized to {width} × {height} pixels"));
+        }
+        if (width, height) == (self.width, self.height) {
+            return Ok(Rendered { width, height, pixels: self.pixels.clone() });
+        }
+        let (dw, dh) = (width as usize, height as usize);
+        let len = dw.checked_mul(dh).and_then(|n| n.checked_mul(4)).ok_or_else(|| format!("a {width} × {height} image is too large"))?;
+        let mut pixels = Vec::new();
+        pixels.try_reserve_exact(len).map_err(|e| format!("a {width} × {height} image: {e}"))?;
+        let (cols, rows) = (area_spans(sw, dw), area_spans(sh, dh));
+        let src: Vec<&[[u8; 4]]> = self.pixels.as_chunks::<4>().0.chunks_exact(sw).collect();
+        let mut acc = vec![[0f64; 4]; dw];
+        for row in &rows {
+            acc.fill([0.0; 4]);
+            for &(y, wy) in row {
+                let Some(line) = src.get(y) else { continue };
+                for (a, col) in acc.iter_mut().zip(&cols) {
+                    for &(x, wx) in col {
+                        if let Some(px) = line.get(x) {
+                            let w = wy * wx;
+                            for (s, v) in a.iter_mut().zip(px) {
+                                *s += w * f64::from(*v);
+                            }
+                        }
+                    }
+                }
+            }
+            for a in &acc {
+                pixels.extend(a.map(|v| v.round().clamp(0.0, 255.0) as u8));
+            }
+        }
+        Ok(Rendered { width, height, pixels })
     }
     /// Encode as PNG without metadata (thumbnails, screenshots, embedded rasters; exports use
     /// [`encode`]).

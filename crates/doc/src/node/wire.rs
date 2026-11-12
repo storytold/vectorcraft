@@ -145,9 +145,10 @@ fn count_one<E: serde::de::Error>() -> Result<(), E> {
 }
 
 /// A list read from a file (a member's Intertwine areas of tier 2 and up, an instance's symbol
-/// overrides), each item counting against [`with_node_budget`] as an object does: a compressed
-/// file of repeated empty items stays small while they take memory once read.
-fn counted_list<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Vec<T>, D::Error> {
+/// overrides, a document's saved ruler guides), each item counting against [`with_node_budget`]
+/// as an object does: a compressed file of repeated empty items stays small while they take
+/// memory once read.
+pub(crate) fn counted_list<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Vec<T>, D::Error> {
     struct Items<T>(std::marker::PhantomData<T>);
     impl<'de, T: Deserialize<'de>> serde::de::Visitor<'de> for Items<T> {
         type Value = Vec<T>;

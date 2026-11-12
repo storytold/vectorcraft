@@ -583,7 +583,8 @@ impl<'a> Scene<'a> {
     }
 
     fn node(&mut self, n: &Node, force: bool) {
-        if let NodeKind::Layer { template: true, .. } = n.kind {
+        // Ruler guides draw on screen only: no entity and no loss warning.
+        if n.is_ruler_guide() || n.is_template() {
             return;
         }
         // Symbols that hold symbols are written in full for each instance: depth alone doesn't
@@ -676,6 +677,8 @@ impl<'a> Scene<'a> {
                     self.node(c, false);
                 }
             }
+            // Ruler guides draw on screen only.
+            NodeKind::RulerGuide { .. } => {}
         }
         self.opacity = opacity;
     }

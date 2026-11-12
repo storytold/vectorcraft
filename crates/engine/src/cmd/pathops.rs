@@ -1351,7 +1351,9 @@ fn split_into_grid(s: &mut Session, p: &Value) -> Result<Value> {
             let node = shape_node(d, c, Some(&top));
             out.push(d.insert(par, idx + k, node)?);
         }
-        d.guides.extend(edges.iter().map(|&(vertical, pos)| vectorcraft_doc::Guide { layer, ..vectorcraft_doc::Guide::new(vertical, pos) }));
+        for &(vertical, pos) in &edges {
+            d.add_ruler_guide(&vectorcraft_doc::Guide { layer, ..vectorcraft_doc::Guide::new(vertical, pos) });
+        }
         sel.set(out.iter().copied());
         Ok(out)
     })?;

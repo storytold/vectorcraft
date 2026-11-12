@@ -288,6 +288,18 @@ fn remove_breaks_in_the_characters_a_type_tool_selected() {
     assert_eq!(obj(&s, id).plain_text(), "a b\nc");
 }
 
+/// `ids: null` is `ids` left out: the characters the Type tool selected lose their breaks, and
+/// the rest of the text keeps them.
+#[test]
+fn remove_breaks_with_ids_null_in_the_characters_a_type_tool_selected() {
+    let mut s = session();
+    let id = text(&mut s, json!({"x": 40, "y": 60, "text": "a\nb\nc", "size": 12}));
+    select(&mut s, &[id]);
+    edit_text(&mut s, id, 0, 2);
+    s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph", "ids": null})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "a b\nc");
+}
+
 #[test]
 fn split_at_the_cursor_and_around_a_selection() {
     for (anchor, caret, want) in [(6, 6, &["Split", "here please"][..]), (6, 10, &["Split", "here", "please"][..])] {

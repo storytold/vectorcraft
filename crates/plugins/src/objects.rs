@@ -616,13 +616,20 @@ fn decode_paint(v: &Value, at: &str) -> Result<Paint> {
             }
             stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
             g.angle = g.angle.rem_euclid(360.0);
+            let conic = g.gradient.kind == vectorcraft_color::GradientKind::Conic;
             if let Some(geom) = &mut g.geom {
                 check_point(geom.start, at)?;
                 check_point(geom.end, at)?;
                 if let Some(f) = geom.focal {
                     check_point(f, at)?;
                 }
-                geom.aspect = if geom.aspect.is_finite() { geom.aspect.clamp(0.01, 100.0) } else { 1.0 };
+                let a = geom.aspect;
+                // A conic's negative aspect mirrors its sweep, so its sign stays.
+                geom.aspect = match (a.is_finite(), conic) {
+                    (false, _) => 1.0,
+                    (true, true) => a.abs().clamp(0.01, 100.0).copysign(a),
+                    (true, false) => a.clamp(0.01, 100.0),
+                };
             }
             if let Some(ff) = &mut g.freeform {
                 if ff.points.len() > MAX_ITEMS || ff.lines.len() > MAX_ITEMS || ff.lines.iter().any(|l| l.len() > MAX_ITEMS) {
@@ -1195,7 +1202,10 @@ impl Plan {
         if self.top.as_ref().is_some_and(|(p, _)| *p == parent)
             && let Some((_, nodes)) = self.top.take()
         {
-            out.get_or_insert_with(|| list.to_vec()).extend(nodes.into_iter().map(Arc::new));
+            // On a layer, new objects go below its ruler guides, which stay on top.
+            let o = out.get_or_insert_with(|| list.to_vec());
+            let at = Node::guide_run_start(o);
+            o.splice(at..at, nodes.into_iter().map(Arc::new));
         }
         out
     }

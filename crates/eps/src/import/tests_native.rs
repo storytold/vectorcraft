@@ -77,6 +77,14 @@ fn names(d: &Document) -> Vec<String> {
     d.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect()
 }
 
+/// The ruler guides of `d` by their line, artboard and layer.
+fn guide_lines(d: &Document) -> Vec<vectorcraft_doc::Guide> {
+    d.ruler_guides()
+        .into_iter()
+        .map(|g| vectorcraft_doc::Guide { artboard: g.artboard, layer: g.layer, ..vectorcraft_doc::Guide::new(g.vertical, g.pos) })
+        .collect()
+}
+
 #[test]
 fn ruler_units_in_the_program_header_alone_are_kept() {
     let art = layer("Art", true, &square(10, 10));
@@ -2219,11 +2227,11 @@ fn an_ai_files_ruler_guides_come_in_on_their_layers() {
         assert!(read, "{w:?}");
         let jig = d.layers[0].id;
         let want = [
-            vectorcraft_doc::Guide { vertical: false, pos: 60.0 * k, artboard: None, layer: Some(jig) },
-            vectorcraft_doc::Guide { vertical: true, pos: 20.0 * k, artboard: Some(d.artboards[0].id), layer: Some(jig) },
+            vectorcraft_doc::Guide { layer: Some(jig), ..vectorcraft_doc::Guide::new(false, 60.0 * k) },
+            vectorcraft_doc::Guide { artboard: Some(d.artboards[0].id), layer: Some(jig), ..vectorcraft_doc::Guide::new(true, 20.0 * k) },
         ];
-        assert_eq!(d.guides, want);
-        assert_eq!(d.layers[0].children().map_or(0, |c| c.len()), 1, "the square alone");
+        assert_eq!(guide_lines(&d), want);
+        assert_eq!(d.layers[0].children().map_or(0, |c| c.iter().filter(|c| !c.is_ruler_guide()).count()), 1, "the square alone");
     }
 }
 
@@ -2241,7 +2249,10 @@ fn an_eps_of_its_art_box_keeps_the_guides_of_its_first_artboard() {
     assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
     assert_eq!(r.document.artboards.len(), 1);
     let (board, layer) = (r.document.artboards[0].id, r.document.layers[0].id);
-    assert_eq!(r.document.guides, [vectorcraft_doc::Guide { vertical: true, pos: 25.0, artboard: Some(board), layer: Some(layer) }]);
+    assert_eq!(
+        guide_lines(&r.document),
+        [vectorcraft_doc::Guide { artboard: Some(board), layer: Some(layer), ..vectorcraft_doc::Guide::new(true, 25.0) }]
+    );
 }
 
 /// A PDF part read from a `UserUnit` page cropped to the art: the art's box, not the artboard, is
@@ -5785,7 +5796,8 @@ fn a_warp_of_type_opens_as_a_mesh_on_its_saved_grid_and_keeps_its_shape_when_its
 
 /// A warp of stroked type with Distort Appearance whose drawn art maps the type's bounds with its
 /// strokes onto the grid the file saves (not its glyphs' bounds alone) opens live as a mesh envelope
-/// mapping from that box (#3179).
+/// mapping from that box (#3179). The drawn art strokes the bent outlines at the stroke's own weight,
+/// as files draw it (#6644).
 #[test]
 fn a_warp_of_stroked_type_maps_from_its_bounds_with_strokes_where_its_drawn_art_does() {
     use vectorcraft_doc::live::{envelope_content_boxes, envelope_stroke_margin};
@@ -5805,7 +5817,7 @@ fn a_warp_of_stroked_type_maps_from_its_bounds_with_strokes_where_its_drawn_art_
         vectorcraft_doc::NodeId(1_000_000),
         NodeKind::Envelope { content, kind: Box::new(rising_kind()), fidelity: 50.0, editing: false, options, frame: Box::default() },
     );
-    let (drawn, page) = drawn_envelope(&shaped);
+    let (drawn, page) = drawn_stroked_envelope(&shaped);
     let art =
         native_with_text(&layer("Art", true, &format!("{}\n{}", square(10, 10), type_envelope_on(&arc_keys(0.3), &rising_grid(), &drawn, ""))), &doc);
     let r = import(&eps(&format!("{}\n{page}", page_square(10, 10)), &art)).unwrap();
@@ -5820,6 +5832,101 @@ fn a_warp_of_stroked_type_maps_from_its_bounds_with_strokes_where_its_drawn_art_
         }
     });
     assert_eq!(margin, Some(options.bounds_margin));
+}
+
+/// The drawn art of `envelope` (on the page axes), an envelope of type stroked by its characters,
+/// as the drawn art of `.ai` files strokes type in an envelope: the bent glyph outlines the envelope
+/// draws of its type unstroked, each filled in its type's color, then each stroked with the type's
+/// stroke (its weight, color, join and miter limit) whatever the grid does to it, and the page's
+/// PostScript for them (#6644).
+fn drawn_stroked_envelope(envelope: &Node) -> (String, String) {
+    let NodeKind::Envelope { content, .. } = &envelope.kind else { panic!("an envelope") };
+    let Some(NodeKind::Text(t)) = content.first().map(|c| &c.kind) else { panic!("type") };
+    let stroke = t.runs[0].style.stroke_layer();
+    let mut unstroked = envelope.clone();
+    if let NodeKind::Envelope { content, .. } = &mut unstroked.kind {
+        for c in content.iter_mut() {
+            if let NodeKind::Text(t) = &mut std::sync::Arc::make_mut(c).kind {
+                t.runs.iter_mut().for_each(|r| r.style.stroke = vectorcraft_color::Paint::None);
+            }
+        }
+    }
+    let (fills, fill_page) = drawn_envelope(&unstroked);
+    let [r, g, b] = stroke.paint.color().map_or([0.0; 3], |c| c.to_rgb());
+    let join = match stroke.join {
+        vectorcraft_doc::LineJoin::Miter => 0,
+        vectorcraft_doc::LineJoin::Round => 1,
+        vectorcraft_doc::LineJoin::Bevel => 2,
+    };
+    let (w, limit) = (stroke.width, stroke.miter_limit);
+    let mut art = format!("{fills}0 0 0 0 {r} {g} {b} XA\n{w} w\n{join} j\n{limit} M\n");
+    let mut page = format!("{fill_page}{r} {g} {b} setrgbcolor {w} setlinewidth {join} setlinejoin {limit} setmiterlimit\n");
+    let pt = |p: kurbo::Point| {
+        let (x, y) = to_art(p);
+        format!("{x} {y}")
+    };
+    vectorcraft_effects::expand_live_deep(None, &unstroked).walk(&mut |n| {
+        let NodeKind::Path { path, .. } = &n.kind else { return };
+        for el in path.to_bezpath().elements() {
+            match *el {
+                kurbo::PathEl::MoveTo(p) => {
+                    art += &format!("{} m\n", pt(p));
+                    page += &format!("newpath {} moveto ", pt(p));
+                }
+                kurbo::PathEl::LineTo(p) => {
+                    art += &format!("{} L\n", pt(p));
+                    page += &format!("{} lineto ", pt(p));
+                }
+                kurbo::PathEl::CurveTo(a, c, p) => {
+                    art += &format!("{} {} {} C\n", pt(a), pt(c), pt(p));
+                    page += &format!("{} {} {} curveto ", pt(a), pt(c), pt(p));
+                }
+                kurbo::PathEl::QuadTo(..) => {}
+                kurbo::PathEl::ClosePath => {
+                    art += "s\n";
+                    page += "closepath stroke\n";
+                }
+            }
+        }
+    });
+    (art, page)
+}
+
+/// An envelope of type with a character stroke, Distort Appearance on, whose drawn art strokes the
+/// bent glyph outlines at the stroke's own weight (as `.ai` files draw the strokes of type in an
+/// envelope, however much the grid squeezes or stretches it) opens live: VectorCraft draws the
+/// stroke that way too (#6644).
+#[test]
+fn an_envelope_of_stroked_type_whose_drawn_art_strokes_the_bent_outlines_at_the_weight_opens_live() {
+    let Some(family) = installed_family() else { return };
+    // "FLUX" stroked 1.5 points wide in black with round joins.
+    let stroked = "/53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> /54 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 0.0 0.0 1.0 ] >> >> /57 true /62 1 /63 1.5";
+    let doc = type_envelope_text(&family, None).replace("/53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >>", stroked);
+    let mut text = made_envelope_type(&doc);
+    text.visible = true;
+    assert!(
+        matches!(&text.kind, NodeKind::Text(t) if t.runs[0].style.stroke_width == 1.5 && t.runs[0].style.stroke_join == vectorcraft_doc::LineJoin::Round),
+        "{text:?}"
+    );
+    let shaped = Node::new(
+        vectorcraft_doc::NodeId(1_000_000),
+        NodeKind::Envelope {
+            content: vec![std::sync::Arc::new(text)],
+            kind: Box::new(rising_kind()),
+            fidelity: 50.0,
+            editing: false,
+            options: vectorcraft_doc::live::EnvelopeOptions::NEW,
+            frame: Box::default(),
+        },
+    );
+    let (drawn, page) = drawn_stroked_envelope(&shaped);
+    let art =
+        native_with_text(&layer("Art", true, &format!("{}\n{}", square(10, 10), type_envelope_on(&arc_keys(0.3), &rising_grid(), &drawn, ""))), &doc);
+    let r = import(&eps(&format!("{}\n{page}", page_square(10, 10)), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let (envelopes, loose) = envelopes_and_type(&r.document);
+    assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{:?}", r.warnings);
+    assert!(loose.is_empty(), "{loose:?}");
 }
 
 /// A warp of type whose editing data saves no grid it can be shaped by keeps its drawn art and its
