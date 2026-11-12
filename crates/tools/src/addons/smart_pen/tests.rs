@@ -157,7 +157,13 @@ fn a_press_on_the_first_anchor_closes_the_path() {
     // A drag shapes the closing curve.
     let (c, params) = preview(&t.pointer(&cx, &ev(PointerKind::Drag, 130.0, 100.0, NO)));
     assert_eq!((c.as_str(), params["in"].clone()), ("path.close", json!([70.0, 100.0])));
-    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 130.0, 100.0, NO)), vec![Action::Commit]);
+    // Alt pressed mid-drag makes the anchor a corner and keeps its outgoing handle where it was.
+    let (_, params) = preview(&t.pointer(&cx, &ev(PointerKind::Drag, 130.0, 120.0, ALT)));
+    assert_eq!(
+        (params["in"].clone(), params["out"].clone(), params["independent"].clone()),
+        (json!([70.0, 80.0]), json!([100.0, 100.0]), json!(true))
+    );
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 130.0, 120.0, ALT)), vec![Action::Commit]);
     assert!(!t.drawing, "the path is finished");
 }
 

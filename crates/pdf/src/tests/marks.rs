@@ -256,14 +256,48 @@ fn every_preset_and_version_keeps_a_20_m_page_or_says_why_not() {
             }
         }
     }
-    // PDF/X-4 and PDF/A-2b files at PDF 1.4 have no `UserUnit` either.
+    // PDF/X-4 files at PDF 1.4 have no `UserUnit` either; PDF/A-2b files at PDF 1.4 are written as
+    // PDF 1.6 to have one.
     let at_14 = |standard| report(&d, PdfSettings { standard, compatibility: Compatibility::Pdf14, ..PdfSettings::default() });
     refused(at_14(Standard::PdfX4).err().unwrap(), "PDF 1.4");
-    refused(at_14(Standard::PdfA2b).err().unwrap(), "PDF 1.4");
+    let r = at_14(Standard::PdfA2b).unwrap();
+    assert!(r.bytes.starts_with(b"%PDF-1.6"));
+    assert_eq!(raw_numbers(&r.bytes, "/UserUnit", 1), [3.938]);
+}
+
+/// PDF/A-2 limits page boundaries to 14,400 units (ISO 19005-2, 6.1.13), and PDF 1.4 has no
+/// `UserUnit`: a PDF/A-2b file at PDF 1.4 with a page longer than 14,400 pt is written as PDF 1.6,
+/// with a `UserUnit` that keeps the page within 14,400 units and a warning, with
+/// `long_pages_in_points` on or off. Pages past 32,767 pt that aren't whole numbers of points are
+/// written too. A file whose pages are all 14,400 pt or shorter stays PDF 1.4.
+#[test]
+fn pdfa2b_at_pdf_1_4_writes_a_long_page_as_pdf_1_6_within_14400_units() {
+    for in_points in [false, true] {
+        let set = PdfSettings {
+            standard: Standard::PdfA2b,
+            compatibility: Compatibility::Pdf14,
+            long_pages_in_points: in_points,
+            ..PdfSettings::default()
+        };
+        for side in [17_000.0, 32_767.0, 32_767.5, 40_000.0, TWENTY_M] {
+            let r = report(&sized(side, 300.0), set.clone()).unwrap_or_else(|e| panic!("{side} {in_points}: {e}"));
+            assert!(r.bytes.starts_with(b"%PDF-1.6"), "{side} {in_points}");
+            let unit = raw_numbers(&r.bytes, "/UserUnit", 1);
+            assert_eq!(unit.len(), 1, "{side} {in_points}");
+            let media = raw_numbers(&r.bytes, "/MediaBox", 4);
+            assert!(media[2] - media[0] <= 14_400.0 && media[3] - media[1] <= 14_400.0, "{side} {in_points}: {media:?}");
+            assert!(((media[2] - media[0]) * unit[0] - side).abs() < side * 0.001, "{side} {in_points}: {media:?} {unit:?}");
+            let raised = "PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6";
+            assert!(r.warnings.iter().any(|w| w == raised), "{side} {in_points}: {:?}", r.warnings);
+        }
+        let r = report(&sized(14_400.0, 300.0), set.clone()).unwrap();
+        assert!(r.bytes.starts_with(b"%PDF-1.4"), "{in_points}");
+        assert!(!r.warnings.iter().any(|w| w.contains("has no UserUnit")), "{in_points}: {:?}", r.warnings);
+    }
 }
 
 /// A page from 14,400 to 32,767 pt long is written in points, with the warning, in PDF 1.3 and 1.4
-/// files, PDF/X-1a, PDF/X-3, PDF/X-4 and PDF/A-2b files among them, as before the warning. Past
+/// files, PDF/X-1a, PDF/X-3 and PDF/X-4 files among them, as before the warning. Past
 /// 32,767 pt a page of whole points is written too, as the writer puts whole numbers as integers;
 /// a side that isn't a whole number, or art that needs a real number past 32,767, gets the error.
 #[test]
@@ -276,7 +310,6 @@ fn pdf_1_4_writes_a_page_up_to_32767_pt_in_points() {
         ("PDF/X-1a:2001", preset("PDF/X-1a:2001")),
         ("PDF/X-3:2002", preset("PDF/X-3:2002")),
         ("PDF/X-4:2010", PdfSettings { standard: Standard::PdfX4, compatibility: Compatibility::Pdf14, ..PdfSettings::default() }),
-        ("PDF/A-2b", PdfSettings { standard: Standard::PdfA2b, compatibility: Compatibility::Pdf14, ..PdfSettings::default() }),
     ];
     for (label, set) in &sets {
         for side in [17_000.0, 32_767.0, 40_000.0] {
@@ -287,8 +320,8 @@ fn pdf_1_4_writes_a_page_up_to_32767_pt_in_points() {
             let points = format!("{label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in");
             assert!(w.len() == 1 && w[0].ends_with(&points), "{label}: {w:?}");
         }
-        // For PDF/X-4 and PDF/A-2b files the error names the PDF version.
-        let label = if matches!(*label, "PDF/X-4:2010" | "PDF/A-2b") { "PDF 1.4" } else { label };
+        // For PDF/X-4 files the error names the PDF version.
+        let label = if *label == "PDF/X-4:2010" { "PDF 1.4" } else { label };
         let refused = |e: PdfError, side: &str| {
             let refusal = format!("{label} files hold real numbers up to 32,767, and the page of artboard 1, {side} pt long, needs larger ones");
             assert!(e.to_string().contains(&refusal), "{e}");
@@ -475,6 +508,29 @@ fn long_pages_in_points_keeps_every_version_and_changes_nothing_where_pages_are_
     }
     let x4 = crate::builtin_presets().into_iter().find(|p| p.name == "PDF/X-4:2010").unwrap().settings;
     assert_eq!(report(&d, with(&x4)).unwrap().bytes, report(&d, x4).unwrap().bytes);
+}
+
+/// PDF/A-2 limits page boundaries to 14,400 units (ISO 19005-2, 6.1.13): with
+/// `long_pages_in_points`, a PDF/A file gives the same file as without it at every version its
+/// standard allows, and a 10 m page keeps its `UserUnit` from PDF 1.5 on (PDF 1.5 is written as
+/// PDF 1.6 for it).
+#[test]
+fn pdfa2b_long_page_stays_within_14400_units() {
+    let d = sized(TEN_M, TEN_M / 10.0);
+    for s in Standard::ALL.iter().copied().filter(|s| *s != Standard::None && !s.is_pdfx()) {
+        for c in Compatibility::ALL.iter().copied().filter(|c| s.allows(*c)) {
+            let off = PdfSettings { standard: s, compatibility: c, ..PdfSettings::default() };
+            let on = PdfSettings { long_pages_in_points: true, ..off.clone() };
+            let (on, off) = (report(&d, on).unwrap(), report(&d, off).unwrap());
+            assert_eq!(on.bytes, off.bytes, "{} {}", s.label(), c.label());
+            assert_eq!(on.warnings, off.warnings, "{} {}", s.label(), c.label());
+            if c != Compatibility::Pdf14 {
+                assert_eq!(raw_numbers(&on.bytes, "/UserUnit", 1), [1.969], "{} {}", s.label(), c.label());
+                let media = raw_numbers(&on.bytes, "/MediaBox", 4);
+                assert!(media[2] - media[0] <= 14_400.0 && media[3] - media[1] <= 14_400.0, "{} {}: {media:?}", s.label(), c.label());
+            }
+        }
+    }
 }
 
 /// A page of 14,400 pt or less gives the same file with `long_pages_in_points` on or off, at every

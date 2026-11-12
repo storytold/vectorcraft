@@ -106,6 +106,7 @@
 	PDF Presets…	Preset PDF…
 	Perspective Grid Presets…	Preset kisi perspektif…
 	Color Settings…	Pengaturan warna…
+	Assign Profile	Tetapkan profil
 	Assign Profile…	Tetapkan profil…
 	Keyboard Shortcuts…	Pintasan papan tik…
 	Import Shortcut Set	Impor set pintasan
@@ -189,6 +190,15 @@
 	Expand…	Perluas…
 	Expand Appearance	Perluas tampilan
 	Crop Image	Pangkas gambar
+	Image Tools	Alat Gambar
+	Remove Background…	Hapus latar belakang…
+	Remove Background	Hapus latar belakang
+	Background	Latar belakang
+	Edge Color	Warna tepi
+	Picked Colors	Warna pilihan
+	Corner Color	Warna sudut
+	Contiguous	Bersambung
+	Each Channel	Setiap kanal
 	Edit Path	Edit jalur
 	Mask	Masker
 	Rasterize…	Rasterisasi…
@@ -368,6 +378,8 @@
 	Create Outlines	Buat garis luar
 	Optical Margin Alignment	Perataan margin optik
 	Dynamic Text	Teks dinamis
+	Dynamic Text Presets	Preset teks dinamis
+	Arch	Pelengkung
 	Fill with Placeholder Text	Isi dengan teks placeholder
 	Insert Inline Symbol	Sisipkan simbol sebaris
 	Show Hidden Characters	Tampilkan karakter tersembunyi
@@ -730,6 +742,15 @@
 	Stun Pulse	Pingsan
 	Stealth Fade	Menghilang
 	Shield Buff	Perisai
+	Textures	Tekstur
+	Fine Grain	Butiran Halus
+	Canvas Weave	Anyaman Kanvas
+	Burlap Sack	Karung Goni
+	Cracked Glaze	Glasir Retak
+	Mosaic Floor	Lantai Mosaik
+	Quilted Squares	Kotak Quilt
+	Leaded Glass	Kaca Patri
+	Damp Paper	Kertas Basah
 	Outlines and Rules	Garis luar dan garis
 	Hand-Drawn	Gambar tangan
 	Gradient Finishes	Finishing gradien
@@ -809,6 +830,13 @@
 	Dock Panel	Tambatkan panel
 	Dock to Top	Tambatkan ke atas
 	Dock to Bottom	Tambatkan ke bawah
+	Control Bar Options	Opsi bilah kontrol
+	Tool Options	Opsi alat
+	Object Options	Opsi objek
+	Image Options	Opsi gambar
+	Vertical Alignment	Perataan vertikal
+	Align and Distribute	Sejajarkan dan distribusikan
+	Document Options	Opsi dokumen
 	Dock Control Bar	Tambatkan bilah kontrol
 	Float Tool Group	Mengambangkan grup alat
 	Services	Layanan
@@ -1083,6 +1111,8 @@ lighting	Light	Cahaya
 	Toolbar: Single/Double Column	Bilah alat: kolom tunggal/ganda
 	Toolbar: Add Tool	Bilah alat: tambahkan alat
 	Toolbar: Remove Tool	Bilah alat: hapus alat
+	Add Tool…	Tambahkan alat…
+	Remove Tool	Hapus alat
 	Toolbar: Reset	Bilah alat: setel ulang
 	Two Point Perspective Preset 1	Preset perspektif dua titik 1
 	Two Point Perspective Preset 2	Preset perspektif dua titik 2
@@ -1462,6 +1492,7 @@ digits	Malayalam	Malayalam
 	Roman Baseline	Baseline Romawi
 	Select a text object to edit its character attributes.	Pilih objek teks untuk mengedit atribut karakternya.
 	Show Options	Tampilkan opsi
+	Show Recent Colors	Tampilkan warna terbaru
 	Small Caps	Kapital kecil
 	Small Caps (on the roadmap)	Kapital kecil (masih dalam roadmap)
 	Standard Vertical Roman Alignment	Perataan Romawi vertikal standar
@@ -1489,6 +1520,8 @@ digits	Malayalam	Malayalam
 	Scale at Center	Skalakan dari tengah
 	Up/Down:	Atas/bawah:
 	Left/Right:	Kiri/kanan:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko atas/bawah
+	Tate-chu-yoko Left/Right	Tate-chu-yoko kiri/kanan
 	Underline	Garis bawah
 	Vertical Scale %	Skala vertikal %
 	Axis	Sumbu
@@ -1591,6 +1624,8 @@ digits	Malayalam	Malayalam
 	No gradient swatches	Tidak ada swatch gradien
 	Points: clicks add free points	Titik: klik menambahkan titik bebas
 	Radial Gradient	Gradien radial
+	Conic Gradient	Gradien kerucut
+	Diamond Gradient	Gradien wajik
 	Reset to White, Black	Setel ulang ke putih, hitam
 	Reverse Gradient	Balikkan gradien
 	Save to Swatches	Simpan ke swatch
@@ -1857,6 +1892,7 @@ digits	Malayalam	Malayalam
 	Simulate Paper	Simulasikan kertas
 	Use Black Point Compensation	Gunakan kompensasi titik hitam
 	Working CMYK (don't tag)	CMYK kerja (tanpa tag)
+	Working RGB (don't tag)	RGB kerja (tanpa tag)
 	{name} (spot)	{name} (spot)
 	Add to Profiles…	Tambahkan ke profil…
 	Align Stroke to Center	Ratakan stroke ke tengah
@@ -4185,6 +4221,8 @@ imageTrace	Outline	Kontur
 @msg	`gradient` must be an object	`gradient` harus berupa objek
 @msg	`library` is a library id or name (see {list})	`library` adalah id atau nama pustaka (lihat {list})
 @msg	`mode` applies to freeform gradients	`mode` berlaku untuk gradien bentuk bebas
+@msg	a negative `aspect` applies to conic gradients	`aspect` negatif berlaku untuk gradien kerucut
+@msg	`focal` applies to radial gradients	`focal` berlaku untuk gradien radial
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` harus 1, 3, atau 5
 @msg	`stops` must be an array	`stops` harus berupa larik
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` harus berupa objek opsi SVG (lihat document.formats)
@@ -4453,6 +4491,7 @@ imageTrace	Outline	Kontur
 @msg	not a stored central record	bukan rekaman pusat yang tersimpan
 @msg	not a valid plug-in module: {0}	bukan modul plug-in yang valid: {0}
 @msg	not an EMF or WMF file	bukan berkas EMF atau WMF
+@msg	not an HP-GL file	bukan berkas HP-GL
 @msg	not found	tidak ditemukan
 @msg	not in pattern editing mode	tidak dalam mode pengeditan pola
 @msg	finish editing the pattern first	selesaikan pengeditan pola terlebih dahulu
@@ -4620,7 +4659,7 @@ imageTrace	Outline	Kontur
 @msg	unknown format	format tidak dikenal
 @msg	unknown format `{f}` (Save writes {_1})	format `{f}` tidak dikenal (Simpan menulis {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	mode bentuk bebas `{m}` tidak dikenal (titik, garis)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	jenis gradien `{k}` tidak dikenal (linear, radial, bentuk bebas)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	jenis gradien `{k}` tidak dikenal (linear, radial, kerucut, wajik, bentuk bebas)
 @msg	unknown highlight `{h}`	sorotan `{h}` tidak dikenal
 @msg	unknown option `{path}.{k}`	opsi `{path}.{k}` tidak dikenal
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	overprint `{o}` tidak dikenal (pertahankan, simulasikan, atau buang)
@@ -4822,7 +4861,13 @@ imageTrace	Outline	Kontur
 @msg	the PSD file has an unknown colour mode ({m})	berkas PSD memiliki mode warna yang tidak dikenal ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	data gambar berkas PSD menggunakan kompresi yang tidak dikenal ({m})
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	gambar PSD terlalu besar untuk dibaca ({_1} × {_2} piksel)
-@msg	zipped 32-bit PSD image data with prediction can't be read	data gambar PSD 32-bit terkompresi zip dengan prediksi tidak dapat dibaca
+@msg	zipped 1-bit PSD image data with prediction can't be read	data gambar PSD 1-bit terkompresi zip dengan prediksi tidak dapat dibaca
+@msg	the PSD file's layer data uses an unknown compression ({m})	data lapisan berkas PSD menggunakan kompresi yang tidak dikenal ({m})
+@msg	the PSD file's layer records are damaged	catatan lapisan berkas PSD rusak
+@msg	the PSD file's layer groups are nested too deeply	grup lapisan berkas PSD bersarang terlalu dalam
+@msg	a layer of the PSD file is too large to read	sebuah lapisan berkas PSD terlalu besar untuk dibaca
+@msg	the PSD file's layers take more memory to read than allowed	lapisan berkas PSD memerlukan lebih banyak memori untuk dibaca daripada yang diizinkan
+@msg	the layers can't be read ({e}): the file opened as its merged image	lapisan tidak dapat dibaca ({e}): berkas dibuka sebagai gambar gabungannya
 @msg	{depth}-bit PSD files in this colour mode can't be read	berkas PSD {depth}-bit dalam mode warna ini tidak dapat dibaca
 @msg	the PSD file is cut short	berkas PSD terpotong
 @msg	the PSD file's header is damaged	header berkas PSD rusak
@@ -5230,6 +5275,11 @@ mark-style	Japanese	Jepang
 	Softness	Kelembutan
 	Ambient Light	Cahaya ambient
 	Light behind the object	Cahaya di belakang objek
+	Shadows	Bayangan
+	Distance from Object	Jarak dari objek
+	Shadow Bounds	Batas bayangan
+	Behind Object	Di belakang objek
+	Below Object	Di bawah objek
 	3D Lighting Preset	Preset Pencahayaan 3D
 	Standard	Standar
 	Diffuse	Difus
@@ -5373,7 +5423,7 @@ mark-style	Japanese	Jepang
 @msg	span must be "object" or "selection", got {v}	span harus "object" atau "selection", diterima {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" menempatkan `gradient`, bukan swatch
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" menempatkan gradien: berikan `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" menempatkan gradien linear atau radial, bukan gradien bebas
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" menempatkan gradien linear, radial, kerucut, atau wajik, bukan gradien bebas
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" menempatkan gradien itu sendiri: jangan sertakan `start` dan `end` (keduanya sudah menempatkannya dalam koordinat dokumen)
 	Make Image Dynamic	Jadikan gambar dinamis
 	Import Data Sets…	Impor himpunan data…
@@ -5886,6 +5936,16 @@ axis	Y Axis	Sumbu Y
 @msg	message must be text	message harus berupa teks
 @msg	allowContinue must be true or false	allowContinue harus true atau false
 @msg	Batch cannot play an action with a stop	Batch tidak dapat memutar tindakan dengan titik henti
+	Insert Menu Item…	Sisipkan item menu…
+	Insert Menu Item	Sisipkan item menu
+	Menu Item:	Item menu:
+	No menu item matches.	Tidak ada item menu yang cocok.
+	Several menu items match. Choose one from the list.	Beberapa item menu cocok. Pilih salah satu dari daftar.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Item yang membuka dialog, serta item menu Berkas, Jendela, dan Bantuan, tidak dicantumkan.
+@msg	command must be text	command harus berupa teks
+@msg	no menu item that can be inserted runs this command	tidak ada item menu yang dapat disisipkan yang menjalankan perintah ini
+@msg	the action already has 10,000 steps	tindakan sudah memiliki 10.000 langkah
+@msg	the action set would be larger than 8 MiB	set tindakan akan lebih besar dari 8 MiB
 	Playback Options	Opsi pemutaran
 	Accelerated	Dipercepat
 	Step by Step	Langkah demi langkah
@@ -6534,6 +6594,8 @@ breakText	Glyphs	Glif
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Sejajarkan ke grid piksel
+	Align New Objects to Pixel Grid	Sejajarkan objek baru ke grid piksel
+	Not Aligned to Pixel Grid	Tidak sejajar ke grid piksel
 @msg	side is left or right, not `{s}`	side adalah left atau right, bukan `{s}`
 	Edit Custom Dictionary	Edit kamus kustom
 	Entry:	Entri:

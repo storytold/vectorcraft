@@ -137,13 +137,28 @@ pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: O
 }
 
 /// A document just opened (`r`: `document.open`'s result): the views follow, the status bar says
-/// what didn't come in as it was, and missing links are asked about.
+/// what didn't come in as it was, and missing links are asked about. The status bar names the
+/// first of the notes that say reading the file left something out (the ones that make Save ask
+/// before writing over it), else the first note, and keeps the notes in that order for its hover.
 pub(crate) fn opened(app: &mut VectorcraftApp, r: &Value) {
     app.sync_views();
-    if let Some(w) = r["warnings"].as_array().filter(|w| !w.is_empty()) {
-        app.status(opened_with_notes(w.len(), w[0].as_str().unwrap_or_default()));
+    let notes = open_notes(app, r);
+    if let Some(first) = notes.first() {
+        app.status(opened_with_notes(notes.len(), first));
+        app.ui.status_notes = Some((app.ui.status.clone(), notes));
     }
     crate::dialogs::missing_links::after_open(app, r);
+}
+
+/// The notes of the open `r`, those of what reading the file left out (its document's
+/// `import_losses`) first, each group in the order the import gave them.
+fn open_notes(app: &VectorcraftApp, r: &Value) -> Vec<String> {
+    let notes: Vec<String> = r["warnings"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
+    let index = r["index"].as_u64().and_then(|i| usize::try_from(i).ok());
+    let losses = index.and_then(|i| app.session.documents().get(i)).map(|st| st.import_losses.as_slice()).unwrap_or_default();
+    let (mut first, rest): (Vec<String>, Vec<String>) = notes.into_iter().partition(|n| losses.contains(n));
+    first.extend(rest);
+    first
 }
 
 /// The status bar's line for a document opened with `n` notes, the first of them `first`.
@@ -279,7 +294,7 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
         permissions: asked.iter().filter_map(Value::as_str).map(str::to_string).collect(),
         heavy,
     };
-    let pending = dialogs::plugin::PendingInstall { message, detail: paragraphs.join("\n\n"), params: install, approval };
+    let pending = dialogs::plugin::PendingInstall { message, detail: paragraphs.join("\n\n"), params: install, approval, shown: Default::default() };
     Ok(dialogs::plugin::ask_install(app, pending))
 }
 

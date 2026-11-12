@@ -263,6 +263,7 @@ font-technology	Variable	Variables
 	Asset Export Settings	Paramètres d’exportation de ressources
 	Assets	Ressources
 	Assign	Attribuer
+	Assign Profile	Attribuer un profil
 	Assign Profile…	Attribuer un profil…
 	Assign:	Attribuer :
 	Attach to Active Plane	Associer au plan actif
@@ -702,6 +703,15 @@ font-technology	Variable	Variables
 	Created:	Création :
 	Crop	Recadrer
 	Crop Image	Recadrer l’image
+	Image Tools	Outils d’image
+	Remove Background…	Supprimer l’arrière-plan…
+	Remove Background	Supprimer l’arrière-plan
+	Background	Arrière-plan
+	Edge Color	Couleur du bord
+	Picked Colors	Couleurs choisies
+	Corner Color	Couleur des angles
+	Contiguous	Contigu
+	Each Channel	Chaque canal
 	Edit Path	Modifier le tracé
 	Mask	Masque
 	Crop Marks	Traits de coupe
@@ -2328,6 +2338,9 @@ font-technology	Variable	Variables
 	Optical	Optique
 	Optical Margin Alignment	Alignement optique des marges
 	Dynamic Text	Texte dynamique
+	Dynamic Text Presets	Paramètres prédéfinis du texte dynamique
+	Arch	Voûte
+@msg	select point type or type on a path	sélectionnez du texte de point ou du texte curviligne
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	le texte curviligne d’un texte lié ne peut pas utiliser le texte dynamique : {frames}
 	Optimize for fast web view	Optimiser pour un affichage web rapide
 	Optimized	Optimisé
@@ -2604,6 +2617,8 @@ digits	Malayalam	Malayalam
 	Radial	Radial
 	Radial Glows	Halos radiaux
 	Radial Gradient	Dégradé radial
+	Conic Gradient	Dégradé conique
+	Diamond Gradient	Dégradé en losange
 	Radius 1	Rayon 1
 	Radius 2	Rayon 2
 	Radius1	Rayon1
@@ -3158,6 +3173,15 @@ digits	Malayalam	Malayalam
 	Stun Pulse	Étourdissement
 	Stealth Fade	Furtivité
 	Shield Buff	Bouclier
+	Textures	Textures
+	Fine Grain	Grain fin
+	Canvas Weave	Toile tissée
+	Burlap Sack	Sac de jute
+	Cracked Glaze	Glaçure craquelée
+	Mosaic Floor	Sol en mosaïque
+	Quilted Squares	Carrés matelassés
+	Leaded Glass	Vitrail au plomb
+	Damp Paper	Papier humide
 	Shape	Forme
 	Shape Builder	Concepteur de forme
 	Shape Builder Regions	Zones du Concepteur de forme
@@ -3220,6 +3244,7 @@ digits	Malayalam	Malayalam
 	Show Modified	Afficher les éléments modifiés
 	Show Note	Afficher la note
 	Show Options	Afficher les options
+	Show Recent Colors	Afficher les couleurs récentes
 	Show Original Path	Afficher le tracé d’origine
 	Open this dialog with these settings next time	Ouvrir cette boîte de dialogue avec ces réglages la prochaine fois
 	Auto-Simplify	Simplifier automatiquement
@@ -3524,6 +3549,8 @@ digits	Malayalam	Malayalam
 	Scale at Center	Mettre à l’échelle depuis le centre
 	Up/Down:	Haut/bas :
 	Left/Right:	Gauche/droite :
+	Tate-chu-yoko Up/Down	Tate-chu-yoko haut/bas
+	Tate-chu-yoko Left/Right	Tate-chu-yoko gauche/droite
 	Temperature	Température
 	Temperature/Tint…	Température/teinte…
 	Template	Modèle
@@ -3593,6 +3620,8 @@ digits	Malayalam	Malayalam
 	Toolbar: Single/Double Column	Barre d’outils : une/deux colonnes
 	Toolbar: Add Tool	Barre d’outils : ajouter un outil
 	Toolbar: Remove Tool	Barre d’outils : retirer un outil
+	Add Tool…	Ajouter un outil…
+	Remove Tool	Retirer un outil
 	Toolbar: Reset	Barre d’outils : réinitialiser
 	Toolbars	Barres d’outils
 	Tools	Outils
@@ -3856,6 +3885,7 @@ digits	Malayalam	Malayalam
 	Windows	Windows
 	Working CMYK	CMJN de travail
 	Working CMYK (don't tag)	CMJN de travail (sans balise)
+	Working RGB (don't tag)	RVB de travail (sans balise)
 	Workspace	Espace de travail
 	Workspace {i}	Espace de travail {i}
 	Wrinkle Tool	Outil Fronces
@@ -4037,6 +4067,13 @@ axis	Both	Les deux
 	Dock Panel	Ancrer le panneau
 	Dock to Top	Ancrer en haut
 	Dock to Bottom	Ancrer en bas
+	Control Bar Options	Options de la barre de contrôle
+	Tool Options	Options de l’outil
+	Object Options	Options de l’objet
+	Image Options	Options de l’image
+	Vertical Alignment	Alignement vertical
+	Align and Distribute	Aligner et répartir
+	Document Options	Options du document
 	Dock Control Bar	Ancrer la barre de contrôle
 	Drag to float the toolbar	Faire glisser pour rendre la barre d’outils flottante
 	Drag to the window's left or right edge to dock	Faire glisser vers le bord gauche ou droit de la fenêtre pour ancrer
@@ -4189,6 +4226,8 @@ axis	Both	Les deux
 @msg	`groupColors` must be an array	`groupColors` doit être un tableau
 @msg	`library` is a library id or name (see {list})	`library` est l’identifiant ou le nom d’une bibliothèque (voir {list})
 @msg	`mode` applies to freeform gradients	`mode` s’applique aux dégradés de forme libre
+@msg	a negative `aspect` applies to conic gradients	un `aspect` négatif s’applique aux dégradés coniques
+@msg	`focal` applies to radial gradients	`focal` s’applique aux dégradés radiaux
 @msg	`preserve` must be an object	`preserve` doit être un objet
 @msg	`globalAdjust` must be an object	`globalAdjust` doit être un objet
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` doit valoir 1, 3 ou 5
@@ -4206,6 +4245,7 @@ axis	Both	Les deux
 @msg	`{key}` must be a number, not {v}	`{key}` doit être un nombre, pas {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} doit être un temps Unix en secondes (un entier) ou null
 @msg	`{key}` must be a string	`{key}` doit être une chaîne
+@msg	`{key}` must be a profile name or null	`{key}` doit être un nom de profil ou null
 @msg	`{key}` must be a whole number	`{key}` doit être un nombre entier
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` doit être un nombre entier compris entre {min} et {max} (reçu : {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` doit être compris entre {min} et {max} (reçu : {x})
@@ -4357,6 +4397,7 @@ axis	Both	Les deux
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la page du plan de travail {n} mesure {size}, plus que la limite de page PDF de 14 400 pt (200 in) : elle est écrite avec une UserUnit de {unit}, donc les applications qui ignorent UserUnit l’affichent autant de fois plus petite
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la page du plan de travail {n} mesure {size}, plus que la limite de page PDF de 14 400 pt (200 in) : les pages {label} sont écrites sans UserUnit, en points, et les applications qui respectent la limite coupent la page à 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 n’a pas d’UserUnit, dont une page de plus de 14 400 pt (200 in) a besoin pour garder sa taille : le fichier est écrit en PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 n’a pas d’UserUnit, dont une page de plus de 14 400 pt (200 in) a besoin pour rester dans la limite de page de PDF/A-2, 14 400 unités : le fichier est écrit en PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	la page du plan de travail {n} mesure {size}, trop longue et étroite pour les côtés de page PDF de 3 à 14 400 unités : elle est écrite avec une UserUnit de {unit}, qui garde le petit côté à 3 unités ou plus, et les apps qui respectent la limite coupent le grand côté à 14 400 unités
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	les fichiers {label} acceptent des nombres réels jusqu’à {max}, et la page du plan de travail {n}, longue de {side} pt, en demande de plus grands : choisissez PDF 1.6 ou ultérieur sans norme PDF/X, ou un plan de travail plus petit
 @msg	invalid PDF setting: {0}	réglage PDF non valide : {0}
@@ -4506,6 +4547,7 @@ axis	Both	Les deux
 @msg	not a stored central record	ce n’est pas un enregistrement central stocké
 @msg	not a valid plug-in module: {0}	ce n’est pas un module de plug-in valide : {0}
 @msg	not an EMF or WMF file	ce n’est pas un fichier EMF ou WMF
+@msg	not an HP-GL file	ce n’est pas un fichier HP-GL
 @msg	not found	introuvable
 @msg	not in pattern editing mode	pas en mode d’édition de motif
 @msg	finish editing the pattern first	terminez d’abord la modification du motif
@@ -4585,6 +4627,14 @@ axis	Both	Les deux
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	cette vectorisation créerait plus de {max} points d’ancrage, plus que le document ne peut afficher de façon fluide : augmentez Bruit, réduisez Tracés ou Couleurs, ou choisissez un paramètre prédéfini moins fidèle
 @msg	select an envelope	sélectionnez une enveloppe
 @msg	select an image	sélectionnez une image
+@msg	`background` must be edges, corners or colors	`background` doit valoir edges, corners ou colors
+@msg	`match` must be distance or channels	`match` doit valoir distance ou channels
+@msg	`{key}` must be from 0 to 100	`{key}` doit être compris entre 0 et 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` doit contenir de 1 à 16 couleurs, chacune en hexadécimal (#rrggbb ou #rgb) ou sous la forme black, white, red, green ou blue
+@msg	the linked image shows its preview: embed or relink it first	l’image liée affiche son aperçu : incorporez-la ou rétablissez d’abord le lien
+@msg	a CMYK image has no transparency to set	une image CMJN n’a pas de transparence à définir
+@msg	every pixel matches the background: no image would be left	chaque pixel correspond à l’arrière-plan : il ne resterait aucune image
+@msg	an image of {w} × {h} pixels is too large to change	une image de {w} × {h} pixels est trop grande pour être modifiée
 @msg	select an object in perspective	sélectionnez un objet en perspective
 @msg	select artwork (or a colour group) to recolor	sélectionnez l’illustration (ou un groupe de couleurs) dont redéfinir les couleurs
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloration terminée ; sans changement : {locked} et {hidden}
@@ -4691,7 +4741,7 @@ axis	Both	Les deux
 @msg	unknown format	format inconnu
 @msg	unknown format `{f}` (Save writes {_1})	format inconnu `{f}` (Enregistrer écrit {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	mode de forme libre inconnu `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	type de dégradé inconnu `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	type de dégradé inconnu `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	mise en évidence inconnue `{h}`
 @msg	unknown option `{path}.{k}`	option inconnue `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	surimpressions inconnues `{o}` (preserve, simulate ou discard)
@@ -4966,7 +5016,13 @@ axis	Both	Les deux
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	le fichier HEIC ou HEIF contient un type d'image qui ne peut pas être lu
 @msg	HEIC and HEIF images can't be opened in this build	les images HEIC et HEIF ne peuvent pas être ouvertes dans cette version
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	l'image PSD est trop grande pour être lue ({_1} × {_2} pixels)
-@msg	zipped 32-bit PSD image data with prediction can't be read	les données d'image PSD 32 bits compressées en ZIP avec prédiction ne peuvent pas être lues
+@msg	zipped 1-bit PSD image data with prediction can't be read	les données d'image PSD 1 bit compressées en ZIP avec prédiction ne peuvent pas être lues
+@msg	the PSD file's layer data uses an unknown compression ({m})	les données de calque du fichier PSD utilisent une compression inconnue ({m})
+@msg	the PSD file's layer records are damaged	les enregistrements de calques du fichier PSD sont endommagés
+@msg	the PSD file's layer groups are nested too deeply	les groupes de calques du fichier PSD sont imbriqués trop profondément
+@msg	a layer of the PSD file is too large to read	un calque du fichier PSD est trop grand pour être lu
+@msg	the PSD file's layers take more memory to read than allowed	les calques du fichier PSD demandent plus de mémoire que permis pour être lus
+@msg	the layers can't be read ({e}): the file opened as its merged image	les calques ne peuvent pas être lus ({e}) : le fichier a été ouvert comme son image fusionnée
 @msg	{depth}-bit PSD files in this colour mode can't be read	les fichiers PSD {depth} bits dans ce mode colorimétrique ne peuvent pas être lus
 @msg	the PSD file is cut short	le fichier PSD est tronqué
 @msg	the PSD file's header is damaged	l'en-tête du fichier PSD est endommagé
@@ -5705,6 +5761,11 @@ theme	Appearance	Apparence
 	Softness	Douceur
 	Ambient Light	Lumière ambiante
 	Light behind the object	Lumière derrière l'objet
+	Shadows	Ombres
+	Distance from Object	Distance de l'objet
+	Shadow Bounds	Limites de l'ombre
+	Behind Object	Derrière l'objet
+	Below Object	Sous l'objet
 	3D Lighting Preset	Préréglage d’éclairage 3D
 	Standard	Standard
 	Diffuse	Diffus
@@ -5768,7 +5829,7 @@ theme	Appearance	Apparence
 @msg	span must be "object" or "selection", got {v}	span doit être "object" ou "selection", pas {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" place un `gradient`, pas une nuance
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" place un dégradé : indiquez `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" place un dégradé linéaire ou radial, pas un dégradé de forme libre
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" place un dégradé linéaire, radial, conique ou en losange, pas un dégradé de forme libre
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" place le dégradé lui-même : omettez `start` et `end` (ils le placent déjà en coordonnées du document)
 	Make Image Dynamic	Rendre l'image dynamique
 	Import Data Sets…	Importer des jeux de données…
@@ -6055,6 +6116,11 @@ axis	Y Axis	Axe Y
 @msg	`inputs` needs the permission `doc.read`	`inputs` nécessite l’autorisation `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	budget mémoire (l’objet {_1} nécessite {size} octets d’entrée, il en reste {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	budget d’objets (plus de {MAX_OBJECTS} objets en lecture seule)
+@msg	instruction budget	budget d’instructions
+@msg	time budget	budget de temps
+@msg	memory budget (the selection is too large to hand over)	budget mémoire (la sélection est trop grande pour être transmise)
+@msg	output size ({what} is {len} bytes, limit {max})	taille de sortie ({what} fait {len} octets, limite {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	l’autorisation du plug-in ne peut pas être retirée du magasin de plug-ins
 @msg	unknown permission `{shown}`	autorisation inconnue `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	« {name} » demande les autorisations {asked} : une personne doit les approuver dans l’application de bureau, ou passez `grant` dans une session démarrée avec --allow-plugin-grants
 @msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` et `allowHeavy` ne prennent effet que dans une session démarrée avec --allow-plugin-grants : approuvez le module externe dans l’application de bureau
@@ -6090,6 +6156,16 @@ axis	Y Axis	Axe Y
 @msg	message must be text	message doit être du texte
 @msg	allowContinue must be true or false	allowContinue doit valoir true ou false
 @msg	Batch cannot play an action with a stop	Le traitement par lots ne peut pas exécuter un script comportant un arrêt
+	Insert Menu Item…	Insérer une commande de menu…
+	Insert Menu Item	Insérer une commande de menu
+	Menu Item:	Commande de menu :
+	No menu item matches.	Aucune commande de menu ne correspond.
+	Several menu items match. Choose one from the list.	Plusieurs commandes de menu correspondent. Choisissez-en une dans la liste.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Les commandes qui ouvrent une boîte de dialogue et celles des menus Fichier, Fenêtre et Aide ne sont pas listées.
+@msg	command must be text	command doit être du texte
+@msg	no menu item that can be inserted runs this command	aucune commande de menu insérable n’exécute cette commande
+@msg	the action already has 10,000 steps	le script compte déjà 10 000 étapes
+@msg	the action set would be larger than 8 MiB	le jeu de scripts dépasserait 8 Mio
 	Playback Options	Options d’exécution
 	Accelerated	Accélérée
 	Step by Step	Pas à pas
@@ -6400,9 +6476,12 @@ anchor	Points:	Points :
 @msg	{label} must be a number	{label} doit être un nombre
 @msg	{label} must be a number of at least 0.1	{label} doit être un nombre d’au moins 0,1
 	Advanced Character Formats	Formats de caractère avancés
+	Basic Paragraph Formats	Formats de paragraphe de base
+	Composition	Composition
 	Horizontal Scale	Mise à l’échelle horizontale
 	Vertical Scale	Échelle verticale
 @msg	{label} must be a number from {min} to {max}	{label} doit être un nombre compris entre {min} et {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} doit être un nombre entier compris entre {min} et {max}
 	Character Color	Couleur des caractères
 	OpenType Features	Fonctions OpenType
 	Stylistic Sets	Jeux stylistiques
@@ -6786,6 +6865,8 @@ breakText	Glyphs	Glyphes
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Aligner sur la grille de pixels
+	Align New Objects to Pixel Grid	Aligner les nouveaux objets sur la grille de pixels
+	Not Aligned to Pixel Grid	Non aligné sur la grille de pixels
 @msg	only paths and compound paths can be aligned to the pixel grid	seuls les tracés et les tracés transparents peuvent être alignés sur la grille de pixels
 @msg	side is left or right, not `{s}`	side vaut left ou right, pas `{s}`
 	Ignore All	Tout ignorer

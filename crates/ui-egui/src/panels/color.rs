@@ -12,7 +12,10 @@
 //! the inactive proxy when Alt is also held;
 //! Shift-dragging a slider moves the others in tandem; RGB and HSB show the out-of-gamut warning;
 //! Hide Options leaves just the proxy and the spectrum (the app keeps it between sessions too).
-//! `ui.colorPanel` picks a mode and shows or hides the options as the panel menu does.
+//! Unchecking Show Recent Colors hides the Recent Colors row while applied colors still join the
+//! list (the app keeps it between sessions too).
+//! `ui.colorPanel` picks a mode, shows or hides the options and checks or unchecks Show Recent
+//! Colors as the panel menu does.
 
 use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::{Value, json};
@@ -287,6 +290,14 @@ pub fn deserialize_hide_options<'de, D: serde::Deserializer<'de>>(d: D) -> Resul
     Ok(v.as_bool().unwrap_or_default())
 }
 
+/// Serde reader for the saved Show Recent Colors ([`crate::UiState::color_show_recent_colors`]):
+/// `false` hides the row and any other value shows it, so an unknown value doesn't lose the rest
+/// of the preferences.
+pub fn deserialize_show_recent_colors<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    let v = <Value as serde::Deserialize>::deserialize(d)?;
+    Ok(v.as_bool().unwrap_or(true))
+}
+
 /// The mode the panel shows `color` in: with nothing selected (the defaults for new art) the mode
 /// picked last, which the app keeps between sessions, else [`display_mode`].
 fn shown_mode(app: &VectorcraftApp, color: Option<&Color>) -> Mode {
@@ -511,16 +522,18 @@ fn recolor(app: &mut VectorcraftApp, ui: &Ui, tgt: &Target, invert: bool, behind
     }
 }
 
-/// `ui.colorPanel {mode?, options?}`: pick a mode as the panel menu does ([`set_mode`]), and Show
-/// Options (true) or Hide Options (false). → {mode, options, shown}: the mode picked last (null:
-/// none yet), whether the options show, and the mode the panel shows the color in (`tint` for a
-/// tint of a global or spot swatch).
+/// `ui.colorPanel {mode?, options?, recentColors?}`: pick a mode as the panel menu does
+/// ([`set_mode`]), Show Options (true) or Hide Options (false), and check (true) or uncheck
+/// (false) Show Recent Colors. → {mode, options, recentColors, shown}: the mode picked last (null:
+/// none yet), whether the options show, whether Show Recent Colors is checked, and the mode the
+/// panel shows the color in (`tint` for a tint of a global or spot swatch).
 pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let mode = match p.get("mode") {
         None | Some(Value::Null) => None,
         Some(v) => Some(menu_mode(v).ok_or("`mode` must be grayscale, rgb, hsb, cmyk or websafe")?),
     };
     let options = crate::menus::opt_bool(p, "options")?;
+    let recent = crate::menus::opt_bool(p, "recentColors")?;
     let (fill, stroke) = app.session.proxy_mixed();
     let mixed = if app.session.fill_active { fill } else { stroke };
     if let Some(m) = mode {
@@ -529,12 +542,20 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
     if let Some(shown) = options {
         app.ui.color_hide_options = !shown;
     }
+    if let Some(on) = recent {
+        app.ui.color_show_recent_colors = on;
+    }
     let tgt = target_with(app, mixed);
     let shown = match tgt.tint() {
         Some(_) => json!("tint"),
         None => json!(shown_mode(app, tgt.color().as_ref())),
     };
-    Ok(json!({"mode": app.ui.color_mode, "options": !app.ui.color_hide_options, "shown": shown}))
+    Ok(json!({
+        "mode": app.ui.color_mode,
+        "options": !app.ui.color_hide_options,
+        "recentColors": app.ui.color_show_recent_colors,
+        "shown": shown,
+    }))
 }
 
 /// Tint mode's rows: the swatch's chip and name, and the T slider and field. Returns a new tint
@@ -626,8 +647,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         (Some(c), _) => components(mode, &c),
         (None, _) => vec![0.0; mode.labels().len()],
     };
-    let recent = super::recent_colors_row(app, ui);
-    widgets::divider(ui);
+    // Show Recent Colors draws the Recent Colors row; the Swatches panel's row does not read it.
+    let mut recent = None;
+    if app.ui.color_show_recent_colors {
+        recent = super::recent_colors_row(app, ui);
+        widgets::divider(ui);
+    }
     // An edit of the active colour with its displayed components (`new`), or a colour clicked with
     // Alt held for the inactive proxy (`behind`).
     let mut new: Option<(Color, Live, Vec<f32>)> = None;
@@ -769,6 +794,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let hidden = app.ui.color_hide_options;
     if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
         command(app, &json!({ "options": hidden })).ok();
+    }
+    let recent = app.ui.color_show_recent_colors;
+    if menu_item(ui, tl!("Show Recent Colors"), true, recent) {
+        command(app, &json!({ "recentColors": !recent })).ok();
     }
     ui.separator();
     let tgt = target(app, ui);

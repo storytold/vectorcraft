@@ -7536,3 +7536,84 @@ fn variable_font_instances_name_their_design_space() {
 fn style_of(size: f64) -> vectorcraft_doc::CharStyle {
     style(size, Color::BLACK)
 }
+
+/// The data has no conic gradient: a conic fill is a linear gradient along its vector, with the
+/// same stops, and so is a conic gradient swatch, with a warning.
+#[test]
+fn conic_gradients_are_written_as_linear_gradients_with_their_stops() {
+    let stops =
+        vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(0.6, SKY), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Conic, stops.clone()));
+    let (start, end) = (vectorcraft_geom::Point::new(100.0, 50.0), vectorcraft_geom::Point::new(150.0, 50.0));
+    g.geom = Some(vectorcraft_color::GradientGeom { start, end, aspect: -0.5, focal: None });
+    let mut doc = Document::new(200.0, 100.0);
+    let id = doc.alloc_id();
+    let l = doc.layers[0].id;
+    let fill = Paint::Gradient(Box::new(g.clone()));
+    doc.insert(Some(l), 0, Node::path(id, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Appearance::basic(fill.clone(), Paint::None, 0.0)))
+        .unwrap();
+    let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+    swatches.push(Swatch { name: "Sweep".into(), paint: Paint::Gradient(Box::new(GradientPaint { geom: None, ..g })), global: false, spot: false });
+    doc.swatches = swatches.into();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w.contains("conic gradients are written as linear gradients")), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let mut read = None;
+    back.walk(|n| {
+        if let Paint::Gradient(g) = n.appearance.fill_paint() {
+            read = Some(g.clone());
+        }
+    });
+    let read = read.expect("a gradient fill");
+    assert_eq!(read.gradient.kind, GradientKind::Linear);
+    assert_eq!(
+        read.gradient.stops.iter().map(|s| (s.offset, s.color.to_hex())).collect::<Vec<_>>(),
+        stops.iter().map(|s| (s.offset, s.color.to_hex())).collect::<Vec<_>>()
+    );
+    let geom = read.geom.unwrap();
+    assert!(geom.start.distance(start) < 0.01 && geom.end.distance(end) < 0.01, "{geom:?}");
+    let Some(Paint::Gradient(swatch)) = back.swatch("Sweep").map(|s| &s.paint) else { panic!("the swatch is lost") };
+    assert_eq!(swatch.gradient.kind, GradientKind::Linear);
+}
+
+/// The data has no diamond gradient: a diamond fill is the radial gradient through its square's
+/// corners (centered on it, its vector and the aspect across it), with the same stops, and so is
+/// a diamond gradient swatch, with a warning.
+#[test]
+fn diamond_gradients_are_written_as_radial_gradients_through_their_corners() {
+    let stops =
+        vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(0.6, SKY), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Diamond, stops.clone()));
+    let (start, end) = (vectorcraft_geom::Point::new(100.0, 50.0), vectorcraft_geom::Point::new(150.0, 50.0));
+    // A focal point (a plug-in's or a file's) draws nothing on a diamond and isn't written.
+    let focal = Some(vectorcraft_geom::Point::new(110.0, 55.0));
+    g.geom = Some(vectorcraft_color::GradientGeom { start, end, aspect: 0.5, focal });
+    let mut doc = Document::new(200.0, 100.0);
+    let id = doc.alloc_id();
+    let l = doc.layers[0].id;
+    let fill = Paint::Gradient(Box::new(g.clone()));
+    doc.insert(Some(l), 0, Node::path(id, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Appearance::basic(fill, Paint::None, 0.0))).unwrap();
+    let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+    swatches.push(Swatch { name: "Gem".into(), paint: Paint::Gradient(Box::new(GradientPaint { geom: None, ..g })), global: false, spot: false });
+    doc.swatches = swatches.into();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w.contains("diamond gradients are written as radial gradients")), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let mut read = None;
+    back.walk(|n| {
+        if let Paint::Gradient(g) = n.appearance.fill_paint() {
+            read = Some(g.clone());
+        }
+    });
+    let read = read.expect("a gradient fill");
+    assert_eq!(read.gradient.kind, GradientKind::Radial);
+    assert_eq!(
+        read.gradient.stops.iter().map(|s| (s.offset, s.color.to_hex())).collect::<Vec<_>>(),
+        stops.iter().map(|s| (s.offset, s.color.to_hex())).collect::<Vec<_>>()
+    );
+    let geom = read.geom.unwrap();
+    assert!(geom.start.distance(start) < 0.01 && geom.end.distance(end) < 0.01 && (geom.aspect - 0.5).abs() < 0.01, "{geom:?}");
+    assert!(geom.focal.is_none_or(|f| f.distance(start) < 0.01), "{geom:?}");
+    let Some(Paint::Gradient(swatch)) = back.swatch("Gem").map(|s| &s.paint) else { panic!("the swatch is lost") };
+    assert_eq!(swatch.gradient.kind, GradientKind::Radial);
+}

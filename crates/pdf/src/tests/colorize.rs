@@ -493,3 +493,21 @@ fn a_duotone_devicen_image_still_opens_as_rgb() {
     assert_eq!(blobs.len(), 1);
     assert!(!blobs[0].0.is_cmyk() && !blobs[0].1, "RGB, not colorized");
 }
+
+/// A raster drawn again is placed from what the first drawing found, as the same image at its own
+/// size, without its pixels being converted again.
+#[test]
+fn a_raster_drawn_twice_is_one_image_placed_twice() {
+    let content = "q 80 0 0 10 10 50 cm /Im1 Do Q q 40 0 0 10 10 20 cm /Im1 Do Q";
+    let r = separation_report("/DeviceRGB", 2, 8, "", "FF0000 00FF00", &[], content);
+    let mut placed = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Image(im) = &n.kind {
+            placed.push((im.key.clone(), im.xf.as_coeffs()[0]));
+        }
+    });
+    assert_eq!(placed.len(), 2, "{placed:?}");
+    assert_eq!(placed[0].0, placed[1].0);
+    assert!(placed[0].1 > placed[1].1 * 1.9 && placed[0].1 < placed[1].1 * 2.1, "{placed:?}");
+    assert_eq!(r.document.images.len(), 1);
+}

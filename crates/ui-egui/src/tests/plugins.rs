@@ -27,6 +27,68 @@ fn frame(app: &mut VectorcraftApp) {
     out.textures_delta.clear();
 }
 
+/// Shows the open install approval in one window, frame after frame a quarter of a second apart,
+/// until its OK takes input ([`dialogs::plugin::APPROVAL_DELAY`]), as a person sees it before
+/// pressing OK.
+pub(super) fn show_approval(app: &mut VectorcraftApp) {
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    for k in 0..12 {
+        let input = egui::RawInput { time: Some(f64::from(k) * 0.25), ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| dialogs::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        if app.pending_plugin_install.as_ref().is_some_and(|p| p.shown.ready()) {
+            return;
+        }
+    }
+    panic!("the approval's OK never took input");
+}
+
+type Window = egui_kittest::Harness<'static, VectorcraftApp>;
+
+/// The dialog layer of `app` in a window, each frame drawn at the time [`at`] gives it. Building it
+/// draws frames at times of its own, so a test opens the dialog after.
+fn window(app: VectorcraftApp) -> Window {
+    let mut fonts = false;
+    egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 800.0)).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if !std::mem::replace(&mut fonts, true) {
+                theme::install_fonts(ui.ctx());
+                return;
+            }
+            dialogs::show(app, ui.ctx());
+        },
+        app,
+    )
+}
+
+/// Draws a frame of `h` at `time` seconds.
+fn at(h: &mut Window, time: f64) {
+    h.input_mut().time = Some(time);
+    h.step();
+}
+
+/// Whether the approval's OK is enabled, as a screen reader reads it.
+fn ok_enabled(h: &Window) -> bool {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    !h.get_by_label("OK").accesskit_node().is_disabled()
+}
+
+/// Clicks the approval's OK as a person does, on a frame at `time` seconds.
+fn click_ok(h: &mut Window, time: f64) {
+    use egui_kittest::kittest::Queryable;
+    h.get_by_label("OK").click();
+    at(h, time);
+}
+
+/// The approval is open and plug-in `id` neither installed nor granted.
+fn waiting(app: &VectorcraftApp, id: &str) -> bool {
+    app.ui.dialog.as_ref().is_some_and(|d| d.kind == dialogs::plugin::INSTALL_KIND)
+        && vectorcraft_plugins::registry::get(id).is_none()
+        && vectorcraft_plugins::registry::granted(id).is_none()
+}
+
 fn red_rect(app: &mut VectorcraftApp) -> vectorcraft_doc::NodeId {
     let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
     app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
@@ -163,6 +225,7 @@ fn installing_a_plugin_that_lists_permissions_asks_first() {
     // File › Open asks too, and OK installs it with what it lists granted.
     io::open_bytes(&mut app, "tidy.wasm", &bytes, None).unwrap();
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::plugin::INSTALL_KIND));
+    show_approval(&mut app);
     dialogs::confirm(&mut app).unwrap();
     assert!(app.ui.dialog.is_none());
     assert!(vectorcraft_plugins::registry::get(id).is_some());
@@ -195,6 +258,7 @@ fn installing_a_plugin_that_lists_permissions_asks_first() {
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some(name.into()), "Cancel keeps the one installed");
     assert_ne!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(again_hash), "Cancel records no grant");
     app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&again)})).unwrap();
+    show_approval(&mut app);
     dialogs::confirm(&mut app).unwrap();
     assert!(app.ui.dialog.is_none(), "one question");
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some("Tidy 2".into()));
@@ -209,9 +273,253 @@ fn installing_a_plugin_that_lists_permissions_asks_first() {
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some("Tidy 2".into()), "Cancel keeps the one installed");
     // OK keeps the `replace` it was asked with: `false` leaves the installed one in place.
     app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&more), "replace": false})).unwrap();
+    show_approval(&mut app);
     let _ = dialogs::confirm(&mut app);
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some("Tidy 2".into()), "replace: false is kept");
     app.run("plugin.remove", json!({"id": id})).unwrap();
+}
+
+/// The approval's OK takes no click, Enter or Space, and a confirm installs nothing, until its
+/// question has been on screen for [`dialogs::plugin::APPROVAL_DELAY`]; then a click installs it.
+/// Cancel works on the first frame.
+#[test]
+fn the_install_approval_takes_ok_only_once_its_question_was_shown_for_a_moment() {
+    use egui_kittest::kittest::Queryable;
+    let id = "test.ui.approval.delay";
+    let module = json!({"dataBase64": vectorcraft_format::base64_encode(&asking(id, "Delay", r#"["doc.read"]"#))});
+    let mut h = window(app());
+    h.state_mut().run("ui.installPlugin", module.clone()).unwrap();
+    assert_eq!(dialogs::confirm(h.state_mut()).unwrap(), json!({"pending": dialogs::plugin::INSTALL_KIND}), "not drawn yet");
+    assert!(waiting(h.state(), id));
+    at(&mut h, 10.0);
+    at(&mut h, 10.0);
+    assert!(!ok_enabled(&h), "disabled when it first shows");
+    click_ok(&mut h, 10.1);
+    assert!(waiting(h.state(), id), "a click");
+    for (key, time) in [(egui::Key::Enter, 10.2), (egui::Key::Space, 10.3)] {
+        h.get_by_label("OK").focus();
+        at(&mut h, time);
+        h.key_press(key);
+        at(&mut h, time + 0.05);
+        assert!(waiting(h.state(), id), "{key:?}");
+    }
+    at(&mut h, 10.49);
+    assert!(!ok_enabled(&h), "still disabled just before the delay");
+    assert_eq!(dialogs::confirm(h.state_mut()).unwrap()["pending"], dialogs::plugin::INSTALL_KIND, "a confirm");
+    assert!(waiting(h.state(), id));
+    at(&mut h, 10.5);
+    assert!(ok_enabled(&h), "enabled once shown for the delay");
+    click_ok(&mut h, 10.6);
+    assert!(h.state().ui.dialog.is_none(), "{}", h.state().ui.status);
+    assert!(vectorcraft_plugins::registry::get(id).is_some());
+    h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
+
+    h.state_mut().run("ui.installPlugin", module).unwrap();
+    at(&mut h, 20.0);
+    at(&mut h, 20.0);
+    h.get_by_label("Cancel").click();
+    at(&mut h, 20.0);
+    assert!(h.state().ui.dialog.is_none() && h.state().pending_plugin_install.is_none(), "Cancel doesn't wait");
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+}
+
+/// The wait starts over for each question: one that takes the place of the question shown just
+/// before a click lands, which the click doesn't approve; the same question asked again; and the
+/// question shown when the window gets the focus back.
+#[test]
+fn the_install_approval_waits_again_for_a_new_question_and_after_the_focus_comes_back() {
+    let (a, b) = ("test.ui.approval.swap.a", "test.ui.approval.swap.b");
+    let module = |id: &str| json!({"dataBase64": vectorcraft_format::base64_encode(&asking(id, "Same", r#"["doc.read"]"#))});
+    let mut h = window(app());
+    h.state_mut().run("ui.installPlugin", module(a)).unwrap();
+    at(&mut h, 10.0);
+    at(&mut h, 10.0);
+    at(&mut h, 10.6);
+    assert!(ok_enabled(&h));
+    // Between two frames, a request closes the question and asks about another module.
+    dialogs::cancel(h.state_mut());
+    h.state_mut().run("ui.installPlugin", module(b)).unwrap();
+    click_ok(&mut h, 10.7);
+    assert!(waiting(h.state(), b) && vectorcraft_plugins::registry::get(a).is_none(), "the click approves neither");
+    assert!(!ok_enabled(&h));
+    at(&mut h, 11.19);
+    assert!(!ok_enabled(&h));
+    at(&mut h, 11.2);
+    assert!(ok_enabled(&h), "the new question waits its own delay");
+    // The same question again, from the same bytes.
+    dialogs::cancel(h.state_mut());
+    h.state_mut().run("ui.installPlugin", module(b)).unwrap();
+    at(&mut h, 11.3);
+    assert!(!ok_enabled(&h), "asked again, it waits again");
+    at(&mut h, 11.8);
+    assert!(ok_enabled(&h));
+    // The window loses the focus and gets it back.
+    h.input_mut().focused = false;
+    at(&mut h, 11.9);
+    assert!(!ok_enabled(&h), "not while the window doesn't have the focus");
+    assert_eq!(dialogs::confirm(h.state_mut()).unwrap()["pending"], dialogs::plugin::INSTALL_KIND);
+    h.input_mut().focused = true;
+    at(&mut h, 12.0);
+    at(&mut h, 12.49);
+    assert!(!ok_enabled(&h), "back in front, it waits again");
+    at(&mut h, 12.5);
+    click_ok(&mut h, 12.6);
+    assert!(h.state().ui.dialog.is_none(), "{}", h.state().ui.status);
+    assert!(vectorcraft_plugins::registry::get(b).is_some() && vectorcraft_plugins::registry::get(a).is_none());
+    h.state_mut().run("plugin.remove", json!({"id": b})).unwrap();
+}
+
+/// A press on OK that began before OK took input approves nothing when it is let go after; a new
+/// click does.
+#[test]
+fn a_press_on_the_install_approval_from_before_ok_took_input_approves_nothing() {
+    use egui_kittest::kittest::Queryable;
+    let id = "test.ui.approval.held";
+    let mut h = window(app());
+    let module = json!({"dataBase64": vectorcraft_format::base64_encode(&asking(id, "Held", r#"["doc.read"]"#))});
+    h.state_mut().run("ui.installPlugin", module).unwrap();
+    at(&mut h, 10.0);
+    at(&mut h, 10.0);
+    let pos = h.get_by_label("OK").rect().center();
+    let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    h.input_mut().events.extend([egui::Event::PointerMoved(pos), button(true)]);
+    at(&mut h, 10.1);
+    at(&mut h, 10.6);
+    assert!(ok_enabled(&h));
+    h.input_mut().events.push(button(false));
+    at(&mut h, 10.7);
+    assert!(waiting(h.state(), id), "the press began before OK took input");
+    click_ok(&mut h, 10.8);
+    assert!(h.state().ui.dialog.is_none(), "{}", h.state().ui.status);
+    assert!(vectorcraft_plugins::registry::get(id).is_some());
+    h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
+}
+
+/// A press of another button after OK took input doesn't let a primary press from before it
+/// approve when that press is let go of.
+#[test]
+fn a_later_press_on_the_install_approval_keeps_an_early_press_from_approving() {
+    use egui_kittest::kittest::Queryable;
+    let id = "test.ui.approval.held.two";
+    let mut h = window(app());
+    let module = json!({"dataBase64": vectorcraft_format::base64_encode(&asking(id, "Two", r#"["doc.read"]"#))});
+    h.state_mut().run("ui.installPlugin", module).unwrap();
+    at(&mut h, 10.0);
+    at(&mut h, 10.0);
+    let pos = h.get_by_label("OK").rect().center();
+    let button = |button, pressed| egui::Event::PointerButton { pos, button, pressed, modifiers: Default::default() };
+    // The primary button goes down away from any widget and moves over OK.
+    let away = egui::pos2(2.0, 2.0);
+    h.input_mut().events.extend([
+        egui::Event::PointerMoved(away),
+        egui::Event::PointerButton { pos: away, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() },
+    ]);
+    at(&mut h, 10.1);
+    h.input_mut().events.push(egui::Event::PointerMoved(pos));
+    at(&mut h, 10.2);
+    at(&mut h, 10.5);
+    assert!(ok_enabled(&h));
+    h.input_mut().events.push(button(egui::PointerButton::Secondary, true));
+    at(&mut h, 10.55);
+    h.input_mut().events.push(button(egui::PointerButton::Primary, false));
+    at(&mut h, 10.6);
+    assert!(waiting(h.state(), id), "the primary press began before OK took input");
+    h.input_mut().events.push(button(egui::PointerButton::Secondary, false));
+    at(&mut h, 10.65);
+    click_ok(&mut h, 10.8);
+    assert!(h.state().ui.dialog.is_none(), "{}", h.state().ui.status);
+    h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
+}
+
+/// A press on the OK of one question that is still held when another question takes its place
+/// doesn't approve the new one when it is let go of.
+#[test]
+fn a_press_held_from_the_question_before_approves_nothing() {
+    use egui_kittest::kittest::Queryable;
+    let (a, b) = ("test.ui.approval.carried.a", "test.ui.approval.carried.b");
+    let module = |id: &str| json!({"dataBase64": vectorcraft_format::base64_encode(&asking(id, "Carried", r#"["doc.read"]"#))});
+    let mut h = window(app());
+    h.state_mut().run("ui.installPlugin", module(a)).unwrap();
+    at(&mut h, 10.0);
+    at(&mut h, 10.0);
+    at(&mut h, 10.6);
+    assert!(ok_enabled(&h));
+    let pos = h.get_by_label("OK").rect().center();
+    let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    h.input_mut().events.extend([egui::Event::PointerMoved(pos), button(true)]);
+    at(&mut h, 10.65);
+    // While the button is down, a request closes the question and asks about another module.
+    dialogs::cancel(h.state_mut());
+    h.state_mut().run("ui.installPlugin", module(b)).unwrap();
+    at(&mut h, 10.7);
+    at(&mut h, 11.0);
+    at(&mut h, 11.2);
+    assert!(ok_enabled(&h));
+    h.input_mut().events.push(button(false));
+    at(&mut h, 11.25);
+    assert!(waiting(h.state(), b) && vectorcraft_plugins::registry::get(a).is_none(), "the press began on the question before");
+    click_ok(&mut h, 11.4);
+    assert!(h.state().ui.dialog.is_none(), "{}", h.state().ui.status);
+    assert!(vectorcraft_plugins::registry::get(b).is_some());
+    h.state_mut().run("plugin.remove", json!({"id": b})).unwrap();
+}
+
+/// Enter or Space held down while OK is disabled doesn't approve through its key repeat once OK
+/// has the keyboard focus; a new press after it is let go of does.
+#[test]
+fn a_key_held_on_the_install_approval_from_before_ok_took_input_approves_nothing() {
+    use egui_kittest::kittest::Queryable;
+    for (n, key) in [egui::Key::Enter, egui::Key::Space].into_iter().enumerate() {
+        let id = format!("test.ui.approval.key.{n}");
+        let mut h = window(app());
+        let module = json!({"dataBase64": vectorcraft_format::base64_encode(&asking(&id, "Key", r#"["doc.read"]"#))});
+        h.state_mut().run("ui.installPlugin", module).unwrap();
+        at(&mut h, 10.0);
+        at(&mut h, 10.0);
+        let event = |pressed, repeat| egui::Event::Key { key, physical_key: Some(key), pressed, repeat, modifiers: Default::default() };
+        h.input_mut().events.push(event(true, false));
+        at(&mut h, 10.1);
+        at(&mut h, 10.6);
+        assert!(ok_enabled(&h));
+        h.get_by_label("OK").focus();
+        at(&mut h, 10.65);
+        h.input_mut().events.push(event(true, true));
+        at(&mut h, 10.7);
+        assert!(waiting(h.state(), &id), "{key:?}: the key went down before OK took input");
+        h.input_mut().events.push(event(false, false));
+        at(&mut h, 10.75);
+        h.get_by_label("OK").focus();
+        at(&mut h, 10.8);
+        h.key_press(key);
+        at(&mut h, 10.85);
+        assert!(h.state().ui.dialog.is_none(), "{key:?}: {}", h.state().ui.status);
+        h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
+    }
+}
+
+/// The wait starts over when the window loses the focus and gets it back between two frames.
+#[test]
+fn the_install_approval_waits_again_when_the_focus_leaves_and_comes_back_between_frames() {
+    let id = "test.ui.approval.blink";
+    let mut h = window(app());
+    let module = json!({"dataBase64": vectorcraft_format::base64_encode(&asking(id, "Blink", r#"["doc.read"]"#))});
+    h.state_mut().run("ui.installPlugin", module).unwrap();
+    at(&mut h, 10.0);
+    at(&mut h, 10.0);
+    at(&mut h, 10.6);
+    assert!(ok_enabled(&h));
+    h.input_mut().events.extend([egui::Event::WindowFocused(false), egui::Event::WindowFocused(true)]);
+    at(&mut h, 10.7);
+    assert!(!ok_enabled(&h), "the focus left since the frame before");
+    click_ok(&mut h, 10.8);
+    assert!(waiting(h.state(), id));
+    at(&mut h, 11.19);
+    assert!(!ok_enabled(&h));
+    at(&mut h, 11.2);
+    assert!(ok_enabled(&h), "back in front, it waits again");
+    click_ok(&mut h, 11.3);
+    assert!(h.state().ui.dialog.is_none(), "{}", h.state().ui.status);
+    h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
 }
 
 /// A module with other bytes than the one installed with its id asks before taking its place: in
@@ -246,6 +554,7 @@ fn installing_a_plugin_over_another_module_asks_first() {
     let pending = app.pending_plugin_install.as_ref().unwrap();
     assert!(pending.detail.ends_with(&format!("\n\nID: {id}\nFile SHA-256: {heavy_hash}\n\n{takes_place}")), "{}", pending.detail);
     assert_eq!(pending.params["replace"], json!(true), "OK replaces the one installed");
+    show_approval(&mut app);
     dialogs::confirm(&mut app).unwrap();
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.hash().to_string()), Some(heavy_hash));
     app.run("plugin.remove", json!({"id": id})).unwrap();
@@ -404,6 +713,7 @@ fn installing_a_plugin_that_reports_progress_says_so() {
     assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
     let detail = app.pending_plugin_install.as_ref().unwrap().detail.clone();
     assert!(detail.ends_with("• Read the objects it is given\n• Show its progress, see Cancel and write log lines"), "{detail}");
+    show_approval(&mut app);
     dialogs::confirm(&mut app).unwrap();
     assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.permissions.len()), Some(2));
     app.run("plugin.remove", json!({"id": id})).unwrap();

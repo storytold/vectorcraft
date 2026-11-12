@@ -55,6 +55,42 @@ fn file_constructor_identity_and_folder_path() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `exists` is true only when the path names an entry of the object's own kind.
+#[test]
+fn script_file_exists_checks_the_kind() {
+    let base = folder("kind");
+    write(&base.join("main/data.txt"), b"x");
+    std::fs::create_dir_all(base.join("main/sub")).unwrap();
+    let log =
+        logged(&base, "vc.log([new File('sub').exists, new Folder('data.txt').exists, new File('data.txt').exists, new Folder('sub').exists]);");
+    assert_eq!(log, json!([[false, false, true, true]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A property a script puts on `Object.prototype` is not read as part of what the app returns.
+#[test]
+fn script_file_ignores_inherited_result_fields() {
+    let base = folder("inherited");
+    write(&base.join("main/data.txt"), b"data");
+    let log = logged(
+        &base,
+        "Object.prototype.error = 'inherited'; Object.prototype.exists = true;\n\
+         var f = new File('data.txt'); var opened = f.open('r');\n\
+         vc.log([f.exists, new File('nope').exists, opened, f.error, f.read()]);",
+    );
+    assert_eq!(log, json!([[true, false, true, "", "data"]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `File.encode`, `File.decode`, `File.isEncodingAvailable` and the `Folder` locations are counted as
+/// calls to the app.
+#[test]
+fn script_file_class_functions_are_counted() {
+    let source = "File.encode('x'); File.decode('y'); Folder.isEncodingAvailable('UTF-8'); Folder.temp;";
+    let r = Session::new().execute("script.run", &json!({"source": source})).unwrap();
+    assert_eq!(r["hostCallCounts"]["fileCalls"], 4, "{r}");
+}
+
 #[test]
 fn file_names_are_uri_encoded_and_current_relative() {
     let base = folder("names");
@@ -74,7 +110,7 @@ fn file_names_are_uri_encoded_and_current_relative() {
     assert_eq!(
         log,
         json!([
-            ["caf%C3%A9%20x.txt", "caf\u{e9} x.txt", "caf%C3%A9%20x.txt", true, "%C3%A9%20%2F", "\u{e9}", "sub/y.txt", true, true],
+            ["caf%C3%A9%20x.txt", "caf\u{e9} x.txt", "caf%C3%A9%20x.txt", true, "%C3%A9%20/", "\u{e9}", "sub/y.txt", true, true],
             ["sub", "w", "w"],
             ["literal%20name.txt", "literal%2520name.txt", "literal%2520name.txt", true, "p%41", "p%41"]
         ])
@@ -153,6 +189,20 @@ fn script_file_link_escape_refused() {
          Folder.current.getFiles().map(function (f) { return f.name; }), new Folder('near').alias, new Folder('near').resolve().name]);",
     );
     assert_eq!(log, json!([[false, null, DENIED, null, false, false, DENIED, ["inner", "main.jsx", "near", "own.txt"], true, "inner"]]));
+    // A missing file behind the link is refused like an existing one, so nothing tells them apart.
+    let log = logged(&base, "var n = new File('away/nope.txt'); vc.log([n.exists, n.open('r'), n.error]);");
+    assert_eq!(log, json!([[false, false, DENIED]]));
+    // A folder link to an outside folder that does not exist is refused the same way, so a script
+    // cannot tell whether the folder it leads to exists.
+    link_folder(&base.join("gone"), &base.join("main").join("dangling"));
+    let log = logged(
+        &base,
+        "var d = new File('dangling/nope.txt'); var e = new File('dangling/a/b.txt');\n\
+         vc.log([d.exists, d.open('r'), d.error, e.open('r'), e.error]);",
+    );
+    assert_eq!(log, json!([[false, false, DENIED, false, DENIED]]));
+    let dangling = base.join("main").join("dangling");
+    std::fs::remove_dir(&dangling).or_else(|_| std::fs::remove_file(&dangling)).unwrap();
     #[cfg(unix)]
     let made = |target: &Path, link: &Path| std::os::unix::fs::symlink(target, link).is_ok();
     #[cfg(windows)]
@@ -173,6 +223,31 @@ fn script_file_link_escape_refused() {
          Folder.current.getFiles().map(function (f) { return f.name; }), new File('alias.txt').alias, new File('alias.txt').resolve().name]);",
     );
     assert_eq!(log, json!([[false, false, DENIED, null, false, null, ["alias.txt", "inner", "main.jsx", "near", "own.txt"], true, "own.txt"]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A path whose names differ from the script's folder only in case is that folder where case does
+/// not matter, and outside it where case matters, whether or not the file is there.
+#[test]
+fn script_file_case_variant_folder() {
+    let base = folder("case");
+    write(&base.join("main/own.txt"), b"own");
+    let upper = base.join("MAIN");
+    let source = |name: &str| {
+        let p = format!("{:?}", upper.join(name).to_string_lossy());
+        format!("var f = new File({p}); vc.log([f.exists, f.open('r'), f.error]);")
+    };
+    if upper.exists() {
+        // Case does not matter here: `MAIN` is the script's folder.
+        assert_eq!(logged(&base, &source("own.txt")), json!([[true, true, ""]]));
+        assert_eq!(logged(&base, &source("nope.txt")), json!([[false, false, "Script file does not exist"]]));
+    } else {
+        let denied = json!([[false, false, DENIED]]);
+        assert_eq!(logged(&base, &source("nope.txt")), denied, "MAIN does not exist");
+        write(&upper.join("secret.txt"), b"secret");
+        assert_eq!(logged(&base, &source("secret.txt")), denied);
+        assert_eq!(logged(&base, &source("nope.txt")), denied, "MAIN exists beside main");
+    }
     let _ = std::fs::remove_dir_all(base);
 }
 
