@@ -700,6 +700,41 @@ fn a_presets_folder_outside_the_read_root_is_left_out_of_the_reply() {
     assert!(r["path"].as_str().is_some_and(|p| p.starts_with(&format!("{folder}/")) && p.ends_with(".zip")), "{r}");
 }
 
+/// An export into the folder an export preset keeps, refused because that folder is outside the
+/// client's read and write roots: the error names the folder by its name only. A folder the client
+/// gives stays whole in the error.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_refused_export_into_a_presets_folder_outside_the_read_root_names_it_by_its_name() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let mut s = session(1);
+    let tmp = Folder::new("preset-refused");
+    let (inside, out) = (tmp.0.join("in"), tmp.0.join("kept-out"));
+    for f in [&inside, &out] {
+        std::fs::create_dir_all(f).unwrap();
+    }
+    let folder = out.to_string_lossy().replace('\\', "/");
+    let settings = json!({"formats": [{"format": "png"}], "folder": folder});
+    s.execute("document.exportPresets.save", &json!({"name": "Kept", "settings": settings})).unwrap();
+    let confined = AutomationRoots::new(&[inside.as_path()], &[inside.as_path()]).unwrap();
+    let mut run = |p: Value| confine(confined.as_ref(), || s.execute("document.exportForScreens", &p)).unwrap_err().to_string();
+
+    let e = run(json!({"exportPreset": "Kept"}));
+    assert!(e.contains("outside the write root") && e.contains("kept-out") && !e.contains(&folder), "{e}");
+    let e = run(json!({"exportPreset": "Kept", "folder": folder}));
+    assert!(e.contains(&folder), "{e}");
+    assert_eq!(std::fs::read_dir(&out).unwrap().count(), 0, "nothing written");
+    // A preset folder that holds the write root: the root stays whole in the error.
+    let parent = tmp.0.to_string_lossy().replace('\\', "/");
+    let settings = json!({"formats": [{"format": "png"}], "folder": parent});
+    s.execute("document.exportPresets.save", &json!({"name": "Parent", "settings": settings})).unwrap();
+    let e = confine(confined.as_ref(), || s.execute("document.exportForScreens", &json!({"exportPreset": "Parent"}))).unwrap_err().to_string();
+    let root = inside.display().to_string();
+    let name = tmp.0.file_name().unwrap().to_string_lossy().into_owned();
+    assert!(e.contains(&format!("root {root}: {name}")), "{e}");
+}
+
 /// The export settings the document keeps and the saved presets, read by a client whose read roots
 /// don't hold their folder: `document.exportSettings`, `document.exportPresets.list` and
 /// `document.exportPresets.export` (as data and as a file) leave out that folder and keep the rest.

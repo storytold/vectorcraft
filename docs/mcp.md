@@ -128,7 +128,8 @@ the suite) keep the agent to the folders you give it:
   a `path` write the document's own file: the reply then has no `path`, and `files` and `linked` name the files
   written beside it by their file names. A save without a path known (`file.saveAs` and `file.saveCopy` without
   one, a document never saved) leaves out the suggested `folder`. `document.exportForScreens` into the `folder`
-  of its `exportPreset` leaves out the ZIP's `path` and lists `files` relative to that folder.
+  of its `exportPreset` leaves out the ZIP's `path` and lists `files` relative to that folder, and an error
+  for that export names the folder by its name alone.
   `document.exportSettings`, `document.exportPresets.list` and `document.exportPresets.export` (as data and as
   a file) leave out a kept `folder` outside the read roots. `file.package`
   names the document's file and the linked files outside the read roots by their file names in `warnings`, in

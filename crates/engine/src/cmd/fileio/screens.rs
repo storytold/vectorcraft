@@ -647,12 +647,51 @@ pub(super) fn export_for_screens(s: &mut Session, p: &Value) -> Result<Value> {
     // A folder the client gave, as against the one its `exportPreset` keeps.
     let given = p.get("folder").is_some();
     let p = with_preset(s, p)?;
-    let mut r = export(s, &p)?;
+    let hidden = if given { None } else { str_param(&p, "folder").filter(|f| !f.is_empty() && !super::access::shown(f)) };
+    let mut r = export(s, &p).map_err(|e| match hidden {
+        Some(folder) => leave_out_folder_from_error(e, folder),
+        None => e,
+    })?;
     remember(s, &p);
     if !given && let Some(folder) = str_param(&p, "folder").filter(|f| !f.is_empty()) {
         leave_out_unreadable_folder(&mut r, folder);
     }
     Ok(r)
+}
+
+/// An error of an export into `folder`, a folder outside the read roots that the client did not
+/// give: `folder` as the path the error is about names it by its own name
+/// ([`super::access::shown_path`]), and the rest of the message stays.
+fn leave_out_folder_from_error(e: EngineError, folder: &str) -> EngineError {
+    let name = super::access::shown_path(folder);
+    match e {
+        EngineError::Other(msg) => EngineError::Other(leave_out_folder_from_message(&msg, folder, &name)),
+        EngineError::BadParams { cmd, msg } => EngineError::BadParams { cmd, msg: leave_out_folder_from_message(&msg, folder, &name) },
+        e => e,
+    }
+}
+
+/// `msg` with `folder` given as `name` where it begins a path the message is about: at the start
+/// of `msg` (`<path>: <reason>`), after a `: ` (`... outside the write root <root>: <path>`) or
+/// after `cannot resolve `, followed by the end, a separator, a `:` or a space. A root the message
+/// names stays whole, even one inside `folder`.
+fn leave_out_folder_from_message(msg: &str, folder: &str, name: &str) -> String {
+    const BEFORE: [&str; 2] = [": ", "cannot resolve "];
+    let mut out = String::with_capacity(msg.len());
+    let mut rest = msg;
+    loop {
+        if let Some(after) = rest.strip_prefix(folder)
+            && after.chars().next().is_none_or(|c| matches!(c, '/' | '\\' | ':' | ' '))
+        {
+            out.push_str(name);
+            rest = after;
+        }
+        let Some((i, len)) = BEFORE.iter().filter_map(|b| rest.find(b).map(|i| (i, b.len()))).min() else { break };
+        out.push_str(&rest[..i + len]);
+        rest = &rest[i + len..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// The reply `r` of an export into `folder`, a folder the client did not give, as the request being
@@ -1436,7 +1475,26 @@ pub(super) fn export_settings(s: &mut Session, _: &Value) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Output, ScreenSize, safe_file_name};
+    use super::{Output, ScreenSize, leave_out_folder_from_message, safe_file_name};
+
+    /// A hidden export folder is named by its name where a message is about it, and a root that
+    /// starts with the same text, or a longer path, stays whole.
+    #[test]
+    fn a_hidden_folder_is_named_by_its_name_in_a_message() {
+        let f = "/work/out";
+        let cases = [
+            (
+                "automation path rejected: outside the write root /work/out/in: /work/out",
+                "automation path rejected: outside the write root /work/out/in: out",
+            ),
+            ("automation path rejected: cannot resolve /work/out: denied", "automation path rejected: cannot resolve out: denied"),
+            ("/work/out/2x/a.png: disk full", "out/2x/a.png: disk full"),
+            ("automation path rejected: outside the write root /a: /work/outer", "automation path rejected: outside the write root /a: /work/outer"),
+        ];
+        for (msg, want) in cases {
+            assert_eq!(leave_out_folder_from_message(msg, f, "out"), want, "{msg}");
+        }
+    }
 
     /// Files given one name are numbered in turn, each numbering going on from the last one (so
     /// thousands of them don't each try every number used before), and a file asking again for
