@@ -2599,7 +2599,7 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("scale must be a number from {_1} to {_2}, not {_3}", &["scale"]),
     ("scale must be a number from {_1} to {_2}, not {s}", &["scale"]),
     ("show must be true or false", &["show"]),
-    ("span: \"selection\" places a linear, radial or conic gradient, not a freeform one", &["span"]),
+    ("span: \"selection\" places a linear, radial, conic or diamond gradient, not a freeform one", &["span"]),
     ("thickness must be from 0.01 to 5000 pt", &["thickness"]),
     ("title can't be empty", &["title"]),
     ("view is required", &["view"]),

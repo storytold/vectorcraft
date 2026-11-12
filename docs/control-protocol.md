@@ -574,8 +574,12 @@ Document Setup: File → Document Setup… (`file.documentSetup`, Cmd+Alt+P) ope
 are what `document.setup` reports (`units`, `bleed` [top, bottom, left, right] in pt, `outlineImages`,
 `highlightSubstitutedGlyphs`, `gridSize`, `gridColors`, `simulatePaper`, `flattenerPreset`,
 `discardWhiteOverprint`, `language`, `quotes`, `typographersQuotes`, `superscript`, `subscript`, `smallCapsSize`,
-`exportText`, `backgroundContents`) plus `tab` (`General`, `Transparency` or `Type`) and `bleedLinked`.
-`ui.dialog.confirm` runs `document.setup` with them as one undo step; a bad value answers with an error and the dialog
+`exportText`, `backgroundContents`) plus `tab` (`General`, `Transparency`, `Type` or `Color`) and `bleedLinked`, and
+the Color tab's `colorMode` (`rgb` or `cmyk`), `convertColors` (a mode change converts the colors; `false` keeps their
+numbers), `rgbProfile` and `cmykProfile` (a profile name, or null for the working space).
+`ui.dialog.confirm` runs `document.setup` with them as one undo step. When the Color tab's fields differ from the
+document, it runs `document.setup`, then `edit.assignProfile` with the changed profiles, then `file.documentColorMode`
+in one `command.batch`, and the document's changes are one undo step. A bad value answers with an error and the dialog
 stays open.
 
 New Document: File → New… (`file.newDialog`, Cmd+N) opens the `newDocument` dialog. Its fields are `file.new`'s params

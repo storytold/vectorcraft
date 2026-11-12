@@ -444,7 +444,8 @@ impl Appearance {
         }
     }
     /// Map placed gradients through a warp, given its local affine approximation at a point (taken
-    /// at each gradient's center: the start of a radial or conic, the middle of a linear vector).
+    /// at each gradient's center: the start of a radial, conic or diamond, the middle of a linear
+    /// vector).
     /// Freeform points each follow the warp at their own position.
     pub fn warp_gradients(&mut self, near: &dyn Fn(vectorcraft_geom::Point) -> vectorcraft_geom::Affine) {
         for g in self.gradients_mut() {

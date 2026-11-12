@@ -220,6 +220,7 @@ font-technology	Variable	可變
 	Asset Export Settings	資產匯出設定
 	Assets	資產
 	Assign	指定
+	Assign Profile	指定描述檔
 	Assign Profile…	指定描述檔…
 	Assign:	指定：
 	Attach to Active Plane	附加至作用中平面
@@ -662,6 +663,15 @@ font-technology	Variable	可變
 	Created:	建立時間：
 	Crop	裁切
 	Crop Image	裁切影像
+	Image Tools	影像工具
+	Remove Background…	移除背景…
+	Remove Background	移除背景
+	Background	背景
+	Edge Color	邊緣顏色
+	Picked Colors	選取的顏色
+	Corner Color	轉角顏色
+	Contiguous	連續
+	Each Channel	每個通道
 	Edit Path	編輯路徑
 	Mask	遮色片
 	Crop Marks	裁切標記
@@ -1890,7 +1900,7 @@ file-filter	Templates	範本
 @msg	stop {i} needs `offset`	色標 {i} 需要 `offset`
 @msg	stop {i} needs a valid `color`	色標 {i} 需要有效的 `color`
 @msg	stop {i}: `{k}` must be a number	色標 {i}：`{k}` 必須是數字
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	未知的漸層類型 `{k}` (linear、radial、conic、freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	未知的漸層類型 `{k}` (linear、radial、conic、diamond、freeform)
 @msg	the art could not be sampled	無法對圖稿取樣
 @msg	the art is too light for any dots	圖稿太淡，無法產生任何網點
 @msg	the document has no symbols	文件中沒有符號
@@ -1982,6 +1992,7 @@ file-filter	Templates	範本
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` 必須是 `auto` 或語言代碼，例如 `en` 或 `zh-hant`
 @msg	`{key}` must be a #rrggbb colour	`{key}` 必須是 #rrggbb 顏色
 @msg	`{key}` must be a string	`{key}` 必須是字串
+@msg	`{key}` must be a profile name or null	`{key}` 必須是描述檔名稱或 null
 @msg	`{key}` must be a whole number	`{key}` 必須是整數
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` 必須是介於 {min} 和 {max} 之間的整數 (收到 {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` 必須介於 {min} 和 {max} 之間 (收到 {x})
@@ -2164,6 +2175,7 @@ file-filter	Templates	範本
 @msg	the image's pixels don't match its size	影像的像素與其尺寸不符
 @msg	{bpp}-bit bitmaps can't be read	無法讀取 {bpp} 位元點陣圖
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 檔案
+@msg	not an HP-GL file	不是 HP-GL 檔案
 @msg	its layers use {_1}, which aren't read yet	其圖層使用了 {_1}，目前尚無法讀取
 @msg	the EMF header is damaged	EMF 檔頭已損毀
 @msg	damaged	已損毀
@@ -2180,6 +2192,7 @@ file-filter	Templates	範本
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	工作區域 {n} 的頁面為 {size}，超過 PDF 的頁面上限 14,400 pt (200 in)：它以 UserUnit {unit} 寫入，因此忽略 UserUnit 的應用程式會將其顯示為縮小相應倍數
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	工作區域 {n} 的頁面為 {size}，超過 PDF 的頁面上限 14,400 pt (200 in)：{label} 頁面不含 UserUnit，以點為單位寫入，遵守上限的應用程式會將頁面裁切為 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 沒有 UserUnit，而長於 14,400 pt (200 in) 的頁面需要它來保持尺寸：檔案將以 PDF 1.6 寫入
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 沒有 UserUnit，而長於 14,400 pt (200 in) 的頁面需要它來保持在 PDF/A-2 的 14,400 單位頁面上限之內：檔案將以 PDF 1.6 寫入
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	工作區域 {n} 的頁面為 {size}，對 PDF 3 至 14,400 單位的頁面邊長而言過長過窄：以 UserUnit {unit} 寫入，使短邊保持 3 單位以上，遵守上限的應用程式會把長邊裁到 14,400 單位
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} 檔案的實數最大為 {max}，而工作區域 {n} 的頁面長 {side} pt，需要更大的數：請選擇不含 PDF/X 標準的 PDF 1.6 或更新版本，或使用較小的工作區域
 @msg	page {0} does not exist (the PDF has {1})	頁面 {0} 不存在 (此 PDF 有 {1} 頁)
@@ -2367,6 +2380,14 @@ file-filter	Templates	範本
 @msg	no such view	沒有這個檢視
 @msg	printing isn't available here	此處無法列印
 @msg	select an image	請選取影像
+@msg	`background` must be edges, corners or colors	`background` 必須為 edges、corners 或 colors
+@msg	`match` must be distance or channels	`match` 必須為 distance 或 channels
+@msg	`{key}` must be from 0 to 100	`{key}` 必須介於 0 到 100 之間
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` 必須列出 1 到 16 種顏色，每種寫為十六進位（#rrggbb 或 #rgb）或 black、white、red、green、blue
+@msg	the linked image shows its preview: embed or relink it first	連結影像顯示的是預覽：請先嵌入或重新連結
+@msg	a CMYK image has no transparency to set	CMYK 影像沒有可設定的透明度
+@msg	every pixel matches the background: no image would be left	每個像素都與背景相符：不會留下任何影像
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} 像素的影像過大，無法變更
 @msg	the document has no artboards	文件沒有工作區域
 @msg	tool (a tool id) is required	需要 tool (工具 id)
 @msg	unknown tool `{t}`	未知的工具 `{t}`
@@ -2644,7 +2665,7 @@ file-filter	Templates	範本
 @msg	span must be "object" or "selection", got {v}	span 必須是 "object" 或 "selection"，收到 {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" 放置的是 `gradient`，而非色票
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" 會放置漸層：請提供 `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" 放置線性、放射狀或圓錐漸層，而非任意形狀漸層
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" 放置線性、放射狀、圓錐或菱形漸層，而非任意形狀漸層
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" 會自行放置漸層：請不要提供 `start` 和 `end` (它們已依文件座標放置漸層)
 @msg	Batch: {count} processed	批次：已處理 {count} 個
 @msg	Batch: {count} processed, {failed} failed	批次：已處理 {count} 個，失敗 {failed} 個
@@ -3325,6 +3346,9 @@ file-filter	Templates	範本
 	Optical	視覺
 	Optical Margin Alignment	視覺邊界對齊
 	Dynamic Text	動態文字
+	Dynamic Text Presets	動態文字預設集
+	Arch	拱形
+@msg	select point type or type on a path	請選取點狀文字或路徑文字
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	串連文字中的路徑文字無法使用動態文字：{frames}
 	Optimize for fast web view	最佳化以便快速網頁檢視
 	Optimized	最佳化
@@ -3610,6 +3634,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Radial Glows	放射狀光暈
 	Radial Gradient	放射狀漸層
 	Conic Gradient	圓錐漸層
+	Diamond Gradient	菱形漸層
 	Radius 1	半徑 1
 	Radius 2	半徑 2
 	Radius1	半徑1
@@ -4165,6 +4190,15 @@ digits	Malayalam	馬來亞拉姆數字
 	Stun Pulse	暈眩
 	Stealth Fade	隱身
 	Shield Buff	護盾
+	Textures	紋理
+	Fine Grain	細顆粒
+	Canvas Weave	帆布紋
+	Burlap Sack	麻布袋
+	Cracked Glaze	裂紋釉
+	Mosaic Floor	馬賽克地面
+	Quilted Squares	絎縫方格
+	Leaded Glass	鉛條玻璃
+	Damp Paper	濕紙
 	Shape	形狀
 	Shape Builder	形狀建立
 	Shape Builder Regions	形狀建立區域
@@ -4532,6 +4566,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Scale at Center	從中心縮放
 	Up/Down:	上/下：
 	Left/Right:	左/右：
+	Tate-chu-yoko Up/Down	縱中橫上/下
+	Tate-chu-yoko Left/Right	縱中橫左/右
 	Temperature	色溫
 	Temperature/Tint…	色溫/色調…
 	Template	範本
@@ -4888,6 +4924,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Windows	Windows
 	Working CMYK	使用中的 CMYK
 	Working CMYK (don't tag)	工作 CMYK (不加標記)
+	Working RGB (don't tag)	工作 RGB (不加標記)
 	Workspace	工作區
 	Workspace {i}	工作區 {i}
 	Wrinkle Tool	皺摺工具
@@ -6483,6 +6520,7 @@ breakText	Glyphs	字符
 
 # Align to Pixel Grid
 	Align to Pixel Grid	對齊像素格點
+	Align New Objects to Pixel Grid	將新物件對齊像素格點
 	Not Aligned to Pixel Grid	未對齊像素格點
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路徑和複合路徑可以對齊像素格點
 @msg	side is left or right, not `{s}`	side 應為 left 或 right，而不是 `{s}`

@@ -436,6 +436,104 @@ fn a_marked_host_error_that_passes_through_a_finally_block_says_where_it_was_rai
     assert_eq!(r.error_mark(), Some(7));
 }
 
+/// A realm with a 1 MiB heap, the size that the `finally` blocks of these tests collect garbage in.
+fn small_heap_realm() -> Realm {
+    let mut r = Realm::new();
+    r.set_limits(Limits { fuel: 200_000_000, heap_bytes: 1 << 20, ..Limits::default() });
+    r
+}
+
+/// Begins a run of `source` and advances it one instruction at a time until a `finally` block runs
+/// for an exception whose throw site is saved.
+fn start_until_a_throw_site_is_saved(r: &mut Realm, source: &str) {
+    r.start(source).unwrap();
+    while r.interp().finally_sites.is_empty() {
+        assert_eq!(r.advance(1), Ok(Progress::Paused), "{source}");
+    }
+}
+
+/// The collections that a `finally` block's allocations cause under a small heap limit keep the
+/// site its exception was raised at, and the run's end leaves no saved site behind.
+#[test]
+fn an_error_that_passes_through_a_finally_block_that_collects_garbage_says_where_it_was_raised() {
+    let mut r = small_heap_realm();
+    let source = "try {\n  throw new Error('original');\n} finally {\n  for (var i = 0; i < 20000; i++) { var waste = [i, i + 1, i + 2]; }\n}";
+    start_until_a_throw_site_is_saved(&mut r, source);
+    r.collect_garbage();
+    let collections = r.interp().heap.collections;
+    let e = loop {
+        match r.advance(1_000) {
+            Ok(Progress::Paused) => assert_eq!(r.interp().finally_sites.len(), 1, "the site stays saved while the block runs"),
+            Ok(Progress::Done(v)) => panic!("the run ended with {v:?}"),
+            Err(e) => break e,
+        }
+    };
+    assert!(r.interp().heap.collections > collections, "the block's allocations collect garbage");
+    assert_eq!((e.kind, e.line, e.column, e.message.as_str()), (RunErrorKind::Thrown, 2, 3, "Error: original"));
+    assert!(r.interp().finally_sites.is_empty());
+}
+
+/// The code of a saved throw site stays live through a collection: direct `eval` code that
+/// threw is not part of the code of any frame still running.
+#[test]
+fn a_saved_throw_site_keeps_its_code_live() {
+    let mut r = small_heap_realm();
+    let source = "try {\n  eval(\"var unused = 'padding padding padding padding';\\nthrow new Error('original');\");\n} finally {\n  for (var i = 0; i < 2000; i++) { var waste = [i]; }\n}";
+    start_until_a_throw_site_is_saved(&mut r, source);
+    let with_site = r.collect_garbage();
+    let sites = std::mem::take(&mut r.interp().finally_sites);
+    let without_site = r.collect_garbage();
+    r.interp().finally_sites = sites;
+    assert_eq!(r.collect_garbage(), with_site, "the saved site's code is counted again");
+    assert!(with_site > without_site, "{with_site} <= {without_site}");
+    let e = finish(&mut r, 1_000).0.unwrap_err();
+    assert_eq!((e.kind, e.line, e.message.as_str()), (RunErrorKind::Thrown, 2, "Error: original"));
+    assert!(r.interp().finally_sites.is_empty());
+}
+
+/// A run that a host function stops inside a `finally` block leaves no saved throw site behind.
+#[test]
+fn a_run_stopped_in_a_finally_block_leaves_no_saved_throw_site() {
+    let mut r = realm(1_000_000);
+    let f: HostFunction = Rc::new(|_| Err(HostError::Abort("stopped".into())));
+    r.define_host_object("host", vec![("abort".into(), HostItem::Function(f))]).unwrap();
+    let e = r.run("try { throw new Error('original'); } finally { host.abort(); }").unwrap_err();
+    assert_eq!((e.kind, e.message.as_str()), (RunErrorKind::Limit(LimitKind::Host), "stopped"));
+    assert!(r.interp().finally_sites.is_empty());
+    assert_eq!(r.run("1").unwrap(), JsValue::Number(1.0));
+    assert!(r.interp().finally_sites.is_empty());
+}
+
+/// A `finally` block that `break`, `continue` or `return` leaves drops the saved site of the
+/// exception it ran for as it leaves, before the stack grows back over that site's slot.
+#[test]
+fn leaving_a_finally_block_early_drops_its_saved_throw_site() {
+    let mut r = realm(1_000_000);
+    let marked = Rc::new(Cell::new(false));
+    let seen = marked.clone();
+    let f: HostFunction = Rc::new(move |_| {
+        seen.set(true);
+        Ok(Data::Undefined)
+    });
+    r.define_host_object("host", vec![("mark".into(), HostItem::Function(f))]).unwrap();
+    for source in [
+        "do { try { throw new Error('x'); } finally { break; } } while (false);\nhost.mark(); var a = [1, 2, 3];",
+        "for (var i = 0; i < 1; i++) { try { throw new Error('x'); } finally { continue; } }\nhost.mark(); var a = [1, 2, 3];",
+        "function f() { try { throw new Error('x'); } finally { return 1; } }\nf(); host.mark(); var a = [f, f, f];",
+    ] {
+        marked.set(false);
+        let mut saved = false;
+        r.start(source).unwrap();
+        while r.advance(1).unwrap() == Progress::Paused {
+            saved |= !r.interp().finally_sites.is_empty();
+            if marked.get() {
+                assert!(r.interp().finally_sites.is_empty(), "{source}");
+            }
+        }
+        assert!(saved && marked.get(), "{source}");
+    }
+}
+
 #[test]
 fn advancing_without_a_run_is_an_error() {
     let mut r = realm(1_000);

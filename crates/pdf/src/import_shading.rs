@@ -1,7 +1,8 @@
 //! Shadings: axial and radial ones become gradients (their stops sampled from the shading
 //! function in its own colour model; an end that doesn't extend clips the painted area), a
-//! function-based one whose color changes along one axis a linear gradient, and one whose color
-//! turns around the origin of its space a conic gradient (else its average color; all of them
+//! function-based one whose color changes along one axis a linear gradient, one whose color
+//! turns around the origin of its space a conic gradient, and one whose color is the same along
+//! each square about that origin a diamond gradient (else its average color; all of them
 //! within one budget of function evaluations per import), patch and triangle
 //! meshes become gradient meshes, a gradient drawn through a luminosity mask that is
 //! the same gradient in grey (how stop opacity is written) gets its opacity stops back, and a shape
@@ -180,7 +181,9 @@ pub(crate) fn function_paint(
     if !matches!(sp.shading.shading_type.as_ref(), ShadingType::FunctionBased { .. }) {
         return None;
     }
-    let gradient = function_gradient(sp, colors, inks, budget).or_else(|| function_sweep(sp, colors, inks, budget));
+    let gradient = function_gradient(sp, colors, inks, budget)
+        .or_else(|| function_sweep(sp, colors, inks, budget))
+        .or_else(|| function_diamond(sp, colors, inks, budget));
     Some(match gradient {
         Some(g) => FunctionPaint::Gradient(Box::new(g)),
         None => function_average(sp, budget).map_or(FunctionPaint::Unread, FunctionPaint::Average),
@@ -357,6 +360,59 @@ fn function_sweep(sp: &ShadingPattern, colors: &mut Colors<'_>, inks: Option<&[S
     let mut geom = GradientGeom { start: Point::ZERO, end: Point::new(1.0, 0.0), aspect: 1.0, focal: None };
     geom.transform(sp.matrix * *matrix, GradientKind::Conic);
     let mut g = GradientPaint::new(Gradient::new(GradientKind::Conic, out));
+    g.geom = Some(geom);
+    // It paints only over its domain ([`extend_clip`]).
+    Some(g)
+}
+
+/// A function-based shading (type 1) whose domain holds the origin of its space and whose color
+/// is the same along each square about it with corners on the axes (a function of `abs(x) +
+/// abs(y)`, as a calculator function gives it, ISO 32000-1 7.10.5) as a diamond gradient, its
+/// vector along the space's x axis to the corner of the largest such square the domain reaches
+/// (through the domain's farthest corner): stops sampled from the origin out to that corner, as
+/// [`function_stops`] samples them. `None` when the domain does not hold the origin, the color
+/// differs between grid points on one square or doesn't change from square to square, the stops
+/// would be more than [`MAX_FUNCTION_STOPS`], or `budget` runs out (leaving
+/// [`AVERAGE_EVALUATIONS`] for [`function_average`]).
+fn function_diamond(sp: &ShadingPattern, colors: &mut Colors<'_>, inks: Option<&[String]>, budget: &FunctionBudget) -> Option<GradientPaint> {
+    let ShadingType::FunctionBased { matrix, .. } = sp.shading.shading_type.as_ref() else { return None };
+    let (function, domain) = function_domain(sp)?;
+    let [x0, x1, y0, y1] = domain;
+    if !(x0 < 0.0 && x1 > 0.0 && y0 < 0.0 && y1 > 0.0) {
+        return None;
+    }
+    let rgb = |x: f32, y: f32| function_rgb(sp, function, x, y, budget, AVERAGE_EVALUATIONS);
+    let lerp = |a: f32, b: f32, t: f32| a + (b - a) * t;
+    // The farthest corner of the domain, and a point on each square up to it inside the domain:
+    // along the x axis toward that corner, then up its side.
+    let (fx, fy) = (if x1 >= -x0 { x1 } else { x0 }, if y1 >= -y0 { y1 } else { y0 });
+    let reach = fx.abs() + fy.abs();
+    let on_square = |level: f32| {
+        let x = level.clamp(0.0, fx.abs());
+        (x.copysign(fx), (level - x).clamp(0.0, fy.abs()).copysign(fy))
+    };
+    // Each grid point has the color of that point on its square, and the color changes from
+    // square to square.
+    let mut turns = false;
+    let origin = rgb(0.0, 0.0)?;
+    for j in 0..=FUNCTION_GRID {
+        for i in 0..=FUNCTION_GRID {
+            let (x, y) = (lerp(x0, x1, grid_at(i)), lerp(y0, y1, grid_at(j)));
+            let (sx, sy) = on_square(x.abs() + y.abs());
+            let on_path = rgb(sx, sy)?;
+            if !same_rgb(rgb(x, y)?, on_path) {
+                return None;
+            }
+            turns |= !same_rgb(on_path, origin);
+        }
+    }
+    if !turns {
+        return None;
+    }
+    let out = function_stops(sp, function, colors, inks, budget, &|s: f32| on_square(s * reach))?;
+    let mut geom = GradientGeom { start: Point::ZERO, end: Point::new(f64::from(reach), 0.0), aspect: 1.0, focal: None };
+    geom.transform(sp.matrix * *matrix, GradientKind::Diamond);
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Diamond, out));
     g.geom = Some(geom);
     // It paints only over its domain ([`extend_clip`]).
     Some(g)

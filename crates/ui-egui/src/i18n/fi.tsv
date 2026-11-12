@@ -126,6 +126,7 @@
 	PDF Presets…	PDF-esiasetukset…
 	Perspective Grid Presets…	Perspektiiviruudukon esiasetukset…
 	Color Settings…	Väriasetukset…
+	Assign Profile	Määritä profiili
 	Assign Profile…	Määritä profiili…
 	Keyboard Shortcuts…	Pikanäppäimet…
 	Import Shortcut Set	Tuo pikanäppäinjoukko
@@ -209,6 +210,15 @@
 	Expand…	Laajenna…
 	Expand Appearance	Laajenna ulkoasu
 	Crop Image	Rajaa kuva
+	Image Tools	Kuvatyökalut
+	Remove Background…	Poista tausta…
+	Remove Background	Poista tausta
+	Background	Tausta
+	Edge Color	Reunan väri
+	Picked Colors	Valitut värit
+	Corner Color	Kulmien väri
+	Contiguous	Yhtenäinen
+	Each Channel	Jokainen kanava
 	Edit Path	Muokkaa polkua
 	Mask	Maski
 	Rasterize…	Rasteroi…
@@ -404,6 +414,9 @@
 	Create Outlines	Muunna ääriviivoiksi
 	Optical Margin Alignment	Optinen reunustasaus
 	Dynamic Text	Dynaaminen teksti
+	Dynamic Text Presets	Dynaamisen tekstin esiasetukset
+	Arch	Holvi
+@msg	select point type or type on a path	valitse pisteteksti tai polkuteksti
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	ketjutetun tekstin polkuteksti ei voi käyttää dynaamista tekstiä: {frames}
 	Fill with Placeholder Text	Täytä paikkamerkkitekstillä
 	Insert Inline Symbol	Lisää tekstinsisäinen symboli
@@ -783,6 +796,15 @@
 	Stun Pulse	Tainnutus
 	Stealth Fade	Hiipiminen
 	Shield Buff	Kilpi
+	Textures	Tekstuurit
+	Fine Grain	Hieno rae
+	Canvas Weave	Kanvaskudos
+	Burlap Sack	Juuttisäkki
+	Cracked Glaze	Krakeloitu lasite
+	Mosaic Floor	Mosaiikkilattia
+	Quilted Squares	Tikatut ruudut
+	Leaded Glass	Lyijylasi
+	Damp Paper	Kostea paperi
 	Outlines and Rules	Ääriviivat ja viivat
 	Hand-Drawn	Käsin piirretyt
 	Gradient Finishes	Liukuväriviimeistelyt
@@ -1561,6 +1583,8 @@ digits	Malayalam	Malajalam
 	Scale at Center	Skaalaa keskeltä
 	Up/Down:	Ylös/alas:
 	Left/Right:	Vasen/oikea:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko ylös/alas
+	Tate-chu-yoko Left/Right	Tate-chu-yoko vasen/oikea
 	Underline	Alleviivaus
 	Vertical Scale %	Pystyskaalaus %
 	Axis	Akseli
@@ -1664,6 +1688,7 @@ digits	Malayalam	Malajalam
 	Points: clicks add free points	Pisteet: napsautukset lisäävät vapaita pisteitä
 	Radial Gradient	Säteittäinen liukuväri
 	Conic Gradient	Kartiomainen liukuväri
+	Diamond Gradient	Vinoneliöliukuväri
 	Reset to White, Black	Palauta valkoinen, musta
 	Reverse Gradient	Käännä liukuväri
 	Save to Swatches	Tallenna värimalleihin
@@ -2022,6 +2047,7 @@ digits	Malayalam	Malajalam
 	Simulate Paper	Simuloi paperia
 	Use Black Point Compensation	Käytä mustan pisteen kompensointia
 	Working CMYK (don't tag)	Työ-CMYK (ei tunnistetta)
+	Working RGB (don't tag)	Työ-RGB (ei tunnistetta)
 	{name} (spot)	{name} (spottiväri)
 	Add to Profiles…	Lisää profiileihin…
 	Align Stroke to Center	Tasaa viiva keskelle
@@ -4453,6 +4479,7 @@ imageTrace	Outline	Ääriviiva
 @msg	`{key}` must be a number, not {v}	`{key}` on oltava luku, ei {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} on oltava Unix-aika sekunteina (kokonaisluku) tai null
 @msg	`{key}` must be a string	`{key}` on oltava merkkijono
+@msg	`{key}` must be a profile name or null	`{key}` on oltava profiilin nimi tai null
 @msg	`{key}` must be a whole number	`{key}` on oltava kokonaisluku
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` on oltava kokonaisluku väliltä {min}–{max} (saatiin {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` on oltava väliltä {min}–{max} (saatiin {x})
@@ -4599,6 +4626,7 @@ imageTrace	Outline	Ääriviiva
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	piirtoalustan {n} sivu on {size}, pidempi kuin PDF:n 14 400 pt:n (200 in) sivuraja: se kirjoitetaan UserUnit-arvolla {unit}, joten UserUnitin ohittavat sovellukset näyttävät sen niin monta kertaa pienempänä
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	piirtoalustan {n} sivu on {size}, pidempi kuin PDF:n 14 400 pt:n (200 in) sivuraja: {label}-sivut kirjoitetaan ilman UserUnitia, pisteinä, ja rajaa noudattavat sovellukset rajaavat sivun 200 in:iin
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5:ssä ei ole UserUnitia, jota yli 14 400 pt:n (200 in) sivu tarvitsee säilyttääkseen kokonsa: tiedosto kirjoitetaan PDF 1.6:na
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4:ssä ei ole UserUnitia, jota yli 14 400 pt:n (200 in) sivu tarvitsee pysyäkseen PDF/A-2:n 14 400 yksikön sivurajan sisällä: tiedosto kirjoitetaan PDF 1.6:na
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	piirtoalustan {n} sivu on {size}, liian pitkä ja kapea PDF:n sivuille, jotka ovat 3:sta 14 400 yksikköön: se kirjoitetaan UserUnit-arvolla {unit}, joka pitää lyhyen sivun vähintään 3 yksikössä, ja rajaa noudattavat sovellukset leikkaavat pitkän sivun 14 400 yksikköön
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label}-tiedostot sallivat reaaliluvut enintään {max}, ja piirtoalustan {n} sivu, {side} pt pitkä, tarvitsee suurempia: valitse PDF 1.6 tai uudempi ilman PDF/X-standardia tai pienempi piirtoalusta
 @msg	invalid image data for `{0}`	virheellinen kuvadata kohteelle `{0}`
@@ -4746,6 +4774,7 @@ imageTrace	Outline	Ääriviiva
 @msg	not a stored central record	ei tallennettu keskushakemistotietue
 @msg	not a valid plug-in module: {0}	ei kelvollinen laajennusmoduuli: {0}
 @msg	not an EMF or WMF file	ei EMF- tai WMF-tiedosto
+@msg	not an HP-GL file	ei HP-GL-tiedosto
 @msg	not found	ei löytynyt
 @msg	not in pattern editing mode	ei kuvion muokkaustilassa
 @msg	finish editing the pattern first	lopeta ensin kuvion muokkaus
@@ -4819,6 +4848,14 @@ imageTrace	Outline	Ääriviiva
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	tämä jäljitys tuottaisi yli {max} ankkuripistettä, enemmän kuin asiakirja näyttää sujuvasti: nosta kohinaa, vähennä polkuja tai värejä tai valitse epätarkempi esiasetus
 @msg	select an envelope	valitse vääristyskuori
 @msg	select an image	valitse kuva
+@msg	`background` must be edges, corners or colors	`background`-arvon on oltava edges, corners tai colors
+@msg	`match` must be distance or channels	`match`-arvon on oltava distance tai channels
+@msg	`{key}` must be from 0 to 100	`{key}`-arvon on oltava väliltä 0–100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors`-arvossa on oltava 1–16 väriä, kukin heksadesimaalina (#rrggbb tai #rgb) tai muodossa black, white, red, green tai blue
+@msg	the linked image shows its preview: embed or relink it first	linkitetty kuva näyttää esikatselunsa: upota tai linkitä se ensin uudelleen
+@msg	a CMYK image has no transparency to set	CMYK-kuvalla ei ole asetettavaa läpinäkyvyyttä
+@msg	every pixel matches the background: no image would be left	jokainen pikseli vastaa taustaa: kuvaa ei jäisi jäljelle
+@msg	an image of {w} × {h} pixels is too large to change	kuva, jonka koko on {w} × {h} pikseliä, on liian suuri muutettavaksi
 @msg	select an object in perspective	valitse perspektiivissä oleva objekti
 @msg	select artwork (or a colour group) to recolor	valitse uudelleenväritettävä kuvitus (tai väriryhmä)
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Uudelleenväritys valmis; muuttamatta jäi: {locked} ja {hidden}
@@ -4925,7 +4962,7 @@ imageTrace	Outline	Ääriviiva
 @msg	unknown format	tuntematon muoto
 @msg	unknown format `{f}` (Save writes {_1})	tuntematon muoto `{f}` (Tallenna kirjoittaa muotoja {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	tuntematon vapaamuototila `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tuntematon liukuvärin laji `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	tuntematon liukuvärin laji `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	tuntematon korostus `{h}`
 @msg	unknown option `{path}.{k}`	tuntematon asetus `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	tuntematon päällepainatusten käsittely `{o}` (preserve, simulate tai discard)
@@ -5785,7 +5822,7 @@ mark-style	Japanese	Japanilainen
 @msg	span must be "object" or "selection", got {v}	span-arvon on oltava "object" tai "selection", saatiin {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" sijoittaa `gradient`-liukuvärin, ei värimallia
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" sijoittaa liukuvärin: anna `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" sijoittaa lineaarisen, säteittäisen tai kartiomaisen liukuvärin, ei vapaamuotoista
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" sijoittaa lineaarisen, säteittäisen, kartiomaisen tai vinoneliöliukuvärin, ei vapaamuotoista
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" sijoittaa itse liukuvärin: jätä pois `start` ja `end` (ne sijoittavat sen jo asiakirjan koordinaatteihin)
 @msg	the Color Picker is not open	värinvalitsin ei ole auki
 @msg	the Simplify slider is not open	Yksinkertaista-liukusäädin ei ole auki
@@ -6879,6 +6916,7 @@ breakText	Glyphs	Merkit
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Tasaa pikseliruudukkoon
+	Align New Objects to Pixel Grid	Tasaa uudet objektit pikseliruudukkoon
 	Not Aligned to Pixel Grid	Ei tasattu pikseliruudukkoon
 @msg	only paths and compound paths can be aligned to the pixel grid	vain polut ja yhdistelmäpolut voi tasata pikseliruudukkoon
 @msg	side is left or right, not `{s}`	side on left tai right, ei `{s}`
