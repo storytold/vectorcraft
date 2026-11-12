@@ -191,6 +191,36 @@ fn left_out_of_comparisons(page: Page, mut restyled: Vec<Rect>, placeholders: Ve
     restyled
 }
 
+/// A single PDF page capped at the format's 14,400-unit limit, without user-space scaling.
+/// The other dimension must still match; unrelated page-size mismatches remain errors.
+fn capped_pdf_page(doc: &Document, visible: &Document, board: Rect, page: Rect, unit: f64) -> bool {
+    let capped = |side: f64, pdf: f64| (pdf - 14_400.0).abs() <= 0.5 && side > pdf + 0.5;
+    let matching = |side: f64, pdf: f64| (side - pdf).abs() <= 0.5 || capped(side, pdf);
+    unit == 1.0
+        && doc.artboards.len() == 1
+        && visible.artboards.len() == 1
+        && (capped(board.width(), page.width()) || capped(board.height(), page.height()))
+        && matching(board.width(), page.width())
+        && matching(board.height(), page.height())
+}
+/// The PDF-covered area of a trusted oversized artboard; its full artboard stays in the document.
+fn compared_page_rect(
+    doc: &Document,
+    visible: &Document,
+    board: Rect,
+    pdf: Rect,
+    trusted_page: Option<Page>,
+    unit: f64,
+    warnings: &mut Vec<String>,
+) -> Rect {
+    if matches!(trusted_page, Some(Page::Artboard)) && capped_pdf_page(doc, visible, board, pdf, unit) {
+        warnings.push("the editing data's artboard is larger than the PDF page: the full artboard comes from its editing data".into());
+        Rect::new(board.x0, board.y0, board.x0 + pdf.width(), board.y0 + pdf.height())
+    } else {
+        board
+    }
+}
+
 /// [`build`] from `structure`, the editing copy `data` already read.
 pub(super) fn build_from(
     structure: Structure,
@@ -222,7 +252,7 @@ pub(super) fn build_from(
         bindings,
         bindings_skipped,
         warped_type,
-        warnings,
+        mut warnings,
     } = structure;
     let mut restyled = left_out_of_comparisons(page, restyled, placeholders);
     // Editing data in the units of the page's user space ([`in_units`]), or at its declared large
@@ -270,6 +300,7 @@ pub(super) fn build_from(
         {
             (rect, cropped) = (art, true);
         }
+        rect = compared_page_rect(&doc, visible, rect, page_rect, trust.then_some(page), unit, &mut warnings);
         if !fits(&rect) {
             // Both sizes in points as the fields show them, and the editing data's page to the
             // file's as a scale (1:10 is a tenth of its size) when its sides are in proportion and
