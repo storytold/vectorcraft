@@ -1133,6 +1133,76 @@ fn a_style_table_list_is_not_read_as_chunks() {
     assert!(d.page_size.is_some_and(|(w, h)| (w - 100.0).abs() < 0.01 && (h - 50.0).abs() < 0.01));
 }
 
+/// The objects of a styled drawing: a rectangle with only its style (argument 200), one whose
+/// style leaves the fill and outline to its parent, and one with an outline argument of its own.
+fn graphic_style_drawing(version: u16, table: synth::Node) -> Vec<u8> {
+    let v = V(version);
+    let black = synth::color(2, [0, 0, 0, 100]);
+    let doc = list(
+        b"doc ",
+        vec![
+            synth::mcfg(v, 612.0, 792.0),
+            list(b"filt", vec![chunk(if version >= 700 { b"fild" } else { b"fill" }, v.fill(1, &synth::color(5, [0, 0, 255, 0])))]),
+            list(
+                b"otlt",
+                vec![
+                    chunk(b"outl", v.outline(2, synth::Pen { line_type: 0, width: 2.0, cap: 1, join: 1 }, &black, &[])),
+                    chunk(b"outl", v.outline(3, synth::Pen { line_type: 1, width: 1.0, cap: 0, join: 0 }, &black, &[])),
+                ],
+            ),
+            table,
+        ],
+    );
+    let rect = (30, v.rect(20.0, 10.0, 0.0));
+    let styled = |style: u32, own: &[(u32, Vec<u8>)]| {
+        let mut args = vec![(200, style.to_le_bytes().to_vec())];
+        args.extend(own.iter().cloned());
+        args.push(rect.clone());
+        synth::object(v, 1, &args, None)
+    };
+    let objects = vec![styled(0x10, &[]), styled(0x11, &[]), styled(0x10, &[(10, 3u32.to_le_bytes().to_vec())])];
+    let page = synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", objects)]);
+    synth::file_of(version, vec![doc, page])
+}
+
+/// From version 7 an object without a fill or outline argument of its own takes its style's
+/// (argument 200, `LIST stlt`), through the style's parent where the style names none; its own
+/// argument wins over the style's.
+#[test]
+fn objects_without_their_own_fill_or_outline_take_their_styles() {
+    let styles = [synth::Style { id: 0x10, parent: 0, fill: 0x100, outline: 0x200 }, synth::Style { id: 0x11, parent: 0x10, fill: 0, outline: 0 }];
+    for version in [700, 800, 801, 900, 1000, 1100, 1200, 1300, 1400, 1500] {
+        for text in [false, true] {
+            let table = synth::stlt(V(version), &[(0x100, 1)], &[(0x200, 2)], &styles, text);
+            let d = read(&graphic_style_drawing(version, table), Limits::default()).unwrap_or_else(|e| panic!("{version}: {e}"));
+            let s = shapes(&d.pages[0].layers[0].objects);
+            assert_eq!(s.len(), 3, "{version}");
+            for shape in &s[..2] {
+                assert_eq!(shape.fill, Some(Color::Rgb([1.0, 0.0, 0.0])), "{version} {text}");
+                assert!(shape.outline.as_ref().is_some_and(|o| (o.width - 2.0).abs() < 0.05), "{version} {text}: {:?}", shape.outline);
+            }
+            assert_eq!(s[2].fill, Some(Color::Rgb([1.0, 0.0, 0.0])), "{version} {text}");
+            assert!(s[2].outline.is_none(), "{version} {text}");
+            assert!(d.warnings.is_empty(), "{version} {text}: {:?}", d.warnings);
+        }
+    }
+}
+
+/// A style table that doesn't parse to its end is damage when an object needs a style from it;
+/// the object is drawn with what it holds itself.
+#[test]
+fn a_style_table_that_does_not_parse_is_damage_when_an_object_needs_it() {
+    let styles = [synth::Style { id: 0x10, parent: 0, fill: 0x100, outline: 0x200 }, synth::Style { id: 0x11, parent: 0x10, fill: 0, outline: 0 }];
+    let mut body = synth::stlt_body(V(1000), &[(0x100, 1)], &[(0x200, 2)], &styles, true);
+    body.push(0);
+    let table = chunk(b"LIST", [b"stlt".to_vec(), body].concat());
+    let d = read(&graphic_style_drawing(1000, table), Limits::default()).unwrap();
+    let s = shapes(&d.pages[0].layers[0].objects);
+    assert_eq!(s.len(), 3);
+    assert!(s[0].fill.is_none() && s[0].outline.is_none());
+    assert_eq!(d.warnings, vec![Warning::Damaged]);
+}
+
 #[test]
 fn linked_groups_are_left_out_with_a_warning() {
     let v = V(1100);

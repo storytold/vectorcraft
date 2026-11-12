@@ -479,6 +479,107 @@ pub fn mcfg(v: V, w: f64, h: f64) -> Node {
     chunk(b"mcfg", b)
 }
 
+/// A style of a [`stlt_body`]: its id, its parent's id, and its fill and outline table entries.
+#[derive(Clone, Copy, Debug)]
+pub struct Style {
+    pub id: u32,
+    pub parent: u32,
+    pub fill: u32,
+    pub outline: u32,
+}
+
+/// The body of a `LIST stlt` of `v` (R45): the style count, the fill table (`(entry, fild id)`) and
+/// the outline table (`(entry, outl id)`), the text style tables (each with one record when
+/// `text`), then `styles` as styles of kind 1, and when `text` a style of kind 2 and one of kind 3.
+pub fn stlt_body(v: V, fills: &[(u32, u32)], outlines: &[(u32, u32)], styles: &[Style], text: bool) -> Vec<u8> {
+    let version = v.0;
+    let u32s = |vals: &[u32]| -> Vec<u8> { vals.iter().flat_map(|x| x.to_le_bytes()).collect() };
+    let count = styles.len() + if text { 2 } else { 0 };
+    let mut b = u32s(&[count as u32]);
+    // A table without styles holds nothing else.
+    if count == 0 {
+        return b;
+    }
+    for (table, size) in [(fills, if version >= 1300 { 60 } else { 12 }), (outlines, 12)] {
+        b.extend(u32s(&[table.len() as u32]));
+        for (entry, record) in table {
+            let mut e = u32s(&[*entry, 0, *record]);
+            e.resize(size, 0);
+            b.extend(e);
+        }
+    }
+    let n = u32::from(text);
+    let fixed = |size: usize| -> Vec<u8> {
+        let mut t = n.to_le_bytes().to_vec();
+        t.extend(vec![0x5a; size * n as usize]);
+        t
+    };
+    // Fonts, alignments, spacings and two tables of fixed records.
+    for size in [if version >= 1000 { 60 } else { 44 }, 12, 52, 152, 784] {
+        b.extend(fixed(size));
+    }
+    // One bullet, whose u32 inside asks for the longer form.
+    b.extend(n.to_le_bytes());
+    if text {
+        b.extend([0x5a; 40]);
+        if version >= 1300 {
+            if version >= 1400 {
+                b.extend([0x5a; 4]);
+            }
+            b.extend(u32s(&[1]));
+            b.extend([0x5a; 68]);
+        } else {
+            b.extend(vec![0x5a; if version >= 1000 { 28 } else { 20 }]);
+            b.extend(u32s(&[1]));
+            b.extend([0x5a; 16]);
+        }
+    }
+    // Indents, hyphenation, drop caps, and from version 8.01 one more table.
+    for size in [28, if version >= 1300 { 36 } else { 32 }, 28] {
+        b.extend(fixed(size));
+    }
+    if version >= 801 {
+        b.extend(fixed(12));
+    }
+    let text_styles = [(2, Style { id: 0x7f02, parent: 0, fill: 0, outline: 0 }), (3, Style { id: 0x7f03, parent: 0x7f02, fill: 0, outline: 0 })];
+    let all = styles.iter().map(|s| (1u32, *s)).chain(text_styles.into_iter().filter(|_| text));
+    for (kind, s) in all {
+        b.extend(u32s(&[kind, s.id, s.parent, 1, 1]));
+        if version >= 1200 {
+            b.extend(u32s(&[7]));
+            b.extend("Graphic".encode_utf16().flat_map(u16::to_le_bytes));
+        } else {
+            b.extend(u32s(&[8]));
+            b.extend(b"Graphic\0");
+        }
+        b.extend(u32s(&[s.fill, s.outline]));
+        if kind > 1 {
+            b.extend(vec![0; if version >= 801 { 20 } else { 16 }]);
+        }
+        if kind > 2 {
+            b.extend([0; 20]);
+        }
+    }
+    b
+}
+
+/// A `LIST stlt` of [`stlt_body`].
+pub fn stlt(v: V, fills: &[(u32, u32)], outlines: &[(u32, u32)], styles: &[Style], text: bool) -> Node {
+    Node::Chunk(*b"LIST", [b"stlt".to_vec(), stlt_body(v, fills, outlines, styles, text)].concat())
+}
+
+/// A file of `version` holding `content` as the program of that version saves it: a RIFF file
+/// before 14, then a package (R25, R26).
+pub fn file_of(version: u16, content: Vec<Node>) -> Vec<u8> {
+    let mut body = vec![chunk(b"vrsn", version.to_le_bytes().to_vec())];
+    body.extend(content);
+    match version {
+        ..1400 => riff(version, &body),
+        1400..1600 => package14(riff(version, &body), false),
+        _ => package16(version, &body, false, &[]),
+    }
+}
+
 /// The document list and pages of the [`sample`] of `version`.
 pub fn sample_content(version: u16) -> Vec<Node> {
     let v = V(version);

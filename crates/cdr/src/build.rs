@@ -11,6 +11,7 @@ use crate::limits::Budget;
 use crate::model::{Color, Drawing, Geometry, Guideline, Layer, LayerKind, Matrix, Object, Outline, Page, Pt, Shape};
 use crate::records::{self, Loda};
 use crate::riff::{Chunk, Index, push};
+use crate::styles::Styles;
 use crate::{Error, Warning};
 
 /// Object types (R6).
@@ -25,6 +26,7 @@ const ARG_OUTLINE: u32 = 10;
 const ARG_FILL: u32 = 20;
 const ARG_COORDS: u32 = 30;
 const ARG_TRANSFORMS: u32 = 100;
+const ARG_STYLE: u32 = 200;
 const ARG_NAME: u32 = 1000;
 const ARG_POLYGON: u32 = 11000;
 const ARG_GUIDE: u32 = 16000;
@@ -44,6 +46,9 @@ struct Ctx<'a, 'b> {
     outline_chunks: HashMap<u32, &'b [u8]>,
     fills: HashMap<u32, Option<Color>>,
     outlines: HashMap<u32, Option<Outline>>,
+    /// The styles objects name in argument 200 (R45): `Err` when the file's style table doesn't
+    /// parse.
+    styles: Result<Styles, ()>,
 }
 
 pub(crate) fn drawing(ix: &Index, budget: &mut Budget, warn: &mut Vec<Warning>) -> Result<Drawing, Error> {
@@ -62,8 +67,22 @@ pub(crate) fn drawing(ix: &Index, budget: &mut Budget, warn: &mut Vec<Warning>) 
     let mut found = Found::default();
     collect(ix, root, &mut found);
     let page_size = found.mcfg.and_then(|c| page_size(ix.data(c), &p));
-    let mut cx =
-        Ctx { ix, p, budget, warn, fill_chunks: HashMap::new(), outline_chunks: HashMap::new(), fills: HashMap::new(), outlines: HashMap::new() };
+    // Before version 7 a `LIST stlt` holds chunks, not the style table (R4).
+    let styles = match found.stlt {
+        Some(c) if version >= 700 => Styles::read(ix.data(c), version, budget)?.ok_or(()),
+        _ => Ok(Styles::default()),
+    };
+    let mut cx = Ctx {
+        ix,
+        p,
+        budget,
+        warn,
+        fill_chunks: HashMap::new(),
+        outline_chunks: HashMap::new(),
+        fills: HashMap::new(),
+        outlines: HashMap::new(),
+        styles,
+    };
     for c in &found.fills {
         if let Some(id) = Rd::new(ix.data(c)).u32() {
             cx.fill_chunks.entry(id).or_insert(ix.data(c));
@@ -118,11 +137,12 @@ struct Found<'i> {
     outlines: Vec<&'i Chunk>,
     mcfg: Option<&'i Chunk>,
     guid: Option<&'i Chunk>,
+    stlt: Option<&'i Chunk>,
     pages: Vec<&'i Chunk>,
 }
 
-/// Every fill, outline and page in file order, and the first `mcfg` and `guid`; pages are not
-/// looked into.
+/// Every fill, outline and page in file order, and the first `mcfg`, `guid` and `LIST stlt`;
+/// pages are not looked into.
 fn collect<'i>(ix: &'i Index, root: &'i Chunk, found: &mut Found<'i>) {
     let mut stack: Vec<&Chunk> = ix.children(root).iter().rev().collect();
     while let Some(c) = stack.pop() {
@@ -131,6 +151,7 @@ fn collect<'i>(ix: &'i Index, root: &'i Chunk, found: &mut Found<'i>) {
             b"outl" => found.outlines.push(c),
             b"mcfg" => found.mcfg = found.mcfg.or(Some(c)),
             b"guid" => found.guid = found.guid.or(Some(c)),
+            _ if c.is_list(b"stlt") => found.stlt = found.stlt.or(Some(c)),
             _ if c.is_list(b"page") => found.pages.push(c),
             _ => stack.extend(ix.children(c).iter().rev()),
         }
@@ -414,9 +435,31 @@ impl<'a, 'b> Ctx<'a, 'b> {
                 Matrix::IDENTITY
             }),
         };
-        let fill = loda.arg(ARG_FILL).and_then(id_of).and_then(|id| self.fill(id));
-        let outline = loda.arg(ARG_OUTLINE).and_then(id_of).and_then(|id| self.outline(id));
+        // Without a fill or outline argument of its own, an object takes its style's (R45).
+        let style = loda.arg(ARG_STYLE).and_then(id_of);
+        let fill_id = match loda.arg(ARG_FILL) {
+            Some(b) => id_of(b),
+            None => style.and_then(|s| self.style_entry(s, Styles::fill)),
+        };
+        let outline_id = match loda.arg(ARG_OUTLINE) {
+            Some(b) => id_of(b),
+            None => style.and_then(|s| self.style_entry(s, Styles::outline)),
+        };
+        let fill = fill_id.and_then(|id| self.fill(id));
+        let outline = outline_id.and_then(|id| self.outline(id));
         Some(Object::Shape(Box::new(Shape { geometry, matrix, fill, outline })))
+    }
+
+    /// The fill or outline record that style `id` names; a style table that doesn't parse is
+    /// damage, and the object is drawn without it.
+    fn style_entry(&mut self, id: u32, entry: fn(&Styles, u32) -> Option<u32>) -> Option<u32> {
+        match &self.styles {
+            Ok(s) => entry(s, id),
+            Err(()) => {
+                push(self.warn, Warning::Damaged);
+                None
+            }
+        }
     }
 
     /// A version 3 object, whose transforms, fill and outline are arguments of its own record

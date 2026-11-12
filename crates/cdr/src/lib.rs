@@ -21,6 +21,7 @@ pub mod model;
 mod package;
 mod records;
 mod riff;
+mod styles;
 #[cfg(any(test, feature = "synth"))]
 pub mod synth;
 mod wl;

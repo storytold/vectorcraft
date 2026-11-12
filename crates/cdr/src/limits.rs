@@ -15,7 +15,7 @@ pub struct Limits {
     pub members: usize,
     /// Nested lists below the file's own. Deeper content is left out with a warning.
     pub depth: usize,
-    /// Chunks in the index, nested ones included.
+    /// Chunks in the index, nested ones included, and the entries and styles of the style table.
     pub chunks: usize,
     /// Objects mapped (shapes, groups and guidelines).
     pub objects: usize,
@@ -92,7 +92,12 @@ impl Budget {
     }
 
     pub(crate) fn take_chunk(&mut self) -> Result<(), Error> {
-        self.chunks += 1;
+        self.take_chunks(1)
+    }
+
+    /// `n` more chunks or style table entries.
+    pub(crate) fn take_chunks(&mut self, n: usize) -> Result<(), Error> {
+        self.chunks = self.chunks.saturating_add(n);
         if self.chunks > self.limits.chunks { Err(Error::Limit("chunk count")) } else { Ok(()) }
     }
 

@@ -228,7 +228,7 @@ impl<'a> Index<'a> {
                     continue;
                 }
             };
-            // A `LIST stlt` holds the style tables, not chunks (R4); the reader doesn't use them.
+            // A `LIST stlt` holds the style tables, not chunks (R4); its body is read whole (R45).
             if chunk.id == LIST && chunk.form != *b"stlt" {
                 lists.push(self.chunks.len());
             }
