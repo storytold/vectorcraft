@@ -3228,8 +3228,8 @@ checked as that effect's. It is one undo step. Any other `threeDType` value, or 
 ## Expand as Wireframes
 
 `effect.expandAsWireframes {ids?}` (**Window › 3D and Materials** › Quick Actions › Expand as Wireframes) replaces
-each selected object, or each object in `ids`, that has a visible 3D effect (Extrude & Bevel, Extrude & Bevel
-(Classic), Revolve, Inflate or Rotate, on the object or on its fills and strokes) with a group of paths: the edges of
+each selected object, or each object in `ids`, that has a visible 3D effect (Extrude & Bevel, Revolve, Inflate,
+Rotate or one of their 3D (Classic) forms, on the object or on its fills and strokes) with a group of paths: the edges of
 the faces the effect draws for the object as it is turned and projected now
 ([three-d.md](three-d.md#3d-and-materials-panel)). Each edge appears once; edges that meet end to end form one
 path, closed where it comes back to its start, and curved edges stay curves. Geometry effects after a 3D effect,

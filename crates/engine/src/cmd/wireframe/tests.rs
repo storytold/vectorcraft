@@ -27,7 +27,15 @@ fn run(s: &mut Session, p: Value) -> crate::Result<Value> {
 
 #[test]
 fn a_3d_object_becomes_a_selected_group_of_stroked_edges_in_one_undo_step() {
-    for effect in ["threeD.extrude", "threeD.classicExtrude", "threeD.revolve", "threeD.inflate", "threeD.rotate"] {
+    for effect in [
+        "threeD.extrude",
+        "threeD.classicExtrude",
+        "threeD.revolve",
+        "threeD.classicRevolve",
+        "threeD.inflate",
+        "threeD.rotate",
+        "threeD.classicRotate",
+    ] {
         let (mut s, id) = setup(Some(effect));
         std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().name = Some("Box".into());
         let before = s.doc().unwrap().doc.clone();

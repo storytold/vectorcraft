@@ -124,6 +124,39 @@ fn revolve_inflate_and_rotate_expand_too() {
     assert_eq!(segments(&plane).len(), 4);
 }
 
+/// Revolve (Classic) and Rotate (Classic) expand to the edges of the faces they draw, in the same
+/// place.
+#[test]
+fn revolve_classic_and_rotate_classic_expand_too() {
+    let n = solid_square(crate::CLASSIC_REVOLVE, json!({}));
+    let wire = three_d_wireframe_in(None, &n).unwrap();
+    assert!(!wire.is_empty());
+    let art = crate::revolve_art(&n).unwrap();
+    let (w, a) = (bounds(&wire), bounds(&face_paths(&art)));
+    for (x, y) in [(w.x0, a.x0), (w.y0, a.y0), (w.x1, a.x1), (w.y1, a.y1)] {
+        assert!((x - y).abs() < 1e-6, "{w:?} {a:?}");
+    }
+    // On a fill, with a geometry effect after it.
+    let mut n = solid_square(crate::CLASSIC_REVOLVE, json!({}));
+    let fx = n.appearance.effects.remove(0);
+    for item in &mut n.appearance.items {
+        if matches!(item, AppearanceItem::Fill(_)) {
+            item.effects_mut().push(fx.clone());
+        }
+    }
+    let plain = bounds(&three_d_wireframe_in(None, &n).unwrap());
+    for item in &mut n.appearance.items {
+        if matches!(item, AppearanceItem::Fill(_)) {
+            item.effects_mut().push(crate::new_effect("distort.transform", &json!({"moveH": 50.0})).unwrap());
+        }
+    }
+    let moved = bounds(&three_d_wireframe_in(None, &n).unwrap());
+    assert!((moved.x0 - plain.x0 - 50.0).abs() < 1e-6 && (moved.y0 - plain.y0).abs() < 1e-6, "{plain:?} {moved:?}");
+    // Rotate (Classic) is one flat face: its outline.
+    let plane = three_d_wireframe_in(None, &solid_square(super::super::CLASSIC_ROTATE, json!({}))).unwrap();
+    assert_eq!(segments(&plane).len(), 4);
+}
+
 /// A geometry effect after a fill's 3D effect moves that fill's edges, as it moves its drawn surface.
 #[test]
 fn a_geometry_effect_after_a_fill_s_3d_effect_reshapes_its_edges() {

@@ -7,8 +7,8 @@ use vectorcraft_geom::{Anchor, CubicBez, PathData, Point, SubPath};
 use vectorcraft_three_d::Facet;
 
 use super::{
-    INFLATE, Profile, ROTATE, facets, geometry, has_solid, inflate_options, is_container, is_three_d, label_of, members, object_profile, region,
-    reshape_members, resolve, solid, solid_paints, solid_parts, union_bounds, view_options,
+    INFLATE, Profile, ROTATE, facets, geometry, has_solid, inflate_options, is_container, is_plane, is_three_d, label_of, members, object_profile,
+    region, reshape_members, resolve, solid, solid_paints, solid_parts, union_bounds, view_options,
 };
 use crate::{GeomContext, apply_geometry_with, is_geometry};
 
@@ -21,8 +21,8 @@ const GRID: f64 = 1.0 / 1024.0;
 
 const NO_EFFECT: &str = "the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)";
 
-/// The wireframe of `n`'s 3D effect (Extrude & Bevel, Extrude & Bevel (Classic), Revolve, Inflate
-/// or Rotate), in document coordinates: the edges of every face the effect draws for the object as
+/// The wireframe of `n`'s 3D effect (Extrude & Bevel, Revolve, Inflate, Rotate or one of their 3D
+/// (Classic) forms), in document coordinates: the edges of every face the effect draws for the object as
 /// it is turned and projected, each edge once. Edges that meet end to end are joined into one path;
 /// a run that comes back to where it started is closed. A curved edge stays a curve. The geometry
 /// effects after the object's 3D effect reshape the wireframe as they reshape the drawn art. On a
@@ -108,8 +108,8 @@ fn solid_face_paths(n: &Node) -> Result<Vec<PathData>, String> {
     Ok(out)
 }
 
-/// The outlines of the facets effect `fx` builds from `shapes`, as `art_for` builds them:
-/// Rotate turns every fill and stroke; Extrude & Bevel and Inflate build a solid from each shape's
+/// The outlines of the facets effect `fx` builds from `shapes`, as `art_for` builds them: Rotate and
+/// Rotate (Classic) turn every fill and stroke; Extrude & Bevel and Inflate build a solid from each shape's
 /// top fill and from the outline of each stroke. A stroke whose solid is past the limits is left out,
 /// as it is left out of the drawn art.
 fn facet_paths(fx: &Effect, shapes: &[Profile]) -> Result<Vec<PathData>, String> {
@@ -117,7 +117,7 @@ fn facet_paths(fx: &Effect, shapes: &[Profile]) -> Result<Vec<PathData>, String>
     let b = union_bounds(shapes).ok_or_else(|| format!("{label} requires a shape with at least two anchors"))?;
     let p = crate::merged_params(&fx.id, &fx.params);
     let mut out = vec![];
-    if fx.id == ROTATE {
+    if is_plane(&fx.id) {
         for s in shapes {
             for item in &s.items {
                 let (area, rule) = region(&s.path, s.rule, item);
