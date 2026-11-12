@@ -1873,8 +1873,13 @@ no engines, and the engines it left are dropped when their own thread next uses 
   and the other eight are kept. Each named engine has a heap of 64 MiB, which holds what it keeps between runs; a run
   that goes past it ends with the heap limit, and the engine stays usable.
 - The documents go back after an uncaught error, a limit or `script.stop` as they do for any run, and the engine keeps
-  the globals the run set before it ended. An internal error drops the engine. An error in a function an earlier run
-  defined is reported without a line and column.
+  the globals the run set before it ended. An internal error drops the engine.
+- An error in code an earlier run compiled, such as a function it defined, is reported at that code's line and column
+  in the earlier run's script, a file it included or a file its `$.evalFile` ran, and the report's `file` names that
+  file. For an earlier script given as `source`, `file` is that run's name. The report's `name` and the console line's
+  name stay the calling run's, as in `caller.js: /path/lib.jsx:12:5: Error: kept`. Each engine keeps these places
+  for 8 MiB of source maps, the oldest going first; an error in code whose place is gone, or in code that `eval` or
+  `Function` compiled, is reported without a line and column, and the code still runs.
 - `vc`, `$`, `alert`, `confirm` and `prompt` act for the run that calls them, including a copy an earlier run kept in a
   global. `vc.args` is the calling run's `args`, through a `vc` object an earlier run kept too. An engine
   holds no document: `vc.document` is a copy, read when it is called. What a run sets on `$` (`$.locale`,
