@@ -128,6 +128,45 @@ fn control_saves_leave_out_the_documents_file_outside_the_read_root() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// In one session with a library loaded from outside the read root: the library keeps its file-name
+/// id, a reply that names its path shows the file name, a save without a path leaves out the
+/// document's file, and a save or export to a path the client gave in the write root keeps that path
+/// in `path` and `files`, also in a `command.batch` step's result. A refused path outside the write root is still shown by its file name.
+#[test]
+fn control_saves_keep_the_given_path_beside_a_hidden_library() {
+    let (mut app, tx, base) = confined("save-and-library");
+    let library = s(base.join("outside/b.svg"));
+    app.ui.color_guide_limit = format!("loaded/{library}");
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    let own = s(base.join("out/doc.vectorcraft"));
+    app.run("file.saveAs", json!({"path": own})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let r = request(&mut app, &tx, "app.save", json!({}));
+    assert!(r["result"].get("path").is_none() && !r.to_string().contains(&s(base.join("out"))), "{r}");
+    let r = request(&mut app, &tx, "app.save", json!({"path": own}));
+    assert_eq!(r["result"]["path"], json!(own), "{r}");
+    let split = s(base.join("out/split.vectorcraft"));
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "file.save", "params": {"path": split, "separateArtboards": true}}));
+    assert_eq!(r["result"]["path"], json!(split), "{r}");
+    assert_eq!(r["result"]["files"][0], json!(split), "{r}");
+    let batched = s(base.join("out/batched.vectorcraft"));
+    let steps = json!({"commands": [{"command": "document.save", "params": {"path": batched}}]});
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "command.batch", "params": steps}));
+    assert_eq!(r["result"]["results"][0]["path"], json!(batched), "{r}");
+    let svg = s(base.join("out/a.svg"));
+    let r = request(&mut app, &tx, "app.export", json!({"path": svg, "wait": true}));
+    assert_eq!(r["result"]["path"], json!(svg), "{r}");
+    app.ui.status = format!("from {library}");
+    let r = request(&mut app, &tx, "test.status", json!({}));
+    assert_eq!(r["result"], "from b.svg", "{r}");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.svg", "{r}");
+    let refused = s(base.join("outside/c.vectorcraft"));
+    let r = request(&mut app, &tx, "app.save", json!({"path": refused, "wait": true}));
+    assert!(r["error"].as_str().is_some_and(|e| e.contains("outside the write root") && !e.contains(&refused)), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// With Background Save and Background Export on, `app.save` and `app.export` with `wait: true`
 /// (MCP's `save_file` in the app) reply with the write root's refusal, and write a file inside it
 /// before they reply. Without `wait` the refusal reaches only the status bar.

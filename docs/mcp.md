@@ -178,7 +178,10 @@ the suite) keep the agent to the folders you give it:
   URL writes it, and on Windows in any case of its letters. A hidden id or path stays only where it begins
   another loaded library's whole id with no `.` or `..` part, so a readable library's id that begins with a hidden one stays. A reply also shows a path outside the
   read roots that the request sent by its file name, whether or not a library was loaded from it and whether the
-  request succeeded or failed, so that the reply reads the same either way. A path param (`path`, `file`,
+  request succeeded or failed, so that the reply reads the same either way. The one exception is the `path`
+  and `files` entries of a reply's result, a `command.batch` step's result included, that name the file the
+  request wrote inside the write roots at the path the request gave: they stay as
+  given, as for the save and export replies above. A path param (`path`, `file`,
   `destinationFolder` and the like) counts with a relative path too. The hidden libraries' ids and paths are
   matched before the paths the request sent, so a sent path written over part of a hidden library's path does not
   keep that path in the reply. A relative path is not replaced where it ends a longer path (`/work/data/icon.svg`

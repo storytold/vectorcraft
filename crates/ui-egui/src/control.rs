@@ -1086,7 +1086,8 @@ const DOCKING_ACTION: &str = "action";
 /// such library's id and path as `ui.inspect` does ([`hide_library_ids`]) in every string and key,
 /// errors included, an error from a panic too: the libraries hidden before it ran and after it. The
 /// reply also shows each path outside the read root that the request sent by its file name, whether it
-/// succeeded or failed ([`sent_paths`]). A reply with no `/`, `\` or `%` in it is not searched, since every hidden path
+/// succeeded or failed ([`sent_paths`]), except where a `path` or `files` entry of its result names the
+/// file the request wrote inside the write roots, as the request gave it. A reply with no `/`, `\` or `%` in it is not searched, since every hidden path
 /// holds a separator, written or escaped. A screenshot's reply is hidden when it is sent
 /// ([`hide_in_deferred_reply`]); a `ui.pointer` reply sent after the tool's edit holds no library id
 /// or path.
@@ -1122,17 +1123,88 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
 }
 
 /// Hides in `reply` the libraries hidden now and in `before`, and the paths outside the read root that
-/// `sent`, the request's params, holds ([`handle`]).
+/// `sent`, the request's params, holds ([`handle`]). The `path` and `files` entries of the reply's
+/// `result`, at any depth, that name a file the request gave inside the write roots, the file it
+/// wrote, stay as given ([`written_paths`]).
 fn hide_in_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value, before: Hiding) {
     if !holds_a_separator(reply) {
         return;
     }
+    let mut given = Vec::new();
+    written_paths(sent, false, &mut given);
+    let kept = kept_written_paths(reply, &given);
     let mut hiding = unreadable_library_ids(app);
     hiding.merge(before);
     let mut paths = Vec::new();
     sent_paths(sent, &mut paths);
     hiding.set_hidden(paths, cfg!(windows));
     hide_library_ids(reply, &hiding);
+    restore_written_paths(reply, kept);
+}
+
+/// The strings that `v`'s path params hold at any depth ([`vectorcraft_engine::file_access::is_path_key`])
+/// that name a file inside the write roots; `v` is a path param's value when `path_param` is set.
+fn written_paths(v: &Value, path_param: bool, out: &mut Vec<String>) {
+    use vectorcraft_engine::file_access::{Access, current, is_path_key};
+    match v {
+        Value::String(s) if path_param && !s.is_empty() && current().is_some_and(|r| r.check(s, Access::Write).is_ok()) => out.push(s.clone()),
+        Value::Array(items) => items.iter().for_each(|item| written_paths(item, path_param, out)),
+        Value::Object(fields) => {
+            for (key, item) in fields {
+                written_paths(item, is_path_key(key), out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The entries under `reply`'s `result`, at any depth (a `command.batch` step's result too), that a
+/// `path` key or a `files` list holds and that are one of `given`: each entry's JSON pointer and text.
+fn kept_written_paths(reply: &Value, given: &[String]) -> Vec<(String, String)> {
+    let mut kept = Vec::new();
+    if !given.is_empty() {
+        kept_under(&reply["result"], "/result", given, &mut kept);
+    }
+    kept
+}
+
+/// [`kept_written_paths`] for `v`, found at the JSON pointer `at`.
+fn kept_under(v: &Value, at: &str, given: &[String], out: &mut Vec<(String, String)>) {
+    let is_given = |v: &Value| v.as_str().filter(|s| given.iter().any(|g| g == s)).map(str::to_string);
+    match v {
+        Value::Array(items) => {
+            for (i, item) in items.iter().enumerate() {
+                kept_under(item, &format!("{at}/{i}"), given, out);
+            }
+        }
+        Value::Object(fields) => {
+            for (key, item) in fields {
+                let here = format!("{at}/{}", key.replace('~', "~0").replace('/', "~1"));
+                match (key.as_str(), is_given(item), item.as_array()) {
+                    ("path", Some(path), _) => out.push((here, path)),
+                    ("files", _, Some(rows)) => {
+                        for (i, row) in rows.iter().enumerate() {
+                            match is_given(row) {
+                                Some(path) => out.push((format!("{here}/{i}"), path)),
+                                None => kept_under(row, &format!("{here}/{i}"), given, out),
+                            }
+                        }
+                    }
+                    _ => kept_under(item, &here, given, out),
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Writes back in `reply` the entries [`kept_written_paths`] took from it.
+fn restore_written_paths(reply: &mut Value, kept: Vec<(String, String)>) {
+    for (at, path) in kept {
+        if let Some(slot) = reply.pointer_mut(&at) {
+            *slot = json!(path);
+        }
+    }
 }
 
 /// Hides in a reply sent after its request was handled (a screenshot's) what [`handle`] hides in a
