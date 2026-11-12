@@ -4481,7 +4481,7 @@ axis	Both	Her İkisi
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` tek başına çalışır, toplu iş adımı olarak değil
 @msg	unknown preset (one of {_1})	bilinmeyen ön ayar ({_1}'den biri)
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	bilinmeyen ön ayar `{name}` (yüksek, orta, düşük veya kaydedilmiş bir ayar: bkz. flattener.presets.list)
-@msg	unknown preset `{name}` (see flattener.presets.list)	bilinmeyen ön ayar `{name}` (bkz. düzleştirici.presets.list)
+@msg	unknown preset `{name}` (see flattener.presets.list)	bilinmeyen ön ayar `{name}` (bkz. flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	bilinmeyen ön ayar `{name}` (bkz. webExport.presets.list)
 @msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	bilinmeyen ön ayar `{name}`: yerleşik ya da kayıtlı bir ön ayar değil (bkz. imageTrace.presets)
 @msg	unknown side `{other}` (left|right|top|bottom)	bilinmeyen taraf `{other}` (sol|sağ|üst|alt)
