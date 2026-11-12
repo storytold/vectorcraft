@@ -81,7 +81,7 @@ fn file_fonts_and_composite_fonts_draw_together() {
     db.set_composite_font(&mixed("Mixed"));
     let info = FileFontInfo { family: "Carried Test".into(), style: "Regular".into(), ..Default::default() };
     let glyph = FileGlyph { ch: 'x', outline: Rect::new(0.0, 0.0, 500.0, 700.0).to_path(0.1), advance: 600.0 };
-    assert!(db.keep_file_font("carried-test", std::sync::Arc::new(build_file_font(&info, &[glyph]).unwrap())));
+    let blob = vectorcraft_doc::ImageBlob::new(vectorcraft_doc::FILE_FONT_MIME, build_file_font(&info, &[glyph]).unwrap());
     let mut t = TextObject::point(Point::ZERO, "x", style("Carried Test", 12.0));
     t.runs.push(TextRun::new("A1", style("Mixed", 20.0)));
     t.runs.push(TextRun::new("x", style("Carried Test", 12.0)));
@@ -89,7 +89,8 @@ fn file_fonts_and_composite_fonts_draw_together() {
         vec![FileFont { family: "Carried Test".into(), style: "Regular".into(), key: "carried-test".into() }],
         &t.plain_text(),
     )));
-    let carried = db.file_font("carried-test").unwrap().id();
+    assert!(db.bind_file_fonts(&mut t, |key| (key == "carried-test").then_some(&blob)));
+    let carried = db.file_faces(&t)[0].as_ref().unwrap().id();
     let l = layout(&db, &t);
     let fonts: Vec<(usize, u32)> = l.glyphs.iter().map(|g| (g.run, g.font_id)).collect();
     assert_eq!(fonts, [(0, carried), (1, face_id(&db, "JetBrains Mono")), (1, face_id(&db, "Inter")), (2, carried)]);

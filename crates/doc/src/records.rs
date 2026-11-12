@@ -156,7 +156,7 @@ pub struct Symbol {
 
 /// Encoded image bytes (PNG/JPEG/WebP…) shared by image objects, and the fonts files carried for
 /// type ([`crate::FileFonts`], MIME [`crate::FILE_FONT_MIME`]), which save and travel the same way.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ImageBlob {
     pub mime: String,
     #[serde(skip)]
@@ -165,4 +165,32 @@ pub struct ImageBlob {
     /// linked images show this blob, and what `bytes` hold while the linked file can't be read.
     #[serde(skip)]
     pub proxy: Option<Arc<Vec<u8>>>,
+    /// Runtime ownership of an admitted font face. Image resources (including undo and clipboard
+    /// copies) own it; cached text nodes carry only weak references.
+    #[serde(skip)]
+    pub file_font: std::sync::Mutex<Option<Arc<dyn crate::FileFontFace>>>,
+}
+
+impl std::fmt::Debug for ImageBlob {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ImageBlob").field("mime", &self.mime).field("bytes", &self.bytes).field("proxy", &self.proxy).finish()
+    }
+}
+
+impl Clone for ImageBlob {
+    fn clone(&self) -> Self {
+        let mut owner = self.file_font.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if owner.as_ref().is_some_and(|face| {
+            self.mime != crate::FILE_FONT_MIME || (!std::ptr::eq(face.bytes(), self.bytes.as_slice()) && face.bytes() != self.bytes.as_slice())
+        }) {
+            *owner = None;
+        }
+        Self { mime: self.mime.clone(), bytes: self.bytes.clone(), proxy: self.proxy.clone(), file_font: std::sync::Mutex::new(owner.clone()) }
+    }
+}
+
+impl PartialEq for ImageBlob {
+    fn eq(&self, other: &Self) -> bool {
+        self.mime == other.mime && self.bytes == other.bytes && self.proxy == other.proxy
+    }
 }

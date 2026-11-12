@@ -714,7 +714,10 @@ fn a_placed_brush_whose_art_uses_a_renamed_image_is_copied() {
         let mut s = session();
         s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
         s.edit("Brush", |d, _| {
-            d.images.insert("k".into(), vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
+            d.images.insert(
+                "k".into(),
+                vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None, file_font: Default::default() },
+            );
             let im = vectorcraft_doc::ImageObject {
                 key: "k".into(),
                 width: 2,

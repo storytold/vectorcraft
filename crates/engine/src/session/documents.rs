@@ -249,15 +249,16 @@ impl Session {
     /// what is fitted to type's bounds (an envelope warping it) would come out differently. That
     /// holds for the type in symbol definitions, pattern tiles, graph designs and opacity masks too,
     /// not only in the layers (#1738).
-    pub(crate) fn refresh_text_bounds(doc: &mut Document) {
+    pub(crate) fn refresh_text_bounds(doc: &mut Document) -> Vec<String> {
         // The fonts files carried for their type draw it ([`vectorcraft_doc::FileFonts`]).
-        vectorcraft_text::FontDb::global().keep_file_fonts(&doc.images);
+        let warnings = vectorcraft_text::FontDb::global().bind_document_file_fonts(doc);
         // Inline graphics in text take their size from their symbols' art (not saved either).
         doc.resolve_inline_art();
         let mut uncached = |t: &TextObject| t.cached_bounds.is_none();
         for tree in text_trees_mut(doc) {
             each_text_where(tree, &mut uncached, &mut cmd::typecmd::refresh_bounds_for_first_frame);
         }
+        warnings
     }
 
     /// Measure the type in open document `index` that `stale` picks (in its trees as
@@ -302,6 +303,8 @@ impl Session {
         // (importers and the native reader have seen to theirs already, with a warning).
         doc.limit_depth();
         cmd::compositefonts::filter_loaded(&mut doc);
+        // Importers report binding failures; programmatic additions still need owned resources.
+        let _ = vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc);
         // Inline graphics in text take their size from their symbols' art (not saved).
         doc.resolve_inline_art();
         // Ruler guides a reader left in the saved list become nodes on their layers.

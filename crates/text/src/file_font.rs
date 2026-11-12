@@ -320,8 +320,6 @@ pub(crate) fn name_table(records: &[(u16, &str)]) -> Option<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use kurbo::{Affine, Rect};
     use skrifa::MetadataProvider;
 
@@ -358,8 +356,7 @@ mod tests {
         let font = skrifa::FontRef::new(&bytes).unwrap();
         assert_eq!(font.metrics(skrifa::instance::Size::unscaled(), skrifa::instance::LocationRef::default()).units_per_em, FILE_FONT_UPEM);
         let db = FontDb::with_font_dirs(vec![]);
-        assert!(db.keep_file_font("kept", Arc::new(bytes)));
-        let face = db.file_font("kept").unwrap();
+        let face = db.keep_file_font(&vectorcraft_doc::ImageBlob::new(vectorcraft_doc::FILE_FONT_MIME, bytes)).unwrap();
         assert_eq!((face.family.as_str(), face.style.as_str()), ("Kept Serif", "Regular"));
         assert_eq!(face.postscript_name(), "KeptSerif-Regular");
         // Kept apart: no family name finds it.
@@ -400,8 +397,8 @@ mod tests {
         ] {
             let bytes = build_file_font(&FileFontInfo { fs_type, ..info() }, &from).unwrap();
             let db = FontDb::with_font_dirs(vec![]);
-            assert!(db.keep_file_font("kept", Arc::new(bytes)));
-            assert_eq!(db.file_font("kept").unwrap().embedding(), want, "fsType {fs_type:?}");
+            let face = db.keep_file_font(&vectorcraft_doc::ImageBlob::new(vectorcraft_doc::FILE_FONT_MIME, bytes)).unwrap();
+            assert_eq!(face.embedding(), want, "fsType {fs_type:?}");
         }
     }
 
@@ -418,8 +415,7 @@ mod tests {
         from.push(FileGlyph { ch: 'w', outline: wild, advance: 500.0 });
         let bytes = build_file_font(&info(), &from).unwrap();
         let db = FontDb::with_font_dirs(vec![]);
-        assert!(db.keep_file_font("kept", Arc::new(bytes)));
-        let face = db.file_font("kept").unwrap();
+        let face = db.keep_file_font(&vectorcraft_doc::ImageBlob::new(vectorcraft_doc::FILE_FONT_MIME, bytes)).unwrap();
         assert_ne!(face.glyph_for('a'), 0);
         assert_eq!(face.glyph_for('w'), 0);
     }
@@ -444,8 +440,8 @@ mod tests {
         dot.move_to((5.0, 5.0));
         from.push(FileGlyph { ch: 'e', outline: dot, advance: f64::NAN });
         let db = FontDb::with_font_dirs(vec![]);
-        assert!(db.keep_file_font("kept", Arc::new(build_file_font(&info(), &from).unwrap())));
-        let face = db.file_font("kept").unwrap();
+        let blob = vectorcraft_doc::ImageBlob::new(vectorcraft_doc::FILE_FONT_MIME, build_file_font(&info(), &from).unwrap());
+        let face = db.keep_file_font(&blob).unwrap();
         assert!(face.covers('a') && face.covers('b') && face.covers('e'));
         assert!(!face.covers('c') && !face.covers('d'));
         assert!((face.advance(face.glyph_for('a')) - from[0].advance * 2.0).abs() < 1.0, "the first glyph of a character");
@@ -453,8 +449,7 @@ mod tests {
         assert!(db.outline(&face, face.glyph_for('e')).elements().is_empty());
         assert!(build_file_font(&info(), &[]).is_none());
         // Bytes that aren't a font are kept by no one.
-        assert!(!db.keep_file_font("junk", Arc::new(b"not a font".to_vec())));
-        assert!(db.file_font("junk").is_none());
+        assert!(db.keep_file_font(&vectorcraft_doc::ImageBlob::new(vectorcraft_doc::FILE_FONT_MIME, b"not a font".to_vec())).is_none());
     }
 
     #[test]

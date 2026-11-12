@@ -23,7 +23,7 @@ pub use composite::{
     COMPOSITE_BASELINE, COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, COMPOSITE_SCALE, COMPOSITE_SIZE, CharClass, CompositeFont, CompositePart,
     CompositeParts,
 };
-pub use file_fonts::{FILE_FONT_MIME, FileFont, FileFonts, MAX_FILE_FONTS, text_hash};
+pub use file_fonts::{FILE_FONT_MIME, FileFont, FileFontFace, FileFonts, MAX_FILE_FONTS, text_hash};
 pub use para_style::{
     Burasagari, Composer, FirstBaseline, HyphenationOptions, JustificationOptions, Justify, Kashida, Kinsoku, KinsokuShoriType, LeadingModel,
     Mojikumi, ParaDirection, ParaStyle, SingleWordJustify,

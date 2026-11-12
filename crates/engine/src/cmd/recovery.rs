@@ -1432,7 +1432,7 @@ fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> R
         };
         match read {
             Ok(data) => {
-                let mut blob = ImageBlob { mime: r.mime.clone(), bytes: data, proxy: None };
+                let mut blob = ImageBlob { mime: r.mime.clone(), bytes: data, proxy: None, file_font: Default::default() };
                 // Until the linked file is read, the preview stands in for it.
                 if r.proxy {
                     blob.proxy = Some(blob.bytes.clone());

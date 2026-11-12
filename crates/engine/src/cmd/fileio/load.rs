@@ -185,9 +185,10 @@ fn restore_or_import(
 /// A native file's document and details, the colour profiles it carries installed where missing
 /// (with a warning for each that can't be used).
 pub(crate) fn native_file(bytes: &[u8]) -> Result<(Document, vectorcraft_format::FileInfo, Vec<String>)> {
-    let f = vectorcraft_format::load_file(bytes).map_err(err)?;
+    let mut f = vectorcraft_format::load_file(bytes).map_err(err)?;
     let mut warnings = super::native::install_profiles(f.profiles);
     warnings.extend(f.depth_notes);
+    warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut f.doc));
     Ok((f.doc, f.info, warnings))
 }
 
@@ -630,7 +631,11 @@ pub fn read_for_open(name: &str, bytes: &[u8], path: Option<String>, p: &Value, 
         None => load_with(name, bytes, &opts)?,
     };
     let links = crate::cmd::links::resolve(&mut loaded.doc, crate::cmd::links::LinkBase::file(path.as_deref()), update_links, low_res_proxy_eps);
-    Session::refresh_text_bounds(&mut loaded.doc);
+    for note in Session::refresh_text_bounds(&mut loaded.doc) {
+        if !loaded.warnings.contains(&note) {
+            loaded.warnings.push(note);
+        }
+    }
     Ok(ReadFile { loaded, opts, path, links })
 }
 

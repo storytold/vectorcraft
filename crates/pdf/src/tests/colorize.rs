@@ -176,7 +176,8 @@ fn a_colorized_missing_link_placeholder_is_written_in_its_own_colors() {
     let placeholder = || {
         let mut d = doc(ColorMode::Cmyk, None);
         let bytes = Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
-        d.images.insert("pic".into(), ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) });
+        d.images
+            .insert("pic".into(), ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes), file_font: Default::default() });
         d
     };
     let plain = placeholder();

@@ -741,7 +741,12 @@ fn space_line(t: &mut TextObject, s: &Spacing) {
 /// drawn in them while its text is the file's ([`vectorcraft_doc::FileFonts`]), and spaced again
 /// from where the file put each glyph, measured against the file's own widths (not the stand-in's,
 /// which differ, #3756).
-pub(crate) fn keep_file_fonts(nodes: &mut [Arc<Node>], lines: &HashMap<NodeId, LineFacts>, kept: &HashMap<(String, String), String>) {
+pub(crate) fn keep_file_fonts(
+    nodes: &mut [Arc<Node>],
+    lines: &HashMap<NodeId, LineFacts>,
+    kept: &HashMap<(String, String), String>,
+    images: &HashMap<String, vectorcraft_doc::ImageBlob>,
+) {
     if kept.is_empty() {
         return;
     }
@@ -749,7 +754,7 @@ pub(crate) fn keep_file_fonts(nodes: &mut [Arc<Node>], lines: &HashMap<NodeId, L
         if n.children().is_some_and(|c| !c.is_empty())
             && let Some(children) = Arc::make_mut(n).children_mut()
         {
-            keep_file_fonts(children, lines, kept);
+            keep_file_fonts(children, lines, kept, images);
         }
         let Some(s) = lines.get(&n.id).and_then(|f| f.respace.as_deref()) else { continue };
         let mut fonts: Vec<FileFont> = vec![];
@@ -767,6 +772,8 @@ pub(crate) fn keep_file_fonts(nodes: &mut [Arc<Node>], lines: &HashMap<NodeId, L
         if let NodeKind::Text(t) = &mut Arc::make_mut(n).kind {
             let text: String = s.runs.iter().map(|r| r.text.as_str()).collect();
             t.file_fonts = Some(Box::new(FileFonts::new(fonts, &text)));
+            // A blob reference is not ownership until its actual document resource is bound.
+            vectorcraft_text::FontDb::global().bind_file_fonts(t, |key| images.get(key));
             space_line(t, s);
         }
     }

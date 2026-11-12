@@ -212,6 +212,9 @@ pub fn layout_with(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLay
     // The sizes the fits step and limit are the ones the Character panel shows (`shown`), whatever
     // em size a font height reference sets them at.
     let shown = t;
+    // Keep the verified faces alive throughout fitting and resolve their height references too.
+    let file = in_file_fonts(db, t);
+    let t = file.as_ref().map_or(t, |(text, _)| text);
     let resolved = db.font_heights_resolved(t);
     let t = &*resolved;
     let first = layout_once(db, t, opts);
@@ -375,20 +378,20 @@ pub fn scaled(t: &TextObject, f: f64) -> TextObject {
 
 /// `t` with the runs a font its file carried draws ([`FontDb::file_faces`]) set in that font;
 /// `None` when none is.
-fn in_file_fonts(db: &FontDb, t: &TextObject) -> Option<TextObject> {
+fn in_file_fonts(db: &FontDb, t: &TextObject) -> Option<(TextObject, Vec<Option<std::sync::Arc<crate::FontFace>>>)> {
     let faces = db.file_faces(t);
     if faces.is_empty() {
         return None;
     }
     let mut out = t.clone();
-    for (r, face) in out.runs.iter_mut().zip(faces) {
+    for (r, face) in out.runs.iter_mut().zip(&faces) {
         let Some(face) = face else { continue };
-        r.style.font_family = format!("{}{}", crate::fontdb::FILE_FONT_FAMILY, face.id());
+        r.style.file_font_id = Some(face.id());
         r.style.font_style = face.style.clone();
         r.style.font_version = None;
         r.style.font_axes.clear();
     }
-    Some(out)
+    Some((out, faces))
 }
 
 /// `t` in the styles its layout draws it in: [`scaled`] by the layout's
@@ -436,9 +439,6 @@ pub(crate) fn layout_faces_per_call(db: &FontDb, t: &TextObject) -> TextLayout {
 /// class each that [`FontDb::composite_split`] makes of them; the glyphs, ruby and inline
 /// graphics still name the runs of `t`.
 fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout {
-    // The runs a font the file carried draws take that font (the type's own runs keep naming theirs).
-    let file = in_file_fonts(db, t);
-    let t = file.as_ref().unwrap_or(t);
     let Some((split, from)) = db.composite_split(t) else { return layout_runs(db, t, opts, None) };
     let mut l = layout_runs(db, &split, opts, Some(t));
     let original = |run: &mut usize| *run = from.get(*run).copied().unwrap_or(*run);

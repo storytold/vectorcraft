@@ -244,8 +244,11 @@ impl FontDb {
         if self.composites.read().unwrap_or_else(|e| e.into_inner()).is_empty() {
             return None;
         }
-        let fonts: Vec<Option<Arc<CompositeFont>>> =
-            t.runs.iter().map(|r| if r.inline.is_some() { None } else { self.composite_font(&r.style.font_family) }).collect();
+        let fonts: Vec<Option<Arc<CompositeFont>>> = t
+            .runs
+            .iter()
+            .map(|r| if r.inline.is_some() || r.style.file_font_id.is_some() { None } else { self.composite_font(&r.style.font_family) })
+            .collect();
         if fonts.iter().all(Option::is_none) {
             return None;
         }

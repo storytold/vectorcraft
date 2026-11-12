@@ -148,7 +148,7 @@ fn colorize_dims_with_the_grays() {
 fn a_colorized_missing_link_placeholder_draws_in_its_own_colors() {
     let proxy = |bytes: Vec<u8>| {
         let bytes = std::sync::Arc::new(bytes);
-        ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) }
+        ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes), file_font: Default::default() }
     };
     let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
     let sharp = RenderOptions { smooth_images: false, ..Default::default() };

@@ -72,20 +72,17 @@ pub use traits::{FontClass, FontMatch, FontTraits};
 pub(crate) use traits::{alias_lists, face_styles, on_faces_published};
 pub use wanted::{WantedFont, WantedFonts};
 
-/// The fonts files carried that the database keeps ([`FontDb::keep_file_font`]), by their blob's key
-/// and by face id.
+/// Weak indexes of live file-font resources, by content hash (collisions checked by bytes) and id.
 #[derive(Default)]
 pub(super) struct FileFaces {
-    pub(super) by_key: HashMap<String, Arc<FontFace>>,
-    pub(super) by_id: HashMap<u32, Arc<FontFace>>,
+    pub(super) by_key: HashMap<String, Vec<std::sync::Weak<FontFace>>>,
+    pub(super) by_id: HashMap<u32, std::sync::Weak<FontFace>>,
+    /// Only each admitted face's own byte allocation, never an unbounded list of alias owners.
+    pub(super) by_blob: HashMap<usize, std::sync::Weak<FontFace>>,
 }
 
-/// How many fonts files carried the database keeps at most (each shares its document's bytes).
+/// How many live fonts files carried the database admits at most (each shares its document's bytes).
 pub const MAX_FILE_FACES: usize = 4096;
-
-/// What layout names the family of a run drawn in a font a file carried, followed by the face's
-/// id ([`FontDb::style_face`] finds it so): no font's family name starts so.
-pub(crate) const FILE_FONT_FAMILY: &str = "\u{1}file font ";
 
 /// Process-wide font database.
 pub struct FontDb {

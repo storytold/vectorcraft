@@ -458,7 +458,7 @@ fn read_preview(p: &PlacedDocument, bytes: &Arc<Vec<u8>>) -> Option<Arc<ReadDocu
     doc.layers.clear();
     doc.swatches.clear();
     let mime = if bytes.starts_with(&[0xff, 0xd8]) { "image/jpeg" } else { "image/png" };
-    doc.images.insert("preview".into(), ImageBlob { mime: mime.into(), bytes: bytes.clone(), proxy: None });
+    doc.images.insert("preview".into(), ImageBlob { mime: mime.into(), bytes: bytes.clone(), proxy: None, file_font: Default::default() });
     let xf = Affine::scale_non_uniform(frame.width() / w as f64, frame.height() / h as f64);
     let im = ImageObject { key: "preview".into(), width: w, height: h, xf, link: None, placement: Default::default(), pixels: None };
     let art = Node::new(art_id(), NodeKind::Group { children: vec![Arc::new(Node::new(art_id(), NodeKind::Image(Box::new(im))))], clip: false });

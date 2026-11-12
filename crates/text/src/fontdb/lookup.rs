@@ -15,6 +15,12 @@ use super::{
     Ordering, Size,
 };
 
+fn has_file_fonts(n: &vectorcraft_doc::Node) -> bool {
+    matches!(&n.kind, vectorcraft_doc::NodeKind::Text(t) if t.file_fonts.is_some())
+        || n.extras().mask.as_ref().is_some_and(|mask| has_file_fonts(&mask.art))
+        || n.children().is_some_and(|children| children.iter().any(|child| has_file_fonts(child)))
+}
+
 impl FontDb {
     /// The family's own name and the style for a name given in a document: any of a family's
     /// names (`ヒラギノ角ゴシック` is Hiragino Sans), a legacy family name (`Hiragino Sans W6` with its
@@ -247,16 +253,16 @@ impl FontDb {
     /// instanced face ([`Self::instance`]) included.
     pub fn face_by_id(&self, id: u32) -> Option<Arc<FontFace>> {
         let loaded = self.read_faces().iter().find(|f| f.id == id).cloned();
-        loaded.or_else(|| self.instance_by_id(id)).or_else(|| self.read_file_faces().by_id.get(&id).cloned())
+        loaded.or_else(|| self.instance_by_id(id)).or_else(|| self.read_file_faces().by_id.get(&id).and_then(std::sync::Weak::upgrade))
     }
 
     /// The face of character style `st`: [`Self::face_version`] of its font, instanced at its
     /// Variable Font settings ([`Self::instance`]).
     pub fn style_face(&self, st: &vectorcraft_doc::CharStyle) -> Option<Arc<FontFace>> {
-        if let Some(id) = st.font_family.strip_prefix(super::FILE_FONT_FAMILY).and_then(|id| id.parse::<u32>().ok())
-            && let Some(face) = self.read_file_faces().by_id.get(&id)
+        if let Some(id) = st.file_font_id
+            && let Some(face) = self.read_file_faces().by_id.get(&id).and_then(std::sync::Weak::upgrade)
         {
-            return Some(face.clone());
+            return Some(face);
         }
         let face = self.face_version(&st.font_family, &st.font_style, st.font_version.as_deref())?;
         Some(self.instance(&face, &st.font_axes))
@@ -609,48 +615,163 @@ impl FontDb {
         content
     }
 
-    /// Keep the font a file carried that a document holds as blob `key` ([`vectorcraft_doc::FileFonts`]),
-    /// for its type to be drawn in: read once per key (the face shares the blob's bytes). `false`
-    /// when it can't be read (its type takes the font it names, or the substitute), or when
-    /// [`super::MAX_FILE_FACES`] are kept already.
-    pub fn keep_file_font(&self, key: &str, bytes: Arc<Vec<u8>>) -> bool {
-        if self.read_file_faces().by_key.contains_key(key) {
-            return true;
-        }
-        let Some((i, spec)) = super::scan::enumerate_faces(&bytes).into_iter().next() else { return false };
-        let Some(face) = super::build::make_face(super::face::FontBytes::Owned(bytes), i, spec, None) else { return false };
-        let mut faces = self.file_faces.write().unwrap_or_else(|e| e.into_inner());
-        if faces.by_key.contains_key(key) {
-            return true;
-        }
-        if faces.by_key.len() >= super::MAX_FILE_FACES {
-            return false;
-        }
-        let face = Arc::new(face);
-        faces.by_id.insert(face.id, face.clone());
-        faces.by_key.insert(key.to_string(), face);
-        true
+    /// Admit a font resource, sharing its bytes. Its blob and returned face own the admission.
+    /// Invalid fonts and the live-face cap return `None`; document keys are never identities.
+    pub fn keep_file_font(&self, blob: &vectorcraft_doc::ImageBlob) -> Option<Arc<FontFace>> {
+        self.keep_file_font_up_to(blob, super::MAX_FILE_FACES)
     }
 
-    /// [`Self::keep_file_font`] for every font a file carried among a document's image blobs
-    /// `images` (those of MIME [`vectorcraft_doc::FILE_FONT_MIME`]).
-    pub fn keep_file_fonts<'a>(&self, images: impl IntoIterator<Item = (&'a String, &'a vectorcraft_doc::ImageBlob)>) {
-        for (key, blob) in images {
-            if blob.mime == vectorcraft_doc::FILE_FONT_MIME {
-                // One that can't be read leaves its type in the font it names (or the substitute).
-                let _ = self.keep_file_font(key, blob.bytes.clone());
+    fn keep_file_font_up_to(&self, blob: &vectorcraft_doc::ImageBlob, limit: usize) -> Option<Arc<FontFace>> {
+        // Drop this short-lived resource lock before touching registry locks.
+        let cached = {
+            let mut owner = blob.file_font.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            if blob.mime != vectorcraft_doc::FILE_FONT_MIME {
+                *owner = None;
+                return None;
+            }
+            if owner.as_ref().is_some_and(|face| !std::ptr::eq(face.bytes(), blob.bytes.as_slice()) && face.bytes() != blob.bytes.as_slice()) {
+                *owner = None;
+            }
+            owner.clone()
+        };
+        if let Some(cached) = cached
+            && let Some(face) = self.read_file_faces().by_id.get(&cached.id()).and_then(std::sync::Weak::upgrade)
+            && std::ptr::eq::<dyn vectorcraft_doc::FileFontFace>(face.as_ref(), cached.as_ref())
+        {
+            return Some(face);
+        }
+        let face = self.admit_file_font(blob, limit)?;
+        // No registry lock is held here; only resource owners, never weak bindings, keep slots.
+        *blob.file_font.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(face.clone());
+        Some(face)
+    }
+
+    fn admit_file_font(&self, blob: &vectorcraft_doc::ImageBlob, limit: usize) -> Option<Arc<FontFace>> {
+        let allocation = Arc::as_ptr(&blob.bytes) as usize;
+        if let Some(face) = self.read_file_faces().by_blob.get(&allocation).and_then(std::sync::Weak::upgrade) {
+            return Some(face);
+        }
+        let key = blob.content_key();
+        let mut faces = self.file_faces.write().unwrap_or_else(|e| e.into_inner());
+        if let Some(face) = faces
+            .by_key
+            .get(&key)
+            .and_then(|bucket| bucket.iter().filter_map(std::sync::Weak::upgrade).find(|face| face.data() == blob.bytes.as_slice()))
+        {
+            return Some(face);
+        }
+        // Reap on admission, including dead hash buckets, so closed documents recover allowance.
+        faces.by_id.retain(|_, face| face.strong_count() != 0);
+        faces.by_blob.retain(|_, face| face.strong_count() != 0);
+        faces.by_key.retain(|_, bucket| {
+            bucket.retain(|face| face.strong_count() != 0);
+            !bucket.is_empty()
+        });
+        if faces.by_id.len() >= limit {
+            return None;
+        }
+        let (i, spec) = super::scan::enumerate_faces(&blob.bytes).into_iter().next()?;
+        let face = Arc::new(super::build::make_face(super::face::FontBytes::Owned(blob.bytes.clone()), i, spec, None)?);
+        faces.by_id.insert(face.id, Arc::downgrade(&face));
+        faces.by_blob.insert(allocation, Arc::downgrade(&face));
+        faces.by_key.entry(key).or_default().push(Arc::downgrade(&face));
+        self.generation.fetch_add(1, super::Ordering::Relaxed);
+        Some(face)
+    }
+
+    /// Bind only references whose owning document actually carries the bytes. A serialized
+    /// reference without its blob cannot borrow a font another document loaded.
+    /// The return value says whether every active reference was admitted.
+    pub fn bind_file_fonts<'a>(&self, t: &mut vectorcraft_doc::TextObject, image: impl Fn(&str) -> Option<&'a vectorcraft_doc::ImageBlob>) -> bool {
+        let mut resources: Vec<(String, Arc<dyn vectorcraft_doc::FileFontFace>)> = vec![];
+        let mut complete = true;
+        for font in t.file_fonts_in_use() {
+            if !t.runs.iter().any(|r| r.style.font_family == font.family && r.style.font_style == font.style)
+                || self.resolve(&font.family, &font.style).is_some_and(|(_, m)| m == super::traits::FontMatch::Exact)
+                || resources.iter().any(|(key, _)| *key == font.key)
+            {
+                continue;
+            }
+            let face = image(&font.key).and_then(|blob| self.keep_file_font(blob));
+            if let Some(face) = face {
+                resources.push((font.key.clone(), face));
+            } else {
+                complete = false;
             }
         }
+        if let Some(fonts) = t.file_fonts.as_mut()
+            && fonts.bind(resources)
+        {
+            t.cached_bounds = None;
+            t.cached_baselines.clear();
+            self.generation.fetch_add(1, super::Ordering::Relaxed);
+        }
+        complete
     }
 
-    /// The face of the font a file carried kept as blob `key` ([`Self::keep_file_font`]).
-    pub fn file_font(&self, key: &str) -> Option<Arc<FontFace>> {
-        self.read_file_faces().by_key.get(key).cloned()
+    /// Bind text throughout a resource tree, including opacity masks, reporting rejected fonts.
+    pub fn bind_node_file_fonts<'a>(
+        &self,
+        n: &mut vectorcraft_doc::Node,
+        image: &impl Fn(&str) -> Option<&'a vectorcraft_doc::ImageBlob>,
+    ) -> Vec<String> {
+        fn visit<'a>(
+            db: &FontDb,
+            n: &mut vectorcraft_doc::Node,
+            image: &impl Fn(&str) -> Option<&'a vectorcraft_doc::ImageBlob>,
+            warnings: &mut Vec<String>,
+        ) {
+            if let vectorcraft_doc::NodeKind::Text(t) = &mut n.kind
+                && !db.bind_file_fonts(t, image)
+            {
+                for font in t.file_fonts_in_use() {
+                    if t.runs.iter().any(|r| r.style.font_family == font.family && r.style.font_style == font.style)
+                        && t.file_fonts.as_ref().is_none_or(|fonts| fonts.face(&font.key).is_none())
+                        && db.resolve(&font.family, &font.style).is_none_or(|(_, m)| m != super::traits::FontMatch::Exact)
+                    {
+                        let note = format!(
+                            "the file font {} {} could not be used (missing, invalid or live-font limit reached); its text uses a substitute",
+                            font.family, font.style
+                        );
+                        if !warnings.contains(&note) {
+                            warnings.push(note);
+                        }
+                    }
+                }
+            }
+            if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_mut())
+                && has_file_fonts(&mask.art)
+            {
+                visit(db, Arc::make_mut(&mut mask.art), image, warnings);
+            }
+            for child in n.children_mut().into_iter().flatten().filter(|n| has_file_fonts(n)) {
+                visit(db, Arc::make_mut(child), image, warnings);
+            }
+        }
+        let mut warnings = vec![];
+        visit(self, n, image, &mut warnings);
+        warnings
     }
 
-    /// Is face `id` a font a file carried ([`Self::keep_file_font`])?
+    /// Establish document ownership before layout; unrelated blobs never enter the font cache.
+    pub fn bind_document_file_fonts(&self, doc: &mut vectorcraft_doc::Document) -> Vec<String> {
+        let vectorcraft_doc::Document { layers, symbols, graph_designs, patterns, pattern_edit, images, .. } = doc;
+        let trees = layers.iter_mut().chain(symbols.iter_mut().map(|s| &mut s.art)).chain(graph_designs.iter_mut().map(|g| &mut g.art));
+        let patterns = patterns.iter_mut().chain(pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()));
+        let mut warnings = vec![];
+        for root in trees.chain(patterns.flat_map(|p| &mut p.art)).filter(|n| has_file_fonts(n)) {
+            for note in self.bind_node_file_fonts(Arc::make_mut(root), &|key| images.get(key)) {
+                if !warnings.contains(&note) {
+                    warnings.push(note);
+                }
+            }
+        }
+        warnings
+    }
+
+    /// Is `id` a live file-font resource?
     pub fn is_file_font(&self, id: u32) -> bool {
-        self.read_file_faces().by_id.contains_key(&id)
+        self.read_file_faces().by_id.get(&id).is_some_and(|face| face.strong_count() != 0)
     }
 
     pub(super) fn read_file_faces(&self) -> std::sync::RwLockReadGuard<'_, super::FileFaces> {
@@ -660,8 +781,8 @@ impl FontDb {
     /// For each run of `t`, the font a file carried that draws it ([`vectorcraft_doc::FileFonts`]):
     /// while its text is the file's, the font the run names isn't available as named (missing, or
     /// another style of its family stands in) and the font kept for that family and style is
-    /// loaded ([`Self::keep_file_font`]). `None` for the runs drawn in the font they name or its
-    /// substitute; empty when none is drawn in such a font.
+    /// bound to its owning blob. `None` for runs drawn in their named font or substitute;
+    /// empty when none is drawn in such a font.
     pub fn file_faces(&self, t: &vectorcraft_doc::TextObject) -> Vec<Option<Arc<FontFace>>> {
         if t.file_fonts.is_none() {
             return vec![];
@@ -682,7 +803,8 @@ impl FontDb {
                         .iter()
                         .find(|f| f.family == family && f.style == style)
                         .filter(|_| self.resolve(family, style).is_none_or(|(_, m)| m != super::traits::FontMatch::Exact))
-                        .and_then(|f| self.file_font(&f.key));
+                        .and_then(|f| t.file_fonts.as_ref()?.face(&f.key))
+                        .and_then(|face| self.read_file_faces().by_id.get(&face.id()).and_then(std::sync::Weak::upgrade));
                     known.push((family, style, face.clone()));
                     face
                 }
@@ -692,3 +814,7 @@ impl FontDb {
         if out.iter().all(Option::is_none) { vec![] } else { out }
     }
 }
+
+#[cfg(test)]
+#[path = "file_fonts_tests.rs"]
+mod file_fonts_tests;

@@ -258,3 +258,74 @@ fn type_in_a_font_the_pdf_carries_keeps_its_look_until_edited() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(glyphs(&s), (at, carried));
 }
+
+/// No machine fonts are needed: the two native documents own different synthetic glyphs under
+/// the same key. Paste must relink its own bytes, including after closing the source tab.
+#[test]
+fn owned_file_fonts_survive_native_open_close_clipboard_undo_and_export() {
+    use kurbo::{Point, Rect, Shape};
+    use vectorcraft_doc::{CharStyle, Document, FILE_FONT_MIME, FileFont, FileFonts, ImageBlob, Node, TextObject};
+    use vectorcraft_text::{FileFontInfo, FileGlyph, FontDb, build_file_font};
+
+    const FAMILY: &str = "Native Owned File Font Regression";
+    let make = |width| {
+        let info = FileFontInfo { family: FAMILY.into(), style: "Regular".into(), ..Default::default() };
+        let g = FileGlyph { ch: 'x', outline: Rect::new(0.0, 0.0, width, 700.0).to_path(0.1), advance: width + 100.0 };
+        let blob = ImageBlob::new(FILE_FONT_MIME, build_file_font(&info, &[g]).unwrap());
+        let mut doc = Document::new(100.0, 100.0);
+        doc.images.insert("chosen".into(), blob.clone());
+        let mut t = TextObject::point(Point::new(10.0, 40.0), "x", CharStyle { font_family: FAMILY.into(), size: 20.0, ..Default::default() });
+        t.file_fonts = Some(Box::new(FileFonts::new(vec![FileFont { family: FAMILY.into(), style: "Regular".into(), key: "chosen".into() }], "x")));
+        let id = doc.alloc_id();
+        doc.insert(None, usize::MAX, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+        (doc, blob, id)
+    };
+    let open_native = |s: &mut Session, doc: &Document| {
+        let bytes = vectorcraft_format::save_file(doc);
+        s.execute("document.open", &json!({"name": "font.vectorcraft", "dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap()
+    };
+    let face_of = |s: &Session, id| {
+        let NodeKind::Text(t) = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("text") };
+        let g = &vectorcraft_text::layout(FontDb::global(), t).glyphs[0];
+        FontDb::global().face_by_id(g.font_id).unwrap()
+    };
+    let (a, a_blob, a_id) = make(200.0);
+    let (b, b_blob, b_id) = make(800.0);
+    let mut s = Session::new();
+    open_native(&mut s, &a);
+    let a_index = s.active_index().unwrap();
+    assert_eq!(face_of(&s, a_id).file_data(), a_blob.bytes.as_slice());
+    open_native(&mut s, &b);
+    let b_index = s.active_index().unwrap();
+    let carried = face_of(&s, b_id).id();
+    assert_eq!(face_of(&s, b_id).file_data(), b_blob.bytes.as_slice());
+    s.execute("select.set", &json!({"ids": [b_id.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    assert!(s.close_document(b_index));
+    assert!(s.set_active(a_index));
+    let pasted = s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    assert!(pasted["warnings"].as_array().unwrap().is_empty(), "{pasted}");
+    assert!(pasted["renamed"].as_array().unwrap().iter().any(|v| v["kind"] == "image" && v["from"] == "chosen"));
+    let id = vectorcraft_doc::NodeId(pasted["ids"][0].as_u64().unwrap());
+    assert_eq!(face_of(&s, id).id(), carried);
+    assert_eq!(face_of(&s, id).file_data(), b_blob.bytes.as_slice());
+    assert_eq!(face_of(&s, a_id).file_data(), a_blob.bytes.as_slice());
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(face_of(&s, id).file_data(), b_blob.bytes.as_slice());
+    for options in [json!({"format": "pdf", "advanced": {"outlineText": false}}), json!({"format": "svg", "embedFonts": true})] {
+        let exported = s.execute("document.serialize", &options).unwrap();
+        assert!(!exported["dataBase64"].as_str().unwrap().is_empty());
+        assert!(!exported["warnings"].to_string().contains(FAMILY), "{exported}");
+    }
+    let saved = s.execute("document.serialize", &json!({"format": "vectorcraft"})).unwrap();
+    s.execute("document.open", &json!({"name": "pasted.vectorcraft", "dataBase64": saved["dataBase64"]})).unwrap();
+    assert_eq!(face_of(&s, id).file_data(), b_blob.bytes.as_slice());
+    assert_eq!(face_of(&s, a_id).file_data(), a_blob.bytes.as_slice());
+
+    let mut unowned = b.clone();
+    unowned.images.clear();
+    let report = open_native(&mut s, &unowned);
+    assert!(report["warnings"].to_string().contains(FAMILY));
+    assert_eq!(glyphs(&s).1, 0, "a metadata-only reference cannot borrow any open document's font");
+}

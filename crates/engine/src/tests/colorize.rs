@@ -447,7 +447,7 @@ fn eps_export_still_flattens_a_colorize_paint_on_a_color_image() {
 fn a_colorized_missing_link_placeholder_is_not_flattened() {
     let mut s = session();
     let bytes = std::sync::Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
-    let id = image(&mut s, "pic", ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) });
+    let id = image(&mut s, "pic", ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes), file_font: Default::default() });
     s.edit("Colorize", |d, _| {
         d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb8(255, 0, 0))));
         Ok(())

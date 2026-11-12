@@ -203,6 +203,16 @@ pub struct FontFace {
     pub(super) svg_glyphs: bool,
 }
 
+impl vectorcraft_doc::FileFontFace for FontFace {
+    fn id(&self) -> u32 {
+        self.id
+    }
+
+    fn bytes(&self) -> &[u8] {
+        self.data()
+    }
+}
+
 /// Where the ideographic character face (ICF) lies inside the ideographic em box: its distance
 /// from each edge of the em box, in ems. `top` and `bottom` along a horizontal line, `right` and
 /// `left` across a vertical one.

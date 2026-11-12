@@ -57,7 +57,9 @@ fn include_linked_files_keeps_the_files_bytes() {
     // Only the preview loaded (the file was never found): the preview is all there is to write.
     let mut missing = linked_doc();
     let preview = Arc::new(vec![9, 9]);
-    missing.images.insert("k".into(), ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview) });
+    missing
+        .images
+        .insert("k".into(), ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview), file_font: Default::default() });
     let out = save_with(&missing, &SaveOptions { include_linked: true, ..SaveOptions::default() }).unwrap();
     assert_eq!(json_of(&out)["images"]["k"]["proxy"], true);
 }

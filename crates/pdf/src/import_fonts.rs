@@ -85,19 +85,19 @@ impl FileFontGlyphs {
         }
     }
 
-    /// The fonts built from the glyphs gathered, among `images` (each under its content's key,
-    /// MIME [`FILE_FONT_MIME`]) and kept by the font database for their type to be drawn in →
-    /// each font's key by its family and style. Fonts that can't be built are left out: their type
-    /// shows in the fallback font, as before.
+    /// The fonts built from gathered glyphs, stored under their content keys. Only text that
+    /// actually references one admits a runtime face, before it is respaced.
     pub fn keep(self, images: &mut HashMap<String, ImageBlob>) -> HashMap<(String, String), String> {
-        let db = vectorcraft_text::FontDb::global();
         let mut kept = HashMap::new();
         for f in self.fonts {
             let Some(bytes) = build_file_font(&f.info, &f.glyphs) else { continue };
             let blob = ImageBlob::new(FILE_FONT_MIME, bytes);
-            let key = blob.content_key();
-            if !db.keep_file_font(&key, blob.bytes.clone()) {
-                continue;
+            let base = blob.content_key();
+            let mut key = base.clone();
+            let mut suffix = 1;
+            while images.get(&key).is_some_and(|held| held != &blob) {
+                key = format!("{base}-{suffix}");
+                suffix += 1;
             }
             images.entry(key.clone()).or_insert(blob);
             kept.insert((f.family, f.style), key);

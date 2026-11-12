@@ -234,9 +234,18 @@ pub fn imports_of(bytes: &[u8]) -> usize {
 
 /// The notes on the fonts the file draws with that aren't available: type in a font the file
 /// carries keeps its look until it is edited; the rest shows in the fallback font.
-fn warn_missing_fonts(b: &mut Builder, kept: &HashMap<(String, String), String>) {
-    let (carried, missing): (Vec<String>, Vec<String>) =
-        std::mem::take(&mut b.missing_fonts).into_iter().partition(|family| kept.keys().any(|(f, _)| f == family));
+fn warn_missing_fonts(b: &mut Builder, doc: &Document) {
+    let mut bound = std::collections::HashSet::new();
+    doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            for font in t.file_fonts_in_use() {
+                if t.file_fonts.as_ref().and_then(|fonts| fonts.face(&font.key)).is_some() {
+                    bound.insert(font.family.clone());
+                }
+            }
+        }
+    });
+    let (carried, missing): (Vec<String>, Vec<String>) = std::mem::take(&mut b.missing_fonts).into_iter().partition(|family| bound.contains(family));
     if !carried.is_empty() {
         b.warn(&format!(
             "fonts that aren't available show as the file draws them, in the fonts it carries, until their text is edited (then in the fallback font): {}",
@@ -446,7 +455,7 @@ fn read_opened(
             },
         };
         if let Some(art) = layer.children_mut() {
-            keep_file_fonts(art, &b.lines, &kept);
+            keep_file_fonts(art, &b.lines, &kept, &b.images);
             crate::import_lines::rebuild(art, &b.lines);
         }
         doc.layers.push(Arc::new(layer));
@@ -474,7 +483,7 @@ fn read_opened(
     if b.colors.mixed {
         b.warn("colours mixing several inks (DeviceN) were imported as RGB");
     }
-    warn_missing_fonts(&mut b, &kept);
+    warn_missing_fonts(&mut b, &doc);
     // Before anything walks the tree by recursion (`fix_next_id` does): nested clips can be deeper
     // than the stack goes.
     let mut depth_notes = vec![];
@@ -483,6 +492,7 @@ fn read_opened(
     doc.reserve_ids(b.next);
 
     let mut warnings = b.warnings;
+    warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc));
     if let Ok(v) = sink.lock() {
         for w in v.iter() {
             if !warnings.contains(w) {

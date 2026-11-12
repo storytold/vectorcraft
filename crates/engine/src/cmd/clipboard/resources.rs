@@ -980,6 +980,8 @@ pub(crate) struct Imported {
     /// `{kind, from, to}` for every resource the pasted objects now know under another name: added
     /// renamed, or a copy added renamed by an earlier paste.
     pub renamed: Vec<Value>,
+    /// File-font resources refused while binding pasted type.
+    pub warnings: Vec<String>,
 }
 
 impl Imported {
@@ -993,9 +995,14 @@ impl Imported {
         }
     }
     /// Point a pasted copy at the document's resources.
-    pub(crate) fn apply(&self, n: &mut Node) {
+    pub(crate) fn apply(&mut self, n: &mut Node, d: &Document) {
         if self.relinks {
             self.relink.node(n);
+        }
+        for note in vectorcraft_text::FontDb::global().bind_node_file_fonts(n, &|key| d.images.get(key)) {
+            if !self.warnings.contains(&note) {
+                self.warnings.push(note);
+            }
         }
     }
 }
@@ -1238,6 +1245,7 @@ impl Clipboard {
             && out.relink.styles.is_empty()
             && out.relink.colors.is_empty()
             && used.styles.is_empty());
+        out.warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(d));
         Ok(out)
     }
 
@@ -1324,11 +1332,6 @@ impl Clipboard {
             let p = existing(key, d.images.keys().map(String::as_str), same_doc, |k| d.images.get(k) == Some(blob)).unwrap_or_else(|| {
                 let k = unique_name(key, |n| d.images.contains_key(n));
                 d.images.insert(k.clone(), blob.clone());
-                // A font a file carried draws its pasted type (one that can't be read leaves it in
-                // the font it names).
-                if blob.mime == vectorcraft_doc::FILE_FONT_MIME {
-                    let _ = vectorcraft_text::FontDb::global().keep_file_font(&k, blob.bytes.clone());
-                }
                 Placed::added(key, k)
             });
             out.placed(Res::Image, key, &p);

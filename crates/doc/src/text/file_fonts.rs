@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 
 /// The MIME type of a font a file carried ([`FileFonts`]), kept among the document's image blobs
@@ -18,18 +20,56 @@ pub const MAX_FILE_FONTS: usize = 64;
 /// as the file drew it, while its text is the one the file had and a font it names isn't
 /// available: once its text is edited (or that font is installed) it takes the font it names, or
 /// its substitute. Its runs keep naming the file's fonts, so they stay listed as missing.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FileFonts {
     /// The font kept for each family and style the runs name.
     pub fonts: Vec<FileFont>,
     /// The text as the file had it ([`text_hash`] of the plain text).
     pub text: u64,
+    /// Validated runtime resources; serialized keys alone never authorize a font lookup.
+    #[serde(skip)]
+    resources: Vec<(String, u32, std::sync::Weak<dyn FileFontFace>)>,
 }
 
 impl FileFonts {
     /// `fonts` for type whose text is `text`.
     pub fn new(fonts: Vec<FileFont>, text: &str) -> Self {
-        Self { fonts, text: text_hash([text]) }
+        Self { fonts, text: text_hash([text]), resources: vec![] }
+    }
+
+    /// The runtime face bound to this reference by its owning document.
+    pub fn face(&self, key: &str) -> Option<Arc<dyn FileFontFace>> {
+        self.resources.iter().find(|(k, _, _)| k == key).and_then(|(_, _, face)| face.upgrade())
+    }
+
+    /// Replace validated bindings, returning whether their runtime identity changed.
+    pub fn bind(&mut self, resources: Vec<(String, Arc<dyn FileFontFace>)>) -> bool {
+        let changed = self.resources.len() != resources.len()
+            || self.resources.iter().zip(&resources).any(|((a, id, _), (b, face))| a != b || *id != face.id());
+        self.resources = resources.into_iter().map(|(key, face)| (key, face.id(), Arc::downgrade(&face))).collect();
+        changed
+    }
+}
+
+impl PartialEq for FileFonts {
+    fn eq(&self, other: &Self) -> bool {
+        self.fonts == other.fonts
+            && self.text == other.text
+            && self.resources.len() == other.resources.len()
+            && self.resources.iter().zip(&other.resources).all(|((a, aid, _), (b, bid, _))| a == b && aid == bid)
+    }
+}
+
+/// A runtime file-font resource owned by image blobs, undo snapshots and clipboard resources.
+/// The text engine implements this interface without making the document depend on it.
+pub trait FileFontFace: Send + Sync {
+    fn id(&self) -> u32;
+    fn bytes(&self) -> &[u8];
+}
+
+impl std::fmt::Debug for dyn FileFontFace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FileFontFace").field("id", &self.id()).finish()
     }
 }
 
