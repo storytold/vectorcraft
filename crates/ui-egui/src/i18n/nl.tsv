@@ -823,6 +823,13 @@
 	Dock Panel	Paneel dokken
 	Dock to Top	Bovenaan dokken
 	Dock to Bottom	Onderaan dokken
+	Control Bar Options	Opties voor bedieningsbalk
+	Tool Options	Gereedschapsopties
+	Object Options	Objectopties
+	Image Options	Afbeeldingsopties
+	Vertical Alignment	Verticale uitlijning
+	Align and Distribute	Uitlijnen en verdelen
+	Document Options	Documentopties
 	Dock Control Bar	Bedieningsbalk dokken
 	Float Tool Group	Gereedschapsgroep laten zweven
 	Services	Diensten
@@ -1097,6 +1104,8 @@ lighting	Light	Licht
 	Toolbar: Single/Double Column	Werkbalk: Enkele/dubbele kolom
 	Toolbar: Add Tool	Werkbalk: gereedschap toevoegen
 	Toolbar: Remove Tool	Werkbalk: gereedschap verwijderen
+	Add Tool…	Gereedschap toevoegen…
+	Remove Tool	Gereedschap verwijderen
 	Toolbar: Reset	Werkbalk: herstellen
 	Two Point Perspective Preset 1	Voorinstelling perspectief met twee vluchtpunten 1
 	Two Point Perspective Preset 2	Voorinstelling perspectief met twee vluchtpunten 2
@@ -1605,6 +1614,7 @@ digits	Malayalam	Malayalam
 	No gradient swatches	Geen verloopstalen
 	Points: clicks add free points	Punten: klikken voegen vrije punten toe
 	Radial Gradient	Radiaal verloop
+	Conic Gradient	Conisch verloop
 	Reset to White, Black	Herstellen naar wit, zwart
 	Reverse Gradient	Verloop omkeren
 	Save to Swatches	Opslaan in stalen
@@ -4199,6 +4209,8 @@ imageTrace	Outline	Contour
 @msg	`gradient` must be an object	`gradient` moet een object zijn
 @msg	`library` is a library id or name (see {list})	`library` is een bibliotheek-id of -naam (zie {list})
 @msg	`mode` applies to freeform gradients	`mode` geldt voor verlopen met vrije vorm
+@msg	a negative `aspect` applies to conic gradients	een negatieve `aspect` geldt voor conische verlopen
+@msg	`focal` applies to radial gradients	`focal` geldt voor radiale verlopen
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` moet 1, 3 of 5 zijn
 @msg	`stops` must be an array	`stops` moet een array zijn
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` moet een object met SVG-opties zijn (zie document.formats)
@@ -4632,7 +4644,7 @@ imageTrace	Outline	Contour
 @msg	unknown format	onbekende indeling
 @msg	unknown format `{f}` (Save writes {_1})	onbekende indeling `{f}` (Opslaan schrijft {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	onbekende vrijvormmodus `{m}` (punten, lijnen)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	onbekend verlooptype `{k}` (lineair, radiaal, vrijvorm)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	onbekend verlooptype `{k}` (lineair, radiaal, conisch, vrijvorm)
 @msg	unknown highlight `{h}`	onbekende markering `{h}`
 @msg	unknown option `{path}.{k}`	onbekende optie `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	onbekende overdruk `{o}` (behouden, simuleren of verwerpen)
@@ -4834,7 +4846,13 @@ imageTrace	Outline	Contour
 @msg	the PSD file has an unknown colour mode ({m})	het PSD-bestand heeft een onbekende kleurmodus ({m})
 @msg	the PSD file's image data uses an unknown compression ({m})	de afbeeldingsgegevens van het PSD-bestand gebruiken een onbekende compressie ({m})
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	de PSD-afbeelding is te groot om te lezen ({_1} × {_2} pixels)
-@msg	zipped 32-bit PSD image data with prediction can't be read	gezipte 32-bits PSD-afbeeldingsgegevens met voorspelling kunnen niet worden gelezen
+@msg	zipped 1-bit PSD image data with prediction can't be read	gezipte 1-bits PSD-afbeeldingsgegevens met voorspelling kunnen niet worden gelezen
+@msg	the PSD file's layer data uses an unknown compression ({m})	de laaggegevens van het PSD-bestand gebruiken een onbekende compressie ({m})
+@msg	the PSD file's layer records are damaged	de laagrecords van het PSD-bestand zijn beschadigd
+@msg	the PSD file's layer groups are nested too deeply	de laaggroepen van het PSD-bestand zijn te diep genest
+@msg	a layer of the PSD file is too large to read	een laag van het PSD-bestand is te groot om te lezen
+@msg	the PSD file's layers take more memory to read than allowed	de lagen van het PSD-bestand hebben meer geheugen nodig om te lezen dan toegestaan
+@msg	the layers can't be read ({e}): the file opened as its merged image	de lagen kunnen niet worden gelezen ({e}): het bestand is geopend als zijn samengevoegde afbeelding
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bits PSD-bestanden in deze kleurmodus kunnen niet worden gelezen
 @msg	the PSD file is cut short	het PSD-bestand is afgekapt
 @msg	the PSD file's header is damaged	de header van het PSD-bestand is beschadigd
@@ -5385,7 +5403,7 @@ mark-style	Japanese	Japans
 @msg	span must be "object" or "selection", got {v}	span moet "object" of "selection" zijn, maar is {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" plaatst een `gradient`, geen staal
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" plaatst een verloop: geef `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" plaatst een lineair of radiaal verloop, geen vrij verloop
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" plaatst een lineair, radiaal of conisch verloop, geen vrij verloop
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" plaatst het verloop zelf: laat `start` en `end` weg (die plaatsen het al in documentcoördinaten)
 	Make Image Dynamic	Afbeelding dynamisch maken
 	Import Data Sets…	Gegevenssets importeren…
@@ -6590,6 +6608,7 @@ breakText	Glyphs	Glyphs
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Uitlijnen op pixelraster
+	Not Aligned to Pixel Grid	Niet uitgelijnd op pixelraster
 @msg	side is left or right, not `{s}`	side is left of right, niet `{s}`
 	Edit Custom Dictionary	Aangepast woordenboek bewerken
 	Entry:	Item:

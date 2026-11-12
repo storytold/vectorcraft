@@ -63,11 +63,18 @@ pub(super) struct Pen<'r> {
     pub(super) next_top: Option<f64>,
     /// The narrowest word no line from here down is wide enough for (see [`Pen::place`]).
     pub(super) no_room_for: f64,
+    /// Baseline steps still allowed over all the frame's cells and placements (shared by this pen's
+    /// copies): see [`MAX_TOTAL_STEPS`].
+    pub(super) steps_left: std::rc::Rc<std::cell::Cell<usize>>,
 }
 
 /// The largest number of steps layout takes to move a line down a frame cell to find room for it:
 /// in a cell taller than this many leads, a step is the cell's height divided by this.
 const MAX_STEPS: usize = 100_000;
+
+/// The most baseline steps one frame's layout takes in all, over every cell: a cell may take
+/// [`MAX_STEPS`], but rows and columns of tall, narrow-shaped cells would multiply that.
+pub(super) const MAX_TOTAL_STEPS: usize = 10_000_000;
 
 impl Pen<'_> {
     /// Baseline and horizontal span for a line with estimated metrics `est` and indents that starts
@@ -110,6 +117,12 @@ impl Pen<'_> {
             // height when that is more, in at most `MAX_STEPS` steps.
             let step = est.lead.max(1.0).max(r.cell.height() / MAX_STEPS as f64);
             for _ in 0..=MAX_STEPS {
+                let left = self.steps_left.get();
+                if left == 0 {
+                    // Out of steps: the frame is full as far as this text goes.
+                    return None;
+                }
+                self.steps_left.set(left - 1);
                 // A baseline a step no longer moves (past a gutter of 1e300, say) won't reach a line.
                 if baseline + est.desc > r.bottom() + 0.01 || baseline + step <= baseline || baseline.is_nan() {
                     break;
@@ -731,4 +744,27 @@ pub(super) fn candidates(text: &str, g: &[SGlyph], hyphenate: Option<&Hyphenatio
     v.sort_by_key(|b| b.end);
     v.dedup_by_key(|b| b.end);
     v
+}
+
+#[cfg(test)]
+#[test]
+fn a_pen_out_of_baseline_steps_finds_no_room() {
+    let frame = kurbo::Shape::to_path(&kurbo::Rect::new(0.0, 0.0, 400.0, 400.0), 0.1);
+    let regions = Region::cells(&frame, &super::LayoutOptions::default(), &[]);
+    let est = Metrics { asc: 10.0, desc: 3.0, lead: 14.0, cap: 7.0, xh: 5.0, top: 10.0 };
+    let pen = |steps| Pen {
+        regions: Some(&regions),
+        ri: 0,
+        prev: None,
+        pending: 0.0,
+        fb: FirstBaseline::Ascent,
+        fb_min: 0.0,
+        queued: vec![],
+        model: LeadingModel::default(),
+        next_top: None,
+        no_room_for: f64::INFINITY,
+        steps_left: std::rc::Rc::new(std::cell::Cell::new(steps)),
+    };
+    assert!(pen(MAX_TOTAL_STEPS).place(est, 0.0, 0.0, 0.0).is_some());
+    assert!(pen(0).place(est, 0.0, 0.0, 0.0).is_none());
 }

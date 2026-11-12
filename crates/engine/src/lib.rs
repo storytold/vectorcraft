@@ -258,6 +258,8 @@ pub struct Session {
     pub recovery: cmd::recovery::Recovery,
     /// The running script's job, while there is one: the mutation lease ([`script`]).
     pub(crate) script_key: Option<script::JobKey>,
+    /// The named script engines this session keeps ([`script`]).
+    pub(crate) script_engines: script::EnginesKey,
     /// Stops the running script at its next instruction; the same flag for every run.
     pub(crate) script_stop: vectorcraft_js::Interrupt,
     /// The report of the run that ended last.
@@ -345,6 +347,15 @@ impl Default for Session {
 pub(crate) fn adding_fonts() -> std::sync::MutexGuard<'static, ()> {
     static FONTS: std::sync::Mutex<()> = std::sync::Mutex::new(());
     FONTS.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Whether the tests that run every command with `{}` run command `id`. `plugin.clearCache` is
+/// left out: without an id it empties the cache of every plug-in installed in the process, which
+/// includes the caches that the plug-in storage tests check while they run.
+/// `tests/plugin_clear_cache.rs` runs it with `{}` in a test binary of its own.
+#[cfg(test)]
+pub(crate) fn runs_with_empty_params(id: &str) -> bool {
+    id != "plugin.clearCache"
 }
 
 #[cfg(test)]

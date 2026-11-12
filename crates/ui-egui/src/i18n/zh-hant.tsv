@@ -1879,6 +1879,8 @@ file-filter	Templates	範本
 @msg	`gradient` must be an object	`gradient` 必須是物件
 @msg	`groupColors` must be an array	`groupColors` 必須是陣列
 @msg	`mode` applies to freeform gradients	`mode` 只適用於任意形狀漸層
+@msg	a negative `aspect` applies to conic gradients	負的 `aspect` 只適用於圓錐漸層
+@msg	`focal` applies to radial gradients	`focal` 只適用於放射狀漸層
 @msg	`preserve` must be an object	`preserve` 必須是物件
 @msg	`globalAdjust` must be an object	`globalAdjust` 必須是物件
 @msg	`stops` must be an array	`stops` 必須是陣列
@@ -1888,7 +1890,7 @@ file-filter	Templates	範本
 @msg	stop {i} needs `offset`	色標 {i} 需要 `offset`
 @msg	stop {i} needs a valid `color`	色標 {i} 需要有效的 `color`
 @msg	stop {i}: `{k}` must be a number	色標 {i}：`{k}` 必須是數字
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	未知的漸層類型 `{k}` (linear、radial、freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	未知的漸層類型 `{k}` (linear、radial、conic、freeform)
 @msg	the art could not be sampled	無法對圖稿取樣
 @msg	the art is too light for any dots	圖稿太淡，無法產生任何網點
 @msg	the document has no symbols	文件中沒有符號
@@ -2556,7 +2558,13 @@ file-filter	Templates	範本
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 或 HEIF 檔案包含無法讀取的影像類型
 @msg	HEIC and HEIF images can't be opened in this build	此版本無法開啟 HEIC 和 HEIF 影像
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 影像過大，無法讀取 ({_1} × {_2} 像素)
-@msg	zipped 32-bit PSD image data with prediction can't be read	無法讀取使用預測的 ZIP 壓縮 32 位元 PSD 影像資料
+@msg	zipped 1-bit PSD image data with prediction can't be read	無法讀取使用預測的 ZIP 壓縮 1 位元 PSD 影像資料
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD 檔案的圖層資料使用了不明的壓縮方式 ({m})
+@msg	the PSD file's layer records are damaged	PSD 檔案的圖層記錄已損毀
+@msg	the PSD file's layer groups are nested too deeply	PSD 檔案的圖層群組巢狀過深
+@msg	a layer of the PSD file is too large to read	PSD 檔案的某個圖層過大，無法讀取
+@msg	the PSD file's layers take more memory to read than allowed	讀取 PSD 檔案的圖層所需記憶體超過允許值
+@msg	the layers can't be read ({e}): the file opened as its merged image	無法讀取圖層 ({e})：檔案已以合併影像開啟
 @msg	{depth}-bit PSD files in this colour mode can't be read	無法讀取此色彩模式的 {depth} 位元 PSD 檔案
 @msg	the PSD file is cut short	PSD 檔案不完整
 @msg	the PSD file's header is damaged	PSD 檔頭已損毀
@@ -2625,7 +2633,7 @@ file-filter	Templates	範本
 @msg	span must be "object" or "selection", got {v}	span 必須是 "object" 或 "selection"，收到 {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" 放置的是 `gradient`，而非色票
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" 會放置漸層：請提供 `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" 放置線性或放射狀漸層，而非任意形狀漸層
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" 放置線性、放射狀或圓錐漸層，而非任意形狀漸層
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" 會自行放置漸層：請不要提供 `start` 和 `end` (它們已依文件座標放置漸層)
 @msg	Batch: {count} processed	批次：已處理 {count} 個
 @msg	Batch: {count} processed, {failed} failed	批次：已處理 {count} 個，失敗 {failed} 個
@@ -3590,6 +3598,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Radial	放射狀
 	Radial Glows	放射狀光暈
 	Radial Gradient	放射狀漸層
+	Conic Gradient	圓錐漸層
 	Radius 1	半徑 1
 	Radius 2	半徑 2
 	Radius1	半徑1
@@ -4581,6 +4590,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Toolbar: Single/Double Column	工具列：單欄/雙欄
 	Toolbar: Add Tool	工具列：新增工具
 	Toolbar: Remove Tool	工具列：移除工具
+	Add Tool…	新增工具…
+	Remove Tool	移除工具
 	Toolbar: Reset	工具列：重設
 	Toolbars	工具列
 	Tools	工具
@@ -5046,6 +5057,13 @@ axis	Both	兩者
 	Dock Panel	停駐面板
 	Dock to Top	停駐到頂部
 	Dock to Bottom	停駐到底部
+	Control Bar Options	控制列選項
+	Tool Options	工具選項
+	Object Options	物件選項
+	Image Options	影像選項
+	Vertical Alignment	垂直對齊
+	Align and Distribute	對齊與均分
+	Document Options	文件選項
 	Dock Control Bar	停駐控制列
 	Drag to float the toolbar	拖曳以浮動工具列
 	Drag to the window's left or right edge to dock	拖曳到視窗左側或右側邊緣以停駐
@@ -5694,6 +5712,11 @@ axis	Y Axis	Y 軸
 @msg	`inputs` needs the permission `doc.read`	`inputs` 需要權限 `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	記憶體預算（物件 {_1} 需要 {size} 位元組的輸入，剩餘 {left}）
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	物件預算（超過 {MAX_OBJECTS} 個唯讀物件）
+@msg	instruction budget	指令預算
+@msg	time budget	時間預算
+@msg	memory budget (the selection is too large to hand over)	記憶體預算（所選內容太大，無法傳遞）
+@msg	output size ({what} is {len} bytes, limit {max})	輸出大小（{what} 為 {len} 位元組，上限 {max}）
+@msg	the plug-in's grant can't be removed from the plug-in store	無法從增效模組存放區移除該增效模組的授權
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	權限 `{shown}` 保留給日後的增效模組 API；此主機不授予該權限
 @msg	unknown permission `{shown}`	未知權限 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	「{name}」需要權限 {asked}：需要有人在桌面應用程式中核准，或在以 --allow-plugin-grants 啟動的工作階段中傳入 `grant`
@@ -6043,9 +6066,12 @@ anchor	Points:	點：
 @msg	{label} must be a number	{label} 必須是數字
 @msg	{label} must be a number of at least 0.1	{label} 必須是至少 0.1 的數字
 	Advanced Character Formats	進階字元格式
+	Basic Paragraph Formats	基本段落格式
+	Composition	排版
 	Horizontal Scale	水平縮放
 	Vertical Scale	垂直縮放
 @msg	{label} must be a number from {min} to {max}	{label} 必須是 {min} 到 {max} 之間的數字
+@msg	{label} must be a whole number from {min} to {max}	{label} 必須是 {min} 到 {max} 之間的整數
 	Character Color	字元顏色
 	OpenType Features	OpenType 功能
 	Stylistic Sets	風格集
@@ -6435,6 +6461,7 @@ breakText	Glyphs	字符
 
 # Align to Pixel Grid
 	Align to Pixel Grid	對齊像素格點
+	Not Aligned to Pixel Grid	未對齊像素格點
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路徑和複合路徑可以對齊像素格點
 @msg	side is left or right, not `{s}`	side 應為 left 或 right，而不是 `{s}`
 	Edit Custom Dictionary	編輯自訂字典
