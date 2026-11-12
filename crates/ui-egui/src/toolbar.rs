@@ -416,8 +416,7 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
             Ok(json!({ "dialog": dialog }))
         }
         // The Gradient and Magic Wand tools: their panels.
-        "gradient" | "magicWand" if crate::panel_docking::showing(&app.ui, tool) => Ok(json!({ "open": tool })),
-        "gradient" | "magicWand" => app.run("window.panel", json!({ "panel": tool })),
+        "gradient" | "magicWand" => crate::panel_docking::reveal_panel(app, tool),
         "artboard" => crate::dialogs::artboard_options::open(app),
         "eyedropper" => {
             crate::dialogs::eyedropper::open(app);

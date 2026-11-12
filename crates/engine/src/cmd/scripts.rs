@@ -233,6 +233,43 @@ impl Session {
         self.scripts_dir.as_deref().filter(|_| !cfg!(target_arch = "wasm32"))
     }
 
+    /// The last run's report ([`Session::script_report`]) as a reply shows it: under automation read
+    /// roots, a file the run wrote outside them (`written`) and the file a failed run stopped in
+    /// (`file`, also in the run's error line in `console`) are named by their file name. What the
+    /// script wrote itself (`log`, its output lines) stays as written.
+    pub fn shown_script_report(&self) -> Option<Value> {
+        let mut report = self.script_report()?.clone();
+        if let Some(written) = report.get_mut("written").and_then(Value::as_array_mut) {
+            for path in written.iter_mut() {
+                if let Some(name) = path.as_str().and_then(hidden_name) {
+                    *path = json!(name);
+                }
+            }
+        }
+        if let Some(file) = report.get("file").and_then(Value::as_str).map(str::to_string)
+            && let Some(name) = hidden_name(&file)
+        {
+            // The run's error lines come after every line the script wrote. They are written again
+            // from the report with the file's name, which also covers a line the console cut inside
+            // the path. A console that dropped its oldest lines may hold only the last of them.
+            let before = script::error_lines(&report);
+            report["file"] = json!(name);
+            if let Some(message) = report.get("message").and_then(Value::as_str) {
+                report["message"] = json!(message.replace(&file, &name));
+            }
+            let after = script::error_lines(&report);
+            if let Some(lines) = report.pointer_mut("/console/lines").and_then(Value::as_array_mut) {
+                let kept = (1..=before.len().min(lines.len()))
+                    .rev()
+                    .find(|&n| lines.iter().rev().take(n).map(Value::as_str).eq(before.iter().rev().take(n).map(|l| Some(l.as_str()))))
+                    .unwrap_or(0);
+                lines.truncate(lines.len() - kept);
+                lines.extend(after.iter().skip(after.len().saturating_sub(kept)).map(|l| json!(l)));
+            }
+        }
+        Some(report)
+    }
+
     /// The text of the script at `path`, which a listing of the Scripts folder gave
     /// ([`script::folder::read`]), checked as `script.run` checks a file's.
     pub fn installed_script(&self, path: &str) -> Result<String> {
@@ -248,12 +285,20 @@ impl Session {
     }
 }
 
+/// The file name a reply names `path` by when the file is outside the automation read roots; `None`
+/// when a reply may name it whole.
+fn hidden_name(path: &str) -> Option<String> {
+    let shown = super::fileio::shown_path(path);
+    (shown != path).then(|| shown.into_owned())
+}
+
 fn list_installed(s: &mut Session, _: &Value) -> Result<Value> {
     let Some(root) = s.scripts_dir() else {
         return Ok(json!({"folder": null, "scripts": [], "truncated": false, "unreadable": false}));
     };
     let folder = root.to_string_lossy();
-    crate::file_access::check_read(&folder).map_err(EngineError::Other)?;
+    // The Scripts folder is the app's: a refusal names it as the request may see it.
+    crate::file_access::check_read(&folder).map_err(|e| super::fileio::naming_in_error(EngineError::Other(e), &folder))?;
     let listing = script::folder::list(root);
     let scripts: Vec<Value> = listing
         .scripts()

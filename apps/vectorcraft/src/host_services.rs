@@ -1,10 +1,10 @@
 #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
 use super::portal_save;
-#[cfg(target_os = "linux")]
-use super::tablet;
 #[cfg(all(windows, not(target_vendor = "win7")))]
 use super::windows_stylus;
 use super::{ClipboardProbeFactory, FilePick, PickRequest, Services, clipboard, cursor_theme, fileio, printing};
+#[cfg(target_os = "linux")]
+use super::{linux_screen_color, tablet};
 #[cfg(target_os = "macos")]
 use super::{mac_save_format, mac_screen_color, mac_tablet};
 
@@ -354,8 +354,10 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         .is_some_and(|h| matches!(h.as_raw(), RawWindowHandle::Xlib(_) | RawWindowHandle::Xcb(_)));
     let (clip, clip_probe) = (parent.clone(), parent.clone());
     let (p1, p2, p3, p4, p5) = (parent.clone(), parent.clone(), parent.clone(), parent.clone(), parent);
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     let sampled_ui = ui.clone();
+    #[cfg(target_os = "linux")]
+    let sampled_parent = p1.clone();
     Services {
         pick_open: Some(Box::new(move |pick: &FilePick| pick_now(PickRequest::Open(pick.clone()), &p1).into_iter().next())),
         pick_open_multi: Some(Box::new(move || pick_now(PickRequest::OpenMany, &p2))),
@@ -381,6 +383,8 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         exists: Some(std::sync::Arc::new(|p: &str| std::path::Path::new(p).exists())),
         // Background Save and Export write from a worker thread.
         write_shared: Some(std::sync::Arc::new(write_file)),
+        save_write: Some(std::sync::Arc::new(fileio::write_save_file)),
+        save_stream: Some(std::sync::Arc::new(fileio::write_save_file_with)),
         // Native saves stream into the file as they are encoded.
         stream_shared: Some(std::sync::Arc::new(|p: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>| {
             fileio::write_file_with(p, fill).map_err(|e| e.to_string())
@@ -406,6 +410,8 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         // Sample Color from Screen: the system's color sampler.
         #[cfg(target_os = "macos")]
         screen_color: Some(mac_screen_color::sampler(sampled_ui)),
+        #[cfg(target_os = "linux")]
+        screen_color: Some(linux_screen_color::sampler(sampled_ui, sampled_parent)),
         // File → Print: the system's printers and print queue.
         print: Some(Box::new(printing::SystemPrint)),
         ..Default::default()

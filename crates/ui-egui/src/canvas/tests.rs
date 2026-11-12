@@ -1360,13 +1360,15 @@ fn a_guide_dragged_out_of_a_ruler_shows_while_dragged() {
 
 /// With Preferences › Performance › Real-time Drawing and Editing off, the bounding box moves
 /// with a Selection-tool move drag while the object stays put until the release. With it on, the
-/// art moves and the box hides during the drag (#712).
+/// art moves and the box hides during the drag (#712), unless General › Show Bounding Box While
+/// Moving and Drawing is on, which keeps the box with the art.
 #[test]
 fn real_time_drawing_off_moves_the_bounding_box_with_a_move_drag() {
-    for real_time in [true, false] {
+    for (real_time, while_moving) in [(true, false), (false, false), (true, true), (false, true)] {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
         app.session.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": real_time})).unwrap();
+        app.session.execute("prefs.set", &json!({"key": "boundingBoxWhileMovingAndDrawing", "value": while_moving})).unwrap();
         app.ui.task_bar = false;
         app.ui.view.rulers = false;
         app.ui.view.smart_guides = false;
@@ -1389,15 +1391,19 @@ fn real_time_drawing_off_moves_the_bounding_box_with_a_move_drag() {
         app.session.pointer(&PointerEvent::new(PointerKind::Down, 150.0, 130.0), view).unwrap();
         app.session.pointer(&PointerEvent::new(PointerKind::Drag, 250.0, 230.0), view).unwrap();
         let during = handles(&mut app);
-        if real_time {
-            assert!(during.is_empty(), "the box hides while the art moves: {during:?}");
-            assert_eq!(left(&app), start + 100.0, "the art moves with the pointer");
+        let what = format!("real-time drawing {real_time}, box while moving {while_moving}");
+        if real_time && !while_moving {
+            assert!(during.is_empty(), "{what}: the box hides while the art moves: {during:?}");
         } else {
-            assert_eq!(during.len(), 8, "the box shows during the drag");
+            assert_eq!(during.len(), 8, "{what}: the box shows during the drag");
             let corner = xf.to_screen(Point::new(200.0, 200.0));
-            assert!(during.iter().any(|c| c.distance(corner) < 0.5), "the box's corner is at the dragged position: {during:?}");
-            assert!(!during.iter().any(|c| c.distance(xf.to_screen(Point::new(100.0, 100.0))) < 0.5), "not at the start");
-            assert_eq!(left(&app), start, "the object waits for the release");
+            assert!(during.iter().any(|c| c.distance(corner) < 0.5), "{what}: the box's corner is at the dragged position: {during:?}");
+            assert!(!during.iter().any(|c| c.distance(xf.to_screen(Point::new(100.0, 100.0))) < 0.5), "{what}: not at the start");
+        }
+        if real_time {
+            assert_eq!(left(&app), start + 100.0, "{what}: the art moves with the pointer");
+        } else {
+            assert_eq!(left(&app), start, "{what}: the object waits for the release");
         }
         app.session.pointer(&PointerEvent::new(PointerKind::Up, 250.0, 230.0), view).unwrap();
         assert_eq!(left(&app), start + 100.0, "real-time drawing {real_time}: moved on release");
@@ -2850,13 +2856,10 @@ fn cached_frames_keep_their_scale_during_resize_rotation_and_dpi_changes() {
                 "{old_rot}° -> {new_rot}°, DPI {old_ppp} -> {new_ppp}, pixel={pixel}: {vertex:?}"
             );
         }
-        // Deliver the actual replacement and verify that it replaces the cached key. The frame
-        // reports a slow render: when a parallel test makes a placed document's bitmap, the key's
-        // process-wide `placed` generation moves, and the next frame goes to the controlled worker
-        // instead of rendering over the delivered frame on this thread.
+        // Deliver the actual replacement and verify that it replaces the cached key.
         let img = app.canvas.renderer.render(&job.doc, job.w, job.h, job.view, &job.opts);
         let expected = job.key.clone();
-        completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 50.0, moved: 0, reused: false }).unwrap();
+        completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 1.0, moved: 0, reused: false }).unwrap();
         frame(&mut app, size, new_ppp);
         assert_eq!(app.canvas.key.as_ref(), Some(&expected), "the worker's frame arrived");
     }
@@ -2936,21 +2939,6 @@ fn a_turned_view_draws_the_last_frame_turned_until_its_own_arrives() {
 /// fill is dropped.
 #[test]
 fn a_pan_fills_the_area_the_last_frame_leaves_until_the_worker_frame_arrives() {
-    // The canvas key holds the global placed-document bitmap clock, which tests on other threads
-    // move: a frame whose key changed by more than the view drops the fill. An attempt that fails
-    // while the clock moved runs again; one that fails while it stood still is a real failure.
-    for _ in 0..20 {
-        let clock = vectorcraft_render::placed_document::generation();
-        match std::panic::catch_unwind(pan_fills_the_area_the_last_frame_leaves) {
-            Ok(()) => return,
-            Err(_) if vectorcraft_render::placed_document::generation() != clock => {}
-            Err(e) => std::panic::resume_unwind(e),
-        }
-    }
-    pan_fills_the_area_the_last_frame_leaves();
-}
-
-fn pan_fills_the_area_the_last_frame_leaves() {
     let ctx = egui::Context::default();
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
@@ -3177,6 +3165,200 @@ fn the_canvas_waits_only_while_the_view_of_a_slow_frame_changes() {
     assert_eq!(still_wait(&mut still, Some(&shown_pixels), &pixels, true, 13.0), Some(STILL_SECS), "Pixel Preview, moved");
     assert_eq!(still_wait(&mut still, None, &moved, true, 14.0), None, "no frame shown");
     assert_eq!(still_wait(&mut still, Some(&shown), &shown, true, 15.0), None, "the frame shown");
+}
+
+/// A bitmap made in the background for a file that only another document holds leaves this
+/// document's canvas key as it is. Without a render worker (the web build's setting), a pan of a
+/// heavy canvas keeps drawing the frame shown until the view is still. A light canvas renders the
+/// pan at once, and its key differs from the frame shown only in the view: the pan fill and the
+/// worker's pixel copy ask for that.
+#[test]
+fn a_bitmap_made_for_another_documents_file_leaves_a_pan_waiting() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
+    app.canvas.worker_started = true; // no worker, as in the web build
+    app.canvas.waits_for_still = true;
+    // Another window's document places a file, which its canvas asks a bitmap of.
+    let mut other = VectorcraftApp::new(Session::new(), Default::default());
+    other.canvas.worker_started = true; // render on this thread
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 70, "height": 40})).unwrap();
+    src.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 70, "height": 40})).unwrap();
+    let dir = std::env::temp_dir().join(format!("vectorcraft-placed-pan-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("badge.vectorcraft");
+    std::fs::write(&path, vectorcraft_format::save_file(&src.active().unwrap().doc)).unwrap();
+    other.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    other.session.execute("file.place", &json!({"path": path.to_string_lossy(), "at": [100, 100]})).unwrap();
+    let ctx = egui::Context::default();
+    let frame = |app: &mut VectorcraftApp| {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    frame(&mut app); // the first frame fits the view to the artboard
+    frame(&mut app);
+    app.canvas.last_ms = 1.0;
+    app.view_mut().unwrap().center.x += 10.0;
+    frame(&mut app);
+    let shown = app.canvas.key.clone().unwrap();
+    // The other canvas asks for the bitmap, and it is made: the generation changes before the
+    // bitmap stops being pending.
+    let generation = vectorcraft_render::placed_document::generation();
+    shapes(&mut other, &egui::Context::default());
+    while vectorcraft_render::placed_document::busy() {
+        std::thread::yield_now();
+    }
+    assert_ne!(vectorcraft_render::placed_document::generation(), generation, "a bitmap was made");
+    app.canvas.last_ms = 50.0;
+    app.view_mut().unwrap().center.x += 10.0;
+    frame(&mut app);
+    assert_eq!(app.canvas.key.as_ref(), Some(&shown), "a heavy canvas is not rendered while the view moves");
+    app.canvas.last_ms = 1.0;
+    app.view_mut().unwrap().center.x += 10.0;
+    frame(&mut app);
+    let next = app.canvas.key.clone().unwrap();
+    assert_eq!(next.cx, app.view().unwrap().center.x, "a light canvas renders at once");
+    assert!(super::cursor::only_view_differs(&shown, &next), "only the view differs: {shown:?} {next:?}");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// A document's [`CacheKey::placed`] moves to the current placed-document bitmap generation only
+/// when a bitmap of a file it shows in a placed document was made, or when the files made are no
+/// longer known and it shows a placed document. A bitmap of another document's file, or of a file
+/// it keeps only for Undo, leaves it, so a pan of a heavy
+/// document keeps waiting for the view to stop. Each change keeps the value before it and the
+/// last generation that value was checked at. A closed document's value is dropped.
+#[test]
+fn a_documents_placed_key_moves_only_for_bitmaps_of_its_own_files() {
+    let mut session = Session::new();
+    session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    let plain = session.active().unwrap().uid;
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 60, "height": 30})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 60, "height": 30})).unwrap();
+    let dir = std::env::temp_dir().join(format!("vectorcraft-placed-key-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("card.vectorcraft");
+    std::fs::write(&path, vectorcraft_format::save_file(&src.active().unwrap().doc)).unwrap();
+    session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let r = session.execute("file.place", &json!({"path": path.to_string_lossy(), "at": [60, 50]})).unwrap();
+    let st = session.active().unwrap();
+    let placing = st.uid;
+    let file = match &st.doc.node(vectorcraft_doc::NodeId(r["ids"][0].as_u64().unwrap())).unwrap().kind {
+        vectorcraft_doc::NodeKind::PlacedDocument(p) => p.key.clone(),
+        other => panic!("a placed document: {other:?}"),
+    };
+    type Made<'a> = &'a dyn Fn(u64, u64) -> Option<std::collections::HashSet<String>>;
+    fn key(keys: &mut std::collections::HashMap<u64, crate::PlacedKey>, session: &Session, uid: u64, now: u64, made: Made<'_>) -> u64 {
+        let st = session.documents().iter().find(|d| d.uid == uid).unwrap();
+        placed_key_at(keys, session, st, now, made)
+    }
+    let files = |names: &[&str]| Some(names.iter().map(|n| n.to_string()).collect::<std::collections::HashSet<_>>());
+    let unasked = |_: u64, _: u64| -> Option<std::collections::HashSet<String>> { panic!("no bitmaps to look up") };
+    let mut keys = std::collections::HashMap::new();
+    assert_eq!(key(&mut keys, &session, placing, 5, &unasked), 5, "checked for the first time");
+    assert_eq!(key(&mut keys, &session, placing, 5, &unasked), 5, "no bitmap made since");
+    let other = |from: u64, to: u64| {
+        assert_eq!((from, to), (5, 6), "the bitmaps made since the last check");
+        files(&["another document's file"])
+    };
+    assert_eq!(key(&mut keys, &session, placing, 6, &other), 5, "another document's file");
+    assert_eq!(key(&mut keys, &session, placing, 7, &|_, _| files(&["another document's file", file.as_str()])), 7, "its own file");
+    assert_eq!(keys[&placing], crate::PlacedKey { checked: 7, key: 7, before: (5, 6) });
+    assert_eq!(key(&mut keys, &session, placing, 8, &|_, _| None), 8, "files no longer known");
+    assert_eq!(keys[&placing].before, (7, 7));
+    assert_eq!(key(&mut keys, &session, plain, 8, &unasked), 8, "the other document, checked for the first time");
+    assert_eq!(key(&mut keys, &session, plain, 9, &|_, _| None), 8, "no images: files no longer known");
+    assert_eq!(key(&mut keys, &session, plain, 10, &|_, _| files(&[file.as_str()])), 8, "no images: a file another document holds");
+    // The same document holding an image and showing no placed document.
+    let mut raster = session.documents().iter().find(|d| d.uid == plain).unwrap().clone();
+    let blob = vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Default::default(), proxy: None };
+    std::sync::Arc::make_mut(&mut raster.doc).images.insert("an image".into(), blob);
+    assert_eq!(placed_key_at(&mut keys, &session, &raster, 11, |_, _| None), 8, "an image and no placed document: files no longer known");
+    assert_eq!(keys.len(), 2);
+    let index = session.documents().iter().position(|d| d.uid == plain).unwrap();
+    session.execute("file.close", &json!({"index": index})).unwrap();
+    assert_eq!(key(&mut keys, &session, placing, 12, &|_, _| files(&[])), 8, "no bitmaps of its files");
+    assert_eq!(keys.keys().copied().collect::<Vec<_>>(), [placing], "the closed document's value is dropped");
+    // The placed document deleted: its file stays in the images for Undo, and no longer shows.
+    assert_eq!(session.active().unwrap().uid, placing);
+    session.execute("edit.clear", &json!({"ids": [r["ids"][0]]})).unwrap();
+    assert!(session.active().unwrap().doc.images.contains_key(&file), "kept for Undo");
+    assert_eq!(key(&mut keys, &session, placing, 13, &|_, _| files(&[file.as_str()])), 8, "a file kept only for Undo");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// The canvas key takes the document's value from [`placed_key`], which a bitmap made for a test
+/// running beside this one does not move: this document holds no images.
+#[test]
+fn the_canvas_key_takes_the_documents_placed_value() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
+    app.canvas.worker_started = true; // render on this thread
+    let uid = app.session.active().unwrap().uid;
+    let generation = vectorcraft_render::placed_document::generation();
+    let marked = generation.wrapping_add(1000);
+    app.canvas.placed_keys.insert(uid, crate::PlacedKey { checked: generation, key: marked, before: (marked, generation) });
+    shapes(&mut app, &egui::Context::default());
+    assert_eq!(app.canvas.key.as_ref().map(|k| k.placed), Some(marked));
+}
+
+/// A frame shown at one [`CacheKey::placed`] value and drawn again at the next looks at the
+/// bitmaps made since the last check before the change: those made earlier were of other
+/// documents' files, and past 256 bitmaps they are no longer known ([`placed_since`]).
+#[test]
+fn a_frame_drawn_again_after_one_change_of_its_placed_value_looks_at_the_bitmaps_since_the_last_check() {
+    let entry = crate::PlacedKey { checked: 400, key: 400, before: (5, 399) };
+    assert_eq!(placed_since(Some(&entry), 5, 400), 399, "the value changed once since the frame shown");
+    assert_eq!(placed_since(Some(&entry), 3, 400), 3, "it changed more than once");
+    assert_eq!(placed_since(Some(&entry), 5, 401), 5, "a value the document no longer has");
+    assert_eq!(placed_since(None, 5, 400), 5, "a document not checked");
+}
+
+/// A frame drawn again at a new [`CacheKey::placed`] value draws again where the document shows
+/// the files whose bitmaps were made after [`placed_since`]. After one change of the value, the
+/// bitmaps made before the last check of the old value are not looked up: past 256 bitmaps they
+/// are no longer known, and the whole frame would render. At the same value nothing is looked up.
+#[test]
+fn a_frame_drawn_again_at_a_new_placed_value_draws_where_the_bitmaps_since_the_last_check_show() {
+    let mut session = Session::new();
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 60, "height": 30})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 60, "height": 30})).unwrap();
+    let dir = std::env::temp_dir().join(format!("vectorcraft-placed-changes-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("card.vectorcraft");
+    std::fs::write(&path, vectorcraft_format::save_file(&src.active().unwrap().doc)).unwrap();
+    session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let r = session.execute("file.place", &json!({"path": path.to_string_lossy(), "at": [60, 50]})).unwrap();
+    session.execute("shape.rectangle", &json!({"x": 250, "y": 200, "width": 40, "height": 30})).unwrap();
+    let doc = &session.active().unwrap().doc;
+    let placed = doc.node(vectorcraft_doc::NodeId(r["ids"][0].as_u64().unwrap())).unwrap();
+    let file = match &placed.kind {
+        vectorcraft_doc::NodeKind::PlacedDocument(p) => p.key.clone(),
+        other => panic!("a placed document: {other:?}"),
+    };
+    let bounds = placed.geometric_bounds().unwrap();
+    let entry = crate::PlacedKey { checked: 400, key: 400, before: (5, 399) };
+    // Only the bitmaps made after generation 399 are known: one of the placed file.
+    let made = |from: u64, to: u64| (from >= 399 && to == 400).then(|| std::collections::HashSet::from([file.clone()]));
+    let unasked = |_: u64, _: u64| -> Option<std::collections::HashSet<String>> { panic!("no bitmaps to look up") };
+    assert_eq!(placed_changes(Some(&entry), 400, 400, doc, unasked), Some(vectorcraft_render::Changed::Nothing), "the same value");
+    match placed_changes(Some(&entry), 5, 400, doc, made) {
+        Some(vectorcraft_render::Changed::Area(a)) => {
+            assert!(a.x0 <= bounds.x0 && a.y0 <= bounds.y0 && a.x1 >= bounds.x1 && a.y1 >= bounds.y1, "{a:?} holds {bounds:?}");
+            assert!(a.x1 < 250.0, "{a:?}: not the rectangle");
+        }
+        other => panic!("the placed document's part: {other:?}"),
+    }
+    assert_eq!(placed_changes(Some(&entry), 3, 400, doc, made), None, "the value changed more than once: no longer known");
+    let none = |_: u64, _: u64| Some(std::collections::HashSet::new());
+    assert_eq!(placed_changes(Some(&entry), 5, 400, doc, none), Some(vectorcraft_render::Changed::Nothing), "no bitmaps since");
+    std::fs::remove_dir_all(&dir).ok();
 }
 
 /// File Handling › Display Bitmaps as Anti-aliased Images in Pixel Preview (#394): off, Pixel
@@ -4144,11 +4326,11 @@ fn scrolls_and_pans_move_the_view_by_whole_device_pixels() {
 fn a_scrolls_leftover_pixel_part_carries_only_to_the_same_view() {
     let view = View { zoom: 1.0, center: Point::new(100.0, 100.0), fitted: true, rotation: 0.0, artboard: 0, outline: false };
     let mut v = view;
-    let rest = scroll_by(&mut v, 1, 1.0, vec2(0.4, -0.3), ScrollRest::default());
+    let rest = scroll_by(&mut v, 1, (1.0, 1.0), vec2(0.4, -0.3), ScrollRest::default());
     assert_eq!(v.center, view.center, "less than half a pixel does not move the view");
     assert!((rest.x - 0.4).abs() < 1e-6 && (rest.y + 0.3).abs() < 1e-6);
     let mut again = v;
-    scroll_by(&mut again, 1, 1.0, vec2(0.4, -0.3), rest);
+    scroll_by(&mut again, 1, (1.0, 1.0), vec2(0.4, -0.3), rest);
     assert_eq!(again.center, Point::new(99.0, 101.0), "the second scroll adds the first's part");
     let changed = [
         ("zoomed", View { zoom: 2.0, ..v }, 1, 1.0),
@@ -4159,7 +4341,7 @@ fn a_scrolls_leftover_pixel_part_carries_only_to_the_same_view() {
     ];
     for (name, before, doc, ppp) in changed {
         let mut after = before;
-        let left = scroll_by(&mut after, doc, ppp, vec2(0.4 / ppp, -0.3 / ppp), rest);
+        let left = scroll_by(&mut after, doc, (ppp, 1.0), vec2(0.4 / ppp, -0.3 / ppp), rest);
         assert_eq!(after.center, before.center, "{name}: the first scroll's part is dropped");
         assert!((left.x - 0.4).abs() < 1e-6 && (left.y + 0.3).abs() < 1e-6, "{name}: {left:?}");
     }
@@ -4261,16 +4443,23 @@ fn hidden_corner_widgets_do_not_answer_the_pointer() {
 
 /// One headless canvas frame → the bounding box drawn: its outline's corners on screen (the
 /// closed four-point line in the layer color; `None` when it is hidden) and the number of its
-/// handles (white 6 px squares).
+/// handles (white 6 px squares, to 0.01 px: at a fractional screen position a square's corners
+/// round to a size a little off 6).
 fn bounding_box_drawn(app: &mut VectorcraftApp, ctx: &egui::Context) -> (Option<Vec<Pos2>>, usize) {
     let st = app.session.active().unwrap();
-    let layer = egui::epaint::ColorMode::Solid(c32(st.doc.layer_color(st.selection.objects[0])));
+    let layer = st.doc.layer_color(st.selection.objects[0]);
+    bounding_box_drawn_in(app, ctx, layer)
+}
+
+/// [`bounding_box_drawn`] for a box in the layer color `layer`, whatever is selected.
+fn bounding_box_drawn_in(app: &mut VectorcraftApp, ctx: &egui::Context, layer: [u8; 3]) -> (Option<Vec<Pos2>>, usize) {
+    let layer = egui::epaint::ColorMode::Solid(c32(layer));
     let drawn = shapes(app, ctx);
     let outline = drawn.iter().find_map(|s| match s {
         Shape::Path(ps) if ps.closed && ps.points.len() == 4 && ps.stroke.color == layer => Some(ps.points.clone()),
         _ => None,
     });
-    let handle = |s: &&Shape| matches!(s, Shape::Rect(r) if r.rect.size() == vec2(6.0, 6.0) && r.fill == Color32::WHITE);
+    let handle = |s: &&Shape| matches!(s, Shape::Rect(r) if (r.rect.size() - vec2(6.0, 6.0)).length() < 0.01 && r.fill == Color32::WHITE);
     (outline, drawn.iter().filter(handle).count())
 }
 
@@ -4316,8 +4505,242 @@ fn a_resize_drag_keeps_the_bounding_box_at_the_new_bounds() {
     }
 }
 
+/// With General › Show Bounding Box While Moving and Drawing on, a move of the selection keeps the
+/// bounding box and its handles drawn where the drag carries the selection, with Real-time Drawing
+/// on and off: a Selection-tool move, an Alt-drag copy, and a shape tool's move by the center point.
+/// The box follows each step of the drag and ends where the release leaves the selection. With View
+/// › Hide Bounding Box, no box shows during the move. With the preference off, the box hides during
+/// the move (#712), except for a Selection-tool move with Real-time Drawing off, where the art waits
+/// for the release and the box moves instead.
+#[test]
+fn a_move_drag_keeps_the_bounding_box_where_the_drag_carries_the_selection() {
+    for (real_time, while_moving) in [(true, true), (false, true), (true, false), (false, false)] {
+        for (tool, alt) in [("selection", false), ("selection", true), ("rectangle", false)] {
+            let what = format!("{tool}, alt {alt}, real time {real_time}, box while moving {while_moving}");
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+            app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 60})).unwrap();
+            app.session.execute("attributes.set", &json!({"showCenter": true})).unwrap();
+            app.session.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": real_time})).unwrap();
+            app.session.execute("prefs.set", &json!({"key": "boundingBoxWhileMovingAndDrawing", "value": while_moving})).unwrap();
+            let ctx = egui::Context::default();
+            frame(&mut app, &ctx, vec![]);
+            app.select_tool(tool);
+            let (outline, handles) = bounding_box_drawn(&mut app, &ctx);
+            let before = box_corners(&mut app);
+            assert!(outline.is_some_and(|o| same_corners(&o, &before)) && handles == 8, "{what}: the box at rest");
+            let mods = Mods { alt, ..Mods::default() };
+            let view = app.view_info();
+            let at = |kind, x, y| PointerEvent::new(kind, x, y).with_mods(mods);
+            app.session.pointer(&at(PointerKind::Down, 150.0, 130.0), view).unwrap();
+            app.session.pointer(&at(PointerKind::Drag, 170.0, 140.0), view).unwrap();
+            assert!(app.session.tool_transforming() && !app.session.tool_resizing(), "{what}: the drag moves the selection");
+            let (first, handles) = bounding_box_drawn(&mut app, &ctx);
+            if !while_moving && !(tool == "selection" && !real_time) {
+                assert_eq!((first, handles), (None, 0), "{what}: the box hides during the move");
+                app.session.pointer(&at(PointerKind::Up, 190.0, 165.0), view).unwrap();
+                assert_eq!(bounding_box_drawn(&mut app, &ctx).1, 8, "{what}: back after the move");
+                continue;
+            }
+            assert_eq!(handles, 8, "{what}: the handles show during the move");
+            app.session.pointer(&at(PointerKind::Drag, 190.0, 165.0), view).unwrap();
+            let (during, handles) = bounding_box_drawn(&mut app, &ctx);
+            assert_eq!(handles, 8, "{what}");
+            assert!(
+                first.as_ref().zip(during.as_ref()).is_some_and(|(a, b)| !same_corners(a, b)),
+                "{what}: the box follows the drag: {first:?}, {during:?}"
+            );
+            app.ui.view.bounding_box = false;
+            assert_eq!(bounding_box_drawn(&mut app, &ctx), (None, 0), "{what}: View › Hide Bounding Box");
+            app.ui.view.bounding_box = true;
+            app.session.pointer(&at(PointerKind::Up, 190.0, 165.0), view).unwrap();
+            let after = box_corners(&mut app);
+            assert!(!same_corners(&after, &before), "{what}: the drag moved the rectangle");
+            assert!(during.as_ref().is_some_and(|o| same_corners(o, &after)), "{what}: {during:?}, moved to {after:?}");
+        }
+    }
+}
+
+/// With General › Show Bounding Box While Moving and Drawing on, the Rectangle, Rounded Rectangle,
+/// Ellipse, Polygon and Star tools draw the bounding box and its handles around the shape being
+/// drawn, at each step of the drag, where the release leaves the new shape's box; with Real-time
+/// Drawing on and off, and whether or not something was selected before (off, the document and the
+/// selection stay as they were until the release). Line Segment, which shows no box, draws none,
+/// and View › Hide Bounding Box hides it. With the preference off, no box shows while a shape is
+/// drawn.
+#[test]
+fn a_shape_being_drawn_shows_its_bounding_box() {
+    for (real_time, while_drawing) in [(true, true), (false, true), (true, false), (false, false)] {
+        for selected in [false, true] {
+            for tool in ["rectangle", "roundedRectangle", "ellipse", "polygon", "star", "lineSegment"] {
+                let what = format!("{tool}, real time {real_time}, selected before {selected}, box while drawing {while_drawing}");
+                let mut app = VectorcraftApp::new(Session::new(), Default::default());
+                app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+                let old =
+                    app.session.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap();
+                let layer = app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(old));
+                if !selected {
+                    app.session.execute("select.none", &json!({})).unwrap();
+                }
+                app.session.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": real_time})).unwrap();
+                app.session.execute("prefs.set", &json!({"key": "boundingBoxWhileMovingAndDrawing", "value": while_drawing})).unwrap();
+                let ctx = egui::Context::default();
+                frame(&mut app, &ctx, vec![]);
+                app.select_tool(tool);
+                frame(&mut app, &ctx, vec![]);
+                let view = app.view_info();
+                app.session.pointer(&PointerEvent::new(PointerKind::Down, 150.0, 120.0), view).unwrap();
+                app.session.pointer(&PointerEvent::new(PointerKind::Drag, 180.0, 140.0), view).unwrap();
+                assert_eq!(app.session.draws_new_shape_box(), while_drawing && tool != "lineSegment", "{what}");
+                let (first, handles) = bounding_box_drawn_in(&mut app, &ctx, layer);
+                if tool == "lineSegment" || !while_drawing {
+                    assert_eq!((first, handles), (None, 0), "{what}: no box");
+                    continue;
+                }
+                assert_eq!(handles, 8, "{what}: the handles show while the shape is drawn");
+                app.session.pointer(&PointerEvent::new(PointerKind::Drag, 210.0, 170.0), view).unwrap();
+                let (during, handles) = bounding_box_drawn_in(&mut app, &ctx, layer);
+                assert_eq!(handles, 8, "{what}");
+                assert!(
+                    first.as_ref().zip(during.as_ref()).is_some_and(|(a, b)| !same_corners(a, b)),
+                    "{what}: the box follows the drag: {first:?}, {during:?}"
+                );
+                app.ui.view.bounding_box = false;
+                assert_eq!(bounding_box_drawn_in(&mut app, &ctx, layer), (None, 0), "{what}: View › Hide Bounding Box");
+                app.ui.view.bounding_box = true;
+                app.session.pointer(&PointerEvent::new(PointerKind::Up, 210.0, 170.0), view).unwrap();
+                let selection = app.session.active().unwrap().selection.objects.clone();
+                assert!(selection.len() == 1 && selection[0] != vectorcraft_doc::NodeId(old), "{what}: the new shape is selected");
+                let after = box_corners(&mut app);
+                assert!(during.as_ref().is_some_and(|o| same_corners(o, &after)), "{what}: {during:?}, drawn to {after:?}");
+            }
+        }
+    }
+}
+
+/// With General › Show Bounding Box While Moving and Drawing on, a failed preview of a shape being
+/// drawn (with Real-time Drawing on it leaves the document and the selection as they were before
+/// the drag) shows no box rather than the box of the selection from before the drag. With
+/// Real-time Drawing on and off.
+#[test]
+fn a_failed_preview_of_a_shape_being_drawn_shows_no_bounding_box() {
+    for real_time in [true, false] {
+        let what = format!("real time {real_time}");
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let old = app.session.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap();
+        let layer = app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(old));
+        app.session.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": real_time})).unwrap();
+        app.session.execute("prefs.set", &json!({"key": "boundingBoxWhileMovingAndDrawing", "value": true})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        app.select_tool("rectangle");
+        frame(&mut app, &ctx, vec![]);
+        let view = app.view_info();
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, 150.0, 120.0), view).unwrap();
+        app.session.pointer(&PointerEvent::new(PointerKind::Drag, 180.0, 140.0), view).unwrap();
+        assert_eq!(bounding_box_drawn_in(&mut app, &ctx, layer).1, 8, "{what}: the box of the shape being drawn");
+        assert!(app.session.preview("shape.rectangle", &json!({"x": "left"})).is_err(), "{what}: the preview fails");
+        assert!(app.session.draws_new_shape_box(), "{what}: the shape is still being drawn");
+        let selection = app.session.active().unwrap().selection.objects.clone();
+        assert_eq!(selection, vec![vectorcraft_doc::NodeId(old)], "{what}: the selection from before the drag");
+        assert_eq!(bounding_box_drawn_in(&mut app, &ctx, layer), (None, 0), "{what}: no box, and not the old selection's");
+        app.session.pointer(&PointerEvent::new(PointerKind::Drag, 210.0, 170.0), view).unwrap();
+        assert_eq!(bounding_box_drawn_in(&mut app, &ctx, layer).1, 8, "{what}: the next step's preview shows the box again");
+    }
+}
+
+/// With General › Show Bounding Box While Moving and Drawing on, the box of a shape being drawn is
+/// in the color of the layer the shape goes on, also when the selection from before the drag is on
+/// another layer: with Real-time Drawing off, the shape is only in the pending preview.
+#[test]
+fn a_shape_being_drawn_has_its_box_in_its_own_layers_color() {
+    for real_time in [true, false] {
+        let what = format!("real time {real_time}");
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let old = app.session.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap();
+        let old_layer = app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(old));
+        let new_layer = vectorcraft_doc::NodeId(app.session.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
+        let new_color = app.session.active().unwrap().doc.layer_color(new_layer);
+        assert_ne!(old_layer, new_color, "{what}: the two layers have different colors");
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(old)], "{what}: the old rectangle stays selected");
+        app.session.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": real_time})).unwrap();
+        app.session.execute("prefs.set", &json!({"key": "boundingBoxWhileMovingAndDrawing", "value": true})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        app.select_tool("rectangle");
+        frame(&mut app, &ctx, vec![]);
+        let view = app.view_info();
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, 150.0, 120.0), view).unwrap();
+        app.session.pointer(&PointerEvent::new(PointerKind::Drag, 180.0, 140.0), view).unwrap();
+        let (outline, handles) = bounding_box_drawn_in(&mut app, &ctx, new_color);
+        assert!(outline.is_some() && handles == 8, "{what}: the box in the new layer's color");
+        assert_eq!(bounding_box_drawn_in(&mut app, &ctx, old_layer).0, None, "{what}: not in the old selection's layer color");
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, 180.0, 140.0), view).unwrap();
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc.layer_containing(st.selection.objects[0]), Some(new_layer), "{what}: the shape went on the new layer");
+    }
+}
+
+/// With General › Show Bounding Box While Moving and Drawing on and Real-time Drawing off, a shape
+/// drawn while point type is selected shows its box but not the type widget, which belongs to the
+/// type selected before the drag.
+#[test]
+fn a_shape_being_drawn_has_no_type_widget() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 40, "y": 40, "text": "Type"})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let layer = app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(id));
+    app.session.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": false})).unwrap();
+    app.session.execute("prefs.set", &json!({"key": "boundingBoxWhileMovingAndDrawing", "value": true})).unwrap();
+    let ctx = egui::Context::default();
+    let widgets = |app: &mut VectorcraftApp| {
+        let r = vectorcraft_tools::typewidget::RADIUS_PX;
+        shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Circle(c) if c.radius == r && c.fill != Color32::TRANSPARENT)).count()
+    };
+    frame(&mut app, &ctx, vec![]);
+    app.select_tool("selection");
+    assert_eq!(widgets(&mut app), 1, "the type widget of the selected type");
+    app.select_tool("rectangle");
+    frame(&mut app, &ctx, vec![]);
+    let view = app.view_info();
+    app.session.pointer(&PointerEvent::new(PointerKind::Down, 150.0, 120.0), view).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Drag, 210.0, 170.0), view).unwrap();
+    assert_eq!(bounding_box_drawn_in(&mut app, &ctx, layer).1, 8, "the box of the shape being drawn");
+    assert_eq!(widgets(&mut app), 0, "no type widget beside it");
+}
+
+/// With General › Show Bounding Box While Moving and Drawing on, the Pencil, the Pen and the
+/// Paintbrush draw no bounding box while they draw, as they show none afterwards; the selection's
+/// box does not show either.
+#[test]
+fn freehand_and_pen_drawing_show_no_bounding_box() {
+    for tool in ["pencil", "pen", "paintbrush"] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 30, "height": 30})).unwrap();
+        app.session.execute("prefs.set", &json!({"key": "boundingBoxWhileMovingAndDrawing", "value": true})).unwrap();
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        app.select_tool(tool);
+        frame(&mut app, &ctx, vec![]);
+        let view = app.view_info();
+        app.session.pointer(&PointerEvent::new(PointerKind::Down, 150.0, 120.0), view).unwrap();
+        for (x, y) in [(170.0, 130.0), (190.0, 150.0), (210.0, 170.0)] {
+            app.session.pointer(&PointerEvent::new(PointerKind::Drag, x, y), view).unwrap();
+        }
+        assert!(!app.session.draws_new_shape_box(), "{tool}");
+        let layer = app.session.active().unwrap().doc.layer_color(app.session.active().unwrap().doc.default_layer().unwrap());
+        assert_eq!(bounding_box_drawn_in(&mut app, &ctx, layer), (None, 0), "{tool}: no box while it draws");
+        app.session.pointer(&PointerEvent::new(PointerKind::Up, 210.0, 170.0), view).unwrap();
+    }
+}
+
 /// A move, a rotation and a corner-radius drag keep hiding the bounding box and its handles until
-/// the release (#712, #1229).
+/// the release (#712, #1229). With General › Show Bounding Box While Moving and Drawing on, a move
+/// shows them, and a rotation and a corner-radius drag still hide them.
 #[test]
 fn a_move_rotate_or_corner_radius_drag_hides_the_bounding_box() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -4347,6 +4770,18 @@ fn a_move_rotate_or_corner_radius_drag_hides_the_bounding_box() {
     };
     assert_eq!(drag(&mut app, corner, corner + vectorcraft_geom::Vec2::new(10.0, 10.0)), (None, 0), "a corner-radius drag");
     assert_eq!(bounding_box_drawn(&mut app, &ctx).1, 8, "back after the corner-radius drag");
+    // General › Show Bounding Box While Moving and Drawing keeps the box during a move only. The
+    // corner-radius drag and the rotation are undone first: the rectangle is at 110, 110 to 210, 210.
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    app.session.execute("prefs.set", &json!({"key": "boundingBoxWhileMovingAndDrawing", "value": true})).unwrap();
+    assert_eq!(drag(&mut app, Point::new(150.0, 150.0), Point::new(160.0, 160.0)).1, 8, "a move with the preference on");
+    assert_eq!(drag(&mut app, Point::new(220.0 + offset, 220.0 + offset), Point::new(270.0, 170.0)), (None, 0), "a rotation with the preference on");
+    let corner = {
+        let st = app.session.active().unwrap();
+        vectorcraft_tools::corners::CornerWidgets::of(&st.doc, &st.selection, app.view_info().zoom, false).unwrap().visible().next().unwrap()
+    };
+    assert_eq!(drag(&mut app, corner, corner + vectorcraft_geom::Vec2::new(10.0, 10.0)), (None, 0), "a corner-radius drag with the preference on");
 }
 
 /// View › Hide Edges hides the bounding box and the type widget beside it, and the Selection
@@ -4896,6 +5331,38 @@ fn a_selected_objects_on_path_group_shows_its_move_all_widget_when_it_has_room()
     app.run("edit.clear", json!({"ids": [b]})).unwrap();
     app.run("select.set", json!({"ids": [g]})).unwrap();
     assert_eq!(widgets(&mut app), 1, "one object");
+}
+
+/// A selected Objects on Path group shows a Select/Move widget on each object's attachment point
+/// with the Selection and Objects on Path tools, the chosen object's filled blue.
+#[test]
+fn a_selected_objects_on_path_group_shows_a_select_move_widget_per_object() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let line = id(app.session.execute("shape.line", &json!({"x1": 20, "y1": 200, "x2": 380, "y2": 200})).unwrap());
+    let a = id(app.session.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap());
+    let b = id(app.session.execute("shape.rectangle", &json!({"x": 80, "y": 40, "width": 20, "height": 20})).unwrap());
+    let c = id(app.session.execute("shape.rectangle", &json!({"x": 120, "y": 40, "width": 20, "height": 20})).unwrap());
+    app.run("select.set", json!({"ids": [a, b, c]})).unwrap();
+    app.session.execute("object.objectsOnPath.attach", &json!({"path": line})).unwrap();
+    let ctx = egui::Context::default();
+    let r = vectorcraft_tools::objects_on_path::MEMBER_RADIUS_PX;
+    let widgets = |app: &mut VectorcraftApp, fill: Color32| {
+        shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Circle(k) if k.radius == r && k.fill == fill)).count()
+    };
+    let (ring, chosen) = (Color32::TRANSPARENT, super::overlays::MEMBER_CHOSEN);
+    app.select_tool("selection");
+    assert_eq!((widgets(&mut app, ring), widgets(&mut app, chosen)), (3, 0));
+    app.run("object.objectsOnPath.selectMember", json!({"member": b})).unwrap();
+    assert_eq!((widgets(&mut app, ring), widgets(&mut app, chosen)), (2, 1), "the chosen one is filled");
+    app.select_tool("objectsOnPath");
+    assert_eq!((widgets(&mut app, ring), widgets(&mut app, chosen)), (2, 1));
+    app.select_tool("directSelection");
+    assert_eq!(widgets(&mut app, ring) + widgets(&mut app, chosen), 0);
+    app.select_tool("selection");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(widgets(&mut app, ring) + widgets(&mut app, chosen), 0, "an object in the group, not the group");
 }
 
 /// The shapes Type → Show Hidden Characters draws in one frame, seen through `xf`.
@@ -11301,31 +11768,11 @@ fn a_pan_over_art_the_frame_size_decides_renders_whole() {
     }
 }
 
-/// Runs `test`, whose canvas key holds the global placed-document bitmap clock, which tests on
-/// other threads move: a frame whose key changed by more than the view renders whole. An attempt
-/// that fails while the clock moved runs again; one that fails while it stood still is a real
-/// failure.
-fn while_the_placed_clock_stands_still(test: fn()) {
-    for _ in 0..20 {
-        let clock = vectorcraft_render::placed_document::generation();
-        match std::panic::catch_unwind(test) {
-            Ok(()) => return,
-            Err(_) if vectorcraft_render::placed_document::generation() != clock => {}
-            Err(e) => std::panic::resume_unwind(e),
-        }
-    }
-    test();
-}
-
 /// The canvas asks the worker for a frame that may copy pixels when the view moves, keeps the whole
 /// frame's time, and renders the frame whole once the view has been still for STILL_SECS, not
 /// before and only once.
 #[test]
 fn a_frame_with_copied_pixels_renders_whole_once_the_view_stops() {
-    while_the_placed_clock_stands_still(frame_with_copied_pixels_renders_whole_once_the_view_stops);
-}
-
-fn frame_with_copied_pixels_renders_whole_once_the_view_stops() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.canvas.worker_started = true;
@@ -11372,10 +11819,6 @@ fn frame_with_copied_pixels_renders_whole_once_the_view_stops() {
 /// first step of the next pan copies from it. The jobs are the ones the canvas asks for.
 #[test]
 fn a_pan_after_the_settling_frame_copies() {
-    while_the_placed_clock_stands_still(pan_after_the_settling_frame_copies);
-}
-
-fn pan_after_the_settling_frame_copies() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.canvas.worker_started = true;
@@ -11487,9 +11930,7 @@ fn a_documents_first_frame_renders_on_the_worker() {
     let job = jobs.try_recv().expect("the first frame is queued on the worker");
     assert!(app.canvas.texture.is_none(), "not rendered on the UI thread");
     frame(&mut app);
-    // A placed document of a test running beside this one moves the process-wide generation in
-    // the key: that makes a new frame, not this one again.
-    assert!(jobs.try_iter().all(|j| j.key.placed != job.key.placed), "not queued again while it renders");
+    assert!(jobs.try_recv().is_err(), "not queued again while it renders");
     assert!(app.canvas.texture.is_none());
 
     done_tx.send(finished(&job)).unwrap();

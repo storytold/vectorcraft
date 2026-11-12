@@ -8,7 +8,9 @@ use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, L
 use vectorcraft_geom::{PathData, PathEl, Point, Rect, Vec2};
 use vectorcraft_three_d::{Edge, Revolve};
 
-use crate::solids::{Profile, Scope, is_container, members, object_profile, profile, reshape_members, resolve_for, solid_paints, union_bounds};
+use crate::solids::{
+    Profile, Scope, is_container, members, object_profile, past_effect, profile, reshape_members, resolve_for, solid_paints, union_bounds,
+};
 use crate::util::{flag, num, text};
 use crate::{GeomContext, apply_geometry_with, is_geometry, merged_params};
 
@@ -29,7 +31,7 @@ const MAX_PAINT_COPIES: usize = 256 << 20;
 
 /// The most face and box tests a group's transparent members' faces take together to rejoin their
 /// members' last runs; past them each starts a run of its own.
-const MAX_OVERLAP_TESTS: usize = 1 << 22;
+pub(crate) const MAX_OVERLAP_TESTS: usize = 1 << 22;
 
 /// The width of the stroke around each face that covers the seams between faces.
 const SEAM_WIDTH: f64 = 0.75;
@@ -558,17 +560,11 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
         }
         children.push(Arc::new(surface));
         // Later geometry acts on the projected art as a whole through container evaluation.
-        remaining = n
-            .appearance
-            .effects
-            .iter()
-            .enumerate()
-            .filter(|(i, e)| !is_revolve(&e.id) && (!is_geometry(&e.id) || *i > index))
-            .map(|(_, e)| e.clone())
-            .collect();
+        remaining = past_effect(&n.appearance.effects, index);
+        remaining.retain(|e| !is_revolve(&e.id));
     } else {
         let path = geometry(&path, &n.appearance.effects, &ctx);
-        remaining.retain(|e| !is_geometry(&e.id));
+        remaining = crate::without_geometry(&remaining);
         // Every item's shadow goes behind every item's art.
         let mut shadows = vec![];
         for item in n.appearance.items.iter().filter(|i| crate::paints(i)) {
@@ -628,14 +624,14 @@ pub(crate) fn scoped<'a>(id: NodeId, surfaces: Vec<(&'a [Scope], Arc<Node>)>, le
 /// What a face can paint, to tell whether two faces overlap: the convex hull of the points and
 /// control points of its outline, which holds the outline, and the hull's box grown by half the
 /// seam stroke.
-struct Coverage {
-    bounds: Rect,
+pub(crate) struct Coverage {
+    pub(crate) bounds: Rect,
     hull: Vec<Point>,
 }
 
 impl Coverage {
     /// `None` for a face with no outline and no box.
-    fn of(face: &Node) -> Option<Coverage> {
+    pub(crate) fn of(face: &Node) -> Option<Coverage> {
         let points: Vec<Point> = match face.path_data() {
             Some(path) => path
                 .to_bezpath()
@@ -663,7 +659,7 @@ impl Coverage {
     /// Do the two faces' hulls, each grown by half the seam stroke, overlap? A test of the
     /// separating axes of their edges and of the page's axes: `true` whenever they overlap, and
     /// sometimes near a corner when they don't.
-    fn meets(&self, other: &Coverage) -> bool {
+    pub(crate) fn meets(&self, other: &Coverage) -> bool {
         fn normals(hull: &[Point]) -> impl Iterator<Item = Vec2> + '_ {
             (0..hull.len()).filter_map(|i| {
                 let (a, b) = (hull.get(i)?, hull.get((i + 1) % hull.len())?);
@@ -710,7 +706,7 @@ fn convex_hull(mut points: Vec<Point>) -> Vec<Point> {
 }
 
 /// Do boxes `a` and `b` overlap with some area?
-fn overlaps(a: Rect, b: Rect) -> bool {
+pub(crate) fn overlaps(a: Rect, b: Rect) -> bool {
     a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1
 }
 
@@ -835,8 +831,7 @@ fn group_art(n: &Node, expand: bool) -> Option<Node> {
     // One shadow for every member's surface, behind them all.
     let mut children = children;
     children.splice(0..0, group_shadow(n.id, fx, &shapes, b, options).ok()?);
-    let remaining =
-        n.appearance.effects.iter().enumerate().filter(|(i, e)| *i != index && (!is_geometry(&e.id) || *i > index)).map(|(_, e)| e.clone()).collect();
+    let remaining = past_effect(&n.appearance.effects, index);
     let mut art = n.clone();
     art.kind = NodeKind::Group { children, clip: false };
     art.appearance = Appearance { effects: remaining, ..Default::default() }.into();

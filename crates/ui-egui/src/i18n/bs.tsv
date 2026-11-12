@@ -1400,6 +1400,7 @@ lighting	Light	Svjetlo
 	Rotate View Tool	Alat za rotaciju prikaza
 	Trackpad Gesture to Rotate View	Pokret dodirne ploče za rotaciju prikaza
 	Hold a Tool Shortcut to Use the Tool Temporarily	Držite prečicu alata za privremenu upotrebu alata
+	Show Bounding Box While Moving and Drawing	Prikaži granični okvir pri pomjeranju i crtanju
 	Rotate View	Rotiraj prikaz
 	Rounded Rectangle Tool	Alat zaobljeni pravougaonik
 	Scale Tool	Alat za skaliranje
@@ -1678,6 +1679,17 @@ digits	Malayalam	Malajalam
 	The selected character's font is not available.	Font odabranog znaka nije dostupan.
 	No alternates for the selected character.	Nema alternativa za odabrani znak.
 	Double-click to replace	Dvostruki klik za zamjenu
+	Select one character with the Type tool first.	Prvo odaberite jedan znak alatom za tekst.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} je glif fonta {font}, a ne fonta kojim je postavljen odabrani tekst ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pripada znaku {base} (U+{base_code}) {place}; vaš odabir je {sel} (U+{code}).
+	at the start of a word	na početku riječi
+	in the middle of a word	usred riječi
+	at the end of a word	na kraju riječi
+	standing alone	kad stoji sam
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} nije alternativa znaku {sel} (U+{code}) onako kako stoji u svojoj riječi.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dvostruki klik za umetanje znaka {base} (U+{code}): oblik za prikaz se ne spaja, slovo se spaja.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Umetnut je znak {base} (U+{code}) umjesto oblika za prikaz: font ga spaja sa susjedima prema položaju.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Nijedna OpenType funkcija ne crta ovaj glif ovdje, pa on zamjenjuje glif znaka i možda se neće spajati sa susjednim znakovima.
 	Double-click to insert	Dvostruki klik za umetanje
 	Entire Font	Cijeli font
 	glyph {id}	glif {id}
@@ -1836,6 +1848,8 @@ digits	Malayalam	Malajalam
 	Save Image Trace Preset	Sačuvaj unaprijed postavljeno praćenje slike
 	Delete Image Trace Preset	Izbriši unaprijed postavljeno praćenje slike
 	Method:	Metoda:
+	Pad	Produži
+	Repeats	Broj ponavljanja
 	Mode:	Način:
 	Noise	Šum
 	Create:	Kreiraj:
@@ -1993,6 +2007,7 @@ digits	Malayalam	Malajalam
 	Right-to-Left Paragraph Direction	Smjer pasusa s desna nalijevo
 	Roman Hanging Punctuation	Latinična viseća interpunkcija
 	Korean Line Break Anywhere	Prelom korejskog reda bilo gdje
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Postavke istočnoazijske kompozicije
 	Korean Composition Settings	Postavke korejske kompozicije
 	Select a text object to edit its paragraph attributes.	Odaberite tekstualni objekat da uredite njegove atribute pasusa.
@@ -3076,6 +3091,7 @@ antiAlias	Sharp	Oštro
 	Hide Code	Sakrij kod
 	Images:	Slike:
 	Include Metadata	Uključi metapodatke
+	Include Variable Data	Uključi podatke varijabli
 	Internal CSS	Interni CSS
 	Layer Names	Nazivi slojeva
 	Minify	Minificiraj
@@ -3542,6 +3558,7 @@ theme	Appearance	Izgled
 	Move Mesh Points	Pomjeri tačke mreže
 	Move Spine Point	Pomjeri tačku kičme
 	Reshape Spine Segment	Preoblikuj segment kičme
+	Blend Easing	Ublažavanje stapanja
 	Reset with Mesh	Vrati mrežom
 	Reset with Warp	Vrati iskrivljenjem
 	Set Mesh Point Color	Postavi boju tačke mreže
@@ -3910,6 +3927,9 @@ theme	Appearance	Izgled
 	Select All Unused	Odaberi sve nekorišteno
 	Sort by Kind	Sortiraj po vrsti
 	Sort by Name	Sortiraj po nazivu
+	Spot Color Objects	Objekti sa spot bojama
+	Pattern Objects	Objekti s uzorcima
+	Gradient Objects	Objekti s gradijentima
 	Spot Colors	Spot boje
 	Spot Colors (0)	Spot boje (0)
 	Swatch Options	Opcije uzorka boje
@@ -4606,6 +4626,8 @@ imageTrace	Outline	Obris
 @msg	the Smooth slider is not open	klizač Izgladi nije otvoren
 @msg	the screen color sampler is already open	uzorkivač boja s ekrana je već otvoren
 @msg	this system has no screen color sampler	ovaj sistem nema uzorkivač boja s ekrana
+@msg	the screen color sampler did not answer	uzorkivač boja s ekrana nije odgovorio
+@msg	the screen color sampler failed	uzorkivač boja s ekrana nije uspio
 @msg	bad colour `{hex}` (#rrggbb)	loša boja `{hex}` (#rrggbb)
 @msg	bad page tree	loše stablo stranica
 @msg	bad shortcut	loša prečica
@@ -4635,6 +4657,7 @@ imageTrace	Outline	Obris
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` nije boja poput "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: najviše {MAX_TABLE} boja
 @msg	command `{0}` is not available right now: {1}	naredba `{0}` trenutno nije dostupna: {1}
+@msg	command `{id}` is not available right now	naredba `{id}` trenutno nije dostupna
 @msg	compound paths can only contain paths	složene putanje mogu sadržavati samo putanje
 @msg	compressed (RLE) bitmaps can't be read yet	komprimirane (RLE) bitmape se još ne mogu čitati
 @msg	damaged	oštećeno
@@ -5877,6 +5900,7 @@ mark-style	Japanese	Japanski
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometrijske vodilice
+	Optical Effects	Optički efekti
 	Geometric Patterns	Geometrijski uzorci
 	Grit Textures	Zrnaste teksture
 	Ease In	Ublaži ulaz
@@ -6101,6 +6125,11 @@ axis	Y Axis	Y osa
 	User Brush Library 9	Korisnička biblioteka četkica 9
 	User Brush Library 10	Korisnička biblioteka četkica 10
 	Art Ribbons	Umjetničke trake
+	Ink and Wash	Tuš i lavir
+	Tapered Ink	Suženi tuš
+	Brush Pen	Kistasti flomaster
+	Soft Wash	Meki lavir
+	Pooling Wash	Lavir s rubom
 	Zigzag	Cik-cak
 	Burst Ray	Zraka udara
 	Dash Trail	Isprekidani trag
@@ -6125,6 +6154,11 @@ axis	Y Axis	Y osa
 	Grass Fan	Lepeza za travu
 	Pattern Borders	Ivice od uzoraka
 	Scatter Shapes	Raspršeni oblici
+	Dry Media	Suhi mediji
+	Chalk Grain	Zrno krede
+	Graphite Pencil	Grafitna olovka
+	Wax Crayon	Voštana bojica
+	Charcoal Dust	Ugljena prašina
 	Save Brush Library…	Sačuvaj biblioteku četkica…
 @msg	`{_1}` has no brushes to apply	`{_1}` nema četkica za primjenu
 @msg	missing `library` (see brush.libraries)	nedostaje `library` (pogledajte brush.libraries)
@@ -6730,4 +6764,9 @@ shape	Open	Otvoren
 	Stencil Bridges…	Mostići šablona…
 	Stencil Bridges	Mostići šablona
 	Shortest Crossing	Najkraći prijelaz
+	Weed Box and Lines…	Okvir i linije za čišćenje…
+	Weed Box and Lines	Okvir i linije za čišćenje
+	Margin	Margina
+	Box	Okvir
+	Swatch	Uzorak boje
 	Direction	Smjer

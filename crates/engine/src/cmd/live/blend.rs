@@ -389,6 +389,39 @@ pub(super) fn blend_options(s: &mut Session, p: &Value) -> Result<Value> {
     })
 }
 
+pub(super) fn blend_set_easing(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.blend.setEasing";
+    let id = match crate::cmd::object_param(p, "id", C)? {
+        Some(id) => id,
+        None => *selected_of(s, is_blend).first().ok_or_else(|| bad(C, "select a blend or give `id`"))?,
+    };
+    let doc = &s.doc()?.doc;
+    let Some(NodeKind::Blend { children, spec }) = doc.node(id).map(|n| &n.kind) else { return Err(bad(C, "not a blend")) };
+    if !doc.is_editable(id) {
+        return Err(bad(C, "the object is hidden or locked"));
+    }
+    let ease = ease_param(p, C, spec.ease)?;
+    let color_shift = percent_param(p, C, "colorShift", spec.color_shift, -100.0)?;
+    // Easing moves the steps along a spine, so it needs one with a length to run along.
+    let easing = ["easingType", "ramp"].iter().any(|key| p.get(*key).is_some_and(|v| !v.is_null()));
+    let spined = spec.eases_along_spine()
+        && live::blend_spine(children, spec).and_then(|(path, _)| Spine::new(&path)).is_some_and(|sp| sp.length().is_finite() && sp.length() > 0.0);
+    if easing && !spined {
+        return Err(bad(C, "the blend has no spine"));
+    }
+    let changed = ease != spec.ease || color_shift != spec.color_shift;
+    if changed {
+        s.edit("Blend Options", |d, _| {
+            if let Some(NodeKind::Blend { spec, .. }) = d.node_mut(id).map(|n| &mut n.kind) {
+                spec.ease = ease;
+                spec.color_shift = color_shift;
+            }
+            Ok(())
+        })?;
+    }
+    Ok(json!({ "id": id.0, "easingType": ease.kind.id(), "ramp": ease.ramp * 100.0, "colorShift": color_shift, "changed": changed }))
+}
+
 /// Spacing and orientation as `object.blend.options` takes them; the step count and distance
 /// not in use show their defaults.
 fn blend_options_json(spacing: BlendSpacing, orientation: BlendOrientation) -> Value {

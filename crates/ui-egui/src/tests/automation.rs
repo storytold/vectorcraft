@@ -128,6 +128,45 @@ fn control_saves_leave_out_the_documents_file_outside_the_read_root() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// In one session with a library loaded from outside the read root: the library keeps its file-name
+/// id, a reply that names its path shows the file name, a save without a path leaves out the
+/// document's file, and a save or export to a path the client gave in the write root keeps that path
+/// in `path` and `files`, also in a `command.batch` step's result. A refused path outside the write root is still shown by its file name.
+#[test]
+fn control_saves_keep_the_given_path_beside_a_hidden_library() {
+    let (mut app, tx, base) = confined("save-and-library");
+    let library = s(base.join("outside/b.svg"));
+    app.ui.color_guide_limit = format!("loaded/{library}");
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    let own = s(base.join("out/doc.vectorcraft"));
+    app.run("file.saveAs", json!({"path": own})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let r = request(&mut app, &tx, "app.save", json!({}));
+    assert!(r["result"].get("path").is_none() && !r.to_string().contains(&s(base.join("out"))), "{r}");
+    let r = request(&mut app, &tx, "app.save", json!({"path": own}));
+    assert_eq!(r["result"]["path"], json!(own), "{r}");
+    let split = s(base.join("out/split.vectorcraft"));
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "file.save", "params": {"path": split, "separateArtboards": true}}));
+    assert_eq!(r["result"]["path"], json!(split), "{r}");
+    assert_eq!(r["result"]["files"][0], json!(split), "{r}");
+    let batched = s(base.join("out/batched.vectorcraft"));
+    let steps = json!({"commands": [{"command": "document.save", "params": {"path": batched}}]});
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "command.batch", "params": steps}));
+    assert_eq!(r["result"]["results"][0]["path"], json!(batched), "{r}");
+    let svg = s(base.join("out/a.svg"));
+    let r = request(&mut app, &tx, "app.export", json!({"path": svg, "wait": true}));
+    assert_eq!(r["result"]["path"], json!(svg), "{r}");
+    app.ui.status = format!("from {library}");
+    let r = request(&mut app, &tx, "test.status", json!({}));
+    assert_eq!(r["result"], "from b.svg", "{r}");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.svg", "{r}");
+    let refused = s(base.join("outside/c.vectorcraft"));
+    let r = request(&mut app, &tx, "app.save", json!({"path": refused, "wait": true}));
+    assert!(r["error"].as_str().is_some_and(|e| e.contains("outside the write root") && !e.contains(&refused)), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// With Background Save and Background Export on, `app.save` and `app.export` with `wait: true`
 /// (MCP's `save_file` in the app) reply with the write root's refusal, and write a file inside it
 /// before they reply. Without `wait` the refusal reaches only the status bar.
@@ -446,6 +485,366 @@ fn ui_inspect_leaves_out_paths_outside_the_read_root() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `ui.inspect` checks a folder preference as it is written: the read root's path with a space before
+/// it is a relative path, outside the root, and is left out.
+#[test]
+fn ui_inspect_checks_a_folder_preference_as_written() {
+    let (mut app, tx, base) = confined("inspect-folder-space");
+    let inside = s(base.join("in"));
+    app.ui.engine_prefs = json!({"fontsFolder": inside, "templatesFolder": format!(" {inside}")});
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let prefs = r["result"]["ui"]["engine_prefs"].as_object().unwrap();
+    assert_eq!(prefs.get("fontsFolder").and_then(Value::as_str), Some(inside.as_str()), "{r}");
+    assert!(!prefs.contains_key("templatesFolder"), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` checks a folder preference as the app uses it, trimmed, as well: with the working
+/// folder as the read root, a path outside it with a space before it reads as a name in the working
+/// folder, and is still left out, because the app trims it and uses the path outside.
+#[test]
+fn ui_inspect_checks_a_folder_preference_as_trimmed() {
+    let (_, _, base) = confined("inspect-folder-trimmed");
+    let cwd = std::env::current_dir().unwrap();
+    let roots = AutomationRoots::new(&[&cwd], &[&base.join("out")]).unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Services::default()).with_control(rx).with_automation_roots(roots);
+    let outside = s(base.join("outside"));
+    // Without its drive, the path starts with a separator: trimmed, it is absolute on any platform.
+    let rooted = match outside.as_bytes() {
+        [drive, b':', ..] if drive.is_ascii_alphabetic() => &outside[2..],
+        _ => outside.as_str(),
+    };
+    let spaced = format!(" {rooted}");
+    app.ui.engine_prefs = json!({"fontsFolder": spaced, "pluginsFolder": ""});
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let prefs = r["result"]["ui"]["engine_prefs"].as_object().unwrap();
+    assert_eq!(prefs.get("pluginsFolder").and_then(Value::as_str), Some(""), "{r}");
+    assert!(!prefs.contains_key("fontsFolder"), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` hides a hidden library's id and path in every string it holds: status text, the
+/// command palette query and a script's report show the id and file name shown, and the path appears
+/// nowhere in the reply.
+#[test]
+fn ui_inspect_hides_a_hidden_library_path_in_every_string() {
+    let (mut app, tx, base) = confined("inspect-status-id");
+    let path = s(base.join("outside/b.svg"));
+    let theirs = format!("loaded/{path}");
+    app.ui.color_guide_limit = theirs.clone();
+    app.ui.status = format!("Loaded {path} (3 swatches), kept {path}.bak");
+    app.ui.palette_query = format!("\"{theirs}\"");
+    let source = format!("vc.log({})", json!(format!("read {path}.")));
+    app.session.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap();
+    for _ in 0..10_000 {
+        if app.session.script_pump().is_some() {
+            break;
+        }
+    }
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.svg", "{r}");
+    assert_eq!(r["result"]["ui"]["status"], "Loaded b.svg (3 swatches), kept b.svg.bak", "{r}");
+    assert_eq!(r["result"]["ui"]["palette_query"], "\"loaded/b.svg\"", "{r}");
+    assert_eq!(r["result"]["scriptReport"]["log"], json!(["read b.svg."]), "{r}");
+    let outside = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The reply to a request that names a hidden library by the id `ui.inspect` shows hides that
+/// library's id wherever the reply holds it, also between spaces and brackets and where a character
+/// that continues a path follows it.
+#[test]
+fn a_reply_hides_a_library_the_request_named_by_its_shown_id_everywhere() {
+    let (mut app, tx, base) = confined("named-hidden-reply");
+    let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
+    app.ui.color_guide_limit = theirs.clone();
+    app.ui.status = format!("Not added ( {theirs} ); kept {theirs}_old");
+    let r = request(&mut app, &tx, "ui.inspect", json!({"library": "loaded/b.svg"}));
+    assert_eq!(r["result"]["ui"]["status"], "Not added ( loaded/b.svg ); kept loaded/b.svg_old", "{r}");
+    let outside = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An error to a request that names a hidden library by the id `ui.inspect` shows names it by that id,
+/// and its path appears nowhere in the reply.
+#[test]
+fn an_error_for_a_hidden_library_named_by_its_shown_id_shows_that_id() {
+    let (mut app, tx, base) = confined("named-hidden-error");
+    app.ui.color_guide_limit = format!("loaded/{}", s(base.join("outside/b.svg")));
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "ui.colorGuideLimit", "params": {"library": "loaded/b.svg"}}));
+    assert_eq!(r["ok"], false, "{r}");
+    assert!(r["error"].as_str().is_some_and(|e| e.contains("loaded/b.svg")), "{r}");
+    let outside = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` leaves out of a recorded action's steps a path outside the read root under any path
+/// param (`diffPath`, `file`, a name ending in `Files`), and an absolute path or a `file:` URL outside
+/// it (the scheme in any case) under any other param or in any list. A `file:` URL inside it stays.
+#[test]
+fn ui_inspect_leaves_out_recorded_paths_under_any_key() {
+    let (mut app, tx, base) = confined("inspect-action-keys");
+    let (a, b) = (s(base.join("in/a.svg")), s(base.join("outside/b.svg")));
+    let to_url = |p: &str| if p.starts_with('/') { format!("file://{p}") } else { format!("file:///{}", p.replace('\\', "/")) };
+    let (url, url_in) = (to_url(&b), to_url(&a));
+    let set: crate::panels::actions::ActionSet = serde_json::from_value(json!({
+        "name": "set",
+        "actions": [{"name": "files", "steps": [
+            ["document.compare", {"diffPath": b, "target": a}],
+            ["file.open", {"file": b}],
+            ["type.fonts", {"fontFiles": [a, b, url_in]}],
+            ["x.y", {"target": b, "url": url, "upper": url.replacen("file:", "FILE:", 1), "other": "keep"}],
+            ["x.z", {"list": [b, "keep"]}],
+            ["x.w", {"share": "file://other-host/share/b.svg", "other": "keep"}],
+            ["x.v", {"file": url_in}],
+        ]}],
+    }))
+    .unwrap();
+    app.ui.action_sets = vec![set];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let steps = &r["result"]["ui"]["action_sets"][0]["actions"][0]["steps"];
+    let want = json!([
+        ["document.compare", {"target": a}],
+        ["file.open", {}],
+        ["type.fonts", {"fontFiles": [a, url_in]}],
+        ["x.y", {"other": "keep"}],
+        ["x.z", {"list": ["keep"]}],
+        ["x.w", {"other": "keep"}],
+        ["x.v", {"file": url_in}],
+    ]);
+    assert_eq!(steps, &want, "{r}");
+    let outside = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` hides a library loaded from outside the read root in the steps of a recorded action
+/// (its `library` and `panel` params) and in the action's name, also when nothing else names it.
+#[test]
+fn ui_inspect_hides_a_hidden_library_in_recorded_steps() {
+    let (mut app, tx, base) = confined("inspect-action-steps");
+    let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
+    let set: crate::panels::actions::ActionSet = serde_json::from_value(json!({
+        "name": "set",
+        "actions": [{"name": theirs, "steps": [
+            ["swatch.library.add", {"library": theirs}],
+            ["window.panel", {"panel": format!("library:swatches:{theirs}")}],
+        ]}],
+    }))
+    .unwrap();
+    app.ui.action_sets = vec![set];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let action = &r["result"]["ui"]["action_sets"][0]["actions"][0];
+    assert_eq!(action["name"], "loaded/b.svg", "{r}");
+    assert_eq!(
+        action["steps"],
+        json!([["swatch.library.add", {"library": "loaded/b.svg"}], ["window.panel", {"panel": "library:swatches:loaded/b.svg"}]]),
+        "{r}"
+    );
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` leaves out of a recorded action's steps the file paths (`path`, `folder`, a name ending
+/// in `Folder`, `paths`) outside the read root, also in a batch step's commands, and keeps the ones
+/// inside it.
+#[test]
+fn ui_inspect_leaves_out_recorded_paths_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect-action-paths");
+    let (a, b) = (s(base.join("in/a.svg")), s(base.join("outside/b.svg")));
+    let set: crate::panels::actions::ActionSet = serde_json::from_value(json!({
+        "name": "set",
+        "actions": [{"name": "files", "steps": [
+            ["file.open", {"path": a}],
+            ["file.open", {"path": b}],
+            ["file.place", {"paths": [a, b]}],
+            ["batch.run", {"folder": s(base.join("outside"))}],
+            ["action.batch", {"destinationFolder": s(base.join("outside"))}],
+            ["command.batch", {"commands": [{"command": "file.open", "params": {"path": b}}]}],
+        ]}],
+    }))
+    .unwrap();
+    app.ui.action_sets = vec![set];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let steps = &r["result"]["ui"]["action_sets"][0]["actions"][0]["steps"];
+    let want = json!([
+        ["file.open", {"path": a}],
+        ["file.open", {}],
+        ["file.place", {"paths": [a]}],
+        ["batch.run", {}],
+        ["action.batch", {}],
+        ["command.batch", {"commands": [{"command": "file.open", "params": {}}]}],
+    ]);
+    assert_eq!(steps, &want, "{r}");
+    assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 6, "the UI state is not changed");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` hides a library loaded from outside the read root whose id holds a path written with
+/// either separator, also one saved on another platform.
+#[test]
+fn ui_inspect_hides_a_library_path_with_either_separator() {
+    let (mut app, tx, base) = confined("inspect-separators");
+    app.ui.color_guide_limit = r"loaded/C:\Users\someone\b.svg".to_string();
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.svg", "{r}");
+    app.ui.color_guide_limit = "loaded//home/someone/c.svg".to_string();
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/c.svg", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A hidden library does not take the id of a library loaded without a path under the same file
+/// name: it shows as `loaded/<file name> (2)`, and a request that names the other library reaches it.
+#[test]
+fn ui_inspect_keeps_a_hidden_library_off_a_loaded_librarys_id() {
+    let (mut app, tx, base) = confined("inspect-loaded-id");
+    let svg = std::fs::read_to_string(base.join("in/a.svg")).unwrap();
+    let loaded = app.session.execute("swatch.library.load", &json!({"data": svg, "name": "b.svg"})).unwrap();
+    assert_eq!(loaded["library"], "loaded/b.svg");
+    let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
+    app.ui.color_guide_limit = theirs;
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.svg (2)", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Hidden libraries with the same file name that are shown for the first time in the same reply are
+/// numbered in the order of their paths, as the library commands number them.
+#[test]
+fn hidden_libraries_are_numbered_in_the_order_of_their_paths() {
+    let (mut app, tx, base) = confined("hidden-load-order");
+    let gpl = "GIMP Palette\nName: p\n0 0 0 Black\n";
+    for dir in ["z", "a"] {
+        std::fs::create_dir_all(base.join("outside").join(dir)).unwrap();
+        let path = base.join("outside").join(dir).join("b.gpl");
+        std::fs::write(&path, gpl).unwrap();
+        app.session.execute("swatch.library.load", &json!({"path": s(path)})).unwrap();
+    }
+    app.ui.color_guide_limit = format!("loaded/{}", s(base.join("outside").join("z").join("b.gpl")));
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.gpl (2)", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A hidden library keeps the id a reply showed for it when another library with the same file name is
+/// loaded later.
+#[test]
+fn a_hidden_library_keeps_its_id_when_another_with_its_name_loads() {
+    let (mut app, tx, base) = confined("hidden-stable-id");
+    let first = format!("loaded/{}", s(base.join("outside").join("a").join("b.gpl")));
+    let panel: crate::panels::library_panel::LibraryPanel = serde_json::from_value(json!({"kind": "swatches", "id": first})).unwrap();
+    app.ui.library_panels = vec![panel];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["library_panels"][0]["id"], "loaded/b.gpl", "{r}");
+    std::fs::create_dir_all(base.join("outside").join("z")).unwrap();
+    let path = base.join("outside").join("z").join("b.gpl");
+    std::fs::write(&path, "GIMP Palette\nName: p\n0 0 0 Black\n").unwrap();
+    app.session.execute("swatch.library.load", &json!({"path": s(path.clone())})).unwrap();
+    app.ui.color_guide_limit = format!("loaded/{}", s(path));
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["library_panels"][0]["id"], "loaded/b.gpl", "{r}");
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.gpl (2)", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An error from a panic hides a hidden library's path, also when the request stopped referring to
+/// the library before it panicked.
+#[test]
+fn a_panic_reply_hides_a_library_hidden_before_the_request() {
+    let (mut app, tx, base) = confined("panic-hidden");
+    let path = s(base.join("outside/b.svg"));
+    app.ui.color_guide_limit = format!("loaded/{path}");
+    app.ui.status = format!("Loaded {path}");
+    let r = request(&mut app, &tx, "test.panic", json!({"forget": true}));
+    assert_eq!(r["error"], "internal error: failed on Loaded b.svg (please report this bug)", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An error shows a path outside the read root that the request sent by its file name, whether or not
+/// a hidden library was loaded from that path, so that it reads the same either way. A path the
+/// request sends does not show the app's own text that holds it, in an error or a result, and a result
+/// shows that path by its file name as an error does.
+#[test]
+fn an_error_hides_a_sent_path_whether_or_not_a_library_was_loaded_from_it() {
+    let (mut app, tx, base) = confined("client-echo");
+    let path = s(base.join("outside/b.svg"));
+    // Another hidden library with the same file name comes first, so this one shows as `b.svg (2)`.
+    let first = format!("loaded/{}", s(base.join("outside/a/b.svg")));
+    let panel: crate::panels::library_panel::LibraryPanel = serde_json::from_value(json!({"kind": "swatches", "id": first})).unwrap();
+    app.ui.library_panels = vec![panel];
+    app.ui.color_guide_limit = format!("loaded/{path}");
+    app.ui.status = format!("Loaded {path}");
+    let unloaded = [(s(base.join("outside/y/b.svg")), "b.svg"), (s(base.join("outside/c.svg")), "c.svg")];
+    for (sent, name) in [(path.clone(), "b.svg")].into_iter().chain(unloaded) {
+        let r = request(&mut app, &tx, "app.open", json!({"path": sent}));
+        assert!(r["error"].as_str().is_some_and(|e| e.ends_with(&format!(": {name}"))), "{r}");
+    }
+    let r = request(&mut app, &tx, "test.status", json!({"guess": path}));
+    assert_eq!(r["result"], "Loaded b.svg", "{r}");
+    let r = request(&mut app, &tx, "test.panic", json!({"guess": path}));
+    assert_eq!(r["error"], "internal error: failed on Loaded b.svg (please report this bug)", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A screenshot's reply, sent after its request was handled, hides a hidden library's path, and in an
+/// error the path outside the read root that the request sent.
+#[test]
+fn a_screenshot_reply_hides_paths_like_any_reply() {
+    let (mut app, _tx, base) = confined("deferred-reply");
+    let path = s(base.join("outside/b.svg"));
+    app.ui.color_guide_limit = format!("loaded/{path}");
+    let sent = s(base.join("outside/shot.png"));
+    let roots = AutomationRoots::new(&[&base.join("in")], &[&base.join("out")]).unwrap();
+    let mut done = json!({"ok": true, "result": {"note": format!("from {path}")}});
+    let mut failed = json!({"ok": false, "error": format!("could not write {sent}")});
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        crate::control::hide_in_deferred_reply(&app, &mut done, &json!({"path": sent}));
+        crate::control::hide_in_deferred_reply(&app, &mut failed, &json!({"path": sent}));
+    });
+    assert_eq!(done["result"]["note"], "from b.svg", "{done}");
+    assert_eq!(failed["error"], "could not write shot.png", "{failed}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A reply whose only trace of a hidden library's path is a `file:` URL with every separator escaped
+/// shows the file name alone.
+#[test]
+fn a_reply_hides_a_path_with_escaped_separators() {
+    let (mut app, tx, base) = confined("escaped-separators");
+    let path = s(base.join("outside/b.svg"));
+    app.ui.color_guide_limit = format!("loaded/{path}");
+    app.ui.status = format!("from file:{}", path.replace('/', "%2F").replace('\\', "%5C"));
+    let r = request(&mut app, &tx, "test.status", json!({}));
+    assert_eq!(r["result"], "from b.svg", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` leaves out of a recorded action's steps a path that starts with `./` or `../`, `~` and
+/// a path under `~` outside the read root under any param, as a key too, and in any list. A URL and
+/// other text with a separator stay.
+#[test]
+fn ui_inspect_leaves_out_relative_paths_in_recorded_steps() {
+    let (mut app, tx, base) = confined("inspect-relative");
+    let set: crate::panels::actions::ActionSet = serde_json::from_value(json!({
+        "name": "set",
+        "actions": [{"name": "files", "steps": [
+            ["x.y", {"target": "~/b.svg", "rel": "../outside/b.svg", "home": "~", "text": "a/b", "url": "https://example.com/a"}],
+            ["x.z", {"list": [".\\b.svg", "a/b"], "../k": 1}],
+        ]}],
+    }))
+    .unwrap();
+    app.ui.action_sets = vec![set];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let steps = &r["result"]["ui"]["action_sets"][0]["actions"][0]["steps"];
+    let want = json!([["x.y", {"text": "a/b", "url": "https://example.com/a"}], ["x.z", {"list": ["a/b"]}]]);
+    assert_eq!(steps, &want, "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// Two libraries loaded from outside the read root under the same file name, only the second of them
 /// in a library panel: `ui.inspect` and `swatch.library.list` show the second under the same id, and
 /// that id finds it.
@@ -469,6 +868,43 @@ fn ui_inspect_and_library_commands_show_a_hidden_library_under_one_id() {
     assert_eq!(loaded, [&json!("loaded/Kit.gpl"), &json!("loaded/Kit.gpl (2)")], "{r}");
     let r = request(&mut app, &tx, "engine.execute", json!({"command": "swatch.library.get", "params": {"library": "loaded/Kit.gpl (2)"}}));
     assert_eq!(r["result"]["swatches"].as_array().map(Vec::len), Some(2), "the second library: {r}");
+    assert!(!r.to_string().contains("outside"), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A library panel command given a hidden library's shown id opens the library and answers with
+/// that id, not the library's path.
+#[test]
+fn a_library_panel_command_answers_with_a_hidden_librarys_shown_id() {
+    let (mut app, tx, base) = confined("panel-shown-id");
+    let path = base.join("outside/x/Kit.gpl");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, "GIMP Palette\nName: Kit\n0 0 0 Black\n").unwrap();
+    app.session.execute("swatch.library.load", &json!({"path": s(path.clone())})).unwrap();
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "window.swatchLibrary", "params": {"library": "loaded/Kit.gpl"}}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(r.to_string().contains("loaded/Kit.gpl") && !r.to_string().contains("outside"), "{r}");
+    assert_eq!(app.ui.library_panels.last().map(|p| p.id.clone()), Some(format!("loaded/{}", s(path))), "the app's own id");
+    // The panel id it answers with names the panel in the panel commands.
+    let panel = r["result"]["panel"].clone();
+    assert_eq!(panel, "library:swatches:loaded/Kit.gpl", "{r}");
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "ui.libraryPanel", "params": {"panel": panel, "view": "largeList"}}));
+    assert_eq!((&r["ok"], &r["result"]["panel"]), (&json!(true), &panel), "{r}");
+    assert!(!r.to_string().contains("outside"), "{r}");
+    let r = request(
+        &mut app,
+        &tx,
+        "engine.execute",
+        json!({"command": "window.panel.move", "params": {"panel": "swatches", "anchor": panel, "zone": "tab"}}),
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(!r.to_string().contains("outside"), "{r}");
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "window.panel.close", "params": {"panel": panel}}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(!r.to_string().contains("outside"), "{r}");
+    // Closed, the panel isn't found, and the error names it by the id given.
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "ui.libraryPanel", "params": {"panel": panel, "view": "largeList"}}));
+    assert_eq!(r["ok"], false, "{r}");
     assert!(!r.to_string().contains("outside"), "{r}");
     let _ = std::fs::remove_dir_all(base);
 }
@@ -564,6 +1000,147 @@ fn ui_inspect_keeps_text_that_only_looks_like_a_library_id() {
     assert_eq!(r["result"]["scriptReport"]["log"], json!([text]), "{r}");
     assert_eq!(r["result"]["ui"]["palette_query"], json!(query), "{r}");
     assert_eq!(r["result"]["ui"]["library_panels"][0]["id"], "loaded/d.svg", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect`'s `scriptReport` names a file the person's script wrote outside the read root, and
+/// the included file a failed run stopped in (also in its error line), by its file name; the person
+/// sees the paths.
+#[test]
+fn ui_inspect_script_report_leaves_out_files_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect-script-report");
+    let (kept, hidden) = (s(base.join("in/kept.svg")), s(base.join("outside/hidden.svg")));
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let source = format!(
+        "vc.run('document.export', {{path: {kept}, format: 'svg'}}); vc.run('document.export', {{path: {hidden}, format: 'svg'}});",
+        kept = json!(kept),
+        hidden = json!(hidden)
+    );
+    let finish = |app: &mut VectorcraftApp, params: Value| {
+        app.session.execute("script.run", &params).unwrap();
+        for _ in 0..10_000 {
+            if app.session.script_pump().is_some() {
+                break;
+            }
+        }
+    };
+    finish(&mut app, json!({"source": source, "name": "t.js"}));
+    let ctx = egui::Context::default();
+    let outside = json!(s(base.join("outside"))).to_string();
+    let person = crate::control::inspect(&app, &ctx);
+    assert_eq!(person["scriptReport"]["written"], json!([kept, hidden]), "{person}");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["scriptReport"]["written"], json!([kept, "hidden.svg"]), "{r}");
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    assert_eq!(app.session.script_report().unwrap()["written"], json!([kept, hidden]), "the report is not changed");
+
+    // A run that fails in a file it includes.
+    std::fs::write(base.join("outside/run.jsx"), "#include \"bad.jsxinc\"\n").unwrap();
+    std::fs::write(base.join("outside/bad.jsxinc"), "\nthrow new Error('stopped here');\n").unwrap();
+    finish(&mut app, json!({"path": s(base.join("outside/run.jsx"))}));
+    let person = crate::control::inspect(&app, &ctx);
+    assert_eq!(person["scriptReport"]["file"], json!(s(base.join("outside/bad.jsxinc"))), "{person}");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["scriptReport"]["file"], "bad.jsxinc", "{r}");
+    assert!(r["result"]["scriptReport"]["console"].to_string().contains("bad.jsxinc:2:"), "{r}");
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` rewrites a hidden library's id only where a string is that whole id: a readable
+/// library's id that begins with it stays, and a script's report line and a command palette query
+/// that end with it show the id shown.
+#[test]
+fn ui_inspect_rewrites_only_whole_hidden_library_ids() {
+    let (mut app, tx, base) = confined("inspect-whole-id");
+    let hidden = format!("loaded/{}", s(base.join("i")));
+    let readable = format!("loaded/{}", s(base.join("in/a.svg")));
+    assert!(readable.starts_with(&hidden));
+    let panel = |id: &str| -> crate::panels::library_panel::LibraryPanel { serde_json::from_value(json!({"kind": "swatches", "id": id})).unwrap() };
+    app.ui.library_panels = vec![panel(&hidden), panel(&readable)];
+    app.ui.palette_query = format!("library:swatches:{hidden}");
+    let text = format!("found {hidden}");
+    let source = format!("vc.log({})", json!(text));
+    app.session.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap();
+    for _ in 0..10_000 {
+        if app.session.script_pump().is_some() {
+            break;
+        }
+    }
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let ids: Vec<_> = r["result"]["ui"]["library_panels"].as_array().unwrap().iter().map(|p| p["id"].clone()).collect();
+    assert_eq!(ids, [json!("loaded/i"), json!(readable)], "{r}");
+    assert_eq!(r["result"]["scriptReport"]["log"], json!(["found loaded/i"]), "{r}");
+    assert_eq!(r["result"]["ui"]["palette_query"], "library:swatches:loaded/i", "{r}");
+    // A request that names the hidden library by the id shown keeps the readable id too.
+    let r = request(&mut app, &tx, "ui.inspect", json!({"library": "loaded/i"}));
+    let ids: Vec<_> = r["result"]["ui"]["library_panels"].as_array().unwrap().iter().map(|p| p["id"].clone()).collect();
+    assert_eq!(ids, [json!("loaded/i"), json!(readable)], "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A client can name a hidden library by the id `ui.inspect` shows: `ui.set {panel}` with that panel id
+/// reopens the closed panel of the library, and the reply does not show its path.
+#[test]
+fn ui_set_reopens_a_hidden_librarys_panel_by_its_shown_id() {
+    let (mut app, tx, base) = confined("set-hidden-panel");
+    let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
+    let real = format!("library:swatches:{theirs}");
+    app.ui.docking_hidden.insert(real.clone(), hidden_place());
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let shown = "library:swatches:loaded/b.svg";
+    assert!(r["result"]["ui"]["docking_hidden"].as_object().unwrap().contains_key(shown), "{r}");
+    let r = request(&mut app, &tx, "ui.set", json!({"panel": shown}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(!app.ui.docking_hidden.contains_key(&real), "the closed panel is reopened: {r}");
+    let layout = crate::panel_docking::layout_of(&app.ui);
+    assert!(layout.contains(&real) && !layout.contains(&shown.to_string()), "no second panel: {layout:?}");
+    let hidden = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
+    // A docking command takes the shown id as its destination too.
+    let r = request(
+        &mut app,
+        &tx,
+        "engine.execute",
+        json!({"command": "window.panel.move", "params": {"panel": "layers", "anchor": shown, "zone": "tab"}}),
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
+    // So does `ui.dock`'s move, whose destination is `target`.
+    let r = request(
+        &mut app,
+        &tx,
+        "engine.execute",
+        json!({"command": "ui.dock", "params": {"operation": "move", "panel": "properties", "target": shown, "zone": "tab"}}),
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    let layout = crate::panel_docking::layout_of(&app.ui);
+    assert!(layout.contains(&real) && !layout.contains(&shown.to_string()), "no second panel: {layout:?}");
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
+    // An error that quotes the panel shows the id the client gave, and other text is not rewritten.
+    let r = request(&mut app, &tx, "ui.set", json!({"panel": "library:bogus:loaded/b.svg"}));
+    assert_eq!(r["ok"], false, "{r}");
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
+    let r = request(&mut app, &tx, "ui.set", json!({"status": "loaded/b.svg"}));
+    assert_eq!((r["ok"].as_bool(), app.ui.status.as_str()), (Some(true), "loaded/b.svg"), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A shortcut for showing the panel of a library outside the read root, saved and in an open Keyboard
+/// Shortcuts dialog, is keyed by the panel id shown, also when nothing else refers to the library.
+#[test]
+fn ui_inspect_hides_a_library_panels_path_in_shortcut_overrides() {
+    let (mut app, tx, base) = confined("shortcut-hidden-panel");
+    let real = format!("panel:library:swatches:loaded/{}", s(base.join("outside/b.svg")));
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, &real, "Cmd+Alt+Shift+F7");
+    app.ui.dialog = Some(crate::state::Dialog::new("shortcuts", json!({"overrides": { real.clone(): "Cmd+Alt+Shift+F8" }})));
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let shown = "panel:library:swatches:loaded/b.svg";
+    let ui = &r["result"]["ui"];
+    assert_eq!(ui["shortcut_overrides"][shown], "Cmd+Alt+Shift+F7", "{r}");
+    assert_eq!(ui["dialog"]["fields"]["overrides"][shown], "Cmd+Alt+Shift+F8", "{r}");
+    let hidden = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
     let _ = std::fs::remove_dir_all(base);
 }
 
