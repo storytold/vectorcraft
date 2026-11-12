@@ -13,8 +13,8 @@ use super::edit::selected_roots;
 use super::pathops::Beside;
 use super::select::{first_selectable, is_selectable, selectable_ids, walk_selectable};
 use super::{
-    CommandSpec, EngineError, Point, Result, Session, bad, bool_or, checked_ids_param, cmd, f64_or, f64_req, has_doc, has_selection, id_param, ok,
-    str_param, switch_or,
+    CommandSpec, EngineError, Point, Result, Session, bad, checked_ids_param, cmd, f64_req, has_doc, has_selection, id_param, number_or, ok,
+    str_param, switch_or, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -482,7 +482,7 @@ fn save_selection(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let ids = st.selection.objects.clone();
     let saved = &st.doc.saved_selections;
-    let name = str_param(p, "name").and_then(SavedSelection::clean_name).unwrap_or_else(|| SavedSelection::default_name(saved));
+    let name = text_param(p, "name", C)?.and_then(SavedSelection::clean_name).unwrap_or_else(|| SavedSelection::default_name(saved));
     let existing = saved.iter().position(|x| x.name == name);
     if existing.is_none() && saved.len() >= SavedSelection::MAX {
         return Err(bad(C, format!("a document keeps at most {} saved selections", SavedSelection::MAX)));
@@ -577,10 +577,12 @@ fn edit_saved(s: &mut Session, p: &Value) -> Result<Value> {
     for e in edits {
         let name = str_param(e, "name").ok_or_else(|| bad(C, "missing name"))?;
         let i = *index.get(name).ok_or_else(|| bad(C, format!("no saved selection `{name}`")))?;
+        let delete = switch_or(e, "delete", false, C)?;
+        let new_name = text_param(e, "newName", C)?;
         let Some(slot) = after.get_mut(i) else { continue };
-        if bool_or(e, "delete", false) {
+        if delete {
             *slot = None;
-        } else if let Some(n) = str_param(e, "newName").and_then(SavedSelection::clean_name)
+        } else if let Some(n) = new_name.and_then(SavedSelection::clean_name)
             && let Some(x) = slot
         {
             x.name = n;
@@ -764,7 +766,7 @@ fn clear_guides(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn guide_add(s: &mut Session, p: &Value) -> Result<Value> {
     let pos = f64_req(p, "pos", "guide.add")?;
-    let vertical = bool_or(p, "vertical", false);
+    let vertical = switch_or(p, "vertical", false, "guide.add")?;
     let artboard = match p.get("artboard").filter(|v| !v.is_null()) {
         Some(v) => {
             let boards = &s.doc()?.doc.artboards;
@@ -845,7 +847,7 @@ fn guide_select(s: &mut Session, p: &Value) -> Result<Value> {
     let list = p.get("indexes").and_then(Value::as_array).ok_or_else(|| bad("guide.select", "missing indexes"))?;
     let ids = guide_ids(&s.doc()?.doc);
     let picked = list.iter().map(|v| guide_index_in(&ids, Some(v), "guide.select")).collect::<Result<Vec<_>>>()?;
-    if bool_or(p, "toggle", false) {
+    if switch_or(p, "toggle", false, "guide.select")? {
         // Added to (or taken from) what is selected, the art included.
         s.select(|_, sel| {
             for i in picked {
@@ -924,7 +926,9 @@ pub(crate) fn guide_move(s: &mut Session, p: &Value) -> Result<Value> {
     if moving.is_empty() {
         return Err(bad("guide.move", "no guide selected (or give an index)"));
     }
-    let (dx, dy, copy) = (f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0), bool_or(p, "copy", false));
+    let dx = number_or(p, "dx", 0.0, "guide.move")?;
+    let dy = number_or(p, "dy", 0.0, "guide.move")?;
+    let copy = switch_or(p, "copy", false, "guide.move")?;
     if !s.doc()?.selection.is_empty() {
         let ids = super::edit::selected_roots(s)?;
         return super::object::apply_transform(

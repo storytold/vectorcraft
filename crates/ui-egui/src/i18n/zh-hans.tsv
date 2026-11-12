@@ -2514,6 +2514,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Radial	径向
 	Radial Glows	径向光晕
 	Radial Gradient	径向渐变
+	Conic Gradient	圆锥渐变
 	Radius 1	半径 1
 	Radius 2	半径 2
 	Radius1	半径1
@@ -3465,6 +3466,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Toolbar: Single/Double Column	工具列：单列/双列
 	Toolbar: Add Tool	工具栏：添加工具
 	Toolbar: Remove Tool	工具栏：移除工具
+	Add Tool…	添加工具…
+	Remove Tool	移除工具
 	Toolbar: Reset	工具栏：重置
 	Toolbars	工具栏
 	Tools	工具
@@ -4065,6 +4068,8 @@ imageTrace	Outline	轮廓
 @msg	`gradient` must be an object	`gradient` 必须是对象
 @msg	`groupColors` must be an array	`groupColors` 必须是数组
 @msg	`mode` applies to freeform gradients	`mode` 仅适用于任意形状渐变
+@msg	a negative `aspect` applies to conic gradients	负的 `aspect` 仅适用于圆锥渐变
+@msg	`focal` applies to radial gradients	`focal` 仅适用于径向渐变
 @msg	`preserve` must be an object	`preserve` 必须是对象
 @msg	`globalAdjust` must be an object	`globalAdjust` 必须是对象
 @msg	`stops` must be an array	`stops` 必须是数组
@@ -4074,7 +4079,7 @@ imageTrace	Outline	轮廓
 @msg	stop {i} needs `offset`	色标 {i} 需要 `offset`
 @msg	stop {i} needs a valid `color`	色标 {i} 需要有效的 `color`
 @msg	stop {i}: `{k}` must be a number	色标 {i}：`{k}` 必须是数字
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	未知的渐变类型 `{k}` (linear、radial、freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	未知的渐变类型 `{k}` (linear、radial、conic、freeform)
 @msg	the art could not be sampled	无法对图稿取样
 @msg	the art is too light for any dots	图稿太浅，无法生成任何网点
 @msg	the document has no symbols	文档中没有符号
@@ -4748,7 +4753,13 @@ imageTrace	Outline	轮廓
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 或 HEIF 文件包含无法读取的图像类型
 @msg	HEIC and HEIF images can't be opened in this build	此版本无法打开 HEIC 和 HEIF 图像
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 图像过大，无法读取 ({_1} × {_2} 像素)
-@msg	zipped 32-bit PSD image data with prediction can't be read	无法读取带预测的 ZIP 压缩 32 位 PSD 图像数据
+@msg	zipped 1-bit PSD image data with prediction can't be read	无法读取带预测的 ZIP 压缩 1 位 PSD 图像数据
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD 文件的图层数据使用了未知的压缩方式 ({m})
+@msg	the PSD file's layer records are damaged	PSD 文件的图层记录已损坏
+@msg	the PSD file's layer groups are nested too deeply	PSD 文件的图层组嵌套过深
+@msg	a layer of the PSD file is too large to read	PSD 文件的某个图层过大，无法读取
+@msg	the PSD file's layers take more memory to read than allowed	读取 PSD 文件的图层所需内存超过允许值
+@msg	the layers can't be read ({e}): the file opened as its merged image	无法读取图层 ({e})：文件已作为合并图像打开
 @msg	{depth}-bit PSD files in this colour mode can't be read	无法读取此颜色模式下的 {depth} 位 PSD 文件
 @msg	the PSD file is cut short	PSD 文件不完整
 @msg	the PSD file's header is damaged	PSD 文件头已损坏
@@ -4813,7 +4824,7 @@ imageTrace	Outline	轮廓
 @msg	span must be "object" or "selection", got {v}	span 必须是 "object" 或 "selection"，实际为 {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" 放置的是 `gradient`，而不是色板
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" 放置渐变：请给出 `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" 放置线性或径向渐变，而不是任意形状渐变
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" 放置线性、径向或圆锥渐变，而不是任意形状渐变
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" 自行放置渐变：请省略 `start` 和 `end` (它们已按文档坐标放置渐变)
 @msg	Batch: {count} processed	批处理：已处理 {count} 个
 @msg	Batch: {count} processed, {failed} failed	批处理：已处理 {count} 个，失败 {failed} 个
@@ -5226,6 +5237,13 @@ axis	Both	两者
 	Dock Panel	停放面板
 	Dock to Top	停放到顶部
 	Dock to Bottom	停放到底部
+	Control Bar Options	控制栏选项
+	Tool Options	工具选项
+	Object Options	对象选项
+	Image Options	图像选项
+	Vertical Alignment	垂直对齐
+	Align and Distribute	对齐和分布
+	Document Options	文档选项
 	Dock Control Bar	停放控制栏
 	Drag to float the toolbar	拖动以浮动工具栏
 	Drag to the window's left or right edge to dock	拖到窗口左边缘或右边缘以停放
@@ -5898,6 +5916,11 @@ axis	Y Axis	Y 轴
 @msg	`inputs` needs the permission `doc.read`	`inputs` 需要权限 `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	内存预算（对象 {_1} 需要 {size} 字节的输入，剩余 {left}）
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	对象预算（超过 {MAX_OBJECTS} 个只读对象）
+@msg	instruction budget	指令预算
+@msg	time budget	时间预算
+@msg	memory budget (the selection is too large to hand over)	内存预算（所选内容太大，无法传递）
+@msg	output size ({what} is {len} bytes, limit {max})	输出大小（{what} 为 {len} 字节，上限 {max}）
+@msg	the plug-in's grant can't be removed from the plug-in store	无法从增效工具存储中移除该增效工具的授权
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	权限 `{shown}` 保留给以后的增效工具 API；此主机不授予该权限
 @msg	unknown permission `{shown}`	未知权限 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}”需要权限 {asked}：需要有人在桌面应用中批准，或在以 --allow-plugin-grants 启动的会话中传入 `grant`
@@ -6247,9 +6270,12 @@ anchor	Points:	点：
 @msg	{label} must be a number	{label} 必须是数字
 @msg	{label} must be a number of at least 0.1	{label} 必须是至少 0.1 的数字
 	Advanced Character Formats	高级字符格式
+	Basic Paragraph Formats	基本段落格式
+	Composition	排版
 	Horizontal Scale	水平缩放
 	Vertical Scale	垂直缩放
 @msg	{label} must be a number from {min} to {max}	{label} 必须是 {min} 到 {max} 之间的数字
+@msg	{label} must be a whole number from {min} to {max}	{label} 必须是 {min} 到 {max} 之间的整数
 	Character Color	字符颜色
 	OpenType Features	OpenType 特性
 	Stylistic Sets	风格集
@@ -6633,6 +6659,7 @@ breakText	Glyphs	字形
 
 # Align to Pixel Grid
 	Align to Pixel Grid	对齐像素网格
+	Not Aligned to Pixel Grid	未对齐像素网格
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路径和复合路径可以对齐像素网格
 @msg	side is left or right, not `{s}`	side 应为 left 或 right，而不是 `{s}`
 	Edit Custom Dictionary	编辑自定义词典

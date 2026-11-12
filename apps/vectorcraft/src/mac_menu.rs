@@ -30,6 +30,9 @@ use vectorcraft_ui_egui::native_menu::{self, Backend, Event, MenuBar, MenuRole, 
 // AppKit can deliver window input while its system menu is still tracking (especially with
 // asynchronous menu presentation). Keep the native tracking state separate from egui popups.
 static TRACKING: AtomicBool = AtomicBool::new(false);
+/// A tracking session began since the last [`Backend::drain`], which reports it as
+/// [`Event::Opened`].
+static OPENED: AtomicBool = AtomicBool::new(false);
 
 pub(crate) fn is_tracking() -> bool {
     TRACKING.load(Ordering::Relaxed)
@@ -46,9 +49,11 @@ fn observe_tracking(ctx: &egui::Context) {
             let block = RcBlock::new(move |_: std::ptr::NonNull<NSNotification>| {
                 TRACKING.store(tracking, Ordering::Relaxed);
                 if tracking {
+                    OPENED.store(true, Ordering::Relaxed);
                     super::mac_cursor::release();
                 }
-                // Apply any deferred menu updates as soon as the tracking session ends.
+                // Report the opened menu and apply any deferred menu updates as soon as the
+                // tracking session ends.
                 if !tracking {
                     repaint.request_repaint();
                 }
@@ -267,6 +272,9 @@ impl Backend for MacMenu {
 
     fn drain(&mut self) -> Vec<Event> {
         let mut out = Vec::new();
+        if OPENED.swap(false, Ordering::Relaxed) {
+            out.push(Event::Opened);
+        }
         while let Ok(chosen) = self.rx.try_recv() {
             cancel_tracking();
             // Ids that aren't ours are AppKit's own items (Services, Zoom…), already handled.

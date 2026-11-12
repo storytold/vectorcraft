@@ -133,6 +133,12 @@ pub struct VectorcraftApp {
     /// [`VectorcraftApp::sync_views`], which puts the views back with their documents after
     /// `document.move` reorders them (#5663).
     pub(crate) view_uids: Vec<u64>,
+    /// The thread that checks the system clipboard for `system_paste` instead
+    /// ([`Services::clipboard_probe`]). It is declared before `services` so that it is dropped
+    /// first: on X11 the last clipboard handle alive hands what the app copied to the clipboard
+    /// manager, and that must be the app's own handle in `services`, dropped on the UI thread
+    /// before the process exits.
+    clipboard_probe: Option<clipboard_probe::Probe>,
     pub services: Services,
     pub canvas: CanvasCache,
     pub perf: Perf,
@@ -234,9 +240,6 @@ pub struct VectorcraftApp {
     pub(crate) clipboard_image_request: Option<egui::Modifiers>,
     /// When `system_paste` was last checked in line (app time, s; at most once per frame).
     system_paste_at: f64,
-    /// The thread that checks the system clipboard for `system_paste` instead
-    /// ([`Services::clipboard_probe`]).
-    clipboard_probe: Option<clipboard_probe::Probe>,
     /// File dialogs shown off the UI thread and what runs again with their answers.
     pub(crate) picks: picks::Picks,
     /// The screen color sampler shown and not answered yet, and where its color goes.

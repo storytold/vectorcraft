@@ -21,6 +21,11 @@ pub struct Hooks<'a> {
     /// Distort Appearance: a path's strokes and geometry effects baked into filled art (`None`
     /// when it has none to bake).
     pub appearance: Outliner<'a>,
+    /// Distort Appearance for the pieces of type's glyph outlines: their geometry effects baked
+    /// as [`Hooks::appearance`] bakes them, their strokes left as strokes, which then paint along
+    /// the bent outlines at their own weight (#6644). `None` when a piece has nothing to bake, and
+    /// without this hook nothing in type's outlines is baked.
+    pub type_appearance: Outliner<'a>,
     /// Distort Pattern Fills: the tiles a pattern fill lays (see [`PatternTiles`]).
     pub pattern: Option<PatternTiles<'a>>,
     /// The document whose symbols' art counts toward the instance budget of a Repeat of their
@@ -61,6 +66,12 @@ pub(super) struct Warper<'a> {
     pub(super) options: EnvelopeOptions,
     /// How many hooks the art being mapped came through.
     pub(super) depth: u32,
+    /// Are groups marked as type's glyph outlines ([`crate::NodeExtras::type_outlines`]) in the art
+    /// being mapped type that live evaluation outlined: the type of the envelope's contents, or of
+    /// a live object in them, such as an envelope inside the envelope? Their strokes then paint
+    /// along the bent outlines at their own weight (#6644). Groups so marked in the contents as
+    /// they are, art an earlier Expand made of type, are plain art.
+    pub(super) type_outlines: bool,
 }
 
 impl Warper<'_> {
@@ -117,6 +128,13 @@ pub(super) fn map_node(n: &Node, w: &Warper) -> Node {
             *live = None;
         }
         NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => {
+            // Type's glyph outlines: with Distort Appearance too, their strokes paint along the
+            // bent outlines at their own weight, as `.ai` files draw them (#6644). Their pieces are
+            // baked by `type_appearance`, which keeps strokes as strokes; their geometry effects,
+            // gradients and pattern fills follow the options as a path's do. The group's opacity
+            // mask, mapped above, bends as other art does.
+            let typed = Warper { hooks: Hooks { appearance: w.hooks.type_appearance, ..w.hooks }, ..*w };
+            let w = if w.type_outlines && n.extras().type_outlines { &typed } else { w };
             for c in children.iter_mut() {
                 *c = Arc::new(map_node(c, w));
             }
@@ -124,14 +142,17 @@ pub(super) fn map_node(n: &Node, w: &Warper) -> Node {
         NodeKind::Mesh(m) => m.map(w.f),
         NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) | NodeKind::Intertwine { .. } => {
             if let Some(d) = &deeper {
-                return map_node(&expanded_group_hooks(n, w.hooks), d);
+                // The type's outlines in its art are type (an envelope inside the envelope, #6644).
+                return map_node(&expanded_group_hooks(n, w.hooks), &Warper { type_outlines: true, ..*d });
             }
         }
         NodeKind::Text(_) | NodeKind::SymbolInstance { .. } => {
             if let Some(d) = &deeper
                 && let Some(o) = w.hooks.outline.and_then(|h| h(n))
             {
-                return map_node(&carry_look(n, o), d);
+                // Type's outlines are type (#6644, the group arm above).
+                let d = Warper { type_outlines: d.type_outlines || matches!(n.kind, NodeKind::Text(_)), ..*d };
+                return map_node(&carry_look(n, o), &d);
             }
         }
         NodeKind::Image(im) => {
@@ -439,8 +460,11 @@ pub fn subtree_has_live(n: &Node) -> bool {
     any
 }
 
-/// Largest stroke outset in a subtree (for visual bounds of envelopes). With `symbols`, the
-/// outsets in the art of the symbols its instances show count too
+/// Largest stroke outset in a subtree (for visual bounds of envelopes, blends and repeats, and the
+/// reach of symbol art), type's character strokes included as type's own visual bounds measure them
+/// ([`crate::TextObject::char_stroke_outset`]): in an envelope they paint at their own weight
+/// around the bent glyphs, past its grid where the glyphs reach its edge (#6644). With
+/// `symbols`, the outsets in the art of the symbols its instances show count too
 /// ([`crate::symbols::ArtBox::reach`]), grown by [`crate::SymbolBoxes::brush_pad`]. In boxes made
 /// by [`crate::SymbolBoxes::without_art_strokes`], the outsets in the art do not count, and the pad
 /// does.
@@ -449,6 +473,9 @@ pub(crate) fn max_outset(nodes: &[Arc<Node>], symbols: Option<&crate::SymbolBoxe
     for n in nodes {
         n.walk(&mut |c| {
             o = o.max(c.appearance.outset());
+            if let NodeKind::Text(t) = &c.kind {
+                o = o.max(t.char_stroke_outset());
+            }
             if let (Some(s), NodeKind::SymbolInstance { symbol, .. }) = (symbols, &c.kind)
                 && let Some(art) = s.art(symbol)
             {

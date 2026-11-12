@@ -2612,6 +2612,7 @@ digits	Malayalam	Malayálam
 	Radial	Radial
 	Radial Glows	Resplandores radiales
 	Radial Gradient	Degradado radial
+	Conic Gradient	Degradado cónico
 	Radius 1	Radio 1
 	Radius 2	Radio 2
 	Radius1	Radio1
@@ -3602,6 +3603,8 @@ digits	Malayalam	Malayálam
 	Toolbar: Single/Double Column	Barra de herramientas: columna simple/doble
 	Toolbar: Add Tool	Barra de herramientas: añadir herramienta
 	Toolbar: Remove Tool	Barra de herramientas: quitar herramienta
+	Add Tool…	Añadir herramienta…
+	Remove Tool	Quitar herramienta
 	Toolbar: Reset	Barra de herramientas: restablecer
 	Toolbars	Barras de herramientas
 	Tools	Herramientas
@@ -4048,6 +4051,13 @@ axis	Both	Ambos
 	Dock Panel	Anclar panel
 	Dock to Top	Anclar arriba
 	Dock to Bottom	Anclar abajo
+	Control Bar Options	Opciones de la barra de control
+	Tool Options	Opciones de herramienta
+	Object Options	Opciones de objeto
+	Image Options	Opciones de imagen
+	Vertical Alignment	Alineación vertical
+	Align and Distribute	Alinear y distribuir
+	Document Options	Opciones de documento
 	Dock Control Bar	Anclar barra de control
 	Drag to float the toolbar	Arrastrar para hacer flotar la barra de herramientas
 	Drag to the window's left or right edge to dock	Arrastrar al borde izquierdo o derecho de la ventana para anclar
@@ -4200,6 +4210,8 @@ axis	Both	Ambos
 @msg	`groupColors` must be an array	`groupColors` debe ser una lista
 @msg	`library` is a library id or name (see {list})	`library` es el id o el nombre de una biblioteca (consulta {list})
 @msg	`mode` applies to freeform gradients	`mode` se aplica a los degradados de forma libre
+@msg	a negative `aspect` applies to conic gradients	un `aspect` negativo se aplica a los degradados cónicos
+@msg	`focal` applies to radial gradients	`focal` se aplica a los degradados radiales
 @msg	`preserve` must be an object	`preserve` debe ser un objeto
 @msg	`globalAdjust` must be an object	`globalAdjust` debe ser un objeto
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` debe ser 1, 3 o 5
@@ -4703,7 +4715,7 @@ axis	Both	Ambos
 @msg	unknown format	formato desconocido
 @msg	unknown format `{f}` (Save writes {_1})	formato desconocido `{f}` (Guardar escribe {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	modo de forma libre desconocido `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	tipo de degradado desconocido `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tipo de degradado desconocido `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	resaltado desconocido `{h}`
 @msg	unknown option `{path}.{k}`	opción desconocida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpresiones desconocidas `{o}` (preserve, simulate o discard)
@@ -4960,7 +4972,13 @@ axis	Both	Ambos
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	el archivo HEIC o HEIF contiene un tipo de imagen que no se puede leer
 @msg	HEIC and HEIF images can't be opened in this build	las imágenes HEIC y HEIF no se pueden abrir en esta compilación
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	la imagen PSD es demasiado grande para leerla ({_1} × {_2} píxeles)
-@msg	zipped 32-bit PSD image data with prediction can't be read	no se pueden leer datos de imagen PSD de 32 bits comprimidos en ZIP con predicción
+@msg	zipped 1-bit PSD image data with prediction can't be read	no se pueden leer datos de imagen PSD de 1 bit comprimidos en ZIP con predicción
+@msg	the PSD file's layer data uses an unknown compression ({m})	los datos de capa del archivo PSD usan una compresión desconocida ({m})
+@msg	the PSD file's layer records are damaged	los registros de capas del archivo PSD están dañados
+@msg	the PSD file's layer groups are nested too deeply	los grupos de capas del archivo PSD están anidados a demasiada profundidad
+@msg	a layer of the PSD file is too large to read	una capa del archivo PSD es demasiado grande para leerla
+@msg	the PSD file's layers take more memory to read than allowed	las capas del archivo PSD necesitan más memoria de la permitida para leerlas
+@msg	the layers can't be read ({e}): the file opened as its merged image	no se pueden leer las capas ({e}): el archivo se abrió como su imagen combinada
 @msg	{depth}-bit PSD files in this colour mode can't be read	los archivos PSD de {depth} bits en este modo de color no se pueden leer
 @msg	the PSD file is cut short	el archivo PSD está incompleto
 @msg	the PSD file's header is damaged	el encabezado del archivo PSD está dañado
@@ -5716,7 +5734,7 @@ mark-style	Japanese	Japonesas
 @msg	span must be "object" or "selection", got {v}	span debe ser "object" o "selection", no {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" coloca un `gradient`, no una muestra
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" coloca un degradado: indique `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" coloca un degradado lineal o radial, no uno de forma libre
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" coloca un degradado lineal, radial o cónico, no uno de forma libre
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" coloca el propio degradado: omita `start` y `end` (ya lo colocan en coordenadas del documento)
 	Make Image Dynamic	Hacer imagen dinámica
 	Import Data Sets…	Importar conjuntos de datos…
@@ -6002,6 +6020,11 @@ axis	Y Axis	Eje Y
 @msg	`inputs` needs the permission `doc.read`	`inputs` requiere el permiso `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	presupuesto de memoria (el objeto {_1} necesita {size} bytes de entrada, quedan {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	presupuesto de objetos (más de {MAX_OBJECTS} objetos de solo lectura)
+@msg	instruction budget	presupuesto de instrucciones
+@msg	time budget	presupuesto de tiempo
+@msg	memory budget (the selection is too large to hand over)	presupuesto de memoria (la selección es demasiado grande para entregarla)
+@msg	output size ({what} is {len} bytes, limit {max})	tamaño de salida ({what} ocupa {len} bytes, límite {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	el permiso del plugin no se puede quitar del almacén de plugins
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	el permiso `{shown}` está reservado para una API de plugins posterior; este host no lo concede
 @msg	unknown permission `{shown}`	permiso desconocido `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” pide los permisos {asked}: una persona debe aprobarlos en la aplicación de escritorio, o pasa `grant` en una sesión iniciada con --allow-plugin-grants
@@ -6349,9 +6372,12 @@ anchor	Points:	Puntos:
 @msg	{label} must be a number	{label} debe ser un número
 @msg	{label} must be a number of at least 0.1	{label} debe ser un número de al menos 0,1
 	Advanced Character Formats	Formatos avanzados de caracteres
+	Basic Paragraph Formats	Formatos básicos de párrafo
+	Composition	Composición
 	Horizontal Scale	Escala horizontal
 	Vertical Scale	Escala vertical
 @msg	{label} must be a number from {min} to {max}	{label} debe ser un número de {min} a {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} debe ser un número entero de {min} a {max}
 	Character Color	Color de los caracteres
 	OpenType Features	Funciones OpenType
 	Stylistic Sets	Conjuntos estilísticos
@@ -6735,6 +6761,7 @@ breakText	Glyphs	Glifos
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Alinear con cuadrícula de píxeles
+	Not Aligned to Pixel Grid	No alineado con cuadrícula de píxeles
 @msg	only paths and compound paths can be aligned to the pixel grid	solo los trazados y los trazados compuestos se pueden alinear con la cuadrícula de píxeles
 @msg	side is left or right, not `{s}`	side es left o right, no `{s}`
 	Ignore All	Omitir todo
