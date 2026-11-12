@@ -7041,6 +7041,8 @@ breakText	Glyphs	Merkit
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Lyhyitä käytännön opetusohjelmia tärkeimmistä työkaluista taidoittain ryhmiteltyinä. Valitse taito nähdäksesi sen opetusohjelmat.
 	List Tutorials	Luettele opetusohjelmat
 	Show Tutorial	Näytä opetusohjelma
+	Show Tool Location	Näytä työkalun sijainti
+	Show where this tool is	Näytä, missä tämä työkalu on
 @msg	missing `tutorial` (see learn.list)	`tutorial` puuttuu (ks. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tuntematon opetusohjelma `{id}` (ks. learn.list)
 

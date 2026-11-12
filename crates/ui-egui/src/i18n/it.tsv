@@ -6635,6 +6635,8 @@ breakText	Glyphs	Glifi
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Brevi tutorial pratici sugli strumenti essenziali, raggruppati per competenza. Scegli una competenza per vederne i tutorial.
 	List Tutorials	Elenca tutorial
 	Show Tutorial	Mostra tutorial
+	Show Tool Location	Mostra posizione strumento
+	Show where this tool is	Mostra dove si trova questo strumento
 @msg	missing `tutorial` (see learn.list)	manca `tutorial` (vedi learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial sconosciuto `{id}` (vedi learn.list)
 

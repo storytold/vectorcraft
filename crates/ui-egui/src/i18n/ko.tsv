@@ -6596,6 +6596,8 @@ breakText	Glyphs	글리프
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	기본 도구를 익히는 짧은 실습 튜토리얼을 기술별로 모았습니다. 기술을 선택하면 해당 튜토리얼이 표시됩니다.
 	List Tutorials	튜토리얼 목록
 	Show Tutorial	튜토리얼 표시
+	Show Tool Location	도구 위치 표시
+	Show where this tool is	이 도구의 위치 표시
 @msg	missing `tutorial` (see learn.list)	`tutorial`이 없습니다(learn.list 참조)
 @msg	unknown tutorial `{id}` (see learn.list)	알 수 없는 튜토리얼 `{id}`(learn.list 참조)
 

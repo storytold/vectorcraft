@@ -6690,6 +6690,8 @@ breakText	Glyphs	Глифи
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Кратки практически уроци за основните инструменти, групирани по умения. Изберете умение, за да видите уроците му.
 	List Tutorials	Извеждане на уроци
 	Show Tutorial	Показване на урок
+	Show Tool Location	Показване на местоположението на инструмента
+	Show where this tool is	Показване къде е този инструмент
 @msg	missing `tutorial` (see learn.list)	липсва `tutorial` (вижте learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	непознат урок `{id}` (вижте learn.list)
 

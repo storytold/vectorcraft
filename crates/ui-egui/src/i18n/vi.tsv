@@ -6616,6 +6616,8 @@ breakText	Glyphs	Glyph
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Các hướng dẫn thực hành ngắn cho những công cụ thiết yếu, xếp theo kỹ năng. Chọn một kỹ năng để xem các hướng dẫn của nó.
 	List Tutorials	Liệt kê hướng dẫn
 	Show Tutorial	Hiện hướng dẫn
+	Show Tool Location	Hiện vị trí công cụ
+	Show where this tool is	Hiện vị trí của công cụ này
 @msg	missing `tutorial` (see learn.list)	thiếu `tutorial` (xem learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	hướng dẫn không xác định `{id}` (xem learn.list)
 

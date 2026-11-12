@@ -7079,6 +7079,8 @@ swatch	Yellow Green	Verde-amarelado
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutoriais práticos curtos das ferramentas essenciais, agrupados por habilidade. Escolha uma habilidade para ver os tutoriais dela.
 	List Tutorials	Listar Tutoriais
 	Show Tutorial	Mostrar Tutorial
+	Show Tool Location	Mostrar Local da Ferramenta
+	Show where this tool is	Mostrar onde está esta ferramenta
 @msg	missing `tutorial` (see learn.list)	falta `tutorial` (veja learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial desconhecido `{id}` (veja learn.list)
 

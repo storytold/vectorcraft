@@ -8439,6 +8439,8 @@ theme	Appearance	अपीयरेंस
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	आवश्यक टूल के लिए छोटे व्यावहारिक ट्यूटोरियल, कौशल के अनुसार समूहित। किसी कौशल के ट्यूटोरियल देखने के लिए उसे चुनें।
 	List Tutorials	ट्यूटोरियल की सूची
 	Show Tutorial	ट्यूटोरियल दिखाएँ
+	Show Tool Location	टूल का स्थान दिखाएँ
+	Show where this tool is	दिखाएँ कि यह टूल कहाँ है
 @msg	missing `tutorial` (see learn.list)	लापता `tutorial` (learn.list देखें)
 @msg	unknown tutorial `{id}` (see learn.list)	अज्ञात ट्यूटोरियल `{id}` (learn.list देखें)
 

@@ -6862,6 +6862,8 @@ breakText	Glyphs	Glify
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Krótkie praktyczne samouczki dotyczące podstawowych narzędzi, pogrupowane według umiejętności. Wybierz umiejętność, aby zobaczyć jej samouczki.
 	List Tutorials	Wyświetl samouczki
 	Show Tutorial	Pokaż samouczek
+	Show Tool Location	Pokaż położenie narzędzia
+	Show where this tool is	Pokaż, gdzie jest to narzędzie
 @msg	missing `tutorial` (see learn.list)	brak `tutorial` (patrz learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	nieznany samouczek `{id}` (patrz learn.list)
 

@@ -6962,6 +6962,8 @@ breakText	Glyphs	Glifler
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Temel araçlar için becerilere göre gruplanmış kısa uygulamalı öğreticiler. Öğreticilerini görmek için bir beceri seçin.
 	List Tutorials	Öğreticileri Listele
 	Show Tutorial	Öğreticiyi Göster
+	Show Tool Location	Aracın Konumunu Göster
+	Show where this tool is	Bu aracın nerede olduğunu göster
 @msg	missing `tutorial` (see learn.list)	`tutorial` eksik (bkz. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	bilinmeyen öğretici `{id}` (bkz. learn.list)
 
