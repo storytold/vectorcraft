@@ -260,7 +260,10 @@ fn remove_profile(s: &mut Session, p: &Value) -> Result<Value> {
     if active.rgb == name || active.cmyk == name {
         use_front_profiles(s);
     }
-    touch_all(s);
+    // The CMYK profile View → Proof Setup targets: redraw.
+    if proof_targets(&info.name) {
+        touch_all(s);
+    }
     Ok(json!({"removed": info.name}))
 }
 
