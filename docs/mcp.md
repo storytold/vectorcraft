@@ -5496,7 +5496,11 @@ value outside that range is read as the nearer end), `previewMode` and `alignNew
 `file.newPresets {category?}` lists the categories and presets (Recent: the last sizes used; Saved: the user's presets,
 kept in the preferences by `file.newPresets.save` and removed by `file.newPresets.delete`). A listed preset can be
 passed straight back to `file.new`. Print presets and sizes without `units` start in `unitsGeneral`; screen presets
-(mobile, web, video, social) in Pixels. A saved or Recent preset whose size (up to 163,830 pt), `artboards` (1 to
+(mobile, web, video, social) in Pixels. `file.new` and `artboard.new` take the same artboard sizes: each side more than 0
+and at most 3,999,856 pt (the 4,000,000 pt the canvas reaches from the origin, less a 72 pt bleed on both sides). A side outside that range is
+refused with `width and height must be more than 0 and at most 3999856 pt`, followed by the limit in the document's
+units in parentheses when they are not points, such as `(1411.0603 m)`, and no document or artboard is made.
+A saved or Recent preset whose size (up to 3,999,856 pt), `artboards` (1 to
 1,000), spacing (0 to 100,000 pt) or bleed (0 to 72 pt a side) lies outside those ranges is read with the nearer end of
 each range, and a size of 0 or less is read as 1 pt.
 The desktop app's `file.newDialog` (Cmd/Ctrl+N) opens the New Document dialog on the first Recent entry, or on the
