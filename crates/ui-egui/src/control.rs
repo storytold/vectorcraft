@@ -324,9 +324,10 @@ const PANEL_FIELDS: [&str; 7] =
 /// loaded without a path is named. The UI state refers to a library by its bare id in a library panel
 /// and the Color Guide's limit, and by a panel id (`library:<kind>:loaded/<path>`) in the fields of
 /// [`PANEL_FIELDS`] and the workspaces' layouts. Text the person types (a command palette query, a
-/// workspace's name) is not read. When another of those ids already shows that name, the next free one
-/// of `loaded/<file name> (2)`, `(3)` and so on is shown, in the sorted order of the full ids, so that
-/// two libraries stay two and `ui.inspect` and `ui.docking` show a library under the same id.
+/// workspace's name) is not read. The ids are numbered with the session's loaded libraries as the
+/// library commands number them ([`vectorcraft_engine::cmd::swatchlib::concealed_library_ids`]), so
+/// that two libraries stay two and `ui.inspect`, `ui.docking` and the library commands show a library
+/// under the same id.
 fn unreadable_library_ids(app: &VectorcraftApp) -> Vec<(String, String)> {
     let mut ids = std::collections::BTreeSet::new();
     let ui = serde_json::to_value(&app.ui).unwrap_or_default();
@@ -342,30 +343,9 @@ fn unreadable_library_ids(app: &VectorcraftApp) -> Vec<(String, String)> {
     for id in app.ui.library_panels.iter().map(|p| p.id.as_str()).chain([app.ui.color_guide_limit.as_str()]) {
         add_library_id(id, &mut ids);
     }
-    let mut hidden = Vec::new();
-    let mut taken = std::collections::BTreeSet::new();
-    for id in ids {
-        let path = &id["loaded/".len()..];
-        let name = vectorcraft_engine::cmd::fileio::file_name(path);
-        if name != path && !readable(path) {
-            hidden.push((id, name));
-        } else {
-            taken.insert(id);
-        }
-    }
-    let mut hidden = hidden
-        .into_iter()
-        .map(|(id, name)| {
-            let mut shown = format!("loaded/{name}");
-            let mut n = 2;
-            while taken.contains(&shown) {
-                shown = format!("loaded/{name} ({n})");
-                n += 1;
-            }
-            taken.insert(shown.clone());
-            (id, shown)
-        })
-        .collect::<Vec<_>>();
+    let mut hidden = vectorcraft_engine::cmd::swatchlib::concealed_library_ids(&app.session, ids.iter().cloned());
+    // Only the ids the UI state refers to are replaced in the reply.
+    hidden.retain(|(id, _)| ids.contains(id));
     // The longest first, so that an id that begins another one does not replace part of it.
     hidden.sort_by_key(|(id, _)| std::cmp::Reverse(id.len()));
     hidden

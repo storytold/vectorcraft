@@ -396,7 +396,10 @@ the Tools panel alone, and Tab hides these toolbars with the other panels. Windo
 panel without them. A toolbar shown with its item or made with New Toolbar after Tab shows alone, and the other
 toolbars Tab hid are turned off. A toolbar's ••• button
 (`window.editToolbar {toolbar}`) opens the All Tools drawer beside it, and the drawer's drags and
-`toolbar.addTool`, `toolbar.removeTool` and `toolbar.reset` with `toolbar` edit it; the drawer has no Show section
+`toolbar.addTool`, `toolbar.removeTool` and `toolbar.reset` with `toolbar` edit it. The + button above the •••
+button (Add Tool…) opens a menu of every tool under the drawer's headings: a click on a tool runs `toolbar.addTool
+{tool, toolbar}`, which puts it at the end, and the tools under its Remove Tool heading run `toolbar.removeTool
+{tool, toolbar}`; the tools already in the toolbar are dimmed under their headings. The drawer has no Show section
 there. `window.floatTools {tool, toolbar}` floats one of its groups, and a group torn off it shows and hides with
 it. `window.toolbar.list` returns the toolbars (`ui.custom_toolbars` in `ui.inspect`: name, slots, shown flag,
 two-column flag, top-left corner, the groups torn off it). They are kept with the workspace they were made in:

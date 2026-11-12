@@ -493,7 +493,8 @@ pub const FORMATS: &[Format] = &[
     // Affinity Photo's `.afphoto` opens by its content but isn't listed: Finder shouldn't offer a
     // vector app for a raster editor's documents.
     reader("affinity", "Affinity", &["af", "afdesign", "afpub"], "application/x-affinity", false),
-    // Photoshop's large document format: read like a PSD (its merged image), never written.
+    // The large document form of PSD: read like a PSD (its layers, or its merged image), never
+    // written.
     reader("psb", "PSB", &["psb"], "image/x-psb", true),
     // PostScript programs, read as EPS files are; Print to PostScript writes them, exports don't.
     reader("ps", "PostScript", &["ps"], "application/postscript", false),

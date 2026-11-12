@@ -477,6 +477,29 @@ fn long_pages_in_points_keeps_every_version_and_changes_nothing_where_pages_are_
     assert_eq!(report(&d, with(&x4)).unwrap().bytes, report(&d, x4).unwrap().bytes);
 }
 
+/// PDF/A-2 limits page boundaries to 14,400 units (ISO 19005-2, 6.1.13): with
+/// `long_pages_in_points`, a PDF/A file gives the same file as without it at every version its
+/// standard allows, and a 10 m page keeps its `UserUnit` from PDF 1.5 on (PDF 1.5 is written as
+/// PDF 1.6 for it).
+#[test]
+fn pdfa2b_long_page_stays_within_14400_units() {
+    let d = sized(TEN_M, TEN_M / 10.0);
+    for s in Standard::ALL.iter().copied().filter(|s| *s != Standard::None && !s.is_pdfx()) {
+        for c in Compatibility::ALL.iter().copied().filter(|c| s.allows(*c)) {
+            let off = PdfSettings { standard: s, compatibility: c, ..PdfSettings::default() };
+            let on = PdfSettings { long_pages_in_points: true, ..off.clone() };
+            let (on, off) = (report(&d, on).unwrap(), report(&d, off).unwrap());
+            assert_eq!(on.bytes, off.bytes, "{} {}", s.label(), c.label());
+            assert_eq!(on.warnings, off.warnings, "{} {}", s.label(), c.label());
+            if c != Compatibility::Pdf14 {
+                assert_eq!(raw_numbers(&on.bytes, "/UserUnit", 1), [1.969], "{} {}", s.label(), c.label());
+                let media = raw_numbers(&on.bytes, "/MediaBox", 4);
+                assert!(media[2] - media[0] <= 14_400.0 && media[3] - media[1] <= 14_400.0, "{} {}: {media:?}", s.label(), c.label());
+            }
+        }
+    }
+}
+
 /// A page of 14,400 pt or less gives the same file with `long_pages_in_points` on or off, at every
 /// PDF version.
 #[test]

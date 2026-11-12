@@ -1,13 +1,13 @@
 //! Type menu long tail (Change Case, Smart Punctuation, Convert To Area/Point Type, Type on a Path
-//! Options, Fill with Placeholder Text, Insert Special/Whitespace/Break characters) and the text
-//! commands of the Edit menu (Find and Replace, Find Next, Paste without Formatting).
+//! Options, Dynamic Text, Fill with Placeholder Text, Insert Special/Whitespace/Break characters)
+//! and the text commands of the Edit menu (Find and Replace, Find Next, Paste without Formatting).
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{CharStyle, Document, Justify, LockedArtboards, Node, NodeId, NodeKind, Quotes, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{AreaFit, CharStyle, Document, Justify, LockedArtboards, Node, NodeId, NodeKind, Quotes, TextKind, TextObject, TextRun};
 use vectorcraft_geom::{Affine, Rect, shapes};
 
 use super::object::choice;
-use super::typecmd::refresh_bounds;
+use super::typecmd::{area_text, block_gaps, refresh_bounds};
 use super::{
     CommandSpec, EngineError, Result, Session, bad, checked_ids_param, cmd, find_command, has_clipboard, has_doc, has_selection, number_or,
     switch_or, targets, text_param,
@@ -65,8 +65,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Dynamic Text",
             ["Type"],
             None,
-            "{ids?|id?, on?: bool} turn Dynamic Text on or off for the selected type on a path (on omitted: the opposite of the first object's setting). On, the layout scales the text by one factor (every character's size, leading and baseline shift; Type on a Path Options › Spacing stays) so that it fills the span between its start and end brackets, larger or smaller, and fits it again after every edit to the text, the path or the brackets; the first character's size moves in steps of 0.1 pt within 0.1 to 1,296 pt, and at 0.1 pt text that still runs past the end bracket overflows. The stored sizes keep their proportions. Off, the text keeps the sizes it was drawn at. Point type and area type in the selection are left as they are; a selection holding type on a path in a thread is refused (threading type turns Dynamic Text off, keeping its drawn sizes). When every object already has the setting, nothing changes and no undo step is recorded → {on, ids, fitScale (the first object's factor, 1 when off)}",
-            has_free_path_type,
+            "{ids?|id?, on?: bool, wordGap?: % of a word space 0..1000 (100), lineGap?: pt -1296..1296 (0)} turn Dynamic Text on or off for the selected type on a path and area type (on omitted: the opposite of the first object's setting, or on when a gap is given). On type on a path, the layout scales the text by one factor (every character's size, leading and baseline shift; Type on a Path Options › Spacing stays) so that it fills the span between its start and end brackets, larger or smaller, and fits it again after every edit to the text, the path or the brackets; the first character's size moves in steps of 0.1 pt within 0.1 to 1,296 pt, and at 0.1 pt text that still runs past the end bracket overflows. The stored sizes keep their proportions. On area type it is Block: each line as typed (each paragraph, and each forced line break in one; lines are not broken again) is set to the frame's width, less the inset, the gutters and the paragraph's indents, by changing its font size only: its first character's size, in steps of 0.1 pt within 0.1 to 1,296 pt, the line's other characters keeping their proportions to it, with baseline shifts following. Every character's leading is its size plus lineGap, and the layout sets every paragraph with wordGap as its Desired word spacing, its Minimum or Maximum moving out to wordGap when wordGap lies outside it (the paragraphs keep their own Justification… values, which apply again when Block is off; the gaps are area type's, and are kept while Block is off; a gap with no area type in the selection is an error). The sizes are written into the characters and fitted again after every edit to the text or the frame, in the same undo step; at a size limit a line can be narrower than the frame or wrap. An empty line keeps its size. Block replaces Auto Size and Shrink Text to Fit (Area Type Options › Block is the same setting). Off, the text keeps the sizes it was drawn at. Point type in the selection is left as it is; a selection holding type in a thread is refused (threading type turns Dynamic Text off, keeping its drawn sizes). When nothing changes, no undo step is recorded → {on, ids, fitScale (the first object's factor; 1 when off and for area type), wordGap?, lineGap? (the first area type's; left out without area type)}",
+            has_dynamic_type,
             dynamic_text
         ),
         cmd!(
@@ -520,26 +520,40 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
     options(s)
 }
 
-/// Whether type on a path `id` is a frame of a thread.
+/// Whether type `id` is a frame of a thread.
 fn threaded(d: &Document, id: NodeId) -> bool {
     !super::threads::story_of(d, id).is_empty()
 }
 
-/// `type.dynamicText` is enabled for a selection holding type on a path, none of it in a thread.
-fn has_free_path_type(s: &Session) -> std::result::Result<(), String> {
+/// Type on a path or area type: the type Dynamic Text works on.
+fn dynamic_type(n: Option<&Node>) -> Option<&TextObject> {
+    path_text(n).or_else(|| area_text(n))
+}
+
+/// `type.dynamicText` is enabled for a selection holding type on a path or area type, none of it
+/// in a thread.
+fn has_dynamic_type(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
     let st = s.active().ok_or("no document open")?;
     let d = &st.doc;
     let selected: Vec<NodeId> = st.selection.objects.to_vec();
-    let paths: Vec<NodeId> = text_ids(d, &selected).into_iter().filter(|id| path_text(d.node(*id)).is_some()).collect();
-    if paths.is_empty() {
-        return Err("select type on a path".into());
+    let types: Vec<NodeId> = text_ids(d, &selected).into_iter().filter(|id| dynamic_type(d.node(*id)).is_some()).collect();
+    if types.is_empty() {
+        return Err("select type on a path or area type".into());
     }
+    threaded_refusal(d, &types).map_or(Ok(()), Err)
+}
+
+/// Why Dynamic Text is refused for `ids`: the frames among them that are in a thread, type on a
+/// path first; None when none is.
+fn threaded_refusal(d: &Document, ids: &[NodeId]) -> Option<String> {
+    let (paths, areas): (Vec<NodeId>, Vec<NodeId>) = ids.iter().copied().partition(|id| path_text(d.node(*id)).is_some());
     let frames = threaded_ids(d, &paths);
     if !frames.is_empty() {
-        return Err(format!("type on a path in a thread cannot use Dynamic Text: {frames}"));
+        return Some(format!("type on a path in a thread cannot use Dynamic Text: {frames}"));
     }
-    Ok(())
+    let frames = threaded_ids(d, &areas);
+    (!frames.is_empty()).then(|| format!("area type in a thread cannot use Dynamic Text: {frames}"))
 }
 
 /// The ids among `ids` of frames of threads, as a list for a message; empty when there are none.
@@ -547,32 +561,60 @@ fn threaded_ids(d: &Document, ids: &[NodeId]) -> String {
     ids.iter().filter(|id| threaded(d, **id)).map(|id| id.0.to_string()).collect::<Vec<_>>().join(", ")
 }
 
-/// Type › Dynamic Text: set `on` (without it, the opposite of the first object's setting) on the
-/// selected type on a path, in one undo step, and none when every object already has it. Turning
-/// it off keeps the sizes the text was drawn at ([`bake_dynamic_text`]).
+/// Type › Dynamic Text: set `on` (without it, the opposite of the first object's setting, or on
+/// when a gap is given) on the selected type on a path and area type (Block, with its gaps), in
+/// one undo step, and none when nothing changes. Turning it off keeps the sizes the text was drawn
+/// at ([`bake_dynamic_text`]).
 fn dynamic_text(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "type.dynamicText";
-    let (ids, on, changing) = {
+    let (word_gap, line_gap) = block_gaps(p, C)?;
+    let (ids, on, planned) = {
         let d = &s.doc()?.doc;
-        let ids: Vec<NodeId> = texts(s, p, C)?.into_iter().filter(|i| path_text(d.node(*i)).is_some()).collect();
-        let first = *ids.first().ok_or_else(|| bad(C, "select type on a path"))?;
-        let frames = threaded_ids(d, &ids);
-        if !frames.is_empty() {
-            return Err(bad(C, format!("type on a path in a thread cannot use Dynamic Text: {frames}")));
+        let ids: Vec<NodeId> = texts(s, p, C)?.into_iter().filter(|i| dynamic_type(d.node(*i)).is_some()).collect();
+        let first = *ids.first().ok_or_else(|| bad(C, "select type on a path or area type"))?;
+        if let Some(why) = threaded_refusal(d, &ids) {
+            return Err(bad(C, why));
         }
-        let on = switch_or(p, "on", !path_text(d.node(first)).is_some_and(|t| t.dynamic_text), C)?;
-        let changing: Vec<NodeId> = ids.iter().copied().filter(|id| path_text(d.node(*id)).is_some_and(|t| t.dynamic_text != on)).collect();
-        (ids, on, changing)
+        let gap_given = word_gap.is_some() || line_gap.is_some();
+        if gap_given && !ids.iter().any(|id| area_text(d.node(*id)).is_some()) {
+            return Err(bad(C, "wordGap and lineGap need area type in the selection"));
+        }
+        let on = switch_or(p, "on", gap_given || !dynamic_type(d.node(first)).is_some_and(|t| t.dynamic_text), C)?;
+        // Each object as the command leaves it, and only those it changes.
+        let mut planned: Vec<(NodeId, TextObject)> = vec![];
+        for id in &ids {
+            let Some(t) = dynamic_type(d.node(*id)) else { continue };
+            let mut after = t.clone();
+            if matches!(t.kind, TextKind::Area { .. }) {
+                after.area.word_gap = word_gap.unwrap_or(t.area.word_gap);
+                after.area.line_gap = line_gap.unwrap_or(t.area.line_gap);
+            }
+            match (on, t.dynamic_text) {
+                (true, true) => refresh_bounds(&mut after),
+                (true, false) => {
+                    after.dynamic_text = true;
+                    // Block replaces Auto Size and Shrink Text to Fit.
+                    if matches!(t.kind, TextKind::Area { .. }) {
+                        after.area.fit = AreaFit::None;
+                    }
+                    refresh_bounds(&mut after);
+                }
+                (false, true) => {
+                    bake_dynamic_text(&mut after);
+                }
+                (false, false) => {}
+            }
+            if after != *t {
+                planned.push((*id, after));
+            }
+        }
+        (ids, on, planned)
     };
-    if !changing.is_empty() {
+    if !planned.is_empty() {
         s.edit("Dynamic Text", |d, _| {
-            for id in &changing {
-                let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
-                if on {
-                    t.dynamic_text = true;
-                    refresh_bounds(t);
-                } else {
-                    bake_dynamic_text(t);
+            for (id, after) in &planned {
+                if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
+                    **t = after.clone();
                 }
             }
             Ok(())
@@ -581,7 +623,13 @@ fn dynamic_text(s: &mut Session, p: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     let fit =
         ids.first().and_then(|id| path_text(d.node(*id))).map_or(1.0, |t| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).fit_scale);
-    Ok(json!({"on": on, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "fitScale": fit}))
+    let mut reply = json!({"on": on, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "fitScale": fit});
+    if let Some(t) = ids.iter().find_map(|id| area_text(d.node(*id))) {
+        let (w, l) = t.area.block_gaps();
+        reply["wordGap"] = json!(w);
+        reply["lineGap"] = json!(l);
+    }
+    Ok(reply)
 }
 
 /// Turn Dynamic Text off on `t`, keeping the sizes its layout draws it at: every run's size,

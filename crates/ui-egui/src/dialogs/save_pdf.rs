@@ -478,9 +478,10 @@ fn general(ui: &mut egui::Ui, d: &mut Dialog, editor: bool) {
     let layers = standard.allows_layers() && choice::<Compatibility>(d, "compatibility").unwrap_or_default().has_layers();
     flag(ui, d, "createLayers", tl!("Create PDF layers from layers and sublayers"), layers);
     flag(ui, d, "includeNonPrinting", tl!("Include non-printing layers"), true);
-    // PDF/X files and PDF 1.3 and 1.4 files always write long pages in points.
+    // PDF/X files and PDF 1.3 and 1.4 files always write long pages in points, and PDF/A files
+    // keep the `UserUnit`.
     let compatibility = choice::<Compatibility>(d, "compatibility").unwrap_or_default();
-    let scales = !standard.is_pdfx() && !matches!(compatibility, Compatibility::Pdf13 | Compatibility::Pdf14);
+    let scales = standard == Standard::None && !matches!(compatibility, Compatibility::Pdf13 | Compatibility::Pdf14);
     flag(ui, d, "longPagesInPoints", tl!("Write pages longer than 200 in at full size in points"), scales);
     if editor {
         heading(ui, tl!("Description"));

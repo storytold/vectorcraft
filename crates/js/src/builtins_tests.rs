@@ -613,7 +613,11 @@ fn math_random_is_seeded_from_the_os_random_source() {
     let Some(start) = src.find("fn random_seed()") else { panic!("interp.rs has no random_seed") };
     let body = &src[start..];
     let body = &body[..body.find("\n}").unwrap_or(body.len())];
-    assert!(body.contains("getrandom::u64()"), "Math.random isn't seeded from the OS random source");
+    assert!(body.contains("random_seed_from(getrandom::u64())"), "Math.random isn't seeded from the OS random source");
+    // The OS value is the seed, made odd so it's never zero; a failed read still gives a seed.
+    assert_eq!(crate::interp::random_seed_from(Ok(0x40)), 0x41);
+    assert_eq!(crate::interp::random_seed_from(Ok(0)), 1);
+    assert_eq!(crate::interp::random_seed_from(Err(getrandom::Error::UNSUPPORTED)) & 1, 1);
 }
 
 // ---- JSON ----
