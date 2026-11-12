@@ -354,6 +354,22 @@ fn a_selected_diamond_shows_and_sets_its_midpoint_in_location() {
     assert!(texts.iter().any(|(t, _)| t == "0%"));
 }
 
+/// A mirrored conic's Aspect Ratio field shows the extent's size, and a typed value keeps the
+/// sweep mirrored.
+#[test]
+fn the_aspect_field_keeps_a_mirrored_conic_mirrored() {
+    let mut app = app(json!({"gradient": {"kind": "conic", "aspect": -50}}));
+    let mut p = Panel::new();
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    let field = texts.iter().find(|(t, _)| t == "50%").unwrap_or_else(|| panic!("the aspect field: {texts:?}")).1;
+    p.click(&mut app, field);
+    let key = |k, modifiers| Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers };
+    p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("80".into())], Modifiers::NONE);
+    p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
+    let geom = fill(&app).geom.unwrap();
+    assert!((geom.aspect + 0.8).abs() < 1e-9 && geom.is_mirrored(), "{geom:?}");
+}
+
 #[test]
 fn the_thumbnail_menu_applies_gradient_swatches_and_saves_one() {
     let mut app = app(json!({"color": "#336699"}));

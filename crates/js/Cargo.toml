@@ -11,7 +11,9 @@ workspace = true
 
 [dependencies]
 chrono = { workspace = true }
-unicode-general-category = "1"
+# Unicode 17.0 general categories for identifiers (chars.rs). 0.1.5 adds the Unicode-3.0 license,
+# which is not on the license allowlist, so the version is exact.
+unicode-properties = { version = "=0.1.4", default-features = false, features = ["general-category"] }
 # The seed of Math.random (interp.rs).
 getrandom = "0.4"
 
