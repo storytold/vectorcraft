@@ -464,3 +464,233 @@
 	Pen	עט
 	Release Blend	פירוק מעבר בין אובייקטים
 	Release Live Paint	פירוק צביעה חיה
+
+# Round 7: typography, type on path, fonts, align, layers, snapping and paths.
+	Align	יישור
+	Align center	יישור למרכז
+	Align left	יישור לשמאל
+	Align Objects:	יישור אובייקטים:
+	Align On:	יישור לפי:
+	Align right	יישור לימין
+	Align Stroke to Center	יישור קו מתאר למרכז
+	Align Stroke to Inside	יישור קו מתאר פנימה
+	Align Stroke to Outside	יישור קו מתאר החוצה
+	Align Stroke:	יישור קו מתאר:
+	Align to Artboard	יישור למשטח יצירה
+	Align to Glyph Bounds	יישור לגבולות הגליף
+	Align to Key Object	יישור לאובייקט הראשי
+	Align to Page	יישור לעמוד
+	Align to Path	יישור לנתיב
+	Align to Selection	יישור לבחירה
+	Align To:	יישור אל:
+	Align:	יישור:
+	Alignment Guides	קווי עזר ליישור
+	Alignment:	יישור:
+	Area / Path Type	טקסט באזור או על נתיב
+	Area Text Objects	אובייקטי טקסט באזור
+	Area Type Options	אפשרויות טקסט באזור
+	Area Type Options…	אפשרויות טקסט באזור…
+	Area Type Tool	כלי טקסט באזור
+	Artboard {number}	משטח יצירה {number}
+	Character	תו
+	Character Alignment	יישור תווים
+	Character / Paragraph	תו / פסקה
+	Character Rotation	סיבוב תווים
+	Character Set:	ערכת תווים:
+	Character Style	סגנון תו
+	Character Style Options	אפשרויות סגנון תו
+	Character Styles	סגנונות תו
+	Vertical Guide	קו עזר אנכי
+	Horizontal Guide	קו עזר אופקי
+	Select a character with the Type tool to see its alternates.	בחרו תו באמצעות כלי הטקסט כדי לראות את החלופות שלו.
+	Artboard or Item Name	שם משטח יצירה או פריט
+	Fill and Stroke	מילוי וקו מתאר
+	Fill new strokes	מילוי קווי מתאר חדשים
+	Selection:	בחירה:
+	Stroke When Editable	קו מתאר כשהפריט ניתן לעריכה
+	Fill with Placeholder Text	מילוי בטקסט מציין מיקום
+	Path:	נתיב:
+	Font	גופן
+	Font Family	משפחת גופנים
+	Font Family & Style	משפחת גופנים וסגנון
+	Font Family, Style & Size	משפחת גופנים, סגנון וגודל
+	Font List	רשימת גופנים
+	Font Preview Size	גודל תצוגה מקדימה של גופן
+	Font Size	גודל גופן
+	Font:	גופן:
+	Fonts	גופנים
+	Fonts in Document	גופנים במסמך
+	Fonts in Document: {count}	גופנים במסמך: {count}
+	Fonts whose licence doesn't allow embedding are not copied.	גופנים שהרישיון שלהם אינו מאפשר הטמעה לא יועתקו.
+	Show Live Paint Gaps	הצגת פערים בצביעה חיה
+	Hide Live Paint Gaps	הסתרת פערים בצביעה חיה
+	Select Fills	בחירת מילויים
+	Select Strokes	בחירת קווי מתאר
+	Glyphs	גליפים
+	Height:	גובה:
+	Show Properties Panel	הצגת חלונית מאפיינים
+	Hide Hidden Characters	הסתרת תווים מוסתרים
+	Area Type	טקסט באזור
+	Text Orientation	כיוון הטקסט
+	Horizontal	אופקי
+	Horizontal %	אופקי %
+	Horizontal Align Center	יישור אופקי למרכז
+	Horizontal Align Left	יישור אופקי לשמאל
+	Horizontal Align Right	יישור אופקי לימין
+	Horizontal Distribute Center	פיזור מרכזים אופקי
+	Horizontal Distribute Left	פיזור שמאלה
+	Horizontal Distribute Right	פיזור ימינה
+	Horizontal Distribute Space	פיזור מרווחים אופקי
+	Horizontal Grid:	רשת אופקית:
+	Horizontal Scale %	קנה מידה אופקי %
+	Horizontal:	אופקי:
+	Justification…	יישור דו־צדדי…
+	Justify all lines	יישור דו־צדדי לכל השורות
+	Align Top	יישור לראש
+	Align Center	יישור למרכז
+	Align Bottom	יישור לתחתית
+	Justify Vertically	יישור אנכי דו־צדדי
+	Justify with last line aligned center	יישור דו־צדדי והשורה האחרונה ממורכזת
+	Justify with last line aligned left	יישור דו־צדדי והשורה האחרונה מיושרת לשמאל
+	Justify with last line aligned right	יישור דו־צדדי והשורה האחרונה מיושרת לימין
+	Kerning	צימוד אותיות
+	Layer	שכבה
+	Layer Names	שמות שכבות
+	Layer Options	אפשרויות שכבה
+	Layer Options…	אפשרויות שכבה…
+	Layers	שכבות
+	Layers Panel Options	אפשרויות חלונית השכבות
+	Layout:	פריסה:
+	Leading	ריווח שורות
+	Fills	מילויים
+	Strokes	קווי מתאר
+	Offset Path	היסט נתיב
+	Offset Path…	היסט נתיב…
+	Offset X	היסט X
+	Offset:	היסט:
+	Outline	קווי מתאר
+	Outline Object	יצירת קווי מתאר לאובייקט
+	Outline Others	הצגת אחרים בקווי מתאר
+	Outline Stroke	המרת קו מתאר לצורה
+	Outline Text	המרת טקסט לקווי מתאר
+	Outlines and Rules	קווי מתאר וקווים
+	Paragraph	פסקה
+	Paragraph Style	סגנון פסקה
+	Paragraph Style Options	אפשרויות סגנון פסקה
+	Paragraph Styles	סגנונות פסקה
+	Paragraph Symbol	סימן פסקה
+	Path	נתיב
+	Path Eraser	מחק נתיבים
+	Path Eraser Tool	כלי מחק נתיבים
+	Pathfinder	פעולות על נתיבים
+	Pathfinder Options…	אפשרויות פעולות על נתיבים…
+	Paths	נתיבים
+	Path Length	אורך נתיב
+	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	נתיבים: {paths}    נקודות עיגון: {anchors}    צבעים: {colors}
+	Character Direction	כיוון התווים
+	Select All Artboards	בחירת כל משטחי היצירה
+	Artboards: {n}	משטחי יצירה: {n}
+	Rulers	סרגלים
+	Rulers & Grids	סרגלים ורשתות
+	Select a text object	בחירת אובייקט טקסט
+	Select a text object to edit its character attributes.	בחרו אובייקט טקסט כדי לערוך את מאפייני התווים שלו.
+	Select a text object to edit its paragraph attributes.	בחרו אובייקט טקסט כדי לערוך את מאפייני הפסקה שלו.
+	Select All Art on Layer	בחירת כל היצירה בשכבה
+	Select All Unused	בחירת כל הפריטים שאינם בשימוש
+	Select Anchors	בחירת נקודות עיגון
+	Select Segments	בחירת מקטעים
+	Select Appearance Item	בחירת פריט מראה
+	Select Art	בחירת יצירה
+	Select Freeform Point	בחירת נקודה חופשית
+	Select Gradient Stop	בחירת נקודת עצירה במעבר צבע
+	Select Guides	בחירת קווי עזר
+	Select Objects	בחירת אובייקטים
+	Select Slices	בחירת פרוסות
+	Select text	בחירת טקסט
+	Select Text by Font	בחירת טקסט לפי גופן
+	Select text or click into text with the Type tool to insert glyphs	בחרו טקסט או לחצו בתוך הטקסט באמצעות כלי הטקסט להוספת גליפים
+	Select Tool	כלי בחירה
+	Select:	בחירה:
+	Selected Artwork	היצירה שנבחרה
+	Selected Styles Only	סגנונות שנבחרו בלבד
+	Selected Swatches	דוגמיות הצבע שנבחרו
+	Selection	בחירה
+	Selection & Anchor Display	תצוגת בחירה ונקודות עיגון
+	Selection Only	הבחירה בלבד
+	Selection Tool	כלי בחירה
+	Show	הצגה
+	Show All	הצגת הכול
+	Show All Layers	הצגת כל השכבות
+	Show Artboards	הצגת משטחי יצירה
+	Show Bounding Box	הצגת תיבה תוחמת
+	Show Brush Size	הצגת גודל מברשת
+	Show Center	הצגת מרכז
+	Show Color Swatches	הצגת דוגמיות צבע
+	Show Corner Widget	הצגת פקד פינות
+	Show Edges	הצגת קצוות
+	Show Find Field	הצגת שדה חיפוש
+	Show Font Names in English	הצגת שמות הגופנים באנגלית
+	Show Gradient Annotator	הצגת כלי הבקרה של מעבר צבע
+	Show Gradient Swatches	הצגת דוגמיות מעבר צבע
+	Show Grid	הצגת רשת
+	Show Guides	הצגת קווי עזר
+	Show Hidden Characters	הצגת תווים מוסתרים
+	Show Layers Only	הצגת שכבות בלבד
+	Show Mesh	הצגת רשת
+	Show Missing	הצגת פריטים חסרים
+	Show Modified	הצגת פריטים ששונו
+	Show Options	הצגת אפשרויות
+	Show Original Path	הצגת הנתיב המקורי
+	Show Pattern Swatches	הצגת דוגמיות דוגמה
+	Show Print Tiling	הצגת חלוקת הדפסה
+	Show Rulers	הצגת סרגלים
+	Show Text Threads	הצגת קישורי טקסט
+	Show Thumbnail	הצגת תמונה ממוזערת
+	Show Thumbnail View	תצוגת תמונות ממוזערות
+	Show Thumbnails	הצגת תמונות ממוזערות
+	Show Tool Tips	הצגת תיאורי כלים
+	Show Transparency Grid	הצגת רשת השקיפות
+	Snap to Grid	הצמדה לרשת
+	Snap to Pixel	הצמדה לפיקסלים
+	Snap to Point	הצמדה לנקודות
+	Snapping Tolerance	סבילות הצמדה
+	Stroke	קו מתאר
+	Stroke Color	צבע קו מתאר
+	Fill Gradient	מעבר צבע למילוי
+	Stroke Gradient	מעבר צבע לקו מתאר
+	Fill Pattern	דוגמה למילוי
+	Stroke Pattern	דוגמה לקו מתאר
+	Stroke Options	אפשרויות קו מתאר
+	Stroke Weight	עובי קו מתאר
+	Stroke:	קו מתאר:
+	Text Displayed in Cell:	טקסט המוצג בתא:
+	Text Export Options	אפשרויות ייצוא טקסט
+	Text Fill & Stroke Color	צבע מילוי וקו מתאר של טקסט
+	Text Fill Color	צבע מילוי טקסט
+	Text Import Options	אפשרויות ייבוא טקסט
+	Text Stroke Color	צבע קו המתאר של טקסט
+	Text Wrap	גלישת טקסט
+	Text Wrap Options	אפשרויות גלישת טקסט
+	Text Wrap Options…	אפשרויות גלישת טקסט…
+	Tracking	ריווח בין אותיות
+	Type on a Path	טקסט על נתיב
+	Type on a Path Options	אפשרויות טקסט על נתיב
+	Type on a Path Options…	אפשרויות טקסט על נתיב…
+	Type on a Path Tool	כלי טקסט על נתיב
+	Type Orientation	כיוון הטקסט
+	Type Tool	כלי טקסט
+	Type:	סוג:
+	Vertical	אנכי
+	Vertical %	אנכי %
+	Vertical Align Bottom	יישור אנכי לתחתית
+	Vertical Align Center	יישור אנכי למרכז
+	Vertical Align Top	יישור אנכי לראש
+	Vertical Distribute Bottom	פיזור אנכי לתחתית
+	Vertical Distribute Center	פיזור מרכזים אנכי
+	Vertical Distribute Space	פיזור מרווחים אנכי
+	Vertical Distribute Top	פיזור אנכי לראש
+	Vertical Scale %	קנה מידה אנכי %
+	Vertical:	אנכי:
+	Width and Height	רוחב וגובה
+	Width Profile	פרופיל רוחב
+	Width Profiles	פרופילי רוחב

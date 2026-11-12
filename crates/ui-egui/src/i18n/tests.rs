@@ -3038,7 +3038,7 @@ fn hebrew_vector_artboard_path_and_color_controls_are_translated() {
     let he = Lang::from_code("he").expect("Hebrew locale registered");
     let (rows, errors) = parse_entries(he.0.source);
     assert!(errors.is_empty(), "invalid Hebrew VectorCraft TSV: {errors:?}");
-    assert_eq!(rows.len(), 453, "source-bound Hebrew catalog row count changed");
+    assert_eq!(rows.len(), 681, "source-bound Hebrew catalog row count changed");
     for key in [
         "Artboard Tool",
         "Artboard Options…",
@@ -3073,4 +3073,47 @@ fn hebrew_vector_artboard_path_and_color_controls_are_translated() {
     assert_eq!(tr(he, "Artboard Tool"), "כלי משטח יצירה");
     assert_eq!(tr(he, "Color Picker"), "בורר צבע");
     assert_eq!(tr(he, "Untranslated native path sentinel"), "Untranslated native path sentinel");
+}
+
+/// Font, character/paragraph and alignment panels are visible in Hebrew;
+/// original command IDs, file names and English tool names are untouched.
+#[test]
+fn hebrew_typography_font_path_and_alignment_are_translated() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert_eq!(rows.len(), 681, "current source catalog count");
+    for source in [
+        "Font",
+        "Font Family",
+        "Font Size",
+        "Fonts in Document",
+        "Glyphs",
+        "Kerning",
+        "Leading",
+        "Tracking",
+        "Character Style",
+        "Paragraph Styles",
+        "Type Tool",
+        "Type on a Path",
+        "Type on a Path Options…",
+        "Align to Artboard",
+        "Align to Key Object",
+        "Show Hidden Characters",
+        "Text Wrap Options…",
+        "Stroke Weight",
+        "Snap to Grid",
+        "Pathfinder",
+        "Layer Options…",
+        "Show Rulers",
+    ] {
+        let translated = tr(he, source);
+        assert_ne!(translated, source, "untranslated native source key {source:?}");
+        assert!(translated.chars().any(|c| ('\u{05d0}'..='\u{05ea}').contains(&c)));
+        assert_eq!(tr(Lang::EN, source), source, "English source changed");
+    }
+    assert_eq!(tr(he, "Font Size"), "גודל גופן");
+    assert_eq!(tr(he, "Type on a Path"), "טקסט על נתיב");
+    assert_eq!(tr(he, "Kerning"), "צימוד אותיות");
+    assert_eq!(tr(he, "Untranslated customer font name"), "Untranslated customer font name");
 }
