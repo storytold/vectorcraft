@@ -6385,7 +6385,8 @@ point, as in SVG export), `pt`, `mm`, `cm` or `in`; `unnamed: false` leaves out 
 writes the `.css` file with the PNGs of rasterized art next to it (no path: `data` and `images` as base64). Its
 `warnings` add the PNGs' notes to the CSS's, each once (an image that couldn't be decoded, type written in the
 fallback font…). In the app, `css.copy` copies the CSS and `css.exportFile` writes it through a save panel (the web
-downloads it) and shows the first note in the status bar.
+downloads it) and shows the first note in the status bar, with how many there are; resting the pointer on the
+message lists them all.
 
 ```json
 {"name":"run_command","arguments":{"command":"css.selection","params":{"units":"px","position":true}}}
