@@ -4282,6 +4282,27 @@ files saved without it read back with it off.
 {"name":"run_command","arguments":{"command":"object.setPixelAligned","params":{"ids":[12],"on":false}}}
 ```
 
+### Align New Objects to Pixel Grid
+
+`document.setup {alignNewObjectsToPixelGrid: true|false}` turns the document's Align New Objects to Pixel Grid on or
+off in one undo step, as the New Document dialog's Advanced Options checkbox and the Transform panel menu's checked item
+do (described on the help page,
+<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/pixel-preview-mode-for-web-graphics.html>);
+`document.setup` with no params reports it. While it is on, every path and compound path drawn in the document (the
+shape, line, arc, spiral, Pen, Curvature, Pencil, Paintbrush, Blob Brush and `addon.shapes.*` commands, and the paths
+in a new rectangular grid, polar grid or flare) takes the pixel-aligned property and is snapped in the undo step that
+makes it. These rules are VectorCraft's own: type, images, groups and guides do not take it; art already in the document stays as it is when the setting changes; objects that Paste, Duplicate, Place and
+import bring in keep their own property; and `object.setPixelAligned` turns one object's property off without changing
+the document's setting. `file.new {alignNewObjectsToPixelGrid}` sets it for the new document. The Mobile and Web presets
+start with it on and the other built-in presets with it off; saved presets and Recent entries keep the value they were
+made with, and a saved preset from before the setting reads off. The setting is saved in the native file only when on,
+and files saved without it open with it off.
+
+```json
+{"name":"run_command","arguments":{"command":"document.setup","params":{"alignNewObjectsToPixelGrid":true}}}
+{"name":"run_command","arguments":{"command":"file.new","params":{"preset":"Letter","alignNewObjectsToPixelGrid":true}}}
+```
+
 ## Live Corners
 
 `object.setLiveShape {id?, ids?, radius?, kind?, corners?, items?}` sets the corners of any path (one undo step): a live
@@ -4966,8 +4987,9 @@ Exporting and importing preferences is an optional VectorCraft feature.
 as a red outline around each artboard), the transparency grid (size and two colours; the first is also the simulated
 paper colour), the flattener preset and Discard White Overprint (Overprint Preview keeps white overprints visible while
 it is on), the type options (language and its quotes, Use Typographer's Quotes for typed straight quotes and a typed `”` where a quote opens, superscript, subscript
-and small caps proportions, SVG text export) and the background contents (white: raster exports are white behind the
-art). Pass any of these keys to change them in one undo step; `document.setUnits` stays as an alias for `units`.
+and small caps proportions, SVG text export), the background contents (white: raster exports are white behind the
+art) and Align New Objects to Pixel Grid (see [Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid)).
+Pass any of these keys to change them in one undo step; `document.setUnits` stays as an alias for `units`.
 A file whose bleed (0 to 72 pt a side), superscript and subscript sizes (1 to 500%) and positions (-500 to 500%) or
 small caps size (1 to 200%) lies outside those ranges opens with the nearer end of each range.
 
@@ -4980,7 +5002,8 @@ small caps size (1 to 200%) lies outside those ranges opens with the nearer end 
 `file.new` takes everything New Document sets: `preset` (a name from `file.newPresets`), `name`, `width`/`height`
 (points, or lengths such as `"210 mm"`), `units`, `orientation`, `artboards` with `artboardLayout {layout, columns,
 spacing, rightToLeft}`, `bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi` (1 to 2,400; a saved preset's
-value outside that range is read as the nearer end) and `previewMode`.
+value outside that range is read as the nearer end), `previewMode` and `alignNewObjectsToPixelGrid` (see
+[Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid)).
 `file.newPresets {category?}` lists the categories and presets (Recent: the last sizes used; Saved: the user's presets,
 kept in the preferences by `file.newPresets.save` and removed by `file.newPresets.delete`). A listed preset can be
 passed straight back to `file.new`. Print presets and sizes without `units` start in `unitsGeneral`; screen presets

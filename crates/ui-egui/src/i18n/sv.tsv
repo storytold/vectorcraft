@@ -8276,6 +8276,7 @@ digits	Hindi	Hindi
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Justera mot pixelrutnät
+	Align New Objects to Pixel Grid	Justera nya objekt mot pixelrutnät
 @msg	only paths and compound paths can be aligned to the pixel grid	bara banor och sammansatta banor kan justeras mot pixelrutnätet
 @msg	side is left or right, not `{s}`	side är left eller right, inte `{s}`
 	Ignore All	Ignorera alla

@@ -6534,6 +6534,7 @@ breakText	Glyphs	Glyffer
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Juster efter pixelgitter
+	Align New Objects to Pixel Grid	Juster nye objekter efter pixelgitter
 @msg	side is left or right, not `{s}`	side er left eller right, ikke `{s}`
 	Edit Custom Dictionary	Redigér egen ordliste
 	Entry:	Opslag:
