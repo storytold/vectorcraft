@@ -685,7 +685,8 @@ fn a_ligature_feature_still_applies_only_to_its_character_range() {
     crate::edit::style_range(&mut text.runs, 0, 1, |st| st.features = vec!["-liga".into()]);
     let after = layout(&db, &text);
     let glyphs = after.glyphs.iter().map(|g| (g.gid, g.byte, g.len)).collect::<Vec<_>>();
-    assert_eq!(glyphs, [(face.glyph_for('f'), 0, 1), (face.glyph_for('i'), 1, 1), (face.glyph_for(LIGATURE_CARET_GLYPH), 2, 2)]);
+    let ligature = u32::from(source_sans_gid(LIGATURE_CARET_GLYPH).expect("the fixture's unencoded ligature glyph"));
+    assert_eq!(glyphs, [(face.glyph_for('f'), 0, 1), (face.glyph_for('i'), 1, 1), (ligature, 2, 2)]);
 }
 
 /// Horizontal type does not read Standard Vertical Roman Alignment or the tate-chu-yoko offsets, so
