@@ -7209,6 +7209,36 @@ fn art_moved_off_the_canvas_waits_and_drops_on_the_panel() {
     assert_eq!(st.history.undo.len(), undo);
 }
 
+/// Art Alt-dragged off the canvas (a copy while it moves there) reaches the panels as the art the
+/// drag started with, which is what stays when the release over a panel takes the copy back.
+#[test]
+fn art_alt_dragged_off_the_canvas_reaches_the_panels_as_the_original() {
+    use egui::{Event, Modifiers};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    let id = vectorcraft_doc::NodeId(id);
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let before = app.session.active().unwrap().doc.clone();
+    let button = |pos: Pos2, pressed: bool| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::ALT };
+    let start = xf.to_screen(Point::new(100.0, 100.0));
+    frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::ALT), Event::PointerMoved(start), button(start, true)]);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(start + vec2(40.0, 0.0))]);
+    let st = app.session.active().unwrap();
+    assert_eq!(st.interaction.as_ref().map(|i| i.label.as_str()), Some("Copy"));
+    assert!(!st.selection.objects.contains(&id), "the copy is selected while it moves");
+    frame(&mut app, &ctx, vec![Event::PointerMoved(pos2(850.0, 100.0))]);
+    assert_eq!(egui::DragAndDrop::payload::<widgets::PanelDrag>(&ctx).as_deref(), Some(&widgets::PanelDrag::Art(vec![id])));
+    frame(&mut app, &ctx, vec![button(pos2(850.0, 100.0), false)]);
+    let st = app.session.active().unwrap();
+    assert!(st.interaction.is_none());
+    assert_eq!(*st.doc, *before, "the copy goes, the original stays");
+    assert!(st.doc.node(id).is_some());
+}
+
 /// #4233: the Direct and Group Selection tools hand art they move whole to the panels too (Asset
 /// Export, Graphic Styles…), as the Selection tool does; the move waits and nothing is recorded.
 #[test]
@@ -9321,6 +9351,33 @@ fn the_task_bar_traces_an_image_then_expands_the_trace() {
     let mut images = 0;
     expanded.walk(&mut |n| images += usize::from(matches!(n.kind, NodeKind::Image(_))));
     assert_eq!(images, 0, "only the traced paths are kept");
+}
+
+/// For a selected image the Contextual Task Bar offers Remove Background, which clears the
+/// background in the image's pixels at once (no dialog) with the command's defaults.
+#[test]
+fn the_task_bar_removes_a_selected_images_background() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let img =
+        image::RgbaImage::from_fn(20, 20, |x, y| image::Rgba(if (6..14).contains(&x) && (6..14).contains(&y) { [200, 0, 0, 255] } else { [255; 4] }));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let data = vectorcraft_format::base64_encode(&png);
+    app.run("file.place", json!({"name": "dot.png", "dataBase64": data, "link": false, "at": [200, 150]})).unwrap();
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    let labels = task_bar_labels(&mut app, &ctx);
+    let at = labels.iter().find(|(t, _)| t == "Remove Background").map(|(_, r)| r.center()).expect("Remove Background is offered");
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    frame(&mut app, &ctx, vec![button(true)]);
+    frame(&mut app, &ctx, vec![button(false)]);
+    assert!(app.ui.dialog.is_none(), "it runs at once");
+    let st = app.session.active().unwrap();
+    let Some(NodeKind::Image(im)) = st.selection.objects.first().and_then(|id| st.doc.node(*id)).map(|n| &n.kind) else { panic!("an image") };
+    let px = image::load_from_memory(&st.doc.images[&im.key].bytes).unwrap().to_rgba8();
+    assert_eq!((px.get_pixel(0, 0).0[3], px.get_pixel(10, 10).0[3]), (0, 255), "the white background is cleared, the red dot kept");
 }
 
 /// The labels the Contextual Task Bar draws in a headless frame (after one to lay it out), with

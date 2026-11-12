@@ -19,7 +19,9 @@
 //! while their copies are restored or discarded the area is held, so two apps launched together
 //! never both take it. An area's lock file or folder can be removed while its app runs, so each
 //! recovery save and heartbeat checks that the lock still holds the area, and locks it again or
-//! takes a new area.
+//! takes a new area. The copies it had in the old area stay there until it has written them again
+//! in the new one, and an entry `<new area>/keeps-<old area>` ([`mark_left`]) tells other apps
+//! that those copies belong to a running app, so none of them offers or discards them meanwhile.
 //!
 //! A heartbeat alone can't tell a gone app from one whose timers stopped (a background tab), so
 //! when unsure an area counts as held, and its app repairs what another app did meanwhile: each
@@ -61,6 +63,9 @@ const BLOB_EXT: &str = ".blob";
 /// The heartbeat entry of an area in a store without locks: when its app last said it runs (Unix
 /// seconds, as text).
 const BEAT: &str = "heartbeat";
+/// The start of an entry `<area>/keeps-<left area>`: the app holding `<area>` still keeps the copies
+/// it left in `<left area>` ([`mark_left`]).
+const KEEPS: &str = "keeps-";
 /// The least time without a heartbeat after which an area's app counts as gone (seconds); else
 /// three Data Recovery intervals.
 const MIN_STALE: i64 = 180;
@@ -535,6 +540,8 @@ pub struct Recovery {
     /// store: each stays until its document has a copy in the new area, or needs none. They are
     /// still this session's: never offered or discarded as a crash's here.
     left: BTreeMap<u64, (Arc<dyn RecoveryStore>, String)>,
+    /// The `<own area>/keeps-<left area>` entries this session wrote in its area ([`mark_left`]).
+    marked: BTreeSet<String>,
 }
 
 impl Recovery {
@@ -609,6 +616,15 @@ fn beating(store: &dyn RecoveryStore, area: &str, stale: i64, mine: Option<i64>)
 /// beat only lets another app offer the copies once three intervals have passed.
 pub fn heartbeat(s: &mut Session) -> Vec<u64> {
     let mut lost = keep_hold(s);
+    // An entry that couldn't be written before, or that was removed since (by the user, a
+    // cleaner), is written now.
+    if let Some(own) = &s.recovery.own
+        && !s.recovery.marked.is_empty()
+        && let Ok(names) = own.store.list()
+    {
+        s.recovery.marked.retain(|n| names.contains(n));
+    }
+    mark_left(s);
     if let Some(own) = s.recovery.own.as_ref().filter(|o| o.beats) {
         let _ = beat(own.store.as_ref(), &own.area);
     }
@@ -678,6 +694,36 @@ fn drop_left(s: &mut Session, uid: u64) {
     let meta = store.remove(&format!("{file}{META_EXT}"));
     if doc.is_ok() && meta.is_ok() {
         s.recovery.left.remove(&uid);
+        mark_left(s);
+    }
+}
+
+/// Record in this session's area each area it left that still holds copies of its documents: an
+/// entry `<own area>/keeps-<left area>`, so another app leaves those copies alone while this one
+/// runs ([`keeper`]). The entries of areas that hold none of its copies any more go. Best effort:
+/// an entry not written or removed now is written or removed at the next heartbeat.
+fn mark_left(s: &mut Session) {
+    let Some(own) = &s.recovery.own else { return };
+    let (store, area) = (own.store.clone(), own.area.clone());
+    let want: BTreeSet<String> = s
+        .recovery
+        .left
+        .values()
+        .filter(|(st, _)| st.location() == store.location())
+        .filter_map(|(_, f)| f.split_once('/').map(|(a, _)| a))
+        .filter(|a| *a != area)
+        .map(|a| format!("{area}/{KEEPS}{a}"))
+        .collect();
+    let gone: Vec<String> = s.recovery.marked.difference(&want).cloned().collect();
+    for n in gone {
+        if store.remove(&n).is_ok() {
+            s.recovery.marked.remove(&n);
+        }
+    }
+    for n in want {
+        if !s.recovery.marked.contains(&n) && store.write(&n, b"").is_ok() {
+            s.recovery.marked.insert(n);
+        }
     }
 }
 
@@ -726,6 +772,9 @@ pub fn claim(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<String> 
             }
         };
         s.recovery.own = Some(Own { store: store.clone(), area: area.clone(), hold, beats });
+        // The entries written before are in the area this session had (released or left).
+        s.recovery.marked.clear();
+        mark_left(s);
         return Ok(area);
     }
     Err(EngineError::Other("no free recovery area".into()))
@@ -742,6 +791,8 @@ pub fn release(s: &mut Session) {
         drop_left(s, uid);
     }
     let Some(Own { store, area, hold, .. }) = s.recovery.own.take() else { return };
+    // Its `keeps-` entries go with the area's other entries.
+    s.recovery.marked.clear();
     let mine = |n: &String| n.split_once('/').is_some_and(|(a, _)| a == area);
     for name in store.list().unwrap_or_default().iter().filter(|n| mine(n)) {
         let _ = store.remove(name);
@@ -987,6 +1038,7 @@ impl RecoveryJob {
                     let _ = store.remove(&format!("{file}{DOC_EXT}"));
                     let _ = store.remove(&format!("{file}{META_EXT}"));
                 }
+                mark_left(s);
             }
             // Best effort, as in `remove_copy`.
             _ => {
@@ -1208,6 +1260,10 @@ fn owner(s: &mut Session, store: &dyn RecoveryStore, area: &str, hold: &mut Vec<
     }
     match store.lock(area) {
         Ok(Lock::Held(h)) => {
+            // Copies an app left here when it had to leave the area stay its own while it runs.
+            if let Some(who) = keeper(s, store, area) {
+                return who;
+            }
             hold.push(h);
             Owner::Gone
         }
@@ -1216,11 +1272,50 @@ fn owner(s: &mut Session, store: &dyn RecoveryStore, area: &str, hold: &mut Vec<
             if store.announced(area).unwrap_or(false) || beating(store, area, stale_after(s), s.recovery.adopted.get(area).copied()) {
                 return Owner::Running;
             }
+            if let Some(who) = keeper(s, store, area) {
+                return who;
+            }
             // Best effort: without it another app might offer the copies too, which loses nothing.
             if take && let Ok(t) = beat(store, area) {
                 s.recovery.adopted.insert(area.to_string(), t);
             }
             Owner::Gone
+        }
+    }
+}
+
+/// Who keeps the copies left in `area` by an app that had to leave it, from the entries
+/// `<its area>/keeps-<area>` ([`mark_left`]): this session, or another app that is running. `None`:
+/// no app that runs keeps them. An entry counts only in an area this account can lock or tell is
+/// held ([`holder`]), so an entry in a folder of another account, or in one whose lock can't be
+/// checked, keeps nothing. A store that can't be listed now keeps them (a copy kept loses nothing).
+fn keeper(s: &Session, store: &dyn RecoveryStore, area: &str) -> Option<Owner> {
+    let Ok(names) = store.list() else { return Some(Owner::Running) };
+    let mark = format!("/{KEEPS}{area}");
+    let mut who = None;
+    for k in names.iter().filter_map(|n| n.strip_suffix(mark.as_str())).filter(|k| *k != area) {
+        match holder(s, store, k) {
+            Owner::Mine => return Some(Owner::Mine),
+            Owner::Running => who = Some(Owner::Running),
+            Owner::Gone => {}
+        }
+    }
+    who
+}
+
+/// Whose area `area` is, without taking it over: this session's, a running app's, or nobody's (a
+/// lock taken to tell goes at once). An area whose lock fails (not a recovery area of this
+/// account, a lock file that can't be opened) is nobody's.
+fn holder(s: &Session, store: &dyn RecoveryStore, area: &str) -> Owner {
+    if s.recovery.own.as_ref().is_some_and(|o| o.area == area && o.store.location() == store.location()) {
+        return Owner::Mine;
+    }
+    match store.lock(area) {
+        Ok(Lock::Held(_)) | Err(_) => Owner::Gone,
+        Ok(Lock::Busy) => Owner::Running,
+        Ok(Lock::Unsupported) => {
+            let runs = store.announced(area).unwrap_or(false) || beating(store, area, stale_after(s), s.recovery.adopted.get(area).copied());
+            if runs { Owner::Running } else { Owner::Gone }
         }
     }
 }

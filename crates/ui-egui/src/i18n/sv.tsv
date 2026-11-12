@@ -1132,6 +1132,8 @@ font-technology	Variable	Variabla
 	Extrude & Bevel…	Extrudera och fasa…
 	3D (Classic)	3D (klassisk)
 	Extrude & Bevel (Classic)…	Extrudera och fasa (klassisk)…
+	Revolve (Classic)…	Rotera runt axel (klassisk)…
+	Rotate (Classic)…	Rotera (klassisk)…
 	Surface	Yta
 	Wireframe	Trådram
 	No Shading	Ingen skuggning
@@ -2304,6 +2306,7 @@ font-technology	Variable	Variabla
 	Options:	Alternativ:
 	Options…	Alternativ…
 	Organic Fades	Organiska toningar
+	Holographic	Holografiska
 	or more spaces with a tab	eller fler blanksteg med en tabb
 	Order:	Ordning:
 	Ordinals	Ordningstal
@@ -2850,6 +2853,9 @@ digits	Malayalam	Malayalam
 	Rise…	Stigning…
 	Roman Baseline	Baslinje (roman)
 	Roman Hanging Punctuation	Hängande interpunktion (roman)
+	Korean Line Break Anywhere	Koreansk radbrytning var som helst
+	East Asian Composition Settings	Inställningar för östasiatisk sättning
+	Korean Composition Settings	Inställningar för koreansk sättning
 	Rotate	Rotera
 	Rotate 90° CW	Rotera 90° medurs
 	Rotate Tool	Rotationsverktyg
@@ -4479,6 +4485,7 @@ axis	Both	Båda
 @msg	not a valid plug-in module: {0}	inte ett giltigt plugin: {0}
 @msg	not an EMF or WMF file	inte en EMF- eller WMF-fil
 @msg	not an HP-GL file	inte en HP-GL-fil
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` måste vara en array med 1 till 255 färger i formatet #rrggbb
 @msg	not found	hittades inte
 @msg	not in pattern editing mode	inte i läget för mönsterredigering
 @msg	finish editing the pattern first	slutför redigeringen av mönstret först
@@ -6333,6 +6340,17 @@ axis	Y Axis	Y-axel
 	Charge Wave	Laddningsvåg
 	Spark Trail	Gnistsvår
 	Calligraphic Nibs	Kalligrafiska pennspetsar
+	Bristle Brushes	Borstpenslar
+	Fine Liner	Fin linje
+	Pointed Flat	Spetsig platt
+	Stubby Round	Kort rund
+	Dry Scrub	Torr skrubbning
+	Soft Dome	Mjuk kupol
+	Filbert	Oval platt
+	Angled Round	Sned rund
+	Angled Flat	Sned platt
+	Fan Blender	Blandande solfjäder
+	Grass Fan	Grässolfjäder
 	Pattern Borders	Mönsterbårder
 	Scatter Shapes	Spridningsformer
 	Save Brush Library…	Spara penselbibliotek…
@@ -6736,6 +6754,10 @@ breakText	Glyphs	Glyfer
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturer använder en eller flera av de här penslarna. Ta bort penslarna från konturerna och radera penslarna?
 	Remove Strokes	Ta bort konturer
 	Place Brush Art	Placera penselgrafik
+	Replace Brush Art	Ersätt penselgrafik
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturer använder den här penseln. Använd den nya grafiken på konturerna, eller låt dem vara som de är och lägg till en kopia av penseln med den nya grafiken?
+	Apply to Strokes	Använd på konturer
+	Leave Strokes	Behåll konturer
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` har ingen grafik (bara spridnings-, konst- och mönsterpenslar har grafik)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Ordningsverktyg
@@ -8422,8 +8444,33 @@ digits	Hindi	Hindi
 @plural	{n} line cut|{n} lines cut	{n} rad avkortad|{n} rader avkortade
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` och `last` måste vara nummer på rader som konsolen har kvar, `first` före `last`
 
+# Learn panel
+	Learn	Lär dig
+	Explore tutorials	Utforska självstudier
+	For you	För dig
+	Skills	Färdigheter
+	Get started	Kom igång
+	Quick skill guide	Snabbguide till färdigheter
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Korta praktiska självstudier för de viktigaste verktygen, ordnade efter färdighet. Välj en färdighet för att se dess självstudier.
+	List Tutorials	Lista självstudier
+	Show Tutorial	Visa självstudie
+@msg	missing `tutorial` (see learn.list)	`tutorial` saknas (se learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	okänd självstudie `{id}` (se learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Uppdatera uppskjutna effekter
 	Deferred Effects	Uppskjutna effekter
 @msg	no plug-in effect is deferred	ingen plugineffekt är uppskjuten
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Öppnades med {n} uppskjuten plugineffekt. Effekt › Uppdatera uppskjutna effekter kör den.|Öppnades med {n} uppskjutna plugineffekter. Effekt › Uppdatera uppskjutna effekter kör dem.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Skärverktyg
+	Stencil Bridges…	Schablonbryggor…
+	Stencil Bridges	Schablonbryggor
+	Shortest Crossing	Kortaste korsning
+	Direction	Riktning
+@msg	The selected art has no islands to bridge	Den markerade teckningen har inga öar att förbinda
+@msg	No bridge of this width fits across the selected art	Ingen brygga med den här bredden får plats över den markerade teckningen
+@msg	Some islands could not be joined to the area around the art	Vissa öar kunde inte förbindas med området runt teckningen
+@msg	`width` must be from {lo} to {hi} pt	`width` måste vara från {lo} till {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` måste vara ett heltal från 1 till {MAX_BRIDGES_PER_ISLAND}

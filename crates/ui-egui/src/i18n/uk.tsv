@@ -1156,6 +1156,8 @@ font-technology	Variable	Варіативні
 	Extrude & Bevel…	Видавлювання та фаска…
 	3D (Classic)	3D (класичні)
 	Extrude & Bevel (Classic)…	Видавлювання та фаска (класичне)…
+	Revolve (Classic)…	Обертання (класичне)…
+	Rotate (Classic)…	Поворот (класичний)…
 	Surface	Поверхня
 	Wireframe	Каркас
 	No Shading	Без затінення
@@ -2395,6 +2397,7 @@ file-filter	Templates	Шаблони
 	Options:	Параметри:
 	Options…	Параметри…
 	Organic Fades	Органічні згасання
+	Holographic	Голографічні
 	or more spaces with a tab	або більше прогалин на табуляцію
 	Order:	Порядок:
 	Ordinals	Порядкові числівники
@@ -2949,6 +2952,9 @@ digits	Malayalam	Малаялам
 	Rise…	Підйом…
 	Roman Baseline	Римська базова лінія
 	Roman Hanging Punctuation	Римська висяча пунктуація
+	Korean Line Break Anywhere	Перенесення корейського тексту будь-де
+	East Asian Composition Settings	Параметри східноазійського набору
+	Korean Composition Settings	Параметри корейського набору
 	Rotate	Повернути
 	Rotate 90° CW	Повернути на 90° за годинниковою стрілкою
 	Rotate Tool	Інструмент «Поворот»
@@ -4611,6 +4617,7 @@ axis	Both	Обидві
 @msg	not a valid plug-in module: {0}	не є допустимим модулем: {0}
 @msg	not an EMF or WMF file	не є файлом EMF або WMF
 @msg	not an HP-GL file	не є файлом HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` має бути масивом із 1–255 кольорів #rrggbb
 @msg	not found	не знайдено
 @msg	not in pattern editing mode	не в режимі редагування візерунка
 @msg	finish editing the pattern first	спочатку завершіть редагування візерунка
@@ -5921,6 +5928,17 @@ axis	Y Axis	Вісь Y
 	Charge Wave	Хвиля заряду
 	Spark Trail	Слід іскор
 	Calligraphic Nibs	Каліграфічні пера
+	Bristle Brushes	Щетинні пензлі
+	Fine Liner	Тонкий лайнер
+	Pointed Flat	Загострений плаский
+	Stubby Round	Короткий круглий
+	Dry Scrub	Сухе розтирання
+	Soft Dome	М'який купол
+	Filbert	Котячий язик
+	Angled Round	Скошений круглий
+	Angled Flat	Скошений плаский
+	Fan Blender	Віяло для розтушовування
+	Grass Fan	Віяло для трави
 	Pattern Borders	Візерункові облямівки
 	Scatter Shapes	Розсіяні фігури
 	Save Brush Library…	Зберегти бібліотеку пензлів…
@@ -6300,6 +6318,10 @@ breakText	Glyphs	Гліфи
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Обведення використовують один або кілька з цих пензлів. Забрати пензлі з цих обведень і видалити пензлі?
 	Remove Strokes	Забрати обведення
 	Place Brush Art	Розмістити малюнок пензля
+	Replace Brush Art	Замінити малюнок пензля
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Обведення використовують цей пензель. Застосувати новий малюнок до цих обведень чи залишити їх як є і додати копію пензля з новим малюнком?
+	Apply to Strokes	Застосувати до обведень
+	Leave Strokes	Залишити обведення
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	у `{name}` немає малюнка (він є лише в пензлів-розпорошень, художніх і візерункових пензлів)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Інструменти розміщення
@@ -6553,8 +6575,33 @@ breakText	Glyphs	Гліфи
 @plural	{n} line cut|{n} lines cut	{n} рядок обрізано|{n} рядки обрізано|{n} рядків обрізано
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` і `last` мають бути номерами рядків, які зберігає консоль, причому `first` не пізніше `last`
 
+# Learn panel
+	Learn	Навчання
+	Explore tutorials	Переглянути уроки
+	For you	Для вас
+	Skills	Навички
+	Get started	Початок роботи
+	Quick skill guide	Короткий посібник із навичок
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Короткі практичні уроки з основних інструментів, згруповані за навичками. Виберіть навичку, щоб побачити її уроки.
+	List Tutorials	Перелічити уроки
+	Show Tutorial	Показати урок
+@msg	missing `tutorial` (see learn.list)	відсутній `tutorial` (див. learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	невідомий урок `{id}` (див. learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Оновити відкладені ефекти
 	Deferred Effects	Відкладені ефекти
 @msg	no plug-in effect is deferred	немає відкладених ефектів модулів
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Відкрито з {n} відкладеним ефектом модуля. Ефект › Оновити відкладені ефекти виконає його.|Відкрито з {n} відкладеними ефектами модулів. Ефект › Оновити відкладені ефекти виконає їх.|Відкрито з {n} відкладеними ефектами модулів. Ефект › Оновити відкладені ефекти виконає їх.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Інструменти різання
+	Stencil Bridges…	Містки трафарету…
+	Stencil Bridges	Містки трафарету
+	Shortest Crossing	Найкоротший перетин
+	Direction	Напрямок
+@msg	The selected art has no islands to bridge	У виділеній графіці немає острівців для з’єднання
+@msg	No bridge of this width fits across the selected art	Місток такої ширини не вміщується впоперек виділеної графіки
+@msg	Some islands could not be joined to the area around the art	Деякі острівці не вдалося з’єднати з областю навколо графіки
+@msg	`width` must be from {lo} to {hi} pt	`width` має бути від {lo} до {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` має бути цілим числом від 1 до {MAX_BRIDGES_PER_ISLAND}

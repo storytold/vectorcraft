@@ -379,6 +379,87 @@ fn classic_extrude_bevel_shows_its_options_and_applies_as_one_step() {
     assert_eq!(h.app.session.doc().unwrap().doc, before);
 }
 
+/// Revolve (Classic): its angle, cap, offset and axis side on the Object tab, Position on the
+/// Rotation tab, and the classic surface on the Lighting tab, without Draw Hidden Faces; OK keeps
+/// the edit as one undo step.
+#[test]
+fn classic_revolve_shows_its_options_and_applies_as_one_step() {
+    use vectorcraft_effects::CLASSIC_REVOLVE;
+    let mut h = Harness::with("M100 40 L130 60 L130 140 L100 160", CLASSIC_REVOLVE, vec2(1400.0, 1000.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    for text in ["Angle", "Cap", "Offset", "Axis side", "Left"] {
+        h.rect(text);
+    }
+    assert!(!h.texts.iter().any(|(t, _)| t == "Segments" || t == "Revolve angle" || t == "Depth"), "the other effects' options stay out");
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("__tab".into(), json!("rotation"));
+    h.settle();
+    for text in ["Presets", "Rotation X", "Perspective", "Off-Axis Front"] {
+        h.rect(text);
+    }
+    h.click(h.rect("Lighting").center());
+    h.settle();
+    for text in ["Surface", "Plastic", "Light Intensity", "Ambient Light", "Highlight Size", "Blend Steps", "Shading Color"] {
+        h.rect(text);
+    }
+    assert!(!h.texts.iter().any(|(t, _)| t == "Draw Hidden Faces"), "every face is drawn");
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag the light, or its rings. Shift snaps to 15°.");
+    let d = h.app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("edge".into(), json!("right"));
+    d.fields.insert("offset".into(), json!(12.0));
+    d.fields.insert("surface".into(), json!("wireframe"));
+    h.settle();
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag values or labels. Double-click a value to type.");
+    dialogs::confirm(&mut h.app).unwrap();
+    let state = h.app.session.doc().unwrap();
+    let fx = &state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0];
+    assert_eq!(fx.id, CLASSIC_REVOLVE);
+    assert_eq!(
+        (fx.params["edge"].clone(), fx.params["offset"].as_f64(), fx.params["surface"].clone()),
+        (json!("right"), Some(12.0), json!("wireframe"))
+    );
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
+}
+
+/// Rotate (Classic): Position on the Rotation tab, with no Object tab, and No Shading or Diffuse
+/// on the Lighting tab, without the highlight or Draw Hidden Faces; OK keeps the edit as one undo
+/// step.
+#[test]
+fn classic_rotate_shows_its_options_and_applies_as_one_step() {
+    use vectorcraft_effects::CLASSIC_ROTATE;
+    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", CLASSIC_ROTATE, vec2(1400.0, 1000.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    for text in ["Rotation", "Presets", "Rotation X", "Perspective", "Off-Axis Front"] {
+        h.rect(text);
+    }
+    assert!(!h.texts.iter().any(|(t, _)| t == "Object" || t == "Depth" || t == "Angle"), "no Object tab");
+    h.click(h.rect("Lighting").center());
+    h.settle();
+    for text in ["Surface", "Diffuse", "Light Intensity", "Ambient Light", "Blend Steps", "Shading Color"] {
+        h.rect(text);
+    }
+    assert!(
+        !h.texts.iter().any(|(t, _)| t == "Highlight Intensity" || t == "Highlight Size" || t == "Draw Hidden Faces"),
+        "no highlight and no hidden faces"
+    );
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag the light, or its rings. Shift snaps to 15°.");
+    let d = h.app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("surface".into(), json!("none"));
+    d.fields.insert("rotationY".into(), json!(40.0));
+    h.settle();
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag values or labels. Double-click a value to type.");
+    dialogs::confirm(&mut h.app).unwrap();
+    let state = h.app.session.doc().unwrap();
+    let fx = &state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0];
+    assert_eq!(fx.id, CLASSIC_ROTATE);
+    assert_eq!((fx.params["surface"].clone(), fx.params["rotationY"].as_f64()), (json!("none"), Some(40.0)));
+    assert!(fx.params.get("highlightSize").is_none() && fx.params.get("drawHiddenFaces").is_none());
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
+}
+
 #[test]
 fn extrude_bevel_options_enable_with_a_bevel_shape() {
     let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", vectorcraft_effects::EXTRUDE, vec2(1400.0, 1000.0));
