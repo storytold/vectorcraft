@@ -548,7 +548,9 @@ fn expand_piece_leaves(
 /// Path `l` as the canvas paints its fills and strokes: its visible geometry effects applied to its
 /// path (a plain path then), and every geometry effect of its own removed, with each raster effect
 /// following the Transform effects after it
-/// ([`without_geometry`](vectorcraft_render::effects::without_geometry)). `None` when it has no
+/// ([`without_geometry`](vectorcraft_render::effects::without_geometry)) and those of its fills and
+/// strokes following its Transform effects
+/// ([`follow_items`](vectorcraft_render::effects::follow_items)). `None` when it has no
 /// visible geometry effect. The swatches and patterns that live-effect plug-ins painting their
 /// pieces name are looked up in `doc`. This merges the pieces of such a plug-in into one path, so a
 /// path that one paints goes through [`expand_pieces`] instead.
@@ -564,6 +566,8 @@ pub(crate) fn reshaped(doc: &Document, l: &Node) -> Option<Node> {
     if carry.moves(&m.appearance) {
         carry.apply(&mut m.appearance);
     }
+    // So do the raster effects of its fills and strokes.
+    vectorcraft_render::effects::follow_items(&mut m);
     m.appearance.effects = without_geometry(&m.appearance.effects);
     Some(m)
 }

@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::color::{BlendMode, Color};
 use vectorcraft_doc::rastersettings::MAX_ADD_AROUND;
-use vectorcraft_doc::{Effect, RasterColorModel, RasterEffectsSettings};
+use vectorcraft_doc::{Effect, Node, RasterColorModel, RasterEffectsSettings};
 
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
@@ -478,6 +478,94 @@ pub(crate) fn follow_one(effects: &mut [Effect], t: &Effect) -> bool {
     changed
 }
 
+/// The linear part of the visible Transform effects of `owner`, an object's or a container's own
+/// effects, in order: what they do to the raster effects of everything the object paints (its
+/// fills and strokes, and a container's members and theirs), which those effects transform with
+/// the rest of the art. `None` when they leave them as they are: no Transform effect moves the
+/// art, or one of them makes copies or moves at random ([`followed`]).
+pub(crate) fn contents_step(owner: &[Effect]) -> Option<Affine> {
+    let a = owner.iter().filter(|e| e.visible && e.id == "distort.transform").try_fold(Affine::IDENTITY, |a, e| transform_step(e).map(|s| s * a))?;
+    (a != Affine::IDENTITY).then_some(a)
+}
+
+/// Make the raster effects of `effects`, the own effects of something inside an object (a fill's
+/// or stroke's, or a member's), follow `a`, the linear part of the object's Transform effects
+/// ([`contents_step`]), which apply after all of them. `outer` is what the Transform effects
+/// between them and `a` do to them (those of the fill's or stroke's object and of the groups that
+/// hold it inside the object). A raster effect that the Transform effects after it in `effects`
+/// move ([`followed`]) is set so that it draws as those effects, then `outer` and then `a`
+/// transform it, whichever of them is applied first. One that a Transform effect after it in
+/// `effects` holds back keeps its value through those effects, so it is set to draw as `outer` and
+/// then `a` transform it. `false` when nothing changed.
+pub(crate) fn follow_contents(effects: &mut [Effect], a: Affine, outer: Affine) -> bool {
+    if a == Affine::IDENTITY || !effects.iter().any(|e| follows(&e.id)) {
+        return false;
+    }
+    let mut changed = false;
+    // The linear part of the Transform effects after the effect at hand, as `followed` reads it;
+    // `None` once one of them holds the effect back, which they then leave as it is.
+    let mut after = Some(Affine::IDENTITY);
+    for e in effects.iter_mut().rev() {
+        if e.id == "distort.transform" {
+            after = after.and_then(|b| transform_step(e).map(|s| b * s));
+            continue;
+        }
+        if !follows(&e.id) {
+            continue;
+        }
+        let b = outer * after.unwrap_or(Affine::IDENTITY);
+        // The effect is still to be mapped by `b` when it is drawn, so it takes b⁻¹·a·b now:
+        // drawn, it is a·b of what it was. A `b` that flattens the art takes `a` alone.
+        let det = b.determinant();
+        let c = if b == Affine::IDENTITY || !(det.is_finite() && det.abs() > 1e-12) { a } else { b.inverse() * a * b };
+        if c.is_finite() {
+            follow_transform(e, c);
+            changed = true;
+        }
+    }
+    changed
+}
+
+/// Make the raster effects of the fills and strokes of `n` follow the Transform effects of its own
+/// effect list ([`contents_step`]), as they do while the object is drawn with them: for art that
+/// applies those effects and keeps the fills and strokes. `false` when nothing changed.
+pub fn follow_items(n: &mut Node) -> bool {
+    let Some(a) = contents_step(&n.appearance.effects) else { return false };
+    follow_items_by(n, a)
+}
+
+/// [`follow_items`] for `n` holding the fills and strokes of an object whose own effects are
+/// `owner` (the area of a compound shape, which carries none of the shape's effects).
+pub(crate) fn follow_items_of(n: &mut Node, owner: &[Effect]) -> bool {
+    let Some(a) = contents_step(owner) else { return false };
+    follow_items_by(n, a)
+}
+
+/// Make the raster effects of the fills and strokes of `n` follow `a` ([`follow_contents`]).
+fn follow_items_by(n: &mut Node, a: Affine) -> bool {
+    if !n.appearance.items.iter().any(|i| i.effects().iter().any(|e| follows(&e.id))) {
+        return false;
+    }
+    let mut changed = false;
+    for item in &mut n.appearance.items {
+        changed |= follow_contents(item.effects_mut(), a, Affine::IDENTITY);
+    }
+    changed
+}
+
+/// `effects`, those of a fill or stroke of an object whose own effects are `owner`, with each
+/// raster effect following the Transform effects of `owner` as well ([`follow_contents`]): the
+/// list to draw that fill's or stroke's raster effects from ([`raster_effects`]). Borrowed when
+/// nothing changes.
+pub fn item_effects_in<'a>(owner: &[Effect], effects: &'a [Effect]) -> Cow<'a, [Effect]> {
+    let Some(a) = contents_step(owner) else { return Cow::Borrowed(effects) };
+    if !effects.iter().any(|e| follows(&e.id)) {
+        return Cow::Borrowed(effects);
+    }
+    let mut out = effects.to_vec();
+    if follow_contents(&mut out, a, Affine::IDENTITY) { Cow::Owned(out) } else { Cow::Borrowed(effects) }
+}
+
 /// How many of the effects of `effects` that [`without_geometry`] keeps no longer follow the
 /// Transform effects listed after `effects` ([`followed`]): those before the last visible Transform
 /// effect among them that makes copies or moves at random.
@@ -511,7 +599,7 @@ fn transform_step(e: &Effect) -> Option<Affine> {
 /// Does raster effect `id` follow the Transform effects listed after it ([`followed`])? An SVG
 /// filter does not, and neither does Rasterize, whose image keeps its own pixel grid and room
 /// around the art.
-fn follows(id: &str) -> bool {
+pub(crate) fn follows(id: &str) -> bool {
     crate::is_raster(id) && id != crate::SVG_FILTER && id != RASTERIZE
 }
 

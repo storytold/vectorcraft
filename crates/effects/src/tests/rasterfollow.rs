@@ -335,3 +335,194 @@ fn expanded_and_exported_objects_keep_the_shadow_the_canvas_draws() {
         assert!(close(drawn_shadow(&b.appearance.effects), (20.0, 20.0, 8.0)), "{id}: {:?}", b.appearance.effects);
     }
 }
+
+/// A group of `members` with `effects` of its own.
+fn group(id: u64, members: Vec<Node>, effects: Vec<Effect>) -> Node {
+    let mut g = Node::group(NodeId(id), members.into_iter().map(std::sync::Arc::new).collect());
+    g.appearance.effects = effects;
+    g
+}
+
+/// The node with `id` under `n`.
+fn node_in(n: &Node, id: u64) -> Node {
+    let mut found = None;
+    n.walk(&mut |m| {
+        if m.id == NodeId(id) && found.is_none() {
+            found = Some(m.clone());
+        }
+    });
+    found.unwrap_or_else(|| panic!("no node {id}"))
+}
+
+/// The offset of the Drop Shadow that the first fill of `n` draws, its own effects and `n`'s
+/// Transform effects applied ([`crate::item_effects_in`]).
+fn fill_shadow(n: &Node) -> (f64, f64) {
+    let item = n.appearance.items.first().unwrap();
+    match raster_effects(&crate::item_effects_in(&n.appearance.effects, item.effects())).first() {
+        Some(RasterFx::DropShadow { dx, dy, .. }) => (*dx, *dy),
+        other => panic!("expected a drop shadow, got {other:?}"),
+    }
+}
+
+/// A group's Transform effect transforms the raster effects of what the group holds with the art,
+/// whatever its options: a member's own shadow, a member's fill's shadow and a nested group's own
+/// shadow, drawn (the group's art) and baked.
+#[test]
+fn a_groups_transform_moves_its_members_shadows() {
+    let cases = [
+        (json!({"scaleH": 200, "scaleV": 200}), (20.0, 20.0)),
+        (json!({"scaleH": 200, "scaleV": 100, "strokes": true}), (20.0, 10.0)),
+        (json!({"rotate": 90, "patterns": true}), (10.0, -10.0)),
+        (json!({"rotate": 90, "strokes": true}), (10.0, -10.0)),
+    ];
+    for (params, want) in cases {
+        let members = vec![
+            square(21, vec![shadow(10.0, 10.0, 0.0)]),
+            fill_square(22, vec![shadow(10.0, 10.0, 0.0)]),
+            group(23, vec![square(24, vec![])], vec![shadow(10.0, 10.0, 0.0)]),
+        ];
+        let g = group(20, members, vec![transform(params.clone())]);
+        let art = crate::evaluate_container(None, &g).unwrap();
+        assert!(near(&shadows_in(&art), &[want; 3]), "{params}: drawn {:?}", shadows_in(&art));
+        let mut d = Document::new(800.0, 800.0);
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), 0, g).unwrap();
+        let baked = bake_document(&d).unwrap();
+        for id in [21, 22, 23] {
+            let b = baked.node(NodeId(id)).unwrap();
+            assert!(near(&shadows_in(b), &[want]), "{params}: {id} baked {:?}", shadows_in(b));
+        }
+    }
+}
+
+/// A group's Transform effect that makes copies or moves at random leaves its members' shadows as
+/// they are, as it leaves the shadows listed before it in its own effects.
+#[test]
+fn a_groups_copying_transform_leaves_its_members_shadows() {
+    for params in [json!({"scaleH": 200, "scaleV": 200, "copies": 1}), json!({"scaleH": 200, "scaleV": 200, "random": true})] {
+        let g = group(25, vec![square(26, vec![shadow(10.0, 10.0, 0.0)]), square(27, vec![])], vec![transform(params.clone())]);
+        let art = crate::evaluate_container(None, &g).unwrap();
+        let drawn = shadows_in(&art);
+        assert!(!drawn.is_empty() && near(&drawn, &vec![(10.0, 10.0); drawn.len()]), "{params}: {drawn:?}");
+    }
+}
+
+/// The Transform effects inside a group apply before the group's: a member's own turn of 90°
+/// applies to its shadow before the group's uneven scale does, for the member's own shadow, its
+/// fill's shadow, and the shadow of a member of a nested group that has the turn.
+#[test]
+fn a_groups_transform_applies_after_its_members_own() {
+    let turn = || transform(json!({"rotate": 90}));
+    let uneven = || transform(json!({"scaleH": 200, "scaleV": 100}));
+    // Turned first, (10, 0) goes to (0, -10), which the scale leaves; scaled first, it would be (0, -20).
+    let want = (0.0, -10.0);
+    let own = group(30, vec![square(31, vec![shadow(10.0, 0.0, 0.0), turn()])], vec![uneven()]);
+    let art = crate::evaluate_container(None, &own).unwrap();
+    assert!(near(&shadows_in(&art), &[want]), "own: {:?}", shadows_in(&art));
+    let mut on_fill = fill_square(33, vec![shadow(10.0, 0.0, 0.0)]);
+    on_fill.appearance.effects = vec![turn()];
+    let art = crate::evaluate_container(None, &group(32, vec![on_fill], vec![uneven()])).unwrap();
+    assert!(near(&[fill_shadow(&node_in(&art, 33))], &[want]), "fill: {:?}", fill_shadow(&node_in(&art, 33)));
+    let nested = group(34, vec![group(35, vec![square(36, vec![shadow(10.0, 0.0, 0.0)])], vec![turn()])], vec![uneven()]);
+    let art = crate::evaluate_container(None, &nested).unwrap();
+    let inner = crate::evaluate_container(None, &node_in(&art, 35)).unwrap();
+    assert!(near(&shadows_in(&inner), &[want]), "nested: {:?}", shadows_in(&inner));
+}
+
+/// An object's Transform effect transforms the raster effects of its fills and strokes with the
+/// art, whatever its options: drawn, drawn through the art an option makes, and baked. One that
+/// makes copies leaves them.
+#[test]
+fn an_objects_transform_moves_its_fills_shadows() {
+    let cases = [
+        (json!({"scaleH": 200, "scaleV": 100}), (20.0, 10.0)),
+        (json!({"scaleH": 200, "scaleV": 100, "strokes": true}), (20.0, 10.0)),
+        (json!({"rotate": 90, "patterns": true}), (10.0, -10.0)),
+        (json!({"rotate": 90, "strokes": true}), (10.0, -10.0)),
+        (json!({"scaleH": 200, "scaleV": 200, "copies": 1}), (10.0, 10.0)),
+    ];
+    for (params, want) in cases {
+        let mut n = fill_square(40, vec![shadow(10.0, 10.0, 0.0)]);
+        n.appearance.effects = vec![transform(params.clone())];
+        if crate::has_transform_art(&n) {
+            let art = crate::reshape(None, &n, None).unwrap();
+            let drawn = shadows_in(&art);
+            assert!(!drawn.is_empty() && near(&drawn, &vec![want; drawn.len()]), "{params}: drawn {drawn:?}");
+        } else {
+            assert!(near(&[fill_shadow(&n)], &[want]), "{params}: drawn {:?}", fill_shadow(&n));
+        }
+        let mut d = Document::new(800.0, 800.0);
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), 0, n).unwrap();
+        let baked = bake_document(&d).unwrap();
+        let drawn = shadows_in(baked.node(NodeId(40)).unwrap());
+        assert!(!drawn.is_empty() && near(&drawn, &vec![want; drawn.len()]), "{params}: baked {drawn:?}");
+    }
+}
+
+/// A 10 pt image at the origin with `effects`.
+fn image(id: u64, effects: Vec<Effect>) -> Node {
+    let mut n = Node::new(
+        NodeId(id),
+        vectorcraft_doc::NodeKind::Image(Box::new(vectorcraft_doc::ImageObject {
+            key: "k".into(),
+            width: 10,
+            height: 10,
+            xf: vectorcraft_geom::Affine::IDENTITY,
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        })),
+    );
+    n.appearance.effects = effects;
+    n
+}
+
+/// A group's Transform effect transforms, with Scale Strokes & Effects off or on, the raster
+/// effects that a member's own Transform effect with copies holds back: they keep their value
+/// through the member's effect and transform with the group's. That holds for a shadow listed
+/// before the member's copying effect, one listed after it, a fill's shadow under it, the shadow
+/// of a member of a nested group with such an effect, and an image's shadow.
+#[test]
+fn a_groups_transform_moves_the_shadows_its_members_copies_hold_back() {
+    let copies = || transform(json!({"moveH": 60, "copies": 1}));
+    // Halved and turned 90° counterclockwise on screen, (10, 10) goes to (5, -5).
+    let want = (5.0, -5.0);
+    for strokes in [false, true] {
+        let mut on_fill = fill_square(73, vec![shadow(10.0, 10.0, 0.0)]);
+        on_fill.appearance.effects = vec![copies()];
+        let members = vec![
+            square(71, vec![shadow(10.0, 10.0, 0.0), copies()]),
+            square(72, vec![copies(), shadow(10.0, 10.0, 0.0)]),
+            on_fill,
+            group(74, vec![square(75, vec![shadow(10.0, 10.0, 0.0)])], vec![copies()]),
+            image(76, vec![shadow(10.0, 10.0, 0.0)]),
+        ];
+        let g = group(70, members, vec![transform(json!({"scaleH": 50, "scaleV": 50, "rotate": 90, "strokes": strokes}))]);
+        let art = crate::evaluate_container(None, &g).unwrap();
+        for id in [71, 72, 73, 75, 76] {
+            let drawn = shadows_in(&node_in(&art, id));
+            assert!(near(&drawn, &[want]), "Scale Strokes & Effects {strokes}: {id} {drawn:?}");
+        }
+    }
+}
+
+/// A group's Transform effect transforms the raster effects in the art of a member's linked opacity
+/// mask with the member, a path's or an image's, with Scale Strokes & Effects off or on.
+#[test]
+fn a_groups_transform_moves_the_shadow_in_a_members_mask() {
+    let masked = |mut n: Node, id: u64| {
+        n.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(square(id, vec![shadow(10.0, 10.0, 0.0)]), true)));
+        n
+    };
+    for strokes in [false, true] {
+        let params = json!({"scaleH": 50, "scaleV": 50, "rotate": 90, "strokes": strokes});
+        let g = group(80, vec![masked(square(81, vec![]), 82), masked(image(83, vec![]), 84)], vec![transform(params)]);
+        let art = crate::evaluate_container(None, &g).unwrap();
+        for id in [81, 83] {
+            let member = node_in(&art, id);
+            let mask = member.extras().mask.as_deref().unwrap();
+            assert!(near(&shadows_in(&mask.art), &[(5.0, -5.0)]), "Scale Strokes & Effects {strokes}: {id} {:?}", shadows_in(&mask.art));
+        }
+    }
+}

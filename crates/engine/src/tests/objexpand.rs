@@ -212,6 +212,51 @@ fn a_shadow_before_a_transform_expands_as_the_canvas_draws_it() {
     }
 }
 
+/// The object's Transform effect scales and turns the drop shadow of its gradient fill on the
+/// canvas; Object › Expand of the fill keeps the shadow the canvas drew.
+#[test]
+fn a_fills_shadow_under_the_objects_transform_expands_as_the_canvas_draws_it() {
+    let mut s = session();
+    let id = gradient_rect(&mut s, Rect::new(80.0, 80.0, 120.0, 120.0), white_black(), false);
+    for (effect, params, item) in [
+        ("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 100}), json!(0)),
+        ("distort.transform", json!({"scaleH": 200, "scaleV": 100, "rotate": 90}), json!(null)),
+    ] {
+        run(&mut s, "effect.apply", json!({"effect": effect, "params": params, "ids": [id.0], "item": item}));
+    }
+    let before = render(&s);
+    run(&mut s, "object.expand", json!({"object": false, "stroke": false, "steps": 64}));
+    let after = render(&s);
+    let diff = differing(&before, &after, 64);
+    assert_eq!(diff, 0, "{diff} pixels differ");
+}
+
+/// A group's Transform effect scales and turns its member's drop shadow on the canvas, and an
+/// object's scales and turns its fill's, with Scale Strokes & Effects off or on; Expand Appearance
+/// keeps the shadows the canvas drew.
+#[test]
+fn shadows_under_a_groups_or_an_objects_transform_expand_appearance_as_the_canvas_draws_them() {
+    let shadow = json!({"x": 10, "y": 0, "blur": 0, "opacity": 100});
+    for strokes in [false, true] {
+        let transform = json!({"scaleH": 200, "scaleV": 100, "rotate": 90, "strokes": strokes});
+        for group in [false, true] {
+            let mut s = session();
+            let id = gradient_rect(&mut s, Rect::new(80.0, 80.0, 120.0, 120.0), white_black(), false);
+            let item = if group { json!(null) } else { json!(0) };
+            run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "params": shadow, "ids": [id.0], "item": item}));
+            if group {
+                run(&mut s, "object.group", json!({}));
+            }
+            run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": transform}));
+            let before = render(&s);
+            run(&mut s, "effect.expandAppearance", json!({}));
+            let after = render(&s);
+            let diff = differing(&before, &after, 64);
+            assert_eq!(diff, 0, "group {group}, Scale Strokes & Effects {strokes}: {diff} pixels differ");
+        }
+    }
+}
+
 #[test]
 fn a_placed_gradient_moved_by_a_warp_expands_as_the_canvas_draws_it() {
     // The object's own effect, and the fill's (the first appearance item).
