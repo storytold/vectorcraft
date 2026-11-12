@@ -1282,6 +1282,11 @@ doesn't take. Each of them refuses an unknown key inside an option object it tak
 → invalid parameters for `document.export`: unknown parameter `marks.useDocumentBleed`; `marks` takes: …
 ```
 
+Of the keys each one takes, `document.export`, `document.exportSelection`, `document.serialize` and
+`document.exportForOffice` refuse a `path` or `format` that is not a string, a `selectedOnly`, `selectionOnly` or
+`transparent` that is not true or false, and a `ppi` that is not a number, naming the key, and write nothing. Null is
+the same as leaving the key out.
+
 The save commands limit them the same way. `document.save`, `file.saveAs`, `file.saveCopy`, `file.saveAsTemplate`,
 `app.save` and `file.save` refuse a key that no save format takes, given beside the path or in `options`, and an
 unknown key inside a PDF option object or the `svg` object, also when the file is not SVG. A save still leaves out a key
@@ -5070,7 +5075,9 @@ that draws the image does not decode the file again.
 `file.place.info` describes a file without placing it and `image.info` reports a placed image's link, colour mode and
 effective ppi. `file.place.queue` loads the place cursor (the `place` tool) with several files: headless, drive it
 with `pointer_gesture` (a click places at 100% with the top-left corner there, a drag at the dragged size) and
-`press_key` (Left/Right/Up/Down cycle, Escape discards the current file).
+`press_key` (Left/Right/Up/Down cycle, Escape discards the current file). `file.place`, `file.place.queue` and
+`file.place.info` refuse, of the keys each one takes, a `link`, `replace` or `template` that is not true or false and a `thumbnail` that is not a
+number, naming the key, and place nothing; null is the same as leaving the key out.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/photo.jpg","at":[300,200]}}}
@@ -5737,7 +5744,8 @@ type uses in `Fonts/` (fonts whose licence doesn't allow embedding are listed in
 the copies (each file copied once); one that can't be read is copied as it is, and a cycle of placed documents or one
 past the nesting limit stops there, each with a line in `warnings` and the report. A `folder/name` where a packaged file
 would replace the document or one of its linked files (the document's own folder, say) is an error, and nothing is
-written. Every option defaults to true. Without `folder` (the web, or an agent that wants the bytes) the
+written. Every option defaults to true. An option that is not true or false, or a `folder` or `name` that is not a
+string, is an error naming the key, and nothing is written; null is the same as leaving the key out. Without `folder` (the web, or an agent that wants the bytes) the
 result carries the same files as a zip (`{name: "<name>.zip", dataBase64}`, entries under `<name>/`).
 
 `document.info {selectionOnly?, category?, format?: "text"}` adds `sections` (`[{id, title, rows: [[label, value]]}]`:
