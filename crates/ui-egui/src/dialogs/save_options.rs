@@ -7,8 +7,13 @@
 //! editable), `path`, `format`, and one field per option (agents set them with `ui.dialog.set`).
 //! Native and `.ai` files show their save options (VectorCraft Options after Save As): each
 //! artboard to a separate file, with `all` (true: every artboard) or `range`, Include Linked Files,
-//! Embed ICC Profiles, Create PDF-Compatible File and Use Compression. A native file's Version is a
-//! menu of the versions VectorCraft writes (`version`, named by the releases that read each). A
+//! Embed ICC Profiles, Create PDF-Compatible File and Use Compression. EPS shows Use Artboards
+//! (`useArtboards`, off by default: the bounding box fits the visible art) with the same `all` or
+//! `range` under it, then the options Export's EPS Options shows: Preview, Overprints, Flattener
+//! preset and PostScript are menus that write the option's value (`previewFormat: "tiffColor"`,
+//! `overprints: "preserve"`, `flattenerPreset: "medium"` or a saved preset's name, `level: 3`).
+//! A native file's Version is a menu of the versions VectorCraft writes
+//! (`version`, named by the releases that read each). A
 //! `.ai` file's Version comes first: PDF-compatible, or legacy version 7 (`aiVersion: "7"`, a file
 //! per artboard), which takes only Transparent Images (`transparentImages`), Hidden Objects
 //! (`hiddenObjects`: a hidden layer, omitted or made visible), Text (`outlineText`: editable or
@@ -18,7 +23,9 @@
 use std::sync::OnceLock;
 
 use serde_json::{Map, Value, json};
+use vectorcraft_engine::cmd::FlattenOptions;
 use vectorcraft_engine::cmd::fileio::{self, ArtboardPick, Format, FormatOption, SAVE_FORMATS, SaveMode, TEMPLATE_FORMATS};
+use vectorcraft_eps::{Level, Overprint, Preview};
 
 use super::{DialogResult, DialogSpec, form};
 use crate::state::Dialog;
@@ -76,50 +83,130 @@ fn separates(f: &Format) -> bool {
     f.options.iter().any(|o| o.name == "separateArtboards")
 }
 
+/// The checkbox that `f`'s All or Range shows under: Save each artboard to a separate file, or
+/// for EPS Use Artboards (off: the visible art's bounds).
+fn board_switch(f: &Format) -> Option<&'static str> {
+    if separates(f) {
+        Some("separateArtboards")
+    } else if f.id == "eps" {
+        Some("useArtboards")
+    } else {
+        None
+    }
+}
+
 /// The options the dialog shows: arrays and objects are for agents, as is a native file's
 /// `precision`, and a page range replaces the single artboard choice; none for a format with its
 /// own dialog. A `.ait` template has no Version: Save as Template writes it PDF-compatible only.
 fn shown(f: &Format) -> impl Iterator<Item = &'static FormatOption> {
     let range = f.options.iter().any(|o| o.name == "range");
-    let separate = separates(f);
+    let switched = board_switch(f).is_some();
     let options = if own_dialog(f) { &[][..] } else { f.options };
     options.iter().filter(move |o| {
         !(matches!(o.ty, "array" | "object")
             || o.name == "precision"
             || (range && o.name == "artboard")
-            || (separate && o.name == "range")
+            || (switched && o.name == "range")
             || (matches!(f.id, "ai" | "ait") && o.name == "useArtboards")
-            // EPS Save keeps a page and the complete editing document; cropped and
-            // selected-only output belongs to Export, never this save dialog.
-            || (f.id == "eps" && matches!(o.name, "useArtboards" | "selectedOnly"))
+            // EPS Save writes all the artwork: selected-only output belongs to Export.
+            || (f.id == "eps" && o.name == "selectedOnly")
             || (f.id == "ait" && o.name == "aiVersion"))
     })
 }
 
-/// An option's label: the save options as the reference app's options dialog names them, the
-/// others from their names.
+/// An option's label: its written label, or for an option without one, its name split into words.
 fn label(o: &FormatOption) -> String {
-    match o.name {
+    written_label(o).unwrap_or_else(|| form::humanize(o.name))
+}
+
+/// The written label of option `o`, translated.
+fn written_label(o: &FormatOption) -> Option<String> {
+    Some(match o.name {
         "separateArtboards" => tl!("Save each artboard to a separate file").into(),
-        "includeLinked" => tl!("Include Linked Files").into(),
+        "useArtboards" => tl!("Use Artboards").into(),
+        "includeLinked" | "includeLinkedFiles" => tl!("Include Linked Files").into(),
         "embedProfiles" => tl!("Embed ICC Profiles").into(),
         "pdfCompatible" => tl!("Create PDF-Compatible File").into(),
         "compress" => tl!("Use Compression").into(),
         "editingData" => tl!("Include Editing Data for Other Apps").into(),
-        _ => form::humanize(o.name),
-    }
+        "version" | "aiVersion" => tl!("Version:").into(),
+        "transparentImages" => tl!("Transparent Images:").into(),
+        "hiddenObjects" => tl!("Hidden Objects:").into(),
+        "outlineText" => tl!("Text:").into(),
+        "preview" => tl!("Preview").into(),
+        "thumbnails" => tl!("Include Document Thumbnails").into(),
+        "previewFormat" => tl!("Preview:").into(),
+        "transparentPreview" => tl!("Transparent").into(),
+        "overprints" => tl!("Overprints:").into(),
+        "flattenerPreset" => tl!("Flattener preset:").into(),
+        "embedFonts" => tl!("Embed Fonts (for other applications)").into(),
+        "cmykPostScript" => tl!("Include CMYK PostScript in RGB Files").into(),
+        "compatibleGradients" => tl!("Compatible Gradient and Gradient Mesh Printing").into(),
+        "level" => tl!("PostScript:").into(),
+        _ => return None,
+    })
 }
 
-/// Every artboard (the All choice under Save each artboard to a separate file): `all` when set,
-/// else no range given.
+/// The values of an option that takes one of a fixed set, each with the name its menu shows, and
+/// `at`, the entry the option's value picks as the save reads it (none when the save would reject
+/// the value). The first `builtins` names are VectorCraft's own (translated where they are shown);
+/// the others are names the user gave (saved flattener presets), shown as they are.
+struct Choices {
+    values: Vec<Value>,
+    names: Vec<String>,
+    builtins: usize,
+    at: Option<usize>,
+}
+
+/// The choices of `f`'s option `o`, whose value is `value`, when it takes one of a fixed set of
+/// values: EPS's preview format, overprints, PostScript level and flattener preset (the built-in
+/// presets by id, then the saved ones by name).
+fn choices(app: &VectorcraftApp, f: &Format, o: &FormatOption, value: &Value) -> Option<Choices> {
+    if f.id != "eps" {
+        return None;
+    }
+    let text = value.as_str().map_or_else(|| value.to_string(), str::to_string);
+    let (pairs, builtins, at): (Vec<(Value, String)>, Option<usize>, Option<usize>) = match o.name {
+        "previewFormat" => (
+            Preview::ALL.iter().map(|p| (json!(p.id()), p.label().to_string())).collect(),
+            None,
+            Preview::from_id(&text).and_then(|p| Preview::ALL.iter().position(|q| *q == p)),
+        ),
+        "overprints" => (
+            Overprint::ALL.iter().map(|p| (json!(p.id()), p.label().to_string())).collect(),
+            None,
+            Overprint::from_id(&text).and_then(|p| Overprint::ALL.iter().position(|q| *q == p)),
+        ),
+        // The level is a number in the save options.
+        "level" => (
+            Level::ALL.iter().filter_map(|l| Some((json!(l.id().parse::<u64>().ok()?), l.label().to_string()))).collect(),
+            None,
+            Level::from_id(&text).and_then(|l| Level::ALL.iter().position(|q| *q == l)),
+        ),
+        "flattenerPreset" => {
+            let presets = app.session.flattener_presets();
+            let id = |name: &str| FlattenOptions::PRESETS.into_iter().find(|id| FlattenOptions::preset_label(id) == Some(name));
+            let pairs = presets.iter().map(|p| (id(&p.name).map_or_else(|| json!(p.name), |id| json!(id)), p.name.clone())).collect();
+            let at = app.session.flattener_preset(&text).and_then(|p| presets.iter().position(|q| q.name == p.name));
+            (pairs, Some(FlattenOptions::builtin_presets().len()), at)
+        }
+        _ => return None,
+    };
+    let builtins = builtins.unwrap_or(pairs.len());
+    let (values, names): (Vec<Value>, Vec<String>) = pairs.into_iter().unzip();
+    Some(Choices { values, names, builtins, at })
+}
+
+/// Every artboard (the All choice under Save each artboard to a separate file or Use Artboards):
+/// `all` when set, else no range given.
 fn all_artboards(d: &Dialog) -> bool {
     d.fields.get("all").and_then(Value::as_bool).unwrap_or_else(|| d.str("range").trim().is_empty())
 }
 
-/// All or Range, under Save each artboard to a separate file (enabled while it is on).
-fn artboard_range(ui: &mut egui::Ui, d: &mut Dialog) {
+/// All or Range, under the checkbox `switch` (enabled while it is on).
+fn artboard_range(ui: &mut egui::Ui, d: &mut Dialog, switch: &str) {
     ui.label("");
-    ui.add_enabled_ui(d.bool("separateArtboards"), |ui| {
+    ui.add_enabled_ui(d.bool(switch), |ui| {
         ui.horizontal(|ui| {
             ui.add_space(22.0);
             let mut all = all_artboards(d);
@@ -167,9 +254,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         // Version first; the legacy version takes only its own options.
         let legacy = legacy_ai(d);
         let mut rows: Vec<&FormatOption> = shown(f).filter(|o| LEGACY_ONLY.contains(&o.name) == legacy || o.name == "aiVersion").collect();
-        rows.sort_by_key(|o| o.name != "aiVersion");
+        // EPS's PostScript level comes last, as in Export's EPS Options.
+        rows.sort_by_key(|o| (o.name != "aiVersion", f.id == "eps" && o.name == "level"));
         for o in rows {
-            option_row(app, ui, d, o);
+            option_row(app, ui, d, f, o);
         }
     });
     if legacy_ai(d) && app.session.active().is_some_and(|st| st.doc.artboards.len() > 1) {
@@ -330,8 +418,9 @@ fn artboard_picker(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) 
     }
 }
 
-/// One option: a checkbox, an artboard menu, a version menu, a number or a text field.
-fn option_row(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, o: &FormatOption) {
+/// One option of format `f`: a checkbox, an artboard menu, a version menu, a menu of its
+/// [`choices`], a number or a text field.
+fn option_row(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, f: &Format, o: &FormatOption) {
     let t = Tokens::get(ui.ctx());
     let label = label(o);
     let value = d.fields.get(o.name).cloned().unwrap_or(Value::Null);
@@ -383,6 +472,40 @@ fn option_row(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, o: &Forma
         ui.end_row();
         return;
     }
+    if let Some(c) = choices(app, f, o, &value) {
+        ui.label(egui::RichText::new(&label).color(t.text_dim)).on_hover_text(o.description);
+        // A value none of them names shows as it is.
+        let current = c.at.and_then(|i| c.names.get(i)).cloned().unwrap_or_else(|| value.as_str().map_or_else(|| value.to_string(), str::to_string));
+        let names: Vec<&str> = c.names.iter().map(String::as_str).collect();
+        if let Some(i) = super::mixed_dropdown(ui, ("save-option", o.name), &current, &names, 254.0, |k| k < c.builtins) {
+            choose(d, o, &c, i);
+        }
+        ui.end_row();
+        return;
+    }
+    if f.id == "eps" && o.name == "transparentPreview" {
+        // Only the color preview can keep transparency.
+        ui.label("");
+        let color = Preview::from_id(&d.str("previewFormat")) == Some(Preview::TiffColor);
+        let transparent = value.as_bool().unwrap_or(true);
+        ui.horizontal(|ui| {
+            for (name, on) in [(tl!("Transparent"), true), (tl!("Opaque"), false)] {
+                if widgets::radio(ui, name, color && transparent == on, color) {
+                    d.fields.insert(o.name.into(), json!(on));
+                }
+                ui.add_space(12.0);
+            }
+        });
+        ui.end_row();
+        return;
+    }
+    if f.id == "eps" && o.name == "embedFonts" {
+        // Type is written as glyph outlines, which need no fonts.
+        ui.label("");
+        widgets::check_tip(ui, &label, true, false, o.description);
+        ui.end_row();
+        return;
+    }
     if o.ty == "boolean" {
         ui.label("");
         let on = value.as_bool().unwrap_or(false);
@@ -392,8 +515,8 @@ fn option_row(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, o: &Forma
             d.fields.insert(o.name.into(), json!(!on));
         }
         ui.end_row();
-        if o.name == "separateArtboards" {
-            artboard_range(ui, d);
+        if matches!(o.name, "separateArtboards" | "useArtboards") {
+            artboard_range(ui, d, o.name);
         }
         return;
     }
@@ -419,6 +542,13 @@ fn option_row(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, o: &Forma
         }
     }
     ui.end_row();
+}
+
+/// Option `o` set to the value of entry `i` of its menu `c`.
+fn choose(d: &mut Dialog, o: &FormatOption, c: &Choices, i: usize) {
+    if let Some(v) = c.values.get(i) {
+        d.fields.insert(o.name.into(), v.clone());
+    }
 }
 
 /// The native versions VectorCraft writes, newest first, each with the first release that reads
@@ -505,8 +635,15 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
         if !boards.iter().all(|b| *b) {
             options.insert("range".into(), json!(super::export_for_screens::range_text(&boards)));
         }
-    } else if separates(f) {
-        if !d.bool("separateArtboards") || all_artboards(d) {
+    } else if let Some(switch) = board_switch(f) {
+        if switch == "useArtboards" {
+            // All or Range alone names the artboards: an artboard remembered from an earlier
+            // save would otherwise turn Use Artboards on, or narrow All to itself.
+            options.remove("artboard");
+            options.remove("artboards");
+            options.insert(switch.into(), json!(d.bool(switch)));
+        }
+        if !d.bool(switch) || all_artboards(d) {
             options.remove("range");
         } else {
             // A bad range keeps the dialog open.

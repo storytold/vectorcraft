@@ -70,8 +70,13 @@ fn message(i: &mut Interp, name: &str) -> JsResult<Value> {
     i.get_value(&text, &key(name))
 }
 
+/// The field `name` of a record the host gave: its own data property, `undefined` when it has none,
+/// so that a property a script put on `Object.prototype` is not read as part of it.
 fn field(i: &mut Interp, v: &Value, name: &str) -> JsResult<Value> {
-    i.get_value(v, &key(name))
+    match v.as_object() {
+        Some(o) => slot(i, o, name),
+        None => Ok(Value::Undefined),
+    }
 }
 
 /// The value of the own data property `name` of `o`, `undefined` when it has none.
@@ -310,8 +315,19 @@ fn parent(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> 
     instance(i, proto, up)
 }
 
+/// `exists`: whether the path names something of the object's own kind, a folder for a `Folder`
+/// and anything else for a `File`.
 fn exists(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
-    Ok(Value::Bool(stat_field(i, &this, "exists", "exists", Value::Bool(false))?.truthy()))
+    let folder = classes(i)?.folder_proto;
+    let want_dir = match this.as_object() {
+        Some(o) => i.object(o)?.proto == Some(folder),
+        None => false,
+    };
+    let Some(r) = stat(i, &this, "exists")? else { return Ok(Value::Bool(false)) };
+    i.rooted(std::slice::from_ref(&r), |i| {
+        let dir = field(i, &r, "dir")?.truthy();
+        Ok(Value::Bool(field(i, &r, "exists")?.truthy() && dir == want_dir))
+    })
 }
 
 fn created(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
@@ -607,7 +623,7 @@ fn get_files(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<V
             return Ok(Value::Null);
         }
         let entries = field(i, &r, "entries")?;
-        let length = field(i, &entries, "length")?;
+        let length = i.get_value(&entries, &key("length"))?;
         let n = i.to_number(&length)?;
         i.reserve_heap(OBJECT_BYTES)?;
         let proto = i.intrinsics.array_proto;

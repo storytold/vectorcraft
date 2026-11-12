@@ -90,6 +90,7 @@ pub static ICONS: &[(&str, &[u8])] = &[
     ("dc-fx", include_bytes!("../../../assets/icons/dc-fx.svg")),
     ("dc-gamut", include_bytes!("../../../assets/icons/dc-gamut.svg")),
     ("dc-grad-conic", include_bytes!("../../../assets/icons/dc-grad-conic.svg")),
+    ("dc-grad-diamond", include_bytes!("../../../assets/icons/dc-grad-diamond.svg")),
     ("dc-grad-freeform", include_bytes!("../../../assets/icons/dc-grad-freeform.svg")),
     ("dc-grad-linear", include_bytes!("../../../assets/icons/dc-grad-linear.svg")),
     ("dc-grad-radial", include_bytes!("../../../assets/icons/dc-grad-radial.svg")),

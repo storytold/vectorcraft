@@ -1,6 +1,6 @@
 use super::blend::{
-    blend_expand, blend_info, blend_make, blend_options, blend_release, blend_replace_spine, blend_reverse_spine, blend_reverse_stack,
-    spine_add_anchor, spine_convert_anchor, spine_move_anchor, spine_remove_anchor, spine_reshape_segment,
+    blend_create_spine, blend_expand, blend_info, blend_make, blend_options, blend_release, blend_replace_spine, blend_reverse_spine,
+    blend_reverse_stack, spine_add_anchor, spine_convert_anchor, spine_move_anchor, spine_remove_anchor, spine_reshape_segment,
 };
 use super::common::{has_blend, has_envelope, has_mesh};
 use super::envelope::{
@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Blend"],
             Some("Cmd+Alt+B"),
-            "{ids?, steps?: n | distance?: pt | smooth?: bool, orientation?: page|path (default: the Blend Options set with nothing selected, else smooth colour and page), starts?: [anchor index | null, …] (per object of `ids`, else of the selection in paint order: the anchor of its first subpath the blend starts from; an open path's last anchor runs it the other way), spacing?: smooth|steps|distance (with value), value?: n, easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct (0..100), colorShift?: pct (-100..100; 0: even)} blend the selected objects (paint order) into a live blend; a blend among them takes the others in as more key objects (keeping its options, name and transparency) instead of nesting → {id}",
+            "{ids?, steps?: n | distance?: pt | smooth?: bool, orientation?: page|path (default: the Blend Options set with nothing selected, else smooth colour and page), starts?: [anchor index | null, …] (per object of `ids`, else of the selection in paint order: the anchor of its first subpath the blend starts from; an open path's last anchor runs it the other way), spacing?: smooth|steps|distance (with value), value?: n, easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct (0..100), colorShift?: pct (-100..100; 0: even), createSpine?: auto|always|never (default: the mode object.blend.createSpine sets; never: a blend without a spine, which takes no easing)} blend the selected objects (paint order) into a live blend; a blend among them takes the others in as more key objects (keeping its options, name, transparency and whether it has a spine) instead of nesting → {id}",
             has_doc,
             blend_make
         ),
@@ -27,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Release",
             ["Object", "Blend"],
             Some("Cmd+Alt+Shift+B"),
-            "{} release the selected blends: the key objects come back and the spine stays as a path with no fill or stroke, below them; a blend with a name, opacity, blend mode, isolation, opacity mask or appearance of its own comes back as a group keeping them (and its knockout) → {ids (the keys), spines: [ids], groups: [ids]}",
+            "{} release the selected blends: the key objects come back and the spine (if the blend has one) stays as a path with no fill or stroke, below them; a blend with a name, opacity, blend mode, isolation, opacity mask or appearance of its own comes back as a group keeping them (and its knockout) → {ids (the keys), spines: [ids], groups: [ids]}",
             has_blend,
             blend_release
         ),
@@ -39,6 +39,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{spacing?: smooth|steps|distance, value?: n, steps?: n, distance?: pt, orientation?: page|path, smooth?: bool, easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct} set the options of the selected blends; easingType chooses the distribution, ramp sets its strength (0..100; 0 = even), colorShift (-100..100; 0 = even) shifts colours independently of shape/position easing (omitted ones keep their value; out of range is an error); with no blend selected, the options new blends start with (spacing and orientation only; a tool setting, not an undo step) → {defaults?: true}",
             always,
             blend_options
+        ),
+        cmd!(
+            "object.blend.createSpine",
+            "Create Spine",
+            [],
+            None,
+            "{mode?: auto|always|never} the Blend panel's Create Spine: whether new blends get a spine (auto and always: the straight lines between the key centers, as before; never: no spine to show, edit, reverse or release, and no easing, until Replace Spine gives one); with no `mode`, reads it; blends already made keep theirs (a tool setting kept with the preferences, not an undo step) → {mode}",
+            always,
+            blend_create_spine
         ),
         cmd!(
             "object.blend.expand",
@@ -54,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Spine",
             ["Object", "Blend"],
             None,
-            "{} use the selected path as the spine of the selected blend (the path is consumed)",
+            "{} use the selected path as the spine of the selected blend (the path is consumed); a blend made without a spine gets this one",
             has_blend,
             blend_replace_spine
         ),
@@ -63,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reverse Spine",
             ["Object", "Blend"],
             None,
-            "{} reverse the order of the key objects along the spine",
+            "{} reverse the order of the key objects along the spine; an error when a selected blend has no spine",
             has_blend,
             blend_reverse_spine
         ),
@@ -72,7 +81,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Info",
             [],
             None,
-            "{} the options of the first selected blend, else those new blends start with → {target: blend|defaults, id?, spacing: smooth|steps|distance, steps, distance, orientation: page|path, easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct, keys?: [ids], starts?: [anchor|null], spine?: {anchors: [{x, y, in: [x, y], out: [x, y]}], closed, keyAnchors: [anchor each key sits on] | null (keys spread evenly: a spine from Replace Spine), explicit: false for the straight lines between the key centres}}",
+            "{} the options of the first selected blend, else those new blends start with → {target: blend|defaults, id?, spacing: smooth|steps|distance, steps, distance, orientation: page|path, easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct, colorShift?: pct, keys?: [ids], starts?: [anchor|null], hasSpine?: false for a blend made without a spine (no `spine` then), spine?: {anchors: [{x, y, in: [x, y], out: [x, y]}], closed, keyAnchors: [anchor each key sits on] | null (keys spread evenly: a spine from Replace Spine), explicit: false for the straight lines between the key centres}}",
             always,
             blend_info
         ),

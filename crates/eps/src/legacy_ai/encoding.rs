@@ -201,7 +201,9 @@ pub(super) fn segment_point(path: &BezPath, fraction: f64) -> f64 {
 pub(super) fn direct_fill(p: &Paint) -> bool {
     match p {
         Paint::Solid { .. } => true,
-        Paint::Gradient(g) => !matches!(g.gradient.kind, GradientKind::Freeform | GradientKind::Conic) && !g.gradient.stops.is_empty(),
+        Paint::Gradient(g) => {
+            !matches!(g.gradient.kind, GradientKind::Freeform | GradientKind::Conic | GradientKind::Diamond) && !g.gradient.stops.is_empty()
+        }
         _ => false,
     }
 }

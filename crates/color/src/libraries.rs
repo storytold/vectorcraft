@@ -9,7 +9,7 @@ use std::sync::{Arc, OnceLock};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint, Swatch, SwatchGroup};
+use crate::{Color, Gradient, GradientKind, GradientMethod, GradientPaint, GradientStop, Paint, Swatch, SwatchGroup};
 
 /// A library: its name, its ungrouped swatches and its colour groups.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -72,6 +72,7 @@ pub const GRADIENT_LIBRARIES: &[BuiltinLibrary] = &[
     lib!("spectrum-gradients", "Spectrum Gradients", spectrum_gradients),
     lib!("sky-gradients", "Sky Gradients", sky_gradients),
     lib!("neutral-gradients", "Neutral Gradients", neutral_gradients),
+    lib!("organic-fades", "Organic Fades", organic_fades),
     lib!("duotone-gradients", "Duotone Gradients", duotone_gradients),
     lib!("radial-glows", "Radial Glows", radial_glows),
 ];
@@ -177,6 +178,14 @@ fn group(name: &str, swatches: Vec<Swatch>) -> SwatchGroup {
 pub(crate) fn gradient(name: &str, kind: GradientKind, stops: &[(f32, Color, f32)]) -> Swatch {
     let stops = stops.iter().map(|&(offset, color, opacity)| GradientStop { opacity, ..GradientStop::new(offset, color) }).collect();
     Swatch { name: name.into(), paint: Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(kind, stops)))), global: false, spot: false }
+}
+
+/// A gradient swatch mixed by `method` through `stops` of (offset, color, opacity, midpoint).
+fn gradient_with(name: &str, kind: GradientKind, method: GradientMethod, stops: &[(f32, Color, f32, f32)]) -> Swatch {
+    let stops =
+        stops.iter().map(|&(offset, color, opacity, midpoint)| GradientStop { opacity, midpoint, ..GradientStop::new(offset, color) }).collect();
+    let gradient = Gradient { method, ..Gradient::new(kind, stops) };
+    Swatch { name: name.into(), paint: Paint::Gradient(Box::new(GradientPaint::new(gradient))), global: false, spot: false }
 }
 
 /// `n` steps of OKLCH lightness from `l0` to `l1`, chroma `c(t)` and hue `h(t)` (`t` in 0..=1),
@@ -387,6 +396,141 @@ fn radial_glows() -> (Vec<Swatch>, Vec<SwatchGroup>) {
     (s, vec![])
 }
 
+/// A stop of [`organic_fades`]: offset, OKLCH `(l, c, h°)`, opacity and midpoint.
+type FadeStop = (f32, (f64, f64, f64), f32, f32);
+
+/// Soft fades through a few unevenly spaced stops with off-center midpoints, mixed perceptually,
+/// that thin out to transparent: at the end of the linear ones and at the edge of the radial ones.
+fn organic_fades() -> (Vec<Swatch>, Vec<SwatchGroup>) {
+    use GradientKind::{Linear, Radial};
+    let fades: [(&str, GradientKind, &[FadeStop]); 15] = [
+        (
+            "Mist",
+            Linear,
+            &[
+                (0.0, (0.94, 0.012, 240.0), 1.0, 0.38),
+                (0.35, (0.86, 0.03, 235.0), 0.85, 0.62),
+                (0.7, (0.8, 0.035, 230.0), 0.4, 0.45),
+                (1.0, (0.78, 0.035, 230.0), 0.0, 0.5),
+            ],
+        ),
+        (
+            "Petal",
+            Linear,
+            &[
+                (0.0, (0.82, 0.09, 350.0), 1.0, 0.42),
+                (0.28, (0.88, 0.07, 10.0), 0.9, 0.66),
+                (0.64, (0.93, 0.04, 30.0), 0.45, 0.35),
+                (1.0, (0.95, 0.03, 40.0), 0.0, 0.5),
+            ],
+        ),
+        ("Fern", Linear, &[(0.0, (0.52, 0.1, 145.0), 1.0, 0.6), (0.4, (0.68, 0.11, 135.0), 0.75, 0.4), (1.0, (0.85, 0.08, 120.0), 0.0, 0.5)]),
+        (
+            "Smoke",
+            Linear,
+            &[
+                (0.0, (0.35, 0.01, 260.0), 1.0, 0.3),
+                (0.22, (0.48, 0.012, 255.0), 0.8, 0.58),
+                (0.58, (0.62, 0.01, 250.0), 0.35, 0.7),
+                (1.0, (0.72, 0.008, 250.0), 0.0, 0.5),
+            ],
+        ),
+        (
+            "Honey",
+            Linear,
+            &[
+                (0.0, (0.72, 0.15, 70.0), 1.0, 0.55),
+                (0.3, (0.8, 0.14, 80.0), 0.9, 0.35),
+                (0.75, (0.9, 0.09, 90.0), 0.3, 0.6),
+                (1.0, (0.95, 0.05, 95.0), 0.0, 0.5),
+            ],
+        ),
+        ("Seafoam", Linear, &[(0.0, (0.7, 0.09, 175.0), 1.0, 0.45), (0.45, (0.84, 0.07, 170.0), 0.6, 0.65), (1.0, (0.95, 0.03, 165.0), 0.0, 0.5)]),
+        (
+            "Lavender",
+            Linear,
+            &[
+                (0.0, (0.62, 0.12, 300.0), 1.0, 0.36),
+                (0.3, (0.72, 0.1, 295.0), 0.85, 0.55),
+                (0.55, (0.82, 0.07, 290.0), 0.5, 0.68),
+                (0.82, (0.9, 0.04, 285.0), 0.15, 0.4),
+                (1.0, (0.93, 0.03, 285.0), 0.0, 0.5),
+            ],
+        ),
+        ("Driftwood", Linear, &[(0.0, (0.55, 0.04, 60.0), 1.0, 0.64), (0.38, (0.68, 0.035, 70.0), 0.7, 0.42), (1.0, (0.84, 0.025, 80.0), 0.0, 0.5)]),
+        (
+            "Ink Wash",
+            Linear,
+            &[
+                (0.0, (0.25, 0.05, 265.0), 1.0, 0.28),
+                (0.18, (0.35, 0.06, 262.0), 0.9, 0.6),
+                (0.5, (0.5, 0.05, 258.0), 0.45, 0.72),
+                (1.0, (0.65, 0.04, 255.0), 0.0, 0.5),
+            ],
+        ),
+        (
+            "Tide",
+            Linear,
+            &[
+                (0.0, (0.45, 0.1, 230.0), 1.0, 0.4),
+                (0.26, (0.6, 0.1, 215.0), 0.8, 0.62),
+                (0.72, (0.76, 0.08, 200.0), 0.35, 0.44),
+                (1.0, (0.88, 0.05, 195.0), 0.0, 0.5),
+            ],
+        ),
+        (
+            "Bloom",
+            Radial,
+            &[
+                (0.0, (0.92, 0.05, 40.0), 1.0, 0.4),
+                (0.22, (0.8, 0.12, 20.0), 0.95, 0.6),
+                (0.6, (0.7, 0.14, 355.0), 0.4, 0.35),
+                (1.0, (0.66, 0.13, 345.0), 0.0, 0.5),
+            ],
+        ),
+        ("Dew", Radial, &[(0.0, (0.97, 0.01, 200.0), 1.0, 0.3), (0.3, (0.88, 0.05, 195.0), 0.7, 0.58), (1.0, (0.8, 0.06, 190.0), 0.0, 0.5)]),
+        (
+            "Pollen",
+            Radial,
+            &[
+                (0.0, (0.96, 0.08, 100.0), 1.0, 0.45),
+                (0.18, (0.9, 0.15, 95.0), 1.0, 0.65),
+                (0.55, (0.82, 0.16, 85.0), 0.5, 0.4),
+                (1.0, (0.76, 0.15, 75.0), 0.0, 0.5),
+            ],
+        ),
+        // A ring: clear at the center, then a band that fades out to the edge.
+        (
+            "Halo",
+            Radial,
+            &[
+                (0.0, (0.98, 0.005, 90.0), 0.0, 0.6),
+                (0.42, (0.95, 0.02, 85.0), 0.0, 0.35),
+                (0.62, (0.92, 0.04, 80.0), 1.0, 0.55),
+                (1.0, (0.88, 0.05, 75.0), 0.0, 0.5),
+            ],
+        ),
+        (
+            "Lichen",
+            Radial,
+            &[
+                (0.0, (0.8, 0.07, 120.0), 1.0, 0.58),
+                (0.35, (0.7, 0.08, 130.0), 0.75, 0.4),
+                (0.74, (0.6, 0.07, 140.0), 0.25, 0.62),
+                (1.0, (0.55, 0.06, 145.0), 0.0, 0.5),
+            ],
+        ),
+    ];
+    let s = fades
+        .iter()
+        .map(|&(name, kind, stops)| {
+            let stops: Vec<(f32, Color, f32, f32)> = stops.iter().map(|&(at, (l, c, h), opacity, mid)| (at, oklch(l, c, h), opacity, mid)).collect();
+            gradient_with(name, kind, GradientMethod::Perceptual, &stops)
+        })
+        .collect();
+    (s, vec![])
+}
+
 /// The sequential scales of [`perceptual`]: name and anchors of rising lightness.
 const SEQUENTIAL: [(&str, Anchors); 5] = [
     ("Ember", &[(0.22, 0.10, 300.0), (0.55, 0.18, 30.0), (0.93, 0.15, 100.0)]),
@@ -532,6 +676,45 @@ mod tests {
                     let st = &g.gradient.stops;
                     assert!(st.len() >= 2 && st.windows(2).all(|w| w[0].offset <= w[1].offset), "{}", s.name);
                     assert!(st.iter().all(|s| (0.0..=1.0).contains(&s.offset) && (0.0..=1.0).contains(&s.opacity)));
+                    assert!(st.iter().all(|s| (0.01..=0.99).contains(&s.midpoint)), "{}: a midpoint out of range", s.name);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn organic_fades_are_perceptual_multi_stop_fades_to_transparent() {
+        let lib = builtin_library("organic-fades").unwrap();
+        assert_eq!(GRADIENT_LIBRARIES.iter().map(|b| b.name).position(|n| n == "Organic Fades"), Some(3), "after Neutral Gradients");
+        assert!(lib.groups.is_empty() && (12..=16).contains(&lib.len()), "{} swatches", lib.len());
+        let radial = lib.iter().filter(|s| matches!(&s.paint, Paint::Gradient(g) if g.gradient.kind == GradientKind::Radial)).count();
+        assert!(radial >= 3 && radial * 2 <= lib.len(), "{radial} radial of {}", lib.len());
+        for s in lib.iter() {
+            let Paint::Gradient(g) = &s.paint else { panic!("{} is a gradient", s.name) };
+            let (g, n) = (&g.gradient, &s.name);
+            assert_eq!(g.method, GradientMethod::Perceptual, "{n}");
+            assert!((3..=5).contains(&g.stops.len()), "{n}: {} stops", g.stops.len());
+            assert!(g.stops.windows(2).all(|w| w[0].offset < w[1].offset), "{n}: rising offsets");
+            assert_eq!((g.stops[0].offset, g.stops[g.stops.len() - 1].offset), (0.0, 1.0), "{n}");
+            // Unevenly spaced: some gap differs from an even step.
+            let even = 1.0 / (g.stops.len() - 1) as f32;
+            assert!(g.stops.windows(2).any(|w| (w[1].offset - w[0].offset - even).abs() > 0.02), "{n}: uneven stops");
+            // Every segment's midpoint is off center and within the Gradient panel's 13 to 87%.
+            let segments = &g.stops[..g.stops.len() - 1];
+            assert!(segments.iter().all(|st| (st.midpoint - 0.5).abs() > 0.02 && (0.13..=0.87).contains(&st.midpoint)), "{n}: midpoints");
+            // Fully opaque somewhere, and clear at the end (the edge of a radial one).
+            assert!(g.stops.iter().any(|st| st.opacity == 1.0), "{n}: an opaque stop");
+            assert_eq!(g.stops[g.stops.len() - 1].opacity, 0.0, "{n}: clear at the end");
+        }
+    }
+
+    #[test]
+    fn the_other_libraries_keep_classic_mixing_and_centered_midpoints() {
+        for b in builtins().filter(|b| b.id != "organic-fades") {
+            for s in builtin_library(b.id).unwrap().iter() {
+                if let Paint::Gradient(g) = &s.paint {
+                    assert_eq!(g.gradient.method, GradientMethod::Classic, "{}", s.name);
+                    assert!(g.gradient.stops.iter().all(|st| st.midpoint == 0.5), "{}", s.name);
                 }
             }
         }

@@ -401,6 +401,14 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 ),
                 c("Dynamic Text", "type.dynamicText"),
                 sub(
+                    "Dynamic Text Presets",
+                    vec![
+                        cp("Circle", "type.dynamicTextPreset", json!({"preset": "circle"})),
+                        cp("Arch", "type.dynamicTextPreset", json!({"preset": "arch"})),
+                        cp("Bow", "type.dynamicTextPreset", json!({"preset": "bow"})),
+                    ],
+                ),
+                sub(
                     "Threaded Text",
                     vec![
                         c("Create", "text.thread.create"),
@@ -714,6 +722,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Search Commands…", "help.commandPalette"),
                 todos("VectorCraft Help…", "F1"),
                 c("Safe Mode…", "help.safeMode"),
+                c("Copy Troubleshooting Info", "help.copyTroubleshootingInfo"),
                 Sep,
                 c("Check for Updates…", "help.checkForUpdates"),
                 c("About VectorCraft", "help.about"),
