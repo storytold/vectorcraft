@@ -440,6 +440,59 @@ fn korean_line_break_anywhere_is_set_per_paragraph_and_saved_only_when_off() {
     assert!(!text(&s).para_at(0).korean_line_break_anywhere && !text(&s).para_at(1).korean_line_break_anywhere);
 }
 
+/// Paragraph panel menu › Bunri-Kinshi: off for new type and for a paragraph saved before it, and
+/// saved only when on; `text.setFormat {bunriKinshi}` sets it per paragraph in one undo step and
+/// refuses a value that is not true or false, kinsoku None keeps it, and paragraph styles carry it.
+#[test]
+fn bunri_kinshi_is_set_per_paragraph_and_saved_only_when_on() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "size": 20, "text": "あ——い\nう……え"})).unwrap()["id"].as_u64().unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    assert!(!text(&s).para_at(0).bunri_kinshi, "new type has it off");
+    assert!(serde_json::to_value(text(&s).para_at(0)).unwrap().get("bunri_kinshi").is_none());
+    let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
+    assert!(!old.bunri_kinshi, "saved before the option: off");
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    // Only the second paragraph.
+    let second = "あ——い\n".len();
+    s.execute("text.setFormat", &json!({"bunriKinshi": true, "start": second, "end": second})).unwrap();
+    assert!(!text(&s).para_at(0).bunri_kinshi && text(&s).para_at(1).bunri_kinshi);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    let saved = serde_json::to_value(text(&s).para_at(1)).unwrap();
+    assert_eq!(saved["bunri_kinshi"], true);
+    let back: vectorcraft_doc::ParaStyle = serde_json::from_value(saved).unwrap();
+    assert!(back.bunri_kinshi);
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(id)).map(|n| &n.kind) else { panic!("text") };
+    assert!(!back.para_at(0).bunri_kinshi && back.para_at(1).bunri_kinshi, "the file keeps it per paragraph");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!text(&s).para_at(1).bunri_kinshi);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(text(&s).para_at(1).bunri_kinshi);
+    for bad in [json!("yes"), json!(1)] {
+        assert!(s.execute("text.setFormat", &json!({"ids": [id], "bunriKinshi": bad, "kinsoku": "none"})).is_err(), "{bad}");
+    }
+    assert!(s.execute("text.setRangeStyle", &json!({"id": id, "bunriKinshi": false})).is_err());
+    assert!(text(&s).para_at(1).bunri_kinshi && text(&s).para_at(1).kinsoku != vectorcraft_doc::Kinsoku::None, "a refused call changes nothing");
+    // Kinsoku None keeps the setting, without effect, and turning kinsoku back on restores it.
+    s.execute("text.setFormat", &json!({"ids": [id], "kinsoku": "none"})).unwrap();
+    assert!(text(&s).para_at(1).bunri_kinshi);
+    s.execute("text.setFormat", &json!({"ids": [id], "kinsoku": "hard"})).unwrap();
+    assert!(text(&s).para_at(1).bunri_kinshi);
+    // A paragraph style carries it.
+    s.execute("paraStyle.new", &json!({"name": "Pairs", "attrs": {"bunri_kinshi": true}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Pairs", "id": id})).unwrap();
+    assert!(text(&s).para_at(0).bunri_kinshi && text(&s).para_at(1).bunri_kinshi);
+    s.execute("paraStyle.new", &json!({"name": "Split", "attrs": {"bunri_kinshi": false}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Split", "id": id})).unwrap();
+    assert!(!text(&s).para_at(0).bunri_kinshi && !text(&s).para_at(1).bunri_kinshi);
+}
+
 /// Paragraph panel › Insert Kashidas: `text.setFormat {kashida}` sets it per paragraph in one
 /// undo step, the paragraph is saved with it only when it is not None and opens with it, an
 /// unknown value changes nothing, and paragraph styles carry it.

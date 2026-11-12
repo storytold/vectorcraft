@@ -8,7 +8,9 @@ use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, L
 use vectorcraft_geom::{PathData, PathEl, Point, Rect, Vec2};
 use vectorcraft_three_d::{Edge, Revolve};
 
-use crate::solids::{Profile, Scope, is_container, members, object_profile, profile, reshape_members, resolve_for, solid_paints, union_bounds};
+use crate::solids::{
+    Profile, Scope, is_container, members, object_profile, past_effect, profile, reshape_members, resolve_for, solid_paints, union_bounds,
+};
 use crate::util::{flag, num, text};
 use crate::{GeomContext, apply_geometry_with, is_geometry, merged_params};
 
@@ -558,17 +560,11 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
         }
         children.push(Arc::new(surface));
         // Later geometry acts on the projected art as a whole through container evaluation.
-        remaining = n
-            .appearance
-            .effects
-            .iter()
-            .enumerate()
-            .filter(|(i, e)| !is_revolve(&e.id) && (!is_geometry(&e.id) || *i > index))
-            .map(|(_, e)| e.clone())
-            .collect();
+        remaining = past_effect(&n.appearance.effects, index);
+        remaining.retain(|e| !is_revolve(&e.id));
     } else {
         let path = geometry(&path, &n.appearance.effects, &ctx);
-        remaining.retain(|e| !is_geometry(&e.id));
+        remaining = crate::without_geometry(&remaining);
         // Every item's shadow goes behind every item's art.
         let mut shadows = vec![];
         for item in n.appearance.items.iter().filter(|i| crate::paints(i)) {
@@ -835,8 +831,7 @@ fn group_art(n: &Node, expand: bool) -> Option<Node> {
     // One shadow for every member's surface, behind them all.
     let mut children = children;
     children.splice(0..0, group_shadow(n.id, fx, &shapes, b, options).ok()?);
-    let remaining =
-        n.appearance.effects.iter().enumerate().filter(|(i, e)| *i != index && (!is_geometry(&e.id) || *i > index)).map(|(_, e)| e.clone()).collect();
+    let remaining = past_effect(&n.appearance.effects, index);
     let mut art = n.clone();
     art.kind = NodeKind::Group { children, clip: false };
     art.appearance = Appearance { effects: remaining, ..Default::default() }.into();

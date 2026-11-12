@@ -27,6 +27,7 @@ mod csv;
 mod library;
 
 use csv::{MAX_GRAPH_CSV, dataset_export, dataset_import};
+pub(crate) use library::{give_svg_library, svg_library};
 use library::{load_library, save_library};
 
 /// The longest variable or dataset name, in characters (names arrive from MCP and files).

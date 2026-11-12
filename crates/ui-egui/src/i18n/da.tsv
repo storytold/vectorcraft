@@ -1840,6 +1840,7 @@ digits	Malayalam	Malayalam
 	Right-to-Left Paragraph Direction	Afsnitsretning fra højre mod venstre
 	Roman Hanging Punctuation	Romersk hængende tegnsætning
 	Korean Line Break Anywhere	Koreansk linjeskift hvor som helst
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Indstillinger for østasiatisk komposition
 	Korean Composition Settings	Indstillinger for koreansk komposition
 	Select a text object to edit its paragraph attributes.	Markér et tekstobjekt for at redigere dets afsnitsattributter.
@@ -2910,6 +2911,7 @@ antiAlias	Sharp	Skarp
 	Hide Code	Skjul kode
 	Images:	Billeder:
 	Include Metadata	Medtag metadata
+	Include Variable Data	Medtag variabeldata
 	Internal CSS	Intern CSS
 	Layer Names	Lagnavne
 	Minify	Minificér
@@ -3343,6 +3345,7 @@ theme	Appearance	Udseende
 	Move Mesh Points	Flyt meshpunkter
 	Move Spine Point	Flyt rygradpunkt
 	Reshape Spine Segment	Omform rygradsegment
+	Blend Easing	Blandingens acceleration
 	Reset with Mesh	Nulstil med mesh
 	Reset with Warp	Nulstil med forvrængning
 	Set Mesh Point Color	Angiv farve for meshpunkt
@@ -6086,6 +6089,11 @@ axis	Y Axis	Y-akse
 	User Brush Library 9	Brugerpenselbibliotek 9
 	User Brush Library 10	Brugerpenselbibliotek 10
 	Art Ribbons	Kunstbånd
+	Ink and Wash	Blæk og lavering
+	Tapered Ink	Tilspidset blæk
+	Brush Pen	Penselpen
+	Soft Wash	Blød lavering
+	Pooling Wash	Lavering med rand
 	Zigzag	Zigzag
 	Burst Ray	Burststråle
 	Dash Trail	Streget spor

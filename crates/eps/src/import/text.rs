@@ -186,22 +186,15 @@ impl Interp<'_> {
                 // The procedure shows or places each character: it gets its code and width.
                 let s = self.pop_str()?.to_vec();
                 let proc = self.pop_proc()?;
-                // In a CIDFont only named, a code may be several bytes: the procedure gets each
-                // code's value.
+                // In a CIDFont only named, a code may be several bytes: the procedure runs once for
+                // each code.
                 if let Some(named) = self.named_cid_type(&s)? {
-                    let mut chars = named.codes.text.chars();
-                    for &(code, n) in &named.codes.codes {
-                        let mut one = Decoded::default();
-                        one.push(code, chars.by_ref().take(n));
-                        let v = self.named_cid_width(&named, &one)?;
-                        self.push(Obj::Int(i64::from(code)))?;
-                        self.push_num(v.x)?;
-                        self.push_num(v.y)?;
-                        if !self.body(&proc)? {
-                            break;
-                        }
-                    }
-                    return Ok(());
+                    let root = self.g.font.clone();
+                    let before = self.cshow.take();
+                    let r = self.named_cshow(named, &proc, root.clone());
+                    self.cshow = before;
+                    self.g.font = root;
+                    return r;
                 }
                 for b in s {
                     let v = self.width_of(&[b])?;
@@ -252,7 +245,12 @@ impl Interp<'_> {
             SetCharWidth => self.glyph_width = Some(self.nums::<2>()?),
             SetCacheDevice2 => self.glyph_width = Some(self.nums::<10>()?[..2].try_into().unwrap_or_default()),
             RootFont => {
-                let font = match self.g.font.clone() {
+                // Inside a `cshow` procedure the composite font, unless the procedure set a font.
+                let root = match (&self.cshow, &self.g.font) {
+                    (Some(c), Some(f)) if f.same(&c.selected) => Some(c.root.clone()),
+                    _ => None,
+                };
+                let font = match root.or_else(|| self.g.font.clone()) {
                     Some(f) => f,
                     None => self.find_font(&Obj::name(DEFAULT_FONT))?,
                 };
@@ -791,18 +789,16 @@ impl Interp<'_> {
         self.push(Obj::Int(code.into()))?;
         self.push(Obj::Int(next.into()))?;
         // The procedure sees the font the file set, not the one type in a CIDFont only named is
-        // set in; a font it sets stays current.
-        let Some(outer) = self.kshow_font.take() else {
-            self.call(p.clone())?;
-            return Ok(self.user_point()? - pen);
+        // set in, and the current font is restored when it completes (PLRM 3rd ed., `kshow`).
+        // A `kshow` the procedure runs sees the font the procedure set.
+        let outer = self.kshow_font.take();
+        let inner = match outer.clone() {
+            Some(outer) => self.g.font.replace(outer),
+            None => self.g.font.clone(),
         };
-        let inner = self.g.font.replace(outer.clone());
         let r = self.call(p.clone());
-        // Once the procedure sets a font, it and the later procedures see that one.
-        if self.g.font.as_ref().is_some_and(|f| f.same(&outer)) {
-            self.g.font = inner;
-            self.kshow_font = Some(outer);
-        }
+        self.kshow_font = outer;
+        self.g.font = inner;
         r?;
         Ok(self.user_point()? - pen)
     }
@@ -960,6 +956,15 @@ struct NamedCid {
     ems: bool,
 }
 
+/// A `cshow` procedure running over type in a CIDFont only named ([`Interp::named_cshow`]): the
+/// CIDFont it sees as current, the composite font `rootfont` gives while that CIDFont is current,
+/// and the type of the code it was given.
+pub(super) struct CShowFont {
+    selected: DictRef,
+    root: DictRef,
+    code: NamedCid,
+}
+
 /// What drawing a glyph does with it.
 #[derive(Clone, Copy, PartialEq)]
 enum Draw {
@@ -1092,7 +1097,17 @@ impl Interp<'_> {
     /// stands for none), set as type in the font of its CIDFont's name, vertical over a vertical
     /// CMap (`WMode` 1). Control codes stand for no character. Type in a CMap VectorCraft can't
     /// read is left out, with a warning, each of its codes moving the point one em.
+    /// Inside a `cshow` procedure over such type, with the CIDFont current, the string must be the
+    /// one byte the procedure was given, else a `rangecheck` error, and it stands for the code
+    /// the procedure was given (PLRM 3rd ed., `cshow`: the glyph of the selected CID).
     fn named_cid_type(&mut self, s: &[u8]) -> Res<Option<NamedCid>> {
+        if let Some(named) = self.cshow_code(true) {
+            let given = named.codes.codes.first().map(|&(code, _)| code & 0xff);
+            if s.len() != 1 || given != s.first().map(|&b| u32::from(b)) {
+                return ps_err("rangecheck", "a string shown in cshow");
+            }
+            return Ok(Some(named));
+        }
         let Some(cmap) = self.named_cid_parts().map(|(cmap, ..)| cmap) else { return Ok(None) };
         // Each code is looked up in the CMap's mappings.
         self.spend(s.len() as u64)?;
@@ -1120,6 +1135,9 @@ impl Interp<'_> {
     /// The font [`Self::named_cid_type`] sets type in, with no codes yet, when the current font is
     /// a CID-keyed font over a predefined CMap the file doesn't define.
     fn named_cid_font(&mut self) -> Res<Option<NamedCid>> {
+        if let Some(named) = self.cshow_code(false) {
+            return Ok(Some(named));
+        }
         let Some((_, font, name, vertical)) = self.named_cid_parts() else { return Ok(None) };
         // The composite font is copied under the CIDFont's name for every string: charged by
         // its size, so a huge font dictionary shown in a loop runs out of the budget.
@@ -1128,6 +1146,23 @@ impl Interp<'_> {
         let mut named = font.borrow().clone();
         named.insert(Key::name("FontName"), name);
         Ok(Some(NamedCid { codes: Decoded::default(), font: DictRef::new(named), vertical, ems: vertical }))
+    }
+
+    /// The type of the code a running `cshow` procedure was given ([`Self::named_cshow`]), with
+    /// that code when `code` and with none otherwise, while the CIDFont it selected is current.
+    fn cshow_code(&self, code: bool) -> Option<NamedCid> {
+        let c = self.cshow.as_ref()?;
+        if !self.g.font.as_ref().is_some_and(|f| f.same(&c.selected)) {
+            return None;
+        }
+        let mut codes = Decoded::default();
+        if code {
+            let mut chars = c.code.codes.text.chars();
+            for &(value, n) in &c.code.codes.codes {
+                codes.push(value, chars.by_ref().take(n));
+            }
+        }
+        Some(NamedCid { codes, font: c.code.font.clone(), vertical: c.code.vertical, ems: c.code.ems })
     }
 
     /// The CMap's name, the composite font, the CIDFont's name and the writing mode of
@@ -1191,11 +1226,39 @@ impl Interp<'_> {
         let before = std::mem::replace(&mut self.kshow_font, saved.clone());
         let r = self.show_codes(&named.codes, widths.as_deref(), spacing, named.vertical, &kern, draw);
         self.kshow_font = before;
-        // A font the `kshow` procedure set stays current.
-        if self.g.font.as_ref().is_none_or(|f| f.same(&named.font)) {
-            self.g.font = saved;
-        }
+        self.g.font = saved;
         r
+    }
+
+    /// `cshow`'s procedure `proc` run for each code of type `named` in composite font `root`, with
+    /// the code's last byte and its width (PLRM 3rd ed., `cshow`). While it runs the CIDFont is the
+    /// current font and `rootfont` gives `root`; a show operator in the CIDFont shows the code's
+    /// character, whatever its string (see [`Self::named_cid_type`]). The current font is restored
+    /// when the procedure completes.
+    fn named_cshow(&mut self, named: NamedCid, proc: &Obj, root: Option<DictRef>) -> Res {
+        let Some(composite) = root.clone() else { return Ok(()) };
+        let dep = named.font.borrow().get(&Key::name("FDepVector")).and_then(|v| v.items()?.get(0));
+        let selected = match dep {
+            Some(Obj::Dict(d)) => d,
+            _ => named.font.clone(),
+        };
+        let mut chars = named.codes.text.chars();
+        for &(code, n) in &named.codes.codes {
+            let mut one = NamedCid { codes: Decoded::default(), font: named.font.clone(), vertical: named.vertical, ems: named.ems };
+            one.codes.push(code, chars.by_ref().take(n));
+            let v = self.named_cid_width(&one, &one.codes)?;
+            self.push(Obj::Int(i64::from(code & 0xff)))?;
+            self.push_num(v.x)?;
+            self.push_num(v.y)?;
+            self.cshow = Some(CShowFont { selected: selected.clone(), root: composite.clone(), code: one });
+            self.g.font = Some(selected.clone());
+            let go = self.body(proc);
+            self.g.font = root.clone();
+            if !go? {
+                break;
+            }
+        }
+        Ok(())
     }
 
     /// How far codes `codes` of type `named` move the current point (user space) when

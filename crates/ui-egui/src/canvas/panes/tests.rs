@@ -323,6 +323,22 @@ fn other_panes_show_pixel_preview() {
     assert!(x1 > x0 && y1 > y0);
 }
 
+/// A pane's render key takes its document's [`CacheKey::placed`] value ([`placed_key`]), which a
+/// bitmap made for a test running beside this one does not move: the document holds no images.
+#[test]
+fn a_panes_key_takes_its_documents_placed_value() {
+    let mut app = app_with(2);
+    let ctx = egui::Context::default();
+    app.run("window.arrange.tile", json!({})).unwrap();
+    let uid = app.session.documents()[0].uid;
+    let generation = vectorcraft_render::placed_document::generation();
+    let marked = generation.wrapping_add(1000);
+    app.canvas.placed_keys.insert(uid, crate::PlacedKey { checked: generation, key: marked, before: (marked, generation) });
+    frame(&mut app, &ctx, vec![]);
+    let key = app.canvas.panes.shown.get(&(uid, 1)).map(|(k, _)| k.placed);
+    assert_eq!(key, Some(marked));
+}
+
 #[test]
 fn a_resized_window_fits_the_tiled_documents_again_unless_one_was_zoomed() {
     let mut app = app_with(3);
