@@ -5963,6 +5963,11 @@ axis	Y Axis	Asse Y
 	Grass Fan	Ventaglio per erba
 	Pattern Borders	Bordi a motivo
 	Scatter Shapes	Forme a dispersione
+	Dry Media	Tecniche secche
+	Chalk Grain	Grana di gesso
+	Graphite Pencil	Matita di grafite
+	Wax Crayon	Pastello a cera
+	Charcoal Dust	Polvere di carboncino
 	Save Brush Library…	Salva libreria pennelli…
 @msg	`{_1}` has no brushes to apply	`{_1}` non ha pennelli da applicare
 @msg	missing `library` (see brush.libraries)	manca `library` (vedi brush.libraries)
