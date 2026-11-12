@@ -202,6 +202,10 @@ pub(super) struct ArtStyle {
     pub transparency: Option<(f32, BlendMode, bool, Knockout)>,
     /// [`Self::effects`] holds Effect › Pathfinder effects, which only a group is read with.
     pub pathfinder: bool,
+    /// A style that is one paint (`/SimpleStyle :`, its paint's operators, `/Paint ;`), when that
+    /// paint is a pattern: its [`StyleItem::Pattern`]. A text document's characters name such
+    /// styles for their fills and strokes (`ate`). `None` for any other paint or style.
+    pub simple_pattern: Option<StyleItem>,
 }
 
 impl ArtStyle {
@@ -406,9 +410,14 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
     let mut open: Vec<usize> = vec![];
     let mut pending: Option<bool> = None;
     let mut in_basic = false;
-    let mut finish = |name: Option<String>, filters: &mut Vec<Filter>| {
+    // A style that is one paint being read, and its pattern so far.
+    let mut simple: Option<Option<StyleItem>> = None;
+    let mut finish = |name: Option<String>, filters: &mut Vec<Filter>, simple_pattern: Option<StyleItem>| {
         if let Some(name) = name {
-            styles.insert(name, style(filters));
+            // Only a style that is one paint holds a pattern for type: one with filters as well
+            // paints with more than that.
+            let simple_pattern = simple_pattern.filter(|_| filters.is_empty());
+            styles.insert(name, ArtStyle { simple_pattern, ..style(filters) });
         }
         filters.clear();
     };
@@ -445,11 +454,12 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
             }
             Tok::Name(n) => match n {
                 b"KnownStyle" => {
-                    finish(name.take(), &mut filters);
+                    finish(name.take(), &mut filters, simple.take().flatten());
                     operands.clear();
                     open.clear();
                     (pending, in_basic, style_entry, other_entry) = (None, false, None, None);
                 }
+                b"SimpleStyle" if filters.is_empty() => simple = Some(None),
                 b"FillStyle" => style_entry = Some(Kind::Fill),
                 b"StrokeStyle" | b"BlendStyle" => style_entry = Some(Kind::Other),
                 b"Name" if name.is_none() && filters.is_empty() => name = operands.iter().rev().find_map(|v| names.text(v)),
@@ -549,9 +559,7 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
                         f.repeated |= f.kinds.insert(key, kind).is_some();
                     }
                 }
-                if let Some(f) = filters.last_mut() {
-                    paint_op(f, op, &operands, names);
-                }
+                style_paint_op(&mut filters, &mut simple, op, &operands, names);
                 if op == "," || op == ";" || op.starts_with('X') || op.starts_with('B') || op.len() <= 2 {
                     operands.clear();
                 }
@@ -563,7 +571,7 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
             operands.clear();
         }
     }
-    finish(name, &mut filters);
+    finish(name, &mut filters, simple.take().flatten());
     styles
 }
 
@@ -696,20 +704,48 @@ fn paint_op(f: &mut Filter, op: &str, vals: &[V], names: &mut Names) {
             f.gradient_of = Some((name, angle));
         }
         "p" => {
-            let name = vals.iter().find(|v| matches!(v, V::Str(_))).and_then(|v| names.text(v));
-            let matrix = vals.iter().rev().find_map(|v| match v {
-                V::Arr(a) => {
-                    let n: Vec<f64> = a.iter().filter_map(V::num).collect();
-                    <[f64; 6]>::try_from(n.as_slice()).ok().filter(|m| m.iter().all(|v| v.is_finite()))
-                }
-                _ => None,
-            });
-            let controls: Vec<f64> =
-                vals.iter().skip_while(|v| !matches!(v, V::Str(_))).skip(1).take_while(|v| !matches!(v, V::Arr(_))).filter_map(V::num).collect();
-            if let Some(name) = name {
-                f.pattern = Some((name, matrix, controls));
+            if let Some(pattern) = pattern_operands(vals, names) {
+                f.pattern = Some(pattern);
             }
         }
+        _ => {}
+    }
+}
+
+/// The operands of `(name) … [matrix] p`: the pattern's name read by `names`, its matrix (six
+/// finite numbers) and the numbers between the name and the matrix. `None` without a name.
+fn pattern_operands(vals: &[V], names: &mut Names) -> Option<(String, Option<[f64; 6]>, Vec<f64>)> {
+    let name = vals.iter().find(|v| matches!(v, V::Str(_))).and_then(|v| names.text(v))?;
+    let matrix = vals.iter().rev().find_map(|v| match v {
+        V::Arr(a) => {
+            let n: Vec<f64> = a.iter().filter_map(V::num).collect();
+            <[f64; 6]>::try_from(n.as_slice()).ok().filter(|m| m.iter().all(|v| v.is_finite()))
+        }
+        _ => None,
+    });
+    let controls: Vec<f64> =
+        vals.iter().skip_while(|v| !matches!(v, V::Str(_))).skip(1).take_while(|v| !matches!(v, V::Arr(_))).filter_map(V::num).collect();
+    Some((name, matrix, controls))
+}
+
+/// A paint operator in a style being read: one of the last filter's (`filters`), else one of a style
+/// that is one paint (`simple`, while one is read).
+fn style_paint_op(filters: &mut [Filter], simple: &mut Option<Option<StyleItem>>, op: &str, vals: &[V], names: &mut Names) {
+    if let Some(f) = filters.last_mut() {
+        paint_op(f, op, vals, names);
+    } else if let Some(paint) = simple.as_mut() {
+        simple_paint_op(paint, op, vals, names);
+    }
+}
+
+/// A paint operator of a style that is one paint: a pattern (`p`) is kept as its
+/// [`StyleItem::Pattern`], and any other paint after it (a colour, a stroke's pattern or a
+/// gradient) leaves the style without one.
+fn simple_paint_op(paint: &mut Option<StyleItem>, op: &str, vals: &[V], names: &mut Names) {
+    match op {
+        "p" => *paint = pattern_operands(vals, names).map(|(name, matrix, controls)| StyleItem::Pattern { name, matrix, controls }),
+        "Xa" | "k" | "g" | "x" | "Xx" | "Xk" | "Xs" | "Xz" | "XA" | "K" | "G" | "X" | "XX" | "XK" | "XS" | "XZ" | "xa" | "xx" | "xk" | "xs"
+        | "xz" | "P" | "Bg" => *paint = None,
         _ => {}
     }
 }
