@@ -28,7 +28,7 @@ fn a_reply_hides_a_hidden_library_whatever_surrounds_it() {
 fn hiding(hidden: &[(&str, &str)], readable: &[&str]) -> super::Hiding {
     let mut hidden: Vec<(String, String)> = hidden.iter().map(|(id, shown)| (id.to_string(), shown.to_string())).collect();
     hidden.sort_by_key(|(id, _)| std::cmp::Reverse(id.len()));
-    super::Hiding { hidden, readable: readable.iter().map(|id| id.to_string()).collect() }
+    super::Hiding { hidden, readable: readable.iter().map(|id| id.to_string()).collect(), sent: Vec::new() }
 }
 
 /// [`super::hide_library_ids`] on `reply`, under a read root made for `tag`.
@@ -125,10 +125,41 @@ fn a_reply_hides_a_path_in_any_case_and_escaped() {
 fn a_sent_path_replaces_a_hidden_id_for_the_same_path() {
     let mut hidden = hiding(&[(r"loaded/C:\Libs\b.svg", "loaded/b.svg (2)"), ("loaded//other/b.svg", "loaded/b.svg")], &[]);
     hidden.set_hidden(vec![("loaded/c:/libs/B.svg".to_string(), "loaded/B.svg".to_string())], true);
-    let ids: Vec<&str> = hidden.hidden.iter().map(|(id, _)| id.as_str()).collect();
-    assert_eq!(ids, ["loaded/c:/libs/B.svg", "loaded//other/b.svg"]);
-    hidden.set_hidden(vec![("loaded//OTHER/b.svg".to_string(), "loaded/b.svg".to_string())], false);
-    assert_eq!(hidden.hidden.len(), 3, "{hidden:?}");
+    let shown: Vec<&str> = hidden.hidden.iter().map(|(_, shown)| shown.as_str()).collect();
+    assert_eq!(shown, ["loaded/B.svg", "loaded/b.svg"], "{hidden:?}");
+    assert_eq!(hidden.sent, [("loaded/c:/libs/B.svg".to_string(), "loaded/B.svg".to_string())]);
+    hidden.set_hidden(vec![("loaded//OTHER/b.svg".to_string(), "loaded/x.svg".to_string())], false);
+    assert_eq!((hidden.hidden[1].1.as_str(), hidden.sent.len()), ("loaded/b.svg", 2), "{hidden:?}");
+    // A library loaded by a relative path, and the absolute path it reads as, sent: the sent path's
+    // file name is shown for both, not the library's numbered id.
+    let mut hidden = hiding(&[("loaded/data/icon.svg", "loaded/icon.svg (2)")], &[]);
+    let absolute = std::path::absolute("data/icon.svg").unwrap().to_string_lossy().into_owned();
+    hidden.set_hidden(vec![(format!("loaded/{absolute}"), "loaded/icon.svg".to_string())], false);
+    let mut reply = json!({"error": format!("can't read \"data/icon.svg\" or {absolute}")});
+    hide_under_a_root("sent-absolute", &mut reply, &hidden);
+    assert_eq!(reply["error"], "can't read \"icon.svg\" or icon.svg", "{reply}");
+}
+
+/// A sent path whose text overlaps part of a hidden library's path does not keep that library's path
+/// from being hidden: the hidden libraries are matched first.
+#[test]
+fn a_sent_path_does_not_stop_a_hidden_library_path_from_being_hidden() {
+    let mut hidden = hiding(&[("loaded//home/secret/dir/lib", "loaded/lib")], &[]);
+    hidden.set_hidden(vec![("loaded//dir/lib/sent-folder/longer".to_string(), "loaded/longer".to_string())], false);
+    let mut reply = json!({"error": "can't read /home/secret/dir/lib/sent-folder/longer"});
+    hide_under_a_root("sent-overlap", &mut reply, &hidden);
+    assert_eq!(reply["error"], "can't read lib/sent-folder/longer", "{reply}");
+}
+
+/// A hidden relative path is also hidden where a reply shows it as the absolute path it reads as from
+/// the working folder.
+#[test]
+fn a_reply_hides_a_hidden_relative_path_written_as_absolute() {
+    let hidden = hiding(&[("loaded/data/icon.svg", "loaded/icon.svg")], &[]);
+    let absolute = std::path::absolute("data/icon.svg").unwrap().to_string_lossy().into_owned();
+    let mut reply = json!({"error": format!("can't read {absolute}")});
+    hide_under_a_root("relative-absolute", &mut reply, &hidden);
+    assert_eq!(reply["error"], "can't read icon.svg", "{reply}");
 }
 
 /// The paths outside the read root that a request sends, as a path, a `file:` URL (also one that names

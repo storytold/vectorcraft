@@ -884,7 +884,7 @@ fn ui_inspect_and_ui_docking_give_a_hidden_library_the_same_id() {
     let ui = &r["result"]["ui"];
     assert_eq!(
         (ui["color_guide_limit"].as_str(), ui["open_panel"].as_str()),
-        (Some("loaded/b.svg (2)"), Some("library:swatches:loaded/b.svg")),
+        (Some("loaded/b.svg"), Some("library:swatches:loaded/b.svg (2)")),
         "{r}"
     );
     let d = request(&mut app, &tx, "ui.docking", json!({}));

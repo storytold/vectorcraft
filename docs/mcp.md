@@ -161,8 +161,10 @@ the suite) keep the agent to the folders you give it:
   another loaded library's whole id with no `.` or `..` part, so a readable library's id that begins with a hidden one stays. A reply also shows a path outside the
   read roots that the request sent by its file name, whether or not a library was loaded from it and whether the
   request succeeded or failed, so that the reply reads the same either way. A path param (`path`, `file`,
-  `destinationFolder` and the like) counts with a relative path too. A relative path is not replaced where it ends a
-  longer path (`/work/data/icon.svg` keeps `data/icon.svg`). Encoded file data, a base64 string under `dataBase64`,
+  `destinationFolder` and the like) counts with a relative path too. The hidden libraries' ids and paths are
+  matched before the paths the request sent, so a sent path written over part of a hidden library's path does not
+  keep that path in the reply. A relative path is not replaced where it ends a longer path (`/work/data/icon.svg`
+  keeps `data/icon.svg`), and the absolute path it reads as from the app's working folder is replaced too. Encoded file data, a base64 string under `dataBase64`,
   `pngBase64` or `thumbnailBase64`, is sent as it is.
 - `swatch.library.list`, `brush.libraries`, `symbol.libraries` and `graphicStyle.libraries` list every library
   but leave out the paths outside the read roots: a library's `path` and the user library folder in `userFolder`
