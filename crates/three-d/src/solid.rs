@@ -14,6 +14,7 @@ use vectorcraft_geom::{BezPath, FillRule, ParamCurve, PathData, Point, Rect, Vec
 use crate::{MAX_FACES, MAX_SOLID_FACES, Revolve, V3, eye_distance, perspective_scale};
 
 mod build;
+mod face_map;
 mod inflate;
 mod membrane;
 mod outline;
@@ -23,6 +24,7 @@ mod rings;
 use build::{Camera, cuts, edge_distance, newell, section};
 pub(crate) use build::{Face3, extrude_faces, plane_faces};
 pub use build::{extrude, plane};
+pub use face_map::{FaceMap, extrude_face_map, plane_face_map};
 #[cfg(test)]
 use inflate::GRID_WORK;
 #[cfg(test)]
@@ -242,6 +244,29 @@ impl Default for Inflate {
     }
 }
 
+/// A planar face of a solid that a graphic can be mapped onto: Extrude & Bevel's front cap (the
+/// art itself, or a plane's only face) or its back cap.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum PlanarFace {
+    Front,
+    Back,
+}
+
+impl PlanarFace {
+    pub const ALL: [PlanarFace; 2] = [Self::Front, Self::Back];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Front => "front",
+            Self::Back => "back",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|f| f.id() == s)
+    }
+}
+
 /// One projected polygon. Holes are contours of their own (nonzero winding).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Facet {
@@ -263,6 +288,9 @@ pub struct Facet {
     /// The facet is turned away from the viewer: a closed solid keeps it (seen edge-on, or with
     /// Draw Hidden Faces) and draws it behind the facets turned toward the viewer.
     pub away: bool,
+    /// The planar end of the solid the facet is: Extrude & Bevel's front or back cap, or a plane
+    /// (its front). `None` for every other facet.
+    pub end: Option<PlanarFace>,
     /// The contours in view space, before projection, for tests that measure depths.
     #[cfg(test)]
     view: Vec<Vec<V3>>,
