@@ -287,7 +287,8 @@ fn document_base(s: &Session) -> Value {
         "title": st.title(),
         // The File Info title (`file.info`), where `title` comes from the file name once the document has one.
         "fileInfoTitle": d.title,
-        "path": st.path,
+        // Null for a confined caller when the file is outside its read roots.
+        "path": st.path.as_deref().filter(|p| crate::file_access::check_read(p).is_ok()),
         "dirty": st.is_dirty(),
         "revision": st.revision,
         "units": d.units.label(),

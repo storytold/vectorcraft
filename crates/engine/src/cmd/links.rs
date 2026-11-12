@@ -28,7 +28,9 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::links::{Align, Preserve, hash_bytes};
-use vectorcraft_doc::{Appearance, Document, ImageBlob, ImageObject, LinkInfo, Node, NodeId, NodeKind, PageBox, PlacedDocument, PlacementOptions};
+use vectorcraft_doc::{
+    Appearance, DataValue, Document, ImageBlob, ImageObject, LinkInfo, Node, NodeId, NodeKind, PageBox, PlacedDocument, PlacementOptions,
+};
 use vectorcraft_geom::{Affine, PathData, Rect, shapes};
 
 use super::fileio::{self, RasterImage, absolute_path, file_created, file_stamp, read_file, write_file};
@@ -1193,6 +1195,48 @@ pub(crate) fn with_found_paths(d: &mut Document, base: LinkBase) {
             l.relative = relative.clone();
         }
     });
+}
+
+/// `d`, a document saved at `doc_path`, as a reply to the caller asking now may show it: without
+/// read roots in force, `d` itself; with them, a copy in which each link [`path_shown`] does not
+/// allow names its file alone, without its relative path or the size and date kept of its file,
+/// and each data set's image value it does not allow names its file alone too. The folder Export
+/// for Screens last wrote to is left out of the export settings when it is outside the read roots.
+/// Links in the layers, symbols, graph designs, patterns, the pattern being edited as it was
+/// before and opacity masks are all checked.
+pub(crate) fn with_hidden_paths_named<'a>(d: &'a Document, doc_path: Option<&str>) -> Cow<'a, Document> {
+    if crate::file_access::current().is_none() {
+        return Cow::Borrowed(d);
+    }
+    let mut d = d.clone();
+    // The pattern being edited as it was before is checked as one more pattern, then put back.
+    let original = d.pattern_edit.as_mut().and_then(|e| e.original.take());
+    let edited = original.is_some();
+    d.patterns.extend(original);
+    d.update_links_where(
+        |l| !path_shown(&l.path, doc_path),
+        |l| {
+            let name = l.name().to_string();
+            *l = LinkInfo { path: name, relative: None, modified: None, size: None, ..l.clone() };
+        },
+    );
+    if edited && let (Some(def), Some(e)) = (d.patterns.pop(), d.pattern_edit.as_mut()) {
+        e.original = Some(def);
+    }
+    if d.export_settings.get("folder").and_then(Value::as_str).is_some_and(|f| crate::file_access::check_read(f).is_err()) {
+        d.export_settings.remove("folder");
+    }
+    let hidden = |v: &DataValue| matches!(v, DataValue::Image(path) if !path_shown(path, doc_path));
+    if d.variables.datasets.iter().any(|set| set.values.values().any(hidden)) {
+        for v in d.variables.datasets.iter_mut().flat_map(|set| set.values.values_mut()) {
+            if hidden(&*v)
+                && let DataValue::Image(path) = v
+            {
+                *path = LinkInfo::new(path.as_str()).name().to_string();
+            }
+        }
+    }
+    Cow::Owned(d)
 }
 
 // ---------- commands ----------
