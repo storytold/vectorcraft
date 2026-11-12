@@ -3878,6 +3878,9 @@ theme	Appearance	Ulkoasu
 	Select All Unused	Valitse kaikki käyttämättömät
 	Sort by Kind	Lajittele lajin mukaan
 	Sort by Name	Lajittele nimen mukaan
+	Spot Color Objects	Objektit, joissa on spottivärejä
+	Pattern Objects	Objektit, joissa on kuvioita
+	Gradient Objects	Objektit, joissa on liukuvärejä
 	Spot Colors	Spottivärit
 	Spot Colors (0)	Spottivärit (0)
 	Swatch Options	Värimallin asetukset
