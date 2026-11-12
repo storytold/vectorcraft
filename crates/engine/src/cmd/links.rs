@@ -28,7 +28,9 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::links::{Align, Preserve, hash_bytes};
-use vectorcraft_doc::{Appearance, Document, ImageBlob, ImageObject, LinkInfo, Node, NodeId, NodeKind, PageBox, PlacedDocument, PlacementOptions};
+use vectorcraft_doc::{
+    Appearance, DataValue, Document, ImageBlob, ImageObject, LinkInfo, Node, NodeId, NodeKind, PageBox, PlacedDocument, PlacementOptions,
+};
 use vectorcraft_geom::{Affine, PathData, Rect, shapes};
 
 use super::fileio::{self, RasterImage, absolute_path, file_created, file_stamp, read_file, write_file};
@@ -1193,6 +1195,78 @@ pub(crate) fn with_found_paths(d: &mut Document, base: LinkBase) {
             l.relative = relative.clone();
         }
     });
+}
+
+/// `d`, a document saved at `doc_path`, as a reply to the caller asking now may show it: without
+/// read roots in force, `d` itself; with them, a copy in which each link [`path_shown`] does not
+/// allow names its file alone, without its relative path or the size and date kept of its file,
+/// and each data set's image value it does not allow names its file alone too. The folder Export
+/// for Screens last wrote to is left out of the export settings when it is outside the read roots.
+/// A link whose path is allowed but whose relative path leads outside the read roots loses its
+/// relative path. Links in the layers, symbols, graph designs, patterns, the pattern being edited
+/// as it was before, opacity masks and the art of the stored brushes are all checked. A stored
+/// brush entry that does not read as a brush is left out of the copy, since its links cannot be
+/// checked, and a stored brush library that is not a list becomes an empty one.
+pub(crate) fn with_hidden_paths_named<'a>(d: &'a Document, base: LinkBase) -> Cow<'a, Document> {
+    if crate::file_access::current().is_none() {
+        return Cow::Borrowed(d);
+    }
+    let doc_path = base.doc;
+    // A stored relative path is followed from the folder of the file the document was read from,
+    // and a link is also looked for from the document's own folder: it is shown only when both
+    // places it names are inside the read roots.
+    let relative_hidden = |r: &str| [base.relative, base.doc].into_iter().any(|from| !path_shown(r, from));
+    let mut d = d.clone();
+    // The pattern being edited as it was before is checked as one more pattern, then put back.
+    let original = d.pattern_edit.as_mut().and_then(|e| e.original.take());
+    let edited = original.is_some();
+    d.patterns.extend(original);
+    // The art of each stored brush is checked as more layers, then put back.
+    let stored = d.unknown.get(vectorcraft_brush::DOC_KEY).map(|v| v.as_array().cloned().unwrap_or_default());
+    let mut brushes: Vec<vectorcraft_brush::Brush> =
+        stored.iter().flatten().filter_map(|raw| vectorcraft_brush::Brush::from_json(raw.clone()).ok()).collect();
+    let layers = d.layers.len();
+    d.layers.extend(brushes.iter().flat_map(|b| b.art()).map(|n| Arc::new(n.clone())));
+    d.update_links_where(
+        |l| !path_shown(&l.path, base.doc) || l.relative.as_deref().is_some_and(relative_hidden),
+        |l| {
+            if path_shown(&l.path, base.doc) {
+                l.relative = None;
+            } else {
+                let name = l.name().to_string();
+                *l = LinkInfo { path: name, relative: None, modified: None, size: None, ..l.clone() };
+            }
+        },
+    );
+    let mut checked = d.layers.split_off(layers).into_iter();
+    if edited && let (Some(def), Some(e)) = (d.patterns.pop(), d.pattern_edit.as_mut()) {
+        e.original = Some(def);
+    }
+    if stored.is_some() {
+        // Each brush is written as it reads, so fields it does not read are left out too.
+        let mut kept = vec![];
+        for b in &mut brushes {
+            for (slot, art) in b.art_mut().into_iter().zip(&mut checked) {
+                *slot = Arc::unwrap_or_clone(art);
+            }
+            kept.extend(serde_json::to_value(&*b).ok());
+        }
+        d.unknown.insert(vectorcraft_brush::DOC_KEY.into(), Value::Array(kept));
+    }
+    if d.export_settings.get("folder").and_then(Value::as_str).is_some_and(|f| crate::file_access::check_read(f).is_err()) {
+        d.export_settings.remove("folder");
+    }
+    let hidden = |v: &DataValue| matches!(v, DataValue::Image(path) if !path_shown(path, doc_path));
+    if d.variables.datasets.iter().any(|set| set.values.values().any(hidden)) {
+        for v in d.variables.datasets.iter_mut().flat_map(|set| set.values.values_mut()) {
+            if hidden(&*v)
+                && let DataValue::Image(path) = v
+            {
+                *path = LinkInfo::new(path.as_str()).name().to_string();
+            }
+        }
+    }
+    Cow::Owned(d)
 }
 
 // ---------- commands ----------

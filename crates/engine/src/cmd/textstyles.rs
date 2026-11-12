@@ -243,6 +243,7 @@ pub fn para_attrs(v: &ParaStyle) -> Map<String, Value> {
         ("burasagari", json!(v.burasagari)),
         ("kinsoku", json!(v.kinsoku)),
         ("kinsoku_type", json!(v.kinsoku_type)),
+        ("bunri_kinshi", json!(v.bunri_kinshi)),
         ("roman_hanging", json!(v.roman_hanging)),
         ("kashida", json!(v.kashida)),
         ("korean_line_break_anywhere", json!(v.korean_line_break_anywhere)),
