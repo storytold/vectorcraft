@@ -2204,6 +2204,13 @@ axis	Both	Και τα δύο
 	Dock Panel	Αγκύρωση πάνελ
 	Dock to Top	Αγκύρωση επάνω
 	Dock to Bottom	Αγκύρωση κάτω
+	Control Bar Options	Επιλογές γραμμής ελέγχου
+	Tool Options	Επιλογές εργαλείου
+	Object Options	Επιλογές αντικειμένου
+	Image Options	Επιλογές εικόνας
+	Vertical Alignment	Κατακόρυφη στοίχιση
+	Align and Distribute	Στοίχιση και κατανομή
+	Document Options	Επιλογές εγγράφου
 	Dock Control Bar	Αγκύρωση γραμμής ελέγχου
 @msg	no library `{id}`	Δεν υπάρχει βιβλιοθήκη με αναγνωριστικό `{id}`
 @msg	select some type first	Επιλέξτε πρώτα κάποιο κείμενο
