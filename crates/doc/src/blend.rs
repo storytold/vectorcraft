@@ -1116,8 +1116,12 @@ pub fn pin_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Vec<
         && pinned(spec, keys.len(), first.anchors.len()).is_none()
     {
         let mut path = PathData::single(first.clone());
-        let out = spread_anchors(&mut path, keys.len())?;
-        return Some((path, out));
+        let mut out = spread_anchors(&mut path, keys.len())?;
+        // A closed spine's end keys get points of their own, so that once pinned each still
+        // moves only its own end.
+        let mut sp = path.subpaths.into_iter().next()?;
+        open_at_start(&mut sp, &mut out);
+        return Some((PathData::single(sp), out));
     }
     let (path, anchors) = blend_spine(keys, spec)?;
     Some((path, anchors?))
