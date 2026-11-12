@@ -265,7 +265,8 @@ impl<'a> Writer<'a> {
             }
             NodeKind::Image(im) => {
                 self.lock(locked);
-                let blob = self.doc.image_blob(im);
+                let shown = self.doc.shown_image(n, im);
+                let blob = self.doc.image_blob(&shown);
                 // A colorize color the renderer draws the image in.
                 let colorize =
                     n.extras().colorize.as_deref().filter(|p| matches!(p, Paint::Solid { .. }) && blob.is_some_and(ImageBlob::takes_colorize));

@@ -119,6 +119,10 @@ fn node_refs(n: &Node, f: Visit) {
         if let Some(mask) = &m.extras().mask {
             node_refs(&mask.art, f);
         }
+        // A color-masked image's masked pixels go with it.
+        if let Some(cm) = Document::color_mask_of(m) {
+            f(Ref::Name(Res::Image, &cm.key));
+        }
         match &m.kind {
             NodeKind::Text(t) => {
                 for r in &t.runs {
@@ -647,6 +651,10 @@ impl Relink {
         n.extras_mut().graphic_style = n.extras().graphic_style.and_then(|id| self.styles.get(&id).copied());
         if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
             self.node(Arc::make_mut(&mut m.art));
+        }
+        if let Some(cm) = n.extras_if_any().and_then(|e| e.color_mask.as_deref_mut()) {
+            self.name(Res::Image, &mut cm.key);
+            self.name(Res::Image, &mut cm.from);
         }
         match &mut n.kind {
             NodeKind::Text(t) => {

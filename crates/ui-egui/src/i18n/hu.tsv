@@ -911,6 +911,10 @@ font-technology	Variable	Változó
 	Corner Color	Sarokszín
 	Contiguous	Összefüggő
 	Each Channel	Minden csatorna
+	Color Mask…	Színmaszk…
+	Color Mask	Színmaszk
+	Remove Color Mask	Színmaszk eltávolítása
+	Apply Color Mask	Színmaszk alkalmazása
 	Edit Path	Útvonal szerkesztése
 	Crop Marks	Vágójelek
 	Crop To	Körülvágás
@@ -5421,6 +5425,10 @@ imageTrace	Outline	Körvonal
 @msg	a CMYK image has no transparency to set	a CMYK képnek nincs beállítható átlátszósága
 @msg	every pixel matches the background: no image would be left	minden képpont egyezik a háttérrel: nem maradna kép
 @msg	an image of {w} × {h} pixels is too large to change	egy {w} × {h} pixeles kép túl nagy a módosításhoz
+@msg	select an image with a color mask	jelölj ki egy színmaszkos képet
+@msg	the color mask's settings are out of range	a színmaszk beállításai a tartományon kívül esnek
+@msg	a CMYK image can't take a color mask	CMYK képre nem tehető színmaszk
+@msg	the mask would hide every pixel	a maszk minden képpontot elrejtene
 @msg	select an Image Trace object	jelölj ki egy képvektorizálási objektumot
 @msg	select an object in perspective	jelölj ki egy perspektivikus objektumot
 @msg	select artwork (or a colour group) to recolor	jelölj ki átszínezendő grafikát (vagy színcsoportot)

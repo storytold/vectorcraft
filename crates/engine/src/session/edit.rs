@@ -31,6 +31,8 @@ impl Session {
             }
             // Pixel-aligned objects the edit changed go back on the pixel grid.
             cmd::refresh_pixel_aligned(&before, doc);
+            // Color masks of images whose own pixels the edit replaced are made for the new ones.
+            cmd::refresh_color_masks(Some(&*before), doc);
             let placed = cmd::objects_on_path::refresh(&before, doc);
             // Pixel-aligned members that placing moved go back on the pixel grid.
             cmd::keep_aligned_in(doc, &placed);

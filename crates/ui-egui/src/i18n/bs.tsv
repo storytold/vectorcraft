@@ -206,6 +206,10 @@
 	Corner Color	Boja uglova
 	Contiguous	Susjedni
 	Each Channel	Svaki kanal
+	Color Mask…	Maska boja…
+	Color Mask	Maska boja
+	Remove Color Mask	Ukloni masku boja
+	Apply Color Mask	Primijeni masku boja
 	Edit Path	Uredi putanju
 	Mask	Maska
 	Rasterize…	Rasteriziraj…

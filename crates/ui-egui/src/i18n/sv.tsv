@@ -698,6 +698,10 @@ font-technology	Variable	Variabla
 	Corner Color	Hörnfärg
 	Contiguous	Sammanhängande
 	Each Channel	Varje kanal
+	Color Mask…	Färgmask…
+	Color Mask	Färgmask
+	Remove Color Mask	Ta bort färgmask
+	Apply Color Mask	Tillämpa färgmask
 	Edit Path	Redigera bana
 	Mask	Maskera
 	Crop Marks	Skärmärken
@@ -4567,6 +4571,10 @@ axis	Both	Båda
 @msg	a CMYK image has no transparency to set	en CMYK-bild har ingen transparens att ställa in
 @msg	every pixel matches the background: no image would be left	varje pixel matchar bakgrunden: ingen bild skulle bli kvar
 @msg	an image of {w} × {h} pixels is too large to change	en bild på {w} × {h} pixlar är för stor för att ändras
+@msg	select an image with a color mask	markera en bild med en färgmask
+@msg	the color mask's settings are out of range	färgmaskens inställningar ligger utanför intervallet
+@msg	a CMYK image can't take a color mask	en CMYK-bild kan inte ha en färgmask
+@msg	the mask would hide every pixel	masken skulle dölja varje pixel
 @msg	select an object in perspective	markera ett objekt i perspektiv
 @msg	select artwork (or a colour group) to recolor	markera grafik (eller en färggrupp) att färga om
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Omfärgning klar; utan ändring: {locked} och {hidden}

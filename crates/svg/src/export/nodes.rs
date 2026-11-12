@@ -748,6 +748,8 @@ impl Writer<'_> {
             }
             NodeKind::Text(t) => self.text_node(n, t),
             NodeKind::Image(im) => {
+                let shown = self.doc.shown_image(n, im);
+                let im = &*shown;
                 if let Some(Paint::Solid { color, .. }) = n.extras().colorize.as_deref()
                     && let Some(blob) = self.doc.image_blob(im)
                     && blob.gray_source().is_some()

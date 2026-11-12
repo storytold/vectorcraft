@@ -64,12 +64,12 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 /// Does this dialog show a Preview checkbox? Grid Repeat Options does: the public page for the
 /// grid options lists one, and the radial and mirror pages do not. Type on a Path Options does
 /// too (#5360), as public tutorials of the dialog show, and Type Tools › Release Type on a Path
-/// works the same way (#5532), and so does Image Tools › Remove Background. (Cancel rolls a
-/// preview back whichever dialog started it.)
+/// works the same way (#5532), and so do Image Tools › Remove Background and Color Mask. (Cancel
+/// rolls a preview back whichever dialog started it.)
 fn previews(d: &Dialog) -> bool {
     match d.str("__command").as_str() {
         "object.repeat.options" => d.fields.contains_key("gridType"),
-        "type.pathOptions" | crate::addons::typetools::RELEASE | crate::addons::image::REMOVE_BACKGROUND => true,
+        "type.pathOptions" | crate::addons::typetools::RELEASE | crate::addons::image::REMOVE_BACKGROUND | crate::addons::image::COLOR_MASK => true,
         _ => false,
     }
 }
@@ -119,7 +119,9 @@ fn order(command: &str) -> &'static [&'static str] {
         "object.pathfinder.trap" => &["thickness", "heightWidth", "tintReduction", "trapsWithProcessColor", "reverseTraps"],
         "addon.color.printFixes" => &["inkLimit", "excludePureBlack", "removeWhiteOverprint", "overprintBlack", "textOnly", "fill", "stroke"],
         crate::addons::typetools::RELEASE => &["mode", "keepOriginal"],
-        crate::addons::image::REMOVE_BACKGROUND => &["background", "colors", "contiguous", "match", "tolerance", "softness"],
+        crate::addons::image::REMOVE_BACKGROUND | crate::addons::image::COLOR_MASK => {
+            &["background", "colors", "contiguous", "match", "tolerance", "softness"]
+        }
         crate::addons::cutting::BRIDGES => &["width", "count", "direction", "keepOriginal"],
         _ => &[],
     }
@@ -141,8 +143,8 @@ fn choices(command: &str, key: &str) -> Option<form::Choices> {
         ("graph.setType", "pieLegend") => Some(PIE_LEGEND),
         ("graph.setType", "piePosition") => Some(PIE_POSITION),
         ("graph.setType", "pieSort") => Some(PIE_SORT),
-        (crate::addons::image::REMOVE_BACKGROUND, "background") => Some(crate::addons::image::BACKGROUNDS),
-        (crate::addons::image::REMOVE_BACKGROUND, "match") => Some(crate::addons::image::MATCHES),
+        (crate::addons::image::REMOVE_BACKGROUND | crate::addons::image::COLOR_MASK, "background") => Some(crate::addons::image::BACKGROUNDS),
+        (crate::addons::image::REMOVE_BACKGROUND | crate::addons::image::COLOR_MASK, "match") => Some(crate::addons::image::MATCHES),
         _ => None,
     }
 }

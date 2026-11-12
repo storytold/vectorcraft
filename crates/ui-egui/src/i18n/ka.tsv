@@ -171,6 +171,10 @@
 	Corner Color	კუთხეების ფერი
 	Contiguous	მომიჯნავე
 	Each Channel	თითოეული არხი
+	Color Mask…	ფერის ნიღაბი…
+	Color Mask	ფერის ნიღაბი
+	Remove Color Mask	ფერის ნიღბის მოშორება
+	Apply Color Mask	ფერის ნიღბის გამოყენება
 	Mask	ნიღაბი
 	Rasterize…	რასტრირება…
 	Create Gradient Mesh…	გრადიენტული ბადის შექმნა…
@@ -4418,6 +4422,10 @@ font-technology	Variable	ცვლადი
 @msg	a CMYK image has no transparency to set	CMYK გამოსახულებას არ აქვს დასაყენებელი გამჭვირვალობა
 @msg	every pixel matches the background: no image would be left	ყველა პიქსელი ემთხვევა ფონს: გამოსახულება აღარ დარჩებოდა
 @msg	an image of {w} × {h} pixels is too large to change	{w} × {h} პიქსელის გამოსახულება შესაცვლელად ზედმეტად დიდია
+@msg	select an image with a color mask	მონიშნეთ ფერის ნიღბიანი გამოსახულება
+@msg	the color mask's settings are out of range	ფერის ნიღბის პარამეტრები დასაშვებ დიაპაზონს სცდება
+@msg	a CMYK image can't take a color mask	CMYK გამოსახულებას ფერის ნიღაბი ვერ დაედება
+@msg	the mask would hide every pixel	ნიღაბი ყველა პიქსელს დამალავდა
 @msg	select an object in perspective	მონიშნეთ ობიექტი პერსპექტივაში
 @msg	select artwork (or a colour group) to recolor	მონიშნეთ ხელახლა შესაფერადებელი ნახატი (ან ფერთა ჯგუფი)
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	ხელახლა შეფერადება დასრულდა; უცვლელი დარჩა: {locked} და {hidden}

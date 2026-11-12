@@ -167,9 +167,14 @@ fn keep_colorized_pixels(n: &mut Arc<Node>, images: &BTreeMap<String, ImageBlob>
     {
         node.extras_mut().colorize = None;
     }
+    // A colorized image with a color mask is separated as it shows: its masked pixels.
+    let mask = if colorized(node) { node.extras_if_any().and_then(|e| e.color_mask.take()) } else { None };
     if colorized(node)
         && let NodeKind::Image(im) = &mut node.kind
     {
+        if let Some(m) = mask.filter(|m| m.made_for(im) && images.contains_key(&m.key)) {
+            im.key = m.key;
+        }
         keys.insert(im.key.clone());
         im.key = colorized_key(&im.key);
     }

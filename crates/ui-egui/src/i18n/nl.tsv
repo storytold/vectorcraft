@@ -213,6 +213,10 @@
 	Corner Color	Hoekkleur
 	Contiguous	Aaneengesloten
 	Each Channel	Elk kanaal
+	Color Mask…	Kleurmasker…
+	Color Mask	Kleurmasker
+	Remove Color Mask	Kleurmasker verwijderen
+	Apply Color Mask	Kleurmasker toepassen
 	Edit Path	Pad bewerken
 	Mask	Masker
 	Rasterize…	Rasteriseren…

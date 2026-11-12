@@ -701,7 +701,9 @@ fn colorized_images(d: &Document, ids: &[NodeId], paint: &Paint) -> std::result:
             out.push(*id);
             continue;
         }
-        let Some(gray) = d.image_blob(im).and_then(|b| b.gray_source()) else { continue };
+        // A color-masked image is colorized as it shows: its masked pixels, which have an alpha
+        // channel.
+        let Some(gray) = d.image_blob(&d.shown_image(n, im)).and_then(|b| b.gray_source()) else { continue };
         match paint {
             // Without a color, `none` goes to the image's fill item.
             Paint::None => continue,
@@ -740,7 +742,7 @@ pub(super) fn check_colorized(d: &Document) -> std::result::Result<(), String> {
             if let (NodeKind::Image(im), Some(paint)) = (&m.kind, m.extras().colorize.as_deref())
                 && !refused
                 && !colorizes_transparency(d, paint)
-                && d.image_blob(im).and_then(|b| b.gray_source()).is_some_and(|g| g.alpha)
+                && d.image_blob(&d.shown_image(m, im)).and_then(|b| b.gray_source()).is_some_and(|g| g.alpha)
             {
                 refused = true;
             }

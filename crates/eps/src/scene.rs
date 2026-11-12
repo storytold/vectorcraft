@@ -363,6 +363,8 @@ impl<'a> Scene<'a> {
             }
             NodeKind::Text(t) => self.text(n, t),
             NodeKind::Image(im) => {
+                let shown = self.doc.shown_image(n, im);
+                let im = &*shown;
                 let blob = self.doc.image_blob(im);
                 match n.extras().colorize.as_deref() {
                     Some(p @ Paint::Solid { .. }) if blob.is_none_or(|b| b.gray_source().is_some()) => {

@@ -696,6 +696,10 @@ font-technology	Variable	Променливи
 	Corner Color	Цвят на ъглите
 	Contiguous	Съседни
 	Each Channel	Всеки канал
+	Color Mask…	Цветова маска…
+	Color Mask	Цветова маска
+	Remove Color Mask	Премахване на цветовата маска
+	Apply Color Mask	Прилагане на цветовата маска
 	Edit Path	Редактиране на контура
 	Mask	Маска
 	Crop Marks	Знаци за изрязване
