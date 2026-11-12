@@ -159,6 +159,9 @@ pub struct Beacon {
     documents: AtomicUsize,
     /// A pass of some window had input since [`Beacon::take_input`] last ran.
     input: AtomicBool,
+    /// The windows a pass handed to the system since [`Beacon::take_handed_off`] last ran. Only the
+    /// interface thread uses it.
+    handed_off: Mutex<Vec<egui::ViewportId>>,
     commands: Mutex<VecDeque<String>>,
     frames: Mutex<VecDeque<FrameTime>>,
 }
@@ -177,6 +180,7 @@ impl Beacon {
             activity: AtomicU8::new(Activity::None as u8),
             documents: AtomicUsize::new(0),
             input: AtomicBool::new(false),
+            handed_off: Mutex::new(Vec::new()),
             commands: Mutex::new(VecDeque::new()),
             frames: Mutex::new(VecDeque::new()),
         }
@@ -234,6 +238,20 @@ impl Beacon {
         self.input.swap(false, Ordering::Relaxed)
     }
 
+    /// A pass of window `id` sent it commands that hand it to the system ([`hands_off`],
+    /// [`watch_input`]).
+    pub fn hand_off(&self, id: egui::ViewportId) {
+        let mut windows = self.handed_off.lock().unwrap_or_else(PoisonError::into_inner);
+        if !windows.contains(&id) {
+            windows.push(id);
+        }
+    }
+
+    /// The windows a pass handed to the system since the last call.
+    pub fn take_handed_off(&self) -> Vec<egui::ViewportId> {
+        std::mem::take(&mut *self.handed_off.lock().unwrap_or_else(PoisonError::into_inner))
+    }
+
     /// A frame ended with `time`, with `documents` documents open.
     pub fn frame(&self, time: FrameTime, documents: usize) {
         self.documents.store(documents, Ordering::Relaxed);
@@ -285,7 +303,9 @@ pub fn had_input(raw: &egui::RawInput) -> bool {
 
 /// Mark on `beacon` every pass of every window of `ctx` that had input ([`had_input`]): the main
 /// window's, after the host's input hook added its own, and those of the windows shown in line
-/// (floating panels and documents), whose input does not pass through that hook.
+/// (floating panels and documents), whose input does not pass through that hook. Mark as well every
+/// pass of a window shown in line that sends its window commands that hand it to the system
+/// ([`hands_off`]), before egui passes them on; the main window's are read at the frame's end.
 pub fn watch_input(beacon: &'static Beacon, ctx: &egui::Context) {
     ctx.on_begin_pass(
         "VectorCraft hang report input",
@@ -295,17 +315,39 @@ pub fn watch_input(beacon: &'static Beacon, ctx: &egui::Context) {
             }
         }),
     );
+    ctx.on_end_pass(
+        "VectorCraft hang report hand-off",
+        std::sync::Arc::new(move |ui| {
+            if ui.ctx().viewport_id() != egui::ViewportId::ROOT && ui.ctx().viewport(|vp| hands_off(&vp.commands)) {
+                beacon.hand_off(ui.ctx().viewport_id());
+            }
+        }),
+    );
 }
 
-/// The stage at the end of a frame: [`Stage::Drawing`] when a pass had `input` and the main
-/// window is `shown` (focused, not minimized or hidden), since input asks for the next frame at
-/// once; otherwise [`Stage::Idle`]. A frame that sends the main window `commands` that minimize or
-/// hide it, or hand it to the system to move or resize, also ends idle: the system may hold back
-/// the next frame until the user is done.
-pub fn after_frame(input: bool, shown: bool, commands: &[egui::ViewportCommand]) -> Stage {
+/// Whether `commands` minimize or hide their window, or hand it to the system to move or resize:
+/// the system may hold back the next frame until the user is done.
+pub fn hands_off(commands: &[egui::ViewportCommand]) -> bool {
     use egui::ViewportCommand as C;
-    let handed_off = commands.iter().any(|c| matches!(c, C::Minimized(true) | C::Visible(false) | C::StartDrag | C::BeginResize(_)));
-    if input && shown && !handed_off { Stage::Drawing } else { Stage::Idle }
+    commands.iter().any(|c| matches!(c, C::Minimized(true) | C::Visible(false) | C::StartDrag | C::BeginResize(_)))
+}
+
+/// The window whose end of frame sets the stage ([`after_frame`]): the main window when it is
+/// `main_shown`; otherwise a window shown in line (a floating panel or document) that `viewports`
+/// (the main window's input) gives as focused and not minimized; otherwise none.
+pub fn shown_window(main_shown: bool, viewports: &egui::ViewportIdMap<egui::ViewportInfo>) -> Option<egui::ViewportId> {
+    if main_shown {
+        return Some(egui::ViewportId::ROOT);
+    }
+    viewports.iter().find(|(id, v)| **id != egui::ViewportId::ROOT && v.focused == Some(true) && v.minimized != Some(true)).map(|(id, _)| *id)
+}
+
+/// The stage at the end of a frame: [`Stage::Drawing`] when a pass had `input` and a window is
+/// `shown` (focused, not minimized or hidden: [`shown_window`]), since input asks for the next
+/// frame at once; otherwise [`Stage::Idle`]. A frame that sends that window `commands` that
+/// minimize or hide it, or hand it to the system to move or resize ([`hands_off`]), also ends idle.
+pub fn after_frame(input: bool, shown: bool, commands: &[egui::ViewportCommand]) -> Stage {
+    if input && shown && !hands_off(commands) { Stage::Drawing } else { Stage::Idle }
 }
 
 /// Ends an [`Activity`] when dropped ([`Beacon::activity`]).
@@ -494,6 +536,59 @@ mod tests {
         assert!(!B.take_input(), "taken");
         frame(vec![egui::Event::PointerGone]);
         assert!(B.take_input(), "the main window's input");
+    }
+
+    #[test]
+    fn a_window_shown_in_line_handed_to_the_system_is_marked() {
+        static B: Beacon = Beacon::new();
+        egui::Context::set_immediate_viewport_renderer(|ctx, mut viewport| {
+            let id = viewport.ids.this;
+            let viewports = std::iter::once((id, egui::ViewportInfo::default())).collect();
+            let input = egui::RawInput { viewport_id: id, viewports, ..Default::default() };
+            ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui)).textures_delta.clear();
+        });
+        let ctx = egui::Context::default();
+        ctx.set_embed_viewports(false);
+        watch_input(&B, &ctx);
+        let child = egui::ViewportId::from_hash_of("floating panel");
+        let frame = |command: Option<egui::ViewportCommand>, main: Option<egui::ViewportCommand>| {
+            ctx.run_ui(egui::RawInput::default(), |ui| {
+                ui.ctx().show_viewport_immediate(child, egui::ViewportBuilder::default(), |ui, _| {
+                    if let Some(c) = command.clone() {
+                        ui.ctx().send_viewport_cmd(c);
+                    }
+                });
+                if let Some(c) = main.clone() {
+                    ui.ctx().send_viewport_cmd(c);
+                }
+            })
+            .textures_delta
+            .clear();
+        };
+        frame(None, None);
+        assert!(B.take_handed_off().is_empty(), "nothing handed off");
+        frame(Some(egui::ViewportCommand::StartDrag), None);
+        assert_eq!(B.take_handed_off(), [child], "the floating window starts a move");
+        assert!(B.take_handed_off().is_empty(), "taken");
+        frame(Some(egui::ViewportCommand::Focus), None);
+        assert!(B.take_handed_off().is_empty(), "another command");
+        frame(None, Some(egui::ViewportCommand::StartDrag));
+        assert!(B.take_handed_off().is_empty(), "the main window's commands are read at the frame's end");
+    }
+
+    #[test]
+    fn a_focused_window_shown_in_line_is_the_shown_window() {
+        use egui::{ViewportId, ViewportIdMap, ViewportInfo};
+        let child = ViewportId::from_hash_of("document window");
+        let info = |focused: bool, minimized: bool| ViewportInfo { focused: Some(focused), minimized: Some(minimized), ..Default::default() };
+        let map = |root: ViewportInfo, window: ViewportInfo| -> ViewportIdMap<ViewportInfo> {
+            [(ViewportId::ROOT, root), (child, window)].into_iter().collect()
+        };
+        assert_eq!(shown_window(true, &map(info(true, false), info(false, false))), Some(ViewportId::ROOT));
+        assert_eq!(shown_window(false, &map(info(false, false), info(true, false))), Some(child), "the document window has the focus");
+        assert_eq!(shown_window(false, &map(info(false, false), info(true, true))), None, "minimized");
+        assert_eq!(shown_window(false, &map(info(false, false), info(false, false))), None, "no window has the focus");
+        assert_eq!(shown_window(false, &map(info(true, false), info(false, false))), None, "the main window is not shown");
     }
 
     #[test]

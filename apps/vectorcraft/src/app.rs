@@ -128,10 +128,18 @@ impl App {
             BEACON.frame(FrameTime { work_ms, previous_total_ms }, self.app.session.documents().len());
         }
         // Hide on macOS hides the window at once, before the window reports losing focus.
-        let shown = ctx.input(|i| i.focused && i.viewport().minimized != Some(true))
+        let main_shown = ctx.input(|i| i.focused && i.viewport().minimized != Some(true))
             && self.winit_window.as_ref().is_none_or(|w| w.is_visible() != Some(false));
+        // A floating panel or document window with the focus counts as well, with the commands it
+        // was sent after its pass, and those its pass sent (`hang_beacon::watch_input`).
+        let shown = ctx.input(|i| hang_beacon::shown_window(main_shown, &i.raw.viewports));
+        let handed_off = BEACON.take_handed_off();
         let input = BEACON.take_input();
-        BEACON.enter(ctx.viewport(|vp| hang_beacon::after_frame(input, shown, &vp.commands)));
+        let stage = match shown {
+            Some(id) => ctx.viewport_for(id, |vp| hang_beacon::after_frame(input && !handed_off.contains(&id), true, &vp.commands)),
+            None => hang_beacon::after_frame(input, false, &[]),
+        };
+        BEACON.enter(stage);
     }
 
     fn logic_frame(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
