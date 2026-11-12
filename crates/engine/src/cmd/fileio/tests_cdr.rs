@@ -263,15 +263,18 @@ fn layers_of_one_name_on_a_page_stay_apart_and_pages_share_them() {
 
 /// Pages that stack layers of the same names in another order keep their own order: the later
 /// page gets a new layer rather than art under a layer it stacks above. A layer a later page adds
-/// below the shared ones goes below them.
+/// below the shared ones goes below them, and a page that shares no layer puts its layers on top.
 #[test]
 fn each_page_keeps_its_own_layer_order() {
     let v = V(1100);
     let rect = || synth::object(v, 1, &[(30, [v.coord(5.0), v.coord(5.0), v.coord(0.0), v.coord(0.0), v.coord(0.0), v.coord(0.0)].concat())], None);
     let page = |names: &[&str]| synth::page(false, names.iter().map(|n| synth::layer(v, [0, 0, 0, 0x98], n, vec![rect()])).collect());
     // Front to back on each page.
-    for (second, want, counts) in [(&["A", "B"][..], vec!["A", "B", "A"], vec![1, 2, 1]), (&["B", "A", "C"][..], vec!["C", "A", "B"], vec![1, 2, 2])]
-    {
+    for (second, want, counts) in [
+        (&["A", "B"][..], vec!["A", "B", "A"], vec![1, 2, 1]),
+        (&["B", "A", "C"][..], vec!["C", "A", "B"], vec![1, 2, 2]),
+        (&["D", "C"][..], vec!["A", "B", "C", "D"], vec![1, 1, 1, 1]),
+    ] {
         let file = synth::riff(1100, &[chunk(b"vrsn", 1100u16.to_le_bytes().to_vec()), page(&["B", "A"]), page(second)]);
         let (doc, _) = super::cdr::import(&file).unwrap();
         let names: Vec<String> = doc.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();

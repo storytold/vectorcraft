@@ -171,7 +171,7 @@ impl shapes::Builder {
             // The layer this page's last layer went to: the next one goes above it.
             let mut below: Option<usize> = None;
             // The file lists layers front to back.
-            for l in page.layers.iter().rev() {
+            for (j, l) in page.layers.iter().rev().enumerate() {
                 self.guides(&l.guides, p, artboard);
                 if l.kind != LayerKind::Drawing && l.kind != LayerKind::Desktop {
                     continue;
@@ -193,7 +193,29 @@ impl shapes::Builder {
                     }
                     None if layers.len() >= MAX_LAYERS => self.notes.push(Warning::TooDeep),
                     None => {
-                        let at = below.map_or(pages_from, |b| b + 1);
+                        // The page's bottom layer goes below the lowest layer that the rest of the
+                        // page shares with earlier pages, so the page keeps its own order. When the
+                        // page shares none, it goes on top, in the order the layers were first seen.
+                        let at = match below {
+                            Some(b) => b + 1,
+                            None => {
+                                let mut counts = seen.clone();
+                                page.layers
+                                    .iter()
+                                    .rev()
+                                    .skip(j + 1)
+                                    .filter(|l| l.kind == LayerKind::Drawing || l.kind == LayerKind::Desktop)
+                                    .filter_map(|l| {
+                                        let n = counts.entry(l.name.as_str()).or_insert(0);
+                                        let key = (l.name.clone(), *n);
+                                        *n += 1;
+                                        by_name.get(&key).and_then(|is| is.first().copied())
+                                    })
+                                    .min()
+                                    .unwrap_or(layers.len())
+                                    .max(pages_from)
+                            }
+                        };
                         if at < layers.len() {
                             for i in by_name.values_mut().flatten().filter(|i| **i >= at) {
                                 *i += 1;
