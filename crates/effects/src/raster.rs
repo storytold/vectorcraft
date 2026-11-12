@@ -1,11 +1,13 @@
 //! Raster (painted) effects: descriptions for the renderer.
 
-use serde_json::Value;
+use std::borrow::Cow;
+
+use serde_json::{Map, Value, json};
 use vectorcraft_doc::color::{BlendMode, Color};
 use vectorcraft_doc::rastersettings::MAX_ADD_AROUND;
 use vectorcraft_doc::{Effect, RasterColorModel, RasterEffectsSettings};
 
-use vectorcraft_geom::{Point, Rect};
+use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use crate::merged_params;
 use crate::pixel::{self, PixelFx, PixelSpace};
@@ -384,9 +386,10 @@ fn opacity(p: &Value) -> f32 {
     (num(p, "opacity", 75.0) / 100.0).clamp(0.0, 1.0) as f32
 }
 
-/// The visible raster effects of `effects`, in stack order.
+/// The visible raster effects of `effects`, in stack order, each following the Transform effects
+/// listed after it ([`followed`]).
 pub fn raster_effects(effects: &[Effect]) -> Vec<RasterFx> {
-    effects
+    followed(effects)
         .iter()
         .filter(|e| e.visible)
         .filter_map(|e| {
@@ -424,6 +427,116 @@ pub fn raster_effects(effects: &[Effect]) -> Vec<RasterFx> {
             })
         })
         .collect()
+}
+
+/// `effects` with each raster effect following the visible Transform effects listed after it
+/// ([`follow_transform`]): effects apply in the order they are listed, so a Transform effect
+/// transforms what the raster effects before it paint, whatever its Scale Strokes & Effects says.
+/// A hidden raster effect follows too, so it draws the same when it is shown after the Transform
+/// effect has been expanded. A raster effect that a Transform effect making copies or moving at
+/// random follows stays as it is, as does one after the last Transform effect. Borrowed when
+/// nothing changes.
+pub(crate) fn followed(effects: &[Effect]) -> Cow<'_, [Effect]> {
+    if !effects.iter().any(|e| e.visible && e.id == "distort.transform") {
+        return Cow::Borrowed(effects);
+    }
+    let mut out: Option<Vec<Effect>> = None;
+    // The linear part of the Transform effects after the effect at hand, the last one outermost;
+    // `None` once one of them makes copies or moves at random.
+    let mut after = Some(Affine::IDENTITY);
+    for (i, e) in effects.iter().enumerate().rev() {
+        if e.id == "distort.transform" {
+            after = after.and_then(|a| transform_step(e).map(|s| a * s));
+            continue;
+        }
+        let Some(a) = after.filter(|a| *a != Affine::IDENTITY && follows(&e.id)) else { continue };
+        let list = out.get_or_insert_with(|| effects.to_vec());
+        if let Some(e) = list.get_mut(i) {
+            follow_transform(e, a);
+        }
+    }
+    out.map_or(Cow::Borrowed(effects), Cow::Owned)
+}
+
+/// `effects` without their geometry effects, each raster effect following the Transform effects
+/// it loses ([`followed`]): what an object, or a fill or stroke, keeps once its geometry effects
+/// are applied to its art.
+pub fn without_geometry(effects: &[Effect]) -> Vec<Effect> {
+    followed(effects).iter().filter(|e| !crate::is_geometry(&e.id)).cloned().collect()
+}
+
+/// Make the raster effects of `effects`, all listed before Transform effect `t`, follow `t` as
+/// [`followed`] makes them follow it, for art that applies its effects one at a time. `false`
+/// when `t` leaves them as they are.
+pub(crate) fn follow_one(effects: &mut [Effect], t: &Effect) -> bool {
+    let Some(a) = transform_step(t).filter(|a| *a != Affine::IDENTITY) else { return false };
+    let mut changed = false;
+    for e in effects.iter_mut().filter(|e| follows(&e.id)) {
+        follow_transform(e, a);
+        changed = true;
+    }
+    changed
+}
+
+/// How many of the effects of `effects` that [`without_geometry`] keeps no longer follow the
+/// Transform effects listed after `effects` ([`followed`]): those before the last visible Transform
+/// effect among them that makes copies or moves at random.
+pub(crate) fn held_back(effects: &[Effect]) -> usize {
+    let Some(last) = effects.iter().rposition(|e| transform_step(e).is_none()) else { return 0 };
+    effects.get(..last).unwrap_or_default().iter().filter(|e| !crate::is_geometry(&e.id)).count()
+}
+
+/// Does `e` stop the raster effects listed before it from following the Transform effects after
+/// it ([`followed`]): is it a visible Transform effect that makes copies or moves at random?
+pub(crate) fn holds_back(e: &Effect) -> bool {
+    transform_step(e).is_none()
+}
+
+/// What `e` does to the raster effects listed before it ([`followed`]): the linear part of its map
+/// when it is a visible Transform effect that moves the art once, the identity when it is no
+/// Transform effect, is hidden or has Transform Objects off (the art stays where it is), and `None`
+/// when it makes copies or moves at random.
+fn transform_step(e: &Effect) -> Option<Affine> {
+    if e.id != "distort.transform" || !e.visible {
+        return Some(Affine::IDENTITY);
+    }
+    let p = merged_params(&e.id, &e.params);
+    if !flag(&p, "objects", true) {
+        return Some(Affine::IDENTITY);
+    }
+    let (map, copies) = crate::distort::transform_map(Rect::ZERO, &p, 0);
+    (copies == 0 && !flag(&p, "random", false)).then(|| map.with_translation(Vec2::ZERO))
+}
+
+/// Does raster effect `id` follow the Transform effects listed after it ([`followed`])? An SVG
+/// filter does not, and neither does Rasterize, whose image keeps its own pixel grid and room
+/// around the art.
+fn follows(id: &str) -> bool {
+    crate::is_raster(id) && id != crate::SVG_FILTER && id != RASTERIZE
+}
+
+/// Make raster effect `e` follow `a`, the linear part of a Transform effect listed after it, as
+/// that effect transforms what `e` paints: its distances and raster sizes scale by `a`'s mean
+/// scale ([`crate::scale_effect`]), and a Drop Shadow's offset turns, reflects and scales with
+/// `a`. Effects that [`follows`] leaves out stay as they are.
+fn follow_transform(e: &mut Effect, a: Affine) {
+    if !follows(&e.id) {
+        return;
+    }
+    let offset = (e.id == "stylize.dropShadow").then(|| {
+        let p = merged_params(&e.id, &e.params);
+        a * Point::new(num(&p, "x", 7.0), num(&p, "y", 7.0))
+    });
+    if let Some(k) = vectorcraft_doc::Scaling::factor(a) {
+        crate::scale_effect(e, k);
+    }
+    if let Some(o) = offset.filter(|o| o.x.is_finite() && o.y.is_finite()) {
+        if !e.params.is_object() {
+            e.params = Value::Object(Map::new());
+        }
+        e.params["x"] = json!(o.x);
+        e.params["y"] = json!(o.y);
+    }
 }
 
 /// How far the visible raster effects of `effects` paint beyond `bounds`, the (effected)

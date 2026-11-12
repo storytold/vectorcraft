@@ -36,6 +36,11 @@ pub(crate) fn push_num(s: &mut String, v: f64) {
     push_num_places(s, v, 4);
 }
 
+/// The value [`num`]`(v)` stands for, as a reader parses it back.
+pub(crate) fn written(v: f64) -> f64 {
+    num(v).parse().unwrap_or(0.0)
+}
+
 /// Append `v` to `s` with at most `places` decimals (up to 9), no trailing zeros (0 when not
 /// finite).
 pub(crate) fn push_num_places(s: &mut String, v: f64, places: u32) {

@@ -594,7 +594,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.panel",
         "Show Panel",
         "",
-        "{panel: id, toggle?: bool} e.g. layers, swatches, stroke (case-insensitive; display labels like \"Layers\" work too); toggle (the Window menu) hides a panel that shows, and shows it again where it was",
+        "{panel: id, toggle?: bool} e.g. layers, swatches, stroke (case-insensitive; display labels like \"Layers\" work too); toggle (the Window menu) hides a panel that can be seen, and shows it again where it was; with the dock hidden by Tab or Shift+Tab, the dock shows again with the panel in front, leaving the toolbar and Control bar as they are; fails and changes nothing in Presentation Mode, which hides every panel",
     ),
     (
         "window.panel.layout",
@@ -651,6 +651,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Show Tutorial",
         "",
         "{tutorial: id (see learn.list)} show the Learn panel on its Skills tab with that tutorial's numbered steps, as choosing its skill and then the tutorial does; a missing, non-string or unknown id is an error and changes nothing; returns {skill, tutorial, title, steps: [text]}",
+    ),
+    (
+        "learn.locateTool",
+        "Show Tool Location",
+        "",
+        "{tool: a tool id, as tool.select takes} mark where that tool is for 3 seconds without choosing it, as the link on a tool's name in a Learn tutorial step does: its toolbar button, a row of its collapsed group's flyout (which opens), its group's torn-off strip (which comes to the front), or, when no shown toolbar holds it, its row in the All Tools drawer (which opens); a Tools panel hidden with Window › Tools shows again; Escape or the next locate removes the mark; a missing, non-string or unknown id is an error and changes nothing; returns {tool, location: toolbar|flyout|strip|allTools|unavailable, toolbar: the name of the toolbar made with New Toolbar that holds it, or null}, with reason when Presentation Mode or Tab hides the toolbars",
     ),
     ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
     (

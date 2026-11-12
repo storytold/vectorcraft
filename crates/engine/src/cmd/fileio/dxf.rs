@@ -241,6 +241,7 @@ pub(super) fn encode(doc: &Document, p: &Value, use_artboards: Option<bool>) -> 
                 enc.warnings.push(w);
             }
         }
+        enc.add_setting_notes(out.setting_notes);
         for img in out.images {
             if !enc.linked.iter().any(|l| l.name == img.name) {
                 enc.linked.push(vectorcraft_svg::LinkedImage { name: img.name, bytes: Arc::new(img.bytes) });

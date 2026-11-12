@@ -98,6 +98,9 @@ pub(crate) struct Interp<'a> {
     /// The font a `kshow` procedure sees as current while type in a CIDFont only named is set in
     /// a font of its own (see `text`).
     pub kshow_font: Option<DictRef>,
+    /// The `cshow` procedure running over type in a CIDFont only named, with the font it sees as
+    /// current (see `text`).
+    pub cshow: Option<super::text::CShowFont>,
     pub g: GState,
     pub saved: Vec<GState>,
     pub out: Out,
@@ -240,6 +243,7 @@ impl<'a> Interp<'a> {
             cmap_font: 0,
             predefined_cmaps: vec![],
             kshow_font: None,
+            cshow: None,
             type42_counted: HashSet::new(),
             g,
             saved: vec![],

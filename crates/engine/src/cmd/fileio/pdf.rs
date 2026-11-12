@@ -12,7 +12,7 @@ use vectorcraft_pdf::{Overprint, PdfError, PdfOptions, PdfPreset, PdfSettings, S
 
 use super::super::flatten::{FlattenOptions, flatten_document, see_through_images};
 use super::super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param};
-use super::{ArtboardPick, FormatOption, write_or_return};
+use super::{ArtboardPick, FormatOption, Note, note_texts, write_or_return};
 use crate::EngineError;
 
 const C: &str = "document.exportPdf";
@@ -285,41 +285,42 @@ pub const EDITING_NEEDS_THE_ARTBOARDS: &str =
     "Preserve editing was left out: it needs a PDF of the artboards (reopened, this one would replace them with one artboard around the art)";
 
 /// With `useArtboards: false` in `p`: the PDF of one page, the bounds of `doc`'s visible art
-/// ([`super::encode::art_page`]) → (bytes, warnings). It carries no editing data: with Preserve
-/// Editing on, the warnings end with [`EDITING_NEEDS_THE_ARTBOARDS`]. `None` when `p` asks for the
+/// ([`super::encode::art_page`]) → (bytes, notes). It carries no editing data: with Preserve
+/// Editing on, the notes end with [`EDITING_NEEDS_THE_ARTBOARDS`]. `None` when `p` asks for the
 /// artboards.
-pub(super) fn encode_art_page(cmd: &str, doc: &Document, p: &Value) -> Result<Option<(Vec<u8>, Vec<String>)>> {
+pub(super) fn encode_art_page(cmd: &str, doc: &Document, p: &Value) -> Result<Option<(Vec<u8>, Vec<Note>)>> {
     let Some((art, mut q)) = super::encode::art_page(cmd, doc, p)? else { return Ok(None) };
     let left_out = settings(cmd, &q)?.preserve_editing;
     if left_out && let Some(o) = q.as_object_mut() {
         o.insert("preserveEditing".into(), json!(false));
     }
-    let (bytes, mut warnings) = encode(cmd, &art, &q)?;
+    let (bytes, mut notes) = encode(cmd, &art, &q)?;
     if left_out {
-        warnings.push(EDITING_NEEDS_THE_ARTBOARDS.to_string());
+        notes.push(Note::setting(EDITING_NEEDS_THE_ARTBOARDS));
     }
-    Ok(Some((bytes, warnings)))
+    Ok(Some((bytes, notes)))
 }
 
 /// The warning for a PDF/X file that leaves out the document's bleed
 /// ([`vectorcraft_pdf::PdfSettings::leaves_out_bleed`]).
 pub const BLEED_LEFT_OUT: &str = "the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings";
 
-/// Encode `doc` as PDF with the options in `p` → (bytes, warnings). Raster effects are rendered
+/// Encode `doc` as PDF with the options in `p` → (bytes, notes). Raster effects are rendered
 /// to images at the document's raster effects resolution. Preserve Editing embeds `doc` itself
 /// when the PDF has every artboard (a PDF of some reopens as just those).
-pub fn encode(cmd: &str, doc: &Document, p: &Value) -> Result<(Vec<u8>, Vec<String>)> {
+pub fn encode(cmd: &str, doc: &Document, p: &Value) -> Result<(Vec<u8>, Vec<Note>)> {
     encode_at(cmd, doc, p, None)
 }
 
 /// [`encode`] modified at `modified` (Unix seconds) when given, instead of the time of writing.
-pub(super) fn encode_at(cmd: &str, doc: &Document, p: &Value, modified: Option<i64>) -> Result<(Vec<u8>, Vec<String>)> {
+pub(super) fn encode_at(cmd: &str, doc: &Document, p: &Value, modified: Option<i64>) -> Result<(Vec<u8>, Vec<Note>)> {
     // Keep the editable object tree independent of preview fallbacks used by the drawn pages.
-    let (full, mut warnings) = crate::cmd::place::document::full_documents(doc);
-    let (bytes, drawn_warnings) = encode_carrying_at(cmd, &full, p, modified, || Ok(vectorcraft_format::save(doc, false)), || Ok(None))?;
-    warnings.extend(drawn_warnings);
-    warnings.extend(overflow_warning(cmd, &full, p)?);
-    Ok((bytes, warnings))
+    let (full, placed) = crate::cmd::place::document::full_documents(doc);
+    let mut notes: Vec<Note> = placed.into_iter().map(Note::loss).collect();
+    let (bytes, drawn) = encode_carrying_at(cmd, &full, p, modified, || Ok(vectorcraft_format::save(doc, false)), || Ok(None))?;
+    notes.extend(drawn);
+    notes.extend(overflow_warning(cmd, &full, p)?.map(Note::loss));
+    Ok((bytes, notes))
 }
 
 /// The warning about the type that the pages of a PDF of `doc` with the options in `p` draw and
@@ -342,7 +343,7 @@ pub(super) fn encode_carrying(
     p: &Value,
     native: impl FnOnce() -> Result<Vec<u8>>,
     private: impl FnOnce() -> Result<Option<(vectorcraft_pdf::PrivateData, Vec<String>)>>,
-) -> Result<(Vec<u8>, Vec<String>)> {
+) -> Result<(Vec<u8>, Vec<Note>)> {
     encode_carrying_at(cmd, doc, p, None, native, private)
 }
 
@@ -355,7 +356,7 @@ fn encode_carrying_at(
     modified: Option<i64>,
     native: impl FnOnce() -> Result<Vec<u8>>,
     private: impl FnOnce() -> Result<Option<(vectorcraft_pdf::PrivateData, Vec<String>)>>,
-) -> Result<(Vec<u8>, Vec<String>)> {
+) -> Result<(Vec<u8>, Vec<Note>)> {
     let mut opts = options_at(cmd, doc, p, modified.or_else(vectorcraft_doc::metadata::output_time))?;
     // The pages' background colors, behind the art (the editing data keeps them as colors).
     let pages = opts.artboards.clone().unwrap_or_else(|| (0..doc.artboards.len()).collect());
@@ -366,21 +367,22 @@ fn encode_carrying_at(
     if opts.settings.thumbnails {
         opts.thumbnails = thumbnails(doc, &opts).map_err(|e| pdf_error(cmd, e))?;
     }
-    let mut warnings = vec![];
-    // The status bar shows the first warning, so this one goes ahead of the flattening note.
+    let mut notes = vec![];
+    // A loss, ahead of the flattening note: the PDF/X pages leave out the bleed that Document
+    // Setup gives.
     if opts.settings.leaves_out_bleed(doc) {
-        warnings.push(BLEED_LEFT_OUT.to_string());
+        notes.push(Note::loss(BLEED_LEFT_OUT));
     }
     if opts.settings.preserve_editing {
         if opts.artboards.as_ref().is_none_or(|v| v.iter().copied().eq(0..doc.artboards.len())) {
             opts.native = Some(native()?);
             if let Some((data, lost)) = private()? {
                 opts.private_data = Some(data);
-                warnings.extend(lost);
+                notes.extend(lost.into_iter().map(Note::loss));
             }
         } else {
             opts.settings.preserve_editing = false;
-            warnings.push(EDITING_NEEDS_EVERY_ARTBOARD.to_string());
+            notes.push(Note::setting(EDITING_NEEDS_EVERY_ARTBOARD));
         }
     }
     let set = &opts.settings;
@@ -391,12 +393,13 @@ fn encode_carrying_at(
     vectorcraft_doc::cancel::check()?;
     if flattened {
         let kind = if set.standard.flattens() { set.standard.label() } else { set.compatibility.label() };
-        warnings.push(format!("transparency is flattened into opaque art and images ({kind} files have none): see the flattener preset"));
+        notes.push(Note::loss(format!("transparency is flattened into opaque art and images ({kind} files have none): see the flattener preset")));
     }
     let r = super::super::rasterfx::export_pdf_with_report(flat.as_ref().unwrap_or(doc), &opts).map_err(|e| pdf_error(cmd, e))?;
-    warnings.extend(r.warnings);
-    warnings.extend(crate::cmd::fonts::substitution_warning(doc));
-    Ok((r.bytes, warnings))
+    notes.extend(r.warnings.into_iter().map(Note::loss));
+    notes.extend(r.setting_notes.into_iter().map(Note::setting));
+    notes.extend(crate::cmd::fonts::substitution_warning(doc).map(Note::loss));
+    Ok((r.bytes, notes))
 }
 
 /// The flattener preset of PDF 1.3 files whose `flattenerPreset` is empty.
@@ -502,11 +505,11 @@ fn export_pdf(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // The opacity-mask or symbol editing layer is left out.
     let doc = titled.as_ref().unwrap_or(&st.doc).without_edit_modes();
-    let (bytes, warnings) = match encode_art_page(C, &doc, &q)? {
+    let (bytes, notes) = match encode_art_page(C, &doc, &q)? {
         Some(encoded) => encoded,
         None => encode(C, &doc, &q)?,
     };
-    write_or_return(str_param(p, "path"), &bytes, json!({ "warnings": warnings }))
+    write_or_return(str_param(p, "path"), &bytes, json!({ "warnings": note_texts(&notes) }))
 }
 
 /// `(path, value)` for every leaf of `v` that differs from `default` (`compression.color.ppi`).
@@ -542,10 +545,11 @@ fn pdf_settings(s: &mut Session, p: &Value) -> Result<Value> {
         Some(st) if bool_or(p, "includeDocument", false) => {
             let q = expand_preset(s, Q, p)?;
             let doc = st.doc.without_edit_modes();
-            match encode_art_page(Q, &doc, &q)? {
-                Some((_, warnings)) => warnings,
-                None => encode(Q, &doc, &q)?.1,
-            }
+            let (_, notes) = match encode_art_page(Q, &doc, &q)? {
+                Some(encoded) => encoded,
+                None => encode(Q, &doc, &q)?,
+            };
+            note_texts(&notes)
         }
         _ => set.warnings(),
     };

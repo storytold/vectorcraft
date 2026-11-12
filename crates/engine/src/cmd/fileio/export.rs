@@ -42,7 +42,7 @@ pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
         }
         _ => json!({ "dataBase64": vectorcraft_format::base64_encode(bytes) }),
     };
-    let mut out = merge(data(main.first().map_or(&[][..], |m| &m.1)), json!({ "warnings": enc.warnings }));
+    let mut out = merge(data(main.first().map_or(&[][..], |m| &m.1)), json!({ "warnings": enc.notes() }));
     if main.len() > 1 {
         out["files"] = main.iter().map(|(name, bytes)| merge(json!({ "name": name }), data(bytes))).collect();
     }
@@ -69,7 +69,7 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
         o.insert("_displayDocTitle".into(), json!(display_doc_title));
     }
     let enc = encode_all(doc, f.id, &q)?;
-    write_encoded(path, &default_name(doc, f.extensions[0]), doc, &enc, json!({ "format": f.id, "warnings": enc.warnings }))
+    write_encoded(path, &default_name(doc, f.extensions[0]), doc, &enc, json!({ "format": f.id, "warnings": enc.notes() }))
 }
 
 /// The document an export of `st` in format `f` writes ([`export_source`]): a `.ai` or `.ait`

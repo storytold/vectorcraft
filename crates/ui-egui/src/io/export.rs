@@ -92,7 +92,7 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
                 return Ok(json!({ "replaces": replaced }));
             }
             let files = write_encoded(write, &doc, &path, &enc)?;
-            let mut out = json!({ "path": files.first().unwrap_or(&path), "warnings": enc.warnings });
+            let mut out = json!({ "path": files.first().unwrap_or(&path), "warnings": enc.notes() });
             if files.len() > 1 {
                 out["files"] = json!(files);
             }
