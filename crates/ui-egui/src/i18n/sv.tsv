@@ -2015,6 +2015,7 @@ font-technology	Variable	Variabla
 	Move Slices	Flytta skivor
 	Move Spine Point	Flytta ryggradspunkt
 	Reshape Spine Segment	Omforma ryggradssegment
+	Blend Easing	Blandningens acceleration
 	Move Brush	Flytta pensel
 	Move Swatch	Flytta färgruta
 	Move Up	Flytta upp
@@ -2883,6 +2884,7 @@ digits	Malayalam	Malayalam
 	Rotate View Tool	Verktyget Rotera vy
 	Trackpad Gesture to Rotate View	Rotera vyn med en gest på styrplattan
 	Hold a Tool Shortcut to Use the Tool Temporarily	Håll ned ett verktygs kortkommando för att använda verktyget tillfälligt
+	Show Bounding Box While Moving and Drawing	Visa begränsningsram vid flyttning och ritning
 	Rotate…	Rotera…
 	Rotation	Rotation
 	Roughen…	Ojämn…
@@ -6357,6 +6359,11 @@ axis	Y Axis	Y-axel
 	User Brush Library 9	Användarbibliotek för penslar 9
 	User Brush Library 10	Användarbibliotek för penslar 10
 	Art Ribbons	Konstband
+	Ink and Wash	Tusch och lavering
+	Tapered Ink	Avsmalnande tusch
+	Brush Pen	Penselpenna
+	Soft Wash	Mjuk lavering
+	Pooling Wash	Lavering med kant
 	Zigzag	Sicksack
 	Burst Ray	Stötstråle
 	Dash Trail	Streckat spår

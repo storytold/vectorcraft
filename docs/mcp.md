@@ -145,24 +145,64 @@ the suite) keep the agent to the folders you give it:
   `file.openRecentN` for a file outside the roots ends with `no such recent file`, as an empty slot does.
 - `ui_inspect` (the control channel's `ui.inspect`) leaves out the paths outside the read roots: in `opening`, the
   documents still being read; in `ui.recent_files`, the recent files; a library panel's `path` in `ui.library_panels`;
-  and the folder preferences in `ui.engine_prefs` and in an open Preferences dialog's `ui.dialog.fields`
+  in a recorded action's steps in `ui.action_sets`, also in a batch step's commands, the `path`, `paths`, `file`,
+  `files` and `folder` params, a param whose name ends in `Path`, `Paths`, `File`, `Files` or `Folder` (`diffPath`,
+  `destinationFolder`), the entries of a list under such a param, and under any other param, as a key or in any
+  list, an absolute path or a `file:` URL outside the roots (any case of `file:`, `%XX` escapes decoded; a URL that
+  names another host is always left out), and `~`, a path under `~` or a path that starts with `./` or `../`
+  (either separator) that resolves outside the roots from the app's working folder; and the folder
+  preferences in `ui.engine_prefs` and in an open Preferences dialog's `ui.dialog.fields`
   (`fontsFolder`, `pluginsFolder`, `scratchPrimary`, `scratchSecondary`, `recoveryFolder`, `templatesFolder`; an
   empty folder and the scratch disk choices `Startup` and `None` stay). A library loaded from a file outside the
   roots shows as `loaded/<file name>` wherever `ui_inspect` and `ui.docking` name it: its id, its panel's id, the
-  Color Guide's `ui.color_guide_limit` and a closed panel's key in `ui.docking_hidden`, also when its panel is
-  closed. When another hidden library has the same file name, the libraries take `loaded/<file name>`,
-  `loaded/<file name> (2)`, `(3)` and so on in the order of their full ids (the libraries loaded in this session
-  first, then those only the UI state names), and each one keeps its id in both replies and in the library
-  commands below. The other entries keep their order, and the app's own state is not changed.
+  Color Guide's `ui.color_guide_limit`, a closed panel's key in `ui.docking_hidden` and the `library` and `panel`
+  params of a recorded action's steps in `ui.action_sets`, and the keys of shortcut overrides (`panel:<panel id>`
+  in `ui.shortcut_overrides` and an open Keyboard Shortcuts dialog's `ui.dialog.fields.overrides`), also when its
+  panel is closed. A path written with
+  either separator counts as a path, also one saved on another platform, and outside Windows a path that starts
+  with a drive (`C:`) or a `\` counts as outside the roots. Outside Windows, any other path keeps a `\` in its
+  file name (`/libs/a\b.ase` shows as `loaded/a\b.ase`), and a reply matches it only as written, not with `/`
+  in place of the `\`. When another hidden library has the same
+  file name, the libraries take `loaded/<file name>`, `loaded/<file name> (2)`, `(3)` and so on in the order they
+  are first shown. Libraries first shown in the same reply are numbered in the order of their full ids, the
+  libraries loaded in this session first, then those only the UI state names. Each one keeps its id for the rest
+  of the session in both replies and in the library commands below, also after another library with the same
+  file name is loaded. A hidden library skips an id that a library loaded without a path already has, and only a
+  library loaded later from data under that file name, which takes the id itself, moves a hidden one to the next
+  free number. The other entries keep their order, and the app's own state is not changed. A request may name such a library or its panel by the id
+  shown in a `panel`, `library` or `panels` param, in a docking destination (`anchor`, `target`, `before`, `onto`,
+  `above`, `below`) and in `window.panel.layout`'s `action` (`ui.set {panel: "library:swatches:loaded/<file name>"}`
+  reopens its panel), and the reply to such a request shows that id and file name wherever the library's id or path
+  appears, an error included. Every reply under the read roots shows a hidden library's id as the id shown and its
+  path as the file name in every string and key, the status text (`ui.status`), dialogs, the command palette query
+  (`ui.palette_query`), a script's report (`scriptReport`), a screenshot's reply and the error from an internal
+  fault included, for the libraries hidden before the request ran and after it. The path is also matched with `%XX` escapes as a `file:`
+  URL writes it, and on Windows in any case of its letters; a `file:` URL of an absolute path is shown as the file
+  name alone, without `file:` or its host. A hidden id or path stays only where it begins
+  another loaded library's whole id with no `.` or `..` part, so a readable library's id that begins with a hidden one stays. A reply also shows a path outside the
+  read roots that the request sent by its file name, whether or not a library was loaded from it and whether the
+  request succeeded or failed, so that the reply reads the same either way. The one exception is the `path`
+  and `files` entries of a reply's result, a `command.batch` step's result included, that name the file the
+  request wrote inside the write roots at the path the request gave: they stay as
+  given, as for the save and export replies above. A path param (`path`, `file`,
+  `destinationFolder` and the like) counts with a relative path too. The hidden libraries' ids and paths are
+  matched before the paths the request sent, so a sent path written over part of a hidden library's path does not
+  keep that path in the reply. A relative path is not replaced where it ends a longer path (`/work/data/icon.svg`
+  keeps `data/icon.svg`), and the absolute path it reads as from the app's working folder is replaced too. Encoded file data, a base64 string under `dataBase64`,
+  `pngBase64`, `thumbnailBase64` or `thumbnail` (`library.get`, `document.pdfInfo`), is sent as it is.
 - `swatch.library.list`, `brush.libraries`, `symbol.libraries` and `graphicStyle.libraries` list every library
   but leave out the paths outside the read roots: a library's `path` and the user library folder in `userFolder`
   are `null` there. A library loaded from a file outside the roots is listed as `loaded/<file name>`, numbered
   `(2)`, `(3)` and so on as in `ui_inspect` when two have the same file name. That id finds the library in the
   other library commands (`swatch.library.get`, `swatch.library.add`, `brush.library`, `brush.addFromLibrary`,
   `symbol.library`, `symbol.addFromLibrary`, `graphicStyle.library`, `graphicStyle.addFromLibrary` and the
-  others that take `library`), whose replies show it too. `swatch.library.copyToUser` refuses a library whose file
-  is outside the read roots without naming the file, and it and the library saves with `user: true` leave out
-  `path` when the user library folder is outside the read roots.
+  others that take `library`), whose replies show it too. Over the control channel, `window.swatchLibrary` and
+  the other library panel commands answer with that id and its panel's id (`library:swatches:loaded/<file name>`),
+  and `ui.libraryPanel` and the `window.panel.*` commands take that panel id in `panel`, `anchor`, `before`,
+  `onto`, `above` and `below`. `swatch.library.copyToUser` refuses to copy a library file outside the read roots
+  without naming the file (the swatches of a document loaded from there are written from the loaded library, as
+  for a library loaded from data, and the document is not read again), and it and the library saves with
+  `user: true` leave out `path` when the user library folder is outside the read roots.
 - `links.list`, `links.check`, `links.info` and the `missingLinks`, `modifiedLinks` and `updatedLinks` rows of
   `document.open` leave out a linked file's path when the file is outside the read roots (a relative path is taken
   from the document's folder): `path`, `found`, and in `links.info` also `link` and `location`, with the `fileSize`
@@ -217,6 +257,12 @@ the suite) keep the agent to the folders you give it:
   `outside the write roots /work/project/out, /tmp/scratch: …`) or
   `automation filesystem access is not granted: write authority is absent: /work/project/out/x.png`.
   Links in an opened document that point outside the read roots show as missing.
+- An error names a path the client gave as given. A path the client did not give (the document's own file
+  in a save without `path` and in `file.revert`, also inside `action.batch`, an export preset's folder, the
+  Scripts folder, the document's folder in `links.relink {copy}`) is named
+  whole only inside the read roots; outside them the error names it by its file name, or as
+  `a file or folder outside the read roots` when it has none, and keeps the roots and the reason, for example
+  `automation path rejected: outside the write root /work/project/out: poster.vectorcraft`.
 - The preferences that move folders the app reads or writes on its own (`fontsFolder`,
   `pluginsFolder`, `recoveryFolder`, `templatesFolder`) can only be set inside the roots. The app's own folders
   (preferences, Data Recovery, the User Defined library folders, VectorCraft's Fonts folder) are not
@@ -1631,7 +1677,9 @@ wrong. A value that is not a number gets `` `dx` must be a number, not "10" ``: 
 `` `size` must be a number, not true ``, and a `tracking` that is neither a number nor a number written as a string
 (`"20"`) with `` `tracking` must be a number, not false ``. It and `text.setRangeStyle` refuse a `font` or `style` that is not a string
 with `` `font` must be a string ``, and a `features` list with an entry that is not a string with
-`features must be a list of tags`; `text.setStyle` refuses such a `justify` too. `type.ruby` refuses a `text`,
+`features must be a list of tags`; `text.setStyle` refuses such a `justify` too. `text.create`, `text.createInPath`,
+`text.setStyle` and `text.setRangeStyle` refuse a `size` outside 0.1 to 1,296 pt with
+`` `size` must be from 0.1 to 1296 `` and change nothing. `type.ruby` refuses a `text`,
 `position` or `align` that is not a string, and `text.setPathHandle` refuses a `which` other than `in` or `out` with
 `` `which` must be one of in, out ``. Each leaves the document, the selection and the undo history as they were, also
 when the call gives another param it could apply. A null is read as a key left out.
@@ -1956,8 +2004,9 @@ no engines, and the engines it left are dropped when their own thread next uses 
   in the earlier run's script, a file it included or a file its `$.evalFile` ran, and the report's `file` names that
   file. For an earlier script given as `source`, `file` is that run's name. The report's `name` and the console line's
   name stay the calling run's, as in `caller.js: /path/lib.jsx:12:5: Error: kept`. Each engine keeps these places
-  for 8 MiB of source maps, the oldest going first; an error in code whose place is gone, or in code that `eval` or
-  `Function` compiled, is reported without a line and column, and the code still runs.
+  for 8 MiB of source maps, the oldest going first, and a run whose script does not compile keeps none. An error in
+  code whose place is gone, or in code that `eval` or `Function` compiled, is reported without a line and column, and
+  the code still runs.
 - `vc`, `$`, `alert`, `confirm` and `prompt` act for the run that calls them, including a copy an earlier run kept in a
   global. `vc.args` is the calling run's `args`, through a `vc` object an earlier run kept too. An engine
   holds no document: `vc.document` is a copy, read when it is called. What a run sets on `$` (`$.locale`,
@@ -2870,16 +2919,23 @@ already walks Image Trace. Short agent entry points:
   use version 2, so older builds refuse them
   instead of playing the excluded steps or failing at a stop; other files use version 1. A file with another `format` or a `version` other than
   1, 2 or 3, a stop whose message is not text or whose `allowContinue` is not true or false, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
-  refused, and no set is added. The Actions panel menu's Save Actions… and Load Actions… run these; Load Actions… is
+  refused, and no set is added. So is a file whose set `ui.actionSet.save` would write larger than 8 MiB (a file with
+  less white space, a set name that gets a number, or an `.aia` set), with the error `the action set would be larger
+  than 8 MiB`. The Actions panel menu's Save Actions… and Load Actions… run these; Load Actions… is
   disabled where there is no open dialog (the web). `ui.actionSet.load` also reads the action sets other apps save as
   text (`.aia`); see "Action sets from other apps".
 - Actions: `ui.action.rename {set, action, name}` renames the Actions panel's action at `action` in set `set` (0 is
   the top set) to `name` with spaces trimmed from both ends, keeps its steps, function key and color, and returns
-  `{name}`. An index past the last set or action, or an empty name, is an error, and then nothing is renamed.
+  `{name}`. An index past the last set or action, or an empty name, is an error, and then nothing is renamed. So is a
+  name that would give the set's action set file more than 8 MiB, counting the steps the recording in progress adds
+  to the set (`the action set would be larger than 8 MiB`); a name that leaves the file as large or makes it smaller
+  is never refused. The same holds for `ui.action.options` and for the names Set Options… and New Set… give.
 - Actions: `ui.action.stepsIncluded {set, action?, step?, included, others?}` includes or excludes all steps of a set,
   one action, or one step. With `step` and `others: true`, it leaves that step as it was and applies `included` to the
-  other steps of its action (the panel's Alt/Option-click). An invalid set, action or step changes nothing. The panel's
-  checkmarks run this command; normal playback and Batch… skip excluded steps.
+  other steps of its action (the panel's Alt/Option-click). An invalid set, action or step changes nothing. So does an
+  exclusion that would give the set's action set file more than 8 MiB, counting the steps the recording in progress
+  adds to the set; it is an error. A change that leaves the file as large or makes it smaller is never refused. The
+  panel's checkmarks run this command; normal playback and Batch… skip excluded steps.
 - Actions: `ui.action.new {set, name, key?, cmd?, shift?, color?}` adds an action named `name` (spaces
   trimmed) after the last action of set `set` (0 is the top set), starts recording into it and returns
   `{set, action}`; Stop Playing/Recording (`ui.action.stop`) ends the recording. `key` 1 to 15 is the function key F1 to F15 that plays the
@@ -2887,12 +2943,23 @@ already walks Image Trace. Short agent entry points:
   (`red`, `yellow`, `green`, `blue` or `violet`; null or `""` for none), which the panel does not show. Action function
   keys take priority over command shortcuts and preserve the command's binding. On Windows F1, Ctrl+F4 and Ctrl+F6
   cannot be used. While an action is recording, and for an index past the last set,
-  an empty name, or a key or color that is not one of these, it is an error and nothing is added. The panel's Create
+  an empty name, or a key or color that is not one of these, it is an error and nothing is added. So is an action that
+  would give the set more than 1,000 actions (`the action set file holds more than 1,000 actions`) or a file larger
+  than 8 MiB (`the action set would be larger than 8 MiB`), and then no recording starts. The panel's Create
   New Action button and menu's New Action… open the `actionNew` dialog, whose Record runs this.
 - Actions: `ui.action.record {set?}` starts recording a new action in the chosen set, or the current set when `set`
   is left out, and returns `{set, name}`. With no sets, it creates Set 1. The action gets the next available
   `Action N` name in that set. The Actions panel's Begin Recording button runs this command. An invalid set or an
-  existing recording is an error and leaves the sets and recording unchanged.
+  existing recording is an error and leaves the sets and recording unchanged, and so is a set where the new action
+  would give it more than 1,000 actions or an action set file larger than 8 MiB. While a recording (this one or
+  `ui.action.new`'s) is in progress, a recorded command whose step would give the action more than 10,000 steps, or
+  its set's action set file more than 8 MiB, is an error with the reason (`the action already has 10,000 steps`, `the
+  action set would be larger than 8 MiB`): it does not run, and the recording goes on. A batch (`command.batch`) is
+  such a command too. A command whose step grows past a limit only as it runs, from values it adds to its step,
+  keeps its edit and result; the status bar names the limit, later recorded commands do not run, and
+  `ui.action.stop` leaves its step out. A stop that playback reaches
+  then is not recorded, and the status bar shows the reason. `ui.action.stop` leaves out any recorded steps still past
+  either limit and shows which one in the status bar.
 - Actions: `ui.action.options {set, action, name?, key?, cmd?, shift?, color?}` changes the action at
   `action` in set `set` and keeps its steps: `name` renames it, `key` with `cmd` and `shift` sets its function key,
   and `color` its Button Mode color, as `ui.action.new` takes them; a param left out keeps what the action has, and
@@ -2978,7 +3045,8 @@ already walks Image Trace. Short agent entry points:
   `ui.actionSet.duplicate {set?: index, action?: index}` copies the action at `action` in set `set` to right after it
   in the same set, and returns `{set, action}`; without `action` it copies the set with all its actions to right after
   it, and returns `{set}`. In both cases `set` defaults to the current set. The copy is named after the original with
-  " copy" added, a copied set gets an id of its own, and the copy is selected. An index past the last set or action is an error. The
+  " copy" added, a copied set gets an id of its own, and the copy is selected. An index past the last set or action is an error,
+  and so is a copy that would give its set more than 1,000 actions or a file larger than 8 MiB; then nothing is copied. The
   panel menu's Duplicate runs this for the selected action, else the current set.
 - Image Trace: `imageTrace.presets`, `imageTrace.make {id?, preset?, params?, view?}` (or `imageTrace.makeAndExpand`),
   `imageTrace.setView`, `imageTrace.expand`, `imageTrace.release`. A key inside `params` that is not one of the trace
@@ -3662,7 +3730,7 @@ error.
 
 ## Brush libraries
 
-Brush libraries are read-only sets of brushes: eight generated in code (Art Ribbons, Calligraphic Nibs, Bristle
+Brush libraries are read-only sets of brushes: nine generated in code (Art Ribbons, Ink and Wash, Calligraphic Nibs, Bristle
 Brushes with one bristle brush for each tip shape, Pattern Borders, Scatter Shapes, Game Trails, Energy Beams, and Dry Media with the Chalk Grain, Graphite Pencil, Wax Crayon and
 Charcoal Dust art brushes, id `dry-media`), the `.vectorcraft` files in the user library folder of the desktop app (User
 Defined) and the brushes of any document loaded with `brush.loadLibrary` (a document without brushes of its own has
@@ -5160,7 +5228,11 @@ interface and not the art: a zoom shows the art at the same size at every UI Sca
 preference `holdToolKeys` also needs the desktop app. It is on by default: a single-key tool shortcut held for 0.25 s
 or more, or held while its tool is used, chooses the tool until the key is let go and then returns to the tool active
 before, after any drag in progress; a quicker press chooses the tool for good. With it off, every press and every key
-repeat chooses the tool. `highlightAlternateGlyphs` (off by default: on, the canvas paints a pink cell behind glyphs OpenType features
+repeat chooses the tool. The canvas preference `boundingBoxWhileMovingAndDrawing` (off by default) also needs the
+desktop app: on, with View › Show Bounding Box, the bounding box and its handles stay visible while a drag moves the
+selection, and the Rectangle, Rounded Rectangle, Ellipse, Polygon and Star tools draw the box around the shape being
+drawn; off, the box hides during both, except that a Selection tool move with `realTimeDrawing` off still moves the
+box. `highlightAlternateGlyphs` (off by default: on, the canvas paints a pink cell behind glyphs OpenType features
 substituted — ligatures, contextual forms — on screen; Document Setup's Highlight Substituted Glyphs stays
 separate). `highlightSubstitutedFonts` (on by default: the canvas paints pink behind text drawn in a substitute for a
 missing font, in every document). `blackOnScreen`
@@ -9085,9 +9157,29 @@ so its point at `t` moves by (dx, dy), turning a straight spine into a curve (`p
 {"name":"run_command","arguments":{"command":"object.blend.spine.moveAnchor","params":{"id":40,"anchor":1,"x":150,"y":20}}}
 ```
 
+`object.blend.setEasing {id?, easingType?, ramp?, colorShift?}` sets one blend's easing and color shift (the
+first selected blend without `id`) and returns `{id, easingType, ramp, colorShift, changed}`; omitted values are kept.
+`easingType` is `easeIn`, `easeOut`, `easeInOut` or `easeOutIn`, `ramp` is 0 to 100 and `colorShift` -100 to 100.
+`easingType` and `ramp` need a blend whose steps follow a spine (a replaced or edited spine, or
+`orientation: "path"`), as the Blend panel's Type and Ramp do. A blend made without a spine
+(`createSpine: "never"`) takes them once Replace Spine has given it one. A value out of range, a hidden or locked blend and a target that is not a blend are errors,
+and a call that changes nothing records no undo step (`changed: false`). With one blend selected that has a spine,
+the Selection and Blend tools show the same values as widgets
+16 px above and below the spine's halfway point (where the boxes of three or more other visible objects hold that
+spot, a widget moves out in 16 px steps, up to 144 px, joined to the halfway point by a line): the upper one sets
+`colorShift` and the lower one, shown only when the steps follow the spine as `ramp` needs, sets `ramp`, by one per screen pixel dragged along the spine and by one per arrow key
+during the drag (ten with Shift). Each drag is one undo step, and `press_key` Escape or a switch to another tool
+during it puts the value back:
+
+```json
+{"name":"run_command","arguments":{"command":"object.blend.setEasing","params":{"id":40,"ramp":35}}}
+```
+
 How blends interpolate: closed shapes start where they twist least unless `starts` picks the anchors; strokes
-interpolate weight, dashes (a solid stroke counts as the dashed one with its gaps closed), miter limit, arrowhead scale
-and width profiles, while caps, joins, alignment, arrowheads and brushes switch halfway; gradients of one kind with
+interpolate weight, dashes (a solid stroke counts as the dashed one with its gaps closed), miter limit, arrowhead scale,
+width profiles and the pen pressure, tilt, bearing and rotation recorded with the Paintbrush (a stroke without a
+recording counts as half pressure, half tilt and 0°, as brushes read it; angles turn the shorter way round), while
+caps, joins, alignment, arrowheads and brushes switch halfway; gradients of one kind with
 different stop counts resample to a common set of stops. Groups pair their members in stacking order (members only
 one group has grow out of the other's centre), compound paths stay compound paths, and type, symbol instances and
 images interpolate their transforms (type also its colours, stroke weight and size run by run; the words and the

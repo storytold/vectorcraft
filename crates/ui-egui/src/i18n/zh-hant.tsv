@@ -3060,6 +3060,7 @@ file-filter	Templates	範本
 	Move Slices	移動切片
 	Move Spine Point	移動脊線點
 	Reshape Spine Segment	改變脊線線段外框
+	Blend Easing	漸變緩動
 @msg	select a blend or give `id`	請選取漸變物件，或提供 `id`
 @msg	not a blend	不是漸變物件
 @msg	the blend has no spine	漸變物件沒有脊線
@@ -3958,6 +3959,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Rotate View Tool	旋轉檢視工具
 	Trackpad Gesture to Rotate View	使用觸控式軌跡板手勢旋轉檢視
 	Hold a Tool Shortcut to Use the Tool Temporarily	按住工具快速鍵以暫時使用該工具
+	Show Bounding Box While Moving and Drawing	移動和繪製時顯示邊框
 	Rotate…	旋轉…
 	Rotation	旋轉
 	Roughen…	粗糙效果…
@@ -5983,6 +5985,11 @@ axis	Y Axis	Y 軸
 	User Brush Library 9	使用者筆刷資料庫 9
 	User Brush Library 10	使用者筆刷資料庫 10
 	Art Ribbons	藝術緞帶
+	Ink and Wash	水墨淡彩
+	Tapered Ink	漸細墨線
+	Brush Pen	軟頭筆
+	Soft Wash	柔和淡彩
+	Pooling Wash	積色淡彩
 	Zigzag	鋸齒
 	Burst Ray	衝擊射線
 	Dash Trail	虛線軌跡

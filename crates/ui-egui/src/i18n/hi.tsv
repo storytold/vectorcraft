@@ -424,6 +424,11 @@ antiAlias	Sharp	शार्प
 	Art Brush Options	आर्ट ब्रश ऑप्शन्स
 	Art Optimized	आर्टवर्क के लिए अनुकूलित
 	Art Ribbons	आर्ट रिबन
+	Ink and Wash	स्याही और वॉश
+	Tapered Ink	पतली होती स्याही
+	Brush Pen	ब्रश पेन
+	Soft Wash	सॉफ्ट वॉश
+	Pooling Wash	पूलिंग वॉश
 	Zigzag	ज़िगज़ैग
 	Burst Ray	बर्स्ट रे
 	Dash Trail	डैश ट्रेल
@@ -3940,6 +3945,7 @@ antiAlias	Sharp	शार्प
 	Reshape Segment	सेगमेंट को आकार देना
 	Reshape Spine	स्पाइन का आकार बदलें
 	Reshape Spine Segment	स्पिन सेगमेंट को फिर से आकार दें
+	Blend Easing	ब्लेंड ईज़िंग
 	Reshape Tool	रीशेप टूल
 	Reshape Type Area	रीशैप टाइप एरिया
 	Reshape Type Path	टाइप पाथ रीशेप करें
@@ -5066,6 +5072,7 @@ antiAlias	Sharp	शार्प
 	Tracking	ट्रैकिंग
 	Trackpad Gesture to Rotate View	दृश्य घुमाने के लिए ट्रैकपैड जेस्चर
 	Hold a Tool Shortcut to Use the Tool Temporarily	किसी टूल का शॉर्टकट दबाए रखकर उसे अस्थायी रूप से उपयोग करें
+	Show Bounding Box While Moving and Drawing	खिसकाते और बनाते समय बाउंडिंग बॉक्स दिखाएँ
 	Trademark Symbol	ट्रेडमार्क सिंबल
 	Transform	रूपांतरण करें
 	Transform Again	फिर से बदलना

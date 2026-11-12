@@ -1335,6 +1335,7 @@ lighting	Light	Lys
 	Rotate View Tool	Visningsroteringsværktøj
 	Trackpad Gesture to Rotate View	Rotér visning med bevægelse på pegefeltet
 	Hold a Tool Shortcut to Use the Tool Temporarily	Hold et værktøjs genvejstast nede for at bruge værktøjet midlertidigt
+	Show Bounding Box While Moving and Drawing	Vis afgrænsningsramme under flytning og tegning
 	Rotate View	Rotér visning
 	Rounded Rectangle Tool	Afrundet rektangelværktøj
 	Scale Tool	Skaleringsværktøj
@@ -3342,6 +3343,7 @@ theme	Appearance	Udseende
 	Move Mesh Points	Flyt meshpunkter
 	Move Spine Point	Flyt rygradpunkt
 	Reshape Spine Segment	Omform rygradsegment
+	Blend Easing	Blandingens acceleration
 	Reset with Mesh	Nulstil med mesh
 	Reset with Warp	Nulstil med forvrængning
 	Set Mesh Point Color	Angiv farve for meshpunkt
@@ -6089,6 +6091,11 @@ axis	Y Axis	Y-akse
 	User Brush Library 9	Brugerpenselbibliotek 9
 	User Brush Library 10	Brugerpenselbibliotek 10
 	Art Ribbons	Kunstbånd
+	Ink and Wash	Blæk og lavering
+	Tapered Ink	Tilspidset blæk
+	Brush Pen	Penselpen
+	Soft Wash	Blød lavering
+	Pooling Wash	Lavering med rand
 	Zigzag	Zigzag
 	Burst Ray	Burststråle
 	Dash Trail	Streget spor

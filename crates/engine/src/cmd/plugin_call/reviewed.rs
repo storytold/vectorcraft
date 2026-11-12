@@ -242,6 +242,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "object.blend.replaceSpine",
     "object.blend.reverseFrontToBack",
     "object.blend.reverseSpine",
+    "object.blend.setEasing",
     "object.blend.spine.addAnchor",
     "object.blend.spine.convertAnchor",
     "object.blend.spine.moveAnchor",

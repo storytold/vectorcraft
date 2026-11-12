@@ -363,6 +363,11 @@ antiAlias	Sharp	Nítid
 	Art Brush Options	Opcions del pinzell artístic
 	Art Optimized	Optimitzat per a l’art
 	Art Ribbons	Cintes d’art
+	Ink and Wash	Tinta i aiguada
+	Tapered Ink	Tinta afuada
+	Brush Pen	Retolador de pinzell
+	Soft Wash	Aiguada suau
+	Pooling Wash	Aiguada amb vora
 	Zigzag	Zigzag
 	Burst Ray	Raig d’impacte
 	Dash Trail	Estela discontínua
@@ -3608,6 +3613,7 @@ digits	Malayalam	Malaiàlam
 	Reshape Segment	Remodela el segment
 	Reshape Spine	Remodela l’espina
 	Reshape Spine Segment	Remodela el segment de l’espina
+	Blend Easing	Suavitzat de la fusió
 	Reshape Tool	Eina de remodelació
 	Reshape Type Area	Remodela l’àrea de text
 	Resize	Redimensiona
@@ -4673,6 +4679,7 @@ digits	Malayalam	Malaiàlam
 	Tracking	Espaiat
 	Trackpad Gesture to Rotate View	Gesticulació del trackpad per girar la vista
 	Hold a Tool Shortcut to Use the Tool Temporarily	Mantén premuda la drecera d’una eina per usar-la temporalment
+	Show Bounding Box While Moving and Drawing	Mostra el quadre delimitador en moure i dibuixar
 	Trademark Symbol	Símbol de marca comercial
 	Transform	Transforma
 	Transform Again	Transforma de nou

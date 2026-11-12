@@ -81,6 +81,7 @@ impl Session {
             symbol_libraries: Default::default(),
             brush_libraries: Default::default(),
             arrowheads: Default::default(),
+            shown_library_ids: Default::default(),
             libraries: Default::default(),
             pdf_preset_dir: None,
             dictionary_file: None,
