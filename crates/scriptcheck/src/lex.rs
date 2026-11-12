@@ -457,10 +457,20 @@ impl<'s> Lexer<'s> {
 
     /// A line that starts with `#` and then `rest` is a private name here, not a preprocessor line:
     /// the line is inside braces or in the code of an XML literal, and the name `rest` starts with
-    /// is not a directive's.
+    /// is not a directive's. The name runs over every character a name may hold, written out or as
+    /// an escape, so `#include$size` is not `#include`.
     pub fn private_line(&self, rest: &str) -> bool {
         let in_code = !self.braces.is_empty() || self.deeper_braces > 0 || !self.xml.is_empty();
-        let end = rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_').unwrap_or(rest.len());
+        let mut end = 0;
+        while let Some(more) = rest.get(end..) {
+            let len = match more.chars().next() {
+                Some('\\') => escape(more).filter(|&(c, _)| ident_part(c)).map(|(_, len)| len),
+                Some(c) if ident_part(c) => Some(c.len_utf8()),
+                _ => None,
+            };
+            let Some(len) = len else { break };
+            end += len;
+        }
         let name = rest.get(..end).unwrap_or_default();
         in_code && !catalog::DIRECTIVES.iter().any(|d| d.eq_ignore_ascii_case(name))
     }

@@ -492,6 +492,21 @@ fn private_name_at_line_start_is_not_a_directive() {
 }
 
 #[test]
+fn private_name_that_starts_with_a_directive_name_is_not_a_directive() {
+    let r = report(concat!(
+        "class Box {\n",
+        "  #include$size = 1;\n",
+        "  #include\u{e9} = 2;\n",
+        "  #include\\u0041 = 3;\n",
+        "  #include\\u{41} = 4;\n",
+        "  #INCLUDE 'a.jsxinc'\n",
+        "}\n",
+    ));
+    let directives: Vec<_> = r.directives.iter().map(|d| (d.name, d.line)).collect();
+    assert_eq!(directives, [("include", 6)]);
+}
+
+#[test]
 fn xml_code_uses_escaped_names() {
     let r = report("var x = <a>{\\u{61}pp.activeDocument}</a>;\nvar y = <b>\\u0061pp.z \\u{61}</b>;\n");
     let members: Vec<&str> = r.members.iter().map(|m| m.name.as_str()).collect();
