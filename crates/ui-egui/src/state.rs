@@ -9,7 +9,9 @@ use crate::theme::Brightness;
 /// Per-document view (camera).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct View {
-    /// Screen points per document point (1.0 = 100%).
+    /// The zoom (1.0 = 100%): points of the screen per document point, counted before
+    /// Preferences › User Interface › UI Scaling, which scales the interface and not the art.
+    /// [`Self::screen_zoom`] is the zoom in the interface's points.
     pub zoom: f64,
     /// Document point at the centre of the canvas.
     pub center: Point,
@@ -54,6 +56,19 @@ impl View {
             artboard: 0,
             outline: false,
         })
+    }
+
+    /// The interface's points per document point when the interface is zoomed by `ui_zoom` (egui's
+    /// zoom factor, which Preferences › User Interface › UI Scaling sets). A document point then
+    /// covers the same device pixels at every UI Scaling.
+    pub fn screen_zoom(&self, ui_zoom: f32) -> f64 {
+        self.zoom / f64::from(ui_zoom)
+    }
+
+    /// This view with its zoom in the interface's points ([`Self::screen_zoom`]), as the canvas
+    /// renders it.
+    pub(crate) fn on_screen(&self, ui_zoom: f32) -> Self {
+        Self { zoom: self.screen_zoom(ui_zoom), ..*self }
     }
 }
 

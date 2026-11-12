@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 use crate::Color;
 use crate::freeform::Freeform;
 
+mod spread;
+pub use spread::{MAX_SPREAD_LEVEL, MAX_SPREAD_RUNS, MAX_SPREAD_STOPS, Padded};
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GradientKind {
     #[default]
@@ -92,6 +95,82 @@ impl GradientMethod {
             }
         }
     }
+}
+
+/// What a linear, radial, conic or diamond gradient paints past the ends of its stops (the
+/// Gradient panel's Spread). With Repeat and Reflect, the stops run [`Gradient::repeats`] times
+/// along the vector (around the circle, for a conic), and keep going past both of its ends.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize)]
+pub enum GradientSpread {
+    /// The first and last stops' colors carry on past the ends, as gradients always did.
+    #[default]
+    Pad,
+    /// The stops start again at each end.
+    Repeat,
+    /// The stops run back the other way at each end, so every other run is mirrored.
+    Reflect,
+}
+
+impl GradientSpread {
+    /// Every spread, in the order the Gradient panel lists them.
+    pub const ALL: [GradientSpread; 3] = [GradientSpread::Pad, GradientSpread::Repeat, GradientSpread::Reflect];
+    /// Parse a spread name (`pad`, `repeat`, `reflect`; any case).
+    pub fn parse(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|m| m.label().eq_ignore_ascii_case(s))
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Pad => "Pad",
+            Self::Repeat => "Repeat",
+            Self::Reflect => "Reflect",
+        }
+    }
+    pub fn is_pad(&self) -> bool {
+        *self == Self::Pad
+    }
+}
+
+impl<'de> Deserialize<'de> for GradientSpread {
+    /// A spread name; a file's unknown name or other value reads as Pad.
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Raw {
+            Name(String),
+            Other(serde::de::IgnoredAny),
+        }
+        Ok(match Raw::deserialize(d)? {
+            Raw::Name(s) => Self::parse(&s).unwrap_or_default(),
+            Raw::Other(_) => Self::Pad,
+        })
+    }
+}
+
+/// Most times a gradient's stops run along its vector ([`Gradient::repeats`]): VectorCraft's own
+/// limit.
+pub const MAX_REPEATS: u32 = 100;
+
+fn one_repeat() -> u32 {
+    1
+}
+
+fn is_one_repeat(n: &u32) -> bool {
+    *n == 1
+}
+
+/// A file's repeat count: a number, rounded and kept within 1 to [`MAX_REPEATS`]; anything else
+/// reads as 1.
+fn lenient_repeats<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Raw {
+        Number(f64),
+        Other(serde::de::IgnoredAny),
+    }
+    Ok(match Raw::deserialize(d)? {
+        Raw::Number(n) if n.is_finite() => n.round().clamp(1.0, f64::from(MAX_REPEATS)) as u32,
+        _ => 1,
+    })
 }
 
 /// How far (display RGB, 0..1) the straight line between a Perceptual gradient's neighbouring
@@ -259,6 +338,15 @@ pub struct Gradient {
     /// How the colours between the stops are mixed (Classic unless set; written only when not).
     #[serde(default, skip_serializing_if = "GradientMethod::is_classic")]
     pub method: GradientMethod,
+    /// What it paints past the ends of its stops (Pad unless set; written only when not). A
+    /// freeform gradient has no ends and ignores it.
+    #[serde(default, skip_serializing_if = "GradientSpread::is_pad")]
+    pub spread: GradientSpread,
+    /// How many times the stops run along the vector with Repeat and Reflect, 1 to
+    /// [`MAX_REPEATS`] (use [`Self::repeat_count`]: a value set in code may be out of range); Pad
+    /// ignores it. Written only when it is not 1.
+    #[serde(default = "one_repeat", skip_serializing_if = "is_one_repeat", deserialize_with = "lenient_repeats")]
+    pub repeats: u32,
 }
 
 impl Default for Gradient {
@@ -271,7 +359,55 @@ impl Default for Gradient {
 impl Gradient {
     /// A gradient of `kind` through `stops`, with the default options.
     pub fn new(kind: GradientKind, stops: Vec<GradientStop>) -> Self {
-        Self { kind, stops, dither: false, method: GradientMethod::Classic }
+        Self { kind, stops, dither: false, method: GradientMethod::Classic, spread: GradientSpread::Pad, repeats: 1 }
+    }
+    /// [`Self::repeats`] kept within 1 to [`MAX_REPEATS`].
+    pub fn repeat_count(&self) -> u32 {
+        self.repeats.clamp(1, MAX_REPEATS)
+    }
+    /// Does it paint something other than its end colors past the ends of its stops, or run its
+    /// stops more than once: a linear, radial, conic or diamond gradient that repeats or reflects?
+    pub fn is_spread(&self) -> bool {
+        !self.spread.is_pad() && self.kind != GradientKind::Freeform
+    }
+    /// The spread and count as the gradient paints them: Pad and 1 for one that pads (whatever
+    /// count it keeps) and for a freeform one, else its spread and [`Self::repeat_count`]. Equal
+    /// for two gradients whose spreads paint alike.
+    pub fn painted_spread(&self) -> (GradientSpread, u32) {
+        if self.is_spread() { (self.spread, self.repeat_count()) } else { (GradientSpread::Pad, 1) }
+    }
+    /// The position (0..1) along the stops that gradient parameter `t` (0 at the start of the
+    /// vector, 1 at its end; [`GradientGeom::param_at`]) samples: `t` itself with Pad (the stops
+    /// clamp it), else `t` × [`Self::repeat_count`] wrapped back into 0..1, every other run
+    /// mirrored with Reflect. A `t` that is not finite is returned as it is.
+    pub fn spread_param(&self, t: f64) -> f64 {
+        self.spreader()(t)
+    }
+    /// How many wedges a conic gradient is written as ([`GradientGeom::conic_wedges`]) where
+    /// `per_turn` would do for stops that run once around: that many for each time the stops run
+    /// around, at most [`MAX_CONIC_WEDGES`]. Sample each wedge at [`Self::spread_param`] of its
+    /// turn.
+    pub fn conic_wedge_count(&self, per_turn: usize) -> usize {
+        let runs = if self.is_spread() { self.repeat_count() as usize } else { 1 };
+        per_turn.saturating_mul(runs).clamp(1, MAX_CONIC_WEDGES)
+    }
+    /// [`Self::spread_param`] as a function that holds no borrow of the gradient.
+    pub fn spreader(&self) -> impl Fn(f64) -> f64 + Copy + use<> {
+        let spread = if self.is_spread() { self.spread } else { GradientSpread::Pad };
+        let n = f64::from(self.repeat_count());
+        move |t: f64| {
+            if !t.is_finite() {
+                return t;
+            }
+            match spread {
+                GradientSpread::Pad => t,
+                GradientSpread::Repeat => (t * n).rem_euclid(1.0),
+                GradientSpread::Reflect => {
+                    let w = (t * n).rem_euclid(2.0);
+                    if w > 1.0 { 2.0 - w } else { w }
+                }
+            }
+        }
     }
     /// Colour and opacity at `t` (honours midpoints and the method).
     pub fn sample(&self, t: f32) -> (Color, f32) {
@@ -544,10 +680,18 @@ impl Gradient {
             GradientStop { opacity, ..GradientStop::new(offset, color) }
         };
         let d = to - from;
-        let mut stops = vec![stop(0.0, from)];
+        let expanded = self.expanded_stops();
+        // Where stops share the offset `from` (a sharp step, as where the runs of a repeating
+        // gradient meet), the piece starts with the color after the step; sampling gives the one
+        // before it.
+        let first = match expanded.iter().rev().find(|(t, ..)| *t == from) {
+            Some(&(_, color, opacity)) if d > 1e-6 => GradientStop { opacity, ..GradientStop::new(0.0, color) },
+            _ => stop(0.0, from),
+        };
+        let mut stops = vec![first];
         if d > 1e-6 {
             stops.extend(
-                self.expanded_stops()
+                expanded
                     .into_iter()
                     .filter(|(t, ..)| *t > from && *t < to)
                     .map(|(t, color, opacity)| GradientStop { opacity, ..GradientStop::new((t - from) / d, color) }),
@@ -954,6 +1098,35 @@ impl GradientGeom {
             self.set_focal(Some(m * q));
         }
     }
+    /// The placement whose level `t` is this one's level `k`·`t` (`k` > 0), for a linear, radial or
+    /// diamond gradient: the vector `k` times as long from the same start, and for an off-center
+    /// radial the extent ellipse scaled `k` times about the focal point, which stays. A conic keeps
+    /// its placement (its level is a turn).
+    pub fn levels_scaled(&self, kind: GradientKind, k: f64) -> GradientGeom {
+        if kind == GradientKind::Conic || !(k.is_finite() && k > 0.0) {
+            return *self;
+        }
+        let u = self.end - self.start;
+        let mut out = *self;
+        if kind == GradientKind::Radial
+            && let (Some(f), Some(frame)) = (self.focal, self.unit_frame())
+        {
+            // Level t of an off-center radial is the extent ellipse scaled by t about the line
+            // from the focal point to the center: the new center sits on that line, `k` times as
+            // far from the focal point.
+            let f = (frame.inverse() * f).to_vec2();
+            out.start = frame * (f * (1.0 - k)).to_point();
+        }
+        out.end = out.start + u * k;
+        out
+    }
+
+    /// The placement over which one run of the stops of a gradient that repeats `n` times along
+    /// its vector lies ([`Self::levels_scaled`] by 1/`n`).
+    pub fn period(&self, kind: GradientKind, n: u32) -> GradientGeom {
+        self.levels_scaled(kind, 1.0 / f64::from(n.max(1)))
+    }
+
     pub fn angle_deg(&self) -> f64 {
         let v = self.end - self.start;
         (-v.y).atan2(v.x).to_degrees()
@@ -1148,12 +1321,13 @@ impl GradientPaint {
         inks: bool,
     ) -> impl Iterator<Item = [u8; N]> + use<N> {
         let (kind, geom, dither) = (self.gradient.kind, self.resolve(bounds), fill && self.gradient.dither);
+        let spread = self.gradient.spreader();
         let (cw, ch) = (area.width() / f64::from(cols.max(1)), area.height() / f64::from(rows.max(1)));
         let (x0, y0) = (area.x0, area.y0);
         let [across, down] = cells.map(|r| u32::from(r.start)..u32::from(r.end));
         down.flat_map(move |j| across.clone().map(move |i| (i, j))).map(move |(i, j)| {
             let p = Point::new(x0 + (f64::from(i) + 0.5) * cw, y0 + (f64::from(j) + 0.5) * ch);
-            let c = ramp.at(geom.param_at(kind, p) as f32);
+            let c = ramp.at(spread(geom.param_at(kind, p)) as f32);
             std::array::from_fn(|k| {
                 if k + 1 == N {
                     return (c[k].clamp(0.0, 1.0) * 255.0).round() as u8;
