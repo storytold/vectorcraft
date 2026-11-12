@@ -32,6 +32,9 @@ pub(crate) struct Unpacked<'a> {
     max_blobs: u64,
     /// Most bytes unpacked to find them in a streamed file ([`MAX_WORK`] unless capped).
     max_work: u64,
+    /// Must a streamed file's data after the JSON end within `max_blobs` bytes
+    /// ([`Self::within_capped`])?
+    capped: bool,
 }
 
 enum Json<'a> {
@@ -72,16 +75,18 @@ impl<'a> Unpacked<'a> {
     /// a document several times its size, and the cap is what keeps that off the address space
     /// (#3587).
     fn within(bytes: &'a [u8], max_json: u64) -> Result<Self, FormatError> {
-        Self::within_capped(bytes, max_json, MAX_UNPACKED, MAX_BLOBS)
+        let (json, tail) = Self::open(bytes, max_json, MAX_UNPACKED)?;
+        Ok(Self { json, tail, max_blobs: MAX_BLOBS, max_work: max_json.saturating_add(MAX_BLOBS).min(MAX_WORK), capped: false })
     }
 
     /// [`Self::within`], with a compressed file that lacks the marker after its JSON (unpacked
     /// whole) capped at `max_whole` bytes instead of [`MAX_UNPACKED`], the entries after the JSON
     /// at `max_blobs` bytes together instead of [`MAX_BLOBS`], and the bytes unpacked to find them
-    /// at `max_json` and `max_blobs` together instead of [`MAX_WORK`].
+    /// at `max_json` and `max_blobs` together instead of [`MAX_WORK`]. A streamed file whose data
+    /// after the JSON unpacks to more than `max_blobs` bytes is refused when its entries are read.
     pub(crate) fn within_capped(bytes: &'a [u8], max_json: u64, max_whole: u64, max_blobs: u64) -> Result<Self, FormatError> {
         let (json, tail) = Self::open(bytes, max_json, max_whole)?;
-        Ok(Self { json, tail, max_blobs, max_work: max_json.saturating_add(max_blobs).min(MAX_WORK) })
+        Ok(Self { json, tail, max_blobs, max_work: max_json.saturating_add(max_blobs).min(MAX_WORK), capped: true })
     }
 
     /// The JSON of `bytes` and where the data after it is, within `max_json` and `max_whole`.
@@ -160,7 +165,7 @@ impl<'a> Unpacked<'a> {
 
     /// [`Self::entries`], unpacking at most `work` bytes of a streamed file to find them.
     fn entries_within(self, wanted: &[[u64; 2]], work: u64) -> Result<Vec<Entry>, FormatError> {
-        let max_blobs = self.max_blobs;
+        let (max_blobs, capped) = (self.max_blobs, self.capped);
         let mut out: Vec<Entry> = vec![None; wanted.len()];
         // Data in memory is read through the crate's `Entries`: entries naming the same bytes
         // share them, and the bytes copied stay within the data.
@@ -214,9 +219,10 @@ impl<'a> Unpacked<'a> {
                     }
                     done.insert(w, slot.clone());
                 }
-                // To the end, so the stream's checksum is verified as before.
-                s.left = max_blobs;
-                s.skip(max_blobs)?;
+                // To the end, so the stream's checksum is verified as before. A capped file's data
+                // must end within its cap from its start: one byte more is over the budget.
+                s.left = if capped { max_blobs.checked_sub(s.pos).ok_or(FormatError::TooBig)? } else { max_blobs };
+                s.skip(if capped { s.left.saturating_add(1) } else { max_blobs })?;
             }
         }
         Ok(out)
@@ -339,11 +345,14 @@ mod tests {
         assert_eq!(read(&[[1 << 40, 1]], 1 << 20).unwrap(), vec![None]);
         assert_eq!(Unpacked::new(&file).unwrap().entries(&[[0, 4096]]).unwrap(), vec![Some(Arc::new(tail.clone()))]);
         // A capped file finds its entries within its own caps: a small entry far into the data,
-        // or entries larger than the cap together, are refused.
-        let capped = || Unpacked::within_capped(&file, 64, MAX_UNPACKED, 16).unwrap();
-        assert_eq!(capped().entries(&[[0, 16]]).unwrap(), vec![Some(Arc::new(tail[..16].to_vec()))]);
-        assert!(matches!(capped().entries(&[[4000, 1]]), Err(FormatError::TooBig)));
-        assert!(matches!(capped().entries(&[[0, 17]]), Err(FormatError::TooBig)));
+        // entries larger than the cap together, or data that goes on past the cap after the
+        // entries, are refused.
+        let capped = |cap: u64| Unpacked::within_capped(&file, 64, MAX_UNPACKED, cap).unwrap();
+        assert_eq!(capped(4096).entries(&[[0, 16]]).unwrap(), vec![Some(Arc::new(tail[..16].to_vec()))]);
+        assert!(matches!(capped(4095).entries(&[[0, 16]]), Err(FormatError::TooBig)));
+        assert!(matches!(capped(4095).entries(&[[4095, 1]]), Err(FormatError::TooBig)));
+        assert!(matches!(capped(16).entries(&[[4000, 1]]), Err(FormatError::TooBig)));
+        assert!(matches!(capped(16).entries(&[[0, 17]]), Err(FormatError::TooBig)));
         assert_eq!(Unpacked::new(&file).unwrap().entries(&[[4000, 1]]).unwrap(), vec![Some(Arc::new(vec![tail[4000]]))]);
     }
 

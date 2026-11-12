@@ -504,8 +504,8 @@ pub fn load_file(bytes: &[u8]) -> Result<NativeFile, FormatError> {
     load_file_within(bytes, vectorcraft_doc::node::MAX_READ_NODES, vectorcraft_doc::node::MAX_BUFFERED_VALUES)
 }
 
-/// [`load_file`] with a compressed file refused when its JSON, or the data after it that the
-/// document uses (images, profiles), unpacks to more than `max` bytes (at most [`MAX_JSON`] and
+/// [`load_file`] with a compressed file refused when its JSON, or the data after it (images,
+/// profiles, the preview), unpacks to more than `max` bytes (at most [`MAX_JSON`] and
 /// [`MAX_BLOBS`]), or, when it lacks the marker after its JSON, when all of it does.
 pub fn load_file_capped(bytes: &[u8], max: u64) -> Result<NativeFile, FormatError> {
     let file = unpack::Unpacked::within_capped(bytes, max.min(MAX_JSON), max.min(MAX_UNPACKED), max.min(MAX_BLOBS))?;
