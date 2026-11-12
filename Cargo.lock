@@ -6592,7 +6592,7 @@ dependencies = [
  "chrono",
  "getrandom 0.4.3",
  "proptest",
- "unicode-general-category",
+ "unicode-properties",
 ]
 
 [[package]]
@@ -6728,7 +6728,7 @@ name = "vectorcraft-scriptcheck"
 version = "0.24.0"
 dependencies = [
  "proptest",
- "unicode-general-category",
+ "unicode-properties",
 ]
 
 [[package]]

@@ -278,12 +278,14 @@ fn unescaped(src: &str) -> String {
 fn names_are_made_of_the_unicode_identifier_characters() {
     // U+2118 (Other_ID_Start) starts a name, and U+203F (connector punctuation), U+00B7
     // (Other_ID_Continue) and the zero width non-joiner and joiner continue one.
-    for name in ["\u{2118}a", "a\u{203F}b", "a\u{B7}b", "a\u{200C}b", "a\u{200D}b", "_\u{2118}", "$_a1", "\u{E9}t\u{E9}"] {
+    // Unicode 17.0 assigned the letter U+088F and the combining mark U+1ACF.
+    for name in ["\u{2118}a", "a\u{203F}b", "a\u{B7}b", "a\u{200C}b", "a\u{200D}b", "_\u{2118}", "$_a1", "\u{E9}t\u{E9}", "\u{88F}", "_\u{1ACF}"] {
         assert_eq!(tokens(name), [(T::Ident, name)], "{name:?}");
     }
     for (src, want) in [
         // Characters that only continue a name, and digits, don't start one.
         ("\u{203F}a", [(T::Other, "\u{203F}"), (T::Ident, "a")]),
+        ("\u{1ACF}a", [(T::Other, "\u{1ACF}"), (T::Ident, "a")]),
         ("\u{B7}a", [(T::Other, "\u{B7}"), (T::Ident, "a")]),
         ("\u{200C}a", [(T::Other, "\u{200C}"), (T::Ident, "a")]),
         ("0a", [(T::Number, "0"), (T::Ident, "a")]),
@@ -318,8 +320,11 @@ fn an_escape_stands_for_a_character_only_where_a_name_may_hold_it() {
         ("a\\u200Db", "a\u{200D}b"),
         ("a\\u0030", "a0"),
         ("\\u0024\\u005F", "$_"),
+        ("\\u088F", "\u{88F}"),
+        ("_\\u1ACF", "_\u{1ACF}"),
         // Not at the start of a name.
         ("\\u0030abc", "\\u0030abc"),
+        ("\\u1ACFa", "\\u1ACFa"),
         ("\\u203Fa", "\\u203Fa"),
         ("\\u00B7a", "\\u00B7a"),
         // In no name.
