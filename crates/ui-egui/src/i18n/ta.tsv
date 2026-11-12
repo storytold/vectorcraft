@@ -8475,3 +8475,26 @@ theme	Appearance	தோற்றப்பாணி
 	Center on Bottom	கீழ்ப்புறத்தில் மையப்படுத்து
 @msg	select type on a closed path	மூடிய பாதையிலுள்ள உரையைத் தேர்ந்தெடுக்கவும்
 @msg	type on a path with no length or no height cannot be centered: {flat}	நீளமோ உயரமோ இல்லாத பாதையிலுள்ள உரையை மையப்படுத்த முடியாது: {flat}
+	Spot Color Objects	புள்ளி நிறப் பொருட்கள்
+	Repeats	மீள்செய்கைகள்
+	Weed Box and Lines…	களைநீக்கப் பெட்டியும் கோடுகளும்…
+	Weed Box and Lines	களைநீக்கப் பெட்டியும் கோடுகளும்
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	அதற்குப் பதிலாக {base} (U+{code}) ஐச் செருக இருமுறை சொடுக்கவும்: காட்சி வடிவம் இணையாது, எழுத்து இணையும்.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	காட்சி வடிவத்துக்குப் பதிலாக {base} (U+{code}) செருகப்பட்டது: எழுத்துரு அதை நிலைக்கேற்ப அருகிலுள்ள எழுத்துகளுடன் இணைக்கும்.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	இங்கே எந்த OpenType அம்சமும் இந்த வரியுருவை வரையாது, எனவே அது எழுத்தின் வரியுருவை மாற்றுகிறது; அருகிலுள்ள எழுத்துகளுடன் இணையாமல் போகலாம்.
+	Pad	நீட்டு
+	Select one character with the Type tool first.	முதலில் உரைக் கருவியால் ஓர் எழுத்தைத் தேர்ந்தெடுக்கவும்.
+	at the end of a word	சொல்லின் இறுதியில்
+	at the start of a word	சொல்லின் தொடக்கத்தில்
+	in the middle of a word	சொல்லின் நடுவில்
+	standing alone	தனியாக
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} என்பது {place} வரும் {base} (U+{base_code}) இன் வடிவம்; உங்கள் தேர்வு {sel} (U+{code}).
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} என்பது {font} இன் வரியுரு; தேர்ந்தெடுத்த உரை அமைந்துள்ள எழுத்துருவின் ({text_font}) வரியுரு அல்ல.
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} என்பது, அதன் சொல்லில் உள்ளபடி {sel} (U+{code}) இன் மாற்று வடிவம் அல்ல.
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 1 முதல் {MAX_REPEATS} வரையிலான முழு எண்ணாக இருக்க வேண்டும்
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` நேரியல், ஆரவடிவ, கூம்பு, சாய்சதுரச் சாய்வுகளுக்கு மட்டுமே பொருந்தும்
+@msg	`spread` must be pad, repeat or reflect	`spread` pad, repeat அல்லது reflect ஆக இருக்க வேண்டும்
+@msg	command `{id}` is not available right now	`{id}` கட்டளை இப்போது கிடைக்கவில்லை
+@msg	width and height must be more than 0 and at most {limit}	width, height 0 ஐ விட அதிகமாகவும் அதிகபட்சம் {limit} ஆகவும் இருக்க வேண்டும்
+	Pattern Objects	வடிவமாதிரிப் பொருட்கள்
+	Gradient Objects	சாய்வுப் பொருட்கள்
