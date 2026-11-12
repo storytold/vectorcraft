@@ -94,6 +94,8 @@ fn lengths_of(id: &str) -> Lengths {
         "stylize.glowingEdges" => always(&["edgeWidth", "smoothness"]),
         "brushStrokes.accentedEdges" => always(&["edgeWidth"]),
         "artistic.paletteKnife" => always(&["strokeSize"]),
+        "artistic.coloredPencil" => always(&["pencilWidth"]),
+        "artistic.paintDaubs" => always(&["brushSize"]),
         "brushStrokes.angledStrokes" | "brushStrokes.crosshatch" | "brushStrokes.inkOutlines" => always(&["strokeLength"]),
         "brushStrokes.spatter" => always(&["sprayRadius"]),
         "brushStrokes.sprayedStrokes" => always(&["strokeLength", "sprayRadius"]),
@@ -387,7 +389,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "artistic.paintDaubs",
             "Paint Daubs…",
             ARTISTIC,
-            "{brushSize: 1..50 (10; dab centres farther apart), sharpness: 0..40 (25; harder dab edges), brushType: \"simple\"|\"lightRough\"|\"darkRough\"|\"wideSharp\"|\"wideBlurry\"|\"sparkle\" (\"simple\")} repaints the object with thick round brush dabs in the local colours, keeping its coverage. Original visual approximation; chosen VectorCraft defaults.",
+            "{brushSize: 1..50 (10; spacing of the dab centers in document units),sharpness: 0..40 (25; harder dab edges), brushType: \"simple\"|\"lightRough\"|\"darkRough\"|\"wideSharp\"|\"wideBlurry\"|\"sparkle\" (\"simple\")} repaints the object with thick round brush dabs in the local colours, keeping its coverage. Original visual approximation; chosen VectorCraft defaults.",
             json!({"brushSize": 10.0, "sharpness": 25.0, "brushType": "simple"}),
         ),
         r(

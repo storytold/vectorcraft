@@ -1263,9 +1263,13 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
         let params = merged_params(&fx[at].id, &fx[at].params);
         // Where each effect the piece keeps sits among the item's effects.
         let kept: Vec<usize> = (0..at).filter(|&k| !is_geometry(&fx[k].id)).chain(at + 1..fx.len()).collect();
+        // A Transform effect after this one that makes copies or moves at random holds the raster
+        // effects before this one back from every Transform effect ([`crate::raster::followed`]).
+        let held_later = fx.get(at + 1..).unwrap_or_default().iter().any(crate::raster::holds_back);
         // The effects before the Transform effect that it keeps, each raster effect following the
-        // geometry effects before it ([`crate::raster::without_geometry`]).
-        let kept_before = crate::without_geometry(before);
+        // geometry effects before it ([`crate::raster::without_geometry`]) unless held back.
+        let kept_before: Vec<Effect> =
+            if held_later { before.iter().filter(|e| !is_geometry(&e.id)).cloned().collect() } else { crate::without_geometry(before) };
         if let Some(plugin) = painted_plugin(&fx[at]) {
             let mut it = item.clone();
             let rest: Vec<Effect> = kept_before.iter().chain(&fx[at + 1..]).cloned().collect();
@@ -1308,7 +1312,7 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
         let (made, moved) = transform_leaf(&mut p, &g, map, copies, options, room);
         *used = used.plus(made);
         let from = crate::raster::held_back(before);
-        if moved {
+        if moved && !held_later {
             follow_piece(&mut p, kept_before.get(from..).unwrap_or_default(), from, &fx[at]);
         }
         transform_piece(&mut p, (ctx.seed, i, &kept), crate::raster::held_back(&fx[..=at]), limit, used, doc);
@@ -1333,7 +1337,8 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
 /// A live-effect plug-in that paints what it returns ([`painted_plugin`]) makes each path one path
 /// for each piece it returns ([`paint_piece`]). The raster effects before a Transform effect
 /// follow it ([`follow_piece`]), except the first `held` effects, which a Transform effect before
-/// the piece's effects that makes copies or moves at random holds back. The geometry effects then
+/// the piece's effects that makes copies or moves at random holds back, and the effects before
+/// such a Transform effect among the piece's effects. The geometry effects then
 /// leave the fills and strokes; their other effects stay. The paths keep to `max` together with
 /// the rest of the art (`used`), and the swatches and patterns painted pieces name must be in
 /// `doc`. `(seed, source, kept)`: the object's seed, the index in the object's appearance of the
@@ -1346,7 +1351,14 @@ fn transform_piece(p: &mut Node, (seed, source, kept): (u64, usize, &[usize]), h
             count = count.max(item.effects().len());
         }
     });
+    // The effects before a Transform effect among the piece's effects that makes copies or moves at
+    // random are held back from the Transform effects before it too.
     let mut held = held;
+    for_each_leaf(p, &mut |l| {
+        if let Some(last) = l.appearance.items.first().and_then(|item| item.effects().iter().rposition(crate::raster::holds_back)) {
+            held = held.max(last);
+        }
+    });
     for j in 0..count {
         let Some(bounds) = p.geometric_bounds() else { break };
         let from = held.min(j);
@@ -1397,7 +1409,7 @@ fn transform_piece(p: &mut Node, (seed, source, kept): (u64, usize, &[usize]), h
             follow_piece(leaf, was, from, &e);
         });
         if holds {
-            held = j;
+            held = held.max(j);
         }
     }
     for_each_leaf(p, &mut |leaf| {

@@ -961,10 +961,17 @@ fn group_solid_art(n: &Node) -> Option<Node> {
 
 /// `effects` without the 3D effect at `index` and the geometry effects before it, which shape the
 /// art it projects. Each raster effect before it follows the Transform effects among those
-/// ([`crate::without_geometry`]); the effects after it stay as they are.
+/// ([`crate::without_geometry`]), unless a Transform effect after it makes copies or moves at
+/// random ([`crate::raster::holds_back`]); the effects after it stay as they are.
 pub(crate) fn past_effect(effects: &[Effect], index: usize) -> Vec<Effect> {
     let (before, after) = effects.split_at(index.min(effects.len()));
-    crate::without_geometry(before).into_iter().chain(after.iter().skip(1).cloned()).collect()
+    let after = after.get(1..).unwrap_or_default();
+    let kept: Vec<Effect> = if after.iter().any(crate::raster::holds_back) {
+        before.iter().filter(|e| !is_geometry(&e.id)).cloned().collect()
+    } else {
+        crate::without_geometry(before)
+    };
+    kept.into_iter().chain(after.iter().cloned()).collect()
 }
 
 /// One solid of a 3D object as a mesh, with the color it is painted.

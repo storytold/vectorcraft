@@ -265,6 +265,54 @@ fn glows_blurs_and_feathers_scale_with_the_transform_after_them() {
 }
 
 #[test]
+fn pixel_filter_sizes_scale_with_the_transform_after_them() {
+    let effects = [
+        fx("artistic.coloredPencil", json!({"pencilWidth": 5})),
+        fx("artistic.paintDaubs", json!({"brushSize": 10})),
+        transform(json!({"scaleH": 200, "scaleV": 200})),
+    ];
+    let drawn = raster_effects(&effects);
+    assert!(matches!(drawn.first(), Some(RasterFx::Pixel(crate::PixelFx::ColoredPencil { width, .. })) if (width - 10.0).abs() < 1e-9), "{drawn:?}");
+    assert!(matches!(drawn.get(1), Some(RasterFx::Pixel(crate::PixelFx::PaintDaubs { size, .. })) if (size - 20.0).abs() < 1e-9), "{drawn:?}");
+}
+
+/// A Transform effect after a 3D effect that makes copies or moves at random holds back the shadow
+/// before the 3D effect, as it does without the 3D effect.
+#[test]
+fn a_copying_transform_after_3d_holds_the_shadow_back() {
+    for later in [json!({"copies": 1}), json!({"scaleH": 150, "scaleV": 150, "random": true})] {
+        let plain = [shadow(10.0, 0.0, 0.0), transform(json!({"scaleH": 200, "scaleV": 200})), transform(later.clone())];
+        assert!(close(drawn_shadow(&plain), (10.0, 0.0, 0.0)), "{later}: {:?}", drawn_shadow(&plain));
+        for three_d in [crate::EXTRUDE, crate::REVOLVE] {
+            let art = |n: &Node| if three_d == crate::EXTRUDE { crate::solid_art(n) } else { crate::revolve_art(n) };
+            let effects = vec![plain[0].clone(), plain[1].clone(), fx(three_d, json!({})), plain[2].clone()];
+            let projected = art(&square(16, effects)).unwrap();
+            let drawn = shadows_in(&projected);
+            assert!(!drawn.is_empty() && near(&drawn, &vec![(10.0, 0.0); drawn.len()]), "{three_d} {later}: {drawn:?}");
+        }
+    }
+}
+
+/// In a fill's own effects, a Transform effect that makes copies after a Transform effect with
+/// Transform Patterns on holds back the shadow before both, and before a Transform effect between
+/// them.
+#[test]
+fn a_fills_copying_transform_holds_back_the_shadow_before_an_earlier_transform() {
+    let patterns = transform(json!({"scaleH": 200, "scaleV": 200, "patterns": true}));
+    let copies = transform(json!({"copies": 1}));
+    let lists = [
+        vec![shadow(10.0, 0.0, 0.0), patterns.clone(), copies.clone()],
+        vec![shadow(10.0, 0.0, 0.0), patterns, transform(json!({"rotate": 90})), copies],
+    ];
+    for effects in lists {
+        let n = fill_square(17, effects.clone());
+        let art = crate::reshape(None, &n, None).unwrap();
+        let drawn = shadows_in(&art);
+        assert!(!drawn.is_empty() && near(&drawn, &vec![(10.0, 0.0); drawn.len()]), "{} effects: {drawn:?}", effects.len());
+    }
+}
+
+#[test]
 fn expanded_and_exported_objects_keep_the_shadow_the_canvas_draws() {
     let effects = vec![shadow(10.0, 10.0, 4.0), transform(json!({"scaleH": 200, "scaleV": 200}))];
     // A path drawn through its art (Scale Strokes & Effects on), expanded.
