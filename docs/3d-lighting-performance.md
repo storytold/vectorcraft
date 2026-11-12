@@ -1,6 +1,6 @@
 # 3D lighting performance
 
-Measured 2026-10-17 for PR #2706 on one macOS machine.
+Measured 2026-10-17 for PR #2706 on one macOS machine (an Apple M1 Pro, below); the round seam joins on 2026-11-12 on another (an Apple M4 Pro, in their own section).
 
 ## Method
 
@@ -34,6 +34,8 @@ vectorcraft-cli perf
 
 ## Measurements
 
+Only the legacy white-light row and the white-light comparison below are affected by the round seam joins of 2026-11-12: they were measured on 2026-10-17, and colored-light seams were already round; see [Round seam joins](#round-seam-joins).
+
 Milliseconds per frame, medians of three five-frame averages. `8` is the CLI default thread count on this machine; `0` selects the single-thread renderer.
 
 | Inflate scene | Before, 8 | After, 8 | Before, 0 | After, 0 |
@@ -66,10 +68,42 @@ The colored fixture uses the same projected mesh before and after. The solid-fil
 
 For a smooth colored solid fill, all facets share one compound coverage clip and three isolated channel groups. Each channel has an opaque black backdrop; Screen combines the disjoint RGB channels and Multiply applies the source color. Face order is retained in each channel. Surface opacity and outer coverage apply once. The group/clip counts are independent of triangle count, and export remains vector artwork.
 
-Source gradients retain their independently placed per-facet vector compositor. They remain a more expensive case. Patterns retain their neutral shading approximation. White-light Inflate uses the original polygon shading, paint composition and default seam joins; the seam width retains its 0.05 to 0.75 pt bounds.
+Source gradients retain their independently placed per-facet vector compositor. They remain a more expensive case. Patterns retain their neutral shading approximation. White-light Inflate uses the original polygon shading and paint composition; the seam width retains its 0.05 to 0.75 pt bounds. Its seams kept the default Miter Join until 2026-11-12, when every 3D seam took round joins (a mitered seam drew thorns past facets seen almost edge-on), so white-light output is no longer identical to the comparison below.
 
 Geometry/effects tests cover legacy polygons and seam bounds, shared smooth normals, finite ramps, holes and constant group/clip counts. Engine tests cover the batched SVG round trip, vector PDF, expansion, undo, compound holes and surface opacity.
 
 ## Legacy white-light comparison
 
-Four original synthetic scenes were exported at 1200 x 1200 from unchanged main `f7de3d6a` and the updated implementation. The PNG files match byte for byte in all four cases: the legacy white-lit ellipse above; the same ellipse with both sides, hollow cap, twist 60 degrees, taper 70%, perspective 80 degrees and view Y rotation 145 degrees; an unshaded ellipse; and the transparent source gradient above under the legacy white light. The command recipe was also checked against the measured colored fixture's image pixels.
+Four original synthetic scenes were exported at 1200 x 1200 from unchanged main `f7de3d6a` and the updated implementation. The PNG files matched (2026-10-17) byte for byte in all four cases: the legacy white-lit ellipse above; the same ellipse with both sides, hollow cap, twist 60 degrees, taper 70%, perspective 80 degrees and view Y rotation 145 degrees; an unshaded ellipse; and the transparent source gradient above under the legacy white light. The command recipe was also checked against the measured colored fixture's image pixels.
+
+## Round seam joins
+
+Measured once, on 2026-11-12, on another machine (an Apple M4 Pro with 14 cores) that was not idle: its one-minute load average was 6 to 13, so these are one loaded run, not the idle measurements above. Two `vectorcraft-cli` builds, each in release (`cargo build --release -p vectorcraft-cli`): main at `6d6bbff53`, and that commit with the round seam joins, run in turn, three times each. `bench` fits the artboard to 95% of 2880 x 1800 pixels, draws one frame to warm each renderer and reports the average of the frames after it: `threads 8` with the renderer's default workers (one per core it may use, up to 8, one core left free), `threads 0` on the calling thread alone. A cold frame is a whole `run` that opens the scene, builds its 3D art and draws it once.
+
+White light: extruded type with a cove bevel, an Inflate, an Extrude & Bevel (Classic) star with a classic bevel and a Revolve, no strokes (6,283 nodes drawn). The median of three runs of 20 frames, on 8 threads and on one: main 8.0 ms and 18.3 ms; with the round joins 7.5 ms and 17.7 ms. Cold frames took 0.08 s of processor time on each. The differences are within noise for one loaded run. Not measured: `vectorcraft-cli perf`, the legacy white-light Inflate row above (still the 2026-10-17 figures), frames whose 3D art is rebuilt (while dragging a 3D slider, say) apart from the cold run, and SVG/PDF exports.
+
+```
+{"command":"file.new","params":{"width":800,"height":600}}
+{"command":"text.create","params":{"x":40,"y":120,"text":"SAMPLE TYPE","size":64,"font":"Source Sans 3","color":"#3366cc"}}
+{"command":"effect.apply","params":{"effect":"threeD.extrude","item":null,"params":{"depth":40,"rotationX":-35,"rotationY":25,"taper":47.5,"bevel":"cove","bevelHeight":2}}}
+{"command":"path.create","params":{"d":"M100 300C100 245 145 200 200 200C255 200 300 245 300 300C300 355 255 400 200 400C145 400 100 355 100 300Z"}}
+{"command":"paint.setFill","params":{"color":"#cc6633"}}
+{"command":"paint.setStroke","params":{"none":true}}
+{"command":"effect.apply","params":{"effect":"threeD.inflate","item":null,"params":{}}}
+{"command":"path.create","params":{"d":"M400 200L440 280L520 290L460 340L480 420L400 380L320 420L340 340L280 290L360 280Z"}}
+{"command":"paint.setFill","params":{"color":"#33aa66"}}
+{"command":"paint.setStroke","params":{"none":true}}
+{"command":"effect.apply","params":{"effect":"threeD.classicExtrude","item":null,"params":{"depth":50,"bevel":"classic","bevelHeight":4,"rotationX":80,"rotationY":10}}}
+{"command":"path.create","params":{"d":"M600 200L640 200L660 300L640 400L600 400Z"}}
+{"command":"paint.setFill","params":{"color":"#aa33aa"}}
+{"command":"paint.setStroke","params":{"none":true}}
+{"command":"effect.apply","params":{"effect":"threeD.revolve","item":null,"params":{}}}
+```
+
+The type is set in Source Sans 3, which a build has only with craft-fonts (`CRAFT_FONTS_DIR`, see `docs/development.md` › Fonts); without it the type falls back to another face. To reproduce, save the commands as `scene.jsonl` and, with each build:
+
+```
+vectorcraft-cli run --commands scene.jsonl --export scene.vectorcraft
+vectorcraft-cli bench scene.vectorcraft --iters 20
+/usr/bin/time -p vectorcraft-cli run --in scene.vectorcraft --export scene.png
+```

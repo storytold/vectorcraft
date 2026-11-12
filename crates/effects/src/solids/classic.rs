@@ -218,18 +218,23 @@ pub(crate) fn surface(n: &Node, facets: Vec<Facet>, source: &Paint, opacity: f32
                 // Unshaded (No Shading, no shading color, or a face in full light) with no
                 // highlight: the paint itself, its color space and swatch kept.
                 Some(_) if (tone >= 1.0 || shade.is_none()) && spec <= 0.0 => {
-                    vec![AppearanceItem::Fill(FillLayer::new(paint.clone())), AppearanceItem::Stroke(StrokeLayer::new(paint.clone(), seam))]
+                    vec![
+                        AppearanceItem::Fill(FillLayer::new(paint.clone())),
+                        AppearanceItem::Stroke(crate::lighting::seam_stroke(paint.clone(), seam)),
+                    ]
                 }
                 Some(c) => {
                     let fill = Paint::solid(shaded(c, tone, spec, shade));
-                    vec![AppearanceItem::Fill(FillLayer::new(fill.clone())), AppearanceItem::Stroke(StrokeLayer::new(fill, seam))]
+                    vec![AppearanceItem::Fill(FillLayer::new(fill.clone())), AppearanceItem::Stroke(crate::lighting::seam_stroke(fill, seam))]
                 }
                 // Gradients and patterns keep their paint, darkened by a layer of the shading color
                 // and lightened by one of white. As with the other 3D effects' pattern shadow, the
                 // layers cover the whole face, transparent pattern cells included.
                 None => {
-                    let mut items =
-                        vec![AppearanceItem::Fill(FillLayer::new(paint.clone())), AppearanceItem::Stroke(StrokeLayer::new(paint.clone(), seam))];
+                    let mut items = vec![
+                        AppearanceItem::Fill(FillLayer::new(paint.clone())),
+                        AppearanceItem::Stroke(crate::lighting::seam_stroke(paint.clone(), seam)),
+                    ];
                     for (color, share) in [(shade, 1.0 - tone), (Some(Color::WHITE), spec)] {
                         if let Some(color) = color.filter(|_| share > 0.0) {
                             let mut layer = FillLayer::new(Paint::solid(color));
