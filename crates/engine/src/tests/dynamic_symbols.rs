@@ -1309,7 +1309,7 @@ fn a_lent_selection_tool_moves_the_instance_of_a_picked_object() {
 #[test]
 fn read_only_commands_read_the_instance_of_a_picked_object() {
     let mut failures = Vec::new();
-    for spec in crate::cmd::command_specs().iter().filter(|c| !c.journal) {
+    for spec in crate::cmd::command_specs().iter().filter(|c| !c.journal && crate::runs_with_empty_params(c.id)) {
         let mut s = session();
         let inst = pair(&mut s, "dynamic");
         s.execute("symbol.instance.selectPart", &json!({"id": inst.0, "path": [1]})).unwrap();

@@ -42,6 +42,12 @@ pick that branch for a full run. Run on any other branch, it is a dry run: the L
 FreeBSD and web jobs build and upload their artifacts, the environment refuses the signing jobs,
 and no draft release is created.
 
+Flatpak permission repairs need one update through the existing host-side installation method.
+After that update, Help > Check for Updates can inspect and update standalone bundles.
+Repository-managed installations continue to use their package manager; launcher-pinned
+versions keep their selected version. Both Flatpak manifests must grant network access,
+the host Flatpak interface, and read-only access to the shared version choices.
+
 ## What gets built
 
 | Platform | Artifacts | Built on |

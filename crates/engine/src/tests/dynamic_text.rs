@@ -88,14 +88,10 @@ fn dynamic_text_refuses_bad_params_and_other_type() {
     assert!(err(s.execute("type.dynamicText", &json!({"on": 1}))).contains("on"));
     assert_eq!(undo_len(&s), before);
     assert!(!text(&s, id).dynamic_text);
-    // Point type and area type alone: refused.
+    // Point type alone: refused (area type takes Block, `typecmd::block_tests`).
     let point = s.execute("text.create", &json!({"x": 10, "y": 10, "text": "Point"})).unwrap()["id"].as_u64().unwrap();
-    let area =
-        s.execute("text.create", &json!({"x": 10, "y": 100, "text": "Area", "area": {"width": 100, "height": 50}})).unwrap()["id"].as_u64().unwrap();
-    for other in [point, area] {
-        s.execute("select.set", &json!({"ids": [other]})).unwrap();
-        assert!(err(s.execute("type.dynamicText", &json!({}))).contains("select type on a path"));
-    }
+    s.execute("select.set", &json!({"ids": [point]})).unwrap();
+    assert!(err(s.execute("type.dynamicText", &json!({}))).contains("select type on a path or area type"));
     let empty = s.execute("shape.rectangle", &json!({"x": 300, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [empty]})).unwrap();
     assert!(s.execute("type.dynamicText", &json!({})).is_err());

@@ -28,8 +28,10 @@ pub struct LoadOptions {
     /// What a PDF's text becomes.
     pub text_as: TextAs,
     /// A PDF's optional content groups become layers (else one layer per page, without the art
-    /// that is off).
+    /// that is off), and a PSD or PSB file's layers become layers (else its merged image opens).
     pub layers: bool,
+    /// A PSD or PSB file's hidden layers come in, hidden (`hiddenLayers`; else they are left out).
+    pub hidden_layers: bool,
     /// How a DXF drawing comes in (the `dxf` param, see [`super::dxfimport`]).
     pub dxf: vectorcraft_cad::ImportOptions,
     /// An Illustrator EPS or `.ai` that carries the editing copy of its art opens from it (its
@@ -57,6 +59,7 @@ impl Default for LoadOptions {
             grays: Grays::default(),
             text_as: TextAs::default(),
             layers: true,
+            hidden_layers: false,
             dxf: Default::default(),
             editing_data: true,
             trust_editing_data: false,
@@ -69,7 +72,8 @@ impl Default for LoadOptions {
 impl LoadOptions {
     /// From command params: `pages` (`"2-3, 5"`, a page number or `"all"`), `page` (one page, when
     /// `pages` isn't given), `cropTo` (or `crop`), `password`, `colorMode` (`rgb` | `cmyk`) with `grays`,
-    /// `textAs` (`text` | `outlines`), `layers` (true | false), `editingData` (true | false | `always`),
+    /// `textAs` (`text` | `outlines`), `layers` (true | false), `hiddenLayers` (true | false),
+    /// `editingData` (true | false | `always`),
     /// `legacyNameEncoding` (one of [`vectorcraft_eps::NameEncoding::LABELS`]) and `dxf` (the DXF
     /// import options).
     pub fn from_params(cmd: &str, p: &Value) -> Result<Self> {
@@ -95,6 +99,10 @@ impl LoadOptions {
             None => true,
             Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "layers must be true or false"))?,
         };
+        let hidden_layers = match p.get("hiddenLayers").filter(|v| !v.is_null()) {
+            None => false,
+            Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "hiddenLayers must be true or false"))?,
+        };
         let (editing_data, trust_editing_data) = match p.get("editingData").filter(|v| !v.is_null()) {
             None => (true, false),
             Some(Value::String(s)) if s.eq_ignore_ascii_case("always") => (true, true),
@@ -108,7 +116,21 @@ impl LoadOptions {
                 .ok_or_else(|| bad(cmd, format!("legacyNameEncoding must be one of {}", vectorcraft_eps::NameEncoding::LABELS.join(", "))))?,
         };
         let dxf = super::dxfimport::options(cmd, p.get("dxf"))?;
-        Ok(Self { pages, crop, password, color_mode, grays, text_as, layers, dxf, editing_data, trust_editing_data, legacy_names, native: true })
+        Ok(Self {
+            pages,
+            crop,
+            password,
+            color_mode,
+            grays,
+            text_as,
+            layers,
+            hidden_layers,
+            dxf,
+            editing_data,
+            trust_editing_data,
+            legacy_names,
+            native: true,
+        })
     }
 
     /// Does the document read only part of the file, or read it differently (a page range, another

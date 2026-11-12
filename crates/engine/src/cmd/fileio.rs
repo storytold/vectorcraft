@@ -50,6 +50,7 @@ mod pdfimport;
 pub mod pngtext;
 pub mod ppi;
 pub mod progress;
+mod psdlayers;
 pub mod psdread;
 mod pxrread;
 mod save;
@@ -217,6 +218,8 @@ mod tests_jxlread;
 mod tests_pdfx;
 #[cfg(test)]
 mod tests_psd;
+#[cfg(test)]
+mod tests_psdlayers;
 #[cfg(test)]
 mod tests_psdread;
 
