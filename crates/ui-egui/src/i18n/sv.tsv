@@ -1412,6 +1412,14 @@ font-technology	Variable	Variabla
 	Hair Space	Hårfint blanksteg
 	Hand Tool	Handverktyg
 	Hand-Drawn	Handritad
+	Painted and Sketched	Målat och skissat
+	Washed Blue	Urtvättad blå
+	Bristle Ochre	Borstockra
+	Pastel Heather	Pastelljung
+	Charcoal Shade	Kolskugga
+	Ink Contour	Tuschkontur
+	Wet Ink	Våt tusch
+	Fine Pen	Fin penna
 	Handles	Handtag
 	Hard Light	Hårt ljus
 	Hard Mix	Hård blandning
@@ -4161,6 +4169,7 @@ axis	Both	Båda
 @msg	`globalAdjust` must be an object	`globalAdjust` måste vara ett objekt
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` måste vara 1, 3 eller 5
 @msg	`stops` must be an array	`stops` måste vara en array
+@msg	`{key}` must be an array	`{key}` måste vara en array
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` måste vara ett objekt med SVG-alternativ (se document.formats)
 @msg	`{_1}` is no save command	`{_1}` är inget sparkommando
 @msg	`{area}` is no recovery area name	`{area}` är inget namn på ett återställningsområde
@@ -6047,6 +6056,7 @@ font-script	Japanese	Japanska
 	Ruby	Ruby
 	Geometric Guides	Geometriska stödlinjer
 	Geometric Patterns	Geometriska mönster
+	Grit Textures	Korniga texturer
 	Ease In	Långsam start
 	Ease Out	Långsamt slut
 	Ease In Out	Långsam start och slut
@@ -6556,6 +6566,9 @@ shape	Open	Öppen
 @msg	features lists at most {max} tags	features får innehålla högst {max} taggar
 @msg	unknown OpenType feature `{t}`	okänd OpenType-funktion `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} måste vara ett tal över 0 och högst {max}
+@msg	{label} must be at most {max} characters	{label} får innehålla högst {max} tecken
+@msg	{label} must be one character	{label} måste vara ett tecken
+@msg	at most {max} tab stops	högst {max} tabbstopp
 @msg	no character style `{name}`	Teckenformatet `{name}` hittades inte
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6717,6 +6730,8 @@ breakText	Glyphs	Glyfer
 	Delete the selected brushes?	Radera de valda penslarna?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturer använder en eller flera av de här penslarna. Ta bort penslarna från konturerna och radera penslarna?
 	Remove Strokes	Ta bort konturer
+	Place Brush Art	Placera penselgrafik
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` har ingen grafik (bara spridnings-, konst- och mönsterpenslar har grafik)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Ordningsverktyg
 	Arrange in Grid…	Ordna i rutnät…

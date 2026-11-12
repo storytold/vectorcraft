@@ -1376,6 +1376,14 @@ font-technology	Variable	Değişken
 	Hair Space	Saç Alanı
 	Hand Tool	El Aracı
 	Hand-Drawn	elle çizilmiş
+	Painted and Sketched	Boyanmış ve Eskiz
+	Washed Blue	Soluk Mavi
+	Bristle Ochre	Fırça Darbeli Toprak Sarısı
+	Pastel Heather	Pastel Funda
+	Charcoal Shade	Kömür Gölge
+	Ink Contour	Mürekkep Kontur
+	Wet Ink	Islak Mürekkep
+	Fine Pen	İnce Kalem
 	Handles	Kollar
 	Hard Light	Sert Işık
 	Harmony Rules:	Uyum Kuralları:
@@ -4041,6 +4049,7 @@ axis	Both	Her İkisi
 @msg	`globalAdjust` must be an object	`globalAdjust` bir nesne olmalıdır
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` 1, 3 veya 5 olmalıdır
 @msg	`stops` must be an array	`stops` bir dizi olmalıdır
+@msg	`{key}` must be an array	`{key}` bir dizi olmalıdır
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg`, SVG seçeneklerinin bir nesnesi olmalıdır (bkz. document.formats)
 @msg	`{_1}` is no save command	`{_1}` kaydetme komutu değil
 @msg	`{area}` is no recovery area name	`{area}`, kurtarma alanı adı değildir
@@ -6020,6 +6029,7 @@ axis	Y Axis	Y ekseni
 	Snap to Perpendicular	Dikeye Yasla
 	Geometric Guides	Geometrik Kılavuzlar
 	Geometric Patterns	Geometrik Desenler
+	Grit Textures	Grenli Dokular
 @msg	`method` must be classic or perceptual	`method` classic veya perceptual olmalıdır
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Büyük bir hesaplama bütçesi isteyen “{name}” yüklensin mi?
@@ -6466,6 +6476,10 @@ anchor	Points:	Noktalar:
 @msg	features lists at most {max} tags	features en fazla {max} etiket içerebilir
 @msg	unknown OpenType feature `{t}`	bilinmeyen OpenType özelliği `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 0'ın üzerinde ve en fazla {max} olan bir sayı olmalıdır
+@msg	{label} must be at most {max} characters	{label} en fazla {max} karakter olmalıdır
+@msg	{label} must be one character	{label} tek bir karakter olmalıdır
+@msg	at most {max} tab stops	en fazla {max} sekme durağı
+@msg	unknown align `{other}`	bilinmeyen hizalama `{other}`
 @msg	no character style `{name}`	`{name}` karakter stili bulunamadı
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6627,6 +6641,8 @@ breakText	Glyphs	Glifler
 	Delete the selected brushes?	Seçili fırçalar silinsin mi?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturlar bu fırçalardan birini veya daha fazlasını kullanıyor. Fırçalar bu konturlardan kaldırılsın ve fırçalar silinsin mi?
 	Remove Strokes	Konturları Kaldır
+	Place Brush Art	Fırça Çizimini Yerleştir
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` fırçasının çizimi yok (yalnızca serpme, resim ve desen fırçalarının çizimi vardır)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Düzenleme Araçları
 	Arrange in Grid…	Izgarada Düzenle…

@@ -1403,6 +1403,14 @@ file-filter	Templates	模板
 	Hair Space	极细空格
 	Hand Tool	抓手工具
 	Hand-Drawn	手绘
+	Painted and Sketched	绘画与素描
+	Washed Blue	水洗蓝
+	Bristle Ochre	干刷土黄
+	Pastel Heather	粉彩淡紫
+	Charcoal Shade	炭笔阴影
+	Ink Contour	墨线轮廓
+	Wet Ink	湿墨
+	Fine Pen	细笔
 	Handles	手柄
 	Hard Light	强光
 	Hard Mix	实色混合
@@ -4108,6 +4116,7 @@ imageTrace	Outline	轮廓
 @msg	`preserve` must be an object	`preserve` 必须是对象
 @msg	`globalAdjust` must be an object	`globalAdjust` 必须是对象
 @msg	`stops` must be an array	`stops` 必须是数组
+@msg	`{key}` must be an array	`{key}` 必须是数组
 @msg	`{k}` must be [x, y]	`{k}` 必须是 [x, y]
 @msg	a gradient needs at least two stops	渐变至少需要两个色标
 @msg	give both `start` and `end` [x, y] (or neither)	请同时给出 `start` 和 `end` [x, y] (或都不给出)
@@ -5862,6 +5871,7 @@ lighting	Light	光源
 	Ruby	注音
 	Geometric Guides	几何参考线
 	Geometric Patterns	几何图案
+	Grit Textures	颗粒纹理
 	Ease In	缓入
 	Ease Out	缓出
 	Ease In Out	缓入缓出
@@ -6351,6 +6361,10 @@ anchor	Points:	点：
 @msg	features lists at most {max} tags	features 最多包含 {max} 个标签
 @msg	unknown OpenType feature `{t}`	未知的 OpenType 特性 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 必须是大于 0 且不超过 {max} 的数字
+@msg	{label} must be at most {max} characters	{label} 最多 {max} 个字符
+@msg	{label} must be one character	{label} 必须是一个字符
+@msg	at most {max} tab stops	最多 {max} 个制表位
+@msg	unknown align `{other}`	未知的对齐方式 `{other}`
 @msg	no character style `{name}`	找不到字符样式 `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6512,6 +6526,8 @@ breakText	Glyphs	字形
 	Delete the selected brushes?	删除选中的画笔吗？
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	有描边使用了其中一个或多个画笔。要从这些描边移除画笔并删除画笔吗？
 	Remove Strokes	移除描边
+	Place Brush Art	置入画笔图稿
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` 没有图稿 (只有散布画笔、艺术画笔和图案画笔有图稿)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	排列工具
 	Arrange in Grid…	按网格排列…

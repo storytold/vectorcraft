@@ -1695,6 +1695,14 @@ file-filter	Templates	Mẫu
 	Halo	Vầng hào quang
 	Hand Tool	Công cụ Bàn tay
 	Hand-Drawn	Vẽ tay
+	Painted and Sketched	Vẽ màu và phác thảo
+	Washed Blue	Xanh nhạt nhòa
+	Bristle Ochre	Vàng đất cọ khô
+	Pastel Heather	Tím phấn màu
+	Charcoal Shade	Bóng than
+	Ink Contour	Đường viền mực
+	Wet Ink	Mực ướt
+	Fine Pen	Bút mảnh
 	Handles	Tay nắm
 	Hard	Cứng
 	Hard Light	Ánh sáng mạnh
@@ -4420,6 +4428,7 @@ theme	Appearance	Giao diện
 @msg	`globalAdjust` must be an object	`globalAdjust` phải là một đối tượng
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` phải là 1, 3 hoặc 5
 @msg	`stops` must be an array	`stops` phải là một mảng
+@msg	`{key}` must be an array	`{key}` phải là một mảng
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` phải là đối tượng tùy chọn SVG (xem document.formats)
 @msg	`to` must be "corner" or "smooth"	`to` phải là "corner" hoặc "smooth"
 @msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` phải là "emBox", "capHeight", "xHeight" hoặc "icfBox"
@@ -5629,6 +5638,7 @@ theme	Appearance	Giao diện
 	Ruby	Ruby
 	Geometric Guides	Đường dẫn hình học
 	Geometric Patterns	Họa tiết hình học
+	Grit Textures	Kết cấu hạt
 	Ease In	Chậm lúc đầu
 	Ease Out	Chậm lúc cuối
 	Ease In Out	Chậm lúc đầu và cuối
@@ -6119,6 +6129,10 @@ anchor	Points:	Điểm:
 @msg	features lists at most {max} tags	features chứa tối đa {max} thẻ
 @msg	unknown OpenType feature `{t}`	tính năng OpenType không xác định `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} phải là một số lớn hơn 0 và tối đa {max}
+@msg	{label} must be at most {max} characters	{label} chỉ được có tối đa {max} ký tự
+@msg	{label} must be one character	{label} phải là một ký tự
+@msg	at most {max} tab stops	tối đa {max} điểm dừng tab
+@msg	unknown align `{other}`	căn chỉnh không xác định `{other}`
 @msg	no character style `{name}`	Không tìm thấy kiểu ký tự `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6281,6 +6295,8 @@ breakText	Glyphs	Glyph
 	Delete the selected brushes?	Xóa các cọ đã chọn?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Có nét đang dùng một hoặc nhiều cọ này. Gỡ cọ khỏi các nét đó và xóa cọ?
 	Remove Strokes	Gỡ nét
+	Place Brush Art	Đặt đối tượng của cọ
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` không có đối tượng (chỉ cọ phân tán, cọ bản vẽ và cọ họa tiết mới có)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Công cụ sắp xếp
 	Arrange in Grid…	Sắp xếp theo lưới…
