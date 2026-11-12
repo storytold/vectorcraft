@@ -8469,3 +8469,9 @@ theme	Appearance	தோற்றப்பாணி
 	East Asian Composition Settings	கிழக்கு ஆசிய வரியமைப்பு அமைப்புகள்
 	Korean Composition Settings	கொரிய வரியமைப்பு அமைப்புகள்
 	Korean Line Break Anywhere	கொரிய உரையில் எங்கும் வரி முறிவு
+	Dry Media	உலர் ஊடகங்கள்
+	Optical Effects	ஒளியியல் விளைவுகள்
+	Center on Top	மேற்புறத்தில் மையப்படுத்து
+	Center on Bottom	கீழ்ப்புறத்தில் மையப்படுத்து
+@msg	select type on a closed path	மூடிய பாதையிலுள்ள உரையைத் தேர்ந்தெடுக்கவும்
+@msg	type on a path with no length or no height cannot be centered: {flat}	நீளமோ உயரமோ இல்லாத பாதையிலுள்ள உரையை மையப்படுத்த முடியாது: {flat}
