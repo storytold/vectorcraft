@@ -472,6 +472,7 @@ mod loads {
         }
 
         /// The answer to `request`, or why there is none, after `wait` at most.
+        #[cfg(test)]
         pub(super) fn get(&mut self, request: R, wait: Duration) -> Result<A, String> {
             wait_for_answer(&self.ask(request)?, wait)
         }
@@ -710,8 +711,9 @@ mod portable {
 
     /// The longest a paste's bitmap read of arboard's waits for the app that copied, off the UI
     /// thread: the bitmap's transfer and its PNG decoding happen within the read. A paste waits as
-    /// long, from when it was sent, for a read that got no answer in its wait. Text, file lists and
-    /// the UI thread's bitmap check wait [`LOAD_WAIT`](super::loads::LOAD_WAIT).
+    /// long, from when it was sent, for a read that got no answer in its wait, the core protocol's
+    /// text read included. Text, file lists and the UI thread's bitmap check wait
+    /// [`LOAD_WAIT`](super::loads::LOAD_WAIT).
     #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
     const IMAGE_WAIT: Duration = Duration::from_secs(10);
 
@@ -825,6 +827,33 @@ mod portable {
                 Some(t) => Some(Flavour { mime: TEXT, data: t.into_bytes() }),
                 None if mimes.contains(&BITMAP) => bitmap(&mut read),
                 None => None,
+            }
+        }
+    }
+
+    /// A read that got no answer in its wait, for a paste to wait for off the UI thread.
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+    enum Late {
+        Arboard(Unanswered),
+        /// The core protocol's text read.
+        #[cfg(target_os = "linux")]
+        Wayland(super::wayland::Unanswered),
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+    impl Late {
+        /// What a paste of one of `mimes` takes once the answer comes ([`Unanswered::paste`]). The
+        /// core protocol's text is waited for as long, until [`IMAGE_WAIT`] after its read was
+        /// sent, and pasted unless it is empty, what `ours` put on the clipboard, or doesn't come.
+        fn paste(self, ours: Option<&Ours>, mimes: &[&'static str]) -> Option<Flavour> {
+            match self {
+                Self::Arboard(unanswered) => unanswered.paste(ours, mimes),
+                #[cfg(target_os = "linux")]
+                Self::Wayland(unanswered) => {
+                    let text = unanswered.text(IMAGE_WAIT).ok().filter(|t| !t.is_empty())?;
+                    let held = matches!(ours, Some(Ours::Text(t)) if *t == text);
+                    (!held).then(|| Flavour { mime: TEXT, data: text.into_bytes() })
+                }
             }
         }
     }
@@ -1019,24 +1048,24 @@ mod portable {
             }
         }
 
-        /// arboard's read that got no answer in its wait, when a paste of one of `mimes` can take
-        /// its answer ([`Arboard::unanswered`]).
+        /// The read that got no answer in its wait, when a paste of one of `mimes` can take its
+        /// answer ([`Arboard::unanswered`], [`TextReads::unanswered`](super::wayland::TextReads::unanswered)).
         #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
-        fn unanswered(&mut self, mimes: &[&'static str]) -> Option<Unanswered> {
+        fn unanswered(&mut self, mimes: &[&'static str]) -> Option<Late> {
             match self {
-                Self::Arboard(cb) => cb.unanswered(mimes),
+                Self::Arboard(cb) => cb.unanswered(mimes).map(Late::Arboard),
                 #[cfg(target_os = "linux")]
-                Self::Wayland(_) => None,
+                Self::Wayland(cb) => cb.unanswered(mimes).map(Late::Wayland),
             }
         }
 
-        /// Drops arboard's read that got no answer in its wait: a paste no longer takes its answer.
+        /// Drops the read that got no answer in its wait: a paste no longer takes its answer.
         #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
         fn forget_unanswered(&mut self) {
             match self {
                 Self::Arboard(cb) => cb.unanswered = None,
                 #[cfg(target_os = "linux")]
-                Self::Wayland(_) => {}
+                Self::Wayland(cb) => cb.forget_unanswered(),
             }
         }
 
@@ -1168,8 +1197,8 @@ mod portable {
             self.cb.get(asker, Instant::now(), || Backend::open(window), Backend::name).ok_or_else(|| "no system clipboard".to_string())
         }
 
-        /// The work that pastes the answer to arboard's read that got no answer in its wait
-        /// ([`Unanswered::paste`]), while that answer has not come.
+        /// The work that pastes the answer to a read that got no answer in its wait
+        /// ([`Late::paste`]), while that answer has not come.
         #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
         fn paste_unanswered(&mut self, mimes: &[&'static str]) -> Option<ClipboardRead> {
             let ours = self.ours.clone();
@@ -1565,6 +1594,55 @@ mod portable {
             assert!(cb.unanswered(&[TEXT]).is_none());
         }
 
+        #[cfg(target_os = "linux")]
+        #[test]
+        fn a_paste_after_an_unanswered_core_protocol_text_read_waits_for_its_answer() {
+            use super::super::wayland::TextReads;
+            use vectorcraft_engine::cmd::clipboard::PASTE_ORDER;
+
+            /// Core protocol text reads whose owner answers with `text` only once the sender
+            /// returned is used or dropped.
+            fn slow_text(text: &'static str) -> (TextReads, std::sync::mpsc::Sender<()>) {
+                let (release, gate) = std::sync::mpsc::channel::<()>();
+                let loads = Loads::spawn("test", Duration::ZERO, move |()| {
+                    let _ = gate.recv();
+                    Ok(text.to_string())
+                })
+                .unwrap();
+                (TextReads::new(loads), release)
+            }
+            // Text was copied here; the clipboard's owner answers the check with `text` late.
+            let paste_after_check = |text: &'static str| {
+                let (mut reads, release) = slow_text(text);
+                // The check whether the clipboard still holds what was copied here gets no answer
+                // in its wait (2 s on the UI thread, none here).
+                assert!(reads.get(Duration::ZERO).is_err());
+                // The paste's own read fails at once while the owner hasn't answered.
+                assert!(reads.get(Duration::from_secs(600)).is_err());
+                // A paste of a bitmap alone can't take text: the read stays kept.
+                assert!(reads.unanswered(&[BITMAP]).is_none());
+                let late = Late::Wayland(reads.unanswered(&PASTE_ORDER).expect("the check's read is kept for the paste"));
+                let ours = Ours::Text("copied here".into());
+                let paste = std::thread::spawn(move || late.paste(Some(&ours), &PASTE_ORDER));
+                drop(release);
+                paste.join().ok().flatten()
+            };
+            let pasted = paste_after_check("copied elsewhere").expect("the other app's text is pasted");
+            assert_eq!((pasted.mime, pasted.data), (TEXT, b"copied elsewhere".to_vec()));
+            // The text copied here, or nothing: the paste takes the internal clipboard.
+            assert!(paste_after_check("copied here").is_none());
+            assert!(paste_after_check("").is_none());
+
+            // An answer that came before the paste may be old: it is dropped, not pasted.
+            let (mut reads, release) = slow_text("old");
+            assert!(reads.get(Duration::ZERO).is_err());
+            drop(release);
+            while reads.waiting() {
+                std::thread::yield_now();
+            }
+            assert!(reads.unanswered(&[TEXT]).is_none());
+        }
+
         #[test]
         fn one_outage_is_logged_once_across_handles() {
             static LOGGED: AtomicBool = AtomicBool::new(false);
@@ -1585,21 +1663,85 @@ mod portable {
 /// data-control protocol arboard needs (GNOME) and there is no X11 to fall back on (the Flatpak on
 /// a Wayland session). Text only (smithay-clipboard), and only while the window has focus, as the
 /// protocol has it. A read waits [`LOAD_WAIT`] at most: smithay-clipboard waits for the owner's
-/// data with no limit, so reads run on a worker of their own.
+/// data with no limit, so reads run on a worker of their own. A read that gets no answer in that
+/// time is kept for a paste to wait for off the UI thread, as arboard's are.
 #[cfg(target_os = "linux")]
 mod wayland {
-    use std::sync::Arc;
-    use std::time::Duration;
+    use std::sync::{Arc, mpsc};
+    use std::time::{Duration, Instant};
 
-    use super::loads::{LOAD_WAIT, Loads};
+    use super::TEXT;
+    use super::loads::{GONE, LOAD_WAIT, Loads, wait_for_answer};
+
+    /// What a text read gives.
+    type Text = Result<String, String>;
 
     pub struct TextClipboard {
         /// Writes: a store only hands the text to smithay-clipboard's thread.
         cb: smithay_clipboard::Clipboard,
         /// Reads, on a worker with a second clipboard on the same connection.
-        loads: Loads<(), Result<String, String>>,
+        reads: TextReads,
         /// Held as long as the clipboards: their connection is the window's.
         _window: Arc<winit::window::Window>,
+    }
+
+    /// Text reads on a worker, and the last one that got no answer in its wait.
+    pub(super) struct TextReads {
+        loads: Loads<(), Text>,
+        /// The last read that got no answer in its wait, until a paste takes it or the next read
+        /// is sent.
+        unanswered: Option<Unanswered>,
+    }
+
+    /// A text read that got no answer in its wait.
+    pub(super) struct Unanswered {
+        answer: mpsc::Receiver<Text>,
+        sent: Instant,
+    }
+
+    impl Unanswered {
+        /// The text, once it comes, waiting for it until `limit` after the read was sent.
+        pub(super) fn text(self, limit: Duration) -> Text {
+            wait_for_answer(&self.answer, (self.sent + limit).saturating_duration_since(Instant::now()))?
+        }
+    }
+
+    impl TextReads {
+        pub(super) fn new(loads: Loads<(), Text>) -> Self {
+            Self { loads, unanswered: None }
+        }
+
+        /// The text, waiting `wait` at most. A read that gets no answer in that time is kept
+        /// ([`Self::unanswered`]) for a paste to wait for off the UI thread; a read sent means the
+        /// one kept has been answered, and its answer is dropped.
+        pub(super) fn get(&mut self, wait: Duration) -> Text {
+            let sent = Instant::now();
+            let answer = self.loads.ask(())?;
+            self.unanswered = None;
+            match wait_for_answer(&answer, wait) {
+                Ok(text) => text,
+                Err(why) => {
+                    if why != GONE {
+                        self.unanswered = Some(Unanswered { answer, sent });
+                    }
+                    Err(why)
+                }
+            }
+        }
+
+        /// The read that got no answer in its wait, while its answer has still not come and a
+        /// paste of one of `mimes` can take text. Once it has come the answer may be old, and it is
+        /// dropped: a new read is made.
+        pub(super) fn unanswered(&mut self, mimes: &[&'static str]) -> Option<Unanswered> {
+            let unanswered = self.unanswered.take_if(|_| mimes.contains(&TEXT))?;
+            self.loads.waiting().then_some(unanswered)
+        }
+
+        /// Whether a read sent is still unanswered.
+        #[cfg(test)]
+        pub(super) fn waiting(&self) -> bool {
+            self.loads.waiting()
+        }
     }
 
     /// The read worker's clipboard and the window whose connection it uses, dropped in that order.
@@ -1631,15 +1773,26 @@ mod wayland {
             // Dropping doesn't wait for an unanswered read: only arboard's X11 handles hand what the
             // app copied on when the last one goes.
             let loads = Loads::spawn("wayland-clipboard-read", Duration::ZERO, move |()| loader.load())?;
-            Some(Self { cb, loads, _window: window })
+            Some(Self { cb, reads: TextReads::new(loads), _window: window })
         }
 
         pub fn get_text(&mut self) -> Result<String, String> {
-            self.loads.get((), LOAD_WAIT)?
+            self.reads.get(LOAD_WAIT)
         }
 
         pub fn set_text(&self, text: &str) {
             self.cb.store(text);
+        }
+
+        /// The read that got no answer in its wait, when a paste of one of `mimes` can take its
+        /// answer ([`TextReads::unanswered`]).
+        pub(super) fn unanswered(&mut self, mimes: &[&'static str]) -> Option<Unanswered> {
+            self.reads.unanswered(mimes)
+        }
+
+        /// Drops the read that got no answer in its wait: a paste no longer takes its answer.
+        pub fn forget_unanswered(&mut self) {
+            self.reads.unanswered = None;
         }
     }
 }
