@@ -1608,6 +1608,7 @@ font-technology	Variable	Μεταβλητές
 	Include Hidden Layers	Συμπερίληψη κρυφών επιπέδων
 	Include Linked Files	Συμπερίληψη συνδεδεμένων αρχείων
 	Include Metadata	Συμπερίληψη μεταδεδομένων
+	Include Variable Data	Συμπερίληψη δεδομένων μεταβλητών
 	Include non-printing layers	Συμπερίληψη μη εκτυπώσιμων επιπέδων
 	Write pages longer than 200 in at full size in points	Εγγραφή σελίδων μεγαλύτερων από 200 in σε πλήρες μέγεθος, σε στιγμές
 	Include SVG Code	Συμπερίληψη κώδικα SVG
@@ -1978,6 +1979,7 @@ font-technology	Variable	Μεταβλητές
 	Rise…	Ανύψωση…
 	Roman Hanging Punctuation	Κρεμαστή στίξη όρθιας γραφής
 	Korean Line Break Anywhere	Αλλαγή γραμμής κορεατικών οπουδήποτε
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Ρυθμίσεις σύνθεσης ανατολικής Ασίας
 	Korean Composition Settings	Ρυθμίσεις κορεατικής σύνθεσης
 	Rotate	Περιστροφή
@@ -2916,6 +2918,7 @@ theme	Appearance	Εμφάνιση
 	Move Slices	Μετακίνηση τομών
 	Move Spine Point	Μετακίνηση σημείου κεντρικής καμπύλης
 	Reshape Spine Segment	Αναδιαμόρφωση τμήματος κεντρικής καμπύλης
+	Blend Easing	Επιτάχυνση ανάμειξης
 	Move Brush	Μετακίνηση πινέλου
 	Move Swatch	Μετακίνηση δείγματος χρώματος
 	Move Up	Μετακίνηση επάνω
@@ -3489,6 +3492,10 @@ digits	Malayalam	Μαλαγιάλαμ
 	Reset OpenType Features	Επαναφορά χαρακτηριστικών OpenType
 	Reset Panel	Επαναφορά πίνακα
 	Reset Profiles	Επαναφορά προφίλ
+	Arrowheads	Αιχμές βελών
+	Edit Arrowheads	Επεξεργασία αιχμών βελών
+	Edit Arrowheads…	Επεξεργασία αιχμών βελών…
+	Reload Arrowheads	Επαναφόρτωση αιχμών βελών
 	Reset Rotate View	Επαναφορά περιστροφής προβολής
 	Rotate View to Selection	Περιστροφή προβολής ως προς την επιλογή
 	Reset the rows to the artwork's colors	Επαναφορά γραμμών στα χρώματα του σχεδίου
@@ -4754,6 +4761,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	unknown option `{path}.{k}`	άγνωστη επιλογή `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	άγνωστη επιλογή υπερεκτύπωσης `{o}` (preserve, simulate ή discard)
 @msg	unknown panel `{raw}`	άγνωστος πίνακας `{raw}`
+@msg	panels can't be shown in Presentation Mode	τα πλαίσια δεν μπορούν να εμφανιστούν στη λειτουργία παρουσίασης
 @msg	unknown preference `{key}`	άγνωστη προτίμηση `{key}`
 @msg	Preferences imported.	Οι προτιμήσεις εισήχθησαν.
 @msg	not a preferences file: {e}	δεν είναι αρχείο προτιμήσεων: {e}
@@ -6075,6 +6083,110 @@ axis	Y Axis	Άξονας Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ένα δυναμικό εφέ εκτελείται κατά τη σχεδίαση του εγγράφου, οπότε δεν μπορεί να είναι `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	ένα πρόσθετο εξαγωγής παίρνει πάντα τον προϋπολογισμό μιας εξαγωγής: παραλείψτε το `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	το «{_1}» ζητά μεγάλο υπολογιστικό προϋπολογισμό (κάθε εκτέλεση έως {minutes} λεπτά και {times} φορές τις συνήθεις εντολές): πρέπει να το εγκρίνει ένα άτομο στην εφαρμογή επιφάνειας εργασίας ή περάστε `allowHeavy: true` σε μια συνεδρία που ξεκίνησε με --allow-plugin-grants
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	το `name` πρέπει να έχει 1-64 εκτυπώσιμους χαρακτήρες
+@msg	`version`, `description` or `author` is too long	το `version`, το `description` ή το `author` είναι πολύ μεγάλο
+@msg	`warnings` must be a list of strings	το `warnings` πρέπει να είναι λίστα συμβολοσειρών
+@msg	`{k}` must be one of {_1}	το `{k}` πρέπει να είναι ένα από τα {_1}
+@msg	`{k}` must be {what}	το `{k}` πρέπει να είναι {what}
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	ένα πρόσθετο εξαγωγής δηλώνει 1 έως {MAX_EXTENSIONS} `extensions`
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	το πολύ {MAX_UNGROUPED} παράμετροι εκτός ομάδων: δώστε στις υπόλοιπες ένα `group`
+@msg	can't encode the input	η είσοδος δεν μπορεί να κωδικοποιηθεί
+@msg	expected {"dataBase64"}	αναμενόταν {"dataBase64"}
+@msg	expected {"objects"}	αναμενόταν {"objects"}
+@msg	export `{name}`: {e}	εξαγωγή `{name}`: {e}
+@msg	extension {e} is listed twice	η επέκταση {e} αναφέρεται δύο φορές
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	επέκταση {e}: χρησιμοποιήστε 1-16 πεζά γράμματα και ψηφία, χωρίς την τελεία
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	μη έγκυρο αναγνωριστικό {_1}: χρησιμοποιήστε 1-64 χαρακτήρες από A-Z a-z 0-9 . _ -
+@msg	invalid parameter name {k}	μη έγκυρο όνομα παραμέτρου {k}
+@msg	manifest is not UTF-8	το αρχείο δηλώσεων δεν είναι σε UTF-8
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	το αρχείο δηλώσεων είναι πολύ μεγάλο (όριο {MAX_MANIFEST_BYTES} byte)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	το αρχείο δηλώσεων έχει {_1} byte (όριο {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	η λειτουργική μονάδα έχει {_1} byte (όριο {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	χρειάζεται έγκριση: ζητά {0}, που ο χρήστης παραχωρεί όταν το εγκαθιστά μόνο του
+@msg	not JSON: {e}	δεν είναι JSON: {e}
+@msg	not a WebAssembly binary (missing \0asm header)	δεν είναι δυαδικό αρχείο WebAssembly (λείπει η κεφαλίδα \0asm)
+@msg	parameter `{k}`: {what}	παράμετρος `{k}`: {what}
+@msg	parameter `{name}`: {what}	παράμετρος `{name}`: {what}
+@msg	plug-in parameters must be a JSON object	οι παράμετροι του προσθέτου πρέπει να είναι αντικείμενο JSON
+@msg	the module must export its linear memory as `memory`	η λειτουργική μονάδα πρέπει να εξάγει τη γραμμική της μνήμη ως `memory`
+@msg	the objects to change are no longer in the document	τα αντικείμενα προς αλλαγή δεν βρίσκονται πια στο έγγραφο
+@msg	the runtime panicked	το περιβάλλον εκτέλεσης κατέρρευσε
+@msg	unexpected host trap	μη αναμενόμενη παγίδευση του κεντρικού υπολογιστή
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	η vc_abi_version επέστρεψε {v}· αυτός ο κεντρικός υπολογιστής υλοποιεί την έκδοση {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	η vc_alloc επέστρεψε 0 (η μνήμη εξαντλήθηκε)
+@msg	vc_alloc returned a block outside memory	η vc_alloc επέστρεψε ένα μπλοκ εκτός μνήμης
+@msg	vc_run returned error code {packed}	η vc_run επέστρεψε τον κωδικό σφάλματος {packed}
+@msg	{_1} is not a file	το {_1} δεν είναι αρχείο
+@msg	{_1} is {_2} bytes (limit {_3})	το {_1} έχει {_2} byte (όριο {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} αντικείμενα (όριο {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	το {what} δείχνει εκτός μνήμης
+@msg	`angle` must be a number	το `angle` πρέπει να είναι αριθμός
+@msg	`aspect` must be from 0.01 to 100	το `aspect` πρέπει να είναι από 0.01 έως 100
+@msg	`cap` must be "butt", "round" or "square"	το `cap` πρέπει να είναι "butt", "round" ή "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	το `fillRule` πρέπει να είναι "nonzero" ή "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	το `helpUrl` πρέπει να είναι διεύθυνση https:// έως {MAX_HELP_URL} byte
+@msg	`help` must be 1-{MAX_HELP} printable characters	το `help` πρέπει να έχει 1-{MAX_HELP} εκτυπώσιμους χαρακτήρες
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	το `id` πρέπει να είναι αναγνωριστικό εφέ 1-{MAX_EFFECT_ID} byte
+@msg	`id` must be the id of an input object	το `id` πρέπει να είναι το αναγνωριστικό ενός αντικειμένου εισόδου
+@msg	`join` must be "miter", "round" or "bevel"	το `join` πρέπει να είναι "miter", "round" ή "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	τα `label` και `group` πρέπει να έχουν 1-{MAX_LABEL} εκτυπώσιμους χαρακτήρες
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	το `maxLength` πρέπει να είναι 1-{MAX_TEXT} και η προεπιλογή όχι μεγαλύτερη
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	τα `minItems` και `maxItems` πρέπει να είναι 0-{MAX_LIST}, το `maxItems` τουλάχιστον 1 και η προεπιλογή να έχει τόσα στοιχεία
+@msg	`name` must be a string	το `name` πρέπει να είναι συμβολοσειρά
+@msg	`opacity` must be a number	το `opacity` πρέπει να είναι αριθμός
+@msg	`type` must be "path" or "compound"	το `type` πρέπει να είναι "path" ή "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	το `unit` πρέπει να έχει 1-{MAX_UNIT} εκτυπώσιμους χαρακτήρες
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	το `visibleWhen` πρέπει να αναφέρει 1 έως {MAX_CONDITION_VALUES} τιμές για το `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	το `visibleWhen` αναφέρει το `{other}`, που δεν είναι παράμετρος δηλωμένη πριν από αυτήν
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	το `visibleWhen` αναφέρει έως {MAX_CONDITIONS} παραμέτρους
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	το `visibleWhen` δέχεται τιμές του `{other}`, ενός πλαισίου ελέγχου ή μιας επιλογής
+@msg	`visible` must be true or false	το `visible` πρέπει να είναι true ή false
+@msg	`{key}` must be a number from {_1} to {_2}	το `{key}` πρέπει να είναι αριθμός από {_1} έως {_2}
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	το `{key}` πρέπει να είναι πίνακας έως {MAX_ITEMS} στοιχείων
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	η προεπιλογή χρώματος πρέπει να είναι αντικείμενο χρώματος ή δεκαεξαδική συμβολοσειρά όπως "#3a7bd5"
+@msg	a color object or a hex string such as "#3a7bd5"	αντικείμενο χρώματος ή δεκαεξαδική συμβολοσειρά όπως "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	ένα ντεγκραντέ ελεύθερης μορφής έχει έως {MAX_ITEMS} σημεία και γραμμές
+@msg	a freeform gradient line names a point it doesn't have	μια γραμμή ντεγκραντέ ελεύθερης μορφής αναφέρει σημείο που το ντεγκραντέ δεν έχει
+@msg	a gradient needs 1-{MAX_ITEMS} stops	ένα ντεγκραντέ χρειάζεται 1-{MAX_ITEMS} σημεία χρώματος
+@msg	a list of numbers	λίστα αριθμών
+@msg	a list of {min_items} to {max_items} numbers	λίστα {min_items} έως {max_items} αριθμών
+@msg	a new object needs a `path`	ένα νέο αντικείμενο χρειάζεται `path`
+@msg	a number	αριθμός
+@msg	a painted live effect returns only `objects`	ένα ζωντανό εφέ βαφής επιστρέφει μόνο `objects`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ένα κομμάτι ζωντανού εφέ βαφής έχει μόνο `path`, `fillRule`, `fills` και `strokes`
+@msg	a read-only object was left out	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση: επιστρέψτε το ως {"id"} μόνο ή όπως δόθηκε
+@msg	a string	συμβολοσειρά
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	ένα περίγραμμα έχει μόνο `paint`, `width`, `join`, `cap` και `miterLimit`
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	ένα περίγραμμα πρέπει να είναι {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
+@msg	an effect must be {"id", "params"?, "visible"?}	ένα εφέ πρέπει να είναι {"id", "params"?, "visible"?}
+@msg	an effect on a fill returns only `fills`	ένα εφέ σε γέμισμα επιστρέφει μόνο `fills`
+@msg	an effect on a stroke returns only `strokes`	ένα εφέ σε περίγραμμα επιστρέφει μόνο `strokes`
+@msg	an object must be a JSON object	ένα αντικείμενο πρέπει να είναι αντικείμενο JSON
+@msg	bad range	μη έγκυρο εύρος
+@msg	choices must be 1-64 non-empty, printable strings	οι επιλογές πρέπει να είναι 1-64 μη κενές, εκτυπώσιμες συμβολοσειρές
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	συντεταγμένη εκτός εύρους (όριο ±{MAX_COORD} pt)
+@msg	default is not one of the options	η προεπιλογή δεν είναι μία από τις επιλογές
+@msg	each piece needs a `path`	κάθε κομμάτι χρειάζεται `path`
+@msg	is listed twice	αναφέρεται δύο φορές
+@msg	pattern transform out of range	μετασχηματισμός μοτίβου εκτός εύρους
+@msg	read-only field '{field}' changed	το πεδίο μόνο για ανάγνωση '{field}' άλλαξε
+@msg	stops must be in order of `offset`	τα σημεία χρώματος πρέπει να είναι ταξινομημένα κατά `offset`
+@msg	the document has no pattern {pattern}	το έγγραφο δεν έχει μοτίβο {pattern}
+@msg	the document has no swatch {n}	το έγγραφο δεν έχει δείγμα χρώματος {n}
+@msg	the output	η έξοδος
+@msg	the path has no anchor points	η διαδρομή δεν έχει σημεία αγκύρωσης
+@msg	too many anchor points (limit {MAX_ANCHORS})	πάρα πολλά σημεία αγκύρωσης (όριο {MAX_ANCHORS})
+@msg	true or false	true ή false
+@msg	unknown key `{k}`; the keys here are {_1}	άγνωστο κλειδί `{k}`· τα κλειδιά εδώ είναι {_1}
+@msg	{_1} is listed twice	το {_1} αναφέρεται δύο φορές
+@msg	{_1} is not the id of an input object	το {_1} δεν είναι αναγνωριστικό αντικειμένου εισόδου
+@msg	{_1} is read-only	το {_1} είναι μόνο για ανάγνωση
+@msg	{what} must be from {lo} to {hi}	το {what} πρέπει να είναι από {lo} έως {hi}
+@msg	a color component	συνιστώσα χρώματος
+@msg	a plate	πλάκα εκτύπωσης
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Να εγκατασταθεί το «{name}», που ζητά αυτά τα δικαιώματα;
 	ID: {id}	Αναγνωριστικό: {id}
@@ -6298,6 +6410,11 @@ axis	Y Axis	Άξονας Y
 	User Brush Library 9	Βιβλιοθήκη πινέλων χρήστη 9
 	User Brush Library 10	Βιβλιοθήκη πινέλων χρήστη 10
 	Art Ribbons	Γραφικές κορδέλες
+	Ink and Wash	Μελάνι και ακουαρέλα
+	Tapered Ink	Λεπτυνόμενο μελάνι
+	Brush Pen	Πένα πινέλου
+	Soft Wash	Απαλή ακουαρέλα
+	Pooling Wash	Ακουαρέλα με περίγραμμα
 	Zigzag	Ζιγκζάγκ
 	Burst Ray	Ακτίνα κρούσης
 	Dash Trail	Διακεκομμένο ίχνος
@@ -6968,6 +7085,8 @@ breakText	Glyphs	Γλύφοι
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Σύντομοι πρακτικοί οδηγοί για τα βασικά εργαλεία, ομαδοποιημένοι ανά δεξιότητα. Επιλέξτε μια δεξιότητα για να δείτε τους οδηγούς της.
 	List Tutorials	Λίστα οδηγών εκμάθησης
 	Show Tutorial	Εμφάνιση οδηγού εκμάθησης
+	Show Tool Location	Εμφάνιση θέσης εργαλείου
+	Show where this tool is	Εμφάνιση της θέσης αυτού του εργαλείου
 @msg	missing `tutorial` (see learn.list)	λείπει το `tutorial` (δείτε learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	άγνωστος οδηγός εκμάθησης `{id}` (δείτε learn.list)
 

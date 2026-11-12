@@ -349,7 +349,7 @@ impl ColorOut {
     }
 
     /// `pdf` with the output intent and Trapped entries, and a PDF/X file's identification
-    /// ([`crate::pdfx`]) → (the file, warnings).
+    /// ([`crate::pdfx`]) → (the file, notes on the output intent asked for).
     pub(crate) fn write_catalog(&self, pdf: Vec<u8>, display_doc_title: bool) -> Result<(Vec<u8>, Vec<String>), PdfError> {
         let cat = self.catalog.as_ref();
         if cat.is_none() && !display_doc_title {

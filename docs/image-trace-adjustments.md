@@ -87,6 +87,16 @@ pixels and 16,384 pixels on a side. A raster export shows the line as the canvas
 Type Optimized anti-aliasing, or when it uses Art Optimized and is larger than either limit.
 Overlapping stacks the colors instead: a lower color continues under the edge of the color above it,
 and no background shows along that edge.
+
+**Flat Logo with named colors.** With `logoColors` named, Flat Logo decides whether the image is flat
+art by the image's own colors. It finds them the same way as when no colors are named, and looks for as
+many colors as are named, with white, or as the Colors setting gives, whichever is more. How far the named colors
+are from the image's colors does not change whether the image is refused. While no more colors are
+named than the Colors setting, an image is refused exactly when it is refused without named colors.
+The trace then uses only the named colors, and white while white is a color of its own. An area of a
+color that was not named is traced too: each of its pixels goes to the named color, white or
+transparent that has the largest share in the blend of them that comes closest to the pixel.
+
 **Large images.** An image of more than 1500 pixels on a side is traced as any other, only more
 slowly, and the trace says so: `imageTrace.make` returns the note in `warnings` and the status bar
 shows it (the [results optimization](https://helpx.adobe.com/illustrator/using/image-trace-results-optimization.html)
