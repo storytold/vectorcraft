@@ -94,6 +94,30 @@ fn a_reply_keeps_a_hidden_path_only_inside_a_known_library_id() {
     assert_eq!(reply["error"], "x loaded//art/in work/a.svg, /art/in work/a.svg and in work; in/../ok/c.svg", "{reply}");
 }
 
+/// A readable library's id that holds a hidden absolute path after its start stays whole: with and
+/// without its `loaded/`, in a `file:` URL and with `%XX` escapes, in any case with matching in any
+/// case. The hidden path on its own, and followed by other path text, is still hidden.
+#[test]
+fn a_reply_keeps_a_readable_id_that_holds_a_hidden_path_inside() {
+    let hidden = hiding(&[("loaded//libs/Kit.gpl", "loaded/Kit.gpl")], &["loaded//project/libs/Kit.gpl"]);
+    let text = "loaded//project/libs/Kit.gpl, /project/libs/Kit.gpl, file:///project/libs/Kit.gpl and file:///project%2Flibs/Kit.gpl; /libs/Kit.gpl and /libs/Kit.gpl.bak";
+    for fold in [false, true] {
+        let mut reply = json!({"error": text});
+        super::replace_in_value(&mut reply, &super::Rewrite { pairs: super::hidden_text(&hidden), hiding: &hidden, fold });
+        let kept = "loaded//project/libs/Kit.gpl, /project/libs/Kit.gpl, file:///project/libs/Kit.gpl and file:///project%2Flibs/Kit.gpl";
+        assert_eq!(reply["error"], json!(format!("{kept}; Kit.gpl and Kit.gpl.bak")), "fold {fold}: {reply}");
+    }
+    let mut reply = json!({"error": "LOADED//PROJECT/LIBS/KIT.GPL and file://LocalHost/project/libs/Kit.gpl"});
+    super::replace_in_value(&mut reply, &super::Rewrite { pairs: super::hidden_text(&hidden), hiding: &hidden, fold: true });
+    assert_eq!(reply["error"], "LOADED//PROJECT/LIBS/KIT.GPL and file://LocalHost/project/libs/Kit.gpl", "{reply}");
+    // The readable id's path after a drive or in a URL that names another host is another path.
+    for text in ["C:/project/libs/Kit.gpl", "file://remote/project/libs/Kit.gpl"] {
+        let mut reply = json!({"error": text});
+        super::replace_in_value(&mut reply, &super::Rewrite { pairs: super::hidden_text(&hidden), hiding: &hidden, fold: false });
+        assert!(!reply["error"].as_str().unwrap_or_default().contains("/libs/Kit.gpl"), "{text}: {reply}");
+    }
+}
+
 /// With matching in any case (as on Windows), a hidden path written in other letter cases is hidden
 /// too; a path in a `file:` URL with `%XX` escapes is hidden on every platform, the whole URL shown as
 /// the file name.
