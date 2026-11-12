@@ -7742,6 +7742,7 @@ antiAlias	Sharp	शार्प
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	CDR लाइब्रेरी के जिन रंगों को ड्रॉइंग केवल संख्या से सहेजती है, वे काले स्पॉट रंगों के रूप में खोले गए
 @msg	CDR outline arrowheads were left out	CDR आउटलाइन के तीर-शीर्ष छोड़ दिए गए
 @msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR एनवेलप लागू नहीं किए गए, और उनके नीचे की आकृतियाँ अपनी आउटलाइन बनाए रखती हैं
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR लेंस और ऑब्जेक्ट पारदर्शिता लागू नहीं की गई, और जिन ऑब्जेक्ट पर वे हैं वे अपारदर्शी दिखते हैं
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	ड्रॉइंग के बहुत गहराई तक नेस्ट किए गए या आयात सीमाओं से परे के हिस्से छोड़ दिए गए
 @msg	damaged parts of the drawing were left out	ड्रॉइंग के क्षतिग्रस्त हिस्से छोड़ दिए गए
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163,830 pt से लंबे CDR पेज उसी लंबाई पर खोले गए, और उनके किनारों के पास का आर्ट आर्टबोर्ड के बाहर है

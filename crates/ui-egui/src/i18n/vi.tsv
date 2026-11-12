@@ -5231,6 +5231,7 @@ theme	Appearance	Giao diện
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	các màu thư viện CDR mà bản vẽ chỉ lưu theo số đã được mở thành màu đặc biệt đen
 @msg	CDR outline arrowheads were left out	các đầu mũi tên của đường viền CDR đã bị bỏ qua
 @msg	CDR envelopes were not applied, and the shapes under them keep their outlines	các bao hình CDR không được áp dụng, và các hình bên dưới vẫn giữ đường viền của chúng
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	thấu kính và độ trong suốt đối tượng CDR không được áp dụng, và các đối tượng có chúng hiển thị đục
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	các phần của bản vẽ lồng nhau quá sâu hoặc vượt quá giới hạn nhập đã bị bỏ qua
 @msg	damaged parts of the drawing were left out	các phần bị hỏng của bản vẽ đã bị bỏ qua
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	các trang CDR dài hơn 163.830 pt đã được mở với độ dài đó, và hình vẽ gần mép trang nằm ngoài bảng vẽ

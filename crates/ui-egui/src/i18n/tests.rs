@@ -1773,6 +1773,7 @@ fn cdr_import_notes_are_translated() {
         "CDR library colors that the drawing stores only by number were opened as black spot colors",
         "CDR outline arrowheads were left out",
         "CDR envelopes were not applied, and the shapes under them keep their outlines",
+        "CDR lenses and object transparency were not applied, and the objects they are on show opaque",
         "parts of the drawing nested too deeply, or past the import limits, were left out",
         "damaged parts of the drawing were left out",
         "CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard",

@@ -5563,6 +5563,7 @@ imageTrace	Outline	Körvonal
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	a CDR könyvtári színei, amelyeket a rajz csak számként tárol, fekete direktszínként nyíltak meg
 @msg	CDR outline arrowheads were left out	kimaradtak a CDR körvonalainak nyílhegyei
 @msg	CDR envelopes were not applied, and the shapes under them keep their outlines	a CDR burkolók nem lettek alkalmazva, és az alattuk lévő alakzatok megtartják a körvonalukat
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	a CDR lencsék és objektumátlátszóság nem lettek alkalmazva, és az objektumok, amelyeken vannak, átlátszatlanul jelennek meg
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	kimaradtak a rajz túl mélyen egymásba ágyazott vagy az importálási korlátokon túli részei
 @msg	damaged parts of the drawing were left out	kimaradtak a rajz sérült részei
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	a 163 830 pt-nál hosszabb CDR-oldalak ekkora hosszal nyíltak meg, és a szélük közelében lévő grafika a rajztáblán kívül esik

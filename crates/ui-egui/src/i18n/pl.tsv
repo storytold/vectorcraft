@@ -5154,6 +5154,7 @@ imageTrace	Outline	Kontur
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	kolory z bibliotek CDR, które rysunek zapisuje tylko jako numer, otwarto jako czarne kolory dodatkowe
 @msg	CDR outline arrowheads were left out	pominięto groty strzałek na obrysach CDR
 @msg	CDR envelopes were not applied, and the shapes under them keep their outlines	obwiednie CDR nie zostały zastosowane, a kształty pod nimi zachowują swoje obrysy
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	soczewki i przezroczystość obiektów CDR nie zostały zastosowane, a obiekty, na których się znajdują, są wyświetlane jako nieprzezroczyste
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	pominięto części rysunku zagnieżdżone zbyt głęboko lub wykraczające poza limity importu
 @msg	damaged parts of the drawing were left out	pominięto uszkodzone części rysunku
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	strony CDR dłuższe niż 163 830 pt otwarto z tą długością, a grafika przy ich krawędziach leży poza obszarem kompozycji

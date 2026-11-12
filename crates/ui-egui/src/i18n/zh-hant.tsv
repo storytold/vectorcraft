@@ -2606,6 +2606,7 @@ file-filter	Templates	範本
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	繪圖僅以編號儲存的 CDR 色彩庫顏色已以黑色特別色開啟
 @msg	CDR outline arrowheads were left out	已略過 CDR 外框線的箭頭
 @msg	CDR envelopes were not applied, and the shapes under them keep their outlines	未套用 CDR 封套，其中的形狀保留原有外框
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	未套用 CDR 透鏡和物件透明度，相關物件顯示為不透明
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	已略過繪圖中巢狀過深或超出讀入限制的部分
 @msg	damaged parts of the drawing were left out	已略過繪圖中損壞的部分
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	長度超過 163,830 pt 的 CDR 頁面已以該長度開啟，其邊緣附近的圖稿位於工作區域之外

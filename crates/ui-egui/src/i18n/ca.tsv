@@ -6698,6 +6698,7 @@ breakText	Glyphs	Glifs
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	els colors de biblioteca del CDR que el dibuix desa només pel número s’han obert com a colors directes negres
 @msg	CDR outline arrowheads were left out	s’han omès les puntes de fletxa dels contorns del CDR
 @msg	CDR envelopes were not applied, and the shapes under them keep their outlines	no s’han aplicat les envoltants del CDR, i les formes que hi ha a sota conserven els seus contorns
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	no s’han aplicat les lents ni la transparència dels objectes del CDR, i els objectes on són es mostren opacs
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	s’han omès les parts del dibuix imbricades massa a fons o fora dels límits d’importació
 @msg	damaged parts of the drawing were left out	s’han omès les parts danyades del dibuix
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	les pàgines del CDR de més de 163.830 pt s’han obert amb aquesta longitud, i el dibuix a prop de les vores queda fora del tauler

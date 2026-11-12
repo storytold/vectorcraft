@@ -4827,6 +4827,7 @@ imageTrace	Outline	轮廓
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	绘图仅按编号存储的 CDR 库颜色已作为黑色专色打开
 @msg	CDR outline arrowheads were left out	已略去 CDR 轮廓线的箭头
 @msg	CDR envelopes were not applied, and the shapes under them keep their outlines	未应用 CDR 封套，其中的形状保留原有轮廓
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	未应用 CDR 透镜和对象透明度，相关对象显示为不透明
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	已略去绘图中嵌套过深或超出导入限制的部分
 @msg	damaged parts of the drawing were left out	已略去绘图中损坏的部分
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	长度超过 163,830 pt 的 CDR 页面已按该长度打开，其边缘附近的图稿位于画板之外

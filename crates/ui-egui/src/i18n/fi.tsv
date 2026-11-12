@@ -5230,6 +5230,7 @@ imageTrace	Outline	Ääriviiva
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	CDR-kirjastovärit, jotka piirros tallentaa vain numerona, avattiin mustina spottiväreinä
 @msg	CDR outline arrowheads were left out	CDR-ääriviivojen nuolenkärjet jätettiin pois
 @msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR-verhokäyriä ei käytetty, ja niiden alla olevat muodot säilyttävät ääriviivansa
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR-linssejä ja objektien läpinäkyvyyttä ei käytetty, ja objektit, joissa niitä on, näkyvät peittävinä
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	liian syvälle sisäkkäiset tai tuontirajojen ylittävät piirroksen osat jätettiin pois
 @msg	damaged parts of the drawing were left out	piirroksen vahingoittuneet osat jätettiin pois
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	yli 163 830 pt pitkät CDR-sivut avattiin tämän pituisina, ja niiden reunojen lähellä oleva grafiikka on piirtoalustan ulkopuolella

@@ -5079,6 +5079,7 @@ theme	Appearance	Erscheinungsbild
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	CDR-Bibliotheksfarben, die die Zeichnung nur als Nummer speichert, wurden als schwarze Volltonfarben geöffnet
 @msg	CDR outline arrowheads were left out	Pfeilspitzen an CDR-Umrisslinien wurden ausgelassen
 @msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR-Hüllen wurden nicht angewendet, und die Formen darunter behalten ihre Umrisse
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR-Linsen und Objekttransparenz wurden nicht angewendet, und die Objekte, auf denen sie liegen, erscheinen deckend
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	Teile der Zeichnung, die zu tief verschachtelt sind oder die Importgrenzen überschreiten, wurden ausgelassen
 @msg	damaged parts of the drawing were left out	beschädigte Teile der Zeichnung wurden ausgelassen
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	CDR-Seiten, die länger als 163.830 pt sind, wurden in dieser Länge geöffnet, und Grafik nahe ihren Rändern liegt außerhalb der Zeichenfläche

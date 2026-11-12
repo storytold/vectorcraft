@@ -5328,6 +5328,7 @@ imageTrace	Outline	Obrys
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	knihovní barvy CDR, které výkres ukládá jen číslem, byly otevřeny jako černé přímé barvy
 @msg	CDR outline arrowheads were left out	šipky na obrysových čarách CDR byly vynechány
 @msg	CDR envelopes were not applied, and the shapes under them keep their outlines	obálky CDR nebyly použity a tvary pod nimi si ponechávají své obrysy
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	čočky a průhlednost objektů CDR nebyly použity a objekty, na kterých jsou, se zobrazují neprůhledně
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	části výkresu vnořené příliš hluboko nebo za hranicemi importu byly vynechány
 @msg	damaged parts of the drawing were left out	poškozené části výkresu byly vynechány
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	stránky CDR delší než 163 830 pt byly otevřeny v této délce a kresba u jejich okrajů leží mimo pracovní plochu

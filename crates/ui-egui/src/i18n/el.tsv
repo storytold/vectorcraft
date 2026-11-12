@@ -5007,6 +5007,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	τα χρώματα βιβλιοθήκης του CDR που το σχέδιο αποθηκεύει μόνο με αριθμό ανοίχτηκαν ως μαύρα πλακάτα χρώματα
 @msg	CDR outline arrowheads were left out	παραλείφθηκαν οι αιχμές βελών των γραμμών περιγράμματος του CDR
 @msg	CDR envelopes were not applied, and the shapes under them keep their outlines	δεν εφαρμόστηκαν τα περιβλήματα του CDR, και τα σχήματα κάτω από αυτά διατηρούν τα περιγράμματά τους
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	δεν εφαρμόστηκαν οι φακοί και η διαφάνεια αντικειμένων του CDR, και τα αντικείμενα στα οποία βρίσκονται εμφανίζονται αδιαφανή
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	παραλείφθηκαν τμήματα του σχεδίου με υπερβολικά βαθιά ένθεση ή πέρα από τα όρια εισαγωγής
 @msg	damaged parts of the drawing were left out	παραλείφθηκαν κατεστραμμένα τμήματα του σχεδίου
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	οι σελίδες του CDR με μήκος πάνω από 163.830 pt ανοίχτηκαν σε αυτό το μήκος και το γραφικό κοντά στα άκρα τους βρίσκεται έξω από τον πίνακα σχεδίασης

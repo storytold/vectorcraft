@@ -5065,6 +5065,7 @@ theme	Appearance	외관
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	도면이 번호로만 저장한 CDR 라이브러리 색상은 검정 별색으로 열었습니다
 @msg	CDR outline arrowheads were left out	CDR 외곽선의 화살촉은 제외했습니다
 @msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR 엔벨로프는 적용하지 않았으며, 그 아래의 도형은 원래 외곽선을 유지합니다
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR 렌즈와 개체 투명도는 적용하지 않았으며, 해당 개체는 불투명하게 표시됩니다
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	너무 깊이 중첩되었거나 가져오기 한도를 넘은 도면 부분은 제외했습니다
 @msg	damaged parts of the drawing were left out	도면의 손상된 부분은 제외했습니다
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163,830pt보다 긴 CDR 페이지는 그 길이로 열었으며, 가장자리 근처의 아트는 아트보드 밖에 있습니다

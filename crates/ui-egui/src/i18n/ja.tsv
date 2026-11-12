@@ -5138,6 +5138,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	図面が番号だけで保存している CDR のライブラリカラーは黒の特色として開きました
 @msg	CDR outline arrowheads were left out	CDR のアウトラインの矢印は除外されました
 @msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR のエンベロープは適用されず、その下のシェイプは元のアウトラインのままです
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR のレンズとオブジェクトの透明度は適用されず、それらがあるオブジェクトは不透明で表示されます
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	入れ子が深すぎる図面の部分や読み込みの上限を超えた部分は除外されました
 @msg	damaged parts of the drawing were left out	図面の破損した部分は除外されました
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163,830 pt より長い CDR のページはその長さで開いたため、端の近くのアートはアートボードの外にあります

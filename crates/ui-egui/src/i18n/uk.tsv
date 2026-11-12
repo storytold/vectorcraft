@@ -5081,6 +5081,7 @@ axis	Both	Обидві
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	бібліотечні кольори CDR, які малюнок зберігає лише за номером, відкрито як чорні плашкові кольори
 @msg	CDR outline arrowheads were left out	наконечники стрілок абрисів CDR було пропущено
 @msg	CDR envelopes were not applied, and the shapes under them keep their outlines	оболонки CDR не було застосовано, і фігури під ними зберігають свої контури
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	лінзи та прозорість об’єктів CDR не було застосовано, і об’єкти, до яких вони належать, показано непрозорими
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	частини малюнка із надто глибоким вкладенням або поза межами обмежень імпорту було пропущено
 @msg	damaged parts of the drawing were left out	пошкоджені частини малюнка було пропущено
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	сторінки CDR, довші за 163 830 pt, відкрито з цією довжиною, і графіка біля їхніх країв лежить поза монтажною областю

@@ -4549,6 +4549,7 @@ axis	Both	Ambos
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	cores de biblioteca do CDR que o desenho guarda apenas pelo número foram abertas como cores spot pretas
 @msg	CDR outline arrowheads were left out	as pontas de seta das linhas de contorno do CDR foram omitidas
 @msg	CDR envelopes were not applied, and the shapes under them keep their outlines	os envelopes do CDR não foram aplicados, e as formas sob eles mantêm seus contornos
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	as lentes e a transparência de objetos do CDR não foram aplicadas, e os objetos em que estão aparecem opacos
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	partes do desenho aninhadas profundamente demais ou além dos limites de importação foram omitidas
 @msg	damaged parts of the drawing were left out	partes danificadas do desenho foram omitidas
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	páginas do CDR com mais de 163.830 pt foram abertas com esse comprimento, e a arte perto das bordas fica fora da prancheta
