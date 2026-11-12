@@ -9966,9 +9966,10 @@ selected art and weeding lines across the box, so the waste vinyl around the art
 VectorCraft's own. The weed box is a rectangle `margin` points (0 to 100000, default 9) outside the art's bounds;
 `box: false` leaves it out. The weeding lines run `"horizontal"`, `"vertical"` or `"both"` ways (default `"both"`) from
 one side of the box to the other and divide it evenly: `count` lines each way (a whole number from 0 to 1000, default 1),
-or with `spacing` instead, as few lines as keep them at most that far apart. A line is left out over the art's area and
-within `gap` points of its outlines (0 to 100000, default 0: the lines stop at the outlines), so it ends in several
-pieces, each a straight path. The lines and the box are stroked `weight` points wide (0.01 to 1000, default 0.3) in the
+or with `spacing` points instead (more than 0 and at most 100000), as few lines as keep them at most that far apart. A
+`spacing` that needs more than 1000 lines each way is refused, and so is a request that gives both `count` and
+`spacing`. A line is left out over the art's area and within `gap` points of its outlines (0 to 100000, default 0: the
+lines stop at the outlines), so it ends in several pieces, each a straight path. The lines and the box are stroked `weight` points wide (0.01 to 1000, default 0.3) in the
 color swatch `swatch` (default `"[Registration]"`), with no fill.
 
 The art is measured by the outlines a cutter cuts. Closed paths enclose their area by their fill rule, so the hole of a
