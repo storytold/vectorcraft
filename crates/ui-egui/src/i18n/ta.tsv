@@ -425,6 +425,11 @@ antiAlias	Sharp	கூர்மையான
 	Art Brush Options	ஓவியத் தூரிகை விருப்பங்கள்
 	Art Optimized	ஓவியத்திற்கு உகந்தது
 	Art Ribbons	ஓவிய ரிப்பன்கள்
+	Ink and Wash	மையும் நீர்ப்பூச்சும்
+	Tapered Ink	குறுகும் மை
+	Brush Pen	தூரிகைப் பேனா
+	Soft Wash	மென்மையான நீர்ப்பூச்சு
+	Pooling Wash	தேங்கும் நீர்ப்பூச்சு
 	Zigzag	ஜிக்ஜாக்
 	Burst Ray	வெடிப்புக் கதிர்
 	Dash Trail	கோட்டுத் துண்டுத் தடம்
@@ -3914,6 +3919,7 @@ antiAlias	Sharp	கூர்மையான
 	Reshape Segment	பகுதியை மறுவடிவமை
 	Reshape Spine	முதுகெலும்பை மறுவடிவமை
 	Reshape Spine Segment	முதுகெலும்புப் பகுதியை மறுவடிவமை
+	Blend Easing	கலப்பு மென்மையாக்கம்
 	Reshape Tool	மறுவடிவக் கருவி
 	Reshape Type Area	உரைப் பரப்பை மறுவடிவமை
 	Reshape Type Path	உரைப் பாதையை மறுவடிவமை
@@ -5034,6 +5040,7 @@ antiAlias	Sharp	கூர்மையான
 	Tracking	எழுத்துவரிசை இடைவெளி
 	Trackpad Gesture to Rotate View	காட்சியைச் சுழற்ற டிராக்பேட் சைகை
 	Hold a Tool Shortcut to Use the Tool Temporarily	கருவியைத் தற்காலிகமாகப் பயன்படுத்த அதன் குறுக்குவழியை அழுத்திப் பிடி
+	Show Bounding Box While Moving and Drawing	நகர்த்தும்போதும் வரையும்போதும் எல்லைப்பெட்டியைக் காட்டு
 	Trademark Symbol	வணிகக் குறியீடு
 	Transform	உருமாற்று
 	Transform Again	மீண்டும் உருமாற்று
