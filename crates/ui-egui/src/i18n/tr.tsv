@@ -2171,6 +2171,10 @@ shape	Open	Açık
 	Arch	Kemer
 @msg	select point type or type on a path	nokta metni veya yol üzerindeki yazıyı seçin
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	zincirli metindeki yol üzerindeki yazı dinamik metin kullanamaz: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	açık veya bileşik bir yol üzerindeki yazı üstte veya altta ortalanamaz: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	uzunluğu ya da yüksekliği olmayan yol üzerindeki yazı ortalanamaz: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	zincirli metindeki yol üzerindeki yazı üstte veya altta ortalanamaz: {frames}
+@msg	select type on a closed path	kapalı bir yol üzerindeki yazıyı seçin
 	Optimize for fast web view	Hızlı web görünümü için optimize edin
 	Optimized	Optimize edilmiş
 	Options	Seçenekler
@@ -3532,6 +3536,8 @@ digits	Malayalam	Malayalam
 	Type on a Path	Bir Yola Yazın
 	Type on a Path Options	Yol Seçenekleri Üzerine Yazma
 	Type on a Path Options…	Yol Seçenekleri Üzerine Yazma…
+	Center on Top	Üstte ortala
+	Center on Bottom	Altta ortala
 	Type on a Path Tool	Yola Yazma Aracı
 	Type Orientation	Tip Yönü
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Yazı metin olarak kalır ve her kontur, çizgi kalınlığı ve tireleriyle birlikte bir çizgidir.
@@ -6035,6 +6041,7 @@ axis	Y Axis	Y ekseni
 	Snap to Tangent	Teğete Yasla
 	Snap to Perpendicular	Dikeye Yasla
 	Geometric Guides	Geometrik Kılavuzlar
+	Optical Effects	Optik Efektler
 	Geometric Patterns	Geometrik Desenler
 	Grit Textures	Grenli Dokular
 @msg	`method` must be classic or perceptual	`method` classic veya perceptual olmalıdır

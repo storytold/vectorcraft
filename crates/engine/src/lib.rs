@@ -382,7 +382,7 @@ pub(crate) use command_sets::SELECTS_GIVEN_IDS;
 use command_sets::given_ids;
 pub use command_sets::{FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_tool_edit};
 pub use doc_state::{DocState, OpenRows, RecalledSelection};
-pub use error::{EngineError, Result, SCRIPT_BUSY};
+pub use error::{EngineError, READ_ONLY_LOCATION, Result, SCRIPT_BUSY};
 #[cfg(test)]
 use history::history_budget_for;
 pub use history::{History, HistoryEntry, NamedStep, default_history_budget};
