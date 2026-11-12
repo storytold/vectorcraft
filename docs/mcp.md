@@ -7849,12 +7849,12 @@ its look, in one undo step. Point type in the selection is left as it is, and ar
 ([Dynamic Text: Block](#dynamic-text-block)). Type on a path in a
 thread is refused with an error that names it, and the menu item and the task bar item are not offered for it;
 `text.thread.create` and `text.thread.add` turn Dynamic Text off on the frames they thread, at their drawn sizes, and
-list them in `dynamicTextOff`. When every object already has the setting asked for, nothing changes and no undo step
+list them in `dynamicTextOff`; `addon.type.releasePath` turns it off at the drawn sizes on the point type it makes. When every object already has the setting asked for, nothing changes and no undo step
 is recorded. It replies `{on, ids, fitScale}` (the first object's factor, 1 when off), and the menu item is checked
 while the first selected type on a path or area type has it on. `document.inspect` reports `dynamicText` and `fitScale` for type
-on a path. New type and documents from before it have it off, and it is saved only when on. SVG, PDF, EPS and the
-editing data for other apps write the type at its drawn sizes; the editing data does not hold the setting and says
-so in a warning.
+on a path. New type and documents from before it have it off, and it is saved only when on. SVG, PDF, EPS, legacy
+`.ai` and the editing data for other apps write the type at its drawn sizes; legacy `.ai` and the editing data do not
+hold the setting, and each says so in a warning.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.dynamicText","params":{"on":true}}}
@@ -9710,7 +9710,9 @@ VectorCraft addition and changes no parity score.
 - **The text** keeps its runs with their character attributes and its paragraph attributes, and becomes point type on
   one straight line along the object's own axis, with the baseline starting where the first character sat on the path
   (type with no characters starts at its start bracket). Type on a Path Options (effect, align to path, spacing, flip,
-  brackets) don't apply to point type and are dropped. Without `keepOriginal` the type object itself becomes the point
+  brackets) don't apply to point type and are dropped. Type with Dynamic Text on (`type.dynamicText`) becomes point
+  type with it off, at the sizes it was drawn at: each size, leading and baseline shift is multiplied by the fit factor.
+  Without `keepOriginal` the type object itself becomes the point
   type, keeping its id, so a frame of threaded text leaves its thread with the text it holds, as
   `type.convertToPointType` does for area type.
 - It acts on the type on a path among `ids` (or `id`, else the selection), groups included; other objects are left
