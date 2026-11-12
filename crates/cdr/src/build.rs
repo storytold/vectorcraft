@@ -193,8 +193,20 @@ fn flags(ix: &Index, list: &Chunk) -> Option<[u8; 4]> {
     ix.data(c).get(..4)?.try_into().ok()
 }
 
-/// What a layer's flags make it (R19). Byte 0 holds the kind; versions 7 to 13 flag the master
-/// page's desktop layer 0 with bytes 1 and 2 set, and its guides layer 2.
+/// What a layer's object type makes it (R19): 11 a grid, 12 guides, 17 the desktop, any other a
+/// drawing layer. Version 3 counts its types from 0, one less (R32).
+fn layer_kind_of_type(kind: u32, types_from_zero: bool) -> LayerKind {
+    match kind.saturating_add(u32::from(types_from_zero)) {
+        11 => LayerKind::Grid,
+        12 => LayerKind::Guides,
+        17 => LayerKind::Desktop,
+        _ => LayerKind::Drawing,
+    }
+}
+
+/// What a layer's flags make it, for a layer without an object type of its own (R19). Byte 0 holds
+/// the kind; versions 7 to 13 may flag the master page's desktop layer 0 with bytes 1 and 2 set,
+/// and its guides layer 2.
 fn layer_kind(f: [u8; 4], version_below_14: bool) -> LayerKind {
     let [b0, b1, b2, _] = f;
     if b0 & 0x10 != 0 {
@@ -283,8 +295,12 @@ impl<'a, 'b> Ctx<'a, 'b> {
 
     fn layer(&mut self, list: &Chunk) -> Layer {
         let ix = self.ix;
-        let kind = flags(ix, list).map_or(LayerKind::Drawing, |f| layer_kind(f, self.p.old_master_flags));
         let loda = own_loda(ix, list).and_then(|c| records::loda(ix.data(c), &self.p, &self.budget.limits, self.warn));
+        // The layer's own object type says what it is; its flags, only when it has none (R19).
+        let kind = match &loda {
+            Some(l) => layer_kind_of_type(l.kind, self.p.types_from_zero),
+            None => flags(ix, list).map_or(LayerKind::Drawing, |f| layer_kind(f, self.p.old_master_flags)),
+        };
         let name = loda.and_then(|l| l.arg(ARG_NAME).map(|b| records::name(b, &self.p, self.warn))).unwrap_or_default();
         let mut guides = Vec::new();
         let objects = self.objects(ix.children(list), &mut guides);

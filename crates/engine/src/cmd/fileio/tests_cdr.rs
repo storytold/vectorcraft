@@ -118,7 +118,7 @@ fn versions_3_and_4_open_and_place_as_editable_art() {
 fn versions_1_and_2_open_and_place_as_editable_art() {
     use vectorcraft_color::{Color, Paint};
     use vectorcraft_doc::appearance::AppearanceItem;
-    for marker in *b"em" {
+    for marker in *b"elm" {
         let bytes = synth::wl_sample(marker);
         let mut s = Session::new();
         for name in ["drawing.cdr", "renamed.bin"] {

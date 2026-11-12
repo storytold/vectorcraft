@@ -6852,10 +6852,11 @@ fountain, pattern, texture and PostScript fills, and outline arrowheads are left
 were left out. Drawings of versions after 27 are refused with a message, and so are packages that are
 encrypted, ZIP64 archives or split across files. VectorCraft doesn't write `.cdr` files.
 
-No public specification covers versions 1 to 4, so the importer reads what published notes describe. A drawing of
-version 1 or 2 opens as one page with one layer: its rectangles, whole ellipses and curves with their matrices, uniform
-fills and outlines with their width and color. Its text, its arcs and pies, and its fills of other types are left out
-with the same warnings, and its groups are not kept. A drawing of version 3 opens with its pages, layers and groups;
+No public specification covers versions 1 to 4, so the importer reads the layouts found in public sample files. A
+drawing of version 1 or 2 opens as one page with one layer: its rectangles, whole ellipses and curves with their
+matrices, uniform fills and outlines with their width and color. Its text, its arcs and pies, and its fills of other
+types are left out with the same warnings, and its groups are not kept. An object of another type ends the read of
+its records, with the warning for unsupported objects. A drawing of version 3 opens with its pages, layers and groups;
 an envelope is not applied, so an object or a group under one keeps its outline, placed by its matrices, and the
 `warnings` say so. A drawing of
 version 4 opens as one of version 5 does. A file is taken for version 1 or 2 by its content only when the offsets in

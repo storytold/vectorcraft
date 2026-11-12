@@ -15,7 +15,7 @@ with each object's transform. It does not write `.cdr` files.
 | Layers (drawing, desktop, guides and grid layers), the master page's among them | layers by name and kind |
 | Guidelines (object type 0x16, and the version 7 `guid` chunk) | guidelines at their point and angle |
 | Groups (`LIST grp `) | groups |
-| Curves (point lists of moves, lines and cubic curves) and paths (object type 0x25, version 16 on) | paths |
+| Curves (point lists of moves, lines and cubic curves) and paths (object type 0x25, version 10 on) | paths |
 | Rectangles (one corner radius, four from version 9) | rectangles with each corner's radius |
 | Ellipses, arcs and pies | ellipses, and paths for arcs and pies |
 | Polygons and stars (a base side copied for each side) | paths |
@@ -29,19 +29,19 @@ that are encrypted, ZIP64 archives or split across files.
 
 ## Versions 1 to 4
 
-No public specification covers these versions. The reader follows the published notes that
-`PROVENANCE.md` cites (rows R31 to R44), and the files of these versions it has read are the
-synthetic ones that `src/synth.rs` builds from those rows.
+No public specification covers these versions. The reader follows the layouts of public sample
+files that `PROVENANCE.md` lists (rows R31 to R44), and its tests read the synthetic files that
+`src/synth.rs` builds from those rows.
 
 | Version | Read | Left out or refused |
 |---|---|---|
-| 1 and 2 (`WL` files) | the page size; rectangles with one corner radius, whole ellipses and curves, each with its matrix; uniform fills and outlines with their width and color, in CMYK percent and the inks black and white. The objects come in on one page and one layer, front to back | text and objects of other types, and ellipses whose two angles differ (arcs and pies), with the unsupported-objects warning; fills of other types, with the unsupported-fills warning; inks of a numbered library, which read as spot colors without a look; groups and layers, whose records are passed over; dashes, caps, joins and arrowheads, which the notes do not place |
+| 1 and 2 (`WL` files) | the page size; rectangles with one corner radius, whole ellipses and curves, each with its matrix; uniform fills and outlines with their width and color, in CMYK percent and the inks black and white. The objects come in on one page and one layer, front to back | text and objects of other types, and ellipses whose two angles differ (arcs and pies), with the unsupported-objects warning; fills of other types, with the unsupported-fills warning; inks of a numbered library, which read as spot colors without a look; groups and layers, whose records are passed over; dashes, caps, joins and arrowheads, which the reader does not look for; the records after a drawn object of another type, with the unsupported-objects warning |
 | 3 (RIFF, form type `CDR `) | the page size from the page's corners; pages, layers and groups; rectangles, ellipses, arcs and curves with the matrices of the object and of the groups around it; uniform fills; outlines with their width, color, caps, joins and dashes | text and bitmaps; envelopes, with the envelopes warning (the objects and groups under one keep their outlines and matrices); fountain, pattern and texture fills; arrowheads |
 | 4 (RIFF, form type `CDR4`) | as version 5, with the colors and the fixed-point transforms of version 4 | as version 5 |
 
 A file is taken for version 1 or 2 by its content only when, after `WL`, its marker byte is one of
-`d`, `e` and `m`, the next byte is zero, and the record offsets of its header fit the file. The
-reader reports version 2 for the marker `m` and version 1 for the other two. A RIFF file that names
+`e`, `l` and `m`, the next byte is zero, and the offsets of its header fit the file. The reader
+reports version 1 for the marker `e` and version 2 for the other two. A RIFF file that names
 a version before 3 is refused, and so is the version 4 template form type `CDST`, which reads as
 not a `.cdr` drawing.
 

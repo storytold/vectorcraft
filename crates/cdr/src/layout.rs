@@ -95,7 +95,7 @@ const fn profile(from: u16) -> Profile {
         outl_after_color: if short { 10 } else { 16 },
         marker_after_dash: if from >= 1300 {
             Some(20)
-        } else if from == 700 || from >= 1100 {
+        } else if from >= 600 {
             Some(22)
         } else {
             None
@@ -103,7 +103,7 @@ const fn profile(from: u16) -> Profile {
         four_radii: from >= 900,
         f64_rect: from >= 1500,
         old_master_flags: from < 1400,
-        paths: from >= 1600,
+        paths: from >= 1000,
         utf16_names: from >= 1200,
     }
 }
@@ -120,6 +120,7 @@ const PROFILES: &[(u16, Profile)] = &[
     (700, profile(700)),
     (800, profile(800)),
     (900, profile(900)),
+    (1000, profile(1000)),
     (1100, profile(1100)),
     (1200, profile(1200)),
     (1300, profile(1300)),
@@ -166,12 +167,13 @@ mod tests {
         assert!(for_version(500).is_some_and(|p| !p.fixed_matrix && !p.types_from_zero && p.color == ColorLayout::Record12));
         assert!(for_version(1300).is_some_and(|p| p.old_master_flags));
         assert!(for_version(1400).is_some_and(|p| p.tagged && !p.f64_rect && !p.old_master_flags));
-        assert!(for_version(1500).is_some_and(|p| p.tagged && p.f64_rect && p.mcfg_skip == 12 && !p.paths));
+        assert!(for_version(1500).is_some_and(|p| p.tagged && p.f64_rect && p.mcfg_skip == 12 && p.paths));
         assert!(for_version(2430).is_some_and(|p| p.f64_rect && p.paths && p.utf16_names));
-        assert!(for_version(500).is_some_and(|p| p.short && p.mcfg_skip == 0));
-        assert!(for_version(600).is_some_and(|p| !p.short && p.mcfg_skip == 28));
-        assert!(for_version(801).is_some_and(|p| p.mcfg_skip == 0 && p.marker_after_dash.is_none()));
-        assert!(for_version(1000).is_some_and(|p| p.mcfg_skip == 4 && p.four_radii && !p.utf16_names));
+        assert!(for_version(500).is_some_and(|p| p.short && p.mcfg_skip == 0 && p.marker_after_dash.is_none()));
+        assert!(for_version(600).is_some_and(|p| !p.short && p.mcfg_skip == 28 && p.marker_after_dash == Some(22)));
+        assert!(for_version(801).is_some_and(|p| p.mcfg_skip == 0 && p.marker_after_dash == Some(22)));
+        assert!(for_version(999).is_some_and(|p| !p.paths && p.marker_after_dash == Some(22)));
+        assert!(for_version(1000).is_some_and(|p| p.mcfg_skip == 4 && p.four_radii && !p.utf16_names && p.paths));
         assert!(for_version(1300).is_some_and(|p| p.tagged && p.trfd_head == 8 && p.outl_after_angle == 46));
         // The table is in order, so the search finds each range's own row.
         assert!(PROFILES.windows(2).all(|w| w[0].0 < w[1].0));

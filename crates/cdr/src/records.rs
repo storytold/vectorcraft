@@ -414,6 +414,40 @@ fn windows_1252(c: u8) -> char {
 mod tests {
     use super::*;
 
+    /// An outline that names an arrowhead says so with a warning, in each version whose arrowhead
+    /// ids have a known place: 22 bytes after the first dash in versions 6 to 12, 20 from 13.
+    #[test]
+    fn arrowheads_are_named_from_version_6() {
+        let pen = crate::synth::Pen { line_type: 0, width: 1.0, cap: 0, join: 0 };
+        let color = [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100];
+        for (version, place) in [
+            (500, None),
+            (600, Some(22)),
+            (700, Some(22)),
+            (800, Some(22)),
+            (900, Some(22)),
+            (1000, Some(22)),
+            (1100, Some(22)),
+            (1200, Some(22)),
+            (1300, Some(20)),
+            (1700, Some(20)),
+        ] {
+            let p = crate::layout::for_version(version).unwrap();
+            let plain = crate::synth::V(version).outline(7, pen, &color, &[]);
+            // The record ends with 32 bytes after its dashes, and this one has none.
+            let first_dash = plain.len() - 32;
+            let mut w = vec![];
+            assert!(outline(&plain, &p, &mut w).is_some_and(|(id, o)| id == 7 && o.is_some()), "{version}");
+            assert!(w.is_empty(), "{version}: {w:?}");
+            let Some(place) = place else { continue };
+            let mut arrow = plain.clone();
+            arrow[first_dash + place..first_dash + place + 4].copy_from_slice(&9u32.to_le_bytes());
+            let mut w = vec![];
+            assert!(outline(&arrow, &p, &mut w).is_some(), "{version}");
+            assert_eq!(w, vec![Warning::Arrowheads], "{version}");
+        }
+    }
+
     #[test]
     fn single_byte_names_read_as_windows_1252() {
         let p = crate::layout::for_version(1100).unwrap();

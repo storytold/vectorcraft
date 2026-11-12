@@ -344,7 +344,7 @@ proptest! {
     // Drawings of versions 1 and 2 are not RIFF files: a header of offsets, then records.
     #[test]
     fn cdr_mutated_wl_drawings_render_and_export(
-        marker in prop::sample::select(vec![b'd', b'e', b'm']),
+        marker in prop::sample::select(vec![b'e', b'l', b'm']),
         cut in prop::option::of(0usize..1024),
         edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
     ) {
@@ -366,7 +366,7 @@ proptest! {
 
     #[test]
     fn cdr_garbage_after_a_wl_header_opens_and_places_without_panicking(
-        marker in prop::sample::select(vec![b'd', b'e', b'm']),
+        marker in prop::sample::select(vec![b'e', b'l', b'm']),
         tail in prop::collection::vec(any::<u8>(), 0..2048),
     ) {
         // Offsets that fit the file, so the garbage is walked as records.

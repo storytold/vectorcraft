@@ -336,7 +336,7 @@ fn wl_objects(d: &vectorcraft_cdr::Drawing) -> &[Object] {
 
 #[test]
 fn versions_1_and_2_read_their_sample() {
-    for (marker, version) in [(b'e', 100), (b'd', 100), (b'm', 200)] {
+    for (marker, version) in [(b'e', 100), (b'l', 200), (b'm', 200)] {
         let file = synth::wl_sample(marker);
         assert!(file.starts_with(b"WL") && vectorcraft_cdr::is_cdr(&file));
         let d = read(&file, Limits::default()).unwrap();
@@ -855,7 +855,7 @@ fn rectangles_from_version_15_give_radii_as_shares_of_half_the_shorter_side() {
 }
 
 #[test]
-fn paths_of_version_16_read_their_points() {
+fn paths_from_version_10_read_their_points() {
     let v = V(1700);
     let mut c = vec![0; 4];
     c.extend(2u16.to_le_bytes());
@@ -869,13 +869,15 @@ fn paths_of_version_16_read_their_points() {
             &[synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![synth::object(v, 0x25, &[(30, c.clone())], None)])])],
         )
     };
-    let d = read(&objects(1700), Limits::default()).unwrap();
-    let s = shapes(&d.pages[0].layers[0].objects);
-    let Geometry::Path(p) = &s[0].geometry else { panic!("{:?}", s[0].geometry) };
-    assert_eq!(p.subpaths[0].segments.len(), 2);
-    assert!(d.warnings.is_empty(), "{:?}", d.warnings);
-    // Before 16 the type is not a path.
-    let d = read(&objects(1500), Limits::default()).unwrap();
+    for version in [1000, 1300, 1500, 1700] {
+        let d = read(&objects(version), Limits::default()).unwrap();
+        let s = shapes(&d.pages[0].layers[0].objects);
+        let Geometry::Path(p) = &s[0].geometry else { panic!("{version}: {:?}", s[0].geometry) };
+        assert_eq!(p.subpaths[0].segments.len(), 2);
+        assert!(d.warnings.is_empty(), "{version}: {:?}", d.warnings);
+    }
+    // No sample before version 10 holds the type, so it is not read as a path there.
+    let d = read(&objects(900), Limits::default()).unwrap();
     assert!(d.pages[0].layers[0].objects.is_empty() && d.warnings.contains(&Warning::UnsupportedObjects));
 }
 
@@ -900,21 +902,37 @@ fn a_template_takes_its_version_from_the_vrsn_chunk() {
 }
 
 #[test]
-fn master_page_layers_take_their_kind_by_byte_0_from_version_14() {
-    // Flags that mark the master page's guides and desktop layers in versions 7 to 13 mark
-    // drawing layers from 14.
-    for version in [1300, 1700] {
+fn layers_take_their_kind_from_their_object_type() {
+    for version in [300, 800, 1300, 1700] {
         let v = V(version);
         let rect = || synth::object(v, 1, &[(30, v.rect(10.0, 10.0, 0.0))], None);
-        let master =
-            synth::page(true, vec![synth::layer(v, [2, 1, 1, 0x98], "G", vec![rect()]), synth::layer(v, [0, 1, 1, 0x98], "D", vec![rect()])]);
-        let own = synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![rect()])]);
+        // Version 3 counts its types from 0 (R32).
+        let ty = |t: u32| if version < 400 { t - 1 } else { t };
+        // Master page layers flagged in the older way, with the types of guides and desktop layers,
+        // and a drawing layer whose flags would make it a desktop layer.
+        let master = synth::page(
+            true,
+            vec![
+                synth::layer_of_type(v, [2, 1, 1, 0x98], ty(12), "G", vec![rect()]),
+                synth::layer_of_type(v, [0, 1, 1, 0x98], ty(17), "D", vec![rect()]),
+                synth::layer_of_type(v, [8, 1, 0, 0x98], 0, "M", vec![rect()]),
+            ],
+        );
+        // A drawing layer with flag bit 0x10 set, and a grid layer.
+        let own = synth::page(
+            false,
+            vec![
+                synth::layer_of_type(v, [0x10, 0, 0, 0x98], 0, "L", vec![rect()]),
+                synth::layer_of_type(v, [0x1a, 0, 1, 0x98], ty(11), "Grid", vec![rect()]),
+            ],
+        );
         let body = [chunk(b"vrsn", version.to_le_bytes().to_vec()), master, own];
         let file = if version < 1400 { synth::riff(version, &body) } else { synth::package16(version, &body, true, &[]) };
         let d = read(&file, Limits::default()).unwrap();
         let kinds: Vec<_> = d.master.iter().map(|l| l.kind).collect();
-        let want = if version < 1400 { vec![LayerKind::Guides, LayerKind::Desktop] } else { vec![LayerKind::Drawing, LayerKind::Drawing] };
-        assert_eq!(kinds, want, "{version}");
+        assert_eq!(kinds, [LayerKind::Guides, LayerKind::Desktop, LayerKind::Drawing], "{version}");
+        let kinds: Vec<_> = d.pages[0].layers.iter().map(|l| (l.kind, l.objects.len())).collect();
+        assert_eq!(kinds, [(LayerKind::Drawing, 1), (LayerKind::Grid, 1)], "{version}");
     }
 }
 
@@ -1416,7 +1434,7 @@ proptest! {
     }
 
     #[test]
-    fn never_panics_on_garbage_after_a_wl_header(marker in prop::sample::select(vec![b'd', b'e', b'm']), bytes in prop::collection::vec(any::<u8>(), 0..2048)) {
+    fn never_panics_on_garbage_after_a_wl_header(marker in prop::sample::select(vec![b'e', b'l', b'm']), bytes in prop::collection::vec(any::<u8>(), 0..2048)) {
         // Offsets that fit the file, so the garbage is walked as records.
         let mut b = vec![b'W', b'L', marker, 0];
         b.extend(28u32.to_le_bytes());
@@ -1429,7 +1447,7 @@ proptest! {
     }
 
     #[test]
-    fn never_panics_on_mutated_wl_files(marker in prop::sample::select(vec![b'd', b'e', b'm']), cut in any::<usize>(), edits in prop::collection::vec((any::<usize>(), any::<u8>()), 1..24)) {
+    fn never_panics_on_mutated_wl_files(marker in prop::sample::select(vec![b'e', b'l', b'm']), cut in any::<usize>(), edits in prop::collection::vec((any::<usize>(), any::<u8>()), 1..24)) {
         let mut b = synth::wl_sample(marker);
         let n = b.len();
         for (at, v) in edits {

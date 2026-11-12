@@ -426,11 +426,25 @@ pub fn object(v: V, kind: u32, args: &[(u32, Vec<u8>)], matrix: Option<[f64; 6]>
     list(b"obj ", vec![chunk(b"flgs", vec![0, 0, 0, 0x08]), list(b"lgob", own)])
 }
 
-/// A layer list of `kind` flags named `name` holding `objects`, its `loda` in a `lgob` list (R22).
+/// A layer list of `kind` flags named `name` holding `objects`, its `loda` in a `lgob` list (R22),
+/// with the object type that layers of such flags have in sample files (R19).
 pub fn layer(v: V, flags: [u8; 4], name: &str, objects: Vec<Node>) -> Node {
+    let kind = match flags {
+        [b0, ..] if b0 & 0x10 != 0 => 11,
+        [b0, ..] if b0 & 0x0f == 0x0a || b0 & 0x0f == 0x02 => 12,
+        [0x08, ..] | [0, 1, 1, _] => 17,
+        _ => 0,
+    };
+    // Version 3 counts its types from 0, one less (R32).
+    let kind = if v.0 < 400 && kind > 0 { kind - 1 } else { kind };
+    layer_of_type(v, flags, kind, name, objects)
+}
+
+/// A layer list as [`layer`] writes it, with the object type `kind` in its `loda`.
+pub fn layer_of_type(v: V, flags: [u8; 4], kind: u32, name: &str, objects: Vec<Node>) -> Node {
     let name: Vec<u8> =
         if v.0 >= 1200 { name.encode_utf16().chain([0]).flat_map(|u| u.to_le_bytes()).collect() } else { name.bytes().chain([0]).collect() };
-    let mut kids = vec![chunk(b"flgs", flags.to_vec()), list(b"lgob", vec![chunk(b"loda", v.loda(0, &[(1000, name)]))])];
+    let mut kids = vec![chunk(b"flgs", flags.to_vec()), list(b"lgob", vec![chunk(b"loda", v.loda(kind, &[(1000, name)]))])];
     kids.extend(objects);
     list(b"layr", kids)
 }
@@ -730,19 +744,20 @@ pub enum WlShape {
     Text,
 }
 
-/// A drawn object's record of a version 1 or 2 file (R42, R43, R44): `shape` placed by `matrix`
+/// A drawn object's record of a version 1 file (R42, R43, R44): `shape` placed by `matrix`
 /// `[a, b, c, d, e, f]` with offsets in points, a uniform fill of `fill` and an outline of a width
 /// in points and a color. The record's point holds the matrix's x offset and its `ty` the y
-/// offset.
+/// offset. [`wl_file`] moves the fill and the shape to their places in a version 2 file.
 pub fn wl_object(shape: WlShape, matrix: [f64; 6], fill: Option<[u8; 5]>, outline: Option<(f64, [u8; 5])>) -> Vec<u8> {
     let v = V(300);
     let (kind, body): (u8, Vec<u8>) = match shape {
-        WlShape::Rect { w, h, radius } => (0, [v.coord(w), v.coord(h), vec![0; 2], v.coord(radius)].concat()),
+        WlShape::Rect { w, h, radius } => (0, [v.coord(w), v.coord(h), v.coord(radius), vec![0; 2]].concat()),
         WlShape::Ellipse { w, h, angles } => (1, [v.coord(w), v.coord(h), angles.0.to_le_bytes().to_vec(), angles.1.to_le_bytes().to_vec()].concat()),
         WlShape::Curve(points) => (2, v.points(&points)),
         WlShape::Text => (3, vec![0; 30]),
     };
     let mut r = vec![0u8; (114 + body.len()).max(118)];
+    r[..4].copy_from_slice(&WL_RECORD_START);
     r[26] = 0x40;
     r[27] = 0x20;
     let size = (r.len() - 32) as u16;
@@ -768,27 +783,54 @@ pub fn wl_object(shape: WlShape, matrix: [f64; 6], fill: Option<[u8; 5]>, outlin
     r
 }
 
+/// The u32 that starts every record of a version 1 or 2 file (R42).
+const WL_RECORD_START: [u8; 4] = 24u32.to_le_bytes();
+
 /// A group or layer record of a version 1 or 2 file (R42): 28 bytes.
 pub fn wl_group() -> Vec<u8> {
     let mut r = vec![0u8; 28];
-    r[27] = 1;
+    r[..4].copy_from_slice(&WL_RECORD_START);
+    r[26] = 1;
+    r[27] = 0x60;
     r
 }
 
-/// A file of version 1 or 2 (R40, R41): the header with `marker` (`e` or `d`, or `m` for version
-/// 2), a page of `page` points, the `records` and an empty font table.
+/// A drawn object's record of a version 1 file laid out as in a version 2 file (R43): 11 more bytes
+/// before the fill and 11 more before the shape. Group records stay as they are.
+fn wl_v2_record(rec: &[u8]) -> Vec<u8> {
+    if rec.get(26).is_none_or(|flags| flags & 0x40 == 0) || rec.len() < 114 {
+        return rec.to_vec();
+    }
+    let mut out = [&rec[..94], &[0; 11], &rec[94..114], &[0; 11], &rec[114..]].concat();
+    let size = (out.len() - 32) as u16;
+    out[28..30].copy_from_slice(&size.to_le_bytes());
+    out
+}
+
+/// A file of version 1 or 2 (R40, R41): the header with `marker` (`e` for version 1, `l` or `m`
+/// for version 2), a page of `page` points, the `records` and an empty font table. A version 1
+/// file's settings start after the header; a version 2 file's start further on, where a picture
+/// lies in the files of that version, and its drawn objects are laid out as [`wl_v2_record`] says.
 pub fn wl_file(marker: u8, page: (f64, f64), records: &[Vec<u8>]) -> Vec<u8> {
     let v = V(300);
+    let settings = if marker == b'e' { 28u32 } else { 40 };
     let start = 64u32;
     let mut out = vec![0u8; start as usize];
     out[..4].copy_from_slice(&[b'W', b'L', marker, 0]);
     let (w, h) = page;
-    out[30..38].copy_from_slice(&[v.coord(-w / 2.0), v.coord(h / 2.0), v.coord(w / 2.0), v.coord(-h / 2.0)].concat());
-    out.extend(records.iter().flatten());
+    let page_box = settings as usize + 2;
+    out[page_box..page_box + 8].copy_from_slice(&[v.coord(-w / 2.0), v.coord(h / 2.0), v.coord(w / 2.0), v.coord(-h / 2.0)].concat());
+    for r in records {
+        if marker == b'e' {
+            out.extend(r);
+        } else {
+            out.extend(wl_v2_record(r));
+        }
+    }
     let end = out.len() as u32;
     out.extend([0; 2]);
     let trailer = out.len() as u32;
-    for (k, offset) in [28, start, end, trailer, trailer - 2].into_iter().enumerate() {
+    for (k, offset) in [settings, start, end, trailer, trailer - 2].into_iter().enumerate() {
         out[4 + 4 * k..8 + 4 * k].copy_from_slice(&offset.to_le_bytes());
     }
     out
