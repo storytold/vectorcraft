@@ -151,6 +151,9 @@ pub struct Session {
     pub symbol_libraries: cmd::symbollib::Libraries,
     /// User Defined and loaded brush libraries (Window → Brush Libraries); not saved.
     pub brush_libraries: cmd::brushlib::Libraries,
+    /// The id each loaded library outside a request's read roots has been shown under, by its own id
+    /// ([`cmd::swatchlib::concealed_library_ids`]), kept for the session.
+    shown_library_ids: std::sync::Mutex<std::collections::BTreeMap<String, String>>,
     /// The Libraries panel's libraries of graphics, colours and text styles (`library.*`).
     pub libraries: cmd::library::Libraries,
     /// Where the saved PDF presets are kept, one file each; `None`: only for the session
@@ -302,6 +305,8 @@ pub struct Session {
     pub(crate) press_point: Option<Option<(usize, cmd::gradient::StopOwner)>>,
     /// A guide being dragged out of a ruler ([`Session::ruler_guide`]).
     pub(crate) ruler_guide: Option<vectorcraft_tools::rulerguide::NewGuide>,
+    /// The rulers' origin being dragged out of their corner ([`Session::ruler_origin_drag`]).
+    pub(crate) ruler_origin: Option<vectorcraft_tools::rulerguide::OriginDrag>,
     /// Which selected type overflows its frame, for the ports every tool but the Type tools shows.
     pub(crate) port_marks: vectorcraft_tools::text::PortMarks,
     /// The last search for the files of missing fonts (`text.findFontFiles`), until another

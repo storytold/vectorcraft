@@ -33,8 +33,8 @@ mod symbols;
 
 pub(crate) use brushes::{apply_brush, brush_targets, stroke_paint};
 use brushes::{
-    brush_apply, brush_delete, brush_duplicate, brush_freehand, brush_get, brush_list, brush_move, brush_new, brush_options, brush_remove,
-    brush_selection_art, brush_set_current, brush_unused, expand_brush,
+    brush_apply, brush_delete, brush_duplicate, brush_freehand, brush_get, brush_list, brush_move, brush_new, brush_options, brush_place_art,
+    brush_remove, brush_replace_art, brush_selection_art, brush_set_current, brush_unused, expand_brush,
 };
 pub(crate) use dynamic::{edit_part, part_only, selected_part};
 use dynamic::{symbol_instance_reset, symbol_instance_select_part, symbol_instance_set_appearance};
@@ -66,6 +66,24 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?|id?} → {art: the object brush.new takes as a new scatter or art brush's art and as a new pattern brush's side tile (several objects become one group), or null when nothing is selected or ids name no object}",
             has_doc,
             brush_selection_art
+        ),
+        cmd!(
+            "brush.placeArt",
+            "Place Brush Art",
+            [],
+            None,
+            "{name, x?, y?} place a copy of the art a scatter, art or pattern brush is made of, centered on (x, y) (default: the center of the first artboard), and select it, as dragging the brush from the Brushes panel onto an empty part of the canvas does; a pattern brush places its tiles left to right (side, outer corner, inner corner, start, end; the ones it has art for) 10 pt apart, each in a group named Side Tile, Outer Corner Tile, Inner Corner Tile, Start Tile or End Tile, with an unpainted rectangle at the back of a tile that has a repeat frame marking that frame; a calligraphic or bristle brush is refused → {id}",
+            has_doc,
+            brush_place_art
+        ),
+        cmd!(
+            "brush.replaceArt",
+            "Replace Brush Art",
+            [],
+            None,
+            "{name, ids?|id?, applyToStrokes?: true} make the selected art (several objects become one group, as in brush.new) the art of a scatter, art or pattern brush, keeping its other options, as Alt-dragging (Option-dragging on macOS) art onto the brush in the Brushes panel does; a pattern brush takes a group named for one of its tiles, or a group of such groups (as brush.placeArt places them), tile by tile (of two named for one tile, the frontmost), each with the repeat frame an unpainted rectangle at its back marks (other tiles stay as they are), and other art as its side tile; when strokes use the brush and applyToStrokes is false, the brush and its strokes stay as they were and a copy of the brush with the new art, named `<name> copy`, goes after it and becomes the current brush; otherwise the strokes redraw with the new art; one undo step; refused for a calligraphic or bristle brush, with nothing selected, and for art (or a tile) with no width → {name: the brush that has the new art}",
+            has_doc,
+            brush_replace_art
         ),
         cmd!(
             "brush.apply",
