@@ -7,7 +7,7 @@
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
-use vectorcraft_color::{BlendMode, Color, GradientKind, GradientPaint, Paint};
+use vectorcraft_color::{BlendMode, Color, GradientGeom, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{AppearanceItem, CharStyle, Document, Justify, LineCap, LiveShape, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextKind};
 use vectorcraft_effects::RasterFx;
 use vectorcraft_geom::shapes::{self, CornerKind};
@@ -559,9 +559,25 @@ impl Rules<'_> {
     /// writes (midpoints as stops of their own). `None` for freeform gradients.
     fn gradient(&mut self, g: &GradientPaint, b: Rect, opacity: f32) -> Option<String> {
         let geom = g.resolve(b);
+        // A linear, radial or diamond gradient that repeats or reflects: a repeating gradient of
+        // one cycle (a run, or a run and its mirror) over that cycle's placement
+        // (https://www.w3.org/TR/css-images-3/#repeating-gradients). A conic one: its stops
+        // repeated around the turn.
+        let kind = g.gradient.kind;
+        let unrolled = g.gradient.unrolled();
+        let (gradient, geom, repeating) = match g.gradient.cycle() {
+            Some((cycle, runs)) if kind != GradientKind::Conic => {
+                // CSS radials start at their center: the cycle is scaled about it.
+                let centered = GradientGeom { focal: None, ..geom };
+                let cycle_geom = centered.period(kind, g.gradient.repeat_count()).levels_scaled(kind, f64::from(runs));
+                let geom = GradientGeom { focal: geom.focal, ..cycle_geom };
+                (std::borrow::Cow::Owned(cycle), geom, "repeating-")
+            }
+            _ => (unrolled, geom, ""),
+        };
         let stops = |pos: &dyn Fn(f32) -> f64| {
             let stops: Vec<String> =
-                g.gradient.expanded().map(|(t, c, o, _)| format!("{} {}%", color_css(&c, o * opacity), fmt_num(pos(t) * 100.0, 2))).collect();
+                gradient.expanded().map(|(t, c, o, _)| format!("{} {}%", color_css(&c, o * opacity), fmt_num(pos(t) * 100.0, 2))).collect();
             stops.join(", ")
         };
         match g.gradient.kind {
@@ -578,7 +594,7 @@ impl Rules<'_> {
                 let line = (b.width() * dir.x).abs() + (b.height() * dir.y).abs();
                 let from = (geom.start - b.center()).dot(dir);
                 let pos = |t: f32| if line > 1e-9 { (from + t as f64 * length) / line + 0.5 } else { t as f64 };
-                Some(format!("linear-gradient({}deg, {})", fmt_num(angle, 2), stops(&pos)))
+                Some(format!("{repeating}linear-gradient({}deg, {})", fmt_num(angle, 2), stops(&pos)))
             }
             // CSS has no diamond gradient: the ellipse through the square's corners stands in.
             GradientKind::Radial | GradientKind::Diamond => {
@@ -594,7 +610,7 @@ impl Rules<'_> {
                     format!("ellipse {} {}", self.len(r), self.len(r * geom.aspect))
                 };
                 let at = format!("at {} {}", self.len(geom.start.x - b.x0), self.len(geom.start.y - b.y0));
-                Some(format!("radial-gradient({shape} {at}, {})", stops(&|t| t as f64)))
+                Some(format!("{repeating}radial-gradient({shape} {at}, {})", stops(&|t| t as f64)))
             }
             GradientKind::Conic => {
                 // CSS sweeps clockwise from the `from` angle, 0deg straight up
@@ -607,7 +623,7 @@ impl Rules<'_> {
                 if (geom.aspect.abs() - 1.0).abs() > 1e-9 && geom.unit_frame().is_some() {
                     self.warn("conic gradients are written circular (an elliptical sweep is left out)");
                 }
-                let mut stops: Vec<(f32, Color, f32)> = g.gradient.expanded().map(|(t, c, o, _)| (t, c, o)).collect();
+                let mut stops: Vec<(f32, Color, f32)> = gradient.expanded().map(|(t, c, o, _)| (t, c, o)).collect();
                 if geom.is_mirrored() {
                     stops.reverse();
                     stops.iter_mut().for_each(|s| s.0 = 1.0 - s.0);

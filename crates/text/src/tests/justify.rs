@@ -130,6 +130,263 @@ fn a_justified_right_to_left_word_is_spread_between_its_drawn_letters() {
     assert!(gaps.iter().all(|&g| g > 1.0 && (g - gaps[0]).abs() < 1e-6), "{gaps:?}");
 }
 
+/// A word with a combining mark that has no precomposed form, `x` + U+0301: the base and the mark
+/// are two glyphs of one shaped cluster at byte 1, between `a` (byte 0) and `z` (byte 4).
+const MARKED: &str = "ax\u{301}z";
+
+/// Where each glyph of the cluster at byte `b` sits from the cluster's first glyph.
+fn cluster_offsets(l: &TextLayout, b: usize) -> Vec<Vec2> {
+    let glyphs: Vec<&PositionedGlyph> = l.glyphs.iter().filter(|g| g.byte == b).collect();
+    glyphs.iter().map(|g| g.origin - glyphs[0].origin).collect()
+}
+
+fn assert_same_offsets(a: &[Vec2], b: &[Vec2], what: &str) {
+    assert!(a.len() == b.len() && a.iter().zip(b).all(|(p, q)| (*p - *q).hypot() < 1e-6), "{what}: {a:?} vs {b:?}");
+}
+
+/// The precondition of the cluster tests: `MARKED` shapes the base and its mark as two glyphs
+/// with one byte.
+fn marked_cluster(l: &TextLayout) -> Vec<Vec2> {
+    let offsets = cluster_offsets(l, 1);
+    assert_eq!(offsets.len(), 2, "x and its mark are one cluster: {:?}", l.glyphs);
+    offsets
+}
+
+/// The space Full Justify put between two clusters, from `a`'s first glyph to `b`'s, beyond the
+/// distance the unspaced `natural` layout has between them.
+fn added_gap(l: &TextLayout, natural: &TextLayout, a: usize, b: usize) -> f64 {
+    let d = |l: &TextLayout| (at(l, b).origin - at(l, a).origin).hypot();
+    d(l) - d(natural)
+}
+
+/// Full Justify spreads a single word between its clusters, never between a letter and its
+/// combining mark: the mark keeps its place on its letter, the two gaps are equal, and the word
+/// still reaches the measure.
+#[test]
+fn single_word_full_justify_keeps_combining_mark_with_base() {
+    let natural = layout(db(), &point(MARKED, JustificationOptions::default()));
+    let unspaced = marked_cluster(&natural);
+    let l = layout(db(), &area(MARKED, 300.0, Justify::JustifyAll, JustificationOptions::default()));
+    assert_same_offsets(&cluster_offsets(&l, 1), &unspaced, "the mark stays on its letter");
+    let (first, second) = (added_gap(&l, &natural, 0, 1), added_gap(&l, &natural, 1, 4));
+    assert!(first > 1.0 && (first - second).abs() < 1e-6, "{first} {second}");
+    let z = at(&l, 4);
+    assert!((z.origin.x + at(&natural, 4).advance - 300.0).abs() < 1e-6, "{:?}", z.origin);
+}
+
+/// Desired Letter Spacing on a ragged line, and the letter spacing range of a justified one, go
+/// after each cluster, not between a letter and its mark.
+#[test]
+fn desired_and_fitted_letter_spacing_skip_shaped_cluster() {
+    let natural = layout(db(), &point(MARKED, JustificationOptions::default()));
+    let unspaced = marked_cluster(&natural);
+
+    let desired = layout(db(), &point(MARKED, JustificationOptions { letter_spacing: [0.0, 50.0, 50.0], ..JustificationOptions::default() }));
+    assert_same_offsets(&cluster_offsets(&desired, 1), &unspaced, "Desired Letter Spacing");
+    let gap = at(&desired, 0).advance - at(&natural, 0).advance;
+    assert!(gap > 1.0, "{gap}");
+    assert!((added_gap(&desired, &natural, 1, 4) - gap).abs() < 1e-6, "one gap after the cluster");
+
+    // 4 pt of room, less than the two gaps' Maximum (half a space each): letter spacing alone.
+    let w = natural.lines[0].x1 - natural.lines[0].x0 + 4.0;
+    let range = JustificationOptions { letter_spacing: [0.0, 0.0, 50.0], ..JustificationOptions::default() };
+    let fitted = layout(db(), &area(MARKED, w, Justify::JustifyAll, range));
+    assert_same_offsets(&cluster_offsets(&fitted, 1), &unspaced, "fitted letter spacing");
+    let (first, second) = (added_gap(&fitted, &natural, 0, 1), added_gap(&fitted, &natural, 1, 4));
+    assert!((first - 2.0).abs() < 1e-6 && (second - 2.0).abs() < 1e-6, "{first} {second}");
+}
+
+/// Right to left (a bidi override), Full Justify puts its gaps between the clusters as they are
+/// drawn and leaves the mark on its letter.
+#[test]
+fn rtl_single_word_cluster_gap_follows_drawn_order() {
+    // RLO, then MARKED, then PDF: a at byte 3, the cluster at byte 4, z at byte 7.
+    let text = "\u{202E}ax\u{301}z\u{202C}";
+    let natural = layout(db(), &point(text, JustificationOptions::default()));
+    let unspaced = cluster_offsets(&natural, 4);
+    assert_eq!(unspaced.len(), 2, "x and its mark are one cluster: {:?}", natural.glyphs);
+    assert!(at(&natural, 4).rtl, "the override sets the word right to left");
+    let l = layout(db(), &area(text, 300.0, Justify::JustifyAll, JustificationOptions::default()));
+    assert_same_offsets(&cluster_offsets(&l, 4), &unspaced, "the mark stays on its letter");
+    // Drawn from left to right: z, the cluster, a.
+    assert!(at(&l, 7).origin.x < at(&l, 4).origin.x && at(&l, 4).origin.x < at(&l, 3).origin.x);
+    let (first, second) = (added_gap(&l, &natural, 7, 4), added_gap(&l, &natural, 4, 3));
+    assert!(first > 1.0 && (first - second).abs() < 1e-6, "{first} {second}");
+    // The zero-width override marks take no gap: the word runs from edge to edge.
+    assert!(at(&l, 7).origin.x.abs() < 1e-6, "{:?}", at(&l, 7).origin);
+    assert!((at(&l, 3).origin.x + at(&natural, 3).advance - 300.0).abs() < 1e-6, "{:?}", at(&l, 3).origin);
+}
+
+/// Desired Letter Spacing goes between the letters of a word wrapped in bidi override marks,
+/// not after the zero-width marks or before the closing one.
+#[test]
+fn desired_letter_spacing_skips_bidi_format_controls() {
+    let text = "\u{202E}ax\u{301}z\u{202C}";
+    let natural = layout(db(), &point(text, JustificationOptions::default()));
+    let spaced = layout(db(), &point(text, JustificationOptions { letter_spacing: [0.0, 50.0, 50.0], ..JustificationOptions::default() }));
+    let gap = at(&spaced, 3).advance - at(&natural, 3).advance;
+    assert!(gap > 1.0, "{gap}");
+    assert!((at(&spaced, 7).origin.x - at(&natural, 7).origin.x).abs() < 1e-6, "{:?}", at(&spaced, 7).origin);
+    let extent = |l: &TextLayout| l.lines[0].x1 - l.lines[0].x0;
+    assert!((extent(&spaced) - extent(&natural) - 2.0 * gap).abs() < 1e-6, "{} {} {gap}", extent(&spaced), extent(&natural));
+}
+
+/// A zero-width joiner at the start and end of a word, and a word joiner and a soft hyphen inside
+/// it, take no letter spacing and no Full Justify gap: the space goes between a, b and c only.
+#[test]
+fn letter_spacing_and_full_justify_skip_joiners_and_soft_hyphens() {
+    // ZWJ (bytes 0..3), a (3), word joiner (4..7), b (7), soft hyphen (8..10), c (10), ZWJ (11..14).
+    let text = "\u{200D}a\u{2060}b\u{AD}c\u{200D}";
+    let natural = layout(db(), &point(text, JustificationOptions::default()));
+
+    let spaced = layout(db(), &point(text, JustificationOptions { letter_spacing: [0.0, 50.0, 50.0], ..JustificationOptions::default() }));
+    let gap = at(&spaced, 3).advance - at(&natural, 3).advance;
+    assert!(gap > 1.0, "{gap}");
+    assert!((at(&spaced, 3).origin.x - at(&natural, 3).origin.x).abs() < 1e-6, "{:?}", at(&spaced, 3).origin);
+    assert!((added_gap(&spaced, &natural, 7, 10) - gap).abs() < 1e-6, "one gap between b and c");
+    let extent = |l: &TextLayout| l.lines[0].x1 - l.lines[0].x0;
+    assert!((extent(&spaced) - extent(&natural) - 2.0 * gap).abs() < 1e-6, "{} {} {gap}", extent(&spaced), extent(&natural));
+
+    let l = layout(db(), &area(text, 300.0, Justify::JustifyAll, JustificationOptions::default()));
+    let (first, second) = (added_gap(&l, &natural, 3, 7), added_gap(&l, &natural, 7, 10));
+    assert!(first > 1.0 && (first - second).abs() < 1e-6, "{first} {second}");
+    assert!(at(&l, 3).origin.x.abs() < 1e-6, "{:?}", at(&l, 3).origin);
+    assert!((at(&l, 10).origin.x + at(&natural, 10).advance - 300.0).abs() < 1e-6, "{:?}", at(&l, 10).origin);
+}
+
+/// Every assigned default-ignorable character drawn with no width is a format control, the
+/// zero-width space included; word spaces, the Hangul fillers and ordinary letters are not.
+#[test]
+fn format_controls_are_the_zero_width_default_ignorables() {
+    use crate::justify::is_format_control;
+    let controls = "\u{AD}\u{34F}\u{61C}\u{180E}\u{200B}\u{200C}\u{200D}\u{200E}\u{202E}\u{2060}\u{2065}\u{2066}\u{206F}";
+    let more = "\u{FE0F}\u{FEFF}\u{1BCA0}\u{1D173}\u{E0001}\u{E007F}\u{E0100}";
+    for ch in controls.chars().chain(more.chars()) {
+        assert!(is_format_control(ch), "U+{:04X}", ch as u32);
+    }
+    for ch in "a \u{2009}\u{3000}\u{2028}\u{3164}\u{FFA0}\u{301}".chars() {
+        assert!(!is_format_control(ch), "U+{:04X}", ch as u32);
+    }
+}
+
+/// A zero-width space is a line break opportunity but not a word separator: a justified line
+/// gives it no share of its room, Full Justify spreads a word with one between its visible letters,
+/// and Desired Letter Spacing goes between the letters on either side of it.
+#[test]
+fn zero_width_space_takes_no_word_space_room() {
+    // a (0), b (1), zero-width space (2..5), c (5), d (6), space (7), e (8), f (9).
+    let natural = layout(db(), &point("ab\u{200B}cd ef", JustificationOptions::default()));
+    let l = layout(db(), &area("ab\u{200B}cd ef", 300.0, Justify::JustifyAll, JustificationOptions::default()));
+    assert!(added_gap(&l, &natural, 1, 5).abs() < 1e-6, "b and c stay together: {}", added_gap(&l, &natural, 1, 5));
+    assert!((at(&l, 9).origin.x + at(&natural, 9).advance - 300.0).abs() < 1e-6, "the word space takes the room: {:?}", at(&l, 9).origin);
+
+    // No word space: the zero-width space does not stand in for one.
+    let text = "ab\u{200B}cd";
+    let natural = layout(db(), &point(text, JustificationOptions::default()));
+    let l = layout(db(), &area(text, 300.0, Justify::JustifyAll, JustificationOptions::default()));
+    let gaps = [added_gap(&l, &natural, 0, 1), added_gap(&l, &natural, 1, 5), added_gap(&l, &natural, 5, 6)];
+    assert!(gaps[0] > 1.0 && gaps.iter().all(|g| (g - gaps[0]).abs() < 1e-6), "{gaps:?}");
+    assert!((at(&l, 6).origin.x + at(&natural, 6).advance - 300.0).abs() < 1e-6, "{:?}", at(&l, 6).origin);
+
+    let spaced = layout(db(), &point(text, JustificationOptions { letter_spacing: [0.0, 50.0, 50.0], ..JustificationOptions::default() }));
+    let gap = at(&spaced, 0).advance - at(&natural, 0).advance;
+    assert!(gap > 1.0 && (added_gap(&spaced, &natural, 1, 5) - gap).abs() < 1e-6, "{gap} {}", added_gap(&spaced, &natural, 1, 5));
+
+    // It is still a place to break the line.
+    let w = natural.lines[0].x1 - natural.lines[0].x0 - 5.0;
+    let wrapped = layout(db(), &area(text, w, Justify::Left, JustificationOptions::default()));
+    assert_eq!(wrapped.lines.len(), 2);
+    assert_eq!(wrapped.lines[0].end, 5, "breaks after the zero-width space");
+}
+
+/// Desired Letter Spacing puts the gap between b and c on the zero-width space, so a line that
+/// breaks there ends at b's own advance and wraps where the unspaced text does.
+#[test]
+fn desired_letter_spacing_ends_a_line_broken_at_a_zero_width_space_without_a_gap() {
+    // a (0), b (1), zero-width space (2..5), c (5), d (6).
+    let text = "ab\u{200B}cd";
+    let desired = JustificationOptions { letter_spacing: [0.0, 50.0, 50.0], ..JustificationOptions::default() };
+    let natural = layout(db(), &point(text, JustificationOptions::default()));
+    let spaced = layout(db(), &point(text, desired.clone()));
+    let gap = at(&spaced, 0).advance - at(&natural, 0).advance;
+    assert!(gap > 1.0, "{gap}");
+    // Room for a, its gap and b, and half a gap more: not for a second gap after b.
+    let w = at(&natural, 0).advance + gap + at(&natural, 1).advance + 0.5 * gap;
+    let unspaced = layout(db(), &area(text, w, Justify::Left, JustificationOptions::default()));
+    assert_eq!(unspaced.lines.first().map(|l| l.end), Some(5), "the unspaced text breaks after the zero-width space");
+    let wrapped = layout(db(), &area(text, w, Justify::Left, desired));
+    assert_eq!(wrapped.lines.len(), 2, "{:?}", wrapped.lines);
+    assert_eq!(wrapped.lines[0].end, 5, "breaks after the zero-width space");
+    assert!((at(&wrapped, 1).advance - at(&natural, 1).advance).abs() < 1e-6, "b keeps its own advance: {}", at(&wrapped, 1).advance);
+    let b = at(&wrapped, 1);
+    let end = b.origin.x + b.advance;
+    assert!((end - (at(&natural, 0).advance + gap + at(&natural, 1).advance)).abs() < 1e-6, "the line ends at b: {end}");
+}
+
+/// A single word under Full Justify that breaks at a soft hyphen spreads its first line between its
+/// letters and the hyphen drawn after the last one, all with the same gap.
+#[test]
+fn single_word_full_justify_spreads_up_to_the_drawn_hyphen() {
+    // a (0), b (1), c (2), soft hyphen (3..5), then d at byte 5.
+    let text = "abc\u{AD}defghij";
+    let hyphenated = layout(db(), &point("abc-", JustificationOptions::default()));
+    let w = hyphenated.lines[0].x1 - hyphenated.lines[0].x0 + 30.0;
+    // The same first line, set ragged: the distances justification adds to.
+    let natural = layout(db(), &area(text, w, Justify::Left, JustificationOptions::default()));
+    let l = layout(db(), &area(text, w, Justify::JustifyLeft, JustificationOptions::default()));
+    for layout in [&natural, &l] {
+        assert!(layout.lines.len() >= 2 && layout.lines[0].end == 5, "the first line ends at the soft hyphen: {:?}", layout.lines);
+    }
+    let hyphen = |l: &TextLayout| l.glyphs[l.lines[0].glyph_end - 1].clone();
+    let ab = added_gap(&l, &natural, 0, 1);
+    let bc = added_gap(&l, &natural, 1, 2);
+    let c_hyphen = (hyphen(&l).origin.x - at(&l, 2).origin.x) - (hyphen(&natural).origin.x - at(&natural, 2).origin.x);
+    assert!(ab > 1.0 && (ab - bc).abs() < 1e-6 && (ab - c_hyphen).abs() < 1e-6, "{ab} {bc} {c_hyphen}");
+    let end = hyphen(&l).origin.x + hyphen(&l).advance;
+    assert!((end - w).abs() < 1e-6, "the hyphen reaches the edge: {end} {w}");
+}
+
+/// In vertical type, Full Justify spreads a word down the column between its clusters and leaves
+/// the mark on its letter.
+#[test]
+fn vertical_single_word_cluster_gap_follows_drawn_order() {
+    let vertical = |t: &mut TextObject| t.vertical = true;
+    let mut plain = point(MARKED, JustificationOptions::default());
+    vertical(&mut plain);
+    let natural = layout(db(), &plain);
+    let unspaced = marked_cluster(&natural);
+    let mut t = area(MARKED, 100.0, Justify::JustifyAll, JustificationOptions::default());
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(0.0, 0.0, 100.0, 300.0).to_path(0.1)) };
+    vertical(&mut t);
+    let l = layout(db(), &t);
+    assert_same_offsets(&cluster_offsets(&l, 1), &unspaced, "the mark stays on its letter");
+    assert!(at(&l, 0).origin.y < at(&l, 1).origin.y && at(&l, 1).origin.y < at(&l, 4).origin.y, "down the column");
+    let (first, second) = (added_gap(&l, &natural, 0, 1), added_gap(&l, &natural, 1, 4));
+    assert!(first > 1.0 && (first - second).abs() < 1e-6, "{first} {second}");
+}
+
+/// A Devanagari syllable whose vowel sign is drawn before its consonant (कि) is one cluster of two
+/// glyphs: Full Justify keeps them together. Skipped without an installed Devanagari face.
+#[test]
+fn single_word_full_justify_keeps_conjunct_cluster() {
+    let Some(face) = super::devanagari::devanagari_test_face("single_word_full_justify_keeps_conjunct_cluster") else { return };
+    // कि (bytes 0..6) and क (byte 6).
+    let text = "\u{915}\u{93F}\u{915}";
+    let styled = |mut t: TextObject| {
+        for run in &mut t.runs {
+            run.style.font_family = face.family.clone();
+            run.style.font_style = face.style.clone();
+        }
+        t
+    };
+    let natural = layout(db(), &styled(point(text, JustificationOptions::default())));
+    let unspaced = cluster_offsets(&natural, 0);
+    assert!(unspaced.len() >= 2, "कि is one cluster of several glyphs: {:?}", natural.glyphs);
+    let l = layout(db(), &styled(area(text, 300.0, Justify::JustifyAll, JustificationOptions::default())));
+    assert_same_offsets(&cluster_offsets(&l, 0), &unspaced, "the syllable stays together");
+    assert!(added_gap(&l, &natural, 0, 6) > 1.0);
+}
+
 /// Single Word Justification: a justified line holding one word is spread between its letters
 /// (Full Justify, the default) or aligned as chosen.
 #[test]

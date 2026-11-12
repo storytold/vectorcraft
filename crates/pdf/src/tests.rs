@@ -45,6 +45,7 @@ mod reader_compat;
 mod reader_streaming;
 mod realtext;
 mod settings;
+mod spread;
 pub(super) mod stroke;
 mod strokeout;
 mod text_placement;

@@ -2274,6 +2274,8 @@ antiAlias	Sharp	シャープ
 	Metadata:	メタデータ:
 	Meters	メートル
 	Method:	方法:
+	Pad	パッド
+	Repeats	リピート回数
 	Millimeters	ミリメートル
 	Minify	最小化
 	Minimize	最小化
@@ -3240,6 +3242,9 @@ mark-style	Japanese	日本式
 	Add Guides	ガイドを追加
 	Split Path	パスを分割
 	Spot Color	特色
+	Spot Color Objects	特色を使用したオブジェクト
+	Pattern Objects	パターンを使用したオブジェクト
+	Gradient Objects	グラデーションを使用したオブジェクト
 	Spot Colors	特色
 	Spot Colors…	特色…
 	Spread:	拡散:
@@ -4592,6 +4597,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	nothing to distort	変形するものがありません
 @msg	unknown option `{path}.{k}`	`{path}.{k}` は不明なオプションです
 @msg	command `{0}` is not available right now: {1}	コマンド `{0}` は現在使用できません: {1}
+@msg	command `{id}` is not available right now	コマンド `{id}` は現在使用できません
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	`{cmd}` で内部エラーが発生しました: {msg} (ドキュメントは変更されていません。このバグを報告してください)
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` のパラメーターが正しくありません: {msg}
 @msg	no active document	アクティブなドキュメントがありません
@@ -4784,6 +4790,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the Smooth slider is not open	スムーズスライダーが開いていません
 @msg	the screen color sampler is already open	画面のカラーサンプラーはすでに開いています
 @msg	this system has no screen color sampler	このシステムには画面のカラーサンプラーがありません
+@msg	the screen color sampler did not answer	画面のカラーサンプラーが応答しませんでした
+@msg	the screen color sampler failed	画面のカラーサンプラーでエラーが発生しました
 @msg	Corners edits the corners of a path	「コーナー」で編集できるのはパスの角だけです
 @msg	give corners of the path: anchors where its sides meet at an angle	パスの角 (辺が角度をなして交わるアンカーポイント) を指定してください
 @msg	select one path, or give its `id`	パスを 1 つ選択するか、その `id` を指定してください
@@ -5719,6 +5727,7 @@ lighting	Light	ライト
 	Ruby…	ルビ…
 	Ruby	ルビ
 	Geometric Guides	幾何ガイド
+	Optical Effects	オプティカル効果
 	Geometric Patterns	幾何パターン
 	Grit Textures	粒状テクスチャ
 	Ease In	イーズイン
@@ -5778,6 +5787,9 @@ axis	Y Axis	Y 軸
 @msg	`dither` must be true or false	`dither` には true または false を指定してください
 	Perceptual	知覚的
 @msg	`method` must be classic or perceptual	`method` には classic または perceptual を指定してください
+@msg	`spread` must be pad, repeat or reflect	`spread` には pad、repeat または reflect を指定してください
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` には 1 から {MAX_REPEATS} までの整数を指定してください
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` は線形、円形、円錐およびひし形グラデーションに適用されます
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	大きな計算予算を求める「{name}」をインストールしますか？
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	1 回の実行に最大 {minutes} 分かかり、ほかのプラグインに許される {times} 倍の処理を行うことがあります。バックグラウンドで実行され、キャンセルできます。
@@ -6027,6 +6039,11 @@ axis	Y Axis	Y 軸
 	Grass Fan	草描き扇筆
 	Pattern Borders	パターンボーダー
 	Scatter Shapes	散布シェイプ
+	Dry Media	ドライメディア
+	Chalk Grain	チョークの粒子
+	Graphite Pencil	黒鉛鉛筆
+	Wax Crayon	ワックスクレヨン
+	Charcoal Dust	木炭の粉
 	Save Brush Library…	ブラシライブラリを保存…
 @msg	`{_1}` has no brushes to apply	`{_1}` に適用できるブラシがありません
 @msg	missing `library` (see brush.libraries)	`library` がありません (brush.libraries を参照)

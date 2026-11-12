@@ -2264,6 +2264,8 @@ antiAlias	Sharp	날카롭게
 	Metadata:	메타데이터:
 	Meters	미터
 	Method:	방법:
+	Pad	연장
+	Repeats	반복 횟수
 	Millimeters	밀리미터
 	Minify	압축
 	Minimize	최소화
@@ -3229,6 +3231,9 @@ mark-style	Japanese	일본식
 	Add Guides	안내선 추가
 	Split Path	패스 분할
 	Spot Color	별색
+	Spot Color Objects	별색을 사용한 개체
+	Pattern Objects	패턴을 사용한 개체
+	Gradient Objects	그레이디언트를 사용한 개체
 	Spot Colors	별색
 	Spot Colors…	별색…
 	Spread:	확산:
@@ -4519,6 +4524,7 @@ theme	Appearance	외관
 @msg	nothing to distort	왜곡할 항목이 없습니다
 @msg	unknown option `{path}.{k}`	알 수 없는 옵션 `{path}.{k}`
 @msg	command `{0}` is not available right now: {1}	명령 `{0}`은(는) 지금 사용할 수 없습니다: {1}
+@msg	command `{id}` is not available right now	명령 `{id}`은(는) 지금 사용할 수 없습니다
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	`{cmd}`에서 내부 오류가 발생했습니다: {msg}(문서는 이전 상태로 유지되었습니다. 이 버그를 신고해 주세요)
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}`의 매개변수가 올바르지 않습니다: {msg}
 @msg	no active document	활성 문서가 없습니다
@@ -4711,6 +4717,8 @@ theme	Appearance	외관
 @msg	the Smooth slider is not open	매끄럽게 슬라이더가 열려 있지 않습니다
 @msg	the screen color sampler is already open	화면 색상 추출기가 이미 열려 있습니다
 @msg	this system has no screen color sampler	이 시스템에는 화면 색상 추출기가 없습니다
+@msg	the screen color sampler did not answer	화면 색상 추출기가 응답하지 않았습니다
+@msg	the screen color sampler failed	화면 색상 추출기에 오류가 발생했습니다
 @msg	Corners edits the corners of a path	모퉁이는 패스의 모퉁이를 편집합니다
 @msg	give corners of the path: anchors where its sides meet at an angle	패스의 모퉁이, 즉 변이 각을 이루며 만나는 앵커를 지정하세요
 @msg	select one path, or give its `id`	패스를 하나 선택하거나 `id`를 지정하세요
@@ -5630,6 +5638,7 @@ lighting	Light	광원
 	Ruby…	루비…
 	Ruby	루비
 	Geometric Guides	기하학적 안내선
+	Optical Effects	광학 효과
 	Geometric Patterns	기하학적 패턴
 	Grit Textures	입자 텍스처
 	Ease In	서서히 시작
@@ -5674,6 +5683,9 @@ axis	Y Axis	Y축
 @msg	`dither` must be true or false	`dither`은(는) true 또는 false여야 합니다
 	Perceptual	지각적
 @msg	`method` must be classic or perceptual	`method`는 classic 또는 perceptual이어야 합니다
+@msg	`spread` must be pad, repeat or reflect	`spread`는 pad, repeat 또는 reflect여야 합니다
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats`는 1에서 {MAX_REPEATS} 사이의 정수여야 합니다
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread`는 선형, 방사형, 원뿔형 및 다이아몬드 그레이디언트에 적용됩니다
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	큰 계산 예산을 요청하는 “{name}”을(를) 설치하시겠습니까?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	한 번 실행에 최대 {minutes}분이 걸리고 다른 플러그인에 허용되는 작업량의 {times}배를 수행할 수 있습니다. 백그라운드에서 실행되며 취소할 수 있습니다.
@@ -5923,6 +5935,11 @@ axis	Y Axis	Y축
 	Grass Fan	잔디 부채붓
 	Pattern Borders	패턴 테두리
 	Scatter Shapes	흩뿌리기 모양
+	Dry Media	건식 재료
+	Chalk Grain	분필 입자
+	Graphite Pencil	흑연 연필
+	Wax Crayon	왁스 크레용
+	Charcoal Dust	목탄 가루
 	Save Brush Library…	브러시 라이브러리 저장…
 @msg	`{_1}` has no brushes to apply	`{_1}`에 적용할 브러시가 없습니다
 @msg	missing `library` (see brush.libraries)	`library`가 없습니다(brush.libraries 참조)

@@ -184,7 +184,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Not Aligned to Pixel Grid",
             ["Select", "Object"],
             None,
-            "{} the paths (not guides) and compound paths whose pixel-aligned property (object.setPixelAligned) is off, looking into groups but not into compound paths → {count}",
+            "{} the paths (not guides) and compound paths whose pixel-aligned property (object.setPixelAligned) is off, looking into groups, clip groups, blends, envelopes, repeats and Intertwine groups but not into compound paths → {count}",
             has_doc,
             not_pixel_aligned
         ),

@@ -152,6 +152,11 @@ fn lerp_gradient(a: &GradientPaint, b: &GradientPaint, t: f32) -> Option<Gradien
             }
         })
         .collect();
+    // Two gradients that repeat (or reflect) step their count from one to the other; a spread
+    // that differs switches halfway, as the method does.
+    if a.gradient.is_spread() && a.gradient.spread == b.gradient.spread {
+        out.gradient.repeats = lerp_f32(a.gradient.repeat_count() as f32, b.gradient.repeat_count() as f32, t).round() as u32;
+    }
     out.angle = a.angle + (b.angle - a.angle) * t as f64;
     out.swatch = None;
     if let (Some(ga), Some(gb)) = (a.geom, b.geom) {
@@ -1654,6 +1659,25 @@ mod tests {
         // Clicked start points win over the automatic match.
         let pair = PathPair::new(&a, &b, (Some(0), Some(0)));
         assert!(pair.at(0.5).bounds().unwrap().height() < 1e-6, "the clicked anchors pair up");
+    }
+
+    /// A blend between two gradients that repeat steps the count; one between a gradient that
+    /// pads and one that repeats switches halfway, as the method does.
+    #[test]
+    fn blend_between_repeating_gradients_steps_the_count() {
+        use vectorcraft_color::GradientSpread;
+        let spread = |spread, repeats| Paint::Gradient(Box::new(GradientPaint::new(Gradient { spread, repeats, ..Gradient::default() })));
+        let at = |a: &Paint, b: &Paint, t: f32| match lerp_paint(a, b, t) {
+            Paint::Gradient(g) => (g.gradient.spread, g.gradient.repeat_count()),
+            p => panic!("a gradient, not {p:?}"),
+        };
+        let (two, twenty) = (spread(GradientSpread::Repeat, 2), spread(GradientSpread::Repeat, 20));
+        assert_eq!(at(&two, &twenty, 0.25), (GradientSpread::Repeat, 7));
+        assert_eq!(at(&two, &twenty, 0.5), (GradientSpread::Repeat, 11));
+        assert_eq!(at(&two, &twenty, 1.0), (GradientSpread::Repeat, 20));
+        let pad = spread(GradientSpread::Pad, 1);
+        assert_eq!(at(&pad, &twenty, 0.25), (GradientSpread::Pad, 1));
+        assert_eq!(at(&pad, &twenty, 0.75), (GradientSpread::Repeat, 20));
     }
 
     #[test]

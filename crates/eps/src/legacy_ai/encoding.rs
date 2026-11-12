@@ -41,8 +41,12 @@ pub(super) fn gradient_def(s: &mut String, w: &Writer, name: &str, g: &Gradient)
                 s.push_str(" 3 ");
             }
         }
-        ps::push_nums(s, &[f64::from(stop.midpoint) * 100.0, f64::from(stop.offset) * 100.0]);
-        s.push_str("%_Bs\n");
+        // The ramp point to five decimals of its percent: a gradient's stops repeated many times
+        // keep their places in each run.
+        ps::push_num(s, f64::from(stop.midpoint) * 100.0);
+        s.push(' ');
+        ps::push_num_places(s, f64::from(stop.offset) * 100.0, 5);
+        s.push_str(" %_Bs\n");
     }
     s.push_str("BD\n%AI5_EndGradient\n");
 }

@@ -1694,6 +1694,8 @@ digits	Malayalam	Malayalam
 	Save Image Trace Preset	Gem forudindstilling til billedsporing
 	Delete Image Trace Preset	Slet forudindstilling til billedsporing
 	Method:	Metode:
+	Pad	Forlæng
+	Repeats	Gentagelser
 	Mode:	Tilstand:
 	Noise	Støj
 	Create:	Opret:
@@ -3685,6 +3687,9 @@ theme	Appearance	Udseende
 	Select All Unused	Markér alle ubrugte
 	Sort by Kind	Sortér efter type
 	Sort by Name	Sortér efter navn
+	Spot Color Objects	Objekter med spotfarver
+	Pattern Objects	Objekter med mønstre
+	Gradient Objects	Objekter med gradienter
 	Spot Colors	Spotfarver
 	Spot Colors (0)	Spotfarver (0)
 	Swatch Options	Indstillinger for farveprøve
@@ -4359,6 +4364,7 @@ imageTrace	Outline	Kontur
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` er ikke en farve som "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: højst {MAX_TABLE} farver
 @msg	command `{0}` is not available right now: {1}	kommandoen `{0}` er ikke tilgængelig lige nu: {1}
+@msg	command `{id}` is not available right now	kommandoen `{id}` er ikke tilgængelig lige nu
 @msg	compound paths can only contain paths	sammensatte kurver kan kun indeholde kurver
 @msg	compressed (RLE) bitmaps can't be read yet	komprimerede (RLE) bitmaps kan endnu ikke læses
 @msg	damaged	beskadiget
@@ -5515,6 +5521,8 @@ mark-style	Japanese	Japansk
 @msg	the Color Picker is not open	farvevælgeren er ikke åben
 @msg	the screen color sampler is already open	skærmfarvesampleren er allerede åben
 @msg	this system has no screen color sampler	dette system har ingen skærmfarvesampler
+@msg	the screen color sampler did not answer	skærmfarvesampleren svarede ikke
+@msg	the screen color sampler failed	skærmfarvesampleren mislykkedes
 swatch	[None]	[Ingen]
 swatch	[Registration]	[Passning]
 swatch	White	Hvid
@@ -5875,6 +5883,7 @@ swatch	Bright Violet	Kraftig violet
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometriske hjælpelinjer
+	Optical Effects	Optiske effekter
 	Geometric Patterns	Geometriske mønstre
 	Grit Textures	Kornede teksturer
 	Ease In	Langsom start
@@ -6089,6 +6098,11 @@ axis	Y Axis	Y-akse
 	Grass Fan	Græsvifte
 	Pattern Borders	Mønsterborter
 	Scatter Shapes	Spredte former
+	Dry Media	Tørre medier
+	Chalk Grain	Kridtkorn
+	Graphite Pencil	Grafitblyant
+	Wax Crayon	Vokskridt
+	Charcoal Dust	Kulstøv
 	Save Brush Library…	Gem penselbibliotek…
 @msg	no empty artboards to delete	ingen tomme tegneflader at slette
 	Scale Presets	Skaleringsforudindstillinger

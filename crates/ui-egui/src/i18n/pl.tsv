@@ -1785,6 +1785,8 @@ digits	Malayalam	Malajalam
 	Save Image Trace Preset	Zapisz ustawienie obrysu obrazu
 	Delete Image Trace Preset	Usuń ustawienie obrysu obrazu
 	Method:	Metoda:
+	Pad	Przedłuż
+	Repeats	Liczba powtórzeń
 	Mode:	Tryb:
 	Noise	Szum
 	Create:	Utwórz:
@@ -3825,6 +3827,9 @@ theme	Appearance	Wygląd
 	Select All Unused	Zaznacz wszystkie nieużywane
 	Sort by Kind	Sortuj według rodzaju
 	Sort by Name	Sortuj według nazwy
+	Spot Color Objects	Obiekty z kolorami dodatkowymi
+	Pattern Objects	Obiekty ze wzorkami
+	Gradient Objects	Obiekty z gradientami
 	Spot Colors	Kolory dodatkowe
 	Swatch Options	Opcje próbki
 	Ungroup Color Group	Rozgrupuj grupę kolorów
@@ -4510,6 +4515,8 @@ imageTrace	Outline	Kontur
 @msg	the Smooth slider is not open	Suwak Wygładź nie jest otwarty
 @msg	the screen color sampler is already open	narzędzie do pobierania koloru z ekranu jest już otwarte
 @msg	this system has no screen color sampler	ten system nie ma narzędzia do pobierania koloru z ekranu
+@msg	the screen color sampler did not answer	narzędzie do pobierania koloru z ekranu nie odpowiedziało
+@msg	the screen color sampler failed	narzędzie do pobierania koloru z ekranu zgłosiło błąd
 @msg	bad colour `{hex}` (#rrggbb)	nieprawidłowy kolor `{hex}` (#rrggbb)
 @msg	bad page tree	nieprawidłowe drzewo stron
 @msg	bad shortcut	nieprawidłowy skrót
@@ -4539,6 +4546,7 @@ imageTrace	Outline	Kontur
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` nie jest kolorem w rodzaju "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maksymalnie {MAX_TABLE} kolorów
 @msg	command `{0}` is not available right now: {1}	polecenie `{0}` jest teraz niedostępne: {1}
+@msg	command `{id}` is not available right now	polecenie `{id}` jest teraz niedostępne
 @msg	compound paths can only contain paths	ścieżki złożone mogą zawierać tylko ścieżki
 @msg	compressed (RLE) bitmaps can't be read yet	skompresowanych bitmap (RLE) nie można jeszcze odczytać
 @msg	damaged	uszkodzony
@@ -5900,6 +5908,7 @@ mark-style	Japanese	Japońskie
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometryczne linie pomocnicze
+	Optical Effects	Efekty optyczne
 	Geometric Patterns	Wzorki geometryczne
 	Grit Textures	Tekstury ziarniste
 	Ease In	Łagodny początek
@@ -5942,6 +5951,9 @@ axis	Y Axis	Oś Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` dotyczy wypełnień gradientem (paint.setFill)
 @msg	`dither` must be true or false	`dither` musi mieć wartość true lub false
 @msg	`method` must be classic or perceptual	`method` musi mieć wartość classic lub perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` musi mieć wartość pad, repeat lub reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` musi być liczbą całkowitą od 1 do {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` dotyczy gradientów liniowych, radialnych, stożkowych i rombowych
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Zainstalować „{name}”, wtyczkę, która prosi o duży budżet obliczeń?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Każde uruchomienie może trwać do {minutes} minut i wykonać {times} razy więcej pracy, niż mogą inne wtyczki. Działa w tle i można je anulować.
@@ -6191,6 +6203,11 @@ axis	Y Axis	Oś Y
 	Grass Fan	Wachlarz do trawy
 	Pattern Borders	Obramowania wzorków
 	Scatter Shapes	Kształty rozproszone
+	Dry Media	Techniki suche
+	Chalk Grain	Ziarno kredy
+	Graphite Pencil	Ołówek grafitowy
+	Wax Crayon	Kredka woskowa
+	Charcoal Dust	Pył węglowy
 	Save Brush Library…	Zapisz bibliotekę pędzli…
 @msg	`{_1}` has no brushes to apply	`{_1}` nie ma pędzli do zastosowania
 @msg	missing `library` (see brush.libraries)	brak `library` (zobacz brush.libraries)

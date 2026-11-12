@@ -2032,6 +2032,8 @@ file-filter	Templates	Modelli
 	Metallic Gradients	Sfumature metalliche
 	Meters	Metri
 	Method:	Metodo:
+	Pad	Prolunga
+	Repeats	Ripetizioni
 	Millimeters	Millimetri
 	Minify	Minifica
 	Minimal	Minimale
@@ -3463,6 +3465,9 @@ digits	Malayalam	Malayalam
 	Split Path	Dividi tracciato
 	spot	spot
 	Spot Color	Colore spot
+	Spot Color Objects	Oggetti con colori spot
+	Pattern Objects	Oggetti con motivi
+	Gradient Objects	Oggetti con sfumature
 	Spot Colors	Colori spot
 	Spot Colors…	Colori spot…
 	Spread:	Estensione:
@@ -4429,6 +4434,8 @@ axis	Both	Entrambi
 @msg	the Smooth slider is not open	il cursore Smussa non è aperto
 @msg	the screen color sampler is already open	il campionatore di colore dello schermo è già aperto
 @msg	this system has no screen color sampler	questo sistema non ha un campionatore di colore dello schermo
+@msg	the screen color sampler did not answer	il campionatore di colore dello schermo non ha risposto
+@msg	the screen color sampler failed	il campionatore di colore dello schermo ha avuto un errore
 @msg	bad colour `{hex}` (#rrggbb)	colore non valido `{hex}` (#rrggbb)
 @msg	bad page tree	albero delle pagine non valido
 @msg	bad shortcut	scelta rapida non valida
@@ -4458,6 +4465,7 @@ axis	Both	Entrambi
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` non è un colore come "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: al massimo {MAX_TABLE} colori
 @msg	command `{0}` is not available right now: {1}	il comando `{0}` non è disponibile in questo momento: {1}
+@msg	command `{id}` is not available right now	il comando `{id}` non è disponibile in questo momento
 @msg	compound paths can only contain paths	i tracciati composti possono contenere solo tracciati
 @msg	compressed (RLE) bitmaps can't be read yet	le bitmap compresse (RLE) non possono ancora essere lette
 @msg	damaged	danneggiato
@@ -5669,6 +5677,7 @@ lighting	Light	Luce
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Guide geometriche
+	Optical Effects	Effetti ottici
 	Geometric Patterns	Motivi geometrici
 	Grit Textures	Texture granulose
 	Ease In	Inizio graduale
@@ -5713,6 +5722,9 @@ axis	Y Axis	Asse Y
 @msg	`dither` must be true or false	`dither` deve essere true o false
 	Perceptual	Percettivo
 @msg	`method` must be classic or perceptual	`method` deve essere classic o perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` deve essere pad, repeat o reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` deve essere un numero intero da 1 a {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` si applica alle sfumature lineari, radiali, coniche e a rombo
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Installare “{name}”, che chiede un budget di calcolo elevato?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Ogni esecuzione può durare fino a {minutes} minuti e svolgere {times} volte il lavoro consentito agli altri plug-in. Viene eseguita in background ed è possibile annullarla.
@@ -5962,6 +5974,11 @@ axis	Y Axis	Asse Y
 	Grass Fan	Ventaglio per erba
 	Pattern Borders	Bordi a motivo
 	Scatter Shapes	Forme a dispersione
+	Dry Media	Tecniche secche
+	Chalk Grain	Grana di gesso
+	Graphite Pencil	Matita di grafite
+	Wax Crayon	Pastello a cera
+	Charcoal Dust	Polvere di carboncino
 	Save Brush Library…	Salva libreria pennelli…
 @msg	`{_1}` has no brushes to apply	`{_1}` non ha pennelli da applicare
 @msg	missing `library` (see brush.libraries)	manca `library` (vedi brush.libraries)

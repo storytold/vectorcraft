@@ -434,6 +434,11 @@ antiAlias	Sharp	शार्प
 	Plasma Arc	प्लाज़्मा चाप
 	Charge Wave	चार्ज तरंग
 	Spark Trail	चिंगारी पथ
+	Dry Media	सूखे माध्यम
+	Chalk Grain	चॉक के दाने
+	Graphite Pencil	ग्रेफाइट पेंसिल
+	Wax Crayon	मोम क्रेयॉन
+	Charcoal Dust	चारकोल धूल
 	Art using a deleted global swatch keeps its colour.	हटाए गए ग्लोबल स्वॉच वाला आर्टवर्क अपना रंग बनाए रखता है।
 	Artboard	आर्टबोर्ड
 	Artboard {n} of {total}	{total} में से आर्टबोर्ड {n}
@@ -2762,6 +2767,8 @@ antiAlias	Sharp	शार्प
 	Meters	मीटर
 	Method	विधि
 	Method:	विधि:
+	Pad	विस्तार करें
+	Repeats	दोहराव
 	Mezzotint	मेज़ोटिंट
 	Mezzotint…	मेज़ोटिंट…
 	Millimeters	मिलीमीटर
@@ -3183,6 +3190,7 @@ antiAlias	Sharp	शार्प
 	Opens network connections	नेटवर्क कनेक्शन ओपन करें
 	OpenType Features	ओपन टाइप सुविधाएँ
 	Optical	ऑप्टिकल
+	Optical Effects	ऑप्टिकल इफ़ेक्ट्स
 	Optical Margin Alignment	ऑप्टिकल मार्जिन संरेखण
 	Dynamic Text	डायनैमिक टेक्स्ट
 	Dynamic Text Presets	डायनैमिक टेक्स्ट प्रीसेट
@@ -4670,6 +4678,9 @@ antiAlias	Sharp	शार्प
 	Sponge…	स्पंज…
 	spot	स्पॉट
 	Spot Color	स्पॉट रंग
+	Spot Color Objects	स्पॉट कलर्स के साथ ऑब्जेक्ट्स
+	Pattern Objects	पैटर्न्स के साथ ऑब्जेक्ट्स
+	Gradient Objects	ग्रेडिएंट्स के साथ ऑब्जेक्ट्स
 	Spot Colors	स्पॉट रंग
 	Spot Colors (0)	स्पॉट कलर्स (0)
 	Spot Colors…	स्पॉट कलर्स…
@@ -5879,6 +5890,9 @@ antiAlias	Sharp	शार्प
 @msg	`library` is a library id or name (see {list})	`library` एक लाइब्रेरी आईडी या नाम है ( {list} देखें)
 @msg	`line` must be true or false	`line` को true या false होना चाहिए
 @msg	`method` must be classic or perceptual	`method` क्लासिक या अवधारणात्मक होना चाहिए
+@msg	`spread` must be pad, repeat or reflect	`spread` pad, repeat या reflect होना चाहिए
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 1 से {MAX_REPEATS} तक की पूर्ण संख्या होनी चाहिए
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` रैखिक, रेडियल, शंक्वाकार और डायमंड ग्रेडिएंट्स पर लागू होता है
 @msg	`min` is greater than `max`	`min` अधिकतम `max` से अधिक है
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` और `maxAnchors` पूरे नंबर होना चाहिए
 @msg	`minAngle` ({min_angle}°) can't be more than `maxAngle` ({max_angle}°)	`minAngle` ({min_angle}°) `maxAngle` ({max_angle}°) से अधिक नहीं हो सकता है।
@@ -6300,6 +6314,7 @@ antiAlias	Sharp	शार्प
 @msg	columns {first} and {column} both name the variable `{name}`	कॉलम {first} और {column} दोनों नाम चर `{name}`
 @msg	Combine Slices: the slices have no bounds	स्लाइस को मिलाएं: स्लाइस में कोई सीमा नहीं है
 @msg	command `{0}` is not available right now: {1}	आदेश `{0}` अभी उपलब्ध नहीं है: {1}
+@msg	command `{id}` is not available right now	आदेश `{id}` अभी उपलब्ध नहीं है
 @msg	command must be a shape.* command	command: आदेश एक आकार होना चाहिए।* आदेश
 @msg	commands[{i}]: missing `command`	आदेश [{i}]: लापता `command`
 @msg	composer must be "singleLine" or "everyLine"	composer: संगीतकार "singleLine" या "everyLine" होना चाहिए।
@@ -7917,6 +7932,8 @@ antiAlias	Sharp	शार्प
 @msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	इस पोस्टस्क्रिप्ट फ़ाइल को पढ़ा नहीं जा सकता ({why}): इसे उस ऐप में PDF या SVG के रूप में सेव करें जिसने इसे बनाया
 @msg	This shortcut file is in a form VectorCraft can't read.	यह शॉर्टकट फ़ाइल एक फॉर्म VectorCraft में है जिसे पढ़ा नहीं जा सकता है।
 @msg	this system has no screen color sampler	इस प्रणाली में कोई स्क्रीन रंग नमूना नहीं है
+@msg	the screen color sampler did not answer	स्क्रीन रंग नमूने ने उत्तर नहीं दिया
+@msg	the screen color sampler failed	स्क्रीन रंग नमूना विफल रहा
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	यह निशान {max} एंकर पॉइंट से अधिक होगा, डॉक्यूमेंट की तुलना में अधिक आसानी से दिखा सकते हैं: शोर, निचले पाथ या रंग उठाना, या कम-fidelity प्रीसेट चुनना
 @msg	thumbnail: no page {n} (the file has 1)	थंबनेल: कोई पेज {n} (फ़ाइल में 1 है)
 @msg	thumbnail: no page {v} (the {what} has {count})	थंबनेल: कोई पेज {v} ({what} में {count} है)
