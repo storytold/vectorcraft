@@ -4552,6 +4552,8 @@ theme	Appearance	Giao diện
 @msg	the Smooth slider is not open	Thanh trượt Làm mượt chưa được mở
 @msg	the screen color sampler is already open	công cụ lấy mẫu màu trên màn hình đã được mở
 @msg	this system has no screen color sampler	hệ thống này không có công cụ lấy mẫu màu trên màn hình
+@msg	the screen color sampler did not answer	công cụ lấy mẫu màu trên màn hình không phản hồi
+@msg	the screen color sampler failed	công cụ lấy mẫu màu trên màn hình gặp lỗi
 @msg	bad colour `{hex}` (#rrggbb)	màu không hợp lệ `{hex}` (#rrggbb)
 @msg	bad page tree	cây trang bị lỗi
 @msg	bad shortcut	phím tắt không hợp lệ

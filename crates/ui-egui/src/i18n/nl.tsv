@@ -5500,6 +5500,8 @@ mark-style	Japanese	Japans
 @msg	the Color Picker is not open	de kleurenkiezer is niet open
 @msg	the screen color sampler is already open	de schermkleurkiezer is al open
 @msg	this system has no screen color sampler	dit systeem heeft geen schermkleurkiezer
+@msg	the screen color sampler did not answer	de schermkleurkiezer heeft niet geantwoord
+@msg	the screen color sampler failed	de schermkleurkiezer is mislukt
 swatch	[None]	[Geen]
 swatch	[Registration]	[Passers]
 swatch	White	Wit

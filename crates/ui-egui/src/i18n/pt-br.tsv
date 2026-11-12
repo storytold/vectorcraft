@@ -5765,6 +5765,8 @@ mark-style	Japanese	Japonesas
 @msg	the Smooth slider is not open	o controle deslizante Suavizar não está aberto
 @msg	the screen color sampler is already open	o coletor de cores da tela já está aberto
 @msg	this system has no screen color sampler	este sistema não tem coletor de cores da tela
+@msg	the screen color sampler did not answer	o coletor de cores da tela não respondeu
+@msg	the screen color sampler failed	o coletor de cores da tela falhou
 	Darkness	Escuridão
 	Dimension	Cota
 	Dimension Tool Options	Opções da Ferramenta Cota

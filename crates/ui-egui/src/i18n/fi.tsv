@@ -5828,6 +5828,8 @@ mark-style	Japanese	Japanilainen
 @msg	the screen color sampler is already open	värin poiminta näytöltä on jo auki
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	tämä on PostScript-tiedosto (vanhemmassa muodossa tai ilman PDF-yhteensopivuutta tallennettu .ai tai EPS-tiedosto), ei PDF: Tiedosto › Avaa ja Tiedosto › Sijoita lukevat sen EPS-muodossa
 @msg	this system has no screen color sampler	tässä järjestelmässä ei ole värin poimintaa näytöltä
+@msg	the screen color sampler did not answer	värin poiminta näytöltä ei vastannut
+@msg	the screen color sampler failed	värin poiminta näytöltä epäonnistui
 @msg	the image can't be read as a texture	kuvaa ei voi lukea tekstuurina
 
 # User Interface › Accent Color

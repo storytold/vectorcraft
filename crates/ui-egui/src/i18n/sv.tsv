@@ -5819,6 +5819,8 @@ theme	Appearance	Utseende
 @msg	the screen color sampler is already open	färghämtningen från skärmen är redan öppen
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	det här är en PostScript-fil (en .ai sparad i ett äldre format eller utan PDF-kompatibilitet, eller en EPS-fil), inte en PDF: Fil › Öppna och Fil › Placera läser den som EPS
 @msg	this system has no screen color sampler	det här systemet saknar färghämtning från skärmen
+@msg	the screen color sampler did not answer	färghämtningen från skärmen svarade inte
+@msg	the screen color sampler failed	färghämtningen från skärmen misslyckades
 @msg	the image can't be read as a texture	bilden kan inte läsas som en textur
 
 # User Interface › Accent Color

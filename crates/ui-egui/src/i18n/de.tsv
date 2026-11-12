@@ -4275,6 +4275,8 @@ theme	Appearance	Erscheinungsbild
 @msg	the Smooth slider is not open	der Regler „Glätten“ ist nicht geöffnet
 @msg	the screen color sampler is already open	die Farbaufnahme vom Bildschirm ist bereits geöffnet
 @msg	this system has no screen color sampler	dieses System hat keine Farbaufnahme vom Bildschirm
+@msg	the screen color sampler did not answer	die Farbaufnahme vom Bildschirm hat nicht geantwortet
+@msg	the screen color sampler failed	die Farbaufnahme vom Bildschirm ist fehlgeschlagen
 @msg	bad colour `{hex}` (#rrggbb)	ungültige Farbe `{hex}` (#rrggbb)
 @msg	bad page tree	fehlerhafter Seitenbaum
 @msg	bad shortcut	ungültiger Tastaturbefehl

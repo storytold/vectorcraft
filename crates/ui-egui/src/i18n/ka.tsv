@@ -5414,6 +5414,8 @@ imageTrace	Outline	კონტური
 @msg	the Smooth slider is not open	გაგლუვების სლაიდერი გახსნილი არ არის
 @msg	the screen color sampler is already open	ეკრანიდან ფერის აღება უკვე გახსნილია
 @msg	this system has no screen color sampler	ამ სისტემას ეკრანიდან ფერის აღების საშუალება არ აქვს
+@msg	the screen color sampler did not answer	ეკრანიდან ფერის აღების საშუალებამ არ უპასუხა
+@msg	the screen color sampler failed	ეკრანიდან ფერის აღება ვერ მოხერხდა
 # Dimension tool and Object › Dimensions. A drafting dimension is ზომა (ზომის დასმა), like a dimension on a technical drawing.
 	Dimension	ზომა
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	ნახაზი : რეალური ზომა — 1:10 გვერდზე 1 ერთეულს 10-ად აწერს.

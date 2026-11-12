@@ -5492,6 +5492,8 @@ mark-style	Japanese	Japansk
 @msg	the Color Picker is not open	farvevælgeren er ikke åben
 @msg	the screen color sampler is already open	skærmfarvesampleren er allerede åben
 @msg	this system has no screen color sampler	dette system har ingen skærmfarvesampler
+@msg	the screen color sampler did not answer	skærmfarvesampleren svarede ikke
+@msg	the screen color sampler failed	skærmfarvesampleren mislykkedes
 swatch	[None]	[Ingen]
 swatch	[Registration]	[Passning]
 swatch	White	Hvid

@@ -4584,6 +4584,8 @@ imageTrace	Outline	Obris
 @msg	the Smooth slider is not open	klizač Izgladi nije otvoren
 @msg	the screen color sampler is already open	uzorkivač boja s ekrana je već otvoren
 @msg	this system has no screen color sampler	ovaj sistem nema uzorkivač boja s ekrana
+@msg	the screen color sampler did not answer	uzorkivač boja s ekrana nije odgovorio
+@msg	the screen color sampler failed	uzorkivač boja s ekrana nije uspio
 @msg	bad colour `{hex}` (#rrggbb)	loša boja `{hex}` (#rrggbb)
 @msg	bad page tree	loše stablo stranica
 @msg	bad shortcut	loša prečica

@@ -138,9 +138,10 @@ pub struct Services {
     pub open_in_photocraft: Option<OpenInFn>,
     /// Show a folder picker; returns its path (desktop: Relink to Folder, Package).
     pub pick_folder: Option<Box<dyn FnMut() -> Option<String>>>,
-    /// Show the system's color sampler, which picks a color anywhere on the screen (macOS, and
-    /// browsers with an EyeDropper): Sample Color from Screen ([`screen_color`]). Without it that
-    /// command answers with an error and the Color Picker's eyedropper button is gray.
+    /// Show the system's color sampler, which picks a color anywhere on the screen (macOS, Linux
+    /// through the desktop portal, and browsers with an EyeDropper): Sample Color from Screen
+    /// ([`screen_color`]). Without it that command answers with an error and the Color Picker's
+    /// eyedropper button is gray.
     pub screen_color: Option<screen_color::StartSampler>,
     /// Where Data Recovery keeps its copies when not in a folder (the web's browser storage;
     /// tests): installed into the session ([`vectorcraft_engine::cmd::recovery`]).

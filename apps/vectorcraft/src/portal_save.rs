@@ -233,6 +233,13 @@ fn parent(window: &winit::window::Window) -> (String, Option<wayland::Export>) {
     }
 }
 
+/// [`parent`] for another dialog of the portal (the screen color sampler, `linux_screen_color`):
+/// the identifier stays valid until the second value is dropped.
+#[cfg(target_os = "linux")]
+pub(crate) fn exported_parent(window: &winit::window::Window) -> (String, impl Send + 'static) {
+    parent(window)
+}
+
 /// The portal's identifier of `window`: its X11 id, else empty (no Wayland export is made off
 /// Linux).
 #[cfg(any(target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]

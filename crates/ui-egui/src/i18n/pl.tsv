@@ -4483,6 +4483,8 @@ imageTrace	Outline	Kontur
 @msg	the Smooth slider is not open	Suwak Wygładź nie jest otwarty
 @msg	the screen color sampler is already open	narzędzie do pobierania koloru z ekranu jest już otwarte
 @msg	this system has no screen color sampler	ten system nie ma narzędzia do pobierania koloru z ekranu
+@msg	the screen color sampler did not answer	narzędzie do pobierania koloru z ekranu nie odpowiedziało
+@msg	the screen color sampler failed	narzędzie do pobierania koloru z ekranu zgłosiło błąd
 @msg	bad colour `{hex}` (#rrggbb)	nieprawidłowy kolor `{hex}` (#rrggbb)
 @msg	bad page tree	nieprawidłowe drzewo stron
 @msg	bad shortcut	nieprawidłowy skrót
