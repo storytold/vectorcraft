@@ -3272,7 +3272,11 @@ fn hebrew_parallel_round3_selection_values() {
         ("Flip Along Vertical Axis", "היפוך לאורך הציר האנכי"),
         ("Free Transform", "שינוי צורה חופשי"),
     ] {
-        assert_eq!(tr(he, source), expected, "Hebrew UI regression for {source}");
+        assert_eq!(
+            tr(he, source),
+            expected,
+            "Hebrew UI regression for {source}"
+        );
     }
 }
 
@@ -3289,9 +3293,16 @@ fn hebrew_parallel_round3_typography_values() {
         ("Break Text into Lines", "פיצול טקסט לשורות"),
         ("Break Text into Words", "פיצול טקסט למילים"),
         ("Character Color", "צבע תו"),
-        ("Left-to-Right Paragraph Direction", "כיוון פסקה משמאל לימין"),
+        (
+            "Left-to-Right Paragraph Direction",
+            "כיוון פסקה משמאל לימין",
+        ),
     ] {
-        assert_eq!(tr(he, source), expected, "Hebrew UI regression for {source}");
+        assert_eq!(
+            tr(he, source),
+            expected,
+            "Hebrew UI regression for {source}"
+        );
     }
 }
 
@@ -3299,10 +3310,19 @@ fn hebrew_parallel_round3_typography_values() {
 fn hebrew_parallel_round3_files_values() {
     let he = Lang::from_code("he").expect("Hebrew locale available");
     for (source, expected) in [
-        ("Export All Open Documents as PDF", "ייצוא כל המסמכים הפתוחים ל־PDF"),
-        ("Export All Open Documents as SVG", "ייצוא כל המסמכים הפתוחים ל־SVG"),
+        (
+            "Export All Open Documents as PDF",
+            "ייצוא כל המסמכים הפתוחים ל־PDF",
+        ),
+        (
+            "Export All Open Documents as SVG",
+            "ייצוא כל המסמכים הפתוחים ל־SVG",
+        ),
         ("Go to Artboard", "מעבר למשטח עבודה"),
-        ("Couldn't save recovery data: {e}", "לא ניתן לשמור נתוני שחזור: ⁨{e}⁩"),
+        (
+            "Couldn't save recovery data: {e}",
+            "לא ניתן לשמור נתוני שחזור: ⁨{e}⁩",
+        ),
         ("Cancel Export", "ביטול הייצוא"),
         ("No artboards match.", "לא נמצאו משטחי עבודה תואמים."),
         ("No importer plug-ins installed", "לא מותקנים תוספים לייבוא"),
@@ -3310,6 +3330,10 @@ fn hebrew_parallel_round3_files_values() {
         ("Next Artboard", "משטח העבודה הבא"),
         ("Find Linked Files", "איתור קבצים מקושרים"),
     ] {
-        assert_eq!(tr(he, source), expected, "Hebrew UI regression for {source}");
+        assert_eq!(
+            tr(he, source),
+            expected,
+            "Hebrew UI regression for {source}"
+        );
     }
 }
