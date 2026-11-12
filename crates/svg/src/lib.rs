@@ -228,6 +228,11 @@ pub struct ExportOptions {
     pub responsive: bool,
     /// Fonts → Convert to Outlines: text becomes paths (portable, no font needed to view it).
     pub outline_text: bool,
+    /// Expand Clipping Masks: clipping groups are written as clipped geometry instead of
+    /// `<clipPath>`, which readers that ignore it (Qt SVG behind KDE's thumbnails and viewers,
+    /// some Office and CAD importers) draw as if the mask were released. Art that can't be
+    /// expanded (a stroke, type, an image, an effect, a nested clip) keeps its `<clipPath>`.
+    pub expand_clips: bool,
     /// Embed the native document (passed to [`export_full`]) in `<metadata>` so VectorCraft
     /// reopens the SVG with nothing lost (see [`editing`]).
     pub preserve_editing: bool,
@@ -260,6 +265,7 @@ impl Default for ExportOptions {
             minify: false,
             responsive: false,
             outline_text: false,
+            expand_clips: false,
             preserve_editing: false,
             metadata: false,
             fewer_tspans: false,

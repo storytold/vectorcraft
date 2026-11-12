@@ -34,6 +34,12 @@ pub const OPTIONS: &[FormatOption] = &[
         description: "Fonts: text as glyph outlines (viewable without the fonts) instead of <text>; default: Document Setup → Type → Export (Preserve Text Appearance: true)",
     },
     FormatOption {
+        name: "expandClips",
+        ty: "boolean",
+        default: "false",
+        description: "clipping masks as clipped geometry instead of <clipPath>, so readers that ignore <clipPath> (Qt SVG behind KDE's thumbnails and viewers, some Office and CAD importers) draw them; art that can't be expanded (a stroke, type, an image, an effect, a nested clip) keeps its <clipPath>",
+    },
+    FormatOption {
         name: "images",
         ty: "string",
         default: "\"embed\"",
