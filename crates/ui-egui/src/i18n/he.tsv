@@ -215,3 +215,91 @@
 	Pages	עמודים
 	e.g. 1-3, 5	לדוגמה: 1-3, 5
 	Password	סיסמה
+
+# Round 5 source-linked Hebrew vector tools, effects and 3D action vocabulary.
+	Glowing Edges…	קצוות זוהרים…
+	Glowing Edges	קצוות זוהרים
+	Edge Width	רוחב הקצוות
+	Edge Brightness	בהירות הקצוות
+	Smoothness	החלקה
+	Radial Blur…	טשטוש רדיאלי…
+	Smart Blur…	טשטוש חכם…
+	Sharpen	חידוד
+	Unsharp Mask…	מסכת חידוד…
+	Radial Blur	טשטוש רדיאלי
+	Smart Blur	טשטוש חכם
+	Unsharp Mask	מסכת חידוד
+	Gaussian Blur	טשטוש גאוסי
+	Method	שיטה
+	Quality	איכות
+	Radius	רדיוס
+	Spin	סיבוב
+	Draft	טיוטה
+	Good	טוב
+	Best	מיטבי
+	Mode	מצב
+	Blur Mode	מצב טשטוש
+	Edge Only	קצוות בלבד
+	Overlay Edge	שכבת־על של קצוות
+	(closest)	(הקרוב ביותר)
+	+ Add Scale	+ הוספת קנה מידה
+	0.2 (quality) to 100 (speed)	מ־0.2 (איכות) עד 100 (מהירות)
+	1 Color Job…	עבודה בצבע אחד…
+	1 {unit} on the artboard stands for {real} {unit} in the scene.	יחידת {unit} אחת על משטח היצירה מייצגת {real} יחידות {unit} בסצנה.
+	2 Color Job…	עבודה בשני צבעים…
+	3 Color Job…	עבודה בשלושה צבעים…
+	30° Angles	זוויות של 30°
+	3D and Materials	תלת־ממד וחומרים
+	Plane	מישור
+	Extrude	שיחול
+	Revolve	סיבוב סביב ציר
+	Inflate	ניפוח
+	Select objects, then pick an object type to give them a 3D effect.	בחרו אובייקטים, ולאחר מכן בחרו את סוג האובייקט כדי להחיל עליהם אפקט תלת־ממדי.
+	3D Ribbon	סרגל תלת־ממד
+	45° Angles	זוויות של 45°
+	60° Angles	זוויות של 60°
+	90° & 45° & 30° Angles	זוויות של 90°, 45° ו־30°
+	90° & 45° Angles	זוויות של 90° ו־45°
+	90° Angles	זוויות של 90°
+	<Opacity Mask>	<מסכת אטימות>
+	[Default] is protected: New… starts an editable copy.	הגדרת ברירת המחדל [Default] מוגנת: חדש… יוצר עותק שניתן לערוך.
+	[Unnamed]	[ללא שם]
+	A File…	קובץ…
+	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	ערך נמוך עוקב מקרוב אחר קו המתאר; ערך גבוה יוצר פחות נקודות ועקומות חלקות יותר.
+	A new preset starting from the selected one	ערכת הגדרות חדשה על בסיס הערכה שנבחרה
+	A saved copy of the selected preset	עותק שמור של ערכת ההגדרות שנבחרה
+	above	מעל
+	Absolute Position	מיקום מוחלט
+	Accurate	מדויק
+	Abutting	צמודים
+	Action {n}	פעולה {n}
+	Actions	פעולות
+	Activate Document	הפעלת המסמך
+	Active Perspective Plane	מישור הפרספקטיבה הפעיל
+	Actual Size	גודל בפועל
+	Add	הוספה
+	Add Anchor (Pen)	הוספת נקודת עיגון (עט)
+	Add Anchor Point	הוספת נקודת עיגון
+	Add Anchor Point Tool	כלי להוספת נקודת עיגון
+	Add Anchor Points	הוספת נקודות עיגון
+	Add Effect	הוספת אפקט
+	Add Freeform Line	הוספת קו חופשי
+	Add Freeform Point	הוספת נקודה חופשית
+	Add Guide	הוספת קו עזר
+	Add Mesh Line	הוספת קו רשת
+	Add New	הוספת חדש
+	Add New Effect	הוספת אפקט חדש
+	Add New Fill	הוספת מילוי חדש
+	Add New Stroke	הוספת קו מתאר חדש
+	Add Selected Artwork (Alt: as one asset)	הוספת היצירה שנבחרה (Alt: כנכס אחד)
+	Add Selected Artwork as Multiple Assets	הוספת היצירה שנבחרה כמספר נכסים
+	Add Selected Artwork as One Asset	הוספת היצירה שנבחרה כנכס אחד
+	Add Spine Point	הוספת נקודת ציר
+	Add Swatches	הוספת דוגמיות צבע
+	Add to Graphic Styles	הוספה לסגנונות גרפיים
+	Add to Profiles	הוספה לפרופילים
+	Add to Profiles…	הוספה לפרופילים…
+	Add to Selection	הוספה לבחירה
+	Add to Swatches	הוספה לדוגמיות צבע
+	Add Used Colors	הוספת צבעים שבשימוש
+	Additional Plug-ins Folder	תיקיית תוספים נוספת
