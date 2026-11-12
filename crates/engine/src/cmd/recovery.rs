@@ -1230,8 +1230,9 @@ fn owner(s: &mut Session, store: &dyn RecoveryStore, area: &str, hold: &mut Vec<
 
 /// Who keeps the copies left in `area` by an app that had to leave it, from the entries
 /// `<its area>/keeps-<area>` ([`mark_left`]): this session, or another app that is running. `None`:
-/// no app that runs keeps them. A store that can't be listed now keeps them (a copy kept loses
-/// nothing).
+/// no app that runs keeps them. An entry counts only in an area this account can lock or tell is
+/// held ([`holder`]), so an entry in a folder of another account, or in one whose lock can't be
+/// checked, keeps nothing. A store that can't be listed now keeps them (a copy kept loses nothing).
 fn keeper(s: &Session, store: &dyn RecoveryStore, area: &str) -> Option<Owner> {
     let Ok(names) = store.list() else { return Some(Owner::Running) };
     let mark = format!("/{KEEPS}{area}");
@@ -1247,14 +1248,15 @@ fn keeper(s: &Session, store: &dyn RecoveryStore, area: &str) -> Option<Owner> {
 }
 
 /// Whose area `area` is, without taking it over: this session's, a running app's, or nobody's (a
-/// lock taken to tell goes at once).
+/// lock taken to tell goes at once). An area whose lock fails (not a recovery area of this
+/// account, a lock file that can't be opened) is nobody's.
 fn holder(s: &Session, store: &dyn RecoveryStore, area: &str) -> Owner {
     if s.recovery.own.as_ref().is_some_and(|o| o.area == area && o.store.location() == store.location()) {
         return Owner::Mine;
     }
     match store.lock(area) {
-        Ok(Lock::Held(_)) => Owner::Gone,
-        Ok(Lock::Busy) | Err(_) => Owner::Running,
+        Ok(Lock::Held(_)) | Err(_) => Owner::Gone,
+        Ok(Lock::Busy) => Owner::Running,
         Ok(Lock::Unsupported) => {
             let runs = store.announced(area).unwrap_or(false) || beating(store, area, stale_after(s), s.recovery.adopted.get(area).copied());
             if runs { Owner::Running } else { Owner::Gone }
