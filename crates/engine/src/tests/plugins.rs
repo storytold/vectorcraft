@@ -461,11 +461,11 @@ fn a_shadow_on_each_fill_a_painted_effect_returns_follows_the_transform_after_it
     let mut s = session();
     let id = rect(&mut s, 10.0, "#ff0000");
     let out = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#00ff00"), solid("#0000ff")]}]}).to_string();
-    install_wat(&mut s, &tpl::returning(&painting("test.engine.twofills", true), &out));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.shadowedfills", true), &out));
     let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
     for (effect, params) in [
         ("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 50})),
-        ("plugin.test.engine.twofills", json!({})),
+        ("plugin.test.engine.shadowedfills", json!({})),
         ("distort.transform", json!({"scaleH": 200, "scaleV": 200})),
     ] {
         run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": effect, "params": params, "item": fill}));
