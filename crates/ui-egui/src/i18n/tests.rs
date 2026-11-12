@@ -238,6 +238,27 @@ fn anti_aliasing_method_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The names the EPS options' menus show (preview, overprints, flattener preset and PostScript
+/// level), and Save As's Preview label.
+#[test]
+fn eps_option_menu_names_are_in_complete_catalogs() {
+    use vectorcraft_engine::cmd::FlattenOptions;
+    use vectorcraft_eps::{Level, Overprint, Preview};
+    let names: Vec<&str> = Preview::ALL
+        .map(Preview::label)
+        .into_iter()
+        .chain(Overprint::ALL.map(Overprint::label))
+        .chain(Level::ALL.map(Level::label))
+        .chain(FlattenOptions::PRESETS.into_iter().filter_map(FlattenOptions::preset_label))
+        .chain(["Preview:"])
+        .collect();
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in &names {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// Each language counts with its own plural rule: the form a count picks (`one`, then `few`, then
 /// `other`/`many`).
 #[test]
@@ -2577,7 +2598,7 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("scale must be a number from {_1} to {_2}, not {_3}", &["scale"]),
     ("scale must be a number from {_1} to {_2}, not {s}", &["scale"]),
     ("show must be true or false", &["show"]),
-    ("span: \"selection\" places a linear, radial or conic gradient, not a freeform one", &["span"]),
+    ("span: \"selection\" places a linear, radial, conic or diamond gradient, not a freeform one", &["span"]),
     ("thickness must be from 0.01 to 5000 pt", &["thickness"]),
     ("title can't be empty", &["title"]),
     ("view is required", &["view"]),

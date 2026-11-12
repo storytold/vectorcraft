@@ -117,6 +117,7 @@
 	PDF Presets…	PDF-ის პრესეტები…
 	Perspective Grid Presets…	პერსპექტივის ბადის პრესეტები…
 	Color Settings…	ფერის პარამეტრები…
+	Assign Profile	პროფილის მინიჭება
 	Assign Profile…	პროფილის მინიჭება…
 	Keyboard Shortcuts…	კლავიატურის მალსახმობები…
 	Preferences…	პარამეტრები…
@@ -342,6 +343,9 @@
 	Create Outlines	კონტურებად გარდაქმნა
 	Optical Margin Alignment	ოპტიკური არშიის სწორება
 	Dynamic Text	დინამიკური ტექსტი
+	Dynamic Text Presets	დინამიკური ტექსტის წინასწარი პარამეტრები
+	Arch	თაღი
+@msg	select point type or type on a path	აირჩიეთ წერტილოვანი ტექსტი ან ტრაექტორიაზე ტექსტი
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	დაკავშირებულ ტექსტში ტრაექტორიაზე ტექსტი ვერ გამოიყენებს დინამიკურ ტექსტს: {frames}
 	Fill with Placeholder Text	შემავსებელი ტექსტით შევსება
 	Insert Inline Symbol	ჩადგმული სიმბოლოს ჩასმა
@@ -491,6 +495,7 @@
 	Gaussian Blur…	გაუსის გაბუნდოვნება…
 	View	ხედი
 	Preview	წინასწარი ნახვა
+	Preview:	წინასწარი ნახვა:
 	Overprint Preview	ზედდაბეჭდვის წინასწარი ნახვა
 	Pixel Preview	პიქსელების წინასწარი ნახვა
 	Trim View	მოჭრილი ხედი
@@ -698,6 +703,15 @@
 	Stun Pulse	დაბნეულობა
 	Stealth Fade	შენიღბვა
 	Shield Buff	ფარი
+	Textures	ტექსტურები
+	Fine Grain	წვრილი მარცვალი
+	Canvas Weave	ტილოს ქსოვილი
+	Burlap Sack	ჯუთის ტომარა
+	Cracked Glaze	დამსკდარი მინანქარი
+	Mosaic Floor	მოზაიკის იატაკი
+	Quilted Squares	ქვილთის კვადრატები
+	Leaded Glass	ტყვიის მინა
+	Damp Paper	ნესტიანი ქაღალდი
 	Outlines and Rules	კონტურები და ხაზები
 	Hand-Drawn	ხელით დახატული
 	Gradient Finishes	გრადიენტული ზედაპირები
@@ -719,6 +733,7 @@
 	Spectrum Gradients	სპექტრის გრადიენტები
 	Sky Gradients	ცის გრადიენტები
 	Neutral Gradients	ნეიტრალური გრადიენტები
+	Organic Fades	ორგანული გაქრობები
 	Duotone Gradients	ორტონიანი გრადიენტები
 	Radial Glows	რადიალური ნათებები
 	Save Swatch Library…	ფერის ნიმუშების ბიბლიოთეკის შენახვა…
@@ -1547,6 +1562,7 @@ digits	Malayalam	მალაიალამური
 	Points: clicks add free points	წერტილები: დაწკაპუნებები ამატებს თავისუფალ წერტილებს
 	Radial Gradient	რადიალური გრადიენტი
 	Conic Gradient	კონუსური გრადიენტი
+	Diamond Gradient	რომბული გრადიენტი
 	Reset to White, Black	თეთრზე და შავზე დაბრუნება
 	Reverse Gradient	გრადიენტის შებრუნება
 	Gradient Presets	გრადიენტის პრესეტები
@@ -1804,6 +1820,7 @@ digits	Malayalam	მალაიალამური
 	Simulate Paper	ქაღალდის იმიტაცია
 	Use Black Point Compensation	შავი წერტილის კომპენსაციის გამოყენება
 	Working CMYK (don't tag)	სამუშაო CMYK (ტეგის გარეშე)
+	Working RGB (don't tag)	სამუშაო RGB (ტეგის გარეშე)
 	{name} (spot)	{name} (სპოტ)
 	Add to Profiles…	პროფილებში დამატება…
 	Align Stroke to Center	კონტურის ცენტრზე სწორება
@@ -4022,6 +4039,7 @@ font-technology	Variable	ცვლადი
 @msg	`{key}` must be a number, not {v}	`{key}` უნდა იყოს რიცხვი და არა {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} უნდა იყოს Unix-დრო წამებში (მთელი რიცხვი) ან null
 @msg	`{key}` must be a string	`{key}` უნდა იყოს სტრიქონი
+@msg	`{key}` must be a profile name or null	`{key}` უნდა იყოს პროფილის სახელი ან null
 @msg	`{key}` must be a whole number	`{key}` უნდა იყოს მთელი რიცხვი
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` უნდა იყოს მთელი რიცხვი {min}-დან {max}-მდე (მიღებულია {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` უნდა იყოს {min}-სა და {max}-ს შორის (მიღებულია {x})
@@ -4481,7 +4499,7 @@ font-technology	Variable	ცვლადი
 @msg	unknown format	უცნობი ფორმატი
 @msg	unknown format `{f}` (Save writes {_1})	უცნობი ფორმატი `{f}` (შენახვა წერს: {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	უცნობი თავისუფალი რეჟიმი `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	უცნობი გრადიენტის სახე `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	უცნობი გრადიენტის სახე `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	უცნობი გამოკვეთა `{h}`
 @msg	unknown option `{path}.{k}`	უცნობი პარამეტრი `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	უცნობი ზედდაბეჭდვა `{o}` (preserve, simulate ან discard)
@@ -5482,7 +5500,7 @@ imageTrace	Outline	კონტური
 @msg	span must be "object" or "selection", got {v}	span უნდა იყოს "object" ან "selection", მიღებულია {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" ათავსებს `gradient`-ს და არა ფერის ნიმუშს
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" ათავსებს გრადიენტს: მიუთითეთ `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" ათავსებს წრფივ, რადიალურ ან კონუსურ გრადიენტს და არა თავისუფალი ფორმისას
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" ათავსებს წრფივ, რადიალურ, კონუსურ ან რომბულ გრადიენტს და არა თავისუფალი ფორმისას
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" თავად ათავსებს გრადიენტს: გამოტოვეთ `start` და `end` (ისინი მას უკვე დოკუმენტის კოორდინატებში ათავსებენ)
 	Make Image Dynamic	გამოსახულების დინამიკურად ქცევა
 	Import Data Sets…	მონაცემთა ნაკრებების იმპორტი…
@@ -6943,6 +6961,11 @@ font-script	Japanese	იაპონური
 @msg	only an exporter or an importer declares `extensions`	`extensions`-ს მხოლოდ ექსპორტის ან იმპორტის პლაგინი აცხადებს
 @msg	an importer always gets an import's budget: leave `budget` out	იმპორტის პლაგინი ყოველთვის იღებს იმპორტის ბიუჯეტს: გამოტოვეთ `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	პრობლემების მოგვარების ინფორმაციის კოპირება
+@msg	Copied the troubleshooting info	პრობლემების მოგვარების ინფორმაცია კოპირებულია
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	VectorCraft-ის ბოლო სესიამ დახურვამდე პასუხის გაცემა შეწყვიტა. დახმარება › პრობლემების მოგვარების ინფორმაციის კოპირება აკოპირებს დეტალებს შეცდომის ანგარიშისთვის
+
 # Safe Mode
 	Safe Mode…	უსაფრთხო რეჟიმი…
 	Safe Mode	უსაფრთხო რეჟიმი
@@ -6963,6 +6986,7 @@ font-script	Japanese	იაპონური
 
 # Align to Pixel Grid
 	Align to Pixel Grid	პიქსელურ ბადეზე გასწორება
+	Align New Objects to Pixel Grid	ახალი ობიექტების პიქსელურ ბადეზე გასწორება
 	Not Aligned to Pixel Grid	პიქსელურ ბადეზე გაუსწორებელი
 @msg	only paths and compound paths can be aligned to the pixel grid	პიქსელურ ბადეზე მხოლოდ ტრაექტორიების და შედგენილი ტრაექტორიების გასწორებაა შესაძლებელი
 @msg	side is left or right, not `{s}`	side არის left ან right და არა `{s}`

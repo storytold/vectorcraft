@@ -179,6 +179,7 @@ digits	Malayalam	말라얄람어
 	PDF Presets…	PDF 프리셋…
 	Perspective Grid Presets…	원근 격자 프리셋…
 	Color Settings…	색상 설정…
+	Assign Profile	프로파일 지정
 	Assign Profile…	프로파일 지정…
 	Keyboard Shortcuts…	키보드 단축키…
 	Preferences…	환경 설정…
@@ -437,6 +438,9 @@ digits	Malayalam	말라얄람어
 	Create Outlines	윤곽선 만들기
 	Optical Margin Alignment	시각적 여백 정렬
 	Dynamic Text	동적 텍스트
+	Dynamic Text Presets	동적 텍스트 사전 설정
+	Arch	아치
+@msg	select point type or type on a path	포인트 문자 또는 패스 위 문자를 선택하십시오
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	연결된 문자의 패스 위 문자에는 동적 텍스트를 사용할 수 없습니다: {frames}
 	Fill with Placeholder Text	자리 표시 문자로 채우기
 	Insert Inline Symbol	인라인 심볼 삽입
@@ -818,6 +822,15 @@ digits	Malayalam	말라얄람어
 	Stun Pulse	기절
 	Stealth Fade	은신
 	Shield Buff	방패
+	Textures	텍스처
+	Fine Grain	고운 입자
+	Canvas Weave	캔버스 직조
+	Burlap Sack	마대 자루
+	Cracked Glaze	갈라진 유약
+	Mosaic Floor	모자이크 바닥
+	Quilted Squares	퀼트 사각형
+	Leaded Glass	납유리
+	Damp Paper	젖은 종이
 	Outlines and Rules	윤곽선과 괘선
 	Hand-Drawn	손그림
 	Gradient Finishes	그레이디언트 마감
@@ -839,6 +852,7 @@ digits	Malayalam	말라얄람어
 	Spectrum Gradients	스펙트럼 그레이디언트
 	Sky Gradients	하늘 그레이디언트
 	Neutral Gradients	중간색 그레이디언트
+	Organic Fades	유기적 페이드
 	Duotone Gradients	듀오톤 그레이디언트
 	Radial Glows	방사형 광선
 	Save Swatch Library…	견본 라이브러리 저장…
@@ -850,6 +864,7 @@ digits	Malayalam	말라얄람어
 	Search Commands…	명령 검색…
 	VectorCraft Help…	VectorCraft 도움말…
 	Preview	미리 보기
+	Preview:	미리 보기:
 	Show Edges	가장자리 표시
 	Show Corner Widget	모퉁이 위젯 표시
 	Show Template	템플릿 표시
@@ -1436,6 +1451,14 @@ antiAlias	Sharp	날카롭게
 	Disable Auto Add/Delete	자동 추가/삭제 사용 안 함
 	Disable Opacity Mask	불투명 마스크 사용 안 함
 	Discard	삭제
+	Preserve	보존
+	TIFF (Black & White)	TIFF (흑백)
+	TIFF (8-bit Color)	TIFF (8비트 색상)
+	High Resolution	고해상도
+	Medium Resolution	중간 해상도
+	Low Resolution	저해상도
+	Language Level 2	언어 수준 2
+	Language Level 3	언어 수준 3
 	Discard Empty Type	빈 문자 삭제
 	Discard Recovered Documents	복구된 문서 삭제
 	Discard White Overprint in Output	출력에서 흰색 오버프린트 삭제
@@ -2687,6 +2710,7 @@ mark-style	Japanese	일본식
 	Radar Graph Tool	레이더 그래프 도구
 	Radial Gradient	방사형 그레이디언트
 	Conic Gradient	원뿔형 그레이디언트
+	Diamond Gradient	다이아몬드 그레이디언트
 	Random	무작위
 	Randomize Colors	색상 무작위 변경
 	Randomly change color order	색상 순서를 무작위로 변경
@@ -3935,6 +3959,7 @@ file-filter	Templates	템플릿
 	Weight	두께
 	Windows	Windows
 	Working CMYK (don't tag)	작업용 CMYK (태그 안 함)
+	Working RGB (don't tag)	작업용 RGB (태그 안 함)
 	Workspace {i}	작업 영역 {i}
 	Yellow	노랑
 	[Normal Character Style]	[기본 문자 스타일]
@@ -4302,7 +4327,7 @@ theme	Appearance	외관
 @msg	stop {i} needs `offset`	정지점 {i}에는 `offset`이 필요합니다
 @msg	stop {i} needs a valid `color`	정지점 {i}에는 올바른 `color`가 필요합니다
 @msg	stop {i}: `{k}` must be a number	정지점 {i}: `{k}`은(는) 숫자여야 합니다
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	알 수 없는 그레이디언트 종류 `{k}`(linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	알 수 없는 그레이디언트 종류 `{k}`(linear, radial, conic, diamond, freeform)
 @msg	the art could not be sampled	아트웍을 샘플링할 수 없습니다
 @msg	the art is too light for any dots	아트웍이 너무 밝아 점을 만들 수 없습니다
 @msg	the document has no symbols	문서에 심볼이 없습니다
@@ -4396,6 +4421,7 @@ theme	Appearance	외관
 @msg	`{key}` must be a #rrggbb color	`{key}`은(는) #rrggbb 색상이어야 합니다
 @msg	`{key}` must be a #rrggbb colour	`{key}`은(는) #rrggbb 색상이어야 합니다
 @msg	`{key}` must be a string	`{key}`은(는) 문자열이어야 합니다
+@msg	`{key}` must be a profile name or null	`{key}`은(는) 프로파일 이름 또는 null이어야 합니다
 @msg	`{key}` must be a whole number	`{key}`은(는) 정수여야 합니다
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}`은(는) {min}에서 {max} 사이의 정수여야 합니다({x} 입력됨)
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}`은(는) {min}에서 {max} 사이여야 합니다({x} 입력됨)
@@ -5392,7 +5418,7 @@ lighting	Light	광원
 @msg	span must be "object" or "selection", got {v}	span은 "object" 또는 "selection"이어야 합니다. {v}은(는) 사용할 수 없습니다
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection"은 `gradient`를 배치합니다. 견본은 배치할 수 없습니다
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection"은 그레이디언트를 배치합니다: `gradient`를 지정하세요
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection"은 선형, 방사형 또는 원뿔형 그레이디언트를 배치합니다. 자유형 그레이디언트는 배치할 수 없습니다
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection"은 선형, 방사형, 원뿔형 또는 다이아몬드 그레이디언트를 배치합니다. 자유형 그레이디언트는 배치할 수 없습니다
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection"은 그레이디언트 자체를 배치합니다: `start`와 `end`를 빼세요 (이미 문서 좌표로 배치합니다)
 	Make Image Dynamic	이미지를 동적으로 만들기
 	Import Data Sets…	데이터 세트 가져오기…
@@ -6416,6 +6442,11 @@ breakText	Glyphs	글리프
 @msg	only an exporter or an importer declares `extensions`	`extensions`는 내보내기 또는 가져오기 플러그인만 선언합니다
 @msg	an importer always gets an import's budget: leave `budget` out	가져오기 플러그인은 항상 가져오기 예산을 받습니다: `budget`을 생략하세요
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	문제 해결 정보 복사
+@msg	Copied the troubleshooting info	문제 해결 정보를 복사했습니다
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	지난 VectorCraft 세션이 닫히기 전에 응답을 멈췄습니다. 도움말 › 문제 해결 정보 복사로 버그 보고용 세부 정보를 복사할 수 있습니다
+
 # Safe Mode
 	Safe Mode…	안전 모드…
 	Safe Mode	안전 모드
@@ -6436,6 +6467,7 @@ breakText	Glyphs	글리프
 
 # Align to Pixel Grid
 	Align to Pixel Grid	픽셀 격자에 정렬
+	Align New Objects to Pixel Grid	새 개체를 픽셀 격자에 정렬
 	Not Aligned to Pixel Grid	픽셀 격자에 정렬되지 않음
 @msg	only paths and compound paths can be aligned to the pixel grid	패스와 컴파운드 패스만 픽셀 격자에 정렬할 수 있습니다
 @msg	side is left or right, not `{s}`	side는 left 또는 right입니다(`{s}` 아님)
