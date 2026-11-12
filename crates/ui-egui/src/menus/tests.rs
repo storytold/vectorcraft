@@ -358,6 +358,58 @@ fn dynamic_text_is_a_checked_type_menu_item() {
     assert_eq!(checked(&app, id, &Value::Null), Some(true));
 }
 
+/// Type › Type on a Path › Center on Top and Center on Bottom run `type.pathCenter.top` and
+/// `.bottom`, which the command palette also runs without params, and are enabled for type on a
+/// closed path only.
+#[test]
+fn center_on_top_and_bottom_are_type_on_a_path_items() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let items: Vec<(&str, &str)> = menu_tree()
+        .into_iter()
+        .filter(|(menu, _)| *menu == "Type")
+        .flat_map(|(_, items)| items)
+        .filter_map(|item| match item {
+            Item::Sub("Type on a Path", children) => Some(children),
+            _ => None,
+        })
+        .flatten()
+        .filter_map(|item| match item {
+            Item::Cmd(label, id, Value::Null) if id.starts_with("type.pathCenter") => Some((label, id)),
+            _ => None,
+        })
+        .collect();
+    let ids = ["type.pathCenter.top", "type.pathCenter.bottom"];
+    assert_eq!(items, [("Center on Top", ids[0]), ("Center on Bottom", ids[1])]);
+    let palette = crate::palette::items();
+    for (label, id) in items {
+        assert!(palette.iter().any(|(l, i, _)| l == &format!("Type › Type on a Path › {label}") && i == id), "{label}");
+    }
+    let line = app.run("path.create", json!({"d": "M60 150 L340 150"})).unwrap()["id"].clone();
+    let open = app.run("text.createInPath", json!({"path": line, "mode": "onPath", "text": "Along", "at": [60, 150]})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [open]})).unwrap();
+    assert!(ids.iter().all(|id| !enabled(&app, id)), "type on an open path");
+    let square = app.run("path.create", json!({"d": "M60 200 L160 200 L160 300 L60 300 Z"})).unwrap()["id"].clone();
+    let closed = app.run("text.createInPath", json!({"path": square, "mode": "onPath", "text": "Round", "at": [60, 200]})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [closed]})).unwrap();
+    assert!(ids.iter().all(|id| enabled(&app, id)));
+    app.run("select.set", json!({"ids": [closed, open]})).unwrap();
+    assert!(ids.iter().all(|id| !enabled(&app, id)), "type on a closed path and on an open one");
+    // A palette pick runs the command with no params.
+    app.run("select.set", json!({"ids": [closed]})).unwrap();
+    crate::palette::run_pick(&mut app, ids[0]);
+    let doc = &app.session.active().unwrap().doc;
+    let start = match &doc.node(vectorcraft_doc::NodeId(closed.as_u64().unwrap())).unwrap().kind {
+        vectorcraft_doc::NodeKind::Text(t) => match t.kind {
+            vectorcraft_doc::TextKind::OnPath { start, .. } => start,
+            ref k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    };
+    // Once round, the middle of the top edge an eighth of the way round.
+    assert!((start - 0.625).abs() < 1e-6, "{start}");
+}
+
 /// Type › Dynamic Text Presets › Circle, Arch and Bow run `type.dynamicTextPreset` with their
 /// preset, enabled for point type and type on a path but not for area type alone.
 #[test]

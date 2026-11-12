@@ -645,6 +645,8 @@ pub(super) const ALLOWED: &[&str] = &[
     "type.opticalMarginAlignment",
     "type.orientation.horizontal",
     "type.orientation.vertical",
+    "type.pathCenter.bottom",
+    "type.pathCenter.top",
     "type.pathOptions",
     "type.resetHorizontalScale",
     "type.resetTracking",

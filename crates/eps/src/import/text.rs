@@ -15,6 +15,7 @@ use super::cid::Base;
 use super::graphics::MAX_APART;
 use super::interp::{Interp, matrix_obj, matrix_of};
 use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, ps_err};
+use super::predefined_cmap::Decoded;
 use super::type1::Embedded;
 
 /// The font a program uses before it sets one.
@@ -170,8 +171,8 @@ impl Interp<'_> {
             ResourceForAll => self.resource_for_all()?,
             Show | AShow | WidthShow | AWidthShow | XShow | YShow | XYShow | KShow => {
                 let (s, spacing) = self.show_operands(op)?;
-                if let Some((text, font)) = self.unicode_type(&s)? {
-                    self.show_unicode(&text, &font)?;
+                if let Some((codes, font, vertical)) = self.named_cid_type(&s)? {
+                    self.show_named_cid(&codes, &font, vertical, &spacing)?;
                 } else if let Some(glyphs) = self.composite_glyphs(&s)? {
                     self.show_composite(&glyphs, &spacing)?;
                 } else {
@@ -282,9 +283,9 @@ impl Interp<'_> {
 
     /// How far `s` moves the current point (user space).
     fn width_of(&mut self, s: &[u8]) -> Res<Vec2> {
-        if let Some((text, font)) = self.unicode_type(s)? {
+        if let Some((codes, font, vertical)) = self.named_cid_type(s)? {
             let saved = self.g.font.replace(font);
-            let r = self.set_text(&text, Point::ZERO).map(|t| t.2);
+            let r = self.named_cid_width(&codes, vertical);
             self.g.font = saved;
             return r;
         }
@@ -395,18 +396,29 @@ impl Interp<'_> {
     }
 
     /// The font named `k`: one the program defined; else, for a name `CIDFont-CMap` whose CMap
-    /// is a predefined Unicode CMap, the CID-keyed font of those two (the usual name of a
-    /// CID-keyed font, as `composefont` makes them: PLRM 3rd ed., chapter 8); else a font of
-    /// that name.
+    /// is a predefined CMap, the CID-keyed font of those two (the usual name of a CID-keyed font,
+    /// as `composefont` makes them: PLRM 3rd ed., chapter 8; the CMaps are Adobe's public CMap
+    /// resources, <https://github.com/adobe-type-tools/cmap-resources>); else a font of that name.
+    /// A name an installed face has is that face's, and a name split at a bare `H` or `V` (the
+    /// row-and-cell CMaps) needs a CIDFont name with a hyphen in it (`Ryumin-Light-H`), so
+    /// `Futura-H` stays a font of that name.
     fn find_font(&mut self, k: &Obj) -> Res<DictRef> {
         let key = k.key().ok_or(PsError::Ps("typecheck", "findfont".into()))?;
         if let Some(Obj::Dict(d)) = self.fonts.borrow().get(&key) {
             return Ok(d.clone());
         }
         let text = k.text().map(|t| t.to_string()).unwrap_or_default();
-        let split =
-            text.match_indices('-').map(|(i, _)| i).find(|&i| i > 0 && super::cid::unicode_cmap(text.get(i + 1..).unwrap_or_default()).is_some());
-        if let Some((cid_font, cmap)) = split.and_then(|i| Some((text.get(..i)?, text.get(i + 1..)?))) {
+        let split = text
+            .match_indices('-')
+            .map(|(i, _)| i)
+            .find(|&i| i > 0 && super::cid::unicode_cmap(text.get(i + 1..).unwrap_or_default()).is_some())
+            .and_then(|i| Some((text.get(..i)?, text.get(i + 1..)?)))
+            .or_else(|| {
+                let (cid_font, cmap) = super::predefined_cmap::composite_font(&text)?;
+                let installed = vectorcraft_text::FontDb::global().find_postscript(&text).is_some();
+                (!installed && !(matches!(cmap, "H" | "V") && !cid_font.contains('-'))).then_some((cid_font, cmap))
+            });
+        if let Some((cid_font, cmap)) = split {
             let cmap = self.find_cmap(&Obj::name(cmap))?;
             let dep = self.find_cid_font(&Obj::name(cid_font))?;
             return Ok(self.composed(key, cmap, vec![Obj::Dict(dep)]));
@@ -476,6 +488,15 @@ impl Interp<'_> {
 
     /// [`Self::set_type`] for the characters `text`.
     fn set_text(&mut self, text: &str, at: Point) -> Res<(TextObject, TextLayout, Vec2)> {
+        self.set_text_in(text, at, false)
+    }
+
+    /// [`Self::set_text`], as vertical type when `vertical`: a column anchored at `at`, the top
+    /// center of its first em box, that moves the current point down the column by the layout's
+    /// advances. In vertical writing the current point is a glyph's origin 1, by default half its
+    /// width across and 880 units of 1000 above its origin 0 (PDF Reference 1.7, §5.6.3 "Glyph
+    /// Metrics in CIDFonts", `DW2`).
+    fn set_text_in(&mut self, text: &str, at: Point, vertical: bool) -> Res<(TextObject, TextLayout, Vec2)> {
         // Laying out type costs about as much as 300 operations, and 64 more a character
         // (measured), so `{ (a) stringwidth pop pop } loop` or `cshow` on a long string ends
         // within the budget like any other loop instead of running for minutes.
@@ -493,11 +514,29 @@ impl Interp<'_> {
         let fill = if self.g.paint.is_none() { Paint::solid(vectorcraft_color::Color::BLACK) } else { self.g.paint.clone() };
         let style = CharStyle { font_family, font_style, size, fill, stroke: Paint::None, ..CharStyle::default() };
         let mut t = TextObject::point(Point::ZERO, text, style);
+        t.vertical = vertical;
         let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
         t.xf = m * Affine::scale_non_uniform(1.0 / size, -1.0 / size);
         t.cached_bounds = Some(layout.bounds);
         let adv: f64 = layout.glyphs.iter().map(|g| g.advance).sum();
-        Ok((t, layout, f1 * Point::new(adv / size, 0.0) - f1 * Point::ZERO))
+        let moved = if vertical { Point::new(0.0, -adv / size) } else { Point::new(adv / size, 0.0) };
+        Ok((t, layout, f1 * moved - f1 * Point::ZERO))
+    }
+
+    /// [`Self::set_text_in`] for characters the file places one by one: where the layout joins
+    /// characters in a ligature, the type is set without ligatures, so each character has its own
+    /// advance.
+    fn set_placed_text(&mut self, text: &str, at: Point, vertical: bool) -> Res<(TextObject, TextLayout)> {
+        let (mut t, mut layout, _) = self.set_text_in(text, at, vertical)?;
+        let glyph_starts: std::collections::HashSet<usize> = layout.glyphs.iter().map(|g| g.byte).collect();
+        if text.char_indices().any(|(b, _)| !glyph_starts.contains(&b)) {
+            for run in &mut t.runs {
+                run.style.features.push("-liga".into());
+            }
+            layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+            t.cached_bounds = Some(layout.bounds);
+        }
+        Ok((t, layout))
     }
 
     /// `show`: point type at the current point, which moves past it.
@@ -527,27 +566,30 @@ impl Interp<'_> {
             return self.show_type42_outlines(data, glyphs, s, spacing, at, f1);
         }
         // Each code's character, if it has one that shows (control codes don't).
-        let chars: Vec<Option<char>> = match &plain {
+        let chars = match &plain {
             Some((_, glyphs)) => glyphs.iter().map(|g| g.ch).collect::<Vec<_>>(),
             None => self.named_chars(s).into_iter().map(Some).collect(),
+        };
+        let mut codes = Decoded::default();
+        for (c, &code) in chars.into_iter().zip(s) {
+            codes.push(u32::from(code), c.filter(|c| !c.is_control()));
         }
-        .into_iter()
-        .map(|c| c.filter(|c| !c.is_control()))
-        .collect();
-        let text: String = chars.iter().flatten().collect();
-        let (mut t, mut layout, _) = self.set_text(&text, at)?;
+        let widths: Option<Vec<f64>> = plain.map(|(_, glyphs)| glyphs.iter().map(|g| g.width).collect());
+        self.show_codes(&codes, widths.as_deref(), spacing, false, s)
+    }
+
+    /// The codes `codes` (each standing for some of its characters, or none) shown in the current
+    /// font as [`Self::show_plain`] shows a string's, spaced as `spacing` says, each code `widths`
+    /// wide when given (in glyph space, one unit an em), else as wide as its characters' advances;
+    /// as vertical type when `vertical`, the codes moving the point down the column. `kern` is the
+    /// string `kshow` gives its procedure the codes of.
+    fn show_codes(&mut self, codes: &Decoded, widths: Option<&[f64]>, spacing: &Spacing, vertical: bool, kern: &[u8]) -> Res {
+        let at = self.user_point()?;
+        let (_, f1) = self.font()?;
+        let text = &codes.text;
+        let (mut t, layout) = self.set_placed_text(text, at, vertical)?;
         let size = t.runs.first().map_or(1.0, |r| r.style.size);
         let starts: Vec<usize> = text.char_indices().map(|(b, _)| b).collect();
-        // The file places each character's glyph: where the layout joins characters in a
-        // ligature, the type is set without ligatures, so each character has its own advance.
-        let glyph_starts: std::collections::HashSet<usize> = layout.glyphs.iter().map(|g| g.byte).collect();
-        if starts.iter().any(|b| !glyph_starts.contains(b)) {
-            for run in &mut t.runs {
-                run.style.features.push("-liga".into());
-            }
-            layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
-            t.cached_bounds = Some(layout.bounds);
-        }
         // Each character's advance in the layout (text space).
         let mut natural = vec![0.0; starts.len()];
         for g in &layout.glyphs {
@@ -555,29 +597,30 @@ impl Interp<'_> {
                 *n += g.advance;
             }
         }
-        // Each code's move (user space) and that move in text space, along the baseline and across.
-        let em = |x: f64| f1 * Point::new(x, 0.0) - f1 * Point::ZERO;
+        // Each code's move (user space) and that move in text space, along the baseline (down the
+        // column) and across.
+        let em = |x: f64| f1 * if vertical { Point::new(0.0, -x) } else { Point::new(x, 0.0) } - f1 * Point::ZERO;
         let inv = f1.inverse();
-        let mut moves = Vec::with_capacity(s.len());
+        let mut moves = Vec::with_capacity(codes.codes.len());
         let mut k = 0;
         // What `kshow`'s procedure draws goes after the type.
         let start = self.out.drawn.len();
         let mut pen = at;
-        for (i, (&code, c)) in s.iter().zip(&chars).enumerate() {
-            let own = match &plain {
-                Some((_, glyphs)) => glyphs.get(i).map_or(0.0, |g| g.width),
-                None if c.is_some() => natural.get(k).copied().unwrap_or(0.0) / size,
-                None => 0.0,
+        for (i, &(code, n)) in codes.codes.iter().enumerate() {
+            let own = match widths {
+                Some(widths) => widths.get(i).copied().unwrap_or(0.0),
+                None => natural.get(k..k + n).map_or(0.0, |w| w.iter().sum::<f64>()) / size,
             };
-            k += usize::from(c.is_some());
+            k += n;
             let mut d = spacing.advance(i, i64::from(code), em(own));
-            d += self.kern(spacing, s, i, pen + d)?;
+            d += self.kern(spacing, kern, i, pen + d)?;
             pen += d;
             let e = inv * Point::new(d.x, d.y) - inv * Point::ZERO;
-            if ![d.x, d.y, e.x * size, e.y * size].iter().all(|v| v.is_finite()) {
+            let (along, across) = if vertical { (-e.y * size, e.x * size) } else { (e.x * size, e.y * size) };
+            if ![d.x, d.y, along, across].iter().all(|v| v.is_finite()) {
                 return ps_err("undefinedresult", "a show");
             }
-            moves.push((d, e.x * size, e.y * size));
+            moves.push((d, along, across));
         }
         let total: Vec2 = moves.iter().map(|m| m.0).sum();
         if !(total.x.is_finite() && total.y.is_finite()) {
@@ -589,12 +632,11 @@ impl Interp<'_> {
         if across {
             // Moves across the baseline (`yshow`, `xyshow`): each character where the file puts it.
             let mut pen = at;
-            for ((d, ..), c) in moves.iter().zip(&chars) {
-                if let Some(c) = c
-                    && painted
-                    && !c.is_whitespace()
-                {
-                    let (t, ..) = self.set_text(c.encode_utf8(&mut [0; 4]), pen)?;
+            let mut chars = text.chars();
+            for ((d, ..), &(_, n)) in moves.iter().zip(&codes.codes) {
+                let c: String = chars.by_ref().take(n).collect();
+                if painted && !c.trim().is_empty() {
+                    let (t, ..) = self.set_text_in(&c, pen, vertical)?;
                     let clips = self.g.clips.clone();
                     self.out.push(Node::new(NodeId(0), NodeKind::Text(Box::new(t))), &clips);
                 }
@@ -605,11 +647,17 @@ impl Interp<'_> {
             // a character, before the next, are that character's.
             let mut lead = Vec2::ZERO;
             let mut target: Vec<f64> = Vec::with_capacity(natural.len());
-            for ((d, along, _), c) in moves.iter().zip(&chars) {
-                match (c, target.last_mut()) {
-                    (Some(_), _) => target.push(*along),
-                    (None, Some(last)) => *last += along,
-                    (None, None) => lead += *d,
+            for ((d, along, _), &(_, n)) in moves.iter().zip(&codes.codes) {
+                if n > 0 {
+                    // A code of several characters: those before its last keep their advances.
+                    let before = natural.get(target.len()..target.len() + n - 1).unwrap_or_default().to_vec();
+                    let rest = *along - before.iter().sum::<f64>();
+                    target.extend(before);
+                    target.push(rest);
+                } else if let Some(last) = target.last_mut() {
+                    *last += along;
+                } else {
+                    lead += *d;
                 }
             }
             let tracking: Vec<f64> = target
@@ -931,23 +979,47 @@ impl Interp<'_> {
             .collect())
     }
 
-    /// The characters of `s` and the font to set them in when the current font is a CID-keyed
-    /// font over a predefined Unicode CMap the file doesn't define (`UniJIS-UCS2-H`), whose
-    /// mappings to CIDs aren't known: its codes say the characters, set as type in the font of
-    /// its CIDFont's name.
-    fn unicode_type(&mut self, s: &[u8]) -> Res<Option<(String, DictRef)>> {
-        let Some((text, font, name)) = self.unicode_parts(s) else { return Ok(None) };
+    /// The codes of `s` with the characters each stands for, the font to set them in and whether
+    /// they run down a column, when the current font is a CID-keyed font over a predefined CMap
+    /// the file doesn't define (`UniJIS-UCS2-H`, `90ms-RKSJ-H`), whose mappings to CIDs the file
+    /// doesn't give: a Unicode CMap's codes are the characters, another CMap's are read by the CMap
+    /// of that name and its character collection's CID → Unicode CMap (a code it doesn't map
+    /// stands for none), set as type in the font of its CIDFont's name, vertical over a vertical
+    /// CMap (`WMode` 1). Control codes stand for no character. Type in a CMap VectorCraft can't
+    /// read is left out, with a warning.
+    fn named_cid_type(&mut self, s: &[u8]) -> Res<Option<(Decoded, DictRef, bool)>> {
+        let Some((cmap, font, name, vertical)) = self.named_cid_parts() else { return Ok(None) };
+        // Each code is looked up in the CMap's mappings.
+        self.spend(s.len() as u64)?;
+        // The decoded codes and characters are held while the string is shown: checked against
+        // the memory budget first, so a huge string in the file stops the program with an error.
+        let held = s.len().saturating_mul(DECODED_BYTES);
+        self.alloc(held)?;
+        self.unalloc(held);
+        let decoded = match self.predefined_codes(&cmap) {
+            Some(codes) => codes.codes(s),
+            None => {
+                self.out.warn(UNREAD_CMAP);
+                Decoded::default()
+            }
+        };
+        let mut codes = Decoded::default();
+        let mut chars = decoded.text.chars();
+        for &(code, n) in &decoded.codes {
+            codes.push(code, chars.by_ref().take(n).filter(|c| !c.is_control()));
+        }
         // The composite font is copied under the CIDFont's name for every string: charged by
         // its size, so a huge font dictionary shown in a loop runs out of the budget.
         let entries = font.borrow().len();
         self.spend(entries as u64)?;
         let mut named = font.borrow().clone();
         named.insert(Key::name("FontName"), name);
-        Ok(Some((text, DictRef::new(named))))
+        Ok(Some((codes, DictRef::new(named), vertical)))
     }
 
-    /// The text, the composite font and the CIDFont's name of [`Self::unicode_type`].
-    fn unicode_parts(&self, s: &[u8]) -> Option<(String, DictRef, Obj)> {
+    /// The CMap's name, the composite font, the CIDFont's name and the writing mode of
+    /// [`Self::named_cid_type`].
+    fn named_cid_parts(&self) -> Option<(String, DictRef, Obj, bool)> {
         let font = self.g.font.clone()?;
         let f = font.borrow();
         if font_type(&f) != Some(0.0) || f.get(&Key::name("FMapType")).and_then(Obj::as_num) != Some(9.0) {
@@ -959,29 +1031,63 @@ impl Interp<'_> {
         if cmap.contains_key(&Key::name("CodeSpaceRange")) {
             return None;
         }
-        let (form, _) = super::cid::unicode_cmap(&cmap.get(&Key::name("CMapName")).and_then(Obj::text)?)?;
+        let cmap_name = cmap.get(&Key::name("CMapName")).and_then(Obj::text)?.to_string();
+        if super::cid::unicode_cmap(&cmap_name).is_none() && !super::predefined_cmap::known(&cmap_name) {
+            return None;
+        }
+        let wmode = f.get(&Key::name("WMode")).or_else(|| cmap.get(&Key::name("WMode"))).and_then(Obj::as_num);
         let Some(Obj::Dict(dep)) = f.get(&Key::name("FDepVector")).and_then(|v| v.items()?.get(0)) else { return None };
         let name = {
             let d = dep.borrow();
             d.get(&Key::name("CIDFontName")).or_else(|| d.get(&Key::name("FontName"))).cloned()?
         };
-        Some((super::cid::unicode_text(s, form), font.clone(), name))
+        Some((cmap_name, font.clone(), name, wmode == Some(1.0)))
     }
 
-    /// `text` set as point type at the current point in font `font` (see
-    /// [`Self::unicode_type`]), which moves past it.
-    fn show_unicode(&mut self, text: &str, font: &DictRef) -> Res {
-        let at = self.user_point()?;
-        let saved = self.g.font.replace(font.clone());
-        let r = self.set_text(text, at);
-        self.g.font = saved;
-        let (t, _, adv) = r?;
-        if !self.g.paint.is_none() && !self.g.null && !text.trim().is_empty() {
-            let clips = self.g.clips.clone();
-            self.out.push(Node::new(NodeId(0), NodeKind::Text(Box::new(t))), &clips);
+    /// How strings in predefined CMap `cmap` decode (a CMap other than a Unicode CMap read once a
+    /// file); `None` when VectorCraft can't read it.
+    fn predefined_codes(&mut self, cmap: &str) -> Option<Rc<super::predefined_cmap::CMapCodes>> {
+        if let Some((form, _)) = super::cid::unicode_cmap(cmap) {
+            return Some(Rc::new(super::predefined_cmap::CMapCodes::Unicode(form)));
         }
-        self.g.cur = Some(self.xf() * (at + adv));
-        Ok(())
+        if let Some((_, codes)) = self.predefined_cmaps.iter().find(|(n, _)| **n == *cmap) {
+            return codes.clone();
+        }
+        let codes = super::predefined_cmap::codes(cmap).map(Rc::new);
+        // Only the names of the other predefined CMaps reach here (`named_cid_parts`), so the
+        // list stays short.
+        self.predefined_cmaps.push((Rc::from(cmap), codes.clone()));
+        codes
+    }
+
+    /// The codes `codes` (with their characters) set as point type at the current point in font
+    /// `font` (see [`Self::named_cid_type`]), running down a column when `vertical`, which moves
+    /// past them, spaced as `spacing` says, as [`Self::show_codes`] shows them. `widthshow` and
+    /// `awidthshow` match a code by its value (font number 0 times 256 plus the code: PLRM 3rd ed.,
+    /// `widthshow` in chapter 8); `kshow`'s procedure isn't run between them (a composite font's
+    /// codes aren't single bytes). Down a column each code moves the point one em, the default
+    /// vertical displacement of a CIDFont whose metrics the file doesn't give (PDF Reference 1.7,
+    /// §5.6.3, `DW2`).
+    fn show_named_cid(&mut self, codes: &Decoded, font: &DictRef, vertical: bool, spacing: &Spacing) -> Res {
+        let widths = vertical.then(|| vec![1.0; codes.codes.len()]);
+        let saved = self.g.font.replace(font.clone());
+        let r = self.show_codes(codes, widths.as_deref(), spacing, vertical, &[]);
+        self.g.font = saved;
+        r
+    }
+
+    /// How far the codes `codes` move the current point (user space) when [`Self::show_named_cid`]
+    /// shows them with no extra spacing.
+    fn named_cid_width(&mut self, codes: &Decoded, vertical: bool) -> Res<Vec2> {
+        let (_, f1) = self.font()?;
+        let moved = if vertical {
+            Point::new(0.0, -(codes.codes.len() as f64))
+        } else {
+            let (t, layout) = self.set_placed_text(&codes.text, Point::ZERO, false)?;
+            let size = t.runs.first().map_or(1.0, |r| r.style.size);
+            Point::new(layout.glyphs.iter().map(|g| g.advance).sum::<f64>() / size, 0.0)
+        };
+        Ok(f1 * moved - f1 * Point::ZERO)
     }
 
     /// The characters of a composite font shown at the current point, spaced as `spacing` says.
@@ -1281,6 +1387,13 @@ const MAX_TYPE1: usize = 256;
 
 /// The warning for CID-keyed type in a CIDFont the file doesn't carry.
 const MISSING_CID_FONT: &str = "CID-keyed type in a font the file doesn't carry was left out";
+
+/// Most bytes [`Interp::named_cid_type`] holds for each byte of a string: two lists of codes (16
+/// bytes a code) and their characters (up to 4 bytes a character, a few characters a code).
+const DECODED_BYTES: usize = 64;
+
+/// The warning for type in a predefined CMap whose mappings VectorCraft doesn't have.
+pub(super) const UNREAD_CMAP: &str = "Type in a CMap that couldn't be read was left out";
 
 /// Most Type 42 fonts whose TrueType data is kept between glyphs.
 const MAX_TYPE42: usize = 16;

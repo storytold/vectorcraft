@@ -165,6 +165,14 @@ the suite) keep the agent to the folders you give it:
   and `modified` the document keeps of that file. Each row keeps its id, `name` (`fileName`), status and other
   fields. This applies to every document, also one the person or a client with wider roots opened. The paths a
   client gives `links.relink` and `links.unembed` stay in their replies, and the document's links are not changed.
+- `image.info` gives `link: null` for a linked file outside the read roots, as `links.info` leaves it out; its id,
+  name, `linked` and the other fields stay. `links.findFiles` and `text.findFontFiles` replies, including later
+  `{}` and `{stop: true}` calls on a search another client started, leave out the files found outside the read
+  roots (with their `size` and `match`), a sought link's `path` outside them, and `folder` when the folder searched
+  is outside them; `error` then gives the reason without the path (for example `the folder can't be read`). The
+  rows keep their `name`, `ids`, family, style and status, and the counts stay. `text.addFontFiles` gives
+  `folder: null` when VectorCraft's Fonts folder is outside the read roots, and only the file name in `copied` and
+  `kept` `to` and in `skipped` `file` for a path outside them; the fonts are still copied.
 - `prefs.get`, `prefs.list`, `prefs.set` and `prefs.reset` show a folder preference outside the read roots
   (`fontsFolder`, `pluginsFolder`, `scratchPrimary`, `scratchSecondary`, `recoveryFolder`, `templatesFolder`) as
   `null`; an empty folder and the scratch disk choices `Startup` and `None` stay. In `prefs.get {}` and
@@ -3449,6 +3457,16 @@ that shape, and the effects before it are left out. Its Contents row stands for 
 vector exports write those items as paths, and `effect.expandAppearance` turns them into objects in a group with the
 image.
 Use Preview Bounds measures an image by its frame.
+A Warp effect (`warp.arc` … `warp.twist`) on an image, or on a group that holds one, bends the image's pixels with its
+frame: after the last effect in the list, the image is cut into 10 × 10 cells of two triangles, each a clipped piece of
+the image under its own affine map. The cell count is VectorCraft's own. Effects after the Warp reshape only the frame,
+a second Warp bends the same pieces, and a Transform effect moves them. A placed gradient on a group that holds the
+image follows the group's bounds as the pieces draw them. The pieces keep the
+image's fill color when it colorizes a grayscale image, and so do the pieces an envelope cuts. Under any geometry
+effect, an image keeps that color and is drawn with or without smoothing as the image is. SVG writes the image once and
+draws the pieces with `<use>`; PDF, EPS, `.ai` and PNG write the bent pieces. Removing the warp shows the image as it
+was. The images stay unbent when their pieces would make the art pass 2 million objects, and an image stays unbent when
+its clipping frame keeps its shape because the warp would pass the effects' anchor budget.
 
 ```json
 {"name":"run_command","arguments":{"command":"appearance.addFill","params":{"ids":[7]}}}
@@ -7987,6 +8005,26 @@ begins or ends, dragging the centre bracket slides the type along its path and, 
 {"name":"run_command","arguments":{"command":"type.pathOptions","params":{"start":0.25,"end":0.75,"flip":true}}}
 ```
 
+`type.pathCenter.top {ids?|id?}` and `type.pathCenter.bottom {ids?|id?}` (Type › Type on a Path › Center on Top and
+Center on Bottom, and the Contextual Task Bar for type on a closed path) slide the selected type on a closed path along
+it so that the middle of the span between its brackets lands on the path's topmost or bottommost point. This is
+VectorCraft's own behavior. The path is measured as the object is drawn, after its transform, so a rotated, scaled or
+skewed circle centers on its drawn top. On a level stretch, such as a rectangle's top edge, the middle of the stretch
+is used; with several separate topmost points, the middle of the shortest part of the path that holds them all is
+used. The span keeps its length, and type that runs once round stays once round. The first paragraph's alignment
+becomes Center unless it is Center or Justify Center, so the type is centered there. The type is not flipped: on the
+bottom of a circle, whose path runs clockwise, it reads upside down outside the circle until `type.pathOptions {flip:
+true}` turns it inside. Point type and area type in the selection are left as they are. Type on an open or compound
+path, type in a thread, and type on a path with no length or no height are refused with an error that names them,
+and nothing changes. The menu items are enabled, and the task bar shows them, only while every selected type on a
+path is on one closed path and none of it is in a thread. Several objects move in one undo step. When every object is
+already centered there, nothing changes and no undo step is recorded. Each replies `{ids, start, end}` with the first
+object's brackets.
+
+```json
+{"name":"run_command","arguments":{"command":"type.pathCenter.top","params":{}}}
+```
+
 ## Dynamic Text
 
 `type.dynamicText {on?: bool, ids?}` (Type › Dynamic Text, and the Contextual Task Bar for type on a path) turns
@@ -8663,6 +8701,20 @@ share of the content's width or height in proportion to the length of its contro
 its curve parameter, so content spreads evenly along a segment without handles. An envelope opened from an `.ai` file
 keeps the corners the file saves, and they stay on the same anchors when the envelope is moved, rotated or
 reflected. These are VectorCraft's own rules, and existing top-object envelopes redraw by them.
+A warp bends the content's bounds as one Bézier patch. The style sets the patch's control points from the bend and
+the size of the bounds (Arc's top and bottom edges, for example, are cubic curves close to arcs around one center), then
+the horizontal distortion scales each column of control points about its middle, and the vertical distortion scales
+each row. Content with no width or no height takes the middle of the patch along that side. New warp envelopes, and
+those opened from `.ai` files, carry `version` 1 for this map, and `object.envelope.info` reports it. Envelopes in
+`.vectorcraft` documents saved before the version existed read as `version` 0, the earlier map, and keep their look,
+and editing an envelope keeps its version. `version` (0 or 1) on `object.envelope.makeWithWarp`,
+`object.envelope.resetWithWarp` and `object.envelope.options` sets the map. The Warp effects (`warp.arc` …
+`warp.twist`) take the same map through the same `version` param: `effect.apply` gives a new Warp `version` 1 unless
+`params.version` is 0, the built-in graphic styles' Warps have 1, and Effect › Warp edits keep each Warp's own version.
+These commands refuse any other value with `` `version` must be 0 or 1 ``; `1.0` counts as 1. An `.ai` file holds a
+warp's settings and not its version, so a `version` 0 warp saved to `.ai` and opened again draws with `version` 1.
+These patches are VectorCraft's own rules; the styles and the ranges of Bend and the distortions are those of the Warp
+options (https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/distort-and-transform-effects-in-illustrator.html).
 `object.envelope.info` reads the selected envelope's settings (`type`, the warp's or mesh's values, `fidelity` and
 the options, `editing`), or with no envelope selected the options new envelopes get. With an envelope selected,
 `object.envelope.resetWithWarp` and `object.envelope.resetWithMesh` (`rows`, `cols`, `maintainShape`: true keeps
