@@ -218,6 +218,26 @@ fn dialog_loop_stops_or_exhausts() {
 }
 
 #[test]
+fn a_run_waiting_at_a_dialog_stops_at_the_next_slice_once_its_work_is_canceled() {
+    let mut s = one_doc();
+    let before = art(&s);
+    let token = crate::cancel::CancelToken::new();
+    s.script_frames = true;
+    let source = "vc.run('shape.rectangle', {x: 20, y: 0, width: 5, height: 5}); alert('x'); vc.log('answered');";
+    assert_eq!(s.execute("script.run", &json!({"source": source, "name": "d.js"})).unwrap()["running"], true);
+    assert!(crate::cancel::scope(&token, None, || s.script_pump()).is_none());
+    assert!(s.script_dialog().is_some());
+    token.cancel();
+    let ended = crate::cancel::scope(&token, None, || s.script_pump());
+    assert!(ended.expect("the run goes on waiting for an answer").is_err());
+    let report = s.script_report().unwrap();
+    assert_eq!((report["kind"].as_str(), &report["log"]), (Some("stopped"), &json!([])), "{report}");
+    assert_eq!(report["dialogs"][0]["answer"], "stop");
+    assert_eq!(s.script_dialog(), None);
+    assert_eq!(art(&s), before);
+}
+
+#[test]
 fn dialog_text_limits_and_controls() {
     let mut s = one_doc();
     let source = format!(

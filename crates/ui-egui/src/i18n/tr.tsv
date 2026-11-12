@@ -247,6 +247,7 @@ font-technology	Variable	Değişken
 	Asset Export Settings	Varlık Dışa Aktarma Ayarları
 	Assets	Varlıklar
 	Assign	Ata
+	Assign Profile	Profil Ata
 	Assign Profile…	Profil Ata…
 	Assign:	Ata:
 	Attach to Active Plane	Etkin Düzlem'e Ekle
@@ -1375,6 +1376,14 @@ font-technology	Variable	Değişken
 	Hair Space	Saç Alanı
 	Hand Tool	El Aracı
 	Hand-Drawn	elle çizilmiş
+	Painted and Sketched	Boyanmış ve Eskiz
+	Washed Blue	Soluk Mavi
+	Bristle Ochre	Fırça Darbeli Toprak Sarısı
+	Pastel Heather	Pastel Funda
+	Charcoal Shade	Kömür Gölge
+	Ink Contour	Mürekkep Kontur
+	Wet Ink	Islak Mürekkep
+	Fine Pen	İnce Kalem
 	Handles	Kollar
 	Hard Light	Sert Işık
 	Harmony Rules:	Uyum Kuralları:
@@ -2156,6 +2165,9 @@ shape	Open	Açık
 	Optical	Optik
 	Optical Margin Alignment	Optik Kenar Boşluğu Hizalaması
 	Dynamic Text	Dinamik Metin
+	Dynamic Text Presets	Dinamik Metin Hazır Ayarları
+	Arch	Kemer
+@msg	select point type or type on a path	nokta metni veya yol üzerindeki yazıyı seçin
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	zincirli metindeki yol üzerindeki yazı dinamik metin kullanamaz: {frames}
 	Optimize for fast web view	Hızlı web görünümü için optimize edin
 	Optimized	Optimize edilmiş
@@ -2163,6 +2175,7 @@ shape	Open	Açık
 	Options for Selection…	Seçim Seçenekleri…
 	Options:	Seçenekler:
 	Options…	Seçenekler…
+	Organic Fades	Organik Solmalar
 	or more spaces with a tab	veya sekmeli daha fazla alan
 	Order:	Sipariş:
 	Ordinals	Sıra Sayıları
@@ -2353,6 +2366,7 @@ shape	Open	Açık
 	Presets:	Ön ayarlar:
 	Press 	Basın 
 	Preview	Önizleme
+	Preview:	Önizleme:
 	Preview All Layers	Tüm Katmanları Önizle
 	Preview in Browser	Tarayıcıda Önizleme
 	Preview in Browser needs the desktop app (the web downloads files instead)	Tarayıcıdaki önizleme için masaüstü uygulaması gerekir (bunun yerine web, dosyaları indirir)
@@ -2431,6 +2445,7 @@ digits	Malayalam	Malayalam
 	Radial Glows	Radyal Parıltılar
 	Radial Gradient	Radyal Gradyan
 	Conic Gradient	Konik Gradyan
+	Diamond Gradient	Elmas Gradyan
 	Radius 1	Yarıçap 1
 	Radius 2	Yarıçap 2
 	Radius1	Yarıçap1
@@ -2443,6 +2458,8 @@ digits	Malayalam	Malayalam
 	Range:	Aralık:
 	Raster Effects	Raster Efektleri
 	Raster File Format:	Raster Dosya Formatı:
+	Include Placed Images	Yerleştirilen Görüntüleri Dahil Et
+	Include Fill Hatches	Dolgu Taramalarını Dahil Et
 	Raster Sample Size:	Raster Örnek Boyutu:
 	Raster/Vector Balance:	Raster/Vektör Dengesi:
 	Rasterize	Rasterleştir
@@ -2620,6 +2637,10 @@ digits	Malayalam	Malayalam
 	Replace Font	Yazı Tipini Değiştir
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Onu başka bir dosyayla değiştirin veya yok sayın: resimleri, belgeyle birlikte kaydedilen önizlemeyi göstermeye devam eder.
 	Replace Spine	Omurgayı Değiştir
+	Create Spine	Omurga Oluştur
+	Create Spine:	Omurga Oluştur:
+	Always	Her Zaman
+	Never	Asla
 	Replace Symbol	Sembolü Değiştir
 	Reset Transformation	Dönüşümü Sıfırla
 	Replace With Font	Yazı Tipiyle Değiştir
@@ -3004,6 +3025,15 @@ digits	Malayalam	Malayalam
 	Stun Pulse	Sersemletme
 	Stealth Fade	Gizlilik
 	Shield Buff	Kalkan
+	Textures	Dokular
+	Fine Grain	İnce Gren
+	Canvas Weave	Kanvas Dokuma
+	Burlap Sack	Çuval Bezi
+	Cracked Glaze	Çatlak Sır
+	Mosaic Floor	Mozaik Zemin
+	Quilted Squares	Kapitone Kareler
+	Leaded Glass	Kurşunlu Cam
+	Damp Paper	Nemli Kâğıt
 	Shape	Şekil
 	Shape Builder	Şekil Oluşturucu
 	Shape Builder Regions	Şekil Oluşturucu Bölgeleri
@@ -3687,6 +3717,7 @@ digits	Malayalam	Malayalam
 	Windows	Windows
 	Working CMYK	CMYK'de çalışıyor
 	Working CMYK (don't tag)	CMYK çalışıyor (etiketlemeyin)
+	Working RGB (don't tag)	Çalışan RGB (etiketlemeyin)
 	Workspace	Çalışma Alanı
 	Workspace {i}	Çalışma Alanı {i}
 	Wrinkle Tool	Kırışıklık Aracı
@@ -4018,6 +4049,7 @@ axis	Both	Her İkisi
 @msg	`globalAdjust` must be an object	`globalAdjust` bir nesne olmalıdır
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` 1, 3 veya 5 olmalıdır
 @msg	`stops` must be an array	`stops` bir dizi olmalıdır
+@msg	`{key}` must be an array	`{key}` bir dizi olmalıdır
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg`, SVG seçeneklerinin bir nesnesi olmalıdır (bkz. document.formats)
 @msg	`{_1}` is no save command	`{_1}` kaydetme komutu değil
 @msg	`{area}` is no recovery area name	`{area}`, kurtarma alanı adı değildir
@@ -4028,6 +4060,7 @@ axis	Both	Her İkisi
 @msg	`{key}` must be a #rrggbb colour	`{key}` bir #rrggbb rengi olmalıdır
 @msg	`{key}` must be a number	`{key}` bir sayı olmalıdır
 @msg	`{key}` must be a string	`{key}` bir dize olmalıdır
+@msg	`{key}` must be a profile name or null	`{key}` bir profil adı ya da null olmalıdır
 @msg	`{key}` must be a whole number	`{key}` bir tam sayı olmalıdır
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}`, {min} ile {max} arasında bir tam sayı olmalıdır ({x}'yi aldı)
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}`, {min} ile {max} arasında olmalıdır ({x}'yi aldı)
@@ -4483,7 +4516,7 @@ axis	Both	Her İkisi
 @msg	unknown format	bilinmeyen format
 @msg	unknown format `{f}` (Save writes {_1})	bilinmeyen format `{f}` (Kaydet, {_1} yazar)
 @msg	unknown freeform mode `{m}` (points, lines)	bilinmeyen serbest biçimli mod `{m}` (noktalar, çizgiler)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	bilinmeyen gradyan türü `{k}` (doğrusal, radyal, konik, serbest biçimli)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	bilinmeyen gradyan türü `{k}` (doğrusal, radyal, konik, elmas, serbest biçimli)
 @msg	unknown highlight `{h}`	bilinmeyen vurgu `{h}`
 @msg	unknown option `{path}.{k}`	bilinmeyen seçenek `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	bilinmeyen üst baskılar `{o}` (koru, benzet veya at)
@@ -5494,7 +5527,7 @@ theme	Appearance	Görünüm
 @msg	span must be "object" or "selection", got {v}	span "object" veya "selection" olmalıdır, {v} değil
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" bir renk örneği değil, bir `gradient` yerleştirir
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" bir degrade yerleştirir: `gradient` verin
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" serbest biçimli bir degrade değil, doğrusal, radyal veya konik bir degrade yerleştirir
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" serbest biçimli bir degrade değil, doğrusal, radyal, konik veya elmas bir degrade yerleştirir
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" degradenin kendisini yerleştirir: `start` ve `end` değerlerini vermeyin (bunlar degradeyi zaten belge koordinatlarına yerleştirir)
 	Make Image Dynamic	Görüntüyü Dinamik Hale Getirin
 	Import Data Sets…	Veri Kümelerini İçe Aktar…
@@ -5996,6 +6029,7 @@ axis	Y Axis	Y ekseni
 	Snap to Perpendicular	Dikeye Yasla
 	Geometric Guides	Geometrik Kılavuzlar
 	Geometric Patterns	Geometrik Desenler
+	Grit Textures	Grenli Dokular
 @msg	`method` must be classic or perceptual	`method` classic veya perceptual olmalıdır
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Büyük bir hesaplama bütçesi isteyen “{name}” yüklensin mi?
@@ -6015,6 +6049,8 @@ axis	Y Axis	Y ekseni
 	Version: {version}	Sürüm: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Aynı kimliğe sahip eklentinin yerine “{name}” yüklensin mi?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Bu dosya, daha önce bu kimlikle yüklenen eklenti değil. O kimlik için saklanan ayarları ve önbelleği alır.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Bir otomasyon bu eklentinin yüklenmesini istedi. Yüklemek için Nesne › Eklentiler › Eklentiyi Yükle… komutunu kendiniz seçin.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Bir otomasyon bu eklentinin yüklenmesini istedi. Yüklemek için Nesne › Eklentiler › Eklentiyi Yükle… komutunu kendiniz seçin.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}”, {_1} kimlikli eklentiden farklı bir modül ve onun için saklanan ayarları ve önbelleği alacak: kullanıcı onayladıktan sonra `replace: true` ile yükleyin
 	File SHA-256: {hash}	Dosya SHA-256: {hash}
 	Read the objects it is given	Kendisine verilen nesneleri okuma
@@ -6077,6 +6113,12 @@ axis	Y Axis	Y ekseni
 @msg	command {name}: `label` must be 1-64 printable characters	{name} komutu: `label` 1-64 yazdırılabilir karakter olmalıdır
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	{name} komutu: a-z 0-9 _ karakterlerinden oluşan ve harfle başlayan 1-{MAX_COMMAND_ID} karakterlik bir kimlik kullanın
 @msg	command {name}: {e}	{name} komutu: {e}
+@msg	manifest: {e}	bildirim: {e}
+@msg	manifest: {e} at line {line} column {column}	bildirim: {e} (satır {line}, sütun {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands`, her biri `id` ve `label` içeren bir komut listesi olmalıdır
+@msg	command {name} must be an object with an `id` and a `label`	{name} komutu `id` ve `label` içeren bir nesne olmalıdır
+@msg	missing field `{key}`	`{key}` alanı eksik
+@msg	duplicate field `{key}`	`{key}` alanı yinelenmiş
 @msg	only a filter or a live effect declares `commands`	`commands` yalnızca bir filtre veya canlı efekt tarafından bildirilir
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modül `hash` içinde verilen SHA-256 değerine sahip değil: hiçbir şey yüklenmedi
@@ -6434,6 +6476,10 @@ anchor	Points:	Noktalar:
 @msg	features lists at most {max} tags	features en fazla {max} etiket içerebilir
 @msg	unknown OpenType feature `{t}`	bilinmeyen OpenType özelliği `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 0'ın üzerinde ve en fazla {max} olan bir sayı olmalıdır
+@msg	{label} must be at most {max} characters	{label} en fazla {max} karakter olmalıdır
+@msg	{label} must be one character	{label} tek bir karakter olmalıdır
+@msg	at most {max} tab stops	en fazla {max} sekme durağı
+@msg	unknown align `{other}`	bilinmeyen hizalama `{other}`
 @msg	no character style `{name}`	`{name}` karakter stili bulunamadı
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6595,6 +6641,8 @@ breakText	Glyphs	Glifler
 	Delete the selected brushes?	Seçili fırçalar silinsin mi?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturlar bu fırçalardan birini veya daha fazlasını kullanıyor. Fırçalar bu konturlardan kaldırılsın ve fırçalar silinsin mi?
 	Remove Strokes	Konturları Kaldır
+	Place Brush Art	Fırça Çizimini Yerleştir
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` fırçasının çizimi yok (yalnızca serpme, resim ve desen fırçalarının çizimi vardır)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Düzenleme Araçları
 	Arrange in Grid…	Izgarada Düzenle…
@@ -6790,6 +6838,11 @@ breakText	Glyphs	Glifler
 @msg	only an exporter or an importer declares `extensions`	`extensions` yalnızca dışa veya içe aktarma eklentisi bildirir
 @msg	an importer always gets an import's budget: leave `budget` out	içe aktarma eklentisi her zaman bir içe aktarmanın bütçesini alır: `budget` değerini çıkarın
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Sorun Giderme Bilgilerini Kopyala
+@msg	Copied the troubleshooting info	Sorun giderme bilgileri kopyalandı
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	VectorCraft'ın son oturumu kapanmadan önce yanıt vermeyi durdurdu. Yardım › Sorun Giderme Bilgilerini Kopyala, hata raporu için ayrıntıları kopyalar
+
 # Safe Mode
 	Safe Mode…	Güvenli Mod…
 	Safe Mode	Güvenli Mod
@@ -6810,6 +6863,7 @@ breakText	Glyphs	Glifler
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Piksel Izgarasına Hizala
+	Align New Objects to Pixel Grid	Yeni Nesneleri Piksel Izgarasına Hizala
 	Not Aligned to Pixel Grid	Piksel Izgarasına Hizalanmamış
 @msg	only paths and compound paths can be aligned to the pixel grid	piksel ızgarasına yalnızca yollar ve bileşik yollar hizalanabilir
 @msg	side is left or right, not `{s}`	side left veya right olmalıdır, `{s}` değil

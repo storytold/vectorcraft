@@ -2073,6 +2073,7 @@ antiAlias	Sharp	शार्प
 	Gridline every	ग्रिडलाइन हर
 	Gridline every:	ग्रिडलाइन हर:
 	Grids In Back	ग्रिड में वापस
+	Grit Textures	दानेदार टेक्सचर
 	Group	समूह
 	Group Overlapping Objects	समूह ओवरलैपिंग ऑब्जेक्ट
 	Group Selection	समूह सिलेक्शन
@@ -2100,6 +2101,14 @@ antiAlias	Sharp	शार्प
 	Hand	हैंड
 	Hand Tool	हैंड टूल
 	Hand-Drawn	हाथ-ड्रन
+	Painted and Sketched	पेंट और स्केच
+	Washed Blue	धुला नीला
+	Bristle Ochre	ब्रश गेरू
+	Pastel Heather	पेस्टल बैंगनी
+	Charcoal Shade	चारकोल छाया
+	Ink Contour	स्याही रूपरेखा
+	Wet Ink	गीली स्याही
+	Fine Pen	बारीक पेन
 	Handles	हैंडल्स
 	Hard	कठोर
 	Hard Light	हार्ड लाइट
@@ -3163,6 +3172,9 @@ antiAlias	Sharp	शार्प
 	Optical	ऑप्टिकल
 	Optical Margin Alignment	ऑप्टिकल मार्जिन संरेखण
 	Dynamic Text	डायनैमिक टेक्स्ट
+	Dynamic Text Presets	डायनैमिक टेक्स्ट प्रीसेट
+	Arch	मेहराब
+@msg	select point type or type on a path	पॉइंट टाइप या पाथ पर टाइप चुनें
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	थ्रेडेड टेक्स्ट में पाथ पर टाइप डायनैमिक टेक्स्ट का उपयोग नहीं कर सकता: {frames}
 	Optimize for fast web view	तेजी से वेब दृश्य के लिए ऑप्टिमाइज़
 	Optimized	ऑप्टिमाइज़्ड
@@ -3170,6 +3182,7 @@ antiAlias	Sharp	शार्प
 	Options for Selection…	सिलेक्शन के लिए ऑप्शन्स…
 	Options:	ऑप्शन्स:
 	Options…	ऑप्शन्स…
+	Organic Fades	ऑर्गेनिक फ़ेड
 	or more spaces with a tab	या एक टैब के साथ अधिक रिक्त स्थान
 	Orange	नारंगी
 	Order:	आदेश:
@@ -3498,6 +3511,7 @@ antiAlias	Sharp	शार्प
 	Press Quality	प्रेस गुणवत्ता
 	Pressure	दबाव
 	Preview	प्रीव्यू
+	Preview:	प्रीव्यू:
 	Preview (1 inch on the page)	प्रीव्यू (1 इंच पृष्ठ पर)
 	Preview All Layers	सभी लेयर्स का प्रीव्यू करें
 	Preview in Browser	ब्राउज़र में प्रीव्यू
@@ -3582,6 +3596,7 @@ antiAlias	Sharp	शार्प
 	Radial Glows	रेडियल चमक
 	Radial Gradient	रेडियल ग्रेडिएंट
 	Conic Gradient	शंक्वाकार ग्रेडिएंट
+	Diamond Gradient	डायमंड ग्रेडिएंट
 	Radial Repeat	रेडियल दोहराव
 	Radius	त्रिज्या
 	Radius 1	त्रिज्या 1
@@ -3600,6 +3615,8 @@ antiAlias	Sharp	शार्प
 	Range:	रेंज:
 	Raster Effects	रीस्टर इफ़ेक्ट
 	Raster File Format:	रास्टर फ़ाइल फ़ॉर्मैट:
+	Include Placed Images	रखी गई छवियाँ शामिल करें
+	Include Fill Hatches	फ़िल हैच शामिल करें
 	Raster Sample Size:	रास्टर सैंपल साइज़:
 	Raster/Vector Balance:	रास्टर/वेक्टर बैलेंस:
 	Rasterize	रास्टराइज़ करें
@@ -3762,6 +3779,8 @@ antiAlias	Sharp	शार्प
 	Remove Selected Assets	सिलेक्टेड परिसंपत्तियों को हटा दें
 	Remove Selected Entry	सिलेक्टेड प्रविष्टि निकालें
 	Remove Strokes	स्ट्रोक हटाएँ
+	Place Brush Art	ब्रश आर्टवर्क रखें
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` में कोई आर्टवर्क नहीं है (आर्टवर्क केवल स्कैटर, आर्ट और पैटर्न ब्रश में होता है)
 	Remove the shortcut	शॉर्टकट निकालें
 	Remove Threading	थ्रेडिंग निकालें
 	Remove White Overprint	व्हाइट ओवरप्रिंट निकालें
@@ -3805,6 +3824,10 @@ antiAlias	Sharp	शार्प
 	Replace Missing Fonts	अनुपलब्ध फ़ॉन्ट रिप्लेस करें
 	Replace Missing Fonts…	अनुपलब्ध फ़ॉन्ट रिप्लेस करें…
 	Replace Spine	स्पाइन रिप्लेस करें
+	Create Spine	स्पाइन बनाएँ
+	Create Spine:	स्पाइन बनाएँ:
+	Always	हमेशा
+	Never	कभी नहीं
 	Replace Symbol	सिंबल रिप्लेस करें
 	Reset Transformation	रूपांतरण रीसेट करें
 	Replace With Font	इस फ़ॉन्ट से रिप्लेस करें
@@ -4324,6 +4347,15 @@ antiAlias	Sharp	शार्प
 	Stun Pulse	स्तब्ध
 	Stealth Fade	छिपना
 	Shield Buff	ढाल
+	Textures	बनावटें
+	Fine Grain	महीन दाना
+	Canvas Weave	कैनवास बुनावट
+	Burlap Sack	टाट की बोरी
+	Cracked Glaze	दरकी ग्लेज़
+	Mosaic Floor	मोज़ेक फ़र्श
+	Quilted Squares	रज़ाईदार वर्ग
+	Leaded Glass	सीसा जड़ा काँच
+	Damp Paper	नम काग़ज़
 	Shaft:	दस्ता:
 	Shape	शेप
 	Shape Builder	शेप बिल्डर
@@ -5319,6 +5351,7 @@ antiAlias	Sharp	शार्प
 	Words Longer Than:	से ज्यादा शब्द:
 	Working CMYK	वर्किंग CMYK
 	Working CMYK (don't tag)	कार्य CMYK (टैग नहीं)
+	Working RGB (don't tag)	कार्य RGB (टैग नहीं)
 	Working RGB	वर्किंग RGB
 	Workspace	वर्कस्पेस
 	Workspace {i}	वर्कस्पेस {i}
@@ -5361,6 +5394,8 @@ antiAlias	Sharp	शार्प
 	Version: {version}	संस्करण: {version}
 	Install “{name}” in place of the plug-in with the same ID?	समान ID वाले प्लग-इन की जगह “{name}” इंस्टॉल करें?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	यह फ़ाइल इस ID के साथ पहले इंस्टॉल किया गया प्लग-इन नहीं है। इसे उस ID के लिए रखी गई सेटिंग्स और कैश मिलते हैं।
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	एक ऑटोमेशन ने इस प्लग-इन को इंस्टॉल करने के लिए कहा। इसे इंस्टॉल करने के लिए, स्वयं ऑब्जेक्ट › प्लग-इन्स › प्लग-इन इंस्टॉल करें… चुनें।
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	एक ऑटोमेशन ने इस प्लग-इन को इंस्टॉल करने के लिए कहा। इसे इंस्टॉल करने के लिए, स्वयं ऑब्जेक्ट › प्लग-इन्स › प्लग-इन इंस्टॉल करें… चुनें।
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” आईडी {_1} वाले प्लग-इन से अलग मॉड्यूल है और उसके लिए रखी गई सेटिंग्स और कैश पा लेगा: उपयोगकर्ता की सहमति मिलने पर इसे `replace: true` से इंस्टॉल करें
 	File SHA-256: {hash}	फ़ाइल SHA-256: {hash}
 	Read the objects it is given	उसे दिए गए ऑब्जेक्ट्स पढ़ना
@@ -5419,6 +5454,11 @@ antiAlias	Sharp	शार्प
 @msg	command {name}: `label` must be 1-64 printable characters	कमांड {name}: `label` में 1-64 प्रिंट करने योग्य वर्ण होने चाहिए
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	कमांड {name}: a-z 0-9 _ के 1-{MAX_COMMAND_ID} वर्णों वाली ऐसी id इस्तेमाल करें जो अक्षर से शुरू हो
 @msg	command {name}: {e}	कमांड {name}: {e}
+@msg	manifest: {e} at line {line} column {column}	प्रकटन: {e} (लाइन {line}, कॉलम {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` कमांड की एक सूची होनी चाहिए, हर एक में `id` और `label` हो
+@msg	command {name} must be an object with an `id` and a `label`	कमांड {name} एक ऑब्जेक्ट होना चाहिए जिसमें `id` और `label` हों
+@msg	missing field `{key}`	फ़ील्ड `{key}` नहीं है
+@msg	duplicate field `{key}`	फ़ील्ड `{key}` दो बार है
 @msg	only a filter or a live effect declares `commands`	केवल फ़िल्टर या लाइव इफ़ेक्ट ही `commands` घोषित करता है
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	मॉड्यूल का SHA-256 वह नहीं है जो `hash` बताता है: कुछ भी इंस्टॉल नहीं हुआ
@@ -5516,6 +5556,9 @@ antiAlias	Sharp	शार्प
 @msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} डॉक्यूमेंट के {n} आर्टबोर्ड में से 1 रखता है: फ़ाइल एक के साथ फिर से खुलती है। उन्हें रखने के लिए संरक्षित संपादन क्षमताओं को चालू करें।
 @msg	{label} must be a number	{label} एक नंबर होना चाहिए
 @msg	{label} must be a number above 0 and at most {max}	{label} 0 से ऊपर और सबसे {max} पर होना चाहिए
+@msg	{label} must be at most {max} characters	{label} में अधिकतम {max} वर्ण होने चाहिए
+@msg	{label} must be one character	{label} एक वर्ण होना चाहिए
+@msg	at most {max} tab stops	अधिकतम {max} टैब स्टॉप
 @msg	{label} must be a number at most {max}	{label} सबसे {max} पर एक नंबर होना चाहिए
 @msg	{label} must be a number from -1296 to 1296	{label} को -1296 से 1296 के बीच की संख्या होना चाहिए
 @msg	{label} must be a number from {min} to {max}	{label} को {min} से {max} तक एक नंबर होना चाहिए
@@ -5871,6 +5914,7 @@ antiAlias	Sharp	शार्प
 @msg	`status` must be linked, embedded, missing or modified, or a list of them	`status` को लिंक, एम्बेडेड, लापता या संशोधित किया जाना चाहिए, या उनमें से एक सूची
 @msg	`stop` must be a stop index	`stop` एक स्टॉप इंडेक्स होना चाहिए
 @msg	`stops` must be an array	`stops` एक सारणी होना चाहिए
+@msg	`{key}` must be an array	`{key}` एक सारणी होना चाहिए
 @msg	`story` styles the whole story: give no `start` or `end`	`story` पूरी स्टोरी को स्टाइल करता है: `start` या `end` न दें
 @msg	`story` takes the whole story: give no `start` or `end`	`story` पूरी स्टोरी लेता है: `start` या `end` न दें
 @msg	`strokeMode` applies to strokes (stroke: true)	`strokeMode` स्ट्रोक पर लागू होता है (stroke: true)
@@ -6378,7 +6422,7 @@ antiAlias	Sharp	शार्प
 @msg	EPS {field} `{s}`: {allowed}	EPS {field} `{s}`: {allowed}
 @msg	EPS flattener: {e}	ईपीएस flattener: {e}
 @msg	EPS options: {e}	ईपीएस ऑप्शन्स: {e}
-@msg	EPS Save retains the artboard and all artwork: use document.export for cropped or selected-only EPS	EPS सेव आर्टबोर्ड और पूरा आर्टवर्क रखता है: क्रॉप किए या केवल सिलेक्ट किए आर्टवर्क के EPS के लिए document.export उपयोग करें
+@msg	EPS Save writes all artwork: use document.export for selected-only EPS	EPS सेव पूरा आर्टवर्क लिखता है: केवल सिलेक्ट किए आर्टवर्क के EPS के लिए document.export उपयोग करें
 @msg	every numbered name for {name} is taken in the document's folder	{name} के लिए हर नंबर का नाम डॉक्यूमेंट के फ़ोल्डर में लिया जाता है
 @msg	every numbered name for it is taken in the Fonts folder	इसके लिए हर नंबर वाला नाम फ़ॉन्ट फ़ोल्डर में लिया जाता है
 @msg	every numbered name for the copy is taken	प्रति के लिए हर नंबर का नाम लिया जाता है
@@ -7504,7 +7548,7 @@ antiAlias	Sharp	शार्प
 @msg	span must be "object" or "selection", got {v}	span: स्पैन को "object" या "selection" होना चाहिए, {v} मिला
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" एक `gradient` रखता है, स्वॉच नहीं
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" ग्रेडिएंट रखता है: `gradient` दें
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" एक रैखिक, रेडियल या शंक्वाकार ग्रेडिएंट रखता है, फ्रीफॉर्म ग्रेडिएंट नहीं
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" एक रैखिक, रेडियल, शंक्वाकार या डायमंड ग्रेडिएंट रखता है, फ्रीफॉर्म ग्रेडिएंट नहीं
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" खुद ग्रेडिएंट रखता है: `start` और `end` न दें (वे उसे डॉक्यूमेंट निर्देशांकों पर रख देते हैं)
 @msg	speed must be accelerated, step or pause	speed: गति को तेज, कदम या रोकें होना चाहिए
 @msg	Split Into Grid: select paths large enough for the grid	स्प्लिट इनो ग्रिड: ग्रिड के लिए काफी बड़े पाथ सिलेक्ट करें
@@ -7923,7 +7967,7 @@ antiAlias	Sharp	शार्प
 @msg	unknown format `{f}` (vcswatches, gpl, ase or css)	अज्ञात फ़ॉर्मैट `{f}` (vcswatches, gpl, ase या css)
 @msg	unknown freeform mode `{m}` (points, lines)	अज्ञात फ्रीफॉर्म मोड `{m}` (बिंदुओं, लाइनों)
 @msg	unknown from {f}	{f} से अज्ञात
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	अज्ञात ग्रेडिएंट `{k}` (रैखिक, रेडियल, शंक्वाकार, फ्रीफॉर्म)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	अज्ञात ग्रेडिएंट `{k}` (रैखिक, रेडियल, शंक्वाकार, डायमंड, फ्रीफॉर्म)
 @msg	unknown graph type `{t}`	अज्ञात ग्राफ प्रकार `{t}`
 @msg	unknown grid colours `{name}` (one of {_1})	अज्ञात ग्रिड रंग `{name}` ({_1} में से एक)
 @msg	unknown gridType `{t}`	अज्ञात gridType `{t}`
@@ -8247,6 +8291,11 @@ swatch	Yellow	पीला
 swatch	Yellow Green	पीला हरा
 theme	Appearance	अपीयरेंस
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	समस्या निवारण जानकारी कॉपी करें
+@msg	Copied the troubleshooting info	समस्या निवारण जानकारी कॉपी की गई
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	VectorCraft के पिछले सत्र ने बंद होने से पहले प्रतिक्रिया देना बंद कर दिया था। सहायता ›समस्या निवारण जानकारी कॉपी करें बग रिपोर्ट के लिए विवरण कॉपी करता है
+
 # Safe Mode
 	Safe Mode…	सुरक्षित मोड…
 	Safe Mode	सुरक्षित मोड
@@ -8267,6 +8316,7 @@ theme	Appearance	अपीयरेंस
 
 # Align to Pixel Grid
 	Align to Pixel Grid	पिक्सेल ग्रिड से संरेखित करें
+	Align New Objects to Pixel Grid	नए ऑब्जेक्ट्स को पिक्सेल ग्रिड से संरेखित करें
 	Not Aligned to Pixel Grid	पिक्सेल ग्रिड से असंरेखित
 @msg	only paths and compound paths can be aligned to the pixel grid	केवल पाथ और कंपाउंड पाथ को पिक्सेल ग्रिड से संरेखित किया जा सकता है
 @msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	नाम `{name}` UTF-8 नहीं है और इसे {label} के रूप में पढ़ा गया: यदि यह गलत दिखे, तो फ़ाइल को किसी अन्य legacyNameEncoding से खोलें

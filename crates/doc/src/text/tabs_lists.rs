@@ -28,6 +28,15 @@ pub struct TabStop {
     pub align_on: char,
 }
 
+impl TabStop {
+    /// The largest stop position `text.tabs.set` and a paragraph style take, in points.
+    pub const MAX_POSITION: f64 = 100_000.0;
+    /// The most leader characters a stop repeats.
+    pub const MAX_LEADER: usize = 8;
+    /// The most stops `text.tabs.set` and a paragraph style take in one list.
+    pub const MAX_STOPS: usize = 256;
+}
+
 fn default_align_on() -> char {
     '.'
 }

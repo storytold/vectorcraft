@@ -117,6 +117,7 @@
 	PDF Presets…	PDF-ის პრესეტები…
 	Perspective Grid Presets…	პერსპექტივის ბადის პრესეტები…
 	Color Settings…	ფერის პარამეტრები…
+	Assign Profile	პროფილის მინიჭება
 	Assign Profile…	პროფილის მინიჭება…
 	Keyboard Shortcuts…	კლავიატურის მალსახმობები…
 	Preferences…	პარამეტრები…
@@ -219,6 +220,10 @@
 	Blend Options…	გადასვლის პარამეტრები…
 	Expand	გაშლა
 	Replace Spine	ხერხემლის ჩანაცვლება
+	Create Spine	ხერხემლის შექმნა
+	Create Spine:	ხერხემლის შექმნა:
+	Always	ყოველთვის
+	Never	არასოდეს
 	Reverse Spine	ხერხემლის შებრუნება
 	Reverse Front to Back	რიგის შებრუნება წინიდან უკან
 	Envelope Distort	გარსით დეფორმაცია
@@ -342,6 +347,9 @@
 	Create Outlines	კონტურებად გარდაქმნა
 	Optical Margin Alignment	ოპტიკური არშიის სწორება
 	Dynamic Text	დინამიკური ტექსტი
+	Dynamic Text Presets	დინამიკური ტექსტის წინასწარი პარამეტრები
+	Arch	თაღი
+@msg	select point type or type on a path	აირჩიეთ წერტილოვანი ტექსტი ან ტრაექტორიაზე ტექსტი
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	დაკავშირებულ ტექსტში ტრაექტორიაზე ტექსტი ვერ გამოიყენებს დინამიკურ ტექსტს: {frames}
 	Fill with Placeholder Text	შემავსებელი ტექსტით შევსება
 	Insert Inline Symbol	ჩადგმული სიმბოლოს ჩასმა
@@ -491,6 +499,7 @@
 	Gaussian Blur…	გაუსის გაბუნდოვნება…
 	View	ხედი
 	Preview	წინასწარი ნახვა
+	Preview:	წინასწარი ნახვა:
 	Overprint Preview	ზედდაბეჭდვის წინასწარი ნახვა
 	Pixel Preview	პიქსელების წინასწარი ნახვა
 	Trim View	მოჭრილი ხედი
@@ -698,8 +707,25 @@
 	Stun Pulse	დაბნეულობა
 	Stealth Fade	შენიღბვა
 	Shield Buff	ფარი
+	Textures	ტექსტურები
+	Fine Grain	წვრილი მარცვალი
+	Canvas Weave	ტილოს ქსოვილი
+	Burlap Sack	ჯუთის ტომარა
+	Cracked Glaze	დამსკდარი მინანქარი
+	Mosaic Floor	მოზაიკის იატაკი
+	Quilted Squares	ქვილთის კვადრატები
+	Leaded Glass	ტყვიის მინა
+	Damp Paper	ნესტიანი ქაღალდი
 	Outlines and Rules	კონტურები და ხაზები
 	Hand-Drawn	ხელით დახატული
+	Painted and Sketched	დახატული და ესკიზური
+	Washed Blue	გარეცხილი ლურჯი
+	Bristle Ochre	ფუნჯის ოხრა
+	Pastel Heather	პასტელის იისფერი
+	Charcoal Shade	ნახშირის ჩრდილი
+	Ink Contour	მელნის კონტური
+	Wet Ink	სველი მელანი
+	Fine Pen	წვრილი კალამი
 	Gradient Finishes	გრადიენტული ზედაპირები
 	Shape Effects	ფიგურის ეფექტები
 	Blends and Transparency	გადასვლები და გამჭვირვალობა
@@ -719,6 +745,7 @@
 	Spectrum Gradients	სპექტრის გრადიენტები
 	Sky Gradients	ცის გრადიენტები
 	Neutral Gradients	ნეიტრალური გრადიენტები
+	Organic Fades	ორგანული გაქრობები
 	Duotone Gradients	ორტონიანი გრადიენტები
 	Radial Glows	რადიალური ნათებები
 	Save Swatch Library…	ფერის ნიმუშების ბიბლიოთეკის შენახვა…
@@ -1547,6 +1574,7 @@ digits	Malayalam	მალაიალამური
 	Points: clicks add free points	წერტილები: დაწკაპუნებები ამატებს თავისუფალ წერტილებს
 	Radial Gradient	რადიალური გრადიენტი
 	Conic Gradient	კონუსური გრადიენტი
+	Diamond Gradient	რომბული გრადიენტი
 	Reset to White, Black	თეთრზე და შავზე დაბრუნება
 	Reverse Gradient	გრადიენტის შებრუნება
 	Gradient Presets	გრადიენტის პრესეტები
@@ -1804,6 +1832,7 @@ digits	Malayalam	მალაიალამური
 	Simulate Paper	ქაღალდის იმიტაცია
 	Use Black Point Compensation	შავი წერტილის კომპენსაციის გამოყენება
 	Working CMYK (don't tag)	სამუშაო CMYK (ტეგის გარეშე)
+	Working RGB (don't tag)	სამუშაო RGB (ტეგის გარეშე)
 	{name} (spot)	{name} (სპოტ)
 	Add to Profiles…	პროფილებში დამატება…
 	Align Stroke to Center	კონტურის ცენტრზე სწორება
@@ -2100,6 +2129,8 @@ digits	Malayalam	მალაიალამური
 	Export Selected Art Only	მხოლოდ მონიშნული ნახატის ექსპორტირება
 	Number of Colors:	ფერების რაოდენობა:
 	Raster File Format:	რასტრული ფაილის ფორმატი:
+	Include Placed Images	განთავსებული გამოსახულებების ჩართვა
+	Include Fill Hatches	შევსებების დაშტრიხვის ჩართვა
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	სრულ ფერს სჭირდება 2004 ან უფრო ახალი ვერსია: იწერება 256 ფერიდან უახლოესი.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	ტექსტი კონტურებად იქცევა, ხოლო ის კონტურები, რომლებსაც CAD-ხაზი ვერ ხატავს, შევსებულ ფიგურებად.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	ტექსტი ტექსტად რჩება, ყოველი კონტური კი ხაზია თავისი სისქითა და ტირეებით.
@@ -4010,6 +4041,7 @@ font-technology	Variable	ცვლადი
 @msg	`globalAdjust` must be an object	`globalAdjust` უნდა იყოს ობიექტი
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` უნდა იყოს 1, 3 ან 5
 @msg	`stops` must be an array	`stops` უნდა იყოს მასივი
+@msg	`{key}` must be an array	`{key}` უნდა იყოს მასივი
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` უნდა იყოს SVG-ის პარამეტრების ობიექტი (იხ. document.formats)
 @msg	`{_1}` is no save command	`{_1}` შენახვის ბრძანება არ არის
 @msg	`{area}` is no recovery area name	`{area}` აღდგენის არის სახელი არ არის
@@ -4022,6 +4054,7 @@ font-technology	Variable	ცვლადი
 @msg	`{key}` must be a number, not {v}	`{key}` უნდა იყოს რიცხვი და არა {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} უნდა იყოს Unix-დრო წამებში (მთელი რიცხვი) ან null
 @msg	`{key}` must be a string	`{key}` უნდა იყოს სტრიქონი
+@msg	`{key}` must be a profile name or null	`{key}` უნდა იყოს პროფილის სახელი ან null
 @msg	`{key}` must be a whole number	`{key}` უნდა იყოს მთელი რიცხვი
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` უნდა იყოს მთელი რიცხვი {min}-დან {max}-მდე (მიღებულია {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` უნდა იყოს {min}-სა და {max}-ს შორის (მიღებულია {x})
@@ -4481,7 +4514,7 @@ font-technology	Variable	ცვლადი
 @msg	unknown format	უცნობი ფორმატი
 @msg	unknown format `{f}` (Save writes {_1})	უცნობი ფორმატი `{f}` (შენახვა წერს: {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	უცნობი თავისუფალი რეჟიმი `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	უცნობი გრადიენტის სახე `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	უცნობი გრადიენტის სახე `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	უცნობი გამოკვეთა `{h}`
 @msg	unknown option `{path}.{k}`	უცნობი პარამეტრი `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	უცნობი ზედდაბეჭდვა `{o}` (preserve, simulate ან discard)
@@ -5482,7 +5515,7 @@ imageTrace	Outline	კონტური
 @msg	span must be "object" or "selection", got {v}	span უნდა იყოს "object" ან "selection", მიღებულია {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" ათავსებს `gradient`-ს და არა ფერის ნიმუშს
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" ათავსებს გრადიენტს: მიუთითეთ `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" ათავსებს წრფივ, რადიალურ ან კონუსურ გრადიენტს და არა თავისუფალი ფორმისას
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" ათავსებს წრფივ, რადიალურ, კონუსურ ან რომბულ გრადიენტს და არა თავისუფალი ფორმისას
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" თავად ათავსებს გრადიენტს: გამოტოვეთ `start` და `end` (ისინი მას უკვე დოკუმენტის კოორდინატებში ათავსებენ)
 	Make Image Dynamic	გამოსახულების დინამიკურად ქცევა
 	Import Data Sets…	მონაცემთა ნაკრებების იმპორტი…
@@ -5941,6 +5974,7 @@ imageTrace	Outline	კონტური
 	Ruby	რუბი
 	Geometric Guides	გეომეტრიული მიმმართველები
 	Geometric Patterns	გეომეტრიული პატერნები
+	Grit Textures	მარცვლოვანი ტექსტურები
 	Ease In	ნელი დასაწყისი
 	Ease Out	ნელი დასასრული
 	Ease In Out	ნელი დასაწყისი და დასასრული
@@ -6010,6 +6044,8 @@ axis	Y Axis	Y ღერძი
 	Version: {version}	ვერსია: {version}
 	Install “{name}” in place of the plug-in with the same ID?	დავაყენოთ „{name}“ იმავე ID-ის მქონე პლაგინის ნაცვლად?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	ეს ფაილი არ არის ამ ID-ით ადრე დაყენებული პლაგინი. ის მიიღებს ამ ID-სთვის შენახულ პარამეტრებს და ქეშს.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	ავტომატიზაციამ ამ პლაგინის დაყენება მოითხოვა. მის დასაყენებლად აირჩიეთ ობიექტი › პლაგინები › პლაგინის დაყენება… თავად.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	ავტომატიზაციამ ამ პლაგინის დაყენება მოითხოვა. მის დასაყენებლად აირჩიეთ ობიექტი › პლაგინები › პლაგინის დაყენება… თავად.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}“ სხვა მოდულია, ვიდრე პლაგინი ID-ით {_1}, და მიიღებდა მისთვის შენახულ პარამეტრებს და ქეშს: მომხმარებლის თანხმობის შემდეგ დააყენეთ ის `replace: true` პარამეტრით
 	File SHA-256: {hash}	ფაილის SHA-256: {hash}
 	Read the objects it is given	მიღებული ობიექტების წაკითხვა
@@ -6072,6 +6108,12 @@ axis	Y Axis	Y ღერძი
 @msg	command {name}: `label` must be 1-64 printable characters	ბრძანება {name}: `label` უნდა შედგებოდეს 1-64 დასაბეჭდი სიმბოლოსგან
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	ბრძანება {name}: გამოიყენეთ 1-{MAX_COMMAND_ID} სიმბოლოიანი id a-z 0-9 _ სიმბოლოებიდან, რომელიც ასოთი იწყება
 @msg	command {name}: {e}	ბრძანება {name}: {e}
+@msg	manifest: {e}	მანიფესტი: {e}
+@msg	manifest: {e} at line {line} column {column}	მანიფესტი: {e} (სტრიქონი {line}, სვეტი {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` უნდა იყოს ბრძანებების სია, თითოეული `id`-ით და `label`-ით
+@msg	command {name} must be an object with an `id` and a `label`	ბრძანება {name} უნდა იყოს ობიექტი `id`-ით და `label`-ით
+@msg	missing field `{key}`	აკლია ველი `{key}`
+@msg	duplicate field `{key}`	ველი `{key}` ორჯერაა
 @msg	only a filter or a live effect declares `commands`	`commands`-ს მხოლოდ ფილტრი ან ცოცხალი ეფექტი აცხადებს
 @msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	მოდულს არ აქვს `hash`-ში მითითებული SHA-256: არაფერი დაყენებულა
@@ -6504,6 +6546,10 @@ anchor	Points:	წერტილები:
 @msg	features lists at most {max} tags	features შეიძლება შეიცავდეს არაუმეტეს {max} ტეგს
 @msg	unknown OpenType feature `{t}`	უცნობი OpenType შესაძლებლობა `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} უნდა იყოს 0-ზე მეტი და არაუმეტეს {max}-ისა რიცხვი
+@msg	{label} must be at most {max} characters	{label} უნდა შეიცავდეს არაუმეტეს {max} სიმბოლოს
+@msg	{label} must be one character	{label} უნდა იყოს ერთი სიმბოლო
+@msg	at most {max} tab stops	არაუმეტეს {max} ტაბულაციის გაჩერება
+@msg	unknown align `{other}`	უცნობი სწორება `{other}`
 @msg	no character style `{name}`	სიმბოლოს სტილი `{name}` ვერ მოიძებნა
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6665,6 +6711,8 @@ breakText	Glyphs	გლიფები
 	Delete the selected brushes?	წაიშალოს არჩეული ფუნჯები?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	კონტურები იყენებს ამ ფუნჯებიდან ერთს ან მეტს. მოიხსნას ფუნჯები ამ კონტურებიდან და წაიშალოს ფუნჯები?
 	Remove Strokes	კონტურების მოხსნა
+	Place Brush Art	ფუნჯის ნახატის განთავსება
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` ნახატი არ აქვს (ნახატი მხოლოდ გაფანტვის, მხატვრულ და პატერნის ფუნჯებს აქვს)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	განლაგების ხელსაწყოები
 	Arrange in Grid…	ბადეში განლაგება…
@@ -6943,6 +6991,11 @@ font-script	Japanese	იაპონური
 @msg	only an exporter or an importer declares `extensions`	`extensions`-ს მხოლოდ ექსპორტის ან იმპორტის პლაგინი აცხადებს
 @msg	an importer always gets an import's budget: leave `budget` out	იმპორტის პლაგინი ყოველთვის იღებს იმპორტის ბიუჯეტს: გამოტოვეთ `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	პრობლემების მოგვარების ინფორმაციის კოპირება
+@msg	Copied the troubleshooting info	პრობლემების მოგვარების ინფორმაცია კოპირებულია
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	VectorCraft-ის ბოლო სესიამ დახურვამდე პასუხის გაცემა შეწყვიტა. დახმარება › პრობლემების მოგვარების ინფორმაციის კოპირება აკოპირებს დეტალებს შეცდომის ანგარიშისთვის
+
 # Safe Mode
 	Safe Mode…	უსაფრთხო რეჟიმი…
 	Safe Mode	უსაფრთხო რეჟიმი
@@ -6963,6 +7016,7 @@ font-script	Japanese	იაპონური
 
 # Align to Pixel Grid
 	Align to Pixel Grid	პიქსელურ ბადეზე გასწორება
+	Align New Objects to Pixel Grid	ახალი ობიექტების პიქსელურ ბადეზე გასწორება
 	Not Aligned to Pixel Grid	პიქსელურ ბადეზე გაუსწორებელი
 @msg	only paths and compound paths can be aligned to the pixel grid	პიქსელურ ბადეზე მხოლოდ ტრაექტორიების და შედგენილი ტრაექტორიების გასწორებაა შესაძლებელი
 @msg	side is left or right, not `{s}`	side არის left ან right და არა `{s}`

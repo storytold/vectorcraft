@@ -237,6 +237,7 @@ font-technology	Variable	Variabel
 	Asset Export Settings	Einstellungen für den Asset-Export
 	Assets	Assets
 	Assign	Zuweisen
+	Assign Profile	Profil zuweisen
 	Assign Profile…	Profil zuweisen…
 	Assign:	Zuweisen:
 	Attach to Active Plane	An aktiver Perspektivebene anbringen
@@ -807,6 +808,14 @@ font-technology	Variable	Variabel
 	Disable Auto Add/Delete	Automatisches Hinzufügen/Löschen deaktivieren
 	Disable Opacity Mask	Deckkraftmaske deaktivieren
 	Discard	Verwerfen
+	Preserve	Beibehalten
+	TIFF (Black & White)	TIFF (Schwarzweiß)
+	TIFF (8-bit Color)	TIFF (8-Bit-Farbe)
+	High Resolution	Hohe Auflösung
+	Medium Resolution	Mittlere Auflösung
+	Low Resolution	Niedrige Auflösung
+	Language Level 2	Sprachebene 2
+	Language Level 3	Sprachebene 3
 	Discard Empty Type	Leeren Text verwerfen
 	Discard Recovered Documents	Wiederhergestellte Dokumente verwerfen
 	Discard White Overprint in Output	Weißes Überdrucken in der Ausgabe verwerfen
@@ -1435,6 +1444,14 @@ file-filter	Templates	Vorlagen
 	Hair Space	Haarspatium
 	Hand Tool	Hand-Werkzeug
 	Hand-Drawn	Handgezeichnet
+	Painted and Sketched	Gemalt und skizziert
+	Washed Blue	Verwaschenes Blau
+	Bristle Ochre	Borstenocker
+	Pastel Heather	Pastellheide
+	Charcoal Shade	Kohleschatten
+	Ink Contour	Tuschekontur
+	Wet Ink	Nasse Tusche
+	Fine Pen	Feine Feder
 	Handles	Griffe
 	Hard Light	Hartes Licht
 	Hard Mix	Hart mischen
@@ -2299,6 +2316,9 @@ file-filter	Templates	Vorlagen
 	Optical	Optisch
 	Optical Margin Alignment	Optischer Randausgleich
 	Dynamic Text	Dynamischer Text
+	Dynamic Text Presets	Vorgaben für dynamischen Text
+	Arch	Rundbogen
+@msg	select point type or type on a path	wählen Sie Punkttext oder Pfadtext aus
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	Pfadtext in verkettetem Text kann keinen dynamischen Text verwenden: {frames}
 	Optimize for fast web view	Für schnelle Webanzeige optimieren
 	Optimized	Optimiert
@@ -2306,6 +2326,7 @@ file-filter	Templates	Vorlagen
 	Options for Selection…	Optionen für Auswahl…
 	Options:	Optionen:
 	Options…	Optionen…
+	Organic Fades	Organische Verläufe
 	or more spaces with a tab	oder mehr Leerzeichen durch einen Tabulator
 	Order:	Reihenfolge:
 	Ordinals	Ordinalzahlen
@@ -2499,6 +2520,7 @@ diagnostics	ui	Oberfläche
 	Presets:	Vorgaben:
 	Press 	Mit 
 	Preview	Vorschau
+	Preview:	Vorschau:
 	Preview All Layers	Vorschau aller Ebenen
 	Preview in Browser	Vorschau im Browser
 	Preview in Browser needs the desktop app (the web downloads files instead)	„Vorschau im Browser“ erfordert die Desktop-App (im Web werden stattdessen Dateien heruntergeladen)
@@ -2580,6 +2602,7 @@ digits	Malayalam	Malayalam
 	Radial Glows	Radiale Leuchteffekte
 	Radial Gradient	Radialer Verlauf
 	Conic Gradient	Konischer Verlauf
+	Diamond Gradient	Rautenverlauf
 	Radius 1	Radius 1
 	Radius 2	Radius 2
 	Radius1	Radius1
@@ -2592,6 +2615,8 @@ digits	Malayalam	Malayalam
 	Range:	Bereich:
 	Raster Effects	Rastereffekte
 	Raster File Format:	Pixelbild-Dateiformat:
+	Include Placed Images	Platzierte Bilder einschließen
+	Include Fill Hatches	Füllschraffuren einschließen
 	Raster Sample Size:	Aufnahmebereich in Pixelbildern:
 	Raster/Vector Balance:	Pixelbild-Vektor-Abgleich:
 	Rasterize	In Pixelbild umwandeln
@@ -2773,6 +2798,10 @@ digits	Malayalam	Malayalam
 	Replace Font	Schrift ersetzen
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Ersetzen Sie sie durch eine andere Datei oder ignorieren Sie sie: Ihre Bilder zeigen weiterhin die mit dem Dokument gespeicherte Vorschau.
 	Replace Spine	Achse ersetzen
+	Create Spine	Achse erstellen
+	Create Spine:	Achse erstellen:
+	Always	Immer
+	Never	Nie
 	Replace Symbol	Symbol ersetzen
 	Reset Transformation	Transformation zurücksetzen
 	Replace With Font	Durch Schrift ersetzen
@@ -3137,6 +3166,15 @@ digits	Malayalam	Malayalam
 	Stun Pulse	Betäubung
 	Stealth Fade	Schleichen
 	Shield Buff	Schild
+	Textures	Texturen
+	Fine Grain	Feine Körnung
+	Canvas Weave	Leinwandgewebe
+	Burlap Sack	Jutesack
+	Cracked Glaze	Craquelé-Glasur
+	Mosaic Floor	Mosaikboden
+	Quilted Squares	Gesteppte Quadrate
+	Leaded Glass	Bleiglas
+	Damp Paper	Feuchtes Papier
 	Shape	Form
 	Shape Builder	Formerstellung
 	Shape Builder Regions	Formerstellungsbereiche
@@ -3791,6 +3829,7 @@ effect	Points	Punkte
 	Windows	Windows
 	Working CMYK	CMYK-Arbeitsfarbraum
 	Working CMYK (don't tag)	CMYK-Arbeitsfarbraum (nicht kennzeichnen)
+	Working RGB (don't tag)	RGB-Arbeitsfarbraum (nicht kennzeichnen)
 	Workspace	Arbeitsbereich
 	Workspace {i}	Arbeitsbereich {i}
 	Wrinkle Tool	Zerknittern-Werkzeug
@@ -4144,6 +4183,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`globalAdjust` must be an object	`globalAdjust` muss ein Objekt sein
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` muss 1, 3 oder 5 sein
 @msg	`stops` must be an array	`stops` muss ein Array sein
+@msg	`{key}` must be an array	`{key}` muss ein Array sein
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` muss ein Objekt mit SVG-Optionen sein (siehe document.formats)
 @msg	`{_1}` is no save command	`{_1}` ist kein Speicherbefehl
 @msg	`{area}` is no recovery area name	`{area}` ist kein Name eines Wiederherstellungsbereichs
@@ -4157,6 +4197,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`{key}` must be a number, not {v}	`{key}` muss eine Zahl sein, nicht {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} muss eine Unix-Zeit in Sekunden (eine ganze Zahl) oder null sein
 @msg	`{key}` must be a string	`{key}` muss eine Zeichenfolge sein
+@msg	`{key}` must be a profile name or null	`{key}` muss ein Profilname oder null sein
 @msg	`{key}` must be a whole number	`{key}` muss eine ganze Zahl sein
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` muss eine ganze Zahl zwischen {min} und {max} sein (erhalten: {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` muss zwischen {min} und {max} liegen (erhalten: {x})
@@ -4653,7 +4694,7 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown format	unbekanntes Format
 @msg	unknown format `{f}` (Save writes {_1})	unbekanntes Format `{f}` („Speichern“ schreibt {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	unbekannter Freiformmodus `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	unbekannte Verlaufsart `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	unbekannte Verlaufsart `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	unbekannte Hervorhebung `{h}`
 @msg	unknown option `{path}.{k}`	unbekannte Option `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	unbekannter Wert für overprints `{o}` (preserve, simulate oder discard)
@@ -5396,7 +5437,7 @@ effect	Soft	Weich
 @msg	span must be "object" or "selection", got {v}	span muss "object" oder "selection" sein, nicht {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" platziert einen `gradient`, kein Farbfeld
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" platziert einen Verlauf: geben Sie `gradient` an
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" platziert einen linearen, radialen oder konischen Verlauf, keinen Freiform-Verlauf
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" platziert einen linearen, radialen, konischen oder Rautenverlauf, keinen Freiform-Verlauf
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" platziert den Verlauf selbst: lassen Sie `start` und `end` weg (sie platzieren ihn bereits in Dokumentkoordinaten)
 	Make Image Dynamic	Bild dynamisch machen
 	Import Data Sets…	Datensätze importieren…
@@ -5582,6 +5623,7 @@ effect	Soft	Weich
 	Ruby	Ruby
 	Geometric Guides	Geometrische Hilfslinien
 	Geometric Patterns	Geometrische Muster
+	Grit Textures	Körnige Texturen
 	Ease In	Langsam starten
 	Ease Out	Langsam enden
 	Ease In Out	Langsam starten und enden
@@ -5642,6 +5684,8 @@ axis	Y Axis	Y-Achse
 	Version: {version}	Version: {version}
 	Install “{name}” in place of the plug-in with the same ID?	„{name}“ anstelle des Plug-ins mit derselben ID installieren?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Diese Datei ist nicht das Plug-in, das vorher mit dieser ID installiert war. Sie erhält die Einstellungen und den Cache, die für diese ID gespeichert sind.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Eine Automatisierung hat angefordert, dieses Plug-in zu installieren. Um es zu installieren, wählen Sie selbst „Objekt › Plug-ins › Plug-in installieren…“.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Eine Automatisierung hat angefordert, dieses Plug-in zu installieren. Um es zu installieren, wählen Sie selbst „Objekt › Plug-ins › Plug-in installieren…“.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}“ ist ein anderes Modul als das Plug-in mit der ID {_1} und würde die dafür gespeicherten Einstellungen und den Cache erhalten: Installieren Sie es mit `replace: true`, sobald der Benutzer zustimmt
 	File SHA-256: {hash}	Datei-SHA-256: {hash}
 	Read the objects it is given	Die Objekte lesen, die es erhält
@@ -5704,6 +5748,12 @@ axis	Y Axis	Y-Achse
 @msg	command {name}: `label` must be 1-64 printable characters	Befehl {name}: `label` muss 1-64 druckbare Zeichen haben
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	Befehl {name}: Verwenden Sie eine ID aus 1-{MAX_COMMAND_ID} Zeichen aus a-z 0-9 _, die mit einem Buchstaben beginnt
 @msg	command {name}: {e}	Befehl {name}: {e}
+@msg	manifest: {e}	Manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	Manifest: {e} (Zeile {line}, Spalte {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` muss eine Liste von Befehlen sein, jeder mit `id` und `label`
+@msg	command {name} must be an object with an `id` and a `label`	der Befehl {name} muss ein Objekt mit `id` und `label` sein
+@msg	missing field `{key}`	fehlendes Feld `{key}`
+@msg	duplicate field `{key}`	doppeltes Feld `{key}`
 @msg	only a filter or a live effect declares `commands`	nur ein Filter oder ein Live-Effekt deklariert `commands`
 @msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	das Modul hat nicht den SHA-256-Wert aus `hash`: Es wurde nichts installiert
@@ -6064,6 +6114,10 @@ anchor	Points:	Punkte:
 @msg	features lists at most {max} tags	features enthält höchstens {max} Tags
 @msg	unknown OpenType feature `{t}`	unbekannte OpenType-Funktion `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} muss eine Zahl über 0 und höchstens {max} sein
+@msg	{label} must be at most {max} characters	{label} darf höchstens {max} Zeichen lang sein
+@msg	{label} must be one character	{label} muss genau ein Zeichen sein
+@msg	at most {max} tab stops	höchstens {max} Tabstopps
+@msg	unknown align `{other}`	unbekannte Ausrichtung `{other}`
 @msg	no character style `{name}`	Zeichenformat `{name}` nicht gefunden
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6226,6 +6280,8 @@ breakText	Glyphs	Glyphen
 	Delete the selected brushes?	Ausgewählte Pinsel löschen?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturen verwenden einen oder mehrere dieser Pinsel. Pinsel von diesen Konturen entfernen und die Pinsel löschen?
 	Remove Strokes	Konturen entfernen
+	Place Brush Art	Pinselgrafik platzieren
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` hat keine Grafik (nur Spezial-, Bild- und Musterpinsel haben eine)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Anordnungswerkzeuge
 	Arrange in Grid…	In Raster anordnen…
@@ -6421,6 +6477,11 @@ breakText	Glyphs	Glyphen
 @msg	only an exporter or an importer declares `extensions`	nur ein Export- oder Import-Plug-in gibt `extensions` an
 @msg	an importer always gets an import's budget: leave `budget` out	ein Import-Plug-in erhält immer das Budget eines Imports: Lassen Sie `budget` weg
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Informationen zur Fehlerbehebung kopieren
+@msg	Copied the troubleshooting info	Informationen zur Fehlerbehebung kopiert
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Die letzte VectorCraft-Sitzung reagierte nicht mehr, bevor sie geschlossen wurde. Hilfe › Informationen zur Fehlerbehebung kopieren kopiert die Details für einen Fehlerbericht
+
 # Safe Mode
 	Safe Mode…	Abgesicherter Modus…
 	Safe Mode	Abgesicherter Modus
@@ -6441,6 +6502,7 @@ breakText	Glyphs	Glyphen
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Am Pixelraster ausrichten
+	Align New Objects to Pixel Grid	Neue Objekte am Pixelraster ausrichten
 	Not Aligned to Pixel Grid	Nicht am Pixelraster ausgerichtet
 @msg	only paths and compound paths can be aligned to the pixel grid	nur Pfade und zusammengesetzte Pfade können am Pixelraster ausgerichtet werden
 @msg	side is left or right, not `{s}`	side ist left oder right, nicht `{s}`

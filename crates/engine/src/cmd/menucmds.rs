@@ -1306,13 +1306,16 @@ fn convert_to_artboards(s: &mut Session, _: &Value) -> Result<Value> {
         let symbols = d.symbol_boxes();
         let boxes: Vec<(NodeId, Rect)> = roots.iter().filter_map(|id| Some((*id, d.node(*id)?.geometric_bounds_with(&symbols)?))).collect();
         let mut converted = vec![];
+        // The highest artboard id the document has, kept up to date as artboards are added.
+        let mut top = d.artboards.iter().map(|a| a.id).max();
         for (id, b) in boxes {
             if b.width() <= 0.0 || b.height() <= 0.0 {
                 continue;
             }
             // Named one past the highest artboard id the document has, whatever id it is given.
-            let number = d.artboards.iter().map(|a| a.id).max().map_or(1, |m| m.saturating_add(1));
-            let aid = d.next_artboard_id();
+            let number = top.map_or(1, |m| m.saturating_add(1));
+            let aid = d.next_artboard_id_above(top);
+            top = top.max(Some(aid));
             d.artboards.push(vectorcraft_doc::Artboard {
                 id: aid,
                 name: format!("Artboard {number}"),

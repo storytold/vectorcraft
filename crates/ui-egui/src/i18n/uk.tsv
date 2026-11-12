@@ -256,6 +256,7 @@ font-technology	Variable	Варіативні
 	Asset Export Settings	Параметри експорту ресурсів
 	Assets	Ресурси
 	Assign	Призначити
+	Assign Profile	Призначити профіль
 	Assign Profile…	Призначити профіль…
 	Assign:	Призначити:
 	Attach to Active Plane	Прикріпити до активної площини
@@ -822,6 +823,14 @@ font-technology	Variable	Варіативні
 	Disable Auto Add/Delete	Вимкнути авто-додавання/видалення
 	Disable Opacity Mask	Вимкнути маску непрозорості
 	Discard	Відкинути
+	Preserve	Зберігати
+	TIFF (Black & White)	TIFF (чорно-білий)
+	TIFF (8-bit Color)	TIFF (8-бітний колір)
+	High Resolution	Висока роздільна здатність
+	Medium Resolution	Середня роздільна здатність
+	Low Resolution	Низька роздільна здатність
+	Language Level 2	Рівень мови 2
+	Language Level 3	Рівень мови 3
 	Discard Empty Type	Видалити порожній текст
 	Discard Recovered Documents	Відкинути відновлені документи
 	Discard White Overprint in Output	Скасувати накладення білого під час виведення
@@ -1459,6 +1468,14 @@ file-filter	Templates	Шаблони
 	Hair Space	Волосяна шпація
 	Hand Tool	Інструмент «Рука»
 	Hand-Drawn	Намальований від руки
+	Painted and Sketched	Мальовані та ескізні
+	Washed Blue	Розмитий синій
+	Bristle Ochre	Охра пензлем
+	Pastel Heather	Пастельний верес
+	Charcoal Shade	Тінь вугіллям
+	Ink Contour	Контур тушшю
+	Wet Ink	Мокра туш
+	Fine Pen	Тонке перо
 	Handles	Маркери
 	Hard Light	Жорстке світло
 	Hard Mix	Жорстке накладання
@@ -2367,6 +2384,9 @@ file-filter	Templates	Шаблони
 	Optical	Оптичний
 	Optical Margin Alignment	Оптичне вирівнювання полів
 	Dynamic Text	Динамічний текст
+	Dynamic Text Presets	Набори параметрів динамічного тексту
+	Arch	Арка
+@msg	select point type or type on a path	виберіть точковий текст або текст за контуром
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	текст за контуром у пов’язаному тексті не може використовувати динамічний текст: {frames}
 	Optimize for fast web view	Оптимізувати для швидкого перегляду web
 	Optimized	Оптимізовано
@@ -2374,6 +2394,7 @@ file-filter	Templates	Шаблони
 	Options for Selection…	Параметри виділення…
 	Options:	Параметри:
 	Options…	Параметри…
+	Organic Fades	Органічні згасання
 	or more spaces with a tab	або більше прогалин на табуляцію
 	Order:	Порядок:
 	Ordinals	Порядкові числівники
@@ -2567,6 +2588,7 @@ diagnostics	ui	інтерфейс
 	Presets:	Набори:
 	Press 	Натисніть 
 	Preview	Перегляд
+	Preview:	Перегляд:
 	Preview All Layers	Переглянути всі шари
 	Preview in Browser	Переглянути у браузері
 	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
@@ -2648,6 +2670,7 @@ digits	Malayalam	Малаялам
 	Radial Glows	Радіальні світіння
 	Radial Gradient	Радіальний градієнт
 	Conic Gradient	Конічний градієнт
+	Diamond Gradient	Ромбоподібний градієнт
 	Radius 1	Радіус 1
 	Radius 2	Радіус 2
 	Radius1	Радіус1
@@ -2660,6 +2683,8 @@ digits	Malayalam	Малаялам
 	Range:	Діапазон:
 	Raster Effects	Растрові ефекти
 	Raster File Format:	Формат растрового файлу:
+	Include Placed Images	Включати розміщені зображення
+	Include Fill Hatches	Включати штрихування заливок
 	Raster Sample Size:	Розмір растрового зразка:
 	Raster/Vector Balance:	Баланс растрових/векторних:
 	Rasterize	Растеризувати
@@ -2841,6 +2866,10 @@ digits	Malayalam	Малаялам
 	Replace Font	Замінити шрифт
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Замініть його іншим файлом або ігноруйте: зображення продовжать показувати попередній перегляд, збережений з документом.
 	Replace Spine	Замінити вісь
+	Create Spine	Створити вісь
+	Create Spine:	Створити вісь:
+	Always	Завжди
+	Never	Ніколи
 	Replace Symbol	Замінити символ
 	Reset Transformation	Скинути трансформацію
 	Replace With Font	Замінити шрифтом
@@ -3205,6 +3234,15 @@ digits	Malayalam	Малаялам
 	Stun Pulse	Оглушення
 	Stealth Fade	Невидимість
 	Shield Buff	Щит
+	Textures	Текстури
+	Fine Grain	Дрібне зерно
+	Canvas Weave	Полотняне плетіння
+	Burlap Sack	Мішковина
+	Cracked Glaze	Потріскана глазур
+	Mosaic Floor	Мозаїчна підлога
+	Quilted Squares	Стьобані квадрати
+	Leaded Glass	Вітражне скло
+	Damp Paper	Вологий папір
 	Shape	Фігура
 	Shape Builder	Створення фігур
 	Shape Builder Regions	Області створення фігур
@@ -3911,6 +3949,7 @@ effect	Points	Точки
 	Windows	Windows
 	Working CMYK	Робочий CMYK
 	Working CMYK (don't tag)	Робочий CMYK (без позначки)
+	Working RGB (don't tag)	Робочий RGB (без позначки)
 	Workspace	Робоче середовище
 	Workspace {i}	Робоче середовище {i}
 	Wrinkle Tool	Інструмент «Зморшки»
@@ -4255,6 +4294,7 @@ axis	Both	Обидві
 @msg	`globalAdjust` must be an object	`globalAdjust` має бути об’єктом
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` має бути 1, 3 або 5
 @msg	`stops` must be an array	`stops` має бути масивом
+@msg	`{key}` must be an array	`{key}` має бути масивом
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` має бути об’єктом параметрів SVG (див. document.formats)
 @msg	`{_1}` is no save command	`{_1}` не є командою збереження
 @msg	`{area}` is no recovery area name	`{area}` не є ім’ям області відновлення
@@ -4268,6 +4308,7 @@ axis	Both	Обидві
 @msg	`{key}` must be a number, not {v}	`{key}` має бути числом, а не {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} має бути часом Unix у секундах (цілим числом) або null
 @msg	`{key}` must be a string	`{key}` має бути рядком
+@msg	`{key}` must be a profile name or null	`{key}` має бути назвою профілю або null
 @msg	`{key}` must be a whole number	`{key}` має бути цілим числом
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` має бути цілим числом від {min} до {max} (отримано {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` має бути від {min} до {max} (отримано {x})
@@ -4763,7 +4804,7 @@ axis	Both	Обидві
 @msg	unknown format	невідомий формат
 @msg	unknown format `{f}` (Save writes {_1})	невідомий формат `{f}` (збереження записує {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	невідомий режим довільної форми `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	невідомий тип градієнта `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	невідомий тип градієнта `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	невідоме виділення `{h}`
 @msg	unknown option `{path}.{k}`	невідомий параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	невідомі накладення `{o}` (preserve, simulate або discard)
@@ -5411,7 +5452,7 @@ lighting	Light	Світло
 @msg	span must be "object" or "selection", got {v}	span має бути "object" або "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" розміщує `gradient`, а не зразок
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" розміщує градієнт: вкажіть `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" розміщує лінійний, радіальний або конічний градієнт, а не довільний
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" розміщує лінійний, радіальний, конічний або ромбоподібний градієнт, а не довільний
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" сам розміщує градієнт: приберіть `start` і `end` (вони вже задають його в координатах документа)
 	Make Image Dynamic	Зробити зображення динамічним
 	Import Data Sets…	Імпортувати набори даних…
@@ -5596,6 +5637,7 @@ lighting	Light	Світло
 	Ruby	Рубі
 	Geometric Guides	Геометричні напрямні
 	Geometric Patterns	Геометричні візерунки
+	Grit Textures	Зернисті текстури
 	Ease In	Плавний початок
 	Ease Out	Плавне завершення
 	Ease In Out	Плавний початок і завершення
@@ -5656,6 +5698,8 @@ axis	Y Axis	Вісь Y
 	Version: {version}	Версія: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Встановити «{name}» замість модуля з тим самим ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Цей файл не є модулем, установленим раніше з цим ID. Він отримає налаштування й кеш, збережені для цього ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Автоматизація попросила встановити цей модуль. Щоб установити його, виберіть «Об’єкт › Модулі › Встановити модуль…» самостійно.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Автоматизація попросила встановити цей модуль. Щоб установити його, виберіть «Об’єкт › Модулі › Встановити модуль…» самостійно.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	«{name}» відрізняється від модуля з ID {_1} і отримав би збережені для нього налаштування й кеш: встановіть його з `replace: true`, коли користувач погодиться
 	File SHA-256: {hash}	SHA-256 файлу: {hash}
 	Read the objects it is given	Читати передані йому об’єкти
@@ -5718,6 +5762,12 @@ axis	Y Axis	Вісь Y
 @msg	command {name}: `label` must be 1-64 printable characters	команда {name}: `label` має містити 1-64 друковані символи
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	команда {name}: використайте id з 1-{MAX_COMMAND_ID} символів a-z 0-9 _, що починається з літери
 @msg	command {name}: {e}	команда {name}: {e}
+@msg	manifest: {e}	маніфест: {e}
+@msg	manifest: {e} at line {line} column {column}	маніфест: {e} (рядок {line}, стовпець {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` має бути списком команд, кожна з `id` і `label`
+@msg	command {name} must be an object with an `id` and a `label`	команда {name} має бути об'єктом з `id` і `label`
+@msg	missing field `{key}`	немає поля `{key}`
+@msg	duplicate field `{key}`	поле `{key}` вказано двічі
 @msg	only a filter or a live effect declares `commands`	`commands` оголошує лише фільтр або динамічний ефект
 @msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	модуль має не той SHA-256, що вказаний у `hash`: нічого не встановлено
@@ -6078,6 +6128,10 @@ anchor	Points:	Точки:
 @msg	features lists at most {max} tags	features містить не більше {max} тегів
 @msg	unknown OpenType feature `{t}`	невідома функція OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} має бути числом більше 0 і не більше {max}
+@msg	{label} must be at most {max} characters	{label} має містити не більше {max} символів
+@msg	{label} must be one character	{label} має бути одним символом
+@msg	at most {max} tab stops	не більше {max} позицій табуляції
+@msg	unknown align `{other}`	невідоме вирівнювання `{other}`
 @msg	no character style `{name}`	Стиль символів `{name}` не знайдено
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6240,6 +6294,8 @@ breakText	Glyphs	Гліфи
 	Delete the selected brushes?	Видалити вибрані пензлі?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Обведення використовують один або кілька з цих пензлів. Забрати пензлі з цих обведень і видалити пензлі?
 	Remove Strokes	Забрати обведення
+	Place Brush Art	Розмістити малюнок пензля
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	у `{name}` немає малюнка (він є лише в пензлів-розпорошень, художніх і візерункових пензлів)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Інструменти розміщення
 	Arrange in Grid…	Розмістити сіткою…
@@ -6435,6 +6491,11 @@ breakText	Glyphs	Гліфи
 @msg	only an exporter or an importer declares `extensions`	`extensions` оголошує лише модуль експорту або імпорту
 @msg	an importer always gets an import's budget: leave `budget` out	модуль імпорту завжди отримує бюджет імпорту: не вказуйте `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Копіювати відомості для усунення несправностей
+@msg	Copied the troubleshooting info	Відомості для усунення несправностей скопійовано
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Останній сеанс VectorCraft перестав відповідати перед закриттям. Довідка › Копіювати відомості для усунення несправностей копіює подробиці для звіту про помилку
+
 # Safe Mode
 	Safe Mode…	Безпечний режим…
 	Safe Mode	Безпечний режим
@@ -6455,6 +6516,7 @@ breakText	Glyphs	Гліфи
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Вирівняти за піксельною сіткою
+	Align New Objects to Pixel Grid	Вирівнювати нові об’єкти за піксельною сіткою
 	Not Aligned to Pixel Grid	Не вирівняні за піксельною сіткою
 @msg	only paths and compound paths can be aligned to the pixel grid	за піксельною сіткою можна вирівняти лише контури і складені контури
 @msg	side is left or right, not `{s}`	side — це left або right, а не `{s}`

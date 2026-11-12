@@ -17,6 +17,7 @@ mod colorize;
 mod compression;
 mod conic;
 mod dashalign;
+mod diamond;
 mod editing;
 mod encrypt;
 mod file_info;
