@@ -196,7 +196,7 @@ pub(super) fn name_without_device(name: &str) -> String {
 pub(crate) const ROW_KEYS: [&str; 7] = ["format", "scale", "ppi", "width", "height", "suffix", "folder"];
 
 /// The writable formats a format row can't name.
-pub(crate) const UNWRITTEN_FORMATS: [&str; 5] = ["template", "txt", "dxf", "emf", "wmf"];
+pub(crate) const UNWRITTEN_FORMATS: [&str; 6] = ["template", "txt", "dxf", "emf", "wmf", "hpgl"];
 
 /// One format row: what to write, at which size, with which suffix, into which sub-folder.
 struct Row {

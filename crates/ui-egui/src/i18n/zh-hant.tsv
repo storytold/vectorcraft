@@ -2195,6 +2195,7 @@ file-filter	Templates	範本
 @msg	{bpp}-bit bitmaps can't be read	無法讀取 {bpp} 位元點陣圖
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 檔案
 @msg	not an HP-GL file	不是 HP-GL 檔案
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 必須是由 1 到 255 個 #rrggbb 格式顏色組成的陣列
 @msg	its layers use {_1}, which aren't read yet	其圖層使用了 {_1}，目前尚無法讀取
 @msg	the EMF header is damaged	EMF 檔頭已損毀
 @msg	damaged	已損毀
@@ -3365,6 +3366,7 @@ file-filter	Templates	範本
 	Options:	選項：
 	Options…	選項…
 	Organic Fades	自然漸隱
+	Holographic	全像
 	or more spaces with a tab	個以上的空格取代為定位字元
 	Order:	順序：
 	Ordinals	序數字
@@ -5956,6 +5958,17 @@ axis	Y Axis	Y 軸
 	Charge Wave	充能波
 	Spark Trail	火花尾跡
 	Calligraphic Nibs	書法筆尖
+	Bristle Brushes	鬃毛筆刷集
+	Fine Liner	細勾線筆
+	Pointed Flat	尖頭平筆
+	Stubby Round	短圓筆
+	Dry Scrub	乾擦
+	Soft Dome	柔和圓頂
+	Filbert	榛形筆
+	Angled Round	斜圓筆
+	Angled Flat	斜平筆
+	Fan Blender	混色扇形筆
+	Grass Fan	畫草扇形筆
 	Pattern Borders	圖樣邊框
 	Scatter Shapes	散佈形狀
 	Save Brush Library…	儲存筆刷資料庫…

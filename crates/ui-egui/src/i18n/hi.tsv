@@ -691,6 +691,17 @@ antiAlias	Sharp	शार्प
 	Calligraphic Brush	कैलिग्राफिक ब्रश
 	Calligraphic Brush Options	कैलिग्राफिक ब्रश ऑप्शन्स
 	Calligraphic Nibs	कैलिग्राफिक निब्स
+	Bristle Brushes	ब्रिसल ब्रश संग्रह
+	Fine Liner	बारीक लाइनर
+	Pointed Flat	नुकीला फ्लैट
+	Stubby Round	छोटा गोल
+	Dry Scrub	सूखी रगड़
+	Soft Dome	मुलायम गुंबद
+	Filbert	फिल्बर्ट
+	Angled Round	तिरछा गोल
+	Angled Flat	तिरछा फ्लैट
+	Fan Blender	मिश्रण पंखा
+	Grass Fan	घास पंखा
 	Can't export “{name}”.	"{name}" निर्यात नहीं कर सकते।
 	Can't open “{name}”.	"{name}" नहीं खोल सकते हैं।
 	Can't print these settings: see the Summary	इन सेटिंग्स को मुद्रित नहीं कर सकते: सारांश देखें
@@ -3185,6 +3196,7 @@ antiAlias	Sharp	शार्प
 	Options:	ऑप्शन्स:
 	Options…	ऑप्शन्स…
 	Organic Fades	ऑर्गेनिक फ़ेड
+	Holographic	होलोग्राफ़िक
 	or more spaces with a tab	या एक टैब के साथ अधिक रिक्त स्थान
 	Orange	नारंगी
 	Order:	आदेश:
@@ -7143,6 +7155,7 @@ antiAlias	Sharp	शार्प
 @msg	not an action set file	एक एक्शन सेट फ़ाइल नहीं
 @msg	not an EMF or WMF file	नहीं एक EMF या WMF फ़ाइल
 @msg	not an HP-GL file	HP-GL फ़ाइल नहीं है
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` को 1 से 255 #rrggbb रंगों की ऐरे होना चाहिए
 @msg	not an export presets file (format `{_1}`)	नहीं निर्यात presets फ़ाइल (format `{_1}`)
 @msg	not an export presets file: {e}	एक निर्यात प्रीसेट फ़ाइल नहीं: {e}
 @msg	not an image VectorCraft reads (see document.formats)	यह ऐसी इमेज नहीं है जिसे VectorCraft पढ़ सके (document.formats देखें)

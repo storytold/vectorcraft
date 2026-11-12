@@ -741,10 +741,11 @@ fn group_art(n: &Node, expand: bool) -> Option<Node> {
     if surfaces.is_empty() {
         return None;
     }
-    // A classic surface whose gradient has transparent stops carries an opacity mask, and stays whole.
-    let plain = surfaces.iter().all(|(depths, s, _)| {
-        s.extras().mask.is_none() && matches!(&s.kind, NodeKind::Group { children, clip: false } if children.len() == depths.len())
-    });
+    let plain = surfaces.iter().all(|(depths, s, _)| matches!(&s.kind, NodeKind::Group { children, clip: false } if children.len() == depths.len()));
+    // A classic surface whose gradient has transparent stops carries an opacity mask: its faces go
+    // in runs, as a transparent member's do, and each run carries the mask.
+    let masks: Vec<Option<Box<vectorcraft_doc::OpacityMask>>> = surfaces.iter().map(|(_, s, _)| s.extras().mask.clone()).collect();
+    let opaque = opaque && masks.iter().all(Option::is_none);
     let children = if !plain {
         scoped(n.id, surfaces.into_iter().map(|(_, s, scopes)| (scopes, Arc::new(s))).collect(), 0)
     } else {
@@ -786,7 +787,8 @@ fn group_art(n: &Node, expand: bool) -> Option<Node> {
                     runs.push(Run { member: None, scopes, bounds: Rect::ZERO, faces: vec![face], cover: vec![], opacity, blend });
                     continue;
                 };
-                if opacity >= 1.0 && blend == Default::default() && scopes.is_empty() {
+                let masked = masks.get(member).is_some_and(Option::is_some);
+                if opacity >= 1.0 && blend == Default::default() && scopes.is_empty() && !masked {
                     runs.push(Run { member: None, scopes, bounds: cover.bounds, faces: vec![face], cover: vec![cover], opacity, blend });
                     continue;
                 }
@@ -822,6 +824,9 @@ fn group_art(n: &Node, expand: bool) -> Option<Node> {
                 let mut group = Node::group(n.id, r.faces);
                 group.opacity = r.opacity;
                 group.blend = r.blend;
+                if let Some(mask) = r.member.and_then(|m| masks.get(m)).cloned().flatten() {
+                    group.extras_mut().mask = Some(mask);
+                }
                 Some((r.scopes, Arc::new(group)))
             });
             scoped(n.id, runs.collect(), 0)
