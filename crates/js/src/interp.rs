@@ -2816,7 +2816,9 @@ impl Interp {
                 | (Value::Bool(_), Value::Bool(_))
                 | (Value::Object(_), Value::Object(_)) => return Ok(strict_eq(&x, &y)),
                 (Value::Number(n), Value::String(s)) | (Value::String(s), Value::Number(n)) => {
-                    return Ok(*n == string_to_number(&flat_charged(self, s)?));
+                    // Rooted, so what the string holds is still counted while its copy is reserved.
+                    let units = self.rooted(&[x.clone(), y.clone()], |i| flat_charged(i, s))?;
+                    return Ok(*n == string_to_number(&units));
                 }
                 (Value::Bool(v), _) => x = Value::Number(f64::from(u8::from(*v))),
                 (_, Value::Bool(v)) => y = Value::Number(f64::from(u8::from(*v))),

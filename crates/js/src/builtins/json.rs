@@ -474,7 +474,8 @@ fn settings(interp: &mut Interp, replacer: &Value, space: &Value) -> JsResult<Se
             let n = to_integer(interp, &space)?.clamp(0.0, 10.0) as usize;
             s.gap = vec![u16::from(b' '); n];
         }
-        Value::String(t) => s.gap = flat_charged(interp, &t)?.iter().take(10).copied().collect(),
+        // Rooted, so what the string holds is still counted while its copy is reserved.
+        Value::String(t) => s.gap = interp.rooted(&[Value::String(t.clone())], |i| flat_charged(i, &t))?.iter().take(10).copied().collect(),
         _ => {}
     }
     Ok(s)

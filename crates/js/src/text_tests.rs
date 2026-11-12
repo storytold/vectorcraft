@@ -361,13 +361,18 @@ fn a_converted_rope_counts_what_it_holds_while_its_copy_is_made() {
     let build = "var s = 'x'; for (var i = 0; i < 18; i++) s = s + s; function f(c) { return s + c; } \
                  function mk() { var a = f('a'); a[0]; return a + 'b'; }";
     let limits = Limits { heap_bytes: 4 * 262_146, ..Limits::default() };
-    let not_stopped: Vec<_> = ["+({ valueOf: mk })", "({})[{ toString: mk }]"]
-        .into_iter()
-        .filter(|read| {
-            let result = Realm::with_options(Options::default(), limits.clone()).run(&format!("{build} {read}; 0"));
-            !matches!(result, Err(ref e) if e.kind == RunErrorKind::Limit(LimitKind::Heap))
-        })
-        .collect();
+    let not_stopped: Vec<_> = [
+        "+({ valueOf: mk })",
+        "({})[{ toString: mk }]",
+        "({ valueOf: mk }) == 1",
+        "JSON.stringify(0, null, (function () { var o = new String(''); o.toString = mk; return o; })())",
+    ]
+    .into_iter()
+    .filter(|read| {
+        let result = Realm::with_options(Options::default(), limits.clone()).run(&format!("{build} {read}; 0"));
+        !matches!(result, Err(ref e) if e.kind == RunErrorKind::Limit(LimitKind::Heap))
+    })
+    .collect();
     assert!(not_stopped.is_empty(), "not stopped by the heap limit: {not_stopped:?}");
 }
 
