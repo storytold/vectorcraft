@@ -263,6 +263,21 @@ fn a_library_saved_with_another_platforms_path_is_hidden() {
     assert_eq!(hiding.hidden, [(r"loaded/C:\Users\someone\b.svg".to_string(), "loaded/b.svg".to_string())], "{hiding:?}");
 }
 
+/// Another platform's absolute path is outside the read root, also when the working folder is inside
+/// it: a request that sends one sees it by its file name.
+#[test]
+fn another_platforms_absolute_path_is_unreadable() {
+    let here = std::env::current_dir().unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&here], &[]).unwrap();
+    let path = r"C:\Users\someone\private.svg";
+    let mut sent = Vec::new();
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        assert!(!super::readable(path) && super::unreadable_absolute(path));
+        super::sent_paths(&json!({"list": [path]}), &mut sent);
+    });
+    assert_eq!(sent, [(format!("loaded/{path}"), "loaded/private.svg".to_string())]);
+}
+
 /// A hidden relative path is hidden where it stands alone or after `./`, and stays where it ends a
 /// longer path.
 #[test]
