@@ -694,3 +694,241 @@
 	Width and Height	רוחב וגובה
 	Width Profile	פרופיל רוחב
 	Width Profiles	פרופילי רוחב
+
+# Round 8: document, print, export, package, links and empty states.
+	Document	מסמך
+	Document Info	מידע על המסמך
+	Document Ink Options	אפשרויות צבעי דפוס במסמך
+	Document JSON	JSON של המסמך
+	Document profile	פרופיל המסמך
+	Document Raster Effects Settings	הגדרות אפקטים רסטריים במסמך
+	Document Raster Effects Settings Dialog	חלונית הגדרות אפקטים רסטריים במסמך
+	Document Raster Effects Settings…	הגדרות אפקטים רסטריים במסמך…
+	Document Setup	הגדרת מסמך
+	Document Swatches	דוגמיות צבע במסמך
+	Document Title:	כותרת המסמך:
+	Edit Artboards	עריכת משטחי יצירה
+	Edit Clipping Path	עריכת נתיב חיתוך
+	Edit Color Group	עריכת קבוצת צבעים
+	Edit Contents	עריכת תוכן
+	Edit Envelope	עריכת מעטפת
+	Edit Gradient	עריכת מעבר צבע
+	Edit Opacity Mask	עריכת מסכת אטימות
+	Edit or Apply Color Group	עריכה או החלה של קבוצת צבעים
+	Edit or Apply Color Group…	עריכה או החלה של קבוצת צבעים…
+	Edit Original	עריכת המקור
+	Edit Pattern	עריכת דוגמה
+	Edit Print Preset	עריכת ערכת הגדרות הדפסה
+	Edit Selection	עריכת הבחירה
+	Edit Selection…	עריכת הבחירה…
+	Edit Symbol	עריכת סמל
+	Edit Text	עריכת טקסט
+	Edit Theme	עריכת ערכת נושא
+	Edit theme	עריכת ערכת נושא
+	Edit Toolbar	עריכת סרגל הכלים
+	Edit Views	עריכת תצוגות
+	Edit Views…	עריכת תצוגות…
+	Edit…	עריכה…
+	Embed	הטמעה
+	Embed Fonts (for other applications)	הטמעת גופנים (ליישומים אחרים)
+	Embed Fonts (Glyphs Used)	הטמעת גופנים (גליפים בשימוש)
+	Embed ICC Profile	הטמעת פרופיל ICC
+	Embed Image	הטמעת תמונה
+	Embed Image(s)	הטמעת תמונות
+	Embedded	מוטמע
+	Embedded Image	תמונה מוטמעת
+	Error	שגיאה
+	Export All…	ייצוא הכול…
+	Export Artboard	ייצוא משטח יצירה
+	Export Preset:	ערכת הגדרות ייצוא:
+	Export Presets	ערכות הגדרות ייצוא
+	Save Export Preset	שמירת ערכת הגדרות ייצוא
+	Import Export Presets	ייבוא ערכות הגדרות ייצוא
+	Import Preset…	ייבוא ערכת הגדרות…
+	Export Layer	ייצוא שכבה
+	Export Selection	ייצוא הבחירה
+	Export Asset	ייצוא נכס
+	Export Assets	ייצוא נכסים
+	Export 3D Object	ייצוא אובייקט תלת־ממדי (3D)
+	Export 3D Assets	ייצוא נכסים תלת־ממדיים (3D)
+	Export CSS	ייצוא CSS
+	Export CSS…	ייצוא CSS…
+	Export Document	ייצוא מסמך
+	Export DXF	ייצוא DXF
+	Export EPS	ייצוא EPS
+	Export for Screens	ייצוא למסכים
+	Export for Screens Settings	הגדרות ייצוא למסכים
+	Export Keyboard Shortcuts…	ייצוא קיצורי מקשים…
+	Export Keyboard Shortcuts as Text…	ייצוא קיצורי מקשים כטקסט…
+	Export Text…	ייצוא טקסט…
+	Export Option	אפשרות ייצוא
+	Export PDF	ייצוא PDF
+	Export PDF Presets	ייצוא ערכות הגדרות PDF
+	Export Print Presets	ייצוא ערכות הדפסה
+	Export Selected Art Only	ייצוא היצירה שנבחרה בלבד
+	Export Selected CSS…	ייצוא CSS שנבחר…
+	Export Settings	הגדרות ייצוא
+	Export the selected assets (else all of them)	ייצוא הנכסים שנבחרו (ואם לא נבחרו — כולם)
+	Export to:	ייצוא אל:
+	Export {count} Selected	ייצוא {count} פריטים שנבחרו
+	Export:	ייצוא:
+	Exported {path}	יוצא אל {path}
+	Exported {what}	יוצא: {what}
+	File Dimensions	ממדי הקובץ
+	File Format:	תבנית קובץ:
+	File Formats	תבניות קבצים
+	File Handling	טיפול בקבצים
+	File Info	מידע על הקובץ
+	File Info Dialog	חלונית מידע על הקובץ
+	Files	קבצים
+	Guides	קווי עזר
+	Guides & Grid	קווי עזר ורשת
+	Import Data…	ייבוא נתונים…
+	Import Keyboard Shortcuts…	ייבוא קיצורי מקשים…
+	Import PDF Presets	ייבוא ערכות הגדרות PDF
+	Import Print Presets	ייבוא ערכות הגדרות הדפסה
+	Import…	ייבוא…
+	Info	מידע
+	Imported {what}: {}	יובא {what}: {}
+	Link	קישור
+	Link Info	מידע על קישור
+	Link Opacity Mask	קישור מסכת אטימות
+	Link the mask	קישור המסכה
+	Linked	מקושר
+	Linked File	קובץ מקושר
+	Linked File Not Found	לא נמצא הקובץ המקושר
+	Links	קישורים
+	Missing	חסר
+	Missing: {path}	חסר: {path}
+	New	חדש
+	New Artboard	משטח יצירה חדש
+	New Brush…	מברשת חדשה…
+	New Brush	מברשת חדשה
+	New Character Style	סגנון תו חדש
+	New Character Style…	סגנון תו חדש…
+	New Color Group	קבוצת צבעים חדשה
+	New Color Group…	קבוצת צבעים חדשה…
+	New Document Presets	ערכות מסמך חדשות
+	New file	קובץ חדש
+	New Graphic Style	סגנון גרפי חדש
+	New Graphic Style…	סגנון גרפי חדש…
+	New Artboard Options…	אפשרויות משטח יצירה חדש…
+	New Layer Options…	אפשרויות שכבה חדשה…
+	New Layer…	שכבה חדשה…
+	New Paragraph Style	סגנון פסקה חדש
+	New Paragraph Style…	סגנון פסקה חדש…
+	New Print Preset	ערכת הדפסה חדשה
+	New Sublayer…	שכבת משנה חדשה…
+	New Swatch	דוגמית צבע חדשה
+	New Swatch…	דוגמית צבע חדשה…
+	New Symbol	סמל חדש
+	New Symbol…	סמל חדש…
+	New View	תצוגה חדשה
+	New View…	תצוגה חדשה…
+	New Window	חלון חדש
+	New Workspace	סביבת עבודה חדשה
+	New Workspace…	סביבת עבודה חדשה…
+	New Toolbar…	סרגל כלים חדש…
+	No assets	אין נכסים
+	No brushes	אין מברשות
+	No CSS	אין CSS
+	No document	אין מסמך
+	No Document	אין מסמך
+	No document open	אין מסמך פתוח
+	No document open.	אין מסמך פתוח.
+	No fonts are available.	אין גופנים זמינים.
+	No gradient swatches	אין דוגמיות של מעברי צבע
+	No graphic styles	אין סגנונות גרפיים
+	No images	אין תמונות
+	No matches.	לא נמצאו התאמות.
+	No matching fonts	לא נמצאו גופנים תואמים
+	No options	אין אפשרויות
+	No printer settings to open here	אין כאן הגדרות מדפסת לפתיחה
+	No saved themes	אין ערכות נושא שמורות
+	No Selection	אין בחירה
+	No selection	אין בחירה
+	No symbols in this document	אין סמלים במסמך הזה
+	No text selected	לא נבחר טקסט
+	Object Name	שם האובייקט
+	Object Properties	מאפייני האובייקט
+	Objects	אובייקטים
+	Open	פתיחה
+	Open Document	פתיחת מסמך
+	Open Documents As Tabs	פתיחת מסמכים כלשוניות
+	Open Graphic Style Library	פתיחת ספריית סגנונות גרפיים
+	Open Location after Export	פתיחת המיקום לאחר הייצוא
+	Open Paths	פתיחת נתיבים
+	Open Swatch Library	פתיחת ספריית דוגמיות צבע
+	Open the URL in the web browser	פתיחת כתובת URL בדפדפן
+	Package	אריזה
+	Package collects a saved document with its linked files and fonts.	אריזה מרכזת מסמך שמור עם קבצים מקושרים וגופנים.
+	Package created	האריזה נוצרה
+	Page	עמוד
+	Page information	מידע על העמוד
+	Page Isolated Blending	מיזוג מבודד בעמוד
+	Page Knockout Group	קבוצת חיתוך צבע בעמוד
+	Preferences	העדפות
+	Preferences…	העדפות…
+	Preview	תצוגה מקדימה
+	Preview All Layers	תצוגה מקדימה של כל השכבות
+	Preview in Browser	תצוגה מקדימה בדפדפן
+	Preview the document as it is now	תצוגה מקדימה של המסמך במצבו הנוכחי
+	Print	הדפסה
+	Print as Bitmap	הדפסה כתמונת מפת סיביות
+	Print Layers:	הדפסת שכבות:
+	Print Preset	ערכת הגדרות הדפסה
+	Print Preset:	ערכת הגדרות הדפסה:
+	Print Presets	ערכות הגדרות הדפסה
+	Print presets	ערכות הגדרות הדפסה
+	Print Presets…	ערכות הגדרות הדפסה…
+	Print Preview	תצוגה מקדימה להדפסה
+	Print Setup	הגדרת הדפסה
+	Print Tiling	חלוקה לאריחי הדפסה
+	Print Tiling Pages	עמודי אריחי הדפסה
+	Print Tiling Tool	כלי חלוקה לאריחי הדפסה
+	Printer	מדפסת
+	Printer mark type:	סוג סימני מדפסת:
+	Printer profile:	פרופיל מדפסת:
+	Printer Setup…	הגדרות מדפסת…
+	Printer:	מדפסת:
+	Printers	מדפסות
+	Printing / Exporting	הדפסה / ייצוא
+	Reflect	שיקוף
+	Reflect Horizontal	שיקוף אופקי
+	Reflect Tool	כלי שיקוף
+	Reflect X	שיקוף X
+	Reflect Y	שיקוף Y
+	Reflect…	שיקוף…
+	Missing Fonts	גופנים חסרים
+	Missing Fonts Dialog	חלונית גופנים חסרים
+	Missing Links from This Folder	קישורים חסרים מהתיקייה הזאת
+	Replace	החלפה
+	Replace:	החלפה:
+	Replace Font	החלפת גופן
+	Replace Symbol	החלפת סמל
+	Replace With Font	החלפה בגופן
+	Replace With Font From	החלפה בגופן מתוך
+	Replace…	החלפה…
+	Rotate	סיבוב
+	Rotate 90° CW	סיבוב 90° בכיוון השעון
+	Rotate Tool	כלי סיבוב
+	Rotate View Tool	כלי סיבוב תצוגה
+	Rotate…	סיבוב…
+	Save changes to {name}	שמירת השינויים ב־{name}
+	Save Colors as Swatches	שמירת צבעים כדוגמיות
+	Save Document	שמירת מסמך
+	Save Document Info…	שמירת מידע על המסמך…
+	Save for Office Documents	שמירה למסמכי Office
+	Save for Web	שמירה לאינטרנט
+	Save for Web (Legacy)…	שמירה לאינטרנט (גרסה ישנה)…
+	Save for Web Presets	ערכות שמירה לאינטרנט
+	Save for Web Preview	תצוגה מקדימה לשמירה לאינטרנט
+	Save for Web Settings	הגדרות שמירה לאינטרנט
+	Save Graphic Style Library	שמירת ספריית סגנונות גרפיים
+	Save Graphic Style Library…	שמירת ספריית סגנונות גרפיים…
+	Save Grid as Preset	שמירת רשת כערכת הגדרות
+	Save Grid as Preset…	שמירת רשת כערכת הגדרות…
+	Save PDF Dialog	חלונית שמירת PDF
+	Save PDF Preset	שמירת ערכת הגדרות PDF
+	Save Print Preset	שמירת ערכת הגדרות הדפסה
+	Save Recovery Data	שמירת נתוני שחזור

@@ -3082,7 +3082,7 @@ fn hebrew_typography_font_path_and_alignment_are_translated() {
     let he = Lang::from_code("he").expect("Hebrew locale registered");
     let (rows, errors) = parse_entries(he.0.source);
     assert!(errors.is_empty(), "{errors:?}");
-    assert_eq!(rows.len(), 681, "current source catalog count");
+    assert_eq!(rows.len(), 917, "current source catalog count");
     for source in [
         "Font",
         "Font Family",
@@ -3116,4 +3116,47 @@ fn hebrew_typography_font_path_and_alignment_are_translated() {
     assert_eq!(tr(he, "Type on a Path"), "טקסט על נתיב");
     assert_eq!(tr(he, "Kerning"), "צימוד אותיות");
     assert_eq!(tr(he, "Untranslated customer font name"), "Untranslated customer font name");
+}
+
+/// File/package/export and print dialogs must expose Hebrew source labels
+/// without modifying file paths, user data, English commands or plural rules.
+#[test]
+fn hebrew_document_export_print_and_missing_states_are_translated() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert_eq!(rows.len(), 917, "Hebrew source catalog record count");
+    for source in [
+        "Document Setup",
+        "Export Selection",
+        "Export PDF",
+        "Export for Screens",
+        "Export Assets",
+        "Open Document",
+        "Linked File Not Found",
+        "No document open",
+        "No fonts are available.",
+        "Missing Fonts",
+        "Package",
+        "Package created",
+        "Print Preview",
+        "Print Presets…",
+        "Printer Setup…",
+        "Save Document",
+        "Save PDF Preset",
+        "Save Recovery Data",
+        "Open Location after Export",
+        "Embed ICC Profile",
+        "New Layer…",
+        "Replace Font",
+    ] {
+        let translated = tr(he, source);
+        assert_ne!(translated, source, "native source UI still English: {source:?}");
+        assert!(translated.chars().any(|c| ('\u{05d0}'..='\u{05ea}').contains(&c)));
+        assert_eq!(tr(Lang::EN, source), source, "source English changed");
+    }
+    assert_eq!(tr(he, "Linked File Not Found"), "לא נמצא הקובץ המקושר");
+    assert_eq!(tr(he, "Print Preview"), "תצוגה מקדימה להדפסה");
+    assert_eq!(tr(he, "Package created"), "האריזה נוצרה");
+    assert_eq!(tr(he, "User library file name"), "User library file name");
 }
