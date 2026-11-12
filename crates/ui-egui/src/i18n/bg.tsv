@@ -883,6 +883,17 @@ font-technology	Variable	Променливи
 	The selected character's font is not available.	Шрифтът на избрания знак не е наличен.
 	No alternates for the selected character.	Няма алтернативи за избрания знак.
 	Double-click to replace	Двойно щракване за замяна
+	Select one character with the Type tool first.	Първо изберете един знак с инструмента „Текст“.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} е глиф на {font}, а не на шрифта, с който е зададен избраният текст ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} принадлежи на {base} (U+{base_code}) {place}; избраният от вас знак е {sel} (U+{code}).
+	at the start of a word	в началото на дума
+	in the middle of a word	в средата на дума
+	at the end of a word	в края на дума
+	standing alone	когато стои сам
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} не е алтернатива на {sel} (U+{code}) там, където е в думата си.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Двойно щракване за вмъкване на {base} (U+{code}): представителната форма не се свързва, буквата се свързва.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Вмъкнато е {base} (U+{code}) вместо представителна форма: шрифтът я свързва със съседите според позицията.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Нито една OpenType функция не рисува този глиф тук, затова той заменя глифа на знака и може да не се свързва със съседните знаци.
 	Double-click to insert	Двойно щракване за вмъкване
 	Double-click to rename	Двойно щракване за преименуване
 	Double-click to target the contents	Двойно щракване за насочване към съдържанието
@@ -1928,6 +1939,8 @@ font-technology	Variable	Променливи
 	Metallic Gradients	Метални разградки
 	Meters	Метри
 	Method:	Метод:
+	Pad	Удължаване
+	Repeats	Повторения
 	Millimeters	Милиметри
 	Minify	Минимизиране на код
 	Minimal	Минимално
@@ -3329,6 +3342,9 @@ digits	Malayalam	Малаялам
 	Split Path	Разделяне на път
 	spot	петно
 	Spot Color	Спот цвят
+	Spot Color Objects	Обекти със спот цветове
+	Pattern Objects	Обекти с мостри
+	Gradient Objects	Обекти с градиенти
 	Spot Colors	Спот цветове
 	Spot Colors…	Спот цветове…
 	Spread:	Разпространение:
@@ -4251,6 +4267,7 @@ axis	Both	И двете
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не е цвят като "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: най-много {MAX_TABLE} цвята
 @msg	command `{0}` is not available right now: {1}	команда `{0}` не е налична в момента: {1}
+@msg	command `{id}` is not available right now	команда `{id}` не е налична в момента
 @msg	compound paths can only contain paths	съставните пътища могат да съдържат само пътища
 @msg	compressed (RLE) bitmaps can't be read yet	компресираните (RLE) битови карти все още не могат да бъдат четени
 @msg	damaged	повреден
@@ -6688,4 +6705,9 @@ breakText	Glyphs	Глифи
 	Stencil Bridges…	Мостчета на шаблона…
 	Stencil Bridges	Мостчета на шаблона
 	Shortest Crossing	Най-късо пресичане
+	Weed Box and Lines…	Рамка и линии за почистване…
+	Weed Box and Lines	Рамка и линии за почистване
+	Margin	Поле
+	Box	Рамка
+	Swatch	Образец
 	Direction	Посока

@@ -233,7 +233,7 @@ fn a_saved_preset_with_values_out_of_range_reads_in_range() {
         saved,
         [
             (1.0, 1.0, 1.0, 0.0, vec![0.0, 0.0, 0.0, 9.0]),
-            (163830.0, 163830.0, 1.0, 1.0e5, vec![72.0, 72.0, 72.0, 0.0]),
+            (3_999_856.0, 200000.0, 1.0, 1.0e5, vec![72.0, 72.0, 72.0, 0.0]),
             (10.0, 10.0, 1000.0, 0.0, vec![0.0; 4]),
         ]
     );
@@ -242,12 +242,55 @@ fn a_saved_preset_with_values_out_of_range_reads_in_range() {
     s.execute("file.new", &json!({"preset": "Low"})).unwrap();
     assert_eq!((boards(&s), s.doc().unwrap().doc.setup.bleed), (vec![Rect::new(0.0, 0.0, 1.0, 1.0)], [0.0, 0.0, 0.0, 9.0]));
     s.execute("file.new", &json!({"preset": "High"})).unwrap();
-    assert_eq!((boards(&s), s.doc().unwrap().doc.setup.bleed), (vec![Rect::new(0.0, 0.0, 163830.0, 163830.0)], [72.0, 72.0, 72.0, 0.0]));
+    assert_eq!((boards(&s), s.doc().unwrap().doc.setup.bleed), (vec![Rect::new(0.0, 0.0, 3_999_856.0, 200000.0)], [72.0, 72.0, 72.0, 0.0]));
     s.execute("file.new", &json!({"preset": "Many"})).unwrap();
     assert_eq!(boards(&s).len(), 1000);
     let custom = presets(&mut s, "Recent").into_iter().find(|p| p["name"] == "Custom").unwrap();
     s.execute("file.new", &custom).unwrap();
     assert_eq!(boards(&s).iter().map(|r| r.x0).collect::<Vec<_>>(), [0.0, 100.0, 200.0], "side by side, not overlapping");
+}
+
+/// `file.new` and `artboard.new` take the same largest artboard side (the canvas less the largest
+/// bleed on both sides) and refuse a side just past it, or of 0 or less, with an error that names
+/// the limit in points and, when the document's units aren't points, in those units too.
+#[test]
+fn file_new_and_artboard_new_take_the_same_largest_side() {
+    let max = 3_999_856.0;
+    let in_meters = "at most 3999856 pt (1411.0603 m)";
+    let s = new_doc(json!({"width": max, "height": 170078}));
+    assert_eq!(boards(&s), [Rect::new(0.0, 0.0, max, 170078.0)]);
+    let mut s = Session::new();
+    let err = s.execute("file.new", &json!({"width": max + 1.0, "height": 100})).unwrap_err().to_string();
+    assert!(err.contains("width and height must be more than 0 and at most 3999856 pt") && !err.contains('('), "{err}");
+    let err = s.execute("file.new", &json!({"width": 100, "height": "1412 m", "units": "Meters"})).unwrap_err().to_string();
+    assert!(err.contains(in_meters), "{err}");
+    // The value in other units is rounded down, so it is one file.new takes.
+    let err = s.execute("file.new", &json!({"width": 100, "height": "56000 in", "units": "Inches"})).unwrap_err().to_string();
+    assert!(err.contains("at most 3999856 pt (55553.5555 in)"), "{err}");
+    assert!(s.execute("file.new", &json!({"width": 0, "height": 100})).is_err());
+    assert!(s.doc().is_err(), "no document was made");
+    s.execute("file.new", &json!({"width": "55553.5555 in", "height": 100, "units": "Inches"})).unwrap();
+
+    let mut s = new_doc(json!({"units": "Meters"}));
+    s.execute("artboard.new", &json!({"x": -2_000_000, "y": 0, "width": max, "height": 100})).unwrap();
+    assert_eq!(boards(&s)[1], Rect::new(-2_000_000.0, 0.0, max - 2_000_000.0, 100.0));
+    for p in [
+        json!({"x": -2_000_000, "y": 0, "width": max + 1.0, "height": 100}),
+        json!({"x": 0, "y": 2000, "width": 100, "height": max + 1.0}),
+        json!({"width": 0}),
+        json!({"height": -1}),
+    ] {
+        let err = s.execute("artboard.new", &p).unwrap_err().to_string();
+        assert!(err.contains(in_meters), "{p}: {err}");
+    }
+    assert_eq!(boards(&s).len(), 2, "the refused artboards were not added");
+    // A size taken from a wider artboard is refused too.
+    s.execute("artboard.setProps", &json!({"index": 1, "x": -2_000_000, "y": 0, "width": max + 1.0, "height": 100})).unwrap();
+    for p in [json!({}), json!({"x": 0, "y": 5000, "height": 100}), json!({"side": "bottom", "beside": 1})] {
+        let err = s.execute("artboard.new", &p).unwrap_err().to_string();
+        assert!(err.contains(in_meters), "{p}: {err}");
+    }
+    assert_eq!(boards(&s).len(), 2);
 }
 
 #[test]

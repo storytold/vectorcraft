@@ -1292,6 +1292,17 @@ antiAlias	Sharp	Nítid
 	The selected character's font is not available.	El tipus de lletra del caràcter seleccionat no està disponible.
 	No alternates for the selected character.	No hi ha alternatives per al caràcter seleccionat.
 	Double-click to replace	Feu doble clic per substituir
+	Select one character with the Type tool first.	Selecciona primer un caràcter amb l’eina de text.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} és un glif de {font}, no del tipus de lletra amb què està escrit el text seleccionat ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pertany a {base} (U+{base_code}) {place}; la teva selecció és {sel} (U+{code}).
+	at the start of a word	a l’inici d’una paraula
+	in the middle of a word	al mig d’una paraula
+	at the end of a word	al final d’una paraula
+	standing alone	quan va sol
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} no és una alternativa de {sel} (U+{code}) tal com es troba a la seva paraula.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Feu doble clic per inserir {base} (U+{code}): una forma de presentació no s’uneix, la lletra sí.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	S’ha inserit {base} (U+{code}) en lloc d’una forma de presentació: el tipus de lletra l’uneix als veïns segons la posició.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Cap funció OpenType dibuixa aquest glif aquí, de manera que substitueix el glif del caràcter i pot no unir-se als caràcters veïns.
 	Double-click to insert	Feu doble clic per inserir
 	Double-click to rename	Feu doble clic per canviar el nom
 	Double-click to target the contents	Feu doble clic per apuntar al contingut
@@ -2535,6 +2546,8 @@ digits	Malayalam	Malaiàlam
 	Meters	Metres
 	Method	Mètode
 	Method:	Mètode:
+	Pad	Allarga
+	Repeats	Repeticions
 	Mezzotint	Mezzotinta
 	Mezzotint…	Mezzotinta…
 	Millimeters	Mil·límetres
@@ -4318,6 +4331,9 @@ digits	Malayalam	Malaiàlam
 	Sponge…	Esponja…
 	spot	directe
 	Spot Color	Color directe
+	Spot Color Objects	Objectes amb colors directes
+	Pattern Objects	Objectes amb motius
+	Gradient Objects	Objectes amb degradats
 	Spot Colors	Colors directes
 	Spot Colors (0)	Colors directes (0)
 	Spot Colors…	Colors directes…
@@ -5110,6 +5126,9 @@ digits	Malayalam	Malaiàlam
 @msg	`colors` must be an array of colors, not {v}	`colors` ha de ser una matriu de colors, no {v}
 @msg	`library` is a library id or name (see {list})	`library` és un identificador o un nom de biblioteca (vegeu {list})
 @msg	`method` must be classic or perceptual	`method` ha de ser classic o perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` ha de ser pad, repeat o reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` ha de ser un nombre enter d’1 a {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` s’aplica als degradats lineals, radials, cònics i de rombe
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` i `maxAnchors` han de ser nombres enters
 @msg	`mode` applies to freeform gradients	`mode` s’aplica als degradats de forma lliure
 @msg	a negative `aspect` applies to conic gradients	un `aspect` negatiu s’aplica als degradats cònics
@@ -5313,6 +5332,7 @@ digits	Malayalam	Malaiàlam
 @msg	column must be true or a number from 1	column ha de ser true o un nombre a partir d’1
 @msg	Combine Slices: the slices have no bounds	Combina els talls: els talls no tenen límits
 @msg	command `{0}` is not available right now: {1}	l’ordre `{0}` no està disponible ara mateix: {1}
+@msg	command `{id}` is not available right now	l’ordre `{id}` no està disponible ara mateix
 @msg	compound paths can only contain paths	els traçats compostos només poden contenir traçats
 @msg	compressed (RLE) bitmaps can't be read yet	encara no es poden llegir els mapes de bits comprimits (RLE)
 @msg	control must be fillStroke, coloring, drawMode or screenMode	control ha de ser fillStroke, coloring, drawMode o screenMode
@@ -6039,6 +6059,8 @@ digits	Malayalam	Malaiàlam
 @msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	aquest fitxer PostScript no es pot llegir ({why}): desa’l com a PDF o SVG a l’aplicació que l’ha creat
 @msg	This shortcut file is in a form VectorCraft can't read.	Aquest fitxer de dreceres té un format que VectorCraft no pot llegir.
 @msg	this system has no screen color sampler	aquest sistema no té cap mostrejador de color de pantalla
+@msg	the screen color sampler did not answer	el mostrejador de color de pantalla no ha respost
+@msg	the screen color sampler failed	el mostrejador de color de pantalla ha fallat
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	aquesta traça crearia més de {max} punts d’ancoratge, més dels que el document pot mostrar amb fluïdesa: augmenta el Soroll, redueix Traçats o Colors, o tria un preajust de fidelitat més baixa
 @msg	thumbnail: no page {n} (the file has 1)	miniatura: no hi ha la pàgina {n} (el fitxer en té 1)
 @msg	tintReduction must be from 0 to 100 %	tintReduction ha de ser d’entre 0 i 100 %
@@ -6992,3 +7014,8 @@ breakText	Glyphs	Glifs
 @msg	Some islands could not be joined to the area around the art	Algunes illes no s’han pogut unir a l’àrea que envolta la il·lustració
 @msg	`width` must be from {lo} to {hi} pt	`width` ha d’estar entre {lo} i {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` ha de ser un nombre enter d’1 a {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Caixa i línies de pelat…
+	Weed Box and Lines	Caixa i línies de pelat
+	Margin	Marge
+	Box	Caixa
+	Swatch	Mostra

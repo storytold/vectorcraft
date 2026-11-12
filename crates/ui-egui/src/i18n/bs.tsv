@@ -1682,6 +1682,17 @@ digits	Malayalam	Malajalam
 	The selected character's font is not available.	Font odabranog znaka nije dostupan.
 	No alternates for the selected character.	Nema alternativa za odabrani znak.
 	Double-click to replace	Dvostruki klik za zamjenu
+	Select one character with the Type tool first.	Prvo odaberite jedan znak alatom za tekst.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} je glif fonta {font}, a ne fonta kojim je postavljen odabrani tekst ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pripada znaku {base} (U+{base_code}) {place}; vaš odabir je {sel} (U+{code}).
+	at the start of a word	na početku riječi
+	in the middle of a word	usred riječi
+	at the end of a word	na kraju riječi
+	standing alone	kad stoji sam
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} nije alternativa znaku {sel} (U+{code}) onako kako stoji u svojoj riječi.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dvostruki klik za umetanje znaka {base} (U+{code}): oblik za prikaz se ne spaja, slovo se spaja.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Umetnut je znak {base} (U+{code}) umjesto oblika za prikaz: font ga spaja sa susjedima prema položaju.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Nijedna OpenType funkcija ne crta ovaj glif ovdje, pa on zamjenjuje glif znaka i možda se neće spajati sa susjednim znakovima.
 	Double-click to insert	Dvostruki klik za umetanje
 	Entire Font	Cijeli font
 	glyph {id}	glif {id}
@@ -1840,6 +1851,8 @@ digits	Malayalam	Malajalam
 	Save Image Trace Preset	Sačuvaj unaprijed postavljeno praćenje slike
 	Delete Image Trace Preset	Izbriši unaprijed postavljeno praćenje slike
 	Method:	Metoda:
+	Pad	Produži
+	Repeats	Broj ponavljanja
 	Mode:	Način:
 	Noise	Šum
 	Create:	Kreiraj:
@@ -3914,6 +3927,9 @@ theme	Appearance	Izgled
 	Select All Unused	Odaberi sve nekorišteno
 	Sort by Kind	Sortiraj po vrsti
 	Sort by Name	Sortiraj po nazivu
+	Spot Color Objects	Objekti sa spot bojama
+	Pattern Objects	Objekti s uzorcima
+	Gradient Objects	Objekti s gradijentima
 	Spot Colors	Spot boje
 	Spot Colors (0)	Spot boje (0)
 	Swatch Options	Opcije uzorka boje
@@ -4610,6 +4626,8 @@ imageTrace	Outline	Obris
 @msg	the Smooth slider is not open	klizač Izgladi nije otvoren
 @msg	the screen color sampler is already open	uzorkivač boja s ekrana je već otvoren
 @msg	this system has no screen color sampler	ovaj sistem nema uzorkivač boja s ekrana
+@msg	the screen color sampler did not answer	uzorkivač boja s ekrana nije odgovorio
+@msg	the screen color sampler failed	uzorkivač boja s ekrana nije uspio
 @msg	bad colour `{hex}` (#rrggbb)	loša boja `{hex}` (#rrggbb)
 @msg	bad page tree	loše stablo stranica
 @msg	bad shortcut	loša prečica
@@ -4639,6 +4657,7 @@ imageTrace	Outline	Obris
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` nije boja poput "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: najviše {MAX_TABLE} boja
 @msg	command `{0}` is not available right now: {1}	naredba `{0}` trenutno nije dostupna: {1}
+@msg	command `{id}` is not available right now	naredba `{id}` trenutno nije dostupna
 @msg	compound paths can only contain paths	složene putanje mogu sadržavati samo putanje
 @msg	compressed (RLE) bitmaps can't be read yet	komprimirane (RLE) bitmape se još ne mogu čitati
 @msg	damaged	oštećeno
@@ -6740,4 +6759,9 @@ shape	Open	Otvoren
 	Stencil Bridges…	Mostići šablona…
 	Stencil Bridges	Mostići šablona
 	Shortest Crossing	Najkraći prijelaz
+	Weed Box and Lines…	Okvir i linije za čišćenje…
+	Weed Box and Lines	Okvir i linije za čišćenje
+	Margin	Margina
+	Box	Okvir
+	Swatch	Uzorak boje
 	Direction	Smjer

@@ -415,13 +415,13 @@ impl<'a> Scene<'a> {
             field.display_grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect()
         } else {
             let geom = g.resolve(bounds);
-            let sample = g.gradient.sampler();
+            let (sample, spread) = (g.gradient.sampler(), g.gradient.spreader());
             let (cw, ch) = (area.width() / f64::from(cols), area.height() / f64::from(rows));
             (0..usize::from(rows) * usize::from(cols))
                 .flat_map(|i| {
                     let (x, y) = (i % usize::from(cols), i / usize::from(cols));
                     let p = Point::new(area.x0 + (x as f64 + 0.5) * cw, area.y0 + (y as f64 + 0.5) * ch);
-                    let t = geom.param_at(g.gradient.kind, p);
+                    let t = spread(geom.param_at(g.gradient.kind, p));
                     let t = if t.is_finite() { t.clamp(0.0, 1.0) } else { 0.0 };
                     let (c, a) = sample(t as f32);
                     c.to_rgba8(a)

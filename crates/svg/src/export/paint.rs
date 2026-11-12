@@ -277,7 +277,15 @@ impl Writer<'_> {
             // Object fills and strokes are four linear gradients or images (see `raster_paint`).
             self.warn("diamond gradients on characters are written as radial gradients");
         }
+        // A gradient that repeats or reflects: one run of its stops over its period, and
+        // `spreadMethod` to carry it on past both ends.
+        let spread = g.gradient.is_spread();
         let mut geom = g.resolve(bounds);
+        if spread {
+            // A conic is written as a linear gradient along its vector: its runs lie along it.
+            let written = if g.gradient.kind == GradientKind::Conic { GradientKind::Linear } else { g.gradient.kind };
+            geom = geom.period(written, g.gradient.repeat_count());
+        }
         geom.transform(self.xf, g.gradient.kind);
         if g.gradient.kind != GradientKind::Radial {
             // Only a radial gradient has a focal point (a plug-in's or a file's other kinds can
@@ -307,6 +315,11 @@ impl Writer<'_> {
                 "linear-gradient",
                 format!(" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\"", self.num(s.x), self.num(s.y), self.num(e.x), self.num(e.y)),
             ),
+        };
+        let attrs = match g.gradient.spread {
+            _ if !spread => attrs,
+            vectorcraft_color::GradientSpread::Reflect => format!("{attrs} spreadMethod=\"reflect\""),
+            _ => format!("{attrs} spreadMethod=\"repeat\""),
         };
         let stops: Vec<String> = g
             .gradient
@@ -562,10 +575,10 @@ impl Writer<'_> {
                     }
                 }
                 None => {
-                    let sample = g.gradient.sampler();
-                    for (pts, t) in g.resolve(bounds).conic_wedges(cover, CONIC_WEDGES, true) {
+                    let (sample, spread) = (g.gradient.sampler(), g.gradient.spreader());
+                    for (pts, t) in g.resolve(bounds).conic_wedges(cover, g.gradient.conic_wedge_count(CONIC_WEDGES), true) {
                         let d = self.path_d(&PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true)), self.xf);
-                        self.line(&format!("<path d=\"{d}\" fill=\"{}\"/>", sample(t as f32).0.to_hex()));
+                        self.line(&format!("<path d=\"{d}\" fill=\"{}\"/>", sample(spread(t) as f32).0.to_hex()));
                     }
                 }
             },

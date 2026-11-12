@@ -119,7 +119,8 @@ pub(super) fn map_node(n: &Node, w: &Warper) -> Node {
     {
         out.appearance.warp_linear_gradients(b, &|p| affine_near(w.f, p, w.eps));
     }
-    if let Some(m) = out.extras_if_any().and_then(|e| e.mask.as_mut()) {
+    // A linked opacity mask bends with the object it masks; an unlinked one stays where it is.
+    if let Some(m) = out.extras_if_any().and_then(|e| e.mask.as_mut()).filter(|m| m.linked) {
         m.art = Arc::new(map_node(&m.art, w));
     }
     match &mut out.kind {
