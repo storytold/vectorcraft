@@ -278,14 +278,25 @@ proptest! {
     fn cdr_mutated_drawings_render_and_export(
         version in prop::sample::select(vec![300u16, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300]),
         compress: bool,
+        features: bool,
         cut in 12usize..8192,
         edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
     ) {
-        let mut bytes = vectorcraft_cdr::synth::sample(version, compress && version >= 700);
+        // The feature sample adds a style table, a PowerClip and a lens to the shapes.
+        let compress = compress && version >= 700;
+        let mut bytes =
+            if features { vectorcraft_cdr::synth::feature_sample(version, compress) } else { vectorcraft_cdr::synth::sample(version, compress) };
         let n = bytes.len();
         for (at, b) in edits { bytes[at % n] = b; }
         bytes.truncate(cut);
         survive("CDR drawing", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "CDR drawing placement panicked: {:?}", r.err());
     }
 
     #[test]

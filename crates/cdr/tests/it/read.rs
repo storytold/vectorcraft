@@ -1246,6 +1246,27 @@ fn a_container_clips_the_group_it_names() {
     }
 }
 
+/// The feature sample, the seed of the importer's fuzz tests, reads its style table, PowerClip and
+/// lens in every version from 7 to 13, plain and compressed.
+#[test]
+fn the_feature_sample_reads_its_styles_powerclip_and_lens() {
+    for version in [700, 800, 900, 1000, 1100, 1200, 1300] {
+        for compress in [false, true] {
+            let d = read(&synth::feature_sample(version, compress), Limits::default()).unwrap_or_else(|e| panic!("{version}: {e}"));
+            let objects = &d.pages[0].layers[0].objects;
+            let [Object::Shape(styled), Object::Clip { objects: clipped, .. }, Object::Shape(_)] = objects.as_slice() else {
+                panic!("{version}: {objects:?}")
+            };
+            assert_eq!(styled.fill, Some(Color::Rgb([1.0, 0.0, 0.0])), "{version}");
+            assert!(styled.outline.as_ref().is_some_and(|o| o.dashes == [3.0, 1.0]), "{version}");
+            let s = shapes(clipped);
+            assert_eq!(s.len(), 2, "{version}");
+            assert!(s[1].outline.as_ref().is_some_and(|o| o.behind_fill), "{version}");
+            assert_eq!(d.warnings, vec![Warning::Lenses], "{version} {compress}");
+        }
+    }
+}
+
 /// A container whose group isn't there is damage, and one whose group holds a container naming
 /// it again is read once, with the limit warning; the containers stay as plain shapes.
 #[test]

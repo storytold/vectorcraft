@@ -588,6 +588,55 @@ pub fn container(id: u32) -> (u32, Vec<u8>) {
     (8005, [id, 1, 0, 1].iter().flat_map(|v| v.to_le_bytes()).collect())
 }
 
+/// A RIFF drawing of `version` (7 to 13) with a style table, a PowerClip and a lens: a rectangle
+/// that takes its fill and outline from its style, a container that clips two rectangles, one
+/// with an outline behind the fill, and a rectangle with a lens; compressed when `compress`.
+/// Before version 7, the [`sample`].
+pub fn feature_sample(version: u16, compress: bool) -> Vec<u8> {
+    if version < 700 {
+        return sample(version, false);
+    }
+    let v = V(version);
+    let black = color(2, [0, 0, 0, 100]);
+    let rect = |w: f64, extra: Vec<(u32, Vec<u8>)>, at: f64| {
+        let mut args = vec![(30, v.rect(w, w, 0.0))];
+        args.extend(extra);
+        object(v, 1, &args, Some([1.0, 0.0, 0.0, 1.0, at, at]))
+    };
+    let style = (200, 0x10u32.to_le_bytes().to_vec());
+    let clipped =
+        vec![rect(30.0, vec![style.clone()], 10.0), rect(30.0, vec![(10, 3u32.to_le_bytes().to_vec()), (20, 1u32.to_le_bytes().to_vec())], -10.0)];
+    let doc = list(
+        b"doc ",
+        vec![
+            mcfg(v, 612.0, 792.0),
+            list(b"filt", vec![chunk(b"fild", v.fill(1, &color(5, [0, 0, 255, 0])))]),
+            list(
+                b"otlt",
+                vec![
+                    chunk(b"outl", v.outline(2, Pen { line_type: 4, width: 2.0, cap: 1, join: 1 }, &black, &[3, 1])),
+                    chunk(b"outl", v.outline(3, Pen { line_type: 0x12, width: 4.0, cap: 0, join: 0 }, &black, &[])),
+                ],
+            ),
+            stlt(v, &[(0x100, 1)], &[(0x200, 2)], &[Style { id: 0x10, parent: 0, fill: 0x100, outline: 0x200 }], true),
+            clpt(vec![(7, clipped)]),
+        ],
+    );
+    let objects = vec![
+        rect(20.0, vec![style.clone()], 0.0),
+        rect(40.0, vec![style.clone(), container(7)], 50.0),
+        rect(20.0, vec![style, (8000, vec![1, 0, 0, 0])], -50.0),
+    ];
+    let page = page(false, vec![layer(v, [0, 0, 0, 0x98], "Art", objects)]);
+    let mut body = vec![chunk(b"vrsn", version.to_le_bytes().to_vec())];
+    if compress {
+        body.push(cmpr(&[doc, page]));
+    } else {
+        body.extend([doc, page]);
+    }
+    riff(version, &body)
+}
+
 /// A file of `version` holding `content` as the program of that version saves it: a RIFF file
 /// before 14, then a package (R25, R26).
 pub fn file_of(version: u16, content: Vec<Node>) -> Vec<u8> {
