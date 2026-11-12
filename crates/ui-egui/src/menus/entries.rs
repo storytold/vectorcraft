@@ -127,6 +127,71 @@ pub fn context_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
     out
 }
 
+/// A menu item that the Actions panel's Insert Menu Item… adds to an action as a step
+/// ([`insertable_items`]).
+#[derive(Clone, Debug, PartialEq)]
+pub struct InsertableItem {
+    /// The menu title and the submenus that hold the item, as the tree names them in English.
+    pub path: Vec<&'static str>,
+    /// The item's label in the tree, in English.
+    pub label: &'static str,
+    pub command: &'static str,
+    /// The item's params; `{}` for an item that has none.
+    pub params: Value,
+}
+
+/// The menus whose items are not added to actions: the application menu, File (documents and
+/// files), Window (panels and workspaces) and Help.
+const NOT_INSERTED_MENUS: [&str; 4] = ["VectorCraft", "File", "Window", "Help"];
+
+/// Whether the item labeled `label` in menu `title`, which runs command `id` with `p`, can be a step
+/// of an action. It can when it runs an engine command, which action playback runs as the menu
+/// does; its label does not end with "…", the mark of an item that asks for values first; it is not
+/// in a menu of [`NOT_INSERTED_MENUS`]; and it is not Undo, Redo, a Paste, an item that stands for a
+/// saved selection, a saved view or a recent font, a plug-in's item or an action's own command. Nor
+/// is it Object › Align, whose menu items add the Align To choice and the selection's key to their
+/// params when clicked ([`crate::panels::align::with_align_to`]), which playback does not.
+pub fn insertable(title: &str, label: &str, id: &str, p: &Value) -> bool {
+    use super::slots::{RECENT_FONT_IDS, SAVED_SELECTION_IDS, SAVED_VIEW_IDS};
+    vectorcraft_engine::find_command(id).is_some()
+        && !label.ends_with('…')
+        && !NOT_INSERTED_MENUS.contains(&title)
+        && !matches!(id, "edit.undo" | "edit.redo" | "command.batch" | "object.align")
+        && !id.starts_with("edit.paste")
+        && !id.starts_with("prefs.")
+        && !id.starts_with("action.")
+        && ![&RECENT_FONT_IDS[..], &SAVED_SELECTION_IDS[..], &SAVED_VIEW_IDS[..]].iter().any(|ids| ids.contains(&id))
+        && !super::labels::lists_plugin(id, p)
+}
+
+/// Every menu item that can be a step of an action ([`insertable`]), in menu order. An item that
+/// shows in two places is listed in both. `english_names` is as [`menu_tree_named`] takes it.
+pub fn insertable_items(english_names: bool) -> Vec<InsertableItem> {
+    fn walk(title: &'static str, path: &mut Vec<&'static str>, items: &[Item], out: &mut Vec<InsertableItem>) {
+        for it in items {
+            match it {
+                Item::Cmd(label, id, p) if insertable(title, label, id, p) => out.push(InsertableItem {
+                    path: path.clone(),
+                    label,
+                    command: id,
+                    params: if p.is_null() { serde_json::json!({}) } else { p.clone() },
+                }),
+                Item::Sub(label, children) => {
+                    path.push(label);
+                    walk(title, path, children, out);
+                    path.pop();
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut out = vec![];
+    for (title, items) in menu_tree_named(english_names) {
+        walk(title, &mut vec![title], &items, &mut out);
+    }
+    out
+}
+
 fn flatten(app: &VectorcraftApp, path: Vec<String>, items: &[Item], out: &mut Vec<MenuEntry>) {
     for it in items {
         match it {

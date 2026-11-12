@@ -5678,6 +5678,16 @@ axis	Y Axis	Y-Achse
 @msg	message must be text	message muss Text sein
 @msg	allowContinue must be true or false	allowContinue muss true oder false sein
 @msg	Batch cannot play an action with a stop	Die Stapelverarbeitung kann keine Aktion mit einem Stopp abspielen
+	Insert Menu Item…	Menübefehl einfügen…
+	Insert Menu Item	Menübefehl einfügen
+	Menu Item:	Menübefehl:
+	No menu item matches.	Kein Menübefehl passt.
+	Several menu items match. Choose one from the list.	Mehrere Menübefehle passen. Wählen Sie einen aus der Liste.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Befehle, die ein Dialogfeld öffnen, sowie Befehle der Menüs „Datei“, „Fenster“ und „Hilfe“ werden nicht aufgeführt.
+@msg	command must be text	command muss Text sein
+@msg	no menu item that can be inserted runs this command	kein einfügbarer Menübefehl führt diesen Befehl aus
+@msg	the action already has 10,000 steps	die Aktion hat bereits 10.000 Schritte
+@msg	the action set would be larger than 8 MiB	der Aktionssatz wäre größer als 8 MiB
 	Playback Options	Wiedergabeoptionen
 	Accelerated	Beschleunigt
 	Step by Step	Schrittweise

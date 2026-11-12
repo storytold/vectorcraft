@@ -5692,6 +5692,16 @@ axis	Y Axis	Вісь Y
 @msg	message must be text	message має бути текстом
 @msg	allowContinue must be true or false	allowContinue має бути true або false
 @msg	Batch cannot play an action with a stop	Пакет не може відтворити дію із зупинкою
+	Insert Menu Item…	Вставити пункт меню…
+	Insert Menu Item	Вставити пункт меню
+	Menu Item:	Пункт меню:
+	No menu item matches.	Немає відповідних пунктів меню.
+	Several menu items match. Choose one from the list.	Відповідає кілька пунктів меню. Виберіть один зі списку.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Пункти, що відкривають діалогове вікно, і пункти меню «Файл», «Вікно» та «Довідка» не показано.
+@msg	command must be text	command має бути текстом
+@msg	no menu item that can be inserted runs this command	жоден пункт меню, який можна вставити, не виконує цю команду
+@msg	the action already has 10,000 steps	дія вже має 10 000 кроків
+@msg	the action set would be larger than 8 MiB	набір дій став би більшим за 8 MiB
 	Playback Options	Параметри відтворення
 	Accelerated	Прискорено
 	Step by Step	Покроково
