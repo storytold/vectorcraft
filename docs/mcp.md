@@ -2575,8 +2575,9 @@ already walks Image Trace. Short agent entry points:
   locked or sits in a hidden or locked group or layer. Choosing another selection tool selects the instance whole again.
   `symbol.instance.reset {ids?}` drops the selected instances' changes (the Properties
   panel's Reset). Redefining the symbol (`symbol.update`) reshapes every instance and keeps each change whose path the
-  new art still has; `symbol.breakLink` bakes the changes into the expanded art; `symbol.edit` edits the symbol's own
-  art, and each edit there keeps the changes whose path the art still has; making the symbol static drops them, and
+  new art still has, less a fill or stroke the object now at that path does not draw (a change left empty is dropped);
+  `symbol.breakLink` bakes the changes into the expanded art; `symbol.edit` edits the symbol's own art, and each edit
+  there keeps the changes the same way; making the symbol static drops them, and
   so does `symbol.replace` with a different symbol (a replace with the instance's own symbol keeps them).
 
 ```json

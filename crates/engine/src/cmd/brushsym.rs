@@ -36,7 +36,7 @@ use brushes::{
     brush_apply, brush_delete, brush_duplicate, brush_freehand, brush_get, brush_list, brush_move, brush_new, brush_options, brush_remove,
     brush_selection_art, brush_set_current, brush_unused, expand_brush,
 };
-pub(crate) use dynamic::{edit_part, part_only, selected_part};
+pub(crate) use dynamic::{edit_part, fit_parts, part_only, selected_part};
 use dynamic::{symbol_instance_reset, symbol_instance_select_part, symbol_instance_set_appearance};
 use symbols::selected_instances;
 pub(crate) use symbols::{
