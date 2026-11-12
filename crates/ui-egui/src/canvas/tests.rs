@@ -4898,6 +4898,38 @@ fn a_selected_objects_on_path_group_shows_its_move_all_widget_when_it_has_room()
     assert_eq!(widgets(&mut app), 1, "one object");
 }
 
+/// A selected Objects on Path group shows a Select/Move widget on each object's attachment point
+/// with the Selection and Objects on Path tools, the chosen object's filled blue.
+#[test]
+fn a_selected_objects_on_path_group_shows_a_select_move_widget_per_object() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let line = id(app.session.execute("shape.line", &json!({"x1": 20, "y1": 200, "x2": 380, "y2": 200})).unwrap());
+    let a = id(app.session.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap());
+    let b = id(app.session.execute("shape.rectangle", &json!({"x": 80, "y": 40, "width": 20, "height": 20})).unwrap());
+    let c = id(app.session.execute("shape.rectangle", &json!({"x": 120, "y": 40, "width": 20, "height": 20})).unwrap());
+    app.run("select.set", json!({"ids": [a, b, c]})).unwrap();
+    app.session.execute("object.objectsOnPath.attach", &json!({"path": line})).unwrap();
+    let ctx = egui::Context::default();
+    let r = vectorcraft_tools::objects_on_path::MEMBER_RADIUS_PX;
+    let widgets = |app: &mut VectorcraftApp, fill: Color32| {
+        shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Circle(k) if k.radius == r && k.fill == fill)).count()
+    };
+    let (ring, chosen) = (Color32::TRANSPARENT, super::overlays::MEMBER_CHOSEN);
+    app.select_tool("selection");
+    assert_eq!((widgets(&mut app, ring), widgets(&mut app, chosen)), (3, 0));
+    app.run("object.objectsOnPath.selectMember", json!({"member": b})).unwrap();
+    assert_eq!((widgets(&mut app, ring), widgets(&mut app, chosen)), (2, 1), "the chosen one is filled");
+    app.select_tool("objectsOnPath");
+    assert_eq!((widgets(&mut app, ring), widgets(&mut app, chosen)), (2, 1));
+    app.select_tool("directSelection");
+    assert_eq!(widgets(&mut app, ring) + widgets(&mut app, chosen), 0);
+    app.select_tool("selection");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(widgets(&mut app, ring) + widgets(&mut app, chosen), 0, "an object in the group, not the group");
+}
+
 /// The shapes Type → Show Hidden Characters draws in one frame, seen through `xf`.
 fn hidden_chars(app: &mut VectorcraftApp, ctx: &egui::Context, xf: &Xf) -> Vec<Shape> {
     let raw = egui::RawInput { screen_rect: Some(xf.rect), ..Default::default() };
