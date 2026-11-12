@@ -133,6 +133,13 @@ pub(crate) fn tiff(bytes: &[u8]) -> Option<(tiff::ColorType, tiff::decoder::Deco
     Some((d.colortype().ok()?, d))
 }
 
+/// The Orientation tag of TIFF `bytes`' first image, of any unsigned type; `None` for other images
+/// and TIFFs without one. Reads only its header.
+pub fn tiff_orientation(bytes: &[u8]) -> Option<u16> {
+    let (_, mut d) = tiff(bytes)?;
+    d.find_tag_unsigned::<u16>(tiff::tags::Tag::Orientation).ok().flatten()
+}
+
 /// Does the TIFF `d` reads store one plane per channel (PlanarConfiguration 2)?
 fn planar(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>) -> bool {
     d.find_tag_unsigned::<u16>(tiff::tags::Tag::PlanarConfiguration).ok().flatten().is_some_and(|p| p != 1)
@@ -299,7 +306,7 @@ fn jpeg_inks(bytes: &[u8]) -> Option<Inks> {
 
 /// The ink amounts of a CMYK TIFF (16-bit samples to 8 bits), its inks stored together or one plane
 /// per ink.
-fn tiff_inks(bytes: &[u8]) -> Option<Inks> {
+pub fn tiff_inks(bytes: &[u8]) -> Option<Inks> {
     let (kind, mut d) = tiff(bytes)?;
     let (w, h) = d.dimensions().ok()?;
     if !matches!(kind, tiff::ColorType::CMYK(8 | 16)) {

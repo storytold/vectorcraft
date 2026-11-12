@@ -907,6 +907,213 @@ fn a_photo_places_the_way_its_exif_orientation_says() {
     assert!(red(px.get_pixel(4, 3)) && !red(px.get_pixel(4, 12)), "the left half is on top");
 }
 
+/// Where the first stored pixel shows once EXIF (or TIFF) `orientation` turns the image, as
+/// (right, bottom): orientations 1 and 5 keep it at the top left, 2 and 6 put it at the top right,
+/// 3 and 7 at the bottom right, 4 and 8 at the bottom left. Values outside 1 to 8 leave it.
+fn first_pixel_at(orientation: u16) -> (bool, bool) {
+    match orientation {
+        2 | 6 => (true, false),
+        3 | 7 => (true, true),
+        4 | 8 => (false, true),
+        _ => (false, false),
+    }
+}
+
+/// A little-endian EXIF block (a TIFF header and directory, as a PNG `eXIf` chunk or a WebP
+/// `EXIF` chunk holds it) with an Orientation of `orientation` and an XResolution and YResolution
+/// of `x` and `y` pixels per inch.
+fn exif_block(orientation: u16, (x, y): (u32, u32)) -> Vec<u8> {
+    let entry = |tag: u16, kind: u16, value: u32| [&tag.to_le_bytes()[..], &kind.to_le_bytes(), &1u32.to_le_bytes(), &value.to_le_bytes()].concat();
+    // Orientation, XResolution, YResolution, ResolutionUnit inches; the two rationals follow.
+    [
+        b"II".as_slice(),
+        &[0x2a, 0, 8, 0, 0, 0],
+        &4u16.to_le_bytes(),
+        &entry(0x0112, 3, u32::from(orientation)),
+        &entry(0x011a, 5, 62),
+        &entry(0x011b, 5, 70),
+        &entry(0x0128, 3, 2),
+        &[0, 0, 0, 0],
+        &[x.to_le_bytes(), 1u32.to_le_bytes(), y.to_le_bytes(), 1u32.to_le_bytes()].concat(),
+    ]
+    .concat()
+}
+
+/// A photo turned a quarter by its EXIF orientation keeps its physical size: the resolution's
+/// axes swap with the pixels', in what Place reports and in the stored image. Every orientation
+/// puts the first stored pixel in its corner once, and the stored image, read again, is not turned
+/// a second time. Values outside 1 to 8 leave the photo as stored.
+#[test]
+fn a_quarter_turn_swaps_the_resolution_axes() {
+    // 48 × 32: the top-left 16 × 16 (one whole JPEG MCU) red, the rest white.
+    let rgb = image::RgbImage::from_fn(48, 32, |x, y| if x < 16 && y < 16 { image::Rgb([220, 0, 0]) } else { image::Rgb([255, 255, 255]) });
+    let mut jpg = Vec::new();
+    image::DynamicImage::ImageRgb8(rgb).write_to(&mut Cursor::new(&mut jpg), image::ImageFormat::Jpeg).unwrap();
+    for orientation in [0u16, 1, 2, 3, 4, 5, 6, 7, 8, 9] {
+        let exif = [b"Exif\0\0".as_slice(), &exif_block(orientation, (300, 150))].concat();
+        // Without a JFIF density the resolution comes from the EXIF block.
+        let mut turned = jpg[..2].to_vec();
+        turned.extend([0xff, 0xe1]);
+        turned.extend(u16::try_from(exif.len() + 2).unwrap().to_be_bytes());
+        turned.extend(&exif);
+        turned.extend(&jpg[2..]);
+        let what = format!("orientation {orientation}");
+        assert_eq!(super::ppi::resolution(&turned), Some((300.0, 150.0)), "{what}: as stored");
+        let quarter = (5..=8).contains(&orientation);
+        let (size, ppi) = if quarter { ((32, 48), (150.0, 300.0)) } else { ((48, 32), (300.0, 150.0)) };
+        let img = raster_image(&turned).unwrap();
+        assert_eq!(((img.width, img.height), img.ppi), (size, Some(ppi)), "{what}");
+        assert_eq!(super::ppi::resolution(&img.blob.bytes), Some(ppi), "{what}: the stored image");
+        let px = image::load_from_memory(&img.blob.bytes).unwrap().to_rgb8();
+        let red = |x: u32, y: u32| px.get_pixel(x, y)[1] < 80;
+        let (w, h) = size;
+        let corners = [(false, false), (true, false), (true, true), (false, true)];
+        let reds: Vec<_> =
+            corners.into_iter().filter(|&(right, bottom)| red(if right { w - 4 } else { 4 }, if bottom { h - 4 } else { 4 })).collect();
+        assert_eq!(reds, [first_pixel_at(orientation)], "{what}: the first stored pixel's corner");
+        let again = raster_image(&img.blob.bytes).unwrap();
+        assert_eq!(((again.width, again.height), again.ppi), (size, Some(ppi)), "{what}: read again, it isn't turned again");
+    }
+}
+
+/// `tiff` (little-endian) with an Orientation tag (274) of `value`, a SHORT or, when `long`, a
+/// LONG, and, when `y_ppi` is given, a YResolution (283, which `tiff` must have) of that many
+/// pixels per inch: its first directory copied to the end of the file with the tag added in order,
+/// and the header pointing there, so that every other offset in the file still holds.
+fn tiff_oriented(tiff: &[u8], value: u16, long: bool, y_ppi: Option<u32>) -> Vec<u8> {
+    let at = usize::try_from(u32::from_le_bytes(tiff[4..8].try_into().unwrap())).unwrap();
+    let n = usize::from(u16::from_le_bytes([tiff[at], tiff[at + 1]]));
+    let mut entries: Vec<Vec<u8>> = tiff[at + 2..at + 2 + 12 * n].chunks(12).map(<[u8]>::to_vec).collect();
+    let i = entries.iter().position(|e| u16::from_le_bytes([e[0], e[1]]) > 274).unwrap_or(n);
+    let (kind, v) = if long { (4u16, u32::from(value).to_le_bytes()) } else { (3, [value.to_le_bytes(), [0, 0]].concat().try_into().unwrap()) };
+    entries.insert(i, [&274u16.to_le_bytes()[..], &kind.to_le_bytes(), &1u32.to_le_bytes(), &v].concat());
+    let mut out = tiff.to_vec();
+    if out.len() % 2 == 1 {
+        out.push(0);
+    }
+    if let Some(y) = y_ppi {
+        let rational = u32::try_from(out.len()).unwrap();
+        out.extend([y.to_le_bytes(), 1u32.to_le_bytes()].concat());
+        let e = entries.iter_mut().find(|e| u16::from_le_bytes([e[0], e[1]]) == 283).unwrap();
+        e[8..12].copy_from_slice(&rational.to_le_bytes());
+    }
+    let ifd = u32::try_from(out.len()).unwrap();
+    out[4..8].copy_from_slice(&ifd.to_le_bytes());
+    out.extend(u16::try_from(n + 1).unwrap().to_le_bytes());
+    out.extend(entries.concat());
+    out.extend([0; 4]);
+    out
+}
+
+/// TIFFs the image decoder can't read, grayscale with an alpha channel and 1-bit ones compressed
+/// with CCITT Group 3, turn and flip as their Orientation tag says, as the others do (#4284),
+/// whether the tag is a SHORT or a LONG. A quarter turn swaps the resolution's axes.
+#[test]
+fn tiffs_read_without_the_image_decoder_follow_their_orientation() {
+    // 3 × 2 at 150 × 300 ppi, the first pixel black and the rest white, opaque.
+    let gray = hand_tiff(1, 8, &[2], false, &[vec![0, 255, 255, 255, 255, 255], vec![255; 6]]);
+    let rows: Vec<Vec<bool>> = (0..2).map(|y| (0..3).map(|x| x == 0 && y == 0).collect()).collect();
+    let g = vectorcraft_testkit::tiff::Group3 {
+        rows: &rows,
+        compression: 2,
+        t4_options: 0,
+        photometric: 0,
+        fill_order: 1,
+        rows_per_strip: 2,
+        tile: None,
+        rtc: false,
+    };
+    let fax = vectorcraft_testkit::tiff::group3(&g);
+    // The Group 3 file declares no resolution.
+    for (kind, file, y_ppi) in [("Group 3", fax, None), ("gray with alpha", gray, Some(300))] {
+        assert!(image::load_from_memory(&file).is_err(), "{kind}: the image decoder reads it now");
+        for (orientation, long) in (1..=8).flat_map(|o| [(o, false), (o, true)]) {
+            let what = format!("{kind}, orientation {orientation}, LONG {long}");
+            let img = raster_image(&tiff_oriented(&file, orientation, long, y_ppi)).unwrap_or_else(|e| panic!("{what}: {e}"));
+            let quarter = orientation >= 5;
+            let size = if quarter { (2, 3) } else { (3, 2) };
+            let ppi = y_ppi.map(|y| if quarter { (f64::from(y), 150.0) } else { (150.0, f64::from(y)) });
+            assert_eq!(((img.width, img.height), img.ppi), (size, ppi), "{what}");
+            assert_eq!(super::ppi::resolution(&img.blob.bytes), ppi, "{what}: the stored image");
+            let px = image::load_from_memory(&img.blob.bytes).unwrap().to_luma8();
+            let (right, bottom) = first_pixel_at(orientation);
+            let (x, y) = (if right { size.0 - 1 } else { 0 }, if bottom { size.1 - 1 } else { 0 });
+            let black: Vec<_> = px.enumerate_pixels().filter(|p| p.2[0] < 128).map(|p| (p.0, p.1)).collect();
+            assert_eq!(black, [(x, y)], "{what}: the first stored pixel's corner");
+        }
+    }
+}
+
+/// A CMYK TIFF that its Orientation tag turns or flips keeps its inks, turned, whether it stores
+/// them together or one plane per ink, at 8 or 16 bits; a quarter turn swaps the resolution's axes.
+/// Read again, the stored image is not turned a second time.
+#[test]
+fn cmyk_tiffs_turned_by_their_orientation_keep_their_inks() {
+    // 3 × 2 at 150 × 300 ppi: the first pixel full cyan, the others 30% black.
+    let first: [u8; 4] = [255, 0, 0, 0];
+    let other: [u8; 4] = [0, 0, 0, 77];
+    let channel = |i: usize| -> Vec<u16> { (0..6).map(|p| u16::from(if p == 0 { first[i] } else { other[i] })).collect() };
+    for (bits, planar) in [(8, false), (8, true), (16, false), (16, true)] {
+        let channels: Vec<Vec<u16>> = (0..4).map(|i| channel(i).iter().map(|v| if bits == 16 { v * 257 } else { *v }).collect()).collect();
+        let file = hand_tiff(5, bits, &[], planar, &channels);
+        for orientation in 1..=8 {
+            let what = format!("{bits} bits, planar {planar}, orientation {orientation}");
+            let img = raster_image(&tiff_oriented(&file, orientation, false, Some(300))).unwrap_or_else(|e| panic!("{what}: {e}"));
+            let quarter = orientation >= 5;
+            let size = if quarter { (2, 3) } else { (3, 2) };
+            let ppi = if quarter { (300.0, 150.0) } else { (150.0, 300.0) };
+            assert_eq!(((img.width, img.height), img.ppi, img.blob.mime.as_str()), (size, Some(ppi), "image/tiff"), "{what}");
+            assert_eq!(super::ppi::resolution(&img.blob.bytes), Some(ppi), "{what}: the stored image");
+            let inks = img.blob.cmyk().unwrap_or_else(|| panic!("{what}: the inks are lost"));
+            assert_eq!((inks.width, inks.height), size, "{what}: the inks' size");
+            let (right, bottom) = first_pixel_at(orientation);
+            let at = (if right { size.0 - 1 } else { 0 }, if bottom { size.1 - 1 } else { 0 });
+            for (i, px) in inks.data.chunks(4).enumerate() {
+                let (x, y) = (u32::try_from(i).unwrap() % size.0, u32::try_from(i).unwrap() / size.0);
+                assert_eq!(px, if (x, y) == at { first } else { other }, "{what}: the inks of pixel ({x}, {y})");
+            }
+            let again = raster_image(&img.blob.bytes).unwrap();
+            assert_eq!(((again.width, again.height), again.blob.cmyk()), (size, Some(inks)), "{what}: read again, it isn't turned again");
+        }
+    }
+}
+
+/// A PNG (its `eXIf` chunk and `pHYs` resolution), a WebP (its `EXIF` chunk) and an RGB TIFF read
+/// by the image decoder, turned a quarter by their orientation, swap their resolution's axes; a
+/// half turn keeps them.
+#[test]
+fn png_webp_and_rgb_tiff_turned_a_quarter_swap_their_resolution() {
+    use image::ImageEncoder as _;
+    let rgb = image::RgbImage::from_fn(3, 2, |x, y| image::Rgb(if x == 0 && y == 0 { [0, 0, 0] } else { [255, 255, 255] }));
+    for orientation in [3u16, 6, 8] {
+        let mut png = Vec::new();
+        let mut enc = image::codecs::png::PngEncoder::new(&mut png);
+        enc.set_exif_metadata(exif_block(orientation, (150, 300))).unwrap();
+        enc.write_image(rgb.as_raw(), 3, 2, image::ExtendedColorType::Rgb8).unwrap();
+        let png = super::ppi::with_png_resolution(&png, (150.0, 300.0));
+        let mut webp = Vec::new();
+        let mut enc = image::codecs::webp::WebPEncoder::new_lossless(&mut webp);
+        enc.set_exif_metadata(exif_block(orientation, (150, 300))).unwrap();
+        enc.write_image(rgb.as_raw(), 3, 2, image::ExtendedColorType::Rgb8).unwrap();
+        let channel = |c: usize| -> Vec<u16> { rgb.pixels().map(|p| u16::from(p[c])).collect() };
+        let tiff = tiff_oriented(&hand_tiff(2, 8, &[], false, &[channel(0), channel(1), channel(2)]), orientation, false, Some(300));
+        for (kind, file) in [("PNG", png), ("WebP", webp), ("TIFF", tiff)] {
+            let what = format!("{kind}, orientation {orientation}");
+            assert_eq!(super::ppi::resolution(&file), Some((150.0, 300.0)), "{what}: as stored");
+            let quarter = orientation >= 5;
+            let (size, ppi) = if quarter { ((2, 3), (300.0, 150.0)) } else { ((3, 2), (150.0, 300.0)) };
+            let img = raster_image(&file).unwrap_or_else(|e| panic!("{what}: {e}"));
+            assert_eq!(((img.width, img.height), img.ppi), (size, Some(ppi)), "{what}");
+            assert_eq!(super::ppi::resolution(&img.blob.bytes), Some(ppi), "{what}: the stored image");
+            let px = image::load_from_memory(&img.blob.bytes).unwrap().to_luma8();
+            let (right, bottom) = first_pixel_at(orientation);
+            let at = (if right { size.0 - 1 } else { 0 }, if bottom { size.1 - 1 } else { 0 });
+            let black: Vec<_> = px.enumerate_pixels().filter(|p| p.2[0] < 128).map(|p| (p.0, p.1)).collect();
+            assert_eq!(black, [at], "{what}: the first stored pixel's corner");
+        }
+    }
+}
+
 /// With `importer` named, a file up to the importer's limit is read whole and a larger one is an
 /// error, whatever its content.
 #[test]
