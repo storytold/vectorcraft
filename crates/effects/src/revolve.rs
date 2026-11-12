@@ -20,7 +20,7 @@ const MAX_PAINT_COPIES: usize = 256 << 20;
 
 /// The most face and box tests a group's transparent members' faces take together to rejoin their
 /// members' last runs; past them each starts a run of its own.
-const MAX_OVERLAP_TESTS: usize = 1 << 22;
+pub(crate) const MAX_OVERLAP_TESTS: usize = 1 << 22;
 
 /// The width of the stroke around each face that covers the seams between faces.
 const SEAM_WIDTH: f64 = 0.75;
@@ -576,14 +576,14 @@ pub(crate) fn scoped<'a>(id: NodeId, surfaces: Vec<(&'a [Scope], Arc<Node>)>, le
 /// What a face can paint, to tell whether two faces overlap: the convex hull of the points and
 /// control points of its outline, which holds the outline, and the hull's box grown by half the
 /// seam stroke.
-struct Coverage {
-    bounds: Rect,
+pub(crate) struct Coverage {
+    pub(crate) bounds: Rect,
     hull: Vec<Point>,
 }
 
 impl Coverage {
     /// `None` for a face with no outline and no box.
-    fn of(face: &Node) -> Option<Coverage> {
+    pub(crate) fn of(face: &Node) -> Option<Coverage> {
         let points: Vec<Point> = match face.path_data() {
             Some(path) => path
                 .to_bezpath()
@@ -611,7 +611,7 @@ impl Coverage {
     /// Do the two faces' hulls, each grown by half the seam stroke, overlap? A test of the
     /// separating axes of their edges and of the page's axes: `true` whenever they overlap, and
     /// sometimes near a corner when they don't.
-    fn meets(&self, other: &Coverage) -> bool {
+    pub(crate) fn meets(&self, other: &Coverage) -> bool {
         fn normals(hull: &[Point]) -> impl Iterator<Item = Vec2> + '_ {
             (0..hull.len()).filter_map(|i| {
                 let (a, b) = (hull.get(i)?, hull.get((i + 1) % hull.len())?);
@@ -658,7 +658,7 @@ fn convex_hull(mut points: Vec<Point>) -> Vec<Point> {
 }
 
 /// Do boxes `a` and `b` overlap with some area?
-fn overlaps(a: Rect, b: Rect) -> bool {
+pub(crate) fn overlaps(a: Rect, b: Rect) -> bool {
     a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1
 }
 

@@ -686,10 +686,11 @@ type ShadowAndSurfaces = (Vec<Arc<Node>>, Vec<Arc<Node>>);
 /// Rotate turns every fill and stroke, each in its own paint. Extrude & Bevel and Inflate build a
 /// solid from the path for the top visible fill and one from the outline of each visible stroke,
 /// each in its own paint. When every one is opaque with normal blending and no colored light makes
-/// a surface one composite or masks it, their faces are drawn in one back-to-front order (where
-/// depths tie, as for the caps turned toward the viewer, in the order of the appearance, and with
-/// caps, a shape's fill walls before the faces of its covering strokes that overlap them:
-/// [`draw_order`]);
+/// a surface one composite, their faces are drawn in one back-to-front order (where depths tie, as
+/// for the caps turned toward the viewer, in the order of the appearance, and with caps, a shape's
+/// fill walls before the faces of its covering strokes that overlap them: [`draw_order`]), the
+/// faces of a solid in a gradient with transparent stops in runs that carry its opacity mask
+/// ([`in_runs`]);
 /// otherwise each solid is a surface of its own, in that order. A member's opacity mask and
 /// blending mode, and those of a group it is in, apply to the surfaces of the members it holds
 /// ([`masked`]). The art comes in two parts: the effect's shadow ([`cast_shadow`], none with it
@@ -841,19 +842,20 @@ fn surfaces_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Nod
         return Some(masked(n.id, surfaces.into_iter().map(|(_, s, scopes)| (scopes, Arc::new(s))).collect()));
     }
     // One order takes a plain group of faces from each solid, one face for each facet. With
-    // colored lights a surface can instead be one clipped composite of all its facets, or carry an
-    // opacity mask, and then it stays whole.
-    let plain = surfaces.iter().all(|(depths, s, _)| {
-        s.extras().mask.is_none() && matches!(&s.kind, NodeKind::Group { children, clip: false } if children.len() == depths.len())
-    });
+    // colored lights a surface can instead be one clipped composite of all its facets, and then it
+    // stays whole.
+    let plain = surfaces.iter().all(|(depths, s, _)| matches!(&s.kind, NodeKind::Group { children, clip: false } if children.len() == depths.len()));
     if !opaque || !plain {
         return Some(surfaces.into_iter().map(|(_, s, _)| Arc::new(s)).collect());
     }
+    // A surface in a gradient with transparent stops carries an opacity mask: its faces go in runs
+    // ([`in_runs`]), and each run carries the mask.
+    let masks: Vec<Option<Box<OpacityMask>>> = surfaces.iter().map(|(_, s, _)| s.extras().mask.clone()).collect();
     let (mut placed, mut faces) = (vec![], vec![]);
-    for (depths, s, _) in surfaces {
+    for (surface, (depths, s, _)) in surfaces.into_iter().enumerate() {
         if let NodeKind::Group { children, .. } = s.kind {
             placed.extend(depths);
-            faces.extend(children.into_iter().map(Some));
+            faces.extend(children.into_iter().map(|face| Some((surface, face))));
         }
     }
     let sealed = match fx.id.as_str() {
@@ -862,7 +864,69 @@ fn surfaces_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Nod
         _ => extrude_options(&p).cap,
     };
     let order = draw_order(&placed, sealed);
-    Some(vec![Arc::new(Node::group(n.id, order.into_iter().filter_map(|k| faces.get_mut(k).and_then(Option::take)).collect()))])
+    let faces: Vec<(usize, Arc<Node>)> = order.into_iter().filter_map(|k| faces.get_mut(k).and_then(Option::take)).collect();
+    let children = if masks.iter().all(Option::is_none) { faces.into_iter().map(|(_, face)| face).collect() } else { in_runs(n.id, faces, &masks) };
+    Some(vec![Arc::new(Node::group(n.id, children))])
+}
+
+/// `faces` in their back-to-front order, each with the index of its surface, where some surfaces
+/// carry an opacity mask (`masks`, by surface). A face of a surface without one goes in the order
+/// on its own. The faces of a masked surface share a run, one group with the surface's mask. Such a
+/// face joins its surface's last run unless a face drawn after that run overlaps it: only then does
+/// the surface split, where one group can't be both behind and in front of another face.
+fn in_runs(id: NodeId, faces: Vec<(usize, Arc<Node>)>, masks: &[Option<Box<OpacityMask>>]) -> Vec<Arc<Node>> {
+    use crate::revolve::{Coverage, overlaps};
+    struct Run {
+        surface: Option<usize>,
+        bounds: Rect,
+        faces: Vec<Arc<Node>>,
+        cover: Vec<Coverage>,
+    }
+    let mut runs: Vec<Run> = vec![];
+    let mut last_run = vec![None; masks.len()];
+    // Past this many tests a face starts a run of its own, which never draws out of order.
+    let mut budget = crate::revolve::MAX_OVERLAP_TESTS;
+    for (surface, face) in faces {
+        let Some(cover) = Coverage::of(&face) else {
+            // A face with no outline and no box overlaps nothing.
+            runs.push(Run { surface: None, bounds: Rect::ZERO, faces: vec![face], cover: vec![] });
+            continue;
+        };
+        if masks.get(surface).is_none_or(Option::is_none) {
+            runs.push(Run { surface: None, bounds: cover.bounds, faces: vec![face], cover: vec![cover] });
+            continue;
+        }
+        let mut clear = |r: &Run| {
+            budget = budget.saturating_sub(1);
+            if !overlaps(r.bounds, cover.bounds) {
+                return budget > 0;
+            }
+            budget = budget.saturating_sub(r.cover.len());
+            budget > 0 && r.cover.iter().all(|c| !overlaps(c.bounds, cover.bounds) || !c.meets(&cover))
+        };
+        let joins = last_run.get(surface).copied().flatten().filter(|&i: &usize| runs.get(i + 1..).is_some_and(|later| later.iter().all(&mut clear)));
+        match joins.and_then(|i| runs.get_mut(i)) {
+            Some(run) => {
+                run.bounds = run.bounds.union(cover.bounds);
+                run.faces.push(face);
+                run.cover.push(cover);
+            }
+            None => {
+                if let Some(last) = last_run.get_mut(surface) {
+                    *last = Some(runs.len());
+                }
+                runs.push(Run { surface: Some(surface), bounds: cover.bounds, faces: vec![face], cover: vec![cover] });
+            }
+        }
+    }
+    runs.into_iter()
+        .filter_map(|mut r| {
+            let Some(mask) = r.surface.and_then(|s| masks.get(s)).cloned().flatten() else { return r.faces.pop() };
+            let mut group = Node::group(id, r.faces);
+            group.extras_mut().mask = Some(mask);
+            Some(Arc::new(group))
+        })
+        .collect()
 }
 
 fn geometry(path: &PathData, fx: &[Effect], ctx: &GeomContext) -> PathData {
