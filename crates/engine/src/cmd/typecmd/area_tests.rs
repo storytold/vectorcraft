@@ -397,6 +397,49 @@ fn roman_hanging_punctuation_is_set_per_paragraph_and_saved_only_when_on() {
     assert!(text(&s).para_at(1).roman_hanging);
 }
 
+/// Paragraph panel menu › Korean Line Break Anywhere: new type has it off and saves that;
+/// `text.setFormat {koreanLineBreakAnywhere}` sets it per paragraph in one undo step and refuses a
+/// value that is not true or false, a paragraph saved before the option opens with it on, and
+/// paragraph styles carry it. `text.setRangeStyle`, a character command, does not take it.
+#[test]
+fn korean_line_break_anywhere_is_set_per_paragraph_and_saved_only_when_off() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 10, "size": 20, "text": "가나다\n라마"})).unwrap()["id"].as_u64().unwrap();
+    let text = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("text"),
+    };
+    assert!(!text(&s).para_at(0).korean_line_break_anywhere, "new type has it off");
+    assert_eq!(serde_json::to_value(text(&s).para_at(0)).unwrap()["korean_line_break_anywhere"], false);
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    // Only the first paragraph (the caret's range).
+    s.execute("text.setFormat", &json!({"koreanLineBreakAnywhere": true, "start": 0, "end": 0})).unwrap();
+    assert!(text(&s).para_at(0).korean_line_break_anywhere && !text(&s).para_at(1).korean_line_break_anywhere);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    assert!(serde_json::to_value(text(&s).para_at(0)).unwrap().get("korean_line_break_anywhere").is_none());
+    let back: vectorcraft_doc::ParaStyle = serde_json::from_value(serde_json::to_value(text(&s).para_at(0)).unwrap()).unwrap();
+    assert!(back.korean_line_break_anywhere);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!text(&s).para_at(0).korean_line_break_anywhere);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(text(&s).para_at(0).korean_line_break_anywhere);
+    // Saved before the option: on, the line breaks it was laid out with.
+    let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
+    assert!(old.korean_line_break_anywhere);
+    assert!(s.execute("text.setFormat", &json!({"ids": [id], "koreanLineBreakAnywhere": "yes"})).is_err());
+    assert!(s.execute("text.setRangeStyle", &json!({"id": id, "koreanLineBreakAnywhere": false})).is_err());
+    assert!(text(&s).para_at(0).korean_line_break_anywhere, "a refused call changes nothing");
+    // A paragraph style carries it.
+    s.execute("paraStyle.new", &json!({"name": "Anywhere", "attrs": {"korean_line_break_anywhere": true}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Anywhere", "id": id})).unwrap();
+    assert!(text(&s).para_at(1).korean_line_break_anywhere);
+    s.execute("paraStyle.new", &json!({"name": "Words", "attrs": {"korean_line_break_anywhere": false}})).unwrap();
+    s.execute("paraStyle.apply", &json!({"name": "Words", "id": id})).unwrap();
+    assert!(!text(&s).para_at(0).korean_line_break_anywhere && !text(&s).para_at(1).korean_line_break_anywhere);
+}
+
 /// Paragraph panel › Insert Kashidas: `text.setFormat {kashida}` sets it per paragraph in one
 /// undo step, the paragraph is saved with it only when it is not None and opens with it, an
 /// unknown value changes nothing, and paragraph styles carry it.

@@ -856,6 +856,142 @@ fn sorting_stops_at_its_budget_and_keeps_every_path() {
     assert_eq!(text(&out).matches("PD").count(), 600);
 }
 
+/// `x` points in plotter units.
+fn plu(x: f64) -> i64 {
+    (x * 1016.0 / 72.0).round() as i64
+}
+
+/// The left edge of each path a plain HP-GL plot draws, in drawing order (plotter units).
+fn lefts(out: &HpglOutput) -> Vec<i64> {
+    let mut lefts: Vec<i64> = vec![];
+    for i in text(out).split_terminator(';') {
+        let xs = i.get(2..).unwrap_or_default().split(',').step_by(2).filter_map(|x| x.parse::<i64>().ok());
+        match i.get(..2) {
+            Some("PU") => lefts.extend(xs.min()),
+            Some("PD") => {
+                if let (Some(l), Some(x)) = (lefts.last_mut(), xs.min()) {
+                    *l = (*l).min(x);
+                }
+            }
+            _ => {}
+        }
+    }
+    lefts
+}
+
+/// A letter O made as one path: its outline, then its counter.
+#[test]
+fn inside_first_cuts_a_letters_counter_before_its_outline() {
+    let d = doc_with(|d| {
+        let mut bp = rect(10.0, 10.0, 60.0, 90.0).to_bezpath();
+        bp.extend(shapes::ellipse(Rect::new(25.0, 30.0, 45.0, 70.0)).to_bezpath());
+        vec![filled(d, PathData::from_bezpath(&bp), Color::BLACK)]
+    });
+    assert_eq!(lefts(&plot(&d, &opts(&d))), [plu(10.0), plu(25.0)]);
+    assert_eq!(lefts(&plot(&d, &HpglOptions { inside_first: true, ..opts(&d) })), [plu(25.0), plu(10.0)]);
+}
+
+/// A part drawn before its two holes: the holes are cut first, nearest first with `sort`.
+#[test]
+fn a_part_with_two_holes_is_cut_holes_first() {
+    let d = doc_with(|d| {
+        vec![
+            stroked(d, rect(10.0, 10.0, 190.0, 90.0), Color::BLACK),
+            stroked(d, shapes::ellipse(Rect::new(160.0, 40.0, 180.0, 60.0)), Color::BLACK),
+            stroked(d, shapes::ellipse(Rect::new(20.0, 40.0, 40.0, 60.0)), Color::BLACK),
+        ]
+    });
+    let (part, right, left) = (plu(10.0), plu(160.0), plu(20.0));
+    assert_eq!(lefts(&plot(&d, &opts(&d))), [part, right, left]);
+    assert_eq!(lefts(&plot(&d, &HpglOptions { inside_first: true, ..opts(&d) })), [right, left, part]);
+    // Sorting alone starts at the part's corner, nearest the origin; inside first, the nearest
+    // hole comes first, then the other, then the part.
+    assert_eq!(lefts(&plot(&d, &HpglOptions { sort: true, ..opts(&d) })), [part, left, right]);
+    let both = plot(&d, &HpglOptions { sort: true, inside_first: true, ..opts(&d) });
+    assert_eq!(lefts(&both), [left, right, part]);
+    assert!(both.warnings.is_empty(), "{:?}", both.warnings);
+}
+
+/// Rings inside rings are cut innermost first, and a ring with nothing inside it keeps its place
+/// in paint order.
+#[test]
+fn nested_rings_are_cut_innermost_first() {
+    let d = doc_with(|d| {
+        vec![
+            stroked(d, rect(120.0, 10.0, 190.0, 90.0), Color::BLACK),
+            stroked(d, rect(10.0, 10.0, 100.0, 90.0), Color::BLACK),
+            stroked(d, rect(20.0, 20.0, 90.0, 80.0), Color::BLACK),
+            stroked(d, rect(30.0, 30.0, 80.0, 70.0), Color::BLACK),
+        ]
+    });
+    let out = plot(&d, &HpglOptions { inside_first: true, ..opts(&d) });
+    assert_eq!(lefts(&out), [plu(120.0), plu(30.0), plu(20.0), plu(10.0)]);
+}
+
+/// Each pen's paths are ordered among themselves: a red square inside a black part is drawn with
+/// the red pen, after the black part.
+#[test]
+fn inside_first_orders_each_pens_paths() {
+    let d = doc_with(|d| {
+        vec![
+            stroked(d, rect(10.0, 10.0, 190.0, 90.0), Color::BLACK),
+            stroked(d, rect(20.0, 20.0, 40.0, 40.0), Color::rgb8(255, 0, 0)),
+            stroked(d, rect(50.0, 20.0, 70.0, 40.0), Color::BLACK),
+        ]
+    });
+    let out = plot(&d, &HpglOptions { inside_first: true, ..opts(&d) });
+    assert_eq!(lefts(&out), [plu(50.0), plu(10.0), plu(20.0)]);
+}
+
+/// Finding which of 100 nested rings lie inside which is past the budget: they are drawn in
+/// paint order, with a warning.
+#[test]
+fn inside_first_past_its_budget_draws_in_paint_order() {
+    let d = doc_with(|d| (0..100).map(|i| stroked(d, rect(1.0 + 0.4 * f64::from(i), 10.0, 199.0, 90.0), Color::BLACK)).collect());
+    let out = plot(&d, &HpglOptions { inside_first: true, ..opts(&d) });
+    assert_eq!(out.warnings, [UNNESTED]);
+    let l = lefts(&out);
+    assert_eq!(l.len(), 100);
+    assert!(l.windows(2).all(|w| w[0] <= w[1]), "{l:?}");
+    // With `sort` too, the budget is spent before sorting starts: paint order, with both warnings.
+    let out = plot(&d, &HpglOptions { sort: true, inside_first: true, ..opts(&d) });
+    assert_eq!(out.warnings, [UNNESTED, UNSORTED]);
+    assert_eq!(lefts(&out), l);
+}
+
+/// Sorting 600 lines inside two rings runs out of work: every path is drawn, the inner ring and
+/// then the outer one last.
+#[test]
+fn inside_first_past_its_sorting_budget_keeps_the_rings_last() {
+    let d = doc_with(|d| {
+        let mut v = vec![stroked(d, rect(0.5, 5.0, 150.0, 30.0), Color::BLACK), stroked(d, rect(0.7, 7.0, 140.0, 25.0), Color::BLACK)];
+        v.extend((0..600).map(|i| stroked(d, line((1.0 + (i % 100) as f64, 10.0), (1.0 + (i % 100) as f64, 20.0)), Color::BLACK)));
+        v
+    });
+    let out = plot(&d, &HpglOptions { sort: true, inside_first: true, ..opts(&d) });
+    assert_eq!(out.warnings, [UNSORTED_INSIDE]);
+    let l = lefts(&out);
+    assert_eq!(l.len(), 602);
+    assert_eq!(l.get(600..), Some(&[plu(0.7), plu(0.5)][..]));
+}
+
+/// Without `sort`, 1,000 lines inside a ring are drawn in paint order and the ring after them,
+/// within the budget.
+#[test]
+fn inside_first_alone_keeps_paint_order_for_many_paths() {
+    let d = doc_with(|d| {
+        let mut v = vec![stroked(d, rect(0.5, 5.0, 199.0, 30.0), Color::BLACK)];
+        v.extend((0..1000).map(|i| stroked(d, line((1.0 + 0.19 * f64::from(i), 10.0), (1.0 + 0.19 * f64::from(i), 20.0)), Color::BLACK)));
+        v
+    });
+    let out = plot(&d, &HpglOptions { inside_first: true, ..opts(&d) });
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let l = lefts(&out);
+    assert_eq!(l.len(), 1001);
+    assert_eq!(l.last(), Some(&plu(0.5)));
+    assert!(l.get(..1000).is_some_and(|l| l.windows(2).all(|w| w[0] < w[1])), "{l:?}");
+}
+
 #[test]
 fn art_wholly_past_the_plotter_range_is_cut_off_with_a_warning() {
     let d = doc_with(|d| vec![stroked(d, line((7e8, 50.0), (7e8 + 10.0, 50.0)), Color::BLACK)]);
