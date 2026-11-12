@@ -511,6 +511,21 @@ fn eps_save_keeps_all_editing_artboards_in_the_file_of_one_page() {
 }
 
 #[test]
+fn eps_save_with_use_artboards_and_a_named_artboard_reports_it_as_the_range() {
+    let d = dir("eps-named-artboard");
+    let eps_path = path(&d, "Art.eps");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    rect(&mut s);
+    let options = json!({"useArtboards": true, "artboard": 1, "previewFormat": "none", "thumbnails": false});
+    s.execute("document.save", &json!({"path": eps_path, "options": options})).unwrap();
+    let o = s.execute("file.formatOptions", &json!({})).unwrap();
+    assert_eq!(o["options"]["useArtboards"]["value"], true);
+    assert_eq!(o["options"]["range"]["value"], "2", "the saved artboard, not All");
+    std::fs::remove_dir_all(d).unwrap();
+}
+
+#[test]
 fn eps_save_with_use_artboards_writes_the_central_file_and_one_per_artboard() {
     let d = dir("eps-artboards");
     let eps_path = path(&d, "Art.eps");

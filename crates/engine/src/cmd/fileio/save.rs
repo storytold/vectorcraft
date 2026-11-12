@@ -1094,11 +1094,11 @@ fn format_options(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     }
-    // An EPS save that named artboards without Use Artboards had it on (the encoder reads them
-    // so): it shows on, with those artboards as the range.
+    // An EPS save that named artboards without Use Artboards, or with it on, had it on (the
+    // encoder reads them so): it shows on, with those artboards as the range.
     if f.id == "eps"
         && let Some(m) = &saved
-        && m.get("useArtboards").is_none_or(Value::is_null)
+        && m.get("useArtboards").and_then(Value::as_bool) != Some(false)
     {
         let range = m.get("range").and_then(Value::as_str).filter(|r| !r.trim().is_empty());
         let boards = m
