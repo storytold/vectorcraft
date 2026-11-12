@@ -109,10 +109,11 @@ fn push_held<T>(interp: &mut Interp, held: &mut HeldBytes, list: &mut Vec<T>, it
 }
 
 /// The code units of `s`. Flattening a rope makes a copy of its units, so for a rope that copy's
-/// bytes are reserved and added to the heap, and its units charged as fuel, first.
+/// bytes are reserved and added to the heap, and its units charged as fuel, first. The rope stays
+/// rooted while the copy is reserved, so what it holds is still counted.
 pub(crate) fn flat_charged(interp: &mut Interp, s: &Str) -> JsResult<Rc<[u16]>> {
     if s.is_rope() {
-        reserve_units(interp, s.len())?;
+        interp.rooted(&[Value::String(s.clone())], |interp| reserve_units(interp, s.len()))?;
     }
     Ok(s.flat())
 }
