@@ -4,6 +4,7 @@ use super::{
     Affine, BezPath, Breakpoint, Burasagari, EPS, FirstBaseline, FontDb, HyphenationOptions, Kinsoku, KinsokuShoriType, LeadingModel, SGlyph,
     hyphen_glyph, is_cjk, no_line_end, no_line_start, points_for, soft_line_start,
 };
+use crate::justify::is_format_control;
 
 /// Vertical metrics of a line: (ascent, descent, leading, cap height, x height).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -346,10 +347,11 @@ pub(super) fn break_line(
         while g.get(cluster_end).is_some_and(|next| next.byte == gl.byte && (next.len == 0) == (gl.len == 0)) {
             cluster_end += 1;
         }
-        // No Break: the marked characters stay on one line, including across a space inside the run.
-        if gl.no_break && gl.ch != '\u{2028}' {
+        // No Break: the marked characters stay on one line, including across a space inside the run;
+        // Bunri-Kinshi keeps an inseparable pair, or a chain of them, on one line too.
+        if gl.ch != '\u{2028}' {
             while let Some(n) = g.get(cluster_end) {
-                if !n.no_break || n.ch == '\u{2028}' {
+                if !splits_no_break(g, cluster_end) || n.ch == '\u{2028}' {
                     break;
                 }
                 let b = n.byte;
@@ -549,9 +551,10 @@ fn may_end_after(g: &[SGlyph], end: usize, kinsoku: Kinsoku) -> bool {
     last.break_after() && last.len > 0 && !last.is_soft_hyphen() && kinsoku_allows(g, e - 1, kinsoku) && !splits_no_break(g, e)
 }
 
-/// Would a line ending at glyph index `end` split a No Break run?
+/// Would a line ending at glyph index `end` split a No Break run, or an inseparable pair that
+/// Bunri-Kinshi keeps together ([`SGlyph::keeps_next`])?
 fn splits_no_break(g: &[SGlyph], end: usize) -> bool {
-    end > 0 && g.get(end - 1).is_some_and(|a| a.no_break) && g.get(end).is_some_and(|b| b.no_break)
+    end > 0 && g.get(end - 1).is_some_and(|a| (a.no_break && g.get(end).is_some_and(|b| b.no_break)) || (a.keeps_next && g.get(end).is_some()))
 }
 
 /// Does kinsoku allow a line break after glyph `j`? Not after an opening bracket, nor before a
@@ -621,6 +624,7 @@ fn push_in(
         k >= g.len()
             || (g[k].byte != g[k - 1].byte
                 && kinsoku_allows(g, k - 1, kinsoku)
+                && !splits_no_break(g, k)
                 && (g[k].is_space() || (g[k - 1].break_after() && !g[k - 1].is_soft_hyphen())))
     };
     let (mut end, mut x) = (cluster_end, x);
@@ -659,7 +663,7 @@ fn push_in(
                 || (a + 2 == last && punct(last - 1))
                 || (a + 3 == last && punct(last - 2) && quote(last - 1)))
     };
-    let room: f64 = (i..end - 1).filter(|&a| closes(g, a) && !may_hang(a)).map(|a| PUSH_IN_SQUEEZE * squeeze_em(&g[a], vertical)).sum();
+    let room: f64 = (i..end - 1).filter(|&a| closes(g, a, end) && !may_hang(a)).map(|a| PUSH_IN_SQUEEZE * squeeze_em(&g[a], vertical)).sum();
     if x - line_end_credit(g, line_end, last) - width > room + EPS {
         return None;
     }
@@ -685,10 +689,14 @@ fn push_in(
 
 /// May a push-in close the gap after glyph `a`? A gap between two characters, at least one of them
 /// CJK, outside a tate-chu-yoko block, a list marker and a shaped cluster, and not next to a space,
-/// a tab or an inline graphic before it.
-fn closes(g: &[SGlyph], a: usize) -> bool {
-    let (Some(p), Some(n)) = (g.get(a), g.get(a + 1)) else { return false };
+/// a tab or an inline graphic before it, nor inside an inseparable pair that Bunri-Kinshi keeps
+/// together. Zero-width format controls take no gap: the gap is the one between the visible
+/// characters on either side, before `end`, as the layout justifies it.
+fn closes(g: &[SGlyph], a: usize, end: usize) -> bool {
+    let Some(p) = g.get(a).filter(|p| !is_format_control(p.ch)) else { return false };
+    let Some(n) = g.get(a + 1..end).and_then(|rest| rest.iter().find(|n| !is_format_control(n.ch))) else { return false };
     p.len > 0
+        && !p.keeps_next
         && p.byte != n.byte
         && p.inline.is_none()
         && !p.is_space()

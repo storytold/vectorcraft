@@ -210,8 +210,12 @@ fn load_profile(s: &mut Session, p: &Value) -> Result<Value> {
     let remembered = s.store_profile(&info.name, &bytes);
     // A new file of a working space: the active settings still hold the old one.
     let working = cms::active_settings();
-    if working.rgb == info.name || working.cmyk == info.name {
+    let is_working = working.rgb == info.name || working.cmyk == info.name;
+    if is_working {
         cms::set_active(&working).map_err(|e| bad(C, e.to_string()))?;
+    }
+    // A new file of a working space, or of the CMYK profile View → Proof Setup targets: redraw.
+    if is_working || proof_targets(&info.name) {
         touch_all(s);
     }
     Ok(json!({"name": info.name, "kind": info.kind, "remembered": remembered}))
@@ -233,8 +237,15 @@ fn remove_profile(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, format!("no profile named `{name}`")));
     }
     s.unstore_profile(&info.name);
-    touch_all(s);
+    if proof_targets(&info.name) {
+        touch_all(s);
+    }
     Ok(json!({"removed": info.name}))
+}
+
+/// Whether View → Proof Setup targets the CMYK profile `name`.
+fn proof_targets(name: &str) -> bool {
+    matches!(proof::view().setup.target, ProofTarget::Cmyk(t) if t == name)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -274,14 +285,17 @@ fn assign_profile(s: &mut Session, p: &Value) -> Result<Value> {
             Ok(())
         })?;
         let mut st = cms::active_settings();
+        let before = st.clone();
         if let Some(r) = &rgb {
             st.rgb = r.clone();
         }
         if let Some(c) = &cmyk {
             st.cmyk = c.clone();
         }
-        cms::set_active(&st).map_err(|e| bad(C, e.to_string()))?;
-        touch_all(s);
+        if st != before {
+            cms::set_active(&st).map_err(|e| bad(C, e.to_string()))?;
+            touch_all(s);
+        }
     }
     Ok(json!({"rgb": rgb, "cmyk": cmyk}))
 }
@@ -760,17 +774,33 @@ fn proof_setup(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(on) = on_param(p, "proof", C)? {
         v.proof_colors = on;
     }
-    proof::set_view(v.clone());
-    touch_all(s);
+    store_view(s, v.clone());
     Ok(view_json(&v))
+}
+
+/// Make `v` the proof view and redraw every document. When `v` equals the current view, the view
+/// and the revisions stay as they are; Separations Preview's visible plates are compared as a set.
+fn store_view(s: &mut Session, v: proof::ProofView) {
+    let shown = |v: &proof::ProofView| proof::ProofView {
+        separations: v.separations.as_ref().map(|vis| {
+            let mut vis = vis.clone();
+            vis.sort();
+            vis.dedup();
+            vis
+        }),
+        ..v.clone()
+    };
+    if shown(&v) != shown(&proof::view()) {
+        proof::set_view(v);
+        touch_all(s);
+    }
 }
 
 fn toggle_view(s: &mut Session, p: &Value, cmd: &str, f: impl FnOnce(&mut proof::ProofView, Option<bool>)) -> Result<Value> {
     let on = on_param(p, "on", cmd)?;
     let mut v = proof::view();
     f(&mut v, on);
-    proof::set_view(v.clone());
-    touch_all(s);
+    store_view(s, v.clone());
     Ok(view_json(&v))
 }
 
@@ -802,7 +832,15 @@ fn separations(s: &mut Session, p: &Value) -> Result<Value> {
     match p.get("plates") {
         None | Some(Value::Null) => {}
         Some(Value::Array(a)) if a.iter().all(Value::is_string) => {
-            v.separations = Some(a.iter().filter_map(Value::as_str).map(check).collect::<Result<Vec<_>>>()?);
+            let mut vis: Vec<String> = Vec::new();
+            for n in a.iter().filter_map(Value::as_str) {
+                let n = check(n)?;
+                // A plate named twice is shown once.
+                if !vis.contains(&n) {
+                    vis.push(n);
+                }
+            }
+            v.separations = Some(vis);
         }
         Some(_) => {
             let key = "plates";
@@ -821,8 +859,7 @@ fn separations(s: &mut Session, p: &Value) -> Result<Value> {
             vis.push(n);
         }
     }
-    proof::set_view(v);
-    touch_all(s);
+    store_view(s, v);
     Ok(plates_json(s))
 }
 

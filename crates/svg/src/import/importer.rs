@@ -4,10 +4,11 @@ use super::prepass::link;
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BlendMode, Color, Dash, FillLayer, FillRule, Gradient, GradientGeom, GradientKind, GradientPaint,
     GradientStop, ImageBlob, ImageObject, Importer, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, PathData, PatternDef, Point, Rect, Reuse,
-    StrokeLayer, Vec2, fnv1a, fx, shapes, spread, text, vector_effect,
+    StrokeLayer, Vec2, fnv1a, fx, shapes, text, vector_effect,
 };
 use crate::SvgError;
 use kurbo::BezPath;
+use vectorcraft_color::GradientSpread;
 
 /// How many clip paths deep (`<clipPath clip-path>`) an object's clip is read.
 const MAX_CLIP_NEST: usize = 16;
@@ -139,12 +140,16 @@ impl Importer {
         Some(self.doc.alloc_id())
     }
 
-    /// A new object named after element `id` (unless it has none or a made-up one).
+    /// A new object named after element `id` (unless it has none or a made-up one), noted as
+    /// found when [`Importer::wanted`] lists `id`.
     fn named(&mut self, id: &str, kind: NodeKind) -> Option<Node> {
         let nid = self.alloc_id()?;
         let mut n = Node::new(nid, kind);
         if !id.is_empty() && !made_up(id) {
             n.name = Some(self.name_of(id).to_string());
+            if self.wanted.contains(id) {
+                self.found.entry(id.to_string()).or_insert(nid);
+            }
         }
         Some(n)
     }
@@ -246,10 +251,7 @@ impl Importer {
         // space; runs paint in text space.
         let to_text = Affine::scale(grow) * obj.xf.inverse();
         let slot_paint = |im: &mut Self, k: usize, m: Affine| match kids.get(main + 1 + k) {
-            Some(usvg::Node::Path(p)) => p.fill().map_or(Paint::None, |f| {
-                let area = kurbo::Shape::bounding_box(&bezpath(p.data(), m));
-                im.paint(f.paint(), m, Some(area))
-            }),
+            Some(usvg::Node::Path(p)) => p.fill().map_or(Paint::None, |f| im.paint(f.paint(), m)),
             _ => Paint::None,
         };
         let resolved: Vec<Paint> = (0..paints).map(|k| slot_paint(self, k, to_text)).collect();
@@ -608,9 +610,8 @@ impl Importer {
         Some(NodeKind::Compound { children, rule: r })
     }
 
-    /// A usvg paint mapped by `m`, for art covering `area` (after `m`: where a reflected or
-    /// repeated gradient has to reach).
-    fn paint(&mut self, p: &usvg::Paint, m: Affine, area: Option<Rect>) -> Paint {
+    /// A usvg paint mapped by `m`.
+    fn paint(&mut self, p: &usvg::Paint, m: Affine) -> Paint {
         let (kind, base, mut geom) = match p {
             usvg::Paint::Color(c) => return Paint::solid(Color::rgb8(c.red, c.green, c.blue)),
             usvg::Paint::Pattern(pt) => return self.pattern(pt, m),
@@ -637,28 +638,14 @@ impl Importer {
             }
         };
         geom.transform(m * aff(base.transform()), kind);
-        let mut stops = self.stops(base);
-        let reflect = match base.spread_method() {
-            usvg::SpreadMethod::Pad => None,
-            usvg::SpreadMethod::Reflect => Some(true),
-            usvg::SpreadMethod::Repeat => Some(false),
+        let mut gradient = Gradient::new(kind, self.stops(base));
+        // `spreadMethod` is the gradient's spread; its stops run once along the vector.
+        gradient.spread = match base.spread_method() {
+            usvg::SpreadMethod::Pad => GradientSpread::Pad,
+            usvg::SpreadMethod::Reflect => GradientSpread::Reflect,
+            usvg::SpreadMethod::Repeat => GradientSpread::Repeat,
         };
-        if let Some(reflect) = reflect {
-            match area.map(|a| spread::expand(kind, &mut geom, &mut stops, reflect, a)) {
-                Some(spread::Expanded::Whole) => {}
-                Some(spread::Expanded::Capped) => {
-                    self.warn(format!("gradient '{}': spreadMethod repeats more than {} times; it pads after that", base.id(), spread::MAX_PERIODS))
-                }
-                None => self.warn(format!("gradient '{}': spreadMethod approximated as pad", base.id())),
-            }
-        }
-        Paint::Gradient(Box::new(GradientPaint {
-            gradient: Gradient::new(kind, stops),
-            geom: Some(geom),
-            angle: geom.angle_deg(),
-            swatch: None,
-            freeform: None,
-        }))
+        Paint::Gradient(Box::new(GradientPaint { gradient, geom: Some(geom), angle: geom.angle_deg(), swatch: None, freeform: None }))
     }
 
     /// `<pattern>` → a pattern swatch painted with the pattern's tile placement. The swatch art is
@@ -692,12 +679,12 @@ impl Importer {
         Paint::Pattern { pattern: name, xf }
     }
 
-    /// The fill and stroke of `p` mapped by `m`; `area`: the bounds of the path after `m`.
-    fn appearance(&mut self, p: &usvg::Path, m: Affine, area: Option<Rect>) -> (Appearance, FillRule) {
+    /// The fill and stroke of `p` mapped by `m`.
+    fn appearance(&mut self, p: &usvg::Path, m: Affine) -> (Appearance, FillRule) {
         let mut fill = None;
         let mut r = FillRule::NonZero;
         if let Some(f) = p.fill() {
-            let paint = self.paint(f.paint(), m, area);
+            let paint = self.paint(f.paint(), m);
             let mut fl = FillLayer::new(paint);
             fl.opacity = f.opacity().get();
             r = rule(f.rule());
@@ -708,9 +695,7 @@ impl Importer {
             // A non-scaling stroke is as wide on screen whatever `m` does: the path takes `m`, so a
             // stroke of that width in the document is exact.
             let scale = if self.non_scaling.contains(p.id()) { self.screen } else { m.determinant().abs().sqrt() };
-            // The stroke reaches past the path (miters further: a generous margin).
-            let reach = s.width().get() as f64 * scale * (s.miterlimit().get() as f64).max(1.0);
-            let paint = self.paint(s.paint(), m, area.map(|a| a.inflate(reach, reach)));
+            let paint = self.paint(s.paint(), m);
             let mut sl = StrokeLayer::new(paint, s.width().get() as f64 * scale);
             sl.opacity = s.opacity().get();
             sl.cap = match s.linecap() {
@@ -749,7 +734,7 @@ impl Importer {
         if path.is_empty() {
             return None;
         }
-        let (appearance, r) = self.appearance(p, acc, path.bounds());
+        let (appearance, r) = self.appearance(p, acc);
         // Shared, so a compound path's subpaths don't each copy a gradient's stops.
         let appearance: vectorcraft_doc::Shared<Appearance> = appearance.into();
         let mut n = if path.subpaths.len() > 1 {
@@ -880,6 +865,8 @@ mod tests {
             max_nodes: 1000,
             error: None,
             nested_svg_images: crate::MAX_NESTED_SVG_IMAGES,
+            wanted: HashSet::new(),
+            found: HashMap::new(),
         };
         let tree = usvg::Tree::from_str(r#"<svg xmlns="http://www.w3.org/2000/svg"/>"#, &usvg::Options::default()).unwrap();
         let res = im.svg_image(&tree, Affine::IDENTITY);

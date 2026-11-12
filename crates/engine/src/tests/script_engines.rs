@@ -230,6 +230,42 @@ fn an_engine_keeps_the_newest_places_within_its_budget() {
     assert_eq!((d_place.0, d_place.1, d_place.2), (None, 0, 0), "a map larger than the budget is not kept");
 }
 
+/// A run of a named engine whose script does not compile defines no code, so it keeps no place
+/// and pushes out none of the places kept before. An included file without a preprocessor line is
+/// first parsed with the script it joins, so its syntax error ends the run as it starts.
+#[test]
+fn a_run_that_does_not_compile_keeps_no_place() {
+    let base: PathBuf = std::env::temp_dir().join(format!("vc-script-engines-uncompiled-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&base).unwrap();
+    // A kept place counts the names of the files the run read: four places of the failed run's size
+    // would not fit in the budget.
+    let mut text = String::from("#targetengine e\n");
+    for k in 0..10 {
+        std::fs::write(base.join(format!("ok{k}.jsxinc")), "var ok = 1;").unwrap();
+        text.push_str(&format!("#include \"ok{k}.jsxinc\"\n"));
+    }
+    std::fs::write(base.join("bad.jsxinc"), "var = ;").unwrap();
+    text.push_str("#include \"bad.jsxinc\"");
+    let bad = base.join("bad.jsx");
+    std::fs::write(&bad, text).unwrap();
+    let mut s = Session::new();
+    run(&mut s, "#targetengine e\nvar x = 1;").unwrap();
+    TEST_KEPT_MAP_BYTES.with(|b| b.set(Some(3000)));
+    run(&mut s, "#targetengine e\n\n\nfunction c() { throw new Error('c'); }").unwrap();
+    let mut kinds = vec![];
+    for _ in 0..5 {
+        assert!(s.execute("script.run", &json!({"path": bad.to_string_lossy()})).is_err());
+        kinds.push(s.script_report().unwrap()["kind"].clone());
+    }
+    assert!(run(&mut s, "#targetengine e\nc();").is_err());
+    let c_place = place(&s);
+    TEST_KEPT_MAP_BYTES.with(|b| b.set(None));
+    let _ = std::fs::remove_dir_all(base);
+    assert!(kinds.iter().all(|k| k == "syntax"), "{kinds:?}");
+    assert_eq!((c_place.0.as_deref(), c_place.1), (Some("t.js"), 4));
+}
+
 /// A `$.evalFile` an earlier run kept reads files the way the run that calls it does: relative to
 /// that run's script, and as `$.evalFile` does in a run given as text.
 #[test]

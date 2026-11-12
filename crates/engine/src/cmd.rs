@@ -4,6 +4,7 @@ pub mod actionset;
 mod addons;
 mod apiref;
 pub(crate) mod appearance;
+pub mod arrowheads;
 mod assets;
 mod attributes;
 pub mod brushlib;
@@ -105,6 +106,7 @@ mod variablecmds;
 pub(crate) mod views;
 pub mod wand;
 pub mod webexport;
+mod wireframe;
 mod xform;
 
 use serde::Serialize;
@@ -297,6 +299,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         // Split out of `paint` (M3.8); kept next to it so lists in registry order (the command
         // palette, `engine.commands`) show them where they always were.
         v.extend(stroke::specs());
+        v.extend(arrowheads::specs());
         v.extend(appearance::specs());
         v.extend(style::specs());
         v.extend(swatch::specs());
@@ -308,6 +311,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(draw2::specs());
         v.extend(xform::specs());
         v.extend(effectcmd::specs());
+        v.extend(wireframe::specs());
         v.extend(pathops::specs());
         v.extend(compoundshape::specs());
         v.extend(typecmd::specs());
@@ -771,6 +775,7 @@ pub use docmenu::guide_indexes;
 pub(crate) use edit::{settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;
 pub(crate) use object::{keep_aligned_in, refresh_pixel_aligned};
+pub use plugin_call::{Location, key_location, location_in, location_keys};
 pub(crate) use vectorcraft_doc::range::parse_range;
 
 /// A date param in Unix seconds that defaults to the clock: `None` when absent (now, see

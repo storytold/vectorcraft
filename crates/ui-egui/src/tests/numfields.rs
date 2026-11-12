@@ -1145,6 +1145,234 @@ fn a_frame_with_turns_on_and_off_a_number_field_scrolls_the_panel() {
     assert_eq!(value.get(), 10.0);
 }
 
+/// The rest of a notch that a number field took, which egui spreads over the next frames, scrolls
+/// no panel after the pointer leaves the field: neither the field's own panel nor a panel drawn
+/// before it. A notch turned after that scrolls the panel under the pointer by one whole notch.
+#[test]
+fn the_rest_of_a_notch_a_number_field_took_scrolls_no_panel_after_the_pointer_leaves() {
+    for to_other_panel in [false, true] {
+        let mut f = Field::new();
+        let (left, right, value, field) = (Cell::new(0.0), Cell::new(0.0), Cell::new(10.0), Cell::new(Rect::NOTHING));
+        let draw = |ui: &mut egui::Ui| {
+            ui.horizontal_top(|ui| {
+                let out = egui::ScrollArea::vertical().id_salt("left").max_height(120.0).show(ui, |ui| {
+                    ui.allocate_space(vec2(100.0, 600.0));
+                });
+                left.set(out.state.clamped_offset().y);
+                let out = egui::ScrollArea::vertical().id_salt("right").max_height(120.0).show(ui, |ui| {
+                    ui.vertical(|ui| {
+                        let v = widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v));
+                        field.set(ui.min_rect());
+                        ui.add_space(600.0);
+                        v
+                    })
+                    .inner
+                });
+                right.set(out.state.clamped_offset().y);
+                out.inner
+            })
+            .inner
+        };
+        f.frame(vec![], &draw);
+        f.frame(vec![], &draw);
+        let on = field.get().center();
+        let off = if to_other_panel { Pos2::new(50.0, 60.0) } else { Pos2::new(on.x, field.get().bottom() + 40.0) };
+        assert_eq!(f.frame(vec![Event::PointerMoved(on), notch_down()], &draw), Some(9.0));
+        f.frame(vec![Event::PointerMoved(off)], &draw);
+        for _ in 0..20 {
+            f.frame(vec![], &draw);
+        }
+        assert_eq!((left.get(), right.get(), value.get()), (0.0, 0.0, 9.0), "pointer moved to the other panel: {to_other_panel}");
+        assert_eq!(f.frame(vec![notch_down()], &draw), None);
+        for _ in 0..30 {
+            f.frame(vec![], &draw);
+        }
+        let line = f.ctx.options(|o| o.input_options.line_scroll_speed);
+        let (scrolled, still) = if to_other_panel { (left.get(), right.get()) } else { (right.get(), left.get()) };
+        assert!((scrolled - line).abs() < 0.01 && still == 0.0, "other panel {to_other_panel}: {scrolled} {still}");
+        assert_eq!(value.get(), 9.0);
+    }
+}
+
+/// A wheel touch that starts and never ends (some mouse wheels send no end) stops counting as a
+/// touch once no wheel event comes for a while, as egui stops it, so the rest of a notch a number
+/// field takes after that still scrolls no panel after the pointer leaves.
+#[test]
+fn a_wheel_touch_with_no_end_does_not_let_the_rest_of_a_later_notch_scroll_the_panel() {
+    let mut f = Field::new();
+    let (offset, value, field) = (Cell::new(0.0), Cell::new(10.0), Cell::new(Rect::NOTHING));
+    let draw = |ui: &mut egui::Ui| {
+        let out = egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
+            ui.vertical(|ui| {
+                let v = widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v));
+                field.set(ui.min_rect());
+                ui.add_space(600.0);
+                v
+            })
+            .inner
+        });
+        offset.set(out.state.clamped_offset().y);
+        out.inner
+    };
+    f.frame(vec![], &draw);
+    f.frame(vec![], &draw);
+    let on = field.get().center();
+    let off = Pos2::new(on.x, field.get().bottom() + 40.0);
+    assert_eq!(f.frame(vec![Event::PointerMoved(on), notch_down()], &draw), Some(9.0));
+    for _ in 0..20 {
+        f.frame(vec![], &draw);
+    }
+    let start = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::Vec2::ZERO,
+        phase: egui::TouchPhase::Start,
+        modifiers: Modifiers::NONE,
+        source: egui::MouseWheelSource::Wheel,
+    };
+    f.frame(vec![start], &draw);
+    for _ in 0..10 {
+        f.frame(vec![], &draw);
+    }
+    assert_eq!(f.frame(vec![notch_down()], &draw), Some(8.0));
+    f.frame(vec![Event::PointerMoved(off)], &draw);
+    for _ in 0..20 {
+        f.frame(vec![], &draw);
+    }
+    assert_eq!((offset.get(), value.get()), (0.0, 8.0));
+}
+
+/// A whole wheel touch (start, turn and end) in one pass that a number field takes leaves nothing
+/// for egui to let out later, so the next notch on the panel scrolls it by one whole notch.
+#[test]
+fn a_whole_touch_in_one_pass_on_a_number_field_leaves_the_next_panel_notch_whole() {
+    let mut f = Field::new();
+    let (offset, value, field) = (Cell::new(0.0), Cell::new(10.0), Cell::new(Rect::NOTHING));
+    let draw = |ui: &mut egui::Ui| {
+        let out = egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
+            let v = ui.vertical(|ui| {
+                let v = widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v));
+                field.set(ui.min_rect());
+                v
+            });
+            ui.add_space(600.0);
+            v.inner
+        });
+        offset.set(out.state.clamped_offset().y);
+        out.inner
+    };
+    f.frame(vec![], &draw);
+    f.frame(vec![], &draw);
+    let on = field.get().center();
+    let off = Pos2::new(on.x, field.get().bottom() + 40.0);
+    assert_eq!(f.frame(vec![Event::PointerMoved(on), notch_down()], &draw), Some(9.0));
+    for _ in 0..20 {
+        f.frame(vec![], &draw);
+    }
+    let touch = |phase| Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: if phase == egui::TouchPhase::Move { vec2(0.0, -1.0) } else { egui::Vec2::ZERO },
+        phase,
+        modifiers: Modifiers::NONE,
+        source: egui::MouseWheelSource::Wheel,
+    };
+    let events = vec![touch(egui::TouchPhase::Start), touch(egui::TouchPhase::Move), touch(egui::TouchPhase::End)];
+    assert_eq!(f.frame(events, &draw), Some(8.0));
+    f.frame(vec![Event::PointerMoved(off), notch_down()], &draw);
+    for _ in 0..30 {
+        f.frame(vec![], &draw);
+    }
+    let line = f.ctx.options(|o| o.input_options.line_scroll_speed);
+    assert!((offset.get() - line).abs() < 0.01, "{} {line}", offset.get());
+    assert_eq!(value.get(), 8.0);
+}
+
+/// A turn and the end of the wheel stream in one pass that a number field takes leave nothing for
+/// egui to let out later, so the next notch on the panel scrolls it by one whole notch.
+#[test]
+fn a_turn_ended_in_its_own_pass_on_a_number_field_leaves_the_next_panel_notch_whole() {
+    let mut f = Field::new();
+    let (offset, value, field) = (Cell::new(0.0), Cell::new(10.0), Cell::new(Rect::NOTHING));
+    let draw = |ui: &mut egui::Ui| {
+        let out = egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
+            let v = ui.vertical(|ui| {
+                let v = widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v));
+                field.set(ui.min_rect());
+                v
+            });
+            ui.add_space(600.0);
+            v.inner
+        });
+        offset.set(out.state.clamped_offset().y);
+        out.inner
+    };
+    f.frame(vec![], &draw);
+    f.frame(vec![], &draw);
+    let on = field.get().center();
+    let off = Pos2::new(on.x, field.get().bottom() + 40.0);
+    let end = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: egui::Vec2::ZERO,
+        phase: egui::TouchPhase::End,
+        modifiers: Modifiers::NONE,
+        source: egui::MouseWheelSource::Wheel,
+    };
+    assert_eq!(f.frame(vec![Event::PointerMoved(on), notch_down(), end], &draw), Some(9.0));
+    f.frame(vec![Event::PointerMoved(off), notch_down()], &draw);
+    for _ in 0..30 {
+        f.frame(vec![], &draw);
+    }
+    let line = f.ctx.options(|o| o.input_options.line_scroll_speed);
+    assert!((offset.get() - line).abs() < 0.01, "{} {line}", offset.get());
+    assert_eq!(value.get(), 9.0);
+}
+
+/// A small turn the other way on the panel while the rest of a notch a number field took is still
+/// being let out scrolls the panel by the whole turn.
+#[test]
+fn a_turn_the_other_way_while_a_number_field_notch_runs_out_scrolls_the_panel_by_the_whole_turn() {
+    let mut f = Field::new();
+    let (offset, value, field) = (Cell::new(0.0), Cell::new(10.0), Cell::new(Rect::NOTHING));
+    let draw = |ui: &mut egui::Ui| {
+        let out = egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
+            ui.add_space(150.0);
+            let v = ui.vertical(|ui| {
+                let v = widgets::plain_field(ui, "f", value.get(), "", 0, 80.0).inspect(|&v| value.set(v));
+                field.set(ui.min_rect());
+                v
+            });
+            ui.add_space(600.0);
+            v.inner
+        });
+        offset.set(out.state.clamped_offset().y);
+        out.inner
+    };
+    f.frame(vec![], &draw);
+    f.frame(vec![], &draw);
+    let line = f.ctx.options(|o| o.input_options.line_scroll_speed);
+    let above = |field: Rect| Pos2::new(field.center().x, field.top() - 30.0);
+    f.frame(vec![Event::PointerMoved(Pos2::new(field.get().center().x, 10.0)), notch_down(), notch_down()], &draw);
+    for _ in 0..30 {
+        f.frame(vec![], &draw);
+    }
+    let scrolled = offset.get();
+    assert!((scrolled - 2.0 * line).abs() < 0.01, "{scrolled}");
+    f.frame(vec![Event::PointerMoved(field.get().center())], &draw);
+    assert_eq!(f.frame(vec![notch_down()], &draw), Some(9.0));
+    let up = Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: vec2(0.0, 10.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Modifiers::NONE,
+        source: egui::MouseWheelSource::Wheel,
+    };
+    f.frame(vec![Event::PointerMoved(above(field.get())), up], &draw);
+    for _ in 0..30 {
+        f.frame(vec![], &draw);
+    }
+    assert!((offset.get() - (scrolled - 10.0)).abs() < 0.01, "{} {scrolled}", offset.get());
+    assert_eq!(value.get(), 9.0);
+}
+
 /// A number field that missed a pass (its panel was hidden) waits for the pointer to move onto it
 /// again before it takes the wheel, with or without another number field drawn meanwhile.
 #[test]

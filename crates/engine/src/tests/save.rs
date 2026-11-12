@@ -84,6 +84,55 @@ fn a_confined_save_leaves_out_paths_outside_the_read_root() {
     let _ = std::fs::remove_dir_all(d);
 }
 
+/// A save without a path, and Revert, refused because the document's own file is outside a confined
+/// client's roots: the error keeps the root and the reason and names the file by its file name, also
+/// for the files a save writes beside it. A path the client gives stays whole in the error.
+#[test]
+fn pathless_save_rejection_hides_document_folder() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let d = dir("roots-error");
+    let (inside, outside) = (d.join("in"), d.join("kept-out"));
+    for f in [&inside, &outside] {
+        std::fs::create_dir_all(f).unwrap();
+    }
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    rect(&mut s);
+    let own = path(&outside, "doc.vectorcraft");
+    s.execute("document.save", &json!({"path": own})).unwrap();
+    rect(&mut s);
+    let roots = AutomationRoots::new(&[inside.as_path()], &[inside.as_path()]).unwrap();
+    let root = crate::cmd::findfiles::plain(std::fs::canonicalize(&inside).unwrap()).display().to_string();
+    let hidden = outside.to_string_lossy().into_owned();
+    let mut refused = |id: &str, p: Value| confine(roots.as_ref(), || s.execute(id, &p)).unwrap_err().to_string();
+
+    let e = refused("document.save", json!({}));
+    assert_eq!(e, format!("automation path rejected: outside the write root {root}: doc.vectorcraft"));
+    let e = refused("document.save", json!({"separateArtboards": true}));
+    assert!(e.starts_with(&format!("automation path rejected: outside the write root {root}: ")) && !e.contains(&hidden), "{e}");
+    let e = refused("file.revert", json!({}));
+    assert_eq!(e, format!("automation path rejected: outside the read root {root}: doc.vectorcraft"));
+    // Given by the client: whole.
+    let e = refused("document.save", json!({"path": own}));
+    assert_eq!(e, format!("automation path rejected: outside the write root {root}: {own}"));
+    // Without read roots, a write refusal still names the file by its file name.
+    let write_only = AutomationRoots::new(&[], &[inside.as_path()]).unwrap();
+    let e = confine(write_only.as_ref(), || s.execute("document.save", &json!({}))).unwrap_err().to_string();
+    assert_eq!(e, format!("automation path rejected: outside the write root {root}: doc.vectorcraft"));
+    assert!(s.doc().unwrap().is_dirty(), "nothing was saved");
+    // Read with losses from its own file: the refusal to write over it names the file by its file name.
+    let st = s.doc_mut().unwrap();
+    st.imported_from = Some(own.clone());
+    st.import_losses = vec!["hidden text".into()];
+    let e = confine(roots.as_ref(), || s.execute("document.save", &json!({}))).unwrap_err().to_string();
+    assert!(e.starts_with("invalid parameters for `document.save`: doc.vectorcraft is the file this document was read from"), "{e}");
+    assert!(!e.contains(&hidden), "{e}");
+    let e = confine(roots.as_ref(), || s.execute("document.save", &json!({"path": own}))).unwrap_err().to_string();
+    assert!(e.contains(&format!("{own} is the file this document was read from")), "{e}");
+    let _ = std::fs::remove_dir_all(d);
+}
+
 #[test]
 fn an_svg_path_writes_svg_and_save_writes_it_back() {
     let d = dir("svg");
@@ -566,6 +615,30 @@ fn eps_save_with_use_artboards_and_a_named_artboard_reports_it_as_the_range() {
     let o = s.execute("file.formatOptions", &json!({})).unwrap();
     assert_eq!(o["options"]["useArtboards"]["value"], true);
     assert_eq!(o["options"]["range"]["value"], "2", "the saved artboard, not All");
+    std::fs::remove_dir_all(d).unwrap();
+}
+
+#[test]
+fn eps_save_with_use_artboards_refuses_to_replace_the_file_read_from_before_writing_any_file() {
+    let d = dir("eps-artboards-lossy-sibling");
+    let eps_path = path(&d, "Art.eps");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    rect(&mut s);
+    let options = json!({"useArtboards": true, "previewFormat": "none", "thumbnails": false});
+    let r = s.execute("document.save", &json!({"path": eps_path, "options": options})).unwrap();
+    let sibling = r["files"][1].as_str().unwrap().to_string();
+    let original = std::fs::read(&sibling).unwrap();
+    std::fs::remove_file(&eps_path).unwrap();
+    let st = s.doc_mut().unwrap();
+    st.imported_from = Some(sibling.clone());
+    st.import_losses.push("test import omitted artwork".into());
+    let err = s.execute("document.save", &json!({"path": eps_path, "options": options})).unwrap_err().to_string();
+    assert!(err.contains("acknowledgeLoss") && err.contains(&sibling), "{err}");
+    assert_eq!(std::fs::read(&sibling).unwrap(), original);
+    assert!(!std::path::Path::new(&eps_path).exists(), "no file of the set is written when one is refused");
+    s.execute("document.save", &json!({"path": eps_path, "options": options, "acknowledgeLoss": true})).unwrap();
+    assert!(std::path::Path::new(&eps_path).exists());
     std::fs::remove_dir_all(d).unwrap();
 }
 

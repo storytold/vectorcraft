@@ -33,6 +33,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "addon.color.swatchLegend",
     "addon.contour.set",
     "addon.cutting.bridges",
+    "addon.cutting.weed",
     "addon.image.removeBackground",
     "addon.pathtools.addPoints",
     "addon.pathtools.close",
@@ -241,6 +242,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "object.blend.replaceSpine",
     "object.blend.reverseFrontToBack",
     "object.blend.reverseSpine",
+    "object.blend.setEasing",
     "object.blend.spine.addAnchor",
     "object.blend.spine.convertAnchor",
     "object.blend.spine.moveAnchor",
@@ -687,5 +689,6 @@ pub(super) const DENIED: &[&str] = &[
     "object.blend.options",
     "object.liquify",
     "object.pathfinder.options",
+    "stroke.arrowheads.edit",
     "type.compositeFonts.set",
 ];

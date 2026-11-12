@@ -113,6 +113,8 @@ const PATTERNS: &str = "pattern fills are written as their tiles, clipped to the
 const FREEFORM: &str = "freeform gradients are written as their average colour";
 const CONIC: &str = "conic gradients are written as solid wedges clipped to the shape (legacy .ai files have no conic gradient)";
 const DIAMOND: &str = "diamond gradients are written as four linear gradients clipped to the shape (legacy .ai files have no diamond gradient)";
+const SPREAD: &str = "gradients that repeat or reflect are written with their stops repeated across the shape (legacy .ai gradients only pad)";
+const SPREAD_CAPPED: &str = "gradients that repeat or reflect are written with at most 256 stops; they pad past those";
 /// Wedges a conic gradient is written as: one a degree.
 const CONIC_WEDGES: usize = 360;
 const STROKES: &str =
@@ -156,6 +158,8 @@ pub enum HiddenObjects {
 pub struct LegacyAiOutput {
     pub bytes: Vec<u8>,
     pub warnings: Vec<String>,
+    /// Notes on what the options asked for: hidden objects left out or written visible.
+    pub setting_notes: Vec<String>,
 }
 
 /// Whether image node `n` of `doc` is written as a 1-bit image mask in its colorize color
@@ -267,7 +271,7 @@ pub fn export_legacy_ai(doc: &Document, o: &LegacyAiOptions) -> Result<LegacyAiO
     // The page trailer as the specification's script has it (§3); the document trailer takes the
     // prolog's dictionary off the dictionary stack (its procedure set termination, §3).
     s.push_str("%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\nend\n%%EOF\n");
-    Ok(LegacyAiOutput { bytes: s.into_bytes(), warnings: w.warnings })
+    Ok(LegacyAiOutput { bytes: s.into_bytes(), warnings: w.warnings, setting_notes: w.setting_notes })
 }
 
 #[cfg(test)]

@@ -165,6 +165,7 @@ impl Writer<'_> {
             }
         }
         let id = self.id_attr(n);
+        self.note_outlined(n.id);
         let a = self.attrs(&css::transparency(n));
         // Text outlined because SVG text can't draw it (bent glyphs, vertical type, ruby, effects on
         // a path and the like) names its text for screen readers and search; Convert to Outlines
@@ -521,7 +522,7 @@ impl Writer<'_> {
                 continue;
             };
             if !font.subset {
-                self.warn(&format!("the font {name} is embedded whole: its licence doesn't allow subsetting"));
+                self.note_setting(&format!("the font {name} is embedded whole: its licence doesn't allow subsetting"));
             }
             let shared = uses.iter().filter(|o| described(o) == described(u)).count() > 1;
             let range = if shared { format!(";unicode-range:{}", unicode_range(&u.chars)) } else { String::new() };

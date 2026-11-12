@@ -896,6 +896,17 @@ font-technology	Variable	Варіативні
 	The selected character's font is not available.	Шрифт виділеного символу недоступний.
 	No alternates for the selected character.	Виділений символ не має альтернатив.
 	Double-click to replace	Двічі клацніть для заміни
+	Select one character with the Type tool first.	Спершу виділіть один символ інструментом «Текст».
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} — гліф шрифту {font}, а не шрифту виділеного тексту ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} належить символу {base} (U+{base_code}) {place}; виділено символ {sel} (U+{code}).
+	at the start of a word	на початку слова
+	in the middle of a word	у середині слова
+	at the end of a word	наприкінці слова
+	standing alone	в окремому вигляді
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} не є альтернативою символу {sel} (U+{code}) у тому вигляді, в якому він стоїть у своєму слові.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Двічі клацніть, щоб вставити замість нього {base} (U+{code}): форма подання не з’єднується, літера з’єднується.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Замість форми подання вставлено {base} (U+{code}): шрифт з’єднує його із сусідніми за положенням.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Жодна функція OpenType не малює тут цей гліф, тому він замінює гліф символу й може не з’єднуватися із сусідніми символами.
 	Double-click to insert	Двічі клацніть для вставки
 	Double-click to rename	Двічі клацніть для перейменування
 	Double-click to target the contents	Двічі клацніть, щоб вибрати вміст як об’єкт
@@ -1707,6 +1718,7 @@ file-filter	Templates	Шаблони
 	Include Hidden Layers	Включати приховані шари
 	Include Linked Files	Включати пов’язані файли
 	Include Metadata	Включати метадані
+	Include Variable Data	Включати дані змінних
 	Include non-printing layers	Включати недруковані шари
 	Write pages longer than 200 in at full size in points	Записувати сторінки, довші за 200 in, у повному розмірі, у пунктах
 	Include SVG Code	Вмикати код SVG
@@ -2026,6 +2038,8 @@ file-filter	Templates	Шаблони
 	Metallic Gradients	Металеві градієнти
 	Meters	Метри
 	Method:	Метод:
+	Pad	Продовжити
+	Repeats	Кількість повторів
 	Millimeters	Міліметри
 	Minify	Мінімізувати
 	Minimal	Мінімальний
@@ -2093,6 +2107,7 @@ file-filter	Templates	Шаблони
 	Move Slices	Перемістити фрагменти
 	Move Spine Point	Перемістити точку осі
 	Reshape Spine Segment	Змінити форму сегмента осі
+	Blend Easing	Згладжування переходу
 	Move Brush	Перемістити пензель
 	Move Swatch	Перемістити зразок
 	Move Up	Перемістити вгору
@@ -2905,6 +2920,10 @@ digits	Malayalam	Малаялам
 	Search Preferences	Пошук у налаштуваннях
 	No settings found	Налаштування не знайдено
 	Reset Profiles	Скинути профілі
+	Arrowheads	Стрілки
+	Edit Arrowheads	Редагувати стрілки
+	Edit Arrowheads…	Редагувати стрілки…
+	Reload Arrowheads	Перезавантажити стрілки
 	Rotate View	Повернути вид
 	Reset Rotate View	Скинути поворот виду
 	Rotate View to Selection	Повернути вид за виділенням
@@ -2957,6 +2976,7 @@ digits	Malayalam	Малаялам
 	Roman Baseline	Римська базова лінія
 	Roman Hanging Punctuation	Римська висяча пунктуація
 	Korean Line Break Anywhere	Перенесення корейського тексту будь-де
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Параметри східноазійського набору
 	Korean Composition Settings	Параметри корейського набору
 	Rotate	Повернути
@@ -2965,6 +2985,7 @@ digits	Malayalam	Малаялам
 	Rotate View Tool	Інструмент «Поворот виду»
 	Trackpad Gesture to Rotate View	Повертати вид жестом трекпада
 	Hold a Tool Shortcut to Use the Tool Temporarily	Тимчасово використовувати інструмент, утримуючи його клавішу
+	Show Bounding Box While Moving and Drawing	Показувати обмежувальну рамку під час переміщення та малювання
 	Rotate…	Повернути…
 	Rotation	Поворот
 	Roughen…	Надати нерівності…
@@ -3456,6 +3477,9 @@ effect	Points	Точки
 	Split Path	Розділити контур
 	spot	плашковий
 	Spot Color	Плашковий колір
+	Spot Color Objects	Об’єкти з плашковими кольорами
+	Pattern Objects	Об’єкти з візерунками
+	Gradient Objects	Об’єкти з градієнтами
 	Spot Colors	Плашкові кольори
 	Spot Colors…	Плашкові кольори…
 	Spread:	Розворот:
@@ -4413,6 +4437,8 @@ axis	Both	Обидві
 @msg	the Smooth slider is not open	повзунок «Згладити» не відкрито
 @msg	the screen color sampler is already open	засіб вибору кольору з екрана вже відкритий
 @msg	this system has no screen color sampler	у цій системі немає засобу вибору кольору з екрана
+@msg	the screen color sampler did not answer	засіб вибору кольору з екрана не відповів
+@msg	the screen color sampler failed	у засобі вибору кольору з екрана сталася помилка
 @msg	bad colour `{hex}` (#rrggbb)	неприпустимий колір `{hex}` (#rrggbb)
 @msg	bad page tree	неприпустиме дерево сторінок
 @msg	bad shortcut	неприпустиме поєднання клавіш
@@ -4442,6 +4468,7 @@ axis	Both	Обидві
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не є кольором, наприклад "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: не більше {MAX_TABLE} кольорів
 @msg	command `{0}` is not available right now: {1}	команда `{0}` зараз недоступна: {1}
+@msg	command `{id}` is not available right now	команда `{id}` зараз недоступна
 @msg	compound paths can only contain paths	складені контури можуть містити лише контури
 @msg	compressed (RLE) bitmaps can't be read yet	стислі (RLE) растрові зображення поки не читаються
 @msg	damaged	пошкоджено
@@ -4822,6 +4849,7 @@ axis	Both	Обидві
 @msg	unknown option `{path}.{k}`	невідомий параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	невідомі накладення `{o}` (preserve, simulate або discard)
 @msg	unknown panel `{raw}`	невідома панель `{raw}`
+@msg	panels can't be shown in Presentation Mode	у режимі презентації панелі показати не можна
 @msg	unknown preference `{key}`	невідоме налаштування `{key}`
 @msg	Preferences imported.	Налаштування імпортовано.
 @msg	not a preferences file: {e}	не є файлом налаштувань: {e}
@@ -5694,6 +5722,9 @@ axis	Y Axis	Вісь Y
 @msg	`dither` must be true or false	`dither` має бути true або false
 	Perceptual	Перцептивний
 @msg	`method` must be classic or perceptual	`method` має бути classic або perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` має бути pad, repeat або reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` має бути цілим числом від 1 до {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` застосовується до лінійних, радіальних, конічних і ромбоподібних градієнтів
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Встановити «{name}», якому потрібен великий обчислювальний бюджет?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Кожен запуск може тривати до {minutes} хвилин і виконувати в {times} разів більше роботи, ніж дозволено іншим модулям. Він працює у фоні, і його можна скасувати.
@@ -5706,6 +5737,110 @@ axis	Y Axis	Вісь Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамічний ефект виконується під час відмальовування документа, тому він не може бути `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	модуль експорту завжди отримує бюджет експорту: не вказуйте `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» запитує великий обчислювальний бюджет (кожен запуск до {minutes} хвилин і в {times} разів більше інструкцій, ніж зазвичай): його має схвалити людина в настільному застосунку, або передайте `allowHeavy: true` у сеансі, запущеному з --allow-plugin-grants
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	`name` має містити 1-64 друковані символи
+@msg	`version`, `description` or `author` is too long	`version`, `description` або `author` задовге
+@msg	`warnings` must be a list of strings	`warnings` має бути списком рядків
+@msg	`{k}` must be one of {_1}	`{k}` має бути одним з: {_1}
+@msg	`{k}` must be {what}	`{k}` має бути: {what}
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	модуль експорту оголошує від 1 до {MAX_EXTENSIONS} `extensions`
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	поза групами може бути не більше {MAX_UNGROUPED} параметрів: задайте решті `group`
+@msg	can't encode the input	не вдається закодувати вхідні дані
+@msg	expected {"dataBase64"}	очікувалося {"dataBase64"}
+@msg	expected {"objects"}	очікувалося {"objects"}
+@msg	export `{name}`: {e}	експорт модуля `{name}`: {e}
+@msg	extension {e} is listed twice	розширення {e} вказано двічі
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	розширення {e}: використовуйте 1-16 малих літер і цифр, без крапки
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	неприпустимий ID {_1}: використовуйте 1-64 символи з A-Z a-z 0-9 . _ -
+@msg	invalid parameter name {k}	неприпустиме ім’я параметра {k}
+@msg	manifest is not UTF-8	маніфест не в кодуванні UTF-8
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	маніфест задовгий (межа {MAX_MANIFEST_BYTES} байтів)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	маніфест займає {_1} байтів (межа {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	модуль займає {_1} байтів (межа {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	потрібне схвалення: він запитує {0}, що користувач дозволяє під час окремого встановлення
+@msg	not JSON: {e}	не JSON: {e}
+@msg	not a WebAssembly binary (missing \0asm header)	не двійковий файл WebAssembly (немає заголовка \0asm)
+@msg	parameter `{k}`: {what}	параметр `{k}`: {what}
+@msg	parameter `{name}`: {what}	параметр `{name}`: {what}
+@msg	plug-in parameters must be a JSON object	параметри модуля мають бути об’єктом JSON
+@msg	the module must export its linear memory as `memory`	модуль має експортувати свою лінійну пам’ять як `memory`
+@msg	the objects to change are no longer in the document	об’єктів, які треба змінити, більше немає в документі
+@msg	the runtime panicked	середовище виконання аварійно завершилося
+@msg	unexpected host trap	неочікувана пастка (trap) хоста
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version повернула {v}; цей хост реалізує версію {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc повернула 0 (бракує пам’яті)
+@msg	vc_alloc returned a block outside memory	vc_alloc повернула блок поза пам’яттю
+@msg	vc_run returned error code {packed}	vc_run повернула код помилки {packed}
+@msg	{_1} is not a file	{_1} не є файлом
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} займає {_2} байтів (межа {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	об’єктів: {_1} (межа {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what} вказує за межі пам’яті
+@msg	`angle` must be a number	`angle` має бути числом
+@msg	`aspect` must be from 0.01 to 100	`aspect` має бути від 0.01 до 100
+@msg	`cap` must be "butt", "round" or "square"	`cap` має бути "butt", "round" або "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` має бути "nonzero" або "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` має бути адресою https:// довжиною не більше {MAX_HELP_URL} байтів
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` має містити 1-{MAX_HELP} друкованих символів
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` має бути ідентифікатором ефекту довжиною 1-{MAX_EFFECT_ID} байтів
+@msg	`id` must be the id of an input object	`id` має бути ідентифікатором вхідного об’єкта
+@msg	`join` must be "miter", "round" or "bevel"	`join` має бути "miter", "round" або "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` і `group` мають містити 1-{MAX_LABEL} друкованих символів
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` має бути 1-{MAX_TEXT}, а типове значення не довшим
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` і `maxItems` мають бути 0-{MAX_LIST}, `maxItems` щонайменше 1, а типове значення має містити стільки елементів
+@msg	`name` must be a string	`name` має бути рядком
+@msg	`opacity` must be a number	`opacity` має бути числом
+@msg	`type` must be "path" or "compound"	`type` має бути "path" або "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` має містити 1-{MAX_UNIT} друкованих символів
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` має перелічувати від 1 до {MAX_CONDITION_VALUES} значень для `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` указує `{other}`, але це не параметр, оголошений раніше за цей
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` указує не більше {MAX_CONDITIONS} параметрів
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` приймає значення `{other}`, прапорця або списку варіантів
+@msg	`visible` must be true or false	`visible` має бути true або false
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` має бути числом від {_1} до {_2}
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` має бути масивом не більше ніж із {MAX_ITEMS} елементів
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	типовий колір має бути об’єктом кольору або шістнадцятковим рядком, наприклад "#3a7bd5"
+@msg	a color object or a hex string such as "#3a7bd5"	об’єкт кольору або шістнадцятковий рядок, наприклад "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	довільний градієнт містить не більше {MAX_ITEMS} точок і ліній
+@msg	a freeform gradient line names a point it doesn't have	лінія довільного градієнта вказує точку, якої в градієнті немає
+@msg	a gradient needs 1-{MAX_ITEMS} stops	градієнту потрібно 1-{MAX_ITEMS} точок переходу
+@msg	a list of numbers	список чисел
+@msg	a list of {min_items} to {max_items} numbers	список із {min_items}-{max_items} чисел
+@msg	a new object needs a `path`	новому об’єкту потрібен `path`
+@msg	a number	число
+@msg	a painted live effect returns only `objects`	малювальний динамічний ефект повертає лише `objects`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	частина малювального динамічного ефекту має лише `path`, `fillRule`, `fills` і `strokes`
+@msg	a read-only object was left out	пропущено об’єкт лише для читання
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	пропущено об’єкт лише для читання: поверніть його як один {"id"} або в тому вигляді, у якому його передано
+@msg	a string	рядок
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	обведення має лише `paint`, `width`, `join`, `cap` і `miterLimit`
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	обведення має мати вигляд {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
+@msg	an effect must be {"id", "params"?, "visible"?}	ефект має мати вигляд {"id", "params"?, "visible"?}
+@msg	an effect on a fill returns only `fills`	ефект на заливці повертає лише `fills`
+@msg	an effect on a stroke returns only `strokes`	ефект на обведенні повертає лише `strokes`
+@msg	an object must be a JSON object	об’єкт має бути об’єктом JSON
+@msg	bad range	неприпустимий діапазон
+@msg	choices must be 1-64 non-empty, printable strings	варіанти мають бути 1-64 непорожніми друкованими рядками
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	координата поза діапазоном (межа ±{MAX_COORD} pt)
+@msg	default is not one of the options	типове значення не входить до варіантів
+@msg	each piece needs a `path`	кожній частині потрібен `path`
+@msg	is listed twice	вказано двічі
+@msg	pattern transform out of range	перетворення візерунка поза діапазоном
+@msg	read-only field '{field}' changed	змінено поле лише для читання '{field}'
+@msg	stops must be in order of `offset`	точки переходу мають іти в порядку `offset`
+@msg	the document has no pattern {pattern}	у документі немає візерунка {pattern}
+@msg	the document has no swatch {n}	у документі немає зразка {n}
+@msg	the output	виведення
+@msg	the path has no anchor points	контур не має опорних точок
+@msg	too many anchor points (limit {MAX_ANCHORS})	забагато опорних точок (межа {MAX_ANCHORS})
+@msg	true or false	true або false
+@msg	unknown key `{k}`; the keys here are {_1}	невідомий ключ `{k}`; тут допустимі ключі {_1}
+@msg	{_1} is listed twice	{_1} вказано двічі
+@msg	{_1} is not the id of an input object	{_1} не є ідентифікатором вхідного об’єкта
+@msg	{_1} is read-only	{_1} доступний лише для читання
+@msg	{what} must be from {lo} to {hi}	{what}: значення має бути від {lo} до {hi}
+@msg	a color component	компонент кольору
+@msg	a plate	пластина
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Встановити «{name}», якому потрібні ці дозволи?
 	ID: {id}	ID: {id}
@@ -5919,6 +6054,11 @@ axis	Y Axis	Вісь Y
 	User Brush Library 9	Користувацька бібліотека пензлів 9
 	User Brush Library 10	Користувацька бібліотека пензлів 10
 	Art Ribbons	Художні стрічки
+	Ink and Wash	Туш і розмивка
+	Tapered Ink	Звужена туш
+	Brush Pen	Пензлева ручка
+	Soft Wash	М'яка розмивка
+	Pooling Wash	Розмивка з облямівкою
 	Zigzag	Зигзаг
 	Burst Ray	Ударний промінь
 	Dash Trail	Пунктирний слід
@@ -6592,6 +6732,8 @@ breakText	Glyphs	Гліфи
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Короткі практичні уроки з основних інструментів, згруповані за навичками. Виберіть навичку, щоб побачити її уроки.
 	List Tutorials	Перелічити уроки
 	Show Tutorial	Показати урок
+	Show Tool Location	Показати розташування інструмента
+	Show where this tool is	Показати, де розташований цей інструмент
 @msg	missing `tutorial` (see learn.list)	відсутній `tutorial` (див. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	невідомий урок `{id}` (див. learn.list)
 
@@ -6612,3 +6754,8 @@ breakText	Glyphs	Гліфи
 @msg	Some islands could not be joined to the area around the art	Деякі острівці не вдалося з’єднати з областю навколо графіки
 @msg	`width` must be from {lo} to {hi} pt	`width` має бути від {lo} до {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` має бути цілим числом від 1 до {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Рамка й лінії вибірки…
+	Weed Box and Lines	Рамка й лінії вибірки
+	Margin	Поле
+	Box	Рамка
+	Swatch	Зразок

@@ -99,6 +99,10 @@ pub struct SavePlan {
     /// `preview`, `precision`) given beside the path, and each key of `options`, that the format
     /// doesn't read, naming the file the save writes.
     pub notes: Vec<String>,
+    /// The file the document was read from and what reading it left out, when the save needs
+    /// `acknowledgeLoss` to write over it and was not given it: every file the save writes is
+    /// checked against it before the first is written.
+    pub lossy_source: Option<(String, Vec<String>)>,
 }
 
 impl SavePlan {
@@ -303,7 +307,9 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
     };
     let modified = date_param(p, "modified", cmd)?;
     if let Some(path) = &path {
-        super::check_not_lossy_overwrite(st, path, p, cmd)?;
+        // Without a path, it is the document's own file: the error names it as the request may see it.
+        let given = str_param(p, "path").is_some_and(|g| !g.is_empty());
+        super::check_not_lossy_overwrite(st, path, p, cmd).map_err(|e| if given { e } else { super::access::naming_in_error(e, path) })?;
     }
     let written = written_as(cmd, format, &Value::Object(options.clone()));
     let top = NATIVE_OPTIONS.iter().filter(|k| p.get(**k).is_some_and(|v| !v.is_null())).map(|k| k.to_string());
@@ -313,7 +319,8 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
         .chain(nested.filter(|k| !reads_option(format, k)).map(|k| format!("options.{k}")))
         .map(|k| format!("`{k}` was not used: {} files don't read it", written.label))
         .collect();
-    Ok(SavePlan { mode, path, format, options, name, folder, modified, notes })
+    let lossy_source = super::lossy_source(st, p);
+    Ok(SavePlan { mode, path, format, options, name, folder, modified, notes, lossy_source })
 }
 
 /// The native save options, which a save also takes beside the path.
@@ -745,12 +752,14 @@ pub(super) fn encode_ai(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Res
         carries_editing.set(true);
         Ok(Some((data, resolved_warnings)))
     };
-    let (bytes, mut warnings) = super::pdf::encode_carrying(cmd, &pages, &params, native, private)?;
-    warnings.extend(placed_warnings);
+    let (bytes, notes) = super::pdf::encode_carrying(cmd, &pages, &params, native, private)?;
+    let mut enc = Encoded::one_with_notes(bytes, notes);
+    enc.warnings.extend(placed_warnings);
+    // A note on the options: `pdfCompatible: false` writes blank pages.
     if !pdf_compatible {
-        warnings.push(if carries_editing.get() { NOT_PDF_COMPATIBLE_EDITING } else { NOT_PDF_COMPATIBLE }.to_string());
+        enc.setting_notes.push(if carries_editing.get() { NOT_PDF_COMPATIBLE_EDITING } else { NOT_PDF_COMPATIBLE }.to_string());
     }
-    Ok(Encoded { warnings, ..Encoded::one(bytes) })
+    Ok(enc)
 }
 
 /// Snapshot the active document for `plan` (stamping File Info's dates on the snapshot when the
@@ -838,8 +847,8 @@ impl SaveJob {
     }
 
     /// Encode the file → it (and, with `separateArtboards`, a file per artboard after it), with
-    /// the warnings (what the format loses first, then the encoder's own notes: PDF options not
-    /// applied yet…, then the plan's notes on its params).
+    /// the notes (what the format loses first, then the encoder's own notes: PDF options not
+    /// applied yet…, then the plan's notes on its params, which are notes on the options).
     pub fn encode(&self) -> Result<Encoded> {
         let mut enc = self.encode_one(&self.doc)?;
         for &b in &self.boards {
@@ -847,7 +856,7 @@ impl SaveJob {
             enc.files.extend(one.files.into_iter().map(|(_, bytes)| (Some(b), bytes)));
         }
         enc.warnings.splice(0..0, self.format_losses());
-        enc.warnings.extend(self.plan.notes.iter().cloned());
+        enc.setting_notes.extend(self.plan.notes.iter().cloned());
         Ok(enc)
     }
 
@@ -898,9 +907,8 @@ impl SaveJob {
     /// order: when `stop` returns a value, nothing is written and that value is returned.
     pub fn write_unless(&self, stop: impl FnOnce(&[&str]) -> Option<Value>, mut write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
         let (plan, doc) = (&self.plan, &*self.doc);
-        let mut enc = self.encode()?;
-        let warnings = std::mem::take(&mut enc.warnings);
-        let extra = json!({ "format": plan.format.id, "warnings": warnings });
+        let enc = self.encode()?;
+        let extra = json!({ "format": plan.format.id, "warnings": enc.notes() });
         let Some(path) = &plan.path else {
             let mut out = write_encoded(None, &plan.name, doc, &enc, extra)?;
             out["name"] = json!(plan.name);
@@ -910,6 +918,9 @@ impl SaveJob {
             return Ok(out);
         };
         let files = enc.named(doc, path);
+        if let Some(source) = &plan.lossy_source {
+            super::check_files_not_lossy_overwrite(source, files.iter().map(|(p, _)| p.as_str()), plan.mode.command())?;
+        }
         if let Some(stopped) = stop(&files.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>()) {
             return Ok(stopped);
         }
@@ -1021,6 +1032,8 @@ impl SaveJob {
         }
         // The other open documents that place this one show the new version.
         let written = self.plan.path.clone().filter(|_| matches!(self.plan.format.id, "vectorcraft" | "template"));
+        // A save of the arrowheads file lists its heads in the arrowhead menus.
+        let native = self.plan.format.id == "vectorcraft";
         if let Some(st) = s.document_mut(uid) {
             self.finish(st);
         }
@@ -1028,6 +1041,9 @@ impl SaveJob {
             crate::cmd::recovery::forget(s, uid);
         }
         if let Some(path) = written {
+            if native {
+                s.arrowheads_saved(&path);
+            }
             crate::cmd::links::refresh_placed(s, uid, &path);
         }
     }
@@ -1048,7 +1064,12 @@ pub(crate) fn save(s: &mut Session, mode: SaveMode, p: &Value) -> Result<Value> 
     let plan = save_plan(s, mode, p)?;
     let job = save_job(s, plan)?;
     let uid = s.doc()?.uid;
-    let mut out = job.write_streamed(&mut super::write_save_file_with)?;
+    let given = str_param(p, "path").is_some_and(|g| !g.is_empty());
+    // Without a path, the files written are the document's own file and those beside it.
+    let mut write = |path: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>| {
+        super::write_save_file_with(path, fill).map_err(|e| if given { e } else { super::access::naming_in_error(e, path) })
+    };
+    let mut out = job.write_streamed(&mut write)?;
     job.complete(s, uid);
     leave_out_unreadable_save_paths(&mut out, str_param(p, "path"));
     Ok(out)
@@ -1103,7 +1124,8 @@ fn can_revert(s: &Session) -> std::result::Result<(), String> {
 fn revert(s: &mut Session, _: &Value) -> Result<Value> {
     let index = s.active_index().ok_or(crate::EngineError::NoDocument)?;
     let path = s.doc()?.path.clone().ok_or_else(|| bad("file.revert", "the document has never been saved"))?;
-    let Loaded { mut doc, native_pdf_compatible, .. } = load(&path, &read_file(&path)?)?.with_grid_prefs(&s.prefs).with_unit_prefs(&s.prefs);
+    let bytes = read_file(&path).map_err(|e| super::access::naming_in_error(e, &path))?;
+    let Loaded { mut doc, native_pdf_compatible, .. } = load(&path, &bytes)?.with_grid_prefs(&s.prefs).with_unit_prefs(&s.prefs);
     doc.template = false;
     // Back to the saved file: its recovery copy has nothing left to recover.
     let uid = s.doc()?.uid;

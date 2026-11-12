@@ -32,6 +32,8 @@ mod cursor_theme;
 mod gpu;
 mod hang_watch;
 #[cfg(target_os = "linux")]
+mod linux_screen_color;
+#[cfg(target_os = "linux")]
 mod linux_stylus;
 mod logging;
 #[cfg(all(target_os = "macos", feature = "wgpu"))]
@@ -485,6 +487,8 @@ fn main() -> std::process::ExitCode {
                 prefs_dir::attach_pdf_preset_store(&mut app.session);
                 // The custom dictionary's words, kept in their own file next to the preferences.
                 prefs_dir::attach_custom_dictionary(&mut app.session);
+                // The custom arrowheads, kept in their own file next to the preferences.
+                prefs_dir::attach_arrowheads(&mut app.session);
                 // Fit the window to its monitor, or put it back where it was (still hidden).
                 let winit_window = cc.winit_window().cloned();
                 if let Some(w) = &winit_window {
