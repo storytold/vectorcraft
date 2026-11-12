@@ -482,7 +482,7 @@ impl FontDb {
     /// Load a system font covering `c` (preferred fallback families first, then any cataloged
     /// file under 40 MB). Returns true if one was loaded. Misses are remembered.
     #[cfg(not(target_arch = "wasm32"))]
-    fn system_fallback(&self, c: char) -> bool {
+    pub(super) fn system_fallback(&self, c: char) -> bool {
         if c.is_control() || c.is_whitespace() {
             return false;
         }
@@ -500,6 +500,13 @@ impl FontDb {
             if !self.is_loaded(fam) && self.load_cataloged(fam) && covered(self) {
                 return true;
             }
+        }
+        {
+            let mut sys = self.sys.lock().unwrap_or_else(|e| e.into_inner());
+            if sys.file_searches >= super::names::MAX_FILE_SEARCHES {
+                return false;
+            }
+            sys.file_searches += 1;
         }
         let mut paths: Vec<PathBuf> = self.read_catalog().values().flat_map(|c| c.faces.iter().map(|cf| cf.path.clone())).collect();
         paths.sort();

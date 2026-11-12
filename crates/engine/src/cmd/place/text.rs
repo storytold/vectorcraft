@@ -108,7 +108,7 @@ pub(in crate::cmd) fn windows_1252(b: u8) -> char {
 }
 
 /// Byte `b` of Mac Roman.
-pub(super) fn mac_roman(b: u8) -> char {
+pub(in crate::cmd) fn mac_roman(b: u8) -> char {
     const HIGH: [char; 128] = [
         'Ä', 'Å', 'Ç', 'É', 'Ñ', 'Ö', 'Ü', 'á', 'à', 'â', 'ä', 'ã', 'å', 'ç', 'é', 'è', //
         'ê', 'ë', 'í', 'ì', 'î', 'ï', 'ñ', 'ó', 'ò', 'ô', 'ö', 'õ', 'ú', 'ù', 'û', 'ü', //

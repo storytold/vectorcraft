@@ -2,6 +2,13 @@ use super::*;
 use crate::testutil::*;
 use vectorcraft_doc::Selection;
 
+/// What a press on the first anchor, at `first`, of subpath 0 of `id` does: the path closes with
+/// the anchor a corner with its incoming handle retracted.
+fn close_press(id: NodeId, first: Point) -> Vec<Action> {
+    let params = json!({"id": id.0, "subpath": 0, "in": [first.x, first.y], "independent": true});
+    vec![Action::Begin("Close Path".into()), Action::Preview("path.close".into(), params)]
+}
+
 #[test]
 fn press_inside_drag_threshold_places_a_corner() {
     let (d, s) = (vectorcraft_doc::Document::new(500.0, 500.0), Selection::default());
@@ -131,10 +138,7 @@ fn snapped_first_endpoint_closes_active_path_after_raw_miss() {
     assert!(open_end_at(&cx, raw, tol, Some((id, 0))).is_none());
     assert!(open_end_at(&cx, first, tol, Some((id, 0))).is_none());
 
-    assert_eq!(
-        pen.pointer(&cx, &PointerEvent::new(PointerKind::Down, raw.x, raw.y)),
-        vec![Action::Begin("Close Path".into()), Action::Preview("path.close".into(), json!({"id": id.0, "subpath": 0}))]
-    );
+    assert_eq!(pen.pointer(&cx, &PointerEvent::new(PointerKind::Down, raw.x, raw.y)), close_press(id, first));
     let place = pen.drag.unwrap();
     assert!(place.closing);
     assert_eq!((place.path, place.at), (Some(id), first));
@@ -349,10 +353,7 @@ fn terminal_anchor_conversion_precedes_grid_snapping() {
     assert_eq!(t.cursor(&cx, Point::new(63.0, 303.0), Mods::default()), Cursor::PenContinue);
     assert!(click(&mut t, &cx, 63.0, 303.0, Mods::default()).is_empty());
     assert_eq!(t.active(&cx).map(|a| a.0), Some(id));
-    assert_eq!(
-        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 13.0, 303.0)),
-        vec![Action::Begin("Close Path".into()), Action::Preview("path.close".into(), json!({"id": id.0, "subpath": 0}))]
-    );
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 13.0, 303.0)), close_press(id, Point::new(13.0, 303.0)));
 }
 
 #[test]
@@ -401,7 +402,7 @@ fn overlapping_endpoint_tolerances_pick_the_nearest_end() {
                     let cursor = if first_end { Cursor::PenClose } else { Cursor::PenConvert };
                     let actual_cursor = pen.cursor(&cx, at, mods);
                     let expected = if first_end {
-                        vec![Action::Begin("Close Path".into()), Action::Preview("path.close".into(), json!({"id": id.0, "subpath": 0}))]
+                        close_press(id, first)
                     } else {
                         vec![Action::Begin("Convert Anchor Point".into()), set_out(id, 1, last.x, last.y)]
                     };
@@ -459,10 +460,7 @@ fn coincident_endpoints_keep_the_prior_tie_choice() {
         let cx = ToolContext { zoom, smart_guides: false, snap_to_point: false, ..cx(&d, &selection, &paint) };
         let mut drawing = PenTool { drawing: true, ..PenTool::default() };
         assert_eq!(drawing.cursor(&cx, at, Mods::default()), Cursor::PenClose);
-        assert_eq!(
-            click(&mut drawing, &cx, at.x, at.y, Mods::default()),
-            vec![Action::Begin("Close Path".into()), Action::Preview("path.close".into(), json!({"id": id.0, "subpath": 0}))]
-        );
+        assert_eq!(click(&mut drawing, &cx, at.x, at.y, Mods::default()), close_press(id, at));
         let mut resuming = PenTool::default();
         assert_eq!(resuming.cursor(&cx, at, Mods::default()), Cursor::PenContinue);
         assert!(click(&mut resuming, &cx, at.x, at.y, Mods::default()).is_empty());
@@ -516,10 +514,7 @@ fn enlarged_anchor_radius_is_used_for_endpoints_and_alt_conversion() {
         let mut closing = PenTool { drawing: true, ..PenTool::default() };
         let first = Point::new(10.0 - 6.0 / zoom, 300.0);
         assert_eq!(closing.cursor(&cx, first, Mods::default()), Cursor::PenClose);
-        assert_eq!(
-            click(&mut closing, &cx, first.x, first.y, Mods::default()),
-            vec![Action::Begin("Close Path".into()), Action::Preview("path.close".into(), json!({"id": id.0, "subpath": 0}))]
-        );
+        assert_eq!(click(&mut closing, &cx, first.x, first.y, Mods::default()), close_press(id, Point::new(10.0, 300.0)));
         let mut alt_pen = PenTool { drawing: true, ..PenTool::default() };
         let alt = Mods { alt: true, ..Mods::default() };
         assert!(alt_pen.pointer(&cx, &PointerEvent::new(PointerKind::Down, at.x, at.y).with_mods(alt)).is_empty());
@@ -577,7 +572,8 @@ fn ending_during_a_pen_gesture_commits_and_clears_it() {
 
 /// #501: a press on the first anchor closes the path, however far the drag then goes: the
 /// closing preview leaves the path closed (so not one the pen extends), and each move still
-/// previews the close with symmetric handles (Alt breaks them), released as a close.
+/// previews the close with the incoming handle mirroring the pointer (Alt keeps the outgoing one
+/// where it is), released as a close.
 #[test]
 fn a_drag_from_the_first_anchor_always_closes() {
     let pts = [Point::new(100.0, 300.0), Point::new(200.0, 300.0), Point::new(200.0, 400.0)];
@@ -585,20 +581,51 @@ fn a_drag_from_the_first_anchor_always_closes() {
     let p = paint();
     let mut t = PenTool { drawing: true, ..PenTool::default() };
     let a = t.pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 101.0, 301.0));
-    assert_eq!(a, vec![Action::Begin("Close Path".into()), Action::Preview("path.close".into(), json!({"id": id.0, "subpath": 0}))]);
+    assert_eq!(a, close_press(id, pts[0]));
     // What the tool sees once the preview applied: the path closed.
     d.node_mut(id).unwrap().path_data_mut().unwrap().subpaths[0].closed = true;
     let c = cx(&d, &s, &p);
-    let close = |x: f64, y: f64, alt: bool| {
-        vec![Action::Preview("path.close".into(), json!({"id": id.0, "in": [200.0 - x, 600.0 - y], "independent": alt, "subpath": 0}))]
+    let close = |x: f64, y: f64| {
+        vec![Action::Preview("path.close".into(), json!({"id": id.0, "in": [200.0 - x, 600.0 - y], "independent": false, "subpath": 0}))]
     };
     for (x, y) in [(105.0, 290.0), (130.0, 260.0), (160.0, 240.0)] {
-        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, x, y)), close(x, y, false), "at ({x}, {y})");
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, x, y)), close(x, y), "at ({x}, {y})");
     }
     let alt = Mods { alt: true, ..Mods::default() };
-    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 170.0, 250.0).with_mods(alt)), close(170.0, 250.0, true));
+    let alt_close = json!({"id": id.0, "in": [30.0, 350.0], "out": [100.0, 300.0], "independent": true, "subpath": 0});
+    assert_eq!(
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 170.0, 250.0).with_mods(alt)),
+        vec![Action::Preview("path.close".into(), alt_close)]
+    );
     assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 170.0, 250.0)), vec![Action::Commit]);
     assert!(!t.busy() && t.active(&c).is_none(), "the path is done");
+}
+
+/// #6634: on a smooth first anchor the closing drag turns the outgoing handle in line with the
+/// incoming one; Alt pressed mid-drag sends the outgoing handle where the drag had turned it.
+#[test]
+fn alt_mid_close_keeps_the_turned_outgoing_handle() {
+    use vectorcraft_geom::{Anchor, SubPath};
+    let anchors = vec![Anchor::smooth(Point::new(100.0, 300.0), Point::new(150.0, 300.0)), Anchor::corner(Point::new(200.0, 200.0))];
+    let (mut d, id, s) = drawing(SubPath { anchors, closed: false });
+    let p = paint();
+    let mut t = PenTool { drawing: true, ..PenTool::default() };
+    assert_eq!(t.pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 100.0, 300.0)), close_press(id, Point::new(100.0, 300.0)));
+    d.node_mut(id).unwrap().path_data_mut().unwrap().subpaths[0].closed = true;
+    let c = cx(&d, &s, &p);
+    assert_eq!(
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 100.0, 200.0)),
+        vec![Action::Preview("path.close".into(), json!({"id": id.0, "in": [100.0, 400.0], "independent": false, "subpath": 0}))]
+    );
+    let alt = Mods { alt: true, ..Mods::default() };
+    assert_eq!(
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 130.0, 200.0).with_mods(alt)),
+        vec![Action::Preview(
+            "path.close".into(),
+            json!({"id": id.0, "in": [70.0, 400.0], "out": [100.0, 250.0], "independent": true, "subpath": 0})
+        )]
+    );
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 130.0, 200.0)), vec![Action::Commit]);
 }
 
 #[test]

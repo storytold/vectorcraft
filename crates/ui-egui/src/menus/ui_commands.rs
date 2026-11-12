@@ -472,6 +472,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{edge: \"top\"|\"bottom\"} dock the Control bar to the top of the window, under the menu bar, or to its bottom, as the bar's panel menu (Dock to Top, Dock to Bottom) and a drag of its gripper do; kept with the workspace; another edge is an error and changes nothing; returns {edge}",
     ),
+    (
+        "window.control.options",
+        "Control Bar Options",
+        "",
+        "{group: \"snapping\"|\"anchors\"|\"toolOptions\"|\"objectOptions\"|\"imageOptions\"|\"fillStroke\"|\"opacity\"|\"graphicStyle\"|\"character\"|\"paragraph\"|\"verticalAlignment\"|\"alignDistribute\"|\"transform\"|\"artboardOptions\"|\"documentOptions\", visible?: bool} turn a group of the Control bar's options on (true), off (false) or toggle it (omitted), as the bar's panel menu does; a group that is off stays out of the bar even while its tool or object is selected, and one that is on shows only while the selection or the tool calls for it; every group starts on; kept with the workspace; another group or a `visible` that is not true or false is an error and changes nothing; returns {group, visible}",
+    ),
     ("window.toolbar", "Tools", "", "{}"),
     (
         "window.toolbarColumns",
@@ -805,6 +811,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} clear the settings of the section shown, Basic Character Formats, Advanced Character Formats, Character Color or OpenType Features, in the open Character Style Options or New Character Style dialog; available only on those sections",
     ),
     (
+        "ui.paraStyleOptions",
+        "Paragraph Style Options",
+        "",
+        "{name} open Paragraph Style Options (dialog `paraStyleOptions`, sections General, Basic Paragraph Formats, Composition, Hyphenation and Justification); OK runs paraStyle.edit with name, to and sparse attrs in one undo step; Cancel restores a live preview",
+    ),
+    (
+        "ui.paraStyleOptions.resetPanel",
+        "Reset Panel",
+        "",
+        "{} clear the settings of the section shown, Basic Paragraph Formats, Composition, Hyphenation or Justification, in the open Paragraph Style Options or New Paragraph Style dialog; available only on those sections",
+    ),
+    (
         "ui.newCharStyle",
         "New Character Style…",
         "",
@@ -814,7 +832,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.newParaStyle",
         "New Paragraph Style…",
         "",
-        "{} open New Paragraph Style (dialog `newTextStyle`, field `name`, filled in with the name paraStyle.new {} would give the style), what Alt-clicking the Paragraph Styles panel's New button opens; OK runs paraStyle.new with the name and the paragraph of the Type tool's selection (else the selected type) as it was when the dialog opened; Cancel adds no style",
+        "{} open New Paragraph Style (dialog `newTextStyle`, field `name`, filled in with the name paraStyle.new {} would give the style), what Alt-clicking the Paragraph Styles panel's New button opens; the dialog also has the sections of Paragraph Style Options, filled in from the paragraph of the Type tool's selection (else the selected type) as it was when the dialog opened; OK runs paraStyle.new with the name and those attrs; Cancel adds no style",
     ),
     (
         "ui.symbolOptions",
@@ -1494,7 +1512,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "plugin.dialog",
         "Plug-in…",
         "",
-        "{id: an object filter plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter, `__plugin` the id, live preview; OK runs plugin.run as one undo step)",
+        "{id: an object filter plug-in (plugin.list), params?: {…}} Object › Plug-ins: run the filter at once when it takes no parameters or params are given (plugin.run), else open its dialog (dialog `plugin`: a field per parameter, `__plugin` the id, live preview; OK runs plugin.run as one undo step). A heavy filter, and a filter that lists `progress` and no commandAllowlist, run in the background when they run at once or OK runs them without a kept preview → {background: true, status} (see plugin.cancelRuns)",
     ),
     (
         "ui.installPlugin",
@@ -1506,13 +1524,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "plugin.cancelRuns",
         "Cancel Plug-in Run",
         "",
-        "{} stop every heavy filter running in the background (its progress window's Cancel): it stops at the next slice of its budget and changes nothing → {cancelled: n}",
+        "{} stop every filter running in the background (its progress window's Cancel): it stops at the next slice of its budget and changes nothing → {cancelled: n}",
     ),
     (
         "plugin.hideRuns",
         "Continue in Background",
         "",
-        "{} close the progress window of the heavy filters running in the background; they go on, shown in the status bar → {hidden: n}",
+        "{} close the progress window of the filters running in the background; they go on, shown in the status bar → {hidden: n}",
     ),
     (
         "imageTrace.cancelRuns",
