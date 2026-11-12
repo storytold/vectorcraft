@@ -42,6 +42,8 @@ pub struct Locate {
     pub(crate) scrolled: bool,
     /// The group's flyout was opened or its strip raised.
     pub(crate) revealed: bool,
+    /// The toolbar made with New Toolbar that holds the tool was brought to the front.
+    raised: bool,
     /// The mark drew in this pass.
     drawn: bool,
     /// Passes in a row in which the mark did not draw.
@@ -74,6 +76,17 @@ pub(crate) fn scroll_once(ui: &mut UiState) -> bool {
 /// Whether the target's flyout is still to be opened or its strip raised; true once.
 pub(crate) fn reveal_once(ui: &mut UiState) -> bool {
     ui.learn_locate.as_mut().is_some_and(|l| !std::mem::replace(&mut l.revealed, true))
+}
+
+/// Whether the toolbar made with New Toolbar that holds the tool is still to be brought to the
+/// front; true once.
+pub(crate) fn raise_once(ui: &mut UiState) -> bool {
+    ui.learn_locate.as_mut().is_some_and(|l| !std::mem::replace(&mut l.raised, true))
+}
+
+/// Whether a locate is under way and its mark has not drawn yet.
+pub(crate) fn unmarked(ui: &UiState) -> bool {
+    ui.learn_locate.as_ref().is_some_and(|l| l.since.is_none())
 }
 
 /// Mark `rect`, the located tool's control as drawn this pass on `layer`, clipped to `clip` and the
@@ -129,7 +142,7 @@ fn start(app: &mut VectorcraftApp, tool: &'static str, target: Target) {
             app.ui.tools_drawer = false;
         }
     }
-    app.ui.learn_locate = Some(Locate { tool, target, since: None, scrolled: false, revealed: false, drawn: false, unseen: 0 });
+    app.ui.learn_locate = Some(Locate { tool, target, since: None, scrolled: false, revealed: false, raised: false, drawn: false, unseen: 0 });
 }
 
 /// `learn.locateTool {tool}`: mark where `tool` is in the current layout →

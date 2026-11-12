@@ -1301,6 +1301,77 @@ fn a_learn_link_in_a_short_window_marks_a_flyout_row_inside_the_window() {
     assert_marks(&marks, row, tool);
 }
 
+/// A group with more rows than the window holds scrolls its flyout, and a Learn link scrolls the
+/// located row into view before marking it.
+#[test]
+fn a_learn_link_scrolls_the_row_of_a_group_taller_than_the_window_into_view() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let tools: Vec<&'static str> = slots(&app).into_iter().filter_map(|(_, s)| s.first().copied()).skip(1).take(16).collect();
+    for tool in &tools {
+        app.run("toolbar.addTool", json!({"tool": tool, "slot": 0, "place": "group"})).unwrap();
+    }
+    let tool = *tools.last().expect("a tool");
+    let group = slots(&app).into_iter().map(|(_, s)| s).find(|s| s.contains(&tool)).expect("the group");
+    assert!(group.len() * 30 > 400, "{} rows of 30 points do not fit in 400", group.len());
+    let ctx = reader_context();
+    locate_frame(&mut app, &ctx, 0.0, vec![], 400.0);
+    assert_eq!(app.run("learn.locateTool", json!({"tool": tool})).unwrap()["location"], "flyout", "{tool}");
+    let mut drawn = (vec![], vec![]);
+    for k in 1..20 {
+        drawn = locate_frame(&mut app, &ctx, f64::from(k) * 0.1, vec![], 400.0);
+    }
+    let (marks, nodes) = drawn;
+    let row = tool_rect(&nodes, tool);
+    assert!(row.top() >= 0.0 && row.bottom() <= 400.0, "{tool}: the row is inside the window: {row:?}");
+    assert_marks(&marks, row, tool);
+    assert_eq!(app.session.tool_id(), "selection");
+    // The mark is clipped to the rows' view inside the flyout's 1 pt border, so a row scrolled
+    // part way out shows no mark over the border above or below the rows.
+    let view = ctx.memory(|m| m.area_rect(egui::Id::unique("tool-flyout"))).expect("the flyout shows").shrink(1.0);
+    let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 400.0)));
+    let out = ctx.run_ui(egui::RawInput { time: Some(2.0), screen_rect, ..Default::default() }, |ui| show(&mut app, ui));
+    let color = Tokens::get(&ctx).selection;
+    let clips: Vec<egui::Rect> = out
+        .shapes
+        .iter()
+        .filter(|c| matches!(&c.shape, egui::Shape::Rect(r) if r.stroke.width == MARK_WIDTH && r.stroke.color == color))
+        .map(|c| c.clip_rect)
+        .collect();
+    assert!(
+        !clips.is_empty() && clips.iter().all(|c| c.top() >= view.top() && c.bottom() <= view.bottom()),
+        "the mark is clipped to {view:?}: {clips:?}"
+    );
+}
+
+/// A toolbar made with New Toolbar under another floating toolbar comes to the front for a Learn
+/// link, so its marked button shows.
+#[test]
+fn a_learn_link_brings_a_covered_toolbar_made_with_new_toolbar_to_the_front() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    for (name, tool) in [("Mine", "artboard"), ("Other", "slice")] {
+        app.run("window.toolbar.new", json!({"name": name})).unwrap();
+        app.run("toolbar.addTool", json!({"tool": tool, "toolbar": name})).unwrap();
+    }
+    for bar in &mut app.ui.custom_toolbars {
+        bar.pos = [200.0, 200.0];
+    }
+    let (mine, other) = (crate::custom_toolbars::area_id("Mine"), crate::custom_toolbars::area_id("Other"));
+    let ctx = reader_context();
+    locate_frame(&mut app, &ctx, 0.0, vec![], 1200.0);
+    ctx.move_to_top(egui::LayerId::new(egui::Order::Middle, other));
+    let (_, nodes) = locate_frame(&mut app, &ctx, 0.05, vec![], 1200.0);
+    let button = tool_rect(&nodes, "artboard");
+    assert_eq!(ctx.layer_id_at(button.center()).map(|l| l.id), Some(other), "Other covers the button of Mine");
+    assert_eq!(
+        app.run("learn.locateTool", json!({"tool": "artboard"})).unwrap(),
+        json!({"tool": "artboard", "location": "toolbar", "toolbar": "Mine"})
+    );
+    let (marks, nodes) = locate_frame(&mut app, &ctx, 1.0, vec![], 1200.0);
+    let button = tool_rect(&nodes, "artboard");
+    assert_eq!(ctx.layer_id_at(button.center()).map(|l| l.id), Some(mine), "Mine comes to the front");
+    assert_marks(&marks, button, "the toolbar Mine");
+}
+
 /// A second Learn link moves the mark; Escape removes it.
 #[test]
 fn a_second_learn_link_replaces_the_mark_and_escape_removes_it() {

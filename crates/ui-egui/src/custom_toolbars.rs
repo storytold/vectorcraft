@@ -601,6 +601,17 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // A Learn link locating a tool of this toolbar: its button, scrolled into view once.
         let locate = crate::panels::learn::locate::wanted(&app.ui, Some(&bar.name));
         let scrolled = app.ui.learn_locate.as_ref().is_some_and(|l| l.scrolled);
+        // The toolbar comes to the front once, over other floating toolbars, unless the tool's
+        // group is torn off into a strip, which comes to the front instead.
+        let holder: Option<Vec<&'static str>> = locate
+            .and_then(|tool| bar.slots.iter().find(|s| s.iter().any(|t| t == tool)))
+            .map(|slot| slot.iter().filter_map(|id| tool_info(id).map(|t| t.id)).collect());
+        let torn_off = holder
+            .as_ref()
+            .is_some_and(|tools| tools.len() > 1 && tools.first().is_some_and(|key| crate::toolbar::is_floating(app, Some(&bar.name), key)));
+        if holder.is_some() && !torn_off && crate::panels::learn::locate::raise_once(&mut app.ui) {
+            ctx.move_to_top(egui::LayerId::new(egui::Order::Middle, id));
+        }
         let (mut found, mut did_scroll) = (None, false);
         egui::Area::new(id).order(egui::Order::Middle).fixed_pos(pos).show(ctx, |ui| {
             crate::toolbar::flyout_frame(&t, false).inner_margin(egui::Margin { left: 0, right: 0, top: 0, bottom: 4 }).show(ui, |ui| {

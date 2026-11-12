@@ -747,14 +747,27 @@ struct FlyoutInput {
     close: bool,
     /// Where the tool a Learn link locates is drawn.
     located: Option<egui::Rect>,
+    /// What a docked flyout's rows are clipped to (they scroll in a group taller than the window).
+    located_clip: Option<egui::Rect>,
 }
 
 /// A flyout's tool rows (a floating flyout's strip of tool buttons) with the grab bar down their
 /// right side; a floating flyout's bar has a × at its top. The bar's id is the group's, so a drag
 /// that tears a flyout off carries on moving the floating flyout it becomes (`toolbar`: the toolbar
 /// made with New Toolbar the group is in, none for the Tools panel's; `locate`: the tool a Learn
-/// link locates, whose place it returns).
-fn flyout_body(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], floating: bool, toolbar: Option<&str>, locate: Option<&str>) -> FlyoutInput {
+/// link locates, whose place it returns; `reveal_row`: a located row outside the flyout's view
+/// scrolls into it, and is returned once it shows).
+#[allow(clippy::too_many_arguments)]
+fn flyout_body(
+    ui: &mut Ui,
+    t: &Tokens,
+    active: &str,
+    tools: &[String],
+    floating: bool,
+    toolbar: Option<&str>,
+    locate: Option<&str>,
+    reveal_row: bool,
+) -> FlyoutInput {
     let mut out = FlyoutInput::default();
     let key = tools.first().map_or("", String::as_str);
     let bar_id = bar_id(toolbar, key);
@@ -763,7 +776,29 @@ fn flyout_body(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], floating
         let rows = if floating {
             ui.horizontal(|ui| tool_strip(ui, t, active, tools, locate))
         } else {
-            ui.vertical(|ui| tool_rows(ui, t, active, tools, locate))
+            // A group taller than the window scrolls its rows (inside the frame's 1 pt border). The
+            // rows' height is given, since the row this sits in starts one widget tall.
+            let max = ui.ctx().content_rect().height() - 2.0;
+            let height = (tools.iter().filter(|id| tool_info(id).is_some()).count() as f32 * ROW_HEIGHT).min(max);
+            ui.vertical(|ui| {
+                egui::ScrollArea::vertical()
+                    .id_salt(bar_id.with("rows"))
+                    .max_height(max)
+                    .min_scrolled_height(height)
+                    .show(ui, |ui| {
+                        let (chosen, located) = tool_rows(ui, t, active, tools, locate);
+                        // The mark is clipped to the rows' view, not to the whole flyout.
+                        out.located_clip = Some(ui.clip_rect());
+                        match located.filter(|r| reveal_row && !ui.clip_rect().contains_rect(*r)) {
+                            Some(r) => {
+                                ui.scroll_to_rect_animation(r, Some(egui::Align::Center), egui::style::ScrollAnimation::none());
+                                (chosen, None)
+                            }
+                            None => (chosen, located),
+                        }
+                    })
+                    .inner
+            })
         };
         (out.chosen, out.located) = rows.inner;
         let (bar, _) = ui.allocate_exact_size(vec2(BAR, rows.response.rect.height()), Sense::hover());
@@ -810,7 +845,7 @@ fn tool_rows(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], locate: Op
     let w = rows_width(rows.iter().map(|(_, text)| text));
     for (tool, (name, shortcut)) in rows {
         let is_active = active == tool.id;
-        let (r, resp) = ui.allocate_exact_size(vec2(w, 30.0), Sense::click());
+        let (r, resp) = ui.allocate_exact_size(vec2(w, ROW_HEIGHT), Sense::click());
         if resp.hovered() {
             ui.painter().rect_filled(r, 0.0, t.hover);
         }
@@ -843,6 +878,8 @@ type RowText = (Arc<egui::Galley>, Option<Arc<egui::Galley>>);
 const NAME_X: f32 = 52.0;
 const NAME_GAP: f32 = 14.0;
 const ROW_END: f32 = 18.0;
+/// The height of a flyout row.
+const ROW_HEIGHT: f32 = 30.0;
 
 /// The name of `tool` in `lang` and its shortcut in brackets, as a flyout row draws them.
 fn row_text(ui: &Ui, lang: crate::i18n::Lang, tool: &ToolInfo, color: Color32) -> RowText {
@@ -947,18 +984,20 @@ fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let active = app.session.tool_id();
     let toolbar = ctx.data(|d| d.get_temp::<Option<String>>(flyout_toolbar_id())).flatten();
     let locate = learn_locate::wanted(&app.ui, toolbar.as_deref()).filter(|tool| tools.iter().any(|id| id == tool));
+    let reveal_row = learn_locate::unmarked(&app.ui);
     let mut input = FlyoutInput::default();
     // Beside the tool, on the side with room for it: toward the canvas from a toolbar docked right.
     let size = ctx.memory(|m| m.area_rect(egui::Id::unique("tool-flyout"))).map_or(vec2(160.0, 0.0), |r| r.size());
     let x = beside(anchor, size.x, 8.0, room(app, ctx));
     // The area stays inside the window (egui's `Area::constrain`, on by default): a flyout opened
-    // near the bottom moves up, so every row, a located one included, shows.
+    // near the bottom moves up, and a group taller than the window scrolls a located row into view.
     let resp =
         egui::Area::new(egui::Id::unique("tool-flyout")).order(egui::Order::Foreground).fixed_pos(pos2(x, anchor.top() - 1.0)).show(ctx, |ui| {
-            flyout_frame(&t, false).show(ui, |ui| input = flyout_body(ui, &t, active, &tools, false, toolbar.as_deref(), locate));
+            flyout_frame(&t, false).show(ui, |ui| input = flyout_body(ui, &t, active, &tools, false, toolbar.as_deref(), locate, reveal_row));
         });
     if let Some(rect) = input.located {
-        learn_locate::mark(app, ctx, resp.response.layer_id, resp.response.rect, rect);
+        let clip = input.located_clip.map_or(resp.response.rect, |c| c.intersect(resp.response.rect));
+        learn_locate::mark(app, ctx, resp.response.layer_id, clip, rect);
     }
     // Dragging the bar tears the flyout off, and so does releasing a press over it (a click, or the
     // end of the long press that opened the flyout): it floats where the pointer is.
@@ -1065,7 +1104,7 @@ fn floating_strips(app: &mut VectorcraftApp, ctx: &egui::Context, toolbar: Optio
         let pos = crate::tools_float::clamp(f.pos, size, screen);
         let mut input = FlyoutInput::default();
         let area = egui::Area::new(id).order(egui::Order::Middle).fixed_pos(pos).show(ctx, |ui| {
-            flyout_frame(&t, flash).show(ui, |ui| input = flyout_body(ui, &t, active, &f.tools, true, toolbar, locate));
+            flyout_frame(&t, flash).show(ui, |ui| input = flyout_body(ui, &t, active, &f.tools, true, toolbar, locate, false));
         });
         if let Some(rect) = input.located {
             located = Some((area.response.layer_id, area.response.rect, rect));
