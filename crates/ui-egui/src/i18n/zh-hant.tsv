@@ -662,6 +662,15 @@ font-technology	Variable	可變
 	Created:	建立時間：
 	Crop	裁切
 	Crop Image	裁切影像
+	Image Tools	影像工具
+	Remove Background…	移除背景…
+	Remove Background	移除背景
+	Background	背景
+	Edge Color	邊緣顏色
+	Picked Colors	選取的顏色
+	Corner Color	轉角顏色
+	Contiguous	連續
+	Each Channel	每個通道
 	Edit Path	編輯路徑
 	Mask	遮色片
 	Crop Marks	裁切標記
@@ -1651,6 +1660,7 @@ file-filter	Templates	範本
 	Include Linked Files	包含連結檔案
 	Include Metadata	包含中繼資料
 	Include non-printing layers	包含不列印的圖層
+	Write pages longer than 200 in at full size in points	以實際尺寸（點）寫入長於 200 in 的頁面
 	Include SVG Code	包含 SVG 程式碼
 	Include Swatches for Tints	包含色調的色票
 	Inflate…	膨脹…
@@ -1878,6 +1888,8 @@ file-filter	Templates	範本
 @msg	`gradient` must be an object	`gradient` 必須是物件
 @msg	`groupColors` must be an array	`groupColors` 必須是陣列
 @msg	`mode` applies to freeform gradients	`mode` 只適用於任意形狀漸層
+@msg	a negative `aspect` applies to conic gradients	負的 `aspect` 只適用於圓錐漸層
+@msg	`focal` applies to radial gradients	`focal` 只適用於放射狀漸層
 @msg	`preserve` must be an object	`preserve` 必須是物件
 @msg	`globalAdjust` must be an object	`globalAdjust` 必須是物件
 @msg	`stops` must be an array	`stops` 必須是陣列
@@ -1887,7 +1899,7 @@ file-filter	Templates	範本
 @msg	stop {i} needs `offset`	色標 {i} 需要 `offset`
 @msg	stop {i} needs a valid `color`	色標 {i} 需要有效的 `color`
 @msg	stop {i}: `{k}` must be a number	色標 {i}：`{k}` 必須是數字
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	未知的漸層類型 `{k}` (linear、radial、freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	未知的漸層類型 `{k}` (linear、radial、conic、freeform)
 @msg	the art could not be sampled	無法對圖稿取樣
 @msg	the art is too light for any dots	圖稿太淡，無法產生任何網點
 @msg	the document has no symbols	文件中沒有符號
@@ -2161,6 +2173,7 @@ file-filter	Templates	範本
 @msg	the image's pixels don't match its size	影像的像素與其尺寸不符
 @msg	{bpp}-bit bitmaps can't be read	無法讀取 {bpp} 位元點陣圖
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 檔案
+@msg	not an HP-GL file	不是 HP-GL 檔案
 @msg	its layers use {_1}, which aren't read yet	其圖層使用了 {_1}，目前尚無法讀取
 @msg	the EMF header is damaged	EMF 檔頭已損毀
 @msg	damaged	已損毀
@@ -2177,6 +2190,7 @@ file-filter	Templates	範本
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	工作區域 {n} 的頁面為 {size}，超過 PDF 的頁面上限 14,400 pt (200 in)：它以 UserUnit {unit} 寫入，因此忽略 UserUnit 的應用程式會將其顯示為縮小相應倍數
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	工作區域 {n} 的頁面為 {size}，超過 PDF 的頁面上限 14,400 pt (200 in)：{label} 頁面不含 UserUnit，以點為單位寫入，遵守上限的應用程式會將頁面裁切為 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 沒有 UserUnit，而長於 14,400 pt (200 in) 的頁面需要它來保持尺寸：檔案將以 PDF 1.6 寫入
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 沒有 UserUnit，而長於 14,400 pt (200 in) 的頁面需要它來保持在 PDF/A-2 的 14,400 單位頁面上限之內：檔案將以 PDF 1.6 寫入
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	工作區域 {n} 的頁面為 {size}，對 PDF 3 至 14,400 單位的頁面邊長而言過長過窄：以 UserUnit {unit} 寫入，使短邊保持 3 單位以上，遵守上限的應用程式會把長邊裁到 14,400 單位
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} 檔案的實數最大為 {max}，而工作區域 {n} 的頁面長 {side} pt，需要更大的數：請選擇不含 PDF/X 標準的 PDF 1.6 或更新版本，或使用較小的工作區域
 @msg	page {0} does not exist (the PDF has {1})	頁面 {0} 不存在 (此 PDF 有 {1} 頁)
@@ -2364,6 +2378,14 @@ file-filter	Templates	範本
 @msg	no such view	沒有這個檢視
 @msg	printing isn't available here	此處無法列印
 @msg	select an image	請選取影像
+@msg	`background` must be edges, corners or colors	`background` 必須為 edges、corners 或 colors
+@msg	`match` must be distance or channels	`match` 必須為 distance 或 channels
+@msg	`{key}` must be from 0 to 100	`{key}` 必須介於 0 到 100 之間
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` 必須列出 1 到 16 種顏色，每種寫為十六進位（#rrggbb 或 #rgb）或 black、white、red、green、blue
+@msg	the linked image shows its preview: embed or relink it first	連結影像顯示的是預覽：請先嵌入或重新連結
+@msg	a CMYK image has no transparency to set	CMYK 影像沒有可設定的透明度
+@msg	every pixel matches the background: no image would be left	每個像素都與背景相符：不會留下任何影像
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} 像素的影像過大，無法變更
 @msg	the document has no artboards	文件沒有工作區域
 @msg	tool (a tool id) is required	需要 tool (工具 id)
 @msg	unknown tool `{t}`	未知的工具 `{t}`
@@ -2555,7 +2577,13 @@ file-filter	Templates	範本
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 或 HEIF 檔案包含無法讀取的影像類型
 @msg	HEIC and HEIF images can't be opened in this build	此版本無法開啟 HEIC 和 HEIF 影像
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 影像過大，無法讀取 ({_1} × {_2} 像素)
-@msg	zipped 32-bit PSD image data with prediction can't be read	無法讀取使用預測的 ZIP 壓縮 32 位元 PSD 影像資料
+@msg	zipped 1-bit PSD image data with prediction can't be read	無法讀取使用預測的 ZIP 壓縮 1 位元 PSD 影像資料
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD 檔案的圖層資料使用了不明的壓縮方式 ({m})
+@msg	the PSD file's layer records are damaged	PSD 檔案的圖層記錄已損毀
+@msg	the PSD file's layer groups are nested too deeply	PSD 檔案的圖層群組巢狀過深
+@msg	a layer of the PSD file is too large to read	PSD 檔案的某個圖層過大，無法讀取
+@msg	the PSD file's layers take more memory to read than allowed	讀取 PSD 檔案的圖層所需記憶體超過允許值
+@msg	the layers can't be read ({e}): the file opened as its merged image	無法讀取圖層 ({e})：檔案已以合併影像開啟
 @msg	{depth}-bit PSD files in this colour mode can't be read	無法讀取此色彩模式的 {depth} 位元 PSD 檔案
 @msg	the PSD file is cut short	PSD 檔案不完整
 @msg	the PSD file's header is damaged	PSD 檔頭已損毀
@@ -2624,7 +2652,7 @@ file-filter	Templates	範本
 @msg	span must be "object" or "selection", got {v}	span 必須是 "object" 或 "selection"，收到 {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" 放置的是 `gradient`，而非色票
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" 會放置漸層：請提供 `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" 放置線性或放射狀漸層，而非任意形狀漸層
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" 放置線性、放射狀或圓錐漸層，而非任意形狀漸層
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" 會自行放置漸層：請不要提供 `start` 和 `end` (它們已依文件座標放置漸層)
 @msg	Batch: {count} processed	批次：已處理 {count} 個
 @msg	Batch: {count} processed, {failed} failed	批次：已處理 {count} 個，失敗 {failed} 個
@@ -3304,6 +3332,8 @@ file-filter	Templates	範本
 	Open…	開啟…
 	Optical	視覺
 	Optical Margin Alignment	視覺邊界對齊
+	Dynamic Text	動態文字
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	串連文字中的路徑文字無法使用動態文字：{frames}
 	Optimize for fast web view	最佳化以便快速網頁檢視
 	Optimized	最佳化
 	Options	選項
@@ -3587,6 +3617,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Radial	放射狀
 	Radial Glows	放射狀光暈
 	Radial Gradient	放射狀漸層
+	Conic Gradient	圓錐漸層
 	Radius 1	半徑 1
 	Radius 2	半徑 2
 	Radius1	半徑1
@@ -4204,6 +4235,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Show Modified	顯示已修改
 	Show Note	顯示註解
 	Show Options	顯示選項
+	Show Recent Colors	顯示最近使用的顏色
 	Show Original Path	顯示原始路徑
 	Open this dialog with these settings next time	下次以這些設定開啟此對話方塊
 	Auto-Simplify	自動簡化
@@ -4508,6 +4540,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Scale at Center	從中心縮放
 	Up/Down:	上/下：
 	Left/Right:	左/右：
+	Tate-chu-yoko Up/Down	縱中橫上/下
+	Tate-chu-yoko Left/Right	縱中橫左/右
 	Temperature	色溫
 	Temperature/Tint…	色溫/色調…
 	Template	範本
@@ -4578,6 +4612,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Toolbar: Single/Double Column	工具列：單欄/雙欄
 	Toolbar: Add Tool	工具列：新增工具
 	Toolbar: Remove Tool	工具列：移除工具
+	Add Tool…	新增工具…
+	Remove Tool	移除工具
 	Toolbar: Reset	工具列：重設
 	Toolbars	工具列
 	Tools	工具
@@ -5043,6 +5079,13 @@ axis	Both	兩者
 	Dock Panel	停駐面板
 	Dock to Top	停駐到頂部
 	Dock to Bottom	停駐到底部
+	Control Bar Options	控制列選項
+	Tool Options	工具選項
+	Object Options	物件選項
+	Image Options	影像選項
+	Vertical Alignment	垂直對齊
+	Align and Distribute	對齊與均分
+	Document Options	文件選項
 	Dock Control Bar	停駐控制列
 	Drag to float the toolbar	拖曳以浮動工具列
 	Drag to the window's left or right edge to dock	拖曳到視窗左側或右側邊緣以停駐
@@ -5399,6 +5442,11 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	環境光
 	Light behind the object	光源位於物件後方
+	Shadows	陰影
+	Distance from Object	與物件的距離
+	Shadow Bounds	陰影邊界
+	Behind Object	物件後方
+	Below Object	物件下方
 	3D Lighting Preset	3D 光照預設
 	Standard	標準
 	Diffuse	漫射
@@ -5691,6 +5739,11 @@ axis	Y Axis	Y 軸
 @msg	`inputs` needs the permission `doc.read`	`inputs` 需要權限 `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	記憶體預算（物件 {_1} 需要 {size} 位元組的輸入，剩餘 {left}）
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	物件預算（超過 {MAX_OBJECTS} 個唯讀物件）
+@msg	instruction budget	指令預算
+@msg	time budget	時間預算
+@msg	memory budget (the selection is too large to hand over)	記憶體預算（所選內容太大，無法傳遞）
+@msg	output size ({what} is {len} bytes, limit {max})	輸出大小（{what} 為 {len} 位元組，上限 {max}）
+@msg	the plug-in's grant can't be removed from the plug-in store	無法從增效模組存放區移除該增效模組的授權
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	權限 `{shown}` 保留給日後的增效模組 API；此主機不授予該權限
 @msg	unknown permission `{shown}`	未知權限 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	「{name}」需要權限 {asked}：需要有人在桌面應用程式中核准，或在以 --allow-plugin-grants 啟動的工作階段中傳入 `grant`
@@ -5727,6 +5780,16 @@ axis	Y Axis	Y 軸
 @msg	message must be text	message 必須是文字
 @msg	allowContinue must be true or false	allowContinue 必須是 true 或 false
 @msg	Batch cannot play an action with a stop	批次無法播放含有停止的動作
+	Insert Menu Item…	插入選單項目…
+	Insert Menu Item	插入選單項目
+	Menu Item:	選單項目：
+	No menu item matches.	沒有相符的選單項目。
+	Several menu items match. Choose one from the list.	有多個選單項目相符。請從清單中選擇一個。
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	未列出會開啟對話框的項目，以及「檔案」、「視窗」和「說明」選單中的項目。
+@msg	command must be text	command 必須是文字
+@msg	no menu item that can be inserted runs this command	沒有可插入的選單項目執行此指令
+@msg	the action already has 10,000 steps	這個動作已有 10,000 個步驟
+@msg	the action set would be larger than 8 MiB	動作組會超過 8 MiB
 	Playback Options	播放選項
 	Accelerated	加速
 	Step by Step	逐步
@@ -6040,9 +6103,12 @@ anchor	Points:	點：
 @msg	{label} must be a number	{label} 必須是數字
 @msg	{label} must be a number of at least 0.1	{label} 必須是至少 0.1 的數字
 	Advanced Character Formats	進階字元格式
+	Basic Paragraph Formats	基本段落格式
+	Composition	排版
 	Horizontal Scale	水平縮放
 	Vertical Scale	垂直縮放
 @msg	{label} must be a number from {min} to {max}	{label} 必須是 {min} 到 {max} 之間的數字
+@msg	{label} must be a whole number from {min} to {max}	{label} 必須是 {min} 到 {max} 之間的整數
 	Character Color	字元顏色
 	OpenType Features	OpenType 功能
 	Stylistic Sets	風格集
@@ -6427,6 +6493,7 @@ breakText	Glyphs	字符
 
 # Align to Pixel Grid
 	Align to Pixel Grid	對齊像素格點
+	Not Aligned to Pixel Grid	未對齊像素格點
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路徑和複合路徑可以對齊像素格點
 @msg	side is left or right, not `{s}`	side 應為 left 或 right，而不是 `{s}`
 	Edit Custom Dictionary	編輯自訂字典

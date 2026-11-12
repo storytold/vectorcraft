@@ -149,6 +149,24 @@ fn command_driven_fields_preview_and_small_windows_keep_the_buttons_reachable() 
 }
 
 #[test]
+fn the_shadows_switch_shows_its_settings_and_turns_the_shadow_on_in_one_undo_step() {
+    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", EXTRUDE, vec2(1280.0, 900.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    h.click(h.rect("Lighting").center());
+    assert!(!h.texts.iter().any(|(s, _)| s == "Shadow Bounds"), "the settings show only while shadows are on");
+    h.click(h.rect("Shadows").center());
+    assert_eq!(h.app.ui.dialog.as_ref().unwrap().fields.get("shadow"), Some(&json!(true)));
+    assert!(h.texts.iter().any(|(s, _)| s == "Distance from Object"));
+    let state = h.app.session.doc().unwrap();
+    let node = state.doc.node(state.selection.objects[0]).unwrap();
+    assert_eq!(node.appearance.effects[0].params["shadow"], json!(true), "the preview draws the shadow");
+    dialogs::confirm(&mut h.app).unwrap();
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
+}
+
+#[test]
 fn lighting_tab_shows_light_fields_and_keeps_the_dialog_compact() {
     let mut h = Harness::new(vec2(1280.0, 900.0));
     h.settle();
@@ -158,7 +176,9 @@ fn lighting_tab_shows_light_fields_and_keeps_the_dialog_compact() {
         assert!(Rect::from_min_size(Pos2::ZERO, h.screen).contains_rect(h.rect(label)));
     }
     let panel = h.ctx.memory(|m| m.area_rect(Id::unique(("dialog", "effect")).with("revolve"))).unwrap();
-    assert!(panel.width() < 420.0 && panel.height() < 570.0, "compact lighting controls with light management: {panel:?}");
+    // The Shadows switch adds one 28-point row to the 570-point bound; its settings show only
+    // while it is on.
+    assert!(panel.width() < 420.0 && panel.height() < 600.0, "compact lighting controls with light management: {panel:?}");
     h.drag(h.rect("Height").center(), vec2(24.0, 0.0));
     assert_ne!(h.value("lightHeight"), 30.0);
     h.click(h.response(("revolve-reset", "lightHeight")).center());

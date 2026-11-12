@@ -1951,3 +1951,63 @@ fn symbol_unused_lists_the_symbols_nothing_places_and_delete_takes_several() {
     }
     assert_eq!(names(&s).len(), 6);
 }
+
+/// Symbols panel › Sort by Name: the document's symbols in name order, ignoring case, with names
+/// that differ only in case kept in their order, as one undo step that keeps the current symbol
+/// and every instance; sorting symbols already in order adds no undo step.
+#[test]
+fn symbol_sort_by_name_orders_the_symbols_in_one_undo_step() {
+    let mut s = session();
+    let names = |s: &mut Session| -> Vec<String> {
+        let list = s.execute("symbol.list", &json!({})).unwrap();
+        list["symbols"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap_or_default().to_string()).collect()
+    };
+    let current = |s: &mut Session| s.execute("symbol.list", &json!({})).unwrap()["current"].clone();
+    let made = ["leaf", "Badge", "apple", "Leaf", "Zed"];
+    for (i, name) in made.into_iter().enumerate() {
+        rect(&mut s, 20.0 * i as f64, 0.0, 10.0, 10.0);
+        s.execute("symbol.new", &json!({"name": name})).unwrap();
+    }
+    // No current symbol stored: the first one is current.
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).unknown.remove("currentSymbol");
+    assert_eq!(current(&mut s), "leaf");
+    let instances = |s: &Session| {
+        let mut v = vec![];
+        s.doc().unwrap().doc.walk(|n| {
+            if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+                v.push((n.id, symbol.clone()));
+            }
+        });
+        v
+    };
+    let placed = instances(&s);
+    assert_eq!(placed.len(), 5);
+    let before = s.doc().unwrap().history.undo.len();
+    s.execute("symbol.sortByName", &json!({})).unwrap();
+    assert_eq!(names(&mut s), ["apple", "Badge", "leaf", "Leaf", "Zed"]);
+    assert_eq!(current(&mut s), "leaf", "the current symbol stays current");
+    assert_eq!(instances(&s), placed, "every instance keeps its symbol");
+    assert_eq!(s.doc().unwrap().history.undo.len(), before + 1, "one undo step");
+    // Already in order: nothing changes and no undo step is added.
+    let revision = s.doc().unwrap().revision;
+    s.execute("symbol.sortByName", &json!({})).unwrap();
+    assert_eq!((s.doc().unwrap().history.undo.len(), s.doc().unwrap().revision), (before + 1, revision));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(names(&mut s), made);
+    assert_eq!(current(&mut s), "leaf");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(names(&mut s), ["apple", "Badge", "leaf", "Leaf", "Zed"]);
+    // An explicitly current symbol stays current too.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("symbol.setCurrent", &json!({"name": "Zed"})).unwrap();
+    s.execute("symbol.sortByName", &json!({})).unwrap();
+    assert_eq!(current(&mut s), "Zed");
+    // Run as a batch step it sorts as well, and with no symbols it adds no undo step.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("command.batch", &json!({"commands": [{"command": "symbol.sortByName", "params": {}}]})).unwrap();
+    assert_eq!(names(&mut s), ["apple", "Badge", "leaf", "Leaf", "Zed"]);
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let before = s.doc().unwrap().history.undo.len();
+    s.execute("symbol.sortByName", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), before);
+}

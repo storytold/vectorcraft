@@ -14,7 +14,9 @@ use vectorcraft_doc::style_libs::{self, STYLE_LIBRARIES, STYLES_EXT, builtin_sty
 use vectorcraft_doc::{Document, GraphicStyle, PatternDef, StyleLibrary};
 
 use super::menucmds::squash;
-use super::swatchlib::{FileData, LibraryFile, LibraryInfo, names_param, stem};
+use super::swatchlib::{
+    FileData, LibraryFile, LibraryInfo, concealed_library_id, concealed_library_ids, names_param, shown_id, shown_library_id, stem,
+};
 use super::{CommandSpec, Result, Session, always, bad, checked_ids_param, cmd, has_doc, str_param, switch_or, text_param, unique_name};
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -94,6 +96,9 @@ pub fn library(s: &Session, key: &str) -> Option<(LibraryInfo, Arc<StyleLibrary>
     if let Some(found) = s.style_libraries.get(key) {
         return Some(found);
     }
+    if let Some(found) = concealed_library_id(s, key).and_then(|id| s.style_libraries.get(&id)) {
+        return Some(found);
+    }
     if let Some(b) = STYLE_LIBRARIES.iter().find(|b| b.id == key) {
         return Some((builtin_info(b), builtin_style_library(key)?));
     }
@@ -108,20 +113,22 @@ fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<(LibraryInfo, Arc<
 
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
     s.style_libraries.rescan();
+    let concealed = concealed_library_ids(s, []);
     let libs: Vec<Value> = libraries(s)
         .into_iter()
         .map(|l| {
             let count = library(s, &l.id).map_or(0, |(_, lib)| lib.len());
-            json!({"id": l.id, "name": l.name, "category": l.category, "count": count, "path": s.style_libraries.path(&l.id)})
+            let (id, path) = (shown_id(&concealed, &l.id), s.style_libraries.shown_path(&l.id));
+            json!({"id": id, "name": l.name, "category": l.category, "count": count, "path": path})
         })
         .collect();
-    Ok(json!({ "libraries": libs, "userFolder": s.style_libraries.user_dir() }))
+    Ok(json!({ "libraries": libs, "userFolder": s.style_libraries.shown_user_dir() }))
 }
 
 fn get(s: &mut Session, p: &Value) -> Result<Value> {
     let (info, lib) = library_param(s, p, "graphicStyle.library")?;
     let styles: Vec<Value> = lib.styles.iter().map(super::style::style_json).collect();
-    Ok(json!({"id": info.id, "name": info.name, "category": info.category, "styles": styles}))
+    Ok(json!({"id": shown_library_id(s, &info.id), "name": info.name, "category": info.category, "styles": styles}))
 }
 
 /// Pattern `name` of `lib` in `d`: the document's own when it has the same pattern (under any
@@ -192,7 +199,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let doc_name = |lib_name: &str| added.iter().find(|(l, _)| l == lib_name).map_or_else(|| lib_name.to_string(), |(_, n)| n.clone());
     let mut out = json!({
-        "library": info.id,
+        "library": shown_library_id(s, &info.id),
         "added": added.iter().map(|(_, n)| n).collect::<Vec<_>>(),
         "existing": existing.iter().map(|g| &g.name).collect::<Vec<_>>(),
     });
@@ -238,5 +245,5 @@ fn load(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     })?;
-    Ok(json!({"library": info.id, "name": info.name, "count": lib.len()}))
+    Ok(json!({"library": shown_library_id(s, &info.id), "name": info.name, "count": lib.len()}))
 }

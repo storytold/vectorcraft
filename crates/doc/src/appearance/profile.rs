@@ -26,11 +26,16 @@ impl WidthProfile {
     pub fn at(&self, t: f64) -> (f64, f64) {
         Self::at_points(&self.points, t)
     }
-    /// [`Self::at`] of a profile's points (a preset's or a saved profile's). Each side runs through
-    /// its points on a monotone cubic curve (Fritsch–Carlson): it flows through a width point
-    /// without a kink, turns flat at a point wider or narrower than both neighbours, and never
-    /// goes past either point of the span it is in (#5714). Points on one straight line stay on
-    /// it. A step (two points at one position, [`Self::around`]) ends the curve on each side of it.
+    /// [`Self::at`] of a profile's points (a preset's or a saved profile's).
+    ///
+    /// Each side runs through its points on a cubic Hermite curve, its slope at each one the
+    /// weighted harmonic mean of the secants either side (Fritsch–Carlson). That is C1 continuous
+    /// and monotone between points, so it never overshoots them, a point eases into its neighbours
+    /// instead of making a corner, and moving one reshapes the curve as far as its neighbours'
+    /// neighbours (their slopes depend on it). The ends of a run use the one-sided PCHIP slope
+    /// from its first two secants, or the secant when it has only two points, so a two-point
+    /// profile stays a straight taper and the lens is a parabola. Two points at one `t` are still
+    /// a step: each run either side ends independently at it.
     pub fn at_points(p: &[(f64, f64, f64)], t: f64) -> (f64, f64) {
         if p.is_empty() {
             return (1.0, 1.0);
@@ -71,9 +76,10 @@ impl WidthProfile {
         // Two swells between narrow necks.
         ProfilePreset { id: "wave", label: "Wave", points: &[(0.0, 0.3, 0.3), (0.25, 1.0, 1.0), (0.5, 0.3, 0.3), (0.75, 1.0, 1.0), (1.0, 0.3, 0.3)] },
     ];
-    /// The widest the stroke gets, as a multiple of its weight, 1 for a profile without points. Each
-    /// side stays between the widths of the two points of each span ([`Self::at_points`]), but the
-    /// two sides needn't peak together, so a span counts its wider left and its wider right.
+    /// The widest the stroke gets, as a multiple of its weight, 1 for a profile without points.
+    /// Each side's smooth curve stays between the widths of the two points of each span
+    /// ([`Self::at_points`]), but the two sides needn't peak together, so a span counts its wider
+    /// left and its wider right.
     pub fn widest(&self) -> f64 {
         let p = &self.points;
         if p.is_empty() {
@@ -249,11 +255,27 @@ impl AngleProfile {
 /// How close two width points' positions are to make a step ([`WidthProfile::around`]).
 const STEP: f64 = 1e-7;
 
+/// The one-sided three-point PCHIP slope at the start of a run, from the first two secants.
+/// A sign change caps the slope, and a slope that turns back on the first secant is flattened.
+/// Runs of only two points use their secant instead (see [`tangent`]).
+fn end_slope(h0: f64, h1: f64, d0: f64, d1: f64) -> f64 {
+    let m = ((2.0 * h0 + h1) * d0 - h0 * d1) / (h0 + h1);
+    if !m.is_finite() || m * d0 <= 0.0 {
+        return 0.0;
+    }
+    if d0 * d1 < 0.0 {
+        return if d0 > 0.0 { m.min(3.0 * d0) } else { m.max(3.0 * d0) };
+    }
+    m
+}
+
 /// The slope of one side (`v` reads it from a point) of width profile `p` at its point `j`, in
 /// width per unit of position: Fritsch–Carlson's choice for a monotone cubic curve. It is 0 where
-/// the point is wider or narrower than both neighbours, the weighted harmonic mean of the slopes
-/// of the spans on either side elsewhere (never more than three times either, so no span
-/// overshoots its points), and the span's own slope at an end of the profile or beside a step.
+/// the point is wider or narrower than both neighbours, and the weighted harmonic mean of the
+/// slopes of the spans on either side elsewhere (never more than three times either, so no span
+/// overshoots its points). The ends of a run take the one-sided three-point PCHIP slope, or their
+/// secant when the run has only two points; a step ends the run on each side, so the points either
+/// side of it do not see across it.
 fn tangent(p: &[(f64, f64, f64)], j: usize, v: fn(&(f64, f64, f64)) -> f64) -> f64 {
     let Some(q) = p.get(j) else { return 0.0 };
     let before = j.checked_sub(1).and_then(|k| p.get(k)).filter(|a| q.0 - a.0 > STEP);
@@ -268,8 +290,18 @@ fn tangent(p: &[(f64, f64, f64)], j: usize, v: fn(&(f64, f64, f64)) -> f64) -> f
             let (h0, h1) = (q.0 - a.0, b.0 - q.0);
             3.0 * (h0 + h1) / ((2.0 * h1 + h0) / d0 + (h1 + 2.0 * h0) / d1)
         }
-        (Some(a), None) => slope(a, q),
-        (None, Some(b)) => slope(q, b),
+        // The end of a run: its previous two points set a one-sided three-point slope, or its
+        // secant when the run has only two points (the point before `a` is on the other side of a
+        // step, or does not exist).
+        (Some(a), None) => {
+            let Some(prev) = j.checked_sub(2).and_then(|k| p.get(k)).filter(|z| a.0 - z.0 > STEP) else { return slope(a, q) };
+            end_slope(q.0 - a.0, a.0 - prev.0, slope(a, q), slope(prev, a))
+        }
+        // The start of a run, symmetrically.
+        (None, Some(b)) => {
+            let Some(next) = p.get(j + 2).filter(|z| z.0 - b.0 > STEP) else { return slope(q, b) };
+            end_slope(b.0 - q.0, next.0 - b.0, slope(q, b), slope(b, next))
+        }
         (None, None) => 0.0,
     }
 }
@@ -424,12 +456,12 @@ mod tests {
     #[test]
     fn widths_run_smoothly_through_width_points() {
         // A swell in the middle: flat at its widest, and a quarter of the way along above the
-        // straight ramp from 1 to 3 (2).
+        // straight ramp from 1 to 3 (2) because the end eases out of the first point.
         let swell = WidthProfile { points: vec![(0.0, 1.0, 1.0), (0.5, 3.0, 2.0), (1.0, 1.0, 1.0)] };
         let (before, after) = slopes(&swell, 0.5);
         assert!(before.abs() < 1e-4 && after.abs() < 1e-4, "{before} {after}");
         let (l, r) = swell.at(0.25);
-        assert!((l - 2.25).abs() < 1e-12 && (r - 1.625).abs() < 1e-12, "{l} {r}");
+        assert!((l - 2.5).abs() < 1e-12 && (r - 1.75).abs() < 1e-12, "{l} {r}");
         // Rising on both sides of a point: the slope is the same either side of it.
         let rise = WidthProfile { points: vec![(0.0, 0.0, 0.0), (0.3, 1.0, 1.0), (1.0, 4.0, 4.0)] };
         let (before, after) = slopes(&rise, 0.3);
