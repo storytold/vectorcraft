@@ -9,7 +9,8 @@
 //! Before each instruction the interpreter takes one unit of fuel, checks the interrupt flag and,
 //! when the heap has grown past its threshold, collects garbage. Running out of fuel, the heap
 //! limit, the frame limit, the re-entry limit and the interrupt flag each end the run with an
-//! [`Abrupt::Limit`] that unwinds every frame without running catch or finally blocks.
+//! [`Abrupt::Limit`] that unwinds every frame without running catch or finally blocks. Source
+//! compiled during a run takes a unit of fuel for each code unit before it is parsed.
 //!
 //! Collection runs only between instructions. An operation that may run JavaScript in the middle
 //! keeps its operands on the operand stack until it is done, so everything it holds is reachable
@@ -232,6 +233,13 @@ pub(crate) struct Interp {
     /// runs. An entry whose slot no longer holds its exception belongs to a block that `break`,
     /// `continue` or `return` left, and [`Self::drop_left_finally_marks`] removes it.
     pub(crate) finally_marks: Vec<(ObjId, u32, usize)>,
+    /// Where the exceptions `finally` blocks are running for were raised, innermost last, each with
+    /// the stack slot that holds the exception while the block runs. The block's end throws the
+    /// exception on from that site. An entry whose slot is at or above the stack's length belongs to
+    /// a block that was left, and [`Self::drop_left_finally_sites`] removes it at each `Jump`, each
+    /// return and each collection. [`Self::unwind`] removes the entries at or above a handler's slot
+    /// before it adds one, so the slots rise and the list is never longer than the stack.
+    pub(crate) finally_sites: Vec<(ThrowSite, usize)>,
     /// The mark of the host error the last run ended with.
     pub(crate) error_mark: Option<u32>,
     /// [`crate::bytecode::Source::strict_writes`] for the scripts the realm runs.
@@ -293,6 +301,12 @@ pub(crate) const MAX_APPLY_ARGS: usize = 1 << 16;
 /// The estimated bytes of a name's entries in the list and the set `for-in` builds.
 const KEY_ENTRY_BYTES: usize = 32;
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: the [`Interp::finally_sites`] entries that leaving a block or a frame has looked at.
+    pub(crate) static SITE_CHECKS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 /// The estimated bytes of the index names `0` to `len - 1` while `for-in` lists them.
 fn index_keys_bytes(len: usize) -> usize {
     let mut total = 0usize;
@@ -307,13 +321,21 @@ fn index_keys_bytes(len: usize) -> usize {
     total
 }
 
-/// A seed for `Math.random` that differs from realm to realm, from the standard library's
-/// randomly keyed hasher; never zero.
+/// A seed for `Math.random` that differs from realm to realm and from run to run, from the OS
+/// random source (the browser's crypto on the web), or the standard library's randomly keyed
+/// hasher when that fails; never zero.
 fn random_seed() -> u64 {
+    random_seed_from(getrandom::u64())
+}
+
+/// [`random_seed`] from what the OS random source returned.
+pub(crate) fn random_seed_from(os: Result<u64, getrandom::Error>) -> u64 {
     use std::hash::{BuildHasher, Hasher};
-    let mut h = std::collections::hash_map::RandomState::new().build_hasher();
-    h.write_u64(0x9e37_79b9_7f4a_7c15);
-    h.finish() | 1
+    os.unwrap_or_else(|_| {
+        let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+        h.write_u64(0x9e37_79b9_7f4a_7c15);
+        h.finish()
+    }) | 1
 }
 
 /// The estimated bytes of a binding or property named by `len` code units.
@@ -440,6 +462,7 @@ impl Interp {
             error_tag: crate::realm::UNKNOWN_SOURCE,
             thrown_mark: None,
             finally_marks: Vec::new(),
+            finally_sites: Vec::new(),
             error_mark: None,
             strict_writes: false,
         };
@@ -595,6 +618,22 @@ impl Interp {
         Ok(())
     }
 
+    /// Prepares for parsing `units` code units of source at run time: takes a unit of fuel for
+    /// each code unit and checks that the source text fits in the heap, before any of it is
+    /// flattened, parsed or compiled. Running out of fuel uses up what was left.
+    pub(crate) fn prepare_source(&mut self, units: usize) -> JsResult<()> {
+        let fuel = u64::try_from(units).unwrap_or(u64::MAX);
+        if fuel > self.fuel {
+            self.fuel = 0;
+            return Err(Abrupt::Limit(LimitKind::Fuel));
+        }
+        self.fuel -= fuel;
+        if self.interrupt.load(Ordering::Relaxed) {
+            return Err(Abrupt::Limit(LimitKind::Interrupted));
+        }
+        self.reserve_heap(string_bytes(units))
+    }
+
     /// Removes the [`Self::finally_marks`] entries of `finally` blocks that `break`, `continue` or
     /// `return` left: those whose stack slot no longer holds their exception.
     fn drop_left_finally_marks(&mut self) {
@@ -602,8 +641,22 @@ impl Interp {
         self.finally_marks.retain(|&(id, _, slot)| matches!(stack.get(slot), Some(Value::Object(o)) if *o == id));
     }
 
+    /// Removes the [`Self::finally_sites`] entries whose stack slot is at or above `len`: those of
+    /// `finally` blocks that were left. The slots rise along the list, so only its end is looked at.
+    fn drop_left_finally_sites(&mut self, len: usize) {
+        while let Some(&(_, slot)) = self.finally_sites.last() {
+            #[cfg(test)]
+            SITE_CHECKS.with(|c| c.set(c.get() + 1));
+            if slot < len {
+                break;
+            }
+            self.finally_sites.pop();
+        }
+    }
+
     pub(crate) fn collect_garbage(&mut self) {
         self.drop_left_finally_marks();
+        self.drop_left_finally_sites(self.stack.len());
         let mut roots = Roots::default();
         roots.values.extend(self.stack.iter());
         roots.values.extend(self.temp_roots.iter());
@@ -611,6 +664,7 @@ impl Interp {
         roots.values.push(&self.last_error);
         roots.values.push(&self.passing);
         roots.objects.extend(self.finally_marks.iter().map(|&(id, _, _)| id));
+        roots.codes.extend(self.finally_sites.iter().map(|((code, _), _)| &**code));
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
@@ -722,11 +776,15 @@ impl Interp {
                 }
                 self.stack.truncate(target_len);
                 self.drop_left_finally_marks();
+                self.drop_left_finally_sites(target_len);
                 if let (Some(mark), false, Value::Object(id)) = (self.thrown_mark.take(), caught, &v) {
                     self.finally_marks.push((*id, mark, target_len));
                 }
                 self.stack.push(v);
-                self.throw_site = None;
+                let site = self.throw_site.take();
+                if let (false, Some(site)) = (caught, site) {
+                    self.finally_sites.push((site, target_len));
+                }
                 return Ok(());
             }
             let Some(frame) = self.frames.pop() else { return Err(Abrupt::Throw(v)) };
@@ -756,6 +814,8 @@ impl Interp {
     fn return_value(&mut self, v: Value) -> JsResult<Option<Value>> {
         let Some(frame) = self.frames.pop() else { return internal("return without a frame") };
         self.stack.truncate(frame.base);
+        // A `return` in a finally block leaves the block, and the value takes its exception's slot.
+        self.drop_left_finally_sites(frame.base);
         let v = match frame.construct {
             Some(o) if !matches!(v, Value::Object(_)) => Value::Object(o),
             _ => v,
@@ -842,7 +902,11 @@ impl Interp {
             Op::New(n) => self.op_new(n),
             Op::Binary(b) => self.op_binary(b),
             Op::Neg | Op::Plus | Op::BitNot | Op::Not | Op::Typeof | Op::ToNumber => self.op_unary(op),
-            Op::Jump(t) => self.jump_to(t),
+            Op::Jump(t) => {
+                // `break` and `continue` leave a `finally` block by popping its exception and jumping.
+                self.drop_left_finally_sites(self.stack.len());
+                self.jump_to(t)
+            }
             Op::JumpIfFalse(t) | Op::JumpIfTrue(t) => self.op_branch(t, matches!(op, Op::JumpIfTrue(_)), false),
             Op::JumpIfFalseKeep(t) | Op::JumpIfTrueKeep(t) => self.op_branch(t, matches!(op, Op::JumpIfTrueKeep(_)), true),
             Op::Throw => {
@@ -879,11 +943,12 @@ impl Interp {
             Op::XmlEscape(kind) => self.op_xml_escape(kind),
             Op::XmlLiteral { parts, list } => self.op_xml_literal(parts, list),
             Op::XmlScopeGet => self.op_xml_scope_get(),
+            Op::XmlScopeRef => self.op_xml_scope_ref(),
             Op::XmlFilterStart => self.op_xml_filter_start(),
             Op::XmlFilterNext(t) => self.op_xml_filter_next(t),
             Op::XmlFilterTest => self.op_xml_filter_test(),
             Op::XmlFilterEnd => self.op_xml_filter_end(),
-            Op::ForEachValue => self.op_for_each_value(),
+            Op::ForEachValue(n) => self.op_for_each_value(n as usize),
             Op::SetDefaultNamespace => self.op_set_default_namespace(),
             Op::Return | Op::ReturnCompletion => internal("return reached the dispatcher"),
         }
@@ -948,6 +1013,11 @@ impl Interp {
             {
                 self.thrown_mark = self.finally_marks.get(i).map(|&(_, mark, _)| mark);
                 self.finally_marks.truncate(i);
+            }
+            let slot = self.stack.len();
+            if let Some(i) = self.finally_sites.iter().rposition(|&(_, s)| s == slot) {
+                self.throw_site = self.finally_sites.get(i).map(|(site, _)| site.clone());
+                self.finally_sites.truncate(i);
             }
             return Err(Abrupt::Throw(v));
         }
@@ -2349,6 +2419,7 @@ impl Interp {
         };
         let strict = self.strict();
         self.check_source_units(s.len()).map_err(|e| self.compile_error_to_abrupt(e))?;
+        self.prepare_source(s.len())?;
         let units = s.flat();
         let code = self.compile_source(&units, strict, CodeKind::Eval).map_err(|e| self.compile_error_to_abrupt(e))?;
         self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES))?;

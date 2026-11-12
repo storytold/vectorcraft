@@ -2908,3 +2908,15 @@ fn noise_keeps_a_kept_rare_colours_regions_but_not_its_specks() {
     assert_eq!(a, b);
     assert!(a.iter().all(|&v| v == 0));
 }
+
+/// A GIF whose logical screen is one pixel but whose frame declares 65535 × 65535 is refused before
+/// the decoder allocates for the frame.
+#[test]
+fn a_gif_frame_larger_than_its_screen_is_refused_before_decoding() {
+    let mut gif = b"GIF89a".to_vec();
+    gif.extend([1, 0, 1, 0, 0, 0, 0]); // screen 1 × 1, no color table
+    gif.extend([0x2C, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0]); // frame at 0,0 of 65535 × 65535
+    gif.extend([2, 1, 0, 0, 0x3B]);
+    assert!(matches!(Raster::decode(&gif), Err(TraceError::TooLarge { .. })), "{:?}", Raster::decode(&gif).err());
+    assert!(matches!(Raster::decode_to_fit(&gif), Err(TraceError::TooLarge { .. })));
+}

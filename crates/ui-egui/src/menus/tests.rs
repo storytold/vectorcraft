@@ -313,6 +313,86 @@ fn optical_margin_alignment_is_a_checked_type_menu_item() {
     assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
 }
 
+/// Type › Dynamic Text runs `type.dynamicText`, is enabled for type on a path and area type that
+/// are in no thread, and is checked while the selected type has it on.
+#[test]
+fn dynamic_text_is_a_checked_type_menu_item() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let ids: Vec<&str> = menu_tree()
+        .into_iter()
+        .filter(|(menu, _)| *menu == "Type")
+        .flat_map(|(_, items)| items)
+        .filter_map(|item| match item {
+            Item::Cmd("Dynamic Text", id, _) => Some(id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ids, ["type.dynamicText"]);
+    let id = "type.dynamicText";
+    assert_eq!(checked(&app, id, &Value::Null), Some(false));
+    assert!(!enabled(&app, id));
+    let point = app.run("text.create", json!({"x": 10, "y": 10, "text": "Point"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [point]})).unwrap();
+    assert!(!enabled(&app, id), "point type");
+    let path = app.run("path.create", json!({"d": "M60 150 L340 150"})).unwrap()["id"].clone();
+    let t = app.run("text.createInPath", json!({"path": path, "mode": "onPath", "text": "Along", "at": [60, 150]})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [t]})).unwrap();
+    assert!(enabled(&app, id));
+    assert_eq!(checked(&app, id, &Value::Null), Some(false));
+    app.run(id, json!({})).unwrap();
+    assert_eq!(checked(&app, id, &Value::Null), Some(true));
+    app.run(id, json!({})).unwrap();
+    assert_eq!(checked(&app, id, &Value::Null), Some(false));
+    let frame = app.run("shape.rectangle", json!({"x": 60, "y": 200, "width": 200, "height": 100})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [t, frame]})).unwrap();
+    app.run("text.thread.create", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [t]})).unwrap();
+    assert!(!enabled(&app, id), "type on a path in a thread");
+    // Area type takes Block, and the item is checked while it is on.
+    let area = app.run("text.create", json!({"x": 10, "y": 400, "text": "Block", "area": {"width": 100, "height": 50}})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [area]})).unwrap();
+    assert!(enabled(&app, id), "area type");
+    assert_eq!(checked(&app, id, &Value::Null), Some(false));
+    app.run(id, json!({})).unwrap();
+    assert_eq!(checked(&app, id, &Value::Null), Some(true));
+}
+
+/// Type › Dynamic Text Presets › Circle, Arch and Bow run `type.dynamicTextPreset` with their
+/// preset, enabled for point type and type on a path but not for area type alone.
+#[test]
+fn dynamic_text_presets_are_a_type_submenu() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let items: Vec<(&str, &str, Value)> = menu_tree()
+        .into_iter()
+        .filter(|(menu, _)| *menu == "Type")
+        .flat_map(|(_, items)| items)
+        .filter_map(|item| match item {
+            Item::Sub("Dynamic Text Presets", children) => Some(children),
+            _ => None,
+        })
+        .flatten()
+        .filter_map(|item| match item {
+            Item::Cmd(label, id, p) => Some((label, id, p)),
+            _ => None,
+        })
+        .collect();
+    let id = "type.dynamicTextPreset";
+    assert_eq!(items, [("Circle", id, json!({"preset": "circle"})), ("Arch", id, json!({"preset": "arch"})), ("Bow", id, json!({"preset": "bow"}))]);
+    assert!(!enabled(&app, id));
+    let area = app.run("text.create", json!({"x": 10, "y": 200, "text": "Area", "area": {"width": 100, "height": 50}})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [area]})).unwrap();
+    assert!(!enabled(&app, id), "area type");
+    let point = app.run("text.create", json!({"x": 10, "y": 10, "text": "Point"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [point]})).unwrap();
+    assert!(enabled(&app, id));
+    app.run(id, json!({"preset": "arch"})).unwrap();
+    // Now type on a path with Dynamic Text on, so Type › Dynamic Text is checked.
+    assert!(enabled(&app, id));
+    assert_eq!(checked(&app, "type.dynamicText", &Value::Null), Some(true));
+}
+
 /// Type › Optical Margin Alignment menu check uses `shared_text_flag`; mixed values stay unchecked.
 #[test]
 fn optical_margin_alignment_menu_unchecked_when_shared_flag_none() {

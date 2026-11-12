@@ -1173,6 +1173,56 @@ fn a_click_just_outside_the_canvas_does_not_reach_the_tool() {
     assert_eq!(selected(&app), vec![vectorcraft_doc::NodeId(id)]);
 }
 
+/// The box-drawing shape tools show the bounding box of the shape just drawn (#5477). A drag of
+/// its bottom-right handle with the tool still active scales that shape, as with the Selection
+/// tool, rather than drawing a second shape from the handle.
+#[test]
+fn a_shape_tool_scales_the_shape_just_drawn_by_its_bounding_box_handle() {
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    for tool in ["rectangle", "roundedRectangle", "ellipse", "polygon", "star"] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool(tool);
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let drag = |app: &mut VectorcraftApp, a: Pos2, b: Pos2| {
+            for ev in [
+                egui::Event::PointerMoved(a),
+                button(a, true),
+                egui::Event::PointerMoved(a.lerp(b, 0.5)),
+                egui::Event::PointerMoved(b),
+                button(b, false),
+            ] {
+                frame(app, &ctx, vec![ev]);
+            }
+            frame(app, &ctx, vec![]);
+        };
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        drag(&mut app, xf.to_screen(Point::new(150.0, 120.0)), xf.to_screen(Point::new(210.0, 170.0)));
+        let objects = |app: &VectorcraftApp| {
+            let mut n = 0;
+            app.session.active().unwrap().doc.walk(|node| n += usize::from(node.path_data().is_some()));
+            n
+        };
+        assert_eq!(objects(&app), 1, "{tool}: the drag draws one shape");
+        let before = app.selection_box().unwrap_or_else(|| panic!("{tool}: the shape just drawn shows its box"));
+        // The bottom-right handle, dragged 40 pt along the box's width and 30 pt along its height
+        // (a polygon's or star's box turns with the shape).
+        let (corner, to) = (Point::new(before.rect.x1, before.rect.y1), Point::new(before.rect.x1 + 40.0, before.rect.y1 + 30.0));
+        drag(&mut app, xf.to_screen(before.to_doc() * corner), xf.to_screen(before.to_doc() * to));
+        let after = app.selection_box().unwrap_or_else(|| panic!("{tool}: the shape stays selected"));
+        let label = app.session.active().and_then(|st| st.history.undo.last().map(|e| e.label.clone()));
+        assert_eq!(objects(&app), 1, "{tool}: no second shape, last step {label:?}");
+        assert!(
+            (after.rect.width() - before.rect.width() - 40.0).abs() < 0.5 && (after.rect.height() - before.rect.height() - 30.0).abs() < 0.5,
+            "{tool}: {:?} -> {:?}, last step {label:?}",
+            before.rect,
+            after.rect
+        );
+        assert_eq!(label.as_deref(), Some("Scale"), "{tool}");
+    }
+}
+
 #[test]
 fn a_drag_from_a_ruler_onto_the_canvas_makes_a_guide() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -2800,10 +2850,13 @@ fn cached_frames_keep_their_scale_during_resize_rotation_and_dpi_changes() {
                 "{old_rot}° -> {new_rot}°, DPI {old_ppp} -> {new_ppp}, pixel={pixel}: {vertex:?}"
             );
         }
-        // Deliver the actual replacement and verify that it replaces the cached key.
+        // Deliver the actual replacement and verify that it replaces the cached key. The frame
+        // reports a slow render: when a parallel test makes a placed document's bitmap, the key's
+        // process-wide `placed` generation moves, and the next frame goes to the controlled worker
+        // instead of rendering over the delivered frame on this thread.
         let img = app.canvas.renderer.render(&job.doc, job.w, job.h, job.view, &job.opts);
         let expected = job.key.clone();
-        completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 1.0, moved: 0, reused: false }).unwrap();
+        completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 50.0, moved: 0, reused: false }).unwrap();
         frame(&mut app, size, new_ppp);
         assert_eq!(app.canvas.key.as_ref(), Some(&expected), "the worker's frame arrived");
     }
@@ -4804,6 +4857,45 @@ fn a_selected_objects_on_path_group_shows_its_space_widget() {
     app.run("edit.clear", json!({"ids": [b]})).unwrap();
     app.run("select.set", json!({"ids": [g]})).unwrap();
     assert_eq!(widgets(&mut app), 0, "one object");
+}
+
+/// A selected Objects on Path group whose objects have room to move along the path shows its Move
+/// All widget, a white diamond below its first object, with the Selection and Objects on Path tools;
+/// objects spread evenly to both ends of an open path have no room, and show none.
+#[test]
+fn a_selected_objects_on_path_group_shows_its_move_all_widget_when_it_has_room() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let line = id(app.session.execute("shape.line", &json!({"x1": 20, "y1": 200, "x2": 380, "y2": 200})).unwrap());
+    let a = id(app.session.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap());
+    let b = id(app.session.execute("shape.rectangle", &json!({"x": 80, "y": 40, "width": 20, "height": 20})).unwrap());
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let g = id(app.session.execute("object.objectsOnPath.attach", &json!({"path": line})).unwrap());
+    let ctx = egui::Context::default();
+    // A diamond: its top and bottom corners one above the other, its full height apart.
+    let diamond = |d: &egui::epaint::PathShape| {
+        let h = 2.0 * vectorcraft_tools::objects_on_path::MOVE_ALL_HALF_PX;
+        let [top, _, bottom, _] = d.points[..] else { return false };
+        d.closed && d.fill == Color32::WHITE && top.x == bottom.x && (bottom.y - top.y - h).abs() < 1e-3
+    };
+    let widgets = |app: &mut VectorcraftApp| shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Path(d) if diamond(d))).count();
+    app.select_tool("selection");
+    assert_eq!(widgets(&mut app), 0, "Auto: the objects reach both ends");
+    app.session.execute("object.objectsOnPath.options", &json!({"ids": [g], "spacing": 60})).unwrap();
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("objectsOnPath");
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("directSelection");
+    assert_eq!(widgets(&mut app), 0);
+    app.select_tool("selection");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(widgets(&mut app), 0, "an object in the group, not the group");
+    // One object can move along the path whatever its Space.
+    app.session.execute("object.objectsOnPath.options", &json!({"ids": [g], "spacing": "auto"})).unwrap();
+    app.run("edit.clear", json!({"ids": [b]})).unwrap();
+    app.run("select.set", json!({"ids": [g]})).unwrap();
+    assert_eq!(widgets(&mut app), 1, "one object");
 }
 
 /// The shapes Type → Show Hidden Characters draws in one frame, seen through `xf`.

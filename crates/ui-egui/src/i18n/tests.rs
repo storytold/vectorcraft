@@ -194,6 +194,37 @@ fn marquee_selection_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The Control bar panel menu's items, its groups of options and the edges, and the label of the
+/// command that turns a group on or off.
+#[test]
+fn control_bar_panel_menu_labels_are_in_complete_catalogs() {
+    const LABELS: [&str; 18] = [
+        "Snapping",
+        "Anchor Points",
+        "Tool Options",
+        "Object Options",
+        "Image Options",
+        "Fill and Stroke",
+        "Opacity",
+        "Graphic Style",
+        "Character",
+        "Paragraph",
+        "Vertical Alignment",
+        "Align and Distribute",
+        "Transform",
+        "Artboard Options",
+        "Document Options",
+        "Dock to Top",
+        "Dock to Bottom",
+        "Control Bar Options",
+    ];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in LABELS {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// The Character panel's Anti-aliasing Method label and its choices, with the Sharp method's
 /// own `antiAlias` row apart from the plain "Sharp" corner row.
 #[test]
@@ -204,6 +235,27 @@ fn anti_aliasing_method_labels_are_in_complete_catalogs() {
             assert!(cat.plain(label).is_some(), "{} is missing {label}", lang.code);
         }
         assert!(cat.contextual("antiAlias", "Sharp").is_some(), "{} is missing the antiAlias Sharp row", lang.code);
+    }
+}
+
+/// The names the EPS options' menus show (preview, overprints, flattener preset and PostScript
+/// level), and Save As's Preview label.
+#[test]
+fn eps_option_menu_names_are_in_complete_catalogs() {
+    use vectorcraft_engine::cmd::FlattenOptions;
+    use vectorcraft_eps::{Level, Overprint, Preview};
+    let names: Vec<&str> = Preview::ALL
+        .map(Preview::label)
+        .into_iter()
+        .chain(Overprint::ALL.map(Overprint::label))
+        .chain(Level::ALL.map(Level::label))
+        .chain(FlattenOptions::PRESETS.into_iter().filter_map(FlattenOptions::preset_label))
+        .chain(["Preview:"])
+        .collect();
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in &names {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
     }
 }
 
@@ -1878,7 +1930,7 @@ fn width(p: &Value, cmd: &str, key: &str) -> Result<f64> {
 }
 "##;
     let engine: Vec<_> = ERROR_HELPERS.iter().filter(|(c, _, _)| *c == "engine").map(|&(_, call, before)| (call, before)).collect();
-    let found = source_messages(code, &engine);
+    let found = source_messages(code, &engine, &Default::default());
     for want in [
         "`{key}` must be a number",
         "the width can't be negative",
@@ -1897,12 +1949,114 @@ fn width(p: &Value, cmd: &str, key: &str) -> Result<f64> {
     }
     let named = |m: &String| m.contains("not an error") || m.contains("not.an.error") || m.contains("not.a.reason");
     assert!(!found.iter().any(named), "{found:#?}");
-    let elsewhere = source_messages(code, &[]);
+    let elsewhere = source_messages(code, &[], &Default::default());
     let in_variants = ["nested", "manifest", "nothing to clear", "panel is locked"];
     assert!(elsewhere.len() == 4 && elsewhere.iter().all(|m| in_variants.iter().any(|w| m.contains(w))), "{elsewhere:#?}");
     // A message read this way matches its row: `{key}` keeps its name.
     let c = Catalog::parse("@msg\t`{key}` must be a number\t`{key}` ok\n");
     assert_eq!(c.message("`width` must be a number").map(|m| m.1), Some(vec![("key", "width")]));
+}
+
+/// The scan reads a message that an error or a status takes from a `&str` constant, by its name or
+/// by its path, with `.into()`, `.to_string()` or nothing after it, and the constant declared in
+/// another file. It does not read a constant that no error takes, a call of a name that a constant
+/// also has, or a constant in a comment.
+#[test]
+fn message_scan_reads_messages_held_in_constants() {
+    let declared = r#"
+pub(crate) const TOO_LARGE: &str = "the selection is too large to hand over";
+pub const SLOW: &'static str = "time budget";
+const UNUSED: &str = "not an error: a constant no error takes";
+const fn NOT_A_STR() -> u32 { 0 }
+// const COMMENTED: &str = "not an error: a constant in a comment";
+"#;
+    let code = r#"
+fn run() -> Result<()> {
+    let _ = Error::Limit(crate::runtime::TOO_LARGE.into());
+    let _ = Err(Error::Limit(SLOW.to_string()));
+    let _ = Err(COMMENTED);
+    let _ = Err(SLOW(3));
+    Ok(())
+}
+"#;
+    let mut consts = std::collections::BTreeMap::new();
+    for (name, value) in str_consts(declared) {
+        consts.entry(name).or_insert_with(Vec::new).push(value);
+    }
+    assert_eq!(consts.keys().collect::<Vec<_>>(), ["SLOW", "TOO_LARGE", "UNUSED"]);
+    let found: std::collections::BTreeSet<String> = source_messages(code, &[], &consts).into_iter().collect();
+    assert_eq!(found.iter().collect::<Vec<_>>(), ["the selection is too large to hand over", "time budget"]);
+    assert!(source_messages(code, &[], &Default::default()).is_empty());
+}
+
+/// The limits a plug-in run can exceed, and the error of a removal that leaves the plug-in's grant
+/// in the plug-in store, are translated in every language that translates every message, as the
+/// status bar shows them.
+#[test]
+fn plugin_limit_errors_are_translated() {
+    use vectorcraft_plugins::Error;
+    let scanned = message_literals();
+    let grant = "the plug-in's grant can't be removed from the plug-in store";
+    let templates = [
+        "instruction budget",
+        "time budget",
+        "memory budget (the selection is too large to hand over)",
+        "output size ({what} is {len} bytes, limit {max})",
+        grant,
+    ];
+    for template in templates {
+        assert!(scanned.contains(template), "{template}");
+    }
+    let limits = [
+        "instruction budget",
+        "time budget",
+        "memory budget (the selection is too large to hand over)",
+        "output size (the result is 9000 bytes, limit 4096)",
+    ];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for limit in limits {
+            let shown = message(lang, limit);
+            assert_ne!(shown, limit, "{code}");
+            let whole = message(lang, &Error::Limit(limit.into()).to_string());
+            assert!(whole.contains(&shown) && !whole.contains("exceeded"), "{code}: {whole}");
+        }
+        let shown = message(lang, limits[3]);
+        assert!(shown.contains("9000") && shown.contains("4096") && !shown.contains("output size"), "{code}: {shown}");
+        assert_ne!(message(lang, grant), grant, "{code}");
+    }
+}
+
+/// A manifest whose `commands` value has the wrong shape is refused with an error that every
+/// language of [`COMPLETE_MESSAGES`] translates whole, the command's name and the place in the
+/// manifest included.
+#[test]
+fn wrongly_shaped_plugin_commands_errors_are_translated() {
+    let many: Vec<String> = (0..=32).map(|i| format!(r#"{{"id":"c{i}","label":"C"}}"#)).collect();
+    let commands = [
+        r#"{"id":"x"}"#.to_string(),
+        r#""x""#.to_string(),
+        "[1]".to_string(),
+        r#"[{"id":1,"label":"A"}]"#.to_string(),
+        r#"[{"id":"x","label":true}]"#.to_string(),
+        r#"[{"label":"B"}]"#.to_string(),
+        r#"[{"id":"x"}]"#.to_string(),
+        r#"[{"id":"x","id":"y","label":"A"}]"#.to_string(),
+        format!("[{}]", many.join(",")),
+    ];
+    let english = ["must", "list", "missing", "field", "duplicate", "object", "line", "column", "each", "with", "invalid", "expected"];
+    for value in &commands {
+        let manifest = format!(r#"{{"id":"a","name":"x","kind":"filter","commands":{value}}}"#);
+        let e = vectorcraft_plugins::manifest::Manifest::parse(manifest.as_bytes()).unwrap_err().to_string();
+        let numbers: Vec<&str> = e.split(|c: char| !c.is_ascii_digit()).filter(|n| !n.is_empty()).collect();
+        for code in COMPLETE_MESSAGES {
+            let shown = message(Lang::from_code(code).expect("registered"), &e);
+            // Backticked names stay in English; the words around them are translated.
+            let words: String = shown.split('`').step_by(2).collect();
+            assert!(words.split(|c: char| !c.is_alphabetic()).all(|w| !english.contains(&w)), "{code}: {e} -> {shown}");
+            assert!(numbers.iter().all(|n| shown.contains(n)), "{code}: {e} -> {shown}");
+        }
+    }
 }
 
 /// The warnings of an Image Trace with keepColors, which the status bar shows and the scan above
@@ -2476,7 +2630,7 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("scale must be a number from {_1} to {_2}, not {_3}", &["scale"]),
     ("scale must be a number from {_1} to {_2}, not {s}", &["scale"]),
     ("show must be true or false", &["show"]),
-    ("span: \"selection\" places a linear or radial gradient, not a freeform one", &["span"]),
+    ("span: \"selection\" places a linear, radial, conic or diamond gradient, not a freeform one", &["span"]),
     ("thickness must be from 0.01 to 5000 pt", &["thickness"]),
     ("title can't be empty", &["title"]),
     ("view is required", &["view"]),
@@ -2508,6 +2662,61 @@ fn translated_messages_keep_the_keys_and_values_their_english_names() {
     let stale: Vec<&str> = NAMED_KEYS.iter().zip(&seen).filter(|(_, seen)| !**seen).map(|((english, _), _)| *english).collect();
     assert!(stale.is_empty(), "no catalog translates {stale:?}");
     assert!(missing.is_empty(), "{} rows drop a key or value their English names:\n{}", missing.len(), missing.join("\n"));
+}
+
+/// The command ids that `s` names outside its backticked spans, such as `assets.list` or
+/// `window.panel.dock`: words of two or more dot-separated parts, each an ASCII letter or digit
+/// run that starts with a lowercase letter.
+fn command_ids(s: &str) -> Vec<&str> {
+    let mut ids = Vec::new();
+    for part in s.split('`').step_by(2) {
+        for word in part.split(|c: char| !(c.is_ascii_alphanumeric() || c == '.' || c == '_')) {
+            let word = word.trim_end_matches('.');
+            let segments: Vec<&str> = word.split('.').collect();
+            let dotted = segments.len() > 1
+                && segments
+                    .iter()
+                    .all(|seg| seg.chars().next().is_some_and(|c| c.is_ascii_lowercase()) && seg.chars().all(|c| c.is_ascii_alphanumeric()));
+            if dotted && word != "e.g" && word != "i.e" {
+                ids.push(word);
+            }
+        }
+    }
+    ids
+}
+
+#[test]
+fn command_ids_finds_dotted_ids_outside_backticks() {
+    assert_eq!(command_ids("no slice {n} in the image (see slice.list)"), ["slice.list"]);
+    assert_eq!(command_ids("use window.panel.dock."), ["window.panel.dock"]);
+    assert_eq!(command_ids("output.destination: {e}"), ["output.destination"]);
+    assert_eq!(command_ids("(assets.list.old देखें)"), ["assets.list.old"]);
+    assert_eq!(command_ids("see `plugin.list`, e.g. 1.5 or {name}.svg"), Vec::<&str>::new());
+}
+
+/// A translated status or error message keeps each command id its English text names without
+/// backticks, spelled as the English spells it, since that is the id a script or the command
+/// palette runs.
+#[test]
+fn translated_messages_keep_the_command_ids_their_english_names() {
+    let mut missing = Vec::new();
+    for l in &LANGUAGES {
+        let (entries, _) = parse_entries(l.source);
+        for (ctx, src, tr) in entries.iter().filter(|(ctx, _, _)| ctx == "@msg" || ctx == "@msgplural") {
+            let plural = ctx == "@msgplural";
+            let english = if plural { src.rsplit('|').next().unwrap_or(src) } else { src.as_str() };
+            let forms: Vec<&str> = if plural { tr.split('|').collect() } else { vec![tr.as_str()] };
+            for form in forms {
+                let kept: Vec<&str> = command_ids(form).into_iter().chain(backticked(form)).collect();
+                for id in command_ids(english) {
+                    if !kept.contains(&id) {
+                        missing.push(format!("{}: {id} in {src:?} -> {form:?}", l.code));
+                    }
+                }
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{} rows drop a command id their English names:\n{}", missing.len(), missing.join("\n"));
 }
 
 /// Languages whose catalogs translate status and error messages; [`untranslated_report`] lists
@@ -2545,6 +2754,7 @@ const NOT_MESSAGES: &[&str] = &["quit", "cancelled"];
 pub fn message_literals() -> std::collections::BTreeSet<String> {
     let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let mut out = std::collections::BTreeSet::new();
+    let mut files = vec![];
     let mut stack: Vec<_> = MESSAGE_CRATES.iter().map(|c| crates.join(c).join("src")).collect();
     while let Some(d) = stack.pop() {
         for entry in std::fs::read_dir(&d).into_iter().flatten().flatten() {
@@ -2558,13 +2768,51 @@ pub fn message_literals() -> std::collections::BTreeSet<String> {
                 // Control replies are English protocol data, never status-bar messages
                 // (see i18n's module contract). Engine messages are scanned in their own crates.
                 let text = std::fs::read_to_string(&path).unwrap_or_default();
-                let helpers: Vec<_> =
-                    ERROR_HELPERS.iter().filter(|(c, _, _)| path.starts_with(crates.join(c))).map(|&(_, call, before)| (call, before)).collect();
-                out.extend(source_messages(without_test_module(&text), &helpers));
+                files.push((path, text));
             }
         }
     }
+    let mut consts = std::collections::BTreeMap::new();
+    for (_, text) in &files {
+        for (name, value) in str_consts(without_test_module(text)) {
+            consts.entry(name).or_insert_with(Vec::new).push(value);
+        }
+    }
+    for (path, text) in &files {
+        let helpers: Vec<_> =
+            ERROR_HELPERS.iter().filter(|(c, _, _)| path.starts_with(crates.join(c))).map(|&(_, call, before)| (call, before)).collect();
+        out.extend(source_messages(without_test_module(text), &helpers, &consts));
+    }
     out
+}
+
+/// The `&str` constants `code` declares outside its comments (`const NAME: &str = "…";`), with
+/// their text, escapes resolved.
+fn str_consts(code: &str) -> Vec<(String, String)> {
+    let code = &without_comments(code);
+    code.match_indices("const ")
+        .filter(|&(at, _)| !code[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_'))
+        .filter_map(|(at, m)| {
+            let rest = &code[at + m.len()..];
+            let (name, rest) = rest.split_at(rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_')?);
+            let rest = rest.trim_start().strip_prefix(':')?.trim_start();
+            let rest = rest.strip_prefix("&'static str").or_else(|| rest.strip_prefix("&str"))?.trim_start();
+            let value = string_literal(rest.strip_prefix('=')?.trim_start().strip_prefix('"')?)?;
+            Some((name.to_string(), value))
+        })
+        .collect()
+}
+
+/// The text of the constant that `rest` starts with, by name or by path (`TIME_BUDGET`,
+/// `crate::runtime::SELECTION_TOO_LARGE.into()`), when `consts` holds it: every text, when crates
+/// declare constants of that name with different texts.
+fn named_const<'a>(rest: &str, consts: &'a std::collections::BTreeMap<String, Vec<String>>) -> &'a [String] {
+    let path = &rest[..rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != ':').unwrap_or(rest.len())];
+    let after = &rest[path.len()..];
+    let used = [")", ",", ".into()", ".to_string()", ".to_owned()"].iter().any(|end| after.starts_with(end));
+    let name = path.rsplit("::").next().unwrap_or("");
+    let upper = name.starts_with(|c: char| c.is_ascii_uppercase()) && name.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
+    if used && upper { consts.get(name).map_or(&[], Vec::as_slice) } else { &[] }
 }
 
 /// The message literals in `code` outside its comments, as catalog templates (see
@@ -2572,8 +2820,9 @@ pub fn message_literals() -> std::collections::BTreeSet<String> {
 /// error enum's variant (the first, as in `PsError::Limit(…)` and `Error::Manifest(…)`, or the one
 /// [`LATER_MESSAGE_VARIANTS`] gives; not [`NAME_VARIANTS`]),
 /// and the message argument of each call in `helpers` (a call and the number of arguments before
-/// its message), a literal or a `format!` string.
-fn source_messages(code: &str, helpers: &[(&str, usize)]) -> Vec<String> {
+/// its message), a literal, a `format!` string or the name of one of `consts` (see
+/// [`str_consts`]).
+fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collections::BTreeMap<String, Vec<String>>) -> Vec<String> {
     let code = &without_comments(code);
     let after_markers = MESSAGE_MARKERS.iter().flat_map(|marker| code.match_indices(marker).map(|(at, _)| &code[at + marker.len()..]));
     let in_variants = code.match_indices("Error::").filter_map(|(at, m)| {
@@ -2592,10 +2841,15 @@ fn source_messages(code: &str, helpers: &[(&str, usize)]) -> Vec<String> {
     for rest in after_markers.chain(in_variants).chain(in_helpers) {
         let rest = rest.trim_start();
         let rest = rest.strip_prefix("format!(").map_or(rest, str::trim_start);
-        let Some(lit) = rest.strip_prefix('"').and_then(string_literal) else { continue };
-        let has_word = lit.as_bytes().windows(3).any(|w| w.iter().all(u8::is_ascii_lowercase));
-        if has_word && !NOT_MESSAGES.contains(&lit.as_str()) {
-            out.push(as_template(&lit));
+        let lits = match rest.strip_prefix('"') {
+            Some(quoted) => string_literal(quoted).into_iter().collect(),
+            None => named_const(rest, consts).to_vec(),
+        };
+        for lit in lits {
+            let has_word = lit.as_bytes().windows(3).any(|w| w.iter().all(u8::is_ascii_lowercase));
+            if has_word && !NOT_MESSAGES.contains(&lit.as_str()) {
+                out.push(as_template(&lit));
+            }
         }
     }
     out

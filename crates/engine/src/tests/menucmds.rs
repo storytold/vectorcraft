@@ -1855,6 +1855,38 @@ fn convert_to_artboards_names_by_the_artboards_the_document_has() {
     assert_eq!(name_after(&|s| _ = s.execute("edit.undo", &json!({})).unwrap()), "Artboard 3");
 }
 
+/// Convert to Artboards on several objects gives each new artboard an id above the ids given out
+/// before and the deleted artboard's, and names it one past the highest id the artboards have,
+/// counting the artboards it has just added. With an artboard whose id is `u32::MAX` (a damaged
+/// file), each new artboard takes the smallest free id and the name stays at `u32::MAX`.
+#[test]
+fn convert_to_artboards_gives_each_object_the_next_id_and_name() {
+    let convert = |s: &mut Session| {
+        let ids: Vec<NodeId> = (0..3).map(|i| rect(s, 3000.0 + 300.0 * f64::from(i), 0.0, 200.0, 100.0)).collect();
+        sel(s, &ids);
+        assert_eq!(s.execute("artboard.convertToArtboards", &json!({})).unwrap()["artboards"], 3);
+        let d = &s.doc().unwrap().doc;
+        d.artboards.iter().map(|a| (a.id, a.name.clone())).collect::<Vec<_>>()
+    };
+    let named = |pairs: &[(u32, &str)]| pairs.iter().map(|&(id, n)| (id, n.to_string())).collect::<Vec<_>>();
+
+    // Artboards 1 and 2 are left after artboard 3 is deleted, so its id stays given out.
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    s.execute("artboard.new", &json!({})).unwrap();
+    s.execute("artboard.delete", &json!({"index": 2})).unwrap();
+    let ids: Vec<u32> = s.doc().unwrap().doc.artboards.iter().map(|a| a.id).collect();
+    assert_eq!(ids, [1, 2]);
+    let got = convert(&mut s);
+    assert_eq!(got, named(&[(1, "Artboard 1"), (2, "Artboard 2"), (4, "Artboard 3"), (5, "Artboard 5"), (6, "Artboard 6")]));
+
+    let mut s = session();
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).artboards[0].id = u32::MAX;
+    let got = convert(&mut s);
+    let top = format!("Artboard {}", u32::MAX);
+    assert_eq!(got, named(&[(u32::MAX, "Artboard 1"), (1, &top), (2, &top), (3, &top)]));
+}
+
 /// Rearrange All Artboards refuses `columns` that are not a whole number (a fraction, a negative number or a string),
 /// and the artboards stay where they were; 1.0, as the Rearrange All Artboards dialog sends a count, is one column.
 #[test]
@@ -4105,6 +4137,60 @@ fn invalid_clear_guides_parameters_delete_nothing() {
     s.execute("edit.clear", &json!({"ids": [a.0], "guides": null})).unwrap();
     assert!(s.doc().unwrap().doc.node(a).is_none());
     assert_eq!(guides(&s).len(), 1);
+}
+
+/// Run `cmd` with `params`, expect an error naming `msg`, and check that the documents, the undo
+/// history, the guides, the saved selections and the selection are as they were.
+fn refuses_wrong_type(s: &mut Session, cmd: &str, params: Value, msg: &str) {
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (s.documents().len(), undo_len(s), guides(s), st.doc.saved_selections.clone(), st.selection.clone())
+    };
+    let before = state(s);
+    match s.execute(cmd, &params) {
+        Ok(v) => panic!("{cmd} accepted {params}: {v}"),
+        Err(e) => assert!(e.to_string().contains(msg), "{cmd} {params}: {e}"),
+    }
+    assert!(state(s) == before, "{cmd} changed something for {params}");
+}
+
+#[test]
+fn edit_guide_and_slice_commands_refuse_params_of_the_wrong_type() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 40.0, 20.0);
+    s.execute("guide.add", &json!({"vertical": true, "pos": 200})).unwrap();
+    let slice = s.execute("object.slice.fromSelection", &json!({"ids": [a.0]})).unwrap()["id"].as_u64().unwrap();
+    sel(&mut s, &[a]);
+    s.execute("select.save", &json!({"name": "A"})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    for (cmd, params, msg) in [
+        ("edit.duplicate", json!({"dx": "5"}), "`dx` must be a number, not \"5\""),
+        ("edit.duplicate", json!({"dy": true}), "`dy` must be a number, not true"),
+        ("edit.paste", json!({"dx": "5"}), "`dx` must be a number, not \"5\""),
+        ("edit.paste", json!({"dy": [1]}), "`dy` must be a number, not [1]"),
+        ("document.node", json!({"id": a.0, "summary": "yes"}), "`summary` must be true or false"),
+        ("file.close", json!({"index": "0"}), "`index` must be a non-negative integer"),
+        ("guide.add", json!({"pos": 50, "vertical": "true"}), "`vertical` must be true or false"),
+        ("guide.select", json!({"indexes": [0], "toggle": 1}), "`toggle` must be true or false"),
+        ("select.save", json!({"name": 5}), "`name` must be a string"),
+        ("select.editSaved", json!({"name": "A", "delete": "yes"}), "`delete` must be true or false"),
+        ("select.editSaved", json!({"name": "A", "newName": 5}), "`newName` must be a string"),
+    ] {
+        refuses_wrong_type(&mut s, cmd, params, msg);
+    }
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    refuses_wrong_type(&mut s, "guide.move", json!({"dx": "10"}), "`dx` must be a number, not \"10\"");
+    refuses_wrong_type(&mut s, "guide.move", json!({"dy": 5, "copy": "yes"}), "`copy` must be true or false");
+    s.execute("object.slice.select", &json!({"slices": [slice]})).unwrap();
+    refuses_wrong_type(&mut s, "object.slice.duplicate", json!({"dx": "10"}), "`dx` must be a number, not \"10\"");
+    refuses_wrong_type(&mut s, "object.slice.select", json!({"slices": [slice], "toggle": "no"}), "`toggle` must be true or false");
+    s.execute("edit.undoGroup.begin", &json!({})).unwrap();
+    refuses_wrong_type(&mut s, "edit.undoGroup.end", json!({"cancel": "yes"}), "`cancel` must be true or false");
+    // Null is read as a key left out.
+    s.execute("edit.undoGroup.end", &json!({"cancel": null})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("guide.move", &json!({"dx": 10, "dy": null, "copy": null})).unwrap();
+    assert_eq!(guides(&s), vec![(true, 210.0)]);
 }
 
 /// When ruler guides and art are selected together, moving the art moves the guides as well;
