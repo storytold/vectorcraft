@@ -446,7 +446,8 @@ impl StrokeLayer {
     /// paint `p`, which is within `side` (and `tol`) of segment `i` of the subpath `segs`
     /// (`closed`: a closed one) and nearest to it at `t`? It does when `p` is not past the end of
     /// the segment that `t` is at, by more than `tol`, and past it when a round cap or a round join
-    /// paints there, or when `p` is within `tol` of the bevel's triangle. Projecting caps and
+    /// paints there, when the path does not turn at that end, or when `p` is within `tol` of the
+    /// bevel's triangle. Projecting caps and
     /// miter spikes are checked apart. A curve that bends more tightly than `side` ([`gentle`])
     /// counts as painting round its ends.
     fn paints_at_end(&self, segs: &[PathSeg], closed: bool, (i, t): (usize, f64), p: Point, side: f64, tol: f64) -> bool {
@@ -466,7 +467,8 @@ impl StrokeLayer {
             return true;
         }
         let (t_in, t_out) = if at_start { (tangent(other, 1.0), tangent(seg, 0.0)) } else { (tangent(seg, 1.0), tangent(other, 0.0)) };
-        bevel(at, t_in, t_out, side).is_some_and(|([a, b], _)| in_convex(&[at, a, b], p, tol))
+        // A joint where the path does not turn has no bevel: the stroke runs on through it.
+        bevel(at, t_in, t_out, side).is_none_or(|([a, b], _)| in_convex(&[at, a, b], p, tol))
     }
 
     /// Is `p` within `tol` of where the start (`end == false`) or end arrowhead at `at` (the path
@@ -707,6 +709,17 @@ mod tests {
         assert!(!butt.hits(&line, FillRule::NonZero, Point::new(1.0, -1.5), 0.25));
         assert!(butt.hits(&line, FillRule::NonZero, Point::new(1.0, -0.2), 0.25));
         assert!(stroke(4.0, |s| s.cap = LineCap::Round).hits(&line, FillRule::NonZero, Point::new(1.0, -1.5), 0.25));
+    }
+
+    #[test]
+    fn a_joint_too_shallow_to_bevel_paints_past_both_segments_ends() {
+        // The path turns by about 0.57° at (100, -0.5), too little to bevel, so the stroke runs on
+        // through the joint: 3.5 pt above it is past the end of both segments and still painted.
+        let kink = polyline(&[(0.0, 0.0), (100.0, -0.5), (200.0, 0.0)]);
+        let above = Point::new(100.0, -4.0);
+        for join in [LineJoin::Bevel, LineJoin::Miter, LineJoin::Round] {
+            assert!(stroke(10.0, |s| s.join = join).hits(&kink, FillRule::NonZero, above, 0.0), "{join:?}");
+        }
     }
 
     /// An open path through `points`.
