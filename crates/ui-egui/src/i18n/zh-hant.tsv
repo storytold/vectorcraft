@@ -791,6 +791,14 @@ font-technology	Variable	可變
 	Disable Auto Add/Delete	停用自動增加/刪除
 	Disable Opacity Mask	停用不透明度遮色片
 	Discard	捨棄
+	Preserve	保留
+	TIFF (Black & White)	TIFF (黑白)
+	TIFF (8-bit Color)	TIFF (8 位元色彩)
+	High Resolution	高解析度
+	Medium Resolution	中解析度
+	Low Resolution	低解析度
+	Language Level 2	語言層級 2
+	Language Level 3	語言層級 3
 	Discard Empty Type	捨棄空白文字
 	Discard Recovered Documents	捨棄已復原的文件
 	Discard White Overprint in Output	輸出時捨棄白色疊印
@@ -3539,6 +3547,7 @@ diagnostics	ui	介面
 	Presets:	預設集：
 	Press 	按下 
 	Preview	預覽
+	Preview:	預覽：
 	Preview All Layers	預覽所有圖層
 	Preview in Browser	在瀏覽器中預覽
 	Preview in Browser needs the desktop app (the web downloads files instead)	在瀏覽器中預覽需要桌面版應用程式 (網頁版會改為下載檔案)

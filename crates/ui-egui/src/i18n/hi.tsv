@@ -3501,6 +3501,7 @@ antiAlias	Sharp	शार्प
 	Press Quality	प्रेस गुणवत्ता
 	Pressure	दबाव
 	Preview	प्रीव्यू
+	Preview:	प्रीव्यू:
 	Preview (1 inch on the page)	प्रीव्यू (1 इंच पृष्ठ पर)
 	Preview All Layers	सभी लेयर्स का प्रीव्यू करें
 	Preview in Browser	ब्राउज़र में प्रीव्यू
@@ -6392,7 +6393,7 @@ antiAlias	Sharp	शार्प
 @msg	EPS {field} `{s}`: {allowed}	EPS {field} `{s}`: {allowed}
 @msg	EPS flattener: {e}	ईपीएस flattener: {e}
 @msg	EPS options: {e}	ईपीएस ऑप्शन्स: {e}
-@msg	EPS Save retains the artboard and all artwork: use document.export for cropped or selected-only EPS	EPS सेव आर्टबोर्ड और पूरा आर्टवर्क रखता है: क्रॉप किए या केवल सिलेक्ट किए आर्टवर्क के EPS के लिए document.export उपयोग करें
+@msg	EPS Save writes all artwork: use document.export for selected-only EPS	EPS सेव पूरा आर्टवर्क लिखता है: केवल सिलेक्ट किए आर्टवर्क के EPS के लिए document.export उपयोग करें
 @msg	every numbered name for {name} is taken in the document's folder	{name} के लिए हर नंबर का नाम डॉक्यूमेंट के फ़ोल्डर में लिया जाता है
 @msg	every numbered name for it is taken in the Fonts folder	इसके लिए हर नंबर वाला नाम फ़ॉन्ट फ़ोल्डर में लिया जाता है
 @msg	every numbered name for the copy is taken	प्रति के लिए हर नंबर का नाम लिया जाता है
