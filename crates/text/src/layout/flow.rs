@@ -217,8 +217,9 @@ fn prepare_paragraph<'a, 'text>(
     // …and a quarter em between Japanese and Latin text.
     let mut wakan = if para.mojikumi == Mojikumi::LineEndHalf { space_japanese_and_latin(&mut sg) } else { vec![] };
     // Justification…: the glyphs at Desired word and letter spacing and glyph scaling, and how
-    // far a justified line may move each one from it.
-    let mut flex = apply_desired(&mut sg, &para.justification, !cx.vertical);
+    // far a justified line may move each one from it (Dynamic Text's Block on area type sets the
+    // Desired word spacing to its word gap).
+    let mut flex = apply_desired(&mut sg, &t.layout_justification(para), !cx.vertical);
     // Threaded text: a first paragraph that continues from the frame before has its first
     // line, first-line indent and list marker there.
     let continued = pi == 0 && t.first_para_continues;

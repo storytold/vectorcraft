@@ -6384,7 +6384,7 @@ antiAlias	Sharp	शार्प
 @msg	files must be {name, dataBase64}	files: फ़ाइलों को {name, dataBase64} होना चाहिए
 @msg	finish editing the pattern first	पहले पैटर्न को संपादित करना
 @msg	First measured segment no longer exists	पहले मापा खंड अब मौजूद नहीं है
-@msg	fit must be none|autoHeight|shrinkText, got {id}	fit को none|autoHeight|shrinkText होना चाहिए, {id} मिला
+@msg	fit must be none|autoHeight|shrinkText|block, got {id}	fit को none|autoHeight|shrinkText|block होना चाहिए, {id} मिला
 @msg	Flare click coordinates must be finite numbers	फ्लेयर क्लिक निर्देशांक परिमित संख्या होना चाहिए
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	फ्लैट लोगो ने {_1} × {_2} पिक्सेल पर इमेज का पता लगाया, जो {_3} × {_4} से नीचे है।
 @msg	Flatten Transparency: {e}	Flatten transparency: {e}

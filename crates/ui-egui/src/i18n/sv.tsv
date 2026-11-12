@@ -7419,7 +7419,7 @@ digits	Hindi	Hindi
 @msg	features must be a list of tags	features måste vara en lista med taggar
 @msg	fidelity must be 0..100	fidelity måste vara 0..100
 @msg	files must be {name, dataBase64}	files måste vara {name, dataBase64}
-@msg	fit must be none|autoHeight|shrinkText, got {id}	fit måste vara none|autoHeight|shrinkText, fick {id}
+@msg	fit must be none|autoHeight|shrinkText|block, got {id}	fit måste vara none|autoHeight|shrinkText|block, fick {id}
 @msg	Flare click coordinates must be finite numbers	Klickkoordinaterna för Ljusreflex måste vara ändliga tal
 @msg	flattener: {e}	utplattning: {e}
 @msg	flattenerPreset `{name}`: high, medium, low or a saved one (see flattener.presets.list)	flattenerPreset `{name}`: high, medium, low eller en sparad (se flattener.presets.list)

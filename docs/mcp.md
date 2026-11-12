@@ -6564,12 +6564,17 @@ Native files save it only when it is `rows`, so files from before it open by col
   sizes don't change: the scaling happens at layout time, so rendering and every export see it. The factor is
   found by bisection over the first run's size in steps of 0.1 pt (its scaled size is a whole number of tenths of
   a point, so the result is deterministic); at `fitMinPercent` the text may still overflow.
+- `block`: Dynamic Text's Block, as `type.dynamicText` turns it on (see below), in place of Auto Size and Shrink Text
+  to Fit; another fit turns it off. `wordGap` (0–1,000 % of a word space, default 100) and `lineGap` (-1,296 to 1,296
+  pt, default 0) set its gaps, and are kept while Block is off.
 
 The file stores `"fit": "autoHeight"` or `"fit": {"shrinkText": {"minPercent": 40}}` in the object's `area`; the
-command also accepts that object form. The query (and every reply) of `text.areaOptions` reports `fit` as its id,
-`fitMinPercent`, `overflow` (the text doesn't fit its frame) and `fitScale` (Shrink Text's factor, 1 unshrunk).
+command also accepts that object form. Block is stored as the object's `"dynamicText": true`, with `wordGap` and
+`lineGap` in its `area` when they differ from their defaults. The query (and every reply) of `text.areaOptions`
+reports `fit` as its id (`block` while Block is on), `fitMinPercent`, `wordGap`, `lineGap`, `overflow` (the text
+doesn't fit its frame) and `fitScale` (Shrink Text's factor, 1 unshrunk).
 `document.inspect` (and `document.node {summary: true}`) reports `overflow` for area type and type on a path (text past
-the end of the path), and `fit` and `fitScale` for area type.
+the end of the path), and `fit`, `fitScale` and `dynamicText` (Block is on) for area type.
 
 Given for several area types (`ids`, or a selection of several), `text.areaOptions` changes only the options given on
 each one: each frame keeps its other options (it used to take the first frame's), and `fitMinPercent` alone changes only
@@ -6592,6 +6597,48 @@ chosen artboards draw all of them. A PDF leaves out the layers that don't print 
 
 ```json
 {"name":"run_command","arguments":{"command":"text.areaOptions","params":{"fit":"shrinkText","fitMinPercent":60}}}
+```
+
+### Dynamic Text: Block
+
+`type.dynamicText {ids?|id?, on?: bool, wordGap?, lineGap?}` (Type › Dynamic Text, and the Contextual Task Bar for
+area type outside a thread) turns Block on or off for the
+selected area type, as it turns Dynamic Text on or off for type on a path ([Dynamic Text](#dynamic-text)). Area Type
+Options › Block is the same setting, and the Properties panel's Paragraph section has a Dynamic Text checkbox, which
+shows Word Gap and Line Gap while it is on. The [Dynamic Text overview](https://helpx.adobe.com/photoshop/desktop/text-typography/work-with-dynamic-text/dynamic-text-overview.html)
+describes Block as text that scales to fill a rectangular box, with settings for the spacing between words and between
+lines. The rest are VectorCraft's own rules:
+
+- Each line as typed (each paragraph, and each forced line break, Shift+Enter, in one) is one line; lines are not
+  broken again. Each line is set to the frame's width, less the inset, the gutters between columns and the paragraph's
+  left, right and first-line indents, by its font size only (tracking and scaling stay): the first character's size in
+  steps of 0.1 pt within 0.1 to 1,296 pt, the line's other characters keeping their proportions to it and their
+  baseline shifts following. Vertical type sets each line to the frame's height (less the gutters between rows).
+- The layout sets every paragraph with `wordGap` as its Desired word spacing (Justification…), and its Minimum or
+  Maximum word spacing moves out to `wordGap` when `wordGap` lies outside it. The paragraphs keep their own
+  Justification… values, which apply again when Block is off. Each character's leading is its size plus `lineGap`. A
+  gap given with no area type in the selection is an error.
+- The sizes are written into the characters, so every export and the Character panel see them. After every edit to
+  the text or the frame (typing, `text.editRange`, character and paragraph changes, `text.areaOptions {width}`, a
+  frame resize) the lines are fitted again, in the edit's own undo step. The lines are then measured again, in at
+  most four passes: a line whose width does not follow its size (a tab to a fixed stop) is sized again from what it
+  measures, and a line that still wraps (a frame that is not a rectangle) is made smaller.
+- An empty line, or a line of spaces, keeps its size. At 1,296 pt a line can be narrower than the frame; at 0.1 pt it
+  can still wrap. A frame with no room along its lines changes nothing. Right-to-left lines are fitted as left-to-right
+  ones are.
+- Off keeps the sizes the text was drawn at. On replaces Auto Size and Shrink Text to Fit. Point type in the selection
+  is left as it is. Area type in a thread is refused with an error that names it (`text.areaOptions {fit: "block"}`
+  refuses it too); threading a frame turns Block off, keeping its sizes. Without `on`, it toggles from the first
+  object's setting, or turns on when a gap is given. A value that is not a boolean, or a gap outside its range, is an
+  error. When nothing changes, no undo step is recorded.
+- Saved and opened, the native file keeps Block on with its gaps and the sizes in the characters; with Block off it
+  keeps the sizes.
+
+The reply is `{on, ids, fitScale, wordGap, lineGap}` (`fitScale` as for type on a path, 1 when the first object is area
+type; the gaps are the first area type's).
+
+```json
+{"name":"run_command","arguments":{"command":"type.dynamicText","params":{"on":true,"wordGap":120,"lineGap":2}}}
 ```
 
 ## Threading text from the in and out ports
@@ -7401,12 +7448,13 @@ and tate-chu-yoko offsets by one factor, so runs keep their proportions; Type on
 scaled. The first character's size, in document points, moves in steps of 0.1 pt within 0.1 to 1,296 pt; text that
 still runs past the end bracket at 0.1 pt overflows. Reshaping or scaling the path fits the text again. The stored
 sizes do not change: turning Dynamic Text off writes the sizes the text was drawn at into its characters, so it keeps
-its look, in one undo step. Point type and area type in the selection are left as they are. Type on a path in a
+its look, in one undo step. Point type in the selection is left as it is, and area type in it takes Block
+([Dynamic Text: Block](#dynamic-text-block)). Type on a path in a
 thread is refused with an error that names it, and the menu item and the task bar item are not offered for it;
 `text.thread.create` and `text.thread.add` turn Dynamic Text off on the frames they thread, at their drawn sizes, and
 list them in `dynamicTextOff`. When every object already has the setting asked for, nothing changes and no undo step
 is recorded. It replies `{on, ids, fitScale}` (the first object's factor, 1 when off), and the menu item is checked
-while the first selected type on a path has it on. `document.inspect` reports `dynamicText` and `fitScale` for type
+while the first selected type on a path or area type has it on. `document.inspect` reports `dynamicText` and `fitScale` for type
 on a path. New type and documents from before it have it off, and it is saved only when on. SVG, PDF, EPS and the
 editing data for other apps write the type at its drawn sizes; the editing data does not hold the setting and says
 so in a warning.
