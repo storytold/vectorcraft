@@ -58,6 +58,103 @@ fn the_scroll_bar_leaves_the_stars_clear() {
     }
 }
 
+/// In a wide row the sample starts after the widest name and a gap, not halfway along, even for a
+/// name wider than the menu widens itself for; the sample keeps its room, and a row too narrow for
+/// both gives the name half of it. Without samples the name runs to the star.
+#[test]
+fn the_sample_starts_after_the_widest_name() {
+    use super::{DISCLOSURE, NAME_GAP, NAME_MAX, SAMPLE_W, STAR, name_column};
+    assert_eq!(name_column(500.0, 100.0, true), DISCLOSURE + 100.0 + NAME_GAP);
+    assert_eq!(name_column(600.0, NAME_MAX + 80.0, true), DISCLOSURE + NAME_MAX + 80.0 + NAME_GAP);
+    assert_eq!(name_column(600.0, 1000.0, true), 600.0 - STAR - 2.0 - SAMPLE_W);
+    assert_eq!(name_column(200.0, 100.0, true), 100.0);
+    assert_eq!(name_column(500.0, 100.0, false), 500.0 - STAR);
+}
+
+/// The widest label is the widest one laid out, though it has fewer characters than others, or
+/// characters that are narrow on their own.
+#[test]
+fn the_widest_label_is_the_widest_laid_out() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut labels: Vec<String> = ["WWWWWWWW", "Mm", "", "ffi ffl fi fl", "Source Serif 4 Display Semibold"].map(str::to_string).into();
+    labels.push("i".repeat(40));
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let font = egui::FontId::proportional(super::NAME_SIZE);
+        let laid_out = |l: &String| ui.painter().layout_no_wrap(l.clone(), font.clone(), egui::Color32::WHITE).size().x;
+        let widest = labels.iter().map(laid_out).fold(0.0, f32::max);
+        assert_eq!(super::widest_label(ui, labels.clone()), widest);
+        for l in &labels {
+            assert_eq!(super::widest_label(ui, vec![l.clone()]), laid_out(l), "{l}");
+        }
+        assert_eq!(super::widest_label(ui, vec![]), 0.0);
+    });
+    out.textures_delta.clear();
+}
+
+/// The widest family name is measured again when the interface's fonts change, as they do when
+/// faces for another script are added to it, not only when the font list does.
+#[test]
+fn the_widest_name_is_measured_again_when_the_interface_fonts_change() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |f: &mut dyn FnMut(&mut egui::Ui)| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| f(ui));
+        out.textures_delta.clear();
+    };
+    // A width no name has, kept as if measured for the fonts as they are.
+    frame(&mut |ui| {
+        let key = super::family_name_key(ui, true);
+        ui.data_mut(|d| d.insert_temp(super::family_name_id(), (key, -1.0_f32)));
+    });
+    frame(&mut |ui| {
+        let data = ui.ctx().fonts(|f| f.definitions().font_data.values().next().cloned()).expect("an interface font");
+        ui.ctx().add_font(egui::epaint::text::FontInsert { name: "font-menu-test-face".into(), data: (*data).clone(), families: vec![] });
+    });
+    frame(&mut |ui| assert!(super::family_name_width(ui, true) >= 0.0, "measured again"));
+}
+
+/// Without a row of filters drawn yet, the menu still makes room for the widest name, its sample,
+/// the star and the scroll bar; without samples it is the sample's room narrower.
+#[test]
+fn the_menu_makes_room_for_the_widest_name_and_its_sample() {
+    use super::{DISCLOSURE, NAME_GAP, NAME_MAX, SAMPLE_W, STAR};
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0))), ..Default::default() };
+    let mut out = ctx.run_ui(input, |ui| {
+        let st = super::MenuState::default();
+        let look = super::MenuLook::default();
+        let names = super::name_width(ui, look.english_names, &st.rows).min(NAME_MAX);
+        assert!(names > 0.0, "a family is listed");
+        let width = super::menu_width(ui, &st, look);
+        assert!(width >= DISCLOSURE + names + NAME_GAP + SAMPLE_W + STAR, "the menu is {width} wide for a name {names} wide");
+        let plain = super::menu_width(ui, &st, super::MenuLook { samples: false, ..look });
+        assert!((width - plain - SAMPLE_W).abs() < 0.01, "{width} with samples, {plain} without");
+    });
+    out.textures_delta.clear();
+}
+
+/// The style names of the families expanded in the listed rows count toward the names' width;
+/// those of a family expanded earlier but not listed now do not.
+#[test]
+fn only_listed_style_names_widen_the_names() {
+    use super::{Row, STYLE_INDENT};
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let long = format!("SemiCondensed ExtraLight Italic {}", "W".repeat(80));
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let families = super::name_width(ui, true, &[]);
+        let font = egui::FontId::proportional(super::NAME_SIZE);
+        let style = STYLE_INDENT + ui.painter().layout_no_wrap(long.clone(), font, egui::Color32::WHITE).size().x;
+        assert!(style > families, "the style name is wider than every family name");
+        let listed = [Row::Family("A".into()), Row::Style("A".into(), long.clone())];
+        assert_eq!(super::name_width(ui, true, &listed), style);
+        assert!(super::name_width(ui, true, &listed[..1]) < style, "a style not listed is not measured");
+    });
+    out.textures_delta.clear();
+}
+
 use super::{Row, remap_highlight};
 
 fn family(name: &str) -> Row {

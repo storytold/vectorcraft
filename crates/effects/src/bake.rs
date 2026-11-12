@@ -29,7 +29,7 @@ use crate::group::{has_own_paint, paints};
 use crate::reshape::{as_art, geometry_effects, glyph_outlines, outline_nested_text, reshape_leaves};
 use crate::{
     GeomContext, adjust_in_document, apply_geometry_carrying, crop_marks_art, evaluate_container, has_adjustment, has_crop_marks, has_geometry,
-    has_item_geometry, has_pathfinder, is_geometry, is_pathfinder, merged_params, needs_outline, outline_text, reshape,
+    has_item_geometry, has_pathfinder, is_pathfinder, merged_params, needs_outline, outline_text, reshape,
 };
 
 fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] {
@@ -41,8 +41,8 @@ fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] {
 
 fn clear_item_effects(item: &mut AppearanceItem) {
     match item {
-        AppearanceItem::Fill(f) => f.effects.retain(|e| !is_geometry(&e.id)),
-        AppearanceItem::Stroke(s) => s.effects.retain(|e| !is_geometry(&e.id)),
+        AppearanceItem::Fill(f) => f.effects = crate::raster::without_geometry(&f.effects),
+        AppearanceItem::Stroke(s) => s.effects = crate::raster::without_geometry(&s.effects),
     }
 }
 
@@ -337,7 +337,7 @@ fn moved_type_group(n: &Node) -> Option<Node> {
     g.knockout = Knockout::Off;
     g.knockout_shape = n.knockout_shape;
     g.extras_mut().mask = n.extras().mask.clone();
-    g.appearance.effects = n.appearance.effects.iter().filter(|e| !is_geometry(&e.id)).cloned().collect();
+    g.appearance.effects = crate::raster::without_geometry(&n.appearance.effects);
     Some(g)
 }
 
@@ -397,7 +397,8 @@ fn container_keeping_type(d: &Document, n: &Node) -> Option<Node> {
         return None;
     }
     reshape_leaves(&mut m, &fx, &n.appearance.effects, Some(d));
-    m.appearance.effects.retain(|e| !is_pathfinder(&e.id) && !is_geometry(&e.id));
+    m.appearance.effects = crate::raster::without_geometry(&m.appearance.effects);
+    m.appearance.effects.retain(|e| !is_pathfinder(&e.id));
     m.appearance.items.clear();
     m.appearance.contents_index = None;
     Some(m)
@@ -439,7 +440,9 @@ fn leaf_base(n: &Node) -> Option<(PathData, FillRule, GeomContext<'_>, Node)> {
     if carry.moves(&m.appearance) {
         carry.apply(&mut m.appearance);
     }
-    m.appearance.effects.retain(|e| !is_geometry(&e.id));
+    // The raster effects of its fills and strokes follow its Transform effects, as on the canvas.
+    crate::raster::follow_items(&mut m);
+    m.appearance.effects = crate::raster::without_geometry(&m.appearance.effects);
     Some((g, rule, ctx, m))
 }
 

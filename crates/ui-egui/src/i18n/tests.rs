@@ -239,6 +239,28 @@ fn control_bar_panel_menu_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The titles of Document Info's Spot Color Objects, Pattern Objects and Gradient Objects
+/// categories, which the panel, its menu and the Objects category's counts show.
+#[test]
+fn document_info_object_category_titles_are_in_complete_catalogs() {
+    let mut session = vectorcraft_engine::Session::new();
+    session.execute("file.new", &serde_json::json!({"width": 100, "height": 100})).unwrap();
+    let info = session.execute("document.info", &serde_json::json!({})).unwrap();
+    let titles: Vec<&str> = info["sections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|s| matches!(s["id"].as_str(), Some("spotColors" | "patterns" | "gradients")))
+        .filter_map(|s| s["title"].as_str())
+        .collect();
+    assert_eq!(titles, ["Spot Color Objects", "Pattern Objects", "Gradient Objects"]);
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for title in &titles {
+            assert!(lang.catalog().plain(title).is_some(), "{} is missing {title}", lang.code);
+        }
+    }
+}
+
 /// The Character panel's Anti-aliasing Method label and its choices, with the Sharp method's
 /// own `antiAlias` row apart from the plain "Sharp" corner row.
 #[test]
@@ -1732,6 +1754,21 @@ fn package_status_message_templates_parse() {
     assert!(Catalog::parse("@msg\tPackaged {n} file(s) in {folder}{note}\tbad\n").message("Packaged 1 file(s) in /a b").is_none());
 }
 
+/// A template that starts with text matches a message it wraps before a template that starts
+/// with a placeholder, even one with more literal text, so the wrapped reason is translated by
+/// its own row.
+#[test]
+fn templates_that_start_with_text_match_first() {
+    let c = Catalog::parse(concat!(
+        "@msg\tplug-in manifest: {0}\twrapped {0}\n",
+        "@msg\t{_1} is {_2} bytes (limit {_3})\tsized {_1}\n",
+        "@msg\tmanifest is {_1} bytes (limit {_2})\tmanifest {_1}\n",
+    ));
+    let (form, caps) = c.message("plug-in manifest: manifest is 9 bytes (limit 8)").expect("matches");
+    assert_eq!((form, caps), ("wrapped {0}", vec![("0", "manifest is 9 bytes (limit 8)")]));
+    assert_eq!(c.message("a.wasm is 9 bytes (limit 8)").map(|(f, _)| f), Some("sized {_1}"));
+}
+
 /// A `@msgplural` row translates both English forms of a message with a count, and the count
 /// picks the language's form.
 #[test]
@@ -1784,6 +1821,86 @@ fn cdr_import_notes_are_translated() {
             assert_ne!(message(lang, note), note, "{code}: {note}");
         }
     }
+}
+
+/// The plug-in host's status and error messages (manifests, modules, runs and the output of
+/// importers, exporters and effects) have an `@msg` row in every complete-message catalog.
+#[test]
+fn plugin_messages_are_translated_in_every_complete_catalog() {
+    let messages = message_literals_in(&["plugins"]);
+    assert!(messages.len() > 100, "scan found only {} plug-in messages", messages.len());
+    let mut missing = vec![];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        let rows: std::collections::BTreeSet<&str> = entries.iter().filter(|(ctx, _, _)| ctx == "@msg").map(|(_, src, _)| src.as_str()).collect();
+        missing.extend(messages.iter().filter(|m| !rows.contains(m.as_str())).map(|m| format!("{code}: {m}")));
+    }
+    assert!(missing.is_empty(), "{} plug-in messages have no @msg row:\n{}", missing.len(), missing.join("\n"));
+}
+
+/// Errors the plug-in host returns are translated whole in every complete-message catalog, the
+/// reason inside the error's kind included, and keep their numbers, JSON shapes, permission names
+/// and nested reasons as written.
+#[test]
+fn plugin_errors_translate_with_their_values() {
+    use vectorcraft_plugins::{Error, Manifest, manifest::MAX_MANIFEST_BYTES};
+    let err = |r: Result<(), Error>| r.err().map(|e| e.to_string()).unwrap_or_default();
+    let not_json = err(vectorcraft_plugins::export::decode(b"{} x").map(drop));
+    let reason = not_json.strip_prefix("plug-in output: not JSON: ").expect("not JSON error").to_string();
+    let errors = [
+        (err(Manifest::parse(b"\xff").map(drop)), "manifest is not UTF-8", vec!["UTF-8"]),
+        (err(Manifest::parse(&vec![b' '; MAX_MANIFEST_BYTES + 1]).map(drop)), "manifest is", vec!["65537", "65536"]),
+        (err(vectorcraft_plugins::export::decode(b"{}").map(drop)), "expected {", vec![r#"{"dataBase64": "…"}"#]),
+        (err(vectorcraft_plugins::objects::decode(b"{}").map(drop)), "expected {", vec![r#"{"objects": [...]}"#]),
+        (not_json, "not JSON", vec![reason.as_str()]),
+        (Error::NeedsApproval("doc.read, doc.write".into()).to_string(), "needs approval", vec!["doc.read, doc.write"]),
+    ];
+    for (e, english, _) in &errors {
+        assert!(e.contains(english), "{e}");
+    }
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, english, kept) in &errors {
+            let shown = message(lang, e);
+            assert!(!shown.contains(english), "{code}: {e} -> {shown}");
+            assert!(kept.iter().all(|k| shown.contains(k)), "{code}: {e} -> {shown}");
+        }
+    }
+    assert_eq!(message(de(), &errors[1].0), "Plug-in-Manifest: das Manifest ist 65537 Byte groß (Grenze 65536)");
+    let fr = Lang::from_code("fr").expect("registered");
+    assert!(message(fr, &errors[3].0).ends_with(r#"attendu : {"objects": [...]}"#), "{}", message(fr, &errors[3].0));
+}
+
+/// The reasons the plug-in host puts inside its errors (what is wrong with a parameter's spec or
+/// dialog keys, the value a parameter needs, what is wrong with an output object) are translated
+/// with the error in every complete-message catalog, so no status line mixes two languages.
+#[test]
+fn plugin_error_reasons_are_translated_with_the_error() {
+    use serde_json::json;
+    use vectorcraft_plugins::{Error, Manifest};
+    let err = |r: Result<(), Error>| r.err().map(|e| e.to_string()).unwrap_or_default();
+    let manifest = |params: &str| Manifest::parse(format!(r#"{{"id":"a","name":"x","kind":"filter","params":{{{params}}}}}"#).as_bytes());
+    let m = manifest(r#""angles":{"type":"numberList","min":0,"max":360,"default":[45],"minItems":1,"maxItems":3}"#).expect("manifest");
+    let errors = [
+        (err(manifest(r#""r":{"type":"number","min":5,"max":1,"default":1}"#).map(drop)), "bad range"),
+        (err(manifest(r#""r":{"type":"number","min":0,"max":1,"default":1,"label":" "}"#).map(drop)), "printable characters"),
+        (err(m.resolve_params(&json!({"angles": "big"})).map(drop)), "a list of numbers"),
+        (err(vectorcraft_plugins::objects::decode(br#"{"objects":[{"opacity":"full"}]}"#).map(drop)), "must be a number"),
+    ];
+    for (e, english) in &errors {
+        assert!(e.contains(english), "{e}");
+    }
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, english) in &errors {
+            let shown = message(lang, e);
+            assert!(!shown.contains(english), "{code}: {e} -> {shown}");
+        }
+    }
+    assert_eq!(message(de(), &errors[0].0), "Plug-in-Manifest: Parameter `r`: ungültiger Bereich");
+    assert_eq!(message(de(), &errors[2].0), "Plug-in-Parameter: `angles` muss eine Liste von Zahlen sein");
+    assert!(message(de(), &errors[3].0).ends_with("objects[0]: `opacity` muss eine Zahl sein"), "{}", message(de(), &errors[3].0));
 }
 
 /// The Gamut Check status line names a count of 1 in the singular and other counts in the plural,
@@ -2039,6 +2156,53 @@ fn run() -> Result<()> {
     let found: std::collections::BTreeSet<String> = source_messages(code, &[], &consts).into_iter().collect();
     assert_eq!(found.iter().collect::<Vec<_>>(), ["the selection is too large to hand over", "time budget"]);
     assert!(source_messages(code, &[], &Default::default()).is_empty());
+}
+
+/// The scan reads the message of each of the plug-in host's [`ERROR_HELPERS`]: a literal, a
+/// `format!` string with or without a `&` before it, after the location of `out_err` (a
+/// `format!` string too), the number and range of `in_range`, the number and location of `unit`,
+/// and the block of `.read_packed`, a method. It does not read a value that isn't a literal, a
+/// key's name alone, a call with too few arguments, a helper's declaration or a call whose name
+/// ends in a helper's name.
+#[test]
+fn message_scan_reads_plugin_helpers() {
+    let code = r#"
+fn check(k: &str) -> Result<()> {
+    let bad = |what: &str| Err(Error::Manifest(format!("parameter `{k}`: {what}")));
+    let wrong = |what: &str| Error::Params(format!("`{k}` must be {what}"));
+    let _ = bad("bad range");
+    let _ = bad(&format!("`maxLength` must be 1-{MAX_TEXT}, and the default no longer"));
+    let _ = wrong("a number");
+    let _ = wrong(&format!("a list of {min_items} to {max_items} numbers"));
+    let _ = out_err(at, "`opacity` must be a number");
+    let _ = out_err(&format!("{at}.{k}"), format!("unknown key `{k}`; the keys here are {}", keys.join(", ")));
+    let _ = out_err(at, e);
+    let _ = live.read_packed(packed, "the output", limits.max_output_bytes);
+    let _ = in_range(l, 0.0, 100.0, at, "a color component");
+    let _ = unit(*x, &format!("{at}.plates"), "a plate");
+    let _ = unit(s.tint, &format!("{at}.tint"), "`tint`");
+    let _ = unit(r);
+    let _ = not_bad("not an error helper");
+    Err(wrong())
+}
+fn wrong(&self) -> String { String::new() }
+"#;
+    let plugins: Vec<_> = ERROR_HELPERS.iter().filter(|(c, _, _)| *c == "plugins").map(|&(_, call, before)| (call, before)).collect();
+    let found: std::collections::BTreeSet<String> = source_messages(code, &plugins, &Default::default()).into_iter().collect();
+    let want = [
+        "`maxLength` must be 1-{MAX_TEXT}, and the default no longer",
+        "`opacity` must be a number",
+        "`{k}` must be {what}",
+        "a color component",
+        "a list of {min_items} to {max_items} numbers",
+        "a number",
+        "a plate",
+        "bad range",
+        "parameter `{k}`: {what}",
+        "the output",
+        "unknown key `{k}`; the keys here are {_1}",
+    ];
+    assert_eq!(found.iter().collect::<Vec<_>>(), want);
 }
 
 /// The limits a plug-in run can exceed, and the error of a removal that leaves the plug-in's grant
@@ -2785,10 +2949,25 @@ const MESSAGE_MARKERS: &[&str] = &[".status(", "ui.status = ", "status = ", "Oth
 
 /// Helpers that make an error from a message, by crate, with the number of arguments before the
 /// message: the engine's `bad(cmd, msg)` (`EngineError::BadParams`), `err(msg)` (`cmd/fileio`)
-/// and `error(msg)` (`cmd/dimension.rs`), and the PDF writer's `bad(why)` (`forms.rs`) and
-/// `failed(why)` (`encrypt.rs`, `linearize.rs`).
-const ERROR_HELPERS: &[(&str, &str, usize)] =
-    &[("engine", "bad(", 1), ("engine", "err(", 0), ("engine", "error(", 0), ("pdf", "bad(", 0), ("pdf", "failed(", 0)];
+/// and `error(msg)` (`cmd/dimension.rs`), the PDF writer's `bad(why)` (`forms.rs`) and
+/// `failed(why)` (`encrypt.rs`, `linearize.rs`), and the plug-in host's `bad(what)` (a parameter's
+/// spec and dialog keys), `wrong(what)` (a parameter's value), `out_err(at, msg)` (plug-in output),
+/// `in_range(x, lo, hi, at, what)` and `unit(x, at, what)` (a painted effect's numbers) and
+/// `.read_packed(packed, what, max)` (the block a plug-in returned). A helper that starts with
+/// `.` is a method.
+const ERROR_HELPERS: &[(&str, &str, usize)] = &[
+    ("engine", "bad(", 1),
+    ("engine", "err(", 0),
+    ("engine", "error(", 0),
+    ("pdf", "bad(", 0),
+    ("pdf", "failed(", 0),
+    ("plugins", "bad(", 0),
+    ("plugins", "wrong(", 0),
+    ("plugins", "out_err(", 1),
+    ("plugins", "in_range(", 4),
+    ("plugins", "unit(", 2),
+    ("plugins", ".read_packed(", 1),
+];
 
 /// Error variants whose first argument is a name, not a message: a command id
 /// (`EngineError::UnknownCommand`) and a PostScript error name (`PsError::Ps`).
@@ -2798,16 +2977,22 @@ const NAME_VARIANTS: &[&str] = &["UnknownCommand", "Ps"];
 /// `EngineError::Disabled(command id, reason)`.
 const LATER_MESSAGE_VARIANTS: &[(&str, usize)] = &[("Disabled", 1)];
 
-/// Messages that are signals, not text for people.
-const NOT_MESSAGES: &[&str] = &["quit", "cancelled"];
+/// Messages that are signals, not text for people, and the name of a plug-in export that an
+/// error message holds (`vc_manifest points outside memory`).
+const NOT_MESSAGES: &[&str] = &["quit", "cancelled", "vc_manifest"];
 
 /// Every status and error message literal in [`MESSAGE_CRATES`] (test modules aside), as catalog
 /// templates: `{}` becomes `{_1}`, `{_2}` … and format specs are dropped (`{n:?}` → `{n}`).
 pub fn message_literals() -> std::collections::BTreeSet<String> {
+    message_literals_in(MESSAGE_CRATES)
+}
+
+/// The message literals of [`message_literals`] in the crates `names` alone.
+fn message_literals_in(names: &[&str]) -> std::collections::BTreeSet<String> {
     let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let mut out = std::collections::BTreeSet::new();
     let mut files = vec![];
-    let mut stack: Vec<_> = MESSAGE_CRATES.iter().map(|c| crates.join(c).join("src")).collect();
+    let mut stack: Vec<_> = names.iter().map(|c| crates.join(c).join("src")).collect();
     while let Some(d) = stack.pop() {
         for entry in std::fs::read_dir(&d).into_iter().flatten().flatten() {
             let path = entry.path();
@@ -2873,7 +3058,8 @@ fn named_const<'a>(rest: &str, consts: &'a std::collections::BTreeMap<String, Ve
 /// [`LATER_MESSAGE_VARIANTS`] gives; not [`NAME_VARIANTS`]),
 /// and the message argument of each call in `helpers` (a call and the number of arguments before
 /// its message), a literal, a `format!` string or the name of one of `consts` (see
-/// [`str_consts`]).
+/// [`str_consts`]), each one with or without a `&` before it. A key's name alone (`` `tint` ``)
+/// is not a message.
 fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collections::BTreeMap<String, Vec<String>>) -> Vec<String> {
     let code = &without_comments(code);
     let after_markers = MESSAGE_MARKERS.iter().flat_map(|marker| code.match_indices(marker).map(|(at, _)| &code[at + marker.len()..]));
@@ -2886,12 +3072,13 @@ fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collecti
     });
     let in_helpers = helpers.iter().flat_map(|&(call, before)| {
         code.match_indices(call)
-            .filter(|&(at, _)| !code[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_' || c == '.'))
+            .filter(|&(at, _)| call.starts_with('.') || !code[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_' || c == '.'))
             .filter_map(move |(at, _)| skip_args(&code[at + call.len()..], before))
     });
     let mut out = vec![];
     for rest in after_markers.chain(in_variants).chain(in_helpers) {
         let rest = rest.trim_start();
+        let rest = rest.strip_prefix('&').map_or(rest, str::trim_start);
         let rest = rest.strip_prefix("format!(").map_or(rest, str::trim_start);
         let lits = match rest.strip_prefix('"') {
             Some(quoted) => string_literal(quoted).into_iter().collect(),
@@ -2899,7 +3086,8 @@ fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collecti
         };
         for lit in lits {
             let has_word = lit.as_bytes().windows(3).any(|w| w.iter().all(u8::is_ascii_lowercase));
-            if has_word && !NOT_MESSAGES.contains(&lit.as_str()) {
+            let key_name = lit.len() > 1 && lit.starts_with('`') && lit.ends_with('`') && !lit.contains(' ');
+            if has_word && !key_name && !NOT_MESSAGES.contains(&lit.as_str()) {
                 out.push(as_template(&lit));
             }
         }

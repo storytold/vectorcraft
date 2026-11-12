@@ -382,6 +382,7 @@ fn encode_document(doc: &Document, p: &Value, saving: bool) -> Result<Encoded> {
                 enc.warnings.push(w);
             }
         }
+        enc.add_setting_notes(out.setting_notes);
     }
     enc.warnings.extend(crate::cmd::fonts::export_overflow_warning(doc, &doc.layers, Some(&regions)));
     Ok(enc)

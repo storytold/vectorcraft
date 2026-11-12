@@ -28,9 +28,9 @@
 use egui::{Color32, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::gradient::{
-    MIN_STOPS, duplicate_stop, insert_stop, midpoint_from_pos, midpoint_pos, move_stop, remove_stop, set_midpoint, swap_stop_colors,
+    MAX_REPEATS, MIN_STOPS, duplicate_stop, insert_stop, midpoint_from_pos, midpoint_pos, move_stop, remove_stop, set_midpoint, swap_stop_colors,
 };
-use vectorcraft_color::{Color, Freeform, FreeformMode, Gradient, GradientKind, GradientMethod, GradientPaint, GradientStop, Paint};
+use vectorcraft_color::{Color, Freeform, FreeformMode, Gradient, GradientKind, GradientMethod, GradientPaint, GradientSpread, GradientStop, Paint};
 use vectorcraft_doc::{NodeId, StrokeGradientMode};
 
 use super::{active_paint, live_run, pstate, set_pstate};
@@ -315,6 +315,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     method_row(app, ui, &g, is_grad);
+    spread_row(app, ui, &g, is_grad);
     // The proxy beside the angle and aspect ratio fields.
     ui.horizontal(|ui| {
         super::proxy(app, ui, 36.0);
@@ -396,6 +397,39 @@ fn method_row(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad:
         }
     });
 }
+
+/// The Spread row: what a linear, radial, conic or diamond gradient paints past the ends of its
+/// stops (Pad, Repeat or Reflect), and how many times Repeat and Reflect run the stops along the
+/// vector (1 to [`MAX_REPEATS`]; dimmed with Pad).
+fn spread_row(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad: bool) {
+    let spreads = [(GradientSpread::Pad, tl!("Pad")), (GradientSpread::Repeat, tl!("Repeat")), (GradientSpread::Reflect, tl!("Reflect"))];
+    let current = g.gradient.spread;
+    let shown = spreads.iter().find(|(s, _)| *s == current).map_or("", |(_, l)| *l);
+    ui.horizontal(|ui| {
+        widgets::dim_label(ui, tl!("Spread:"));
+        let labels = spreads.map(|(_, l)| l);
+        let chosen = ui.add_enabled_ui(is_grad, |ui| widgets::dropdown_names(ui, "grad-spread", shown, &labels, 80.0)).inner;
+        if let Some((s, _)) = chosen.and_then(|i| spreads.get(i))
+            && *s != current
+        {
+            edit(app, json!({"spread": s.label().to_lowercase()}), Live::Released);
+        }
+        let on = is_grad && !current.is_pad();
+        let n = f64::from(g.gradient.repeat_count());
+        let set = ui
+            .add_enabled_ui(on, |ui| widgets::spin_plain_named(ui, "grad-repeats", Some(tl!("Repeats")), n, "", 0, 56.0, 1.0, 1.0, &REPEAT_PRESETS))
+            .inner;
+        if let Some(r) = set {
+            let r = r.round().clamp(1.0, f64::from(MAX_REPEATS));
+            if r != n {
+                edit(app, json!({"repeats": r}), Live::Released);
+            }
+        }
+    });
+}
+
+/// The Repeats field's menu.
+const REPEAT_PRESETS: [f64; 6] = [1.0, 2.0, 3.0, 4.0, 5.0, 10.0];
 
 /// The Presets row: a menu of the preset gradients by library (theme), then the
 /// saved ones; a choice applies to the gradient behind the active proxy, keeping its placement

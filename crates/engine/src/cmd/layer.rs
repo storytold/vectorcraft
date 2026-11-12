@@ -128,7 +128,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Artboard",
             ["Window", "Artboards"],
             None,
-            "{x?, y?, width?, height?, name?, color?: color (its background color, as artboard.setProps takes it, #rrggbbaa and #rgba refused; default: none), guideLabel?: name | \"#rrggbb\" | null (its guide label, as artboard.setProps takes it; default: none), showCenterMark?: bool, showCrossHairs?: bool, showVideoSafeAreas?: bool (as artboard.setProps takes them; default false), videoRulerPixelAspectRatio?: number 0.1–10 (as artboard.setProps takes it; default 1), side?: \"left\"|\"right\"|\"top\"|\"bottom\" (the size of artboard `beside`, 20 pt from that side of it; refused with x, y, width or height), beside?: n (the artboard `side` places it by; default the last)} (default place: right of the last)",
+            "{x?, y?, width?, height? (each more than 0 and at most 3,999,856 pt, as file.new takes them), name?, color?: color (its background color, as artboard.setProps takes it, #rrggbbaa and #rgba refused; default: none), guideLabel?: name | \"#rrggbb\" | null (its guide label, as artboard.setProps takes it; default: none), showCenterMark?: bool, showCrossHairs?: bool, showVideoSafeAreas?: bool (as artboard.setProps takes them; default false), videoRulerPixelAspectRatio?: number 0.1–10 (as artboard.setProps takes it; default 1), side?: \"left\"|\"right\"|\"top\"|\"bottom\" (the size of artboard `beside`, 20 pt from that side of it; refused with x, y, width or height), beside?: n (the artboard `side` places it by; default the last)} (default place: right of the last)",
             has_doc,
             artboard_new
         ),
@@ -850,12 +850,21 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-fn rect_from(p: &Value, default: Rect) -> Rect {
+/// The rectangle from `x`, `y`, `width` and `height`, each defaulting to `default`'s. Sides are kept as given.
+fn rect_unclamped(p: &Value, default: Rect) -> Rect {
     let x = f64_or(p, "x", default.x0);
     let y = f64_or(p, "y", default.y0);
-    let w = f64_or(p, "width", default.width()).max(1.0);
-    let h = f64_or(p, "height", default.height()).max(1.0);
+    let w = f64_or(p, "width", default.width());
+    let h = f64_or(p, "height", default.height());
     Rect::new(x, y, x + w, y + h)
+}
+
+/// [`rect_unclamped`] with each supplied side raised to at least 1 pt, as `artboard.setProps` uses it.
+/// A side left out keeps `default`'s, even below 1 pt.
+fn rect_from(p: &Value, default: Rect) -> Rect {
+    let r = rect_unclamped(p, default);
+    let floor = |key: &str, side: f64| if p.get(key).and_then(Value::as_f64).is_some() { side.max(1.0) } else { side };
+    Rect::new(r.x0, r.y0, r.x0 + floor("width", r.width()), r.y0 + floor("height", r.height()))
 }
 
 /// An artboard command's `color` param, its background color: None when absent, `Some(None)` for
@@ -926,6 +935,9 @@ fn artboard_new(s: &mut Session, p: &Value) -> Result<Value> {
     let guide_label = artboard_guide_label(p, "artboard.new")?.flatten();
     check_switches(p, &["showCenterMark", "showCrossHairs", "showVideoSafeAreas"], "artboard.new")?;
     check_numbers(p, &["x", "y", "width", "height"], "artboard.new")?;
+    if ["width", "height"].iter().filter_map(|k| p.get(*k).and_then(Value::as_f64)).any(|side| !super::newdoc::side_in_range(side)) {
+        return Err(super::newdoc::side_error("artboard.new", d0.units));
+    }
     let r = match artboard_side(p, "artboard.new")? {
         Some(side) => {
             if ["x", "y", "width", "height"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null())) {
@@ -939,8 +951,12 @@ fn artboard_new(s: &mut Session, p: &Value) -> Result<Value> {
             src + side.offset(src)
         }
         None if p.get("beside").is_some_and(|v| !v.is_null()) => return Err(bad("artboard.new", "`beside` needs `side`")),
-        None => rect_from(p, def),
+        None => rect_unclamped(p, def),
     };
+    // A size taken from another artboard (`side`, or width or height left out) keeps to the limit too.
+    if !super::newdoc::side_in_range(r.width()) || !super::newdoc::side_in_range(r.height()) {
+        return Err(super::newdoc::side_error("artboard.new", d0.units));
+    }
     let given = artboard_str(p, "name", "artboard.new")?.map(str::trim).filter(|n| !n.is_empty());
     let (show_center_mark, show_cross_hairs) = (bool_or(p, "showCenterMark", false), bool_or(p, "showCrossHairs", false));
     let show_video_safe_areas = bool_or(p, "showVideoSafeAreas", false);

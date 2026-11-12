@@ -402,7 +402,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             let editing = vectorcraft_svg::editing(&text).map(|e| (e.intact, move || vectorcraft_format::base64_decode(&e.data)));
             // Relative links are found in the SVG's folder (when `name` is a path).
             let folder = std::path::Path::new(name).parent().map(|f| f.to_string_lossy()).filter(|f| !f.is_empty()).map(|f| absolute_path(&f));
-            restore_or_import(editing, || import_svg(&text, folder.as_deref()))?
+            restore_or_import(editing, || open_svg(&text, folder.as_deref()))?
         }
         "pdf" | "ai" | "ait" => {
             // The file is read and checked once, for the document it carries, its pages, the
@@ -581,6 +581,33 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
 /// own): rasters stay linked, SVG files become art, missing ones placeholders (see
 /// [`vectorcraft_svg::ImportOptions`]).
 pub(crate) fn import_svg(text: &str, folder: Option<&str>) -> Result<(Document, Vec<String>)> {
+    import_svg_finding(text, folder, &std::collections::HashSet::new()).map(|(doc, warnings, _)| (doc, warnings))
+}
+
+/// [`import_svg`] for a document opened from an SVG: with the variable data the file carries (SVG
+/// Options › Include Variable Data), read as [`crate::cmd::variablecmds::svg_library`] says. Variable
+/// data that can't be read is left out with a warning; the art opens either way.
+fn open_svg(text: &str, folder: Option<&str>) -> Result<(Document, Vec<String>)> {
+    let lib = match crate::cmd::variablecmds::svg_library(text) {
+        None => return import_svg(text, folder),
+        Some(Err(e)) => {
+            let (doc, mut warnings) = import_svg(text, folder)?;
+            warnings.push(format!("the file's variable data wasn't read: {e}"));
+            return Ok((doc, warnings));
+        }
+        Some(Ok(lib)) => lib,
+    };
+    let (mut doc, mut warnings, found) = import_svg_finding(text, folder, &lib.elements())?;
+    warnings.extend(crate::cmd::variablecmds::give_svg_library(&mut doc, lib, &found));
+    Ok((doc, warnings))
+}
+
+/// [`import_svg`], also returning the object made of each element whose id `ids` lists.
+fn import_svg_finding(
+    text: &str,
+    folder: Option<&str>,
+    ids: &std::collections::HashSet<String>,
+) -> Result<(Document, Vec<String>, vectorcraft_svg::Found)> {
     // The importer reads on a thread of its own (for its stack): what may be read is what may be
     // read here.
     let scope = crate::file_access::ScopeHandle::capture();
@@ -596,7 +623,7 @@ pub(crate) fn import_svg(text: &str, folder: Option<&str>) -> Result<(Document, 
             Some((bytes, link))
         })
     };
-    vectorcraft_svg::import_with(text, &vectorcraft_svg::ImportOptions { folder, read: Some(&read) }).map_err(err)
+    vectorcraft_svg::import_finding(text, &vectorcraft_svg::ImportOptions { folder, read: Some(&read) }, ids).map_err(err)
 }
 
 /// Open a file's bytes as the new active document (what `document.open` does) →
@@ -1027,13 +1054,38 @@ fn is_loss(note: &str) -> bool {
 /// Another name keeps the original file, with all it has.
 pub(crate) fn check_not_lossy_overwrite(st: &crate::DocState, target: &str, p: &Value, cmd: &str) -> Result<()> {
     let Some(losses) = overwrite_losses(st, target, p) else { return Ok(()) };
+    Err(lossy_overwrite(target, losses, cmd))
+}
+
+/// The refusal to write `target`, the file the document was read from, when reading it left out `losses`.
+fn lossy_overwrite(target: &str, losses: &[String], cmd: &str) -> EngineError {
     let what = losses_summary(losses);
-    Err(bad(
+    bad(
         cmd,
         format!(
             "{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway"
         ),
-    ))
+    )
+}
+
+/// The file the document was read from and what reading it left out, when a write to that file
+/// needs `acknowledgeLoss` and `p` does not have it ([`overwrite_losses`]).
+pub(crate) fn lossy_source(st: &crate::DocState, p: &Value) -> Option<(String, Vec<String>)> {
+    let source = st.imported_from.as_deref().filter(|_| !st.import_losses.is_empty())?;
+    (!bool_or(p, "acknowledgeLoss", false)).then(|| (source.to_string(), st.import_losses.clone()))
+}
+
+/// None of the files `targets` (every file a save writes, before any is written) is the
+/// `source` file that reading left `losses` out of ([`lossy_source`]).
+pub(crate) fn check_files_not_lossy_overwrite<'a>(
+    source: &(String, Vec<String>),
+    targets: impl IntoIterator<Item = &'a str>,
+    cmd: &str,
+) -> Result<()> {
+    match targets.into_iter().find(|t| same_file(&source.0, t)) {
+        Some(target) => Err(lossy_overwrite(target, &source.1, cmd)),
+        None => Ok(()),
+    }
 }
 
 /// What writing the file `target` for document `st` would lose for good: the notes of what reading

@@ -142,6 +142,24 @@ fn the_corner_tool_item_selects_the_tool_and_opens_its_panel_section() {
     assert!(!vectorcraft_tools::TOOL_GROUPS.iter().flat_map(|g| g.iter()).any(|t| t.id == "cornerTool" || t.id == "slideAnchor"));
 }
 
+/// The Corner Tool and Shared Edge Merge Tool items leave a floating Anchor Inspector showing
+/// instead of closing it, and in Presentation Mode they choose the tool without failing.
+#[test]
+fn the_tool_items_keep_a_floating_anchor_inspector_showing() {
+    let mut app = app();
+    app.run("window.panel.float", json!({ "panel": ID })).unwrap();
+    assert!(crate::panel_docking::visible(&app.ui, ID));
+    for command in [super::corner::COMMAND, super::shared_edge::COMMAND] {
+        app.run(command, json!({})).unwrap();
+        assert!(crate::panel_docking::visible(&app.ui, ID), "{command} leaves the panel showing");
+    }
+    app.ui.screen_mode = 3;
+    app.run(super::corner::COMMAND, json!({})).unwrap();
+    assert_eq!(app.session.tool_id(), "cornerTool");
+    app.ui.screen_mode = 0;
+    assert!(crate::panel_docking::visible(&app.ui, ID), "the panel shows when Presentation Mode ends");
+}
+
 #[test]
 fn the_shared_edge_item_selects_the_tool_and_opens_its_panel_section() {
     let mut app = app();

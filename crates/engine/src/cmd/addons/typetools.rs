@@ -139,7 +139,8 @@ fn text_tweaker(s: &mut Session, p: &Value) -> Result<Value> {
         let mut run = 0;
         for (i, at) in chars.into_iter().enumerate() {
             let random = if shape == "random" { unit(&mut rng) } else { 0.0 };
-            let value = from + (to - from) * amount(shape, i, n, random);
+            // Rounding can carry a value a hair past the range's ends.
+            let value = (from + (to - from) * amount(shape, i, n, random)).clamp(lo, hi);
             let mut change = CharChange::parse(&json!({ key: value }), C, &setup)?;
             change.localize(&t, C)?;
             while ends.get(run).is_some_and(|&e| e <= at) {

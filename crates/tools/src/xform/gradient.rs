@@ -68,6 +68,8 @@ const CENTRE: f64 = 4.5;
 const CENTRE_HIT: f64 = 8.0;
 /// A stop dragged farther than this from the bar is deleted on release.
 const OFF_BAR: f64 = 24.0;
+/// Half the length of the ticks across the bar where the runs of a repeating gradient meet.
+const TICK: f64 = 5.0;
 /// A press becomes a drag after this much movement.
 const DRAG_START: f64 = 3.0;
 /// Arrow-key nudges of the selected stop (Shift: the big step).
@@ -287,6 +289,7 @@ fn annotator_overlays(cx: &ToolContext, a: &Annotator) -> Vec<Overlay> {
     if len < 1e-12 {
         return o;
     }
+    o.extend(run_ticks(cx, a));
     let r = cx.tol(4.0);
     let (along, across) = (a.vector() / len * r, a.normal() * r);
     for i in 0..a.gradient.stops.len().saturating_sub(1) {
@@ -300,6 +303,31 @@ fn annotator_overlays(cx: &ToolContext, a: &Annotator) -> Vec<Overlay> {
         o.push(Overlay::Swatch { p, color: st.color.to_rgba8(st.opacity), selected: cx.gradient_stop == Some(i) });
     }
     o
+}
+
+/// Where each run of the stops of a gradient that repeats or reflects meets the next: a tick across
+/// the bar at each such place along the vector, or, for a conic, a tick across its extent ellipse
+/// at each such turn. None for a gradient that pads.
+fn run_ticks(cx: &ToolContext, a: &Annotator) -> Vec<Overlay> {
+    if !a.gradient.is_spread() {
+        return vec![];
+    }
+    let n = a.gradient.repeat_count();
+    let conic = a.gradient.kind == GradientKind::Conic;
+    let frame = a.geom.conic_frame();
+    let tick = a.normal() * cx.tol(TICK);
+    (1..n)
+        .flat_map(|k| {
+            let t = f64::from(k) / f64::from(n);
+            let (p, q) = if conic {
+                let (sin, cos) = (t * std::f64::consts::TAU).sin_cos();
+                (frame * Point::new(0.9 * cos, 0.9 * sin), frame * Point::new(1.1 * cos, 1.1 * sin))
+            } else {
+                (a.at(t) - tick, a.at(t) + tick)
+            };
+            [Overlay::Line { a: p, b: q, color: LIGHT, dashed: false }, Overlay::Line { a: p, b: q, color: BAR, dashed: true }]
+        })
+        .collect()
 }
 
 /// The vector a click applies to `id`: its current gradient's, else the default fit on its box.

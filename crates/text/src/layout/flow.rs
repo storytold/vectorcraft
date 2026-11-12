@@ -10,7 +10,8 @@ use super::{
     ListMarker, Mojikumi, ParaStyle, Params, Point, Punct, Range, SGlyph, SingleWordJustify, TextObject, apply_desired, cap_x_heights, compose,
     fit_line, hyphen_glyph, is_cjk, is_word_space, kashida, mark_word_ends, no_line_end, no_line_start, style_metrics,
 };
-use crate::shape::keep_korean_words;
+use crate::justify::is_format_control;
+use crate::shape::{keep_inseparable_pairs, keep_korean_words};
 
 /// Does paragraph `para` push characters in (Kinsoku Shori Type Push In First or Push Out First,
 /// with kinsoku on)?
@@ -228,6 +229,10 @@ fn prepare_paragraph<'a, 'text>(
     // Korean breaks between words, unless Korean Line Break Anywhere lets it break between syllables.
     if !para.korean_line_break_anywhere {
         keep_korean_words(&mut sg);
+    }
+    // Bunri-Kinshi keeps inseparable pairs on one line, while kinsoku is on.
+    if para.bunri_kinshi && para.kinsoku != Kinsoku::None {
+        keep_inseparable_pairs(text, &mut sg);
     }
     // Japanese composition: consecutive punctuation shares one half-em space.
     let mut compressed = if para.mojikumi == Mojikumi::LineEndHalf { compress_punctuation(&mut sg) } else { vec![] };
@@ -707,14 +712,77 @@ fn drawn_after(index: usize, glyph: usize, after: &[Option<usize>]) -> Option<us
     glyph.checked_sub(index).and_then(|offset| after.get(offset).copied().flatten())
 }
 
+// The next drawn glyph after `glyph` that is not a zero-width format control.
+fn visible_after(index: usize, glyph: usize, after: &[Option<usize>], sg: &[SGlyph]) -> Option<usize> {
+    let mut next = drawn_after(index, glyph, after);
+    for _ in 0..after.len() {
+        match next {
+            Some(n) if sg.get(n).is_some_and(|g| is_format_control(g.ch)) => next = drawn_after(index, n, after),
+            _ => break,
+        }
+    }
+    next
+}
+
+// The glyph after which a gap between drawn glyphs opens, and the visible glyph that follows it:
+// not a held glyph, and never a zero-width format control on either side.
+fn gap_pair<'a>(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &'a [SGlyph]) -> Option<(&'a SGlyph, &'a SGlyph)> {
+    if held.contains(&glyph) {
+        return None;
+    }
+    let a = sg.get(glyph).filter(|a| !is_format_control(a.ch))?;
+    visible_after(index, glyph, after, sg).and_then(|next| sg.get(next)).map(|b| (a, b))
+}
+
 // Japanese (and Chinese) lines are justified between their characters (JLREQ 3.8): the
 // gaps next to a CJK character, not inside a Latin word, a tate-chu-yoko block or a shaped
 // cluster.
 fn is_cjk_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph]) -> bool {
-    !held.contains(&glyph)
-        && drawn_after(index, glyph, after).and_then(|next| sg.get(glyph).zip(sg.get(next))).is_some_and(|(a, b)| {
-            a.byte != b.byte && !a.is_space() && !b.is_space() && !b.continues_tcy() && a.ch != '\t' && (is_cjk(a.ch) || is_cjk(b.ch))
-        })
+    gap_pair(glyph, held, after, index, sg).is_some_and(|(a, b)| {
+        a.byte != b.byte && !a.is_space() && !b.is_space() && !b.continues_tcy() && a.ch != '\t' && (is_cjk(a.ch) || is_cjk(b.ch))
+    }) && !in_pair(glyph, index, after, sg)
+}
+
+// Bunri-Kinshi: are glyph `glyph` and the glyph drawn after it in the two halves of an inseparable
+// pair? Justification adds no space between them. The halves are neighboring clusters: the
+// earlier one's last glyph keeps the next, and the later one starts right after it. Right to left,
+// the clusters are drawn in the other order, each with its glyphs in logical order, so the two
+// drawn neighbors need not be neighbors in `sg`.
+fn in_pair(glyph: usize, index: usize, after: &[Option<usize>], sg: &[SGlyph]) -> bool {
+    let Some(next) = drawn_after(index, glyph, after) else {
+        return false;
+    };
+    let (Some(a), Some(b)) = (sg.get(glyph), sg.get(next)) else {
+        return false;
+    };
+    if a.byte == b.byte {
+        return false;
+    }
+    let (first, later) = if a.byte < b.byte { (glyph, b.byte) } else { (next, a.byte) };
+    let byte = sg.get(first).map_or(0, |g| g.byte);
+    let last = first + sg.iter().skip(first + 1).take_while(|g| g.byte == byte).count();
+    sg.get(last).is_some_and(|g| g.keeps_next) && sg.get(last + 1).is_some_and(|g| g.byte == later)
+}
+
+// Single Word Justification's Full Justify spreads a line's leftover room over the gaps between
+// its drawn glyphs: not after a held glyph, nor inside a tate-chu-yoko block (one cell), a shaped
+// cluster, whose glyphs (a letter and its combining marks, a conjunct and its matra) stay
+// together, or an inseparable pair. On a line that ends in a drawn hyphen, the gap before the
+// hyphen counts too: it follows the line's last visible glyph.
+fn is_letter_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph], hyphen: bool) -> bool {
+    if held.contains(&glyph) || sg.get(glyph).is_none_or(|a| is_format_control(a.ch)) || in_pair(glyph, index, after, sg) {
+        return false;
+    }
+    match gap_pair(glyph, held, after, index, sg) {
+        Some((a, b)) => a.byte != b.byte && !b.continues_tcy(),
+        None => hyphen,
+    }
+}
+
+// A space that takes a share of a justified line's room: not a zero-width space, which is a line
+// break opportunity but not a word separator.
+fn is_justified_space(g: &SGlyph) -> bool {
+    g.is_space() && !is_format_control(g.ch)
 }
 
 // May a pushed-in line close a CJK gap after `g`? Not after a list marker or an inline graphic,
@@ -760,7 +828,7 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
         Justify::JustifyAll => (0, true),
     };
     justify &= paragraph.regions.is_some();
-    let spaces = (line.index..line.body).filter(|&j| j >= paragraph.marker && sg[j].is_space()).count();
+    let spaces = (line.index..line.body).filter(|&j| j >= paragraph.marker && is_justified_space(&sg[j])).count();
     // A gap that justification adds between two glyphs goes into the advance of the one
     // drawn first: `drawn_after(j)` is the glyph drawn right after glyph `j`, which in a
     // right-to-left line comes before it in the text.
@@ -812,7 +880,8 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
             // Word spacing, letter spacing and glyph scaling within their ranges, then the
             // word spaces alone; composed lines may shrink word spaces (never below zero).
             let flex: Vec<Flex> = (line.index..line.body).map(|j| flow_line_flex(j, &paragraph.flex, held, hung)).collect();
-            let floor = (line.index..line.body).filter(|&j| j >= paragraph.marker && sg[j].is_space()).map(|j| sg[j].adv).fold(f64::MAX, f64::min);
+            let floor =
+                (line.index..line.body).filter(|&j| j >= paragraph.marker && is_justified_space(&sg[j])).map(|j| sg[j].adv).fold(f64::MAX, f64::min);
             fit = fit_line(&flex, room - width, spaces, floor);
         } else if room > width {
             // One word: its letter spacing and glyph scaling, then the gaps between its glyphs.
@@ -820,11 +889,8 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
             fit = fit_line(&flex, room - width, 0, 0.0);
             let used: f64 = flex.iter().map(|f| fit.letter(f) + fit.glyph(f)).sum();
             let rest = room - width - used;
-            let gaps = (line.index..line.body)
-                .filter(|&j| {
-                    !held.contains(&j) && drawn_after(line.index, j, &after).and_then(|next| sg.get(next)).is_some_and(|next| !next.continues_tcy())
-                })
-                .count();
+            let hyphen = line.hyphen.is_some();
+            let gaps = (line.index..line.body).filter(|&j| is_letter_gap(j, held, &after, line.index, sg, hyphen)).count();
             if gaps > 0 && rest > EPS {
                 per_gap = rest / gaps as f64;
             }
@@ -942,16 +1008,13 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
                 advance += justification.fit.letter(&flex) + justification.fit.glyph(&flex);
                 scale = justification.fit.glyph_scale(&flex);
             }
-            if glyph.is_space() {
+            if is_justified_space(glyph) {
                 advance += justification.per_space;
             } else if justification.per_cjk != 0.0 || justification.squeeze != 0.0 {
                 if is_cjk_gap(glyph_index, &line.held, &justification.after, index, sg) {
                     advance += justification.per_cjk + squeeze_after(glyph, justification.squeeze, cx.vertical);
                 }
-            } else if !line.held.contains(&glyph_index)
-                && drawn_after(index, glyph_index, &justification.after).and_then(|next| sg.get(next)).is_some_and(|next| !next.continues_tcy())
-            {
-                // Between glyphs, never inside a tate-chu-yoko block (one cell).
+            } else if is_letter_gap(glyph_index, &line.held, &justification.after, index, sg, line.hyphen.is_some()) {
                 advance += justification.per_gap;
             }
         }

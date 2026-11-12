@@ -205,6 +205,10 @@ pub struct Structure {
     pub warped_type: super::envelope::WarpedType,
     /// The document's graphic styles are those of the file's style list, in place of the defaults.
     pub styles_read: bool,
+    /// The patterns that paint the text document's characters, placed in the document, by the
+    /// name of the art style that gives each: the styles that are one paint, a pattern this read
+    /// (see `ate::Texts::with_patterns`).
+    pub text_patterns: HashMap<String, Paint>,
     /// The file's `%AI24_LargeCanvasScale` (1 when it declares none), applied or not.
     pub canvas_scale: f64,
     /// The objects by their XML id (`AI10_ArtUID`), a text object by its slot's id: `None` for an

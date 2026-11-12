@@ -881,6 +881,17 @@ font-technology	Variable	Variabla
 	The selected character's font is not available.	Typsnittet för det markerade tecknet är inte tillgängligt.
 	No alternates for the selected character.	Inga alternativ för det markerade tecknet.
 	Double-click to replace	Dubbelklicka för att ersätta
+	Select one character with the Type tool first.	Markera först ett tecken med textverktyget.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} är en glyf i {font}, inte i det typsnitt den markerade texten är satt i ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} hör till {base} (U+{base_code}) {place}; din markering är {sel} (U+{code}).
+	at the start of a word	i början av ett ord
+	in the middle of a word	mitt i ett ord
+	at the end of a word	i slutet av ett ord
+	standing alone	när det står ensamt
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} är inget alternativ till {sel} (U+{code}) som det står i sitt ord.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dubbelklicka för att infoga {base} (U+{code}) i stället: en presentationsform ansluter inte, bokstaven gör det.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) infogades i stället för en presentationsform: typsnittet ansluter det till grannarna efter position.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Ingen OpenType-funktion ritar den här glyfen här, så den ersätter tecknets glyf och ansluter kanske inte till grannteckenen.
 	Double-click to insert	Dubbelklicka för att infoga
 	Double-click to rename	Dubbelklicka för att byta namn
 	Double-click to target the contents	Dubbelklicka för att välja innehållet som mål
@@ -1636,6 +1647,7 @@ font-technology	Variable	Variabla
 	Include Hidden Layers	Inkludera dolda lager
 	Include Linked Files	Inkludera länkade filer
 	Include Metadata	Inkludera metadata
+	Include Variable Data	Inkludera variabeldata
 	Include non-printing layers	Inkludera lager som inte skrivs ut
 	Write pages longer than 200 in at full size in points	Skriv sidor längre än 200 in i full storlek i punkter
 	Include SVG Code	Inkludera SVG-kod
@@ -1935,6 +1947,8 @@ font-technology	Variable	Variabla
 	Metallic Gradients	Metalliska gradienter
 	Meters	Meter
 	Method:	Metod:
+	Pad	Förläng
+	Repeats	Upprepningar
 	Millimeters	Millimeter
 	Minify	Minifiera
 	Minimal	Minimal
@@ -2002,6 +2016,7 @@ font-technology	Variable	Variabla
 	Move Slices	Flytta skivor
 	Move Spine Point	Flytta ryggradspunkt
 	Reshape Spine Segment	Omforma ryggradssegment
+	Blend Easing	Blandningens acceleration
 	Move Brush	Flytta pensel
 	Move Swatch	Flytta färgruta
 	Move Up	Flytta upp
@@ -2807,6 +2822,10 @@ digits	Malayalam	Malayalam
 	Search Preferences	Sök i inställningar
 	No settings found	Inga inställningar hittades
 	Reset Profiles	Återställ profiler
+	Arrowheads	Pilspetsar
+	Edit Arrowheads	Redigera pilspetsar
+	Edit Arrowheads…	Redigera pilspetsar…
+	Reload Arrowheads	Läs in pilspetsar igen
 	Reset Rotate View	Återställ Rotera vy
 	Rotate View to Selection	Rotera vyn efter markeringen
 	Reset the rows to the artwork's colors	Återställ raderna till teckningens färger
@@ -2858,6 +2877,7 @@ digits	Malayalam	Malayalam
 	Roman Baseline	Baslinje (roman)
 	Roman Hanging Punctuation	Hängande interpunktion (roman)
 	Korean Line Break Anywhere	Koreansk radbrytning var som helst
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Inställningar för östasiatisk sättning
 	Korean Composition Settings	Inställningar för koreansk sättning
 	Rotate	Rotera
@@ -2866,6 +2886,7 @@ digits	Malayalam	Malayalam
 	Rotate View Tool	Verktyget Rotera vy
 	Trackpad Gesture to Rotate View	Rotera vyn med en gest på styrplattan
 	Hold a Tool Shortcut to Use the Tool Temporarily	Håll ned ett verktygs kortkommando för att använda verktyget tillfälligt
+	Show Bounding Box While Moving and Drawing	Visa begränsningsram vid flyttning och ritning
 	Rotate…	Rotera…
 	Rotation	Rotation
 	Roughen…	Ojämn…
@@ -3340,6 +3361,9 @@ digits	Malayalam	Malayalam
 	Split Path	Dela bana
 	spot	dekor
 	Spot Color	Dekorfärg
+	Spot Color Objects	Objekt med dekorfärger
+	Pattern Objects	Objekt med mönster
+	Gradient Objects	Objekt med gradienter
 	Spot Colors	Dekorfärger
 	Spot Colors…	Dekorfärger…
 	Spread:	Spridning:
@@ -4310,6 +4334,7 @@ axis	Both	Båda
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` är inte en färg som "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: högst {MAX_TABLE} färger
 @msg	command `{0}` is not available right now: {1}	kommandot `{0}` är inte tillgängligt just nu: {1}
+@msg	command `{id}` is not available right now	kommandot `{id}` är inte tillgängligt just nu
 @msg	compound paths can only contain paths	sammansatta banor kan bara innehålla banor
 @msg	compressed (RLE) bitmaps can't be read yet	komprimerade (RLE) bitmappar kan inte läsas än
 @msg	damaged	skadad
@@ -4684,6 +4709,7 @@ axis	Both	Båda
 @msg	unknown option `{path}.{k}`	okänt alternativ `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	okänt värde för övertryck `{o}` (preserve, simulate eller discard)
 @msg	unknown panel `{raw}`	okänd panel `{raw}`
+@msg	panels can't be shown in Presentation Mode	paneler kan inte visas i presentationsläge
 @msg	unknown preference `{key}`	okänd inställning `{key}`
 @msg	Preferences imported.	Inställningarna har importerats.
 @msg	not a preferences file: {e}	inte en inställningsfil: {e}
@@ -5859,6 +5885,8 @@ theme	Appearance	Utseende
 @msg	the screen color sampler is already open	färghämtningen från skärmen är redan öppen
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	det här är en PostScript-fil (en .ai sparad i ett äldre format eller utan PDF-kompatibilitet, eller en EPS-fil), inte en PDF: Fil › Öppna och Fil › Placera läser den som EPS
 @msg	this system has no screen color sampler	det här systemet saknar färghämtning från skärmen
+@msg	the screen color sampler did not answer	färghämtningen från skärmen svarade inte
+@msg	the screen color sampler failed	färghämtningen från skärmen misslyckades
 @msg	the image can't be read as a texture	bilden kan inte läsas som en textur
 
 # User Interface › Accent Color
@@ -6123,6 +6151,9 @@ axis	Y Axis	Y-axel
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gäller gradientfyllningar (paint.setFill)
 @msg	`dither` must be true or false	`dither` måste vara true eller false
 @msg	`method` must be classic or perceptual	`method` måste vara classic eller perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` måste vara pad, repeat eller reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` måste vara ett heltal från 1 till {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gäller för linjära, radiella och koniska gradienter och rombgradienter
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Installera ”{name}”, som begär en stor beräkningsbudget?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Varje körning kan ta upp till {minutes} minuter och göra {times} gånger så mycket arbete som andra plugins får. Den körs i bakgrunden och du kan avbryta den.
@@ -6135,6 +6166,74 @@ axis	Y Axis	Y-axel
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	en live-effekt körs medan dokumentet ritas, så den kan inte vara `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	ett exportinsticksprogram får alltid en exports budget: utelämna `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	”{_1}” begär en stor beräkningsbudget (varje körning upp till {minutes} minuter och {times} gånger de vanliga instruktionerna): en person måste godkänna det i skrivbordsappen, eller skicka `allowHeavy: true` i en session som startats med --allow-plugin-grants
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`{k}` must be one of {_1}	`{k}` måste vara något av {_1}
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	kräver godkännande: det begär {0}, som användaren beviljar när pluginet installeras för sig
+@msg	`angle` must be a number	`angle` måste vara ett tal
+@msg	`aspect` must be from 0.01 to 100	`aspect` måste vara från 0.01 till 100
+@msg	`cap` must be "butt", "round" or "square"	`cap` måste vara "butt", "round" eller "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` måste vara "nonzero" eller "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` måste vara en https://-adress på högst {MAX_HELP_URL} byte
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` måste ha 1-{MAX_HELP} utskrivbara tecken
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` måste vara ett effekt-id på 1-{MAX_EFFECT_ID} byte
+@msg	`id` must be the id of an input object	`id` måste vara id:t för ett indataobjekt
+@msg	`join` must be "miter", "round" or "bevel"	`join` måste vara "miter", "round" eller "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` och `group` måste ha 1-{MAX_LABEL} utskrivbara tecken
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` måste vara 1-{MAX_TEXT}, och standardvärdet får inte vara längre
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` och `maxItems` måste vara 0-{MAX_LIST}, `maxItems` minst 1, och standardvärdet måste ha så många poster
+@msg	`name` must be a string	`name` måste vara en sträng
+@msg	`opacity` must be a number	`opacity` måste vara ett tal
+@msg	`type` must be "path" or "compound"	`type` måste vara "path" eller "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` måste ha 1-{MAX_UNIT} utskrivbara tecken
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` måste ange 1 till {MAX_CONDITION_VALUES} värden för `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` anger `{other}`, som inte är en parameter som deklarerats före den här
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` anger högst {MAX_CONDITIONS} parametrar
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` tar värden från `{other}`, en kryssruta eller ett val
+@msg	`visible` must be true or false	`visible` måste vara true eller false
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` måste vara ett tal från {_1} till {_2}
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` måste vara en array med högst {MAX_ITEMS} poster
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	ett standardvärde för färg måste vara ett färgobjekt eller en hexsträng som "#3a7bd5"
+@msg	a color object or a hex string such as "#3a7bd5"	ett färgobjekt eller en hexsträng som "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	en fri gradient innehåller högst {MAX_ITEMS} punkter och linjer
+@msg	a freeform gradient line names a point it doesn't have	en linje i en fri gradient anger en punkt som gradienten inte har
+@msg	a gradient needs 1-{MAX_ITEMS} stops	en gradient behöver 1-{MAX_ITEMS} stopp
+@msg	a list of numbers	en lista med tal
+@msg	a list of {min_items} to {max_items} numbers	en lista med {min_items} till {max_items} tal
+@msg	a new object needs a `path`	ett nytt objekt behöver en `path`
+@msg	a number	ett tal
+@msg	a painted live effect returns only `objects`	en målande live-effekt returnerar bara `objects`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	en del av en målande live-effekt har bara `path`, `fillRule`, `fills` och `strokes`
+@msg	a read-only object was left out	ett skrivskyddat objekt utelämnades
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	ett skrivskyddat objekt utelämnades: returnera det som enbart {"id"} eller som det gavs
+@msg	a string	en sträng
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	en kontur har bara `paint`, `width`, `join`, `cap` och `miterLimit`
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	en kontur måste vara {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
+@msg	an effect must be {"id", "params"?, "visible"?}	en effekt måste vara {"id", "params"?, "visible"?}
+@msg	an effect on a fill returns only `fills`	en effekt på en fyllning returnerar bara `fills`
+@msg	an effect on a stroke returns only `strokes`	en effekt på en kontur returnerar bara `strokes`
+@msg	an object must be a JSON object	ett objekt måste vara ett JSON-objekt
+@msg	bad range	ogiltigt intervall
+@msg	choices must be 1-64 non-empty, printable strings	valen måste vara 1-64 icke-tomma, utskrivbara strängar
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	koordinat utanför intervallet (gräns ±{MAX_COORD} pt)
+@msg	default is not one of the options	standardvärdet är inte ett av alternativen
+@msg	each piece needs a `path`	varje del behöver en `path`
+@msg	is listed twice	finns två gånger
+@msg	pattern transform out of range	mönstertransformering utanför intervallet
+@msg	read-only field '{field}' changed	det skrivskyddade fältet '{field}' ändrades
+@msg	stops must be in order of `offset`	stoppen måste vara ordnade efter `offset`
+@msg	the document has no pattern {pattern}	dokumentet har inget mönster {pattern}
+@msg	the document has no swatch {n}	dokumentet har ingen färgruta {n}
+@msg	the output	utdata
+@msg	the path has no anchor points	banan har inga ankarpunkter
+@msg	too many anchor points (limit {MAX_ANCHORS})	för många ankarpunkter (gräns {MAX_ANCHORS})
+@msg	true or false	true eller false
+@msg	unknown key `{k}`; the keys here are {_1}	okänd nyckel `{k}`; nycklarna här är {_1}
+@msg	{_1} is listed twice	{_1} finns två gånger
+@msg	{_1} is not the id of an input object	{_1} är inte id:t för ett indataobjekt
+@msg	{_1} is read-only	{_1} är skrivskyddat
+@msg	{what} must be from {lo} to {hi}	{what} måste vara från {lo} till {hi}
+@msg	a color component	en färgkomponent
+@msg	a plate	en plåt
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Installera ”{name}”, som begär dessa behörigheter?
 	ID: {id}	ID: {id}
@@ -6343,6 +6442,11 @@ axis	Y Axis	Y-axel
 	User Brush Library 9	Användarbibliotek för penslar 9
 	User Brush Library 10	Användarbibliotek för penslar 10
 	Art Ribbons	Konstband
+	Ink and Wash	Tusch och lavering
+	Tapered Ink	Avsmalnande tusch
+	Brush Pen	Penselpenna
+	Soft Wash	Mjuk lavering
+	Pooling Wash	Lavering med kant
 	Zigzag	Sicksack
 	Burst Ray	Stötstråle
 	Dash Trail	Streckat spår
@@ -8384,7 +8488,7 @@ digits	Hindi	Hindi
 @msg	width must be positive	width måste vara positiv
 @msg	width out of range	bredden ligger utanför tillåtet omfång
 @msg	width/height must be > 0	bredd/höjd måste vara > 0
-@msg	width/height must be positive and within the canvas	bredd/höjd måste vara positiva och inom arbetsytan
+@msg	width and height must be more than 0 and at most {limit}	bredd och höjd måste vara större än 0 och högst {limit}
 @msg	x and y must be finite numbers	x och y måste vara ändliga tal
 @msg	x and y must be given together	x och y måste anges tillsammans
 @msg	zone needs an anchor: dock beside a panel with anchor, or in a new dock column with side (Start or End)	zone behöver ett ankare: docka bredvid en panel med anchor eller i en ny dockkolumn med side (Start eller End)
@@ -8473,6 +8577,8 @@ digits	Hindi	Hindi
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Korta praktiska självstudier för de viktigaste verktygen, ordnade efter färdighet. Välj en färdighet för att se dess självstudier.
 	List Tutorials	Lista självstudier
 	Show Tutorial	Visa självstudie
+	Show Tool Location	Visa verktygets plats
+	Show where this tool is	Visa var det här verktyget finns
 @msg	missing `tutorial` (see learn.list)	`tutorial` saknas (se learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	okänd självstudie `{id}` (se learn.list)
 
@@ -8493,3 +8599,8 @@ digits	Hindi	Hindi
 @msg	Some islands could not be joined to the area around the art	Vissa öar kunde inte förbindas med området runt teckningen
 @msg	`width` must be from {lo} to {hi} pt	`width` måste vara från {lo} till {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` måste vara ett heltal från 1 till {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Rensningsram och rensningslinjer…
+	Weed Box and Lines	Rensningsram och rensningslinjer
+	Margin	Marginal
+	Box	Ram
+	Swatch	Färgruta
