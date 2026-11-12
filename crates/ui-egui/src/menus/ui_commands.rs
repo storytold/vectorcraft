@@ -749,6 +749,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} open the Safe Mode dialog (dialog `safeMode`): whether VectorCraft is in Safe Mode, and the disabled plug-ins, each with Enable on Re-launch (engine: plugin.setEnabled). Closing it leaves Safe Mode as it is; Safe Mode is chosen at launch (--safe-mode, or the choice after a launch that stopped while a plug-in was loading, dialog `pluginStopped`)",
     ),
+    (
+        "help.copyTroubleshootingInfo",
+        "Copy Troubleshooting Info",
+        "",
+        "{} put text for a bug report on the clipboard: the version, and in the desktop app the platform, the window system, the graphics processor, the commands and frame times of the last few frames, and the hang reports of this session and the session before (no document contents or file paths) → {chars}",
+    ),
     ("app.quit", "Quit VectorCraft", "Cmd+Q", "{}"),
     (
         "ui.swatchOptions",

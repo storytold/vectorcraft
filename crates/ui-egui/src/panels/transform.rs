@@ -581,6 +581,13 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Measure Type by Glyph Bounds"), true, glyphs) {
         set_pref(app, "typeGlyphBounds", !glyphs);
     }
+    // The active document's Align New Objects to Pixel Grid (`document.setup`).
+    let align_new = app.session.active().map(|st| st.doc.setup.align_new_objects_to_pixel_grid);
+    if menu_item(ui, tl!("Align New Objects to Pixel Grid"), align_new.is_some(), align_new == Some(true))
+        && let Err(e) = app.run("document.setup", json!({"alignNewObjectsToPixelGrid": align_new != Some(true)}))
+    {
+        app.status(e);
+    }
     ui.separator();
     // What the panel transforms (Transform Object Only / Pattern Only / Both), one checked.
     let current = pattern_mode(app);

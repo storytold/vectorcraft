@@ -121,6 +121,7 @@
 	PDF Presets…	Ustawienia PDF…
 	Perspective Grid Presets…	Ustawienia siatki perspektywy…
 	Color Settings…	Ustawienia kolorów…
+	Assign Profile	Przypisz profil
 	Assign Profile…	Przypisz profil…
 	Keyboard Shortcuts…	Skróty klawiaturowe…
 	Preferences…	Preferencje…
@@ -166,6 +167,15 @@
 	Expand…	Rozszerz…
 	Expand Appearance	Rozszerz wygląd
 	Crop Image	Kadruj obraz
+	Image Tools	Narzędzia obrazu
+	Remove Background…	Usuń tło…
+	Remove Background	Usuń tło
+	Background	Tło
+	Edge Color	Kolor krawędzi
+	Picked Colors	Wybrane kolory
+	Corner Color	Kolor narożników
+	Contiguous	Ciągły
+	Each Channel	Każdy kanał
 	Edit Path	Edytuj ścieżkę
 	Mask	Maska
 	Rasterize…	Rasteryzuj…
@@ -366,6 +376,9 @@
 	Create Outlines	Utwórz kontury
 	Optical Margin Alignment	Optyczne wyrównanie marginesów
 	Dynamic Text	Tekst dynamiczny
+	Dynamic Text Presets	Ustawienia predefiniowane tekstu dynamicznego
+	Arch	Sklepienie
+@msg	select point type or type on a path	zaznacz tekst punktowy lub tekst na ścieżce
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	tekst na ścieżce w tekście wątkowym nie może używać tekstu dynamicznego: {frames}
 	Fill with Placeholder Text	Wypełnij tekstem zastępczym
 	Insert Inline Symbol	Wstaw symbol w tekście
@@ -511,6 +524,7 @@
 	Gaussian Blur…	Rozmycie gaussowskie…
 	View	Widok
 	Preview	Podgląd
+	Preview:	Podgląd:
 	Overprint Preview	Podgląd nadruku
 	Pixel Preview	Podgląd pikseli
 	Trim View	Widok przycięty
@@ -739,6 +753,15 @@
 	Stun Pulse	Ogłuszenie
 	Stealth Fade	Ukrycie
 	Shield Buff	Tarcza
+	Textures	Tekstury
+	Fine Grain	Drobne ziarno
+	Canvas Weave	Splot płótna
+	Burlap Sack	Worek jutowy
+	Cracked Glaze	Spękana glazura
+	Mosaic Floor	Mozaikowa posadzka
+	Quilted Squares	Pikowane kwadraty
+	Leaded Glass	Witraż ołowiany
+	Damp Paper	Wilgotny papier
 	Outlines and Rules	Kontury i linie
 	Hand-Drawn	Rysowane odręcznie
 	Gradient Finishes	Wykończenia gradientowe
@@ -760,6 +783,7 @@
 	Spectrum Gradients	Gradienty widma
 	Sky Gradients	Gradienty nieba
 	Neutral Gradients	Gradienty neutralne
+	Organic Fades	Organiczne zanikania
 	Duotone Gradients	Gradienty dwutonowe
 	Radial Glows	Blaski promieniste
 	Save Swatch Library…	Zapisz bibliotekę próbek…
@@ -1500,6 +1524,8 @@ digits	Malayalam	Malajalam
 	Scale at Center	Skaluj od środka
 	Up/Down:	W górę/w dół:
 	Left/Right:	W lewo/w prawo:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko w górę/w dół
+	Tate-chu-yoko Left/Right	Tate-chu-yoko w lewo/w prawo
 	Underline	Podkreślenie
 	Vertical Scale %	Skala pionowa %
 	Axis	Oś
@@ -1603,6 +1629,7 @@ digits	Malayalam	Malajalam
 	Points: clicks add free points	Punkty: kliknięcia dodają wolne punkty
 	Radial Gradient	Gradient promienisty
 	Conic Gradient	Gradient stożkowy
+	Diamond Gradient	Gradient rombowy
 	Reset to White, Black	Resetuj do bieli i czerni
 	Reverse Gradient	Odwróć gradient
 	Save to Swatches	Zapisz w próbkach
@@ -1979,6 +2006,7 @@ digits	Malayalam	Malajalam
 	Simulate Paper	Symuluj papier
 	Use Black Point Compensation	Użyj kompensacji punktu czerni
 	Working CMYK (don't tag)	Roboczy CMYK (bez znacznika)
+	Working RGB (don't tag)	Roboczy RGB (bez znacznika)
 	{name} (spot)	{name} (dodatkowy)
 	Add to Profiles…	Dodaj do profili…
 	Align Stroke to Center	Wyrównaj obrys do środka
@@ -4362,6 +4390,7 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be a number, not {v}	`{key}` musi być liczbą, nie {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} musi być czasem Unix w sekundach (liczbą całkowitą) lub null
 @msg	`{key}` must be a string	`{key}` musi być ciągiem znaków
+@msg	`{key}` must be a profile name or null	`{key}` musi być nazwą profilu lub null
 @msg	`{key}` must be a whole number	`{key}` musi być liczbą całkowitą
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` musi być liczbą całkowitą od {min} do {max} (podano {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` musi mieścić się w zakresie od {min} do {max} (podano {x})
@@ -4514,6 +4543,7 @@ imageTrace	Outline	Kontur
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	strona obszaru kompozycji {n} ma {size}, czyli więcej niż limit strony PDF wynoszący 14 400 pt (200 in): jest zapisywana z UserUnit {unit}, więc aplikacje ignorujące UserUnit pokazują ją tyle razy mniejszą
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	strona obszaru kompozycji {n} ma {size}, czyli więcej niż limit strony PDF wynoszący 14 400 pt (200 in): strony {label} są zapisywane bez UserUnit, w punktach, a aplikacje przestrzegające limitu przycinają stronę do 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 nie ma UserUnit, którego strona dłuższa niż 14 400 pt (200 in) potrzebuje, aby zachować rozmiar: plik jest zapisywany jako PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 nie ma UserUnit, którego strona dłuższa niż 14 400 pt (200 in) potrzebuje, aby zmieścić się w limicie strony PDF/A-2 wynoszącym 14 400 jednostek: plik jest zapisywany jako PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	strona obszaru kompozycji {n} ma {size} i jest za długa i za wąska dla boków strony PDF od 3 do 14 400 jednostek: jest zapisywana z UserUnit {unit}, która utrzymuje krótszy bok na co najmniej 3 jednostkach, a aplikacje przestrzegające limitu przycinają dłuższy bok do 14 400 jednostek
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	pliki {label} mieszczą liczby rzeczywiste do {max}, a strona obszaru kompozycji {n} o długości {side} pt wymaga większych: wybierz PDF 1.6 lub nowszy bez standardu PDF/X albo mniejszy obszar kompozycji
 @msg	invalid image data for `{0}`	nieprawidłowe dane obrazu dla `{0}`
@@ -4663,6 +4693,7 @@ imageTrace	Outline	Kontur
 @msg	not a stored central record	to nie jest zapisany rekord centralny
 @msg	not a valid plug-in module: {0}	nieprawidłowy moduł wtyczki: {0}
 @msg	not an EMF or WMF file	to nie jest plik EMF ani WMF
+@msg	not an HP-GL file	to nie jest plik HP-GL
 @msg	not found	nie znaleziono
 @msg	not in pattern editing mode	nie jest w trybie edycji wzorka
 @msg	finish editing the pattern first	najpierw zakończ edycję wzorka
@@ -4743,6 +4774,14 @@ imageTrace	Outline	Kontur
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	ten obrys utworzyłby ponad {max} punktów kontrolnych, więcej niż dokument może płynnie wyświetlić: zwiększ Szum, zmniejsz Ścieżki lub Kolory albo wybierz ustawienie o niższej wierności
 @msg	select an envelope	zaznacz kopertę
 @msg	select an image	zaznacz obraz
+@msg	`background` must be edges, corners or colors	`background` musi mieć wartość edges, corners lub colors
+@msg	`match` must be distance or channels	`match` musi mieć wartość distance lub channels
+@msg	`{key}` must be from 0 to 100	`{key}` musi mieścić się w zakresie od 0 do 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` musi zawierać od 1 do 16 kolorów, każdy szesnastkowo (#rrggbb lub #rgb) albo jako black, white, red, green lub blue
+@msg	the linked image shows its preview: embed or relink it first	połączony obraz pokazuje podgląd: najpierw go osadź lub połącz ponownie
+@msg	a CMYK image has no transparency to set	obraz CMYK nie ma przezroczystości, którą można ustawić
+@msg	every pixel matches the background: no image would be left	każdy piksel pasuje do tła: nie zostałby żaden obraz
+@msg	an image of {w} × {h} pixels is too large to change	obraz o wymiarach {w} × {h} pikseli jest zbyt duży, aby go zmienić
 @msg	select an object in perspective	zaznacz obiekt w perspektywie
 @msg	select artwork (or a colour group) to recolor	zaznacz kompozycję (lub grupę kolorów), aby zmienić kolory
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Zmiana kolorów zakończona; bez zmian: {locked} i {hidden}
@@ -4849,7 +4888,7 @@ imageTrace	Outline	Kontur
 @msg	unknown format	nieznany format
 @msg	unknown format `{f}` (Save writes {_1})	nieznany format `{f}` (zapis tworzy {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	nieznany tryb dowolny `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	nieznany rodzaj gradientu `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	nieznany rodzaj gradientu `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	nieznane wyróżnienie `{h}`
 @msg	unknown option `{path}.{k}`	nieznana opcja `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	nieznana wartość nadruków `{o}` (preserve, simulate lub discard)
@@ -5650,7 +5689,7 @@ mark-style	Japanese	Japońskie
 @msg	span must be "object" or "selection", got {v}	span musi mieć wartość "object" lub "selection", a nie {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" umieszcza `gradient`, a nie próbkę
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" umieszcza gradient: podaj `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" umieszcza gradient liniowy, radialny lub stożkowy, a nie dowolny
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" umieszcza gradient liniowy, radialny, stożkowy lub rombowy, a nie dowolny
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" umieszcza sam gradient: pomiń `start` i `end` (one już umieszczają go we współrzędnych dokumentu)
 	Make Image Dynamic	Uczyń obraz dynamicznym
 	Import Data Sets…	Importuj zestawy danych…
@@ -6669,6 +6708,11 @@ breakText	Glyphs	Glify
 @msg	only an exporter or an importer declares `extensions`	`extensions` deklaruje tylko wtyczka eksportu lub importu
 @msg	an importer always gets an import's budget: leave `budget` out	wtyczka importu zawsze dostaje budżet importu: pomiń `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Kopiuj informacje diagnostyczne
+@msg	Copied the troubleshooting info	Skopiowano informacje diagnostyczne
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Ostatnia sesja VectorCraft przestała odpowiadać przed zamknięciem. Pomoc › Kopiuj informacje diagnostyczne kopiuje szczegóły do zgłoszenia błędu
+
 # Safe Mode
 	Safe Mode…	Tryb awaryjny…
 	Safe Mode	Tryb awaryjny
@@ -6689,6 +6733,7 @@ breakText	Glyphs	Glify
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Wyrównaj do siatki pikseli
+	Align New Objects to Pixel Grid	Wyrównaj nowe obiekty do siatki pikseli
 	Not Aligned to Pixel Grid	Niewyrównane do siatki pikseli
 @msg	only paths and compound paths can be aligned to the pixel grid	do siatki pikseli można wyrównać tylko ścieżki i ścieżki złożone
 @msg	side is left or right, not `{s}`	side to left lub right, a nie `{s}`

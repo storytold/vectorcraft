@@ -186,6 +186,7 @@ digits	Malayalam	マラヤーラム数字
 	PDF Presets…	PDF プリセット…
 	Perspective Grid Presets…	遠近グリッドプリセット…
 	Color Settings…	カラー設定…
+	Assign Profile	プロファイルの指定
 	Assign Profile…	プロファイルの指定…
 	Keyboard Shortcuts…	キーボードショートカット…
 	Preferences…	環境設定…
@@ -231,6 +232,15 @@ digits	Malayalam	マラヤーラム数字
 	Expand…	分割・拡張…
 	Expand Appearance	アピアランスを分割
 	Crop Image	画像の切り抜き
+	Image Tools	画像ツール
+	Remove Background…	背景を削除…
+	Remove Background	背景を削除
+	Background	背景
+	Edge Color	端の色
+	Picked Colors	選択したカラー
+	Corner Color	角の色
+	Contiguous	隣接
+	Each Channel	各チャンネル
 	Edit Path	パスを編集
 	Mask	マスク
 	Rasterize…	ラスタライズ…
@@ -435,6 +445,9 @@ digits	Malayalam	マラヤーラム数字
 	Create Outlines	アウトラインを作成
 	Optical Margin Alignment	最適なマージン揃え
 	Dynamic Text	ダイナミックテキスト
+	Dynamic Text Presets	ダイナミックテキストプリセット
+	Arch	アーチ
+@msg	select point type or type on a path	ポイント文字またはパス上文字を選択してください
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	スレッドテキスト内のパス上文字にはダイナミックテキストを使用できません: {frames}
 	Fill with Placeholder Text	サンプルテキストの割り付け
 	Insert Inline Symbol	インラインシンボルを挿入
@@ -816,6 +829,15 @@ digits	Malayalam	マラヤーラム数字
 	Stun Pulse	気絶
 	Stealth Fade	ステルス
 	Shield Buff	シールド
+	Textures	テクスチャ集
+	Fine Grain	細かい粒子
+	Canvas Weave	キャンバス織り
+	Burlap Sack	麻袋
+	Cracked Glaze	ひび割れ釉
+	Mosaic Floor	モザイクの床
+	Quilted Squares	キルトの四角
+	Leaded Glass	鉛ガラス
+	Damp Paper	湿った紙
 	Outlines and Rules	アウトラインと罫線
 	Hand-Drawn	手描き風
 	Gradient Finishes	グラデーション仕上げ
@@ -837,6 +859,7 @@ digits	Malayalam	マラヤーラム数字
 	Spectrum Gradients	スペクトルグラデーション
 	Sky Gradients	空のグラデーション
 	Neutral Gradients	ニュートラルグラデーション
+	Organic Fades	オーガニックフェード
 	Duotone Gradients	ダブルトーングラデーション
 	Radial Glows	円形グロー
 	Save Swatch Library…	スウォッチライブラリを保存…
@@ -848,6 +871,7 @@ digits	Malayalam	マラヤーラム数字
 	Search Commands…	コマンドを検索…
 	VectorCraft Help…	VectorCraft ヘルプ…
 	Preview	プレビュー
+	Preview:	プレビュー:
 	Show Edges	エッジを表示
 	Show Corner Widget	コーナーウィジェットを表示
 	Show Template	テンプレートを表示
@@ -1437,6 +1461,14 @@ antiAlias	Sharp	シャープ
 	Disable Auto Add/Delete	自動追加/削除機能を使用しない
 	Disable Opacity Mask	不透明マスクを無効にする
 	Discard	破棄
+	Preserve	保持
+	TIFF (Black & White)	TIFF (白黒)
+	TIFF (8-bit Color)	TIFF (8 bit カラー)
+	High Resolution	高解像度
+	Medium Resolution	中解像度
+	Low Resolution	低解像度
+	Language Level 2	言語レベル 2
+	Language Level 3	言語レベル 3
 	Discard Empty Type	空のテキストを破棄
 	Discard Recovered Documents	復帰したドキュメントを破棄
 	Discard White Overprint in Output	出力時に白のオーバープリントを破棄
@@ -2688,6 +2720,7 @@ mark-style	Japanese	日本式
 	Radar Graph Tool	レーダーチャートツール
 	Radial Gradient	円形グラデーション
 	Conic Gradient	円錐グラデーション
+	Diamond Gradient	ひし形グラデーション
 	Random	ランダム
 	Randomize Colors	カラーをランダム化
 	Randomly change color order	カラーの順序をランダムに変更
@@ -3898,6 +3931,8 @@ file-filter	Templates	テンプレート
 	Scale at Center	中心から拡大・縮小
 	Up/Down:	上下:
 	Left/Right:	左右:
+	Tate-chu-yoko Up/Down	縦中横の上下
+	Tate-chu-yoko Left/Right	縦中横の左右
 	Temperature	色温度
 	Template	テンプレート
 	Templates	テンプレート
@@ -3936,6 +3971,7 @@ file-filter	Templates	テンプレート
 	Weight	線幅
 	Windows	Windows
 	Working CMYK (don't tag)	作業用 CMYK (タグなし)
+	Working RGB (don't tag)	作業用 RGB (タグなし)
 	Workspace {i}	ワークスペース {i}
 	Yellow	イエロー
 	[Normal Character Style]	[標準文字スタイル]
@@ -4364,7 +4400,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	stop {i} needs `offset`	分岐点 {i} には `offset` が必要です
 @msg	stop {i} needs a valid `color`	分岐点 {i} には有効な `color` が必要です
 @msg	stop {i}: `{k}` must be a number	分岐点 {i}: `{k}` には数値を指定してください
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	`{k}` は不明なグラデーションの種類です (linear、radial、conic、freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	`{k}` は不明なグラデーションの種類です (linear、radial、conic、diamond、freeform)
 @msg	the art could not be sampled	アートをサンプリングできませんでした
 @msg	the art is too light for any dots	アートが明るすぎて網点を生成できません
 @msg	the document has no symbols	ドキュメントにシンボルがありません
@@ -4458,6 +4494,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`{key}` must be a #rrggbb color	`{key}` は #rrggbb 形式のカラーにしてください
 @msg	`{key}` must be a #rrggbb colour	`{key}` は #rrggbb 形式のカラーにしてください
 @msg	`{key}` must be a string	`{key}` は文字列にしてください
+@msg	`{key}` must be a profile name or null	`{key}` はプロファイル名または null にしてください
 @msg	`{key}` must be a whole number	`{key}` は整数にしてください
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` は {min} から {max} までの整数にしてください (指定値: {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` は {min} から {max} までの値にしてください (指定値: {x})
@@ -4644,6 +4681,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the image's pixels don't match its size	画像のピクセル数がサイズと一致しません
 @msg	{bpp}-bit bitmaps can't be read	{bpp} ビットのビットマップは読み込めません
 @msg	not an EMF or WMF file	EMF ファイルでも WMF ファイルでもありません
+@msg	not an HP-GL file	HP-GL ファイルではありません
 @msg	its layers use {_1}, which aren't read yet	レイヤーで使用されている {_1} はまだ読み込めません
 @msg	the EMF header is damaged	EMF ヘッダーが破損しています
 @msg	damaged	破損しています
@@ -4660,6 +4698,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	アートボード {n} のページは {size} で、PDF のページ上限 14,400 pt (200 in) を超えています: UserUnit {unit} で書き出されるため、UserUnit を無視するアプリではその倍率だけ小さく表示されます
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	アートボード {n} のページは {size} で、PDF のページ上限 14,400 pt (200 in) を超えています: {label} のページは UserUnit なしでポイント単位で書き出され、上限を守るアプリではページが 200 in で切り取られます
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 には、14,400 pt (200 in) を超えるページがサイズを保つために必要な UserUnit がありません: ファイルは PDF 1.6 として書き出されます
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 には、14,400 pt (200 in) を超えるページが PDF/A-2 のページ上限 14,400 単位に収まるために必要な UserUnit がありません: ファイルは PDF 1.6 として書き出されます
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	アートボード {n} のページは {size} で、PDF のページ辺 3 から 14,400 単位には長く細すぎます: 短辺を 3 単位以上に保つ UserUnit {unit} で書き出され、上限を守るアプリは長辺を 14,400 単位で切り取ります
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} ファイルの実数は {max} までですが、アートボード {n} の {side} pt のページにはそれより大きな値が必要です: PDF/X 規格なしの PDF 1.6 以降を選ぶか、アートボードを小さくしてください
 @msg	page {0} does not exist (the PDF has {1})	ページ {0} は存在しません (この PDF のページ数は {1} です)
@@ -4854,6 +4893,14 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no such view	指定された表示が見つかりません
 @msg	printing isn't available here	この環境ではプリントできません
 @msg	select an image	画像を選択してください
+@msg	`background` must be edges, corners or colors	`background` は edges、corners または colors にしてください
+@msg	`match` must be distance or channels	`match` は distance または channels にしてください
+@msg	`{key}` must be from 0 to 100	`{key}` は 0 から 100 までの値にしてください
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` には 16 進数（#rrggbb または #rgb）か black、white、red、green、blue で書いたカラーを 1〜16 個指定してください
+@msg	the linked image shows its preview: embed or relink it first	リンク画像はプレビューを表示しています: 先に埋め込むか再リンクしてください
+@msg	a CMYK image has no transparency to set	CMYK 画像には設定できる透明部分がありません
+@msg	every pixel matches the background: no image would be left	すべてのピクセルが背景に一致します: 画像が残りません
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} ピクセルの画像は大きすぎて変更できません
 @msg	the document has no artboards	ドキュメントにアートボードがありません
 @msg	tool (a tool id) is required	tool (ツール ID) を指定してください
 @msg	unknown tool `{t}`	`{t}` は不明なツールです
@@ -5453,7 +5500,7 @@ lighting	Light	ライト
 @msg	span must be "object" or "selection", got {v}	span は "object" または "selection" で指定してください ({v} は指定できません)
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" は `gradient` を配置します。スウォッチは配置できません
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" はグラデーションを配置します: `gradient` を指定してください
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" は線形、円形または円錐グラデーションを配置します。フリーグラデーションは配置できません
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" は線形、円形、円錐またはひし形グラデーションを配置します。フリーグラデーションは配置できません
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" はグラデーション自体を配置します: `start` と `end` は省略してください (これらはすでにドキュメント座標で配置を指定します)
 	Make Image Dynamic	画像を動的にする
 	Import Data Sets…	データセットを読み込み…
@@ -6499,6 +6546,11 @@ breakText	Glyphs	字形
 @msg	only an exporter or an importer declares `extensions`	`extensions` を宣言できるのは書き出しプラグインと読み込みプラグインだけです
 @msg	an importer always gets an import's budget: leave `budget` out	読み込みプラグインには常に読み込みの予算が割り当てられます: `budget` は省略してください
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	トラブルシューティング情報をコピー
+@msg	Copied the troubleshooting info	トラブルシューティング情報をコピーしました
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	前回の VectorCraft のセッションは、閉じる前に応答しなくなりました。ヘルプ › トラブルシューティング情報をコピー で、バグ報告用の詳細をコピーできます
+
 # Safe Mode
 	Safe Mode…	セーフモード…
 	Safe Mode	セーフモード
@@ -6519,6 +6571,7 @@ breakText	Glyphs	字形
 
 # Align to Pixel Grid
 	Align to Pixel Grid	ピクセルグリッドに整合
+	Align New Objects to Pixel Grid	新規オブジェクトをピクセルグリッドに整合
 	Not Aligned to Pixel Grid	ピクセルグリッドに未整合
 @msg	only paths and compound paths can be aligned to the pixel grid	ピクセルグリッドに整合できるのはパスと複合パスのみです
 @msg	side is left or right, not `{s}`	side は left または right です（`{s}` ではありません）
