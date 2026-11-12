@@ -384,6 +384,8 @@
 	Stair Step	Trap
 	Gravity	Zwaartekracht
 	Type on a Path Options…	Opties voor tekst op pad…
+	Center on Top	Boven centreren
+	Center on Bottom	Onder centreren
 	Threaded Text	Gekoppelde tekst
 	Create	Maken
 	Release Selection	Selectie vrijgeven
@@ -5928,6 +5930,7 @@ swatch	Bright Violet	Felviolet
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometrische hulplijnen
+	Optical Effects	Optische effecten
 	Geometric Patterns	Geometrische patronen
 	Grit Textures	Korrelige texturen
 	Ease In	Langzaam beginnen
@@ -6142,6 +6145,11 @@ axis	Y Axis	Y-as
 	Grass Fan	Graswaaier
 	Pattern Borders	Patroonranden
 	Scatter Shapes	Strooivormen
+	Dry Media	Droge media
+	Chalk Grain	Krijtkorrel
+	Graphite Pencil	Grafietpotlood
+	Wax Crayon	Waskrijt
+	Charcoal Dust	Houtskoolstof
 	Save Brush Library…	Penseelbibliotheek opslaan…
 @msg	no empty artboards to delete	geen lege tekengebieden om te verwijderen
 	Scale Presets	Schaalvoorinstellingen

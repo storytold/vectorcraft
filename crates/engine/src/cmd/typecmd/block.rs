@@ -89,6 +89,39 @@ fn line_widths(db: &vectorcraft_text::FontDb, t: &TextObject) -> std::collection
     out
 }
 
+/// The room along its lines that a frame of `t`'s text needs for Block to keep the widest line as
+/// typed at its present size: that line's width plus its paragraph's indents, as [`block_fit`]
+/// measures them, and a margin of under half a size step so that the line is not made a step
+/// smaller; with the widest line's first byte and its paragraph's index. A line whose negative
+/// indents take more than its width needs its own width. None when no line has a width.
+pub(crate) fn needed_room(t: &TextObject) -> Option<(f64, usize, usize)> {
+    let points = t.style_scale().map(|s| s.points).filter(|p| p.is_finite() && *p > 1e-12)?;
+    let text = t.plain_text();
+    let lines = typed_lines(&text);
+    let widths = line_widths(vectorcraft_text::FontDb::global(), t);
+    let sizes = first_sizes(&t.runs, &lines);
+    lines
+        .iter()
+        .zip(&sizes)
+        .filter_map(|(l, size)| {
+            let width = widths.get(&l.start).copied().filter(|w| w.is_finite() && *w > 1e-9)?;
+            let size = size * points;
+            if l.content == l.start || !(size.is_finite() && size > 0.0) {
+                return None;
+            }
+            let para = t.para_at(l.para);
+            let first = if l.para_start { para.first_line_indent } else { 0.0 };
+            let indents = para.laid_out_left_indent() + para.right_indent + first;
+            // Negative indents that take more than the line's width leave the line no room at its
+            // size; the frame is then as wide as the line itself, and Block makes it larger.
+            let room = if width + indents > 1e-9 { width + indents } else { width };
+            // A tenth of a point more size widens the line by 0.1 * width / size.
+            Some((room + 0.04 * width / size, l.start, l.para))
+        })
+        .filter(|r| r.0.is_finite() && r.0 > 1e-9)
+        .reduce(|a, b| if b.0 > a.0 { b } else { a })
+}
+
 /// The size a line set at `size` points and `width` wide takes to fill `avail`, its width growing
 /// by `slope` a point of size (`width / size` when the whole line follows its size): rounded down
 /// to tenths and kept within [`SIZES`]. A line that fits and would not fit a tenth larger keeps its
@@ -152,7 +185,7 @@ pub(crate) fn block_fit(t: &mut TextObject) -> bool {
             let width = widths.get(&l.start).copied().filter(|w| w.is_finite() && *w > 1e-9)?;
             let para = t.para_at(l.para);
             let first = if l.para_start { para.first_line_indent } else { 0.0 };
-            let avail = cell - para.left_indent - para.right_indent - first;
+            let avail = cell - para.laid_out_left_indent() - para.right_indent - first;
             let size = size * points;
             if !(size.is_finite() && size > 0.0) {
                 return None;

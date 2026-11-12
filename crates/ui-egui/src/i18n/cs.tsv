@@ -409,6 +409,8 @@
 	Stair Step	Schody
 	Gravity	Gravitace
 	Type on a Path Options…	Možnosti textu na cestě…
+	Center on Top	Vystředit nahoře
+	Center on Bottom	Vystředit dole
 	Threaded Text	Zřetězený text
 	Create	Vytvořit
 	Release Selection	Uvolnit výběr
@@ -429,6 +431,10 @@
 	Arch	Klenba
 @msg	select point type or type on a path	vyberte bodový text nebo text na cestě
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	text na cestě ve zřetězeném textu nemůže používat dynamický text: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	text na otevřené nebo složené cestě nelze vystředit nahoře ani dole: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	text na cestě bez délky nebo bez výšky nelze vystředit: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	text na cestě ve zřetězeném textu nelze vystředit nahoře ani dole: {frames}
+@msg	select type on a closed path	vyberte text na uzavřené cestě
 	Fill with Placeholder Text	Vyplnit zástupným textem
 	Insert Inline Symbol	Vložit symbol do textu
 	Show Hidden Characters	Zobrazit skryté znaky
@@ -6048,6 +6054,7 @@ mark-style	Japanese	Japonské
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometrická vodítka
+	Optical Effects	Optické efekty
 	Geometric Patterns	Geometrické vzorky
 	Grit Textures	Zrnité textury
 	Ease In	Pozvolný začátek
@@ -6339,6 +6346,11 @@ axis	Y Axis	osa Y
 	Grass Fan	Vějíř na trávu
 	Pattern Borders	Vzorkové okraje
 	Scatter Shapes	Rozptýlené tvary
+	Dry Media	Suché techniky
+	Chalk Grain	Křídové zrno
+	Graphite Pencil	Grafitová tužka
+	Wax Crayon	Vosková pastelka
+	Charcoal Dust	Uhlový prach
 	Save Brush Library…	Uložit knihovnu štětců…
 @msg	`{_1}` has no brushes to apply	`{_1}` nemá žádné štětce k použití
 @msg	missing `library` (see brush.libraries)	chybí `library` (viz brush.libraries)

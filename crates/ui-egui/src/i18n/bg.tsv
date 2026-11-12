@@ -3638,6 +3638,8 @@ digits	Malayalam	Малаялам
 	Type on a Path	Текст по пътя
 	Type on a Path Options	Опции за текст по пътя
 	Type on a Path Options…	Опции за текст по път…
+	Center on Top	Центриране горе
+	Center on Bottom	Центриране долу
 	Type on a Path Tool	Инструмент „Текст по път“
 	Type Orientation	Ориентация на текста
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Текстът остава текст, а всеки щрих е линия с дебелина и чертички.
@@ -5862,6 +5864,7 @@ theme	Appearance	Външен вид
 	Ruby…	Руби…
 	Ruby	Руби
 	Geometric Guides	Геометрични водачи
+	Optical Effects	Оптични ефекти
 	Geometric Patterns	Геометрични мостри
 	Grit Textures	Зърнести текстури
 	Ease In	Плавно начало
@@ -6076,6 +6079,11 @@ axis	Y Axis	Y ос
 	Grass Fan	Ветрило за трева
 	Pattern Borders	Бордюри с мостри
 	Scatter Shapes	Разсеяни фигури
+	Dry Media	Сухи материали
+	Chalk Grain	Тебеширено зърно
+	Graphite Pencil	Графитен молив
+	Wax Crayon	Восъчен пастел
+	Charcoal Dust	Въглен прах
 	Save Brush Library…	Запази библиотека с четки…
 @msg	no empty artboards to delete	няма празни работни области за изтриване
 	Scale Presets	Пресети за мащаб

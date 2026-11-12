@@ -1433,6 +1433,92 @@ fn plugins_folder_set_again_after_clearing_installs_its_plugins() {
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
+/// Under automation read roots, `plugin.list` names the plug-in folder last loaded, its failed
+/// files and a plug-in's source file only inside them: a folder outside is `null`, and a file
+/// outside is named by its file name.
+#[test]
+fn plugin_list_leaves_out_paths_outside_the_read_root() {
+    use crate::file_access::{AutomationRoots, confine};
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    let base = crate::tests_links::Folder::new("plugin-list-read-root");
+    let (inside, outside) = (base.0.join("in"), base.0.join("out"));
+    std::fs::create_dir_all(&inside).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    let id = "test.engine.listroots";
+    let src = tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#);
+    std::fs::write(outside.join("hidden.wasm"), wat::parse_str(src).unwrap()).unwrap();
+    std::fs::write(outside.join("broken.wasm"), b"\0asm?").unwrap();
+    let folder = outside.to_string_lossy().to_string();
+    let mut s = session();
+    let r = run(&mut s, "plugin.reload", json!({"path": folder}));
+    assert_eq!(r["loaded"], json!([id]), "{r}");
+    let broken = outside.join("broken.wasm").to_string_lossy().to_string();
+    let source = outside.join("hidden.wasm").to_string_lossy().to_string();
+    let entry = |list: &Value| list["plugins"].as_array().unwrap().iter().find(|p| p["id"] == id).cloned().unwrap();
+
+    // The person sees the paths.
+    let person = run(&mut s, "plugin.list", json!({}));
+    assert_eq!((&person["folder"]["folder"], &person["folder"]["failed"][0]["file"]), (&json!(folder), &json!(broken)), "{person}");
+    assert_eq!(entry(&person)["source"], json!(source));
+
+    // The client sees their names.
+    let roots = AutomationRoots::new(&[&inside], &[]).unwrap();
+    let listed = confine(roots.as_ref(), || s.execute("plugin.list", &json!({}))).unwrap();
+    let report = &listed["folder"];
+    assert_eq!((&report["folder"], &report["loaded"], &report["failed"][0]["file"]), (&Value::Null, &json!([id]), &json!("broken.wasm")), "{listed}");
+    assert_eq!(entry(&listed)["source"], "hidden.wasm");
+    let info = confine(roots.as_ref(), || s.execute("plugin.info", &json!({"id": id}))).unwrap();
+    assert_eq!(info["source"], "hidden.wasm");
+    let outside_text = json!(folder).to_string();
+    for reply in [&listed, &info] {
+        assert!(!reply.to_string().contains(outside_text.trim_matches('"')), "no path outside the root: {reply}");
+    }
+
+    // A read root holding the folder shows it whole.
+    let wider = AutomationRoots::new(&[&outside], &[]).unwrap();
+    let listed = confine(wider.as_ref(), || s.execute("plugin.list", &json!({}))).unwrap();
+    assert_eq!(listed["folder"]["folder"], json!(folder), "{listed}");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// Under automation read roots, a plug-in turned off for the next launch is listed with a file
+/// outside them named by its file name, and `plugin.setEnabled` turns it on by that name.
+#[test]
+fn disabled_plugins_name_files_outside_the_read_root_by_their_names() {
+    if !in_own_process("disabled_plugins_name_files_outside_the_read_root_by_their_names") {
+        return;
+    }
+    use crate::file_access::{AutomationRoots, confine};
+    let base = crate::tests_links::Folder::new("plugin-disabled-read-root");
+    let (inside, outside) = (base.0.join("in"), base.0.join("out"));
+    std::fs::create_dir_all(&inside).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    let id = "test.engine.disabledroots";
+    let src = tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#);
+    let file = outside.join("off.wasm");
+    std::fs::write(&file, wat::parse_str(src).unwrap()).unwrap();
+    let file = file.to_string_lossy().to_string();
+    let mut s = session();
+    run(&mut s, "plugin.install", json!({"path": file}));
+    let roots = AutomationRoots::new(&[&inside], &[]).unwrap();
+    // The client turns it off by the source plugin.list shows.
+    let listed = confine(roots.as_ref(), || s.execute("plugin.list", &json!({}))).unwrap();
+    let source = listed["plugins"].as_array().unwrap().iter().find(|p| p["id"] == id).unwrap()["source"].clone();
+    assert_eq!(source, "off.wasm", "{listed}");
+    confine(roots.as_ref(), || s.execute("plugin.setEnabled", &json!({"file": source, "enabled": false}))).unwrap();
+    assert_eq!(run(&mut s, "plugin.safeMode", json!({}))["disabled"][0]["file"], json!(file), "the person sees the path");
+
+    let outside_text = json!(outside.to_string_lossy()).to_string();
+    for cmd in ["plugin.list", "plugin.safeMode"] {
+        let r = confine(roots.as_ref(), || s.execute(cmd, &json!({}))).unwrap();
+        assert_eq!(r["disabled"][0]["file"], "off.wasm", "{cmd}: {r}");
+        assert!(!r.to_string().contains(outside_text.trim_matches('"')), "{cmd}: no path outside the root: {r}");
+    }
+    let r = confine(roots.as_ref(), || s.execute("plugin.setEnabled", &json!({"file": "off.wasm", "enabled": true}))).unwrap();
+    assert_eq!((&r["changed"], &r["disabled"]), (&json!(true), &json!([])), "{r}");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
 /// #2541: a plug-in installed in a session with a plug-in store is installed again in the next
 /// session that attaches the store, and Remove Plug-in takes it out of the store.
 #[test]

@@ -3,6 +3,10 @@ use super::mesh::{GradientMesh, MeshPoint, grid_len, grid_points, surface_of};
 use super::{Affine, Arc, Color, Deserialize, Node, NodeId, NodeKind, PathData, Point, Rect, Serialize, Vec2, yes};
 use vectorcraft_geom::Homography;
 
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
 /// How an envelope distorts its content.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -19,6 +23,10 @@ pub enum EnvelopeKind {
         v: f64,
         #[serde(default = "yes")]
         horizontal: bool,
+        /// The map the warp draws with: [`WARP_NET`](super::WARP_NET) for its style's Bézier net,
+        /// 0 (as in files from before the version existed) for [`warp_point`](super::warp_point).
+        #[serde(default, skip_serializing_if = "is_zero")]
+        version: u32,
     },
     /// A `(rows+1)×(cols+1)` grid of points (row-major) the content's bounding box maps onto.
     Mesh {

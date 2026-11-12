@@ -39,6 +39,10 @@ pub(super) struct Writer<'a> {
     in_hidden: bool,
     /// The fonts type is set in: PostScript name, and whether it's TrueType.
     pub(super) fonts: Vec<(String, bool)>,
+    /// The Standard Vertical Roman Alignment the last `Tv` set (it lasts into later text objects).
+    roman: bool,
+    /// Inside a Kumi block `1 TY` began (Tate-chu-yoko in horizontal type).
+    kumi: bool,
 }
 
 impl<'a> Writer<'a> {
@@ -59,6 +63,8 @@ impl<'a> Writer<'a> {
             hidden_art: vec![],
             in_hidden: false,
             fonts: vec![],
+            roman: false,
+            kumi: false,
         }
     }
 
@@ -820,6 +826,10 @@ impl<'a> Writer<'a> {
                 self.line(" Tx");
             }
         }
+        if self.kumi {
+            self.line("0 TY");
+            self.kumi = false;
+        }
         self.line("TO");
     }
 
@@ -839,7 +849,8 @@ impl<'a> Writer<'a> {
     }
 
     /// A run's character attributes and paint style: `Tr`, its fill and stroke, `Tf`, `Ts`, `Tz`,
-    /// `Tt`, `TA`, and the leading with the space before its paragraph, `Tl`.
+    /// `Tt`, `TA`, and the leading with the space before its paragraph, `Tl`; then `Tv` and `TY`
+    /// where Standard Vertical Roman Alignment or Tate-chu-yoko changes.
     fn char_style(&mut self, st: &CharStyle, p: &ParaStyle) {
         let fill = !st.fill.is_none();
         let stroke = st.has_stroke();
@@ -877,6 +888,14 @@ impl<'a> Writer<'a> {
         let leading = st.leading.unwrap_or_else(|| p.justification.auto_leading_for(st.size));
         ps::push_nums(&mut self.body, &[finite(leading, size * 1.2), finite(p.space_before, 0.0)]);
         self.line("Tl");
+        if st.standard_vertical_roman != self.roman {
+            self.roman = st.standard_vertical_roman;
+            self.line(if self.roman { "1 Tv" } else { "0 Tv" });
+        }
+        if st.tate_chu_yoko != self.kumi {
+            self.kumi = st.tate_chu_yoko;
+            self.line(if self.kumi { "1 TY" } else { "0 TY" });
+        }
     }
 
     /// Type as its glyphs' outlines: a group of a compound path for each run, with the run's fill

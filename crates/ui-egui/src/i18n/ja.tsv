@@ -427,6 +427,8 @@ digits	Malayalam	マラヤーラム数字
 	Stair Step	階段
 	Gravity	引力
 	Type on a Path Options…	パス上文字オプション…
+	Center on Top	上端に中央揃え
+	Center on Bottom	下端に中央揃え
 	Threaded Text	スレッドテキストオプション
 	Create	作成
 	Release Selection	選択部分をリリース
@@ -457,6 +459,10 @@ digits	Malayalam	マラヤーラム数字
 	Arch	アーチ
 @msg	select point type or type on a path	ポイント文字またはパス上文字を選択してください
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	スレッドテキスト内のパス上文字にはダイナミックテキストを使用できません: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	オープンパスや複合パス上のパス上文字は上端または下端に中央揃えできません: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	長さや高さのないパスのパス上文字は中央揃えできません: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	スレッドテキスト内のパス上文字は上端または下端に中央揃えできません: {frames}
+@msg	select type on a closed path	クローズパス上のパス上文字を選択してください
 	Fill with Placeholder Text	サンプルテキストの割り付け
 	Insert Inline Symbol	インラインシンボルを挿入
 	Show Hidden Characters	制御文字を表示
@@ -5721,6 +5727,7 @@ lighting	Light	ライト
 	Ruby…	ルビ…
 	Ruby	ルビ
 	Geometric Guides	幾何ガイド
+	Optical Effects	オプティカル効果
 	Geometric Patterns	幾何パターン
 	Grit Textures	粒状テクスチャ
 	Ease In	イーズイン
@@ -6029,6 +6036,11 @@ axis	Y Axis	Y 軸
 	Grass Fan	草描き扇筆
 	Pattern Borders	パターンボーダー
 	Scatter Shapes	散布シェイプ
+	Dry Media	ドライメディア
+	Chalk Grain	チョークの粒子
+	Graphite Pencil	黒鉛鉛筆
+	Wax Crayon	ワックスクレヨン
+	Charcoal Dust	木炭の粉
 	Save Brush Library…	ブラシライブラリを保存…
 @msg	`{_1}` has no brushes to apply	`{_1}` に適用できるブラシがありません
 @msg	missing `library` (see brush.libraries)	`library` がありません (brush.libraries を参照)

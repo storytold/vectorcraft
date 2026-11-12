@@ -97,6 +97,10 @@ pub trait RecoveryStore: Send + Sync {
     fn remove(&self, name: &str) -> std::result::Result<(), String>;
     /// Where the entries are, as the user knows it (a folder, "browser storage").
     fn location(&self) -> String;
+    /// Is [`RecoveryStore::location`] a folder on this computer (default: no)?
+    fn in_folder(&self) -> bool {
+        false
+    }
     /// The areas in the store (default: those with entries).
     fn areas(&self) -> std::result::Result<Vec<String>, String> {
         let names = self.list()?;
@@ -476,6 +480,9 @@ impl RecoveryStore for FolderStore {
     }
     fn location(&self) -> String {
         self.0.to_string_lossy().into_owned()
+    }
+    fn in_folder(&self) -> bool {
+        true
     }
     fn areas(&self) -> std::result::Result<Vec<String>, String> {
         Self::names(&self.0, true)
@@ -938,6 +945,21 @@ fn sweep(store: &dyn RecoveryStore, area: &str) {
     }
 }
 
+/// The document's file `path` as a reply names it: under automation read roots, only inside them.
+fn shown_path(path: Option<String>) -> Option<String> {
+    path.filter(|p| crate::file_access::check_read(p).is_ok())
+}
+
+/// Where `store` keeps its copies, as a reply names it: a recovery folder outside the automation
+/// read roots is `null`.
+fn shown_location(store: &dyn RecoveryStore) -> Value {
+    let location = store.location();
+    if store.in_folder() && crate::file_access::check_read(&location).is_err() {
+        return Value::Null;
+    }
+    json!(location)
+}
+
 fn read_meta(store: &dyn RecoveryStore, file: &str) -> Meta {
     store.read(&format!("{file}{META_EXT}")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
@@ -1235,7 +1257,7 @@ fn save(s: &mut Session, _: &Value) -> Result<Value> {
     }
     forget_clean(s);
     heartbeat(s);
-    Ok(json!({ "saved": saved, "skipped": skipped, "location": store.location() }))
+    Ok(json!({ "saved": saved, "skipped": skipped, "location": shown_location(store.as_ref()) }))
 }
 
 /// Who an area of the store belongs to.
@@ -1361,7 +1383,7 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
             let meta = read_meta(store.as_ref(), f);
             let title = if meta.title.is_empty() { f.rsplit('/').next().unwrap_or(f).to_string() } else { meta.title };
             rows.push(json!({
-                "file": f, "title": title, "path": meta.path, "format": meta.format, "saved": meta.saved,
+                "file": f, "title": title, "path": shown_path(meta.path), "format": meta.format, "saved": meta.saved,
                 "open": (who == Owner::Mine && open.contains(f)) || left.contains(f), "running": who == Owner::Running,
             }));
         }
@@ -1370,7 +1392,7 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
             tidy(store.as_ref(), &area, hold);
         }
     }
-    Ok(json!({ "copies": rows, "location": store.location() }))
+    Ok(json!({ "copies": rows, "location": shown_location(store.as_ref()) }))
 }
 
 /// A gone app's area to act on: its name, the copies to act on, and its lock.
@@ -1483,7 +1505,10 @@ fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> R
     // The copy stays until the document is saved or closed.
     st.recovery = Some(RecoveryCopy { file: mine.clone(), doc: st.doc.clone() });
     let title = st.title();
-    Ok(super::fileio::merge(json!({ "index": index, "title": title, "file": mine, "path": meta.path, "warnings": warnings }), links.to_json()))
+    Ok(super::fileio::merge(
+        json!({ "index": index, "title": title, "file": mine, "path": shown_path(meta.path), "warnings": warnings }),
+        links.to_json(),
+    ))
 }
 
 fn restore(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1527,7 +1552,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Recovery Data",
             [],
             None,
-            "{} write a recovery copy of every modified document changed since its last copy, in this app's own area of the store (the app does this every autosaveInterval minutes while autosaveRecovery is on; documents of more than 20000 objects are skipped while recoveryOffForComplex is on). Images are stored apart, each once while unchanged. A copy goes when its document is saved, reverted or closed → {saved: [{file, title, bytes, imageBytes (images written this time)}], skipped: [{title, reason}], location} (location: the recovery folder, or browser storage on the web)",
+            "{} write a recovery copy of every modified document changed since its last copy, in this app's own area of the store (the app does this every autosaveInterval minutes while autosaveRecovery is on; documents of more than 20000 objects are skipped while recoveryOffForComplex is on). Images are stored apart, each once while unchanged. A copy goes when its document is saved, reverted or closed → {saved: [{file, title, bytes, imageBytes (images written this time)}], skipped: [{title, reason}], location} (location: the recovery folder, or browser storage on the web; null under automation read roots when the folder is outside them)",
             has_store,
             save
         ),
@@ -1536,7 +1561,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Recovery Data",
             [],
             None,
-            "{} the recovery copies in the store → {copies: [{file (\"<area>/<name>\"), title, path (the document's file, if it had one), format, saved (Unix seconds or null), open (the copy of a document open here), running (kept by another VectorCraft that is running)}], location}; copies neither open nor running were left behind by a crash",
+            "{} the recovery copies in the store → {copies: [{file (\"<area>/<name>\"), title, path (the document's file, if it had one), format, saved (Unix seconds or null), open (the copy of a document open here), running (kept by another VectorCraft that is running)}], location}; copies neither open nor running were left behind by a crash; under automation read roots, path is null when the document's file is outside them, and location when the recovery folder is",
             has_store,
             list
         ),
@@ -1545,7 +1570,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Restore Recovered Documents",
             [],
             None,
-            "{file?} open a copy left behind by a crash (default: every one; a running VectorCraft's copies are never taken) as a new document titled \"<name> [Recovered]\": modified, and Save asks where to save it (suggesting its original file) → {restored: [{index, title, file, path, warnings, missingLinks, modifiedLinks, updatedLinks}], failed: [{file, error}] (damaged copies, when restoring every one; a named one fails the command)}. The copy moves to this app's area and stays until the document is saved or closed",
+            "{file?} open a copy left behind by a crash (default: every one; a running VectorCraft's copies are never taken) as a new document titled \"<name> [Recovered]\": modified, and Save asks where to save it (suggesting its original file) → {restored: [{index, title, file, path, warnings, missingLinks, modifiedLinks, updatedLinks}], failed: [{file, error}] (damaged copies, when restoring every one; a named one fails the command)}; under automation read roots, path is null when the original file is outside them. The copy moves to this app's area and stays until the document is saved or closed",
             has_store,
             restore
         ),
