@@ -6786,6 +6786,7 @@ dependencies = [
  "icu_segmenter",
  "kurbo 0.13.1",
  "log",
+ "serde_json",
  "skrifa 0.47.0",
  "subsetter",
  "unicode-bidi",

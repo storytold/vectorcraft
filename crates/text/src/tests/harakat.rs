@@ -578,7 +578,13 @@ fn duplicate_authored_glyphs_keep_occurrence_order() {
 
     let mut wrong = before.clone();
     wrong.glyphs[0].run = 1;
-    assert!(std::panic::catch_unwind(|| assert_kashida_ownership(&text, &before, &wrong, &red(), "changed owner", false)).is_err());
+    // This panic probe only reads snapshots; opaque carried-font handles need no unwind-safety bound.
+    assert!(
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            assert_kashida_ownership(&text, &before, &wrong, &red(), "changed owner", false)
+        }))
+        .is_err()
+    );
 }
 
 /// Compare authored glyph run indices before/after Insert Kashidas (matched by byte and gid;

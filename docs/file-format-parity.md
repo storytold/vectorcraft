@@ -30,6 +30,8 @@ Synthetic regressions cover chosen-key collisions in both opening orders, metada
 forged internal names, unused blobs, last-owner quota recovery, cross-document renderer reuse, and
 native open/save, source-tab close, clipboard relinking, Undo/Redo and export. Placement, Break Link,
 older-version save, recovery and installed-font-removal regressions cover resource-lifetime paths.
+The serde round-trip regressions use a test-only `serde_json` dependency; the read-only harakat
+panic probe asserts unwind safety locally without restricting production font interfaces.
 Existing PDF respacing and composite-font regressions remain. **Only formatting has been checked;
 compilation and runtime proof remain pending.** No parity score or estimate changes.
 

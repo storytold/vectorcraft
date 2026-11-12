@@ -36,6 +36,9 @@ vello_cpu = { workspace = true }
 # MIT OR Apache-2.0, already in the build through subsetter.
 write-fonts = "0.48"
 
+[dev-dependencies]
+serde_json = { workspace = true }
+
 [features]
 default = ["bundled-fonts"]
 # The OFL fonts of `assets/fonts` (Source Sans 3, Source Serif 4, Inter, JetBrains Mono) compiled
