@@ -766,6 +766,68 @@ mod gradient_chip_tests {
         assert_eq!(colors[0], Color32::BLACK);
     }
 
+    /// A stop at opacity 0 is clear on the chip of every kind, and one at 50% half clear.
+    #[test]
+    fn chip_shows_the_stops_opacity() {
+        use vectorcraft_color::{Color, GradientStop};
+        for kind in [GradientKind::Linear, GradientKind::Radial, GradientKind::Conic] {
+            let mut gp = paint(kind, 0.0);
+            gp.gradient.stops = vec![
+                GradientStop { opacity: 0.5, ..GradientStop::new(0.0, Color::BLACK) },
+                GradientStop { opacity: 0.0, ..GradientStop::new(1.0, Color::BLACK) },
+            ];
+            let chip = gradient_chip_colors(&gp, 20.0, 20.0, 4, 4);
+            let (lo, hi) = chip.iter().fold((u8::MAX, 0), |(lo, hi), c| (lo.min(c.a()), hi.max(c.a())));
+            // No grid point of a conic chip lands exactly at the end of its sweep.
+            assert!(lo <= if kind == GradientKind::Conic { 12 } else { 0 }, "{kind:?}: {chip:?}");
+            assert!(hi.abs_diff(128) <= 1, "{kind:?}: {chip:?}");
+        }
+        let at = |colors: &[Color32], i: usize, j: usize| colors[j * 5 + i];
+        let mut gp = paint(GradientKind::Linear, 0.0);
+        gp.gradient.stops[1].opacity = 0.0;
+        let chip = gradient_chip_colors(&gp, 20.0, 20.0, 4, 4);
+        assert_eq!(at(&chip, 0, 2), Color32::WHITE);
+        assert_eq!(at(&chip, 4, 2).a(), 0);
+        // Radial: an opaque edge around a clear center.
+        let mut gp = paint(GradientKind::Radial, 0.0);
+        gp.gradient.stops[0].opacity = 0.0;
+        let chip = gradient_chip_colors(&gp, 20.0, 20.0, 4, 4);
+        assert_eq!(at(&chip, 2, 2).a(), 0);
+        assert_eq!(chip[0], Color32::BLACK);
+    }
+
+    /// A chip with a clear stop draws a checkerboard under the gradient; an opaque one does not.
+    #[test]
+    fn a_clear_gradient_chip_has_a_checkerboard_under_it() {
+        let ctx = egui::Context::default();
+        let shapes = |gp: &GradientPaint| {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| gradient_chip(ui, Rect::from_min_size(pos2(10.0, 10.0), vec2(20.0, 20.0)), gp));
+            out.textures_delta.clear();
+            out.shapes.into_iter().map(|s| s.shape).collect::<Vec<_>>()
+        };
+        let opaque = shapes(&paint(GradientKind::Linear, 0.0));
+        assert!(matches!(opaque[..], [egui::Shape::Mesh(_)]), "{opaque:?}");
+        let mut gp = paint(GradientKind::Linear, 0.0);
+        gp.gradient.stops[1].opacity = 0.0;
+        let clear = shapes(&gp);
+        let n = clear.len();
+        assert!(n > 2 && matches!(clear[n - 1], egui::Shape::Mesh(_)), "{clear:?}");
+        let fills: std::collections::HashSet<_> =
+            clear[..n - 1].iter().filter_map(|s| if let egui::Shape::Rect(r) = s { Some(r.fill) } else { None }).collect();
+        assert_eq!(fills, [Color32::WHITE, Color32::from_gray(204)].into_iter().collect(), "{clear:?}");
+    }
+
+    #[test]
+    fn freeform_chip_shows_the_points_opacity() {
+        use vectorcraft_color::{Color, Freeform, FreeformPoint};
+        use vectorcraft_geom::kurbo::Point;
+        let mut gp = paint(GradientKind::Freeform, 0.0);
+        let clear = FreeformPoint { opacity: 0.0, ..FreeformPoint::new(Point::new(10.0, 10.0), Color::BLACK) };
+        gp.freeform = Some(Freeform { points: vec![clear], ..Default::default() });
+        let chip = gradient_chip_colors(&gp, 20.0, 20.0, 4, 4);
+        assert!(chip.iter().all(|c| c.a() == 0), "{chip:?}");
+    }
+
     #[test]
     fn freeform_chip_mixes_points_in_the_model_they_share() {
         use vectorcraft_color::{Color, Freeform, FreeformPoint};

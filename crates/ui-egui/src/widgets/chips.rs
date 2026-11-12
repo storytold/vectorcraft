@@ -39,6 +39,10 @@ pub fn gradient_chip(ui: &Ui, rect: Rect, gradient: &vectorcraft_color::Gradient
     let cols = ((rect.width() / 3.0).ceil() as usize).clamp(1, max);
     let rows = ((rect.height() / 3.0).ceil() as usize).clamp(1, max);
     let colors = gradient_chip_colors(gradient, rect.width(), rect.height(), cols, rows);
+    // Stops below full opacity show a checkerboard through them.
+    if colors.iter().any(|c| c.a() < u8::MAX) {
+        checkerboard(ui, rect);
+    }
     let mut mesh = egui::Mesh::default();
     for (k, color) in colors.into_iter().enumerate() {
         let (i, j) = (k % (cols + 1), k / (cols + 1));
@@ -55,14 +59,32 @@ pub fn gradient_chip(ui: &Ui, rect: Rect, gradient: &vectorcraft_color::Gradient
     ui.painter().add(egui::Shape::mesh(mesh));
 }
 
+/// A white and light gray checkerboard filling `rect`, with cells a quarter of its shorter side
+/// (3 to 8 points).
+fn checkerboard(ui: &Ui, rect: Rect) {
+    let p = ui.painter();
+    p.rect_filled(rect, 0.0, Color32::WHITE);
+    let cell = (rect.width().min(rect.height()) / 4.0).clamp(3.0, 8.0);
+    let cols = (rect.width() / cell).ceil() as usize;
+    let rows = (rect.height() / cell).ceil() as usize;
+    for j in 0..rows {
+        for i in (j % 2..cols).step_by(2) {
+            let min = pos2(rect.left() + cell * i as f32, rect.top() + cell * j as f32);
+            let square = Rect::from_min_size(min, Vec2::splat(cell)).intersect(rect);
+            p.rect_filled(square, 0.0, Color32::from_gray(204));
+        }
+    }
+}
+
 /// The colours at the `(cols + 1) x (rows + 1)` grid points (row by row) of a `width` x `height`
-/// chip showing `gp` as it would look on an object of that size.
+/// chip showing `gp` as it would look on an object of that size, with the gradient's opacity as
+/// their alpha.
 pub(super) fn gradient_chip_colors(gp: &vectorcraft_color::GradientPaint, width: f32, height: f32, cols: usize, rows: usize) -> Vec<Color32> {
     use vectorcraft_color::{GradientGeom, GradientKind};
     let b = vectorcraft_geom::kurbo::Rect::new(0.0, 0.0, width as f64, height as f64);
-    let rgb = |c: vectorcraft_color::Color| {
-        let [r, g, b, _] = c.to_rgba8(1.0);
-        Color32::from_rgb(r, g, b)
+    let rgba = |(c, a): (vectorcraft_color::Color, f32)| {
+        let [r, g, b, a] = c.to_rgba8(if a.is_finite() { a } else { 1.0 });
+        Color32::from_rgba_unmultiplied(r, g, b, a)
     };
     let at = |k: usize| {
         let (i, j) = (k % (cols + 1), k / (cols + 1));
@@ -74,9 +96,9 @@ pub(super) fn gradient_chip_colors(gp: &vectorcraft_color::GradientPaint, width:
         let field = gp.freeform_on(painted).model_field(vectorcraft_color::freeform::spread_scale(painted));
         return (0..n)
             .map(|k| {
-                let ([r, g, b], _) = field.display_sample(at(k));
+                let ([r, g, b], a) = field.display_sample(at(k));
                 let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-                Color32::from_rgb(q(r), q(g), q(b))
+                Color32::from_rgba_unmultiplied(q(r), q(g), q(b), q(if a.is_finite() { a } else { 1.0 }))
             })
             .collect();
     }
@@ -90,7 +112,7 @@ pub(super) fn gradient_chip_colors(gp: &vectorcraft_color::GradientPaint, width:
     (0..n)
         .map(|k| {
             let t = geom.param_at(gp.gradient.kind, at(k)).clamp(0.0, 1.0) as f32;
-            rgb(gp.gradient.sample(t).0)
+            rgba(gp.gradient.sample(t))
         })
         .collect()
 }

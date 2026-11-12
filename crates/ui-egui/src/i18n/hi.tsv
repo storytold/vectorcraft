@@ -3173,6 +3173,7 @@ antiAlias	Sharp	शार्प
 	Options for Selection…	सिलेक्शन के लिए ऑप्शन्स…
 	Options:	ऑप्शन्स:
 	Options…	ऑप्शन्स…
+	Organic Fades	ऑर्गेनिक फ़ेड
 	or more spaces with a tab	या एक टैब के साथ अधिक रिक्त स्थान
 	Orange	नारंगी
 	Order:	आदेश:
@@ -3501,6 +3502,7 @@ antiAlias	Sharp	शार्प
 	Press Quality	प्रेस गुणवत्ता
 	Pressure	दबाव
 	Preview	प्रीव्यू
+	Preview:	प्रीव्यू:
 	Preview (1 inch on the page)	प्रीव्यू (1 इंच पृष्ठ पर)
 	Preview All Layers	सभी लेयर्स का प्रीव्यू करें
 	Preview in Browser	ब्राउज़र में प्रीव्यू
@@ -3604,6 +3606,8 @@ antiAlias	Sharp	शार्प
 	Range:	रेंज:
 	Raster Effects	रीस्टर इफ़ेक्ट
 	Raster File Format:	रास्टर फ़ाइल फ़ॉर्मैट:
+	Include Placed Images	रखी गई छवियाँ शामिल करें
+	Include Fill Hatches	फ़िल हैच शामिल करें
 	Raster Sample Size:	रास्टर सैंपल साइज़:
 	Raster/Vector Balance:	रास्टर/वेक्टर बैलेंस:
 	Rasterize	रास्टराइज़ करें
@@ -3809,6 +3813,10 @@ antiAlias	Sharp	शार्प
 	Replace Missing Fonts	अनुपलब्ध फ़ॉन्ट रिप्लेस करें
 	Replace Missing Fonts…	अनुपलब्ध फ़ॉन्ट रिप्लेस करें…
 	Replace Spine	स्पाइन रिप्लेस करें
+	Create Spine	स्पाइन बनाएँ
+	Create Spine:	स्पाइन बनाएँ:
+	Always	हमेशा
+	Never	कभी नहीं
 	Replace Symbol	सिंबल रिप्लेस करें
 	Reset Transformation	रूपांतरण रीसेट करें
 	Replace With Font	इस फ़ॉन्ट से रिप्लेस करें
@@ -5375,6 +5383,8 @@ antiAlias	Sharp	शार्प
 	Version: {version}	संस्करण: {version}
 	Install “{name}” in place of the plug-in with the same ID?	समान ID वाले प्लग-इन की जगह “{name}” इंस्टॉल करें?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	यह फ़ाइल इस ID के साथ पहले इंस्टॉल किया गया प्लग-इन नहीं है। इसे उस ID के लिए रखी गई सेटिंग्स और कैश मिलते हैं।
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	एक ऑटोमेशन ने इस प्लग-इन को इंस्टॉल करने के लिए कहा। इसे इंस्टॉल करने के लिए, स्वयं ऑब्जेक्ट › प्लग-इन्स › प्लग-इन इंस्टॉल करें… चुनें।
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	एक ऑटोमेशन ने इस प्लग-इन को इंस्टॉल करने के लिए कहा। इसे इंस्टॉल करने के लिए, स्वयं ऑब्जेक्ट › प्लग-इन्स › प्लग-इन इंस्टॉल करें… चुनें।
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” आईडी {_1} वाले प्लग-इन से अलग मॉड्यूल है और उसके लिए रखी गई सेटिंग्स और कैश पा लेगा: उपयोगकर्ता की सहमति मिलने पर इसे `replace: true` से इंस्टॉल करें
 	File SHA-256: {hash}	फ़ाइल SHA-256: {hash}
 	Read the objects it is given	उसे दिए गए ऑब्जेक्ट्स पढ़ना
@@ -5433,6 +5443,11 @@ antiAlias	Sharp	शार्प
 @msg	command {name}: `label` must be 1-64 printable characters	कमांड {name}: `label` में 1-64 प्रिंट करने योग्य वर्ण होने चाहिए
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	कमांड {name}: a-z 0-9 _ के 1-{MAX_COMMAND_ID} वर्णों वाली ऐसी id इस्तेमाल करें जो अक्षर से शुरू हो
 @msg	command {name}: {e}	कमांड {name}: {e}
+@msg	manifest: {e} at line {line} column {column}	प्रकटन: {e} (लाइन {line}, कॉलम {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` कमांड की एक सूची होनी चाहिए, हर एक में `id` और `label` हो
+@msg	command {name} must be an object with an `id` and a `label`	कमांड {name} एक ऑब्जेक्ट होना चाहिए जिसमें `id` और `label` हों
+@msg	missing field `{key}`	फ़ील्ड `{key}` नहीं है
+@msg	duplicate field `{key}`	फ़ील्ड `{key}` दो बार है
 @msg	only a filter or a live effect declares `commands`	केवल फ़िल्टर या लाइव इफ़ेक्ट ही `commands` घोषित करता है
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	मॉड्यूल का SHA-256 वह नहीं है जो `hash` बताता है: कुछ भी इंस्टॉल नहीं हुआ
@@ -6392,7 +6407,7 @@ antiAlias	Sharp	शार्प
 @msg	EPS {field} `{s}`: {allowed}	EPS {field} `{s}`: {allowed}
 @msg	EPS flattener: {e}	ईपीएस flattener: {e}
 @msg	EPS options: {e}	ईपीएस ऑप्शन्स: {e}
-@msg	EPS Save retains the artboard and all artwork: use document.export for cropped or selected-only EPS	EPS सेव आर्टबोर्ड और पूरा आर्टवर्क रखता है: क्रॉप किए या केवल सिलेक्ट किए आर्टवर्क के EPS के लिए document.export उपयोग करें
+@msg	EPS Save writes all artwork: use document.export for selected-only EPS	EPS सेव पूरा आर्टवर्क लिखता है: केवल सिलेक्ट किए आर्टवर्क के EPS के लिए document.export उपयोग करें
 @msg	every numbered name for {name} is taken in the document's folder	{name} के लिए हर नंबर का नाम डॉक्यूमेंट के फ़ोल्डर में लिया जाता है
 @msg	every numbered name for it is taken in the Fonts folder	इसके लिए हर नंबर वाला नाम फ़ॉन्ट फ़ोल्डर में लिया जाता है
 @msg	every numbered name for the copy is taken	प्रति के लिए हर नंबर का नाम लिया जाता है
@@ -8260,6 +8275,11 @@ swatch	White, Black	सफ़ेद, काला
 swatch	Yellow	पीला
 swatch	Yellow Green	पीला हरा
 theme	Appearance	अपीयरेंस
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	समस्या निवारण जानकारी कॉपी करें
+@msg	Copied the troubleshooting info	समस्या निवारण जानकारी कॉपी की गई
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	VectorCraft के पिछले सत्र ने बंद होने से पहले प्रतिक्रिया देना बंद कर दिया था। सहायता ›समस्या निवारण जानकारी कॉपी करें बग रिपोर्ट के लिए विवरण कॉपी करता है
 
 # Safe Mode
 	Safe Mode…	सुरक्षित मोड…

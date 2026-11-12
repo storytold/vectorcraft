@@ -238,6 +238,27 @@ fn anti_aliasing_method_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The names the EPS options' menus show (preview, overprints, flattener preset and PostScript
+/// level), and Save As's Preview label.
+#[test]
+fn eps_option_menu_names_are_in_complete_catalogs() {
+    use vectorcraft_engine::cmd::FlattenOptions;
+    use vectorcraft_eps::{Level, Overprint, Preview};
+    let names: Vec<&str> = Preview::ALL
+        .map(Preview::label)
+        .into_iter()
+        .chain(Overprint::ALL.map(Overprint::label))
+        .chain(Level::ALL.map(Level::label))
+        .chain(FlattenOptions::PRESETS.into_iter().filter_map(FlattenOptions::preset_label))
+        .chain(["Preview:"])
+        .collect();
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in &names {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// Each language counts with its own plural rule: the form a count picks (`one`, then `few`, then
 /// `other`/`many`).
 #[test]
@@ -2003,6 +2024,38 @@ fn plugin_limit_errors_are_translated() {
         let shown = message(lang, limits[3]);
         assert!(shown.contains("9000") && shown.contains("4096") && !shown.contains("output size"), "{code}: {shown}");
         assert_ne!(message(lang, grant), grant, "{code}");
+    }
+}
+
+/// A manifest whose `commands` value has the wrong shape is refused with an error that every
+/// language of [`COMPLETE_MESSAGES`] translates whole, the command's name and the place in the
+/// manifest included.
+#[test]
+fn wrongly_shaped_plugin_commands_errors_are_translated() {
+    let many: Vec<String> = (0..=32).map(|i| format!(r#"{{"id":"c{i}","label":"C"}}"#)).collect();
+    let commands = [
+        r#"{"id":"x"}"#.to_string(),
+        r#""x""#.to_string(),
+        "[1]".to_string(),
+        r#"[{"id":1,"label":"A"}]"#.to_string(),
+        r#"[{"id":"x","label":true}]"#.to_string(),
+        r#"[{"label":"B"}]"#.to_string(),
+        r#"[{"id":"x"}]"#.to_string(),
+        r#"[{"id":"x","id":"y","label":"A"}]"#.to_string(),
+        format!("[{}]", many.join(",")),
+    ];
+    let english = ["must", "list", "missing", "field", "duplicate", "object", "line", "column", "each", "with", "invalid", "expected"];
+    for value in &commands {
+        let manifest = format!(r#"{{"id":"a","name":"x","kind":"filter","commands":{value}}}"#);
+        let e = vectorcraft_plugins::manifest::Manifest::parse(manifest.as_bytes()).unwrap_err().to_string();
+        let numbers: Vec<&str> = e.split(|c: char| !c.is_ascii_digit()).filter(|n| !n.is_empty()).collect();
+        for code in COMPLETE_MESSAGES {
+            let shown = message(Lang::from_code(code).expect("registered"), &e);
+            // Backticked names stay in English; the words around them are translated.
+            let words: String = shown.split('`').step_by(2).collect();
+            assert!(words.split(|c: char| !c.is_alphabetic()).all(|w| !english.contains(&w)), "{code}: {e} -> {shown}");
+            assert!(numbers.iter().all(|n| shown.contains(n)), "{code}: {e} -> {shown}");
+        }
     }
 }
 

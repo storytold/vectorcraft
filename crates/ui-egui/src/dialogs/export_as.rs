@@ -103,7 +103,8 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 d.fields.insert("all".into(), json!(all));
             }
             let mut range = d.str("range");
-            if ui.add_enabled(!all, egui::TextEdit::singleline(&mut range).align(egui::Align2::LEFT_CENTER).desired_width(90.0)).changed() {
+            let field = egui::TextEdit::singleline(&mut range).align(egui::Align2::LEFT_CENTER).desired_width(90.0).hint_text("1-3, 5");
+            if ui.add_enabled(!all, field).changed() {
                 d.fields.insert("range".into(), json!(range));
             }
         });
