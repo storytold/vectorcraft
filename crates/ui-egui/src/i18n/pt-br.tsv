@@ -1488,6 +1488,7 @@ antiAlias	Sharp	Nítido
 	Include Hidden Layers	Incluir Camadas Ocultas
 	Include Linked Files	Incluir Arquivos Vinculados
 	Include Metadata	Incluir Metadados
+	Include Variable Data	Incluir Dados de Variáveis
 	Include SVG Code	Incluir Código SVG
 	Include Swatches for Tints	Incluir Amostras para Tons
 	Include non-printing layers	Incluir camadas de não impressão
@@ -1762,6 +1763,7 @@ antiAlias	Sharp	Nítido
 	Move Slices	Mover Fatias
 	Move Spine Point	Mover Ponto de Coluna
 	Reshape Spine Segment	Remodelar Segmento da Coluna
+	Blend Easing	Suavização da Mesclagem
 	Move Brush	Mover Pincel
 	Move Swatch	Mover Amostra
 	Move Up	Mover para Cima
@@ -2469,6 +2471,7 @@ digits	Malayalam	Malaiala
 	Roman Baseline	Linha de Base Romana
 	Roman Hanging Punctuation	Pontuação Pendurada Romana
 	Korean Line Break Anywhere	Quebra de Linha Coreana em Qualquer Lugar
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Configurações de Composição do Leste Asiático
 	Korean Composition Settings	Configurações de Composição Coreana
 	Rotate	Girar
@@ -2476,6 +2479,7 @@ digits	Malayalam	Malaiala
 	Rotate View Tool	Ferramenta Girar Visualização
 	Trackpad Gesture to Rotate View	Girar Visualização com Gesto do Trackpad
 	Hold a Tool Shortcut to Use the Tool Temporarily	Manter o Atalho de uma Ferramenta Pressionado para Usá-la Temporariamente
+	Show Bounding Box While Moving and Drawing	Mostrar Caixa Delimitadora ao Mover e Desenhar
 	Rotate…	Girar…
 	Rotation	Rotação
 	Roughen…	Enrugar…
@@ -4349,6 +4353,7 @@ axis	Both	Ambos
 @msg	unknown option `{path}.{k}`	opção desconhecida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressões desconhecidas `{o}` (preserve, simulate ou discard)
 @msg	unknown panel `{raw}`	painel desconhecido `{raw}`
+@msg	panels can't be shown in Presentation Mode	os painéis não podem ser mostrados no Modo de Apresentação
 @msg	unknown preference `{key}`	preferência desconhecida `{key}`
 @msg	Preferences imported.	Preferências importadas.
 @msg	not a preferences file: {e}	não é um arquivo de preferências: {e}
@@ -6046,6 +6051,110 @@ axis	Y Axis	Eixo Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	um efeito dinâmico é executado enquanto o documento é desenhado, então não pode ser `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	um plug-in de exportação sempre recebe o orçamento de uma exportação: omita `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” pede um orçamento de processamento grande (cada execução até {minutes} minutos e {times} vezes as instruções habituais): uma pessoa precisa aprová-lo no aplicativo de desktop, ou passe `allowHeavy: true` em uma sessão iniciada com --allow-plugin-grants
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	`name` deve ter 1-64 caracteres imprimíveis
+@msg	`version`, `description` or `author` is too long	`version`, `description` ou `author` é longo demais
+@msg	`warnings` must be a list of strings	`warnings` deve ser uma lista de strings
+@msg	`{k}` must be one of {_1}	`{k}` deve ser um de {_1}
+@msg	`{k}` must be {what}	`{k}` deve ser {what}
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	um plug-in de exportação declara de 1 a {MAX_EXTENSIONS} `extensions`
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	no máximo {MAX_UNGROUPED} parâmetros fora de grupos: dê um `group` aos outros
+@msg	can't encode the input	não é possível codificar a entrada
+@msg	expected {"dataBase64"}	esperado {"dataBase64"}
+@msg	expected {"objects"}	esperado {"objects"}
+@msg	export `{name}`: {e}	exportação do módulo `{name}`: {e}
+@msg	extension {e} is listed twice	a extensão {e} aparece duas vezes
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	extensão {e}: use 1-16 letras minúsculas e dígitos, sem o ponto
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	ID inválido {_1}: use 1-64 caracteres de A-Z a-z 0-9 . _ -
+@msg	invalid parameter name {k}	nome de parâmetro inválido {k}
+@msg	manifest is not UTF-8	o manifesto não está em UTF-8
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	o manifesto é longo demais (limite {MAX_MANIFEST_BYTES} bytes)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	o manifesto tem {_1} bytes (limite {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	o módulo tem {_1} bytes (limite {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	precisa de aprovação: pede {0}, que o usuário concede ao instalá-lo separadamente
+@msg	not JSON: {e}	não é JSON: {e}
+@msg	not a WebAssembly binary (missing \0asm header)	não é um binário WebAssembly (falta o cabeçalho \0asm)
+@msg	parameter `{k}`: {what}	parâmetro `{k}`: {what}
+@msg	parameter `{name}`: {what}	parâmetro `{name}`: {what}
+@msg	plug-in parameters must be a JSON object	os parâmetros do plug-in devem ser um objeto JSON
+@msg	the module must export its linear memory as `memory`	o módulo deve exportar sua memória linear como `memory`
+@msg	the objects to change are no longer in the document	os objetos a alterar não estão mais no documento
+@msg	the runtime panicked	o ambiente de execução falhou
+@msg	unexpected host trap	trap inesperada do host
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version retornou {v}; este host implementa a versão {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc retornou 0 (sem memória)
+@msg	vc_alloc returned a block outside memory	vc_alloc retornou um bloco fora da memória
+@msg	vc_run returned error code {packed}	vc_run retornou o código de erro {packed}
+@msg	{_1} is not a file	{_1} não é um arquivo
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} tem {_2} bytes (limite {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objetos (limite {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what} aponta para fora da memória
+@msg	`angle` must be a number	`angle` deve ser um número
+@msg	`aspect` must be from 0.01 to 100	`aspect` deve estar entre 0.01 e 100
+@msg	`cap` must be "butt", "round" or "square"	`cap` deve ser "butt", "round" ou "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` deve ser "nonzero" ou "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` deve ser um endereço https:// de no máximo {MAX_HELP_URL} bytes
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` deve ter 1-{MAX_HELP} caracteres imprimíveis
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` deve ser um id de efeito de 1-{MAX_EFFECT_ID} bytes
+@msg	`id` must be the id of an input object	`id` deve ser o id de um objeto de entrada
+@msg	`join` must be "miter", "round" or "bevel"	`join` deve ser "miter", "round" ou "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` e `group` devem ter 1-{MAX_LABEL} caracteres imprimíveis
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` deve ser 1-{MAX_TEXT}, e o valor padrão não pode ser mais longo
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` e `maxItems` devem ser 0-{MAX_LIST}, `maxItems` pelo menos 1, e o valor padrão deve ter essa quantidade
+@msg	`name` must be a string	`name` deve ser uma string
+@msg	`opacity` must be a number	`opacity` deve ser um número
+@msg	`type` must be "path" or "compound"	`type` deve ser "path" ou "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` deve ter 1-{MAX_UNIT} caracteres imprimíveis
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` deve listar de 1 a {MAX_CONDITION_VALUES} valores para `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` nomeia `{other}`, que não é um parâmetro declarado antes deste
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` nomeia no máximo {MAX_CONDITIONS} parâmetros
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` aceita os valores de `{other}`, de uma caixa de seleção ou de uma escolha
+@msg	`visible` must be true or false	`visible` deve ser true ou false
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` deve ser um número de {_1} a {_2}
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` deve ser uma matriz de no máximo {MAX_ITEMS} entradas
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	uma cor padrão deve ser um objeto de cor ou uma string hexadecimal como "#3a7bd5"
+@msg	a color object or a hex string such as "#3a7bd5"	um objeto de cor ou uma string hexadecimal como "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	um gradiente de forma livre contém no máximo {MAX_ITEMS} pontos e linhas
+@msg	a freeform gradient line names a point it doesn't have	uma linha do gradiente de forma livre nomeia um ponto que o gradiente não tem
+@msg	a gradient needs 1-{MAX_ITEMS} stops	um gradiente precisa de 1-{MAX_ITEMS} paradas
+@msg	a list of numbers	uma lista de números
+@msg	a list of {min_items} to {max_items} numbers	uma lista de {min_items} a {max_items} números
+@msg	a new object needs a `path`	um objeto novo precisa de um `path`
+@msg	a number	um número
+@msg	a painted live effect returns only `objects`	um efeito dinâmico de pintura retorna apenas `objects`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	uma peça de um efeito dinâmico de pintura tem apenas `path`, `fillRule`, `fills` e `strokes`
+@msg	a read-only object was left out	um objeto somente leitura foi omitido
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	um objeto somente leitura foi omitido: retorne-o como {"id"} sozinho ou como foi recebido
+@msg	a string	uma string
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	um traçado tem apenas `paint`, `width`, `join`, `cap` e `miterLimit`
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	um traçado deve ser {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
+@msg	an effect must be {"id", "params"?, "visible"?}	um efeito deve ser {"id", "params"?, "visible"?}
+@msg	an effect on a fill returns only `fills`	um efeito em um preenchimento retorna apenas `fills`
+@msg	an effect on a stroke returns only `strokes`	um efeito em um traçado retorna apenas `strokes`
+@msg	an object must be a JSON object	um objeto deve ser um objeto JSON
+@msg	bad range	intervalo inválido
+@msg	choices must be 1-64 non-empty, printable strings	as opções devem ser 1-64 strings imprimíveis não vazias
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	coordenada fora do intervalo (limite ±{MAX_COORD} pt)
+@msg	default is not one of the options	o valor padrão não é uma das opções
+@msg	each piece needs a `path`	cada peça precisa de um `path`
+@msg	is listed twice	aparece duas vezes
+@msg	pattern transform out of range	transformação do padrão fora do intervalo
+@msg	read-only field '{field}' changed	o campo somente leitura '{field}' foi alterado
+@msg	stops must be in order of `offset`	as paradas devem estar em ordem de `offset`
+@msg	the document has no pattern {pattern}	o documento não tem o padrão {pattern}
+@msg	the document has no swatch {n}	o documento não tem a amostra {n}
+@msg	the output	a saída
+@msg	the path has no anchor points	o caminho não tem pontos de ancoragem
+@msg	too many anchor points (limit {MAX_ANCHORS})	pontos de ancoragem demais (limite {MAX_ANCHORS})
+@msg	true or false	true ou false
+@msg	unknown key `{k}`; the keys here are {_1}	chave desconhecida `{k}`; as chaves aqui são {_1}
+@msg	{_1} is listed twice	{_1} aparece duas vezes
+@msg	{_1} is not the id of an input object	{_1} não é o id de um objeto de entrada
+@msg	{_1} is read-only	{_1} é somente leitura
+@msg	{what} must be from {lo} to {hi}	{what} deve estar entre {lo} e {hi}
+@msg	a color component	um componente de cor
+@msg	a plate	uma placa
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Instalar “{name}”, que pede estas permissões?
 	ID: {id}	ID: {id}
@@ -6259,6 +6368,11 @@ axis	Y Axis	Eixo Y
 	User Brush Library 9	Biblioteca de Pincéis do Usuário 9
 	User Brush Library 10	Biblioteca de Pincéis do Usuário 10
 	Art Ribbons	Fitas de Arte
+	Ink and Wash	Nanquim e Aguada
+	Tapered Ink	Nanquim Afilado
+	Brush Pen	Caneta Pincel
+	Soft Wash	Aguada Suave
+	Pooling Wash	Aguada com Borda
 	Zigzag	Zigue-zague
 	Burst Ray	Raio de impacto
 	Dash Trail	Rastro tracejado

@@ -1,8 +1,9 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use image::{DynamicImage, ImageBuffer, Luma, Rgb};
+use image::{DynamicImage, ImageBuffer, Luma, LumaA, Rgb};
 use serde_json::{Value, json};
+use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{ImageBlob, ImageObject, LinkInfo, Node, NodeId, NodeKind};
 use vectorcraft_geom::Affine;
 
@@ -331,6 +332,54 @@ fn sixteen_bit_and_gray_images_keep_their_depth_and_channels() {
     s.execute(C, &json!({})).unwrap();
     let DynamicImage::ImageLumaA16(out) = pixels(&s, id) else { panic!("16-bit gray with alpha") };
     assert_eq!((out.get_pixel(0, 0).0, out.get_pixel(3, 3).0), ([61_000, 0], [7_000, 65_535]));
+}
+
+/// A process color can't colorize a grayscale image with transparency, so a gray image colorized
+/// with one keeps its pixels. Black, white and spot colors can, so those images are cleared.
+#[test]
+fn a_gray_image_colorized_with_a_process_color_is_refused() {
+    let gray = || {
+        png(DynamicImage::ImageLuma8(ImageBuffer::from_fn(8, 8, |x, y| Luma([if (2..6).contains(&x) && (2..6).contains(&y) { 30u8 } else { 240 }]))))
+    };
+    let (mut s, id) = open(&gray());
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).unwrap().extras().colorize.is_some(), "the fill colorizes the image");
+    let (before, steps) = (s.doc().unwrap().doc.clone(), undo_len(&s));
+    let e = s.execute(C, &json!({})).unwrap_err();
+    assert!(e.to_string().contains("a process color can't colorize a grayscale image with transparency"), "{e}");
+    assert_eq!((&s.doc().unwrap().doc, undo_len(&s)), (&before, steps), "the document and its undo steps are unchanged");
+    // Another image that already has an alpha channel and a process colorize color, as an opened
+    // file can hold, neither lets this one through nor stops a run on an image that can be cleared.
+    let held = ImageBlob::png(png(DynamicImage::ImageLumaA8(ImageBuffer::from_pixel(2, 2, LumaA([128u8, 100])))));
+    let other = place_linked(&mut s, "held", held, (2, 2));
+    s.edit("Embed and colorize", |d, _| {
+        let n = d.node_mut(other).unwrap();
+        n.extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb8(255, 0, 0))));
+        if let NodeKind::Image(im) = &mut n.kind {
+            im.link = None;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let (before, steps) = (s.doc().unwrap().doc.clone(), undo_len(&s));
+    let e = s.execute(C, &json!({"ids": [id.0]})).unwrap_err();
+    assert!(e.to_string().contains("a process color can't colorize a grayscale image with transparency"), "{e}");
+    assert_eq!((&s.doc().unwrap().doc, undo_len(&s)), (&before, steps), "with another image refused already, nothing changes");
+    s.execute("paint.setFill", &json!({"color": "#000000", "ids": [id.0]})).unwrap();
+    assert_eq!(s.execute(C, &json!({"ids": [id.0]})).unwrap()["changed"], 1, "an image colorized with black is cleared beside the other");
+    let DynamicImage::ImageLumaA8(out) = pixels(&s, id) else { panic!("gray with alpha") };
+    assert_eq!(out.get_pixel(0, 0).0[1], 0, "the background is cleared");
+    assert!(s.doc().unwrap().doc.node(id).unwrap().extras().colorize.is_some(), "the image stays colorized");
+    for fill in [json!({"color": "#000000"}), json!({"color": "#ffffff"}), json!({"swatch": "Ink"})] {
+        let (mut s, id) = open(&gray());
+        s.execute("swatch.new", &json!({"name": "Ink", "color": {"c": 0, "m": 100, "y": 100, "k": 0}, "spot": true})).unwrap();
+        s.execute("paint.setFill", &fill).unwrap();
+        assert!(s.doc().unwrap().doc.node(id).unwrap().extras().colorize.is_some(), "{fill} colorizes the image");
+        s.execute(C, &json!({})).unwrap();
+        let DynamicImage::ImageLumaA8(out) = pixels(&s, id) else { panic!("gray with alpha") };
+        assert_eq!(out.get_pixel(0, 0).0[1], 0, "{fill}: the background is cleared");
+        assert!(s.doc().unwrap().doc.node(id).unwrap().extras().colorize.is_some(), "{fill} still colorizes the image");
+    }
 }
 
 /// The ICC profile the colors are in stays with them.

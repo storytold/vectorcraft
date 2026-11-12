@@ -269,6 +269,7 @@ impl Session {
             isolation: st.isolation,
             perspective_again: None,
             copies: None,
+            move_box: std::sync::OnceLock::new(),
         });
         Ok(())
     }

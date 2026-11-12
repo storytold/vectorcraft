@@ -188,8 +188,10 @@ impl Catalog {
                 }
             }
         }
-        // Most literal text first, so `Couldn't open {name}: {e}` wins over `{path}: {e}`.
-        c.templates.sort_by_key(|t| std::cmp::Reverse(t.literal));
+        // Templates that start with text before those that start with a placeholder, so
+        // `plug-in manifest: {0}` wins over `{_1} is {_2} bytes (limit {_3})` for a message it
+        // wraps; then most literal text first, so `Couldn't open {name}: {e}` wins over `{path}: {e}`.
+        c.templates.sort_by_key(|t| (matches!(t.pieces.first(), Some(Piece::Hole(_))), std::cmp::Reverse(t.literal)));
         c
     }
 

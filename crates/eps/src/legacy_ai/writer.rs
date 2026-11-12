@@ -634,7 +634,8 @@ impl<'a> Writer<'a> {
             // Grey is ink coverage; the format's grey is lightness.
             Color::Gray { k } => Ink::Gray(unit(1.0 - k)),
             Color::Cmyk { c, m, y, k } => Ink::Cmyk([c, m, y, k].map(unit)),
-            Color::Rgb { r, g, b } => Ink::Rgb(self.cms.to_cmyk(color, intent).map(unit), [r, g, b].map(unit)),
+            // The CMYK equivalent of the RGB values as written.
+            Color::Rgb { r, g, b } => Ink::Rgb(self.cms.to_cmyk(&ai_ops::as_written(*color), intent).map(unit), [r, g, b].map(unit)),
             Color::Lab { .. } => {
                 let rgb = color.to_rgb().map(unit);
                 Ink::Rgb(self.cms.to_cmyk(color, intent).map(unit), rgb)

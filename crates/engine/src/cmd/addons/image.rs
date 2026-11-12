@@ -24,6 +24,7 @@ use vectorcraft_geom::Affine;
 
 use super::super::fileio::{MAX_RASTER_ALLOC, ppi};
 use super::super::menucmds::has_image;
+use super::super::paint::{PROCESS_ON_TRANSPARENCY, gray_colorized_with_process};
 use super::super::{CommandSpec, Result, Session, bad, checked_ids_param, cmd, hex_with_alpha, number_or, switch_or, text_param};
 
 /// Remove Background's command.
@@ -43,7 +44,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Remove Background…",
         ["Object", "Plug-ins", "Image Tools"],
         None,
-        "{background?: \"edges\" (default: the most common color along the image's edges; nothing is cleared when the edges hold at least as many clear pixels as pixels of that color) | \"corners\" (the average of the image's four corner pixels that are not clear; nothing is cleared when all four are clear) | \"colors\" (the colors in `colors`), colors?: [color…] or one string of them split by commas or spaces (1 to 16 colors, each a hex color \"#rrggbb\" or \"#rgb\" with or without the # or one of black, white, red, green and blue; needed with background: colors, and checked but not used with edges or corners), contiguous?: bool (true: only background pixels that reach in from an edge are cleared; false: they are cleared wherever they are; true), match?: \"distance\" (default: a color's RGB distance from a background color) | \"channels\" (its largest difference on one of red, green and blue), tolerance?: 0..100 (with distance, % of the largest RGB distance; with channels, % of 255 steps on one channel; a pixel this near a background color is cleared; 10), softness?: 0..100 (% past the tolerance over which pixels fade from cleared to kept; 10), ids?: [id…] (default: the selected images)} make the background of each image transparent in its own pixels, as one undo step: the image stays an image, embedded as a PNG with an alpha channel at the depth of its pixels (16-bit images keep 16 bits and grayscale images stay gray) with the source's color profile and resolution, and a linked image is embedded; a CMYK image, a linked image that shows its preview (embed or relink it first), an image too large to change, and a result with no pixel left are refused, and an image whose pixels do not change is left as it is (no undo step when none changes) → {changed: the images changed, ids, cleared: the pixels made fully clear in them}",
+        "{background?: \"edges\" (default: the most common color along the image's edges; nothing is cleared when the edges hold at least as many clear pixels as pixels of that color) | \"corners\" (the average of the image's four corner pixels that are not clear; nothing is cleared when all four are clear) | \"colors\" (the colors in `colors`), colors?: [color…] or one string of them split by commas or spaces (1 to 16 colors, each a hex color \"#rrggbb\" or \"#rgb\" with or without the # or one of black, white, red, green and blue; needed with background: colors, and checked but not used with edges or corners), contiguous?: bool (true: only background pixels that reach in from an edge are cleared; false: they are cleared wherever they are; true), match?: \"distance\" (default: a color's RGB distance from a background color) | \"channels\" (its largest difference on one of red, green and blue), tolerance?: 0..100 (with distance, % of the largest RGB distance; with channels, % of 255 steps on one channel; a pixel this near a background color is cleared; 10), softness?: 0..100 (% past the tolerance over which pixels fade from cleared to kept; 10), ids?: [id…] (default: the selected images)} make the background of each image transparent in its own pixels, as one undo step: the image stays an image, embedded as a PNG with an alpha channel at the depth of its pixels (16-bit images keep 16 bits and grayscale images stay gray) with the source's color profile and resolution, and a linked image is embedded; a CMYK image, a linked image that shows its preview (embed or relink it first), an image too large to change, a result with no pixel left, and a grayscale image colorized with a process color (which can't colorize gray pixels with transparency) are refused, and an image whose pixels do not change is left as it is (no undo step when none changes) → {changed: the images changed, ids, cleared: the pixels made fully clear in them}",
         has_image,
         remove_background
     )];
@@ -171,6 +172,14 @@ fn remove_background(s: &mut Session, p: &Value) -> Result<Value> {
 /// taken from and kept in `kept` when it is given.
 fn changes(s: &Session, p: &Value, settings: &Settings, mut kept: Option<&mut DecodedImages>) -> Result<Vec<(NodeId, Cleared, Affine)>> {
     let images = images(s, p, C)?;
+    // The result has an alpha channel, which a grayscale image colorized with a process color
+    // can't take.
+    let st = s.doc()?;
+    for (id, ..) in &images {
+        if st.doc.node(*id).is_some_and(|n| gray_colorized_with_process(&st.doc, n).is_some()) {
+            return Err(bad(C, PROCESS_ON_TRANSPARENCY));
+        }
+    }
     // Each image's pixels once, however many objects show them.
     let mut cleared: HashMap<&str, Option<Cleared>> = HashMap::new();
     let mut changes = vec![];

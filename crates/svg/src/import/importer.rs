@@ -140,12 +140,16 @@ impl Importer {
         Some(self.doc.alloc_id())
     }
 
-    /// A new object named after element `id` (unless it has none or a made-up one).
+    /// A new object named after element `id` (unless it has none or a made-up one), noted as
+    /// found when [`Importer::wanted`] lists `id`.
     fn named(&mut self, id: &str, kind: NodeKind) -> Option<Node> {
         let nid = self.alloc_id()?;
         let mut n = Node::new(nid, kind);
         if !id.is_empty() && !made_up(id) {
             n.name = Some(self.name_of(id).to_string());
+            if self.wanted.contains(id) {
+                self.found.entry(id.to_string()).or_insert(nid);
+            }
         }
         Some(n)
     }
@@ -861,6 +865,8 @@ mod tests {
             max_nodes: 1000,
             error: None,
             nested_svg_images: crate::MAX_NESTED_SVG_IMAGES,
+            wanted: HashSet::new(),
+            found: HashMap::new(),
         };
         let tree = usvg::Tree::from_str(r#"<svg xmlns="http://www.w3.org/2000/svg"/>"#, &usvg::Options::default()).unwrap();
         let res = im.svg_image(&tree, Affine::IDENTITY);

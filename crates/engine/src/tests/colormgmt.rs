@@ -308,6 +308,23 @@ fn assign_profile_is_stored_and_undoable() {
     assert_eq!(cmd::colormgmt::doc_profiles(&s.doc().unwrap().doc), (None, None));
 }
 
+/// Assigning the working profiles leaves the active color settings and the other documents'
+/// revisions unchanged.
+#[test]
+fn assigning_the_working_profiles_keeps_the_active_color_settings() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let working = cms::active_settings();
+    let active = cms::active();
+    let other = s.documents()[0].revision;
+    let r = s.execute("edit.assignProfile", &json!({"rgb": working.rgb, "cmyk": working.cmyk})).unwrap();
+    assert_eq!((r["rgb"].as_str(), r["cmyk"].as_str()), (Some(working.rgb.as_str()), Some(working.cmyk.as_str())));
+    assert_eq!(cmd::colormgmt::doc_profiles(&s.doc().unwrap().doc), (Some(working.rgb.clone()), Some(working.cmyk.clone())));
+    assert!(std::sync::Arc::ptr_eq(&active, &cms::active()), "the active color settings were replaced");
+    assert_eq!(s.documents()[0].revision, other, "the other document's revision changed");
+}
+
 #[test]
 fn proof_colors_simulate_press_on_screen() {
     let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
@@ -438,6 +455,7 @@ fn overprint_black_multiplies_in_preview() {
 #[test]
 fn view_toggles_redraw_without_dirtying() {
     let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
     let mut s = session();
     let rev = s.doc().unwrap().revision;
     let r = s.execute("view.proofColors", &json!({"on": true})).unwrap();
@@ -456,6 +474,101 @@ fn view_toggles_redraw_without_dirtying() {
     let r = s.execute("view.overprintPreview", &json!({"on": true})).unwrap();
     assert_eq!(r["overprintPreview"], true);
     s.execute("view.overprintPreview", &json!({"on": false})).unwrap();
+}
+
+/// Sets the default proof view when made and again when dropped, also after a failed assertion,
+/// so the next test starts from the default view.
+pub(crate) struct DefaultView;
+
+impl DefaultView {
+    pub(crate) fn new() -> Self {
+        vectorcraft_render::proof::set_view(Default::default());
+        DefaultView
+    }
+}
+
+impl Drop for DefaultView {
+    fn drop(&mut self) {
+        vectorcraft_render::proof::set_view(Default::default());
+    }
+}
+
+/// Runs `cmd` with `p` twice from the default proof view: the first run changes the view and
+/// redraws, and the second asks for the view that is already showing and leaves the revision alone.
+fn repeat_keeps_revision(cmd: &str, p: Value) {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session();
+    let rev = s.doc().unwrap().revision;
+    s.execute(cmd, &p).unwrap();
+    let changed = s.doc().unwrap().revision;
+    assert!(changed > rev, "{cmd} {p}: the first run changes the view");
+    s.execute(cmd, &p).unwrap();
+    assert_eq!(s.doc().unwrap().revision, changed, "{cmd} {p}: the same view again");
+}
+
+/// Runs `cmd` with `p` once from the default proof view, which `p` leaves as it is.
+fn default_view_keeps_revision(cmd: &str, p: Value) {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session();
+    let rev = s.doc().unwrap().revision;
+    s.execute(cmd, &p).unwrap();
+    assert_eq!(s.doc().unwrap().revision, rev, "{cmd} {p}");
+    assert_eq!(vectorcraft_render::proof::view(), Default::default(), "{cmd} {p}");
+}
+
+#[test]
+fn proof_setup_with_nothing_changed_keeps_the_revision() {
+    repeat_keeps_revision("view.proofSetup", json!({"target": "deuteranopia"}));
+    repeat_keeps_revision("view.proofSetup", json!({"simulatePaper": true, "proof": true}));
+    default_view_keeps_revision("view.proofSetup", json!({}));
+    default_view_keeps_revision("view.proofSetup", json!({"target": "workingCmyk", "proof": false}));
+}
+
+#[test]
+fn proof_colors_with_nothing_changed_keeps_the_revision() {
+    repeat_keeps_revision("view.proofColors", json!({"on": true}));
+    default_view_keeps_revision("view.proofColors", json!({"on": false}));
+}
+
+#[test]
+fn overprint_preview_with_nothing_changed_keeps_the_revision() {
+    repeat_keeps_revision("view.overprintPreview", json!({"on": true}));
+    default_view_keeps_revision("view.overprintPreview", json!({"on": false}));
+}
+
+#[test]
+fn separations_preview_with_nothing_changed_keeps_the_revision() {
+    repeat_keeps_revision("view.separationsPreview", json!({"on": true}));
+    repeat_keeps_revision("view.separationsPreview", json!({"only": "Cyan"}));
+    repeat_keeps_revision("view.separationsPreview", json!({"plates": ["Magenta", "Black"]}));
+    default_view_keeps_revision("view.separationsPreview", json!({"on": false}));
+}
+
+/// Separations Preview's visible plates are a set: the same plates in another order, or with one
+/// named twice, leave the revision alone, and a plate named twice hides with one `toggle`.
+#[test]
+fn separations_preview_compares_the_visible_plates_as_a_set() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _v = DefaultView::new();
+    let mut s = session();
+    let sep = |s: &mut Session, p: Value| {
+        s.execute("view.separationsPreview", &p).unwrap();
+        s.doc().unwrap().revision
+    };
+    let shown = sep(&mut s, json!({"plates": ["Magenta", "Black"]}));
+    assert_eq!(sep(&mut s, json!({"plates": ["Black", "Magenta"]})), shown, "another order");
+    assert_eq!(sep(&mut s, json!({"plates": ["Magenta", "Black", "Black"]})), shown, "a plate named twice");
+    // Cyan hidden and shown again goes to the end of the list; every plate is shown.
+    sep(&mut s, json!({"on": false}));
+    sep(&mut s, json!({"on": true}));
+    sep(&mut s, json!({"toggle": "Cyan"}));
+    let all = sep(&mut s, json!({"toggle": "Cyan"}));
+    assert_eq!(sep(&mut s, json!({"plates": ["Cyan", "Magenta", "Yellow", "Black"]})), all, "every plate in plate order");
+    sep(&mut s, json!({"plates": ["Cyan", "Cyan"]}));
+    let r = s.execute("view.separationsPreview", &json!({"toggle": "Cyan"})).unwrap();
+    assert!(r["plates"].as_array().unwrap().iter().all(|p| p["visible"] == false), "{r}");
 }
 
 #[test]

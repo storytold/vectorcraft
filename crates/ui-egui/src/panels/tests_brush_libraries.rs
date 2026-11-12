@@ -121,6 +121,26 @@ fn clicking_a_library_brush_adds_it_to_the_documents_brushes_in_one_step() {
 }
 
 #[test]
+fn the_ink_and_wash_library_opens_and_a_click_adds_and_applies_its_brush() {
+    let mut app = app();
+    let ctx = context();
+    let r = app.run("window.brushLibrary", json!({"library": "ink-and-wash"})).unwrap();
+    assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("ink-and-wash"), Some(4)));
+    let lib = BrushLibraries::get(&app, "ink-and-wash").unwrap().1;
+    let rows = BrushLibraries::rows(&lib, "");
+    assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Tapered Ink", "Brush Pen", "Soft Wash", "Pooling Wash"]);
+    let path = app.run("shape.line", json!({"x1": 10, "y1": 10, "x2": 150, "y2": 60})).unwrap()["id"].as_u64().unwrap();
+    let (undo, brushes) = (undo_len(&app), count(&app));
+    click(&mut app, &ctx, "Pooling Wash", Modifiers::NONE, 0.0);
+    assert_eq!((count(&app), undo_len(&app)), (brushes + 1, undo + 1), "one brush, one undo step");
+    let n = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(path)).unwrap().clone();
+    assert_eq!(n.appearance.stroke().and_then(|s| s.brush.clone()).as_deref(), Some("Pooling Wash"));
+    click(&mut app, &ctx, "Brush Pen", Modifiers::NONE, 2.0);
+    assert!(has(&app, "Brush Pen"));
+    assert_eq!(app.run("brush.list", json!({})).unwrap()["current"], "Brush Pen");
+}
+
+#[test]
 fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     let mut app = app();
     let entries = crate::menus::menu_entries(&app);
@@ -131,6 +151,7 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
         opened,
         [
             json!("art-ribbons"),
+            json!("ink-and-wash"),
             json!("calligraphic-nibs"),
             json!("bristle-brushes"),
             json!("pattern-borders"),

@@ -1339,6 +1339,7 @@ lighting	Light	Cahaya
 	Rotate View Tool	Alat putar tampilan
 	Trackpad Gesture to Rotate View	Putar tampilan dengan gestur trackpad
 	Hold a Tool Shortcut to Use the Tool Temporarily	Tahan pintasan alat untuk menggunakan alat itu sementara
+	Show Bounding Box While Moving and Drawing	Tampilkan kotak pembatas saat memindahkan dan menggambar
 	Rotate View	Putar tampilan
 	Rounded Rectangle Tool	Alat persegi panjang bulat
 	Scale Tool	Alat skala
@@ -1843,6 +1844,7 @@ digits	Malayalam	Malayalam
 	Right-to-Left Paragraph Direction	Arah paragraf kanan ke kiri
 	Roman Hanging Punctuation	Tanda baca gantung Romawi
 	Korean Line Break Anywhere	Putus baris Korea di mana saja
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Pengaturan komposisi Asia Timur
 	Korean Composition Settings	Pengaturan komposisi Korea
 	Select a text object to edit its paragraph attributes.	Pilih objek teks untuk mengedit atribut paragrafnya.
@@ -2913,6 +2915,7 @@ antiAlias	Sharp	Tajam
 	Hide Code	Sembunyikan kode
 	Images:	Gambar:
 	Include Metadata	Sertakan metadata
+	Include Variable Data	Sertakan data variabel
 	Internal CSS	CSS internal
 	Layer Names	Nama lapisan
 	Minify	Minify
@@ -3346,6 +3349,7 @@ theme	Appearance	Tampilan
 	Move Mesh Points	Pindahkan titik-titik mesh
 	Move Spine Point	Pindahkan titik spine
 	Reshape Spine Segment	Bentuk ulang segmen spine
+	Blend Easing	Easing blend
 	Reset with Mesh	Atur ulang dengan mesh
 	Reset with Warp	Atur ulang dengan warp
 	Set Mesh Point Color	Tetapkan warna titik mesh
@@ -6089,6 +6093,11 @@ axis	Y Axis	Sumbu Y
 	User Brush Library 9	Pustaka kuas pengguna 9
 	User Brush Library 10	Pustaka kuas pengguna 10
 	Art Ribbons	Pita seni
+	Ink and Wash	Tinta dan sapuan
+	Tapered Ink	Tinta meruncing
+	Brush Pen	Pena kuas
+	Soft Wash	Sapuan lembut
+	Pooling Wash	Sapuan menggenang
 	Zigzag	Zigzag
 	Burst Ray	Sinar ledakan
 	Dash Trail	Jejak putus-putus

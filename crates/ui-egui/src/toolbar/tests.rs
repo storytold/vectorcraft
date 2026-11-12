@@ -155,6 +155,15 @@ fn more_tools_open_their_options() {
     assert!(crate::panel_docking::showing(&app.ui, "magicWand"));
     open_options(&mut app, "magicWand").unwrap();
     assert!(crate::panel_docking::showing(&app.ui, "magicWand"));
+    // With the panels hidden by Tab, the double-click shows them with the panel.
+    app.run("window.dock", json!({})).unwrap();
+    open_options(&mut app, "magicWand").unwrap();
+    assert!(app.ui.dock && crate::panel_docking::visible(&app.ui, "magicWand"), "the Magic Wand panel shows");
+    // In Presentation Mode the double-click does not fail, and the panel shows when the mode ends.
+    app.ui.screen_mode = 3;
+    open_options(&mut app, "magicWand").unwrap();
+    app.ui.screen_mode = 0;
+    assert!(crate::panel_docking::visible(&app.ui, "magicWand"), "the Magic Wand panel stays in place");
 }
 
 /// A double-click at `at`, `time` seconds in (a second apart from the last).

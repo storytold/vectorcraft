@@ -300,7 +300,9 @@ pub(super) fn save_suggesting(
         if ask && matches!(mode, SaveMode::SaveAs | SaveMode::Copy) && matches!(first.format.id, "svg" | "svgz") {
             return ask_format_options(app, mode, first.format, &path);
         }
-        return write_plan(app, first, (save_command(mode), with_path(p, &path)), None);
+        // Only `path` was asked about: the files written beside it are checked against the file
+        // the document was read from when the save writes them.
+        return write_plan(app, plan(app, mode, p)?, (save_command(mode), with_path(p, &path)), None);
     }
     if is_web(app) && ask_options {
         return Ok(open_options(app, mode.command(), first.format, &first.name, true));
@@ -337,6 +339,7 @@ pub(super) fn save_suggesting(
         crate::dialogs::opened_by_panel(app);
         return r;
     }
+    let chosen = plan(app, mode, &q)?;
     write_plan(app, chosen, (save_command(mode), q), None)
 }
 
