@@ -883,7 +883,13 @@ impl SaveJob {
     /// folder?, warnings, files?: [{name, dataBase64}] (every file, when there are several),
     /// linked?: [{name, dataBase64}]}`; with one → `{path, format, bytes, warnings, files?:
     /// [path…], linked?: [path…]}`.
-    pub fn write(&self, mut write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
+    pub fn write(&self, write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
+        self.write_unless(|_| None, write)
+    }
+
+    /// [`SaveJob::write`], once `stop` has seen the paths of every file it writes to a path, in
+    /// order: when `stop` returns a value, nothing is written and that value is returned.
+    pub fn write_unless(&self, stop: impl FnOnce(&[&str]) -> Option<Value>, mut write: impl FnMut(&str, &[u8]) -> Result<()>) -> Result<Value> {
         let (plan, doc) = (&self.plan, &*self.doc);
         let mut enc = self.encode()?;
         let warnings = std::mem::take(&mut enc.warnings);
@@ -897,6 +903,9 @@ impl SaveJob {
             return Ok(out);
         };
         let files = enc.named(doc, path);
+        if let Some(stopped) = stop(&files.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>()) {
+            return Ok(stopped);
+        }
         for (p, bytes) in &files {
             write(p, bytes)?;
         }
