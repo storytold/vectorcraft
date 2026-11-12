@@ -2282,6 +2282,7 @@ font-technology	Variable	Променливи
 	Options for Selection…	Опции за селектиране…
 	Options:	Опции:
 	Options…	Опции…
+	Organic Fades	Органични преливания
 	or more spaces with a tab	или повече интервала с табулация
 	Order:	Ред:
 	Ordinals	Поредни номера
@@ -2473,6 +2474,7 @@ font-technology	Variable	Променливи
 	Presets:	Предварителни настройки:
 	Press 	Натиснете 
 	Preview	Преглед
+	Preview:	Преглед:
 	Preview All Layers	Преглед на всички слоеве
 	Preview in Browser	Преглед в браузър
 	Preview in Browser needs the desktop app (the web downloads files instead)	Прегледът в браузър изисква настолното приложение (уеб версията изтегля файловете вместо това)
@@ -6559,6 +6561,11 @@ breakText	Glyphs	Глифи
 	Open With	Отваряне с
 	No importer plug-ins installed	Няма инсталирани плъгини за импортиране
 	Read files you open in its format and make documents from them	Четене на файлове, които отваряте в неговия формат, и създаване на документи от тях
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Копиране на информация за отстраняване на проблеми
+@msg	Copied the troubleshooting info	Информацията за отстраняване на проблеми е копирана
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Последната сесия на VectorCraft спря да отговаря, преди да се затвори. Помощ › Копиране на информация за отстраняване на проблеми копира подробностите за доклад за грешка
 
 # Safe Mode
 	Safe Mode…	Безопасен режим…

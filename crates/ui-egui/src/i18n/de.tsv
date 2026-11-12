@@ -808,6 +808,14 @@ font-technology	Variable	Variabel
 	Disable Auto Add/Delete	Automatisches Hinzufügen/Löschen deaktivieren
 	Disable Opacity Mask	Deckkraftmaske deaktivieren
 	Discard	Verwerfen
+	Preserve	Beibehalten
+	TIFF (Black & White)	TIFF (Schwarzweiß)
+	TIFF (8-bit Color)	TIFF (8-Bit-Farbe)
+	High Resolution	Hohe Auflösung
+	Medium Resolution	Mittlere Auflösung
+	Low Resolution	Niedrige Auflösung
+	Language Level 2	Sprachebene 2
+	Language Level 3	Sprachebene 3
 	Discard Empty Type	Leeren Text verwerfen
 	Discard Recovered Documents	Wiederhergestellte Dokumente verwerfen
 	Discard White Overprint in Output	Weißes Überdrucken in der Ausgabe verwerfen
@@ -2310,6 +2318,7 @@ file-filter	Templates	Vorlagen
 	Options for Selection…	Optionen für Auswahl…
 	Options:	Optionen:
 	Options…	Optionen…
+	Organic Fades	Organische Verläufe
 	or more spaces with a tab	oder mehr Leerzeichen durch einen Tabulator
 	Order:	Reihenfolge:
 	Ordinals	Ordinalzahlen
@@ -2503,6 +2512,7 @@ diagnostics	ui	Oberfläche
 	Presets:	Vorgaben:
 	Press 	Mit 
 	Preview	Vorschau
+	Preview:	Vorschau:
 	Preview All Layers	Vorschau aller Ebenen
 	Preview in Browser	Vorschau im Browser
 	Preview in Browser needs the desktop app (the web downloads files instead)	„Vorschau im Browser“ erfordert die Desktop-App (im Web werden stattdessen Dateien heruntergeladen)
@@ -6447,6 +6457,11 @@ breakText	Glyphs	Glyphen
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	ein Import-Plug-in gibt 1 bis {MAX_EXTENSIONS} `extensions` an
 @msg	only an exporter or an importer declares `extensions`	nur ein Export- oder Import-Plug-in gibt `extensions` an
 @msg	an importer always gets an import's budget: leave `budget` out	ein Import-Plug-in erhält immer das Budget eines Imports: Lassen Sie `budget` weg
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Informationen zur Fehlerbehebung kopieren
+@msg	Copied the troubleshooting info	Informationen zur Fehlerbehebung kopiert
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Die letzte VectorCraft-Sitzung reagierte nicht mehr, bevor sie geschlossen wurde. Hilfe › Informationen zur Fehlerbehebung kopieren kopiert die Details für einen Fehlerbericht
 
 # Safe Mode
 	Safe Mode…	Abgesicherter Modus…

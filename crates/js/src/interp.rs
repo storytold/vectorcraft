@@ -9,7 +9,8 @@
 //! Before each instruction the interpreter takes one unit of fuel, checks the interrupt flag and,
 //! when the heap has grown past its threshold, collects garbage. Running out of fuel, the heap
 //! limit, the frame limit, the re-entry limit and the interrupt flag each end the run with an
-//! [`Abrupt::Limit`] that unwinds every frame without running catch or finally blocks.
+//! [`Abrupt::Limit`] that unwinds every frame without running catch or finally blocks. Source
+//! compiled during a run takes a unit of fuel for each code unit before it is parsed.
 //!
 //! Collection runs only between instructions. An operation that may run JavaScript in the middle
 //! keeps its operands on the operand stack until it is done, so everything it holds is reachable
@@ -615,6 +616,22 @@ impl Interp {
         self.reserve_heap(bytes.saturating_add(extra))?;
         self.heap.bytes = self.heap.bytes.saturating_add(bytes);
         Ok(())
+    }
+
+    /// Prepares for parsing `units` code units of source at run time: takes a unit of fuel for
+    /// each code unit and checks that the source text fits in the heap, before any of it is
+    /// flattened, parsed or compiled. Running out of fuel uses up what was left.
+    pub(crate) fn prepare_source(&mut self, units: usize) -> JsResult<()> {
+        let fuel = u64::try_from(units).unwrap_or(u64::MAX);
+        if fuel > self.fuel {
+            self.fuel = 0;
+            return Err(Abrupt::Limit(LimitKind::Fuel));
+        }
+        self.fuel -= fuel;
+        if self.interrupt.load(Ordering::Relaxed) {
+            return Err(Abrupt::Limit(LimitKind::Interrupted));
+        }
+        self.reserve_heap(string_bytes(units))
     }
 
     /// Removes the [`Self::finally_marks`] entries of `finally` blocks that `break`, `continue` or
@@ -2401,6 +2418,7 @@ impl Interp {
         };
         let strict = self.strict();
         self.check_source_units(s.len()).map_err(|e| self.compile_error_to_abrupt(e))?;
+        self.prepare_source(s.len())?;
         let units = s.flat();
         let code = self.compile_source(&units, strict, CodeKind::Eval).map_err(|e| self.compile_error_to_abrupt(e))?;
         self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES))?;

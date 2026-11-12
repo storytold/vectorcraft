@@ -1841,6 +1841,7 @@ font-technology	Variable	Μεταβλητές
 	Options:	Επιλογές:
 	Options…	Επιλογές…
 	Ordinals	Τακτικοί αριθμοί
+	Organic Fades	Οργανικές διαβαθμίσεις
 	Orientation	Προσανατολισμός
 	Orientation:	Προσανατολισμός:
 	Original	Πρωτότυπο
@@ -1889,6 +1890,7 @@ font-technology	Variable	Μεταβλητές
 	Preset:	Προεπιλογή:
 	Presets:	Προεπιλογές:
 	Preview	Προεπισκόπηση
+	Preview:	Προεπισκόπηση:
 	Previous	Προηγούμενο
 	Print	Εκτύπωση
 	Printer	Εκτυπωτής
@@ -6812,6 +6814,11 @@ breakText	Glyphs	Γλύφοι
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	ένα πρόσθετο εισαγωγής δηλώνει 1 έως {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	μόνο ένα πρόσθετο εξαγωγής ή εισαγωγής δηλώνει `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	ένα πρόσθετο εισαγωγής παίρνει πάντα τον προϋπολογισμό μιας εισαγωγής: παραλείψτε το `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Αντιγραφή πληροφοριών αντιμετώπισης προβλημάτων
+@msg	Copied the troubleshooting info	Οι πληροφορίες αντιμετώπισης προβλημάτων αντιγράφηκαν
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Η τελευταία συνεδρία του VectorCraft σταμάτησε να αποκρίνεται πριν κλείσει. Βοήθεια › Αντιγραφή πληροφοριών αντιμετώπισης προβλημάτων αντιγράφει τις λεπτομέρειες για αναφορά σφάλματος
 
 # Safe Mode
 	Safe Mode…	Ασφαλής λειτουργία…

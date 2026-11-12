@@ -191,6 +191,9 @@ fn lock_disabled(_: &Path) -> Option<std::fs::File> {
 thread_local! {
     /// Tests: [`Session::put_back_plugin`] fails on this thread, as on a full volume.
     pub(crate) static PUT_BACK_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Tests: removing [`GRANTS_FILE`] fails on this thread while the file still reads, as when
+    /// another program holds it open.
+    pub(crate) static GRANTS_DELETE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Tests: [`Session::put_back_plugin`] writes the old module back on this thread and then
     /// reports a failure, as when the last flush of a copy fails.
     pub(crate) static PUT_BACK_FAILS_AFTER_WRITE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -205,7 +208,15 @@ thread_local! {
 /// Remove `dir/file` → whether it is gone; a file that isn't there is what was wanted.
 fn take(dir: &Path, file: &str) -> bool {
     let path = dir.join(file);
-    match std::fs::remove_file(&path) {
+    #[cfg(test)]
+    let removed = if file == GRANTS_FILE && GRANTS_DELETE_FAILS.get() {
+        Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
+    } else {
+        std::fs::remove_file(&path)
+    };
+    #[cfg(not(test))]
+    let removed = std::fs::remove_file(&path);
+    match removed {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
             log::warn!("can't remove {}: {e}", path.display());
             false

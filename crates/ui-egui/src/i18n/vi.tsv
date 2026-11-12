@@ -964,6 +964,14 @@ font-technology	Variable	Biến thiên
 	Disable Auto Add/Delete	Tắt tự động thêm/xóa
 	Disable Opacity Mask	Tắt mặt nạ độ mờ
 	Discard	Loại bỏ
+	Preserve	Bảo lưu
+	TIFF (Black & White)	TIFF (Đen trắng)
+	TIFF (8-bit Color)	TIFF (Màu 8 bit)
+	High Resolution	Độ phân giải cao
+	Medium Resolution	Độ phân giải vừa
+	Low Resolution	Độ phân giải thấp
+	Language Level 2	Cấp ngôn ngữ 2
+	Language Level 3	Cấp ngôn ngữ 3
 	Discard Empty Type	Loại bỏ chữ trống
 	Discard Recovered Documents	Loại bỏ tài liệu đã phục hồi
 	Discard White Overprint in Output	Loại bỏ in chồng màu trắng khi xuất
@@ -2880,6 +2888,7 @@ diagnostics	ui	giao diện
 	Press 	Nhấn 
 	Pressure	Áp lực
 	Preview	Xem trước
+	Preview:	Xem trước:
 	Preview All Layers	Xem trước tất cả lớp
 	Preview in Browser	Xem trước trong trình duyệt
 	Preview in Browser needs the desktop app (the web downloads files instead)	Xem trước trong trình duyệt cần ứng dụng máy tính để bàn (web sẽ tải tệp xuống thay thế)
@@ -2954,6 +2963,7 @@ mark-style	Japanese	Kiểu Nhật
 	Radial Blur…	Mờ hướng tâm…
 	Radial Dividers:	Đường chia hướng tâm:
 	Radial Glows	Ánh sáng hướng tâm
+	Organic Fades	Mờ dần tự nhiên
 	Radial Gradient	Chuyển sắc hướng tâm
 	Conic Gradient	Chuyển sắc hình nón
 	Diamond Gradient	Chuyển sắc hình thoi
@@ -6462,6 +6472,11 @@ breakText	Glyphs	Glyph
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	plug-in nhập khai báo từ 1 đến {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	chỉ plug-in xuất hoặc nhập mới khai báo `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	plug-in nhập luôn nhận ngân sách của một lần nhập: hãy bỏ `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Sao chép thông tin khắc phục sự cố
+@msg	Copied the troubleshooting info	Đã sao chép thông tin khắc phục sự cố
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Phiên VectorCraft trước đã ngừng phản hồi trước khi đóng. Trợ giúp › Sao chép thông tin khắc phục sự cố sẽ sao chép chi tiết cho báo cáo lỗi
 
 # Safe Mode
 	Safe Mode…	Chế độ an toàn…

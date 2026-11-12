@@ -495,6 +495,7 @@
 	Gaussian Blur…	გაუსის გაბუნდოვნება…
 	View	ხედი
 	Preview	წინასწარი ნახვა
+	Preview:	წინასწარი ნახვა:
 	Overprint Preview	ზედდაბეჭდვის წინასწარი ნახვა
 	Pixel Preview	პიქსელების წინასწარი ნახვა
 	Trim View	მოჭრილი ხედი
@@ -732,6 +733,7 @@
 	Spectrum Gradients	სპექტრის გრადიენტები
 	Sky Gradients	ცის გრადიენტები
 	Neutral Gradients	ნეიტრალური გრადიენტები
+	Organic Fades	ორგანული გაქრობები
 	Duotone Gradients	ორტონიანი გრადიენტები
 	Radial Glows	რადიალური ნათებები
 	Save Swatch Library…	ფერის ნიმუშების ბიბლიოთეკის შენახვა…
@@ -6969,6 +6971,11 @@ font-script	Japanese	იაპონური
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	იმპორტის პლაგინი აცხადებს 1-დან {MAX_EXTENSIONS}-მდე `extensions`-ს
 @msg	only an exporter or an importer declares `extensions`	`extensions`-ს მხოლოდ ექსპორტის ან იმპორტის პლაგინი აცხადებს
 @msg	an importer always gets an import's budget: leave `budget` out	იმპორტის პლაგინი ყოველთვის იღებს იმპორტის ბიუჯეტს: გამოტოვეთ `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	პრობლემების მოგვარების ინფორმაციის კოპირება
+@msg	Copied the troubleshooting info	პრობლემების მოგვარების ინფორმაცია კოპირებულია
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	VectorCraft-ის ბოლო სესიამ დახურვამდე პასუხის გაცემა შეწყვიტა. დახმარება › პრობლემების მოგვარების ინფორმაციის კოპირება აკოპირებს დეტალებს შეცდომის ანგარიშისთვის
 
 # Safe Mode
 	Safe Mode…	უსაფრთხო რეჟიმი…

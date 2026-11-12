@@ -2295,6 +2295,7 @@ font-technology	Variable	Variabla
 	Options for Selection…	Alternativ för markering…
 	Options:	Alternativ:
 	Options…	Alternativ…
+	Organic Fades	Organiska toningar
 	or more spaces with a tab	eller fler blanksteg med en tabb
 	Order:	Ordning:
 	Ordinals	Ordningstal
@@ -2484,6 +2485,7 @@ font-technology	Variable	Variabla
 	Presets:	Förinställningar:
 	Press 	Tryck på 
 	Preview	Förhandsgranskning
+	Preview:	Förhandsgranskning:
 	Preview All Layers	Förhandsgranska alla lager
 	Preview in Browser	Förhandsgranska i webbläsare
 	Preview in Browser needs the desktop app (the web downloads files instead)	Förhandsgranska i webbläsare kräver skrivbordsappen (webbversionen hämtar filerna i stället)
@@ -7473,7 +7475,7 @@ digits	Hindi	Hindi
 @msg	EPS {field} `{s}`: {allowed}	EPS {field} `{s}`: {allowed}
 @msg	EPS flattener: {e}	EPS-utplattning: {e}
 @msg	EPS options: {e}	EPS-alternativ: {e}
-@msg	EPS Save retains the artboard and all artwork: use document.export for cropped or selected-only EPS	När du sparar som EPS behålls ritytan och allt bildmaterial: använd document.export för beskuren EPS eller EPS med bara det markerade
+@msg	EPS Save writes all artwork: use document.export for selected-only EPS	När du sparar som EPS skrivs allt bildmaterial: använd document.export för EPS med bara det markerade
 @msg	every numbered name for the result is taken	alla numrerade namn för resultatet är upptagna
 @msg	expanded SVG styles exceed the import size limit	de expanderade SVG-stilarna överskrider storleksgränsen för import
 @msg	expected {"dataBase64"}	förväntade {"dataBase64"}
@@ -8340,6 +8342,11 @@ digits	Hindi	Hindi
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	filen är större än de {MAX_INPUT_BYTES} byte som en importfunktion läser
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	en importfunktion anger 1 till {MAX_EXTENSIONS} `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	en importfunktion får alltid en imports budget: utelämna `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Kopiera felsökningsinformation
+@msg	Copied the troubleshooting info	Kopierade felsökningsinformationen
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Den senaste VectorCraft-sessionen slutade svara innan den stängdes. Hjälp › Kopiera felsökningsinformation kopierar detaljerna till en felrapport
 
 # Safe Mode
 	Safe Mode…	Felsäkert läge…

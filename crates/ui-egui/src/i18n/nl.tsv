@@ -534,6 +534,7 @@
 	Gaussian Blur…	Gaussiaanse vervaging…
 	View	Beeld
 	Preview	Voorbeeld
+	Preview:	Voorbeeld:
 	Overprint Preview	Overprintvoorbeeld
 	Pixel Preview	Pixelvoorbeeld
 	Trim View	Bijsnijweergave
@@ -786,6 +787,7 @@
 	Spectrum Gradients	Spectrumverlopen
 	Sky Gradients	Luchtverlopen
 	Neutral Gradients	Neutrale verlopen
+	Organic Fades	Organische vervagingen
 	Duotone Gradients	Duotoonverlopen
 	Radial Glows	Radiale gloed
 	Save Swatch Library…	Staalenbibliotheek opslaan…
@@ -6624,6 +6626,11 @@ breakText	Glyphs	Glyphs
 	Open With	Openen met
 	No importer plug-ins installed	Geen importplug-ins geïnstalleerd
 	Read files you open in its format and make documents from them	Bestanden lezen die u in zijn indeling opent en er documenten van maken
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Probleemoplossingsgegevens kopiëren
+@msg	Copied the troubleshooting info	Probleemoplossingsgegevens gekopieerd
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	De laatste sessie van VectorCraft reageerde niet meer voordat deze werd gesloten. Help › Probleemoplossingsgegevens kopiëren kopieert de details voor een foutrapport
 
 # Safe Mode
 	Safe Mode…	Veilige modus…

@@ -2356,6 +2356,7 @@ font-technology	Variable	Variables
 	Options for Selection…	Opciones de la selección…
 	Options:	Opciones:
 	Options…	Opciones…
+	Organic Fades	Desvanecidos orgánicos
 	or more spaces with a tab	o más espacios por una tabulación
 	Order:	Orden:
 	Ordinals	Ordinales
@@ -2547,6 +2548,7 @@ font-technology	Variable	Variables
 	Presets:	Preajustes:
 	Press 	Presiona 
 	Preview	Vista previa
+	Preview:	Vista previa:
 	Preview All Layers	Previsualizar todas las capas
 	Preview in Browser	Previsualizar en el navegador
 	Preview in Browser needs the desktop app (the web downloads files instead)	Previsualizar en el navegador requiere la aplicación de escritorio (la versión web descarga los archivos)
@@ -6803,6 +6805,11 @@ breakText	Glyphs	Glifos
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	un plugin de importación declara de 1 a {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	solo un plugin de exportación o de importación declara `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	un plugin de importación siempre recibe el presupuesto de una importación: omita `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Copiar información de solución de problemas
+@msg	Copied the troubleshooting info	Se copió la información de solución de problemas
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	La última sesión de VectorCraft dejó de responder antes de cerrarse. Ayuda › Copiar información de solución de problemas copia los detalles para un informe de error
 
 # Safe Mode
 	Safe Mode…	Modo seguro…

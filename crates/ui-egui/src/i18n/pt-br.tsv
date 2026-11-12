@@ -1953,6 +1953,7 @@ antiAlias	Sharp	Nítido
 	Options…	Opções…
 	Order:	Ordem:
 	Ordinals	Ordinais
+	Organic Fades	Esmaecimentos Orgânicos
 	Orientation	Orientação
 	Orientation:	Orientação:
 	Original	Original
@@ -2120,6 +2121,7 @@ antiAlias	Sharp	Nítido
 	Presets:	Predefinidos:
 	Press 	Pressione 
 	Preview	Visualização
+	Preview:	Visualização:
 	Preview Mode	Modo de Visualização
 	Preview in Browser	Visualizar no Navegador
 	Preview the document as it is now	Visualizar o documento como está agora
@@ -6933,6 +6935,11 @@ swatch	Yellow Green	Verde-amarelado
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	um plug-in de importação declara de 1 a {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	só um plug-in de exportação ou de importação declara `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	um plug-in de importação sempre recebe o orçamento de uma importação: omita `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Copiar informações de solução de problemas
+@msg	Copied the troubleshooting info	Informações de solução de problemas copiadas
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	A última sessão do VectorCraft parou de responder antes de fechar. Ajuda › Copiar informações de solução de problemas copia os detalhes para um relatório de bug
 
 # Safe Mode
 	Safe Mode…	Modo de Segurança…
