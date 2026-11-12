@@ -33,8 +33,12 @@ older-version save, recovery and installed-font-removal regressions cover resour
 The serde round-trip regressions use a test-only `serde_json` dependency; the read-only harakat
 panic probe asserts unwind safety locally without restricting production font interfaces.
 The height-reference regression uses a fixture with explicit OS/2 cap-height metadata.
-Existing PDF respacing and composite-font regressions remain. **OPS reports successful focused
-text-test compilation; the corrected height fixture and broader runtime checks await verification.**
+Native and recovery regression fixtures put artwork inside a layer, preserving the document
+structure that placement, clipboard insertion and native reopening require.
+SVG regression checks read the text response and require both owned faces to be embedded; the
+existing warning for overlapping CSS font descriptions is distinct from font substitution.
+Existing PDF respacing and composite-font regressions remain. **OPS reports all focused file-font
+and renderer ownership tests passing; corrected engine fidelity and recovery fixtures await runtime verification.**
 No parity score or estimate changes.
 
 **Fidelity** is estimated unless a test is named. Test sources: unit and property tests per crate

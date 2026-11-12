@@ -86,7 +86,7 @@ fn carried_font_copy() -> (Arc<MemoryStore>, vectorcraft_doc::NodeId) {
         "x",
     )));
     let id = doc.alloc_id();
-    doc.insert(None, usize::MAX, Node::new(id, NodeKind::Text(Box::new(text)))).unwrap();
+    doc.insert(Some(doc.layers[0].id), usize::MAX, Node::new(id, NodeKind::Text(Box::new(text)))).unwrap();
     let saved = s.execute("file.recovery.save", &json!({})).unwrap();
     let file = saved["saved"][0]["file"].as_str().unwrap();
     let lean = vectorcraft_format::load(&store.read(&format!("{file}.vectorcraft")).unwrap()).unwrap();

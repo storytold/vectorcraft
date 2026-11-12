@@ -272,7 +272,7 @@ fn owned_font_document(family: &str, width: f64) -> (vectorcraft_doc::Document, 
     let mut t = TextObject::point(Point::new(10.0, 40.0), "x", CharStyle { font_family: family.into(), size: 20.0, ..Default::default() });
     t.file_fonts = Some(Box::new(FileFonts::new(vec![FileFont { family: family.into(), style: "Regular".into(), key: "chosen".into() }], "x")));
     let id = doc.alloc_id();
-    doc.insert(None, usize::MAX, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+    doc.insert(Some(doc.layers[0].id), usize::MAX, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
     (doc, blob, id)
 }
 
@@ -318,9 +318,17 @@ fn owned_file_fonts_survive_native_open_close_clipboard_undo_and_export() {
     s.execute("edit.redo", &json!({})).unwrap();
     assert_eq!(face_of(&s, id).file_data(), b_blob.bytes.as_slice());
     for options in [json!({"format": "pdf", "advanced": {"outlineText": false}}), json!({"format": "svg", "embedFonts": true})] {
+        let svg = options["format"] == "svg";
         let exported = s.execute("document.serialize", &options).unwrap();
-        assert!(!exported["dataBase64"].as_str().unwrap().is_empty());
-        assert!(!exported["warnings"].to_string().contains(FAMILY), "{exported}");
+        if svg {
+            let text = exported["text"].as_str().unwrap();
+            assert_eq!(text.matches("@font-face").count(), 2, "both distinct owned faces are embedded");
+        } else {
+            let bytes = vectorcraft_format::base64_decode(exported["dataBase64"].as_str().unwrap()).unwrap();
+            assert!(bytes.starts_with(b"%PDF-"));
+        }
+        // SVG may warn that the same CSS description cannot distinguish these two x glyphs.
+        assert!(!exported["warnings"].to_string().contains(vectorcraft_text::FALLBACK_FAMILY), "{exported}");
     }
     let saved = s.execute("document.serialize", &json!({"format": "vectorcraft"})).unwrap();
     s.execute("document.open", &json!({"name": "pasted.vectorcraft", "dataBase64": saved["dataBase64"]})).unwrap();
@@ -400,7 +408,7 @@ fn linked_owned_font_document(family: &str) -> (vectorcraft_doc::Document, vecto
         placement: Default::default(),
     };
     let id = host.alloc_id();
-    host.insert(None, usize::MAX, Node::new(id, NodeKind::PlacedDocument(Box::new(placed)))).unwrap();
+    host.insert(Some(host.layers[0].id), usize::MAX, Node::new(id, NodeKind::PlacedDocument(Box::new(placed)))).unwrap();
     (host, expected, id)
 }
 
