@@ -3356,3 +3356,22 @@ fn hebrew_parallel_round5_view_values() {
         assert_eq!(tr(he, source), expected, "Hebrew source mismatch: {source}");
     }
 }
+
+#[test]
+fn hebrew_parallel_round5_color_values() {
+    let he = Lang::from_code("he").expect("Hebrew locale available");
+    for (source, expected) in [
+        ("Apply Fill to Stroke", "החלת המילוי על קו המתאר"),
+        ("Apply Stroke to Fill", "החלת קו המתאר על המילוי"),
+        ("Apply Last Color", "החלת הצבע האחרון"),
+        ("Apply Last Gradient", "החלת מעבר הצבע האחרון"),
+        ("Enable Opacity Mask", "הפעלת מסכת אטימות"),
+        ("Disable Opacity Mask", "השבתת מסכת אטימות"),
+        ("Make Opacity Mask", "יצירת מסכת אטימות"),
+        ("Copy Color Value (Hex)", "העתקת ערך צבע (HEX)"),
+        ("Fill Tint", "גוון מילוי"),
+        ("Auto Color", "צביעה אוטומטית"),
+    ] {
+        assert_eq!(tr(he, source), expected, "Hebrew source mismatch: {source}");
+    }
+}

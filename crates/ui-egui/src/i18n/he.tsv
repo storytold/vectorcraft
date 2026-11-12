@@ -1445,3 +1445,13 @@
 	More Align options	אפשרויות יישור נוספות
 	Reset Rotate View	איפוס סיבוב התצוגה
 	Rearrange All Artboards	סידור מחדש של כל משטחי העבודה
+	Apply Fill to Stroke	החלת המילוי על קו המתאר
+	Apply Stroke to Fill	החלת קו המתאר על המילוי
+	Apply Last Color	החלת הצבע האחרון
+	Apply Last Gradient	החלת מעבר הצבע האחרון
+	Enable Opacity Mask	הפעלת מסכת אטימות
+	Disable Opacity Mask	השבתת מסכת אטימות
+	Make Opacity Mask	יצירת מסכת אטימות
+	Copy Color Value (Hex)	העתקת ערך צבע (HEX)
+	Fill Tint	גוון מילוי
+	Auto Color	צביעה אוטומטית
