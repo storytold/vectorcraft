@@ -864,6 +864,13 @@
 	Dock Panel	Usidri panel
 	Dock to Top	Usidri na vrh
 	Dock to Bottom	Usidri na dno
+	Control Bar Options	Opcije kontrolne trake
+	Tool Options	Opcije alata
+	Object Options	Opcije objekta
+	Image Options	Opcije slike
+	Vertical Alignment	Okomito poravnanje
+	Align and Distribute	Poravnanje i raspored
+	Document Options	Opcije dokumenta
 	Dock Control Bar	Usidri kontrolnu traku
 	Float Tool Group	Odvoji grupu alata
 	Services	Usluge
@@ -1148,6 +1155,8 @@ lighting	Light	Svjetlo
 	Toolbar: Single/Double Column	Traka s alatima: jedna/dvije kolone
 	Toolbar: Add Tool	Traka s alatima: dodaj alat
 	Toolbar: Remove Tool	Traka s alatima: ukloni alat
+	Add Tool…	Dodaj alat…
+	Remove Tool	Ukloni alat
 	Toolbar: Reset	Traka s alatima: vrati na početno
 	Two Point Perspective Preset 1	Predložak perspektive s dvije tačke 1
 	Two Point Perspective Preset 2	Predložak perspektive s dvije tačke 2
@@ -1656,6 +1665,7 @@ digits	Malayalam	Malajalam
 	No gradient swatches	Nema gradijentnih uzoraka boja
 	Points: clicks add free points	Tačke: klikovi dodaju slobodne tačke
 	Radial Gradient	Radijalni gradijent
+	Conic Gradient	Konusni gradijent
 	Reset to White, Black	Vrati na bijelu, crnu
 	Reverse Gradient	Obrni gradijent
 	Save to Swatches	Sačuvaj u uzorke boja
@@ -4435,6 +4445,8 @@ imageTrace	Outline	Obris
 @msg	`groupColors` must be an array	`groupColors` mora biti niz
 @msg	`library` is a library id or name (see {list})	`library` je ID ili naziv biblioteke (vidi {list})
 @msg	`mode` applies to freeform gradients	`mode` se primjenjuje na gradijente slobodnog oblika
+@msg	a negative `aspect` applies to conic gradients	negativan `aspect` se primjenjuje na konusne gradijente
+@msg	`focal` applies to radial gradients	`focal` se primjenjuje na radijalne gradijente
 @msg	`preserve` must be an object	`preserve` mora biti objekat
 @msg	`globalAdjust` must be an object	`globalAdjust` mora biti objekat
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` mora biti 1, 3 ili 5
@@ -4924,7 +4936,7 @@ imageTrace	Outline	Obris
 @msg	unknown format	nepoznat format
 @msg	unknown format `{f}` (Save writes {_1})	nepoznat format `{f}` (Sačuvaj zapisuje {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	nepoznat način slobodnog oblika `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	nepoznata vrsta gradijenta `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	nepoznata vrsta gradijenta `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	nepoznato isticanje `{h}`
 @msg	unknown option `{path}.{k}`	nepoznata opcija `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	nepoznati pretisci `{o}` (preserve, simulate ili discard)
@@ -5144,7 +5156,13 @@ imageTrace	Outline	Obris
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	datoteka HEIC ili HEIF sadrži vrstu slike koju nije moguće pročitati
 @msg	HEIC and HEIF images can't be opened in this build	HEIC i HEIF slike nije moguće otvoriti u ovoj verziji programa
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD slika je prevelika za čitanje ({_1} × {_2} piksela)
-@msg	zipped 32-bit PSD image data with prediction can't be read	zipovani 32-bitni PSD podaci slike s predviđanjem ne mogu se pročitati
+@msg	zipped 1-bit PSD image data with prediction can't be read	zipovani 1-bitni PSD podaci slike s predviđanjem ne mogu se pročitati
+@msg	the PSD file's layer data uses an unknown compression ({m})	podaci slojeva PSD datoteke koriste nepoznatu kompresiju ({m})
+@msg	the PSD file's layer records are damaged	zapisi slojeva PSD datoteke su oštećeni
+@msg	the PSD file's layer groups are nested too deeply	grupe slojeva PSD datoteke su previše duboko ugniježđene
+@msg	a layer of the PSD file is too large to read	sloj PSD datoteke je prevelik za čitanje
+@msg	the PSD file's layers take more memory to read than allowed	slojevi PSD datoteke zahtijevaju više memorije za čitanje nego što je dozvoljeno
+@msg	the layers can't be read ({e}): the file opened as its merged image	slojevi se ne mogu pročitati ({e}): datoteka je otvorena kao spojena slika
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bitne PSD datoteke u ovom načinu boja ne mogu se pročitati
 @msg	the PSD file is cut short	PSD datoteka je skraćena
 @msg	the PSD file's header is damaged	zaglavlje PSD datoteke je oštećeno
@@ -5639,7 +5657,7 @@ mark-style	Japanese	Japanski
 @msg	span must be "object" or "selection", got {v}	span mora biti "object" ili "selection", dobiveno {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" postavlja `gradient`, a ne uzorak boje
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" postavlja gradijent: navedite `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" postavlja linearni ili radijalni gradijent, a ne gradijent slobodnog oblika
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" postavlja linearni, radijalni ili konusni gradijent, a ne gradijent slobodnog oblika
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" postavlja sam gradijent: izostavite `start` i `end` (oni ga već postavljaju u koordinatama dokumenta)
 	Make Image Dynamic	Učini sliku dinamičkom
 	Import Data Sets…	Uvezi skupove podataka…
@@ -6572,6 +6590,7 @@ shape	Open	Otvoren
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Poravnaj s mrežom piksela
+	Not Aligned to Pixel Grid	Nije poravnato s mrežom piksela
 @msg	side is left or right, not `{s}`	side je left ili right, a ne `{s}`
 	Edit Custom Dictionary	Uredi prilagođeni rječnik
 	Entry:	Unos:

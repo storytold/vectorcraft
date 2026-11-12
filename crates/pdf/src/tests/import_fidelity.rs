@@ -474,6 +474,22 @@ fn a_composite_font_is_noted_by_its_cid_font_name() {
     assert_eq!(noted("<< /Type /Font /Subtype /Type1 /BaseFont /Vctest-Identity-H >>"), ["Vctest-Identity-H"]);
 }
 
+/// A form drawn again and again without resources of its own reads the page's font dictionary once,
+/// not at every drawing; the fonts are noted all the same.
+#[test]
+fn a_form_drawn_many_times_reads_its_font_resources_once() {
+    let form_no = first_extra(1);
+    let form = stream("/Type /XObject /Subtype /Form /BBox [0 0 100 100]", "0 0 1 rg 50 50 30 30 re f");
+    let resources = format!("/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> /XObject << /X0 {form_no} 0 R >>");
+    let page = PdfPage { resources, ..PdfPage::new(100.0, 100.0, &format!("BT /F1 24 Tf 10 30 Td (Hi) Tj ET {}", "/X0 Do ".repeat(500))) };
+    let pdf = craft_pdf::syntax::Pdf::new(pdf_with(&[page], &[&form], None)).unwrap();
+    let mut fonts = crate::import_scan::FontNames::new();
+    let mut ocgs = crate::import_scan::Ocgs::read(&pdf);
+    let walk = crate::import_scan::walk_page(&pdf.pages()[0], &mut ocgs, false, &mut fonts, pdf.decode_limits().max_decoded_stream());
+    assert_eq!(walk.font_dicts.len(), 1);
+    assert_eq!(walk.fonts.len(), 1);
+}
+
 /// A value of the page's font dictionary that the reader can't parse (a name with a broken `#`
 /// escape, a number with a stray `-`) is left out when the page's fonts are noted, and the fonts
 /// after it are noted.
@@ -682,6 +698,74 @@ fn a_function_based_shading_along_one_axis_becomes_a_linear_gradient() {
     assert_eq!(edges.len(), 8, "{:?}", g.gradient.stops);
     for (k, e) in edges.iter().take(7).enumerate() {
         assert!((e - (k + 1) as f32 / 8.0).abs() < 1e-4, "change {k} at {e}");
+    }
+}
+
+/// A function-based shading whose calculator function turns the angle about the origin into a gray
+/// ramp (`atan` gives the angle of `y` over `x` in degrees, 0 to 360, ISO 32000-1 7.10.5) comes in
+/// as a conic gradient about the origin's place on the page, turning the way the page shows it.
+#[test]
+fn a_function_based_shading_around_the_origin_becomes_a_conic_gradient() {
+    use vectorcraft_geom::Point;
+    let _held = shadings();
+    // The origin at the square's center, a unit 50 pt.
+    let r = function_shading("-1 1 -1 1", "50 0 0 50 50 50", "{ exch atan 360 div dup dup }");
+    assert!(!r.warnings.iter().any(|w| w.contains("flat")), "{:?}", r.warnings);
+    let g = all(&r.document)
+        .into_iter()
+        .find_map(|n| match n.appearance.fill().map(|f| &f.paint) {
+            Some(Paint::Gradient(g)) => Some(g.clone()),
+            _ => None,
+        })
+        .expect("a gradient fill");
+    assert_eq!(g.gradient.kind, GradientKind::Conic);
+    let geom = g.geom.unwrap();
+    assert!(geom.start.distance(Point::new(50.0, 50.0)) < 0.01, "{geom:?}");
+    // The page's y runs up, the document's down: the sweep turns counterclockwise on the page,
+    // through the top of the square a quarter turn on.
+    assert!(geom.is_mirrored(), "{geom:?}");
+    for (x, y, want) in [(90.0, 48.0, 0.0), (50.0, 10.0, 0.25), (10.0, 50.0, 0.5), (50.0, 90.0, 0.75), (90.0, 52.0, 1.0)] {
+        let gray = g.gradient.sample(geom.param_at(GradientKind::Conic, Point::new(x, y)) as f32).0.to_rgb()[0];
+        assert!((gray - want).abs() < 0.03, "({x}, {y}): {gray} vs {want}");
+    }
+}
+
+/// The same shading over a domain that leaves the origin out (the conic's center lies off the
+/// painted area) comes in as a conic gradient too, with the colors the domain shows, whether or not
+/// the seam (angle 0) runs through it.
+#[test]
+fn a_function_based_shading_beside_the_origin_becomes_a_conic_gradient() {
+    use vectorcraft_geom::Point;
+    let _held = shadings();
+    // The shading's x and y from a point of the 100 pt page (its y up, the document's down).
+    let turn = |x: f64, y: f64| {
+        let (sx, sy) = ((x - 50.0) / 50.0, (50.0 - y) / 50.0);
+        sy.atan2(sx).to_degrees().rem_euclid(360.0) / 360.0
+    };
+    for (domain, points) in [
+        // Right of the origin, across the seam.
+        ("0.2 1 -0.6 0.6", [(70.0, 30.0), (70.0, 70.0), (90.0, 45.0), (90.0, 55.0), (65.0, 25.0)]),
+        // Above it.
+        ("-1 1 0.2 1", [(50.0, 20.0), (20.0, 30.0), (80.0, 30.0), (5.0, 35.0), (95.0, 5.0)]),
+        // The origin on its left edge: the rays it shows run from straight down to straight up.
+        ("0 1 -1 1", [(52.0, 5.0), (52.0, 95.0), (90.0, 40.0), (90.0, 60.0), (75.0, 20.0)]),
+    ] {
+        let r = function_shading(domain, "50 0 0 50 50 50", "{ exch atan 360 div dup dup }");
+        let g = all(&r.document)
+            .into_iter()
+            .find_map(|n| match n.appearance.fill().map(|f| &f.paint) {
+                Some(Paint::Gradient(g)) => Some(g.clone()),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{domain}: a gradient fill, {:?}", r.warnings));
+        assert_eq!(g.gradient.kind, GradientKind::Conic, "{domain}");
+        let geom = g.geom.unwrap();
+        assert!(geom.start.distance(Point::new(50.0, 50.0)) < 0.01, "{domain}: {geom:?}");
+        for (x, y) in points {
+            let gray = g.gradient.sample(geom.param_at(GradientKind::Conic, Point::new(x, y)) as f32).0.to_rgb()[0];
+            let want = turn(x, y) as f32;
+            assert!((gray - want).abs() < 0.03, "{domain} ({x}, {y}): {gray} vs {want}");
+        }
     }
 }
 
