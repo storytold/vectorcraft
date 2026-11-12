@@ -572,8 +572,9 @@ fn an_area_tidied_away_before_it_is_locked_is_busy() {
     // The folder went before it was checked or its lock file opened.
     std::fs::remove_dir(&area).unwrap();
     assert!(matches!(FolderStore::lock_area(&area), Ok(Lock::Busy)));
-    // A lock file made again under the same name is not the one opened.
-    #[cfg(unix)]
+    // A lock file made again under the same name is not the one opened, also where it keeps the
+    // removed one's creation time (NTFS does within 15 seconds).
+    #[cfg(any(unix, windows))]
     {
         std::fs::create_dir_all(&area).unwrap();
         let opened = open(true);

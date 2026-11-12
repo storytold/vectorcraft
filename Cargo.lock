@@ -6498,6 +6498,7 @@ dependencies = [
  "roxmltree 0.21.2",
  "rustix 1.1.6",
  "ruzstd",
+ "same-file",
  "serde",
  "serde_json",
  "skrifa 0.47.0",

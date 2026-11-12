@@ -342,7 +342,8 @@ impl FolderStore {
     }
 
     /// Does `path` still name `file`? On Unix the two must be the same file (device and inode); on
-    /// Windows they must have the same creation time; elsewhere `path` must exist.
+    /// Windows they must be the same file (volume serial number and file index); elsewhere `path`
+    /// must exist. When either file can't be read, it does not.
     fn still_named(file: &std::fs::File, path: &std::path::Path) -> bool {
         #[cfg(unix)]
         {
@@ -354,9 +355,9 @@ impl FolderStore {
         }
         #[cfg(windows)]
         {
-            use std::os::windows::fs::MetadataExt as _;
-            match (file.metadata(), std::fs::symlink_metadata(path)) {
-                (Ok(a), Ok(b)) => a.creation_time() == b.creation_time(),
+            let opened = file.try_clone().and_then(same_file::Handle::from_file);
+            match (opened, same_file::Handle::from_path(path)) {
+                (Ok(a), Ok(b)) => a == b,
                 _ => false,
             }
         }
