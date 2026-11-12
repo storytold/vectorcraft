@@ -1006,7 +1006,7 @@ impl SaveJob {
         // The other open documents that place this one show the new version.
         let written = self.plan.path.clone().filter(|_| matches!(self.plan.format.id, "vectorcraft" | "template"));
         // A save of the arrowheads file lists its heads in the arrowhead menus.
-        let native = (self.plan.format.id == "vectorcraft").then(|| self.snapshot.clone());
+        let native = self.plan.format.id == "vectorcraft";
         if let Some(st) = s.document_mut(uid) {
             self.finish(st);
         }
@@ -1014,8 +1014,8 @@ impl SaveJob {
             crate::cmd::recovery::forget(s, uid);
         }
         if let Some(path) = written {
-            if let Some(doc) = native {
-                s.arrowheads_saved(&path, &doc);
+            if native {
+                s.arrowheads_saved(&path);
             }
             crate::cmd::links::refresh_placed(s, uid, &path);
         }

@@ -3960,17 +3960,18 @@ right, the symbol's registration point is its tip, and the art's height is drawn
 head weights). The visible fills and the outlined visible strokes of its paths, compound paths and groups, and its
 gradient meshes, make the head, with geometry effects applied and clip groups clipped, and the line stops halfway along its length. A head is
 one solid shape in the stroke's paint: art at 0 % opacity is left out, and other opacities, blend modes and opacity
-masks do not change the shape. The file is read when the app starts and again each time VectorCraft saves it;
-`stroke.arrowheads.reload` reads it again. A file larger than 64 MB is not read, at most 256 symbols are read, and a
-symbol that paints nothing, reaches more than 64 head weights from its tip, has more than 65,536 anchors in its art or
-in the shapes it paints, or has more than 4,096 anchors once united is listed in `skipped`. `stroke.arrowheads.list` returns each head's `name`, `reach` and `halfWidth`, the `file`
+masks do not change the shape. The file is read when the app starts and again from disk each time VectorCraft saves it;
+`stroke.arrowheads.reload` reads it again. A file larger than 64 MB, or whose document or images unpack to more than 64 MB, is
+not read, at most 256 symbols are read, and a symbol that paints nothing, reaches more than 64 head weights from its
+tip, has more than 65,536 anchors in its art or in the shapes it paints, has shapes that cannot be combined into one,
+or has more than 4,096 anchors once united is listed in `skipped`. `stroke.arrowheads.list` returns each head's `name`, `reach` and `halfWidth`, the `file`
 path, the `skipped` symbols and any read `error`.
 
 `stroke.set {endArrow: {"custom": name}}` puts a custom head on a stroke. The stroke keeps a copy of the head's art,
 so the document draws it, saves it and exports it to SVG and PDF the same way without the arrowheads file.
 `document.inspect` reports such a head as `{"Custom": {name, path}}`, which `stroke.set` takes back unchanged. It
 refuses a `path` that fills no area (non-zero rule; parts thinner than a millionth of a head unit count as none) or
-has more than 4,096 anchors or a point more than 64 head units from the tip. The help page
+has more than 4,096 anchors, more than 4,096 subpaths or a point more than 64 head units from the tip. The help page
 [Apply stroke on an object](https://helpx.adobe.com/illustrator/using/stroke-object.html) describes defining custom
 arrowheads in a separate arrowheads file.
 

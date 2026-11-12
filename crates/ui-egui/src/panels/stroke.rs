@@ -367,22 +367,44 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The document an arrowhead preview renders: a `w`×`h` pt line with head `a` at its left
-/// (`start`) or right end, its tip on the end point, drawn white (the preview is tinted).
-pub(super) fn arrow_doc(a: Option<Arrowhead>, start: bool, w: f64, h: f64) -> Option<Document> {
-    let mut doc = Document::new(w, h);
-    let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::WHITE), 1.5);
-    let st = ap.stroke_mut()?;
+/// (`start`) or right end, its tip on the end point, drawn white (the preview is tinted). A custom
+/// head is made smaller than the built-in ones when it would not fit (below the smallest head
+/// weight, its outline is scaled down), and the line's end moves in by as much as the head reaches
+/// past its tip.
+pub(super) fn arrow_doc(mut a: Option<Arrowhead>, start: bool, w: f64, h: f64) -> Option<Document> {
+    const WIDTH: f64 = 1.5;
+    // The smallest weight `StrokeLayer::arrow_weight` gives a head.
+    const LEAST: f64 = 0.25;
     // Heads of weight 2.5 pt: 10 pt long and wide.
-    st.arrow_scale = (500.0 / 3.0, 500.0 / 3.0);
+    let mut scale: f64 = 500.0 / 3.0;
+    let mut inset = 0.0;
+    if let Some(Arrowhead::Custom(c)) = &a
+        && let Some(b) = c.path.control_bounds()
+    {
+        let (long, half) = (b.x1.max(0.0) - b.x0.min(0.0), b.y0.abs().max(b.y1.abs()));
+        let fit = |room: f64, units: f64| if units > 1e-9 { room.max(0.0) / units } else { f64::INFINITY };
+        let weight = fit(w - 6.0, long).min(fit(h / 2.0 - 1.0, half)).min(2.5);
+        inset = -b.x0.min(0.0) * weight;
+        if weight < LEAST {
+            let path = c.path.transformed(vectorcraft_geom::Affine::scale(weight / LEAST));
+            a = Some(Arrowhead::Custom(std::sync::Arc::new(vectorcraft_doc::CustomArrowhead::new(c.name.clone(), path))));
+        }
+        scale = scale.min(weight.max(LEAST) / WIDTH * 100.0);
+    }
+    let mut doc = Document::new(w, h);
+    let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::WHITE), WIDTH);
+    let st = ap.stroke_mut()?;
+    st.arrow_scale = (scale, scale);
     st.arrow_align = ArrowAlign::Tip;
     if start {
         st.start_arrow = a
     } else {
         st.end_arrow = a
     }
+    let (x0, x1) = if start { (3.0 + inset, w - 3.0) } else { (3.0, w - 3.0 - inset) };
     let mut bp = vectorcraft_geom::BezPath::new();
-    bp.move_to((3.0, h / 2.0));
-    bp.line_to((w - 3.0, h / 2.0));
+    bp.move_to((x0, h / 2.0));
+    bp.line_to((x1, h / 2.0));
     let (id, l) = (doc.alloc_id(), doc.layers[0].id);
     doc.insert(Some(l), 0, Node::path(id, vectorcraft_geom::PathData::from_bezpath(&bp), ap)).ok()?;
     Some(doc)
@@ -419,7 +441,10 @@ fn arrow_dropdown(ui: &mut Ui, id: &str, cur: Option<&Arrowhead>, custom: &[Arro
                 } else if rr.hovered() {
                     ui.painter().rect_filled(row, 0.0, t.hover);
                 }
-                paint_arrow(ui, Rect::from_min_size(row.min + vec2(4.0, 0.0), vec2(56.0, 22.0)), a, start, t.text_strong);
+                // Only the rows in view render their previews.
+                if ui.is_rect_visible(row) {
+                    paint_arrow(ui, Rect::from_min_size(row.min + vec2(4.0, 0.0), vec2(56.0, 22.0)), a, start, t.text_strong);
+                }
                 ui.painter().text(
                     row.left_center() + vec2(66.0, 0.0),
                     egui::Align2::LEFT_CENTER,

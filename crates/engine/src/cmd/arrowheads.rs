@@ -22,7 +22,8 @@ use super::{CommandSpec, Result, Session, always, bad, cmd};
 
 /// The arrowheads file's name, in the folder of the preferences.
 pub const FILE_NAME: &str = "Arrowheads.vectorcraft";
-/// The largest arrowheads file read.
+/// The largest arrowheads file read, and the most its document or its images may unpack to when
+/// compressed.
 pub const MAX_FILE_BYTES: u64 = 64 << 20;
 /// The most heads read from the file; symbols past it are skipped.
 pub const MAX_HEADS: usize = 256;
@@ -121,6 +122,7 @@ pub fn heads_of(doc: &Document) -> Read {
 /// Symbol `sym` of `d` as a head.
 fn head(d: &mut Document, brushes: &[vectorcraft_brush::Brush], sym: &Symbol) -> std::result::Result<CustomArrowhead, &'static str> {
     const TOO_DETAILED: &str = "its art is too long or too detailed for a head";
+    const UNITED: &str = "its shapes could not be combined into one";
     if art_anchors(&sym.art) > MAX_ART_ANCHORS {
         return Err(TOO_DETAILED);
     }
@@ -130,7 +132,10 @@ fn head(d: &mut Document, brushes: &[vectorcraft_brush::Brush], sym: &Symbol) ->
     if shapes.too_detailed {
         return Err(TOO_DETAILED);
     }
-    let area = shapes.united();
+    if shapes.failed {
+        return Err(UNITED);
+    }
+    let area = shapes.united().ok_or(UNITED)?;
     let b = area.bounds().filter(|b| b.height() > 1e-9 && b.is_finite()).ok_or("its art paints nothing")?;
     let tip = b.center() + d.symbol_registration(&sym.name).offset_from_center(b.width(), b.height());
     // Head units: x back from the tip, y across to the right of +x, 4 units to the art's height.
@@ -172,6 +177,8 @@ struct Shapes {
     anchors: usize,
     /// More anchors were asked for than fit; the shapes past the limit were not made.
     too_detailed: bool,
+    /// A clip group's art could not be combined or clipped, so a shape it paints is missing.
+    failed: bool,
 }
 
 impl Shapes {
@@ -186,9 +193,10 @@ impl Shapes {
             self.list.push(shape);
         }
     }
-    fn united(&self) -> PathData {
+    /// The shapes united, or `None` when one of them could not be (the union would miss it).
+    fn united(&self) -> Option<PathData> {
         let refs: Vec<(&PathData, FillRule)> = self.list.iter().map(|(p, r)| (p, *r)).collect();
-        vectorcraft_pathops::unite_all(&refs)
+        vectorcraft_pathops::try_unite_all(&refs).ok()
     }
     /// The shapes of `inside` clipped to `outline` (filled under `rule`), added as one.
     fn push_clipped(&mut self, inside: Shapes, outline: &PathData, rule: FillRule) {
@@ -196,7 +204,14 @@ impl Shapes {
             self.too_detailed = true;
             return;
         }
-        let clipped = vectorcraft_pathops::boolean(&inside.united(), FillRule::NonZero, outline, rule, BoolOp::Intersect);
+        self.failed |= inside.failed;
+        let clip = |art: PathData| {
+            vectorcraft_pathops::try_boolean(&art, FillRule::NonZero, outline, rule, BoolOp::Intersect, vectorcraft_pathops::DEFAULT_PRECISION).ok()
+        };
+        let Some(clipped) = inside.united().and_then(clip) else {
+            self.failed = true;
+            return;
+        };
         if !clipped.subpaths.is_empty() {
             self.push((clipped, FillRule::NonZero));
         }
@@ -345,11 +360,11 @@ impl Session {
         }
     }
 
-    /// Document `doc` was saved to `path`: when that is the arrowheads file, its heads are the
-    /// ones listed now.
-    pub(crate) fn arrowheads_saved(&mut self, path: &str, doc: &Document) {
+    /// A document was saved to `path`: when that is the arrowheads file, its heads are read back
+    /// from what was written.
+    pub(crate) fn arrowheads_saved(&mut self, path: &str) {
         if self.arrowheads.path.as_deref().is_some_and(|a| same_file(a, path)) {
-            self.arrowheads.set(heads_of(doc));
+            self.reload_arrowheads();
         }
     }
 }
@@ -371,7 +386,9 @@ fn read(path: &str) -> std::result::Result<Option<Document>, String> {
         return Err(format!("{path}: larger than {} MB", MAX_FILE_BYTES >> 20));
     }
     let bytes = crate::file_access::unconfined(|| super::fileio::read_file(path)).map_err(|e| e.to_string())?;
-    let parse = || super::fileio::native_file(&bytes).map(|(doc, ..)| doc).map_err(|e| e.to_string());
+    // A compressed file's document, and its images, may unpack to no more than an uncompressed
+    // file may hold.
+    let parse = || vectorcraft_format::load_file_capped(&bytes, MAX_FILE_BYTES).map(|f| f.doc).map_err(|e| format!("{path}: {e}"));
     crate::guard::catch_panic(parse).map_err(|_| format!("{path}: could not be read"))?.map(Some)
 }
 
@@ -400,13 +417,17 @@ fn reload(s: &mut Session, _: &Value) -> Result<Value> {
 fn edit(s: &mut Session, _: &Value) -> Result<Value> {
     const C: &str = "stroke.arrowheads.edit";
     let path = s.arrowheads.path.clone().ok_or_else(|| bad(C, "no arrowheads file here"))?;
-    let created = !std::path::Path::new(&path).exists();
+    if let Some(dir) = std::path::Path::new(&path).parent() {
+        std::fs::create_dir_all(dir).map_err(|e| bad(C, format!("{}: {e}", dir.display())))?;
+    }
+    // Made only when no file is there, also when another run makes one at the same moment.
+    let bytes = vectorcraft_format::save_file(&starter());
+    let created = match crate::file_access::unconfined(|| super::fileio::write_new_file(&path, &bytes)) {
+        Ok(()) => true,
+        Err(_) if std::path::Path::new(&path).exists() => false,
+        Err(e) => return Err(bad(C, e.to_string())),
+    };
     if created {
-        if let Some(dir) = std::path::Path::new(&path).parent() {
-            std::fs::create_dir_all(dir).map_err(|e| bad(C, format!("{}: {e}", dir.display())))?;
-        }
-        let bytes = vectorcraft_format::save_file(&starter());
-        crate::file_access::unconfined(|| super::fileio::write_file(&path, &bytes)).map_err(|e| bad(C, e.to_string()))?;
         s.reload_arrowheads();
     }
     // Already open: that document comes to the front.

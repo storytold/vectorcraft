@@ -283,3 +283,68 @@ fn an_unreadable_arrowheads_file_lists_no_heads_and_says_why() {
     assert!(bare.execute("stroke.arrowheads.edit", &json!({})).is_err());
     assert_eq!(bare.execute("stroke.arrowheads.list", &json!({})).unwrap()["file"], serde_json::Value::Null);
 }
+
+#[test]
+fn the_heads_listed_after_a_save_are_read_from_the_file_and_editing_keeps_it() {
+    let dir = folder("saved");
+    let file = dir.join(arrowheads::FILE_NAME).to_string_lossy().to_string();
+    let (mut s, _) = session_with_line();
+    s.attach_arrowheads_file(file.clone());
+    assert_eq!(s.execute("stroke.arrowheads.edit", &json!({})).unwrap()["created"], true);
+    // A speck that saving rounds to a point is a head only before the save.
+    let st = s.doc_mut().unwrap();
+    add_symbol(Arc::make_mut(&mut st.doc), "Speck", polygon(&[(0.0, 0.0), (0.3, 0.1), (0.0, 0.2)], filled()));
+    assert!(heads_of(&s.doc().unwrap().doc).heads.iter().any(|h| h.name == "Speck"), "a head before rounding");
+    s.execute("document.save", &json!({"precision": 0})).unwrap();
+    let list = s.execute("stroke.arrowheads.list", &json!({})).unwrap();
+    let names: Vec<&str> = list["arrowheads"].as_array().unwrap().iter().filter_map(|h| h["name"].as_str()).collect();
+    assert_eq!(names, ["Example Arrowhead"]);
+    assert_eq!(list["skipped"][0]["name"], "Speck", "{list}");
+    // Editing again leaves the file as it is.
+    let saved = std::fs::read(&file).unwrap();
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    assert_eq!(s.execute("stroke.arrowheads.edit", &json!({})).unwrap()["created"], false);
+    assert_eq!(std::fs::read(&file).unwrap(), saved, "the file is left as it was");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_arrowheads_file_that_unpacks_past_the_size_limit_is_not_read() {
+    let dir = folder("unpacked");
+    let file = dir.join(arrowheads::FILE_NAME);
+    let mut d = arrowheads::starter();
+    d.title = "a".repeat(arrowheads::MAX_FILE_BYTES as usize);
+    let bytes = vectorcraft_format::save_with(&d, &vectorcraft_format::SaveOptions { compress: true, ..Default::default() }).unwrap();
+    assert!((bytes.len() as u64) < arrowheads::MAX_FILE_BYTES / 16, "compressed small: {}", bytes.len());
+    std::fs::write(&file, &bytes).unwrap();
+    let mut s = Session::new();
+    s.attach_arrowheads_file(file.to_string_lossy().to_string());
+    let list = s.execute("stroke.arrowheads.list", &json!({})).unwrap();
+    assert!(list["arrowheads"].as_array().unwrap().is_empty(), "{}", list["arrowheads"]);
+    assert!(list["error"].is_string(), "{}", list["error"]);
+    // The same head in a file of an ordinary size is read.
+    std::fs::write(&file, vectorcraft_format::save_file(&arrowheads::starter())).unwrap();
+    assert_eq!(s.execute("stroke.arrowheads.reload", &json!({})).unwrap()["count"], 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_symbol_whose_shapes_cannot_be_combined_is_skipped() {
+    let wedge = || Arc::new(polygon(&[(0.0, -10.0), (20.0, 0.0), (0.0, 10.0)], filled()));
+    // Too far out for the shape operations to measure: the union would leave it out.
+    let far = || Arc::new(polygon(&[(0.0, 0.0), (1e200, 0.0), (0.0, 1e200)], filled()));
+    let mut d = Document::new(100.0, 100.0);
+    add_symbol(&mut d, "Wedge", (*wedge()).clone());
+    add_symbol(&mut d, "Broken", Node::group(NodeId(0), vec![wedge(), far()]));
+    // The same as clipped art.
+    let mut mask = polygon(&[(0.0, -10.0), (20.0, -10.0), (20.0, 10.0), (0.0, 10.0)], Appearance::default());
+    if let NodeKind::Path { clipping, .. } = &mut mask.kind {
+        *clipping = true;
+    }
+    add_symbol(&mut d, "Broken Clip", Node::new(NodeId(0), NodeKind::Group { children: vec![Arc::new(mask), wedge(), far()], clip: true }));
+    let read = heads_of(&d);
+    let names: Vec<&str> = read.heads.iter().map(|h| h.name.as_str()).collect();
+    assert_eq!(names, ["Wedge"]);
+    let skipped: Vec<&str> = read.skipped.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(skipped, ["Broken", "Broken Clip"], "{:?}", read.skipped);
+}

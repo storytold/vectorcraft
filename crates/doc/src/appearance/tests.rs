@@ -387,6 +387,13 @@ fn custom_arrowheads_out_of_bounds_draw_nothing() {
     let anchors = vec![vectorcraft_geom::Anchor::corner(vectorcraft_geom::Point::new(1.0, 0.0)); CustomArrowhead::MAX_ANCHORS + 1];
     let many = CustomArrowhead::new("Many".into(), vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::new(anchors, true)));
     assert!(many.path.subpaths.is_empty(), "too many anchors");
+    // Empty subpaths add no anchors, and still count.
+    let mut hollow = c.path.clone();
+    hollow.subpaths.extend(std::iter::repeat_n(vectorcraft_geom::SubPath::new(vec![], false), CustomArrowhead::MAX_ANCHORS));
+    assert!(!CustomArrowhead::fits(&hollow), "too many subpaths");
+    let json = serde_json::to_value(CustomArrowhead { name: "Hollow".into(), path: hollow }).unwrap();
+    let hollow: CustomArrowhead = serde_json::from_value(json).unwrap();
+    assert!(hollow.path.subpaths.is_empty(), "too many subpaths, read back");
 }
 
 #[test]

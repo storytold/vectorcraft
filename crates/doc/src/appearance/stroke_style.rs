@@ -84,24 +84,26 @@ impl From<CustomArrowheadData> for CustomArrowhead {
 }
 
 impl CustomArrowhead {
-    /// The most anchors a custom head's outline may have.
+    /// The most anchors a custom head's outline may have, and the most subpaths.
     pub const MAX_ANCHORS: usize = 4096;
     /// How far from the tip a custom head's outline may reach, in head units.
     pub const MAX_UNITS: f64 = 64.0;
 
     /// Head `name` with outline `path` (in head units). An outline with more than
-    /// [`Self::MAX_ANCHORS`] anchors, a point that is not finite, or a point farther than
-    /// [`Self::MAX_UNITS`] from the tip is dropped: the head then draws nothing.
+    /// [`Self::MAX_ANCHORS`] anchors or subpaths, a point that is not finite, or a point farther
+    /// than [`Self::MAX_UNITS`] from the tip is dropped: the head then draws nothing.
     pub fn new(name: String, path: PathData) -> Self {
         let path = if Self::fits(&path) { path } else { PathData::default() };
         CustomArrowhead { name, path }
     }
-    /// Whether outline `path` is within [`Self::MAX_ANCHORS`] and [`Self::MAX_UNITS`], with finite
-    /// points only.
+    /// Whether outline `path` has at most [`Self::MAX_ANCHORS`] anchors and as many subpaths, with
+    /// finite points within [`Self::MAX_UNITS`] only.
     pub fn fits(path: &PathData) -> bool {
         let anchors = path.subpaths.iter().map(|s| s.anchors.len()).sum::<usize>();
         let near = |p: vectorcraft_geom::Point| p.x.is_finite() && p.y.is_finite() && p.x.abs() <= Self::MAX_UNITS && p.y.abs() <= Self::MAX_UNITS;
-        anchors <= Self::MAX_ANCHORS && path.subpaths.iter().flat_map(|s| &s.anchors).all(|a| near(a.p) && near(a.h_in) && near(a.h_out))
+        anchors <= Self::MAX_ANCHORS
+            && path.subpaths.len() <= Self::MAX_ANCHORS
+            && path.subpaths.iter().flat_map(|s| &s.anchors).all(|a| near(a.p) && near(a.h_in) && near(a.h_out))
     }
     fn bounds(&self) -> Option<Rect> {
         self.path.control_bounds()
