@@ -2299,6 +2299,10 @@ font-technology	Variable	Variabla
 	Arch	Valv
 @msg	select point type or type on a path	markera punkttext eller text på bana
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	text på bana i länkad text kan inte använda dynamisk text: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	text på en öppen eller sammansatt bana kan inte centreras överst eller nederst: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	text på en bana utan längd eller utan höjd kan inte centreras: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	text på bana i länkad text kan inte centreras överst eller nederst: {frames}
+@msg	select type on a closed path	markera text på en sluten bana
 	Optimize for fast web view	Optimera för snabb webbvisning
 	Optimized	Optimerad
 	Options	Alternativ
@@ -3644,6 +3648,8 @@ digits	Malayalam	Malayalam
 	Type on a Path	Text på bana
 	Type on a Path Options	Alternativ för text på bana
 	Type on a Path Options…	Alternativ för text på bana…
+	Center on Top	Centrera överst
+	Center on Bottom	Centrera nederst
 	Type on a Path Tool	Verktyg för text på bana
 	Type Orientation	Textorientering
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Text förblir text, och varje kontur blir en linje med sin linjetjocklek och sina streck.

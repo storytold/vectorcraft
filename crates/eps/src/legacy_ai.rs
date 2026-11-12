@@ -33,7 +33,10 @@
 //! - Type (§15): point type, area type and type on a path as text objects, `type To`, `a b c d tx
 //!   ty startPt Tp` (the text matrix; the frame or path in art space between it and `TP`), each
 //!   run's paint style, `Tr` (fill, stroke, both or neither), `/_font size ascent descent Tf`,
-//!   `Ts Tz Tt TA Tl Ta Ti` and its characters `(…) Tx` (`\r` ends a paragraph), `TO`. Only the
+//!   `Ts Tz Tt TA Tl Ta Ti` and its characters `(…) Tx` (`\r` ends a paragraph), `TO`. Standard
+//!   Vertical Roman Alignment is written as `1 Tv` and `0 Tv`, and Tate-chu-yoko in horizontal
+//!   type as a Kumi block recorded for later use, `1 TY` … `0 TY` (§15.3.4); neither operator is
+//!   written for type that has neither mark. Only the
 //!   revisable form is written: readers lay the type out again (§15.1). Fonts are named by their
 //!   PostScript names in `%%DocumentFonts` and `%%IncludeFont` (§3.1) and re-encoded to
 //!   Windows-1252 (`TE`, then `%AI3_BeginEncoding: _name name`, `TZ`, §3.3), the 8-bit encoding
