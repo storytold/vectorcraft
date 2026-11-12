@@ -2626,7 +2626,11 @@ impl Interp {
             Value::Undefined | Value::Null => return Err(self.type_error("cannot convert undefined or null to an object")),
             Value::Bool(b) => (Class::Boolean(*b), self.intrinsics.boolean_proto),
             Value::Number(n) => (Class::Number(*n), self.intrinsics.number_proto),
-            Value::String(s) => (Class::String(s.clone()), self.intrinsics.string_proto),
+            // Flattened now, with its copy counted, so reading a character copies nothing.
+            Value::String(s) => {
+                flat_charged(self, s)?;
+                (Class::String(s.clone()), self.intrinsics.string_proto)
+            }
         };
         Ok(self.heap.alloc_object(Object::new(class, Some(proto))))
     }
@@ -2740,8 +2744,11 @@ impl Interp {
             (self.to_primitive(x, Hint::Number)?, py)
         };
         if let (Value::String(a), Value::String(b)) = (&px, &py) {
-            let (a, b) = (flat_charged(self, a)?, flat_charged(self, b)?);
-            return Ok(Some(*a < *b));
+            // Both stay rooted, so the first copy is still counted while the second is made.
+            return self.rooted(&[px.clone(), py.clone()], |i| {
+                let (a, b) = (flat_charged(i, a)?, flat_charged(i, b)?);
+                Ok(Some(*a < *b))
+            });
         }
         let nx = self.to_number(&px)?;
         let ny = self.to_number(&py)?;

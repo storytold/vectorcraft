@@ -314,15 +314,43 @@ fn operators_and_builtins_count_a_flattened_rope_against_the_heap() {
     // Three ropes of about 524,288 units, each 1 MiB once flat, with a 3 MiB heap.
     let build = "var s = 'x'; for (var i = 0; i < 19; i++) s = s + s; var t = s + 'y', u = s + 'z';";
     let limits = Limits { heap_bytes: 3 << 20, ..Limits::default() };
-    let not_stopped: Vec<_> =
-        ["X < 'a'", "X == 1", "+X", "X[0]", "({})[{ toString: function () { return X; } }]", "JSON.stringify(0, null, X)", "[1].join(X)"]
-            .into_iter()
-            .filter(|read| {
-                let src = format!("{build} {}; {}; {}; 0", read.replace('X', "s"), read.replace('X', "t"), read.replace('X', "u"));
-                let result = Realm::with_options(Options::default(), limits.clone()).run(&src);
-                !matches!(result, Err(ref e) if e.kind == RunErrorKind::Limit(LimitKind::Heap))
-            })
-            .collect();
+    let not_stopped: Vec<_> = [
+        "X < 'a'",
+        "X == 1",
+        "+X",
+        "X[0]",
+        "new String(X)[0]",
+        "({})[{ toString: function () { return X; } }]",
+        "JSON.stringify(0, null, X)",
+        "[1].join(X)",
+    ]
+    .into_iter()
+    .filter(|read| {
+        let src = format!("{build} {}; {}; {}; 0", read.replace('X', "s"), read.replace('X', "t"), read.replace('X', "u"));
+        let result = Realm::with_options(Options::default(), limits.clone()).run(&src);
+        !matches!(result, Err(ref e) if e.kind == RunErrorKind::Limit(LimitKind::Heap))
+    })
+    .collect();
+    assert!(not_stopped.is_empty(), "not stopped by the heap limit: {not_stopped:?}");
+}
+
+#[test]
+fn a_flattened_temporary_stays_counted_while_the_next_copy_is_made() {
+    // Ropes of 262,145 units, each about half the heap once flat: one fits, two don't. Each is
+    // made by a function, so nothing but the native code holds it while it is flattened.
+    let build = "var s = 'x'; for (var i = 0; i < 18; i++) s = s + s; function f(c) { return s + c; }";
+    let limits = Limits { heap_bytes: 4 * 262_146, ..Limits::default() };
+    let run = |read: &str| Realm::with_options(Options::default(), limits.clone()).run(&format!("{build} {read}; 0"));
+    assert!(run("f('a')[0]").is_ok(), "one flattened copy fits");
+    let not_stopped: Vec<_> = [
+        "({ valueOf: function () { return f('a'); } }) < ({ valueOf: function () { return f('b'); } })",
+        "JSON.stringify({ toJSON: function () { return f('a'); } })",
+        "[1, 2].join({ toString: function () { return f('a'); } })",
+        "[{ toString: function () { return f('a'); } }].join('')",
+    ]
+    .into_iter()
+    .filter(|read| !matches!(run(read), Err(ref e) if e.kind == RunErrorKind::Limit(LimitKind::Heap)))
+    .collect();
     assert!(not_stopped.is_empty(), "not stopped by the heap limit: {not_stopped:?}");
 }
 

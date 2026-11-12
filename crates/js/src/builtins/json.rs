@@ -633,10 +633,10 @@ fn write_primitive(interp: &mut Interp, out: &mut Builder, v: &Value) -> JsResul
         Value::Bool(b) => out.push_str(interp, if *b { "true" } else { "false" }),
         Value::Number(n) if n.is_finite() => out.push_units(interp, &number_to_str(*n).flat()),
         Value::Number(_) => out.push_str(interp, "null"),
-        Value::String(s) => {
-            let units = flat_charged(interp, s)?;
-            write_quoted(interp, out, &units)
-        }
+        Value::String(s) => interp.rooted(std::slice::from_ref(v), |i| {
+            let units = flat_charged(i, s)?;
+            write_quoted(i, out, &units)
+        }),
         Value::Undefined | Value::Object(_) => Ok(()),
     }
 }

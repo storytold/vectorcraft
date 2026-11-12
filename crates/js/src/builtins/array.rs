@@ -279,17 +279,20 @@ fn join_with(interp: &mut Interp, o: ObjId, separator: &Value, item: fn(&mut Int
     if len == 0 {
         return Ok(Value::str(""));
     }
-    let flat = flat_charged(interp, &sep)?;
-    let sep = &flat[..];
-    // A result that cannot fit is refused before any element is read.
-    let least = (sep.len() as u64).saturating_mul(u64::from(len - 1));
-    if least > (interp.limits.heap_bytes / 4) as u64 {
-        return Err(Abrupt::Limit(crate::LimitKind::Heap));
-    }
-    interp.join_stack.push(o);
-    let r = join_elements(interp, o, len, sep, item);
-    interp.join_stack.pop();
-    r
+    // The separator stays rooted for the whole join, so its flattened copy stays counted.
+    interp.rooted(&[Value::String(sep.clone())], |interp| {
+        let flat = flat_charged(interp, &sep)?;
+        let sep = &flat[..];
+        // A result that cannot fit is refused before any element is read.
+        let least = (sep.len() as u64).saturating_mul(u64::from(len - 1));
+        if least > (interp.limits.heap_bytes / 4) as u64 {
+            return Err(Abrupt::Limit(crate::LimitKind::Heap));
+        }
+        interp.join_stack.push(o);
+        let r = join_elements(interp, o, len, sep, item);
+        interp.join_stack.pop();
+        r
+    })
 }
 
 fn join_elements(interp: &mut Interp, o: ObjId, len: u32, sep: &[u16], item: fn(&mut Interp, Value) -> JsResult<Option<Str>>) -> JsResult<Value> {
@@ -302,8 +305,10 @@ fn join_elements(interp: &mut Interp, o: ObjId, len: u32, sep: &[u16], item: fn(
         let Some(s) = item(interp, v)? else { continue };
         out.push_repeated(interp, sep, k.saturating_sub(seps))?;
         seps = k;
-        let units = flat_charged(interp, &s)?;
-        out.push_units(interp, &units)?;
+        interp.rooted(&[Value::String(s.clone())], |interp| {
+            let units = flat_charged(interp, &s)?;
+            out.push_units(interp, &units)
+        })?;
     }
     out.push_repeated(interp, sep, u64::from(len - 1).saturating_sub(seps))?;
     Ok(out.finish(interp))
