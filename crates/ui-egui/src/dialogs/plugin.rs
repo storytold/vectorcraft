@@ -367,7 +367,8 @@ pub(crate) struct Shown {
     /// The pass number and time of the last frame that drew it.
     pass: Option<u64>,
     last: Option<f64>,
-    /// A pointer button went down before OK took input, and hasn't been let go of.
+    /// A pointer button, Enter or Space was down on a frame where OK was disabled, and they haven't
+    /// all been let go of since.
     pressed_early: bool,
     /// OK takes input: shown for [`APPROVAL_DELAY`], with no press from before that held.
     ready: bool,
@@ -375,14 +376,19 @@ pub(crate) struct Shown {
 
 impl Shown {
     /// Notes a frame that draws the question in `ui` → whether OK is enabled on it. The showing
-    /// starts over when the frame before didn't draw it, when time went back, and on any frame
-    /// that is a measuring pass, is invisible or comes while the window doesn't have the focus.
+    /// starts over when the frame before didn't draw it, when time went back, when the window lost
+    /// the focus since the frame before, and on any frame that is a measuring pass, is invisible or
+    /// comes while the window doesn't have the focus.
     fn drawn(&mut self, ui: &egui::Ui) -> bool {
         let pass = ui.ctx().cumulative_pass_nr();
-        let (now, focused, pressed) = ui.input(|i| (i.time, i.focused, i.pointer.any_pressed()));
+        let (now, focused, left, pressed) = ui.input(|i| {
+            let left = i.events.iter().any(|e| matches!(e, egui::Event::WindowFocused(false)));
+            let pressed = i.pointer.any_pressed() || [egui::Key::Enter, egui::Key::Space].into_iter().any(|k| i.key_pressed(k));
+            (i.time, i.focused, left, pressed || Self::held(i))
+        });
         let seen = focused && ui.is_visible() && !ui.is_sizing_pass() && now.is_finite();
         let follows = self.pass.is_some_and(|p| p.checked_add(1) == Some(pass)) && self.last.is_some_and(|t| t <= now);
-        if !seen || !follows {
+        if !seen || !follows || left {
             self.since = None;
         }
         if seen && self.since.is_none() {
@@ -390,8 +396,8 @@ impl Shown {
         }
         (self.pass, self.last) = (Some(pass), Some(now));
         let enabled = self.since.is_some_and(|s| now - s >= APPROVAL_DELAY);
-        if pressed {
-            self.pressed_early = !enabled;
+        if pressed && !enabled {
+            self.pressed_early = true;
         }
         self.ready = enabled && !self.pressed_early;
         if let Some(s) = self.since.filter(|_| !enabled) {
@@ -401,11 +407,17 @@ impl Shown {
     }
 
     /// After the frame's OK: a press from before OK took input stops counting once every pointer
-    /// button is up.
+    /// button, Enter and Space are up.
     fn released(&mut self, ui: &egui::Ui) {
-        if !ui.input(|i| i.pointer.any_down()) {
+        if !ui.input(Self::held) {
             self.pressed_early = false;
         }
+    }
+
+    /// Whether a pointer button, Enter or Space is down: what can click OK when it is let go of or
+    /// repeats.
+    fn held(i: &egui::InputState) -> bool {
+        i.pointer.any_down() || i.key_down(egui::Key::Enter) || i.key_down(egui::Key::Space)
     }
 
     /// Whether OK takes input: the question was shown for [`APPROVAL_DELAY`] on the last frame

@@ -1587,7 +1587,7 @@ fn a_module_without_permissions_ends_the_grant_of_its_id() {
 /// that holds such a module and a grant for its id has that grant forgotten when it is attached.
 #[test]
 fn a_module_without_permissions_ends_the_grant_kept_in_the_store() {
-    use vectorcraft_plugins::permissions::{Grant, Permission, sha256_hex};
+    use vectorcraft_plugins::permissions::{Grant, GrantToken, Permission, sha256_hex};
     let folder = crate::tests_links::Folder::new("plugin-store-stale-grant");
     let id = "test.engine.permissions.storedstale";
     let other = "test.engine.permissions.storedother";
@@ -1634,7 +1634,11 @@ fn a_module_without_permissions_ends_the_grant_kept_in_the_store() {
     let future = json!({"id": id, "hash": "00", "permissions": ["doc.read", "ui.panel"]});
     std::fs::write(&grants, serde_json::to_vec(&json!([future, other_entry])).unwrap()).unwrap();
     vectorcraft_plugins::registry::remove(id);
-    vectorcraft_plugins::registry::grant(Grant { id: id.into(), hash: sha256_hex(&approved), permissions: vec![Permission::DocRead] });
+    vectorcraft_plugins::registry::grant(GrantToken::after_engine_approval(Grant {
+        id: id.into(),
+        hash: sha256_hex(&approved),
+        permissions: vec![Permission::DocRead],
+    }));
     let mut fourth = session();
     fourth.attach_plugin_store(folder.0.clone());
     assert_eq!(ids(), vec![other.to_string()]);
@@ -2165,7 +2169,7 @@ fn a_plugin_folder_ends_the_process_grant_of_an_id_it_replaces() {
 /// With a store attached, a matching grant held only by the process doesn't count.
 #[test]
 fn a_stored_grant_covers_only_the_stored_module_it_recorded() {
-    use vectorcraft_plugins::permissions::{Grant, Permission, sha256_hex};
+    use vectorcraft_plugins::permissions::{Grant, GrantToken, Permission, sha256_hex};
     let folder = crate::tests_links::Folder::new("plugin-store-recorded-module");
     let id = "test.engine.permissions.storedbytes";
     let first = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
@@ -2210,7 +2214,11 @@ fn a_stored_grant_covers_only_the_stored_module_it_recorded() {
     assert!(starts());
     let mut attached = session();
     attached.attach_plugin_store(folder.0.clone());
-    vectorcraft_plugins::registry::grant(Grant { id: id.into(), hash: sha256_hex(&changed), permissions: vec![Permission::DocRead] });
+    vectorcraft_plugins::registry::grant(GrantToken::after_engine_approval(Grant {
+        id: id.into(),
+        hash: sha256_hex(&changed),
+        permissions: vec![Permission::DocRead],
+    }));
     let inspected = run(&mut attached, "plugin.inspect", json!({"dataBase64": vectorcraft_format::base64_encode(&changed)}));
     assert_eq!(inspected["needsApproval"], true, "a grant held only by the process doesn't count with a store attached");
     run(&mut attached, "plugin.remove", json!({"id": id}));
@@ -2295,6 +2303,194 @@ fn a_failed_store_write_keeps_the_stored_module_with_its_grant() {
     assert!(!module.exists(), "the store holds no module its grants don't cover");
     vectorcraft_plugins::registry::remove(id);
     vectorcraft_plugins::registry::revoke(id);
+}
+
+/// Runs the test `name` of this module again in a process of its own → whether this is that
+/// process. The list of disabled plug-ins is kept for the whole process, and the other tests here
+/// read it again each time they attach a plug-in store.
+fn in_own_process(name: &str) -> bool {
+    const CHILD: &str = "VECTORCRAFT_TEST_PLUGIN_DISABLED_LIST";
+    if std::env::var_os(CHILD).is_some() {
+        return true;
+    }
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", &format!("tests::plugins::{name}"), "--nocapture"])
+        .env(CHILD, "1")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+        "{name} failed in its own process:\n{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    false
+}
+
+/// An update whose grant can't be written, and whose old module can't be put back either, stays in
+/// the store: a disabled plug-in is turned on, as for any update the store holds. The old grant
+/// doesn't cover the new module, so the next start skips it until it is approved.
+#[test]
+fn an_update_left_in_the_store_by_a_failed_put_back_turns_a_disabled_plugin_on() {
+    if !in_own_process("an_update_left_in_the_store_by_a_failed_put_back_turns_a_disabled_plugin_on") {
+        return;
+    }
+    use vectorcraft_plugins::{permissions::sha256_hex, registry, safe_mode};
+    let folder = crate::tests_links::Folder::new("plugin-store-failed-put-back-update");
+    let id = "test.engine.permissions.putbackupdate";
+    let first = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let changed = asking(id, r#"["doc.read","doc.write"]"#, &json!({"objects": []}));
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&first), "grant": ["doc.read"]}));
+    run(&mut s, "plugin.setEnabled", json!({"id": id, "enabled": false}));
+    let grants = folder.0.join("grants.json");
+    let recorded = std::fs::read(&grants).unwrap();
+    std::fs::remove_file(&grants).unwrap();
+    std::fs::create_dir_all(grants.join("block")).unwrap();
+
+    crate::store::PUT_BACK_FAILS.set(true);
+    let update = json!({"dataBase64": vectorcraft_format::base64_encode(&changed), "grant": ["doc.read", "doc.write"], "replace": true});
+    let installed = s.execute("plugin.install", &update);
+    crate::store::PUT_BACK_FAILS.set(false);
+    assert_eq!(installed.unwrap()["hash"], sha256_hex(&changed), "the new module runs in this session");
+    assert_eq!(registry::get(id).map(|p| p.hash().to_string()), Some(sha256_hex(&changed)));
+    assert_eq!(std::fs::read(s.stored_plugin_file(id).unwrap()).unwrap(), changed, "the store holds the new module");
+    assert!(safe_mode::disabled().is_empty(), "the module the store holds is turned on");
+    let saved = std::fs::read(folder.0.join(crate::store::DISABLED_FILE)).unwrap();
+    assert!(safe_mode::parse_disabled_file(&saved).is_empty(), "nothing disabled is saved");
+
+    std::fs::remove_dir_all(&grants).unwrap();
+    std::fs::write(&grants, &recorded).unwrap();
+    registry::remove(id);
+    registry::revoke(id);
+    let mut next = session();
+    next.attach_plugin_store(folder.0.clone());
+    assert!(registry::get(id).is_none(), "the old grant doesn't cover the new module");
+    safe_mode::set_disabled(vec![]);
+}
+
+/// An update whose grant can't be written, and whose put-back writes the old module and then
+/// reports a failure, leaves the old module in the store: a disabled plug-in stays disabled, and the
+/// next start doesn't load it.
+#[test]
+fn an_update_put_back_that_fails_after_writing_keeps_a_disabled_plugin_off() {
+    if !in_own_process("an_update_put_back_that_fails_after_writing_keeps_a_disabled_plugin_off") {
+        return;
+    }
+    use vectorcraft_plugins::{registry, safe_mode};
+    let folder = crate::tests_links::Folder::new("plugin-store-put-back-fails-after-write");
+    let id = "test.engine.permissions.putbacklate";
+    let first = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let changed = asking(id, r#"["doc.read","doc.write"]"#, &json!({"objects": []}));
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&first), "grant": ["doc.read"]}));
+    run(&mut s, "plugin.setEnabled", json!({"id": id, "enabled": false}));
+    let disabled = safe_mode::disabled();
+    assert!(!disabled.is_empty());
+    let grants = folder.0.join("grants.json");
+    let recorded = std::fs::read(&grants).unwrap();
+    std::fs::remove_file(&grants).unwrap();
+    std::fs::create_dir_all(grants.join("block")).unwrap();
+
+    crate::store::PUT_BACK_FAILS_AFTER_WRITE.set(true);
+    let update = json!({"dataBase64": vectorcraft_format::base64_encode(&changed), "grant": ["doc.read", "doc.write"], "replace": true});
+    let installed = s.execute("plugin.install", &update);
+    crate::store::PUT_BACK_FAILS_AFTER_WRITE.set(false);
+    installed.unwrap();
+    assert_eq!(std::fs::read(s.stored_plugin_file(id).unwrap()).unwrap(), first, "the store holds the old module");
+    assert_eq!(safe_mode::disabled(), disabled, "the plug-in stays disabled");
+    let saved = std::fs::read(folder.0.join(crate::store::DISABLED_FILE)).unwrap();
+    assert!(!safe_mode::parse_disabled_file(&saved).is_empty(), "the disabled list on disk is kept");
+
+    std::fs::remove_dir_all(&grants).unwrap();
+    std::fs::write(&grants, &recorded).unwrap();
+    registry::remove(id);
+    registry::revoke(id);
+    let mut next = session();
+    next.attach_plugin_store(folder.0.clone());
+    assert!(registry::get(id).is_none(), "the disabled old module doesn't load");
+    safe_mode::set_disabled(vec![]);
+}
+
+/// A module without permissions whose install can't remove the old grant, and whose put-back writes
+/// the old module and then reports a failure, leaves the old module in the store: a disabled plug-in
+/// stays disabled.
+#[test]
+fn a_plain_update_put_back_that_fails_after_writing_keeps_a_disabled_plugin_off() {
+    if !in_own_process("a_plain_update_put_back_that_fails_after_writing_keeps_a_disabled_plugin_off") {
+        return;
+    }
+    use vectorcraft_plugins::safe_mode;
+    let folder = crate::tests_links::Folder::new("plugin-store-plain-put-back-fails-after-write");
+    let id = "test.engine.permissions.plainputbacklate";
+    let empty = json!({"objects": []});
+    let approved = asking(id, r#"["doc.read"]"#, &empty);
+    let plain = asking(id, "null", &empty);
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&approved), "grant": ["doc.read"]}));
+    run(&mut s, "plugin.setEnabled", json!({"id": id, "enabled": false}));
+    let disabled = safe_mode::disabled();
+    assert!(!disabled.is_empty());
+    let file = s.stored_plugin_file(id).unwrap();
+    // `1e9` is written back as `1000000000.0`, which makes the rewritten file larger than the 1 MiB that is read.
+    let entry = serde_json::from_slice::<Vec<Value>>(&std::fs::read(&grants).unwrap()).unwrap().remove(0);
+    let full = format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")).into_bytes();
+    std::fs::write(&grants, &full).unwrap();
+
+    crate::store::PUT_BACK_FAILS_AFTER_WRITE.set(true);
+    let installed = s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&plain), "replace": true}));
+    crate::store::PUT_BACK_FAILS_AFTER_WRITE.set(false);
+    installed.unwrap();
+    assert_eq!(std::fs::read(&file).unwrap(), approved, "the store holds the old module");
+    assert_eq!(safe_mode::disabled(), disabled, "the plug-in stays disabled");
+    let saved = std::fs::read(folder.0.join(crate::store::DISABLED_FILE)).unwrap();
+    assert!(!safe_mode::parse_disabled_file(&saved).is_empty(), "the disabled list on disk is kept");
+
+    std::fs::remove_file(&grants).unwrap();
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    safe_mode::set_disabled(vec![]);
+}
+
+/// A first install whose grant can't be written, and whose module can't be taken out of the store
+/// again, stays in the store: the plug-in's file is turned on. No grant covers the module, so the
+/// next start skips it until it is approved.
+#[test]
+fn a_first_install_left_in_the_store_by_a_failed_put_back_turns_its_file_on() {
+    if !in_own_process("a_first_install_left_in_the_store_by_a_failed_put_back_turns_its_file_on") {
+        return;
+    }
+    use vectorcraft_plugins::{registry, safe_mode};
+    let folder = crate::tests_links::Folder::new("plugin-store-failed-put-back-first");
+    let id = "test.engine.permissions.putbackfirst";
+    let first = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    let module = s.stored_plugin_file(id).unwrap();
+    run(&mut s, "plugin.setEnabled", json!({"file": module, "enabled": false}));
+    let grants = folder.0.join("grants.json");
+    std::fs::create_dir_all(grants.join("block")).unwrap();
+
+    crate::store::PUT_BACK_FAILS.set(true);
+    let installed = s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&first), "grant": ["doc.read"]}));
+    crate::store::PUT_BACK_FAILS.set(false);
+    installed.unwrap();
+    assert!(registry::get(id).is_some(), "the module runs in this session");
+    assert_eq!(std::fs::read(&module).unwrap(), first, "the store holds the module");
+    assert!(safe_mode::disabled().is_empty(), "the file the store holds is turned on");
+    let saved = std::fs::read(folder.0.join(crate::store::DISABLED_FILE)).unwrap();
+    assert!(safe_mode::parse_disabled_file(&saved).is_empty(), "nothing disabled is saved");
+
+    std::fs::remove_dir_all(&grants).unwrap();
+    registry::remove(id);
+    registry::revoke(id);
+    let mut next = session();
+    next.attach_plugin_store(folder.0.clone());
+    assert!(registry::get(id).is_none(), "no grant covers the module");
+    safe_mode::set_disabled(vec![]);
 }
 
 /// A plug-in folder reports a changed module as needing approval and still loads the other files;
@@ -2480,8 +2676,15 @@ fn a_run_past_the_memory_budget_fails_before_the_plugin_starts() {
         params.join(",")
     );
     let module = wat::parse_str(tpl::module(&manifest, "unreachable", "", 1)).unwrap();
-    // One page of memory: the input and the parameters share 32 KiB.
-    registry::install(Plugin::load(&module, Limits { max_memory_bytes: 1 << 16, ..Limits::default() }).unwrap());
+    // One page of memory: the input and the parameters share 32 KiB. The module lists permissions,
+    // so its grant is recorded first.
+    let plugin = Plugin::load(&module, Limits { max_memory_bytes: 1 << 16, ..Limits::default() }).unwrap();
+    registry::grant(vectorcraft_plugins::permissions::GrantToken::after_engine_approval(vectorcraft_plugins::permissions::Grant {
+        id: id.into(),
+        hash: plugin.hash().to_string(),
+        permissions: plugin.manifest().permissions(),
+    }));
+    registry::install(plugin).unwrap();
     let mut s = session();
     let small = rect(&mut s, 10.0, "#ff0000");
     let long = rect(&mut s, 30.0, "#00ff00");
@@ -2522,7 +2725,7 @@ fn a_run_past_the_memory_budget_fails_before_the_plugin_starts() {
         assert!(e.contains(says), "{says}: {e}");
         assert_eq!((s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len()), before, "{says}");
     }
-    assert!(registry::remove(id));
+    assert!(registry::remove(id) && registry::revoke(id));
 }
 
 /// What the user granted is kept in the plug-in store with the module: the next session installs
@@ -2611,6 +2814,41 @@ fn granted_permissions_are_kept_and_folders_skip_the_rest() {
     run(&mut granted, "prefs.set", pref);
     assert!(vectorcraft_plugins::registry::get(id).is_some(), "loaded under this store's grant");
     run(&mut granted, "plugin.remove", json!({"id": id}));
+}
+
+/// The registry installs a module that lists permissions only under a grant the process holds, so
+/// a start and a `plugin.reload` record the store's grant for the module they load. A module in the
+/// folder that nobody granted is reported and skipped, and records nothing.
+#[test]
+fn stored_and_reload_grants_still_install() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    let store = crate::tests_links::Folder::new("plugin-store-grants-reload");
+    let id = "test.engine.permissions.reload";
+    let lone = "test.engine.permissions.reload.lone";
+    let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let mut s = session();
+    s.attach_plugin_store(store.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": ["doc.read"]}));
+    let forget = || {
+        vectorcraft_plugins::registry::remove(id);
+        vectorcraft_plugins::registry::revoke(id);
+    };
+    forget();
+    let mut next = session();
+    next.attach_plugin_store(store.0.clone());
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "installed again from the store");
+    assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(vectorcraft_plugins::permissions::sha256_hex(&wasm)));
+    forget();
+    let dir = crate::tests_links::Folder::new("plugin-folder-grants-reload");
+    std::fs::write(dir.0.join("granted.wasm"), &wasm).unwrap();
+    std::fs::write(dir.0.join("lone.wasm"), asking(lone, r#"["doc.read"]"#, &json!({"objects": []}))).unwrap();
+    let r = run(&mut next, "plugin.reload", json!({"path": dir.0.display().to_string()}));
+    assert_eq!(r["loaded"], json!([id]), "{r}");
+    assert!(vectorcraft_plugins::registry::granted(id).is_some(), "the store's grant is the process's too");
+    let why = r["failed"][0]["error"].as_str().unwrap();
+    assert!(why.contains("needs approval") && r["failed"][0]["file"].as_str().unwrap().ends_with("lone.wasm"), "{r}");
+    assert!(vectorcraft_plugins::registry::get(lone).is_none() && vectorcraft_plugins::registry::granted(lone).is_none());
+    run(&mut next, "plugin.remove", json!({"id": id}));
 }
 
 /// A grant covers the module it was given to: another module under the id, listing the same
@@ -3782,5 +4020,62 @@ fn a_filter_that_calls_commands_is_given_the_edit_in_progress() {
     run(&mut s, "edit.undo", json!({}));
     let x = run(&mut s, "document.inspect", json!({}))["layers"][0]["children"][0]["bounds"]["x"].clone();
     assert_eq!(x, json!(17.0), "undoing the filter brings back the moved rectangle");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// Installs a filter `id` that calls commands and hands back what it is given, with `commands` (a
+/// JSON list of command specs) in its manifest.
+fn install_echo_calling(s: &mut Session, id: &str, commands: &str) {
+    let grant = json!(["doc.read", "doc.write", "commands"]);
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":{grant},"commandAllowlist":["select.all"],"commands":{commands}}}"#
+    );
+    let wasm = wat::parse_str(tpl::module(&manifest, tpl::ECHO, "", 1)).unwrap();
+    run(s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant, "replace": true}));
+}
+
+/// With Real-time Drawing off, a 50 × 50 rectangle at (10, 10) whose move by 7 pt is still being
+/// dragged: the tool has stored the move, which the document does not hold yet.
+fn deferred_move(s: &mut Session) -> NodeId {
+    let r = NodeId(run(s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    run(s, "prefs.set", json!({"key": "realTimeDrawing", "value": false}));
+    let move_by = vectorcraft_tools::Action::Preview("object.move".into(), json!({"dx": 7, "dy": 0}));
+    s.apply_actions(vec![vectorcraft_tools::Action::Begin("Move".into()), move_by]).unwrap();
+    assert_eq!(node(s, r).geometric_bounds().unwrap().x0, 10.0, "the move is not applied while it is dragged");
+    r
+}
+
+/// The rectangle a run named `label` during [`deferred_move`] left: moved, with the interaction
+/// ended and the move an undo step of its own before the run's.
+fn assert_moved_once(s: &Session, r: NodeId, label: &str) {
+    assert!(!s.in_interaction());
+    assert_eq!(node(s, r).geometric_bounds().unwrap().x0, 17.0, "the filter was given the moved rectangle");
+    let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
+    assert_eq!(labels, [label, "Move"]);
+}
+
+/// With Real-time Drawing off, `plugin.run` of a filter that calls commands during a drag applies
+/// the dragged move first and gives the filter the moved rectangle, which it hands back as it was.
+#[test]
+fn a_filter_that_calls_commands_is_given_a_deferred_move() {
+    let id = "test.engine.callsdeferred";
+    let mut s = session();
+    install_echo_calling(&mut s, id, "[]");
+    let r = deferred_move(&mut s);
+    run(&mut s, "plugin.run", json!({"id": id}));
+    assert_moved_once(&s, r, &format!("Test {id}"));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A plug-in command that calls commands, run with Real-time Drawing off during a drag, is given
+/// the moved rectangle as `plugin.run` is.
+#[test]
+fn a_plugin_command_that_calls_commands_is_given_a_deferred_move() {
+    let id = "test.engine.callsdeferredcmd";
+    let mut s = session();
+    install_echo_calling(&mut s, id, r#"[{"id":"same","label":"Same"}]"#);
+    let r = deferred_move(&mut s);
+    run(&mut s, &format!("plugin.{id}.same"), json!({}));
+    assert_moved_once(&s, r, "Same");
     run(&mut s, "plugin.remove", json!({"id": id}));
 }

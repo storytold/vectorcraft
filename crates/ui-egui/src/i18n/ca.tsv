@@ -400,6 +400,7 @@ antiAlias	Sharp	Nítid
 	Asset Export Settings	Configuració d’exportació de recursos
 	Assets	Recursos
 	Assign	Assigna
+	Assign Profile	Assigna el perfil
 	Assign Profile…	Assigna el perfil…
 	Assign:	Assigna:
 	Attach	Adjunta
@@ -985,6 +986,15 @@ antiAlias	Sharp	Nítid
 	CRLF (Windows)	CRLF (Windows)
 	Crop	Retalla
 	Crop Image	Retalla la imatge
+	Image Tools	Eines d’imatge
+	Remove Background…	Elimina el fons…
+	Remove Background	Elimina el fons
+	Background	Fons
+	Edge Color	Color de la vora
+	Picked Colors	Colors triats
+	Corner Color	Color de les cantonades
+	Contiguous	Contigu
+	Each Channel	Cada canal
 	Crop Marks	Marques de retall
 	Crop To	Retalla fins a
 	Cross	Creu
@@ -2266,6 +2276,11 @@ digits	Malayalam	Malaiàlam
 	Ligatures are off while the text is tracked.	Les lligadures estan desactivades mentre el text té espaiat.
 	Light	Clar
 	Light behind the object	Llum darrere de l’objecte
+	Shadows	Ombres
+	Distance from Object	Distància de l’objecte
+	Shadow Bounds	Límits de l’ombra
+	Behind Object	Darrere de l’objecte
+	Below Object	Sota l’objecte
 	Light Blue	Blau clar
 	Light Red	Vermell clar
 	Light Direction	Direcció de la llum
@@ -2892,6 +2907,9 @@ digits	Malayalam	Malaiàlam
 	Optical	Òptic
 	Optical Margin Alignment	Alineació òptica de marges
 	Dynamic Text	Text dinàmic
+	Dynamic Text Presets	Valors predefinits de text dinàmic
+	Arch	Volta
+@msg	select point type or type on a path	seleccioneu text de punt o text sobre un traçat
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	el text sobre un traçat d’un text enllaçat no pot fer servir el text dinàmic: {frames}
 	Optimize for fast web view	Optimitza per a la visualització web ràpida
 	Optimized	Optimitzat
@@ -3273,6 +3291,7 @@ digits	Malayalam	Malaiàlam
 	Radial Glows	Resplendors radials
 	Radial Gradient	Degradat radial
 	Conic Gradient	Degradat cònic
+	Diamond Gradient	Degradat de rombe
 	Radial Repeat	Repetició radial
 	Radius	Radi
 	Radius 1	Radi 1
@@ -3942,6 +3961,16 @@ digits	Malayalam	Malaiàlam
 @msg	message must be text	message ha de ser text
 @msg	allowContinue must be true or false	allowContinue ha de ser true o false
 @msg	Batch cannot play an action with a stop	Lot no pot reproduir una acció amb una aturada
+	Insert Menu Item…	Insereix un element de menú…
+	Insert Menu Item	Insereix un element de menú
+	Menu Item:	Element de menú:
+	No menu item matches.	Cap element de menú no coincideix.
+	Several menu items match. Choose one from the list.	Coincideixen diversos elements de menú. Trieu-ne un de la llista.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	No es mostren els elements que obren un quadre de diàleg ni els elements dels menús Fitxer, Finestra i Ajuda.
+@msg	command must be text	command ha de ser text
+@msg	no menu item that can be inserted runs this command	cap element de menú que es pugui inserir no executa aquesta ordre
+@msg	the action already has 10,000 steps	l’acció ja té 10.000 passos
+@msg	the action set would be larger than 8 MiB	el conjunt d’accions superaria els 8 MiB
 	Playback Options	Opcions de reproducció
 	Accelerated	Accelerada
 	Step by Step	Pas a pas
@@ -3984,6 +4013,15 @@ digits	Malayalam	Malaiàlam
 	Stun Pulse	Atordiment
 	Stealth Fade	Sigil
 	Shield Buff	Escut
+	Textures	Textures
+	Fine Grain	Gra fi
+	Canvas Weave	Teixit de llenç
+	Burlap Sack	Sac de jute
+	Cracked Glaze	Vidrat esquerdat
+	Mosaic Floor	Terra de mosaic
+	Quilted Squares	Quadrats encoixinats
+	Leaded Glass	Vitrall emplomat
+	Damp Paper	Paper humit
 	Shape	Forma
 	Shape Builder	Constructor de formes
 	Shape Builder Delete	Suprimeix del constructor de formes
@@ -4064,6 +4102,7 @@ digits	Malayalam	Malaiàlam
 	Show Modified	Mostra els modificats
 	Show Note	Mostra la nota
 	Show Options	Mostra les opcions
+	Show Recent Colors	Mostra els colors recents
 	Show Original Path	Mostra el traçat original
 	Show Package	Mostra el paquet
 	Show Panel	Mostra el panell
@@ -4425,6 +4464,8 @@ digits	Malayalam	Malaiàlam
 	Scale at Center	Escala des del centre
 	Up/Down:	Amunt/avall:
 	Left/Right:	Esquerra/dreta:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko amunt/avall
+	Tate-chu-yoko Left/Right	Tate-chu-yoko esquerra/dreta
 	Technical Drawing	Dibuix tècnic
 	Temperature	Temperatura
 	Temperature/Tint…	Temperatura/To…
@@ -4893,6 +4934,7 @@ digits	Malayalam	Malaiàlam
 	Words Longer Than:	Paraules més llargues de:
 	Working CMYK	CMYK de treball
 	Working CMYK (don't tag)	CMYK de treball (sense etiquetar)
+	Working RGB (don't tag)	RGB de treball (sense etiquetar)
 	Working RGB	RGB de treball
 	Workspace	Espai de treball
 	Workspace {i}	Espai de treball {i}
@@ -5051,6 +5093,7 @@ digits	Malayalam	Malaiàlam
 @msg	`{key}` must be a number not below 0	`{key}` ha de ser un nombre no inferior a 0
 @msg	`{key}` must be a number, not {v}	`{key}` ha de ser un nombre, no {v}
 @msg	`{key}` must be a string	`{key}` ha de ser una cadena
+@msg	`{key}` must be a profile name or null	`{key}` ha de ser un nom de perfil o null
 @msg	`{key}` must be a whole number	`{key}` ha de ser un nombre enter
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` ha de ser un nombre enter entre {min} i {max} (rebut {x})
 @msg	`{key}` must be an array of these names: {_1}	`{key}` ha de ser una matriu d’aquests noms: {_1}
@@ -5352,6 +5395,7 @@ digits	Malayalam	Malaiàlam
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la pàgina del tauler {n} fa {size}, més que el límit de pàgina del PDF de 14.400 pt (200 in): s’escriu amb un UserUnit de {unit}, de manera que les aplicacions que ignoren UserUnit la mostren tantes vegades més petita
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la pàgina del tauler {n} fa {size}, més que el límit de pàgina del PDF de 14.400 pt (200 in): les pàgines {label} s’escriuen sense UserUnit, en punts, i les aplicacions que respecten el límit retallen la pàgina a 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	el PDF 1.5 no té UserUnit, que una pàgina de més de 14.400 pt (200 in) necessita per mantenir la mida: el fitxer s’escriu com a PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	el PDF 1.4 no té UserUnit, que una pàgina de més de 14.400 pt (200 in) necessita per quedar dins del límit de pàgina de 14.400 unitats del PDF/A-2: el fitxer s’escriu com a PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	la pàgina del tauler {n} fa {size}, massa llarga i estreta per als costats de pàgina del PDF de 3 a 14.400 unitats: s'escriu amb una UserUnit de {unit}, que manté el costat curt en 3 unitats o més, i les aplicacions que respecten el límit retallen el costat llarg a 14.400 unitats
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	els fitxers {label} admeten nombres reals fins a {max}, i la pàgina del tauler {n}, de {side} pt, en necessita de més grans: trieu PDF 1.6 o posterior sense estàndard PDF/X, o un tauler més petit
 @msg	Invalid real scale	Escala real no vàlida
@@ -5588,6 +5632,7 @@ digits	Malayalam	Malaiàlam
 @msg	not a VectorCraft file: {0}	no és un fitxer de VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	no és un conjunt de dreceres de VectorCraft (falta `overrides`)
 @msg	not an EMF or WMF file	no és un fitxer EMF o WMF
+@msg	not an HP-GL file	no és un fitxer HP-GL
 @msg	not an RTF file: it doesn't start with {\\rtf	no és un fitxer RTF: no comença amb {\\rtf
 @msg	not found	no s’ha trobat
 @msg	not in pattern editing mode	no esteu en mode d’edició de motius
@@ -5738,6 +5783,14 @@ digits	Malayalam	Malaiàlam
 @msg	exit isolation mode first	surt primer del mode d’aïllament
 @msg	select an envelope	selecciona un embolcall
 @msg	select an image	selecciona una imatge
+@msg	`background` must be edges, corners or colors	`background` ha de ser edges, corners o colors
+@msg	`match` must be distance or channels	`match` ha de ser distance o channels
+@msg	`{key}` must be from 0 to 100	`{key}` ha d’estar entre 0 i 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` ha de llistar d’1 a 16 colors, cadascun en hexadecimal (#rrggbb o #rgb) o com a black, white, red, green o blue
+@msg	the linked image shows its preview: embed or relink it first	la imatge enllaçada mostra la previsualització: incrusta-la o torna a enllaçar-la primer
+@msg	a CMYK image has no transparency to set	una imatge CMYK no té transparència per establir
+@msg	every pixel matches the background: no image would be left	cada píxel coincideix amb el fons: no quedaria cap imatge
+@msg	an image of {w} × {h} pixels is too large to change	una imatge de {w} × {h} píxels és massa gran per canviar-la
 @msg	select an Image Trace object	selecciona un objecte d’Image Trace
 @msg	select an Intertwine group	selecciona un grup Intertwine
 @msg	select an object in perspective	selecciona un objecte en perspectiva
@@ -5778,7 +5831,7 @@ digits	Malayalam	Malaiàlam
 @msg	span must be "object" or "selection", got {v}	span ha de ser "object" o "selection", s’ha rebut {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" col·loca un `gradient`, no una mostra
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" col·loca un degradat: dona `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" col·loca un degradat lineal, radial o cònic, no un de lliure
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" col·loca un degradat lineal, radial, cònic o de rombe, no un de lliure
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" col·loca el degradat mateix: omet `start` i `end` (ja el col·loquen en coordenades del document)
 @msg	Split Into Grid: select paths large enough for the grid	Divideix en quadrícula: selecciona traçats prou grans per a la quadrícula
 @msg	stop {i} needs `offset`	la parada {i} necessita `offset`
@@ -5952,7 +6005,7 @@ digits	Malayalam	Malaiàlam
 @msg	unknown format	format desconegut
 @msg	unknown format `{f}` (Save writes {_1})	format desconegut `{f}` (Desa escriu {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	mode de forma lliure desconegut `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tipus de degradat desconegut `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	tipus de degradat desconegut `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	ressaltat desconegut `{h}`
 @msg	unknown option `{path}.{k}`	opció desconeguda `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressions desconegudes `{o}` (preserve, simulate o discard)
@@ -6798,6 +6851,7 @@ breakText	Glyphs	Glifs
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Alinea a la quadrícula de píxels
+	Align New Objects to Pixel Grid	Alinea els objectes nous a la quadrícula de píxels
 	Not Aligned to Pixel Grid	No alineat a la quadrícula de píxels
 @msg	only paths and compound paths can be aligned to the pixel grid	només els traçats i els traçats compostos es poden alinear a la quadrícula de píxels
 @msg	side is left or right, not `{s}`	side ha de ser left o right, no `{s}`
