@@ -787,6 +787,43 @@ fn ui_inspect_and_library_commands_show_a_hidden_library_under_one_id() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A library panel command given a hidden library's shown id opens the library and answers with
+/// that id, not the library's path.
+#[test]
+fn a_library_panel_command_answers_with_a_hidden_librarys_shown_id() {
+    let (mut app, tx, base) = confined("panel-shown-id");
+    let path = base.join("outside/x/Kit.gpl");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, "GIMP Palette\nName: Kit\n0 0 0 Black\n").unwrap();
+    app.session.execute("swatch.library.load", &json!({"path": s(path.clone())})).unwrap();
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "window.swatchLibrary", "params": {"library": "loaded/Kit.gpl"}}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(r.to_string().contains("loaded/Kit.gpl") && !r.to_string().contains("outside"), "{r}");
+    assert_eq!(app.ui.library_panels.last().map(|p| p.id.clone()), Some(format!("loaded/{}", s(path))), "the app's own id");
+    // The panel id it answers with names the panel in the panel commands.
+    let panel = r["result"]["panel"].clone();
+    assert_eq!(panel, "library:swatches:loaded/Kit.gpl", "{r}");
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "ui.libraryPanel", "params": {"panel": panel, "view": "largeList"}}));
+    assert_eq!((&r["ok"], &r["result"]["panel"]), (&json!(true), &panel), "{r}");
+    assert!(!r.to_string().contains("outside"), "{r}");
+    let r = request(
+        &mut app,
+        &tx,
+        "engine.execute",
+        json!({"command": "window.panel.move", "params": {"panel": "swatches", "anchor": panel, "zone": "tab"}}),
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(!r.to_string().contains("outside"), "{r}");
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "window.panel.close", "params": {"panel": panel}}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(!r.to_string().contains("outside"), "{r}");
+    // Closed, the panel isn't found, and the error names it by the id given.
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "ui.libraryPanel", "params": {"panel": panel, "view": "largeList"}}));
+    assert_eq!(r["ok"], false, "{r}");
+    assert!(!r.to_string().contains("outside"), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// A closed panel's former place, as `ui.docking_hidden` keeps it.
 fn hidden_place() -> craft_ui::docking::Location<String> {
     serde_json::from_value(json!({"floating": null, "anchor": null, "placement": {"Tab": {"before": null}}, "size": null, "stack": null})).unwrap()
