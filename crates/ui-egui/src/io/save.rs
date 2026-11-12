@@ -251,7 +251,7 @@ pub(crate) fn save_current(app: &mut VectorcraftApp, p: &Value) -> Result<Value,
 pub(super) fn save_current_in(app: &mut VectorcraftApp, p: &Value, folder: Option<String>) -> Result<Value, String> {
     remember_view(app);
     let first = plan(app, SaveMode::Save, &acknowledged(p))?;
-    let own = !app.automation_is_acting()
+    let own = !app.automation_asked()
         && !is_web(app)
         && p.get("path").is_none_or(Value::is_null)
         && first.path.is_some()
@@ -440,20 +440,35 @@ pub(super) fn view_file(app: &mut VectorcraftApp, path: &str) {
     }
 }
 
-/// "Saved <path>", with the first of the result's warnings.
+/// "Saved <path>", with the first of the result's warnings and how many there are; hovering the
+/// message lists up to 30 of them, fewer when the window is small, with how many were left out
+/// ([`show_with_notes`]).
 pub(crate) fn report_saved(app: &mut VectorcraftApp, path: &str, r: &Value) {
-    app.status(saved_status(path, r));
+    show_with_notes(app, saved_status(path, r), notes_of(r));
+}
+
+/// The warnings of a reply `r`, in the reply's order (a save's notes start with what the format
+/// loses).
+pub(crate) fn notes_of(r: &Value) -> Vec<String> {
+    r["warnings"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect()
+}
+
+/// Show `status`, which names the first of `notes`, in the status bar and keep `notes` for its
+/// hover ([`crate::state::UiState::status_notes`]). Without notes nothing is kept.
+pub(crate) fn show_with_notes(app: &mut VectorcraftApp, status: String, notes: Vec<String>) {
+    app.status(status);
+    app.ui.status_notes = (!notes.is_empty()).then(|| (app.ui.status.clone(), notes));
 }
 
 /// [`report_saved`]'s message.
 pub(crate) fn saved_status(path: &str, r: &Value) -> String {
-    let warnings: Vec<&str> = r["warnings"].as_array().map(|w| w.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    let warnings = notes_of(r);
     match warnings.first() {
         Some(first) => crate::i18n::msg_n(
             warnings.len() as u64,
             "Saved {path} with {n} note: {first}",
             "Saved {path} with {n} notes: {first}",
-            &[("path", path), ("first", first)],
+            &[("path", path), ("first", first.as_str())],
         ),
         None => format!("Saved {path}"),
     }
@@ -492,7 +507,7 @@ fn write_plan(app: &mut VectorcraftApp, plan: SavePlan, retry: Option<super::rea
     let done = job.clone();
     // Capture the caller before background work leaves the request: it must never open a panel
     // or error dialog later, when answering_control has been reset.
-    let by_control = app.automation_is_acting();
+    let by_control = app.automation_asked();
     let location_refused = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let refused_by_work = location_refused.clone();
     let own_path = target.clone();

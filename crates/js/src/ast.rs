@@ -187,7 +187,8 @@ pub enum Expr {
         qualifier: Option<XmlQualifier>,
         name: XmlNamePart,
     },
-    /// An E4X name standing alone (`@a` in a filter): looked up on the nearest XML value in scope.
+    /// An E4X name standing alone (`@a` in a filter): looked up on the nearest XML value in scope
+    /// that holds it, and also an assignment, update or `delete` target.
     XmlScopeName(ExprId),
     /// `object..name`.
     XmlDescendants {

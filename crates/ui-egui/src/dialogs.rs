@@ -8,6 +8,7 @@
 
 mod about;
 pub mod action_batch;
+pub mod action_insert_menu_item;
 pub mod action_new;
 pub mod action_playback;
 pub mod action_set_options;
@@ -17,6 +18,7 @@ pub mod blend_options;
 mod brush_art_options;
 pub mod brush_delete;
 pub mod brush_options;
+pub mod brush_replace_art;
 pub mod bullets_numbering;
 pub mod char_style_options;
 pub mod color_balance;
@@ -77,6 +79,7 @@ pub mod new_text_style;
 pub mod objects_on_path_options;
 pub mod office_export;
 pub mod package;
+pub mod para_style_options;
 pub(crate) mod path_ops;
 pub mod pathfinder_options;
 pub mod pdf_presets;
@@ -320,6 +323,7 @@ registry! {
     SwatchOptions: [swatch_options::KIND] => swatch_options::SPEC,
     Confirm: [confirm::KIND] => confirm::SPEC,
     BrushDelete: [brush_delete::KIND] => brush_delete::SPEC,
+    BrushReplaceArt: [brush_replace_art::KIND] => brush_replace_art::SPEC,
     Message: [confirm::MESSAGE] => confirm::MESSAGE_SPEC,
     Replace: [confirm::REPLACE] => confirm::REPLACE_SPEC,
     ResetPreferences: [confirm::RESET_PREFS] => confirm::RESET_PREFS_SPEC,
@@ -333,6 +337,7 @@ registry! {
     ColorPicker: [color_picker::KIND] => color_picker::SPEC,
     GraphicStyleOptions: [graphic_style_options::KIND] => graphic_style_options::SPEC,
     CharStyleOptions: [char_style_options::KIND] => char_style_options::SPEC,
+    ParaStyleOptions: [para_style_options::KIND] => para_style_options::SPEC,
     NewTextStyle: [new_text_style::KIND] => new_text_style::SPEC,
     EffectExists: [effect::EXISTS] => effect::EXISTS_SPEC,
     ColorGuideOptions: [color_guide_options::KIND] => color_guide_options::SPEC,
@@ -389,6 +394,7 @@ registry! {
     ActionPlayback: [action_playback::KIND] => action_playback::SPEC,
     ActionStopRecord: [action_stop::RECORD_KIND] => action_stop::RECORD_SPEC,
     ActionStopMessage: [action_stop::MESSAGE_KIND] => action_stop::MESSAGE_SPEC,
+    ActionInsertMenuItem: [action_insert_menu_item::KIND] => action_insert_menu_item::SPEC,
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
@@ -871,6 +877,9 @@ mod tests_eps;
 
 #[cfg(test)]
 mod tests_metafile;
+
+#[cfg(test)]
+mod tests_hpgl;
 
 #[cfg(test)]
 mod tests_tiff_bmp_tga;

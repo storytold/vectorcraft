@@ -594,6 +594,10 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
     doc.raster_effects.add_around = doc.raster_effects.add_around.clamp(0.0, vectorcraft_doc::rastersettings::MAX_ADD_AROUND);
     let mut depth_notes = vec![];
     doc.limit_depth_noting(&mut depth_notes);
+    // Untrusted: ruler guide nodes only directly in layers, above their art (after the depth limit:
+    // the walk recurses; before the canvas check, which takes a layer's first member as its
+    // clipping path).
+    doc.tidy_ruler_guides();
     // Untrusted: nothing beyond the canvas, where no edit may leave anything (after the depth
     // limit: the walk recurses). A file whose artboards all lie there has no page to show (#3575).
     let had_artboards = !doc.artboards.is_empty();
@@ -605,9 +609,6 @@ fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result
         )));
     }
     depth_notes.extend(beyond.note());
-    // Untrusted: ruler guide nodes only directly in layers, above their art (after the depth limit:
-    // the walk recurses).
-    doc.tidy_ruler_guides();
     // The saved ruler guides become nodes on their layers (after the guides beyond the canvas are
     // dropped, and after `fix_next_id`: new ids start above the file's).
     doc.guides_into_nodes();
@@ -1384,5 +1385,36 @@ mod tests {
         assert_eq!(base64_decode("QQ=="), Some(vec![0x41]));
         assert_eq!(base64_decode("QUI="), Some(vec![0x41, 0x42]));
         assert_eq!(base64_decode("QUJD"), Some(vec![0x41, 0x42, 0x43]));
+    }
+
+    /// A layer clipping by a path beyond the canvas is emptied on open and stops clipping, also
+    /// when the file puts a ruler guide before the clipping path: no other object becomes it.
+    #[test]
+    fn a_guide_before_a_clipping_path_beyond_the_canvas_does_not_change_the_clipping_path() {
+        let opened = |guide_first: bool| {
+            let mut d = Document::new(100.0, 100.0);
+            let rect = |d: &mut Document, y: f64| {
+                Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, y, 10.0, y + 10.0)), Appearance::default_art()))
+            };
+            let (far, near) = (rect(&mut d, 1e17), rect(&mut d, 0.0));
+            if let NodeKind::Layer { children, clip, .. } = &mut Arc::make_mut(&mut d.layers[0]).kind {
+                *children = vec![far, near];
+                *clip = true;
+            }
+            // Saving writes ruler guides to the saved list: the guide node is put in the file.
+            let mut v: serde_json::Value = serde_json::from_slice(&save(&d, false)).unwrap();
+            let guide = serde_json::json!({"id": 50, "kind": {"type": "rulerguide", "vertical": true, "pos": 5.0}});
+            let kids = v["document"]["layers"][0]["kind"]["children"].as_array_mut().unwrap();
+            if guide_first {
+                kids.insert(0, guide)
+            } else {
+                kids.push(guide)
+            }
+            let d = load(&serde_json::to_vec(&v).unwrap()).unwrap();
+            let NodeKind::Layer { children, clip, .. } = &d.layers[0].kind else { panic!("a layer") };
+            (*clip, children.iter().map(|c| c.is_ruler_guide()).collect::<Vec<_>>())
+        };
+        assert_eq!(opened(false), (false, vec![true]), "the clipping path and what it clipped go; the guide stays");
+        assert_eq!(opened(true), opened(false));
     }
 }

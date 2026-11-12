@@ -28,7 +28,7 @@ impl Retry {
     /// None when this continuation is stale or another picker prevents it. The existing failed-save
     /// dialog then stays in charge; there is no queue of deferred Save As requests.
     pub(super) fn instead(self, app: &mut VectorcraftApp, uid: u64) -> Option<Result<Value, String>> {
-        if app.automation_is_acting() || app.services.pick_save.is_none() || app.picks.is_waiting() || super::save::is_web(app) {
+        if app.automation_asked() || app.services.pick_save.is_none() || app.picks.is_waiting() || super::save::is_web(app) {
             return None;
         }
         let index = app.session.documents().iter().position(|st| st.uid == uid && st.path == self.path)?;

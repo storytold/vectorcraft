@@ -1,4 +1,5 @@
-//! CAD interchange: a hand-written ASCII DXF writer (versions R12 to 2018) and reader.
+//! CAD interchange: a hand-written ASCII DXF writer (versions R12 to 2018) and reader, and an
+//! HP-GL/2 plot file reader and writer.
 //!
 //! [`export`] writes the visible art of a document into one DXF drawing: each layer becomes a DXF
 //! layer (hidden ones switched off, locked ones locked, non-printing ones not plotted), paths
@@ -11,13 +12,16 @@
 //! clipping) is approximated or left out, and each such loss comes back as a warning.
 //!
 //! [`import()`] reads an ASCII DXF drawing (any version) into a document: see [`import`].
+//! [`hpgl::import`] reads an HP-GL plotter file, and [`hpgl::export`] writes one: see [`hpgl`].
 //!
 //! - `aci`: the 256-colour index palette and the nearest index of a colour.
 //! - `writer`: group codes, handles and the file's sections, tables and objects.
 //! - `scene`: the document walk that turns objects into entities.
 //! - `import`: the reader, entities to art, blocks to symbols.
+//! - `hpgl`: the HP-GL reader, the pen's moves to paths, and the writer, paths to pen moves.
 
 mod aci;
+pub mod hpgl;
 pub mod import;
 mod scene;
 mod writer;
@@ -277,6 +281,10 @@ pub struct DxfOptions {
     pub scale_lineweights: bool,
     pub colors: ColorDepth,
     pub raster: RasterFormat,
+    /// Placed images are written as IMAGE entities with their files (else left out, undecoded).
+    pub include_images: bool,
+    /// Filled areas get a solid HATCH after their outlines (else the outlines alone).
+    pub include_hatches: bool,
     pub preserve: Preserve,
     /// Alter Paths for Appearance: a stroke a CAD line can't draw (one [`Preserve::Appearance`]
     /// outlines, one wider than the widest lineweight, or any stroke in R13 and R14, which have
@@ -299,6 +307,8 @@ impl Default for DxfOptions {
             scale_lineweights: false,
             colors: ColorDepth::default(),
             raster: RasterFormat::default(),
+            include_images: true,
+            include_hatches: true,
             preserve: Preserve::default(),
             alter_paths: false,
             outline_text: false,
@@ -318,7 +328,8 @@ pub enum DxfPreset {
     /// For CNC and CAM cutting software: version 2000 (the oldest version that has both lightweight
     /// polylines and lineweights), 1 mm = 1 unit, 256 indexed colors (all version 2000 holds), Maximize
     /// Editability with Alter Paths off (every stroke a center line), Outline Text (type as paths),
-    /// and placed images as PNG.
+    /// and placed images and fill hatches left out (fills are their outlines), with PNG as the
+    /// format images take when they are put back in.
     Cnc,
 }
 
@@ -356,6 +367,8 @@ impl DxfPreset {
                 scale_lineweights: false,
                 colors: ColorDepth::Aci256,
                 raster: RasterFormat::Png,
+                include_images: false,
+                include_hatches: false,
                 preserve: Preserve::Editability,
                 alter_paths: false,
                 outline_text: true,
@@ -373,6 +386,8 @@ impl DxfPreset {
             && o.scale_lineweights == c.scale_lineweights
             && o.colors == c.colors
             && o.raster == c.raster
+            && o.include_images == c.include_images
+            && o.include_hatches == c.include_hatches
             && o.preserve == c.preserve
             && o.alter_paths == c.alter_paths
             && o.outline_text == c.outline_text;

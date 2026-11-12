@@ -10,12 +10,15 @@
 //! - [`segment_reshape`]: bending a segment by dragging a point on it (shared by the tools that
 //!   reshape segments directly).
 //! - [`pen`]: the Smart Pen's straight and curved segments and its point edits.
+//! - [`stencil`]: Stencil Bridges, the strips cut out of art so that a stencil cut from it keeps
+//!   its islands attached.
 
 pub mod cleanup;
 pub mod keep_shape;
 pub mod pathtools;
 pub mod pen;
 pub mod segment_reshape;
+pub mod stencil;
 
 pub use cleanup::{
     Rejoined, close_nearly_closed, merge_duplicate_anchors, near_point_groups, rejoin, remove_collinear_anchors, retract_tiny_handles,

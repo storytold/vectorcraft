@@ -205,6 +205,20 @@ fn readonly_control_returns_the_prefix_and_never_opens_a_panel_even_after_comple
 }
 
 #[test]
+fn readonly_automation_continuation_keeps_the_prefix_and_never_opens_a_panel() {
+    let (mut app, files) = app("svg", ErrorKind::PermissionDenied);
+    let before = state(&app);
+    app.services.pick_save = Some(Box::new(|_| panic!("automation never picks")));
+    assert!(!app.automation_is_acting());
+    let r = picks::as_automated(&mut app, true, |app| app.run("file.save", json!({})));
+    assert!(r.unwrap_err().starts_with("READ_ONLY_LOCATION: "));
+    assert_eq!(state(&app), before);
+    assert_eq!(files.lock().unwrap().attempts, ["/locked/Poster.svg"]);
+    assert!(app.ui.dialog.is_none() && app.ui.told.is_empty() && !app.picks.is_waiting());
+    assert!(!app.automation_asked());
+}
+
+#[test]
 fn readonly_background_completion_resumes_the_original_uid_without_repeating_save() {
     for streamed in [false, true] {
         let format = if streamed { "vectorcraft" } else { "svg" };

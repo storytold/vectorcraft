@@ -339,3 +339,12 @@ fn find_in_folder_asks_for_the_folder_off_the_ui_thread() {
     searched(&mut app);
     assert_eq!(pick(app.ui.dialog.as_ref().unwrap(), "here.png"), &json!(here));
 }
+
+/// A row whose path `links.check` left out (its file is outside the read roots) still shows the
+/// files the search found for its objects.
+#[test]
+fn a_row_without_its_path_shows_the_files_found_for_its_objects() {
+    let found = [json!({"name": "a.png", "path": "/elsewhere/a.png", "ids": [3], "files": [{"path": "/root/a.png"}]})];
+    assert_eq!(files_for(&found, &json!({"name": "a.png", "ids": [3]})), [json!({"path": "/root/a.png"})]);
+    assert!(files_for(&found, &json!({"name": "a.png", "ids": [4]})).is_empty());
+}

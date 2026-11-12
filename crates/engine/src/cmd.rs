@@ -507,6 +507,23 @@ pub(crate) fn given_objects(s: &Session, p: &Value, command: &str) -> Result<Opt
         Some(v) => Ok(Some(vec![checked_id(s, v, command)?])),
     }
 }
+/// The objects `p` gives `command`, as [`given_objects`] reads them, checked only for their form:
+/// for a command that looks its objects up itself, outside the document's layers too.
+pub(crate) fn given_object_ids(p: &Value, command: &str) -> Result<Option<Vec<NodeId>>> {
+    if p.get("ids").is_some_and(|v| !v.is_null()) {
+        return ids_param(p, "ids", command);
+    }
+    match p.get("id").filter(|v| !v.is_null()) {
+        None => Ok(None),
+        Some(Value::String(r)) if r.starts_with('$') => {
+            Err(bad(command, format!("`id` is the step reference {r:?}, which only `run` and `command_batch` resolve")))
+        }
+        Some(v) => {
+            let id = v.as_u64().map(NodeId).ok_or_else(|| bad(command, format!("invalid object id {v}: expected a non-negative integer")))?;
+            Ok(Some(vec![id]))
+        }
+    }
+}
 /// `v` as an index, a count or a byte offset: past `usize::MAX` reads as `usize::MAX`, past the end of any list.
 pub(crate) fn index(v: u64) -> usize {
     usize::try_from(v).unwrap_or(usize::MAX)
@@ -749,6 +766,7 @@ pub(crate) fn unique_name_from(base: &str, next: &mut std::collections::HashMap<
 /// The most presets one presets file imports: each is looked up among the saved ones.
 pub(crate) const MAX_IMPORTED_PRESETS: usize = 1000;
 
+pub(crate) use addons::DecodedImages;
 pub use docmenu::guide_indexes;
 pub(crate) use edit::{settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;

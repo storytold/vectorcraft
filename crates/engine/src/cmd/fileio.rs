@@ -2,7 +2,7 @@
 //! save, export and serialize by path or bytes (base64), the format table, `command.batch` and
 //! `action.batch` (the Actions panel menu's Batch…).
 //!
-//! - `load`: `document.open` (native, legacy, SVG/SVGZ, PDF/.ai/.ait, DXF, raster images).
+//! - `load`: `document.open` (native, legacy, SVG/SVGZ, PDF/.ai/.ait, DXF, HP-GL, raster images).
 //! - `action_batch`: play an action on every file in a folder or every data set.
 //! - `encode`: one encoder per writable format, with typed options parsed from the params.
 //! - `svg`: the SVG Options (styling, fonts, images, object ids, artboards…).
@@ -17,6 +17,7 @@
 //! - `eps`: EPS export options (flattened transparency, previews, the embedded document), `document.exportEps`.
 //! - `dxfimport`: the DXF options `document.open` and Place read, `document.dxfInfo`.
 //! - `metafile`: EMF and WMF export, open and place.
+//! - `hpgl`: HP-GL export options and plots.
 //! - `importer`: files that importer plug-ins open (`document.open {importer}`, and extensions no
 //!   built-in format reads).
 //! - `mesh3d`: 3D assets as OBJ, glTF, USDA and USDZ mesh files (`assets.export3D`).
@@ -40,6 +41,7 @@ mod load;
 mod mesh3d;
 pub(crate) use load::{MAX_RASTER_ALLOC, size_note};
 mod heifread;
+mod hpgl;
 mod jp2read;
 mod metafile;
 mod naming;
@@ -50,6 +52,7 @@ mod pdfimport;
 pub mod pngtext;
 pub mod ppi;
 pub mod progress;
+mod psdlayers;
 pub mod psdread;
 mod pxrread;
 mod save;
@@ -90,8 +93,8 @@ pub(crate) use save::job_for;
 pub(crate) use save::save as save_document;
 pub use save::{
     SAVE_FORMATS, SaveJob, SaveMode, SavePlan, StreamWrite, TEMPLATE_FORMATS, dialog_folder, documents_dialog_folder, export_folder,
-    reads_option as save_reads_option, remembered_save_options, save_filters, save_format, save_job, save_plan, save_with, stamp_save_dates,
-    template_filters, templates_dialog_folder, templates_folder,
+    leave_out_unreadable_save_paths, reads_option as save_reads_option, remembered_save_options, save_filters, save_format, save_job, save_plan,
+    save_with, stamp_save_dates, template_filters, templates_dialog_folder, templates_folder,
 };
 pub(crate) use screens::{
     PARAM_KEYS as SCREEN_PARAM_KEYS, ROW_KEYS as SCREEN_ROW_KEYS, UNWRITTEN_FORMATS as SCREEN_UNWRITTEN_FORMATS,
@@ -126,7 +129,9 @@ pub use access::{write_file_with, write_save_file, write_save_file_with};
 mod tests_readonly;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use access::{Placed, copy_new, file_metadata};
-pub(crate) use access::{absolute_path, create_dir, document_path, file_created, file_stamp, read_file, read_file_head, write_file, write_new_file};
+pub(crate) use access::{
+    absolute_path, create_dir, document_path, file_created, file_stamp, read_file, read_file_head, shown_link, shown_path, write_file, write_new_file,
+};
 #[cfg(all(test, windows))]
 pub(crate) use access::{document_path_on, document_path_with};
 #[cfg(test)]
@@ -207,6 +212,8 @@ mod tests_eps;
 #[cfg(test)]
 mod tests_dxfimport;
 #[cfg(test)]
+mod tests_hpgl;
+#[cfg(test)]
 mod tests_metafile;
 
 #[cfg(test)]
@@ -220,6 +227,8 @@ mod tests_jxlread;
 mod tests_pdfx;
 #[cfg(test)]
 mod tests_psd;
+#[cfg(test)]
+mod tests_psdlayers;
 #[cfg(test)]
 mod tests_psdread;
 

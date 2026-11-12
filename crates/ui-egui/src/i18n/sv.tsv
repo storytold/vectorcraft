@@ -251,6 +251,7 @@ font-technology	Variable	Variabla
 	Asset Export Settings	Inställningar för resursexport
 	Assets	Resurser
 	Assign	Tilldela
+	Assign Profile	Tilldela profil
 	Assign Profile…	Tilldela profil…
 	Assign:	Tilldela:
 	Attach to Active Plane	Koppla till aktivt plan
@@ -688,6 +689,15 @@ font-technology	Variable	Variabla
 	Created:	Skapad:
 	Crop	Beskär
 	Crop Image	Beskär bild
+	Image Tools	Bildverktyg
+	Remove Background…	Ta bort bakgrund…
+	Remove Background	Ta bort bakgrund
+	Background	Bakgrund
+	Edge Color	Kantfärg
+	Picked Colors	Valda färger
+	Corner Color	Hörnfärg
+	Contiguous	Sammanhängande
+	Each Channel	Varje kanal
 	Edit Path	Redigera bana
 	Mask	Maskera
 	Crop Marks	Skärmärken
@@ -1122,6 +1132,8 @@ font-technology	Variable	Variabla
 	Extrude & Bevel…	Extrudera och fasa…
 	3D (Classic)	3D (klassisk)
 	Extrude & Bevel (Classic)…	Extrudera och fasa (klassisk)…
+	Revolve (Classic)…	Rotera runt axel (klassisk)…
+	Rotate (Classic)…	Rotera (klassisk)…
 	Surface	Yta
 	Wireframe	Trådram
 	No Shading	Ingen skuggning
@@ -1402,6 +1414,14 @@ font-technology	Variable	Variabla
 	Hair Space	Hårfint blanksteg
 	Hand Tool	Handverktyg
 	Hand-Drawn	Handritad
+	Painted and Sketched	Målat och skissat
+	Washed Blue	Urtvättad blå
+	Bristle Ochre	Borstockra
+	Pastel Heather	Pastelljung
+	Charcoal Shade	Kolskugga
+	Ink Contour	Tuschkontur
+	Wet Ink	Våt tusch
+	Fine Pen	Fin penna
 	Handles	Handtag
 	Hard Light	Hårt ljus
 	Hard Mix	Hård blandning
@@ -2275,6 +2295,9 @@ font-technology	Variable	Variabla
 	Optical	Optisk
 	Optical Margin Alignment	Optisk marginaljustering
 	Dynamic Text	Dynamisk text
+	Dynamic Text Presets	Förinställningar för dynamisk text
+	Arch	Valv
+@msg	select point type or type on a path	markera punkttext eller text på bana
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	text på bana i länkad text kan inte använda dynamisk text: {frames}
 	Optimize for fast web view	Optimera för snabb webbvisning
 	Optimized	Optimerad
@@ -2282,6 +2305,8 @@ font-technology	Variable	Variabla
 	Options for Selection…	Alternativ för markering…
 	Options:	Alternativ:
 	Options…	Alternativ…
+	Organic Fades	Organiska toningar
+	Holographic	Holografiska
 	or more spaces with a tab	eller fler blanksteg med en tabb
 	Order:	Ordning:
 	Ordinals	Ordningstal
@@ -2471,6 +2496,7 @@ font-technology	Variable	Variabla
 	Presets:	Förinställningar:
 	Press 	Tryck på 
 	Preview	Förhandsgranskning
+	Preview:	Förhandsgranskning:
 	Preview All Layers	Förhandsgranska alla lager
 	Preview in Browser	Förhandsgranska i webbläsare
 	Preview in Browser needs the desktop app (the web downloads files instead)	Förhandsgranska i webbläsare kräver skrivbordsappen (webbversionen hämtar filerna i stället)
@@ -2549,6 +2575,8 @@ digits	Malayalam	Malayalam
 	Radial	Radiell
 	Radial Glows	Radiellt sken
 	Radial Gradient	Radiell gradient
+	Conic Gradient	Konisk gradient
+	Diamond Gradient	Rombgradient
 	Radius 1	Radie 1
 	Radius 2	Radie 2
 	Radius1	Radie1
@@ -2561,6 +2589,8 @@ digits	Malayalam	Malayalam
 	Range:	Omfång:
 	Raster Effects	Rastereffekter
 	Raster File Format:	Rasterfilformat:
+	Include Placed Images	Inkludera placerade bilder
+	Include Fill Hatches	Inkludera skrafferingar av fyllningar
 	Raster Sample Size:	Samplingsstorlek för raster:
 	Raster/Vector Balance:	Raster-/vektorbalans:
 	Rasterize	Rastrera
@@ -2741,6 +2771,10 @@ digits	Malayalam	Malayalam
 	Replace Font	Ersätt typsnitt
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Ersätt den med en annan fil eller ignorera den: dess bilder fortsätter att visa förhandsgranskningen som sparats med dokumentet.
 	Replace Spine	Ersätt ryggrad
+	Create Spine	Skapa ryggrad
+	Create Spine:	Skapa ryggrad:
+	Always	Alltid
+	Never	Aldrig
 	Replace Symbol	Ersätt symbol
 	Reset Transformation	Återställ transformering
 	Replace With Font	Ersätt med typsnitt
@@ -3090,6 +3124,15 @@ digits	Malayalam	Malayalam
 	Stun Pulse	Bedövning
 	Stealth Fade	Smyga
 	Shield Buff	Sköld
+	Textures	Texturer
+	Fine Grain	Fin kornighet
+	Canvas Weave	Kanvasväv
+	Burlap Sack	Jutesäck
+	Cracked Glaze	Krackelerad glasyr
+	Mosaic Floor	Mosaikgolv
+	Quilted Squares	Quiltade rutor
+	Leaded Glass	Blyinfattat glas
+	Damp Paper	Fuktigt papper
 	Shape	Form
 	Shape Builder	Formbyggare
 	Shape Builder Regions	Formbyggarområden
@@ -3152,6 +3195,7 @@ digits	Malayalam	Malayalam
 	Show Modified	Visa ändrade
 	Show Note	Visa anteckning
 	Show Options	Visa alternativ
+	Show Recent Colors	Visa senaste färger
 	Show Original Path	Visa ursprunglig bana
 	Open this dialog with these settings next time	Öppna den här dialogrutan med de här inställningarna nästa gång
 	Auto-Simplify	Förenkla automatiskt
@@ -3454,6 +3498,8 @@ digits	Malayalam	Malayalam
 	Scale at Center	Skala från mitten
 	Up/Down:	Upp/ned:
 	Left/Right:	Vänster/höger:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko upp/ned
+	Tate-chu-yoko Left/Right	Tate-chu-yoko vänster/höger
 	Temperature	Temperatur
 	Temperature/Tint…	Temperatur/färgton…
 	Template	Mall
@@ -3523,6 +3569,8 @@ digits	Malayalam	Malayalam
 	Toolbar: Single/Double Column	Verktygsfält: En/två kolumner
 	Toolbar: Add Tool	Verktygsfält: Lägg till verktyg
 	Toolbar: Remove Tool	Verktygsfält: Ta bort verktyg
+	Add Tool…	Lägg till verktyg…
+	Remove Tool	Ta bort verktyg
 	Toolbar: Reset	Verktygsfält: Återställ
 	Toolbars	Verktygsfält
 	Tools	Verktyg
@@ -3786,6 +3834,7 @@ digits	Malayalam	Malayalam
 	Windows	Windows
 	Working CMYK	Arbets-CMYK
 	Working CMYK (don't tag)	Arbets-CMYK (tagga inte)
+	Working RGB (don't tag)	Arbets-RGB (tagga inte)
 	Workspace	Arbetslayout
 	Workspace {i}	Arbetslayout {i}
 	Wrinkle Tool	Skrynkelverktyg
@@ -3964,6 +4013,13 @@ axis	Both	Båda
 	Dock Panel	Docka panel
 	Dock to Top	Docka överst
 	Dock to Bottom	Docka nederst
+	Control Bar Options	Alternativ för kontrollfältet
+	Tool Options	Verktygsalternativ
+	Object Options	Objektalternativ
+	Image Options	Bildalternativ
+	Vertical Alignment	Vertikal justering
+	Align and Distribute	Justera och fördela
+	Document Options	Dokumentalternativ
 	Dock Control Bar	Docka kontrollfältet
 	Drag to float the toolbar	Dra för att göra verktygsfältet flytande
 	Drag to the window's left or right edge to dock	Dra till fönstrets vänster- eller högerkant för att docka
@@ -4110,10 +4166,13 @@ axis	Both	Båda
 @msg	`groupColors` must be an array	`groupColors` måste vara en array
 @msg	`library` is a library id or name (see {list})	`library` är ett biblioteks-id eller biblioteksnamn (se {list})
 @msg	`mode` applies to freeform gradients	`mode` gäller för fria gradienter
+@msg	a negative `aspect` applies to conic gradients	ett negativt `aspect` gäller för koniska gradienter
+@msg	`focal` applies to radial gradients	`focal` gäller för radiella gradienter
 @msg	`preserve` must be an object	`preserve` måste vara ett objekt
 @msg	`globalAdjust` must be an object	`globalAdjust` måste vara ett objekt
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` måste vara 1, 3 eller 5
 @msg	`stops` must be an array	`stops` måste vara en array
+@msg	`{key}` must be an array	`{key}` måste vara en array
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` måste vara ett objekt med SVG-alternativ (se document.formats)
 @msg	`{_1}` is no save command	`{_1}` är inget sparkommando
 @msg	`{area}` is no recovery area name	`{area}` är inget namn på ett återställningsområde
@@ -4273,6 +4332,7 @@ axis	Both	Båda
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	sidan för rityta {n} är {size}, längre än PDF:s sidgräns på 14 400 pt (200 in): den skrivs med en UserUnit på {unit}, så appar som ignorerar UserUnit visar den så många gånger mindre
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	sidan för rityta {n} är {size}, längre än PDF:s sidgräns på 14 400 pt (200 in): {label}-sidor skrivs utan UserUnit, i punkter, och appar som håller sig till gränsen beskär sidan till 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 har ingen UserUnit, som en sida längre än 14 400 pt (200 in) behöver för att behålla sin storlek: filen skrivs som PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 har ingen UserUnit, som en sida längre än 14 400 pt (200 in) behöver för att hålla sig inom PDF/A-2:s sidgräns på 14 400 enheter: filen skrivs som PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	sidan för rityta {n} är {size}, för lång och smal för PDF:s sidlängder på 3 till 14 400 enheter: den skrivs med UserUnit {unit}, som håller den korta sidan på minst 3 enheter, och appar som följer gränsen klipper den långa sidan vid 14 400 enheter
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label}-filer rymmer reella tal upp till {max}, och sidan för rityta {n}, {side} pt lång, behöver större: välj PDF 1.6 eller senare utan PDF/X-standard, eller en mindre rityta
 @msg	invalid image data for `{0}`	ogiltiga bilddata för `{0}`
@@ -4421,6 +4481,8 @@ axis	Both	Båda
 @msg	not a stored central record	inte en lagrad central post
 @msg	not a valid plug-in module: {0}	inte ett giltigt plugin: {0}
 @msg	not an EMF or WMF file	inte en EMF- eller WMF-fil
+@msg	not an HP-GL file	inte en HP-GL-fil
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` måste vara en array med 1 till 255 färger i formatet #rrggbb
 @msg	not found	hittades inte
 @msg	not in pattern editing mode	inte i läget för mönsterredigering
 @msg	finish editing the pattern first	slutför redigeringen av mönstret först
@@ -4494,6 +4556,14 @@ axis	Both	Båda
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	spårningen skulle ge fler än {max} ankarpunkter, fler än dokumentet kan visa smidigt: höj Brus, sänk Banor eller Färger, eller välj en förinställning med lägre återgivning
 @msg	select an envelope	markera ett kuvert
 @msg	select an image	markera en bild
+@msg	`background` must be edges, corners or colors	`background` måste vara edges, corners eller colors
+@msg	`match` must be distance or channels	`match` måste vara distance eller channels
+@msg	`{key}` must be from 0 to 100	`{key}` måste vara från 0 till 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` måste lista 1 till 16 färger, var och en hexadecimalt (#rrggbb eller #rgb) eller som black, white, red, green eller blue
+@msg	the linked image shows its preview: embed or relink it first	den länkade bilden visar sin förhandsvisning: bädda in eller länka om den först
+@msg	a CMYK image has no transparency to set	en CMYK-bild har ingen transparens att ställa in
+@msg	every pixel matches the background: no image would be left	varje pixel matchar bakgrunden: ingen bild skulle bli kvar
+@msg	an image of {w} × {h} pixels is too large to change	en bild på {w} × {h} pixlar är för stor för att ändras
 @msg	select an object in perspective	markera ett objekt i perspektiv
 @msg	select artwork (or a colour group) to recolor	markera grafik (eller en färggrupp) att färga om
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Omfärgning klar; utan ändring: {locked} och {hidden}
@@ -4600,7 +4670,7 @@ axis	Both	Båda
 @msg	unknown format	okänt format
 @msg	unknown format `{f}` (Save writes {_1})	okänt format `{f}` (Spara skriver {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	okänt fritt läge `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	okänd gradienttyp `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	okänd gradienttyp `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	okänd högdager `{h}`
 @msg	unknown option `{path}.{k}`	okänt alternativ `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	okänt värde för övertryck `{o}` (preserve, simulate eller discard)
@@ -4875,7 +4945,13 @@ axis	Both	Båda
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC- eller HEIF-filen innehåller en typ av bild som inte kan läsas
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- och HEIF-bilder kan inte öppnas i den här versionen
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD-bilden är för stor för att läsas ({_1} × {_2} pixlar)
-@msg	zipped 32-bit PSD image data with prediction can't be read	zippad 32-bitars PSD-bilddata med prediktion kan inte läsas
+@msg	zipped 1-bit PSD image data with prediction can't be read	zippad 1-bitars PSD-bilddata med prediktion kan inte läsas
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD-filens lagerdata använder en okänd komprimering ({m})
+@msg	the PSD file's layer records are damaged	PSD-filens lagerposter är skadade
+@msg	the PSD file's layer groups are nested too deeply	PSD-filens lagergrupper är kapslade för djupt
+@msg	a layer of the PSD file is too large to read	ett lager i PSD-filen är för stort för att läsas
+@msg	the PSD file's layers take more memory to read than allowed	PSD-filens lager kräver mer minne för att läsas än vad som tillåts
+@msg	the layers can't be read ({e}): the file opened as its merged image	lagren kan inte läsas ({e}): filen öppnades som sin sammanslagna bild
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bitars PSD-filer i det här färgläget kan inte läsas
 @msg	the PSD file is cut short	PSD-filen är avkortad
 @msg	the PSD file's header is damaged	PSD-filens huvud är skadat
@@ -5607,6 +5683,11 @@ theme	Appearance	Utseende
 	Softness	Mjukhet
 	Ambient Light	Omgivande ljus
 	Light behind the object	Ljus bakom objektet
+	Shadows	Skuggor
+	Distance from Object	Avstånd från objektet
+	Shadow Bounds	Skuggans gränser
+	Behind Object	Bakom objektet
+	Below Object	Under objektet
 	3D Lighting Preset	Förinställning för 3D-belysning
 	Standard	Standard
 	Diffuse	Diffust
@@ -5742,7 +5823,7 @@ theme	Appearance	Utseende
 @msg	span must be "object" or "selection", got {v}	span måste vara "object" eller "selection", fick {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" placerar en `gradient`, inte en färgruta
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" placerar en gradient: ange `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" placerar en linjär eller radiell gradient, inte en fri
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" placerar en linjär, radiell, konisk eller rombformad gradient, inte en fri
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" placerar själva gradienten: utelämna `start` och `end` (de placerar den redan i dokumentkoordinater)
 @msg	the Color Picker is not open	färgväljaren är inte öppen
 @msg	the Simplify slider is not open	Förenkla-reglaget är inte öppet
@@ -5979,6 +6060,7 @@ font-script	Japanese	Japanska
 	Ruby	Ruby
 	Geometric Guides	Geometriska stödlinjer
 	Geometric Patterns	Geometriska mönster
+	Grit Textures	Korniga texturer
 	Ease In	Långsam start
 	Ease Out	Långsamt slut
 	Ease In Out	Långsam start och slut
@@ -6037,6 +6119,8 @@ axis	Y Axis	Y-axel
 	Version: {version}	Version: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Installera ”{name}” i stället för det plugin som har samma id?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Den här filen är inte det plugin som tidigare installerades med detta id. Den får de inställningar och den cache som sparats för detta id.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	En automatisering bad om att installera det här pluginet. Välj själv Objekt › Plugins › Installera plugin… för att installera det.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	En automatisering bad om att installera det här pluginet. Välj själv Objekt › Plugins › Installera plugin… för att installera det.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	”{name}” är en annan modul än pluginet med id {_1} och skulle få de inställningar och den cache som sparats för det: installera det med `replace: true` när användaren har godkänt
 	File SHA-256: {hash}	Filens SHA-256: {hash}
 	Read the objects it is given	Läsa objekten den får
@@ -6082,6 +6166,7 @@ axis	Y Axis	Y-axel
 @msg	`inputs` needs the permission `doc.read`	`inputs` kräver behörigheten `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	minnesbudget (objekt {_1} behöver {size} byte indata, {left} återstår)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektbudget (fler än {MAX_OBJECTS} skrivskyddade objekt)
+@msg	the plug-in's grant can't be removed from the plug-in store	pluginets behörighet kan inte tas bort ur pluginlagret
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	behörigheten `{shown}` är reserverad för ett senare plugin-API; den här värden beviljar den inte
 @msg	unknown permission `{shown}`	okänd behörighet `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	”{name}” begär behörigheterna {asked}: en person måste godkänna dem i skrivbordsappen, eller skicka `grant` i en session som startats med --allow-plugin-grants
@@ -6094,6 +6179,11 @@ axis	Y Axis	Y-axel
 @msg	command {name}: `label` must be 1-64 printable characters	kommando {name}: `label` måste ha 1-64 utskrivbara tecken
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	kommando {name}: använd ett id med 1-{MAX_COMMAND_ID} tecken av a-z 0-9 _ som börjar med en bokstav
 @msg	command {name}: {e}	kommando {name}: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (rad {line}, kolumn {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` måste vara en lista med kommandon, vart och ett med `id` och `label`
+@msg	command {name} must be an object with an `id` and a `label`	kommandot {name} måste vara ett objekt med `id` och `label`
+@msg	missing field `{key}`	fältet `{key}` saknas
+@msg	duplicate field `{key}`	fältet `{key}` förekommer två gånger
 @msg	only a filter or a live effect declares `commands`	bara ett filter eller en live-effekt deklarerar `commands`
 @msg	“{name}” › {label}: {e}	”{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modulen har inte den SHA-256 som `hash` anger: ingenting installerades
@@ -6118,6 +6208,16 @@ axis	Y Axis	Y-axel
 @msg	message must be text	message måste vara text
 @msg	allowContinue must be true or false	allowContinue måste vara true eller false
 @msg	Batch cannot play an action with a stop	Batch kan inte spela upp en åtgärd med ett stopp
+	Insert Menu Item…	Infoga menyalternativ…
+	Insert Menu Item	Infoga menyalternativ
+	Menu Item:	Menyalternativ:
+	No menu item matches.	Inget menyalternativ matchar.
+	Several menu items match. Choose one from the list.	Flera menyalternativ matchar. Välj ett i listan.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Alternativ som öppnar en dialogruta och alternativ i menyerna Fil, Fönster och Hjälp visas inte.
+@msg	command must be text	command måste vara text
+@msg	no menu item that can be inserted runs this command	inget menyalternativ som kan infogas kör det här kommandot
+@msg	the action already has 10,000 steps	åtgärden har redan 10 000 steg
+@msg	the action set would be larger than 8 MiB	åtgärdsuppsättningen skulle bli större än 8 MiB
 	Playback Options	Uppspelningsalternativ
 	Accelerated	Accelererad
 	Step by Step	Steg för steg
@@ -6232,6 +6332,17 @@ axis	Y Axis	Y-axel
 	Charge Wave	Laddningsvåg
 	Spark Trail	Gnistsvår
 	Calligraphic Nibs	Kalligrafiska pennspetsar
+	Bristle Brushes	Borstpenslar
+	Fine Liner	Fin linje
+	Pointed Flat	Spetsig platt
+	Stubby Round	Kort rund
+	Dry Scrub	Torr skrubbning
+	Soft Dome	Mjuk kupol
+	Filbert	Oval platt
+	Angled Round	Sned rund
+	Angled Flat	Sned platt
+	Fan Blender	Blandande solfjäder
+	Grass Fan	Grässolfjäder
 	Pattern Borders	Mönsterbårder
 	Scatter Shapes	Spridningsformer
 	Save Brush Library…	Spara penselbibliotek…
@@ -6457,9 +6568,12 @@ shape	Open	Öppen
 @msg	{label} must be a number	{label} måste vara ett tal
 @msg	{label} must be a number of at least 0.1	{label} måste vara ett tal på minst 0,1
 	Advanced Character Formats	Avancerade teckenformat
+	Basic Paragraph Formats	Grundläggande styckeformat
+	Composition	Sättning
 	Horizontal Scale	Horisontell skala
 	Vertical Scale	Vertikal skala
 @msg	{label} must be a number from {min} to {max}	{label} måste vara ett tal från {min} till {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} måste vara ett heltal från {min} till {max}
 	Character Color	Teckenfärg
 	OpenType Features	OpenType-funktioner
 	Stylistic Sets	Stilistiska uppsättningar
@@ -6467,6 +6581,9 @@ shape	Open	Öppen
 @msg	features lists at most {max} tags	features får innehålla högst {max} taggar
 @msg	unknown OpenType feature `{t}`	okänd OpenType-funktion `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} måste vara ett tal över 0 och högst {max}
+@msg	{label} must be at most {max} characters	{label} får innehålla högst {max} tecken
+@msg	{label} must be one character	{label} måste vara ett tecken
+@msg	at most {max} tab stops	högst {max} tabbstopp
 @msg	no character style `{name}`	Teckenformatet `{name}` hittades inte
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6628,6 +6745,12 @@ breakText	Glyphs	Glyfer
 	Delete the selected brushes?	Radera de valda penslarna?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturer använder en eller flera av de här penslarna. Ta bort penslarna från konturerna och radera penslarna?
 	Remove Strokes	Ta bort konturer
+	Place Brush Art	Placera penselgrafik
+	Replace Brush Art	Ersätt penselgrafik
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturer använder den här penseln. Använd den nya grafiken på konturerna, eller låt dem vara som de är och lägg till en kopia av penseln med den nya grafiken?
+	Apply to Strokes	Använd på konturer
+	Leave Strokes	Behåll konturer
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` har ingen grafik (bara spridnings-, konst- och mönsterpenslar har grafik)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Ordningsverktyg
 	Arrange in Grid…	Ordna i rutnät…
@@ -7388,7 +7511,7 @@ digits	Hindi	Hindi
 @msg	EPS {field} `{s}`: {allowed}	EPS {field} `{s}`: {allowed}
 @msg	EPS flattener: {e}	EPS-utplattning: {e}
 @msg	EPS options: {e}	EPS-alternativ: {e}
-@msg	EPS Save retains the artboard and all artwork: use document.export for cropped or selected-only EPS	När du sparar som EPS behålls ritytan och allt bildmaterial: använd document.export för beskuren EPS eller EPS med bara det markerade
+@msg	EPS Save writes all artwork: use document.export for selected-only EPS	När du sparar som EPS skrivs allt bildmaterial: använd document.export för EPS med bara det markerade
 @msg	every numbered name for the result is taken	alla numrerade namn för resultatet är upptagna
 @msg	expanded SVG styles exceed the import size limit	de expanderade SVG-stilarna överskrider storleksgränsen för import
 @msg	expected {"dataBase64"}	förväntade {"dataBase64"}
@@ -7406,7 +7529,7 @@ digits	Hindi	Hindi
 @msg	features must be a list of tags	features måste vara en lista med taggar
 @msg	fidelity must be 0..100	fidelity måste vara 0..100
 @msg	files must be {name, dataBase64}	files måste vara {name, dataBase64}
-@msg	fit must be none|autoHeight|shrinkText, got {id}	fit måste vara none|autoHeight|shrinkText, fick {id}
+@msg	fit must be none|autoHeight|shrinkText|block, got {id}	fit måste vara none|autoHeight|shrinkText|block, fick {id}
 @msg	Flare click coordinates must be finite numbers	Klickkoordinaterna för Ljusreflex måste vara ändliga tal
 @msg	flattener: {e}	utplattning: {e}
 @msg	flattenerPreset `{name}`: high, medium, low or a saved one (see flattener.presets.list)	flattenerPreset `{name}`: high, medium, low eller en sparad (se flattener.presets.list)
@@ -8256,6 +8379,11 @@ digits	Hindi	Hindi
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	en importfunktion anger 1 till {MAX_EXTENSIONS} `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	en importfunktion får alltid en imports budget: utelämna `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Kopiera felsökningsinformation
+@msg	Copied the troubleshooting info	Kopierade felsökningsinformationen
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Den senaste VectorCraft-sessionen slutade svara innan den stängdes. Hjälp › Kopiera felsökningsinformation kopierar detaljerna till en felrapport
+
 # Safe Mode
 	Safe Mode…	Felsäkert läge…
 	Safe Mode	Felsäkert läge
@@ -8276,6 +8404,8 @@ digits	Hindi	Hindi
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Justera mot pixelrutnät
+	Align New Objects to Pixel Grid	Justera nya objekt mot pixelrutnät
+	Not Aligned to Pixel Grid	Inte justerade mot pixelrutnät
 @msg	only paths and compound paths can be aligned to the pixel grid	bara banor och sammansatta banor kan justeras mot pixelrutnätet
 @msg	side is left or right, not `{s}`	side är left eller right, inte `{s}`
 	Ignore All	Ignorera alla
@@ -8306,8 +8436,33 @@ digits	Hindi	Hindi
 @plural	{n} line cut|{n} lines cut	{n} rad avkortad|{n} rader avkortade
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` och `last` måste vara nummer på rader som konsolen har kvar, `first` före `last`
 
+# Learn panel
+	Learn	Lär dig
+	Explore tutorials	Utforska självstudier
+	For you	För dig
+	Skills	Färdigheter
+	Get started	Kom igång
+	Quick skill guide	Snabbguide till färdigheter
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Korta praktiska självstudier för de viktigaste verktygen, ordnade efter färdighet. Välj en färdighet för att se dess självstudier.
+	List Tutorials	Lista självstudier
+	Show Tutorial	Visa självstudie
+@msg	missing `tutorial` (see learn.list)	`tutorial` saknas (se learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	okänd självstudie `{id}` (se learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Uppdatera uppskjutna effekter
 	Deferred Effects	Uppskjutna effekter
 @msg	no plug-in effect is deferred	ingen plugineffekt är uppskjuten
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Öppnades med {n} uppskjuten plugineffekt. Effekt › Uppdatera uppskjutna effekter kör den.|Öppnades med {n} uppskjutna plugineffekter. Effekt › Uppdatera uppskjutna effekter kör dem.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Skärverktyg
+	Stencil Bridges…	Schablonbryggor…
+	Stencil Bridges	Schablonbryggor
+	Shortest Crossing	Kortaste korsning
+	Direction	Riktning
+@msg	The selected art has no islands to bridge	Den markerade teckningen har inga öar att förbinda
+@msg	No bridge of this width fits across the selected art	Ingen brygga med den här bredden får plats över den markerade teckningen
+@msg	Some islands could not be joined to the area around the art	Vissa öar kunde inte förbindas med området runt teckningen
+@msg	`width` must be from {lo} to {hi} pt	`width` måste vara från {lo} till {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` måste vara ett heltal från 1 till {MAX_BRIDGES_PER_ISLAND}

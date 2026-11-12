@@ -21,6 +21,8 @@ pub(in crate::ai_editing) const SWATCH_PLACEMENT: &str =
     "the placement of pattern swatches that move, turn or scale their pattern is left out of the editing data for other apps";
 pub(in crate::ai_editing) const GRADIENT_MIX: &str =
     "gradients that mix their colors perceptually or dither are written as classic gradients in the editing data for other apps";
+pub(in crate::ai_editing) const CONIC: &str =
+    "conic gradients are written as linear gradients along their vector, with the same stops, in the editing data for other apps";
 pub(in crate::ai_editing) const STOP_LINKS: &str =
     "gradient stops linked to global process colors are written as their colors in the editing data for other apps";
 /// The length of a linear gradient's caps (`Bc`): the canvas's side.
@@ -43,10 +45,20 @@ pub(super) struct PatternOut {
     used: bool,
 }
 
-/// Can `g` be written as a gradient (a linear or radial one with stops, no more than the `.ai`
-/// reader reads)?
+pub(in crate::ai_editing) const DIAMOND: &str =
+    "diamond gradients are written as radial gradients through their corners, with the same stops, in the editing data for other apps";
+
+/// Can `g` be written as a gradient (a linear, radial, conic or diamond one with stops, no more
+/// than the `.ai` reader reads; a conic is written linear, [`CONIC`], and a diamond radial,
+/// [`DIAMOND`])?
 fn writable_gradient(g: &Gradient) -> bool {
     g.kind != GradientKind::Freeform && !g.stops.is_empty() && g.stops.len() <= crate::import::MAX_GRADIENT_STOPS
+}
+
+/// Is a gradient of `kind` written as a radial one: a radial gradient, or a diamond (the ellipse
+/// through its square's corners, [`DIAMOND`])?
+fn written_radial(kind: GradientKind) -> bool {
+    matches!(kind, GradientKind::Radial | GradientKind::Diamond)
 }
 
 /// The first name of `Gradient`, `Gradient 2`, `Gradient 3`, … numbered `next` or higher for
@@ -126,7 +138,7 @@ impl Writer<'_> {
         let Paint::Gradient(g) = p else { return p.clone() };
         let geom = g.resolve(bounds);
         let finite = [geom.start.x, geom.start.y, geom.end.x, geom.end.y, geom.aspect].iter().all(|v| v.is_finite());
-        let radial = g.gradient.kind == GradientKind::Radial;
+        let radial = written_radial(g.gradient.kind);
         if g.gradient.kind == GradientKind::Freeform {
             self.warn(GRADIENTS);
             return Paint::solid(average(&g.gradient));
@@ -242,7 +254,7 @@ impl Writer<'_> {
         self.instance_head(g, clip, path);
         let m = self.grad_space;
         let u = geom.end - geom.start;
-        let radial = g.gradient.kind == GradientKind::Radial;
+        let radial = written_radial(g.gradient.kind);
         // The unit vector along the gradient, and across it as long.
         let frame = |from: f64, to: f64| {
             let p = geom.start + u * from;
@@ -273,10 +285,15 @@ impl Writer<'_> {
     /// A gradient instance's focal point (`Bh`, radial gradients only) and its `Bg` line, as
     /// [`Self::instance`] writes them; also what a fill's art style holds after its `Bb`.
     pub(super) fn instance_head(&mut self, g: &GradientPaint, clip: bool, path: &BezPath) {
-        let Some(geom) = g.geom else { return };
+        let Some(mut geom) = g.geom else { return };
+        if g.gradient.kind != GradientKind::Radial {
+            // Only a radial gradient has a focal point (a plug-in's or a file's other kinds can
+            // carry one that draws nothing): a diamond's circle stays centered.
+            geom.focal = None;
+        }
         let name = self.define_gradient(&g.gradient, g.swatch.as_deref());
         let m = self.grad_space;
-        let radial = g.gradient.kind == GradientKind::Radial;
+        let radial = written_radial(g.gradient.kind);
         let place = placement(&geom, radial, &(self.canvas * path.clone()), self.canvas);
         if radial {
             let c = m * geom.start;
@@ -300,8 +317,14 @@ impl Writer<'_> {
         if d.gradient.dither || !d.gradient.method.is_classic() {
             self.warn(GRADIENT_MIX);
         }
+        if d.gradient.kind == GradientKind::Conic {
+            self.warn(CONIC);
+        }
+        if d.gradient.kind == GradientKind::Diamond {
+            self.warn(DIAMOND);
+        }
         let name = ps::bytes(d.name.as_bytes());
-        let radial = d.gradient.kind == GradientKind::Radial;
+        let radial = written_radial(d.gradient.kind);
         let _ = writeln!(s, "%AI5_BeginGradient: {name}\n{name} {} {} Bd\n[", u8::from(radial), d.gradient.stops.len());
         let mut stops = sorted_stops(&d.gradient);
         if !radial {
@@ -503,7 +526,7 @@ impl Writer<'_> {
                 let swatch = Some(sw.name.as_str());
                 let name = self.define_gradient(&g.gradient, swatch);
                 s.push_str("Bb\n");
-                if g.gradient.kind == GradientKind::Radial {
+                if written_radial(g.gradient.kind) {
                     s.push_str("0 0 0 0 Bh\n");
                 }
                 let _ = writeln!(s, "2 {} 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB", ps::bytes(name.as_bytes()));

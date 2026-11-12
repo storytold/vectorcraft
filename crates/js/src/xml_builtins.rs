@@ -1,6 +1,7 @@
 //! The E4X built-ins (ECMA-357 sections 13.1 to 13.5): `XML`, `XMLList`, `Namespace`, `QName`,
 //! `isXMLName` and `setDefaultXMLNamespace`. A realm has them only with [`crate::Options::e4x`].
 
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::builtins::{arg, constructor, data, method, native};
@@ -13,6 +14,7 @@ use crate::value::{Str, Value};
 use crate::xml::{
     Access, Content, NameRef, RESERVED_NS_BINDING, STAR, Xv, canonical_index, is_ncname, is_script_xml_name, ns_binding_allowed, xml_name_writable,
 };
+use crate::xpath::xpath;
 
 const SETTINGS: [(&str, Value); 5] = [
     ("ignoreComments", Value::Bool(false)),
@@ -44,7 +46,7 @@ pub(crate) fn install(interp: &mut Interp) -> JsResult<()> {
     method(interp, xml, "settings", settings, 0)?;
     method(interp, xml, "setSettings", set_settings, 1)?;
     method(interp, xml, "defaultSettings", default_settings, 0)?;
-    let xml_methods: [(&'static str, NativeFn, u32); 39] = [
+    let xml_methods: [(&'static str, NativeFn, u32); 40] = [
         ("addNamespace", add_namespace, 1),
         ("appendChild", append_child, 1),
         ("attribute", attribute, 1),
@@ -84,6 +86,7 @@ pub(crate) fn install(interp: &mut Interp) -> JsResult<()> {
         ("toString", to_string, 0),
         ("toXMLString", to_xml_string, 0),
         ("valueOf", value_of, 0),
+        ("xpath", xpath, 1),
     ];
     for (name, f, n) in xml_methods {
         method(interp, xml_proto, name, f, n)?;
@@ -91,7 +94,7 @@ pub(crate) fn install(interp: &mut Interp) -> JsResult<()> {
 
     let list = native(interp, "XMLList", xml_list_ctor, 1, NativeKind::Plain, true)?;
     constructor(interp, "XMLList", list, list_proto)?;
-    let list_methods: [(&'static str, NativeFn, u32); 21] = [
+    let list_methods: [(&'static str, NativeFn, u32); 22] = [
         ("attribute", attribute, 1),
         ("attributes", attributes, 0),
         ("child", child, 1),
@@ -113,6 +116,7 @@ pub(crate) fn install(interp: &mut Interp) -> JsResult<()> {
         ("toString", to_string, 0),
         ("toXMLString", to_xml_string, 0),
         ("valueOf", value_of, 0),
+        ("xpath", xpath, 1),
     ];
     for (name, f, n) in list_methods {
         method(interp, list_proto, name, f, n)?;
@@ -662,19 +666,25 @@ fn has_simple_content(interp: &mut Interp, this: Value, _: &[Value], _: bool) ->
     }
 }
 
-/// The namespaces in scope at `x`, nearest declarations first, one for each prefix.
-fn scope_of(interp: &mut Interp, x: Option<ObjId>) -> JsResult<Vec<XmlNs>> {
+/// The namespaces in scope at `x`, nearest declarations first, one for each prefix. Takes one unit
+/// of fuel for each node it climbs through and for each declaration it reads.
+pub(crate) fn scope_of(interp: &mut Interp, x: Option<ObjId>) -> JsResult<Vec<XmlNs>> {
     let mut out: Vec<XmlNs> = Vec::new();
+    let mut seen: HashSet<Option<Key>> = HashSet::new();
     let mut cur = x;
     while let Some(y) = cur {
-        let node = interp.xml_node(y)?.clone();
-        for ns in &node.ns {
+        interp.use_fuel()?;
+        let (list, parent) = {
+            let node = interp.xml_node(y)?;
+            (node.ns.clone(), node.parent)
+        };
+        for ns in list {
             interp.use_fuel()?;
-            if !out.iter().any(|n| n.prefix == ns.prefix) {
-                out.push(ns.clone());
+            if seen.insert(ns.prefix.clone()) {
+                out.push(ns);
             }
         }
-        cur = node.parent;
+        cur = parent;
     }
     Ok(out)
 }
@@ -702,9 +712,8 @@ fn namespace_declarations(interp: &mut Interp, this: Value, _: &[Value], _: bool
         return namespaces_array(interp, Vec::new());
     }
     let parent = interp.xml_node(x)?.parent;
-    let ancestors = scope_of(interp, parent)?;
-    let declared: Vec<XmlNs> =
-        interp.xml_node(x)?.ns.iter().filter(|ns| !ancestors.iter().any(|a| a.prefix == ns.prefix && a.uri == ns.uri)).cloned().collect();
+    let ancestors: HashMap<Option<Key>, Key> = scope_of(interp, parent)?.into_iter().map(|a| (a.prefix, a.uri)).collect();
+    let declared: Vec<XmlNs> = interp.xml_node(x)?.ns.iter().filter(|ns| ancestors.get(&ns.prefix) != Some(&ns.uri)).cloned().collect();
     namespaces_array(interp, declared)
 }
 

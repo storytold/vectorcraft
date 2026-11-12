@@ -38,7 +38,19 @@ fn built_in_presets_are_the_gradient_libraries_by_theme_with_unique_names() {
     // Grouped by library, the gradient libraries first, then the swatch libraries holding gradients.
     let mut libraries: Vec<&str> = rows.iter().map(|r| r["library"].as_str().unwrap()).collect();
     libraries.dedup();
-    assert_eq!(libraries, ["Spectrum Gradients", "Sky Gradients", "Neutral Gradients", "Duotone Gradients", "Radial Glows", "Metallic Gradients"]);
+    assert_eq!(
+        libraries,
+        [
+            "Spectrum Gradients",
+            "Sky Gradients",
+            "Neutral Gradients",
+            "Organic Fades",
+            "Holographic",
+            "Duotone Gradients",
+            "Radial Glows",
+            "Metallic Gradients"
+        ]
+    );
     let mut seen = std::collections::HashSet::new();
     assert!(names(&list).iter().all(|n| seen.insert(n.to_lowercase())), "a name names one preset");
     let vignette = rows.iter().find(|r| r["name"] == "Vignette").unwrap();
@@ -63,6 +75,56 @@ fn applying_a_preset_edits_the_gradient_in_place_as_one_undo_step() {
     assert_eq!(s.gradient_preset_name(&before.gradient), None);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(paint(&s, id, false), before);
+}
+
+#[test]
+fn an_organic_fade_applies_with_its_method_midpoints_and_opacities() {
+    let (mut s, id) = session_with(json!({"color": "#336699"}));
+    let mist = s.gradient_preset("Mist").unwrap();
+    assert_eq!((mist.library, mist.gradient.method), (Some("Organic Fades"), GradientMethod::Perceptual));
+    s.execute("gradient.presets.apply", &json!({"name": "Mist"})).unwrap();
+    let g = paint(&s, id, false).gradient;
+    assert_eq!((g.kind, g.method, &g.stops), (GradientKind::Linear, GradientMethod::Perceptual, &mist.gradient.stops));
+    assert_eq!(s.gradient_preset_name(&g).as_deref(), Some("Mist"));
+    let list = s.execute("gradient.presets.list", &json!({})).unwrap();
+    let row = list["presets"].as_array().unwrap().iter().find(|r| r["name"] == "Mist").unwrap().clone();
+    assert_eq!(row["gradient"]["method"], "perceptual");
+}
+
+#[test]
+fn a_holographic_foil_applies_in_place_as_one_undo_step() {
+    let (mut s, id) = session_with(json!({"gradient": {"angle": 30}}));
+    let before = paint(&s, id, false);
+    let undo = s.doc().unwrap().history.undo.len();
+    let veil = s.gradient_preset("prism veil").unwrap();
+    assert_eq!((veil.library, veil.gradient.method), (Some("Holographic"), GradientMethod::Perceptual));
+    let r = s.execute("gradient.presets.apply", &json!({"name": "prism veil"})).unwrap();
+    assert_eq!(r["name"].as_str(), Some("Prism Veil"));
+    let g = paint(&s, id, false);
+    assert_eq!((g.gradient.kind, g.gradient.method, &g.gradient.stops), (GradientKind::Linear, GradientMethod::Perceptual, &veil.gradient.stops));
+    assert_eq!(g.gradient.stops.len(), 6);
+    assert_eq!(g.angle, before.angle, "the placement stays");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(s.gradient_preset_name(&g.gradient).as_deref(), Some("Prism Veil"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(paint(&s, id, false), before);
+}
+
+/// A preset saved as "Mint Halo" before Holographic existed stays listed under a free name.
+#[test]
+fn a_saved_preset_named_like_a_holographic_glow_gets_a_free_name() {
+    let (mut s, id) = session_with(json!({"gradient": {"kind": "radial"}}));
+    let halo = s.gradient_preset("Mint Halo").unwrap().gradient;
+    let mut own = paint(&s, id, false).gradient;
+    own.dither = true;
+    let mut prefs = s.prefs.clone();
+    prefs.gradient_presets = vec![crate::cmd::GradientPreset { name: "MINT HALO".into(), gradient: own.clone() }];
+    s.apply_prefs(prefs);
+    assert_eq!(s.prefs.gradient_presets.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["MINT HALO 2"]);
+    s.execute("gradient.presets.apply", &json!({"name": "mint halo 2"})).unwrap();
+    assert_eq!(paint(&s, id, false).gradient, own);
+    s.execute("gradient.presets.apply", &json!({"name": "Mint Halo"})).unwrap();
+    assert_eq!(paint(&s, id, false).gradient.stops, halo.stops);
 }
 
 #[test]
@@ -333,4 +395,38 @@ fn saved_presets_round_trip_with_the_preferences() {
     let mut fresh = Session::new();
     fresh.apply_prefs(back);
     assert!(fresh.gradient_preset("mine").is_some_and(|e| e.library.is_none()));
+}
+
+/// Preferences can hold saved presets named like a built-in preset (saved before it existed) or
+/// like each other (edited by hand): applied, each gets a name of its own, any case.
+#[test]
+fn saved_presets_named_like_a_built_in_or_another_saved_one_get_a_free_name() {
+    let (mut s, id) = session_with(json!({"gradient": {"kind": "radial"}}));
+    let mist = s.gradient_preset("Mist").unwrap().gradient;
+    let mut own = paint(&s, id, false).gradient;
+    own.dither = true;
+    let preset = |name: &str| crate::cmd::GradientPreset { name: name.into(), gradient: own.clone() };
+    let mut prefs = s.prefs.clone();
+    prefs.gradient_presets =
+        vec![preset("mist"), preset("Mine"), preset("MINE"), preset("Mist 2"), preset("Plain"), preset("PLAIN"), preset("plain")];
+    s.apply_prefs(prefs);
+    let saved: Vec<&str> = s.prefs.gradient_presets.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(saved, ["mist 3", "Mine", "MINE 2", "Mist 2", "Plain", "PLAIN 2", "plain 3"]);
+    let list = s.execute("gradient.presets.list", &json!({})).unwrap();
+    let mut seen = std::collections::HashSet::new();
+    assert!(names(&list).iter().all(|n| seen.insert(n.to_lowercase())), "a name names one preset");
+    // The renamed one applies and deletes; the built-in Mist stays as it was.
+    s.execute("gradient.presets.apply", &json!({"name": "mist 3"})).unwrap();
+    assert_eq!(paint(&s, id, false).gradient, own);
+    assert_eq!(s.gradient_preset("Mist").unwrap().gradient, mist);
+    assert_eq!(s.execute("gradient.presets.delete", &json!({"name": "Mist 3"})).unwrap()["deleted"], "mist 3");
+    assert!(s.execute("gradient.presets.delete", &json!({"name": "Mist"})).is_err(), "built in");
+    assert_eq!(s.prefs.gradient_presets.len(), 6);
+    // Many presets with one name each get their own number.
+    let mut prefs = s.prefs.clone();
+    prefs.gradient_presets = (0..2000).map(|_| preset("Same")).collect();
+    s.apply_prefs(prefs);
+    let mut seen = std::collections::HashSet::new();
+    assert!(s.prefs.gradient_presets.iter().all(|p| seen.insert(p.name.to_lowercase())));
+    assert_eq!(s.prefs.gradient_presets.last().map(|p| p.name.as_str()), Some("Same 2000"));
 }

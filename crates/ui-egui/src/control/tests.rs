@@ -314,6 +314,93 @@ fn render_takes_the_artboard_asked_for() {
         assert_eq!(got, size.map(Some), "{params}: {r}");
     }
     assert!(request("ui.render", json!({"artboard": 2}))["error"].is_string());
+    for (params, key) in [
+        (json!({"artboard": "1"}), "artboard"),
+        (json!({"artboard": -1}), "artboard"),
+        (json!({"scale": "0.5"}), "scale"),
+        (json!({"traceViews": 1}), "traceViews"),
+        (json!({"data": "yes"}), "data"),
+    ] {
+        let r = request("ui.render", params.clone());
+        assert!(r["error"].as_str().is_some_and(|e| e.contains(&format!("`{key}`"))), "{params}: {r}");
+    }
+    let r = request("ui.render", json!({"artboard": null, "scale": null}));
+    assert_eq!([&r["result"]["width"], &r["result"]["height"]].map(Value::as_u64), [Some(64), Some(64)], "null keeps the default: {r}");
+}
+
+/// The control channel's input methods refuse a number or switch of the wrong type before they
+/// queue any event; omitting it keeps its default.
+#[test]
+fn control_input_refuses_params_of_the_wrong_type() {
+    let move_to = |mods: Value| json!({"events": [{"kind": "move", "x": 5, "y": 5}, {"kind": "move", "x": 6, "y": 6, "mods": mods}]});
+    for (method, params, key) in [
+        ("ui.move", json!({"x": "10"}), "x"),
+        ("ui.move", json!({"y": true}), "y"),
+        ("ui.wheel", json!({"dy": "1"}), "dy"),
+        ("ui.wheel", json!({"dy": 1, "shift": "yes"}), "shift"),
+        ("ui.click", json!({"x": [1]}), "x"),
+        ("ui.click", json!({"cmd": 1}), "cmd"),
+        ("ui.drag", json!({"toX": "5"}), "toX"),
+        ("ui.key", json!({"key": "Enter", "alt": "true"}), "alt"),
+        ("ui.resize", json!({"width": "800"}), "width"),
+        ("ui.screenshot", json!({"focus": "no"}), "focus"),
+        ("ui.screenshot", json!({"data": 1}), "data"),
+        ("ui.set", json!({"rulers": "true"}), "rulers"),
+        ("ui.set", json!({"grid": true, "controlBar": 0}), "controlBar"),
+        ("ui.pointer", json!({"events": [{"kind": "move", "x": "5", "y": 0}]}), "x"),
+        ("ui.pointer", move_to(json!({"shift": "yes"})), "mods"),
+        ("ui.pointer", move_to(json!([true])), "mods"),
+        ("ui.pointer", json!({"mods": "shift", "events": [{"kind": "move", "x": 1, "y": 1}]}), "mods"),
+    ] {
+        let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        app.synthetic.push(egui::Event::Text("pending".into()));
+        let before = (format!("{:?}", app.synthetic), app.ui.view.rulers, app.ui.view.grid, app.ui.control_bar);
+        let r = input_request(&mut app, method, params.clone());
+        assert_eq!(r["ok"], false, "{method} {params}: {r}");
+        assert!(r["error"].as_str().is_some_and(|e| e.contains(&format!("`{key}`"))), "{method} {params}: {r}");
+        let after = (format!("{:?}", app.synthetic), app.ui.view.rulers, app.ui.view.grid, app.ui.control_bar);
+        assert_eq!(after, before, "{method} {params}: nothing is queued or set");
+    }
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    assert_eq!(input_request(&mut app, "ui.move", json!({"x": null, "y": 4}))["ok"], true);
+    assert!(matches!(app.synthetic.first(), Some(egui::Event::PointerMoved(p)) if *p == egui::pos2(0.0, 4.0)));
+}
+
+/// The app's own commands refuse a param of the wrong type and change nothing; omitting it or
+/// giving null keeps its default.
+#[test]
+fn ui_commands_refuse_params_of_the_wrong_type() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("view.setZoom", json!({"zoom": 300, "center": [5, 5]})).unwrap();
+    let view = |app: &VectorcraftApp| app.view().map(|v| (v.zoom, v.center.x, v.center.y));
+    let before = (view(&app), app.ui.screen_mode, app.session.documents().len(), app.ui.dialog.is_some(), app.ui.open_panel.clone());
+    for (id, params, key) in [
+        ("view.setZoom", json!({"zoom": "200"}), "zoom"),
+        ("view.setZoom", json!({"zoom": 200, "center": [1]}), "center"),
+        ("view.setZoom", json!({"zoom": 200, "center": "0,0"}), "center"),
+        ("view.screenMode", json!({"mode": "2"}), "mode"),
+        ("view.screenMode", json!({"mode": 1.5}), "mode"),
+        ("window.panel", json!({"panel": "layers", "toggle": "true"}), "toggle"),
+        ("window.panel", json!({"panel": "layers", "toggle": true, "toggleGroup": 1}), "toggleGroup"),
+        ("file.revert", json!({"confirmed": "yes"}), "confirmed"),
+        ("file.close", json!({"index": "0"}), "index"),
+        ("ui.newSwatch", json!({"spot": "true"}), "spot"),
+        ("ui.newSwatch", json!({"global": 1}), "global"),
+        ("ui.symbolOptions", json!({"edit": 1}), "edit"),
+        ("ui.batchDialog", json!({"set": "1"}), "set"),
+        ("ui.batchDialog", json!({"action": -1}), "action"),
+        ("file.exportSelection", json!({"multiple": "true"}), "multiple"),
+    ] {
+        let e = app.run(id, params.clone()).unwrap_err();
+        assert!(e.contains(&format!("`{key}`")), "{id} {params}: {e}");
+        let after = (view(&app), app.ui.screen_mode, app.session.documents().len(), app.ui.dialog.is_some(), app.ui.open_panel.clone());
+        assert_eq!(after, before, "{id} {params}: nothing changes");
+    }
+    app.run("view.setZoom", json!({"zoom": null, "center": null})).unwrap();
+    assert_eq!(app.view().map(|v| v.zoom), Some(crate::state::zoom_from_display_percent(100.0, app.session.prefs.display_print_size)));
 }
 
 #[test]
@@ -367,6 +454,35 @@ fn synthetic_pointer_rejects_a_backquote_that_is_not_a_boolean() {
         assert_eq!(r["ok"], false, "{params}: {r}");
         assert!(r["error"].as_str().is_some_and(|e| e.contains("`backquote` must be a boolean")), "{r}");
         assert_eq!(app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap(), &before, "{params}");
+    }
+}
+
+/// `ui.pointer` refuses an unknown event kind, a pen value or `space` of the wrong type, or a
+/// screen-space event with no canvas, before any of the packet's events runs.
+#[test]
+fn synthetic_pointer_rejects_an_unknown_kind_before_any_event_runs() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    assert_eq!(input_request(&mut app, "ui.tool.select", json!({"tool": "selection"}))["ok"], true);
+    let before = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    let moves = [json!({"kind": "down", "x": 125, "y": 125}), json!({"kind": "drag", "x": 145, "y": 125}), json!({"kind": "up", "x": 145, "y": 125})];
+    for (last, error) in [
+        (json!({"kind": "wiggle", "x": 145, "y": 125}), "unknown pointer kind `wiggle`"),
+        (json!({"kind": "move", "x": 145, "y": 125, "space": "screen"}), "no canvas yet"),
+        (json!({"kind": "move", "x": 145, "y": 125, "pressure": "bad"}), "`pressure` must be a number"),
+        (json!({"kind": "move", "x": 145, "y": 125, "holdMs": "800"}), "`holdMs` must be a number"),
+        (json!({"kind": "move", "x": 145, "y": 125, "tiltY": true}), "`tiltY` must be a number"),
+        (json!({"kind": "move", "x": 145, "y": 125, "rotation": "90"}), "`rotation` must be a number"),
+        (json!({"kind": "move", "x": 145, "y": 125, "space": "screeen"}), "`space` must be doc or screen"),
+        (json!({"kind": "move", "x": 145, "y": 125, "space": true}), "`space` must be doc or screen"),
+    ] {
+        let events = moves.iter().cloned().chain([last]).collect::<Vec<_>>();
+        let r = input_request(&mut app, "ui.pointer", json!({"events": events}));
+        assert_eq!(r["ok"], false, "{error}: {r}");
+        assert!(r["error"].as_str().is_some_and(|e| e.contains(error)), "{r}");
+        assert_eq!(app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap(), &before, "{error}: the drag does not run");
     }
 }
 
