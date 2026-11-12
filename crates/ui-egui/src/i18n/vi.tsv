@@ -6462,6 +6462,11 @@ breakText	Glyphs	Glyph
 @msg	only an exporter or an importer declares `extensions`	chỉ plug-in xuất hoặc nhập mới khai báo `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	plug-in nhập luôn nhận ngân sách của một lần nhập: hãy bỏ `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Sao chép thông tin khắc phục sự cố
+@msg	Copied the troubleshooting info	Đã sao chép thông tin khắc phục sự cố
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Phiên VectorCraft trước đã ngừng phản hồi trước khi đóng. Trợ giúp › Sao chép thông tin khắc phục sự cố sẽ sao chép chi tiết cho báo cáo lỗi
+
 # Safe Mode
 	Safe Mode…	Chế độ an toàn…
 	Safe Mode	Chế độ an toàn

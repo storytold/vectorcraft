@@ -8263,6 +8263,11 @@ swatch	Yellow	पीला
 swatch	Yellow Green	पीला हरा
 theme	Appearance	अपीयरेंस
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	समस्या निवारण जानकारी कॉपी करें
+@msg	Copied the troubleshooting info	समस्या निवारण जानकारी कॉपी की गई
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	VectorCraft के पिछले सत्र ने बंद होने से पहले प्रतिक्रिया देना बंद कर दिया था। सहायता ›समस्या निवारण जानकारी कॉपी करें बग रिपोर्ट के लिए विवरण कॉपी करता है
+
 # Safe Mode
 	Safe Mode…	सुरक्षित मोड…
 	Safe Mode	सुरक्षित मोड

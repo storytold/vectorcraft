@@ -6461,6 +6461,11 @@ breakText	Glyphs	Гліфи
 @msg	only an exporter or an importer declares `extensions`	`extensions` оголошує лише модуль експорту або імпорту
 @msg	an importer always gets an import's budget: leave `budget` out	модуль імпорту завжди отримує бюджет імпорту: не вказуйте `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Копіювати відомості для усунення несправностей
+@msg	Copied the troubleshooting info	Відомості для усунення несправностей скопійовано
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Останній сеанс VectorCraft перестав відповідати перед закриттям. Довідка › Копіювати відомості для усунення несправностей копіює подробиці для звіту про помилку
+
 # Safe Mode
 	Safe Mode…	Безпечний режим…
 	Safe Mode	Безпечний режим

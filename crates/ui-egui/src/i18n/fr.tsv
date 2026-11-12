@@ -6847,6 +6847,11 @@ breakText	Glyphs	Glyphes
 @msg	only an exporter or an importer declares `extensions`	seul un module externe d’exportation ou d’importation déclare `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	un module externe d’importation reçoit toujours le budget d’une importation : omettez `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Copier les informations de dépannage
+@msg	Copied the troubleshooting info	Informations de dépannage copiées
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	La dernière session de VectorCraft a cessé de répondre avant de se fermer. Aide › Copier les informations de dépannage copie les détails pour un rapport de bogue
+
 # Safe Mode
 	Safe Mode…	Mode sans échec…
 	Safe Mode	Mode sans échec

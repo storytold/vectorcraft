@@ -6576,6 +6576,11 @@ breakText	Glyphs	Glif
 	No importer plug-ins installed	Tidak ada plug-in impor yang terinstal
 	Read files you open in its format and make documents from them	Membaca file yang Anda buka dalam formatnya dan membuat dokumen darinya
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Salin info pemecahan masalah
+@msg	Copied the troubleshooting info	Berhasil menyalin info pemecahan masalah
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Sesi terakhir VectorCraft berhenti merespons sebelum ditutup. Bantuan › Salin info pemecahan masalah menyalin detailnya untuk laporan bug
+
 # Safe Mode
 	Safe Mode…	Mode aman…
 	Safe Mode	Mode aman

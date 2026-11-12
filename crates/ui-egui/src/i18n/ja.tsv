@@ -6546,6 +6546,11 @@ breakText	Glyphs	字形
 @msg	only an exporter or an importer declares `extensions`	`extensions` を宣言できるのは書き出しプラグインと読み込みプラグインだけです
 @msg	an importer always gets an import's budget: leave `budget` out	読み込みプラグインには常に読み込みの予算が割り当てられます: `budget` は省略してください
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	トラブルシューティング情報をコピー
+@msg	Copied the troubleshooting info	トラブルシューティング情報をコピーしました
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	前回の VectorCraft のセッションは、閉じる前に応答しなくなりました。ヘルプ › トラブルシューティング情報をコピー で、バグ報告用の詳細をコピーできます
+
 # Safe Mode
 	Safe Mode…	セーフモード…
 	Safe Mode	セーフモード

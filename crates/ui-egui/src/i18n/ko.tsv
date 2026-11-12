@@ -6442,6 +6442,11 @@ breakText	Glyphs	글리프
 @msg	only an exporter or an importer declares `extensions`	`extensions`는 내보내기 또는 가져오기 플러그인만 선언합니다
 @msg	an importer always gets an import's budget: leave `budget` out	가져오기 플러그인은 항상 가져오기 예산을 받습니다: `budget`을 생략하세요
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	문제 해결 정보 복사
+@msg	Copied the troubleshooting info	문제 해결 정보를 복사했습니다
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	지난 VectorCraft 세션이 닫히기 전에 응답을 멈췄습니다. 도움말 › 문제 해결 정보 복사로 버그 보고용 세부 정보를 복사할 수 있습니다
+
 # Safe Mode
 	Safe Mode…	안전 모드…
 	Safe Mode	안전 모드

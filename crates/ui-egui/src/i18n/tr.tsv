@@ -6808,6 +6808,11 @@ breakText	Glyphs	Glifler
 @msg	only an exporter or an importer declares `extensions`	`extensions` yalnızca dışa veya içe aktarma eklentisi bildirir
 @msg	an importer always gets an import's budget: leave `budget` out	içe aktarma eklentisi her zaman bir içe aktarmanın bütçesini alır: `budget` değerini çıkarın
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Sorun Giderme Bilgilerini Kopyala
+@msg	Copied the troubleshooting info	Sorun giderme bilgileri kopyalandı
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	VectorCraft'ın son oturumu kapanmadan önce yanıt vermeyi durdurdu. Yardım › Sorun Giderme Bilgilerini Kopyala, hata raporu için ayrıntıları kopyalar
+
 # Safe Mode
 	Safe Mode…	Güvenli Mod…
 	Safe Mode	Güvenli Mod

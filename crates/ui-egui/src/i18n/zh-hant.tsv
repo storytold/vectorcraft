@@ -6499,6 +6499,11 @@ breakText	Glyphs	字符
 @msg	only an exporter or an importer declares `extensions`	只有匯出或匯入增效模組才宣告 `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	匯入增效模組一律取得匯入的預算：請勿指定 `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	複製疑難排解資訊
+@msg	Copied the troubleshooting info	已複製疑難排解資訊
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	上次的 VectorCraft 工作階段在關閉前停止回應。說明 › 複製疑難排解資訊 可複製用於錯誤回報的詳細資料
+
 # Safe Mode
 	Safe Mode…	安全模式…
 	Safe Mode	安全模式

@@ -6836,6 +6836,11 @@ breakText	Glyphs	Glifák
 @msg	only an exporter or an importer declares `extensions`	csak exportáló vagy importáló bővítmény adhat meg `extensions` értéket
 @msg	an importer always gets an import's budget: leave `budget` out	az importáló bővítmény mindig egy importálás keretét kapja: hagyja el a `budget` kulcsot
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Hibaelhárítási adatok másolása
+@msg	Copied the troubleshooting info	Hibaelhárítási adatok másolva
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	A VectorCraft legutóbbi munkamenete nem válaszolt, mielőtt bezárult. A Súgó › Hibaelhárítási adatok másolása kimásolja a részleteket egy hibajelentéshez
+
 # Safe Mode
 	Safe Mode…	Csökkentett mód…
 	Safe Mode	Csökkentett mód
