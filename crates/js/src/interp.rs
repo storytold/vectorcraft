@@ -300,6 +300,12 @@ pub(crate) const MAX_APPLY_ARGS: usize = 1 << 16;
 /// The estimated bytes of a name's entries in the list and the set `for-in` builds.
 const KEY_ENTRY_BYTES: usize = 32;
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: the [`Interp::finally_sites`] entries that leaving a block or a frame has looked at.
+    pub(crate) static SITE_CHECKS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 /// The estimated bytes of the index names `0` to `len - 1` while `for-in` lists them.
 fn index_keys_bytes(len: usize) -> usize {
     let mut total = 0usize;
@@ -619,9 +625,16 @@ impl Interp {
     }
 
     /// Removes the [`Self::finally_sites`] entries whose stack slot is at or above `len`: those of
-    /// `finally` blocks that were left.
+    /// `finally` blocks that were left. The slots rise along the list, so only its end is looked at.
     fn drop_left_finally_sites(&mut self, len: usize) {
-        self.finally_sites.retain(|&(_, slot)| slot < len);
+        while let Some(&(_, slot)) = self.finally_sites.last() {
+            #[cfg(test)]
+            SITE_CHECKS.with(|c| c.set(c.get() + 1));
+            if slot < len {
+                break;
+            }
+            self.finally_sites.pop();
+        }
     }
 
     pub(crate) fn collect_garbage(&mut self) {
@@ -784,6 +797,8 @@ impl Interp {
     fn return_value(&mut self, v: Value) -> JsResult<Option<Value>> {
         let Some(frame) = self.frames.pop() else { return internal("return without a frame") };
         self.stack.truncate(frame.base);
+        // A `return` in a finally block leaves the block, and the value takes its exception's slot.
+        self.drop_left_finally_sites(frame.base);
         let v = match frame.construct {
             Some(o) if !matches!(v, Value::Object(_)) => Value::Object(o),
             _ => v,

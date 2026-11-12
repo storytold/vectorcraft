@@ -880,6 +880,13 @@
 	Dock Panel	Ukotvit panel
 	Dock to Top	Ukotvit nahoru
 	Dock to Bottom	Ukotvit dolů
+	Control Bar Options	Možnosti ovládacího panelu
+	Tool Options	Možnosti nástroje
+	Object Options	Možnosti objektu
+	Image Options	Možnosti obrazu
+	Vertical Alignment	Svislé zarovnání
+	Align and Distribute	Zarovnat a rozmístit
+	Document Options	Možnosti dokumentu
 	Dock Control Bar	Ukotvit ovládací panel
 	Float Tool Group	Plovoucí skupina nástrojů
 
@@ -1173,6 +1180,8 @@ lighting	Light	Světlo
 	Toolbar: Single/Double Column	Panel nástrojů: jeden / dva sloupce
 	Toolbar: Add Tool	Panel nástrojů: přidat nástroj
 	Toolbar: Remove Tool	Panel nástrojů: odebrat nástroj
+	Add Tool…	Přidat nástroj…
+	Remove Tool	Odebrat nástroj
 	Toolbar: Reset	Panel nástrojů: obnovit
 	Two Point Perspective Preset 1	Přednastavení dvoubodové perspektivy 1
 	Two Point Perspective Preset 2	Přednastavení dvoubodové perspektivy 2
@@ -1686,6 +1695,7 @@ digits	Malayalam	Malajálamské
 	No gradient swatches	Ve vzorníku nejsou žádné přechody
 	Points: clicks add free points	Body: kliknutím přidáte volné body
 	Radial Gradient	Kruhový přechod
+	Conic Gradient	Kuželový přechod
 	Reset to White, Black	Obnovit na bílou a černou
 	Reverse Gradient	Obrátit přechod
 	Save to Swatches	Uložit do vzorníku
@@ -4515,6 +4525,8 @@ imageTrace	Outline	Obrys
 @msg	`groupColors` must be an array	`groupColors` musí být pole
 @msg	`library` is a library id or name (see {list})	`library` je ID nebo název knihovny (viz {list})
 @msg	`mode` applies to freeform gradients	`mode` platí pro volné přechody
+@msg	a negative `aspect` applies to conic gradients	záporný `aspect` platí pro kuželové přechody
+@msg	`focal` applies to radial gradients	`focal` platí pro radiální přechody
 @msg	`preserve` must be an object	`preserve` musí být objekt
 @msg	`globalAdjust` must be an object	`globalAdjust` musí být objekt
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` musí být 1, 3 nebo 5
@@ -5016,7 +5028,7 @@ imageTrace	Outline	Obrys
 @msg	unknown format	neznámý formát
 @msg	unknown format `{f}` (Save writes {_1})	neznámý formát `{f}` (Uložit zapisuje {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	neznámý režim volného přechodu `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	neznámý druh přechodu `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	neznámý druh přechodu `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	neznámé zvýraznění `{h}`
 @msg	unknown option `{path}.{k}`	neznámá možnost `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	neznámé přetisky `{o}` (preserve, simulate nebo discard)
@@ -5247,7 +5259,13 @@ imageTrace	Outline	Obrys
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	soubor HEIC nebo HEIF obsahuje druh obrázku, který nelze přečíst
 @msg	HEIC and HEIF images can't be opened in this build	obrázky HEIC a HEIF nelze v tomto sestavení otevřít
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	obraz PSD je příliš velký na přečtení ({_1} × {_2} obrazových bodů)
-@msg	zipped 32-bit PSD image data with prediction can't be read	zazipovaná 32bitová obrazová data PSD s predikcí nelze přečíst
+@msg	zipped 1-bit PSD image data with prediction can't be read	zazipovaná 1bitová obrazová data PSD s predikcí nelze přečíst
+@msg	the PSD file's layer data uses an unknown compression ({m})	data vrstev souboru PSD používají neznámou kompresi ({m})
+@msg	the PSD file's layer records are damaged	záznamy vrstev souboru PSD jsou poškozené
+@msg	the PSD file's layer groups are nested too deeply	skupiny vrstev souboru PSD jsou vnořené příliš hluboko
+@msg	a layer of the PSD file is too large to read	vrstva souboru PSD je příliš velká na přečtení
+@msg	the PSD file's layers take more memory to read than allowed	vrstvy souboru PSD potřebují ke čtení víc paměti, než je povoleno
+@msg	the layers can't be read ({e}): the file opened as its merged image	vrstvy nelze přečíst ({e}): soubor se otevřel jako sloučený obraz
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}bitové soubory PSD v tomto barevném režimu nelze přečíst
 @msg	the PSD file is cut short	soubor PSD je useknutý
 @msg	the PSD file's header is damaged	hlavička souboru PSD je poškozená
@@ -5715,6 +5733,11 @@ mark-style	Japanese	Japonské
 	Softness	Měkkost
 	Ambient Light	Okolní světlo
 	Light behind the object	Světlo za objektem
+	Shadows	Stíny
+	Distance from Object	Vzdálenost od objektu
+	Shadow Bounds	Hranice stínu
+	Behind Object	Za objektem
+	Below Object	Pod objektem
 	3D Lighting Preset	Předvolba 3D osvětlení
 	Standard	Standardní
 	Diffuse	Rozptýlené
@@ -5779,7 +5802,7 @@ mark-style	Japanese	Japonské
 @msg	span must be "object" or "selection", got {v}	span musí být "object" nebo "selection", ne {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" umísťuje `gradient`, ne vzorník
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" umísťuje přechod: zadejte `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" umísťuje lineární nebo radiální přechod, ne volný přechod
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" umísťuje lineární, radiální nebo kuželový přechod, ne volný přechod
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" umísťuje samotný přechod: vynechte `start` a `end` (ty ho už umísťují v souřadnicích dokumentu)
 	Make Image Dynamic	Nastavit obraz jako dynamický
 	Import Data Sets…	Importovat sady dat…
@@ -6065,6 +6088,11 @@ axis	Y Axis	osa Y
 @msg	`inputs` needs the permission `doc.read`	`inputs` vyžaduje oprávnění `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	rozpočet paměti (objekt {_1} potřebuje {size} bajtů vstupu, zbývá {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	rozpočet objektů (více než {MAX_OBJECTS} objektů jen pro čtení)
+@msg	instruction budget	rozpočet instrukcí
+@msg	time budget	časový rozpočet
+@msg	memory budget (the selection is too large to hand over)	rozpočet paměti (výběr je příliš velký na předání)
+@msg	output size ({what} is {len} bytes, limit {max})	velikost výstupu ({what} má {len} bajtů, limit {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	oprávnění zásuvného modulu nelze odebrat z úložiště zásuvných modulů
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	oprávnění `{shown}` je vyhrazeno pro pozdější API zásuvných modulů; tento hostitel ho neuděluje
 @msg	unknown permission `{shown}`	neznámé oprávnění `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	„{name}“ žádá o oprávnění {asked}: musí je schválit člověk v desktopové aplikaci, nebo předejte `grant` v relaci spuštěné s --allow-plugin-grants
@@ -6101,6 +6129,16 @@ axis	Y Axis	osa Y
 @msg	message must be text	message musí být text
 @msg	allowContinue must be true or false	allowContinue musí být true nebo false
 @msg	Batch cannot play an action with a stop	Dávka nemůže přehrát akci se zastavením
+	Insert Menu Item…	Vložit položku nabídky…
+	Insert Menu Item	Vložit položku nabídky
+	Menu Item:	Položka nabídky:
+	No menu item matches.	Žádná položka nabídky neodpovídá.
+	Several menu items match. Choose one from the list.	Odpovídá několik položek nabídky. Vyberte jednu ze seznamu.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Položky, které otevírají dialogové okno, a položky nabídek Soubor, Okno a Nápověda nejsou uvedeny.
+@msg	command must be text	command musí být text
+@msg	no menu item that can be inserted runs this command	tento příkaz nespouští žádná položka nabídky, kterou lze vložit
+@msg	the action already has 10,000 steps	akce už má 10 000 kroků
+@msg	the action set would be larger than 8 MiB	sada akcí by byla větší než 8 MiB
 	Playback Options	Možnosti přehrávání
 	Accelerated	Zrychleně
 	Step by Step	Krok za krokem
@@ -6411,9 +6449,12 @@ anchor	Points:	Body:
 @msg	{label} must be a number	{label} musí být číslo
 @msg	{label} must be a number of at least 0.1	{label} musí být číslo alespoň 0,1
 	Advanced Character Formats	Rozšířené formáty znaků
+	Basic Paragraph Formats	Základní formáty odstavce
+	Composition	Sazba
 	Horizontal Scale	Vodorovná změna velikosti
 	Vertical Scale	Svislá změna velikosti
 @msg	{label} must be a number from {min} to {max}	{label} musí být číslo od {min} do {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} musí být celé číslo od {min} do {max}
 	Character Color	Barva znaků
 	OpenType Features	Funkce OpenType
 	Stylistic Sets	Stylistické sady
@@ -6797,6 +6838,7 @@ breakText	Glyphs	Glyfy
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Zarovnat na mřížku obrazových bodů
+	Not Aligned to Pixel Grid	Nezarovnané na mřížku obrazových bodů
 @msg	only paths and compound paths can be aligned to the pixel grid	na mřížku obrazových bodů lze zarovnat jen cesty a složené cesty
 @msg	side is left or right, not `{s}`	side je left nebo right, ne `{s}`
 	Ignore All	Ignorovat vše

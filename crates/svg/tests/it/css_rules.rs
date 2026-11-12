@@ -284,6 +284,39 @@ fn gradients_give_css_gradients() {
     assert!(bg.starts_with("radial-gradient(circle ") && bg.contains(" at 50px 50px, #ffffff 0%, #000000 100%)"), "{bg}");
 }
 
+/// A conic gradient is a CSS conic gradient (CSS turns clockwise from straight up): from where
+/// the vector points, at the center. A mirrored one has its stops mirrored about the seam, and an
+/// elliptical one is written circular, with a warning.
+#[test]
+fn conic_gradients_give_css_conic_gradients() {
+    let mut d = doc();
+    let conic = |geom: Option<GradientGeom>| {
+        let mut g = GradientPaint::new(Gradient { kind: GradientKind::Conic, ..Gradient::default() });
+        g.geom = geom;
+        Appearance::basic(Paint::Gradient(Box::new(g)), Paint::None, 0.0)
+    };
+    let mut n = rect(&mut d, (0.0, 0.0, 100.0, 60.0), 0.0);
+    n.appearance = conic(None).into();
+    let id = add(&mut d, n);
+    assert_eq!(
+        prop(&one(&d, id, &CssOptions::default()), "background-image"),
+        Some("conic-gradient(from 90deg at 50px 30px, #ffffff 0%, #000000 100%)")
+    );
+    // Pointing straight up and mirrored: it sweeps counterclockwise, so black comes first clockwise.
+    let mut n = rect(&mut d, (0.0, 0.0, 100.0, 60.0), 0.0);
+    n.appearance = conic(Some(GradientGeom { start: Point::new(40.0, 30.0), end: Point::new(40.0, 0.0), aspect: -1.0, focal: None })).into();
+    let id = add(&mut d, n);
+    assert_eq!(
+        prop(&one(&d, id, &CssOptions::default()), "background-image"),
+        Some("conic-gradient(from 0deg at 40px 30px, #000000 0%, #ffffff 100%)")
+    );
+    let mut n = rect(&mut d, (0.0, 0.0, 100.0, 60.0), 0.0);
+    n.appearance = conic(Some(GradientGeom { start: Point::new(40.0, 30.0), end: Point::new(70.0, 30.0), aspect: 0.5, focal: None })).into();
+    let id = add(&mut d, n);
+    let sheet = css_rules(&d, &[id], &CssOptions::default());
+    assert!(sheet.warnings.iter().any(|w| w.contains("conic gradients are written circular")), "{:?}", sheet.warnings);
+}
+
 #[test]
 fn shadows_and_unsupported_art() {
     let mut d = doc();

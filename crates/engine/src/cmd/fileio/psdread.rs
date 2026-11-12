@@ -1,7 +1,8 @@
 //! Reading Photoshop documents (PSD, and PSB, the large document format) for File › Open and
 //! File › Place (#918): the merged image, the flattened picture every PSD carries after its layers,
 //! as a linked PSD shows. Written from Adobe's public "Photoshop File Formats Specification"
-//! (<https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/>). Layers aren't read.
+//! (<https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/>). File › Open reads the
+//! layers with [`super::psdlayers`], which shares this reader.
 //!
 //! Every mode Photoshop saves a merged image in is read: Bitmap, Grayscale, Duotone (as its
 //! grayscale data), Indexed, RGB, CMYK and Lab, at 1, 8, 16 and 32 bits per channel, stored raw,
@@ -16,7 +17,7 @@ use vectorcraft_color::cms::{Lab, lab::lab_to_srgb};
 
 /// Photoshop's colour modes (the header's numbers), as far as the merged image is concerned.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Mode {
+pub(super) enum Mode {
     Bitmap,
     Gray,
     Indexed,
@@ -27,7 +28,7 @@ enum Mode {
 
 impl Mode {
     /// The channels holding colour (an alpha channel may follow them).
-    fn colors(self) -> usize {
+    pub(super) fn colors(self) -> usize {
         match self {
             Mode::Bitmap | Mode::Gray | Mode::Indexed => 1,
             Mode::Rgb | Mode::Lab => 3,
@@ -46,68 +47,68 @@ pub fn is_psb(bytes: &[u8]) -> bool {
     is_psd(bytes) && bytes.get(4..6) == Some(&[0, 2])
 }
 
-const TRUNCATED: &str = "the PSD file is cut short";
+pub(super) const TRUNCATED: &str = "the PSD file is cut short";
 const DAMAGED: &str = "the PSD file's header is damaged";
 
 /// Big-endian reads through `b`, each checked against its end.
-struct Reader<'a> {
+pub(super) struct Reader<'a> {
     b: &'a [u8],
     at: usize,
 }
 
 impl<'a> Reader<'a> {
-    fn new(b: &'a [u8]) -> Self {
+    pub(super) fn new(b: &'a [u8]) -> Self {
         Self { b, at: 0 }
     }
-    fn take(&mut self, n: usize) -> Result<&'a [u8], String> {
+    pub(super) fn take(&mut self, n: usize) -> Result<&'a [u8], String> {
         let s = self.at.checked_add(n).and_then(|end| self.b.get(self.at..end)).ok_or(TRUNCATED)?;
         self.at += n;
         Ok(s)
     }
-    fn array<const N: usize>(&mut self) -> Result<[u8; N], String> {
+    pub(super) fn array<const N: usize>(&mut self) -> Result<[u8; N], String> {
         self.take(N)?.try_into().map_err(|_| TRUNCATED.to_string())
     }
-    fn u8(&mut self) -> Result<u8, String> {
+    pub(super) fn u8(&mut self) -> Result<u8, String> {
         self.array::<1>().map(|[v]| v)
     }
-    fn u16(&mut self) -> Result<u16, String> {
+    pub(super) fn u16(&mut self) -> Result<u16, String> {
         self.array().map(u16::from_be_bytes)
     }
-    fn u32(&mut self) -> Result<u32, String> {
+    pub(super) fn u32(&mut self) -> Result<u32, String> {
         self.array().map(u32::from_be_bytes)
     }
     /// A section length: 4 bytes in a PSD, 8 in a PSB.
-    fn length(&mut self, psb: bool) -> Result<usize, String> {
+    pub(super) fn length(&mut self, psb: bool) -> Result<usize, String> {
         let n = if psb { self.array().map(u64::from_be_bytes)? } else { u64::from(self.u32()?) };
         usize::try_from(n).map_err(|_| TRUNCATED.to_string())
     }
     /// A section: its length, then that many bytes.
-    fn section(&mut self, psb: bool) -> Result<&'a [u8], String> {
+    pub(super) fn section(&mut self, psb: bool) -> Result<&'a [u8], String> {
         let n = self.length(psb)?;
         self.take(n)
     }
-    fn rest(&self) -> &'a [u8] {
+    pub(super) fn rest(&self) -> &'a [u8] {
         self.b.get(self.at..).unwrap_or_default()
     }
 }
 
 /// The fixed-size header and the sections before the image data.
-struct Header<'a> {
-    psb: bool,
+pub(super) struct Header<'a> {
+    pub(super) psb: bool,
     channels: usize,
-    width: u32,
-    height: u32,
-    depth: u16,
-    mode: Mode,
+    pub(super) width: u32,
+    pub(super) height: u32,
+    pub(super) depth: u16,
+    pub(super) mode: Mode,
     /// Colour mode data: an indexed image's palette (256 reds, then greens, then blues).
     palette: &'a [u8],
     /// The image resources.
     resources: &'a [u8],
     /// The layer and mask information.
-    layers: &'a [u8],
+    pub(super) layers: &'a [u8],
 }
 
-fn header<'a>(r: &mut Reader<'a>) -> Result<Header<'a>, String> {
+pub(super) fn header<'a>(r: &mut Reader<'a>) -> Result<Header<'a>, String> {
     if !is_psd(r.b) {
         return Err("not a PSD file".into());
     }
@@ -183,41 +184,45 @@ pub fn resolution(bytes: &[u8]) -> Option<(f64, f64)> {
 /// count is negative: in the layer info, or for 16- and 32-bit documents (whose layer info is
 /// empty) in their `Lr16` / `Lr32` block.
 fn merged_alpha(layers: &[u8], psb: bool) -> bool {
-    let count_negative = |info: &[u8]| info.get(..2).is_some_and(|c| i16::from_be_bytes([c[0], c[1]]) < 0);
+    layer_info(layers, psb).is_some_and(|info| info.get(..2).is_some_and(|c| i16::from_be_bytes([c[0], c[1]]) < 0))
+}
+
+/// Do tagged blocks with this key give an 8-byte length in a PSB?
+pub(super) fn long_key(key: &[u8; 4]) -> bool {
+    matches!(key, b"Lr16" | b"Lr32" | b"Layr" | b"LMsk" | b"Mt16" | b"Mt32" | b"Mtrn" | b"Alph" | b"FMsk" | b"lnk2" | b"FEid" | b"FXid" | b"PxSD")
+}
+
+/// The layer info: the layer count, the layer records and their channels. It is the first part of
+/// the layer and mask information, or for 16- and 32-bit documents (whose first part is empty) the
+/// `Lr16` / `Lr32` block after it. `None` when the file has neither.
+pub(super) fn layer_info(layers: &[u8], psb: bool) -> Option<&[u8]> {
     let mut r = Reader::new(layers);
-    let Ok(info) = r.section(psb) else { return false };
+    let info = r.section(psb).ok()?;
     if !info.is_empty() {
-        return count_negative(info);
+        return Some(info);
     }
     // The global layer mask info, then tagged blocks: signature, key, length (8 bytes for the
     // layer blocks of a PSB), data padded to 4 bytes.
-    if r.section(false).is_err() {
-        return false;
-    }
+    r.section(false).ok()?;
     while r.rest().len() >= 12 {
-        let (Ok(_), Ok(key)) = (r.take(4), r.array::<4>()) else { return false };
-        let layer_block = matches!(&key, b"Lr16" | b"Lr32" | b"Layr");
-        let long = layer_block || matches!(&key, b"LMsk" | b"Mt16" | b"Mt32" | b"Mtrn" | b"Alph" | b"FMsk" | b"lnk2" | b"FEid" | b"FXid" | b"PxSD");
-        let Ok(data) = r.section(psb && long) else {
-            return false;
-        };
-        if layer_block {
-            return count_negative(data);
+        r.take(4).ok()?;
+        let key = r.array::<4>().ok()?;
+        let data = r.section(psb && long_key(&key)).ok()?;
+        if matches!(&key, b"Lr16" | b"Lr32" | b"Layr") {
+            return Some(data);
         }
-        if r.take((4 - data.len() % 4) % 4).is_err() {
-            return false;
-        }
+        r.take((4 - data.len() % 4) % 4).ok()?;
     }
-    false
+    None
 }
 
 /// The most bytes one channel row may take (a PSB at 32 bits).
-fn row_bytes(width: usize, depth: u16) -> usize {
+pub(super) fn row_bytes(width: usize, depth: u16) -> usize {
     if depth == 1 { width.div_ceil(8) } else { width * usize::from(depth / 8) }
 }
 
 /// Undo PackBits: `src` into `dst` (a row; a short or overlong run leaves the rest as it is).
-fn unpack_bits(mut src: &[u8], dst: &mut [u8]) {
+pub(super) fn unpack_bits(mut src: &[u8], dst: &mut [u8]) {
     let mut at = 0;
     while let Some((&n, rest)) = src.split_first() {
         src = rest;
@@ -269,32 +274,77 @@ fn channel_data(data: &[u8], h: &Header<'_>, channels: usize, row: usize) -> Res
             }
             Ok(out)
         }
-        2 | 3 => {
-            let mut out = Vec::new();
-            flate2::read::ZlibDecoder::new(r.rest())
-                .take(wanted as u64)
-                .read_to_end(&mut out)
-                .map_err(|e| format!("the PSD file's image data can't be read: {e}"))?;
-            if out.len() < wanted {
-                return Err(TRUNCATED.into());
-            }
-            if method == 3 {
-                // Each row stores the difference from the sample before it.
-                match h.depth {
-                    8 => out.chunks_exact_mut(row).for_each(|r| (1..r.len()).for_each(|i| r[i] = r[i].wrapping_add(r[i - 1]))),
-                    16 => out.chunks_exact_mut(row).for_each(|r| {
-                        let mut prev = 0u16;
-                        for s in r.as_chunks_mut::<2>().0 {
-                            prev = prev.wrapping_add(u16::from_be_bytes(*s));
-                            *s = prev.to_be_bytes();
-                        }
-                    }),
-                    _ => return Err("zipped 32-bit PSD image data with prediction can't be read".into()),
+        2 | 3 => inflate(r.rest(), wanted, method == 3, h.depth, row),
+        m => Err(format!("the PSD file's image data uses an unknown compression ({m})")),
+    }
+}
+
+/// `wanted` bytes of zipped image data, rows of `row` bytes; with `predicted`, each row stores the
+/// difference from the sample before it. In 32-bit data a row stores the first bytes of its samples,
+/// then their second bytes, and so on, and the differences run byte by byte along the whole row (as
+/// psd-tools, MIT, reads it: <https://github.com/psd-tools/psd-tools>, `compression/__init__.py`).
+fn inflate(src: &[u8], wanted: usize, predicted: bool, depth: u16, row: usize) -> Result<Vec<u8>, String> {
+    let mut out = Vec::new();
+    flate2::read::ZlibDecoder::new(src)
+        .take(wanted as u64)
+        .read_to_end(&mut out)
+        .map_err(|e| format!("the PSD file's image data can't be read: {e}"))?;
+    if out.len() < wanted {
+        return Err(TRUNCATED.into());
+    }
+    if predicted && row > 0 {
+        match depth {
+            8 => out.chunks_exact_mut(row).for_each(|r| (1..r.len()).for_each(|i| r[i] = r[i].wrapping_add(r[i - 1]))),
+            16 => out.chunks_exact_mut(row).for_each(|r| {
+                let mut prev = 0u16;
+                for s in r.as_chunks_mut::<2>().0 {
+                    prev = prev.wrapping_add(u16::from_be_bytes(*s));
+                    *s = prev.to_be_bytes();
                 }
+            }),
+            32 => {
+                let w = row / 4;
+                let mut planes = vec![0u8; row];
+                for r in out.chunks_exact_mut(row) {
+                    let mut prev = 0u8;
+                    for (dst, &b) in planes.iter_mut().zip(r.iter()) {
+                        prev = prev.wrapping_add(b);
+                        *dst = prev;
+                    }
+                    for (x, s) in r.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+                        for (k, v) in s.iter_mut().enumerate() {
+                            *v = planes.get(k * w + x).copied().unwrap_or(0);
+                        }
+                    }
+                }
+            }
+            // 1-bit.
+            _ => return Err("zipped 1-bit PSD image data with prediction can't be read".into()),
+        }
+    }
+    Ok(out)
+}
+
+/// One channel of a layer: its compression method, then `rows` rows of `row` bytes (PackBits rows
+/// after their byte counts, 4 bytes each in a PSB).
+pub(super) fn layer_channel(data: &[u8], rows: usize, row: usize, psb: bool, depth: u16) -> Result<Vec<u8>, String> {
+    let mut r = Reader::new(data);
+    let method = r.u16()?;
+    let wanted = rows.checked_mul(row).ok_or(TRUNCATED)?;
+    match method {
+        0 => r.take(wanted).map(<[u8]>::to_vec),
+        1 => {
+            let size = if psb { 4 } else { 2 };
+            let counts = r.take(rows.checked_mul(size).ok_or(TRUNCATED)?)?;
+            let mut out = vec![0; wanted];
+            for (dst, n) in out.chunks_exact_mut(row.max(1)).zip(counts.chunks_exact(size)) {
+                let n = n.iter().fold(0usize, |n, &b| n << 8 | usize::from(b));
+                unpack_bits(r.take(n)?, dst);
             }
             Ok(out)
         }
-        m => Err(format!("the PSD file's image data uses an unknown compression ({m})")),
+        2 | 3 => inflate(r.rest(), wanted, method == 3, depth, row),
+        m => Err(format!("the PSD file's layer data uses an unknown compression ({m})")),
     }
 }
 
@@ -304,7 +354,7 @@ fn srgb_encode(v: f32) -> f32 {
 }
 
 /// Sample `x` of a channel row, 0..1.
-fn sample(row: &[u8], x: usize, depth: u16, linear: bool) -> f32 {
+pub(super) fn sample(row: &[u8], x: usize, depth: u16, linear: bool) -> f32 {
     match depth {
         1 => {
             // Bitmap: a set bit is black.
@@ -321,8 +371,23 @@ fn sample(row: &[u8], x: usize, depth: u16, linear: bool) -> f32 {
     }
 }
 
-fn byte(v: f32) -> u8 {
+pub(super) fn byte(v: f32) -> u8 {
     (v.clamp(0.0, 1.0) * 255.0).round() as u8
+}
+
+/// The sRGB color of a pixel whose color channels `v` gives (0..1, as stored), in `h`'s mode.
+pub(super) fn to_rgb(h: &Header<'_>, v: impl Fn(usize) -> f32, cmyk: &impl Fn([f32; 4]) -> [f32; 3]) -> [f32; 3] {
+    match h.mode {
+        Mode::Bitmap | Mode::Gray => [v(0); 3],
+        Mode::Indexed => {
+            let i = usize::from(byte(v(0)));
+            [0, 256, 512].map(|at| h.palette.get(at + i).map_or(0.0, |&c| f32::from(c) / 255.0))
+        }
+        Mode::Rgb => [v(0), v(1), v(2)],
+        // Inks are stored as 1 − amount.
+        Mode::Cmyk => cmyk([0, 1, 2, 3].map(|c| 1.0 - v(c))),
+        Mode::Lab => lab_to_srgb(Lab { l: v(0) * 100.0, a: v(1) * 255.0 - 128.0, b: v(2) * 255.0 - 128.0 }),
+    }
 }
 
 /// A Photoshop document's merged image as straight RGBA. CMYK converts through `cmyk` (ink
@@ -348,17 +413,7 @@ pub fn decode(bytes: &[u8], max_alloc: u64, cmyk: impl Fn([f32; 4]) -> [f32; 3])
         let planes: Vec<&[u8]> = (0..channels).map(|c| data.get((c * rows + y) * row..(c * rows + y + 1) * row).unwrap_or_default()).collect();
         for (x, px) in line.enumerate() {
             let v = |c: usize| planes.get(c).map_or(0.0, |p| sample(p, x, h.depth, linear && c < colors));
-            let rgb = match h.mode {
-                Mode::Bitmap | Mode::Gray => [v(0); 3],
-                Mode::Indexed => {
-                    let i = usize::from(byte(v(0)));
-                    [0, 256, 512].map(|at| h.palette.get(at + i).map_or(0.0, |&c| f32::from(c) / 255.0))
-                }
-                Mode::Rgb => [v(0), v(1), v(2)],
-                // Inks are stored as 1 − amount.
-                Mode::Cmyk => cmyk([0, 1, 2, 3].map(|c| 1.0 - v(c))),
-                Mode::Lab => lab_to_srgb(Lab { l: v(0) * 100.0, a: v(1) * 255.0 - 128.0, b: v(2) * 255.0 - 128.0 }),
-            };
+            let rgb = to_rgb(&h, v, &cmyk);
             let a = if alpha { v(colors) } else { 1.0 };
             // The merged image is stored on white: take the white back out.
             let straight = |c: f32| if a <= 0.0 { 0.0 } else { (c - (1.0 - a)) / a };

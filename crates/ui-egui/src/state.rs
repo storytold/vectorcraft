@@ -405,6 +405,10 @@ pub struct UiState {
     /// The Control bar is docked to the bottom of the window instead of the top
     /// (`window.control.dock`).
     pub control_bar_bottom: bool,
+    /// The groups of the Control bar's options (`chrome::CONTROL_BAR_GROUPS`) that its panel menu
+    /// has off (`window.control.options`); none: every group shows.
+    #[serde(deserialize_with = "crate::chrome::read_hidden_groups")]
+    pub control_bar_hidden_groups: std::collections::BTreeSet<String>,
     pub toolbar: bool,
     pub toolbar_double: bool,
     /// Advanced toolbar (every tool group) instead of the categorized Basic toolbar.
@@ -533,6 +537,10 @@ pub struct UiState {
     /// The Replace Font request behind the status bar's warning ([`ReplaceFontWarning`]). Not saved.
     #[serde(skip)]
     pub replace_font_warning: Option<ReplaceFontWarning>,
+    /// The notes of the last open that gave any, with the status text that names the first of
+    /// them: hovering that text lists them when there are several. Not saved.
+    #[serde(skip)]
+    pub status_notes: Option<(String, Vec<String>)>,
     pub palette_open: bool,
     pub palette_query: String,
     /// Screen mode: 0 normal, 1 full screen with menu, 2 full screen, 3 presentation. Not saved:
@@ -1019,6 +1027,7 @@ impl Default for UiState {
             find_font_in: String::new(),
             control_bar: false,
             control_bar_bottom: false,
+            control_bar_hidden_groups: Default::default(),
             toolbar: true,
             toolbar_double: false,
             toolbar_advanced: false,
@@ -1060,6 +1069,7 @@ impl Default for UiState {
             group_tool: vectorcraft_tools::TOOL_GROUPS.iter().map(|g| g[0].id.to_string()).collect(),
             status: String::new(),
             replace_font_warning: None,
+            status_notes: None,
             palette_open: false,
             palette_query: String::new(),
             screen_mode: 0,

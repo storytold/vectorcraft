@@ -236,6 +236,30 @@ fn type_on_a_closed_path_offers_center_on_top_and_bottom() {
     assert!((start(&app) - 0.25).abs() < 1e-3, "{}", start(&app));
 }
 
+/// Area type offers Dynamic Text beside Convert To Point Type, which turns Block on and off; area
+/// type in a thread does not.
+#[test]
+fn area_type_offers_dynamic_text() {
+    let mut app = app();
+    let t = id(app.run("text.create", json!({"x": 60, "y": 80, "area": {"width": 200, "height": 100}, "text": "Fit me"})).unwrap());
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    select(&mut app, &[t]);
+    let dynamic = |app: &VectorcraftApp| matches!(kind(app, t), NodeKind::Text(ref t) if t.dynamic_text);
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Convert To Point Type") && has(&texts, "Dynamic Text"), "{texts:?}");
+    click(&mut app, "Dynamic Text");
+    assert!(dynamic(&app));
+    click(&mut app, "Dynamic Text");
+    assert!(!dynamic(&app));
+    // Threaded, it is not offered.
+    let frame = id(app.run("shape.rectangle", json!({"x": 60, "y": 300, "width": 200, "height": 100})).unwrap());
+    select(&mut app, &[t, frame]);
+    app.run("text.thread.create", json!({})).unwrap();
+    select(&mut app, &[t]);
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Convert To Point Type") && !has(&texts, "Dynamic Text"), "{texts:?}");
+}
+
 /// The path's anchors (its first subpath).
 fn anchors(app: &VectorcraftApp, id: u64) -> Vec<vectorcraft_geom::Anchor> {
     match kind(app, id) {

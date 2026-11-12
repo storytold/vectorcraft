@@ -497,6 +497,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Slices", "select.object.slices"),
                         c("Stray Points", "select.object.strayPoints"),
                         c("Open Paths", "select.object.openPaths"),
+                        c("Not Aligned to Pixel Grid", "select.object.notAlignedToPixelGrid"),
                         Sep,
                         c("All Text Objects", "select.object.textObjects"),
                         c("Point Text Objects", "select.object.pointText"),

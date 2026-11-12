@@ -313,8 +313,8 @@ fn optical_margin_alignment_is_a_checked_type_menu_item() {
     assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
 }
 
-/// Type › Dynamic Text runs `type.dynamicText`, is enabled for type on a path that is in no
-/// thread, and is checked while the selected type on a path has it on.
+/// Type › Dynamic Text runs `type.dynamicText`, is enabled for type on a path and area type that
+/// are in no thread, and is checked while the selected type has it on.
 #[test]
 fn dynamic_text_is_a_checked_type_menu_item() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
@@ -349,6 +349,13 @@ fn dynamic_text_is_a_checked_type_menu_item() {
     app.run("text.thread.create", json!({})).unwrap();
     app.run("select.set", json!({"ids": [t]})).unwrap();
     assert!(!enabled(&app, id), "type on a path in a thread");
+    // Area type takes Block, and the item is checked while it is on.
+    let area = app.run("text.create", json!({"x": 10, "y": 400, "text": "Block", "area": {"width": 100, "height": 50}})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [area]})).unwrap();
+    assert!(enabled(&app, id), "area type");
+    assert_eq!(checked(&app, id, &Value::Null), Some(false));
+    app.run(id, json!({})).unwrap();
+    assert_eq!(checked(&app, id, &Value::Null), Some(true));
 }
 
 /// Type › Type on a Path › Center on Top and Center on Bottom run `type.pathCenter.top` and
