@@ -20,7 +20,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::OrientedBox;
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
-use crate::bbox::{Handle, hit_handle, move_delta, rotate_for_drag, scale_for_drag};
+use crate::bbox::{Handle, move_delta, rotate_for_drag, scale_for_drag};
 use crate::corners::{self, CornerDrag};
 use crate::guides::{DrawSnap, Leave, PointSnap, Targets, square};
 use crate::pie::{self, PieDrag};
@@ -31,6 +31,22 @@ use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, Tool
 /// Corner Radius, which the tool's radius is (its `prefs.list` spec), so ↑ and a Tool Options
 /// value stop there too.
 pub const MAX_CORNER_RADIUS: f64 = 1296.0;
+
+/// How far (screen points, along each axis) from a bounding-box handle's centre a shape tool's
+/// press scales the selection: half the drawn handle square, which is 6 points wide at the default
+/// Selection & Anchor Display › Size 3 and a point wider or narrower per step. The Selection tool
+/// takes 5 points.
+fn handle_reach(cx: &ToolContext) -> f64 {
+    (6.0 + f64::from(cx.anchor_size.clamp(1, 7)) - 3.0) / 2.0
+}
+
+/// A document offset `d` in screen points: across and down the window.
+fn screen_offset(cx: &ToolContext, d: Vec2) -> (f64, f64) {
+    match cx.screen {
+        Some(s) if s.right.hypot2() > 0.0 && s.down.hypot2() > 0.0 => (d.dot(s.right) / s.right.hypot2(), d.dot(s.down) / s.down.hypot2()),
+        _ => (d.x * cx.zoom, d.y * cx.zoom),
+    }
+}
 
 /// Does tool `id` keep the selection's bounding box and Live Shape widgets on show and let its
 /// corner and pie widgets be dragged (#5477)? The shape tools that draw a box: not Line Segment.
@@ -186,10 +202,19 @@ impl ShapeTool {
     }
 
     /// The handle of the selection's box under `p`, with the box: a press there scales the
-    /// selection, as with the Selection tool, whose handles take the same 5 pt square.
+    /// selection, as with the Selection tool. A shape tool takes only the drawn handle square
+    /// ([`handle_reach`]), which stays square to the screen when the box or the view is turned, so
+    /// a press just beside a handle still draws a new shape.
     fn over_handle(&self, cx: &ToolContext, p: Point) -> Option<(Handle, OrientedBox)> {
         let bx = self.box_of(cx)?;
-        hit_handle(bx.rect, bx.to_local(p), cx.tol(5.0)).map(|h| (h, bx))
+        let reach = handle_reach(cx);
+        Handle::ALL
+            .into_iter()
+            .find(|h| {
+                let (x, y) = screen_offset(cx, p - bx.to_doc() * h.pos(bx.rect));
+                x.abs() <= reach && y.abs() <= reach
+            })
+            .map(|h| (h, bx))
     }
 
     /// Is `p` over the centre point of a selected object (Attributes › Show Center), where a press

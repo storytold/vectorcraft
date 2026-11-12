@@ -639,6 +639,40 @@ fn a_shape_tool_scales_the_selection_by_its_bounding_box_handles() {
     assert_eq!(a.first(), Some(&Action::Begin("Line".into())), "{a:?}");
 }
 
+/// A shape tool's press scales the selection only on the drawn handle square: 3 screen points from
+/// the handle's centre along each axis at the default Anchor Size, at any zoom. A press 4 points
+/// from it draws a new shape; at Anchor Size 7 the square is 10 points wide and that press scales.
+#[test]
+fn a_shape_tool_draws_from_a_press_just_beside_a_handle() {
+    let (d, s) = unfilled_live_rect();
+    let p = paint();
+    for zoom in [1.0, 4.0] {
+        let c = ToolContext { zoom, ..cx(&d, &s, &p) };
+        let on = Point::new(200.0 + 3.0 / zoom, 200.0 - 3.0 / zoom);
+        let mut t = ShapeTool::new("rectangle");
+        assert_eq!(t.cursor(&c, on, Mods::default()), handle_cursor(Handle::BottomRight, 0.0), "{zoom}");
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, on.x, on.y)), vec![Action::Begin("Scale".into())], "{zoom}");
+        let beside = Point::new(200.0 + 2.0 / zoom, 200.0 + 4.0 / zoom);
+        let mut t = ShapeTool::new("rectangle");
+        assert_eq!(t.cursor(&c, beside, Mods::default()), Cursor::Crosshair, "{zoom}");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, beside.x, beside.y));
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 260.0, 260.0));
+        assert_eq!(a.first(), Some(&Action::Begin("Rectangle".into())), "{zoom}: {a:?}");
+        let big = ToolContext { anchor_size: 7, ..c };
+        let mut t = ShapeTool::new("rectangle");
+        assert_eq!(t.cursor(&big, beside, Mods::default()), handle_cursor(Handle::BottomRight, 0.0), "{zoom}");
+        assert_eq!(t.pointer(&big, &PointerEvent::new(PointerKind::Down, beside.x, beside.y)), vec![Action::Begin("Scale".into())], "{zoom}");
+    }
+    // In a view turned 45°, the drawn square stays square to the screen: a press 3 screen points
+    // right of and below the handle's centre, 4.24 pt along the box's x axis, scales.
+    let screen = turned_view(45.0);
+    let c = ToolContext { screen, ..cx(&d, &s, &p) };
+    let f = screen.unwrap_or_else(|| panic!("a turned view"));
+    let corner = Point::new(200.0, 200.0) + f.right * 3.0 + f.down * 3.0;
+    let mut t = ShapeTool::new("rectangle");
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, corner.x, corner.y)), vec![Action::Begin("Scale".into())]);
+}
+
 /// Two selected live rectangles, the second placed so that its top-left Live Corners widget (10 pt
 /// in along the corner's bisector) lands on the first one's centre point.
 fn two_live_rects() -> (vectorcraft_doc::Document, Selection) {
