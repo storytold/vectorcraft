@@ -2,6 +2,39 @@ use super::*;
 use crate::testutil::*;
 use vectorcraft_doc::Selection;
 
+/// #6618: the Selection tool isolates a live blend from a key or an intermediate step,
+/// subject to Double Click To Isolate, without expanding the blend.
+#[test]
+fn double_click_isolates_a_live_blend_when_enabled() {
+    use vectorcraft_doc::live::{BlendSpacing, BlendSpec};
+    use vectorcraft_doc::{Appearance, Document, Node, NodeKind};
+    use vectorcraft_geom::shapes;
+
+    let mut d = Document::new(600.0, 400.0);
+    let layer = d.layers[0].id;
+    let blend = d.alloc_id();
+    let keys = [100.0, 300.0]
+        .into_iter()
+        .map(|x| std::sync::Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, 100.0, x + 40.0, 140.0)), Appearance::default_art())))
+        .collect();
+    let spec = Box::new(BlendSpec { spacing: BlendSpacing::Steps(3), ..Default::default() });
+    d.insert(Some(layer), 0, Node::new(blend, NodeKind::Blend { children: keys, spec })).unwrap();
+    let mut selected = Selection::default();
+    selected.set([blend]);
+    let paint = paint();
+    for x in [120.0, 220.0, 320.0] {
+        let event = ev(PointerKind::DoubleClick, x, 120.0);
+        let enabled = cx(&d, &selected, &paint);
+        assert_eq!(
+            SelectionTool::default().pointer(&enabled, &event),
+            vec![Action::Exec("object.isolate".into(), json!({"id": blend.0}))],
+            "a double-click at {x} isolates the live blend"
+        );
+        let disabled = ToolContext { double_click_isolate: false, ..enabled };
+        assert!(SelectionTool::default().pointer(&disabled, &event).is_empty(), "disabled at {x}");
+    }
+}
+
 /// While an opacity mask is edited, a press on a selected Shaper original shape moves it, over the
 /// art the group shows and over a part of the shape the group does not show. A press on an original
 /// shape that is not selected selects the Shaper Group or starts a marquee, as before.
