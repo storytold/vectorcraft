@@ -526,6 +526,51 @@ fn distort_command_maps_corners() {
     assert!(close(bounds(&s, a), Rect::new(0.0, 0.0, 100.0, 100.0)));
 }
 
+/// Free Distort warps the art of a linked opacity mask with the object it masks, and one undo puts
+/// both back; an unlinked mask stays where it is.
+#[test]
+fn distort_command_warps_a_linked_opacity_mask_with_its_object() {
+    for linked in [true, false] {
+        let mut s = session();
+        let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+        let b = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+        if !linked {
+            s.execute("transparency.unlinkOpacityMask", &json!({})).unwrap();
+        }
+        let mask_path = |s: &Session| s.doc().unwrap().doc.node(a).unwrap().extras().mask.as_ref().unwrap().art.path_data().cloned();
+        let path = |s: &Session| s.doc().unwrap().doc.node(a).unwrap().path_data().cloned();
+        let before = (path(&s), mask_path(&s));
+        s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+        s.execute("object.distort", &json!({"corners": [[10, 0], [90, 0], [100, 100], [0, 100]]})).unwrap();
+        assert!(path(&s) != before.0);
+        let want = if linked { path(&s) } else { before.1.clone() };
+        assert_eq!(mask_path(&s), want, "linked: {linked}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!((path(&s), mask_path(&s)), before);
+    }
+}
+
+/// Free Distort of a group warps the linked opacity mask of a path inside it with the path.
+#[test]
+fn distort_command_warps_the_linked_mask_of_a_path_in_a_group() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    let c = rect(&mut s, 150.0, 0.0, 50.0, 50.0);
+    s.execute("select.set", &json!({"ids": [a.0, c.0]})).unwrap();
+    let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let before = s.doc().unwrap().doc.node(a).unwrap().path_data().cloned();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[10, 0], [190, 0], [200, 100], [0, 100]]})).unwrap();
+    let a = s.doc().unwrap().doc.node(a).unwrap();
+    assert!(a.path_data().cloned() != before, "the path is warped");
+    assert_eq!(a.extras().mask.as_ref().unwrap().art.path_data(), a.path_data(), "and so is its mask");
+}
+
 #[test]
 fn distort_perspective_midpoint_is_projective() {
     // Distort a tiny probe at the centre of a 100×100 source box into a trapezoid: with a real

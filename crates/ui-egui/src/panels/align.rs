@@ -1,6 +1,7 @@
 //! Align panel: Align Objects, Distribute Objects and Distribute Spacing (both with the spacing
 //! value when aligning to a key object or a key guide) and Align To (selection / key object /
-//! artboard).
+//! artboard). With the Artboard tool chosen, the buttons align and distribute the artboards the
+//! tool has selected.
 
 use egui::Ui;
 use serde::Serialize;
@@ -104,7 +105,7 @@ pub enum Button {
 }
 
 impl Button {
-    /// The engine command the button runs.
+    /// The engine command the button runs on the selected objects.
     pub(crate) fn command(self) -> &'static str {
         match self {
             Button::Align(..) | Button::AlignCenters => "object.align",
@@ -112,6 +113,51 @@ impl Button {
             Button::Spacing(_) => "object.distributeSpacing",
         }
     }
+
+    /// The engine command the button runs on the selected artboards ([`on_artboards`]).
+    fn artboard_command(self) -> &'static str {
+        match self {
+            Button::Align(..) | Button::AlignCenters => "artboard.align",
+            Button::Distribute(..) => "artboard.distribute",
+            Button::Spacing(_) => "artboard.distributeSpacing",
+        }
+    }
+
+    /// The engine command a click on the button runs now: the artboard command with the Artboard
+    /// tool chosen, else the object command.
+    pub(crate) fn command_now(self, app: &VectorcraftApp) -> &'static str {
+        if on_artboards(app) { self.artboard_command() } else { self.command() }
+    }
+}
+
+/// Whether the Align panel's buttons, and the Control bar's, align and distribute artboards: the
+/// Artboard tool is chosen. They then act on the artboards the tool has selected.
+pub(crate) fn on_artboards(app: &VectorcraftApp) -> bool {
+    app.session.tool_id() == "artboard"
+}
+
+/// The number of artboards the Artboard tool has selected ([`super::artboards::picked`]).
+pub(crate) fn artboards_selected(app: &VectorcraftApp) -> usize {
+    let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
+    if n == 0 { 0 } else { super::artboards::picked(app, n).len() }
+}
+
+/// Runs what a click on button `b` runs with the Artboard tool chosen: the artboard command on
+/// the artboards the tool has selected. With Align to Artboard chosen, it sends `to: "artboard"`,
+/// which keeps the tool's active artboard in place, and the Distribute buttons send the
+/// Distribute Spacing value. With Align to Selection chosen, it sends `to: "selection"`.
+fn run_on_artboards(app: &mut VectorcraftApp, b: Button) -> Result<Value, String> {
+    let to_artboard = app.ui.align_to == AlignTo::Artboard;
+    let mut p = match b {
+        Button::Align(axis, v) | Button::Distribute(axis, v) => json!({axis: v}),
+        Button::AlignCenters => json!({"horizontal": "center", "vertical": "center"}),
+        Button::Spacing(axis) => json!({"axis": axis}),
+    };
+    p["to"] = json!(if to_artboard { "artboard" } else { "selection" });
+    if to_artboard && matches!(b, Button::Distribute(..) | Button::Spacing(_)) {
+        p["spacing"] = json!(app.ui.align_spacing);
+    }
+    app.run(b.artboard_command(), p)
 }
 
 /// The Align panel's buttons as UI commands ([`crate::menus::UI_COMMANDS`]), in the panel's order:
@@ -143,8 +189,12 @@ pub(crate) fn button(id: &str) -> Option<Button> {
 
 /// Runs what a click on button `b` runs. An Align Objects button sends the `to` of
 /// [`with_align_to`]. A Distribute Objects or Distribute Spacing button sends the key while there
-/// is one, else the Align To choice, and the Distribute Spacing value while there is a key.
+/// is one, else the Align To choice, and the Distribute Spacing value while there is a key. With
+/// the Artboard tool chosen, the button acts on the selected artboards ([`run_on_artboards`]).
 pub fn run_button(app: &mut VectorcraftApp, b: Button) -> Result<Value, String> {
+    if on_artboards(app) {
+        return run_on_artboards(app, b);
+    }
     let to = align_to(app).param();
     let p = match b {
         Button::Align(axis, v) => with_align_to(app, json!({axis: v})),
@@ -163,14 +213,15 @@ pub fn run_button(app: &mut VectorcraftApp, b: Button) -> Result<Value, String> 
 
 /// The Distribute Spacing value ([`crate::UiState::align_spacing`]) while there is a key object
 /// or a key guide (#2143), which the Distribute Objects and Distribute Spacing buttons then send;
-/// else none.
+/// else none. With the Artboard tool chosen, the buttons send it while Align to Artboard is chosen.
 fn spacing_sent(app: &VectorcraftApp) -> Option<f64> {
-    (align_to(app) == AlignTo::Key).then_some(app.ui.align_spacing)
+    let sent = if on_artboards(app) { app.ui.align_to == AlignTo::Artboard } else { align_to(app) == AlignTo::Key };
+    sent.then_some(app.ui.align_spacing)
 }
 
 /// The six align buttons of the Control bar and the Properties panel, `size` points square.
 /// They align to what the Align panel's Align To says (the key object while there is one), as
-/// its own buttons do (#789).
+/// its own buttons do (#789), and the selected artboards with the Artboard tool chosen.
 pub fn align_buttons(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     for (i, (icon, tip, axis, v)) in [
         ("align-start-vertical", "Horizontal Align Left", "horizontal", "left"),
@@ -184,10 +235,10 @@ pub fn align_buttons(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     .enumerate()
     {
         if i == 3 && widgets::icon_button(ui, "dc-al-center", tl!("Horizontal & Vertical Align Center"), false, size).clicked() {
-            app.run("object.align", with_align_to(app, json!({"horizontal": "center", "vertical": "center"}))).ok();
+            run_button(app, Button::AlignCenters).ok();
         }
         if widgets::icon_button(ui, icon, tl!(tip), false, size).clicked() {
-            app.run("object.align", with_align_to(app, json!({axis: v}))).ok();
+            run_button(app, Button::Align(axis, v)).ok();
         }
     }
 }
@@ -246,15 +297,23 @@ fn align_to_icon_name(v: AlignTo) -> (&'static str, &'static str) {
 }
 
 /// The Align To choice that the Align panel and the Control bar show chosen: Artboard while one
-/// object is selected (the buttons then align it to the artboard), else [`align_to`].
+/// object is selected (the buttons then align it to the artboard), else [`align_to`]. With the
+/// Artboard tool chosen, it is the stored choice, Selection or Artboard.
 fn shown_align_to(app: &VectorcraftApp) -> AlignTo {
+    if on_artboards(app) {
+        return app.ui.align_to;
+    }
     aligns_to(align_to(app), objects_aligned(app))
 }
 
 /// Whether Align To choice `v` can be chosen. Align to Key Object needs a key object or a key
 /// guide, or something to make one of: two or more selected objects, or a guide selected with
-/// objects.
+/// objects. With the Artboard tool chosen it is off: Align to Artboard keeps the active artboard
+/// in place.
 fn can_choose(app: &VectorcraftApp, v: AlignTo) -> bool {
+    if on_artboards(app) {
+        return v != AlignTo::Key;
+    }
     v != AlignTo::Key || selection_len(app) >= 2 || has_key(app) || guide_for_key(app).is_some()
 }
 
@@ -262,9 +321,14 @@ fn can_choose(app: &VectorcraftApp, v: AlignTo) -> bool {
 /// do. Align to Key Object makes the topmost selected object the key object, unless there is one
 /// already; with one object, a guide selected with it becomes the key. The stored choice stays as
 /// it was, and Align To shows it again once the key is cleared. Align to Selection and Align to
-/// Artboard store the choice and let go of the key object.
+/// Artboard store the choice and let go of the key object. With the Artboard tool chosen, the
+/// choice is stored and the selected objects keep their key.
 pub(crate) fn choose_align_to(app: &mut VectorcraftApp, v: AlignTo) {
     if !can_choose(app, v) {
+        return;
+    }
+    if on_artboards(app) {
+        app.ui.align_to = v;
         return;
     }
     if v == AlignTo::Key {
@@ -332,13 +396,17 @@ pub(crate) fn align_to_menu(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let n = selection_len(app);
     let guides = selected_guides(app);
-    let can_align = n + guides >= 1;
+    // With the Artboard tool chosen, the buttons act on the artboards it has selected.
+    let boards = on_artboards(app).then(|| artboards_selected(app));
+    let can_align = boards.map_or(n + guides >= 1, |b| b >= 1);
     // `spacing` is the Distribute Spacing value. The Distribute Objects and Distribute Spacing
-    // buttons send it while there is a key object or a key guide (#2143).
+    // buttons send it while there is a key object or a key guide (#2143), or for artboards while
+    // Align to Artboard is chosen.
     let spacing = app.ui.align_spacing;
     let key = spacing_sent(app).is_some();
-    // Two or more objects and ruler guides (#1597), or anchor points, which may all be on one path.
-    let distributes = n + selected_guides(app) >= 2 || has_anchors(app);
+    // Two or more objects and ruler guides (#1597), or anchor points, which may all be on one
+    // path; or two or more artboards.
+    let distributes = boards.map_or(n + selected_guides(app) >= 2 || has_anchors(app), |b| b >= 2);
     widgets::subheader(ui, tl!("Align Objects:"));
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 5.0;

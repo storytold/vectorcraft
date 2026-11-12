@@ -265,7 +265,7 @@ const MAX_PICKS: usize = 256;
 /// draws a drag's marquee, whose sides follow the document's axes.
 fn theme_overlay(app: &VectorcraftApp, ctx: &egui::Context, d: &mut Dialog) {
     let (Some(rect), Some(view)) = (app.canvas_rect, app.view()) else { return };
-    let xf = crate::canvas::Xf::new(rect, view);
+    let xf = crate::canvas::Xf::at(rect, view, app.canvas_ui_zoom);
     let accent = Tokens::get(ctx).accent;
     let id = egui::Id::unique("recolor-theme-picker");
     let shown = egui::Area::new(id).order(egui::Order::Middle).fixed_pos(rect.min).movable(false).show(ctx, |ui| {
@@ -362,6 +362,11 @@ fn keep_tints(before: &[Value], rows: &mut [Value]) {
 
 fn excluded(row: &Value) -> bool {
     row["exclude"].as_bool().unwrap_or(false)
+}
+
+/// The seed for the next Randomize: one past the last, held at `u64::MAX`.
+fn next_seed(d: &Dialog) -> u64 {
+    (d.f64("__seed", 0.0) as u64).saturating_add(1)
 }
 
 fn selection(d: &Dialog) -> Vec<usize> {
@@ -661,7 +666,7 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
             [("arrow-left-right", tl!("Randomly change color order"), false), ("sparkles", tl!("Randomly change saturation and brightness"), true)]
         {
             if widgets::icon_button_enabled(ui, icon, tip, false, rows.len() > 1 || sb, 24.0).clicked() {
-                let seed = d.f64("__seed", 0.0) as u64 + 1;
+                let seed = next_seed(d);
                 d.fields.insert("__seed".into(), json!(seed));
                 let p = json!({"map": rows, "order": !sb, "saturationBrightness": sb, "seed": seed});
                 match app.session.execute("recolor.randomize", &p) {
@@ -1012,6 +1017,7 @@ fn sliders(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]
 fn merge(rows: &mut Vec<Value>, sel: &[usize]) {
     let mut sel: Vec<usize> = sel.iter().copied().filter(|i| *i < rows.len()).collect();
     sel.sort_unstable();
+    sel.dedup();
     let Some((&first, rest)) = sel.split_first() else { return };
     let mut moved = vec![];
     for &i in rest.iter().rev() {
@@ -1321,6 +1327,25 @@ mod tests {
         assert_eq!(r.len(), 3);
         assert_eq!(r[1], json!({"from": ["rgb 0 0 255"], "to": "rgb 0 0 255"}));
         assert_eq!(r[2]["to"], "rgb 0 0 128");
+    }
+
+    /// A selection that lists a row twice merges it once, as `ui.dialog.set` can store one.
+    #[test]
+    fn merge_takes_a_repeated_row_once() {
+        let mut r = rows();
+        merge(&mut r, &[0, 2, 2]);
+        assert_eq!(r.len(), 2);
+        assert_eq!(r[0]["from"], json!(["rgb 255 0 0", "rgb 0 255 0"]));
+        merge(&mut r, &[1, 1]);
+        assert_eq!(r.len(), 2);
+    }
+
+    /// Randomize after a seed past `u64::MAX` keeps the largest seed.
+    #[test]
+    fn next_seed_holds_at_the_largest() {
+        assert_eq!(next_seed(&Dialog::new("recolor", json!({}))), 1);
+        assert_eq!(next_seed(&Dialog::new("recolor", json!({"__seed": 4}))), 5);
+        assert_eq!(next_seed(&Dialog::new("recolor", json!({"__seed": 1e30}))), u64::MAX);
     }
 
     #[test]

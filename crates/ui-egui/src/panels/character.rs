@@ -450,10 +450,10 @@ impl Field {
 /// Type tool edits, the panel shows, nothing takes the focus and the command fails. → `{field}`.
 pub(crate) fn highlight(app: &mut VectorcraftApp, field: Field) -> Result<Value, String> {
     // `window.panel` would hide a floating panel in front of its window, or an open flyout.
-    if crate::panel_docking::showing(&app.ui, "character") {
+    if crate::panel_docking::visible(&app.ui, "character") {
         app.run("window.panel.activate", json!({"panel": "character"}))?;
     } else {
-        app.run("window.panel", json!({"panel": "character"}))?;
+        crate::panel_docking::reveal_panel(app, "character")?;
     }
     if text_style(app).is_none() {
         app.character_focus = None;

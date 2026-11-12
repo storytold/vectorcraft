@@ -1,5 +1,5 @@
 //! Document Info panel: the document's setup and what it contains (objects by kind, graphic
-//! styles, brushes, spot colors, objects painted with patterns and with gradients, symbols, fonts and their files,
+//! styles, brushes, objects painted with spot colors, with patterns and with gradients, symbols, fonts and their files,
 //! linked and embedded images, repeat objects), for the whole document or the selection only. The flyout picks one category (or all)
 //! and saves the text report (`docInfo.save`, the report File → Package writes too).
 
@@ -192,6 +192,7 @@ mod tests {
                 && menu_text.contains("Brushes")
                 && menu_text.contains("Repeat Objects")
                 && menu_text.contains("Gradient Objects")
+                && menu_text.contains("Spot Color Objects")
                 && menu_text.contains("Save…"),
             "{menu_text}"
         );
@@ -205,6 +206,17 @@ mod tests {
             show(app, ui);
         });
         assert!(gradients.contains("Gradient Objects (1)") && gradients.contains("Glow") && gradients.contains("Radial gradient"), "{gradients}");
+        // Spot Color Objects lists the objects painted with a spot color by name.
+        let spot = json!({"model": "cmyk", "c": 0.0, "m": 0.8, "y": 0.6, "k": 0.0});
+        app.session.execute("swatch.new", &json!({"name": "Signal Red", "color": spot, "spot": true})).unwrap();
+        let badge = app.session.execute("shape.ellipse", &json!({"x": 50, "y": 50, "width": 20, "height": 20})).unwrap()["id"].clone();
+        app.session.execute("paint.setFill", &json!({"ids": [badge], "swatch": "Signal Red"})).unwrap();
+        app.session.execute("layer.setProps", &json!({"id": badge, "name": "Badge"})).unwrap();
+        let spots = crate::tests_labels::painted_text(&mut app, |app, ui| {
+            set_pstate(ui.ctx(), "docinfo-category", "spotColors".to_string());
+            show(app, ui);
+        });
+        assert!(spots.contains("Spot Color Objects (1)") && spots.contains("Badge") && spots.contains("Signal Red"), "{spots}");
         let filtered = crate::tests_labels::painted_text(&mut app, |app, ui| {
             set_pstate(ui.ctx(), "docinfo-category", "fonts".to_string());
             show(app, ui);
@@ -222,6 +234,7 @@ mod tests {
         let report = String::from_utf8(written.borrow().clone()).unwrap();
         assert!(report.starts_with("Document Info: ") && report.contains("\nFONT DETAILS\n") && report.contains("\nREPEAT OBJECTS\n"), "{report}");
         assert!(report.contains("\nGRADIENT OBJECTS\nGlow: Radial gradient\n"), "{report}");
+        assert!(report.contains("\nSPOT COLOR OBJECTS\nBadge: Signal Red\n"), "{report}");
     }
 
     /// The report the panel menu's Save… writes with category `category` shown ("" for All

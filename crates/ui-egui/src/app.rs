@@ -89,6 +89,7 @@ impl VectorcraftApp {
                 selection_bounds: None,
                 content_bounds: None,
                 plugin_keys: Default::default(),
+                placed_keys: Default::default(),
                 cursors: Default::default(),
                 view_moved: None,
                 hover_cursor: None,
@@ -127,6 +128,7 @@ impl VectorcraftApp {
             updates_rt: Default::default(),
             frame_rate: Default::default(),
             canvas_rect: None,
+            canvas_ui_zoom: 1.0,
             control_rotate_press: None,
             hover_doc: None,
             titlebar_from_env: false,
@@ -600,6 +602,7 @@ impl VectorcraftApp {
         panels::library_panel::tidy(self);
         // The canvas and the panels: one docking layout. Tab hides the panels but not the canvas.
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| panel_docking::show(self, ui));
+        panels::learn::locate::tidy(self, &ctx);
         crate::doc_windows::show(self, &ctx);
         dialogs::show(self, &ctx);
         updates_ui::show(self, &ctx);

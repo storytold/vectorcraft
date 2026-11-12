@@ -212,11 +212,12 @@ impl Renderer {
             let tol = 2f64.powi(level);
             // Reach a pixel past the stroke, so its antialiased edge has colour under it.
             let slices = effects::stroke::gradient_slices(bp, rule, st, tol, f.px + tol, f.px);
+            let unrolled = g.unrolled();
             Arc::new(
                 slices
                     .into_iter()
                     .map(|s| {
-                        let (b, paint) = (s.shape.bounding_box(), s.paint(g));
+                        let (b, paint) = (s.shape.bounding_box(), s.paint(&unrolled));
                         (s.shape, paint, b)
                     })
                     .collect(),

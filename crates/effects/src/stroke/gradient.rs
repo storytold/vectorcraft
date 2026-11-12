@@ -32,6 +32,12 @@ const SHARP: f64 = 1.25;
 const HAIRPIN: f64 = 4.0;
 /// Rows of a mesh across the stroke (more where the gradient has stops).
 const MESH_ROWS: usize = 16;
+/// The most stops of the gradient [`gradient_meshes`] puts rows or columns at
+/// ([`Gradient::fitted`]: past it, the stops that change the colors least are left out).
+pub(crate) const MAX_MESH_STOPS: usize = 1024;
+/// The most points of one mesh [`gradient_meshes`] makes, unless a single pair of ribs needs more:
+/// a subpath with more ribs than leave room for a row at each stop becomes several meshes.
+pub(crate) const MAX_MESH_POINTS: usize = 1 << 20;
 /// The most of a subpath one column of a mesh along the stroke spans.
 const MESH_STEP: f64 = 1.0 / 32.0;
 /// The most of a subpath one slice spans while a width profile shapes the across gradient.
@@ -367,9 +373,12 @@ pub struct Slice {
 }
 
 impl Slice {
-    /// The slice's paint: its piece of `g` as a linear gradient placed from `from` to `to`.
-    pub fn paint(&self, g: &Gradient) -> Paint {
-        let gradient = g.span(self.span.0 as f32, self.span.1 as f32);
+    /// The slice's paint: its piece of `unrolled` as a linear gradient placed from `from` to `to`.
+    /// `unrolled` is the stroke's gradient as [`Gradient::unrolled`] gives it (unrolled once for
+    /// all the slices), so one that repeats or reflects runs its stops that many times along (or
+    /// across) the stroke.
+    pub fn paint(&self, unrolled: &Gradient) -> Paint {
+        let gradient = unrolled.span(self.span.0 as f32, self.span.1 as f32);
         let end = if self.from.distance(self.to) > 1e-9 { self.to } else { self.from + Vec2::new(1.0, 0.0) };
         let geom = GradientGeom { start: self.from, end, aspect: 1.0, focal: None };
         Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), angle: geom.angle_deg(), ..GradientPaint::new(gradient) }))
@@ -471,40 +480,72 @@ pub fn written_slices(bp: &BezPath, rule: FillRule, st: &StrokeLayer, outlines: 
         _ => vectorcraft_pathops::stroke_region(outlines).to_bezpath(),
     };
     let grow = if g.stops.iter().all(|s| s.opacity >= 1.0) { SLICE_GROW } else { 0.0 };
+    let unrolled = g.unrolled();
     let slices = gradient_slices(bp, rule, st, SLICE_TOL, SLICE_MARGIN, grow)
         .into_iter()
         .map(|s| {
-            let paint = s.paint(g);
+            let paint = s.paint(&unrolled);
             (s.shape, paint)
         })
         .collect();
     Some(WrittenSlices { clip, slices })
 }
 
+/// How far before and after a sharp step between two colors (two stops at one offset, as a
+/// gradient that repeats has where one run meets the next) [`mesh_marks`] puts a mesh row or
+/// column, as a fraction of the gradient's length.
+const STEP_GAP: f64 = 1e-4;
+
+/// Where along gradient `g` (0 to 1) Outline Stroke's mesh puts a row or column for its stops
+/// ([`Gradient::expanded_stops`]): at each stop, and for two stops at one offset (a sharp step,
+/// or where a reflecting gradient turns back) also [`STEP_GAP`] before and after it, so the mesh
+/// takes the color on each side.
+fn mesh_marks(g: &Gradient) -> Vec<f64> {
+    let offsets: Vec<f64> = g.expanded_stops().iter().map(|s| f64::from(s.0)).collect();
+    let shared = |i: usize| {
+        let t = offsets.get(i).copied().unwrap_or(0.0);
+        let near = |j: Option<usize>| j.and_then(|j| offsets.get(j)).is_some_and(|&u| (u - t).abs() < 1e-6);
+        near(i.checked_sub(1)) || near(i.checked_add(1))
+    };
+    let mut out = Vec::with_capacity(offsets.len() + 2);
+    for (i, &t) in offsets.iter().enumerate() {
+        out.push(t);
+        if shared(i) {
+            out.extend([(t - STEP_GAP).max(0.0), (t + STEP_GAP).min(1.0)]);
+        }
+    }
+    out
+}
+
 /// Outline Stroke of stroke `st` of `bp` (filled with `rule`) whose gradient `g` runs along or
 /// across it: a gradient mesh per subpath over all the stroke can paint there (clip it to the
-/// stroke's outline), coloured as [`gradient_slices`] paint it.
+/// stroke's outline), coloured as [`gradient_slices`] paint it. The gradient's stops are fitted to
+/// [`MAX_MESH_STOPS`], and a subpath whose mesh would hold more than [`MAX_MESH_POINTS`] points is
+/// split into meshes of fewer ribs ([`rib_pieces`]).
 pub fn gradient_meshes(bp: &BezPath, rule: FillRule, st: &StrokeLayer, g: &Gradient) -> Vec<GradientMesh> {
+    let fitted = g.fitted(MAX_MESH_STOPS);
     let across = st.gradient_mode == StrokeGradientMode::Across;
-    let color = |t: f64| g.sample_keep_model(t.clamp(0.0, 1.0) as f32);
     // Along: a column at each stop (colours are linear between columns), close enough to look smooth.
-    let marks: Vec<f64> = if across { vec![] } else { g.expanded_stops().iter().map(|s| s.0 as f64).collect() };
+    let marks: Vec<f64> = if across { vec![] } else { mesh_marks(&fitted) };
     let max_dt = match (across, st.profile.is_some()) {
         (false, _) => MESH_STEP,
         (true, true) => PROFILE_STEP,
         (true, false) => 1.0,
     };
     // Rows across: the strip's edges, then (across) the band's left edge to its right edge with a row at each stop.
-    let mut us: Vec<f64> = if across {
-        (0..=MESH_ROWS).map(|i| i as f64 / MESH_ROWS as f64).chain(g.expanded_stops().iter().map(|s| s.0 as f64)).collect()
-    } else {
-        vec![0.5]
-    };
+    let mut us: Vec<f64> = if across { (0..=MESH_ROWS).map(|i| i as f64 / MESH_ROWS as f64).chain(mesh_marks(&fitted)).collect() } else { vec![0.5] };
     us.sort_by(f64::total_cmp);
     us.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+    let us = &us;
+    let g = &*fitted;
+    let color = |t: f64| g.sample_keep_model(t.clamp(0.0, 1.0) as f32);
+    // A mesh is a point for each row (and its two edges) on each rib: a strip with more ribs than
+    // that leaves room for is split into meshes of fewer ribs.
+    let per_mesh = MAX_MESH_POINTS / (us.len() + 2);
     strips(bp, rule, st, SLICE_TOL, SLICE_MARGIN, &marks, max_dt)
         .into_iter()
         .filter(|ribs| ribs.len() > 1)
+        .flat_map(|ribs| rib_pieces(ribs.len(), per_mesh).into_iter().map(move |r| ribs.get(r).unwrap_or_default().to_vec()))
         .map(|ribs| {
             let (rows, cols) = (us.len() + 1, ribs.len() - 1);
             // Each level across: a point on each rib and the gradient position there.
@@ -540,4 +581,12 @@ pub fn gradient_meshes(bp: &BezPath, rule: FillRule, st: &StrokeLayer, g: &Gradi
             GradientMesh { rows: rows as u32, cols: cols as u32, points }
         })
         .collect()
+}
+
+/// The ribs (index ranges of `n`, at least two) of each mesh [`gradient_meshes`] makes of a strip:
+/// at most `per_mesh` ribs each (at least two), each starting on the last rib of the one before,
+/// so the meshes meet without a gap.
+pub(crate) fn rib_pieces(n: usize, per_mesh: usize) -> Vec<std::ops::Range<usize>> {
+    let per_mesh = per_mesh.max(2);
+    (0..n.saturating_sub(1)).step_by(per_mesh - 1).map(|start| start..(start + per_mesh).min(n)).collect()
 }

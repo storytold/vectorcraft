@@ -1335,6 +1335,7 @@ lighting	Light	Cahaya
 	Rotate View Tool	Alat putar tampilan
 	Trackpad Gesture to Rotate View	Putar tampilan dengan gestur trackpad
 	Hold a Tool Shortcut to Use the Tool Temporarily	Tahan pintasan alat untuk menggunakan alat itu sementara
+	Show Bounding Box While Moving and Drawing	Tampilkan kotak pembatas saat memindahkan dan menggambar
 	Rotate View	Putar tampilan
 	Rounded Rectangle Tool	Alat persegi panjang bulat
 	Scale Tool	Alat skala
@@ -1613,6 +1614,17 @@ digits	Malayalam	Malayalam
 	The selected character's font is not available.	Font karakter yang dipilih tidak tersedia.
 	No alternates for the selected character.	Tidak ada alternatif untuk karakter yang dipilih.
 	Double-click to replace	Klik ganda untuk mengganti
+	Select one character with the Type tool first.	Pilih satu karakter dengan alat teks terlebih dahulu.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} adalah glif {font}, bukan dari font yang dipakai teks terpilih ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} milik {base} (U+{base_code}) {place}; pilihan Anda adalah {sel} (U+{code}).
+	at the start of a word	di awal kata
+	in the middle of a word	di tengah kata
+	at the end of a word	di akhir kata
+	standing alone	saat berdiri sendiri
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} bukan alternatif {sel} (U+{code}) sebagaimana posisinya di dalam katanya.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Klik ganda untuk menyisipkan {base} (U+{code}) sebagai gantinya: bentuk presentasi tidak menyambung, hurufnya menyambung.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) disisipkan sebagai ganti bentuk presentasi: font menyambungkannya ke huruf di sebelahnya menurut posisi.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Tidak ada fitur OpenType yang menggambar glif ini di sini, jadi glif ini menggantikan glif karakter dan mungkin tidak menyambung dengan karakter di sebelahnya.
 	Double-click to insert	Klik ganda untuk menyisipkan
 	Entire Font	Seluruh font
 	glyph {id}	glif {id}
@@ -1694,6 +1706,8 @@ digits	Malayalam	Malayalam
 	Save Image Trace Preset	Simpan preset telusur gambar
 	Delete Image Trace Preset	Hapus preset telusur gambar
 	Method:	Metode:
+	Pad	Perpanjang
+	Repeats	Jumlah ulangan
 	Mode:	Mode:
 	Noise	Derau
 	Create:	Buat:
@@ -1826,6 +1840,7 @@ digits	Malayalam	Malayalam
 	Right-to-Left Paragraph Direction	Arah paragraf kanan ke kiri
 	Roman Hanging Punctuation	Tanda baca gantung Romawi
 	Korean Line Break Anywhere	Putus baris Korea di mana saja
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Pengaturan komposisi Asia Timur
 	Korean Composition Settings	Pengaturan komposisi Korea
 	Select a text object to edit its paragraph attributes.	Pilih objek teks untuk mengedit atribut paragrafnya.
@@ -2898,6 +2913,7 @@ antiAlias	Sharp	Tajam
 	Hide Code	Sembunyikan kode
 	Images:	Gambar:
 	Include Metadata	Sertakan metadata
+	Include Variable Data	Sertakan data variabel
 	Internal CSS	CSS internal
 	Layer Names	Nama lapisan
 	Minify	Minify
@@ -3331,6 +3347,7 @@ theme	Appearance	Tampilan
 	Move Mesh Points	Pindahkan titik-titik mesh
 	Move Spine Point	Pindahkan titik spine
 	Reshape Spine Segment	Bentuk ulang segmen spine
+	Blend Easing	Easing blend
 	Reset with Mesh	Atur ulang dengan mesh
 	Reset with Warp	Atur ulang dengan warp
 	Set Mesh Point Color	Tetapkan warna titik mesh
@@ -3656,6 +3673,10 @@ theme	Appearance	Tampilan
 	Add to Profiles	Tambahkan ke profil
 	Delete Profile	Hapus profil
 	Reset Profiles	Atur ulang profil
+	Arrowheads	Mata panah
+	Edit Arrowheads	Edit mata panah
+	Edit Arrowheads…	Edit mata panah…
+	Reload Arrowheads	Muat ulang mata panah
 	Stroke Options	Opsi goresan
 	Width Profiles	Profil lebar
 	Apply Graphic Style	Terapkan gaya grafis
@@ -3687,6 +3708,9 @@ theme	Appearance	Tampilan
 	Select All Unused	Pilih semua yang tidak digunakan
 	Sort by Kind	Urutkan berdasarkan jenis
 	Sort by Name	Urutkan berdasarkan nama
+	Spot Color Objects	Objek dengan Warna Spot
+	Pattern Objects	Objek dengan Pola
+	Gradient Objects	Objek dengan Gradien
 	Spot Colors	Warna spot
 	Spot Colors (0)	Warna spot (0)
 	Swatch Options	Opsi sampel
@@ -4361,6 +4385,7 @@ imageTrace	Outline	Kontur
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` bukan warna seperti "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maksimal {MAX_TABLE} warna
 @msg	command `{0}` is not available right now: {1}	perintah `{0}` tidak tersedia saat ini: {1}
+@msg	command `{id}` is not available right now	perintah `{id}` tidak tersedia saat ini
 @msg	compound paths can only contain paths	jalur majemuk hanya dapat berisi jalur
 @msg	compressed (RLE) bitmaps can't be read yet	bitmap terkompresi (RLE) belum dapat dibaca
 @msg	damaged	rusak
@@ -5517,6 +5542,8 @@ mark-style	Japanese	Jepang
 @msg	the Color Picker is not open	Pemilih Warna tidak terbuka
 @msg	the screen color sampler is already open	pengambil warna layar sudah terbuka
 @msg	this system has no screen color sampler	sistem ini tidak memiliki pengambil warna layar
+@msg	the screen color sampler did not answer	pengambil warna layar tidak merespons
+@msg	the screen color sampler failed	pengambil warna layar gagal
 swatch	[None]	[Tidak ada]
 swatch	[Registration]	[Registrasi]
 swatch	White	Putih
@@ -6068,6 +6095,11 @@ axis	Y Axis	Sumbu Y
 	User Brush Library 9	Pustaka kuas pengguna 9
 	User Brush Library 10	Pustaka kuas pengguna 10
 	Art Ribbons	Pita seni
+	Ink and Wash	Tinta dan sapuan
+	Tapered Ink	Tinta meruncing
+	Brush Pen	Pena kuas
+	Soft Wash	Sapuan lembut
+	Pooling Wash	Sapuan menggenang
 	Zigzag	Zigzag
 	Burst Ray	Sinar ledakan
 	Dash Trail	Jejak putus-putus
@@ -6688,6 +6720,8 @@ breakText	Glyphs	Glif
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutorial praktik singkat untuk alat-alat utama, dikelompokkan menurut keterampilan. Pilih keterampilan untuk melihat tutorialnya.
 	List Tutorials	Daftar tutorial
 	Show Tutorial	Tampilkan tutorial
+	Show Tool Location	Tampilkan lokasi alat
+	Show where this tool is	Tampilkan letak alat ini
 @msg	missing `tutorial` (see learn.list)	`tutorial` tidak ada (lihat learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial `{id}` tidak dikenal (lihat learn.list)
 
@@ -6700,4 +6734,9 @@ breakText	Glyphs	Glif
 	Stencil Bridges…	Jembatan Stensil…
 	Stencil Bridges	Jembatan Stensil
 	Shortest Crossing	Persilangan terpendek
+	Weed Box and Lines…	Kotak dan garis pembersih sisa…
+	Weed Box and Lines	Kotak dan garis pembersih sisa
+	Margin	Margin
+	Box	Kotak
+	Swatch	Sampel warna
 	Direction	Arah

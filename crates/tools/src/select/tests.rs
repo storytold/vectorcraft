@@ -716,8 +716,10 @@ fn drag_moves_with_single_undo() {
     let cx = cx(&d, &s, &p);
     let mut t = SelectionTool::default();
     assert!(t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0)).is_empty());
+    assert!(!t.moving(), "a press is not a move yet");
     let a = t.pointer(&cx, &ev(PointerKind::Drag, 160.0, 150.0));
     assert_eq!(a[0], Action::Begin("Move".into()));
+    assert!(t.moving());
     assert!(matches!(&a[1], Action::Preview(c, v) if c == "object.transform" && v["matrix"][4] == 10.0));
     let a = t.pointer(&cx, &ev(PointerKind::Up, 160.0, 150.0));
     assert_eq!(a, vec![Action::Commit]);
@@ -737,9 +739,10 @@ fn escape_cancels_a_move_or_an_alt_drag_copy() {
         t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0).with_mods(m));
         let a = t.pointer(&cx, &ev(PointerKind::Drag, 160.0, 150.0).with_mods(m));
         assert!(matches!(&a[1], Action::Preview(_, v) if v["copy"] == m.alt), "{what}: {a:?}");
-        assert!(t.transforming(), "{what}");
+        // A move or a copy, which the canvas can show the bounding box for.
+        assert!(t.transforming() && t.moving() && !t.resizing(), "{what}");
         assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{what}: Escape cancels the drag");
-        assert!(!t.busy() && !t.transforming(), "{what}");
+        assert!(!t.busy() && !t.transforming() && !t.moving(), "{what}");
         assert!(t.overlays(&cx).iter().all(|o| !matches!(o, Overlay::Measure { .. })), "{what}: no readout stays");
         assert!(t.pointer(&cx, &ev(PointerKind::Drag, 170.0, 150.0).with_mods(m)).is_empty(), "{what}: the drag is over");
         assert!(t.pointer(&cx, &ev(PointerKind::Up, 170.0, 150.0).with_mods(m)).is_empty(), "{what}: the release commits nothing");
