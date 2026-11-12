@@ -515,7 +515,7 @@ fn the_document_info_report_has_every_category() {
         "OBJECTS",
         "GRAPHIC STYLES",
         "BRUSHES",
-        "SPOT COLORS",
+        "SPOT COLOR OBJECTS",
         "PATTERN OBJECTS",
         "GRADIENT OBJECTS",
         "SYMBOLS",

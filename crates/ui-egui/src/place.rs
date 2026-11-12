@@ -451,7 +451,7 @@ impl VectorcraftApp {
         let at = match pos {
             _ if io::opens_as(name).is_some() || fileio::opens_with_importer(name) => return DropTarget::Open,
             Some(p) if !rect.contains(p) => return DropTarget::Open,
-            Some(p) => crate::canvas::Xf::new(rect, v).to_doc(p),
+            Some(p) => crate::canvas::Xf::at(rect, v, self.canvas_ui_zoom).to_doc(p),
             None if is_document(name) => return DropTarget::Open,
             None => v.center,
         };

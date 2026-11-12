@@ -74,8 +74,8 @@
 //! * A `<g id>` layer (top-level, or inside one) that isn't displayed (`display: none`) comes back
 //!   as a hidden layer; other undisplayed objects as hidden objects, unless a `<use>` refers to
 //!   them.
-//! * `spreadMethod` reflect and repeat are expanded into stops over the painted area (at most
-//!   64 periods).
+//! * `spreadMethod` reflect and repeat become the gradient's spread, Reflect or Repeat, its stops
+//!   running once along the vector.
 //! * `<image>` files are read through [`ImportOptions`]: rasters stay linked, SVG files (and SVG
 //!   `data:` URLs) become art (without their text), missing ones a placeholder keeping the link.
 //! * Text lines after the first start at the first line's x; absolute positions inside type on a

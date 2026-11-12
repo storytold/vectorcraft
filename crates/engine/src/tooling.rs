@@ -1164,8 +1164,11 @@ impl Session {
             let place = w.show.then_some(WidgetPlace { screen: view.screen.as_ref(), corner: w.position });
             v.splice(0..0, vectorcraft_tools::distort::perspective::grid_overlays_in(&d.doc, 1.0 / view.zoom.max(1e-9), place));
         }
-        // Global Edit: the objects edited with the selected one are highlighted.
-        for (path, color) in crate::cmd::globaledit::highlights(self) {
+        // Global Edit: the objects edited with the selected one are highlighted; before it starts,
+        // with the Selection tool, the objects it would take.
+        let ge_on = self.active().is_some_and(|d| d.global_edit.is_some());
+        let shown = if ge_on || self.tool.id() == "selection" { crate::cmd::globaledit::highlights(self) } else { vec![] };
+        for (path, color) in shown {
             v.push(Overlay::Path { path, color, width: 1.0, dashed: false });
         }
         if let Some((cmd, p)) = deferred_preview {

@@ -40,8 +40,9 @@ pub(in crate::ai_editing) fn style_links(doc: &Document) -> usize {
 }
 
 /// The objects of `doc`'s layers that may be written with an art style ([`Writer::styled_object`]),
-/// by id: paths and compound paths with points and groups, with live effects or linked to a graphic
-/// style, without Opacity & Mask Define Knockout Shape (the reader takes an object's transparency
+/// by id: paths and compound paths with points and groups, with live effects, linked to a graphic
+/// style or (paths and compound paths) with a brush on a stroke, without Opacity & Mask Define
+/// Knockout Shape (the reader takes an object's transparency
 /// from its look, which doesn't carry it). A group's members are paths, compound paths or such
 /// groups, none with effects or anything baking changes.
 pub(in crate::ai_editing) fn styled_objects(doc: &Document) -> HashMap<NodeId, Arc<Node>> {
@@ -76,7 +77,8 @@ fn bakes_members(n: &Node) -> bool {
 
 /// Whether `n` may be written with an art style ([`styled_objects`]).
 fn candidate(n: &Node) -> bool {
-    let styled = !n.appearance.effects.is_empty() || n.extras().graphic_style.is_some();
+    let brushed = brushed(n) && matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
+    let styled = !n.appearance.effects.is_empty() || n.extras().graphic_style.is_some() || brushed;
     if !styled || n.knockout_shape {
         return false;
     }
@@ -86,6 +88,12 @@ fn candidate(n: &Node) -> bool {
         NodeKind::Group { children, clip: false } => !n.is_compound_shape() && children.iter().all(|c| plain_member(c)),
         _ => false,
     }
+}
+
+/// Does `n` have a stroke with a brush that paints, one that its art style holds ([`Writer::style_text`]
+/// leaves out what paints nothing)?
+fn brushed(n: &Node) -> bool {
+    n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.brush.is_some() && !s.paint.is_none()))
 }
 
 /// Does `path` write anything ([`Writer::plain_object`] skips subpaths without points)?
@@ -144,7 +152,7 @@ impl Styles {
 }
 
 /// One style as the reader's section holds it: `/KnownStyle :`, `(name) /Name ,`, its text.
-fn known_style(name: &str, text: &str) -> String {
+pub(super) fn known_style(name: &str, text: &str) -> String {
     format!("/KnownStyle :\n{} /Name ,\n{text}", ps::bytes(name.as_bytes()))
 }
 
@@ -172,7 +180,7 @@ const NO_LINE: &str = "0 J 0 j 1 w 10 M []0 d\n";
 
 /// A basic filter's start: its name and kind numbers (`1 0` for an effect, `0 0` for the
 /// style's own filters), `/Visible` and the dictionary's start.
-fn basic(s: &mut String, name: &str, effect: bool, visible: bool) {
+pub(super) fn basic(s: &mut String, name: &str, effect: bool, visible: bool) {
     let _ = write!(s, "/BasicFilter :\n{} {} 0 /Filter ,\n{} /Visible ,\n", ps::bytes(name.as_bytes()), u8::from(effect), u8::from(visible));
 }
 
@@ -180,7 +188,7 @@ fn basic(s: &mut String, name: &str, effect: bool, visible: bool) {
 const CONDUIT: &str = "/BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n";
 
 /// A basic filter's end.
-const END_BASIC: &str = "; /Dict ;\n /Part ,\n";
+pub(super) const END_BASIC: &str = "; /Dict ;\n /Part ,\n";
 
 /// The blend filter of transparency `xy`.
 fn blend_filter(s: &mut String, xy: Xy) {
@@ -228,7 +236,7 @@ fn flag(p: &Value, key: &str) -> Option<bool> {
 
 impl Writer<'_> {
     /// What `paint` writes with [`Self::color`] (a color, a spot or global color), as a string.
-    fn color_ops(&mut self, paint: &Paint, stroke: bool) -> String {
+    pub(super) fn color_ops(&mut self, paint: &Paint, stroke: bool) -> String {
         let saved = std::mem::take(&mut self.body);
         self.color(paint, stroke);
         std::mem::replace(&mut self.body, saved)
@@ -267,9 +275,12 @@ impl Writer<'_> {
     }
 
     /// A stroke's basic filter: a color, its line style, and its width profile as the arrays
-    /// `BSVariableWidthTValuesArray`, `BSLeftWidthsArray` and `BSRightWidthsArray`. `None` for
-    /// other paint.
+    /// `BSVariableWidthTValuesArray`, `BSLeftWidthsArray` and `BSRightWidthsArray`; a stroke with a
+    /// brush, the brush's filter ([`Self::brush_filter`]). `None` for other paint.
     fn stroke_filter(&mut self, s: &mut String, st: &StrokeLayer, visible: bool) -> Option<()> {
+        if st.brush.is_some() {
+            return self.brush_filter(s, st, visible);
+        }
         if !matches!(st.paint, Paint::Solid { .. }) || st.overprint {
             return None;
         }
@@ -652,17 +663,19 @@ impl Writer<'_> {
             && let Some(text) = self.styles.known.iter().find(|(n, _)| *n == name).map(|(_, t)| t.clone())
             && object_reads(orig, &text)
         {
-            self.styles.links_written += 1;
             return Some(name);
         }
-        if orig.appearance.effects.is_empty() || !own_style_holds(&orig.appearance) {
+        let brushed = brushed(orig);
+        if (orig.appearance.effects.is_empty() && !brushed) || !own_style_holds(&orig.appearance) {
             return None;
         }
         let graded = orig.appearance.items.iter().any(|i| matches!(i.paint(), Paint::Gradient(_)));
         let saved = (graded.then(|| self.gradient_mark()), self.warnings.len());
         let path = drawn_outline(n, orig);
         let rule = object_rule(orig);
-        let text = self.style_text(&orig.appearance, Xy::of(orig), path.as_ref().map(|p| (p, rule))).filter(|t| object_reads(orig, t));
+        let text = self
+            .style_text(&orig.appearance, Xy::of(orig), path.as_ref().map(|p| (p, rule)))
+            .filter(|t| object_reads(orig, t) && (!brushed || self.brushed_style_reads(t)));
         let Some(text) = text else {
             if let Some(mark) = saved.0 {
                 self.gradient_rollback(mark);
@@ -693,7 +706,8 @@ impl Writer<'_> {
     /// compound path's points painted with nothing, or with its gradient fill when its style has
     /// one; a group with its members), its name and opacity mask; then `1 (name) XW`.
     /// The look's group and the object itself are counted first ([`Self::take_objects`]): without
-    /// room for them, nothing is written.
+    /// room for them, nothing is written, and the object counts neither as written with its graphic
+    /// style nor as written with a brush on its stroke.
     pub(super) fn styled_object(&mut self, n: &Node, orig: &Node, name: &str) {
         let own = match &orig.kind {
             NodeKind::Path { path, .. } => super::object_count(path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).count()),
@@ -703,6 +717,12 @@ impl Writer<'_> {
         };
         if !self.take_objects(1 + own) {
             return;
+        }
+        let linked = orig.extras().graphic_style.and_then(|id| self.styles.panel.get(&id)).is_some_and(|p| p == name);
+        if linked {
+            self.styles.links_written += 1;
+        } else if brushed(orig) {
+            self.brush_set.live_written += 1;
         }
         self.state(orig.locked, !orig.visible);
         let xy = Xy::of(orig);
@@ -834,8 +854,12 @@ fn own_style_holds(ap: &Appearance) -> bool {
     ap.items.iter().filter(|i| !i.paint().is_none()).all(plain) && !ap.effects.iter().any(panel_only)
 }
 
-/// Does the reader read graphic style `g` from style text `text` as it is?
+/// Does the reader read graphic style `g` from style text `text` as it is? It leaves out a graphic
+/// style with a brush on a stroke that paints.
 fn panel_reads(g: &GraphicStyle, text: &str) -> bool {
+    if g.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.brush.is_some() && !s.paint.is_none())) {
+        return false;
+    }
     let section = known_style("x", text);
     let Some(read) = crate::import::read_art_style(section.as_bytes(), "x", None) else { return false };
     // The opacity within the written number's precision.
@@ -918,7 +942,7 @@ fn normalized_params(e: &Effect) -> Value {
 const NEAR: f64 = 6e-3;
 
 /// JSON values equal but for numbers within the written numbers' precision.
-fn near(a: &Value, b: &Value) -> bool {
+pub(super) fn near(a: &Value, b: &Value) -> bool {
     match (a, b) {
         (Value::Number(x), Value::Number(y)) => match (x.as_f64(), y.as_f64()) {
             (Some(x), Some(y)) => (x - y).abs() <= NEAR,

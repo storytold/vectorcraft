@@ -111,7 +111,7 @@ pub(super) fn gradient_chip_colors(gp: &vectorcraft_color::GradientPaint, width:
     }
     (0..n)
         .map(|k| {
-            let t = geom.param_at(gp.gradient.kind, at(k)).clamp(0.0, 1.0) as f32;
+            let t = gp.gradient.spread_param(geom.param_at(gp.gradient.kind, at(k))).clamp(0.0, 1.0) as f32;
             rgba(gp.gradient.sample(t))
         })
         .collect()

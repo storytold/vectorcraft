@@ -122,8 +122,8 @@ pub use craft_ui::docking::Monitor as DockMonitor;
 #[cfg(test)]
 pub(crate) use services::browsable_url;
 pub use services::{
-    DownloadFn, ExistsFn, FileFilter, FilePick, Inbox, NativeInputHook, OpenUrlFn, PickOpen, PickSave, PickedInbox, ReadFn, RevealFn, Services,
-    WriteFn,
+    DownloadFn, ExistsFn, FileFilter, FilePick, Inbox, NativeInputHook, OpenUrlFn, PickOpen, PickSave, PickedInbox, ReadFn, RevealFn, SaveStreamFn,
+    SaveWriteFn, Services, WriteFn,
 };
 use state::{GeometryStamp, InputGeneration, PendingScreenshot, QueuedScreenshot};
 pub(crate) use state::{InputFrame, take_frame_once};
@@ -197,6 +197,10 @@ pub struct VectorcraftApp {
     frame_rate: frame_rate::FrameRate,
     /// Canvas rect of the last frame (screen points), for control-channel coordinate mapping.
     pub canvas_rect: Option<egui::Rect>,
+    /// The UI zoom (egui's zoom factor, set by Preferences › User Interface › UI Scaling) of the
+    /// frame that laid out [`Self::canvas_rect`]; 1.0 before the first one. [`Self::canvas_xf`]
+    /// maps the document to that rect with it.
+    pub(crate) canvas_ui_zoom: f32,
     /// An unfinished control-channel Rotate View gesture, kept only for this app instance.
     pub(crate) control_rotate_press: Option<control::RotateViewPress>,
     /// Hover position in document coordinates.
