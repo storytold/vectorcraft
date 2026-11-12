@@ -241,6 +241,23 @@ fn a_shadow_before_a_transform_follows_it_into_3d_art() {
     }
 }
 
+/// An object's Transform effect transforms the raster effects of its fills when only a fill has a
+/// 3D effect: the shadow after that fill's 3D effect and another fill's shadow, as it does without
+/// the 3D effect.
+#[test]
+fn an_objects_transform_moves_its_fills_shadows_beside_a_fills_3d_effect() {
+    for three_d in [crate::EXTRUDE, crate::REVOLVE] {
+        let art = |n: &Node| if three_d == crate::EXTRUDE { crate::solid_art(n) } else { crate::revolve_art(n) };
+        let mut n = fill_square(18, vec![fx(three_d, json!({})), shadow(10.0, 10.0, 0.0)]);
+        let mut other = n.appearance.items[0].clone();
+        *other.effects_mut() = vec![shadow(10.0, 10.0, 0.0)];
+        n.appearance.items.push(other);
+        n.appearance.effects = vec![transform(json!({"scaleH": 200, "scaleV": 100}))];
+        let drawn = shadows_in(&art(&n).unwrap());
+        assert!(drawn.len() > 1 && near(&drawn, &vec![(20.0, 10.0); drawn.len()]), "{three_d}: {drawn:?}");
+    }
+}
+
 #[test]
 fn glows_blurs_and_feathers_scale_with_the_transform_after_them() {
     let effects = [

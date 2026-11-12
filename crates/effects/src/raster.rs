@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::color::{BlendMode, Color};
 use vectorcraft_doc::rastersettings::MAX_ADD_AROUND;
-use vectorcraft_doc::{Effect, Node, RasterColorModel, RasterEffectsSettings};
+use vectorcraft_doc::{AppearanceItem, Effect, Node, RasterColorModel, RasterEffectsSettings};
 
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
@@ -551,6 +551,16 @@ fn follow_items_by(n: &mut Node, a: Affine) -> bool {
         changed |= follow_contents(item.effects_mut(), a, Affine::IDENTITY);
     }
     changed
+}
+
+/// Make the raster effects of `items`, the fills and strokes of an object whose own effects are
+/// `owner`, follow the Transform effects of `owner` ([`follow_contents`]): for art that applies
+/// those effects to the object's path and draws each fill and stroke on it as a node of its own.
+pub(crate) fn follow_paints(items: &mut [AppearanceItem], owner: &[Effect]) {
+    let Some(a) = contents_step(owner) else { return };
+    for item in items {
+        follow_contents(item.effects_mut(), a, Affine::IDENTITY);
+    }
 }
 
 /// `effects`, those of a fill or stroke of an object whose own effects are `owner`, with each
