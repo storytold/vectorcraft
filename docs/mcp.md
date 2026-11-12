@@ -8359,6 +8359,18 @@ than the end. With Alt (Option on macOS) held, the objects spread from both ends
 open path, or of the first anchor of a closed path, up to the whole path. With measurement labels on, the distance
 between the objects shows next to the pointer in the document's units. Escape cancels the drag.
 
+When the objects have room to move along the path, the same tools show the Move All widget, a diamond below the
+group's first object joined by a line to its attachment point. On an open path that is when the distance from the first
+object to the last is shorter than the path: one object, or a Space value that leaves part of the path free, but not
+Auto from the first anchor, which spreads the objects to both ends. On a closed path the widget always shows. Dragging
+it moves every object along the path as far as the pointer moves along the path, keeping the distances between them,
+and previews `object.objectsOnPath.options {ids: [group], start}` and keeps it as one undo step on release. On an open
+path the objects stop where the first one reaches the first anchor or the last one reaches the end, and moving the
+pointer back moves them back at once; on a closed path they go on round across the first anchor. Where Auto or a Space
+value the open path is too short for sets the distance, the drag also sets `spacing` to the distance as drawn, so the
+objects stay that far apart. Shift and Alt do not change the drag. With measurement labels on, the first object's
+distance along the path shows next to the pointer in the document's units. Escape cancels the drag.
+
 ```json
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"objectsOnPath","values":{"pivot":7,"rotate":30}}}}
 {"name":"run_command","arguments":{"command":"object.objectsOnPath.attach","params":{"path":30,"ids":[12,15,18]}}}
