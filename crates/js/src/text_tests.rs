@@ -357,6 +357,7 @@ fn a_converted_rope_counts_what_it_holds_while_its_copy_is_made() {
         "+({ valueOf: mk })",
         "({})[{ toString: mk }]",
         "({ valueOf: mk }) == 1",
+        "++({ get x() { return mk(); } }).x",
         "JSON.stringify(0, null, (function () { var o = new String(''); o.toString = mk; return o; })())",
     ]
     .into_iter()

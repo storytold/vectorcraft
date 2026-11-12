@@ -2626,8 +2626,7 @@ impl Interp {
             Value::String(s) => string_to_number(&flat_charged(self, s)?),
             Value::Object(_) => {
                 let p = self.to_primitive(v, Hint::Number)?;
-                // Rooted, so what a string holds is still counted while its copy is reserved.
-                return self.rooted(std::slice::from_ref(&p), |i| i.to_number(&p));
+                return self.to_number(&p);
             }
         })
     }
@@ -2662,19 +2661,19 @@ impl Interp {
             Value::Number(n) if *n >= 0.0 && *n < 4_294_967_295.0 && n.fract() == 0.0 => Ok(index_key(*n as u32)),
             _ => {
                 let s = self.to_str(v)?;
-                // Rooted, so what the string holds is still counted while its copy is reserved.
-                self.rooted(&[Value::String(s.clone())], |i| i.flat_reserved(&s))
+                self.flat_reserved(&s)
             }
         }
     }
 
     /// The code units of `s`. Flattening a rope makes a copy of its units, so for a rope that
-    /// copy's bytes are reserved and added to the heap first, without taking fuel. Everything
-    /// the caller still needs must be reachable from the roots.
+    /// copy's bytes are reserved and added to the heap first, without taking fuel. The rope stays
+    /// rooted while the copy is reserved; everything else the caller still needs must be
+    /// reachable from the roots.
     fn flat_reserved(&mut self, s: &Str) -> JsResult<Key> {
         if s.is_rope() {
             let bytes = string_bytes(s.len());
-            self.reserve_heap(bytes)?;
+            self.rooted(&[Value::String(s.clone())], |i| i.reserve_heap(bytes))?;
             self.heap.bytes = self.heap.bytes.saturating_add(bytes);
         }
         Ok(s.flat())
@@ -2832,9 +2831,7 @@ impl Interp {
                 | (Value::Bool(_), Value::Bool(_))
                 | (Value::Object(_), Value::Object(_)) => return Ok(strict_eq(&x, &y)),
                 (Value::Number(n), Value::String(s)) | (Value::String(s), Value::Number(n)) => {
-                    // Rooted, so what the string holds is still counted while its copy is reserved.
-                    let units = self.rooted(&[x.clone(), y.clone()], |i| flat_charged(i, s))?;
-                    return Ok(*n == string_to_number(&units));
+                    return Ok(*n == string_to_number(&flat_charged(self, s)?));
                 }
                 (Value::Bool(v), _) => x = Value::Number(f64::from(u8::from(*v))),
                 (_, Value::Bool(v)) => y = Value::Number(f64::from(u8::from(*v))),
