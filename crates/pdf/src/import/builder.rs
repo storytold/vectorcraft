@@ -398,8 +398,10 @@ impl<'p> Builder<'p> {
                 outlined = true;
                 for g in glyphs {
                     // Glyphs the file fills one by one composite where they overlap: only opaque
-                    // ones, drawn alike down to the stroke, share a path.
+                    // ones, drawn alike down to the stroke, and not under a soft mask (which
+                    // would be applied once to all of them), share a path.
                     let same = g.opacity >= 0.999
+                        && self.mask.is_none()
                         && self.glyphs.as_ref().is_some_and(|r| {
                             r.paint == g.paint
                                 && r.opacity == g.opacity
