@@ -2109,7 +2109,7 @@ fn empty_artboard_checks_match_the_visual_bounds_on_varied_strokes() {
                 st.cap = [LineCap::Butt, LineCap::Round, LineCap::Square][next(3) as usize];
                 st.align = [StrokeAlign::Center, StrokeAlign::Inside, StrokeAlign::Outside][next(3) as usize];
                 st.miter_limit = 1.0 + next(20) as f64;
-                let mut head = || (next(3) == 0).then(|| Arrowhead::ALL[next(Arrowhead::ALL.len() as u64) as usize]);
+                let mut head = || (next(3) == 0).then(|| Arrowhead::ALL[next(Arrowhead::ALL.len() as u64) as usize].clone());
                 (st.start_arrow, st.end_arrow) = (head(), head());
                 st.arrow_scale = (50.0 + next(250) as f64, 50.0 + next(250) as f64);
                 if next(3) == 0 {

@@ -386,7 +386,10 @@ type Colours = Vec<[u8; 3]>;
 
 /// The colours to trace: those the caller named (white is skipped when it is its own class;
 /// colours closer than [`SAME_COLOUR`] count as one; at most [`MAX_COLOURS`]) or the ones found,
-/// the tones of one colour folded into it ([`fold_tones`]); and with them the colours before folding.
+/// the tones of one colour folded into it ([`fold_tones`]); and with them the image's own colors
+/// before folding. With named colors, the image's own colors are found the same way as when none are
+/// named, and as many are looked for as are named, with white, or as the Colors setting gives,
+/// whichever is more.
 fn choose_palette(params: &TraceParams, pix: &[Px], w: usize, h: usize) -> Result<(Colours, Colours), TraceError> {
     if params.logo_colors.is_empty() {
         let found = auto_palette(pix, w, h, (params.colors as usize).clamp(2, MAX_COLOURS));
@@ -401,7 +404,12 @@ fn choose_palette(params: &TraceParams, pix: &[Px], w: usize, h: usize) -> Resul
             palette.push(c);
         }
     }
-    Ok((palette.clone(), palette))
+    if palette.is_empty() {
+        return Ok((palette, Vec::new()));
+    }
+    // (One more than named: white takes a slot while the colors are found, and is left out after.)
+    let tones = auto_palette(pix, w, h, (palette.len() + 1).max(params.colors as usize).clamp(2, MAX_COLOURS + 1));
+    Ok((palette, tones))
 }
 
 /// Trace a flat-colour logo.
@@ -411,8 +419,9 @@ pub(crate) fn trace_logo(img: &Raster, params: &TraceParams, max_anchors: usize)
         return Ok(TraceResult::default());
     }
     let (mut pix, mut w, mut h, mut factor) = working_copy(img, 1);
-    // (`tones`: the colours as found, each tone of an unevenly lit colour on its own. Whether the
-    // image is flat art is asked of them: a paper's tones are flat colour too.)
+    // (`tones`: the image's own colors as found, each tone of an unevenly lit colour on its own,
+    // also when colors are named. Whether the image is flat art is asked of them: a paper's tones
+    // are flat colour too, and how far the named colors are from the image's does not change the answer.)
     let (mut palette, tones) = choose_palette(params, &pix, w, h)?;
     if palette.is_empty() {
         return Ok(TraceResult::default());

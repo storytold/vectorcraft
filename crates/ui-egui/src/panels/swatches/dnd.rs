@@ -59,9 +59,10 @@ pub(super) enum Drop {
     /// `target` of its kind (neither None, Registration nor a tint swatch; see [`replaces`]), it
     /// gives that swatch its paint instead of moving.
     Move { names: Vec<String>, target: Option<String>, after: bool, with: Option<String> },
-    /// A paint from elsewhere (a Fill/Stroke proxy, the Gradient panel's thumbnail) dropped on row
-    /// `target` (or between rows) becomes a swatch; with Alt held (`replace`) it replaces swatch
-    /// `target` when that is of its kind and not a tint swatch.
+    /// A paint from elsewhere (a Fill/Stroke proxy, a Recent Colors chip, the Gradient panel's
+    /// thumbnail) dropped on row `target` (or between rows) becomes a swatch; with Alt held
+    /// (`replace`) it replaces swatch `target` when that is of its kind and neither Registration
+    /// nor a tint swatch.
     New { paint: Paint, target: Option<String>, replace: bool },
     /// Art dragged off the canvas becomes a pattern swatch made of a copy of it (the art stays).
     Pattern { ids: Vec<u64> },
@@ -259,7 +260,9 @@ pub(super) fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
             None => return,
         },
         // Alt: an edited gradient (or colour) replaces the swatch it is dropped on.
-        Drop::New { paint, target: Some(t), replace: true } if d.swatch(&t).is_some_and(|w| w.tint_of().is_none() && same_kind(&w.paint, &paint)) => {
+        Drop::New { paint, target: Some(t), replace: true }
+            if d.swatch(&t).is_some_and(|w| !w.is_reserved() && w.tint_of().is_none() && same_kind(&w.paint, &paint)) =>
+        {
             ("swatch.edit", json!({"name": t, "paint": crate::panels::swatch_paint_params(&paint)}))
         }
         Drop::New { paint, target, .. } => {
@@ -279,9 +282,9 @@ pub(super) fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
 }
 
 /// While a panel drags something onto art, a chip follows the pointer: the dragged paint (swatches,
-/// a Fill/Stroke proxy, the Gradient panel's thumbnail), the fill of the object whose appearance
-/// the Appearance panel's thumbnail carries (or of the first art dragged off the canvas), or the
-/// thumbnail of a dragged graphic style.
+/// a Fill/Stroke proxy, a Recent Colors chip, the Gradient panel's thumbnail), the fill of the
+/// object whose appearance the Appearance panel's thumbnail carries (or of the first art dragged
+/// off the canvas), or the thumbnail of a dragged graphic style.
 pub(crate) fn drag_preview(app: &VectorcraftApp, ctx: &egui::Context) {
     let Some(d) = egui::DragAndDrop::payload::<PanelDrag>(ctx) else { return };
     let fill_of = |id: &vectorcraft_doc::NodeId| app.session.active().and_then(|st| st.doc.node(*id)).map(|n| n.appearance.fill_paint());

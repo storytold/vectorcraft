@@ -117,6 +117,17 @@ pub(crate) fn svg_filters(svg: &str, room: usize, taken: impl Fn(&str) -> bool) 
 
 /// The document SVG text `svg` holds, read with `opts`, and the warnings about what it couldn't keep.
 pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Result<(Document, Vec<String>), SvgError> {
+    import_finding(svg, opts, max_nodes, &HashSet::new()).map(|(doc, warnings, _)| (doc, warnings))
+}
+
+/// [`import`], also finding the object made of each element whose id `wanted` lists (the first
+/// object named after it), by element id.
+pub(crate) fn import_finding(
+    svg: &str,
+    opts: &ImportOptions,
+    max_nodes: usize,
+    wanted: &HashSet<String>,
+) -> Result<(Document, Vec<String>, crate::Found), SvgError> {
     // Before anything reads the tree: the XML reader, usvg, and what is made of its tree, all by
     // recursion.
     let too_deep = || SvgError::TooDeep(depth::MAX_ELEMENT_DEPTH);
@@ -191,6 +202,8 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         max_nodes,
         error: None,
         nested_svg_images: 0,
+        wanted: wanted.clone(),
+        found: HashMap::new(),
     };
     im.doc.svg_scripts = found.scripts;
     if im.files.nested_text() {
@@ -303,7 +316,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         }
     }
     im.doc.limit_depth_noting(&mut im.warnings);
-    Ok((im.doc, im.warnings))
+    Ok((im.doc, im.warnings, im.found))
 }
 
 struct Importer {
@@ -365,4 +378,8 @@ struct Importer {
     error: Option<SvgError>,
     /// How many nested SVG images were converted so far.
     nested_svg_images: usize,
+    /// The element ids whose objects [`import_finding`] looks for.
+    wanted: HashSet<String>,
+    /// The object made of each element `wanted` lists, by its id.
+    found: HashMap<String, NodeId>,
 }
