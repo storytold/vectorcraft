@@ -9,7 +9,7 @@ use super::{
     ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
     TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
-use super::{CONIC, CONIC_WEDGES};
+use super::{CONIC, CONIC_WEDGES, DIAMOND};
 
 pub(super) struct Writer<'a> {
     doc: &'a Document,
@@ -429,6 +429,11 @@ impl<'a> Writer<'a> {
         {
             return self.conic_object(path, rule, f, g);
         }
+        if let Paint::Gradient(g) = &f.paint
+            && g.gradient.kind == GradientKind::Diamond
+        {
+            return self.diamond_object(path, rule, f, g);
+        }
         let Paint::Pattern { pattern, xf } = &f.paint else {
             // A freeform gradient: its average colour.
             self.warn(FREEFORM);
@@ -493,6 +498,41 @@ impl<'a> Writer<'a> {
             let (color, _) = g.gradient.sample_keep_model(t as f32);
             let wedge = FillLayer { paint: Paint::solid(color), ..f.clone() };
             self.path_object(&PathData::single(SubPath::polyline(&pts, true)), FillRule::NonZero, Some(&wedge), None);
+        }
+        self.line("Q");
+    }
+
+    /// A diamond gradient fill (the format has no diamond gradient) as four linear gradients
+    /// clipped to `path` (filled by `rule`), one for each quadrant of its frame and equal to the
+    /// diamond there, each running on under the next
+    /// ([`vectorcraft_color::GradientGeom::diamond_quadrants`]). A diamond without an extent is its
+    /// last stop.
+    fn diamond_object(&mut self, path: &PathData, rule: FillRule, f: &FillLayer, g: &GradientPaint) {
+        let area = path.to_bezpath().bounding_box();
+        let Some(quadrants) = g.resolve(area).diamond_quadrants(area) else {
+            let color = g.gradient.stops.last().map_or(Color::gray(0.5), |s| s.color);
+            let flat = FillLayer { paint: Paint::solid(color), ..f.clone() };
+            return self.path_object(path, rule, Some(&flat), None);
+        };
+        self.warn(DIAMOND);
+        self.line("q");
+        self.fill_rule(rule);
+        let several = path.subpaths.len() > 1;
+        if several {
+            self.line("*u");
+        }
+        for sp in path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()) {
+            self.mask(sp);
+        }
+        if several {
+            self.line("*U");
+        }
+        let gradient = Gradient { kind: GradientKind::Linear, ..g.gradient.clone() };
+        for (pts, geom) in quadrants {
+            // Not named after the swatch: the definition is a linear gradient, not the swatch's.
+            let linear = GradientPaint { gradient: gradient.clone(), geom: Some(geom), swatch: None, ..g.clone() };
+            let quadrant = FillLayer { paint: Paint::Gradient(Box::new(linear)), ..f.clone() };
+            self.path_object(&PathData::single(SubPath::polyline(&pts, true)), FillRule::NonZero, Some(&quadrant), None);
         }
         self.line("Q");
     }

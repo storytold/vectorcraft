@@ -262,6 +262,7 @@ font-technology	Variable	Variables
 	Asset Export Settings	Ajustes de exportación de recursos
 	Assets	Recursos
 	Assign	Asignar
+	Assign Profile	Asignar perfil
 	Assign Profile…	Asignar perfil…
 	Assign:	Asignar:
 	Attach to Active Plane	Adjuntar al plano activo
@@ -2353,6 +2354,9 @@ font-technology	Variable	Variables
 	Optical	Óptico
 	Optical Margin Alignment	Alineación óptica de márgenes
 	Dynamic Text	Texto dinámico
+	Dynamic Text Presets	Ajustes preestablecidos de texto dinámico
+	Arch	Bóveda
+@msg	select point type or type on a path	seleccione texto de punto o texto en trazado
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	el texto en trazado de un texto enlazado no puede usar texto dinámico: {frames}
 	Optimize for fast web view	Optimizar para vista web rápida
 	Optimized	Optimizado
@@ -2630,6 +2634,7 @@ digits	Malayalam	Malayálam
 	Radial Glows	Resplandores radiales
 	Radial Gradient	Degradado radial
 	Conic Gradient	Degradado cónico
+	Diamond Gradient	Degradado de rombo
 	Radius 1	Radio 1
 	Radius 2	Radio 2
 	Radius1	Radio1
@@ -3184,6 +3189,15 @@ digits	Malayalam	Malayálam
 	Stun Pulse	Aturdimiento
 	Stealth Fade	Sigilo
 	Shield Buff	Escudo
+	Textures	Texturas
+	Fine Grain	Grano fino
+	Canvas Weave	Tejido de lienzo
+	Burlap Sack	Saco de arpillera
+	Cracked Glaze	Esmalte agrietado
+	Mosaic Floor	Suelo de mosaico
+	Quilted Squares	Cuadros acolchados
+	Leaded Glass	Vidrio emplomado
+	Damp Paper	Papel húmedo
 	Shape	Forma
 	Shape Builder	Generador de formas
 	Shape Builder Regions	Regiones del generador de formas
@@ -3888,6 +3902,7 @@ digits	Malayalam	Malayálam
 	Windows	Windows
 	Working CMYK	CMYK de trabajo
 	Working CMYK (don't tag)	CMYK de trabajo (sin etiquetar)
+	Working RGB (don't tag)	RGB de trabajo (sin etiquetar)
 	Workspace	Espacio de trabajo
 	Workspace {i}	Espacio de trabajo {i}
 	Wrinkle Tool	Herramienta Arrugar
@@ -4249,6 +4264,7 @@ axis	Both	Ambos
 @msg	`{key}` must be a number, not {v}	`{key}` debe ser un número, no {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} debe ser un tiempo Unix en segundos (un entero) o null
 @msg	`{key}` must be a string	`{key}` debe ser un texto
+@msg	`{key}` must be a profile name or null	`{key}` debe ser un nombre de perfil o null
 @msg	`{key}` must be a whole number	`{key}` debe ser un número entero
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` debe ser un número entero entre {min} y {max} (se recibió {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` debe estar entre {min} y {max} (se recibió {x})
@@ -4744,7 +4760,7 @@ axis	Both	Ambos
 @msg	unknown format	formato desconocido
 @msg	unknown format `{f}` (Save writes {_1})	formato desconocido `{f}` (Guardar escribe {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	modo de forma libre desconocido `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tipo de degradado desconocido `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	tipo de degradado desconocido `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	resaltado desconocido `{h}`
 @msg	unknown option `{path}.{k}`	opción desconocida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpresiones desconocidas `{o}` (preserve, simulate o discard)
@@ -5768,7 +5784,7 @@ mark-style	Japanese	Japonesas
 @msg	span must be "object" or "selection", got {v}	span debe ser "object" o "selection", no {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" coloca un `gradient`, no una muestra
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" coloca un degradado: indique `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" coloca un degradado lineal, radial o cónico, no uno de forma libre
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" coloca un degradado lineal, radial, cónico o de rombo, no uno de forma libre
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" coloca el propio degradado: omita `start` y `end` (ya lo colocan en coordenadas del documento)
 	Make Image Dynamic	Hacer imagen dinámica
 	Import Data Sets…	Importar conjuntos de datos…
@@ -6805,6 +6821,7 @@ breakText	Glyphs	Glifos
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Alinear con cuadrícula de píxeles
+	Align New Objects to Pixel Grid	Alinear objetos nuevos con cuadrícula de píxeles
 	Not Aligned to Pixel Grid	No alineado con cuadrícula de píxeles
 @msg	only paths and compound paths can be aligned to the pixel grid	solo los trazados y los trazados compuestos se pueden alinear con la cuadrícula de píxeles
 @msg	side is left or right, not `{s}`	side es left o right, no `{s}`

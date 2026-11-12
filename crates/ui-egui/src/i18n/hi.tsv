@@ -3171,6 +3171,9 @@ antiAlias	Sharp	शार्प
 	Optical	ऑप्टिकल
 	Optical Margin Alignment	ऑप्टिकल मार्जिन संरेखण
 	Dynamic Text	डायनैमिक टेक्स्ट
+	Dynamic Text Presets	डायनैमिक टेक्स्ट प्रीसेट
+	Arch	मेहराब
+@msg	select point type or type on a path	पॉइंट टाइप या पाथ पर टाइप चुनें
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	थ्रेडेड टेक्स्ट में पाथ पर टाइप डायनैमिक टेक्स्ट का उपयोग नहीं कर सकता: {frames}
 	Optimize for fast web view	तेजी से वेब दृश्य के लिए ऑप्टिमाइज़
 	Optimized	ऑप्टिमाइज़्ड
@@ -3590,6 +3593,7 @@ antiAlias	Sharp	शार्प
 	Radial Glows	रेडियल चमक
 	Radial Gradient	रेडियल ग्रेडिएंट
 	Conic Gradient	शंक्वाकार ग्रेडिएंट
+	Diamond Gradient	डायमंड ग्रेडिएंट
 	Radial Repeat	रेडियल दोहराव
 	Radius	त्रिज्या
 	Radius 1	त्रिज्या 1
@@ -4332,6 +4336,15 @@ antiAlias	Sharp	शार्प
 	Stun Pulse	स्तब्ध
 	Stealth Fade	छिपना
 	Shield Buff	ढाल
+	Textures	बनावटें
+	Fine Grain	महीन दाना
+	Canvas Weave	कैनवास बुनावट
+	Burlap Sack	टाट की बोरी
+	Cracked Glaze	दरकी ग्लेज़
+	Mosaic Floor	मोज़ेक फ़र्श
+	Quilted Squares	रज़ाईदार वर्ग
+	Leaded Glass	सीसा जड़ा काँच
+	Damp Paper	नम काग़ज़
 	Shaft:	दस्ता:
 	Shape	शेप
 	Shape Builder	शेप बिल्डर
@@ -5327,6 +5340,7 @@ antiAlias	Sharp	शार्प
 	Words Longer Than:	से ज्यादा शब्द:
 	Working CMYK	वर्किंग CMYK
 	Working CMYK (don't tag)	कार्य CMYK (टैग नहीं)
+	Working RGB (don't tag)	कार्य RGB (टैग नहीं)
 	Working RGB	वर्किंग RGB
 	Workspace	वर्कस्पेस
 	Workspace {i}	वर्कस्पेस {i}
@@ -7512,7 +7526,7 @@ antiAlias	Sharp	शार्प
 @msg	span must be "object" or "selection", got {v}	span: स्पैन को "object" या "selection" होना चाहिए, {v} मिला
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" एक `gradient` रखता है, स्वॉच नहीं
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" ग्रेडिएंट रखता है: `gradient` दें
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" एक रैखिक, रेडियल या शंक्वाकार ग्रेडिएंट रखता है, फ्रीफॉर्म ग्रेडिएंट नहीं
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" एक रैखिक, रेडियल, शंक्वाकार या डायमंड ग्रेडिएंट रखता है, फ्रीफॉर्म ग्रेडिएंट नहीं
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" खुद ग्रेडिएंट रखता है: `start` और `end` न दें (वे उसे डॉक्यूमेंट निर्देशांकों पर रख देते हैं)
 @msg	speed must be accelerated, step or pause	speed: गति को तेज, कदम या रोकें होना चाहिए
 @msg	Split Into Grid: select paths large enough for the grid	स्प्लिट इनो ग्रिड: ग्रिड के लिए काफी बड़े पाथ सिलेक्ट करें
@@ -7931,7 +7945,7 @@ antiAlias	Sharp	शार्प
 @msg	unknown format `{f}` (vcswatches, gpl, ase or css)	अज्ञात फ़ॉर्मैट `{f}` (vcswatches, gpl, ase या css)
 @msg	unknown freeform mode `{m}` (points, lines)	अज्ञात फ्रीफॉर्म मोड `{m}` (बिंदुओं, लाइनों)
 @msg	unknown from {f}	{f} से अज्ञात
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	अज्ञात ग्रेडिएंट `{k}` (रैखिक, रेडियल, शंक्वाकार, फ्रीफॉर्म)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	अज्ञात ग्रेडिएंट `{k}` (रैखिक, रेडियल, शंक्वाकार, डायमंड, फ्रीफॉर्म)
 @msg	unknown graph type `{t}`	अज्ञात ग्राफ प्रकार `{t}`
 @msg	unknown grid colours `{name}` (one of {_1})	अज्ञात ग्रिड रंग `{name}` ({_1} में से एक)
 @msg	unknown gridType `{t}`	अज्ञात gridType `{t}`
@@ -8275,6 +8289,7 @@ theme	Appearance	अपीयरेंस
 
 # Align to Pixel Grid
 	Align to Pixel Grid	पिक्सेल ग्रिड से संरेखित करें
+	Align New Objects to Pixel Grid	नए ऑब्जेक्ट्स को पिक्सेल ग्रिड से संरेखित करें
 	Not Aligned to Pixel Grid	पिक्सेल ग्रिड से असंरेखित
 @msg	only paths and compound paths can be aligned to the pixel grid	केवल पाथ और कंपाउंड पाथ को पिक्सेल ग्रिड से संरेखित किया जा सकता है
 @msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	नाम `{name}` UTF-8 नहीं है और इसे {label} के रूप में पढ़ा गया: यदि यह गलत दिखे, तो फ़ाइल को किसी अन्य legacyNameEncoding से खोलें

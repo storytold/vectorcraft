@@ -44,6 +44,7 @@ fn builtin_libraries_are_listed_with_original_styles_using_catalogued_effects() 
     assert!(libs.len() >= 8 && libs.iter().all(|l| l["category"] == "builtIn"), "{libs:?}");
     assert!(libs.iter().any(|l| l["id"] == "game-hud" && l["name"] == "Game HUD"), "{libs:?}");
     assert!(libs.iter().any(|l| l["id"] == "status-effects" && l["name"] == "Status Effects"), "{libs:?}");
+    assert!(libs.iter().any(|l| l["id"] == "textures" && l["name"] == "Textures" && l["count"] == 8), "{libs:?}");
     for l in libs {
         let id = l["id"].as_str().unwrap();
         let g = run(&mut s, "graphicStyle.library", json!({"library": id}));
@@ -64,6 +65,10 @@ fn builtin_libraries_are_listed_with_original_styles_using_catalogued_effects() 
     let status = run(&mut s, "graphicStyle.library", json!({"library": "status-effects"}));
     let status_names: Vec<&str> = status["styles"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
     assert_eq!(status_names, ["Poison Tint", "Freeze Edge", "Burn Aura", "Stun Pulse", "Stealth Fade", "Shield Buff"]);
+    let textures = run(&mut s, "graphicStyle.library", json!({"library": "textures"}));
+    let texture_names: Vec<&str> = textures["styles"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
+    let expected = ["Fine Grain", "Canvas Weave", "Burlap Sack", "Cracked Glaze", "Mosaic Floor", "Quilted Squares", "Leaded Glass", "Damp Paper"];
+    assert_eq!(texture_names, expected);
     let id = rect(&mut s, 10.0, 20.0, 40.0, 30.0);
     let r = run(&mut s, "graphicStyle.addFromLibrary", json!({"library": "game-hud", "name": "Mana Glow", "apply": true, "ids": [id.0]}));
     assert_eq!((names(&r["added"]), r["applied"].as_str()), (vec!["Mana Glow"], Some("Mana Glow")));
@@ -89,7 +94,7 @@ fn painted_and_sketched_styles_set_every_effect_setting_and_reopen_applied() {
     let libs = list["libraries"].as_array().unwrap();
     let at = libs.iter().position(|l| l["id"] == "painted-sketched").expect("listed");
     assert_eq!((libs[at]["name"].as_str(), libs[at]["count"].as_u64()), (Some("Painted and Sketched"), Some(7)));
-    assert_eq!(libs[at - 1]["id"], "hand-drawn");
+    assert_eq!(libs[at - 1]["id"], "textures");
     let g = run(&mut s, "graphicStyle.library", json!({"library": "Painted and Sketched"}));
     let listed: Vec<(&str, &str, Vec<&str>)> =
         g["styles"].as_array().unwrap().iter().map(|x| (x["name"].as_str().unwrap(), x["fill"].as_str().unwrap(), names(&x["effects"]))).collect();
@@ -246,6 +251,53 @@ fn add_with_null_ids_applies_to_selection() {
     let (style, linked) = s.selection_graphic_style().unwrap();
     assert_eq!((style.name.as_str(), linked), ("Halo", true));
     assert_eq!(doc(&s).node(id).unwrap().extras().graphic_style, Some(style.id));
+}
+
+#[test]
+fn textures_styles_apply_their_texture_effects_and_keep_their_params_through_save_and_open() {
+    let mut s = session();
+    let (_, lib) = cmd::stylelib::library(&s, "textures").unwrap();
+    let mut ids = vec![];
+    for (i, g) in lib.styles.iter().enumerate() {
+        let id = rect(&mut s, (i % 4) as f64 * 50.0, (i / 4) as f64 * 50.0, 40.0, 40.0);
+        let before = undo_len(&s);
+        let r = run(&mut s, "graphicStyle.addFromLibrary", json!({"library": "textures", "name": g.name, "apply": true, "ids": [id.0]}));
+        assert_eq!((names(&r["added"]), r["applied"].as_str()), (vec![g.name.as_str()], Some(g.name.as_str())));
+        assert_eq!(undo_len(&s), before + 1, "{}: added and applied as one step", g.name);
+        ids.push(id);
+    }
+    let effects = |s: &Session| -> Vec<Vec<(String, Value)>> {
+        ids.iter().map(|id| doc(s).node(*id).unwrap().appearance.effects.iter().map(|e| (e.id.clone(), e.params.clone())).collect()).collect()
+    };
+    let applied = effects(&s);
+    let effect_ids: Vec<Vec<&str>> = applied.iter().map(|fx| fx.iter().map(|(id, _)| id.as_str()).collect()).collect();
+    assert_eq!(
+        effect_ids,
+        [
+            ["texture.grain"],
+            ["texture.texturizer"],
+            ["texture.texturizer"],
+            ["texture.craquelure"],
+            ["texture.mosaicTiles"],
+            ["texture.patchwork"],
+            ["texture.stainedGlass"],
+            ["sketch.waterPaper"],
+        ]
+    );
+    assert_eq!(applied[1][0].1["texture"], "canvas");
+    assert_eq!(applied[3][0].1["crackSpacing"], 12.0);
+    for (fx, g) in applied.iter().zip(&lib.styles) {
+        let want: Vec<(String, Value)> = g.appearance.effects.iter().map(|e| (e.id.clone(), e.params.clone())).collect();
+        assert_eq!(fx, &want, "{} applies the library's params", g.name);
+    }
+    let b64 = run(&mut s, "document.serialize", json!({"format": "vectorcraft"}))["dataBase64"].as_str().unwrap().to_string();
+    run(&mut s, "document.open", json!({"name": "textures.vectorcraft", "dataBase64": b64}));
+    assert_eq!(effects(&s), applied, "the params survive a save and open");
+    for g in &lib.styles {
+        let saved = doc(&s).graphic_style(&g.name).unwrap();
+        assert!(saved.same_look(g), "{} keeps its look", g.name);
+        assert!(ids.iter().any(|id| doc(&s).node(*id).unwrap().extras().graphic_style == Some(saved.id)), "{} stays linked", g.name);
+    }
 }
 
 /// A document with pattern `name` (a dot) and its swatch.

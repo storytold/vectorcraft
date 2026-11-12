@@ -360,6 +360,7 @@ font-technology	Variable	Változó
 	Asset Export Settings	Elemexportálási beállítások
 	Assets	Elemek
 	Assign	Hozzárendelés
+	Assign Profile	Profil hozzárendelése
 	Assign Profile…	Profil hozzárendelése…
 	Assign:	Hozzárendelés:
 	Attach to Active Plane	Csatolás az aktív síkhoz
@@ -2847,6 +2848,9 @@ file-filter	Templates	Sablonok
 	Optical	Optikai
 	Optical Margin Alignment	Optikai margóigazítás
 	Dynamic Text	Dinamikus szöveg
+	Dynamic Text Presets	Dinamikus szöveg előbeállításai
+	Arch	Boltív
+@msg	select point type or type on a path	jelöljön ki pontszöveget vagy útvonalszöveget
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	a láncolt szövegben lévő útvonalszöveg nem használhat dinamikus szöveget: {frames}
 	Optimize for fast web view	Optimalizálás gyors webes megtekintéshez
 	Optimized	Optimalizált
@@ -3179,6 +3183,7 @@ mark-style	Japanese	Japán
 	Radial Glows	Körkörös ragyogások
 	Radial Gradient	Körkörös színátmenet
 	Conic Gradient	Kúpos színátmenet
+	Diamond Gradient	Rombusz színátmenet
 	Radial Repeat	Körkörös ismétlés
 	Radius	Sugár
 	Radius 1	Sugár 1
@@ -3806,6 +3811,15 @@ mark-style	Japanese	Japán
 	Stun Pulse	Kábítás
 	Stealth Fade	Lopakodás
 	Shield Buff	Pajzs
+	Textures	Textúrák
+	Fine Grain	Finom szemcse
+	Canvas Weave	Vászonszövés
+	Burlap Sack	Jutazsák
+	Cracked Glaze	Repedezett máz
+	Mosaic Floor	Mozaikpadló
+	Quilted Squares	Steppelt négyzetek
+	Leaded Glass	Ólomüveg
+	Damp Paper	Nedves papír
 	Shape	Alakzat
 	Shape Builder	Alakzatépítő
 	Shape Builder Regions	Alakzatépítő területei
@@ -4622,6 +4636,7 @@ mark-style	Japanese	Japán
 	Windows	Windows
 	Working CMYK	Munka-CMYK
 	Working CMYK (don't tag)	Munka-CMYK (címke nélkül)
+	Working RGB (don't tag)	Munka-RGB (címke nélkül)
 	Working RGB	Munka-RGB
 	Workspace	Munkaterület
 	Workspace {i}	Munkaterület {i}
@@ -4759,6 +4774,7 @@ imageTrace	Outline	Körvonal
 @msg	`{key}` must be a number, not {v}	`{key}`: szám kell, ez nem az: {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key}: Unix-idő kell másodpercben (egész szám) vagy null
 @msg	`{key}` must be a string	`{key}`: szöveg kell
+@msg	`{key}` must be a profile name or null	`{key}`: profilnév vagy null kell
 @msg	`{key}` must be a whole number	`{key}`: egész szám kell
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}`: {min} és {max} közötti egész szám kell (kapott érték: {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}`: {min} és {max} közötti érték kell (kapott érték: {x})
@@ -5557,7 +5573,7 @@ imageTrace	Outline	Körvonal
 @msg	unknown format	ismeretlen formátum
 @msg	unknown format `{f}` (Save writes {_1})	ismeretlen formátum: `{f}` (a Mentés ezeket írja: {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	ismeretlen szabad formájú mód: `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	ismeretlen színátmenet-fajta: `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	ismeretlen színátmenet-fajta: `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	ismeretlen kiemelés: `{h}`
 @msg	unknown option `{path}.{k}`	ismeretlen beállítás: `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ismeretlen felülnyomás-kezelés: `{o}` (preserve, simulate vagy discard)
@@ -5809,7 +5825,7 @@ imageTrace	Outline	Körvonal
 @msg	span must be "object" or "selection", got {v}	a span értéke "object" vagy "selection" lehet, nem {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" egy `gradient` értéket helyez el, nem színmintát
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" színátmenetet helyez el: adja meg a `gradient` értéket
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" lineáris, sugaras vagy kúpos színátmenetet helyez el, nem szabad formájút
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" lineáris, sugaras, kúpos vagy rombusz színátmenetet helyez el, nem szabad formájút
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" magát a színátmenetet helyezi el: hagyja el a `start` és `end` értéket (ezek már a dokumentum koordinátáiban helyezik el)
 	Make Image Dynamic	Kép dinamikussá tétele
 	Import Data Sets…	Adatkészletek importálása…
@@ -6846,6 +6862,7 @@ breakText	Glyphs	Glifák
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Igazítás a pixelrácshoz
+	Align New Objects to Pixel Grid	Új objektumok igazítása a pixelrácshoz
 	Not Aligned to Pixel Grid	Pixelrácshoz nem igazított
 @msg	only paths and compound paths can be aligned to the pixel grid	csak útvonalak és összetett útvonalak igazíthatók a pixelrácshoz
 @msg	side is left or right, not `{s}`	a side értéke left vagy right lehet, nem `{s}`

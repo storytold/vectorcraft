@@ -106,6 +106,7 @@
 	PDF Presets…	Preset PDF…
 	Perspective Grid Presets…	Preset kisi perspektif…
 	Color Settings…	Pengaturan warna…
+	Assign Profile	Tetapkan profil
 	Assign Profile…	Tetapkan profil…
 	Keyboard Shortcuts…	Pintasan papan tik…
 	Import Shortcut Set	Impor set pintasan
@@ -377,6 +378,8 @@
 	Create Outlines	Buat garis luar
 	Optical Margin Alignment	Perataan margin optik
 	Dynamic Text	Teks dinamis
+	Dynamic Text Presets	Preset teks dinamis
+	Arch	Pelengkung
 	Fill with Placeholder Text	Isi dengan teks placeholder
 	Insert Inline Symbol	Sisipkan simbol sebaris
 	Show Hidden Characters	Tampilkan karakter tersembunyi
@@ -739,6 +742,15 @@
 	Stun Pulse	Pingsan
 	Stealth Fade	Menghilang
 	Shield Buff	Perisai
+	Textures	Tekstur
+	Fine Grain	Butiran Halus
+	Canvas Weave	Anyaman Kanvas
+	Burlap Sack	Karung Goni
+	Cracked Glaze	Glasir Retak
+	Mosaic Floor	Lantai Mosaik
+	Quilted Squares	Kotak Quilt
+	Leaded Glass	Kaca Patri
+	Damp Paper	Kertas Basah
 	Outlines and Rules	Garis luar dan garis
 	Hand-Drawn	Gambar tangan
 	Painted and Sketched	Lukisan dan sketsa
@@ -1621,6 +1633,7 @@ digits	Malayalam	Malayalam
 	Points: clicks add free points	Titik: klik menambahkan titik bebas
 	Radial Gradient	Gradien radial
 	Conic Gradient	Gradien kerucut
+	Diamond Gradient	Gradien wajik
 	Reset to White, Black	Setel ulang ke putih, hitam
 	Reverse Gradient	Balikkan gradien
 	Save to Swatches	Simpan ke swatch
@@ -1887,6 +1900,7 @@ digits	Malayalam	Malayalam
 	Simulate Paper	Simulasikan kertas
 	Use Black Point Compensation	Gunakan kompensasi titik hitam
 	Working CMYK (don't tag)	CMYK kerja (tanpa tag)
+	Working RGB (don't tag)	RGB kerja (tanpa tag)
 	{name} (spot)	{name} (spot)
 	Add to Profiles…	Tambahkan ke profil…
 	Align Stroke to Center	Ratakan stroke ke tengah
@@ -4653,7 +4667,7 @@ imageTrace	Outline	Kontur
 @msg	unknown format	format tidak dikenal
 @msg	unknown format `{f}` (Save writes {_1})	format `{f}` tidak dikenal (Simpan menulis {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	mode bentuk bebas `{m}` tidak dikenal (titik, garis)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	jenis gradien `{k}` tidak dikenal (linear, radial, kerucut, bentuk bebas)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	jenis gradien `{k}` tidak dikenal (linear, radial, kerucut, wajik, bentuk bebas)
 @msg	unknown highlight `{h}`	sorotan `{h}` tidak dikenal
 @msg	unknown option `{path}.{k}`	opsi `{path}.{k}` tidak dikenal
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	overprint `{o}` tidak dikenal (pertahankan, simulasikan, atau buang)
@@ -5417,7 +5431,7 @@ mark-style	Japanese	Jepang
 @msg	span must be "object" or "selection", got {v}	span harus "object" atau "selection", diterima {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" menempatkan `gradient`, bukan swatch
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" menempatkan gradien: berikan `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" menempatkan gradien linear, radial, atau kerucut, bukan gradien bebas
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" menempatkan gradien linear, radial, kerucut, atau wajik, bukan gradien bebas
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" menempatkan gradien itu sendiri: jangan sertakan `start` dan `end` (keduanya sudah menempatkannya dalam koordinat dokumen)
 	Make Image Dynamic	Jadikan gambar dinamis
 	Import Data Sets…	Impor himpunan data…
@@ -6588,6 +6602,7 @@ breakText	Glyphs	Glif
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Sejajarkan ke grid piksel
+	Align New Objects to Pixel Grid	Sejajarkan objek baru ke grid piksel
 	Not Aligned to Pixel Grid	Tidak sejajar ke grid piksel
 @msg	side is left or right, not `{s}`	side adalah left atau right, bukan `{s}`
 	Edit Custom Dictionary	Edit kamus kustom
