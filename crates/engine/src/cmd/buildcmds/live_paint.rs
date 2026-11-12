@@ -1,7 +1,7 @@
 use super::{
     Appearance, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId, Paint, PathData, Point,
-    Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, id_param, ids_json,
-    is_live_paint, json, number_or, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes, switch_or,
+    Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, ids_json, is_live_paint,
+    json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes, switch_or,
 };
 
 /// `options` as stored on a Live Paint group: none for the defaults.
@@ -272,9 +272,38 @@ pub(super) fn lp_gap_options(s: &mut Session, p: &Value) -> Result<Value> {
 pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "livePaint.fill";
     let pt = point_param(p, "point").filter(|q| finite(*q)).ok_or_else(|| bad(C, "missing point [x,y]"))?;
+    let parse_chunk = |input: &Value, start: Point| -> Result<Vec<Point>> {
+        let values = input
+            .as_array()
+            .filter(|points| !points.is_empty() && points.len() <= b::LP_FILL_CHUNK_POINTS)
+            .ok_or_else(|| bad(C, "each path chunk must contain 1 to 4096 points"))?;
+        let points: Vec<_> = values
+            .iter()
+            .map(|point| {
+                let pair = point.as_array().filter(|pair| pair.len() == 2).ok_or_else(|| bad(C, "points must be [x,y] pairs"))?;
+                let x = pair.first().and_then(Value::as_f64).ok_or_else(|| bad(C, "point x must be a number"))?;
+                let y = pair.get(1).and_then(Value::as_f64).ok_or_else(|| bad(C, "point y must be a number"))?;
+                let point = Point::new(x, y);
+                if !finite(point) {
+                    return Err(bad(C, "points must be finite canvas points"));
+                }
+                Ok(point)
+            })
+            .collect::<Result<_>>()?;
+        if points.first() != Some(&start) {
+            return Err(bad(C, "path chunks must share their boundary point"));
+        }
+        Ok(points)
+    };
+    let points = p.get("points");
+    let continuation = match p.get("continuation") {
+        None => &[][..],
+        Some(input) if points.is_some() => input.as_array().ok_or_else(|| bad(C, "continuation must be an array of path chunks"))?.as_slice(),
+        Some(_) => return Err(bad(C, "continuation requires points")),
+    };
     crate::cmd::paint::check_keep_model(p, C)?;
     let paint = paint_from(s, p)?.unwrap_or_else(|| s.paint.fill.clone());
-    let group = id_param(p, "group");
+    let group = object_param(p, "group", C)?;
     let roots = if group.is_none() { root_ids(s, p)? } else { vec![] };
     let (g, face) = s.edit("Live Paint Bucket", |d, sel| {
         let gid = match group {
@@ -302,7 +331,33 @@ pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
             .and_then(|n| b::visible_face_at(n, pt))
             .map(|f| f.id)
             .ok_or_else(|| EngineError::Other("no Live Paint face at that point".into()))?;
-        d.node_mut(fid).ok_or(EngineError::NoNode(fid))?.appearance.set_fill(paint.clone());
+        let mut targets = std::collections::BTreeSet::from([fid]);
+        if let Some(points) = points {
+            let n = d.node(gid).ok_or(EngineError::NoNode(gid))?;
+            // Use the existing region-crossing probes, so even a face narrower than the distance
+            // between pointer events is filled. Reversing matches visible_face_at's front first.
+            let faces: Vec<_> = b::faces(n).into_iter().rev().filter(|f| f.visible).collect();
+            let mut face_ids = vec![];
+            let mut regions = vec![];
+            for f in faces {
+                if let Some(path) = f.path_data()
+                    && let Some(bounds) = path.bounds()
+                {
+                    face_ids.push(f.id);
+                    regions.push((po::Region { path: path.clone(), sources: vec![] }, path.to_bezpath(), bounds));
+                }
+            }
+            let map = b::BuilderMap { regions, ..Default::default() };
+            let mut last = pt;
+            for input in std::iter::once(points).chain(continuation) {
+                let chunk = parse_chunk(input, last)?;
+                last = chunk.last().copied().unwrap_or(last);
+                targets.extend(map.hits_along(&chunk, None).regions.iter().filter_map(|i| face_ids.get(*i).copied()));
+            }
+        }
+        for target in targets {
+            d.node_mut(target).ok_or(EngineError::NoNode(target))?.appearance.set_fill(paint.clone());
+        }
         Ok((gid, fid))
     })?;
     s.remember_paint(&paint);
@@ -312,7 +367,7 @@ pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
 pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "livePaint.strokeEdge";
     let pt = point_param(p, "point").filter(|q| finite(*q)).ok_or_else(|| bad(C, "missing point [x,y]"))?;
-    let g = id_param(p, "group").ok_or_else(|| bad(C, "missing group"))?;
+    let g = object_param(p, "group", C)?.ok_or_else(|| bad(C, "missing group"))?;
     crate::cmd::paint::check_keep_model(p, C)?;
     let paint = paint_from(s, p)?.unwrap_or_else(|| s.paint.stroke.clone());
     let width = number_or(p, "width", s.paint.stroke_width.max(0.0), C)?;
@@ -335,7 +390,10 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 pub(super) fn lp_info(s: &mut Session, p: &Value) -> Result<Value> {
-    let g = id_param(p, "group").or_else(|| id_param(p, "id")).ok_or_else(|| bad("livePaint.info", "missing group"))?;
+    let g = match object_param(p, "group", "livePaint.info")? {
+        Some(g) => g,
+        None => object_param(p, "id", "livePaint.info")?.ok_or_else(|| bad("livePaint.info", "missing group"))?,
+    };
     let d = &s.doc()?.doc;
     let n = d.node(g).filter(|n| is_live_paint(n)).ok_or_else(|| bad("livePaint.info", format!("{g} is not a Live Paint group")))?;
     let faces: Vec<Value> = b::faces(n)

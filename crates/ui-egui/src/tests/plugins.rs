@@ -45,11 +45,11 @@ pub(super) fn show_approval(app: &mut VectorcraftApp) {
     panic!("the approval's OK never took input");
 }
 
-type Window = egui_kittest::Harness<'static, VectorcraftApp>;
+pub(super) type Window = egui_kittest::Harness<'static, VectorcraftApp>;
 
 /// The dialog layer of `app` in a window, each frame drawn at the time [`at`] gives it. Building it
 /// draws frames at times of its own, so a test opens the dialog after.
-fn window(app: VectorcraftApp) -> Window {
+pub(super) fn window(app: VectorcraftApp) -> Window {
     let mut fonts = false;
     egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 800.0)).build_ui_state(
         move |ui, app: &mut VectorcraftApp| {
@@ -64,26 +64,26 @@ fn window(app: VectorcraftApp) -> Window {
 }
 
 /// Draws a frame of `h` at `time` seconds.
-fn at(h: &mut Window, time: f64) {
+pub(super) fn at(h: &mut Window, time: f64) {
     h.input_mut().time = Some(time);
     h.step();
 }
 
 /// Whether the approval's OK is enabled, as a screen reader reads it.
-fn ok_enabled(h: &Window) -> bool {
+pub(super) fn ok_enabled(h: &Window) -> bool {
     use egui_kittest::kittest::{NodeT, Queryable};
     !h.get_by_label("OK").accesskit_node().is_disabled()
 }
 
 /// Clicks the approval's OK as a person does, on a frame at `time` seconds.
-fn click_ok(h: &mut Window, time: f64) {
+pub(super) fn click_ok(h: &mut Window, time: f64) {
     use egui_kittest::kittest::Queryable;
     h.get_by_label("OK").click();
     at(h, time);
 }
 
 /// The approval is open and plug-in `id` neither installed nor granted.
-fn waiting(app: &VectorcraftApp, id: &str) -> bool {
+pub(super) fn waiting(app: &VectorcraftApp, id: &str) -> bool {
     app.ui.dialog.as_ref().is_some_and(|d| d.kind == dialogs::plugin::INSTALL_KIND)
         && vectorcraft_plugins::registry::get(id).is_none()
         && vectorcraft_plugins::registry::granted(id).is_none()
@@ -184,7 +184,7 @@ fn plugin_effects_open_the_effect_dialog_with_their_schema() {
 
 /// A filter `id` named `name` whose manifest lists `permissions` (a JSON list), at a version with
 /// a bidirectional override, a tab and a bell in it.
-fn asking(id: &str, name: &str, permissions: &str) -> Vec<u8> {
+pub(super) fn asking(id: &str, name: &str, permissions: &str) -> Vec<u8> {
     let manifest = json!({"id": id, "name": name, "version": "3.0\u{202E}\t\u{0007}", "kind": "filter"}).to_string();
     let manifest = format!(r#"{},"permissions":{permissions}}}"#, manifest.trim_end_matches('}'));
     wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()
@@ -522,9 +522,8 @@ fn the_install_approval_waits_again_when_the_focus_leaves_and_comes_back_between
     h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
 }
 
-/// A module with other bytes than the one installed with its id asks before taking its place: in
-/// the ordinary confirm when it needs nothing that only a person can approve, and in the approval
-/// dialog, with its id and file hash, when it also asks for a heavy budget.
+/// A module with other bytes than the one installed with its id asks before taking its place, in
+/// the approval dialog, with its id and file hash, also when it asks for a heavy budget.
 #[test]
 fn installing_a_plugin_over_another_module_asks_first() {
     let mut app = app();
@@ -538,10 +537,13 @@ fn installing_a_plugin_over_another_module_asks_first() {
     let other = plain(r#"{"objects":[],"error":null}"#);
     let other_hash = vectorcraft_plugins::permissions::sha256_hex(&other);
     let r = app.run("ui.installPlugin", module(&other)).unwrap();
-    assert_eq!(r["pending"], dialogs::confirm::KIND);
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!(d.str("message"), "Install “Plain” in place of the plug-in with the same ID?");
-    assert_eq!(d.str("detail"), format!("ID: {id}\nFile SHA-256: {other_hash}\n\n{takes_place}"));
+    assert_eq!(r, json!({"pending": dialogs::plugin::INSTALL_KIND}));
+    let pending = app.pending_plugin_install.as_ref().unwrap();
+    assert_eq!(pending.message, "Install “Plain” in place of the plug-in with the same ID?");
+    assert_eq!(pending.detail, format!("ID: {id}\nFile SHA-256: {other_hash}\n\n{takes_place}"));
+    assert_eq!(pending.params["replace"], json!(true), "OK replaces the one installed");
+    assert_eq!(dialogs::confirm(&mut app).unwrap()["pending"], dialogs::plugin::INSTALL_KIND, "it waits like any other question");
+    show_approval(&mut app);
     dialogs::confirm(&mut app).unwrap();
     assert!(app.ui.dialog.is_none());
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.hash().to_string()), Some(other_hash));

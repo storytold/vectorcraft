@@ -48,7 +48,7 @@ pub(crate) const OPTIONS: &[FormatOption] = &[
         name: "useArtboards",
         ty: "boolean",
         default: "null",
-        description: "true: one file per chosen artboard (default all), <file>_<artboard>.eps, and with two or more a central <file>.eps of the whole document (none when no art shows); absent: the same when artboard, artboards or range names artboards, else one file of the visible art; false: one file of the visible art, even when artboards are named",
+        description: "true: one file per chosen artboard (default all), <file>_<artboard>.eps, and with two or more a central <file>.eps of the whole document (when no art shows, Export writes none and Save writes it on the first artboard); absent: the same when artboard, artboards or range names artboards, else one file of the visible art; false: one file of the visible art, even when artboards are named (Save: the first artboard when no art shows)",
     },
     FormatOption { name: "level", ty: "integer", default: "3", description: "PostScript language level, 2 or 3" },
     FormatOption {
@@ -203,10 +203,15 @@ fn expanded(cmd: &str, p: &Value, saved: &[super::super::FlattenerPreset]) -> Re
     }
 }
 
+/// One file to write: its artboard, region and origin.
+type Page = (Option<usize>, Rect, Point);
+
 /// The files to write: `(artboard, region, origin)` each — every chosen artboard with its corner
 /// as the origin, or the visible art's bounds with the first artboard's corner. With two or more
 /// chosen artboards, a central file of the visible art comes first (none when no art shows).
-fn pages(doc: &Document, set: &Settings) -> Result<Vec<(Option<usize>, Rect, Point)>> {
+/// `saving`: Save always writes the file it names, so with no visible art that file's region is
+/// the first artboard, and the second value is true.
+fn pages(doc: &Document, set: &Settings, saving: bool) -> Result<(Vec<Page>, bool)> {
     let n = doc.artboards.len();
     let named = set.boards.resolve(n).map_err(|e| bad(C, e))?;
     let boards = match (set.use_artboards, named) {
@@ -217,17 +222,25 @@ fn pages(doc: &Document, set: &Settings) -> Result<Vec<(Option<usize>, Rect, Poi
     };
     let corner = |r: Rect| Point::new(r.x0, r.y1);
     let art = |art: Rect| (None, art, doc.artboards.first().map_or(corner(art), |a| corner(a.rect)));
+    // The visible art's bounds; for Save with no visible art, the first artboard (true).
+    let visible = || match vectorcraft_render::encode::art_bounds(doc) {
+        Some(bounds) => Some((bounds, false)),
+        None if saving => doc.artboards.first().map(|a| (a.rect, true)),
+        None => None,
+    };
     match boards {
         Some(boards) => {
-            let central = (boards.len() > 1).then(|| vectorcraft_render::encode::art_bounds(doc).map(art)).flatten();
+            let central = (boards.len() > 1).then(visible).flatten();
             let each = boards
                 .into_iter()
                 .map(|b| doc.artboards.get(b).map(|a| (Some(b), a.rect, corner(a.rect))).ok_or_else(|| bad(C, format!("no artboard {}", b + 1))));
-            central.map(Ok).into_iter().chain(each).collect()
+            let pages = central.map(|(bounds, _)| Ok(art(bounds))).into_iter().chain(each).collect::<Result<_>>()?;
+            Ok((pages, central.is_some_and(|(_, blank)| blank)))
         }
         None => {
-            let bounds = vectorcraft_render::encode::art_bounds(doc).ok_or_else(|| bad(C, "nothing to export: the document has no visible art"))?;
-            Ok(vec![art(bounds)])
+            let missing = if saving { "the document has no artboard" } else { "nothing to export: the document has no visible art" };
+            let (bounds, blank) = visible().ok_or_else(|| bad(C, missing))?;
+            Ok((vec![art(bounds)], blank))
         }
     }
 }
@@ -293,16 +306,17 @@ pub(super) fn encode(doc: &Document, p: &Value) -> Result<Encoded> {
     encode_document(doc, p, false)
 }
 
-/// Save keeps a single page's original frame and all native editing data, unlike Export's
-/// optional art-bound crop or separate file per artboard. Existing EPS loss warnings still apply.
+/// Save writes the pages Export does (the visible art's bounds, or with Use Artboards the chosen
+/// artboards), with a smaller preview. A single file, the one the document becomes, carries all
+/// the native editing data; with no visible art its page is the first artboard.
 pub(super) fn encode_save(doc: &Document, p: &Value) -> Result<Encoded> {
     encode_document(doc, p, true)
 }
 
 fn encode_document(doc: &Document, p: &Value, saving: bool) -> Result<Encoded> {
     let set = parse(p)?;
-    if saving && (set.use_artboards == Some(false) || bool_or(p, "selectedOnly", false)) {
-        return Err(bad(C, "EPS Save retains the artboard and all artwork: use document.export for cropped or selected-only EPS"));
+    if saving && bool_or(p, "selectedOnly", false) {
+        return Err(bad(C, "EPS Save writes all artwork: use document.export for selected-only EPS"));
     }
     let original = doc;
     let (full, warnings) = crate::cmd::place::document::full_documents(doc);
@@ -315,18 +329,16 @@ fn encode_document(doc: &Document, p: &Value, saving: bool) -> Result<Encoded> {
     } else {
         Cow::Borrowed(original)
     };
-    let pages = if saving {
-        let board = set.boards.one(doc.artboards.len()).map_err(|e| bad(C, e))?;
-        let rect = doc.artboards.get(board).ok_or_else(|| bad(C, "the document has no artboard"))?.rect;
-        vec![(Some(board), rect, Point::new(rect.x0, rect.y1))]
-    } else {
-        pages(doc, &set)?
-    };
+    let (pages, blank) = pages(doc, &set, saving)?;
     if pages.is_empty() {
         return Err(bad(C, "the document has no artboard"));
     }
-    // The artboards' background colors, behind the art (the editing data keeps them as colors).
-    let filled = super::export::with_artboard_fills(doc, p, pages.iter().filter_map(|(b, ..)| *b)).map_err(|e| bad(C, e))?;
+    // The file Save writes alone becomes the document's own, so it carries every artboard.
+    let whole = saving && pages.len() == 1;
+    // The artboards' background colors, behind the art (the editing data keeps them as colors);
+    // a page on the first artboard because no art shows has that artboard's color.
+    let fills = pages.iter().filter_map(|(b, ..)| *b).chain(blank.then_some(0));
+    let filled = super::export::with_artboard_fills(doc, p, fills).map_err(|e| bad(C, e))?;
     let doc = &*filled;
     let regions: Vec<Rect> = pages.iter().map(|(_, region, _)| *region).collect();
     let expanded = expand_transparent_tile_images(doc, &set.flatten)?;
@@ -358,9 +370,9 @@ fn encode_document(doc: &Document, p: &Value, saving: bool) -> Result<Encoded> {
         let o = EpsOptions {
             region,
             origin,
-            title: doc.title.clone(),
+            title: doc.info_title().to_owned(),
             created,
-            native: Some(native(&editing, if saving { None } else { board }, set.include_linked)),
+            native: Some(native(&editing, if whole { None } else { board }, set.include_linked)),
             ..set.eps.clone()
         };
         let out = vectorcraft_eps::export(drawn, &o, preview.as_ref(), thumbnail.as_ref()).map_err(|e| bad(C, e))?;

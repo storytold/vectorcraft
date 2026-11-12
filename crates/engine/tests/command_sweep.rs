@@ -674,6 +674,8 @@ fn structured_junk() {
         ("object.blend.options", json!({"spacing": "distance", "value": -1e308, "orientation": 5})),
         ("object.blend.options", json!({"ramp": 1e308, "colorShift": -1e308, "easingType": [1]})),
         ("object.blend.make", json!({"ids": [1, 2], "ramp": f64::NAN, "colorShift": [1]})),
+        ("object.blend.make", json!({"ids": [1, 2], "createSpine": ["never"], "easingType": "easeIn"})),
+        ("object.blend.createSpine", json!({"mode": 1e308})),
         ("object.blend.spine.moveAnchor", json!({"id": 2, "anchor": u64::MAX, "x": 1e308, "y": -1e308, "handle": "sideways"})),
         ("object.blend.spine.addAnchor", json!({"id": u64::MAX, "x": 0, "y": 0})),
         ("object.blend.spine.reshapeSegment", json!({"id": 2, "segment": u64::MAX, "t": f64::NAN, "dx": 1e308, "dy": -1e308})),

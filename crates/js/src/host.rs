@@ -395,13 +395,31 @@ impl Interp {
             Err(e) => return Err(self.host_error(e)?),
         };
         let writes = strict_writes().unwrap_or_else(|| self.writes_mode());
-        self.evaluated = self.evaluated.saturating_add(1);
+        self.evaluated = crate::realm::next_tag(self.evaluated);
         let tag = std::mem::replace(&mut self.source_tag, self.evaluated);
-        let code = self.encode_source(&source).and_then(|units| self.compile_source_writes(&units, false, writes, crate::bytecode::CodeKind::Eval));
+        // UTF-8 takes at most 3 bytes for each UTF-16 code unit, so the fuel for a third of the
+        // bytes is taken before the source is encoded, and the rest after. A source within the
+        // source limit must fit in the heap whole before it is encoded; a longer one is refused as
+        // a syntax error when it is encoded.
+        let floor = source.len().div_ceil(3);
+        let fits = |interp: &mut Self| {
+            let units = source.encode_utf16().count();
+            if interp.check_source_units(units).is_ok() { interp.reserve_heap(string_bytes(units)) } else { Ok(()) }
+        };
+        let code = self.prepare_source(floor).and_then(|()| fits(self)).map(|()| {
+            let units = self.encode_source(&source);
+            let rest = match &units {
+                Ok(units) => self.prepare_source(units.len().saturating_sub(floor)),
+                Err(_) => Ok(()),
+            };
+            rest.map(|()| units.and_then(|units| self.compile_source_writes(&units, false, writes, crate::bytecode::CodeKind::Eval)))
+        });
+        let code = code.and_then(|c| c);
         self.source_tag = tag;
         let r = match code {
-            Ok(code) => self.run_global(code, true),
-            Err(e) => Err(self.compile_error_to_abrupt(e)),
+            Ok(Ok(code)) => self.run_global(code, true),
+            Ok(Err(e)) => Err(self.compile_error_to_abrupt(e)),
+            Err(limit) => Err(limit),
         };
         end();
         r
