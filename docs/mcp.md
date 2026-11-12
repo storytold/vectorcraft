@@ -3486,9 +3486,10 @@ in the `swatch.list` shape (`library` is an id or a name). `swatch.library.add {
 into the document as one undo step: a colour group's name brings the whole group, a swatch's name the swatch alone,
 no names the whole library; swatches the document already has (same name and paint) are reported under `existing`
 and not added again. `apply: "fill"|"stroke"` also applies the first one, in the same undo step (what clicking a
-swatch in the library panel does). The pattern libraries Geometric Patterns (`geometric-patterns`) and Grit Textures
-(`grit-textures`: seamless black grain, grit, sand, speckle, stipple, scratch and fleck tiles), category `patterns`,
-hold pattern swatches drawn in code; adding one also adds its pattern, as pasting art painted with it does
+swatch in the library panel does). The pattern libraries Geometric Patterns (`geometric-patterns`), Grit Textures
+(`grit-textures`: seamless black grain, grit, sand, speckle, stipple, scratch and fleck tiles) and Optical Effects
+(`optical-effects`: VectorCraft's own black wave, ring, warped-check, pinched-stripe, chevron and lens tiles),
+category `patterns`, hold pattern swatches drawn in code; adding one also adds its pattern, as pasting art painted with it does
 (the same pattern the document has is reused, and a name another pattern or swatch has gets a number).
 `swatch.resetDefaults {replace?}` brings back the missing default swatches.
 
