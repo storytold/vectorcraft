@@ -52,7 +52,7 @@ use vectorcraft_plugins::{Budget, Command, Kind, Plugin, effect, export, objects
 
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param, switch_or};
 
-use vectorcraft_plugins::permissions::{self, Grant, Permission};
+use vectorcraft_plugins::permissions::{self, Grant, GrantToken, Permission};
 
 /// What a plug-in error looks like to the user. A run the caller cancelled changed nothing.
 fn err(e: vectorcraft_plugins::Error) -> EngineError {
@@ -741,17 +741,18 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Installed plug-ins stay installed after a restart (#2541). The module is written first and its
     // grant only once it is there; when the grant can't be written, the store gets the module it
-    // held back. A failed write of that module is only logged, and the grant then doesn't cover
-    // the new module. A stored module that can't be read back isn't replaced by one that needs a
-    // grant.
+    // held back. A failed write of that module is only logged: the store then holds the new module,
+    // which the grant doesn't cover. A write that reports a failure may still have put the old
+    // module back, so the store is read again to tell which module it holds. A stored module that
+    // can't be read back isn't replaced by one that needs a grant.
     let previous = s.stored_plugin_bytes(plugin.id());
     let mut stored = (previous.is_ok() || !m.asks_permissions()) && s.store_plugin(plugin.id(), &bytes);
+    let holds_new = |s: &Session| s.stored_plugin_bytes(plugin.id()).is_ok_and(|held| held.as_deref() == Some(&bytes[..]));
     if m.asks_permissions() {
         let g = Grant { id: m.id.clone(), hash: plugin.hash().to_string(), permissions: wanted };
-        registry::grant(g.clone());
+        registry::grant(GrantToken::after_engine_approval(g.clone()));
         if stored && !s.store_grant(&m.id, Some(g)) {
-            s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref());
-            stored = false;
+            stored = !s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref()) && holds_new(s);
         }
     } else {
         // This module takes the id over, so nothing the user approved for the id applies any more.
@@ -759,14 +760,16 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         // When the write failed, the old stored module stays in the folder and needs its grant at
         // the next launch. A grant that can't be removed still approves the old bytes, so the store
         // gets the module it held back. When that module can't be read or written back, or there
-        // was none, no module goes with the grant, and the grant stops counting for this session. A
-        // grants file that is too large or doesn't hold a list approves nothing, and the new module
-        // stays; one that can't be opened or read may approve the old bytes once it reads again.
+        // was none, no module goes with the grant, and the grant stops counting for every session in
+        // the process attached to the folder. A grants file that is too large or doesn't hold a list
+        // approves nothing, and the new module stays; one that can't be opened or read may approve
+        // the old bytes once it reads again.
+        let writes = s.grant_writes();
         if stored && !s.store_grant(&m.id, None) && s.holds_plugin_grant(&m.id) {
             let back = previous.as_ref().is_ok_and(|held| s.put_back_plugin(plugin.id(), held.as_deref()));
-            stored = !back;
+            stored = !back && holds_new(s);
             if !back || matches!(previous, Ok(None)) {
-                s.ignore_stored_grant(&m.id);
+                s.ignore_stored_grant(&m.id, writes);
             }
         }
     }
@@ -786,7 +789,8 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     if changed {
         s.store_disabled_plugins();
     }
-    let mut v = describe_installed(&registry::install(plugin));
+    let installed = registry::install(plugin).map_err(err)?;
+    let mut v = describe_installed(&installed);
     if !unknown.is_empty() {
         v["unknownCommands"] = json!(unknown);
     }
@@ -846,6 +850,15 @@ pub(crate) fn sync_prefs(s: &Session) {
     *last = Some((folder.to_string(), s.plugin_dir.clone(), load_folder(s, folder)));
 }
 
+/// The Additional Plug-ins Folder preference was cleared from `old`: when `old` is the folder last
+/// loaded, it is forgotten, so setting the preference to it again loads it again.
+pub(crate) fn forget_prefs_folder(old: &str) {
+    let mut last = FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    if last.as_ref().is_some_and(|(f, _, _)| f == old.trim()) {
+        *last = None;
+    }
+}
+
 /// Turns Safe Mode on for `--safe-mode`, before the plug-in folder is attached: no plug-in loads or
 /// runs in this process from then on.
 pub fn start_in_safe_mode() {
@@ -876,7 +889,7 @@ fn load_folder(s: &Session, folder: &str) -> Value {
         None if crate::file_access::current().is_none() => Ok(()),
         None => Err(format!("automation path rejected: {} isn't valid text", f.display())),
     };
-    match registry::load_folder_where(std::path::Path::new(folder), allow, s.plugin_approver()) {
+    match registry::load_folder_where(std::path::Path::new(folder), allow, s.plugin_folder_approver()) {
         Ok(r) => {
             for id in &r.loaded {
                 s.attach_plugin_storage(id);
@@ -1087,7 +1100,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Plug-in",
             [],
             None,
-            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, the command fails and the plug-in stays installed); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it → {removed}",
+            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, the command fails and the plug-in stays installed; when the settings can't be moved back either, the error names the folder they stay in, and the next load, install or removal of the plug-in moves them back); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it → {removed}",
             always,
             remove
         ),

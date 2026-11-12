@@ -249,8 +249,9 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
     // the layout.
     if let Some(fields) = ui.as_object_mut() {
         fields.remove("floating_panels");
+        leave_out_unreadable_paths(fields);
     }
-    json!({
+    let mut inspected = json!({
         "scriptRunning": app.session.script_running(),
         "scriptReport": app.session.script_report(),
         "tool": app.session.tool_id(),
@@ -294,8 +295,9 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "nativeMenuBar": app.services.native_menu.is_some(),
         // Saves and exports still being written in the background (Background Save / Export).
         "background": app.background.jobs.iter().filter(|j| !j.label.is_empty()).map(|j| j.label.as_str()).collect::<Vec<_>>(),
-        // Documents still being read off the UI thread (File › Open, Open Recent): their paths.
-        "opening": app.opening.pending.iter().map(|p| p.path.as_str()).collect::<Vec<_>>(),
+        // Documents still being read off the UI thread (File › Open, Open Recent): their paths, without
+        // the ones outside the read root.
+        "opening": app.opening.pending.iter().map(|p| p.path.as_str()).filter(|p| readable(p)).collect::<Vec<_>>(),
         // Files still being read off the UI thread for Place (the Place dialog's OK, drops): their
         // names, in the order they are placed.
         "placing": app.placing.pending.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
@@ -305,7 +307,153 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         // A native file dialog open off the UI thread (`open`, `place`, `save`, `folder`), waiting
         // for the person at the computer: what asked for it runs again when it answers.
         "fileDialog": app.picks.waiting_kind(),
-    })
+    });
+    let ids = unreadable_library_ids(app);
+    hide_library_ids(&mut inspected, &ids);
+    inspected
+}
+
+/// The fields of the UI state, by their keys in `ui.inspect`'s `ui`, that hold panel ids: the panel
+/// popped out of the collapsed column, the docking layout, closed panels' places and groups, the panels
+/// shown as icons or collapsed, and the older floating panels' record.
+const PANEL_FIELDS: [&str; 7] =
+    ["open_panel", "docking", "docking_hidden", "docking_hidden_groups", "docking_icons", "docking_collapsed", "floating_panels"];
+
+/// The ids of the loaded libraries (`loaded/<path>`) that the UI state refers to and whose file the
+/// request may not read, each with the id a reply shows instead: `loaded/<file name>`, as a library
+/// loaded without a path is named. The UI state refers to a library by its bare id in a library panel
+/// and the Color Guide's limit, and by a panel id (`library:<kind>:loaded/<path>`) in the fields of
+/// [`PANEL_FIELDS`] and the workspaces' layouts. Text the person types (a command palette query, a
+/// workspace's name) is not read. The ids are numbered with the session's loaded libraries as the
+/// library commands number them ([`vectorcraft_engine::cmd::swatchlib::concealed_library_ids`]), so
+/// that two libraries stay two and `ui.inspect`, `ui.docking` and the library commands show a library
+/// under the same id.
+fn unreadable_library_ids(app: &VectorcraftApp) -> Vec<(String, String)> {
+    let mut ids = std::collections::BTreeSet::new();
+    let ui = serde_json::to_value(&app.ui).unwrap_or_default();
+    for field in PANEL_FIELDS {
+        collect_library_panel_ids(&ui[field], &mut ids);
+    }
+    for workspace in ["custom_workspaces", "workspace_changes"].iter().filter_map(|k| ui[k].as_array()).flatten() {
+        for (_, layout) in workspace.as_object().into_iter().flatten().filter(|(k, _)| k.as_str() != "name") {
+            collect_library_panel_ids(layout, &mut ids);
+        }
+    }
+    collect_library_panel_ids(&json!(app.ui.transient_panel), &mut ids);
+    for id in app.ui.library_panels.iter().map(|p| p.id.as_str()).chain([app.ui.color_guide_limit.as_str()]) {
+        add_library_id(id, &mut ids);
+    }
+    let mut hidden = vectorcraft_engine::cmd::swatchlib::concealed_library_ids(&app.session, ids.iter().cloned());
+    // Only the ids the UI state refers to are replaced in the reply.
+    hidden.retain(|(id, _)| ids.contains(id));
+    // The longest first, so that an id that begins another one does not replace part of it.
+    hidden.sort_by_key(|(id, _)| std::cmp::Reverse(id.len()));
+    hidden
+}
+
+/// Adds `id` to `ids` when it is a loaded library's id (`loaded/<path>`).
+fn add_library_id(id: &str, ids: &mut std::collections::BTreeSet<String>) {
+    if id.len() > "loaded/".len() && id.starts_with("loaded/") {
+        ids.insert(id.to_string());
+    }
+}
+
+/// Adds to `ids` the loaded library id of every library panel id (`library:<kind>:loaded/<path>`)
+/// that `v` holds as a string or a key.
+fn collect_library_panel_ids(v: &Value, ids: &mut std::collections::BTreeSet<String>) {
+    let add = |s: &str, ids: &mut std::collections::BTreeSet<String>| {
+        if let Some((_, id)) = s.strip_prefix(crate::panels::library_panel::PREFIX).and_then(|rest| rest.split_once(':')) {
+            add_library_id(id, ids);
+        }
+    };
+    match v {
+        Value::String(s) => add(s, ids),
+        Value::Array(items) => items.iter().for_each(|item| collect_library_panel_ids(item, ids)),
+        Value::Object(fields) => {
+            for (key, item) in fields {
+                add(key, ids);
+                collect_library_panel_ids(item, ids);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Writes each id of `ids` as the id the reply shows instead, wherever `v` holds it: in a library's
+/// id, in its panel's id (`library:swatches:loaded/<path>`) and in keys.
+fn hide_library_ids(v: &mut Value, ids: &[(String, String)]) {
+    if ids.is_empty() {
+        return;
+    }
+    let hide = |s: &mut String| {
+        for (id, shown) in ids {
+            if s.contains(id.as_str()) {
+                *s = s.replace(id.as_str(), shown);
+            }
+        }
+    };
+    match v {
+        Value::String(s) => hide(s),
+        Value::Array(items) => items.iter_mut().for_each(|item| hide_library_ids(item, ids)),
+        Value::Object(fields) => {
+            for (mut key, mut item) in std::mem::take(fields) {
+                hide(&mut key);
+                hide_library_ids(&mut item, ids);
+                fields.insert(key, item);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The preferences that hold a folder, by their keys in `ui.engine_prefs` and the Preferences dialog.
+const PREF_FOLDERS: [&str; 6] = ["fontsFolder", "pluginsFolder", "scratchPrimary", "scratchSecondary", "recoveryFolder", "templatesFolder"];
+
+/// The scratch disk choices that are not paths.
+const SCRATCH_CHOICES: [&str; 2] = ["Startup", "None"];
+
+/// May the request being served read `path`? Under an automation read root (a control client's
+/// request), `ui.inspect` leaves out a path outside the root, as `ui.menu.list` leaves out a recent
+/// file or a listed script outside it.
+fn readable(path: &str) -> bool {
+    vectorcraft_engine::file_access::check_read(path).is_ok()
+}
+
+/// Takes out of `ui.inspect`'s copy of the UI state the paths the request may not read: recent files,
+/// a library panel's file and folder preferences (saved, and in an open Preferences dialog) outside
+/// the read root. The UI state itself is not changed.
+fn leave_out_unreadable_paths(ui: &mut serde_json::Map<String, Value>) {
+    if let Some(Value::Array(files)) = ui.get_mut("recent_files") {
+        files.retain(|f| f.as_str().is_some_and(readable));
+    }
+    if let Some(Value::Array(panels)) = ui.get_mut("library_panels") {
+        for panel in panels.iter_mut().filter_map(Value::as_object_mut) {
+            if panel.get("path").and_then(Value::as_str).is_some_and(|p| !readable(p)) {
+                panel.remove("path");
+            }
+        }
+    }
+    if let Some(Value::Object(prefs)) = ui.get_mut("engine_prefs") {
+        leave_out_unreadable_folders(prefs);
+    }
+    if let Some(Value::Object(dialog)) = ui.get_mut("dialog")
+        && dialog.get("kind").and_then(Value::as_str) == Some("preferences")
+        && let Some(Value::Object(fields)) = dialog.get_mut("fields")
+    {
+        leave_out_unreadable_folders(fields);
+    }
+}
+
+/// Takes out of `prefs` the folder preferences ([`PREF_FOLDERS`]) the request may not read. An
+/// empty value (no folder) and a scratch disk choice ([`SCRATCH_CHOICES`]) stay.
+fn leave_out_unreadable_folders(prefs: &mut serde_json::Map<String, Value>) {
+    for key in PREF_FOLDERS {
+        let Some(path) = prefs.get(key).and_then(Value::as_str).map(str::trim) else { continue };
+        if path.is_empty() || (key.starts_with("scratch") && SCRATCH_CHOICES.contains(&path)) || readable(path) {
+            continue;
+        }
+        prefs.remove(key);
+    }
 }
 
 fn key_from(name: &str) -> Option<egui::Key> {
@@ -326,9 +474,24 @@ fn key_from(name: &str) -> Option<egui::Key> {
 
 /// The modifier keys a request holds down (`cmd`, `ctrl`, `alt`, `shift`; `cmd` is Command on
 /// macOS, Ctrl elsewhere).
-fn modifiers(p: &Value) -> egui::Modifiers {
-    let b = |n: &str| p.get(n).and_then(Value::as_bool).unwrap_or(false);
-    egui::Modifiers { alt: b("alt"), ctrl: b("ctrl"), shift: b("shift"), mac_cmd: b("cmd") && cfg!(target_os = "macos"), command: b("cmd") }
+fn modifiers(p: &Value) -> Result<egui::Modifiers, String> {
+    let b = |n: &str| crate::menus::opt_bool(p, n).map(|on| on.unwrap_or(false));
+    let cmd = b("cmd")?;
+    Ok(egui::Modifiers { alt: b("alt")?, ctrl: b("ctrl")?, shift: b("shift")?, mac_cmd: cmd && cfg!(target_os = "macos"), command: cmd })
+}
+
+/// An optional number param of a control request as `f32`, `default` when it is omitted or null.
+fn coord(p: &Value, key: &str, default: f32) -> Result<f32, String> {
+    crate::menus::opt_number(p, key).map(|n| n.map_or(default, |n| n as f32))
+}
+
+/// A pointer packet's `mods`: none when omitted or null, else an object of booleans.
+fn packet_mods(value: Option<&Value>) -> Result<Option<Mods>, String> {
+    match value {
+        None | Some(Value::Null) => Ok(None),
+        Some(m) if !m.is_object() => Err("`mods` must be an object of true or false values".to_string()),
+        Some(m) => serde_json::from_value(m.clone()).map(Some).map_err(|e| format!("`mods` must be an object of true or false values: {e}")),
+    }
 }
 
 pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
@@ -348,7 +511,12 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         "engine.commands" => ok(all_commands(app)),
         "document.inspect" => wrap(app.run("document.inspect", p.clone())),
         "ui.inspect" => ok(inspect(app, ctx)),
-        "ui.docking" => ok(crate::panel_docking::inspect(app, ctx)),
+        "ui.docking" => {
+            let mut docking = crate::panel_docking::inspect(app, ctx);
+            let ids = unreadable_library_ids(app);
+            hide_library_ids(&mut docking, &ids);
+            ok(docking)
+        }
         "ui.menu.list" => ok(serde_json::to_value(crate::menus::menu_entries(app)).unwrap_or_default()),
         "ui.contextMenu.list" => ok(serde_json::to_value(crate::menus::context_entries(app)).unwrap_or_default()),
         "ui.tool.select" => wrap(app.run("tool.select", json!({"tool": s("tool").unwrap_or("")}))),
@@ -359,10 +527,13 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
         "ui.pointer" => pointer_events(app, ctx, req),
         "ui.key" => {
             let Some(k) = s("key").and_then(key_from) else { return err("unknown or missing `key`") };
+            let m = match modifiers(p) {
+                Ok(m) => m,
+                Err(e) => return err(e),
+            };
             if let Err(e) = reserve_synthetic(app, 2 + usize::from(s("text").is_some())) {
                 return err(e);
             }
-            let m = modifiers(p);
             app.synthetic.push(egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers: m });
             // Typed text comes with the press, so it shares the key's frame and modifiers.
             if let Some(t) = s("text") {
@@ -373,31 +544,39 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             ok(Value::Null)
         }
         "ui.move" => {
+            let pos = match coord(p, "x", 0.0).and_then(|x| Ok(egui::pos2(x, coord(p, "y", 0.0)?))) {
+                Ok(pos) => pos,
+                Err(e) => return err(e),
+            };
             if let Err(e) = reserve_synthetic(app, 1) {
                 return err(e);
             }
-            let pos = egui::pos2(p.get("x").and_then(Value::as_f64).unwrap_or(0.0) as f32, p.get("y").and_then(Value::as_f64).unwrap_or(0.0) as f32);
             app.synthetic.push(egui::Event::PointerMoved(pos));
             ctx.request_repaint();
             ok(Value::Null)
         }
         "ui.click" | "ui.drag" => synthetic_click(app, ctx, req),
         "ui.wheel" => {
+            // Mouse wheel notches over screen point (x, y): `dy` up (+) or down, `dx` sideways
+            // (`unit: "point"` for trackpad-like points), with modifiers as `ui.click` takes them.
+            let given =
+                (|| Ok::<_, String>(([coord(p, "dx", 0.0)?, coord(p, "dy", 0.0)?, coord(p, "x", 0.0)?, coord(p, "y", 0.0)?], modifiers(p)?)))();
+            let ([dx, dy, x, y], modifiers) = match given {
+                Ok(given) => given,
+                Err(e) => return err(e),
+            };
             if let Err(e) = reserve_synthetic(app, 2) {
                 return err(e);
             }
-            // Mouse wheel notches over screen point (x, y): `dy` up (+) or down, `dx` sideways
-            // (`unit: "point"` for trackpad-like points), with modifiers as `ui.click` takes them.
-            let f = |k: &str| p.get(k).and_then(Value::as_f64).unwrap_or(0.0) as f32;
             let unit = if s("unit") == Some("point") { egui::MouseWheelUnit::Point } else { egui::MouseWheelUnit::Line };
             // Notches, not a flood: a turn stays within what a real wheel sends.
-            let delta = egui::vec2(f("dx"), f("dy")).clamp(egui::Vec2::splat(-100.0), egui::Vec2::splat(100.0));
-            app.synthetic.push(egui::Event::PointerMoved(egui::pos2(f("x"), f("y"))));
+            let delta = egui::vec2(dx, dy).clamp(egui::Vec2::splat(-100.0), egui::Vec2::splat(100.0));
+            app.synthetic.push(egui::Event::PointerMoved(egui::pos2(x, y)));
             app.synthetic.push(egui::Event::MouseWheel {
                 unit,
                 delta,
                 phase: egui::TouchPhase::Move,
-                modifiers: modifiers(p),
+                modifiers,
                 source: egui::MouseWheelSource::Unknown,
             });
             ctx.request_repaint();
@@ -462,8 +641,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             ok(Value::Null)
         }
         "ui.resize" => {
-            let w = p.get("width").and_then(Value::as_f64).unwrap_or(1440.0) as f32;
-            let h = p.get("height").and_then(Value::as_f64).unwrap_or(900.0) as f32;
+            let (w, h) = match coord(p, "width", 1440.0).and_then(|w| Ok((w, coord(p, "height", 900.0)?))) {
+                Ok(size) => size,
+                Err(e) => return err(e),
+            };
             ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(w, h)));
             ok(Value::Null)
         }
@@ -476,32 +657,48 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             if let Some(Err(e)) = s("path").map(vectorcraft_engine::file_access::check_write) {
                 return err(e);
             }
-            if p.get("focus").and_then(Value::as_bool).unwrap_or(true) {
+            let flags = crate::menus::opt_bool(p, "focus").and_then(|focus| Ok((focus, crate::menus::opt_bool(p, "data")?)));
+            let (focus, data) = match flags {
+                Ok(flags) => flags,
+                Err(e) => return err(e),
+            };
+            if focus.unwrap_or(true) {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             }
             ctx.request_repaint();
-            Outcome::Screenshot { path: s("path").map(str::to_string), data: p.get("data").and_then(Value::as_bool) == Some(true) }
+            Outcome::Screenshot { path: s("path").map(str::to_string), data: data == Some(true) }
         }
         "ui.render" => {
+            let given = (|| {
+                Ok::<_, String>((
+                    crate::menus::opt_index(p, "artboard")?,
+                    crate::menus::opt_number(p, "scale")?,
+                    crate::menus::opt_bool(p, "traceViews")?,
+                    crate::menus::opt_bool(p, "data")?,
+                ))
+            })();
+            let (index, scale, trace_views, data) = match given {
+                Ok(given) => given,
+                Err(e) => return err(e),
+            };
             let Some(st) = app.session.active() else { return err("no document") };
             let doc = st.doc.clone();
             // The artboard asked for (0-based, as headless), else the first.
-            let index = p.get("artboard").and_then(Value::as_u64).map_or(Some(0), |i| usize::try_from(i).ok());
-            let Some(r) = index.and_then(|i| doc.artboards.get(i)).map(|a| a.rect) else { return err("no such artboard") };
-            let scale = p.get("scale").and_then(Value::as_f64).unwrap_or(1.0);
+            let Some(r) = doc.artboards.get(index.unwrap_or(0)).map(|a| a.rect) else { return err("no such artboard") };
+            let scale = scale.unwrap_or(1.0);
             if let Err(e) = vectorcraft_render::raster_size(r, scale) {
                 return err(e);
             }
             // Rendered with the options of a PNG export on white, so its pixels are the exported file's.
             // `traceViews: true` draws Image Trace objects as their View shows them, as the canvas does.
             let mut opts = RasterExportOptions { background: Some([255; 3]), ..Default::default() }.render_options(RasterFormat::Png);
-            opts.trace_views = p.get("traceViews").and_then(Value::as_bool) == Some(true);
+            opts.trace_views = trace_views == Some(true);
             let img = app.canvas.renderer.render_region_with(&doc, r, scale, &opts);
             let png = match img.to_png() {
                 Ok(png) => png,
                 Err(e) => return err(e),
             };
-            let data = p.get("data").and_then(Value::as_bool) == Some(true);
+            let data = data == Some(true);
             match s("path") {
                 Some(path) => match app.services.write.as_mut() {
                     Some(w) => wrap(
@@ -704,7 +901,7 @@ fn rotate_view_pointer(
 
 /// A Rotate View packet accepts only the documented boolean modifier fields.
 fn validate_rotate_view_mods(value: Option<&Value>) -> Result<(), String> {
-    let Some(value) = value else { return Ok(()) };
+    let Some(value) = value.filter(|value| !value.is_null()) else { return Ok(()) };
     let Some(fields) = value.as_object() else { return Err("Rotate View `mods` must be an object of booleans".into()) };
     if fields.iter().any(|(key, value)| !matches!(key.as_str(), "shift" | "alt" | "cmd" | "ctrl" | "space") || !value.is_boolean()) {
         return Err("Rotate View `mods` accepts only boolean shift, alt, cmd, ctrl and space".into());
@@ -753,9 +950,36 @@ fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, req: &Con
     if rotating && let Err(error) = validate_rotate_view_events(p, events) {
         return err(error);
     }
-    let base_mods: Mods = p.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or_default();
+    // Every event is read before any is sent, so a malformed packet sends none of them.
+    let read = packet_mods(p.get("mods")).and_then(|base| {
+        let base = base.unwrap_or_default();
+        events
+            .iter()
+            .map(|e| {
+                let kind = match e.get("kind").and_then(Value::as_str).unwrap_or("") {
+                    "down" => PointerKind::Down,
+                    "drag" => PointerKind::Drag,
+                    "up" => PointerKind::Up,
+                    "move" => PointerKind::Move,
+                    "doubleclick" | "dblclick" => PointerKind::DoubleClick,
+                    other => return Err(format!("unknown pointer kind `{other}`")),
+                };
+                PointerEvent::json_check(e)?;
+                let at = |k: &str| crate::menus::opt_number(e, k).map(|n| n.unwrap_or(0.0));
+                Ok((kind, at("x")?, at("y")?, packet_mods(e.get("mods"))?.unwrap_or(base)))
+            })
+            .collect::<Result<Vec<_>, String>>()
+    });
+    let read = match read {
+        Ok(read) => read,
+        Err(e) => return err(e),
+    };
     let view = app.view_info();
     let xf = app.canvas_rect.zip(app.view().copied()).map(|(rect, v)| Xf::new(rect, &v));
+    let screen = |e: &Value| e.get("space").and_then(Value::as_str) == Some("screen");
+    if !rotating && xf.is_none() && events.iter().any(screen) {
+        return err("no canvas yet");
+    }
     let from = app.session.input_count();
     let held =
         PointerEvent::json_backquote(p, false).and_then(|d| events.iter().map(|e| PointerEvent::json_backquote(e, d)).collect::<Result<Vec<_>, _>>());
@@ -763,19 +987,8 @@ fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, req: &Con
         Ok(held) => held,
         Err(e) => return err(e),
     };
-    for (e, backquote) in events.iter().zip(held) {
-        let kind = match e.get("kind").and_then(Value::as_str).unwrap_or("") {
-            "down" => PointerKind::Down,
-            "drag" => PointerKind::Drag,
-            "up" => PointerKind::Up,
-            "move" => PointerKind::Move,
-            "doubleclick" | "dblclick" => PointerKind::DoubleClick,
-            other => return err(format!("unknown pointer kind `{other}`")),
-        };
-        let x = e.get("x").and_then(Value::as_f64).unwrap_or(0.0);
-        let y = e.get("y").and_then(Value::as_f64).unwrap_or(0.0);
-        let screen = e.get("space").and_then(Value::as_str) == Some("screen");
-        let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base_mods);
+    for ((e, backquote), (kind, x, y, mods)) in events.iter().zip(held).zip(read) {
+        let screen = screen(e);
         if rotating {
             if let Err(e) = rotate_view_pointer(app, kind, vectorcraft_geom::Point::new(x, y), screen, mods.shift) {
                 return err(e);
@@ -834,18 +1047,24 @@ fn synthetic_click(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlR
     let Some(events) = count.checked_mul(2).and_then(|n| n.checked_add(steps)).and_then(|n| n.checked_add(1)) else {
         return err("synthetic input event count is out of range");
     };
+    // Screen-space (egui points) pointer input through egui itself: reaches every widget.
+    let drag = req.method == "ui.drag";
+    let given = (|| {
+        let a = egui::pos2(coord(p, "x", 0.0)?, coord(p, "y", 0.0)?);
+        let end = if drag { egui::pos2(coord(p, "toX", 0.0)?, coord(p, "toY", 0.0)?) } else { a };
+        Ok::<_, String>((a, end, modifiers(p)?))
+    })();
+    let (a, end, modifiers) = match given {
+        Ok(given) => given,
+        Err(e) => return err(e),
+    };
     if let Err(e) = reserve_synthetic(app, events) {
         return err(e);
     }
-    // Screen-space (egui points) pointer input through egui itself: reaches every widget.
-    let f = |k: &str| p.get(k).and_then(Value::as_f64).unwrap_or(0.0) as f32;
     let button = match s("button") {
         Some("right") | Some("secondary") => egui::PointerButton::Secondary,
         _ => egui::PointerButton::Primary,
     };
-    let modifiers = modifiers(p);
-    let a = egui::pos2(f("x"), f("y"));
-    let end = if req.method == "ui.drag" { egui::pos2(f("toX"), f("toY")) } else { a };
     app.synthetic.push(egui::Event::PointerMoved(a));
     app.synthetic.push(egui::Event::PointerButton { pos: a, button, pressed: true, modifiers });
     if req.method == "ui.drag" {
@@ -867,6 +1086,11 @@ fn synthetic_click(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlR
 fn set_ui(app: &mut VectorcraftApp, req: &ControlRequest) -> Outcome {
     let p = &req.params;
     let s = |k: &str| p.get(k).and_then(Value::as_str);
+    // A flag of the wrong type is refused before anything is set.
+    let flags = ["rulers", "outline", "grid", "smartGuides", "boundingBox", "controlBar", "imageTracePreview"];
+    if let Some(e) = flags.iter().find_map(|k| crate::menus::opt_bool(p, k).err()) {
+        return err(e);
+    }
     // Outline is a setting of the active document's view: without one, nothing is set.
     if p.get("outline").is_some_and(Value::is_boolean) && app.session.active().is_none() {
         return err("no document");

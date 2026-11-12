@@ -94,8 +94,47 @@ fn run_fresh(
     params: &serde_json::Value,
 ) -> (std::result::Result<serde_json::Value, String>, Option<std::sync::Arc<vectorcraft_doc::Document>>) {
     let (mut s, ..) = doc_with_type();
-    let r = s.execute(cmd, params).map_err(|e| e.to_string());
+    let r = s.execute(cmd, params).map(|v| without_plugin_effects(cmd, v)).map_err(|e| e.to_string());
     (r, s.doc().ok().map(|d| d.doc.clone()))
+}
+
+/// `cmd`'s result with the plug-in effects (`plugin.<id>`) taken out of `effect.list`'s catalog.
+/// The plug-in tests install and remove plug-ins in the process-wide registry while these
+/// comparisons run, so two runs of `effect.list` can list different plug-ins.
+fn without_plugin_effects(cmd: &str, mut r: serde_json::Value) -> serde_json::Value {
+    if cmd == "effect.list"
+        && let Some(catalog) = r.get_mut("catalog").and_then(serde_json::Value::as_array_mut)
+    {
+        catalog.retain(|e| !e["id"].as_str().is_some_and(|id| id.starts_with(vectorcraft_plugins::PREFIX)));
+    }
+    r
+}
+
+/// Whether two results of `cmd` are the same, apart from the plug-in effects in `effect.list`'s
+/// catalog ([`without_plugin_effects`]).
+fn same_without_plugin_effects(cmd: &str, x: &serde_json::Value, y: &serde_json::Value) -> bool {
+    if cmd == "effect.list" { without_plugin_effects(cmd, x.clone()) == without_plugin_effects(cmd, y.clone()) } else { x == y }
+}
+
+/// Two `effect.list` results that differ only in a plug-in effect in the catalog compare the same;
+/// a difference in a built-in effect, in `applied` or in `activeItem`, or in another command's
+/// result, does not.
+#[test]
+fn plugin_effects_are_left_out_of_the_effect_list_comparison() {
+    let list = |catalog: &[&str], applied: serde_json::Value, active: serde_json::Value| {
+        let catalog: Vec<_> = catalog.iter().map(|id| json!({"id": id, "label": id})).collect();
+        json!({"catalog": catalog, "applied": applied, "activeItem": active})
+    };
+    let base = list(&["stylize.dropShadow"], json!([]), json!(null));
+    let with_plugin = list(&["stylize.dropShadow", "plugin.test.glow"], json!([]), json!(null));
+    assert!(same_without_plugin_effects("effect.list", &base, &with_plugin));
+    assert!(same_without_plugin_effects("effect.list", &with_plugin, &base));
+    assert_eq!(without_plugin_effects("effect.list", with_plugin.clone()), base);
+    assert!(!same_without_plugin_effects("effect.list", &base, &list(&[], json!([]), json!(null))), "a built-in effect");
+    assert!(!same_without_plugin_effects("effect.list", &base, &list(&["stylize.dropShadow"], json!([{"id": 3}]), json!(null))), "applied");
+    assert!(!same_without_plugin_effects("effect.list", &base, &list(&["stylize.dropShadow"], json!([]), json!(0))), "activeItem");
+    assert!(!same_without_plugin_effects("object.transform", &base, &with_plugin), "another command");
+    assert_eq!(without_plugin_effects("object.transform", with_plugin.clone()), with_plugin);
 }
 
 /// Every command whose params description names both `id` and `ids` (`{ids?|id?}`, `{id?, ids?:
@@ -265,7 +304,7 @@ fn ids_and_selection(cmd: &str, picks: &[usize]) -> std::result::Result<bool, St
     with_ids["ids"] = json!(list);
     let (a, b) = (given.execute(cmd, &with_ids), selected.execute(cmd, &params));
     let same_result = match (&a, &b) {
-        (Ok(x), Ok(y)) => x == y,
+        (Ok(x), Ok(y)) => same_without_plugin_effects(cmd, x, y),
         (Err(x), Err(y)) => x.to_string() == y.to_string(),
         _ => false,
     };
@@ -436,9 +475,7 @@ fn an_ids_entry_that_is_not_an_id_is_refused_and_changes_nothing() {
 /// With the rectangle apart (`d`) selected, the same commands with `ids` (or `slices`) left out and
 /// with it null do the same: what the selection's list does for the commands that take the
 /// selection, and the command's own default for the others (`object.slice.select` deselects the
-/// slices). `addon.color.filter` and `addon.color.applyNearestSwatch` read `ids` through
-/// [`cmd::checked_ids_or_selection`], which refuses null as a value that is not a list and changes
-/// nothing.
+/// slices).
 #[test]
 fn ids_left_out_or_null_take_the_selection_or_the_default() {
     let (_, [.., d], _) = doc_with_type();
@@ -450,15 +487,7 @@ fn ids_left_out_or_null_take_the_selection_or_the_default() {
         let mut null = params.clone();
         null[key] = serde_json::Value::Null;
         let with_null = outcome(cmd, &null, &[d], slice);
-        if matches!(cmd, "addon.color.filter" | "addon.color.applyNearestSwatch") {
-            let (mut s, ..) = doc_with_type();
-            s.execute("select.set", &json!({ "ids": [d] })).unwrap();
-            let st = s.doc().unwrap();
-            let refused = with_null.0.as_ref().is_err_and(|e| e.ends_with("ids must be an array of non-negative integer object ids"));
-            if !refused || (&with_null.1, &with_null.2, with_null.3) != (&*st.doc, &st.selection, st.history.undo.len()) {
-                failures.push(format!("{cmd} {key}: null is not refused with nothing changed ({:.160?})", with_null.0));
-            }
-        } else if with_null != left_out {
+        if with_null != left_out {
             failures.push(format!("{cmd} {key}: null does not do what leaving it out does ({:.160?})", left_out.0));
         }
         let mut listed = params.clone();
@@ -473,6 +502,65 @@ fn ids_left_out_or_null_take_the_selection_or_the_default() {
         if !ok {
             failures.push(format!("{cmd} {key}: left out: {:.200?}; listed: {:.200?}", left_out.0, listed.0));
         }
+    }
+    assert!(failures.is_empty(), "{} fail:\n{}", failures.len(), failures.join("\n"));
+}
+
+/// The commands that read `ids` through [`cmd::checked_ids_or_selection`] take `ids: null` as left
+/// out: with the rectangle apart (`d`) or the type object (`t`) selected, null gives the same
+/// result or error, document, selection and undo history as leaving `ids` out. Print Ink Fixes
+/// runs in a CMYK document.
+#[test]
+fn ids_null_takes_the_selection_in_every_command_that_falls_back_to_it() {
+    let (_, [.., d], t) = doc_with_type();
+    let mut failures = vec![];
+    let (rect, both, text) = (&[d][..], &[d, t][..], &[t][..]);
+    let cases = [
+        ("addon.arrange.randomizeOpacity", json!({"seed": 1}), rect),
+        ("addon.arrange.sort", json!({"by": "area", "apply": "x"}), both),
+        ("addon.cleanup.simplify", json!({}), rect),
+        ("addon.cleanup.deepUngroup", json!({}), rect),
+        ("addon.cleanup.rejoin", json!({}), rect),
+        ("addon.color.nearestSwatch", json!({}), rect),
+        ("addon.pathtools.cornerSet", json!({"radius": 2}), rect),
+        ("addon.pathtools.cornerRemove", json!({}), rect),
+        ("addon.pathtools.shape.convert", json!({}), rect),
+        ("addon.pathtools.erase", json!({"points": [[0, 20], [200, 20]]}), rect),
+        ("addon.pathtools.crossings", json!({}), rect),
+        ("addon.pathtools.expandDashes", json!({}), rect),
+        ("object.path.smooth", json!({}), rect),
+        ("object.textWrap.make", json!({}), rect),
+        ("object.textWrap.release", json!({}), rect),
+        ("object.textWrap.options", json!({}), rect),
+        ("variable.bind", json!({"variable": "v"}), rect),
+        ("variable.unbind", json!({}), rect),
+        ("addon.cleanup.breakText", json!({}), text),
+        ("addon.cleanup.combineText", json!({}), text),
+        ("addon.cleanup.joinText", json!({}), text),
+        ("addon.cleanup.removeBreaks", json!({"kind": "line"}), text),
+        ("addon.cleanup.resetTextTransform", json!({}), text),
+        ("addon.cleanup.alignInPlace", json!({"align": "left"}), text),
+    ];
+    for (cmd, params, selected) in cases {
+        let left_out = outcome(cmd, &params, selected, false);
+        let mut null = params.clone();
+        null["ids"] = serde_json::Value::Null;
+        let with_null = outcome(cmd, &null, selected, false);
+        if with_null != left_out {
+            failures.push(format!("{cmd}: null gives {:.160?}; left out gives {:.160?}", with_null.0, left_out.0));
+        }
+    }
+    let print_fixes = |p: &serde_json::Value| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200, "colorMode": "cmyk", "created": null})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+        let r = s.execute("addon.color.printFixes", p).map_err(|e| e.to_string());
+        let st = s.doc().unwrap();
+        (r, (*st.doc).clone(), st.selection.clone(), st.history.undo.len())
+    };
+    let (left_out, with_null) = (print_fixes(&json!({"inkLimit": 200})), print_fixes(&json!({"inkLimit": 200, "ids": null})));
+    if with_null != left_out {
+        failures.push(format!("addon.color.printFixes: null gives {:.160?}; left out gives {:.160?}", with_null.0, left_out.0));
     }
     assert!(failures.is_empty(), "{} fail:\n{}", failures.len(), failures.join("\n"));
 }

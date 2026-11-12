@@ -50,7 +50,7 @@ use fill::fill_uncovered;
 use fill::{fill_view, polygon_area};
 #[cfg(test)]
 use grid::ruler_rects;
-use grid::{LineLook, PIXEL_GRID, PIXEL_GRID_ZOOM, checker, clip_segment, grid, ruler_input, rulers, textured_quad, view_bounds};
+use grid::{LineLook, PIXEL_GRID, PIXEL_GRID_ZOOM, checker, clip_segment, grid, ruler_input, rulers, rulers_hidden, textured_quad, view_bounds};
 pub(crate) use grid::{RulerScale, checker_texture, ruler_label, ruler_origin_dragging};
 #[cfg(test)]
 pub(crate) use grid::{TRANSPARENCY_GRID, vertical_label_height};
@@ -283,7 +283,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.ctx().request_repaint_after_secs(secs as f32);
     }
     let hover_still = wait.is_none();
-    let origin_preview = if app.ui.view.rulers && app.ui.screen_mode < 3 { ruler_input(app, ui, full, rect, &xf) } else { None };
+    let origin_preview = if app.ui.view.rulers && app.ui.screen_mode < 3 { ruler_input(app, ui, full, rect, &xf) } else { rulers_hidden(app, ui) };
     crate::document_drag::drop_on_canvas(app, &resp, &xf);
     panel_drop(app, ui, &resp, &xf);
     // In Presentation Mode a right click or a long touch opens no context menu.
@@ -1119,11 +1119,12 @@ fn guides_of(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, (painter, 
     let look = LineLook::guides(&app.session.prefs, t);
     let picked = LineLook { color: t.selection, ..look };
     let labels = guide_labels(doc);
-    let selected: &[usize] = &st.selection.guides;
+    let selected: &[vectorcraft_doc::NodeId] = &st.selection.guides;
     let key = st.selection.key_guide;
     let view = view_bounds(xf);
     // Guides on a hidden layer hide with it.
-    for (i, g) in doc.guides.iter().enumerate().filter(|(_, g)| doc.guide_shown(g)) {
+    for g in doc.ruler_guides().iter().filter(|g| doc.guide_shown(g)) {
+        let Some(i) = g.id else { continue };
         let at = |along: f64| xf.to_screen(if g.vertical { Point::new(g.pos, along) } else { Point::new(along, g.pos) });
         // An artboard guide runs across its artboard, a canvas guide across the window (the part
         // of its document line that the canvas shows, turned with the view).

@@ -1,12 +1,12 @@
 //! Compact controls for the 3D and Materials effects: Extrude & Bevel, Revolve, Inflate and Rotate,
-//! and Extrude & Bevel (Classic), whose own controls are in `three_d_classic`. The object and the
-//! rotation and light gizmos live on the artboard. All document changes run through the effect
+//! and Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic), whose own controls are in
+//! `three_d_classic`. The object and the rotation and light gizmos live on the artboard. All document changes run through the effect
 //! dialog's existing preview/commit commands.
 
 use egui::{Align2, FontId, Id, Pos2, Sense, Stroke, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
-use vectorcraft_effects::{CLASSIC_EXTRUDE, EXTRUDE, INFLATE, REVOLVE, ROTATION_PRESETS};
+use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, REVOLVE, ROTATION_PRESETS};
 
 use crate::state::Dialog;
 use crate::theme::Tokens;
@@ -145,11 +145,12 @@ pub(super) fn c3(s: &'static str) -> &'static str {
     crate::i18n::tr_ctx(crate::i18n::current(), "3d", s)
 }
 
-/// Extrude & Bevel, Inflate and Extrude & Bevel (Classic): Object, Rotation and Lighting tabs
-/// (Rotate has no Object tab). The rotation gizmo shows on the first two, the light gizmo on
-/// Lighting.
+/// Extrude & Bevel, Inflate, Extrude & Bevel (Classic) and Revolve (Classic): Object, Rotation and
+/// Lighting tabs (Rotate and Rotate (Classic) have no Object tab). The rotation gizmo shows on the
+/// first two, the light gizmo on Lighting.
 fn solid_controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id: &str) {
-    let object = id == EXTRUDE || id == INFLATE || id == CLASSIC_EXTRUDE;
+    let classic = vectorcraft_effects::is_classic_three_d(id);
+    let object = id == EXTRUDE || id == INFLATE || id == CLASSIC_EXTRUDE || id == CLASSIC_REVOLVE;
     let mut tabs = vec![];
     if object {
         tabs.push(tl!("Object"));
@@ -169,7 +170,7 @@ fn solid_controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id: &
     }
     ui.add_space(8.0);
     if super::revolve_gizmo::lighting(d) {
-        if id == CLASSIC_EXTRUDE {
+        if classic {
             super::three_d_classic::surface_controls(ui, d);
         } else {
             lighting_controls(ui, d);
@@ -178,6 +179,8 @@ fn solid_controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id: &
         let unit = app.session.general_unit();
         if id == CLASSIC_EXTRUDE {
             super::three_d_classic::object_controls(ui, d, unit);
+        } else if id == CLASSIC_REVOLVE {
+            super::three_d_classic::revolve_controls(ui, d, unit);
         } else if id == EXTRUDE {
             extrude_controls(ui, d, unit);
         } else {
@@ -332,6 +335,27 @@ fn lighting_controls(ui: &mut egui::Ui, d: &mut Dialog) {
         if light_record(&selected) != before {
             store_selected(d, &selected);
         }
+    });
+    shadow_controls(ui, d);
+}
+
+/// The Shadows switch, and below it while the switch is on or mixed, the shadow's Position,
+/// Distance from Object and Shadow Bounds. The first light casts the shadow, so they are
+/// unavailable while Shading is off.
+fn shadow_controls(ui: &mut egui::Ui, d: &mut Dialog) {
+    ui.add_enabled_ui(flag(d, "shade", true) != Some(false), |ui| {
+        toggle(ui, d, "shadow", tl!("Shadows"), false);
+        if flag(d, "shadow", false) == Some(false) {
+            return;
+        }
+        let positions: Vec<(Value, &str)> = super::effect::own_choices(&d.str("__effect"), "shadowPosition", false)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(label, value)| (json!(value), label))
+            .collect();
+        choice(ui, d, "shadowPosition", tl!("Position"), &positions);
+        number(ui, d, "shadowDistance", tl!("Distance from Object"), (0.0, 100.0), "%", 1, None);
+        number(ui, d, "shadowBounds", tl!("Shadow Bounds"), (10.0, 400.0), "%", 1, None);
     });
 }
 

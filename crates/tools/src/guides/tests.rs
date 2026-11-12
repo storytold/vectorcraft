@@ -442,9 +442,9 @@ fn drawn_points_land_on_intersections() {
         let id = d.alloc_id();
         d.insert(Some(l), 1, Node::path(id, path, Appearance::default_art())).unwrap();
     }
-    d.guides.push(vectorcraft_doc::Guide::new(true, 400.0));
-    d.guides.push(vectorcraft_doc::Guide::new(false, 300.0));
-    d.guides.push(vectorcraft_doc::Guide::new(false, 150.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 400.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 300.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 150.0));
     let (s, p) = (Selection::default(), paint());
     let c = ToolContext { guides: true, ..cx(&d, &s, &p) };
     let t = Targets::for_drawing(&d, &[], None, None).styled(&c).with_rulers(&c);
@@ -612,8 +612,8 @@ fn bisection_finds_what_a_scan_finds() {
 #[test]
 fn drawn_points_snap_to_ruler_guides_with_smart_guides_on() {
     let (mut d, _) = doc_with_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(false, 313.0));
-    d.guides.push(vectorcraft_doc::Guide::new(true, 331.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 313.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 331.0));
     let (s, p) = (Selection::default(), paint());
     let c = cx(&d, &s, &p);
     let mut snap = DrawSnap::default();

@@ -606,6 +606,34 @@ fn the_control_bar_and_properties_trace_a_selected_image() {
     assert!(selected_trace(&app).is_none() && g.children().unwrap().iter().all(|c| !matches!(c.kind, NodeKind::Image(_))), "expanded");
 }
 
+/// With the Control bar's Image Options group off, a selected image or Image Trace object shows
+/// neither its own controls nor Fill and Stroke in their place; its label and Opacity stay.
+#[test]
+fn the_image_options_group_holds_the_image_and_trace_controls() {
+    use crate::tests_removeanchors::{control_frame, has};
+    let mut app = app();
+    let data = vectorcraft_format::base64_encode(&png(30, 30, 72.0));
+    app.run("file.place", json!({"name": "red.png", "dataBase64": data, "link": false})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let set = |app: &mut VectorcraftApp, on: bool| app.run("window.control.options", json!({"group": "imageOptions", "visible": on})).unwrap();
+    set(&mut app, false);
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    for s in ["Unembed…", "Image Trace", "Crop Image", "Stroke:"] {
+        assert!(!has(&bar, s), "{s}: {bar:?}");
+    }
+    assert!(has(&bar, "Embedded") && has(&bar, "Opacity:"), "{bar:?}");
+    set(&mut app, true);
+    click_label(&mut app, &ctx, "Image Trace");
+    assert!(has(&control_frame(&mut app, &ctx, vec![]), "Expand"), "traced");
+    set(&mut app, false);
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    for s in ["Preset:", "Expand", "Stroke:"] {
+        assert!(!has(&bar, s), "{s}: {bar:?}");
+    }
+    assert!(has(&bar, "Image Tracing") && has(&bar, "Opacity:"), "{bar:?}");
+}
+
 #[test]
 fn the_control_bars_mask_clips_the_image_and_selects_the_clipping_path() {
     let mut app = app();

@@ -37,6 +37,15 @@
 //! by [`Limits`]: instructions run (fuel), heap bytes, frames, nested host calls, and an
 //! [`Interrupt`] flag another thread can set. A run that reaches a limit ends with
 //! [`RunErrorKind::Limit`], which a script's `try` cannot catch.
+//!
+//! With [`Options::e4x`], the parser also reads E4X (ECMA-357, second edition, December 2005):
+//! XML and XMLList literals, the `.@`, `..`, `::` and `.( )` operators, `for each … in` and
+//! `default xml namespace`; the realm then provides `XML`, `XMLList`, `Namespace`, `QName`,
+//! `isXMLName` and `setDefaultXMLNamespace`, and XML and XMLList values have an `xpath` method that
+//! evaluates an XPath 1.0 expression. Without the option, the language and the built-ins are
+//! those of ECMAScript 5.1 above. XML trees live in the heap, and parsing, copying, comparing and
+//! serializing them, and evaluating XPath on them, use no native recursion and take fuel for each
+//! node.
 #![forbid(unsafe_code)]
 
 pub mod ast;
@@ -46,6 +55,7 @@ mod chars;
 mod compiler;
 mod date_builtins;
 mod error;
+mod file_classes;
 mod heap;
 mod host;
 mod interp;
@@ -60,10 +70,13 @@ mod regexp_vm;
 mod string_builtins;
 mod token;
 mod value;
+mod xml;
+mod xml_builtins;
+mod xpath;
 
 pub use ast::{
     AssignOp, Ast, BinaryOp, CatchClause, Expr, ExprId, ForInTarget, ForInit, Function, FunctionId, FunctionKind, LogicalOp, Name, Program, Property,
-    PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, UnaryOp, UpdateOp, VarDecl,
+    PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
 };
 pub use builtins::extensions::Localization;
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
@@ -85,11 +98,13 @@ pub struct Options {
     pub max_depth: usize,
     /// The most UTF-16 code units a source may hold.
     pub max_source_units: usize,
+    /// Read and run E4X (ECMA-357). Off, XML syntax is an error and a realm has no XML built-ins.
+    pub e4x: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { strict: false, preprocessor_lines: false, max_depth: DEFAULT_MAX_DEPTH, max_source_units: 64 << 20 }
+        Self { strict: false, preprocessor_lines: false, max_depth: DEFAULT_MAX_DEPTH, max_source_units: 64 << 20, e4x: false }
     }
 }
 
@@ -197,3 +212,5 @@ mod interp_tests;
 mod tests;
 #[cfg(test)]
 mod text_tests;
+#[cfg(test)]
+mod xml_tests;

@@ -39,16 +39,16 @@ pub struct Selection {
     /// clears them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub slices: Vec<NodeId>,
-    /// Ruler guides selected with a selection tool, as indexes into [`Document::guides`]. A new
+    /// Ruler guides selected with a selection tool, by node id ([`Document::ruler_guides`]). A new
     /// selection ([`Self::set`]) clears them; Shift-adding or -removing objects keeps them, so
     /// guides and objects can be selected together, in either order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub guides: Vec<usize>,
-    /// A selected ruler guide that is the key object for Align instead of [`Self::key`] (an index
-    /// into [`Document::guides`], one of [`Self::guides`]): the objects line up on it. Never set
-    /// with `key`; [`Self::prune`] clears it when no object is selected to align to it.
+    pub guides: Vec<NodeId>,
+    /// A selected ruler guide that is the key object for Align instead of [`Self::key`] (one of
+    /// [`Self::guides`]): the objects line up on it. Never set with `key`; [`Self::prune`] clears
+    /// it when no object is selected to align to it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub key_guide: Option<usize>,
+    pub key_guide: Option<NodeId>,
     /// The new art on a locked artboard that this selection keeps editable
     /// ([`Document::new_art`]). Undo, Redo and a failed batch restore it with the selection, and
     /// the engine then sets the document's from it. Editing state, never saved.
@@ -139,10 +139,10 @@ impl Selection {
             }
         }
     }
-    /// Select ruler guides `indexes` (see [`Selection::guides`]) and nothing else.
-    pub fn set_guides(&mut self, indexes: impl IntoIterator<Item = usize>) {
+    /// Select ruler guides `ids` (see [`Selection::guides`]) and nothing else.
+    pub fn set_guides(&mut self, ids: impl IntoIterator<Item = NodeId>) {
         self.clear();
-        for i in indexes {
+        for i in ids {
             if !self.guides.contains(&i) {
                 self.guides.push(i);
             }
@@ -150,7 +150,7 @@ impl Selection {
     }
     /// Add ruler guide `i` to the selection, or take it out, keeping the selected objects (a
     /// Shift-click on a guide).
-    pub fn toggle_guide(&mut self, i: usize) {
+    pub fn toggle_guide(&mut self, i: NodeId) {
         self.symbol_part = None;
         if let Some(k) = self.guides.iter().position(|g| *g == i) {
             self.guides.remove(k);
@@ -201,7 +201,9 @@ impl Selection {
     pub fn prune(&mut self, doc: &Document) {
         // Every id this looks up, found in one walk of the tree.
         let ids = self.objects.iter().chain(self.anchors.keys()).chain(self.segments.keys()).copied().chain(self.key).chain(self.target);
-        let found = doc.index_paths(ids);
+        let mut found = doc.index_paths(ids);
+        // A ruler guide is selected in `guides` only, never as an object, an anchor or the key.
+        found.retain(|_, p| !doc.node_at(p).is_some_and(|n| n.is_ruler_guide()));
         self.objects.retain(|id| found.contains_key(id));
         self.anchors.retain(|id, _| found.contains_key(id));
         self.segments.retain(|id, refs| {
@@ -209,8 +211,12 @@ impl Selection {
             refs.retain(|&(si, seg)| path.subpaths.get(si).is_some_and(|sp| seg < sp.segment_count()));
             !refs.is_empty() && self.objects.contains(id) && self.anchors.contains_key(id)
         });
-        // Guides on a hidden or locked layer can't stay selected.
-        self.guides.retain(|i| doc.guides.get(*i).is_some_and(|g| doc.guide_editable(g)));
+        // Guides that are gone, or hidden or locked (themselves or by their layer), can't stay
+        // selected.
+        if !self.guides.is_empty() {
+            let editable = doc.editable();
+            self.guides.retain(|id| doc.node(*id).is_some_and(|n| n.is_ruler_guide()) && editable(*id));
+        }
         // The key object stays while another selected object lies outside it, or while ruler
         // guides are selected for it to line up (#2143).
         let keep = self.key.and_then(|k| found.get(&k)).and_then(|p| doc.node_at(p)).is_some_and(|n| {

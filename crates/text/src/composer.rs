@@ -116,7 +116,9 @@ fn adjustment_ratio(natural: f64, width: f64, stretch: f64, shrink: f64, last: b
 
 /// Compose the paragraph `g` into lines. `width(k)` is the available width of line `k`;
 /// `start_credit(i)` is the width a wrapped line starting at glyph `i` gives back (Mojikumi sets
-/// an opening bracket there flush with the line's start); `cands` are the break opportunities
+/// an opening bracket there flush with the line's start); `end_credit(t)` is the width a line whose
+/// last character is glyph `t - 1` gives back (Mojikumi sets a closing mark there half width), at
+/// most that glyph's advance, and nothing at a hyphenation point; `cands` are the break opportunities
 /// in increasing order (the paragraph end is added); `flex` holds how far each glyph may stretch
 /// and shrink in a justified line.
 /// Returns `(end, hyphen)` per line, or `None` if no set of breaks fits within the tolerance
@@ -125,6 +127,7 @@ pub(crate) fn compose(
     g: &[SGlyph],
     width: &dyn Fn(usize) -> f64,
     start_credit: &dyn Fn(usize) -> f64,
+    end_credit: &dyn Fn(usize) -> f64,
     cands: &[Breakpoint],
     flex: &[Flex],
     p: &Params,
@@ -153,6 +156,11 @@ pub(crate) fn compose(
         }
         b
     };
+    let line_end_credit = |t: usize| {
+        let credit = end_credit(t);
+        let most = t.checked_sub(1).and_then(|k| g.get(k)).map_or(0.0, |gl| gl.adv.max(0.0));
+        if credit.is_finite() { credit.clamp(0.0, most) } else { 0.0 }
+    };
     let mut all: Vec<Breakpoint> = cands.iter().copied().filter(|c| c.end > 0 && c.end < n).collect();
     all.push(Breakpoint { end: n, hyphen: 0.0 });
     let (adj_demerits, hyphen_penalty) =
@@ -170,7 +178,10 @@ pub(crate) fn compose(
             let Some(a) = nodes.get(ai) else { continue };
             let t = trim(bp.end, a.pos);
             let credit = if a.pos > 0 { start_credit(a.pos) } else { 0.0 };
-            let natural = w[t] - w[a.pos] - credit + bp.hyphen;
+            // A line that ends with a hyphen ends with it, not with its last character. At most the
+            // last glyph's advance, so a longer line from the same node is never narrower.
+            let end = if hyphen || t <= a.pos { 0.0 } else { line_end_credit(t) };
+            let natural = w[t] - w[a.pos] - credit - end + bp.hyphen;
             let lw = width(a.line);
             // Adjustment ratio, badness and whether the line ends the active node's reach.
             let Some(ratio) = adjustment_ratio(natural, lw, st[t] - st[a.pos], sh[t] - sh[a.pos], last, p) else { continue };
