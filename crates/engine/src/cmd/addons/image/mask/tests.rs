@@ -60,8 +60,16 @@ fn undo_len(s: &Session) -> usize {
 
 /// The straight RGBA of pixel (`x`, `y`) of image `id` as `d` draws it, on nothing.
 fn drawn(d: &Document, id: NodeId, x: u32, y: u32) -> [u8; 4] {
-    let im = image_of(d, id);
-    let at = im.xf * vectorcraft_geom::Point::new(f64::from(x) + 0.5, f64::from(y) + 0.5);
+    drawn_at(d, pixel_at(d, id, x, y))
+}
+
+/// Where the center of pixel (`x`, `y`) of image `id` is in `d`.
+fn pixel_at(d: &Document, id: NodeId, x: u32, y: u32) -> vectorcraft_geom::Point {
+    image_of(d, id).xf * vectorcraft_geom::Point::new(f64::from(x) + 0.5, f64::from(y) + 0.5)
+}
+
+/// The straight RGBA that `d` draws at `at`, on nothing.
+fn drawn_at(d: &Document, at: vectorcraft_geom::Point) -> [u8; 4] {
     let r = vectorcraft_render::Renderer::new().render_region(d, Rect::new(at.x - 0.5, at.y - 0.5, at.x + 0.5, at.y + 0.5), 1.0, false);
     let px = r.to_straight();
     [px[0], px[1], px[2], px[3]]
@@ -619,6 +627,34 @@ fn legacy_ai_flattens_a_masked_image_as_a_see_through_one() {
         assert!(w.iter().any(|w| w.contains("transparent images") && w.contains(said)), "{p}: {w:?}");
         assert_eq!(w, warnings(&cleared, &p), "{p}");
     }
+}
+
+/// A live color adjustment recolors the masked pixels too: the hidden colors stay hidden on the
+/// canvas and in outputs that apply the adjustment.
+#[test]
+fn a_live_color_adjustment_keeps_the_hidden_colors_hidden() {
+    let (mut s, id) = open(&framed());
+    s.execute(COLOR_MASK, &hide_white()).unwrap();
+    s.execute("effect.apply", &json!({"effect": "adjust.hueSaturation", "params": {"hue": 120}})).unwrap();
+    let d = doc(&s);
+    assert_eq!(drawn(d, id, 1, 1)[3], 0, "the hidden white");
+    let block = drawn(d, id, 4, 4);
+    assert!(block[3] == 255 && block != RED, "the red block, recolored: {block:?}");
+    let r = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+    let px = svg_image(r["text"].as_str().unwrap()).to_rgba8();
+    assert_eq!(px.get_pixel(1, 1).0[3], 0, "SVG: the hidden white");
+    assert!(px.get_pixel(4, 4).0[3] == 255 && px.get_pixel(4, 4).0 != RED, "SVG: the red block, recolored");
+}
+
+/// An envelope warp draws the image's masked pixels in its pieces.
+#[test]
+fn an_envelope_warp_draws_the_masked_pixels() {
+    let (mut s, id) = open(&framed());
+    s.execute(COLOR_MASK, &hide_white()).unwrap();
+    let (white, red) = (pixel_at(doc(&s), id, 1, 1), pixel_at(doc(&s), id, 4, 4));
+    s.execute("object.envelope.makeWithWarp", &json!({"style": "arch", "bend": 0})).unwrap();
+    assert_eq!(drawn_at(doc(&s), white)[3], 0, "the hidden white");
+    assert!(drawn_at(doc(&s), red)[3] > 0, "the red block");
 }
 
 /// A pattern whose tile holds a masked image counts as one with a see-through image, so outputs

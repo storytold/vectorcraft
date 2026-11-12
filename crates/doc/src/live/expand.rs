@@ -182,7 +182,7 @@ fn affine_between(s: [Point; 3], d: [Point; 3]) -> Option<Affine> {
 /// `w.cells`² cells of two triangles, each a clip group showing the image under the affine map
 /// that takes the triangle where the warp takes its corners (with Preserve Shape Using
 /// Transparency, the image masked by the triangle; with Anti-Alias off, drawn without smoothing).
-/// Each piece reaches a little past its edges (at most half a point) so neighbours overlap and no
+/// Each piece keeps the image's color mask. Each piece reaches a little past its edges (at most half a point) so neighbours overlap and no
 /// seams show.
 fn warp_image(n: &Node, im: &ImageObject, w: &Warper) -> Node {
     let k = w.cells.max(1);
@@ -217,6 +217,8 @@ fn warp_image(n: &Node, im: &ImageObject, w: &Warper) -> Node {
                 let shape = PathData::single(SubPath::polyline(&tri, true));
                 let mut image = Node::new(n.id, NodeKind::Image(Box::new(ImageObject { xf, ..im.clone() })));
                 image.extras_mut().pixelated = !w.options.anti_alias;
+                // Each piece shows what the image shows: its color mask's masked pixels.
+                image.extras_mut().color_mask = n.extras().color_mask.clone();
                 if w.options.preserve_shape == PreserveShape::Transparency {
                     // Preserve Shape Using Transparency: the triangle is the piece's alpha (a
                     // white opacity mask) instead of its clipping path.

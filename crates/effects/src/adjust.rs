@@ -462,9 +462,43 @@ pub fn adjust(n: &Node, outer: Option<&ColorMap>, swatches: &SwatchKinds, images
     if let Some(map) = map {
         let mm = m.get_or_insert_with(|| n.clone());
         mm.appearance.effects.retain(|e| !is_adjustment(&e.id));
+        show_color_masks(mm);
         recolor_node(mm, Reach::ALL, &mut Live { map: &map, swatches, images });
     }
     m
+}
+
+/// Whether `n` is an image that [`recolor_node`] recolours (embedded, not colorized, without
+/// pixels of its own) with a color mask made from its pixels.
+fn recoloured_with_mask(n: &Node) -> bool {
+    match (&n.kind, Document::color_mask_of(n)) {
+        (NodeKind::Image(im), Some(m)) => im.link.is_none() && n.extras().colorize.is_none() && m.made_for(im),
+        _ => false,
+    }
+}
+
+/// Whether `n` is or holds an image [`recoloured_with_mask`] counts.
+fn holds_recoloured_with_mask(n: &Node) -> bool {
+    recoloured_with_mask(n) || n.children().is_some_and(|ch| ch.iter().any(|c| holds_recoloured_with_mask(c)))
+}
+
+/// Give each image in `n` that [`recoloured_with_mask`] counts its masked pixels as its own,
+/// without the mask, so [`recolor_node`] recolours the pixels it shows and the colors the mask
+/// hides stay hidden.
+fn show_color_masks(n: &mut Node) {
+    if recoloured_with_mask(n)
+        && let Some(masked) = Document::color_mask_of(n).map(|m| m.key.clone())
+    {
+        if let NodeKind::Image(im) = &mut n.kind {
+            im.key = masked;
+        }
+        n.extras_mut().color_mask = None;
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        if holds_recoloured_with_mask(c) {
+            show_color_masks(Arc::make_mut(c));
+        }
+    }
 }
 
 /// [`adjust`] for export and Expand Appearance: recoloured embedded images become new images in
