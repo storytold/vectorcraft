@@ -5635,6 +5635,7 @@ effect	Soft	Weich
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometrische Hilfslinien
+	Optical Effects	Optische Effekte
 	Geometric Patterns	Geometrische Muster
 	Grit Textures	Körnige Texturen
 	Ease In	Langsam starten
@@ -5928,6 +5929,11 @@ axis	Y Axis	Y-Achse
 	Grass Fan	Grasfächer
 	Pattern Borders	Musterbordüren
 	Scatter Shapes	Streuformen
+	Dry Media	Trockene Medien
+	Chalk Grain	Kreidekorn
+	Graphite Pencil	Graphitstift
+	Wax Crayon	Wachsmalstift
+	Charcoal Dust	Kohlestaub
 	Save Brush Library…	Pinsel-Bibliothek speichern…
 @msg	`{_1}` has no brushes to apply	`{_1}` hat keine Pinsel zum Anwenden
 @msg	missing `library` (see brush.libraries)	`library` fehlt (siehe brush.libraries)

@@ -5961,6 +5961,7 @@ mark-style	Japanese	Japonesas
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Guias geométricas
+	Optical Effects	Efeitos ópticos
 	Geometric Patterns	Padrões geométricos
 	Grit Textures	Texturas granuladas
 	Ease In	Entrada suave
@@ -6252,6 +6253,11 @@ axis	Y Axis	Eixo Y
 	Grass Fan	Leque de Grama
 	Pattern Borders	Bordas de Padrão
 	Scatter Shapes	Formas de Dispersão
+	Dry Media	Técnicas Secas
+	Chalk Grain	Grão de Giz
+	Graphite Pencil	Lápis de Grafite
+	Wax Crayon	Giz de Cera
+	Charcoal Dust	Pó de Carvão
 	Save Brush Library…	Salvar Biblioteca de Pincéis…
 @msg	`{_1}` has no brushes to apply	`{_1}` não tem pincéis para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)

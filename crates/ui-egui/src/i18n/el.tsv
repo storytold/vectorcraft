@@ -5997,6 +5997,7 @@ effect	Points	Σημεία
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Γεωμετρικοί οδηγοί
+	Optical Effects	Οπτικά εφέ
 	Geometric Patterns	Γεωμετρικά μοτίβα
 	Grit Textures	Κοκκώδεις υφές
 	Ease In	Ομαλή αρχή
@@ -6288,6 +6289,11 @@ axis	Y Axis	Άξονας Y
 	Grass Fan	Βεντάλια για γρασίδι
 	Pattern Borders	Περιθώρια μοτίβου
 	Scatter Shapes	Σχήματα διασποράς
+	Dry Media	Ξηρά μέσα
+	Chalk Grain	Κόκκος κιμωλίας
+	Graphite Pencil	Μολύβι γραφίτη
+	Wax Crayon	Κηρομπογιά
+	Charcoal Dust	Σκόνη κάρβουνου
 	Save Brush Library…	Αποθήκευση βιβλιοθήκης πινέλων…
 @msg	`{_1}` has no brushes to apply	Η `{_1}` δεν έχει πινέλα για εφαρμογή
 @msg	missing `library` (see brush.libraries)	λείπει το `library` (δείτε brush.libraries)

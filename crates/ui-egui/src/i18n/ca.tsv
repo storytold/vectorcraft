@@ -2927,6 +2927,7 @@ digits	Malayalam	Malaiàlam
 	Opens network connections	Obre connexions de xarxa
 	Open…	Obre…
 	Optical	Òptic
+	Optical Effects	Efectes òptics
 	Optical Margin Alignment	Alineació òptica de marges
 	Dynamic Text	Text dinàmic
 	Dynamic Text Presets	Valors predefinits de text dinàmic
@@ -3867,6 +3868,11 @@ digits	Malayalam	Malaiàlam
 	Scatter Brush Options	Opcions del pinzell de dispersió
 	Scatter Graph Tool	Eina de gràfic de dispersió
 	Scatter Shapes	Formes de dispersió
+	Dry Media	Tècniques seques
+	Chalk Grain	Gra de guix
+	Graphite Pencil	Llapis de grafit
+	Wax Crayon	Cera de colors
+	Charcoal Dust	Pols de carbó
 	Scatter:	Dispersió:
 	Scissors	Tisores
 	Scissors Tool	Eina de tisores

@@ -6068,6 +6068,7 @@ font-script	Japanese	Japanska
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometriska stödlinjer
+	Optical Effects	Optiska effekter
 	Geometric Patterns	Geometriska mönster
 	Grit Textures	Korniga texturer
 	Ease In	Långsam start
@@ -6354,6 +6355,11 @@ axis	Y Axis	Y-axel
 	Grass Fan	Grässolfjäder
 	Pattern Borders	Mönsterbårder
 	Scatter Shapes	Spridningsformer
+	Dry Media	Torra medier
+	Chalk Grain	Kritkorn
+	Graphite Pencil	Grafitpenna
+	Wax Crayon	Vaxkrita
+	Charcoal Dust	Koldamm
 	Save Brush Library…	Spara penselbibliotek…
 @msg	`{_1}` has no brushes to apply	`{_1}` har inga penslar att använda
 @msg	missing `library` (see brush.libraries)	`library` saknas (se brush.libraries)

@@ -5719,6 +5719,7 @@ lighting	Light	ライト
 	Ruby…	ルビ…
 	Ruby	ルビ
 	Geometric Guides	幾何ガイド
+	Optical Effects	オプティカル効果
 	Geometric Patterns	幾何パターン
 	Grit Textures	粒状テクスチャ
 	Ease In	イーズイン
@@ -6027,6 +6028,11 @@ axis	Y Axis	Y 軸
 	Grass Fan	草描き扇筆
 	Pattern Borders	パターンボーダー
 	Scatter Shapes	散布シェイプ
+	Dry Media	ドライメディア
+	Chalk Grain	チョークの粒子
+	Graphite Pencil	黒鉛鉛筆
+	Wax Crayon	ワックスクレヨン
+	Charcoal Dust	木炭の粉
 	Save Brush Library…	ブラシライブラリを保存…
 @msg	`{_1}` has no brushes to apply	`{_1}` に適用できるブラシがありません
 @msg	missing `library` (see brush.libraries)	`library` がありません (brush.libraries を参照)

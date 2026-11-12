@@ -21,12 +21,13 @@ fn the_thai_filter_lists_fonts_with_thai() {
 /// stay clear of it.
 #[test]
 fn the_scroll_bar_leaves_the_stars_clear() {
-    // Every family starred, so each row draws its star.
+    // Every family starred, so each row draws its star. Tests running alongside add fonts and
+    // composite fonts to the process-wide database, which the menu lists too: the ★ filter keeps
+    // the rows to the families starred here.
     let all = vectorcraft_text::FontDb::global().families();
-    let families = all.len();
     let ctx = egui::Context::default();
     let area = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(300.0, 160.0));
-    let mut st = super::MenuState::default();
+    let mut st = super::MenuState { favorites_only: true, ..Default::default() };
     let look = super::MenuLook { samples: false, favorites: &all, ..Default::default() };
     let mut stars = vec![];
     for _ in 0..3 {
@@ -45,6 +46,7 @@ fn the_scroll_bar_leaves_the_stars_clear() {
             })
             .collect();
     }
+    let families = st.rows.len();
     assert!(!stars.is_empty() || families == 0, "{families} families, no row stars drawn");
     // The rows don't fill the list without enough families to scroll, and then there is no bar.
     if families as f32 * look.row > area.height() {
@@ -60,6 +62,13 @@ use super::{Row, remap_highlight};
 
 fn family(name: &str) -> Row {
     Row::Family(name.to_string())
+}
+
+/// The families the font menu lists that stay listed, in its order: the menu's list without the
+/// composite fonts at its top, which tests running alongside define and remove in the process-wide
+/// database.
+fn lasting_families() -> Vec<String> {
+    vectorcraft_text::FontDb::global().family_list().iter().filter(|f| !f.starts_with('.')).cloned().collect()
 }
 
 #[test]
@@ -86,7 +95,7 @@ fn recent_fonts_are_first_available_unique_and_expandable() {
 
 #[test]
 fn recent_section_rebuilds_and_arrows_skip_its_headings() {
-    let names = vectorcraft_text::FontDb::global().menu_family_list();
+    let names = lasting_families();
     if names.len() < 3 {
         return;
     }
@@ -135,7 +144,7 @@ fn recent_section_rebuilds_and_arrows_skip_its_headings() {
 
 #[test]
 fn recent_fonts_obey_search_and_favorite_filters() {
-    let names = vectorcraft_text::FontDb::global().menu_family_list();
+    let names = lasting_families();
     if names.len() < 3 {
         return;
     }
@@ -176,7 +185,7 @@ fn recent_fonts_obey_search_and_favorite_filters() {
 
 #[test]
 fn opening_on_another_font_keeps_the_recent_section_visible() {
-    let names = vectorcraft_text::FontDb::global().menu_family_list();
+    let names = lasting_families();
     let Some(current) = names.last() else { return };
     let recent = vec![names[0].clone()];
     let ctx = egui::Context::default();
@@ -244,7 +253,7 @@ fn the_wheel_steps_one_family_per_notch_and_stops_at_the_ends() {
 /// others in the database's order, under the favourites (and other) filters.
 #[test]
 fn the_wheel_follows_the_menus_order_and_filters() {
-    let names = vectorcraft_text::FontDb::global().menu_family_list();
+    let names = lasting_families();
     if names.len() < 3 {
         return;
     }
@@ -770,8 +779,9 @@ fn the_variable_filter_lists_only_variable_families() {
     assert_eq!(frame(&mut st, vec![], &favorites).0, [TWO_AXIS_FAMILY]);
     st.favorites_only = false;
     // Off again: every family is listed.
+    let lasting = lasting_families();
     let again = click(&mut st, &favorites);
     assert!(!st.variable_only);
-    assert_eq!(again, frame(&mut st, vec![], &[]).0);
+    assert!(lasting.iter().all(|f| has(&again, f)), "{again:?}");
     assert!(has(&again, TWO_AXIS_FAMILY) && has(&again, "Source Sans 3") && has(&again, "JetBrains Mono"), "{again:?}");
 }
