@@ -441,6 +441,22 @@ fn an_empty_or_zero_length_plot_has_no_moves() {
     assert!(export(&d, &nan).is_err());
 }
 
+/// A tolerance outside its range and a pen table of more than 255 pens are errors, not changed.
+#[test]
+fn bad_options_are_errors() {
+    let d = three();
+    for tolerance in [0.0, 0.009, 10.01, f64::NAN, f64::INFINITY] {
+        let o = HpglOptions { tolerance, ..opts(&d) };
+        assert_eq!(export(&d, &o).err().as_deref(), Some("the curve tolerance must be from 0.01 to 10 points"), "{tolerance}");
+    }
+    for tolerance in [0.01, 10.0] {
+        assert!(export(&d, &HpglOptions { tolerance, ..opts(&d) }).is_ok(), "{tolerance}");
+    }
+    let o = HpglOptions { pens: vec![[0, 0, 0]; MAX_PENS + 1], ..opts(&d) };
+    assert_eq!(export(&d, &o).err().as_deref(), Some("the pen table holds more than 255 pens"));
+    assert!(export(&d, &HpglOptions { pens: vec![[0, 0, 0]; MAX_PENS], ..opts(&d) }).is_ok());
+}
+
 #[test]
 fn art_past_the_plotter_range_is_cut_off() {
     let d = doc_with(|d| vec![stroked(d, line((0.0, 50.0), (1e9, 50.0)), Color::BLACK)]);
@@ -452,6 +468,27 @@ fn art_past_the_plotter_range_is_cut_off() {
     let out = plot(&d, &HpglOptions { region: Rect::new(0.0, 0.0, 1e9, 100.0), ..HpglOptions::default() });
     assert!(out.warnings.is_empty(), "{:?}", out.warnings);
     assert_eq!(text(&out), "IN;PU;SP1;PU0,706;PD141,706;PU;SP0;");
+}
+
+/// HP-GL past 16-bit coordinates is written as it is, with a warning; HP-GL/2 gets none.
+#[test]
+fn hpgl_past_16_bit_coordinates_warns() {
+    let region = Rect::new(-2400.0, 0.0, 2400.0, 100.0);
+    // Past 32,767 from the bottom-left corner, within the range from the center.
+    let d = doc_with(|d| vec![stroked(d, line((-2000.0, 50.0), (2000.0, 50.0)), Color::BLACK)]);
+    let out = plot(&d, &HpglOptions { region, ..HpglOptions::default() });
+    assert_eq!(out.warnings, [PAST_CLASSIC_RANGE]);
+    assert_eq!(text(&out), "IN;PU;SP1;PU5644,706;PD62089,706;PU;SP0;");
+    let out = plot(&d, &HpglOptions { region, origin: Origin::Center, ..HpglOptions::default() });
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    assert_eq!(text(&out), "IN;PU;SP1;PU-28222,0;PD28222,0;PU;SP0;");
+    // Past −32,768 and 32,767 from the center.
+    let d = doc_with(|d| vec![stroked(d, line((-2400.0, 50.0), (2400.0, 50.0)), Color::BLACK)]);
+    let out = plot(&d, &HpglOptions { region, origin: Origin::Center, ..HpglOptions::default() });
+    assert_eq!(out.warnings, [PAST_CLASSIC_RANGE]);
+    assert_eq!(text(&out), "IN;PU;SP1;PU-33867,0;PD33867,0;PU;SP0;");
+    let out = plot(&d, &HpglOptions { region, origin: Origin::Center, version: Version::Hpgl2, ..HpglOptions::default() });
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
 }
 
 #[test]

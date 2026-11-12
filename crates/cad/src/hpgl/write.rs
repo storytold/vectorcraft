@@ -15,6 +15,8 @@
 //! Coordinates are plotter units (1016 to the inch, y up) from the region's bottom-left corner or
 //! its center, rounded to whole units. Art past ±8,388,607 units (2²³ − 1, the smallest range
 //! the HP-GL/2 reference asks a device to take for encoded polylines) from the origin is cut off.
+//! An HP-GL plot with a coordinate outside −32,768 to 32,767 (16-bit numbers, the range older
+//! devices read) gets a warning; HP-GL/2's encoded polylines take the wider range.
 //! The pens are drawn in turn (pen 1's paths, then pen 2's), each in paint order or, with
 //! `sort`, each next path the one that starts nearest where the pen stopped. With `inside_first`,
 //! a pen draws a path only after every path of its own that lies inside it (a letter's counter
@@ -43,6 +45,8 @@ use clip::Region;
 const PLU_PER_PT: f64 = 1016.0 / 72.0;
 /// The largest coordinate written, plotter units.
 pub const MAX_COORD: i64 = (1 << 23) - 1;
+/// The coordinates an HP-GL plot keeps to without a warning: 16-bit numbers, plotter units.
+const CLASSIC_RANGE: std::ops::RangeInclusive<i64> = -32_768..=32_767;
 /// The curve tolerance a path is flattened to by default, points.
 pub const DEFAULT_TOLERANCE: f64 = 0.1;
 /// The smallest and largest curve tolerance, points.
@@ -72,6 +76,7 @@ const TOO_MANY_POINTS: &str = "the export is too large: the art past its first 1
 const CLIP_WORK: &str = "clipping masks are too complex to apply in full: the art past that point is drawn whole";
 const MASK_POINTS: &str = "clipping masks past 10 million points together are left out: the art they clip is drawn unclipped by them";
 const OUT_OF_RANGE: &str = "art past 8,388,607 plotter units (about 210 m) from the origin is cut off";
+const PAST_CLASSIC_RANGE: &str = "the plot has coordinates past 32,767 plotter units (about 82 cm) from the origin, which older HP-GL devices may not read: HP-GL/2 takes a wider range";
 const MANY_COLORS: &str = "the art has more than 255 colors: the colors past those draw with the pen of the nearest color";
 const UNSORTED: &str = "the plot has too many paths to sort in full: the rest are drawn in paint order";
 const UNSORTED_INSIDE: &str = "the plot has too many paths to sort in full: the rest are drawn in paint order, each after the paths inside it";
@@ -144,9 +149,11 @@ impl Origin {
 #[derive(Clone, Debug)]
 pub struct HpglOptions {
     pub version: Version,
-    /// How far a flattened curve may lie from the curve, points ([`TOLERANCE_RANGE`]).
+    /// How far a flattened curve may lie from the curve, points ([`TOLERANCE_RANGE`]; a value
+    /// outside it is an error).
     pub tolerance: f64,
-    /// The pen table: pen 1's color first. Empty: a pen for each color the art draws in.
+    /// The pen table: pen 1's color first, up to [`MAX_PENS`] (more is an error). Empty: a pen for
+    /// each color the art draws in.
     pub pens: Vec<[u8; 3]>,
     pub origin: Origin,
     /// Draw each pen's paths nearest first, instead of in paint order.
@@ -196,8 +203,13 @@ pub fn export_regions(doc: &Document, opts: &HpglOptions, regions: &[Rect]) -> R
     if regions.iter().any(|r| ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) || r.width() <= 0.0 || r.height() <= 0.0) {
         return Err("the export region is empty".into());
     }
-    let tolerance =
-        if opts.tolerance.is_finite() { opts.tolerance.clamp(*TOLERANCE_RANGE.start(), *TOLERANCE_RANGE.end()) } else { DEFAULT_TOLERANCE };
+    if !TOLERANCE_RANGE.contains(&opts.tolerance) {
+        return Err("the curve tolerance must be from 0.01 to 10 points".into());
+    }
+    if opts.pens.len() > MAX_PENS {
+        return Err("the pen table holds more than 255 pens".into());
+    }
+    let tolerance = opts.tolerance;
     // Layers the plot leaves out go first: baking can wrap one in art that would be drawn (its
     // crop marks).
     let shown = plotted(&doc.layers, false).map(|layers| {
@@ -273,6 +285,9 @@ pub fn export_regions(doc: &Document, opts: &HpglOptions, regions: &[Rect]) -> R
             for paths in &mut by_pen {
                 at = reorder(paths, at, &mut work, opts.sort, opts.inside_first, &mut warnings);
             }
+        }
+        if opts.version == Version::Hpgl && by_pen.iter().flatten().flatten().any(|(x, y)| !CLASSIC_RANGE.contains(x) || !CLASSIC_RANGE.contains(y)) {
+            warn(&mut warnings, PAST_CLASSIC_RANGE);
         }
         let bytes = match opts.version {
             Version::Hpgl => plain(&by_pen),

@@ -22,7 +22,7 @@ pub(super) const OPTIONS: &[FormatOption] = &[
         name: "hpglVersion",
         ty: "string",
         default: "\"hpgl\"",
-        description: "hpgl (IN, SP, PU and PD only) or hpgl2 (also the pens' colors, NP and PC, and each pen's paths as one encoded polyline, PE)",
+        description: "hpgl (IN, SP, PU and PD only; a coordinate outside -32,768 to 32,767 gets a warning) or hpgl2 (also the pens' colors, NP and PC, and each pen's paths as one encoded polyline, PE)",
     },
     FormatOption {
         name: "curveTolerance",
