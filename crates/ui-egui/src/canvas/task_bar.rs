@@ -96,11 +96,13 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     } else {
         // Edit Path: the Direct Selection tool, to edit the path's anchors.
         let edit_path = || (tl!("Edit Path"), "dc-direct", "tool.select", json!({"tool": "directSelection"}));
-        // As in the reference app, an image offers Image Trace and Crop Image, and traced art offers
-        // Expand (<https://community.adobe.com/announcements-651/contextual-task-bar-in-illustrator-2025-quick-actions-when-you-need-them-1546580>).
+        // As in the reference app, an image offers Image Trace, Crop Image and Remove Background, and
+        // traced art offers Expand (<https://community.adobe.com/announcements-651/contextual-task-bar-in-illustrator-2025-quick-actions-when-you-need-them-1546580>,
+        // <https://community.adobe.com/announcements-651/ai-powered-image-editing-features-in-illustrator-1624061>).
         if n == 1 && is_image {
             items.push((tl!("Image Trace"), "image", TASK_BAR_IMAGE_TRACE, none()));
             items.push((tl!("Crop Image"), "dc-pf-crop", "ui.cropImage", none()));
+            items.push((tl!("Remove Background"), "eraser", crate::addons::image::REMOVE_BACKGROUND, none()));
         }
         // Direct-selected anchors take the place of a path's Offset Path and Simplify. For them the bar
         // offers Remove, Connect, Cut and Convert to corner or smooth, as the reference app does
@@ -151,7 +153,10 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             match kind {
                 TextKind::Area { .. } => items.push((tl!("Convert To Point Type"), "type", "type.convertToPointType", none())),
                 TextKind::Point => items.push((tl!("Convert To Area Type"), "dc-type-area", "type.convertToAreaType", none())),
-                TextKind::OnPath { .. } => items.push((tl!("Type on a Path Options"), "dc-type-path", "type.pathOptions", none())),
+                TextKind::OnPath { .. } => {
+                    items.push((tl!("Type on a Path Options"), "dc-type-path", "type.pathOptions", none()));
+                    center_on_path_items(app, &mut items);
+                }
             }
             // Dynamic Text turns on or off for type on a path and area type (Block), as the Type menu's item does;
             // left out for point type and type in a thread, which is VectorCraft's own rule
@@ -345,6 +350,18 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         Some((TASK_BAR_TO_SMOOTH, _)) => crate::menus::invoke(app, "path.convertAnchors", json!({"to": "smooth"})),
         Some((c, p)) => crate::menus::invoke(app, c, p),
         None => {}
+    }
+}
+
+/// The Contextual Task Bar's Center on Top and Center on Bottom, as in the Type menu, for type on a
+/// closed path.
+fn center_on_path_items(app: &VectorcraftApp, items: &mut Vec<(&'static str, &'static str, &'static str, serde_json::Value)>) {
+    for (label, icon, id) in
+        [(tl!("Center on Top"), "dc-al-top", "type.pathCenter.top"), (tl!("Center on Bottom"), "dc-al-bottom", "type.pathCenter.bottom")]
+    {
+        if crate::menus::enabled(app, id) {
+            items.push((label, icon, id, json!({})));
+        }
     }
 }
 

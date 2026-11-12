@@ -38,7 +38,7 @@ pub(super) use importer::PT_PER_IN;
 use importer::SymbolMade;
 pub(super) use layers::DEFAULT_FONT_SIZE;
 pub(crate) use layers::SUBLAYER;
-use layers::{RootUnits, inkscape_pages, promote_sublayers, root_layer_name};
+use layers::{RootUnits, inkscape_pages, promote_sublayers, root_layer_name, root_title};
 pub(super) use prepass::Edits;
 use prepass::{Extras, labels, prepass};
 pub use prepass::{MAX_FOREIGN, MAX_FOREIGN_VALUE};
@@ -158,6 +158,9 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
     let k = units.k;
     let mut doc = Document::new(size.width() as f64 * k, size.height() as f64 * k);
     doc.units = units.unit;
+    // The file's own title, when it gives one, is the document's File Info title; the document's
+    // name stays what `Document::new` gave it, for the caller to name after the file.
+    doc.metadata.title = root_title(xml.root_element());
     let mut im = Importer {
         doc,
         warnings,

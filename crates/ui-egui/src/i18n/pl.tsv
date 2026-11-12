@@ -364,6 +364,8 @@
 	Stair Step	Schodki
 	Gravity	Grawitacja
 	Type on a Path Options…	Opcje tekstu na ścieżce…
+	Center on Top	Wyśrodkuj na górze
+	Center on Bottom	Wyśrodkuj na dole
 	Threaded Text	Tekst wątkowy
 	Create	Utwórz
 	Release Selection	Uwolnij zaznaczenie
@@ -384,6 +386,10 @@
 	Arch	Sklepienie
 @msg	select point type or type on a path	zaznacz tekst punktowy lub tekst na ścieżce
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	tekst na ścieżce w tekście wątkowym nie może używać tekstu dynamicznego: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	nie można wyśrodkować na górze ani na dole tekstu na ścieżce otwartej lub złożonej: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	nie można wyśrodkować tekstu na ścieżce bez długości lub bez wysokości: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	nie można wyśrodkować na górze ani na dole tekstu na ścieżce w tekście wątkowym: {frames}
+@msg	select type on a closed path	zaznacz tekst na zamkniętej ścieżce
 	Fill with Placeholder Text	Wypełnij tekstem zastępczym
 	Insert Inline Symbol	Wstaw symbol w tekście
 	Show Hidden Characters	Pokaż ukryte znaki
@@ -1935,6 +1941,9 @@ digits	Malayalam	Malajalam
 	Right Indent	Wcięcie z prawej
 	Right-to-Left Paragraph Direction	Kierunek akapitu od prawej do lewej
 	Roman Hanging Punctuation	Wysunięta interpunkcja łacińska
+	Korean Line Break Anywhere	Koreański podział wiersza w dowolnym miejscu
+	East Asian Composition Settings	Ustawienia składu wschodnioazjatyckiego
+	Korean Composition Settings	Ustawienia składu koreańskiego
 	Select a text object to edit its paragraph attributes.	Zaznacz obiekt tekstowy, aby edytować atrybuty akapitu.
 	Single-line Composer	Kompozytor jednowierszowy
 	Toggle Line Composer	Przełącz kompozytor wierszy

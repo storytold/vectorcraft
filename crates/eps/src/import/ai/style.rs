@@ -1195,6 +1195,7 @@ fn effect(f: &Filter, under: Under) -> Option<Effect> {
                     "horizontal": pct("DeformHoriz"),
                     "vertical": pct("DeformVert"),
                     "orientation": if flag("Rotate") { "vertical" } else { "horizontal" },
+                    "version": vectorcraft_doc::live::WARP_NET,
                 }),
             )
         }

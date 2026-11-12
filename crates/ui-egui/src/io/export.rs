@@ -1,6 +1,7 @@
 use super::save::{
-    ask_before_losing, export_path, is_web, notes_of, remember_active_artboard, report_saved, report_write_error, saved_status, show_with_notes,
-    target_path, target_path_keeping, view_file, write_encoded, write_named, write_reporting,
+    ask_before_losing, ask_to_replace_files, checks_replaced, export_path, is_web, notes_of, remember_active_artboard, replaced_files, report_saved,
+    report_write_error, saved_status, show_with_notes, target_path, target_path_keeping, view_file, with_path, write_encoded, write_named,
+    write_reporting,
 };
 use super::{EngineError, Progress, Value, VectorcraftApp, Writer, background, cancel, fileio, json, progress};
 
@@ -44,6 +45,7 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
         std::borrow::Cow::Owned(d) => std::sync::Arc::new(d),
     };
     let doc = fileio::titled_for_export(&doc, st.path.as_deref(), f.id).map_or(doc, std::sync::Arc::new);
+    let uid = st.uid;
     let path = export_path(app, path, f)?;
     let mut again = params.clone();
     if let Some(o) = again.as_object_mut() {
@@ -68,11 +70,18 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     // writing.
     let progress = Progress::new();
     let (reporting, asked) = (progress.clone(), progress.clone());
+    let (exists, allowed) = checks_replaced(app);
+    let allowed_before = allowed.clone();
+    let rerun = with_path(&again, &path);
     let work = move |write: Writer| {
         progress::scope(&reporting, || {
             cancel::check().map_err(|e| e.to_string())?;
             let enc = fileio::encode_all(&doc, f.id, &params).map_err(|e| e.to_string())?;
             cancel::check().map_err(|e| e.to_string())?;
+            let replaced = replaced_files(exists.as_ref(), &path, &allowed, enc.named(&doc, &path).iter().map(|(p, _)| p.as_str()));
+            if !replaced.is_empty() {
+                return Ok(json!({ "replaces": replaced }));
+            }
             let files = write_encoded(write, &doc, &path, &enc)?;
             let mut out = json!({ "path": files.first().unwrap_or(&path), "warnings": enc.warnings });
             if files.len() > 1 {
@@ -90,6 +99,11 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
             return Ok(json!({ "cancelled": true }));
         }
         let r = r.inspect_err(|e| report_write_error(app, true, &failed, e))?;
+        // Nothing written: asked first.
+        if let Some(files) = r.get("replaces").and_then(Value::as_array) {
+            let files: Vec<String> = files.iter().filter_map(Value::as_str).map(str::to_string).collect();
+            return Ok(ask_to_replace_files(app, uid, &files, &allowed_before, "file.exportAs", &rerun));
+        }
         let what = match r["files"].as_array() {
             Some(files) => format!("{} files", files.len()),
             None => r["path"].as_str().unwrap_or_default().to_string(),

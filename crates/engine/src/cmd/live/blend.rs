@@ -324,7 +324,11 @@ pub(super) fn spine_remove_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         if anchors.contains(&index) {
             return Err(bad(C, "a key object sits on that point"));
         }
-        if sp.anchors.len() <= 2 {
+        // A closed spine pinned open keeps a copy of its first point at its end (#6809), so the
+        // points left must be two apart, not only two in number.
+        let mut rest = sp.anchors.iter().enumerate().filter(|(i, _)| *i != index).map(|(_, a)| a.p);
+        let first = rest.next();
+        if sp.anchors.len() <= 2 || first.is_none_or(|f| rest.all(|q| q.distance(f) < 0.01)) {
             return Err(bad(C, "a spine keeps at least two points"));
         }
         sp.anchors.remove(index);

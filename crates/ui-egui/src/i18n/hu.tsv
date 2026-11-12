@@ -2854,6 +2854,10 @@ file-filter	Templates	Sablonok
 	Arch	Boltív
 @msg	select point type or type on a path	jelöljön ki pontszöveget vagy útvonalszöveget
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	a láncolt szövegben lévő útvonalszöveg nem használhat dinamikus szöveget: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	nyitott vagy összetett útvonalon lévő útvonalszöveg nem igazítható középre felül vagy alul: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	a hossz vagy magasság nélküli útvonalon lévő útvonalszöveg nem igazítható középre: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	a láncolt szövegben lévő útvonalszöveg nem igazítható középre felül vagy alul: {frames}
+@msg	select type on a closed path	jelöljön ki zárt útvonalon lévő útvonalszöveget
 	Optimize for fast web view	Optimalizálás gyors webes megtekintéshez
 	Optimized	Optimalizált
 	Options	Beállítások
@@ -3492,6 +3496,9 @@ mark-style	Japanese	Japán
 	Roman	Latin
 	Roman Baseline	Latin alapvonal
 	Roman Hanging Punctuation	Latin függő írásjelek
+	Korean Line Break Anywhere	Koreai sortörés bárhol
+	East Asian Composition Settings	Kelet-ázsiai szedési beállítások
+	Korean Composition Settings	Koreai szedési beállítások
 	Rotate	Elforgatás
 	Rotate 90° CW	Forgatás 90°-kal jobbra
 	Rotate Tool	Elforgatás
@@ -4437,6 +4444,8 @@ mark-style	Japanese	Japán
 	Type on a Path	Útvonalszöveg
 	Type on a Path Options	Útvonalszöveg beállításai
 	Type on a Path Options…	Útvonalszöveg beállításai…
+	Center on Top	Középre igazítás felül
+	Center on Bottom	Középre igazítás alul
 	Type on a Path Tool	Útvonalszöveg
 	Type Optimized	Szövegre optimalizált
 	Type Orientation	Szöveg iránya

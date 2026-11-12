@@ -48,6 +48,12 @@ pub(super) const OPTIONS: &[FormatOption] = &[
         default: "false",
         description: "draw each pen's next path from the end nearest where the pen stopped, instead of in paint order",
     },
+    FormatOption {
+        name: "insideFirst",
+        ty: "boolean",
+        default: "false",
+        description: "draw a path only after the pen's paths that lie inside it (a letter's counter before the letter, a hole before the part), the paths otherwise in paint order; with sortPaths, the nearest of the paths free to draw comes next",
+    },
 ];
 
 /// The HP-GL options in `p` (the region is set per plot).
@@ -75,6 +81,7 @@ fn parse(p: &Value) -> Result<HpglOptions> {
         o.origin = Origin::from_id(s).ok_or_else(|| bad(C, format!("`{key}` must be one of {}", Origin::ALL.map(Origin::id).join(", "))))?;
     }
     o.sort = switch_or(p, "sortPaths", false, C)?;
+    o.inside_first = switch_or(p, "insideFirst", false, C)?;
     Ok(o)
 }
 

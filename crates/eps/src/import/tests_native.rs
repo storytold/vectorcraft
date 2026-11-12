@@ -5484,7 +5484,14 @@ fn type_envelope_text(family: &str, paint: Option<&str>) -> String {
 fn arc_envelope(text: &Node, bend: f64) -> Node {
     let mut text = text.clone();
     text.visible = true;
-    let kind = vectorcraft_doc::live::EnvelopeKind::Warp { style: "arc".into(), bend, h: 0.0, v: 0.0, horizontal: true };
+    let kind = vectorcraft_doc::live::EnvelopeKind::Warp {
+        style: "arc".into(),
+        bend,
+        h: 0.0,
+        v: 0.0,
+        horizontal: true,
+        version: vectorcraft_doc::live::WARP_NET,
+    };
     Node::new(
         vectorcraft_doc::NodeId(1_000_000),
         NodeKind::Envelope {

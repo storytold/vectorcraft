@@ -2258,6 +2258,10 @@ file-filter	Templates	模板
 	Arch	拱形
 @msg	select point type or type on a path	请选择点文字或路径文字
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	串接文本中的路径文字不能使用动态文本：{frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	开放路径或复合路径上的路径文字无法在顶部或底部居中：{open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	路径没有长度或没有高度时，其路径文字无法居中：{flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	串接文本中的路径文字无法在顶部或底部居中：{frames}
+@msg	select type on a closed path	请选择闭合路径上的路径文字
 	Optimize for fast web view	优化快速 Web 查看
 	Optimized	优化
 	Options	选项
@@ -2816,6 +2820,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Rise…	上升…
 	Roman Baseline	罗马基线
 	Roman Hanging Punctuation	西文悬挂标点
+	Korean Line Break Anywhere	韩文任意位置换行
+	East Asian Composition Settings	东亚排版设置
+	Korean Composition Settings	韩文排版设置
 	Rotate	旋转
 	Rotate 90° CW	顺时针旋转 90°
 	Rotate Tool	旋转工具
@@ -3586,6 +3593,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Type on a Path	路径文字
 	Type on a Path Options	路径文字选项
 	Type on a Path Options…	路径文字选项…
+	Center on Top	在顶部居中
+	Center on Bottom	在底部居中
 	Type on a Path Tool	路径文字工具
 	Type Orientation	文字方向
 	Type stays text, and every stroke is a line with its lineweight and dashes.	文字维持为文字，每个描边都是带有线宽与虚线的线条。

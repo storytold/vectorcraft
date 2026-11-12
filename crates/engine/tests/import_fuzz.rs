@@ -2682,7 +2682,10 @@ fn arb_ps_token() -> impl Strategy<Value = String> {
             // Local VM restored: dictionary changes undone, saves restored twice.
             "/a 1 def save /a 2 def", "restore", "save dup restore", "1 dict save exch /k 1 put", "cachestatus", "/n 0 def save /n n 1 add store",
             // Executable strings and keys other than names (PLRM 3rd ed., `cvx`, `load`).
-            "(>>) cvx", "(1 2 add) cvx exec", "(x) cvx dup exec", "0 load", "1 { } def", "(mark) cvx cvlit"
+            "(>>) cvx", "(1 2 add) cvx exec", "(x) cvx dup exec", "0 load", "1 { } def", "(mark) cvx cvlit",
+            // CID-keyed fonts found by name over predefined CMaps, horizontal and vertical.
+            "/Ryumin-Light-90ms-RKSJ-H", "/Ryumin-Light-EUC-V", "/Ryumin-Light-H", "/GBT-EUC-H", "/KSCms-UHC-V", "/UniJIS-UTF16-V",
+            "[/Ryumin-Light]", "composefont", "<93fa967b8540fd0d41>", "<c7d1a4a4467c>"
         ])
         .prop_map(str::to_string),
     ]
