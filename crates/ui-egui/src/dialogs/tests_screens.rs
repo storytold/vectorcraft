@@ -508,6 +508,35 @@ fn the_status_bar_says_when_an_image_could_not_be_decoded() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// An export into a folder with several notes, from Export for Screens and from the Asset Export
+/// panel: the status bar names the first, counts them, and keeps every one of them for its hover.
+#[test]
+fn an_export_into_a_folder_keeps_every_note_for_the_hover() {
+    let mut png = Vec::new();
+    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let dir = temp_folder("notes");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    let rows = json!([{"format": "png", "scale": "1x", "suffix": ""}]);
+    let (mut app, _) = app(1, false);
+    vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({"at": [10, 10]}));
+    app.run("text.create", json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
+    let r = app.run("file.exportForScreens", json!({"folder": folder, "formats": rows})).unwrap();
+    let notes = crate::io::notes_of(&r);
+    assert_eq!(notes.len(), 2, "{r}");
+    assert!(app.ui.status.starts_with(&format!("Saved {folder} with 2 notes: {}", notes[0])), "{}", app.ui.status);
+    assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
+    app.ui.status_notes = None;
+    app.run("select.all", json!({})).unwrap();
+    app.run("assets.add", json!({"multiple": false})).unwrap();
+    let r = crate::io::export_files(&mut app, "assets.export", json!({"folder": folder, "formats": rows})).unwrap();
+    let notes = crate::io::notes_of(&r);
+    assert_eq!(notes.len(), 2, "{r}");
+    assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)), "assets.export");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn a_preset_export_reopens_on_its_rows() {
     let (mut app, _) = app(1, true);

@@ -1444,6 +1444,14 @@ file-filter	Templates	Vorlagen
 	Hair Space	Haarspatium
 	Hand Tool	Hand-Werkzeug
 	Hand-Drawn	Handgezeichnet
+	Painted and Sketched	Gemalt und skizziert
+	Washed Blue	Verwaschenes Blau
+	Bristle Ochre	Borstenocker
+	Pastel Heather	Pastellheide
+	Charcoal Shade	Kohleschatten
+	Ink Contour	Tuschekontur
+	Wet Ink	Nasse Tusche
+	Fine Pen	Feine Feder
 	Handles	Griffe
 	Hard Light	Hartes Licht
 	Hard Mix	Hart mischen
@@ -4175,6 +4183,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`globalAdjust` must be an object	`globalAdjust` muss ein Objekt sein
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` muss 1, 3 oder 5 sein
 @msg	`stops` must be an array	`stops` muss ein Array sein
+@msg	`{key}` must be an array	`{key}` muss ein Array sein
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` muss ein Objekt mit SVG-Optionen sein (siehe document.formats)
 @msg	`{_1}` is no save command	`{_1}` ist kein Speicherbefehl
 @msg	`{area}` is no recovery area name	`{area}` ist kein Name eines Wiederherstellungsbereichs
@@ -5614,6 +5623,7 @@ effect	Soft	Weich
 	Ruby	Ruby
 	Geometric Guides	Geometrische Hilfslinien
 	Geometric Patterns	Geometrische Muster
+	Grit Textures	Körnige Texturen
 	Ease In	Langsam starten
 	Ease Out	Langsam enden
 	Ease In Out	Langsam starten und enden
@@ -6104,6 +6114,10 @@ anchor	Points:	Punkte:
 @msg	features lists at most {max} tags	features enthält höchstens {max} Tags
 @msg	unknown OpenType feature `{t}`	unbekannte OpenType-Funktion `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} muss eine Zahl über 0 und höchstens {max} sein
+@msg	{label} must be at most {max} characters	{label} darf höchstens {max} Zeichen lang sein
+@msg	{label} must be one character	{label} muss genau ein Zeichen sein
+@msg	at most {max} tab stops	höchstens {max} Tabstopps
+@msg	unknown align `{other}`	unbekannte Ausrichtung `{other}`
 @msg	no character style `{name}`	Zeichenformat `{name}` nicht gefunden
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6266,6 +6280,8 @@ breakText	Glyphs	Glyphen
 	Delete the selected brushes?	Ausgewählte Pinsel löschen?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturen verwenden einen oder mehrere dieser Pinsel. Pinsel von diesen Konturen entfernen und die Pinsel löschen?
 	Remove Strokes	Konturen entfernen
+	Place Brush Art	Pinselgrafik platzieren
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` hat keine Grafik (nur Spezial-, Bild- und Musterpinsel haben eine)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Anordnungswerkzeuge
 	Arrange in Grid…	In Raster anordnen…

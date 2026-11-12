@@ -133,8 +133,8 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 }
 
 /// `file.saveForWeb` with settings: write the files (`path`, else a picked file: the page with HTML
-/// output, else the image); the web downloads them. The status bar shows the export's first
-/// warning.
+/// output, else the image); the web downloads them. The status bar shows the export's warnings as
+/// [`io::report_saved`] shows a save's notes.
 pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, String> {
     // Bad settings never open a save panel.
     let s = app.session.web_settings(&p)?;
@@ -170,7 +170,7 @@ pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, Stri
 }
 
 /// Whether an export's reply `r` has warnings (an image that couldn't be decoded):
-/// [`io::report_saved`] puts the first in the status bar as a save's note.
+/// [`io::report_saved`] shows them in the status bar as a save's notes.
 fn has_warnings(r: &Value) -> bool {
     r["warnings"].as_array().is_some_and(|w| !w.is_empty())
 }
@@ -183,8 +183,8 @@ pub(super) fn preview_name(stem: &str) -> &str {
 }
 
 /// `file.saveForWeb.browser`: the HTML page and its images in a new temporary folder, opened in the
-/// default browser (desktop). When the export has warnings, the status bar shows the first in
-/// place of "Opened …".
+/// default browser (desktop). When the export has warnings, the status bar shows them as
+/// [`io::report_saved`] shows a save's notes.
 pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if io::is_web(app) {
         return Err("Preview in Browser needs the desktop app (the web downloads files instead)".into());

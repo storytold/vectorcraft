@@ -772,6 +772,14 @@
 	Damp Paper	Vochtig papier
 	Outlines and Rules	Omtrekken en lijnen
 	Hand-Drawn	Handgetekend
+	Painted and Sketched	Geschilderd en geschetst
+	Washed Blue	Verwassen blauw
+	Bristle Ochre	Borsteloker
+	Pastel Heather	Pastelheide
+	Charcoal Shade	Houtskoolschaduw
+	Ink Contour	Inktcontour
+	Wet Ink	Natte inkt
+	Fine Pen	Fijne pen
 	Gradient Finishes	Verloopafwerkingen
 	Shape Effects	Vormeffecten
 	Blends and Transparency	Vermengingen en transparantie
@@ -5910,6 +5918,7 @@ swatch	Bright Violet	Felviolet
 	Ruby	Ruby
 	Geometric Guides	Geometrische hulplijnen
 	Geometric Patterns	Geometrische patronen
+	Grit Textures	Korrelige texturen
 	Ease In	Langzaam beginnen
 	Ease Out	Langzaam eindigen
 	Ease In Out	Langzaam beginnen en eindigen
@@ -6452,6 +6461,8 @@ breakText	Glyphs	Glyphs
 	Delete the selected brushes?	Geselecteerde kwasten verwijderen?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Contouren gebruiken een of meer van deze kwasten. De kwasten van deze contouren halen en de kwasten verwijderen?
 	Remove Strokes	Contouren verwijderen
+	Place Brush Art	Penseelillustratie plaatsen
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` heeft geen illustratie (alleen verspreidings-, art- en patroonpenselen hebben er een)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Schikgereedschappen
 	Arrange in Grid…	In raster schikken…

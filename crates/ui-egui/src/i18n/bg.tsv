@@ -1399,6 +1399,14 @@ font-technology	Variable	Променливи
 	Hair Space	Тънък интервал
 	Hand Tool	Инструмент „Ръка“
 	Hand-Drawn	Ръчно рисувани
+	Painted and Sketched	Рисувани и скицирани
+	Washed Blue	Размито синьо
+	Bristle Ochre	Охра с четка
+	Pastel Heather	Пастелен пирен
+	Charcoal Shade	Сянка с въглен
+	Ink Contour	Мастилен контур
+	Wet Ink	Мокро мастило
+	Fine Pen	Фино перо
 	Handles	Дръжки
 	Hard Light	Твърда светлина
 	Hard Mix	Твърдо смесване
@@ -5844,6 +5852,7 @@ theme	Appearance	Външен вид
 	Ruby	Руби
 	Geometric Guides	Геометрични водачи
 	Geometric Patterns	Геометрични мостри
+	Grit Textures	Зърнести текстури
 	Ease In	Плавно начало
 	Ease Out	Плавен край
 	Ease In Out	Плавно начало и край
@@ -6387,6 +6396,8 @@ breakText	Glyphs	Глифи
 	Delete the selected brushes?	Да се изтрият избраните четки?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Щрихи използват една или повече от тези четки. Да се премахнат ли четките от тези щрихи и да се изтрият четките?
 	Remove Strokes	Премахване на щрихи
+	Place Brush Art	Поставяне на графика на четка
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` няма графика (имат я само разпръснатите и артистичните четки и четките с мостра)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Инструменти за подреждане
 	Arrange in Grid…	Подреждане в мрежа…

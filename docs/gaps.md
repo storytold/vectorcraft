@@ -647,12 +647,14 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   Direct Selection of a path, compound path or type inside a dynamic instance also takes opacity and blend
   (`transparency.set`) and a gradient or pattern fill or stroke (`paint.setFill` / `paint.setStroke`,
   Eyedropper), for that instance only;
-  graphic style libraries (Window › Graphic Style Libraries; nine original libraries generated in code, including
+  graphic style libraries (Window › Graphic Style Libraries; ten original libraries generated in code, including
   Game HUD with Health Fill, Mana Glow, Damage Flash, Quest Outline, Coin Shine and Boss Alert, Status Effects
-  with Poison Tint, Freeze Edge, Burn Aura, Stun Pulse, Stealth Fade and Shield Buff, and Textures with Fine Grain,
-  Canvas Weave, Burlap Sack, Cracked Glaze, Mosaic Floor, Quilted Squares, Leaded Glass and Damp Paper, painted with
-  the texture effects; User Defined; Other Library…; `graphicStyle.libraries`, `graphicStyle.addFromLibrary`).
-- **Missing:** more built-in brush libraries beyond the six shipped (and further graphic-style libraries beyond the nine shipped, and further symbol libraries beyond Basic
+  with Poison Tint, Freeze Edge, Burn Aura, Stun Pulse, Stealth Fade and Shield Buff, Painted and Sketched with
+  Washed Blue, Bristle Ochre, Pastel Heather, Charcoal Shade, Ink Contour, Wet Ink and Fine Pen, and Textures with
+  Fine Grain, Canvas Weave, Burlap Sack, Cracked Glaze, Mosaic Floor, Quilted Squares, Leaded Glass and Damp Paper,
+  painted with the texture effects; User Defined; Other Library…; `graphicStyle.libraries`,
+  `graphicStyle.addFromLibrary`).
+- **Missing:** more built-in brush libraries beyond the six shipped (and further graphic-style libraries beyond the ten shipped, and further symbol libraries beyond Basic
   Shapes, UI Frames, Map Markers, Inventory Icons and Skill Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write;
   Global Edit of groups holding type or images, rotated copies as matches and highlighting matches before the
   start; 9-slice guides outside the symbol's art (a dragged guide stops at the art's edge).

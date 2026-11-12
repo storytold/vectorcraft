@@ -821,6 +821,14 @@
 	Damp Paper	Vlhký papír
 	Outlines and Rules	Obrysy a linky
 	Hand-Drawn	Ručně kreslené
+	Painted and Sketched	Malované a skicované
+	Washed Blue	Rozmytá modrá
+	Bristle Ochre	Okr štětcem
+	Pastel Heather	Pastelový vřes
+	Charcoal Shade	Stín uhlem
+	Ink Contour	Obrys tuší
+	Wet Ink	Mokrá tuš
+	Fine Pen	Jemné pero
 	Gradient Finishes	Přechodové povrchy
 	Shape Effects	Efekty tvarů
 	Blends and Transparency	Prolnutí a průhlednost
@@ -4560,6 +4568,7 @@ imageTrace	Outline	Obrys
 @msg	`globalAdjust` must be an object	`globalAdjust` musí být objekt
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` musí být 1, 3 nebo 5
 @msg	`stops` must be an array	`stops` musí být pole
+@msg	`{key}` must be an array	`{key}` musí být pole
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` musí být objekt s možnostmi SVG (viz document.formats)
 @msg	`{_1}` is no save command	`{_1}` není příkaz pro uložení
 @msg	`{area}` is no recovery area name	`{area}` není název oblasti obnovení
@@ -6025,6 +6034,7 @@ mark-style	Japanese	Japonské
 	Ruby	Ruby
 	Geometric Guides	Geometrická vodítka
 	Geometric Patterns	Geometrické vzorky
+	Grit Textures	Zrnité textury
 	Ease In	Pozvolný začátek
 	Ease Out	Pozvolný konec
 	Ease In Out	Pozvolný začátek a konec
@@ -6510,6 +6520,10 @@ anchor	Points:	Body:
 @msg	features lists at most {max} tags	features obsahuje nejvýše {max} značek
 @msg	unknown OpenType feature `{t}`	neznámá funkce OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} musí být číslo větší než 0 a nejvýše {max}
+@msg	{label} must be at most {max} characters	{label} smí mít nejvýše {max} znaků
+@msg	{label} must be one character	{label} musí být jeden znak
+@msg	at most {max} tab stops	nejvýše {max} zarážek tabulátoru
+@msg	unknown align `{other}`	neznámé zarovnání `{other}`
 @msg	no character style `{name}`	styl znaků `{name}` neexistuje
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6671,6 +6685,8 @@ breakText	Glyphs	Glyfy
 	Delete the selected brushes?	Odstranit vybrané štětce?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Tahy používají jeden nebo více z těchto štětců. Odebrat štětce z těchto tahů a odstranit štětce?
 	Remove Strokes	Odebrat tahy
+	Place Brush Art	Umístit kresbu štětce
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` nemá kresbu (mají ji jen rozptylové, obrazové a vzorkové štětce)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Nástroje uspořádání
 	Arrange in Grid…	Uspořádat do mřížky…

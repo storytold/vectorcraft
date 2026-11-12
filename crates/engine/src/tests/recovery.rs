@@ -483,6 +483,105 @@ fn the_folder_store_reads_no_linked_entries() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
+/// A file where a folder of the store's path should be: the error names that file, not the area
+/// folder or the copy below it, for a write, a lock, a read, a listing, a removal and a recovery
+/// save.
+#[cfg(unix)]
+#[test]
+fn folder_errors_name_a_file_in_the_way() {
+    let base = std::env::temp_dir().join(format!("vc-recovery-file-in-way-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&base).unwrap();
+    let file = base.join("file");
+    std::fs::write(&file, b"").unwrap();
+    let folder = file.join("recovery");
+    let store = FolderStore::new(&folder);
+    let mut s = Session::new();
+    s.prefs.recovery_folder = folder.to_string_lossy().to_string();
+    s.execute("file.new", &json!({"width": 50, "height": 50})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 5, "height": 5})).unwrap();
+    let errors = [
+        ("write", store.write("1-1/Untitled-1-1.vectorcraft", b"copy").err()),
+        ("lock", store.lock("1-2").err()),
+        ("read", store.read("1-1/Untitled-1-1.vectorcraft").err()),
+        ("list", store.list().err()),
+        ("remove", store.remove("1-1/Untitled-1-1.vectorcraft").err()),
+        ("save", s.execute("file.recovery.save", &json!({})).err().map(|e| e.to_string())),
+    ];
+    let _ = std::fs::remove_dir_all(&base);
+    let named = format!("{} is not a folder: ", file.display());
+    let wrong: Vec<_> = errors.iter().filter(|(_, e)| !e.as_deref().is_some_and(|e| e.contains(&named))).collect();
+    assert!(wrong.is_empty(), "{wrong:?}");
+}
+
+/// A removal that finds the copy missing because a file is on the way to it (how Windows reports a
+/// file in the way) names that file. A copy that is just not there still counts as removed.
+#[test]
+fn a_removal_reported_missing_names_a_file_in_the_way() {
+    let base = std::env::temp_dir().join(format!("vc-recovery-remove-in-way-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&base).unwrap();
+    let file = base.join("file");
+    std::fs::write(&file, b"").unwrap();
+    let missing = || std::io::Error::from(std::io::ErrorKind::NotFound);
+    let behind = FolderStore::removed(&file.join("recovery").join("1-1").join("Untitled-1-1.vectorcraft"), Err(missing()));
+    let gone = FolderStore::removed(&base.join("recovery").join("1-1").join("Untitled-1-1.vectorcraft"), Err(missing()));
+    let _ = std::fs::remove_dir_all(&base);
+    let named = format!("{} is not a folder: ", file.display());
+    assert!(behind.as_ref().is_err_and(|e| e.starts_with(&named)), "{behind:?}");
+    assert_eq!(gone, Ok(()));
+}
+
+/// A folder of the store's path that is missing and can't be made: a write or a lock names it as
+/// the folder it couldn't make, and a read names it as missing. An area folder that can't be made
+/// in a store folder that is there is named the same way.
+#[cfg(unix)]
+#[test]
+fn folder_errors_name_a_missing_folder_that_cannot_be_made() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let base = std::env::temp_dir().join(format!("vc-recovery-missing-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let closed = base.join("closed");
+    std::fs::create_dir_all(&closed).unwrap();
+    std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o500)).unwrap();
+    let gone = closed.join("gone");
+    let store = FolderStore::new(gone.join("recovery"));
+    let unmade = format!("couldn't make {}: ", gone.display());
+    let area = FolderStore::new(&closed).write("1-1/Untitled-1-1.vectorcraft", b"copy").err();
+    let errors = [
+        ("write", store.write("1-1/Untitled-1-1.vectorcraft", b"copy").err(), unmade.clone()),
+        ("lock", store.lock("1-2").err(), unmade),
+        ("read", store.read("1-1/Untitled-1-1.vectorcraft").err(), format!("{} is missing", gone.display())),
+        ("area", area, format!("couldn't make {}: ", closed.join("1-1").display())),
+    ];
+    std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let _ = std::fs::remove_dir_all(&base);
+    // An account that can write anywhere (root) makes the folders, so the test has nothing to check.
+    if errors[0].1.is_none() {
+        return;
+    }
+    let wrong: Vec<_> = errors.iter().filter(|(_, e, named)| !e.as_deref().is_some_and(|e| e.starts_with(named.as_str()))).collect();
+    assert!(wrong.is_empty(), "{wrong:?}");
+}
+
+/// When every folder on the way is there, an error names the folder it happened on.
+#[cfg(unix)]
+#[test]
+fn folder_errors_name_the_folder_when_every_folder_is_there() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let base = std::env::temp_dir().join(format!("vc-recovery-unreadable-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let unreadable = base.join("unreadable");
+    std::fs::create_dir_all(&unreadable).unwrap();
+    std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o300)).unwrap();
+    let listed = FolderStore::new(&unreadable).list();
+    std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let _ = std::fs::remove_dir_all(&base);
+    // An account that can read any folder (root) lists it, so the test has nothing to check.
+    let Err(err) = listed else { return };
+    assert!(err.starts_with(&format!("{}: ", unreadable.display())), "{err}");
+}
+
 /// A store in memory that notes each removal of an area (its lock file and folder, then its empty
 /// folder) and whether the area was still held then.
 #[derive(Default)]
