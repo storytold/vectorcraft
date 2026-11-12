@@ -6555,3 +6555,8 @@ breakText	Glyphs	字符
 @msg	Some islands could not be joined to the area around the art	部分孤島無法連接到圖稿周圍的區域
 @msg	`width` must be from {lo} to {hi} pt	`width` 必須介於 {lo} 到 {hi} pt 之間
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必須是介於 1 到 {MAX_BRIDGES_PER_ISLAND} 的整數
+	Weed Box and Lines…	除廢框與除廢線…
+	Weed Box and Lines	除廢框與除廢線
+	Margin	邊距
+	Box	框
+	Swatch	色票

@@ -6871,3 +6871,8 @@ breakText	Glyphs	Γλύφοι
 @msg	Some islands could not be joined to the area around the art	Ορισμένες νησίδες δεν ήταν δυνατό να συνδεθούν με την περιοχή γύρω από το γραφικό
 @msg	`width` must be from {lo} to {hi} pt	Το `width` πρέπει να είναι από {lo} έως {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	Το `count` πρέπει να είναι ακέραιος από 1 έως {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Πλαίσιο και γραμμές αφαίρεσης περισσευμάτων…
+	Weed Box and Lines	Πλαίσιο και γραμμές αφαίρεσης περισσευμάτων
+	Margin	Περιθώριο
+	Box	Πλαίσιο
+	Swatch	Δείγμα χρώματος

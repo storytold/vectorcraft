@@ -6520,3 +6520,8 @@ breakText	Glyphs	Гліфи
 @msg	Some islands could not be joined to the area around the art	Деякі острівці не вдалося з’єднати з областю навколо графіки
 @msg	`width` must be from {lo} to {hi} pt	`width` має бути від {lo} до {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` має бути цілим числом від 1 до {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Рамка й лінії вибірки…
+	Weed Box and Lines	Рамка й лінії вибірки
+	Margin	Поле
+	Box	Рамка
+	Swatch	Зразок

@@ -6506,3 +6506,8 @@ breakText	Glyphs	Glyphen
 @msg	Some islands could not be joined to the area around the art	Einige Inseln konnten nicht mit der Fläche um das Bildmaterial verbunden werden
 @msg	`width` must be from {lo} to {hi} pt	`width` muss zwischen {lo} und {hi} pt liegen
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` muss eine ganze Zahl von 1 bis {MAX_BRIDGES_PER_ISLAND} sein
+	Weed Box and Lines…	Entgitterrahmen und -linien…
+	Weed Box and Lines	Entgitterrahmen und -linien
+	Margin	Rand
+	Box	Rahmen
+	Swatch	Farbfeld

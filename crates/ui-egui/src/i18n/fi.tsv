@@ -6954,3 +6954,8 @@ breakText	Glyphs	Merkit
 @msg	Some islands could not be joined to the area around the art	Joitakin saarekkeita ei voitu yhdistää grafiikkaa ympäröivään alueeseen
 @msg	`width` must be from {lo} to {hi} pt	`width`-arvon on oltava {lo}–{hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` on oltava kokonaisluku 1–{MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Karsintakehys ja -viivat…
+	Weed Box and Lines	Karsintakehys ja -viivat
+	Margin	Marginaali
+	Box	Kehys
+	Swatch	Värimalli

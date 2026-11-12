@@ -6903,3 +6903,8 @@ breakText	Glyphs	Glifák
 @msg	Some islands could not be joined to the area around the art	Egyes szigeteket nem sikerült összekötni a grafikát körülvevő területtel
 @msg	`width` must be from {lo} to {hi} pt	A `width` értéke {lo} és {hi} pt között lehet
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`: 1 és {MAX_BRIDGES_PER_ISLAND} közötti egész szám kell
+	Weed Box and Lines…	Gyomláló keret és vonalak…
+	Weed Box and Lines	Gyomláló keret és vonalak
+	Margin	Margó
+	Box	Keret
+	Swatch	Színminta

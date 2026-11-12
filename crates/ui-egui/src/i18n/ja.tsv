@@ -6605,3 +6605,8 @@ breakText	Glyphs	字形
 @msg	Some islands could not be joined to the area around the art	一部のアイランドをアートワークの周囲の領域につなげられませんでした
 @msg	`width` must be from {lo} to {hi} pt	`width` は {lo}～{hi} pt の範囲で指定してください
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` には 1 から {MAX_BRIDGES_PER_ISLAND} の整数を指定してください
+	Weed Box and Lines…	カス取り枠とライン…
+	Weed Box and Lines	カス取り枠とライン
+	Margin	マージン
+	Box	枠
+	Swatch	スウォッチ

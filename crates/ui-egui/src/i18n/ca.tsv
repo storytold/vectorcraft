@@ -6900,3 +6900,8 @@ breakText	Glyphs	Glifs
 @msg	Some islands could not be joined to the area around the art	Algunes illes no s’han pogut unir a l’àrea que envolta la il·lustració
 @msg	`width` must be from {lo} to {hi} pt	`width` ha d’estar entre {lo} i {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` ha de ser un nombre enter d’1 a {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Caixa i línies de pelat…
+	Weed Box and Lines	Caixa i línies de pelat
+	Margin	Marge
+	Box	Caixa
+	Swatch	Mostra

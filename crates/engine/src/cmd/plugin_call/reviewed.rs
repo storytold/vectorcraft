@@ -33,6 +33,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "addon.color.swatchLegend",
     "addon.contour.set",
     "addon.cutting.bridges",
+    "addon.cutting.weed",
     "addon.image.removeBackground",
     "addon.pathtools.addPoints",
     "addon.pathtools.close",

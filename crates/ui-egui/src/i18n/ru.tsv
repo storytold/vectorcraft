@@ -7008,3 +7008,8 @@ shape	Open	Открытый
 @msg	Some islands could not be joined to the area around the art	Некоторые островки не удалось соединить с областью вокруг графики
 @msg	`width` must be from {lo} to {hi} pt	`width` должно быть от {lo} до {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` должно быть целым числом от 1 до {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Рамка и линии выборки…
+	Weed Box and Lines	Рамка и линии выборки
+	Margin	Поле
+	Box	Рамка
+	Swatch	Образец
