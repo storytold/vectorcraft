@@ -1765,7 +1765,9 @@ as it is. A string as the first argument is used as the text.
 objects as the text of an expression that makes the same value, such as `({"a":[1, "x"]})`. A function, a getter, a
 date, a regular expression, an error, a host object such as `vc`, an array with properties besides its elements, an
 object whose prototype is not `Object.prototype`, a property that is not enumerable, or an object that contains
-itself throws a `TypeError`. A value deeper than 64 levels, with more than 1,048,576 entries or with text longer than 16,777,216
+itself throws a `TypeError`. So does a property that is not writable or not configurable, an object or array after
+`Object.preventExtensions`, `Object.seal` or `Object.freeze`, and an array whose `length` is read-only, since the text
+would make each of them writable, configurable and extensible again (VectorCraft's own rule). A value deeper than 64 levels, with more than 1,048,576 entries or with text longer than 16,777,216
 characters throws a `RangeError`.
 
 The run is one transaction. When the script ends, each document it changed gets one undo step named Run Script. A
