@@ -6,8 +6,9 @@
 //! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
 //! (damaged ones, hostile programs) read by the PostScript interpreter, nor the editing data of
 //! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor Affinity documents
-//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor the
-//! font files a folder search reads (damaged fonts, collections whose headers give any count of
+//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor
+//! `.cdr` drawings (mutated and cut short, plain, compressed and packaged, opened and placed),
+//! nor the font files a folder search reads (damaged fonts, collections whose headers give any count of
 //! faces), nor scripts written for the reference app checked without running them (garbage,
 //! generated script text and mutated scripts).
 //!
@@ -265,6 +266,124 @@ proptest! {
             assert!(no_panic(s.execute("file.place.queue", &json!({"files":[p]}))).is_err());
         });
         prop_assert!(r.is_ok(), "Affinity placement panicked: {:?}", r.err());
+    }
+}
+
+// ---------- .cdr drawings ----------
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn cdr_mutated_drawings_render_and_export(
+        version in prop::sample::select(vec![300u16, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300]),
+        compress: bool,
+        cut in 12usize..8192,
+        edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
+    ) {
+        let mut bytes = vectorcraft_cdr::synth::sample(version, compress && version >= 700);
+        let n = bytes.len();
+        for (at, b) in edits { bytes[at % n] = b; }
+        bytes.truncate(cut);
+        survive("CDR drawing", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+    }
+
+    #[test]
+    fn cdr_mutated_packages_render_and_export(
+        version in prop::sample::select(vec![1400u16, 1500, 1600, 2000, 2700]),
+        cut in prop::option::of(22usize..16384),
+        edits in prop::collection::vec((any::<usize>(), 0usize..8192, any::<u8>()), 0..24),
+    ) {
+        // The members are edited before they are zipped, so that the edits reach the drawing
+        // rather than stop at the CRC-32; the archive may then be cut short.
+        let mut members = if version < 1600 {
+            vec![vectorcraft_cdr::synth::Member { name: "content/riffData.cdr".into(), data: vectorcraft_cdr::synth::sample(version, true), deflate: false }]
+        } else {
+            let mut body = vec![vectorcraft_cdr::synth::chunk(b"vrsn", version.to_le_bytes().to_vec())];
+            body.extend(vectorcraft_cdr::synth::sample_content(version));
+            vectorcraft_cdr::synth::package16_members(version, &body, false, &[])
+        };
+        for (m, at, b) in edits {
+            let k = m % members.len();
+            let data = &mut members[k].data;
+            if !data.is_empty() {
+                let n = data.len();
+                data[at % n] = b;
+            }
+        }
+        let mut bytes = vectorcraft_cdr::synth::zip(&members, b"");
+        if let Some(cut) = cut {
+            bytes.truncate(cut);
+        }
+        survive("CDR package", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "CDR package placement panicked: {:?}", r.err());
+    }
+
+    #[test]
+    fn cdr_garbage_opens_and_places_without_panicking(tail in prop::collection::vec(any::<u8>(), 0..2048)) {
+        let mut bytes = b"RIFF".to_vec();
+        bytes.extend(((4 + tail.len()) as u32).to_le_bytes());
+        bytes.extend(b"CDRB");
+        bytes.extend(tail);
+        survive("CDR garbage", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "CDR placement panicked: {:?}", r.err());
+    }
+
+    // Drawings of versions 1 and 2 are not RIFF files: a header of offsets, then records.
+    #[test]
+    fn cdr_mutated_wl_drawings_render_and_export(
+        marker in prop::sample::select(vec![b'd', b'e', b'm']),
+        cut in prop::option::of(0usize..1024),
+        edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
+    ) {
+        let mut bytes = vectorcraft_cdr::synth::wl_sample(marker);
+        let n = bytes.len();
+        for (at, b) in edits { bytes[at % n] = b; }
+        if let Some(cut) = cut {
+            bytes.truncate(cut);
+        }
+        survive("CDR drawing of version 1 or 2", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "placing a CDR drawing of version 1 or 2 panicked: {:?}", r.err());
+    }
+
+    #[test]
+    fn cdr_garbage_after_a_wl_header_opens_and_places_without_panicking(
+        marker in prop::sample::select(vec![b'd', b'e', b'm']),
+        tail in prop::collection::vec(any::<u8>(), 0..2048),
+    ) {
+        // Offsets that fit the file, so the garbage is walked as records.
+        let mut bytes = vec![b'W', b'L', marker, 0];
+        bytes.extend(28u32.to_le_bytes());
+        bytes.extend(28u32.to_le_bytes());
+        bytes.extend((28 + tail.len() as u32).to_le_bytes());
+        bytes.extend([0; 12]);
+        bytes.extend(tail);
+        survive("CDR garbage of version 1 or 2", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "placing CDR garbage of version 1 or 2 panicked: {:?}", r.err());
     }
 }
 

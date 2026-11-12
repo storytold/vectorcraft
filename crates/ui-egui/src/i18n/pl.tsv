@@ -5146,6 +5146,17 @@ imageTrace	Outline	Kontur
 @msg	the HEIC or HEIF file can't be read	nie można odczytać pliku HEIC lub HEIF
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	plik HEIC lub HEIF zawiera rodzaj obrazu, którego nie można odczytać
 @msg	HEIC and HEIF images can't be opened in this build	obrazów HEIC i HEIF nie można otworzyć w tej wersji
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	nie można otworzyć rysunków CDR {version}: VectorCraft odczytuje wersje od 1 do 27
+@msg	this CDR drawing can't be read ({why})	nie można odczytać tego rysunku CDR ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	pominięto teksty, mapy bitowe, przejścia, efekty konturu, pociągnięcia pędzla i inne obiekty CDR, których VectorCraft jeszcze nie odczytuje
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	pominięto wypełnienia tonalne, deseniowe, teksturowe i PostScript CDR
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	kolory w modelach kolorów CDR, których VectorCraft nie odczytuje, otwarto jako czarne
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	kolory z bibliotek CDR, które rysunek zapisuje tylko jako numer, otwarto jako czarne kolory dodatkowe
+@msg	CDR outline arrowheads were left out	pominięto groty strzałek na obrysach CDR
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	obwiednie CDR nie zostały zastosowane, a kształty pod nimi zachowują swoje obrysy
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	pominięto części rysunku zagnieżdżone zbyt głęboko lub wykraczające poza limity importu
+@msg	damaged parts of the drawing were left out	pominięto uszkodzone części rysunku
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	strony CDR dłuższe niż 163 830 pt otwarto z tą długością, a grafika przy ich krawędziach leży poza obszarem kompozycji
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	obraz PSD jest zbyt duży, aby go odczytać ({_1} × {_2} pikseli)
 @msg	zipped 1-bit PSD image data with prediction can't be read	nie można odczytać spakowanych 1-bitowych danych obrazu PSD z predykcją
 @msg	the PSD file's layer data uses an unknown compression ({m})	dane warstw pliku PSD używają nieznanej kompresji ({m})

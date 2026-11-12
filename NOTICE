@@ -35,6 +35,10 @@ based in part on the work of the Independent JPEG Group.
 WebAssembly plug-ins run in the wasmi interpreter (MIT OR Apache-2.0); its wasmparser dependency is
 under the Apache License 2.0 with the LLVM exception.
 
+The .cdr reader (crates/cdr) reads the record layouts that the Kaitai Struct specification
+coreldraw_cdr.ksy (https://github.com/kaitai-io/coreldraw_cdr.ksy, MIT License) describes. No part
+of the specification is copied into the crate; its license text is in crates/cdr/LICENSE-kaitai.txt.
+
 Builds made with craft-fonts (the CRAFT_FONTS_DIR build option; all official releases) embed the
 fonts listed in https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md (BIZ UDPGothic,
 Shippori Mincho, BIZ UDMincho, Noto Sans CJK SC and Noto Sans Arabic in the current manifest;

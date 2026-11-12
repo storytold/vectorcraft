@@ -17,6 +17,7 @@
 //! - `eps`: EPS export options (flattened transparency, previews, the embedded document), `document.exportEps`.
 //! - `dxfimport`: the DXF options `document.open` and Place read, `document.dxfInfo`.
 //! - `metafile`: EMF and WMF export, open and place.
+//! - `cdr`: `.cdr` drawings of versions 1 to 27 and `.cdt` templates, open and place.
 //! - `hpgl`: HP-GL export options and plots.
 //! - `importer`: files that importer plug-ins open (`document.open {importer}`, and extensions no
 //!   built-in format reads).
@@ -28,6 +29,7 @@
 mod action_batch;
 mod affinity;
 mod batch;
+mod cdr;
 pub mod dxf;
 pub mod dxfimport;
 mod encode;
@@ -161,6 +163,8 @@ mod tests;
 mod tests_affinity;
 #[cfg(test)]
 mod tests_artboard_fill;
+#[cfg(test)]
+mod tests_cdr;
 #[cfg(test)]
 mod tests_pdf;
 #[cfg(test)]

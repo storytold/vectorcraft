@@ -5038,6 +5038,17 @@ axis	Both	Ambos
 @msg	the HEIC or HEIF file can't be read	no se puede leer el archivo HEIC o HEIF
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	el archivo HEIC o HEIF contiene un tipo de imagen que no se puede leer
 @msg	HEIC and HEIF images can't be opened in this build	las imágenes HEIC y HEIF no se pueden abrir en esta compilación
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	no se pueden abrir dibujos de CDR {version}: VectorCraft lee las versiones 1 a 27
+@msg	this CDR drawing can't be read ({why})	no se puede leer este dibujo de CDR ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	se omitieron textos, mapas de bits, mezclas, siluetas, trazos de pincel y otros objetos de CDR que VectorCraft aún no lee
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	se omitieron los rellenos degradados, de patrón, de textura y PostScript de CDR
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	los colores en modelos de color de CDR que VectorCraft no lee se abrieron en negro
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	los colores de biblioteca de CDR que el dibujo guarda solo por número se abrieron como tintas planas negras
+@msg	CDR outline arrowheads were left out	se omitieron las puntas de flecha de los contornos de CDR
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	no se aplicaron las envolventes de CDR, y las formas que contienen conservan sus contornos
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	se omitieron partes del dibujo anidadas a demasiada profundidad o fuera de los límites de importación
+@msg	damaged parts of the drawing were left out	se omitieron partes dañadas del dibujo
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	las páginas de CDR de más de 163.830 pt se abrieron con esa longitud, y el arte cerca de sus bordes queda fuera de la mesa de trabajo
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	la imagen PSD es demasiado grande para leerla ({_1} × {_2} píxeles)
 @msg	zipped 1-bit PSD image data with prediction can't be read	no se pueden leer datos de imagen PSD de 1 bit comprimidos en ZIP con predicción
 @msg	the PSD file's layer data uses an unknown compression ({m})	los datos de capa del archivo PSD usan una compresión desconocida ({m})

@@ -5130,6 +5130,17 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the HEIC or HEIF file can't be read	HEIC または HEIF ファイルを読み込めません
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC または HEIF ファイルには読み込めない種類の画像が含まれています
 @msg	HEIC and HEIF images can't be opened in this build	このビルドでは HEIC と HEIF の画像を開けません
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	CDR {version} の図面は開けません: VectorCraft で読み込めるのはバージョン 1 から 27 までです
+@msg	this CDR drawing can't be read ({why})	この CDR 図面は読み込めません ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	VectorCraft でまだ読み込めない CDR のテキスト、ビットマップ、ブレンド、コンター、ブラシストローク、その他のオブジェクトは除外されました
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR のグラデーション、パターン、テクスチャ、PostScript の塗りは除外されました
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	VectorCraft で読み込めない CDR のカラーモデルの色は黒として開きました
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	図面が番号だけで保存している CDR のライブラリカラーは黒の特色として開きました
+@msg	CDR outline arrowheads were left out	CDR のアウトラインの矢印は除外されました
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR のエンベロープは適用されず、その下のシェイプは元のアウトラインのままです
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	入れ子が深すぎる図面の部分や読み込みの上限を超えた部分は除外されました
+@msg	damaged parts of the drawing were left out	図面の破損した部分は除外されました
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163,830 pt より長い CDR のページはその長さで開いたため、端の近くのアートはアートボードの外にあります
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 画像が大きすぎて読み込めません（{_1} × {_2} ピクセル）
 @msg	zipped 1-bit PSD image data with prediction can't be read	予測付き ZIP 圧縮の 1 bit PSD 画像データは読み込めません
 @msg	the PSD file's layer data uses an unknown compression ({m})	PSD ファイルのレイヤーデータの圧縮方式が不明です（{m}）
