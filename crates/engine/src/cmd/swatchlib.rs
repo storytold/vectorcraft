@@ -85,7 +85,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Copy to User Defined",
             ["Window", "Swatch Libraries"],
             None,
-            "{library: id or name of a loaded library (category \"loaded\", swatch.library.load)} copy it into the user library folder of the desktop app, whose libraries VectorCraft lists as User Defined every time it starts (a loaded library is listed until the app quits): a library file as it is, the swatches of a document or a library loaded from data as a .vcswatches file. A name the folder already has gets a number (\"Brand 2.ase\") and no file is replaced; when the folder already holds the same file, that file is used. The library is then listed as User Defined only, and until the app quits commands given its loaded id use the copy; a User Defined library comes back as it is → {library: its User Defined id, name, count, path, copied: false when nothing was written}",
+            "{library: id or name of a loaded library (category \"loaded\", swatch.library.load)} copy it into the user library folder of the desktop app, whose libraries VectorCraft lists as User Defined every time it starts (a loaded library is listed until the app quits): a library file as it is, the swatches of a document or a library loaded from data as a .vcswatches file. A name the folder already has gets a number (\"Brand 2.ase\") and no file is replaced; when the folder already holds the same file, that file is used. The library is then listed as User Defined only, and until the app quits commands given its loaded id use the copy; a User Defined library comes back as it is → {library: its User Defined id, name, count, path (left out when it is outside the read roots), copied: false when nothing was written}",
             has_user_folder,
             copy_to_user
         ),
@@ -368,7 +368,9 @@ impl<L: LibraryFile> Libraries<L> {
             .ok_or_else(|| bad(cmd, format!("`{id}` isn't a loaded library")))?;
         let (file, bytes) = match source.filter(|p| L::EXTS.contains(&extension(p).as_str())) {
             Some(p) => {
-                // Outside the request's read roots: the error names no path.
+                // The file's bytes are read: outside the request's read roots, the error names no
+                // path. A document's swatches (the arm below) are written from the loaded library,
+                // and the document is not read again.
                 if !readable(&p) {
                     return Err(bad(cmd, "the library's file is outside the read roots"));
                 }
@@ -486,11 +488,15 @@ fn written_elsewhere(path: &str) -> bool {
 /// The loaded library ids (`loaded/<path>`) whose file the request being served may not read, each
 /// with the id a reply shows instead: `loaded/<file name>`, as a library loaded without a path is
 /// named. The file name is the last part of the path after either separator, and a path saved as
-/// another platform's absolute path counts as one the request may not read. The ids are those of the session's swatch, brush, symbol and graphic style libraries, then
-/// `others` (ids the UI state refers to). When another id already is or shows that id, the next free
-/// one of `loaded/<file name> (2)`, `(3)` and so on is shown, so that two libraries stay two. The
-/// session's libraries are numbered first, in the sorted order of their full ids, so a library shows
-/// the same id whatever `others` holds; then `others`, in the same order. Without roots in force, none.
+/// another platform's absolute path counts as one the request may not read. The ids are those of the
+/// session's swatch, brush, symbol and graphic style libraries, then `others` (ids the UI state refers
+/// to). When another id already is or shows that id, the next free
+/// one of `loaded/<file name> (2)`, `(3)` and so on is shown, so that two libraries stay two. A library
+/// keeps the id it was first shown under for the rest of the session, so an id a client was given
+/// finds the same library after another one with the same file name is loaded; only a library that
+/// shows that id itself (one loaded later without a file under that name) moves it to the next free
+/// one. Libraries shown for the first time are numbered the session's first, in the sorted order of
+/// their full ids, then `others`, in the same order. Without roots in force, none.
 pub fn concealed_library_ids(s: &Session, others: impl IntoIterator<Item = String>) -> Vec<(String, String)> {
     if crate::file_access::current().is_none() {
         return vec![];
@@ -515,16 +521,32 @@ pub fn concealed_library_ids(s: &Session, others: impl IntoIterator<Item = Strin
             }
         }
     }
+    let mut assigned = s.shown_library_ids.lock().unwrap_or_else(|e| e.into_inner());
+    let mut kept = vec![None; hidden.len()];
+    for (slot, (id, _)) in kept.iter_mut().zip(&hidden) {
+        if let Some(shown) = assigned.get(id).filter(|shown| !taken.contains(*shown)) {
+            taken.insert(shown.clone());
+            *slot = Some(shown.clone());
+        }
+    }
+    // A new id is never one given to another library earlier in the session.
+    let mut given: BTreeSet<String> = assigned.values().cloned().collect();
     hidden
         .into_iter()
-        .map(|(id, name)| {
-            let mut shown = format!("loaded/{name}");
-            let mut n = 2;
-            while taken.contains(&shown) {
-                shown = format!("loaded/{name} ({n})");
-                n += 1;
-            }
-            taken.insert(shown.clone());
+        .zip(kept)
+        .map(|((id, name), kept)| {
+            let shown = kept.unwrap_or_else(|| {
+                let mut shown = format!("loaded/{name}");
+                let mut n = 2;
+                while taken.contains(&shown) || given.contains(&shown) {
+                    shown = format!("loaded/{name} ({n})");
+                    n += 1;
+                }
+                taken.insert(shown.clone());
+                given.insert(shown.clone());
+                assigned.insert(id.clone(), shown.clone());
+                shown
+            });
             (id, shown)
         })
         .collect()
@@ -759,8 +781,12 @@ fn copy_to_user(s: &mut Session, p: &Value) -> Result<Value> {
         "user" => (info, lib, false),
         _ => return Err(bad(C, format!("`{}` is built in and always listed", info.name))),
     };
-    let path = s.swatch_libraries.shown_path(&info.id);
-    Ok(json!({"library": info.id, "name": info.name, "count": lib.len(), "path": path, "copied": copied}))
+    let mut out = json!({"library": info.id, "name": info.name, "count": lib.len(), "copied": copied});
+    // As the saves with `user: true`: no `path` when the request may not read the file.
+    if let Some(path) = s.swatch_libraries.shown_path(&info.id) {
+        out["path"] = json!(path);
+    }
+    Ok(out)
 }
 
 /// The library swatches `names` stand for, each once, with the colour group it goes into (`None`:

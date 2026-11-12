@@ -157,11 +157,13 @@ the suite) keep the agent to the folders you give it:
   params of a recorded action's steps in `ui.action_sets`, also when its panel is closed. A path written with
   either separator counts as a path, also one saved on another platform, and outside Windows a path that starts
   with a drive (`C:`) or a `\` counts as outside the roots. When another hidden library has the same
-  file name, the libraries take `loaded/<file name>`, `loaded/<file name> (2)`, `(3)` and so on in the order of
-  their full ids (the libraries loaded in this session first, then those only the UI state names), and each one
-  keeps its id in both replies and in the library commands below. A hidden library skips an id that a library
-  loaded without a path already has. The other entries keep their order, and the app's own state is not
-  changed. A request may name such a library or its panel by the id
+  file name, the libraries take `loaded/<file name>`, `loaded/<file name> (2)`, `(3)` and so on in the order they
+  are first shown. Libraries first shown in the same reply are numbered in the order of their full ids, the
+  libraries loaded in this session first, then those only the UI state names. Each one keeps its id for the rest
+  of the session in both replies and in the library commands below, also after another library with the same
+  file name is loaded. A hidden library skips an id that a library loaded without a path already has, and only a
+  library loaded later from data under that file name, which takes the id itself, moves a hidden one to the next
+  free number. The other entries keep their order, and the app's own state is not changed. A request may name such a library or its panel by the id
   shown in a `panel`, `library` or `panels` param, in a docking destination (`anchor`, `before`, `onto`, `above`,
   `below`) and in `window.panel.layout`'s `action` (`ui.set {panel: "library:swatches:loaded/<file name>"}`
   reopens its panel), and the reply to such a request shows that id and file name wherever the library's id or path
@@ -182,9 +184,13 @@ the suite) keep the agent to the folders you give it:
   `(2)`, `(3)` and so on as in `ui_inspect` when two have the same file name. That id finds the library in the
   other library commands (`swatch.library.get`, `swatch.library.add`, `brush.library`, `brush.addFromLibrary`,
   `symbol.library`, `symbol.addFromLibrary`, `graphicStyle.library`, `graphicStyle.addFromLibrary` and the
-  others that take `library`), whose replies show it too. `swatch.library.copyToUser` refuses a library whose file
-  is outside the read roots without naming the file, and it and the library saves with `user: true` leave out
-  `path` when the user library folder is outside the read roots.
+  others that take `library`), whose replies show it too. Over the control channel, `window.swatchLibrary` and
+  the other library panel commands answer with that id and its panel's id (`library:swatches:loaded/<file name>`),
+  and `ui.libraryPanel` and the `window.panel.*` commands take that panel id in `panel`, `anchor`, `before`,
+  `onto`, `above` and `below`. `swatch.library.copyToUser` refuses to copy a library file outside the read roots
+  without naming the file (the swatches of a document loaded from there are written from the loaded library, as
+  for a library loaded from data, and the document is not read again), and it and the library saves with
+  `user: true` leave out `path` when the user library folder is outside the read roots.
 - `links.list`, `links.check`, `links.info` and the `missingLinks`, `modifiedLinks` and `updatedLinks` rows of
   `document.open` leave out a linked file's path when the file is outside the read roots (a relative path is taken
   from the document's folder): `path`, `found`, and in `links.info` also `link` and `location`, with the `fileSize`
