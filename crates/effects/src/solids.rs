@@ -842,8 +842,9 @@ fn surfaces_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Nod
         return Some(masked(n.id, surfaces.into_iter().map(|(_, s, scopes)| (scopes, Arc::new(s))).collect()));
     }
     // One order takes a plain group of faces from each solid, one face for each facet. With
-    // colored lights a surface can instead be one clipped composite of all its facets, and then it
-    // stays whole.
+    // colored lights a surface can instead be one clipped composite of all its facets. A composite
+    // has no faces to order, so when any surface is one, every surface of the solid, masked ones
+    // included, draws whole in member order.
     let plain = surfaces.iter().all(|(depths, s, _)| matches!(&s.kind, NodeKind::Group { children, clip: false } if children.len() == depths.len()));
     if !opaque || !plain {
         return Some(surfaces.into_iter().map(|(_, s, _)| Arc::new(s)).collect());
