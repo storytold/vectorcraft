@@ -4528,6 +4528,7 @@ axis	Both	Her İkisi
 @msg	unknown option `{path}.{k}`	bilinmeyen seçenek `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	bilinmeyen üst baskılar `{o}` (koru, benzet veya at)
 @msg	unknown panel `{raw}`	bilinmeyen panel `{raw}`
+@msg	panels can't be shown in Presentation Mode	Sunum Modunda paneller gösterilemez
 @msg	unknown preference `{key}`	bilinmeyen tercih `{key}`
 @msg	Preferences imported.	Tercihler içe aktarıldı.
 @msg	not a preferences file: {e}	tercih dosyası değil: {e}

@@ -8020,6 +8020,7 @@ antiAlias	Sharp	शार्प
 @msg	unknown overprints `{v}` (preserve, simulate or discard)	अज्ञात ओवरप्रिंट `{v}` (प्ररक्षित, अनुकरण या त्यागपत्र)
 @msg	unknown panel	अज्ञात पैनल
 @msg	unknown panel `{raw}`	अज्ञात पैनल `{raw}`
+@msg	panels can't be shown in Presentation Mode	प्रस्तुति मोड में पैनल्स नहीं दिखाए जा सकते
 @msg	unknown parameter `{key}`; did you mean `{near}`?	अज्ञात पैरामीटर `{key}`; क्या आपको `{near}` का मतलब है?
 @msg	unknown parameter `{key}`; the command takes no parameters	अज्ञात पैरामीटर `{key}`; कमांड कोई पैरामीटर नहीं लेता है
 @msg	unknown parameter `{key}`; the command takes: {keys}	अज्ञात पैरामीटर `{key}`; कमांड लेता है: {keys}
