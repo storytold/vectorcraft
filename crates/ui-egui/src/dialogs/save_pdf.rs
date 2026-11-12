@@ -83,6 +83,11 @@ pub(super) const TOP_LABEL_WIDTH: f32 = LIST_WIDTH + 26.0;
 /// Open the dialog with `params` (`document.exportPdf` options and `path?`) applied over their
 /// preset. `useArtboards: false` makes the page the bounds of the visible art.
 pub fn open(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String> {
+    let art_bounds = match params.get("useArtboards") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(b)) => !b,
+        Some(v) => return Err(format!("useArtboards must be true or false, not {v}")),
+    };
     let mut fields = settings_fields(app, params)?;
     let s = |k: &str| params.get(k).and_then(Value::as_str);
     fields.insert("preset".into(), json!(s("preset").unwrap_or(pdf::DEFAULT_PRESET)));
@@ -93,7 +98,7 @@ pub fn open(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String> {
     if let Some(path) = s("path") {
         fields.insert("path".into(), json!(path));
     }
-    if params.get("useArtboards") == Some(&json!(false)) {
+    if art_bounds {
         fields.insert(ART_BOUNDS.into(), json!(true));
     }
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });

@@ -130,6 +130,22 @@ fn a_page_of_the_arts_bounds_has_no_artboards_section_and_takes_the_options() {
     assert!(opened.borrow()[0].0.ends_with("/tmp/art.pdf"));
 }
 
+/// `useArtboards` other than true, false or null is refused, as `document.exportPdf` refuses it,
+/// and no dialog opens.
+#[test]
+fn a_use_artboards_that_is_not_true_or_false_is_refused() {
+    let (mut app, _, _) = app();
+    for bad in [json!("false"), json!(0), json!({})] {
+        let e = app.run("ui.savePdfDialog", json!({"path": "/tmp/x.pdf", "useArtboards": bad})).unwrap_err();
+        assert!(e.contains("useArtboards must be true or false"), "{bad}: {e}");
+        assert!(app.ui.dialog.is_none(), "{bad}: no dialog opens");
+    }
+    for ok in [json!(true), json!(null)] {
+        app.run("ui.savePdfDialog", json!({"path": "/tmp/x.pdf", "useArtboards": ok})).unwrap();
+        assert!(!app.ui.dialog.take().unwrap().bool(ART_BOUNDS), "{ok}: the artboards' dialog");
+    }
+}
+
 /// With Background Export on, a page of the art's bounds is written in the background, as Export
 /// As writes its other formats.
 #[test]
