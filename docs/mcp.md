@@ -2330,9 +2330,12 @@ everything in it, and `select.all`, `select.allOnArtboard` and `select.inverse` 
 `brush.list`), whatever the brush is named; a brush of another type with "Bristle" in its name does not count.
 `select.object.notAlignedToPixelGrid` (Select › Object › Not Aligned to Pixel Grid) selects the paths and compound
 paths whose pixel-aligned property (`object.setPixelAligned`) is off and returns `{count}`. It goes by the property,
-not by where the anchors are: a path on whole points with the property off is selected. Guide paths, type, images,
-groups and other objects are not, nor are the paths inside a compound path, which takes the property as one object.
-It looks into groups, replaces the selection, and with no such object clears it; it records no undo step.
+not by where the anchors are: a path on whole points with the property off is selected. Guide paths, type (point,
+area and on a path), images, symbol instances, gradient meshes, placed documents, groups and other objects are not,
+nor are the paths inside a compound path, which takes the property as one object. A path with effects is selected
+as the path it is. It looks into groups, clip groups, blends, envelopes, repeats and Intertwine groups and selects the
+paths they hold, not the objects that hold them. It replaces the selection, and with no such object clears it; it
+records no undo step.
 `select.nextAbove` and `select.nextBelow` select the nearest such object above or below the first selected object
 among the objects beside it in its group or layer, passing over hidden and locked objects and sublayers. When there
 is no such object, the selection stays as it is.
