@@ -461,6 +461,32 @@ fn a_gray_image_whose_earlier_mask_shows_color_pixels_is_refused() {
     assert_eq!((doc(&s), undo_len(&s)), (&before, steps));
 }
 
+/// Remove Background clears the image's own pixels: a grayscale image colorized with a process
+/// color is refused even when an earlier mask, as an opened file can hold, shows color pixels.
+#[test]
+fn remove_background_refuses_a_gray_image_whose_earlier_mask_shows_color_pixels() {
+    let (mut s, id) = open(&gray_framed());
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let rgb = ImageBlob::png(framed());
+    let key = rgb.content_key();
+    s.edit("Mask", |d, _| {
+        d.images.insert(key.clone(), rgb.clone());
+        let from = image_of(d, id).key;
+        let mask = ColorMask { key: key.clone(), from, ..mask_of_settings() };
+        d.node_mut(id).unwrap().extras_mut().color_mask = Some(Box::new(mask));
+        Ok(())
+    })
+    .unwrap();
+    let d = doc(&s);
+    let n = d.node(id).unwrap();
+    let NodeKind::Image(im) = &n.kind else { panic!("an image") };
+    assert_eq!(d.shown_image(n, im).key, key, "the image shows the color pixels");
+    let (before, steps) = (doc(&s).clone(), undo_len(&s));
+    let e = s.execute(super::super::REMOVE_BACKGROUND, &hide_white()).unwrap_err().to_string();
+    assert!(e.contains("a process color can't colorize a grayscale image with transparency"), "{e}");
+    assert_eq!((doc(&s), undo_len(&s)), (&before, steps));
+}
+
 /// A mask that hides nothing leaves the image's own pixels without transparency, so a grayscale
 /// image colorized with a process color takes it.
 #[test]

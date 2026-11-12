@@ -24,7 +24,7 @@ use vectorcraft_geom::Affine;
 
 use super::super::fileio::{MAX_RASTER_ALLOC, ppi};
 use super::super::menucmds::has_image;
-use super::super::paint::{PROCESS_ON_TRANSPARENCY, gray_colorized_with_process};
+use super::super::paint::{PROCESS_ON_TRANSPARENCY, colorized_with_process};
 use super::super::{CommandSpec, Result, Session, bad, checked_ids_param, cmd, hex_with_alpha, number_or, switch_or, text_param};
 
 /// Remove Background's command.
@@ -173,10 +173,11 @@ fn remove_background(s: &mut Session, p: &Value) -> Result<Value> {
 fn changes(s: &Session, p: &Value, settings: &Settings, mut kept: Option<&mut DecodedImages>) -> Result<Vec<(NodeId, Cleared, Affine)>> {
     let images = images(s, p, C)?;
     // The result has an alpha channel, which a grayscale image colorized with a process color
-    // can't take.
+    // can't take. The pixels that are cleared are checked, the image's own, not the ones a color
+    // mask shows.
     let st = s.doc()?;
-    for (id, ..) in &images {
-        if st.doc.node(*id).is_some_and(|n| gray_colorized_with_process(&st.doc, n).is_some()) {
+    for (id, _, blob) in &images {
+        if blob.gray_source().is_some() && st.doc.node(*id).is_some_and(|n| colorized_with_process(&st.doc, n)) {
             return Err(bad(C, PROCESS_ON_TRANSPARENCY));
         }
     }

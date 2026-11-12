@@ -10296,10 +10296,12 @@ profile and resolution). PDF's color key masking hides chosen colors of an image
   EPS, the raster formats, DXF, EMF, WMF, the legacy .ai, the .ai editing data, copy and paste, and placing a document
   show the masked pixels. A linked image stays linked. An output that refers to linked files instead of embedding them
   (SVG with `images: "link"`) writes the masked pixels in place of the link.
-- A grayscale image's masked pixels have an alpha channel. A colorize color on a masked grayscale image follows the rule
-  for grayscale images with transparency (a spot color, black or white), and Color Mask refuses a mask that hides
-  pixels of a grayscale image colorized with a process color. Each image is checked on the pixels its new mask shows,
-  whatever other images in the document hold.
+- A grayscale image's masked pixels have an alpha channel when the mask hides pixels. A colorize color on such an image
+  follows the rule for grayscale images with transparency (a spot color, black or white), and Color Mask refuses a mask
+  that hides pixels of a grayscale image colorized with a process color. A mask that hides no pixels shows the image's
+  own pixels, so a grayscale image with such a mask takes a process color. Each image is checked on the pixels its new
+  mask shows, whatever other images in the document hold. Remove Background checks the image's own pixels, which it
+  clears.
 - A click anywhere in the image's frame selects it, hidden pixels included, as it does for an image with clear pixels.
   The Eyedropper, Object Mosaic, Create Gradient Mesh, Crop Image's trim and Image Trace read the image's own pixels,
   hidden colors included.
