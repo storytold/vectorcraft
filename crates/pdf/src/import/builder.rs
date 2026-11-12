@@ -396,6 +396,10 @@ impl<'p> Builder<'p> {
         if let Some((t, opacity, facts)) = line.finish() {
             if checked && reshaped::reshapes(&t.plain_text()) && !reshaped::draws_as(&t, &facts.ink) {
                 outlined = true;
+                if self.mask.is_some() {
+                    self.flush_glyphs();
+                    self.flush_masked();
+                }
                 for g in glyphs {
                     // Glyphs the file fills one by one composite where they overlap: only opaque
                     // ones, drawn alike down to the stroke, and not under a soft mask (which
@@ -415,6 +419,12 @@ impl<'p> Builder<'p> {
                             self.flush_glyphs();
                             self.glyphs = Some(g);
                         }
+                    }
+                    // Under a soft mask each glyph is masked on its own: the art queued for the
+                    // mask is drained at each glyph, or one group of them all takes it once.
+                    if self.mask.is_some() {
+                        self.flush_glyphs();
+                        self.flush_masked();
                     }
                 }
                 self.warn(RESHAPED_TEXT_NOTE);

@@ -194,3 +194,27 @@ fn kept_glyphs_are_where_the_file_draws_them() {
         }
     }
 }
+
+/// How many glyph outlines carry a soft mask of their own.
+fn masked_outlines(d: &Document) -> usize {
+    let mut n = 0;
+    d.walk(|node| n += usize::from(is_glyph_outlines(node) && node.extras().mask.is_some()));
+    n
+}
+
+/// A mask that isn't constant (dark on the left, light on the right) is a mask of its own on each
+/// glyph, not one on a group of them: glyphs that overlap composite one by one, as the file draws
+/// them.
+#[test]
+fn outlined_glyphs_under_a_varying_soft_mask_are_masked_one_by_one() {
+    let group = stream(
+        "/Type /XObject /Subtype /Form /BBox [0 0 300 200] /Group << /S /Transparency /CS /DeviceGray >>",
+        "0.2 g 0 0 150 200 re f 0.9 g 150 0 150 200 re f",
+    );
+    let mask = format!("/ExtGState << /M << /SMask << /S /Luminosity /G {} 0 R >> >> >>", first_extra(1) + 4);
+    let bytes = page_with(|id| format!("/M gs {} Tj {} Tj {} Tj", id(KA), id(SIGN_I), id(KA)), &mask, &[group], None);
+    let report = open(&bytes);
+    assert_eq!(texts(&report.document), [""; 0]);
+    assert_eq!(outlines(&report.document), 3, "a path each");
+    assert_eq!(masked_outlines(&report.document), 3, "each path has its own mask");
+}
