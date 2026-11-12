@@ -648,7 +648,7 @@ fn occurrences(text: &str, needle: &str, fold: bool) -> Vec<usize> {
 /// in letter case keep their own ids, and then the ones written in another case. `None` when nothing
 /// changed.
 fn replace_text(s: &str, r: &Rewrite) -> Option<String> {
-    let decoded = if s.contains('%') { decoded_with_spans(s).filter(|(decoded, _)| decoded != s) } else { None };
+    let decoded = if has_percent_escape(s) { decoded_with_spans(s).filter(|(decoded, _)| decoded != s) } else { None };
     let mut found = Found::default();
     for group in &r.pairs {
         for fold in [false, true].into_iter().take(if r.fold { 2 } else { 1 }) {
@@ -772,6 +772,12 @@ fn decoded_with_spans(text: &str) -> Option<(String, Vec<(usize, usize)>)> {
         }
     }
     Some((decoded, decoded_spans))
+}
+
+/// Does `text` hold a `%XX` escape, one that [`decoded_with_spans`] decodes? Only such an escape
+/// changes the decoded text.
+fn has_percent_escape(text: &str) -> bool {
+    text.as_bytes().windows(3).any(|w| w[0] == b'%' && w[1].is_ascii_hexdigit() && w[2].is_ascii_hexdigit())
 }
 
 /// Is `from`, a relative path (one that does not start with a separator, a drive or `loaded/`), at
@@ -1060,13 +1066,14 @@ fn leave_out_unreadable_paths(ui: &mut serde_json::Map<String, Value>) {
     }
 }
 
-/// Takes out of `prefs` the folder preferences ([`PREF_FOLDERS`]) the request may not read. An
-/// empty value (no folder) and a scratch disk choice ([`SCRATCH_CHOICES`]) stay.
+/// Takes out of `prefs` the folder preferences ([`PREF_FOLDERS`]) the request may not read, as written
+/// or trimmed as the app uses it. An empty value (no folder) and a scratch disk choice
+/// ([`SCRATCH_CHOICES`]) stay.
 fn leave_out_unreadable_folders(prefs: &mut serde_json::Map<String, Value>) {
     for key in PREF_FOLDERS {
         let Some(written) = prefs.get(key).and_then(Value::as_str) else { continue };
         let path = written.trim();
-        if path.is_empty() || (key.starts_with("scratch") && SCRATCH_CHOICES.contains(&path)) || readable(written) {
+        if path.is_empty() || (key.starts_with("scratch") && SCRATCH_CHOICES.contains(&path)) || (readable(written) && readable(path)) {
             continue;
         }
         prefs.remove(key);

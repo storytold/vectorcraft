@@ -131,6 +131,21 @@ fn a_reply_hides_a_path_in_any_case_and_escaped() {
     assert_eq!(reply["error"], "c.svg, c.svg, c.svg", "{reply}");
 }
 
+/// Only a string with a `%XX` escape is decoded before it is searched: a `%` that begins no escape
+/// leaves the text as it is, and the reply is the same either way.
+#[test]
+fn only_a_percent_escape_is_decoded() {
+    for (text, escaped) in [("width=\"100%\"", false), ("50% off", false), ("%zz%4", false), ("%", false), ("a%2Fb", true), ("%fF", true)] {
+        assert_eq!(super::has_percent_escape(text), escaped, "{text}");
+        let decoded = super::decoded_with_spans(text).map(|(decoded, _)| decoded);
+        assert_eq!(decoded.as_deref() != Some(text), escaped, "{text}: an escape alone changes the decoded text");
+    }
+    let hidden = hiding(&[("loaded//libs/b.svg", "loaded/b.svg")], &[]);
+    let mut reply = json!({"error": "100% of /libs/b.svg and file:///libs%2Fb.svg"});
+    super::replace_in_value(&mut reply, &super::Rewrite { pairs: super::hidden_text(&hidden), hiding: &hidden, fold: false });
+    assert_eq!(reply["error"], "100% of b.svg and b.svg", "{reply}");
+}
+
 /// A path a failed request sent takes the place of a hidden library's id for the same path, written
 /// with the other separator, and in another letter case when matching in any case (as on Windows).
 #[test]

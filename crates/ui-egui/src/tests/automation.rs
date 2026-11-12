@@ -499,6 +499,31 @@ fn ui_inspect_checks_a_folder_preference_as_written() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `ui.inspect` checks a folder preference as the app uses it, trimmed, as well: with the working
+/// folder as the read root, a path outside it with a space before it reads as a name in the working
+/// folder, and is still left out, because the app trims it and uses the path outside.
+#[test]
+fn ui_inspect_checks_a_folder_preference_as_trimmed() {
+    let (_, _, base) = confined("inspect-folder-trimmed");
+    let cwd = std::env::current_dir().unwrap();
+    let roots = AutomationRoots::new(&[&cwd], &[&base.join("out")]).unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Services::default()).with_control(rx).with_automation_roots(roots);
+    let outside = s(base.join("outside"));
+    // Without its drive, the path starts with a separator: trimmed, it is absolute on any platform.
+    let rooted = match outside.as_bytes() {
+        [drive, b':', ..] if drive.is_ascii_alphabetic() => &outside[2..],
+        _ => outside.as_str(),
+    };
+    let spaced = format!(" {rooted}");
+    app.ui.engine_prefs = json!({"fontsFolder": spaced, "pluginsFolder": ""});
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let prefs = r["result"]["ui"]["engine_prefs"].as_object().unwrap();
+    assert_eq!(prefs.get("pluginsFolder").and_then(Value::as_str), Some(""), "{r}");
+    assert!(!prefs.contains_key("fontsFolder"), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `ui.inspect` hides a hidden library's id and path in every string it holds: status text, the
 /// command palette query and a script's report show the id and file name shown, and the path appears
 /// nowhere in the reply.
