@@ -162,7 +162,7 @@
 //! symbols past 4,096 as their art (symbol art past [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects
 //! in all left out), instances of symbols the document doesn't have as empty groups, symbols' 9-slice
 //! guides, export types and dynamic type left out, live objects (placed documents included) as their art,
-//! strokes a plain line can't draw
+//! strokes a plain line can't draw and the object's art style doesn't hold
 //! as their filled outlines, several fills or strokes as a group of a path for each, freeform
 //! gradient swatches, gradient swatches of more than 256 stops, swatches of patterns written as
 //! tiles and the placement of pattern swatches that move, turn or scale their pattern, the opacity and blending modes of single fills and strokes, opacity masks on

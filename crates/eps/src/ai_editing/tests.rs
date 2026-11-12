@@ -6629,6 +6629,70 @@ fn every_effect_setting_written_on_an_object_is_read_back() {
     assert!(matches!(&spot.appearance.fill().unwrap().paint, Paint::Solid { swatch: Some(s), .. } if s == "Ink"), "{spot:?}");
 }
 
+/// A drawn look's strokes warn only where its art style leaves them out: a path with a drop shadow and
+/// a stroke with a width profile is written with a style that holds the profile, and doesn't warn;
+/// a group with a drop shadow whose member has a stroke inside the path still warns.
+#[test]
+fn a_drawn_looks_strokes_warn_only_where_its_style_leaves_them_out() {
+    let profile = vectorcraft_doc::WidthProfile { points: vec![(0.0, 1.0, 0.5), (0.5, 0.25, 0.75), (1.0, 0.0, 1.0)] };
+    let (n, warnings, p) = read_one(|doc| {
+        let mut stroke = StrokeLayer::new(black_fill(), 4.0);
+        stroke.profile = Some(profile.clone());
+        let ap = Appearance { items: vec![AppearanceItem::Stroke(stroke)], effects: vec![drop_shadow()], contents_index: None };
+        Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap)
+    });
+    assert!(p.contains("%AI9_BeginArtStyles"), "{p}");
+    assert!(!warnings.iter().any(|w| w == writer::STROKES), "{warnings:?}");
+    assert_eq!(n.appearance.stroke().and_then(|s| s.profile.clone()), Some(profile));
+    let (_, warnings, p) = read_one(|doc| {
+        let mut n =
+            Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), Appearance::basic(Paint::None, black_fill(), 2.0));
+        n.appearance.stroke_mut().unwrap().align = vectorcraft_doc::StrokeAlign::Inside;
+        let mut g = group(doc, vec![n], false);
+        g.appearance.effects = vec![drop_shadow()];
+        g
+    });
+    assert!(p.contains("%AI9_BeginArtStyles"), "{p}");
+    assert!(warnings.iter().any(|w| w == writer::STROKES), "{warnings:?}");
+}
+
+/// A path linked to a graphic style with a drop shadow and a stroke with a width profile is written
+/// with that style, which holds the profile, and doesn't warn; it reads back linked, with its
+/// profile. A linked path whose fill is half opaque in Screen mode isn't written with its style, which
+/// the reader reads on no object, and warns that the fill's transparency is left out.
+#[test]
+fn a_linked_paths_drawn_look_warns_only_for_what_its_style_leaves_out() {
+    let profile = vectorcraft_doc::WidthProfile { points: vec![(0.0, 1.0, 0.5), (0.5, 0.25, 0.75), (1.0, 0.0, 1.0)] };
+    let linked = |doc: &mut Document, fill: FillLayer| {
+        let mut stroke = StrokeLayer::new(black_fill(), 4.0);
+        stroke.profile = Some(profile.clone());
+        let ap = Appearance {
+            items: vec![AppearanceItem::Fill(fill), AppearanceItem::Stroke(stroke)],
+            effects: vec![drop_shadow()],
+            contents_index: None,
+        };
+        let mut g = vectorcraft_doc::GraphicStyle::new("Linked", ap.clone());
+        g.id = 7;
+        doc.graphic_styles.push(g);
+        let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap);
+        n.extras_mut().graphic_style = Some(7);
+        n
+    };
+    let (n, warnings, p) = read_one(|doc| linked(doc, FillLayer::new(solid(Color::rgb(0.2, 0.2, 0.9)))));
+    assert!(p.contains("1 (Linked) XW"), "{warnings:?}");
+    assert!(!warnings.iter().any(|w| w == writer::STROKES), "{warnings:?}");
+    assert!(n.extras().graphic_style.is_some(), "{n:?}");
+    assert_eq!(n.appearance.stroke().and_then(|s| s.profile.clone()), Some(profile.clone()));
+    let (_, warnings, p) = read_one(|doc| {
+        let mut fill = FillLayer::new(solid(Color::rgb(0.2, 0.2, 0.9)));
+        fill.opacity = 0.5;
+        fill.blend = BlendMode::Screen;
+        linked(doc, fill)
+    });
+    assert!(!p.contains("1 (Linked) XW"), "{p}");
+    assert!(warnings.iter().any(|w| w == writer::ITEM_TRANSPARENCY), "{warnings:?}");
+}
+
 /// Each effect a graphic style can hold, in a style of its own, reads back with its settings, whatever
 /// the writer's conversions to the file's units.
 #[test]

@@ -51,7 +51,7 @@ pub(super) const CLIP_PAINT: &str = "the fills and strokes of clipping paths tha
 pub(super) const CLIP_PAINT_MASKS: &str = "the opacity masks of clipping paths whose fills and strokes are written as paths of their own stay on the clipping path, not on those paths, in the editing data for other apps";
 pub(super) const LIVE: &str =
     "blends, envelopes, meshes, repeats, placed documents and intertwines are written as their art in the editing data for other apps";
-const STROKES: &str = "strokes a plain line can't draw (inside or outside the path, variable width, dots, dashes fitted to corners, gradients, patterns, arrowheads) are written as filled outlines, and brushed strokes as their brush's art, in the editing data for other apps";
+pub(super) const STROKES: &str = "strokes a plain line can't draw (inside or outside the path, variable width, dots, dashes fitted to corners, gradients, patterns, arrowheads) are written as filled outlines, and brushed strokes as their brush's art, in the editing data for other apps";
 pub(super) const ITEM_TRANSPARENCY: &str =
     "the opacity and blending modes of single fills and strokes are left out of the editing data for other apps";
 pub(super) const LAYER_MASKS: &str = "opacity masks on layers are left out of the editing data for other apps";
@@ -1028,7 +1028,13 @@ impl<'a> Writer<'a> {
             AppearanceItem::Fill(f) => self.fill_object(path, rule, f, xy),
             AppearanceItem::Stroke(s) if self.direct_stroke(s) => self.path_object(path, rule, None, Some(s), xy),
             AppearanceItem::Stroke(s) => {
-                self.warn(STROKES);
+                // In a styled path's or compound path's drawn look the stroke is kept by the object's
+                // art style, which is written only when the reader reads the object's appearance back
+                // from it. A styled group's style holds no fills or strokes: its members are written
+                // again after the look, and warn there.
+                if !self.in_look {
+                    self.warn(STROKES);
+                }
                 self.wrote_fixed = true;
                 if self.brush_art(path, s, xy) {
                     return;
