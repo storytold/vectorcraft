@@ -894,6 +894,17 @@ font-technology	Variable	Variables
 	The selected character's font is not available.	La fuente del carácter seleccionado no está disponible.
 	No alternates for the selected character.	No hay alternativas para el carácter seleccionado.
 	Double-click to replace	Doble clic para reemplazar
+	Select one character with the Type tool first.	Primero selecciona un carácter con la herramienta Texto.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} es un glifo de {font}, no de la fuente del texto seleccionado ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pertenece a {base} (U+{base_code}) {place}; tu selección es {sel} (U+{code}).
+	at the start of a word	al principio de una palabra
+	in the middle of a word	en medio de una palabra
+	at the end of a word	al final de una palabra
+	standing alone	cuando está solo
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} no es una alternativa de {sel} (U+{code}) tal como está en su palabra.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Doble clic para insertar {base} (U+{code}) en su lugar: una forma de presentación no se une, la letra sí.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Se insertó {base} (U+{code}) en lugar de una forma de presentación: la fuente la une a sus vecinas según la posición.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Ninguna función OpenType dibuja este glifo aquí, así que sustituye el glifo del carácter y puede que no se una a los caracteres vecinos.
 	Double-click to insert	Doble clic para insertar
 	Double-click to rename	Doble clic para cambiar el nombre
 	Double-click to target the contents	Doble clic para seleccionar el contenido como destino
@@ -1994,6 +2005,8 @@ font-technology	Variable	Variables
 	Metallic Gradients	Degradados metálicos
 	Meters	Metros
 	Method:	Método:
+	Pad	Prolongar
+	Repeats	Repeticiones
 	Millimeters	Milímetros
 	Minify	Minificar
 	Minimal	Mínimo
@@ -2360,6 +2373,10 @@ font-technology	Variable	Variables
 	Arch	Bóveda
 @msg	select point type or type on a path	seleccione texto de punto o texto en trazado
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	el texto en trazado de un texto enlazado no puede usar texto dinámico: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	el texto en un trazado abierto o compuesto no se puede centrar arriba o abajo: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	el texto en un trazado sin longitud o sin altura no se puede centrar: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	el texto en trazado de un texto enlazado no se puede centrar arriba o abajo: {frames}
+@msg	select type on a closed path	seleccione texto en un trazado cerrado
 	Optimize for fast web view	Optimizar para vista web rápida
 	Optimized	Optimizado
 	Options	Opciones
@@ -3414,6 +3431,9 @@ digits	Malayalam	Malayálam
 	Split Path	Dividir trazado
 	spot	plana
 	Spot Color	Tinta plana
+	Spot Color Objects	Objetos con tintas planas
+	Pattern Objects	Objetos con motivos
+	Gradient Objects	Objetos con degradados
 	Spot Colors	Tintas planas
 	Spot Colors…	Tintas planas…
 	Spread:	Extensión:
@@ -3723,6 +3743,8 @@ digits	Malayalam	Malayálam
 	Type on a Path	Texto en trazado
 	Type on a Path Options	Opciones de texto en trazado
 	Type on a Path Options…	Opciones de texto en trazado…
+	Center on Top	Centrar arriba
+	Center on Bottom	Centrar abajo
 	Type on a Path Tool	Herramienta Texto en trazado
 	Type Orientation	Orientación del texto
 	Type stays text, and every stroke is a line with its lineweight and dashes.	El texto sigue siendo texto, y cada trazo es una línea con su grosor y guiones.
@@ -4372,6 +4394,8 @@ axis	Both	Ambos
 @msg	the Smooth slider is not open	el regulador de Suavizar no está abierto
 @msg	the screen color sampler is already open	el muestreador de color de la pantalla ya está abierto
 @msg	this system has no screen color sampler	este sistema no tiene muestreador de color de la pantalla
+@msg	the screen color sampler did not answer	el muestreador de color de la pantalla no respondió
+@msg	the screen color sampler failed	el muestreador de color de la pantalla falló
 @msg	bad colour `{hex}` (#rrggbb)	color no válido `{hex}` (#rrggbb)
 @msg	bad page tree	árbol de páginas no válido
 @msg	bad shortcut	atajo no válido
@@ -4401,6 +4425,7 @@ axis	Both	Ambos
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` no es un color como "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: como máximo {MAX_TABLE} colores
 @msg	command `{0}` is not available right now: {1}	el comando `{0}` no está disponible ahora: {1}
+@msg	command `{id}` is not available right now	el comando `{id}` no está disponible ahora
 @msg	compound paths can only contain paths	los trazados compuestos solo pueden contener trazados
 @msg	compressed (RLE) bitmaps can't be read yet	todavía no se pueden leer mapas de bits comprimidos (RLE)
 @msg	damaged	dañado
@@ -5982,6 +6007,7 @@ mark-style	Japanese	Japonesas
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Guías geométricas
+	Optical Effects	Efectos ópticos
 	Geometric Patterns	Motivos geométricos
 	Grit Textures	Texturas granuladas
 	Ease In	Entrada suave
@@ -6024,6 +6050,9 @@ axis	Y Axis	Eje Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` se aplica a rellenos de degradado (paint.setFill)
 @msg	`dither` must be true or false	`dither` debe ser true o false
 @msg	`method` must be classic or perceptual	`method` debe ser classic o perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` debe ser pad, repeat o reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` debe ser un número entero de 1 a {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` se aplica a los degradados lineales, radiales, cónicos y de rombo
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	¿Instalar “{name}”, que pide un presupuesto de cálculo grande?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Cada ejecución puede tardar hasta {minutes} minutos y hacer {times} veces el trabajo que se permite a otros plugins. Se ejecuta en segundo plano y se puede cancelar.
@@ -6273,6 +6302,11 @@ axis	Y Axis	Eje Y
 	Grass Fan	Abanico de hierba
 	Pattern Borders	Bordes de motivo
 	Scatter Shapes	Formas de dispersión
+	Dry Media	Técnicas secas
+	Chalk Grain	Grano de tiza
+	Graphite Pencil	Lápiz de grafito
+	Wax Crayon	Cera de colores
+	Charcoal Dust	Polvo de carboncillo
 	Save Brush Library…	Guardar biblioteca de pinceles…
 @msg	`{_1}` has no brushes to apply	`{_1}` no tiene pinceles para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)
@@ -6934,3 +6968,8 @@ breakText	Glyphs	Glifos
 @msg	Some islands could not be joined to the area around the art	Algunas islas no se pudieron unir al área que rodea la ilustración
 @msg	`width` must be from {lo} to {hi} pt	`width` debe estar entre {lo} y {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` debe ser un número entero entre 1 y {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Caja y líneas de pelado…
+	Weed Box and Lines	Caja y líneas de pelado
+	Margin	Margen
+	Box	Caja
+	Swatch	Muestra

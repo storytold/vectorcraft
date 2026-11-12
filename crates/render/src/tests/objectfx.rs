@@ -439,7 +439,7 @@ fn transforms_of(t: &Node) -> [(Value, Affine); 3] {
 /// A 100×100 document holding `content` in an envelope that leaves it as it is (an arc with no
 /// bend), with Distort Appearance on or off.
 fn envelope_doc(content: Node, distort_appearance: bool) -> Document {
-    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true };
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
     let options = vectorcraft_doc::live::EnvelopeOptions { distort_appearance, ..Default::default() };
     let envelope = NodeKind::Envelope {
         content: vec![Arc::new(content)],

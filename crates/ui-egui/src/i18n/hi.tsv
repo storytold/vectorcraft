@@ -434,6 +434,11 @@ antiAlias	Sharp	शार्प
 	Plasma Arc	प्लाज़्मा चाप
 	Charge Wave	चार्ज तरंग
 	Spark Trail	चिंगारी पथ
+	Dry Media	सूखे माध्यम
+	Chalk Grain	चॉक के दाने
+	Graphite Pencil	ग्रेफाइट पेंसिल
+	Wax Crayon	मोम क्रेयॉन
+	Charcoal Dust	चारकोल धूल
 	Art using a deleted global swatch keeps its colour.	हटाए गए ग्लोबल स्वॉच वाला आर्टवर्क अपना रंग बनाए रखता है।
 	Artboard	आर्टबोर्ड
 	Artboard {n} of {total}	{total} में से आर्टबोर्ड {n}
@@ -1423,6 +1428,17 @@ antiAlias	Sharp	शार्प
 	Double-click to insert	सम्मिलित करने के लिए डबल क्लिक करें
 	Double-click to rename	नाम बदलने के लिए डबल क्लिक करें
 	Double-click to replace	प्रतिस्थापित करने के लिए डबल क्लिक करें
+	Select one character with the Type tool first.	पहले टाइप टूल से एक कैरेक्टर सिलेक्ट करें।
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} {font} का ग्लिफ़ है, उस फ़ॉन्ट का नहीं जिसमें सिलेक्ट किया टेक्स्ट सेट है ({text_font})।
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} {base} (U+{base_code}) का है, {place}; आपका सिलेक्शन {sel} (U+{code}) है।
+	at the start of a word	शब्द की शुरुआत में
+	in the middle of a word	शब्द के बीच में
+	at the end of a word	शब्द के अंत में
+	standing alone	अकेले खड़े होने पर
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph}, {sel} (U+{code}) का विकल्प नहीं है, जैसा वह अपने शब्द में खड़ा है।
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	इसके बजाय {base} (U+{code}) सम्मिलित करने के लिए डबल क्लिक करें: प्रेज़ेंटेशन फ़ॉर्म नहीं जुड़ता, अक्षर जुड़ता है।
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	प्रेज़ेंटेशन फ़ॉर्म की जगह {base} (U+{code}) सम्मिलित किया गया: फ़ॉन्ट उसे स्थिति के अनुसार पड़ोसियों से जोड़ता है।
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	यहाँ कोई OpenType फ़ीचर इस ग्लिफ़ को नहीं बनाता, इसलिए यह कैरेक्टर के ग्लिफ़ की जगह लेता है और पड़ोसी कैरेक्टरों से जुड़ नहीं भी सकता।
 	Double-click to target the contents	सामग्री को लक्षित करने के लिए डबल क्लिक करें
 	Down (right reading)	नीचे (दाएं पढ़ने)
 	Download	डाउनलोड
@@ -2762,6 +2778,8 @@ antiAlias	Sharp	शार्प
 	Meters	मीटर
 	Method	विधि
 	Method:	विधि:
+	Pad	विस्तार करें
+	Repeats	दोहराव
 	Mezzotint	मेज़ोटिंट
 	Mezzotint…	मेज़ोटिंट…
 	Millimeters	मिलीमीटर
@@ -3183,12 +3201,17 @@ antiAlias	Sharp	शार्प
 	Opens network connections	नेटवर्क कनेक्शन ओपन करें
 	OpenType Features	ओपन टाइप सुविधाएँ
 	Optical	ऑप्टिकल
+	Optical Effects	ऑप्टिकल इफ़ेक्ट्स
 	Optical Margin Alignment	ऑप्टिकल मार्जिन संरेखण
 	Dynamic Text	डायनैमिक टेक्स्ट
 	Dynamic Text Presets	डायनैमिक टेक्स्ट प्रीसेट
 	Arch	मेहराब
 @msg	select point type or type on a path	पॉइंट टाइप या पाथ पर टाइप चुनें
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	थ्रेडेड टेक्स्ट में पाथ पर टाइप डायनैमिक टेक्स्ट का उपयोग नहीं कर सकता: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	खुले पाथ या कंपाउंड पाथ पर टाइप को ऊपर या नीचे केंद्रित नहीं किया जा सकता: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	बिना लंबाई या बिना ऊँचाई वाले पाथ पर टाइप केंद्रित नहीं किया जा सकता: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	थ्रेडेड टेक्स्ट में पाथ पर टाइप को ऊपर या नीचे केंद्रित नहीं किया जा सकता: {frames}
+@msg	select type on a closed path	बंद पाथ पर टाइप चुनें
 	Optimize for fast web view	तेजी से वेब दृश्य के लिए ऑप्टिमाइज़
 	Optimized	ऑप्टिमाइज़्ड
 	Options	ऑप्शन्स
@@ -4666,6 +4689,9 @@ antiAlias	Sharp	शार्प
 	Sponge…	स्पंज…
 	spot	स्पॉट
 	Spot Color	स्पॉट रंग
+	Spot Color Objects	स्पॉट कलर्स के साथ ऑब्जेक्ट्स
+	Pattern Objects	पैटर्न्स के साथ ऑब्जेक्ट्स
+	Gradient Objects	ग्रेडिएंट्स के साथ ऑब्जेक्ट्स
 	Spot Colors	स्पॉट रंग
 	Spot Colors (0)	स्पॉट कलर्स (0)
 	Spot Colors…	स्पॉट कलर्स…
@@ -5106,6 +5132,8 @@ antiAlias	Sharp	शार्प
 	Type on a Path	पाथ पर टाइप
 	Type on a Path Options	पाथ पर टाइप ऑप्शन्स
 	Type on a Path Options…	पाथ पर टाइप ऑप्शन्स…
+	Center on Top	ऊपर केंद्रित करें
+	Center on Bottom	नीचे केंद्रित करें
 	Type on a Path Tool	पाथ पर टाइप टूल
 	Type Optimized	टाइप ऑप्टिमाइज़
 	Type Orientation	प्रकार अभिविन्यास
@@ -5873,6 +5901,9 @@ antiAlias	Sharp	शार्प
 @msg	`library` is a library id or name (see {list})	`library` एक लाइब्रेरी आईडी या नाम है ( {list} देखें)
 @msg	`line` must be true or false	`line` को true या false होना चाहिए
 @msg	`method` must be classic or perceptual	`method` क्लासिक या अवधारणात्मक होना चाहिए
+@msg	`spread` must be pad, repeat or reflect	`spread` pad, repeat या reflect होना चाहिए
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 1 से {MAX_REPEATS} तक की पूर्ण संख्या होनी चाहिए
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` रैखिक, रेडियल, शंक्वाकार और डायमंड ग्रेडिएंट्स पर लागू होता है
 @msg	`min` is greater than `max`	`min` अधिकतम `max` से अधिक है
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` और `maxAnchors` पूरे नंबर होना चाहिए
 @msg	`minAngle` ({min_angle}°) can't be more than `maxAngle` ({max_angle}°)	`minAngle` ({min_angle}°) `maxAngle` ({max_angle}°) से अधिक नहीं हो सकता है।
@@ -6294,6 +6325,7 @@ antiAlias	Sharp	शार्प
 @msg	columns {first} and {column} both name the variable `{name}`	कॉलम {first} और {column} दोनों नाम चर `{name}`
 @msg	Combine Slices: the slices have no bounds	स्लाइस को मिलाएं: स्लाइस में कोई सीमा नहीं है
 @msg	command `{0}` is not available right now: {1}	आदेश `{0}` अभी उपलब्ध नहीं है: {1}
+@msg	command `{id}` is not available right now	आदेश `{id}` अभी उपलब्ध नहीं है
 @msg	command must be a shape.* command	command: आदेश एक आकार होना चाहिए।* आदेश
 @msg	commands[{i}]: missing `command`	आदेश [{i}]: लापता `command`
 @msg	composer must be "singleLine" or "everyLine"	composer: संगीतकार "singleLine" या "everyLine" होना चाहिए।
@@ -7911,6 +7943,8 @@ antiAlias	Sharp	शार्प
 @msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	इस पोस्टस्क्रिप्ट फ़ाइल को पढ़ा नहीं जा सकता ({why}): इसे उस ऐप में PDF या SVG के रूप में सेव करें जिसने इसे बनाया
 @msg	This shortcut file is in a form VectorCraft can't read.	यह शॉर्टकट फ़ाइल एक फॉर्म VectorCraft में है जिसे पढ़ा नहीं जा सकता है।
 @msg	this system has no screen color sampler	इस प्रणाली में कोई स्क्रीन रंग नमूना नहीं है
+@msg	the screen color sampler did not answer	स्क्रीन रंग नमूने ने उत्तर नहीं दिया
+@msg	the screen color sampler failed	स्क्रीन रंग नमूना विफल रहा
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	यह निशान {max} एंकर पॉइंट से अधिक होगा, डॉक्यूमेंट की तुलना में अधिक आसानी से दिखा सकते हैं: शोर, निचले पाथ या रंग उठाना, या कम-fidelity प्रीसेट चुनना
 @msg	thumbnail: no page {n} (the file has 1)	थंबनेल: कोई पेज {n} (फ़ाइल में 1 है)
 @msg	thumbnail: no page {v} (the {what} has {count})	थंबनेल: कोई पेज {v} ({what} में {count} है)
@@ -8110,7 +8144,7 @@ antiAlias	Sharp	शार्प
 @msg	width must be positive	width: चौड़ाई सकारात्मक होना चाहिए
 @msg	width out of range	सीमा से बाहर चौड़ाई
 @msg	width/height must be > 0	चौड़ाई / ऊंचाई होना चाहिए > 0
-@msg	width/height must be positive and within the canvas	चौड़ाई / ऊंचाई सकारात्मक होना चाहिए और कैनवास के भीतर होना चाहिए
+@msg	width and height must be more than 0 and at most {limit}	चौड़ाई और ऊंचाई 0 से अधिक और अधिकतम {limit} होनी चाहिए
 @msg	workspace name can't be empty	कार्यक्षेत्र का नाम खाली नहीं हो सकता है
 @msg	x and y must be finite	x और y को परिमित होना चाहिए
 @msg	x and y must be finite numbers	x और y होना चाहिए परिमित संख्या
@@ -8424,3 +8458,8 @@ theme	Appearance	अपीयरेंस
 @msg	Some islands could not be joined to the area around the art	कुछ आइलैंड आर्टवर्क के आसपास के क्षेत्र से नहीं जोड़े जा सके
 @msg	`width` must be from {lo} to {hi} pt	`width` {lo} से {hi} pt तक होना चाहिए
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 से {MAX_BRIDGES_PER_ISLAND} तक पूरी संख्या होना चाहिए
+	Weed Box and Lines…	वीड बॉक्स और लाइनें…
+	Weed Box and Lines	वीड बॉक्स और लाइनें
+	Margin	मार्जिन
+	Box	बॉक्स
+	Swatch	स्वॉच

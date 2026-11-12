@@ -366,6 +366,8 @@
 	Stair Step	Undakan tangga
 	Gravity	Gravitasi
 	Type on a Path Options…	Opsi teks pada jalur…
+	Center on Top	Pusatkan di atas
+	Center on Bottom	Pusatkan di bawah
 	Threaded Text	Teks beruntun
 	Create	Buat
 	Release Selection	Lepaskan seleksi
@@ -1611,6 +1613,17 @@ digits	Malayalam	Malayalam
 	The selected character's font is not available.	Font karakter yang dipilih tidak tersedia.
 	No alternates for the selected character.	Tidak ada alternatif untuk karakter yang dipilih.
 	Double-click to replace	Klik ganda untuk mengganti
+	Select one character with the Type tool first.	Pilih satu karakter dengan alat teks terlebih dahulu.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} adalah glif {font}, bukan dari font yang dipakai teks terpilih ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} milik {base} (U+{base_code}) {place}; pilihan Anda adalah {sel} (U+{code}).
+	at the start of a word	di awal kata
+	in the middle of a word	di tengah kata
+	at the end of a word	di akhir kata
+	standing alone	saat berdiri sendiri
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} bukan alternatif {sel} (U+{code}) sebagaimana posisinya di dalam katanya.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Klik ganda untuk menyisipkan {base} (U+{code}) sebagai gantinya: bentuk presentasi tidak menyambung, hurufnya menyambung.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) disisipkan sebagai ganti bentuk presentasi: font menyambungkannya ke huruf di sebelahnya menurut posisi.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Tidak ada fitur OpenType yang menggambar glif ini di sini, jadi glif ini menggantikan glif karakter dan mungkin tidak menyambung dengan karakter di sebelahnya.
 	Double-click to insert	Klik ganda untuk menyisipkan
 	Entire Font	Seluruh font
 	glyph {id}	glif {id}
@@ -1692,6 +1705,8 @@ digits	Malayalam	Malayalam
 	Save Image Trace Preset	Simpan preset telusur gambar
 	Delete Image Trace Preset	Hapus preset telusur gambar
 	Method:	Metode:
+	Pad	Perpanjang
+	Repeats	Jumlah ulangan
 	Mode:	Mode:
 	Noise	Derau
 	Create:	Buat:
@@ -3683,6 +3698,9 @@ theme	Appearance	Tampilan
 	Select All Unused	Pilih semua yang tidak digunakan
 	Sort by Kind	Urutkan berdasarkan jenis
 	Sort by Name	Urutkan berdasarkan nama
+	Spot Color Objects	Objek dengan Warna Spot
+	Pattern Objects	Objek dengan Pola
+	Gradient Objects	Objek dengan Gradien
 	Spot Colors	Warna spot
 	Spot Colors (0)	Warna spot (0)
 	Swatch Options	Opsi sampel
@@ -4357,6 +4375,7 @@ imageTrace	Outline	Kontur
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` bukan warna seperti "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maksimal {MAX_TABLE} warna
 @msg	command `{0}` is not available right now: {1}	perintah `{0}` tidak tersedia saat ini: {1}
+@msg	command `{id}` is not available right now	perintah `{id}` tidak tersedia saat ini
 @msg	compound paths can only contain paths	jalur majemuk hanya dapat berisi jalur
 @msg	compressed (RLE) bitmaps can't be read yet	bitmap terkompresi (RLE) belum dapat dibaca
 @msg	damaged	rusak
@@ -5513,6 +5532,8 @@ mark-style	Japanese	Jepang
 @msg	the Color Picker is not open	Pemilih Warna tidak terbuka
 @msg	the screen color sampler is already open	pengambil warna layar sudah terbuka
 @msg	this system has no screen color sampler	sistem ini tidak memiliki pengambil warna layar
+@msg	the screen color sampler did not answer	pengambil warna layar tidak merespons
+@msg	the screen color sampler failed	pengambil warna layar gagal
 swatch	[None]	[Tidak ada]
 swatch	[Registration]	[Registrasi]
 swatch	White	Putih
@@ -5873,6 +5894,7 @@ swatch	Bright Violet	Violet cerah
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Panduan Geometris
+	Optical Effects	Efek Optis
 	Geometric Patterns	Pola Geometris
 	Grit Textures	Tekstur Butiran
 	Ease In	Awal Lambat
@@ -6087,6 +6109,11 @@ axis	Y Axis	Sumbu Y
 	Grass Fan	Kipas rumput
 	Pattern Borders	Bingkai pola
 	Scatter Shapes	Bentuk sebar
+	Dry Media	Media kering
+	Chalk Grain	Butiran kapur
+	Graphite Pencil	Pensil grafit
+	Wax Crayon	Krayon lilin
+	Charcoal Dust	Debu arang
 	Save Brush Library…	Simpan pustaka kuas…
 @msg	no empty artboards to delete	tidak ada artboard kosong untuk dihapus
 	Scale Presets	Preset skala
@@ -6690,4 +6717,9 @@ breakText	Glyphs	Glif
 	Stencil Bridges…	Jembatan Stensil…
 	Stencil Bridges	Jembatan Stensil
 	Shortest Crossing	Persilangan terpendek
+	Weed Box and Lines…	Kotak dan garis pembersih sisa…
+	Weed Box and Lines	Kotak dan garis pembersih sisa
+	Margin	Margin
+	Box	Kotak
+	Swatch	Sampel warna
 	Direction	Arah

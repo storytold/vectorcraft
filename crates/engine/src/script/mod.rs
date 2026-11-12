@@ -2119,6 +2119,27 @@ fn line_to(s: &mut Session, host: &Host, entry: console::Entry, cut: bool) {
     host.console.borrow_mut().push(line, cut);
 }
 
+/// The error of the failed run `report` describes, as its console lines give it; `name` is the
+/// run's name in those lines ([`console::line_name`]).
+fn error_text(name: &str, report: &Value) -> String {
+    let (line, column) = (report["line"].as_u64().unwrap_or(0), report["column"].as_u64().unwrap_or(0));
+    let message = report["message"].as_str().unwrap_or_default();
+    match report["file"].as_str() {
+        Some(file) if line > 0 => format!("{name}: {file}:{line}:{column}: {message}"),
+        _ if line > 0 => format!("{name}:{line}:{column}: {message}"),
+        _ => format!("{name}: location unavailable: {message}"),
+    }
+}
+
+/// The console lines of the error of the failed run `report` describes, each as the console keeps
+/// it, cut to its limit.
+pub(crate) fn error_lines(report: &Value) -> Vec<String> {
+    let name = console::line_name(report["name"].as_str().unwrap_or_default());
+    let mut lines = vec![];
+    each_line(&error_text(&name, report), |line, _| lines.push(line));
+    lines
+}
+
 /// Ends the console lines of `host`'s run: the line `$.write` left unended, then for a failed run
 /// (`report["ok"]` false) its error as `name:line:column: message`, then an end line and a report
 /// line in the session's console. Adds the run's time, host calls by kind, slowest commands,
@@ -2133,14 +2154,7 @@ fn close_run(s: &mut Session, host: &Host, report: &mut Value, ending: console::
         }
     }
     if report["ok"] == false {
-        let (line, column) = (report["line"].as_u64().unwrap_or(0), report["column"].as_u64().unwrap_or(0));
-        let message = report["message"].as_str().unwrap_or_default();
-        let text = match report["file"].as_str() {
-            Some(file) if line > 0 => format!("{}: {file}:{line}:{column}: {message}", host.name),
-            _ if line > 0 => format!("{}:{line}:{column}: {message}", host.name),
-            _ => format!("{}: location unavailable: {message}", host.name),
-        };
-        each_line(&text, |line, cut| line_to(s, host, console::Entry::Error(line), cut));
+        each_line(&error_text(&host.name, report), |line, cut| line_to(s, host, console::Entry::Error(line), cut));
     }
     let timing = clock().is_some();
     let ms = millis(host.run_nanos.get());
