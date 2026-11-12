@@ -1701,6 +1701,8 @@ antiAlias	Sharp	Nítido
 	Metallic Gradients	Gradientes Metálicos
 	Meters	Metros
 	Method:	Método:
+	Pad	Prolongar
+	Repeats	Repetições
 	Millimeters	Milímetros
 	Minify	Minificar
 	Minimize	Minimizar
@@ -5997,6 +5999,9 @@ axis	Y Axis	Eixo Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` se aplica a preenchimentos em gradiente (paint.setFill)
 @msg	`dither` must be true or false	`dither` deve ser true ou false
 @msg	`method` must be classic or perceptual	`method` deve ser classic ou perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` deve ser pad, repeat ou reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` deve ser um número inteiro de 1 a {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` se aplica a gradientes lineares, radiais, cônicos e em losango
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Instalar “{name}”, que pede um orçamento de processamento grande?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Cada execução pode levar até {minutes} minutos e fazer {times} vezes o trabalho permitido a outros plug-ins. Ela é executada em segundo plano, e você pode cancelá-la.

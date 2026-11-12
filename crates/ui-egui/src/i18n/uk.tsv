@@ -2026,6 +2026,8 @@ file-filter	Templates	Шаблони
 	Metallic Gradients	Металеві градієнти
 	Meters	Метри
 	Method:	Метод:
+	Pad	Продовжити
+	Repeats	Кількість повторів
 	Millimeters	Міліметри
 	Minify	Мінімізувати
 	Minimal	Мінімальний
@@ -5687,6 +5689,9 @@ axis	Y Axis	Вісь Y
 @msg	`dither` must be true or false	`dither` має бути true або false
 	Perceptual	Перцептивний
 @msg	`method` must be classic or perceptual	`method` має бути classic або perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` має бути pad, repeat або reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` має бути цілим числом від 1 до {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` застосовується до лінійних, радіальних, конічних і ромбоподібних градієнтів
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Встановити «{name}», якому потрібен великий обчислювальний бюджет?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Кожен запуск може тривати до {minutes} хвилин і виконувати в {times} разів більше роботи, ніж дозволено іншим модулям. Він працює у фоні, і його можна скасувати.

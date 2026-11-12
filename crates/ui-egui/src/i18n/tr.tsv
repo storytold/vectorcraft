@@ -1828,6 +1828,8 @@ font-technology	Variable	Değişken
 	Metallic Gradients	Metalik Degradeler
 	Meters	Metre
 	Method:	Yöntem:
+	Pad	Uzat
+	Repeats	Tekrar sayısı
 	Millimeters	Milimetre
 	Minify	Küçült
 	Minimal	Asgari
@@ -6038,6 +6040,9 @@ axis	Y Axis	Y ekseni
 	Geometric Patterns	Geometrik Desenler
 	Grit Textures	Grenli Dokular
 @msg	`method` must be classic or perceptual	`method` classic veya perceptual olmalıdır
+@msg	`spread` must be pad, repeat or reflect	`spread` pad, repeat veya reflect olmalıdır
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 1 ile {MAX_REPEATS} arasında bir tam sayı olmalıdır
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` doğrusal, radyal, konik ve elmas degradeler için geçerlidir
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Büyük bir hesaplama bütçesi isteyen “{name}” yüklensin mi?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Her çalıştırma {minutes} dakikaya kadar sürebilir ve diğer eklentilere izin verilen işin {times} katını yapabilir. Arka planda çalışır ve iptal edebilirsiniz.

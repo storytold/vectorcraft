@@ -2032,6 +2032,8 @@ file-filter	Templates	Modelli
 	Metallic Gradients	Sfumature metalliche
 	Meters	Metri
 	Method:	Metodo:
+	Pad	Prolunga
+	Repeats	Ripetizioni
 	Millimeters	Millimetri
 	Minify	Minifica
 	Minimal	Minimale
@@ -5707,6 +5709,9 @@ axis	Y Axis	Asse Y
 @msg	`dither` must be true or false	`dither` deve essere true o false
 	Perceptual	Percettivo
 @msg	`method` must be classic or perceptual	`method` deve essere classic o perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` deve essere pad, repeat o reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` deve essere un numero intero da 1 a {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` si applica alle sfumature lineari, radiali, coniche e a rombo
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Installare “{name}”, che chiede un budget di calcolo elevato?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Ogni esecuzione può durare fino a {minutes} minuti e svolgere {times} volte il lavoro consentito agli altri plug-in. Viene eseguita in background ed è possibile annullarla.

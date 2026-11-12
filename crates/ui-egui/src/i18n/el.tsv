@@ -1765,6 +1765,8 @@ font-technology	Variable	Μεταβλητές
 	Message:	Μήνυμα:
 	Metadata:	Μεταδεδομένα:
 	Method:	Μέθοδος:
+	Pad	Συνέχιση
+	Repeats	Επαναλήψεις
 	Millimeters	Χιλιοστά
 	Minimize	Ελαχιστοποίηση
 	Mode:	Λειτουργία:
@@ -6033,6 +6035,9 @@ axis	Y Axis	Άξονας Y
 @msg	`dither` applies to gradient fills (paint.setFill)	Το `dither` ισχύει για γεμίσματα ντεγκραντέ (paint.setFill)
 @msg	`dither` must be true or false	Το `dither` πρέπει να είναι true ή false
 @msg	`method` must be classic or perceptual	Το `method` πρέπει να είναι classic ή perceptual
+@msg	`spread` must be pad, repeat or reflect	Το `spread` πρέπει να είναι pad, repeat ή reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	Το `repeats` πρέπει να είναι ακέραιος από 1 έως {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	Το `spread` ισχύει για γραμμικά, ακτινικά, κωνικά και ρομβοειδή ντεγκραντέ
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Να εγκατασταθεί το «{name}», που ζητά μεγάλο υπολογιστικό προϋπολογισμό;
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Κάθε εκτέλεση μπορεί να διαρκέσει έως {minutes} λεπτά και να κάνει {times} φορές τη δουλειά που επιτρέπεται στα άλλα πρόσθετα. Εκτελείται στο παρασκήνιο και μπορείτε να την ακυρώσετε.

@@ -794,7 +794,7 @@ symbol (named after its `data-name`, else its id) with an instance per `<use>`; 
 symbol with strokes) stays art. `feGaussianBlur`, `feDropShadow` and the usual shadow chains (offset, blur, flood or
 colour matrix, composite, merge) become Gaussian Blur, Drop Shadow, Outer Glow, Inner Glow and Feather effects; other
 filters are listed in `warnings`. Undisplayed objects (`display:none`) come back hidden, nested clip paths intersect,
-and reflected or repeated gradients (`spreadMethod`) are expanded into stops. `<image>` files (relative links are
+and reflected or repeated gradients (`spreadMethod`) import as gradients that repeat or reflect (see Spread under Examples). `<image>` files (relative links are
 found in the SVG's folder; only files on this computer or the SVG's network share are read, and pasted SVG reads only
 absolute paths) stay linked images (see Linked images); SVG files and `data:` SVGs become art; a file that
 can't be read becomes a placeholder in its box, named in `warnings` and `missingLinks`.
@@ -1141,6 +1141,41 @@ another form gives a warning:
 
 ```json
 {"name":"run_command","arguments":{"command":"paint.setFill","params":{"gradient":{"kind":"diamond","start":[150,150],"end":[200,150],"aspect":60}}}}
+```
+
+Spread (the Gradient panel's menu, beside a Repeats field) says what a linear, radial, conic or diamond gradient
+paints past the ends of its stops. `pad` (the default) carries the first and last colors on. `repeat` and `reflect`
+run the stops `repeats` times along the vector (1 to 100, VectorCraft's own limit; default 1) and keep going past
+both ends of it, `repeat` starting the stops again each time and `reflect` running every other run backwards. A
+radial or diamond gradient repeats in rings or squares out from its center (an off-center radial's rings grow about
+its focal point), and a conic one repeats around the turn. A freeform gradient has no ends, so a `spread` other
+than `pad` is an error for one, and so is a `repeats` that is not a whole number from 1 to 100. Both edit as one
+undo step, and an edit that changes nothing records none. A gradient set back to `pad` keeps its count for later,
+and it matches a preset or swatch of the same gradient whatever count it keeps. The Gradient tool marks each place
+along the bar where one run meets the next (on a conic, across its extent ellipse). A gradient along or across a
+stroke runs its stops `repeats` times along or across it, a blend between two gradients that repeat (or reflect)
+steps the count from one to the other, and a gradient swatch saved as CSS gets its stops repeated across the box. The
+Gradient tool's stop and midpoint markers lie along the whole bar, as on the Gradient panel's slider, and edit the
+stops of one run.
+
+SVG export writes `spreadMethod` with the gradient's vector shortened to one run
+(https://www.w3.org/TR/SVG2/pservers.html), and SVG import reads
+`spreadMethod` as the spread, with a count of 1. CSS writes `repeating-linear-gradient` and `repeating-radial-gradient` over one run, or
+one run and its mirror for `reflect` (https://www.w3.org/TR/css-images-3/#repeating-gradients), and a conic gradient
+with its stops repeated around the turn. PDF writes a conic gradient's sweep shading over one run, repeated or
+reflected past it. PDF, EPS and legacy `.ai` gradients pad past their ends, so a linear, radial or diamond gradient
+is written with its stops repeated as many times as the shape needs: at most 256 runs and 16,384 stops (256 stops in
+legacy `.ai`), and for a radial or diamond gradient no farther from its center than 65,536 runs, or than a million
+times the smallest gap between its stops (measured in runs) when that is less. Past those it pads, with a warning.
+The `.ai` editing data has no spread either: it holds the stops repeated across the shape, at most 256 of them, with
+a warning. PDF import finds a sharp step between two colors in an axial or radial shading, in any PDF, by halving
+the spans between its samples, so the step reads back where it is in the file (to 1/64 × 2^-14 of the axis, with at
+most 16,384 samples a shading) instead of blurred across the samples around it. Object › Expand expands the
+repeated stops, into the same whole number of `steps` objects for each run (at least one, so about `steps` in all),
+each run starting on an object's edge:
+
+```json
+{"name":"run_command","arguments":{"command":"paint.editGradient","params":{"spread":"reflect","repeats":3}}}
 ```
 
 Dither (the Gradient panel's box) draws a linear, radial, conic or diamond gradient fill with fine noise that hides

@@ -896,7 +896,7 @@ impl<'a> Writer<'a> {
             self.warn_cut(Some(first));
             return self.clip_contents(children);
         };
-        let items = self.items(first, path.to_bezpath().bounding_box());
+        let items = self.items(first, &path.to_bezpath());
         let painted = self.plain_paint(&items);
         // The clipping path goes after the others, so its objects are counted first.
         let subpaths: Vec<&SubPath> = path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).collect();
@@ -1004,7 +1004,7 @@ impl<'a> Writer<'a> {
         if path.is_empty() {
             return;
         }
-        let items = self.items(n, path.to_bezpath().bounding_box());
+        let items = self.items(n, &path.to_bezpath());
         if items.iter().any(|i| i.opacity() < 1.0 || i.blend() != BlendMode::Normal) {
             self.warn(ITEM_TRANSPARENCY);
         }
