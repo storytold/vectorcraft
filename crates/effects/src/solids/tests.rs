@@ -1038,8 +1038,9 @@ fn classic_rotate_parameters_are_checked() {
     }
 }
 
-/// Under a white light and under colored ones, in Extrude & Bevel, Inflate, Rotate and Extrude &
-/// Bevel (Classic, each of its shading branches), a face seen almost edge-on (a sharp sliver) has
+/// Under a white light and under colored ones, in Extrude & Bevel, Inflate, Rotate, Extrude &
+/// Bevel (Classic, each of its shading branches) and Rotate (Classic, its No Shading and Diffuse
+/// surfaces and a gradient), a face seen almost edge-on (a sharp sliver) has
 /// its seam stroke rounded at the corners: every seam's joins are round, and none reaches past its
 /// face more than half its width as it is outlined (a mitered seam would reach past the solid as a
 /// thorn up to ten times that beyond the face's tip). Each case's view makes some face with a
@@ -1116,9 +1117,15 @@ fn a_faces_seam_stays_within_half_its_width_of_the_face() {
             p["surface"] = json!(surface);
             cases.push((CLASSIC_ROTATE, x, y, p, None));
         }
+        let mut p = flat.clone();
+        p["surface"] = json!("diffuse");
+        cases.push((CLASSIC_ROTATE, x, y, p, Some(gradient.clone())));
     }
     // Classic's own paint for its fill: a swatch in CMYK, which its unshaded faces keep as it is.
     let brick = Paint::Solid { color: Color::Cmyk { c: 0.0, m: 0.75, y: 0.9, k: 0.2 }, swatch: Some("Brick".into()), tint: 1.0 };
+    // Rotate (Classic)'s one plane is shaded at some views, not at every one (the light can leave
+    // it as its paint), so its Diffuse case is held to a darkened face at one view at least.
+    let mut rotate_shaded = false;
     for (id, x, y, params, paint) in cases {
         let mut n = if id == ROTATE || id == CLASSIC_ROTATE {
             let mut b = BezPath::new();
@@ -1134,7 +1141,7 @@ fn a_faces_seam_stays_within_half_its_width_of_the_face() {
         for (k, item) in n.appearance.items.iter_mut().enumerate() {
             match &paint {
                 Some(paint) => *item.paint_mut() = paint.clone(),
-                None if id == CLASSIC_EXTRUDE && k == 0 => *item.paint_mut() = brick.clone(),
+                None if (id == CLASSIC_EXTRUDE || id == CLASSIC_ROTATE) && k == 0 => *item.paint_mut() = brick.clone(),
                 None => {}
             }
         }
@@ -1155,10 +1162,10 @@ fn a_faces_seam_stays_within_half_its_width_of_the_face() {
                     seamed.push((path.clone(), face.appearance.items.clone()));
                 }
             });
-            // Each Classic case reaches its own branch: an unshaded face keeps the paint itself (its
-            // swatch and color space too), a shaded one is the paint darkened, and a gradient's
-            // face keeps the gradient.
-            if id == CLASSIC_EXTRUDE {
+            // Each Classic case (Extrude & Bevel and Rotate) reaches its own branch: an unshaded face
+            // keeps the paint itself (its swatch and color space too), a shaded one is the paint
+            // darkened, and a gradient's face keeps the gradient.
+            if id == CLASSIC_EXTRUDE || id == CLASSIC_ROTATE {
                 let fills: Vec<&Paint> = seamed
                     .iter()
                     .filter_map(|(_, items)| match items.first() {
@@ -1178,7 +1185,11 @@ fn a_faces_seam_stays_within_half_its_width_of_the_face() {
                         }
                         _ => false,
                     });
-                    assert!(darkened, "{what}: some face shaded darker than its paint");
+                    if id == CLASSIC_ROTATE {
+                        rotate_shaded |= darkened;
+                    } else {
+                        assert!(darkened, "{what}: some face shaded darker than its paint");
+                    }
                 }
             }
             // Every seamed fill (the paint's, a shadow's over it) has its seams checked, and on some
@@ -1224,32 +1235,50 @@ fn a_faces_seam_stays_within_half_its_width_of_the_face() {
             }
         }
     }
+    assert!(rotate_shaded, "Rotate (Classic), Diffuse: no view shades its plane darker than its paint");
 }
 
-/// Revolve (Classic) draws its faces through Classic's surfaces: every face's seam has round joins,
-/// on the plastic, diffuse and unshaded surfaces.
+/// Revolve (Classic) draws its faces through Classic's surfaces: on the plastic, diffuse and
+/// unshaded surfaces, and with a gradient, every face's seam has round joins and reaches no more
+/// than half its width past its face as it is outlined (the reach Revolve's overlap test counts on).
 #[test]
 fn classic_revolves_seams_are_round() {
+    use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(
+        GradientKind::Linear,
+        vec![GradientStop::new(0.0, RED), GradientStop::new(1.0, BLUE)],
+    ))));
     let mut b = BezPath::new();
     b.move_to((100.0, 40.0));
     b.line_to((130.0, 60.0));
     b.line_to((130.0, 140.0));
     b.line_to((100.0, 160.0));
-    for surface in ["plastic", "diffuse", "none"] {
-        let mut n = Node::path(NodeId(1), PathData::from_bezpath(&b), Appearance::basic(Paint::solid(BLUE), Paint::None, 0.0));
+    let cases = [("plastic", Paint::solid(BLUE)), ("diffuse", Paint::solid(BLUE)), ("none", Paint::solid(BLUE)), ("plastic", gradient)];
+    for (surface, paint) in cases {
+        let what = format!("{surface} gradient {}", matches!(paint, Paint::Gradient(_)));
+        let mut n = Node::path(NodeId(1), PathData::from_bezpath(&b), Appearance::basic(paint, Paint::None, 0.0));
         n.appearance.effects.push(fx(crate::CLASSIC_REVOLVE, json!({"surface": surface})));
         let art = crate::revolve_art(&n).unwrap();
         let mut seams = 0;
         art.walk(&mut |face| {
+            let Some(path) = face.path_data() else { return };
             for item in &face.appearance.items {
-                if let AppearanceItem::Stroke(s) = item
-                    && s.width > 0.0
-                {
-                    seams += 1;
-                    assert_eq!(s.join, vectorcraft_doc::LineJoin::Round, "{surface}: a seam's joins");
+                let AppearanceItem::Stroke(s) = item else { continue };
+                if s.width <= 0.0 {
+                    continue;
                 }
+                seams += 1;
+                assert_eq!(s.join, vectorcraft_doc::LineJoin::Round, "{what}: a seam's joins");
+                let drawn = crate::stroke::line_outline(&path.to_bezpath(), s, s.width, s.width * 1e-3);
+                let mut farthest: f64 = 0.0;
+                kurbo::flatten(drawn.iter(), s.width * 1e-4, |el| {
+                    if let kurbo::PathEl::MoveTo(p) | kurbo::PathEl::LineTo(p) = el {
+                        farthest = farthest.max(path.nearest(p).map_or(f64::INFINITY, |n| n.4));
+                    }
+                });
+                assert!(farthest <= s.width / 2.0 * 1.01, "{what}: a seam {} wide reaches {farthest} from its face", s.width);
             }
         });
-        assert!(seams > 0, "{surface}: seams checked");
+        assert!(seams > 0, "{what}: seams checked");
     }
 }

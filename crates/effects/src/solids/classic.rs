@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use serde_json::Value;
 use vectorcraft_doc::color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, Node, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, Node};
 use vectorcraft_geom::Rect;
 use vectorcraft_three_d::{Bevel, BevelShape, ClassicShading, ClassicSurface, Extrude, Facet, Light};
 
@@ -207,8 +207,8 @@ pub(crate) fn surface(n: &Node, facets: Vec<Facet>, source: &Paint, opacity: f32
         .into_iter()
         .map(|face| {
             if wire {
-                let mut edge = StrokeLayer::new(paint.clone(), WIRE);
-                edge.join = vectorcraft_doc::LineJoin::Round;
+                // A wire edge is drawn as a seam is: a round-joined stroke of the paint.
+                let edge = crate::lighting::seam_stroke(paint.clone(), WIRE);
                 return Arc::new(Node::path(n.id, face.path(), Appearance { items: vec![AppearanceItem::Stroke(edge)], ..Default::default() }));
             }
             let (tone, spec) = shading.tone(face.normal, &lights);
