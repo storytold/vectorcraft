@@ -584,10 +584,7 @@ pub(crate) fn pick_library_file(
     path: Option<String>,
     filters: Vec<(&'static str, &'static [&'static str])>,
 ) -> Result<Option<String>, String> {
-    if path.is_none()
-        && let Some(f) = app.services.open_async.as_mut()
-    {
-        f();
+    if path.is_none() && crate::picks::open_async(app) {
         return Ok(None);
     }
     path.or_else(|| {

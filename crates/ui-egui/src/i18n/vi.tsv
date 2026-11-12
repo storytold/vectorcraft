@@ -5685,6 +5685,8 @@ axis	Y Axis	Trục Y
 	Version: {version}	Phiên bản: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Cài đặt “{name}” thay cho plug-in có cùng ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Tệp này không phải là plug-in đã cài đặt trước đây với ID này. Tệp sẽ nhận cài đặt và bộ nhớ đệm được lưu cho ID đó.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Một tác vụ tự động đã yêu cầu cài đặt plug-in này. Để cài đặt, hãy tự mình chọn lệnh Đối tượng › Plug-in › Cài đặt plug-in… trong menu.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Một tác vụ tự động đã yêu cầu cài đặt plug-in này. Để cài đặt, hãy tự mình chọn lệnh Đối tượng › Plug-in › Cài đặt plug-in… trong menu.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” là mô-đun khác với plug-in có ID {_1} và sẽ nhận cài đặt và bộ nhớ đệm được lưu cho plug-in đó: hãy cài đặt với `replace: true` khi người dùng đồng ý
 	File SHA-256: {hash}	SHA-256 của tệp: {hash}
 	Read the objects it is given	Đọc các đối tượng được trao cho nó

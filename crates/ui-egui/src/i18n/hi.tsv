@@ -5379,6 +5379,8 @@ antiAlias	Sharp	शार्प
 	Version: {version}	संस्करण: {version}
 	Install “{name}” in place of the plug-in with the same ID?	समान ID वाले प्लग-इन की जगह “{name}” इंस्टॉल करें?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	यह फ़ाइल इस ID के साथ पहले इंस्टॉल किया गया प्लग-इन नहीं है। इसे उस ID के लिए रखी गई सेटिंग्स और कैश मिलते हैं।
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	एक ऑटोमेशन ने इस प्लग-इन को इंस्टॉल करने के लिए कहा। इसे इंस्टॉल करने के लिए, स्वयं ऑब्जेक्ट › प्लग-इन्स › प्लग-इन इंस्टॉल करें… चुनें।
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	एक ऑटोमेशन ने इस प्लग-इन को इंस्टॉल करने के लिए कहा। इसे इंस्टॉल करने के लिए, स्वयं ऑब्जेक्ट › प्लग-इन्स › प्लग-इन इंस्टॉल करें… चुनें।
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” आईडी {_1} वाले प्लग-इन से अलग मॉड्यूल है और उसके लिए रखी गई सेटिंग्स और कैश पा लेगा: उपयोगकर्ता की सहमति मिलने पर इसे `replace: true` से इंस्टॉल करें
 	File SHA-256: {hash}	फ़ाइल SHA-256: {hash}
 	Read the objects it is given	उसे दिए गए ऑब्जेक्ट्स पढ़ना

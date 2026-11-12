@@ -6079,6 +6079,8 @@ axis	Y Axis	osa Y
 	Version: {version}	Verze: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Nainstalovat „{name}“ místo zásuvného modulu se stejným ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Tento soubor není zásuvný modul dříve nainstalovaný s tímto ID. Získá nastavení a mezipaměť uchovávané pro toto ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	O instalaci tohoto zásuvného modulu požádala automatizace. Chcete-li ho nainstalovat, zvolte Objekt › Zásuvné moduly › Nainstalovat zásuvný modul… sami.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	O instalaci tohoto zásuvného modulu požádala automatizace. Chcete-li ho nainstalovat, zvolte Objekt › Zásuvné moduly › Nainstalovat zásuvný modul… sami.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}“ je jiný modul než zásuvný modul s ID {_1} a získal by nastavení a mezipaměť uchovávané pro něj: nainstalujte ho s `replace: true`, jakmile uživatel souhlasí
 	File SHA-256: {hash}	SHA-256 souboru: {hash}
 	Read the objects it is given	Číst objekty, které dostane

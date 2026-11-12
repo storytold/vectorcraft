@@ -217,7 +217,16 @@ capability model proposed for PhotoCraft plug-ins
   https://chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/security/security-considerations-for-browser-ui.md
   gives for dialog boxes), so a click, Enter or Space, or a press begun before then, installs nothing. The half second
   starts over for every new question, even one that reads the same, and when the window gets the focus back. Cancel
-  and Escape work at once.
+  and Escape work at once. A module that would take the place of the installed plug-in with its id asks in the same
+  dialog.
+- **An install that automation asked for is not approved in its dialog.** When a control request, MCP, injected input,
+  or a file dialog that one of them opened (even when the person picks the file there) leads to the approval dialog, its
+  OK stays disabled, a confirm is refused even after the half second, and the dialog says that automation asked for the
+  install. `ui.installPlugin` returns `{pending: "pluginInstall", approval: "personMustStartInstall"}`. Cancel still
+  closes it. To install the plug-in, the person chooses Object › Plug-ins › Install Plug-in… and picks the file, or
+  opens it with File › Open or drops it on the window: the module is inspected again and the new question waits its
+  half second. A request's `replace: true` does not skip asking about taking another module's place. A module that
+  needs no approval still installs at once from any request. This is VectorCraft's own rule.
 - `plugin.install` refuses the module, naming the permissions it needs, unless this module already has a recorded grant
   (`plugin.inspect`'s `needsApproval` tells it beforehand). A request's `grant` is refused too: `plugin.install` takes
   it only with the approval the dialog gives. A `vectorcraft-cli mcp` or `run` started with `--allow-plugin-grants`

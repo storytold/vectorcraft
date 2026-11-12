@@ -6126,6 +6126,8 @@ digits	Malayalam	Malaiàlam
 	Version: {version}	Versió: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instal·la «{name}» en lloc del complement amb el mateix ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Aquest fitxer no és el complement instal·lat abans amb aquest ID. Rep la configuració i la memòria cau desades per a aquest ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Una automatització ha demanat d’instal·lar aquest complement. Per instal·lar-lo, tria Objecte › Complements › Instal·la el complement… tu mateix.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Una automatització ha demanat d’instal·lar aquest complement. Per instal·lar-lo, tria Objecte › Complements › Instal·la el complement… tu mateix.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	«{name}» és un mòdul diferent del complement amb l’ID {_1} i rebria la configuració i la memòria cau desades per a aquest: instal·la’l amb `replace: true` quan l’usuari hi estigui d’acord
 	File SHA-256: {hash}	SHA-256 del fitxer: {hash}
 	Read the objects it is given	Llegir els objectes que rep

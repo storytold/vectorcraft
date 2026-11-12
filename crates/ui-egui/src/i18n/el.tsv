@@ -6030,6 +6030,8 @@ axis	Y Axis	Άξονας Y
 	Version: {version}	Έκδοση: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Να εγκατασταθεί το «{name}» στη θέση του πρόσθετου με το ίδιο αναγνωριστικό;
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Αυτό το αρχείο δεν είναι το πρόσθετο που ήταν εγκατεστημένο πριν με αυτό το αναγνωριστικό. Παίρνει τις ρυθμίσεις και την κρυφή μνήμη που διατηρούνται για αυτό το αναγνωριστικό.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Μια αυτοματοποίηση ζήτησε να εγκατασταθεί αυτό το πρόσθετο. Για να το εγκαταστήσετε, επιλέξτε Αντικείμενο › Πρόσθετα › Εγκατάσταση προσθέτου… μόνοι σας.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Μια αυτοματοποίηση ζήτησε να εγκατασταθεί αυτό το πρόσθετο. Για να το εγκαταστήσετε, επιλέξτε Αντικείμενο › Πρόσθετα › Εγκατάσταση προσθέτου… μόνοι σας.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	το «{name}» είναι άλλη λειτουργική μονάδα από το πρόσθετο με αναγνωριστικό {_1} και θα έπαιρνε τις ρυθμίσεις και την κρυφή μνήμη που διατηρούνται για αυτό: εγκαταστήστε το με `replace: true` μόλις συμφωνήσει ο χρήστης
 	File SHA-256: {hash}	SHA-256 αρχείου: {hash}
 	Read the objects it is given	Ανάγνωση των αντικειμένων που του δίνονται

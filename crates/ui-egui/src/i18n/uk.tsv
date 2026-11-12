@@ -5684,6 +5684,8 @@ axis	Y Axis	Вісь Y
 	Version: {version}	Версія: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Встановити «{name}» замість модуля з тим самим ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Цей файл не є модулем, установленим раніше з цим ID. Він отримає налаштування й кеш, збережені для цього ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Автоматизація попросила встановити цей модуль. Щоб установити його, виберіть «Об’єкт › Модулі › Встановити модуль…» самостійно.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Автоматизація попросила встановити цей модуль. Щоб установити його, виберіть «Об’єкт › Модулі › Встановити модуль…» самостійно.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	«{name}» відрізняється від модуля з ID {_1} і отримав би збережені для нього налаштування й кеш: встановіть його з `replace: true`, коли користувач погодиться
 	File SHA-256: {hash}	SHA-256 файлу: {hash}
 	Read the objects it is given	Читати передані йому об’єкти

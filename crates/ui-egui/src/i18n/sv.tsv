@@ -6101,6 +6101,8 @@ axis	Y Axis	Y-axel
 	Version: {version}	Version: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Installera ”{name}” i stället för det plugin som har samma id?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Den här filen är inte det plugin som tidigare installerades med detta id. Den får de inställningar och den cache som sparats för detta id.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	En automatisering bad om att installera det här pluginet. Välj själv Objekt › Plugins › Installera plugin… för att installera det.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	En automatisering bad om att installera det här pluginet. Välj själv Objekt › Plugins › Installera plugin… för att installera det.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	”{name}” är en annan modul än pluginet med id {_1} och skulle få de inställningar och den cache som sparats för det: installera det med `replace: true` när användaren har godkänt
 	File SHA-256: {hash}	Filens SHA-256: {hash}
 	Read the objects it is given	Läsa objekten den får

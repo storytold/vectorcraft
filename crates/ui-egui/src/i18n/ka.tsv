@@ -6030,6 +6030,8 @@ axis	Y Axis	Y ღერძი
 	Version: {version}	ვერსია: {version}
 	Install “{name}” in place of the plug-in with the same ID?	დავაყენოთ „{name}“ იმავე ID-ის მქონე პლაგინის ნაცვლად?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	ეს ფაილი არ არის ამ ID-ით ადრე დაყენებული პლაგინი. ის მიიღებს ამ ID-სთვის შენახულ პარამეტრებს და ქეშს.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	ავტომატიზაციამ ამ პლაგინის დაყენება მოითხოვა. მის დასაყენებლად აირჩიეთ ობიექტი › პლაგინები › პლაგინის დაყენება… თავად.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	ავტომატიზაციამ ამ პლაგინის დაყენება მოითხოვა. მის დასაყენებლად აირჩიეთ ობიექტი › პლაგინები › პლაგინის დაყენება… თავად.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}“ სხვა მოდულია, ვიდრე პლაგინი ID-ით {_1}, და მიიღებდა მისთვის შენახულ პარამეტრებს და ქეშს: მომხმარებლის თანხმობის შემდეგ დააყენეთ ის `replace: true` პარამეტრით
 	File SHA-256: {hash}	ფაილის SHA-256: {hash}
 	Read the objects it is given	მიღებული ობიექტების წაკითხვა

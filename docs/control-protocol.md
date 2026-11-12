@@ -217,7 +217,9 @@ export's own parameters); `ui.dialog.confirm` writes the file. An importer plug-
 `pluginImport` dialog when `file.openWith` is given no `params`: one field per parameter, `__plugin`, and `__open`
 (`path` and `importer`); `ui.dialog.confirm` opens the file. `ui.installPlugin {path?}` installs a `.wasm` (without
 a path it asks for one); one that needs approval opens the `pluginInstall` dialog, which only a person can confirm
-(`ui.dialog.confirm` and injected input are refused); see [plugins.md](plugins.md).
+(`ui.dialog.confirm` and injected input are refused). When a control request opened it, directly or through a file
+dialog, the reply adds `approval: "personMustStartInstall"` and nobody can confirm it: the person chooses Object ›
+Plug-ins › Install Plug-in… to install the plug-in; see [plugins.md](plugins.md).
 
 Overprint Black: the Edit → Edit Colors → Overprint Black… menu item opens a `command` parameter dialog for
 `edit.colors.overprintBlack` (fields `remove`, `percentage`, `fill`, `stroke`, `includeCmyBlacks`,
@@ -1064,7 +1066,7 @@ app:
 | `vectorcraft.docInspect(params)` / `vectorcraft.uiInspect(params)` | `document.inspect` / `ui.inspect` |
 | `vectorcraft.inspect()` | `ui.inspect` (the name before `uiInspect`) |
 | `vectorcraft.screenshot(params)` | `ui.screenshot` (no `path`: the PNG comes back inline, as `data` and as `pngBase64`) |
-| `vectorcraft.openFile(name, bytes)` | opens the bytes the way a dropped file opens (returns `true` once queued) |
+| `vectorcraft.openFile(name, bytes)` | opens the bytes the way a dropped file opens, as automation: a plug-in install it asks for has to be started by the person (returns `true` once queued) |
 | `vectorcraft.captureDownloads(on)` | while on, a save or export is kept in the page instead of downloaded |
 | `vectorcraft.files()` / `vectorcraft.readFile(name)` | the kept files (`{path, size}`) / one of them as a `Uint8Array` |
 

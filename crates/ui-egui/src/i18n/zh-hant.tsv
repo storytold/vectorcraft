@@ -5722,6 +5722,8 @@ axis	Y Axis	Y 軸
 	Version: {version}	版本：{version}
 	Install “{name}” in place of the plug-in with the same ID?	要安裝「{name}」來取代具有相同 ID 的增效模組嗎？
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	此檔案不是先前以此 ID 安裝的增效模組。它會取得為該 ID 保存的設定和快取。
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	自動化要求安裝此增效模組。若要安裝，請自行選擇「物件 › 增效模組 › 安裝增效模組…」。
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	自動化要求安裝此增效模組。若要安裝，請自行選擇「物件 › 增效模組 › 安裝增效模組…」。
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	「{name}」與 ID 為 {_1} 的增效模組是不同的模組，並會取得為其保存的設定和快取：請在使用者同意後以 `replace: true` 安裝
 	File SHA-256: {hash}	檔案 SHA-256：{hash}
 	Read the objects it is given	讀取交給它的物件
