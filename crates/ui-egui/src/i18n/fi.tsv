@@ -3069,6 +3069,7 @@ antiAlias	Sharp	Terävä
 	Hide Code	Piilota koodi
 	Images:	Kuvat:
 	Include Metadata	Sisällytä metatiedot
+	Include Variable Data	Sisällytä muuttujatiedot
 	Internal CSS	Sisäinen CSS
 	Layer Names	Tasojen nimet
 	Minify	Pienennä

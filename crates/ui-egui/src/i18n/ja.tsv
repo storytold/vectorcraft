@@ -2065,6 +2065,7 @@ antiAlias	Sharp	シャープ
 	Include Hidden Layers	非表示レイヤーを含む
 	Include Linked Files	リンクファイルを含める
 	Include Metadata	メタデータを含む
+	Include Variable Data	変数データを含む
 	Include SVG Code	SVG コードを含める
 	Include Swatches for Tints	ティント用のスウォッチを含める
 	Include non-printing layers	印刷しないレイヤーを含む

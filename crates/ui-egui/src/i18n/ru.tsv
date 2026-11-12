@@ -1713,6 +1713,7 @@ file-filter	Templates	Шаблоны
 	Include Hidden Layers	Включать скрытые слои
 	Include Linked Files	Включать связанные файлы
 	Include Metadata	Включать метаданные
+	Include Variable Data	Включать данные переменных
 	Include non-printing layers	Включать непечатаемые слои
 	Write pages longer than 200 in at full size in points	Записывать страницы длиннее 200 in в полном размере, в пунктах
 	Include SVG Code	Включать код SVG

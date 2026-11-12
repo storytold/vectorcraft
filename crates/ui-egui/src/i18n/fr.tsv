@@ -1683,6 +1683,7 @@ font-technology	Variable	Variables
 	Include Hidden Layers	Inclure les calques masqués
 	Include Linked Files	Inclure les fichiers liés
 	Include Metadata	Inclure les métadonnées
+	Include Variable Data	Inclure les données des variables
 	Include non-printing layers	Inclure les calques non imprimables
 	Write pages longer than 200 in at full size in points	Écrire les pages de plus de 200 in en taille réelle, en points
 	Include SVG Code	Inclure le code SVG

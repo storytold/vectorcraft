@@ -2909,6 +2909,7 @@ antiAlias	Sharp	Skarp
 	Hide Code	Skjul kode
 	Images:	Billeder:
 	Include Metadata	Medtag metadata
+	Include Variable Data	Medtag variabeldata
 	Internal CSS	Intern CSS
 	Layer Names	Lagnavne
 	Minify	Minificér

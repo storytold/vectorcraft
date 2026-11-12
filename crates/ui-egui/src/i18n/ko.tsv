@@ -2094,6 +2094,7 @@ antiAlias	Sharp	날카롭게
 	Include Hidden Layers	숨겨진 레이어 포함
 	Include Linked Files	링크된 파일 포함
 	Include Metadata	메타데이터 포함
+	Include Variable Data	변수 데이터 포함
 	Include SVG Code	SVG 코드 포함
 	Include Swatches for Tints	농도별 견본 포함
 	Include non-printing layers	인쇄되지 않는 레이어 포함

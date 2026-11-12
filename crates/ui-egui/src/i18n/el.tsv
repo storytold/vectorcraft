@@ -1608,6 +1608,7 @@ font-technology	Variable	Μεταβλητές
 	Include Hidden Layers	Συμπερίληψη κρυφών επιπέδων
 	Include Linked Files	Συμπερίληψη συνδεδεμένων αρχείων
 	Include Metadata	Συμπερίληψη μεταδεδομένων
+	Include Variable Data	Συμπερίληψη δεδομένων μεταβλητών
 	Include non-printing layers	Συμπερίληψη μη εκτυπώσιμων επιπέδων
 	Write pages longer than 200 in at full size in points	Εγγραφή σελίδων μεγαλύτερων από 200 in σε πλήρες μέγεθος, σε στιγμές
 	Include SVG Code	Συμπερίληψη κώδικα SVG

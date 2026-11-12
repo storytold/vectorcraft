@@ -246,6 +246,10 @@ pub struct ExportOptions {
     /// its licence allows (whole where it forbids subsetting, left out where it forbids
     /// embedding). Not with outlined text or the Tiny profile.
     pub embed_fonts: bool,
+    /// Include Variable Data: write the document's text variables, its data sets and the object
+    /// each text variable is bound to as a `variableSets` element, in the layout Load Variable
+    /// Library reads. Opening the SVG reads them back.
+    pub variable_data: bool,
 }
 
 impl Default for ExportOptions {
@@ -267,6 +271,7 @@ impl Default for ExportOptions {
             encoding: Encoding::Utf8,
             profile: Profile::Svg11,
             embed_fonts: false,
+            variable_data: false,
         }
     }
 }
@@ -576,6 +581,15 @@ pub fn import_within(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
     // capped (`import::depth`), and it gets room for that cap whatever thread asks.
     vectorcraft_doc::depth::with_deep_stack(|| import::import(svg, opts, max_nodes))
 }
+
+/// [`import_with`], also returning the object made of each element whose id `ids` lists (the
+/// first object named after it), by element id. Ids with no object are left out.
+pub fn import_finding(svg: &str, opts: &ImportOptions, ids: &std::collections::HashSet<String>) -> Result<(Document, Vec<String>, Found), SvgError> {
+    vectorcraft_doc::depth::with_deep_stack(|| import::import_finding(svg, opts, MAX_NODES, ids))
+}
+
+/// The object made of each element [`import_finding`] looked for, by element id.
+pub type Found = std::collections::HashMap<String, vectorcraft_doc::NodeId>;
 
 /// Reads a linked file: its bytes and the link to it (absolute path, size, time and hash), or
 /// `None` when there is no readable file at the (absolute) path.
