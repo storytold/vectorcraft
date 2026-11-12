@@ -2000,6 +2000,8 @@ file-filter	Templates	Vorlagen
 	Metallic Gradients	Metallic-Verläufe
 	Meters	Meter
 	Method:	Methode:
+	Pad	Fortsetzen
+	Repeats	Wiederholungen
 	Millimeters	Millimeter
 	Minify	Minifizieren
 	Minimal	Minimal
@@ -3388,6 +3390,9 @@ effect	Points	Punkte
 	Split Path	Pfad teilen
 	spot	Vollton
 	Spot Color	Volltonfarbe
+	Spot Color Objects	Objekte mit Volltonfarben
+	Pattern Objects	Objekte mit Mustern
+	Gradient Objects	Objekte mit Verläufen
 	Spot Colors	Volltonfarben
 	Spot Colors…	Volltonfarben…
 	Spread:	Ausbreitung:
@@ -4302,6 +4307,8 @@ theme	Appearance	Erscheinungsbild
 @msg	the Smooth slider is not open	der Regler „Glätten“ ist nicht geöffnet
 @msg	the screen color sampler is already open	die Farbaufnahme vom Bildschirm ist bereits geöffnet
 @msg	this system has no screen color sampler	dieses System hat keine Farbaufnahme vom Bildschirm
+@msg	the screen color sampler did not answer	die Farbaufnahme vom Bildschirm hat nicht geantwortet
+@msg	the screen color sampler failed	die Farbaufnahme vom Bildschirm ist fehlgeschlagen
 @msg	bad colour `{hex}` (#rrggbb)	ungültige Farbe `{hex}` (#rrggbb)
 @msg	bad page tree	fehlerhafter Seitenbaum
 @msg	bad shortcut	ungültiger Tastaturbefehl
@@ -4331,6 +4338,7 @@ theme	Appearance	Erscheinungsbild
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ist keine Farbe wie "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: höchstens {MAX_TABLE} Farben
 @msg	command `{0}` is not available right now: {1}	der Befehl `{0}` ist derzeit nicht verfügbar: {1}
+@msg	command `{id}` is not available right now	der Befehl `{id}` ist derzeit nicht verfügbar
 @msg	compound paths can only contain paths	zusammengesetzte Pfade können nur Pfade enthalten
 @msg	compressed (RLE) bitmaps can't be read yet	komprimierte Bitmaps (RLE) können noch nicht gelesen werden
 @msg	damaged	beschädigt
@@ -5635,6 +5643,7 @@ effect	Soft	Weich
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometrische Hilfslinien
+	Optical Effects	Optische Effekte
 	Geometric Patterns	Geometrische Muster
 	Grit Textures	Körnige Texturen
 	Ease In	Langsam starten
@@ -5679,6 +5688,9 @@ axis	Y Axis	Y-Achse
 @msg	`dither` must be true or false	`dither` muss true oder false sein
 	Perceptual	Perzeptiv
 @msg	`method` must be classic or perceptual	`method` muss classic oder perceptual sein
+@msg	`spread` must be pad, repeat or reflect	`spread` muss pad, repeat oder reflect sein
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` muss eine ganze Zahl von 1 bis {MAX_REPEATS} sein
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gilt für lineare, radiale, konische Verläufe und Rautenverläufe
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	„{name}“ installieren, das ein großes Rechenbudget verlangt?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Jede Ausführung kann bis zu {minutes} Minuten dauern und {times}-mal so viel Arbeit leisten, wie andere Plug-ins dürfen. Sie läuft im Hintergrund, und Sie können sie abbrechen.
@@ -5928,6 +5940,11 @@ axis	Y Axis	Y-Achse
 	Grass Fan	Grasfächer
 	Pattern Borders	Musterbordüren
 	Scatter Shapes	Streuformen
+	Dry Media	Trockene Medien
+	Chalk Grain	Kreidekorn
+	Graphite Pencil	Graphitstift
+	Wax Crayon	Wachsmalstift
+	Charcoal Dust	Kohlestaub
 	Save Brush Library…	Pinsel-Bibliothek speichern…
 @msg	`{_1}` has no brushes to apply	`{_1}` hat keine Pinsel zum Anwenden
 @msg	missing `library` (see brush.libraries)	`library` fehlt (siehe brush.libraries)

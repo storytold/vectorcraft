@@ -7676,3 +7676,144 @@ fn diamond_gradients_are_written_as_radial_gradients_through_their_corners() {
     let Some(Paint::Gradient(swatch)) = back.swatch("Gem").map(|s| &s.paint) else { panic!("the swatch is lost") };
     assert_eq!(swatch.gradient.kind, GradientKind::Radial);
 }
+
+/// The data has no spread: a fill that repeats or reflects holds its stops repeated across the
+/// shape and reads back looking as the canvas paints it; a swatch holds its stops repeated along
+/// its vector; both with a warning.
+#[test]
+fn spread_gradients_are_written_with_their_stops_repeated() {
+    use vectorcraft_color::GradientSpread;
+    for kind in [GradientKind::Linear, GradientKind::Radial] {
+        let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+        let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Reflect, repeats: 2, ..Gradient::new(kind, stops) });
+        let (start, end) = (vectorcraft_geom::Point::new(60.0, 50.0), vectorcraft_geom::Point::new(120.0, 50.0));
+        g.geom = Some(vectorcraft_color::GradientGeom { start, end, aspect: 1.0, focal: None });
+        let mut doc = Document::new(200.0, 100.0);
+        let id = doc.alloc_id();
+        let l = doc.layers[0].id;
+        let fill = Paint::Gradient(Box::new(g.clone()));
+        doc.insert(Some(l), 0, Node::path(id, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Appearance::basic(fill, Paint::None, 0.0)))
+            .unwrap();
+        let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+        swatches.push(Swatch {
+            name: "Bands".into(),
+            paint: Paint::Gradient(Box::new(GradientPaint { geom: None, ..g })),
+            global: false,
+            spot: false,
+        });
+        doc.swatches = swatches.into();
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(
+            out.warnings.iter().any(|w| w.contains("gradients that repeat or reflect are written with their stops repeated")),
+            "{:?}",
+            out.warnings
+        );
+        let back = read_back(&doc);
+        let st = vectorcraft_testkit::raster::perceptual_diff(
+            &vectorcraft_testkit::raster::render_artboard(&doc),
+            &vectorcraft_testkit::raster::render_artboard(&back),
+            8.0,
+        );
+        assert!((st.bad_pixels as f64) < 0.02 * st.pixels as f64, "{kind:?}: {} of {} pixels differ", st.bad_pixels, st.pixels);
+        let Some(Paint::Gradient(swatch)) = back.swatch("Bands").map(|s| &s.paint) else { panic!("the swatch is lost") };
+        let colors: Vec<String> = swatch.gradient.stops.iter().map(|s| s.color.to_hex()).collect();
+        assert_eq!(colors, ["#ff0000", "#0000ff", "#0000ff", "#ff0000"], "{kind:?}");
+    }
+}
+
+/// A stroke's gradient that repeats is written with its stops repeated as far as the stroke's
+/// miter joins reach, past the box the gradient is placed on, so a sharp join's tip shows the next
+/// run rather than the color the gradient pads with; a straight line, which has no joins, keeps
+/// every run within the stops the reader reads.
+#[test]
+fn a_stroke_spread_gradient_runs_on_into_its_miter_tips() {
+    use vectorcraft_color::GradientSpread;
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, repeats: 3, ..Gradient::new(GradientKind::Linear, stops) });
+    // From the top of the box the gradient is placed on (the path's box grown by half the width).
+    let (start, end) = (vectorcraft_geom::Point::new(100.0, 15.0), vectorcraft_geom::Point::new(100.0, 85.0));
+    g.geom = Some(vectorcraft_color::GradientGeom { start, end, aspect: 1.0, focal: None });
+    let mut app = Appearance::basic(Paint::None, Paint::Gradient(Box::new(g)), 10.0);
+    for item in &mut app.items {
+        if let AppearanceItem::Stroke(s) = item {
+            (s.join, s.miter_limit) = (LineJoin::Miter, 10.0);
+        }
+    }
+    // A V whose apex's miter reaches about 10 pt above it, to y = 9.9.
+    let pts = [vectorcraft_geom::Point::new(60.0, 90.0), vectorcraft_geom::Point::new(100.0, 20.0), vectorcraft_geom::Point::new(140.0, 90.0)];
+    let mut doc = Document::new(200.0, 100.0);
+    let id = doc.alloc_id();
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, Node::path(id, PathData::new(vec![vectorcraft_geom::SubPath::polyline(&pts, false)]), app)).unwrap();
+    let back = read_back(&doc);
+    let mut geom = None;
+    back.walk(|n| {
+        if let Paint::Gradient(g) = n.appearance.stroke_paint() {
+            geom = g.geom;
+        }
+    });
+    let geom = geom.expect("the stroke keeps a gradient");
+    assert!(geom.start.y.min(geom.end.y) < 9.9, "the runs start at {:?}", geom);
+    // A straight line has no joins: its 100 runs, 200 stops, fit the 256 the reader reads.
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, repeats: 100, ..Gradient::new(GradientKind::Linear, stops) });
+    let (start, end) = (vectorcraft_geom::Point::new(50.0, 50.0), vectorcraft_geom::Point::new(150.0, 50.0));
+    g.geom = Some(vectorcraft_color::GradientGeom { start, end, aspect: 1.0, focal: None });
+    let line = PathData::new(vec![vectorcraft_geom::SubPath::polyline(&[start, end], false)]);
+    let mut doc = Document::new(200.0, 100.0);
+    let id = doc.alloc_id();
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, Node::path(id, line, Appearance::basic(Paint::None, Paint::Gradient(Box::new(g)), 10.0))).unwrap();
+    let mut stops = None;
+    read_back(&doc).walk(|n| {
+        if let Paint::Gradient(g) = n.appearance.stroke_paint() {
+            stops = Some(g.gradient.stops.len());
+        }
+    });
+    assert_eq!(stops, Some(200));
+}
+
+/// A conic fill (written linear, its stops repeated around its turn), a diamond fill (written
+/// radial) and a swatch whose stops repeat more times than the 256 stops the reader reads stay
+/// gradients: each holds its stops repeated as far as 256 stops go.
+#[test]
+fn spread_gradients_past_the_stops_the_reader_reads_stay_gradients() {
+    use vectorcraft_color::GradientSpread;
+    let three = || {
+        vec![
+            GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)),
+            GradientStop::new(0.5, Color::rgb(0.0, 1.0, 0.0)),
+            GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0)),
+        ]
+    };
+    for kind in [GradientKind::Conic, GradientKind::Diamond] {
+        let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, repeats: 100, ..Gradient::new(kind, three()) });
+        let c = vectorcraft_geom::Point::new(100.0, 50.0);
+        g.geom = Some(vectorcraft_color::GradientGeom { start: c, end: c + vectorcraft_geom::Vec2::new(40.0, 0.0), aspect: 1.0, focal: None });
+        let mut doc = Document::new(200.0, 100.0);
+        let id = doc.alloc_id();
+        let l = doc.layers[0].id;
+        let fill = Paint::Gradient(Box::new(g));
+        doc.insert(Some(l), 0, Node::path(id, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Appearance::basic(fill, Paint::None, 0.0)))
+            .unwrap();
+        let back = read_back(&doc);
+        let mut stops = None;
+        back.walk(|n| {
+            if let Paint::Gradient(g) = n.appearance.fill_paint() {
+                stops = Some(g.gradient.stops.len());
+            }
+        });
+        let stops = stops.unwrap_or_else(|| panic!("{kind:?}: the gradient is written as a solid color"));
+        assert!((200..=crate::import::MAX_GRADIENT_STOPS).contains(&stops), "{kind:?}: {stops} stops");
+    }
+    // Stops at 0.1 and 0.9 run from 0 to 1 as four: 70 runs are 280 stops.
+    let stops = vec![GradientStop::new(0.1, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(0.9, Color::rgb(0.0, 0.0, 1.0))];
+    let g = GradientPaint::new(Gradient { spread: GradientSpread::Reflect, repeats: 70, ..Gradient::new(GradientKind::Linear, stops) });
+    let mut doc = Document::new(200.0, 100.0);
+    let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+    swatches.push(Swatch { name: "Bands".into(), paint: Paint::Gradient(Box::new(g)), global: false, spot: false });
+    doc.swatches = swatches.into();
+    let back = read_back(&doc);
+    let Some(Paint::Gradient(swatch)) = back.swatch("Bands").map(|s| &s.paint) else { panic!("the swatch is lost") };
+    assert!((200..=crate::import::MAX_GRADIENT_STOPS).contains(&swatch.gradient.stops.len()), "{} stops", swatch.gradient.stops.len());
+}

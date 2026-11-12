@@ -261,6 +261,29 @@ fn css_preserves_fractional_gradient_stop_positions() {
     }
 }
 
+/// A gradient swatch that repeats or reflects has its stops written that many times across the
+/// box, every other run backwards for Reflect.
+#[test]
+fn css_writes_spread_gradient_swatches_with_their_stops_repeated() {
+    for (spread, want) in [
+        (crate::GradientSpread::Repeat, "#ffffff 0%, #000000 50%, #ffffff 50%, #000000 100%"),
+        (crate::GradientSpread::Reflect, "#ffffff 0%, #000000 50%, #000000 50%, #ffffff 100%"),
+    ] {
+        let lib = SwatchLibrary {
+            name: "x".into(),
+            swatches: vec![Swatch {
+                name: "Bands".into(),
+                paint: Paint::Gradient(Box::new(GradientPaint::new(Gradient { spread, repeats: 2, ..Gradient::default() }))),
+                global: false,
+                spot: false,
+            }],
+            groups: vec![],
+        };
+        let text = written(&lib, PaletteFormat::Css);
+        assert!(text.contains(&format!("--bands: linear-gradient(90deg, {want});")), "{spread:?}: {text}");
+    }
+}
+
 #[test]
 fn holds_counts_the_swatches_each_format_writes() {
     // `sample()` holds the spot color Ink, the linear gradient Fade, the pattern Tiles and two solid colors in a group.

@@ -58,7 +58,7 @@ fn cells(px: f64) -> u16 {
 fn key(g: &GradientPaint, place: Rect, b: Rect, cols: u16, rows: u16, win: &[Range<u16>; 2], ink: Ink, fill: bool) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     let gr = &g.gradient;
-    (gr.kind as u8, gr.dither && fill, gr.method as u8).hash(&mut h);
+    (gr.kind as u8, gr.dither && fill, gr.method as u8, gr.painted_spread()).hash(&mut h);
     for s in &gr.stops {
         (s.offset.to_bits(), s.opacity.to_bits(), s.midpoint.to_bits()).hash(&mut h);
         s.color.key().hash(&mut h);

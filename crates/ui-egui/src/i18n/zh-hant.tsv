@@ -2080,6 +2080,7 @@ file-filter	Templates	範本
 @msg	nothing to distort	沒有可扭曲的內容
 @msg	unknown option `{path}.{k}`	未知的選項 `{path}.{k}`
 @msg	command `{0}` is not available right now: {1}	指令 `{0}` 目前無法使用：{1}
+@msg	command `{id}` is not available right now	指令 `{id}` 目前無法使用
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	`{cmd}` 發生內部錯誤：{msg} (文件維持原狀；請回報此錯誤)
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` 的參數無效：{msg}
 @msg	no active document	沒有作用中的文件
@@ -2268,6 +2269,8 @@ file-filter	Templates	範本
 @msg	the Smooth slider is not open	「平滑」滑桿未開啟
 @msg	the screen color sampler is already open	螢幕取色器已開啟
 @msg	this system has no screen color sampler	此系統沒有螢幕取色器
+@msg	the screen color sampler did not answer	螢幕取色器沒有回應
+@msg	the screen color sampler failed	螢幕取色器發生錯誤
 @msg	Corners edits the corners of a path	「轉角」用於編輯路徑的轉角
 @msg	give corners of the path: anchors where its sides meet at an angle	請提供路徑的轉角：其各邊以角度相交處的錨點
 @msg	select one path, or give its `id`	請選取一條路徑，或提供其 `id`
@@ -2978,6 +2981,8 @@ file-filter	Templates	範本
 	Metallic Gradients	金屬漸層
 	Meters	公尺
 	Method:	方法：
+	Pad	延伸
+	Repeats	重複次數
 	Millimeters	公釐
 	Minify	縮減檔案大小
 	Minimal	最少
@@ -4426,6 +4431,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Split Path	分割路徑
 	spot	特別色
 	Spot Color	特別色
+	Spot Color Objects	使用特別色的物件
+	Pattern Objects	使用圖樣的物件
+	Gradient Objects	使用漸層的物件
 	Spot Colors	特別色
 	Spot Colors…	特別色…
 	Spread:	擴散：
@@ -5687,6 +5695,7 @@ lighting	Light	光源
 	Ruby…	注音…
 	Ruby	注音
 	Geometric Guides	幾何參考線
+	Optical Effects	光學效果
 	Geometric Patterns	幾何圖樣
 	Grit Textures	顆粒紋理
 	Ease In	緩入
@@ -5731,6 +5740,9 @@ axis	Y Axis	Y 軸
 @msg	`dither` must be true or false	`dither` 必須是 true 或 false
 	Perceptual	感知
 @msg	`method` must be classic or perceptual	`method` 必須是 classic 或 perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` 必須是 pad、repeat 或 reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 必須是 1 到 {MAX_REPEATS} 之間的整數
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` 適用於線性、放射狀、圓錐和菱形漸層
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	要安裝需要大量運算預算的「{name}」嗎？
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	每次執行最多可能需要 {minutes} 分鐘，並可完成其他增效模組所允許工作量的 {times} 倍。它會在背景執行，您可以隨時取消。
@@ -5980,6 +5992,11 @@ axis	Y Axis	Y 軸
 	Grass Fan	畫草扇形筆
 	Pattern Borders	圖樣邊框
 	Scatter Shapes	散佈形狀
+	Dry Media	乾性畫材
+	Chalk Grain	粉筆顆粒
+	Graphite Pencil	石墨鉛筆
+	Wax Crayon	蠟筆
+	Charcoal Dust	炭粉
 	Save Brush Library…	儲存筆刷資料庫…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中沒有可套用的筆刷
 @msg	missing `library` (see brush.libraries)	未提供 `library`（請參閱 brush.libraries）

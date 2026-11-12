@@ -1281,6 +1281,92 @@ fn hairlines_keep_their_colour_in_color_mode() {
     assert_eq!(q.labels.iter().filter(|&&l| l == black).count(), 8 * 80 * 2 - 64);
 }
 
+/// Where a point lies across [`wavy_bands`]' gradient: the same all along each of its contours.
+fn wavy_u(x: f64, y: f64) -> f64 {
+    x + 8.0 * (y / 23.0).sin()
+}
+
+/// The dark square of [`wavy_bands`]: its left, top, right and bottom sides.
+const WAVY_SQUARE: [f64; 4] = [100.3, 40.2, 132.6, 80.7];
+
+/// A 256 × 128 gradient from blue to orange whose contours wave from top to bottom, with 6 levels
+/// of noise per channel, and a dark square with crisp sides on it, drawn anti-aliased.
+fn wavy_bands() -> Raster {
+    const LOW: [f64; 3] = [30.0, 60.0, 120.0];
+    const HIGH: [f64; 3] = [230.0, 170.0, 60.0];
+    Raster::from_fn(256, 128, |x, y| {
+        let mut sum = [0.0; 3];
+        for i in 0..16 {
+            let (sx, sy) = (f64::from(x) + (f64::from(i % 4) + 0.5) / 4.0, f64::from(y) + (f64::from(i / 4) + 0.5) / 4.0);
+            let [l, t, r, b] = WAVY_SQUARE;
+            let c = if (l..r).contains(&sx) && (t..b).contains(&sy) {
+                [20.0; 3]
+            } else {
+                let along = ((wavy_u(sx, sy) + 8.0) / 272.0).clamp(0.0, 1.0);
+                [0, 1, 2].map(|k| LOW[k] + (HIGH[k] - LOW[k]) * along)
+            };
+            for k in 0..3 {
+                sum[k] += c[k] / 16.0;
+            }
+        }
+        let c = |k: usize| (sum[k] + 6.0 * jitter(x, y, k as u32)).round().clamp(0.0, 255.0) as u8;
+        [c(0), c(1), c(2), 255]
+    })
+}
+
+/// How far the borders between the bands of a [`wavy_bands`] trace stray from contours of the
+/// gradient: the RMS, over points along every curve more than 6 px from the image's border and from
+/// the square, of the point's [`wavy_u`] less the mean of its stretch (the points in a row along
+/// one curve), over stretches that run at least 30 px down the image. Also returns their number.
+fn contour_spread(res: &TraceResult) -> (f64, usize) {
+    use vectorcraft_geom::ParamCurve;
+    let [l, t, r, b] = WAVY_SQUARE;
+    let away = |p: Point| p.x > 6.0 && p.x < 250.0 && p.y > 6.0 && p.y < 122.0 && !(p.x > l - 6.0 && p.x < r + 6.0 && p.y > t - 6.0 && p.y < b + 6.0);
+    let mut stretches: Vec<Vec<Point>> = vec![];
+    for sp in res.paths.iter().flat_map(|p| &p.path.subpaths) {
+        let mut stretch = vec![];
+        for p in (0..sp.segment_count()).flat_map(|i| (0..64).map(move |k| sp.segment(i).eval(f64::from(k) / 64.0))) {
+            if away(p) {
+                stretch.push(p);
+            } else if !stretch.is_empty() {
+                stretches.push(std::mem::take(&mut stretch));
+            }
+        }
+        stretches.push(stretch);
+    }
+    stretches.retain(|s| s.iter().map(|p| p.y).fold(f64::MIN, f64::max) - s.iter().map(|p| p.y).fold(f64::MAX, f64::min) >= 30.0);
+    let mut sum = 0.0;
+    let mut n = 0;
+    for s in &stretches {
+        let mean = s.iter().map(|p| wavy_u(p.x, p.y)).sum::<f64>() / s.len() as f64;
+        sum += s.iter().map(|p| (wavy_u(p.x, p.y) - mean).powi(2)).sum::<f64>();
+        n += s.len();
+    }
+    ((sum / n.max(1) as f64).sqrt(), stretches.len())
+}
+
+#[test]
+fn the_borders_of_a_gradients_bands_follow_its_contours() {
+    let res = trace(&wavy_bands(), &sixteen_colors());
+    // The square's sides are edges: it keeps its four corners.
+    let [l, t, r, b] = WAVY_SQUARE;
+    let square = res.paths.iter().find(|p| p.color.iter().all(|&c| c < 40)).expect("the dark square");
+    let nearest = [Point::new(l, t), Point::new(r, t), Point::new(r, b), Point::new(l, b)].map(|corner| {
+        square.path.subpaths[0]
+            .anchors
+            .iter()
+            .filter(|a| a.kind == vectorcraft_geom::AnchorKind::Corner)
+            .map(|a| a.p.distance(corner))
+            .fold(f64::MAX, f64::min)
+    });
+    assert!(nearest.iter().all(|&d| d < 0.3), "the nearest corner anchors to the square's corners: {nearest:?} px");
+    let (spread, stretches) = contour_spread(&res);
+    // Each of the borders between the 15 or so bands, once for the band on either side of it.
+    assert!(stretches >= 20, "{stretches} stretches");
+    // (Smoothed as edges are, 1.13 px.)
+    assert!(spread < 0.9, "the borders stray {spread} px from the gradient's contours");
+}
+
 #[test]
 fn the_bands_of_a_gradient_stay_apart() {
     let img = Raster::from_fn(256, 64, |x, y| [x as u8, (x / 2 + y) as u8, 200 - (x / 2) as u8, 255]);

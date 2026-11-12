@@ -126,6 +126,36 @@ flipped crack's, and the image does have cracks the one-sided reading gets wrong
 48 px noisy ripple in Black and White at thresholds 140, 157, 170 and Paths 0, 50, 100, sampled on
 the 4 × 4 grid per pixel the shared-boundary check uses). With the one-sided reading 482–1,228
 sample points per trace were uncovered; now none are. The crate's other tests pass unchanged.
+## Band borders in smooth areas
+In a gradient or a shaded area, the palette colors on either side of a band border differ by more than
+the image changes across it. Pixel noise placed the border, and the fitter smoothed it over 0.5 px as it
+smooths an edge, so the border wobbled, kept stair steps and took many anchors. For each crack between
+two colors, `Layers::step` now reads the share of the step between the two colors that the image makes
+next to the crack and a few pixels further out, how far the image changes next to the crack along the
+line between the two colors and in any direction, and how much it changes within each side, as RGB
+distances (0 to 255 a channel). `subpixel::low_contrast` makes a piece of outline the contour of a smooth
+area when, over its cracks, the near share is under one half; the far share is at least 1.25 times the
+near one, the change along the line is under 12 (about 7 levels in each channel of a gray), or no crack
+has a far share; the sides change within themselves, by at least 1/32 of the change along the line; and the
+whole change is under twice the change along the line, or under 24. Black and White traces do not use
+the rule. A contour piece is smoothed over 4 px (a closed one over at most an eighth of its smaller width
+or height), keeps no corners, is fitted to at least 0.5 px and is checked against its smoothed points.
+Grayscale now reads each pixel as its gray for this rule and for every edge's sub-pixel shift
+(`Layers::shift`), which read the pixels' colors against gray palette entries before.
+Measured with the harness below, before and after the change: Color traces of the "flat colour art"
+inputs, and corners % in every row, do not change. Shades of Gray on those inputs: off mean 0.263 to 0.165 px,
+off max 1.47 to 1.04 px, anchors 196 to 122. Gradient and photo inputs: anchors 2,138 to 798 (16 Colors,
+gradient and photo), 1,372 to 200 (16 Colors, linear gradients), 10,063 to 6,766 (High Fidelity Photo,
+gradient and photo); ΔE and edge ΔE change by −0.25 to +0.02. Specks rise by up to 0.8 per image (16
+Colors on gradient and photo 0.0 to 0.8, Auto Color 0.0 to 0.5). Auto Color, enhanced (Shapes on) on
+gradient and photo leaves a gap of 0.3 px (was 0.0) and an overlap of 0.4 px (was 0.1). The tables below
+are the previous measurement, not a rerun.
+Tests on code-drawn images: `tests::the_borders_of_a_gradients_bands_follow_its_contours` (a 256 × 128
+gradient whose contours wave, with noise, and a dark square with crisp sides: the band borders stray
+under 0.9 px RMS from the gradient's contours, 1.13 px when smoothed as edges, and the square keeps its
+four corners); `layers::tests` (a ramp, flat colors in palette entries far apart, close flat colors, a
+thin flat stroke, colors off the line between their entries, and Grayscale's grays, each read from both
+sides of the crack) and `subpixel::tests` (the rule, and one decision for a whole piece from either side).
 ## A simpler contour walk
 `contour::trace_mask` follows each region's outline along the pixel cracks with the inside on the
 right. It used to build a table of outgoing directions for every pixel corner in a raster pass and

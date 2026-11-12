@@ -1935,6 +1935,8 @@ font-technology	Variable	Variabla
 	Metallic Gradients	Metalliska gradienter
 	Meters	Meter
 	Method:	Metod:
+	Pad	Förläng
+	Repeats	Upprepningar
 	Millimeters	Millimeter
 	Minify	Minifiera
 	Minimal	Minimal
@@ -3340,6 +3342,9 @@ digits	Malayalam	Malayalam
 	Split Path	Dela bana
 	spot	dekor
 	Spot Color	Dekorfärg
+	Spot Color Objects	Objekt med dekorfärger
+	Pattern Objects	Objekt med mönster
+	Gradient Objects	Objekt med gradienter
 	Spot Colors	Dekorfärger
 	Spot Colors…	Dekorfärger…
 	Spread:	Spridning:
@@ -4310,6 +4315,7 @@ axis	Both	Båda
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` är inte en färg som "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: högst {MAX_TABLE} färger
 @msg	command `{0}` is not available right now: {1}	kommandot `{0}` är inte tillgängligt just nu: {1}
+@msg	command `{id}` is not available right now	kommandot `{id}` är inte tillgängligt just nu
 @msg	compound paths can only contain paths	sammansatta banor kan bara innehålla banor
 @msg	compressed (RLE) bitmaps can't be read yet	komprimerade (RLE) bitmappar kan inte läsas än
 @msg	damaged	skadad
@@ -5847,6 +5853,8 @@ theme	Appearance	Utseende
 @msg	the screen color sampler is already open	färghämtningen från skärmen är redan öppen
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	det här är en PostScript-fil (en .ai sparad i ett äldre format eller utan PDF-kompatibilitet, eller en EPS-fil), inte en PDF: Fil › Öppna och Fil › Placera läser den som EPS
 @msg	this system has no screen color sampler	det här systemet saknar färghämtning från skärmen
+@msg	the screen color sampler did not answer	färghämtningen från skärmen svarade inte
+@msg	the screen color sampler failed	färghämtningen från skärmen misslyckades
 @msg	the image can't be read as a texture	bilden kan inte läsas som en textur
 
 # User Interface › Accent Color
@@ -6068,6 +6076,7 @@ font-script	Japanese	Japanska
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometriska stödlinjer
+	Optical Effects	Optiska effekter
 	Geometric Patterns	Geometriska mönster
 	Grit Textures	Korniga texturer
 	Ease In	Långsam start
@@ -6110,6 +6119,9 @@ axis	Y Axis	Y-axel
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gäller gradientfyllningar (paint.setFill)
 @msg	`dither` must be true or false	`dither` måste vara true eller false
 @msg	`method` must be classic or perceptual	`method` måste vara classic eller perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` måste vara pad, repeat eller reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` måste vara ett heltal från 1 till {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gäller för linjära, radiella och koniska gradienter och rombgradienter
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Installera ”{name}”, som begär en stor beräkningsbudget?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Varje körning kan ta upp till {minutes} minuter och göra {times} gånger så mycket arbete som andra plugins får. Den körs i bakgrunden och du kan avbryta den.
@@ -6354,6 +6366,11 @@ axis	Y Axis	Y-axel
 	Grass Fan	Grässolfjäder
 	Pattern Borders	Mönsterbårder
 	Scatter Shapes	Spridningsformer
+	Dry Media	Torra medier
+	Chalk Grain	Kritkorn
+	Graphite Pencil	Grafitpenna
+	Wax Crayon	Vaxkrita
+	Charcoal Dust	Koldamm
 	Save Brush Library…	Spara penselbibliotek…
 @msg	`{_1}` has no brushes to apply	`{_1}` har inga penslar att använda
 @msg	missing `library` (see brush.libraries)	`library` saknas (se brush.libraries)

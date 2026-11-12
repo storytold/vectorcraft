@@ -1828,6 +1828,8 @@ font-technology	Variable	Değişken
 	Metallic Gradients	Metalik Degradeler
 	Meters	Metre
 	Method:	Yöntem:
+	Pad	Uzat
+	Repeats	Tekrar sayısı
 	Millimeters	Milimetre
 	Minify	Küçült
 	Minimal	Asgari
@@ -3241,6 +3243,9 @@ digits	Malayalam	Malayalam
 	Split Path	Bölünmüş Yol
 	spot	nokta
 	Spot Color	Nokta Rengi
+	Spot Color Objects	Spot Renkli Nesneler
+	Pattern Objects	Desenli Nesneler
+	Gradient Objects	Degradeli Nesneler
 	Spot Colors	Nokta Renkleri
 	Spot Colors…	Nokta Renkleri…
 	Spread:	Yayılma:
@@ -4141,6 +4146,8 @@ axis	Both	Her İkisi
 @msg	the Color Picker is not open	Renk Seçici açık değil
 @msg	the screen color sampler is already open	ekran rengi örnekleyici zaten açık
 @msg	this system has no screen color sampler	bu sistemin ekran rengi örnekleyicisi yok
+@msg	the screen color sampler did not answer	ekran rengi örnekleyici yanıt vermedi
+@msg	the screen color sampler failed	ekran rengi örnekleyici başarısız oldu
 @msg	bad colour `{hex}` (#rrggbb)	kötü renk `{hex}` (#rrggbb)
 @msg	bad page tree	kötü sayfa ağacı
 @msg	bad shortcut	kötü kısayol
@@ -4172,6 +4179,7 @@ axis	Both	Her İkisi
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}`, "#ff8800" gibi bir renk değil
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: en fazla {MAX_TABLE} renginde
 @msg	command `{0}` is not available right now: {1}	`{0}` komutu şu anda kullanılamıyor: {1}
+@msg	command `{id}` is not available right now	`{id}` komutu şu anda kullanılamıyor
 @msg	compound paths can only contain paths	bileşik yollar yalnızca yollar içerebilir
 @msg	compressed (RLE) bitmaps can't be read yet	sıkıştırılmış (RLE) bitmapler henüz okunamıyor
 @msg	damaged	hasarlı
@@ -6041,9 +6049,13 @@ axis	Y Axis	Y ekseni
 	Snap to Tangent	Teğete Yasla
 	Snap to Perpendicular	Dikeye Yasla
 	Geometric Guides	Geometrik Kılavuzlar
+	Optical Effects	Optik Efektler
 	Geometric Patterns	Geometrik Desenler
 	Grit Textures	Grenli Dokular
 @msg	`method` must be classic or perceptual	`method` classic veya perceptual olmalıdır
+@msg	`spread` must be pad, repeat or reflect	`spread` pad, repeat veya reflect olmalıdır
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 1 ile {MAX_REPEATS} arasında bir tam sayı olmalıdır
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` doğrusal, radyal, konik ve elmas degradeler için geçerlidir
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Büyük bir hesaplama bütçesi isteyen “{name}” yüklensin mi?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Her çalıştırma {minutes} dakikaya kadar sürebilir ve diğer eklentilere izin verilen işin {times} katını yapabilir. Arka planda çalışır ve iptal edebilirsiniz.
@@ -6293,6 +6305,11 @@ axis	Y Axis	Y ekseni
 	Grass Fan	Çim Yelpazesi
 	Pattern Borders	Desen Kenarlıkları
 	Scatter Shapes	Dağılım Şekilleri
+	Dry Media	Kuru Teknikler
+	Chalk Grain	Tebeşir Dokusu
+	Graphite Pencil	Grafit Kalem
+	Wax Crayon	Mum Boya
+	Charcoal Dust	Kömür Tozu
 	Save Brush Library…	Fırça Kitaplığını Kaydet…
 @msg	`{_1}` has no brushes to apply	`{_1}` içinde uygulanacak fırça yok
 @msg	missing `library` (see brush.libraries)	`library` eksik (bkz. brush.libraries)

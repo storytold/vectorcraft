@@ -18,7 +18,6 @@ use vectorcraft_geom::BezPath;
 
 use super::interp::{Interp, matrix_obj};
 use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, Shared, ps_err};
-use super::predefined_cmap::Unicode;
 
 /// Most codespace ranges, character and notdef mappings a CMap may hold.
 const MAX_RANGES: usize = 1 << 16;
@@ -211,32 +210,6 @@ fn number(data: &[u8], at: usize, n: usize) -> Option<u64> {
     (n <= 8).then(|| bytes.iter().fold(0u64, |v, b| v << 8 | u64::from(*b)))
 }
 
-/// The encoding of predefined Unicode CMap `name` and whether it is vertical: one of Adobe's
-/// public CMap resources whose name says its codes are Unicode: `Uni` and a character
-/// collection, then `-UCS2`, `-UTF8`, `-UTF16` or `-UTF32` (and `-HW` for half-width forms),
-/// then `-H` or `-V` (`UniJIS-UCS2-H`, `UniGB-UTF16-V`:
-/// <https://github.com/adobe-type-tools/cmap-resources>).
-pub(super) fn unicode_cmap(name: &str) -> Option<(Unicode, bool)> {
-    let (rest, dir) = name.rsplit_once('-')?;
-    let vertical = match dir {
-        "H" => false,
-        "V" => true,
-        _ => return None,
-    };
-    let rest = rest.strip_suffix("-HW").unwrap_or(rest);
-    let (collection, form) = rest.rsplit_once('-')?;
-    if !(collection.len() > 3 && collection.starts_with("Uni") && !collection.contains('-')) {
-        return None;
-    }
-    let form = match form {
-        "UCS2" | "UTF16" => Unicode::Utf16,
-        "UTF8" => Unicode::Utf8,
-        "UTF32" => Unicode::Utf32,
-        _ => return None,
-    };
-    Some((form, vertical))
-}
-
 /// A predefined Identity CMap: two-byte codes, each the CID of its own value; vertical for
 /// `Identity-V`.
 pub(super) fn identity(name: &str, vertical: bool) -> Obj {
@@ -396,11 +369,9 @@ impl Interp<'_> {
             return Ok(d.clone());
         }
         let text = name.text().map(|t| t.to_string()).unwrap_or_default();
-        // Another predefined CMap the file doesn't define, without its mappings: its codes are
-        // read by its name when type is set (see `text`).
-        let predefined = unicode_cmap(&text)
-            .map(|(_, vertical)| vertical)
-            .or_else(|| super::predefined_cmap::known(&text).then(|| super::predefined_cmap::vertical(&text)));
+        // A predefined CMap the file doesn't define, without its mappings: its codes are read by
+        // its name when type is set (see `text`).
+        let predefined = super::predefined_cmap::known(&text).then(|| super::predefined_cmap::vertical(&text));
         match predefined {
             Some(vertical) => {
                 let mut d = Dict::new();

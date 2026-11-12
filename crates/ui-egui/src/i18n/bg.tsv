@@ -1924,6 +1924,8 @@ font-technology	Variable	Променливи
 	Metallic Gradients	Метални разградки
 	Meters	Метри
 	Method:	Метод:
+	Pad	Удължаване
+	Repeats	Повторения
 	Millimeters	Милиметри
 	Minify	Минимизиране на код
 	Minimal	Минимално
@@ -3325,6 +3327,9 @@ digits	Malayalam	Малаялам
 	Split Path	Разделяне на път
 	spot	петно
 	Spot Color	Спот цвят
+	Spot Color Objects	Обекти със спот цветове
+	Pattern Objects	Обекти с мостри
+	Gradient Objects	Обекти с градиенти
 	Spot Colors	Спот цветове
 	Spot Colors…	Спот цветове…
 	Spread:	Разпространение:
@@ -4247,6 +4252,7 @@ axis	Both	И двете
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не е цвят като "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: най-много {MAX_TABLE} цвята
 @msg	command `{0}` is not available right now: {1}	команда `{0}` не е налична в момента: {1}
+@msg	command `{id}` is not available right now	команда `{id}` не е налична в момента
 @msg	compound paths can only contain paths	съставните пътища могат да съдържат само пътища
 @msg	compressed (RLE) bitmaps can't be read yet	компресираните (RLE) битови карти все още не могат да бъдат четени
 @msg	damaged	повреден
@@ -5860,6 +5866,7 @@ theme	Appearance	Външен вид
 	Ruby…	Руби…
 	Ruby	Руби
 	Geometric Guides	Геометрични водачи
+	Optical Effects	Оптични ефекти
 	Geometric Patterns	Геометрични мостри
 	Grit Textures	Зърнести текстури
 	Ease In	Плавно начало
@@ -6074,6 +6081,11 @@ axis	Y Axis	Y ос
 	Grass Fan	Ветрило за трева
 	Pattern Borders	Бордюри с мостри
 	Scatter Shapes	Разсеяни фигури
+	Dry Media	Сухи материали
+	Chalk Grain	Тебеширено зърно
+	Graphite Pencil	Графитен молив
+	Wax Crayon	Восъчен пастел
+	Charcoal Dust	Въглен прах
 	Save Brush Library…	Запази библиотека с четки…
 @msg	no empty artboards to delete	няма празни работни области за изтриване
 	Scale Presets	Пресети за мащаб

@@ -95,6 +95,9 @@ pub(crate) struct Interp<'a> {
     /// The predefined CMaps type was set in so far, by name, with how their strings decode
     /// (`None` when one can't be read; see `text`).
     pub predefined_cmaps: Vec<(Rc<str>, Option<Rc<super::predefined_cmap::CMapCodes>>)>,
+    /// The font a `kshow` procedure sees as current while type in a CIDFont only named is set in
+    /// a font of its own (see `text`).
+    pub kshow_font: Option<DictRef>,
     pub g: GState,
     pub saved: Vec<GState>,
     pub out: Out,
@@ -236,6 +239,7 @@ impl<'a> Interp<'a> {
             cid_subrs: vec![],
             cmap_font: 0,
             predefined_cmaps: vec![],
+            kshow_font: None,
             type42_counted: HashSet::new(),
             g,
             saved: vec![],
