@@ -28,8 +28,12 @@ use super::{ArtboardPick, create_dir, distinct_names_by, encode_with_warnings, f
 
 pub(super) const C: &str = "document.exportForIconComposer";
 
-/// Most layer files one export writes: a bound on the work and memory one request can ask for.
+/// Most layer files one export writes: a bound on the work one request can ask for.
 const MAX_FILES: usize = 10_000;
+
+/// Most bytes of layer files one export holds in memory when it returns them (in the reply or as
+/// one ZIP) rather than writing them to a folder, where each file is written as it is made.
+const MAX_HELD_BYTES: usize = 256 << 20;
 
 /// The params of `document.exportForIconComposer`.
 #[derive(Default, Deserialize)]
@@ -42,10 +46,48 @@ struct Params {
     zip: bool,
 }
 
-/// One file the export writes: its path inside the export's folder and its bytes.
+/// One file the export makes: its path inside the export's folder and its bytes.
 struct LayerFile {
     path: String,
     bytes: Vec<u8>,
+}
+
+/// Where each layer file goes as soon as it is encoded.
+enum Sink<'a> {
+    /// Written into a new folder in `parent`, made at the first file (so a failed export leaves
+    /// none), with each artboard's sub-folder made at its first file.
+    Folder { parent: &'a str, name: &'a str, folder: Option<String>, subs: Vec<String>, written: Vec<String> },
+    /// Held for the reply, at most [`MAX_HELD_BYTES`] in all.
+    Held { files: Vec<LayerFile>, bytes: usize },
+}
+
+impl Sink<'_> {
+    fn put(&mut self, sub: Option<&str>, file: LayerFile) -> Result<()> {
+        match self {
+            Sink::Folder { parent, name, folder, subs, written } => {
+                if folder.is_none() {
+                    create_dir(parent)?;
+                    *folder = Some(new_folder(parent, name)?);
+                }
+                let Some(folder) = folder.as_deref() else { return Err(bad(C, "the export folder could not be made")) };
+                if let Some(sub) = sub.filter(|s| !subs.iter().any(|d| d == s)) {
+                    create_dir(&format!("{folder}/{sub}"))?;
+                    subs.push(sub.to_string());
+                }
+                let path = format!("{folder}/{}", file.path);
+                write_file(&path, &file.bytes)?;
+                written.push(path);
+            }
+            Sink::Held { files, bytes } => {
+                *bytes = bytes.saturating_add(file.bytes.len());
+                if *bytes > MAX_HELD_BYTES {
+                    return Err(bad(C, format!("the layer files come to over {} MB: export them to a folder", MAX_HELD_BYTES >> 20)));
+                }
+                files.push(file);
+            }
+        }
+        Ok(())
+    }
 }
 
 /// `document.exportForIconComposer`.
@@ -60,7 +102,11 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let doc = &st.doc;
     let name = folder_name(st.path.as_deref().unwrap_or(&doc.title));
     let n = doc.artboards.len();
-    let boards = o.boards.resolve(n).map_err(|e| bad(C, e))?.unwrap_or_else(|| (0..n).collect());
+    let mut boards = o.boards.resolve(n).map_err(|e| bad(C, e))?.unwrap_or_else(|| (0..n).collect());
+    // An artboard picked twice is exported once, where it was first picked: twice would give two
+    // files of one name.
+    let mut seen = std::collections::HashSet::new();
+    boards.retain(|b| seen.insert(*b));
     if boards.is_empty() {
         return Err(bad(C, "the document has no artboard"));
     }
@@ -70,24 +116,16 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
         let names = boards.iter().map(|b| safe_name(doc.artboards.get(*b).map_or("", |a| a.name.as_str()), &format!("Artboard {}", b + 1)));
         distinct_names_by(names, str::to_lowercase)
     });
-    let (files, warnings) = layer_files(doc, &boards, subfolders.as_deref(), format)?;
-    let names: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
-    match o.folder.as_deref().map(str::trim).filter(|f| !f.is_empty()) {
-        Some(parent) => {
-            create_dir(parent)?;
-            let folder = new_folder(parent, &name)?;
-            for sub in subfolders.iter().flatten() {
-                create_dir(&format!("{folder}/{sub}"))?;
-            }
-            let mut written = vec![];
-            for f in &files {
-                let path = format!("{folder}/{}", f.path);
-                write_file(&path, &f.bytes)?;
-                written.push(path);
-            }
-            Ok(json!({ "folder": folder, "files": written, "warnings": warnings }))
-        }
-        None if o.zip => {
+    let folder = o.folder.as_deref().map(str::trim).filter(|f| !f.is_empty());
+    let mut sink = match folder {
+        Some(parent) => Sink::Folder { parent, name: &name, folder: None, subs: vec![], written: vec![] },
+        None => Sink::Held { files: vec![], bytes: 0 },
+    };
+    let warnings = layer_files(doc, &boards, subfolders.as_deref(), format, &mut sink)?;
+    match sink {
+        Sink::Folder { folder, written, .. } => Ok(json!({ "folder": folder, "files": written, "warnings": warnings })),
+        Sink::Held { files, .. } if o.zip => {
+            let names: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
             let entries: Vec<(String, &[u8])> = files.iter().map(|f| (format!("{name}/{}", f.path), f.bytes.as_slice())).collect();
             let zip = super::zip::deflate(&entries, super::zip::FIXED_TIME, vectorcraft_doc::cancel::is_cancelled);
             vectorcraft_doc::cancel::check()?;
@@ -100,7 +138,7 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
                 "warnings": warnings,
             }))
         }
-        None => {
+        Sink::Held { files, .. } => {
             let files: Vec<Value> =
                 files.iter().map(|f| json!({ "name": f.path, "dataBase64": vectorcraft_format::base64_encode(&f.bytes) })).collect();
             Ok(json!({ "folder": name, "files": files, "warnings": warnings }))
@@ -108,13 +146,13 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     }
 }
 
-/// Encode the layer files of every artboard in `boards` (sub-folder `subfolders[i]` for the `i`th)
-/// → the files and the encoders' warnings, each once.
-fn layer_files(doc: &Document, boards: &[usize], subfolders: Option<&[String]>, format: &str) -> Result<(Vec<LayerFile>, Vec<String>)> {
+/// Encode the layer files of every artboard in `boards` (sub-folder `subfolders[i]` for the `i`th),
+/// each into `sink` as it is made → the encoders' warnings, each once.
+fn layer_files(doc: &Document, boards: &[usize], subfolders: Option<&[String]>, format: &str, sink: &mut Sink) -> Result<Vec<String>> {
     // No background color; PNG at one pixel per point (72 ppi), not the document's raster effects
     // resolution, so a 1024 pt artboard gives the 1024 px canvas Icon Composer works on.
     let options = if format == "png" { json!({ "includeArtboardFill": false, "ppi": 72 }) } else { json!({ "includeArtboardFill": false }) };
-    let mut files = vec![];
+    let mut count = 0usize;
     let mut warnings: Vec<String> = vec![];
     for (i, b) in boards.iter().enumerate() {
         let Some(artboard) = doc.artboards.get(*b) else { continue };
@@ -124,10 +162,11 @@ fn layer_files(doc: &Document, boards: &[usize], subfolders: Option<&[String]>, 
         for layer in doc.layers.iter().filter(|l| l.is_layer() && l.visible && !l.is_template()) {
             vectorcraft_doc::cancel::check()?;
             let Some(d) = layer_doc(doc, layer, artboard.rect, &artboard.name) else { continue };
-            if files.len() >= MAX_FILES {
+            if count >= MAX_FILES {
                 return Err(bad(C, format!("more than {MAX_FILES} layer files: export fewer artboards at a time")));
             }
             number += 1;
+            count += 1;
             let (bytes, notes) = encode_with_warnings(&d, format, &options)?;
             for w in notes {
                 if !warnings.contains(&w) {
@@ -136,24 +175,46 @@ fn layer_files(doc: &Document, boards: &[usize], subfolders: Option<&[String]>, 
             }
             let file = format!("{number}.{}.{format}", safe_name(&layer.display_name(), "Layer")).to_lowercase();
             let path = sub.map_or_else(|| file.clone(), |s| format!("{s}/{file}"));
-            files.push(LayerFile { path, bytes });
+            sink.put(sub.map(String::as_str), LayerFile { path, bytes })?;
         }
     }
-    if files.is_empty() {
+    if count == 0 {
         return Err(bad(C, "nothing to export: no visible layer has art on the chosen artboards"));
     }
-    Ok((files, warnings))
+    Ok(warnings)
 }
 
 /// `doc` with `layer` alone and one artboard, `rect` (named `name`), holding only the layer's
-/// objects that touch it; `None` when none of its visible art overlaps `rect`.
+/// objects whose drawing touches it; `None` when none of its visible art overlaps `rect`.
 fn layer_doc(doc: &Document, layer: &Arc<Node>, rect: Rect, name: &str) -> Option<Document> {
     let mut d = doc.clone();
     d.layers = vec![layer.clone()];
     let mut d = with_single_artboard(d, rect, name);
-    super::save::keep_art_on(&mut d, rect);
+    let mut kept = d.layers.clone();
+    {
+        let symbols = d.symbol_boxes();
+        for l in &mut kept {
+            keep_drawn_on(&symbols, l, rect);
+        }
+    }
+    d.layers = kept;
+    d.last_view = None;
+    d.layers_open = None;
     vectorcraft_render::encode::art_bounds_on(&d, rect)?;
     Some(d)
+}
+
+/// Keep in layer `n` (and its sublayers) only the objects whose drawing touches `r`, effects
+/// included (a shadow cast onto the artboard by a shape beside it keeps the shape), and those
+/// that can't be measured (type in a missing font): dropping them could lose art.
+fn keep_drawn_on(symbols: &vectorcraft_doc::SymbolBoxes, n: &mut Arc<Node>, r: Rect) {
+    let touches = |b: Rect| b.x0 <= r.x1 && b.x1 >= r.x0 && b.y0 <= r.y1 && b.y1 >= r.y0;
+    if let Some(children) = Arc::make_mut(n).children_mut() {
+        children.retain(|c| c.is_layer() || vectorcraft_render::encode::drawn_bounds(symbols, c).or_else(|| c.visual_bounds()).is_none_or(touches));
+        for c in children.iter_mut().filter(|c| c.is_layer()) {
+            keep_drawn_on(symbols, c, r);
+        }
+    }
 }
 
 /// The export folder's name: the document's file name without its extension, else its title.

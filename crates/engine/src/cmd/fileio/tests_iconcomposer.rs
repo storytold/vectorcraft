@@ -118,6 +118,28 @@ fn several_artboards_get_a_sub_folder_each_and_a_range_picks_them() {
 }
 
 #[test]
+fn an_artboard_picked_twice_is_exported_once() {
+    let mut s = two_layers();
+    let r = s.execute(C, &json!({"artboards": [0, 0]})).unwrap();
+    assert_eq!(names(&r), ["1.back.svg", "2.front.svg"]);
+}
+
+#[test]
+fn an_object_off_the_artboard_whose_shadow_reaches_it_is_kept() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let r = s.doc().unwrap().doc.artboards[0].rect;
+    let id = s.execute("shape.rectangle", &json!({"x": r.x0 - 30.0, "y": r.y0 + 10.0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    assert!(s.execute(C, &json!({})).unwrap_err().to_string().contains("nothing to export"), "the plain rectangle is off the artboard");
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [id], "params": {"x": 20, "y": 0, "blur": 0}})).unwrap();
+    let r = s.execute(C, &json!({"format": "png"})).unwrap();
+    let f = files(&r);
+    assert_eq!(f.len(), 1, "its shadow reaches 10 pt onto the artboard");
+    assert!(alpha(&f[0].1, 5, 20) > 0, "the shadow is drawn");
+    assert_eq!(alpha(&f[0].1, 50, 50), 0);
+}
+
+#[test]
 fn layer_names_are_made_safe_for_file_names() {
     let mut s = two_layers();
     let front = s.doc().unwrap().doc.layers[1].id.0;
@@ -150,12 +172,31 @@ fn zip_holds_the_folder() {
     assert!(text.contains(&format!("{title}/2.front.svg")), "entries are inside the folder");
 }
 
+/// A temporary folder, removed when the test ends, failing or not.
+#[cfg(not(target_arch = "wasm32"))]
+struct TempFolder(std::path::PathBuf);
+
+#[cfg(not(target_arch = "wasm32"))]
+impl TempFolder {
+    fn new(name: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("vc-iconcomposer-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        Self(dir)
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Drop for TempFolder {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_folder_gets_a_new_folder_named_after_the_document_each_time() {
-    let dir = std::env::temp_dir().join(format!("vc-iconcomposer-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    let parent = dir.to_string_lossy().to_string();
+    let dir = TempFolder::new("each-time");
+    let parent = dir.0.to_string_lossy().to_string();
     let mut s = two_layers();
     let title = super::file_stem(&s.doc().unwrap().doc.title);
     let r = s.execute(C, &json!({"folder": parent})).unwrap();
@@ -171,5 +212,14 @@ fn a_folder_gets_a_new_folder_named_after_the_document_each_time() {
     assert!(std::path::Path::new(&format!("{second}/1.back.svg")).is_file());
     let r = s.execute(C, &json!({"folder": parent})).unwrap();
     assert!(!matches!(r["folder"].as_str(), Some(f) if f == first || f == second));
-    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_failed_export_to_a_folder_makes_no_folder() {
+    let dir = TempFolder::new("failed");
+    let mut empty = Session::new();
+    empty.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    assert!(empty.execute(C, &json!({"folder": dir.0.to_string_lossy()})).is_err());
+    assert!(!dir.0.exists());
 }

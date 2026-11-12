@@ -47,7 +47,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         form::choice(ui, d, "__boards", "Artboards:", (90.0, 160.0), &[("all", "All"), ("range", "Range")]);
         if d.str("__boards") == "range" {
             widgets::label_row(ui, "", 90.0, |ui| {
-                form::text(ui, d, "range", 160.0);
+                form::text_named(ui, d, "range", tl!("Range:"), 160.0);
             });
         }
     }

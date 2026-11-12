@@ -170,9 +170,16 @@ fn export_for_icon_composer_writes_a_file_per_layer_into_a_new_folder() {
     set(&mut app, "range", json!("1"));
     set(&mut app, "folder", json!(""));
     assert!(confirm(&mut app).is_err());
-    let dir = std::env::temp_dir().join(format!("vc-ui-iconcomposer-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    set(&mut app, "folder", json!(dir.to_string_lossy()));
+    /// Removes the export folder when the test ends, failing or not.
+    struct Cleanup(std::path::PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let dir = Cleanup(std::env::temp_dir().join(format!("vc-ui-iconcomposer-{}", std::process::id())));
+    let _ = std::fs::remove_dir_all(&dir.0);
+    set(&mut app, "folder", json!(dir.0.to_string_lossy()));
     let r = confirm(&mut app).unwrap();
     assert!(app.ui.dialog.is_none());
     let files = r["files"].as_array().unwrap();
@@ -182,5 +189,4 @@ fn export_for_icon_composer_writes_a_file_per_layer_into_a_new_folder() {
     let img = image::open(file).unwrap().to_rgba8();
     assert_eq!(img.dimensions(), (60, 40), "the artboard's size");
     assert!(app.ui.status.starts_with("Exported 1 file to "), "{}", app.ui.status);
-    let _ = std::fs::remove_dir_all(&dir);
 }
