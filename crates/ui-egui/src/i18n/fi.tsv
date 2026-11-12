@@ -6171,6 +6171,12 @@ axis	Y Axis	Y-akseli
 @msg	command {name}: `label` must be 1-64 printable characters	komento {name}: `label`-kentässä on oltava 1-64 tulostettavaa merkkiä
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	komento {name}: käytä 1-{MAX_COMMAND_ID} merkin tunnusta merkeistä a-z 0-9 _, joka alkaa kirjaimella
 @msg	command {name}: {e}	komento {name}: {e}
+@msg	manifest: {e}	manifesti: {e}
+@msg	manifest: {e} at line {line} column {column}	manifesti: {e} (rivi {line}, sarake {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands`-kohdan on oltava luettelo komennoista, joilla kullakin on `id` ja `label`
+@msg	command {name} must be an object with an `id` and a `label`	komennon {name} on oltava objekti, jossa on `id` ja `label`
+@msg	missing field `{key}`	kenttä `{key}` puuttuu
+@msg	duplicate field `{key}`	kenttä `{key}` on kahdesti
 @msg	only a filter or a live effect declares `commands`	vain suodin tai live-tehoste määrittelee `commands`-kohdan
 @msg	“{name}” › {label}: {e}	”{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	moduulilla ei ole `hash`-kentän SHA-256-arvoa: mitään ei asennettu

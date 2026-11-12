@@ -6159,6 +6159,11 @@ axis	Y Axis	Y-axel
 @msg	command {name}: `label` must be 1-64 printable characters	kommando {name}: `label` måste ha 1-64 utskrivbara tecken
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	kommando {name}: använd ett id med 1-{MAX_COMMAND_ID} tecken av a-z 0-9 _ som börjar med en bokstav
 @msg	command {name}: {e}	kommando {name}: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (rad {line}, kolumn {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` måste vara en lista med kommandon, vart och ett med `id` och `label`
+@msg	command {name} must be an object with an `id` and a `label`	kommandot {name} måste vara ett objekt med `id` och `label`
+@msg	missing field `{key}`	fältet `{key}` saknas
+@msg	duplicate field `{key}`	fältet `{key}` förekommer två gånger
 @msg	only a filter or a live effect declares `commands`	bara ett filter eller en live-effekt deklarerar `commands`
 @msg	“{name}” › {label}: {e}	”{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modulen har inte den SHA-256 som `hash` anger: ingenting installerades

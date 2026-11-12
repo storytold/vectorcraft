@@ -5747,6 +5747,12 @@ axis	Y Axis	Trục Y
 @msg	command {name}: `label` must be 1-64 printable characters	lệnh {name}: `label` phải có 1-64 ký tự in được
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	lệnh {name}: hãy dùng id gồm 1-{MAX_COMMAND_ID} ký tự từ a-z 0-9 _ và bắt đầu bằng một chữ cái
 @msg	command {name}: {e}	lệnh {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (dòng {line}, cột {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` phải là một danh sách lệnh, mỗi lệnh có `id` và `label`
+@msg	command {name} must be an object with an `id` and a `label`	lệnh {name} phải là một đối tượng có `id` và `label`
+@msg	missing field `{key}`	thiếu trường `{key}`
+@msg	duplicate field `{key}`	trường `{key}` bị lặp
 @msg	only a filter or a live effect declares `commands`	chỉ bộ lọc hoặc hiệu ứng trực tiếp mới khai báo `commands`
 @msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	mô-đun không có SHA-256 mà `hash` cho biết: không có gì được cài đặt

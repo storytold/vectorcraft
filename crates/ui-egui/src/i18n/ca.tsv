@@ -6188,6 +6188,12 @@ digits	Malayalam	Malaiàlam
 @msg	command {name}: `label` must be 1-64 printable characters	ordre {name}: `label` ha de tenir 1-64 caràcters imprimibles
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	ordre {name}: fes servir un id d’1-{MAX_COMMAND_ID} caràcters d’a-z 0-9 _ que comenci per una lletra
 @msg	command {name}: {e}	ordre {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} (línia {line}, columna {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` ha de ser una llista d’ordres, cadascuna amb `id` i `label`
+@msg	command {name} must be an object with an `id` and a `label`	l’ordre {name} ha de ser un objecte amb `id` i `label`
+@msg	missing field `{key}`	falta el camp `{key}`
+@msg	duplicate field `{key}`	el camp `{key}` està repetit
 @msg	only a filter or a live effect declares `commands`	només un filtre o un efecte dinàmic declara `commands`
 @msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	el mòdul no té el SHA-256 que indica `hash`: no s’ha instal·lat res

@@ -6092,6 +6092,12 @@ axis	Y Axis	Άξονας Y
 @msg	command {name}: `label` must be 1-64 printable characters	εντολή {name}: το `label` πρέπει να έχει 1-64 εκτυπώσιμους χαρακτήρες
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	εντολή {name}: χρησιμοποιήστε αναγνωριστικό 1-{MAX_COMMAND_ID} χαρακτήρων από a-z 0-9 _ που αρχίζει με γράμμα
 @msg	command {name}: {e}	εντολή {name}: {e}
+@msg	manifest: {e}	αρχείο δηλώσεων: {e}
+@msg	manifest: {e} at line {line} column {column}	αρχείο δηλώσεων: {e} (γραμμή {line}, στήλη {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	το `commands` πρέπει να είναι λίστα εντολών, καθεμία με `id` και `label`
+@msg	command {name} must be an object with an `id` and a `label`	η εντολή {name} πρέπει να είναι αντικείμενο με `id` και `label`
+@msg	missing field `{key}`	λείπει το πεδίο `{key}`
+@msg	duplicate field `{key}`	το πεδίο `{key}` εμφανίζεται δύο φορές
 @msg	only a filter or a live effect declares `commands`	μόνο ένα φίλτρο ή ένα δυναμικό εφέ δηλώνει `commands`
 @msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	η λειτουργική μονάδα δεν έχει το SHA-256 που δίνει το `hash`: δεν εγκαταστάθηκε τίποτα

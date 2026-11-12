@@ -5752,6 +5752,12 @@ axis	Y Axis	Ось Y
 @msg	command {name}: `label` must be 1-64 printable characters	команда {name}: `label` должен содержать 1-64 печатаемых символа
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	команда {name}: используйте id из 1-{MAX_COMMAND_ID} символов a-z 0-9 _, начинающийся с буквы
 @msg	command {name}: {e}	команда {name}: {e}
+@msg	manifest: {e}	манифест: {e}
+@msg	manifest: {e} at line {line} column {column}	манифест: {e} (строка {line}, столбец {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` должно быть списком команд, у каждой из которых есть `id` и `label`
+@msg	command {name} must be an object with an `id` and a `label`	команда {name} должна быть объектом с `id` и `label`
+@msg	missing field `{key}`	нет поля `{key}`
+@msg	duplicate field `{key}`	поле `{key}` указано дважды
 @msg	only a filter or a live effect declares `commands`	`commands` объявляет только фильтр или динамический эффект
 @msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	у модуля не тот SHA-256, что указан в `hash`: ничего не установлено

@@ -6092,6 +6092,12 @@ axis	Y Axis	Y ღერძი
 @msg	command {name}: `label` must be 1-64 printable characters	ბრძანება {name}: `label` უნდა შედგებოდეს 1-64 დასაბეჭდი სიმბოლოსგან
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	ბრძანება {name}: გამოიყენეთ 1-{MAX_COMMAND_ID} სიმბოლოიანი id a-z 0-9 _ სიმბოლოებიდან, რომელიც ასოთი იწყება
 @msg	command {name}: {e}	ბრძანება {name}: {e}
+@msg	manifest: {e}	მანიფესტი: {e}
+@msg	manifest: {e} at line {line} column {column}	მანიფესტი: {e} (სტრიქონი {line}, სვეტი {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` უნდა იყოს ბრძანებების სია, თითოეული `id`-ით და `label`-ით
+@msg	command {name} must be an object with an `id` and a `label`	ბრძანება {name} უნდა იყოს ობიექტი `id`-ით და `label`-ით
+@msg	missing field `{key}`	აკლია ველი `{key}`
+@msg	duplicate field `{key}`	ველი `{key}` ორჯერაა
 @msg	only a filter or a live effect declares `commands`	`commands`-ს მხოლოდ ფილტრი ან ცოცხალი ეფექტი აცხადებს
 @msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	მოდულს არ აქვს `hash`-ში მითითებული SHA-256: არაფერი დაყენებულა
