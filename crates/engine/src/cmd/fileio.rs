@@ -90,9 +90,9 @@ pub use pdfimport::{LoadOptions, page_document};
 pub(crate) use save::job_for;
 pub(crate) use save::save as save_document;
 pub use save::{
-    SAVE_FORMATS, SaveJob, SaveMode, SavePlan, StreamWrite, TEMPLATE_FORMATS, dialog_folder, export_folder, reads_option as save_reads_option,
-    remembered_save_options, save_filters, save_format, save_job, save_plan, save_with, stamp_save_dates, template_filters, templates_dialog_folder,
-    templates_folder,
+    SAVE_FORMATS, SaveJob, SaveMode, SavePlan, StreamWrite, TEMPLATE_FORMATS, dialog_folder, export_folder, leave_out_unreadable_save_paths,
+    reads_option as save_reads_option, remembered_save_options, save_filters, save_format, save_job, save_plan, save_with, stamp_save_dates,
+    template_filters, templates_dialog_folder, templates_folder,
 };
 pub(crate) use screens::{
     PARAM_KEYS as SCREEN_PARAM_KEYS, ROW_KEYS as SCREEN_ROW_KEYS, UNWRITTEN_FORMATS as SCREEN_UNWRITTEN_FORMATS,
@@ -124,7 +124,9 @@ pub(crate) use access::list_dir;
 pub use access::write_file_with;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use access::{Placed, copy_new, file_metadata};
-pub(crate) use access::{absolute_path, create_dir, document_path, file_created, file_stamp, read_file, read_file_head, write_file, write_new_file};
+pub(crate) use access::{
+    absolute_path, create_dir, document_path, file_created, file_stamp, read_file, read_file_head, shown_link, shown_path, write_file, write_new_file,
+};
 #[cfg(all(test, windows))]
 pub(crate) use access::{document_path_on, document_path_with};
 #[cfg(test)]

@@ -667,6 +667,83 @@ fn a_numbered_file_is_written_into_the_first_rows_folder() {
     assert_eq!(std::fs::read_dir(dir).unwrap().count(), 1, "one sub-folder");
 }
 
+/// An export into the folder an export preset keeps, for a client whose read roots don't hold that
+/// folder: the reply leaves out the ZIP's path and names the files relative to the folder. A folder
+/// inside the read roots, and one the client gives, stay whole.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_presets_folder_outside_the_read_root_is_left_out_of_the_reply() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let mut s = session(1);
+    let tmp = Folder::new("preset-roots");
+    let (inside, out) = (tmp.0.join("in"), tmp.0.join("out"));
+    for f in [&inside, &out] {
+        std::fs::create_dir_all(f).unwrap();
+    }
+    let folder = out.to_string_lossy().replace('\\', "/");
+    let settings = json!({"formats": [{"format": "png", "folder": "1x"}], "subfolders": true, "folder": folder});
+    s.execute("document.exportPresets.save", &json!({"name": "Kept", "settings": settings})).unwrap();
+    let write_only = AutomationRoots::new(&[inside.as_path()], &[out.as_path()]).unwrap();
+    let both = AutomationRoots::new(&[inside.as_path(), out.as_path()], &[out.as_path()]).unwrap();
+    let run = |s: &mut Session, roots: &Option<std::sync::Arc<AutomationRoots>>, p: Value| confine(roots.as_ref(), || export(s, p));
+
+    let r = run(&mut s, &write_only, json!({"exportPreset": "Kept"}));
+    assert_eq!(r["files"], json!(["1x/Artboard-1.png"]), "{r}");
+    assert!(out.join("1x/Artboard-1.png").is_file());
+    let r = run(&mut s, &write_only, json!({"exportPreset": "Kept", "zip": true}));
+    assert_eq!((r.get("path"), &r["files"]), (None, &json!(["1x/Artboard-1.png"])), "{r}");
+    assert!(!r.to_string().contains(&folder), "{r}");
+    // Inside the read roots, or given by the client: whole.
+    assert_eq!(run(&mut s, &both, json!({"exportPreset": "Kept"}))["files"], json!([format!("{folder}/1x/Artboard-1.png")]));
+    let r = run(&mut s, &write_only, json!({"exportPreset": "Kept", "folder": folder, "zip": true}));
+    assert!(r["path"].as_str().is_some_and(|p| p.starts_with(&format!("{folder}/")) && p.ends_with(".zip")), "{r}");
+}
+
+/// The export settings the document keeps and the saved presets, read by a client whose read roots
+/// don't hold their folder: `document.exportSettings`, `document.exportPresets.list` and
+/// `document.exportPresets.export` (as data and as a file) leave out that folder and keep the rest.
+/// Inside the read roots the folder stays.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn kept_settings_leave_out_a_folder_outside_the_read_root() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let mut s = session(1);
+    let tmp = Folder::new("settings-roots");
+    let (inside, out) = (tmp.0.join("in"), tmp.0.join("out"));
+    for f in [&inside, &out] {
+        std::fs::create_dir_all(f).unwrap();
+    }
+    let folder = out.to_string_lossy().replace('\\', "/");
+    let settings = json!({"formats": [{"format": "svg"}], "folder": folder});
+    s.execute("document.exportPresets.save", &json!({"name": "Kept", "settings": settings})).unwrap();
+    export(&mut s, json!({"exportPreset": "Kept"}));
+    let confined = AutomationRoots::new(&[inside.as_path()], &[inside.as_path()]).unwrap();
+    let both = AutomationRoots::new(&[inside.as_path(), out.as_path()], &[inside.as_path()]).unwrap();
+    let ask = |s: &mut Session, roots: &Option<std::sync::Arc<AutomationRoots>>, cmd: &str, p: Value| {
+        confine(roots.as_ref(), || s.execute(cmd, &p).unwrap())
+    };
+    let saved = |list: &Value| list["presets"].as_array().unwrap().iter().find(|p| p["name"] == "Kept").unwrap()["settings"].clone();
+
+    let r = ask(&mut s, &confined, "document.exportSettings", json!({}));
+    assert_eq!((r["settings"].get("folder"), &r["settings"]["formats"]), (None, &json!([{"format": "svg"}])), "{r}");
+    let r = ask(&mut s, &confined, "document.exportPresets.list", json!({}));
+    assert_eq!(saved(&r), json!({"formats": [{"format": "svg"}]}), "{r}");
+    let r = ask(&mut s, &confined, "document.exportPresets.export", json!({"names": ["Kept"]}));
+    let data = r["data"].as_str().unwrap();
+    assert!(!data.contains(&folder) && data.contains("svg"), "{data}");
+    let file = inside.join("kept.vcexportpresets");
+    let path = file.to_string_lossy().replace('\\', "/");
+    ask(&mut s, &confined, "document.exportPresets.export", json!({"names": ["Kept"], "path": path}));
+    assert!(!std::fs::read_to_string(&file).unwrap().contains(&folder));
+
+    // Inside the read roots: whole.
+    assert_eq!(ask(&mut s, &both, "document.exportSettings", json!({}))["settings"]["folder"], json!(folder));
+    assert_eq!(saved(&ask(&mut s, &both, "document.exportPresets.list", json!({})))["folder"], json!(folder));
+    assert!(ask(&mut s, &both, "document.exportPresets.export", json!({"names": ["Kept"]}))["data"].as_str().unwrap().contains(&folder));
+}
+
 #[test]
 fn format_settings_apply_to_their_rows_and_rows_win() {
     let mut s = session(1);

@@ -644,10 +644,45 @@ impl Output {
 /// File → Export for Screens: [`export`] (over the settings of `exportPreset`, when given), with
 /// the params remembered in the document (`document.exportSettings`).
 pub(super) fn export_for_screens(s: &mut Session, p: &Value) -> Result<Value> {
+    // A folder the client gave, as against the one its `exportPreset` keeps.
+    let given = p.get("folder").is_some();
     let p = with_preset(s, p)?;
-    let r = export(s, &p)?;
+    let mut r = export(s, &p)?;
     remember(s, &p);
+    if !given && let Some(folder) = str_param(&p, "folder").filter(|f| !f.is_empty()) {
+        leave_out_unreadable_folder(&mut r, folder);
+    }
     Ok(r)
+}
+
+/// The reply `r` of an export into `folder`, a folder the client did not give, as the request being
+/// served may see it: when `folder` is outside the read roots ([`super::access::shown`]), the ZIP's
+/// `path` is left out and `files` names each file written relative to `folder` (`2x/Logo@2x.png`),
+/// as the reply of an export to a ZIP names them.
+fn leave_out_unreadable_folder(r: &mut Value, folder: &str) {
+    if super::access::shown(folder) {
+        return;
+    }
+    let Some(o) = r.as_object_mut() else { return };
+    o.remove("path");
+    let inside = format!("{folder}/");
+    if let Some(Value::Array(files)) = o.get_mut("files") {
+        for file in files {
+            // A ZIP's files are named relative to it already.
+            if let Some(name) = file.as_str().and_then(|path| path.strip_prefix(&inside)) {
+                *file = json!(name);
+            }
+        }
+    }
+}
+
+/// Export settings kept in the document or a preset, as the request being served may see them: a
+/// `folder` outside the read roots ([`super::access::shown`]) is left out.
+fn leave_out_unreadable_settings_folder(mut settings: Map<String, Value>) -> Map<String, Value> {
+    if settings.get("folder").and_then(Value::as_str).is_some_and(|f| !f.is_empty() && !super::access::shown(f)) {
+        settings.remove("folder");
+    }
+    settings
 }
 
 // ---------- export presets ----------
@@ -727,7 +762,13 @@ pub fn preset_list(saved: &[ScreenExportPreset]) -> Value {
 }
 
 pub(super) fn presets_list(s: &mut Session, _: &Value) -> Result<Value> {
-    Ok(json!({ "presets": preset_list(&s.prefs.screen_export_presets) }))
+    let saved: Vec<ScreenExportPreset> = s
+        .prefs
+        .screen_export_presets
+        .iter()
+        .map(|p| ScreenExportPreset { name: p.name.clone(), settings: leave_out_unreadable_settings_folder(p.settings.clone()) })
+        .collect();
+    Ok(json!({ "presets": preset_list(&saved) }))
 }
 
 /// The [`PRESET_KEYS`] of `given`, refused as an error of command `cmd` when an export would
@@ -831,6 +872,8 @@ pub(super) fn presets_export(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(too_many());
     }
     let count = presets.len();
+    let presets: Vec<ScreenExportPreset> =
+        presets.into_iter().map(|p| ScreenExportPreset { settings: leave_out_unreadable_settings_folder(p.settings), ..p }).collect();
     let text = serde_json::to_string_pretty(&PresetFile { format: PRESET_FILE_FORMAT.into(), presets }).map_err(|e| bad(EXPORT, e.to_string()))?;
     if text.len() > MAX_PRESET_FILE_BYTES {
         return Err(bad(EXPORT, format!("export presets file is larger than {MAX_PRESET_FILE_BYTES} bytes")));
@@ -1388,7 +1431,7 @@ pub(crate) fn store_settings(s: &mut Session, mut settings: Map<String, Value>) 
 
 /// `document.exportSettings`: the Export for Screens settings the document last exported with.
 pub(super) fn export_settings(s: &mut Session, _: &Value) -> Result<Value> {
-    Ok(json!({ "settings": s.doc()?.doc.export_settings }))
+    Ok(json!({ "settings": leave_out_unreadable_settings_folder(s.doc()?.doc.export_settings.clone()) }))
 }
 
 #[cfg(test)]
