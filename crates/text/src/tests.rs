@@ -2631,6 +2631,26 @@ fn bunri_kinshi_adds_no_justification_space_inside_a_pair() {
     let (on, a) = desired(true);
     assert!((on - natural).abs() < 1e-6, "on: the dashes keep their spacing");
     assert!(a > layout(db(), &point(text, style(20.0))).glyphs[0].advance + 1.0, "on: other letters still take Desired spacing");
+    // Single Word Justification's Full Justify, right to left: the second dash's cluster (the dash
+    // and a combining mark) is drawn before the first dash, and the mark's gap, which opens next
+    // to the first dash, takes no space. The other gaps of the word still do.
+    let text = "אב——\u{301}גד";
+    let (first, second) = ("אב".len(), "אב—".len());
+    let width = |l: &TextLayout, b: usize| l.glyphs.iter().filter(|g| g.byte == b).map(|g| g.advance).sum::<f64>();
+    let natural = layout(db(), &point(text, style(20.0)));
+    assert!(natural.glyphs.iter().filter(|g| g.byte == second).count() > 1, "the dash and its mark are one cluster");
+    let set = |bunri: bool| {
+        let mut t = area(text, style(20.0), frame, Justify::JustifyAll);
+        t.para.bunri_kinshi = bunri;
+        let l = layout(db(), &t);
+        assert!((l.lines[0].x1 - frame.x1).abs() < 1e-6, "{bunri}: {:?}", l.lines[0]);
+        (width(&l, first), width(&l, second))
+    };
+    let (_, off) = set(false);
+    assert!(off > width(&natural, second) + 1.0, "off: Full Justify widens the gap between the dashes");
+    let (dash, on) = set(true);
+    assert!((on - width(&natural, second)).abs() < 1e-6, "on: the pair keeps its spacing right to left");
+    assert!(dash > width(&natural, first) + 1.0, "on: the gap on the pair's other side still widens");
 }
 
 /// No Break (Character panel menu) keeps the marked words on one line, where the same text wraps

@@ -743,12 +743,25 @@ fn is_cjk_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usiz
     }) && !in_pair(glyph, index, after, sg)
 }
 
-// Bunri-Kinshi: are glyph `glyph` and the glyph drawn after it the two halves of an inseparable
-// pair? Justification adds no space between them.
+// Bunri-Kinshi: are glyph `glyph` and the glyph drawn after it in the two halves of an inseparable
+// pair? Justification adds no space between them. The halves are neighboring clusters: the
+// earlier one's last glyph keeps the next, and the later one starts right after it. Right to left,
+// the clusters are drawn in the other order, each with its glyphs in logical order, so the two
+// drawn neighbors need not be neighbors in `sg`.
 fn in_pair(glyph: usize, index: usize, after: &[Option<usize>], sg: &[SGlyph]) -> bool {
-    drawn_after(index, glyph, after).is_some_and(|next| {
-        (next == glyph + 1 && sg.get(glyph).is_some_and(|a| a.keeps_next)) || (glyph == next + 1 && sg.get(next).is_some_and(|b| b.keeps_next))
-    })
+    let Some(next) = drawn_after(index, glyph, after) else {
+        return false;
+    };
+    let (Some(a), Some(b)) = (sg.get(glyph), sg.get(next)) else {
+        return false;
+    };
+    if a.byte == b.byte {
+        return false;
+    }
+    let (first, later) = if a.byte < b.byte { (glyph, b.byte) } else { (next, a.byte) };
+    let byte = sg.get(first).map_or(0, |g| g.byte);
+    let last = first + sg.iter().skip(first + 1).take_while(|g| g.byte == byte).count();
+    sg.get(last).is_some_and(|g| g.keeps_next) && sg.get(last + 1).is_some_and(|g| g.byte == later)
 }
 
 // Single Word Justification's Full Justify spreads a line's leftover room over the gaps between
