@@ -1461,6 +1461,7 @@ fn headless_methods_refuse_params_of_the_wrong_type() {
     h.call("ui.tool.select", json!({"tool": "rectangle"})).unwrap();
     let before = h.call("document.json", json!({})).unwrap();
     let drag = |mods: Value| json!({"events": [{"kind": "down", "x": 10, "y": 10}, {"kind": "drag", "x": 60, "y": 60, "mods": mods}, {"kind": "up", "x": 60, "y": 60}]});
+    let after_rect = |last: Value| json!({"events": [{"kind": "down", "x": 10, "y": 10}, {"kind": "drag", "x": 60, "y": 60}, {"kind": "up", "x": 60, "y": 60}, last]});
     for (method, params, key) in [
         ("ui.render", json!({"artboard": "0"}), "artboard"),
         ("ui.render", json!({"scale": "2"}), "scale"),
@@ -1469,6 +1470,10 @@ fn headless_methods_refuse_params_of_the_wrong_type() {
         ("ui.key", json!({"key": "Delete", "shift": "true"}), "shift"),
         ("ui.pointer", drag(json!({"shift": "yes"})), "mods"),
         ("ui.pointer", json!({"mods": 1, "events": []}), "mods"),
+        ("ui.pointer", drag(json!([true])), "mods"),
+        // A whole rectangle comes before the malformed event, and none of it is drawn.
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": "bad", "y": 0})), "x"),
+        ("ui.pointer", after_rect(json!({"kind": "wiggle", "x": 0, "y": 0})), "wiggle"),
     ] {
         let e = h.call(method, params.clone()).unwrap_err();
         assert!(e.contains(&format!("`{key}`")), "{method} {params}: {e}");

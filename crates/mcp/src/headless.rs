@@ -71,7 +71,7 @@ fn opt_bool(p: &Value, k: &str) -> Result<Option<bool>, String> {
 
 /// A pointer packet's `mods`: none when omitted or null, else an object of booleans.
 fn packet_mods(p: &Value) -> Result<Option<Mods>, String> {
-    opt(p, "mods", |m| serde_json::from_value(m.clone()).ok(), "an object of true or false values")
+    opt(p, "mods", |m| m.as_object().and_then(|_| serde_json::from_value(m.clone()).ok()), "an object of true or false values")
 }
 
 pub(crate) fn pointer_kind(k: &str) -> Option<PointerKind> {
@@ -231,25 +231,26 @@ impl Headless {
         let base = packet_mods(p)?.unwrap_or_default();
         let default = PointerEvent::json_backquote(p, false)?;
         let held = events.iter().map(|e| PointerEvent::json_backquote(e, default)).collect::<Result<Vec<_>, _>>()?;
-        let mods = events.iter().map(|e| Ok(packet_mods(e)?.unwrap_or(base))).collect::<Result<Vec<_>, String>>()?;
+        // Every event is read before any is sent, so a malformed packet sends none of them.
+        let read = events
+            .iter()
+            .zip(held)
+            .map(|(e, backquote)| {
+                let mods = packet_mods(e)?.unwrap_or(base);
+                let kind = s(e, "kind").unwrap_or("");
+                let kind = pointer_kind(kind).ok_or_else(|| format!("unknown pointer kind `{kind}` (down|drag|up|move|doubleclick)"))?;
+                if s(e, "space") == Some("screen") {
+                    return Err("screen-space pointer events need the desktop app; use document coordinates".to_string());
+                }
+                let x = e.get("x").and_then(Value::as_f64).ok_or("pointer event needs numeric `x`")?;
+                let y = e.get("y").and_then(Value::as_f64).ok_or("pointer event needs numeric `y`")?;
+                Ok((e, kind, Point::new(x, y), mods, backquote))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
         self.ensure_document();
         let mut requests = vec![];
-        for ((e, backquote), mods) in events.iter().zip(held).zip(mods) {
-            let kind = s(e, "kind").unwrap_or("");
-            let kind = pointer_kind(kind).ok_or_else(|| format!("unknown pointer kind `{kind}` (down|drag|up|move|doubleclick)"))?;
-            if s(e, "space") == Some("screen") {
-                return Err("screen-space pointer events need the desktop app; use document coordinates".into());
-            }
-            let x = e.get("x").and_then(Value::as_f64).ok_or("pointer event needs numeric `x`")?;
-            let y = e.get("y").and_then(Value::as_f64).ok_or("pointer event needs numeric `y`")?;
-            let ev = PointerEvent {
-                kind,
-                pos: Point::new(x, y),
-                mods,
-                backquote,
-                pressure: PointerEvent::json_pressure(e),
-                pen: PointerEvent::json_pen(e),
-            };
+        for (e, kind, pos, mods, backquote) in read {
+            let ev = PointerEvent { kind, pos, mods, backquote, pressure: PointerEvent::json_pressure(e), pen: PointerEvent::json_pen(e) };
             let reqs = self.session.pointer(&ev, self.view).map_err(|e| e.to_string())?;
             self.apply_ui_requests(reqs, &mut requests)?;
             // With no frames to show the highlight or apply an edit in later, each event waits for

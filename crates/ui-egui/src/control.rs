@@ -509,6 +509,7 @@ fn coord(p: &Value, key: &str, default: f32) -> Result<f32, String> {
 fn packet_mods(value: Option<&Value>) -> Result<Option<Mods>, String> {
     match value {
         None | Some(Value::Null) => Ok(None),
+        Some(m) if !m.is_object() => Err("`mods` must be an object of true or false values".to_string()),
         Some(m) => serde_json::from_value(m.clone()).map(Some).map_err(|e| format!("`mods` must be an object of true or false values: {e}")),
     }
 }
@@ -920,7 +921,7 @@ fn rotate_view_pointer(
 
 /// A Rotate View packet accepts only the documented boolean modifier fields.
 fn validate_rotate_view_mods(value: Option<&Value>) -> Result<(), String> {
-    let Some(value) = value else { return Ok(()) };
+    let Some(value) = value.filter(|value| !value.is_null()) else { return Ok(()) };
     let Some(fields) = value.as_object() else { return Err("Rotate View `mods` must be an object of booleans".into()) };
     if fields.iter().any(|(key, value)| !matches!(key.as_str(), "shift" | "alt" | "cmd" | "ctrl" | "space") || !value.is_boolean()) {
         return Err("Rotate View `mods` accepts only boolean shift, alt, cmd, ctrl and space".into());
@@ -975,8 +976,16 @@ fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, req: &Con
         events
             .iter()
             .map(|e| {
+                let kind = match e.get("kind").and_then(Value::as_str).unwrap_or("") {
+                    "down" => PointerKind::Down,
+                    "drag" => PointerKind::Drag,
+                    "up" => PointerKind::Up,
+                    "move" => PointerKind::Move,
+                    "doubleclick" | "dblclick" => PointerKind::DoubleClick,
+                    other => return Err(format!("unknown pointer kind `{other}`")),
+                };
                 let at = |k: &str| crate::menus::opt_number(e, k).map(|n| n.unwrap_or(0.0));
-                Ok((at("x")?, at("y")?, packet_mods(e.get("mods"))?.unwrap_or(base)))
+                Ok((kind, at("x")?, at("y")?, packet_mods(e.get("mods"))?.unwrap_or(base)))
             })
             .collect::<Result<Vec<_>, String>>()
     });
@@ -986,6 +995,10 @@ fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, req: &Con
     };
     let view = app.view_info();
     let xf = app.canvas_rect.zip(app.view().copied()).map(|(rect, v)| Xf::new(rect, &v));
+    let screen = |e: &Value| e.get("space").and_then(Value::as_str) == Some("screen");
+    if !rotating && xf.is_none() && events.iter().any(screen) {
+        return err("no canvas yet");
+    }
     let from = app.session.input_count();
     let held =
         PointerEvent::json_backquote(p, false).and_then(|d| events.iter().map(|e| PointerEvent::json_backquote(e, d)).collect::<Result<Vec<_>, _>>());
@@ -993,16 +1006,8 @@ fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, req: &Con
         Ok(held) => held,
         Err(e) => return err(e),
     };
-    for ((e, backquote), (x, y, mods)) in events.iter().zip(held).zip(read) {
-        let kind = match e.get("kind").and_then(Value::as_str).unwrap_or("") {
-            "down" => PointerKind::Down,
-            "drag" => PointerKind::Drag,
-            "up" => PointerKind::Up,
-            "move" => PointerKind::Move,
-            "doubleclick" | "dblclick" => PointerKind::DoubleClick,
-            other => return err(format!("unknown pointer kind `{other}`")),
-        };
-        let screen = e.get("space").and_then(Value::as_str) == Some("screen");
+    for ((e, backquote), (kind, x, y, mods)) in events.iter().zip(held).zip(read) {
+        let screen = screen(e);
         if rotating {
             if let Err(e) = rotate_view_pointer(app, kind, vectorcraft_geom::Point::new(x, y), screen, mods.shift) {
                 return err(e);

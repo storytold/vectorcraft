@@ -349,6 +349,7 @@ fn control_input_refuses_params_of_the_wrong_type() {
         ("ui.set", json!({"grid": true, "controlBar": 0}), "controlBar"),
         ("ui.pointer", json!({"events": [{"kind": "move", "x": "5", "y": 0}]}), "x"),
         ("ui.pointer", move_to(json!({"shift": "yes"})), "mods"),
+        ("ui.pointer", move_to(json!([true])), "mods"),
         ("ui.pointer", json!({"mods": "shift", "events": [{"kind": "move", "x": 1, "y": 1}]}), "mods"),
     ] {
         let mut app = VectorcraftApp::new(Session::new(), Services::default());
@@ -453,6 +454,29 @@ fn synthetic_pointer_rejects_a_backquote_that_is_not_a_boolean() {
         assert_eq!(r["ok"], false, "{params}: {r}");
         assert!(r["error"].as_str().is_some_and(|e| e.contains("`backquote` must be a boolean")), "{r}");
         assert_eq!(app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap(), &before, "{params}");
+    }
+}
+
+/// `ui.pointer` refuses an unknown event kind, or a screen-space event with no canvas, before any
+/// of the packet's events runs.
+#[test]
+fn synthetic_pointer_rejects_an_unknown_kind_before_any_event_runs() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    assert_eq!(input_request(&mut app, "ui.tool.select", json!({"tool": "selection"}))["ok"], true);
+    let before = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    let moves = [json!({"kind": "down", "x": 125, "y": 125}), json!({"kind": "drag", "x": 145, "y": 125}), json!({"kind": "up", "x": 145, "y": 125})];
+    for (last, error) in [
+        (json!({"kind": "wiggle", "x": 145, "y": 125}), "unknown pointer kind `wiggle`"),
+        (json!({"kind": "move", "x": 145, "y": 125, "space": "screen"}), "no canvas yet"),
+    ] {
+        let events = moves.iter().cloned().chain([last]).collect::<Vec<_>>();
+        let r = input_request(&mut app, "ui.pointer", json!({"events": events}));
+        assert_eq!(r["ok"], false, "{error}: {r}");
+        assert!(r["error"].as_str().is_some_and(|e| e.contains(error)), "{r}");
+        assert_eq!(app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap(), &before, "{error}: the drag does not run");
     }
 }
 

@@ -1271,7 +1271,9 @@ type and change nothing: `view.setZoom` (`zoom`, `center`), `view.screenMode` (`
 `ui.symbolOptions` (`edit`), `ui.batchDialog` (`set`, `action`) and `file.exportSelection` (`multiple`). So do the
 control channel's `ui.key`, `ui.move`, `ui.wheel`, `ui.click`, `ui.drag`, `ui.pointer`, `ui.resize`, `ui.screenshot`,
 `ui.render` and `ui.set` for their numbers, switches and `mods`, and the headless session's key, pointer and screenshot
-calls. Omitting a param or giving null keeps its default:
+calls. Omitting a param or giving null keeps its default, with two exceptions: `ui.click`'s `count` and `ui.drag`'s
+`count` and `steps` refuse null, and a headless pointer event needs its `x` and `y`. A pointer packet with one
+malformed event sends none of its events:
 
 ```json
 {"id": "view.setZoom", "params": {"zoom": "200"}}
