@@ -179,6 +179,7 @@ digits	Malayalam	말라얄람어
 	PDF Presets…	PDF 프리셋…
 	Perspective Grid Presets…	원근 격자 프리셋…
 	Color Settings…	색상 설정…
+	Assign Profile	프로파일 지정
 	Assign Profile…	프로파일 지정…
 	Keyboard Shortcuts…	키보드 단축키…
 	Preferences…	환경 설정…
@@ -224,6 +225,15 @@ digits	Malayalam	말라얄람어
 	Expand…	확장…
 	Expand Appearance	모양새 확장
 	Crop Image	이미지 자르기
+	Image Tools	이미지 도구
+	Remove Background…	배경 제거…
+	Remove Background	배경 제거
+	Background	배경
+	Edge Color	가장자리 색상
+	Picked Colors	선택한 색상
+	Corner Color	모퉁이 색상
+	Contiguous	인접
+	Each Channel	각 채널
 	Edit Path	패스 편집
 	Mask	마스크
 	Rasterize…	래스터화…
@@ -428,6 +438,9 @@ digits	Malayalam	말라얄람어
 	Create Outlines	윤곽선 만들기
 	Optical Margin Alignment	시각적 여백 정렬
 	Dynamic Text	동적 텍스트
+	Dynamic Text Presets	동적 텍스트 사전 설정
+	Arch	아치
+@msg	select point type or type on a path	포인트 문자 또는 패스 위 문자를 선택하십시오
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	연결된 문자의 패스 위 문자에는 동적 텍스트를 사용할 수 없습니다: {frames}
 	Fill with Placeholder Text	자리 표시 문자로 채우기
 	Insert Inline Symbol	인라인 심볼 삽입
@@ -809,6 +822,15 @@ digits	Malayalam	말라얄람어
 	Stun Pulse	기절
 	Stealth Fade	은신
 	Shield Buff	방패
+	Textures	텍스처
+	Fine Grain	고운 입자
+	Canvas Weave	캔버스 직조
+	Burlap Sack	마대 자루
+	Cracked Glaze	갈라진 유약
+	Mosaic Floor	모자이크 바닥
+	Quilted Squares	퀼트 사각형
+	Leaded Glass	납유리
+	Damp Paper	젖은 종이
 	Outlines and Rules	윤곽선과 괘선
 	Hand-Drawn	손그림
 	Gradient Finishes	그레이디언트 마감
@@ -2677,6 +2699,8 @@ mark-style	Japanese	일본식
 	RECENT	최근 항목
 	Radar Graph Tool	레이더 그래프 도구
 	Radial Gradient	방사형 그레이디언트
+	Conic Gradient	원뿔형 그레이디언트
+	Diamond Gradient	다이아몬드 그레이디언트
 	Random	무작위
 	Randomize Colors	색상 무작위 변경
 	Randomly change color order	색상 순서를 무작위로 변경
@@ -3076,6 +3100,7 @@ mark-style	Japanese	일본식
 	Show List View	목록 보기 표시
 	Show Note	메모 표시
 	Show Options	옵션 표시
+	Show Recent Colors	최근 색상 표시
 	Show Original Path	원래 패스 표시
 	Open this dialog with these settings next time	다음에 이 설정으로 이 대화상자 열기
 	Auto-Simplify	자동 단순화
@@ -3316,6 +3341,8 @@ mark-style	Japanese	일본식
 	Toolbar: Single/Double Column	도구 막대: 한 줄/두 줄
 	Toolbar: Add Tool	도구 막대: 도구 추가
 	Toolbar: Remove Tool	도구 막대: 도구 제거
+	Add Tool…	도구 추가…
+	Remove Tool	도구 제거
 	Toolbar: Reset	도구 막대: 재설정
 	Top:	위쪽:
 	Total Width:	전체 너비:
@@ -3886,6 +3913,8 @@ file-filter	Templates	템플릿
 	Scale at Center	중심에서 크기 조정
 	Up/Down:	위/아래:
 	Left/Right:	왼쪽/오른쪽:
+	Tate-chu-yoko Up/Down	다테추요코 위/아래
+	Tate-chu-yoko Left/Right	다테추요코 왼쪽/오른쪽
 	Temperature	색온도
 	Template	템플릿
 	Templates	템플릿
@@ -3924,6 +3953,7 @@ file-filter	Templates	템플릿
 	Weight	두께
 	Windows	Windows
 	Working CMYK (don't tag)	작업용 CMYK (태그 안 함)
+	Working RGB (don't tag)	작업용 RGB (태그 안 함)
 	Workspace {i}	작업 영역 {i}
 	Yellow	노랑
 	[Normal Character Style]	[기본 문자 스타일]
@@ -4021,6 +4051,13 @@ axis	Both	양쪽
 	Dock Panel	패널 고정
 	Dock to Top	위쪽에 고정
 	Dock to Bottom	아래쪽에 고정
+	Control Bar Options	컨트롤 막대 옵션
+	Tool Options	도구 옵션
+	Object Options	개체 옵션
+	Image Options	이미지 옵션
+	Vertical Alignment	세로 정렬
+	Align and Distribute	정렬 및 분포
+	Document Options	문서 옵션
 	Dock Control Bar	컨트롤 막대 고정
 	Drag to float the toolbar	드래그하여 도구 모음 분리
 	Drag to the window's left or right edge to dock	창 왼쪽 또는 오른쪽 가장자리로 드래그하여 고정
@@ -4273,6 +4310,8 @@ theme	Appearance	외관
 @msg	`gradient` must be an object	`gradient`는 개체여야 합니다
 @msg	`groupColors` must be an array	`groupColors`는 배열이어야 합니다
 @msg	`mode` applies to freeform gradients	`mode`는 자유형 그레이디언트에 적용됩니다
+@msg	a negative `aspect` applies to conic gradients	음수 `aspect`는 원뿔형 그레이디언트에 적용됩니다
+@msg	`focal` applies to radial gradients	`focal`은 방사형 그레이디언트에 적용됩니다
 @msg	`preserve` must be an object	`preserve`는 개체여야 합니다
 @msg	`globalAdjust` must be an object	`globalAdjust`는 개체여야 합니다
 @msg	`stops` must be an array	`stops`는 배열이어야 합니다
@@ -4282,7 +4321,7 @@ theme	Appearance	외관
 @msg	stop {i} needs `offset`	정지점 {i}에는 `offset`이 필요합니다
 @msg	stop {i} needs a valid `color`	정지점 {i}에는 올바른 `color`가 필요합니다
 @msg	stop {i}: `{k}` must be a number	정지점 {i}: `{k}`은(는) 숫자여야 합니다
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	알 수 없는 그레이디언트 종류 `{k}`(linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	알 수 없는 그레이디언트 종류 `{k}`(linear, radial, conic, diamond, freeform)
 @msg	the art could not be sampled	아트웍을 샘플링할 수 없습니다
 @msg	the art is too light for any dots	아트웍이 너무 밝아 점을 만들 수 없습니다
 @msg	the document has no symbols	문서에 심볼이 없습니다
@@ -4376,6 +4415,7 @@ theme	Appearance	외관
 @msg	`{key}` must be a #rrggbb color	`{key}`은(는) #rrggbb 색상이어야 합니다
 @msg	`{key}` must be a #rrggbb colour	`{key}`은(는) #rrggbb 색상이어야 합니다
 @msg	`{key}` must be a string	`{key}`은(는) 문자열이어야 합니다
+@msg	`{key}` must be a profile name or null	`{key}`은(는) 프로파일 이름 또는 null이어야 합니다
 @msg	`{key}` must be a whole number	`{key}`은(는) 정수여야 합니다
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}`은(는) {min}에서 {max} 사이의 정수여야 합니다({x} 입력됨)
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}`은(는) {min}에서 {max} 사이여야 합니다({x} 입력됨)
@@ -4562,6 +4602,7 @@ theme	Appearance	외관
 @msg	the image's pixels don't match its size	이미지의 픽셀이 크기와 맞지 않습니다
 @msg	{bpp}-bit bitmaps can't be read	{bpp}비트 비트맵은 읽을 수 없습니다
 @msg	not an EMF or WMF file	EMF 또는 WMF 파일이 아닙니다
+@msg	not an HP-GL file	HP-GL 파일이 아닙니다
 @msg	its layers use {_1}, which aren't read yet	레이어에 {_1}이(가) 있으며, 아직 읽을 수 없습니다
 @msg	the EMF header is damaged	EMF 헤더가 손상되었습니다
 @msg	damaged	손상됨
@@ -4578,6 +4619,7 @@ theme	Appearance	외관
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	아트보드 {n}의 페이지는 {size}로 PDF 페이지 한도 14,400 pt (200 in)보다 깁니다: UserUnit {unit}(으)로 기록되므로 UserUnit을 무시하는 앱에서는 그 배수만큼 작게 표시됩니다
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	아트보드 {n}의 페이지는 {size}로 PDF 페이지 한도 14,400 pt (200 in)보다 깁니다: {label} 페이지는 UserUnit 없이 포인트 단위로 기록되며, 한도를 지키는 앱은 페이지를 200 in으로 자릅니다
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5에는 14,400 pt (200 in)보다 긴 페이지가 크기를 유지하는 데 필요한 UserUnit이 없습니다: 파일이 PDF 1.6으로 기록됩니다
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4에는 14,400 pt (200 in)보다 긴 페이지가 PDF/A-2의 페이지 한도인 14,400 단위 안에 들어가는 데 필요한 UserUnit이 없습니다: 파일이 PDF 1.6으로 기록됩니다
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	아트보드 {n}의 페이지는 {size}로, PDF 페이지 변 3에서 14,400 단위에 비해 너무 길고 좁습니다: 짧은 변을 3 단위 이상으로 유지하는 UserUnit {unit}로 기록되며, 한도를 지키는 앱은 긴 변을 14,400 단위로 자릅니다
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} 파일은 실수를 최대 {max}까지 담는데 아트보드 {n}의 {side} pt 페이지에는 더 큰 값이 필요합니다: PDF/X 표준 없이 PDF 1.6 이상을 선택하거나 더 작은 아트보드를 사용하세요
 @msg	page {0} does not exist (the PDF has {1})	페이지 {0}이(가) 없습니다(PDF의 페이지 수: {1})
@@ -4772,6 +4814,14 @@ theme	Appearance	외관
 @msg	no such view	해당 보기가 없습니다
 @msg	printing isn't available here	여기서는 인쇄할 수 없습니다
 @msg	select an image	이미지를 선택하세요
+@msg	`background` must be edges, corners or colors	`background`는 edges, corners 또는 colors여야 합니다
+@msg	`match` must be distance or channels	`match`는 distance 또는 channels여야 합니다
+@msg	`{key}` must be from 0 to 100	`{key}`는 0에서 100 사이여야 합니다
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors`에는 16진수(#rrggbb 또는 #rgb)나 black, white, red, green, blue로 쓴 색상이 1~16개 있어야 합니다
+@msg	the linked image shows its preview: embed or relink it first	연결된 이미지가 미리 보기를 표시하고 있습니다: 먼저 포함하거나 다시 링크하세요
+@msg	a CMYK image has no transparency to set	CMYK 이미지에는 설정할 투명도가 없습니다
+@msg	every pixel matches the background: no image would be left	모든 픽셀이 배경과 일치합니다: 남는 이미지가 없습니다
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h}픽셀 이미지는 너무 커서 변경할 수 없습니다
 @msg	the document has no artboards	문서에 아트보드가 없습니다
 @msg	tool (a tool id) is required	도구(도구 id)가 필요합니다
 @msg	unknown tool `{t}`	알 수 없는 도구 `{t}`
@@ -4974,7 +5024,13 @@ theme	Appearance	외관
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 또는 HEIF 파일에 읽을 수 없는 종류의 이미지가 있습니다
 @msg	HEIC and HEIF images can't be opened in this build	이 빌드에서는 HEIC 및 HEIF 이미지를 열 수 없습니다
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 이미지가 너무 커서 읽을 수 없습니다({_1} × {_2}픽셀)
-@msg	zipped 32-bit PSD image data with prediction can't be read	예측이 적용된 ZIP 압축 32비트 PSD 이미지 데이터는 읽을 수 없습니다
+@msg	zipped 1-bit PSD image data with prediction can't be read	예측이 적용된 ZIP 압축 1비트 PSD 이미지 데이터는 읽을 수 없습니다
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD 파일의 레이어 데이터가 알 수 없는 압축({m})을 사용합니다
+@msg	the PSD file's layer records are damaged	PSD 파일의 레이어 레코드가 손상되었습니다
+@msg	the PSD file's layer groups are nested too deeply	PSD 파일의 레이어 그룹이 너무 깊이 중첩되어 있습니다
+@msg	a layer of the PSD file is too large to read	PSD 파일의 레이어가 너무 커서 읽을 수 없습니다
+@msg	the PSD file's layers take more memory to read than allowed	PSD 파일의 레이어를 읽는 데 허용된 것보다 많은 메모리가 필요합니다
+@msg	the layers can't be read ({e}): the file opened as its merged image	레이어를 읽을 수 없습니다({e}): 파일이 병합된 이미지로 열렸습니다
 @msg	{depth}-bit PSD files in this colour mode can't be read	이 색상 모드의 {depth}비트 PSD 파일은 읽을 수 없습니다
 @msg	the PSD file is cut short	PSD 파일이 잘려 있습니다
 @msg	the PSD file's header is damaged	PSD 파일의 헤더가 손상되었습니다
@@ -5284,6 +5340,11 @@ lighting	Light	광원
 	Softness	부드러움
 	Ambient Light	주변광
 	Light behind the object	개체 뒤의 조명
+	Shadows	그림자
+	Distance from Object	개체로부터의 거리
+	Shadow Bounds	그림자 범위
+	Behind Object	개체 뒤
+	Below Object	개체 아래
 	3D Lighting Preset	3D 조명 사전 설정
 	Standard	표준
 	Diffuse	확산
@@ -5351,7 +5412,7 @@ lighting	Light	광원
 @msg	span must be "object" or "selection", got {v}	span은 "object" 또는 "selection"이어야 합니다. {v}은(는) 사용할 수 없습니다
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection"은 `gradient`를 배치합니다. 견본은 배치할 수 없습니다
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection"은 그레이디언트를 배치합니다: `gradient`를 지정하세요
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection"은 선형 또는 방사형 그레이디언트를 배치합니다. 자유형 그레이디언트는 배치할 수 없습니다
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection"은 선형, 방사형, 원뿔형 또는 다이아몬드 그레이디언트를 배치합니다. 자유형 그레이디언트는 배치할 수 없습니다
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection"은 그레이디언트 자체를 배치합니다: `start`와 `end`를 빼세요 (이미 문서 좌표로 배치합니다)
 	Make Image Dynamic	이미지를 동적으로 만들기
 	Import Data Sets…	데이터 세트 가져오기…
@@ -5641,6 +5702,11 @@ axis	Y Axis	Y축
 @msg	`inputs` needs the permission `doc.read`	`inputs`에는 `doc.read` 권한이 필요합니다
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	메모리 예산(개체 {_1}에 입력 {size}바이트가 필요하지만 {left}바이트 남음)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	개체 예산(읽기 전용 개체 {MAX_OBJECTS}개 초과)
+@msg	instruction budget	명령어 예산
+@msg	time budget	시간 예산
+@msg	memory budget (the selection is too large to hand over)	메모리 예산(선택 항목이 너무 커서 넘길 수 없음)
+@msg	output size ({what} is {len} bytes, limit {max})	출력 크기({what}: {len}바이트, 제한 {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	플러그인 저장소에서 플러그인의 권한을 제거할 수 없습니다
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` 권한은 이후 플러그인 API용으로 예약되어 있습니다. 이 호스트는 이 권한을 부여하지 않습니다
 @msg	unknown permission `{shown}`	알 수 없는 권한 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}”은(는) {asked} 권한을 요청합니다. 데스크톱 앱에서 사람이 승인하거나 --allow-plugin-grants로 시작한 세션에서 `grant`를 전달하세요
@@ -5677,6 +5743,16 @@ axis	Y Axis	Y축
 @msg	message must be text	message의 값은 텍스트여야 합니다
 @msg	allowContinue must be true or false	allowContinue의 값은 true 또는 false여야 합니다
 @msg	Batch cannot play an action with a stop	일괄 처리에서는 중지가 있는 액션을 재생할 수 없습니다
+	Insert Menu Item…	메뉴 항목 삽입…
+	Insert Menu Item	메뉴 항목 삽입
+	Menu Item:	메뉴 항목:
+	No menu item matches.	일치하는 메뉴 항목이 없습니다.
+	Several menu items match. Choose one from the list.	여러 메뉴 항목이 일치합니다. 목록에서 하나를 선택하세요.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	대화 상자를 여는 항목과 파일, 윈도우, 도움말 메뉴의 항목은 표시되지 않습니다.
+@msg	command must be text	command의 값은 텍스트여야 합니다
+@msg	no menu item that can be inserted runs this command	이 명령을 실행하는 삽입 가능한 메뉴 항목이 없습니다
+@msg	the action already has 10,000 steps	액션에 이미 단계가 10,000개 있습니다
+@msg	the action set would be larger than 8 MiB	액션 세트가 8 MiB를 넘게 됩니다
 	Playback Options	재생 옵션
 	Accelerated	가속
 	Step by Step	단계별
@@ -5990,9 +6066,12 @@ anchor	Points:	포인트:
 @msg	{label} must be a number	{label}은(는) 숫자여야 합니다
 @msg	{label} must be a number of at least 0.1	{label}은(는) 0.1 이상의 숫자여야 합니다
 	Advanced Character Formats	고급 문자 형식
+	Basic Paragraph Formats	기본 단락 형식
+	Composition	조판
 	Horizontal Scale	가로 비율
 	Vertical Scale	세로 비율
 @msg	{label} must be a number from {min} to {max}	{label}은(는) {min}에서 {max} 사이의 숫자여야 합니다
+@msg	{label} must be a whole number from {min} to {max}	{label}은(는) {min}에서 {max} 사이의 정수여야 합니다
 	Character Color	문자 색상
 	OpenType Features	OpenType 기능
 	Stylistic Sets	스타일 세트
@@ -6377,6 +6456,8 @@ breakText	Glyphs	글리프
 
 # Align to Pixel Grid
 	Align to Pixel Grid	픽셀 격자에 정렬
+	Align New Objects to Pixel Grid	새 개체를 픽셀 격자에 정렬
+	Not Aligned to Pixel Grid	픽셀 격자에 정렬되지 않음
 @msg	only paths and compound paths can be aligned to the pixel grid	패스와 컴파운드 패스만 픽셀 격자에 정렬할 수 있습니다
 @msg	side is left or right, not `{s}`	side는 left 또는 right입니다(`{s}` 아님)
 	Ignore All	모두 무시

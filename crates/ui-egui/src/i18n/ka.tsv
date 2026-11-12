@@ -117,6 +117,7 @@
 	PDF Presets…	PDF-ის პრესეტები…
 	Perspective Grid Presets…	პერსპექტივის ბადის პრესეტები…
 	Color Settings…	ფერის პარამეტრები…
+	Assign Profile	პროფილის მინიჭება
 	Assign Profile…	პროფილის მინიჭება…
 	Keyboard Shortcuts…	კლავიატურის მალსახმობები…
 	Preferences…	პარამეტრები…
@@ -161,6 +162,15 @@
 	Expand…	გაშლა…
 	Expand Appearance	იერსახის გაშლა
 	Crop Image	გამოსახულების ჩამოჭრა
+	Image Tools	გამოსახულების ხელსაწყოები
+	Remove Background…	ფონის მოშორება…
+	Remove Background	ფონის მოშორება
+	Background	ფონი
+	Edge Color	კიდის ფერი
+	Picked Colors	არჩეული ფერები
+	Corner Color	კუთხეების ფერი
+	Contiguous	მომიჯნავე
+	Each Channel	თითოეული არხი
 	Mask	ნიღაბი
 	Rasterize…	რასტრირება…
 	Create Gradient Mesh…	გრადიენტული ბადის შექმნა…
@@ -333,6 +343,9 @@
 	Create Outlines	კონტურებად გარდაქმნა
 	Optical Margin Alignment	ოპტიკური არშიის სწორება
 	Dynamic Text	დინამიკური ტექსტი
+	Dynamic Text Presets	დინამიკური ტექსტის წინასწარი პარამეტრები
+	Arch	თაღი
+@msg	select point type or type on a path	აირჩიეთ წერტილოვანი ტექსტი ან ტრაექტორიაზე ტექსტი
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	დაკავშირებულ ტექსტში ტრაექტორიაზე ტექსტი ვერ გამოიყენებს დინამიკურ ტექსტს: {frames}
 	Fill with Placeholder Text	შემავსებელი ტექსტით შევსება
 	Insert Inline Symbol	ჩადგმული სიმბოლოს ჩასმა
@@ -689,6 +702,15 @@
 	Stun Pulse	დაბნეულობა
 	Stealth Fade	შენიღბვა
 	Shield Buff	ფარი
+	Textures	ტექსტურები
+	Fine Grain	წვრილი მარცვალი
+	Canvas Weave	ტილოს ქსოვილი
+	Burlap Sack	ჯუთის ტომარა
+	Cracked Glaze	დამსკდარი მინანქარი
+	Mosaic Floor	მოზაიკის იატაკი
+	Quilted Squares	ქვილთის კვადრატები
+	Leaded Glass	ტყვიის მინა
+	Damp Paper	ნესტიანი ქაღალდი
 	Outlines and Rules	კონტურები და ხაზები
 	Hand-Drawn	ხელით დახატული
 	Gradient Finishes	გრადიენტული ზედაპირები
@@ -767,6 +789,13 @@
 	Dock Panel	პანელის მიმაგრება
 	Dock to Top	ზემოთ მიმაგრება
 	Dock to Bottom	ქვემოთ მიმაგრება
+	Control Bar Options	მართვის ზოლის პარამეტრები
+	Tool Options	ხელსაწყოს პარამეტრები
+	Object Options	ობიექტის პარამეტრები
+	Image Options	გამოსახულების პარამეტრები
+	Vertical Alignment	ვერტიკალური სწორება
+	Align and Distribute	სწორება და განაწილება
+	Document Options	დოკუმენტის პარამეტრები
 	Dock Control Bar	მართვის ზოლის მიმაგრება
 	Float Tool Group	მცურავი ხელსაწყოთა ჯგუფი
 	Services	სერვისები
@@ -1041,6 +1070,8 @@ lighting	Light	სინათლე
 	Toolbar: Single/Double Column	ხელსაწყოთა ზოლი: ერთი/ორი სვეტი
 	Toolbar: Add Tool	ხელსაწყოთა ზოლი: ხელსაწყოს დამატება
 	Toolbar: Remove Tool	ხელსაწყოთა ზოლი: ხელსაწყოს ამოშლა
+	Add Tool…	ხელსაწყოს დამატება…
+	Remove Tool	ხელსაწყოს ამოშლა
 	Toolbar: Reset	ხელსაწყოთა ზოლი: ჩამოყრა
 	Two Point Perspective Preset 1	ორწერტილიანი პერსპექტივის პრესეტი 1
 	Two Point Perspective Preset 2	ორწერტილიანი პერსპექტივის პრესეტი 2
@@ -1396,6 +1427,7 @@ digits	Malayalam	მალაიალამური
 	Roman Baseline	ლათინური საბაზისო ხაზი
 	Select a text object to edit its character attributes.	სიმბოლოების ატრიბუტების რედაქტირებისთვის მონიშნეთ ტექსტური ობიექტი.
 	Show Options	პარამეტრების ჩვენება
+	Show Recent Colors	ბოლოდროინდელი ფერების ჩვენება
 	Small Caps	პატარა მთავრული
 	Small Caps (on the roadmap)	პატარა მთავრული (სამომავლო გეგმაშია)
 	Standard Vertical Roman Alignment	სტანდარტული ვერტიკალური ლათინური სწორება
@@ -1423,6 +1455,8 @@ digits	Malayalam	მალაიალამური
 	Scale at Center	ცენტრიდან მასშტაბირება
 	Up/Down:	ზემოთ/ქვემოთ:
 	Left/Right:	მარცხნივ/მარჯვნივ:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko ზემოთ/ქვემოთ
+	Tate-chu-yoko Left/Right	Tate-chu-yoko მარცხნივ/მარჯვნივ
 	Underline	ხაზგასმული
 	Vertical Scale %	ვერტიკალური მასშტაბი %
 	Axis	ღერძი
@@ -1525,6 +1559,8 @@ digits	Malayalam	მალაიალამური
 	No gradient swatches	გრადიენტის ნიმუშები არ არის
 	Points: clicks add free points	წერტილები: დაწკაპუნებები ამატებს თავისუფალ წერტილებს
 	Radial Gradient	რადიალური გრადიენტი
+	Conic Gradient	კონუსური გრადიენტი
+	Diamond Gradient	რომბული გრადიენტი
 	Reset to White, Black	თეთრზე და შავზე დაბრუნება
 	Reverse Gradient	გრადიენტის შებრუნება
 	Gradient Presets	გრადიენტის პრესეტები
@@ -1782,6 +1818,7 @@ digits	Malayalam	მალაიალამური
 	Simulate Paper	ქაღალდის იმიტაცია
 	Use Black Point Compensation	შავი წერტილის კომპენსაციის გამოყენება
 	Working CMYK (don't tag)	სამუშაო CMYK (ტეგის გარეშე)
+	Working RGB (don't tag)	სამუშაო RGB (ტეგის გარეშე)
 	{name} (spot)	{name} (სპოტ)
 	Add to Profiles…	პროფილებში დამატება…
 	Align Stroke to Center	კონტურის ცენტრზე სწორება
@@ -3986,6 +4023,8 @@ font-technology	Variable	ცვლადი
 @msg	`groupColors` must be an array	`groupColors` უნდა იყოს მასივი
 @msg	`library` is a library id or name (see {list})	`library` არის ბიბლიოთეკის id ან სახელი (იხ. {list})
 @msg	`mode` applies to freeform gradients	`mode` ეხება თავისუფალი ფორმის გრადიენტებს
+@msg	a negative `aspect` applies to conic gradients	უარყოფითი `aspect` ეხება კონუსურ გრადიენტებს
+@msg	`focal` applies to radial gradients	`focal` ეხება რადიალურ გრადიენტებს
 @msg	`preserve` must be an object	`preserve` უნდა იყოს ობიექტი
 @msg	`globalAdjust` must be an object	`globalAdjust` უნდა იყოს ობიექტი
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` უნდა იყოს 1, 3 ან 5
@@ -4002,6 +4041,7 @@ font-technology	Variable	ცვლადი
 @msg	`{key}` must be a number, not {v}	`{key}` უნდა იყოს რიცხვი და არა {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} უნდა იყოს Unix-დრო წამებში (მთელი რიცხვი) ან null
 @msg	`{key}` must be a string	`{key}` უნდა იყოს სტრიქონი
+@msg	`{key}` must be a profile name or null	`{key}` უნდა იყოს პროფილის სახელი ან null
 @msg	`{key}` must be a whole number	`{key}` უნდა იყოს მთელი რიცხვი
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` უნდა იყოს მთელი რიცხვი {min}-დან {max}-მდე (მიღებულია {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` უნდა იყოს {min}-სა და {max}-ს შორის (მიღებულია {x})
@@ -4142,6 +4182,7 @@ font-technology	Variable	ცვლადი
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	სამუშაო დაფა {n}-ის გვერდი არის {size}, რაც აღემატება PDF-ის გვერდის ლიმიტს 14 400 pt (200 in): ის იწერება UserUnit {unit}-ით, ამიტომ აპები, რომლებიც UserUnit-ს უგულებელყოფენ, მას ამდენჯერ პატარას აჩვენებენ
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	სამუშაო დაფა {n}-ის გვერდი არის {size}, რაც აღემატება PDF-ის გვერდის ლიმიტს 14 400 pt (200 in): {label} გვერდები იწერება UserUnit-ის გარეშე, პუნქტებში, და აპები, რომლებიც ლიმიტს იცავენ, გვერდს 200 in-ზე ჭრიან
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5-ს არ აქვს UserUnit, რომელიც 14 400 pt-ზე (200 in) გრძელ გვერდს ზომის შესანარჩუნებლად სჭირდება: ფაილი იწერება როგორც PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4-ს არ აქვს UserUnit, რომელიც 14 400 pt-ზე (200 in) გრძელ გვერდს PDF/A-2-ის 14 400 ერთეულიანი გვერდის ზღვარში დასარჩენად სჭირდება: ფაილი იწერება როგორც PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	სამუშაო დაფა {n}-ის გვერდი არის {size}, ძალიან გრძელი და ვიწრო PDF-ის 3-დან 14 400 ერთეულამდე გვერდის მხარეებისთვის: ის იწერება UserUnit {unit}-ით, რომელიც მოკლე მხარეს 3 ერთეულზე ან მეტზე ინარჩუნებს, ხოლო ზღვრის დამცველი აპები გრძელ მხარეს 14 400 ერთეულამდე ჭრიან
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} ფაილები ინახავს ნამდვილ რიცხვებს {max}-მდე, სამუშაო დაფა {n}-ის {side} pt სიგრძის გვერდს კი უფრო დიდი სჭირდება: აირჩიეთ PDF 1.6 ან უფრო ახალი PDF/X სტანდარტის გარეშე, ან უფრო პატარა სამუშაო დაფა
 @msg	invalid image data for `{0}`	არასწორი გამოსახულების მონაცემები `{0}`-სთვის
@@ -4281,6 +4322,7 @@ font-technology	Variable	ცვლადი
 @msg	not a stored central record	ეს არ არის შენახული ცენტრალური ჩანაწერი
 @msg	not a valid plug-in module: {0}	ეს არ არის პლაგინის სწორი მოდული: {0}
 @msg	not an EMF or WMF file	ეს არ არის EMF ან WMF ფაილი
+@msg	not an HP-GL file	ეს არ არის HP-GL ფაილი
 @msg	not found	ვერ მოიძებნა
 @msg	not in pattern editing mode	პატერნის რედაქტირების რეჟიმი არ არის ჩართული
 @msg	finish editing the pattern first	ჯერ დაასრულეთ პატერნის რედაქტირება
@@ -4348,6 +4390,14 @@ font-technology	Variable	ცვლადი
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	ეს ვექტორიზაცია {max}-ზე მეტ საყრდენ წერტილს შექმნიდა, რასაც დოკუმენტი შეუფერხებლად ვერ აჩვენებს: გაზარდეთ ხმაური, შეამცირეთ ტრაექტორიები ან ფერები, ან აირჩიეთ ნაკლები სიზუსტის პრესეტი
 @msg	select an envelope	მონიშნეთ გარსი
 @msg	select an image	მონიშნეთ გამოსახულება
+@msg	`background` must be edges, corners or colors	`background` უნდა იყოს edges, corners ან colors
+@msg	`match` must be distance or channels	`match` უნდა იყოს distance ან channels
+@msg	`{key}` must be from 0 to 100	`{key}` უნდა იყოს 0-დან 100-მდე
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` უნდა შეიცავდეს 1-დან 16-მდე ფერს, თითოეულს თექვსმეტობით ფორმატში (#rrggbb ან #rgb) ან როგორც black, white, red, green ან blue
+@msg	the linked image shows its preview: embed or relink it first	დაკავშირებული გამოსახულება გადახედვას აჩვენებს: ჯერ ჩააშენეთ ან ხელახლა მიაბით
+@msg	a CMYK image has no transparency to set	CMYK გამოსახულებას არ აქვს დასაყენებელი გამჭვირვალობა
+@msg	every pixel matches the background: no image would be left	ყველა პიქსელი ემთხვევა ფონს: გამოსახულება აღარ დარჩებოდა
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} პიქსელის გამოსახულება შესაცვლელად ზედმეტად დიდია
 @msg	select an object in perspective	მონიშნეთ ობიექტი პერსპექტივაში
 @msg	select artwork (or a colour group) to recolor	მონიშნეთ ხელახლა შესაფერადებელი ნახატი (ან ფერთა ჯგუფი)
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	ხელახლა შეფერადება დასრულდა; უცვლელი დარჩა: {locked} და {hidden}
@@ -4451,7 +4501,7 @@ font-technology	Variable	ცვლადი
 @msg	unknown format	უცნობი ფორმატი
 @msg	unknown format `{f}` (Save writes {_1})	უცნობი ფორმატი `{f}` (შენახვა წერს: {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	უცნობი თავისუფალი რეჟიმი `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	უცნობი გრადიენტის სახე `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	უცნობი გრადიენტის სახე `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	უცნობი გამოკვეთა `{h}`
 @msg	unknown option `{path}.{k}`	უცნობი პარამეტრი `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	უცნობი ზედდაბეჭდვა `{o}` (preserve, simulate ან discard)
@@ -4662,7 +4712,13 @@ font-technology	Variable	ცვლადი
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC ან HEIF ფაილი შეიცავს გამოსახულების ტიპს, რომლის წაკითხვაც შეუძლებელია
 @msg	HEIC and HEIF images can't be opened in this build	ამ ვერსიაში HEIC და HEIF გამოსახულებების გახსნა შეუძლებელია
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD გამოსახულება ზედმეტად დიდია წასაკითხად ({_1} × {_2} პიქსელი)
-@msg	zipped 32-bit PSD image data with prediction can't be read	zip-ით შეკუმშული 32-ბიტიანი PSD გამოსახულების მონაცემების წაკითხვა პროგნოზირებით ვერ ხერხდება
+@msg	zipped 1-bit PSD image data with prediction can't be read	zip-ით შეკუმშული 1-ბიტიანი PSD გამოსახულების მონაცემების წაკითხვა პროგნოზირებით ვერ ხერხდება
+@msg	the PSD file's layer data uses an unknown compression ({m})	PSD ფაილის შრეების მონაცემები უცნობ შეკუმშვას იყენებს ({m})
+@msg	the PSD file's layer records are damaged	PSD ფაილის შრეების ჩანაწერები დაზიანებულია
+@msg	the PSD file's layer groups are nested too deeply	PSD ფაილის შრეების ჯგუფები ზედმეტად ღრმადაა ჩადგმული
+@msg	a layer of the PSD file is too large to read	PSD ფაილის შრე ზედმეტად დიდია წასაკითხად
+@msg	the PSD file's layers take more memory to read than allowed	PSD ფაილის შრეების წასაკითხად დაშვებულზე მეტი მეხსიერებაა საჭირო
+@msg	the layers can't be read ({e}): the file opened as its merged image	შრეების წაკითხვა ვერ ხერხდება ({e}): ფაილი გაიხსნა როგორც მისი გაერთიანებული გამოსახულება
 @msg	{depth}-bit PSD files in this colour mode can't be read	ამ ფერის რეჟიმში {depth}-ბიტიანი PSD ფაილების წაკითხვა ვერ ხერხდება
 @msg	the PSD file is cut short	PSD ფაილი შეკვეცილია
 @msg	the PSD file's header is damaged	PSD ფაილის სათაური დაზიანებულია
@@ -5275,6 +5331,11 @@ imageTrace	Outline	კონტური
 	In the File	ფაილში
 	Keys	კლავიშები
 	Light behind the object	სინათლე ობიექტის უკან
+	Shadows	ჩრდილები
+	Distance from Object	მანძილი ობიექტიდან
+	Shadow Bounds	ჩრდილის საზღვრები
+	Behind Object	ობიექტის უკან
+	Below Object	ობიექტის ქვეშ
 	3D Lighting Preset	3D განათების წინასწარი პარამეტრი
 	Standard	სტანდარტული
 	Diffuse	დიფუზური
@@ -5441,7 +5502,7 @@ imageTrace	Outline	კონტური
 @msg	span must be "object" or "selection", got {v}	span უნდა იყოს "object" ან "selection", მიღებულია {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" ათავსებს `gradient`-ს და არა ფერის ნიმუშს
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" ათავსებს გრადიენტს: მიუთითეთ `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" ათავსებს წრფივ ან რადიალურ გრადიენტს და არა თავისუფალი ფორმისას
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" ათავსებს წრფივ, რადიალურ, კონუსურ ან რომბულ გრადიენტს და არა თავისუფალი ფორმისას
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" თავად ათავსებს გრადიენტს: გამოტოვეთ `start` და `end` (ისინი მას უკვე დოკუმენტის კოორდინატებში ათავსებენ)
 	Make Image Dynamic	გამოსახულების დინამიკურად ქცევა
 	Import Data Sets…	მონაცემთა ნაკრებების იმპორტი…
@@ -6014,6 +6075,11 @@ axis	Y Axis	Y ღერძი
 @msg	`inputs` needs the permission `doc.read`	`inputs`-ს სჭირდება ნებართვა `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	მეხსიერების ბიუჯეტი (ობიექტს {_1} სჭირდება შეყვანის {size} ბაიტი, დარჩენილია {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	ობიექტების ბიუჯეტი ({MAX_OBJECTS}-ზე მეტი მხოლოდ წასაკითხი ობიექტი)
+@msg	instruction budget	ინსტრუქციების ბიუჯეტი
+@msg	time budget	დროის ბიუჯეტი
+@msg	memory budget (the selection is too large to hand over)	მეხსიერების ბიუჯეტი (მონიშნული ზედმეტად დიდია გადასაცემად)
+@msg	output size ({what} is {len} bytes, limit {max})	გამოტანის ზომა ({what}: {len} ბაიტი, ლიმიტი {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	პლაგინის ნებართვის წაშლა პლაგინების საცავიდან შეუძლებელია
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	ნებართვა `{shown}` დაჯავშნილია პლაგინების მომავალი API-სთვის; ეს ჰოსტი მას არ გასცემს
 @msg	unknown permission `{shown}`	უცნობი ნებართვა `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	„{name}“ ითხოვს ნებართვებს {asked}: ისინი დესკტოპის აპში ადამიანმა უნდა დაამტკიცოს, ან გადაეცით `grant` --allow-plugin-grants-ით გაშვებულ სესიაში
@@ -6050,6 +6116,16 @@ axis	Y Axis	Y ღერძი
 @msg	message must be text	message უნდა იყოს ტექსტი
 @msg	allowContinue must be true or false	allowContinue უნდა იყოს true ან false
 @msg	Batch cannot play an action with a stop	პაკეტურ დამუშავებას არ შეუძლია გაჩერების მქონე მოქმედების შესრულება
+	Insert Menu Item…	მენიუს ელემენტის ჩასმა…
+	Insert Menu Item	მენიუს ელემენტის ჩასმა
+	Menu Item:	მენიუს ელემენტი:
+	No menu item matches.	მენიუს არცერთი ელემენტი არ ემთხვევა.
+	Several menu items match. Choose one from the list.	ემთხვევა მენიუს რამდენიმე ელემენტი. აირჩიეთ ერთი სიიდან.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	დიალოგის გამხსნელი ელემენტები და მენიუების „ფაილი“, „ფანჯარა“ და „დახმარება“ ელემენტები სიაში არ არის.
+@msg	command must be text	command უნდა იყოს ტექსტი
+@msg	no menu item that can be inserted runs this command	ჩასმადი მენიუს არცერთი ელემენტი არ უშვებს ამ ბრძანებას
+@msg	the action already has 10,000 steps	მოქმედებას უკვე 10 000 ნაბიჯი აქვს
+@msg	the action set would be larger than 8 MiB	მოქმედებების ნაკრები 8 MiB-ზე დიდი გახდებოდა
 	Playback Options	შესრულების პარამეტრები
 	Accelerated	დაჩქარებული
 	Step by Step	ნაბიჯ-ნაბიჯ
@@ -6435,9 +6511,12 @@ anchor	Points:	წერტილები:
 @msg	{label} must be a number	{label} უნდა იყოს რიცხვი
 @msg	{label} must be a number of at least 0.1	{label} უნდა იყოს მინიმუმ 0,1
 	Advanced Character Formats	სიმბოლოს დამატებითი ფორმატები
+	Basic Paragraph Formats	აბზაცის ძირითადი ფორმატები
+	Composition	კომპოზიცია
 	Horizontal Scale	ჰორიზონტალური მასშტაბი
 	Vertical Scale	ვერტიკალური მასშტაბი
 @msg	{label} must be a number from {min} to {max}	{label} უნდა იყოს რიცხვი {min}-დან {max}-მდე
+@msg	{label} must be a whole number from {min} to {max}	{label} უნდა იყოს მთელი რიცხვი {min}-დან {max}-მდე
 	Character Color	სიმბოლოს ფერი
 	OpenType Features	OpenType შესაძლებლობები
 	Stylistic Sets	სტილისტური ნაკრებები
@@ -6904,6 +6983,8 @@ font-script	Japanese	იაპონური
 
 # Align to Pixel Grid
 	Align to Pixel Grid	პიქსელურ ბადეზე გასწორება
+	Align New Objects to Pixel Grid	ახალი ობიექტების პიქსელურ ბადეზე გასწორება
+	Not Aligned to Pixel Grid	პიქსელურ ბადეზე გაუსწორებელი
 @msg	only paths and compound paths can be aligned to the pixel grid	პიქსელურ ბადეზე მხოლოდ ტრაექტორიების და შედგენილი ტრაექტორიების გასწორებაა შესაძლებელი
 @msg	side is left or right, not `{s}`	side არის left ან right და არა `{s}`
 	Ignore All	ყველას იგნორირება

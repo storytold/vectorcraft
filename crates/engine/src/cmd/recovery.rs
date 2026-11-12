@@ -111,8 +111,13 @@ pub trait RecoveryStore: Send + Sync {
     fn announced(&self, _area: &str) -> Option<bool> {
         None
     }
-    /// Tidy away area `area` once it holds no copies and nobody holds it (its lock file and folder).
+    /// Tidy away area `area` once it holds no copies (its lock file and folder). The caller holds
+    /// the area until this returns.
     fn remove_area(&self, _area: &str) {}
+    /// Remove area `area`'s folder if it is empty, after [`RecoveryStore::remove_area`] and after the
+    /// caller let the area go. On some file systems a file that is open is removed only when it is
+    /// closed, so `remove_area` leaves the folder there while the area is held.
+    fn remove_empty_area(&self, _area: &str) {}
     /// The clock heartbeats are judged by (Unix seconds; `None`: none, so no area counts as gone).
     fn now(&self) -> Option<i64> {
         vectorcraft_doc::metadata::now_unix()
@@ -295,6 +300,73 @@ impl FolderStore {
             .filter(|n| Self::plain(n))
             .collect())
     }
+
+    /// Lock area folder `dir`, which was just made. Another app tidies an empty area away
+    /// (`tidy`) by removing its lock file and folder while it holds the lock. So when the folder
+    /// or the lock file is gone by now, or the lock taken is on a lock file the folder no longer
+    /// has, that app had the area: it is [`Lock::Busy`], and the caller tries another one.
+    pub(crate) fn lock_area(dir: &std::path::Path) -> std::result::Result<Lock, String> {
+        if let Err(e) = Self::own_area(dir) {
+            let gone = std::fs::symlink_metadata(dir).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound);
+            return if gone { Ok(Lock::Busy) } else { Err(e) };
+        }
+        let path = dir.join(LOCK_FILE);
+        match std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(&path) {
+            Ok(file) => Self::take(file, &path),
+            Err(e) => Self::open_failed(e, &path),
+        }
+    }
+
+    /// Opening lock file `path` failed with `e`. When the folder is gone by now, another app had the
+    /// area: it is [`Lock::Busy`]. So it is when the lock file is there but can't be opened: some
+    /// file systems keep a removed file that another app still has open until that app closes it,
+    /// and refuse to open it meanwhile. A lock file that can't be made is an error.
+    pub(crate) fn open_failed(e: std::io::Error, path: &std::path::Path) -> std::result::Result<Lock, String> {
+        match e.kind() {
+            std::io::ErrorKind::NotFound => Ok(Lock::Busy),
+            std::io::ErrorKind::PermissionDenied if std::fs::symlink_metadata(path).is_ok() => Ok(Lock::Busy),
+            _ => Err(format!("{}: {e}", path.display())),
+        }
+    }
+
+    /// Lock `file`, opened as lock file `path`. The lock holds the area only while `path` still
+    /// names that file.
+    pub(crate) fn take(file: std::fs::File, path: &std::path::Path) -> std::result::Result<Lock, String> {
+        match file.try_lock() {
+            Ok(()) if Self::still_named(&file, path) => Ok(Lock::Held(Box::new(file))),
+            Ok(()) | Err(std::fs::TryLockError::WouldBlock) => Ok(Lock::Busy),
+            // The lock file was removed meanwhile, and locking it failed instead.
+            Err(std::fs::TryLockError::Error(_)) if !Self::still_named(&file, path) => Ok(Lock::Busy),
+            Err(std::fs::TryLockError::Error(e)) => Err(format!("{}: {e}", path.display())),
+        }
+    }
+
+    /// Does `path` still name `file`? On Unix the two must be the same file (device and inode); on
+    /// Windows they must be the same file (volume serial number and file index); elsewhere `path`
+    /// must exist. When either file can't be read, it does not.
+    fn still_named(file: &std::fs::File, path: &std::path::Path) -> bool {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt as _;
+            match (file.metadata(), std::fs::symlink_metadata(path)) {
+                (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
+                _ => false,
+            }
+        }
+        #[cfg(windows)]
+        {
+            let opened = file.try_clone().and_then(same_file::Handle::from_file);
+            match (opened, same_file::Handle::from_path(path)) {
+                (Ok(a), Ok(b)) => a == b,
+                _ => false,
+            }
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = file;
+            std::fs::symlink_metadata(path).is_ok()
+        }
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -342,26 +414,20 @@ impl RecoveryStore for FolderStore {
     fn lock(&self, area: &str) -> std::result::Result<Lock, String> {
         let dir = self.area(area)?;
         Self::create_area(&dir)?;
-        Self::own_area(&dir)?;
-        let path = dir.join(LOCK_FILE);
-        let file = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(&path)
-            .map_err(|e| format!("{}: {e}", path.display()))?;
-        match file.try_lock() {
-            Ok(()) => Ok(Lock::Held(Box::new(file))),
-            Err(std::fs::TryLockError::WouldBlock) => Ok(Lock::Busy),
-            Err(std::fs::TryLockError::Error(e)) => Err(format!("{}: {e}", path.display())),
-        }
+        Self::lock_area(&dir)
     }
     fn remove_area(&self, area: &str) {
         // Best effort: whatever is left is tidied at a later launch. A folder that isn't empty
-        // (copies came back meanwhile) stays.
+        // (copies came back meanwhile) stays. The caller still holds the lock here.
         if let Ok(dir) = self.area(area) {
             let _ = std::fs::remove_file(dir.join(LOCK_FILE));
+            let _ = std::fs::remove_dir(&dir);
+        }
+    }
+    fn remove_empty_area(&self, area: &str) {
+        // Best effort, as above. An app that made the folder again meanwhile and has not locked it
+        // yet finds it gone and takes another area (`lock_area`); one that has keeps it.
+        if let Ok(dir) = self.area(area) {
             let _ = std::fs::remove_dir(&dir);
         }
     }
@@ -527,8 +593,10 @@ pub fn release(s: &mut Session) {
     for name in store.list().unwrap_or_default().iter().filter(|n| mine(n)) {
         let _ = store.remove(name);
     }
-    drop(hold);
+    // Held until it is gone, as in `tidy`.
     store.remove_area(&area);
+    drop(hold);
+    store.remove_empty_area(&area);
 }
 
 /// Let go of this session's area but leave its copies, as a crash would, so the next app started
@@ -967,7 +1035,9 @@ fn owner(s: &mut Session, store: &dyn RecoveryStore, area: &str, hold: &mut Vec<
     }
 }
 
-/// Tidy away a gone app's area `area` once no copies are left in it, then let it go (`hold`).
+/// Tidy away a gone app's area `area` once no copies are left in it, then let it go (`hold`). The
+/// area is removed while it is still held, so an app taking a new area of that name meanwhile
+/// finds it held or gone and takes the next name.
 fn tidy(store: &dyn RecoveryStore, area: &str, hold: Vec<Hold>) {
     let names = store.list().unwrap_or_default();
     let mine: Vec<&String> = names.iter().filter(|n| n.split_once('/').is_some_and(|(a, _)| a == area)).collect();
@@ -977,8 +1047,9 @@ fn tidy(store: &dyn RecoveryStore, area: &str, hold: Vec<Hold>) {
     for n in mine {
         let _ = store.remove(n);
     }
-    drop(hold);
     store.remove_area(area);
+    drop(hold);
+    store.remove_empty_area(area);
 }
 
 /// The copies of documents open now in this session.

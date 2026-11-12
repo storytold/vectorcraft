@@ -232,16 +232,14 @@ fn line_outline_uses_the_profile_dashes_or_a_plain_stroke() {
     let plain = line_outline(&l, &stroke(10.0, |_| {}), 10.0, 1e-3);
     assert!(near(plain.area().abs(), 1000.0, 1e-6));
     let lens = line_outline(&l, &stroke(10.0, |s| s.profile = Some(WidthProfile::lens())), 10.0, 1e-3);
-    // The lens swells on a cubic, flat at the middle: 7/12 of the full-width band (#5714).
-    assert!(near(lens.area().abs(), 1000.0 * 7.0 / 12.0, 0.05));
-    // Each dash takes its widths from where it sits along the lens (0 → 1 → 0). Half of the lens
-    // rises as w(u) = u + u² − u³ (u from 0 to 1 across that half): the dash over 0..25 covers
-    // its first half, ∫₀^½ w = 29/192, the one over 50..75 the wider other half, 83/192.
+    // The lens is a parabola between its ends: 2/3 of the full-width band.
+    assert!(near(lens.area().abs(), 2000.0 / 3.0, 0.1));
+    // Each dash takes its widths from where it sits along the lens (0 → 1 → 0).
     let st = stroke(10.0, |s| {
         s.profile = Some(WidthProfile::lens());
         s.dash = Some(dashed(&[25.0, 25.0], 0.0));
     });
-    assert!(near(line_outline(&l, &st, 10.0, 1e-3).area().abs(), 500.0 * (29.0 + 83.0) / 192.0, 0.05));
+    assert!(near(line_outline(&l, &st, 10.0, 1e-3).area().abs(), 1000.0 / 3.0, 0.1));
     assert!(line_outline(&BezPath::new(), &st, 10.0, 1e-3).elements().is_empty());
 }
 

@@ -181,6 +181,18 @@ fn bar(hw: f64) -> f64 {
 /// Where the notch of the (open) arrow sits, as a fraction of the length.
 const NOTCH: f64 = 0.7;
 
+/// How far [`super::stroke_pieces`] trims the line under each end's head: the head's inset from
+/// the tip, along the path. Both are 0 without a head at that end, and in [`ArrowAlign::Extend`],
+/// where the stroke keeps its full length.
+pub(super) fn trims(st: &StrokeLayer) -> (f64, f64) {
+    if st.arrow_align != ArrowAlign::Tip {
+        return (0.0, 0.0);
+    }
+    let cap = cap_extent(st.cap, st.width);
+    let inset_of = |kind: &Option<Arrowhead>, end: bool| kind.as_ref().map_or(0.0, |k| inset(k, st.arrow_weight(end), cap));
+    (inset_of(&st.start_arrow, false), inset_of(&st.end_arrow, true))
+}
+
 /// Distance from the tip where the stroke ends, for a stroke whose cap reaches `cap` past its end.
 fn inset(kind: &Arrowhead, hw: f64, cap: f64) -> f64 {
     let l = len(hw);

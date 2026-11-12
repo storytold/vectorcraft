@@ -9,14 +9,18 @@
 //! a script's own method: a getter, a function, a date, a regular expression, an error, a boxed
 //! primitive, an array with properties besides its elements, an object whose prototype is not
 //! `Object.prototype`, a property that is not enumerable or any other object that is not plain
-//! data throws a `TypeError`, and so does an object that contains itself. A value nested deeper, with more entries or longer text than the
+//! data throws a `TypeError`, and so does an object that contains itself. A literal makes an
+//! extensible object whose properties are writable and configurable and an array whose `length`
+//! is writable, so a property that is not writable or not configurable, an object or array that is
+//! not extensible (after `Object.preventExtensions`, `Object.seal` or `Object.freeze`) and an
+//! array with a read-only `length` throw a `TypeError` too. A value nested deeper, with more entries or longer text than the
 //! realm's [`crate::DataLimits`] allow throws a `RangeError`. Every value written takes fuel.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::{Builder, arg, method};
-use crate::heap::{Class, NativeFn, ObjId, Prop, key};
+use crate::heap::{CONFIGURABLE, Class, NativeFn, ObjId, Object, Prop, WRITABLE, key};
 use crate::interp::{ErrorType, Interp, JsResult};
 use crate::value::{Value, array_index, index_key, number_to_str};
 use crate::{ScriptItem, bytecode::Code};
@@ -289,10 +293,14 @@ impl Source {
             Class::Ordinary => return Err(interp.type_error(NOT_PLAIN_OBJECT)),
             _ => None,
         };
+        let fixed = shape.as_ref().and(fixed_state(o));
         let Some(shape) = shape else {
             let what = format!("toSource: a {} cannot be written as source", interp.object(id)?.class.name());
             return Err(interp.type_error(&what));
         };
+        if let Some(what) = fixed {
+            return Err(interp.type_error(what));
+        }
         self.ancestors.push(id);
         let r = match shape {
             Err(length) => self.array(interp, id, length),
@@ -347,6 +355,23 @@ const NOT_PLAIN_ARRAY: &str =
     "toSource: an array with properties besides its elements, a property that is not enumerable or another prototype cannot be written as source";
 const NOT_PLAIN_OBJECT: &str =
     "toSource: an object with a property that is not enumerable, or whose prototype is not Object.prototype, cannot be written as source";
+const NOT_EXTENSIBLE: &str = "toSource: a non-extensible object cannot be written as source";
+const READ_ONLY_LENGTH: &str = "toSource: an array with a read-only length cannot be written as source";
+const FIXED_PROPERTY: &str = "toSource: a property that is not writable or configurable cannot be written as source";
+
+/// Why the literal for the array or plain object `o` would not make it again: `o` is not
+/// extensible, its `length` is read-only, or one of its data properties is not writable or not
+/// configurable. A literal makes each of these open.
+fn fixed_state(o: &Object) -> Option<&'static str> {
+    if !o.extensible {
+        return Some(NOT_EXTENSIBLE);
+    }
+    if matches!(o.class, Class::Array { length_writable: false, .. }) {
+        return Some(READ_ONLY_LENGTH);
+    }
+    let open = WRITABLE | CONFIGURABLE;
+    o.props.iter().any(|(_, p)| matches!(p, Prop::Data { flags, .. } if flags & open != open)).then_some(FIXED_PROPERTY)
+}
 
 /// The getter behind `item`; [`ScriptItem::Global`] is a value and has none.
 pub(crate) fn getter(item: ScriptItem) -> Option<(&'static str, NativeFn)> {

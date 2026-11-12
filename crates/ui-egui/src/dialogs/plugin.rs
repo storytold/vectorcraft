@@ -6,7 +6,10 @@
 //! declared parameter (fields named after them; `__plugin` is the plug-in id) with a live
 //! Preview, and OK keeps the run as one undo step (`plugin.run`). A filter without parameters runs
 //! at once. A heavy filter (its manifest's `budget`) has no Preview, since a run may take minutes:
-//! it runs in the background ([`crate::plugin_runs`]). A filter or live effect with commands of
+//! it runs in the background ([`crate::plugin_runs`]). A light filter that reports its progress
+//! (plug-in API level 2 with the `progress` permission) and calls no commands runs in the
+//! background too, with its progress and Cancel, when it runs at once or when OK runs it without a
+//! kept preview ([`in_background`]). A filter or live effect with commands of
 //! its own is a submenu named after it, holding its item and then its commands; a command with
 //! parameters opens the same dialog for them ([`open_command`]). Exporters are formats of File › Export ›
 //! Export As; one with parameters opens dialog `pluginExport` once the file is picked, and its
@@ -16,7 +19,9 @@
 //!
 //! Dialog `pluginInstall` asks a person to approve a plug-in's permissions or heavy budget. What it
 //! shows and installs is held by the app, not in its fields; a control request or synthetic input
-//! can't confirm it. Enter confirms it only when OK has the keyboard focus.
+//! can't confirm it. Enter confirms it only when OK has the keyboard focus. OK takes no click, Enter
+//! or Space until the question has been on screen in the focused window for [`APPROVAL_DELAY`], and
+//! that time starts over for every new question and whenever the window loses the focus.
 
 use std::sync::Arc;
 
@@ -200,12 +205,19 @@ fn params(d: &Dialog) -> Value {
     }
 }
 
-/// Runs filter `plugin` with `plugin.run`'s params `p`: at once, or in the background when it is
-/// heavy.
+/// Does filter `m` run in the background ([`crate::plugin_runs`]) rather than on the UI thread? A
+/// heavy one does, and so does a light one that reports its progress (the `progress` permission)
+/// unless it calls commands, which run only in the session.
+fn in_background(m: &Manifest) -> bool {
+    m.budget == Budget::Heavy || (m.permissions().contains(&permissions::Permission::Progress) && m.command_allowlist.is_empty())
+}
+
+/// Runs filter `plugin` with `plugin.run`'s params `p`: at once, or in the background
+/// ([`in_background`]).
 fn run(app: &mut VectorcraftApp, plugin: &Plugin, p: Value) -> Result<Value, String> {
-    match plugin.manifest().budget {
-        Budget::Light => app.run(CMD, p),
-        Budget::Heavy => crate::plugin_runs::start(app, p),
+    match in_background(plugin.manifest()) {
+        false => app.run(CMD, p),
+        true => crate::plugin_runs::start(app, p),
     }
 }
 
@@ -234,11 +246,20 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// OK: a filter keeps its previewed run as one undo step; a heavy one, which has no preview, starts
-/// in the background ([`run`]) and the dialog closes.
+/// OK: a filter keeps its previewed run as one undo step; a heavy one, which has no preview, and a
+/// light one that runs in the background ([`in_background`]) with Preview off or a failed preview,
+/// start in the background ([`run`]) and the dialog closes. A preview still shown when Preview was
+/// just turned off, or a preview that failed, is rolled back first.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let own_run = d.str("__command").is_empty();
+    let kept = |plugin: &Plugin| {
+        plugin.manifest().budget == Budget::Light && d.bool("preview") && app.session.in_interaction() && !d.fields.contains_key(form::REFUSED)
+    };
     match registry::get(&d.str("__plugin")) {
-        Some(plugin) if plugin.manifest().budget == Budget::Heavy => {
+        Some(plugin) if own_run && in_background(plugin.manifest()) && !kept(&plugin) => {
+            if d.fields.contains_key(form::PREVIEWED) && app.session.in_interaction() {
+                let _ = app.session.cancel_interaction();
+            }
             let r = run(app, &plugin, params(d));
             if r.is_ok() {
                 app.ui.dialog = None;
@@ -329,6 +350,81 @@ pub(crate) struct PendingInstall {
     pub params: Value,
     /// What OK approves: the module the question is about.
     pub approval: InstallApproval,
+    /// How long the question has been on screen; [`ask_install`] starts it over.
+    pub shown: Shown,
+}
+
+/// How long, in seconds, the approval's question stays on screen in the focused window, on every
+/// frame and unchanged, before its OK takes a click, Enter or Space.
+pub(crate) const APPROVAL_DELAY: f64 = 0.5;
+
+/// How long the approval's question has been on screen, from the frames that drew it.
+#[derive(Default)]
+pub(crate) struct Shown {
+    /// The time of the first frame of the current showing: drawn, visible, in the focused window,
+    /// right after a frame that drew it too. `None` while it isn't shown.
+    since: Option<f64>,
+    /// The pass number and time of the last frame that drew it.
+    pass: Option<u64>,
+    last: Option<f64>,
+    /// A pointer button, Enter or Space was down on a frame where OK was disabled, and they haven't
+    /// all been let go of since.
+    pressed_early: bool,
+    /// OK takes input: shown for [`APPROVAL_DELAY`], with no press from before that held.
+    ready: bool,
+}
+
+impl Shown {
+    /// Notes a frame that draws the question in `ui` → whether OK is enabled on it. The showing
+    /// starts over when the frame before didn't draw it, when time went back, when the window lost
+    /// the focus since the frame before, and on any frame that is a measuring pass, is invisible or
+    /// comes while the window doesn't have the focus.
+    fn drawn(&mut self, ui: &egui::Ui) -> bool {
+        let pass = ui.ctx().cumulative_pass_nr();
+        let (now, focused, left, pressed) = ui.input(|i| {
+            let left = i.events.iter().any(|e| matches!(e, egui::Event::WindowFocused(false)));
+            let pressed = i.pointer.any_pressed() || [egui::Key::Enter, egui::Key::Space].into_iter().any(|k| i.key_pressed(k));
+            (i.time, i.focused, left, pressed || Self::held(i))
+        });
+        let seen = focused && ui.is_visible() && !ui.is_sizing_pass() && now.is_finite();
+        let follows = self.pass.is_some_and(|p| p.checked_add(1) == Some(pass)) && self.last.is_some_and(|t| t <= now);
+        if !seen || !follows || left {
+            self.since = None;
+        }
+        if seen && self.since.is_none() {
+            self.since = Some(now);
+        }
+        (self.pass, self.last) = (Some(pass), Some(now));
+        let enabled = self.since.is_some_and(|s| now - s >= APPROVAL_DELAY);
+        if pressed && !enabled {
+            self.pressed_early = true;
+        }
+        self.ready = enabled && !self.pressed_early;
+        if let Some(s) = self.since.filter(|_| !enabled) {
+            ui.ctx().request_repaint_after_secs((s + APPROVAL_DELAY - now) as f32);
+        }
+        enabled
+    }
+
+    /// After the frame's OK: a press from before OK took input stops counting once every pointer
+    /// button, Enter and Space are up.
+    fn released(&mut self, ui: &egui::Ui) {
+        if !ui.input(Self::held) {
+            self.pressed_early = false;
+        }
+    }
+
+    /// Whether a pointer button, Enter or Space is down: what can click OK when it is let go of or
+    /// repeats.
+    fn held(i: &egui::InputState) -> bool {
+        i.pointer.any_down() || i.key_down(egui::Key::Enter) || i.key_down(egui::Key::Space)
+    }
+
+    /// Whether OK takes input: the question was shown for [`APPROVAL_DELAY`] on the last frame
+    /// that drew it.
+    pub(crate) fn ready(&self) -> bool {
+        self.ready
+    }
 }
 
 /// No OK in the shared footer: the OK in its body is a `Sense::click` button, which Enter clicks
@@ -342,15 +438,20 @@ pub(super) const INSTALL_SPEC: DialogSpec = DialogSpec {
     ..DialogSpec::FORM
 };
 
-/// Asks a person whether to install what `pending` describes. → `{pending}`.
-pub(crate) fn ask_install(app: &mut VectorcraftApp, pending: PendingInstall) -> Value {
+/// Asks a person whether to install what `pending` describes, its question not yet shown, even when
+/// it reads as the one it replaces. → `{pending}`.
+pub(crate) fn ask_install(app: &mut VectorcraftApp, mut pending: PendingInstall) -> Value {
+    pending.shown = Shown::default();
     app.pending_plugin_install = Some(pending);
     app.ui.dialog = Some(Dialog::new(INSTALL_KIND, json!({})));
     json!({ "pending": INSTALL_KIND })
 }
 
+/// The question, the lines under it, and OK, which is disabled until the question has been shown
+/// for [`APPROVAL_DELAY`] ([`Shown`]), and Cancel, which never waits.
 fn install_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, _: &mut Dialog) -> DialogAction {
-    let Some(pending) = app.pending_plugin_install.as_ref() else { return DialogAction::Cancel };
+    let Some(pending) = app.pending_plugin_install.as_mut() else { return DialogAction::Cancel };
+    let enabled = pending.shown.drawn(ui);
     ui.label(egui::RichText::new(&pending.message).strong());
     ui.add_space(8.0);
     ui.label(egui::RichText::new(&pending.detail).color(crate::theme::Tokens::get(ui.ctx()).text_dim));
@@ -358,9 +459,10 @@ fn install_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, _: &mut Dialog) -> 
     let mut action = DialogAction::None;
     let row = egui::vec2(ui.min_rect().width(), ui.spacing().interact_size.y);
     ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        if widgets::primary_button_enabled(ui, "OK", true).clicked() {
+        if widgets::primary_button_enabled(ui, "OK", enabled).clicked() && pending.shown.ready() {
             action = DialogAction::Confirm;
         }
+        pending.shown.released(ui);
         ui.add_space(8.0);
         if widgets::secondary_button(ui, "Cancel").clicked() {
             action = DialogAction::Cancel;
@@ -370,10 +472,14 @@ fn install_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, _: &mut Dialog) -> 
 }
 
 /// OK: installs the module the dialog showed, if a person pressed it; automation is refused and the
-/// dialog stays open.
+/// dialog stays open. Before the question has been shown for [`APPROVAL_DELAY`] it installs nothing
+/// and the dialog stays open. → `{pending}`.
 fn install_confirm(app: &mut VectorcraftApp, _: &Dialog) -> Result<Value, String> {
     if app.automation_is_acting() {
         return Err("Only the person at the keyboard can approve installing a plug-in".into());
+    }
+    if app.pending_plugin_install.as_ref().is_some_and(|p| !p.shown.ready()) {
+        return Ok(json!({ "pending": INSTALL_KIND }));
     }
     app.ui.dialog = None;
     let Some(pending) = app.pending_plugin_install.take() else { return Ok(Value::Null) };

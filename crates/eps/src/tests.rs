@@ -189,6 +189,61 @@ fn gradients_are_smooth_shadings_at_level_3_and_stepped_fills_at_level_2() {
     assert_eq!(dsc(&ps, "LanguageLevel").as_deref(), Some("2"));
 }
 
+/// PostScript has no conic shading: a conic is solid wedges about its center at both levels, each
+/// running on to the seam, and read back from the PostScript it looks as the canvas paints it.
+#[test]
+fn conic_gradients_are_solid_wedges_at_both_levels() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    for aspect in [1.0, -0.5] {
+        let mut g = GradientPaint::new(Gradient::new(GradientKind::Conic, stops.clone()));
+        g.geom = Some(vectorcraft_color::GradientGeom { start: Point::new(100.0, 70.0), end: Point::new(150.0, 70.0), aspect, focal: None });
+        let paint = Paint::Gradient(Box::new(g));
+        let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), paint, Paint::None, 0.0)]);
+        for o in [opts(&d), EpsOptions { level: Level::Two, ..opts(&d) }] {
+            let out = export(&d, &o, None, None).unwrap();
+            assert!(out.warnings.iter().any(|w| w.contains("conic gradients are written as solid wedges")), "{:?}", out.warnings);
+            let page = page_of(&d, &o);
+            assert!(!page.contains("shfill"), "no shading stands in");
+            assert_eq!(page.matches("closepath fill").count(), 360, "a wedge a degree");
+        }
+        let out = export(&d, &opts(&d), None, None).unwrap();
+        let back = import_with(&out.bytes, false).unwrap().document;
+        vectorcraft_testkit::raster::assert_similar(
+            &vectorcraft_testkit::raster::render_artboard(&d),
+            &vectorcraft_testkit::raster::render_artboard(&back),
+            8.0,
+            0.01,
+        );
+    }
+}
+
+/// PostScript has no diamond shading: a diamond is four axial shadings at Level 3 (stepped fills at
+/// Level 2), each clipped to a quadrant of its frame, and read back from the PostScript it looks
+/// as the canvas paints it, with no hairline between the quadrants.
+#[test]
+fn diamond_gradients_are_four_linear_gradients_clipped_to_quadrants() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Diamond, stops));
+    g.geom = Some(vectorcraft_color::GradientGeom { start: Point::new(100.0, 70.0), end: Point::new(140.0, 40.0), aspect: 0.6, focal: None });
+    let paint = Paint::Gradient(Box::new(g));
+    let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), paint, Paint::None, 0.0)]);
+    for (o, shadings) in [(opts(&d), 4), (EpsOptions { level: Level::Two, ..opts(&d) }, 0)] {
+        let out = export(&d, &o, None, None).unwrap();
+        assert!(out.warnings.iter().any(|w| w.contains("diamond gradients are written as four linear gradients")), "{:?}", out.warnings);
+        let page = page_of(&d, &o);
+        assert_eq!(page.matches("shfill").count(), shadings);
+        assert_eq!(page.matches("closepath clip newpath").count(), 4, "a clip a quadrant");
+    }
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let back = import_with(&out.bytes, false).unwrap().document;
+    vectorcraft_testkit::raster::assert_similar(
+        &vectorcraft_testkit::raster::render_artboard(&d),
+        &vectorcraft_testkit::raster::render_artboard(&back),
+        6.0,
+        0.01,
+    );
+}
+
 #[test]
 fn strokes_keep_their_caps_joins_and_dashes() {
     let d = doc_with(|d| {
