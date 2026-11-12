@@ -791,6 +791,14 @@ font-technology	Variable	可變
 	Disable Auto Add/Delete	停用自動增加/刪除
 	Disable Opacity Mask	停用不透明度遮色片
 	Discard	捨棄
+	Preserve	保留
+	TIFF (Black & White)	TIFF (黑白)
+	TIFF (8-bit Color)	TIFF (8 位元色彩)
+	High Resolution	高解析度
+	Medium Resolution	中解析度
+	Low Resolution	低解析度
+	Language Level 2	語言層級 2
+	Language Level 3	語言層級 3
 	Discard Empty Type	捨棄空白文字
 	Discard Recovered Documents	捨棄已復原的文件
 	Discard White Overprint in Output	輸出時捨棄白色疊印
@@ -1431,6 +1439,14 @@ file-filter	Templates	範本
 	Hair Space	極細空格
 	Hand Tool	手形工具
 	Hand-Drawn	手繪
+	Painted and Sketched	繪畫與素描
+	Washed Blue	水洗藍
+	Bristle Ochre	乾刷土黃
+	Pastel Heather	粉彩淡紫
+	Charcoal Shade	炭筆陰影
+	Ink Contour	墨線輪廓
+	Wet Ink	濕墨
+	Fine Pen	細筆
 	Handles	控制把手
 	Hard Light	實光
 	Hard Mix	實色混合
@@ -1894,6 +1910,7 @@ file-filter	Templates	範本
 @msg	`preserve` must be an object	`preserve` 必須是物件
 @msg	`globalAdjust` must be an object	`globalAdjust` 必須是物件
 @msg	`stops` must be an array	`stops` 必須是陣列
+@msg	`{key}` must be an array	`{key}` 必須是陣列
 @msg	`{k}` must be [x, y]	`{k}` 必須是 [x, y]
 @msg	a gradient needs at least two stops	漸層至少需要兩個色標
 @msg	give both `start` and `end` [x, y] (or neither)	請同時提供 `start` 和 `end` [x, y] (或兩者都不提供)
@@ -3345,6 +3362,7 @@ file-filter	Templates	範本
 	Options for Selection…	選取範圍的選項…
 	Options:	選項：
 	Options…	選項…
+	Organic Fades	自然漸隱
 	or more spaces with a tab	個以上的空格取代為定位字元
 	Order:	順序：
 	Ordinals	序數字
@@ -3539,6 +3557,7 @@ diagnostics	ui	介面
 	Presets:	預設集：
 	Press 	按下 
 	Preview	預覽
+	Preview:	預覽：
 	Preview All Layers	預覽所有圖層
 	Preview in Browser	在瀏覽器中預覽
 	Preview in Browser needs the desktop app (the web downloads files instead)	在瀏覽器中預覽需要桌面版應用程式 (網頁版會改為下載檔案)
@@ -3636,6 +3655,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Range:	範圍：
 	Raster Effects	點陣效果
 	Raster File Format:	點陣檔案格式：
+	Include Placed Images	包含置入的影像
+	Include Fill Hatches	包含填色的圖案填充
 	Raster Sample Size:	點陣取樣大小：
 	Raster/Vector Balance:	點陣／向量平衡：
 	Rasterize	點陣化
@@ -3817,6 +3838,10 @@ digits	Malayalam	馬來亞拉姆數字
 	Replace Font	取代字體
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	以其他檔案取代，或忽略：其影像會繼續顯示隨文件儲存的預覽。
 	Replace Spine	取代脊線
+	Create Spine	建立脊線
+	Create Spine:	建立脊線：
+	Always	一律
+	Never	永不
 	Replace Symbol	取代符號
 	Reset Transformation	重設變形
 	Replace With Font	取代為字體
@@ -5650,6 +5675,7 @@ lighting	Light	光源
 	Ruby	注音
 	Geometric Guides	幾何參考線
 	Geometric Patterns	幾何圖樣
+	Grit Textures	顆粒紋理
 	Ease In	緩入
 	Ease Out	緩出
 	Ease In Out	緩入緩出
@@ -5710,6 +5736,8 @@ axis	Y Axis	Y 軸
 	Version: {version}	版本：{version}
 	Install “{name}” in place of the plug-in with the same ID?	要安裝「{name}」來取代具有相同 ID 的增效模組嗎？
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	此檔案不是先前以此 ID 安裝的增效模組。它會取得為該 ID 保存的設定和快取。
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	自動化要求安裝此增效模組。若要安裝，請自行選擇「物件 › 增效模組 › 安裝增效模組…」。
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	自動化要求安裝此增效模組。若要安裝，請自行選擇「物件 › 增效模組 › 安裝增效模組…」。
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	「{name}」與 ID 為 {_1} 的增效模組是不同的模組，並會取得為其保存的設定和快取：請在使用者同意後以 `replace: true` 安裝
 	File SHA-256: {hash}	檔案 SHA-256：{hash}
 	Read the objects it is given	讀取交給它的物件
@@ -5772,6 +5800,12 @@ axis	Y Axis	Y 軸
 @msg	command {name}: `label` must be 1-64 printable characters	指令 {name}：`label` 必須是 1-64 個可列印字元
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	指令 {name}：請使用由 a-z 0-9 _ 組成、以字母開頭的 1-{MAX_COMMAND_ID} 個字元的 ID
 @msg	command {name}: {e}	指令 {name}：{e}
+@msg	manifest: {e}	資訊清單：{e}
+@msg	manifest: {e} at line {line} column {column}	資訊清單：{e}（第 {line} 行，第 {column} 欄）
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` 必須是指令清單，每個指令都有 `id` 和 `label`
+@msg	command {name} must be an object with an `id` and a `label`	指令 {name} 必須是包含 `id` 和 `label` 的物件
+@msg	missing field `{key}`	找不到欄位 `{key}`
+@msg	duplicate field `{key}`	欄位 `{key}` 重複
 @msg	only a filter or a live effect declares `commands`	只有濾鏡或即時效果才能宣告 `commands`
 @msg	“{name}” › {label}: {e}	「{name}」 › {label}：{e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	模組的 SHA-256 與 `hash` 提供的不符：未安裝任何內容
@@ -6143,6 +6177,10 @@ anchor	Points:	點：
 @msg	features lists at most {max} tags	features 最多包含 {max} 個標籤
 @msg	unknown OpenType feature `{t}`	未知的 OpenType 功能 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 必須是大於 0 且不超過 {max} 的數字
+@msg	{label} must be at most {max} characters	{label} 最多 {max} 個字元
+@msg	{label} must be one character	{label} 必須是一個字元
+@msg	at most {max} tab stops	最多 {max} 個定位點
+@msg	unknown align `{other}`	未知的對齊方式 `{other}`
 @msg	no character style `{name}`	找不到字元樣式 `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6305,6 +6343,8 @@ breakText	Glyphs	字符
 	Delete the selected brushes?	要刪除選取的筆刷嗎？
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	有筆畫使用了其中一個或多個筆刷。要從這些筆畫移除筆刷並刪除筆刷嗎？
 	Remove Strokes	移除筆畫
+	Place Brush Art	置入筆刷圖稿
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` 沒有圖稿 (只有散佈筆刷、藝術筆刷和圖樣筆刷有圖稿)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	排列工具
 	Arrange in Grid…	依格狀排列…
@@ -6499,6 +6539,11 @@ breakText	Glyphs	字符
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	匯入增效模組宣告 1 到 {MAX_EXTENSIONS} 個 `extensions`
 @msg	only an exporter or an importer declares `extensions`	只有匯出或匯入增效模組才宣告 `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	匯入增效模組一律取得匯入的預算：請勿指定 `budget`
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	複製疑難排解資訊
+@msg	Copied the troubleshooting info	已複製疑難排解資訊
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	上次的 VectorCraft 工作階段在關閉前停止回應。說明 › 複製疑難排解資訊 可複製用於錯誤回報的詳細資料
 
 # Safe Mode
 	Safe Mode…	安全模式…

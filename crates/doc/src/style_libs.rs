@@ -156,6 +156,7 @@ pub const STYLE_LIBRARIES: &[BuiltinStyleLibrary] = &[
     BuiltinStyleLibrary { id: "outlines-rules", name: "Outlines and Rules", make: outlines_rules },
     BuiltinStyleLibrary { id: "hand-drawn", name: "Hand-Drawn", make: hand_drawn },
     BuiltinStyleLibrary { id: "textures", name: "Textures", make: textures },
+    BuiltinStyleLibrary { id: "painted-sketched", name: "Painted and Sketched", make: painted_sketched },
     BuiltinStyleLibrary { id: "gradient-finishes", name: "Gradient Finishes", make: gradient_finishes },
     BuiltinStyleLibrary { id: "shape-effects", name: "Shape Effects", make: shape_effects },
     BuiltinStyleLibrary { id: "blends-transparency", name: "Blends and Transparency", make: blends_transparency },
@@ -320,6 +321,59 @@ fn hand_drawn() -> Vec<GraphicStyle> {
         ),
         style("Puffy", vec![F(fill("#ffc8dd")), S(round("#c9184a", 1.5))], vec![fx("distort.puckerBloat", json!({"amount": 25.0}))]),
         style("Starburst", vec![F(fill("#ffbe0b")), S(stroke("#fb5607", 1.0))], vec![fx("distort.puckerBloat", json!({"amount": -40.0}))]),
+    ]
+}
+
+/// Painted and Sketched: one catalog paint or sketch effect over the whole appearance, so it
+/// repaints the fill and the stroke together (watercolor, dry brush, pastels, charcoal and ink).
+fn painted_sketched() -> Vec<GraphicStyle> {
+    vec![
+        style(
+            "Washed Blue",
+            vec![F(fill("#8ab9c9"))],
+            vec![fx("artistic.watercolor", json!({"brushDetail": 8.0, "shadowIntensity": 2.0, "texture": 2.0}))],
+        ),
+        style(
+            "Bristle Ochre",
+            vec![F(fill("#c4975a")), S(stroke("#76533d", 1.0))],
+            vec![fx("artistic.dryBrush", json!({"brushSize": 4.0, "brushDetail": 7.0, "texture": 2.0}))],
+        ),
+        style(
+            "Pastel Heather",
+            vec![F(fill("#a78ca5"))],
+            vec![fx(
+                "artistic.roughPastels",
+                json!({
+                    "strokeLength": 8.0,
+                    "strokeDetail": 9.0,
+                    "texture": "canvas",
+                    "scaling": 100.0,
+                    "relief": 5.0,
+                    "lightDirection": "topLeft",
+                    "invert": false
+                }),
+            )],
+        ),
+        style(
+            "Charcoal Shade",
+            vec![F(fill("#666666"))],
+            vec![fx("sketch.charcoal", json!({"thickness": 3.0, "detail": 3.0, "lightDarkBalance": 55.0}))],
+        ),
+        style(
+            "Ink Contour",
+            vec![F(fill("#d9e2df")), S(stroke("#26323b", 1.0))],
+            vec![fx("brushStrokes.inkOutlines", json!({"strokeLength": 6.0, "darkIntensity": 24.0, "lightIntensity": 8.0}))],
+        ),
+        style(
+            "Wet Ink",
+            vec![F(fill("#637b85"))],
+            vec![fx("brushStrokes.sumiE", json!({"strokeWidth": 7.0, "strokePressure": 5.0, "contrast": 20.0}))],
+        ),
+        style(
+            "Fine Pen",
+            vec![F(fill("#d8d4c6"))],
+            vec![fx("sketch.graphicPen", json!({"strokeLength": 6.0, "lightDarkBalance": 55.0, "strokeDirection": "rightDiagonal"}))],
+        ),
     ]
 }
 
@@ -601,6 +655,36 @@ mod tests {
         }
         let ids: Vec<&str> = STYLE_LIBRARIES.iter().map(|b| b.id).collect();
         assert_eq!(ids.iter().position(|&i| i == "textures"), ids.iter().position(|&i| i == "hand-drawn").map(|i| i + 1), "after Hand-Drawn");
+    }
+
+    #[test]
+    fn painted_and_sketched_follows_textures_with_one_effect_per_style() {
+        let ids: Vec<&str> = STYLE_LIBRARIES.iter().map(|b| b.id).collect();
+        let at = ids.iter().position(|&id| id == "painted-sketched").expect("listed");
+        assert_eq!(ids[at - 1], "textures");
+        let lib = builtin_style_library("painted-sketched").unwrap();
+        assert_eq!(lib.name, "Painted and Sketched");
+        let names: Vec<&str> = lib.styles.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(names, ["Washed Blue", "Bristle Ochre", "Pastel Heather", "Charcoal Shade", "Ink Contour", "Wet Ink", "Fine Pen"]);
+        let effects: Vec<&str> = lib.styles.iter().flat_map(|g| g.appearance.effects.iter().map(|e| e.id.as_str())).collect();
+        assert_eq!(
+            effects,
+            [
+                "artistic.watercolor",
+                "artistic.dryBrush",
+                "artistic.roughPastels",
+                "sketch.charcoal",
+                "brushStrokes.inkOutlines",
+                "brushStrokes.sumiE",
+                "sketch.graphicPen"
+            ]
+        );
+        assert!(lib.styles.iter().all(|g| g.appearance.items.iter().all(|i| i.effects().is_empty())), "no effects on a fill or stroke");
+        // No other built-in library holds a style of the same name.
+        for b in STYLE_LIBRARIES.iter().filter(|b| b.id != "painted-sketched") {
+            let other = builtin_style_library(b.id).unwrap();
+            assert!(other.styles.iter().all(|g| !names.contains(&g.name.as_str())), "{}", b.id);
+        }
     }
 
     #[test]

@@ -49,7 +49,7 @@ mod expand;
 mod mesh;
 mod warp;
 
-pub use blend_spec::{BlendDefaults, BlendEase, BlendEaseType, BlendOrientation, BlendSpacing, BlendSpec};
+pub use blend_spec::{BlendDefaults, BlendEase, BlendEaseType, BlendOrientation, BlendSpacing, BlendSpec, BlendSpineMode};
 #[cfg(test)]
 use blend_spec::{blend_color_shift, blend_ramp};
 pub use envelope::{

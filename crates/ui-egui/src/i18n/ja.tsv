@@ -290,6 +290,10 @@ digits	Malayalam	マラヤーラム数字
 	Blend Options…	ブレンドオプション…
 	Expand	拡張
 	Replace Spine	スパインを置き換え
+	Create Spine	スパインを作成
+	Create Spine:	スパインを作成:
+	Always	常に
+	Never	しない
 	Reverse Spine	スパインを反転
 	Reverse Front to Back	前後を反転
 	Envelope Distort	エンベロープ
@@ -840,6 +844,14 @@ digits	Malayalam	マラヤーラム数字
 	Damp Paper	湿った紙
 	Outlines and Rules	アウトラインと罫線
 	Hand-Drawn	手描き風
+	Painted and Sketched	絵画とスケッチ
+	Washed Blue	にじみブルー
+	Bristle Ochre	筆跡オーカー
+	Pastel Heather	パステルヘザー
+	Charcoal Shade	木炭シェード
+	Ink Contour	インク輪郭
+	Wet Ink	濡れ墨
+	Fine Pen	細いペン
 	Gradient Finishes	グラデーション仕上げ
 	Shape Effects	シェイプ効果
 	Blends and Transparency	ブレンドと透明
@@ -859,6 +871,7 @@ digits	Malayalam	マラヤーラム数字
 	Spectrum Gradients	スペクトルグラデーション
 	Sky Gradients	空のグラデーション
 	Neutral Gradients	ニュートラルグラデーション
+	Organic Fades	オーガニックフェード
 	Duotone Gradients	ダブルトーングラデーション
 	Radial Glows	円形グロー
 	Save Swatch Library…	スウォッチライブラリを保存…
@@ -870,6 +883,7 @@ digits	Malayalam	マラヤーラム数字
 	Search Commands…	コマンドを検索…
 	VectorCraft Help…	VectorCraft ヘルプ…
 	Preview	プレビュー
+	Preview:	プレビュー:
 	Show Edges	エッジを表示
 	Show Corner Widget	コーナーウィジェットを表示
 	Show Template	テンプレートを表示
@@ -1459,6 +1473,14 @@ antiAlias	Sharp	シャープ
 	Disable Auto Add/Delete	自動追加/削除機能を使用しない
 	Disable Opacity Mask	不透明マスクを無効にする
 	Discard	破棄
+	Preserve	保持
+	TIFF (Black & White)	TIFF (白黒)
+	TIFF (8-bit Color)	TIFF (8 bit カラー)
+	High Resolution	高解像度
+	Medium Resolution	中解像度
+	Low Resolution	低解像度
+	Language Level 2	言語レベル 2
+	Language Level 3	言語レベル 3
 	Discard Empty Type	空のテキストを破棄
 	Discard Recovered Documents	復帰したドキュメントを破棄
 	Discard White Overprint in Output	出力時に白のオーバープリントを破棄
@@ -2717,6 +2739,8 @@ mark-style	Japanese	日本式
 	Randomly change saturation and brightness	彩度と明度をランダムに変更
 	Range:	範囲:
 	Raster File Format:	ラスターファイル形式:
+	Include Placed Images	配置画像を含める
+	Include Fill Hatches	塗りのハッチングを含める
 	Raster Sample Size:	ラスターのサンプルサイズ:
 	Raster/Vector Balance:	ラスター／ベクターのバランス:
 	Rasterize Unsupported Art	非対応のアートをラスタライズ
@@ -4384,6 +4408,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`preserve` must be an object	`preserve` にはオブジェクトを指定してください
 @msg	`globalAdjust` must be an object	`globalAdjust` にはオブジェクトを指定してください
 @msg	`stops` must be an array	`stops` には配列を指定してください
+@msg	`{key}` must be an array	`{key}` には配列を指定してください
 @msg	`{k}` must be [x, y]	`{k}` は [x, y] の形式で指定してください
 @msg	a gradient needs at least two stops	グラデーションには 2 つ以上の分岐点が必要です
 @msg	give both `start` and `end` [x, y] (or neither)	`start` と `end` は両方とも [x, y] で指定するか、どちらも省略してください
@@ -5682,6 +5707,7 @@ lighting	Light	ライト
 	Ruby	ルビ
 	Geometric Guides	幾何ガイド
 	Geometric Patterns	幾何パターン
+	Grit Textures	粒状テクスチャ
 	Ease In	イーズイン
 	Ease Out	イーズアウト
 	Ease In Out	イーズインアウト
@@ -5757,6 +5783,8 @@ axis	Y Axis	Y 軸
 	Version: {version}	バージョン: {version}
 	Install “{name}” in place of the plug-in with the same ID?	同じ ID のプラグインの代わりに「{name}」をインストールしますか？
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	このファイルは、以前にこの ID でインストールされていたプラグインではありません。この ID 用に保持されている設定とキャッシュを引き継ぎます。
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	自動操作がこのプラグインのインストールを要求しました。インストールするには、オブジェクト › プラグイン › プラグインをインストール… をご自身で選んでください。
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	自動操作がこのプラグインのインストールを要求しました。インストールするには、オブジェクト › プラグイン › プラグインをインストール… をご自身で選んでください。
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	「{name}」は ID {_1} のプラグインとは別のモジュールで、そのプラグイン用に保持されている設定とキャッシュを引き継ぐことになります。ユーザーが同意したら `replace: true` を指定してインストールしてください
 	File SHA-256: {hash}	ファイルの SHA-256: {hash}
 	Read the objects it is given	渡されたオブジェクトの読み取り
@@ -5819,6 +5847,12 @@ axis	Y Axis	Y 軸
 @msg	command {name}: `label` must be 1-64 printable characters	コマンド {name}: `label` は印刷可能な 1-64 文字にしてください
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	コマンド {name}: a-z 0-9 _ からなり英字で始まる 1-{MAX_COMMAND_ID} 文字の ID を使用してください
 @msg	command {name}: {e}	コマンド {name}: {e}
+@msg	manifest: {e}	マニフェスト: {e}
+@msg	manifest: {e} at line {line} column {column}	マニフェスト: {e} ({line} 行目、{column} 列目)
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` は、それぞれ `id` と `label` を持つコマンドのリストにしてください
+@msg	command {name} must be an object with an `id` and a `label`	コマンド {name} は `id` と `label` を持つオブジェクトにしてください
+@msg	missing field `{key}`	フィールド `{key}` がありません
+@msg	duplicate field `{key}`	フィールド `{key}` が重複しています
 @msg	only a filter or a live effect declares `commands`	`commands` を宣言できるのはフィルターかライブ効果だけです
 @msg	“{name}” › {label}: {e}	「{name}」 › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	モジュールの SHA-256 が `hash` の値と一致しません。何もインストールされませんでした
@@ -6190,6 +6224,10 @@ anchor	Points:	ポイント:
 @msg	features lists at most {max} tags	features に指定できるタグは {max} 個までです
 @msg	unknown OpenType feature `{t}`	不明な OpenType 機能 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} には 0 より大きく {max} 以下の数値を指定してください
+@msg	{label} must be at most {max} characters	{label} には {max} 文字以内で指定してください
+@msg	{label} must be one character	{label} には 1 文字を指定してください
+@msg	at most {max} tab stops	タブストップは {max} 個までです
+@msg	unknown align `{other}`	不明な揃え `{other}`
 @msg	no character style `{name}`	文字スタイル `{name}` が見つかりません
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6352,6 +6390,8 @@ breakText	Glyphs	字形
 	Delete the selected brushes?	選択したブラシを削除しますか？
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	これらのブラシの 1 つ以上が線で使われています。それらの線からブラシを外して、ブラシを削除しますか？
 	Remove Strokes	線を削除
+	Place Brush Art	ブラシのアートを配置
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` にはアートがありません (アートを持つのは散布ブラシ、アートブラシ、パターンブラシだけです)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	配置ツール
 	Arrange in Grid…	グリッドに配置…
@@ -6546,6 +6586,11 @@ breakText	Glyphs	字形
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	読み込みプラグインは `extensions` を 1～{MAX_EXTENSIONS} 個宣言します
 @msg	only an exporter or an importer declares `extensions`	`extensions` を宣言できるのは書き出しプラグインと読み込みプラグインだけです
 @msg	an importer always gets an import's budget: leave `budget` out	読み込みプラグインには常に読み込みの予算が割り当てられます: `budget` は省略してください
+
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	トラブルシューティング情報をコピー
+@msg	Copied the troubleshooting info	トラブルシューティング情報をコピーしました
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	前回の VectorCraft のセッションは、閉じる前に応答しなくなりました。ヘルプ › トラブルシューティング情報をコピー で、バグ報告用の詳細をコピーできます
 
 # Safe Mode
 	Safe Mode…	セーフモード…
