@@ -325,7 +325,14 @@ fn copy_cost(objects: &[cd::Object]) -> usize {
             cd::Object::Group(kids) => stack.extend(kids),
             cd::Object::Shape(s) => n = n.saturating_add(shape_cost(s)),
             cd::Object::Clip { container, objects } => {
+                // A container whose outline is behind its fill is built twice, as that outline
+                // and as the clipping path, inside a group of their own.
                 n = n.saturating_add(shape_cost(container));
+                // The second path, without the dashes, which only the outline shape has, and the
+                // group around the two.
+                if container.outline.as_ref().is_some_and(|o| o.behind_fill) {
+                    n = n.saturating_add(2 + path_cost(container));
+                }
                 stack.extend(objects);
             }
         }
@@ -336,11 +343,15 @@ fn copy_cost(objects: &[cd::Object]) -> usize {
 /// What one copy of shape `s` takes past the object itself: its path's subpaths and segments and
 /// its outline's dashes.
 fn shape_cost(s: &cd::Shape) -> usize {
-    let mut n: usize = 0;
-    if let cd::Geometry::Path(p) = &s.geometry {
-        n = p.subpaths.iter().fold(n, |n, sp| n.saturating_add(1 + sp.segments.len()));
+    path_cost(s).saturating_add(s.outline.as_ref().map_or(0, |o| o.dashes.len()))
+}
+
+/// The subpaths and segments of shape `s`'s path.
+fn path_cost(s: &cd::Shape) -> usize {
+    match &s.geometry {
+        cd::Geometry::Path(p) => p.subpaths.iter().fold(0usize, |n, sp| n.saturating_add(1 + sp.segments.len())),
+        _ => 0,
     }
-    n.saturating_add(s.outline.as_ref().map_or(0, |o| o.dashes.len()))
 }
 
 /// A layer of the document named `name` holding `kids` (bottom to top).

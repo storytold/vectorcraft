@@ -411,6 +411,71 @@ fn fills_and_outlines_keep_their_colors_widths_caps_joins_and_dashes() {
     assert!(dash.pattern.len() == 2 && (dash.pattern[0] - 6.0).abs() < 0.01 && (dash.pattern[1] - 2.0).abs() < 0.01, "{:?}", dash.pattern);
 }
 
+/// An outline behind the fill becomes a stroke painted before the fill.
+#[test]
+fn outlines_behind_the_fill_paint_first() {
+    use vectorcraft_doc::appearance::AppearanceItem;
+    let v = V(1100);
+    let black = synth::color(2, [0, 0, 0, 100]);
+    let doc = list(
+        b"doc ",
+        vec![
+            list(b"filt", vec![chunk(b"fild", v.fill(1, &synth::color(5, [0, 0, 255, 0])))]),
+            list(
+                b"otlt",
+                vec![
+                    chunk(b"outl", v.outline(2, synth::Pen { line_type: 0x12, width: 4.0, cap: 0, join: 0 }, &black, &[])),
+                    chunk(b"outl", v.outline(3, synth::Pen { line_type: 0x02, width: 4.0, cap: 0, join: 0 }, &black, &[])),
+                ],
+            ),
+        ],
+    );
+    let rect = |outline: u32| {
+        let args = vec![(20, 1u32.to_le_bytes().to_vec()), (10, outline.to_le_bytes().to_vec()), (30, v.rect(10.0, 10.0, 0.0))];
+        synth::object(v, 1, &args, None)
+    };
+    let page = synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![rect(2), rect(3)])]);
+    let (doc, _) = super::cdr::import(&synth::riff(1100, &[chunk(b"vrsn", 1100u16.to_le_bytes().to_vec()), doc, page])).unwrap();
+    let p = paths(&doc);
+    assert_eq!(p.len(), 2);
+    // The file lists objects front to back; the document stacks them bottom to top.
+    let (behind, over) = (&p[1].appearance.items, &p[0].appearance.items);
+    assert!(matches!(behind.as_slice(), [AppearanceItem::Stroke(_), AppearanceItem::Fill(_)]), "{behind:?}");
+    assert!(matches!(over.as_slice(), [AppearanceItem::Fill(_), AppearanceItem::Stroke(_)]), "{over:?}");
+}
+
+/// A container whose outline is behind its fill opens as a group of that outline below a clipping
+/// group whose clipping path keeps only the fill.
+#[test]
+fn a_container_outline_behind_the_fill_stays_below_its_contents() {
+    use vectorcraft_doc::appearance::AppearanceItem;
+    let v = V(1100);
+    let black = synth::color(2, [0, 0, 0, 100]);
+    let rect = |w: f64, extra: Vec<(u32, Vec<u8>)>| {
+        let mut args = vec![(20, 1u32.to_le_bytes().to_vec()), (30, v.rect(w, w, 0.0))];
+        args.extend(extra);
+        synth::object(v, 1, &args, None)
+    };
+    let doc = list(
+        b"doc ",
+        vec![
+            list(b"filt", vec![chunk(b"fild", v.fill(1, &synth::color(5, [0, 0, 255, 0])))]),
+            list(b"otlt", vec![chunk(b"outl", v.outline(2, synth::Pen { line_type: 0x12, width: 4.0, cap: 0, join: 0 }, &black, &[]))]),
+            synth::clpt(vec![(5, vec![rect(10.0, vec![])])]),
+        ],
+    );
+    let container = rect(40.0, vec![synth::container(5), (10, 2u32.to_le_bytes().to_vec())]);
+    let page = synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![container])]);
+    let (doc, _) = super::cdr::import(&synth::riff(1100, &[chunk(b"vrsn", 1100u16.to_le_bytes().to_vec()), doc, page])).unwrap();
+    let layer = doc.layers.last().and_then(|l| l.children()).unwrap();
+    let [both] = layer.as_slice() else { panic!("{layer:?}") };
+    let NodeKind::Group { children: both, clip: false } = &both.kind else { panic!("{:?}", both.kind) };
+    let [outline, group] = both.as_slice() else { panic!("{both:?}") };
+    assert!(matches!(outline.appearance.items.as_slice(), [AppearanceItem::Stroke(_)]), "{:?}", outline.appearance.items);
+    let NodeKind::Group { children, clip: true } = &group.kind else { panic!("{:?}", group.kind) };
+    assert!(matches!(children[0].appearance.items.as_slice(), [AppearanceItem::Fill(_)]), "{:?}", children[0].appearance.items);
+}
+
 /// A container and the group it clips open as a clipping group: the container's shape first, as
 /// the clipping path keeping its fill, then the clipped shapes.
 #[test]

@@ -21,7 +21,7 @@ with each object's transform. It does not write `.cdr` files.
 | Ellipses, arcs and pies | ellipses, and paths for arcs and pies |
 | Polygons and stars (a base side copied for each side) | paths |
 | Uniform fills: CMYK, CMY, RGB, gray, registration, library colors | colors, spot colors with their tints |
-| Outlines: width, caps, joins, dashes, the no-outline flag | outlines |
+| Outlines: width, caps, joins, dashes, the no-outline and behind-the-fill flags | outlines |
 | Styles (`LIST stlt`, versions 7 to 15) that objects name | the fill and outline of an object that has none of its own |
 
 Text, bitmaps, linked groups (blends, contours, brush strokes), B-spline curves, fountain,

@@ -124,10 +124,27 @@ impl Builder {
                 // A clipping group whose clipping path keeps the container's paint: its fill
                 // behind the clipped objects and its outline over them.
                 cd::Object::Clip { container, objects } => {
-                    let Some(clip) = self.shape(container, to_doc, true) else { continue };
+                    // A clipping path's stroke paints over the clipped objects, so an outline
+                    // behind the fill becomes a shape of its own below the clipping group, the
+                    // two in a group of their own.
+                    let behind = container.outline.as_ref().is_some_and(|o| o.behind_fill);
+                    let (outline, clip) = if behind {
+                        let outline = self.shape(&cd::Shape { fill: None, ..(**container).clone() }, to_doc, false);
+                        (outline, self.shape(&cd::Shape { outline: None, ..(**container).clone() }, to_doc, true))
+                    } else {
+                        (None, self.shape(container, to_doc, true))
+                    };
+                    let Some(clip) = clip else { continue };
                     let mut children = vec![clip];
                     children.extend(self.objects_at(objects, to_doc, depth + 1));
-                    out.push(Arc::new(Node::new(self.doc.alloc_id(), NodeKind::Group { children, clip: true })));
+                    let group = Arc::new(Node::new(self.doc.alloc_id(), NodeKind::Group { children, clip: true }));
+                    match outline {
+                        Some(outline) => {
+                            let children = vec![outline, group];
+                            out.push(Arc::new(Node::new(self.doc.alloc_id(), NodeKind::Group { children, clip: false })));
+                        }
+                        None => out.push(group),
+                    }
                 }
             }
         }
@@ -150,11 +167,15 @@ impl Builder {
             self.note(Warning::TooDeep);
             return None;
         }
+        // In paint order: an outline behind the fill comes first.
         let mut items = Vec::new();
+        if let Some(o) = s.outline.as_ref().filter(|o| o.behind_fill) {
+            items.push(AppearanceItem::Stroke(self.stroke(o)));
+        }
         if let Some(c) = &s.fill {
             items.push(AppearanceItem::Fill(FillLayer::new(self.paint(c))));
         }
-        if let Some(o) = &s.outline {
+        if let Some(o) = s.outline.as_ref().filter(|o| !o.behind_fill) {
             items.push(AppearanceItem::Stroke(self.stroke(o)));
         }
         // A curve of several subpaths is filled with holes where they overlap: VectorCraft's own
@@ -453,7 +474,14 @@ mod tests {
     /// whose outline has 299 dashes costs 300 each time it is copied.
     #[test]
     fn master_copies_count_their_dashes() {
-        let outline = cd::Outline { width: 1.0, color: cd::Color::Gray(1.0), cap: cd::Cap::Butt, join: cd::Join::Miter, dashes: vec![1.0; 299] };
+        let outline = cd::Outline {
+            width: 1.0,
+            color: cd::Color::Gray(1.0),
+            cap: cd::Cap::Butt,
+            join: cd::Join::Miter,
+            dashes: vec![1.0; 299],
+            behind_fill: false,
+        };
         let rect = cd::Object::Shape(Box::new(cd::Shape {
             geometry: Geometry::Rect { w: 10.0, h: 10.0, radii: [0.0; 4] },
             matrix: cd::Matrix::IDENTITY,

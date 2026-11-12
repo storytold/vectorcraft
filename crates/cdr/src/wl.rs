@@ -181,7 +181,7 @@ fn shape(rec: &[u8], fields: Fields, p: &Profile, budget: &mut Budget, warn: &mu
     };
     let outline = if *rec.get(OUTLINED)? != 0 {
         let width = f64::from(Rd::at(rec, OUTLINE_WIDTH).u16()?) * k;
-        Some(Outline { width, color: color_at(OUTLINE_COLOR, warn)?, cap: Cap::Butt, join: Join::Miter, dashes: Vec::new() })
+        Some(Outline { width, color: color_at(OUTLINE_COLOR, warn)?, cap: Cap::Butt, join: Join::Miter, dashes: Vec::new(), behind_fill: false })
     } else {
         None
     };

@@ -616,7 +616,7 @@ impl<'a, 'b> Ctx<'a, 'b> {
             return Some(o.clone());
         }
         push(self.warn, Warning::TooDeep);
-        Some(Outline { width: o.width, color: o.color.clone(), cap: o.cap, join: o.join, dashes: Vec::new() })
+        Some(Outline { dashes: Vec::new(), ..o.clone() })
     }
 }
 

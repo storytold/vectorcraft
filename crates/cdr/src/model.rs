@@ -105,6 +105,8 @@ pub struct Outline {
     pub join: Join,
     /// Dash and gap lengths, in outline widths; empty for a solid line.
     pub dashes: Vec<f64>,
+    /// Drawn behind the fill, so that a filled shape shows only the outer half of it.
+    pub behind_fill: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
