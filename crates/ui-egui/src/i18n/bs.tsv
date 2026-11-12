@@ -398,6 +398,8 @@
 	Stair Step	Stepenice
 	Gravity	Gravitacija
 	Type on a Path Options…	Opcije teksta na putanji…
+	Center on Top	Centriraj na vrhu
+	Center on Bottom	Centriraj na dnu
 	Threaded Text	Povezani tekst
 	Create	Kreiraj
 	Release Selection	Oslobodi odabir
@@ -487,6 +489,8 @@
 	Extrude & Bevel…	Istiskivanje i zakošenje…
 	3D (Classic)	3D (klasično)
 	Extrude & Bevel (Classic)…	Istiskivanje i zakošenje (klasično)…
+	Revolve (Classic)…	Rotaciono tijelo (klasično)…
+	Rotate (Classic)…	Rotiraj (klasično)…
 	Surface	Površina
 	Wireframe	Žičani model
 	No Shading	Bez sjenčenja
@@ -840,6 +844,7 @@
 	Sky Gradients	Gradijenti neba
 	Neutral Gradients	Neutralni gradijenti
 	Organic Fades	Organski prelazi
+	Holographic	Holografski
 	Duotone Gradients	Duoton gradijenti
 	Radial Glows	Radijalni sjajevi
 	Save Swatch Library…	Sačuvaj biblioteku uzoraka boja…
@@ -1987,6 +1992,9 @@ digits	Malayalam	Malajalam
 	Right Indent	Desna uvlaka
 	Right-to-Left Paragraph Direction	Smjer pasusa s desna nalijevo
 	Roman Hanging Punctuation	Latinična viseća interpunkcija
+	Korean Line Break Anywhere	Prelom korejskog reda bilo gdje
+	East Asian Composition Settings	Postavke istočnoazijske kompozicije
+	Korean Composition Settings	Postavke korejske kompozicije
 	Select a text object to edit its paragraph attributes.	Odaberite tekstualni objekat da uredite njegove atribute pasusa.
 	Single-line Composer	Slagač jednog reda
 	Toggle Line Composer	Uključi/isključi Line Composer
@@ -4798,6 +4806,7 @@ imageTrace	Outline	Obris
 @msg	not a valid plug-in module: {0}	nije važeći modul dodatka: {0}
 @msg	not an EMF or WMF file	nije EMF ni WMF datoteka
 @msg	not an HP-GL file	nije HP-GL datoteka
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` mora biti niz od 1 do 255 boja #rrggbb
 @msg	not an export presets file (format `{_1}`)	nije datoteka predložaka izvoza (format `{_1}`)
 @msg	not an export presets file: {e}	nije datoteka predložaka izvoza: {e}
 @msg	not found	nije pronađeno
@@ -6103,6 +6112,17 @@ axis	Y Axis	Y osa
 	Charge Wave	Talas naboja
 	Spark Trail	Trag iskri
 	Calligraphic Nibs	Kaligrafski vrhovi
+	Bristle Brushes	Četkice s čekinjama
+	Fine Liner	Tanka linija
+	Pointed Flat	Šiljata ravna
+	Stubby Round	Kratka okrugla
+	Dry Scrub	Suho trljanje
+	Soft Dome	Meka kupola
+	Filbert	Ovalna ravna
+	Angled Round	Kosa okrugla
+	Angled Flat	Kosa ravna
+	Fan Blender	Lepeza za stapanje
+	Grass Fan	Lepeza za travu
 	Pattern Borders	Ivice od uzoraka
 	Scatter Shapes	Raspršeni oblici
 	Save Brush Library…	Sačuvaj biblioteku četkica…
@@ -6448,6 +6468,10 @@ shape	Open	Otvoren
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Potezi koriste jednu ili više ovih četkica. Ukloniti četkice s tih poteza i izbrisati četkice?
 	Remove Strokes	Ukloni poteze
 	Place Brush Art	Postavi crtež četkice
+	Replace Brush Art	Zamijeni crtež četkice
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Potezi koriste ovu četkicu. Primijeniti novi crtež na te poteze ili ih ostaviti kakvi jesu i dodati kopiju četkice s novim crtežom?
+	Apply to Strokes	Primijeni na poteze
+	Leave Strokes	Ostavi poteze
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` nema crtež (imaju ga samo raspršene i umjetničke četkice i četkice uzorka)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Alati za raspoređivanje
@@ -6684,6 +6708,26 @@ shape	Open	Otvoren
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} raniji red uklonjen|{n} ranija reda uklonjena|{n} ranijih redova uklonjeno
 @plural	{n} line cut|{n} lines cut	{n} red skraćen|{n} reda skraćena|{n} redova skraćeno
 
+# Learn panel
+	Learn	Učenje
+	Explore tutorials	Istražite tutorijale
+	For you	Za vas
+	Skills	Vještine
+	Get started	Prvi koraci
+	Quick skill guide	Brzi vodič kroz vještine
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Kratki praktični tutorijali za osnovne alate, grupisani po vještinama. Odaberite vještinu da vidite njene tutorijale.
+	List Tutorials	Izlistaj tutorijale
+	Show Tutorial	Prikaži tutorijal
+@msg	missing `tutorial` (see learn.list)	nedostaje `tutorial` (vidi learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	nepoznat tutorijal `{id}` (vidi learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Osvježi odgođene efekte
 	Deferred Effects	Odgođeni efekti
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Alati za rezanje
+	Stencil Bridges…	Mostići šablona…
+	Stencil Bridges	Mostići šablona
+	Shortest Crossing	Najkraći prijelaz
+	Direction	Smjer

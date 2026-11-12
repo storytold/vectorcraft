@@ -3785,6 +3785,34 @@ fn an_unstroked_run_with_a_stroke_style_loses_nothing() {
     }
 }
 
+/// The text document has no Korean Line Break Anywhere: a paragraph with it on and Hangul in it
+/// is reported as left out, and comes back off; with it off, or with no Hangul, nothing is
+/// reported.
+#[test]
+fn korean_line_break_anywhere_is_reported_only_for_korean_paragraphs() {
+    use vectorcraft_doc::TextObject;
+    for (text, on, reported) in [("가나다 라마", true, true), ("가나다 라마", false, false), ("Plain", true, false)] {
+        let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), text, style(14.0, Color::BLACK));
+        t.para.korean_line_break_anywhere = on;
+        let mut doc = Document::new(200.0, 200.0);
+        let layer = doc.layers[0].id;
+        let n = text_node(&mut doc, t);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(!out.warnings.is_empty(), reported, "{text} {on}: {:?}", out.warnings);
+        let mut all = vec![];
+        paths(&read_back(&doc).layers, &mut all);
+        let paras: Vec<bool> = all
+            .iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Text(t) => Some(t.para_at(0).korean_line_break_anywhere),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(paras, [false], "{text} {on}");
+    }
+}
+
 #[test]
 fn type_is_written_again_as_the_same_bytes() {
     let doc = typed();
@@ -4366,6 +4394,19 @@ fn dynamic_text_is_written_at_its_drawn_sizes() {
     assert!(!texts[0].dynamic_text);
     let k = texts[0].xf.as_coeffs()[0];
     assert_eq!(r3(texts[0].runs[0].style.size * k), r3(drawn));
+    // Type written as outlines (here on an open path whose ends meet) loses the setting too, and
+    // says so.
+    let mut doc = Document::new(600.0, 300.0);
+    let layer = doc.layers[0].id;
+    let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "Grow", style(12.0, Color::BLACK));
+    let ends_meet = [(50.0, 200.0).into(), (550.0, 200.0).into(), (300.0, 50.0).into(), (50.0, 200.0).into()];
+    t.kind = TextKind::OnPath { path: PathData::new(vec![vectorcraft_geom::SubPath::polyline(&ends_meet, false)]), start: 0.0, end: None };
+    t.xf = Affine::IDENTITY;
+    t.dynamic_text = true;
+    let node = text_node(&mut doc, t);
+    doc.insert(Some(layer), usize::MAX, node).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::TYPE) && out.warnings.iter().any(|w| w == writer::DYNAMIC_TEXT), "{:?}", out.warnings);
 }
 
 /// See-through type with the knockout shape flag comes back with the flag and writes no warning.
@@ -6627,6 +6668,7 @@ fn every_effect_a_graphic_style_holds_is_read_back() {
     for id in &ids {
         cases.push((id, json!({"bend": 30.0, "horizontal": -10.0, "vertical": 20.0, "orientation": "vertical"})));
         cases.push((id, json!({"bend": -30.0, "horizontal": 0.0, "vertical": 0.0, "orientation": "horizontal"})));
+        cases.push((id, json!({"bend": 45.0, "horizontal": 15.0, "vertical": -5.0, "orientation": "horizontal", "version": 1})));
     }
     for (id, params) in cases {
         let effect = fx(id, params.clone());
@@ -6643,6 +6685,10 @@ fn every_effect_a_graphic_style_holds_is_read_back() {
         let got = &back.graphic_styles[0].appearance.effects;
         assert_eq!(got.len(), 1, "{id} {params}");
         assert_eq!(got[0].id, effect.id);
+        // A warp read from a file bends as its style's Bézier net.
+        if id.starts_with("warp.") {
+            assert_eq!(got[0].params["version"], json!(vectorcraft_doc::live::WARP_NET), "{id} {params}");
+        }
         let (g, w) = (vectorcraft_effects::merged_params(&got[0].id, &got[0].params), vectorcraft_effects::merged_params(&effect.id, &effect.params));
         for (key, value) in w.as_object().unwrap() {
             // Random isn't written, and a style with it isn't read; its seed is the default.
@@ -6663,6 +6709,19 @@ fn every_effect_a_graphic_style_holds_is_read_back() {
             }
         }
     }
+    // A warp saved before the map version existed is written with its settings too, and reads back on
+    // the nets' map.
+    let old = vectorcraft_doc::Effect { id: "warp.flag".into(), params: json!({"bend": 40.0, "horizontal": 10.0}), visible: true };
+    let mut doc = Document::new(200.0, 100.0);
+    let mut g = vectorcraft_doc::GraphicStyle::new("Old", Appearance { effects: vec![old], ..Appearance::basic(black_fill(), Paint::None, 0.0) });
+    g.id = 3;
+    *doc.graphic_styles = vec![g];
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::PANEL_STYLES), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let [warp] = back.graphic_styles[0].appearance.effects.as_slice() else { panic!("{:?}", back.graphic_styles) };
+    assert_eq!((warp.id.as_str(), &warp.params["bend"], &warp.params["horizontal"]), ("warp.flag", &json!(40.0), &json!(10.0)));
+    assert_eq!(warp.params["version"], json!(vectorcraft_doc::live::WARP_NET));
     // A Zig Zag with its 0 to 1 settings written under the size's own key, and a turn in radians.
     let mut doc = Document::new(200.0, 100.0);
     let effects = vec![

@@ -364,6 +364,8 @@
 	Stair Step	Schodki
 	Gravity	Grawitacja
 	Type on a Path Options…	Opcje tekstu na ścieżce…
+	Center on Top	Wyśrodkuj na górze
+	Center on Bottom	Wyśrodkuj na dole
 	Threaded Text	Tekst wątkowy
 	Create	Utwórz
 	Release Selection	Uwolnij zaznaczenie
@@ -384,6 +386,10 @@
 	Arch	Sklepienie
 @msg	select point type or type on a path	zaznacz tekst punktowy lub tekst na ścieżce
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	tekst na ścieżce w tekście wątkowym nie może używać tekstu dynamicznego: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	nie można wyśrodkować na górze ani na dole tekstu na ścieżce otwartej lub złożonej: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	nie można wyśrodkować tekstu na ścieżce bez długości lub bez wysokości: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	nie można wyśrodkować na górze ani na dole tekstu na ścieżce w tekście wątkowym: {frames}
+@msg	select type on a closed path	zaznacz tekst na zamkniętej ścieżce
 	Fill with Placeholder Text	Wypełnij tekstem zastępczym
 	Insert Inline Symbol	Wstaw symbol w tekście
 	Show Hidden Characters	Pokaż ukryte znaki
@@ -455,6 +461,8 @@
 	Extrude & Bevel…	Wyciągnięcie i fazowanie…
 	3D (Classic)	3D (klasyczne)
 	Extrude & Bevel (Classic)…	Wyciągnięcie i fazowanie (klasyczne)…
+	Revolve (Classic)…	Obrót (klasyczny)…
+	Rotate (Classic)…	Obróć (klasyczny)…
 	Surface	Powierzchnia
 	Wireframe	Szkielet
 	No Shading	Bez cieniowania
@@ -796,6 +804,7 @@
 	Sky Gradients	Gradienty nieba
 	Neutral Gradients	Gradienty neutralne
 	Organic Fades	Organiczne zanikania
+	Holographic	Holograficzne
 	Duotone Gradients	Gradienty dwutonowe
 	Radial Glows	Blaski promieniste
 	Save Swatch Library…	Zapisz bibliotekę próbek…
@@ -1932,6 +1941,9 @@ digits	Malayalam	Malajalam
 	Right Indent	Wcięcie z prawej
 	Right-to-Left Paragraph Direction	Kierunek akapitu od prawej do lewej
 	Roman Hanging Punctuation	Wysunięta interpunkcja łacińska
+	Korean Line Break Anywhere	Koreański podział wiersza w dowolnym miejscu
+	East Asian Composition Settings	Ustawienia składu wschodnioazjatyckiego
+	Korean Composition Settings	Ustawienia składu koreańskiego
 	Select a text object to edit its paragraph attributes.	Zaznacz obiekt tekstowy, aby edytować atrybuty akapitu.
 	Single-line Composer	Kompozytor jednowierszowy
 	Toggle Line Composer	Przełącz kompozytor wierszy
@@ -4709,6 +4721,7 @@ imageTrace	Outline	Kontur
 @msg	not a valid plug-in module: {0}	nieprawidłowy moduł wtyczki: {0}
 @msg	not an EMF or WMF file	to nie jest plik EMF ani WMF
 @msg	not an HP-GL file	to nie jest plik HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` musi być tablicą od 1 do 255 kolorów #rrggbb
 @msg	not found	nie znaleziono
 @msg	not in pattern editing mode	nie jest w trybie edycji wzorka
 @msg	finish editing the pattern first	najpierw zakończ edycję wzorka
@@ -6165,6 +6178,17 @@ axis	Y Axis	Oś Y
 	Charge Wave	Fala ładunku
 	Spark Trail	Ślad iskier
 	Calligraphic Nibs	Stalówki kaligraficzne
+	Bristle Brushes	Pędzle włosiankowe
+	Fine Liner	Cienka linia
+	Pointed Flat	Szpiczasty płaski
+	Stubby Round	Krótki okrągły
+	Dry Scrub	Suche szorowanie
+	Soft Dome	Miękka kopuła
+	Filbert	Koci język
+	Angled Round	Skośny okrągły
+	Angled Flat	Skośny płaski
+	Fan Blender	Wachlarz do mieszania
+	Grass Fan	Wachlarz do trawy
 	Pattern Borders	Obramowania wzorków
 	Scatter Shapes	Kształty rozproszone
 	Save Brush Library…	Zapisz bibliotekę pędzli…
@@ -6542,6 +6566,10 @@ breakText	Glyphs	Glify
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Obrysy używają co najmniej jednego z tych pędzli. Zdjąć pędzle z tych obrysów i usunąć pędzle?
 	Remove Strokes	Usuń obrysy
 	Place Brush Art	Umieść kompozycję pędzla
+	Replace Brush Art	Zastąp kompozycję pędzla
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Obrysy używają tego pędzla. Zastosować nową kompozycję do tych obrysów, czy pozostawić je bez zmian i dodać kopię pędzla z nową kompozycją?
+	Apply to Strokes	Zastosuj do obrysów
+	Leave Strokes	Pozostaw obrysy
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` nie ma kompozycji (mają ją tylko pędzle rozproszone, artystyczne i wzorka)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Narzędzia układania
@@ -6795,8 +6823,33 @@ breakText	Glyphs	Glify
 @plural	{n} line cut|{n} lines cut	{n} skrócony wiersz|{n} skrócone wiersze|{n} skróconych wierszy
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` muszą być numerami wierszy przechowywanych w konsoli, `first` przed `last`
 
+# Learn panel
+	Learn	Nauka
+	Explore tutorials	Przeglądaj samouczki
+	For you	Dla Ciebie
+	Skills	Umiejętności
+	Get started	Pierwsze kroki
+	Quick skill guide	Krótki przewodnik po umiejętnościach
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Krótkie praktyczne samouczki dotyczące podstawowych narzędzi, pogrupowane według umiejętności. Wybierz umiejętność, aby zobaczyć jej samouczki.
+	List Tutorials	Wyświetl samouczki
+	Show Tutorial	Pokaż samouczek
+@msg	missing `tutorial` (see learn.list)	brak `tutorial` (patrz learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	nieznany samouczek `{id}` (patrz learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Odśwież odroczone efekty
 	Deferred Effects	Odroczone efekty
 @msg	no plug-in effect is deferred	żaden efekt wtyczki nie jest odroczony
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Otwarto z {n} odroczonym efektem wtyczki. Efekt › Odśwież odroczone efekty go uruchamia.|Otwarto z {n} odroczonymi efektami wtyczek. Efekt › Odśwież odroczone efekty je uruchamia.|Otwarto z {n} odroczonymi efektami wtyczek. Efekt › Odśwież odroczone efekty je uruchamia.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Narzędzia do cięcia
+	Stencil Bridges…	Mostki szablonu…
+	Stencil Bridges	Mostki szablonu
+	Shortest Crossing	Najkrótsze przejście
+	Direction	Kierunek
+@msg	The selected art has no islands to bridge	Zaznaczona grafika nie ma wysp do połączenia
+@msg	No bridge of this width fits across the selected art	Żaden mostek o tej szerokości nie mieści się w zaznaczonej grafice
+@msg	Some islands could not be joined to the area around the art	Niektórych wysp nie udało się połączyć z obszarem wokół grafiki
+@msg	`width` must be from {lo} to {hi} pt	`width` musi mieścić się w zakresie od {lo} do {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` musi być liczbą całkowitą od 1 do {MAX_BRIDGES_PER_ISLAND}

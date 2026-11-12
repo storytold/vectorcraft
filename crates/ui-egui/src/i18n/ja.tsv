@@ -423,6 +423,8 @@ digits	Malayalam	マラヤーラム数字
 	Stair Step	階段
 	Gravity	引力
 	Type on a Path Options…	パス上文字オプション…
+	Center on Top	上端に中央揃え
+	Center on Bottom	下端に中央揃え
 	Threaded Text	スレッドテキストオプション
 	Create	作成
 	Release Selection	選択部分をリリース
@@ -453,6 +455,10 @@ digits	Malayalam	マラヤーラム数字
 	Arch	アーチ
 @msg	select point type or type on a path	ポイント文字またはパス上文字を選択してください
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	スレッドテキスト内のパス上文字にはダイナミックテキストを使用できません: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	オープンパスや複合パス上のパス上文字は上端または下端に中央揃えできません: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	長さや高さのないパスのパス上文字は中央揃えできません: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	スレッドテキスト内のパス上文字は上端または下端に中央揃えできません: {frames}
+@msg	select type on a closed path	クローズパス上のパス上文字を選択してください
 	Fill with Placeholder Text	サンプルテキストの割り付け
 	Insert Inline Symbol	インラインシンボルを挿入
 	Show Hidden Characters	制御文字を表示
@@ -531,6 +537,8 @@ digits	Malayalam	マラヤーラム数字
 	Extrude & Bevel…	押し出しとベベル…
 	3D (Classic)	3D（クラシック）
 	Extrude & Bevel (Classic)…	押し出しとベベル（クラシック）…
+	Revolve (Classic)…	回転体（クラシック）…
+	Rotate (Classic)…	回転（クラシック）…
 	Surface	表面
 	Wireframe	ワイヤーフレーム
 	No Shading	陰影なし
@@ -872,6 +880,7 @@ digits	Malayalam	マラヤーラム数字
 	Sky Gradients	空のグラデーション
 	Neutral Gradients	ニュートラルグラデーション
 	Organic Fades	オーガニックフェード
+	Holographic	ホログラフィック
 	Duotone Gradients	ダブルトーングラデーション
 	Radial Glows	円形グロー
 	Save Swatch Library…	スウォッチライブラリを保存…
@@ -2943,6 +2952,9 @@ mark-style	Japanese	日本式
 	Right Plane	右面
 	Right:	右:
 	Roman Hanging Punctuation	欧文ぶら下がり
+	Korean Line Break Anywhere	韓国語の任意位置での改行
+	East Asian Composition Settings	東アジア言語の組版設定
+	Korean Composition Settings	韓国語の組版設定
 	Rotate	回転
 	Rotate Tool	回転ツール
 	Rotate View Tool	回転ビューツール
@@ -4697,6 +4709,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{bpp}-bit bitmaps can't be read	{bpp} ビットのビットマップは読み込めません
 @msg	not an EMF or WMF file	EMF ファイルでも WMF ファイルでもありません
 @msg	not an HP-GL file	HP-GL ファイルではありません
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` は 1〜255 個の #rrggbb 形式のカラーの配列にしてください
 @msg	its layers use {_1}, which aren't read yet	レイヤーで使用されている {_1} はまだ読み込めません
 @msg	the EMF header is damaged	EMF ヘッダーが破損しています
 @msg	damaged	破損しています
@@ -6001,6 +6014,17 @@ axis	Y Axis	Y 軸
 	Charge Wave	チャージウェーブ
 	Spark Trail	スパークトレイル
 	Calligraphic Nibs	カリグラフィペン先
+	Bristle Brushes	剛毛ブラシ集
+	Fine Liner	細線ライナー
+	Pointed Flat	先細平筆
+	Stubby Round	短丸筆
+	Dry Scrub	ドライスクラブ
+	Soft Dome	ソフトドーム
+	Filbert	フィルバート
+	Angled Round	斜め丸筆
+	Angled Flat	斜め平筆
+	Fan Blender	ぼかし扇筆
+	Grass Fan	草描き扇筆
 	Pattern Borders	パターンボーダー
 	Scatter Shapes	散布シェイプ
 	Save Brush Library…	ブラシライブラリを保存…
@@ -6380,6 +6404,10 @@ breakText	Glyphs	字形
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	これらのブラシの 1 つ以上が線で使われています。それらの線からブラシを外して、ブラシを削除しますか？
 	Remove Strokes	線を削除
 	Place Brush Art	ブラシのアートを配置
+	Replace Brush Art	ブラシのアートを置き換え
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	このブラシは線で使われています。新しいアートをそれらの線に適用しますか？それとも線をそのままにして、新しいアートを持つブラシのコピーを追加しますか？
+	Apply to Strokes	線に適用
+	Leave Strokes	線を保持
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` にはアートがありません (アートを持つのは散布ブラシ、アートブラシ、パターンブラシだけです)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	配置ツール
@@ -6633,8 +6661,33 @@ breakText	Glyphs	字形
 @plural	{n} line cut|{n} lines cut	{n} 行を切り詰め
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` と `last` には、コンソールが保持している行の番号を、`first` が `last` より前になるよう指定してください
 
+# Learn panel
+	Learn	学ぶ
+	Explore tutorials	チュートリアルを見る
+	For you	おすすめ
+	Skills	スキル
+	Get started	はじめに
+	Quick skill guide	クイックスキルガイド
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	基本ツールを学ぶ短い実践チュートリアルを、スキルごとにまとめています。スキルを選ぶとチュートリアルが表示されます。
+	List Tutorials	チュートリアルの一覧
+	Show Tutorial	チュートリアルを表示
+@msg	missing `tutorial` (see learn.list)	`tutorial` が指定されていません (learn.list を参照)
+@msg	unknown tutorial `{id}` (see learn.list)	`{id}` は不明なチュートリアルです (learn.list を参照)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	保留中の効果を更新
 	Deferred Effects	保留中の効果
 @msg	no plug-in effect is deferred	保留中のプラグイン効果はありません
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	プラグイン効果を {n} 件保留して開きました。「効果 › 保留中の効果を更新」で実行します。
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	カッティングツール
+	Stencil Bridges…	ステンシルブリッジ…
+	Stencil Bridges	ステンシルブリッジ
+	Shortest Crossing	最短の横断
+	Direction	方向
+@msg	The selected art has no islands to bridge	選択したアートワークにはブリッジでつなぐアイランドがありません
+@msg	No bridge of this width fits across the selected art	この幅のブリッジは選択したアートワークに収まりません
+@msg	Some islands could not be joined to the area around the art	一部のアイランドをアートワークの周囲の領域につなげられませんでした
+@msg	`width` must be from {lo} to {hi} pt	`width` は {lo}～{hi} pt の範囲で指定してください
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` には 1 から {MAX_BRIDGES_PER_ISLAND} の整数を指定してください

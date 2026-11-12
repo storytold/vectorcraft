@@ -416,6 +416,8 @@ digits	Malayalam	말라얄람어
 	Stair Step	계단
 	Gravity	중력
 	Type on a Path Options…	패스 위 문자 옵션…
+	Center on Top	위쪽에 가운데 맞춤
+	Center on Bottom	아래쪽에 가운데 맞춤
 	Threaded Text	연결된 문자
 	Create	만들기
 	Release Selection	선택 해제
@@ -446,6 +448,10 @@ digits	Malayalam	말라얄람어
 	Arch	아치
 @msg	select point type or type on a path	포인트 문자 또는 패스 위 문자를 선택하십시오
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	연결된 문자의 패스 위 문자에는 동적 텍스트를 사용할 수 없습니다: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	열린 패스나 컴파운드 패스 위 문자는 위쪽이나 아래쪽에 가운데 맞춤할 수 없습니다: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	길이나 높이가 없는 패스 위 문자는 가운데 맞춤할 수 없습니다: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	연결된 문자의 패스 위 문자는 위쪽이나 아래쪽에 가운데 맞춤할 수 없습니다: {frames}
+@msg	select type on a closed path	닫힌 패스 위 문자를 선택하세요
 	Fill with Placeholder Text	자리 표시 문자로 채우기
 	Insert Inline Symbol	인라인 심볼 삽입
 	Show Hidden Characters	숨겨진 문자 표시
@@ -524,6 +530,8 @@ digits	Malayalam	말라얄람어
 	Extrude & Bevel…	돌출 및 경사…
 	3D (Classic)	3D(클래식)
 	Extrude & Bevel (Classic)…	돌출 및 경사(클래식)…
+	Revolve (Classic)…	회전체(클래식)…
+	Rotate (Classic)…	회전(클래식)…
 	Surface	표면
 	Wireframe	와이어프레임
 	No Shading	셰이딩 없음
@@ -865,6 +873,7 @@ digits	Malayalam	말라얄람어
 	Sky Gradients	하늘 그레이디언트
 	Neutral Gradients	중간색 그레이디언트
 	Organic Fades	유기적 페이드
+	Holographic	홀로그래픽
 	Duotone Gradients	듀오톤 그레이디언트
 	Radial Glows	방사형 광선
 	Save Swatch Library…	견본 라이브러리 저장…
@@ -2932,6 +2941,9 @@ mark-style	Japanese	일본식
 	Right Plane	오른쪽 평면
 	Right:	오른쪽:
 	Roman Hanging Punctuation	로마자 걸림 문장 부호
+	Korean Line Break Anywhere	한글 어디서나 줄 바꿈
+	East Asian Composition Settings	동아시아 조판 설정
+	Korean Composition Settings	한글 조판 설정
 	Rotate	회전
 	Rotate Tool	회전 도구
 	Rotate View Tool	보기 회전 도구
@@ -4624,6 +4636,7 @@ theme	Appearance	외관
 @msg	{bpp}-bit bitmaps can't be read	{bpp}비트 비트맵은 읽을 수 없습니다
 @msg	not an EMF or WMF file	EMF 또는 WMF 파일이 아닙니다
 @msg	not an HP-GL file	HP-GL 파일이 아닙니다
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens`는 #rrggbb 색상 1~255개의 배열이어야 합니다
 @msg	its layers use {_1}, which aren't read yet	레이어에 {_1}이(가) 있으며, 아직 읽을 수 없습니다
 @msg	the EMF header is damaged	EMF 헤더가 손상되었습니다
 @msg	damaged	손상됨
@@ -5897,6 +5910,17 @@ axis	Y Axis	Y축
 	Charge Wave	차지 웨이브
 	Spark Trail	스파크 트레일
 	Calligraphic Nibs	서예 펜촉
+	Bristle Brushes	강모 브러시 모음
+	Fine Liner	가는 라이너
+	Pointed Flat	뾰족한 평붓
+	Stubby Round	짧은 둥근 붓
+	Dry Scrub	마른 문지르기
+	Soft Dome	부드러운 돔
+	Filbert	필버트
+	Angled Round	사선 둥근 붓
+	Angled Flat	사선 평붓
+	Fan Blender	블렌딩 부채붓
+	Grass Fan	잔디 부채붓
 	Pattern Borders	패턴 테두리
 	Scatter Shapes	흩뿌리기 모양
 	Save Brush Library…	브러시 라이브러리 저장…
@@ -6276,6 +6300,10 @@ breakText	Glyphs	글리프
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	선에서 이 브러시 중 하나 이상을 사용합니다. 해당 선에서 브러시를 제거하고 브러시를 삭제하시겠습니까?
 	Remove Strokes	선 제거
 	Place Brush Art	브러시 아트 배치
+	Replace Brush Art	브러시 아트 바꾸기
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	선에서 이 브러시를 사용합니다. 새 아트를 해당 선에 적용하시겠습니까, 아니면 선을 그대로 두고 새 아트로 브러시 사본을 추가하시겠습니까?
+	Apply to Strokes	선에 적용
+	Leave Strokes	선 유지
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}`에는 아트가 없습니다 (흩뿌리기, 아트, 패턴 브러시에만 아트가 있습니다)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	배치 도구
@@ -6529,8 +6557,33 @@ breakText	Glyphs	글리프
 @plural	{n} line cut|{n} lines cut	줄 {n}개 잘림
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first`와 `last`는 콘솔에 있는 줄 번호여야 하며 `first`가 `last`보다 앞서야 합니다
 
+# Learn panel
+	Learn	학습
+	Explore tutorials	튜토리얼 살펴보기
+	For you	추천
+	Skills	기술
+	Get started	시작하기
+	Quick skill guide	빠른 기술 가이드
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	기본 도구를 익히는 짧은 실습 튜토리얼을 기술별로 모았습니다. 기술을 선택하면 해당 튜토리얼이 표시됩니다.
+	List Tutorials	튜토리얼 목록
+	Show Tutorial	튜토리얼 표시
+@msg	missing `tutorial` (see learn.list)	`tutorial`이 없습니다(learn.list 참조)
+@msg	unknown tutorial `{id}` (see learn.list)	알 수 없는 튜토리얼 `{id}`(learn.list 참조)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	보류된 효과 새로 고침
 	Deferred Effects	보류된 효과
 @msg	no plug-in effect is deferred	보류된 플러그인 효과가 없습니다
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	플러그인 효과 {n}개를 보류하고 열었습니다. 효과 › 보류된 효과 새로 고침으로 실행합니다.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	커팅 도구
+	Stencil Bridges…	스텐실 브리지…
+	Stencil Bridges	스텐실 브리지
+	Shortest Crossing	최단 가로지르기
+	Direction	방향
+@msg	The selected art has no islands to bridge	선택한 아트워크에 연결할 섬이 없습니다
+@msg	No bridge of this width fits across the selected art	이 너비의 브리지가 선택한 아트워크에 들어가지 않습니다
+@msg	Some islands could not be joined to the area around the art	일부 섬을 아트워크 주변 영역에 연결할 수 없습니다
+@msg	`width` must be from {lo} to {hi} pt	`width`는 {lo}에서 {hi}pt 사이여야 합니다
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`는 1에서 {MAX_BRIDGES_PER_ISLAND} 사이의 정수여야 합니다

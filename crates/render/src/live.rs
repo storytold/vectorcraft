@@ -781,7 +781,7 @@ mod tests {
             d.symbols.push(Symbol { dynamic: false, name: format!("S{k}"), art: Arc::new(art) });
         }
         let first = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S0".into(), xf: Affine::IDENTITY });
-        let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+        let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
         let envelope = NodeKind::Envelope {
             content: vec![Arc::new(first)],
             kind: Box::new(kind),
@@ -815,7 +815,7 @@ mod tests {
             d.symbols.push(Symbol { dynamic: false, name: name.into(), art: art.clone() });
         }
         let content = ["A", "B", "C"].map(|s| Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: s.into(), xf: Affine::IDENTITY })));
-        let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+        let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
         let envelope = NodeKind::Envelope {
             content: content.to_vec(),
             kind: Box::new(kind),

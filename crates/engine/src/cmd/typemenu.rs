@@ -61,6 +61,24 @@ pub fn specs() -> Vec<CommandSpec> {
             path_options
         ),
         cmd!(
+            "type.pathCenter.top",
+            "Center on Top",
+            ["Type", "Type on a Path"],
+            None,
+            "{ids?|id?} slide the selected type on a closed path along it so that the middle of the span between its start and end brackets lands on the path's topmost point as the object is drawn (after its transform, so a rotated, scaled or skewed path is measured as it appears; on a level stretch such as a rectangle's top edge, its middle; with several separate topmost points, the middle of the shortest part of the path that holds them all), keeping the span's length (a full turn stays a full turn), and set the first paragraph's alignment to Center unless it is Center or Justify Center, so the type is centered there. Point type and area type in the selection are left as they are. Type on an open or compound path, type in a thread, and type on a path with no length or no height are refused with an error that names them, and nothing changes. When every object is already centered there, nothing changes and no undo step is recorded → {ids, start, end} (the first object's brackets)",
+            has_closed_path_type,
+            path_center_top
+        ),
+        cmd!(
+            "type.pathCenter.bottom",
+            "Center on Bottom",
+            ["Type", "Type on a Path"],
+            None,
+            "{ids?|id?} as type.pathCenter.top, on the path's bottommost point as drawn. The type is not flipped: on the bottom of a path that runs clockwise it reads upside down until Type on a Path Options › Flip turns it → {ids, start, end} (the first object's brackets)",
+            has_closed_path_type,
+            path_center_bottom
+        ),
+        cmd!(
             "type.dynamicText",
             "Dynamic Text",
             ["Type"],
@@ -311,7 +329,10 @@ fn to_area(s: &mut Session, p: &Value) -> Result<Value> {
                 continue;
             }
             let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
-            let mut b = if lay.bounds.area() > 0.0 { lay.bounds } else { t.estimate_bounds() };
+            // The frame is worked out in line space, where the lines are; vertical type turns it
+            // into text space with the lines.
+            let text_bounds = if lay.bounds.area() > 0.0 { lay.bounds } else { t.estimate_bounds() };
+            let mut b = lay.line_xf.inverse().transform_rect_bbox(text_bounds);
             // Across, the frame spans the lines as they are aligned: from their starts to their ends
             // without the tracking after their last characters (`LineInfo::trailing`), not to the
             // ink, which tracking can pull past an advance. Area type aligns them alike.
@@ -332,7 +353,7 @@ fn to_area(s: &mut Session, p: &Value) -> Result<Value> {
                 Justify::Auto if lay.lines.first().is_some_and(|l| l.rtl) => (slack, 0.0),
                 _ => (0.0, slack),
             };
-            let frame = Rect::new(b.x0 - sl, top, b.x1 + sr, b.y1.max(top + 1.0));
+            let frame = lay.line_xf.transform_rect_bbox(Rect::new(b.x0 - sl, top, b.x1 + sr, b.y1.max(top + 1.0)));
             t.kind = TextKind::Area { frame: shapes::rectangle(frame) };
             refresh_bounds(t);
         }
@@ -368,6 +389,8 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
             // Point type is in no thread: its first paragraph starts in it.
             t.first_para_continues = false;
             let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+            // The lines are in line space; the frame's bounds are taken there too.
+            let fb = lay.line_xf.inverse().transform_rect_bbox(fb);
             let plain = t.plain_text();
             let baseline = lay.lines.first().map(|l| l.baseline).unwrap_or(fb.y0 + t.first_style().size * 0.8);
             // Soft wraps → explicit breaks (replace the space before the wrap when there is one).
@@ -414,12 +437,145 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
             // converting back to area type does not turn it on again.
             t.dynamic_text = false;
             t.kind = TextKind::Point;
-            t.xf *= Affine::translate((ox, baseline));
+            // The origin is in the area type's line space; point type's line space puts its own
+            // origin there (vertical point type turns its lines about a different point).
+            let point_xf = if lay.vertical { vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).line_xf } else { Affine::IDENTITY };
+            t.xf *= lay.line_xf * Affine::translate((ox, baseline)) * point_xf.inverse();
             refresh_bounds(t);
         }
         Ok(())
     })?;
     Ok(ids_json(&ids))
+}
+
+/// Whether type on a path `t` runs along one closed path (no open or compound path).
+fn on_one_closed_path(t: &TextObject) -> bool {
+    matches!(&t.kind, TextKind::OnPath { path, .. } if path.subpaths.len() == 1 && path.is_closed())
+}
+
+/// Why `type.pathCenter.top` and `.bottom` refuse type on a path `ids`: those on an open or
+/// compound path, then those in a thread; None when they take every one.
+fn path_center_refusal(d: &Document, ids: &[NodeId]) -> Option<String> {
+    let open = ids.iter().filter(|id| !path_text(d.node(**id)).is_some_and(on_one_closed_path)).map(|id| id.0.to_string()).collect::<Vec<_>>();
+    if !open.is_empty() {
+        let open = open.join(", ");
+        return Some(format!("type on an open or compound path cannot be centered on its top or bottom: {open}"));
+    }
+    let frames = threaded_ids(d, ids);
+    (!frames.is_empty()).then(|| format!("type on a path in a thread cannot be centered on its top or bottom: {frames}"))
+}
+
+/// `type.pathCenter.top` and `.bottom` are enabled for a selection holding type on a path, all of
+/// it on one closed path and none of it in a thread.
+fn has_closed_path_type(s: &Session) -> std::result::Result<(), String> {
+    has_selection(s)?;
+    let st = s.active().ok_or("no document open")?;
+    let d = &st.doc;
+    let selected: Vec<NodeId> = st.selection.objects.to_vec();
+    let paths: Vec<NodeId> = text_ids(d, &selected).into_iter().filter(|id| path_text(d.node(*id)).is_some()).collect();
+    if paths.is_empty() {
+        return Err("select type on a closed path".into());
+    }
+    path_center_refusal(d, &paths).map_or(Ok(()), Err)
+}
+
+/// The brackets that center type on a path `t` on its path's topmost point (`bottom`: its
+/// bottommost) as `t.xf` draws it, its span keeping its length; None for a path with no length or
+/// no height.
+fn centered_brackets(t: &TextObject, bottom: bool) -> Option<(f64, Option<f64>)> {
+    let TextKind::OnPath { path, end, .. } = &t.kind else { return None };
+    let (from, to) = t.kind.path_span()?;
+    let arc = vectorcraft_geom::ArcPath::new(path);
+    if arc.is_empty() {
+        return None;
+    }
+    let flip = if bottom { Affine::FLIP_Y } else { Affine::IDENTITY };
+    let middle = arc.topmost(flip * t.xf)? / arc.len();
+    let run = to - from;
+    let start = (middle - run * 0.5).rem_euclid(1.0).clamp(0.0, 1.0);
+    // Without an end bracket the type runs once round; a full turn's end stays on its start.
+    let end = end.map(|_| if run >= 1.0 - 1e-12 { start } else { (start + run).rem_euclid(1.0).clamp(0.0, 1.0) });
+    Some((start, end))
+}
+
+/// Whether brackets `a` and `b`, fractions of a closed path's length, are at one place within
+/// rounding (0 and 1 are one place).
+fn same_bracket(a: f64, b: f64) -> bool {
+    let d = (a - b).rem_euclid(1.0);
+    d.min(1.0 - d) <= 1e-9
+}
+
+fn path_center_top(s: &mut Session, p: &Value) -> Result<Value> {
+    path_center(s, p, false)
+}
+
+fn path_center_bottom(s: &mut Session, p: &Value) -> Result<Value> {
+    path_center(s, p, true)
+}
+
+/// Type › Type on a Path › Center on Top and Center on Bottom: slide the selected type on closed
+/// paths along them so the middle of each span lands on the path's top (`bottom`: its bottom) as
+/// drawn, and center the first paragraph, in one undo step; none when nothing changes.
+fn path_center(s: &mut Session, p: &Value, bottom: bool) -> Result<Value> {
+    let c = if bottom { "type.pathCenter.bottom" } else { "type.pathCenter.top" };
+    let centered = |j: Justify| matches!(j, Justify::Center | Justify::JustifyCenter);
+    // Each object the command changes, with its new brackets when they move and whether its first
+    // paragraph is set to Center.
+    let (ids, changes) = {
+        let d = &s.doc()?.doc;
+        let ids: Vec<NodeId> = texts(s, p, c)?.into_iter().filter(|i| path_text(d.node(*i)).is_some()).collect();
+        if ids.is_empty() {
+            return Err(bad(c, "select type on a closed path"));
+        }
+        if let Some(why) = path_center_refusal(d, &ids) {
+            return Err(bad(c, why));
+        }
+        let (mut changes, mut flat) = (vec![], vec![]);
+        for id in &ids {
+            let Some(t) = path_text(d.node(*id)) else { continue };
+            let TextKind::OnPath { start, end, .. } = &t.kind else { continue };
+            let Some((to_start, to_end)) = centered_brackets(t, bottom) else {
+                flat.push(id.0.to_string());
+                continue;
+            };
+            let stays = same_bracket(*start, to_start)
+                && match (end, to_end) {
+                    (None, None) => true,
+                    (Some(a), Some(b)) => same_bracket(*a, b),
+                    _ => false,
+                };
+            let align = !centered(t.para_at(0).justify);
+            if !stays || align {
+                changes.push((*id, (!stays).then_some((to_start, to_end)), align));
+            }
+        }
+        if !flat.is_empty() {
+            let flat = flat.join(", ");
+            return Err(bad(c, format!("type on a path with no length or no height cannot be centered: {flat}")));
+        }
+        (ids, changes)
+    };
+    if !changes.is_empty() {
+        s.edit(if bottom { "Center on Bottom" } else { "Center on Top" }, |d, _| {
+            for (id, brackets, align) in &changes {
+                let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+                if let (Some(b), TextKind::OnPath { start, end, .. }) = (brackets, &mut t.kind) {
+                    (*start, *end) = *b;
+                }
+                if *align {
+                    t.edit_paras(Some(0..1), |para| para.justify = Justify::Center);
+                }
+                refresh_bounds(t);
+            }
+            Ok(())
+        })?;
+    }
+    let d = &s.doc()?.doc;
+    let (start, end) = ids.first().and_then(|id| path_text(d.node(*id))).map_or((0.0, None), |t| match &t.kind {
+        TextKind::OnPath { start, end, .. } => (*start, *end),
+        _ => (0.0, None),
+    });
+    Ok(json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "start": start, "end": end}))
 }
 
 /// The options `type.pathOptions` sets; with none of them given it queries.
