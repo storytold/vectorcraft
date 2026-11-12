@@ -3641,6 +3641,89 @@ fn an_overflowing_grapheme_keeps_the_styles_of_its_characters() {
     assert_eq!(r["gid"], json!(g('b')), "the overflowing Ka is shaped apart from the nukta of another size");
 }
 
+/// A contextual alternate with no feature must name the fallback face that supplies the glyph,
+/// including when the character is outside its frame. Neither another face's glyph nor an
+/// out-of-range id becomes a choice.
+#[test]
+fn a_contextual_fallback_glyph_choice_draws_through_undo_and_reopen() {
+    use vectorcraft_text::test_fonts::{
+        CONTEXTUAL_FALLBACK_CHAR as CH, CONTEXTUAL_FALLBACK_FAMILY, alternates_family, alternates_font, contextual_fallback_font, source_sans_gid,
+    };
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the primary test font builds"));
+    db.add_font(contextual_fallback_font().expect("the fallback test font builds"));
+    let primary = db.face(alternates_family(true), "Regular").expect("the primary face");
+    let fallback = db.face(CONTEXTUAL_FALLBACK_FAMILY, "Regular").expect("the supplying face");
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let (default, alternate) = (g('m'), g('d'));
+    assert_eq!(primary.glyph_for(CH), 0);
+    assert_eq!(db.face_covering(CH).unwrap().id(), fallback.id(), "only the fixture supplies the private-use character");
+    assert!(!fallback.alternates(CH).iter().any(|a| a.gid == alternate), "the alternate belongs to its shaped, not nominal, glyph");
+    assert!(!fallback.is_unlisted_alternate(CH, alternate), "the contextual validation path is required");
+    let text = format!("a{CH}a");
+    let start = 1;
+    let end = start + CH.len_utf8();
+    let drawn = |t: &TextObject| {
+        let mut open = t.clone();
+        open.kind = TextKind::Point;
+        vectorcraft_text::layout(db, &open).glyphs.into_iter().find(|g| g.byte == start).map(|g| (g.font_id, g.gid))
+    };
+    let state = |s: &Session| (s.doc().unwrap().history.undo.len(), s.doc().unwrap().revision);
+
+    for overflow in [false, true] {
+        let mut s = session();
+        let mut spec = json!({"x": 0, "y": 0, "text": text, "size": 20, "font": alternates_family(true)});
+        if overflow {
+            spec["area"] = json!({"width": 200, "height": 2});
+        }
+        let id = NodeId(s.execute("text.create", &spec).unwrap()["id"].as_u64().unwrap());
+        let before = obj(&s, id);
+        assert_eq!(drawn(&before), Some((fallback.id(), default)));
+        if overflow {
+            assert!(vectorcraft_text::layout(db, &before).glyphs.is_empty(), "the original frame overflows");
+        }
+        let contextual = vectorcraft_text::alternates_in_context(db, &before, start).expect("the panel's contextual alternates");
+        assert_eq!((contextual.font_id, contextual.default), (fallback.id(), default));
+        assert!(contextual.alternates.iter().any(|a| a.gid == alternate && a.apply.is_none()));
+
+        let unchanged = state(&s);
+        for gid in [primary.glyph_for('a'), fallback.glyph_count()] {
+            let err = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": start, "gid": gid})).unwrap_err();
+            assert!(err.to_string().contains("is not an alternate"), "{err}");
+            assert_eq!(state(&s), unchanged, "a refused choice makes no edit");
+            assert_eq!(obj(&s, id).runs, before.runs);
+        }
+        let result = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": start, "gid": alternate})).unwrap();
+        assert_eq!(result, json!({"id": id.0, "start": start, "end": end, "gid": alternate}));
+        assert_eq!(state(&s).0, unchanged.0 + 1, "one undo step");
+        let chosen = obj(&s, id);
+        assert_eq!(chosen.plain_text(), text);
+        assert_eq!(drawn(&chosen), Some((fallback.id(), alternate)));
+        let choice = chosen.runs.iter().find_map(|r| r.style.glyph_alternate.as_ref()).expect("the stored choice");
+        assert_eq!(choice, &fallback.choice(CH, alternate), "the choice keeps the supplying face's identity");
+
+        let mut wrong_face = chosen.clone();
+        wrong_face.runs.iter_mut().find(|r| r.style.glyph_alternate.is_some()).unwrap().style.glyph_alternate = Some(primary.choice(CH, alternate));
+        assert_eq!(drawn(&wrong_face), Some((fallback.id(), default)), "another face's choice is not drawn");
+
+        let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
+        let reopened = vectorcraft_format::load(&bytes).unwrap();
+        let NodeKind::Text(reopened) = &reopened.node(id).unwrap().kind else { panic!("text missing") };
+        assert_eq!(drawn(reopened), Some((fallback.id(), alternate)), "native restore retains the face and glyph");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(obj(&s, id).runs, before.runs, "Undo restores the original runs");
+        assert_eq!(drawn(&obj(&s, id)), Some((fallback.id(), default)));
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(drawn(&obj(&s, id)), Some((fallback.id(), alternate)), "Redo restores the choice");
+
+        let result = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": start, "gid": null})).unwrap();
+        assert_eq!(result["gid"], json!(default), "clearing reports the fallback's shaped glyph");
+        assert_eq!(drawn(&obj(&s, id)), Some((fallback.id(), default)));
+        assert!(obj(&s, id).runs.iter().all(|r| r.style.glyph_alternate.is_none()));
+    }
+}
+
 #[test]
 fn glyph_alternates_query_reports_the_fallback_glyph_that_is_drawn() {
     use vectorcraft_text::test_fonts::{alternates_family, alternates_font};

@@ -990,6 +990,47 @@ pub fn aliased_joining_font() -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family and private-use character of [`contextual_fallback_font`].
+pub const CONTEXTUAL_FALLBACK_FAMILY: &str = "Contextual Fallbacktest Sans";
+pub const CONTEXTUAL_FALLBACK_CHAR: char = '\u{F6084}';
+
+/// A fallback fixture with coverage no bundled face shares: `ccmp` draws its private-use
+/// character (n) as m, whose `cv01` alternate d has no applicable character-style feature.
+pub fn contextual_fallback_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::gsub::{Gsub, SingleSubst, SingleSubstFormat2, SubstitutionLookup, SubstitutionLookupList};
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    let base = remapped_source_sans(
+        CONTEXTUAL_FALLBACK_FAMILY,
+        "ContextualFallbacktestSans-Regular",
+        &[(CONTEXTUAL_FALLBACK_CHAR, 'n'), ('a', 'a'), (' ', ' ')],
+    )?;
+    let font = skrifa::FontRef::new(&base).ok()?;
+    let [n, m, d] = source_sans_gids(['n', 'm', 'd'])?;
+    let single = |from, to| {
+        SubstitutionLookup::Single(Lookup::new(
+            Default::default(),
+            vec![SingleSubst::from(SingleSubstFormat2::new(CoverageFormat1::new(vec![GlyphId16::new(from)]).into(), vec![GlyphId16::new(to)]))],
+        ))
+    };
+    let lookups = SubstitutionLookupList::new(vec![single(n, m), single(m, d)]);
+    let features = FeatureList::new(vec![
+        FeatureRecord::new(Tag::new(b"ccmp"), Feature::new(None, vec![0])),
+        FeatureRecord::new(Tag::new(b"cv01"), Feature::new(None, vec![1])),
+    ]);
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), Script::new(Some(LangSys::new(vec![0, 1])), vec![]))]);
+    let mut builder = FontBuilder::new();
+    builder.add_table(&Gsub::new(scripts, features, lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`ligature_caret_font`].
 pub const LIGATURE_CARET_FAMILY: &str = "Carettest Sans";
 

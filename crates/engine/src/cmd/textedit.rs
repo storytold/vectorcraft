@@ -1284,7 +1284,9 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let t = text_ref(s, id)?;
     let (ch, bytes, face) = glyph_target(&t, p, C)?;
-    let default = face.glyph_for(ch);
+    let db = vectorcraft_text::FontDb::global();
+    let context = std::cell::OnceCell::new();
+    let contextual = || context.get_or_init(|| vectorcraft_text::alternates_in_context(db, &t, bytes.start));
     let holder = t
         .runs
         .iter()
@@ -1305,6 +1307,16 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     let mut probe = t.clone();
     edit::style_range(&mut probe.runs, bytes.start, bytes.end, |st| st.glyph_alternate = None);
     let probe_lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &probe);
+    // Choices belong to the supplying face, including fallback for a missing grapheme. When the
+    // character overflows, the contextual probe finds that face in an unconstrained frame.
+    let face = probe_lay
+        .glyphs
+        .iter()
+        .find(|g| g.byte <= bytes.start && bytes.start < g.byte.saturating_add(g.len))
+        .and_then(|g| db.face_by_id(g.font_id))
+        .or_else(|| contextual().as_ref().and_then(|f| db.face_by_id(f.font_id)))
+        .unwrap_or(face);
+    let default = face.glyph_for(ch);
     let unchosen = holder
         .as_ref()
         .filter(|_| !styled)
@@ -1316,8 +1328,7 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
             if g == default
                 || face.alternates(ch).iter().any(|a| a.gid == g)
                 || face.is_unlisted_alternate(ch, g)
-                || vectorcraft_text::alternates_in_context(vectorcraft_text::FontDb::global(), &t, bytes.start)
-                    .is_some_and(|f| f.font_id == face.id() && f.alternates.iter().any(|a| a.gid == g)) =>
+                || contextual().as_ref().is_some_and(|f| f.font_id == face.id() && f.alternates.iter().any(|a| a.gid == g)) =>
         {
             Some(face.choice(ch, g))
         }

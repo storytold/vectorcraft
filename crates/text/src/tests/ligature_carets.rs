@@ -629,6 +629,65 @@ fn an_upright_ligature_takes_its_caret_down_its_cell() {
     assert!((at(900) - 0.5).abs() < 1e-9, "{}", at(900));
 }
 
+#[test]
+fn feature_only_settings_keep_a_ligature_whole() {
+    let db = db_with(vertical_ligature_caret_font(280));
+    for vertical in [false, true] {
+        let mut text = point("fi", VERTICAL_LIGATURE_CARET_FAMILY);
+        text.vertical = vertical;
+        let before = layout(&db, &text);
+        assert_eq!(before.glyphs.len(), 1, "the fixture ligates fi");
+        let plain = &before.glyphs[0];
+        for byte in [0, 1] {
+            for feature in ["salt=2", "ss03"] {
+                let mut featured = text.clone();
+                crate::edit::style_range(&mut featured.runs, byte, byte + 1, |st| st.features = vec![feature.into()]);
+                let after = layout(&db, &featured);
+                assert_eq!(after.glyphs.len(), 1, "{feature} at {byte}, vertical {vertical}: an unchanged fi stays ligated");
+                let glyph = &after.glyphs[0];
+                assert_eq!((glyph.gid, glyph.byte, glyph.len), (plain.gid, 0, 2));
+                assert_eq!(glyph.origin, plain.origin);
+                assert_eq!(glyph.xf, plain.xf);
+                assert_eq!(glyph.advance, plain.advance);
+                assert_eq!(glyph.carets, plain.carets);
+            }
+        }
+    }
+}
+
+#[test]
+fn drawing_differences_still_split_a_feature_styled_ligature() {
+    let db = db_with(ligature_caret_font(None));
+    let face = db.face(LIGATURE_CARET_FAMILY, "Regular").expect("the test face");
+    let changes: [fn(&mut CharStyle); 3] =
+        [|st| st.fill = vectorcraft_doc::color::Paint::None, |st| st.baseline_shift = 10.0, |st| st.underline = true];
+    for (i, change) in changes.into_iter().enumerate() {
+        for byte in [0, 1] {
+            let mut text = point("fi", LIGATURE_CARET_FAMILY);
+            crate::edit::style_range(&mut text.runs, byte, byte + 1, |st| {
+                st.features = vec!["salt=2".into()];
+                change(st);
+            });
+            let after = layout(&db, &text);
+            assert_eq!(after.glyphs.iter().map(|g| g.gid).collect::<Vec<_>>(), [face.glyph_for('f'), face.glyph_for('i')], "attribute {i} at {byte}");
+            for (byte, glyph) in after.glyphs.iter().enumerate() {
+                assert_eq!((glyph.byte, glyph.len, glyph.run), (byte, 1, byte), "split glyphs keep their own drawing style");
+            }
+        }
+    }
+}
+
+#[test]
+fn a_ligature_feature_still_applies_only_to_its_character_range() {
+    let db = db_with(ligature_caret_font(None));
+    let face = db.face(LIGATURE_CARET_FAMILY, "Regular").expect("the test face");
+    let mut text = point("fifi", LIGATURE_CARET_FAMILY);
+    crate::edit::style_range(&mut text.runs, 0, 1, |st| st.features = vec!["-liga".into()]);
+    let after = layout(&db, &text);
+    let glyphs = after.glyphs.iter().map(|g| (g.gid, g.byte, g.len)).collect::<Vec<_>>();
+    assert_eq!(glyphs, [(face.glyph_for('f'), 0, 1), (face.glyph_for('i'), 1, 1), (face.glyph_for(LIGATURE_CARET_GLYPH), 2, 2)]);
+}
+
 /// Horizontal type does not read Standard Vertical Roman Alignment or the tate-chu-yoko offsets, so
 /// setting one of them on the f of "fi" keeps the ligature. Vertical type reads them per glyph, so
 /// there the f is shaped apart from the i.

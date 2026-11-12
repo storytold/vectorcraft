@@ -198,23 +198,26 @@ fn selected_target(app: &VectorcraftApp) -> Option<Target<'_>> {
     None
 }
 
-/// Insert `ch` at the Type tool's caret, else append it to the selected text.
-fn insert(app: &mut VectorcraftApp, ctx: &egui::Context, ch: char) {
+/// Insert `ch` at the Type tool's caret, else append it to the selected text; whether it succeeded.
+fn insert(app: &mut VectorcraftApp, ctx: &egui::Context, ch: char) -> bool {
     let s = ch.to_string();
     if app.session.tool_wants_text() {
         let v = app.view_info();
         let target_before = crate::ime::target(&mut app.session, v);
         let before = crate::ime::stamp(&mut app.session, v);
         let r = app.session.tool_text(&s, v);
+        let inserted = r.is_ok();
         match &r {
             Err(e) => app.status(e.to_string()),
             Ok(_) => crate::ime::note_application_edit(app, ctx, v, target_before, before),
         }
         app.sync_views();
+        inserted
     } else if super::character::text_style(app).is_some() {
-        app.run("type.insert", json!({"text": s})).ok();
+        app.run("type.insert", json!({"text": s})).is_ok()
     } else {
         app.ui.status = "Select text or click into text with the Type tool to insert glyphs".into();
+        false
     }
 }
 
@@ -714,13 +717,16 @@ fn encoded_tip(face: &vectorcraft_text::FontFace, c: char, gid: u32) -> String {
 fn insert_character(app: &mut VectorcraftApp, ctx: &egui::Context, face: &vectorcraft_text::FontFace, c: char, gid: u32) {
     match base_letter(face, c, gid) {
         Some(base) => {
-            insert(app, ctx, base);
-            app.status(crate::i18n::fmt(
-                tl!("Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position."),
-                &[("base", &base.to_string()), ("code", &format!("{:04X}", base as u32))],
-            ));
+            if insert(app, ctx, base) {
+                app.status(crate::i18n::fmt(
+                    tl!("Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position."),
+                    &[("base", &base.to_string()), ("code", &format!("{:04X}", base as u32))],
+                ));
+            }
         }
-        None => insert(app, ctx, c),
+        None => {
+            insert(app, ctx, c);
+        }
     }
 }
 
@@ -1654,5 +1660,31 @@ mod tests {
             let NodeKind::Text(text) = &state.doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind else { panic!("text") };
             assert_eq!(text.plain_text(), "a");
         }
+    }
+
+    #[test]
+    fn a_normalized_glyph_without_a_text_target_preserves_the_insertion_error() {
+        use vectorcraft_text::test_fonts::{ALIASED_JOINING_FAMILY, aliased_joining_font};
+        let db = FontDb::global();
+        db.add_font(aliased_joining_font().expect("the test font builds"));
+        let face = db.face(ALIASED_JOINING_FAMILY, "Regular").expect("the test face");
+        let chars = face.chars().into_iter().filter(|(c, _)| !c.is_control() && !c.is_whitespace()).collect::<Vec<_>>();
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let ctx = egui::Context::default();
+        set_pstate(&ctx, "gl-font", Some((ALIASED_JOINING_FAMILY.to_string(), "Regular".to_string())));
+        let cells = inks(&tall_shapes(&ctx, &mut app));
+        let at = |c| chars.iter().position(|(ch, _)| *ch == c).expect("the encoded glyph");
+        double_click_in(&ctx, &mut app, cells[at('B')].0.center(), TALL);
+        let failed = app.ui.status.clone();
+        assert!(!failed.is_empty(), "the ordinary character reports the missing text target");
+        double_click_in(&ctx, &mut app, cells[at('\u{FE91}')].0.center(), TALL);
+        assert_eq!(app.ui.status, failed, "normalization must not overwrite the insertion failure with a success");
+        let state = app.session.active().unwrap();
+        assert_eq!(state.history.undo.len(), undo);
+        let mut texts = 0;
+        state.doc.walk(|n| texts += usize::from(matches!(n.kind, NodeKind::Text(_))));
+        assert_eq!(texts, 0, "neither glyph created or changed text");
     }
 }

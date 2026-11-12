@@ -875,24 +875,103 @@ fn source_run_at(runs: &[(Range<usize>, &CharStyle)], span: &Range<usize>, byte:
     source.get(i).filter(|(range, _)| range.contains(&byte)).map(|_| span.start + i)
 }
 
-/// Can one glyph draw characters in styles `a` and `b`? Only when the styles are equal, except that
-/// horizontal type (`vertical` false) does not read Standard Vertical Roman Alignment or the
-/// tate-chu-yoko offsets, so styles that differ only in those are drawn alike there. The space
-/// before a line's first character ([`space_before`]) is never read inside a cluster, which takes it
-/// from its first character, so it doesn't split a ligature either.
+/// Can one glyph draw characters in styles `a` and `b`? OpenType features already apply to their
+/// own character ranges during shaping, so feature-only differences do not split a cluster.
+/// Horizontal type does not read Standard Vertical Roman Alignment or the tate-chu-yoko offsets.
+/// The space before a line's first character ([`space_before`]) comes from the cluster's first
+/// character, so it does not split a ligature either.
 fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
-    let b = &CharStyle { kerning_before: a.kerning_before, ..b.clone() };
-    if a == b {
-        return true;
-    }
-    !vertical
-        && *a
-            == CharStyle {
-                standard_vertical_roman: a.standard_vertical_roman,
-                tcy_up_down: a.tcy_up_down,
-                tcy_left_right: a.tcy_left_right,
-                ..b.clone()
-            }
+    // Exhaustive, like `shapes_alike`: compare borrowed fields without copying feature lists.
+    let CharStyle {
+        font_family,
+        font_style,
+        font_version,
+        font_axes,
+        size,
+        leading,
+        tracking,
+        kerning,
+        kerning_before,
+        optical_kerning,
+        baseline_shift,
+        h_scale,
+        v_scale,
+        rotation,
+        fill,
+        stroke,
+        stroke_width,
+        underline,
+        strikethrough,
+        all_caps,
+        features: _,
+        style_name,
+        overprint_fill,
+        overprint_stroke,
+        stroke_cap,
+        stroke_join,
+        stroke_miter_limit,
+        stroke_dash,
+        stroke_align,
+        position,
+        small_caps,
+        char_align,
+        char_direction,
+        kashidas,
+        proportional_metrics,
+        tate_chu_yoko,
+        tcy_up_down,
+        tcy_left_right,
+        standard_vertical_roman,
+        digits,
+        font_height_reference,
+        no_break,
+        language,
+        glyph_alternate,
+    } = a;
+    // Keep PartialEq's non-reflexive behavior for ignored numeric fields, without cloning styles.
+    let offsets = (standard_vertical_roman, tcy_up_down, tcy_left_right);
+    let other_offsets = if vertical { (&b.standard_vertical_roman, &b.tcy_up_down, &b.tcy_left_right) } else { offsets };
+    kerning_before == &a.kerning_before
+        && offsets == other_offsets
+        && font_family == &b.font_family
+        && font_style == &b.font_style
+        && font_version == &b.font_version
+        && font_axes == &b.font_axes
+        && size == &b.size
+        && leading == &b.leading
+        && tracking == &b.tracking
+        && kerning == &b.kerning
+        && optical_kerning == &b.optical_kerning
+        && baseline_shift == &b.baseline_shift
+        && h_scale == &b.h_scale
+        && v_scale == &b.v_scale
+        && rotation == &b.rotation
+        && fill == &b.fill
+        && stroke == &b.stroke
+        && stroke_width == &b.stroke_width
+        && underline == &b.underline
+        && strikethrough == &b.strikethrough
+        && all_caps == &b.all_caps
+        && style_name == &b.style_name
+        && overprint_fill == &b.overprint_fill
+        && overprint_stroke == &b.overprint_stroke
+        && stroke_cap == &b.stroke_cap
+        && stroke_join == &b.stroke_join
+        && stroke_miter_limit == &b.stroke_miter_limit
+        && stroke_dash == &b.stroke_dash
+        && stroke_align == &b.stroke_align
+        && position == &b.position
+        && small_caps == &b.small_caps
+        && char_align == &b.char_align
+        && char_direction == &b.char_direction
+        && kashidas == &b.kashidas
+        && proportional_metrics == &b.proportional_metrics
+        && tate_chu_yoko == &b.tate_chu_yoko
+        && digits == &b.digits
+        && font_height_reference == &b.font_height_reference
+        && no_break == &b.no_break
+        && language == &b.language
+        && glyph_alternate == &b.glyph_alternate
 }
 
 /// Do text runs in styles `a` and `b` shape alike, so that they are shaped as one piece of text?
@@ -1151,8 +1230,8 @@ fn is_mark(c: char) -> bool {
 /// characters with automatic kerning: the manual value replaces the font's pair after its
 /// character, and a character before it with automatic kerning keeps the font's pair with it
 /// (except before a character that All Caps or Small Caps sets as several letters, such as ß as
-/// SS). A cluster that would take in characters of runs with different styles (a ligature, a
-/// base with its marks) is not formed: the segment is shaped in pieces at those run boundaries.
+/// SS). A cluster that would take in characters of runs with different drawing attributes (a
+/// ligature, a base with its marks) is not formed, except for paint-only harakat differences.
 fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFeatures, out: &mut Vec<SGlyph>) {
     let Segment { range, runs, source_runs, st, face, small, level } = seg;
     let (range, small) = (range.clone(), *small);
@@ -1426,8 +1505,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     cluster_starts.dedup();
     // A glyph is drawn in one style: where a cluster would take in characters of runs in different
     // styles, the runs are shaped apart, as runs that do not shape alike are.
-    // Except at harakat styled apart only in paint ([`crate::harakat`]), and, in horizontal type, where
-    // the runs differ only in settings that vertical type alone reads.
+    // Except at harakat styled apart only in paint ([`crate::harakat`]), feature-only boundaries,
+    // and, in horizontal type, settings that vertical type alone reads.
     let inside_clusters: Vec<usize> = boundaries()
         .filter(|&b| cluster_starts.binary_search(&b).is_err() && !drawn_alike(run_at(b - 1).1, run_at(b).1, feats.vertical))
         .filter(|b| mark_boundaries.binary_search(b).is_err())
