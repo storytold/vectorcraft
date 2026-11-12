@@ -262,14 +262,16 @@ capability model proposed for PhotoCraft plug-ins
   write the module to the `Plug-ins` folder, or can't remove the grant from `grants.json`, the folder keeps the module
   it held and `grants.json` keeps the grant. The new module runs until the session ends. When the grant can't be
   removed and the module already stored can't be read back or written back, the new module stays in the folder, and
-  the grant does not count for the rest of the session. The grant also does not count when the folder held no module
-  for that id. A
+  the grant stops counting. The grant also stops counting when the folder held no module for that id. A
   `grants.json` larger than 1 MiB, or one that is not a JSON list, grants nothing: the new module stays in the folder,
   and `plugin.remove` removes the plug-in. A `grants.json` that can't be opened or read counts as a grant that can't be
   removed. When VectorCraft loads the `Plug-ins` folder, it forgets any grant for an id whose stored module lists no
-  permissions. When it can't remove that grant from `grants.json`, or can't read the file, the grant does not count for
-  the rest of the session, or until the plug-in is granted again, including for the next load, which tries the removal
-  again. In Safe Mode, and for
+  permissions. When it can't remove that grant from `grants.json`, or can't read the file, the grant stops counting,
+  including for the next load, which tries the removal again. A grant that stops counting in either of these cases
+  does not count for any session in the same process that uses the same `Plug-ins` folder, by any path to it, until
+  `grants.json` can be written for that plug-in, as when the plug-in is granted again. Another process on the same
+  folder, for example `vectorcraft-cli` beside the app, still reads `grants.json` as it is written. A grant for the
+  same id kept in another `Plug-ins` folder counts. In Safe Mode, and for
   a stored module that the user disabled,
   VectorCraft does not read the module, and `grants.json` keeps the grant for its id. The Additional Plug-ins Folder
   and `plugin.reload` do not change the `Plug-ins` folder: when they leave a module that lists no permissions under an
