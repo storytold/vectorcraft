@@ -552,6 +552,21 @@ pub fn expand_art(d: &mut Document, n: &mut Node, stroke_art: StrokeArt) {
 /// painting their pieces name are looked up in `doc`. `None` when it has neither a stroke to
 /// outline nor a geometry effect, so bending first changes nothing.
 pub fn bake_appearance(doc: Option<&Document>, n: &Node) -> Option<Node> {
+    bake_appearance_as(doc, n, true)
+}
+
+/// [`bake_appearance`] for the glyph outlines of type in an envelope with Distort Appearance:
+/// geometry effects are applied as it applies them, and fills, gradients and patterns are left as
+/// it leaves them, but every stroke stays a stroke on its piece instead of becoming its filled
+/// outline. The envelope then bends the piece's path, and the stroke paints along the bent outline
+/// at its own weight, as `.ai` files draw the strokes of type in an envelope (#6644). `None` when
+/// it has no geometry effect, so bending first changes nothing.
+pub fn bake_type_appearance(doc: Option<&Document>, n: &Node) -> Option<Node> {
+    bake_appearance_as(doc, n, false)
+}
+
+/// [`bake_appearance`], or with `outline_strokes` false [`bake_type_appearance`].
+fn bake_appearance_as(doc: Option<&Document>, n: &Node, outline_strokes: bool) -> Option<Node> {
     if let Some(m) = crate::revolve_art_in(doc, n).or_else(|| crate::solid_art_in(doc, n)) {
         return Some(m);
     }
@@ -564,10 +579,10 @@ pub fn bake_appearance(doc: Option<&Document>, n: &Node) -> Option<Node> {
     if crate::has_transform_art(n)
         && let Some(mut m) = reshape(doc, n, None)
     {
-        bake_appearance_pieces(doc, &mut m);
+        bake_appearance_pieces(doc, &mut m, outline_strokes);
         return Some(m);
     }
-    let outlined = |i: &AppearanceItem| paints(i) && matches!(i, AppearanceItem::Stroke(s) if s.brush.is_none());
+    let outlined = |i: &AppearanceItem| outline_strokes && paints(i) && matches!(i, AppearanceItem::Stroke(s) if s.brush.is_none());
     let geometric = has_geometry(&n.appearance.effects) || n.appearance.items.iter().any(|i| has_geometry(item_effects(i)));
     if !geometric && !n.appearance.items.iter().any(outlined) {
         return None;
@@ -585,7 +600,7 @@ pub fn bake_appearance(doc: Option<&Document>, n: &Node) -> Option<Node> {
         let (ig, mut it) = apply_item(item, carried, &g, &ctx);
         clear_item_effects(&mut it);
         pieces.push(match &it {
-            AppearanceItem::Stroke(st) if st.brush.is_none() => {
+            AppearanceItem::Stroke(st) if outline_strokes && st.brush.is_none() => {
                 let outline = crate::stroke::outline_region(&ig, rule, st);
                 match st.path_gradient() {
                     // A gradient along or across the stroke: its gradient meshes clipped to the outline.
@@ -618,16 +633,16 @@ pub fn bake_appearance(doc: Option<&Document>, n: &Node) -> Option<Node> {
     Some(m)
 }
 
-/// [`bake_appearance`] every path and compound path in `n` that it changes, in place.
-fn bake_appearance_pieces(doc: Option<&Document>, n: &mut Node) {
+/// [`bake_appearance_as`] every path and compound path in `n` that it changes, in place.
+fn bake_appearance_pieces(doc: Option<&Document>, n: &mut Node, outline_strokes: bool) {
     if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) {
-        if let Some(m) = bake_appearance(doc, n) {
+        if let Some(m) = bake_appearance_as(doc, n, outline_strokes) {
             *n = m;
         }
         return;
     }
     for c in n.children_mut().into_iter().flatten() {
-        bake_appearance_pieces(doc, Arc::make_mut(c));
+        bake_appearance_pieces(doc, Arc::make_mut(c), outline_strokes);
     }
 }
 

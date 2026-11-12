@@ -148,6 +148,10 @@ impl From<SyntaxError> for RunError {
 pub struct Realm {
     interp: Interp,
     unbroken_fuel: u64,
+    /// The source tag of the script the last [`Realm::run`] or [`Realm::start`] compiled. Each
+    /// script gets a new one, and the sources an evaluator gives during its run get the ones after
+    /// it, so code that an earlier script defined keeps a tag of its own.
+    script_tag: u32,
 }
 
 impl Default for Realm {
@@ -165,7 +169,7 @@ impl Realm {
     /// `options`; [`Options::max_source_units`] caps the source parsed in one run, all of it
     /// counted together.
     pub fn with_options(options: Options, limits: Limits) -> Self {
-        Self { interp: Interp::new(options, limits), unbroken_fuel: MAX_UNBROKEN_FUEL }
+        Self { interp: Interp::new(options, limits), unbroken_fuel: MAX_UNBROKEN_FUEL, script_tag: 0 }
     }
 
     /// Sets the fuel [`Realm::advance`] lets a nested run spend past its slice (by default
@@ -238,13 +242,15 @@ impl Realm {
         interp.finally_sites.clear();
         interp.error_mark = None;
         let strict = interp.options.strict;
-        interp.source_tag = 0;
+        interp.evaluated = interp.evaluated.saturating_add(1).min(UNKNOWN_SOURCE - 1);
+        self.script_tag = interp.evaluated;
+        interp.source_tag = self.script_tag;
         let code = interp.encode_source(source).and_then(|units| interp.compile_source(&units, strict, CodeKind::Global));
         interp.source_tag = UNKNOWN_SOURCE;
         match code {
             Ok(code) => Ok(code),
             Err(CompileError::Syntax(e)) => {
-                interp.error_tag = 0;
+                interp.error_tag = self.script_tag;
                 Err(e.into())
             }
             Err(CompileError::Internal(m)) => Err(RunError { kind: RunErrorKind::Internal, message: m, line: 0, column: 0 }),
@@ -327,6 +333,15 @@ impl Realm {
         !self.interp.frames.is_empty()
     }
 
+    /// Ends a run begun with [`Realm::start`] where it is, paused or waiting for a host function's
+    /// result, as an interrupt would: its stacks are emptied, so the realm can start another run.
+    /// The globals the run set stay.
+    pub fn end(&mut self) {
+        if self.is_running() || self.interp.waiting {
+            let _ = self.outcome(Err(Abrupt::Limit(LimitKind::Interrupted)));
+        }
+    }
+
     /// The flag a host function sets to end the current slice at the next point it can pause.
     pub fn pause_flag(&self) -> std::rc::Rc<std::cell::Cell<bool>> {
         self.interp.pause.clone()
@@ -369,11 +384,15 @@ impl Realm {
         self.interp.interrupt = interrupt.0.clone();
     }
 
-    /// Which source the last error's `line` and `column` are in: 0 for the script given to
+    /// Which source the last error's `line` and `column` are in: 0 for the script last given to
     /// [`Realm::run`] or [`Realm::start`], `n` for the `n`th source a
-    /// [`crate::HostItem::Evaluator`] gave in this realm, and [`UNKNOWN_SOURCE`] otherwise.
+    /// [`crate::HostItem::Evaluator`] gave since then, and [`UNKNOWN_SOURCE`] otherwise, which
+    /// includes code from an earlier script and from the sources given during its run.
     pub fn error_source(&self) -> u32 {
-        self.interp.error_tag
+        match self.interp.error_tag {
+            UNKNOWN_SOURCE => UNKNOWN_SOURCE,
+            tag => tag.checked_sub(self.script_tag).unwrap_or(UNKNOWN_SOURCE),
+        }
     }
 
     /// The mark of the host error ([`crate::HostError::Marked`]) the last run ended with, when no
@@ -411,6 +430,20 @@ impl Realm {
     /// encoding and its line feed in properties that are not enumerable.
     pub fn define_file_classes(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
         match crate::file_classes::install(&mut self.interp, items) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Sets `Folder.current` back to the host's `current`, for the next run of a realm that has
+    /// `File` and `Folder` ([`Realm::define_file_classes`]); a realm without them keeps its
+    /// `Folder.current`. The files an earlier run opened are no longer open. The last run's uncaught
+    /// exception and `$.error` are dropped first, as [`Realm::start`] drops them, so memory that only
+    /// they held is free for the reset.
+    pub fn reset_folder_current(&mut self) -> Result<(), RunError> {
+        self.interp.last_thrown = Value::Undefined;
+        self.interp.last_error = Value::Null;
+        match crate::file_classes::reset_current(&mut self.interp) {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),
         }

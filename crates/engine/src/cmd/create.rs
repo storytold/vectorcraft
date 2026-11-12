@@ -109,7 +109,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, rotation?: deg clockwise about x, y (0: level), vertical?: bool = false, size?: pt, font?: family, style? (default Regular, or the family's closest style when it has no Regular), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits), warning?: text (the font or style given isn't available: the type is drawn in the fallback font or the family's closest style)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
+            "{x, y, text, rotation?: deg clockwise about x, y (0: level), vertical?: bool = false, size?: pt, font?: family, style? (default Regular, or the family's closest style when it has no Regular), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText|block, fitMinPercent?, wordGap?, lineGap? (as text.areaOptions)}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits), warning?: text (the font or style given isn't available: the type is drawn in the fallback font or the family's closest style)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
             has_doc,
             text_create
         ),
@@ -756,7 +756,7 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
         let w = f64_or(a, "width", 200.0);
         let h = f64_or(a, "height", 100.0);
         t.kind = vectorcraft_doc::TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, w, h)) };
-        t.area.fit = new_area_fit(s, a, "text.create")?;
+        new_area_fit(s, a, "text.create", &mut t)?;
     }
     t.system_layout = s.doc()?.doc.setup.system_layout;
     if bool_or(p, "placeholder", false) {
@@ -831,11 +831,16 @@ pub(crate) fn new_type_alignment(s: &mut Session, p: &Value, cmd: &str, t: &mut 
     Ok(())
 }
 
-/// The fit new area type gets: `fit`/`fitMinPercent` from `p` (as `text.areaOptions` takes
-/// them), else Auto Size when the "Auto Size New Area Type" preference is on.
-pub(crate) fn new_area_fit(s: &Session, p: &Value, c: &str) -> Result<vectorcraft_doc::AreaFit> {
+/// The fit new area type `t` gets: `fit`/`fitMinPercent` from `p` (as `text.areaOptions` takes
+/// them, `block` turning Dynamic Text on), else Auto Size when the "Auto Size New Area Type"
+/// preference is on; and Block's `wordGap` and `lineGap`.
+pub(crate) fn new_area_fit(s: &Session, p: &Value, c: &str, t: &mut TextObject) -> Result<()> {
     let default = if s.prefs.auto_size_area_type { vectorcraft_doc::AreaFit::AutoHeight } else { vectorcraft_doc::AreaFit::None };
-    Ok(super::typecmd::fit_param(p, default, c)?.unwrap_or(default))
+    let (word_gap, line_gap) = super::typecmd::block_gaps(p, c)?;
+    (t.area.fit, t.dynamic_text) = super::typecmd::fit_param(p, default, false, c)?.unwrap_or((default, false));
+    t.area.word_gap = word_gap.unwrap_or(t.area.word_gap);
+    t.area.line_gap = line_gap.unwrap_or(t.area.line_gap);
+    Ok(())
 }
 
 /// The character style new type gets: `size`, `font`, `style` and `color` from `p` (an RGB
