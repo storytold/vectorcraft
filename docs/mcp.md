@@ -5862,7 +5862,7 @@ DXF layer (hidden layers switched off, locked ones locked, non-printing ones not
 straight paths become polylines (an open path of one straight segment becomes a line, except for a stroke weight
 before 2000), curved ones cubic splines through every anchor, fills their outlines followed by
 solid hatches (laser and cutter software reads the outlines and skips hatches; R12 has no hatches: the outlines
-alone), strokes lines with their lineweight and a linetype per dash pattern, and placed images image entities linked
+alone; an open path's fill outline is closed, as the fill is), strokes lines with their lineweight and a linetype per dash pattern, and placed images image entities linked
 to PNG or JPEG files (`rasterFormat`) written next to the drawing (`linked` in the result). `includeImages: false`
 leaves placed images out, with no image entity, no linked file and no decoding of their pixels, and `includeHatches:
 false` writes each filled area as its outlines alone, without its solid hatch (both default to `true`; these two

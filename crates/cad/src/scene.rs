@@ -342,6 +342,32 @@ fn subpaths(bp: &BezPath) -> Vec<Sub> {
     out
 }
 
+/// `bp` with each open subpath that can enclose an area closed, as a fill closes it: two or more
+/// segments, or one curve. A single straight segment stays open.
+fn closed_fill(bp: &BezPath) -> BezPath {
+    let mut out = BezPath::new();
+    let (mut segs, mut curved) = (0usize, false);
+    let close = |out: &mut BezPath, segs: usize, curved: bool| {
+        if segs >= 2 || (segs == 1 && curved) {
+            out.close_path();
+        }
+    };
+    for el in bp.elements() {
+        match *el {
+            PathEl::MoveTo(_) => {
+                close(&mut out, segs, curved);
+                (segs, curved) = (0, false);
+            }
+            PathEl::ClosePath => (segs, curved) = (0, false),
+            PathEl::LineTo(_) => segs += 1,
+            PathEl::QuadTo(..) | PathEl::CurveTo(..) => (segs, curved) = (segs + 1, true),
+        }
+        out.push(*el);
+    }
+    close(&mut out, segs, curved);
+    out
+}
+
 /// The most pixels of an image written (it is held decoded, as RGBA and encoded at once).
 const MAX_IMAGE_PIXELS: u64 = 64 << 20;
 
@@ -887,7 +913,7 @@ impl<'a> Scene<'a> {
     fn area(&mut self, bp: &BezPath, rule: FillRule, style: &EntityStyle, clean: bool) {
         if !self.o.version.handles() {
             self.warn(NO_FILLS);
-            self.lines(bp, style, 0.0);
+            self.lines(&closed_fill(bp), style, 0.0);
             return;
         }
         let several = bp.elements().iter().filter(|e| matches!(e, PathEl::MoveTo(_))).count() > 1;
@@ -901,7 +927,8 @@ impl<'a> Scene<'a> {
         if loops.is_empty() {
             return;
         }
-        self.lines(outline, style, 0.0);
+        // The outlines close as the fill does, so an open path's fill keeps its closing edge.
+        self.lines(&closed_fill(outline), style, 0.0);
         if !self.o.include_hatches {
             self.warn(HATCHES_OFF);
             return;

@@ -926,6 +926,30 @@ fn fills_without_hatches_keep_their_outlines() {
 }
 
 #[test]
+fn an_open_path_s_fill_outline_keeps_its_closing_edge() {
+    let mut bp = vectorcraft_geom::BezPath::new();
+    bp.move_to((10.0, 10.0));
+    bp.line_to((90.0, 10.0));
+    bp.line_to((50.0, 80.0));
+    let open = PathData::from_bezpath(&bp);
+    let d = doc_with(|d| vec![path(d, open.clone(), Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 1.0)]);
+    let closed = |e: &Pairs| get(e, 70).and_then(|v| v.trim().parse::<i64>().ok()).is_some_and(|v| v & 1 == 1);
+    for include_hatches in [false, true] {
+        let out = export(&d, &DxfOptions { include_hatches, ..opts(&d) }).unwrap();
+        let e: Vec<Pairs> = entities(&out).into_iter().filter(|x| kind(x) == "LWPOLYLINE").collect();
+        assert_eq!(e.len(), 2, "the fill's outline and the stroke: {:?}", kinds(&out));
+        assert!(closed(&e[0]), "the fill's outline closes as the fill does (hatches {include_hatches})");
+        assert!(!closed(&e[1]), "the stroke stays open (hatches {include_hatches})");
+    }
+    // R12 writes the outline alone, closed too.
+    let fill_only = doc_with(|d| vec![path(d, open.clone(), Paint::solid(Color::BLACK), Paint::None, 0.0)]);
+    let r12 = export(&fill_only, &DxfOptions { version: DxfVersion::R12, ..opts(&fill_only) }).unwrap();
+    let e = entities(&r12);
+    assert_eq!(kind(&e[0]), "POLYLINE", "{:?}", kinds(&r12));
+    assert!(closed(&e[0]), "R12's outline closes as the fill does");
+}
+
+#[test]
 fn images_can_be_left_out_with_their_files() {
     let d = image_and_fill_doc(Paint::None);
     let out = export(&d, &DxfOptions { include_images: false, ..opts(&d) }).unwrap();
