@@ -29,6 +29,13 @@ fn glyph(c: char) -> (u32, f64) {
 /// and a ToUnicode map naming each glyph's character. `sign_width`: the advance the file gives
 /// the vowel sign, in thousandths of an em (`None`: the font's).
 fn page(drawn: &[char], sign_width: Option<f64>) -> Vec<u8> {
+    page_with(|id| format!("[{}] TJ", drawn.iter().map(|&c| id(c)).collect::<String>()), "", sign_width)
+}
+
+/// [`page`] showing glyphs with the text operators `ops` makes (after the position of the first
+/// glyph) from a function giving a character's glyph id in hex, and `extra` more resources: a
+/// graphics state, to set between glyphs or before them.
+fn page_with(ops: impl Fn(&dyn Fn(char) -> String) -> String, extra: &str, sign_width: Option<f64>) -> Vec<u8> {
     FontDb::global().add_font(matra_font().expect("the test font builds"));
     let program = matra_font().unwrap();
     let hex: String = program.iter().map(|b| format!("{b:02X}")).collect::<String>() + ">";
@@ -57,12 +64,11 @@ fn page(drawn: &[char], sign_width: Option<f64>) -> Vec<u8> {
     ];
     let refs: Vec<&str> = objs.iter().map(String::as_str).collect();
     let resources = format!(
-        "/Font << /F1 << /Type /Font /Subtype /Type0 /BaseFont /MatratestSans-Regular /Encoding /Identity-H /DescendantFonts [{} 0 R] /ToUnicode {} 0 R >> >>",
+        "/Font << /F1 << /Type /Font /Subtype /Type0 /BaseFont /MatratestSans-Regular /Encoding /Identity-H /DescendantFonts [{} 0 R] /ToUnicode {} 0 R >> >> {extra}",
         n + 2,
         n + 3
     );
-    let shown: String = drawn.iter().map(|&c| format!("{:04X}", glyph(c).0)).collect();
-    let content = format!("BT /F1 40 Tf 20 100 Td <{shown}> Tj ET");
+    let content = format!("BT /F1 40 Tf 20 100 Td {} ET", ops(&|c| format!("<{:04X}>", glyph(c).0)));
     pdf_with(&[PdfPage { resources, ..PdfPage::new(300.0, 200.0, &content) }], &refs, None)
 }
 
@@ -116,4 +122,26 @@ fn a_mark_without_an_advance_stays_with_its_line() {
     let report = open(&page(&[KA, SIGN_I], Some(0.0)));
     assert_eq!(texts(&report.document), [""; 0], "the mark is no type of its own");
     assert_eq!(outlines(&report.document), 1, "both glyphs, as one path");
+}
+
+/// The file's glyphs are outlines of one path when drawn alike, and a path each when a stroke
+/// property other than the width (here the dash) differs between them: the first glyph's would
+/// otherwise be drawn on all.
+#[test]
+fn outlined_glyphs_stroked_differently_stay_apart() {
+    // Stroked (`1 Tr`) at the same width, one glyph solid and the next dashed.
+    let alike = page_with(|id| format!("1 Tr 2 w {} Tj {} Tj {} Tj", id(KA), id(SIGN_I), id(KA)), "", None);
+    let apart = page_with(|id| format!("1 Tr 2 w {} Tj [3 2] 0 d {} Tj [] 0 d {} Tj", id(KA), id(SIGN_I), id(KA)), "", None);
+    assert_eq!(outlines(&open(&alike).document), 1, "drawn alike: one path");
+    assert_eq!(outlines(&open(&apart).document), 3, "solid, dashed, solid: a path each");
+}
+
+/// Translucent glyphs the file fills one by one composite where they overlap, which one fill of
+/// their joined outlines does not do: each keeps a path of its own.
+#[test]
+fn outlined_translucent_glyphs_stay_apart() {
+    let bytes = page_with(|id| format!("/G gs {} Tj {} Tj {} Tj", id(KA), id(SIGN_I), id(KA)), "/ExtGState << /G << /ca 0.5 >> >>", None);
+    let report = open(&bytes);
+    assert_eq!(texts(&report.document), [""; 0]);
+    assert_eq!(outlines(&report.document), 3, "a path each");
 }
