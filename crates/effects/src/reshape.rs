@@ -1815,22 +1815,25 @@ fn transform_piece(p: &mut Node, (seed, source, kept): (u64, usize, &[usize]), h
     });
 }
 
-/// Make the raster effects of `leaf`'s first fill or stroke from index `from` on follow Transform
-/// effect `t`, listed after them, once `t` has moved the leaf ([`crate::raster::follow_one`]).
-/// `was` holds those effects as they were before `t` was applied: each one that follows takes the
-/// value [`crate::raster::followed`] gives it, in place of what Scale Strokes & Effects made of it,
-/// and the others keep theirs.
+/// Make the raster effects of each of `leaf`'s fills and strokes from index `from` on follow
+/// Transform effect `t`, listed after them, once `t` has moved the leaf
+/// ([`crate::raster::follow_one`]). The fills and strokes are copies of one fill or stroke (those a
+/// painted plug-in returns, [`vectorcraft_plugins::painted::items`]), with the same effects. `was`
+/// holds those effects of the first one as they were before `t` was applied: each one that
+/// follows takes the value [`crate::raster::followed`] gives it, in place of what Scale Strokes &
+/// Effects made of it, and the others keep theirs.
 fn follow_piece(leaf: &mut Node, was: &[Effect], from: usize, t: &Effect) {
     let mut follow = was.to_vec();
     if !crate::raster::follow_one(&mut follow, t) {
         return;
     }
-    let Some(item) = leaf.appearance.items.first_mut() else { return };
-    for (k, (new, old)) in follow.into_iter().zip(was).enumerate() {
-        if new != *old
-            && let Some(e) = item.effects_mut().get_mut(from + k)
-        {
-            *e = new;
+    for item in &mut leaf.appearance.items {
+        for (k, (new, old)) in follow.iter().zip(was).enumerate() {
+            if new != old
+                && let Some(e) = item.effects_mut().get_mut(from + k)
+            {
+                *e = new.clone();
+            }
         }
     }
 }

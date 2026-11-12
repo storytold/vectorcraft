@@ -452,6 +452,30 @@ fn a_painted_effect_on_a_fill_and_refused_results() {
     }
 }
 
+/// A fill's Drop Shadow before a painted effect that returns two fills, and a 200% Transform effect
+/// after it: the shadow of each returned fill follows the Transform effect. The square the effect
+/// returns spans 30 to 70 pt once scaled, so both half-opaque shadows, 20 pt to the right, cover
+/// 85 pt as they cover 75 pt.
+#[test]
+fn a_shadow_on_each_fill_a_painted_effect_returns_follows_the_transform_after_it() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let out = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#00ff00"), solid("#0000ff")]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.twofills", true), &out));
+    let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    for (effect, params) in [
+        ("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 50})),
+        ("plugin.test.engine.twofills", json!({})),
+        ("distort.transform", json!({"scaleH": 200, "scaleV": 200})),
+    ] {
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": effect, "params": params, "item": fill}));
+    }
+    let img = drawn(&s);
+    let (near, far) = (img.pixel(75, 50), img.pixel(85, 50));
+    assert_ne!(near, WHITE, "the shadows reach past the square");
+    assert_eq!(far, near, "both shadows at 20 pt");
+}
+
 /// A result refused for a swatch the document doesn't have stays cached: once the document has the
 /// swatch, the next check of that result clears the error.
 #[test]
