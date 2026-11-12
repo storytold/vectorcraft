@@ -145,24 +145,64 @@ the suite) keep the agent to the folders you give it:
   `file.openRecentN` for a file outside the roots ends with `no such recent file`, as an empty slot does.
 - `ui_inspect` (the control channel's `ui.inspect`) leaves out the paths outside the read roots: in `opening`, the
   documents still being read; in `ui.recent_files`, the recent files; a library panel's `path` in `ui.library_panels`;
-  and the folder preferences in `ui.engine_prefs` and in an open Preferences dialog's `ui.dialog.fields`
+  in a recorded action's steps in `ui.action_sets`, also in a batch step's commands, the `path`, `paths`, `file`,
+  `files` and `folder` params, a param whose name ends in `Path`, `Paths`, `File`, `Files` or `Folder` (`diffPath`,
+  `destinationFolder`), the entries of a list under such a param, and under any other param, as a key or in any
+  list, an absolute path or a `file:` URL outside the roots (any case of `file:`, `%XX` escapes decoded; a URL that
+  names another host is always left out), and `~`, a path under `~` or a path that starts with `./` or `../`
+  (either separator) that resolves outside the roots from the app's working folder; and the folder
+  preferences in `ui.engine_prefs` and in an open Preferences dialog's `ui.dialog.fields`
   (`fontsFolder`, `pluginsFolder`, `scratchPrimary`, `scratchSecondary`, `recoveryFolder`, `templatesFolder`; an
   empty folder and the scratch disk choices `Startup` and `None` stay). A library loaded from a file outside the
   roots shows as `loaded/<file name>` wherever `ui_inspect` and `ui.docking` name it: its id, its panel's id, the
-  Color Guide's `ui.color_guide_limit` and a closed panel's key in `ui.docking_hidden`, also when its panel is
-  closed. When another hidden library has the same file name, the libraries take `loaded/<file name>`,
-  `loaded/<file name> (2)`, `(3)` and so on in the order of their full ids (the libraries loaded in this session
-  first, then those only the UI state names), and each one keeps its id in both replies and in the library
-  commands below. The other entries keep their order, and the app's own state is not changed.
+  Color Guide's `ui.color_guide_limit`, a closed panel's key in `ui.docking_hidden` and the `library` and `panel`
+  params of a recorded action's steps in `ui.action_sets`, and the keys of shortcut overrides (`panel:<panel id>`
+  in `ui.shortcut_overrides` and an open Keyboard Shortcuts dialog's `ui.dialog.fields.overrides`), also when its
+  panel is closed. A path written with
+  either separator counts as a path, also one saved on another platform, and outside Windows a path that starts
+  with a drive (`C:`) or a `\` counts as outside the roots. Outside Windows, any other path keeps a `\` in its
+  file name (`/libs/a\b.ase` shows as `loaded/a\b.ase`), and a reply matches it only as written, not with `/`
+  in place of the `\`. When another hidden library has the same
+  file name, the libraries take `loaded/<file name>`, `loaded/<file name> (2)`, `(3)` and so on in the order they
+  are first shown. Libraries first shown in the same reply are numbered in the order of their full ids, the
+  libraries loaded in this session first, then those only the UI state names. Each one keeps its id for the rest
+  of the session in both replies and in the library commands below, also after another library with the same
+  file name is loaded. A hidden library skips an id that a library loaded without a path already has, and only a
+  library loaded later from data under that file name, which takes the id itself, moves a hidden one to the next
+  free number. The other entries keep their order, and the app's own state is not changed. A request may name such a library or its panel by the id
+  shown in a `panel`, `library` or `panels` param, in a docking destination (`anchor`, `target`, `before`, `onto`,
+  `above`, `below`) and in `window.panel.layout`'s `action` (`ui.set {panel: "library:swatches:loaded/<file name>"}`
+  reopens its panel), and the reply to such a request shows that id and file name wherever the library's id or path
+  appears, an error included. Every reply under the read roots shows a hidden library's id as the id shown and its
+  path as the file name in every string and key, the status text (`ui.status`), dialogs, the command palette query
+  (`ui.palette_query`), a script's report (`scriptReport`), a screenshot's reply and the error from an internal
+  fault included, for the libraries hidden before the request ran and after it. The path is also matched with `%XX` escapes as a `file:`
+  URL writes it, and on Windows in any case of its letters; a `file:` URL of an absolute path is shown as the file
+  name alone, without `file:` or its host. A hidden id or path stays only where it begins
+  another loaded library's whole id with no `.` or `..` part, so a readable library's id that begins with a hidden one stays. A reply also shows a path outside the
+  read roots that the request sent by its file name, whether or not a library was loaded from it and whether the
+  request succeeded or failed, so that the reply reads the same either way. The one exception is the `path`
+  and `files` entries of a reply's result, a `command.batch` step's result included, that name the file the
+  request wrote inside the write roots at the path the request gave: they stay as
+  given, as for the save and export replies above. A path param (`path`, `file`,
+  `destinationFolder` and the like) counts with a relative path too. The hidden libraries' ids and paths are
+  matched before the paths the request sent, so a sent path written over part of a hidden library's path does not
+  keep that path in the reply. A relative path is not replaced where it ends a longer path (`/work/data/icon.svg`
+  keeps `data/icon.svg`), and the absolute path it reads as from the app's working folder is replaced too. Encoded file data, a base64 string under `dataBase64`,
+  `pngBase64`, `thumbnailBase64` or `thumbnail` (`library.get`, `document.pdfInfo`), is sent as it is.
 - `swatch.library.list`, `brush.libraries`, `symbol.libraries` and `graphicStyle.libraries` list every library
   but leave out the paths outside the read roots: a library's `path` and the user library folder in `userFolder`
   are `null` there. A library loaded from a file outside the roots is listed as `loaded/<file name>`, numbered
   `(2)`, `(3)` and so on as in `ui_inspect` when two have the same file name. That id finds the library in the
   other library commands (`swatch.library.get`, `swatch.library.add`, `brush.library`, `brush.addFromLibrary`,
   `symbol.library`, `symbol.addFromLibrary`, `graphicStyle.library`, `graphicStyle.addFromLibrary` and the
-  others that take `library`), whose replies show it too. `swatch.library.copyToUser` refuses a library whose file
-  is outside the read roots without naming the file, and it and the library saves with `user: true` leave out
-  `path` when the user library folder is outside the read roots.
+  others that take `library`), whose replies show it too. Over the control channel, `window.swatchLibrary` and
+  the other library panel commands answer with that id and its panel's id (`library:swatches:loaded/<file name>`),
+  and `ui.libraryPanel` and the `window.panel.*` commands take that panel id in `panel`, `anchor`, `before`,
+  `onto`, `above` and `below`. `swatch.library.copyToUser` refuses to copy a library file outside the read roots
+  without naming the file (the swatches of a document loaded from there are written from the loaded library, as
+  for a library loaded from data, and the document is not read again), and it and the library saves with
+  `user: true` leave out `path` when the user library folder is outside the read roots.
 - `links.list`, `links.check`, `links.info` and the `missingLinks`, `modifiedLinks` and `updatedLinks` rows of
   `document.open` leave out a linked file's path when the file is outside the read roots (a relative path is taken
   from the document's folder): `path`, `found`, and in `links.info` also `link` and `location`, with the `fileSize`
