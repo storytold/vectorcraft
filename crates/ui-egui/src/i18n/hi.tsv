@@ -691,6 +691,17 @@ antiAlias	Sharp	शार्प
 	Calligraphic Brush	कैलिग्राफिक ब्रश
 	Calligraphic Brush Options	कैलिग्राफिक ब्रश ऑप्शन्स
 	Calligraphic Nibs	कैलिग्राफिक निब्स
+	Bristle Brushes	ब्रिसल ब्रश संग्रह
+	Fine Liner	बारीक लाइनर
+	Pointed Flat	नुकीला फ्लैट
+	Stubby Round	छोटा गोल
+	Dry Scrub	सूखी रगड़
+	Soft Dome	मुलायम गुंबद
+	Filbert	फिल्बर्ट
+	Angled Round	तिरछा गोल
+	Angled Flat	तिरछा फ्लैट
+	Fan Blender	मिश्रण पंखा
+	Grass Fan	घास पंखा
 	Can't export “{name}”.	"{name}" निर्यात नहीं कर सकते।
 	Can't open “{name}”.	"{name}" नहीं खोल सकते हैं।
 	Can't print these settings: see the Summary	इन सेटिंग्स को मुद्रित नहीं कर सकते: सारांश देखें
@@ -1745,6 +1756,8 @@ antiAlias	Sharp	शार्प
 	Extrude & Bevel…	एक्सट्रूडेड और बेवेल…
 	3D (Classic)	3D (क्लासिक)
 	Extrude & Bevel (Classic)…	एक्सट्रूडेड और बेवेल (क्लासिक)…
+	Revolve (Classic)…	रिवॉल्व (क्लासिक)…
+	Rotate (Classic)…	घुमाव (क्लासिक)…
 	Surface	सतह
 	Wireframe	वायरफ़्रेम
 	No Shading	कोई शेडिंग नहीं
@@ -3183,6 +3196,7 @@ antiAlias	Sharp	शार्प
 	Options:	ऑप्शन्स:
 	Options…	ऑप्शन्स…
 	Organic Fades	ऑर्गेनिक फ़ेड
+	Holographic	होलोग्राफ़िक
 	or more spaces with a tab	या एक टैब के साथ अधिक रिक्त स्थान
 	Orange	नारंगी
 	Order:	आदेश:
@@ -3780,6 +3794,10 @@ antiAlias	Sharp	शार्प
 	Remove Selected Entry	सिलेक्टेड प्रविष्टि निकालें
 	Remove Strokes	स्ट्रोक हटाएँ
 	Place Brush Art	ब्रश आर्टवर्क रखें
+	Replace Brush Art	ब्रश आर्टवर्क बदलें
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	स्ट्रोक्स इस ब्रश का उपयोग कर रहे हैं। नया आर्टवर्क उन स्ट्रोक्स पर लागू करें, या उन्हें जैसा है वैसा छोड़कर नए आर्टवर्क वाले ब्रश की एक कॉपी जोड़ें?
+	Apply to Strokes	स्ट्रोक्स पर लागू करें
+	Leave Strokes	स्ट्रोक्स जैसे हैं वैसे छोड़ें
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` में कोई आर्टवर्क नहीं है (आर्टवर्क केवल स्कैटर, आर्ट और पैटर्न ब्रश में होता है)
 	Remove the shortcut	शॉर्टकट निकालें
 	Remove Threading	थ्रेडिंग निकालें
@@ -3958,6 +3976,9 @@ antiAlias	Sharp	शार्प
 	Roman	रोमन
 	Roman Baseline	रोमन बेसलाइन
 	Roman Hanging Punctuation	रोमन हैंगिंग विराम चिह्न
+	Korean Line Break Anywhere	कोरियाई लाइन ब्रेक कहीं भी
+	East Asian Composition Settings	पूर्वी एशियाई संरचना सेटिंग्स
+	Korean Composition Settings	कोरियाई संरचना सेटिंग्स
 	Rotate	घुमाएँ
 	Rotate 90° CW	90° सीडब्ल्यू
 	Rotate Tool	रोटेट टूल
@@ -7137,6 +7158,7 @@ antiAlias	Sharp	शार्प
 @msg	not an action set file	एक एक्शन सेट फ़ाइल नहीं
 @msg	not an EMF or WMF file	नहीं एक EMF या WMF फ़ाइल
 @msg	not an HP-GL file	HP-GL फ़ाइल नहीं है
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` को 1 से 255 #rrggbb रंगों की ऐरे होना चाहिए
 @msg	not an export presets file (format `{_1}`)	नहीं निर्यात presets फ़ाइल (format `{_1}`)
 @msg	not an export presets file: {e}	एक निर्यात प्रीसेट फ़ाइल नहीं: {e}
 @msg	not an image VectorCraft reads (see document.formats)	यह ऐसी इमेज नहीं है जिसे VectorCraft पढ़ सके (document.formats देखें)
@@ -8372,8 +8394,33 @@ theme	Appearance	अपीयरेंस
 @plural	{n} line cut|{n} lines cut	{n} पंक्ति काटी गई|{n} पंक्तियाँ काटी गईं
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` और `last` कंसोल में रखी पंक्तियों की संख्याएँ होनी चाहिए, `first` पहले और `last` बाद में
 
+# Learn panel
+	Learn	सीखें
+	Explore tutorials	ट्यूटोरियल देखें
+	For you	आपके लिए
+	Skills	कौशल
+	Get started	शुरू करें
+	Quick skill guide	त्वरित कौशल गाइड
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	आवश्यक टूल के लिए छोटे व्यावहारिक ट्यूटोरियल, कौशल के अनुसार समूहित। किसी कौशल के ट्यूटोरियल देखने के लिए उसे चुनें।
+	List Tutorials	ट्यूटोरियल की सूची
+	Show Tutorial	ट्यूटोरियल दिखाएँ
+@msg	missing `tutorial` (see learn.list)	लापता `tutorial` (learn.list देखें)
+@msg	unknown tutorial `{id}` (see learn.list)	अज्ञात ट्यूटोरियल `{id}` (learn.list देखें)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	स्थगित इफ़ेक्ट्स रिफ्रेश करें
 	Deferred Effects	स्थगित इफ़ेक्ट्स
 @msg	no plug-in effect is deferred	कोई प्लग-इन इफ़ेक्ट स्थगित नहीं है
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	{n} प्लग-इन इफ़ेक्ट स्थगित रखकर खोला गया। इफ़ेक्ट › स्थगित इफ़ेक्ट्स रिफ्रेश करें इसे चलाता है।|{n} प्लग-इन इफ़ेक्ट्स स्थगित रखकर खोला गया। इफ़ेक्ट › स्थगित इफ़ेक्ट्स रिफ्रेश करें इन्हें चलाता है।
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	कटिंग टूल्स
+	Stencil Bridges…	स्टेंसिल ब्रिज…
+	Stencil Bridges	स्टेंसिल ब्रिज
+	Shortest Crossing	सबसे छोटा क्रॉसिंग
+	Direction	दिशा
+@msg	The selected art has no islands to bridge	चुने गए आर्टवर्क में ब्रिज से जोड़ने के लिए कोई आइलैंड नहीं है
+@msg	No bridge of this width fits across the selected art	इस चौड़ाई का कोई ब्रिज चुने गए आर्टवर्क के पार नहीं आता
+@msg	Some islands could not be joined to the area around the art	कुछ आइलैंड आर्टवर्क के आसपास के क्षेत्र से नहीं जोड़े जा सके
+@msg	`width` must be from {lo} to {hi} pt	`width` {lo} से {hi} pt तक होना चाहिए
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 से {MAX_BRIDGES_PER_ISLAND} तक पूरी संख्या होना चाहिए

@@ -13,7 +13,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Tab Stops",
             ["Window", "Tabs"],
             None,
-            "{stops: [{position: pt, align?: left|center|right|decimal, leader?: \". \", alignOn?: \".\"}], ids?|id?, start?: byte, end?: byte} replace the tab stops of the selected text (with a range: of the paragraphs it touches); at most 256 stops, positions 0..=100000 pt; supplied align, leader and alignOn must be strings, a leader has at most 8 characters and alignOn exactly one; stops are sorted by position, and of stops at one position the first given is kept",
+            "{stops: [{position: pt, align?: left|center|right|decimal, leader?: \". \", alignOn?: \".\"}], ids?|id?, start?: byte, end?: byte} replace the tab stops of the selected text (with a range: of the paragraphs it touches); at most 256 stops, or no more than each targeted paragraph already holds, positions 0..=100000 pt; supplied align, leader and alignOn must be strings, a leader has at most 8 characters and alignOn exactly one; stops are sorted by position, and of stops at one position the first given is kept",
             has_selection,
             set
         ),
@@ -38,10 +38,6 @@ pub fn specs() -> Vec<CommandSpec> {
 fn parse_stops(p: &Value) -> Result<Vec<TabStop>> {
     const C: &str = "text.tabs.set";
     let arr = p.get("stops").and_then(Value::as_array).ok_or_else(|| bad(C, "missing stops"))?;
-    let max = TabStop::MAX_STOPS;
-    if arr.len() > max {
-        return Err(bad(C, format!("at most {max} tab stops")));
-    }
     let mut stops = vec![];
     for s in arr {
         let position = s.get("position").and_then(Value::as_f64).ok_or_else(|| bad(C, "each stop needs a position"))?;
@@ -90,8 +86,37 @@ fn parse_stops(p: &Value) -> Result<Vec<TabStop>> {
 }
 
 fn set(s: &mut Session, p: &Value) -> Result<Value> {
+    // More than the limit is taken only when every targeted paragraph already holds at least as
+    // many stops, so a paragraph that holds more can still lose them one at a time. The supplied
+    // list is counted before it is read.
+    let max = TabStop::MAX_STOPS;
+    let supplied = p.get("stops").and_then(Value::as_array).map_or(0, Vec::len);
+    if supplied > max && supplied > fewest_held(s, p)? {
+        return Err(bad("text.tabs.set", format!("at most {max} tab stops")));
+    }
     let stops = parse_stops(p)?;
     apply(s, p, stops, "Tab Stops")
+}
+
+/// The fewest tab stops a paragraph that `text.tabs.set` with `p` targets holds (0 with none).
+fn fewest_held(s: &Session, p: &Value) -> Result<usize> {
+    let ids = text_targets(s, p, "text.tabs.set")?;
+    let range = TextRange::parse(p, "text.tabs.set")?;
+    let doc = &s.doc()?.doc;
+    let mut fewest: Option<usize> = None;
+    for id in &ids {
+        if let Some(NodeKind::Text(t)) = doc.node(*id).map(|node| &node.kind) {
+            let held = match para_span(range, t) {
+                None => t.para_styles().map(|pa| pa.tabs.len()).min(),
+                Some(r) => r.map(|i| t.para_at(i).tabs.len()).min(),
+            };
+            fewest = match (fewest, held) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (a, b) => a.or(b),
+            };
+        }
+    }
+    Ok(fewest.unwrap_or(0))
 }
 
 fn apply(s: &mut Session, p: &Value, stops: Vec<TabStop>, label: &str) -> Result<Value> {
@@ -159,12 +184,50 @@ mod tests {
         let err = |stops: Value| super::parse_stops(&json!({ "stops": stops })).unwrap_err().to_string();
         assert!(err(json!([{"position": 40, "leader": "123456789"}])).contains("`leader` must be at most 8 characters"));
         assert!(err(json!([{"position": 40, "alignOn": ",."}])).contains("`alignOn` must be one character"));
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        s.execute("text.create", &json!({"x": 10, "y": 20, "text": "a\tb"})).unwrap();
         let many: Vec<Value> = (0..257).map(|i| json!({"position": i})).collect();
-        assert!(err(Value::from(many.clone())).contains("at most 256 tab stops"));
-        let ok = super::parse_stops(&json!({ "stops": &many[..256] })).unwrap();
-        assert_eq!(ok.len(), 256);
+        let e = s.execute("text.tabs.set", &json!({ "stops": many.clone() })).unwrap_err().to_string();
+        assert!(e.contains("at most 256 tab stops"), "{e}");
+        // The supplied list is counted, not the stops left once those at one position merge.
+        let same: Vec<Value> = (0..257).map(|_| json!({"position": 5})).collect();
+        assert!(s.execute("text.tabs.set", &json!({ "stops": same })).unwrap_err().to_string().contains("at most 256 tab stops"));
+        assert_eq!(s.execute("text.tabs.set", &json!({ "stops": &many[..256] })).unwrap()["stops"], json!(256));
         let ok = super::parse_stops(&json!({"stops": [{"position": 0, "leader": "12345678", "alignOn": "€"}]})).unwrap();
         assert_eq!((ok[0].leader.as_str(), ok[0].align_on), ("12345678", '€'));
+    }
+
+    /// A paragraph that already holds more than 256 stops (from a file) can lose them one at a
+    /// time: a list no longer than every targeted paragraph's own is taken, a longer one is not, and
+    /// a paragraph with fewer stops targeted beside it keeps the limit.
+    #[test]
+    fn stops_can_be_removed_from_a_paragraph_holding_more_than_the_limit() {
+        use vectorcraft_doc::{NodeId, NodeKind, TabAlign, TabStop};
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = NodeId(s.execute("text.create", &json!({"x": 10, "y": 20, "text": "a\tb\nc\td"})).unwrap()["id"].as_u64().unwrap());
+        let held: Vec<TabStop> =
+            (0..300).map(|i| TabStop { position: f64::from(i), align: TabAlign::Left, leader: String::new(), align_on: '.' }).collect();
+        s.edit("Load", |d, _| {
+            if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+                t.edit_paras(None, |pa| pa.tabs = held.clone());
+            }
+            Ok(())
+        })
+        .unwrap();
+        let list = |n: i32| json!({ "stops": (0..n).map(|i| json!({"position": i})).collect::<Vec<_>>() });
+        assert!(s.execute("text.tabs.set", &list(301)).unwrap_err().to_string().contains("at most 256 tab stops"));
+        assert_eq!(s.execute("text.tabs.set", &list(299)).unwrap()["stops"], json!(299));
+        assert_eq!(s.execute("text.tabs.get", &json!({})).unwrap()["stops"].as_array().unwrap().len(), 299);
+        // The second paragraph (bytes 4 on) now holds 2 stops: 298 for both paragraphs is refused,
+        // and 298 for the first alone is taken.
+        s.execute("text.tabs.set", &json!({"stops": [{"position": 1}, {"position": 2}], "start": 4, "end": 4})).unwrap();
+        let mut both = list(298);
+        assert!(s.execute("text.tabs.set", &both).is_err());
+        both["start"] = json!(0);
+        both["end"] = json!(0);
+        assert_eq!(s.execute("text.tabs.set", &both).unwrap()["stops"], json!(298));
     }
 
     #[test]

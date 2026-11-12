@@ -20,6 +20,7 @@ mod brushlib;
 mod brushsym;
 mod build;
 mod cancel;
+mod caret_kerning;
 mod charstroke;
 pub(super) mod clip;
 mod clipboard;

@@ -1151,6 +1151,8 @@ font-technology	Variable	Вариативные
 	Extrude & Bevel…	Выдавливание и фаска…
 	3D (Classic)	3D (классические)
 	Extrude & Bevel (Classic)…	Выдавливание и фаска (классическое)…
+	Revolve (Classic)…	Вращение (классическое)…
+	Rotate (Classic)…	Поворот (классический)…
 	Surface	Поверхность
 	Wireframe	Каркас
 	No Shading	Без затенения
@@ -2390,6 +2392,7 @@ file-filter	Templates	Шаблоны
 	Options:	Параметры:
 	Options…	Параметры…
 	Organic Fades	Органические затухания
+	Holographic	Голографические
 	or more spaces with a tab	или больше пробелов на табуляцию
 	Order:	Порядок:
 	Ordinals	Порядковые числительные
@@ -2944,6 +2947,9 @@ digits	Malayalam	Малаялам
 	Rise…	Подъём…
 	Roman Baseline	Римская базовая линия
 	Roman Hanging Punctuation	Римская висячая пунктуация
+	Korean Line Break Anywhere	Перенос корейского текста в любом месте
+	East Asian Composition Settings	Параметры восточноазиатского набора
+	Korean Composition Settings	Параметры корейского набора
 	Rotate	Повернуть
 	Rotate 90° CW	Повернуть на 90° по часовой стрелке
 	Rotate Tool	Инструмент «Поворот»
@@ -4613,6 +4619,7 @@ axis	Both	Оба
 @msg	not a valid plug-in module: {0}	не является допустимым модулем: {0}
 @msg	not an EMF or WMF file	не является файлом EMF или WMF
 @msg	not an HP-GL file	не является файлом HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` должен быть массивом из 1–255 цветов #rrggbb
 @msg	not found	не найдено
 @msg	not in pattern editing mode	не в режиме редактирования узора
 @msg	finish editing the pattern first	сначала завершите редактирование узора
@@ -5922,6 +5929,17 @@ axis	Y Axis	Ось Y
 	Charge Wave	Волна заряда
 	Spark Trail	Искра-след
 	Calligraphic Nibs	Каллиграфические перья
+	Bristle Brushes	Щетинные кисти
+	Fine Liner	Тонкий лайнер
+	Pointed Flat	Заострённая плоская
+	Stubby Round	Короткая круглая
+	Dry Scrub	Сухое растирание
+	Soft Dome	Мягкий купол
+	Filbert	Кошачий язык
+	Angled Round	Скошенная круглая
+	Angled Flat	Скошенная плоская
+	Fan Blender	Веер для растушёвки
+	Grass Fan	Веер для травы
 	Pattern Borders	Узорные каймы
 	Scatter Shapes	Рассеянные фигуры
 	Save Brush Library…	Сохранить библиотеку кистей…
@@ -6663,6 +6681,10 @@ breakText	Glyphs	Глифы
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Обводки используют одну или несколько из этих кистей. Убрать кисти с этих обводок и удалить кисти?
 	Remove Strokes	Убрать обводки
 	Place Brush Art	Поместить рисунок кисти
+	Replace Brush Art	Заменить рисунок кисти
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Обводки используют эту кисть. Применить новый рисунок к этим обводкам или оставить их как есть и добавить копию кисти с новым рисунком?
+	Apply to Strokes	Применить к обводкам
+	Leave Strokes	Оставить обводки
 @msg	`{name}` has no art (only scatter, art and pattern brushes do)	у `{name}` нет рисунка (он есть только у кистей-распылений, художественных и узорных кистей)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Инструменты размещения
@@ -7028,8 +7050,33 @@ shape	Open	Открытый
 @plural	{n} line cut|{n} lines cut	{n} строка обрезана|{n} строки обрезаны|{n} строк обрезано
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` и `last` должны быть номерами строк, которые хранит консоль, причём `first` не позже `last`
 
+# Learn panel
+	Learn	Обучение
+	Explore tutorials	Обзор уроков
+	For you	Для вас
+	Skills	Навыки
+	Get started	Начало работы
+	Quick skill guide	Краткое руководство по навыкам
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Короткие практические уроки по основным инструментам, сгруппированные по навыкам. Выберите навык, чтобы увидеть его уроки.
+	List Tutorials	Перечислить уроки
+	Show Tutorial	Показать урок
+@msg	missing `tutorial` (see learn.list)	отсутствует `tutorial` (см. learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	неизвестный урок `{id}` (см. learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Обновить отложенные эффекты
 	Deferred Effects	Отложенные эффекты
 @msg	no plug-in effect is deferred	нет отложенных эффектов модулей
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Открыто с {n} отложенным эффектом модуля. Эффект › Обновить отложенные эффекты выполнит его.|Открыто с {n} отложенными эффектами модулей. Эффект › Обновить отложенные эффекты выполнит их.|Открыто с {n} отложенными эффектами модулей. Эффект › Обновить отложенные эффекты выполнит их.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Инструменты резки
+	Stencil Bridges…	Мостики трафарета…
+	Stencil Bridges	Мостики трафарета
+	Shortest Crossing	Кратчайшее пересечение
+	Direction	Направление
+@msg	The selected art has no islands to bridge	В выделенной графике нет островков для соединения
+@msg	No bridge of this width fits across the selected art	Мостик такой ширины не помещается поперёк выделенной графики
+@msg	Some islands could not be joined to the area around the art	Некоторые островки не удалось соединить с областью вокруг графики
+@msg	`width` must be from {lo} to {hi} pt	`width` должно быть от {lo} до {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` должно быть целым числом от 1 до {MAX_BRIDGES_PER_ISLAND}

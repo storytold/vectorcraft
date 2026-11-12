@@ -672,6 +672,44 @@ fn organic_fades_add_with_their_method_midpoints_and_opacities_in_rgb_and_cmyk()
 }
 
 #[test]
+fn holographic_glows_add_whole_in_rgb_and_cmyk_as_one_undo_step() {
+    let lib = vectorcraft_color::libraries::builtin_library("holographic").unwrap();
+    let Paint::Gradient(want) = &lib.swatch("Mint Halo").unwrap().paint else { panic!("Mint Halo is a gradient") };
+    for mode in ["rgb", "cmyk"] {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 100, "height": 100, "colorMode": mode}));
+        let list = run(&mut s, "swatch.library.list", json!({}));
+        let row = list["libraries"].as_array().unwrap().iter().find(|l| l["id"] == "holographic").unwrap().clone();
+        assert_eq!((row["name"].as_str(), row["category"].as_str(), row["count"].as_u64()), (Some("Holographic"), Some("gradients"), Some(14)));
+        let got = run(&mut s, "swatch.library.get", json!({"library": "holographic"}));
+        assert!(got.to_string().contains("Mint Halo"), "{mode}: get lists Mint Halo");
+        let id = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].clone();
+        let node = vectorcraft_doc::NodeId(id.as_u64().unwrap());
+        let before = undo_len(&s);
+        let r = run(&mut s, "swatch.library.add", json!({"library": "holographic", "names": ["Mint Halo"], "apply": "fill"}));
+        assert_eq!((r["added"].clone(), r["applied"].clone()), (json!(["Mint Halo"]), json!("Mint Halo")), "{mode}");
+        assert_eq!(undo_len(&s), before + 1, "{mode}: added and applied as one step");
+        // The swatch comes as the library has it: kind, stops (RGB colors, opacities, midpoints) and method.
+        let Paint::Gradient(added) = &doc(&s).swatch("Mint Halo").unwrap().paint else { panic!("{mode}: a gradient swatch") };
+        assert_eq!(added.gradient, want.gradient, "{mode}");
+        assert!(added.gradient.stops.iter().all(|st| matches!(st.color, Color::Rgb { .. })), "{mode}: the stops stay RGB");
+        assert_eq!(added.gradient.stops.last().map(|st| st.opacity), Some(0.0), "{mode}: clear at the edge");
+        let Paint::Gradient(fill) = doc(&s).node(node).unwrap().appearance.fill_paint() else { panic!("{mode}: a gradient fill") };
+        assert_eq!((fill.gradient.kind, fill.gradient.method), (want.gradient.kind, want.gradient.method), "{mode}");
+        assert_eq!(fill.gradient.stops, want.gradient.stops, "{mode}");
+        run(&mut s, "edit.undo", json!({}));
+        assert!(doc(&s).swatch("Mint Halo").is_none(), "{mode}: undo removes the add");
+        assert!(!matches!(doc(&s).node(node).unwrap().appearance.fill_paint(), Paint::Gradient(_)), "{mode}: and the fill");
+        // A document swatch already named Mint Halo stays; the glow comes in under a number.
+        run(&mut s, "swatch.new", json!({"name": "Mint Halo", "color": "#123456"}));
+        let r = run(&mut s, "swatch.library.add", json!({"library": "holographic", "names": ["Mint Halo"]}));
+        assert_eq!(r["added"], json!(["Mint Halo 2"]), "{mode}");
+        assert!(doc(&s).swatch("Mint Halo").unwrap().paint.color().is_some(), "{mode}: the document's swatch is kept");
+        assert!(matches!(&doc(&s).swatch("Mint Halo 2").unwrap().paint, Paint::Gradient(g) if g.gradient == want.gradient));
+    }
+}
+
+#[test]
 fn pattern_libraries_bring_their_patterns_and_add_each_once() {
     let mut s = session();
     let list = run(&mut s, "swatch.library.list", json!({}));
