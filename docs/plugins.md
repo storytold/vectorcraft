@@ -336,7 +336,11 @@ still returns `1`. `vc_progress`, `vc_cancelled` and `vc_log` need `progress`; t
   and one the manifest doesn't allow (an `api` below 2, or without the import's permission) refuse the module, and the
   error names the import and the permission.
 - A filter's or an exporter's progress is shown as a share: a heavy filter's progress window and the export's progress
-  window draw a bar with a percentage, and Cancel there makes `vc_cancelled` return `1`. A plug-in that checks it can
+  window draw a bar with a percentage, and Cancel there makes `vc_cancelled` return `1`. In the desktop app a light
+  filter that lists `progress` runs in the background as a heavy one does, under its light budget, when it runs at once
+  from Object › Plug-ins or its shortcut, or when OK runs it with Preview off; with Preview on, its dialog keeps the
+  previewed run. A filter that also lists a `commandAllowlist` runs where it is called, since its command calls need
+  the document. A plug-in that checks `vc_cancelled` can
   stop early, and the host discards what it returns after the Cancel or after its time budget ran out; one that
   ignores it is still stopped by the instruction and time budgets. With a known total, a report is passed on only when
   it reaches another tenth of a percent; with an unknown total, each change of `done` is passed on. After 2,000 reports
