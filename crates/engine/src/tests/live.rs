@@ -455,6 +455,35 @@ fn moving_a_key_of_a_replaced_spine_blend_moves_what_is_drawn() {
     assert!(center(&back[1]).distance(center(&before[1])) < 1e-6);
 }
 
+/// #6809 on a closed spine, where both end keys start on its first point: moving the first key
+/// moves its end of the spine without dragging the last key's end along.
+#[test]
+fn moving_the_first_key_of_a_closed_replaced_spine_blend_moves_what_is_drawn() {
+    let mut s = session();
+    let (a, _, g) = blend(&mut s, json!({"steps": 5}));
+    let square = id_of(&s.execute("path.create", &json!({"d": "M100 100 L300 100 L300 300 L100 300 Z"})).unwrap());
+    sel(&mut s, &[g, square]);
+    s.execute("object.blend.replaceSpine", &json!({})).unwrap();
+    let center = |n: &Node| n.geometric_bounds().unwrap().center();
+    let before = steps_of(&s, g);
+    assert!(center(&before[0]).distance(Point::new(100.0, 100.0)) < 1e-6);
+    sel(&mut s, &[a]);
+    s.execute("object.move", &json!({"dx": -50, "dy": -40})).unwrap();
+    let key = center(&node(&s, a));
+    assert!(key.distance(Point::new(50.0, 60.0)) < 1e-6, "{key:?}");
+    let after = steps_of(&s, g);
+    assert_eq!(after.len(), before.len());
+    let drawn = center(&after[0]);
+    assert!(drawn.distance(key) < 1e-6, "the key is drawn where it was moved to: {drawn:?}, outline at {key:?}");
+    assert!(center(&after[1]).distance(center(&before[1])) > 1.0, "the first step follows the moved key");
+    let last = center(&after[after.len() - 1]);
+    assert!(last.distance(Point::new(100.0, 100.0)) < 1e-6, "the other key stays put: {last:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let back = steps_of(&s, g);
+    assert!(center(&back[0]).distance(Point::new(100.0, 100.0)) < 1e-6);
+    assert!(center(&back[1]).distance(center(&before[1])) < 1e-6);
+}
+
 #[test]
 fn blend_align_to_path_rotates_steps() {
     let mut s = session();

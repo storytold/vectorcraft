@@ -1085,8 +1085,9 @@ fn layout_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Optio
         if Spine::new(&path).is_none_or(|sp| keys_spread_along(keys, &sp)) {
             return Some((path, None));
         }
-        let Some(ka) = spread_anchors(&mut path, keys.len()) else { return Some((path, None)) };
+        let Some(mut ka) = spread_anchors(&mut path, keys.len()) else { return Some((path, None)) };
         let mut first = path.subpaths.into_iter().next()?;
+        open_at_start(&mut first, &mut ka);
         for (k, &ai) in keys.iter().zip(&ka) {
             if let Some(a) = first.anchors.get_mut(ai) {
                 let d = center_of(k) - a.p;
@@ -1130,6 +1131,21 @@ fn keys_spread_along(keys: &[Arc<Node>], spine: &Spine) -> bool {
         let f = if k > 1 { i as f64 / (k - 1) as f64 } else { 0.0 };
         center_of(key).distance(spine.at(f).0) < 0.01
     })
+}
+
+/// Open closed spine `sp` at its first anchor when the last key sits there with the first (as
+/// [`spread_anchors`] puts them): a copy of that anchor at the end takes the closing segment and
+/// the last key, so the two end keys move their ends of the spine apart.
+fn open_at_start(sp: &mut SubPath, ka: &mut [usize]) {
+    let Some(&start) = sp.anchors.first() else { return };
+    if !sp.closed || ka.len() < 2 {
+        return;
+    }
+    if let Some(last) = ka.last_mut().filter(|a| **a == 0) {
+        *last = sp.anchors.len();
+        sp.anchors.push(start);
+        sp.closed = false;
+    }
 }
 
 /// The anchors of `path`'s first subpath that `k` keys spread evenly along it by arc length sit
