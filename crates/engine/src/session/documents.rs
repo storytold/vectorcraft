@@ -80,6 +80,7 @@ impl Session {
             style_libraries: Default::default(),
             symbol_libraries: Default::default(),
             brush_libraries: Default::default(),
+            arrowheads: Default::default(),
             libraries: Default::default(),
             pdf_preset_dir: None,
             dictionary_file: None,

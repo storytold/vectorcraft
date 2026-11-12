@@ -151,6 +151,8 @@ pub struct Session {
     pub symbol_libraries: cmd::symbollib::Libraries,
     /// User Defined and loaded brush libraries (Window → Brush Libraries); not saved.
     pub brush_libraries: cmd::brushlib::Libraries,
+    /// The custom arrowheads of the arrowheads file (`stroke.arrowheads.*`); none without one.
+    pub arrowheads: cmd::arrowheads::Arrowheads,
     /// The Libraries panel's libraries of graphics, colours and text styles (`library.*`).
     pub libraries: cmd::library::Libraries,
     /// Where the saved PDF presets are kept, one file each; `None`: only for the session

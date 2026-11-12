@@ -100,9 +100,15 @@ fn every_arrowhead_preview_draws_its_head() {
     };
     let plain = (ink(None, false), ink(None, true));
     for a in Arrowhead::ALL {
-        assert!(ink(Some(a), false) > plain.0 + 20, "{a:?} at the end");
-        assert!(ink(Some(a), true) > plain.1 + 20, "{a:?} at the start");
+        assert!(ink(Some(a.clone()), false) > plain.0 + 20, "{a:?} at the end");
+        assert!(ink(Some(a.clone()), true) > plain.1 + 20, "{a:?} at the start");
     }
+    // So does a custom head: a 4 × 4 square behind its tip.
+    let pts = [(0.0, -2.0), (4.0, -2.0), (4.0, 2.0), (0.0, 2.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y));
+    let square = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true));
+    let custom = Arrowhead::Custom(std::sync::Arc::new(vectorcraft_doc::CustomArrowhead::new("Square".into(), square)));
+    assert!(ink(Some(custom.clone()), false) > plain.0 + 20);
+    assert!(ink(Some(custom), true) > plain.1 + 20);
 }
 
 #[test]

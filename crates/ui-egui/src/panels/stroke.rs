@@ -100,8 +100,35 @@ pub(crate) fn edited_dash_pattern(fields: &[Option<f64>; 6], previous: &[f64]) -
     out
 }
 
-fn arrow_label(a: Option<Arrowhead>) -> &'static str {
+fn arrow_label(a: Option<&Arrowhead>) -> &'static str {
     a.map_or("None", Arrowhead::label)
+}
+
+/// The name an arrowhead menu shows for `a`: a built-in head's in the interface language, a
+/// custom head's own.
+fn arrow_name(a: Option<&Arrowhead>) -> String {
+    match a {
+        Some(Arrowhead::Custom(c)) => c.name.clone(),
+        _ => tl!(arrow_label(a)).to_string(),
+    }
+}
+
+/// The preview cache key of `a`: its name, and for a custom head its art.
+fn arrow_key(a: Option<&Arrowhead>) -> String {
+    match a {
+        Some(Arrowhead::Custom(c)) => {
+            use std::hash::{Hash, Hasher};
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            for s in &c.path.subpaths {
+                (s.anchors.len(), s.closed).hash(&mut h);
+                for p in s.anchors.iter().flat_map(|a| [a.p, a.h_in, a.h_out]) {
+                    (p.x.to_bits(), p.y.to_bits()).hash(&mut h);
+                }
+            }
+            format!("custom:{}:{:x}", c.name, h.finish())
+        }
+        _ => format!("{a:?}"),
+    }
 }
 
 /// Apply Stroke panel options (`stroke.set` params): while the Type tool edits text, to the
@@ -272,14 +299,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     widgets::divider(ui);
     // Arrowheads.
-    let (sa, ea) = (st.as_ref().and_then(|s| s.start_arrow), st.as_ref().and_then(|s| s.end_arrow));
+    let (sa, ea) = (st.as_ref().and_then(|s| s.start_arrow.clone()), st.as_ref().and_then(|s| s.end_arrow.clone()));
+    // The custom heads of the arrowheads file follow the built-in ones.
+    let custom: Vec<Arrowhead> = app.session.arrowheads.heads().iter().cloned().map(Arrowhead::Custom).collect();
     ui.horizontal(|ui| {
         row_label(ui, tl!("Arrowheads:"));
-        if let Some(a) = arrow_dropdown(ui, "arrow-start", sa, true) {
-            set(app, json!({"startArrow": a.map(|a| format!("{a:?}"))}));
+        // A custom head goes with its art, as document.inspect reports it.
+        if let Some(a) = arrow_dropdown(ui, "arrow-start", sa.as_ref(), &custom, true) {
+            set(app, json!({ "startArrow": a }));
         }
-        if let Some(a) = arrow_dropdown(ui, "arrow-end", ea, false) {
-            set(app, json!({"endArrow": a.map(|a| format!("{a:?}"))}));
+        if let Some(a) = arrow_dropdown(ui, "arrow-end", ea.as_ref(), &custom, false) {
+            set(app, json!({ "endArrow": a }));
         }
         if widgets::icon_button_enabled(ui, "arrow-left-right", tl!("Swap start and end arrowheads"), false, st.is_some(), 22.0).clicked() {
             app.run("stroke.setAdvanced", json!({"swapArrows": true})).ok();
@@ -360,14 +390,15 @@ pub(super) fn arrow_doc(a: Option<Arrowhead>, start: bool, w: f64, h: f64) -> Op
 
 /// Draw an arrowhead preview (the head as the canvas draws it) in `r`: a line with the head at the
 /// left (`start`) or right end.
-fn paint_arrow(ui: &Ui, r: Rect, a: Option<Arrowhead>, start: bool, color: Color32) {
-    if let Some(tex) = widgets::doc_preview(ui, &format!("arrow:{a:?}:{start}"), r.size(), |w, h| arrow_doc(a, start, w, h)) {
+fn paint_arrow(ui: &Ui, r: Rect, a: Option<&Arrowhead>, start: bool, color: Color32) {
+    if let Some(tex) = widgets::doc_preview(ui, &format!("arrow:{}:{start}", arrow_key(a)), r.size(), |w, h| arrow_doc(a.cloned(), start, w, h)) {
         ui.painter().image(tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), color);
     }
 }
 
-/// Dropdown whose button and items show drawn arrowhead previews. Returns Some(choice).
-fn arrow_dropdown(ui: &mut Ui, id: &str, cur: Option<Arrowhead>, start: bool) -> Option<Option<Arrowhead>> {
+/// Dropdown whose button and items show drawn arrowhead previews: None, the built-in heads, then
+/// the `custom` ones. Returns Some(choice).
+fn arrow_dropdown(ui: &mut Ui, id: &str, cur: Option<&Arrowhead>, custom: &[Arrowhead], start: bool) -> Option<Option<Arrowhead>> {
     let t = Tokens::get(ui.ctx());
     let (r, resp) = ui.allocate_exact_size(vec2(64.0, 24.0), Sense::click());
     ui.painter().rect_filled(r, 2, t.input);
@@ -380,7 +411,8 @@ fn arrow_dropdown(ui: &mut Ui, id: &str, cur: Option<Arrowhead>, start: bool) ->
     egui::Popup::menu(&resp).id(egui::Id::unique(("arrow-pop", id))).show(|ui| {
         ui.set_min_width(170.0);
         egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
-            for a in std::iter::once(None).chain(Arrowhead::ALL.map(Some)) {
+            let built_in = Arrowhead::ALL;
+            for a in std::iter::once(None).chain(built_in.iter().map(Some)).chain(custom.iter().map(Some)) {
                 let (row, rr) = ui.allocate_exact_size(vec2(170.0, 22.0), Sense::click());
                 if a == cur {
                     ui.painter().rect_filled(row, 0.0, t.row_selected);
@@ -391,12 +423,12 @@ fn arrow_dropdown(ui: &mut Ui, id: &str, cur: Option<Arrowhead>, start: bool) ->
                 ui.painter().text(
                     row.left_center() + vec2(66.0, 0.0),
                     egui::Align2::LEFT_CENTER,
-                    tl!(arrow_label(a)),
+                    arrow_name(a),
                     egui::FontId::proportional(11.5),
                     t.text,
                 );
                 if rr.clicked() {
-                    out = Some(a);
+                    out = Some(a.cloned());
                     ui.close();
                 }
             }
@@ -499,6 +531,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if menu_item(ui, tl!("Reset Profiles"), crate::menus::enabled(app, "stroke.widthProfile.reset"), false) {
         app.run("stroke.widthProfile.reset", json!({})).ok();
+    }
+    ui.separator();
+    // Opens the arrowheads file, whose symbols are the custom heads; saving it reloads them.
+    if menu_item(ui, tl!("Edit Arrowheads…"), crate::menus::enabled(app, "stroke.arrowheads.edit"), false) {
+        app.run("stroke.arrowheads.edit", json!({})).ok();
     }
 }
 
@@ -647,7 +684,7 @@ mod tests {
         assert!(silhouette(WidthProfile::PRESETS[0].points).is_none(), "uniform draws the plain bar");
         let lens = WidthProfile::lens();
         assert_eq!(silhouette(&lens.points), Some(lens.points.as_slice()));
-        assert_eq!(arrow_label(Some(Arrowhead::CircleOpen)), "Circle (open)");
+        assert_eq!(arrow_label(Some(&Arrowhead::CircleOpen)), "Circle (open)");
     }
 
     #[test]

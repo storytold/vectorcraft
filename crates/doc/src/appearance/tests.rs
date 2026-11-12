@@ -264,11 +264,56 @@ fn arrowhead_names_are_stable_and_every_one_is_listed_once() {
     ];
     for name in SAVED {
         let a: Arrowhead = serde_json::from_value(serde_json::json!(name)).unwrap();
-        assert_eq!(serde_json::to_value(a).unwrap(), name);
+        assert_eq!(serde_json::to_value(&a).unwrap(), name);
         assert_eq!(Arrowhead::ALL.iter().filter(|x| **x == a).count(), 1, "{name} in the menu once");
     }
     let labels: std::collections::HashSet<&str> = Arrowhead::ALL.iter().map(|a| a.label()).collect();
     assert_eq!(labels.len(), Arrowhead::ALL.len(), "labels are distinct");
+}
+
+/// A custom head: a triangle from its tip back 3 units, 2 units right and 1 left of its line.
+fn custom_head() -> Arrowhead {
+    use vectorcraft_geom::{PathData, Point, SubPath};
+    let path = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(3.0, 2.0), Point::new(3.0, -1.0)], true));
+    Arrowhead::Custom(std::sync::Arc::new(CustomArrowhead::new("Wedge".into(), path)))
+}
+
+#[test]
+fn custom_arrowheads_carry_their_art_and_measure_it() {
+    let head = custom_head();
+    assert_eq!((head.name(), head.label()), ("Wedge", "Custom"));
+    assert_eq!(head.reach(), 3.0f64.hypot(2.0));
+    assert_eq!(head.half_width(), 2.0);
+    let Arrowhead::Custom(c) = &head else { panic!("custom") };
+    assert_eq!(c.stop(), 1.5, "the line stops halfway along the head");
+    // Saved with the stroke, art and all, beside the built-in heads' names.
+    let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 2.0);
+    (st.start_arrow, st.end_arrow) = (Some(Arrowhead::Triangle), Some(head.clone()));
+    let json = serde_json::to_value(&st).unwrap();
+    assert_eq!(json["start_arrow"], "Triangle");
+    assert_eq!(json["end_arrow"]["Custom"]["name"], "Wedge");
+    let back: StrokeLayer = serde_json::from_value(json).unwrap();
+    assert_eq!(back, st);
+    // Extended, the tip sits the stop past the end point; on it, only the reach counts.
+    assert_eq!(head.length(), 1.5 + head.reach());
+    assert_eq!(st.head_reach(true), head.length() * 2.0 + 1.0);
+    st.arrow_align = ArrowAlign::Tip;
+    assert_eq!(st.head_reach(true), head.reach() * 2.0 + 1.0);
+}
+
+#[test]
+fn custom_arrowheads_out_of_bounds_draw_nothing() {
+    let Arrowhead::Custom(c) = custom_head() else { panic!("custom") };
+    let mut path = c.path.clone();
+    path.subpaths[0].anchors[1] = vectorcraft_geom::Anchor::corner(vectorcraft_geom::Point::new(1e9, 0.0));
+    // A file can hold what `new` drops: reading it drops it too.
+    let json = serde_json::to_value(CustomArrowhead { name: "Wedge".into(), path }).unwrap();
+    let far: CustomArrowhead = serde_json::from_value(json).unwrap();
+    assert_eq!((far.name.as_str(), far.path.subpaths.len()), ("Wedge", 0));
+    assert_eq!((far.reach(), far.half_width(), far.stop()), (0.0, 0.0, 0.0));
+    let anchors = vec![vectorcraft_geom::Anchor::corner(vectorcraft_geom::Point::new(1.0, 0.0)); CustomArrowhead::MAX_ANCHORS + 1];
+    let many = CustomArrowhead::new("Many".into(), vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::new(anchors, true)));
+    assert!(many.path.subpaths.is_empty(), "too many anchors");
 }
 
 #[test]
