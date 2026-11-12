@@ -40,7 +40,9 @@ Status: `public-spec` (K, KR, Z, F or PR), `sample` (S), `unconfirmed` (a point 
 and no sample file shows; listed so it can be checked against a file, with what the reader does
 when it is wrong).
 
-No public specification covers versions 1 to 4. Their rows rest on the sample files they name.
+Public specifications cover only parts of versions 1 to 4: the rows that cite K, F or PR, such as
+the version 3 fill (R34) and page settings (R38). The other rows of those versions rest on the
+sample files they name.
 The test inputs are the synthetic files that `src/synth.rs` builds from the rows below; no sample
 file is committed.
 

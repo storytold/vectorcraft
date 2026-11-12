@@ -32,8 +32,9 @@ that are encrypted, ZIP64 archives or split across files.
 
 ## Versions 1 to 4
 
-No public specification covers these versions. The reader follows the layouts of public sample
-files that `PROVENANCE.md` lists (rows R31 to R44), and its tests read the synthetic files that
+Public specifications cover only parts of these versions, such as the version 3 fill and page
+settings. For the rest, the reader follows the layouts of public sample files that
+`PROVENANCE.md` lists (rows R31 to R44), and its tests read the synthetic files that
 `src/synth.rs` builds from those rows.
 
 | Version | Read | Left out or refused |

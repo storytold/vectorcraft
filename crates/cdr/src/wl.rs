@@ -159,8 +159,9 @@ fn shape(rec: &[u8], fields: Fields, p: &Profile, budget: &mut Budget, warn: &mu
             let mut s = Rd::new(body);
             let (w, h) = (coord(&mut s, p)?, coord(&mut s, p)?);
             // Two angles follow. No source confirms how they make an arc, so an ellipse whose
-            // angles differ is left out.
-            if matches!((s.i16(), s.i16()), (Some(from), Some(to)) if from != to) {
+            // angles differ is left out; one whose angles are missing is damage.
+            let (from, to) = (s.i16()?, s.i16()?);
+            if from != to {
                 push(warn, Warning::UnsupportedObjects);
                 return Some(None);
             }
@@ -316,6 +317,19 @@ mod tests {
         // A body size that leaves less than the fixed fields.
         short[28..30].copy_from_slice(&((Fields::of(b'e').least() - AFTER_BODY - 1) as u16).to_le_bytes());
         let d = read(&synth::wl_file(b'e', (612.0, 792.0), &[rect.clone(), short, rect])).unwrap();
+        assert_eq!(d.pages[0].layers[0].objects.len(), 1);
+        assert_eq!(d.warnings, vec![Warning::Damaged]);
+    }
+
+    #[test]
+    fn an_ellipse_without_its_angles_is_damage() {
+        let ellipse =
+            synth::wl_object(WlShape::Ellipse { w: 72.0, h: 36.0, angles: (0, 0) }, [1.0, 0.0, 0.0, 1.0, 0.0, 0.0], Some([1, 0, 0, 0, 100]), None);
+        let mut cut = ellipse.clone();
+        // A body size that ends the record after the ellipse's width and height.
+        cut[28..30].copy_from_slice(&((Fields::of(b'e').least() - AFTER_BODY) as u16).to_le_bytes());
+        cut.truncate(Fields::of(b'e').least());
+        let d = read(&synth::wl_file(b'e', (612.0, 792.0), &[ellipse, cut])).unwrap();
         assert_eq!(d.pages[0].layers[0].objects.len(), 1);
         assert_eq!(d.warnings, vec![Warning::Damaged]);
     }

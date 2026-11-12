@@ -6856,7 +6856,7 @@ transparency are not applied. The `warnings` of
 were left out. Drawings of versions after 27 are refused with a message, and so are packages that are
 encrypted, ZIP64 archives or split across files. VectorCraft doesn't write `.cdr` files.
 
-No public specification covers versions 1 to 4, so the importer reads the layouts found in public sample files. A
+Public specifications cover only parts of versions 1 to 4, so for the rest the importer reads the layouts found in public sample files. A
 drawing of version 1 or 2 opens as one page with one layer: its rectangles, whole ellipses and curves with their
 matrices, uniform fills and outlines with their width and color. Its text, its arcs and pies, and its fills of other
 types are left out with the same warnings, and its groups are not kept. An object of another type ends the read of
