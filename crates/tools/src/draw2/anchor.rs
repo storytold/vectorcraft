@@ -94,12 +94,14 @@ enum SpaceResume {
     SpineHandle { id: NodeId, ai: usize, out: bool },
 }
 
-/// The cursor reuses the last hover's point, with DrawSnap checking its target inputs. Zoom is
-/// separate because the cached point has already applied the screen-pixel tolerances.
+/// The cursor reuses the last hover's point, with DrawSnap checking its target inputs. The
+/// Scissors-only inputs also bind the resolved point to the current cut eligibility.
 struct ScissorsHover {
     raw: Point,
     snapped: Point,
     zoom: f64,
+    isolation: Option<NodeId>,
+    selection_tolerance: f64,
 }
 
 pub struct AnchorTool {
@@ -143,7 +145,41 @@ impl AnchorTool {
     }
 
     fn current_scissors_hover(&self, cx: &ToolContext) -> Option<&ScissorsHover> {
-        self.scissors_hover.as_ref().filter(|h| h.zoom == cx.zoom && self.scissors_snap.is_current(cx, &[]))
+        self.scissors_hover.as_ref().filter(|h| {
+            h.zoom == cx.zoom
+                && h.isolation == cx.isolation
+                && h.selection_tolerance == cx.selection_tolerance
+                && self.scissors_snap.is_current(cx, &[])
+        })
+    }
+
+    /// Keep a shared art snap unless it prevents a cut the raw pointer could make. Outside art
+    /// still supplies alignment and intersection guides; pixel and grid snapping keep precedence.
+    fn resolve_scissors_snap(&mut self, cx: &ToolContext, raw: Point, snapped: Point) -> Point {
+        let eligible = |p| hit_anchor(cx, p, 0.0).is_some() || hit_segment(cx, p, cx.pick_tol()).is_some();
+        let fallback =
+            (cx.smart_guides || cx.snap_to_point) && !cx.snap_to_pixel && !cx.snap_to_grid && snapped != raw && !eligible(snapped) && eligible(raw);
+        let snapped = if fallback {
+            self.scissors_snap.clear();
+            raw
+        } else {
+            snapped
+        };
+        self.scissors_hover =
+            Some(ScissorsHover { raw, snapped, zoom: cx.zoom, isolation: cx.isolation, selection_tolerance: cx.selection_tolerance });
+        snapped
+    }
+
+    /// Prefer a path actually at the snapped point before a nearby selected path. The small
+    /// tolerance covers curve-meeting roundoff. Pixel, grid and alignment points can lie off all
+    /// paths; there the ordinary full pick radius keeps the existing selected-path priority.
+    fn scissors_segment(cx: &ToolContext, p: Point) -> Option<(NodeId, usize, usize, f64)> {
+        let tol = cx.pick_tol();
+        if cx.smart_guides || cx.snap_to_point || cx.snap_to_pixel || cx.snap_to_grid {
+            super::segment_in(cx, super::candidate_paths(cx), p, tol.min(1e-6)).or_else(|| hit_segment(cx, p, tol))
+        } else {
+            hit_segment(cx, p, tol)
+        }
     }
 
     fn scissors_press(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
@@ -152,9 +188,8 @@ impl AnchorTool {
             return Self::add(cx, p);
         }
         let snapped = self.scissors_snap.press(cx, p, &[], None);
-        self.scissors_hover = Some(ScissorsHover { raw: p, snapped, zoom: cx.zoom });
-        let p = snapped;
-        let (tol, point) = (cx.pick_tol(), cx.point_tol());
+        let p = self.resolve_scissors_snap(cx, p, snapped);
+        let point = cx.point_tol();
         // A path snap must not be pulled to a nearby anchor by the larger pick radius.
         // Shared anchor targets and the path's anchors use the same stored coordinates.
         let snapping = cx.smart_guides || cx.snap_to_point || cx.snap_to_pixel || cx.snap_to_grid;
@@ -162,7 +197,7 @@ impl AnchorTool {
         if let Some((id, si, ai)) = hit_anchor(cx, p, anchor_tol) {
             return vec![Action::Exec("path.split".into(), json!({"id": id.0, "subpath": si, "anchor": ai}))];
         }
-        match hit_segment(cx, p, tol) {
+        match Self::scissors_segment(cx, p) {
             Some((id, si, seg, t)) => vec![Action::Exec("path.split".into(), json!({"id": id.0, "subpath": si, "segment": seg, "t": t}))],
             None => vec![],
         }
@@ -398,7 +433,7 @@ impl Tool for AnchorTool {
             ("scissors", PointerKind::Move) => {
                 if !ev.mods.alt {
                     let snapped = self.scissors_snap.hover(cx, p, &[], None);
-                    self.scissors_hover = Some(ScissorsHover { raw: p, snapped, zoom: cx.zoom });
+                    self.resolve_scissors_snap(cx, p, snapped);
                 }
                 vec![]
             }

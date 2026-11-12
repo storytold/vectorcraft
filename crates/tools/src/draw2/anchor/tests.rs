@@ -365,6 +365,118 @@ fn scissors_snaps_intersections_with_the_drawing_options() {
     }
 }
 
+/// Snapping chooses the path it names, rather than a selected path merely within pick tolerance.
+/// With every snap off, the existing selected-path priority still applies to the raw pointer.
+#[test]
+fn scissors_snapped_path_beats_nearby_selected_path() {
+    let (mut d, rect) = doc_with_rect();
+    let line = d.alloc_id();
+    d.insert(
+        Some(d.layers[0].id),
+        1,
+        vectorcraft_doc::Node::path(
+            line,
+            vectorcraft_geom::shapes::line(Point::new(120.0, 102.0), Point::new(240.0, 102.0)),
+            vectorcraft_doc::Appearance::default_art(),
+        ),
+    )
+    .unwrap();
+    let mut selected = Selection::default();
+    selected.set([rect]);
+    let paint = paint();
+    for (smart, point, at, owner, target) in [
+        (false, false, (150.0, 101.6), rect, (150.0, 100.0)),
+        (true, true, (150.0, 101.6), line, (150.0, 102.0)),
+        (false, true, (150.0, 101.6), rect, (150.0, 100.0)),
+        (false, true, (150.0, 102.0), line, (150.0, 102.0)),
+    ] {
+        let (at, target) = (Point::from(at), Point::from(target));
+        let c = ToolContext { smart_guides: smart, snap_to_point: point, snap_to_pixel: false, snap_to_grid: false, ..cx(&d, &selected, &paint) };
+        let mut tool = AnchorTool::new("scissors");
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+        let labels = scissors_labels(&tool, &c);
+        if smart {
+            assert_eq!(labels.len(), 1, "{labels:?}");
+            assert_eq!(labels[0].0, "path");
+            assert!(labels[0].1.distance(Point::new(150.0, 102.0)) < 1e-6, "{labels:?}");
+        } else {
+            assert!(labels.is_empty(), "{labels:?}");
+        }
+        assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::Scissors);
+        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+        assert!(scissors_cut_at(&d, owner, &actions).distance(target) < 1e-6, "smart={smart}, point={point}: {actions:?}");
+    }
+}
+
+/// Outside art can give an isolated path useful guides, but an unusable art snap must not turn a
+/// valid raw cut into a miss. Pixel/grid precedence still forbids falling back to the raw point.
+#[test]
+fn scissors_keeps_valid_isolated_cuts_when_outside_art_snaps() {
+    let (mut d, rect) = doc_with_rect();
+    let outside = d.alloc_id();
+    d.insert(
+        Some(d.layers[0].id),
+        1,
+        vectorcraft_doc::Node::path(
+            outside,
+            vectorcraft_geom::shapes::line(Point::new(150.0, 103.5), Point::new(350.0, 350.0)),
+            vectorcraft_doc::Appearance::default_art(),
+        ),
+    )
+    .unwrap();
+    let mut selected = Selection::default();
+    selected.set([rect]);
+    let paint = paint();
+    let at = Point::new(150.0, 100.0);
+    for snapping in [false, true] {
+        let c = ToolContext {
+            isolation: Some(rect),
+            smart_guides: snapping,
+            snap_to_point: snapping,
+            snap_to_pixel: false,
+            snap_to_grid: false,
+            ..cx(&d, &selected, &paint)
+        };
+        let mut tool = AnchorTool::new("scissors");
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+        let labels = scissors_labels(&tool, &c);
+        let cursor = tool.cursor(&c, at, Mods::default());
+        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+        assert!(scissors_cut_at(&d, rect, &actions).distance(at) < 1e-6, "snapping={snapping}: {actions:?}");
+        assert_eq!(cursor, Cursor::Scissors, "snapping={snapping}");
+        assert!(labels.is_empty(), "rejected outside snap must not guide the raw cut: {labels:?}");
+        assert!(scissors_labels(&tool, &c).is_empty(), "the press also discards its rejected guide");
+    }
+
+    // The same isolation may still use an outside path's intersection on the eligible rectangle.
+    let (d, rect, selected) = scissors_crossing();
+    let c = ToolContext { isolation: Some(rect), ..cx(&d, &selected, &paint) };
+    let mut tool = AnchorTool::new("scissors");
+    let at = Point::new(152.0, 101.5);
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    let labels = scissors_labels(&tool, &c);
+    assert_eq!(labels.len(), 1, "{labels:?}");
+    assert_eq!(labels[0].0, "intersect");
+    assert!(labels[0].1.distance(Point::new(150.0, 100.0)) < 1e-6, "{labels:?}");
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::Scissors);
+    let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+    assert!(scissors_cut_at(&d, rect, &actions).distance(Point::new(150.0, 100.0)) < 1e-6, "{actions:?}");
+
+    // A grid snap away from the path remains a miss even though the raw point is cuttable.
+    let (mut d, rect) = doc_with_rect();
+    d.node_mut(rect).unwrap().transform(vectorcraft_geom::Affine::translate((0.0, 3.5)), true);
+    d.grid = vectorcraft_doc::GridPrefs { spacing: 20.0, subdivisions: 1 };
+    let mut selected = Selection::default();
+    selected.set([rect]);
+    let c = ToolContext { isolation: Some(rect), snap_to_grid: true, ..cx(&d, &selected, &paint) };
+    let mut tool = AnchorTool::new("scissors");
+    let at = Point::new(150.0, 103.5);
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::ScissorsNotAllowed);
+    assert!(tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y)).is_empty());
+    assert!(scissors_labels(&tool, &c).is_empty());
+}
+
 /// Path and alignment labels use the same targets as the Pen. A configured snap reach beyond the
 /// anchor's pick radius proves that snapping chooses the anchor rather than a nearby segment.
 #[test]
@@ -418,6 +530,23 @@ fn scissors_cursor_and_press_use_current_snaps() {
     tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
     assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::Scissors);
     assert_eq!(tool.cursor(&c, Point::new(204.0, 160.0), Mods::default()), Cursor::ScissorsNotAllowed);
+    assert!(!tool.overlays(&c).is_empty());
+    // These interaction inputs can change without a document revision. The old hover must not
+    // keep moving the cursor onto the path or showing guides until another pointer move.
+    c.selection_tolerance = 1.0;
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::ScissorsNotAllowed);
+    assert!(tool.overlays(&c).is_empty());
+    c.selection_tolerance = 3.0;
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::Scissors);
+    assert!(!tool.overlays(&c).is_empty());
+    c.isolation = Some(rect);
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::ScissorsNotAllowed);
+    assert!(tool.overlays(&c).is_empty());
+    c.isolation = None;
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::Scissors);
+    assert!(!tool.overlays(&c).is_empty());
     c.smart_guides = false;
     c.snap_to_point = false;
     assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::ScissorsNotAllowed);
