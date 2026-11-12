@@ -88,6 +88,24 @@ static PLUGIN_DATA_LOCK: Mutex<()> = Mutex::new(());
 /// The state of each plug-in folder's storage, shared by every storage made for the folder until
 /// the plug-in is removed, which closes it and drops it.
 static PLUGIN_DATA_OPEN: Mutex<BTreeMap<PathBuf, Arc<PluginData>>> = Mutex::new(BTreeMap::new());
+/// The grants of plug-in stores that the sessions of the process don't count, and when each was
+/// last written ([`IgnoredGrants`]). Another process reads `grants.json` as it is.
+static IGNORED_PLUGIN_GRANTS: Mutex<IgnoredGrants> = Mutex::new(IgnoredGrants { ignored: BTreeSet::new(), written: BTreeMap::new(), writes: 0 });
+/// How many of the latest grant writes [`IgnoredGrants`] keeps.
+const MAX_GRANT_WRITES_KEPT: usize = 256;
+
+/// Grants of plug-in stores, by the store's folder ([`plugin_store_key`]) and the plug-in id.
+struct IgnoredGrants {
+    /// The grants that should be gone but could not be removed: no session in the process counts
+    /// them ([`Session::ignore_stored_grant`]) until one writes the store's grants for the id
+    /// ([`Session::store_grant`]).
+    ignored: BTreeSet<(PathBuf, String)>,
+    /// The latest grant writes of the process, at most [`MAX_GRANT_WRITES_KEPT`], each with the
+    /// count of writes it made ([`IgnoredGrants::writes`]).
+    written: BTreeMap<(PathBuf, String), u64>,
+    /// How many grant writes the sessions of the process have made ([`Session::grant_writes`]).
+    writes: u64,
+}
 
 /// The file name (without extension) a stored item called `name` gets: its name made safe for any
 /// file system, then a hash of the name, so that names that differ only in characters a file name
@@ -97,6 +115,37 @@ pub(crate) fn file_stem(name: &str) -> String {
     // FNV-1a over the lower-cased name: stable across versions and platforms, unlike `DefaultHasher`.
     let hash = name.trim().to_lowercase().bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3));
     format!("{}-{hash:016x}", safe.trim())
+}
+
+/// The folder `dir` spelled one way for every path to it, so that sessions attached to it by
+/// different paths share [`IGNORED_PLUGIN_GRANTS`]: the canonical path when the folder exists, else
+/// the canonical path of its nearest folder that exists followed by the rest of the path, with `.`
+/// and `..` taken out by name. The path as given when it has no absolute form (the current folder
+/// can't be read).
+pub(crate) fn plugin_store_key(dir: &Path) -> PathBuf {
+    if let Ok(path) = std::fs::canonicalize(dir) {
+        return path;
+    }
+    let Ok(absolute) = std::path::absolute(dir) else { return dir.to_path_buf() };
+    let mut parts: Vec<std::path::Component> = Vec::new();
+    for part in absolute.components() {
+        match part {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                if matches!(parts.last(), Some(std::path::Component::Normal(_))) {
+                    parts.pop();
+                }
+            }
+            _ => parts.push(part),
+        }
+    }
+    for kept in (1..=parts.len()).rev() {
+        let base: PathBuf = parts[..kept].iter().collect();
+        if let Ok(found) = std::fs::canonicalize(&base) {
+            return parts[kept..].iter().fold(found, |path, part| path.join(part));
+        }
+    }
+    parts.iter().collect()
 }
 
 /// The regular files of `dir` with the extension `ext` (any case), by file name, at most
@@ -334,9 +383,6 @@ impl Session {
         let disabled =
             read_capped(&dir.join(DISABLED_FILE), safe_mode::MAX_DISABLED_FILE_BYTES).map(|b| safe_mode::parse_disabled_file(&b)).unwrap_or_default();
         safe_mode::set_disabled(disabled);
-        if self.plugin_dir.as_ref() != Some(&dir) {
-            self.ignored_plugin_grants.lock().unwrap_or_else(|e| e.into_inner()).clear();
-        }
         self.plugin_dir = Some(dir);
         self.load_stored_plugins();
     }
@@ -347,7 +393,8 @@ impl Session {
     /// there don't grant that very module ([`grant_covers`]), is skipped with a log record, and
     /// stays in the folder with its grant. A grant for an id whose stored module lists no
     /// permissions is forgotten; one that can't be removed from the grants file doesn't count for
-    /// the rest of the session ([`Session::plugin_approver`]).
+    /// any session in the process attached to the folder until the file can be written for the id
+    /// ([`Session::ignore_stored_grant`]).
     pub fn load_stored_plugins(&mut self) {
         let Some(dir) = self.plugin_dir.clone() else { return };
         if safe_mode::active() {
@@ -407,8 +454,11 @@ impl Session {
                 Ok(file) => file.names(id),
                 Err(e) => e.unread,
             };
-            if named && !self.store_grant(id, None) && self.holds_plugin_grant(id) {
-                self.ignore_stored_grant(id);
+            if named {
+                let writes = self.grant_writes();
+                if !self.store_grant(id, None) && self.holds_plugin_grant(id) {
+                    self.ignore_stored_grant(id, writes);
+                }
             }
         }
     }
@@ -469,12 +519,16 @@ impl Session {
         }
     }
 
-    /// The grants kept in the plug-in store `dir` ([`stored_grants`]) without those this session
-    /// doesn't count ([`Session::ignore_stored_grant`]).
+    /// The grants kept in the plug-in store `dir` ([`stored_grants`]) without those the process
+    /// doesn't count for that folder ([`Session::ignore_stored_grant`]). The folder's key is worked
+    /// out on each call, so a path whose link now leads elsewhere is matched with where it leads.
     fn counted_grants(&self, dir: &Path) -> BTreeMap<String, vectorcraft_plugins::permissions::Grant> {
-        let ignored = self.ignored_plugin_grants.lock().unwrap_or_else(|e| e.into_inner());
+        let key = plugin_store_key(dir);
         let mut grants = stored_grants(dir);
-        grants.retain(|id, _| !ignored.contains(id));
+        let shared = IGNORED_PLUGIN_GRANTS.lock().unwrap_or_else(|e| e.into_inner());
+        for (_, id) in shared.ignored.range((key.clone(), String::new())..).take_while(|(folder, _)| *folder == key) {
+            grants.remove(id);
+        }
         grants
     }
 
@@ -522,20 +576,53 @@ impl Session {
     /// be read or doesn't hold a list is left as it is, with a log record, and nothing is recorded;
     /// so is one whose new content would be larger than `MAX_GRANTS_FILE`. → whether the store now
     /// holds what was asked (`false` without a folder). When it does, the grant kept for `id` counts
-    /// again ([`Session::ignore_stored_grant`]).
+    /// again, for every session in the process attached to the store ([`Session::ignore_stored_grant`]).
     pub(crate) fn store_grant(&self, id: &str, grant: Option<vectorcraft_plugins::permissions::Grant>) -> bool {
         let done = self.write_grant(id, grant);
-        if done {
-            self.ignored_plugin_grants.lock().unwrap_or_else(|e| e.into_inner()).remove(id);
+        if done && let Some(key) = self.plugin_dir.as_deref().map(plugin_store_key) {
+            let mut shared = IGNORED_PLUGIN_GRANTS.lock().unwrap_or_else(|e| e.into_inner());
+            let entry = (key, id.to_string());
+            shared.ignored.remove(&entry);
+            shared.writes = shared.writes.saturating_add(1);
+            let writes = shared.writes;
+            shared.written.insert(entry, writes);
+            if shared.written.len() > MAX_GRANT_WRITES_KEPT
+                && let Some(oldest) = shared.written.iter().min_by_key(|(_, at)| **at).map(|(entry, _)| entry.clone())
+            {
+                shared.written.remove(&oldest);
+            }
         }
         done
     }
 
-    /// Stop counting the store's grant for the plug-in `id` until [`Session::store_grant`] next
-    /// succeeds for it or another store is attached: for a grant that should be gone and could not
-    /// be removed, which would otherwise approve the bytes it covers.
-    pub(crate) fn ignore_stored_grant(&self, id: &str) {
-        self.ignored_plugin_grants.lock().unwrap_or_else(|e| e.into_inner()).insert(id.to_string());
+    /// How many grant writes the sessions of the process have made ([`Session::store_grant`]).
+    /// Taken before a write that may fail, for [`Session::ignore_stored_grant`].
+    pub(crate) fn grant_writes(&self) -> u64 {
+        IGNORED_PLUGIN_GRANTS.lock().unwrap_or_else(|e| e.into_inner()).writes
+    }
+
+    /// How many grant writes the process keeps ([`IgnoredGrants::written`]).
+    #[cfg(test)]
+    pub(crate) fn grant_writes_kept() -> usize {
+        IGNORED_PLUGIN_GRANTS.lock().unwrap_or_else(|e| e.into_inner()).written.len()
+    }
+
+    /// Stop counting the attached store's grant for the plug-in `id`, in every session in the
+    /// process attached to the same folder, until [`Session::store_grant`] next succeeds for it in
+    /// one of them: for a grant that should be gone and could not be removed, which would otherwise
+    /// approve the bytes it covers. `writes` is [`Session::grant_writes`] from before the failed
+    /// write: when a session has written the store's grants for `id` since, the file holds what that
+    /// write asked for, and the grant keeps counting. A write no longer among the latest
+    /// [`MAX_GRANT_WRITES_KEPT`] is not seen, and the grant stops counting. Another process on the
+    /// folder reads `grants.json` as it is.
+    pub(crate) fn ignore_stored_grant(&self, id: &str, writes: u64) {
+        if let Some(key) = self.plugin_dir.as_deref().map(plugin_store_key) {
+            let mut shared = IGNORED_PLUGIN_GRANTS.lock().unwrap_or_else(|e| e.into_inner());
+            let entry = (key, id.to_string());
+            if shared.written.get(&entry).is_none_or(|at| *at <= writes) {
+                shared.ignored.insert(entry);
+            }
+        }
     }
 
     fn write_grant(&self, id: &str, grant: Option<vectorcraft_plugins::permissions::Grant>) -> bool {

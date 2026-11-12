@@ -87,7 +87,6 @@ impl Session {
             color_settings_file: None,
             plugin_dir: None,
             scripts_dir: None,
-            ignored_plugin_grants: Default::default(),
             plugin_output: None,
             plugin_install_approval: None,
             plugin_grants_from_requests: false,
