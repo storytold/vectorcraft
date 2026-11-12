@@ -6389,9 +6389,12 @@ anchor	Points:	Pontok:
 @msg	{label} must be a number	{label}: szám kell
 @msg	{label} must be a number of at least 0.1	{label} legalább 0,1 értékű szám kell legyen
 	Advanced Character Formats	Speciális karakterformátumok
+	Basic Paragraph Formats	Alapvető bekezdésformátumok
+	Composition	Szedés
 	Horizontal Scale	Vízszintes méretezés
 	Vertical Scale	Függőleges méretezés
 @msg	{label} must be a number from {min} to {max}	{label} {min} és {max} közötti szám kell legyen
+@msg	{label} must be a whole number from {min} to {max}	{label} {min} és {max} közötti egész szám kell legyen
 	Character Color	Karakterszín
 	OpenType Features	OpenType-funkciók
 	Stylistic Sets	Stíluskészletek

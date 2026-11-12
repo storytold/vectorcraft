@@ -6005,9 +6005,12 @@ anchor	Points:	Точки:
 @msg	{label} must be a number	{label} має бути числом
 @msg	{label} must be a number of at least 0.1	{label} має бути числом не менше 0,1
 	Advanced Character Formats	Додаткові формати символів
+	Basic Paragraph Formats	Основні формати абзацу
+	Composition	Компонування
 	Horizontal Scale	Масштаб по горизонталі
 	Vertical Scale	Масштаб за вертикаллю
 @msg	{label} must be a number from {min} to {max}	{label} має бути числом від {min} до {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} має бути цілим числом від {min} до {max}
 	Character Color	Колір символів
 	OpenType Features	Функції OpenType
 	Stylistic Sets	Стилістичні набори

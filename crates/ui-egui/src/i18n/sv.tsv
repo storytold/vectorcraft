@@ -6457,9 +6457,12 @@ shape	Open	Öppen
 @msg	{label} must be a number	{label} måste vara ett tal
 @msg	{label} must be a number of at least 0.1	{label} måste vara ett tal på minst 0,1
 	Advanced Character Formats	Avancerade teckenformat
+	Basic Paragraph Formats	Grundläggande styckeformat
+	Composition	Sättning
 	Horizontal Scale	Horisontell skala
 	Vertical Scale	Vertikal skala
 @msg	{label} must be a number from {min} to {max}	{label} måste vara ett tal från {min} till {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} måste vara ett heltal från {min} till {max}
 	Character Color	Teckenfärg
 	OpenType Features	OpenType-funktioner
 	Stylistic Sets	Stilistiska uppsättningar

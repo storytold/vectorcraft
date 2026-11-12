@@ -263,6 +263,8 @@
 	Adjustment	समायोजन
 	Advanced	उन्नत
 	Advanced Character Formats	उन्नत कैरेक्टर फ़ॉर्मैट
+	Basic Paragraph Formats	बुनियादी पैराग्राफ़ फ़ॉर्मैट
+	Composition	संयोजन
 	Advanced Options	उन्नत ऑप्शन्स
 	After First:	शुरू के बाद:
 	Align	संरेखित करें
@@ -5479,6 +5481,7 @@ antiAlias	Sharp	शार्प
 @msg	{label} must be a number at most {max}	{label} सबसे {max} पर एक नंबर होना चाहिए
 @msg	{label} must be a number from -1296 to 1296	{label} को -1296 से 1296 के बीच की संख्या होना चाहिए
 @msg	{label} must be a number from {min} to {max}	{label} को {min} से {max} तक एक नंबर होना चाहिए
+@msg	{label} must be a whole number from {min} to {max}	{label} को {min} से {max} तक एक पूर्ण संख्या होना चाहिए
 @msg	{label} must be a number from 1 to 10000	{label} को 1 से 10000 तक एक नंबर होना चाहिए
 @msg	{label} must be a number of at least 0.1	{label} को कम से कम 0.1 होना चाहिए।
 @msg	{label} produced an empty result	{label} ने खाली परिणाम का उत्पादन किया

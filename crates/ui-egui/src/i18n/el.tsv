@@ -6356,9 +6356,12 @@ anchor	Points:	Σημεία:
 @msg	{label} must be a number	Το {label} πρέπει να είναι αριθμός
 @msg	{label} must be a number of at least 0.1	Το {label} πρέπει να είναι αριθμός τουλάχιστον 0,1
 	Advanced Character Formats	Σύνθετες μορφές χαρακτήρων
+	Basic Paragraph Formats	Βασικές μορφές παραγράφου
+	Composition	Σύνθεση
 	Horizontal Scale	Οριζόντια κλίμακα
 	Vertical Scale	Κατακόρυφη κλίμακα
 @msg	{label} must be a number from {min} to {max}	Το {label} πρέπει να είναι αριθμός από {min} έως {max}
+@msg	{label} must be a whole number from {min} to {max}	Το {label} πρέπει να είναι ακέραιος αριθμός από {min} έως {max}
 	Character Color	Χρώμα χαρακτήρων
 	OpenType Features	Χαρακτηριστικά OpenType
 	Stylistic Sets	Στιλιστικά σύνολα

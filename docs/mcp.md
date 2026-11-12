@@ -7407,12 +7407,47 @@ Auto leading. An invalid value leaves the style, its text, and Undo history unch
 The New Character Style dialog accepts the same character fields and starts with the selected text's
 captured attributes. Without selected text, it starts with the character defaults for the interface language
 (including `charAlign: "emBoxCenter"` in Japanese); changing a Basic field keeps other seeded attributes.
-Without selected text, the New Paragraph Style dialog sends no `attrs`, and the engine gives the new style the
-paragraph defaults for the interface language. Reset Panel in Basic Character
+The New Paragraph Style dialog has the sections of Paragraph Style Options, filled in from the selected
+paragraph's attributes, or without selected text from the paragraph defaults for the interface language, and OK
+sends the attributes of its sections as `attrs`. Reset Panel in Basic Character
 Formats removes those fields from the definition, Reset Panel in Advanced Character Formats removes its five, Reset
 Panel in Character Color removes its five attributes and Reset Panel in OpenType Features removes `features`.
 `ui.charStyleOptions.resetPanel {}` performs that reset for the section selected in either character-style
 dialog; it is disabled on General.
+
+`ui.paraStyleOptions {name}` opens Paragraph Style Options for an existing named style (double-clicking a row of
+the Paragraph Styles panel, or Paragraph Style Options… in its menu, does the same). OK runs
+`paraStyle.edit {name, to, attrs}`, which takes the same arguments as `charStyle.edit` and replaces the style's
+name and attributes in one undo step; the paragraphs that use the style keep their local overrides. OK with no field
+changed records no undo step, and Preview updates the paragraphs while the dialog is open (Cancel restores them).
+The `paraStyleOptions` dialog exposes `name`, `section` (`general`, `basic`, `composition`, `hyphenation` or
+`justification`) and `preview`, and these fields:
+
+- Basic Paragraph Formats: `justify` (`Auto`, `Left`, `Center`, `Right`, `JustifyLeft`, `JustifyCenter`,
+  `JustifyRight` or `JustifyAll`), and `left_indent`, `right_indent`, `first_line_indent`, `space_before` and
+  `space_after`, typed in the General unit of Preferences or with a unit of their own.
+- Composition: `composer` (`singleLine` or `everyLine`) and the `roman_hanging` checkbox.
+- Hyphenation: the `hyphenate` checkbox, `words_longer_than`, `after_first`, `before_last`, `hyphen_limit`,
+  `hyphenation_zone` and the `hyphenate_capitalized` checkbox. The options are inactive while Hyphenation is off, and
+  Hyphenation Zone is inactive with the Every-line Composer.
+- Justification: `word_min`, `word_desired`, `word_max`, `letter_min`, `letter_desired`, `letter_max`, `glyph_min`,
+  `glyph_desired` and `glyph_max` (percent), `auto_leading` (percent) and `single_word` (`fullJustify`,
+  `alignLeft`, `alignCenter` or `alignRight`).
+
+A field left as it was keeps the attribute as the style has it, and an empty field leaves its attribute unset; an
+empty Hyphenation or Justification field takes its default while another field of that section is set. Attributes
+the dialog does not show, such as tabs and character attributes, stay as they are.
+`paraStyle.new`, `paraStyle.setAttrs` and `paraStyle.edit` reject a changed indent, space before or space after outside
+-1296 to 1296 pt, Words Longer Than outside 1 to 25, After First or Before Last outside 1 to 15, Hyphen Limit outside
+0 to 25, Hyphenation Zone outside 0 to 1296 pt, Word Spacing outside 0 to 1000%, Letter Spacing outside -100 to 500%,
+Glyph Scaling outside 50 to 200%, Minimum, Desired and Maximum values out of that order, Auto Leading outside 0 to
+500%, and a tab position outside 0 to 100000 pt. A value the style already has is kept. An invalid value leaves the
+style, its paragraphs and Undo history unchanged, and keeps the dialog open.
+Reset Panel removes the section's attributes from the definition: Basic Paragraph Formats removes `justify` and the
+five distances, Composition removes `composer` and `roman_hanging`, Hyphenation removes `hyphenate` and
+`hyphenation`, and
+Justification removes `justification`. `ui.paraStyleOptions.resetPanel {}` performs that reset for the section
+selected in Paragraph Style Options or New Paragraph Style; it is disabled on General.
 
 In the native file a text object's `para` holds the first paragraph's attributes and `paras` (left out when every
 paragraph is alike) one entry per paragraph, so older readers keep the first paragraph's. SVG export anchors each

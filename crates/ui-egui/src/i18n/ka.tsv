@@ -6431,9 +6431,12 @@ anchor	Points:	წერტილები:
 @msg	{label} must be a number	{label} უნდა იყოს რიცხვი
 @msg	{label} must be a number of at least 0.1	{label} უნდა იყოს მინიმუმ 0,1
 	Advanced Character Formats	სიმბოლოს დამატებითი ფორმატები
+	Basic Paragraph Formats	აბზაცის ძირითადი ფორმატები
+	Composition	კომპოზიცია
 	Horizontal Scale	ჰორიზონტალური მასშტაბი
 	Vertical Scale	ვერტიკალური მასშტაბი
 @msg	{label} must be a number from {min} to {max}	{label} უნდა იყოს რიცხვი {min}-დან {max}-მდე
+@msg	{label} must be a whole number from {min} to {max}	{label} უნდა იყოს მთელი რიცხვი {min}-დან {max}-მდე
 	Character Color	სიმბოლოს ფერი
 	OpenType Features	OpenType შესაძლებლობები
 	Stylistic Sets	სტილისტური ნაკრებები
