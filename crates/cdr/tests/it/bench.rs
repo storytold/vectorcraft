@@ -1,6 +1,5 @@
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 //! Read time of a large synthetic drawing. Run with
-//! `cargo test --release -p vectorcraft-cdr --test bench -- --ignored --nocapture`.
+//! `cargo test --release -p vectorcraft-cdr --test it bench -- --ignored --nocapture`.
 
 use vectorcraft_cdr::synth::{self, V, chunk, list};
 use vectorcraft_cdr::{Limits, read};

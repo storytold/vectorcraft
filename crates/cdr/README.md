@@ -51,7 +51,7 @@ not a `.cdr` drawing.
 ## Provenance
 
 `PROVENANCE.md` lists every record layout the reader relies on, with its public source and status.
-Code cites the rows by id (`R1` ...), and `tests/provenance.rs` fails when a cited id has no row.
+Code cites the rows by id (`R1` ...), and `tests/it/provenance.rs` fails when a cited id has no row.
 The test inputs are synthetic drawings built by `src/synth.rs` (the `synth` feature); no
 third-party file is committed.
 

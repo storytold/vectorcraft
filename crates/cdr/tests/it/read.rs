@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 //! Reading synthetic drawings of every version the reader takes, plain and compressed, and
 //! hostile files.
 

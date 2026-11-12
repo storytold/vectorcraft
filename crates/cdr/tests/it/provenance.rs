@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 //! Every layout id the code cites (`R1` ...) has a row in `PROVENANCE.md`.
 
 use std::collections::BTreeSet;

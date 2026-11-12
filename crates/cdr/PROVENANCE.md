@@ -1,7 +1,7 @@
 # Where each layout comes from
 
 The reader relies on the record layouts below. Code cites a row by its id (`R1` ...), and
-`tests/provenance.rs` fails when a cited id has no row here.
+`tests/it/provenance.rs` fails when a cited id has no row here.
 
 Sources:
 
