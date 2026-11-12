@@ -2,8 +2,9 @@ use std::io::Cursor;
 
 use image::DynamicImage;
 use serde_json::{Value, json};
+use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::color_mask::{ColorMask, MaskBackground};
-use vectorcraft_doc::{Document, ImageBlob, ImageObject, NodeId, NodeKind};
+use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeId, NodeKind};
 use vectorcraft_geom::Rect;
 
 use super::{APPLY_COLOR_MASK, COLOR_MASK, REMOVE_COLOR_MASK};
@@ -404,6 +405,127 @@ fn a_process_color_does_not_colorize_masked_gray_pixels() {
     assert_eq!(s.execute(COLOR_MASK, &hide_white()).unwrap()["changed"], 1);
     let e = s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap_err().to_string();
     assert!(e.contains(REFUSED), "{e}");
+}
+
+/// Another image that already has an alpha channel and a process colorize color, as an opened file
+/// can hold, neither lets a grayscale image colorized with a process color take a mask nor stops a
+/// mask on an image that can take one.
+#[test]
+fn another_image_colorized_with_transparency_does_not_change_the_refusal() {
+    const REFUSED: &str = "a process color can't colorize a grayscale image with transparency";
+    let (mut s, id) = open(&gray_framed());
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let held = ImageBlob::png(png(DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_pixel(2, 2, image::LumaA([128, 100])))));
+    s.edit("Place", |d, _| {
+        let key = held.content_key();
+        d.images.insert(key.clone(), held.clone());
+        let other = d.alloc_id();
+        let im = ImageObject { key, width: 2, height: 2, xf: Default::default(), link: None, placement: Default::default(), pixels: None };
+        let mut n = Node::new(other, NodeKind::Image(Box::new(im)));
+        n.extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb8(255, 0, 0))));
+        d.insert(d.default_layer(), 0, n)?;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id], "only the gray image is selected");
+    let (before, steps) = (doc(&s).clone(), undo_len(&s));
+    let e = s.execute(COLOR_MASK, &hide_white()).unwrap_err().to_string();
+    assert!(e.contains(COLOR_MASK) && e.contains(REFUSED), "{e}");
+    assert_eq!((doc(&s), undo_len(&s)), (&before, steps), "with another image refused already, nothing changes");
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    assert_eq!(s.execute(COLOR_MASK, &hide_white()).unwrap()["changed"], 1, "an image colorized with black takes the mask beside the other");
+    let m = mask_of(doc(&s), id).unwrap();
+    let masked = image::load_from_memory(&doc(&s).images[&m.key].bytes).unwrap().to_luma_alpha8();
+    assert_eq!((masked.get_pixel(0, 0).0[1], masked.get_pixel(4, 4).0[1]), (0, 255), "white is hidden and black shows");
+}
+
+/// The mask is made from the image's own pixels: a grayscale image colorized with a process color
+/// is refused even when an earlier mask, as an opened file can hold, shows color pixels.
+#[test]
+fn a_gray_image_whose_earlier_mask_shows_color_pixels_is_refused() {
+    let (mut s, id) = open(&gray_framed());
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let rgb = ImageBlob::png(framed());
+    s.edit("Mask", |d, _| {
+        let key = rgb.content_key();
+        d.images.insert(key.clone(), rgb.clone());
+        let from = image_of(d, id).key;
+        let mask = ColorMask { key, from, ..mask_of_settings() };
+        d.node_mut(id).unwrap().extras_mut().color_mask = Some(Box::new(mask));
+        Ok(())
+    })
+    .unwrap();
+    let (before, steps) = (doc(&s).clone(), undo_len(&s));
+    let e = s.execute(COLOR_MASK, &hide_white()).unwrap_err().to_string();
+    assert!(e.contains("a process color can't colorize a grayscale image with transparency"), "{e}");
+    assert_eq!((doc(&s), undo_len(&s)), (&before, steps));
+}
+
+/// A mask that hides nothing leaves the image's own pixels without transparency, so a grayscale
+/// image colorized with a process color takes it.
+#[test]
+fn a_mask_that_hides_nothing_on_a_gray_image_colorized_with_a_process_color_is_set() {
+    let (mut s, id) = open(&gray_framed());
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let none = json!({"background": "colors", "colors": "#808080", "contiguous": false, "tolerance": 0, "softness": 0});
+    let r = s.execute(COLOR_MASK, &none).unwrap();
+    assert_eq!((r["changed"].as_u64(), r["hidden"].as_u64()), (Some(1), Some(0)));
+    let (m, im) = (mask_of(doc(&s), id).unwrap(), image_of(doc(&s), id));
+    assert_eq!(m.key, im.key, "the masked pixels are the image's own");
+    assert!(doc(&s).node(id).unwrap().extras().colorize.is_some(), "the image stays colorized");
+}
+
+/// New gray pixels whose colors a mask hides would take transparency, which a process color can't
+/// colorize: the mask made again for them hides nothing, and Apply Color Mask refuses them.
+#[test]
+fn new_gray_pixels_under_a_process_color_are_not_masked() {
+    const REFUSED: &str = "a process color can't colorize a grayscale image with transparency";
+    let gray = json!({"background": "colors", "colors": "#808080", "contiguous": false, "tolerance": 0, "softness": 0});
+    let swapped =
+        || ImageBlob::png(png(DynamicImage::ImageLuma8(image::GrayImage::from_fn(12, 10, |x, _| image::Luma([if x < 6 { 128 } else { 0 }])))));
+    let setup = || {
+        let (mut s, id) = open(&gray_framed());
+        s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+        assert_eq!(s.execute(COLOR_MASK, &gray).unwrap()["hidden"], 0, "no pixel is gray yet");
+        (s, id)
+    };
+    // Pixels put in place by an edit: the mask is made again for them and hides nothing.
+    let (mut s, id) = setup();
+    s.edit("Swap", |d, _| {
+        let blob = swapped();
+        let key = blob.content_key();
+        d.images.insert(key.clone(), blob);
+        if let NodeKind::Image(im) = &mut d.node_mut(id).unwrap().kind {
+            im.key = key;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let d = doc(&s);
+    let (im, m) = (image_of(d, id), mask_of(d, id).unwrap());
+    assert_eq!((m.from.as_str(), m.key.as_str()), (im.key.as_str(), im.key.as_str()), "the mask hides nothing");
+    assert_eq!(crate::cmd::paint::check_colorized(d), Ok(()));
+    // Pixels put in place without an edit: Apply Color Mask makes the mask again and refuses it.
+    let (mut s, id) = setup();
+    let blob = swapped();
+    let key = blob.content_key();
+    let st = s.doc_mut().unwrap();
+    let d = std::sync::Arc::make_mut(&mut st.doc);
+    d.images.insert(key.clone(), blob);
+    if let NodeKind::Image(im) = &mut d.node_mut(id).unwrap().kind {
+        im.key = key;
+    }
+    let (before, steps) = (doc(&s).clone(), undo_len(&s));
+    let e = s.execute(APPLY_COLOR_MASK, &json!({})).unwrap_err().to_string();
+    assert!(e.contains(APPLY_COLOR_MASK) && e.contains(REFUSED), "{e}");
+    assert_eq!((doc(&s), undo_len(&s)), (&before, steps));
+}
+
+/// A mask that hides white, made for another document's image (only its settings are of use).
+fn mask_of_settings() -> ColorMask {
+    let (mut s, id) = open(&framed());
+    s.execute(COLOR_MASK, &hide_white()).unwrap();
+    mask_of(doc(&s), id).unwrap()
 }
 
 /// Images outside the layers (a symbol's art, opacity-mask art) take their masks again too when

@@ -17,7 +17,7 @@ use vectorcraft_doc::color_mask::{ColorMask, MaskBackground, MaskMatch};
 use vectorcraft_doc::{Document, ImageBlob, Node, NodeId, NodeKind};
 use vectorcraft_geom::Affine;
 
-use super::super::super::paint::{check_colorized, check_colorized_kept};
+use super::super::super::paint::{PROCESS_ON_TRANSPARENCY, colorized_with_process};
 use super::super::super::{CommandSpec, Result, Session, bad, cmd};
 use super::{Background, DecodedImages, MAX_COLORS, Match, Settings, clear, images, targets};
 
@@ -38,7 +38,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Color Mask…",
             ["Object", "Plug-ins", "Image Tools"],
             None,
-            "{background?: \"edges\" (default: the most common color along the image's edges) | \"corners\" (the average of the image's four corner pixels that are not clear) | \"colors\" (the colors in `colors`), colors?: [color…] or one string of them split by commas or spaces (1 to 16 hex colors or black, white, red, green and blue, as addon.image.removeBackground takes them; needed with background: colors), contiguous?: bool (true: only matching pixels that reach in from an edge are hidden; false: wherever they are; true), match?: \"distance\" (default: a color's RGB distance from a hidden color) | \"channels\" (its largest difference on one of red, green and blue), tolerance?: 0..100 (% as addon.image.removeBackground measures it; a pixel this near a hidden color is hidden; 10), softness?: 0..100 (% past the tolerance over which pixels fade from hidden to shown; 10), ids?: [id…] (default: the selected images)} hide colors of each image without changing its pixels, as one undo step: the image keeps its own pixels, and the mask (these settings, and the image's pixels with the hidden colors made clear, made as Remove Background makes them) is kept with the image and saved with the document; the canvas, printing and separations, PDF, SVG, EPS, raster formats, DXF, EMF, WMF, the legacy .ai and the .ai editing data, copy and paste, and placing a document show the masked pixels, and a click on any part of the image's frame selects it (the Eyedropper, Object Mosaic, Create Gradient Mesh, Crop Image's trim and Image Trace read the image's own pixels); setting the mask again replaces it, and an image whose mask does not change is left as it is (no undo step when none changes); when the image's own pixels are replaced later (Update Link, Relink, Crop Image, a recolor, a linked file read again on open), the mask is made again for the new pixels; an object in `ids` that is not an image, a CMYK image, a linked image that shows its preview (embed or relink it first), an image too large to change, a mask that would hide every pixel, and a grayscale image colorized with a process color (masked gray pixels have transparency, which only a spot color, black or white colorizes) are refused. With none of background, colors, contiguous, match, tolerance and softness given, nothing changes and the mask settings of the first image (or the defaults when it has no mask) are returned → {changed: the images changed, ids, hidden: the pixels made fully clear in them} or {background, colors, contiguous, match, tolerance, softness, masked}",
+            "{background?: \"edges\" (default: the most common color along the image's edges) | \"corners\" (the average of the image's four corner pixels that are not clear) | \"colors\" (the colors in `colors`), colors?: [color…] or one string of them split by commas or spaces (1 to 16 hex colors or black, white, red, green and blue, as addon.image.removeBackground takes them; needed with background: colors), contiguous?: bool (true: only matching pixels that reach in from an edge are hidden; false: wherever they are; true), match?: \"distance\" (default: a color's RGB distance from a hidden color) | \"channels\" (its largest difference on one of red, green and blue), tolerance?: 0..100 (% as addon.image.removeBackground measures it; a pixel this near a hidden color is hidden; 10), softness?: 0..100 (% past the tolerance over which pixels fade from hidden to shown; 10), ids?: [id…] (default: the selected images)} hide colors of each image without changing its pixels, as one undo step: the image keeps its own pixels, and the mask (these settings, and the image's pixels with the hidden colors made clear, made as Remove Background makes them) is kept with the image and saved with the document; the canvas, printing and separations, PDF, SVG, EPS, raster formats, DXF, EMF, WMF, the legacy .ai and the .ai editing data, copy and paste, and placing a document show the masked pixels, and a click on any part of the image's frame selects it (the Eyedropper, Object Mosaic, Create Gradient Mesh, Crop Image's trim and Image Trace read the image's own pixels); setting the mask again replaces it, and an image whose mask does not change is left as it is (no undo step when none changes); when the image's own pixels are replaced later (Update Link, Relink, Crop Image, a recolor, a linked file read again on open), the mask is made again for the new pixels; an object in `ids` that is not an image, a CMYK image, a linked image that shows its preview (embed or relink it first), an image too large to change, a mask that would hide every pixel, and a mask that would hide pixels of a grayscale image colorized with a process color (masked gray pixels have transparency, which only a spot color, black or white colorizes; each image is checked on the pixels its new mask shows) are refused. With none of background, colors, contiguous, match, tolerance and softness given, nothing changes and the mask settings of the first image (or the defaults when it has no mask) are returned → {changed: the images changed, ids, hidden: the pixels made fully clear in them} or {background, colors, contiguous, match, tolerance, softness, masked}",
             super::has_image,
             color_mask
         ),
@@ -56,7 +56,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Color Mask",
             ["Object", "Plug-ins", "Image Tools"],
             None,
-            "{ids?: [id…] (default: the selected images)} make each image's color mask part of its pixels, as one undo step: the masked pixels become the image's own, embedded as a PNG with an alpha channel (a linked image is embedded), and the mask is taken off; a mask that hides nothing is only taken off (the image keeps its pixels and its link); images without a mask are left as they are (no undo step when none has one), and an object in `ids` that is not an image is refused → {changed, ids}",
+            "{ids?: [id…] (default: the selected images)} make each image's color mask part of its pixels, as one undo step: the masked pixels become the image's own, embedded as a PNG with an alpha channel (a linked image is embedded), and the mask is taken off; a mask that hides nothing is only taken off (the image keeps its pixels and its link); images without a mask are left as they are (no undo step when none has one), and an object in `ids` that is not an image, and a mask made again for new pixels that would give a grayscale image colorized with a process color an alpha channel, are refused → {changed, ids}",
             has_color_mask,
             apply_color_mask
         ),
@@ -128,7 +128,6 @@ fn color_mask(s: &mut Session, p: &Value) -> Result<Value> {
     let ids: Vec<u64> = changes.iter().map(|c| c.0.0).collect();
     let hidden: u64 = changes.iter().map(|c| c.3).sum();
     if !changes.is_empty() {
-        let colorized_ok = check_colorized(&s.doc()?.doc).is_ok();
         s.edit("Color Mask", |d, _| {
             for (id, mask, blob, _) in changes {
                 if let Some(blob) = blob {
@@ -138,9 +137,7 @@ fn color_mask(s: &mut Session, p: &Value) -> Result<Value> {
                     n.extras_mut().color_mask = Some(Box::new(mask));
                 }
             }
-            // Masked pixels have an alpha channel, which a grayscale image colorized with a process
-            // color can't take.
-            check_colorized_kept(colorized_ok, d).map_err(|e| bad(COLOR_MASK, e))
+            Ok(())
         })?;
     }
     Ok(json!({ "changed": ids.len(), "ids": ids, "hidden": hidden }))
@@ -171,10 +168,24 @@ fn mask_changes(s: &Session, p: &Value, settings: &Settings, mut kept: Option<&m
         if st.doc.node(id).and_then(Document::color_mask_of) == Some(&mask) {
             continue;
         }
+        // Masked pixels that hide something have an alpha channel, which a grayscale image
+        // colorized with a process color can't take. The pixels the new mask shows are checked,
+        // made from the image's own pixels, not the ones an earlier mask shows.
+        let shown = pixels.as_ref().or_else(|| st.doc.images.get(&mask.key));
+        if st.doc.node(id).is_some_and(|n| refused_colorize(&st.doc, n, shown)) {
+            return Err(bad(COLOR_MASK, PROCESS_ON_TRANSPARENCY));
+        }
         let pixels = pixels.filter(|_| !st.doc.images.contains_key(&mask.key));
         out.push((id, mask, pixels, hidden));
     }
     Ok(out)
+}
+
+/// Whether masked pixels `shown`, made for image node `n`, have transparency that `n`'s colorize
+/// color can't take: gray pixels with an alpha channel and a process color
+/// ([`colorized_with_process`]).
+fn refused_colorize(doc: &Document, n: &Node, shown: Option<&ImageBlob>) -> bool {
+    shown.and_then(ImageBlob::gray_source).is_some_and(|g| g.alpha) && colorized_with_process(doc, n)
 }
 
 /// Color Mask without settings: the first image's mask settings, or the defaults. It reads them
@@ -239,7 +250,11 @@ fn apply_color_mask(s: &mut Session, p: &Value) -> Result<Value> {
                 made.push((*id, None));
                 continue;
             }
-            let size = mask_size(st.doc.images.get(&mask.0.key).or(mask.1.as_ref()), im.width, im.height);
+            let shown = st.doc.images.get(&mask.0.key).or(mask.1.as_ref());
+            if refused_colorize(&st.doc, n, shown) {
+                return Err(bad(APPLY_COLOR_MASK, PROCESS_ON_TRANSPARENCY));
+            }
+            let size = mask_size(shown, im.width, im.height);
             made.push((*id, Some((mask, size))));
         }
     }
@@ -371,11 +386,12 @@ fn stale_mask(doc: &Document, n: &Node) -> bool {
         if im.pixels.is_none() && !(m.made_for(im) && (m.key == im.key || doc.images.contains_key(&m.key))))
 }
 
-/// One [`refresh`] pass: the masks made so far, by the image's pixels and the mask's settings (an
-/// image shown by many objects is decoded once), and the masked pixels to add to the document.
+/// One [`refresh`] pass: the masks made so far, by the image's pixels, the mask's settings and
+/// whether a process color colorizes the image (an image shown by many objects is decoded once),
+/// and the masked pixels to add to the document.
 struct Refresh<'a> {
     doc: &'a Document,
-    made: HashMap<(String, String), ColorMask>,
+    made: HashMap<(String, String, bool), ColorMask>,
     blobs: Vec<(String, ImageBlob)>,
 }
 
@@ -399,24 +415,27 @@ impl Refresh<'_> {
 
     /// The mask of image node `n` made again for the image's own pixels ([`fresh`]), `None` when
     /// it is up to date. A mask that can't be made for them (every pixel hidden, CMYK pixels, a
-    /// linked preview, too large) keeps its settings and hides nothing: the image shows its own
-    /// pixels, and setting the mask again reports why.
+    /// linked preview, too large, gray pixels with transparency under a process color) keeps its
+    /// settings and hides nothing: the image shows its own pixels, and setting the mask again
+    /// reports why.
     fn made(&mut self, n: &Node) -> Option<ColorMask> {
         let (NodeKind::Image(im), Some(m)) = (&n.kind, Document::color_mask_of(n)) else { return None };
         if !stale_mask(self.doc, n) {
             return None;
         }
         let settings = ColorMask { key: String::new(), from: String::new(), ..m.clone() };
-        let at = (im.key.clone(), format!("{settings:?}"));
+        let at = (im.key.clone(), format!("{settings:?}"), colorized_with_process(self.doc, n));
         if let Some(made) = self.made.get(&at) {
             return Some(made.clone());
         }
+        let hides_nothing = || ColorMask { key: im.key.clone(), from: im.key.clone(), ..m.clone() };
         let mask = match fresh(self.doc, n, COLOR_MASK)? {
+            Ok((mask, blob)) if refused_colorize(self.doc, n, blob.as_ref().or_else(|| self.doc.images.get(&mask.key))) => hides_nothing(),
             Ok((mask, blob)) => {
                 self.blobs.extend(blob.map(|b| (mask.key.clone(), b)));
                 mask
             }
-            Err(_) => ColorMask { key: im.key.clone(), from: im.key.clone(), ..m.clone() },
+            Err(_) => hides_nothing(),
         };
         self.made.insert(at, mask.clone());
         Some(mask)

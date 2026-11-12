@@ -10131,8 +10131,9 @@ profile and resolution). PDF's color key masking hides chosen colors of an image
   show the masked pixels. A linked image stays linked. An output that refers to linked files instead of embedding them
   (SVG with `images: "link"`) writes the masked pixels in place of the link.
 - A grayscale image's masked pixels have an alpha channel. A colorize color on a masked grayscale image follows the rule
-  for grayscale images with transparency (a spot color, black or white), and Color Mask refuses a grayscale image
-  colorized with a process color.
+  for grayscale images with transparency (a spot color, black or white), and Color Mask refuses a mask that hides
+  pixels of a grayscale image colorized with a process color. Each image is checked on the pixels its new mask shows,
+  whatever other images in the document hold.
 - A click anywhere in the image's frame selects it, hidden pixels included, as it does for an image with clear pixels.
   The Eyedropper, Object Mosaic, Create Gradient Mesh, Crop Image's trim and Image Trace read the image's own pixels,
   hidden colors included.
@@ -10141,7 +10142,8 @@ profile and resolution). PDF's color key masking hides chosen colors of an image
   `hidden` counts the pixels made fully clear in the images that changed.
 - When the image's own pixels are replaced later (Update Link, Relink, Crop Image, a recolor, or a linked file read
   again when the document opens), the mask is made again for the new pixels. When the new pixels can't be masked (CMYK
-  pixels, missing pixels, or every pixel would be hidden), the mask keeps its settings and hides nothing.
+  pixels, missing pixels, every pixel would be hidden, or the image is grayscale and colorized with a process color
+  and the mask would hide some of its pixels), the mask keeps its settings and hides nothing.
 - The command refuses, and changes nothing, when an object in `ids` is not an image, an image is CMYK, a linked image
   shows its preview (embed or relink it first), an image would need more than the decode allowance, or the mask would
   hide every pixel of an image.
@@ -10155,7 +10157,9 @@ profile and resolution). PDF's color key masking hides chosen colors of an image
 the images show their own pixels again. `addon.image.applyColorMask` makes each mask part of its image: the masked
 pixels become the image's own, embedded as a PNG with an alpha channel (a linked image is embedded), and the mask is
 taken off, in one undo step. A mask that hides nothing is only taken off, and the image keeps its pixels and its link.
-Images without a mask are left as they are, and an object in `ids` that is not an image is refused. Both commands are
+Images without a mask are left as they are, and an object in `ids` that is not an image is refused. Apply Color Mask
+also refuses, and changes nothing, when a mask made again for new pixels would give a grayscale image colorized with a
+process color an alpha channel. Both commands are
 enabled only when a selected image has a mask. → `{changed, ids}`
 
 ```json
