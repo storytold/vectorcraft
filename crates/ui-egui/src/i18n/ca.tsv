@@ -2531,6 +2531,8 @@ digits	Malayalam	Malaiàlam
 	Meters	Metres
 	Method	Mètode
 	Method:	Mètode:
+	Pad	Allarga
+	Repeats	Repeticions
 	Mezzotint	Mezzotinta
 	Mezzotint…	Mezzotinta…
 	Millimeters	Mil·límetres
@@ -5106,6 +5108,9 @@ digits	Malayalam	Malaiàlam
 @msg	`colors` must be an array of colors, not {v}	`colors` ha de ser una matriu de colors, no {v}
 @msg	`library` is a library id or name (see {list})	`library` és un identificador o un nom de biblioteca (vegeu {list})
 @msg	`method` must be classic or perceptual	`method` ha de ser classic o perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` ha de ser pad, repeat o reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` ha de ser un nombre enter d’1 a {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` s’aplica als degradats lineals, radials, cònics i de rombe
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` i `maxAnchors` han de ser nombres enters
 @msg	`mode` applies to freeform gradients	`mode` s’aplica als degradats de forma lliure
 @msg	a negative `aspect` applies to conic gradients	un `aspect` negatiu s’aplica als degradats cònics

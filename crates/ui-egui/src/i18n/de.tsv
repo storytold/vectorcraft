@@ -2000,6 +2000,8 @@ file-filter	Templates	Vorlagen
 	Metallic Gradients	Metallic-Verläufe
 	Meters	Meter
 	Method:	Methode:
+	Pad	Fortsetzen
+	Repeats	Wiederholungen
 	Millimeters	Millimeter
 	Minify	Minifizieren
 	Minimal	Minimal
@@ -5680,6 +5682,9 @@ axis	Y Axis	Y-Achse
 @msg	`dither` must be true or false	`dither` muss true oder false sein
 	Perceptual	Perzeptiv
 @msg	`method` must be classic or perceptual	`method` muss classic oder perceptual sein
+@msg	`spread` must be pad, repeat or reflect	`spread` muss pad, repeat oder reflect sein
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` muss eine ganze Zahl von 1 bis {MAX_REPEATS} sein
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gilt für lineare, radiale, konische Verläufe und Rautenverläufe
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	„{name}“ installieren, das ein großes Rechenbudget verlangt?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Jede Ausführung kann bis zu {minutes} Minuten dauern und {times}-mal so viel Arbeit leisten, wie andere Plug-ins dürfen. Sie läuft im Hintergrund, und Sie können sie abbrechen.

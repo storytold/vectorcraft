@@ -414,9 +414,9 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Done:** COLR colour fonts (v0 and v1): a glyph's layers are vector art (solid colours, linear and radial
   gradients, clips, blend modes, palette 0, the foreground colour from the run's fill), placed with the type, drawn on
   the canvas, written as paths in SVG, EPS, legacy `.ai` and PDF with outlined text, as text in PDF, and editable
-  paths with Create Outlines. Limits: glyphs using sweep gradients, Porter-Duff compositing, radial gradients from a
-  circle that isn't the centre, or repeating gradients are images of the glyph until documents have those paints;
-  estimate unchanged.
+  paths with Create Outlines. Limits: glyphs using sweep gradients, Porter-Duff compositing or radial gradients from a
+  circle that isn't the centre are images of the glyph until documents have those paints, and glyphs using repeating
+  or reflecting gradients are images until the color font reader maps them to a gradient's spread; estimate unchanged.
 - **Done:** OpenType SVG colour fonts: each glyph's SVG document is read by the SVG importer into vector art,
   in the run's colours where it uses `currentColor` (or the legacy `context-fill`/`context-stroke`), then drawn, exported and outlined as COLR
   glyphs are (PDF real text writes them as text that draws nothing, their art drawn where they sit). Images in glyph documents

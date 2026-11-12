@@ -2978,6 +2978,8 @@ file-filter	Templates	範本
 	Metallic Gradients	金屬漸層
 	Meters	公尺
 	Method:	方法：
+	Pad	延伸
+	Repeats	重複次數
 	Millimeters	公釐
 	Minify	縮減檔案大小
 	Minimal	最少
@@ -5732,6 +5734,9 @@ axis	Y Axis	Y 軸
 @msg	`dither` must be true or false	`dither` 必須是 true 或 false
 	Perceptual	感知
 @msg	`method` must be classic or perceptual	`method` 必須是 classic 或 perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` 必須是 pad、repeat 或 reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 必須是 1 到 {MAX_REPEATS} 之間的整數
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` 適用於線性、放射狀、圓錐和菱形漸層
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	要安裝需要大量運算預算的「{name}」嗎？
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	每次執行最多可能需要 {minutes} 分鐘，並可完成其他增效模組所允許工作量的 {times} 倍。它會在背景執行，您可以隨時取消。
