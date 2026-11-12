@@ -123,6 +123,18 @@ the suite) keep the agent to the folders you give it:
 - Every file a command writes must lie inside a **write root**: `save_file`, `export`, the save and
   export commands, Export for Screens, Package, Export for Web, print to file, `screenshot {path}`,
   library and preset saves to a path, the copies `links.relink {copy}` makes.
+- A path the agent gives stays in a save or export reply, with the files written beside it. Paths it did not
+  give are left out when they are outside the read roots. `save_file`, `document.save` and `file.save` without
+  a `path` write the document's own file: the reply then has no `path`, and `files` and `linked` name the files
+  written beside it by their file names. A save without a path known (`file.saveAs` and `file.saveCopy` without
+  one, a document never saved) leaves out the suggested `folder`. `document.exportForScreens` into the `folder`
+  of its `exportPreset` leaves out the ZIP's `path` and lists `files` relative to that folder, and an error
+  for that export names the folder by its name alone.
+  `document.exportSettings`, `document.exportPresets.list` and `document.exportPresets.export` (as data and as
+  a file) leave out a kept `folder` outside the read roots. `file.package`
+  names the document's file and the linked files outside the read roots by their file names in `warnings`, in
+  `missingLinks` and in its report. `document.info` gives `link: null` for an image linked to a file outside them,
+  and its Linked Images rows and text report name that file alone. `action.batch` returns the replies of its steps as these commands give them.
 - `file.list {path}` (through `run_command`) lists a folder's files and folders, held to the read roots like any read, so an agent can see what it was given (#1163).
 - `file.recentFiles` and the control channel's `ui.menu.list` leave out the recent files outside the read roots. The
   other File › Open Recent Files rows keep their ids (`file.openRecent3` still opens the third file), and

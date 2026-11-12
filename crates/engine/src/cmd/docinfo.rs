@@ -1,7 +1,7 @@
 //! Document Info panel data, its categories and the text report (Document Info › Save…, File →
 //! Package), and Object → Make Pixel Perfect.
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else Linear gradient, Radial gradient or Freeform gradient; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the Brushes panel's brushes; with selectionOnly: the brushes the selected objects' strokes use), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else Linear gradient, Radial gradient or Freeform gradient; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone",
             has_doc,
             info
         ),
@@ -358,6 +358,16 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let mut fonts = BTreeSet::new();
     let mut images: BTreeMap<String, Value> = BTreeMap::new();
     let mut image_rows: Vec<ImageRow> = vec![];
+    // Whether the request being served may read each linked file (a relative path read from the
+    // document's folder), checked once per file.
+    let mut readable: HashMap<String, bool> = HashMap::new();
+    let link_doc = super::links::LinkBase::of(st).doc;
+    let mut may_read = |stored: &str| {
+        *readable.entry(stored.to_string()).or_insert_with(|| {
+            let resolved = super::fileio::document_path(stored, link_doc).ok();
+            crate::file_access::check_read(resolved.as_deref().unwrap_or(stored)).is_ok()
+        })
+    };
     let mut patterns = BTreeSet::new();
     let mut symbols = BTreeSet::new();
     let mut spot = BTreeSet::new();
@@ -411,12 +421,15 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                     Some("textObjects")
                 }
                 NodeKind::Image(im) => {
+                    // A linked file outside a confined request's read roots: `link` is null, and the row
+                    // names the file alone.
+                    let link = im.link.as_ref().map(|l| (l, may_read(&l.path)));
                     images.insert(
                         im.key.clone(),
-                        json!({ "width": im.width, "height": im.height, "linked": im.link.is_some(), "link": im.link.as_ref().map(|l| &l.path) }),
+                        json!({ "width": im.width, "height": im.height, "linked": im.link.is_some(), "link": link.and_then(|(l, ok)| ok.then_some(&l.path)) }),
                     );
                     let name = im.link.as_ref().map_or_else(|| n.display_name(), |l| l.name().to_string());
-                    image_rows.push((name, im.width, im.height, im.link.as_ref().map(|l| l.path.clone())));
+                    image_rows.push((name, im.width, im.height, link.map(|(l, ok)| if ok { l.path.clone() } else { l.name().to_string() })));
                     Some("images")
                 }
                 NodeKind::SymbolInstance { symbol, .. } => {
