@@ -215,6 +215,22 @@ impl Session {
         Some(self.last_selection_tool.unwrap_or(if edits_anchors(id) { "directSelection" } else { "selection" }))
     }
 
+    /// [`Self::lent_tool`] for a press or pointer at `p` (document space). Cmd lends Direct
+    /// Selection while the Selection tool is active (#6583), with two exceptions that keep their
+    /// own meaning for the key: with Shift held (Cmd+Shift releases guides), and, with General ›
+    /// Command Click to Select Objects Behind on, away from the anchors, handles and segments of a
+    /// selected object, where Cmd-click selects behind.
+    fn lent_tool_at(&mut self, id: &str, mods: &Mods, p: Point, view: ViewInfo) -> Option<&'static str> {
+        if id != "selection" {
+            return self.lent_tool(id, mods);
+        }
+        if mods.shift {
+            return None;
+        }
+        let lends = !self.prefs.ctrl_click_selects_behind || self.with_tool_cx(view, |_, cx| vectorcraft_tools::direct::over_selected_part(cx, p));
+        lends.then_some("directSelection")
+    }
+
     /// The selection tool a press with `mods` would borrow from the active tool
     /// ([`Self::lend_selection_tool`]), as [`Self::cursor`] shows it: the canvas also shows what
     /// that tool shows (Direct Selection with Cmd held shows the bounding box).
@@ -225,14 +241,20 @@ impl Session {
         self.lent_tool(self.tool.id(), mods)
     }
 
+    /// Would the press `ev` be lent a selection tool ([`Self::lend_selection_tool`])? The frontend
+    /// asks it before the press, to tell a gesture of the tool in hand from one of a lent tool.
+    pub fn press_lends_tool(&mut self, ev: &PointerEvent, view: ViewInfo) -> bool {
+        ev.kind == PointerKind::Down && ev.mods.cmd && self.lender.is_none() && self.lent_tool_at(self.tool.id(), &ev.mods, ev.pos, view).is_some()
+    }
+
     /// A press with Cmd held (Ctrl elsewhere) and any other tool than a selection tool: the
     /// selection tool [`Self::lent_tool`] takes the gesture, pressing without Cmd (a plain click,
     /// not Select Behind). The tool lent to stays as it was, unaware, until the release.
-    fn lend_selection_tool(&mut self, ev: &PointerEvent) -> PointerEvent {
+    fn lend_selection_tool(&mut self, ev: &PointerEvent, view: ViewInfo) -> PointerEvent {
         if ev.kind != PointerKind::Down || !ev.mods.cmd || self.lender.is_some() {
             return *ev;
         }
-        let Some(id) = self.lent_tool(self.tool.id(), &ev.mods) else { return *ev };
+        let Some(id) = self.lent_tool_at(self.tool.id(), &ev.mods, ev.pos, view) else { return *ev };
         // Typing in progress is kept as its own step first: the lent tool's drag previews from the
         // document its interaction started from, which would drop the typing (#1881).
         if crate::cmd::typing_in_progress(self) {
@@ -659,7 +681,7 @@ impl Session {
         }
         self.leave_draw_inside(ev, view)?;
         self.tell_tool_history_moved();
-        let ev = &self.lend_selection_tool(ev);
+        let ev = &self.lend_selection_tool(ev, view);
         let lent = self.lender.is_some();
         let mut acts = self.with_tool_cx(view, |t, cx| t.pointer(cx, ev));
         if !keep {
@@ -1157,10 +1179,12 @@ impl Session {
 
     /// The pointer the active tool shows at `p` (General › Use Precise Cursors, or Caps Lock while
     /// it is on, makes the drawing tools' a crosshair, [`Cursor::precise`]). With Cmd held, the pointer of the selection tool a
-    /// press would borrow ([`Self::lend_selection_tool`]).
+    /// press would borrow ([`Self::lend_selection_tool`]), but not while a drag is under way: Cmd
+    /// pressed after the press lends nothing, so the tool keeps its pointer until the release.
     pub fn cursor(&mut self, p: Point, mods: Mods, view: ViewInfo) -> Cursor {
         // While an edit is computed, a Cmd press is held for the active tool, which shows it is busy.
-        let lent = if mods.cmd && self.lender.is_none() && !self.tool_editing() { self.lent_tool(self.tool.id(), &mods) } else { None };
+        let lends = mods.cmd && self.lender.is_none() && !self.tool_editing() && !self.pointer_held;
+        let lent = if lends { self.lent_tool_at(self.tool.id(), &mods, p, view) } else { None };
         let c = match lent {
             Some(id) => {
                 let lent = self.make_tool(id);
