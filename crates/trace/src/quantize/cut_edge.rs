@@ -70,12 +70,25 @@ pub(super) fn settled(mut q: Quantized, img: &Raster, own: &[bool]) -> Quantized
 /// colours and what noise and lighting make of them, and eight colours come within a few levels
 /// of every pixel; a photo's tones spread all through its range, and eight colours stay far from
 /// most of them (more than 6 levels, and more than a tenth of how far a single colour stays).
+/// A gray picture's tones lie along one line instead of through the whole color cube, and eight
+/// colors come nearer to them. A neutral picture (19 in 20 of its opaque pixels with their
+/// channels within 8 levels of each other) is therefore also continuous tone when eight colors
+/// stay more than 0.065 as far as a single color does, unless sixteen colors stay at most a fifth
+/// as far as eight do. That exception holds for gray flat art of up to sixteen clean levels, where
+/// sixteen colors come within about a level of every pixel. On gray photos sixteen colors stay
+/// 0.18 to 0.48 as far as eight do, and on most anti-aliased or noisy gray flat art 0.24 to 0.5
+/// as far, so the exception holds for neither.
 pub(crate) fn continuous_tone(img: &Raster) -> bool {
     let hk = HistKey::new(img);
     let mut bins = vec![Bin::default(); 1 << 15];
+    let (mut opaque, mut neutral) = (0u64, 0u64);
     for p in img.rgba.as_chunks::<4>().0 {
         if p[3] >= 128 {
             bins[hk.key(p[0], p[1], p[2])].add(p);
+            opaque += 1;
+            if p[0].max(p[1]).max(p[2]) - p[0].min(p[1]).min(p[2]) <= 8 {
+                neutral += 1;
+            }
         }
     }
     let used: Vec<Used> = bins.iter().enumerate().filter(|(_, b)| b.n > 0).map(|(i, b)| (i, b.mean(), b.n as f64)).collect();
@@ -91,7 +104,11 @@ pub(crate) fn continuous_tone(img: &Raster) -> bool {
         if n > 0.0 { (sum / n).sqrt() } else { 0.0 }
     };
     let eight = unsaid(8);
-    eight > 6.0 && eight > 0.1 * unsaid(1)
+    if eight <= 6.0 {
+        return false;
+    }
+    let one = unsaid(1);
+    eight > 0.1 * one || (20 * neutral >= 19 * opaque && eight > 0.065 * one && unsaid(16) > 0.2 * eight)
 }
 
 /// Drop unused palette entries and merge duplicates.

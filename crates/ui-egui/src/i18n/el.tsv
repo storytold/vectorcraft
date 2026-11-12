@@ -1984,6 +1984,7 @@ font-technology	Variable	Μεταβλητές
 	Rotate View Tool	Εργαλείο περιστροφής προβολής (Rotate View Tool)
 	Trackpad Gesture to Rotate View	Περιστροφή προβολής με χειρονομία στην επιφάνεια αφής
 	Hold a Tool Shortcut to Use the Tool Temporarily	Προσωρινή χρήση εργαλείου κρατώντας πατημένη τη συντόμευσή του
+	Show Bounding Box While Moving and Drawing	Εμφάνιση πλαισίου οριοθέτησης κατά τη μετακίνηση και τη σχεδίαση
 	Rotate…	Περιστροφή…
 	Rotation	Περιστροφή
 	Rows:	Γραμμές:
