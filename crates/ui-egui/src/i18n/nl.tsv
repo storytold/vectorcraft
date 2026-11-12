@@ -6769,6 +6769,8 @@ breakText	Glyphs	Glyphs
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Korte praktische tutorials voor de belangrijkste gereedschappen, gegroepeerd per vaardigheid. Kies een vaardigheid om de tutorials ervan te zien.
 	List Tutorials	Tutorials weergeven
 	Show Tutorial	Tutorial tonen
+	Show Tool Location	Locatie van gereedschap tonen
+	Show where this tool is	Tonen waar dit gereedschap zich bevindt
 @msg	missing `tutorial` (see learn.list)	`tutorial` ontbreekt (zie learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	onbekende tutorial `{id}` (zie learn.list)
 

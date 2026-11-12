@@ -6756,6 +6756,8 @@ shape	Open	Otvoren
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Kratki praktični tutorijali za osnovne alate, grupisani po vještinama. Odaberite vještinu da vidite njene tutorijale.
 	List Tutorials	Izlistaj tutorijale
 	Show Tutorial	Prikaži tutorijal
+	Show Tool Location	Prikaži lokaciju alata
+	Show where this tool is	Prikaži gdje je ovaj alat
 @msg	missing `tutorial` (see learn.list)	nedostaje `tutorial` (vidi learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	nepoznat tutorijal `{id}` (vidi learn.list)
 

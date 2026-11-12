@@ -7075,6 +7075,8 @@ breakText	Glyphs	Γλύφοι
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Σύντομοι πρακτικοί οδηγοί για τα βασικά εργαλεία, ομαδοποιημένοι ανά δεξιότητα. Επιλέξτε μια δεξιότητα για να δείτε τους οδηγούς της.
 	List Tutorials	Λίστα οδηγών εκμάθησης
 	Show Tutorial	Εμφάνιση οδηγού εκμάθησης
+	Show Tool Location	Εμφάνιση θέσης εργαλείου
+	Show where this tool is	Εμφάνιση της θέσης αυτού του εργαλείου
 @msg	missing `tutorial` (see learn.list)	λείπει το `tutorial` (δείτε learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	άγνωστος οδηγός εκμάθησης `{id}` (δείτε learn.list)
 

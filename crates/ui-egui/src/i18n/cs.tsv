@@ -7123,6 +7123,8 @@ breakText	Glyphs	Glyfy
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Krátké praktické výukové kurzy k základním nástrojům, seřazené podle dovedností. Vyberte dovednost a zobrazí se její kurzy.
 	List Tutorials	Vypsat výukové kurzy
 	Show Tutorial	Zobrazit výukový kurz
+	Show Tool Location	Zobrazit umístění nástroje
+	Show where this tool is	Zobrazit, kde je tento nástroj
 @msg	missing `tutorial` (see learn.list)	chybí `tutorial` (viz learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	neznámý výukový kurz `{id}` (viz learn.list)
 

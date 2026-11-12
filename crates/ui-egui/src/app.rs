@@ -602,6 +602,7 @@ impl VectorcraftApp {
         panels::library_panel::tidy(self);
         // The canvas and the panels: one docking layout. Tab hides the panels but not the canvas.
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| panel_docking::show(self, ui));
+        panels::learn::locate::tidy(self, &ctx);
         crate::doc_windows::show(self, &ctx);
         dialogs::show(self, &ctx);
         updates_ui::show(self, &ctx);

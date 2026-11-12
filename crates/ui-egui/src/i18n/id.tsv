@@ -6718,6 +6718,8 @@ breakText	Glyphs	Glif
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutorial praktik singkat untuk alat-alat utama, dikelompokkan menurut keterampilan. Pilih keterampilan untuk melihat tutorialnya.
 	List Tutorials	Daftar tutorial
 	Show Tutorial	Tampilkan tutorial
+	Show Tool Location	Tampilkan lokasi alat
+	Show where this tool is	Tampilkan letak alat ini
 @msg	missing `tutorial` (see learn.list)	`tutorial` tidak ada (lihat learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial `{id}` tidak dikenal (lihat learn.list)
 

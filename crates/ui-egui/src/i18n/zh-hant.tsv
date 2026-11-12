@@ -6767,6 +6767,8 @@ breakText	Glyphs	字符
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	針對基本工具的簡短實作教學課程，依技能分組。選擇一項技能即可查看其教學課程。
 	List Tutorials	列出教學課程
 	Show Tutorial	顯示教學課程
+	Show Tool Location	顯示工具位置
+	Show where this tool is	顯示此工具的位置
 @msg	missing `tutorial` (see learn.list)	未提供 `tutorial` (請參閱 learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	未知的教學課程 `{id}` (請參閱 learn.list)
 

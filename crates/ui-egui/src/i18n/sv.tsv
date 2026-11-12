@@ -8565,6 +8565,8 @@ digits	Hindi	Hindi
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Korta praktiska självstudier för de viktigaste verktygen, ordnade efter färdighet. Välj en färdighet för att se dess självstudier.
 	List Tutorials	Lista självstudier
 	Show Tutorial	Visa självstudie
+	Show Tool Location	Visa verktygets plats
+	Show where this tool is	Visa var det här verktyget finns
 @msg	missing `tutorial` (see learn.list)	`tutorial` saknas (se learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	okänd självstudie `{id}` (se learn.list)
 

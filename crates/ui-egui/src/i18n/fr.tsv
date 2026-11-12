@@ -7118,6 +7118,8 @@ breakText	Glyphs	Glyphes
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Courts tutoriels pratiques sur les outils essentiels, regroupés par compétence. Choisissez une compétence pour voir ses tutoriels.
 	List Tutorials	Lister les tutoriels
 	Show Tutorial	Afficher le tutoriel
+	Show Tool Location	Afficher l'emplacement de l'outil
+	Show where this tool is	Afficher l'emplacement de cet outil
 @msg	missing `tutorial` (see learn.list)	`tutorial` manquant (voir learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutoriel inconnu `{id}` (voir learn.list)
 
