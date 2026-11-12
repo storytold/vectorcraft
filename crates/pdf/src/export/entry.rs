@@ -53,7 +53,9 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     let raised = for_long_pages(set, &pages)?;
     let set = raised.as_ref().unwrap_or(set);
 
-    let title = crate::pdfx::title(set.standard, opts.title.clone().unwrap_or_else(|| doc.title.clone()));
+    // The file's Title is File Info's; the page information names the document, as its tab does.
+    let title = crate::pdfx::title(set.standard, opts.title.clone().unwrap_or_else(|| doc.info_title().to_owned()));
+    let name = opts.title.as_deref().unwrap_or(&doc.title);
     // The time of writing (none on the web) dates the editing data and the page information.
     let now = vectorcraft_doc::metadata::output_time();
     let created_at = opts.created.or(now);
@@ -63,9 +65,11 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     // Preserve Editing: the native document as an embedded file (`check` refused PDF/A with it).
     let mut warnings = set.warnings();
     if raised.is_some() {
-        warnings.push(
-            "PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6".into(),
-        );
+        warnings.push(if opts.settings.compatibility == Compatibility::Pdf14 {
+            "PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6".into()
+        } else {
+            "PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6".into()
+        });
     }
     let native = opts.native.as_deref().filter(|_| set.preserve_editing);
     if let Some(native) = native {
@@ -106,7 +110,7 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
         vectorcraft_doc::cancel::check().map_err(|_| PdfError::Cancelled)?;
         vectorcraft_doc::cancel::progress(written as u64 + 1, total, &format!("Writing page {} of {total}", written + 1));
         let (m, r) = (boxes.media, boxes.bleed);
-        let info = if marks.page_info { crate::marks::page_info(doc, &title, i, now) } else { String::new() };
+        let info = if marks.page_info { crate::marks::page_info(doc, name, i, now) } else { String::new() };
         let art = crate::marks::art(doc, &marks, &boxes, bleed, &info);
         // The page is the media box, y down from its top-left corner (like ours), in units of
         // `unit` points.
@@ -199,9 +203,9 @@ fn writes_user_units(set: &PdfSettings) -> bool {
 }
 
 /// `long_pages_in_points` is on in a file without a standard. PDF/X files write long pages in
-/// points anyway, and PDF/A files from PDF 1.5 on keep the `UserUnit`, which keeps their page
-/// boundaries within 14,400 units (ISO 19005-2, 6.1.13). A PDF/A file at PDF 1.4 has no
-/// `UserUnit` and writes long pages in points either way.
+/// points anyway, and PDF/A files keep the `UserUnit`, which keeps their page boundaries within
+/// 14,400 units (ISO 19005-2, 6.1.13). A PDF/A file at PDF 1.4 is written as PDF 1.6 to have one
+/// ([`for_long_pages`]).
 fn long_pages_in_points(set: &PdfSettings) -> bool {
     set.long_pages_in_points && set.standard == Standard::None
 }
@@ -239,10 +243,20 @@ fn for_long_pages(set: &PdfSettings, pages: &[(usize, PageBoxes)]) -> Result<Opt
     }
     let raised = (set.compatibility == Compatibility::Pdf15 && !set.standard.is_pdfx() && !long_pages_in_points(set))
         .then(|| PdfSettings { compatibility: Compatibility::Pdf16, ..set.clone() });
+    // PDF/A-2 limits page boundaries to 14,400 units (ISO 19005-2, 6.1.13), and PDF 1.4 has no
+    // `UserUnit`: a PDF/A file at PDF 1.4 is written as PDF 1.6, with the `UserUnit` whether or
+    // not `long_pages_in_points` is on.
+    let raised = raised.or_else(|| {
+        (set.standard == Standard::PdfA2b && set.compatibility == Compatibility::Pdf14).then(|| PdfSettings {
+            compatibility: Compatibility::Pdf16,
+            long_pages_in_points: false,
+            ..set.clone()
+        })
+    });
     // The writer's test for a whole number, on the `f32` it writes.
     let real = |side: f64| side > MAX_PDF14_REAL && (side as f32) as i32 as f32 != side as f32;
     if let Some((i, b)) = pages.iter().find(|(_, b)| real(b.media.width()) || real(b.media.height())) {
-        page_too_long(set, *i, b.media.width().max(b.media.height()))?;
+        page_too_long(raised.as_ref().unwrap_or(set), *i, b.media.width().max(b.media.height()))?;
     }
     Ok(raised)
 }

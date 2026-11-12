@@ -110,6 +110,35 @@ fn conic_gradients_are_written_as_wedges_clipped_to_the_shape() {
     }
 }
 
+/// The format has no diamond gradient: a diamond fill, and a diamond stroke (written as its filled
+/// outline), are four path objects clipped to the shape, each a linear gradient over a quadrant
+/// of the diamond's frame, with a warning; the definition is not named after the swatch.
+#[test]
+fn diamond_gradients_are_written_as_four_linear_gradients_clipped_to_the_shape() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Diamond, stops));
+    g.geom = Some(vectorcraft_color::GradientGeom {
+        start: vectorcraft_geom::Point::new(100.0, 50.0),
+        end: vectorcraft_geom::Point::new(140.0, 30.0),
+        aspect: 0.7,
+        focal: None,
+    });
+    g.swatch = Some("Gem".into());
+    let diamond = Paint::Gradient(Box::new(g));
+    for (fill, stroke) in [(diamond.clone(), Paint::None), (Paint::None, diamond)] {
+        let mut doc = Document::new(200.0, 100.0);
+        let n = shape(&mut doc, shapes::ellipse(Rect::new(20.0, 10.0, 180.0, 90.0)), fill.clone(), stroke.clone());
+        let l = doc.layers[0].id;
+        doc.insert(Some(l), 0, n).unwrap();
+        let out = write(&doc);
+        assert!(out.warnings.iter().any(|w| w == DIAMOND), "{:?}", out.warnings);
+        let text = String::from_utf8_lossy(&out.bytes);
+        assert_eq!(text.matches("%AI5_BeginGradient: (Gradient)").count(), 1, "one linear definition: {text}");
+        assert!(!text.contains("(Gem)"), "not named after the swatch");
+        assert_eq!(text.matches(" Bg\n").count(), 4, "a gradient a quadrant");
+    }
+}
+
 /// `doc` written with options `o`. Every file the tests write is also run as a PostScript program
 /// ([`prints_as`]) and must draw what `doc` draws.
 fn write_with(doc: &Document, o: LegacyAiOptions) -> LegacyAiOutput {
@@ -1261,6 +1290,74 @@ fn a_font_height_reference_is_written_as_the_size_drawn() {
     let imported = crate::import(&out.bytes).unwrap();
     let size = texts(&imported.document)[0].1.runs[0].style.size;
     assert!((size - 20.0).abs() < 1e-6, "{size}");
+}
+
+/// Type on a path with Dynamic Text is written at the sizes it is drawn at, with a warning that
+/// the setting itself is not written; without Dynamic Text there is no warning.
+#[test]
+fn dynamic_text_is_written_at_its_drawn_sizes_with_a_warning() {
+    let mut doc = typed();
+    assert!(!write(&doc).warnings.iter().any(|w| w == DYNAMIC_TEXT));
+    let id = texts(&doc).into_iter().find(|(_, t)| matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. })).unwrap().0.id;
+    let mut drawn = 0.0;
+    if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[0].style.size = 4.0;
+        t.dynamic_text = true;
+        drawn = 4.0 * vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).fit_scale;
+    }
+    assert!(drawn > 4.0, "{drawn}");
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == DYNAMIC_TEXT), "{:?}", out.warnings);
+    let imported = crate::import(&out.bytes).unwrap();
+    let (_, back) = texts(&imported.document).into_iter().find(|(_, t)| t.runs.iter().any(|r| r.text.contains("path"))).unwrap();
+    assert!(!back.dynamic_text);
+    assert!((back.runs[0].style.size - drawn).abs() < 1e-3, "{} vs {drawn}", back.runs[0].style.size);
+    // Type written as outlines loses the setting too, and says so.
+    if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[0].text.push('\u{2192}');
+    }
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == TYPE) && out.warnings.iter().any(|w| w == DYNAMIC_TEXT), "{:?}", out.warnings);
+    let out = write_with(&doc, LegacyAiOptions { outline_text: true, ..LegacyAiOptions::default() });
+    assert!(out.warnings.iter().any(|w| w == DYNAMIC_TEXT), "{:?}", out.warnings);
+}
+
+/// Dynamic Text fits type whose size measures the cap height at the size the Character panel
+/// shows: 1,000 pt measuring a 0.7 em cap height on a long path grows to the 1,296 pt limit and is
+/// written at the em size drawn there, as text and as outlines.
+#[test]
+fn dynamic_text_with_a_font_height_reference_is_written_at_its_drawn_size() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, height_font};
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(height_font(true).unwrap());
+    let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "HE", style(1000.0, red()));
+    let st = &mut t.runs[0].style;
+    st.font_family = HEIGHT_FAMILY.into();
+    st.font_height_reference = vectorcraft_doc::FontHeightReference::CapHeight;
+    let mut line = PathData::new(vec![]);
+    line.subpaths.push(vectorcraft_geom::SubPath::polyline(&[(0.0, 2000.0).into(), (100_000.0, 2000.0).into()], false));
+    t.kind = TextKind::OnPath { path: line, start: 0.0, end: None };
+    t.xf = Affine::IDENTITY;
+    t.dynamic_text = true;
+    let lay = vectorcraft_text::layout(db, &t);
+    assert!((lay.fit_scale - 1.296).abs() < 1e-9, "{}", lay.fit_scale);
+    let em = 1296.0 / 0.7;
+    let mut glyphs = kurbo::BezPath::new();
+    for g in &lay.glyphs {
+        glyphs.extend(g.outline.iter());
+    }
+    let want = glyphs.bounding_box();
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let back = crate::import(&write(&doc).bytes).unwrap().document;
+    let size = texts(&back)[0].1.runs[0].style.size;
+    assert!((size - em).abs() < 1e-3, "{size} vs {em}");
+    let back = crate::import(&write_with(&doc, LegacyAiOptions { outline_text: true, ..LegacyAiOptions::default() }).bytes).unwrap().document;
+    let b = children(&children(&back.layers[0])[0])[0].visual_bounds().unwrap();
+    assert!((b.height() - want.height()).abs() < 0.05 && (b.width() - want.width()).abs() < 0.05, "{b:?}, laid out at {want:?}");
 }
 
 /// Characters with Auto leading are written with their paragraph's Auto Leading share of the

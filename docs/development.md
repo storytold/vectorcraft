@@ -1,6 +1,6 @@
 # Development
 
-> **Last updated:** 2026-11-06 · **Change:** Hindi catalog and zero/one plural rule; desktop Devanagari fallback and optional craft-fonts UI face; native review pending.
+> **Last updated:** 2026-11-12 · **Change:** minor (clipboard failure helper follows its Linux/BSD and test callers; previously: Hindi catalog and zero/one plural rule; desktop Devanagari fallback and optional craft-fonts UI face; native review pending).
 > **Last updated:** 2026-11-01 · **Change:** Linux: Automatic Linux Display Server opens the window through XWayland when a pen is attached on a Wayland session, so the pen draws (#4967); `VECTORCRAFT_NATIVE_WAYLAND=1` keeps Wayland.
 > **Last updated:** 2026-10-31 · **Change:** files opened while the app runs open in its window on Windows and Linux (#4892); `--new-instance`.
 > **Last updated:** 2026-10-29 · **Change:** Linux clipboard: the Flatpak on GNOME copies and pastes text through the core Wayland protocol.
@@ -88,6 +88,8 @@ The canvas is rasterized on the CPU (`vectorcraft-render`, vello_cpu); the GPU (
 The desktop app writes its `log` records to standard error and to `logs/vectorcraft.log` next to the preferences (Linux `$XDG_CONFIG_HOME/vectorcraft/logs/`, by default `~/.config/vectorcraft/logs/`; macOS `~/Library/Application Support/VectorCraft/logs/`; Windows `%APPDATA%\VectorCraft\logs\`). A start launched from a desktop menu or the Dock has no terminal, so this file is what to attach to a bug report: the graphics adapter in use, a lost graphics device, panics the engine's guard recovered from and clipboard formats that couldn't be made land there. Each launch moves the previous log to `vectorcraft.1.log` (and that one to `vectorcraft.2.log`), so the log of a run that crashed survives the next start. The file stops growing at 16 MiB. `--version` writes no file, and runs with `VECTORCRAFT_NO_PREFS` log to standard error only.
 
 By default VectorCraft's own crates log at `info` and everything else at `warn`. `RUST_LOG` replaces that with env_logger-style directives, for example `RUST_LOG=debug`, `RUST_LOG=warn,vectorcraft_render=trace` or `RUST_LOG=info,wgpu_core=warn`; a directive ending in `*` covers every target starting with it (`vectorcraft*=debug`). The logger is `apps/vectorcraft/src/logging.rs`. `vectorcraft-cli mcp` has its own logger, which sends records to the MCP client (`docs/mcp.md`).
+
+When the interface thread stays in one part of a frame for 3 s (VectorCraft's own value), a watching thread writes a hang report to the log and to `logs/hang-report-<process id>.txt`, which the process keeps locked. The report gives the part of the frame (the input hook, the app's logic, the interface, or the renderer after a frame in which any window had input), a system clipboard read or write in progress, the last 8 different command ids (a command run again moves to the end of the list), the times of the last 16 frames, the platform, the window system (Wayland, X11, AppKit, Win32, other or unknown), `XDG_CURRENT_DESKTOP`, `XDG_SESSION_TYPE`, whether the app runs in a Flatpak, the graphics adapter, the present mode and frame latency the app asks the window surface for, the session's running time and how many documents are open. It holds no document contents, file paths or command parameters, and no native stack. The time after a frame that minimizes or hides the main window, or starts moving or resizing it, is not timed, and neither is an in-line file dialog (Windows and Linux) or an open menu of the macOS menu bar. When the interface answers again, the log records after how long and the file is removed. A file that no process holds locked at a later launch was left by a session that was closed while it did not answer (a locked one belongs to another instance and is left alone): that launch writes the report to the log, moves the file to `logs/hang-report.1.txt` (older abandoned reports beyond the newest 16 are removed) and, unless another start-up message is showing, says so in the status bar. Help › Copy Troubleshooting Info (`help.copyTroubleshootingInfo`) copies the platform facts, the recent commands and frame times, and the hang reports of this session and the last one, for a bug report. The watch is `apps/vectorcraft/src/hang_watch.rs`; the marks it reads are `crates/ui-egui/src/hang_beacon.rs`.
 
 ## Environment variables (desktop app)
 
@@ -349,6 +351,10 @@ parameters. Shipped code therefore never panics. Anything that can fail returns 
 
 ### Enforced by lints
 
+The clipboard timeout failure helper is compiled for Linux/BSD workers and unit tests; production
+macOS reads synchronously. Keep helper target gates aligned with their callers instead of disabling
+dead-code warnings across the workspace.
+
 `Cargo.toml` denies these clippy lints for the whole workspace, and `cargo xtask ci` runs clippy with
 `-D warnings`. The gate targets the current stable Rust (`rust-version` in `Cargo.toml` is only the
 minimum that builds the app, and no toolchain is pinned): when a new stable adds lints, they are fixed
@@ -506,6 +512,7 @@ Scores and hour estimates are unchanged.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-12 | minor | Compile the clipboard failure helper only for Linux/BSD worker callers and unit tests; keep production macOS free of the unused helper without suppressing workspace dead-code warnings. |
 | 2026-11-06 | minor | Localisation: Hindi catalog, zero/one plurals, desktop and web font requirements; AI/MT draft, native review pending. |
 | 2026-10-31 | minor | Files opened while the app runs open in its window on Windows and Linux (#4892); `--new-instance` opts out. |
 | 2026-10-29 | minor | Linux clipboard: core Wayland protocol text fallback where arboard has neither data-control nor X11 (the Flatpak on GNOME).; its reads wait 2 s at most. |

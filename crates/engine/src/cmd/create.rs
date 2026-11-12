@@ -162,7 +162,8 @@ fn constrained_turn(s: &Session, rotation: f64) -> f64 {
     }
 }
 
-/// [`insert_look`] with the new object's bounding box turned to `bbox_angle`.
+/// [`insert_look`] with the new object's bounding box turned to `bbox_angle`. A new path or
+/// compound path is pixel-aligned while the document's Align New Objects to Pixel Grid is on.
 fn insert_look_turned(
     s: &mut Session,
     label: &str,
@@ -180,6 +181,7 @@ fn insert_look_turned(
         let id = d.alloc_id();
         let mut n = Node::new(id, kind);
         look.apply(d, &mut n);
+        super::object::align_new_object(d, &mut n);
         n.name = name;
         n.bbox_angle = bbox_angle;
         let mut into = None;
@@ -512,6 +514,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
                 n.name = Some(name.into());
                 n.blend = BlendMode::Screen;
                 n.opacity = op;
+                super::object::align_new_object(d, &mut n);
                 std::sync::Arc::new(n)
             })
             .collect();
@@ -603,6 +606,7 @@ fn grid_group(s: &mut Session, label: &str, (paths, bbox_angle): (Vec<PathData>,
                     Node::path(d.alloc_id(), pd, Appearance::default())
                 };
                 look.apply(d, &mut n);
+                super::object::align_new_object(d, &mut n);
                 n.bbox_angle = bbox_angle;
                 std::sync::Arc::new(n)
             })
@@ -779,12 +783,14 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The paragraph attributes new type gets (the Type tools, `text.create`): aligned to the start of
 /// each paragraph's direction (left, right for Hebrew and Arabic), Japanese punctuation composed
-/// with Line-end Punctuation Half Width and Standard burasagari. Imported text keeps its own.
+/// with Line-end Punctuation Half Width and Standard burasagari, and Korean words kept whole
+/// (Korean Line Break Anywhere off). Imported text keeps its own.
 pub(crate) fn new_type_para() -> vectorcraft_doc::ParaStyle {
     vectorcraft_doc::ParaStyle {
         justify: vectorcraft_doc::Justify::Auto,
         mojikumi: vectorcraft_doc::Mojikumi::LineEndHalf,
         burasagari: vectorcraft_doc::Burasagari::Standard,
+        korean_line_break_anywhere: false,
         ..Default::default()
     }
 }

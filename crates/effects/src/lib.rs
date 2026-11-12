@@ -83,12 +83,14 @@ pub use reshape::{
     SYMBOL_ART_MAX_NODES, expand_outlined, gives_image_shape, has_gradient_copies, has_item_geometry, has_painted_effects, has_transform_art,
     has_transform_copies, has_transform_options, image_paint, needs_outline, outline_art, outline_text, reshape,
 };
-pub use revolve::{REVOLVE, has_revolve, revolve_art, revolve_art_in, revolve_options, validate_revolve, validate_revolve_in};
+pub use revolve::{
+    CLASSIC_REVOLVE, REVOLVE, has_revolve, is_revolve, revolve_art, revolve_art_in, revolve_options, validate_revolve, validate_revolve_in,
+};
 pub use solids::{
-    CLASSIC_EXTRUDE, EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS, SHADING_COLORS, SOLIDS, SolidMesh, THREE_D_TYPES, classic_extrude_options,
-    classic_shading, extrude_options, has_solid, inflate_options, is_three_d, solid_art, solid_art_in, three_d_meshes, three_d_meshes_in,
-    three_d_meshes_of, three_d_meshes_of_in, three_d_params_as, three_d_wireframe_in, validate_solid, validate_solid_in, validate_three_d,
-    validate_three_d_at, validate_three_d_at_in, validate_three_d_in, validate_three_d_params, view_options,
+    CLASSIC_EXTRUDE, CLASSIC_ROTATE, EXTRUDE, INFLATE, ROTATE, ROTATE_SURFACES, ROTATION_PRESETS, SHADING_COLORS, SOLIDS, SolidMesh, THREE_D_TYPES,
+    classic_extrude_options, classic_shading, extrude_options, has_solid, inflate_options, is_classic_three_d, is_three_d, solid_art, solid_art_in,
+    three_d_meshes, three_d_meshes_in, three_d_meshes_of, three_d_meshes_of_in, three_d_params_as, three_d_wireframe_in, validate_solid,
+    validate_solid_in, validate_three_d, validate_three_d_at, validate_three_d_at_in, validate_three_d_in, validate_three_d_params, view_options,
 };
 pub use stylize::{ScribbleSetting, scribble_setting_id, scribble_settings};
 pub use svg_filter::SVG_FILTER;

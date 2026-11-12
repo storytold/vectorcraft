@@ -135,6 +135,7 @@ impl VectorcraftApp {
             last_window_title: String::new(),
             fullscreen_for_mode: false,
             graphics_adapter: None,
+            beacon: &crate::hang_beacon::BEACON,
             place: Default::default(),
             system_paste: false,
             clipboard_image_request: None,

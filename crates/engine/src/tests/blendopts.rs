@@ -418,3 +418,179 @@ fn native_blend_easing_values_clamp_and_non_finite_become_default() {
         assert_eq!((spec.ease.ramp, spec.color_shift), (ramp, shift), "{bad}");
     }
 }
+
+fn create_spine(s: &mut Session, p: Value) -> Value {
+    s.execute("object.blend.createSpine", &p).unwrap()["mode"].clone()
+}
+
+/// Two squares 100 pt apart blended with `p`; the blend.
+fn make(s: &mut Session, y: f64, p: Value) -> NodeId {
+    let (a, b) = (rect(s, 0.0, y, 10.0), rect(s, 100.0, y, 10.0));
+    let mut p = p;
+    p["ids"] = json!([a.0, b.0]);
+    p["steps"] = json!(3);
+    id_of(&s.execute("object.blend.make", &p).unwrap())
+}
+
+#[test]
+fn create_spine_sets_whether_new_blends_get_a_spine() {
+    let mut s = session();
+    assert_eq!(create_spine(&mut s, json!({})), "auto", "Auto until one is chosen");
+    let spined = make(&mut s, 0.0, json!({}));
+    assert!(!spec(&s, spined).1.no_spine);
+    let depth = s.doc().unwrap().history.undo.len();
+    assert_eq!(create_spine(&mut s, json!({"mode": "never"})), "never");
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth, "a tool setting, not an undo step");
+    assert_eq!(create_spine(&mut s, json!({})), "never");
+    // The Blend Options set with nothing selected keep it, and it keeps them.
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("object.blend.options", &json!({"steps": 7})).unwrap();
+    assert_eq!(create_spine(&mut s, json!({})), "never");
+    assert_eq!(s.prefs.blend_options.unwrap().spacing, BlendSpacing::Steps(7));
+    // A new blend has no spine; the blend made before keeps its own.
+    let bare = make(&mut s, 50.0, json!({}));
+    assert!(spec(&s, bare).1.no_spine);
+    assert!(!spec(&s, spined).1.no_spine, "blends already made keep their spine");
+    sel(&mut s, &[bare]);
+    let info = s.execute("object.blend.info", &json!({})).unwrap();
+    assert_eq!(info["hasSpine"], json!(false));
+    assert!(info.get("spine").is_none(), "{info}");
+    sel(&mut s, &[spined]);
+    assert_eq!(s.execute("object.blend.info", &json!({})).unwrap()["hasSpine"], json!(true));
+    // `createSpine` on Make chooses for that blend only.
+    let forced = make(&mut s, 100.0, json!({"createSpine": "always"}));
+    assert!(!spec(&s, forced).1.no_spine);
+    assert_eq!(create_spine(&mut s, json!({})), "never");
+    assert_eq!(create_spine(&mut s, json!({"mode": "always"})), "always");
+    let always = make(&mut s, 150.0, json!({}));
+    assert!(!spec(&s, always).1.no_spine);
+    assert!(spec(&s, bare).1.no_spine, "blends already made keep having no spine");
+    let none = make(&mut s, 200.0, json!({"createSpine": "never"}));
+    assert!(spec(&s, none).1.no_spine);
+    // The setting survives a round trip through the preferences file; Auto is not written.
+    let back: Prefs = serde_json::from_value(s.prefs.to_json()).unwrap();
+    assert_eq!(back.blend_options.unwrap().create_spine, vectorcraft_doc::live::BlendSpineMode::Always);
+    assert_eq!(s.prefs.to_json()["blendOptions"]["createSpine"], json!("always"));
+    create_spine(&mut s, json!({"mode": "auto"}));
+    assert!(s.prefs.to_json()["blendOptions"].get("createSpine").is_none());
+    let mut odd = s.prefs.to_json();
+    odd["blendOptions"]["createSpine"] = json!("sometimes");
+    let unknown: Prefs = serde_json::from_value(odd).unwrap();
+    assert_eq!(unknown.blend_options.unwrap().create_spine, vectorcraft_doc::live::BlendSpineMode::Auto, "an unknown value reads as Auto");
+}
+
+#[test]
+fn create_spine_refuses_bad_values_and_changes_nothing() {
+    let mut s = session();
+    create_spine(&mut s, json!({"mode": "never"}));
+    let prefs = s.prefs.blend_options;
+    for bad in [json!({"mode": "sometimes"}), json!({"mode": 1}), json!({"mode": true}), json!({"mode": ["never"]}), json!({"mode": "Never"})] {
+        let e = s.execute("object.blend.createSpine", &bad).unwrap_err().to_string();
+        assert!(e.contains("`mode` must be one of auto, always, never"), "{bad}: {e}");
+        assert_eq!(s.prefs.blend_options, prefs, "{bad}");
+    }
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 10.0), rect(&mut s, 100.0, 0.0, 10.0));
+    let depth = s.doc().unwrap().history.undo.len();
+    for bad in [json!({"createSpine": "x"}), json!({"createSpine": 0}), json!({"createSpine": "never", "easingType": "easeIn"}), json!({"ramp": 30})]
+    {
+        let mut p = bad.clone();
+        p["ids"] = json!([a.0, b.0]);
+        assert!(s.execute("object.blend.make", &p).is_err(), "{bad}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), depth, "{bad}: nothing made");
+    }
+    assert!(s.execute("object.blend.createSpine", &json!({"spine": "never"})).is_err(), "an unknown key");
+}
+
+#[test]
+fn a_blend_without_a_spine_has_none_to_edit_reverse_ease_or_release() {
+    let mut s = session();
+    let g = make(&mut s, 0.0, json!({"createSpine": "never"}));
+    sel(&mut s, &[g]);
+    let before = node(&s, g);
+    let depth = s.doc().unwrap().history.undo.len();
+    // Reverse Spine, easing and the spine point commands refuse it and change nothing.
+    let refused = [
+        ("object.blend.reverseSpine", json!({})),
+        ("object.blend.options", json!({"easingType": "easeOut"})),
+        ("object.blend.options", json!({"ramp": 40})),
+        ("object.blend.spine.addAnchor", json!({"x": 50, "y": 5})),
+        ("object.blend.spine.moveAnchor", json!({"anchor": 0, "x": 0, "y": 50})),
+    ];
+    for (cmd, p) in refused {
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains("the blend has no spine"), "{cmd}: {e}");
+        assert_eq!((node(&s, g), s.doc().unwrap().history.undo.len()), (before.clone(), depth), "{cmd}");
+    }
+    // Spacing, Orientation and Shift still apply; Align to Path makes no spine.
+    s.execute("object.blend.options", &json!({"steps": 2, "orientation": "path", "colorShift": 20})).unwrap();
+    let sp = spec(&s, g).1;
+    assert_eq!((sp.spacing, sp.orientation, sp.color_shift, sp.no_spine), (BlendSpacing::Steps(2), BlendOrientation::AlignToPath, 20.0, true));
+    assert!(s.execute("object.blend.info", &json!({})).unwrap().get("spine").is_none());
+    // Taking in another key keeps it without a spine, whatever Create Spine says.
+    let c = rect(&mut s, 200.0, 0.0, 10.0);
+    sel(&mut s, &[g, c]);
+    create_spine(&mut s, json!({"mode": "always"}));
+    let g = id_of(&s.execute("object.blend.make", &json!({})).unwrap());
+    assert_eq!(spec(&s, g).0.len(), 3);
+    assert!(spec(&s, g).1.no_spine && spec(&s, g).1.spine.is_none());
+    // Release gives back the keys and no spine path.
+    sel(&mut s, &[g]);
+    let r = s.execute("object.blend.release", &json!({})).unwrap();
+    assert_eq!((r["ids"].as_array().map(Vec::len), &r["spines"]), (Some(3), &json!([])));
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Replace Spine gives it one: then it reverses and eases like any other.
+    let line = id_of(&s.execute("path.create", &json!({"d": "M0 100 L200 150"})).unwrap());
+    sel(&mut s, &[g, line]);
+    s.execute("object.blend.replaceSpine", &json!({})).unwrap();
+    let sp = spec(&s, g).1;
+    assert!(!sp.no_spine && sp.spine.is_some());
+    let info = s.execute("object.blend.info", &json!({})).unwrap();
+    assert_eq!((&info["hasSpine"], &info["spine"]["explicit"]), (&json!(true), &json!(true)));
+    s.execute("object.blend.reverseSpine", &json!({})).unwrap();
+    s.execute("object.blend.options", &json!({"easingType": "easeOut", "ramp": 40})).unwrap();
+    assert_eq!(spec(&s, g).1.ease.ramp, 0.4);
+}
+
+#[test]
+fn a_blend_without_a_spine_draws_its_steps_where_one_with_a_spine_does() {
+    let mut s = session();
+    for orientation in ["page", "path"] {
+        let spined = make(&mut s, 0.0, json!({"orientation": orientation}));
+        let bare = make(&mut s, 0.0, json!({"orientation": orientation, "createSpine": "never"}));
+        let boxes = |g: NodeId| -> Vec<_> { vectorcraft_doc::live::expand_live(&node(&s, g)).iter().map(|n| n.geometric_bounds()).collect() };
+        assert_eq!(boxes(bare), boxes(spined), "{orientation}");
+        assert!(boxes(bare).len() >= 3, "the three steps at least");
+    }
+    // Easing stored on a blend without a spine (a hand-edited file) leaves its steps evenly spaced.
+    let bare = make(&mut s, 300.0, json!({"orientation": "path", "createSpine": "never"}));
+    let even = vectorcraft_doc::live::expand_live(&node(&s, bare));
+    let mut eased = node(&s, bare);
+    if let NodeKind::Blend { spec, .. } = &mut eased.kind {
+        spec.ease = vectorcraft_doc::live::BlendEase { kind: vectorcraft_doc::live::BlendEaseType::In, ramp: 1.0 };
+    }
+    let boxes = |v: &[Node]| -> Vec<_> { v.iter().map(|n| n.geometric_bounds()).collect() };
+    assert_eq!(boxes(&vectorcraft_doc::live::expand_live(&eased)), boxes(&even));
+}
+
+#[test]
+fn whether_a_blend_has_a_spine_is_saved_and_old_blends_have_one() {
+    let mut s = session();
+    let bare = make(&mut s, 0.0, json!({"createSpine": "never"}));
+    let spined = make(&mut s, 50.0, json!({}));
+    let d = &s.doc().unwrap().doc;
+    let back = vectorcraft_format::load(&vectorcraft_format::save(d, false)).unwrap();
+    assert_eq!(&back.layers, &d.layers);
+    let saved = |g: NodeId| match &back.node(g).unwrap().kind {
+        NodeKind::Blend { spec, .. } => spec.no_spine,
+        _ => panic!("not a blend"),
+    };
+    assert!(saved(bare) && !saved(spined));
+    assert_eq!(serde_json::to_value(spec(&s, bare).1).unwrap()["noSpine"], json!(true));
+    assert!(serde_json::to_value(spec(&s, spined).1).unwrap().get("noSpine").is_none(), "a spine is not written");
+    let old: BlendSpec = serde_json::from_value(json!({"spacing": {"steps": 4}})).unwrap();
+    assert!(!old.no_spine, "a blend saved before Create Spine has a spine");
+    for odd in [json!("yes"), json!(1), json!(null)] {
+        let v: BlendSpec = serde_json::from_value(json!({"noSpine": odd.clone()})).unwrap_or_else(|e| panic!("{odd}: {e}"));
+        assert!(!v.no_spine, "{odd}");
+    }
+}

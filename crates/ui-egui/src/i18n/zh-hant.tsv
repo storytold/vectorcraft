@@ -220,6 +220,7 @@ font-technology	Variable	可變
 	Asset Export Settings	資產匯出設定
 	Assets	資產
 	Assign	指定
+	Assign Profile	指定描述檔
 	Assign Profile…	指定描述檔…
 	Assign:	指定：
 	Attach to Active Plane	附加至作用中平面
@@ -662,6 +663,15 @@ font-technology	Variable	可變
 	Created:	建立時間：
 	Crop	裁切
 	Crop Image	裁切影像
+	Image Tools	影像工具
+	Remove Background…	移除背景…
+	Remove Background	移除背景
+	Background	背景
+	Edge Color	邊緣顏色
+	Picked Colors	選取的顏色
+	Corner Color	轉角顏色
+	Contiguous	連續
+	Each Channel	每個通道
 	Edit Path	編輯路徑
 	Mask	遮色片
 	Crop Marks	裁切標記
@@ -781,6 +791,14 @@ font-technology	Variable	可變
 	Disable Auto Add/Delete	停用自動增加/刪除
 	Disable Opacity Mask	停用不透明度遮色片
 	Discard	捨棄
+	Preserve	保留
+	TIFF (Black & White)	TIFF (黑白)
+	TIFF (8-bit Color)	TIFF (8 位元色彩)
+	High Resolution	高解析度
+	Medium Resolution	中解析度
+	Low Resolution	低解析度
+	Language Level 2	語言層級 2
+	Language Level 3	語言層級 3
 	Discard Empty Type	捨棄空白文字
 	Discard Recovered Documents	捨棄已復原的文件
 	Discard White Overprint in Output	輸出時捨棄白色疊印
@@ -1108,6 +1126,8 @@ font-technology	Variable	可變
 	Extrude & Bevel…	突出與斜角…
 	3D (Classic)	3D (經典)
 	Extrude & Bevel (Classic)…	突出與斜角 (經典)…
+	Revolve (Classic)…	迴轉 (經典)…
+	Rotate (Classic)…	旋轉 (經典)…
 	Surface	表面
 	Wireframe	線框
 	No Shading	無網底
@@ -1421,6 +1441,14 @@ file-filter	Templates	範本
 	Hair Space	極細空格
 	Hand Tool	手形工具
 	Hand-Drawn	手繪
+	Painted and Sketched	繪畫與素描
+	Washed Blue	水洗藍
+	Bristle Ochre	乾刷土黃
+	Pastel Heather	粉彩淡紫
+	Charcoal Shade	炭筆陰影
+	Ink Contour	墨線輪廓
+	Wet Ink	濕墨
+	Fine Pen	細筆
 	Handles	控制把手
 	Hard Light	實光
 	Hard Mix	實色混合
@@ -1884,13 +1912,14 @@ file-filter	Templates	範本
 @msg	`preserve` must be an object	`preserve` 必須是物件
 @msg	`globalAdjust` must be an object	`globalAdjust` 必須是物件
 @msg	`stops` must be an array	`stops` 必須是陣列
+@msg	`{key}` must be an array	`{key}` 必須是陣列
 @msg	`{k}` must be [x, y]	`{k}` 必須是 [x, y]
 @msg	a gradient needs at least two stops	漸層至少需要兩個色標
 @msg	give both `start` and `end` [x, y] (or neither)	請同時提供 `start` 和 `end` [x, y] (或兩者都不提供)
 @msg	stop {i} needs `offset`	色標 {i} 需要 `offset`
 @msg	stop {i} needs a valid `color`	色標 {i} 需要有效的 `color`
 @msg	stop {i}: `{k}` must be a number	色標 {i}：`{k}` 必須是數字
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	未知的漸層類型 `{k}` (linear、radial、conic、freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	未知的漸層類型 `{k}` (linear、radial、conic、diamond、freeform)
 @msg	the art could not be sampled	無法對圖稿取樣
 @msg	the art is too light for any dots	圖稿太淡，無法產生任何網點
 @msg	the document has no symbols	文件中沒有符號
@@ -1982,6 +2011,7 @@ file-filter	Templates	範本
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` 必須是 `auto` 或語言代碼，例如 `en` 或 `zh-hant`
 @msg	`{key}` must be a #rrggbb colour	`{key}` 必須是 #rrggbb 顏色
 @msg	`{key}` must be a string	`{key}` 必須是字串
+@msg	`{key}` must be a profile name or null	`{key}` 必須是描述檔名稱或 null
 @msg	`{key}` must be a whole number	`{key}` 必須是整數
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` 必須是介於 {min} 和 {max} 之間的整數 (收到 {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` 必須介於 {min} 和 {max} 之間 (收到 {x})
@@ -2164,6 +2194,8 @@ file-filter	Templates	範本
 @msg	the image's pixels don't match its size	影像的像素與其尺寸不符
 @msg	{bpp}-bit bitmaps can't be read	無法讀取 {bpp} 位元點陣圖
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 檔案
+@msg	not an HP-GL file	不是 HP-GL 檔案
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 必須是由 1 到 255 個 #rrggbb 格式顏色組成的陣列
 @msg	its layers use {_1}, which aren't read yet	其圖層使用了 {_1}，目前尚無法讀取
 @msg	the EMF header is damaged	EMF 檔頭已損毀
 @msg	damaged	已損毀
@@ -2180,6 +2212,7 @@ file-filter	Templates	範本
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	工作區域 {n} 的頁面為 {size}，超過 PDF 的頁面上限 14,400 pt (200 in)：它以 UserUnit {unit} 寫入，因此忽略 UserUnit 的應用程式會將其顯示為縮小相應倍數
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	工作區域 {n} 的頁面為 {size}，超過 PDF 的頁面上限 14,400 pt (200 in)：{label} 頁面不含 UserUnit，以點為單位寫入，遵守上限的應用程式會將頁面裁切為 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 沒有 UserUnit，而長於 14,400 pt (200 in) 的頁面需要它來保持尺寸：檔案將以 PDF 1.6 寫入
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 沒有 UserUnit，而長於 14,400 pt (200 in) 的頁面需要它來保持在 PDF/A-2 的 14,400 單位頁面上限之內：檔案將以 PDF 1.6 寫入
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	工作區域 {n} 的頁面為 {size}，對 PDF 3 至 14,400 單位的頁面邊長而言過長過窄：以 UserUnit {unit} 寫入，使短邊保持 3 單位以上，遵守上限的應用程式會把長邊裁到 14,400 單位
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} 檔案的實數最大為 {max}，而工作區域 {n} 的頁面長 {side} pt，需要更大的數：請選擇不含 PDF/X 標準的 PDF 1.6 或更新版本，或使用較小的工作區域
 @msg	page {0} does not exist (the PDF has {1})	頁面 {0} 不存在 (此 PDF 有 {1} 頁)
@@ -2367,6 +2400,14 @@ file-filter	Templates	範本
 @msg	no such view	沒有這個檢視
 @msg	printing isn't available here	此處無法列印
 @msg	select an image	請選取影像
+@msg	`background` must be edges, corners or colors	`background` 必須為 edges、corners 或 colors
+@msg	`match` must be distance or channels	`match` 必須為 distance 或 channels
+@msg	`{key}` must be from 0 to 100	`{key}` 必須介於 0 到 100 之間
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` 必須列出 1 到 16 種顏色，每種寫為十六進位（#rrggbb 或 #rgb）或 black、white、red、green、blue
+@msg	the linked image shows its preview: embed or relink it first	連結影像顯示的是預覽：請先嵌入或重新連結
+@msg	a CMYK image has no transparency to set	CMYK 影像沒有可設定的透明度
+@msg	every pixel matches the background: no image would be left	每個像素都與背景相符：不會留下任何影像
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} 像素的影像過大，無法變更
 @msg	the document has no artboards	文件沒有工作區域
 @msg	tool (a tool id) is required	需要 tool (工具 id)
 @msg	unknown tool `{t}`	未知的工具 `{t}`
@@ -2633,7 +2674,7 @@ file-filter	Templates	範本
 @msg	span must be "object" or "selection", got {v}	span 必須是 "object" 或 "selection"，收到 {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" 放置的是 `gradient`，而非色票
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" 會放置漸層：請提供 `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" 放置線性、放射狀或圓錐漸層，而非任意形狀漸層
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" 放置線性、放射狀、圓錐或菱形漸層，而非任意形狀漸層
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" 會自行放置漸層：請不要提供 `start` 和 `end` (它們已依文件座標放置漸層)
 @msg	Batch: {count} processed	批次：已處理 {count} 個
 @msg	Batch: {count} processed, {failed} failed	批次：已處理 {count} 個，失敗 {failed} 個
@@ -3314,6 +3355,9 @@ file-filter	Templates	範本
 	Optical	視覺
 	Optical Margin Alignment	視覺邊界對齊
 	Dynamic Text	動態文字
+	Dynamic Text Presets	動態文字預設集
+	Arch	拱形
+@msg	select point type or type on a path	請選取點狀文字或路徑文字
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	串連文字中的路徑文字無法使用動態文字：{frames}
 	Optimize for fast web view	最佳化以便快速網頁檢視
 	Optimized	最佳化
@@ -3321,6 +3365,8 @@ file-filter	Templates	範本
 	Options for Selection…	選取範圍的選項…
 	Options:	選項：
 	Options…	選項…
+	Organic Fades	自然漸隱
+	Holographic	全像
 	or more spaces with a tab	個以上的空格取代為定位字元
 	Order:	順序：
 	Ordinals	序數字
@@ -3515,6 +3561,7 @@ diagnostics	ui	介面
 	Presets:	預設集：
 	Press 	按下 
 	Preview	預覽
+	Preview:	預覽：
 	Preview All Layers	預覽所有圖層
 	Preview in Browser	在瀏覽器中預覽
 	Preview in Browser needs the desktop app (the web downloads files instead)	在瀏覽器中預覽需要桌面版應用程式 (網頁版會改為下載檔案)
@@ -3599,6 +3646,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Radial Glows	放射狀光暈
 	Radial Gradient	放射狀漸層
 	Conic Gradient	圓錐漸層
+	Diamond Gradient	菱形漸層
 	Radius 1	半徑 1
 	Radius 2	半徑 2
 	Radius1	半徑1
@@ -3611,6 +3659,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Range:	範圍：
 	Raster Effects	點陣效果
 	Raster File Format:	點陣檔案格式：
+	Include Placed Images	包含置入的影像
+	Include Fill Hatches	包含填色的圖案填充
 	Raster Sample Size:	點陣取樣大小：
 	Raster/Vector Balance:	點陣／向量平衡：
 	Rasterize	點陣化
@@ -3792,6 +3842,10 @@ digits	Malayalam	馬來亞拉姆數字
 	Replace Font	取代字體
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	以其他檔案取代，或忽略：其影像會繼續顯示隨文件儲存的預覽。
 	Replace Spine	取代脊線
+	Create Spine	建立脊線
+	Create Spine:	建立脊線：
+	Always	一律
+	Never	永不
 	Replace Symbol	取代符號
 	Reset Transformation	重設變形
 	Replace With Font	取代為字體
@@ -3871,6 +3925,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Rise…	上升…
 	Roman Baseline	羅馬基線
 	Roman Hanging Punctuation	羅馬懸掛標點
+	Korean Line Break Anywhere	韓文任意位置換行
+	East Asian Composition Settings	東亞排版設定
+	Korean Composition Settings	韓文排版設定
 	Rotate	旋轉
 	Rotate 90° CW	順時針旋轉 90°
 	Rotate Tool	旋轉工具
@@ -4154,6 +4211,15 @@ digits	Malayalam	馬來亞拉姆數字
 	Stun Pulse	暈眩
 	Stealth Fade	隱身
 	Shield Buff	護盾
+	Textures	紋理
+	Fine Grain	細顆粒
+	Canvas Weave	帆布紋
+	Burlap Sack	麻布袋
+	Cracked Glaze	裂紋釉
+	Mosaic Floor	馬賽克地面
+	Quilted Squares	絎縫方格
+	Leaded Glass	鉛條玻璃
+	Damp Paper	濕紙
 	Shape	形狀
 	Shape Builder	形狀建立
 	Shape Builder Regions	形狀建立區域
@@ -4521,6 +4587,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Scale at Center	從中心縮放
 	Up/Down:	上/下：
 	Left/Right:	左/右：
+	Tate-chu-yoko Up/Down	縱中橫上/下
+	Tate-chu-yoko Left/Right	縱中橫左/右
 	Temperature	色溫
 	Temperature/Tint…	色溫/色調…
 	Template	範本
@@ -4877,6 +4945,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Windows	Windows
 	Working CMYK	使用中的 CMYK
 	Working CMYK (don't tag)	工作 CMYK (不加標記)
+	Working RGB (don't tag)	工作 RGB (不加標記)
 	Workspace	工作區
 	Workspace {i}	工作區 {i}
 	Wrinkle Tool	皺摺工具
@@ -5613,6 +5682,7 @@ lighting	Light	光源
 	Ruby	注音
 	Geometric Guides	幾何參考線
 	Geometric Patterns	幾何圖樣
+	Grit Textures	顆粒紋理
 	Ease In	緩入
 	Ease Out	緩出
 	Ease In Out	緩入緩出
@@ -5673,6 +5743,8 @@ axis	Y Axis	Y 軸
 	Version: {version}	版本：{version}
 	Install “{name}” in place of the plug-in with the same ID?	要安裝「{name}」來取代具有相同 ID 的增效模組嗎？
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	此檔案不是先前以此 ID 安裝的增效模組。它會取得為該 ID 保存的設定和快取。
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	自動化要求安裝此增效模組。若要安裝，請自行選擇「物件 › 增效模組 › 安裝增效模組…」。
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	自動化要求安裝此增效模組。若要安裝，請自行選擇「物件 › 增效模組 › 安裝增效模組…」。
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	「{name}」與 ID 為 {_1} 的增效模組是不同的模組，並會取得為其保存的設定和快取：請在使用者同意後以 `replace: true` 安裝
 	File SHA-256: {hash}	檔案 SHA-256：{hash}
 	Read the objects it is given	讀取交給它的物件
@@ -5735,6 +5807,12 @@ axis	Y Axis	Y 軸
 @msg	command {name}: `label` must be 1-64 printable characters	指令 {name}：`label` 必須是 1-64 個可列印字元
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	指令 {name}：請使用由 a-z 0-9 _ 組成、以字母開頭的 1-{MAX_COMMAND_ID} 個字元的 ID
 @msg	command {name}: {e}	指令 {name}：{e}
+@msg	manifest: {e}	資訊清單：{e}
+@msg	manifest: {e} at line {line} column {column}	資訊清單：{e}（第 {line} 行，第 {column} 欄）
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` 必須是指令清單，每個指令都有 `id` 和 `label`
+@msg	command {name} must be an object with an `id` and a `label`	指令 {name} 必須是包含 `id` 和 `label` 的物件
+@msg	missing field `{key}`	找不到欄位 `{key}`
+@msg	duplicate field `{key}`	欄位 `{key}` 重複
 @msg	only a filter or a live effect declares `commands`	只有濾鏡或即時效果才能宣告 `commands`
 @msg	“{name}” › {label}: {e}	「{name}」 › {label}：{e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	模組的 SHA-256 與 `hash` 提供的不符：未安裝任何內容
@@ -5883,6 +5961,17 @@ axis	Y Axis	Y 軸
 	Charge Wave	充能波
 	Spark Trail	火花尾跡
 	Calligraphic Nibs	書法筆尖
+	Bristle Brushes	鬃毛筆刷集
+	Fine Liner	細勾線筆
+	Pointed Flat	尖頭平筆
+	Stubby Round	短圓筆
+	Dry Scrub	乾擦
+	Soft Dome	柔和圓頂
+	Filbert	榛形筆
+	Angled Round	斜圓筆
+	Angled Flat	斜平筆
+	Fan Blender	混色扇形筆
+	Grass Fan	畫草扇形筆
 	Pattern Borders	圖樣邊框
 	Scatter Shapes	散佈形狀
 	Save Brush Library…	儲存筆刷資料庫…
@@ -6095,6 +6184,10 @@ anchor	Points:	點：
 @msg	features lists at most {max} tags	features 最多包含 {max} 個標籤
 @msg	unknown OpenType feature `{t}`	未知的 OpenType 功能 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 必須是大於 0 且不超過 {max} 的數字
+@msg	{label} must be at most {max} characters	{label} 最多 {max} 個字元
+@msg	{label} must be one character	{label} 必須是一個字元
+@msg	at most {max} tab stops	最多 {max} 個定位點
+@msg	unknown align `{other}`	未知的對齊方式 `{other}`
 @msg	no character style `{name}`	找不到字元樣式 `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6257,6 +6350,12 @@ breakText	Glyphs	字符
 	Delete the selected brushes?	要刪除選取的筆刷嗎？
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	有筆畫使用了其中一個或多個筆刷。要從這些筆畫移除筆刷並刪除筆刷嗎？
 	Remove Strokes	移除筆畫
+	Place Brush Art	置入筆刷圖稿
+	Replace Brush Art	取代筆刷圖稿
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	有筆畫使用了此筆刷。要將新圖稿套用到這些筆畫，還是保留筆畫不變並加入一個使用新圖稿的筆刷複本？
+	Apply to Strokes	套用至筆畫
+	Leave Strokes	保留筆畫
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` 沒有圖稿 (只有散佈筆刷、藝術筆刷和圖樣筆刷有圖稿)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	排列工具
 	Arrange in Grid…	依格狀排列…
@@ -6452,6 +6551,11 @@ breakText	Glyphs	字符
 @msg	only an exporter or an importer declares `extensions`	只有匯出或匯入增效模組才宣告 `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	匯入增效模組一律取得匯入的預算：請勿指定 `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	複製疑難排解資訊
+@msg	Copied the troubleshooting info	已複製疑難排解資訊
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	上次的 VectorCraft 工作階段在關閉前停止回應。說明 › 複製疑難排解資訊 可複製用於錯誤回報的詳細資料
+
 # Safe Mode
 	Safe Mode…	安全模式…
 	Safe Mode	安全模式
@@ -6472,6 +6576,7 @@ breakText	Glyphs	字符
 
 # Align to Pixel Grid
 	Align to Pixel Grid	對齊像素格點
+	Align New Objects to Pixel Grid	將新物件對齊像素格點
 	Not Aligned to Pixel Grid	未對齊像素格點
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路徑和複合路徑可以對齊像素格點
 @msg	side is left or right, not `{s}`	side 應為 left 或 right，而不是 `{s}`
@@ -6500,8 +6605,33 @@ breakText	Glyphs	字符
 @plural	{n} line cut|{n} lines cut	已截斷 {n} 行
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必須是主控台保留的行號，且 `first` 不能在 `last` 之後
 
+# Learn panel
+	Learn	學習
+	Explore tutorials	瀏覽教學課程
+	For you	為你推薦
+	Skills	技能
+	Get started	入門
+	Quick skill guide	快速技能指南
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	針對基本工具的簡短實作教學課程，依技能分組。選擇一項技能即可查看其教學課程。
+	List Tutorials	列出教學課程
+	Show Tutorial	顯示教學課程
+@msg	missing `tutorial` (see learn.list)	未提供 `tutorial` (請參閱 learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	未知的教學課程 `{id}` (請參閱 learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	重新整理延後的效果
 	Deferred Effects	延後的效果
 @msg	no plug-in effect is deferred	沒有延後的增效模組效果
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	開啟時延後了 {n} 個增效模組效果。效果 › 重新整理延後的效果可執行它們。
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	切割工具
+	Stencil Bridges…	鏤空版連接橋…
+	Stencil Bridges	鏤空版連接橋
+	Shortest Crossing	最短跨越
+	Direction	方向
+@msg	The selected art has no islands to bridge	所選圖稿沒有需要連接的孤島
+@msg	No bridge of this width fits across the selected art	此寬度的連接橋無法放入所選圖稿
+@msg	Some islands could not be joined to the area around the art	部分孤島無法連接到圖稿周圍的區域
+@msg	`width` must be from {lo} to {hi} pt	`width` 必須介於 {lo} 到 {hi} pt 之間
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必須是介於 1 到 {MAX_BRIDGES_PER_ISLAND} 的整數

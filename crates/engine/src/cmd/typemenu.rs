@@ -47,7 +47,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert To Point Type",
             ["Type"],
             None,
-            "{ids?|id?} area type → point type; soft line wraps become line breaks, and a frame of threaded text leaves its thread with the text it holds → {ids}",
+            "{ids?|id?} area type → point type; soft line wraps become line breaks, a frame of threaded text leaves its thread with the text it holds, and Dynamic Text (Block) is turned off, keeping the sizes it set → {ids}",
             has_selection,
             to_point
         ),
@@ -68,6 +68,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?|id?, on?: bool, wordGap?: % of a word space 0..1000 (100), lineGap?: pt -1296..1296 (0)} turn Dynamic Text on or off for the selected type on a path and area type (on omitted: the opposite of the first object's setting, or on when a gap is given). On type on a path, the layout scales the text by one factor (every character's size, leading and baseline shift; Type on a Path Options › Spacing stays) so that it fills the span between its start and end brackets, larger or smaller, and fits it again after every edit to the text, the path or the brackets; the first character's size moves in steps of 0.1 pt within 0.1 to 1,296 pt, and at 0.1 pt text that still runs past the end bracket overflows. The stored sizes keep their proportions. On area type it is Block: each line as typed (each paragraph, and each forced line break in one; lines are not broken again) is set to the frame's width, less the inset, the gutters and the paragraph's indents, by changing its font size only: its first character's size, in steps of 0.1 pt within 0.1 to 1,296 pt, the line's other characters keeping their proportions to it, with baseline shifts following. Every character's leading is its size plus lineGap, and the layout sets every paragraph with wordGap as its Desired word spacing, its Minimum or Maximum moving out to wordGap when wordGap lies outside it (the paragraphs keep their own Justification… values, which apply again when Block is off; the gaps are area type's, and are kept while Block is off; a gap with no area type in the selection is an error). The sizes are written into the characters and fitted again after every edit to the text or the frame, in the same undo step; at a size limit a line can be narrower than the frame or wrap. An empty line keeps its size. Block replaces Auto Size and Shrink Text to Fit (Area Type Options › Block is the same setting). Off, the text keeps the sizes it was drawn at. Point type in the selection is left as it is; a selection holding type in a thread is refused (threading type turns Dynamic Text off, keeping its drawn sizes). When nothing changes, no undo step is recorded → {on, ids, fitScale (the first object's factor; 1 when off and for area type), wordGap?, lineGap? (the first area type's; left out without area type)}",
             has_dynamic_type,
             dynamic_text
+        ),
+        cmd!(
+            "type.dynamicTextPreset",
+            "Dynamic Text Presets",
+            ["Type", "Dynamic Text Presets"],
+            None,
+            "{preset: \"circle\"|\"arch\"|\"bow\", position?: \"above\"|\"center\"|\"below\", flip?: bool, ids?|id?} put the selected point type and type on a path on a new path of the preset's shape with Dynamic Text on, so the text is sized to fill it (see type.dynamicText). Circle: a circle as wide as the text, the text running clockwise round all of it from its bottom; Arch: an arc of a circle bulging upward over 120°, as wide as the text; Bow: the same arc bulging downward. The width is, for point type, the length on the page of the longer side of the text's bounds, and for type on a path the longer side of its path's bounds on the page (so the same preset again leaves it as it is); the new path is centered where they were, and the shape is upright on the page when the object is rotated or scaled. position (omitted: above) sets Type on a Path Options › Align to Path: above stands the type on the path (descender), center centers it on the path (center), below hangs it from the path (ascender); flip true then turns the text to the other side of its path, running the other way. Type on a Path Options › effect and spacing stay. Area type in the selection is left as it is; a selection holding type on a path in a thread is refused. When nothing changes, no undo step is recorded → {ids, fitScale (the first object's factor)}",
+            has_preset_type,
+            dynamic_text_preset
         ),
         cmd!(
             "type.fillPlaceholder",
@@ -302,7 +311,10 @@ fn to_area(s: &mut Session, p: &Value) -> Result<Value> {
                 continue;
             }
             let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
-            let mut b = if lay.bounds.area() > 0.0 { lay.bounds } else { t.estimate_bounds() };
+            // The frame is worked out in line space, where the lines are; vertical type turns it
+            // into text space with the lines.
+            let text_bounds = if lay.bounds.area() > 0.0 { lay.bounds } else { t.estimate_bounds() };
+            let mut b = lay.line_xf.inverse().transform_rect_bbox(text_bounds);
             // Across, the frame spans the lines as they are aligned: from their starts to their ends
             // without the tracking after their last characters (`LineInfo::trailing`), not to the
             // ink, which tracking can pull past an advance. Area type aligns them alike.
@@ -323,7 +335,7 @@ fn to_area(s: &mut Session, p: &Value) -> Result<Value> {
                 Justify::Auto if lay.lines.first().is_some_and(|l| l.rtl) => (slack, 0.0),
                 _ => (0.0, slack),
             };
-            let frame = Rect::new(b.x0 - sl, top, b.x1 + sr, b.y1.max(top + 1.0));
+            let frame = lay.line_xf.transform_rect_bbox(Rect::new(b.x0 - sl, top, b.x1 + sr, b.y1.max(top + 1.0)));
             t.kind = TextKind::Area { frame: shapes::rectangle(frame) };
             refresh_bounds(t);
         }
@@ -359,6 +371,8 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
             // Point type is in no thread: its first paragraph starts in it.
             t.first_para_continues = false;
             let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+            // The lines are in line space; the frame's bounds are taken there too.
+            let fb = lay.line_xf.inverse().transform_rect_bbox(fb);
             let plain = t.plain_text();
             let baseline = lay.lines.first().map(|l| l.baseline).unwrap_or(fb.y0 + t.first_style().size * 0.8);
             // Soft wraps → explicit breaks (replace the space before the wrap when there is one).
@@ -401,8 +415,14 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
                 Justify::Auto if lay.lines.first().is_some_and(|l| l.rtl) => x1,
                 _ => x0,
             };
+            // Point type has no Dynamic Text: Block is turned off, keeping the sizes it set, so
+            // converting back to area type does not turn it on again.
+            t.dynamic_text = false;
             t.kind = TextKind::Point;
-            t.xf *= Affine::translate((ox, baseline));
+            // The origin is in the area type's line space; point type's line space puts its own
+            // origin there (vertical point type turns its lines about a different point).
+            let point_xf = if lay.vertical { vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).line_xf } else { Affine::IDENTITY };
+            t.xf *= lay.line_xf * Affine::translate((ox, baseline)) * point_xf.inverse();
             refresh_bounds(t);
         }
         Ok(())
@@ -646,6 +666,196 @@ pub(crate) fn bake_dynamic_text(t: &mut TextObject) -> bool {
     t.dynamic_text = false;
     refresh_bounds(t);
     true
+}
+
+/// The shapes of `type.dynamicTextPreset`.
+const PRESETS: [&str; 3] = ["circle", "arch", "bow"];
+
+/// Point type and type on a path among `ids` and their descendants: the type
+/// `type.dynamicTextPreset` puts on a path.
+fn preset_ids(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
+    text_ids(d, ids)
+        .into_iter()
+        .filter(|id| matches!(d.node(*id).map(|n| &n.kind), Some(NodeKind::Text(t)) if matches!(t.kind, TextKind::Point | TextKind::OnPath { .. })))
+        .collect()
+}
+
+/// `type.dynamicTextPreset` is enabled for a selection holding point type or type on a path, and
+/// no type on a path in a thread.
+fn has_preset_type(s: &Session) -> std::result::Result<(), String> {
+    has_selection(s)?;
+    let st = s.active().ok_or("no document open")?;
+    let d = &st.doc;
+    let ids = preset_ids(d, &st.selection.objects);
+    if ids.is_empty() {
+        return Err("select point type or type on a path".into());
+    }
+    let frames = threaded_ids(d, &ids);
+    if !frames.is_empty() {
+        return Err(format!("type on a path in a thread cannot use Dynamic Text: {frames}"));
+    }
+    Ok(())
+}
+
+/// The path of Dynamic Text preset `preset` (one of [`PRESETS`]) `w` wide, centered on `c`, with
+/// the start bracket the text starts at. Circle: a circle `w` across, run clockwise from its
+/// bottom; Arch and Bow: a 120° arc of a circle whose chord is `w`, bulging up or down, run from
+/// left to right.
+fn preset_path(preset: &str, c: vectorcraft_geom::Point, w: f64) -> (vectorcraft_geom::PathData, f64) {
+    let h = w / 2.0;
+    if preset == "circle" {
+        // `shapes::ellipse` runs clockwise on screen from its left: its bottom is 3/4 of the way.
+        return (shapes::ellipse(Rect::new(c.x - h, c.y - h, c.x + h, c.y + h)), 0.75);
+    }
+    // A chord of `w` under 120°: radius w/√3, and the arc rises a half radius above its chord.
+    let r = w / 3f64.sqrt();
+    let arch = preset == "arch";
+    let cy = if arch { c.y - r / 4.0 + r } else { c.y + r / 4.0 - r };
+    let circle = Rect::new(c.x - r, cy - r, c.x + r, cy + r);
+    // `shapes::ellipse_arc` runs counterclockwise on screen: right to left over the top.
+    let mut path = if arch {
+        shapes::ellipse_arc(circle, 30.0, 150.0, shapes::EllipseMode::Arc)
+    } else {
+        shapes::ellipse_arc(circle, 210.0, 330.0, shapes::EllipseMode::Arc)
+    };
+    if arch {
+        path.reverse();
+    }
+    (path, 0.0)
+}
+
+/// `t` (point type or type on a path) on the path of `preset` with Dynamic Text on, Align to Path
+/// `align`, and flipped when `flip`. The shape is made upright on the page and mapped back through
+/// the object's transform, so a rotated or scaled object still shows a circle, an arch or a bow.
+/// Point type: the path is as wide as the longer side of the text's layout bounds is long on the
+/// page, centered on them; with no layout area (empty text), four ems of its first character
+/// wide, centered on its estimated bounds. Type on a path: as wide as the longer side of its
+/// path's bounds on the page, centered on them, so the same preset again gives the same path.
+/// When the object's transform can't be undone, or undoing it gives a path that isn't finite, the
+/// shape is made in the text's own space.
+fn with_preset(t: &TextObject, preset: &str, align: vectorcraft_doc::PathAlign, flip: bool) -> TextObject {
+    let invertible = t.xf.is_finite() && t.xf.determinant() != 0.0 && t.xf.inverse().is_finite();
+    // The transform the shape was made upright through, with the shape.
+    let ((path, start, w), xf) = invertible
+        .then(|| preset_shape(t, preset, t.xf).map(|s| (s, t.xf)))
+        .flatten()
+        .or_else(|| preset_shape(t, preset, Affine::IDENTITY).map(|s| (s, Affine::IDENTITY)))
+        .unwrap_or_else(|| {
+            let (path, start) = preset_path(preset, vectorcraft_geom::Point::ZERO, 48.0);
+            ((path, start, 48.0), Affine::IDENTITY)
+        });
+    let mut out = t.clone();
+    out.kind = TextKind::OnPath { path, start, end: None };
+    out.path_align = align;
+    out.dynamic_text = true;
+    if flip {
+        out.flip_on_path();
+    }
+    // The same preset again measures the path it made, which can differ in the last bits: a path
+    // within a billionth of its width of the old one on the page keeps the old one, so nothing
+    // changes.
+    if let (TextKind::OnPath { path: old, .. }, TextKind::OnPath { path: new, .. }) = (&t.kind, &mut out.kind)
+        && same_path(&old.transformed(xf), &new.transformed(xf), w * 1e-9)
+    {
+        *new = old.clone();
+    }
+    refresh_bounds(&mut out);
+    out
+}
+
+/// The path of `preset` for `t` made upright through transform `xf` (see [`with_preset`]), in the
+/// text's space, with its start bracket and its width on the page; None when the path isn't
+/// finite.
+fn preset_shape(t: &TextObject, preset: &str, xf: Affine) -> Option<(vectorcraft_geom::PathData, f64, f64)> {
+    // How long `(x, y)` in the text's space is on the page.
+    let on_page = |x: f64, y: f64| (xf * vectorcraft_geom::Point::new(x, y) - xf * vectorcraft_geom::Point::ZERO).hypot();
+    // The center on the page, and the width measured (0 when nothing can be measured).
+    let (c, longer) = match &t.kind {
+        TextKind::OnPath { path, .. } => path
+            .transformed(xf)
+            .bounds()
+            .filter(|b| b.is_finite())
+            .map_or((xf * vectorcraft_geom::Point::ZERO, 0.0), |b| (b.center(), b.width().max(b.height()))),
+        _ => {
+            let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).bounds;
+            match Some(lay).filter(|b| b.area() > 0.0 && b.is_finite()) {
+                Some(b) => (xf * b.center(), on_page(b.width(), 0.0).max(on_page(0.0, b.height()))),
+                None => (xf * Some(t.estimate_bounds()).filter(|b| b.is_finite()).map_or(vectorcraft_geom::Point::ZERO, |b| b.center()), 0.0),
+            }
+        }
+    };
+    // Without a measured width: four ems of the first character, else 48 pt.
+    let size = t.first_style().size;
+    let w = if longer.is_finite() && longer > 1e-6 {
+        longer
+    } else if size.is_finite() && size > 0.0 && on_page(size * 4.0, 0.0) > 1e-6 {
+        on_page(size * 4.0, 0.0)
+    } else {
+        48.0
+    };
+    let (path, start) = preset_path(preset, c, w);
+    let path = path.transformed(xf.inverse());
+    let finite = path.subpaths.iter().flat_map(|s| &s.anchors).all(|a| a.p.is_finite() && a.h_in.is_finite() && a.h_out.is_finite());
+    (finite && w.is_finite()).then_some((path, start, w))
+}
+
+/// Whether paths `a` and `b` have the same subpaths, closed alike, with every anchor and handle
+/// within `eps` of each other.
+fn same_path(a: &vectorcraft_geom::PathData, b: &vectorcraft_geom::PathData, eps: f64) -> bool {
+    let near = |p: vectorcraft_geom::Point, q: vectorcraft_geom::Point| (p - q).hypot() <= eps;
+    a.subpaths.len() == b.subpaths.len()
+        && a.subpaths.iter().zip(&b.subpaths).all(|(s, t)| {
+            s.closed == t.closed
+                && s.anchors.len() == t.anchors.len()
+                && s.anchors.iter().zip(&t.anchors).all(|(x, y)| x.kind == y.kind && near(x.p, y.p) && near(x.h_in, y.h_in) && near(x.h_out, y.h_out))
+        })
+}
+
+/// Type › Dynamic Text Presets: put the selected point type and type on a path on a new path of
+/// the preset's shape with Dynamic Text on, in one undo step, and none when nothing changes.
+fn dynamic_text_preset(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "type.dynamicTextPreset";
+    let key = "preset";
+    let preset = choice(p, C, key, &PRESETS)?.ok_or_else(|| bad(C, format!("`{key}` must be one of {}", PRESETS.join(", "))))?;
+    let align = match choice(p, C, "position", &["above", "center", "below"])? {
+        Some("center") => vectorcraft_doc::PathAlign::Center,
+        Some("below") => vectorcraft_doc::PathAlign::Ascender,
+        _ => vectorcraft_doc::PathAlign::Descender,
+    };
+    let flip = switch_or(p, "flip", false, C)?;
+    let (ids, changed) = {
+        let d = &s.doc()?.doc;
+        let ids = preset_ids(d, &targets(s, p)?);
+        if ids.is_empty() {
+            return Err(bad(C, "select point type or type on a path"));
+        }
+        let frames = threaded_ids(d, &ids);
+        if !frames.is_empty() {
+            return Err(bad(C, format!("type on a path in a thread cannot use Dynamic Text: {frames}")));
+        }
+        let changed: Vec<(NodeId, TextObject)> = ids
+            .iter()
+            .filter_map(|id| match d.node(*id).map(|n| &n.kind) {
+                Some(NodeKind::Text(t)) => Some((*id, with_preset(t, preset, align, flip))).filter(|(_, new)| new != &**t),
+                _ => None,
+            })
+            .collect();
+        (ids, changed)
+    };
+    if !changed.is_empty() {
+        s.edit("Dynamic Text", |d, _| {
+            for (id, new) in &changed {
+                if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
+                    **t = new.clone();
+                }
+            }
+            Ok(())
+        })?;
+    }
+    let d = &s.doc()?.doc;
+    let fit =
+        ids.first().and_then(|id| path_text(d.node(*id))).map_or(1.0, |t| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).fit_scale);
+    Ok(json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "fitScale": fit}))
 }
 
 // ---------- placeholder / insert ----------

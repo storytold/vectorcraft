@@ -1,6 +1,7 @@
 use super::super::unique_name;
 use super::{
-    Result, Session, TEMPLATE_FORMATS, UNSUPPORTED, Unsupported, Value, bad, dxf, eps, json, metafile, native, pdf, screens, svg, text, unsupported,
+    Result, Session, TEMPLATE_FORMATS, UNSUPPORTED, Unsupported, Value, bad, dxf, eps, hpgl, json, metafile, native, pdf, screens, svg, text,
+    unsupported,
 };
 
 /// One option a format's encoder reads from the export params.
@@ -479,6 +480,17 @@ pub const FORMATS: &[Format] = &[
     },
     Format { id: "emf", label: "EMF", extensions: &["emf"], mime: "image/emf", read: true, write: true, raster: false, options: metafile::OPTIONS },
     Format { id: "wmf", label: "WMF", extensions: &["wmf"], mime: "image/wmf", read: true, write: true, raster: false, options: metafile::OPTIONS },
+    // HP-GL/2 plot files, read by `vectorcraft_cad::hpgl` into paths and written as pen moves.
+    Format {
+        id: "hpgl",
+        label: "HP-GL",
+        extensions: &["plt", "hpgl", "hgl", "hpg"],
+        mime: "application/vnd.hp-hpgl",
+        read: true,
+        write: true,
+        raster: false,
+        options: hpgl::OPTIONS,
+    },
     Format {
         id: "tga",
         label: "Targa",
@@ -552,6 +564,10 @@ pub const OPEN_EXTS: &[&str] = &[
     "dxf",
     "emf",
     "wmf",
+    "plt",
+    "hpgl",
+    "hgl",
+    "hpg",
     "eps",
     "epsf",
     "ps",
@@ -565,9 +581,10 @@ pub const OPEN_EXTS: &[&str] = &[
 /// `.epsf`, `.ps`, Targa, PCX, Pixar, JPEG 2000, HEIC/HEIF or JPEG XL type, nor one for the `.pns`, `.dib` and `.rle` names of
 /// PNG and BMP files (File › Open and Place still read them all). On Linux the desktop entry's EPS
 /// type (shared-mime-info's) also covers `.epsf`, so file managers offer VectorCraft for it.
+/// The packaging declares no type for HP-GL plot files either.
 pub const UNASSOCIATED_EXTS: &[&str] = &[
     "psd", "pdd", "psb", "epsf", "ps", "pns", "dib", "rle", "tga", "vda", "icb", "vst", "pcx", "pxr", "jpf", "jpx", "jp2", "j2k", "j2c", "jpc",
-    "heic", "heif", "jxl",
+    "heic", "heif", "jxl", "plt", "hpgl", "hgl", "hpg",
 ];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
@@ -641,6 +658,10 @@ pub const PLACE_EXTS: &[&str] = &[
     "dxf",
     "emf",
     "wmf",
+    "plt",
+    "hpgl",
+    "hgl",
+    "hpg",
     "eps",
     "epsf",
     "ps",
@@ -909,13 +930,20 @@ pub(crate) fn import_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
 /// (the title PDF, PNG and SVG metadata carry). A title of its own stays, and native files keep
 /// the stored title.
 pub fn has_own_title(doc: &vectorcraft_doc::Document) -> bool {
-    !doc.title.trim().is_empty() && !doc.title.strip_prefix("Untitled-").is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+    is_own_title(doc.info_title())
+}
+
+/// Is `title` one a person or a file gave, not blank and not the Untitled-N name New gives?
+pub(crate) fn is_own_title(title: &str) -> bool {
+    !title.trim().is_empty() && !title.strip_prefix("Untitled-").is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
 pub fn titled_for_export(doc: &vectorcraft_doc::Document, path: Option<&str>, format: &str) -> Option<vectorcraft_doc::Document> {
     let path = path.filter(|_| !has_own_title(doc) && !matches!(format, "vectorcraft" | "template" | "ai"))?;
     let mut d = doc.clone();
     d.title = file_stem(path);
+    // A File Info title that is no title of its own (blank, or an Untitled-N name) would hide it.
+    d.metadata.title = None;
     Some(d)
 }
 

@@ -3,13 +3,13 @@ use super::encoding::{
     unit, writable,
 };
 use super::{
-    Affine, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule, Gradient,
-    GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
+    Affine, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, DYNAMIC_TEXT, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule,
+    Gradient, GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
     LAYER_NAME, LIVE, LegacyAiOptions, MAX_IMAGE_PIXELS, MAX_NEST, NAMES, Node, NodeKind, PATTERNS, Paint, ParaDirection, ParaStyle, PathData,
     ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
     TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
-use super::{CONIC, CONIC_WEDGES};
+use super::{CONIC, CONIC_WEDGES, DIAMOND};
 
 pub(super) struct Writer<'a> {
     doc: &'a Document,
@@ -429,6 +429,11 @@ impl<'a> Writer<'a> {
         {
             return self.conic_object(path, rule, f, g);
         }
+        if let Paint::Gradient(g) = &f.paint
+            && g.gradient.kind == GradientKind::Diamond
+        {
+            return self.diamond_object(path, rule, f, g);
+        }
         let Paint::Pattern { pattern, xf } = &f.paint else {
             // A freeform gradient: its average colour.
             self.warn(FREEFORM);
@@ -493,6 +498,41 @@ impl<'a> Writer<'a> {
             let (color, _) = g.gradient.sample_keep_model(t as f32);
             let wedge = FillLayer { paint: Paint::solid(color), ..f.clone() };
             self.path_object(&PathData::single(SubPath::polyline(&pts, true)), FillRule::NonZero, Some(&wedge), None);
+        }
+        self.line("Q");
+    }
+
+    /// A diamond gradient fill (the format has no diamond gradient) as four linear gradients
+    /// clipped to `path` (filled by `rule`), one for each quadrant of its frame and equal to the
+    /// diamond there, each running on under the next
+    /// ([`vectorcraft_color::GradientGeom::diamond_quadrants`]). A diamond without an extent is its
+    /// last stop.
+    fn diamond_object(&mut self, path: &PathData, rule: FillRule, f: &FillLayer, g: &GradientPaint) {
+        let area = path.to_bezpath().bounding_box();
+        let Some(quadrants) = g.resolve(area).diamond_quadrants(area) else {
+            let color = g.gradient.stops.last().map_or(Color::gray(0.5), |s| s.color);
+            let flat = FillLayer { paint: Paint::solid(color), ..f.clone() };
+            return self.path_object(path, rule, Some(&flat), None);
+        };
+        self.warn(DIAMOND);
+        self.line("q");
+        self.fill_rule(rule);
+        let several = path.subpaths.len() > 1;
+        if several {
+            self.line("*u");
+        }
+        for sp in path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()) {
+            self.mask(sp);
+        }
+        if several {
+            self.line("*U");
+        }
+        let gradient = Gradient { kind: GradientKind::Linear, ..g.gradient.clone() };
+        for (pts, geom) in quadrants {
+            // Not named after the swatch: the definition is a linear gradient, not the swatch's.
+            let linear = GradientPaint { gradient: gradient.clone(), geom: Some(geom), swatch: None, ..g.clone() };
+            let quadrant = FillLayer { paint: Paint::Gradient(Box::new(linear)), ..f.clone() };
+            self.path_object(&PathData::single(SubPath::polyline(&pts, true)), FillRule::NonZero, Some(&quadrant), None);
         }
         self.line("Q");
     }
@@ -693,15 +733,15 @@ impl<'a> Writer<'a> {
     // ---------- type ----------
 
     /// Type: a text object when the format can hold it as text, else its outlines (type with
-    /// rotated characters among them, which keeps their rotation). A run whose
-    /// font size measures a height other than the em box is written at the em size it is drawn
-    /// at ([`vectorcraft_text::FontDb::font_heights_resolved`]).
+    /// rotated characters among them, which keeps their rotation).
     fn text(&mut self, t: &TextObject) {
         if !invertible(t.xf) {
             return;
         }
-        let resolved = vectorcraft_text::FontDb::global().font_heights_resolved(t);
-        let t = &*resolved;
+        // Written as text or as outlines, the type keeps its drawn sizes but not the setting.
+        if t.dynamic_text && matches!(t.kind, TextKind::OnPath { .. }) {
+            self.warn(DYNAMIC_TEXT);
+        }
         if !self.outline_text {
             if writable(self.doc, t) {
                 return self.text_object(t);
@@ -719,14 +759,18 @@ impl<'a> Writer<'a> {
     /// A text object (§15): `type To`, the text path (`a b c d tx ty startPt Tp`, an area's frame
     /// or the path type runs along, `TP`), then each run's style and characters, `TO`. The matrix
     /// takes text space (y up, the first baseline's start for point type) to art space; the frame
-    /// and path are in art space, as the specification's examples have them (§15.5).
+    /// and path are in art space, as the specification's examples have them (§15.5). Type that
+    /// Shrink Text to Fit or Dynamic Text scales is written in the styles it draws in, fitted at
+    /// the sizes the Character panel shows; then a run whose font size measures a height other
+    /// than the em box is written at the em size it is drawn at
+    /// ([`vectorcraft_text::FontDb::font_heights_resolved`]).
     fn text_object(&mut self, t: &TextObject) {
         if lost_attributes(t) {
             self.warn(TYPE_ATTRIBUTES);
         }
-        // Type that Shrink Text to Fit or Dynamic Text scales is written in the styles it draws in.
         let fitted = vectorcraft_text::drawn(t);
-        let t = &*fitted;
+        let resolved = vectorcraft_text::FontDb::global().font_heights_resolved(&fitted);
+        let t = &*resolved;
         let m = self.to_art * t.xf * Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
         let (kind, path, start) = match &t.kind {
             TextKind::Point => (0, None, 0.0),

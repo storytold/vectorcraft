@@ -14,7 +14,8 @@ use crate::{Options, SyntaxError};
 /// cannot catch it, and their `finally` blocks do not run.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Limits {
-    /// Instructions a run may execute.
+    /// Instructions a run may execute. Source that `eval`, `Function` or a host evaluator
+    /// compiles during the run also takes one unit for each UTF-16 code unit, before it is parsed.
     pub fuel: u64,
     /// Estimated bytes the heap (objects, environments and the strings they hold) may reach
     /// after a collection. A string longer than a quarter of this many code units cannot be
@@ -61,6 +62,12 @@ pub enum LimitKind {
 /// The tag [`Realm::error_source`] gives for a source that is neither the realm's script nor an
 /// evaluator's: code that `eval` or `Function` compiled, or an error with no place.
 pub const UNKNOWN_SOURCE: u32 = u32::MAX;
+
+/// The source tag after `tag`. Once the tags are used up, every later source gets
+/// [`UNKNOWN_SOURCE`], so no two sources share a tag.
+pub(crate) fn next_tag(tag: u32) -> u32 {
+    if tag >= UNKNOWN_SOURCE - 1 { UNKNOWN_SOURCE } else { tag + 1 }
+}
 
 /// The fuel [`Realm::advance`] lets a slice spend, past the slice it was asked for, in a nested run
 /// it cannot pause.
@@ -150,7 +157,9 @@ pub struct Realm {
     unbroken_fuel: u64,
     /// The source tag of the script the last [`Realm::run`] or [`Realm::start`] compiled. Each
     /// script gets a new one, and the sources an evaluator gives during its run get the ones after
-    /// it, so code that an earlier script defined keeps a tag of its own.
+    /// it, so code that an earlier script defined keeps a tag of its own. [`UNKNOWN_SOURCE`]
+    /// before the first script, for a script the realm did not compile, and once the tags are used
+    /// up.
     script_tag: u32,
 }
 
@@ -169,7 +178,7 @@ impl Realm {
     /// `options`; [`Options::max_source_units`] caps the source parsed in one run, all of it
     /// counted together.
     pub fn with_options(options: Options, limits: Limits) -> Self {
-        Self { interp: Interp::new(options, limits), unbroken_fuel: MAX_UNBROKEN_FUEL, script_tag: 0 }
+        Self { interp: Interp::new(options, limits), unbroken_fuel: MAX_UNBROKEN_FUEL, script_tag: UNKNOWN_SOURCE }
     }
 
     /// Sets the fuel [`Realm::advance`] lets a nested run spend past its slice (by default
@@ -225,11 +234,13 @@ impl Realm {
 
     /// Compiles `source` and readies the realm for a run.
     fn compile(&mut self, source: &str) -> Result<std::rc::Rc<crate::bytecode::Code>, RunError> {
+        self.script_tag = UNKNOWN_SOURCE;
         let interp = &mut self.interp;
         if let Some(message) = &interp.install_error {
             return Err(RunError { kind: RunErrorKind::Internal, message: message.clone(), line: 0, column: 0 });
         }
         interp.fuel = interp.limits.fuel;
+        interp.flattened_fuel.set(0);
         interp.source_units = 0;
         interp.throw_site = None;
         interp.last_thrown = Value::Undefined;
@@ -242,7 +253,7 @@ impl Realm {
         interp.finally_sites.clear();
         interp.error_mark = None;
         let strict = interp.options.strict;
-        interp.evaluated = interp.evaluated.saturating_add(1).min(UNKNOWN_SOURCE - 1);
+        interp.evaluated = next_tag(interp.evaluated);
         self.script_tag = interp.evaluated;
         interp.source_tag = self.script_tag;
         let code = interp.encode_source(source).and_then(|units| interp.compile_source(&units, strict, CodeKind::Global));
@@ -393,6 +404,28 @@ impl Realm {
             UNKNOWN_SOURCE => UNKNOWN_SOURCE,
             tag => tag.checked_sub(self.script_tag).unwrap_or(UNKNOWN_SOURCE),
         }
+    }
+
+    /// The source tag of the code the last error's `line` and `column` are in, which stays the same
+    /// from run to run: each script given to [`Realm::run`] or [`Realm::start`] and each source a
+    /// [`crate::HostItem::Evaluator`] gives gets the next tag, so a function an earlier script
+    /// defined has its script's tag. [`UNKNOWN_SOURCE`] for code that `eval` or `Function`
+    /// compiled, an error with no place, and sources given once the tags are used up.
+    pub fn error_tag(&self) -> u32 {
+        self.interp.error_tag
+    }
+
+    /// The source tag ([`Realm::error_tag`]) of the script the last [`Realm::run`] or
+    /// [`Realm::start`] compiled; the `n`th source an evaluator gave during that run has this tag
+    /// plus `n`. [`UNKNOWN_SOURCE`] when that call compiled nothing.
+    pub fn script_tag(&self) -> u32 {
+        self.script_tag
+    }
+
+    /// Tests: makes `tag` the last source tag given out.
+    #[cfg(test)]
+    pub(crate) fn set_last_tag(&mut self, tag: u32) {
+        self.interp.evaluated = tag;
     }
 
     /// The mark of the host error ([`crate::HostError::Marked`]) the last run ended with, when no

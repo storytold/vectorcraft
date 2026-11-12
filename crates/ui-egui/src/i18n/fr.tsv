@@ -263,6 +263,7 @@ font-technology	Variable	Variables
 	Asset Export Settings	Paramètres d’exportation de ressources
 	Assets	Ressources
 	Assign	Attribuer
+	Assign Profile	Attribuer un profil
 	Assign Profile…	Attribuer un profil…
 	Assign:	Attribuer :
 	Attach to Active Plane	Associer au plan actif
@@ -702,6 +703,15 @@ font-technology	Variable	Variables
 	Created:	Création :
 	Crop	Recadrer
 	Crop Image	Recadrer l’image
+	Image Tools	Outils d’image
+	Remove Background…	Supprimer l’arrière-plan…
+	Remove Background	Supprimer l’arrière-plan
+	Background	Arrière-plan
+	Edge Color	Couleur du bord
+	Picked Colors	Couleurs choisies
+	Corner Color	Couleur des angles
+	Contiguous	Contigu
+	Each Channel	Chaque canal
 	Edit Path	Modifier le tracé
 	Mask	Masque
 	Crop Marks	Traits de coupe
@@ -1138,6 +1148,8 @@ font-technology	Variable	Variables
 	Extrude & Bevel…	Extrusion et biseautage…
 	3D (Classic)	3D (classique)
 	Extrude & Bevel (Classic)…	Extrusion et biseautage (classique)…
+	Revolve (Classic)…	Révolution (classique)…
+	Rotate (Classic)…	Rotation (classique)…
 	Surface	Surface
 	Wireframe	Fil de fer
 	No Shading	Sans ombrage
@@ -1437,6 +1449,14 @@ font-technology	Variable	Variables
 	Hair Space	Espace ultrafine
 	Hand Tool	Outil Main
 	Hand-Drawn	Dessiné à la main
+	Painted and Sketched	Peint et esquissé
+	Washed Blue	Bleu lavé
+	Bristle Ochre	Ocre à la brosse
+	Pastel Heather	Bruyère pastel
+	Charcoal Shade	Ombre au fusain
+	Ink Contour	Contour encré
+	Wet Ink	Encre humide
+	Fine Pen	Plume fine
 	Handles	Poignées
 	Hard Light	Lumière crue
 	Hard Mix	Mélange maximal
@@ -2328,6 +2348,9 @@ font-technology	Variable	Variables
 	Optical	Optique
 	Optical Margin Alignment	Alignement optique des marges
 	Dynamic Text	Texte dynamique
+	Dynamic Text Presets	Paramètres prédéfinis du texte dynamique
+	Arch	Voûte
+@msg	select point type or type on a path	sélectionnez du texte de point ou du texte curviligne
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	le texte curviligne d’un texte lié ne peut pas utiliser le texte dynamique : {frames}
 	Optimize for fast web view	Optimiser pour un affichage web rapide
 	Optimized	Optimisé
@@ -2335,6 +2358,8 @@ font-technology	Variable	Variables
 	Options for Selection…	Options de la sélection…
 	Options:	Options :
 	Options…	Options…
+	Organic Fades	Fondus organiques
+	Holographic	Holographiques
 	or more spaces with a tab	espaces ou plus par une tabulation
 	Order:	Ordre :
 	Ordinals	Ordinaux
@@ -2526,6 +2551,7 @@ font-technology	Variable	Variables
 	Presets:	Paramètres prédéfinis :
 	Press 	Appuyez sur 
 	Preview	Aperçu
+	Preview:	Aperçu :
 	Preview All Layers	Aperçu de tous les calques
 	Preview in Browser	Aperçu dans le navigateur
 	Preview in Browser needs the desktop app (the web downloads files instead)	L’aperçu dans le navigateur nécessite l’application de bureau (la version web télécharge les fichiers à la place)
@@ -2605,6 +2631,7 @@ digits	Malayalam	Malayalam
 	Radial Glows	Halos radiaux
 	Radial Gradient	Dégradé radial
 	Conic Gradient	Dégradé conique
+	Diamond Gradient	Dégradé en losange
 	Radius 1	Rayon 1
 	Radius 2	Rayon 2
 	Radius1	Rayon1
@@ -2617,6 +2644,8 @@ digits	Malayalam	Malayalam
 	Range:	Plage :
 	Raster Effects	Effets de pixellisation
 	Raster File Format:	Format du fichier pixellisé :
+	Include Placed Images	Inclure les images importées
+	Include Fill Hatches	Inclure les hachures des fonds
 	Raster Sample Size:	Taille de l’échantillon pixellisé :
 	Raster/Vector Balance:	Équilibre pixellisé/vectoriel :
 	Rasterize	Pixelliser
@@ -2798,6 +2827,10 @@ digits	Malayalam	Malayalam
 	Replace Font	Remplacer la police
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Remplacez-le par un autre fichier ou ignorez-le : ses images continueront d’afficher l’aperçu enregistré avec le document.
 	Replace Spine	Remplacer la dorsale
+	Create Spine	Créer une dorsale
+	Create Spine:	Créer une dorsale :
+	Always	Toujours
+	Never	Jamais
 	Replace Symbol	Remplacer le symbole
 	Reset Transformation	Réinitialiser la transformation
 	Replace With Font	Remplacer par la police
@@ -2876,6 +2909,9 @@ digits	Malayalam	Malayalam
 	Rise…	Élévation…
 	Roman Baseline	Ligne de base romaine
 	Roman Hanging Punctuation	Ponctuation romaine hors justification
+	Korean Line Break Anywhere	Saut de ligne coréen n’importe où
+	East Asian Composition Settings	Paramètres de composition d’Asie orientale
+	Korean Composition Settings	Paramètres de composition coréenne
 	Rotate	Rotation
 	Rotate 90° CW	Rotation de 90° horaire
 	Rotate Tool	Outil Rotation
@@ -3159,6 +3195,15 @@ digits	Malayalam	Malayalam
 	Stun Pulse	Étourdissement
 	Stealth Fade	Furtivité
 	Shield Buff	Bouclier
+	Textures	Textures
+	Fine Grain	Grain fin
+	Canvas Weave	Toile tissée
+	Burlap Sack	Sac de jute
+	Cracked Glaze	Glaçure craquelée
+	Mosaic Floor	Sol en mosaïque
+	Quilted Squares	Carrés matelassés
+	Leaded Glass	Vitrail au plomb
+	Damp Paper	Papier humide
 	Shape	Forme
 	Shape Builder	Concepteur de forme
 	Shape Builder Regions	Zones du Concepteur de forme
@@ -3526,6 +3571,8 @@ digits	Malayalam	Malayalam
 	Scale at Center	Mettre à l’échelle depuis le centre
 	Up/Down:	Haut/bas :
 	Left/Right:	Gauche/droite :
+	Tate-chu-yoko Up/Down	Tate-chu-yoko haut/bas
+	Tate-chu-yoko Left/Right	Tate-chu-yoko gauche/droite
 	Temperature	Température
 	Temperature/Tint…	Température/teinte…
 	Template	Modèle
@@ -3860,6 +3907,7 @@ digits	Malayalam	Malayalam
 	Windows	Windows
 	Working CMYK	CMJN de travail
 	Working CMYK (don't tag)	CMJN de travail (sans balise)
+	Working RGB (don't tag)	RVB de travail (sans balise)
 	Workspace	Espace de travail
 	Workspace {i}	Espace de travail {i}
 	Wrinkle Tool	Outil Fronces
@@ -4206,6 +4254,7 @@ axis	Both	Les deux
 @msg	`globalAdjust` must be an object	`globalAdjust` doit être un objet
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` doit valoir 1, 3 ou 5
 @msg	`stops` must be an array	`stops` doit être un tableau
+@msg	`{key}` must be an array	`{key}` doit être un tableau
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` doit être un objet d’options SVG (voir document.formats)
 @msg	`{_1}` is no save command	`{_1}` n’est pas une commande d’enregistrement
 @msg	`{area}` is no recovery area name	`{area}` n’est pas un nom de zone de récupération
@@ -4219,6 +4268,7 @@ axis	Both	Les deux
 @msg	`{key}` must be a number, not {v}	`{key}` doit être un nombre, pas {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} doit être un temps Unix en secondes (un entier) ou null
 @msg	`{key}` must be a string	`{key}` doit être une chaîne
+@msg	`{key}` must be a profile name or null	`{key}` doit être un nom de profil ou null
 @msg	`{key}` must be a whole number	`{key}` doit être un nombre entier
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` doit être un nombre entier compris entre {min} et {max} (reçu : {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` doit être compris entre {min} et {max} (reçu : {x})
@@ -4370,6 +4420,7 @@ axis	Both	Les deux
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la page du plan de travail {n} mesure {size}, plus que la limite de page PDF de 14 400 pt (200 in) : elle est écrite avec une UserUnit de {unit}, donc les applications qui ignorent UserUnit l’affichent autant de fois plus petite
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la page du plan de travail {n} mesure {size}, plus que la limite de page PDF de 14 400 pt (200 in) : les pages {label} sont écrites sans UserUnit, en points, et les applications qui respectent la limite coupent la page à 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 n’a pas d’UserUnit, dont une page de plus de 14 400 pt (200 in) a besoin pour garder sa taille : le fichier est écrit en PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 n’a pas d’UserUnit, dont une page de plus de 14 400 pt (200 in) a besoin pour rester dans la limite de page de PDF/A-2, 14 400 unités : le fichier est écrit en PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	la page du plan de travail {n} mesure {size}, trop longue et étroite pour les côtés de page PDF de 3 à 14 400 unités : elle est écrite avec une UserUnit de {unit}, qui garde le petit côté à 3 unités ou plus, et les apps qui respectent la limite coupent le grand côté à 14 400 unités
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	les fichiers {label} acceptent des nombres réels jusqu’à {max}, et la page du plan de travail {n}, longue de {side} pt, en demande de plus grands : choisissez PDF 1.6 ou ultérieur sans norme PDF/X, ou un plan de travail plus petit
 @msg	invalid PDF setting: {0}	réglage PDF non valide : {0}
@@ -4519,6 +4570,8 @@ axis	Both	Les deux
 @msg	not a stored central record	ce n’est pas un enregistrement central stocké
 @msg	not a valid plug-in module: {0}	ce n’est pas un module de plug-in valide : {0}
 @msg	not an EMF or WMF file	ce n’est pas un fichier EMF ou WMF
+@msg	not an HP-GL file	ce n’est pas un fichier HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` doit être une liste de 1 à 255 couleurs #rrggbb
 @msg	not found	introuvable
 @msg	not in pattern editing mode	pas en mode d’édition de motif
 @msg	finish editing the pattern first	terminez d’abord la modification du motif
@@ -4598,6 +4651,14 @@ axis	Both	Les deux
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	cette vectorisation créerait plus de {max} points d’ancrage, plus que le document ne peut afficher de façon fluide : augmentez Bruit, réduisez Tracés ou Couleurs, ou choisissez un paramètre prédéfini moins fidèle
 @msg	select an envelope	sélectionnez une enveloppe
 @msg	select an image	sélectionnez une image
+@msg	`background` must be edges, corners or colors	`background` doit valoir edges, corners ou colors
+@msg	`match` must be distance or channels	`match` doit valoir distance ou channels
+@msg	`{key}` must be from 0 to 100	`{key}` doit être compris entre 0 et 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` doit contenir de 1 à 16 couleurs, chacune en hexadécimal (#rrggbb ou #rgb) ou sous la forme black, white, red, green ou blue
+@msg	the linked image shows its preview: embed or relink it first	l’image liée affiche son aperçu : incorporez-la ou rétablissez d’abord le lien
+@msg	a CMYK image has no transparency to set	une image CMJN n’a pas de transparence à définir
+@msg	every pixel matches the background: no image would be left	chaque pixel correspond à l’arrière-plan : il ne resterait aucune image
+@msg	an image of {w} × {h} pixels is too large to change	une image de {w} × {h} pixels est trop grande pour être modifiée
 @msg	select an object in perspective	sélectionnez un objet en perspective
 @msg	select artwork (or a colour group) to recolor	sélectionnez l’illustration (ou un groupe de couleurs) dont redéfinir les couleurs
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloration terminée ; sans changement : {locked} et {hidden}
@@ -4704,7 +4765,7 @@ axis	Both	Les deux
 @msg	unknown format	format inconnu
 @msg	unknown format `{f}` (Save writes {_1})	format inconnu `{f}` (Enregistrer écrit {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	mode de forme libre inconnu `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	type de dégradé inconnu `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	type de dégradé inconnu `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	mise en évidence inconnue `{h}`
 @msg	unknown option `{path}.{k}`	option inconnue `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	surimpressions inconnues `{o}` (preserve, simulate ou discard)
@@ -5792,7 +5853,7 @@ theme	Appearance	Apparence
 @msg	span must be "object" or "selection", got {v}	span doit être "object" ou "selection", pas {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" place un `gradient`, pas une nuance
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" place un dégradé : indiquez `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" place un dégradé linéaire, radial ou conique, pas un dégradé de forme libre
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" place un dégradé linéaire, radial, conique ou en losange, pas un dégradé de forme libre
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" place le dégradé lui-même : omettez `start` et `end` (ils le placent déjà en coordonnées du document)
 	Make Image Dynamic	Rendre l'image dynamique
 	Import Data Sets…	Importer des jeux de données…
@@ -5975,6 +6036,7 @@ theme	Appearance	Apparence
 	Ruby	Ruby
 	Geometric Guides	Repères géométriques
 	Geometric Patterns	Motifs géométriques
+	Grit Textures	Textures granuleuses
 	Ease In	Accélération progressive
 	Ease Out	Décélération progressive
 	Ease In Out	Accélération et décélération
@@ -6033,6 +6095,8 @@ axis	Y Axis	Axe Y
 	Version: {version}	Version : {version}
 	Install “{name}” in place of the plug-in with the same ID?	Installer « {name} » à la place du module externe qui a le même ID ?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Ce fichier n’est pas le module externe installé auparavant avec cet ID. Il reçoit les réglages et le cache conservés pour cet ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Une automatisation a demandé l’installation de ce module externe. Pour l’installer, choisissez Objet › Modules externes › Installer un module externe… vous-même.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Une automatisation a demandé l’installation de ce module externe. Pour l’installer, choisissez Objet › Modules externes › Installer un module externe… vous-même.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	« {name} » est un autre module que le module externe d’ID {_1} et recevrait les réglages et le cache conservés pour celui-ci : installez-le avec `replace: true` une fois que l’utilisateur l’accepte
 	File SHA-256: {hash}	SHA-256 du fichier : {hash}
 	Read the objects it is given	Lire les objets qui lui sont transmis
@@ -6095,6 +6159,12 @@ axis	Y Axis	Axe Y
 @msg	command {name}: `label` must be 1-64 printable characters	commande {name} : `label` doit compter 1-64 caractères imprimables
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	commande {name} : utilisez un id de 1-{MAX_COMMAND_ID} caractères parmi a-z 0-9 _ commençant par une lettre
 @msg	command {name}: {e}	commande {name} : {e}
+@msg	manifest: {e}	manifeste : {e}
+@msg	manifest: {e} at line {line} column {column}	manifeste : {e} (ligne {line}, colonne {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` doit être une liste de commandes, chacune avec `id` et `label`
+@msg	command {name} must be an object with an `id` and a `label`	la commande {name} doit être un objet avec `id` et `label`
+@msg	missing field `{key}`	champ `{key}` manquant
+@msg	duplicate field `{key}`	champ `{key}` en double
 @msg	only a filter or a live effect declares `commands`	seul un filtre ou un effet dynamique déclare `commands`
 @msg	“{name}” › {label}: {e}	« {name} » › {label} : {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	le module n’a pas le SHA-256 indiqué par `hash` : rien n’a été installé
@@ -6243,6 +6313,17 @@ axis	Y Axis	Axe Y
 	Charge Wave	Vague de charge
 	Spark Trail	Traînée d'étincelles
 	Calligraphic Nibs	Plumes calligraphiques
+	Bristle Brushes	Pinceaux à soies
+	Fine Liner	Traceur fin
+	Pointed Flat	Plat pointu
+	Stubby Round	Rond court
+	Dry Scrub	Frottis sec
+	Soft Dome	Dôme doux
+	Filbert	Langue de chat
+	Angled Round	Rond biseauté
+	Angled Flat	Plat biseauté
+	Fan Blender	Éventail estompeur
+	Grass Fan	Éventail à herbe
 	Pattern Borders	Bordures de motif
 	Scatter Shapes	Formes de dispersion
 	Save Brush Library…	Enregistrer la bibliothèque de formes…
@@ -6452,6 +6533,10 @@ anchor	Points:	Points :
 @msg	features lists at most {max} tags	features contient au plus {max} balises
 @msg	unknown OpenType feature `{t}`	fonction OpenType inconnue `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} doit être un nombre supérieur à 0 et au plus égal à {max}
+@msg	{label} must be at most {max} characters	{label} doit compter au plus {max} caractères
+@msg	{label} must be one character	{label} doit être un seul caractère
+@msg	at most {max} tab stops	au plus {max} taquets de tabulation
+@msg	unknown align `{other}`	alignement inconnu `{other}`
 @msg	no character style `{name}`	Style de caractère `{name}` introuvable
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6613,6 +6698,12 @@ breakText	Glyphs	Glyphes
 	Delete the selected brushes?	Supprimer les formes sélectionnées ?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Des contours utilisent une ou plusieurs de ces formes. Retirer les formes de ces contours et supprimer les formes ?
 	Remove Strokes	Supprimer les contours
+	Place Brush Art	Placer l’illustration de la forme
+	Replace Brush Art	Remplacer l’illustration de la forme
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Des contours utilisent cette forme. Appliquer la nouvelle illustration à ces contours, ou les laisser tels quels et ajouter une copie de la forme avec la nouvelle illustration ?
+	Apply to Strokes	Appliquer aux contours
+	Leave Strokes	Conserver les contours
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` n’a pas d’illustration (seules les formes diffuses, artistiques et de motif en ont)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Outils de disposition
 	Arrange in Grid…	Disposer en grille…
@@ -6808,6 +6899,11 @@ breakText	Glyphs	Glyphes
 @msg	only an exporter or an importer declares `extensions`	seul un module externe d’exportation ou d’importation déclare `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	un module externe d’importation reçoit toujours le budget d’une importation : omettez `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Copier les informations de dépannage
+@msg	Copied the troubleshooting info	Informations de dépannage copiées
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	La dernière session de VectorCraft a cessé de répondre avant de se fermer. Aide › Copier les informations de dépannage copie les détails pour un rapport de bogue
+
 # Safe Mode
 	Safe Mode…	Mode sans échec…
 	Safe Mode	Mode sans échec
@@ -6828,6 +6924,7 @@ breakText	Glyphs	Glyphes
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Aligner sur la grille de pixels
+	Align New Objects to Pixel Grid	Aligner les nouveaux objets sur la grille de pixels
 	Not Aligned to Pixel Grid	Non aligné sur la grille de pixels
 @msg	only paths and compound paths can be aligned to the pixel grid	seuls les tracés et les tracés transparents peuvent être alignés sur la grille de pixels
 @msg	side is left or right, not `{s}`	side vaut left ou right, pas `{s}`
@@ -6859,8 +6956,33 @@ breakText	Glyphs	Glyphes
 @plural	{n} line cut|{n} lines cut	{n} ligne coupée|{n} lignes coupées
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` et `last` doivent être des numéros de lignes que la console contient, `first` avant `last`
 
+# Learn panel
+	Learn	Apprendre
+	Explore tutorials	Découvrir les tutoriels
+	For you	Pour vous
+	Skills	Compétences
+	Get started	Prise en main
+	Quick skill guide	Guide rapide des compétences
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Courts tutoriels pratiques sur les outils essentiels, regroupés par compétence. Choisissez une compétence pour voir ses tutoriels.
+	List Tutorials	Lister les tutoriels
+	Show Tutorial	Afficher le tutoriel
+@msg	missing `tutorial` (see learn.list)	`tutorial` manquant (voir learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutoriel inconnu `{id}` (voir learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualiser les effets différés
 	Deferred Effects	Effets différés
 @msg	no plug-in effect is deferred	aucun effet de plug-in n’est différé
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Ouvert avec {n} effet de plug-in différé. Effet › Actualiser les effets différés l’exécute.|Ouvert avec {n} effets de plug-in différés. Effet › Actualiser les effets différés les exécute.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Outils de découpe
+	Stencil Bridges…	Ponts de pochoir…
+	Stencil Bridges	Ponts de pochoir
+	Shortest Crossing	Traversée la plus courte
+	Direction	Direction
+@msg	The selected art has no islands to bridge	L’illustration sélectionnée n’a aucun îlot à relier
+@msg	No bridge of this width fits across the selected art	Aucun pont de cette largeur ne tient en travers de l’illustration sélectionnée
+@msg	Some islands could not be joined to the area around the art	Certains îlots n’ont pas pu être reliés à la zone autour de l’illustration
+@msg	`width` must be from {lo} to {hi} pt	`width` doit être compris entre {lo} et {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` doit être un nombre entier compris entre 1 et {MAX_BRIDGES_PER_ISLAND}
