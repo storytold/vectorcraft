@@ -524,6 +524,7 @@ fn type_commands_refuse_a_number_or_boolean_given_as_text() {
             ("text.setFormat", json!({"ids": [id.0], "hyphenateCapitalized": 0}), "hyphenateCapitalized"),
             ("text.setFormat", json!({"ids": [id.0], "romanHangingPunctuation": "true"}), "romanHangingPunctuation"),
             ("text.setFormat", json!({"ids": [id.0], "koreanLineBreakAnywhere": 1}), "koreanLineBreakAnywhere"),
+            ("text.setFormat", json!({"ids": [id.0], "bunriKinshi": "on"}), "bunriKinshi"),
             ("text.getRange", json!({"id": id.0, "effective": "true"}), "effective"),
             ("type.opticalMarginAlignment", json!({"on": "true"}), "on"),
             ("type.systemLayout", json!({"on": "true"}), "on"),
