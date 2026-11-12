@@ -1,6 +1,6 @@
 # Development
 
-> **Last updated:** 2026-11-06 · **Change:** Hindi catalog and zero/one plural rule; desktop Devanagari fallback and optional craft-fonts UI face; native review pending.
+> **Last updated:** 2026-11-12 · **Change:** minor (clipboard failure helper follows its Linux/BSD and test callers; previously: Hindi catalog and zero/one plural rule; desktop Devanagari fallback and optional craft-fonts UI face; native review pending).
 > **Last updated:** 2026-11-01 · **Change:** Linux: Automatic Linux Display Server opens the window through XWayland when a pen is attached on a Wayland session, so the pen draws (#4967); `VECTORCRAFT_NATIVE_WAYLAND=1` keeps Wayland.
 > **Last updated:** 2026-10-31 · **Change:** files opened while the app runs open in its window on Windows and Linux (#4892); `--new-instance`.
 > **Last updated:** 2026-10-29 · **Change:** Linux clipboard: the Flatpak on GNOME copies and pastes text through the core Wayland protocol.
@@ -351,6 +351,10 @@ parameters. Shipped code therefore never panics. Anything that can fail returns 
 
 ### Enforced by lints
 
+The clipboard timeout failure helper is compiled for Linux/BSD workers and unit tests; production
+macOS reads synchronously. Keep helper target gates aligned with their callers instead of disabling
+dead-code warnings across the workspace.
+
 `Cargo.toml` denies these clippy lints for the whole workspace, and `cargo xtask ci` runs clippy with
 `-D warnings`. The gate targets the current stable Rust (`rust-version` in `Cargo.toml` is only the
 minimum that builds the app, and no toolchain is pinned): when a new stable adds lints, they are fixed
@@ -508,6 +512,7 @@ Scores and hour estimates are unchanged.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-12 | minor | Compile the clipboard failure helper only for Linux/BSD worker callers and unit tests; keep production macOS free of the unused helper without suppressing workspace dead-code warnings. |
 | 2026-11-06 | minor | Localisation: Hindi catalog, zero/one plurals, desktop and web font requirements; AI/MT draft, native review pending. |
 | 2026-10-31 | minor | Files opened while the app runs open in its window on Windows and Linux (#4892); `--new-instance` opts out. |
 | 2026-10-29 | minor | Linux clipboard: core Wayland protocol text fallback where arboard has neither data-control nor X11 (the Flatpak on GNOME).; its reads wait 2 s at most. |
