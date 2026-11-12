@@ -450,6 +450,25 @@ fn a_solid_in_a_transparent_gradient_keeps_its_graphic() {
     art.walk(&mut |c| masked |= c.extras().mask.is_some());
     assert!(masked);
     assert_eq!(graphics_in(&art).len(), 1);
+    // Each graphic clip group in `art`, in drawing order: whether it carries an opacity mask.
+    let masks = |art: &Node| {
+        let mut out = vec![];
+        art.walk(&mut |c| {
+            if let NodeKind::Group { children, clip: true } = &c.kind
+                && let [_, inner] = children.as_slice()
+                && matches!(inner.kind, NodeKind::Group { clip: false, .. })
+            {
+                out.push(c.extras().mask.is_some());
+            }
+        });
+        out
+    };
+    // The graphic carries the cap's mask, so it is hidden where the gradient is transparent.
+    assert_eq!(masks(&art), vec![true]);
+    // With an opaque stroke drawn after the fill, the fill's cap keeps a masked graphic of its own
+    // and the stroke's outline gets an unmasked one.
+    n.appearance.items.push(AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 4.0)));
+    assert_eq!(masks(&solid_art_in(Some(&d), &n).unwrap()), vec![true, false]);
 }
 
 #[test]

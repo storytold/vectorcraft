@@ -844,13 +844,20 @@ fn graphic_art(
 }
 
 /// A solid (a fill's or a stroke's) with ends the viewer sees: the index of its surface, its
-/// member, the ends, and the opacity and blending mode of its fill or stroke.
+/// member, the ends, the opacity and blending mode of its fill or stroke, and whether its surface
+/// carries an opacity mask (a gradient's transparency under a colored light, [`surface`]).
 struct Filled {
     at: usize,
     member: usize,
     caps: Vec<Facet>,
     opacity: f32,
     blend: BlendMode,
+    masked: bool,
+}
+
+/// Does a surface in `paint` carry an opacity mask ([`surface`])?
+fn masks_surface(paint: &Paint, colored: bool) -> bool {
+    colored && crate::lighting::opaque_paint(paint).1.is_some()
 }
 
 /// The graphics of the solids `filled` ([`graphic_art`]), each with the index of the surface it is
@@ -868,8 +875,11 @@ fn placed_graphics(
     let mut groups: Vec<Vec<&Filled>> = vec![];
     for f in filled {
         // Solids whose fills or strokes differ in opacity or blending mode get graphics of their
-        // own, each drawn as its fill or stroke is.
-        let joins = |first: &Filled| (!per_member || first.member == f.member) && first.opacity == f.opacity && first.blend == f.blend;
+        // own, each drawn as its fill or stroke is. A solid whose surface carries an opacity mask
+        // gets its own too, which takes that mask ([`with_graphics`]).
+        let joins = |first: &Filled| {
+            (!per_member || first.member == f.member) && first.opacity == f.opacity && first.blend == f.blend && !first.masked && !f.masked
+        };
         match groups.iter_mut().find(|g| g.first().is_some_and(|first| joins(first))) {
             Some(g) => g.push(f),
             None => groups.push(vec![f]),
@@ -900,12 +910,20 @@ fn whole_surfaces<'s>(surfaces: Vec<BuiltSurface<'s>>, arts: &[(usize, PlanarFac
 }
 
 /// `surfaces` drawn whole, each with its scopes, and the graphics `arts` ([`placed_graphics`]) each
-/// right after its surface, with that surface's scopes.
+/// right after its surface, with that surface's scopes and its opacity mask (a gradient's
+/// transparency), so a graphic is hidden where its cap is.
 fn with_graphics<'s>(surfaces: Vec<(&'s [Scope], Arc<Node>)>, arts: &[(usize, PlanarFace, Arc<Node>)]) -> Vec<(&'s [Scope], Arc<Node>)> {
     let mut out = Vec::with_capacity(surfaces.len() + arts.len());
     for (k, (scopes, s)) in surfaces.into_iter().enumerate() {
+        let mask = s.extras().mask.clone();
         out.push((scopes, s));
-        out.extend(arts.iter().filter(|(at, ..)| *at == k).map(|(.., art)| (scopes, art.clone())));
+        out.extend(arts.iter().filter(|(at, ..)| *at == k).map(|(.., art)| {
+            let mut art = art.clone();
+            if let Some(mask) = &mask {
+                Arc::make_mut(&mut art).extras_mut().mask = Some(mask.clone());
+            }
+            (scopes, art)
+        }));
     }
     out
 }
@@ -943,7 +961,7 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
                 if graphics_on {
                     let caps: Vec<Facet> = seen_ends(&f).cloned().collect();
                     if !caps.is_empty() {
-                        filled.push(Filled { at: out.len(), member, caps, opacity, blend });
+                        filled.push(Filled { at: out.len(), member, caps, opacity, blend, masked: masks_surface(&paint, colored) });
                     }
                 }
                 let art = if classic { classic::surface(n, f, &paint, opacity, blend, &p) } else { surface(n, f, &paint, opacity, blend, colored) };
@@ -991,8 +1009,9 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
             .enumerate()
             .filter_map(|(at, (item, member, _, f, shape))| {
                 let caps: Vec<Facet> = seen_ends(f).cloned().collect();
-                let (_, opacity, blend) = paint_of(item, *member);
-                (!caps.is_empty()).then_some(Filled { at, member: *shape, caps, opacity, blend })
+                let (paint, opacity, blend) = paint_of(item, *member);
+                let masked = masks_surface(&paint, colored);
+                (!caps.is_empty()).then_some(Filled { at, member: *shape, caps, opacity, blend, masked })
             })
             .collect();
         placed_graphics(doc, n.id, (&fx.id, &p), bounds, &filled, masks)
