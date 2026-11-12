@@ -235,9 +235,9 @@ pub(crate) struct Interp {
     /// Where the exceptions `finally` blocks are running for were raised, innermost last, each with
     /// the stack slot that holds the exception while the block runs. The block's end throws the
     /// exception on from that site. An entry whose slot is at or above the stack's length belongs to
-    /// a block that was left, and [`Self::drop_left_finally_sites`] removes it. [`Self::unwind`]
-    /// removes the entries at or above a handler's slot before it adds one, so the slots rise and
-    /// the list is never longer than the stack.
+    /// a block that was left, and [`Self::drop_left_finally_sites`] removes it at each `Jump`, each
+    /// return and each collection. [`Self::unwind`] removes the entries at or above a handler's slot
+    /// before it adds one, so the slots rise and the list is never longer than the stack.
     pub(crate) finally_sites: Vec<(ThrowSite, usize)>,
     /// The mark of the host error the last run ended with.
     pub(crate) error_mark: Option<u32>,
@@ -885,7 +885,11 @@ impl Interp {
             Op::New(n) => self.op_new(n),
             Op::Binary(b) => self.op_binary(b),
             Op::Neg | Op::Plus | Op::BitNot | Op::Not | Op::Typeof | Op::ToNumber => self.op_unary(op),
-            Op::Jump(t) => self.jump_to(t),
+            Op::Jump(t) => {
+                // `break` and `continue` leave a `finally` block by popping its exception and jumping.
+                self.drop_left_finally_sites(self.stack.len());
+                self.jump_to(t)
+            }
             Op::JumpIfFalse(t) | Op::JumpIfTrue(t) => self.op_branch(t, matches!(op, Op::JumpIfTrue(_)), false),
             Op::JumpIfFalseKeep(t) | Op::JumpIfTrueKeep(t) => self.op_branch(t, matches!(op, Op::JumpIfTrueKeep(_)), true),
             Op::Throw => {
