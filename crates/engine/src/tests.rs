@@ -205,6 +205,7 @@ mod typescale;
 mod typeundo;
 mod units;
 mod variables;
+mod warp_images;
 mod webexport;
 mod widthpoints;
 mod widthprofiles;
