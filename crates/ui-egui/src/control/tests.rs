@@ -140,6 +140,20 @@ fn a_sent_path_replaces_a_hidden_id_for_the_same_path() {
     assert_eq!(reply["error"], "can't read \"icon.svg\" or icon.svg", "{reply}");
 }
 
+/// Outside Windows, a `\` in a native path is part of a name: a sent path that differs from a hidden
+/// library's path only by `/` in place of that `\` names another file, so the library keeps its id
+/// and a reply does not read either path as a spelling of the other.
+#[cfg(not(windows))]
+#[test]
+fn a_backslash_in_a_native_path_keeps_two_paths_apart() {
+    let mut hidden = hiding(&[(r"loaded//out/weird\name.svg", r"loaded/weird\name.svg")], &[]);
+    hidden.set_hidden(vec![("loaded//out/weird/name.svg".to_string(), "loaded/name.svg".to_string())], false);
+    assert_eq!(hidden.hidden[0].1, r"loaded/weird\name.svg", "{hidden:?}");
+    let mut reply = json!({"error": r"no /out/weird\name.svg, /out/weird/name.svg or \out\weird\name.svg"});
+    hide_under_a_root("native-backslash", &mut reply, &hidden);
+    assert_eq!(reply["error"], r"no weird\name.svg, name.svg or \out\weird\name.svg", "{reply}");
+}
+
 /// A sent path whose text overlaps part of a hidden library's path does not keep that library's path
 /// from being hidden: the hidden libraries are matched first.
 #[test]
