@@ -220,17 +220,6 @@ mod tests {
         connect(zbus::blocking::connection::Builder::address(address)).unwrap()
     }
 
-    /// [`pick`] on `conn`, given 30 seconds to answer: an answer that is never awaited fails the
-    /// test instead of leaving it waiting.
-    fn pick_within(conn: &Connection, parent: &str) -> Result<Option<[f32; 3]>, Failure> {
-        let (tx, rx) = std::sync::mpsc::channel();
-        let (conn, parent) = (conn.clone(), parent.to_string());
-        std::thread::spawn(move || {
-            let _ = tx.send(pick(&conn, &parent));
-        });
-        rx.recv_timeout(std::time::Duration::from_secs(30)).expect("the portal's answer was not awaited within 30 seconds")
-    }
-
     /// The portal's name, owned on the private bus at `address` before any call, so the bus never
     /// starts an installed portal in its place.
     fn portal(address: &str) -> Connection {
@@ -295,10 +284,10 @@ mod tests {
             calls
         });
         let client = client(address);
-        assert_eq!(pick_within(&client, "x11:12"), Ok(Some([0.25, 0.5, 0.75])));
-        assert_eq!(pick_within(&client, "wayland:example"), Ok(None));
-        assert_eq!(pick_within(&client, ""), Ok(Some([0.25, 0.5, 0.75])));
-        assert!(matches!(pick_within(&client, ""), Err(Failure::NoAnswer(_))));
+        assert_eq!(pick(&client, "x11:12"), Ok(Some([0.25, 0.5, 0.75])));
+        assert_eq!(pick(&client, "wayland:example"), Ok(None));
+        assert_eq!(pick(&client, ""), Ok(Some([0.25, 0.5, 0.75])));
+        assert!(matches!(pick(&client, ""), Err(Failure::NoAnswer(_))));
         let calls = worker.join().unwrap();
         assert_eq!(calls.iter().map(|(parent, _)| parent.as_str()).collect::<Vec<_>>(), ["x11:12", "wayland:example", "", ""]);
     }
@@ -323,7 +312,7 @@ mod tests {
         });
         let client = client(address);
         assert_eq!(client.method_timeout(), Some(CALL_TIMEOUT));
-        let failure = pick_within(&client, "");
+        let failure = pick(&client, "");
         assert!(matches!(failure, Err(Failure::Unavailable(_))), "{failure:?}");
         worker.join().unwrap();
     }
