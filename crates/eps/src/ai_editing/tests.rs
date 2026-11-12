@@ -8382,6 +8382,47 @@ fn variable_font_instances_name_their_design_space() {
     );
 }
 
+/// Type in a static font whose PostScript name is also an installed variable font's named
+/// instance's names that instance's design vector and the variable font's version: the app that
+/// opens the file takes the name for the instance, and without them sets the variable font's
+/// default instance (#6756). It comes back as the style it was set in.
+#[test]
+fn a_static_font_named_like_a_variable_instance_names_the_instance() {
+    use vectorcraft_doc::{CharStyle, TextObject};
+    use vectorcraft_text::test_fonts::{SHADOWED_FAMILY, shadowed_fonts};
+    let db = vectorcraft_text::FontDb::global();
+    let (variable, static_font) = shadowed_fonts().unwrap();
+    // The static face first, so that its family and style resolve to it, as in the report.
+    db.add_font(static_font);
+    db.add_font(variable);
+    let regular = db.face(SHADOWED_FAMILY, "Regular").unwrap();
+    assert!(regular.axes().is_empty(), "Regular resolves to the static face");
+    assert_eq!(regular.postscript_name(), "ShadowtestSans-Regular");
+    let mut doc = Document::new(300.0, 200.0);
+    let st = CharStyle { font_family: SHADOWED_FAMILY.into(), font_style: "Regular".into(), ..style_of(12.0) };
+    let n = text_node(&mut doc, TextObject::point(vectorcraft_geom::Point::new(10.0, 20.0), "Regular", st));
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+
+    let td = text_document(&program(&doc));
+    // 400 × 65536: the default instance's weight.
+    assert!(td.contains("ShadowtestSans-Regular) /2 1 /4 [ 26214400 ] /5 ("), "{td}");
+    assert!(td.contains("Version 2.000) >>"), "the variable font's version: {td}");
+    assert!(!td.contains("Version 1.500"), "{td}");
+
+    let back = read_back(&doc);
+    let styles: Vec<(String, String)> = back.layers[0]
+        .children()
+        .unwrap()
+        .iter()
+        .filter_map(|n| match &n.kind {
+            NodeKind::Text(t) => Some((t.runs[0].style.font_family.clone(), t.runs[0].style.font_style.clone())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(styles, [(SHADOWED_FAMILY.into(), "Regular".into())]);
+}
+
 fn style_of(size: f64) -> vectorcraft_doc::CharStyle {
     style(size, Color::BLACK)
 }

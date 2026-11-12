@@ -466,12 +466,25 @@ fn font_name(st: &CharStyle) -> FontRecord {
         .filter(|f| f.family == st.font_family && f.style == st.font_style)
     {
         Some(face) => {
+            // A static face whose PostScript name is also an installed variable font's named
+            // instance's: an app that opens the file takes the name for that instance and, without
+            // its design vector, sets the variable font's default instance (#6756). So the record
+            // names the instance, at its own setting. The family's traits read no font file, so
+            // other static fonts don't load their families' files.
+            let instance = if face.axes().is_empty() && db.family_traits(&face.family).variable {
+                let name = face.postscript_name();
+                db.versions(&face).into_iter().find(|f| !f.axes().is_empty() && f.postscript_name().eq_ignore_ascii_case(&name))
+            } else {
+                None
+            };
+            let own_face = instance.is_none();
+            let face = instance.unwrap_or(face);
             let axes = face.axes();
             let design: Vec<f32> = axes
                 .iter()
                 .map(|a| {
                     let own = face.axis_value(a.tag).unwrap_or(a.default);
-                    let set = st.font_axes.get(String::from_utf8_lossy(&a.tag).as_ref()).copied().filter(|v| v.is_finite());
+                    let set = st.font_axes.get(String::from_utf8_lossy(&a.tag).as_ref()).copied().filter(|v| own_face && v.is_finite());
                     set.map_or(own, |v| (v as f32).clamp(a.min.min(a.max), a.max.max(a.min)))
                 })
                 .collect();
