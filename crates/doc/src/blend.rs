@@ -1051,7 +1051,8 @@ fn pinned(spec: &BlendSpec, keys: usize, n: usize) -> Option<Vec<usize>> {
 /// - a pinned spine (`key_anchors`): the stored spine's first subpath with each key's anchor (and
 ///   its handles) moved onto the key's centre, so moving a key moves its end of the spine;
 /// - a spine from Replace Spine: its first subpath, `None` for the anchors (the keys spread
-///   evenly along it by arc length).
+///   evenly along it by arc length) while the keys sit there; once one is moved off, pinned as
+///   above at the anchors where they were spread.
 ///
 /// `None` for a blend made without a spine ([`BlendSpec::no_spine`]).
 pub fn blend_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Option<Vec<usize>>)> {
@@ -1077,7 +1078,23 @@ fn layout_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Optio
         return Some((PathData::single(SubPath::polyline(&centers, false)), Some((0..keys.len()).collect())));
     };
     let mut first = stored.subpaths.first()?.clone();
-    let Some(ka) = pinned(spec, keys.len(), first.anchors.len()) else { return Some((PathData::single(first), None)) };
+    let Some(ka) = pinned(spec, keys.len(), first.anchors.len()) else {
+        let mut path = PathData::single(first);
+        // A key moved off where Replace Spine spread it takes its point of the spine along, as
+        // on a pinned spine; otherwise the steps would put it back on the spine (#6809).
+        if Spine::new(&path).is_none_or(|sp| keys_spread_along(keys, &sp)) {
+            return Some((path, None));
+        }
+        let Some(ka) = spread_anchors(&mut path, keys.len()) else { return Some((path, None)) };
+        let mut first = path.subpaths.into_iter().next()?;
+        for (k, &ai) in keys.iter().zip(&ka) {
+            if let Some(a) = first.anchors.get_mut(ai) {
+                let d = center_of(k) - a.p;
+                a.translate(d);
+            }
+        }
+        return Some((PathData::single(first), Some(ka)));
+    };
     for (k, &ai) in keys.iter().zip(&ka) {
         let c = center_of(k);
         if let Some(a) = first.anchors.get_mut(ai) {
@@ -1091,21 +1108,43 @@ fn layout_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Optio
 /// [`blend_spine`] with every key on an anchor: a spine from Replace Spine gets anchors where its
 /// keys sit (by arc length), so editing it keeps them in place.
 pub fn pin_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Vec<usize>)> {
-    let (mut path, anchors) = blend_spine(keys, spec)?;
-    if let Some(a) = anchors {
-        return Some((path, a));
+    // A spine from Replace Spine is pinned as stored, even with a key moved off it (where
+    // [`blend_spine`] moves that key's point along): the layout is the same.
+    if keys.len() >= 2
+        && let Some(first) = stored_spine(spec).and_then(|s| s.subpaths.first())
+        && pinned(spec, keys.len(), first.anchors.len()).is_none()
+    {
+        let mut path = PathData::single(first.clone());
+        let out = spread_anchors(&mut path, keys.len())?;
+        return Some((path, out));
     }
+    let (path, anchors) = blend_spine(keys, spec)?;
+    Some((path, anchors?))
+}
+
+/// Do `keys` sit where a spine from Replace Spine spreads them: evenly along `spine` by arc length
+/// (within a hundredth of a point, as [`anchor_at_length`] matches anchors)?
+fn keys_spread_along(keys: &[Arc<Node>], spine: &Spine) -> bool {
     let k = keys.len();
-    let total = Spine::new(&path)?.length();
+    keys.iter().enumerate().all(|(i, key)| {
+        let f = if k > 1 { i as f64 / (k - 1) as f64 } else { 0.0 };
+        center_of(key).distance(spine.at(f).0) < 0.01
+    })
+}
+
+/// The anchors of `path`'s first subpath that `k` keys spread evenly along it by arc length sit
+/// on, splitting segments where none is.
+fn spread_anchors(path: &mut PathData, k: usize) -> Option<Vec<usize>> {
+    let total = Spine::new(path)?.length();
     let closed = path.subpaths.first().is_some_and(|s| s.closed);
     let mut out = vec![0usize];
     for i in 1..k.saturating_sub(1) {
         let s = total * i as f64 / (k - 1) as f64;
-        out.push(anchor_at_length(&mut path, s)?);
+        out.push(anchor_at_length(path, s)?);
     }
     let last = path.subpaths.first().map_or(0, |sp| if closed { 0 } else { sp.anchors.len().saturating_sub(1) });
     out.push(last);
-    Some((path, out))
+    Some(out)
 }
 
 /// The anchor of the first subpath at arc length `s`: an existing one within a hundredth of a
