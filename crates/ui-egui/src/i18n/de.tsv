@@ -2570,6 +2570,7 @@ digits	Malayalam	Malayalam
 	Radial	Radial
 	Radial Glows	Radiale Leuchteffekte
 	Radial Gradient	Radialer Verlauf
+	Conic Gradient	Konischer Verlauf
 	Radius 1	Radius 1
 	Radius 2	Radius 2
 	Radius1	Radius1
@@ -3964,6 +3965,13 @@ theme	Appearance	Erscheinungsbild
 	Dock Panel	Bedienfeld andocken
 	Dock to Top	Oben andocken
 	Dock to Bottom	Unten andocken
+	Control Bar Options	Optionen der Steuerungsleiste
+	Tool Options	Werkzeugoptionen
+	Object Options	Objektoptionen
+	Image Options	Bildoptionen
+	Vertical Alignment	Vertikale Ausrichtung
+	Align and Distribute	Ausrichten und verteilen
+	Document Options	Dokumentoptionen
 	Dock Control Bar	Steuerungsleiste andocken
 	Drag to float the toolbar	Ziehen, um die Werkzeugleiste abzulösen
 	Drag to the window's left or right edge to dock	Zum Andocken an den linken oder rechten Fensterrand ziehen
@@ -4116,6 +4124,8 @@ theme	Appearance	Erscheinungsbild
 @msg	`groupColors` must be an array	`groupColors` muss ein Array sein
 @msg	`library` is a library id or name (see {list})	`library` ist die ID oder der Name einer Bibliothek (siehe {list})
 @msg	`mode` applies to freeform gradients	`mode` gilt für Freiformverläufe
+@msg	a negative `aspect` applies to conic gradients	ein negatives `aspect` gilt für konische Verläufe
+@msg	`focal` applies to radial gradients	`focal` gilt für radiale Verläufe
 @msg	`preserve` must be an object	`preserve` muss ein Objekt sein
 @msg	`globalAdjust` must be an object	`globalAdjust` muss ein Objekt sein
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` muss 1, 3 oder 5 sein
@@ -4619,7 +4629,7 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown format	unbekanntes Format
 @msg	unknown format `{f}` (Save writes {_1})	unbekanntes Format `{f}` („Speichern“ schreibt {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	unbekannter Freiformmodus `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	unbekannte Verlaufsart `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	unbekannte Verlaufsart `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	unbekannte Hervorhebung `{h}`
 @msg	unknown option `{path}.{k}`	unbekannte Option `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	unbekannter Wert für overprints `{o}` (preserve, simulate oder discard)
@@ -5351,7 +5361,7 @@ effect	Soft	Weich
 @msg	span must be "object" or "selection", got {v}	span muss "object" oder "selection" sein, nicht {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" platziert einen `gradient`, kein Farbfeld
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" platziert einen Verlauf: geben Sie `gradient` an
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" platziert einen linearen oder radialen Verlauf, keinen Freiform-Verlauf
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" platziert einen linearen, radialen oder konischen Verlauf, keinen Freiform-Verlauf
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" platziert den Verlauf selbst: lassen Sie `start` und `end` weg (sie platzieren ihn bereits in Dokumentkoordinaten)
 	Make Image Dynamic	Bild dynamisch machen
 	Import Data Sets…	Datensätze importieren…
@@ -5991,9 +6001,12 @@ anchor	Points:	Punkte:
 @msg	{label} must be a number	{label} muss eine Zahl sein
 @msg	{label} must be a number of at least 0.1	{label} muss eine Zahl von mindestens 0,1 sein
 	Advanced Character Formats	Erweiterte Zeichenformate
+	Basic Paragraph Formats	Grundlegende Absatzformate
+	Composition	Satz
 	Horizontal Scale	Horizontale Skalierung
 	Vertical Scale	Vertikale Skalierung
 @msg	{label} must be a number from {min} to {max}	{label} muss eine Zahl von {min} bis {max} sein
+@msg	{label} must be a whole number from {min} to {max}	{label} muss eine ganze Zahl von {min} bis {max} sein
 	Character Color	Zeichenfarbe
 	OpenType Features	OpenType-Funktionen
 	Stylistic Sets	Stilsätze
@@ -6378,6 +6391,7 @@ breakText	Glyphs	Glyphen
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Am Pixelraster ausrichten
+	Not Aligned to Pixel Grid	Nicht am Pixelraster ausgerichtet
 @msg	only paths and compound paths can be aligned to the pixel grid	nur Pfade und zusammengesetzte Pfade können am Pixelraster ausgerichtet werden
 @msg	side is left or right, not `{s}`	side ist left oder right, nicht `{s}`
 	Ignore All	Alle ignorieren

@@ -988,6 +988,13 @@ font-technology	Variable	Biến thiên
 	Dock Panel	Neo bảng
 	Dock to Top	Neo lên trên
 	Dock to Bottom	Neo xuống dưới
+	Control Bar Options	Tùy chọn thanh điều khiển
+	Tool Options	Tùy chọn công cụ
+	Object Options	Tùy chọn đối tượng
+	Image Options	Tùy chọn hình ảnh
+	Vertical Alignment	Căn chỉnh dọc
+	Align and Distribute	Căn chỉnh và phân bố
+	Document Options	Tùy chọn tài liệu
 	Dock Control Bar	Neo thanh điều khiển
 	Document	Tài liệu
 	Document Color Mode	Chế độ màu tài liệu
@@ -2935,6 +2942,7 @@ mark-style	Japanese	Kiểu Nhật
 	Radial Dividers:	Đường chia hướng tâm:
 	Radial Glows	Ánh sáng hướng tâm
 	Radial Gradient	Chuyển sắc hướng tâm
+	Conic Gradient	Chuyển sắc hình nón
 	Radius	Bán kính
 	Radius 1	Bán kính 1
 	Radius 2	Bán kính 2
@@ -4361,6 +4369,8 @@ theme	Appearance	Giao diện
 @msg	`colors` must be an array of colors, not {v}	`colors` phải là mảng màu, không phải {v}
 @msg	`library` is a library id or name (see {list})	`library` là id hoặc tên thư viện (xem {list})
 @msg	`mode` applies to freeform gradients	`mode` áp dụng cho chuyển sắc tự do
+@msg	a negative `aspect` applies to conic gradients	`aspect` âm áp dụng cho chuyển sắc hình nón
+@msg	`focal` applies to radial gradients	`focal` áp dụng cho chuyển sắc xuyên tâm
 @msg	`preserve` must be an object	`preserve` phải là một đối tượng
 @msg	`globalAdjust` must be an object	`globalAdjust` phải là một đối tượng
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` phải là 1, 3 hoặc 5
@@ -5175,7 +5185,7 @@ theme	Appearance	Giao diện
 @msg	unknown format	định dạng không xác định
 @msg	unknown format `{f}` (Save writes {_1})	định dạng không xác định `{f}` (Lưu ghi {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	chế độ tự do không xác định `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	loại chuyển sắc không xác định `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	loại chuyển sắc không xác định `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	tô sáng không xác định `{h}`
 @msg	unknown option `{path}.{k}`	tùy chọn không xác định `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	chế độ in đè không xác định `{o}` (preserve, simulate hoặc discard)
@@ -5367,7 +5377,7 @@ theme	Appearance	Giao diện
 @msg	span must be "object" or "selection", got {v}	span phải là "object" hoặc "selection", không phải {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" đặt một `gradient`, không phải mẫu màu
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" đặt một dải chuyển màu: hãy cung cấp `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" đặt dải chuyển màu tuyến tính hoặc xuyên tâm, không phải dạng tự do
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" đặt dải chuyển màu tuyến tính, xuyên tâm hoặc hình nón, không phải dạng tự do
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" tự đặt dải chuyển màu: hãy bỏ `start` và `end` (chúng đã đặt nó theo tọa độ tài liệu)
 	Make Image Dynamic	Tạo hình ảnh động
 	Import Data Sets…	Nhập tập dữ liệu…
@@ -6006,9 +6016,12 @@ anchor	Points:	Điểm:
 @msg	{label} must be a number	{label} phải là một số
 @msg	{label} must be a number of at least 0.1	{label} phải là một số ít nhất bằng 0,1
 	Advanced Character Formats	Định dạng ký tự nâng cao
+	Basic Paragraph Formats	Định dạng đoạn văn cơ bản
+	Composition	Dàn trang
 	Horizontal Scale	Tỷ lệ ngang
 	Vertical Scale	Tỷ lệ dọc
 @msg	{label} must be a number from {min} to {max}	{label} phải là một số từ {min} đến {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} phải là một số nguyên từ {min} đến {max}
 	Character Color	Màu ký tự
 	OpenType Features	Tính năng OpenType
 	Stylistic Sets	Bộ phong cách
@@ -6393,6 +6406,7 @@ breakText	Glyphs	Glyph
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Căn theo lưới pixel
+	Not Aligned to Pixel Grid	Chưa căn theo lưới pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	chỉ đường dẫn và đường dẫn phức mới căn theo lưới pixel được
 @msg	side is left or right, not `{s}`	side là left hoặc right, không phải `{s}`
 	Ignore All	Bỏ qua tất cả

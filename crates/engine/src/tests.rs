@@ -90,6 +90,7 @@ mod layerclip;
 mod layers;
 mod legacy_ai;
 mod library;
+mod library_roots;
 mod link_paths;
 mod linked_stops;
 mod linkfiles;
@@ -3161,7 +3162,7 @@ fn every_command_survives_empty_params() {
     // The view toggles among them flip the process-wide proof view.
     let _proof_view = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     for sel in [false, true] {
-        for c in command_specs() {
+        for c in command_specs().iter().filter(|c| crate::runs_with_empty_params(c.id)) {
             let mut s = session();
             let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
             rect(&mut s, 20.0, 0.0, 10.0, 10.0);

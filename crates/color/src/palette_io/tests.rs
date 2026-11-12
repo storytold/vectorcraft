@@ -166,6 +166,26 @@ fn css_escapes_names_and_writes_gradients() {
     assert!(read(&text, "x").is_err(), "CSS is written only");
 }
 
+/// A conic gradient swatch is a CSS conic gradient starting where its angle points (CSS turns
+/// clockwise from straight up); a mirrored one, which turns counterclockwise, has its stops mirrored
+/// about the seam so each color lies on the same side.
+#[test]
+fn css_writes_conic_gradient_swatches() {
+    let one = |name: &str, g: GradientPaint| SwatchLibrary {
+        name: "x".into(),
+        swatches: vec![Swatch { name: name.into(), paint: Paint::Gradient(Box::new(g)), global: false, spot: false }],
+        groups: vec![],
+    };
+    let mut conic = GradientPaint::new(Gradient { kind: GradientKind::Conic, ..Gradient::default() });
+    conic.angle = 90.0;
+    let text = written(&one("Sweep", conic.clone()), PaletteFormat::Css);
+    assert!(text.contains("--sweep: conic-gradient(from 0deg, #ffffff 0%, #000000 100%);"), "{text}");
+    conic.gradient.stops[0].offset = 0.2;
+    conic.geom = Some(crate::GradientGeom { start: kurbo::Point::ZERO, end: kurbo::Point::new(0.0, -10.0), aspect: -1.0, focal: None });
+    let text = written(&one("Back", conic), PaletteFormat::Css);
+    assert!(text.contains("--back: conic-gradient(from 0deg, #000000 0%, #ffffff 80%);"), "{text}");
+}
+
 #[test]
 fn css_preserves_fractional_gradient_stop_positions() {
     for kind in [GradientKind::Linear, GradientKind::Radial] {

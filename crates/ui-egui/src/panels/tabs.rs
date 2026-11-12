@@ -4,9 +4,11 @@
 //! same distance. A stop placed or dragged on the ruler lands on the nearest whole point. With Snap
 //! to Unit on, or Shift held, it lands on the ruler's nearest tick.
 
+use std::collections::HashSet;
+
 use egui::{Sense, Stroke, Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Node, NodeKind, ParaStyle, TabAlign, TabStop, TextKind};
+use vectorcraft_doc::{Document, Node, NodeId, NodeKind, ParaStyle, TabAlign, TabStop, TextKind, TextObject};
 
 use super::{first_selected, pstate, set_pstate};
 use crate::VectorcraftApp;
@@ -64,39 +66,94 @@ struct IndentTarget {
     level: f64,
 }
 
+fn indent_target(id: NodeId, text: &TextObject, i: usize, start: usize) -> IndentTarget {
+    let para = text.para_at(i);
+    let left = para.laid_out_left_indent();
+    IndentTarget { id: id.0, start, left, first_line: para.first_line_indent, level: left - para.left_indent }
+}
+
 fn append_indent_targets(node: &Node, range: std::ops::Range<usize>, targets: &mut Vec<IndentTarget>) {
     let NodeKind::Text(text) = &node.kind else { return };
     let plain = text.plain_text();
     let mut starts = vec![0];
     starts.extend(plain.bytes().enumerate().filter_map(|(i, c)| (c == b'\n').then_some(i + 1)));
-    targets.extend(range.filter_map(|i| {
-        let para = text.para_at(i);
-        let left = para.laid_out_left_indent();
-        Some(IndentTarget { id: node.id.0, start: *starts.get(i)?, left, first_line: para.first_line_indent, level: left - para.left_indent })
-    }));
+    targets.extend(range.filter_map(|i| Some(indent_target(node.id, text, i, *starts.get(i)?))));
 }
 
-/// Paragraphs touched by the Type selection (every paragraph of every frame after Select All in
-/// threaded text), or all paragraphs of selected text objects.
+/// One target for each paragraph of `story` (its frames in thread order), in story order. Where
+/// one frame ends and the next begins, the last paragraph of the one and the first of the next are
+/// pieces of one story paragraph: a paragraph that runs on into the next frame, or an empty piece
+/// after a frame's last paragraph break. Such a paragraph is targeted once, by its last piece with
+/// text in a frame that `selected` takes, the piece whose style the story keeps when it flows again.
+/// A paragraph whose text lies only in frames that `selected` leaves out is not targeted. An empty
+/// paragraph takes its style from its last piece when the story flows again, so it is targeted by
+/// that piece when `selected` takes its frame, and otherwise not.
+fn append_story_targets(doc: &Document, story: &[NodeId], selected: impl Fn(NodeId) -> bool, targets: &mut Vec<IndentTarget>) {
+    /// The part of a story paragraph in one frame: paragraph `index` there, starting at byte `start`.
+    struct Piece<'a> {
+        id: NodeId,
+        text: &'a TextObject,
+        index: usize,
+        start: usize,
+        has_text: bool,
+    }
+    // Each story paragraph's pieces, in thread order.
+    let mut paragraphs: Vec<Vec<Piece<'_>>> = vec![];
+    for frame in story.iter().filter_map(|id| doc.node(*id)) {
+        let NodeKind::Text(text) = &frame.kind else { continue };
+        let plain = text.plain_text();
+        let mut start = 0;
+        for (index, part) in plain.split('\n').enumerate() {
+            let piece = Piece { id: frame.id, text, index, start, has_text: !part.is_empty() };
+            start += part.len() + 1;
+            match paragraphs.last_mut() {
+                Some(last) if index == 0 => last.push(piece),
+                _ => paragraphs.push(vec![piece]),
+            }
+        }
+    }
+    for pieces in &paragraphs {
+        let pick = if pieces.iter().any(|p| p.has_text) {
+            pieces.iter().rev().find(|p| p.has_text && selected(p.id))
+        } else {
+            pieces.last().filter(|p| selected(p.id))
+        };
+        if let Some(p) = pick {
+            targets.push(indent_target(p.id, p.text, p.index, p.start));
+        }
+    }
+}
+
+/// Paragraphs touched by the Type selection (every paragraph of the story after Select All in
+/// threaded text), or all paragraphs of selected text objects. Each paragraph of a threaded story
+/// is listed once, in story order ([`append_story_targets`]).
 fn indent_targets(app: &VectorcraftApp, node: &Node) -> Vec<IndentTarget> {
     let mut targets = Vec::new();
     if let Some((_, a, b)) = super::character::text_editing(app) {
         if let (Some(story), Some(st)) = (super::character::text_story(app), app.session.active()) {
-            for frame in story.iter().filter_map(|id| st.doc.node(*id)) {
-                if let NodeKind::Text(text) = &frame.kind {
-                    append_indent_targets(frame, 0..text.paragraph_count(), &mut targets);
-                }
-            }
+            append_story_targets(&st.doc, &story, |_| true, &mut targets);
         } else if let NodeKind::Text(text) = &node.kind {
             append_indent_targets(node, text.paragraphs_in(a, b), &mut targets);
         }
     } else if let Some(st) = app.session.active() {
+        // The selected text objects and the text in selected groups, each once.
+        let mut frames = Vec::new();
+        let mut taken = HashSet::new();
         for selected in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
             selected.walk(&mut |child| {
-                if let NodeKind::Text(text) = &child.kind {
-                    append_indent_targets(child, 0..text.paragraph_count(), &mut targets);
+                if matches!(child.kind, NodeKind::Text(_)) && taken.insert(child.id) {
+                    frames.push(child.id);
                 }
             });
+        }
+        let mut done = HashSet::new();
+        for id in frames {
+            if done.contains(&id) {
+                continue;
+            }
+            let story = st.doc.story_of(id);
+            done.extend(story.iter().copied());
+            append_story_targets(&st.doc, &story, |f| taken.contains(&f), &mut targets);
         }
     }
     targets

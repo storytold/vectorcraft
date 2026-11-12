@@ -2677,6 +2677,7 @@ mark-style	Japanese	일본식
 	RECENT	최근 항목
 	Radar Graph Tool	레이더 그래프 도구
 	Radial Gradient	방사형 그레이디언트
+	Conic Gradient	원뿔형 그레이디언트
 	Random	무작위
 	Randomize Colors	색상 무작위 변경
 	Randomly change color order	색상 순서를 무작위로 변경
@@ -4017,6 +4018,13 @@ axis	Both	양쪽
 	Dock Panel	패널 고정
 	Dock to Top	위쪽에 고정
 	Dock to Bottom	아래쪽에 고정
+	Control Bar Options	컨트롤 막대 옵션
+	Tool Options	도구 옵션
+	Object Options	개체 옵션
+	Image Options	이미지 옵션
+	Vertical Alignment	세로 정렬
+	Align and Distribute	정렬 및 분포
+	Document Options	문서 옵션
 	Dock Control Bar	컨트롤 막대 고정
 	Drag to float the toolbar	드래그하여 도구 모음 분리
 	Drag to the window's left or right edge to dock	창 왼쪽 또는 오른쪽 가장자리로 드래그하여 고정
@@ -4269,6 +4277,8 @@ theme	Appearance	외관
 @msg	`gradient` must be an object	`gradient`는 개체여야 합니다
 @msg	`groupColors` must be an array	`groupColors`는 배열이어야 합니다
 @msg	`mode` applies to freeform gradients	`mode`는 자유형 그레이디언트에 적용됩니다
+@msg	a negative `aspect` applies to conic gradients	음수 `aspect`는 원뿔형 그레이디언트에 적용됩니다
+@msg	`focal` applies to radial gradients	`focal`은 방사형 그레이디언트에 적용됩니다
 @msg	`preserve` must be an object	`preserve`는 개체여야 합니다
 @msg	`globalAdjust` must be an object	`globalAdjust`는 개체여야 합니다
 @msg	`stops` must be an array	`stops`는 배열이어야 합니다
@@ -4278,7 +4288,7 @@ theme	Appearance	외관
 @msg	stop {i} needs `offset`	정지점 {i}에는 `offset`이 필요합니다
 @msg	stop {i} needs a valid `color`	정지점 {i}에는 올바른 `color`가 필요합니다
 @msg	stop {i}: `{k}` must be a number	정지점 {i}: `{k}`은(는) 숫자여야 합니다
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	알 수 없는 그레이디언트 종류 `{k}`(linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	알 수 없는 그레이디언트 종류 `{k}`(linear, radial, conic, freeform)
 @msg	the art could not be sampled	아트웍을 샘플링할 수 없습니다
 @msg	the art is too light for any dots	아트웍이 너무 밝아 점을 만들 수 없습니다
 @msg	the document has no symbols	문서에 심볼이 없습니다
@@ -5347,7 +5357,7 @@ lighting	Light	광원
 @msg	span must be "object" or "selection", got {v}	span은 "object" 또는 "selection"이어야 합니다. {v}은(는) 사용할 수 없습니다
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection"은 `gradient`를 배치합니다. 견본은 배치할 수 없습니다
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection"은 그레이디언트를 배치합니다: `gradient`를 지정하세요
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection"은 선형 또는 방사형 그레이디언트를 배치합니다. 자유형 그레이디언트는 배치할 수 없습니다
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection"은 선형, 방사형 또는 원뿔형 그레이디언트를 배치합니다. 자유형 그레이디언트는 배치할 수 없습니다
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection"은 그레이디언트 자체를 배치합니다: `start`와 `end`를 빼세요 (이미 문서 좌표로 배치합니다)
 	Make Image Dynamic	이미지를 동적으로 만들기
 	Import Data Sets…	데이터 세트 가져오기…
@@ -5986,9 +5996,12 @@ anchor	Points:	포인트:
 @msg	{label} must be a number	{label}은(는) 숫자여야 합니다
 @msg	{label} must be a number of at least 0.1	{label}은(는) 0.1 이상의 숫자여야 합니다
 	Advanced Character Formats	고급 문자 형식
+	Basic Paragraph Formats	기본 단락 형식
+	Composition	조판
 	Horizontal Scale	가로 비율
 	Vertical Scale	세로 비율
 @msg	{label} must be a number from {min} to {max}	{label}은(는) {min}에서 {max} 사이의 숫자여야 합니다
+@msg	{label} must be a whole number from {min} to {max}	{label}은(는) {min}에서 {max} 사이의 정수여야 합니다
 	Character Color	문자 색상
 	OpenType Features	OpenType 기능
 	Stylistic Sets	스타일 세트
@@ -6373,6 +6386,7 @@ breakText	Glyphs	글리프
 
 # Align to Pixel Grid
 	Align to Pixel Grid	픽셀 격자에 정렬
+	Not Aligned to Pixel Grid	픽셀 격자에 정렬되지 않음
 @msg	only paths and compound paths can be aligned to the pixel grid	패스와 컴파운드 패스만 픽셀 격자에 정렬할 수 있습니다
 @msg	side is left or right, not `{s}`	side는 left 또는 right입니다(`{s}` 아님)
 	Ignore All	모두 무시

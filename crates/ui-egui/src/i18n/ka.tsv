@@ -767,6 +767,13 @@
 	Dock Panel	პანელის მიმაგრება
 	Dock to Top	ზემოთ მიმაგრება
 	Dock to Bottom	ქვემოთ მიმაგრება
+	Control Bar Options	მართვის ზოლის პარამეტრები
+	Tool Options	ხელსაწყოს პარამეტრები
+	Object Options	ობიექტის პარამეტრები
+	Image Options	გამოსახულების პარამეტრები
+	Vertical Alignment	ვერტიკალური სწორება
+	Align and Distribute	სწორება და განაწილება
+	Document Options	დოკუმენტის პარამეტრები
 	Dock Control Bar	მართვის ზოლის მიმაგრება
 	Float Tool Group	მცურავი ხელსაწყოთა ჯგუფი
 	Services	სერვისები
@@ -1525,6 +1532,7 @@ digits	Malayalam	მალაიალამური
 	No gradient swatches	გრადიენტის ნიმუშები არ არის
 	Points: clicks add free points	წერტილები: დაწკაპუნებები ამატებს თავისუფალ წერტილებს
 	Radial Gradient	რადიალური გრადიენტი
+	Conic Gradient	კონუსური გრადიენტი
 	Reset to White, Black	თეთრზე და შავზე დაბრუნება
 	Reverse Gradient	გრადიენტის შებრუნება
 	Gradient Presets	გრადიენტის პრესეტები
@@ -3982,6 +3990,8 @@ font-technology	Variable	ცვლადი
 @msg	`groupColors` must be an array	`groupColors` უნდა იყოს მასივი
 @msg	`library` is a library id or name (see {list})	`library` არის ბიბლიოთეკის id ან სახელი (იხ. {list})
 @msg	`mode` applies to freeform gradients	`mode` ეხება თავისუფალი ფორმის გრადიენტებს
+@msg	a negative `aspect` applies to conic gradients	უარყოფითი `aspect` ეხება კონუსურ გრადიენტებს
+@msg	`focal` applies to radial gradients	`focal` ეხება რადიალურ გრადიენტებს
 @msg	`preserve` must be an object	`preserve` უნდა იყოს ობიექტი
 @msg	`globalAdjust` must be an object	`globalAdjust` უნდა იყოს ობიექტი
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` უნდა იყოს 1, 3 ან 5
@@ -4447,7 +4457,7 @@ font-technology	Variable	ცვლადი
 @msg	unknown format	უცნობი ფორმატი
 @msg	unknown format `{f}` (Save writes {_1})	უცნობი ფორმატი `{f}` (შენახვა წერს: {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	უცნობი თავისუფალი რეჟიმი `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	უცნობი გრადიენტის სახე `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	უცნობი გრადიენტის სახე `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	უცნობი გამოკვეთა `{h}`
 @msg	unknown option `{path}.{k}`	უცნობი პარამეტრი `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	უცნობი ზედდაბეჭდვა `{o}` (preserve, simulate ან discard)
@@ -5437,7 +5447,7 @@ imageTrace	Outline	კონტური
 @msg	span must be "object" or "selection", got {v}	span უნდა იყოს "object" ან "selection", მიღებულია {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" ათავსებს `gradient`-ს და არა ფერის ნიმუშს
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" ათავსებს გრადიენტს: მიუთითეთ `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" ათავსებს წრფივ ან რადიალურ გრადიენტს და არა თავისუფალი ფორმისას
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" ათავსებს წრფივ, რადიალურ ან კონუსურ გრადიენტს და არა თავისუფალი ფორმისას
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" თავად ათავსებს გრადიენტს: გამოტოვეთ `start` და `end` (ისინი მას უკვე დოკუმენტის კოორდინატებში ათავსებენ)
 	Make Image Dynamic	გამოსახულების დინამიკურად ქცევა
 	Import Data Sets…	მონაცემთა ნაკრებების იმპორტი…
@@ -6431,9 +6441,12 @@ anchor	Points:	წერტილები:
 @msg	{label} must be a number	{label} უნდა იყოს რიცხვი
 @msg	{label} must be a number of at least 0.1	{label} უნდა იყოს მინიმუმ 0,1
 	Advanced Character Formats	სიმბოლოს დამატებითი ფორმატები
+	Basic Paragraph Formats	აბზაცის ძირითადი ფორმატები
+	Composition	კომპოზიცია
 	Horizontal Scale	ჰორიზონტალური მასშტაბი
 	Vertical Scale	ვერტიკალური მასშტაბი
 @msg	{label} must be a number from {min} to {max}	{label} უნდა იყოს რიცხვი {min}-დან {max}-მდე
+@msg	{label} must be a whole number from {min} to {max}	{label} უნდა იყოს მთელი რიცხვი {min}-დან {max}-მდე
 	Character Color	სიმბოლოს ფერი
 	OpenType Features	OpenType შესაძლებლობები
 	Stylistic Sets	სტილისტური ნაკრებები
@@ -6900,6 +6913,7 @@ font-script	Japanese	იაპონური
 
 # Align to Pixel Grid
 	Align to Pixel Grid	პიქსელურ ბადეზე გასწორება
+	Not Aligned to Pixel Grid	პიქსელურ ბადეზე გაუსწორებელი
 @msg	only paths and compound paths can be aligned to the pixel grid	პიქსელურ ბადეზე მხოლოდ ტრაექტორიების და შედგენილი ტრაექტორიების გასწორებაა შესაძლებელი
 @msg	side is left or right, not `{s}`	side არის left ან right და არა `{s}`
 	Ignore All	ყველას იგნორირება

@@ -2638,6 +2638,7 @@ digits	Malayalam	Малаялам
 	Radial	Радіальний
 	Radial Glows	Радіальні світіння
 	Radial Gradient	Радіальний градієнт
+	Conic Gradient	Конічний градієнт
 	Radius 1	Радіус 1
 	Radius 2	Радіус 2
 	Radius1	Радіус1
@@ -4080,6 +4081,13 @@ axis	Both	Обидві
 	Dock Panel	Прикріпити панель
 	Dock to Top	Прикріпити вгорі
 	Dock to Bottom	Прикріпити внизу
+	Control Bar Options	Параметри панелі керування
+	Tool Options	Параметри інструменту
+	Object Options	Параметри об’єкта
+	Image Options	Параметри зображення
+	Vertical Alignment	Вертикальне вирівнювання
+	Align and Distribute	Вирівняти та розподілити
+	Document Options	Параметри документа
 	Dock Control Bar	Прикріпити панель керування
 	Drag to float the toolbar	Перетягніть, щоб від’єднати панель інструментів
 	Drag to the window's left or right edge to dock	Перетягніть до лівого або правого краю вікна для прикріплення
@@ -4227,6 +4235,8 @@ axis	Both	Обидві
 @msg	`groupColors` must be an array	`groupColors` має бути масивом
 @msg	`library` is a library id or name (see {list})	`library` — це ідентифікатор або ім’я бібліотеки (див. {list})
 @msg	`mode` applies to freeform gradients	`mode` застосовується до довільних градієнтів
+@msg	a negative `aspect` applies to conic gradients	від’ємний `aspect` застосовується до конічних градієнтів
+@msg	`focal` applies to radial gradients	`focal` застосовується до радіальних градієнтів
 @msg	`preserve` must be an object	`preserve` має бути об’єктом
 @msg	`globalAdjust` must be an object	`globalAdjust` має бути об’єктом
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` має бути 1, 3 або 5
@@ -4729,7 +4739,7 @@ axis	Both	Обидві
 @msg	unknown format	невідомий формат
 @msg	unknown format `{f}` (Save writes {_1})	невідомий формат `{f}` (збереження записує {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	невідомий режим довільної форми `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	невідомий тип градієнта `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	невідомий тип градієнта `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	невідоме виділення `{h}`
 @msg	unknown option `{path}.{k}`	невідомий параметр `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	невідомі накладення `{o}` (preserve, simulate або discard)
@@ -5366,7 +5376,7 @@ lighting	Light	Світло
 @msg	span must be "object" or "selection", got {v}	span має бути "object" або "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" розміщує `gradient`, а не зразок
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" розміщує градієнт: вкажіть `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" розміщує лінійний або радіальний градієнт, а не довільний
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" розміщує лінійний, радіальний або конічний градієнт, а не довільний
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" сам розміщує градієнт: приберіть `start` і `end` (вони вже задають його в координатах документа)
 	Make Image Dynamic	Зробити зображення динамічним
 	Import Data Sets…	Імпортувати набори даних…
@@ -6005,9 +6015,12 @@ anchor	Points:	Точки:
 @msg	{label} must be a number	{label} має бути числом
 @msg	{label} must be a number of at least 0.1	{label} має бути числом не менше 0,1
 	Advanced Character Formats	Додаткові формати символів
+	Basic Paragraph Formats	Основні формати абзацу
+	Composition	Компонування
 	Horizontal Scale	Масштаб по горизонталі
 	Vertical Scale	Масштаб за вертикаллю
 @msg	{label} must be a number from {min} to {max}	{label} має бути числом від {min} до {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} має бути цілим числом від {min} до {max}
 	Character Color	Колір символів
 	OpenType Features	Функції OpenType
 	Stylistic Sets	Стилістичні набори
@@ -6392,6 +6405,7 @@ breakText	Glyphs	Гліфи
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Вирівняти за піксельною сіткою
+	Not Aligned to Pixel Grid	Не вирівняні за піксельною сіткою
 @msg	only paths and compound paths can be aligned to the pixel grid	за піксельною сіткою можна вирівняти лише контури і складені контури
 @msg	side is left or right, not `{s}`	side — це left або right, а не `{s}`
 	Ignore All	Пропустити все

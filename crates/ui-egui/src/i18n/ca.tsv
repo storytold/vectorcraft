@@ -1215,6 +1215,13 @@ antiAlias	Sharp	Nítid
 	Dock Panel	Acobla el panell
 	Dock to Top	Acobla a dalt
 	Dock to Bottom	Acobla a baix
+	Control Bar Options	Opcions de la barra de control
+	Tool Options	Opcions de l’eina
+	Object Options	Opcions de l’objecte
+	Image Options	Opcions de la imatge
+	Vertical Alignment	Alineació vertical
+	Align and Distribute	Alinea i distribueix
+	Document Options	Opcions del document
 	Dock Control Bar	Acobla la barra de control
 	Document	Document
 	Document Color Mode	Mode de color del document
@@ -3265,6 +3272,7 @@ digits	Malayalam	Malaiàlam
 	Radial Dividers:	Divisors radials:
 	Radial Glows	Resplendors radials
 	Radial Gradient	Degradat radial
+	Conic Gradient	Degradat cònic
 	Radial Repeat	Repetició radial
 	Radius	Radi
 	Radius 1	Radi 1
@@ -5010,6 +5018,8 @@ digits	Malayalam	Malaiàlam
 @msg	`method` must be classic or perceptual	`method` ha de ser classic o perceptual
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` i `maxAnchors` han de ser nombres enters
 @msg	`mode` applies to freeform gradients	`mode` s’aplica als degradats de forma lliure
+@msg	a negative `aspect` applies to conic gradients	un `aspect` negatiu s’aplica als degradats cònics
+@msg	`focal` applies to radial gradients	`focal` s’aplica als degradats radials
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` ha de ser grayscale, rgb, hsb, cmyk o websafe
 @msg	`name` is empty	`name` és buit
 @msg	`newName` is empty	`newName` és buit
@@ -5766,7 +5776,7 @@ digits	Malayalam	Malaiàlam
 @msg	span must be "object" or "selection", got {v}	span ha de ser "object" o "selection", s’ha rebut {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" col·loca un `gradient`, no una mostra
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" col·loca un degradat: dona `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" col·loca un degradat lineal o radial, no un de lliure
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" col·loca un degradat lineal, radial o cònic, no un de lliure
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" col·loca el degradat mateix: omet `start` i `end` (ja el col·loquen en coordenades del document)
 @msg	Split Into Grid: select paths large enough for the grid	Divideix en quadrícula: selecciona traçats prou grans per a la quadrícula
 @msg	stop {i} needs `offset`	la parada {i} necessita `offset`
@@ -5940,7 +5950,7 @@ digits	Malayalam	Malaiàlam
 @msg	unknown format	format desconegut
 @msg	unknown format `{f}` (Save writes {_1})	format desconegut `{f}` (Desa escriu {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	mode de forma lliure desconegut `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	tipus de degradat desconegut `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	tipus de degradat desconegut `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	ressaltat desconegut `{h}`
 @msg	unknown option `{path}.{k}`	opció desconeguda `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpressions desconegudes `{o}` (preserve, simulate o discard)
@@ -6377,9 +6387,12 @@ anchor	Points:	Punts:
 @msg	{label} must be a number	{label} ha de ser un nombre
 @msg	{label} must be a number of at least 0.1	{label} ha de ser un nombre de com a mínim 0,1
 	Advanced Character Formats	Formats avançats de caràcters
+	Basic Paragraph Formats	Formats bàsics de paràgraf
+	Composition	Composició
 	Horizontal Scale	Escala horitzontal
 	Vertical Scale	Escala vertical
 @msg	{label} must be a number from {min} to {max}	{label} ha de ser un nombre de {min} a {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} ha de ser un nombre enter de {min} a {max}
 	Character Color	Color del caràcter
 	OpenType Features	Funcions OpenType
 	Stylistic Sets	Jocs estilístics
@@ -6772,6 +6785,7 @@ breakText	Glyphs	Glifs
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Alinea a la quadrícula de píxels
+	Not Aligned to Pixel Grid	No alineat a la quadrícula de píxels
 @msg	only paths and compound paths can be aligned to the pixel grid	només els traçats i els traçats compostos es poden alinear a la quadrícula de píxels
 @msg	side is left or right, not `{s}`	side ha de ser left o right, no `{s}`
 	Ignore All	Ignora-ho tot

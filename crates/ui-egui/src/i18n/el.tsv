@@ -1898,6 +1898,7 @@ font-technology	Variable	Μεταβλητές
 	Quick Actions	Γρήγορες ενέργειες
 	Radial	Ακτινικό
 	Radial Gradient	Ακτινωτό ντεγκραντέ
+	Conic Gradient	Κωνικό ντεγκραντέ
 	Random	Τυχαίο
 	Range:	Εύρος:
 	Rasterize	Μετατροπή σε εικονοστοιχεία
@@ -2204,6 +2205,13 @@ axis	Both	Και τα δύο
 	Dock Panel	Αγκύρωση πάνελ
 	Dock to Top	Αγκύρωση επάνω
 	Dock to Bottom	Αγκύρωση κάτω
+	Control Bar Options	Επιλογές γραμμής ελέγχου
+	Tool Options	Επιλογές εργαλείου
+	Object Options	Επιλογές αντικειμένου
+	Image Options	Επιλογές εικόνας
+	Vertical Alignment	Κατακόρυφη στοίχιση
+	Align and Distribute	Στοίχιση και κατανομή
+	Document Options	Επιλογές εγγράφου
 	Dock Control Bar	Αγκύρωση γραμμής ελέγχου
 @msg	no library `{id}`	Δεν υπάρχει βιβλιοθήκη με αναγνωριστικό `{id}`
 @msg	select some type first	Επιλέξτε πρώτα κάποιο κείμενο
@@ -2347,6 +2355,8 @@ axis	Both	Και τα δύο
 @msg	`groupColors` must be an array	Το `groupColors` πρέπει να είναι πίνακας
 @msg	`library` is a library id or name (see {list})	Το `library` είναι αναγνωριστικό ή όνομα βιβλιοθήκης (δείτε {list})
 @msg	`mode` applies to freeform gradients	Το `mode` ισχύει για ντεγκραντέ ελεύθερης μορφής
+@msg	a negative `aspect` applies to conic gradients	Το αρνητικό `aspect` ισχύει για κωνικά ντεγκραντέ
+@msg	`focal` applies to radial gradients	Το `focal` ισχύει για ακτινικά ντεγκραντέ
 @msg	`preserve` must be an object	Το `preserve` πρέπει να είναι αντικείμενο
 @msg	`globalAdjust` must be an object	Το `globalAdjust` πρέπει να είναι αντικείμενο
 @msg	`sampleSize` must be 1, 3 or 5	Το `sampleSize` πρέπει να είναι 1, 3 ή 5
@@ -4651,7 +4661,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	unknown format	άγνωστη μορφή
 @msg	unknown format `{f}` (Save writes {_1})	άγνωστη μορφή `{f}` (η Αποθήκευση υποστηρίζει {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	άγνωστη λειτουργία ελεύθερης μορφής `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, freeform)	άγνωστος τύπος ντεγκραντέ `{k}` (linear, radial, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	άγνωστος τύπος ντεγκραντέ `{k}` (linear, radial, conic, freeform)
 @msg	unknown highlight `{h}`	άγνωστη επισήμανση `{h}`
 @msg	unknown option `{path}.{k}`	άγνωστη επιλογή `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	άγνωστη επιλογή υπερεκτύπωσης `{o}` (preserve, simulate ή discard)
@@ -5738,7 +5748,7 @@ effect	Points	Σημεία
 @msg	span must be "object" or "selection", got {v}	το span πρέπει να είναι "object" ή "selection", δόθηκε {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: το "selection" τοποθετεί ένα `gradient`, όχι δείγμα χρώματος
 @msg	span: "selection" places a gradient: give `gradient`	span: το "selection" τοποθετεί ντεγκραντέ: δώστε `gradient`
-@msg	span: "selection" places a linear or radial gradient, not a freeform one	span: το "selection" τοποθετεί γραμμικό ή ακτινικό ντεγκραντέ, όχι ελεύθερης μορφής
+@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: το "selection" τοποθετεί γραμμικό, ακτινικό ή κωνικό ντεγκραντέ, όχι ελεύθερης μορφής
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: το "selection" τοποθετεί το ίδιο το ντεγκραντέ: παραλείψτε τα `start` και `end` (το τοποθετούν ήδη σε συντεταγμένες εγγράφου)
 @msg	the Color Picker is not open	ο επιλογέας χρώματος δεν είναι ανοιχτός
 @msg	the Simplify slider is not open	ο ρυθμιστής Απλοποίησης δεν είναι ανοιχτός
@@ -6356,9 +6366,12 @@ anchor	Points:	Σημεία:
 @msg	{label} must be a number	Το {label} πρέπει να είναι αριθμός
 @msg	{label} must be a number of at least 0.1	Το {label} πρέπει να είναι αριθμός τουλάχιστον 0,1
 	Advanced Character Formats	Σύνθετες μορφές χαρακτήρων
+	Basic Paragraph Formats	Βασικές μορφές παραγράφου
+	Composition	Σύνθεση
 	Horizontal Scale	Οριζόντια κλίμακα
 	Vertical Scale	Κατακόρυφη κλίμακα
 @msg	{label} must be a number from {min} to {max}	Το {label} πρέπει να είναι αριθμός από {min} έως {max}
+@msg	{label} must be a whole number from {min} to {max}	Το {label} πρέπει να είναι ακέραιος αριθμός από {min} έως {max}
 	Character Color	Χρώμα χαρακτήρων
 	OpenType Features	Χαρακτηριστικά OpenType
 	Stylistic Sets	Στιλιστικά σύνολα
@@ -6743,6 +6756,7 @@ breakText	Glyphs	Γλύφοι
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Στοίχιση στο πλέγμα εικονοστοιχείων
+	Not Aligned to Pixel Grid	Μη στοιχισμένα στο πλέγμα εικονοστοιχείων
 @msg	only paths and compound paths can be aligned to the pixel grid	μόνο διαδρομές και σύνθετες διαδρομές μπορούν να στοιχιστούν στο πλέγμα εικονοστοιχείων
 @msg	side is left or right, not `{s}`	το side είναι left ή right, όχι `{s}`
 	Ignore All	Παράβλεψη όλων

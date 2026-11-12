@@ -184,7 +184,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste in Front",
             ["Edit"],
             Some("Cmd+F"),
-            "{swatchConflict?, artboard?: index (the active artboard: the objects go where they were on the artboard they were copied from, on this one)} paste in place just above the top selected object, or on top of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
+            "{swatchConflict?, artboard?: index (the active artboard: the objects go where they were on the artboard they were copied from, on this one), artboards?: [index…] (a copy on each of these artboards, placed as on `artboard`, the copies in artboard order; `artboard` wins when both are given; default while the Artboard tool is chosen with several artboards selected: those; art copied from no artboard keeps its place on the first and its offset to it on the others; an index the document lacks, a repeated one or an empty list is an error)} paste in place just above the top selected object, or on top of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::Front)
         ),
@@ -193,7 +193,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste in Back",
             ["Edit"],
             Some("Cmd+B"),
-            "{swatchConflict?, artboard?: index (as edit.pasteInFront)} paste in place just below the bottom selected object, or at the bottom of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
+            "{swatchConflict?, artboard?: index, artboards?: [index…] (both as edit.pasteInFront)} paste in place just below the bottom selected object, or at the bottom of the current layer when nothing is selected (resources and layers as edit.paste) → {ids, added, merged, renamed}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::Back)
         ),
@@ -202,7 +202,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste in Place",
             ["Edit"],
             Some("Cmd+Shift+V"),
-            "{swatchConflict?, artboard?: index (as edit.pasteInFront)} paste where the objects were copied (resources, layers and drawing modes as edit.paste) → {ids, added, merged, renamed}",
+            "{swatchConflict?, artboard?: index, artboards?: [index…] (both as edit.pasteInFront)} paste where the objects were copied (resources, layers and drawing modes as edit.paste) → {ids, added, merged, renamed}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::InPlace)
         ),
@@ -1246,15 +1246,79 @@ pub(crate) fn place_clip(s: &mut Session, clip: &Clipboard, center: vectorcraft_
     paste_clip(s, &json!({ "center": [center.x, center.y] }), PasteMode::Library, clip, &choices)
 }
 
-/// Paste in Place, in Front or in Back onto artboard `artboard` (the active one, #693): where the
-/// objects were on the artboard they were copied from, on that one; without it (or a copy from no
-/// artboard), where they were.
-fn onto_artboard(doc: &Document, p: &Value, clip: &Clipboard) -> Affine {
-    let target = p.get("artboard").and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok()).and_then(|i| doc.artboards.get(i));
-    match (target, clip.source_artboard) {
-        (Some(t), Some(src)) => Affine::translate(t.rect.origin() - src.origin()),
-        _ => Affine::IDENTITY,
+/// The artboards Paste in Place, in Front or in Back puts a copy on, in artboard order: `artboard`
+/// (the active one, #693), else `artboards`, else, while the Artboard tool is chosen with several
+/// artboards selected, those (noted in the journal as `artboards`, so a replay pastes on the same
+/// ones); `None` when none is named. A named index that is not an artboard of the document, a
+/// repeated one or an empty list is an error.
+fn paste_targets(s: &mut Session, p: &Value, cmd: &str) -> Result<Option<Vec<usize>>> {
+    let n = s.doc()?.doc.artboards.len();
+    let one = |v: &Value| v.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|i| *i < n);
+    let single = match p.get("artboard") {
+        Some(v) => Some(one(v).ok_or_else(|| bad(cmd, "`artboard` must be the index of an artboard of the document"))?),
+        None => None,
+    };
+    let listed = match p.get("artboards") {
+        Some(v) => {
+            let list = v.as_array().filter(|a| !a.is_empty()).ok_or_else(|| bad(cmd, "`artboards` must be a list of artboard indices"))?;
+            let mut all = list
+                .iter()
+                .map(one)
+                .collect::<Option<Vec<usize>>>()
+                .ok_or_else(|| bad(cmd, "`artboards` names an artboard the document does not have"))?;
+            all.sort_unstable();
+            if all.windows(2).any(|w| w[0] == w[1]) {
+                return Err(bad(cmd, "`artboards` names an artboard twice"));
+            }
+            Some(all)
+        }
+        None => None,
+    };
+    if let Some(i) = single {
+        return Ok(Some(vec![i]));
     }
+    if listed.is_some() {
+        return Ok(listed);
+    }
+    let picked = artboard_tool_picks(s);
+    if picked.is_empty() {
+        return Ok(None);
+    }
+    s.note_journal("artboards", json!(picked));
+    Ok(Some(picked))
+}
+
+/// The artboards of the active document the Artboard tool has selected, in artboard order, while
+/// that tool is chosen with two or more of them selected; otherwise none. Indices the document
+/// does not have are left out.
+pub(crate) fn artboard_tool_picks(s: &Session) -> Vec<usize> {
+    if s.tool_id() != "artboard" {
+        return Vec::new();
+    }
+    let n = s.active().map_or(0, |d| d.doc.artboards.len());
+    let mut picked: Vec<usize> = s.tool_options_of("artboard")["selected"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|v| v.as_u64().and_then(|i| usize::try_from(i).ok()))
+        .filter(|i| *i < n)
+        .collect();
+    picked.sort_unstable();
+    picked.dedup();
+    if picked.len() < 2 {
+        picked.clear();
+    }
+    picked
+}
+
+/// Paste in Place, in Front or in Back onto artboards `targets`: one copy on each, where the objects
+/// were on the artboard they were copied from. A copy from no artboard keeps its place on the first
+/// target and its offset to that one on the others; without targets, the objects go where they were.
+fn onto_artboards(doc: &Document, targets: Option<&[usize]>, clip: &Clipboard) -> Vec<Affine> {
+    let rects: Vec<_> = targets.unwrap_or_default().iter().filter_map(|i| doc.artboards.get(*i)).map(|a| a.rect.origin()).collect();
+    let Some(first) = rects.first().copied() else { return vec![Affine::IDENTITY] };
+    let src = clip.source_artboard.map_or(first, |r| r.origin());
+    rects.iter().map(|o| Affine::translate(*o - src)).collect()
 }
 
 /// Insert clipboard resources atomically in the active editable context using the requested placement mode.
@@ -1266,6 +1330,12 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                 .filter(|c| v.as_array().is_some_and(|a| a.len() == 2) && c.x.is_finite() && c.y.is_finite())
                 .ok_or_else(|| bad("edit.paste", "`artboardsAt` must be [x, y]"))?,
         ),
+        _ => None,
+    };
+    let targets = match mode {
+        PasteMode::Front => paste_targets(s, p, "edit.pasteInFront")?,
+        PasteMode::Back => paste_targets(s, p, "edit.pasteInBack")?,
+        PasteMode::InPlace => paste_targets(s, p, "edit.pasteInPlace")?,
         _ => None,
     };
     let st = s.doc()?;
@@ -1321,8 +1391,9 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
             let src = clip.source_artboard.or_else(|| st.doc.artboards.first().map(|a| a.rect)).map(|r| r.origin()).unwrap_or_default();
             st.doc.artboards.iter().map(|a| Affine::translate(a.rect.origin() - src)).collect()
         }
-        // In place, in front, in back: onto the active artboard when the UI names it.
-        _ => vec![onto_artboard(&st.doc, p, clip)],
+        // In place, in front, in back: onto the active artboard when the UI names it, or onto each
+        // artboard the Artboard tool has selected.
+        _ => onto_artboards(&st.doc, targets.as_deref(), clip),
     };
     // Guides alone don't follow a plain paste's offset or the view centre: they stay where they
     // were. With objects they move as the objects do.

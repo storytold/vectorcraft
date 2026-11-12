@@ -347,6 +347,7 @@ fn gradient_key(g: &Gradient) -> Option<GradientKey<'_>> {
         GradientKind::Linear => 0,
         GradientKind::Radial => 1,
         GradientKind::Freeform => 2,
+        GradientKind::Conic => 3,
     };
     let method = match g.method {
         GradientMethod::Classic => 0,
