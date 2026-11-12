@@ -47,7 +47,12 @@ fn expand_as_wireframes(s: &mut Session, p: &Value) -> Result<Value> {
     // they are.
     let d = &s.doc()?.doc;
     let mut wires = vec![];
+    let mut seen = std::collections::HashSet::new();
     for id in roots {
+        // An id given twice is expanded once.
+        if !seen.insert(id) {
+            continue;
+        }
         let Some(n) = d.node(id) else { continue };
         if !effects::has_revolve(n) && !effects::has_solid(n) {
             continue;

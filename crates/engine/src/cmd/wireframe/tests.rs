@@ -71,7 +71,8 @@ fn a_layer_with_a_3d_effect_stays_a_layer_holding_the_edges() {
     let layer = s.doc().unwrap().doc.layers[0].id;
     s.execute("effect.apply", &json!({"ids":[layer.0],"effect":"threeD.extrude","item":null,"params":{}})).unwrap();
     let history = undo_len(&s);
-    let out = run(&mut s, json!({"ids":[layer.0]})).unwrap();
+    // An id given twice is expanded once.
+    let out = run(&mut s, json!({"ids":[layer.0, layer.0]})).unwrap();
     assert_eq!(out["ids"], json!([layer.0]));
     let st = s.doc().unwrap();
     let node = st.doc.node(layer).unwrap();
