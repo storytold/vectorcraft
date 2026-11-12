@@ -171,10 +171,6 @@ pub struct Session {
     /// The Scripts folder, whose scripts File › Scripts lists; `None`: no folder
     /// ([`Session::attach_scripts_dir`]).
     scripts_dir: Option<std::path::PathBuf>,
-    /// The plug-in ids whose grant in the plug-in store should be gone but could not be removed:
-    /// [`Session::plugin_approver`] and a load of the store do not count those grants, and a successful
-    /// [`Session::store_grant`] for the id takes it out.
-    ignored_plugin_grants: std::sync::Mutex<std::collections::BTreeSet<String>>,
     /// A filter's output that a run made in the background handed in for `plugin.run` to apply
     /// ([`cmd::plugin::FilterRun::hand_in`]); the next `plugin.run` takes it.
     plugin_output: Option<cmd::plugin::HandedIn>,
@@ -282,6 +278,9 @@ pub struct Session {
     pub(crate) in_tool_actions: bool,
     /// While [`Session::preview`] runs its command: its edits are the interaction's own.
     previewing: bool,
+    /// The images Remove Background decoded during the interaction's preview steps, emptied when
+    /// it ends ([`cmd::DecodedImages`]).
+    pub(crate) decoded_images: cmd::DecodedImages,
     /// Envelope Options with no envelope selected: the options and fidelity new envelopes get
     /// (`None`: the reference app's defaults, fidelity 50); not saved.
     pub(crate) envelope_defaults: Option<(vectorcraft_doc::live::EnvelopeOptions, f64)>,

@@ -7,7 +7,7 @@
 //! Differences from the desktop app:
 //! - no TCP control server (browsers can't listen on sockets);
 //! - File → Open uses the browser file picker; bytes arrive asynchronously through
-//!   `Services::inbox`;
+//!   `Services::picked_inbox`;
 //! - Save / Export trigger a browser download;
 //! - dropped files are read asynchronously by `web::WebShell` and delivered through the inbox;
 //! - pen and finger input is read from Pointer Events by `pencil` (Apple Pencil pressure and

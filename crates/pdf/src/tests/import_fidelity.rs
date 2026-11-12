@@ -769,6 +769,47 @@ fn a_function_based_shading_beside_the_origin_becomes_a_conic_gradient() {
     }
 }
 
+/// A function-based shading whose calculator function turns `abs(x) + abs(y)` into a gray ramp
+/// (ISO 32000-1 7.10.5; the ramp clipped to 1 past the square with corners at the domain's edges)
+/// comes in as a diamond gradient about the origin's place on the page. A ramp along a circle
+/// about the origin does not.
+#[test]
+fn a_function_based_shading_of_squares_about_the_origin_becomes_a_diamond_gradient() {
+    use vectorcraft_geom::Point;
+    let _held = shadings();
+    let fill = |r: &ImportReport| {
+        all(&r.document).into_iter().find_map(|n| match n.appearance.fill().map(|f| &f.paint) {
+            Some(Paint::Gradient(g)) => Some(g.clone()),
+            _ => None,
+        })
+    };
+    // The origin at the square's center, a unit 50 pt.
+    let r = function_shading("-1 1 -1 1", "50 0 0 50 50 50", "{ abs exch abs add dup dup }");
+    let g = fill(&r).unwrap_or_else(|| panic!("a gradient fill, {:?}", r.warnings));
+    assert_eq!(g.gradient.kind, GradientKind::Diamond);
+    let geom = g.geom.unwrap();
+    assert!(geom.start.distance(Point::new(50.0, 50.0)) < 0.01, "{geom:?}");
+    for (x, y) in [(50.0, 50.0), (75.0, 50.0), (50.0, 20.0), (70.0, 70.0), (35.0, 60.0), (95.0, 95.0), (10.0, 80.0)] {
+        let gray = g.gradient.sample(geom.param_at(GradientKind::Diamond, Point::new(x, y)) as f32).0.to_rgb()[0];
+        let want = (((x - 50.0) as f32).abs() / 50.0 + ((y - 50.0) as f32).abs() / 50.0).min(1.0);
+        assert!((gray - want).abs() < 0.03, "({x}, {y}): {gray} vs {want}");
+    }
+    // A radial ramp (the distance from the origin) is not one.
+    let r = function_shading("-1 1 -1 1", "50 0 0 50 50 50", "{ dup mul exch dup mul add sqrt dup dup }");
+    assert!(fill(&r).is_none_or(|g| g.gradient.kind != GradientKind::Diamond));
+    // A domain wider than it is tall: the ramp keeps changing out to its far corners, past the
+    // largest square the domain holds whole.
+    let r = function_shading("-2 2 -1 1", "50 0 0 50 50 50", "{ abs exch abs add 3 div dup dup }");
+    let g = fill(&r).unwrap_or_else(|| panic!("a gradient fill, {:?}", r.warnings));
+    assert_eq!(g.gradient.kind, GradientKind::Diamond);
+    let geom = g.geom.unwrap();
+    for (x, y) in [(50.0, 50.0), (125.0, 90.0), (-20.0, 10.0), (140.0, 50.0), (60.0, 95.0), (0.0, 30.0)] {
+        let gray = g.gradient.sample(geom.param_at(GradientKind::Diamond, Point::new(x, y)) as f32).0.to_rgb()[0];
+        let want = (((x - 50.0) as f32).abs() / 50.0 + ((y - 50.0) as f32).abs() / 50.0) / 3.0;
+        assert!((gray - want).abs() < 0.03, "({x}, {y}): {gray} vs {want}");
+    }
+}
+
 /// A function-based shading paints only over its domain: a square filled with one whose domain
 /// covers its left half is clipped to that half; one whose domain covers it all isn't clipped.
 #[test]

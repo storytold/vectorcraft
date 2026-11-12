@@ -2047,6 +2047,42 @@ fn real_time_drawing_turned_on_mid_drag_still_commits_deferred_preview() {
     assert_eq!(paths(&s), 1, "the deferred rectangle is committed");
 }
 
+/// With Real-time Drawing off, Undo during a drag keeps the dragged move as its own step and takes
+/// back only that: the rectangle drawn before stays, and Redo brings the move back.
+#[test]
+fn undo_during_a_deferred_drag_takes_back_only_the_drag() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let r = NodeId(s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap());
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    let x = |s: &Session| s.doc().unwrap().doc.node(r).and_then(vectorcraft_doc::Node::geometric_bounds).map(|b| b.x0);
+    let move_by = vectorcraft_tools::Action::Preview("object.move".into(), json!({"dx": 7, "dy": 0}));
+    s.apply_actions(vec![vectorcraft_tools::Action::Begin("Move".into()), move_by]).unwrap();
+    assert_eq!(x(&s), Some(10.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!s.in_interaction());
+    assert_eq!(x(&s), Some(10.0), "the rectangle stays");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(x(&s), Some(17.0), "Redo brings the move back");
+}
+
+/// Undo during a drag whose stored preview fails cancels the drag, as its release would, and then
+/// takes back the step before it.
+#[test]
+fn undo_during_a_deferred_drag_that_fails_cancels_it() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    let bad = vectorcraft_tools::Action::Preview("no.such.command".into(), json!({}));
+    s.apply_actions(vec![vectorcraft_tools::Action::Begin("Bad".into()), bad]).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!s.in_interaction());
+    let d = s.doc().unwrap();
+    assert_eq!(d.doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum::<usize>(), 0, "the rectangle is undone");
+    assert!(d.history.undo.iter().all(|e| e.label != "Bad"));
+}
+
 /// Repeated overlay redraws with Real-time Drawing off reuse the cached deferred feedback.
 #[test]
 fn deferred_preview_overlays_are_cached_across_redraws() {
