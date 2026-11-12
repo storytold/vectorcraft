@@ -185,15 +185,15 @@ impl<'a> Reader<'a> {
         let mut parts = vec![];
         'ids: for path in &kept {
             let Some(n) = doc.node_at(path) else { continue };
+            // Art in a hidden group or layer isn't shown, and isn't measured.
+            if (1..path.len()).any(|depth| path.get(..depth).and_then(|p| doc.node_at(p)).is_some_and(|c| !c.visible)) {
+                continue;
+            }
             let Some(mut region) = self.read(&[n])? else { continue };
             // The containers around the object, innermost first.
             let mut child = n.id;
             for depth in (1..path.len()).rev() {
                 let Some(container) = path.get(..depth).and_then(|p| doc.node_at(p)) else { break };
-                // Art in a hidden group or layer isn't shown.
-                if !container.visible {
-                    continue 'ids;
-                }
                 if clips(container)
                     && let Some(first) = container.editing_children().first().filter(|f| f.id != child)
                 {

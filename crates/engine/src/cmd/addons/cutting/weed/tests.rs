@@ -452,6 +452,31 @@ fn art_in_a_hidden_group_is_left_out() {
 }
 
 #[test]
+fn art_in_a_hidden_group_is_not_measured() {
+    // Selected art in a hidden group with more outline points than the limit doesn't count toward
+    // it.
+    let mut s = session();
+    let shown = rect(&mut s, 300.0, 300.0, 20.0, 20.0);
+    let mut p = BezPath::new();
+    p.move_to((100.0, 100.0));
+    for i in 1..=super::geometry::MAX_POINTS as u32 {
+        p.line_to((100.0 + f64::from(i) * 0.001, if i % 2 == 0 { 100.0 } else { 101.0 }));
+    }
+    let dense = insert(&mut s, |id| Node::path(id, PathData::from_bezpath(&p), Appearance::default()));
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.edit("hide", |d, _| {
+        if let Some(n) = d.node_mut(g) {
+            n.visible = false;
+        }
+        Ok(())
+    })
+    .unwrap();
+    select(&mut s, &[dense, shown]);
+    let (_, w) = weed(&mut s, json!({"margin": 10}));
+    assert_eq!(weed_box(&w), Some(Rect::new(290.0, 290.0, 330.0, 330.0)));
+}
+
+#[test]
 fn clip_outlines_crossing_too_often_are_refused() {
     // A clipping path whose 700 edges each run across the art, and open art whose 700 segments
     // each run down across the clipping path: every pair crosses, and each of the 490,000 pieces
