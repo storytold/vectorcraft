@@ -2966,6 +2966,8 @@ mark-style	Japanese	Kiểu Nhật
 	Range:	Phạm vi:
 	Raster Effects	Hiệu ứng raster
 	Raster File Format:	Định dạng tệp raster:
+	Include Placed Images	Bao gồm ảnh đã đặt
+	Include Fill Hatches	Bao gồm mẫu gạch của vùng tô
 	Raster Sample Size:	Kích thước mẫu raster:
 	Raster/Vector Balance:	Cân bằng raster/vector:
 	Rasterize	Raster hóa

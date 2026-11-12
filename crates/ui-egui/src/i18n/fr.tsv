@@ -2626,6 +2626,8 @@ digits	Malayalam	Malayalam
 	Range:	Plage :
 	Raster Effects	Effets de pixellisation
 	Raster File Format:	Format du fichier pixellisé :
+	Include Placed Images	Inclure les images importées
+	Include Fill Hatches	Inclure les hachures des fonds
 	Raster Sample Size:	Taille de l’échantillon pixellisé :
 	Raster/Vector Balance:	Équilibre pixellisé/vectoriel :
 	Rasterize	Pixelliser

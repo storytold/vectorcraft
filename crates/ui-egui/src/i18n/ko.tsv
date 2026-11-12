@@ -2693,6 +2693,8 @@ mark-style	Japanese	일본식
 	Randomly change saturation and brightness	채도와 명도를 무작위로 변경
 	Range:	범위:
 	Raster File Format:	래스터 파일 형식:
+	Include Placed Images	배치된 이미지 포함
+	Include Fill Hatches	칠 해치 포함
 	Raster Sample Size:	래스터 샘플 크기:
 	Raster/Vector Balance:	래스터/벡터 균형:
 	Rasterize Unsupported Art	지원되지 않는 아트웍 래스터화

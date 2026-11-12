@@ -1,5 +1,6 @@
 //! The document walk: each visible object becomes DXF entities on its layer's DXF layer, in paint
-//! order. Fills are their outlines then solid hatches (the outlines alone in R12), strokes
+//! order. Fills are their outlines then solid hatches (the outlines alone in R12 or with
+//! hatches left out), placed images are linked image files unless left out, strokes
 //! polylines (with bulges for circular arcs) and cubic splines with a lineweight and dashes, or
 //! filled outlines where the look needs them.
 
@@ -28,6 +29,8 @@ const NO_TRUE_COLOR: &str = "true colour needs DXF 2004 or later: colours are wr
 const NO_TRANSPARENCY: &str = "transparency needs DXF 2004 or later: transparent objects are written opaque";
 const NO_FILLS: &str = "DXF R12 has no fills: filled areas are written as their outlines";
 const NO_IMAGES: &str = "DXF R12 has no images: placed images are left out";
+const IMAGES_OFF: &str = "placed images are left out (Include Placed Images is off)";
+const HATCHES_OFF: &str = "fill hatches are left out: filled areas are written as their outlines (Include Fill Hatches is off)";
 const WIDE_LINES: &str =
     "lines wider than 2.11 mm (the widest lineweight) are written at 2.11 mm: Alter Paths for Appearance writes their true width";
 const STROKE_EXTRAS: &str = "stroke alignment, width profiles, arrowheads and brushes are left out (Maximize Editability writes strokes as lines)";
@@ -878,8 +881,8 @@ impl<'a> Scene<'a> {
         Some(vectorcraft_brush::stroke_pieces(doc, b, bp, st))
     }
 
-    /// A filled area as its outlines followed by a solid hatch (R12: the outlines alone). Laser
-    /// and cutter software reads the outlines and skips hatches. `clean`: the path has no
+    /// A filled area as its outlines followed by a solid hatch (R12, or with hatches left out: the
+    /// outlines alone). Laser and cutter software reads the outlines and skips hatches. `clean`: the path has no
     /// overlaps, so the hatch's even-odd rule reads it as it is.
     fn area(&mut self, bp: &BezPath, rule: FillRule, style: &EntityStyle, clean: bool) {
         if !self.o.version.handles() {
@@ -893,11 +896,16 @@ impl<'a> Scene<'a> {
             .flatten()
             .map(|p| p.to_bezpath());
         let outline = normalized.as_ref().unwrap_or(bp);
+        // A fill with no loop of three points or more encloses no area: no outline and no hatch.
         let loops: Vec<Vec<Point>> = polygons(outline).into_iter().filter(|p| p.len() >= 3).collect();
         if loops.is_empty() {
             return;
         }
         self.lines(outline, style, 0.0);
+        if !self.o.include_hatches {
+            self.warn(HATCHES_OFF);
+            return;
+        }
         let h = self.handle();
         let layer = self.layer.clone();
         self.e.entity("HATCH", h, fixed::MODEL_RECORD, &layer, style, "AcDbHatch");
@@ -1283,6 +1291,10 @@ impl<'a> Scene<'a> {
     fn image(&mut self, im: &ImageObject) {
         if !self.o.version.handles() {
             self.warn(NO_IMAGES);
+            return;
+        }
+        if !self.o.include_images {
+            self.warn(IMAGES_OFF);
             return;
         }
         let Some(i) = self.image_def(im) else { return };

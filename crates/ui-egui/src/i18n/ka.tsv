@@ -2100,6 +2100,8 @@ digits	Malayalam	მალაიალამური
 	Export Selected Art Only	მხოლოდ მონიშნული ნახატის ექსპორტირება
 	Number of Colors:	ფერების რაოდენობა:
 	Raster File Format:	რასტრული ფაილის ფორმატი:
+	Include Placed Images	განთავსებული გამოსახულებების ჩართვა
+	Include Fill Hatches	შევსებების დაშტრიხვის ჩართვა
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	სრულ ფერს სჭირდება 2004 ან უფრო ახალი ვერსია: იწერება 256 ფერიდან უახლოესი.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	ტექსტი კონტურებად იქცევა, ხოლო ის კონტურები, რომლებსაც CAD-ხაზი ვერ ხატავს, შევსებულ ფიგურებად.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	ტექსტი ტექსტად რჩება, ყოველი კონტური კი ხაზია თავისი სისქითა და ტირეებით.

@@ -2289,6 +2289,8 @@ digits	Malayalam	Malajalam
 	Export Selected Art Only	Eksportuj tylko zaznaczoną kompozycję
 	Number of Colors:	Liczba kolorów:
 	Raster File Format:	Format pliku rastrowego:
+	Include Placed Images	Uwzględnij umieszczone obrazy
+	Include Fill Hatches	Uwzględnij kreskowania wypełnień
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Pełny kolor wymaga wersji 2004 lub nowszej: zapisywany jest najbliższy z 256 kolorów.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Tekst staje się konturami, a obrysy, których linia CAD nie narysuje, stają się wypełnionymi kształtami.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Tekst pozostaje tekstem, a każdy obrys jest linią z grubością i kreskami.

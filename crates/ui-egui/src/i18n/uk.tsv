@@ -2660,6 +2660,8 @@ digits	Malayalam	Малаялам
 	Range:	Діапазон:
 	Raster Effects	Растрові ефекти
 	Raster File Format:	Формат растрового файлу:
+	Include Placed Images	Включати розміщені зображення
+	Include Fill Hatches	Включати штрихування заливок
 	Raster Sample Size:	Розмір растрового зразка:
 	Raster/Vector Balance:	Баланс растрових/векторних:
 	Rasterize	Растеризувати

@@ -707,8 +707,9 @@ with.
 DXF Options: Export As… with the DXF format (`file.exportAs {format: "dxf"}`, then the save dialog), or
 `ui.dxfOptionsDialog {path?, …document.exportDxf options}` for agents, opens the `dxfOptions` dialog. Its fields are
 `document.export` params: `dxfPreset` (`custom`, `cnc`), `version`, `unit` (a unit name such as `Millimeters`), `scale`,
-`scaleLineweights`, `colors` (`8`, `16`, `256`, `true`), `rasterFormat` (`png`, `jpeg`), `preserve` (`appearance`,
-`editability`), `selectedOnly`, `alterPaths`, `outlineText`, plus `path` and the artboard choice. Setting `dxfPreset` to
+`scaleLineweights`, `colors` (`8`, `16`, `256`, `true`), `rasterFormat` (`png`, `jpeg`), `includeImages` (Include
+Placed Images), `preserve` (`appearance`, `editability`), `selectedOnly`, `alterPaths`, `outlineText`, `includeHatches`
+(Include Fill Hatches), plus `path` and the artboard choice. Setting `dxfPreset` to
 `cnc` sets the fields it sets (see `document.exportDxf`), and `dxfPreset` reads `custom` again once one of them is
 changed; setting it to `custom` puts back the defaults. `ui.dialog.confirm` checks them (a bad value, or
 Export Selected Art Only with nothing selected, keeps the dialog open), remembers them for the next DXF Options and
