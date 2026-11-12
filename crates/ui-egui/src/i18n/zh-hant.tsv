@@ -2080,6 +2080,7 @@ file-filter	Templates	範本
 @msg	nothing to distort	沒有可扭曲的內容
 @msg	unknown option `{path}.{k}`	未知的選項 `{path}.{k}`
 @msg	command `{0}` is not available right now: {1}	指令 `{0}` 目前無法使用：{1}
+@msg	command `{id}` is not available right now	指令 `{id}` 目前無法使用
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	`{cmd}` 發生內部錯誤：{msg} (文件維持原狀；請回報此錯誤)
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` 的參數無效：{msg}
 @msg	no active document	沒有作用中的文件

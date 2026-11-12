@@ -5314,6 +5314,7 @@ digits	Malayalam	Malaiàlam
 @msg	column must be true or a number from 1	column ha de ser true o un nombre a partir d’1
 @msg	Combine Slices: the slices have no bounds	Combina els talls: els talls no tenen límits
 @msg	command `{0}` is not available right now: {1}	l’ordre `{0}` no està disponible ara mateix: {1}
+@msg	command `{id}` is not available right now	l’ordre `{id}` no està disponible ara mateix
 @msg	compound paths can only contain paths	els traçats compostos només poden contenir traçats
 @msg	compressed (RLE) bitmaps can't be read yet	encara no es poden llegir els mapes de bits comprimits (RLE)
 @msg	control must be fillStroke, coloring, drawMode or screenMode	control ha de ser fillStroke, coloring, drawMode o screenMode

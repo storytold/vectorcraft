@@ -4626,6 +4626,7 @@ imageTrace	Outline	Ääriviiva
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ei ole väri, kuten "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: enintään {MAX_TABLE} väriä
 @msg	command `{0}` is not available right now: {1}	komento `{0}` ei ole nyt käytettävissä: {1}
+@msg	command `{id}` is not available right now	komento `{id}` ei ole nyt käytettävissä
 @msg	compound paths can only contain paths	yhdistelmäpolut voivat sisältää vain polkuja
 @msg	compressed (RLE) bitmaps can't be read yet	pakattuja (RLE) bittikarttoja ei voi vielä lukea
 @msg	damaged	vaurioitunut

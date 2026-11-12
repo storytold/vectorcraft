@@ -4375,6 +4375,7 @@ imageTrace	Outline	Contour
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` is geen kleur zoals "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maximaal {MAX_TABLE} kleuren
 @msg	command `{0}` is not available right now: {1}	opdracht `{0}` is nu niet beschikbaar: {1}
+@msg	command `{id}` is not available right now	opdracht `{id}` is nu niet beschikbaar
 @msg	compound paths can only contain paths	samengestelde paden kunnen alleen paden bevatten
 @msg	compressed (RLE) bitmaps can't be read yet	gecomprimeerde (RLE) bitmaps kunnen nog niet gelezen worden
 @msg	damaged	beschadigd

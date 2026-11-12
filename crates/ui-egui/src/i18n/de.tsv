@@ -4335,6 +4335,7 @@ theme	Appearance	Erscheinungsbild
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ist keine Farbe wie "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: höchstens {MAX_TABLE} Farben
 @msg	command `{0}` is not available right now: {1}	der Befehl `{0}` ist derzeit nicht verfügbar: {1}
+@msg	command `{id}` is not available right now	der Befehl `{id}` ist derzeit nicht verfügbar
 @msg	compound paths can only contain paths	zusammengesetzte Pfade können nur Pfade enthalten
 @msg	compressed (RLE) bitmaps can't be read yet	komprimierte Bitmaps (RLE) können noch nicht gelesen werden
 @msg	damaged	beschädigt

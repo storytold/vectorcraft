@@ -6311,6 +6311,7 @@ antiAlias	Sharp	शार्प
 @msg	columns {first} and {column} both name the variable `{name}`	कॉलम {first} और {column} दोनों नाम चर `{name}`
 @msg	Combine Slices: the slices have no bounds	स्लाइस को मिलाएं: स्लाइस में कोई सीमा नहीं है
 @msg	command `{0}` is not available right now: {1}	आदेश `{0}` अभी उपलब्ध नहीं है: {1}
+@msg	command `{id}` is not available right now	आदेश `{id}` अभी उपलब्ध नहीं है
 @msg	command must be a shape.* command	command: आदेश एक आकार होना चाहिए।* आदेश
 @msg	commands[{i}]: missing `command`	आदेश [{i}]: लापता `command`
 @msg	composer must be "singleLine" or "everyLine"	composer: संगीतकार "singleLine" या "everyLine" होना चाहिए।

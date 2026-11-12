@@ -4361,6 +4361,7 @@ imageTrace	Outline	Kontur
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` bukan warna seperti "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maksimal {MAX_TABLE} warna
 @msg	command `{0}` is not available right now: {1}	perintah `{0}` tidak tersedia saat ini: {1}
+@msg	command `{id}` is not available right now	perintah `{id}` tidak tersedia saat ini
 @msg	compound paths can only contain paths	jalur majemuk hanya dapat berisi jalur
 @msg	compressed (RLE) bitmaps can't be read yet	bitmap terkompresi (RLE) belum dapat dibaca
 @msg	damaged	rusak

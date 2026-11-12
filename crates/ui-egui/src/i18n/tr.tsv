@@ -4176,6 +4176,7 @@ axis	Both	Her İkisi
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}`, "#ff8800" gibi bir renk değil
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: en fazla {MAX_TABLE} renginde
 @msg	command `{0}` is not available right now: {1}	`{0}` komutu şu anda kullanılamıyor: {1}
+@msg	command `{id}` is not available right now	`{id}` komutu şu anda kullanılamıyor
 @msg	compound paths can only contain paths	bileşik yollar yalnızca yollar içerebilir
 @msg	compressed (RLE) bitmaps can't be read yet	sıkıştırılmış (RLE) bitmapler henüz okunamıyor
 @msg	damaged	hasarlı

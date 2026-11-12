@@ -4298,6 +4298,7 @@ imageTrace	Outline	轮廓
 @msg	nothing to distort	没有可扭曲的内容
 @msg	unknown option `{path}.{k}`	未知选项 `{path}.{k}`
 @msg	command `{0}` is not available right now: {1}	命令 `{0}` 当前不可用：{1}
+@msg	command `{id}` is not available right now	命令 `{id}` 当前不可用
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	`{cmd}` 中出现内部错误：{msg} (文档保持原样；请报告此错误)
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` 的参数无效：{msg}
 @msg	no active document	没有活动文档
