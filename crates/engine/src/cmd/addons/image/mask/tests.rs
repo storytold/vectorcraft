@@ -657,6 +657,23 @@ fn an_envelope_warp_draws_the_masked_pixels() {
     assert!(drawn_at(doc(&s), red)[3] > 0, "the red block");
 }
 
+/// A geometry effect draws the image's masked pixels, and Expand Appearance keeps the mask on the
+/// image it makes.
+#[test]
+fn a_transform_effect_keeps_the_mask() {
+    let (mut s, id) = open(&framed());
+    s.execute(COLOR_MASK, &hide_white()).unwrap();
+    let moved = |p: vectorcraft_geom::Point| vectorcraft_geom::Point::new(p.x + 30.0, p.y);
+    let (white, red) = (moved(pixel_at(doc(&s), id, 1, 1)), moved(pixel_at(doc(&s), id, 4, 4)));
+    s.execute("effect.apply", &json!({"ids": [id.0], "effect": "distort.transform", "params": {"moveH": 30}})).unwrap();
+    assert_eq!(drawn_at(doc(&s), white)[3], 0, "the hidden white");
+    assert_eq!(drawn_at(doc(&s), red), RED, "the red block");
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    let mut masks = vec![];
+    doc(&s).walk(|n| masks.extend(Document::color_mask_of(n).cloned()));
+    assert_eq!(masks.len(), 1, "the expanded image keeps its mask");
+}
+
 /// A pattern whose tile holds a masked image counts as one with a see-through image, so outputs
 /// without transparency expand it before they flatten.
 #[test]

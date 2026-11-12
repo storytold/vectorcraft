@@ -548,7 +548,11 @@ fn as_art_opts(
     let mut art = match &n.kind {
         NodeKind::Image(im) => {
             let frame = shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf);
-            let image = Node::new(n.id, n.kind.clone());
+            let mut image = Node::new(n.id, n.kind.clone());
+            // The image keeps its color mask, so it shows its masked pixels.
+            if let Some(m) = &n.extras().color_mask {
+                image.extras_mut().color_mask = Some(m.clone());
+            }
             let clipped = || {
                 let mut clip = Node::path(n.id, frame.clone(), Appearance::default());
                 if let NodeKind::Path { clipping, .. } = &mut clip.kind {
