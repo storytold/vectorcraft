@@ -113,6 +113,7 @@
 	PDF Presets…	PDF predlošci…
 	Perspective Grid Presets…	Predlošci mreže perspektive…
 	Color Settings…	Postavke boja…
+	Assign Profile	Dodijeli profil
 	Assign Profile…	Dodijeli profil…
 	Keyboard Shortcuts…	Prečice na tastaturi…
 	Import Shortcut Set	Uvezi skup prečica
@@ -196,6 +197,15 @@
 	Expand…	Proširi…
 	Expand Appearance	Proširi izgled
 	Crop Image	Izreži sliku
+	Image Tools	Alati za slike
+	Remove Background…	Ukloni pozadinu…
+	Remove Background	Ukloni pozadinu
+	Background	Pozadina
+	Edge Color	Boja ruba
+	Picked Colors	Odabrane boje
+	Corner Color	Boja uglova
+	Contiguous	Susjedni
+	Each Channel	Svaki kanal
 	Edit Path	Uredi putanju
 	Mask	Maska
 	Rasterize…	Rasteriziraj…
@@ -400,6 +410,8 @@
 	Create Outlines	Kreiraj obrise
 	Optical Margin Alignment	Optičko poravnanje margina
 	Dynamic Text	Dinamički tekst
+	Dynamic Text Presets	Predlošci dinamičkog teksta
+	Arch	Svod
 	Fill with Placeholder Text	Ispuni tekstom čuvara mjesta
 	Insert Inline Symbol	Umetni simbol u redu
 	Show Hidden Characters	Prikaži skrivene znakove
@@ -784,6 +796,15 @@
 	Stun Pulse	Omamljenost
 	Stealth Fade	Nevidljivost
 	Shield Buff	Štit
+	Textures	Teksture
+	Fine Grain	Fino zrno
+	Canvas Weave	Tkano platno
+	Burlap Sack	Jutena vreća
+	Cracked Glaze	Ispucala glazura
+	Mosaic Floor	Mozaični pod
+	Quilted Squares	Prošiveni kvadrati
+	Leaded Glass	Olovno staklo
+	Damp Paper	Vlažni papir
 	Outlines and Rules	Obrisi i linije
 	Hand-Drawn	Ručno crtano
 	Gradient Finishes	Gradijentne završnice
@@ -1564,6 +1585,8 @@ digits	Malayalam	Malajalam
 	Scale at Center	Skaliraj od centra
 	Up/Down:	Gore/dolje:
 	Left/Right:	Lijevo/desno:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko gore/dolje
+	Tate-chu-yoko Left/Right	Tate-chu-yoko lijevo/desno
 	Underline	Podvučeno
 	Vertical Scale %	Okomita skala %
 	Axis	Osa
@@ -1667,6 +1690,7 @@ digits	Malayalam	Malajalam
 	Points: clicks add free points	Tačke: klikovi dodaju slobodne tačke
 	Radial Gradient	Radijalni gradijent
 	Conic Gradient	Konusni gradijent
+	Diamond Gradient	Rombni gradijent
 	Reset to White, Black	Vrati na bijelu, crnu
 	Reverse Gradient	Obrni gradijent
 	Save to Swatches	Sačuvaj u uzorke boja
@@ -2035,6 +2059,7 @@ digits	Malayalam	Malajalam
 	Simulate Paper	Simuliraj papir
 	Use Black Point Compensation	Koristi kompenzaciju crne tačke
 	Working CMYK (don't tag)	Radni CMYK (bez oznake)
+	Working RGB (don't tag)	Radni RGB (bez oznake)
 	{name} (spot)	{name} (spot)
 	Add to Profiles…	Dodaj u profile…
 	Align Stroke to Center	Poravnaj potez po sredini
@@ -4756,6 +4781,7 @@ imageTrace	Outline	Obris
 @msg	not a stored central record	nije sačuvani centralni zapis
 @msg	not a valid plug-in module: {0}	nije važeći modul dodatka: {0}
 @msg	not an EMF or WMF file	nije EMF ni WMF datoteka
+@msg	not an HP-GL file	nije HP-GL datoteka
 @msg	not an export presets file (format `{_1}`)	nije datoteka predložaka izvoza (format `{_1}`)
 @msg	not an export presets file: {e}	nije datoteka predložaka izvoza: {e}
 @msg	not found	nije pronađeno
@@ -4936,7 +4962,7 @@ imageTrace	Outline	Obris
 @msg	unknown format	nepoznat format
 @msg	unknown format `{f}` (Save writes {_1})	nepoznat format `{f}` (Sačuvaj zapisuje {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	nepoznat način slobodnog oblika `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	nepoznata vrsta gradijenta `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	nepoznata vrsta gradijenta `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	nepoznato isticanje `{h}`
 @msg	unknown option `{path}.{k}`	nepoznata opcija `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	nepoznati pretisci `{o}` (preserve, simulate ili discard)
@@ -5662,7 +5688,7 @@ mark-style	Japanese	Japanski
 @msg	span must be "object" or "selection", got {v}	span mora biti "object" ili "selection", dobiveno {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" postavlja `gradient`, a ne uzorak boje
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" postavlja gradijent: navedite `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" postavlja linearni, radijalni ili konusni gradijent, a ne gradijent slobodnog oblika
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" postavlja linearni, radijalni, konusni ili rombni gradijent, a ne gradijent slobodnog oblika
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" postavlja sam gradijent: izostavite `start` i `end` (oni ga već postavljaju u koordinatama dokumenta)
 	Make Image Dynamic	Učini sliku dinamičkom
 	Import Data Sets…	Uvezi skupove podataka…
@@ -6605,6 +6631,7 @@ shape	Open	Otvoren
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Poravnaj s mrežom piksela
+	Align New Objects to Pixel Grid	Poravnaj nove objekte s mrežom piksela
 	Not Aligned to Pixel Grid	Nije poravnato s mrežom piksela
 @msg	side is left or right, not `{s}`	side je left ili right, a ne `{s}`
 	Edit Custom Dictionary	Uredi prilagođeni rječnik

@@ -249,6 +249,7 @@ font-technology	Variable	Променливи
 	Asset Export Settings	Настройки за експортиране на активи
 	Assets	Активи
 	Assign	Задаване
+	Assign Profile	Задаване на профил
 	Assign Profile…	Задаване на профил…
 	Assign:	Задаване:
 	Attach to Active Plane	Прикрепване към активната равнина
@@ -686,6 +687,15 @@ font-technology	Variable	Променливи
 	Created:	Създадено:
 	Crop	Изрязване
 	Crop Image	Изрязване на изображение
+	Image Tools	Инструменти за изображения
+	Remove Background…	Премахване на фона…
+	Remove Background	Премахване на фона
+	Background	Фон
+	Edge Color	Цвят на ръба
+	Picked Colors	Избрани цветове
+	Corner Color	Цвят на ъглите
+	Contiguous	Съседни
+	Each Channel	Всеки канал
 	Edit Path	Редактиране на контура
 	Mask	Маска
 	Crop Marks	Знаци за изрязване
@@ -2264,6 +2274,8 @@ font-technology	Variable	Променливи
 	Optical	Оптично
 	Optical Margin Alignment	Подравняване по оптично поле
 	Dynamic Text	Динамичен текст
+	Dynamic Text Presets	Шаблони за динамичен текст
+	Arch	Арка
 	Optimize for fast web view	Оптимизиране за бърз уеб преглед
 	Optimized	Оптимизирано
 	Options	Опции
@@ -2540,6 +2552,7 @@ digits	Malayalam	Малаялам
 	Radial Glows	Лъчисти сияния
 	Radial Gradient	Лъчист градиент
 	Conic Gradient	Конусен градиент
+	Diamond Gradient	Ромбовиден градиент
 	Radius 1	Радиус 1
 	Radius 2	Радиус 2
 	Radius1	Радиус1
@@ -3081,6 +3094,15 @@ digits	Malayalam	Малаялам
 	Stun Pulse	Зашеметяване
 	Stealth Fade	Скритост
 	Shield Buff	Щит
+	Textures	Текстури
+	Fine Grain	Фино зърно
+	Canvas Weave	Тъкано платно
+	Burlap Sack	Зебло
+	Cracked Glaze	Напукана глазура
+	Mosaic Floor	Мозаечен под
+	Quilted Squares	Капитонирани квадрати
+	Leaded Glass	Оловно стъкло
+	Damp Paper	Влажна хартия
 	Shape	Фигура
 	Shape Builder	Създател на фигури
 	Shape Builder Regions	Области на създателя на фигури
@@ -3447,6 +3469,8 @@ digits	Malayalam	Малаялам
 	Scale at Center	Мащабиране от центъра
 	Up/Down:	Нагоре/надолу:
 	Left/Right:	Наляво/надясно:
+	Tate-chu-yoko Up/Down	Тате-чу-йоко нагоре/надолу
+	Tate-chu-yoko Left/Right	Тате-чу-йоко наляво/надясно
 	Temperature	Температура
 	Temperature/Tint…	Температура/Нюанс…
 	Template	Шаблон
@@ -3781,6 +3805,7 @@ digits	Malayalam	Малаялам
 	Windows	Windows
 	Working CMYK	Работен CMYK
 	Working CMYK (don't tag)	Работен CMYK (без етикет)
+	Working RGB (don't tag)	Работен RGB (без етикет)
 	Workspace	Работно пространство
 	Workspace {i}	Работно пространство {i}
 	Wrinkle Tool	Инструмент „Набръчкване“
@@ -4365,6 +4390,7 @@ axis	Both	И двете
 @msg	not a stored central record	не е съхранен централен запис
 @msg	not a valid plug-in module: {0}	не е валиден модул за плъгин: {0}
 @msg	not an EMF or WMF file	не е EMF или WMF файл
+@msg	not an HP-GL file	не е HP-GL файл
 @msg	not found	не е открито
 @msg	not in pattern editing mode	не е в режим на редактиране на мостра
 @msg	finish editing the pattern first	първо завършете редактирането на мострата
@@ -4537,7 +4563,7 @@ axis	Both	И двете
 @msg	unknown format	непознат формат
 @msg	unknown format `{f}` (Save writes {_1})	непознат формат `{f}` (Запазването записва {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	непознат режим на свободна форма `{m}` (точки, линии)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	непознат вид градиент `{k}` (линеен, радиален, конусен, свободна форма)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	непознат вид градиент `{k}` (линеен, радиален, конусен, ромбовиден, свободна форма)
 @msg	unknown highlight `{h}`	непознат акцент `{h}`
 @msg	unknown option `{path}.{k}`	непозната опция `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	непознати надписи `{o}` (запазване, симулиране или отхвърляне)
@@ -5641,7 +5667,7 @@ theme	Appearance	Външен вид
 @msg	span must be "object" or "selection", got {v}	span трябва да е "object" или "selection", а не {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" поставя `gradient`, а не мостра
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" поставя градиент: задайте `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" поставя линеен, радиален или конусен градиент, а не свободен
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" поставя линеен, радиален, конусен или ромбовиден градиент, а не свободен
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" поставя самия градиент: пропуснете `start` и `end` (те вече го поставят в координатите на документа)
 	Make Image Dynamic	Динамично изображение
 	Import Data Sets…	Импортиране на набори от данни…
@@ -6554,6 +6580,7 @@ breakText	Glyphs	Глифи
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Подравняване към пикселната мрежа
+	Align New Objects to Pixel Grid	Подравняване на новите обекти към пикселната мрежа
 	Not Aligned to Pixel Grid	Неподравнени към пикселната мрежа
 @msg	side is left or right, not `{s}`	side е left или right, а не `{s}`
 	Edit Custom Dictionary	Редактиране на потребителски речник

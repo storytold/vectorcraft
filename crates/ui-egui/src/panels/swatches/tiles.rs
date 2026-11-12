@@ -142,6 +142,7 @@ pub(crate) fn list_icons(ui: &Ui, r: Rect, paint: &Paint, global: bool, spot: bo
                 GradientKind::Linear => "dc-grad-linear",
                 GradientKind::Radial => "dc-grad-radial",
                 GradientKind::Conic => "dc-grad-conic",
+                GradientKind::Diamond => "dc-grad-diamond",
                 GradientKind::Freeform => "dc-grad-freeform",
             };
             icons::paint(ui, icon, kind.expand(1.0), t.icon);

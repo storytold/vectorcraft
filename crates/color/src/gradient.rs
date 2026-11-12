@@ -19,13 +19,18 @@ pub enum GradientKind {
     /// the page from the vector, with a seam where the last stop meets the first. A negative
     /// `aspect` mirrors the sweep (see [`GradientGeom::transform`]).
     Conic,
+    /// Diamond gradients: the stops run from the center (`start`) out to a square whose
+    /// half-diagonal is the vector (a diamond when the vector is level), stretched across the
+    /// vector by `aspect` (see [`GradientGeom::diamond_frame`]).
+    Diamond,
 }
 
 impl GradientKind {
     /// Every kind, in the order the Gradient panel lists them.
-    pub const ALL: [GradientKind; 4] = [GradientKind::Linear, GradientKind::Radial, GradientKind::Conic, GradientKind::Freeform];
-    /// Parse a kind name (`linear`, `radial`, `conic`, `freeform`; any case). `angle` and
-    /// `conical` also mean conic.
+    pub const ALL: [GradientKind; 5] =
+        [GradientKind::Linear, GradientKind::Radial, GradientKind::Conic, GradientKind::Diamond, GradientKind::Freeform];
+    /// Parse a kind name (`linear`, `radial`, `conic`, `diamond`, `freeform`; any case). `angle`
+    /// and `conical` also mean conic.
     pub fn parse(s: &str) -> Option<Self> {
         if s.eq_ignore_ascii_case("angle") || s.eq_ignore_ascii_case("conical") {
             return Some(GradientKind::Conic);
@@ -38,12 +43,13 @@ impl GradientKind {
             GradientKind::Radial => "Radial",
             GradientKind::Freeform => "Freeform",
             GradientKind::Conic => "Conic",
+            GradientKind::Diamond => "Diamond",
         }
     }
-    /// Is it placed by a center (`start`) and an extent ellipse (radial and conic), rather than
-    /// by a line?
+    /// Is it placed by a center (`start`) and an extent around it (radial, conic and diamond),
+    /// rather than by a line?
     pub fn is_centered(self) -> bool {
-        matches!(self, GradientKind::Radial | GradientKind::Conic)
+        matches!(self, GradientKind::Radial | GradientKind::Conic | GradientKind::Diamond)
     }
 }
 
@@ -668,13 +674,22 @@ fn one64() -> f64 {
 impl GradientGeom {
     /// Default placement for a bounding box: linear spans the box through the centre at `angle_deg`,
     /// radial and conic are centered with radius = half the larger dimension and their vector at
-    /// `angle_deg`.
+    /// `angle_deg`, and diamond is centered with its vector at `angle_deg`, its square's edge
+    /// running through the box's farthest corner (at 0 or 90 degrees, through all four).
     pub fn fit(kind: GradientKind, b: Rect, angle_deg: f64) -> Self {
         let c = b.center();
         let a = angle_deg.to_radians();
         let d = Vec2::new(a.cos(), -a.sin());
         match kind {
             GradientKind::Radial | GradientKind::Conic => Self { start: c, end: c + d * (b.width().max(b.height()) / 2.0), aspect: 1.0, focal: None },
+            GradientKind::Diamond => {
+                // The square through the box's farthest corner: the largest reach along the vector
+                // plus across it, at one corner.
+                let (w, h) = (b.width() / 2.0, b.height() / 2.0);
+                let level = |x: f64, y: f64| (x * d.x + y * d.y).abs() + (y * d.x - x * d.y).abs();
+                let half = level(w, h).max(level(w, -h));
+                Self { start: c, end: c + d * half, aspect: 1.0, focal: None }
+            }
             _ => {
                 // Project the box corners onto the direction to cover the whole box.
                 let half = (b.width() * d.x.abs() + b.height() * d.y.abs()) / 2.0;
@@ -694,6 +709,10 @@ impl GradientGeom {
     /// other way: exact for moves, rotations, uniform scales and mirrors, and the nearest frame
     /// that keeps the seam under a shear or a non-uniform scale. A conic whose vector has no
     /// length, or whose aspect is 0, still has the sign of its aspect flipped by a mirror.
+    /// Diamond gradients keep their vector (a corner of the square) the same way, with the size
+    /// of the mapped extent across it as their aspect: exact for moves, rotations, scales along or
+    /// across the vector and mirrors, and the nearest square stretched across its vector under a
+    /// shear or another scale.
     pub fn transform(&mut self, a: Affine, kind: GradientKind) {
         // The focal point is a point like any other.
         self.focal = self.focal.map(|f| a * f);
@@ -722,6 +741,14 @@ impl GradientGeom {
                 (true, true) => 0.0f64.copysign(if self.aspect.is_sign_negative() != mirror { -1.0 } else { 1.0 }),
                 (true, false) => aspect,
             };
+            return;
+        }
+        if kind == GradientKind::Diamond {
+            let (lu, lw) = (lin(u), lin(perp(u) * self.aspect));
+            self.start = start;
+            self.end = start + lu;
+            let aspect = (lw.dot(perp(lu)) / lu.hypot2()).abs();
+            self.aspect = if lu.hypot2() > 1e-18 && aspect.is_finite() { aspect } else { 1.0 };
             return;
         }
         if kind != GradientKind::Radial {
@@ -768,12 +795,21 @@ impl GradientGeom {
     /// measured from the focal point (each level is the ellipse scaled about the line from the
     /// focal point to the centre). For conic gradients it is the turn from the vector in
     /// [`Self::conic_frame`], clockwise on the page (counterclockwise when mirrored), in 0..=1.
+    /// For diamond gradients it is the size of the square through `p`, as a fraction of the one
+    /// [`Self::diamond_frame`] gives (1 everywhere for a diamond without a frame).
     pub fn param_at(&self, kind: GradientKind, p: Point) -> f64 {
         if kind == GradientKind::Conic {
             let q = (self.conic_frame().inverse() * p).to_vec2();
             let t = q.y.atan2(q.x) / std::f64::consts::TAU;
             let t = if t < 0.0 { t + 1.0 } else { t };
             return if t.is_finite() { t.clamp(0.0, 1.0) } else { 0.0 };
+        }
+        if kind == GradientKind::Diamond {
+            // Without a frame the square has no inside: every point is past its edge.
+            let Some(m) = self.diamond_frame() else { return 1.0 };
+            let q = (m.inverse() * p).to_vec2();
+            let t = q.x.abs() + q.y.abs();
+            return if t.is_nan() { 1.0 } else { t };
         }
         let u = self.end - self.start;
         if u.hypot2() < 1e-18 {
@@ -835,30 +871,50 @@ impl GradientGeom {
     pub fn conic_wedges(&self, b: Rect, n: usize, overlap: bool) -> Vec<(Vec<Point>, f64)> {
         let n = n.clamp(1, MAX_CONIC_WEDGES);
         let frame = self.conic_frame();
-        let to_unit = frame.inverse();
-        let corners = [b.origin(), Point::new(b.x1, b.y0), Point::new(b.x1, b.y1), Point::new(b.x0, b.y1)];
-        let reach = corners.iter().map(|&c| (to_unit * c).to_vec2().hypot()).fold(0.0f64, f64::max).max(1e-6);
-        let reach = if reach.is_finite() { reach * 1.01 } else { 1.0 };
-        // Arc points at most ARC of a turn apart, at a radius where their chords stay outside
-        // `reach`.
-        const ARC: f64 = 1.0 / 32.0;
-        let r = reach / (std::f64::consts::PI * ARC).cos();
-        let at = |turn: f64| {
-            let a = turn * std::f64::consts::TAU;
-            frame * Point::new(r * a.cos(), r * a.sin())
-        };
-        let center = frame * Point::ORIGIN;
+        let r = fan_radius(frame, b);
         (0..n)
             .map(|k| {
                 let from = k as f64 / n as f64;
                 let to = if overlap { 1.0 } else { (k + 1) as f64 / n as f64 };
-                let steps = ((to - from) / ARC).ceil().max(1.0) as usize;
-                let mut pts = Vec::with_capacity(steps + 2);
-                pts.push(center);
-                pts.extend((0..=steps).map(|i| at(from + (to - from) * i as f64 / steps as f64)));
-                (pts, (k as f64 + 0.5) / n as f64)
+                (fan(frame, r, from, to), (k as f64 + 0.5) / n as f64)
             })
             .collect()
+    }
+
+    /// The frame a diamond gradient is drawn in: its [`Self::unit_frame`], which maps the square
+    /// with corners (±1, 0) and (0, ±1) onto the diamond (its first corner at the end of the
+    /// vector). `None` when the square is flat or not finite (a vector without length, an aspect
+    /// of 0, or a file's out-of-range numbers): such a diamond has no inside, and every point
+    /// takes its last stop.
+    pub fn diamond_frame(&self) -> Option<Affine> {
+        self.unit_frame().filter(|m| m.is_finite() && m.determinant().abs() > 1e-18)
+    }
+
+    /// A diamond gradient as four linear gradients, one for each quadrant of its
+    /// [`Self::diamond_frame`], for formats without diamond gradients: each quadrant's outline (the
+    /// center, then an arc that reaches past every corner of `b`) and the linear gradient that
+    /// equals the diamond there (its stops run across the square's edge in that quadrant), in the
+    /// order they are drawn. Each of the first three runs on past its last edge under the next,
+    /// and the first also back past its first edge under the last, so every edge drawn lies on
+    /// the quadrant before it and no hairline of what lies below shows between them; where they
+    /// overlap, translucent stops would add up, so the stops must be opaque. `None` for a diamond
+    /// without a frame.
+    pub fn diamond_quadrants(&self, b: Rect) -> Option<[(Vec<Point>, GradientGeom); 4]> {
+        let frame = self.diamond_frame()?;
+        let r = fan_radius(frame, b);
+        Some(std::array::from_fn(|k| {
+            let first = k as f64 / 4.0;
+            let (from, to) = match k {
+                0 => (-0.125, 0.375),
+                3 => (0.75, 1.0),
+                _ => (first, first + 0.375),
+            };
+            // The quadrant's corner of the square, halfway along whose edge t is 1/2.
+            let (sx, sy) = [(1.0, 1.0), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)][k];
+            let mut geom = GradientGeom { start: Point::ORIGIN, end: Point::new(sx / 2.0, sy / 2.0), aspect: 1.0, focal: None };
+            geom.transform(frame, GradientKind::Linear);
+            (fan(frame, r, from, to), geom)
+        }))
     }
 
     /// The map that squashes a radial gradient's circle (centre `start`, radius the vector's
@@ -905,6 +961,34 @@ impl GradientGeom {
     pub fn length(&self) -> f64 {
         (self.end - self.start).hypot()
     }
+}
+
+/// Arc points of [`fan`] are at most this much of a turn apart.
+const FAN_ARC: f64 = 1.0 / 32.0;
+
+/// The radius of the unit circle of `frame` at which the chords of [`fan`]'s arcs stay outside
+/// every corner of `b`.
+fn fan_radius(frame: Affine, b: Rect) -> f64 {
+    let to_unit = frame.inverse();
+    let corners = [b.origin(), Point::new(b.x1, b.y0), Point::new(b.x1, b.y1), Point::new(b.x0, b.y1)];
+    let reach = corners.iter().map(|&c| (to_unit * c).to_vec2().hypot()).fold(0.0f64, f64::max).max(1e-6);
+    let reach = if reach.is_finite() { reach * 1.01 } else { 1.0 };
+    reach / (std::f64::consts::PI * FAN_ARC).cos()
+}
+
+/// The sector of `frame`'s unit circle, scaled to radius `r`, from turn `from` to turn `to`
+/// (counted from the frame's x axis toward its y axis) as an outline: the center, then points on
+/// the arc at most [`FAN_ARC`] of a turn apart.
+fn fan(frame: Affine, r: f64, from: f64, to: f64) -> Vec<Point> {
+    let at = |turn: f64| {
+        let a = turn * std::f64::consts::TAU;
+        frame * Point::new(r * a.cos(), r * a.sin())
+    };
+    let steps = ((to - from) / FAN_ARC).ceil().max(1.0) as usize;
+    let mut pts = Vec::with_capacity(steps + 2);
+    pts.push(frame * Point::ORIGIN);
+    pts.extend((0..=steps).map(|i| at(from + (to - from) * i as f64 / steps as f64)));
+    pts
 }
 
 /// `p` moved from box `from` to box `to`, keeping its position relative to the box (along a side
@@ -1009,7 +1093,7 @@ impl GradientPaint {
     pub fn draws_as_pixels(&self, fill: bool) -> bool {
         self.gradient.kind == GradientKind::Freeform || (fill && self.gradient.dither) || !self.gradient.method.is_classic()
     }
-    /// A linear, radial or conic gradient placed on box `bounds` as a `cols` × `rows` grid of
+    /// A linear, radial, conic or diamond gradient placed on box `bounds` as a `cols` × `rows` grid of
     /// unpremultiplied RGBA8 pixels over `area`, row by row, each sampled at its centre (colours
     /// as `rgb` gives them, mixed as the renderer mixes them: [`Ramp`]). Dithered and painting a
     /// fill (`fill`; dither applies to fills only), each colour channel of pixel (column, row) gets
@@ -1040,7 +1124,7 @@ impl GradientPaint {
     ) -> impl Iterator<Item = [u8; 4]> + use<> {
         self.grid(Ramp::new(&self.gradient, rgb), bounds, area, cols, rows, cells, fill, false)
     }
-    /// [`Self::pixels`] of a linear, radial or conic gradient whose stops are all CMYK, as C, M, Y, K
+    /// [`Self::pixels`] of a linear, radial, conic or diamond gradient whose stops are all CMYK, as C, M, Y, K
     /// and opacity levels mixed from the stops' inks; `None` when a stop is in another model,
     /// there are no stops, or a Perceptual curve has too many stops for [`Gradient::ink_mixes`].
     /// Dither's noise adds no ink where the ramp has none.

@@ -175,6 +175,52 @@ fn is_attribute_run(units: &[u16]) -> bool {
     true
 }
 
+/// Reads one pseudo-attribute of an XML declaration at `at`: white space, `name`, `=` with
+/// optional white space around it, and a quoted value. Returns the offset after the closing
+/// quote and the value.
+fn decl_attribute<'a>(body: &'a [u16], at: usize, name: &str) -> Option<(usize, &'a [u16])> {
+    let start = skip_xml_space(body, at);
+    let name = parser_units(name);
+    if start == at || !body.get(start..)?.starts_with(&name) {
+        return None;
+    }
+    let eq = skip_xml_space(body, start + name.len());
+    if body.get(eq) != Some(&EQ) {
+        return None;
+    }
+    let open = skip_xml_space(body, eq + 1);
+    let quote = body.get(open).copied().filter(|&q| q == DQUOTE || q == SQUOTE)?;
+    let len = body.get(open + 1..)?.iter().position(|&c| c == quote)?;
+    Some((open + len + 2, body.get(open + 1..open + 1 + len)?))
+}
+
+/// Whether `body`, the text between `<?xml` and `?>`, is an XML declaration's version, optional
+/// encoding, optional standalone flag and optional trailing white space (XML 1.0 productions 23
+/// to 26, 32, 80 and 81).
+fn is_xml_decl_body(body: &[u16]) -> bool {
+    let is_digit = |c: &u16| (u16::from(b'0')..=u16::from(b'9')).contains(c);
+    let is_letter = |c: &u16| (u16::from(b'A')..=u16::from(b'Z')).contains(c) || (u16::from(b'a')..=u16::from(b'z')).contains(c);
+    let Some((mut at, version)) = decl_attribute(body, 0, "version") else { return false };
+    let digits = version.strip_prefix(parser_units("1.").as_slice()).unwrap_or_default();
+    if digits.is_empty() || !digits.iter().all(is_digit) {
+        return false;
+    }
+    if let Some((next, encoding)) = decl_attribute(body, at, "encoding") {
+        let Some((first, rest)) = encoding.split_first() else { return false };
+        if !is_letter(first) || !rest.iter().all(|c| is_letter(c) || is_digit(c) || matches!(*c, 0x2D | 0x2E | 0x5F)) {
+            return false;
+        }
+        at = next;
+    }
+    if let Some((next, standalone)) = decl_attribute(body, at, "standalone") {
+        if standalone != parser_units("yes").as_slice() && standalone != parser_units("no").as_slice() {
+            return false;
+        }
+        at = next;
+    }
+    skip_xml_space(body, at) == body.len()
+}
+
 /// An XML name without a prefix (ECMA-357 section 13.1.2.1).
 pub(crate) fn is_ncname(units: &[u16]) -> bool {
     let Some((&first, rest)) = units.split_first() else { return false };
@@ -2305,8 +2351,30 @@ impl Interp {
         src.get(from..)?.windows(needle.len()).position(|w| w == needle).map(|i| from + i)
     }
 
+    /// Takes fuel for `units` code units that the parser scanned, on top of the fuel of the step
+    /// that scanned them, so a short run costs nothing extra.
+    fn xml_scan_fuel(&mut self, units: usize) -> JsResult<()> {
+        self.xml_take_fuel(units / UNITS_PER_FUEL)
+    }
+
+    /// The offset after the white space at `src[pos]`, taking fuel for its length.
+    fn skip_space(&mut self, src: &[u16], pos: usize) -> JsResult<usize> {
+        let end = skip_xml_space(src, pos);
+        self.xml_scan_fuel(end - pos)?;
+        Ok(end)
+    }
+
+    /// The offset after the XML name at `src[pos]`, taking fuel for the units it scanned.
     fn read_name(&mut self, src: &[u16], pos: usize) -> JsResult<usize> {
-        scan_name(src, pos).ok_or_else(|| self.syntax("invalid XML name"))
+        if let Some(end) = scan_name(src, pos) {
+            self.xml_scan_fuel(end - pos)?;
+            return Ok(end);
+        }
+        if src.get(pos).copied().is_some_and(is_name_start) {
+            let scanned = src.get(pos..).unwrap_or_default().iter().skip(1).take_while(|&&c| is_name_part(c)).count();
+            self.xml_scan_fuel(scanned + 1)?;
+        }
+        Err(self.syntax("invalid XML name"))
     }
 
     fn check_units(&mut self, src: &[u16], from: usize, to: usize) -> JsResult<()> {
@@ -2390,9 +2458,7 @@ impl Interp {
         let mut raw_attrs: Vec<(usize, usize, Vec<u16>)> = Vec::new();
         let closes = loop {
             let before = at;
-            while src.get(at).copied().is_some_and(is_xml_space) {
-                at += 1;
-            }
+            at = self.skip_space(src, at)?;
             match src.get(at).copied() {
                 None => return Err(self.syntax("unterminated XML tag")),
                 Some(SLASH) if src.get(at + 1) == Some(&GT) => {
@@ -2407,26 +2473,22 @@ impl Interp {
                 Some(_) => {
                     self.use_fuel()?;
                     let end = self.read_name(src, at)?;
-                    let mut p = end;
-                    while src.get(p).copied().is_some_and(is_xml_space) {
-                        p += 1;
-                    }
+                    let p = self.skip_space(src, end)?;
                     if src.get(p) != Some(&EQ) {
                         return Err(self.syntax("expected '=' after an attribute name"));
                     }
-                    p += 1;
-                    while src.get(p).copied().is_some_and(is_xml_space) {
-                        p += 1;
-                    }
+                    let p = self.skip_space(src, p + 1)?;
                     let quote = match src.get(p).copied() {
                         Some(q @ (DQUOTE | SQUOTE)) => q,
                         _ => return Err(self.syntax("expected a quoted attribute value")),
                     };
                     let value_start = p + 1;
                     let Some(value_end) = Self::find_from(src, value_start, &[quote]) else {
+                        self.xml_text_fuel(src.len().saturating_sub(value_start))?;
                         return Err(self.syntax("unterminated attribute value"));
                     };
                     if src.get(value_start..value_end).is_some_and(|v| v.contains(&LT)) {
+                        self.xml_text_fuel(value_end - value_start)?;
                         return Err(self.syntax("'<' cannot appear in an attribute value"));
                     }
                     let mut value = Vec::new();
@@ -2528,10 +2590,7 @@ impl Interp {
     fn parse_close_tag(&mut self, src: &[u16], pos: usize, open: &mut Vec<ObjId>, names: &mut Vec<(usize, usize)>) -> JsResult<usize> {
         let name_start = pos + 2;
         let name_end = self.read_name(src, name_start)?;
-        let mut at = name_end;
-        while src.get(at).copied().is_some_and(is_xml_space) {
-            at += 1;
-        }
+        let at = self.skip_space(src, name_end)?;
         if src.get(at) != Some(&GT) {
             return Err(self.syntax("expected '>' at the end of a closing tag"));
         }
@@ -2552,14 +2611,17 @@ impl Interp {
         held.add(self, string_bytes(source.len()).saturating_mul(2))?;
         let settings = self.xml_settings()?;
         let mut src = source;
-        let mut offset_start = 0;
-        while src.get(offset_start).copied().is_some_and(is_xml_space) {
-            offset_start += 1;
-        }
+        let offset_start = skip_xml_space(src, 0);
         if src.get(offset_start..).is_some_and(|r| r.starts_with(&parser_units("<?xml")) && r.get(5).copied().is_some_and(is_xml_space)) {
             let Some(end) = Self::find_from(src, offset_start, &parser_units("?>")) else {
+                self.xml_text_fuel(src.len())?;
                 return Err(self.syntax("unterminated XML declaration"));
             };
+            self.xml_text_fuel(end + 2)?;
+            self.check_units(src, offset_start, end)?;
+            if !is_xml_decl_body(src.get(offset_start + 5..end).unwrap_or_default()) {
+                return Err(self.syntax("invalid XML declaration"));
+            }
             src = src.get(end + 2..).unwrap_or_default();
         }
         let mut pos = 0;
@@ -2573,6 +2635,7 @@ impl Interp {
                 let end = Self::find_from(src, pos, &[LT]).unwrap_or(src.len());
                 let section_end = parser_units("]]>");
                 if src.get(pos..end).is_some_and(|run| run.windows(3).any(|w| w == section_end)) {
+                    self.xml_text_fuel(end - pos)?;
                     return Err(self.syntax("']]>' cannot appear in XML text"));
                 }
                 self.decode_into(src, pos, end, &mut text, false)?;
@@ -2582,6 +2645,7 @@ impl Interp {
             let rest = src.get(pos..).unwrap_or_default();
             if rest.starts_with(&parser_units("<![CDATA[")) {
                 let Some(end) = Self::find_from(src, pos + 9, &parser_units("]]>")) else {
+                    self.xml_text_fuel(src.len() - pos)?;
                     return Err(self.syntax("unterminated CDATA section"));
                 };
                 self.xml_text_fuel(end - pos)?;
@@ -2593,12 +2657,13 @@ impl Interp {
             self.flush_text(&mut text, settings.ignore_whitespace, &open, &mut roots)?;
             if rest.starts_with(&parser_units("<!--")) {
                 let Some(end) = Self::find_from(src, pos + 4, &parser_units("--")) else {
+                    self.xml_text_fuel(src.len() - pos)?;
                     return Err(self.syntax("unterminated XML comment"));
                 };
+                self.xml_text_fuel(end - pos)?;
                 if src.get(end + 2) != Some(&GT) {
                     return Err(self.syntax("'--' cannot appear in an XML comment"));
                 }
-                self.xml_text_fuel(end - pos)?;
                 self.check_units(src, pos + 4, end)?;
                 if !settings.ignore_comments {
                     let value = Str::from_units(src.get(pos + 4..end).unwrap_or_default().to_vec());
@@ -2623,6 +2688,7 @@ impl Interp {
                     return Err(self.syntax("'xml' cannot name a processing instruction"));
                 }
                 let Some(end) = Self::find_from(src, name_end, &parser_units("?>")) else {
+                    self.xml_text_fuel(src.len() - pos)?;
                     return Err(self.syntax("unterminated processing instruction"));
                 };
                 self.xml_text_fuel(end - pos)?;
