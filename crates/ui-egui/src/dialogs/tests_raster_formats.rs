@@ -177,8 +177,13 @@ fn export_for_icon_composer_writes_a_file_per_layer_into_a_new_folder() {
             let _ = std::fs::remove_dir_all(&self.0);
         }
     }
-    let dir = Cleanup(std::env::temp_dir().join(format!("vc-ui-iconcomposer-{}", std::process::id())));
-    let _ = std::fs::remove_dir_all(&dir.0);
+    // Made here, never one already there, so the cleanup removes only this test's files.
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+    let dir = (0..1000)
+        .map(|i| std::env::temp_dir().join(format!("vc-ui-iconcomposer-{}-{nanos}-{i}", std::process::id())))
+        .find(|d| std::fs::create_dir(d).is_ok())
+        .map(Cleanup)
+        .unwrap();
     set(&mut app, "folder", json!(dir.0.to_string_lossy()));
     let r = confirm(&mut app).unwrap();
     assert!(app.ui.dialog.is_none());

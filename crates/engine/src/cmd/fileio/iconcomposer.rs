@@ -54,8 +54,9 @@ struct LayerFile {
 
 /// Where each layer file goes as soon as it is encoded.
 enum Sink<'a> {
-    /// Written into a new folder in `parent`, made at the first file (so a failed export leaves
-    /// none), with each artboard's sub-folder made at its first file.
+    /// Written into a new folder in `parent`, made at the first file, with each artboard's
+    /// sub-folder made at its first file. An export that fails removes what it wrote
+    /// ([`Sink::abandon`]).
     Folder { parent: &'a str, name: &'a str, folder: Option<String>, subs: Vec<String>, written: Vec<String> },
     /// Held for the reply, at most [`MAX_HELD_BYTES`] in all.
     Held { files: Vec<LayerFile>, bytes: usize },
@@ -87,6 +88,20 @@ impl Sink<'_> {
             }
         }
         Ok(())
+    }
+
+    /// Undo a failed export: remove the files it wrote, then its sub-folders and folder when they
+    /// are empty. Only what this export made is touched.
+    fn abandon(&self) {
+        if let Sink::Folder { folder: Some(folder), subs, written, .. } = self {
+            for path in written.iter().rev() {
+                super::remove_made(path);
+            }
+            for sub in subs.iter().rev() {
+                super::remove_made(&format!("{folder}/{sub}"));
+            }
+            super::remove_made(folder);
+        }
     }
 }
 
@@ -121,7 +136,13 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
         Some(parent) => Sink::Folder { parent, name: &name, folder: None, subs: vec![], written: vec![] },
         None => Sink::Held { files: vec![], bytes: 0 },
     };
-    let warnings = layer_files(doc, &boards, subfolders.as_deref(), format, &mut sink)?;
+    let warnings = match layer_files(doc, &boards, subfolders.as_deref(), format, &mut sink) {
+        Ok(w) => w,
+        Err(e) => {
+            sink.abandon();
+            return Err(e);
+        }
+    };
     match sink {
         Sink::Folder { folder, written, .. } => Ok(json!({ "folder": folder, "files": written, "warnings": warnings })),
         Sink::Held { files, .. } if o.zip => {
@@ -245,4 +266,25 @@ fn new_folder(parent: &str, name: &str) -> Result<String> {
         }
     }
     Err(bad(C, format!("{parent}: could not make a new folder for `{name}`")))
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::super::tests_iconcomposer::TempFolder;
+    use super::*;
+
+    #[test]
+    fn a_failed_export_removes_what_it_wrote_and_nothing_else() {
+        let dir = TempFolder::new("abandon");
+        let parent = dir.0.to_string_lossy().to_string();
+        let other = dir.0.join("other.txt");
+        std::fs::write(&other, b"keep").unwrap();
+        let mut sink = Sink::Folder { parent: &parent, name: "Icon", folder: None, subs: vec![], written: vec![] };
+        sink.put(Some("A"), LayerFile { path: "A/1.back.svg".into(), bytes: b"<svg/>".to_vec() }).unwrap();
+        sink.put(Some("B"), LayerFile { path: "B/1.back.svg".into(), bytes: b"<svg/>".to_vec() }).unwrap();
+        assert!(dir.0.join("Icon/B/1.back.svg").is_file());
+        sink.abandon();
+        let left: Vec<_> = std::fs::read_dir(&dir.0).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(left, ["other.txt"], "the export's folder is gone; the file beside it stays");
+    }
 }

@@ -211,6 +211,19 @@ pub(crate) fn create_new_dir(path: &str) -> Result<bool> {
     }
 }
 
+/// Remove the file or empty folder at `path` that the request being served made itself, undoing
+/// an export that failed part way. Best effort: what can't be removed stays, and a folder that is
+/// not empty is never removed, so nothing else is lost.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn remove_made(path: &str) {
+    if may_write(path).is_err() {
+        return;
+    }
+    // Ignored: what is left of a failed export is only clutter, and the export's own error is
+    // the one to report.
+    let _ = std::fs::remove_file(path).or_else(|_| std::fs::remove_dir(path));
+}
+
 /// Write `bytes` to a new file at `path`. A file already at `path` is an error and is never
 /// replaced. When the write fails part way, the file it started is removed.
 #[cfg(not(target_arch = "wasm32"))]
@@ -534,6 +547,10 @@ pub(crate) fn create_dir(path: &str) -> Result<()> {
 pub(crate) fn create_new_dir(path: &str) -> Result<bool> {
     Err(no_fs(path))
 }
+
+/// Nothing to remove: the web build makes no files.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn remove_made(_: &str) {}
 
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn write_new_file(path: &str, _: &[u8]) -> Result<()> {

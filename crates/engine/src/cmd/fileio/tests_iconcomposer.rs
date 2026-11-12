@@ -172,16 +172,22 @@ fn zip_holds_the_folder() {
     assert!(text.contains(&format!("{title}/2.front.svg")), "entries are inside the folder");
 }
 
-/// A temporary folder, removed when the test ends, failing or not.
+/// A temporary folder this test made itself (never one already there), removed when the test
+/// ends, failing or not.
 #[cfg(not(target_arch = "wasm32"))]
-struct TempFolder(std::path::PathBuf);
+pub(super) struct TempFolder(pub(super) std::path::PathBuf);
 
 #[cfg(not(target_arch = "wasm32"))]
 impl TempFolder {
-    fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("vc-iconcomposer-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        Self(dir)
+    pub(super) fn new(name: &str) -> Self {
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+        for i in 0..1000 {
+            let dir = std::env::temp_dir().join(format!("vc-iconcomposer-{name}-{}-{nanos}-{i}", std::process::id()));
+            if std::fs::create_dir(&dir).is_ok() {
+                return Self(dir);
+            }
+        }
+        panic!("no new temporary folder for {name}");
     }
 }
 
@@ -221,5 +227,5 @@ fn a_failed_export_to_a_folder_makes_no_folder() {
     let mut empty = Session::new();
     empty.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     assert!(empty.execute(C, &json!({"folder": dir.0.to_string_lossy()})).is_err());
-    assert!(!dir.0.exists());
+    assert_eq!(std::fs::read_dir(&dir.0).unwrap().count(), 0, "no folder is made");
 }
