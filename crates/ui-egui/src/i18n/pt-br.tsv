@@ -6894,6 +6894,19 @@ swatch	Yellow Green	Verde-amarelado
 @plural	{n} line cut|{n} lines cut	{n} linha cortada|{n} linhas cortadas
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devem ser números de linhas que o console mantém, `first` antes de `last`
 
+# Learn panel
+	Learn	Aprender
+	Explore tutorials	Explorar tutoriais
+	For you	Para você
+	Skills	Habilidades
+	Get started	Primeiros passos
+	Quick skill guide	Guia rápido de habilidades
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutoriais práticos curtos das ferramentas essenciais, agrupados por habilidade. Escolha uma habilidade para ver os tutoriais dela.
+	List Tutorials	Listar Tutoriais
+	Show Tutorial	Mostrar Tutorial
+@msg	missing `tutorial` (see learn.list)	falta `tutorial` (veja learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial desconhecido `{id}` (veja learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Atualizar Efeitos Adiados
 	Deferred Effects	Efeitos Adiados

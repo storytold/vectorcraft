@@ -81,6 +81,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         .or_else(|| crate::workspaces::run_command(app, id, p))
         .or_else(|| crate::edit_toolbar::command(app, id, p))
         .or_else(|| crate::custom_toolbars::command(app, id, p))
+        .or_else(|| crate::panels::learn::command(app, id, p))
     {
         return Some(r);
     }

@@ -6821,6 +6821,19 @@ breakText	Glyphs	Glyfy
 @plural	{n} line cut|{n} lines cut	{n} řádek zkrácen|{n} řádky zkráceny|{n} řádků zkráceno
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` a `last` musí být čísla řádků, které konzole uchovává, `first` před `last`
 
+# Learn panel
+	Learn	Výuka
+	Explore tutorials	Prozkoumat výukové kurzy
+	For you	Pro vás
+	Skills	Dovednosti
+	Get started	Začínáme
+	Quick skill guide	Rychlý průvodce dovednostmi
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Krátké praktické výukové kurzy k základním nástrojům, seřazené podle dovedností. Vyberte dovednost a zobrazí se její kurzy.
+	List Tutorials	Vypsat výukové kurzy
+	Show Tutorial	Zobrazit výukový kurz
+@msg	missing `tutorial` (see learn.list)	chybí `tutorial` (viz learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	neznámý výukový kurz `{id}` (viz learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Obnovit odložené efekty
 	Deferred Effects	Odložené efekty

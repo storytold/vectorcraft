@@ -6777,6 +6777,19 @@ breakText	Glyphs	Glifler
 @plural	{n} line cut|{n} lines cut	{n} satır kesildi
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` ve `last`, konsolun tuttuğu satırların numaraları olmalı ve `first`, `last` değerinden önce gelmeli
 
+# Learn panel
+	Learn	Öğren
+	Explore tutorials	Öğreticileri Keşfet
+	For you	Sizin için
+	Skills	Beceriler
+	Get started	Başlarken
+	Quick skill guide	Hızlı beceri rehberi
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Temel araçlar için becerilere göre gruplanmış kısa uygulamalı öğreticiler. Öğreticilerini görmek için bir beceri seçin.
+	List Tutorials	Öğreticileri Listele
+	Show Tutorial	Öğreticiyi Göster
+@msg	missing `tutorial` (see learn.list)	`tutorial` eksik (bkz. learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	bilinmeyen öğretici `{id}` (bkz. learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Ertelenen Efektleri Yenile
 	Deferred Effects	Ertelenen Efektler

@@ -6442,6 +6442,19 @@ breakText	Glyphs	Glifi
 @plural	{n} line cut|{n} lines cut	{n} riga tagliata|{n} righe tagliate
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` e `last` devono essere numeri di righe presenti nella console, `first` prima di `last`
 
+# Learn panel
+	Learn	Impara
+	Explore tutorials	Esplora i tutorial
+	For you	Per te
+	Skills	Competenze
+	Get started	Per iniziare
+	Quick skill guide	Guida rapida alle competenze
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Brevi tutorial pratici sugli strumenti essenziali, raggruppati per competenza. Scegli una competenza per vederne i tutorial.
+	List Tutorials	Elenca tutorial
+	Show Tutorial	Mostra tutorial
+@msg	missing `tutorial` (see learn.list)	manca `tutorial` (vedi learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial sconosciuto `{id}` (vedi learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Aggiorna effetti rimandati
 	Deferred Effects	Effetti rimandati

@@ -6802,6 +6802,19 @@ breakText	Glyphs	Glifs
 @plural	{n} line cut|{n} lines cut	{n} línia tallada|{n} línies tallades
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` i `last` han de ser números de línies que la consola conserva, `first` abans de `last`
 
+# Learn panel
+	Learn	Aprèn
+	Explore tutorials	Explora els tutorials
+	For you	Per a vós
+	Skills	Habilitats
+	Get started	Primers passos
+	Quick skill guide	Guia ràpida d’habilitats
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutorials pràctics breus de les eines essencials, agrupats per habilitat. Trieu una habilitat per veure’n els tutorials.
+	List Tutorials	Llista els tutorials
+	Show Tutorial	Mostra el tutorial
+@msg	missing `tutorial` (see learn.list)	falta `tutorial` (vegeu learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial desconegut `{id}` (vegeu learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualitza els efectes ajornats
 	Deferred Effects	Efectes ajornats

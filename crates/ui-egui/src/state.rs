@@ -209,6 +209,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::three_d::ID, "3D and Materials", "dc-cube"),
     (crate::panels::variables::ID, "Variables", "chart-column"),
     (crate::panels::script_console::ID, "Script Console", "message-circle"),
+    (crate::panels::learn::ID, "Learn", "graduation-cap"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
     (crate::addons::pathtools::ID, "Anchor Inspector", "dc-anchor-smooth"),
@@ -401,6 +402,9 @@ pub struct UiState {
     /// Type › Find Font…'s last Find In choice (`find_font::FIND_IN`), kept while the app runs.
     #[serde(skip)]
     pub find_font_in: String,
+    /// The Learn panel's tab, skill and tutorial, kept while the app runs.
+    #[serde(skip)]
+    pub learn: crate::panels::learn::View,
     pub control_bar: bool,
     /// The Control bar is docked to the bottom of the window instead of the top
     /// (`window.control.dock`).
@@ -1017,6 +1021,7 @@ impl Default for UiState {
             transient_focus: false,
             color_settings_scroll: false,
             find_font_in: String::new(),
+            learn: Default::default(),
             control_bar: false,
             control_bar_bottom: false,
             toolbar: true,

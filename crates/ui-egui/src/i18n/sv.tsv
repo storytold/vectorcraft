@@ -8306,6 +8306,19 @@ digits	Hindi	Hindi
 @plural	{n} line cut|{n} lines cut	{n} rad avkortad|{n} rader avkortade
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` och `last` måste vara nummer på rader som konsolen har kvar, `first` före `last`
 
+# Learn panel
+	Learn	Lär dig
+	Explore tutorials	Utforska självstudier
+	For you	För dig
+	Skills	Färdigheter
+	Get started	Kom igång
+	Quick skill guide	Snabbguide till färdigheter
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Korta praktiska självstudier för de viktigaste verktygen, ordnade efter färdighet. Välj en färdighet för att se dess självstudier.
+	List Tutorials	Lista självstudier
+	Show Tutorial	Visa självstudie
+@msg	missing `tutorial` (see learn.list)	`tutorial` saknas (se learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	okänd självstudie `{id}` (se learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Uppdatera uppskjutna effekter
 	Deferred Effects	Uppskjutna effekter

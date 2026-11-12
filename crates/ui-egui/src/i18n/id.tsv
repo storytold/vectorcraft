@@ -6559,6 +6559,19 @@ breakText	Glyphs	Glif
 @plural	{n} earlier line dropped|{n} earlier lines dropped	{n} baris lama dibuang
 @plural	{n} line cut|{n} lines cut	{n} baris dipotong
 
+# Learn panel
+	Learn	Belajar
+	Explore tutorials	Jelajahi tutorial
+	For you	Untuk Anda
+	Skills	Keterampilan
+	Get started	Memulai
+	Quick skill guide	Panduan cepat keterampilan
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutorial praktik singkat untuk alat-alat utama, dikelompokkan menurut keterampilan. Pilih keterampilan untuk melihat tutorialnya.
+	List Tutorials	Daftar tutorial
+	Show Tutorial	Tampilkan tutorial
+@msg	missing `tutorial` (see learn.list)	`tutorial` tidak ada (lihat learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	tutorial `{id}` tidak dikenal (lihat learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Segarkan efek yang ditunda
 	Deferred Effects	Efek yang ditunda
