@@ -1568,7 +1568,9 @@ wrong. A value that is not a number gets `` `dx` must be a number, not "10" ``: 
 `` `size` must be a number, not true ``, and a `tracking` that is neither a number nor a number written as a string
 (`"20"`) with `` `tracking` must be a number, not false ``. It and `text.setRangeStyle` refuse a `font` or `style` that is not a string
 with `` `font` must be a string ``, and a `features` list with an entry that is not a string with
-`features must be a list of tags`; `text.setStyle` refuses such a `justify` too. `type.ruby` refuses a `text`,
+`features must be a list of tags`; `text.setStyle` refuses such a `justify` too. `text.create`, `text.createInPath`,
+`text.setStyle` and `text.setRangeStyle` refuse a `size` outside 0.1 to 1,296 pt with
+`` `size` must be from 0.1 to 1296 `` and change nothing. `type.ruby` refuses a `text`,
 `position` or `align` that is not a string, and `text.setPathHandle` refuses a `which` other than `in` or `out` with
 `` `which` must be one of in, out ``. Each leaves the document, the selection and the undo history as they were, also
 when the call gives another param it could apply. A null is read as a key left out.

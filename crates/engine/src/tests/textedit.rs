@@ -87,6 +87,50 @@ fn set_range_style_splits_runs() {
     assert!(s.execute("text.setRangeStyle", &json!({"id": id.0, "size": -1})).is_err());
 }
 
+/// `text.create`, `text.createInPath`, `text.setStyle` and `text.setRangeStyle` refuse a size
+/// outside 0.1 to 1296 pt with an error naming the range, and change nothing; both ends are taken.
+#[test]
+fn a_type_size_outside_its_range_is_refused() {
+    let mut s = session();
+    let message = "`size` must be from 0.1 to 1296";
+    let state = |s: &Session| (s.doc().unwrap().doc.node_count(), s.doc().unwrap().history.undo.len());
+    let before = state(&s);
+    for size in [2835.0, 1296.5, 0.05, 0.0, -1.0] {
+        let e = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Big", "size": size})).unwrap_err().to_string();
+        assert!(e.contains(message), "{size}: {e}");
+    }
+    assert_eq!(state(&s), before, "no type is made");
+    let big = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Big", "size": 1296})).unwrap();
+    let big = NodeId(big["id"].as_u64().unwrap());
+    assert_eq!(obj(&s, big).runs[0].style.size, 1296.0);
+    let small = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "small", "size": 0.1})).unwrap();
+    assert_eq!(obj(&s, NodeId(small["id"].as_u64().unwrap())).runs[0].style.size, 0.1);
+    let path = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 200, "height": 100})).unwrap()["id"].clone();
+    let before = state(&s);
+    let e = s.execute("text.createInPath", &json!({"path": path, "text": "In", "size": 2835})).unwrap_err().to_string();
+    assert!(e.contains(message), "{e}");
+    assert_eq!(state(&s), before);
+    s.execute("text.createInPath", &json!({"path": path, "text": "In", "size": 1296})).unwrap();
+    let id = text(&mut s, "Hello");
+    let before = state(&s);
+    for (cmd, params) in [
+        ("text.setStyle", json!({"ids": [id.0], "size": 2835})),
+        ("text.setStyle", json!({"ids": [id.0], "size": "1300 pt"})),
+        ("text.setStyle", json!({"ids": [id.0], "size": 0.05})),
+        ("text.setRangeStyle", json!({"id": id.0, "start": 0, "end": 2, "size": 2835})),
+        ("text.setRangeStyle", json!({"id": id.0, "size": 0})),
+    ] {
+        let e = s.execute(cmd, &params).unwrap_err().to_string();
+        assert!(e.contains(message), "{cmd} {params}: {e}");
+    }
+    assert_eq!(state(&s), before, "nothing changes");
+    assert_eq!(obj(&s, id).runs[0].style.size, 20.0);
+    s.execute("text.setStyle", &json!({"ids": [id.0], "size": 1296})).unwrap();
+    assert_eq!(obj(&s, id).runs[0].style.size, 1296.0);
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 1, "size": 0.1})).unwrap();
+    assert_eq!(obj(&s, id).runs[0].style.size, 0.1);
+}
+
 /// `featureChanges` turns features on and off on top of each run's own and keeps the rest, in
 /// `text.setStyle` and `text.setRangeStyle`, in one undo step; an unknown tag is an error.
 #[test]
