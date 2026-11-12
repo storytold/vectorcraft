@@ -2850,10 +2850,13 @@ fn cached_frames_keep_their_scale_during_resize_rotation_and_dpi_changes() {
                 "{old_rot}° -> {new_rot}°, DPI {old_ppp} -> {new_ppp}, pixel={pixel}: {vertex:?}"
             );
         }
-        // Deliver the actual replacement and verify that it replaces the cached key.
+        // Deliver the actual replacement and verify that it replaces the cached key. The frame
+        // reports a slow render: when a parallel test makes a placed document's bitmap, the key's
+        // process-wide `placed` generation moves, and the next frame goes to the controlled worker
+        // instead of rendering over the delivered frame on this thread.
         let img = app.canvas.renderer.render(&job.doc, job.w, job.h, job.view, &job.opts);
         let expected = job.key.clone();
-        completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 1.0, moved: 0, reused: false }).unwrap();
+        completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 50.0, moved: 0, reused: false }).unwrap();
         frame(&mut app, size, new_ppp);
         assert_eq!(app.canvas.key.as_ref(), Some(&expected), "the worker's frame arrived");
     }
