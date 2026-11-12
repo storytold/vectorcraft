@@ -425,8 +425,16 @@ fn transparency_grid_round_trips_without_dirtying() {
     let _ = std::fs::remove_dir_all(d);
 }
 
+/// The `%%BoundingBox` of an EPS file's PostScript.
+fn bounding_box(eps: &[u8]) -> [i64; 4] {
+    let ps = std::str::from_utf8(vectorcraft_eps::sections(eps).unwrap().0).unwrap();
+    let line = ps.lines().find_map(|l| l.strip_prefix("%%BoundingBox:")).expect("a bounding box");
+    let v: Vec<i64> = line.split_whitespace().map(|n| n.parse().unwrap()).collect();
+    [v[0], v[1], v[2], v[3]]
+}
+
 #[test]
-fn opened_eps_saves_to_its_own_file_with_editable_data_and_page_margins() {
+fn opened_eps_saves_to_its_own_file_around_its_art_or_on_its_page() {
     let d = dir("eps-original-format");
     let eps_path = path(&d, "Artwork.eps");
     // Original, contributor-authored PostScript: the artwork occupies only part of the page.
@@ -440,11 +448,16 @@ fn opened_eps_saves_to_its_own_file_with_editable_data_and_page_margins() {
     assert_eq!((board.width(), board.height()), (200.0, 100.0));
     rect(&mut s);
     let edited_layers = s.doc().unwrap().doc.layers.clone();
-    let r = s.execute("document.save", &json!({"options": {"previewFormat": "none", "thumbnails": false}})).unwrap();
+    // Without Use Artboards the bounding box fits the art, as Export draws it; the editing data
+    // keeps the page.
+    let quiet = json!({"previewFormat": "none", "thumbnails": false});
+    let r = s.execute("document.save", &json!({"options": quiet})).unwrap();
     assert_eq!((r["path"].as_str(), r["format"].as_str()), (Some(eps_path.as_str()), Some("eps")));
     let bytes = std::fs::read(&eps_path).unwrap();
     assert!(bytes.starts_with(b"%!PS-Adobe-3.0 EPSF-3.0"));
-    assert!(std::str::from_utf8(vectorcraft_eps::sections(&bytes).unwrap().0).unwrap().contains("%%BoundingBox: 0 0 200 100"));
+    let exported = b64(&s.execute("document.export", &json!({"format": "eps", "previewFormat": "none", "thumbnails": false})).unwrap());
+    assert_eq!(bounding_box(&bytes), bounding_box(&exported));
+    assert_ne!(bounding_box(&bytes), [0, 0, 200, 100], "the art does not fill the page");
     let editing = vectorcraft_format::load(&vectorcraft_eps::native(&bytes).unwrap()).unwrap();
     assert_eq!(editing.artboards[0].rect, board);
     assert_eq!(editing.layers, edited_layers);
@@ -453,26 +466,86 @@ fn opened_eps_saves_to_its_own_file_with_editable_data_and_page_margins() {
     assert_eq!(opened["restored"], true);
     assert_eq!(s.doc().unwrap().doc.layers, edited_layers);
     assert_eq!(s.doc().unwrap().doc.artboards[0].rect, board);
+    // Use Artboards keeps the opened file's page.
+    rect(&mut s);
+    s.execute("document.save", &json!({"options": {"useArtboards": true, "previewFormat": "none", "thumbnails": false}})).unwrap();
+    assert_eq!(s.doc().unwrap().path.as_deref(), Some(eps_path.as_str()));
+    assert_eq!(bounding_box(&std::fs::read(&eps_path).unwrap()), [0, 0, 200, 100]);
+    // Save remembers it.
     rect(&mut s);
     s.execute("document.save", &json!({})).unwrap();
-    assert_eq!(s.doc().unwrap().path.as_deref(), Some(eps_path.as_str()));
+    assert_eq!(bounding_box(&std::fs::read(&eps_path).unwrap()), [0, 0, 200, 100]);
     std::fs::remove_dir_all(d).unwrap();
 }
 
 #[test]
-fn eps_save_keeps_all_editing_artboards_while_printing_one_page() {
+fn eps_save_without_use_artboards_fits_the_box_to_art_past_the_artboard() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": -50, "y": 20, "width": 300, "height": 40})).unwrap();
+    let quiet = json!({"previewFormat": "none", "thumbnails": false});
+    let r = s.execute("document.save", &json!({"format": "eps", "options": quiet})).unwrap();
+    let [x0, y0, x1, y1] = bounding_box(&b64(&r));
+    assert!(x0 <= -50 && x1 >= 250 && y0 >= 0 && y1 <= 100, "{:?}", [x0, y0, x1, y1]);
+    for (use_artboards, expected) in [(false, [x0, y0, x1, y1]), (true, [0, 0, 200, 100])] {
+        let options = json!({"useArtboards": use_artboards, "previewFormat": "none", "thumbnails": false});
+        let r = s.execute("document.save", &json!({"format": "eps", "options": options})).unwrap();
+        assert_eq!(bounding_box(&b64(&r)), expected, "useArtboards: {use_artboards}");
+    }
+}
+
+#[test]
+fn eps_save_keeps_all_editing_artboards_in_the_file_of_one_page() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
     rect(&mut s);
     let r = s.execute("document.save", &json!({"format": "eps", "artboard": 1, "previewFormat": "none", "thumbnails": false})).unwrap();
     let bytes = b64(&r);
+    assert!(r.get("files").is_none(), "{r}");
+    let board = s.doc().unwrap().doc.artboards[1].rect;
+    let [x0, y0, x1, y1] = bounding_box(&bytes);
+    assert_eq!(((x1 - x0) as f64, (y1 - y0) as f64), (board.width(), board.height()));
     let native = vectorcraft_format::load(&vectorcraft_eps::native(&bytes).unwrap()).unwrap();
     assert_eq!(native.artboards.len(), 2);
     assert_eq!(native.layers, s.doc().unwrap().doc.layers);
-    assert!(s.execute("document.save", &json!({"format": "eps", "range": "all"})).is_err(), "EPS is one printed page");
-    for options in [json!({"useArtboards": false}), json!({"selectedOnly": true})] {
-        assert!(s.execute("document.save", &json!({"format": "eps", "options": options})).is_err(), "cropping is Export's job");
+    assert!(s.execute("document.save", &json!({"format": "eps", "options": {"selectedOnly": true}})).is_err(), "selected-only is Export's job");
+}
+
+#[test]
+fn eps_save_with_use_artboards_writes_the_central_file_and_one_per_artboard() {
+    let d = dir("eps-artboards");
+    let eps_path = path(&d, "Art.eps");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    rect(&mut s);
+    let options = json!({"useArtboards": true, "previewFormat": "none", "thumbnails": false});
+    let r = s.execute("document.save", &json!({"path": eps_path, "options": options})).unwrap();
+    let files: Vec<String> = r["files"].as_array().expect("files").iter().map(|f| f.as_str().unwrap().to_string()).collect();
+    assert_eq!(files.len(), 3, "{r}");
+    assert_eq!(files[0], eps_path, "the file the document becomes comes first");
+    assert!(files[1..].iter().all(|f| f.starts_with(&path(&d, "Art_")) && f.ends_with(".eps")), "{files:?}");
+    // The central file: the visible art and the whole document.
+    let central = std::fs::read(&eps_path).unwrap();
+    let exported = b64(&s.execute("document.export", &json!({"format": "eps", "previewFormat": "none", "thumbnails": false})).unwrap());
+    assert_eq!(bounding_box(&central), bounding_box(&exported));
+    assert_eq!(vectorcraft_format::load(&vectorcraft_eps::native(&central).unwrap()).unwrap().artboards.len(), 2);
+    // Each artboard's file: its artboard as the page, holding that artboard.
+    let boards = s.doc().unwrap().doc.artboards.clone();
+    for (f, board) in files[1..].iter().zip(&boards) {
+        let bytes = std::fs::read(f).unwrap();
+        let [x0, y0, x1, y1] = bounding_box(&bytes);
+        assert_eq!(((x1 - x0) as f64, (y1 - y0) as f64), (board.rect.width(), board.rect.height()), "{f}");
+        let native = vectorcraft_format::load(&vectorcraft_eps::native(&bytes).unwrap()).unwrap();
+        assert_eq!(native.artboards.iter().map(|a| a.rect).collect::<Vec<_>>(), [board.rect], "{f}");
     }
+    let st = s.doc().unwrap();
+    assert_eq!((st.path.as_deref(), st.is_dirty()), (Some(eps_path.as_str()), false));
+    // With no visible art the central file is still written, on the first artboard.
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    std::fs::remove_file(&eps_path).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+    assert_eq!(bounding_box(&std::fs::read(&eps_path).unwrap()), [0, 0, 200, 100]);
+    std::fs::remove_dir_all(d).unwrap();
 }
 
 #[test]
@@ -550,7 +623,7 @@ fn eps_save_bounds_large_page_preview_without_cropping_vector_or_editing_data() 
     s.execute("file.new", &json!({"width": 4000, "height": 4000})).unwrap();
     rect(&mut s);
     // Explicit colour preview remains a colour preview; Save bounds its resolution, not the art.
-    let r = s.execute("document.save", &json!({"format": "eps", "previewFormat": "tiffColor"})).unwrap();
+    let r = s.execute("document.save", &json!({"format": "eps", "useArtboards": true, "previewFormat": "tiffColor"})).unwrap();
     let bytes = b64(&r);
     let (ps, tiff) = vectorcraft_eps::sections(&bytes).unwrap();
     let tiff = tiff.unwrap();

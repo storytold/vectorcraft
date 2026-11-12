@@ -7,8 +7,10 @@
 //! editable), `path`, `format`, and one field per option (agents set them with `ui.dialog.set`).
 //! Native and `.ai` files show their save options (VectorCraft Options after Save As): each
 //! artboard to a separate file, with `all` (true: every artboard) or `range`, Include Linked Files,
-//! Embed ICC Profiles, Create PDF-Compatible File and Use Compression. A native file's Version is a
-//! menu of the versions VectorCraft writes (`version`, named by the releases that read each). A
+//! Embed ICC Profiles, Create PDF-Compatible File and Use Compression. EPS shows Use Artboards
+//! (`useArtboards`, off by default: the bounding box fits the visible art) with the same `all` or
+//! `range` under it. A native file's Version is a menu of the versions VectorCraft writes
+//! (`version`, named by the releases that read each). A
 //! `.ai` file's Version comes first: PDF-compatible, or legacy version 7 (`aiVersion: "7"`, a file
 //! per artboard), which takes only Transparent Images (`transparentImages`), Hidden Objects
 //! (`hiddenObjects`: a hidden layer, omitted or made visible), Text (`outlineText`: editable or
@@ -76,22 +78,33 @@ fn separates(f: &Format) -> bool {
     f.options.iter().any(|o| o.name == "separateArtboards")
 }
 
+/// The checkbox that `f`'s All or Range shows under: Save each artboard to a separate file, or
+/// for EPS Use Artboards (off: the visible art's bounds).
+fn board_switch(f: &Format) -> Option<&'static str> {
+    if separates(f) {
+        Some("separateArtboards")
+    } else if f.id == "eps" {
+        Some("useArtboards")
+    } else {
+        None
+    }
+}
+
 /// The options the dialog shows: arrays and objects are for agents, as is a native file's
 /// `precision`, and a page range replaces the single artboard choice; none for a format with its
 /// own dialog. A `.ait` template has no Version: Save as Template writes it PDF-compatible only.
 fn shown(f: &Format) -> impl Iterator<Item = &'static FormatOption> {
     let range = f.options.iter().any(|o| o.name == "range");
-    let separate = separates(f);
+    let switched = board_switch(f).is_some();
     let options = if own_dialog(f) { &[][..] } else { f.options };
     options.iter().filter(move |o| {
         !(matches!(o.ty, "array" | "object")
             || o.name == "precision"
             || (range && o.name == "artboard")
-            || (separate && o.name == "range")
+            || (switched && o.name == "range")
             || (matches!(f.id, "ai" | "ait") && o.name == "useArtboards")
-            // EPS Save keeps a page and the complete editing document; cropped and
-            // selected-only output belongs to Export, never this save dialog.
-            || (f.id == "eps" && matches!(o.name, "useArtboards" | "selectedOnly"))
+            // EPS Save writes all the artwork: selected-only output belongs to Export.
+            || (f.id == "eps" && o.name == "selectedOnly")
             || (f.id == "ait" && o.name == "aiVersion"))
     })
 }
@@ -101,6 +114,7 @@ fn shown(f: &Format) -> impl Iterator<Item = &'static FormatOption> {
 fn label(o: &FormatOption) -> String {
     match o.name {
         "separateArtboards" => tl!("Save each artboard to a separate file").into(),
+        "useArtboards" => tl!("Use Artboards").into(),
         "includeLinked" => tl!("Include Linked Files").into(),
         "embedProfiles" => tl!("Embed ICC Profiles").into(),
         "pdfCompatible" => tl!("Create PDF-Compatible File").into(),
@@ -110,16 +124,16 @@ fn label(o: &FormatOption) -> String {
     }
 }
 
-/// Every artboard (the All choice under Save each artboard to a separate file): `all` when set,
-/// else no range given.
+/// Every artboard (the All choice under Save each artboard to a separate file or Use Artboards):
+/// `all` when set, else no range given.
 fn all_artboards(d: &Dialog) -> bool {
     d.fields.get("all").and_then(Value::as_bool).unwrap_or_else(|| d.str("range").trim().is_empty())
 }
 
-/// All or Range, under Save each artboard to a separate file (enabled while it is on).
-fn artboard_range(ui: &mut egui::Ui, d: &mut Dialog) {
+/// All or Range, under the checkbox `switch` (enabled while it is on).
+fn artboard_range(ui: &mut egui::Ui, d: &mut Dialog, switch: &str) {
     ui.label("");
-    ui.add_enabled_ui(d.bool("separateArtboards"), |ui| {
+    ui.add_enabled_ui(d.bool(switch), |ui| {
         ui.horizontal(|ui| {
             ui.add_space(22.0);
             let mut all = all_artboards(d);
@@ -392,8 +406,8 @@ fn option_row(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, o: &Forma
             d.fields.insert(o.name.into(), json!(!on));
         }
         ui.end_row();
-        if o.name == "separateArtboards" {
-            artboard_range(ui, d);
+        if matches!(o.name, "separateArtboards" | "useArtboards") {
+            artboard_range(ui, d, o.name);
         }
         return;
     }
@@ -505,8 +519,15 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
         if !boards.iter().all(|b| *b) {
             options.insert("range".into(), json!(super::export_for_screens::range_text(&boards)));
         }
-    } else if separates(f) {
-        if !d.bool("separateArtboards") || all_artboards(d) {
+    } else if let Some(switch) = board_switch(f) {
+        if switch == "useArtboards" {
+            // All or Range alone names the artboards: an artboard remembered from an earlier
+            // save would otherwise turn Use Artboards on, or narrow All to itself.
+            options.remove("artboard");
+            options.remove("artboards");
+            options.insert(switch.into(), json!(d.bool(switch)));
+        }
+        if !d.bool(switch) || all_artboards(d) {
             options.remove("range");
         } else {
             // A bad range keeps the dialog open.

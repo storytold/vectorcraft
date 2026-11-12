@@ -346,19 +346,65 @@ fn save_as_pdf_asks_with_the_save_pdf_dialog_and_remembers_its_options() {
     assert_eq!(dialog(&app).str("__save"), "file.saveCopy");
 }
 
+/// The `%%BoundingBox` line of an EPS file.
+fn bounding_box(eps: &[u8]) -> String {
+    let ps = std::str::from_utf8(vectorcraft_eps::sections(eps).unwrap().0).unwrap();
+    ps.lines().find(|l| l.starts_with("%%BoundingBox:")).expect("a bounding box").to_string()
+}
+
 #[test]
-fn eps_save_as_keeps_page_options_and_writes_eps_without_export_only_switches() {
+fn eps_save_as_shows_use_artboards_off_and_writes_the_art_or_the_artboard() {
     let (mut app, written, _) = desktop("art.eps");
     app.run("file.saveAs", json!({})).unwrap();
     let names: Vec<_> = shown(fileio::format("eps").unwrap()).map(|option| option.name).collect();
-    assert!(!names.contains(&"useArtboards") && !names.contains(&"selectedOnly"));
+    assert!(names.contains(&"useArtboards") && !names.contains(&"selectedOnly") && !names.contains(&"range"), "{names:?}");
     assert!(names.contains(&"previewFormat"));
+    // EPS alone gains the row: the other save formats keep their own checkbox or none.
+    for id in SAVE_FORMATS.iter().chain(TEMPLATE_FORMATS).filter(|id| **id != "eps") {
+        let f = fileio::format(id).unwrap();
+        assert!(!shown(f).any(|o| o.name == "useArtboards") && board_switch(f) != Some("useArtboards"), "{id}");
+    }
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| super::super::show(app, ui.ctx()));
+    assert!(text.contains("Use Artboards") && text.contains("All") && text.contains("Range:"), "{text}");
+    assert!(!dialog(&app).bool("useArtboards"), "Use Artboards starts off");
     super::super::confirm(&mut app).unwrap();
     assert!(app.ui.dialog.is_none());
-    let saved = written.borrow();
-    assert_eq!(saved[0].0, "art.eps");
-    assert!(vectorcraft_eps::native(&saved[0].1).is_some());
+    {
+        let saved = written.borrow();
+        assert_eq!(saved[0].0, "art.eps");
+        assert!(vectorcraft_eps::native(&saved[0].1).is_some());
+        // The box Export writes of the visible art, not the artboard.
+        let exported = app.session.execute("document.export", &json!({"format": "eps"})).unwrap();
+        let exported = vectorcraft_format::base64_decode(exported["dataBase64"].as_str().unwrap()).unwrap();
+        assert_eq!(bounding_box(&saved[0].1), bounding_box(&exported));
+        assert_ne!(bounding_box(&saved[0].1), "%%BoundingBox: 0 0 100 80");
+    }
     assert_eq!(app.session.active().unwrap().format, "eps");
+    // Checked, the artboard is the page, and an artboard remembered from an earlier save doesn't
+    // narrow All.
+    app.run("file.saveAs", json!({})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("useArtboards".into(), json!(true));
+    d.fields.insert("artboard".into(), json!(3));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    {
+        let saved = written.borrow();
+        assert_eq!(saved.len(), 2, "one artboard: one file");
+        assert_eq!(bounding_box(&saved[1].1), "%%BoundingBox: 0 0 100 80");
+    }
+    // A save that named an artboard without Use Artboards (as document.save {artboard} does) had
+    // it on: the dialog shows it on, on that artboard, and OK writes the artboard again.
+    let st = app.session.active_mut().unwrap();
+    st.save_options.remove("useArtboards");
+    st.save_options.insert("artboard".into(), json!(0));
+    app.run("file.saveAs", json!({})).unwrap();
+    assert!(dialog(&app).bool("useArtboards"));
+    assert_eq!(dialog(&app).str("range"), "1");
+    super::super::confirm(&mut app).unwrap();
+    let saved = written.borrow();
+    assert_eq!(saved.len(), 3);
+    assert_eq!(bounding_box(&saved[2].1), "%%BoundingBox: 0 0 100 80");
 }
 
 /// #4931: a native file's Version is a menu of the versions VectorCraft writes, the current one
