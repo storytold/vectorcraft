@@ -1158,6 +1158,17 @@ font-technology	Variable	Változó
 	The selected character's font is not available.	A kijelölt karakter betűtípusa nem érhető el.
 	No alternates for the selected character.	A kijelölt karakternek nincsenek változatai.
 	Double-click to replace	Csere dupla kattintással
+	Select one character with the Type tool first.	Előbb jelölj ki egy karaktert a Szöveg eszközzel.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	A(z) {glyph} a(z) {font} glifája, nem a kijelölt szöveg betűtípusáé ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	A(z) {glyph} ehhez tartozik: {base} (U+{base_code}) {place}; a te kijelölésed: {sel} (U+{code}).
+	at the start of a word	szó elején
+	in the middle of a word	szó közepén
+	at the end of a word	szó végén
+	standing alone	önállóan állva
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	A(z) {glyph} nem változata a(z) {sel} (U+{code}) karakternek úgy, ahogy a szavában áll.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dupla kattintással ezt szúrod be helyette: {base} (U+{code}); a megjelenítési forma nem kapcsolódik, a betű igen.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	A megjelenítési forma helyett ez lett beszúrva: {base} (U+{code}); a betűtípus pozíció szerint kapcsolja a szomszédokhoz.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Itt egyetlen OpenType-funkció sem rajzolja meg ezt a glifát, ezért a karakter glifáját váltja fel, és előfordulhat, hogy nem kapcsolódik a szomszédos karakterekhez.
 	Double-click to insert	Beszúrás dupla kattintással
 	Double-click to rename	Dupla kattintással átnevezhető
 	Double-click to target the contents	Dupla kattintással a tartalom lesz a cél
@@ -2510,6 +2521,8 @@ file-filter	Templates	Sablonok
 	Meters	Méter
 	Method	Módszer
 	Method:	Módszer:
+	Pad	Folytatás
+	Repeats	Ismétlések
 	Mezzotint	Mezzotinto
 	Mezzotint…	Mezzotinto…
 	Millimeters	Milliméter
@@ -3506,6 +3519,7 @@ mark-style	Japanese	Japán
 	Rotate View Tool	Nézet elforgatása
 	Trackpad Gesture to Rotate View	Nézet elforgatása kézmozdulattal az érintőpadon
 	Hold a Tool Shortcut to Use the Tool Temporarily	Eszköz ideiglenes használata a billentyűparancsa nyomva tartásával
+	Show Bounding Box While Moving and Drawing	Befoglaló keret megjelenítése mozgatás és rajzolás közben
 	Rotate…	Elforgatás…
 	Rotation	Elforgatás
 	Rotation relative to:	Elforgatás viszonyítási alapja:
@@ -4070,6 +4084,9 @@ mark-style	Japanese	Japán
 	Split Path	Útvonal kettévágása
 	spot	direkt
 	Spot Color	Direktszín
+	Spot Color Objects	Direkt színeket használó objektumok
+	Pattern Objects	Mintázatokat használó objektumok
+	Gradient Objects	Színátmeneteket használó objektumok
 	Spot Colors	Direktszínek
 	Spot Colors (0)	Direktszínek (0)
 	Spot Colors…	Direktszínek…
@@ -4922,6 +4939,8 @@ imageTrace	Outline	Körvonal
 @msg	the Smooth slider is not open	a Simítás csúszka nincs megnyitva
 @msg	the screen color sampler is already open	a képernyős színmintavevő már nyitva van
 @msg	this system has no screen color sampler	ezen a rendszeren nincs képernyős színmintavevő
+@msg	the screen color sampler did not answer	a képernyős színmintavevő nem válaszolt
+@msg	the screen color sampler failed	a képernyős színmintavevő hibába ütközött
 @msg	bad colour `{hex}` (#rrggbb)	hibás szín: `{hex}` (#rrggbb)
 @msg	bad page tree	hibás oldalfa
 @msg	bad shortcut	hibás billentyűparancs
@@ -4958,6 +4977,7 @@ imageTrace	Outline	Körvonal
 @msg	column must be true or a number from 1	a column értéke true vagy 1-től kezdődő szám lehet
 @msg	Combine Slices: the slices have no bounds	Szeletek egyesítése: a szeleteknek nincsenek határai
 @msg	command `{0}` is not available right now: {1}	a parancs jelenleg nem érhető el: `{0}`: {1}
+@msg	command `{id}` is not available right now	a parancs jelenleg nem érhető el: `{id}`
 @msg	compound paths can only contain paths	összetett útvonal csak útvonalakat tartalmazhat
 @msg	compressed (RLE) bitmaps can't be read yet	a tömörített (RLE) bitképek még nem olvashatók
 @msg	Convert to Artboards: selection has no area	Átalakítás rajztáblákká: a kijelölésnek nincs területe
@@ -6029,6 +6049,7 @@ imageTrace	Outline	Körvonal
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometriai segédvonalak
+	Optical Effects	Optikai effektusok
 	Geometric Patterns	Geometriai mintázatok
 	Grit Textures	Szemcsés textúrák
 	Ease In	Lassú kezdés
@@ -6071,6 +6092,9 @@ axis	Y Axis	Y tengely
 @msg	`dither` applies to gradient fills (paint.setFill)	A `dither` színátmenetes kitöltésekre vonatkozik (paint.setFill)
 @msg	`dither` must be true or false	`dither`: true vagy false kell
 @msg	`method` must be classic or perceptual	a `method` értéke classic vagy perceptual lehet
+@msg	`spread` must be pad, repeat or reflect	a `spread` értéke pad, repeat vagy reflect lehet
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	a `repeats` értéke 1 és {MAX_REPEATS} közötti egész szám lehet
+@msg	`spread` applies to linear, radial, conic and diamond gradients	a `spread` a lineáris, sugaras, kúpos és rombusz színátmenetekre vonatkozik
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Telepíted a(z) „{name}” bővítményt, amely nagy számítási keretet kér?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Egy futás akár {minutes} percig tarthat, és {times}-szor annyi munkát végezhet, mint amennyit más bővítmények. A háttérben fut, és megszakíthatod.
@@ -6320,6 +6344,11 @@ axis	Y Axis	Y tengely
 	Grass Fan	Fűlegyező
 	Pattern Borders	Mintázatszegélyek
 	Scatter Shapes	Szórt alakzatok
+	Dry Media	Száraz technikák
+	Chalk Grain	Krétaszemcse
+	Graphite Pencil	Grafitceruza
+	Wax Crayon	Zsírkréta
+	Charcoal Dust	Szénpor
 	Save Brush Library…	Ecsetkönyvtár mentése…
 @msg	`{_1}` has no brushes to apply	A(z) `{_1}` nem tartalmaz alkalmazható ecsetet
 @msg	missing `library` (see brush.libraries)	hiányzik a `library` (lásd: brush.libraries)
@@ -6981,3 +7010,8 @@ breakText	Glyphs	Glifák
 @msg	Some islands could not be joined to the area around the art	Egyes szigeteket nem sikerült összekötni a grafikát körülvevő területtel
 @msg	`width` must be from {lo} to {hi} pt	A `width` értéke {lo} és {hi} pt között lehet
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`: 1 és {MAX_BRIDGES_PER_ISLAND} közötti egész szám kell
+	Weed Box and Lines…	Gyomláló keret és vonalak…
+	Weed Box and Lines	Gyomláló keret és vonalak
+	Margin	Margó
+	Box	Keret
+	Swatch	Színminta

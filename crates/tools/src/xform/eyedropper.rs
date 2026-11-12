@@ -47,7 +47,7 @@ pub fn paint_color_at(paint: &Paint, bounds: Option<vectorcraft_geom::Rect>, p: 
         Paint::Solid { color, .. } => Some(*color),
         Paint::Gradient(g) => {
             let geom = g.geom.or_else(|| bounds.map(|b| g.resolve(b)))?;
-            let t = geom.param_at(g.gradient.kind, p);
+            let t = g.gradient.spread_param(geom.param_at(g.gradient.kind, p));
             Some(g.gradient.sample(t.clamp(0.0, 1.0) as f32).0)
         }
         _ => None,

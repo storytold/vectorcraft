@@ -1552,6 +1552,17 @@ digits	Malayalam	მალაიალამური
 	The selected character's font is not available.	მონიშნული სიმბოლოს შრიფტი მიუწვდომელია.
 	No alternates for the selected character.	მონიშნულ სიმბოლოს ალტერნატივები არ აქვს.
 	Double-click to replace	ორჯერ დაწკაპეთ ჩასანაცვლებლად
+	Select one character with the Type tool first.	ჯერ ტექსტის ხელსაწყოთი მონიშნეთ ერთი სიმბოლო.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} არის {font}-ის გლიფი და არა იმ შრიფტისა, რომლითაც მონიშნული ტექსტია დაწყობილი ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} ეკუთვნის სიმბოლოს {base} (U+{base_code}) {place}; თქვენი მონიშნულია {sel} (U+{code}).
+	at the start of a word	სიტყვის დასაწყისში
+	in the middle of a word	სიტყვის შუაში
+	at the end of a word	სიტყვის ბოლოს
+	standing alone	როცა ცალკე დგას
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} არ არის {sel} (U+{code})-ის ალტერნატივა იმ სახით, როგორც ის თავის სიტყვაშია.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	ორჯერ დაწკაპეთ ამის ნაცვლად {base} (U+{code}) ჩასასმელად: გამოსახვის ფორმა არ უკავშირდება, ასო უკავშირდება.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	გამოსახვის ფორმის ნაცვლად ჩასმულია {base} (U+{code}): შრიფტი მას მეზობლებს პოზიციის მიხედვით აკავშირებს.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	აქ არც ერთი OpenType ფუნქცია არ ხატავს ამ გლიფს, ამიტომ ის ანაცვლებს სიმბოლოს გლიფს და შეიძლება არ დაუკავშირდეს მეზობელ სიმბოლოებს.
 	Double-click to insert	ორჯერ დაწკაპეთ ჩასასმელად
 	Entire Font	მთელი შრიფტი
 	glyph {id}	გლიფი {id}
@@ -1633,6 +1644,8 @@ digits	Malayalam	მალაიალამური
 	Delete Image Trace Preset	გამოსახულების ვექტორიზაციის პრესეტის წაშლა
 	Cancel Image Trace	გამოსახულების ვექტორიზაციის გაუქმება
 	Method:	მეთოდი:
+	Pad	გაგრძელება
+	Repeats	გამეორებების რაოდენობა
 	Mode:	რეჟიმი:
 	Noise	ხმაური
 	Create:	შექმნა:
@@ -3525,6 +3538,9 @@ theme	Appearance	იერსახე
 	Select All Unused	ყველა გამოუყენებლის მონიშვნა
 	Sort by Kind	ტიპის მიხედვით დალაგება
 	Sort by Name	სახელის მიხედვით დალაგება
+	Spot Color Objects	ობიექტები სპოტ-ფერებით
+	Pattern Objects	ობიექტები პატერნებით
+	Gradient Objects	ობიექტები გრადიენტებით
 	Spot Colors	სპოტ-ფერები
 	Swatch Options	ფერის ნიმუშის პარამეტრები
 	Ungroup Color Group	ფერების ჯგუფის დაშლა
@@ -4178,6 +4194,7 @@ font-technology	Variable	ცვლადი
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ფერი არ არის, მაგალითად "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: არაუმეტეს {MAX_TABLE} ფერი
 @msg	command `{0}` is not available right now: {1}	ბრძანება `{0}` ახლა ხელმისაწვდომი არ არის: {1}
+@msg	command `{id}` is not available right now	ბრძანება `{id}` ახლა ხელმისაწვდომი არ არის
 @msg	compound paths can only contain paths	შედგენილი ტრაექტორია მხოლოდ ტრაექტორიებს შეიძლება შეიცავდეს
 @msg	compressed (RLE) bitmaps can't be read yet	შეკუმშული (RLE) ბიტმაპების წაკითხვა ჯერ არ ხერხდება
 @msg	damaged	დაზიანებულია
@@ -5442,6 +5459,8 @@ imageTrace	Outline	კონტური
 @msg	the Smooth slider is not open	გაგლუვების სლაიდერი გახსნილი არ არის
 @msg	the screen color sampler is already open	ეკრანიდან ფერის აღება უკვე გახსნილია
 @msg	this system has no screen color sampler	ამ სისტემას ეკრანიდან ფერის აღების საშუალება არ აქვს
+@msg	the screen color sampler did not answer	ეკრანიდან ფერის აღების საშუალებამ არ უპასუხა
+@msg	the screen color sampler failed	ეკრანიდან ფერის აღება ვერ მოხერხდა
 # Dimension tool and Object › Dimensions. A drafting dimension is ზომა (ზომის დასმა), like a dimension on a technical drawing.
 	Dimension	ზომა
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	ნახაზი : რეალური ზომა — 1:10 გვერდზე 1 ერთეულს 10-ად აწერს.
@@ -5827,6 +5846,7 @@ imageTrace	Outline	კონტური
 	Thread Text	ტექსტის დაკავშირება
 	Trackpad Gesture to Rotate View	ხედის შემობრუნება ტრეკპადის ჟესტით
 	Hold a Tool Shortcut to Use the Tool Temporarily	ხელსაწყოს დროებით გამოყენება მისი მალსახმობის დაჭერით
+	Show Bounding Box While Moving and Drawing	შემომსაზღვრელი ჩარჩოს ჩვენება გადაადგილებისა და ხატვისას
 	Typing	აკრეფა
 	Uniformly Scaled	თანაბრად მასშტაბირებული
 	Unlock Variables	ცვლადების განბლოკვა
@@ -5986,6 +6006,7 @@ imageTrace	Outline	კონტური
 	Ruby…	რუბი…
 	Ruby	რუბი
 	Geometric Guides	გეომეტრიული მიმმართველები
+	Optical Effects	ოპტიკური ეფექტები
 	Geometric Patterns	გეომეტრიული პატერნები
 	Grit Textures	მარცვლოვანი ტექსტურები
 	Ease In	ნელი დასაწყისი
@@ -6039,6 +6060,9 @@ axis	Y Axis	Y ღერძი
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` ვრცელდება გრადიენტულ შევსებებზე (paint.setFill)
 @msg	`dither` must be true or false	`dither` უნდა იყოს true ან false
 @msg	`method` must be classic or perceptual	`method` უნდა იყოს classic ან perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` უნდა იყოს pad, repeat ან reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` უნდა იყოს მთელი რიცხვი 1-დან {MAX_REPEATS}-მდე
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` ეხება წრფივ, რადიალურ, კონუსურ და რომბულ გრადიენტებს
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	დავაყენოთ „{name}“, რომელიც დიდ გამოთვლით ბიუჯეტს ითხოვს?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	თითოეულ გაშვებას შეიძლება {minutes} წუთამდე დასჭირდეს და სხვა პლაგინებისთვის დაშვებულზე {times}-ჯერ მეტი სამუშაო შეასრულოს. ის ფონურ რეჟიმში მუშაობს და შეგიძლიათ გააუქმოთ.
@@ -6288,6 +6312,11 @@ axis	Y Axis	Y ღერძი
 	Grass Fan	ბალახის მარაო
 	Pattern Borders	პატერნის ბორდიურები
 	Scatter Shapes	გაბნეული ფიგურები
+	Dry Media	მშრალი მასალები
+	Chalk Grain	ცარცის მარცვალი
+	Graphite Pencil	გრაფიტის ფანქარი
+	Wax Crayon	ცვილის ფანქარი
+	Charcoal Dust	ნახშირის მტვერი
 	Save Brush Library…	ფუნჯების ბიბლიოთეკის შენახვა…
 @msg	`{_1}` has no brushes to apply	`{_1}`-ში გამოსაყენებელი ფუნჯები არ არის
 @msg	missing `library` (see brush.libraries)	`library` აკლია (იხ. brush.libraries)
@@ -7111,3 +7140,8 @@ font-script	Japanese	იაპონური
 @msg	Some islands could not be joined to the area around the art	ზოგიერთი კუნძული ვერ დაუკავშირდა ნახატის გარშემო არეს
 @msg	`width` must be from {lo} to {hi} pt	`width` უნდა იყოს {lo}-დან {hi} pt-მდე
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` უნდა იყოს მთელი რიცხვი 1-დან {MAX_BRIDGES_PER_ISLAND}-მდე
+	Weed Box and Lines…	ნარჩენის მოსაცილებელი ჩარჩო და ხაზები…
+	Weed Box and Lines	ნარჩენის მოსაცილებელი ჩარჩო და ხაზები
+	Margin	ზღვარი
+	Box	ჩარჩო
+	Swatch	ფერის ნიმუში

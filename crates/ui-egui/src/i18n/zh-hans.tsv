@@ -836,6 +836,17 @@ antiAlias	Sharp	锐利
 	The selected character's font is not available.	所选字符的字体不可用。
 	No alternates for the selected character.	所选字符没有替代字。
 	Double-click to replace	双击以替换
+	Select one character with the Type tool first.	请先用文字工具选择一个字符。
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} 是 {font} 的字形，不是所选文本所用字体（{text_font}）的字形。
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} 属于 {base}（U+{base_code}）{place}；您选择的是 {sel}（U+{code}）。
+	at the start of a word	位于词首
+	in the middle of a word	位于词中
+	at the end of a word	位于词尾
+	standing alone	单独出现时
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} 不是 {sel}（U+{code}）在其单词中所处位置的替代字。
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	双击以改为插入 {base}（U+{code}）：表现形式不会连接，字母会连接。
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	已插入 {base}（U+{code}）以代替表现形式：字体会按位置将其与相邻字符连接。
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	没有任何 OpenType 功能会在此处绘制该字形，因此它会替换该字符的字形，并且可能无法与相邻字符连接。
 	Double-click to insert	双击以插入
 	Double-click to rename	双击以重命名
 	Double-click to target the contents	双击以指定内容
@@ -1903,6 +1914,8 @@ file-filter	Templates	模板
 	Metallic Gradients	金属渐变
 	Meters	米
 	Method:	方法：
+	Pad	延伸
+	Repeats	重复次数
 	Millimeters	毫米
 	Minify	压缩
 	Minimal	最少
@@ -2829,6 +2842,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Rotate View Tool	旋转视图工具
 	Trackpad Gesture to Rotate View	使用触控板手势旋转视图
 	Hold a Tool Shortcut to Use the Tool Temporarily	按住工具快捷键以临时使用该工具
+	Show Bounding Box While Moving and Drawing	移动和绘制时显示定界框
 	Rotate…	旋转…
 	Rotation	旋转
 	Roughen…	粗糙效果…
@@ -3283,6 +3297,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Split Path	分割路径
 	spot	专色
 	Spot Color	专色
+	Spot Color Objects	使用专色的对象
+	Pattern Objects	使用图案的对象
+	Gradient Objects	使用渐变的对象
 	Spot Colors	专色
 	Spot Colors…	专色…
 	Spread:	扩散：
@@ -4296,6 +4313,7 @@ imageTrace	Outline	轮廓
 @msg	nothing to distort	没有可扭曲的内容
 @msg	unknown option `{path}.{k}`	未知选项 `{path}.{k}`
 @msg	command `{0}` is not available right now: {1}	命令 `{0}` 当前不可用：{1}
+@msg	command `{id}` is not available right now	命令 `{id}` 当前不可用
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	`{cmd}` 中出现内部错误：{msg} (文档保持原样；请报告此错误)
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` 的参数无效：{msg}
 @msg	no active document	没有活动文档
@@ -4481,6 +4499,8 @@ imageTrace	Outline	轮廓
 @msg	the Smooth slider is not open	平滑滑块未打开
 @msg	the screen color sampler is already open	屏幕取色器已打开
 @msg	this system has no screen color sampler	此系统没有屏幕取色器
+@msg	the screen color sampler did not answer	屏幕取色器没有响应
+@msg	the screen color sampler failed	屏幕取色器出错
 @msg	Corners edits the corners of a path	转角用于编辑路径的转角
 @msg	give corners of the path: anchors where its sides meet at an angle	请给出路径的转角：其各边以一定角度相交处的锚点
 @msg	select one path, or give its `id`	请选择一条路径，或给出其 `id`
@@ -5883,6 +5903,7 @@ lighting	Light	光源
 	Ruby…	注音…
 	Ruby	注音
 	Geometric Guides	几何参考线
+	Optical Effects	光学效果
 	Geometric Patterns	几何图案
 	Grit Textures	颗粒纹理
 	Ease In	缓入
@@ -5926,6 +5947,9 @@ axis	Y Axis	Y 轴
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` 适用于渐变填色 (paint.setFill)
 @msg	`dither` must be true or false	`dither` 必须是 true 或 false
 @msg	`method` must be classic or perceptual	`method` 必须是 classic 或 perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` 必须是 pad、repeat 或 reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 必须是 1 到 {MAX_REPEATS} 之间的整数
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` 适用于线性、径向、圆锥和菱形渐变
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	要安装需要大量计算预算的“{name}”吗？
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	每次运行最多可能需要 {minutes} 分钟，并可完成其他插件所允许工作量的 {times} 倍。它在后台运行，可以随时取消。
@@ -6175,6 +6199,11 @@ axis	Y Axis	Y 轴
 	Grass Fan	画草扇形笔
 	Pattern Borders	图案边框
 	Scatter Shapes	散布形状
+	Dry Media	干性画材
+	Chalk Grain	粉笔颗粒
+	Graphite Pencil	石墨铅笔
+	Wax Crayon	蜡笔
+	Charcoal Dust	炭粉
 	Save Brush Library…	保存画笔库…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中没有可应用的画笔
 @msg	missing `library` (see brush.libraries)	缺少 `library`（请参阅 brush.libraries）
@@ -6835,3 +6864,8 @@ breakText	Glyphs	字形
 @msg	Some islands could not be joined to the area around the art	部分孤岛无法连接到图稿周围的区域
 @msg	`width` must be from {lo} to {hi} pt	`width` 必须介于 {lo} 到 {hi} pt 之间
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必须是 1 到 {MAX_BRIDGES_PER_ISLAND} 之间的整数
+	Weed Box and Lines…	除废框和除废线…
+	Weed Box and Lines	除废框和除废线
+	Margin	边距
+	Box	框
+	Swatch	色板

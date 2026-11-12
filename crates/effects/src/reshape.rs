@@ -13,7 +13,7 @@
 //! them ([`image_rows`]): Outline Object follows the outline of the image's opaque area
 //! ([`opaque_area`]).
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError, Weak};
@@ -708,7 +708,7 @@ fn as_art_opts(
     transform_items(&mut art, paint_doc);
     // Type and symbols in perspective: the art projected onto their plane.
     if let Some(h) = n.projection() {
-        project_leaves(&mut art, &h);
+        project_leaves(&mut art, &h, paint_doc);
     }
     // The art is a group with `n`'s id (for an image without fills or strokes that paint, a clip
     // group).
@@ -726,9 +726,29 @@ fn as_art_opts(
     Some(out)
 }
 
-/// Map every path under `art` (and its gradients) through the projective map `h`, curves split
-/// finely enough to follow it.
-fn project_leaves(art: &mut Node, h: &vectorcraft_geom::Homography) {
+/// Map every path under `art` (and its gradients), and every path in the art of the linked opacity
+/// masks of the objects under it, through the projective map `h`, curves split finely enough to
+/// follow it. The type and live objects in the art of those masks are outlined and evaluated
+/// first ([`outlined_members`], with the symbols of `doc`).
+fn project_leaves(art: &mut Node, h: &vectorcraft_geom::Homography, doc: Option<&Document>) {
+    project_paths(art, h);
+    each_linked_mask_mut(art, false, 0, &mut |m| {
+        *m = outlined_mask_art(doc, m);
+        project_paths(m, h);
+    });
+}
+
+/// `art`, the art of an opacity mask, with type and live objects in it outlined and evaluated
+/// ([`outlined_members`]), and as art that keeps its look ([`as_art`]) when it is type itself.
+fn outlined_mask_art(doc: Option<&Document>, art: &Node) -> Node {
+    match art.kind {
+        NodeKind::Text(_) => as_art(doc, art, None).unwrap_or_else(|| art.clone()),
+        _ => outlined_members(doc, art),
+    }
+}
+
+/// The paths of [`project_leaves`] outside the art of masks.
+fn project_paths(art: &mut Node, h: &vectorcraft_geom::Homography) {
     let f = |p: vectorcraft_geom::Point| h.apply(p).unwrap_or(p);
     let piece = art.geometric_bounds().map_or(1.0, |b| (b.width().max(b.height()) / 64.0).max(0.25));
     let project = |path: &mut PathData| *path = vectorcraft_doc::live::map_nonlinear(path, piece, f);
@@ -805,58 +825,151 @@ fn hoist_copies(art: &mut Node) {
 /// whose swatches and patterns must be in `doc` (without one, pieces that name one are refused).
 /// Returns how gradients that paint the art as a whole follow the effects. A deferred live-effect
 /// plug-in is listed by its index in `owner`, the effect list `fx` was taken from, or in `fx` when
-/// `owner` does not hold it.
+/// `owner` does not hold it. The art of the linked opacity masks of the objects in `art` (not of
+/// `art` itself) takes each effect as the paths it masks do ([`Step::reshape_masks`]), with the
+/// type and live objects in it outlined and evaluated first ([`outlined_members`]). When a mask
+/// stays as it was, or a Transform effect makes fewer copies than it asks for, art with linked
+/// masks keeps its shape under that effect.
 fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], owner: &[Effect], budget: Budget, apart: bool, doc: Option<&Document>) -> crate::Carry {
     let mut whole = crate::Carry::default();
     if fx.is_empty() {
         return whole;
     }
-    let mut leaves_safe = true;
-    for_each_leaf(art, &mut |leaf| {
-        if !leaves_safe {
-            return;
-        }
-        if let Some((_, rule)) = leaf_geometry(leaf) {
-            let has_stroke = leaf.appearance.stroke().is_some_and(|s| !s.paint.is_none() && s.width > 0.0);
-            if rule != FillRule::NonZero || has_stroke {
-                leaves_safe = false;
-            }
-        }
-    });
+    let masked = has_linked_mask(art, false);
+    if masked {
+        each_linked_mask_mut(art, false, 0, &mut |m| *m = outlined_mask_art(doc, m));
+    }
+    let mut masks_safe = true;
+    each_linked_mask(art, false, 0, &mut |_, m| masks_safe &= leaves_safe(m));
     let art_stroke = art.appearance.stroke().is_some_and(|s| !s.paint.is_none() && s.width > 0.0);
-    let style_safe = leaves_safe && !art_stroke;
+    let style_safe = leaves_safe(art) && masks_safe && !art_stroke;
     let listed = fx;
     let opt_fx = crate::geometry::optimize_geometry_effects(fx, style_safe);
     let fx = opt_fx.as_slice();
     let seed = art.id.0;
     let mut used = art_cost(art);
+    each_linked_mask(art, false, 0, &mut |_, m| used = used.plus(art_cost(m)));
     let max = budget.at_least(used);
-    // Read before the effects run: a path's own copies don't make it art of several objects.
+    // Read before the effects run: a path's own copies don't make it art of several objects. The
+    // same holds for the art of each mask, listed by the object it masks.
     let copy_whole = copies_whole(art);
+    let mut wholes = HashMap::new();
+    each_linked_mask(art, false, 0, &mut |id, m| {
+        wholes.entry(id).or_insert_with(|| copies_whole(m));
+    });
     let mut warped = WarpedImages::new();
     for e in fx {
         let Some(bounds) = warped.bounds(art) else { break };
         let params = merged_params(&e.id, &e.params);
         // Where a live-effect plug-in sits, which it is listed by when it is deferred.
         let effect = owner.iter().position(|x| std::ptr::eq(x, *e)).or_else(|| listed.iter().position(|x| std::ptr::eq(*x, *e)));
+        let step = Step { e, params: &params, bounds, seed, effect, apart, doc, wholes: &wholes };
+        // Art with linked masks keeps its shape under an effect that a mask in it could not take
+        // as the art it masks did, so no mask is left apart from its art.
+        let before = masked.then(|| (art.clone(), used));
+        let ran = step.run(art, max, &mut used, copy_whole, Some(&mut warped), false, 0);
+        if (ran.masks || ran.short)
+            && let Some((was, cost)) = before
+        {
+            *art = was;
+            used = cost;
+            continue;
+        }
+        if let Some(carry) = ran.whole {
+            whole.push(carry);
+        }
+    }
+    cut_warped_images(art, &warped);
+    whole
+}
+
+/// One geometry effect of an object run over its art ([`reshape_leaves_apart`]): the effect, its
+/// merged params, the reference box and seed of the object's art, where a deferred live-effect
+/// plug-in is listed, whether each Transform copy becomes an object, the document that the
+/// swatches and patterns of painted pieces are looked up in, and [`copies_whole`] of the art of
+/// each linked mask before the first effect, by the id of the object it masks.
+struct Step<'a> {
+    e: &'a Effect,
+    params: &'a serde_json::Value,
+    bounds: Rect,
+    seed: u64,
+    effect: Option<usize>,
+    apart: bool,
+    doc: Option<&'a Document>,
+    wholes: &'a HashMap<NodeId, bool>,
+}
+
+/// What [`Step::run`] did to a piece of art.
+struct Ran {
+    /// A path in the art kept its shape (past the budget).
+    kept: bool,
+    /// The linked opacity mask of an object in the art stayed as it was while the paths it masks
+    /// took the effect, or could have ([`Step::reshape_masks`]).
+    masks: bool,
+    /// A Transform effect made fewer copies of a path, image or symbol instance than it asks for
+    /// (past the budget or out of reach), where a linked mask could take a different number.
+    short: bool,
+    /// How what paints the art as a whole follows the effect, when it does.
+    whole: Option<crate::Carry>,
+}
+
+impl Ran {
+    /// Nothing in the art kept its shape or made fewer copies, and every linked mask in it moved.
+    fn complete(&self) -> bool {
+        !self.kept && !self.masks && !self.short
+    }
+}
+
+impl Step<'_> {
+    /// Run the effect over `art`, whose paths and those of the linked opacity masks in it keep to
+    /// `max` together with what they cost so far (`used`). `copy_whole` is [`copies_whole`] of the
+    /// art, or of a mask's art, before the first effect. `warped` lists the images Warp effects
+    /// bend in the art ([`WarpedImages`]); a mask's art has none. With `own`, `art` is the art of a
+    /// mask, and its own linked mask takes the effect too. `depth` counts the masks `art` is in. A
+    /// live-effect plug-in that paints its pieces leaves a mask's art, and art that holds objects
+    /// with linked masks, as they are and reports the masks as stayed: a mask can't take the
+    /// pieces as the art it masks does. So does a Warp effect that bends an image with a linked
+    /// mask.
+    #[allow(clippy::too_many_arguments)]
+    fn run(
+        &self,
+        art: &mut Node,
+        max: Budget,
+        used: &mut Budget,
+        copy_whole: bool,
+        mut warped: Option<&mut WarpedImages>,
+        own: bool,
+        depth: usize,
+    ) -> Ran {
+        let (e, params, bounds, seed) = (self.e, self.params, self.bounds, self.seed);
+        let stayed = Ran { kept: false, masks: true, short: false, whole: None };
         if let Some(plugin) = painted_plugin(e) {
-            let at = effect.map(|effect| vectorcraft_plugins::deferred::Stage { object: seed, effect, item: None });
+            if own || has_linked_mask(art, false) {
+                return stayed;
+            }
+            let at = self.effect.map(|effect| vectorcraft_plugins::deferred::Stage { object: seed, effect, item: None });
             for_each_leaf(art, &mut |leaf| {
                 let Some((path, _)) = leaf_geometry(leaf) else { return };
                 let before = Budget::of(&path);
                 let room = max.minus(used.minus(before));
-                if let Some(made) = paint_leaf(leaf, plugin, &params, bounds, room, doc, at) {
-                    used = used.minus(before).plus(made);
+                if let Some(made) = paint_leaf(leaf, plugin, params, bounds, room, self.doc, at) {
+                    *used = used.minus(before).plus(made);
                 }
             });
-            continue;
+            return Ran { kept: false, masks: false, short: false, whole: None };
+        }
+        // A Warp effect that bends images ([`mark_warped_images`]) bends an image's pixels, not the
+        // art of its linked mask.
+        let warp = e.id.strip_prefix("warp.").and_then(crate::warp::WarpStyle::from_id).filter(|_| crate::warp::bends(&e.id, params));
+        if warp.is_some() && has_masked_image(art) {
+            return stayed;
         }
         // Placed gradients follow a Transform effect, Free Distort and the Warp effects
         // ([`crate::Carry`]): under Free Distort and Warp (`boxes`) each path's move and scale from
         // its bounds before the effect to its bounds after it. Under those and the other effects,
         // the placed gradients of type's outlines in `art` (`outline_text`) move and scale with
         // the outlines' bounds.
-        let follows = crate::Carry::follows(&e.id, &params, bounds, seed);
+        let follows = crate::Carry::follows(&e.id, params, bounds, seed);
         let boxes = follows && crate::Carry::by_bounds(&e.id);
         let mut outlines = vec![];
         if !follows || boxes {
@@ -872,30 +985,61 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], owner: &[Effect], budget
             // The images earlier Warps bend are measured by their pieces only when a group's
             // gradient needs the bounds.
             if !groups.is_empty()
-                && let Some(images) = warped.when_cut(art)
+                && let Some(images) = warped.as_deref().and_then(|w| w.when_cut(art))
             {
                 groups.clear();
                 group_marks(art, &mut vec![], &HashSet::new(), Some(images), &mut groups);
             }
         }
         // The ids of the paths that kept their shape (past the budget), and their places in the
-        // order [`for_each_leaf`] visits the paths.
+        // order [`for_each_leaf`] visits the paths; and the ids of the paths whose linked masks
+        // moved with them as they were transformed as objects.
         let mut kept_ids = HashSet::new();
         let mut kept_leaves = HashSet::new();
         let mut leaf_at = 0usize;
+        let mut moved_ids = HashSet::new();
         let transform = (e.id == "distort.transform").then(|| {
-            let (m, copies) = crate::distort::transform_map(bounds, &params, seed);
-            let options = crate::distort::TransformOptions::of(&params);
-            (m, copies, options, crate::distort::transform_affine(bounds, &params, seed))
+            let (m, copies) = crate::distort::transform_map(bounds, params, seed);
+            let options = crate::distort::TransformOptions::of(params);
+            (m, copies, options, crate::distort::transform_affine(bounds, params, seed))
         });
+        // In a mask's art, images and symbol instances take only a Transform effect
+        // ([`transform_placed`]): a mask's art that holds one can't take another effect as the art
+        // it masks does.
+        if own && transform.is_none() && (is_placed(art) || placed_count(art) > 0) {
+            return Ran { kept: false, masks: true, short: false, whole: None };
+        }
         // Art of several objects is copied whole, so the copies don't interleave member by member.
+        // The copies of its members carry their linked masks, moved with them.
         if let Some((m, copies, options, _)) = transform
             && copies > 0
             && copy_whole
         {
-            used = copy_art(art, m, copies, copy_scaling(options), max);
-            continue;
+            if !own {
+                *used = copy_art(art, m, copies, copy_scaling(options), max);
+                return Ran { kept: false, masks: false, short: false, whole: None };
+            }
+            // A mask's art: its copies keep to what the rest of the art leaves of `max`, and the
+            // linked mask of the art itself takes them too. That mask's art stays in `used`, as
+            // [`copy_art`] counts only the members.
+            let before = copy_cost(art);
+            let rest = used.minus(before).plus(art.extras().mask.as_deref().map_or(Budget { anchors: 0, lines: 0 }, |k| copy_cost(&k.art)));
+            let made = copy_art(art, m, copies, copy_scaling(options), max.minus(rest));
+            *used = rest.plus(made);
+            let short = art.children().is_some_and(|c| c.iter().filter(|c| !c.is_guide()).count() <= copies);
+            let none = HashSet::new();
+            let masks = self.reshape_own_mask(art, &Skip { moved: &none, kept: &none }, max, used, depth);
+            return Ran { kept: false, masks, short, whole: None };
         }
+        // A shortfall in the copies matters for the objects a linked mask above them covers, which
+        // the mask would take a different number of copies than, and anywhere in a mask's art.
+        let watch = transform.is_some_and(|(_, copies, options, _)| copies > 0 && options.objects) && (own || has_linked_mask(art, false));
+        let mut covered = HashSet::new();
+        if watch && !own {
+            masked_ids(art, false, &mut covered);
+        }
+        let counts = |id: NodeId| watch && (own || covered.contains(&id));
+        let mut short = false;
         for_each_leaf(art, &mut |leaf| {
             let at = leaf_at;
             leaf_at += 1;
@@ -908,15 +1052,26 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], owner: &[Effect], budget
                 // strokes; a gradient paints each copy by itself, not the one piece the copies
                 // make together; and Expand Appearance (`apart`) makes each copy an object.
                 // Fills and strokes that stack paint each copy below the one before (#5920, #6316).
+                // Each copy of a path with a linked mask carries the mask, moved with it.
                 let separate = copies > 0
-                    && (apart
+                    && (self.apart
                         || leaf.appearance.has_unplaced_gradient()
                         || leaf.appearance.has_placed_gradient()
-                        || paints_copies_apart(&leaf.appearance, rule));
+                        || paints_copies_apart(&leaf.appearance, rule)
+                        || leaf.extras().mask.as_ref().is_some_and(|m| m.linked));
+                // The copies of a path replace it by a group of them, the path included.
+                let copied = |leaf: &Node| leaf.children().map_or(0, Vec::len);
                 if options.reach_appearance() {
                     let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room);
-                    used = used.minus(before).plus(made);
-                    if !moved {
+                    *used = used.minus(before).plus(made);
+                    if moved {
+                        // With Transform Objects off the path stays, and its mask takes the
+                        // effect's stroke and pattern changes as its own art.
+                        if options.objects {
+                            moved_ids.insert(leaf.id);
+                        }
+                        short |= counts(leaf.id) && copied(leaf) <= copies;
+                    } else {
                         kept_ids.insert(leaf.id);
                     }
                     return;
@@ -924,20 +1079,28 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], owner: &[Effect], budget
                 if separate {
                     let scaling = vectorcraft_doc::Scaling { keep_fit_when_flat: true, ..Default::default() };
                     let made = copy_leaf(leaf, &path, m, copies, scaling, room);
-                    used = used.minus(before).plus(made);
+                    *used = used.minus(before).plus(made);
+                    moved_ids.insert(leaf.id);
+                    short |= counts(leaf.id) && copied(leaf) <= copies;
                     return;
                 }
             }
-            let stage = effect.map(|effect| vectorcraft_plugins::deferred::Stage { object: seed, effect, item: None });
-            let Some(out) = apply_one(&e.id, &params, &path, bounds, &GeomContext { seed, stage, ..GeomContext::of(leaf) }, room) else {
+            let stage = self.effect.map(|effect| vectorcraft_plugins::deferred::Stage { object: seed, effect, item: None });
+            let Some(out) = apply_one(&e.id, params, &path, bounds, &GeomContext { seed, stage, ..GeomContext::of(leaf) }, room) else {
                 kept_ids.insert(leaf.id);
                 kept_leaves.insert(at);
                 return;
             };
-            used = used.minus(before).plus(Budget::of(&out));
+            // A Transform effect's copies of a path are subpaths of it, each with the path's anchors.
+            if counts(leaf.id)
+                && let Some((_, copies, _, _)) = transform
+            {
+                short |= out.anchor_count() < path.anchor_count().saturating_mul(copies.saturating_add(1));
+            }
+            *used = used.minus(before).plus(Budget::of(&out));
             if follows && !boxes {
                 // A gradient fitted to the path fits the path's own bounds.
-                let carry = crate::Carry::of(&e.id, &params, bounds, path.bounds(), None, seed);
+                let carry = crate::Carry::of(&e.id, params, bounds, path.bounds(), None, seed);
                 if carry.moves(&leaf.appearance) {
                     carry.apply(&mut leaf.appearance);
                 }
@@ -950,36 +1113,230 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], owner: &[Effect], budget
         // Warp bends images too: each one's pixels follow the warp's map over the same box. The
         // images are cut into pieces once, after the last effect ([`cut_warped_images`]). An image
         // whose clipping frame kept its shape (past the budget) keeps its pixels as they are.
-        if let Some(style) = e.id.strip_prefix("warp.").and_then(crate::warp::WarpStyle::from_id)
-            && crate::warp::bends(&e.id, &params)
+        if let Some(style) = warp
+            && let Some(warped) = warped.as_deref_mut()
         {
-            let f: WarpMap = Rc::from(crate::warp::warp_map(bounds, style, &params));
+            let f: WarpMap = Rc::from(crate::warp::warp_map(bounds, style, params));
             warped.reserve(art);
-            mark_warped_images(art, &f, &kept_leaves, false, &mut 0, &mut warped);
+            mark_warped_images(art, &f, &kept_leaves, false, &mut 0, warped);
         }
         if let Some((m, copies, options, _)) = transform
             && options.objects
         {
-            transform_placed(art, m, copies);
+            // A mask's art that is one image or symbol instance is placed as the only member of a
+            // group of it.
+            let root = is_placed(art);
+            if root {
+                let id = art.id;
+                let one = std::mem::replace(art, Node::group(id, vec![]));
+                *art = Node::group(id, vec![Arc::new(one)]);
+            }
+            let placed = if watch { masked_placed(art, own) } else { 0 };
+            transform_placed(art, m, copies, copy_scaling(options));
+            short |= watch && masked_placed(art, own) < placed.saturating_mul(copies.saturating_add(1));
+            if root && let Some([one]) = art.children().map(Vec::as_slice) {
+                *art = (**one).clone();
+            }
         }
         if outlines.iter().any(Option::is_some) {
             rebase_type_outlines(art, &mut outlines.into_iter());
         }
+        // Under Transform copies, a mask takes the copies as the paths it masks do; the copies of a
+        // path with a mask of its own each carry it ([`copy_leaf`]).
+        let masks = self.reshape_masks(art, own, &Skip { moved: &moved_ids, kept: &kept_ids }, max, used, depth);
         // What paints the art as a whole, and the own fills and strokes of the groups inside it,
         // follow their bounds under Free Distort and Warp (they stay when no path changed them).
         // Each stays when a path under it that its bounds measure kept its shape (past the budget).
         let mut after = vec![];
-        let images = if groups.is_empty() { None } else { warped.when_cut(art) };
+        let images = if groups.is_empty() { None } else { warped.as_deref().and_then(|w| w.when_cut(art)) };
         let held = (!groups.is_empty() || !kept_ids.is_empty()) && group_marks(art, &mut vec![], &kept_ids, images, &mut after).1;
         if !groups.is_empty() {
-            carry_groups(art, groups, after, &|from, to| crate::Carry::of(&e.id, &params, bounds, from, to, seed));
+            carry_groups(art, groups, after, &|from, to| crate::Carry::of(&e.id, params, bounds, from, to, seed));
         }
-        if follows && !held {
-            whole.push(crate::Carry::of(&e.id, &params, bounds, Some(bounds), warped.bounds(art), seed));
+        let drawn = warped.as_deref().map_or_else(|| art.geometric_bounds(), |w| w.bounds(art));
+        let whole = (follows && !held).then(|| crate::Carry::of(&e.id, params, bounds, Some(bounds), drawn, seed));
+        Ran { kept: !kept_ids.is_empty(), masks, short, whole }
+    }
+
+    /// Run the effect over the art of the linked opacity mask of `n` (with `own`) and of each path,
+    /// compound path, group and layer under it, with the art's reference box, as the paths the mask
+    /// covers take it: the mask moves and bends with what it masks. The mask of an object
+    /// transformed as an object moved with it already and is left as it is. A mask stays as it was
+    /// past [`vectorcraft_doc::depth::MAX_DEPTH`] masks inside masks, and for the reasons
+    /// [`Step::reshape_own_mask`] gives. Returns whether a mask stayed for one of those reasons.
+    fn reshape_masks(&self, n: &mut Node, own: bool, skip: &Skip, max: Budget, used: &mut Budget, depth: usize) -> bool {
+        if depth >= vectorcraft_doc::depth::MAX_DEPTH || !has_linked_mask(n, own) {
+            return false;
+        }
+        let mut stayed = own && self.reshape_own_mask(n, skip, max, used, depth);
+        if let NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } = &mut n.kind {
+            for c in children.iter_mut() {
+                if has_linked_mask(c, true) {
+                    stayed |= self.reshape_masks(Arc::make_mut(c), true, skip, max, used, depth);
+                }
+            }
+        }
+        stayed
+    }
+
+    /// Run the effect over the art of the linked opacity mask of `n` itself, when `n` is a path,
+    /// compound path, group or layer that `skip` does not list as moved. The mask stays as it was
+    /// when a path it masks kept its shape, and when its own art could not take the effect whole: a
+    /// path in it would keep its shape, its copies would stop short, or a mask inside it would stay
+    /// (no mask is left half moved). Returns whether the mask stayed for one of those reasons.
+    fn reshape_own_mask(&self, n: &mut Node, skip: &Skip, max: Budget, used: &mut Budget, depth: usize) -> bool {
+        if depth >= vectorcraft_doc::depth::MAX_DEPTH || !reshapes_mask_of(n) || skip.moved.contains(&n.id) {
+            return false;
+        }
+        let stays = holds_any(n, skip.kept);
+        let id = n.id;
+        let Some(m) = n.extras_if_any().and_then(|x| x.mask.as_mut()).filter(|m| m.linked) else { return false };
+        let before = *used;
+        let mut art = (*m.art).clone();
+        let whole = self.wholes.get(&id).copied().unwrap_or_else(|| copies_whole(&art));
+        let ran = (!stays).then(|| self.run(&mut art, max, used, whole, None, true, depth + 1));
+        match ran {
+            Some(ran) if ran.complete() => {
+                // What paints the mask's art as a whole follows the effect as the art does.
+                if let Some(carry) = ran.whole
+                    && carry.moves(&art.appearance)
+                {
+                    carry.apply(&mut art.appearance);
+                }
+                m.art = Arc::new(art);
+                false
+            }
+            _ => {
+                *used = before;
+                true
+            }
         }
     }
-    cut_warped_images(art, &warped);
-    whole
+}
+
+/// The objects whose linked masks [`Step::reshape_masks`] leaves as they are: those transformed
+/// as objects (`moved`), and those holding a path that kept its shape (`kept`).
+struct Skip<'a> {
+    moved: &'a HashSet<NodeId>,
+    kept: &'a HashSet<NodeId>,
+}
+
+/// Is `n` an object whose linked opacity mask a geometry effect on the art it is in reshapes with
+/// it: a path, compound path, group or layer? An image or symbol instance moves its mask only
+/// with the map a Transform effect places it by ([`transform_placed`]).
+fn reshapes_mask_of(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } | NodeKind::Group { .. } | NodeKind::Layer { .. })
+}
+
+/// Does `n` (with `own`) or a path, compound path, group or layer under it carry a linked opacity
+/// mask that [`Step::reshape_masks`] reshapes?
+fn has_linked_mask(n: &Node, own: bool) -> bool {
+    let mine = own && reshapes_mask_of(n) && n.extras().mask.as_ref().is_some_and(|m| m.linked);
+    mine || match &n.kind {
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => children.iter().any(|c| has_linked_mask(c, true)),
+        _ => false,
+    }
+}
+
+/// Run `f` on the id of `n` (with `own`) and of each path, compound path, group and layer under it
+/// that carries a linked opacity mask, with the art of that mask, and on the masks inside that
+/// art, as [`Step::reshape_masks`] reaches them: `depth` masks deep already, up to
+/// [`vectorcraft_doc::depth::MAX_DEPTH`].
+fn each_linked_mask(n: &Node, own: bool, depth: usize, f: &mut dyn FnMut(NodeId, &Node)) {
+    if depth >= vectorcraft_doc::depth::MAX_DEPTH {
+        return;
+    }
+    if own
+        && reshapes_mask_of(n)
+        && let Some(m) = n.extras().mask.as_deref().filter(|m| m.linked)
+    {
+        f(n.id, &m.art);
+        each_linked_mask(&m.art, true, depth + 1, f);
+    }
+    if let NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } = &n.kind {
+        for c in children {
+            each_linked_mask(c, true, depth, f);
+        }
+    }
+}
+
+/// [`each_linked_mask`] that changes the art of each mask: `f` runs on a mask's art before the
+/// masks inside it are reached.
+fn each_linked_mask_mut(n: &mut Node, own: bool, depth: usize, f: &mut dyn FnMut(&mut Node)) {
+    if depth >= vectorcraft_doc::depth::MAX_DEPTH || !has_linked_mask(n, own) {
+        return;
+    }
+    if own
+        && reshapes_mask_of(n)
+        && let Some(m) = n.extras_if_any().and_then(|x| x.mask.as_mut()).filter(|m| m.linked)
+    {
+        let art = Arc::make_mut(&mut m.art);
+        f(art);
+        each_linked_mask_mut(art, true, depth + 1, f);
+    }
+    if let NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } = &mut n.kind {
+        for c in children.iter_mut() {
+            if has_linked_mask(c, true) {
+                each_linked_mask_mut(Arc::make_mut(c), true, depth, f);
+            }
+        }
+    }
+}
+
+/// Does [`Step::reshape_masks`] reshape the linked opacity mask of `n` itself?
+fn has_own_linked_mask(n: &Node) -> bool {
+    reshapes_mask_of(n) && n.extras().mask.as_ref().is_some_and(|m| m.linked)
+}
+
+/// Add to `out` the ids of the objects under `n` that the linked opacity mask of an object above
+/// them covers (every one of them with `under`).
+fn masked_ids(n: &Node, under: bool, out: &mut HashSet<NodeId>) {
+    for c in n.children().into_iter().flatten() {
+        if under {
+            out.insert(c.id);
+        }
+        masked_ids(c, under || has_own_linked_mask(c), out);
+    }
+}
+
+/// How many images and symbol instances under `n` the linked opacity mask of an object above them
+/// covers (every one of them with `under`).
+fn masked_placed(n: &Node, under: bool) -> usize {
+    n.children().into_iter().flatten().map(|c| usize::from(under && is_placed(c)) + masked_placed(c, under || has_own_linked_mask(c))).sum()
+}
+
+/// Is `n`, or anything under it, one of `ids`?
+fn holds_any(n: &Node, ids: &HashSet<NodeId>) -> bool {
+    if ids.is_empty() {
+        return false;
+    }
+    let mut any = false;
+    n.walk(&mut |c| any |= ids.contains(&c.id));
+    any
+}
+
+/// Do the paths under `n` that [`for_each_leaf`] visits all fill by the non-zero rule without a
+/// stroke that paints? Effects then reshape their outlines alike in any order that the
+/// optimization of [`crate::geometry::optimize_geometry_effects`] takes.
+fn leaves_safe(n: &Node) -> bool {
+    match &n.kind {
+        NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } => {
+            let has_stroke = n.appearance.stroke().is_some_and(|s| !s.paint.is_none() && s.width > 0.0);
+            leaf_geometry(n).is_none_or(|(_, rule)| rule == FillRule::NonZero && !has_stroke)
+        }
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => children.iter().all(|c| leaves_safe(c)),
+        _ => true,
+    }
+}
+
+/// Is there an image with a linked opacity mask among the members of `n`, or among its groups'
+/// and layers' members, which [`mark_warped_images`] walks?
+fn has_masked_image(n: &Node) -> bool {
+    let (NodeKind::Group { children, .. } | NodeKind::Layer { children, .. }) = &n.kind else { return false };
+    children.iter().any(|c| match c.kind {
+        NodeKind::Image(_) => c.extras().mask.as_ref().is_some_and(|m| m.linked),
+        _ => has_masked_image(c),
+    })
 }
 
 /// Largest factor a Transform effect's Scale Strokes & Effects scales one object's strokes by
@@ -1200,7 +1557,9 @@ fn copy_leaf(leaf: &mut Node, path: &PathData, m: Affine, copies: usize, scaling
         let mut copy = leaf.clone();
         copy.transform(xf, scaling);
         // Each copy's own geometry effects make a different amount, as the copy and its effects scale.
-        let cost = Budget::of(&moved).plus(effects_cost(&copy, &moved));
+        let mut cost = Budget::of(&moved).plus(effects_cost(&copy, &moved));
+        // Each copy carries the art of its linked masks, moved with it.
+        each_linked_mask(&copy, true, 0, &mut |_, m| cost = cost.plus(art_cost(m)));
         if !budget.fits(made.plus(cost)) || !copy.geometric_bounds().is_some_and(crate::distort::within_reach) {
             break;
         }
@@ -1740,17 +2099,20 @@ fn box_map(from: Rect, to: Rect) -> vectorcraft_geom::Affine {
 /// Apply the Transform effect's map `m` to every image and symbol instance under `n`, as
 /// [`for_each_leaf`] does to paths: the map goes into the object's placement, and `copies` more
 /// follow, each mapped once more than the last. Without copies the object itself takes the map,
-/// as a path does.
-fn transform_placed(n: &mut Node, m: Affine, copies: usize) {
-    transform_placed_within(n, m, copies, crate::distort::MAX_COPY_OBJECTS)
+/// as a path does. The art of each one's linked opacity mask takes the map with `scaling`, as a
+/// path's mask does.
+fn transform_placed(n: &mut Node, m: Affine, copies: usize, scaling: vectorcraft_doc::Scaling) {
+    let mut room = crate::distort::MAX_COPY_OBJECTS.saturating_sub(placed_count(n));
+    copy_placed(n, m, copies, scaling, &mut room);
 }
 
 /// [`transform_placed`] whose copies make at most `max` image and symbol instance nodes of the art,
 /// the originals included: each copy adds the object once more, and a Transform after this one
 /// copies the lot again, so copies stop where the result would pass `max` (#2042).
+#[cfg(test)]
 pub(crate) fn transform_placed_within(n: &mut Node, m: Affine, copies: usize, max: usize) {
     let mut room = max.saturating_sub(placed_count(n));
-    copy_placed(n, m, copies, &mut room);
+    copy_placed(n, m, copies, vectorcraft_doc::Scaling::default(), &mut room);
 }
 
 /// Rows and columns of the pieces a Warp effect cuts an image into (VectorCraft's own number).
@@ -1982,11 +2344,11 @@ fn is_placed(n: &Node) -> bool {
 /// document order, each copy taking one from `room` (what the art can still grow by), until the
 /// budget is full. As with a path, the copies stop before one reaches past
 /// [`crate::distort::within_reach`].
-fn copy_placed(n: &mut Node, m: Affine, copies: usize, room: &mut usize) {
+fn copy_placed(n: &mut Node, m: Affine, copies: usize, scaling: vectorcraft_doc::Scaling, room: &mut usize) {
     let Some(children) = n.children_mut() else { return };
     for c in children.iter_mut() {
         if !is_placed(c) {
-            copy_placed(Arc::make_mut(c), m, copies, room);
+            copy_placed(Arc::make_mut(c), m, copies, scaling, room);
             continue;
         }
         let src = (**c).clone();
@@ -2004,6 +2366,12 @@ fn copy_placed(n: &mut Node, m: Affine, copies: usize, room: &mut usize) {
             // The placed gradients of its own fills and strokes move with it, as a path's do.
             if xf != Affine::IDENTITY && one.appearance.has_positioned_gradient() {
                 one.appearance.transform_gradients(xf);
+            }
+            // So does the art of its linked opacity mask.
+            if xf != Affine::IDENTITY
+                && let Some(m) = one.extras_if_any().and_then(|x| x.mask.as_mut()).filter(|m| m.linked)
+            {
+                Arc::make_mut(&mut m.art).transform(xf, scaling);
             }
             one
         };
