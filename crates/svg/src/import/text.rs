@@ -442,12 +442,14 @@ struct Instances {
     paints: Vec<Vec<String>>,
     /// The slot made for each [`UseKey`]; `None` where the text's own slot serves.
     memo: HashMap<UseKey, Option<usize>>,
-    /// The nodes and text bytes of the texts built so far, up to [`MAX_INSTANCE_WORK`].
+    /// The nodes, text bytes and text path elements of the texts built so far, up to
+    /// [`MAX_INSTANCE_WORK`].
     work: usize,
 }
 
-/// The most nodes and text bytes [`use_slot`] builds texts from, all `<use>` elements together
-/// (the file is untrusted). Past it, a `<use>` shows its text with the text's own properties.
+/// The most nodes, text bytes and elements of the paths `<textPath>`s follow that [`use_slot`]
+/// builds texts from, all `<use>` elements together (the file is untrusted). Past it, a `<use>`
+/// shows its text with the text's own properties.
 const MAX_INSTANCE_WORK: usize = 1 << 20;
 
 /// The slot of text `style_t` (slot `shared`) as `<use>` `style_u` shows it. The text inherits
@@ -482,7 +484,11 @@ fn use_slot(
     }
     let label = style_t.attribute("id").map_or_else(|| "a text".to_string(), |id| format!("text '{id}'"));
     let work = if inst.work < MAX_INSTANCE_WORK {
-        style_t.descendants().map(|n| if n.is_text() { n.text().map_or(0, str::len) } else { 1 }).sum::<usize>()
+        // Each build lays the text out along the path its `<textPath>` follows, so the path counts too.
+        style_t
+            .descendants()
+            .map(|n| if n.is_text() { n.text().map_or(0, str::len) } else { cx.path_elements(n).saturating_add(1) })
+            .fold(0, usize::saturating_add)
     } else {
         0
     };
@@ -490,7 +496,7 @@ fn use_slot(
     if work == 0 || inst.work > MAX_INSTANCE_WORK {
         inst.work = MAX_INSTANCE_WORK;
         let w = format!(
-            "more than {} KiB of text shown through <use> elements: the rest show their text without the properties the <use> passes on",
+            "more than {} KiB of text and text paths shown through <use> elements: the rest show their text without the properties the <use> passes on",
             MAX_INSTANCE_WORK >> 10
         );
         if !warnings.contains(&w) {
@@ -688,6 +694,16 @@ struct Ctx {
     sizes: RefCell<HashMap<roxmltree::NodeId, f64>>,
     weights: RefCell<HashMap<roxmltree::NodeId, u16>>,
     elems: RefCell<HashMap<roxmltree::NodeId, Rc<ElemStyle>>>,
+    /// The path each `<textPath>` read so far follows ([`Self::text_path`]); `None` where it has
+    /// no usable one. The styles of a `<use>` instance share it, so each path is found and parsed
+    /// once however many `<use>` elements show its text.
+    paths: Rc<RefCell<HashMap<roxmltree::NodeId, Option<Rc<BezPath>>>>>,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times [`Ctx::read_text_path`] has read a `<textPath>`'s path on this thread.
+    static TEXT_PATH_READS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
 impl Ctx {
@@ -700,6 +716,7 @@ impl Ctx {
             sizes: RefCell::default(),
             weights: RefCell::default(),
             elems: RefCell::default(),
+            paths: Rc::default(),
         };
         let root = xml.root_element();
         let dim = |a: &str| root.attribute(a).and_then(|v| cx.length(v, DEFAULT_FONT_SIZE, 0.0)).filter(|v| *v > 0.0);
@@ -720,6 +737,7 @@ impl Ctx {
             sizes: RefCell::default(),
             weights: RefCell::default(),
             elems: RefCell::default(),
+            paths: self.paths.clone(),
         }
     }
 
@@ -986,8 +1004,27 @@ impl Ctx {
         }
     }
 
-    /// The path a `<textPath>` follows, in the text's user space.
-    fn text_path(&self, xml: &roxmltree::Document, tp: XNode) -> Option<BezPath> {
+    /// The path a `<textPath>` follows, in the text's user space. It is read from the file once
+    /// ([`Self::paths`]).
+    fn text_path(&self, xml: &roxmltree::Document, tp: XNode) -> Option<Rc<BezPath>> {
+        if let Some(known) = self.paths.borrow().get(&tp.id()) {
+            return known.clone();
+        }
+        let path = self.read_text_path(xml, tp).map(Rc::new);
+        self.paths.borrow_mut().insert(tp.id(), path.clone());
+        path
+    }
+
+    /// How many elements the path of `<textPath>` `tp` has, when a text built so far follows it
+    /// ([`Self::text_path`]); 0 for any other node.
+    fn path_elements(&self, tp: XNode) -> usize {
+        self.paths.borrow().get(&tp.id()).and_then(|p| p.as_deref()).map_or(0, |p| p.elements().len())
+    }
+
+    /// Find and parse the path `<textPath>` `tp` follows.
+    fn read_text_path(&self, xml: &roxmltree::Document, tp: XNode) -> Option<BezPath> {
+        #[cfg(test)]
+        TEXT_PATH_READS.set(TEXT_PATH_READS.get() + 1);
         let mut bp = match tp.attribute("path") {
             Some(d) => BezPath::from_svg(d).ok()?,
             None => {
@@ -1625,3 +1662,6 @@ fn assemble(cells: &[Cell], breaks: &[Break]) -> (Runs, Vec<usize>) {
     }
     (out, bytes)
 }
+
+#[cfg(test)]
+mod tests;

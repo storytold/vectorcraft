@@ -239,7 +239,28 @@ fn uses_of_a_long_text_stop_taking_their_properties_past_the_limit() {
     assert_eq!(sizes.len(), 4, "{sizes:?}");
     assert!(close(sizes[0], 10.0, 1e-9) && close(sizes[1], 20.0, 1e-9), "{sizes:?}");
     assert!(close(sizes[2], 12.0, 1e-9) && close(sizes[3], 12.0, 1e-9), "{sizes:?}");
-    assert_eq!(w.iter().filter(|w| w.contains("KiB of text shown through <use> elements")).count(), 1, "{w:?}");
+    assert_eq!(w.iter().filter(|w| w.contains("KiB of text and text paths shown through <use> elements")).count(), 1, "{w:?}");
+}
+
+/// The path a text follows counts toward that limit: each `<use>` of the text lays it out along
+/// the whole path again.
+#[test]
+fn uses_of_a_text_on_a_long_path_stop_taking_their_properties_past_the_limit() {
+    let d = format!("M0 0{}", "h1".repeat(350_000));
+    let uses: String = (1..=4).map(|i| format!(r##"<use href="#t" font-size="{}"/>"##, i * 10)).collect();
+    let body = format!(r##"<defs><path id="p" d="{d}"/><text id="t"><textPath href="#p">HI</textPath></text></defs>{uses}"##);
+    let (d, w) = import_with_report(&svg(&body)).unwrap();
+    let sizes: Vec<f64> = texts(&d).iter().map(|t| t.first_style().size).collect();
+    assert_eq!(sizes.len(), 4, "{sizes:?}");
+    assert!(close(sizes[0], 10.0, 1e-9) && close(sizes[1], 20.0, 1e-9), "{sizes:?}");
+    assert!(close(sizes[2], 12.0, 1e-9) && close(sizes[3], 12.0, 1e-9), "{sizes:?}");
+    assert_eq!(w.iter().filter(|w| w.contains("KiB of text and text paths shown through <use> elements")).count(), 1, "{w:?}");
+    // The same text on a short path is within the limit however many `<use>` elements show it.
+    let uses: String = (1..=300).map(|i| format!(r##"<use href="#t" font-size="{i}"/>"##)).collect();
+    let body = format!(r##"<defs><path id="p" d="M0 20L150 20"/><text id="t"><textPath href="#p">HI</textPath></text></defs>{uses}"##);
+    let (d, w) = import_with_report(&svg(&body)).unwrap();
+    assert!(texts(&d).iter().enumerate().all(|(i, t)| close(t.first_style().size, (i + 1) as f64, 1e-9)), "{w:?}");
+    assert!(!w.iter().any(|w| w.contains("shown through <use> elements")), "{w:?}");
 }
 
 /// Many `<use>` elements of one text that inherit the same properties each get it.
