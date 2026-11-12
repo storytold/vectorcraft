@@ -985,6 +985,15 @@ antiAlias	Sharp	Nítid
 	CRLF (Windows)	CRLF (Windows)
 	Crop	Retalla
 	Crop Image	Retalla la imatge
+	Image Tools	Eines d’imatge
+	Remove Background…	Elimina el fons…
+	Remove Background	Elimina el fons
+	Background	Fons
+	Edge Color	Color de la vora
+	Picked Colors	Colors triats
+	Corner Color	Color de les cantonades
+	Contiguous	Contigu
+	Each Channel	Cada canal
 	Crop Marks	Marques de retall
 	Crop To	Retalla fins a
 	Cross	Creu
@@ -4079,6 +4088,7 @@ digits	Malayalam	Malaiàlam
 	Show Modified	Mostra els modificats
 	Show Note	Mostra la nota
 	Show Options	Mostra les opcions
+	Show Recent Colors	Mostra els colors recents
 	Show Original Path	Mostra el traçat original
 	Show Package	Mostra el paquet
 	Show Panel	Mostra el panell
@@ -4440,6 +4450,8 @@ digits	Malayalam	Malaiàlam
 	Scale at Center	Escala des del centre
 	Up/Down:	Amunt/avall:
 	Left/Right:	Esquerra/dreta:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko amunt/avall
+	Tate-chu-yoko Left/Right	Tate-chu-yoko esquerra/dreta
 	Technical Drawing	Dibuix tècnic
 	Temperature	Temperatura
 	Temperature/Tint…	Temperatura/To…
@@ -5367,6 +5379,7 @@ digits	Malayalam	Malaiàlam
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la pàgina del tauler {n} fa {size}, més que el límit de pàgina del PDF de 14.400 pt (200 in): s’escriu amb un UserUnit de {unit}, de manera que les aplicacions que ignoren UserUnit la mostren tantes vegades més petita
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la pàgina del tauler {n} fa {size}, més que el límit de pàgina del PDF de 14.400 pt (200 in): les pàgines {label} s’escriuen sense UserUnit, en punts, i les aplicacions que respecten el límit retallen la pàgina a 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	el PDF 1.5 no té UserUnit, que una pàgina de més de 14.400 pt (200 in) necessita per mantenir la mida: el fitxer s’escriu com a PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	el PDF 1.4 no té UserUnit, que una pàgina de més de 14.400 pt (200 in) necessita per quedar dins del límit de pàgina de 14.400 unitats del PDF/A-2: el fitxer s’escriu com a PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	la pàgina del tauler {n} fa {size}, massa llarga i estreta per als costats de pàgina del PDF de 3 a 14.400 unitats: s'escriu amb una UserUnit de {unit}, que manté el costat curt en 3 unitats o més, i les aplicacions que respecten el límit retallen el costat llarg a 14.400 unitats
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	els fitxers {label} admeten nombres reals fins a {max}, i la pàgina del tauler {n}, de {side} pt, en necessita de més grans: trieu PDF 1.6 o posterior sense estàndard PDF/X, o un tauler més petit
 @msg	Invalid real scale	Escala real no vàlida
@@ -5603,6 +5616,7 @@ digits	Malayalam	Malaiàlam
 @msg	not a VectorCraft file: {0}	no és un fitxer de VectorCraft: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	no és un conjunt de dreceres de VectorCraft (falta `overrides`)
 @msg	not an EMF or WMF file	no és un fitxer EMF o WMF
+@msg	not an HP-GL file	no és un fitxer HP-GL
 @msg	not an RTF file: it doesn't start with {\\rtf	no és un fitxer RTF: no comença amb {\\rtf
 @msg	not found	no s’ha trobat
 @msg	not in pattern editing mode	no esteu en mode d’edició de motius
@@ -5753,6 +5767,14 @@ digits	Malayalam	Malaiàlam
 @msg	exit isolation mode first	surt primer del mode d’aïllament
 @msg	select an envelope	selecciona un embolcall
 @msg	select an image	selecciona una imatge
+@msg	`background` must be edges, corners or colors	`background` ha de ser edges, corners o colors
+@msg	`match` must be distance or channels	`match` ha de ser distance o channels
+@msg	`{key}` must be from 0 to 100	`{key}` ha d’estar entre 0 i 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` ha de llistar d’1 a 16 colors, cadascun en hexadecimal (#rrggbb o #rgb) o com a black, white, red, green o blue
+@msg	the linked image shows its preview: embed or relink it first	la imatge enllaçada mostra la previsualització: incrusta-la o torna a enllaçar-la primer
+@msg	a CMYK image has no transparency to set	una imatge CMYK no té transparència per establir
+@msg	every pixel matches the background: no image would be left	cada píxel coincideix amb el fons: no quedaria cap imatge
+@msg	an image of {w} × {h} pixels is too large to change	una imatge de {w} × {h} píxels és massa gran per canviar-la
 @msg	select an Image Trace object	selecciona un objecte d’Image Trace
 @msg	select an Intertwine group	selecciona un grup Intertwine
 @msg	select an object in perspective	selecciona un objecte en perspectiva

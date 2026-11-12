@@ -1966,6 +1966,10 @@ fn drawing_gestures_snap_to_smart_guides() {
         let b = &made["bounds"];
         [&b["x"], &b["y"], &b["width"], &b["height"]].map(|v| v.as_f64().unwrap())
     };
+    // The rectangle drawn first stays selected, and the press lands on its box's corner handle,
+    // which would scale it instead of drawing.
+    let r = call(&mut s, 30, "run_command", json!({"command": "select.none", "params": {}}));
+    assert_eq!(r["isError"], false, "{r}");
     let events = json!([{"kind": "move", "x": 202, "y": 203}, {"kind": "down", "x": 202, "y": 203}, {"kind": "drag", "x": 330, "y": 341}, {"kind": "up", "x": 330, "y": 341}]);
     assert_eq!(bounds(&mut s, 3, events, "rectangle"), [200.0, 200.0, 130.0, 141.0]);
     let r = call(&mut s, 5, "run_command", json!({"command": "select.none", "params": {}}));

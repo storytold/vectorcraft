@@ -26,6 +26,7 @@ pub use edit::{
     remove_anchor, remove_redundant_points, simplify, simplify_level_tolerance, simplify_part, simplify_with, smooth, smooth_level, smooth_options,
     split_into_grid,
 };
+pub use fit::{fit_cubics, fit_cubics_through};
 pub use offset::{Cap, Join, MAX_OFFSET_SEGMENT_PAIRS, offset_path, outline_stroke, stroke_region, try_offset_path};
 pub use pathfinder::{FaceMerger, PathfinderOp, Region, Shape, merge_regions, pathfinder, pathfinder_with, region_at, regions, regions_within};
 pub use planar::{

@@ -231,6 +231,15 @@ digits	Malayalam	マラヤーラム数字
 	Expand…	分割・拡張…
 	Expand Appearance	アピアランスを分割
 	Crop Image	画像の切り抜き
+	Image Tools	画像ツール
+	Remove Background…	背景を削除…
+	Remove Background	背景を削除
+	Background	背景
+	Edge Color	端の色
+	Picked Colors	選択したカラー
+	Corner Color	角の色
+	Contiguous	隣接
+	Each Channel	各チャンネル
 	Edit Path	パスを編集
 	Mask	マスク
 	Rasterize…	ラスタライズ…
@@ -3084,6 +3093,7 @@ mark-style	Japanese	日本式
 	Show List View	リスト表示
 	Show Note	メモを表示
 	Show Options	オプションを表示
+	Show Recent Colors	最近使用したカラーを表示
 	Show Original Path	元のパスを表示
 	Open this dialog with these settings next time	次回はこの設定でこのダイアログを開く
 	Auto-Simplify	自動単純化
@@ -3897,6 +3907,8 @@ file-filter	Templates	テンプレート
 	Scale at Center	中心から拡大・縮小
 	Up/Down:	上下:
 	Left/Right:	左右:
+	Tate-chu-yoko Up/Down	縦中横の上下
+	Tate-chu-yoko Left/Right	縦中横の左右
 	Temperature	色温度
 	Template	テンプレート
 	Templates	テンプレート
@@ -4643,6 +4655,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the image's pixels don't match its size	画像のピクセル数がサイズと一致しません
 @msg	{bpp}-bit bitmaps can't be read	{bpp} ビットのビットマップは読み込めません
 @msg	not an EMF or WMF file	EMF ファイルでも WMF ファイルでもありません
+@msg	not an HP-GL file	HP-GL ファイルではありません
 @msg	its layers use {_1}, which aren't read yet	レイヤーで使用されている {_1} はまだ読み込めません
 @msg	the EMF header is damaged	EMF ヘッダーが破損しています
 @msg	damaged	破損しています
@@ -4659,6 +4672,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	アートボード {n} のページは {size} で、PDF のページ上限 14,400 pt (200 in) を超えています: UserUnit {unit} で書き出されるため、UserUnit を無視するアプリではその倍率だけ小さく表示されます
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	アートボード {n} のページは {size} で、PDF のページ上限 14,400 pt (200 in) を超えています: {label} のページは UserUnit なしでポイント単位で書き出され、上限を守るアプリではページが 200 in で切り取られます
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 には、14,400 pt (200 in) を超えるページがサイズを保つために必要な UserUnit がありません: ファイルは PDF 1.6 として書き出されます
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 には、14,400 pt (200 in) を超えるページが PDF/A-2 のページ上限 14,400 単位に収まるために必要な UserUnit がありません: ファイルは PDF 1.6 として書き出されます
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	アートボード {n} のページは {size} で、PDF のページ辺 3 から 14,400 単位には長く細すぎます: 短辺を 3 単位以上に保つ UserUnit {unit} で書き出され、上限を守るアプリは長辺を 14,400 単位で切り取ります
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} ファイルの実数は {max} までですが、アートボード {n} の {side} pt のページにはそれより大きな値が必要です: PDF/X 規格なしの PDF 1.6 以降を選ぶか、アートボードを小さくしてください
 @msg	page {0} does not exist (the PDF has {1})	ページ {0} は存在しません (この PDF のページ数は {1} です)
@@ -4853,6 +4867,14 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no such view	指定された表示が見つかりません
 @msg	printing isn't available here	この環境ではプリントできません
 @msg	select an image	画像を選択してください
+@msg	`background` must be edges, corners or colors	`background` は edges、corners または colors にしてください
+@msg	`match` must be distance or channels	`match` は distance または channels にしてください
+@msg	`{key}` must be from 0 to 100	`{key}` は 0 から 100 までの値にしてください
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` には 16 進数（#rrggbb または #rgb）か black、white、red、green、blue で書いたカラーを 1〜16 個指定してください
+@msg	the linked image shows its preview: embed or relink it first	リンク画像はプレビューを表示しています: 先に埋め込むか再リンクしてください
+@msg	a CMYK image has no transparency to set	CMYK 画像には設定できる透明部分がありません
+@msg	every pixel matches the background: no image would be left	すべてのピクセルが背景に一致します: 画像が残りません
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} ピクセルの画像は大きすぎて変更できません
 @msg	the document has no artboards	ドキュメントにアートボードがありません
 @msg	tool (a tool id) is required	tool (ツール ID) を指定してください
 @msg	unknown tool `{t}`	`{t}` は不明なツールです

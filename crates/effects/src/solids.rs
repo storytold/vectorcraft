@@ -534,8 +534,8 @@ fn region(path: &PathData, rule: FillRule, item: &AppearanceItem) -> (PathData, 
 }
 
 /// One part of [`solid_parts`]: a fill or stroke, its shape's opacity, the region it paints and its
-/// fill rule, and its shape's scopes.
-type Part<'a> = (&'a AppearanceItem, f32, PathData, FillRule, &'a [Scope]);
+/// fill rule, its shape's scopes and the index of its shape.
+type Part<'a> = (&'a AppearanceItem, f32, PathData, FillRule, &'a [Scope], usize);
 
 /// The parts Extrude & Bevel and Inflate build solids from: each shape's top fill and its strokes,
 /// a group's members from the back up, each with its shape's opacity, the region it paints and its
@@ -544,16 +544,126 @@ type Part<'a> = (&'a AppearanceItem, f32, PathData, FillRule, &'a [Scope]);
 fn solid_parts(shapes: &[Profile], fallback: Rect) -> (Vec<Part<'_>>, Rect) {
     let parts: Vec<Part> = shapes
         .iter()
-        .flat_map(|s| {
+        .enumerate()
+        .flat_map(|(member, s)| {
             let top_fill = s.items.iter().rposition(|i| matches!(i, AppearanceItem::Fill(_)));
-            s.items.iter().enumerate().filter(move |(k, i)| Some(*k) == top_fill || matches!(i, AppearanceItem::Stroke(_))).map(|(_, i)| {
+            s.items.iter().enumerate().filter(move |(k, i)| Some(*k) == top_fill || matches!(i, AppearanceItem::Stroke(_))).map(move |(_, i)| {
                 let (area, rule) = region(&s.path, s.rule, i);
-                (i, s.opacity, area, rule, s.scopes.as_slice())
+                (i, s.opacity, area, rule, s.scopes.as_slice(), member)
             })
         })
         .collect();
-    let bounds = parts.iter().filter_map(|(_, _, area, _, _)| area.bounds()).reduce(|a, c| a.union(c)).unwrap_or(fallback);
+    let bounds = parts.iter().filter_map(|(_, _, area, _, _, _)| area.bounds()).reduce(|a, c| a.union(c)).unwrap_or(fallback);
     (parts, bounds)
+}
+
+/// What a face of one of the solids [`art_for`] draws in one order was built from: the facet's
+/// depth, whether it is a side face and whether it is turned away from the viewer, the bounds of
+/// its polygon, the index of its shape, and whether its solid is that shape's fill or one of its
+/// strokes that covers the fill's whole edge.
+struct Placed {
+    depth: f64,
+    side: bool,
+    away: bool,
+    bounds: Rect,
+    member: usize,
+    paints: Paints,
+}
+
+/// The part of its shape a face's solid is built from ([`Placed`]).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Paints {
+    Fill,
+    /// A stroke whose solid holds the fill's whole edge and hides it: one with a width, without
+    /// dashes, a width profile or a brush, painted with a solid color or a gradient without
+    /// transparent stops, on a shape whose subpaths are all closed.
+    Stroke,
+    Other,
+}
+
+impl Paints {
+    /// What `item` of a shape is, the shape's subpaths all closed when `closed`.
+    fn of(item: &AppearanceItem, closed: bool) -> Self {
+        match item {
+            AppearanceItem::Fill(_) => Paints::Fill,
+            AppearanceItem::Stroke(s)
+                if closed
+                    && s.width > 0.0
+                    && s.width.is_finite()
+                    && s.dash.is_none()
+                    && s.profile.is_none()
+                    && s.brush.is_none()
+                    && match &s.paint {
+                        Paint::Solid { .. } => true,
+                        Paint::Gradient(_) => crate::lighting::opaque_paint(&s.paint).1.is_none(),
+                        _ => false,
+                    } =>
+            {
+                Paints::Stroke
+            }
+            AppearanceItem::Stroke(_) => Paints::Other,
+        }
+    }
+}
+
+impl Placed {
+    /// The face of `f`, of shape `member`'s part `paints`.
+    fn of(f: &Facet, member: usize, paints: Paints) -> Self {
+        let mut points = f.contours.iter().flatten();
+        let bounds = points.next().map_or(Rect::ZERO, |p| points.fold(Rect::from_points(*p, *p), |r, q| r.union_pt(*q)));
+        Placed { depth: f.depth, side: f.side, away: f.away, bounds, member, paints }
+    }
+}
+
+/// The most bounds comparisons [`draw_order`] makes; the fill walls it has not reached by then keep
+/// their depths.
+const MAX_OVERLAP_CHECKS: usize = 4_000_000;
+
+/// The order faces `faces` are drawn in, back to front, as indices into `faces`: by depth (faces
+/// at the same depth in the order given), except that with `sealed` (solids with caps) a side face
+/// of a shape's fill turned toward the viewer is drawn before each face of the same shape's
+/// covering strokes ([`Paints::Stroke`]), turned toward the viewer, whose bounds overlap its own.
+/// Such a stroke's closed solid holds the fill's walls, so they never show and can be drawn under
+/// any other face.
+fn draw_order(faces: &[Placed], sealed: bool) -> Vec<usize> {
+    // Each face's depth to sort by, and whether it was moved before a stroke face at that depth.
+    let mut keys: Vec<(f64, bool)> = faces.iter().map(|f| (f.depth, false)).collect();
+    if sealed {
+        // The stroke faces turned toward the viewer of each shape, nearest last.
+        let mut strokes: Vec<Vec<&Placed>> = vec![];
+        for f in faces.iter().filter(|f| f.paints == Paints::Stroke && !f.away) {
+            if strokes.len() <= f.member {
+                strokes.resize_with(f.member + 1, Vec::new);
+            }
+            strokes[f.member].push(f);
+        }
+        for list in &mut strokes {
+            list.sort_by(|a, b| a.depth.total_cmp(&b.depth));
+        }
+        let overlap = |a: &Rect, b: &Rect| a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+        let mut checks = 0usize;
+        for (f, key) in faces.iter().zip(&mut keys) {
+            if f.paints != Paints::Fill || !f.side || f.away {
+                continue;
+            }
+            let Some(list) = strokes.get(f.member).filter(|l| !l.is_empty()) else { continue };
+            for s in list.iter().take_while(|s| s.depth <= f.depth) {
+                if checks >= MAX_OVERLAP_CHECKS {
+                    break;
+                }
+                checks += 1;
+                if overlap(&s.bounds, &f.bounds) {
+                    *key = (s.depth, true);
+                    break;
+                }
+            }
+        }
+    }
+    let mut order: Vec<usize> = (0..faces.len()).collect();
+    // A stable sort: faces at the same depth keep the order of the appearance, and a fill's side
+    // face moved to a stroke face's depth goes before it.
+    order.sort_by(|&a, &b| keys[a].0.total_cmp(&keys[b].0).then(keys[b].1.cmp(&keys[a].1)));
+    order
 }
 
 /// `shapes`, the members of group or layer `n`, reshaped by the visible geometry effects `before`
@@ -577,7 +687,9 @@ type ShadowAndSurfaces = (Vec<Arc<Node>>, Vec<Arc<Node>>);
 /// solid from the path for the top visible fill and one from the outline of each visible stroke,
 /// each in its own paint. When every one is opaque with normal blending and no colored light makes
 /// a surface one composite or masks it, their faces are drawn in one back-to-front order (where
-/// depths tie, as for the caps turned toward the viewer, in the order of the appearance);
+/// depths tie, as for the caps turned toward the viewer, in the order of the appearance, and with
+/// caps, a shape's fill walls before the faces of its covering strokes that overlap them:
+/// [`draw_order`]);
 /// otherwise each solid is a surface of its own, in that order. A member's opacity mask and
 /// blending mode, and those of a group it is in, apply to the surfaces of the members it holds
 /// ([`masked`]). The art comes in two parts: the effect's shadow ([`cast_shadow`], none with it
@@ -628,17 +740,17 @@ fn cast_shadow<'a>(id: &str, p: &Value, shapes: &'a [Profile]) -> Result<Option<
         let inks: Vec<shadow::Ink> = parts.iter().map(|(item, member, ..)| ink(item, *member)).collect();
         // Inflate's eye is placed for every shape together, as the solids are.
         let added: Vec<Result<std::ops::Range<usize>, String>> = if id == INFLATE {
-            let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _)| (area, *rule)).collect();
+            let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _, _)| (area, *rule)).collect();
             let casts: Vec<bool> = inks.iter().map(|i| i.opacity > 0.0).collect();
             caster.inflate(&shapes, &casts, bounds, inflate_options(p), view)
         } else {
             let mut added = vec![];
-            for ((_, _, area, rule, _), ink) in parts.iter().zip(&inks) {
+            for ((_, _, area, rule, _, _), ink) in parts.iter().zip(&inks) {
                 added.push(if ink.opacity > 0.0 { caster.extrude(area, *rule, bounds, extrude_options(p), view) } else { Ok(0..0) });
             }
             added
         };
-        for (((item, _, _, _, scopes), ink), faces) in parts.iter().zip(inks).zip(added) {
+        for (((item, _, _, _, scopes, _), ink), faces) in parts.iter().zip(inks).zip(added) {
             if ink.opacity <= 0.0 {
                 continue;
             }
@@ -688,17 +800,17 @@ fn surfaces_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Nod
     let (parts, bounds) = solid_parts(shapes, b);
     let built = if fx.id == INFLATE {
         // One eye for every puff, as far away as the highest needs.
-        let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _)| (area, *rule)).collect();
+        let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _, _)| (area, *rule)).collect();
         vectorcraft_three_d::inflate_together(&shapes, bounds, inflate_options(&p), view_options(&p))
     } else {
-        parts.iter().map(|(_, _, area, rule, _)| facets(&fx.id, area, *rule, bounds, &p)).collect()
+        parts.iter().map(|(_, _, area, rule, _, _)| facets(&fx.id, area, *rule, bounds, &p)).collect()
     };
     let mut solids = vec![];
-    for ((item, opacity, _, _, scopes), f) in parts.iter().zip(built) {
+    for ((item, opacity, _, _, scopes, member), f) in parts.iter().zip(built) {
         let item: &AppearanceItem = item;
         match f {
             Ok(f) if !crate::revolve::paint_copies_add(&mut paint_bytes, facet_copies(&f, paint_ref(item), colored), paint_ref(item)) => return None,
-            Ok(f) => solids.push((item, *opacity, *scopes, f)),
+            Ok(f) => solids.push((item, *opacity, *scopes, f, *member)),
             // A stroke's outline past the limits is left out; the fill's solid still draws.
             Err(_) if matches!(item, AppearanceItem::Stroke(_)) => {}
             // A loaded file or a shape edited past the limits keeps drawing its source path
@@ -710,14 +822,16 @@ fn surfaces_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Nod
     if solids.is_empty() {
         return None;
     }
-    let opaque = solids.iter().all(|(item, member, _, _)| {
+    let opaque = solids.iter().all(|(item, member, _, _, _)| {
         let (_, opacity, blend) = paint_of(item, *member);
         opacity >= 1.0 && blend == BlendMode::Normal
     });
-    let surfaces: Vec<(Vec<f64>, Node, &[Scope])> = solids
+    let surfaces: Vec<(Vec<Placed>, Node, &[Scope])> = solids
         .into_iter()
-        .map(|(item, member, scopes, f)| {
-            let depths: Vec<f64> = f.iter().map(|f| f.depth).collect();
+        .map(|(item, member, scopes, f, shape)| {
+            let closed = shapes.get(shape).is_some_and(|s| s.path.subpaths.iter().all(|p| p.closed));
+            let paints = Paints::of(item, closed);
+            let depths: Vec<Placed> = f.iter().map(|f| Placed::of(f, shape, paints)).collect();
             let (paint, opacity, blend) = paint_of(item, member);
             let art = if classic { classic::surface(n, f, &paint, opacity, blend, &p) } else { surface(n, f, &paint, opacity, blend, colored) };
             (depths, art, scopes)
@@ -735,15 +849,20 @@ fn surfaces_for(n: &Node, fx: &Effect, shapes: &[Profile]) -> Option<Vec<Arc<Nod
     if !opaque || !plain {
         return Some(surfaces.into_iter().map(|(_, s, _)| Arc::new(s)).collect());
     }
-    let mut faces = vec![];
+    let (mut placed, mut faces) = (vec![], vec![]);
     for (depths, s, _) in surfaces {
         if let NodeKind::Group { children, .. } = s.kind {
-            faces.extend(depths.into_iter().zip(children));
+            placed.extend(depths);
+            faces.extend(children.into_iter().map(Some));
         }
     }
-    // A stable sort: faces at the same depth keep the order of the appearance.
-    faces.sort_by(|a, b| a.0.total_cmp(&b.0));
-    Some(vec![Arc::new(Node::group(n.id, faces.into_iter().map(|(_, face)| face).collect()))])
+    let sealed = match fx.id.as_str() {
+        INFLATE => inflate_options(&p).cap,
+        CLASSIC_EXTRUDE => classic_extrude_options(&p).cap,
+        _ => extrude_options(&p).cap,
+    };
+    let order = draw_order(&placed, sealed);
+    Some(vec![Arc::new(Node::group(n.id, order.into_iter().filter_map(|k| faces.get_mut(k).and_then(Option::take)).collect()))])
 }
 
 fn geometry(path: &PathData, fx: &[Effect], ctx: &GeomContext) -> PathData {
@@ -896,11 +1015,11 @@ fn meshes_for(fx: &Effect, shapes: &[Profile], total: &mut usize, limit: usize) 
     // Inflate lays out every puff at once (they share one eye); each Inflate and Extrude & Bevel
     // solid and its mesh are built as the loop reaches them.
     let mut inflated = (fx.id == INFLATE).then(|| {
-        let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _)| (area, *rule)).collect();
+        let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _, _)| (area, *rule)).collect();
         vectorcraft_three_d::inflate_meshes(&shapes, bounds, inflate_options(&p), view)
     });
     let extrude = extrude_options(&p);
-    for (item, member, area, rule, _) in &parts {
+    for (item, member, area, rule, _, _) in &parts {
         let item: &AppearanceItem = item;
         let mesh = match inflated.as_mut() {
             Some(built) => built.next().unwrap_or_else(|| Ok(Mesh::default())),
