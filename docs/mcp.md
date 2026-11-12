@@ -3402,7 +3402,7 @@ as a value left out.
 ## Graphic style libraries
 
 Graphic style libraries are read-only sets of graphic styles generated in code (Shadows and Glows, Outlines and
-Rules, Hand-Drawn, Textures, Gradient Finishes, Shape Effects, Blends and Transparency, Game HUD, Status Effects). Textures
+Rules, Hand-Drawn, Textures, Painted and Sketched, Gradient Finishes, Shape Effects, Blends and Transparency, Game HUD, Status Effects). Textures
 (`textures`) paints its fills and strokes with the texture effects: Fine Grain (`texture.grain`), Canvas Weave and Burlap
 Sack (`texture.texturizer`), Cracked Glaze (`texture.craquelure`), Mosaic Floor (`texture.mosaicTiles`), Quilted Squares
 (`texture.patchwork`), Leaded Glass (`texture.stainedGlass`) and Damp Paper (`sketch.waterPaper`). `graphicStyle.libraries` lists them
@@ -3414,6 +3414,13 @@ the patterns the styles paint with come along. `apply: true` also applies the fi
 (`add: true` adds its appearance on top instead), in the same undo step: what clicking a style in the library panel
 does. Library styles keep placed gradients in unit-box space, so each object gets them at the same place relative to
 its bounds.
+
+Painted and Sketched (`painted-sketched`) holds Washed Blue, Bristle Ochre, Pastel Heather, Charcoal Shade, Ink
+Contour, Wet Ink and Fine Pen. Each is a solid fill (Bristle Ochre and Ink Contour add a 1 pt stroke) under one object
+effect that repaints fill and stroke together: `artistic.watercolor`, `artistic.dryBrush`, `artistic.roughPastels`,
+`sketch.charcoal`, `brushStrokes.inkOutlines`, `brushStrokes.sumiE` and `sketch.graphicPen`, in that order. The
+colors and effect settings are VectorCraft's own. These are raster effects, so the document's raster effects
+resolution sets how fine they draw.
 
 ```json
 {"name":"run_command","arguments":{"command":"graphicStyle.library","params":{"library":"hand-drawn"}}}
