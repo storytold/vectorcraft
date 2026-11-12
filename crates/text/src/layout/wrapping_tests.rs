@@ -33,6 +33,7 @@ fn synthetic_glyphs(specs: &[(usize, usize, f64, char)]) -> Vec<SGlyph> {
             tcy: None,
             inline: None,
             word_end: false,
+            keeps_word: false,
             lead: 0.0,
             proportional: false,
             vpal: None,
@@ -425,6 +426,21 @@ fn kinsoku_shori_type_counts_the_gaps_that_close() {
     assert_eq!(split_end(55.0), 7, "five gaps close by 5 pt: 」 is pushed in");
 }
 
+/// A zero-width joiner between two CJK characters takes no gap of its own: the layout closes the
+/// one gap between the characters on either side, so the push-in counts five gaps (5 pt), short of
+/// the 6 pt the line overflows by.
+#[test]
+fn kinsoku_shori_type_counts_no_gap_at_a_format_control() {
+    let text = "一二\u{200D}三四五」六";
+    let mut glyphs = full_width(text);
+    glyphs[2].adv = 0.0;
+    let end = |width: f64| {
+        break_line(text, &glyphs, 0, width, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushInFirst, false, false, &[]).0
+    };
+    assert_eq!(end(54.0), 5, "五 is pushed out with 」");
+    assert_eq!(end(55.0), 7, "five gaps close by 5 pt: 」 is pushed in");
+}
+
 /// Mojikumi: the greedy breaker measures a line as it is set, with its last character narrowed
 /// (`line_end`): 」 set half width ends a measure of three and a half characters. Only the last
 /// glyph of the last cluster counts, and only where the line may end.
@@ -512,4 +528,102 @@ fn composition_counts_the_narrower_line_end() {
     let hyphenated = [Breakpoint { end: 4, hyphen: 1.0 }];
     assert_eq!(lines(38.0, &half, &hyphenated), None);
     assert_eq!(lines(38.0, &half, &[Breakpoint { end: 4, hyphen: 0.0 }]), Some(vec![(4, false), (7, false)]));
+}
+
+/// The glyphs of `text`, each 10 pt wide, with Korean words kept whole unless `anywhere` (Korean
+/// Line Break Anywhere on).
+fn korean(text: &str, anywhere: bool) -> Vec<SGlyph> {
+    let mut glyphs = full_width(text);
+    if !anywhere {
+        crate::shape::keep_korean_words(&mut glyphs);
+    }
+    glyphs
+}
+
+/// Korean Line Break Anywhere off: both composers break a Korean word only at its spaces, so a
+/// word that doesn't fit moves to the next line whole; on, they break between its syllables.
+#[test]
+fn korean_words_break_at_spaces_unless_line_break_anywhere() {
+    use KinsokuShoriType::PushOutOnly;
+    let text = "가나다 라마바";
+    let greedy =
+        |g: &[SGlyph], width: f64| break_line(text, g, 0, width, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushOutOnly, false, false, &[]).0;
+    let ends = |g: &[SGlyph]| candidates(text, g, None, Kinsoku::Hard).iter().map(|b| b.end).collect::<Vec<_>>();
+    // 50 pt holds "가나다 라" and not "가나다 라마".
+    assert_eq!(greedy(&korean(text, false), 50.0), 4, "off: the line ends at the space");
+    assert_eq!(greedy(&korean(text, true), 50.0), 5, "on: the line ends after 라");
+    assert_eq!(ends(&korean(text, false)), [4]);
+    assert_eq!(ends(&korean(text, true)), [1, 2, 4, 5, 6]);
+    let params = Params { justify_last: false, ragged: true, tolerance: f64::INFINITY, uniform_from: 0, hyphen_limit: 0 };
+    let off = korean(text, false);
+    let cands = candidates(text, &off, None, Kinsoku::Hard);
+    assert_eq!(compose(&off, &|_| 50.0, &|_| 0.0, &|_| 0.0, &cands, &[], &params), Some(vec![(4, false), (7, false)]));
+    // The first word is measured whole, as the line loop measures it.
+    assert_eq!(breaking::word_width(&off, 0, &[], Kinsoku::Hard), 30.0);
+    assert_eq!(breaking::word_width(&korean(text, true), 0, &[], Kinsoku::Hard), 10.0);
+    // A word wider than the line still breaks, at the syllable that overflows.
+    assert_eq!(greedy(&korean("가나다라마바", false), 25.0), 2);
+    // A soft return still ends the line.
+    let soft = "가나\u{2028}다라";
+    assert_eq!(
+        break_line(soft, &korean(soft, false), 0, 100.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushOutOnly, false, false, &[]).0,
+        3
+    );
+}
+
+/// Korean Line Break Anywhere off keeps the Han, kana and full-width letters of a Korean word with
+/// it, lets the line break after East Asian punctuation in it (as kinsoku allows), and leaves
+/// text without Hangul its own breaks. On, No Break still keeps its characters together.
+#[test]
+fn korean_words_keep_their_letters_and_break_after_punctuation() {
+    let ends = |text: &str, anywhere: bool| candidates(text, &korean(text, anywhere), None, Kinsoku::Hard).iter().map(|b| b.end).collect::<Vec<_>>();
+    assert_eq!(ends("漢字한국 ab", false), [5], "Han in a Korean word stays with it");
+    assert_eq!(ends("日本語 한국어", false), [1, 2, 4], "Japanese keeps its breaks");
+    assert_eq!(ends("가나。다라", false), [3], "after the full stop");
+    assert_eq!(ends("「가나」다", false), [4], "after the closing bracket, not the opening one");
+    assert_eq!(ends("가나ＡＢ다", false), Vec::<usize>::new(), "full-width letters stay with it");
+    let text = "가나다라";
+    let mut glyphs = korean(text, true);
+    for g in &mut glyphs[1..3] {
+        g.no_break = true;
+    }
+    let end = break_line(text, &glyphs, 0, 25.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushOutOnly, false, false, &[]).0;
+    assert_eq!(end, 1, "No Break keeps 나다 together");
+}
+
+/// Hyphenation adds no hyphen to a Korean word, even where a hyphenation exception marks one: the
+/// word that overflows breaks without one, and the every-line composer is offered no hyphenated
+/// break in it.
+#[test]
+fn korean_words_take_no_hyphen() {
+    let opts = HyphenationOptions { words_longer_than: 0, after_first: 1, before_last: 1, ..Default::default() };
+    let text = "가나다라";
+    crate::hyphen::with_hyphenation_exceptions_for_test("가나-다라", || {
+        let glyphs = korean(text, false);
+        let line = break_line(
+            text,
+            &glyphs,
+            0,
+            25.0,
+            &[],
+            0.0,
+            Some((&opts, 0.0)),
+            Burasagari::None,
+            Kinsoku::Hard,
+            KinsokuShoriType::PushOutOnly,
+            false,
+            false,
+            &[],
+        );
+        assert_eq!(line, (2, false));
+        assert!(candidates(text, &glyphs, Some(&opts), Kinsoku::Hard).iter().all(|b| b.hyphen == 0.0));
+    });
+    // Nor between the Latin letters of a word that also holds Hangul.
+    let text = "가나foobar";
+    crate::hyphen::with_hyphenation_exceptions_for_test("가나foo-bar", || {
+        let hyphens =
+            |anywhere: bool| candidates(text, &korean(text, anywhere), Some(&opts), Kinsoku::Hard).iter().filter(|b| b.hyphen > 0.0).count();
+        assert_eq!(hyphens(false), 0);
+        assert_eq!(hyphens(true), 1, "on, the word's Latin letters hyphenate as before");
+    });
 }

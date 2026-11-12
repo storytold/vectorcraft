@@ -47,6 +47,7 @@ pub(super) struct PatternOut {
 
 pub(in crate::ai_editing) const DIAMOND: &str =
     "diamond gradients are written as radial gradients through their corners, with the same stops, in the editing data for other apps";
+pub(in crate::ai_editing) const SPREAD: &str = "gradients that repeat or reflect are written with their stops repeated across the shape (at most 256 stops, padding past them) in the editing data for other apps";
 
 /// Can `g` be written as a gradient (a linear, radial, conic or diamond one with stops, no more
 /// than the `.ai` reader reads; a conic is written linear, [`CONIC`], and a diamond radial,
@@ -85,11 +86,13 @@ impl Writer<'_> {
     pub(in crate::ai_editing) fn reserve_swatch_gradients(&mut self) {
         let doc = self.doc;
         for sw in doc.swatches_iter() {
+            // As `swatch_paint` writes it: the stops of one that repeats or reflects repeated.
             if let Paint::Gradient(g) = &sw.paint
-                && writable_gradient(&g.gradient)
+                && let gradient = g.gradient.unrolled_within(crate::import::MAX_GRADIENT_STOPS)
+                && writable_gradient(&gradient)
                 && !self.gradients.iter().any(|d| d.name == sw.name)
             {
-                self.gradients.push(GradientDef { name: sw.name.clone(), gradient: g.gradient.clone(), swatch: true, used: false });
+                self.gradients.push(GradientDef { name: sw.name.clone(), gradient: gradient.into_owned(), swatch: true, used: false });
             }
         }
     }
@@ -135,8 +138,27 @@ impl Writer<'_> {
     /// placed there (it then no longer depends on the shape it paints, which may be cut); one the
     /// data can't hold is its average color, with a warning.
     pub(super) fn placed(&mut self, p: &Paint, bounds: Rect) -> Paint {
+        self.placed_over(p, bounds, bounds)
+    }
+
+    /// [`Self::placed`] for paint that reaches `area`: a gradient that repeats or reflects is
+    /// written with its stops repeated over `area`.
+    fn placed_over(&mut self, p: &Paint, bounds: Rect, area: Rect) -> Paint {
         let Paint::Gradient(g) = p else { return p.clone() };
-        let geom = g.resolve(bounds);
+        let mut geom = g.resolve(bounds);
+        // The data has no spread: a gradient that repeats or reflects is written with its stops
+        // repeated over `area` (a conic one, written linear, around its turn).
+        let mut g: GradientPaint = (**g).clone();
+        if g.gradient.is_spread() {
+            self.warn(SPREAD);
+            match g.gradient.padded_within(&geom, area, crate::import::MAX_GRADIENT_STOPS) {
+                Some(padded) => {
+                    g.gradient = padded.gradient;
+                    geom = padded.geom;
+                }
+                None => g.gradient = g.gradient.unrolled_within(crate::import::MAX_GRADIENT_STOPS).into_owned(),
+            }
+        }
         let finite = [geom.start.x, geom.start.y, geom.end.x, geom.end.y, geom.aspect].iter().all(|v| v.is_finite());
         let radial = written_radial(g.gradient.kind);
         if g.gradient.kind == GradientKind::Freeform {
@@ -147,13 +169,16 @@ impl Writer<'_> {
             self.warn(GRADIENT_SHAPES);
             return Paint::solid(average(&g.gradient));
         }
-        Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..(**g).clone() }))
+        Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..g }))
     }
 
-    /// The fills and strokes of `n` that paint (outline `bounds`), their gradients placed
-    /// ([`Self::placed`]): a fill's on the shape's bounds, a stroke's on what it paints. A gradient
-    /// along or across a stroke is its average color (the stroke is written as its outline).
-    pub(super) fn items(&mut self, n: &vectorcraft_doc::Node, bounds: Rect) -> Vec<AppearanceItem> {
+    /// The fills and strokes of `n` that paint (outline `bp`), their gradients placed
+    /// ([`Self::placed`]): a fill's on the shape's bounds, a stroke's on what it paints, the stops
+    /// of one that repeats or reflects repeated over the box the stroke paints, miter spikes
+    /// included ([`StrokeLayer::bounds_on`]). A gradient along or across a stroke is its average
+    /// color (the stroke is written as its outline).
+    pub(super) fn items(&mut self, n: &vectorcraft_doc::Node, bp: &BezPath) -> Vec<AppearanceItem> {
+        let bounds = bp.bounding_box();
         super::visible_items(n)
             .into_iter()
             .map(|i| match i {
@@ -164,7 +189,11 @@ impl Writer<'_> {
                             self.warn(GRADIENTS);
                             Paint::solid(average(&g.gradient))
                         }
-                        None => self.placed(&s.paint, s.paint_bounds(bounds)),
+                        None => {
+                            let spread = matches!(&s.paint, Paint::Gradient(g) if g.gradient.is_spread());
+                            let reach = if spread { s.bounds_on(bp, bounds) } else { bounds };
+                            self.placed_over(&s.paint, s.paint_bounds(bounds), reach)
+                        }
                     };
                     AppearanceItem::Stroke(StrokeLayer { paint, ..s.clone() })
                 }
@@ -521,10 +550,19 @@ impl Writer<'_> {
     /// `(name) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p`. False for other paint, and for paint that can't
     /// be written.
     pub(super) fn swatch_paint(&mut self, s: &mut String, sw: &vectorcraft_color::swatch::Swatch) -> bool {
+        // A swatch has no placement: one that repeats or reflects holds its stops repeated along
+        // its vector.
+        let unrolled = match &sw.paint {
+            Paint::Gradient(g) => Some(g.gradient.unrolled_within(crate::import::MAX_GRADIENT_STOPS)),
+            _ => None,
+        };
         match &sw.paint {
-            Paint::Gradient(g) if writable_gradient(&g.gradient) => {
+            Paint::Gradient(g) if unrolled.as_deref().is_some_and(writable_gradient) => {
+                if g.gradient.is_spread() {
+                    self.warn(SPREAD);
+                }
                 let swatch = Some(sw.name.as_str());
-                let name = self.define_gradient(&g.gradient, swatch);
+                let name = self.define_gradient(unrolled.as_deref().unwrap_or(&g.gradient), swatch);
                 s.push_str("Bb\n");
                 if written_radial(g.gradient.kind) {
                     s.push_str("0 0 0 0 Bh\n");

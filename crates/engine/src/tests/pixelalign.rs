@@ -959,3 +959,202 @@ fn not_aligned_to_pixel_grid_leaves_out_what_cant_be_selected() {
     assert_eq!(s.execute("select.object.notAlignedToPixelGrid", &json!({})).unwrap()["count"], 1);
     assert_eq!(selected_ids(&s), vec![inside]);
 }
+
+/// Run Not Aligned to Pixel Grid with `before` selected, check that it makes no undo step and that
+/// its count is the number of objects it selected → the selected ids, sorted.
+fn not_aligned(s: &mut Session, before: &[u64]) -> Vec<u64> {
+    s.execute("select.set", &json!({ "ids": before })).unwrap();
+    let steps = undo_len(s);
+    let r = s.execute("select.object.notAlignedToPixelGrid", &json!({})).unwrap();
+    let ids = selected_ids(s);
+    assert_eq!(r["count"], json!(ids.len()), "{r}");
+    assert_eq!(undo_len(s), steps);
+    ids
+}
+
+fn sorted(mut ids: Vec<u64>) -> Vec<u64> {
+    ids.sort_unstable();
+    ids
+}
+
+/// What Select All selects, sorted.
+fn all_ids(s: &mut Session) -> Vec<u64> {
+    s.execute("select.all", &json!({})).unwrap();
+    selected_ids(s)
+}
+
+fn kind(s: &Session, id: u64) -> NodeKind {
+    s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind.clone()
+}
+
+/// Images, symbol instances, point type, area type and type on a path cannot take the property, so
+/// Not Aligned to Pixel Grid leaves them out though Select All selects them; the path a symbol was
+/// made from is the symbol's art, not an object of the document.
+#[test]
+fn not_aligned_to_pixel_grid_leaves_out_images_symbol_instances_and_type() {
+    let mut s = new_doc();
+    let p = path(&mut s, "M10.3 20.6 L40.7 20.6 L40.7 30.3 L10.3 30.3 Z", 1.0);
+    let png = crate::tests_links::png(4, 4, [255, 0, 0]);
+    s.execute("file.place", &json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png), "link": false})).unwrap();
+    let image = s.doc().unwrap().selection.objects[0].0;
+    let art = path(&mut s, "M60.5 60 L80 60 L80 80 L60.5 80 Z", 1.0);
+    let made = s.execute("symbol.new", &json!({"name": "Mark", "ids": [art]})).unwrap()["id"].as_u64().unwrap();
+    let placed = s.execute("symbol.place", &json!({"name": "Mark", "x": 200.3, "y": 200.3})).unwrap()["id"].as_u64().unwrap();
+    let point = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "point"})).unwrap()["id"].as_u64().unwrap();
+    let frame = json!({"width": 80.5, "height": 40.5});
+    let area = s.execute("text.create", &json!({"x": 100, "y": 150, "text": "area", "area": frame})).unwrap()["id"].as_u64().unwrap();
+    let on_path = path(&mut s, "M10.5 300 C100 250 200 350 300.5 300", 1.0);
+    let on_path = s.execute("text.createInPath", &json!({"path": on_path, "mode": "onPath", "text": "on a path"})).unwrap()["id"].as_u64().unwrap();
+    let in_path = path(&mut s, "M250.5 20.5 L350 20.5 L350 90 L250.5 90 Z", 1.0);
+    let in_path = s.execute("text.createInPath", &json!({"path": in_path, "mode": "area", "text": "in a path"})).unwrap()["id"].as_u64().unwrap();
+    assert!(matches!(kind(&s, image), NodeKind::Image(_)));
+    for id in [made, placed] {
+        assert!(matches!(kind(&s, id), NodeKind::SymbolInstance { .. }), "{id}");
+    }
+    for id in [point, area, on_path, in_path] {
+        assert!(matches!(kind(&s, id), NodeKind::Text(_)), "{id}");
+    }
+    assert!(s.doc().unwrap().doc.node(NodeId(art)).is_none());
+    assert_eq!(all_ids(&mut s), sorted(vec![p, image, made, placed, point, area, on_path, in_path]));
+    assert_eq!(not_aligned(&mut s, &[image, made, point]), vec![p]);
+    // With the path aligned, nothing is left to select.
+    s.execute("object.setPixelAligned", &json!({"ids": [p]})).unwrap();
+    assert_eq!(not_aligned(&mut s, &[placed]), Vec::<u64>::new());
+}
+
+/// Paths on a template layer, in a hidden or locked sublayer or on a locked artboard are left out,
+/// as Select All leaves them out; paths in an unlocked visible sublayer are selected.
+#[test]
+fn not_aligned_to_pixel_grid_leaves_out_template_layers_locked_sublayers_and_locked_artboards() {
+    let mut s = new_doc();
+    s.execute("artboard.new", &json!({"x": 500, "y": 0, "width": 100, "height": 100})).unwrap();
+    let main = s.doc().unwrap().doc.layers[0].id.0;
+    let free = path(&mut s, "M10 10 L20 10 L20 20 L10 20 Z", 1.0);
+    let on_locked_board = path(&mut s, "M510 10 L520 10 L520 20 L510 20 Z", 1.0);
+    let template = s.execute("layer.new", &json!({"name": "Trace"})).unwrap()["id"].as_u64().unwrap();
+    let traced = path(&mut s, "M30 10 L40 10 L40 20 L30 20 Z", 1.0);
+    s.execute("layer.setProps", &json!({"id": template, "template": true})).unwrap();
+    let sub = |s: &mut Session, name: &str, d: &str| {
+        let l = s.execute("layer.newSublayer", &json!({"parent": main, "name": name})).unwrap()["id"].as_u64().unwrap();
+        s.execute("layer.setCurrent", &json!({"id": l})).unwrap();
+        (l, path(s, d, 1.0))
+    };
+    let (_, in_sublayer) = sub(&mut s, "Open", "M50 10 L60 10 L60 20 L50 20 Z");
+    let (hidden, in_hidden) = sub(&mut s, "Hidden", "M70 10 L80 10 L80 20 L70 20 Z");
+    let (locked, in_locked) = sub(&mut s, "Locked", "M90 10 L100 10 L100 20 L90 20 Z");
+    s.execute("layer.setProps", &json!({"id": hidden, "visible": false})).unwrap();
+    s.execute("layer.setProps", &json!({"id": locked, "locked": true})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    let all = all_ids(&mut s);
+    for id in [traced, in_hidden, in_locked, on_locked_board] {
+        assert!(!all.contains(&id), "{id}");
+    }
+    assert_eq!(not_aligned(&mut s, &[free]), sorted(vec![free, in_sublayer]));
+    // Unlocked, the artboard's path is selected again.
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": false})).unwrap();
+    assert_eq!(not_aligned(&mut s, &[free]), sorted(vec![free, in_sublayer, on_locked_board]));
+}
+
+/// A clipping path and the paths it clips are selected, not their clip group; a path with a drop
+/// shadow or a Gaussian Blur is selected as the path it is, and its effects are not objects.
+#[test]
+fn not_aligned_to_pixel_grid_selects_clipping_paths_and_paths_with_effects() {
+    let mut s = new_doc();
+    let clipped = path(&mut s, "M10.5 10 L60 10 L60 60 L10.5 60 Z", 1.0);
+    let clip = path(&mut s, "M20.5 20 L50 20 L50 50 L20.5 50 Z", 1.0);
+    s.execute("select.set", &json!({"ids": [clipped, clip]})).unwrap();
+    let group = s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let shadowed = path(&mut s, "M100.5 10 L150 10 L150 60 L100.5 60 Z", 1.0);
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [shadowed]})).unwrap();
+    let blurred = path(&mut s, "M200.5 10 L250 10 L250 60 L200.5 60 Z", 1.0);
+    s.execute("effect.apply", &json!({"effect": "blur.gaussian", "params": {"radius": 3}, "ids": [blurred]})).unwrap();
+    assert!(matches!(kind(&s, group), NodeKind::Group { .. }));
+    for id in [shadowed, blurred] {
+        assert!(!s.doc().unwrap().doc.node(NodeId(id)).unwrap().appearance.effects.is_empty(), "{id}");
+    }
+    let want = sorted(vec![clipped, clip, shadowed, blurred]);
+    assert_eq!(not_aligned(&mut s, &[group]), want);
+    // Object › Align to Pixel Grid takes each object selected; then nothing is left to select.
+    s.execute("object.setPixelAligned", &json!({"ids": want})).unwrap();
+    assert_eq!(not_aligned(&mut s, &[group]), Vec::<u64>::new());
+}
+
+/// The filter looks into blends, envelopes, repeats and Intertwine groups and selects the paths
+/// they are made of, not the objects that hold them; Align to Pixel Grid takes that selection, and
+/// then nothing is left to select.
+#[test]
+fn not_aligned_to_pixel_grid_selects_the_paths_of_blends_envelopes_repeats_and_intertwines() {
+    let mut s = new_doc();
+    let b1 = path(&mut s, "M10.5 10 L30 10 L30 30 L10.5 30 Z", 1.0);
+    let b2 = path(&mut s, "M80.5 10 L100 10 L100 30 L80.5 30 Z", 1.0);
+    s.execute("select.set", &json!({"ids": [b1, b2]})).unwrap();
+    let blend = s.execute("object.blend.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let warped = path(&mut s, "M10.5 100 L100 100 L100 150 L10.5 150 Z", 1.0);
+    let envelope = s.execute("object.envelope.makeWithWarp", &json!({"ids": [warped]})).unwrap()["id"].as_u64().unwrap();
+    let tile = path(&mut s, "M200.5 10 L220 10 L220 30 L200.5 30 Z", 1.0);
+    let repeat = s.execute("object.repeat.grid", &json!({"ids": [tile], "rows": 2, "cols": 2})).unwrap()["id"].as_u64().unwrap();
+    let i1 = path(&mut s, "M200.5 200 L260 200 L260 230 L200.5 230 Z", 1.0);
+    let i2 = path(&mut s, "M220.5 180 L240 180 L240 250 L220.5 250 Z", 1.0);
+    let intertwine = s.execute("object.intertwine.make", &json!({"ids": [i1, i2]})).unwrap()["id"].as_u64().unwrap();
+    assert!(matches!(kind(&s, blend), NodeKind::Blend { .. }));
+    assert!(matches!(kind(&s, envelope), NodeKind::Envelope { .. }));
+    assert!(matches!(kind(&s, repeat), NodeKind::Repeat(_)));
+    assert!(matches!(kind(&s, intertwine), NodeKind::Intertwine { .. }));
+    let want = sorted(vec![b1, b2, warped, tile, i1, i2]);
+    assert_eq!(not_aligned(&mut s, &[blend, envelope]), want);
+    s.execute("object.setPixelAligned", &json!({})).unwrap();
+    for id in &want {
+        assert!(aligned(&s, *id), "{id}");
+    }
+    assert_eq!(not_aligned(&mut s, &[repeat, intertwine]), Vec::<u64>::new());
+}
+
+/// Gradient meshes, placed documents and ruler guides are left out; a live shape is a path and is
+/// selected.
+#[test]
+fn not_aligned_to_pixel_grid_leaves_out_meshes_placed_documents_and_guides_but_takes_live_shapes() {
+    let mut s = new_doc();
+    let filled = path(&mut s, "M10.5 10 L60 10 L60 60 L10.5 60 Z", 1.0);
+    s.execute("paint.setFill", &json!({"color": "#3366cc"})).unwrap();
+    let mesh = s.execute("object.mesh.create", &json!({"ids": [filled], "rows": 2, "cols": 2})).unwrap()["ids"][0].as_u64().unwrap();
+    let dir = crate::tests_links::Folder::new("pixelalign-placed");
+    let file = dir.file("placed.vectorcraft");
+    let mut d = vectorcraft_doc::Document::new(50.0, 50.0);
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let rect = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.5, 0.5, 40.0, 40.0));
+    let paint = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb8(20, 20, 230));
+    let look = vectorcraft_doc::Appearance::basic(paint, vectorcraft_color::Paint::None, 0.0);
+    d.insert(Some(layer), 0, vectorcraft_doc::Node::path(id, rect, look)).unwrap();
+    crate::tests_links::write(&file, &vectorcraft_format::save_file(&d));
+    let placed = s.execute("file.place", &json!({"path": file, "at": [200, 200]})).unwrap()["ids"][0].as_u64().unwrap();
+    let guide = path(&mut s, "M0 300.5 L400 300.5", 1.0);
+    s.execute("view.guides.make", &json!({})).unwrap();
+    let live = s.execute("shape.rectangle", &json!({"x": 100.3, "y": 20.6, "width": 30.4, "height": 9.7})).unwrap()["id"].as_u64().unwrap();
+    assert!(matches!(kind(&s, mesh), NodeKind::Mesh(_)));
+    assert!(matches!(kind(&s, placed), NodeKind::PlacedDocument(_)));
+    assert!(matches!(kind(&s, guide), NodeKind::Path { guide: true, .. }));
+    assert!(s.doc().unwrap().doc.node(NodeId(live)).unwrap().live_shape().is_some());
+    let all = all_ids(&mut s);
+    assert!(all.contains(&mesh) && all.contains(&placed), "{all:?}");
+    assert_eq!(not_aligned(&mut s, &[mesh, placed]), vec![live]);
+}
+
+/// A compound path goes by its own property, whatever the property of the paths in it (a file can
+/// hold paths with the property on inside a compound path): off, it is selected as one object and
+/// the paths in it are not; on, it is not selected, though a path in it has the property off.
+#[test]
+fn not_aligned_to_pixel_grid_takes_a_compound_path_by_its_own_property() {
+    let mut s = new_doc();
+    let on = path(&mut s, "M10.5 10 L30 10 L30 30 L10.5 30 Z", 1.0);
+    let off = path(&mut s, "M50.5 10 L70 10 L70 30 L50.5 30 Z", 1.0);
+    s.execute("select.set", &json!({"ids": [on, off]})).unwrap();
+    let compound = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(NodeId(on)).unwrap().extras_mut().pixel_aligned = true;
+    assert!(aligned(&s, on) && !aligned(&s, off) && !aligned(&s, compound));
+    let other = path(&mut s, "M100 100 L110 100 L110 110 L100 110 Z", 1.0);
+    assert_eq!(not_aligned(&mut s, &[other]), sorted(vec![compound, other]));
+    s.execute("object.setPixelAligned", &json!({"ids": [compound]})).unwrap();
+    assert!(!aligned(&s, off));
+    assert_eq!(not_aligned(&mut s, &[compound]), vec![other]);
+}

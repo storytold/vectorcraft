@@ -92,7 +92,7 @@ impl Geometry {
         let state = app.session.active()?;
         let node = state.doc.node(*state.selection.objects.first()?)?;
         let bounds = node.geometric_bounds()?;
-        let xf = Xf::new(app.canvas_rect?, app.view()?);
+        let xf = app.canvas_xf()?;
         let options = super::revolve::light_options(d);
         // Both Revolves turn about their axis; the others about the centre of the art's bounds.
         let id = d.str("__effect");

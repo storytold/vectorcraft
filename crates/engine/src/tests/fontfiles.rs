@@ -194,6 +194,43 @@ fn a_search_finds_a_missing_fonts_file_by_its_names() {
     assert!(matches!(r["state"].as_str(), Some("stopped" | "done")), "{r}");
 }
 
+/// A caller confined by read roots sees, in the replies to a search another caller started, only
+/// the files found inside its read roots, and the folder searched and a failed search's path only
+/// when they are inside them.
+#[test]
+fn a_search_shows_a_confined_caller_only_paths_inside_its_read_roots() {
+    let root = folder("read-roots");
+    let font = vectorcraft_testkit::fonts::renamed("Findme Sans 3");
+    let (home, wide) = (root.join("home"), root.join("lrf-wide"));
+    for dir in [&home, &wide] {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join("Findme.otf"), &font).unwrap();
+    }
+    let mut s = session_for(&root);
+    let roots = |read: &[&Path]| crate::file_access::AutomationRoots::new(read, &[]).unwrap().unwrap();
+    let (narrow, broad) = (roots(&[&home]), roots(&[&root]));
+    let ask = |s: &mut Session, r: &Arc<crate::file_access::AutomationRoots>, p: Value| {
+        crate::file_access::confine(Some(r), || s.execute("text.findFontFiles", &p).unwrap())
+    };
+    // A font no file has keeps the search going through every folder.
+    let fonts = json!([{"family": "Findme Sans 3"}, {"family": "No Such Sans"}]);
+    ask(&mut s, &broad, json!({"folder": root, "fonts": fonts}));
+    finished(&mut s);
+    let all = ask(&mut s, &broad, json!({}));
+    assert_eq!((&all["fonts"][0]["files"], &all["folder"]), (&json!([home.join("Findme.otf"), wide.join("Findme.otf")]), &json!(root)), "{all}");
+    for r in [ask(&mut s, &narrow, json!({})), ask(&mut s, &narrow, json!({"stop": true}))] {
+        assert!(!r.to_string().contains("lrf-wide") && r.get("folder").is_none(), "{r}");
+        assert_eq!((&r["fonts"][0]["files"], &r["fonts"][0]["family"]), (&json!([home.join("Findme.otf")]), &json!("Findme Sans 3")), "{r}");
+        assert_eq!((&r["state"], &r["searched"], &r["id"]), (&all["state"], &all["searched"], &all["id"]), "{r}");
+    }
+    // A search that failed: the reason shows without the path to a caller outside its folder.
+    ask(&mut s, &broad, json!({"folder": wide.join("gone"), "fonts": fonts}));
+    assert!(finished(&mut s)["error"].as_str().is_some_and(|e| e.contains("lrf-wide")));
+    let r = ask(&mut s, &narrow, json!({}));
+    assert_eq!((r["state"].as_str(), r["error"].as_str(), r.get("folder")), (Some("failed"), Some("the folder can't be read"), None), "{r}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 fn junk_search_params_never_fail_internally() {
     let root = folder("junk");

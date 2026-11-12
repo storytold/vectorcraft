@@ -52,7 +52,7 @@ pub struct TextObject {
     /// the object, so the runs (and their styles) stay the text itself.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ruby: Vec<RubySpan>,
-    #[serde(default)]
+    #[serde(default = "ParaStyle::omitted")]
     pub para: ParaStyle,
     /// Per-paragraph attributes (see the type's docs); empty = every paragraph uses `para`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

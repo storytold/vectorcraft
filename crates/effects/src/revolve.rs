@@ -29,7 +29,7 @@ const MAX_PAINT_COPIES: usize = 256 << 20;
 
 /// The most face and box tests a group's transparent members' faces take together to rejoin their
 /// members' last runs; past them each starts a run of its own.
-const MAX_OVERLAP_TESTS: usize = 1 << 22;
+pub(crate) const MAX_OVERLAP_TESTS: usize = 1 << 22;
 
 /// The width of the stroke around each face that covers the seams between faces.
 const SEAM_WIDTH: f64 = 0.75;
@@ -628,14 +628,14 @@ pub(crate) fn scoped<'a>(id: NodeId, surfaces: Vec<(&'a [Scope], Arc<Node>)>, le
 /// What a face can paint, to tell whether two faces overlap: the convex hull of the points and
 /// control points of its outline, which holds the outline, and the hull's box grown by half the
 /// seam stroke.
-struct Coverage {
-    bounds: Rect,
+pub(crate) struct Coverage {
+    pub(crate) bounds: Rect,
     hull: Vec<Point>,
 }
 
 impl Coverage {
     /// `None` for a face with no outline and no box.
-    fn of(face: &Node) -> Option<Coverage> {
+    pub(crate) fn of(face: &Node) -> Option<Coverage> {
         let points: Vec<Point> = match face.path_data() {
             Some(path) => path
                 .to_bezpath()
@@ -663,7 +663,7 @@ impl Coverage {
     /// Do the two faces' hulls, each grown by half the seam stroke, overlap? A test of the
     /// separating axes of their edges and of the page's axes: `true` whenever they overlap, and
     /// sometimes near a corner when they don't.
-    fn meets(&self, other: &Coverage) -> bool {
+    pub(crate) fn meets(&self, other: &Coverage) -> bool {
         fn normals(hull: &[Point]) -> impl Iterator<Item = Vec2> + '_ {
             (0..hull.len()).filter_map(|i| {
                 let (a, b) = (hull.get(i)?, hull.get((i + 1) % hull.len())?);
@@ -710,7 +710,7 @@ fn convex_hull(mut points: Vec<Point>) -> Vec<Point> {
 }
 
 /// Do boxes `a` and `b` overlap with some area?
-fn overlaps(a: Rect, b: Rect) -> bool {
+pub(crate) fn overlaps(a: Rect, b: Rect) -> bool {
     a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1
 }
 
@@ -741,10 +741,11 @@ fn group_art(n: &Node, expand: bool) -> Option<Node> {
     if surfaces.is_empty() {
         return None;
     }
-    // A classic surface whose gradient has transparent stops carries an opacity mask, and stays whole.
-    let plain = surfaces.iter().all(|(depths, s, _)| {
-        s.extras().mask.is_none() && matches!(&s.kind, NodeKind::Group { children, clip: false } if children.len() == depths.len())
-    });
+    let plain = surfaces.iter().all(|(depths, s, _)| matches!(&s.kind, NodeKind::Group { children, clip: false } if children.len() == depths.len()));
+    // A classic surface whose gradient has transparent stops carries an opacity mask: its faces go
+    // in runs, as a transparent member's do, and each run carries the mask.
+    let masks: Vec<Option<Box<vectorcraft_doc::OpacityMask>>> = surfaces.iter().map(|(_, s, _)| s.extras().mask.clone()).collect();
+    let opaque = opaque && masks.iter().all(Option::is_none);
     let children = if !plain {
         scoped(n.id, surfaces.into_iter().map(|(_, s, scopes)| (scopes, Arc::new(s))).collect(), 0)
     } else {
@@ -786,7 +787,8 @@ fn group_art(n: &Node, expand: bool) -> Option<Node> {
                     runs.push(Run { member: None, scopes, bounds: Rect::ZERO, faces: vec![face], cover: vec![], opacity, blend });
                     continue;
                 };
-                if opacity >= 1.0 && blend == Default::default() && scopes.is_empty() {
+                let masked = masks.get(member).is_some_and(Option::is_some);
+                if opacity >= 1.0 && blend == Default::default() && scopes.is_empty() && !masked {
                     runs.push(Run { member: None, scopes, bounds: cover.bounds, faces: vec![face], cover: vec![cover], opacity, blend });
                     continue;
                 }
@@ -822,6 +824,9 @@ fn group_art(n: &Node, expand: bool) -> Option<Node> {
                 let mut group = Node::group(n.id, r.faces);
                 group.opacity = r.opacity;
                 group.blend = r.blend;
+                if let Some(mask) = r.member.and_then(|m| masks.get(m)).cloned().flatten() {
+                    group.extras_mut().mask = Some(mask);
+                }
                 Some((r.scopes, Arc::new(group)))
             });
             scoped(n.id, runs.collect(), 0)

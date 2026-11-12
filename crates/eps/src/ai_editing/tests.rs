@@ -747,6 +747,7 @@ fn art_the_slice_does_not_cover_is_written_as_plain_paths() {
     assert_eq!(layer[2].visual_bounds().map(|b| (r3(b.x0), r3(b.y0), r3(b.x1), r3(b.y1))), Some((r3(100.0), r3(10.0), r3(120.0), r3(20.0))));
 }
 
+/// A brushed stroke the reader reads as its drawn look (a Scatter brush's) is written as its brush's art.
 #[test]
 fn brushed_strokes_are_written_as_their_brush_art() {
     let mut doc = Document::new(200.0, 100.0);
@@ -756,11 +757,11 @@ fn brushed_strokes_are_written_as_their_brush_art() {
         shapes::line((20.0, 50.0).into(), (180.0, 50.0).into()),
         Appearance::basic(Paint::None, solid(Color::rgb(1.0, 0.0, 0.0)), 4.0),
     );
-    line.appearance.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+    line.appearance.stroke_mut().unwrap().brush = Some("Dots".into());
     doc.insert(Some(layer), usize::MAX, line).unwrap();
     let pieces = vectorcraft_brush::stroke_pieces(
         &doc,
-        &vectorcraft_brush::find(&doc, "3 pt. Round").unwrap(),
+        &vectorcraft_brush::find(&doc, "Dots").unwrap(),
         &shapes::line((20.0, 50.0).into(), (180.0, 50.0).into()).to_bezpath(),
         doc.layers[0].children().unwrap()[0].appearance.stroke().unwrap(),
     );
@@ -895,6 +896,7 @@ fn counted() -> Vec<(&'static str, Document)> {
         ("styles", styles_document()),
         ("painted clips", painted_clips()),
         ("blend", blend_doc()),
+        ("brushes", brushes_document()),
     ]
 }
 
@@ -3785,6 +3787,34 @@ fn an_unstroked_run_with_a_stroke_style_loses_nothing() {
     }
 }
 
+/// The text document has no Korean Line Break Anywhere: a paragraph with it on and Hangul in it
+/// is reported as left out, and comes back off; with it off, or with no Hangul, nothing is
+/// reported.
+#[test]
+fn korean_line_break_anywhere_is_reported_only_for_korean_paragraphs() {
+    use vectorcraft_doc::TextObject;
+    for (text, on, reported) in [("가나다 라마", true, true), ("가나다 라마", false, false), ("Plain", true, false)] {
+        let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), text, style(14.0, Color::BLACK));
+        t.para.korean_line_break_anywhere = on;
+        let mut doc = Document::new(200.0, 200.0);
+        let layer = doc.layers[0].id;
+        let n = text_node(&mut doc, t);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(!out.warnings.is_empty(), reported, "{text} {on}: {:?}", out.warnings);
+        let mut all = vec![];
+        paths(&read_back(&doc).layers, &mut all);
+        let paras: Vec<bool> = all
+            .iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Text(t) => Some(t.para_at(0).korean_line_break_anywhere),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(paras, [false], "{text} {on}");
+    }
+}
+
 #[test]
 fn type_is_written_again_as_the_same_bytes() {
     let doc = typed();
@@ -6640,6 +6670,7 @@ fn every_effect_a_graphic_style_holds_is_read_back() {
     for id in &ids {
         cases.push((id, json!({"bend": 30.0, "horizontal": -10.0, "vertical": 20.0, "orientation": "vertical"})));
         cases.push((id, json!({"bend": -30.0, "horizontal": 0.0, "vertical": 0.0, "orientation": "horizontal"})));
+        cases.push((id, json!({"bend": 45.0, "horizontal": 15.0, "vertical": -5.0, "orientation": "horizontal", "version": 1})));
     }
     for (id, params) in cases {
         let effect = fx(id, params.clone());
@@ -6656,6 +6687,10 @@ fn every_effect_a_graphic_style_holds_is_read_back() {
         let got = &back.graphic_styles[0].appearance.effects;
         assert_eq!(got.len(), 1, "{id} {params}");
         assert_eq!(got[0].id, effect.id);
+        // A warp read from a file bends as its style's Bézier net.
+        if id.starts_with("warp.") {
+            assert_eq!(got[0].params["version"], json!(vectorcraft_doc::live::WARP_NET), "{id} {params}");
+        }
         let (g, w) = (vectorcraft_effects::merged_params(&got[0].id, &got[0].params), vectorcraft_effects::merged_params(&effect.id, &effect.params));
         for (key, value) in w.as_object().unwrap() {
             // Random isn't written, and a style with it isn't read; its seed is the default.
@@ -6676,6 +6711,19 @@ fn every_effect_a_graphic_style_holds_is_read_back() {
             }
         }
     }
+    // A warp saved before the map version existed is written with its settings too, and reads back on
+    // the nets' map.
+    let old = vectorcraft_doc::Effect { id: "warp.flag".into(), params: json!({"bend": 40.0, "horizontal": 10.0}), visible: true };
+    let mut doc = Document::new(200.0, 100.0);
+    let mut g = vectorcraft_doc::GraphicStyle::new("Old", Appearance { effects: vec![old], ..Appearance::basic(black_fill(), Paint::None, 0.0) });
+    g.id = 3;
+    *doc.graphic_styles = vec![g];
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::PANEL_STYLES), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let [warp] = back.graphic_styles[0].appearance.effects.as_slice() else { panic!("{:?}", back.graphic_styles) };
+    assert_eq!((warp.id.as_str(), &warp.params["bend"], &warp.params["horizontal"]), ("warp.flag", &json!(40.0), &json!(10.0)));
+    assert_eq!(warp.params["version"], json!(vectorcraft_doc::live::WARP_NET));
     // A Zig Zag with its 0 to 1 settings written under the size's own key, and a turn in radians.
     let mut doc = Document::new(200.0, 100.0);
     let effects = vec![
@@ -6863,6 +6911,28 @@ fn a_link_to_a_style_that_moves_the_outline_is_kept_where_the_reader_reads_it() 
     let n = &back.layers[0].children().unwrap()[0];
     assert_eq!(n.extras().graphic_style, None);
     assert!(n.extras().mask.is_some(), "{n:?}");
+}
+
+/// An object linked to a graphic style that doesn't fit within the object limit is left out with
+/// the limit's warning and the warning about links left out.
+#[test]
+fn a_linked_object_past_the_object_limit_warns_that_its_link_is_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    let ap = Appearance { effects: vec![drop_shadow()], ..Appearance::basic(black_fill(), Paint::None, 0.0) };
+    let mut g = vectorcraft_doc::GraphicStyle::new("Shadowed", ap.clone());
+    g.id = 9;
+    doc.graphic_styles.push(g);
+    // Room for everything but the object.
+    let room = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap);
+    n.extras_mut().graphic_style = Some(9);
+    put(&mut doc, n);
+    let all = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!all.warnings.iter().any(|w| w == writer::OBJECT_LIMIT || w == writer::STYLE_LINKS), "{:?}", all.warnings);
+    let out = export_within(&doc, &opts(), room).unwrap();
+    for w in [writer::OBJECT_LIMIT, writer::STYLE_LINKS] {
+        assert!(out.warnings.iter().any(|x| x == w), "{w}: {:?}", out.warnings);
+    }
 }
 
 /// Twist and Transform on an object that isn't linked to a graphic style are not written as a style
@@ -7210,6 +7280,772 @@ fn a_large_canvas_writes_every_object_as_its_look() {
     assert!(n.appearance.effects.is_empty());
     let p = n.path_data().unwrap().subpaths[0].anchors[0].p;
     assert!((p.x - 10.0).abs() < 1e-2 && (p.y - 10.0).abs() < 1e-2, "{p:?}");
+}
+
+// ---------- brushes ----------
+
+/// Brush art: a wide block with a narrow one below it (y down), filled black.
+fn brush_art_node() -> Node {
+    let block =
+        |id: u64, r: Rect| Arc::new(Node::path(vectorcraft_doc::NodeId(id), shapes::rectangle(r), Appearance::basic(black_fill(), Paint::None, 0.0)));
+    Node::group(vectorcraft_doc::NodeId(1), vec![block(2, Rect::new(0.0, 0.0, 40.0, 4.0)), block(3, Rect::new(0.0, 4.0, 10.0, 8.0))])
+}
+
+/// A Calligraphic brush varying with the barrel's rotation and the pen's pressure, a Scatter brush in
+/// Tints, an Art brush in Tints and one that keeps its art's colors.
+fn brush_library() -> Vec<vectorcraft_brush::Brush> {
+    use vectorcraft_brush::{ArtBrush, Brush, BrushKind, Calligraphic, Colorization, Scatter, Variation};
+    let art = |colorization| BrushKind::Art(ArtBrush { art: brush_art_node(), colorization, ..ArtBrush::default() });
+    vec![
+        Brush {
+            name: "Nib".into(),
+            kind: BrushKind::Calligraphic(Calligraphic {
+                angle: 30.0,
+                roundness: 40.0,
+                size: 6.0,
+                variation: [20.0, 10.0, 2.0],
+                modes: Some([Variation::Rotation, Variation::Fixed, Variation::Pressure]),
+            }),
+        },
+        Brush {
+            name: "Spray".into(),
+            kind: BrushKind::Scatter(Scatter {
+                art: brush_art_node(),
+                size: (50.0, 150.0),
+                spacing: (120.0, 200.0),
+                scatter: (-25.0, 25.0),
+                rotation: (-45.0, 30.0),
+                rotation_relative_to_path: true,
+                colorization: Colorization::Tints,
+                modes: Some([Variation::Random, Variation::Fixed, Variation::Pressure, Variation::Random]),
+            }),
+        },
+        Brush { name: "Ribbon".into(), kind: art(Colorization::Tints) },
+        Brush { name: "Plain ribbon".into(), kind: art(Colorization::None) },
+    ]
+}
+
+/// A path stroked red at `width` with the brush `brush`, on the first layer of `doc`.
+fn brushed(doc: &mut Document, brush: &str, from: (f64, f64), to: (f64, f64), width: f64) {
+    let mut line =
+        Node::path(doc.alloc_id(), shapes::line(from.into(), to.into()), Appearance::basic(Paint::None, solid(Color::rgb(1.0, 0.0, 0.0)), width));
+    line.appearance.stroke_mut().unwrap().brush = Some(brush.into());
+    put(doc, line);
+}
+
+/// [`brush_library`] and a path with the Calligraphic brush and one with the Art brush in Tints.
+fn brushes_document() -> Document {
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &brush_library());
+    brushed(&mut doc, "Nib", (20.0, 50.0), (280.0, 60.0), 2.0);
+    brushed(&mut doc, "Ribbon", (20.0, 120.0), (280.0, 150.0), 1.5);
+    doc
+}
+
+/// Brush art `n` as a tree to compare with [`same_tree`]: each object's kind, its anchors and handles,
+/// the fills and strokes that paint (a stroke with its width), and its members in order.
+fn art_tree(n: &Node) -> serde_json::Value {
+    let kind = match &n.kind {
+        NodeKind::Path { .. } => "path",
+        NodeKind::Compound { .. } => "compound",
+        NodeKind::Group { clip: false, .. } => "group",
+        _ => "other",
+    };
+    let anchors: Vec<[f64; 6]> = match &n.kind {
+        NodeKind::Path { path, .. } => {
+            path.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| [a.h_in.x, a.h_in.y, a.p.x, a.p.y, a.h_out.x, a.h_out.y])).collect()
+        }
+        _ => vec![],
+    };
+    let paints: Vec<serde_json::Value> = n
+        .appearance
+        .items
+        .iter()
+        .filter(|i| !i.paint().is_none())
+        .map(|i| match i {
+            AppearanceItem::Fill(f) => serde_json::json!(["fill", f.paint]),
+            AppearanceItem::Stroke(s) => serde_json::json!(["stroke", s.paint, s.width]),
+        })
+        .collect();
+    let members: Vec<serde_json::Value> = n.children().map(|c| c.iter().map(|m| art_tree(m)).collect()).unwrap_or_default();
+    serde_json::json!({"kind": kind, "anchors": anchors, "paints": paints, "members": members})
+}
+
+/// Are trees `a` and `b` ([`art_tree`]) the same but for numbers within the written numbers'
+/// precision (1/1000)?
+fn same_tree(a: &serde_json::Value, b: &serde_json::Value) -> bool {
+    use serde_json::Value;
+    match (a, b) {
+        (Value::Number(x), Value::Number(y)) => (x.as_f64().unwrap() - y.as_f64().unwrap()).abs() <= 1e-3,
+        (Value::Array(x), Value::Array(y)) => x.len() == y.len() && x.iter().zip(y).all(|(p, q)| same_tree(p, q)),
+        (Value::Object(x), Value::Object(y)) => x.len() == y.len() && x.iter().all(|(k, v)| y.get(k).is_some_and(|w| same_tree(v, w))),
+        _ => a == b,
+    }
+}
+
+/// The document's brushes come back in the Brushes panel's order with their settings and art: the
+/// Calligraphic brush's channels, the Scatter brush's ranges, modes and Tints, the Art brushes'
+/// colorizations.
+#[test]
+fn brushes_are_read_back_with_their_settings() {
+    use vectorcraft_brush::BrushKind;
+    let doc = brushes_document();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    let text = program(&doc);
+    assert_eq!(text.matches("%AI8_BeginPluginObject").count(), 5, "the manager's order and four brushes");
+    assert_eq!(text.matches("%AI8_BeginBrushPattern").count(), 3);
+    let back = vectorcraft_brush::library(&read_back(&doc));
+    let lib = brush_library();
+    assert_eq!(back.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["Nib", "Spray", "Ribbon", "Plain ribbon"]);
+    assert_eq!(back[0], lib[0]);
+    let (BrushKind::Scatter(got), BrushKind::Scatter(want)) = (&back[1].kind, &lib[1].kind) else { panic!("scatter") };
+    let near = |a: (f64, f64), b: (f64, f64)| (a.0 - b.0).abs() < 1e-3 && (a.1 - b.1).abs() < 1e-3;
+    assert!(
+        near(got.size, want.size) && near(got.spacing, want.spacing) && near(got.scatter, want.scatter) && near(got.rotation, want.rotation),
+        "{got:?}"
+    );
+    assert_eq!((got.modes, got.colorization, got.rotation_relative_to_path), (want.modes, want.colorization, true));
+    let (g, w) = (art_tree(&got.art), art_tree(&want.art));
+    assert!(same_tree(&g, &w), "the art without its frame, with its paint and members in order: {g:#} for {w:#}");
+    for (i, colorization) in [(2, vectorcraft_brush::Colorization::Tints), (3, vectorcraft_brush::Colorization::None)] {
+        let BrushKind::Art(a) = &back[i].kind else { panic!("art") };
+        assert_eq!(a.colorization, colorization);
+        let (g, w) = (art_tree(&a.art), art_tree(&brush_art_node()));
+        assert!(same_tree(&g, &w), "the narrow block stays below the wide one, and no frame stays: {g:#} for {w:#}");
+        let BrushKind::Art(want) = &lib[i].kind else { panic!("art") };
+        assert_eq!(ArtBrushOptions::of(a), ArtBrushOptions::of(want));
+    }
+}
+
+/// An Art brush's options, without its art.
+#[derive(Debug, PartialEq)]
+struct ArtBrushOptions(serde_json::Value);
+
+impl ArtBrushOptions {
+    fn of(a: &vectorcraft_brush::ArtBrush) -> Self {
+        let mut v = serde_json::to_value(a).unwrap();
+        v.as_object_mut().unwrap().remove("art");
+        Self(v)
+    }
+}
+
+/// A path with the Calligraphic brush, and one with an Art brush in Tints whose art bends along the
+/// path, come back as those paths with the brush on their stroke at its weight, not as their drawn
+/// look; a path with the Art brush that keeps its art's colors comes back as its drawn look.
+#[test]
+fn brushed_paths_are_read_back_brushed() {
+    let mut doc = brushes_document();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::STROKES), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let art = back.layers[0].children().unwrap();
+    assert_eq!(art.len(), 2);
+    for (n, (brush, width)) in art.iter().zip([("Nib", 2.0), ("Ribbon", 1.5)]) {
+        assert!(matches!(n.kind, NodeKind::Path { .. }), "{brush}: the path, not its look: {n:#?}");
+        let st = n.appearance.stroke().unwrap();
+        assert_eq!((st.brush.as_deref(), st.width, st.paint.color()), (Some(brush), width, Some(Color::rgb(1.0, 0.0, 0.0))));
+        assert!(n.appearance.fill().is_none_or(|f| f.paint.is_none()));
+    }
+    let ours = doc.layers[0].children().unwrap();
+    assert_eq!(art[0].path_data(), ours[0].path_data());
+    assert_eq!(art[1].path_data(), ours[1].path_data());
+    brushed(&mut doc, "Plain ribbon", (20.0, 180.0), (280.0, 180.0), 1.0);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::STROKES), "{:?}", out.warnings);
+    assert!(matches!(read_back(&doc).layers[0].children().unwrap()[2].kind, NodeKind::Group { .. }));
+}
+
+/// A compound path with the Calligraphic brush comes back as that compound path with the brush on its
+/// stroke; a filled ellipse with it comes back with its fill and the brush.
+#[test]
+fn brushed_compound_and_filled_paths_are_read_back_brushed() {
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &brush_library());
+    let mut stroke = StrokeLayer::new(solid(Color::rgb(1.0, 0.0, 0.0)), 2.0);
+    stroke.brush = Some("Nib".into());
+    let ring = ring(&mut doc, Appearance { items: vec![AppearanceItem::Stroke(stroke.clone())], effects: vec![], contents_index: None });
+    put(&mut doc, ring);
+    let fill = vectorcraft_doc::FillLayer::new(solid(Color::rgb(0.2, 0.6, 0.3)));
+    let ap = Appearance { items: vec![AppearanceItem::Fill(fill), AppearanceItem::Stroke(stroke)], effects: vec![], contents_index: None };
+    let ellipse = Node::path(doc.alloc_id(), shapes::ellipse(Rect::new(20.0, 120.0, 140.0, 180.0)), ap);
+    put(&mut doc, ellipse);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::STROKES || w == writer::BRUSHES), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let (art, ours) = (back.layers[0].children().unwrap(), doc.layers[0].children().unwrap());
+    assert!(matches!(art[0].kind, NodeKind::Compound { .. }), "the compound path, not its look: {:#?}", art[0]);
+    assert!(same_tree(&art_tree(&art[0])["members"], &art_tree(&ours[0])["members"]), "{:#?}", art[0]);
+    assert!(matches!(art[1].kind, NodeKind::Path { .. }), "the ellipse, not its look: {:#?}", art[1]);
+    assert!(same_tree(&art_tree(&art[1])["anchors"], &art_tree(&ours[1])["anchors"]), "{:#?}", art[1]);
+    assert_eq!(art[1].appearance.fill().and_then(|f| f.paint.color()), Some(Color::rgb(0.2, 0.6, 0.3)));
+    for n in art {
+        let st = n.appearance.stroke().unwrap();
+        assert_eq!((st.brush.as_deref(), st.width), (Some("Nib"), 2.0));
+    }
+}
+
+/// A path with an Art brush in Tints whose art doesn't bend along the path (its art has a painted
+/// stroke) comes back as its drawn look, with the stroke warning; the brush itself comes back.
+#[test]
+fn an_art_brush_whose_art_doesnt_bend_keeps_its_paths_look() {
+    use vectorcraft_brush::{ArtBrush, Brush, BrushKind, Colorization};
+    let mut art = brush_art_node();
+    if let Some(c) = art.children_mut() {
+        for m in c.iter_mut() {
+            Arc::make_mut(m).appearance = Appearance::basic(black_fill(), black_fill(), 1.0).into();
+        }
+    }
+    let brush =
+        Brush { name: "Stroked ribbon".into(), kind: BrushKind::Art(ArtBrush { art, colorization: Colorization::Tints, ..ArtBrush::default() }) };
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, std::slice::from_ref(&brush));
+    brushed(&mut doc, "Stroked ribbon", (20.0, 120.0), (280.0, 150.0), 1.0);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::STROKES), "{:?}", out.warnings);
+    assert!(!out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert!(matches!(back.layers[0].children().unwrap()[0].kind, NodeKind::Group { .. }));
+    let lib = vectorcraft_brush::library(&back);
+    let (BrushKind::Art(got), BrushKind::Art(want)) = (&lib[0].kind, &brush.kind) else { panic!("art") };
+    assert!(same_tree(&art_tree(&got.art), &art_tree(&want.art)), "{:#?}", got.art);
+}
+
+/// Settings the other tests don't use come back: a Calligraphic brush varying with tilt and bearing,
+/// a Scatter brush keeping its art's colors whose rotation doesn't follow the path, and brushes whose
+/// modes aren't given (the reader gives them, the same ones).
+#[test]
+fn more_brush_settings_are_read_back() {
+    use vectorcraft_brush::{Brush, BrushKind, Calligraphic, Colorization, Scatter, Variation};
+    let tilted = Calligraphic {
+        angle: -40.0,
+        roundness: 75.0,
+        size: 9.0,
+        variation: [10.0, 5.0, 3.0],
+        modes: Some([Variation::Tilt, Variation::Bearing, Variation::Random]),
+    };
+    let scatter = Scatter {
+        art: brush_art_node(),
+        size: (80.0, 80.0),
+        spacing: (100.0, 100.0),
+        scatter: (0.0, 0.0),
+        rotation: (15.0, 15.0),
+        rotation_relative_to_path: false,
+        colorization: Colorization::None,
+        modes: Some([Variation::Tilt, Variation::Bearing, Variation::Fixed, Variation::Rotation]),
+    };
+    let lib = vec![
+        Brush { name: "Tilted".into(), kind: BrushKind::Calligraphic(tilted.clone()) },
+        Brush { name: "Still".into(), kind: BrushKind::Scatter(scatter.clone()) },
+        Brush { name: "Unset nib".into(), kind: BrushKind::Calligraphic(Calligraphic { modes: None, ..tilted }) },
+        Brush { name: "Unset spray".into(), kind: BrushKind::Scatter(Scatter { modes: None, ..scatter }) },
+    ];
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &lib);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    let back = vectorcraft_brush::library(&read_back(&doc));
+    assert_eq!(back.len(), lib.len());
+    let near = |a: (f64, f64), b: (f64, f64)| (a.0 - b.0).abs() < 1e-3 && (a.1 - b.1).abs() < 1e-3;
+    for (got, want) in back.iter().zip(&lib) {
+        assert_eq!(got.name, want.name);
+        match (&got.kind, &want.kind) {
+            (BrushKind::Calligraphic(g), BrushKind::Calligraphic(w)) => {
+                assert_eq!(g.modes(), w.modes(), "{}", want.name);
+                assert_eq!(Calligraphic { modes: None, ..g.clone() }, Calligraphic { modes: None, ..w.clone() }, "{}", want.name);
+            }
+            (BrushKind::Scatter(g), BrushKind::Scatter(w)) => {
+                assert_eq!(g.modes(), w.modes(), "{}", want.name);
+                assert!(near(g.size, w.size) && near(g.spacing, w.spacing) && near(g.scatter, w.scatter) && near(g.rotation, w.rotation), "{g:?}");
+                assert_eq!((g.colorization, g.rotation_relative_to_path), (Colorization::None, false), "{}", want.name);
+                assert!(same_tree(&art_tree(&g.art), &art_tree(&w.art)), "{}: {:#?}", want.name, g.art);
+            }
+            _ => panic!("{}: {got:?}", want.name),
+        }
+    }
+}
+
+/// Brush art without width or height, a straight stroked line, comes back as that line, without a
+/// frame or a group around it: a Scatter brush's horizontal line and an Art brush's vertical one.
+#[test]
+fn brush_art_of_a_straight_line_comes_back_as_the_line() {
+    use vectorcraft_brush::{ArtBrush, Brush, BrushKind, Scatter};
+    let line = |id: u64, to: (f64, f64)| {
+        Node::path(vectorcraft_doc::NodeId(id), shapes::line((0.0, 0.0).into(), to.into()), Appearance::basic(Paint::None, black_fill(), 2.0))
+    };
+    let lib = vec![
+        Brush { name: "Dash".into(), kind: BrushKind::Scatter(Scatter { art: line(1, (40.0, 0.0)), ..Scatter::default() }) },
+        Brush { name: "Post".into(), kind: BrushKind::Art(ArtBrush { art: line(2, (0.0, 40.0)), ..ArtBrush::default() }) },
+    ];
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &lib);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    let back = vectorcraft_brush::library(&read_back(&doc));
+    assert_eq!(back.len(), 2);
+    for (got, want) in back.iter().zip(&lib) {
+        let art = |b: &Brush| match &b.kind {
+            BrushKind::Scatter(s) => s.art.clone(),
+            BrushKind::Art(a) => a.art.clone(),
+            _ => panic!("{}", b.name),
+        };
+        let (g, w) = (art_tree(&art(got)), art_tree(&art(want)));
+        assert!(same_tree(&g, &w), "{}: {g:#} for {w:#}", want.name);
+    }
+}
+
+/// Brush art of a path with several subpaths is written as a compound path, which the reader reads as
+/// a compound path of one path for each subpath, and is weighed as the reader weighs that against the
+/// art it copies into one file's brushes: of two Art brushes whose art is a path of 30,000 squares,
+/// the second is left out with a warning, so that what is written is what comes back.
+#[test]
+fn brush_art_of_a_path_with_subpaths_is_weighed_as_it_is_read() {
+    use vectorcraft_brush::{ArtBrush, Brush, BrushKind};
+    let squares = |n: u32| {
+        let mut path = PathData::default();
+        for i in 0..n {
+            let x = f64::from(i % 200) * 2.0;
+            let y = f64::from(i / 200) * 2.0;
+            path.subpaths.extend(shapes::rectangle(Rect::new(x, y, x + 1.0, y + 1.0)).subpaths);
+        }
+        Node::path(vectorcraft_doc::NodeId(1), path, Appearance::basic(black_fill(), Paint::None, 0.0))
+    };
+    let brush = |name: &str, n: u32| Brush { name: name.into(), kind: BrushKind::Art(ArtBrush { art: squares(n), ..ArtBrush::default() }) };
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &[brush("Two", 2)]);
+    let back = vectorcraft_brush::library(&read_back(&doc));
+    let BrushKind::Art(a) = &back[0].kind else { panic!("art") };
+    let tree = art_tree(&a.art);
+    assert_eq!(tree["kind"], "compound", "{tree:#}");
+    assert_eq!(tree["members"].as_array().map(Vec::len), Some(2), "{tree:#}");
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &[brush("Many 1", 30_000), brush("Many 2", 30_000)]);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    let names: Vec<String> = vectorcraft_brush::library(&read_back(&doc)).into_iter().map(|b| b.name).collect();
+    assert_eq!(names, ["Many 1"]);
+    assert_eq!(program(&doc).matches("%AI8_BeginBrushPattern").count(), 1);
+}
+
+/// Brush art that is a compound path is written as one path of all its members' subpaths, and is
+/// weighed as the reader reads that back: a compound path of 24,000 members of two squares each is
+/// read as 48,000 paths, within what the reader copies into one file's brushes, so the brush is
+/// written without a warning; a compound path with one square comes back as one path.
+#[test]
+fn brush_art_of_a_compound_path_is_weighed_as_it_is_read() {
+    use vectorcraft_brush::{ArtBrush, Brush, BrushKind};
+    let square = |i: u32| {
+        let x = f64::from(i % 400) * 2.0;
+        let y = f64::from(i / 400) * 2.0;
+        shapes::rectangle(Rect::new(x, y, x + 1.0, y + 1.0)).subpaths
+    };
+    let compound = |members: u32, per: u32| {
+        let children = (0..members)
+            .map(|m| {
+                let path = PathData::new((0..per).flat_map(|k| square(m * per + k)).collect());
+                Arc::new(Node::path(vectorcraft_doc::NodeId(2), path, Appearance::basic(black_fill(), Paint::None, 0.0)))
+            })
+            .collect();
+        let mut n = Node::path(vectorcraft_doc::NodeId(1), PathData::default(), Appearance::basic(black_fill(), Paint::None, 0.0));
+        n.kind = NodeKind::Compound { children, rule: FillRule::NonZero };
+        n
+    };
+    let brush = |name: &str, art: Node| Brush { name: name.into(), kind: BrushKind::Art(ArtBrush { art, ..ArtBrush::default() }) };
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &[brush("One", compound(1, 1))]);
+    let back = vectorcraft_brush::library(&read_back(&doc));
+    let BrushKind::Art(a) = &back[0].kind else { panic!("art") };
+    assert_eq!(art_tree(&a.art)["kind"], "path", "{:#}", art_tree(&a.art));
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &[brush("Many", compound(24_000, 2))]);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    let back = vectorcraft_brush::library(&read_back(&doc));
+    assert_eq!(back.len(), 1);
+    let BrushKind::Art(a) = &back[0].kind else { panic!("art") };
+    assert_eq!(a.art.children().map(Vec::len), Some(48_000));
+}
+
+/// A path with a drop shadow and the Calligraphic brush keeps the brush and the effect, and its drawn
+/// look doesn't warn about the brushed stroke; a group with a drop shadow whose member has the Scatter
+/// brush still warns, as the member is written as its brush's art.
+#[test]
+fn a_brushed_path_with_effects_keeps_its_brush_without_the_stroke_warning() {
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &brush_library());
+    let mut line = Node::path(
+        doc.alloc_id(),
+        shapes::line((20.0, 50.0).into(), (280.0, 60.0).into()),
+        Appearance::basic(Paint::None, solid(Color::rgb(1.0, 0.0, 0.0)), 2.0),
+    );
+    line.appearance.stroke_mut().unwrap().brush = Some("Nib".into());
+    line.appearance.effects = vec![drop_shadow()];
+    put(&mut doc, line);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::STROKES), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let n = &back.layers[0].children().unwrap()[0];
+    assert!(matches!(n.kind, NodeKind::Path { .. }), "the path, not its look: {n:#?}");
+    assert_eq!(n.appearance.stroke().and_then(|s| s.brush.as_deref()), Some("Nib"));
+    assert_eq!(n.appearance.effects.len(), 1);
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &brush_library());
+    let mut member = Node::path(
+        doc.alloc_id(),
+        shapes::line((20.0, 50.0).into(), (280.0, 60.0).into()),
+        Appearance::basic(Paint::None, solid(Color::rgb(1.0, 0.0, 0.0)), 2.0),
+    );
+    member.appearance.stroke_mut().unwrap().brush = Some("Spray".into());
+    let mut g = group(&mut doc, vec![member], false);
+    g.appearance.effects = vec![drop_shadow()];
+    put(&mut doc, g);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::STROKES), "{:?}", out.warnings);
+}
+
+/// A brushed stroke that paints nothing isn't kept by an art style: a path with only such a stroke is
+/// written without a style, and a document whose brushes are a new document's writes no brushes.
+#[test]
+fn a_brushed_stroke_that_paints_nothing_writes_no_brushes() {
+    let mut doc = Document::new(300.0, 200.0);
+    let mut line =
+        Node::path(doc.alloc_id(), shapes::line((20.0, 50.0).into(), (280.0, 60.0).into()), Appearance::basic(Paint::None, Paint::None, 1.0));
+    line.appearance.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+    put(&mut doc, line);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    let text = program(&doc);
+    assert!(!text.contains("%AI8_BeginPluginObject"), "no brushes");
+    assert!(!text.contains("/KnownStyle"), "no art style");
+}
+
+/// The lines of `program` that hold brushes and what is drawn with them: the brush art, the plug-in
+/// objects, the art styles and the layers.
+fn brush_lines(program: &str) -> Vec<&str> {
+    let mut out = vec![];
+    let mut inside = false;
+    for line in program.lines() {
+        if ["%AI8_BeginBrushPattern", "%AI8_BeginPluginObject", "%AI9_BeginArtStyles", "%%EndSetup"].iter().any(|m| line.starts_with(m)) {
+            inside = true;
+        }
+        if inside {
+            out.push(line);
+        }
+        if ["%AI8_EndBrushPattern", "%AI8_EndPluginObject", "%AI9_EndArtStyles"].iter().any(|m| line.starts_with(m)) {
+            inside = false;
+        }
+    }
+    out
+}
+
+/// A document with brushes and brushed paths is written as the same bytes again, and what the reader
+/// reads back is written with the same brushes, art styles and layers.
+#[test]
+fn brushes_write_the_same_bytes_again() {
+    let doc = brushes_document();
+    let first = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(first.program, export_ai_editing(&doc, &opts()).unwrap().program);
+    let again = String::from_utf8(export_ai_editing(&read_back(&doc), &opts()).unwrap().program).unwrap();
+    let first = String::from_utf8(first.program).unwrap();
+    let (again, first) = (brush_lines(&again), brush_lines(&first));
+    let differ = again.iter().zip(&first).enumerate().find(|(_, (a, b))| a != b);
+    assert_eq!(differ, None, "the first line that differs");
+    assert_eq!(again.len(), first.len());
+}
+
+/// Brushes the reader wouldn't read back as they are are left out with a warning, each on its own
+/// beside a brush that comes back, and each changed from a brush that comes back by the one setting
+/// that leaves it out: an Art brush whose art is a group with a fill of its own, a Scatter brush whose
+/// art is a path without points, an Art brush whose art is a group without members, Pattern and Bristle
+/// brushes, Art brushes flipped along or across, overlapping, at another width, with a width that
+/// varies, in another direction or scale, Art and Scatter brushes in Tints and Shades or Hue Shift, a
+/// brush whose name holds a slash and a second brush of a name. A brush left out doesn't take its
+/// name from a later one.
+#[test]
+fn brushes_the_reader_cant_read_are_left_out() {
+    use vectorcraft_brush::{ArtBrush, ArtScale, Bristle, Brush, BrushKind, Colorization, Direction, PatternBrush, Variation};
+    let lib = brush_library();
+    let keep = lib[0].clone();
+    let (BrushKind::Scatter(scatter), BrushKind::Art(art)) = (&lib[1].kind, &lib[2].kind) else { panic!("library") };
+    let hue = Colorization::HueShift { key: Color::rgb(1.0, 0.0, 0.0) };
+    let art_with = |f: &dyn Fn(&mut ArtBrush)| {
+        let mut a = art.clone();
+        f(&mut a);
+        BrushKind::Art(a)
+    };
+    let mut painted_group = brush_art_node();
+    painted_group.appearance = Appearance::basic(black_fill(), Paint::None, 0.0).into();
+    let empty_path = Node::path(vectorcraft_doc::NodeId(1), PathData::new(vec![]), Appearance::basic(black_fill(), Paint::None, 0.0));
+    let cases: Vec<(&str, BrushKind)> = vec![
+        ("painted group", art_with(&|a| a.art = painted_group.clone())),
+        ("empty path", BrushKind::Scatter(vectorcraft_brush::Scatter { art: empty_path.clone(), ..scatter.clone() })),
+        ("empty group", art_with(&|a| a.art = Node::group(vectorcraft_doc::NodeId(1), vec![]))),
+        ("pattern", BrushKind::Pattern(PatternBrush::default())),
+        ("bristle", BrushKind::Bristle(Bristle::default())),
+        ("flipped along", art_with(&|a| a.flip_along = true)),
+        ("flipped across", art_with(&|a| a.flip_across = true)),
+        ("overlap", art_with(&|a| a.overlap = true)),
+        ("width", art_with(&|a| a.width = 50.0)),
+        ("width varies", art_with(&|a| a.width_mode = Some(Variation::Pressure))),
+        ("direction", art_with(&|a| a.direction = Direction::RightToLeft)),
+        ("proportional", art_with(&|a| a.scale = ArtScale::Proportional)),
+        ("art tints and shades", art_with(&|a| a.colorization = Colorization::TintsAndShades)),
+        ("art hue shift", art_with(&|a| a.colorization = hue)),
+        (
+            "scatter tints and shades",
+            BrushKind::Scatter(vectorcraft_brush::Scatter { colorization: Colorization::TintsAndShades, ..scatter.clone() }),
+        ),
+        ("scatter hue shift", BrushKind::Scatter(vectorcraft_brush::Scatter { colorization: hue, ..scatter.clone() })),
+    ];
+    let left_out = |extra: Vec<Brush>, why: &str| {
+        let mut doc = Document::new(300.0, 200.0);
+        let mut lib = vec![keep.clone()];
+        lib.extend(extra);
+        vectorcraft_brush::store(&mut doc, &lib);
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(out.warnings.iter().any(|w| w == writer::BRUSHES), "{why}: {:?}", out.warnings);
+        assert_eq!(vectorcraft_brush::library(&read_back(&doc)), std::slice::from_ref(&keep), "{why}");
+    };
+    for (why, kind) in cases {
+        left_out(vec![Brush { name: "Other".into(), kind }], why);
+    }
+    left_out(vec![Brush { name: "A/B".into(), ..keep.clone() }], "slash");
+    left_out(vec![Brush { kind: BrushKind::Bristle(Bristle::default()), ..keep.clone() }], "a second brush of the name");
+    // A Pattern brush named "X" is left out, so a Calligraphic brush named "X" after it comes back. A
+    // path with "X" is drawn with the Pattern brush, so it comes back as its drawn look.
+    let mut doc = Document::new(300.0, 200.0);
+    let x = Brush { name: "X".into(), ..keep.clone() };
+    vectorcraft_brush::store(&mut doc, &[Brush { name: "X".into(), kind: BrushKind::Pattern(PatternBrush::default()) }, x.clone()]);
+    brushed(&mut doc, "X", (20.0, 50.0), (280.0, 60.0), 2.0);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(vectorcraft_brush::library(&back), [x]);
+    let n = &back.layers[0].children().unwrap()[0];
+    assert!(n.appearance.stroke().is_none_or(|s| s.brush.is_none()), "not with the other brush of the name: {n:#?}");
+}
+
+/// Brushes past the most the reader reads from one file are left out with a warning: of 4,097
+/// Calligraphic brushes, the first 4,096 come back.
+#[test]
+fn brushes_past_the_readers_count_are_left_out() {
+    let nib = brush_library().remove(0);
+    let lib: Vec<vectorcraft_brush::Brush> = (0..4097).map(|i| vectorcraft_brush::Brush { name: format!("Nib {i}"), ..nib.clone() }).collect();
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &lib);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    let back = vectorcraft_brush::library(&read_back(&doc));
+    assert_eq!(back.len(), 4096);
+    assert_eq!(back.last().map(|b| b.name.as_str()), Some("Nib 4095"));
+}
+
+/// A brush whose art the editing data would change (a stroke inside the path, written as its
+/// outline) is left out, also after an object on the layers was already written with that change.
+#[test]
+fn a_brush_whose_art_would_change_is_left_out() {
+    use vectorcraft_brush::{ArtBrush, Brush, BrushKind};
+    let inside = |doc: &mut Document| {
+        let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 8.0)), Appearance::basic(Paint::None, black_fill(), 2.0));
+        n.appearance.stroke_mut().unwrap().align = vectorcraft_doc::StrokeAlign::Inside;
+        n
+    };
+    let mut doc = Document::new(300.0, 200.0);
+    let on_layer = inside(&mut doc);
+    put(&mut doc, on_layer);
+    let keep = brush_library().remove(0);
+    let art = inside(&mut doc);
+    vectorcraft_brush::store(
+        &mut doc,
+        &[keep.clone(), Brush { name: "Outlined".into(), kind: BrushKind::Art(ArtBrush { art, ..ArtBrush::default() }) }],
+    );
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::STROKES), "{:?}", out.warnings);
+    assert!(out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    assert_eq!(vectorcraft_brush::library(&read_back(&doc)), [keep]);
+}
+
+/// Brushes past the art the reader copies into one file's brushes are left out with a warning, so
+/// that what is written is what comes back: three Art brushes of 100,000 anchors each, of which the
+/// reader keeps two.
+#[test]
+fn brushes_past_the_readers_art_limit_are_left_out() {
+    use vectorcraft_brush::{ArtBrush, Brush, BrushKind};
+    let heavy = |id: u64| {
+        let points: Vec<vectorcraft_geom::Point> =
+            (0..100_000).map(|i| vectorcraft_geom::Point::new(f64::from(i) / 1000.0, if i % 2 == 0 { 0.0 } else { 4.0 })).collect();
+        let path = PathData::single(vectorcraft_geom::SubPath::polyline(&points, true));
+        Node::path(vectorcraft_doc::NodeId(id), path, Appearance::basic(black_fill(), Paint::None, 0.0))
+    };
+    let lib: Vec<Brush> =
+        (1..=3).map(|i| Brush { name: format!("Heavy {i}"), kind: BrushKind::Art(ArtBrush { art: heavy(i), ..ArtBrush::default() }) }).collect();
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &lib);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    let back: Vec<String> = vectorcraft_brush::library(&read_back(&doc)).into_iter().map(|b| b.name).collect();
+    assert_eq!(back, ["Heavy 1", "Heavy 2"]);
+    assert_eq!(program(&doc).matches("%AI8_BeginBrushPattern").count(), 2);
+    // The art of the brush left out isn't counted: there is room for it all with room for what is read.
+    let read = crate::import::objects_read(&out.program).unwrap();
+    let room = export_within(&doc, &opts(), read).unwrap();
+    assert!(!room.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "{read}: {:?}", room.warnings);
+}
+
+/// A brush whose art doesn't fit within the object limit is left out with the limit's warning, and
+/// what its art took is given back: a later brush whose art fits comes back.
+#[test]
+fn a_brush_whose_art_passes_the_object_limit_leaves_room_for_the_next() {
+    use vectorcraft_brush::{ArtBrush, Brush, BrushKind};
+    let squares = |n: u64| {
+        let block = |i: u64| {
+            let x = i as f64 * 10.0;
+            Arc::new(Node::path(
+                vectorcraft_doc::NodeId(i + 1),
+                shapes::rectangle(Rect::new(x, 0.0, x + 5.0, 5.0)),
+                Appearance::basic(black_fill(), Paint::None, 0.0),
+            ))
+        };
+        Node::group(vectorcraft_doc::NodeId(100), (0..n).map(block).collect())
+    };
+    let art = |name: &str, n: u64| Brush { name: name.into(), kind: BrushKind::Art(ArtBrush { art: squares(n), ..ArtBrush::default() }) };
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &[art("Big", 6), art("Small", 2)]);
+    let all = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!all.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "{:?}", all.warnings);
+    let mut small = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut small, &[art("Small", 2)]);
+    let room = crate::import::objects_read(&export_ai_editing(&small, &opts()).unwrap().program).unwrap();
+    let out = export_within(&doc, &opts(), room).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "{:?}", out.warnings);
+    assert!(crate::import::objects_read(&out.program).unwrap() <= room);
+    let mut data = ZSTD_MARKER.to_vec();
+    data.extend(ruzstd::encoding::compress_to_vec(out.program.as_slice(), ruzstd::encoding::CompressionLevel::Fastest));
+    let back = crate::ai_alone(&data).unwrap().0;
+    let names: Vec<String> = vectorcraft_brush::library(&back).into_iter().map(|b| b.name).collect();
+    assert_eq!(names, ["Small"]);
+}
+
+/// A graphic style with a brushed stroke, which is left out, takes no room from the layers' objects:
+/// a document with a new document's brushes and no brushed path writes no brush art, so with room for
+/// what its layers write, every object comes back.
+#[test]
+fn a_graphic_style_with_a_brush_takes_no_room_from_the_layers() {
+    let mut doc = Document::new(300.0, 200.0);
+    for i in 0..3 {
+        let x = 20.0 + f64::from(i) * 40.0;
+        let square =
+            Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(x, 20.0, x + 30.0, 50.0)), Appearance::basic(black_fill(), Paint::None, 0.0));
+        put(&mut doc, square);
+    }
+    let room = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    let mut stroke = StrokeLayer::new(solid(Color::rgb(1.0, 0.0, 0.0)), 1.0);
+    stroke.brush = Some("3 pt. Round".into());
+    let ap = Appearance { items: vec![AppearanceItem::Stroke(stroke)], effects: vec![], contents_index: None };
+    doc.graphic_styles.push(vectorcraft_doc::GraphicStyle::new("Brushed", ap));
+    let out = export_within(&doc, &opts(), room).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "{room}: {:?}", out.warnings);
+    let program = String::from_utf8(out.program).unwrap();
+    assert!(!program.contains("%AI8_BeginBrushPattern"), "no brush art");
+}
+
+/// A graphic style whose brushed stroke paints nothing comes back in the Graphic Styles panel.
+#[test]
+fn a_graphic_style_with_an_unpainted_brushed_stroke_comes_back() {
+    let mut doc = Document::new(300.0, 200.0);
+    let mut ap = Appearance::basic(black_fill(), Paint::None, 1.0);
+    ap.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+    doc.graphic_styles.push(vectorcraft_doc::GraphicStyle::new("Unpainted brush", ap));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::PANEL_STYLES), "{:?}", out.warnings);
+    assert!(read_back(&doc).graphic_style("Unpainted brush").is_some());
+}
+
+/// A brush whose art doesn't fit within the object limit after a path was written with it on its
+/// stroke is left out with both warnings, and the path comes back as its drawn look.
+#[test]
+fn a_brushed_path_whose_brush_art_doesnt_fit_comes_back_as_its_look() {
+    let ribbon = brush_library().remove(2);
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, std::slice::from_ref(&ribbon));
+    brushed(&mut doc, "Ribbon", (20.0, 120.0), (280.0, 150.0), 1.5);
+    let all = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!all.warnings.iter().any(|w| w == writer::OBJECT_LIMIT || w == writer::BRUSHES), "{:?}", all.warnings);
+    let room = crate::import::objects_read(&all.program).unwrap() - 1;
+    let out = export_within(&doc, &opts(), room).unwrap();
+    for w in [writer::OBJECT_LIMIT, writer::BRUSHES] {
+        assert!(out.warnings.iter().any(|x| x == w), "{w}: {:?}", out.warnings);
+    }
+    assert!(crate::import::objects_read(&out.program).unwrap() <= room);
+    let mut data = ZSTD_MARKER.to_vec();
+    data.extend(ruzstd::encoding::compress_to_vec(out.program.as_slice(), ruzstd::encoding::CompressionLevel::Fastest));
+    let back = crate::ai_alone(&data).unwrap().0;
+    assert!(vectorcraft_brush::library(&back).is_empty());
+    let n = &back.layers[0].children().unwrap()[0];
+    assert!(matches!(n.kind, NodeKind::Group { .. }), "the path's drawn look: {n:#?}");
+}
+
+/// An empty Brushes panel comes back empty, and a document with a new document's brushes and no
+/// brushed path writes no brushes (the reader gives such a file a new document's).
+#[test]
+fn an_empty_brushes_panel_comes_back_empty() {
+    let mut doc = Document::new(300.0, 200.0);
+    assert!(!program(&doc).contains("%AI8_BeginPluginObject"));
+    assert_eq!(vectorcraft_brush::library(&read_back(&doc)), vectorcraft_brush::library(&doc));
+    vectorcraft_brush::store(&mut doc, &[]);
+    assert!(vectorcraft_brush::library(&read_back(&doc)).is_empty());
+}
+
+/// A path with one of a new document's brushes writes the brushes the reader reads, and keeps its
+/// brush. The new document's Art brush with other options, its Pattern brushes and its Bristle
+/// brushes are left out with a warning, so the file opens without them.
+#[test]
+fn a_new_documents_brush_on_a_path_writes_the_brushes() {
+    let mut doc = Document::new(300.0, 200.0);
+    brushed(&mut doc, "3 pt. Round", (20.0, 50.0), (280.0, 60.0), 1.0);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let n = &back.layers[0].children().unwrap()[0];
+    assert_eq!(n.appearance.stroke().and_then(|s| s.brush.as_deref()), Some("3 pt. Round"));
+    let left_out = ["Arrow", "Chain", "Stitches", "Diamonds", "Bristle Round", "Bristle Flat Fan"];
+    let want: Vec<&str> = vectorcraft_brush::defaults().iter().map(|b| b.name.as_str()).filter(|n| !left_out.contains(n)).collect();
+    let lib = vectorcraft_brush::library(&back);
+    assert_eq!(lib.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), want);
+    assert_eq!(vectorcraft_brush::defaults().len(), want.len() + left_out.len());
+}
+
+/// A path with one of a new document's brushes that doesn't fit within the object limit is left
+/// out, and no brushes are written: the file opens with a new document's brushes, all of them.
+#[test]
+fn a_new_documents_brush_on_a_path_past_the_object_limit_writes_no_brushes() {
+    let empty = Document::new(300.0, 200.0);
+    let room = crate::import::objects_read(&export_ai_editing(&empty, &opts()).unwrap().program).unwrap();
+    let mut doc = Document::new(300.0, 200.0);
+    brushed(&mut doc, "3 pt. Round", (20.0, 50.0), (280.0, 60.0), 1.0);
+    let out = export_within(&doc, &opts(), room).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "{:?}", out.warnings);
+    assert!(!out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    assert!(!String::from_utf8(out.program).unwrap().contains("%AI8_BeginPluginObject"));
+}
+
+/// On a large canvas the brushes are left out with a warning, and brushed paths come back as their
+/// drawn look.
+#[test]
+fn a_large_canvas_leaves_the_brushes_out() {
+    let mut doc = Document::new(20000.0, 100.0);
+    vectorcraft_brush::store(&mut doc, &brush_library());
+    brushed(&mut doc, "Nib", (20.0, 50.0), (280.0, 60.0), 2.0);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    assert!(!program(&doc).contains("%AI8_BeginPluginObject"));
+    assert!(matches!(read_back(&doc).layers[0].children().unwrap()[0].kind, NodeKind::Group { .. }));
+    // An empty panel is kept, without a warning.
+    let mut doc = Document::new(20000.0, 100.0);
+    vectorcraft_brush::store(&mut doc, &[]);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    assert!(vectorcraft_brush::library(&read_back(&doc)).is_empty());
 }
 
 // ---------- variables ----------
@@ -7629,4 +8465,145 @@ fn diamond_gradients_are_written_as_radial_gradients_through_their_corners() {
     assert!(geom.focal.is_none_or(|f| f.distance(start) < 0.01), "{geom:?}");
     let Some(Paint::Gradient(swatch)) = back.swatch("Gem").map(|s| &s.paint) else { panic!("the swatch is lost") };
     assert_eq!(swatch.gradient.kind, GradientKind::Radial);
+}
+
+/// The data has no spread: a fill that repeats or reflects holds its stops repeated across the
+/// shape and reads back looking as the canvas paints it; a swatch holds its stops repeated along
+/// its vector; both with a warning.
+#[test]
+fn spread_gradients_are_written_with_their_stops_repeated() {
+    use vectorcraft_color::GradientSpread;
+    for kind in [GradientKind::Linear, GradientKind::Radial] {
+        let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+        let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Reflect, repeats: 2, ..Gradient::new(kind, stops) });
+        let (start, end) = (vectorcraft_geom::Point::new(60.0, 50.0), vectorcraft_geom::Point::new(120.0, 50.0));
+        g.geom = Some(vectorcraft_color::GradientGeom { start, end, aspect: 1.0, focal: None });
+        let mut doc = Document::new(200.0, 100.0);
+        let id = doc.alloc_id();
+        let l = doc.layers[0].id;
+        let fill = Paint::Gradient(Box::new(g.clone()));
+        doc.insert(Some(l), 0, Node::path(id, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Appearance::basic(fill, Paint::None, 0.0)))
+            .unwrap();
+        let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+        swatches.push(Swatch {
+            name: "Bands".into(),
+            paint: Paint::Gradient(Box::new(GradientPaint { geom: None, ..g })),
+            global: false,
+            spot: false,
+        });
+        doc.swatches = swatches.into();
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(
+            out.warnings.iter().any(|w| w.contains("gradients that repeat or reflect are written with their stops repeated")),
+            "{:?}",
+            out.warnings
+        );
+        let back = read_back(&doc);
+        let st = vectorcraft_testkit::raster::perceptual_diff(
+            &vectorcraft_testkit::raster::render_artboard(&doc),
+            &vectorcraft_testkit::raster::render_artboard(&back),
+            8.0,
+        );
+        assert!((st.bad_pixels as f64) < 0.02 * st.pixels as f64, "{kind:?}: {} of {} pixels differ", st.bad_pixels, st.pixels);
+        let Some(Paint::Gradient(swatch)) = back.swatch("Bands").map(|s| &s.paint) else { panic!("the swatch is lost") };
+        let colors: Vec<String> = swatch.gradient.stops.iter().map(|s| s.color.to_hex()).collect();
+        assert_eq!(colors, ["#ff0000", "#0000ff", "#0000ff", "#ff0000"], "{kind:?}");
+    }
+}
+
+/// A stroke's gradient that repeats is written with its stops repeated as far as the stroke's
+/// miter joins reach, past the box the gradient is placed on, so a sharp join's tip shows the next
+/// run rather than the color the gradient pads with; a straight line, which has no joins, keeps
+/// every run within the stops the reader reads.
+#[test]
+fn a_stroke_spread_gradient_runs_on_into_its_miter_tips() {
+    use vectorcraft_color::GradientSpread;
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, repeats: 3, ..Gradient::new(GradientKind::Linear, stops) });
+    // From the top of the box the gradient is placed on (the path's box grown by half the width).
+    let (start, end) = (vectorcraft_geom::Point::new(100.0, 15.0), vectorcraft_geom::Point::new(100.0, 85.0));
+    g.geom = Some(vectorcraft_color::GradientGeom { start, end, aspect: 1.0, focal: None });
+    let mut app = Appearance::basic(Paint::None, Paint::Gradient(Box::new(g)), 10.0);
+    for item in &mut app.items {
+        if let AppearanceItem::Stroke(s) = item {
+            (s.join, s.miter_limit) = (LineJoin::Miter, 10.0);
+        }
+    }
+    // A V whose apex's miter reaches about 10 pt above it, to y = 9.9.
+    let pts = [vectorcraft_geom::Point::new(60.0, 90.0), vectorcraft_geom::Point::new(100.0, 20.0), vectorcraft_geom::Point::new(140.0, 90.0)];
+    let mut doc = Document::new(200.0, 100.0);
+    let id = doc.alloc_id();
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, Node::path(id, PathData::new(vec![vectorcraft_geom::SubPath::polyline(&pts, false)]), app)).unwrap();
+    let back = read_back(&doc);
+    let mut geom = None;
+    back.walk(|n| {
+        if let Paint::Gradient(g) = n.appearance.stroke_paint() {
+            geom = g.geom;
+        }
+    });
+    let geom = geom.expect("the stroke keeps a gradient");
+    assert!(geom.start.y.min(geom.end.y) < 9.9, "the runs start at {:?}", geom);
+    // A straight line has no joins: its 100 runs, 200 stops, fit the 256 the reader reads.
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, repeats: 100, ..Gradient::new(GradientKind::Linear, stops) });
+    let (start, end) = (vectorcraft_geom::Point::new(50.0, 50.0), vectorcraft_geom::Point::new(150.0, 50.0));
+    g.geom = Some(vectorcraft_color::GradientGeom { start, end, aspect: 1.0, focal: None });
+    let line = PathData::new(vec![vectorcraft_geom::SubPath::polyline(&[start, end], false)]);
+    let mut doc = Document::new(200.0, 100.0);
+    let id = doc.alloc_id();
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, Node::path(id, line, Appearance::basic(Paint::None, Paint::Gradient(Box::new(g)), 10.0))).unwrap();
+    let mut stops = None;
+    read_back(&doc).walk(|n| {
+        if let Paint::Gradient(g) = n.appearance.stroke_paint() {
+            stops = Some(g.gradient.stops.len());
+        }
+    });
+    assert_eq!(stops, Some(200));
+}
+
+/// A conic fill (written linear, its stops repeated around its turn), a diamond fill (written
+/// radial) and a swatch whose stops repeat more times than the 256 stops the reader reads stay
+/// gradients: each holds its stops repeated as far as 256 stops go.
+#[test]
+fn spread_gradients_past_the_stops_the_reader_reads_stay_gradients() {
+    use vectorcraft_color::GradientSpread;
+    let three = || {
+        vec![
+            GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)),
+            GradientStop::new(0.5, Color::rgb(0.0, 1.0, 0.0)),
+            GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0)),
+        ]
+    };
+    for kind in [GradientKind::Conic, GradientKind::Diamond] {
+        let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, repeats: 100, ..Gradient::new(kind, three()) });
+        let c = vectorcraft_geom::Point::new(100.0, 50.0);
+        g.geom = Some(vectorcraft_color::GradientGeom { start: c, end: c + vectorcraft_geom::Vec2::new(40.0, 0.0), aspect: 1.0, focal: None });
+        let mut doc = Document::new(200.0, 100.0);
+        let id = doc.alloc_id();
+        let l = doc.layers[0].id;
+        let fill = Paint::Gradient(Box::new(g));
+        doc.insert(Some(l), 0, Node::path(id, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Appearance::basic(fill, Paint::None, 0.0)))
+            .unwrap();
+        let back = read_back(&doc);
+        let mut stops = None;
+        back.walk(|n| {
+            if let Paint::Gradient(g) = n.appearance.fill_paint() {
+                stops = Some(g.gradient.stops.len());
+            }
+        });
+        let stops = stops.unwrap_or_else(|| panic!("{kind:?}: the gradient is written as a solid color"));
+        assert!((200..=crate::import::MAX_GRADIENT_STOPS).contains(&stops), "{kind:?}: {stops} stops");
+    }
+    // Stops at 0.1 and 0.9 run from 0 to 1 as four: 70 runs are 280 stops.
+    let stops = vec![GradientStop::new(0.1, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(0.9, Color::rgb(0.0, 0.0, 1.0))];
+    let g = GradientPaint::new(Gradient { spread: GradientSpread::Reflect, repeats: 70, ..Gradient::new(GradientKind::Linear, stops) });
+    let mut doc = Document::new(200.0, 100.0);
+    let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+    swatches.push(Swatch { name: "Bands".into(), paint: Paint::Gradient(Box::new(g)), global: false, spot: false });
+    doc.swatches = swatches.into();
+    let back = read_back(&doc);
+    let Some(Paint::Gradient(swatch)) = back.swatch("Bands").map(|s| &s.paint) else { panic!("the swatch is lost") };
+    assert!((200..=crate::import::MAX_GRADIENT_STOPS).contains(&swatch.gradient.stops.len()), "{} stops", swatch.gradient.stops.len());
 }

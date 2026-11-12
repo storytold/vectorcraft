@@ -4144,11 +4144,11 @@ fn scrolls_and_pans_move_the_view_by_whole_device_pixels() {
 fn a_scrolls_leftover_pixel_part_carries_only_to_the_same_view() {
     let view = View { zoom: 1.0, center: Point::new(100.0, 100.0), fitted: true, rotation: 0.0, artboard: 0, outline: false };
     let mut v = view;
-    let rest = scroll_by(&mut v, 1, 1.0, vec2(0.4, -0.3), ScrollRest::default());
+    let rest = scroll_by(&mut v, 1, (1.0, 1.0), vec2(0.4, -0.3), ScrollRest::default());
     assert_eq!(v.center, view.center, "less than half a pixel does not move the view");
     assert!((rest.x - 0.4).abs() < 1e-6 && (rest.y + 0.3).abs() < 1e-6);
     let mut again = v;
-    scroll_by(&mut again, 1, 1.0, vec2(0.4, -0.3), rest);
+    scroll_by(&mut again, 1, (1.0, 1.0), vec2(0.4, -0.3), rest);
     assert_eq!(again.center, Point::new(99.0, 101.0), "the second scroll adds the first's part");
     let changed = [
         ("zoomed", View { zoom: 2.0, ..v }, 1, 1.0),
@@ -4159,7 +4159,7 @@ fn a_scrolls_leftover_pixel_part_carries_only_to_the_same_view() {
     ];
     for (name, before, doc, ppp) in changed {
         let mut after = before;
-        let left = scroll_by(&mut after, doc, ppp, vec2(0.4 / ppp, -0.3 / ppp), rest);
+        let left = scroll_by(&mut after, doc, (ppp, 1.0), vec2(0.4 / ppp, -0.3 / ppp), rest);
         assert_eq!(after.center, before.center, "{name}: the first scroll's part is dropped");
         assert!((left.x - 0.4).abs() < 1e-6 && (left.y + 0.3).abs() < 1e-6, "{name}: {left:?}");
     }
@@ -4896,6 +4896,38 @@ fn a_selected_objects_on_path_group_shows_its_move_all_widget_when_it_has_room()
     app.run("edit.clear", json!({"ids": [b]})).unwrap();
     app.run("select.set", json!({"ids": [g]})).unwrap();
     assert_eq!(widgets(&mut app), 1, "one object");
+}
+
+/// A selected Objects on Path group shows a Select/Move widget on each object's attachment point
+/// with the Selection and Objects on Path tools, the chosen object's filled blue.
+#[test]
+fn a_selected_objects_on_path_group_shows_a_select_move_widget_per_object() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let line = id(app.session.execute("shape.line", &json!({"x1": 20, "y1": 200, "x2": 380, "y2": 200})).unwrap());
+    let a = id(app.session.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap());
+    let b = id(app.session.execute("shape.rectangle", &json!({"x": 80, "y": 40, "width": 20, "height": 20})).unwrap());
+    let c = id(app.session.execute("shape.rectangle", &json!({"x": 120, "y": 40, "width": 20, "height": 20})).unwrap());
+    app.run("select.set", json!({"ids": [a, b, c]})).unwrap();
+    app.session.execute("object.objectsOnPath.attach", &json!({"path": line})).unwrap();
+    let ctx = egui::Context::default();
+    let r = vectorcraft_tools::objects_on_path::MEMBER_RADIUS_PX;
+    let widgets = |app: &mut VectorcraftApp, fill: Color32| {
+        shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Circle(k) if k.radius == r && k.fill == fill)).count()
+    };
+    let (ring, chosen) = (Color32::TRANSPARENT, super::overlays::MEMBER_CHOSEN);
+    app.select_tool("selection");
+    assert_eq!((widgets(&mut app, ring), widgets(&mut app, chosen)), (3, 0));
+    app.run("object.objectsOnPath.selectMember", json!({"member": b})).unwrap();
+    assert_eq!((widgets(&mut app, ring), widgets(&mut app, chosen)), (2, 1), "the chosen one is filled");
+    app.select_tool("objectsOnPath");
+    assert_eq!((widgets(&mut app, ring), widgets(&mut app, chosen)), (2, 1));
+    app.select_tool("directSelection");
+    assert_eq!(widgets(&mut app, ring) + widgets(&mut app, chosen), 0);
+    app.select_tool("selection");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(widgets(&mut app, ring) + widgets(&mut app, chosen), 0, "an object in the group, not the group");
 }
 
 /// The shapes Type → Show Hidden Characters draws in one frame, seen through `xf`.
@@ -9351,6 +9383,33 @@ fn the_task_bar_traces_an_image_then_expands_the_trace() {
     let mut images = 0;
     expanded.walk(&mut |n| images += usize::from(matches!(n.kind, NodeKind::Image(_))));
     assert_eq!(images, 0, "only the traced paths are kept");
+}
+
+/// For a selected image the Contextual Task Bar offers Remove Background, which clears the
+/// background in the image's pixels at once (no dialog) with the command's defaults.
+#[test]
+fn the_task_bar_removes_a_selected_images_background() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let img =
+        image::RgbaImage::from_fn(20, 20, |x, y| image::Rgba(if (6..14).contains(&x) && (6..14).contains(&y) { [200, 0, 0, 255] } else { [255; 4] }));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let data = vectorcraft_format::base64_encode(&png);
+    app.run("file.place", json!({"name": "dot.png", "dataBase64": data, "link": false, "at": [200, 150]})).unwrap();
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    let labels = task_bar_labels(&mut app, &ctx);
+    let at = labels.iter().find(|(t, _)| t == "Remove Background").map(|(_, r)| r.center()).expect("Remove Background is offered");
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    frame(&mut app, &ctx, vec![button(true)]);
+    frame(&mut app, &ctx, vec![button(false)]);
+    assert!(app.ui.dialog.is_none(), "it runs at once");
+    let st = app.session.active().unwrap();
+    let Some(NodeKind::Image(im)) = st.selection.objects.first().and_then(|id| st.doc.node(*id)).map(|n| &n.kind) else { panic!("an image") };
+    let px = image::load_from_memory(&st.doc.images[&im.key].bytes).unwrap().to_rgba8();
+    assert_eq!((px.get_pixel(0, 0).0[3], px.get_pixel(10, 10).0[3]), (0, 255), "the white background is cleared, the red dot kept");
 }
 
 /// The labels the Contextual Task Bar draws in a headless frame (after one to lay it out), with

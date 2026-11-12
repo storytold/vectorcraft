@@ -402,6 +402,8 @@
 	Stair Step	Porras
 	Gravity	Painovoima
 	Type on a Path Options…	Teksti polulla -asetukset…
+	Center on Top	Keskitä ylös
+	Center on Bottom	Keskitä alas
 	Threaded Text	Ketjutettu teksti
 	Create	Luo
 	Release Selection	Vapauta valinta
@@ -422,6 +424,10 @@
 	Arch	Holvi
 @msg	select point type or type on a path	valitse pisteteksti tai polkuteksti
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	ketjutetun tekstin polkuteksti ei voi käyttää dynaamista tekstiä: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	avoimella polulla tai yhdistelmäpolulla olevaa tekstiä ei voi keskittää ylös tai alas: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	polkutekstiä ei voi keskittää polulle, jolla ei ole pituutta tai korkeutta: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	ketjutetun tekstin polkutekstiä ei voi keskittää ylös tai alas: {frames}
+@msg	select type on a closed path	valitse suljetulla polulla oleva teksti
 	Fill with Placeholder Text	Täytä paikkamerkkitekstillä
 	Insert Inline Symbol	Lisää tekstinsisäinen symboli
 	Show Hidden Characters	Näytä piilotetut merkit
@@ -842,6 +848,7 @@
 	Sky Gradients	Taivasliukuvärit
 	Neutral Gradients	Neutraalit liukuvärit
 	Organic Fades	Orgaaniset häivytykset
+	Holographic	Holografiset
 	Duotone Gradients	Kaksisävyliukuvärit
 	Radial Glows	Säteittäiset hehkut
 	Save Swatch Library…	Tallenna värimallikirjasto…
@@ -1673,6 +1680,17 @@ digits	Malayalam	Malajalam
 	The selected character's font is not available.	Valitun merkin fontti ei ole saatavilla.
 	No alternates for the selected character.	Valitulla merkillä ei ole vaihtoehtoja.
 	Double-click to replace	Korvaa kaksoisnapsauttamalla
+	Select one character with the Type tool first.	Valitse ensin yksi merkki tekstityökalulla.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} on fontin {font} glyfi, ei valitun tekstin fontin ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} kuuluu merkille {base} (U+{base_code}) {place}; valintasi on {sel} (U+{code}).
+	at the start of a word	sanan alussa
+	in the middle of a word	sanan keskellä
+	at the end of a word	sanan lopussa
+	standing alone	yksinään
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} ei ole merkin {sel} (U+{code}) vaihtoehto sellaisena kuin se on sanassaan.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Lisää kaksoisnapsauttamalla sen sijaan {base} (U+{code}): esitysmuoto ei liity, kirjain liittyy.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Lisättiin {base} (U+{code}) esitysmuodon sijaan: fontti liittää sen naapureihin sijainnin mukaan.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Mikään OpenType-ominaisuus ei piirrä tätä glyfiä tässä, joten se korvaa merkin glyfin eikä välttämättä liity viereisiin merkkeihin.
 	Double-click to insert	Lisää kaksoisnapsauttamalla
 	Entire Font	Koko fontti
 	glyph {id}	merkki {id}
@@ -1833,6 +1851,8 @@ digits	Malayalam	Malajalam
 	Save Image Trace Preset	Tallenna kuvan jäljityksen esiasetus
 	Delete Image Trace Preset	Poista kuvan jäljityksen esiasetus
 	Method:	Menetelmä:
+	Pad	Jatka
+	Repeats	Toistokerrat
 	Mode:	Tila:
 	Noise	Kohina
 	Create:	Luo:
@@ -1977,6 +1997,9 @@ digits	Malayalam	Malajalam
 	Right Indent	Oikea sisennys
 	Right-to-Left Paragraph Direction	Kappaleen suunta oikealta vasemmalle
 	Roman Hanging Punctuation	Latinalaiset riippuvat välimerkit
+	Korean Line Break Anywhere	Korean rivinvaihto missä tahansa
+	East Asian Composition Settings	Itäaasialaisen ladonnan asetukset
+	Korean Composition Settings	Korean ladonnan asetukset
 	Select a text object to edit its paragraph attributes.	Valitse tekstiobjekti, jonka kappalemääritteitä haluat muokata.
 	Single-line Composer	Yhden rivin asettelu
 	Toggle Line Composer	Vaihda rivien asettelu
@@ -3880,6 +3903,9 @@ theme	Appearance	Ulkoasu
 	Select All Unused	Valitse kaikki käyttämättömät
 	Sort by Kind	Lajittele lajin mukaan
 	Sort by Name	Lajittele nimen mukaan
+	Spot Color Objects	Objektit, joissa on spottivärejä
+	Pattern Objects	Objektit, joissa on kuvioita
+	Gradient Objects	Objektit, joissa on liukuvärejä
 	Spot Colors	Spottivärit
 	Spot Colors (0)	Spottivärit (0)
 	Swatch Options	Värimallin asetukset
@@ -4614,6 +4640,7 @@ imageTrace	Outline	Ääriviiva
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ei ole väri, kuten "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: enintään {MAX_TABLE} väriä
 @msg	command `{0}` is not available right now: {1}	komento `{0}` ei ole nyt käytettävissä: {1}
+@msg	command `{id}` is not available right now	komento `{id}` ei ole nyt käytettävissä
 @msg	compound paths can only contain paths	yhdistelmäpolut voivat sisältää vain polkuja
 @msg	compressed (RLE) bitmaps can't be read yet	pakattuja (RLE) bittikarttoja ei voi vielä lukea
 @msg	damaged	vaurioitunut
@@ -4794,6 +4821,7 @@ imageTrace	Outline	Ääriviiva
 @msg	not a valid plug-in module: {0}	ei kelvollinen laajennusmoduuli: {0}
 @msg	not an EMF or WMF file	ei EMF- tai WMF-tiedosto
 @msg	not an HP-GL file	ei HP-GL-tiedosto
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` on oltava 1–255 #rrggbb-värin taulukko
 @msg	not found	ei löytynyt
 @msg	not in pattern editing mode	ei kuvion muokkaustilassa
 @msg	finish editing the pattern first	lopeta ensin kuvion muokkaus
@@ -5845,6 +5873,8 @@ mark-style	Japanese	Japanilainen
 @msg	the screen color sampler is already open	värin poiminta näytöltä on jo auki
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	tämä on PostScript-tiedosto (vanhemmassa muodossa tai ilman PDF-yhteensopivuutta tallennettu .ai tai EPS-tiedosto), ei PDF: Tiedosto › Avaa ja Tiedosto › Sijoita lukevat sen EPS-muodossa
 @msg	this system has no screen color sampler	tässä järjestelmässä ei ole värin poimintaa näytöltä
+@msg	the screen color sampler did not answer	värin poiminta näytöltä ei vastannut
+@msg	the screen color sampler failed	värin poiminta näytöltä epäonnistui
 @msg	the image can't be read as a texture	kuvaa ei voi lukea tekstuurina
 
 # User Interface › Accent Color
@@ -6065,6 +6095,7 @@ swatch	Bright Violet	Kirkas violetti
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometriset apuviivat
+	Optical Effects	Optiset tehosteet
 	Geometric Patterns	Geometriset kuviot
 	Grit Textures	Rakeiset tekstuurit
 	Ease In	Hidas alku
@@ -6107,6 +6138,9 @@ axis	Y Axis	Y-akseli
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` koskee liukuväritäyttöjä (paint.setFill)
 @msg	`dither` must be true or false	`dither` on oltava true tai false
 @msg	`method` must be classic or perceptual	`method` on oltava classic tai perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` on oltava pad, repeat tai reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` on oltava kokonaisluku väliltä 1–{MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` koskee lineaarisia, säteittäisiä ja kartiomaisia liukuvärejä sekä vinoneliöliukuvärejä
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Asennetaanko ”{name}”, joka pyytää suurta laskentabudjettia?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Jokainen ajo voi kestää enintään {minutes} minuuttia ja tehdä {times} kertaa niin paljon työtä kuin muut laajennukset saavat. Se toimii taustalla, ja voit peruuttaa sen.
@@ -6343,8 +6377,24 @@ axis	Y Axis	Y-akseli
 	Charge Wave	Latausaalto
 	Spark Trail	Kipinävanne
 	Calligraphic Nibs	Kalligrafiakärjet
+	Bristle Brushes	Harjassiveltimet
+	Fine Liner	Ohut viiva
+	Pointed Flat	Suippo litteä
+	Stubby Round	Lyhyt pyöreä
+	Dry Scrub	Kuiva hankaus
+	Soft Dome	Pehmeä kupu
+	Filbert	Kissankieli
+	Angled Round	Vino pyöreä
+	Angled Flat	Vino litteä
+	Fan Blender	Sekoitusviuhka
+	Grass Fan	Ruohoviuhka
 	Pattern Borders	Kuvioreunukset
 	Scatter Shapes	Sirontamuodot
+	Dry Media	Kuivat välineet
+	Chalk Grain	Liitujyvä
+	Graphite Pencil	Grafiittikynä
+	Wax Crayon	Vahaliitu
+	Charcoal Dust	Hiilipöly
 	Save Brush Library…	Tallenna sivellinkirjasto…
 @msg	`{_1}` has no brushes to apply	Kohteessa `{_1}` ei ole käytettäviä siveltimiä
 @msg	missing `library` (see brush.libraries)	`library` puuttuu (katso brush.libraries)
@@ -6998,3 +7048,20 @@ breakText	Glyphs	Merkit
 	Deferred Effects	Lykätyt tehosteet
 @msg	no plug-in effect is deferred	yhtään laajennustehostetta ei ole lykätty
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Avattiin, ja {n} laajennustehoste lykättiin. Tehoste › Päivitä lykätyt tehosteet suorittaa sen.|Avattiin, ja {n} laajennustehostetta lykättiin. Tehoste › Päivitä lykätyt tehosteet suorittaa ne.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Leikkaustyökalut
+	Stencil Bridges…	Sapluunan sillat…
+	Stencil Bridges	Sapluunan sillat
+	Shortest Crossing	Lyhin ylitys
+	Direction	Suunta
+@msg	The selected art has no islands to bridge	Valitussa grafiikassa ei ole yhdistettäviä saarekkeita
+@msg	No bridge of this width fits across the selected art	Näin leveä silta ei mahdu valitun grafiikan poikki
+@msg	Some islands could not be joined to the area around the art	Joitakin saarekkeita ei voitu yhdistää grafiikkaa ympäröivään alueeseen
+@msg	`width` must be from {lo} to {hi} pt	`width`-arvon on oltava {lo}–{hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` on oltava kokonaisluku 1–{MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Karsintakehys ja -viivat…
+	Weed Box and Lines	Karsintakehys ja -viivat
+	Margin	Marginaali
+	Box	Kehys
+	Swatch	Värimalli
