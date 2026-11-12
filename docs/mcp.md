@@ -131,7 +131,9 @@ the suite) keep the agent to the folders you give it:
   written beside it by their file names. A save without a path known (`file.saveAs` and `file.saveCopy` without
   one, a document never saved) leaves out the suggested `folder`. `document.exportForScreens` into the `folder`
   of its `exportPreset` leaves out the ZIP's `path` and lists `files` relative to that folder, and an error
-  for that export names the folder by its name alone.
+  for that export names the folder by its name alone. With Background Export on, an export into the `folder` of
+  its `exportPreset` runs in the background as one into a `folder` the agent gives, and its replies, errors and
+  status bar text name that folder the same way.
   `document.exportSettings`, `document.exportPresets.list` and `document.exportPresets.export` (as data and as
   a file) leave out a kept `folder` outside the read roots. `file.package`
   names the document's file and the linked files outside the read roots by their file names in `warnings`, in
@@ -575,6 +577,19 @@ opens the picker through `run_command` with the remote backend. `ui.colorPanel {
 the panel menu's Show Recent Colors, which hides the Color panel's Recent Colors row, and `true` shows it again;
 applied colors still join the list while it is hidden.
 
+In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
+screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop
+portal's [PickColor](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Screenshot.html)
+on Linux, and the EyeDropper API in browsers that have it. `inspect_ui` reports `screenSampler: true` while it
+waits. The picked sRGB color is converted into the working RGB space and becomes the fill or the stroke of the
+active proxy in one undo step; `stroke: true` picks the stroke, and `picker: true` sends the color to the open
+Color Picker. A cancel leaves the colors as they were. On Linux, a session without a portal that has PickColor
+shows "this system has no screen color sampler" in the status bar, a portal that does not return from the call
+within 25 seconds (VectorCraft's own limit) or leaves the bus before it answers shows "the screen color sampler
+did not answer", and a portal that ends the request in another way shows "the screen color sampler failed"; each
+ends the wait, so the sampler can be shown again. Windows, the BSDs and headless sessions have no screen color
+sampler.
+
 | Tool | Arguments | Notes |
 |---|---|---|
 | `list_commands` | `{filter?, query?, menu?, enabledOnly?, brief?}` | The command catalogue: id, label, menu, shortcut, params doc, enablement, and `schema` and `inputSchema` for a command with a parameter schema (the params doc and both schemas are left out with `brief`). |
@@ -855,7 +870,7 @@ symbol (named after its `data-name`, else its id) with an instance per `<use>`; 
 symbol with strokes) stays art. `feGaussianBlur`, `feDropShadow` and the usual shadow chains (offset, blur, flood or
 colour matrix, composite, merge) become Gaussian Blur, Drop Shadow, Outer Glow, Inner Glow and Feather effects; other
 filters are listed in `warnings`. Undisplayed objects (`display:none`) come back hidden, nested clip paths intersect,
-and reflected or repeated gradients (`spreadMethod`) are expanded into stops. `<image>` files (relative links are
+and reflected or repeated gradients (`spreadMethod`) import as gradients that repeat or reflect (see Spread under Examples). `<image>` files (relative links are
 found in the SVG's folder; only files on this computer or the SVG's network share are read, and pasted SVG reads only
 absolute paths) stay linked images (see Linked images); SVG files and `data:` SVGs become art; a file that
 can't be read becomes a placeholder in its box, named in `warnings` and `missingLinks`.
@@ -1202,6 +1217,41 @@ another form gives a warning:
 
 ```json
 {"name":"run_command","arguments":{"command":"paint.setFill","params":{"gradient":{"kind":"diamond","start":[150,150],"end":[200,150],"aspect":60}}}}
+```
+
+Spread (the Gradient panel's menu, beside a Repeats field) says what a linear, radial, conic or diamond gradient
+paints past the ends of its stops. `pad` (the default) carries the first and last colors on. `repeat` and `reflect`
+run the stops `repeats` times along the vector (1 to 100, VectorCraft's own limit; default 1) and keep going past
+both ends of it, `repeat` starting the stops again each time and `reflect` running every other run backwards. A
+radial or diamond gradient repeats in rings or squares out from its center (an off-center radial's rings grow about
+its focal point), and a conic one repeats around the turn. A freeform gradient has no ends, so a `spread` other
+than `pad` is an error for one, and so is a `repeats` that is not a whole number from 1 to 100. Both edit as one
+undo step, and an edit that changes nothing records none. A gradient set back to `pad` keeps its count for later,
+and it matches a preset or swatch of the same gradient whatever count it keeps. The Gradient tool marks each place
+along the bar where one run meets the next (on a conic, across its extent ellipse). A gradient along or across a
+stroke runs its stops `repeats` times along or across it, a blend between two gradients that repeat (or reflect)
+steps the count from one to the other, and a gradient swatch saved as CSS gets its stops repeated across the box. The
+Gradient tool's stop and midpoint markers lie along the whole bar, as on the Gradient panel's slider, and edit the
+stops of one run.
+
+SVG export writes `spreadMethod` with the gradient's vector shortened to one run
+(https://www.w3.org/TR/SVG2/pservers.html), and SVG import reads
+`spreadMethod` as the spread, with a count of 1. CSS writes `repeating-linear-gradient` and `repeating-radial-gradient` over one run, or
+one run and its mirror for `reflect` (https://www.w3.org/TR/css-images-3/#repeating-gradients), and a conic gradient
+with its stops repeated around the turn. PDF writes a conic gradient's sweep shading over one run, repeated or
+reflected past it. PDF, EPS and legacy `.ai` gradients pad past their ends, so a linear, radial or diamond gradient
+is written with its stops repeated as many times as the shape needs: at most 256 runs and 16,384 stops (256 stops in
+legacy `.ai`), and for a radial or diamond gradient no farther from its center than 65,536 runs, or than a million
+times the smallest gap between its stops (measured in runs) when that is less. Past those it pads, with a warning.
+The `.ai` editing data has no spread either: it holds the stops repeated across the shape, at most 256 of them, with
+a warning. PDF import finds a sharp step between two colors in an axial or radial shading, in any PDF, by halving
+the spans between its samples, so the step reads back where it is in the file (to 1/64 × 2^-14 of the axis, with at
+most 16,384 samples a shading) instead of blurred across the samples around it. Object › Expand expands the
+repeated stops, into the same whole number of `steps` objects for each run (at least one, so about `steps` in all),
+each run starting on an object's edge:
+
+```json
+{"name":"run_command","arguments":{"command":"paint.editGradient","params":{"spread":"reflect","repeats":3}}}
 ```
 
 Dither (the Gradient panel's box) draws a linear, radial, conic or diamond gradient fill with fine noise that hides
@@ -2455,7 +2505,9 @@ each of the others, whose hidden or locked objects are left as they are; when th
 other group takes its objects at that level, keeping its own ids in order. Whenever the document is put back (Undo,
 Redo, a cancelled drag or scrub), the matches it no longer has leave the Global Edit, which ends when fewer than two
 are left. An edit that would take any match past the canvas fails with the coordinates-out-of-range error and changes
-nothing. Nothing of it is saved.
+nothing. Nothing of it is saved. Before Global Edit starts, while one object that `select.globalEdit` accepts is
+selected with the Selection tool, the canvas highlights the other objects a start would take with the current Global
+Edit Options (none while a drag is in progress, or when there are none).
 
 `select.globalEditExclude {id}` leaves the match `id` out of the Global Edit, as a Shift-click on a highlighted match
 (or on an object inside it) with the Selection tool does: it is no longer highlighted, and later edits leave it as it
@@ -4860,6 +4912,30 @@ They list such a command while the user has changed its shortcut (`overridden: t
 shortcut for that command runs what a click on the item runs: Object › Path › Clean Up…, Print Ink Fixes… and Edit ›
 Find and Replace… open their dialogs.
 
+A command without a menu path of its own is listed when an item of the menu bar runs it with no params, or when every
+item that runs it gives it the same params. It is listed in the group named by the first part of its id. These
+commands are listed this way:
+
+- `addon.pathtools.cornerSet` (Object › Plug-ins › Path Precision Tools › Set Corners…, which opens its dialog),
+  under Addon;
+- `perspective.grid.lock`, `perspective.grid.lockStation`, `perspective.grid.rulers` and `perspective.grid.snap`
+  (View › Perspective Grid), and `perspective.attach`, `perspective.editText` and `perspective.plane.matchObject`
+  (Object › Perspective), under Perspective;
+- `text.spelling.dictionary` (Edit › Edit Custom Dictionary…), under Text;
+- the UI commands `ui.recolorDialog` (Edit › Edit Colors › Recolor Artwork…), `ui.flattenerPresetsDialog`,
+  `ui.printPresetsDialog`, `ui.pdfPresetsDialog`, `ui.perspectivePresetsDialog`, `ui.svgFilterDialog`,
+  `ui.saveSwatchLibrary`, `ui.saveBrushLibrary`, `ui.saveGraphicStyleLibrary` and `ui.saveSymbolLibrary`, under Ui;
+  `file.exportAs` and `file.exportSelection`, under File; `links.editOriginal`, under Links; `type.applyBullets` and
+  `type.applyNumbers`, under Type; and `window.toolbar.new`, `window.toolbarColumns`, `window.toolsBesideCanvas`,
+  `window.workspace.new`, `window.arrange.floatInWindow` and `window.arrange.consolidateAllWindows`, under Window.
+
+When such a command has the same group and label as an engine command that no item of the menu bar runs, the
+command the menu item runs keeps the name, and the engine command is listed in the group named by the first part of
+its id: File › Export Selection… runs `file.exportSelection`, as the menu item does, and `document.exportSelection`
+is listed as Document › Export Selection…. A shortcut already given to `document.exportSelection` keeps running it.
+When the other entry is anything else, the command is not listed: `window.learn` is left out, and Window › Learn is
+the Learn panel's entry.
+
 Each installed filter plug-in's Object › Plug-ins item is its own row, with id `plugin:<id>` (the plug-in's id), its
 menu label and no default shortcut, so two filters with the same name have two rows. `shortcuts.set {id:
 "plugin:<id>", shortcut}`, `shortcuts.list` and Import Shortcut Set use that id, `shortcuts.exportText` writes one line
@@ -5091,7 +5167,8 @@ control channel's `ui.drag` scrubs), `showHomeScreen` (on by default: the Home s
 off, an empty window, and the Home button or `app.home` still shows the screen), `autoCollapseIconPanels` (off by
 default: on, a click away from a panel popped out of the icon column puts it away), `displayPrintSize` (off by
 default: View › Actual Size / `view.actualSize` is one document point per screen point; on, one document inch fills
-96 screen points, an inch at the system's reference density whatever the display scaling). The tool shortcut
+96 screen points, an inch at the system's reference density whatever the display scaling). `uiScaling` scales the
+interface and not the art: a zoom shows the art at the same size at every UI Scaling. The tool shortcut
 preference `holdToolKeys` also needs the desktop app. It is on by default: a single-key tool shortcut held for 0.25 s
 or more, or held while its tool is used, chooses the tool until the key is let go and then returns to the tool active
 before, after any drag in progress; a quicker press chooses the tool for good. With it off, every press and every key
@@ -5460,7 +5537,11 @@ value outside that range is read as the nearer end), `previewMode` and `alignNew
 `file.newPresets {category?}` lists the categories and presets (Recent: the last sizes used; Saved: the user's presets,
 kept in the preferences by `file.newPresets.save` and removed by `file.newPresets.delete`). A listed preset can be
 passed straight back to `file.new`. Print presets and sizes without `units` start in `unitsGeneral`; screen presets
-(mobile, web, video, social) in Pixels. A saved or Recent preset whose size (up to 163,830 pt), `artboards` (1 to
+(mobile, web, video, social) in Pixels. `file.new` and `artboard.new` take the same artboard sizes: each side more than 0
+and at most 3,999,856 pt (the 4,000,000 pt the canvas reaches from the origin, less a 72 pt bleed on both sides). A side outside that range is
+refused with `width and height must be more than 0 and at most 3999856 pt`, followed by the limit in the document's
+units in parentheses when they are not points, such as `(1411.0603 m)`, and no document or artboard is made.
+A saved or Recent preset whose size (up to 3,999,856 pt), `artboards` (1 to
 1,000), spacing (0 to 100,000 pt) or bleed (0 to 72 pt a side) lies outside those ranges is read with the nearer end of
 each range, and a size of 0 or less is read as 1 pt.
 The desktop app's `file.newDialog` (Cmd/Ctrl+N) opens the New Document dialog on the first Recent entry, or on the
@@ -6274,7 +6355,13 @@ the patterns it uses, which the patterns category lists as Pattern Objects and `
 stroked with a gradient, by the same rules as `patternObjects`, with the gradients it uses: the name of the gradient
 swatch a gradient is linked to, else `Linear gradient`, `Radial gradient` or `Freeform gradient`; the gradients category
 lists them as Gradient Objects and `objects.gradients` counts them; gradient swatches no art uses are not listed; with
-`selectionOnly`, those in the selection), `gradientNames` (the gradients those objects use) and `pathLength` (pt: the total length of the paths, compound paths' pieces included and guides left
+`selectionOnly`, those in the selection), `gradientNames` (the gradients those objects use), `spotObjects`
+(`[{id, name, spotColors}]`: every object filled or stroked with a spot color swatch, as a solid color or in the
+stops of a gradient with a stop above opacity 0, at a tint above 0, and every grayscale image colorized with one, by
+the same rules as `patternObjects`, with the spot colors it uses; a process
+color, even one of the same color, and Registration are not spot colors; the spotColors category lists them as Spot
+Color Objects and `objects.spots` counts them; spot swatches no art uses are not listed; with `selectionOnly`, those
+in the selection), `spotColorNames` and `spotColors` (the spot colors those objects use) and `pathLength` (pt: the total length of the paths, compound paths' pieces included and guides left
 out, which objects lists as Path Length in the document's units, say for a cut line or an LED strip along the letters);
 `format: "text"` returns the plain-text report Document Info › Save… (`docInfo.save {path?, selectionOnly?, category?}`:
 only `category` when given, else every category) and the package report write.
@@ -6930,7 +7017,7 @@ dictionaries (the standard ones are values in `systemdict`; `dictstack`, `intern
 intervals share storage, resources (categories made from `Generic`, `resourceforall`), executable filters (`cvx exec`
 runs their data; `flushfile` skips it), axial and radial shadings and shading patterns (gradients), images and image
 masks (data in the file through ASCII85, hex, run-length, Flate, LZW or DCT filters, or from procedures), and type as
-point type in the font the file names (embedded Type 1 and Type 42 fonts' characters and widths come from the font program they carry, and the show operators' spacing along the baseline is kept as tracking, while spacing that moves characters off it (`yshow`, `xyshow`) makes a text object per character; CID-keyed fonts draw the glyphs of the Type 0 and Type 2 CIDFonts the file carries, CIDFonts in a FontSet's Compact Font Format data included). In a file in Illustrator's own format
+point type in the font the file names (embedded Type 1 and Type 42 fonts' characters and widths come from the font program they carry, and the show operators' spacing along the baseline is kept as tracking, while spacing that moves characters off it (`yshow`, `xyshow`) makes a text object per character; CID-keyed fonts draw the glyphs of the Type 0 and Type 2 CIDFonts the file carries, CIDFonts in a FontSet's Compact Font Format data included; a CID-keyed font whose CIDFont the file only names, over a predefined CMap such as `UniJIS-UCS2-H`, `90ms-RKSJ-H` or `GBK-EUC-H`, sets the characters its codes stand for as type in the font of the CIDFont's name, as vertical type over a `-V` CMap, and type in a predefined CMap that can't be read is left out with a warning). In a file in Illustrator's own format
 (Illustrator 3–8 `.ai` and their EPS, written with the prolog that defines its operators) the groups it writes (`u` …
 `U`) come in as groups, nested as they were; clips and groups nest at most 128 deep. The artboard is the `%%HiResBoundingBox`
 (else `%%BoundingBox`; a letter page without one). A program the interpreter can't run (an operator it doesn't know,
@@ -7985,26 +8072,59 @@ it, as with any style change to one character (`text.setRangeStyle`). The type s
 ## Alternate glyphs
 
 The Glyphs panel's Show › Alternates for Current Selection lists the alternate glyphs of the character selected with
-the Type tool (a range's first character, else the one before the caret), with the default glyph first when the font
-does not list it, and a double-click on one draws that character with it. `text.glyphAlternates {id, start}` lists them for the character at byte `start`: `{char, font, style, default,
+the Type tool (a range's first character, else the one before the caret) as it stands in its word, with the glyph the
+shaper makes for it first, and a double-click on one applies the OpenType feature that draws it to that character alone
+(see [Alternates as OpenType feature values](#alternates-as-opentype-feature-values)); a glyph no feature draws there is
+drawn by `text.setGlyphAlternate`. `text.glyphAlternates {id, start}` lists them for the character at byte `start`: `{char, font, style, default,
 chosen, alternates: [{gid, feature}]}`, where `default` is the glyph the font's character map gives, `chosen` the glyph
 drawn now, and `alternates` the glyphs the font's `GSUB` single and alternate substitutions put in place of the default
 glyph: `aalt` first, then `salt`, `ss01` to `ss20`, `swsh`, `cv01` to `cv99`, `hist`, `jalt`, `nalt`, `ornm` and
 `titl`, in lookup order within each, each glyph once. The default glyph is listed only when `aalt` lists it. Ligatures
 and contextual substitutions are not listed. `text.setGlyphAlternate {id, start, gid}` draws the character with glyph
-`gid`, one of those alternates or the default glyph, as one undo step; `gid: null` takes the choice away, and the
+`gid`, one of those alternates, a glyph that no character maps and no feature reaches whose name is not another letter's
+(`a.salt` for `a`, in a font with no `salt`), or the default glyph, as one undo step; `gid: null` takes the choice away, and the
 character is drawn as its style draws it (a feature such as `salt` can draw another glyph than the default). The text
 keeps the character and its other attributes, and characters typed next to it take their default glyphs. The choice is
 saved with the character's style as `glyphAlternate: {ch, gid, font, version}`, the face's PostScript name and version
 string: set in another font or version, or with the font missing, the character takes its default glyph. Both commands
-refuse a character whose font is not available, and `text.setGlyphAlternate` refuses a glyph that is not one of the
-character's alternates and a glyph that the character's style does not draw (All Caps, Small Caps or another numeral
+refuse a character whose font is not available, and `text.setGlyphAlternate` refuses a glyph that is not one of those
+and a glyph that the character's style does not draw (All Caps, Small Caps or another numeral
 system). Choosing the glyph a character already draws is not an edit. Character styles do not take `glyphAlternate`:
 `charStyle.new`, `charStyle.edit` and `charStyle.setAttrs` refuse it.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.glyphAlternates","params":{"id":7,"start":2}}}
 {"name":"run_command","arguments":{"command":"text.setGlyphAlternate","params":{"id":7,"start":2,"gid":1043}}}
+```
+
+### Alternates as OpenType feature values
+
+`text.setGlyphAlternate`'s choice swaps a glyph id into one character and shapes that character apart from its neighbours.
+A feature with a value keeps the text real and joined: `features`, `featureChanges` (`text.setRangeStyle`,
+`text.setStyle`, `charStyle.*`) take `tag=N` for `swsh`, `ss01` to `ss20`, `salt`, `titl`, `pnum`, `lnum`, `sups`,
+`subs`, `numr`, `dnom` and `aalt`, `N` from 0 to 65535, and the style's `features` list keeps the string:
+`"salt=2"` draws the font's second alternate of every glyph in the run that has one (the OpenType alternate
+substitution picks the glyph at that position of its set; a glyph without one, or with fewer alternates, keeps the
+glyph it has). A plain `"salt"` is `"salt=1"` and is written so; `"salt=0"`, `"-salt"` and leaving it out are off. The
+next value for a feature replaces the last one, in `features` and in `featureChanges`, and a tag the build does not know
+(`salt=x`, `salt=65536`, `-salt=2`, `liga=2`) is refused with the unknown-feature error. SVG export writes the value as
+CSS `font-feature-settings: "salt" 2`.
+
+Runs that differ only in their `features` are shaped together as one piece of text, each run's features over its own
+characters: styling the middle letter of an Arabic word with `salt=2` leaves every other letter its initial, medial or
+final form and the letters still join, as the same word typed with no style change. Runs that differ in font, size,
+scale, case, language, script or direction are still shaped apart.
+
+`text.glyphAlternates` lists a character's alternates by the glyph the font's character map gives it; the Glyphs panel
+instead lists those of the glyph the shaper makes for the character in its word (a medial letter's medial form), finds
+for each the feature value that draws it there, and on a double-click runs one `text.setRangeStyle` on exactly that
+character: `featureChanges` turns its other alternate features (`salt`, `aalt`, `swsh`, `ss01`–`ss20`) off and sets the
+value (`["-ss01", "salt=2"]`), and `glyphAlternate: null` takes away a glyph choice that would otherwise keep drawing
+its own glyph (`text.setRangeStyle` takes it; any other value is refused). It is one undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":7,"start":4,"end":6,"features":["salt=2"]}}}
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":7,"start":4,"end":6,"featureChanges":["-salt"]}}}
 ```
 
 ## New type in a Japanese interface
@@ -9615,8 +9735,9 @@ it ends up in front), baked with `effect.expandAppearance`, then `object.pathfin
 
 ## Cutting Tools add-on
 
-Cutting Tools is a built-in add-on that prepares art for cutting. Its command is `addon.cutting.bridges`; in the desktop
-app it is Object › Plug-ins › Cutting Tools › Stencil Bridges….
+Cutting Tools is a built-in add-on that prepares art for cutting. Its commands are `addon.cutting.bridges` and
+`addon.cutting.weed`; in the desktop app they are Object › Plug-ins › Cutting Tools › Stencil Bridges… and Weed Box and
+Lines….
 
 ### Stencil Bridges
 
@@ -9665,6 +9786,44 @@ Crossing) and Keep Original.
 ```json
 {"name":"run_command","arguments":{"command":"addon.cutting.bridges","params":{"width":"2 mm"}}}
 {"name":"run_command","arguments":{"command":"addon.cutting.bridges","params":{"width":3,"count":2,"direction":"shortest","keepOriginal":false}}}
+```
+
+### Weed Box and Lines
+
+`addon.cutting.weed {margin?, box?, direction?, count?, spacing?, gap?, weight?, swatch?}` adds a weed box around the
+selected art and weeding lines across the box, so the waste vinyl around the art lifts off in pieces
+([what a weeding border is](https://help.arlon.com/what-is-a-weeding-border)). The ranges, defaults and rules below are
+VectorCraft's own. The weed box is a rectangle `margin` points (0 to 100000, default 9) outside the art's bounds;
+`box: false` leaves it out. The weeding lines run `"horizontal"`, `"vertical"` or `"both"` ways (default `"both"`) from
+one side of the box to the other and divide it evenly: `count` lines each way (a whole number from 0 to 1000, default 1),
+or with `spacing` instead, as few lines as keep them at most that far apart. A line is left out over the art's area and
+within `gap` points of its outlines (0 to 100000, default 0: the lines stop at the outlines), so it ends in several
+pieces, each a straight path. The lines and the box are stroked `weight` points wide (0.01 to 1000, default 0.3) in the
+color swatch `swatch` (default `"[Registration]"`), with no fill.
+
+The art is measured by the outlines a cutter cuts. Closed paths enclose their area by their fill rule, so the hole of a
+compound path filled even-odd gets lines too, and open paths are lines with no area. Type is measured by its glyph
+outlines, a clip group by what shows inside its clipping path (an open clipping path clips as if closed), an image by
+its frame, a placed file by the art it shows (by its box when the file can't be read), a symbol instance by its art (an
+instance of a symbol the document doesn't have adds nothing) and a live object such as a blend by the art it draws. An
+object selected inside a clip group is measured by what shows of it, and a clipping path selected on its own as its clip
+group. Strokes, effects, hidden objects and objects in a hidden group or layer are left out.
+
+The result is one group named "Weeding" (the box is its member "Weed Box"), added on top of the current layer and
+selected, as one undo step. While a clip group, or a group inside one, is edited in isolation, the group goes on top of
+the container that holds the outermost clip group around it. With nothing selected, or with a selection that has no
+outlines, the command fails. It also fails when the art's outlines, followed in straight segments, have more than
+200000 points; when groups, symbol instances and live objects are nested more than 128 levels deep; when measuring the
+clip groups' outlines against each other takes more than 40000000 tests of one segment or outline point against another,
+counted over every clip group in the selection together and including the outlines a nested clip group hides; when, for the
+lines one way, more than 10000000 pairs of a line and an outline segment within `gap` of it are found, or closed
+outline segments are checked for crossings with the lines more than 10000000 times; when the lines would be more than
+100000 pieces; and when no line fits outside the art while `box` is false. Result: `{id, box, lines}`: the group's id,
+the weed box's id (null without one) and the number of pieces of weeding line. Weed Box and Lines… opens the command
+dialog with Preview; a Spacing above 0 is used instead of the Count.
+
+```json
+{"name":"run_command","arguments":{"command":"addon.cutting.weed","params":{"margin":"0.25 in","direction":"both","spacing":"2 in","gap":1}}}
 ```
 
 ## Color Effects add-on
