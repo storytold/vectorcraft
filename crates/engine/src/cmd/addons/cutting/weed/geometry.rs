@@ -209,6 +209,10 @@ impl<'a> Reader<'a> {
 
     /// A path, compound path or type as its outlines.
     fn shape(&mut self, n: &Node) -> Result<Option<Region>, String> {
+        // Each anchor is at least one point, so a path past the budget errs before it is copied.
+        if anchors(n) > MAX_POINTS.saturating_sub(self.points) {
+            return Err(too_many());
+        }
         let Some((path, rule)) = node_path(n) else { return Ok(None) };
         let polys = self.polys(path.to_bezpath())?;
         Ok((!polys.is_empty()).then_some(Region::Shape { polys, rule }))
@@ -267,6 +271,15 @@ impl<'a> Reader<'a> {
 
 fn too_many() -> String {
     format!("the selected art has too many outline points to measure (more than {MAX_POINTS})")
+}
+
+/// The anchors of a path or compound path node, read without copying its path; 0 for type.
+fn anchors(n: &Node) -> usize {
+    match &n.kind {
+        NodeKind::Path { path, .. } => path.anchor_count(),
+        NodeKind::Compound { children, .. } => children.iter().fold(0, |sum, c| sum.saturating_add(anchors(c))),
+        _ => 0,
+    }
 }
 
 /// A subpath through `points`, `None` for fewer than two points or one that isn't finite.
