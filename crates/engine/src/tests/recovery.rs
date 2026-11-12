@@ -514,6 +514,24 @@ fn folder_errors_name_a_file_in_the_way() {
     assert!(wrong.is_empty(), "{wrong:?}");
 }
 
+/// A removal that finds the copy missing because a file is on the way to it (how Windows reports a
+/// file in the way) names that file. A copy that is just not there still counts as removed.
+#[test]
+fn a_removal_reported_missing_names_a_file_in_the_way() {
+    let base = std::env::temp_dir().join(format!("vc-recovery-remove-in-way-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&base).unwrap();
+    let file = base.join("file");
+    std::fs::write(&file, b"").unwrap();
+    let missing = || std::io::Error::from(std::io::ErrorKind::NotFound);
+    let behind = FolderStore::removed(&file.join("recovery").join("1-1").join("Untitled-1-1.vectorcraft"), Err(missing()));
+    let gone = FolderStore::removed(&base.join("recovery").join("1-1").join("Untitled-1-1.vectorcraft"), Err(missing()));
+    let _ = std::fs::remove_dir_all(&base);
+    let named = format!("{} is not a folder: ", file.display());
+    assert!(behind.as_ref().is_err_and(|e| e.starts_with(&named)), "{behind:?}");
+    assert_eq!(gone, Ok(()));
+}
+
 /// A folder of the store's path that is missing and can't be made: a write or a lock names it as
 /// the folder it couldn't make, and a read names it as missing. An area folder that can't be made
 /// in a store folder that is there is named the same way.

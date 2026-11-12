@@ -316,6 +316,20 @@ impl FolderStore {
         }
     }
 
+    /// The outcome `r` of removing file `f`. A file that is not there counts as removed, unless a
+    /// file is on the way to it: Windows reports that as a missing file, and it is named as for a
+    /// listing.
+    pub(crate) fn removed(f: &std::path::Path, r: std::io::Result<()>) -> std::result::Result<(), String> {
+        match r {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => match f.parent().and_then(Self::in_the_way) {
+                Some((p, true)) => Err(format!("{} is not a folder: {e}", p.display())),
+                _ => Ok(()),
+            },
+            Err(e) => Err(Self::file_error(f, &e)),
+            Ok(()) => Ok(()),
+        }
+    }
+
     /// Refuse area folder `dir` unless it is a folder itself, not a link to one, and (on Unix)
     /// belongs to this account. Listing areas leaves links out, so a name another account had
     /// linked to a folder of its own in a shared recovery folder looked free, and claiming it
@@ -453,10 +467,7 @@ impl RecoveryStore for FolderStore {
     }
     fn remove(&self, name: &str) -> std::result::Result<(), String> {
         let f = self.file(name)?;
-        match std::fs::remove_file(&f) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(Self::file_error(&f, &e)),
-            _ => Ok(()),
-        }
+        Self::removed(&f, std::fs::remove_file(&f))
     }
     fn location(&self) -> String {
         self.0.to_string_lossy().into_owned()
