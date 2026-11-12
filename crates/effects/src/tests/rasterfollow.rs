@@ -125,6 +125,122 @@ fn rasterize_before_a_transform_keeps_its_options() {
     assert_eq!(crate::raster::without_geometry(&effects), vec![rasterize]);
 }
 
+/// An SVG filter keeps its options: it paints in its own user space.
+#[test]
+fn an_svg_filter_before_a_transform_keeps_its_options() {
+    let filter = fx(crate::SVG_FILTER, json!({"origin": [10, 10]}));
+    let effects = [filter.clone(), transform(json!({"scaleH": 200, "scaleV": 200, "rotate": 90}))];
+    assert_eq!(crate::raster::followed(&effects)[0], filter);
+    assert_eq!(crate::raster::without_geometry(&effects), vec![filter]);
+}
+
+/// The offset of every Drop Shadow drawn on `n` and the nodes under it, from the object's effects
+/// and from each fill's and stroke's.
+fn shadows_in(n: &Node) -> Vec<(f64, f64)> {
+    let mut out = vec![];
+    n.walk(&mut |m| {
+        let lists = std::iter::once(&m.appearance.effects).chain(m.appearance.items.iter().map(|i| i.effects()));
+        for list in lists {
+            for r in raster_effects(list) {
+                if let RasterFx::DropShadow { dx, dy, .. } = r {
+                    out.push((dx, dy));
+                }
+            }
+        }
+    });
+    out
+}
+
+fn near(a: &[(f64, f64)], b: &[(f64, f64)]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(p, q)| (p.0 - q.0).abs() < 1e-9 && (p.1 - q.1).abs() < 1e-9)
+}
+
+/// A square whose fill carries `effects` of its own.
+fn fill_square(id: u64, effects: Vec<Effect>) -> Node {
+    let mut n = square(id, vec![]);
+    if let Some(item) = n.appearance.items.first_mut() {
+        *item.effects_mut() = effects;
+    }
+    n
+}
+
+/// A fill's own Transform effect transforms the fill's raster effects before it: drawn as they are
+/// (no options), drawn through the art the Transform Patterns or Scale Strokes & Effects option
+/// makes, expanded and baked. Scale Strokes & Effects does not scale a shadow that follows the
+/// Transform effect a second time.
+#[test]
+fn a_fills_shadow_follows_the_fills_own_transform() {
+    let cases = [
+        (json!({"rotate": 90}), (0.0, -10.0)),
+        (json!({"rotate": 90, "strokes": true}), (0.0, -10.0)),
+        (json!({"scaleH": 200, "scaleV": 200, "strokes": true}), (20.0, 0.0)),
+        (json!({"scaleH": 200, "scaleV": 200, "patterns": true}), (20.0, 0.0)),
+        (json!({"reflectX": true, "patterns": true}), (-10.0, 0.0)),
+    ];
+    for (params, want) in cases {
+        let n = fill_square(11, vec![shadow(10.0, 0.0, 0.0), transform(params.clone())]);
+        // Drawn and expanded through its art when an option makes some.
+        if crate::has_transform_art(&n) {
+            let art = crate::reshape(None, &n, None).unwrap();
+            assert!(near(&shadows_in(&art), &[want]), "{params}: drawn {:?}", shadows_in(&art));
+            let expanded = expand_outlined(None, &n, None).unwrap();
+            assert!(near(&shadows_in(&expanded), &[want]), "{params}: expanded {:?}", shadows_in(&expanded));
+        } else {
+            assert!(near(&shadows_in(&n), &[want]), "{params}: drawn {:?}", shadows_in(&n));
+        }
+        let mut d = Document::new(800.0, 800.0);
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), 0, n).unwrap();
+        let baked = bake_document(&d).unwrap();
+        let b = baked.node(NodeId(11)).unwrap();
+        assert!(near(&shadows_in(b), &[want]), "{params}: baked {:?}", shadows_in(b));
+    }
+}
+
+/// A Transform effect after a fill's own Transform effect with Scale Strokes & Effects on turns the
+/// shadow between them, which the first one scaled; a Transform effect that moves at random holds
+/// the shadow before it back from the Transform effects after it.
+#[test]
+fn a_fills_later_transform_turns_the_shadow_its_options_scaled() {
+    let n = fill_square(
+        12,
+        vec![transform(json!({"scaleH": 200, "scaleV": 200, "strokes": true})), shadow(10.0, 0.0, 0.0), transform(json!({"rotate": 90}))],
+    );
+    let art = crate::reshape(None, &n, None).unwrap();
+    assert!(near(&shadows_in(&art), &[(0.0, -20.0)]), "{:?}", shadows_in(&art));
+    let held = fill_square(
+        13,
+        vec![
+            shadow(10.0, 0.0, 0.0),
+            transform(json!({"scaleH": 200, "scaleV": 200, "random": true, "strokes": true})),
+            transform(json!({"rotate": 90})),
+        ],
+    );
+    let art = crate::reshape(None, &held, None).unwrap();
+    let drawn = shadows_in(&art);
+    assert!(drawn.len() == 1 && drawn[0].0 > 0.0 && drawn[0].1.abs() < 1e-9, "{drawn:?}");
+}
+
+/// The 3D effects keep the shadow before a Transform effect that shapes the art they project, the
+/// object's and its fill's 3D effect alike.
+#[test]
+fn a_shadow_before_a_transform_follows_it_into_3d_art() {
+    let before = vec![shadow(10.0, 0.0, 0.0), transform(json!({"scaleH": 200, "scaleV": 200}))];
+    for three_d in [crate::EXTRUDE, crate::REVOLVE] {
+        let art = |n: &Node| if three_d == crate::EXTRUDE { crate::solid_art(n) } else { crate::revolve_art(n) };
+        let mut on_object = before.clone();
+        on_object.push(fx(three_d, json!({})));
+        let projected = art(&square(14, on_object)).unwrap();
+        assert!(near(&shadows_in(&projected), &[(20.0, 0.0)]), "{three_d} on the object: {:?}", shadows_in(&projected));
+        let mut on_fill = square(15, before.clone());
+        if let Some(item) = on_fill.appearance.items.first_mut() {
+            *item.effects_mut() = vec![fx(three_d, json!({}))];
+        }
+        let projected = art(&on_fill).unwrap();
+        assert!(near(&shadows_in(&projected), &[(20.0, 0.0)]), "{three_d} on the fill: {:?}", shadows_in(&projected));
+    }
+}
+
 #[test]
 fn glows_blurs_and_feathers_scale_with_the_transform_after_them() {
     let effects = [

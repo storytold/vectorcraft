@@ -7,7 +7,7 @@ use vectorcraft_doc::color::{BlendMode, Color};
 use vectorcraft_doc::rastersettings::MAX_ADD_AROUND;
 use vectorcraft_doc::{Effect, RasterColorModel, RasterEffectsSettings};
 
-use vectorcraft_geom::{Affine, Point, Rect};
+use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use crate::merged_params;
 use crate::pixel::{self, PixelFx, PixelSpace};
@@ -437,7 +437,7 @@ pub fn raster_effects(effects: &[Effect]) -> Vec<RasterFx> {
 /// random follows stays as it is, as does one after the last Transform effect. Borrowed when
 /// nothing changes.
 pub(crate) fn followed(effects: &[Effect]) -> Cow<'_, [Effect]> {
-    if !effects.iter().any(|e| e.visible && e.id == TRANSFORM) {
+    if !effects.iter().any(|e| e.visible && e.id == "distort.transform") {
         return Cow::Borrowed(effects);
     }
     let mut out: Option<Vec<Effect>> = None;
@@ -445,16 +445,8 @@ pub(crate) fn followed(effects: &[Effect]) -> Cow<'_, [Effect]> {
     // `None` once one of them makes copies or moves at random.
     let mut after = Some(Affine::IDENTITY);
     for (i, e) in effects.iter().enumerate().rev() {
-        if e.id == TRANSFORM {
-            if !e.visible {
-                continue;
-            }
-            let p = merged_params(&e.id, &e.params);
-            // With Transform Objects off the art stays where it is.
-            if flag(&p, "objects", true) {
-                let (map, copies) = crate::distort::transform_map(Rect::ZERO, &p, 0);
-                after = after.filter(|_| copies == 0 && !flag(&p, "random", false)).map(|a| a * linear(map));
-            }
+        if e.id == "distort.transform" {
+            after = after.and_then(|a| transform_step(e).map(|s| a * s));
             continue;
         }
         let Some(a) = after.filter(|a| *a != Affine::IDENTITY && follows(&e.id)) else { continue };
@@ -467,25 +459,60 @@ pub(crate) fn followed(effects: &[Effect]) -> Cow<'_, [Effect]> {
 }
 
 /// `effects` without their geometry effects, each raster effect following the Transform effects
-/// it loses ([`followed`]): what an object keeps once its geometry effects are applied to its art.
-pub(crate) fn without_geometry(effects: &[Effect]) -> Vec<Effect> {
+/// it loses ([`followed`]): what an object, or a fill or stroke, keeps once its geometry effects
+/// are applied to its art.
+pub fn without_geometry(effects: &[Effect]) -> Vec<Effect> {
     followed(effects).iter().filter(|e| !crate::is_geometry(&e.id)).cloned().collect()
 }
 
-/// The Transform effect's id.
-const TRANSFORM: &str = "distort.transform";
+/// Make the raster effects of `effects`, all listed before Transform effect `t`, follow `t` as
+/// [`followed`] makes them follow it, for art that applies its effects one at a time. `false`
+/// when `t` leaves them as they are.
+pub(crate) fn follow_one(effects: &mut [Effect], t: &Effect) -> bool {
+    let Some(a) = transform_step(t).filter(|a| *a != Affine::IDENTITY) else { return false };
+    let mut changed = false;
+    for e in effects.iter_mut().filter(|e| follows(&e.id)) {
+        follow_transform(e, a);
+        changed = true;
+    }
+    changed
+}
+
+/// How many of the effects of `effects` that [`without_geometry`] keeps no longer follow the
+/// Transform effects listed after `effects` ([`followed`]): those before the last visible Transform
+/// effect among them that makes copies or moves at random.
+pub(crate) fn held_back(effects: &[Effect]) -> usize {
+    let Some(last) = effects.iter().rposition(|e| transform_step(e).is_none()) else { return 0 };
+    effects.get(..last).unwrap_or_default().iter().filter(|e| !crate::is_geometry(&e.id)).count()
+}
+
+/// Does `e` stop the raster effects listed before it from following the Transform effects after
+/// it ([`followed`]): is it a visible Transform effect that makes copies or moves at random?
+pub(crate) fn holds_back(e: &Effect) -> bool {
+    transform_step(e).is_none()
+}
+
+/// What `e` does to the raster effects listed before it ([`followed`]): the linear part of its map
+/// when it is a visible Transform effect that moves the art once, the identity when it is no
+/// Transform effect, is hidden or has Transform Objects off (the art stays where it is), and `None`
+/// when it makes copies or moves at random.
+fn transform_step(e: &Effect) -> Option<Affine> {
+    if e.id != "distort.transform" || !e.visible {
+        return Some(Affine::IDENTITY);
+    }
+    let p = merged_params(&e.id, &e.params);
+    if !flag(&p, "objects", true) {
+        return Some(Affine::IDENTITY);
+    }
+    let (map, copies) = crate::distort::transform_map(Rect::ZERO, &p, 0);
+    (copies == 0 && !flag(&p, "random", false)).then(|| map.with_translation(Vec2::ZERO))
+}
 
 /// Does raster effect `id` follow the Transform effects listed after it ([`followed`])? An SVG
 /// filter does not, and neither does Rasterize, whose image keeps its own pixel grid and room
 /// around the art.
 fn follows(id: &str) -> bool {
     crate::is_raster(id) && id != crate::SVG_FILTER && id != RASTERIZE
-}
-
-/// `a` without its translation.
-fn linear(a: Affine) -> Affine {
-    let [a0, a1, a2, a3, _, _] = a.as_coeffs();
-    Affine::new([a0, a1, a2, a3, 0.0, 0.0])
 }
 
 /// Make raster effect `e` follow `a`, the linear part of a Transform effect listed after it, as

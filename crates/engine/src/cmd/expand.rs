@@ -543,12 +543,14 @@ fn expand_piece_leaves(
 }
 
 /// Path `l` as the canvas paints its fills and strokes: its visible geometry effects applied to its
-/// path (a plain path then), and every geometry effect of its own removed. `None` when it has no
+/// path (a plain path then), and every geometry effect of its own removed, with each raster effect
+/// following the Transform effects after it
+/// ([`without_geometry`](vectorcraft_render::effects::without_geometry)). `None` when it has no
 /// visible geometry effect. The swatches and patterns that live-effect plug-ins painting their
 /// pieces name are looked up in `doc`. This merges the pieces of such a plug-in into one path, so a
 /// path that one paints goes through [`expand_pieces`] instead.
 pub(crate) fn reshaped(doc: &Document, l: &Node) -> Option<Node> {
-    use vectorcraft_render::effects::{GeomContext, apply_geometry_carrying, has_geometry, is_geometry};
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_carrying, has_geometry, without_geometry};
     if !has_geometry(&l.appearance.effects) {
         return None;
     }
@@ -559,7 +561,7 @@ pub(crate) fn reshaped(doc: &Document, l: &Node) -> Option<Node> {
     if carry.moves(&m.appearance) {
         carry.apply(&mut m.appearance);
     }
-    m.appearance.effects.retain(|e| !is_geometry(&e.id));
+    m.appearance.effects = without_geometry(&m.appearance.effects);
     Some(m)
 }
 
@@ -601,9 +603,10 @@ fn with_path(l: &Node, path: PathData) -> Node {
 }
 
 /// The effects of fill `f` that stay on its expanded art: all but its geometry effects, which
-/// shape the outline it paints ([`fill_shape`]).
+/// shape the outline it paints ([`fill_shape`]), with each raster effect following the Transform
+/// effects after it ([`without_geometry`](vectorcraft_render::effects::without_geometry)).
 fn fill_effects(f: &FillLayer) -> Vec<vectorcraft_doc::Effect> {
-    f.effects.iter().filter(|e| !vectorcraft_render::effects::is_geometry(&e.id)).cloned().collect()
+    vectorcraft_render::effects::without_geometry(&f.effects)
 }
 
 /// Replace every pattern fill of the selected paths by the tiles it paints (see [`expand_patterns`]).

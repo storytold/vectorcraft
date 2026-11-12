@@ -191,6 +191,27 @@ fn a_fitted_gradient_turned_by_a_transform_expands_as_the_canvas_draws_it() {
     }
 }
 
+/// A Transform effect after a drop shadow, on the object or on the fill, scales and turns the
+/// shadow on the canvas; Object › Expand of the gradient fill keeps the shadow the canvas drew.
+#[test]
+fn a_shadow_before_a_transform_expands_as_the_canvas_draws_it() {
+    for item in [json!(null), json!(0)] {
+        let mut s = session();
+        let id = gradient_rect(&mut s, Rect::new(80.0, 80.0, 120.0, 120.0), white_black(), false);
+        for (effect, params) in [
+            ("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 100})),
+            ("distort.transform", json!({"scaleH": 200, "scaleV": 200, "rotate": 90})),
+        ] {
+            run(&mut s, "effect.apply", json!({"effect": effect, "params": params, "ids": [id.0], "item": item}));
+        }
+        let before = render(&s);
+        run(&mut s, "object.expand", json!({"object": false, "stroke": false, "steps": 64}));
+        let after = render(&s);
+        let diff = differing(&before, &after, 64);
+        assert_eq!(diff, 0, "item {item}: {diff} pixels differ");
+    }
+}
+
 #[test]
 fn a_placed_gradient_moved_by_a_warp_expands_as_the_canvas_draws_it() {
     // The object's own effect, and the fill's (the first appearance item).

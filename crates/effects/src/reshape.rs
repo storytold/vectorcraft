@@ -1263,9 +1263,12 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
         let params = merged_params(&fx[at].id, &fx[at].params);
         // Where each effect the piece keeps sits among the item's effects.
         let kept: Vec<usize> = (0..at).filter(|&k| !is_geometry(&fx[k].id)).chain(at + 1..fx.len()).collect();
+        // The effects before the Transform effect that it keeps, each raster effect following the
+        // geometry effects before it ([`crate::raster::without_geometry`]).
+        let kept_before = crate::without_geometry(before);
         if let Some(plugin) = painted_plugin(&fx[at]) {
             let mut it = item.clone();
-            let rest: Vec<Effect> = before.iter().filter(|e| !is_geometry(&e.id)).chain(&fx[at + 1..]).cloned().collect();
+            let rest: Vec<Effect> = kept_before.iter().chain(&fx[at + 1..]).cloned().collect();
             *it.effects_mut() = rest;
             let mut one = Appearance { items: vec![it.clone()], ..Default::default() };
             if carry.moves(&one) {
@@ -1287,7 +1290,7 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
                 group.push(Arc::new(p));
             }
             let mut p = Node::group(leaf.id, group);
-            transform_piece(&mut p, (ctx.seed, i, &kept), limit, used, doc);
+            transform_piece(&mut p, (ctx.seed, i, &kept), crate::raster::held_back(before), limit, used, doc);
             pieces.push(Arc::new(p));
             continue;
         }
@@ -1295,16 +1298,20 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
         let options = crate::distort::TransformOptions::of(&params);
         let map = crate::distort::transform_affine(tb, &params, ctx.seed);
         let mut it = item.clone();
-        let rest: Vec<Effect> = before.iter().filter(|e| !is_geometry(&e.id)).chain(&fx[at + 1..]).cloned().collect();
+        let rest: Vec<Effect> = kept_before.iter().chain(&fx[at + 1..]).cloned().collect();
         *it.effects_mut() = rest;
         let mut p = piece(vec![it]);
         if carry.moves(&p.appearance) {
             carry.apply(&mut p.appearance);
         }
         set_geometry(&mut p, g.clone(), rule);
-        let (made, _) = transform_leaf(&mut p, &g, map, copies, options, room);
+        let (made, moved) = transform_leaf(&mut p, &g, map, copies, options, room);
         *used = used.plus(made);
-        transform_piece(&mut p, (ctx.seed, i, &kept), limit, used, doc);
+        let from = crate::raster::held_back(before);
+        if moved {
+            follow_piece(&mut p, kept_before.get(from..).unwrap_or_default(), from, &fx[at]);
+        }
+        transform_piece(&mut p, (ctx.seed, i, &kept), crate::raster::held_back(&fx[..=at]), limit, used, doc);
         pieces.push(Arc::new(p));
     }
     if !plain.is_empty() {
@@ -1324,24 +1331,32 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
 /// the effect, whose distances its Scale Strokes & Effects scaled. A Transform effect with
 /// Transform Patterns or Scale Strokes & Effects on transforms each path as [`transform_leaf`] does.
 /// A live-effect plug-in that paints what it returns ([`painted_plugin`]) makes each path one path
-/// for each piece it returns ([`paint_piece`]). The geometry effects then leave the fills and
-/// strokes; their other effects stay. The paths keep to `max` together with the rest of the art
-/// (`used`), and the swatches and patterns painted pieces name must be in `doc`. `(seed, source,
-/// kept)`: the object's seed, the index in the object's appearance of the fill or stroke the
-/// piece was made from, and the index among that item's effects of each effect the piece kept,
-/// which a deferred live-effect plug-in is listed by.
-fn transform_piece(p: &mut Node, (seed, source, kept): (u64, usize, &[usize]), max: Budget, used: &mut Budget, doc: Option<&Document>) {
+/// for each piece it returns ([`paint_piece`]). The raster effects before a Transform effect
+/// follow it ([`follow_piece`]), except the first `held` effects, which a Transform effect before
+/// the piece's effects that makes copies or moves at random holds back. The geometry effects then
+/// leave the fills and strokes; their other effects stay. The paths keep to `max` together with
+/// the rest of the art (`used`), and the swatches and patterns painted pieces name must be in
+/// `doc`. `(seed, source, kept)`: the object's seed, the index in the object's appearance of the
+/// fill or stroke the piece was made from, and the index among that item's effects of each effect
+/// the piece kept, which a deferred live-effect plug-in is listed by.
+fn transform_piece(p: &mut Node, (seed, source, kept): (u64, usize, &[usize]), held: usize, max: Budget, used: &mut Budget, doc: Option<&Document>) {
     let mut count = 0;
     for_each_leaf(p, &mut |l| {
         if let Some(item) = l.appearance.items.first() {
             count = count.max(item.effects().len());
         }
     });
+    let mut held = held;
     for j in 0..count {
         let Some(bounds) = p.geometric_bounds() else { break };
+        let from = held.min(j);
+        let mut holds = false;
         for_each_leaf(p, &mut |leaf| {
             let Some(item) = leaf.appearance.items.first().cloned() else { return };
             let Some(e) = item.effects().get(j).filter(|e| e.visible && is_geometry(&e.id)).cloned() else { return };
+            holds |= crate::raster::holds_back(&e);
+            // The effects before this one as they were before it moved the path.
+            let was = item.effects().get(from..j).unwrap_or_default();
             let Some((path, rule)) = leaf_geometry(leaf) else { return };
             // What the other paths leave of the budget.
             let before = Budget::of(&path);
@@ -1358,8 +1373,11 @@ fn transform_piece(p: &mut Node, (seed, source, kept): (u64, usize, &[usize]), m
                 let (_, copies) = crate::distort::transform_map(bounds, &params, seed);
                 let options = crate::distort::TransformOptions::of(&params);
                 let map = crate::distort::transform_affine(bounds, &params, seed);
-                let (made, _) = transform_leaf(leaf, &path, map, copies, options, room);
+                let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room);
                 *used = used.minus(before).plus(made);
+                if moved {
+                    follow_piece(leaf, was, from, &e);
+                }
                 return;
             }
             let appearance = leaf.appearance.clone();
@@ -1376,13 +1394,37 @@ fn transform_piece(p: &mut Node, (seed, source, kept): (u64, usize, &[usize]), m
                 carry.apply(&mut leaf.appearance);
             }
             set_geometry(leaf, out, rule);
+            follow_piece(leaf, was, from, &e);
         });
+        if holds {
+            held = j;
+        }
     }
     for_each_leaf(p, &mut |leaf| {
         for item in &mut leaf.appearance.items {
             item.effects_mut().retain(|e| !(e.visible && is_geometry(&e.id)));
         }
     });
+}
+
+/// Make the raster effects of `leaf`'s first fill or stroke from index `from` on follow Transform
+/// effect `t`, listed after them, once `t` has moved the leaf ([`crate::raster::follow_one`]).
+/// `was` holds those effects as they were before `t` was applied: each one that follows takes the
+/// value [`crate::raster::followed`] gives it, in place of what Scale Strokes & Effects made of it,
+/// and the others keep theirs.
+fn follow_piece(leaf: &mut Node, was: &[Effect], from: usize, t: &Effect) {
+    let mut follow = was.to_vec();
+    if !crate::raster::follow_one(&mut follow, t) {
+        return;
+    }
+    let Some(item) = leaf.appearance.items.first_mut() else { return };
+    for (k, (new, old)) in follow.into_iter().zip(was).enumerate() {
+        if new != *old
+            && let Some(e) = item.effects_mut().get_mut(from + k)
+        {
+            *e = new;
+        }
+    }
 }
 
 /// The bounds of each group of type's outlines under `n` ([`outline_text`]), `n` included, in

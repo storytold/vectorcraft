@@ -913,17 +913,10 @@ pub fn solid_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
         let (shadow, surfaces) = art_for(n, fx, &[Profile { path, rule, items: paints, opacity: 1.0, scopes: vec![] }])?;
         children.extend(shadow.into_iter().chain(surfaces));
         // Later geometry effects act on the projected art as a whole.
-        remaining = n
-            .appearance
-            .effects
-            .iter()
-            .enumerate()
-            .filter(|(i, e)| *i != index && (!is_geometry(&e.id) || *i > index))
-            .map(|(_, e)| e.clone())
-            .collect();
+        remaining = past_effect(&n.appearance.effects, index);
     } else {
         let path = geometry(&path, &n.appearance.effects, &ctx);
-        remaining = n.appearance.effects.iter().filter(|e| !is_geometry(&e.id)).cloned().collect();
+        remaining = crate::without_geometry(&n.appearance.effects);
         // Every item's shadow goes behind every item's art.
         let mut shadows = vec![];
         for item in &paints {
@@ -959,12 +952,19 @@ fn group_solid_art(n: &Node) -> Option<Node> {
     reshape_members(n, n.appearance.effects.get(..index)?, &mut shapes);
     let (shadow, surfaces) = art_for(n, fx, &shapes)?;
     let children = shadow.into_iter().chain(surfaces).collect();
-    let remaining =
-        n.appearance.effects.iter().enumerate().filter(|(i, e)| *i != index && (!is_geometry(&e.id) || *i > index)).map(|(_, e)| e.clone()).collect();
+    let remaining = past_effect(&n.appearance.effects, index);
     let mut art = n.clone();
     art.kind = NodeKind::Group { children, clip: false };
     art.appearance = Appearance { effects: remaining, ..Default::default() }.into();
     Some(art)
+}
+
+/// `effects` without the 3D effect at `index` and the geometry effects before it, which shape the
+/// art it projects. Each raster effect before it follows the Transform effects among those
+/// ([`crate::without_geometry`]); the effects after it stay as they are.
+pub(crate) fn past_effect(effects: &[Effect], index: usize) -> Vec<Effect> {
+    let (before, after) = effects.split_at(index.min(effects.len()));
+    crate::without_geometry(before).into_iter().chain(after.iter().skip(1).cloned()).collect()
 }
 
 /// One solid of a 3D object as a mesh, with the color it is painted.
