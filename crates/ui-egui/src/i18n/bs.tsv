@@ -842,6 +842,7 @@
 	Sky Gradients	Gradijenti neba
 	Neutral Gradients	Neutralni gradijenti
 	Organic Fades	Organski prelazi
+	Holographic	Holografski
 	Duotone Gradients	Duoton gradijenti
 	Radial Glows	Radijalni sjajevi
 	Save Swatch Library…	Sačuvaj biblioteku uzoraka boja…
@@ -1989,6 +1990,9 @@ digits	Malayalam	Malajalam
 	Right Indent	Desna uvlaka
 	Right-to-Left Paragraph Direction	Smjer pasusa s desna nalijevo
 	Roman Hanging Punctuation	Latinična viseća interpunkcija
+	Korean Line Break Anywhere	Prelom korejskog reda bilo gdje
+	East Asian Composition Settings	Postavke istočnoazijske kompozicije
+	Korean Composition Settings	Postavke korejske kompozicije
 	Select a text object to edit its paragraph attributes.	Odaberite tekstualni objekat da uredite njegove atribute pasusa.
 	Single-line Composer	Slagač jednog reda
 	Toggle Line Composer	Uključi/isključi Line Composer
@@ -4800,6 +4804,7 @@ imageTrace	Outline	Obris
 @msg	not a valid plug-in module: {0}	nije važeći modul dodatka: {0}
 @msg	not an EMF or WMF file	nije EMF ni WMF datoteka
 @msg	not an HP-GL file	nije HP-GL datoteka
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` mora biti niz od 1 do 255 boja #rrggbb
 @msg	not an export presets file (format `{_1}`)	nije datoteka predložaka izvoza (format `{_1}`)
 @msg	not an export presets file: {e}	nije datoteka predložaka izvoza: {e}
 @msg	not found	nije pronađeno
@@ -6105,6 +6110,17 @@ axis	Y Axis	Y osa
 	Charge Wave	Talas naboja
 	Spark Trail	Trag iskri
 	Calligraphic Nibs	Kaligrafski vrhovi
+	Bristle Brushes	Četkice s čekinjama
+	Fine Liner	Tanka linija
+	Pointed Flat	Šiljata ravna
+	Stubby Round	Kratka okrugla
+	Dry Scrub	Suho trljanje
+	Soft Dome	Meka kupola
+	Filbert	Ovalna ravna
+	Angled Round	Kosa okrugla
+	Angled Flat	Kosa ravna
+	Fan Blender	Lepeza za stapanje
+	Grass Fan	Lepeza za travu
 	Pattern Borders	Ivice od uzoraka
 	Scatter Shapes	Raspršeni oblici
 	Save Brush Library…	Sačuvaj biblioteku četkica…
@@ -6706,3 +6722,10 @@ shape	Open	Otvoren
 # Deferred plug-in effects
 	Refresh Deferred Effects	Osvježi odgođene efekte
 	Deferred Effects	Odgođeni efekti
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Alati za rezanje
+	Stencil Bridges…	Mostići šablona…
+	Stencil Bridges	Mostići šablona
+	Shortest Crossing	Najkraći prijelaz
+	Direction	Smjer

@@ -311,7 +311,10 @@ fn to_area(s: &mut Session, p: &Value) -> Result<Value> {
                 continue;
             }
             let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
-            let mut b = if lay.bounds.area() > 0.0 { lay.bounds } else { t.estimate_bounds() };
+            // The frame is worked out in line space, where the lines are; vertical type turns it
+            // into text space with the lines.
+            let text_bounds = if lay.bounds.area() > 0.0 { lay.bounds } else { t.estimate_bounds() };
+            let mut b = lay.line_xf.inverse().transform_rect_bbox(text_bounds);
             // Across, the frame spans the lines as they are aligned: from their starts to their ends
             // without the tracking after their last characters (`LineInfo::trailing`), not to the
             // ink, which tracking can pull past an advance. Area type aligns them alike.
@@ -326,7 +329,7 @@ fn to_area(s: &mut Session, p: &Value) -> Result<Value> {
             let top = lay.lines.first().map(|l| l.baseline - l.ascent).unwrap_or(b.y0).min(b.y0);
             let slack = size * 0.5 + trailing;
             let (sl, sr) = slack_sides(t.para_at(0).justify, lay.lines.first().is_some_and(|l| l.rtl), slack);
-            let frame = Rect::new(b.x0 - sl, top, b.x1 + sr, b.y1.max(top + 1.0));
+            let frame = lay.line_xf.transform_rect_bbox(Rect::new(b.x0 - sl, top, b.x1 + sr, b.y1.max(top + 1.0)));
             t.kind = TextKind::Area { frame: shapes::rectangle(frame) };
             refresh_bounds(t);
         }
@@ -463,6 +466,8 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
             // Point type is in no thread: its first paragraph starts in it.
             t.first_para_continues = false;
             let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+            // The lines are in line space; the frame's bounds are taken there too.
+            let fb = lay.line_xf.inverse().transform_rect_bbox(fb);
             let plain = t.plain_text();
             let baseline = lay.lines.first().map(|l| l.baseline).unwrap_or(fb.y0 + t.first_style().size * 0.8);
             // Soft wraps → explicit breaks (replace the space before the wrap when there is one).
@@ -509,7 +514,10 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
             // converting back to area type does not turn it on again.
             t.dynamic_text = false;
             t.kind = TextKind::Point;
-            t.xf *= Affine::translate((ox, baseline));
+            // The origin is in the area type's line space; point type's line space puts its own
+            // origin there (vertical point type turns its lines about a different point).
+            let point_xf = if lay.vertical { vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).line_xf } else { Affine::IDENTITY };
+            t.xf *= lay.line_xf * Affine::translate((ox, baseline)) * point_xf.inverse();
             refresh_bounds(t);
         }
         Ok(())

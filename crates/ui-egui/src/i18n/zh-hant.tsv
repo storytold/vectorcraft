@@ -2195,6 +2195,7 @@ file-filter	Templates	範本
 @msg	{bpp}-bit bitmaps can't be read	無法讀取 {bpp} 位元點陣圖
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 檔案
 @msg	not an HP-GL file	不是 HP-GL 檔案
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 必須是由 1 到 255 個 #rrggbb 格式顏色組成的陣列
 @msg	its layers use {_1}, which aren't read yet	其圖層使用了 {_1}，目前尚無法讀取
 @msg	the EMF header is damaged	EMF 檔頭已損毀
 @msg	damaged	已損毀
@@ -3365,6 +3366,7 @@ file-filter	Templates	範本
 	Options:	選項：
 	Options…	選項…
 	Organic Fades	自然漸隱
+	Holographic	全像
 	or more spaces with a tab	個以上的空格取代為定位字元
 	Order:	順序：
 	Ordinals	序數字
@@ -3923,6 +3925,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Rise…	上升…
 	Roman Baseline	羅馬基線
 	Roman Hanging Punctuation	羅馬懸掛標點
+	Korean Line Break Anywhere	韓文任意位置換行
+	East Asian Composition Settings	東亞排版設定
+	Korean Composition Settings	韓文排版設定
 	Rotate	旋轉
 	Rotate 90° CW	順時針旋轉 90°
 	Rotate Tool	旋轉工具
@@ -5956,6 +5961,17 @@ axis	Y Axis	Y 軸
 	Charge Wave	充能波
 	Spark Trail	火花尾跡
 	Calligraphic Nibs	書法筆尖
+	Bristle Brushes	鬃毛筆刷集
+	Fine Liner	細勾線筆
+	Pointed Flat	尖頭平筆
+	Stubby Round	短圓筆
+	Dry Scrub	乾擦
+	Soft Dome	柔和圓頂
+	Filbert	榛形筆
+	Angled Round	斜圓筆
+	Angled Flat	斜平筆
+	Fan Blender	混色扇形筆
+	Grass Fan	畫草扇形筆
 	Pattern Borders	圖樣邊框
 	Scatter Shapes	散佈形狀
 	Save Brush Library…	儲存筆刷資料庫…
@@ -6607,3 +6623,15 @@ breakText	Glyphs	字符
 	Deferred Effects	延後的效果
 @msg	no plug-in effect is deferred	沒有延後的增效模組效果
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	開啟時延後了 {n} 個增效模組效果。效果 › 重新整理延後的效果可執行它們。
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	切割工具
+	Stencil Bridges…	鏤空版連接橋…
+	Stencil Bridges	鏤空版連接橋
+	Shortest Crossing	最短跨越
+	Direction	方向
+@msg	The selected art has no islands to bridge	所選圖稿沒有需要連接的孤島
+@msg	No bridge of this width fits across the selected art	此寬度的連接橋無法放入所選圖稿
+@msg	Some islands could not be joined to the area around the art	部分孤島無法連接到圖稿周圍的區域
+@msg	`width` must be from {lo} to {hi} pt	`width` 必須介於 {lo} 到 {hi} pt 之間
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必須是介於 1 到 {MAX_BRIDGES_PER_ISLAND} 的整數

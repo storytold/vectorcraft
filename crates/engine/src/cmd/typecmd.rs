@@ -10,8 +10,8 @@ use vectorcraft_geom::{Affine, PathData, Vec2};
 use super::edit::selected_roots;
 use super::pathops::{length_given, number_given, shape_node};
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, id_param, index, number_or, ok,
-    str_param, switch_or, targets, text_param,
+    CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, index, number_or, object_param,
+    ok, str_param, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -1273,7 +1273,7 @@ fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let mut items = Vec::with_capacity(raw.len());
     for it in raw {
-        let id = id_param(it, "id").ok_or_else(|| bad(C, "missing id"))?;
+        let id = object_param(it, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
         let mut refs = super::select::checked_refs(it.get("anchors"), C)?;
         refs.sort_unstable();
         refs.dedup();
@@ -1304,7 +1304,7 @@ fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn reshape_path(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.reshapePath";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let mut refs = super::select::checked_refs(p.get("anchors"), C)?;
     refs.sort_unstable();
     refs.dedup();
@@ -1335,7 +1335,7 @@ fn reshape_path(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setPathHandle";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let si = super::draw2::usize_opt(p, "subpath", C)?.unwrap_or(0);
     let ai = p.get("anchor").and_then(Value::as_u64).map(index).ok_or_else(|| bad(C, "missing anchor"))?;
     let out = super::object::choice(p, C, "which", &["in", "out"])? != Some("in");
