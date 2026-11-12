@@ -184,6 +184,17 @@ fn follows_opaque_area(item: &AppearanceItem) -> bool {
     item.effects().first().is_some_and(|e| e.id == "path.outlineObject")
 }
 
+/// Is `n` an image with a fill or stroke of its own that follows the outline of the image's opaque
+/// area ([`image_rows`], [`opaque_area`])? The shape that fill or stroke paints then changes with
+/// the image's pixels in the document while `n` stays the same.
+pub fn follows_image_pixels(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Image(_))
+        && n.appearance
+            .items
+            .iter()
+            .any(|i| shapes_image(i) && i.effects().iter().find(|e| gives_shape(e)).is_some_and(|e| e.id == "path.outlineObject"))
+}
+
 /// The outline of a set of pixels' opaque area, in the pixel space they decode to, with that size
 /// ([`traced_opaque_area`]). `None` for pixels that have no transparency or could not be traced.
 type Traced = Option<(Arc<PathData>, (u32, u32))>;

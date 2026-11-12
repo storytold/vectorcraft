@@ -671,7 +671,9 @@ leaves room for a legend label's stored indents, spacing and leading.
 
 `effect.apply {"effect": "path.outlineObject"}` (Effect › Path › Outline Object) takes no parameters. Type that carries
 it is drawn, exported and expanded as its glyph outlines and stays editable type, and the effects after it reshape
-those outlines. On paths, compound paths and images it does not change what is drawn.
+those outlines. On paths, compound paths and images it does not change what is drawn. On an image's own fill or stroke
+it gives the outline of the image's opaque area, or the image's frame, as described under images' fills and strokes
+below.
 
 Errors (unknown tool, bad arguments, a disabled or failing command) come back as a normal result with
 `isError: true` and a message. The model can read the message and retry.
@@ -3450,13 +3452,16 @@ Corners at their defaults, no area left out as noise): the edge follows anti-ali
 and is fitted with curves. Outline Object gives the image's frame when the image has no transparency (a format
 without alpha, or every pixel at least half opaque), when its pixels can't be read, when the outline would take more
 than 100,000 anchor points, and when the image has more than 64 megapixels or its decoded pixels take more than 256 MB
-(a 16-bit image of more than 32 megapixels). An image with no pixel at least half opaque gives nothing to paint. An
-image of more than 4 megapixels is traced with its alpha averaged down to 4 megapixels; an averaged pixel that covers a
-pixel at least half opaque counts as at least half opaque, so opaque lines thinner than the reduction stay in the outline. The
-outline is traced the first time it is needed and kept while the image's pixels are loaded. These are VectorCraft's
-own rules. The image's Contents row stands for the image; `appearance.addFill` and `appearance.addStroke` put a new
-item right below that row, so it paints under the image. SVG, PDF, EPS and the other vector exports write those items
-as paths, and `effect.expandAppearance` turns them into objects in a group with the image.
+(a 16-bit RGBA image of more than 32 megapixels). An image with no pixel at least half opaque gives nothing to paint.
+An image of more than 4 megapixels is traced with its alpha averaged down to 4 megapixels; an averaged pixel that
+covers a pixel at least half opaque counts as at least half opaque, so opaque lines thinner than the reduction stay in
+the outline. The outline is traced the first time it is needed and kept for as long as the image's pixels are loaded.
+After the pixels are gone, it is dropped when another outline is traced or within the next 256 outline lookups. When
+the image's pixels change (`links.update` reading the linked file), the canvas draws the outline of the new pixels.
+These are VectorCraft's own rules. The image's Contents row stands for the image; `appearance.addFill` and
+`appearance.addStroke` put a new item right below that row, so it paints under the image. SVG, PDF, EPS and the other
+vector exports write those items as paths, and `effect.expandAppearance` turns them into objects in a group with the
+image.
 Use Preview Bounds measures an image by its frame and the shapes its own fills and strokes paint.
 
 ```json

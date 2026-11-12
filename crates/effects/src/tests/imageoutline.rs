@@ -200,6 +200,26 @@ fn the_outline_follows_the_images_own_pixels_and_placement() {
 }
 
 #[test]
+fn an_off_center_outline_turns_and_reflects_with_a_smaller_copy_of_the_pixels() {
+    // A 120×60 image whose opaque area is the rectangle from (12, 6) to (40, 24), its pixels a
+    // copy at half size (as a linked image's preview is), turned a quarter and reflected.
+    let half = image::DynamicImage::ImageRgba8(image::RgbaImage::from_fn(60, 30, |x, y| {
+        image::Rgba([255, 0, 0, if (6..20).contains(&x) && (3..12).contains(&y) { 255 } else { 0 }])
+    }));
+    let (d, mut n) = image_doc(encoded(half, image::ImageFormat::Png), vec![stroke(vec![fx("path.outlineObject")])], 1);
+    let xf = Affine::translate((100.0, 40.0)) * Affine::rotate(std::f64::consts::FRAC_PI_2) * Affine::scale_non_uniform(-1.0, 1.0);
+    if let NodeKind::Image(im) = &mut n.kind {
+        (im.width, im.height, im.xf) = (120, 60, xf);
+    }
+    let rows = row_bounds(&d, &n);
+    let want = xf.transform_rect_bbox(Rect::new(12.0, 6.0, 40.0, 24.0));
+    // The rectangle runs from (76, 0) to (94, 28); a flip in either direction, or the copy's
+    // width and height swapped, would move it.
+    assert!(near(want, [76.0, 0.0, 94.0, 28.0], 1e-9), "{want:?}");
+    assert!(rows.len() == 1 && near(rows[0], [want.x0, want.y0, want.x1, want.y1], 0.5), "{rows:?}");
+}
+
+#[test]
 fn an_image_in_a_group_exports_with_its_outline() {
     let (mut d, n) = image_doc(encoded(disc(), image::ImageFormat::Png), vec![stroke(vec![fx("path.outlineObject")])], 1);
     let l = d.layers[0].id;
