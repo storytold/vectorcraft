@@ -13,9 +13,7 @@ use vectorcraft_doc::swatches::{node_colors, node_paints, override_paints};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
 use super::colorcmds::{NotChanged, Recolor, Scope, left_out};
-use super::{
-    CommandSpec, Result, Session, always, bad, check_switches, checked_ids_param, cmd, color_value, has_doc, index, str_param, switch_or, text_param,
-};
+use super::{CommandSpec, Result, Session, always, bad, checked_ids_param, cmd, color_value, has_doc, index, str_param, switch_or, text_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -566,8 +564,8 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() && group.is_none() {
         return Err(bad(C, "select artwork to recolour, or give a colour `group`"));
     }
-    check_switches(p, &["includeImages", "includePatterns"], C)?;
-    let scope = Scope { fill: true, stroke: true, ..Scope::of(p) };
+    let scope =
+        Scope { fill: true, stroke: true, images: switch_or(p, "includeImages", true, C)?, patterns: switch_or(p, "includePatterns", true, C)? };
     let label = if ids.is_empty() { "Edit Color Group" } else { "Recolor Artwork" };
     // `model`: keep each colour's model (default), take the new colour's own, or the document's.
     // A given `model` must be a string; only a missing one means "keep". A row's own `model`

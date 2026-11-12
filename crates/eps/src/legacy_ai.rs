@@ -108,6 +108,9 @@ pub const TITLE_AND_COLOR_NAMES: &str =
 pub const NAMES: &str = "object names are left out (legacy .ai files name only layers)";
 const PATTERNS: &str = "pattern fills are written as their tiles, clipped to the shape";
 const FREEFORM: &str = "freeform gradients are written as their average colour";
+const CONIC: &str = "conic gradients are written as solid wedges clipped to the shape (legacy .ai files have no conic gradient)";
+/// Wedges a conic gradient is written as: one a degree.
+const CONIC_WEDGES: usize = 360;
 const STROKES: &str =
     "strokes a plain line can't draw (inside or outside the path, variable width, gradients, brushes, arrowheads) are written as filled outlines";
 const IMAGE_ALPHA: &str = "transparent image pixels are written over white";
