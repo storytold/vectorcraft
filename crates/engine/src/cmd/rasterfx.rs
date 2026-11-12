@@ -645,8 +645,8 @@ pub fn export_pdf(doc: &Document, opts: &vectorcraft_pdf::PdfOptions) -> std::re
     export_pdf_with_report(doc, opts).map(|r| r.bytes)
 }
 
-/// Like [`export_pdf`], also returning the writer's warnings (options not applied yet, features
-/// approximated or left out).
+/// Like [`export_pdf`], also returning the writer's warnings (features approximated or left out)
+/// and its notes on the options (options not applied yet).
 pub fn export_pdf_with_report(
     doc: &Document,
     opts: &vectorcraft_pdf::PdfOptions,

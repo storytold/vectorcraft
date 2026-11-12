@@ -1,6 +1,7 @@
 //! Where a path's strokes paint, from the path's geometry without building their outlines: the
 //! visual bounds and the clicks of a stroke take in its alignment, its width profile, miter spikes
-//! up to the miter limit, projecting caps and arrowheads. Butt caps end at the path's end points.
+//! up to the miter limit, projecting caps and arrowheads. Butt caps end at the path's end points,
+//! and a bevel ends at the corners of the two segments it joins.
 
 use vectorcraft_geom::bez::{CORNER_COS, has_length, kink, segments, subpaths, tangent, unit};
 use vectorcraft_geom::hit::fill_contains;
@@ -39,10 +40,20 @@ fn joints(segs: &[PathSeg], closed: bool) -> impl Iterator<Item = (Point, Vec2, 
 /// path: its tip and the corner's outer offset points, or `None` when the path doesn't turn there
 /// or the miter limit bevels it.
 fn miter(at: Point, t_in: Vec2, t_out: Vec2, side: f64, limit: f64) -> Option<[Point; 3]> {
-    let cos = t_in.dot(t_out);
     // cos(half the turn) is sin(half the angle between the segments): the miter is side / it.
-    let half = ((1.0 + cos) / 2.0).max(0.0).sqrt();
-    if cos >= CORNER_COS || half * limit < 1.0 {
+    let half = ((1.0 + t_in.dot(t_out)) / 2.0).max(0.0).sqrt();
+    if half * limit < 1.0 {
+        return None;
+    }
+    let ([a, b], out) = bevel(at, t_in, t_out, side)?;
+    Some([a, at + out * (side / half), b])
+}
+
+/// The bevel at a corner with tangents `t_in`, `t_out` of a stroke reaching `side` from its path:
+/// the outer corners of the two segments' strokes and the unit direction out of the turn, or
+/// `None` when the path doesn't turn there.
+fn bevel(at: Point, t_in: Vec2, t_out: Vec2, side: f64) -> Option<([Point; 2], Vec2)> {
+    if t_in.dot(t_out) >= CORNER_COS {
         return None;
     }
     let out = unit(t_in - t_out);
@@ -51,7 +62,7 @@ fn miter(at: Point, t_in: Vec2, t_out: Vec2, side: f64, limit: f64) -> Option<[P
         let n = Vec2::new(-t.y, t.x);
         if n.dot(out) >= 0.0 { n } else { -n }
     };
-    Some([at + outer(t_in) * side, at + out * (side / half), at + outer(t_out) * side])
+    Some(([at + outer(t_in) * side, at + outer(t_out) * side], out))
 }
 
 /// The heads' ends of `bp`: the start of its first subpath and the end of its last, when open (as
@@ -187,26 +198,44 @@ fn in_convex(pts: &[Point], p: Point, tol: f64) -> bool {
 }
 
 impl StrokeLayer {
-    /// Does bounding this stroke need its path's shape: miter spikes, projecting caps, arrowheads,
-    /// an alignment that depends on whether the path is closed, or butt caps, which stop at the
-    /// ends of an open path? Else it reaches evenly round it.
+    /// Does bounding this stroke need its path's shape: miter spikes, bevels, projecting caps,
+    /// arrowheads, an alignment that depends on whether the path is closed, or butt caps, which
+    /// stop at the ends of an open path? Else it reaches evenly round it.
     fn needs_shape(&self) -> bool {
-        self.join == LineJoin::Miter
+        self.join != LineJoin::Round
             || self.cap != LineCap::Round
             || self.start_arrow.is_some()
             || self.end_arrow.is_some()
             || self.align != StrokeAlign::Center
     }
 
-    /// The box this stroke paints along `segs`, the segments with length of an open subpath, when
-    /// its caps are butt caps: each segment's [`swept_box`] and, with round joins, the arc each
-    /// joint between segments paints ([`round_join_box`]), a shallow one included.
-    /// `None` when `segs` is empty. Butt dashes stop inside the same box. The heads and miter tips
-    /// are measured apart. A segment in the middle is measured only when its own box grown by
-    /// `side`, which holds everything it paints, is not inside the box so far.
-    fn butt_body(&self, segs: &[PathSeg], side: f64) -> Option<Rect> {
+    /// Does this stroke stop at the corners of its segments along a subpath that is `closed` or
+    /// open, where its caps are butt caps on an open subpath or its joins are bevels or miters?
+    /// Dashes with round or projecting caps can end at a corner, so with them only butt caps stop.
+    fn stops_at_corners(&self, closed: bool) -> bool {
+        let capped_dashes = self.cap != LineCap::Butt && self.dash.as_ref().is_some_and(Dash::is_dashed);
+        (self.cap == LineCap::Butt && !closed) || (self.join != LineJoin::Round && !capped_dashes)
+    }
+
+    /// Does this stroke reach past a subpath that is `closed` or open by a margin that follows the
+    /// direction of its segments at their corners: where it stops at them
+    /// ([`Self::stops_at_corners`]) or paints miter spikes, which dashes with round or projecting
+    /// caps also paint?
+    fn reaches_by_corners(&self, closed: bool) -> bool {
+        self.stops_at_corners(closed) || self.join == LineJoin::Miter
+    }
+
+    /// The box this stroke's body paints along `segs`, the segments with length of a subpath, short
+    /// of its caps, joined with `within`: each segment's [`swept_box`] and, with round joins on an
+    /// open subpath, the arc each joint between segments paints ([`round_join_box`]), a shallow one
+    /// included. A bevel stays inside the boxes of the segments it joins. `None` when `segs` is
+    /// empty. Butt dashes stop inside the same box. The caps other than butt ones, the heads and
+    /// miter tips are measured apart. A segment in the middle is measured only when its own box
+    /// grown by `side`, which holds everything it paints, is not inside the box so far, which
+    /// starts as `within` and the first and last segments' boxes.
+    fn body_along(&self, segs: &[PathSeg], side: f64, within: Rect) -> Option<Rect> {
         let (first, last) = (segs.first()?, segs.last()?);
-        let ends = swept_box(first, side, 3).union(swept_box(last, side, 3));
+        let ends = swept_box(first, side, 3).union(swept_box(last, side, 3)).union(within);
         let body = segs.iter().skip(1).take(segs.len().saturating_sub(2)).fold(ends, |b, s| {
             if b.contains_rect(ParamCurveExtrema::bounding_box(s).inflate(side, side)) { b } else { b.union(swept_box(s, side, 3)) }
         });
@@ -217,24 +246,28 @@ impl StrokeLayer {
     }
 
     /// The box this stroke paints along `bp` (geometric bounds `bounds`): an open subpath with butt
-    /// caps by [`Self::butt_body`], every other subpath by the box of its segments grown by its
-    /// reach, with `tips` and, when `measure_tips`, the miter spikes the limit keeps, the corners of
-    /// projecting caps and the reach of the arrowheads round their end points.
+    /// caps, and every subpath when the joins are bevels or miters, by [`Self::body_along`] with its
+    /// caps, every other subpath by the box of its segments grown by its reach, with `tips` and,
+    /// when `measure_tips`, the miter spikes the limit keeps, the corners of projecting caps and the
+    /// reach of the arrowheads round their end points.
     fn reach_along(&self, bp: &BezPath, bounds: Rect, tips: Option<Rect>, measure_tips: bool) -> Rect {
         let els = bp.elements();
         let subs = subpaths(bp);
         let mut out = tips.map_or(bounds, |t| bounds.union(t));
         let mut side_max: f64 = 0.0;
-        // Every subpath reaches evenly unless one is open and butt-capped; only then is each
-        // subpath's own box needed.
-        let even_only = self.cap != LineCap::Butt || subs.iter().all(|s| s.1);
-        let mut even = even_only.then_some(bounds);
         // Dashes put a cap on every dash: projecting ones reach a corner's diagonal anywhere.
         let capped_dashes = self.cap == LineCap::Square && self.dash.as_ref().is_some_and(Dash::is_dashed);
+        // A butt cap stops at an open subpath's end, and a bevel, or a miter the limit bevels, at
+        // the two segments' corners, so such a subpath is measured along its segments. Every
+        // subpath reaches evenly unless one is measured that way; only then is each subpath's own
+        // box needed.
+        let even_only = !subs.iter().any(|s| self.stops_at_corners(s.1));
+        let mut even = even_only.then_some(bounds);
         for (r, closed) in subs {
             let side = self.side_reach(closed);
             let butt = self.cap == LineCap::Butt && !closed;
-            if !butt {
+            let along = self.stops_at_corners(closed);
+            if !along {
                 side_max = side_max.max(if capped_dashes { side * std::f64::consts::SQRT_2 } else { side });
             }
             if side <= 0.0 {
@@ -242,10 +275,10 @@ impl StrokeLayer {
             }
             let square = self.cap == LineCap::Square && !closed;
             let miters = measure_tips && self.join == LineJoin::Miter;
-            if !(butt || square || miters || !even_only) {
+            if !(along || square || miters || !even_only) {
                 continue;
             }
-            let segs = drawn(&els[r]);
+            let segs = drawn(&els[r.clone()]);
             if miters {
                 for (at, t_in, t_out) in joints(&segs, closed) {
                     if let Some([_, tip, _]) = miter(at, t_in, t_out, side, self.miter_limit) {
@@ -253,13 +286,24 @@ impl StrokeLayer {
                     }
                 }
             }
-            if butt {
-                if let Some(body) = self.butt_body(&segs, side) {
-                    out = out.union(body);
+            if along {
+                // The path's bounds are in the box already, so only the segments that can reach
+                // past them are measured.
+                match self.body_along(&segs, side, out) {
+                    Some(body) => out = out.union(body),
+                    // A subpath with no length paints at most its caps' dot.
+                    None if !butt => {
+                        let dot = segments(&els[r]).iter().map(ParamCurveExtrema::bounding_box).reduce(|a, b| a.union(b));
+                        out = dot.map_or(out, |d| out.union(d.inflate(side, side)));
+                    }
+                    None => {}
                 }
-                continue;
-            }
-            if !even_only {
+                if self.cap == LineCap::Round && !closed {
+                    for (at, _) in ends(&segs).into_iter().flatten() {
+                        out = out.union(Rect::from_center_size(at, (2.0 * side, 2.0 * side)));
+                    }
+                }
+            } else if !even_only {
                 even = vectorcraft_geom::union_opt(even, segs.iter().map(ParamCurveExtrema::bounding_box).reduce(|a, b| a.union(b)));
             }
             if square {
@@ -279,7 +323,8 @@ impl StrokeLayer {
     /// The box this stroke paints along `bp`, whose geometric bounds are `bounds`: the bounds grown
     /// by the body's reach, with the tips of the miter spikes the limit keeps, the corners of
     /// projecting caps and the reach of the arrowheads round their end points. An open subpath
-    /// with butt caps does not reach past its ends ([`Self::butt_body`]).
+    /// with butt caps does not reach past its ends, and a bevel does not reach round its corner
+    /// ([`Self::body_along`]).
     pub fn bounds_on(&self, bp: &BezPath, bounds: Rect) -> Rect {
         self.reach_along(bp, bounds, None, true)
     }
@@ -329,6 +374,9 @@ impl StrokeLayer {
             let segs = drawn(&els[r]);
             let (half, region) = self.body(closed);
             let full = half * self.profile_max() * dash_caps.unwrap_or(1.0);
+            // Past a butt cap or a bevel the stroke stops at the segments' corners. A width profile
+            // keeps the round reach at the ends.
+            let squared = self.profile.is_none() && self.stops_at_corners(closed);
             // Every segment near enough to reach `p`: with a width profile the wider side of a
             // farther segment can paint past the nearest one, so the nearest alone is not enough.
             let near = segs.iter().enumerate().filter_map(|(i, s)| {
@@ -365,7 +413,8 @@ impl StrokeLayer {
                         }
                     })
                 };
-                if d <= half * factor.max(0.0) + tol && on_side(region, d) {
+                if d <= half * factor.max(0.0) + tol && on_side(region, d) && (!squared || self.paints_at_end(&segs, closed, (i, nr.t), p, half, tol))
+                {
                     return true;
                 }
             }
@@ -391,6 +440,35 @@ impl StrokeLayer {
             }
         }
         false
+    }
+
+    /// Does this stroke, where it stops at the corners of its segments ([`Self::stops_at_corners`]),
+    /// paint `p`, which is within `side` (and `tol`) of segment `i` of the subpath `segs`
+    /// (`closed`: a closed one) and nearest to it at `t`? It does when `p` is not past the end of
+    /// the segment that `t` is at, by more than `tol`, and past it when a round cap or a round join
+    /// paints there, when the path does not turn at that end, or when `p` is within `tol` of the
+    /// bevel's triangle. Projecting caps and
+    /// miter spikes are checked apart. A curve that bends more tightly than `side` ([`gentle`])
+    /// counts as painting round its ends.
+    fn paints_at_end(&self, segs: &[PathSeg], closed: bool, (i, t): (usize, f64), p: Point, side: f64, tol: f64) -> bool {
+        let (n, at_start) = (segs.len(), t <= 1e-9);
+        let Some(seg) = segs.get(i) else { return true };
+        if (!at_start && t < 1.0 - 1e-9) || !(matches!(seg, PathSeg::Line(_)) || gentle(seg, side)) {
+            return true;
+        }
+        let (at, out) = if at_start { (seg.start(), -tangent(seg, 0.0)) } else { (seg.end(), tangent(seg, 1.0)) };
+        if (p - at).dot(out) <= tol {
+            return true;
+        }
+        // The segment on the other side of this end, `None` at the end of an open subpath.
+        let other = if at_start { (i > 0 || closed).then(|| (i + n - 1) % n) } else { (i + 1 < n || closed).then(|| (i + 1) % n) };
+        let Some(other) = other.and_then(|o| segs.get(o)) else { return self.cap == LineCap::Round };
+        if self.join == LineJoin::Round {
+            return true;
+        }
+        let (t_in, t_out) = if at_start { (tangent(other, 1.0), tangent(seg, 0.0)) } else { (tangent(seg, 1.0), tangent(other, 0.0)) };
+        // A joint where the path does not turn has no bevel: the stroke runs on through it.
+        bevel(at, t_in, t_out, side).is_none_or(|([a, b], _)| in_convex(&[at, a, b], p, tol))
     }
 
     /// Is `p` within `tol` of where the start (`end == false`) or end arrowhead at `at` (the path
@@ -428,7 +506,7 @@ impl Appearance {
     }
 
     /// [`Self::stroked_bounds`] with the box of each visible stroke that needs the path's shape
-    /// (miter spikes, projecting or butt caps, arrowheads or an alignment) given by `shaped`.
+    /// (miter spikes, bevels, projecting or butt caps, arrowheads or an alignment) given by `shaped`.
     pub fn stroked_bounds_by(&self, bounds: Rect, mut shaped: impl FnMut(&StrokeLayer) -> Rect) -> Rect {
         self.painted_strokes().fold(bounds, |acc, s| {
             if !s.needs_shape() {
@@ -439,17 +517,21 @@ impl Appearance {
         })
     }
 
-    /// Does this appearance have a visible butt-capped stroke?
-    pub fn has_butt_stroke(&self) -> bool {
-        self.painted_strokes().any(|s| s.cap == LineCap::Butt)
+    /// Does this appearance have a visible stroke that stops at the corners of its segments on an
+    /// open subpath or a closed one, or paints miter spikes: butt caps, or bevel and miter joins
+    /// ([`StrokeLayer::reaches_by_corners`])?
+    pub fn has_cornered_stroke(&self) -> bool {
+        self.painted_strokes().any(|s| s.reaches_by_corners(false))
     }
 
-    /// Does a visible butt-capped stroke of this appearance run along an open subpath of `bp` with
-    /// a segment that starts or ends at a slant, not square to the axes, once placed by `a`? The
-    /// visual box's margin at the stroke's corners there depends on their direction, which a scale
-    /// out of proportion changes.
-    pub fn has_slanted_butt_stroke(&self, bp: &BezPath, a: vectorcraft_geom::Affine) -> bool {
-        if !self.has_butt_stroke() {
+    /// Does a visible stroke of this appearance that stops at the corners of its segments (butt
+    /// caps on an open subpath, bevel and miter joins) or paints miter spikes, dashed ones with
+    /// round or projecting caps included, run along a subpath of `bp` where it does so, with a
+    /// segment that starts or ends at a slant, not square to the axes, once placed by `a`? The
+    /// visual box's margin at those corners, and at miter tips, depends on their direction, which a
+    /// scale out of proportion changes.
+    pub fn has_slanted_stroke_corners(&self, bp: &BezPath, a: vectorcraft_geom::Affine) -> bool {
+        if !self.has_cornered_stroke() {
             return false;
         }
         let slanted = |v: Vec2| {
@@ -457,9 +539,10 @@ impl Appearance {
             (d.x * d.y).abs() > 1e-9
         };
         let els = bp.elements();
-        subpaths(bp)
-            .into_iter()
-            .filter(|(_, closed)| !closed)
+        let subs = subpaths(bp);
+        let cornered = |closed: bool| self.painted_strokes().any(|s| s.reaches_by_corners(closed));
+        subs.into_iter()
+            .filter(|(_, closed)| cornered(*closed))
             .any(|(r, _)| drawn(&els[r]).iter().any(|s| slanted(tangent(s, 0.0)) || slanted(tangent(s, 1.0))))
     }
 
@@ -470,28 +553,28 @@ impl Appearance {
     }
 }
 
-/// How many symbol instances [`crate::Node::has_slanted_butt_stroke`] looks into for one object
+/// How many symbol instances [`crate::Node::has_slanted_stroke_corners`] looks into for one object
 /// before it answers yes without looking further.
 pub const SLANT_INSTANCES: usize = 4096;
 
 impl crate::Node {
-    /// Does a visible butt-capped stroke of this object, of an object in it or of an object in a
-    /// symbol instance's art from `symbols`, placed by `a`, run along an open path with a segment
-    /// at a slant ([`Appearance::has_slanted_butt_stroke`])? Past [`SLANT_INSTANCES`] instances it
-    /// answers yes.
-    pub fn has_slanted_butt_stroke(&self, symbols: &crate::SymbolBoxes, a: vectorcraft_geom::Affine) -> bool {
-        self.slanted_butt(symbols, a, &std::cell::Cell::new(SLANT_INSTANCES))
+    /// Does a visible stroke of this object, of an object in it or of an object in a symbol
+    /// instance's art from `symbols`, placed by `a`, stop at the corners of a segment at a slant
+    /// ([`Appearance::has_slanted_stroke_corners`])? Past [`SLANT_INSTANCES`] instances it answers
+    /// yes.
+    pub fn has_slanted_stroke_corners(&self, symbols: &crate::SymbolBoxes, a: vectorcraft_geom::Affine) -> bool {
+        self.slanted_corners(symbols, a, &std::cell::Cell::new(SLANT_INSTANCES))
     }
 
-    /// [`Self::has_slanted_butt_stroke`] with `left` instances still to look into.
-    fn slanted_butt(&self, symbols: &crate::SymbolBoxes, a: vectorcraft_geom::Affine, left: &std::cell::Cell<usize>) -> bool {
+    /// [`Self::has_slanted_stroke_corners`] with `left` instances still to look into.
+    fn slanted_corners(&self, symbols: &crate::SymbolBoxes, a: vectorcraft_geom::Affine, left: &std::cell::Cell<usize>) -> bool {
         if let crate::NodeKind::SymbolInstance { symbol, xf } = &self.kind {
             let Some(l) = left.get().checked_sub(1) else { return true };
             left.set(l);
-            return symbols.measure_art(symbol, |art| art.slanted_butt(symbols, a * *xf, left)).unwrap_or(false);
+            return symbols.measure_art(symbol, |art| art.slanted_corners(symbols, a * *xf, left)).unwrap_or(false);
         }
-        (self.appearance.has_butt_stroke() && self.stroke_path().is_some_and(|bp| self.appearance.has_slanted_butt_stroke(&bp, a)))
-            || self.children().is_some_and(|c| c.iter().any(|c| c.slanted_butt(symbols, a, left)))
+        (self.appearance.has_cornered_stroke() && self.stroke_path().is_some_and(|bp| self.appearance.has_slanted_stroke_corners(&bp, a)))
+            || self.children().is_some_and(|c| c.iter().any(|c| c.slanted_corners(symbols, a, left)))
     }
 }
 
@@ -566,6 +649,79 @@ mod tests {
         assert_eq!((cap.x0, cap.x1, cap.y1), (-2.0, 102.0, 2.0));
         assert_eq!(stroke(4.0, |s| s.align = StrokeAlign::Inside).bounds_on(&sq, b), b);
         assert_eq!(stroke(4.0, |s| s.align = StrokeAlign::Outside).bounds_on(&sq, b), b.inflate(4.0, 4.0));
+    }
+
+    #[test]
+    fn a_bevel_stops_at_the_corners_of_the_segments_it_joins() {
+        // A 40 × 100 pt triangle stroked 20 pt: a miter limit of 2 or a bevel join bevels its
+        // 22.6° tip at (20, 0), so the stroke reaches 10 · 20 / √10400 pt above it, not 10 pt.
+        let mut tri = BezPath::new();
+        tri.move_to((0.0, 100.0));
+        tri.line_to((20.0, 0.0));
+        tri.line_to((40.0, 100.0));
+        tri.close_path();
+        let tb = tri.bounding_box();
+        let (top, side) = (-200.0 / 10400.0_f64.sqrt(), 1000.0 / 10400.0_f64.sqrt());
+        let limited = stroke(20.0, |s| s.miter_limit = 2.0);
+        let bevel = stroke(20.0, |s| {
+            s.join = LineJoin::Bevel;
+            s.cap = LineCap::Round;
+        });
+        let b = limited.bounds_on(&tri, tb);
+        assert!((b.y0 - top).abs() < 1e-9, "{b:?}");
+        // The limit keeps the base corners' miters, whose tips reach about 12.2 pt left and right.
+        assert!(b.x0 < -12.0 && b.x1 > 52.0, "{b:?}");
+        let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 20.0);
+        *ap.stroke_mut().unwrap() = bevel.clone();
+        let b = ap.stroked_bounds(tb, || tri.clone());
+        for (got, want) in [(b.x0, -side), (b.y0, top), (b.x1, 40.0 + side), (b.y1, 110.0)] {
+            assert!((got - want).abs() < 1e-9, "{b:?}");
+        }
+        // Open, the same corner is beveled and the round caps reach the half weight round the ends.
+        let chevron = polyline(&[(0.0, 100.0), (20.0, 0.0), (40.0, 100.0)]);
+        let b = bevel.bounds_on(&chevron, chevron.bounding_box());
+        for (got, want) in [(b.x0, -10.0), (b.y0, top), (b.x1, 50.0), (b.y1, 110.0)] {
+            assert!((got - want).abs() < 1e-9, "{b:?}");
+        }
+        // A round join, and the round caps of dashes, which can end at the tip, reach round it.
+        let round = stroke(20.0, |s| s.join = LineJoin::Round);
+        assert!((round.bounds_on(&tri, tb).y0 + 10.0).abs() < 1e-9);
+        let mut dashed = bevel.clone();
+        dashed.dash = Some(Dash { pattern: vec![7.0, 4.0], offset: 0.0, align_corners: false });
+        assert!((dashed.bounds_on(&chevron, chevron.bounding_box()).y0 + 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_click_past_a_bevel_or_a_butt_end_misses() {
+        // 5 pt above the triangle's tip is within the half weight of it, but past the bevel, which
+        // reaches about 1.96 pt above it. A round join paints there.
+        let mut tri = polyline(&[(0.0, 100.0), (20.0, 0.0), (40.0, 100.0)]);
+        tri.close_path();
+        let (above, on) = (Point::new(20.0, -5.0), Point::new(20.0, -1.5));
+        for join in [LineJoin::Bevel, LineJoin::Miter] {
+            let st = stroke(20.0, |s| (s.join, s.miter_limit) = (join, 2.0));
+            assert!(!st.hits(&tri, FillRule::NonZero, above, 0.5), "{join:?}");
+            assert!(st.hits(&tri, FillRule::NonZero, on, 0.0), "{join:?}");
+        }
+        assert!(stroke(20.0, |s| s.join = LineJoin::Round).hits(&tri, FillRule::NonZero, above, 0.5));
+        // 1.5 pt past a butt end of a 4 pt line misses, and a quarter point within it hits; a round
+        // cap paints past it.
+        let line = polyline(&[(0.0, 0.0), (0.0, 50.0)]);
+        let butt = stroke(4.0, |s| s.cap = LineCap::Butt);
+        assert!(!butt.hits(&line, FillRule::NonZero, Point::new(1.0, -1.5), 0.25));
+        assert!(butt.hits(&line, FillRule::NonZero, Point::new(1.0, -0.2), 0.25));
+        assert!(stroke(4.0, |s| s.cap = LineCap::Round).hits(&line, FillRule::NonZero, Point::new(1.0, -1.5), 0.25));
+    }
+
+    #[test]
+    fn a_joint_too_shallow_to_bevel_paints_past_both_segments_ends() {
+        // The path turns by about 0.57° at (100, -0.5), too little to bevel, so the stroke runs on
+        // through the joint: 3.5 pt above it is past the end of both segments and still painted.
+        let kink = polyline(&[(0.0, 0.0), (100.0, -0.5), (200.0, 0.0)]);
+        let above = Point::new(100.0, -4.0);
+        for join in [LineJoin::Bevel, LineJoin::Miter, LineJoin::Round] {
+            assert!(stroke(10.0, |s| s.join = join).hits(&kink, FillRule::NonZero, above, 0.0), "{join:?}");
+        }
     }
 
     /// An open path through `points`.
@@ -693,15 +849,25 @@ mod tests {
         let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 2.0);
         ap.stroke_mut().unwrap().cap = LineCap::Butt;
         let id = vectorcraft_geom::Affine::IDENTITY;
-        assert!(!ap.has_slanted_butt_stroke(&polyline(&[(0.0, 0.0), (0.0, 50.0), (30.0, 50.0)]), id));
+        assert!(!ap.has_slanted_stroke_corners(&polyline(&[(0.0, 0.0), (0.0, 50.0), (30.0, 50.0)]), id));
         // Square ends, slanted segments in the middle.
         let apex = polyline(&[(0.0, 50.0), (0.0, 40.0), (10.0, 0.0), (20.0, 40.0), (20.0, 50.0)]);
-        assert!(ap.has_slanted_butt_stroke(&apex, id));
-        // A rotation slants a vertical line; a round cap is never slanted.
+        assert!(ap.has_slanted_stroke_corners(&apex, id));
+        // A rotation slants a vertical line.
         let v = polyline(&[(0.0, 0.0), (0.0, 50.0)]);
-        assert!(ap.has_slanted_butt_stroke(&v, vectorcraft_geom::Affine::rotate(0.3)));
+        assert!(ap.has_slanted_stroke_corners(&v, vectorcraft_geom::Affine::rotate(0.3)));
+        // With round caps, the miter join still stops at the corners of the slanted segments, on a
+        // closed path too; round caps and round joins never do.
         ap.stroke_mut().unwrap().cap = LineCap::Round;
-        assert!(!ap.has_slanted_butt_stroke(&apex, id));
+        assert!(ap.has_slanted_stroke_corners(&apex, id));
+        let mut tri = polyline(&[(0.0, 100.0), (20.0, 0.0), (40.0, 100.0)]);
+        tri.close_path();
+        ap.stroke_mut().unwrap().join = LineJoin::Bevel;
+        assert!(ap.has_slanted_stroke_corners(&tri, id));
+        assert!(!ap.has_slanted_stroke_corners(&square(), id));
+        ap.stroke_mut().unwrap().join = LineJoin::Round;
+        assert!(!ap.has_slanted_stroke_corners(&apex, id));
+        assert!(!ap.has_slanted_stroke_corners(&tri, id));
     }
 
     #[test]
@@ -725,11 +891,11 @@ mod tests {
         }
         let top = Node::new(d.alloc_id(), crate::NodeKind::SymbolInstance { symbol: "S12".into(), xf: vectorcraft_geom::Affine::IDENTITY });
         let symbols = d.symbol_boxes();
-        assert!(top.has_slanted_butt_stroke(&symbols, vectorcraft_geom::Affine::IDENTITY));
+        assert!(top.has_slanted_stroke_corners(&symbols, vectorcraft_geom::Affine::IDENTITY));
         assert!(symbols.art_measured() <= SLANT_INSTANCES, "{}", symbols.art_measured());
         // One instance of S1 holds three instances, all looked into.
         let one = Node::new(d.alloc_id(), crate::NodeKind::SymbolInstance { symbol: "S1".into(), xf: vectorcraft_geom::Affine::IDENTITY });
-        assert!(!one.has_slanted_butt_stroke(&d.symbol_boxes(), vectorcraft_geom::Affine::IDENTITY));
+        assert!(!one.has_slanted_stroke_corners(&d.symbol_boxes(), vectorcraft_geom::Affine::IDENTITY));
     }
 
     #[test]
