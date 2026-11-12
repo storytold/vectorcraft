@@ -4,13 +4,13 @@ use super::*;
 const ZH: fn() -> Lang = || Lang::from_code("zh-hant").expect("zh-hant registered");
 
 #[test]
-fn gujarati_resolves_locales_and_uses_one_other_plurals() {
+fn gujarati_resolves_locales_and_takes_the_singular_for_zero_and_one() {
     let gu = Lang::from_code("gu").expect("gu registered");
     for tag in ["gu", "gu-IN", "gu_IN.UTF-8", "GU-in", "gu-Gujr-IN"] {
         assert_eq!(lang_from_tag(tag), Some(gu), "{tag}");
     }
     assert_eq!(gu.name(), "ગુજરાતી");
-    assert_eq!([0, 1, 2, 21].map(gu.0.plural), [1, 0, 1, 1]);
+    assert_eq!([0, 1, 2, 21].map(gu.0.plural), [0, 0, 1, 1]);
     assert_eq!(tr(gu, "Save"), "સાચવો");
 }
 

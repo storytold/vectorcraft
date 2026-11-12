@@ -116,7 +116,7 @@ pub static LANGUAGES: [LangInfo; 29] = [
         code: "gu",
         name: "ગુજરાતી",
         source: include_str!("i18n/gu.tsv"),
-        plural: plural_one_other,
+        plural: plural_french,
         complete_menus: true,
         catalog: OnceLock::new(),
     },
