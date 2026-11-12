@@ -449,16 +449,16 @@ fn fixed_entries() -> &'static (Vec<Entry>, Vec<Entry>) {
             .map(|t| Entry { key: format!("tool:{}", t.id), label: t.label.to_string(), group: "Tools".into(), is_tool: true })
             .collect();
         let mut seen = HashSet::new();
+        // The commands listed only because an item of the menu bar runs them as a key press would
+        // (Set Corners…).
+        let mut by_the_menu_bar = HashSet::new();
         for c in vectorcraft_engine::command_specs() {
-            // Commands outside the menus (panel menu items) are
-            // listed when a key alone can run them; queries and aliases never are.
-            let listed = if c.menu.is_empty() {
-                c.shortcut.is_some() || (c.journal && !vectorcraft_engine::cmd::is_alias(c.id) && runs_without_params(c.params))
-            } else {
-                true
-            };
-            if !listed || !seen.insert(c.id) {
+            let own = listed_on_its_own(c);
+            if !(own || a_menu_bar_item_runs(c.id, c.params)) || !seen.insert(c.id) {
                 continue;
+            }
+            if !own {
+                by_the_menu_bar.insert(c.id);
             }
             let group = if c.menu.is_empty() { id_group(c.id) } else { c.menu.join(" › ") };
             v.push(Entry { key: c.id.into(), label: c.label.into(), group, is_tool: false });
@@ -472,13 +472,36 @@ fn fixed_entries() -> &'static (Vec<Entry>, Vec<Entry>) {
         // Each effect of the Effect menu comes next, by its own key (#3296): see [`snapshot`].
         let mut tail = vec![];
         for (id, label, sc, params) in menus::UI_COMMANDS {
-            // Rename has no default key, and a key press names the selection: it needs no `id`.
-            let key_runs_it = !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path") || *id == "ui.rename";
-            if !seen.insert(id) || !key_runs_it {
+            let own = ui_listed_on_its_own(id, sc, params);
+            if !seen.insert(id) || !(own || a_menu_bar_item_runs(id, params)) {
                 continue;
+            }
+            if !own {
+                by_the_menu_bar.insert(id);
             }
             tail.push(Entry { key: id.to_string(), label: label.to_string(), group: id_group(id), is_tool: false });
         }
+        // A command listed only because an item of the menu bar runs it can have the group and
+        // label of another entry. When that entry is an engine command that no item of the menu bar
+        // runs, the command the item runs keeps the name and the other entry is shown in the group
+        // of its id: File › Export Selection… runs `file.exportSelection`, as the menu item does,
+        // and `document.exportSelection` shows as Document › Export Selection…. Otherwise the
+        // command is left out: Window › Learn stays the Learn panel's entry.
+        let name = |e: &Entry| (e.group.clone(), e.label.clone());
+        let new_names: HashSet<_> = v.iter().chain(&tail).filter(|e| by_the_menu_bar.contains(e.key.as_str())).map(name).collect();
+        for e in v.iter_mut().chain(tail.iter_mut()) {
+            if new_names.contains(&name(e))
+                && !by_the_menu_bar.contains(e.key.as_str())
+                && vectorcraft_engine::find_command(&e.key).is_some()
+                && !menu_bar_items().contains_key(e.key.as_str())
+            {
+                e.group = id_group(&e.key);
+            }
+        }
+        let names: HashSet<_> = v.iter().chain(&tail).filter(|e| !by_the_menu_bar.contains(e.key.as_str())).map(name).collect();
+        let keep = |e: &Entry| !by_the_menu_bar.contains(e.key.as_str()) || !names.contains(&name(e));
+        v.retain(keep);
+        tail.retain(keep);
         (v, tail)
     })
 }
@@ -694,17 +717,11 @@ pub(crate) fn menu_target(id: &str) -> Option<(String, Value)> {
 fn needs_a_value(key: &str) -> bool {
     static KEYS: OnceLock<HashSet<&'static str>> = OnceLock::new();
     KEYS.get_or_init(|| {
-        // A menu item that runs the command itself with params of its own counts only when the
-        // params doc names no required field: Edit › Find Next gives `find` empty, which it rejects.
-        let runs = |c: &vectorcraft_engine::CommandSpec| {
-            menu_bar_items().get(c.id).is_some_and(|ps| ps.iter().any(|(_, p)| is_bare(p)))
-                || menu_target(c.id).is_some_and(|(id, _)| id != c.id || !names_a_required_field(c.params))
-        };
         vectorcraft_engine::command_specs()
             .iter()
             .filter(|c| {
                 c.shortcut.is_none()
-                    && !runs(c)
+                    && !a_menu_bar_item_runs(c.id, c.params)
                     && !crate::dialogs::variables::opens(c.id)
                     && (!c.journal || NEEDS_A_PARAM.contains(&c.id) || (!c.menu.is_empty() && names_a_required_field(c.params)))
             })
@@ -712,6 +729,31 @@ fn needs_a_value(key: &str) -> bool {
             .collect()
     })
     .contains(key)
+}
+
+/// Does an item of the menu bar run command `id`, whose params doc is `params`, as a key press runs
+/// it: with no params, or with the one set of params all its items give ([`menu_target`])? A menu
+/// item that runs the command itself with params of its own counts only when the params doc names
+/// no required field: Edit › Find Next gives `find` empty, which it rejects.
+fn a_menu_bar_item_runs(id: &str, params: &str) -> bool {
+    menu_bar_items().get(id).is_some_and(|ps| ps.iter().any(|(_, p)| is_bare(p)))
+        || menu_target(id).is_some_and(|(target, _)| target != id || !names_a_required_field(params))
+}
+
+/// Is engine command `c` listed in Edit › Keyboard Shortcuts whether or not an item of the menu bar
+/// runs it? A command with a menu path of its own is. One without (a panel menu item) is when a key
+/// alone can run it: it has a default key, or it is an undoable command, not an alias, whose params
+/// doc ends each field with `?`.
+fn listed_on_its_own(c: &vectorcraft_engine::CommandSpec) -> bool {
+    !c.menu.is_empty() || c.shortcut.is_some() || (c.journal && !vectorcraft_engine::cmd::is_alias(c.id) && runs_without_params(c.params))
+}
+
+/// Is UI command `id` (default key `sc`, params doc `params`) listed in Edit › Keyboard Shortcuts
+/// whether or not an item of the menu bar runs it? It is when it has a default key or a params doc
+/// of `{}` or `{path…}`. Rename has no default key, and a key press names the selection: it needs
+/// no `id`.
+fn ui_listed_on_its_own(id: &str, sc: &str, params: &str) -> bool {
+    !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path") || id == "ui.rename"
 }
 
 /// Does a menu bar item run the command with no params, so that it does what its label says and opens
@@ -2308,6 +2350,70 @@ mod tests {
         let mut ov = Overrides::new();
         assign(&mut ov, "object.isolate", Some("Cmd+Alt+Shift+F11"), false).unwrap();
         assert_eq!(effective_in(&ov, "object.isolate").as_deref(), Some("Cmd+Alt+Shift+F11"));
+    }
+
+    /// Every engine or UI command that an item of the menu bar runs as a key press runs it (without
+    /// params, or with the one set of params all its items give) is listed in Edit › Keyboard
+    /// Shortcuts, also when the command has no menu path of its own: Set Corners…, whose params doc
+    /// names a field a call must give, the Perspective Grid toggles, Edit Custom Dictionary…, a
+    /// query, and Recolor Artwork…, a UI command. Such a command is listed in the group of its id,
+    /// next to the commands of its family that were listed before. A shortcut given to one survives
+    /// a saved set's round trip. Find Next is left out: its menu item gives `find` empty, which the
+    /// command rejects. When another entry has the same group and label, the command the menu item
+    /// runs keeps the name if no menu item runs the other: File › Export Selection… is
+    /// `file.exportSelection`, and `document.exportSelection` moves to Document. Otherwise the
+    /// command is left out: Window › Learn is the Learn panel's entry, not `window.learn`.
+    #[test]
+    fn every_command_the_menu_bar_runs_can_be_given_a_shortcut() {
+        let none = Overrides::new();
+        let mut missing: Vec<&str> = menu_bar_items()
+            .iter()
+            .filter(|(id, items)| items.iter().any(|(_, p)| is_bare(p)) || menu_target(id).is_some())
+            .map(|(id, _)| *id)
+            .filter(|id| *id != "edit.findNext" && *id != "window.learn")
+            .filter(|id| vectorcraft_engine::find_command(id).is_some() || menus::UI_COMMANDS.iter().any(|c| c.0 == *id))
+            .filter(|id| !entry(id).is_some_and(|e| listed(&none, &e)))
+            .collect();
+        missing.sort_unstable();
+        assert!(missing.is_empty(), "{missing:?}");
+        assert!(entry("window.learn").is_none(), "Window › Learn is the Learn panel's entry");
+        let shown = |id: &str| entry(id).map(|e| (e.group, e.label));
+        assert_eq!(shown("file.exportSelection"), Some(("File".into(), "Export Selection…".into())));
+        assert_eq!(shown("document.exportSelection"), Some(("Document".into(), "Export Selection…".into())));
+        // No command listed only because an item of the menu bar runs it shares its group and label
+        // with another entry.
+        let own = |k: &str| {
+            vectorcraft_engine::command_specs()
+                .iter()
+                .find(|c| c.id == k)
+                .map(listed_on_its_own)
+                .or_else(|| menus::UI_COMMANDS.iter().find(|c| c.0 == k).map(|(id, _, sc, p)| ui_listed_on_its_own(id, sc, p)))
+                .unwrap_or(true)
+        };
+        let (v, tail) = fixed_entries();
+        let mut names: HashMap<(&str, &str), Vec<&str>> = HashMap::new();
+        for e in v.iter().chain(tail) {
+            names.entry((e.group.as_str(), e.label.as_str())).or_default().push(e.key.as_str());
+        }
+        let shared: Vec<_> = names.iter().filter(|(_, keys)| keys.len() > 1 && keys.iter().any(|k| !own(k))).collect();
+        assert!(shared.is_empty(), "{shared:?}");
+        for (id, group) in [
+            (crate::addons::pathtools::set_corners::COMMAND, "Addon"),
+            ("perspective.grid.snap", "Perspective"),
+            (crate::dialogs::custom_dictionary::COMMAND, "Text"),
+            ("ui.recolorDialog", "Ui"),
+        ] {
+            let e = entry(id).unwrap_or_else(|| panic!("{id} is listed"));
+            assert_eq!(e.group, group, "{id}");
+        }
+        for id in
+            [crate::addons::pathtools::set_corners::COMMAND, "perspective.grid.lock", crate::dialogs::custom_dictionary::COMMAND, "ui.recolorDialog"]
+        {
+            let mut ov = Overrides::new();
+            assign(&mut ov, id, Some("Cmd+Alt+Shift+F11"), false).unwrap();
+            let (_, back) = import_json(&export_json("Mine", &ov)).unwrap();
+            assert_eq!(effective_in(&back, id).as_deref(), Some("Cmd+Alt+Shift+F11"), "{id}");
+        }
     }
 
     /// `shortcuts.set`, `shortcuts.list` and `shortcuts.preset` reject a supplied param of the wrong

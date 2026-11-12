@@ -294,9 +294,13 @@ fn a_shortcut_runs_what_its_menu_item_runs() {
 
 /// Commands whose menu item opens a slider or a dialog before anything changes: the sliders of
 /// Smooth and Simplify, Offset Path, the Object › Transform dialogs, Average, Split Into Grid,
-/// Vector Halftone, Rearrange All Artboards, Pathfinder Options, Arrange in Grid, Divide into
-/// Dashes, Find Nearest Swatch, and four "…" items whose menu entry gives params.
-const MENU_DIALOG_COMMANDS: [&str; 22] = [
+/// Vector Halftone, Rearrange All Artboards, Pathfinder Options, the Object › Plug-ins dialogs
+/// (Arrange in Grid, Replace with Top Object, the size, opacity and sort dialogs of the Arrange
+/// add-on, Set Corners…, Divide into Dashes, Find Nearest Swatch, the swatch legend, the type
+/// tools, the select add-on and Select by Link Status…), four "…" items whose menu entry gives
+/// params, Edit Custom Dictionary…, Composite Fonts…, Recolor Artwork…, the Edit menu's preset
+/// dialogs and Apply SVG Filter….
+const MENU_DIALOG_COMMANDS: [&str; 39] = [
     "object.path.smooth",
     "object.path.simplify",
     "object.path.offsetPath",
@@ -313,12 +317,29 @@ const MENU_DIALOG_COMMANDS: [&str; 22] = [
     "artboard.rearrange",
     "object.pathfinder.options",
     "addon.arrange.grid",
+    "addon.arrange.replace",
+    "addon.arrange.size",
+    "addon.arrange.randomizeOpacity",
+    "addon.arrange.sort",
+    crate::addons::pathtools::set_corners::COMMAND,
     crate::addons::pathtools::dashes::COMMAND,
     crate::addons::color::nearest::COMMAND,
+    crate::addons::color::legend::COMMAND,
+    crate::addons::typetools::COMMAND,
+    crate::addons::select::COMMAND,
+    crate::addons::select::link_status::COMMAND,
     "object.path.cleanUp",
     "object.mesh.create",
     "type.smartPunctuation",
     "edit.findReplace",
+    crate::dialogs::custom_dictionary::COMMAND,
+    crate::dialogs::composite_fonts::COMMAND,
+    "ui.recolorDialog",
+    "ui.flattenerPresetsDialog",
+    "ui.printPresetsDialog",
+    "ui.pdfPresetsDialog",
+    "ui.perspectivePresetsDialog",
+    "ui.svgFilterDialog",
 ];
 
 /// F pressed without a modifier.
@@ -342,8 +363,33 @@ fn undo_len(app: &VectorcraftApp) -> usize {
     app.session.active().unwrap().history.undo.len()
 }
 
+/// View › Perspective Grid › Snap to Grid, whose command has no menu path of its own, turns off and
+/// on again from a shortcut given to it, as its menu item does.
+#[test]
+fn a_shortcut_on_a_perspective_grid_toggle_runs_it() {
+    let snaps = |app: &VectorcraftApp| crate::menus::checked(app, "perspective.grid.snap", &serde_json::Value::Null);
+    let mut app = app_with_shortcut("perspective.grid.snap", "F");
+    assert_eq!(snaps(&app), Some(true), "on by default");
+    frame(&mut app, press_f());
+    assert_eq!(snaps(&app), Some(false), "F turns it off: {}", app.ui.status);
+    frame(&mut app, vec![]);
+    frame(&mut app, press_f());
+    assert_eq!(snaps(&app), Some(true), "and on again: {}", app.ui.status);
+}
+
+/// A shortcut on File › Export Selection… does what a click on the menu item does: it adds the
+/// selection to Export for Screens' assets and opens Export for Screens.
+#[test]
+fn a_shortcut_on_export_selection_opens_export_for_screens() {
+    let mut app = app_with_shortcut("file.exportSelection", "F");
+    frame(&mut app, press_f());
+    assert_eq!(open_dialog(&app).as_deref(), Some("exportForScreens"), "{}", app.ui.status);
+}
+
 /// A command given a key without a modifier runs what its menu item runs, as it does on a chord:
-/// its slider or dialog opens and nothing changes until it is confirmed.
+/// its slider or dialog opens and nothing changes until it is confirmed. The dialog is the one a
+/// click on the command's menu item opens (its item without params, else its first item), also for
+/// commands without a menu path of their own (Set Corners…, Recolor Artwork…).
 #[test]
 fn a_single_key_shortcut_opens_the_dialog_its_menu_item_opens() {
     let chord = vec![
@@ -364,8 +410,17 @@ fn a_single_key_shortcut_opens_the_dialog_its_menu_item_opens() {
         };
         let by_key = opened("F", press_f());
         let by_chord = opened("Cmd+Alt+Shift+F9", chord.clone());
-        if by_key.is_none() || by_key != by_chord {
-            failures.push(format!("{id}: F opens {by_key:?}, the chord {by_chord:?}"));
+        let mut app = app_with_a_selected_rectangle();
+        // Type › Composite Fonts… shows while East Asian options are shown.
+        app.session.prefs.show_east_asian_options = true;
+        let items: Vec<_> = crate::menus::menu_entries(&app).into_iter().filter(|e| e.command.as_deref() == Some(id)).collect();
+        let item = items.iter().find(|e| e.params.as_object().is_none_or(|o| o.is_empty())).or(items.first());
+        // Pathfinder Options… is an item of the Pathfinder panel's menu, which runs it without params.
+        let (menu_id, p) = item.map_or_else(|| (id.to_string(), json!({})), |item| crate::menus::click_target(&item.label, id, &item.params));
+        crate::menus::invoke(&mut app, &menu_id, p);
+        let by_menu = app.ui.dialog.as_ref().map(|d| (d.kind.clone(), d.fields.get("__command").cloned()));
+        if by_key.is_none() || by_key != by_chord || by_chord != by_menu {
+            failures.push(format!("{id}: F opens {by_key:?}, the chord {by_chord:?}, the menu item {by_menu:?}"));
         }
     }
     assert!(failures.is_empty(), "{failures:#?}");
