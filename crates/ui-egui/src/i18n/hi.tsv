@@ -1099,6 +1099,15 @@ antiAlias	Sharp	शार्प
 	Croatian	क्रोएशियाई
 	Crop	क्रॉप करें
 	Crop Image	फसल की इमेज
+	Image Tools	इमेज टूल
+	Remove Background…	पृष्ठभूमि हटाएँ…
+	Remove Background	पृष्ठभूमि हटाएँ
+	Background	पृष्ठभूमि
+	Edge Color	किनारे का रंग
+	Picked Colors	चुने गए रंग
+	Corner Color	कोनों का रंग
+	Contiguous	सन्निहित
+	Each Channel	प्रत्येक चैनल
 	Crop Marks	क्रॉप मार्क
 	Crop To	करने के लिए फसल
 	Cross	क्रॉस
@@ -2458,6 +2467,8 @@ antiAlias	Sharp	शार्प
 	Left-to-Right Paragraph Direction	बाएँ-से-दाएँ पैराग्राफ़ दिशा
 	Left:	बाएँ:
 	Left/Right:	बाएं / दाएं:
+	Tate-chu-yoko Up/Down	ताते-चू-योको ऊपर/नीचे
+	Tate-chu-yoko Left/Right	ताते-चू-योको बाएं/दाएं
 	Legacy .ai Options	पुराने .ai फ़ॉर्मैट के ऑप्शन्स
 	Legacy (version 7)	पुराना फ़ॉर्मैट (संस्करण 7)
 	Legacy Macintosh RGB (Gamma 1.8)	पुराना Macintosh RGB (गामा 1.8)
@@ -3152,6 +3163,9 @@ antiAlias	Sharp	शार्प
 	Optical	ऑप्टिकल
 	Optical Margin Alignment	ऑप्टिकल मार्जिन संरेखण
 	Dynamic Text	डायनैमिक टेक्स्ट
+	Dynamic Text Presets	डायनैमिक टेक्स्ट प्रीसेट
+	Arch	मेहराब
+@msg	select point type or type on a path	पॉइंट टाइप या पाथ पर टाइप चुनें
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	थ्रेडेड टेक्स्ट में पाथ पर टाइप डायनैमिक टेक्स्ट का उपयोग नहीं कर सकता: {frames}
 	Optimize for fast web view	तेजी से वेब दृश्य के लिए ऑप्टिमाइज़
 	Optimized	ऑप्टिमाइज़्ड
@@ -3159,6 +3173,7 @@ antiAlias	Sharp	शार्प
 	Options for Selection…	सिलेक्शन के लिए ऑप्शन्स…
 	Options:	ऑप्शन्स:
 	Options…	ऑप्शन्स…
+	Organic Fades	ऑर्गेनिक फ़ेड
 	or more spaces with a tab	या एक टैब के साथ अधिक रिक्त स्थान
 	Orange	नारंगी
 	Order:	आदेश:
@@ -3487,6 +3502,7 @@ antiAlias	Sharp	शार्प
 	Press Quality	प्रेस गुणवत्ता
 	Pressure	दबाव
 	Preview	प्रीव्यू
+	Preview:	प्रीव्यू:
 	Preview (1 inch on the page)	प्रीव्यू (1 इंच पृष्ठ पर)
 	Preview All Layers	सभी लेयर्स का प्रीव्यू करें
 	Preview in Browser	ब्राउज़र में प्रीव्यू
@@ -3571,6 +3587,7 @@ antiAlias	Sharp	शार्प
 	Radial Glows	रेडियल चमक
 	Radial Gradient	रेडियल ग्रेडिएंट
 	Conic Gradient	शंक्वाकार ग्रेडिएंट
+	Diamond Gradient	डायमंड ग्रेडिएंट
 	Radial Repeat	रेडियल दोहराव
 	Radius	त्रिज्या
 	Radius 1	त्रिज्या 1
@@ -4313,6 +4330,15 @@ antiAlias	Sharp	शार्प
 	Stun Pulse	स्तब्ध
 	Stealth Fade	छिपना
 	Shield Buff	ढाल
+	Textures	बनावटें
+	Fine Grain	महीन दाना
+	Canvas Weave	कैनवास बुनावट
+	Burlap Sack	टाट की बोरी
+	Cracked Glaze	दरकी ग्लेज़
+	Mosaic Floor	मोज़ेक फ़र्श
+	Quilted Squares	रज़ाईदार वर्ग
+	Leaded Glass	सीसा जड़ा काँच
+	Damp Paper	नम काग़ज़
 	Shaft:	दस्ता:
 	Shape	शेप
 	Shape Builder	शेप बिल्डर
@@ -5308,6 +5334,7 @@ antiAlias	Sharp	शार्प
 	Words Longer Than:	से ज्यादा शब्द:
 	Working CMYK	वर्किंग CMYK
 	Working CMYK (don't tag)	कार्य CMYK (टैग नहीं)
+	Working RGB (don't tag)	कार्य RGB (टैग नहीं)
 	Working RGB	वर्किंग RGB
 	Workspace	वर्कस्पेस
 	Workspace {i}	वर्कस्पेस {i}
@@ -6367,7 +6394,7 @@ antiAlias	Sharp	शार्प
 @msg	EPS {field} `{s}`: {allowed}	EPS {field} `{s}`: {allowed}
 @msg	EPS flattener: {e}	ईपीएस flattener: {e}
 @msg	EPS options: {e}	ईपीएस ऑप्शन्स: {e}
-@msg	EPS Save retains the artboard and all artwork: use document.export for cropped or selected-only EPS	EPS सेव आर्टबोर्ड और पूरा आर्टवर्क रखता है: क्रॉप किए या केवल सिलेक्ट किए आर्टवर्क के EPS के लिए document.export उपयोग करें
+@msg	EPS Save writes all artwork: use document.export for selected-only EPS	EPS सेव पूरा आर्टवर्क लिखता है: केवल सिलेक्ट किए आर्टवर्क के EPS के लिए document.export उपयोग करें
 @msg	every numbered name for {name} is taken in the document's folder	{name} के लिए हर नंबर का नाम डॉक्यूमेंट के फ़ोल्डर में लिया जाता है
 @msg	every numbered name for it is taken in the Fonts folder	इसके लिए हर नंबर वाला नाम फ़ॉन्ट फ़ोल्डर में लिया जाता है
 @msg	every numbered name for the copy is taken	प्रति के लिए हर नंबर का नाम लिया जाता है
@@ -6588,6 +6615,7 @@ antiAlias	Sharp	शार्प
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	आर्टबोर्ड {n} का पेज {size} है, जो PDF की 14,400 pt (200 in) की पेज सीमा से लंबा है: इसे {unit} के UserUnit के साथ लिखा जाता है, इसलिए UserUnit को अनदेखा करने वाले ऐप इसे उतने गुना छोटा दिखाते हैं
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	आर्टबोर्ड {n} का पेज {size} है, जो PDF की 14,400 pt (200 in) की पेज सीमा से लंबा है: {label} पेज बिना UserUnit के, पॉइंट में लिखे जाते हैं, और सीमा मानने वाले ऐप पेज को 200 in पर काट देते हैं
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 में UserUnit नहीं है, जिसकी 14,400 pt (200 in) से लंबे पेज को अपना आकार बनाए रखने के लिए ज़रूरत होती है: फ़ाइल PDF 1.6 के रूप में लिखी जाती है
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 में UserUnit नहीं है, जिसकी 14,400 pt (200 in) से लंबे पेज को PDF/A-2 की 14,400 इकाइयों की पेज सीमा के भीतर रहने के लिए ज़रूरत होती है: फ़ाइल PDF 1.6 के रूप में लिखी जाती है
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	आर्टबोर्ड {n} का पेज {size} है, जो PDF की 3 से 14,400 इकाई की पेज भुजाओं के लिए बहुत लंबा और संकरा है: इसे {unit} की UserUnit के साथ लिखा जाता है, जो छोटी भुजा को 3 इकाई या अधिक पर रखती है, और सीमा का पालन करने वाले ऐप लंबी भुजा को 14,400 इकाई पर काट देते हैं
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} फ़ाइलें {max} तक की वास्तविक संख्याएँ रखती हैं, और आर्टबोर्ड {n} का {side} pt लंबा पेज इससे बड़ी संख्याएँ माँगता है: बिना PDF/X मानक के PDF 1.6 या बाद का चुनें, या छोटा आर्टबोर्ड
 @msg	invalid point	अमानवीय बिंदु
@@ -7080,6 +7108,7 @@ antiAlias	Sharp	शार्प
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” लोड किया गया: {n} चरण छोड़ा गया|“{name}” लोड किया गया: {n} चरण छोड़े गए
 @msg	not an action set file	एक एक्शन सेट फ़ाइल नहीं
 @msg	not an EMF or WMF file	नहीं एक EMF या WMF फ़ाइल
+@msg	not an HP-GL file	HP-GL फ़ाइल नहीं है
 @msg	not an export presets file (format `{_1}`)	नहीं निर्यात presets फ़ाइल (format `{_1}`)
 @msg	not an export presets file: {e}	एक निर्यात प्रीसेट फ़ाइल नहीं: {e}
 @msg	not an image VectorCraft reads (see document.formats)	यह ऐसी इमेज नहीं है जिसे VectorCraft पढ़ सके (document.formats देखें)
@@ -7371,6 +7400,14 @@ antiAlias	Sharp	शार्प
 @msg	select a text object	एक टेक्स्ट ऑब्जेक्ट चुनें
 @msg	select an envelope	एक लिफाफे सिलेक्ट करें
 @msg	select an image	एक इमेज चुनें
+@msg	`background` must be edges, corners or colors	`background` edges, corners या colors होना चाहिए
+@msg	`match` must be distance or channels	`match` distance या channels होना चाहिए
+@msg	`{key}` must be from 0 to 100	`{key}` 0 से 100 तक होना चाहिए
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` में 1 से 16 रंग होने चाहिए, हर एक हेक्स (#rrggbb या #rgb) में या black, white, red, green या blue के रूप में
+@msg	the linked image shows its preview: embed or relink it first	लिंक्ड इमेज अपना पूर्वावलोकन दिखा रही है: पहले इसे एम्बेड करें या फिर से लिंक करें
+@msg	a CMYK image has no transparency to set	CMYK इमेज में सेट करने के लिए कोई पारदर्शिता नहीं है
+@msg	every pixel matches the background: no image would be left	हर पिक्सेल पृष्ठभूमि से मेल खाता है: कोई इमेज नहीं बचेगी
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} पिक्सेल की इमेज बदलने के लिए बहुत बड़ी है
 @msg	select an image (or an Image Trace group)	एक इमेज सिलेक्ट करें (या एक इमेज ट्रेस समूह)
 @msg	select an Image Trace object	एक इमेज ट्रेस ऑब्जेक्ट चुनें
 @msg	select an image, or pass id	एक इमेज सिलेक्ट करें, या आईडी पास करें
@@ -7483,7 +7520,7 @@ antiAlias	Sharp	शार्प
 @msg	span must be "object" or "selection", got {v}	span: स्पैन को "object" या "selection" होना चाहिए, {v} मिला
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" एक `gradient` रखता है, स्वॉच नहीं
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" ग्रेडिएंट रखता है: `gradient` दें
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" एक रैखिक, रेडियल या शंक्वाकार ग्रेडिएंट रखता है, फ्रीफॉर्म ग्रेडिएंट नहीं
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" एक रैखिक, रेडियल, शंक्वाकार या डायमंड ग्रेडिएंट रखता है, फ्रीफॉर्म ग्रेडिएंट नहीं
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" खुद ग्रेडिएंट रखता है: `start` और `end` न दें (वे उसे डॉक्यूमेंट निर्देशांकों पर रख देते हैं)
 @msg	speed must be accelerated, step or pause	speed: गति को तेज, कदम या रोकें होना चाहिए
 @msg	Split Into Grid: select paths large enough for the grid	स्प्लिट इनो ग्रिड: ग्रिड के लिए काफी बड़े पाथ सिलेक्ट करें
@@ -7902,7 +7939,7 @@ antiAlias	Sharp	शार्प
 @msg	unknown format `{f}` (vcswatches, gpl, ase or css)	अज्ञात फ़ॉर्मैट `{f}` (vcswatches, gpl, ase या css)
 @msg	unknown freeform mode `{m}` (points, lines)	अज्ञात फ्रीफॉर्म मोड `{m}` (बिंदुओं, लाइनों)
 @msg	unknown from {f}	{f} से अज्ञात
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	अज्ञात ग्रेडिएंट `{k}` (रैखिक, रेडियल, शंक्वाकार, फ्रीफॉर्म)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	अज्ञात ग्रेडिएंट `{k}` (रैखिक, रेडियल, शंक्वाकार, डायमंड, फ्रीफॉर्म)
 @msg	unknown graph type `{t}`	अज्ञात ग्राफ प्रकार `{t}`
 @msg	unknown grid colours `{name}` (one of {_1})	अज्ञात ग्रिड रंग `{name}` ({_1} में से एक)
 @msg	unknown gridType `{t}`	अज्ञात gridType `{t}`
@@ -8226,6 +8263,11 @@ swatch	Yellow	पीला
 swatch	Yellow Green	पीला हरा
 theme	Appearance	अपीयरेंस
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	समस्या निवारण जानकारी कॉपी करें
+@msg	Copied the troubleshooting info	समस्या निवारण जानकारी कॉपी की गई
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	VectorCraft के पिछले सत्र ने बंद होने से पहले प्रतिक्रिया देना बंद कर दिया था। सहायता ›समस्या निवारण जानकारी कॉपी करें बग रिपोर्ट के लिए विवरण कॉपी करता है
+
 # Safe Mode
 	Safe Mode…	सुरक्षित मोड…
 	Safe Mode	सुरक्षित मोड
@@ -8246,6 +8288,7 @@ theme	Appearance	अपीयरेंस
 
 # Align to Pixel Grid
 	Align to Pixel Grid	पिक्सेल ग्रिड से संरेखित करें
+	Align New Objects to Pixel Grid	नए ऑब्जेक्ट्स को पिक्सेल ग्रिड से संरेखित करें
 	Not Aligned to Pixel Grid	पिक्सेल ग्रिड से असंरेखित
 @msg	only paths and compound paths can be aligned to the pixel grid	केवल पाथ और कंपाउंड पाथ को पिक्सेल ग्रिड से संरेखित किया जा सकता है
 @msg	the name `{name}` isn't UTF-8 and was read as {label}: if it looks wrong, open the file with another legacyNameEncoding	नाम `{name}` UTF-8 नहीं है और इसे {label} के रूप में पढ़ा गया: यदि यह गलत दिखे, तो फ़ाइल को किसी अन्य legacyNameEncoding से खोलें

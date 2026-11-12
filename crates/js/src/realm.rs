@@ -14,7 +14,8 @@ use crate::{Options, SyntaxError};
 /// cannot catch it, and their `finally` blocks do not run.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Limits {
-    /// Instructions a run may execute.
+    /// Instructions a run may execute. Source that `eval`, `Function` or a host evaluator
+    /// compiles during the run also takes one unit for each UTF-16 code unit, before it is parsed.
     pub fuel: u64,
     /// Estimated bytes the heap (objects, environments and the strings they hold) may reach
     /// after a collection. A string longer than a quarter of this many code units cannot be

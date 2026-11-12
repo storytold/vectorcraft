@@ -466,6 +466,7 @@ fn function_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsRe
         .chain([parts.len().saturating_sub(1), HEAD.len() + MID.len() + TAIL.len(), body.len()])
         .fold(0usize, usize::saturating_add);
     interp.check_source_units(total).map_err(|e| interp.compile_error_to_abrupt(e))?;
+    interp.prepare_source(total)?;
     let mut units = Vec::with_capacity(total);
     units.extend(HEAD.encode_utf16());
     for (i, p) in parts.iter().enumerate() {
@@ -554,6 +555,7 @@ fn eval(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Valu
     let x = arg(args, 0);
     let Value::String(s) = &x else { return Ok(x) };
     interp.check_source_units(s.len()).map_err(|e| interp.compile_error_to_abrupt(e))?;
+    interp.prepare_source(s.len())?;
     let units = s.flat();
     let code = interp.compile_source(&units, false, CodeKind::Eval).map_err(|e| interp.compile_error_to_abrupt(e))?;
     interp.run_global(code, true)

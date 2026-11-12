@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Check Links",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: every linked image and placed document)} where each linked file is and whether it changed since it was read → {links: [{name, path, status: ok|modified|missing, ids, found?: path (found away from its path: relative to the document, or by name in its folder), preview: true (showing the low-resolution preview, not the file), refused?: why the path is not followed (another computer, a device or a URL: it counts as missing)}], missing, modified}",
+            "{ids?: [image or placed document ids] (default: every linked image and placed document)} where each linked file is and whether it changed since it was read → {links: [{name, path?, status: ok|modified|missing, ids, found?: path (found away from its path: relative to the document, or by name in its folder), preview: true (showing the low-resolution preview, not the file), refused?: why the path is not followed (another computer, a device or a URL: it counts as missing)}], missing, modified}; under automation read roots, path and found are left out when the file they name is outside the roots",
             has_doc,
             check
         ),
@@ -77,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Links",
             [],
             None,
-            "{show?: all (default)|missing|modified|embedded, sort?: name|kind (file format)|status (missing, modified, ok, embedded); default: stacking order; top first} every image object and placed document in the layers, as the Links panel lists them → {links: [{id, name, linked, status: ok|modified|missing|embedded, format, pixelWidth, pixelHeight, path?, found?: path (found away from its path), page?, preview?: true (showing the saved preview), note?: said of an image past the decode allowance (shown at reduced size, or too large to draw), document?: true (a placed document: pageWidth and pageHeight in pt instead of pixels)}], missing, modified, embedded}",
+            "{show?: all (default)|missing|modified|embedded, sort?: name|kind (file format)|status (missing, modified, ok, embedded); default: stacking order; top first} every image object and placed document in the layers, as the Links panel lists them → {links: [{id, name, linked, status: ok|modified|missing|embedded, format, pixelWidth, pixelHeight, path?, found?: path (found away from its path), page?, preview?: true (showing the saved preview), note?: said of an image past the decode allowance (shown at reduced size, or too large to draw), document?: true (a placed document: pageWidth and pageHeight in pt instead of pixels)}], missing, modified, embedded}; under automation read roots, path and found are left out when the file they name is outside the roots",
             has_doc,
             list
         ),
@@ -113,7 +113,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Link Info",
             [],
             None,
-            "{id?} an image's or placed document's Link Info (default: the one selected) → image.info's fields (id, name, linked, link, colorMode, pixelWidth, pixelHeight, width, height) and status: ok|modified|missing|embedded, format, ppi: [x, y] (the file's), effectivePpi: [x, y] (at its placed size), scale: [x%, y%] (of its 100% size), rotation (degrees, counter-clockwise), placement: {preserve, align, clip}; linked images also fileName, location (its folder), page?, fileSize? (bytes), modified?, created? (ms since the Unix epoch), refused? (why the path is not followed); a placed document has document: true, pageWidth and pageHeight (pt) instead of pixels, ppi and colorMode, and its scale is of its artboard's or page's 100% size",
+            "{id?} an image's or placed document's Link Info (default: the one selected) → image.info's fields (id, name, linked, link, colorMode, pixelWidth, pixelHeight, width, height) and status: ok|modified|missing|embedded, format, ppi: [x, y] (the file's), effectivePpi: [x, y] (at its placed size), scale: [x%, y%] (of its 100% size), rotation (degrees, counter-clockwise), placement: {preserve, align, clip}; linked images also fileName, location (its folder), page?, fileSize? (bytes), modified?, created? (ms since the Unix epoch), refused? (why the path is not followed); a placed document has document: true, pageWidth and pageHeight (pt) instead of pixels, ppi and colorMode, and its scale is of its artboard's or page's 100% size; under automation read roots, a link whose file is outside the roots has no link, path or location, and fileSize and modified come only from the file",
             has_doc,
             info
         ),
@@ -882,15 +882,33 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
 }
 
 /// Groups (of the document saved at `doc_path`) as `{name, path, ids}` rows (those with objects in
-/// the layers), with `refused`: why the path isn't followed, when it isn't.
+/// the layers), with `refused`: why the path isn't followed, when it isn't. `path` is left out
+/// where [`path_shown`] says so.
 fn rows<'a>(gs: impl Iterator<Item = &'a Group>, doc_path: Option<&str>) -> Vec<Value> {
     gs.filter(|g| !g.ids.is_empty())
         .map(|g| {
-            let mut row = json!({ "name": g.link.name(), "path": g.link.path, "ids": ids_json(&g.ids) });
+            let mut row = json!({ "name": g.link.name(), "ids": ids_json(&g.ids) });
+            note_path(&mut row, "path", &g.link.path, doc_path);
             note_refused(&mut row, &g.link, doc_path);
             row
         })
         .collect()
+}
+
+/// May a reply to the caller asking now carry the link path `path` (of the document saved at
+/// `doc_path`)? Always without read roots in force; with them, only when the file it names (a
+/// relative path taken from the document's folder) lies inside them.
+fn path_shown(path: &str, doc_path: Option<&str>) -> bool {
+    crate::file_access::current().is_none() || fileio::document_path(path, doc_path).is_ok_and(|p| crate::file_access::check_read(&p).is_ok())
+}
+
+/// `row[key] = path` when [`path_shown`] says so; otherwise `row` has no `key`.
+fn note_path(row: &mut Value, key: &str, path: &str, doc_path: Option<&str>) {
+    if path_shown(path, doc_path) {
+        row[key] = json!(path);
+    } else if let Some(o) = row.as_object_mut() {
+        o.remove(key);
+    }
 }
 
 /// `row["refused"]`: why the path of `link` isn't followed, when it isn't ([`refused`]).
@@ -1188,10 +1206,12 @@ fn check(s: &mut Session, p: &Value) -> Result<Value> {
         let (status, found) = probe(g, LinkBase::of(st));
         missing += usize::from(status == Status::Missing);
         modified += usize::from(status == Status::Modified);
-        let mut row = json!({ "name": g.link.name(), "path": g.link.path, "status": status.as_str(), "ids": ids_json(&g.ids) });
-        note_refused(&mut row, &g.link, LinkBase::of(st).doc);
+        let doc_path = LinkBase::of(st).doc;
+        let mut row = json!({ "name": g.link.name(), "status": status.as_str(), "ids": ids_json(&g.ids) });
+        note_path(&mut row, "path", &g.link.path, doc_path);
+        note_refused(&mut row, &g.link, doc_path);
         if let Some(f) = found.filter(|f| f.path != g.link.path) {
-            row["found"] = json!(f.path);
+            note_path(&mut row, "found", &f.path, doc_path);
         }
         if stale(&st.doc, g) {
             row["preview"] = json!(true);
@@ -1663,14 +1683,15 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
             o.insert("linked".into(), json!(link.is_some()));
             o.insert("status".into(), json!(status));
         }
+        let doc_path = LinkBase::of(st).doc;
         if let Some(l) = link {
-            row["path"] = json!(l.path);
+            note_path(&mut row, "path", &l.path, doc_path);
             if let Some(page) = l.page {
                 row["page"] = json!(page);
             }
         }
         if let Some(f) = found {
-            row["found"] = json!(f);
+            note_path(&mut row, "found", f, doc_path);
         }
         if preview {
             row["preview"] = json!(true);
@@ -1811,13 +1832,17 @@ fn placement_json(o: PlacementOptions) -> Value {
 
 /// Link Info's fields of the linked file `l` (of object `id` of `st`) into `out`.
 fn file_fields(st: &crate::DocState, id: NodeId, l: &LinkInfo, out: &mut Value) {
+    // Whether the path is shown is judged for the caller asking, before the opener's roots apply.
+    let shown = path_shown(&l.path, LinkBase::of(st).doc);
     // A confined caller reads within its own roots; anyone else within what the caller that
     // opened the document may read (never wider than the caller asking now).
     let roots = crate::file_access::current().or_else(|| st.opened_by.clone());
-    crate::file_access::confine(roots.as_ref(), || file_fields_here(st, id, l, out));
+    crate::file_access::confine(roots.as_ref(), || file_fields_here(st, id, l, shown, out));
 }
 
-fn file_fields_here(st: &crate::DocState, id: NodeId, l: &LinkInfo, out: &mut Value) {
+/// [`file_fields`]; without `shown`, the link's path (`path`, `link`) and folder (`location`)
+/// and the size and date the document keeps of its file are left out.
+fn file_fields_here(st: &crate::DocState, id: NodeId, l: &LinkInfo, shown: bool, out: &mut Value) {
     let base = LinkBase::of(st);
     let status = groups(&st.doc, Some(&[id])).first().map_or(Status::Missing, |g| probe(g, base).0);
     let doc_path = base.doc;
@@ -1825,13 +1850,20 @@ fn file_fields_here(st: &crate::DocState, id: NodeId, l: &LinkInfo, out: &mut Va
     let stamp = path.as_deref().and_then(file_stamp);
     out["status"] = json!(status.as_str());
     note_refused(out, l, doc_path);
-    out["path"] = json!(l.path);
+    if shown {
+        out["path"] = json!(l.path);
+        out["location"] = json!(l.folder());
+    } else if let Some(o) = out.as_object_mut() {
+        for k in ["path", "link", "location"] {
+            o.remove(k);
+        }
+    }
     out["fileName"] = json!(l.name());
-    out["location"] = json!(l.folder());
+    let kept = |v: Option<u64>| v.filter(|_| shown);
     for (k, v) in [
         ("page", l.page.map(u64::from)),
-        ("fileSize", stamp.map(|s| s.0).or(l.size)),
-        ("modified", stamp.and_then(|s| s.1).or(l.modified)),
+        ("fileSize", stamp.map(|s| s.0).or(kept(l.size))),
+        ("modified", stamp.and_then(|s| s.1).or(kept(l.modified))),
         ("created", path.as_deref().and_then(file_created)),
     ] {
         if let Some(v) = v {
