@@ -214,8 +214,9 @@ fn string_ctor(interp: &mut Interp, _: Value, args: &[Value], construct: bool) -
     if !construct {
         return Ok(Value::String(s));
     }
-    // Flattened now, with its copy counted, so reading a character copies nothing.
-    flat_charged(interp, &s)?;
+    // Flattened now, with its copy counted, so reading a character copies nothing. The string
+    // stays rooted, so what it holds is still counted if reserving the copy collects.
+    interp.rooted(&[Value::String(s.clone())], |interp| flat_charged(interp, &s))?;
     let proto = interp.intrinsics.string_proto;
     Ok(Value::Object(interp.heap.alloc_object(Object::new(Class::String(s), Some(proto)))))
 }

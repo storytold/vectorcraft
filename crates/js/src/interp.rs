@@ -2216,26 +2216,19 @@ impl Interp {
         let arguments =
             if code.uses_arguments { OBJECT_BYTES.saturating_add(args.len().saturating_add(4).saturating_mul(binding_bytes(10))) } else { 0 };
         let need = declaration_bytes(&code).saturating_add(ENV_BYTES).saturating_add(params).saturating_add(arguments);
-        if self.heap.bytes.saturating_add(need) > self.limits.heap_bytes {
-            let mark = self.temp_roots.len();
+        // The operands are off the stack. Reserving the heap collects, and so can boxing a string
+        // receiver, which flattens it; the operands stay rooted until the frame holds them.
+        let collects = self.heap.bytes.saturating_add(need) > self.limits.heap_bytes || (!code.strict && matches!(this, Value::String(_)));
+        let mark = self.temp_roots.len();
+        if collects {
             self.temp_roots.push(Value::Object(callee));
             self.temp_roots.push(this.clone());
             self.temp_roots.extend(construct.map(Value::Object));
             self.temp_roots.extend(args.iter().cloned());
-            let reserved = self.reserve_heap(need);
-            self.temp_roots.truncate(mark);
-            reserved?;
         }
-        let this = if code.strict {
-            this
-        } else {
-            match this {
-                Value::Undefined | Value::Null => Value::Object(self.global),
-                Value::Object(_) => this,
-                prim => Value::Object(self.to_object(&prim)?),
-            }
-        };
-        let fenv = self.instantiate_function(&code, env, &args, callee)?;
+        let received = self.receive_call(&code, env, this, &args, callee, need);
+        self.temp_roots.truncate(mark);
+        let (this, fenv) = received?;
         let base = self.stack.len();
         self.frames.push(Frame {
             code,
@@ -2251,6 +2244,25 @@ impl Interp {
             boundary,
         });
         Ok(())
+    }
+
+    /// Reserves the `need` bytes of a call, boxes a primitive receiver for non-strict code and
+    /// binds the parameters, returning the receiver and the function's environment.
+    fn receive_call(&mut self, code: &Rc<Code>, env: EnvId, this: Value, args: &[Value], callee: ObjId, need: usize) -> JsResult<(Value, EnvId)> {
+        if self.heap.bytes.saturating_add(need) > self.limits.heap_bytes {
+            self.reserve_heap(need)?;
+        }
+        let this = if code.strict {
+            this
+        } else {
+            match this {
+                Value::Undefined | Value::Null => Value::Object(self.global),
+                Value::Object(_) => this,
+                prim => Value::Object(self.to_object(&prim)?),
+            }
+        };
+        let fenv = self.instantiate_function(code, env, args, callee)?;
+        Ok((this, fenv))
     }
 
     /// Declaration binding instantiation for function code (section 10.5). Each parameter and

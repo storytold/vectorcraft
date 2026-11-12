@@ -355,6 +355,35 @@ fn a_flattened_temporary_stays_counted_while_the_next_copy_is_made() {
 }
 
 #[test]
+fn a_string_wrapper_counts_what_its_rope_holds_while_the_copy_is_made() {
+    // `mk` returns a rope whose left half is a flat string of about half the heap, held by
+    // nothing else. Its flattened copy is the other half, so the two don't fit together.
+    let build = "var s = 'x'; for (var i = 0; i < 18; i++) s = s + s; function f(c) { return s + c; } \
+                 function mk() { var a = f('a'); a[0]; return a + 'b'; }";
+    let limits = Limits { heap_bytes: 4 * 262_146, ..Limits::default() };
+    let src = format!("{build} new String({{ toString: mk }}); 0");
+    let result = Realm::with_options(Options::default(), limits).run(&src);
+    assert!(matches!(result, Err(ref e) if e.kind == RunErrorKind::Limit(LimitKind::Heap)), "{result:?}");
+}
+
+#[test]
+fn a_call_keeps_its_operands_while_a_string_receiver_is_boxed() {
+    // Boxing the rope receiver of a non-strict function flattens it, and reserving the copy
+    // collects the garbage string `g` left. The callee and the argument object are off the
+    // stack by then, and must survive the collection.
+    let build = "var s = 'x'; for (var i = 0; i < 17; i++) s = s + s; function f(c) { return s + c; } \
+                 function mk() { var a = f('a'); a[0]; return a + 'b'; } 0";
+    let mut realm = Realm::with_options(Options::default(), Limits::default());
+    assert_eq!(realm.run(build), Ok(JsValue::Number(0.0)));
+    let interp = realm.interp();
+    interp.collect_garbage();
+    interp.limits.heap_bytes = interp.heap.bytes + 2 * crate::heap::string_bytes(131_073) + (64 << 10);
+    interp.reset_gc_threshold();
+    let src = "(function () { var g = f('g'); g[0]; })(); (function (o) { return o.x; }).call(mk(), { x: 1 })";
+    assert_eq!(realm.run(src), Ok(JsValue::Number(1.0)));
+}
+
+#[test]
 fn compiling_a_pattern_counts_against_the_heap() {
     let src = "var s = '[\\\\s\\\\S]a*'; for (var i = 0; i < 14; i++) s = s + s; new RegExp(s).source.length";
     let e = fail_with(Realm::with_options(Options::default(), Limits { heap_bytes: 2 << 20, ..Limits::default() }), src);
