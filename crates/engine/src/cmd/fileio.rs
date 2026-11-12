@@ -72,7 +72,6 @@ pub(crate) use encode::{anti_alias, background, with_single_artboard};
 pub(crate) use export::with_artboard_fills;
 pub(crate) use export::{export_crop, isolated};
 pub use export::{export_doc, export_source};
-pub(crate) use load::check_not_lossy_overwrite;
 use load::err;
 pub(crate) use load::import_svg;
 pub(crate) use load::is_placeholder;
@@ -83,6 +82,7 @@ pub use load::{
     Loaded, RasterImage, ReadFile, detect, file_name, load, load_with, open_bytes, open_bytes_with, open_read, open_template, raster_image,
     read_for_open, texture_image,
 };
+pub(crate) use load::{check_files_not_lossy_overwrite, check_not_lossy_overwrite, lossy_source};
 pub use load::{losses_summary, overwrite_losses};
 pub use mesh3d::{DEFAULT_FORMAT_3D, FORMATS_3D, format_3d_label};
 pub(crate) use mesh3d::{mesh_file_names, mesh_files};
@@ -131,8 +131,8 @@ mod tests_readonly;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use access::{Placed, copy_new, file_metadata};
 pub(crate) use access::{
-    absolute_path, create_dir, create_new_dir, document_path, file_created, file_stamp, read_file, read_file_head, shown_link, shown_path,
-    write_file, write_new_file,
+    absolute_path, create_dir, create_new_dir, document_path, file_created, file_stamp, naming_in_error, read_file, read_file_head, shown_link,
+    shown_path, write_file, write_new_file,
 };
 #[cfg(all(test, windows))]
 pub(crate) use access::{document_path_on, document_path_with};

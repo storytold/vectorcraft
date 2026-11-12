@@ -1426,6 +1426,7 @@ lighting	Light	Světlo
 	Rotate View Tool	Nástroj Otočení zobrazení
 	Trackpad Gesture to Rotate View	Otáčet zobrazení gestem na trackpadu
 	Hold a Tool Shortcut to Use the Tool Temporarily	Podržením klávesové zkratky nástroj dočasně použít
+	Show Bounding Box While Moving and Drawing	Zobrazit ohraničovací rámeček při přesouvání a kreslení
 	Rotate View	Otočení zobrazení
 	Rounded Rectangle Tool	Nástroj Zaoblený obdélník
 	Scale Tool	Nástroj Změna velikosti
@@ -2037,6 +2038,7 @@ digits	Malayalam	Malajálamské
 	Right-to-Left Paragraph Direction	Směr odstavce zprava doleva
 	Roman Hanging Punctuation	Visící latinková interpunkce
 	Korean Line Break Anywhere	Zalomení korejského řádku kdekoli
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Nastavení východoasijské sazby
 	Korean Composition Settings	Nastavení korejské sazby
 	Select a text object to edit its paragraph attributes.	Vyberte textový objekt, abyste mohli upravit atributy jeho odstavce.
@@ -3125,6 +3127,7 @@ antiAlias	Sharp	Ostré
 	Hide Code	Skrýt kód
 	Images:	Obrázky:
 	Include Metadata	Zahrnout metadata
+	Include Variable Data	Zahrnout data proměnných
 	Internal CSS	Interní CSS
 	Layer Names	Názvy vrstev
 	Minify	Minimalizovat
@@ -3609,6 +3612,7 @@ theme	Appearance	Motiv
 	Move Mesh Points	Přesunout body sítě
 	Move Spine Point	Přesunout bod páteře
 	Reshape Spine Segment	Přetvarovat segment páteře
+	Blend Easing	Náběh prolnutí
 	Reset with Mesh	Obnovit sítí
 	Reset with Warp	Obnovit pokřivením
 	Set Mesh Point Color	Nastavit barvu bodu sítě
@@ -5114,6 +5118,7 @@ imageTrace	Outline	Obrys
 @msg	unknown option `{path}.{k}`	neznámá možnost `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	neznámé přetisky `{o}` (preserve, simulate nebo discard)
 @msg	unknown panel `{raw}`	neznámý panel `{raw}`
+@msg	panels can't be shown in Presentation Mode	v režimu prezentace nelze panely zobrazit
 @msg	unknown preference `{key}`	neznámá předvolba `{key}`
 @msg	Preferences imported.	Předvolby byly importovány.
 @msg	not a preferences file: {e}	nejde o soubor předvoleb: {e}
@@ -6123,6 +6128,110 @@ axis	Y Axis	osa Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	živý efekt běží během vykreslování dokumentu, takže nemůže být `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	exportní zásuvný modul dostává vždy rozpočet exportu: klíč `budget` vynechte
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}“ žádá o velký výpočetní rozpočet (každé spuštění až {minutes} minut a {times}krát víc instrukcí než obvykle): musí ho schválit člověk v desktopové aplikaci, nebo předejte `allowHeavy: true` v relaci spuštěné s --allow-plugin-grants
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	`name` musí mít 1-64 tisknutelných znaků
+@msg	`version`, `description` or `author` is too long	`version`, `description` nebo `author` je příliš dlouhé
+@msg	`warnings` must be a list of strings	`warnings` musí být seznam řetězců
+@msg	`{k}` must be one of {_1}	`{k}` musí být jedno z {_1}
+@msg	`{k}` must be {what}	`{k}` musí být {what}
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	exportní zásuvný modul deklaruje 1 až {MAX_EXTENSIONS} `extensions`
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	mimo skupiny smí být nejvýše {MAX_UNGROUPED} parametrů: ostatním přiřaďte `group`
+@msg	can't encode the input	vstup nelze zakódovat
+@msg	expected {"dataBase64"}	očekáváno {"dataBase64"}
+@msg	expected {"objects"}	očekáváno {"objects"}
+@msg	export `{name}`: {e}	export `{name}`: {e}
+@msg	extension {e} is listed twice	přípona {e} je uvedena dvakrát
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	přípona {e}: použijte 1-16 malých písmen a číslic, bez tečky
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	neplatné ID {_1}: použijte 1-64 znaků z A-Z a-z 0-9 . _ -
+@msg	invalid parameter name {k}	neplatný název parametru {k}
+@msg	manifest is not UTF-8	manifest není v kódování UTF-8
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	manifest je příliš dlouhý (limit {MAX_MANIFEST_BYTES} bajtů)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	manifest má {_1} bajtů (limit {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	modul má {_1} bajtů (limit {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	vyžaduje schválení: žádá o {0}, což uživatel povolí, když ho instaluje samostatně
+@msg	not JSON: {e}	není JSON: {e}
+@msg	not a WebAssembly binary (missing \0asm header)	není binární soubor WebAssembly (chybí hlavička \0asm)
+@msg	parameter `{k}`: {what}	parametr `{k}`: {what}
+@msg	parameter `{name}`: {what}	parametr `{name}`: {what}
+@msg	plug-in parameters must be a JSON object	parametry zásuvného modulu musí být objekt JSON
+@msg	the module must export its linear memory as `memory`	modul musí exportovat svou lineární paměť jako `memory`
+@msg	the objects to change are no longer in the document	objekty ke změně už v dokumentu nejsou
+@msg	the runtime panicked	běhové prostředí havarovalo
+@msg	unexpected host trap	neočekávaná chyba (trap) hostitele
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version vrátila {v}; tento hostitel implementuje verzi {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc vrátila 0 (nedostatek paměti)
+@msg	vc_alloc returned a block outside memory	vc_alloc vrátila blok mimo paměť
+@msg	vc_run returned error code {packed}	vc_run vrátila chybový kód {packed}
+@msg	{_1} is not a file	{_1} není soubor
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} má {_2} bajtů (limit {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objektů (limit {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what} ukazuje mimo paměť
+@msg	`angle` must be a number	`angle` musí být číslo
+@msg	`aspect` must be from 0.01 to 100	`aspect` musí být od 0.01 do 100
+@msg	`cap` must be "butt", "round" or "square"	`cap` musí být "butt", "round" nebo "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` musí být "nonzero" nebo "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` musí být adresa https:// o nejvýše {MAX_HELP_URL} bajtech
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` musí mít 1-{MAX_HELP} tisknutelných znaků
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` musí být ID efektu o 1-{MAX_EFFECT_ID} bajtech
+@msg	`id` must be the id of an input object	`id` musí být ID vstupního objektu
+@msg	`join` must be "miter", "round" or "bevel"	`join` musí být "miter", "round" nebo "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` a `group` musí mít 1-{MAX_LABEL} tisknutelných znaků
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` musí být 1-{MAX_TEXT} a výchozí hodnota nesmí být delší
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` a `maxItems` musí být 0-{MAX_LIST}, `maxItems` alespoň 1 a výchozí hodnota musí mít tolik položek
+@msg	`name` must be a string	`name` musí být řetězec
+@msg	`opacity` must be a number	`opacity` musí být číslo
+@msg	`type` must be "path" or "compound"	`type` musí být "path" nebo "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` musí mít 1-{MAX_UNIT} tisknutelných znaků
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` musí uvádět 1 až {MAX_CONDITION_VALUES} hodnot pro `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` uvádí `{other}`, což není parametr deklarovaný před tímto
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` smí uvádět nejvýše {MAX_CONDITIONS} parametrů
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` přebírá hodnoty `{other}`, a to zaškrtávacího políčka nebo volby
+@msg	`visible` must be true or false	`visible` musí být true nebo false
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` musí být číslo od {_1} do {_2}
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` musí být pole s nejvýše {MAX_ITEMS} položkami
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	výchozí barva musí být objekt barvy nebo šestnáctkový řetězec, například "#3a7bd5"
+@msg	a color object or a hex string such as "#3a7bd5"	objekt barvy nebo šestnáctkový řetězec, například "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	volný přechod obsahuje nejvýše {MAX_ITEMS} bodů a čar
+@msg	a freeform gradient line names a point it doesn't have	čára volného přechodu uvádí bod, který přechod nemá
+@msg	a gradient needs 1-{MAX_ITEMS} stops	přechod potřebuje 1-{MAX_ITEMS} zarážek
+@msg	a list of numbers	seznam čísel
+@msg	a list of {min_items} to {max_items} numbers	seznam {min_items} až {max_items} čísel
+@msg	a new object needs a `path`	nový objekt potřebuje `path`
+@msg	a number	číslo
+@msg	a painted live effect returns only `objects`	malující živý efekt vrací jen `objects`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	část malujícího živého efektu má jen `path`, `fillRule`, `fills` a `strokes`
+@msg	a read-only object was left out	objekt jen pro čtení byl vynechán
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	objekt jen pro čtení byl vynechán: vraťte ho jako samotné {"id"} nebo tak, jak byl předán
+@msg	a string	řetězec
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	tah má jen `paint`, `width`, `join`, `cap` a `miterLimit`
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	tah musí být {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
+@msg	an effect must be {"id", "params"?, "visible"?}	efekt musí být {"id", "params"?, "visible"?}
+@msg	an effect on a fill returns only `fills`	efekt na výplni vrací jen `fills`
+@msg	an effect on a stroke returns only `strokes`	efekt na tahu vrací jen `strokes`
+@msg	an object must be a JSON object	objekt musí být objekt JSON
+@msg	bad range	neplatný rozsah
+@msg	choices must be 1-64 non-empty, printable strings	volby musí být 1-64 neprázdných tisknutelných řetězců
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	souřadnice mimo rozsah (limit ±{MAX_COORD} pt)
+@msg	default is not one of the options	výchozí hodnota není jednou z možností
+@msg	each piece needs a `path`	každá část potřebuje `path`
+@msg	is listed twice	je uveden dvakrát
+@msg	pattern transform out of range	transformace vzorku mimo rozsah
+@msg	read-only field '{field}' changed	pole jen pro čtení '{field}' bylo změněno
+@msg	stops must be in order of `offset`	zarážky musí být seřazeny podle `offset`
+@msg	the document has no pattern {pattern}	dokument nemá vzorek {pattern}
+@msg	the document has no swatch {n}	dokument nemá vzorek barvy {n}
+@msg	the output	výstup
+@msg	the path has no anchor points	cesta nemá žádné kotevní body
+@msg	too many anchor points (limit {MAX_ANCHORS})	příliš mnoho kotevních bodů (limit {MAX_ANCHORS})
+@msg	true or false	true nebo false
+@msg	unknown key `{k}`; the keys here are {_1}	neznámý klíč `{k}`; zde platné klíče jsou {_1}
+@msg	{_1} is listed twice	{_1} je uveden dvakrát
+@msg	{_1} is not the id of an input object	{_1} není ID vstupního objektu
+@msg	{_1} is read-only	{_1} je jen pro čtení
+@msg	{what} must be from {lo} to {hi}	{what} musí být od {lo} do {hi}
+@msg	a color component	složka barvy
+@msg	a plate	deska
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Nainstalovat „{name}“, který žádá o tato oprávnění?
 	ID: {id}	ID: {id}
@@ -6336,6 +6445,11 @@ axis	Y Axis	osa Y
 	User Brush Library 9	Uživatelská knihovna štětců 9
 	User Brush Library 10	Uživatelská knihovna štětců 10
 	Art Ribbons	Obrazové stuhy
+	Ink and Wash	Tuš a lavírování
+	Tapered Ink	Zužující se tuš
+	Brush Pen	Štětcový fix
+	Soft Wash	Jemná lavírka
+	Pooling Wash	Lavírka s okrajem
 	Zigzag	Cikcak
 	Burst Ray	Paprsek nárazu
 	Dash Trail	Čárkovaná stopa

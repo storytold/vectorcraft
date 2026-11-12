@@ -959,3 +959,142 @@ fn a_preview_stays_put_while_the_menu_is_still() {
     assert_eq!(picked, Some(FontPick::EndPreview));
     assert_eq!(font(&app), "Inter");
 }
+
+/// What an open font menu drew: each text with its rectangle and clip rectangle, the rectangles of
+/// the samples, and the menu's rectangle.
+struct Drawn {
+    texts: Vec<(String, egui::Rect, egui::Rect)>,
+    samples: Vec<egui::Rect>,
+    menu: egui::Rect,
+}
+
+impl Drawn {
+    fn text(&self, label: &str) -> egui::Rect {
+        self.texts.iter().find(|(t, ..)| t == label).map(|(_, r, _)| *r).unwrap_or_else(|| panic!("{label} is drawn"))
+    }
+
+    /// The filters' rows, each by the centers of its first and last chips, in the UI's language.
+    fn filter_rows(&self) -> Vec<(f32, f32)> {
+        use crate::i18n::{current, t, tr_ctx};
+        let variable = tr_ctx(current(), "font-technology", "Variable");
+        [(t("All Scripts"), t("Thai")), ("★", t("Rounded")), (t("Script / Brush"), t("Decorative")), (t("Font Technology"), variable)]
+            .map(|(first, last)| (self.text(first).center().y, self.text(last).center().y))
+            .to_vec()
+    }
+
+    /// The filters lie on their four rows, none wrapped.
+    fn assert_filter_rows(&self) {
+        let rows = self.filter_rows();
+        for (i, (first, last)) in rows.iter().enumerate() {
+            assert!((first - last).abs() < 1.0, "filter row {i} wraps: its first chip at {first}, its last at {last}");
+        }
+        assert!(rows.windows(2).all(|w| w[1].0 > w[0].0 + 4.0), "four rows of filters, in order: {rows:?}");
+    }
+}
+
+/// Opens the font menu of a field `width` wide whose left edge is `left` points into a window of
+/// size `screen`, draws it until it settles and its samples are rendered, and returns what the
+/// last frame drew.
+fn open_menu(id: &str, left: f32, width: f32, screen: egui::Vec2) -> Drawn {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let field = egui::Rect::from_min_size(egui::pos2(left, 10.0), egui::vec2(width, 30.0));
+    let frame = |events: Vec<egui::Event>| {
+        let input = egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, screen)), ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(field), |ui| {
+                font_menu(ui, id, "Inter", width, None, MenuLook::default());
+            });
+        });
+        out.textures_delta.clear();
+        out.shapes
+    };
+    let click = field.min + egui::vec2(10.0, 10.0);
+    let button = |pressed| egui::Event::PointerButton { pos: click, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(vec![]);
+    frame(vec![egui::Event::PointerMoved(click), button(true)]);
+    frame(vec![button(false)]);
+    for _ in 0..5 {
+        frame(vec![]);
+    }
+    crate::font_menu::wait_for_samples(&ctx);
+    let shapes = frame(vec![]);
+    let mut texts = vec![];
+    let mut samples = vec![];
+    for s in &shapes {
+        match &s.shape {
+            egui::Shape::Text(t) => texts.push((t.galley.text().to_string(), egui::Rect::from_min_size(t.pos, t.galley.size()), s.clip_rect)),
+            egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default() => samples.push(m.calc_bounds()),
+            _ => {}
+        }
+    }
+    let mut drawn = Drawn { texts, samples, menu: egui::Rect::NOTHING };
+    let filter = drawn.text(crate::i18n::t("Any Kind")).center();
+    drawn.menu = ctx.layer_id_at(filter).and_then(|l| ctx.memory(|m| m.area_rect(l.id))).expect("the menu is open");
+    drawn
+}
+
+/// A narrow field, such as the Control bar's, opens a menu wide enough for the filters on their
+/// rows and for the families' names, each drawn whole beside its sample.
+#[test]
+fn a_narrow_field_opens_a_menu_wide_enough_for_the_filters_and_names() {
+    let field = 115.0;
+    let d = open_menu("test-narrow", 20.0, field, egui::vec2(1200.0, 800.0));
+    d.assert_filter_rows();
+    assert!(d.menu.width() > 2.0 * field, "the menu is {} wide", d.menu.width());
+    let families = FontDb::global().menu_family_list();
+    // The field shows the current family too: only the names in the menu's rows.
+    let names: Vec<_> = d.texts.iter().filter(|(t, r, _)| r.top() > d.text("Variable").bottom() && families.iter().any(|f| f == t)).collect();
+    assert!(names.iter().any(|(_, r, _)| r.width() > field / 2.0), "a name wider than half the field is listed: {names:?}");
+    // The menu widens itself for names up to its limit; a longer name is cut.
+    for (name, r, clip) in names.iter().filter(|(_, r, _)| r.width() <= crate::font_menu::NAME_MAX) {
+        assert!(r.right() <= clip.right() + 0.5, "{name} ends at {} and is cut at {}", r.right(), clip.right());
+    }
+}
+
+/// In every UI language the filters keep their four rows unwrapped when the window has room for
+/// them: the longest translated labels set the menu's width.
+#[test]
+fn the_filter_rows_stay_whole_in_every_language() {
+    for lang in crate::i18n::Lang::all() {
+        crate::i18n::set_current(lang);
+        let d = open_menu(&format!("test-lang-{}", lang.code()), 20.0, 115.0, egui::vec2(2400.0, 900.0));
+        let rows = d.filter_rows();
+        for (i, (first, last)) in rows.iter().enumerate() {
+            assert!((first - last).abs() < 1.0, "{}: filter row {i} wraps in a menu {} wide", lang.code(), d.menu.width());
+        }
+    }
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+}
+
+/// A menu opened near the window's right edge is wider than its field and stays in the window.
+#[test]
+fn a_menu_wider_than_its_field_stays_in_the_window() {
+    let screen = egui::vec2(700.0, 800.0);
+    let d = open_menu("test-edge", 600.0, 90.0, screen);
+    d.assert_filter_rows();
+    assert!(d.menu.width() > 200.0, "the menu is {} wide", d.menu.width());
+    assert!(d.menu.left() >= -0.5 && d.menu.right() <= screen.x + 0.5, "the menu at {:?} leaves the window", d.menu);
+}
+
+/// A docked panel's field is as wide as the panel: its menu takes that width, with the filters on
+/// the same rows as a narrow field's menu.
+#[test]
+fn a_wide_fields_menu_takes_its_width_with_the_same_filter_rows() {
+    let field = 480.0;
+    let d = open_menu("test-docked", 20.0, field, egui::vec2(1200.0, 800.0));
+    d.assert_filter_rows();
+    // The field is drawn 4 points narrower than its width; the menu's frame adds its margins.
+    assert!(d.menu.width() >= field - 4.0 && d.menu.width() < field + 40.0, "the menu is {} wide", d.menu.width());
+}
+
+/// Each sample takes its row's whole height.
+#[test]
+fn samples_fill_their_rows_height() {
+    let d = open_menu("test-samples", 20.0, 260.0, egui::vec2(1200.0, 800.0));
+    assert!(!d.samples.is_empty(), "samples are drawn");
+    let row = MenuLook::default().row;
+    for s in &d.samples {
+        assert!((s.height() - row).abs() < 0.5, "a sample {} high in a row {row} high", s.height());
+    }
+}

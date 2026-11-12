@@ -723,7 +723,7 @@ struct Host {
     /// order: the error's mark ([`HostError::Marked`]) is its index.
     eval_failures: RefCell<Vec<(Arc<str>, u32, u32)>>,
     /// The realm's tag for the script ([`Realm::script_tag`]) once the run has started it, and
-    /// [`vectorcraft_js::UNKNOWN_SOURCE`] before.
+    /// [`vectorcraft_js::UNKNOWN_SOURCE`] before or when the script did not compile.
     script_tag: Cell<u32>,
     /// The run's name as its report gives it, which [`Host::name`] shortens for console lines.
     report_name: Arc<str>,
@@ -1865,7 +1865,10 @@ impl Session {
                     .and_then(|()| if fresh { files::install(&mut realm, &link) } else { realm.reset_folder_current() })
                     .and_then(|()| {
                         let r = realm.start(&expanded.source);
-                        host.script_tag.set(realm.script_tag());
+                        // Source that does not compile defines no code, so its map is not kept.
+                        if !matches!(&r, Err(e) if e.kind == RunErrorKind::Syntax) {
+                            host.script_tag.set(realm.script_tag());
+                        }
                         r
                     })
                     .map_err(|e| located(&host, &realm, &e))
