@@ -6435,9 +6435,12 @@ anchor	Points:	Pisteet:
 @msg	{label} must be a number	{label} on oltava luku
 @msg	{label} must be a number of at least 0.1	{label} on oltava vähintään 0,1
 	Advanced Character Formats	Merkkien lisämuotoilut
+	Basic Paragraph Formats	Kappaleiden perusmuotoilut
+	Composition	Ladonta
 	Horizontal Scale	Vaakaskaalaus
 	Vertical Scale	Pystyskaalaus
 @msg	{label} must be a number from {min} to {max}	{label} on oltava luku {min} ja {max} väliltä
+@msg	{label} must be a whole number from {min} to {max}	{label} on oltava kokonaisluku {min} ja {max} väliltä
 	Character Color	Merkin väri
 	OpenType Features	OpenType-ominaisuudet
 	Stylistic Sets	Tyylisarjat

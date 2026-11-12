@@ -396,6 +396,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "paraStyle.apply",
     "paraStyle.delete",
     "paraStyle.duplicate",
+    "paraStyle.edit",
     "paraStyle.list",
     "paraStyle.new",
     "paraStyle.redefine",

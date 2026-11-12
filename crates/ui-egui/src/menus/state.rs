@@ -266,11 +266,18 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.missingFontsDialog" => !cfg!(target_arch = "wasm32") && app.session.active().is_some(),
         "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
-        "ui.graphicStyleOptions" | "ui.charStyleOptions" | "ui.newCharStyle" | "ui.newParaStyle" => app.session.active().is_some(),
+        "ui.graphicStyleOptions" | "ui.charStyleOptions" | "ui.paraStyleOptions" | "ui.newCharStyle" | "ui.newParaStyle" => {
+            app.session.active().is_some()
+        }
         "ui.charStyleOptions.resetPanel" => app.ui.dialog.as_ref().is_some_and(|d| {
             (d.kind == crate::dialogs::char_style_options::KIND || (d.kind == crate::dialogs::new_text_style::KIND && !d.bool("__para")))
                 && crate::dialogs::char_style_options::can_reset(d)
         }),
+        "ui.paraStyleOptions.resetPanel" => app
+            .ui
+            .dialog
+            .as_ref()
+            .is_some_and(|d| crate::dialogs::para_style_options::is_paragraph_dialog(d) && crate::dialogs::para_style_options::can_reset(d)),
         "ui.newArtboard" | "artboard.selectAll" => app.session.active().is_some(),
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.newBrush" => app.session.active().is_some(),

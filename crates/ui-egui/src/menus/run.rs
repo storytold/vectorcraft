@@ -693,6 +693,11 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             None => Err("missing `name`".into()),
         },
         "ui.charStyleOptions.resetPanel" => crate::dialogs::char_style_options::reset_panel(app),
+        "ui.paraStyleOptions" => match s("name") {
+            Some(name) => crate::dialogs::para_style_options::open(app, &name),
+            None => Err("missing `name`".into()),
+        },
+        "ui.paraStyleOptions.resetPanel" => crate::dialogs::para_style_options::reset_panel(app),
         "ui.newCharStyle" => crate::panels::text_styles::open_new(app, crate::panels::text_styles::Kind::Char),
         "ui.newParaStyle" => crate::panels::text_styles::open_new(app, crate::panels::text_styles::Kind::Para),
         "ui.symbolOptions" => {

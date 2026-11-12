@@ -6377,9 +6377,12 @@ anchor	Points:	Punts:
 @msg	{label} must be a number	{label} ha de ser un nombre
 @msg	{label} must be a number of at least 0.1	{label} ha de ser un nombre de com a mínim 0,1
 	Advanced Character Formats	Formats avançats de caràcters
+	Basic Paragraph Formats	Formats bàsics de paràgraf
+	Composition	Composició
 	Horizontal Scale	Escala horitzontal
 	Vertical Scale	Escala vertical
 @msg	{label} must be a number from {min} to {max}	{label} ha de ser un nombre de {min} a {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} ha de ser un nombre enter de {min} a {max}
 	Character Color	Color del caràcter
 	OpenType Features	Funcions OpenType
 	Stylistic Sets	Jocs estilístics

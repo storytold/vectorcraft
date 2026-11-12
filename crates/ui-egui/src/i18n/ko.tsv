@@ -5986,9 +5986,12 @@ anchor	Points:	포인트:
 @msg	{label} must be a number	{label}은(는) 숫자여야 합니다
 @msg	{label} must be a number of at least 0.1	{label}은(는) 0.1 이상의 숫자여야 합니다
 	Advanced Character Formats	고급 문자 형식
+	Basic Paragraph Formats	기본 단락 형식
+	Composition	조판
 	Horizontal Scale	가로 비율
 	Vertical Scale	세로 비율
 @msg	{label} must be a number from {min} to {max}	{label}은(는) {min}에서 {max} 사이의 숫자여야 합니다
+@msg	{label} must be a whole number from {min} to {max}	{label}은(는) {min}에서 {max} 사이의 정수여야 합니다
 	Character Color	문자 색상
 	OpenType Features	OpenType 기능
 	Stylistic Sets	스타일 세트
