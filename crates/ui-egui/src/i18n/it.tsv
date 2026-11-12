@@ -5319,6 +5319,11 @@ lighting	Light	Luce
 	Softness	Morbidezza
 	Ambient Light	Luce ambientale
 	Light behind the object	Luce dietro l'oggetto
+	Shadows	Ombre
+	Distance from Object	Distanza dall'oggetto
+	Shadow Bounds	Limiti dell'ombra
+	Behind Object	Dietro l'oggetto
+	Below Object	Sotto l'oggetto
 	3D Lighting Preset	Predefinito illuminazione 3D
 	Standard	Standard
 	Diffuse	Diffusa

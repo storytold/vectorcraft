@@ -5650,6 +5650,11 @@ mark-style	Japanese	Japonesas
 	Softness	Suavidad
 	Ambient Light	Luz ambiental
 	Light behind the object	Luz detrás del objeto
+	Shadows	Sombras
+	Distance from Object	Distancia del objeto
+	Shadow Bounds	Límites de la sombra
+	Behind Object	Detrás del objeto
+	Below Object	Debajo del objeto
 	3D Lighting Preset	Ajuste preestablecido de iluminación 3D
 	Standard	Estándar
 	Diffuse	Difusa

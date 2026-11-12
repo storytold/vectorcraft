@@ -5388,6 +5388,11 @@ digits	Malayalam	Μαλαγιάλαμ
 	 to set spacing and orientation	 για ορισμό απόστασης και προσανατολισμού
 	:	:
 	Light behind the object	Φως πίσω από το αντικείμενο
+	Shadows	Σκιές
+	Distance from Object	Απόσταση από το αντικείμενο
+	Shadow Bounds	Όρια σκιάς
+	Behind Object	Πίσω από το αντικείμενο
+	Below Object	Κάτω από το αντικείμενο
 	3D Lighting Preset	Προεπιλογή φωτισμού 3D
 	Standard	Τυπικός
 	Diffuse	Διάχυτος

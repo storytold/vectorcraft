@@ -2259,6 +2259,11 @@ digits	Malayalam	Malaiàlam
 	Ligatures are off while the text is tracked.	Les lligadures estan desactivades mentre el text té espaiat.
 	Light	Clar
 	Light behind the object	Llum darrere de l’objecte
+	Shadows	Ombres
+	Distance from Object	Distància de l’objecte
+	Shadow Bounds	Límits de l’ombra
+	Behind Object	Darrere de l’objecte
+	Below Object	Sota l’objecte
 	Light Blue	Blau clar
 	Light Red	Vermell clar
 	Light Direction	Direcció de la llum

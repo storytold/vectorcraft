@@ -5578,6 +5578,11 @@ mark-style	Japanese	Japanski
 	Softness	Mekoća
 	Ambient Light	Ambijentalno svjetlo
 	Light behind the object	Svjetlo iza objekta
+	Shadows	Sjene
+	Distance from Object	Udaljenost od objekta
+	Shadow Bounds	Granice sjene
+	Behind Object	Iza objekta
+	Below Object	Ispod objekta
 	3D Lighting Preset	Predložak 3D osvjetljenja
 	Standard	Standardno
 	Diffuse	Difuzno

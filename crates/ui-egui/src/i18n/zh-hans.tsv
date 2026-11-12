@@ -5581,6 +5581,11 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	环境光
 	Light behind the object	光源位于对象后方
+	Shadows	阴影
+	Distance from Object	与对象的距离
+	Shadow Bounds	阴影边界
+	Behind Object	对象后方
+	Below Object	对象下方
 	3D Lighting Preset	3D 光照预设
 	Standard	标准
 	Diffuse	漫射

@@ -5230,6 +5230,11 @@ mark-style	Japanese	Japansk
 	Softness	Blødhed
 	Ambient Light	Omgivelseslys
 	Light behind the object	Lys bag objektet
+	Shadows	Skygger
+	Distance from Object	Afstand fra objektet
+	Shadow Bounds	Skyggegrænser
+	Behind Object	Bag objektet
+	Below Object	Under objektet
 	3D Lighting Preset	Forudindstilling for 3D-belysning
 	Standard	Standard
 	Diffuse	Diffust

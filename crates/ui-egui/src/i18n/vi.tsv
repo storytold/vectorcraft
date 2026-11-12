@@ -5302,6 +5302,11 @@ theme	Appearance	Giao diện
 	Softness	Độ mềm
 	Ambient Light	Ánh sáng môi trường
 	Light behind the object	Ánh sáng phía sau đối tượng
+	Shadows	Bóng đổ
+	Distance from Object	Khoảng cách từ đối tượng
+	Shadow Bounds	Giới hạn bóng
+	Behind Object	Phía sau đối tượng
+	Below Object	Bên dưới đối tượng
 	3D Lighting Preset	Thiết lập sẵn ánh sáng 3D
 	Standard	Tiêu chuẩn
 	Diffuse	Khuếch tán

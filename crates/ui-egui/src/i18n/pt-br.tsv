@@ -4570,6 +4570,11 @@ axis	Both	Ambos
 	Softness	Suavidade
 	Ambient Light	Luz ambiente
 	Light behind the object	Luz atrás do objeto
+	Shadows	Sombras
+	Distance from Object	Distância do objeto
+	Shadow Bounds	Limites da sombra
+	Behind Object	Atrás do objeto
+	Below Object	Abaixo do objeto
 	3D Lighting Preset	Predefinição de iluminação 3D
 	Standard	Padrão
 	Diffuse	Difusa

@@ -5548,6 +5548,11 @@ mark-style	Japanese	Japońskie
 	Softness	Miękkość
 	Ambient Light	Światło otoczenia
 	Light behind the object	Światło za obiektem
+	Shadows	Cienie
+	Distance from Object	Odległość od obiektu
+	Shadow Bounds	Granice cienia
+	Behind Object	Za obiektem
+	Below Object	Pod obiektem
 	3D Lighting Preset	Ustawienie oświetlenia 3D
 	Standard	Standardowe
 	Diffuse	Rozproszone

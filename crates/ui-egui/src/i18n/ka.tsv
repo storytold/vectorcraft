@@ -5271,6 +5271,11 @@ imageTrace	Outline	კონტური
 	In the File	ფაილში
 	Keys	კლავიშები
 	Light behind the object	სინათლე ობიექტის უკან
+	Shadows	ჩრდილები
+	Distance from Object	მანძილი ობიექტიდან
+	Shadow Bounds	ჩრდილის საზღვრები
+	Behind Object	ობიექტის უკან
+	Below Object	ობიექტის ქვეშ
 	3D Lighting Preset	3D განათების წინასწარი პარამეტრი
 	Standard	სტანდარტული
 	Diffuse	დიფუზური

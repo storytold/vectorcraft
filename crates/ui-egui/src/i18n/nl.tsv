@@ -5242,6 +5242,11 @@ mark-style	Japanese	Japans
 	Softness	Zachtheid
 	Ambient Light	Omgevingslicht
 	Light behind the object	Licht achter het object
+	Shadows	Schaduwen
+	Distance from Object	Afstand tot object
+	Shadow Bounds	Schaduwgrenzen
+	Behind Object	Achter object
+	Below Object	Onder object
 	3D Lighting Preset	Voorinstelling 3D-belichting
 	Standard	Standaard
 	Diffuse	Diffuus

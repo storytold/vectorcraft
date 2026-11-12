@@ -2476,6 +2476,11 @@ antiAlias	Sharp	शार्प
 	Ligatures are off while the text is tracked.	टेक्स्ट पर ट्रैकिंग लागू होने पर लिगेचर ऑफ़ रहते हैं।
 	Light	लाइट
 	Light behind the object	ऑब्जेक्ट के पीछे प्रकाश
+	Shadows	छायाएँ
+	Distance from Object	ऑब्जेक्ट से दूरी
+	Shadow Bounds	छाया सीमाएँ
+	Behind Object	ऑब्जेक्ट के पीछे
+	Below Object	ऑब्जेक्ट के नीचे
 	Light Blue	हल्का नीला
 	Light Direction	लाइट की दिशा
 	Light Gray	हल्का ग्रे

@@ -5397,6 +5397,11 @@ theme	Appearance	Görünüm
 	Softness	Yumuşaklık
 	Ambient Light	Ortam Işığı
 	Light behind the object	Nesnenin arkasındaki ışık
+	Shadows	Gölgeler
+	Distance from Object	Nesneden uzaklık
+	Shadow Bounds	Gölge sınırları
+	Behind Object	Nesnenin arkasında
+	Below Object	Nesnenin altında
 	Registration:	Kayıt:
 	Dimension	Boyut
 	Drawing : real size — 1:10 labels 1 unit on the page as 10.	Çizim : Gerçek boyut — 1:10 etiketler sayfada 10 adet olarak 1 adettir.
