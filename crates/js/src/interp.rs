@@ -927,7 +927,7 @@ impl Interp {
             Op::XmlFilterNext(t) => self.op_xml_filter_next(t),
             Op::XmlFilterTest => self.op_xml_filter_test(),
             Op::XmlFilterEnd => self.op_xml_filter_end(),
-            Op::ForEachValue => self.op_for_each_value(),
+            Op::ForEachValue(n) => self.op_for_each_value(n as usize),
             Op::SetDefaultNamespace => self.op_set_default_namespace(),
             Op::Return | Op::ReturnCompletion => internal("return reached the dispatcher"),
         }

@@ -173,8 +173,9 @@ pub(crate) enum Op {
     XmlFilterTest,
     /// `state` → the XMLList of the items kept.
     XmlFilterEnd,
-    /// `iterator name` → `iterator value`: the value under the name a `for each` got.
-    ForEachValue,
+    /// `iterator name x₁…xₙ` → `iterator name x₁…xₙ value`: the value under the name a `for each`
+    /// got, read after the `n` values its target pushed.
+    ForEachValue(u32),
     /// `value` → nothing: sets the default XML namespace of the running code.
     SetDefaultNamespace,
 }
@@ -312,7 +313,7 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::XmlEscape(_) | Op::XmlScopeGet | Op::XmlFilterStart | Op::XmlFilterEnd => e(1, 1),
         Op::XmlLiteral { parts, .. } => e(parts, 1),
         Op::XmlScopeRef => e(1, 2),
-        Op::ForEachValue => e(2, 2),
+        Op::ForEachValue(n) => e(n + 2, n + 3),
         Op::SetDefaultNamespace => e(1, 0),
     })
 }

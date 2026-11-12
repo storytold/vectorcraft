@@ -717,6 +717,14 @@ fn bare_scope_for_targets_assign_each_iteration() {
 }
 
 #[test]
+fn for_each_evaluates_its_target_before_reading_the_value() {
+    truth("var o = { p: 1 }; var t = {}; for each ((o.p = 2, t).v in o); t.v === 2");
+    truth("var o = { p: 1 }; var t = {}; for each (t[(o.p = 3, 'w')] in o); t.w === 3");
+    truth("var x = <a k=''/>; var o = { p: 1 }; with (x) { for each (@[(o.p = 2, 'k')] in o); } x.@k == '2'");
+    truth("var o = { p: 1, q: 2 }; var s = ''; for each (var v in o) s += v; var t; for each (t in o) s += t; s === '1212' && t === 2");
+}
+
+#[test]
 fn bare_scope_targets_need_e4x_option() {
     for src in ["@a = 1", "ns::a = 1", "@a += 1", "++@a", "@a--", "for (@a in o);", "for each (@a in o);", "\"use strict\"; @a = 1"] {
         assert!(parse(src, &Options::default()).is_err(), "{src}");

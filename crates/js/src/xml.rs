@@ -2895,9 +2895,9 @@ impl Interp {
         self.replace(1, Value::Object(out))
     }
 
-    pub(crate) fn op_for_each_value(&mut self) -> JsResult<()> {
-        let name = self.peek(0)?;
-        let Value::Object(iter) = self.peek(1)? else { return Err(Abrupt::Internal("for-in iterator is not an object".into())) };
+    pub(crate) fn op_for_each_value(&mut self, above: usize) -> JsResult<()> {
+        let name = self.peek(above)?;
+        let Value::Object(iter) = self.peek(above + 1)? else { return Err(Abrupt::Internal("for-in iterator is not an object".into())) };
         let object = match self.heap.object(iter).map(|o| &o.class) {
             Some(Class::ForIn(state)) => state.object,
             _ => return Err(Abrupt::Internal("not a for-in iterator".into())),
@@ -2909,7 +2909,7 @@ impl Interp {
             }
             None => Value::Undefined,
         };
-        self.replace(1, v)
+        self.push(v)
     }
 
     /// The URI of a Namespace value or of its string form.

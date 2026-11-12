@@ -497,15 +497,20 @@ impl<'a> FnCompiler<'a> {
         let brk = self.new_label();
         self.bind(head);
         self.jump(Op::ForInNext, brk);
-        if each {
-            self.emit(Op::ForEachValue);
-        }
         match target {
             ForInTarget::Var(d) => {
                 let n = self.var_name(&d.name.name);
+                if each {
+                    self.emit(Op::ForEachValue(0));
+                }
                 self.emit(Op::SetVar(n));
             }
+            ForInTarget::Expr(e) if each => self.store_value_to(*e)?,
             ForInTarget::Expr(e) => self.store_key_to(*e)?,
+        }
+        if each {
+            // The value; the name under it goes next.
+            self.emit(Op::Pop);
         }
         self.emit(Op::Pop);
         self.loop_body(body, labels, brk, head)?;
@@ -546,6 +551,46 @@ impl<'a> FnCompiler<'a> {
             _ => {
                 self.expr(target)?;
                 self.emit(Op::Pop);
+                self.throw_invalid_target();
+            }
+        }
+        Ok(())
+    }
+
+    /// Assigns the value under the name on top of the stack to a `for each` target expression,
+    /// leaving the name and then the value on top. The target is evaluated before the value is
+    /// read (ECMA-357 section 12.3).
+    fn store_value_to(&mut self, target: ExprId) -> CResult<()> {
+        let target = self.ast.unparenthesized(target);
+        self.at(self.ast.expr_span(target).start);
+        match self.ast.expr(target) {
+            Some(Expr::Ident(name)) => {
+                let n = self.var_name(name);
+                self.emit(Op::ForEachValue(0));
+                self.emit(Op::SetVar(n));
+            }
+            Some(Expr::Member { object, property }) => {
+                self.expr(*object)?;
+                self.emit(Op::ForEachValue(1));
+                let n = self.name_key(key_of(&property.name));
+                self.emit(Op::SetMember(n));
+            }
+            Some(Expr::Index { object, index }) => {
+                self.expr(*object)?;
+                self.expr(*index)?;
+                self.emit(Op::ToKey);
+                self.emit(Op::ForEachValue(2));
+                self.emit(Op::SetIndex);
+            }
+            Some(Expr::XmlScopeName(name)) => {
+                self.xml_scope_ref(target, *name)?;
+                self.emit(Op::ForEachValue(2));
+                self.emit(Op::SetIndex);
+            }
+            _ => {
+                self.expr(target)?;
+                self.emit(Op::Pop);
+                self.emit(Op::ForEachValue(0));
                 self.throw_invalid_target();
             }
         }
