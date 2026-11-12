@@ -954,6 +954,14 @@ font-technology	Variable	Biến thiên
 	Disable Auto Add/Delete	Tắt tự động thêm/xóa
 	Disable Opacity Mask	Tắt mặt nạ độ mờ
 	Discard	Loại bỏ
+	Preserve	Bảo lưu
+	TIFF (Black & White)	TIFF (Đen trắng)
+	TIFF (8-bit Color)	TIFF (Màu 8 bit)
+	High Resolution	Độ phân giải cao
+	Medium Resolution	Độ phân giải vừa
+	Low Resolution	Độ phân giải thấp
+	Language Level 2	Cấp ngôn ngữ 2
+	Language Level 3	Cấp ngôn ngữ 3
 	Discard Empty Type	Loại bỏ chữ trống
 	Discard Recovered Documents	Loại bỏ tài liệu đã phục hồi
 	Discard White Overprint in Output	Loại bỏ in chồng màu trắng khi xuất
@@ -2867,6 +2875,7 @@ diagnostics	ui	giao diện
 	Press 	Nhấn 
 	Pressure	Áp lực
 	Preview	Xem trước
+	Preview:	Xem trước:
 	Preview All Layers	Xem trước tất cả lớp
 	Preview in Browser	Xem trước trong trình duyệt
 	Preview in Browser needs the desktop app (the web downloads files instead)	Xem trước trong trình duyệt cần ứng dụng máy tính để bàn (web sẽ tải tệp xuống thay thế)

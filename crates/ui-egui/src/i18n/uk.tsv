@@ -813,6 +813,14 @@ font-technology	Variable	Варіативні
 	Disable Auto Add/Delete	Вимкнути авто-додавання/видалення
 	Disable Opacity Mask	Вимкнути маску непрозорості
 	Discard	Відкинути
+	Preserve	Зберігати
+	TIFF (Black & White)	TIFF (чорно-білий)
+	TIFF (8-bit Color)	TIFF (8-бітний колір)
+	High Resolution	Висока роздільна здатність
+	Medium Resolution	Середня роздільна здатність
+	Low Resolution	Низька роздільна здатність
+	Language Level 2	Рівень мови 2
+	Language Level 3	Рівень мови 3
 	Discard Empty Type	Видалити порожній текст
 	Discard Recovered Documents	Відкинути відновлені документи
 	Discard White Overprint in Output	Скасувати накладення білого під час виведення
@@ -2558,6 +2566,7 @@ diagnostics	ui	інтерфейс
 	Presets:	Набори:
 	Press 	Натисніть 
 	Preview	Перегляд
+	Preview:	Перегляд:
 	Preview All Layers	Переглянути всі шари
 	Preview in Browser	Переглянути у браузері
 	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)

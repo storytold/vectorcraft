@@ -848,6 +848,7 @@ digits	Malayalam	マラヤーラム数字
 	Search Commands…	コマンドを検索…
 	VectorCraft Help…	VectorCraft ヘルプ…
 	Preview	プレビュー
+	Preview:	プレビュー:
 	Show Edges	エッジを表示
 	Show Corner Widget	コーナーウィジェットを表示
 	Show Template	テンプレートを表示
@@ -1437,6 +1438,14 @@ antiAlias	Sharp	シャープ
 	Disable Auto Add/Delete	自動追加/削除機能を使用しない
 	Disable Opacity Mask	不透明マスクを無効にする
 	Discard	破棄
+	Preserve	保持
+	TIFF (Black & White)	TIFF (白黒)
+	TIFF (8-bit Color)	TIFF (8 bit カラー)
+	High Resolution	高解像度
+	Medium Resolution	中解像度
+	Low Resolution	低解像度
+	Language Level 2	言語レベル 2
+	Language Level 3	言語レベル 3
 	Discard Empty Type	空のテキストを破棄
 	Discard Recovered Documents	復帰したドキュメントを破棄
 	Discard White Overprint in Output	出力時に白のオーバープリントを破棄

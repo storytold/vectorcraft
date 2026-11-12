@@ -798,6 +798,14 @@ font-technology	Variable	Variabel
 	Disable Auto Add/Delete	Automatisches Hinzufügen/Löschen deaktivieren
 	Disable Opacity Mask	Deckkraftmaske deaktivieren
 	Discard	Verwerfen
+	Preserve	Beibehalten
+	TIFF (Black & White)	TIFF (Schwarzweiß)
+	TIFF (8-bit Color)	TIFF (8-Bit-Farbe)
+	High Resolution	Hohe Auflösung
+	Medium Resolution	Mittlere Auflösung
+	Low Resolution	Niedrige Auflösung
+	Language Level 2	Sprachebene 2
+	Language Level 3	Sprachebene 3
 	Discard Empty Type	Leeren Text verwerfen
 	Discard Recovered Documents	Wiederhergestellte Dokumente verwerfen
 	Discard White Overprint in Output	Weißes Überdrucken in der Ausgabe verwerfen
@@ -2490,6 +2498,7 @@ diagnostics	ui	Oberfläche
 	Presets:	Vorgaben:
 	Press 	Mit 
 	Preview	Vorschau
+	Preview:	Vorschau:
 	Preview All Layers	Vorschau aller Ebenen
 	Preview in Browser	Vorschau im Browser
 	Preview in Browser needs the desktop app (the web downloads files instead)	„Vorschau im Browser“ erfordert die Desktop-App (im Web werden stattdessen Dateien heruntergeladen)

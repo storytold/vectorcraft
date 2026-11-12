@@ -787,7 +787,11 @@ artboards' files. A `.ai` file's `aiVersion` comes first: `"pdf"` (the default) 
 Options"), which takes only `transparentImages` (`"flatten"` or `"omit"`), `hiddenObjects` (`"layer"`, `"omit"` or
 `"visible"`, the Hidden Objects menu), `outlineText` (the Text menu: false Editable, true Outlines) and, with several artboards, the artboard
 picker: `boards`, one bool per artboard (default: those last saved, else all), saved as `range`, one file per checked
-artboard. OK is disabled with none checked.
+artboard. OK is disabled with none checked. Save As to an EPS file opens the same dialog after the save panel (heading
+"EPS Options") with `useArtboards`, `all` and `range`, then the options Export's EPS Options shows. Preview
+(`previewFormat`), Overprints (`overprints`), Flattener preset (`flattenerPreset`) and PostScript (`level`) are menus:
+a pick writes the option's value (`"tiffColor"`, `"preserve"`, a built-in preset's id such as `"medium"` or a saved
+preset's name, the level as a number), and a value none of them names shows as it is.
 
 EMF and WMF: Export As… lists both formats (`file.exportAs {format: "emf"}` or `"wmf"`); they have no options
 dialog, so `ui.dialog.confirm` asks for the path and writes the file (one per artboard with Use Artboards). Open and
