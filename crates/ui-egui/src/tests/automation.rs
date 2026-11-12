@@ -567,6 +567,50 @@ fn ui_inspect_keeps_text_that_only_looks_like_a_library_id() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `ui.inspect`'s `scriptReport` names a file the person's script wrote outside the read root, and
+/// the included file a failed run stopped in (also in its error line), by its file name; the person
+/// sees the paths.
+#[test]
+fn ui_inspect_script_report_leaves_out_files_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect-script-report");
+    let (kept, hidden) = (s(base.join("in/kept.svg")), s(base.join("outside/hidden.svg")));
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let source = format!(
+        "vc.run('document.export', {{path: {kept}, format: 'svg'}}); vc.run('document.export', {{path: {hidden}, format: 'svg'}});",
+        kept = json!(kept),
+        hidden = json!(hidden)
+    );
+    let finish = |app: &mut VectorcraftApp, params: Value| {
+        app.session.execute("script.run", &params).unwrap();
+        for _ in 0..10_000 {
+            if app.session.script_pump().is_some() {
+                break;
+            }
+        }
+    };
+    finish(&mut app, json!({"source": source, "name": "t.js"}));
+    let ctx = egui::Context::default();
+    let outside = json!(s(base.join("outside"))).to_string();
+    let person = crate::control::inspect(&app, &ctx);
+    assert_eq!(person["scriptReport"]["written"], json!([kept, hidden]), "{person}");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["scriptReport"]["written"], json!([kept, "hidden.svg"]), "{r}");
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    assert_eq!(app.session.script_report().unwrap()["written"], json!([kept, hidden]), "the report is not changed");
+
+    // A run that fails in a file it includes.
+    std::fs::write(base.join("outside/run.jsx"), "#include \"bad.jsxinc\"\n").unwrap();
+    std::fs::write(base.join("outside/bad.jsxinc"), "\nthrow new Error('stopped here');\n").unwrap();
+    finish(&mut app, json!({"path": s(base.join("outside/run.jsx"))}));
+    let person = crate::control::inspect(&app, &ctx);
+    assert_eq!(person["scriptReport"]["file"], json!(s(base.join("outside/bad.jsxinc"))), "{person}");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["scriptReport"]["file"], "bad.jsxinc", "{r}");
+    assert!(r["result"]["scriptReport"]["console"].to_string().contains("bad.jsxinc:2:"), "{r}");
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// A client without automation roots sees every loaded library's full id in `ui.inspect`.
 #[test]
 fn ui_inspect_shows_full_library_ids_without_a_read_root() {

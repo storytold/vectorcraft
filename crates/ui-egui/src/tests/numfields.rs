@@ -1361,6 +1361,23 @@ fn a_short_drag_released_as_a_click_keeps_its_caret() {
     assert_eq!(f.frame(vec![enter()], &draw), Some(1273456.0), "typing lands where the drag left the caret");
 }
 
+/// #1326: a pointer movement well under egui's click tolerance must keep the caret too; only a
+/// press released within a point of where it went down selects all.
+#[test]
+fn a_sub_threshold_movement_released_as_a_click_keeps_its_caret() {
+    let mut f = Field::new();
+    let draw = |ui: &mut egui::Ui| numeric_fixture(ui, 0);
+    f.frame(vec![], &draw);
+    let at = f.text_point(field_text(0), 2, 7.0);
+    f.frame(vec![Event::PointerMoved(at), pointer_button(at, true)], &draw);
+    let pressed = f.selection();
+    let nudge = egui::vec2(1.5, 0.0);
+    f.frame(vec![Event::PointerMoved(at + nudge)], &draw);
+    f.frame(vec![pointer_button(at + nudge, false)], &draw);
+    assert_ne!(f.selection(), Some((0, field_text(0).chars().count())), "a 1.5 px movement is a drag, not a tap (#1326)");
+    assert_eq!(f.selection(), pressed, "the movement keeps the caret where the press landed");
+}
+
 /// A tap (no movement) on a fresh numeric field still selects all on release.
 #[test]
 fn a_tap_without_movement_still_selects_all_on_release() {
@@ -1372,6 +1389,20 @@ fn a_tap_without_movement_still_selects_all_on_release() {
     f.frame(vec![], &draw);
     f.frame(vec![pointer_button(at, false)], &draw);
     assert_eq!(f.selection(), Some((0, field_text(0).chars().count())), "a plain tap selects all");
+}
+
+/// A pen or trackpad tap often moves a pixel between press and release: it is still a tap.
+#[test]
+fn a_tap_with_a_pixel_of_jitter_still_selects_all_on_release() {
+    let mut f = Field::new();
+    let draw = |ui: &mut egui::Ui| numeric_fixture(ui, 0);
+    f.frame(vec![], &draw);
+    let at = f.text_point(field_text(0), 2, 7.0);
+    f.frame(vec![Event::PointerMoved(at), pointer_button(at, true)], &draw);
+    let jitter = egui::vec2(0.7, -0.6);
+    f.frame(vec![Event::PointerMoved(at + jitter)], &draw);
+    f.frame(vec![pointer_button(at + jitter, false)], &draw);
+    assert_eq!(f.selection(), Some((0, field_text(0).chars().count())), "a jittery tap selects all");
 }
 
 #[test]

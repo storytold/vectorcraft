@@ -505,15 +505,29 @@ fn glyphs_box(t: &vectorcraft_doc::TextObject, outset: f64) -> Option<Rect> {
 
 /// How far the content of live object `n` (a blend, envelope or repeat) can paint past its visual
 /// bounds: for each object in it, how far the effects in a symbol instance's art paint past that
-/// art ([`art_effects_reach`]) and how far brush art can paint ([`crate::brush_fx::pad`]), on the
-/// farthest side. 0 for any other kind of object.
+/// art ([`art_effects_reach`]), how far brush art can paint ([`crate::brush_fx::pad`]) and how far
+/// a path's own effects paint past it ([`path_effects_reach`]), on the farthest side. 0 for any
+/// other kind of object.
 fn live_content_reach(symbols: &SymbolBoxes, n: &Node) -> f64 {
     if !vectorcraft_doc::live::is_live(n) {
         return 0.0;
     }
     let mut reach = 0.0f64;
-    n.walk(&mut |c| reach = reach.max(art_effects_reach(symbols, c) + crate::brush_fx::pad(symbols, c)));
+    n.walk(&mut |c| reach = reach.max(art_effects_reach(symbols, c).max(path_effects_reach(symbols, c)) + crate::brush_fx::pad(symbols, c)));
     reach
+}
+
+/// How far the effects of path or compound path `n` (a drop shadow, a glow, a geometry effect)
+/// paint past its visual bounds, on its farthest side ([`visual_bounds`]): 0 when it has no
+/// visible effects, and for any other kind of object.
+fn path_effects_reach(symbols: &SymbolBoxes, n: &Node) -> f64 {
+    if !has_fx(n) {
+        return 0.0;
+    }
+    match (visual_bounds(symbols, n), n.visual_bounds_with(symbols)) {
+        (Some(c), Some(v)) => [v.x0 - c.x0, v.y0 - c.y0, c.x1 - v.x1, c.y1 - v.y1].into_iter().fold(0.0, f64::max),
+        _ => 0.0,
+    }
 }
 
 /// How far the effects in the art of symbol instance `n` (and in the art of the symbols the

@@ -6333,6 +6333,11 @@ axis	Y Axis	Axe Y
 	Grass Fan	Éventail à herbe
 	Pattern Borders	Bordures de motif
 	Scatter Shapes	Formes de dispersion
+	Dry Media	Techniques sèches
+	Chalk Grain	Grain de craie
+	Graphite Pencil	Crayon graphite
+	Wax Crayon	Craie grasse
+	Charcoal Dust	Poussière de fusain
 	Save Brush Library…	Enregistrer la bibliothèque de formes…
 @msg	`{_1}` has no brushes to apply	`{_1}` n'a aucune forme à appliquer
 @msg	missing `library` (see brush.libraries)	`library` manquant (voir brush.libraries)
