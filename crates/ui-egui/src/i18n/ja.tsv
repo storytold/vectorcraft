@@ -4394,6 +4394,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`preserve` must be an object	`preserve` にはオブジェクトを指定してください
 @msg	`globalAdjust` must be an object	`globalAdjust` にはオブジェクトを指定してください
 @msg	`stops` must be an array	`stops` には配列を指定してください
+@msg	`{key}` must be an array	`{key}` には配列を指定してください
 @msg	`{k}` must be [x, y]	`{k}` は [x, y] の形式で指定してください
 @msg	a gradient needs at least two stops	グラデーションには 2 つ以上の分岐点が必要です
 @msg	give both `start` and `end` [x, y] (or neither)	`start` と `end` は両方とも [x, y] で指定するか、どちらも省略してください
@@ -6189,6 +6190,10 @@ anchor	Points:	ポイント:
 @msg	features lists at most {max} tags	features に指定できるタグは {max} 個までです
 @msg	unknown OpenType feature `{t}`	不明な OpenType 機能 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} には 0 より大きく {max} 以下の数値を指定してください
+@msg	{label} must be at most {max} characters	{label} には {max} 文字以内で指定してください
+@msg	{label} must be one character	{label} には 1 文字を指定してください
+@msg	at most {max} tab stops	タブストップは {max} 個までです
+@msg	unknown align `{other}`	不明な揃え `{other}`
 @msg	no character style `{name}`	文字スタイル `{name}` が見つかりません
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

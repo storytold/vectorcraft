@@ -4414,6 +4414,7 @@ theme	Appearance	Giao diện
 @msg	`globalAdjust` must be an object	`globalAdjust` phải là một đối tượng
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` phải là 1, 3 hoặc 5
 @msg	`stops` must be an array	`stops` phải là một mảng
+@msg	`{key}` must be an array	`{key}` phải là một mảng
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` phải là đối tượng tùy chọn SVG (xem document.formats)
 @msg	`to` must be "corner" or "smooth"	`to` phải là "corner" hoặc "smooth"
 @msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` phải là "emBox", "capHeight", "xHeight" hoặc "icfBox"
@@ -6105,6 +6106,10 @@ anchor	Points:	Điểm:
 @msg	features lists at most {max} tags	features chứa tối đa {max} thẻ
 @msg	unknown OpenType feature `{t}`	tính năng OpenType không xác định `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} phải là một số lớn hơn 0 và tối đa {max}
+@msg	{label} must be at most {max} characters	{label} chỉ được có tối đa {max} ký tự
+@msg	{label} must be one character	{label} phải là một ký tự
+@msg	at most {max} tab stops	tối đa {max} điểm dừng tab
+@msg	unknown align `{other}`	căn chỉnh không xác định `{other}`
 @msg	no character style `{name}`	Không tìm thấy kiểu ký tự `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

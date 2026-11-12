@@ -4282,6 +4282,7 @@ axis	Both	Оба
 @msg	`globalAdjust` must be an object	`globalAdjust` должно быть объектом
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` должно быть 1, 3 или 5
 @msg	`stops` must be an array	`stops` должно быть массивом
+@msg	`{key}` must be an array	`{key}` должно быть массивом
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` должно быть объектом параметров SVG (см. document.formats)
 @msg	`{_1}` is no save command	`{_1}` не является командой сохранения
 @msg	`{area}` is no recovery area name	`{area}` не является именем области восстановления
@@ -6473,6 +6474,10 @@ anchor	Points:	Точки:
 @msg	features lists at most {max} tags	features содержит не более {max} тегов
 @msg	unknown OpenType feature `{t}`	неизвестная функция OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} должно быть числом больше 0 и не более {max}
+@msg	{label} must be at most {max} characters	{label} должно содержать не более {max} символов
+@msg	{label} must be one character	{label} должно быть одним символом
+@msg	at most {max} tab stops	не более {max} позиций табуляции
+@msg	unknown align `{other}`	неизвестное выравнивание `{other}`
 @msg	no character style `{name}`	Стиль символов `{name}` не найден
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

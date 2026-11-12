@@ -4377,6 +4377,7 @@ imageTrace	Outline	Kontur
 @msg	`globalAdjust` must be an object	`globalAdjust` musi być obiektem
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` musi wynosić 1, 3 lub 5
 @msg	`stops` must be an array	`stops` musi być tablicą
+@msg	`{key}` must be an array	`{key}` musi być tablicą
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` musi być obiektem opcji SVG (patrz document.formats)
 @msg	`{_1}` is no save command	`{_1}` nie jest poleceniem zapisu
 @msg	`{area}` is no recovery area name	`{area}` nie jest nazwą obszaru odzyskiwania
@@ -6351,6 +6352,10 @@ anchor	Points:	Punkty:
 @msg	features lists at most {max} tags	features może zawierać najwyżej {max} znaczników
 @msg	unknown OpenType feature `{t}`	nieznana funkcja OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} musi być liczbą większą od 0 i nie większą niż {max}
+@msg	{label} must be at most {max} characters	{label} może mieć najwyżej {max} znaków
+@msg	{label} must be one character	{label} musi być jednym znakiem
+@msg	at most {max} tab stops	najwyżej {max} tabulatorów
+@msg	unknown align `{other}`	nieznane wyrównanie `{other}`
 @msg	no character style `{name}`	Nie znaleziono stylu znakowego `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

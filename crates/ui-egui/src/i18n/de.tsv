@@ -4169,6 +4169,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`globalAdjust` must be an object	`globalAdjust` muss ein Objekt sein
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` muss 1, 3 oder 5 sein
 @msg	`stops` must be an array	`stops` muss ein Array sein
+@msg	`{key}` must be an array	`{key}` muss ein Array sein
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` muss ein Objekt mit SVG-Optionen sein (siehe document.formats)
 @msg	`{_1}` is no save command	`{_1}` ist kein Speicherbefehl
 @msg	`{area}` is no recovery area name	`{area}` ist kein Name eines Wiederherstellungsbereichs
@@ -6090,6 +6091,10 @@ anchor	Points:	Punkte:
 @msg	features lists at most {max} tags	features enthält höchstens {max} Tags
 @msg	unknown OpenType feature `{t}`	unbekannte OpenType-Funktion `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} muss eine Zahl über 0 und höchstens {max} sein
+@msg	{label} must be at most {max} characters	{label} darf höchstens {max} Zeichen lang sein
+@msg	{label} must be one character	{label} muss genau ein Zeichen sein
+@msg	at most {max} tab stops	höchstens {max} Tabstopps
+@msg	unknown align `{other}`	unbekannte Ausrichtung `{other}`
 @msg	no character style `{name}`	Zeichenformat `{name}` nicht gefunden
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).

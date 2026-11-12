@@ -4102,6 +4102,7 @@ imageTrace	Outline	轮廓
 @msg	`preserve` must be an object	`preserve` 必须是对象
 @msg	`globalAdjust` must be an object	`globalAdjust` 必须是对象
 @msg	`stops` must be an array	`stops` 必须是数组
+@msg	`{key}` must be an array	`{key}` 必须是数组
 @msg	`{k}` must be [x, y]	`{k}` 必须是 [x, y]
 @msg	a gradient needs at least two stops	渐变至少需要两个色标
 @msg	give both `start` and `end` [x, y] (or neither)	请同时给出 `start` 和 `end` [x, y] (或都不给出)
@@ -6337,6 +6338,10 @@ anchor	Points:	点：
 @msg	features lists at most {max} tags	features 最多包含 {max} 个标签
 @msg	unknown OpenType feature `{t}`	未知的 OpenType 特性 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 必须是大于 0 且不超过 {max} 的数字
+@msg	{label} must be at most {max} characters	{label} 最多 {max} 个字符
+@msg	{label} must be one character	{label} 必须是一个字符
+@msg	at most {max} tab stops	最多 {max} 个制表位
+@msg	unknown align `{other}`	未知的对齐方式 `{other}`
 @msg	no character style `{name}`	找不到字符样式 `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
