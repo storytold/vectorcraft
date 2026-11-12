@@ -1,5 +1,5 @@
 //! Compatibility PDF 1.3: which standards allow it, the header and metadata that say so, the
-//! writer refusing transparency (the app flattens it first) and 40-bit RC4 encryption.
+//! writer refusing transparency (the app flattens it first) and password protection (40-bit RC4).
 
 use serde_json::json;
 use vectorcraft_color::{BlendMode, Color, Paint};
@@ -65,15 +65,10 @@ fn pdf_1_3_files_say_so_and_have_no_transparency() {
 }
 
 #[test]
-fn pdf_1_3_files_are_encrypted_with_40_bit_rc4() {
-    let o = options(json!({"compatibility": "1.3", "security": {"openPassword": "open", "permissionsPassword": "owner", "plaintextMetadata": true}}));
-    let r = export_with_report(&doc(1.0), &o).unwrap();
-    assert!(String::from_utf8_lossy(&r.bytes).contains("/Filter/Standard/V 1/R 2/Length 40/P "));
-    assert!(r.warnings.iter().any(|w| w.contains("PDF 1.3 encryption covers the metadata too")), "{:?}", r.warnings);
-    assert!(matches!(import(&r.bytes), Err(PdfError::NeedsPassword)));
-    for password in ["open", "owner"] {
-        let opened = import_with_report(&r.bytes, &ImportOptions { password: Some(password.into()), ..Default::default() }).unwrap();
-        assert_eq!(opened.document.layers[0].children().map_or(0, |c| c.len()), 1, "{password}");
+fn pdf_1_3_files_are_not_password_protected() {
+    // 40-bit RC4 (revision 2) is refused: its file key can be searched offline.
+    for security in [json!({"openPassword": "open"}), json!({"permissionsPassword": "owner", "printing": "low"})] {
+        let o = options(json!({"compatibility": "1.3", "security": security}));
+        assert!(matches!(export(&doc(1.0), &o), Err(PdfError::BadSetting(m)) if m.contains("40-bit")));
     }
-    assert_eq!(crate::encrypt::user_password(&r.bytes, "owner").as_deref(), Some("open"));
 }
