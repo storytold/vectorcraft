@@ -3060,6 +3060,7 @@ file-filter	Templates	範本
 	Move Slices	移動切片
 	Move Spine Point	移動脊線點
 	Reshape Spine Segment	改變脊線線段外框
+	Blend Easing	漸變緩動
 @msg	select a blend or give `id`	請選取漸變物件，或提供 `id`
 @msg	not a blend	不是漸變物件
 @msg	the blend has no spine	漸變物件沒有脊線

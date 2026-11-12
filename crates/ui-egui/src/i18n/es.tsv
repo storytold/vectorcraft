@@ -2074,6 +2074,7 @@ font-technology	Variable	Variables
 	Move Slices	Mover sectores
 	Move Spine Point	Mover punto del eje
 	Reshape Spine Segment	Remodelar segmento del eje
+	Blend Easing	Suavizado de fusión
 	Move Brush	Mover pincel
 	Move Swatch	Mover muestra
 	Move Up	Subir

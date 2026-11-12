@@ -3189,6 +3189,7 @@ theme	Appearance	იერსახე
 	Move Mesh Points	ბადის წერტილების გადაადგილება
 	Move Spine Point	ხერხემლის წერტილის გადაადგილება
 	Reshape Spine Segment	ხერხემლის სეგმენტის ფორმის შეცვლა
+	Blend Easing	გადასვლის შერბილება
 	Reset with Mesh	ბადით ჩამოყრა
 	Reset with Warp	გაღუნვით ხელახლა დაყენება
 	Set Mesh Point Color	ბადის წერტილის ფერის დაყენება

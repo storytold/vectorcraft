@@ -3610,6 +3610,7 @@ theme	Appearance	Motiv
 	Move Mesh Points	Přesunout body sítě
 	Move Spine Point	Přesunout bod páteře
 	Reshape Spine Segment	Přetvarovat segment páteře
+	Blend Easing	Náběh prolnutí
 	Reset with Mesh	Obnovit sítí
 	Reset with Warp	Obnovit pokřivením
 	Set Mesh Point Color	Nastavit barvu bodu sítě

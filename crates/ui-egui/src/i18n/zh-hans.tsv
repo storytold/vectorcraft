@@ -1968,6 +1968,7 @@ file-filter	Templates	模板
 	Move Slices	移动切片
 	Move Spine Point	移动脊线点
 	Reshape Spine Segment	整形脊线线段
+	Blend Easing	渐变缓动
 @msg	select a blend or give `id`	请选择一个混合对象，或给出 `id`
 @msg	not a blend	不是混合对象
 @msg	the blend has no spine	混合对象没有脊线

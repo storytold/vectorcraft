@@ -2068,6 +2068,7 @@ font-technology	Variable	Variables
 	Move Slices	Déplacer les tranches
 	Move Spine Point	Déplacer le point de la dorsale
 	Reshape Spine Segment	Modeler le segment de la dorsale
+	Blend Easing	Lissage du dégradé de formes
 	Move Brush	Déplacer la forme
 	Move Swatch	Déplacer la nuance
 	Move Up	Monter

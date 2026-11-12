@@ -3548,6 +3548,7 @@ theme	Appearance	Ulkoasu
 	Move Mesh Points	Siirrä verkkopisteitä
 	Move Spine Point	Siirrä selkärangan pistettä
 	Reshape Spine Segment	Muotoile selkärangan segmentti uudelleen
+	Blend Easing	Sulautuksen pehmennys
 	Reset with Mesh	Palauta verkolla
 	Reset with Warp	Palauta vääristyksellä
 	Set Mesh Point Color	Aseta verkkopisteen väri

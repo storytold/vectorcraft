@@ -2101,6 +2101,7 @@ file-filter	Templates	Шаблоны
 	Move Slices	Переместить фрагменты
 	Move Spine Point	Переместить точку остова
 	Reshape Spine Segment	Изменить форму сегмента остова
+	Blend Easing	Сглаживание перехода
 	Move Brush	Переместить кисть
 	Move Swatch	Переместить образец
 	Move Up	Переместить вверх
