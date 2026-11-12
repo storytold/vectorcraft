@@ -804,6 +804,7 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
     LEAVES_TESTED.with(|c| c.set(c.get() + 1));
     match &n.kind {
         NodeKind::Path { path, rule, .. } => {
+            let has_fill = n.appearance.has_visible_fill();
             if opt.outline
                 && let Some((hit, needs_full_check)) = near_path_body(path, p, opt.tol, 0.0)
             {
@@ -816,7 +817,7 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             }
             let mut strokes = n.appearance.painted_strokes();
             if !opt.outline
-                && n.appearance.fill().is_none_or(|f| f.paint.is_none())
+                && !has_fill
                 && let Some(s) = strokes.next()
                 && strokes.next().is_none()
                 && s.align == StrokeAlign::Center
@@ -845,8 +846,7 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             if let Some(k) = hit_stroke(n, &bp, *rule, p, opt) {
                 return Some(k);
             }
-            let filled = !n.appearance.fill_paint().is_none();
-            if !opt.outline && !opt.path_only && filled && fill_contains(&bp, *rule, p) {
+            if !opt.outline && !opt.path_only && has_fill && fill_contains(&bp, *rule, p) {
                 return Some(HitKind::Fill);
             }
             None
@@ -867,7 +867,7 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             if vectorcraft_geom::hit::distance_to_outline(&near, p) <= opt.tol {
                 return Some(HitKind::Outline);
             }
-            (!opt.outline && !opt.path_only && fill_contains(&near, *rule, p)).then_some(HitKind::Fill)
+            (!opt.outline && !opt.path_only && n.appearance.has_visible_fill() && fill_contains(&near, *rule, p)).then_some(HitKind::Fill)
         }
         // The type path lies within the bounds: they rule out the rest before it is measured.
         NodeKind::Text(t) if opt.type_path_only => {
