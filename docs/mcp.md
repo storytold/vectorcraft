@@ -7136,8 +7136,8 @@ chosen artboards draw all of them. A PDF leaves out the layers that don't print 
 ### Dynamic Text: Block
 
 `type.dynamicText {ids?|id?, on?: bool, wordGap?, lineGap?}` (Type › Dynamic Text, and the Contextual Task Bar for
-area type outside a thread) turns Block on or off for the
-selected area type, as it turns Dynamic Text on or off for type on a path ([Dynamic Text](#dynamic-text)). Area Type
+area type outside a thread and for point type) turns Block on or off for the
+selected area type, and turning it on makes point type area type with Block on (below), as it turns Dynamic Text on or off for type on a path ([Dynamic Text](#dynamic-text)). Area Type
 Options › Block is the same setting, and the Properties panel's Paragraph section has a Dynamic Text checkbox, which
 shows Word Gap and Line Gap while it is on. The [Dynamic Text overview](https://helpx.adobe.com/photoshop/desktop/text-typography/work-with-dynamic-text/dynamic-text-overview.html)
 describes Block as text that scales to fill a rectangular box, with settings for the spacing between words and between
@@ -7151,7 +7151,7 @@ lines. The rest are VectorCraft's own rules:
 - The layout sets every paragraph with `wordGap` as its Desired word spacing (Justification…), and its Minimum or
   Maximum word spacing moves out to `wordGap` when `wordGap` lies outside it. The paragraphs keep their own
   Justification… values, which apply again when Block is off. Each character's leading is its size plus `lineGap`. A
-  gap given with no area type in the selection is an error.
+  gap given with no area type in the selection, and no point type that it turns into area type, is an error.
 - The sizes are written into the characters, so every export and the Character panel see them. After every edit to
   the text or the frame (typing, `text.editRange`, character and paragraph changes, `text.areaOptions {width}`, a
   frame resize) the lines are fitted again, in the edit's own undo step. The lines are then measured again, in at
@@ -7160,13 +7160,26 @@ lines. The rest are VectorCraft's own rules:
 - An empty line, or a line of spaces, keeps its size. At 1,296 pt a line can be narrower than the frame; at 0.1 pt it
   can still wrap. A frame with no room along its lines changes nothing. Right-to-left lines are fitted as left-to-right
   ones are.
-- Off keeps the sizes the text was drawn at. On replaces Auto Size and Shrink Text to Fit. Point type in the selection
-  is left as it is. Area type in a thread is refused with an error that names it (`text.areaOptions {fit: "block"}`
+- Off keeps the sizes the text was drawn at. On replaces Auto Size and Shrink Text to Fit. Area type in a thread is refused with an error that names it (`text.areaOptions {fit: "block"}`
   refuses it too); threading a frame turns Block off, keeping its sizes. Without `on`, it toggles from the first
   object's setting, or turns on when a gap is given. A value that is not a boolean, or a gap outside its range, is an
   error. When nothing changes, no undo step is recorded.
 - Saved and opened, the native file keeps Block on with its gaps and the sizes in the characters; with Block off it
   keeps the sizes.
+
+Turning it on also takes point type, in the same undo step (the Contextual Task Bar offers it beside Convert To Area
+Type). [Adjust formatting and resize text](https://helpx.adobe.com/photoshop/desktop/text-typography/work-with-dynamic-text/adjust-formatting-and-resize-text-with-dynamic-text.html)
+applies Dynamic Text, Block among its shapes, to existing text. VectorCraft's own rules for point type:
+
+- It becomes area type with Block on and the default Area Type Options, keeping only its gaps: options it kept from
+  an earlier frame (columns, inset, vertical alignment, first baseline) do not carry over. Along its lines, the frame
+  is as wide as the widest line as typed with its paragraph's indents, so that line keeps its size and stays where it
+  was across the page by its own alignment; the other lines are set to that width. When negative indents take more
+  than the widest line's width, the frame is as wide as that line, and Block makes it larger. The frame starts at the
+  top of the text and then grows down (to the left for vertical type) to hold every fitted line, around any Text Wrap
+  objects above it, so nothing overflows.
+- The gaps given apply to its frame. Point type with no line to fit (empty, or only spaces and breaks) is left as it
+  is, and so is point type when `on` is false. Without `on`, point type counts as off.
 
 The reply is `{on, ids, fitScale, wordGap, lineGap}` (`fitScale` as for type on a path, 1 when the first object is area
 type; the gaps are the first area type's).
@@ -8023,8 +8036,8 @@ and tate-chu-yoko offsets by one factor, so runs keep their proportions; Type on
 scaled. The first character's size, in document points, moves in steps of 0.1 pt within 0.1 to 1,296 pt; text that
 still runs past the end bracket at 0.1 pt overflows. Reshaping or scaling the path fits the text again. The stored
 sizes do not change: turning Dynamic Text off writes the sizes the text was drawn at into its characters, so it keeps
-its look, in one undo step. Point type in the selection is left as it is, and area type in it takes Block
-([Dynamic Text: Block](#dynamic-text-block)). Type on a path in a
+its look, in one undo step. Area type in the selection takes Block, and turning it on makes point type in the
+selection area type with Block on ([Dynamic Text: Block](#dynamic-text-block)). Type on a path in a
 thread is refused with an error that names it, and the menu item and the task bar item are not offered for it;
 `text.thread.create` and `text.thread.add` turn Dynamic Text off on the frames they thread, at their drawn sizes, and
 list them in `dynamicTextOff`; `addon.type.releasePath` turns it off at the drawn sizes on the point type it makes. When every object already has the setting asked for, nothing changes and no undo step
