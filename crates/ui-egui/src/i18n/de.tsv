@@ -6571,3 +6571,15 @@ breakText	Glyphs	Glyphen
 	Deferred Effects	Zurückgestellte Effekte
 @msg	no plug-in effect is deferred	kein Plug-in-Effekt ist zurückgestellt
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Mit {n} zurückgestelltem Plug-in-Effekt geöffnet. Effekt › Zurückgestellte Effekte aktualisieren führt ihn aus.|Mit {n} zurückgestellten Plug-in-Effekten geöffnet. Effekt › Zurückgestellte Effekte aktualisieren führt sie aus.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Schneidwerkzeuge
+	Stencil Bridges…	Schablonenstege…
+	Stencil Bridges	Schablonenstege
+	Shortest Crossing	Kürzeste Querung
+	Direction	Richtung
+@msg	The selected art has no islands to bridge	Das ausgewählte Bildmaterial hat keine Inseln zum Verbinden
+@msg	No bridge of this width fits across the selected art	Kein Steg dieser Breite passt über das ausgewählte Bildmaterial
+@msg	Some islands could not be joined to the area around the art	Einige Inseln konnten nicht mit der Fläche um das Bildmaterial verbunden werden
+@msg	`width` must be from {lo} to {hi} pt	`width` muss zwischen {lo} und {hi} pt liegen
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` muss eine ganze Zahl von 1 bis {MAX_BRIDGES_PER_ISLAND} sein

@@ -6620,3 +6620,15 @@ breakText	Glyphs	字符
 	Deferred Effects	延後的效果
 @msg	no plug-in effect is deferred	沒有延後的增效模組效果
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	開啟時延後了 {n} 個增效模組效果。效果 › 重新整理延後的效果可執行它們。
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	切割工具
+	Stencil Bridges…	鏤空版連接橋…
+	Stencil Bridges	鏤空版連接橋
+	Shortest Crossing	最短跨越
+	Direction	方向
+@msg	The selected art has no islands to bridge	所選圖稿沒有需要連接的孤島
+@msg	No bridge of this width fits across the selected art	此寬度的連接橋無法放入所選圖稿
+@msg	Some islands could not be joined to the area around the art	部分孤島無法連接到圖稿周圍的區域
+@msg	`width` must be from {lo} to {hi} pt	`width` 必須介於 {lo} 到 {hi} pt 之間
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必須是介於 1 到 {MAX_BRIDGES_PER_ISLAND} 的整數
