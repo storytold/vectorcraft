@@ -6634,6 +6634,8 @@ breakText	Glyphs	Glyphes
 	Delete the selected brushes?	Supprimer les formes sélectionnées ?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Des contours utilisent une ou plusieurs de ces formes. Retirer les formes de ces contours et supprimer les formes ?
 	Remove Strokes	Supprimer les contours
+	Place Brush Art	Placer l’illustration de la forme
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` n’a pas d’illustration (seules les formes diffuses, artistiques et de motif en ont)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Outils de disposition
 	Arrange in Grid…	Disposer en grille…

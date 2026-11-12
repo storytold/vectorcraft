@@ -6414,6 +6414,8 @@ shape	Open	Otvoren
 	Delete the selected brushes?	Izbrisati odabrane četkice?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Potezi koriste jednu ili više ovih četkica. Ukloniti četkice s tih poteza i izbrisati četkice?
 	Remove Strokes	Ukloni poteze
+	Place Brush Art	Postavi crtež četkice
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` nema crtež (imaju ga samo raspršene i umjetničke četkice i četkice uzorka)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Alati za raspoređivanje
 	Arrange in Grid…	Rasporedi u mrežu…

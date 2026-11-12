@@ -3762,6 +3762,8 @@ antiAlias	Sharp	शार्प
 	Remove Selected Assets	सिलेक्टेड परिसंपत्तियों को हटा दें
 	Remove Selected Entry	सिलेक्टेड प्रविष्टि निकालें
 	Remove Strokes	स्ट्रोक हटाएँ
+	Place Brush Art	ब्रश आर्टवर्क रखें
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` में कोई आर्टवर्क नहीं है (आर्टवर्क केवल स्कैटर, आर्ट और पैटर्न ब्रश में होता है)
 	Remove the shortcut	शॉर्टकट निकालें
 	Remove Threading	थ्रेडिंग निकालें
 	Remove White Overprint	व्हाइट ओवरप्रिंट निकालें

@@ -6591,6 +6591,8 @@ breakText	Glyphs	Γλύφοι
 	Delete the selected brushes?	Να διαγραφούν τα επιλεγμένα πινέλα;
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Περιγράμματα χρησιμοποιούν ένα ή περισσότερα από αυτά τα πινέλα. Να αφαιρεθούν τα πινέλα από αυτά τα περιγράμματα και να διαγραφούν τα πινέλα;
 	Remove Strokes	Αφαίρεση περιγραμμάτων
+	Place Brush Art	Τοποθέτηση σχεδίου πινέλου
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` δεν έχει σχέδιο (έχουν μόνο τα πινέλα διασποράς, σχεδίου και μοτίβου)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Εργαλεία διάταξης
 	Arrange in Grid…	Διάταξη σε πλέγμα…

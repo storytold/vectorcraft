@@ -6378,6 +6378,8 @@ breakText	Glyphs	Glyffer
 	Delete the selected brushes?	Slet de valgte pensler?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Streger bruger en eller flere af disse pensler. Fjern penslerne fra stregerne, og slet penslerne?
 	Remove Strokes	Fjern streger
+	Place Brush Art	Placér penselgrafik
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` har ingen grafik (det har kun sprednings-, grafik- og mønsterpensler)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Arrangeringsværktøjer
 	Arrange in Grid…	Arrangér i gitter…

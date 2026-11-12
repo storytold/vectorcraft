@@ -6241,6 +6241,8 @@ breakText	Glyphs	Glyph
 	Delete the selected brushes?	Xóa các cọ đã chọn?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Có nét đang dùng một hoặc nhiều cọ này. Gỡ cọ khỏi các nét đó và xóa cọ?
 	Remove Strokes	Gỡ nét
+	Place Brush Art	Đặt đối tượng của cọ
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` không có đối tượng (chỉ cọ phân tán, cọ bản vẽ và cọ họa tiết mới có)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Công cụ sắp xếp
 	Arrange in Grid…	Sắp xếp theo lưới…

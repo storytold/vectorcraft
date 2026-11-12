@@ -253,6 +253,118 @@ fn selection_art_is_the_art_new_brush_takes() {
     assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "only brush.new is an undo step");
 }
 
+fn undo_steps(s: &Session) -> usize {
+    s.doc().unwrap().history.undo.len()
+}
+
+fn selected(s: &Session) -> Vec<NodeId> {
+    s.doc().unwrap().selection.objects.clone()
+}
+
+/// The JSON of object `id`, as `brush.options` params take art.
+fn art_json(s: &mut Session, id: NodeId) -> Value {
+    s.execute("brush.selectionArt", &json!({"ids": [id.0]})).unwrap()["art"].clone()
+}
+
+/// `brush.placeArt` places a copy of an art or scatter brush's art centered where it is dropped
+/// (by default on the first artboard's center), selected, in one undo step; brushes without art,
+/// unknown brushes and a position that is not a number are refused.
+#[test]
+fn place_art_puts_a_copy_of_the_brush_art_where_it_is_dropped() {
+    let mut s = session();
+    let r = rect(&mut s, 10.0, 20.0, 40.0, 8.0);
+    s.execute("brush.new", &json!({"type": "art", "name": "Bar", "ids": [r.0]})).unwrap();
+    let steps = undo_steps(&s);
+    let id = NodeId(s.execute("brush.placeArt", &json!({"name": "Bar", "x": 100, "y": 80})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(undo_steps(&s), steps + 1);
+    assert_eq!(selected(&s), vec![id]);
+    assert_ne!(id, r, "a copy, not the art the brush was made from");
+    assert!(close(bounds(&s, id), Rect::new(80.0, 76.0, 120.0, 84.0), 1e-6), "{:?}", bounds(&s, id));
+    // Without a position: the first artboard's center (the document is 400 × 300).
+    let scatter = NodeId(s.execute("brush.placeArt", &json!({"name": "Dots"})).unwrap()["id"].as_u64().unwrap());
+    let c = bounds(&s, scatter).center();
+    assert!((c.x - 200.0).abs() < 1e-6 && (c.y - 150.0).abs() < 1e-6, "{c:?}");
+    let steps = undo_steps(&s);
+    for (p, msg) in [
+        (json!({"name": "3 pt. Round"}), "`3 pt. Round` has no art (only scatter, art and pattern brushes do)"),
+        (json!({"name": "Bristle Round"}), "`Bristle Round` has no art (only scatter, art and pattern brushes do)"),
+        (json!({"name": "Nope"}), "no brush named `Nope`"),
+    ] {
+        let e = s.execute("brush.placeArt", &p).unwrap_err();
+        assert!(e.to_string().contains(msg), "{p}: {e}");
+    }
+    assert!(s.execute("brush.placeArt", &json!({"name": "Bar", "x": "100"})).is_err());
+    assert_eq!(undo_steps(&s), steps, "a refused call adds no undo step");
+}
+
+/// Brush art holding an instance of a symbol whose art lies away from the symbol's origin (as
+/// imported symbols can) is centered by that art, not by the box an instance has without its
+/// document.
+#[test]
+fn placed_art_with_a_symbol_instance_is_centered_by_the_symbols_art() {
+    let mut s = session();
+    let r = rect(&mut s, 300.0, 10.0, 100.0, 40.0);
+    let art = node(&s, r);
+    s.execute("edit.clear", &json!({"ids": [r.0]})).unwrap();
+    let st = s.doc_mut().unwrap();
+    let d = std::sync::Arc::make_mut(&mut st.doc);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Off".into(), art: std::sync::Arc::new(art) });
+    let layer = d.layers[0].id;
+    let inst = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::translate((50.0, 50.0));
+    d.insert(Some(layer), usize::MAX, Node::new(inst, NodeKind::SymbolInstance { symbol: "Off".into(), xf })).unwrap();
+    let inst = inst.0;
+    s.execute("brush.new", &json!({"type": "art", "name": "Stamp", "ids": [inst]})).unwrap();
+    let id = NodeId(s.execute("brush.placeArt", &json!({"name": "Stamp", "x": 200, "y": 150})).unwrap()["id"].as_u64().unwrap());
+    let st = s.doc().unwrap();
+    let b = st.doc.bounds_of(&[id], false).unwrap();
+    assert!((b.center().x - 200.0).abs() < 1e-6 && (b.center().y - 150.0).abs() < 1e-6, "{b:?}");
+    assert!((b.width() - 100.0).abs() < 1e-6, "{b:?}");
+}
+
+/// A pattern brush with side, outer corner and start tiles, the side tile with a repeat frame
+/// wider than its art: → its name.
+fn framed_pattern_brush(s: &mut Session) -> String {
+    let side = rect(s, 0.0, 0.0, 20.0, 10.0);
+    let corner = rect(s, 0.0, 40.0, 10.0, 10.0);
+    let start = rect(s, 0.0, 80.0, 6.0, 10.0);
+    let name = s.execute("brush.new", &json!({"type": "pattern", "name": "Rail", "ids": [side.0]})).unwrap()["name"].as_str().unwrap().to_string();
+    let params = json!({
+        "side": art_json(s, side),
+        "side_frame": Rect::new(-2.0, 0.0, 22.0, 10.0),
+        "outer_corner": art_json(s, corner),
+        "start": art_json(s, start),
+    });
+    s.execute("brush.options", &json!({"name": name, "params": params})).unwrap();
+    name
+}
+
+/// `brush.placeArt` lays a pattern brush's tiles out left to right, each in a group named for its
+/// tile, with an unpainted rectangle at the back of a tile with a repeat frame marking that frame.
+#[test]
+fn pattern_brushes_place_their_tiles_in_a_row() {
+    let mut s = session();
+    let name = framed_pattern_brush(&mut s);
+    let id = NodeId(s.execute("brush.placeArt", &json!({"name": name, "x": 200, "y": 150})).unwrap()["id"].as_u64().unwrap());
+    let placed = node(&s, id);
+    let tiles: Vec<Node> = placed.children().unwrap().iter().map(|c| (**c).clone()).collect();
+    let names: Vec<&str> = tiles.iter().map(|t| t.name.as_deref().unwrap_or("")).collect();
+    assert_eq!(names, ["Side Tile", "Outer Corner Tile", "Start Tile"]);
+    let boxes: Vec<Rect> = tiles.iter().map(|t| t.geometric_bounds().unwrap()).collect();
+    assert!(boxes.windows(2).all(|w| (w[1].x0 - w[0].x1 - 10.0).abs() < 1e-6), "10 pt apart, left to right: {boxes:?}");
+    // The side tile: the frame's rectangle, unpainted, behind the art.
+    let side = tiles[0].children().unwrap();
+    assert_eq!(side.len(), 2);
+    let marker = &side[0];
+    assert!(marker.appearance.items.iter().all(|i| match i {
+        vectorcraft_doc::AppearanceItem::Fill(f) => f.paint.is_none(),
+        vectorcraft_doc::AppearanceItem::Stroke(st) => st.paint.is_none(),
+    }));
+    let frame = marker.geometric_bounds().unwrap();
+    assert!((frame.width() - 24.0).abs() < 1e-6 && (frame.height() - 10.0).abs() < 1e-6, "{frame:?}");
+    assert_eq!(tiles[1].children().unwrap().len(), 1, "no frame, no rectangle");
+}
+
 #[test]
 fn brush_options_rename_duplicate_and_delete_update_strokes() {
     let mut s = session();

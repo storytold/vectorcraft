@@ -6221,6 +6221,8 @@ breakText	Glyphs	글리프
 	Delete the selected brushes?	선택한 브러시를 삭제하시겠습니까?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	선에서 이 브러시 중 하나 이상을 사용합니다. 해당 선에서 브러시를 제거하고 브러시를 삭제하시겠습니까?
 	Remove Strokes	선 제거
+	Place Brush Art	브러시 아트 배치
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}`에는 아트가 없습니다 (흩뿌리기, 아트, 패턴 브러시에만 아트가 있습니다)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	배치 도구
 	Arrange in Grid…	격자로 배치…
