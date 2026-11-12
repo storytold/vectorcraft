@@ -303,3 +303,164 @@
 	Add to Swatches	הוספה לדוגמיות צבע
 	Add Used Colors	הוספת צבעים שבשימוש
 	Additional Plug-ins Folder	תיקיית תוספים נוספת
+
+# Round 6: vector drawing, artboards, anchors, effects, color and layer controls.
+	Anchor Point	נקודת עיגון
+	Anchor Point Tool	כלי נקודת עיגון
+	Anchor Points	נקודות עיגון
+	Anchors:	נקודות עיגון:
+	Artboard Options	אפשרויות משטח יצירה
+	Artboard Options…	אפשרויות משטח יצירה…
+	Artboard Tool	כלי משטח יצירה
+	Artboard:	משטח יצירה:
+	Brush Definition	הגדרת מברשת
+	Brush Libraries	ספריות מברשות
+	Brush Options…	אפשרויות מברשת…
+	Brush Strokes	משיחות מכחול
+	Brushes	מברשות
+	Clip	חיתוך
+	Clip Complex Regions	חיתוך אזורים מורכבים
+	Clip to Art	חיתוך לגבולות היצירה
+	Clip to Artboard	חיתוך לגבולות משטח היצירה
+	Clip to Bounding Box	חיתוך לתיבת התוחמת
+	Clipboard as PDF	תוכן הלוח כ־PDF
+	Clipboard as PNG	תוכן הלוח כ־PNG
+	Clipboard as SVG	תוכן הלוח כ־SVG
+	Clipboard as Text	תוכן הלוח כטקסט
+	Clipboard Formats	תבניות לוח
+	Clipboard Handling	טיפול בלוח
+	Clipping Mask	מסכת חיתוך
+	Clipping Masks	מסכות חיתוך
+	Color	צבע
+	Color Adjustments	התאמות צבע
+	Color Guide	מדריך צבעים
+	Color Guide Options	אפשרויות מדריך צבעים
+	Color Guide Options…	אפשרויות מדריך צבעים…
+	Color Library	ספריית צבעים
+	Color Library…	ספריית צבעים…
+	Color Management	ניהול צבע
+	Color Mode:	מצב צבע:
+	Color Model:	מודל צבע:
+	Color Models	מודלי צבע
+	Color Picker	בורר צבע
+	Color Picker…	בורר צבע…
+	Color Reduction:	צמצום צבעים:
+	Color Settings	הגדרות צבע
+	Color Space	מרחב צבע
+	Color Swatches	דוגמיות צבע
+	Color Theme	ערכת צבעים
+	Color Themes	ערכות צבעים
+	Color Wheel	גלגל צבעים
+	Color field	שדה צבע
+	Color Type:	סוג צבע:
+	Color:	צבע:
+	Colorize	הוספת צבע
+	Colors	צבעים
+	Compound Path	נתיב מורכב
+	Compound Shape	צורה מורכבת
+	Convert All Spot Colors to Process	המרת כל צבעי הספוט לצבעי תהליך
+	Convert All Strokes to Outlines	המרת כל קווי המתאר לצורות
+	Convert All Text to Outlines	המרת כל הטקסט לקווי מתאר
+	Convert Anchor Point	המרת נקודת עיגון
+	Convert Anchor Points	המרת נקודות עיגון
+	Convert Color	המרת צבע
+	Convert Document Color Mode	המרת מצב צבעי המסמך
+	Convert Selected Anchor Points to Corner	המרת נקודות העיגון שנבחרו לפינות
+	Convert Selected Anchor Points to Smooth	החלקת נקודות העיגון שנבחרו
+	Convert text to outlines	המרת טקסט לקווי מתאר
+	Convert To Area Type	המרה לטקסט באזור
+	Convert To Outlines	המרה לקווי מתאר
+	Convert To Point Type	המרה לטקסט נקודתי
+	Convert to Shape	המרה לצורה
+	Convert to Straight Lines	המרה לקווים ישרים
+	Corner Radius	רדיוס פינה
+	Corner Radius:	רדיוס פינה:
+	Corners	פינות
+	Corners…	פינות…
+	Crop	חיתוך
+	Crop Image	חיתוך תמונה
+	Crop Marks	סימני חיתוך
+	Dash Pattern	דפוס מקווקו
+	Dashed	מקווקו
+	Dashed Line	קו מקווקו
+	Delete	מחיקה
+	Delete All	מחיקת הכול
+	Delete Anchor Point	מחיקת נקודת עיגון
+	Delete Anchor Point Tool	כלי מחיקת נקודת עיגון
+	Delete Anchor Points	מחיקת נקודות עיגון
+	Delete Artboard	מחיקת משטח יצירה
+	Delete Artboards	מחיקת משטחי יצירה
+	Delete Brush	מחיקת מברשת
+	Delete Character Style	מחיקת סגנון תו
+	Delete Empty Artboards	מחיקת משטחי יצירה ריקים
+	Delete Graphic Style	מחיקת סגנון גרפי
+	Delete Layer	מחיקת שכבה
+	Delete Paragraph Style	מחיקת סגנון פסקה
+	Delete Pattern	מחיקת דוגמה
+	Delete PDF Preset	מחיקת ערכת הגדרות PDF
+	Delete Selected Item	מחיקת הפריט שנבחר
+	Delete Selection	מחיקת הבחירה
+	Delete Swatch	מחיקת דוגמית צבע
+	Delete Symbol	מחיקת סמל
+	Direct Selection Tool	כלי בחירה ישירה
+	Direction Handles	ידיות כיוון
+	Distort & Transform	עיוות ושינוי צורה
+	Distort Appearance	עיוות מראה
+	Distort Linear Gradients	עיוות מעברי צבע קוויים
+	Distort Pattern Fills	עיוות מילויי דוגמה
+	Distortion	עיוות
+	Draw	ציור
+	Draw Behind	ציור מאחור
+	Draw in Perspective	ציור בפרספקטיבה
+	Draw Inside	ציור בפנים
+	Draw Normal	ציור רגיל
+	Drawing Mode	מצב ציור
+	Duplicate	שכפול
+	Duplicate Artboard	שכפול משטח יצירה
+	Duplicate Artboards	שכפול משטחי יצירה
+	Duplicate Brush	שכפול מברשת
+	Duplicate Character Style	שכפול סגנון תו
+	Duplicate Effect	שכפול אפקט
+	Duplicate Graphic Style	שכפול סגנון גרפי
+	Duplicate Item	שכפול פריט
+	Duplicate Layer	שכפול שכבה
+	Duplicate Paragraph Style	שכפול סגנון פסקה
+	Duplicate Selected Item	שכפול הפריט שנבחר
+	Duplicate Selection	שכפול הבחירה
+	Duplicate Swatch	שכפול דוגמית צבע
+	Duplicate Symbol	שכפול סמל
+	Ellipse	אליפסה
+	Ellipse Tool	כלי אליפסה
+	Ellipse…	אליפסה…
+	Fill	מילוי
+	Fill & Stroke	מילוי וקו מתאר
+	Fill Color	צבע מילוי
+	Fill Rule	כלל מילוי
+	Fill:	מילוי:
+	Flip Horizontal	היפוך אופקי
+	Flip Vertical	היפוך אנכי
+	Free Transform Tool	כלי שינוי צורה חופשי
+	Freeform Gradient	מעבר צבע חופשי
+	Gradient	מעבר צבע
+	Gradient Mesh	רשת מעבר צבע
+	Gradient Tool	כלי מעבר צבע
+	Gradient Vector	וקטור מעבר צבע
+	Gradients	מעברי צבע
+	Grid	רשת
+	Group	קיבוץ
+	Group Selection Tool	כלי בחירת קבוצה
+	Hide	הסתרה
+	Hide Artboards	הסתרת משטחי יצירה
+	Hide Bounding Box	הסתרת תיבה תוחמת
+	Hide Edges	הסתרת קצוות
+	Hide Grid	הסתרת רשת
+	Hide Guides	הסתרת קווי עזר
+	Hide Rulers	הסתרת סרגלים
+	Hide Text Threads	הסתרת קישורי טקסט
+	Hide Transparency Grid	הסתרת רשת השקיפות
+	Make Blend	יצירת מעבר בין אובייקטים
+	Make Live Paint	יצירת צביעה חיה
+	New Guide	קו עזר חדש
+	Pen	עט
+	Release Blend	פירוק מעבר בין אובייקטים
+	Release Live Paint	פירוק צביעה חיה

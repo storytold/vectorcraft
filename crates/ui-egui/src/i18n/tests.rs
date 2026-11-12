@@ -3030,3 +3030,47 @@ fn hebrew_native_save_export_import_dialogs_are_localized() {
     assert!(errors.is_empty(), "{errors:?}");
     assert!(rows.len() >= 201, "new Hebrew catalog rows absent");
 }
+
+/// The vector editing UI must show native Hebrew for common artboard, path, layer,
+/// fill, stroke and clipping controls, while preserving source command identifiers.
+#[test]
+fn hebrew_vector_artboard_path_and_color_controls_are_translated() {
+    let he = Lang::from_code("he").expect("Hebrew locale registered");
+    let (rows, errors) = parse_entries(he.0.source);
+    assert!(errors.is_empty(), "invalid Hebrew VectorCraft TSV: {errors:?}");
+    assert_eq!(rows.len(), 453, "source-bound Hebrew catalog row count changed");
+    for key in [
+        "Artboard Tool",
+        "Artboard Options…",
+        "Anchor Point",
+        "Anchor Points",
+        "Delete Anchor Point",
+        "Direct Selection Tool",
+        "Clipping Mask",
+        "Clipping Masks",
+        "Compound Path",
+        "Convert To Outlines",
+        "Brush Libraries",
+        "Color Picker",
+        "Color Management",
+        "Crop Image",
+        "Delete Layer",
+        "Duplicate Artboard",
+        "Ellipse Tool",
+        "Fill & Stroke",
+        "Free Transform Tool",
+        "Gradient Tool",
+        "Group Selection Tool",
+        "Hide Guides",
+        "Make Live Paint",
+    ] {
+        let translated = tr(he, key);
+        assert_ne!(translated, key, "untranslated vector control: {key:?}");
+        assert!(translated.chars().any(|c| ('\u{05d0}'..='\u{05ea}').contains(&c)), "{key:?}: no Hebrew letters");
+        assert_eq!(tr(Lang::EN, key), key, "source command text must remain English");
+    }
+    assert_eq!(tr(he, "Clipping Mask"), "מסכת חיתוך");
+    assert_eq!(tr(he, "Artboard Tool"), "כלי משטח יצירה");
+    assert_eq!(tr(he, "Color Picker"), "בורר צבע");
+    assert_eq!(tr(he, "Untranslated native path sentinel"), "Untranslated native path sentinel");
+}
