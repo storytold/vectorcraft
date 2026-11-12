@@ -6521,21 +6521,6 @@ again when it changes); Multichannel files are refused.
 [PSD import options](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html),
 the option that converts layers to objects keeps as much of the layer structure as it can, merges the layers of a
 clipping mask into one layer and discards hidden layers that require merging; the option that flattens the layers
-## CDR import
-
-`.cdr` drawings of versions 5 to 27 (and `.cdt` templates, which open as a new untitled document) open and
-place as editable art, the ZIP packages that versions 14 and later save included. Each page becomes an artboard, side
-by side. Layers of the same name on different pages become one layer when the pages stack them in the same order, and
-the master page's guidelines become guides on every page. Groups stay groups. Curves, paths, arcs and polygons (stars
-included) become paths, and rectangles and ellipses become live shapes; a rectangle keeps each corner's radius. Uniform
-fills and outlines keep their colors, widths, caps, joins and dashes. A library color that the drawing stores with its
-name and values (version 13 and later) becomes a spot swatch with its tint, and one stored only by its number opens as
-a black spot color. Text, bitmaps, blends, contours, brush strokes, other objects the reader doesn't read yet,
-fountain, pattern, texture and PostScript fills, and outline arrowheads are left out. The `warnings` of
-`document.open` name each of these kinds the drawing had, and say when damaged parts or parts past the import limits
-were left out. Drawings of versions before 5 and after 27 are refused with a message, and so are packages that are
-encrypted, ZIP64 archives or split across files. VectorCraft doesn't write `.cdr` files.
-
 imports one image, and Import Hidden Layers brings hidden layers in. `document.open` does the same, with
 `layers: false` for the single image and `hiddenLayers: true` for the hidden layers. The page also merges
 adjustment layers, layers with a knockout option, and layers that hold transparent pixels in some blend modes with
@@ -6598,6 +6583,21 @@ its pixels are decoded. `file.place {path}` links the file like any image. Vecto
 {"name":"export","arguments":{"path":"/tmp/poster.psd","options":{"ppi":300,"maxEditability":true}}}
 {"name":"run_command","arguments":{"command":"document.export","params":{"format":"psd","layers":false,"colorModel":"cmyk"}}}
 ```
+
+## CDR import
+
+`.cdr` drawings of versions 5 to 27 (and `.cdt` templates, which open as a new untitled document) open and
+place as editable art, the ZIP packages that versions 14 and later save included. Each page becomes an artboard, side
+by side. Layers of the same name on different pages become one layer when the pages stack them in the same order, and
+the master page's guidelines become guides on every page. Groups stay groups. Curves, paths, arcs and polygons (stars
+included) become paths, and rectangles and ellipses become live shapes; a rectangle keeps each corner's radius. Uniform
+fills and outlines keep their colors, widths, caps, joins and dashes. A library color that the drawing stores with its
+name and values (version 13 and later) becomes a spot swatch with its tint, and one stored only by its number opens as
+a black spot color. Text, bitmaps, blends, contours, brush strokes, other objects the reader doesn't read yet,
+fountain, pattern, texture and PostScript fills, and outline arrowheads are left out. The `warnings` of
+`document.open` name each of these kinds the drawing had, and say when damaged parts or parts past the import limits
+were left out. Drawings of versions before 5 and after 27 are refused with a message, and so are packages that are
+encrypted, ZIP64 archives or split across files. VectorCraft doesn't write `.cdr` files.
 
 ## Printing
 
