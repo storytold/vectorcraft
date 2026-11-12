@@ -9291,6 +9291,54 @@ there is no step. → `{symbols: [name…], ids: [instance id…], skipped: [{la
 {"name":"run_command","arguments":{"command":"addon.document.symbolsFromLayers","params":{"replace":true}}}
 ```
 
+## Image Tools add-on
+
+Image Tools is a built-in add-on for placed images: its command is `addon.image.removeBackground`, and in the desktop
+app it lives in Object › Plug-ins › Image Tools. It is a VectorCraft addition.
+
+### Remove Background
+
+`addon.image.removeBackground` makes the background of the selected images, or of the images in `ids`, transparent by
+lowering the alpha of their own pixels. The work runs in the app, and no service or model is used.
+
+- With `background: "edges"` (the default), the background is the most common color along the image's edges. When the
+  edges hold at least as many clear pixels as pixels of that color, as after an earlier run, nothing is cleared.
+- With `background: "corners"`, the background is the average color of the image's four corner pixels. A clear corner
+  is left out of the average, and when all four are clear, nothing is cleared.
+- With `background: "colors"`, the background is the colors in `colors`. `colors` lists 1 to 16 colors, as an array or
+  as one string split by commas or spaces. Each is written as other color params take a hex color (`#rrggbb` or `#rgb`,
+  with or without the `#`) or named black, white, red, green or blue.
+- With `contiguous: true` (the default), the background is cleared only where it reaches in from an edge, so the same
+  color inside the subject stays. With `contiguous: false`, it is cleared wherever it is.
+- `tolerance` (0 to 100, default 10) is how near a pixel's color must be to a background color to be cleared, as a
+  percentage. With `match: "distance"` (the default), it is a percentage of the RGB distance from black to white. With
+  `match: "channels"`, it is a percentage of 255 steps on the one of red, green and blue that differs most, so a
+  tolerance of `t / 255 × 100` clears the colors within `t` 8-bit steps on every channel. `softness` (0 to 100,
+  default 10) is the band past the tolerance over which pixels fade from cleared to kept. These ranges and defaults
+  are VectorCraft's own.
+- A value outside 0 to 100, a `background` other than `edges`, `corners` or `colors`, a `match` other than `distance`
+  or `channels`, a `contiguous` that is not true or false, or a `colors` that lists no color, more than 16, or one that
+  is not a color or has an alpha part is refused, and the document stays as it was.
+
+The result stays an image, embedded as a PNG with an alpha channel and the source's color profile and resolution. An
+image of 16-bit samples keeps 16 bits, a grayscale image stays gray, and a linked image is embedded. All the images
+change in one undo step, and an image that `ids` names twice changes once. An image whose pixels do not change is left
+as it is, and when none changes the command adds no undo step and returns `changed: 0`. `cleared` counts the pixels
+made fully clear in the images that changed. The command refuses, and changes nothing, when an image is CMYK, a linked
+image shows its preview (embed or relink it first), an image would need more than the decode allowance while it is
+worked on (2 GiB, or 512 MiB in the web app, counted from the file's header before it is decoded), or every pixel of an
+image would be cleared. Remove Background… opens the command's dialog with Preview off; with Preview on, the canvas
+shows the result for the values in the dialog, and Cancel puts the image back. While a dialog previews the command,
+the session keeps the decoded pixels of the images it changes (at most 128 MiB, or 32 MiB in the web app), so the next
+preview step does not decode them again; it releases them when the dialog closes with OK or Cancel. A run that is not
+a preview step does not keep them.
+→ `{changed, ids, cleared}`
+
+```json
+{"name":"run_command","arguments":{"command":"addon.image.removeBackground","params":{"background":"colors","colors":["#ffffff","#f0f0f0"],"tolerance":5,"softness":15}}}
+{"name":"run_command","arguments":{"command":"addon.image.removeBackground","params":{"background":"corners","contiguous":false,"match":"channels","tolerance":12.55,"softness":0}}}
+```
+
 ## Type Tools add-on
 
 Type Tools is a built-in add-on for type: its commands are `addon.type.textTweaker` and `addon.type.releasePath`, and

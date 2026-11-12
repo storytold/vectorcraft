@@ -985,6 +985,15 @@ antiAlias	Sharp	Nítid
 	CRLF (Windows)	CRLF (Windows)
 	Crop	Retalla
 	Crop Image	Retalla la imatge
+	Image Tools	Eines d’imatge
+	Remove Background…	Elimina el fons…
+	Remove Background	Elimina el fons
+	Background	Fons
+	Edge Color	Color de la vora
+	Picked Colors	Colors triats
+	Corner Color	Color de les cantonades
+	Contiguous	Contigu
+	Each Channel	Cada canal
 	Crop Marks	Marques de retall
 	Crop To	Retalla fins a
 	Cross	Creu
@@ -5738,6 +5747,14 @@ digits	Malayalam	Malaiàlam
 @msg	exit isolation mode first	surt primer del mode d’aïllament
 @msg	select an envelope	selecciona un embolcall
 @msg	select an image	selecciona una imatge
+@msg	`background` must be edges, corners or colors	`background` ha de ser edges, corners o colors
+@msg	`match` must be distance or channels	`match` ha de ser distance o channels
+@msg	`{key}` must be from 0 to 100	`{key}` ha d’estar entre 0 i 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` ha de llistar d’1 a 16 colors, cadascun en hexadecimal (#rrggbb o #rgb) o com a black, white, red, green o blue
+@msg	the linked image shows its preview: embed or relink it first	la imatge enllaçada mostra la previsualització: incrusta-la o torna a enllaçar-la primer
+@msg	a CMYK image has no transparency to set	una imatge CMYK no té transparència per establir
+@msg	every pixel matches the background: no image would be left	cada píxel coincideix amb el fons: no quedaria cap imatge
+@msg	an image of {w} × {h} pixels is too large to change	una imatge de {w} × {h} píxels és massa gran per canviar-la
 @msg	select an Image Trace object	selecciona un objecte d’Image Trace
 @msg	select an Intertwine group	selecciona un grup Intertwine
 @msg	select an object in perspective	selecciona un objecte en perspectiva

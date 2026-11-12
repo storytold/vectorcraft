@@ -700,6 +700,15 @@ font-technology	Variable	Variabili
 	Created:	Creato:
 	Crop	Ritaglia
 	Crop Image	Ritaglia immagine
+	Image Tools	Strumenti immagine
+	Remove Background…	Rimuovi sfondo…
+	Remove Background	Rimuovi sfondo
+	Background	Sfondo
+	Edge Color	Colore del bordo
+	Picked Colors	Colori scelti
+	Corner Color	Colore degli angoli
+	Contiguous	Contiguo
+	Each Channel	Ogni canale
 	Edit Path	Modifica tracciato
 	Mask	Maschera
 	Crop Marks	Segni di ritaglio
@@ -4651,6 +4660,14 @@ axis	Both	Entrambi
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	questo ricalco creerebbe più di {max} punti di ancoraggio, più di quanti il documento possa mostrare in modo fluido: aumenta Disturbo, riduci Tracciati o Colori, oppure scegli un preset a fedeltà inferiore
 @msg	select an envelope	seleziona un involucro
 @msg	select an image	seleziona un'immagine
+@msg	`background` must be edges, corners or colors	`background` deve essere edges, corners o colors
+@msg	`match` must be distance or channels	`match` deve essere distance o channels
+@msg	`{key}` must be from 0 to 100	`{key}` deve essere compreso tra 0 e 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` deve elencare da 1 a 16 colori, ciascuno in esadecimale (#rrggbb o #rgb) o come black, white, red, green o blue
+@msg	the linked image shows its preview: embed or relink it first	l’immagine collegata mostra la sua anteprima: incorporala o ricollegala prima
+@msg	a CMYK image has no transparency to set	un'immagine CMYK non ha trasparenza da impostare
+@msg	every pixel matches the background: no image would be left	ogni pixel corrisponde allo sfondo: non resterebbe alcuna immagine
+@msg	an image of {w} × {h} pixels is too large to change	un'immagine di {w} × {h} pixel è troppo grande per essere modificata
 @msg	select an object in perspective	seleziona un oggetto in prospettiva
 @msg	select artwork (or a colour group) to recolor	seleziona la grafica (o un gruppo colori) da ricolorare
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Ricolorazione completata; senza modifiche: {locked} e {hidden}

@@ -680,6 +680,15 @@ font-technology	Variable	Değişken
 	Created:	Oluşturuldu:
 	Crop	Kırpma
 	Crop Image	Resmi Kırp
+	Image Tools	Resim Araçları
+	Remove Background…	Arka Planı Kaldır…
+	Remove Background	Arka Planı Kaldır
+	Background	Arka Plan
+	Edge Color	Kenar Rengi
+	Picked Colors	Seçilen Renkler
+	Corner Color	Köşe Rengi
+	Contiguous	Bitişik
+	Each Channel	Her Kanal
 	Mask	Maske
 	Crop Marks	Kırpma İşaretleri
 	Crop To	Kırpma Hedefi
@@ -4358,6 +4367,14 @@ axis	Both	Her İkisi
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	bu iz, {max} bağlantı noktalarından daha fazlasını, yani belgenin düzgün bir şekilde gösterebileceğinden daha fazlasını oluşturur: Gürültüyü artırın, Yolları veya Renkleri düşürün veya aslına uygunluğu daha düşük bir ön ayar seçin
 @msg	select an envelope	bir zarf seç
 @msg	select an image	bir resim seç
+@msg	`background` must be edges, corners or colors	`background` edges, corners veya colors olmalıdır
+@msg	`match` must be distance or channels	`match` distance veya channels olmalıdır
+@msg	`{key}` must be from 0 to 100	`{key}` 0 ile 100 arasında olmalıdır
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors`, her biri onaltılık (#rrggbb veya #rgb) ya da black, white, red, green veya blue olarak yazılmış 1 ile 16 arasında renk içermelidir
+@msg	the linked image shows its preview: embed or relink it first	bağlantılı resim önizlemesini gösteriyor: önce gömün veya yeniden bağlayın
+@msg	a CMYK image has no transparency to set	CMYK görüntüsünde ayarlanacak saydamlık yok
+@msg	every pixel matches the background: no image would be left	her piksel arka planla eşleşiyor: hiç görüntü kalmaz
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} piksellik bir görüntü değiştirilemeyecek kadar büyük
 @msg	select an object in perspective	perspektifte bir nesne seç
 @msg	select artwork (or a colour group) to recolor	yeniden renklendirilecek resmi (veya bir renk grubunu) seçin
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Yeniden renklendirme tamamlandı; değiştirilmeden kalan: {locked} ve {hidden}

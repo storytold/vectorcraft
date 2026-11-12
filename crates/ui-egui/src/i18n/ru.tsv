@@ -698,6 +698,15 @@ font-technology	Variable	Вариативные
 	Created:	Создано:
 	Crop	Обрезать
 	Crop Image	Обрезать изображение
+	Image Tools	Инструменты изображения
+	Remove Background…	Удалить фон…
+	Remove Background	Удалить фон
+	Background	Фон
+	Edge Color	Цвет края
+	Picked Colors	Выбранные цвета
+	Corner Color	Цвет углов
+	Contiguous	Смежные
+	Each Channel	Каждый канал
 	Edit Path	Редактировать контур
 	Mask	Маска
 	Crop Marks	Метки обрезки
@@ -4645,6 +4654,14 @@ axis	Both	Оба
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	эта трассировка создала бы более {max} опорных точек, что больше, чем документ может плавно отобразить: увеличьте «Шум», уменьшите «Контуры» или «Цвета» либо выберите набор с меньшей точностью
 @msg	select an envelope	выделите оболочку
 @msg	select an image	выделите изображение
+@msg	`background` must be edges, corners or colors	`background` должен быть edges, corners или colors
+@msg	`match` must be distance or channels	`match` должен быть distance или channels
+@msg	`{key}` must be from 0 to 100	`{key}` должен быть от 0 до 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` должен содержать от 1 до 16 цветов, каждый в шестнадцатеричном виде (#rrggbb или #rgb) или как black, white, red, green или blue
+@msg	the linked image shows its preview: embed or relink it first	связанное изображение показывает предпросмотр: сначала внедрите его или восстановите связь
+@msg	a CMYK image has no transparency to set	у изображения CMYK нет прозрачности, которую можно задать
+@msg	every pixel matches the background: no image would be left	каждый пиксель совпадает с фоном: от изображения ничего не осталось бы
+@msg	an image of {w} × {h} pixels is too large to change	изображение размером {w} × {h} пикселей слишком велико для изменения
 @msg	select an object in perspective	выделите объект в перспективе
 @msg	select artwork (or a colour group) to recolor	выделите рисунок (или цветовую группу) для перекрашивания
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Перекрашивание завершено; без изменений: {locked} и {hidden}

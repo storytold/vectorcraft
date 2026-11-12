@@ -702,6 +702,15 @@ font-technology	Variable	Variables
 	Created:	Création :
 	Crop	Recadrer
 	Crop Image	Recadrer l’image
+	Image Tools	Outils d’image
+	Remove Background…	Supprimer l’arrière-plan…
+	Remove Background	Supprimer l’arrière-plan
+	Background	Arrière-plan
+	Edge Color	Couleur du bord
+	Picked Colors	Couleurs choisies
+	Corner Color	Couleur des angles
+	Contiguous	Contigu
+	Each Channel	Chaque canal
 	Edit Path	Modifier le tracé
 	Mask	Masque
 	Crop Marks	Traits de coupe
@@ -4597,6 +4606,14 @@ axis	Both	Les deux
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	cette vectorisation créerait plus de {max} points d’ancrage, plus que le document ne peut afficher de façon fluide : augmentez Bruit, réduisez Tracés ou Couleurs, ou choisissez un paramètre prédéfini moins fidèle
 @msg	select an envelope	sélectionnez une enveloppe
 @msg	select an image	sélectionnez une image
+@msg	`background` must be edges, corners or colors	`background` doit valoir edges, corners ou colors
+@msg	`match` must be distance or channels	`match` doit valoir distance ou channels
+@msg	`{key}` must be from 0 to 100	`{key}` doit être compris entre 0 et 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` doit contenir de 1 à 16 couleurs, chacune en hexadécimal (#rrggbb ou #rgb) ou sous la forme black, white, red, green ou blue
+@msg	the linked image shows its preview: embed or relink it first	l’image liée affiche son aperçu : incorporez-la ou rétablissez d’abord le lien
+@msg	a CMYK image has no transparency to set	une image CMJN n’a pas de transparence à définir
+@msg	every pixel matches the background: no image would be left	chaque pixel correspond à l’arrière-plan : il ne resterait aucune image
+@msg	an image of {w} × {h} pixels is too large to change	une image de {w} × {h} pixels est trop grande pour être modifiée
 @msg	select an object in perspective	sélectionnez un objet en perspective
 @msg	select artwork (or a colour group) to recolor	sélectionnez l’illustration (ou un groupe de couleurs) dont redéfinir les couleurs
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloration terminée ; sans changement : {locked} et {hidden}

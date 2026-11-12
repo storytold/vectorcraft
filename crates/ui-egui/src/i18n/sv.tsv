@@ -688,6 +688,15 @@ font-technology	Variable	Variabla
 	Created:	Skapad:
 	Crop	Beskär
 	Crop Image	Beskär bild
+	Image Tools	Bildverktyg
+	Remove Background…	Ta bort bakgrund…
+	Remove Background	Ta bort bakgrund
+	Background	Bakgrund
+	Edge Color	Kantfärg
+	Picked Colors	Valda färger
+	Corner Color	Hörnfärg
+	Contiguous	Sammanhängande
+	Each Channel	Varje kanal
 	Edit Path	Redigera bana
 	Mask	Maskera
 	Crop Marks	Skärmärken
@@ -4506,6 +4515,14 @@ axis	Both	Båda
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	spårningen skulle ge fler än {max} ankarpunkter, fler än dokumentet kan visa smidigt: höj Brus, sänk Banor eller Färger, eller välj en förinställning med lägre återgivning
 @msg	select an envelope	markera ett kuvert
 @msg	select an image	markera en bild
+@msg	`background` must be edges, corners or colors	`background` måste vara edges, corners eller colors
+@msg	`match` must be distance or channels	`match` måste vara distance eller channels
+@msg	`{key}` must be from 0 to 100	`{key}` måste vara från 0 till 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` måste lista 1 till 16 färger, var och en hexadecimalt (#rrggbb eller #rgb) eller som black, white, red, green eller blue
+@msg	the linked image shows its preview: embed or relink it first	den länkade bilden visar sin förhandsvisning: bädda in eller länka om den först
+@msg	a CMYK image has no transparency to set	en CMYK-bild har ingen transparens att ställa in
+@msg	every pixel matches the background: no image would be left	varje pixel matchar bakgrunden: ingen bild skulle bli kvar
+@msg	an image of {w} × {h} pixels is too large to change	en bild på {w} × {h} pixlar är för stor för att ändras
 @msg	select an object in perspective	markera ett objekt i perspektiv
 @msg	select artwork (or a colour group) to recolor	markera grafik (eller en färggrupp) att färga om
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Omfärgning klar; utan ändring: {locked} och {hidden}

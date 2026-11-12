@@ -1099,6 +1099,15 @@ antiAlias	Sharp	शार्प
 	Croatian	क्रोएशियाई
 	Crop	क्रॉप करें
 	Crop Image	फसल की इमेज
+	Image Tools	इमेज टूल
+	Remove Background…	पृष्ठभूमि हटाएँ…
+	Remove Background	पृष्ठभूमि हटाएँ
+	Background	पृष्ठभूमि
+	Edge Color	किनारे का रंग
+	Picked Colors	चुने गए रंग
+	Corner Color	कोनों का रंग
+	Contiguous	सन्निहित
+	Each Channel	प्रत्येक चैनल
 	Crop Marks	क्रॉप मार्क
 	Crop To	करने के लिए फसल
 	Cross	क्रॉस
@@ -7355,6 +7364,14 @@ antiAlias	Sharp	शार्प
 @msg	select a text object	एक टेक्स्ट ऑब्जेक्ट चुनें
 @msg	select an envelope	एक लिफाफे सिलेक्ट करें
 @msg	select an image	एक इमेज चुनें
+@msg	`background` must be edges, corners or colors	`background` edges, corners या colors होना चाहिए
+@msg	`match` must be distance or channels	`match` distance या channels होना चाहिए
+@msg	`{key}` must be from 0 to 100	`{key}` 0 से 100 तक होना चाहिए
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` में 1 से 16 रंग होने चाहिए, हर एक हेक्स (#rrggbb या #rgb) में या black, white, red, green या blue के रूप में
+@msg	the linked image shows its preview: embed or relink it first	लिंक्ड इमेज अपना पूर्वावलोकन दिखा रही है: पहले इसे एम्बेड करें या फिर से लिंक करें
+@msg	a CMYK image has no transparency to set	CMYK इमेज में सेट करने के लिए कोई पारदर्शिता नहीं है
+@msg	every pixel matches the background: no image would be left	हर पिक्सेल पृष्ठभूमि से मेल खाता है: कोई इमेज नहीं बचेगी
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} पिक्सेल की इमेज बदलने के लिए बहुत बड़ी है
 @msg	select an image (or an Image Trace group)	एक इमेज सिलेक्ट करें (या एक इमेज ट्रेस समूह)
 @msg	select an Image Trace object	एक इमेज ट्रेस ऑब्जेक्ट चुनें
 @msg	select an image, or pass id	एक इमेज सिलेक्ट करें, या आईडी पास करें

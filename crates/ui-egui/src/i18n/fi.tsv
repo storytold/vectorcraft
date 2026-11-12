@@ -209,6 +209,15 @@
 	Expand…	Laajenna…
 	Expand Appearance	Laajenna ulkoasu
 	Crop Image	Rajaa kuva
+	Image Tools	Kuvatyökalut
+	Remove Background…	Poista tausta…
+	Remove Background	Poista tausta
+	Background	Tausta
+	Edge Color	Reunan väri
+	Picked Colors	Valitut värit
+	Corner Color	Kulmien väri
+	Contiguous	Yhtenäinen
+	Each Channel	Jokainen kanava
 	Edit Path	Muokkaa polkua
 	Mask	Maski
 	Rasterize…	Rasteroi…
@@ -4818,6 +4827,14 @@ imageTrace	Outline	Ääriviiva
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	tämä jäljitys tuottaisi yli {max} ankkuripistettä, enemmän kuin asiakirja näyttää sujuvasti: nosta kohinaa, vähennä polkuja tai värejä tai valitse epätarkempi esiasetus
 @msg	select an envelope	valitse vääristyskuori
 @msg	select an image	valitse kuva
+@msg	`background` must be edges, corners or colors	`background`-arvon on oltava edges, corners tai colors
+@msg	`match` must be distance or channels	`match`-arvon on oltava distance tai channels
+@msg	`{key}` must be from 0 to 100	`{key}`-arvon on oltava väliltä 0–100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors`-arvossa on oltava 1–16 väriä, kukin heksadesimaalina (#rrggbb tai #rgb) tai muodossa black, white, red, green tai blue
+@msg	the linked image shows its preview: embed or relink it first	linkitetty kuva näyttää esikatselunsa: upota tai linkitä se ensin uudelleen
+@msg	a CMYK image has no transparency to set	CMYK-kuvalla ei ole asetettavaa läpinäkyvyyttä
+@msg	every pixel matches the background: no image would be left	jokainen pikseli vastaa taustaa: kuvaa ei jäisi jäljelle
+@msg	an image of {w} × {h} pixels is too large to change	kuva, jonka koko on {w} × {h} pikseliä, on liian suuri muutettavaksi
 @msg	select an object in perspective	valitse perspektiivissä oleva objekti
 @msg	select artwork (or a colour group) to recolor	valitse uudelleenväritettävä kuvitus (tai väriryhmä)
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Uudelleenväritys valmis; muuttamatta jäi: {locked} ja {hidden}

@@ -901,6 +901,15 @@ font-technology	Variable	Változó
 	CRLF (Windows)	CRLF (Windows)
 	Crop	Körülvágás
 	Crop Image	Kép körülvágása
+	Image Tools	Képeszközök
+	Remove Background…	Háttér eltávolítása…
+	Remove Background	Háttér eltávolítása
+	Background	Háttér
+	Edge Color	Szélszín
+	Picked Colors	Kiválasztott színek
+	Corner Color	Sarokszín
+	Contiguous	Összefüggő
+	Each Channel	Minden csatorna
 	Edit Path	Útvonal szerkesztése
 	Crop Marks	Vágójelek
 	Crop To	Körülvágás
@@ -5359,6 +5368,14 @@ imageTrace	Outline	Körvonal
 @msg	a symbol can't hold an instance of itself	egy szimbólum nem tartalmazhatja a saját példányát
 @msg	select an envelope	jelölj ki egy burkolót
 @msg	select an image	jelölj ki egy képet
+@msg	`background` must be edges, corners or colors	a `background` értéke edges, corners vagy colors lehet
+@msg	`match` must be distance or channels	a `match` értéke distance vagy channels lehet
+@msg	`{key}` must be from 0 to 100	a `{key}` értéke 0 és 100 között lehet
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	a `colors` 1–16 színt sorolhat fel, mindegyiket hexadecimálisan (#rrggbb vagy #rgb) vagy black, white, red, green vagy blue alakban
+@msg	the linked image shows its preview: embed or relink it first	a csatolt kép az előnézetét mutatja: előbb ágyazd be vagy csatold újra
+@msg	a CMYK image has no transparency to set	a CMYK képnek nincs beállítható átlátszósága
+@msg	every pixel matches the background: no image would be left	minden képpont egyezik a háttérrel: nem maradna kép
+@msg	an image of {w} × {h} pixels is too large to change	egy {w} × {h} pixeles kép túl nagy a módosításhoz
 @msg	select an Image Trace object	jelölj ki egy képvektorizálási objektumot
 @msg	select an object in perspective	jelölj ki egy perspektivikus objektumot
 @msg	select artwork (or a colour group) to recolor	jelölj ki átszínezendő grafikát (vagy színcsoportot)

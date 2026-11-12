@@ -202,6 +202,15 @@
 	Expand…	Rozložit…
 	Expand Appearance	Rozložit vzhled
 	Crop Image	Oříznout obraz
+	Image Tools	Nástroje obrazu
+	Remove Background…	Odstranit pozadí…
+	Remove Background	Odstranit pozadí
+	Background	Pozadí
+	Edge Color	Barva okraje
+	Picked Colors	Vybrané barvy
+	Corner Color	Barva rohů
+	Contiguous	Souvislé
+	Each Channel	Každý kanál
 	Edit Path	Upravit cestu
 	Mask	Maska
 	Rasterize…	Rastrovat…
@@ -4916,6 +4925,14 @@ imageTrace	Outline	Obrys
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	tato vektorizace by vytvořila více než {max} kotevních bodů, víc, než dokument plynule zobrazí: zvyšte Šum, snižte Cesty nebo Barvy, nebo zvolte přednastavení s nižší věrností
 @msg	select an envelope	vyberte obálku
 @msg	select an image	vyberte obraz
+@msg	`background` must be edges, corners or colors	`background` musí být edges, corners nebo colors
+@msg	`match` must be distance or channels	`match` musí být distance nebo channels
+@msg	`{key}` must be from 0 to 100	`{key}` musí být od 0 do 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` musí obsahovat 1 až 16 barev, každou šestnáctkově (#rrggbb nebo #rgb) nebo jako black, white, red, green či blue
+@msg	the linked image shows its preview: embed or relink it first	propojený obraz zobrazuje náhled: nejprve jej vložte nebo znovu propojte
+@msg	a CMYK image has no transparency to set	obraz CMYK nemá průhlednost, kterou by bylo možné nastavit
+@msg	every pixel matches the background: no image would be left	každý obrazový bod odpovídá pozadí: nezbyl by žádný obraz
+@msg	an image of {w} × {h} pixels is too large to change	obraz o velikosti {w} × {h} obrazových bodů je příliš velký na změnu
 @msg	select an object in perspective	vyberte objekt v perspektivě
 @msg	select artwork (or a colour group) to recolor	vyberte kresbu (nebo skupinu barev) k přebarvení
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Přebarvení dokončeno; beze změny: {locked} a {hidden}
