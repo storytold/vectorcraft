@@ -2571,6 +2571,68 @@ fn converting_tracked_type_between_point_and_area_keeps_it_in_place() {
     }
 }
 
+/// Horizontal and vertical type keep every line where it is when converted from point to area
+/// type and back, and from area to point type and back, however the lines are aligned. Vertical
+/// lines run down their columns, and each next column sits to the left of the one before it.
+#[test]
+fn converting_vertical_type_between_point_and_area_keeps_it_in_place() {
+    for vertical in [false, true] {
+        for j in ["left", "center", "right"] {
+            for text in ["Wave", "Wave\nWaves"] {
+                let mut s = session();
+                let r = s.execute("text.create", &json!({"x": 300, "y": 40, "text": text, "size": 12, "vertical": vertical})).unwrap();
+                let id = NodeId(r["id"].as_u64().unwrap());
+                s.execute("text.setStyle", &json!({"ids": [id.0], "justify": j})).unwrap();
+                let before = line_starts_doc(&obj(&s, id));
+                assert_eq!(before.len(), text.lines().count());
+                if vertical && before.len() > 1 {
+                    assert!(before[1].x < before[0].x, "{j}: the second column is to the left: {before:?}");
+                }
+                for round in 0..2 {
+                    s.execute("type.convertToAreaType", &json!({"ids": [id.0]})).unwrap();
+                    let t = obj(&s, id);
+                    assert!(matches!(t.kind, TextKind::Area { .. }));
+                    let area = line_starts_doc(&t);
+                    assert_eq!(area.len(), before.len(), "vertical {vertical}, {j}, {text:?}: no rewrap");
+                    for (a, b) in area.iter().zip(&before) {
+                        assert!((*a - *b).hypot() < 0.01, "vertical {vertical}, {j}, {text:?}, round {round}, area: {before:?} → {area:?}");
+                    }
+                    s.execute("type.convertToPointType", &json!({"ids": [id.0]})).unwrap();
+                    let t = obj(&s, id);
+                    assert!(matches!(t.kind, TextKind::Point));
+                    let point = line_starts_doc(&t);
+                    for (a, b) in point.iter().zip(&before) {
+                        assert!((*a - *b).hypot() < 0.01, "vertical {vertical}, {j}, {text:?}, round {round}, point: {before:?} → {point:?}");
+                    }
+                }
+            }
+            // Area type to point type and back.
+            let mut s = session();
+            let r = s
+                .execute(
+                    "text.create",
+                    &json!({"x": 300, "y": 40, "text": "Wave\nWaves", "size": 12, "vertical": vertical, "area": {"width": 120, "height": 120}}),
+                )
+                .unwrap();
+            let id = NodeId(r["id"].as_u64().unwrap());
+            s.execute("text.setStyle", &json!({"ids": [id.0], "justify": j})).unwrap();
+            let before = line_starts_doc(&obj(&s, id));
+            assert_eq!(before.len(), 2);
+            s.execute("type.convertToPointType", &json!({"ids": [id.0]})).unwrap();
+            let point = line_starts_doc(&obj(&s, id));
+            for (a, b) in point.iter().zip(&before) {
+                assert!((*a - *b).hypot() < 0.01, "vertical {vertical}, {j}, from area, point: {before:?} → {point:?}");
+            }
+            s.execute("type.convertToAreaType", &json!({"ids": [id.0]})).unwrap();
+            let area = line_starts_doc(&obj(&s, id));
+            assert_eq!(area.len(), 2);
+            for (a, b) in area.iter().zip(&before) {
+                assert!((*a - *b).hypot() < 0.01, "vertical {vertical}, {j}, from area, area again: {before:?} → {area:?}");
+            }
+        }
+    }
+}
+
 #[test]
 fn convert_area_to_point_keeps_a_deeper_list_item_in_place() {
     let mut s = session();

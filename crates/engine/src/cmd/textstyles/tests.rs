@@ -1338,7 +1338,8 @@ fn para_style_redefined_to_the_defaults_updates_its_paragraphs() {
 
 /// The same for character styles: Auto kerning and the Roman baseline alignment, which the
 /// run's JSON leaves out, are captured and reach the style's users. A glyph choice belongs to
-/// one character, so it is not a reusable style attribute.
+/// one character, and the space before a line's first character to where it stands (#5111), so
+/// neither is a reusable style attribute.
 #[test]
 fn char_style_redefined_to_the_defaults_updates_its_text() {
     use vectorcraft_doc::CharAlign;
@@ -1358,6 +1359,7 @@ fn char_style_redefined_to_the_defaults_updates_its_text() {
     assert_eq!((kerning(&s), aligns(&s)), ([None, None, Some(60.0)], [CharAlign::RomanBaseline; 3]));
     let mut reusable = settable::<CharStyle>();
     reusable.remove("glyphAlternate");
+    reusable.remove("kerningBefore");
     assert_eq!(defined(&s, 0), reusable, "Redefine captures every reusable attribute");
     s.execute("charStyle.new", &json!({"name": "Copy", "id": local})).unwrap();
     assert_eq!(defined(&s, 1), reusable, "New captures every reusable attribute");

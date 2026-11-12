@@ -879,6 +879,9 @@ mod tests_eps;
 mod tests_metafile;
 
 #[cfg(test)]
+mod tests_hpgl;
+
+#[cfg(test)]
 mod tests_tiff_bmp_tga;
 
 #[cfg(test)]

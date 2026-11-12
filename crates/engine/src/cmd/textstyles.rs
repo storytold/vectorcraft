@@ -188,8 +188,10 @@ fn to_attrs<T: Serialize>(v: &T) -> Map<String, Value> {
 /// from a style instead leaves the text's own value alone.
 pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
     let mut m = to_attrs(v);
-    // A chosen glyph belongs to one character, not to a reusable character style.
+    // A chosen glyph belongs to one character, and the space before a line's first character to
+    // where it stands (#5111), not to a reusable character style.
     m.remove("glyphAlternate");
+    m.remove("kerningBefore");
     for (k, x) in [
         ("font_version", json!(v.font_version)),
         ("fontAxes", json!(v.font_axes)),
@@ -529,6 +531,12 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
                 Kind::Char => {
                     if m.contains_key("glyphAlternate") {
                         return Err(bad(&c, "`glyphAlternate` belongs to one character, not to a character style (text.setGlyphAlternate sets it)"));
+                    }
+                    if m.contains_key("kerningBefore") {
+                        return Err(bad(
+                            &c,
+                            "`kerningBefore` belongs to a line's first character, not to a character style (text.setRangeStyle sets it)",
+                        ));
                     }
                     let mut st = with_attrs(&CharStyle::default(), m, &c)?;
                     let changed = |key: &str| m.contains_key(key) && kept.and_then(|k| k.get(key)) != m.get(key);

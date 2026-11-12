@@ -2317,6 +2317,7 @@ font-technology	Variable	Variabla
 	Options:	Alternativ:
 	Options…	Alternativ…
 	Organic Fades	Organiska toningar
+	Holographic	Holografiska
 	or more spaces with a tab	eller fler blanksteg med en tabb
 	Order:	Ordning:
 	Ordinals	Ordningstal
@@ -4492,6 +4493,7 @@ axis	Both	Båda
 @msg	not a valid plug-in module: {0}	inte ett giltigt plugin: {0}
 @msg	not an EMF or WMF file	inte en EMF- eller WMF-fil
 @msg	not an HP-GL file	inte en HP-GL-fil
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` måste vara en array med 1 till 255 färger i formatet #rrggbb
 @msg	not found	hittades inte
 @msg	not in pattern editing mode	inte i läget för mönsterredigering
 @msg	finish editing the pattern first	slutför redigeringen av mönstret först
@@ -6341,6 +6343,17 @@ axis	Y Axis	Y-axel
 	Charge Wave	Laddningsvåg
 	Spark Trail	Gnistsvår
 	Calligraphic Nibs	Kalligrafiska pennspetsar
+	Bristle Brushes	Borstpenslar
+	Fine Liner	Fin linje
+	Pointed Flat	Spetsig platt
+	Stubby Round	Kort rund
+	Dry Scrub	Torr skrubbning
+	Soft Dome	Mjuk kupol
+	Filbert	Oval platt
+	Angled Round	Sned rund
+	Angled Flat	Sned platt
+	Fan Blender	Blandande solfjäder
+	Grass Fan	Grässolfjäder
 	Pattern Borders	Mönsterbårder
 	Scatter Shapes	Spridningsformer
 	Save Brush Library…	Spara penselbibliotek…
@@ -8452,3 +8465,15 @@ digits	Hindi	Hindi
 	Deferred Effects	Uppskjutna effekter
 @msg	no plug-in effect is deferred	ingen plugineffekt är uppskjuten
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Öppnades med {n} uppskjuten plugineffekt. Effekt › Uppdatera uppskjutna effekter kör den.|Öppnades med {n} uppskjutna plugineffekter. Effekt › Uppdatera uppskjutna effekter kör dem.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Skärverktyg
+	Stencil Bridges…	Schablonbryggor…
+	Stencil Bridges	Schablonbryggor
+	Shortest Crossing	Kortaste korsning
+	Direction	Riktning
+@msg	The selected art has no islands to bridge	Den markerade teckningen har inga öar att förbinda
+@msg	No bridge of this width fits across the selected art	Ingen brygga med den här bredden får plats över den markerade teckningen
+@msg	Some islands could not be joined to the area around the art	Vissa öar kunde inte förbindas med området runt teckningen
+@msg	`width` must be from {lo} to {hi} pt	`width` måste vara från {lo} till {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` måste vara ett heltal från 1 till {MAX_BRIDGES_PER_ISLAND}

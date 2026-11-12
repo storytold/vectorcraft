@@ -527,7 +527,7 @@ applied colors still join the list while it is hidden.
 | `screenshot` | `{path?, scale?, artboard?, window?, max_side?, traceViews?}` | Returns MCP image content (`image/png`, base64) plus a text block. Renders the artboard with the pixels of a PNG `export` with `background: "white"` at the same scale; `traceViews:true` draws Image Trace objects in the view set with `imageTrace.setView`, as in the app's window; `window:true` captures the app window (remote only), as `ui_screenshot` does, and `max_side` (1–4096, window captures only) scales the returned image down as described for `ui_screenshot`. With `path` the backend (the headless session or the app) writes the PNG there too; a window capture written there keeps its full size with `max_side`. |
 | `open_file` | `{path, importer?, params?}` | Opens any readable file as a new active document: `.vectorcraft`/`.drawcraft`, `.vctemplate`, `.svg`/`.svgz`, `.pdf`/`.ai`, `.ait`, `.eps`/`.epsf`, `.ps`, `.dxf`, `.emf`, `.wmf`, HP-GL (`.plt`/`.hpgl`/`.hgl`/`.hpg`, and a file of an extension no other format reads that starts with plotter instructions), PNG (`.png`/`.pns`), JPEG, GIF, WebP, TIFF, BMP (`.bmp`/`.dib`/`.rle`), Targa (`.tga`/`.vda`/`.icb`/`.vst`), PCX, Pixar (`.pxr`), JPEG 2000 (`.jpf`/`.jpx`/`.jp2`/`.j2k`/`.j2c`/`.jpc`), HEIC/HEIF (`.heic`/`.heif`), JPEG XL (`.jxl`), PSD (`.psd`/`.pdd`)/PSB (an image opens as a document of its pixel size; a PSD or PSB file with its layers as layers, or as its merged image through `run_command document.open` with `layers: false`; a JPEG XL file as its first frame). Templates (`.vctemplate`, `.ait`) open as a new untitled document. PDF, `.ai` and SVG files saved with Preserve Editing reopen as the document they carry. The reply is `document.open`'s: its `warnings` say what didn't come in as it was (an EPS whose PostScript can't be read opens as its preview, and the warning names the PostScript error, the operator and the procedure). A file of an extension only an installed importer plug-in lists opens with that importer ([Plug-ins](#plug-ins)); `importer: "plugin.<id>"` opens the file with the importer it names, which must list the file's extension, also one a built-in format reads (in the app, as File › Open With does), and `params` gives that importer's parameters (their defaults when omitted). `run_command document.formats` lists the formats. |
 | `save_file` | `{path?, compress?, version?, preview?, precision?, options?}` | Runs `document.save`: the document's own file in its own format (native `.vectorcraft` unless it was opened from or saved as SVG, PDF or a restorable `.ai`; then `warnings` say what that format loses). A path's extension picks the format (`.vectorcraft`, `.vctemplate`, `.pdf`, `.svg`, `.svgz`, `.ai`: a PDF carrying the native document, which reopens editable; `.eps`: by default one file whose bounding box fits the visible art, the first artboard when no art shows; `options.useArtboards: true` makes the chosen artboard the page and, with two or more chosen, the file at the path is the central file of the visible art and each artboard is also written to `<name>_<artboard>.eps` beside it, listed in the reply's `files`). For a native file, `compress: true` gzips it (default: the `useCompression` preference, Preferences › File Handling › Use Compression), `version` (1 to 4) writes it for an older VectorCraft (1 and 2 are never compressed, and `version: 2` with `compress: true` is an error), `preview: true` embeds a PNG of the first artboard, and `precision` (0 to 9) rounds path anchors and handles to that many decimal places for that save only (colors, transforms and type stay exact). `options` passes the format's save options as `run_command document.formats` lists them. When `compress`, `version`, `preview` or `precision` is given both at the top level and in `options` with different values, the call is an error (`` `compress: true` and `options.compress: false` disagree: give the option once ``) and nothing is written. A key in `options` that no save format takes is an error, and nothing is written (see Parameter keys). The save drops each option the written format doesn't read. The reply's `warnings` then name each such option given (for example `` `compress` was not used: SVG files don't read it `` for an `.svg` path, and `` `options.preview` was not used: … `` for a key in `options`; a `.ai` file reads `compress` but not `version`, `preview` or `precision`). For a `.ai` file, these warnings name the kind of `.ai` written: a legacy .ai (version 7) for `aiVersion: "7"`, a non-PDF-compatible .ai for `pdfCompatible: false`, and a PDF-compatible .ai otherwise, including a save that reuses the options the document was last saved with. `run_command document.save` and the other save commands refuse any option given beside the path and in `options` with different values, and give the same warnings for a top-level `compress`, `version`, `preview` or `precision` and for each key in `options` that the format doesn't read. The headless session and the app receive the same `app.save` params, and the app is also sent `wait: true`: the call returns once the file is written, or with the error (such as a path outside the write root), even with Background Save on. When the save asks first (the question before replacing a file that opened with losses, or on macOS and Linux the file dialog for an untitled document without `path`), the reply is `{pending}` or `"cancelled"` as before, and the save that runs after the answer uses the Background Save preference. |
-| `export` | `{path?, format?, scale?, artboard?, range?, selection?, outlineText?, options?}` | `svg`, `svgz`, `pdf`, `ai` (the PDF-compatible `.ai` that Save writes, which carries the document when every artboard is written in order), `eps`, `dxf`, `emf`, `wmf`, `png`, `jpg`, `webp`, `gif`, `png8` (an indexed `.png`), `tiff`, `bmp`, `tga`, `psd` (layered), `txt` (the document's text), `vectorcraft` or `template` (a native template). The tool's `format` enum and `document.formats` list them, generated from the engine's format table. When `format` is omitted, it comes from the path's extension. PDF and `.ai` write one page per artboard: all of them, or `artboard` (0-based) / `range` (`"1-3, 5"`, 1-based). SVG and SVGZ write one file per chosen artboard. EPS writes one file of the visible art; with `artboard`, `range`, `options.artboards` or `options: {"useArtboards": true}` it writes one file per chosen artboard, after a central file of the visible art when there are two or more, and `useArtboards: false` keeps the one file. Rasters, DXF, EMF and WMF write one artboard, or one file per chosen artboard with `options: {"useArtboards": true}`. Rasters also take `options: {"rect": [x, y, width, height]}` (page points, y down): that area of the page at the given `ppi`/`scale`, without an artboard and without changing the document; it is refused with `artboard`, `artboards`, `range` or `useArtboards`, with a non-positive or non-finite size, and for non-raster formats. `options` carries more format options (e.g. `{"quality": 80}` for JPEG). `selection: true` exports the selected objects cropped to their bounds (the reply adds their `bounds`, and reports `format` and the encoder's `warnings` as a whole-document export does); `outlineText: true` writes SVG text as paths. Template layers are left out, live effects are kept, and exporting `vectorcraft` never changes the document's path. Without `path` the bytes come back as `dataBase64`. Both backends run the same `document.export` call. |
+| `export` | `{path?, format?, scale?, artboard?, range?, selection?, outlineText?, options?}` | `svg`, `svgz`, `pdf`, `ai` (the PDF-compatible `.ai` that Save writes, which carries the document when every artboard is written in order), `eps`, `dxf`, `emf`, `wmf`, `hpgl` (a `.plt` plot file for plotters and cutters), `png`, `jpg`, `webp`, `gif`, `png8` (an indexed `.png`), `tiff`, `bmp`, `tga`, `psd` (layered), `txt` (the document's text), `vectorcraft` or `template` (a native template). The tool's `format` enum and `document.formats` list them, generated from the engine's format table. When `format` is omitted, it comes from the path's extension. PDF and `.ai` write one page per artboard: all of them, or `artboard` (0-based) / `range` (`"1-3, 5"`, 1-based). SVG and SVGZ write one file per chosen artboard. EPS writes one file of the visible art; with `artboard`, `range`, `options.artboards` or `options: {"useArtboards": true}` it writes one file per chosen artboard, after a central file of the visible art when there are two or more, and `useArtboards: false` keeps the one file. Rasters, DXF, EMF, WMF and HP-GL write one artboard, or one file per chosen artboard with `options: {"useArtboards": true}`. Rasters also take `options: {"rect": [x, y, width, height]}` (page points, y down): that area of the page at the given `ppi`/`scale`, without an artboard and without changing the document; it is refused with `artboard`, `artboards`, `range` or `useArtboards`, with a non-positive or non-finite size, and for non-raster formats. `options` carries more format options (e.g. `{"quality": 80}` for JPEG). `selection: true` exports the selected objects cropped to their bounds (the reply adds their `bounds`, and reports `format` and the encoder's `warnings` as a whole-document export does); `outlineText: true` writes SVG text as paths. Template layers are left out, live effects are kept, and exporting `vectorcraft` never changes the document's path. Without `path` the bytes come back as `dataBase64`. Both backends run the same `document.export` call. |
 | `add_text` | `{text, x?, y?, width?, height?, fit?, fitMinPercent?, path?, mode?, pathEffect?, size?, font?, color?, justify?, vertical?}` | Point type at (x, y) (`justify`: `left`, `center` or `right` starts, centres or ends each line on x); area type with `width`/`height` (`fit`: `none`, `autoHeight`, `shrinkText`, as `text.areaOptions`); or `path` + `mode` (`area`/`onPath`) to flow text in or along a path, with `pathEffect` (`rainbow`, `skew`, `3dRibbon`, `stairStep`, `gravity`; SVG export writes type on a path with any effect other than `rainbow` as outlines, with a warning); `justify` (also `auto`, `justifyAll`) aligns the paragraphs of every kind, as `text.setStyle` does later. `vertical: true` uses the existing vertical writing mode for every kind (default `false`, horizontal). Returns `{id}`, with `overflow: true` when the text doesn't fit its frame or path. |
 | `apply_effect` | `{effect?, params?, ids?}` | Appends a live effect. Without `effect`, returns the effect catalogue with parameters and defaults. |
 | `pathfinder` | `{operation, ids?}` | `unite`, `minusFront`, `intersect`, `exclude`, `divide`, `trim`, `merge`, `crop`, `outline`, `minusBack`. For a live version, apply the `pathfinder.*` effect to a group (`effect.apply` groups several loose selected objects first). In remote desktop mode, `run_command` and `invoke_menu` can both call `pathfinder.repeat` with `{}`. Successful panel operations, direct `object.pathfinder.*` commands, and `command.batch` steps (including Actions panel playback) set its history. Repeat applies it to the current selection using current Pathfinder Options. Trap, compound-shape edits, live effects and `action.batch` do not set history. With no history it returns "no Pathfinder operation applied yet". |
@@ -1873,8 +1873,13 @@ no engines, and the engines it left are dropped when their own thread next uses 
   and the other eight are kept. Each named engine has a heap of 64 MiB, which holds what it keeps between runs; a run
   that goes past it ends with the heap limit, and the engine stays usable.
 - The documents go back after an uncaught error, a limit or `script.stop` as they do for any run, and the engine keeps
-  the globals the run set before it ended. An internal error drops the engine. An error in a function an earlier run
-  defined is reported without a line and column.
+  the globals the run set before it ended. An internal error drops the engine.
+- An error in code an earlier run compiled, such as a function it defined, is reported at that code's line and column
+  in the earlier run's script, a file it included or a file its `$.evalFile` ran, and the report's `file` names that
+  file. For an earlier script given as `source`, `file` is that run's name. The report's `name` and the console line's
+  name stay the calling run's, as in `caller.js: /path/lib.jsx:12:5: Error: kept`. Each engine keeps these places
+  for 8 MiB of source maps, the oldest going first; an error in code whose place is gone, or in code that `eval` or
+  `Function` compiled, is reported without a line and column, and the code still runs.
 - `vc`, `$`, `alert`, `confirm` and `prompt` act for the run that calls them, including a copy an earlier run kept in a
   global. `vc.args` is the calling run's `args`, through a `vc` object an earlier run kept too. An engine
   holds no document: `vc.document` is a copy, read when it is called. What a run sets on `$` (`$.locale`,
@@ -2610,8 +2615,9 @@ already walks Image Trace. Short agent entry points:
   locked or sits in a hidden or locked group or layer. Choosing another selection tool selects the instance whole again.
   `symbol.instance.reset {ids?}` drops the selected instances' changes (the Properties
   panel's Reset). Redefining the symbol (`symbol.update`) reshapes every instance and keeps each change whose path the
-  new art still has; `symbol.breakLink` bakes the changes into the expanded art; `symbol.edit` edits the symbol's own
-  art, and each edit there keeps the changes whose path the art still has; making the symbol static drops them, and
+  new art still has, less a fill or stroke the object now at that path does not draw (a change left empty is dropped);
+  `symbol.breakLink` bakes the changes into the expanded art; `symbol.edit` edits the symbol's own art, and each edit
+  there keeps the changes the same way; making the symbol static drops them, and
   so does `symbol.replace` with a different symbol (a replace with the instance's own symbol keeps them).
 
 ```json
@@ -3562,8 +3568,8 @@ error.
 
 ## Brush libraries
 
-Brush libraries are read-only sets of brushes: six generated in code (Art Ribbons, Calligraphic Nibs, Pattern
-Borders, Scatter Shapes, Game Trails, Energy Beams), the `.vectorcraft` files in the user library folder of the desktop app (User
+Brush libraries are read-only sets of brushes: seven generated in code (Art Ribbons, Calligraphic Nibs, Bristle
+Brushes with one bristle brush for each tip shape, Pattern Borders, Scatter Shapes, Game Trails, Energy Beams), the `.vectorcraft` files in the user library folder of the desktop app (User
 Defined) and the brushes of any document loaded with `brush.loadLibrary` (a document without brushes of its own has
 the default ones). `brush.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and
 `brush.library {library}` returns one's brushes (`name`, `type`; `library` is an id or a name).
@@ -5154,7 +5160,8 @@ Pen's second anchor at (150, 431), in line with the square's centre.
   `type.resetTracking` (Cmd+Alt+Q, `press_key {key: "Q", mods: {cmd: true, alt: true}}`) sets tracking to 0 and
   clears manual kerning in the type objects in `ids`, the Type tool's selected text or the selected type objects,
   keeping Optical; at a caret
-  it resets only the kerning of the character before it. `type.resetHorizontalScale` (Cmd+Shift+X,
+  it resets only the kerning there: of the character before it, or at the start of a line (of the text, a paragraph,
+  or after a forced line break) the space before the character after it (`kerningBefore`). `type.resetHorizontalScale` (Cmd+Shift+X,
   `press_key {key: "X", mods: {cmd: true, shift: true}}`) sets the horizontal scale to 100%, as the Character panel
   shows it, in the same text; at a caret it leaves the text as it is. In the app, `type.highlightKerning` (Cmd+Alt+K),
   `type.highlightTracking` (no default key) and `type.highlightFontName` (Cmd+Alt+Shift+F) show the Character panel and
@@ -6492,11 +6499,55 @@ from the origin, so P2 lies there when the file sets no scaling points.
 `SP0` draws nothing. Labels, the symbols of symbol mode (`SM`) and raster images are not drawn, the input window
 (`IW`) does not clip the art, the art of later pages is drawn over the first page, and hatched and patterned fills are
 filled solid; `warnings` lists each of these. A file named as a plot file that doesn't start with plotter
-instructions is refused with "not an HP-GL file". VectorCraft does not write HP-GL.
+instructions is refused with "not an HP-GL file".
 
 ```json
 {"name":"open_file","arguments":{"path":"/tmp/part.plt"}}
 {"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/part.plt","at":[300,200]}}}
+```
+
+## HP-GL export
+
+`document.export` (and `export`, and Export As) with format `hpgl` writes a plot file (`.plt`) of the first artboard
+(or `artboard`) for pen plotters and cutters; `useArtboards: true` writes one file per chosen artboard
+(`{stem}-{artboard}.plt`), `false` the bounds of the visible art. Each visible path is drawn once along its own line:
+a filled shape is its closed outline, also when a stroke gives its color, and a stroked path is its center line, so
+fills, stroke widths, dashes, brushes and arrowheads are not painted. Type is drawn as its glyph outlines, and a
+gradient mesh as its outline, also inside a blend (a mesh whose every point is at 0% opacity draws nothing). A
+symbol instance is drawn as its symbol's art with the art's effects, in the colors of the instance's stain.
+Clipping masks cut the art they clip, and the art is cut at the artboard's edges. Hidden and non-printing layers,
+hidden objects, objects at 0% opacity, template layers and guides are left out, and so are placed images, with a
+warning. Coordinates are plotter units (1016 to the inch, y up) from the artboard's bottom-left corner, or its
+center with `origin: "center"`, rounded to whole units, as the HP-GL/2 and HP RTL Reference Guide defines them
+([book listing](https://informit.com/store/hp-gl-2-and-hp-rtl-reference-guide-a-handbook-for-program-9780201310146);
+the [vendor's support page](https://support.hp.com/sg-en/document/c01121263) names it as the language reference).
+The guide also gives the instruction syntax and the encoding of `PE` numbers that the writer follows. Art more than
+8,388,607 units (about 210 m) from the origin is cut off, with a warning.
+
+Each color is a pen. Pen 1 is the first color the plot draws in, pen 2 the next new one, and so on, up to 255 pens;
+colors past those draw with the pen of the nearest color. The files of one export share the numbering, so a color is
+the same pen in each file. `pens: ["#000000", "#ff0000"]` gives the pen table instead (pen 1 first): each path draws
+with the pen of the nearest color, the lower pen when two are as near. A path's color is its topmost visible stroke's,
+else its topmost visible fill's, where a fill or stroke at 0% opacity does not count. A gradient's color is the average
+of its stops, a gradient mesh's the average of its points' colors (points at 0% opacity left out), and a pattern's its first visible solid fill (gray
+when it has none). The pens draw in turn, each pen's paths in paint order, or with `sortPaths: true` each next path
+the one that starts nearest where the pen stopped (an open path may be drawn from its other end, and a closed one
+starts at its point nearest the pen). Curves become straight moves no further than `curveTolerance` points from the
+curve (default 0.1, from 0.01 to 10). These defaults, the 255-pen limit and the rules for pen numbers and colors above
+are VectorCraft's own.
+
+`hpglVersion: "hpgl"` (the default) writes `IN;`, then for each pen `PU;SP<n>;` and each path `PUx,y;PDx,y,…;`, and
+ends with `PU;SP0;`. `"hpgl2"` also writes the palette (`NP` and a `PC` color for each pen) and draws each pen's
+paths as one encoded polyline (`PE`, base 64), which takes fewer bytes than the same moves as text. An `"hpgl"` plot
+with a coordinate outside −32,768 to 32,767 units (about 82 cm from the origin, the range of 16-bit numbers) is written
+as it is, with a warning that older devices may not read it; this check is VectorCraft's own. `warnings` names
+type drawn as outlines, inline graphics in type (left out), placed images, opacity masks, raster effects, stroke
+looks that are not drawn, art past the plotter's range, HP-GL coordinates past 16-bit numbers, colors past 255 pens,
+and the limits on points, clipping work, symbols, live art, nesting depth and sorting.
+
+```json
+{"name":"export","arguments":{"path":"/tmp/decal.plt","format":"hpgl"}}
+{"name":"run_command","arguments":{"command":"document.export","params":{"format":"hpgl","path":"/tmp/sheet.plt","useArtboards":true,"hpglVersion":"hpgl2","pens":["#000000","#ff0000"],"sortPaths":true}}}
 ```
 
 ## TIFF, BMP and Targa export
@@ -7954,8 +8005,9 @@ targeted objects, as before. With a range, the character attributes of `text.set
 that range of characters. When every paragraph that `text.tabs.set` or `text.tabs.clear` targets already has those
 stops, the command changes nothing and records no undo step. `text.tabs.set` rejects a supplied `align`, `leader`, or
 `alignOn` value that is not a string, an empty `alignOn` value or one of more than one character, a leader of more than
-8 characters, a position outside 0 to 100000 pt, and more than 256 stops. It sorts the stops by position and keeps the
-first of stops at one position.
+8 characters, a position outside 0 to 100000 pt, and more than 256 stops unless every paragraph it targets already
+holds at least that many, so stops can be removed from a paragraph that holds more. It sorts the stops by position and
+keeps the first of stops at one position.
 
 `text.tabs.get {start?}` and `paraStyle.new` / `paraStyle.redefine {id, start?}` read the
 paragraph at `start`; `paraStyle.list` counts paragraphs as uses, and `charStyle.list` counts runs; both count the type in
@@ -9396,6 +9448,60 @@ changes nothing until the pointer moves, a Contour that already stands at a dist
 whole points and Escape cancels. A drag keeps a Contour's own corners and miter limit; a new Contour takes the tool's
 options `corners` and `miterLimit` (`tool.setOption`). A border with a gap is two Contours of one shape (the gap first, so
 it ends up in front), baked with `effect.expandAppearance`, then `object.pathfinder.minusFront`.
+
+## Cutting Tools add-on
+
+Cutting Tools is a built-in add-on that prepares art for cutting. Its command is `addon.cutting.bridges`; in the desktop
+app it is Object › Plug-ins › Cutting Tools › Stencil Bridges….
+
+### Stencil Bridges
+
+`addon.cutting.bridges` cuts bridges out of the selected art so that a stencil cut from it holds together. An island is
+an area the art encloses, such as the inside of an O, A or 8 or a hole in a shape; cut out of a sheet, it would fall
+away. A bridge is a strip of the sheet left uncut across the art, which keeps the island attached
+([stencil islands and bridges](https://en.wikipedia.org/wiki/Stencil)). The rules below are VectorCraft's own.
+
+- The art is measured by the area its outlines enclose, whatever their paint: paths and compound paths with their fill
+  rule (open paths closed as a fill closes them), groups by their members, and type by its glyph outlines. Hidden
+  objects, and the members of hidden groups, are left out. The type object itself is not converted. An outline that
+  encloses less than the square of the curve tolerance (below) counts as part of the area around it.
+- Every island is joined to the area around the art, directly or through another island, by the shortest crossings
+  that fit (among crossings of about the same length, the one nearest the middle of the island). Then each island gets
+  more bridges, up to `count`: each at least two widths from the island's other bridges and no longer than twice the
+  shortest crossing a bridge fits plus `width`. An island too narrow for a strip `width` wide gets no bridge, and islands that a
+  bridge could join only to each other and not to the sheet get none either. `unbridged` counts the islands the cut
+  result still encloses.
+- The result is one compound path (a plain path when one outline is left) with the strips cut out of its outlines,
+  painted as the topmost selected shape, in the place of the topmost selected object that has outlines. It is selected.
+  Selected objects with no outlines in the art, such as hidden objects or type holding only spaces, stay where they are.
+- With `keepOriginal` the selected objects that make up the art move to a new hidden layer named "Stencil Original"
+  ("Stencil Original 2" and so on when that name is taken), above the other layers, in their stacking order and outside
+  the groups that held them; with false they are replaced.
+- Art with no islands, or with islands that no bridge of the width fits, is left as it is: the result carries a
+  `warning` and no undo step is made. Otherwise the run is one undo step, with a `warning` when the cut result still
+  encloses some islands.
+- Curves are followed in straight segments within a twentieth of `width` (0.002 to 0.25 pt); a curve that would need
+  more than 4096 segments gets a larger tolerance. Art that reaches more than 10000000 pt from the origin or has more
+  than 200000 anchors is refused before it is combined. Art is also refused when its combined area has more than 4000
+  outlines, when its outlines need more than 200000 straight segments, and when finding which outlines lie inside
+  which, or measuring the crossings until every island is joined, takes more work than a fixed budget allows. When the
+  budget runs out while extra bridges are being added, the bridges found so far are kept.
+
+| Parameter | Values (default) |
+|---|---|
+| `width` | each bridge's width, 0.01 to 1000 pt, as a number of points or a string with a unit such as `"2 mm"` (2) |
+| `count` | the bridges each island gets, a whole number from 1 to 16; fewer where it has no room, and more where other islands are joined to the sheet through it (1) |
+| `direction` | `vertical`, `horizontal`, or `shortest` (the shortest crossing among 12 directions 15° apart) (`vertical`) |
+| `keepOriginal` | true; false replaces the selected art |
+
+→ `{id (the new path, or null), islands, bridges, unbridged, original (the hidden layer's id, or null), warning?}`.
+Stencil Bridges… opens the command dialog (`ui.paramDialog`) on Width, Count, Direction (Vertical, Horizontal, Shortest
+Crossing) and Keep Original.
+
+```json
+{"name":"run_command","arguments":{"command":"addon.cutting.bridges","params":{"width":"2 mm"}}}
+{"name":"run_command","arguments":{"command":"addon.cutting.bridges","params":{"width":3,"count":2,"direction":"shortest","keepOriginal":false}}}
+```
 
 ## Color Effects add-on
 

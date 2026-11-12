@@ -788,6 +788,7 @@
 	Sky Gradients	Himmelgradienter
 	Neutral Gradients	Neutrale gradienter
 	Organic Fades	Organiske toninger
+	Holographic	Holografiske
 	Duotone Gradients	Duotonegradienter
 	Radial Glows	Radiale gløder
 	Save Swatch Library…	Gem bibliotek med farveprøver…
@@ -4521,6 +4522,7 @@ imageTrace	Outline	Kontur
 @msg	not a valid plug-in module: {0}	ikke et gyldigt plug-in-modul: {0}
 @msg	not an EMF or WMF file	ikke en EMF- eller WMF-fil
 @msg	not an HP-GL file	ikke en HP-GL-fil
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` skal være et array af 1 til 255 #rrggbb-farver
 @msg	not found	ikke fundet
 @msg	not in pattern editing mode	ikke i mønsterredigeringstilstand
 @msg	finish editing the pattern first	afslut først redigeringen af mønsteret
@@ -6080,6 +6082,17 @@ axis	Y Axis	Y-akse
 	Charge Wave	Opladningsbølge
 	Spark Trail	Gnistsvær
 	Calligraphic Nibs	Kalligrafiske penne
+	Bristle Brushes	Børstepensler
+	Fine Liner	Fin streg
+	Pointed Flat	Spids flad
+	Stubby Round	Kort rund
+	Dry Scrub	Tør skrubning
+	Soft Dome	Blød kuppel
+	Filbert	Oval flad
+	Angled Round	Skrå rund
+	Angled Flat	Skrå flad
+	Fan Blender	Blendevifte
+	Grass Fan	Græsvifte
 	Pattern Borders	Mønsterborter
 	Scatter Shapes	Spredte former
 	Save Brush Library…	Gem penselbibliotek…
@@ -6679,3 +6692,10 @@ breakText	Glyphs	Glyffer
 # Deferred plug-in effects
 	Refresh Deferred Effects	Opdatér udskudte effekter
 	Deferred Effects	Udskudte effekter
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Skæreværktøjer
+	Stencil Bridges…	Stencilbroer…
+	Stencil Bridges	Stencilbroer
+	Shortest Crossing	Korteste krydsning
+	Direction	Retning

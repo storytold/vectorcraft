@@ -20,6 +20,7 @@ mod inline;
 mod joiners;
 mod justify;
 mod kept_layouts;
+mod kerning_before;
 mod ligature_carets;
 mod path_joins;
 mod ruby;

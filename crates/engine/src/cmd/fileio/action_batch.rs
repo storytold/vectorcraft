@@ -536,6 +536,7 @@ fn dataset_output_extensions(run: &Run<'_>, doc: &vectorcraft_doc::Document, def
                                 | "dxf"
                                 | "emf"
                                 | "wmf"
+                                | "hpgl"
                                 | "ai"
                         )
                 };

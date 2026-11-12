@@ -2189,6 +2189,7 @@ shape	Open	Açık
 	Options:	Seçenekler:
 	Options…	Seçenekler…
 	Organic Fades	Organik Solmalar
+	Holographic	Holografik
 	or more spaces with a tab	veya sekmeli daha fazla alan
 	Order:	Sipariş:
 	Ordinals	Sıra Sayıları
@@ -4347,6 +4348,7 @@ axis	Both	Her İkisi
 @msg	not a valid plug-in module: {0}	geçerli bir eklenti modülü değil: {0}
 @msg	not an EMF or WMF file	EMF veya WMF dosyası değil
 @msg	not an HP-GL file	HP-GL dosyası değil
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 1 ile 255 arasında #rrggbb renginden oluşan bir dizi olmalıdır
 @msg	not an RTF file: it doesn't start with {\\rtf	bir RTF dosyası değil: {\\rtf ile başlamıyor
 @msg	not found	bulunamadı
 @msg	not in pattern editing mode	desen düzenleme modunda değil
@@ -6280,6 +6282,17 @@ axis	Y Axis	Y ekseni
 	Charge Wave	Şarj Dalgası
 	Spark Trail	Kıvılcım İzi
 	Calligraphic Nibs	Kaligrafi Uçları
+	Bristle Brushes	Kıl Fırçalar
+	Fine Liner	İnce Çizgi
+	Pointed Flat	Sivri Düz
+	Stubby Round	Kısa Yuvarlak
+	Dry Scrub	Kuru Ovma
+	Soft Dome	Yumuşak Kubbe
+	Filbert	Kedi Dili
+	Angled Round	Eğik Yuvarlak
+	Angled Flat	Eğik Düz
+	Fan Blender	Harmanlama Yelpazesi
+	Grass Fan	Çim Yelpazesi
 	Pattern Borders	Desen Kenarlıkları
 	Scatter Shapes	Dağılım Şekilleri
 	Save Brush Library…	Fırça Kitaplığını Kaydet…
@@ -6930,3 +6943,15 @@ breakText	Glyphs	Glifler
 	Deferred Effects	Ertelenen Efektler
 @msg	no plug-in effect is deferred	ertelenen eklenti efekti yok
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	{n} eklenti efekti ertelenerek açıldı. Efekt › Ertelenen Efektleri Yenile bunları çalıştırır.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Kesim Araçları
+	Stencil Bridges…	Şablon Köprüleri…
+	Stencil Bridges	Şablon Köprüleri
+	Shortest Crossing	En kısa geçiş
+	Direction	Yön
+@msg	The selected art has no islands to bridge	Seçili çizimde köprüyle bağlanacak ada yok
+@msg	No bridge of this width fits across the selected art	Bu genişlikte bir köprü seçili çizime sığmıyor
+@msg	Some islands could not be joined to the area around the art	Bazı adalar çizimin çevresindeki alana bağlanamadı
+@msg	`width` must be from {lo} to {hi} pt	`width` {lo} ile {hi} pt arasında olmalıdır
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 ile {MAX_BRIDGES_PER_ISLAND} arasında bir tam sayı olmalıdır

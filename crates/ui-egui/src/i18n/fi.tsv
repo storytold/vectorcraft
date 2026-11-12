@@ -842,6 +842,7 @@
 	Sky Gradients	Taivasliukuvärit
 	Neutral Gradients	Neutraalit liukuvärit
 	Organic Fades	Orgaaniset häivytykset
+	Holographic	Holografiset
 	Duotone Gradients	Kaksisävyliukuvärit
 	Radial Glows	Säteittäiset hehkut
 	Save Swatch Library…	Tallenna värimallikirjasto…
@@ -4805,6 +4806,7 @@ imageTrace	Outline	Ääriviiva
 @msg	not a valid plug-in module: {0}	ei kelvollinen laajennusmoduuli: {0}
 @msg	not an EMF or WMF file	ei EMF- tai WMF-tiedosto
 @msg	not an HP-GL file	ei HP-GL-tiedosto
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` on oltava 1–255 #rrggbb-värin taulukko
 @msg	not found	ei löytynyt
 @msg	not in pattern editing mode	ei kuvion muokkaustilassa
 @msg	finish editing the pattern first	lopeta ensin kuvion muokkaus
@@ -6354,6 +6356,17 @@ axis	Y Axis	Y-akseli
 	Charge Wave	Latausaalto
 	Spark Trail	Kipinävanne
 	Calligraphic Nibs	Kalligrafiakärjet
+	Bristle Brushes	Harjassiveltimet
+	Fine Liner	Ohut viiva
+	Pointed Flat	Suippo litteä
+	Stubby Round	Lyhyt pyöreä
+	Dry Scrub	Kuiva hankaus
+	Soft Dome	Pehmeä kupu
+	Filbert	Kissankieli
+	Angled Round	Vino pyöreä
+	Angled Flat	Vino litteä
+	Fan Blender	Sekoitusviuhka
+	Grass Fan	Ruohoviuhka
 	Pattern Borders	Kuvioreunukset
 	Scatter Shapes	Sirontamuodot
 	Save Brush Library…	Tallenna sivellinkirjasto…
@@ -7009,3 +7022,15 @@ breakText	Glyphs	Merkit
 	Deferred Effects	Lykätyt tehosteet
 @msg	no plug-in effect is deferred	yhtään laajennustehostetta ei ole lykätty
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Avattiin, ja {n} laajennustehoste lykättiin. Tehoste › Päivitä lykätyt tehosteet suorittaa sen.|Avattiin, ja {n} laajennustehostetta lykättiin. Tehoste › Päivitä lykätyt tehosteet suorittaa ne.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Leikkaustyökalut
+	Stencil Bridges…	Sapluunan sillat…
+	Stencil Bridges	Sapluunan sillat
+	Shortest Crossing	Lyhin ylitys
+	Direction	Suunta
+@msg	The selected art has no islands to bridge	Valitussa grafiikassa ei ole yhdistettäviä saarekkeita
+@msg	No bridge of this width fits across the selected art	Näin leveä silta ei mahdu valitun grafiikan poikki
+@msg	Some islands could not be joined to the area around the art	Joitakin saarekkeita ei voitu yhdistää grafiikkaa ympäröivään alueeseen
+@msg	`width` must be from {lo} to {hi} pt	`width`-arvon on oltava {lo}–{hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` on oltava kokonaisluku 1–{MAX_BRIDGES_PER_ISLAND}
