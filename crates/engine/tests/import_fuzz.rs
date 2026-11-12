@@ -1,4 +1,4 @@
-//! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG, PDF and DXF input,
+//! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG, PDF, DXF and HP-GL input,
 //! mutated raster images (Photoshop documents and JPEG XL images among them) placed with File → Place, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`), flattener preset
 //! (`.vcflattener`) and export preset (`.vcexportpresets`) libraries, shortcut sets and action sets other apps save as text (`.kys`, `.aia`), and native files (compressed, damaged, saved for older versions),
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
@@ -3006,6 +3006,73 @@ proptest! {
     #[test]
     fn pasted_metafiles_never_panic(which in 0usize..2, cut in 0usize..200_000, edits in prop::collection::vec((0usize..200_000, any::<u8>()), 0..12)) {
         paste_from_elsewhere("clipboard.importEmf", json!({"dataBase64": mutated_b64(metafile_samples()[which].clone(), cut, &edits)}))?;
+    }
+}
+
+// ---------- HP-GL plot files: opened and placed ----------
+
+/// A plot file with every kind of instruction the reader plays, printer escapes around it.
+const HPGL_SAMPLE: &[u8] = b"\x1b%-12345X@PJL ENTER LANGUAGE=HPGL2\r\n\x1bE\x1b%0BIN;BP1,\"job\";CO\"sample\";NP16;PC9,10,20,30;CR0,100,0,100,0,100;\
+SP1;PW0.5;WU0;LA1,4,2,4,3,7;LT2,5,1;PA0,0;PD1000,0,1000,1000;PU;LT;PR;PD-500,0,0,-500;PA2000,2000;CI300,5;AA2000,2500,120;AR0,100,-90;\
+AT2500,2500,3000,2000;RT100,100,200,0;BZ0,100,100,100,100,0;BR10,10,20,10,30,0;UL3,1,2,1;LT-3,2;EA3000,3000;ER100,-100;FT10,40;RA3500,3500;\
+RR200,200;WG400,30,120;EW-400,0,360;PM0;PD4000,4000,4500,4000,4500,4500;PM1;PU4100,4100;PD4200,4100,4200,4200;PM2;FP1;EP;FT3,10,45;FP;\
+IP0,0,10160,7620;SC0,100,0,100,1,20,80;PU10,10;PD20,20;SC0,10,0,10,2;PD5,5;SC;RO90;PD100,100;RO;IR10,10,90,90;IW0,0,5000,5000;\
+DT*,1;LBlabel*SMx;PA0,0;SM;PE:\xc1<=\xbf\xc0\xc2\xc2;LB\x03PG;\x1b%0A\x1b*r1A\x1b*b4W\x01\x02\x03\x04\x1b*rC\x1b%1BPD1,1;\x1b%-12345X";
+
+/// The sample the mutations start from opens as a plot with art.
+#[test]
+fn the_hpgl_sample_opens() {
+    let l = vectorcraft_engine::cmd::fileio::load("x.plt", HPGL_SAMPLE).unwrap();
+    assert_eq!(l.format.id, "hpgl");
+    let mut paths = 0;
+    l.doc.walk(|n| paths += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. })));
+    assert!(paths > 15, "{paths} paths, warnings {:?}", l.warnings);
+}
+
+/// A random instruction: a mnemonic the reader plays (or one it doesn't) with hostile numbers.
+fn arb_hpgl_instruction() -> impl Strategy<Value = String> {
+    let op = prop::sample::select(vec![
+        "IN", "DF", "PU", "PD", "PA", "PR", "SP", "PW", "WU", "NP", "PC", "CR", "LT", "UL", "LA", "FT", "SC", "IP", "IR", "RO", "CI", "AA", "AR",
+        "AT", "RT", "BZ", "BR", "EA", "ER", "RA", "RR", "EW", "WG", "PM", "FP", "EP", "LB", "DT", "SM", "CO", "PG", "IW", "PE", "ZZ",
+    ]);
+    let number = prop_oneof![
+        Just("0".to_string()),
+        Just("-1".to_string()),
+        (-3000i32..3000).prop_map(|v| v.to_string()),
+        Just("99999999999999999999999".to_string()),
+        Just("0.000001".to_string()),
+        Just("32767".to_string()),
+        Just("-32768".to_string()),
+        Just("360".to_string()),
+    ];
+    (op, prop::collection::vec(number, 0..8)).prop_map(|(o, n)| format!("{o}{};", n.join(",")))
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn random_hpgl_instructions_never_panic(instructions in prop::collection::vec(arb_hpgl_instruction(), 0..40)) {
+        let bytes = format!("IN;SP1;{}", instructions.concat()).into_bytes();
+        survive_metafile("HP-GL instructions", "x.plt", &bytes)?;
+    }
+
+    #[test]
+    fn mutated_hpgl_files_never_panic(cut in 0usize..1200, edits in prop::collection::vec((0usize..1200, any::<u8>()), 0..16)) {
+        let mut bytes = HPGL_SAMPLE.to_vec();
+        let n = bytes.len();
+        for &(at, b) in &edits {
+            bytes[at % n] = b;
+        }
+        bytes.truncate(cut.max(4));
+        survive_metafile("mutated HP-GL", "x.plt", &bytes)?;
+    }
+
+    #[test]
+    fn hpgl_garbage_never_panics(bytes in prop::collection::vec(any::<u8>(), 0..400)) {
+        let mut b = b"IN;SP1;PD".to_vec();
+        b.extend(bytes);
+        survive_metafile("HP-GL garbage", "x.hpgl", &b)?;
     }
 }
 

@@ -138,6 +138,17 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if clipboard::looks_like_svg(&String::from_utf8_lossy(&bytes[..bytes.len().min(4096)])) {
         return format("svg");
     }
+    // HP-GL has no signature: a file that starts with plotter instructions, named as one or with an
+    // extension no other format (text, the formats VectorCraft names as unsupported, and the files
+    // File › Open takes in other ways included) reads.
+    let ext = super::extension(name);
+    let other = by_name.is_some_and(|f| f.id != "hpgl")
+        || super::TEXT_EXTS.contains(&ext.as_str())
+        || super::unsupported(&ext).is_some()
+        || super::opens_as_other(&ext);
+    if !other && vectorcraft_cad::hpgl::is_hpgl(bytes) {
+        return format("hpgl");
+    }
     by_name
 }
 
@@ -490,6 +501,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         "emf" | "wmf" => {
             let (doc, warnings) = super::metafile::import(bytes)?;
             (doc, warnings, false)
+        }
+        "hpgl" => {
+            let i = vectorcraft_cad::hpgl::import(bytes).map_err(err)?;
+            (i.document, i.warnings, false)
         }
         "affinity" => {
             let i = super::affinity::import(&title, bytes)?;

@@ -55,6 +55,42 @@ fn file_constructor_identity_and_folder_path() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `exists` is true only when the path names an entry of the object's own kind.
+#[test]
+fn script_file_exists_checks_the_kind() {
+    let base = folder("kind");
+    write(&base.join("main/data.txt"), b"x");
+    std::fs::create_dir_all(base.join("main/sub")).unwrap();
+    let log =
+        logged(&base, "vc.log([new File('sub').exists, new Folder('data.txt').exists, new File('data.txt').exists, new Folder('sub').exists]);");
+    assert_eq!(log, json!([[false, false, true, true]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A property a script puts on `Object.prototype` is not read as part of what the app returns.
+#[test]
+fn script_file_ignores_inherited_result_fields() {
+    let base = folder("inherited");
+    write(&base.join("main/data.txt"), b"data");
+    let log = logged(
+        &base,
+        "Object.prototype.error = 'inherited'; Object.prototype.exists = true;\n\
+         var f = new File('data.txt'); var opened = f.open('r');\n\
+         vc.log([f.exists, new File('nope').exists, opened, f.error, f.read()]);",
+    );
+    assert_eq!(log, json!([[true, false, true, "", "data"]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `File.encode`, `File.decode`, `File.isEncodingAvailable` and the `Folder` locations are counted as
+/// calls to the app.
+#[test]
+fn script_file_class_functions_are_counted() {
+    let source = "File.encode('x'); File.decode('y'); Folder.isEncodingAvailable('UTF-8'); Folder.temp;";
+    let r = Session::new().execute("script.run", &json!({"source": source})).unwrap();
+    assert_eq!(r["hostCallCounts"]["fileCalls"], 4, "{r}");
+}
+
 #[test]
 fn file_names_are_uri_encoded_and_current_relative() {
     let base = folder("names");
@@ -74,7 +110,7 @@ fn file_names_are_uri_encoded_and_current_relative() {
     assert_eq!(
         log,
         json!([
-            ["caf%C3%A9%20x.txt", "caf\u{e9} x.txt", "caf%C3%A9%20x.txt", true, "%C3%A9%20%2F", "\u{e9}", "sub/y.txt", true, true],
+            ["caf%C3%A9%20x.txt", "caf\u{e9} x.txt", "caf%C3%A9%20x.txt", true, "%C3%A9%20/", "\u{e9}", "sub/y.txt", true, true],
             ["sub", "w", "w"],
             ["literal%20name.txt", "literal%2520name.txt", "literal%2520name.txt", true, "p%41", "p%41"]
         ])

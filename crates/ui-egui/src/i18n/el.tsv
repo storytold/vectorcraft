@@ -660,6 +660,15 @@ font-technology	Variable	Μεταβλητές
 	Created:	Δημιουργήθηκε:
 	Crop	Περικοπή
 	Crop Image	Περικοπή εικόνας
+	Image Tools	Εργαλεία εικόνας
+	Remove Background…	Αφαίρεση φόντου…
+	Remove Background	Αφαίρεση φόντου
+	Background	Φόντο
+	Edge Color	Χρώμα άκρης
+	Picked Colors	Επιλεγμένα χρώματα
+	Corner Color	Χρώμα γωνιών
+	Contiguous	Συνεχόμενα
+	Each Channel	Κάθε κανάλι
 	Edit Path	Επεξεργασία διαδρομής
 	Mask	Μάσκα
 	Crop Marks	Σημάδια ξακρίσματος
@@ -3918,6 +3927,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Scale at Center	Κλιμάκωση από το κέντρο
 	Up/Down:	Πάνω/Κάτω:
 	Left/Right:	Αριστερά/Δεξιά:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko πάνω/κάτω
+	Tate-chu-yoko Left/Right	Tate-chu-yoko αριστερά/δεξιά
 	Temperature/Tint…	Θερμοκρασία/Απόχρωση…
 	Templates Folder	Φάκελος προτύπων
 	Text Displayed in Cell:	Κείμενο που εμφανίζεται στο κελί:
@@ -4337,6 +4348,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, μεγαλύτερη από το όριο σελίδας PDF των 14.400 pt (200 in): γράφεται με UserUnit {unit}, οπότε οι εφαρμογές που αγνοούν το UserUnit την εμφανίζουν τόσες φορές μικρότερη
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, μεγαλύτερη από το όριο σελίδας PDF των 14.400 pt (200 in): οι σελίδες {label} γράφονται χωρίς UserUnit, σε στιγμές, και οι εφαρμογές που τηρούν το όριο κόβουν τη σελίδα στις 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	το PDF 1.5 δεν έχει UserUnit, που χρειάζεται μια σελίδα μεγαλύτερη από 14.400 pt (200 in) για να κρατήσει το μέγεθός της: το αρχείο γράφεται ως PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	το PDF 1.4 δεν έχει UserUnit, που χρειάζεται μια σελίδα μεγαλύτερη από 14.400 pt (200 in) για να μείνει εντός του ορίου σελίδας του PDF/A-2, 14.400 μονάδων: το αρχείο γράφεται ως PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, πολύ μακριά και στενή για τις πλευρές σελίδας PDF από 3 έως 14.400 μονάδες: γράφεται με UserUnit {unit}, που κρατά τη μικρή πλευρά στις 3 μονάδες ή περισσότερο, και οι εφαρμογές που τηρούν το όριο κόβουν τη μεγάλη πλευρά στις 14.400 μονάδες
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	τα αρχεία {label} δέχονται πραγματικούς αριθμούς έως {max}, και η σελίδα του πίνακα σχεδίασης {n}, μήκους {side} pt, χρειάζεται μεγαλύτερους: επιλέξτε PDF 1.6 ή νεότερο χωρίς πρότυπο PDF/X, ή μικρότερο πίνακα σχεδίασης
 @msg	invalid image data for `{0}`	μη έγκυρα δεδομένα εικόνας για `{0}`
@@ -4485,6 +4497,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	not a stored central record	δεν είναι αποθηκευμένη κεντρική εγγραφή
 @msg	not a valid plug-in module: {0}	δεν είναι έγκυρη μονάδα προσθέτου: {0}
 @msg	not an EMF or WMF file	δεν είναι αρχείο EMF ή WMF
+@msg	not an HP-GL file	δεν είναι αρχείο HP-GL
 @msg	not found	δεν βρέθηκε
 @msg	not in pattern editing mode	δεν βρίσκεστε σε λειτουργία επεξεργασίας μοτίβου
 @msg	finish editing the pattern first	ολοκληρώστε πρώτα την επεξεργασία του μοτίβου
@@ -4558,6 +4571,14 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	αυτή η διανυσματοποίηση θα δημιουργούσε πάνω από {max} σημεία αγκύρωσης, περισσότερα από όσα μπορεί να εμφανίσει ομαλά το έγγραφο: αυξήστε τον Θόρυβο, μειώστε τις Διαδρομές ή τα Χρώματα ή επιλέξτε προεπιλογή χαμηλότερης πιστότητας
 @msg	select an envelope	επιλέξτε περίβλημα
 @msg	select an image	επιλέξτε εικόνα
+@msg	`background` must be edges, corners or colors	το `background` πρέπει να είναι edges, corners ή colors
+@msg	`match` must be distance or channels	το `match` πρέπει να είναι distance ή channels
+@msg	`{key}` must be from 0 to 100	το `{key}` πρέπει να είναι από 0 έως 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	το `colors` πρέπει να περιέχει 1 έως 16 χρώματα, το καθένα σε δεκαεξαδική μορφή (#rrggbb ή #rgb) ή ως black, white, red, green ή blue
+@msg	the linked image shows its preview: embed or relink it first	η συνδεδεμένη εικόνα εμφανίζει την προεπισκόπησή της: ενσωματώστε ή επανασυνδέστε την πρώτα
+@msg	a CMYK image has no transparency to set	μια εικόνα CMYK δεν έχει διαφάνεια για να οριστεί
+@msg	every pixel matches the background: no image would be left	κάθε εικονοστοιχείο ταιριάζει με το φόντο: δεν θα έμενε καμία εικόνα
+@msg	an image of {w} × {h} pixels is too large to change	η εικόνα {w} × {h} εικονοστοιχείων είναι υπερβολικά μεγάλη για να αλλάξει
 @msg	select an object in perspective	επιλέξτε αντικείμενο σε προοπτική
 @msg	select artwork (or a colour group) to recolor	επιλέξτε σχέδιο (ή ομάδα χρωμάτων) για επαναχρωματισμό
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Ο επαναχρωματισμός ολοκληρώθηκε· χωρίς αλλαγή: {locked} και {hidden}

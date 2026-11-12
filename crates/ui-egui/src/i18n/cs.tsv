@@ -202,6 +202,15 @@
 	Expand…	Rozložit…
 	Expand Appearance	Rozložit vzhled
 	Crop Image	Oříznout obraz
+	Image Tools	Nástroje obrazu
+	Remove Background…	Odstranit pozadí…
+	Remove Background	Odstranit pozadí
+	Background	Pozadí
+	Edge Color	Barva okraje
+	Picked Colors	Vybrané barvy
+	Corner Color	Barva rohů
+	Contiguous	Souvislé
+	Each Channel	Každý kanál
 	Edit Path	Upravit cestu
 	Mask	Maska
 	Rasterize…	Rastrovat…
@@ -1588,6 +1597,8 @@ digits	Malayalam	Malajálamské
 	Scale at Center	Měřítko od středu
 	Up/Down:	Nahoru/dolů:
 	Left/Right:	Vlevo/vpravo:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko nahoru/dolů
+	Tate-chu-yoko Left/Right	Tate-chu-yoko vlevo/vpravo
 	Underline	Podtržení
 	Vertical Scale %	Svislá změna velikosti %
 	Axis	Osa
@@ -4691,6 +4702,7 @@ imageTrace	Outline	Obrys
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	stránka pracovní plochy {n} má {size}, což přesahuje limit stránky PDF 14 400 pt (200 in): zapisuje se s UserUnit {unit}, takže aplikace, které UserUnit ignorují, ji zobrazí tolikrát menší
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	stránka pracovní plochy {n} má {size}, což přesahuje limit stránky PDF 14 400 pt (200 in): stránky {label} se zapisují bez UserUnit, v bodech, a aplikace, které limit dodržují, stránku oříznou na 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 nemá UserUnit, který stránka delší než 14 400 pt (200 in) potřebuje, aby si zachovala velikost: soubor se zapíše jako PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 nemá UserUnit, který stránka delší než 14 400 pt (200 in) potřebuje, aby zůstala v limitu stránky PDF/A-2, 14 400 jednotek: soubor se zapíše jako PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	stránka pracovní plochy {n} má rozměr {size} a je příliš dlouhá a úzká pro strany stránky PDF od 3 do 14 400 jednotek: zapisuje se s UserUnit {unit}, která drží kratší stranu na 3 jednotkách nebo více, a aplikace, které limit dodržují, ořežou delší stranu na 14 400 jednotek
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	soubory {label} pojmou reálná čísla nejvýše {max} a stránka pracovní plochy {n}, dlouhá {side} pt, potřebuje větší: zvolte PDF 1.6 nebo novější bez standardu PDF/X, nebo menší pracovní plochu
 @msg	invalid image data for `{0}`	neplatná obrazová data pro `{0}`
@@ -4838,6 +4850,7 @@ imageTrace	Outline	Obrys
 @msg	not a stored central record	nejde o uložený centrální záznam
 @msg	not a valid plug-in module: {0}	neplatný modul zásuvného modulu: {0}
 @msg	not an EMF or WMF file	nejde o soubor EMF ani WMF
+@msg	not an HP-GL file	nejde o soubor HP-GL
 @msg	not found	nenalezeno
 @msg	not in pattern editing mode	není aktivní režim úprav vzorku
 @msg	finish editing the pattern first	nejprve dokončete úpravy vzorku
@@ -4917,6 +4930,14 @@ imageTrace	Outline	Obrys
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	tato vektorizace by vytvořila více než {max} kotevních bodů, víc, než dokument plynule zobrazí: zvyšte Šum, snižte Cesty nebo Barvy, nebo zvolte přednastavení s nižší věrností
 @msg	select an envelope	vyberte obálku
 @msg	select an image	vyberte obraz
+@msg	`background` must be edges, corners or colors	`background` musí být edges, corners nebo colors
+@msg	`match` must be distance or channels	`match` musí být distance nebo channels
+@msg	`{key}` must be from 0 to 100	`{key}` musí být od 0 do 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` musí obsahovat 1 až 16 barev, každou šestnáctkově (#rrggbb nebo #rgb) nebo jako black, white, red, green či blue
+@msg	the linked image shows its preview: embed or relink it first	propojený obraz zobrazuje náhled: nejprve jej vložte nebo znovu propojte
+@msg	a CMYK image has no transparency to set	obraz CMYK nemá průhlednost, kterou by bylo možné nastavit
+@msg	every pixel matches the background: no image would be left	každý obrazový bod odpovídá pozadí: nezbyl by žádný obraz
+@msg	an image of {w} × {h} pixels is too large to change	obraz o velikosti {w} × {h} obrazových bodů je příliš velký na změnu
 @msg	select an object in perspective	vyberte objekt v perspektivě
 @msg	select artwork (or a colour group) to recolor	vyberte kresbu (nebo skupinu barev) k přebarvení
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Přebarvení dokončeno; beze změny: {locked} a {hidden}
