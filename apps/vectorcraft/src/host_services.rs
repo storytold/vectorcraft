@@ -120,7 +120,6 @@ fn make_folder(request: &PickRequest) {
 #[cfg(not(target_os = "macos"))]
 #[cfg_attr(windows, allow(unused_variables))]
 fn show_dialog(dialog: rfd::FileDialog, request: &PickRequest, parent: &Parent) -> Vec<String> {
-    make_folder(request);
     #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
     if let PickRequest::Save(pick) = request
         && let Some(answer) = portal_save::pick(pick, parent.as_deref())
@@ -139,9 +138,30 @@ fn show_dialog(dialog: rfd::FileDialog, request: &PickRequest, parent: &Parent) 
 /// Show the dialog for `request` over `parent` now → the paths picked.
 #[cfg(not(target_os = "macos"))]
 fn pick_now(request: PickRequest, parent: &Parent) -> Vec<String> {
-    // The dialog waits for the user: not a stall for the hang report (`hang_watch`).
-    let _mark = vectorcraft_ui_egui::hang_beacon::BEACON.activity(vectorcraft_ui_egui::hang_beacon::Activity::Dialog);
-    show_dialog(file_dialog(&request, parent), &request, parent)
+    let beacon = &vectorcraft_ui_egui::hang_beacon::BEACON;
+    marked_dialog(beacon, || make_folder(&request), || show_dialog(file_dialog(&request, parent), &request, parent))
+}
+
+/// Run `prepare` (making the dialog's folder), then `show`, marked on `beacon` as a dialog: the
+/// dialog waits for the user and is not a stall for the hang report (`hang_watch`), while `prepare`
+/// is still timed.
+#[cfg(not(target_os = "macos"))]
+fn marked_dialog<T>(beacon: &vectorcraft_ui_egui::hang_beacon::Beacon, prepare: impl FnOnce(), show: impl FnOnce() -> T) -> T {
+    prepare();
+    let _mark = beacon.activity(vectorcraft_ui_egui::hang_beacon::Activity::Dialog);
+    show()
+}
+
+#[cfg(all(test, not(target_os = "macos")))]
+#[test]
+fn making_a_dialogs_folder_is_timed_and_the_dialog_is_not() {
+    use vectorcraft_ui_egui::hang_beacon::{Activity, Beacon};
+    let beacon = Beacon::new();
+    let mut preparing = None;
+    let showing = marked_dialog(&beacon, || preparing = Some(beacon.sample().activity), || beacon.sample().activity);
+    assert_eq!(preparing, Some(Activity::None), "making the folder is timed");
+    assert_eq!(showing, Activity::Dialog, "the dialog is not");
+    assert_eq!(beacon.sample().activity, Activity::None, "the mark ends with the dialog");
 }
 
 /// macOS shows no dialog in line: its modal loop would run inside winit's event handler, and an
@@ -241,6 +261,7 @@ fn start_pick(request: PickRequest, parent: &Parent, ui: &egui::Context) -> Opti
     std::thread::Builder::new()
         .name("file-dialog".into())
         .spawn(move || {
+            make_folder(&request);
             // The app gone meanwhile has no use for the answer.
             let _ = tx.send(show_dialog(dialog, &request, &parent));
             ui.request_repaint();
