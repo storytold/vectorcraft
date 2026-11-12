@@ -3813,3 +3813,60 @@ fn a_filter_that_calls_commands_is_given_the_edit_in_progress() {
     assert_eq!(x, json!(17.0), "undoing the filter brings back the moved rectangle");
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
+
+/// Installs a filter `id` that calls commands and hands back what it is given, with `commands` (a
+/// JSON list of command specs) in its manifest.
+fn install_echo_calling(s: &mut Session, id: &str, commands: &str) {
+    let grant = json!(["doc.read", "doc.write", "commands"]);
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":{grant},"commandAllowlist":["select.all"],"commands":{commands}}}"#
+    );
+    let wasm = wat::parse_str(tpl::module(&manifest, tpl::ECHO, "", 1)).unwrap();
+    run(s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant, "replace": true}));
+}
+
+/// With Real-time Drawing off, a 50 × 50 rectangle at (10, 10) whose move by 7 pt is still being
+/// dragged: the tool has stored the move, which the document does not hold yet.
+fn deferred_move(s: &mut Session) -> NodeId {
+    let r = NodeId(run(s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    run(s, "prefs.set", json!({"key": "realTimeDrawing", "value": false}));
+    let move_by = vectorcraft_tools::Action::Preview("object.move".into(), json!({"dx": 7, "dy": 0}));
+    s.apply_actions(vec![vectorcraft_tools::Action::Begin("Move".into()), move_by]).unwrap();
+    assert_eq!(node(s, r).geometric_bounds().unwrap().x0, 10.0, "the move is not applied while it is dragged");
+    r
+}
+
+/// The rectangle a run named `label` during [`deferred_move`] left: moved, with the interaction
+/// ended and the move an undo step of its own before the run's.
+fn assert_moved_once(s: &Session, r: NodeId, label: &str) {
+    assert!(!s.in_interaction());
+    assert_eq!(node(s, r).geometric_bounds().unwrap().x0, 17.0, "the filter was given the moved rectangle");
+    let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
+    assert_eq!(labels, [label, "Move"]);
+}
+
+/// With Real-time Drawing off, `plugin.run` of a filter that calls commands during a drag applies
+/// the dragged move first and gives the filter the moved rectangle, which it hands back as it was.
+#[test]
+fn a_filter_that_calls_commands_is_given_a_deferred_move() {
+    let id = "test.engine.callsdeferred";
+    let mut s = session();
+    install_echo_calling(&mut s, id, "[]");
+    let r = deferred_move(&mut s);
+    run(&mut s, "plugin.run", json!({"id": id}));
+    assert_moved_once(&s, r, &format!("Test {id}"));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A plug-in command that calls commands, run with Real-time Drawing off during a drag, is given
+/// the moved rectangle as `plugin.run` is.
+#[test]
+fn a_plugin_command_that_calls_commands_is_given_a_deferred_move() {
+    let id = "test.engine.callsdeferredcmd";
+    let mut s = session();
+    install_echo_calling(&mut s, id, r#"[{"id":"same","label":"Same"}]"#);
+    let r = deferred_move(&mut s);
+    run(&mut s, &format!("plugin.{id}.same"), json!({}));
+    assert_moved_once(&s, r, "Same");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
