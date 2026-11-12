@@ -293,3 +293,65 @@ fn readonly_changed_format_asks_for_its_options_before_writing() {
     assert_eq!(state(&app), before);
     assert_eq!(files.lock().unwrap().attempts, ["/locked/Poster.svg"]);
 }
+
+/// Typed saves keep the sidecar preflight both before the refused write and at the retry's
+/// destination. Confirming the ordinary Save still permits its one read-only fallback.
+#[test]
+fn readonly_typed_save_checks_sidecars_before_writing_and_after_retry() {
+    for in_background in [false, true] {
+        let (mut app, files) = app("vectorcraft", ErrorKind::PermissionDenied);
+        app.run("artboard.new", json!({"x": 100, "y": 0, "width": 40, "height": 40, "name": "B"})).unwrap();
+        app.session.doc_mut().unwrap().save_options.insert("separateArtboards".into(), json!(true));
+        let before = state(&app);
+        let there = ["/locked/Poster-B.vectorcraft", "/elsewhere/Poster-B.vectorcraft"];
+        app.services.exists = Some(Arc::new(move |path| there.contains(&path)));
+        app.services.write_shared = Some(Arc::new(|_, _| panic!("typed writer required")));
+        app.session.prefs.background_save = in_background;
+        let (shown, _) = off_the_ui_thread(&mut app.services);
+
+        app.run("file.save", json!({})).unwrap();
+        background::wait_all(&mut app);
+        let d = app.ui.dialog.as_ref().expect("ask before writing the existing artboard file");
+        assert_eq!(d.kind, dialogs::confirm::REPLACE_FILES);
+        assert_eq!(d.fields["files"], json!(["/locked/Poster-B.vectorcraft"]));
+        assert!(files.lock().unwrap().attempts.is_empty());
+        assert!(shown.requests().is_empty());
+        assert_eq!(state(&app), before);
+        dialogs::cancel(&mut app);
+        assert_eq!(state(&app), before);
+        assert!(files.lock().unwrap().attempts.is_empty());
+
+        app.run("file.save", json!({})).unwrap();
+        background::wait_all(&mut app);
+        dialogs::confirm(&mut app).unwrap();
+        background::wait_all(&mut app);
+        assert_eq!(files.lock().unwrap().attempts, ["/locked/Poster.vectorcraft"]);
+        assert_eq!(state(&app), before);
+        let requests = shown.requests();
+        let [picks::PickRequest::Save(pick)] = requests.as_slice() else { panic!("expected one fallback panel: {requests:?}") };
+        assert_eq!(pick.name, "Poster.vectorcraft");
+
+        shown.answer(&["/elsewhere/Poster.vectorcraft"]);
+        poll(&mut app);
+        background::wait_all(&mut app);
+        let d = app.ui.dialog.as_ref().expect("the retry also checks its destination's artboard file");
+        assert_eq!(d.kind, dialogs::confirm::REPLACE_FILES);
+        assert_eq!(d.fields["files"], json!(["/elsewhere/Poster-B.vectorcraft"]));
+        assert_eq!(files.lock().unwrap().attempts, ["/locked/Poster.vectorcraft"]);
+        assert_eq!(state(&app), before);
+        dialogs::confirm(&mut app).unwrap();
+        background::wait_all(&mut app);
+        assert_eq!(
+            files.lock().unwrap().attempts,
+            [
+                "/locked/Poster.vectorcraft",
+                "/elsewhere/Poster.vectorcraft",
+                "/elsewhere/Poster-Artboard-1.vectorcraft",
+                "/elsewhere/Poster-B.vectorcraft"
+            ]
+        );
+        assert_eq!(app.session.doc().unwrap().path.as_deref(), Some("/elsewhere/Poster.vectorcraft"));
+        assert!(!app.session.doc().unwrap().is_dirty());
+        assert!(shown.requests().is_empty() && app.ui.dialog.is_none());
+    }
+}
