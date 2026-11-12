@@ -672,19 +672,26 @@ fn set_bounds_gives_a_butt_path_with_slanted_corners_the_size_out_of_proportion(
 fn set_bounds_gives_a_closed_path_with_beveled_or_mitered_corners_the_size_out_of_proportion() {
     // The bevel at the triangle's tip, the miter the limit bevels there and the miter spikes it
     // keeps reach past the path by margins that follow the slanted segments' directions, which a
-    // scale out of proportion changes.
+    // scale out of proportion changes. The miter spikes of a stroke whose dashes have round or
+    // projecting caps reach past the path too.
     let mut wrong = vec![];
-    for (join, limit) in [("bevel", 10.0), ("miter", 2.0), ("miter", 10.0)] {
+    for (join, limit, cap, dash) in [
+        ("bevel", 10.0, "round", Value::Null),
+        ("miter", 2.0, "round", Value::Null),
+        ("miter", 10.0, "round", Value::Null),
+        ("miter", 10.0, "round", json!([6, 3])),
+        ("miter", 10.0, "projecting", json!([6, 3])),
+    ] {
         let mut s = session();
         let anchors = json!([{"x": 100, "y": 150}, {"x": 110, "y": 100}, {"x": 120, "y": 150}]);
         let id = NodeId(run(&mut s, "path.create", json!({"anchors": anchors, "closed": true}))["id"].as_u64().unwrap());
-        run(&mut s, "stroke.set", json!({"weight": 2, "cap": "round", "join": join, "miterLimit": limit}));
+        run(&mut s, "stroke.set", json!({"weight": 2, "cap": cap, "join": join, "miterLimit": limit, "dash": dash}));
         preview(&mut s, true);
         run(&mut s, "select.set", json!({"ids": [id.0]}));
         run(&mut s, "object.setBounds", json!({"width": 60, "height": 20, "reference": 0, "strokes": false}));
         let v = s.transform_bounds(&[id]).unwrap();
         if (v.width() - 60.0).abs() > 1e-6 || (v.height() - 20.0).abs() > 1e-6 {
-            wrong.push(format!("{join} {limit}: {v:?}"));
+            wrong.push(format!("{join} {limit} {cap} {dash}: {v:?}"));
         }
     }
     assert!(wrong.is_empty(), "{wrong:?}");

@@ -217,6 +217,14 @@ impl StrokeLayer {
         (self.cap == LineCap::Butt && !closed) || (self.join != LineJoin::Round && !capped_dashes)
     }
 
+    /// Does this stroke reach past a subpath that is `closed` or open by a margin that follows the
+    /// direction of its segments at their corners: where it stops at them
+    /// ([`Self::stops_at_corners`]) or paints miter spikes, which dashes with round or projecting
+    /// caps also paint?
+    fn reaches_by_corners(&self, closed: bool) -> bool {
+        self.stops_at_corners(closed) || self.join == LineJoin::Miter
+    }
+
     /// The box this stroke's body paints along `segs`, the segments with length of a subpath, short
     /// of its caps, joined with `within`: each segment's [`swept_box`] and, with round joins on an
     /// open subpath, the arc each joint between segments paints ([`round_join_box`]), a shallow one
@@ -506,16 +514,18 @@ impl Appearance {
     }
 
     /// Does this appearance have a visible stroke that stops at the corners of its segments on an
-    /// open subpath or a closed one: butt caps, or bevel and miter joins?
+    /// open subpath or a closed one, or paints miter spikes: butt caps, or bevel and miter joins
+    /// ([`StrokeLayer::reaches_by_corners`])?
     pub fn has_cornered_stroke(&self) -> bool {
-        self.painted_strokes().any(|s| s.stops_at_corners(false))
+        self.painted_strokes().any(|s| s.reaches_by_corners(false))
     }
 
     /// Does a visible stroke of this appearance that stops at the corners of its segments (butt
-    /// caps on an open subpath, bevel and miter joins) run along a subpath of `bp` where it does so,
-    /// with a segment that starts or ends at a slant, not square to the axes, once placed by `a`?
-    /// The visual box's margin at those corners, and at miter tips, depends on their direction,
-    /// which a scale out of proportion changes.
+    /// caps on an open subpath, bevel and miter joins) or paints miter spikes, dashed ones with
+    /// round or projecting caps included, run along a subpath of `bp` where it does so, with a
+    /// segment that starts or ends at a slant, not square to the axes, once placed by `a`? The
+    /// visual box's margin at those corners, and at miter tips, depends on their direction, which a
+    /// scale out of proportion changes.
     pub fn has_slanted_stroke_corners(&self, bp: &BezPath, a: vectorcraft_geom::Affine) -> bool {
         if !self.has_cornered_stroke() {
             return false;
@@ -526,7 +536,7 @@ impl Appearance {
         };
         let els = bp.elements();
         let subs = subpaths(bp);
-        let cornered = |closed: bool| self.painted_strokes().any(|s| s.stops_at_corners(closed));
+        let cornered = |closed: bool| self.painted_strokes().any(|s| s.reaches_by_corners(closed));
         subs.into_iter()
             .filter(|(_, closed)| cornered(*closed))
             .any(|(r, _)| drawn(&els[r]).iter().any(|s| slanted(tangent(s, 0.0)) || slanted(tangent(s, 1.0))))
