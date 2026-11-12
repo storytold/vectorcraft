@@ -1474,6 +1474,11 @@ fn headless_methods_refuse_params_of_the_wrong_type() {
         // A whole rectangle comes before the malformed event, and none of it is drawn.
         ("ui.pointer", after_rect(json!({"kind": "move", "x": "bad", "y": 0})), "x"),
         ("ui.pointer", after_rect(json!({"kind": "wiggle", "x": 0, "y": 0})), "wiggle"),
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": 1, "y": 1, "pressure": "bad"})), "pressure"),
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": 1, "y": 1, "holdMs": true})), "holdMs"),
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": 1, "y": 1, "tiltX": "5"})), "tiltX"),
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": 1, "y": 1, "rotation": [0]})), "rotation"),
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": 1, "y": 1, "space": "screeen"})), "space"),
     ] {
         let e = h.call(method, params.clone()).unwrap_err();
         assert!(e.contains(&format!("`{key}`")), "{method} {params}: {e}");

@@ -457,8 +457,8 @@ fn synthetic_pointer_rejects_a_backquote_that_is_not_a_boolean() {
     }
 }
 
-/// `ui.pointer` refuses an unknown event kind, or a screen-space event with no canvas, before any
-/// of the packet's events runs.
+/// `ui.pointer` refuses an unknown event kind, a pen value or `space` of the wrong type, or a
+/// screen-space event with no canvas, before any of the packet's events runs.
 #[test]
 fn synthetic_pointer_rejects_an_unknown_kind_before_any_event_runs() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
@@ -471,6 +471,12 @@ fn synthetic_pointer_rejects_an_unknown_kind_before_any_event_runs() {
     for (last, error) in [
         (json!({"kind": "wiggle", "x": 145, "y": 125}), "unknown pointer kind `wiggle`"),
         (json!({"kind": "move", "x": 145, "y": 125, "space": "screen"}), "no canvas yet"),
+        (json!({"kind": "move", "x": 145, "y": 125, "pressure": "bad"}), "`pressure` must be a number"),
+        (json!({"kind": "move", "x": 145, "y": 125, "holdMs": "800"}), "`holdMs` must be a number"),
+        (json!({"kind": "move", "x": 145, "y": 125, "tiltY": true}), "`tiltY` must be a number"),
+        (json!({"kind": "move", "x": 145, "y": 125, "rotation": "90"}), "`rotation` must be a number"),
+        (json!({"kind": "move", "x": 145, "y": 125, "space": "screeen"}), "`space` must be doc or screen"),
+        (json!({"kind": "move", "x": 145, "y": 125, "space": true}), "`space` must be doc or screen"),
     ] {
         let events = moves.iter().cloned().chain([last]).collect::<Vec<_>>();
         let r = input_request(&mut app, "ui.pointer", json!({"events": events}));

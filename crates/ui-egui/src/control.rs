@@ -984,6 +984,7 @@ fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, req: &Con
                     "doubleclick" | "dblclick" => PointerKind::DoubleClick,
                     other => return Err(format!("unknown pointer kind `{other}`")),
                 };
+                PointerEvent::json_check(e)?;
                 let at = |k: &str| crate::menus::opt_number(e, k).map(|n| n.unwrap_or(0.0));
                 Ok((kind, at("x")?, at("y")?, packet_mods(e.get("mods"))?.unwrap_or(base)))
             })

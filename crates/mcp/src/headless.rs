@@ -239,6 +239,7 @@ impl Headless {
                 let mods = packet_mods(e)?.unwrap_or(base);
                 let kind = s(e, "kind").unwrap_or("");
                 let kind = pointer_kind(kind).ok_or_else(|| format!("unknown pointer kind `{kind}` (down|drag|up|move|doubleclick)"))?;
+                PointerEvent::json_check(e)?;
                 if s(e, "space") == Some("screen") {
                     return Err("screen-space pointer events need the desktop app; use document coordinates".to_string());
                 }
