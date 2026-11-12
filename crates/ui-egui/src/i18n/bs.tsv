@@ -3556,6 +3556,7 @@ theme	Appearance	Izgled
 	Move Mesh Points	Pomjeri tačke mreže
 	Move Spine Point	Pomjeri tačku kičme
 	Reshape Spine Segment	Preoblikuj segment kičme
+	Blend Easing	Ublažavanje stapanja
 	Reset with Mesh	Vrati mrežom
 	Reset with Warp	Vrati iskrivljenjem
 	Set Mesh Point Color	Postavi boju tačke mreže
@@ -6122,6 +6123,11 @@ axis	Y Axis	Y osa
 	User Brush Library 9	Korisnička biblioteka četkica 9
 	User Brush Library 10	Korisnička biblioteka četkica 10
 	Art Ribbons	Umjetničke trake
+	Ink and Wash	Tuš i lavir
+	Tapered Ink	Suženi tuš
+	Brush Pen	Kistasti flomaster
+	Soft Wash	Meki lavir
+	Pooling Wash	Lavir s rubom
 	Zigzag	Cik-cak
 	Burst Ray	Zraka udara
 	Dash Trail	Isprekidani trag

@@ -2106,6 +2106,7 @@ file-filter	Templates	Шаблони
 	Move Slices	Перемістити фрагменти
 	Move Spine Point	Перемістити точку осі
 	Reshape Spine Segment	Змінити форму сегмента осі
+	Blend Easing	Згладжування переходу
 	Move Brush	Перемістити пензель
 	Move Swatch	Перемістити зразок
 	Move Up	Перемістити вгору
@@ -5942,6 +5943,11 @@ axis	Y Axis	Вісь Y
 	User Brush Library 9	Користувацька бібліотека пензлів 9
 	User Brush Library 10	Користувацька бібліотека пензлів 10
 	Art Ribbons	Художні стрічки
+	Ink and Wash	Туш і розмивка
+	Tapered Ink	Звужена туш
+	Brush Pen	Пензлева ручка
+	Soft Wash	М'яка розмивка
+	Pooling Wash	Розмивка з облямівкою
 	Zigzag	Зигзаг
 	Burst Ray	Ударний промінь
 	Dash Trail	Пунктирний слід

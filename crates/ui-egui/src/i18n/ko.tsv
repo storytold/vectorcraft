@@ -2318,6 +2318,7 @@ antiAlias	Sharp	날카롭게
 	Move Slices	슬라이스 이동
 	Move Spine Point	스파인 포인트 이동
 	Reshape Spine Segment	스파인 세그먼트 모양 변경
+	Blend Easing	블렌드 이징
 	Move Brush	브러시 이동
 	Move Swatch	견본 이동
 	Move Up	위로 이동
@@ -5923,6 +5924,11 @@ axis	Y Axis	Y축
 	User Brush Library 9	사용자 브러시 라이브러리 9
 	User Brush Library 10	사용자 브러시 라이브러리 10
 	Art Ribbons	아트 리본
+	Ink and Wash	먹과 담채
+	Tapered Ink	가늘어지는 먹선
+	Brush Pen	붓펜
+	Soft Wash	부드러운 담채
+	Pooling Wash	고임 담채
 	Zigzag	지그재그
 	Burst Ray	버스트 레이
 	Dash Trail	대시 트레일
