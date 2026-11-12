@@ -871,7 +871,7 @@ fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
-fn has_image(s: &Session) -> std::result::Result<(), String> {
+pub(crate) fn has_image(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
     let st = s.active().ok_or("no document open")?;
     if st.selection.objects.iter().any(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_)))) {

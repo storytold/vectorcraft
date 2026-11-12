@@ -626,6 +626,15 @@ antiAlias	Sharp	Nítido
 	Created:	Criado:
 	Crop	Recortar
 	Crop Image	Recortar Imagem
+	Image Tools	Ferramentas de imagem
+	Remove Background…	Remover Fundo…
+	Remove Background	Remover Fundo
+	Background	Fundo
+	Edge Color	Cor da Borda
+	Picked Colors	Cores Escolhidas
+	Corner Color	Cor dos Cantos
+	Contiguous	Contíguo
+	Each Channel	Cada Canal
 	Edit Path	Editar caminho
 	Mask	Máscara
 	Crop Marks	Marcas de Corte
@@ -3924,6 +3933,7 @@ axis	Both	Ambos
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	a página da prancheta {n} tem {size}, mais que o limite de página do PDF de 14.400 pt (200 in): ela é gravada com um UserUnit de {unit}, então apps que ignoram UserUnit a mostram essa quantidade de vezes menor
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	a página da prancheta {n} tem {size}, mais que o limite de página do PDF de 14.400 pt (200 in): páginas {label} são gravadas sem UserUnit, em pontos, e apps que respeitam o limite cortam a página em 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	o PDF 1.5 não tem UserUnit, de que uma página com mais de 14.400 pt (200 in) precisa para manter seu tamanho: o arquivo é gravado como PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	o PDF 1.4 não tem UserUnit, de que uma página com mais de 14.400 pt (200 in) precisa para ficar dentro do limite de página do PDF/A-2, de 14.400 unidades: o arquivo é gravado como PDF 1.6
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	a página da prancheta {n} tem {size}, longa e estreita demais para os lados de página do PDF, de 3 a 14.400 unidades: ela é gravada com uma UserUnit de {unit}, que mantém o lado menor em 3 unidades ou mais, e os apps que seguem o limite cortam o lado maior em 14.400 unidades
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	os arquivos {label} aceitam números reais de até {max}, e a página da prancheta {n}, com {side} pt, precisa de números maiores: escolha PDF 1.6 ou posterior sem padrão PDF/X, ou uma prancheta menor
 @msg	invalid image data for `{0}`	dados de imagem inválidos para `{0}`
@@ -4071,6 +4081,7 @@ axis	Both	Ambos
 @msg	not a stored central record	não é um registro central armazenado
 @msg	not a valid plug-in module: {0}	não é um módulo de plug-in válido: {0}
 @msg	not an EMF or WMF file	não é um arquivo EMF ou WMF
+@msg	not an HP-GL file	não é um arquivo HP-GL
 @msg	not found	não encontrado
 @msg	not in pattern editing mode	não está no modo de edição de padrão
 @msg	finish editing the pattern first	termine de editar o padrão primeiro
@@ -4149,6 +4160,14 @@ axis	Both	Ambos
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	esta vetorização geraria mais de {max} pontos de ancoragem, mais do que o documento consegue exibir com fluidez: aumente Ruído, reduza Traçados ou Cores, ou escolha uma predefinição de menor fidelidade
 @msg	select an envelope	selecione um envelope
 @msg	select an image	selecione uma imagem
+@msg	`background` must be edges, corners or colors	`background` deve ser edges, corners ou colors
+@msg	`match` must be distance or channels	`match` deve ser distance ou channels
+@msg	`{key}` must be from 0 to 100	`{key}` deve estar entre 0 e 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` deve listar de 1 a 16 cores, cada uma em hexadecimal (#rrggbb ou #rgb) ou como black, white, red, green ou blue
+@msg	the linked image shows its preview: embed or relink it first	a imagem vinculada mostra sua prévia: incorpore-a ou revincule-a primeiro
+@msg	a CMYK image has no transparency to set	uma imagem CMYK não tem transparência para definir
+@msg	every pixel matches the background: no image would be left	todos os pixels correspondem ao fundo: nenhuma imagem restaria
+@msg	an image of {w} × {h} pixels is too large to change	uma imagem de {w} × {h} pixels é grande demais para ser alterada
 @msg	select an object in perspective	selecione um objeto em perspectiva
 @msg	select artwork (or a colour group) to recolor	selecione uma arte-final (ou um grupo de cores) para recolorir
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloração concluída; sem alteração: {locked} e {hidden}
@@ -5048,6 +5067,8 @@ axis	Both	Ambos
 	Scale at Center	Dimensionar a partir do centro
 	Up/Down:	Para Cima/Para Baixo:
 	Left/Right:	Esquerda/Direita:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko Para Cima/Para Baixo
+	Tate-chu-yoko Left/Right	Tate-chu-yoko Esquerda/Direita
 	Temperature	Temperatura
 	Templates	Modelos
 	Text Wrap Options	Opções de Quebra de Texto

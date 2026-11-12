@@ -285,6 +285,9 @@ pub struct Session {
     pub(crate) in_tool_actions: bool,
     /// While [`Session::preview`] runs its command: its edits are the interaction's own.
     previewing: bool,
+    /// The images Remove Background decoded during the interaction's preview steps, emptied when
+    /// it ends ([`cmd::DecodedImages`]).
+    pub(crate) decoded_images: cmd::DecodedImages,
     /// Envelope Options with no envelope selected: the options and fidelity new envelopes get
     /// (`None`: the reference app's defaults, fidelity 50); not saved.
     pub(crate) envelope_defaults: Option<(vectorcraft_doc::live::EnvelopeOptions, f64)>,
