@@ -4,7 +4,7 @@ use super::common::{fix_ids, ids_json, is_mesh, replace_with, roots_param, selec
 use super::envelope::{outline_of, rows_cols};
 use super::{
     Color, Document, EngineError, EnvelopeKind, GradientMesh, MeshAppearance, Node, NodeId, NodeKind, Paint, Point, Result, Session, Value, bad,
-    check_numbers, color_param, f64_or, f64_req, finite_numbers, gradient_sampler, id_param, json, live, ok, str_param,
+    check_numbers, color_param, f64_or, f64_req, finite_numbers, gradient_sampler, json, live, object_param, ok, str_param,
 };
 
 // ---------- Gradient mesh ----------
@@ -115,7 +115,7 @@ fn image_mesh(d: &Document, im: &vectorcraft_doc::ImageObject, rows: u32, cols: 
 /// Run `f` on the gradient mesh `p.id` (one undo step `label`); with `envelopes`, a mesh
 /// envelope's grid too (see [`edit_grid`]).
 fn with_mesh<T>(s: &mut Session, p: &Value, cmd: &str, label: &str, envelopes: bool, f: impl FnOnce(&mut GradientMesh) -> Result<T>) -> Result<T> {
-    let id = id_param(p, "id").ok_or_else(|| bad(cmd, "missing `id`"))?;
+    let id = object_param(p, "id", cmd)?.ok_or_else(|| bad(cmd, "missing `id`"))?;
     s.edit(label, move |d, _| edit_grid(d, id, cmd, envelopes, f))
 }
 
@@ -147,7 +147,7 @@ const MAX_POINTS: usize = 1 << 20;
 /// points}…]}`. Each mesh comes once, with its points in order and without repeats.
 fn point_items(p: &Value, cmd: &str) -> Result<Vec<(NodeId, BTreeSet<usize>)>> {
     let one = |q: &Value| -> Result<(NodeId, BTreeSet<usize>)> {
-        let id = id_param(q, "id").ok_or_else(|| bad(cmd, "missing `id`"))?;
+        let id = object_param(q, "id", cmd)?.ok_or_else(|| bad(cmd, "missing `id`"))?;
         let points = match q.get("points") {
             None | Some(Value::Null) => BTreeSet::from([index_param(q, "index", cmd)?]),
             Some(Value::Array(v)) if v.len() <= MAX_POINTS => v

@@ -802,6 +802,7 @@
 	Sky Gradients	Luchtverlopen
 	Neutral Gradients	Neutrale verlopen
 	Organic Fades	Organische vervagingen
+	Holographic	Holografisch
 	Duotone Gradients	Duotoonverlopen
 	Radial Glows	Radiale gloed
 	Save Swatch Library…	Staalenbibliotheek opslaan…
@@ -1836,6 +1837,9 @@ digits	Malayalam	Malayalam
 	Right Indent	Rechts inspringen
 	Right-to-Left Paragraph Direction	Alinearichting van rechts naar links
 	Roman Hanging Punctuation	Romeinse hangende leestekens
+	Korean Line Break Anywhere	Koreaans regeleinde overal
+	East Asian Composition Settings	Instellingen voor Oost-Aziatische zetting
+	Korean Composition Settings	Instellingen voor Koreaanse zetting
 	Select a text object to edit its paragraph attributes.	Selecteer een tekstobject om de alineakenmerken ervan te bewerken.
 	Single-line Composer	Compositie per regel
 	Toggle Line Composer	Compositiemethode wisselen
@@ -4522,6 +4526,7 @@ imageTrace	Outline	Contour
 @msg	not a valid plug-in module: {0}	geen geldige plug-inmodule: {0}
 @msg	not an EMF or WMF file	geen EMF- of WMF-bestand
 @msg	not an HP-GL file	geen HP-GL-bestand
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` moet een array van 1 tot 255 #rrggbb-kleuren zijn
 @msg	not found	niet gevonden
 @msg	not in pattern editing mode	niet in patroonbewerkingsmodus
 @msg	finish editing the pattern first	rond eerst het bewerken van het patroon af
@@ -6120,6 +6125,17 @@ axis	Y Axis	Y-as
 	Charge Wave	Laadgolf
 	Spark Trail	Vonkenspoor
 	Calligraphic Nibs	Kalligrafische penpunten
+	Bristle Brushes	Borstelpenselen
+	Fine Liner	Fijne liner
+	Pointed Flat	Spitse platte
+	Stubby Round	Korte ronde
+	Dry Scrub	Droog schrobben
+	Soft Dome	Zachte koepel
+	Filbert	Kattentong
+	Angled Round	Schuine ronde
+	Angled Flat	Schuine platte
+	Fan Blender	Vervloeiwaaier
+	Grass Fan	Graswaaier
 	Pattern Borders	Patroonranden
 	Scatter Shapes	Strooivormen
 	Save Brush Library…	Penseelbibliotheek opslaan…
@@ -6719,3 +6735,10 @@ breakText	Glyphs	Glyphs
 # Deferred plug-in effects
 	Refresh Deferred Effects	Uitgestelde effecten vernieuwen
 	Deferred Effects	Uitgestelde effecten
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Snijgereedschap
+	Stencil Bridges…	Sjabloonbruggen…
+	Stencil Bridges	Sjabloonbruggen
+	Shortest Crossing	Kortste oversteek
+	Direction	Richting

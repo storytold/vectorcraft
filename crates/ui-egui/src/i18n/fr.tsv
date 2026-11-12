@@ -2359,6 +2359,7 @@ font-technology	Variable	Variables
 	Options:	Options :
 	Options…	Options…
 	Organic Fades	Fondus organiques
+	Holographic	Holographiques
 	or more spaces with a tab	espaces ou plus par une tabulation
 	Order:	Ordre :
 	Ordinals	Ordinaux
@@ -2908,6 +2909,9 @@ digits	Malayalam	Malayalam
 	Rise…	Élévation…
 	Roman Baseline	Ligne de base romaine
 	Roman Hanging Punctuation	Ponctuation romaine hors justification
+	Korean Line Break Anywhere	Saut de ligne coréen n’importe où
+	East Asian Composition Settings	Paramètres de composition d’Asie orientale
+	Korean Composition Settings	Paramètres de composition coréenne
 	Rotate	Rotation
 	Rotate 90° CW	Rotation de 90° horaire
 	Rotate Tool	Outil Rotation
@@ -4567,6 +4571,7 @@ axis	Both	Les deux
 @msg	not a valid plug-in module: {0}	ce n’est pas un module de plug-in valide : {0}
 @msg	not an EMF or WMF file	ce n’est pas un fichier EMF ou WMF
 @msg	not an HP-GL file	ce n’est pas un fichier HP-GL
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` doit être une liste de 1 à 255 couleurs #rrggbb
 @msg	not found	introuvable
 @msg	not in pattern editing mode	pas en mode d’édition de motif
 @msg	finish editing the pattern first	terminez d’abord la modification du motif
@@ -6308,6 +6313,17 @@ axis	Y Axis	Axe Y
 	Charge Wave	Vague de charge
 	Spark Trail	Traînée d'étincelles
 	Calligraphic Nibs	Plumes calligraphiques
+	Bristle Brushes	Pinceaux à soies
+	Fine Liner	Traceur fin
+	Pointed Flat	Plat pointu
+	Stubby Round	Rond court
+	Dry Scrub	Frottis sec
+	Soft Dome	Dôme doux
+	Filbert	Langue de chat
+	Angled Round	Rond biseauté
+	Angled Flat	Plat biseauté
+	Fan Blender	Éventail estompeur
+	Grass Fan	Éventail à herbe
 	Pattern Borders	Bordures de motif
 	Scatter Shapes	Formes de dispersion
 	Save Brush Library…	Enregistrer la bibliothèque de formes…
@@ -6958,3 +6974,15 @@ breakText	Glyphs	Glyphes
 	Deferred Effects	Effets différés
 @msg	no plug-in effect is deferred	aucun effet de plug-in n’est différé
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Ouvert avec {n} effet de plug-in différé. Effet › Actualiser les effets différés l’exécute.|Ouvert avec {n} effets de plug-in différés. Effet › Actualiser les effets différés les exécute.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Outils de découpe
+	Stencil Bridges…	Ponts de pochoir…
+	Stencil Bridges	Ponts de pochoir
+	Shortest Crossing	Traversée la plus courte
+	Direction	Direction
+@msg	The selected art has no islands to bridge	L’illustration sélectionnée n’a aucun îlot à relier
+@msg	No bridge of this width fits across the selected art	Aucun pont de cette largeur ne tient en travers de l’illustration sélectionnée
+@msg	Some islands could not be joined to the area around the art	Certains îlots n’ont pas pu être reliés à la zone autour de l’illustration
+@msg	`width` must be from {lo} to {hi} pt	`width` doit être compris entre {lo} et {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` doit être un nombre entier compris entre 1 et {MAX_BRIDGES_PER_ISLAND}
