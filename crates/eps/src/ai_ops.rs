@@ -115,6 +115,15 @@ pub(crate) fn as_written(color: Color) -> Color {
     }
 }
 
+/// The RGB values written for `color`, clamped to 0..1: an RGB color's own values (in the working
+/// RGB space, as a reader reads them back), any other color's display RGB.
+pub(crate) fn rgb_values(color: Color) -> [f32; 3] {
+    match color {
+        Color::Rgb { r, g, b } => [r, g, b].map(unit),
+        c => c.to_rgb().map(unit),
+    }
+}
+
 /// The average colour of a gradient's stops (in RGB).
 pub(crate) fn average(g: &Gradient) -> Color {
     let n = g.stops.len().max(1) as f32;

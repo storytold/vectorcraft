@@ -1343,9 +1343,9 @@ impl<'a> Writer<'a> {
         self.plain_color(*color, stroke);
     }
 
-    /// A color that names no swatch: `g` (gray), `k` (CMYK), else `c m y k r g b Xa` (RGB, and
-    /// Lab as RGB), with its CMYK equivalent (an RGB color's from its values as written, a Lab
-    /// color's from its Lab values).
+    /// A color that names no swatch: `g` (gray), `k` (CMYK), else `c m y k r g b Xa` (RGB in the
+    /// working RGB space, and Lab as display RGB), with its CMYK equivalent (an RGB color's from its
+    /// values as written, a Lab color's from its Lab values).
     fn plain_color(&mut self, color: Color, stroke: bool) {
         let s = &mut self.body;
         let op = |fill: &'static str, line: &'static str| if stroke { line } else { fill };
@@ -1363,7 +1363,7 @@ impl<'a> Writer<'a> {
                 let source = if matches!(color, Color::Rgb { .. }) { ai_ops::as_written(color) } else { color };
                 let cmyk = self.cms.to_cmyk(&source, self.cms.settings().intent).map(unit);
                 ps::push_nums(s, &cmyk.map(f64::from));
-                ps::push_nums(s, &color.to_rgb().map(|v| f64::from(unit(v))));
+                ps::push_nums(s, &ai_ops::rgb_values(color).map(f64::from));
                 let _ = writeln!(s, "{}", op("Xa", "XA"));
             }
         }
