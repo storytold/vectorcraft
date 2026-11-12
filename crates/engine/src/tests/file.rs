@@ -62,6 +62,35 @@ fn serialize_and_reopen() {
 }
 
 #[test]
+fn export_params_of_the_wrong_type_are_refused_and_null_keeps_the_default() {
+    let mut s = session();
+    s.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hello"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 200, "y": 100, "width": 80, "height": 40})).unwrap();
+    for (cmd, p, msg) in [
+        ("document.serialize", json!({"format": 5}), "`format` must be a string"),
+        ("document.serialize", json!({"format": "svg", "selectedOnly": "true"}), "`selectedOnly` must be true or false"),
+        ("document.serialize", json!({"format": "txt", "selectionOnly": 1}), "`selectionOnly` must be true or false"),
+        ("document.serialize", json!({"format": "txt", "selectionOnly": true, "selectedOnly": "false"}), "`selectedOnly` must be true or false"),
+        ("document.export", json!({"format": "svg", "path": 5}), "`path` must be a string"),
+        ("document.exportSelection", json!({"format": "png", "path": 5}), "`path` must be a string"),
+        ("document.exportSelection", json!({"format": 5}), "`format` must be a string"),
+        ("document.exportForOffice", json!({"ppi": "300"}), "`ppi` must be a number"),
+        ("document.exportForOffice", json!({"transparent": "true"}), "`transparent` must be true or false"),
+        ("document.exportForOffice", json!({"path": 5}), "`path` must be a string"),
+    ] {
+        let e = match s.execute(cmd, &p) {
+            Ok(r) => panic!("{cmd} {p} gave {r}"),
+            Err(e) => e.to_string(),
+        };
+        assert!(e.contains(msg), "{cmd} {p}: {e}");
+    }
+    let r = s.execute("document.serialize", &json!({"format": null, "selectedOnly": null})).unwrap();
+    assert_eq!(r, s.execute("document.serialize", &json!({})).unwrap());
+    let r = s.execute("document.exportForOffice", &json!({"ppi": null, "transparent": null, "path": null})).unwrap();
+    assert_eq!(r, s.execute("document.exportForOffice", &json!({})).unwrap());
+}
+
+#[test]
 fn save_and_open_path() {
     let mut s = session();
     s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 80, "height": 40})).unwrap();

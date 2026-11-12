@@ -425,6 +425,27 @@ fn identifiers_take_the_other_id_start_and_continue_characters() {
 }
 
 #[test]
+fn identifiers_take_the_characters_unicode_17_assigned() {
+    // U+088F (a letter, Lo) starts a name; U+1ACF (a combining mark, Mn) may follow the first
+    // character but cannot start a name. Unicode 17.0 assigned both.
+    for (src, name) in [
+        ("var \u{88F} = 1;", "\u{88F}"),
+        ("var \\u088F = 1;", "\u{88F}"),
+        (r"var \u{88F} = 1;", "\u{88F}"),
+        ("var _\u{1ACF} = 1;", "_\u{1ACF}"),
+        ("var _\\u1ACF = 1;", "_\u{1ACF}"),
+        (r"var _\u{1ACF} = 1;", "_\u{1ACF}"),
+    ] {
+        let p = ok(src);
+        let Stmt::Var(decls) = stmt(&p, p.body[0]) else { panic!("{src:?}") };
+        assert_eq!(decls[0].name.name, name, "{src:?}");
+    }
+    assert!(err("var \u{1ACF} = 1;").message.contains("unexpected character"));
+    assert!(err("var \\u1ACF = 1;").message.contains("identifier escape"));
+    assert!(err(r"var \u{1ACF} = 1;").message.contains("identifier escape"));
+}
+
+#[test]
 fn identifiers_refuse_pattern_syntax_surrogates_and_bad_escapes() {
     // U+2E2F is a letter by category but Pattern_Syntax; U+2010, U+00B6 and U+2190 are
     // punctuation and symbols in Pattern_Syntax.
@@ -480,12 +501,12 @@ fn no_pattern_syntax_or_white_space_character_is_an_identifier_character() {
 }
 
 #[test]
-fn identifier_characters_are_unicode_16_id_start_and_id_continue() {
+fn identifier_characters_are_unicode_17_id_start_and_id_continue() {
     use crate::chars::{is_id_part, is_id_start};
-    use unicode_general_category::{GeneralCategory as G, get_general_category};
+    use unicode_properties::{GeneralCategory as G, UnicodeGeneralCategory};
     // Unicode Standard Annex #31: ID_Start is the categories Lu, Ll, Lt, Lm, Lo and Nl plus
     // Other_ID_Start; ID_Continue adds Mn, Mc, Nd, Pc and Other_ID_Continue; both leave out
-    // Pattern_Syntax and Pattern_White_Space. Other_ID_Start and Other_ID_Continue as PropList 16.0
+    // Pattern_Syntax and Pattern_White_Space. Other_ID_Start and Other_ID_Continue as PropList 17.0
     // lists them.
     let other_start = [0x1885..=0x1886, 0x2118..=0x2118, 0x212E..=0x212E, 0x309B..=0x309C];
     let other_continue = [0xB7..=0xB7, 0x387..=0x387, 0x1369..=0x1371, 0x19DA..=0x19DA, 0x200C..=0x200D, 0x30FB..=0x30FB, 0xFF65..=0xFF65];
@@ -498,7 +519,7 @@ fn identifier_characters_are_unicode_16_id_start_and_id_continue() {
     let (mut id_starts, mut id_continues) = (0, 0);
     for c in (0..=0x10_FFFF_u32).filter(|c| !(0xD800..=0xDFFF).contains(c)) {
         let Some(ch) = char::from_u32(c) else { panic!("U+{c:04X}") };
-        let g = get_general_category(ch);
+        let g = ch.general_category();
         let letter = matches!(g, G::UppercaseLetter | G::LowercaseLetter | G::TitlecaseLetter | G::ModifierLetter | G::OtherLetter | G::LetterNumber);
         let id_start = (letter || other_start.iter().any(|r| r.contains(&c))) && !excluded[c as usize];
         let continuing = matches!(g, G::NonspacingMark | G::SpacingMark | G::DecimalNumber | G::ConnectorPunctuation);
@@ -509,8 +530,8 @@ fn identifier_characters_are_unicode_16_id_start_and_id_continue() {
         assert_eq!(is_id_start(c), id_start || c == 0x24 || c == 0x5F, "start U+{c:04X}");
         assert_eq!(is_id_part(c), id_continue || c == 0x24, "part U+{c:04X}");
     }
-    // The totals of ID_Start and ID_Continue in DerivedCoreProperties 16.0.
-    assert_eq!((id_starts, id_continues), (141_269, 144_541));
+    // The totals of ID_Start and ID_Continue in DerivedCoreProperties 17.0.
+    assert_eq!((id_starts, id_continues), (145_916, 149_240));
 }
 
 #[test]

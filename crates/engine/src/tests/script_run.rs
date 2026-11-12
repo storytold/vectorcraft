@@ -166,7 +166,7 @@ fn an_error_names_the_script_its_place_and_kind() {
     let e = run(&mut s, "var = 1;").unwrap_err().to_string();
     assert!(e.starts_with("t.js: line 1,") && e.ends_with("(syntax)"), "{e}");
     assert!(run(&mut s, "app.activeDocument;").unwrap_err().to_string().contains("`vc`"));
-    assert!(run(&mut s, "#targetengine x\n1").unwrap_err().to_string().contains("unsupported script directive: #targetengine"));
+    assert!(run(&mut s, "#targetengine 9x\n1").unwrap_err().to_string().contains("#targetengine needs a name of letters, digits and _"));
     assert_eq!(s.script_report().unwrap()["line"], 1);
 }
 
