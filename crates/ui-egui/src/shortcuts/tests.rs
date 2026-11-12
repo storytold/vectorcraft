@@ -412,6 +412,28 @@ fn a_single_key_shortcut_without_a_dialog_runs_at_once() {
     assert_eq!((open_dialog(&app), undo_len(&app)), (None, before + 1), "Shift+X swaps fill and stroke: {}", app.ui.status);
 }
 
+/// A key or a chord of a command whose menu item is dimmed opens no dialog: Remove Background… and
+/// Object Mosaic… with a rectangle selected change nothing and say why they can't run.
+#[test]
+fn a_shortcut_of_a_dimmed_command_opens_no_dialog_and_says_why() {
+    let chord = vec![
+        egui::Event::ModifiersChanged(cmd() | Modifiers::ALT | Modifiers::SHIFT),
+        egui::Event::Key { key: Key::F9, physical_key: None, pressed: true, repeat: false, modifiers: cmd() | Modifiers::ALT | Modifiers::SHIFT },
+    ];
+    for id in ["addon.image.removeBackground", "object.createObjectMosaic"] {
+        assert!(crate::shortcut_editor::menu_target(id).is_some(), "{id} has a dialog");
+        for (shortcut, events) in [("F", press_f()), ("Cmd+Alt+Shift+F9", chord.clone())] {
+            let mut app = app_with_shortcut(id, shortcut);
+            assert!(!crate::menus::enabled(&app, id), "{id}");
+            let before = undo_len(&app);
+            frame(&mut app, events);
+            crate::shortcut_editor::sync(&crate::state::UiState::default());
+            assert_eq!((open_dialog(&app), undo_len(&app)), (None, before), "{id} on {shortcut}: {}", app.ui.status);
+            assert!(app.ui.status.contains("not available"), "{id} on {shortcut}: {}", app.ui.status);
+        }
+    }
+}
+
 /// With no document open, a command's key without a modifier reports what the same command
 /// reports on a chord.
 #[test]
@@ -1614,6 +1636,29 @@ fn the_command_search_that_opens_while_enter_is_down_waits_for_a_new_press() {
     held.release(&mut app);
     held.press(&mut app);
     assert!(!app.ui.palette_open, "a new press runs the highlighted result");
+}
+
+/// Enter on a command search result whose menu item opens a dialog (Create Gradient Mesh…) opens
+/// that dialog: the press and its repeats do not confirm it, and a new press does.
+#[test]
+fn enter_on_a_command_search_result_opens_its_dialog_and_a_new_press_confirms_it() {
+    let mut app = app_with_a_selected_rectangle();
+    let held = HeldKey::new(Key::Enter, Modifiers::NONE);
+    app.select_tool("selection");
+    app.ui.palette_open = true;
+    app.ui.palette_query = "object.mesh.create".into();
+    let before = undo_len(&app);
+    for repeat in 0..4 {
+        held.press(&mut app);
+        let command = app.ui.dialog.as_ref().and_then(|d| d.fields.get("__command").cloned());
+        assert_eq!(command, Some(json!("object.mesh.create")), "repeat {repeat}: its dialog stays open: {}", app.ui.status);
+        assert_eq!(undo_len(&app), before, "repeat {repeat}: nothing changed");
+    }
+    assert!(!app.ui.palette_open);
+    held.release(&mut app);
+    held.press(&mut app);
+    assert_eq!(open_dialog(&app), None, "a new press confirms");
+    assert_eq!(undo_len(&app), before + 1, "the mesh is one undo step: {}", app.ui.status);
 }
 
 /// A field that rejects its text on Enter keeps the dialog open, while the key is held too.

@@ -653,23 +653,28 @@ const NEEDS_A_PARAM: [&str; 20] = [
 
 /// The (label, params) of each menu bar item, by command id.
 fn menu_bar_items() -> &'static HashMap<&'static str, Vec<(&'static str, Value)>> {
+    static ITEMS: OnceLock<HashMap<&'static str, Vec<(&'static str, Value)>>> = OnceLock::new();
+    ITEMS.get_or_init(|| bar_items(&menus::menu_tree()))
+}
+
+/// The (label, params) of each item of the menus `tree`, by command id. Items that list an
+/// installed plug-in ([`menus::lists_plugin`]) are left out: [`menu_bar_items`] is built once,
+/// and a plug-in installed or removed later would leave it with a row the menu no longer shows.
+fn bar_items(tree: &[(&'static str, Vec<menus::Item>)]) -> HashMap<&'static str, Vec<(&'static str, Value)>> {
     fn walk(items: &[menus::Item], out: &mut HashMap<&'static str, Vec<(&'static str, Value)>>) {
         for it in items {
             match it {
-                menus::Item::Cmd(label, id, p) => out.entry(*id).or_default().push((*label, p.clone())),
+                menus::Item::Cmd(label, id, p) if !menus::lists_plugin(id, p) => out.entry(*id).or_default().push((*label, p.clone())),
                 menus::Item::Sub(_, children) => walk(children, out),
                 _ => {}
             }
         }
     }
-    static ITEMS: OnceLock<HashMap<&'static str, Vec<(&'static str, Value)>>> = OnceLock::new();
-    ITEMS.get_or_init(|| {
-        let mut out = HashMap::new();
-        for (_, items) in menus::menu_tree() {
-            walk(&items, &mut out);
-        }
-        out
-    })
+    let mut out = HashMap::new();
+    for (_, items) in tree {
+        walk(items, &mut out);
+    }
+    out
 }
 
 fn is_bare(p: &Value) -> bool {
@@ -684,6 +689,19 @@ pub(crate) fn menu_target(id: &str) -> Option<(String, Value)> {
     let items = menu_bar_items().get(id)?;
     let (label, p) = items.first().filter(|(_, p)| !is_bare(p))?;
     items.iter().all(|(_, q)| q == p).then(|| menus::click_target(label, id, p))
+}
+
+/// What a command search pick, or a shortcut without params, of command `id` runs now: `Ok` with
+/// what a click on its menu bar item runs ([`menu_target`]), or `None` when no such item gives it
+/// params. While that item is dimmed, no dialog opens for it: `Err` holds the status line that says
+/// why the command can't run (Remove Background… with no image selected).
+pub(crate) fn menu_target_now(app: &VectorcraftApp, id: &str) -> Option<Result<(String, Value), String>> {
+    let target = menu_target(id)?;
+    if menus::enabled(app, id) {
+        return Some(Ok(target));
+    }
+    let why = (vectorcraft_engine::find_command(id)?.enabled)(&app.session).err()?;
+    Some(Err(vectorcraft_engine::EngineError::Disabled(id.to_string(), why).to_string()))
 }
 
 /// Is `key` a command with no default shortcut that a key press can't run: no item of the menu
@@ -2268,6 +2286,25 @@ mod tests {
         assert_eq!(menu_target("edit.findReplace").map(|(id, _)| id).as_deref(), Some("ui.paramDialog"));
         assert_eq!(menu_target("object.align"), None, "seven items, each with its own params");
         assert_eq!(menu_target("edit.undo"), None, "runs without params");
+    }
+
+    /// The menu bar items a shortcut or a command search pick reads leave out items that list an
+    /// installed plug-in (a File › Open With importer, an Object › Plug-ins filter), which come and
+    /// go after the items are read; the other items stay.
+    #[test]
+    fn menu_bar_items_leave_out_installed_plug_ins() {
+        let tree = vec![(
+            "File",
+            vec![
+                menus::Item::Sub("Open With", vec![menus::Item::Cmd("Spins…", "file.openWith", json!({"importer": "plugin.test.spins"}))]),
+                menus::Item::Cmd("Filter…", "plugin.dialog", json!({"id": "test.filter"})),
+                menus::Item::Cmd("Clean Up…", "object.path.cleanUp", json!({"strayPoints": true})),
+            ],
+        )];
+        let items = bar_items(&tree);
+        assert!(!items.contains_key("file.openWith"), "{items:?}");
+        assert!(!items.contains_key("plugin.dialog"), "{items:?}");
+        assert_eq!(items.get("object.path.cleanUp"), Some(&vec![("Clean Up…", json!({"strayPoints": true}))]));
     }
 
     /// Every command the editor lists, run as a key press runs it on a document with one or with
