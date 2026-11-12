@@ -110,6 +110,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "brush.options",
     "brush.placeArt",
     "brush.remove",
+    "brush.replaceArt",
     "brush.selectionArt",
     "brush.setCurrent",
     "brush.unused",

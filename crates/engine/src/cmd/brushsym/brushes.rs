@@ -239,7 +239,7 @@ pub(super) fn brush_new(s: &mut Session, p: &Value) -> Result<Value> {
         && v.get(k).is_none()
     {
         let art = selection_art(s, p)?.ok_or_else(|| bad(C, format!("{ty} brushes need selected art (or params.{k})")))?;
-        if art.geometric_bounds().is_none_or(|b| b.width() <= 1e-6) {
+        if !has_width(&art, &s.doc()?.doc.symbol_boxes()) {
             return Err(bad(C, "the selected art has no width"));
         }
         v[k] = serde_json::to_value(&art).unwrap_or_default();
@@ -247,6 +247,12 @@ pub(super) fn brush_new(s: &mut Session, p: &Value) -> Result<Value> {
     lib.push(parse_brush(C, v)?);
     save_library(s, "New Brush", lib, &[])?;
     Ok(json!({ "name": name }))
+}
+
+/// Whether art `n` has width for a brush to be made of, with symbol instances measured by their
+/// symbols' art in `symbols`.
+fn has_width(n: &Node, symbols: &vectorcraft_doc::SymbolBoxes) -> bool {
+    n.geometric_bounds_with(symbols).is_some_and(|b| b.width() > 1e-6)
 }
 
 /// Refuses `name` for a bristle brush when it has more than [`Bristle::MAX_NAME_CHARS`] characters.
@@ -367,6 +373,12 @@ fn art_brushes(n: &Node, out: &mut Vec<String>) {
 pub(super) fn brush_unused(s: &mut Session, _: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     let lib = brush::library(d);
+    let names = brush_unused_in(d, &lib);
+    Ok(json!({ "names": names }))
+}
+
+/// The brushes of `lib` no stroke in `d` paints with, in library order ([`brush_unused`]).
+fn brush_unused_in(d: &Document, lib: &[Brush]) -> Vec<String> {
     let mut todo = vec![];
     let trees = d.layers.iter().chain(d.symbols.iter().map(|s| &s.art)).chain(d.graph_designs.iter().map(|g| &g.art));
     let patterns = d.patterns.iter().chain(d.pattern_edit.iter().filter_map(|pe| pe.original.as_ref()));
@@ -379,8 +391,7 @@ pub(super) fn brush_unused(s: &mut Session, _: &Value) -> Result<Value> {
             used.insert(name);
         }
     }
-    let names: Vec<&str> = lib.iter().map(|b| b.name.as_str()).filter(|n| !used.contains(*n)).collect();
-    Ok(json!({ "names": names }))
+    lib.iter().map(|b| b.name.clone()).filter(|n| !used.contains(n)).collect()
 }
 
 pub(super) fn brush_options(s: &mut Session, p: &Value) -> Result<Value> {
@@ -484,7 +495,7 @@ pub(super) fn brush_options(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// The name `brush.placeArt` gives each pattern brush tile it places, by tile, in the order it
-/// places them.
+/// places them; `brush.replaceArt` reads a group of that name as that tile.
 const TILE_NAMES: [&str; 5] = ["Side Tile", "Outer Corner Tile", "Inner Corner Tile", "Start Tile", "End Tile"];
 
 /// The space between the pattern brush tiles `brush.placeArt` places, in points.
@@ -503,6 +514,18 @@ fn tile(p: &brush::PatternBrush, i: usize) -> Option<(&Node, Option<vectorcraft_
         2 => p.inner_corner.as_ref().map(|n| (n, p.inner_corner_frame)),
         3 => p.start.as_ref().map(|n| (n, p.start_frame)),
         _ => p.end.as_ref().map(|n| (n, p.end_frame)),
+    }
+}
+
+/// Gives tile `i` of `p` ([`TILE_NAMES`] order) the art `art` and the repeat frame `frame`. The tile
+/// no longer comes from a pattern swatch, and a corner draws its own art.
+fn set_tile(p: &mut brush::PatternBrush, i: usize, art: Node, frame: Option<vectorcraft_geom::Rect>) {
+    match i {
+        0 => (p.side, p.side_frame, p.side_swatch) = (art, frame, None),
+        1 => (p.outer_corner, p.outer_corner_frame, p.outer_corner_swatch, p.outer_source) = (Some(art), frame, None, None),
+        2 => (p.inner_corner, p.inner_corner_frame, p.inner_corner_swatch, p.inner_source) = (Some(art), frame, None, None),
+        3 => (p.start, p.start_frame, p.start_swatch) = (Some(art), frame, None),
+        _ => (p.end, p.end_frame, p.end_swatch) = (Some(art), frame, None),
     }
 }
 
@@ -568,6 +591,118 @@ pub(super) fn brush_place_art(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(id)
     })?;
     Ok(json!({ "id": id.0 }))
+}
+
+/// The repeat frame an unpainted rectangle at the back of a tile group marks ([`placed_art`]): the
+/// rectangle's bounds, when `n` is a path of one closed subpath through the four corners of its
+/// bounds, without curves, whose fills and strokes paint nothing and that has no other appearance.
+fn frame_marker(n: &Node) -> Option<vectorcraft_geom::Rect> {
+    let NodeKind::Path { path, guide: false, clipping: false, .. } = &n.kind else { return None };
+    let unpainted = n.appearance.effects.is_empty()
+        && n.appearance.items.iter().all(|i| match i {
+            AppearanceItem::Fill(f) => f.paint.is_none(),
+            AppearanceItem::Stroke(st) => st.paint.is_none(),
+        });
+    let [sp] = path.subpaths.as_slice() else { return None };
+    let r = n.geometric_bounds()?;
+    let corners = [(r.x0, r.y0), (r.x1, r.y0), (r.x1, r.y1), (r.x0, r.y1)];
+    let at_corners = sp.anchors.len() == 4
+        && sp.anchors.iter().all(|a| a.h_in == a.p && a.h_out == a.p)
+        && corners.iter().all(|c| sp.anchors.iter().any(|a| (a.p.x, a.p.y) == *c));
+    (unpainted && sp.closed && at_corners && r.width() > 1e-9 && r.height() > 1e-9).then_some(r)
+}
+
+/// The tiles in `art` for a pattern brush, by tile ([`TILE_NAMES`] order), with their repeat frames:
+/// a group named for a tile, as `brush.placeArt` places them, is the art of its tile (an unpainted
+/// rectangle at its back marks the tile's frame, [`frame_marker`], and is left out of the art; a
+/// group left with one member gives that member), and so is each member of a group whose members
+/// are all such groups; any other art is the side tile.
+fn tiles_of(art: Node) -> Vec<(usize, Node, Option<vectorcraft_geom::Rect>)> {
+    let named = |c: &Node| matches!(c.kind, NodeKind::Group { clip: false, .. }) && c.name.as_deref().is_some_and(|n| TILE_NAMES.contains(&n));
+    let tiles = match &art.kind {
+        _ if named(&art) => vec![Arc::new(art)],
+        NodeKind::Group { children, clip: false } if !children.is_empty() && children.iter().all(|c| named(c)) => children.clone(),
+        _ => return vec![(0, art, None)],
+    };
+    let mut out: Vec<(usize, Node, Option<vectorcraft_geom::Rect>)> = vec![];
+    for t in tiles {
+        let Some(i) = t.name.as_deref().and_then(|n| TILE_NAMES.iter().position(|x| *x == n)) else { continue };
+        let mut g = (*t).clone();
+        let mut frame = None;
+        if let NodeKind::Group { children, .. } = &mut g.kind
+            && let Some(f) = children.first().and_then(|c| frame_marker(c))
+        {
+            frame = Some(f);
+            children.remove(0);
+        }
+        g.name = None;
+        // The group `brush.placeArt` put around the tile's art: the art itself goes back, so a
+        // tile does not gain a group each time it goes out and back.
+        if let NodeKind::Group { children, clip: false } = &g.kind
+            && let [only] = children.as_slice()
+            && g == Node::group(g.id, children.clone())
+        {
+            g = (**only).clone();
+        }
+        // A tile named twice: the frontmost one counts.
+        out.retain(|(j, ..)| *j != i);
+        out.push((i, g, frame));
+    }
+    out
+}
+
+/// `brush.replaceArt`: the selected art (or `ids`/`id`; several objects become one group, as in
+/// `brush.new`) becomes the art of scatter, art or pattern brush `name`, keeping its other options,
+/// as one undo step. A pattern brush takes the tiles `brush.placeArt` places by their names
+/// ([`tiles_of`]) and other art as its side tile. When strokes use the brush and `applyToStrokes` is
+/// false, the brush and its strokes stay as they were and a copy of the brush with the new art is
+/// added after it and becomes the current brush; otherwise the strokes redraw with the new art.
+pub(super) fn brush_replace_art(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "brush.replaceArt";
+    let name = name_param(p, C)?.to_string();
+    let apply = super::switch_or(p, "applyToStrokes", true, C)?;
+    let mut lib = brush::library(&s.doc()?.doc);
+    let i = lib.iter().position(|b| b.name == name).ok_or_else(|| bad(C, format!("no brush named `{name}`")))?;
+    if lib[i].art().is_empty() {
+        return Err(bad(C, no_art(&name)));
+    }
+    let art = selection_art(s, p)?.ok_or_else(|| bad(C, "nothing selected"))?;
+    let d = &s.doc()?.doc;
+    let symbols = d.symbol_boxes();
+    let check = |n: &Node| if has_width(n, &symbols) { Ok(()) } else { Err(bad(C, "the selected art has no width")) };
+    let mut b = lib[i].clone();
+    match &mut b.kind {
+        BrushKind::Scatter(sc) => {
+            check(&art)?;
+            sc.art = art;
+        }
+        BrushKind::Art(a) => {
+            check(&art)?;
+            a.art = art;
+        }
+        BrushKind::Pattern(pb) => {
+            for (t, art, frame) in tiles_of(art) {
+                check(&art)?;
+                set_tile(pb, t, art, frame);
+            }
+        }
+        BrushKind::Calligraphic(_) | BrushKind::Bristle(_) => return Err(bad(C, no_art(&name))),
+    }
+    let used = !brush_unused_in(d, &lib).contains(&name);
+    if apply || !used {
+        lib[i] = b;
+        save_library(s, "Replace Brush Art", lib, &[])?;
+        return Ok(json!({ "name": name }));
+    }
+    b.name = brush::unique_name(&lib, &format!("{} copy", name.trim()));
+    let copy = b.name.clone();
+    lib.insert(i + 1, b);
+    s.edit("Replace Brush Art", |d, _| {
+        d.unknown.insert(brush::CURRENT_KEY.into(), json!(copy));
+        brush::store(d, &lib);
+        Ok(())
+    })?;
+    Ok(json!({ "name": copy }))
 }
 
 pub(super) fn expand_brush(s: &mut Session, p: &Value) -> Result<Value> {
