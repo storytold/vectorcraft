@@ -5955,6 +5955,11 @@ axis	Y Axis	Trục Y
 	Grass Fan	Cọ quạt vẽ cỏ
 	Pattern Borders	Viền họa tiết
 	Scatter Shapes	Hình phân tán
+	Dry Media	Chất liệu khô
+	Chalk Grain	Hạt phấn
+	Graphite Pencil	Bút chì than chì
+	Wax Crayon	Bút sáp màu
+	Charcoal Dust	Bụi than
 	Save Brush Library…	Lưu thư viện cọ…
 @msg	`{_1}` has no brushes to apply	`{_1}` không có cọ nào để áp dụng
 @msg	missing `library` (see brush.libraries)	thiếu `library` (xem brush.libraries)

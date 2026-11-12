@@ -180,6 +180,49 @@ fn selection_changes_clear_the_target() {
 }
 
 #[test]
+fn a_chosen_object_on_a_path_needs_its_group_selected_alone() {
+    use vectorcraft_geom::{Point, Rect, shapes};
+    let mut d = Document::new(200.0, 200.0);
+    let l = d.layers[0].id;
+    let (line, a, b, g, other) = (d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let line = Node::path(line, shapes::line(Point::new(0.0, 100.0), Point::new(200.0, 100.0)), Default::default());
+    let a = Node::path(a, shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Default::default());
+    let b = Node::path(b, shapes::rectangle(Rect::new(20.0, 0.0, 30.0, 10.0)), Default::default());
+    let rec = crate::objects_on_path::ObjectsOnPath::new(line.id, &[&a, &b], crate::objects_on_path::CENTER, 0.0);
+    let (line_id, a_id) = (line.id, a.id);
+    let mut group = Node::new(g, NodeKind::Group { children: vec![Arc::new(line), Arc::new(a), Arc::new(b)], clip: false });
+    group.extras_mut().objects_on_path = Some(Box::new(rec));
+    d.insert(Some(l), 0, group).unwrap();
+    d.insert(Some(l), 1, Node::path(other, shapes::rectangle(Rect::new(150.0, 0.0, 160.0, 10.0)), Default::default())).unwrap();
+    let mut s = Selection::default();
+    s.set_on_path_member(g, a_id);
+    s.prune(&d);
+    assert_eq!((s.objects.as_slice(), s.on_path_member), (&[g][..], Some(a_id)));
+    s.add(other);
+    assert_eq!(s.on_path_member, None, "another object joins the selection");
+    s.set_on_path_member(g, a_id);
+    s.set([g]);
+    assert_eq!(s.on_path_member, None, "a new selection");
+    // The path is not one of the objects, nor is an object outside the group.
+    for m in [line_id, other] {
+        s.set_on_path_member(g, m);
+        s.prune(&d);
+        assert_eq!(s.on_path_member, None, "{m:?}");
+    }
+    // A locked object is not chosen.
+    s.set_on_path_member(g, a_id);
+    d.node_mut(a_id).unwrap().locked = true;
+    s.prune(&d);
+    assert_eq!((s.objects.as_slice(), s.on_path_member), (&[g][..], None), "locked");
+    d.node_mut(a_id).unwrap().locked = false;
+    // Once the group is a plain group, no object of it is chosen.
+    s.set_on_path_member(g, a_id);
+    d.node_mut(g).unwrap().extras_mut().objects_on_path = None;
+    s.prune(&d);
+    assert_eq!((s.objects.as_slice(), s.on_path_member), (&[g][..], None));
+}
+
+#[test]
 fn a_key_object_needs_two_or_more_selected_objects() {
     let mut s = Selection::default();
     s.set([NodeId(1), NodeId(2)]);

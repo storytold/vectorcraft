@@ -6305,6 +6305,11 @@ axis	Y Axis	Y ekseni
 	Grass Fan	Çim Yelpazesi
 	Pattern Borders	Desen Kenarlıkları
 	Scatter Shapes	Dağılım Şekilleri
+	Dry Media	Kuru Teknikler
+	Chalk Grain	Tebeşir Dokusu
+	Graphite Pencil	Grafit Kalem
+	Wax Crayon	Mum Boya
+	Charcoal Dust	Kömür Tozu
 	Save Brush Library…	Fırça Kitaplığını Kaydet…
 @msg	`{_1}` has no brushes to apply	`{_1}` içinde uygulanacak fırça yok
 @msg	missing `library` (see brush.libraries)	`library` eksik (bkz. brush.libraries)

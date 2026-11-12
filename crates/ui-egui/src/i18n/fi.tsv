@@ -6379,6 +6379,11 @@ axis	Y Axis	Y-akseli
 	Grass Fan	Ruohoviuhka
 	Pattern Borders	Kuvioreunukset
 	Scatter Shapes	Sirontamuodot
+	Dry Media	Kuivat välineet
+	Chalk Grain	Liitujyvä
+	Graphite Pencil	Grafiittikynä
+	Wax Crayon	Vahaliitu
+	Charcoal Dust	Hiilipöly
 	Save Brush Library…	Tallenna sivellinkirjasto…
 @msg	`{_1}` has no brushes to apply	Kohteessa `{_1}` ei ole käytettäviä siveltimiä
 @msg	missing `library` (see brush.libraries)	`library` puuttuu (katso brush.libraries)

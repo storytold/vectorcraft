@@ -1365,6 +1365,7 @@ fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
 #[cfg(test)]
 mod area_tests;
 mod block;
+pub(crate) use block::needed_room;
 #[cfg(test)]
 mod block_tests;
 

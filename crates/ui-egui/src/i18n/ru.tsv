@@ -5960,6 +5960,11 @@ axis	Y Axis	Ось Y
 	Grass Fan	Веер для травы
 	Pattern Borders	Узорные каймы
 	Scatter Shapes	Рассеянные фигуры
+	Dry Media	Сухие материалы
+	Chalk Grain	Меловое зерно
+	Graphite Pencil	Графитный карандаш
+	Wax Crayon	Восковой мелок
+	Charcoal Dust	Угольная пыль
 	Save Brush Library…	Сохранить библиотеку кистей…
 @msg	`{_1}` has no brushes to apply	В `{_1}` нет кистей для применения
 @msg	missing `library` (see brush.libraries)	не указан `library` (см. brush.libraries)

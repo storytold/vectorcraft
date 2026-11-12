@@ -321,7 +321,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 - **Done:** Divide splits filled paths along open cutting lines and curves (#1307), preserving the frontmost filled appearance, implicit filled closure, holes, unrelated objects and one Undo/Redo; the existing bounded-map fallback remains.
 
-- **Done:** Numeric fields keep a text drag's start when the pointer gains focus and movement exceeds the click threshold (#1326, in part). A completed focus click selects the whole value; keyboard focus, double-click and numeric stepping remain regression-tested. Short movements still classified as clicks can select all; that case remains open.
+- **Done:** Numeric fields keep a text drag's start when the pointer gains focus, including short movements that egui still classifies as clicks (#1326). A release more than 1 pt from the press keeps the caret; a tap, including one with a pixel of pen or trackpad jitter, selects the whole value. Keyboard focus, double-click and numeric stepping remain regression-tested (`tests/numfields.rs`, `a_short_drag_released_as_a_click_keeps_its_caret` and `a_sub_threshold_movement_released_as_a_click_keeps_its_caret`).
 
 - **Done:** DXF reads control-point SPLINE closure (#1299 follow-up after #1320); open curves keep their open state. DXF export now recognizes circular cubic paths conservatively and writes native CIRCLE/ARC where stroke semantics permit; R12 weighted strokes remain POLYLINE. A closed four-cubic ellipse, or a circle scaled out of proportion, is written as a native ELLIPSE in R13 and later; R12 keeps the existing fallback. Alter Paths for Appearance outlines only the strokes a CAD line can't draw (aligned, profiled, offset dashes, wider than 2.11 mm, or in R13 and R14), so a 1 pt circle or arc stays a CIRCLE or ARC. DXF Options' Preset menu and `document.exportDxf`'s `dxfPreset: "cnc"` set the CNC / CAM options (#5500); VCarve QA remains open. Escape leaves Artboard editing for Selection; during a drag it first cancels the gesture. Headless egui key events cover idle Escape, active-drag cancellation and a subsequent Escape in `tests/distortkeys.rs`.
 
@@ -632,8 +632,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   libraries ([public source](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/apply-and-edit-strokes/create-new-brush-libraries.html),
   [import](https://helpx.adobe.com/illustrator/desktop/paint-and-fill/apply-and-edit-strokes/import-brushes-from-brush-libraries-or-other-files.html)):
   Window › Brush Libraries and the Brushes panel's Brush Libraries Menu open each library in a library panel of
-  its own (seven original libraries generated in code: Art Ribbons, Calligraphic Nibs, Bristle Brushes (one
-  bristle brush for each tip shape), Pattern Borders, Scatter Shapes, Game Trails and Energy Beams; User Defined; Other Library… reads the brushes of any document VectorCraft opens); a
+  its own (eight original libraries generated in code: Art Ribbons, Calligraphic Nibs, Bristle Brushes (one
+  bristle brush for each tip shape), Pattern Borders, Scatter Shapes, Game Trails, Energy Beams and Dry Media (grainy chalk, pencil, crayon and charcoal art brushes); User Defined; Other Library… reads the brushes of any document VectorCraft opens); a
   click adds a
   brush to the document's Brushes with the patterns, symbols and other resources its art uses, as one undo
   step (applied to the selected paths in the same step), dragging one onto a path adds and applies it and
@@ -654,7 +654,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   Fine Grain, Canvas Weave, Burlap Sack, Cracked Glaze, Mosaic Floor, Quilted Squares, Leaded Glass and Damp Paper,
   painted with the texture effects; User Defined; Other Library…; `graphicStyle.libraries`,
   `graphicStyle.addFromLibrary`).
-- **Missing:** more built-in brush libraries beyond the seven shipped (and further graphic-style libraries beyond the ten shipped, and further symbol libraries beyond Basic
+- **Missing:** more built-in brush libraries beyond the eight shipped (and further graphic-style libraries beyond the ten shipped, and further symbol libraries beyond Basic
   Shapes, UI Frames, Map Markers, Inventory Icons and Skill Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write;
   Global Edit of groups holding type or images, rotated copies as matches and highlighting matches before the
   start; 9-slice guides outside the symbol's art (a dragged guide stops at the art's edge).
@@ -862,6 +862,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 |---|---|---|
 | 2026-11-09 | minor | G4 review (#6084): positional variants no supported feature draws can be applied as glyph choices in both Glyphs views; unlisted glyphs still respect name ownership. OpenType style options keep only a valid last on-value when enabling a set. Existing contextual/ligature lookup and unsupported-feature gaps remain; estimate unchanged. |
 | 2026-11-07 | minor | G4: the Glyphs panel's Alternates for Current Selection applies the OpenType feature that draws a variant to that letter alone (`salt=2`; the style commands take `tag=N`; runs that differ only in their features shape as one piece of text), so an Arabic word stays joined, and Show › Entire Font lists the unencoded glyphs (#5514). Estimate unchanged. |
+| 2026-11-12 | minor | G11: numeric fields keep the caret when a focus click is released more than 1 pt from its press; a tap within 1 pt still selects the whole value (#6659, follow-up to #1326); short-drag and jitter-tap regressions in `tests/numfields.rs`; estimates unchanged. |
 | 2026-11-03 | minor | An imported document's own title (an SVG's root `<title>`, a PDF's XMP `dc:title` else its Info `Title`) goes into File Info only; the document's name stays the file's name (#3626); no scored gap or estimate reassessed. |
 | 2026-11-11 | minor | Eyedropper copies effective character dimensions between transformed text objects (#6404); scores and estimates unchanged. |
 | 2026-11-11 | minor | Ordinary Save to a location refusing writes offers Save As (#6146); cancellation preserves the original path and modified state; automation receives READ_ONLY_LOCATION. Scores and estimates unchanged. Validation pending. |

@@ -6291,6 +6291,11 @@ axis	Y Axis	Eje Y
 	Grass Fan	Abanico de hierba
 	Pattern Borders	Bordes de motivo
 	Scatter Shapes	Formas de dispersión
+	Dry Media	Técnicas secas
+	Chalk Grain	Grano de tiza
+	Graphite Pencil	Lápiz de grafito
+	Wax Crayon	Cera de colores
+	Charcoal Dust	Polvo de carboncillo
 	Save Brush Library…	Guardar biblioteca de pinceles…
 @msg	`{_1}` has no brushes to apply	`{_1}` no tiene pinceles para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)

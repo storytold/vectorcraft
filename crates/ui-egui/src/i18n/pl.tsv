@@ -6203,6 +6203,11 @@ axis	Y Axis	Oś Y
 	Grass Fan	Wachlarz do trawy
 	Pattern Borders	Obramowania wzorków
 	Scatter Shapes	Kształty rozproszone
+	Dry Media	Techniki suche
+	Chalk Grain	Ziarno kredy
+	Graphite Pencil	Ołówek grafitowy
+	Wax Crayon	Kredka woskowa
+	Charcoal Dust	Pył węglowy
 	Save Brush Library…	Zapisz bibliotekę pędzli…
 @msg	`{_1}` has no brushes to apply	`{_1}` nie ma pędzli do zastosowania
 @msg	missing `library` (see brush.libraries)	brak `library` (zobacz brush.libraries)
