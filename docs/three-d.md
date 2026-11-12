@@ -301,7 +301,9 @@ Extrude & Bevel's front and back caps, and the plane of the Plane type (Rotate).
   (counterclockwise), and **Remove Graphic** takes it off. Each change is one undo step.
 - While the tab is open, a blue handle sits on the center of each mapped graphic whose face is turned toward the
   viewer. Dragging a handle moves that graphic over its face, previewed while the pointer is down and recorded as
-  one undo step when it is released. The handles are hidden while the selected objects have different graphics.
+  one undo step when it is released. The handles are hidden while the selected objects have different graphics,
+  and while a geometry effect (such as Transform) comes after the 3D effect. A press on the canvas while its
+  context menu is open only closes the menu and does not grab a handle.
 
 These rules are VectorCraft's own:
 

@@ -301,7 +301,8 @@ type Handles = (vectorcraft_effects::GraphicFrame, Vec<vectorcraft_effects::Mapp
 
 /// The handles of the graphics mapped onto the first selected object, while the Materials tab is
 /// open: each graphic's index, its face and where its center lands on the page, for the graphics
-/// whose face the viewer sees. With them, the object's [`vectorcraft_effects::GraphicFrame`] and the
+/// whose face the viewer sees, and none while a geometry effect follows a selected object's 3D effect.
+/// With them, the object's [`vectorcraft_effects::GraphicFrame`] and the
 /// graphics.
 fn graphic_handles(app: &VectorcraftApp, ctx: &egui::Context) -> Option<Handles> {
     if !materials_open(ctx) {
@@ -312,6 +313,13 @@ fn graphic_handles(app: &VectorcraftApp, ctx: &egui::Context) -> Option<Handles>
     let t = find(n)?;
     // The frame of the effect whose graphics are listed: none while that effect is hidden.
     let frame = vectorcraft_effects::graphic_frame_at(Some(&st.doc), n, t.item, t.index)?;
+    // A geometry effect after the 3D effect of any selected object moves or bends its drawn
+    // graphics away from their places in the frame: no handles, so a drag does not put a graphic
+    // away from the pointer.
+    let reshaped = |n: &Node| find(n).is_some_and(|t| vectorcraft_effects::graphics_reshaped_after(n, t.item, t.index));
+    if st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).any(reshaped) {
+        return None;
+    }
     let list = vectorcraft_effects::mapped_graphics(&vectorcraft_effects::merged_params(&t.effect, &t.params));
     // Selected objects with different graphics show no handles: a drag sends the whole list.
     let graphics_of = |t: Target| vectorcraft_effects::mapped_graphics(&vectorcraft_effects::merged_params(&t.effect, &t.params));

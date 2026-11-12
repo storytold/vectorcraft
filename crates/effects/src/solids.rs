@@ -1232,6 +1232,14 @@ pub fn graphic_frame_at(doc: Option<&Document>, n: &Node, item: Option<usize>, i
     frame_of(doc, n, item, &|fx: &[Effect]| fx.get(index).filter(|e| e.visible && SOLIDS.contains(&e.id.as_str())).map(|e| (index, e)))
 }
 
+/// Does a visible geometry effect come after the 3D effect at `index` in the effects of `n` (on the
+/// object itself with `item` `None`, else on its fill or stroke `item`)? Such an effect moves or
+/// bends the drawn art, graphics included, while [`graphic_frame_at`] places the graphics on the
+/// art before it.
+pub fn graphics_reshaped_after(n: &Node, item: Option<usize>, index: usize) -> bool {
+    n.appearance.effects_at(item).and_then(|fx| fx.get(index + 1..)).is_some_and(crate::has_geometry)
+}
+
 /// Finds a 3D effect in a list of effects, with its index there.
 type Pick<'p> = dyn for<'e> Fn(&'e [Effect]) -> Option<(usize, &'e Effect)> + 'p;
 

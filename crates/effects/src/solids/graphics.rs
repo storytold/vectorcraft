@@ -15,7 +15,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::color::{BlendMode, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, Symbol};
 use vectorcraft_geom::kurbo::{CubicBez, ParamCurve, PathEl, Shape};
-use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect};
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, SubPath};
 use vectorcraft_three_d::{FaceMap, Facet, PlanarFace};
 
 /// The effect parameter that holds the graphics.
@@ -169,18 +169,27 @@ pub fn missing_symbol(doc: &Document, p: &Value, old: Option<&Value>) -> Option<
 }
 
 /// Does the art of the symbols the graphics in `p` name fit the limits? A graphic whose symbol
-/// `doc` does not have draws nothing and is not counted.
+/// `doc` does not have draws nothing and is not counted. With a perspective, each curve counts as
+/// the [`PERSPECTIVE_PIECES`] pieces it is cut into; without one, it counts once.
 pub fn validate_symbols(doc: &Document, p: &Value) -> Result<(), String> {
+    let curve = if super::view_options(p).perspective > 0.0 { PERSPECTIVE_PIECES } else { 1 };
     let mut elements = 0usize;
     for g in mapped_graphics(p) {
         let Some(symbol) = doc.symbols.iter().find(|s| s.name == g.symbol) else { continue };
         let pieces = pieces_of(doc, symbol)?;
-        elements = elements.saturating_add(pieces.iter().map(|p| p.path.subpaths.iter().map(|s| s.anchors.len() + 1).sum::<usize>()).sum());
-        if elements.saturating_mul(PERSPECTIVE_PIECES) > MAX_ELEMENTS {
+        elements = elements.saturating_add(pieces.iter().map(|p| drawn_elements(&p.path, curve)).sum());
+        if elements > MAX_ELEMENTS {
             return Err("The graphics are too complex: simplify the symbols' art".into());
         }
     }
     Ok(())
+}
+
+/// The path elements `path` draws when each curve draws `curve` elements, before curves near the
+/// eye are split further: one for each straight line, move and close.
+fn drawn_elements(path: &PathData, curve: usize) -> usize {
+    let segments = |s: &SubPath| (0..s.segment_count()).map(|i| if s.segment_is_line(i) { 1 } else { curve }).sum::<usize>();
+    path.subpaths.iter().map(|s| 1 + usize::from(s.closed) + segments(s)).sum()
 }
 
 /// One area of a graphic's art, drawn with one paint: a fill, or a stroke's outline.
@@ -194,7 +203,7 @@ struct Piece {
 
 /// The areas the art of `symbol` paints, back to front, at the symbol's natural size: the fills of
 /// its paths, compound paths and type (as outlines), and its strokes' outlines, through the symbol
-/// instances it holds. Hidden objects, guides, clipping paths and images are left out, and clipping
+/// instances it holds (with their changes to dynamic symbols, and through 9-slice guides). Hidden objects, guides, clipping paths and images are left out, and clipping
 /// groups draw their art unclipped.
 fn pieces_of(doc: &Document, symbol: &Symbol) -> Result<Vec<Piece>, String> {
     fn walk(doc: &Document, n: &Node, outer: f32, xf: Affine, (depth, level): (usize, usize), out: &mut Vec<Piece>) -> Result<(), String> {
@@ -224,7 +233,18 @@ fn pieces_of(doc: &Document, symbol: &Symbol) -> Result<Vec<Piece>, String> {
                     if depth >= MAX_NESTING {
                         return Err(format!("A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art"));
                     }
-                    walk(doc, &s.art, opacity, xf * *at, (depth + 1, level + 1), out)?;
+                    // The instance shows its own changes to a dynamic symbol's art, and a symbol
+                    // with 9-slice guides is placed through them, as the canvas draws it. The
+                    // pieces are not clipped, so paths that cross a guide are cut at it.
+                    let art = vectorcraft_doc::symbol_overrides::dynamic_art(&s.art, n);
+                    if doc.symbol_slice_map(symbol, *at).is_some() {
+                        let Some(placed) = doc.place_symbol_art_unclipped(symbol, &art, *at) else {
+                            return Err("A graphic's art holds too many objects: simplify the symbol's art".into());
+                        };
+                        walk(doc, &placed, opacity, xf, (depth + 1, level + 1), out)?;
+                    } else {
+                        walk(doc, &art, opacity, xf * *at, (depth + 1, level + 1), out)?;
+                    }
                 }
                 None
             }
@@ -371,7 +391,6 @@ pub(super) fn face_art(
     let doc = doc?;
     let light = caps.first()?.illumination;
     let affine = map.local_affine(center).filter(|_| map.is_affine());
-    let cuts = if affine.is_some() { 1 } else { PERSPECTIVE_PIECES };
     let mut children = vec![];
     for g in graphics.iter().filter(|g| g.face == face) {
         let Some(symbol) = doc.symbols.iter().find(|s| s.name == g.symbol) else { continue };
@@ -392,15 +411,14 @@ pub(super) fn face_art(
         let gradient_map = local * place;
         for piece in pieces {
             let placed = piece.path.transformed(place);
-            let added: usize = placed.subpaths.iter().map(|s| s.anchors.len() + 1).sum();
+            // Each anchor draws at least one element. A perspective cuts curves into more, and
+            // straight lines stay one each: the path may take what is left of the limit, and is
+            // counted as it is drawn. Past the limit, the face draws nothing.
+            let least: usize = placed.subpaths.iter().map(|s| s.anchors.len()).sum();
             let before = *elements;
-            *elements = elements.saturating_add(added.saturating_mul(cuts));
-            if *elements > MAX_ELEMENTS {
+            if before.saturating_add(least) > MAX_ELEMENTS {
                 return None;
             }
-            // Curves split near the eye, and the cut at it, can draw more elements than were
-            // counted: the path may take what is left of the limit, and is counted as drawn. Past
-            // the limit, the face draws nothing.
             let room = MAX_ELEMENTS - before;
             let mut rule = piece.rule;
             let mapped = match map_path(&placed, map, affine, room) {
@@ -429,7 +447,7 @@ pub(super) fn face_art(
                 Err(NotMapped::Full) => return None,
                 Err(NotMapped::Behind) => continue,
             };
-            *elements = (*elements).max(before.saturating_add(mapped.elements().len()));
+            *elements = before.saturating_add(mapped.elements().len());
             let mut paint = piece.paint;
             vectorcraft_doc::recolor::map_paint(&mut paint, &|c| crate::lighting::shade(c, light));
             // A pattern's tiles follow the graphic onto the face, as its gradients do below.

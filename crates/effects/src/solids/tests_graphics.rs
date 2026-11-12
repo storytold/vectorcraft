@@ -365,27 +365,67 @@ fn members_with_their_own_blending_get_graphics_of_their_own() {
     assert_eq!(blended, 1);
 }
 
-#[test]
-fn members_with_graphics_of_their_own_share_one_element_limit() {
-    // A red polygon of 30,000 sides: cut by a perspective, one copy fits the limit, two do not.
+/// [`document`] with symbol "Dense" too: a red polygon of 30,000 sides, straight or `curved`.
+fn dense_document(curved: bool) -> Document {
     let mut d = document();
     let mut poly = BezPath::new();
+    let mut last = Point::ZERO;
     for k in 0..30_000 {
         let a = k as f64 / 30_000.0 * std::f64::consts::TAU;
         let p = Point::new(5.0 + 5.0 * a.cos(), 5.0 + 5.0 * a.sin());
-        if k == 0 { poly.move_to(p) } else { poly.line_to(p) }
+        if k == 0 {
+            poly.move_to(p);
+        } else if curved {
+            poly.curve_to(last.lerp(p, 1.0 / 3.0), last.lerp(p, 2.0 / 3.0), p);
+        } else {
+            poly.line_to(p);
+        }
+        last = p;
     }
     poly.close_path();
     let art = Node::path(NodeId(0), PathData::from_bezpath(&poly), Appearance::basic(Paint::solid(red()), Paint::None, 0.0));
     d.symbols.push(Symbol { dynamic: false, name: "Dense".into(), art: Arc::new(art) });
+    d
+}
+
+/// The graphics drawn on a group of two members, each with its own graphic of symbol "Dense"
+/// ([`dense_document`]), seen under a perspective.
+fn dense_graphics_drawn(curved: bool) -> usize {
+    let d = dense_document(curved);
     let a = square(1, Rect::new(0.0, 0.0, 50.0, 100.0), Paint::solid(Color::rgb(0.5, 0.5, 0.5)));
     let mut b = square(2, Rect::new(50.0, 0.0, 100.0, 100.0), Paint::solid(Color::rgb(0.5, 0.5, 0.5)));
     b.blend = BlendMode::Multiply;
     let mut group = Node::group(NodeId(3), vec![Arc::new(a), Arc::new(b)]);
     let p = json!({"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0, "perspectiveAngle": 60.0, "shade": false, "graphics": [{"symbol": "Dense", "scale": 1000.0}]});
     group.appearance.effects.push(crate::new_effect(EXTRUDE, &p).unwrap());
+    graphics_in(&solid_art_in(Some(&d), &group).unwrap()).len()
+}
+
+#[test]
+fn members_with_graphics_of_their_own_share_one_element_limit() {
+    // A perspective cuts each of the 30,000 curves into 8: one copy fits the limit, two do not.
     // The first member's graphic is drawn; the second would pass the limit, so it draws none.
-    assert_eq!(graphics_in(&solid_art_in(Some(&d), &group).unwrap()).len(), 1);
+    assert_eq!(dense_graphics_drawn(true), 1);
+}
+
+#[test]
+fn straight_sides_count_once_under_a_perspective() {
+    // A perspective keeps each of the 30,000 straight sides one element: both copies fit the limit.
+    assert_eq!(dense_graphics_drawn(false), 2);
+}
+
+#[test]
+fn the_symbol_check_counts_what_the_view_draws() {
+    // Two graphics of the 30,000-sided polygon under a perspective: straight, they fit the limit;
+    // curved, they do not.
+    let two = json!({"perspectiveAngle": 60.0, "graphics": [{"symbol": "Dense"}, {"symbol": "Dense", "face": "back"}]});
+    let n = object(EXTRUDE, two.clone());
+    assert!(validate_three_d_in(Some(&dense_document(false)), &n, EXTRUDE, &two).is_ok());
+    let e = validate_three_d_in(Some(&dense_document(true)), &n, EXTRUDE, &two).unwrap_err();
+    assert!(e.contains("too complex"), "{e}");
+    // Without a perspective each curve draws once: curved, they fit too.
+    let flat = json!({"perspectiveAngle": 0.0, "graphics": two["graphics"].clone()});
+    assert!(validate_three_d_in(Some(&dense_document(true)), &n, EXTRUDE, &flat).is_ok());
 }
 
 #[test]
@@ -578,4 +618,42 @@ fn a_graphic_starts_inside_its_object() {
     assert_eq!(frame.fitting_scale(Rect::new(0.0, 0.0, 10.0, 10.0)), 100.0);
     assert!((frame.fitting_scale(Rect::new(0.0, 0.0, 400.0, 200.0)) - 25.0).abs() < 1e-9);
     assert_eq!(super::super::graphic_bounds(&d, "Mark"), Some(Rect::new(500.0, 500.0, 510.0, 510.0)));
+}
+
+#[test]
+fn a_symbol_instance_in_a_graphic_draws_as_the_canvas_shows_it() {
+    let mut d = document();
+    let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    // A dynamic symbol whose instance in "Changed" fills its square blue instead of red.
+    d.symbols.push(Symbol { dynamic: true, name: "Dynamic".into(), art: Arc::new(square(0, Rect::new(0.0, 0.0, 10.0, 10.0), Paint::solid(red()))) });
+    let mut changed = Node::new(NodeId(1), NodeKind::SymbolInstance { symbol: "Dynamic".into(), xf: Affine::IDENTITY });
+    changed.extras_mut().symbol_overrides =
+        vec![vectorcraft_doc::symbol_overrides::SymbolOverride { fill: Some(blue.clone()), ..Default::default() }];
+    d.symbols.push(Symbol { dynamic: false, name: "Changed".into(), art: Arc::new(changed) });
+    let pieces = pieces_of(&d, d.symbols.iter().find(|s| s.name == "Changed").unwrap()).unwrap();
+    assert_eq!(pieces.iter().map(|p| p.paint.clone()).collect::<Vec<_>>(), [blue]);
+    // A symbol with 9-slice guides, a 100 × 100 square with a 10 × 10 one in its corner, placed
+    // three times as wide: the corner keeps its width while the rest stretches.
+    let corner = square(2, Rect::new(0.0, 0.0, 10.0, 10.0), Paint::solid(red()));
+    let whole = square(3, Rect::new(0.0, 0.0, 100.0, 100.0), Paint::solid(red()));
+    d.symbols.push(Symbol { dynamic: false, name: "Sliced".into(), art: Arc::new(Node::group(NodeId(4), vec![Arc::new(whole), Arc::new(corner)])) });
+    d.set_symbol_nine_slice("Sliced", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let wide = Node::new(NodeId(5), NodeKind::SymbolInstance { symbol: "Sliced".into(), xf: Affine::scale_non_uniform(3.0, 1.0) });
+    d.symbols.push(Symbol { dynamic: false, name: "Wide".into(), art: Arc::new(wide) });
+    let pieces = pieces_of(&d, d.symbols.iter().find(|s| s.name == "Wide").unwrap()).unwrap();
+    let widths: Vec<f64> = pieces.iter().map(|p| p.path.bounds().unwrap().width()).collect();
+    assert_eq!(widths.len(), 2);
+    assert!((widths[1] / widths[0] - 1.0 / 30.0).abs() < 1e-6, "{widths:?}");
+    // With a gradient, the square crossing the guides is cut at them: its pieces cover the
+    // placed 300 × 100 once, not one whole copy for each cell.
+    use vectorcraft_doc::color::{Gradient, GradientPaint};
+    let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+    let shaded = square(6, Rect::new(0.0, 0.0, 100.0, 100.0), gradient);
+    d.symbols.push(Symbol { dynamic: false, name: "Shaded".into(), art: Arc::new(Node::group(NodeId(7), vec![Arc::new(shaded)])) });
+    d.set_symbol_nine_slice("Shaded", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let wide = Node::new(NodeId(8), NodeKind::SymbolInstance { symbol: "Shaded".into(), xf: Affine::scale_non_uniform(3.0, 1.0) });
+    d.symbols.push(Symbol { dynamic: false, name: "WideShaded".into(), art: Arc::new(wide) });
+    let pieces = pieces_of(&d, d.symbols.iter().find(|s| s.name == "WideShaded").unwrap()).unwrap();
+    let area: f64 = pieces.iter().map(|p| p.path.to_bezpath().area().abs()).sum();
+    assert!((area - 30_000.0).abs() < 1e-3, "{area}");
 }

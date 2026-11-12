@@ -576,6 +576,82 @@ fn a_view_gesture_on_a_graphics_handle_is_left_to_the_canvas() {
 }
 
 #[test]
+fn a_geometry_effect_after_the_3d_effect_hides_the_graphics_handles() {
+    let (mut app, ctx) = materials_app();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    let handle = handles_screen(&app, 150.0, 150.0);
+    let push_effect = |app: &mut VectorcraftApp, object: usize, id: &str, params: Value| {
+        let st = app.session.active_mut().unwrap();
+        let object = st.selection.objects[object];
+        let n = std::sync::Arc::make_mut(&mut st.doc).node_mut(object).unwrap();
+        n.appearance.effects.truncate(1);
+        n.appearance.effects.push(vectorcraft_effects::new_effect(id, &params).unwrap());
+    };
+    // A Transform effect after the 3D effect draws the graphic 40 pt to the right of the frame's
+    // place for it: the artboard shows no handle there.
+    push_effect(&mut app, 0, "distort.transform", json!({"moveH": 40.0}));
+    handles_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(handle)]);
+    assert!(!handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
+    handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+    // A Drop Shadow after it leaves the graphic where the frame places it: the handle shows.
+    push_effect(&mut app, 0, "stylize.dropShadow", json!({}));
+    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
+    handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+    // A second selected object with the same graphic and a Transform effect after its 3D effect:
+    // a drag would move its graphic too, so the artboard shows no handles.
+    let square = app.session.active().unwrap().selection.objects[0].0;
+    let other = app.run("shape.rectangle", json!({"x": 400, "y": 400, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0}}))
+        .unwrap();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    app.run("select.set", json!({"ids": [square, other]})).unwrap();
+    assert!(handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
+    handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+    push_effect(&mut app, 1, "distort.transform", json!({"moveH": 40.0}));
+    assert!(!handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
+    handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+}
+
+#[test]
+fn a_press_that_closes_the_context_menu_does_not_grab_a_graphics_handle() {
+    let (mut app, ctx) = materials_app();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    let rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
+    // One frame of the canvas's input with a context menu: whether the menu is open after it.
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut open = false;
+        ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+            crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
+            let resp = ui.interact(rect, egui::Id::unique("three-d-test-canvas"), egui::Sense::click_and_drag());
+            crate::canvas::canvas_input(app, ui, &resp, rect);
+            resp.context_menu(|ui| {
+                ui.label("Menu");
+            });
+            open = resp.context_menu_opened();
+        })
+        .textures_delta
+        .clear();
+        open
+    };
+    // A right-click below and to the right of the handle opens the menu there, clear of the handle.
+    let (handle, menu) = (handles_screen(&app, 150.0, 150.0), handles_screen(&app, 195.0, 195.0));
+    let secondary =
+        |pressed| egui::Event::PointerButton { pos: menu, button: egui::PointerButton::Secondary, pressed, modifiers: Default::default() };
+    frame(&mut app, vec![egui::Event::PointerMoved(menu)]);
+    frame(&mut app, vec![secondary(true)]);
+    frame(&mut app, vec![secondary(false)]);
+    assert!(frame(&mut app, vec![egui::Event::PointerMoved(handle)]));
+    // The press on the handle only closes the menu: no drag of the graphic starts.
+    let (history, before) = (undo_len(&app), graphics(&app));
+    assert!(!frame(&mut app, vec![primary(handle, true)]));
+    assert!(ctx.data(|m| m.get_temp::<super::HandleDrag>(super::handle_drag_id())).is_none());
+    frame(&mut app, vec![egui::Event::PointerMoved(handle + egui::vec2(20.0, 0.0))]);
+    frame(&mut app, vec![primary(handle + egui::vec2(20.0, 0.0), false)]);
+    assert_eq!(undo_len(&app), history);
+    assert_eq!(graphics(&app), before);
+}
+
+#[test]
 fn a_click_on_a_graphics_handle_records_no_undo_step() {
     let (mut app, ctx) = materials_app();
     app.run("threeD.mapGraphic", json!({"symbol": "Graphic", "x": 5.03})).unwrap();

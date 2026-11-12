@@ -94,7 +94,9 @@ pub use solids::{
     three_d_meshes_in, three_d_meshes_of, three_d_meshes_of_in, three_d_params_as, validate_solid, validate_solid_in, validate_three_d,
     validate_three_d_at, validate_three_d_at_in, validate_three_d_in, validate_three_d_params, view_options, with_graphic,
 };
-pub use solids::{GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, appearance_graphic_symbols, graphic_frame_at, rename_appearance_graphic_symbol};
+pub use solids::{
+    GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, appearance_graphic_symbols, graphic_frame_at, graphics_reshaped_after, rename_appearance_graphic_symbol,
+};
 pub use stylize::{ScribbleSetting, scribble_setting_id, scribble_settings};
 pub use svg_filter::SVG_FILTER;
 pub use trap::TRAP;
