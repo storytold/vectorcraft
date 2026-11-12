@@ -94,11 +94,13 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     } else {
         // Edit Path: the Direct Selection tool, to edit the path's anchors.
         let edit_path = || (tl!("Edit Path"), "dc-direct", "tool.select", json!({"tool": "directSelection"}));
-        // As in the reference app, an image offers Image Trace and Crop Image, and traced art offers
-        // Expand (<https://community.adobe.com/announcements-651/contextual-task-bar-in-illustrator-2025-quick-actions-when-you-need-them-1546580>).
+        // As in the reference app, an image offers Image Trace, Crop Image and Remove Background, and
+        // traced art offers Expand (<https://community.adobe.com/announcements-651/contextual-task-bar-in-illustrator-2025-quick-actions-when-you-need-them-1546580>,
+        // <https://community.adobe.com/announcements-651/ai-powered-image-editing-features-in-illustrator-1624061>).
         if n == 1 && is_image {
             items.push((tl!("Image Trace"), "image", TASK_BAR_IMAGE_TRACE, none()));
             items.push((tl!("Crop Image"), "dc-pf-crop", "ui.cropImage", none()));
+            items.push((tl!("Remove Background"), "eraser", crate::addons::image::REMOVE_BACKGROUND, none()));
         }
         // Direct-selected anchors take the place of a path's Offset Path and Simplify. For them the bar
         // offers Remove, Connect, Cut and Convert to corner or smooth, as the reference app does
