@@ -2418,6 +2418,12 @@ already walks Image Trace. Short agent entry points:
   Instances in the art (opacity masks included), graph designs, pattern tiles (with the tiles that pattern editing's
   Cancel puts back) and the art of the document's brushes count, and so do the instances in the art of a symbol that
   is used; a symbol placed only inside an unused symbol is unused too.
+- The Symbols panel menu's Sort by Name: `symbol.sortByName` (`{}`) puts the document's symbols in name order,
+  ignoring case, as one undo step; symbols whose names differ only in case keep their order. `symbol.list` and the
+  panel list the symbols in the new order, the current symbol stays current, and instances are
+  unchanged. No undo step is added when the symbols are already in order. The panel menu's Thumbnail View, Small List
+  View and Large List View change only how the panel shows the symbols: thumbnails, or rows with a thumbnail and the
+  name (smaller rows in Small List View).
 - The Brushes panel menu's Select All Unused: `brush.unused` (a query) lists the brushes no stroke paints with, in
   library order, and the panel selects them. Strokes in the art (opacity masks included), symbols, graph designs,
   pattern tiles (with the tiles that pattern editing's Cancel puts back) and graphic styles count, and so do the
