@@ -222,6 +222,13 @@ the suite) keep the agent to the folders you give it:
   `null`; an empty folder and the scratch disk choices `Startup` and `None` stay. In `prefs.get {}` and
   `prefs.reset`, an export preset in `screenExportPresets` leaves out its `folder` when the folder is outside the
   read roots, and the preset stays. The preferences themselves are not changed.
+- `document.inspect` (`inspect_document`) gives `path` as null when the document's file is outside the read roots.
+  `document.json` names a linked image or placed file outside them by its file name alone in the link's `path`, and
+  leaves out the link's `relative`, `size` and `modified`. This covers the art of the brushes in `unknown.brushes`
+  too. A link whose file is inside them keeps its `path` but leaves out a `relative` that leads outside them. A
+  stored brush entry that does not read as a brush is left out of `unknown.brushes`. `document.json` also names a data set's image
+  value outside them by its file name alone, and leaves out the `folder` of `export_settings` (the settings Export
+  for Screens last used) when that folder is outside them. The document itself is not changed.
 - `plugin.list`, `plugin.safeMode`, `file.recovery.*` and `ui_inspect`'s `scriptReport` leave out the paths
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
   folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`
