@@ -148,6 +148,8 @@ impl Builder<'_> {
             normal: [n.0, n.1, n.2],
             rgb_gradient: None,
             outline: None,
+            side: false,
+            away: behind,
             #[cfg(test)]
             view,
         });
@@ -227,6 +229,11 @@ impl Builder<'_> {
                 }
                 let before = self.facets.len();
                 self.face(vec![quad], normal, order)?;
+                if self.facets.len() > before
+                    && let Some(f) = self.facets.last_mut()
+                {
+                    f.side = true;
+                }
                 if let Some(w) = curves.as_mut().filter(|_| pieces == 1)
                     && let Some(span) = w.spans.get(i).copied().flatten()
                 {
