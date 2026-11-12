@@ -529,6 +529,13 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
         }
         return encode_files(&single_artboard(doc, rect, "Rect"), f, &q);
     }
+    // A PDF of the art's bounds carries no editing data (it would replace the artboards).
+    if use_artboards == Some(false)
+        && f.id == "pdf"
+        && let Some((bytes, warnings)) = super::pdf::encode_art_page(C, doc, p)?
+    {
+        return Ok(Encoded { warnings, ..Encoded::one(bytes) });
+    }
     if use_artboards == Some(false)
         && let Some((art, q)) = art_page(C, doc, p)?
     {

@@ -103,6 +103,35 @@ fn use_artboards_false_writes_one_page_of_the_arts_bounds() {
     }
 }
 
+/// A PDF of the art's bounds carries no Preserve Editing data, through `document.exportPdf`,
+/// `document.export` and the Summary's export in memory, and says so in a warning: reopened, its
+/// editing data would replace the document's artboards with the one around the art. A PDF of the
+/// artboards keeps the data, and it reopens with every artboard. With Preserve Editing off, there
+/// is no warning.
+#[test]
+fn a_pdf_of_the_arts_bounds_carries_no_editing_data() {
+    let mut s = session(3);
+    let left_out = |v: &Value| warnings(v).iter().any(|w| w == super::pdf::EDITING_NEEDS_THE_ARTBOARDS);
+    let art = json!({"useArtboards": false});
+    for v in [export(&mut s, art.clone()), s.execute("document.export", &as_export(&art)).unwrap()] {
+        let pdf = b64(&v);
+        assert!(vectorcraft_pdf::editing(&pdf).is_none(), "{:?}", warnings(&v));
+        assert!(left_out(&v), "{:?}", warnings(&v));
+        assert_eq!(pages(&pdf), 1);
+    }
+    let summary = s.execute("document.pdfSettings", &json!({"includeDocument": true, "useArtboards": false})).unwrap();
+    assert!(left_out(&summary), "{summary}");
+    let quiet = export(&mut s, json!({"useArtboards": false, "preserveEditing": false}));
+    assert!(!left_out(&quiet), "{:?}", warnings(&quiet));
+
+    for v in [export(&mut s, json!({})), export(&mut s, json!({"useArtboards": true}))] {
+        let editing = vectorcraft_pdf::editing(&b64(&v)).expect("editing data");
+        let reopened = vectorcraft_format::load(&editing.data).unwrap();
+        assert_eq!(reopened.artboards.len(), 3);
+        assert!(!left_out(&v), "{:?}", warnings(&v));
+    }
+}
+
 /// While an opacity mask is edited, a PDF of the art's bounds measures the art without the
 /// editing layer, as `document.export` does: a mask shape drawn past the masked object doesn't
 /// widen the page.

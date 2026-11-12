@@ -885,7 +885,8 @@ or `range`), named `<file>-<artboard>.<ext>`, and returns `{path, files}` (a PDF
 SVG writes one file per artboard of a `range`); `useArtboards: false` exports the bounds of the visible art with what
 its effects paint, the effects of groups, type and images included. `artboard.fitToArt` measures the art the same
 way. `document.exportPdf {useArtboards: false}` writes that one page as well, and ignores `artboard`, `artboards` and
-`range`. Export As PDF continues in the Save PDF dialog with Use Artboards on or off; with it off, the dialog has no
+`range`. A PDF of that page, from either command, carries no Preserve Editing data and comes back with a warning.
+Export As PDF continues in the Save PDF dialog with Use Artboards on or off; with it off, the dialog has no
 Artboards section and the page is the bounds of the visible art.
 
 Raster exports default to the document's raster effects resolution. An explicit `scale` sets pixels per
