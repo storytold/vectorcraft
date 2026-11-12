@@ -135,8 +135,18 @@ the suite) keep the agent to the folders you give it:
   roots shows as `loaded/<file name>` wherever `ui_inspect` and `ui.docking` name it: its id, its panel's id, the
   Color Guide's `ui.color_guide_limit` and a closed panel's key in `ui.docking_hidden`, also when its panel is
   closed. When another hidden library has the same file name, the libraries take `loaded/<file name>`,
-  `loaded/<file name> (2)`, `(3)` and so on in the order of their full ids, and each one keeps its id in both
-  replies. The other entries keep their order, and the app's own state is not changed.
+  `loaded/<file name> (2)`, `(3)` and so on in the order of their full ids (the libraries loaded in this session
+  first, then those only the UI state names), and each one keeps its id in both replies and in the library
+  commands below. The other entries keep their order, and the app's own state is not changed.
+- `swatch.library.list`, `brush.libraries`, `symbol.libraries` and `graphicStyle.libraries` list every library
+  but leave out the paths outside the read roots: a library's `path` and the user library folder in `userFolder`
+  are `null` there. A library loaded from a file outside the roots is listed as `loaded/<file name>`, numbered
+  `(2)`, `(3)` and so on as in `ui_inspect` when two have the same file name. That id finds the library in the
+  other library commands (`swatch.library.get`, `swatch.library.add`, `brush.library`, `brush.addFromLibrary`,
+  `symbol.library`, `symbol.addFromLibrary`, `graphicStyle.library`, `graphicStyle.addFromLibrary` and the
+  others that take `library`), whose replies show it too. `swatch.library.copyToUser` refuses a library whose file
+  is outside the read roots without naming the file, and it and the library saves with `user: true` leave out
+  `path` when the user library folder is outside the read roots.
 - Each flag may be given more than once (#3546): a path inside any of the read roots may be read, one inside any
   of the write roots written, so one session can read a project folder and a shared assets folder, or write to an
   output folder and a scratch folder, without widening a root to their common parent. A folder given twice
