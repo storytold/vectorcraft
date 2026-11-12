@@ -516,13 +516,17 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "window.control" => flag(&mut app.ui.control_bar),
         "window.helpBar" => flag(&mut app.ui.help_bar),
-        // The Control bar's panel menu and gripper: the edge of the window the bar docks to.
+        // The Control bar's panel menu and gripper: the edge of the window the bar docks to, or
+        // floating over the window at the position it last floated at.
         "window.control.dock" => {
             let key = "edge";
             let edges = crate::chrome::CONTROL_BAR_EDGES;
             match edges.iter().position(|e| s(key).as_deref() == Some(*e)) {
                 Some(i) => {
-                    app.ui.control_bar_bottom = i == 1;
+                    app.ui.control_bar_floating = i == 2;
+                    if i < 2 {
+                        app.ui.control_bar_bottom = i == 1;
+                    }
                     Ok(json!({ key: edges[i] }))
                 }
                 None => Err(format!("`{key}` must be one of {}", edges.join(", "))),

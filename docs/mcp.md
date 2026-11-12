@@ -5763,11 +5763,18 @@ through the views in tab order and add `view` to their reply for a document with
 reports `windows` (every window as `[document index, view number]`, in tab order), `currentWindow` and each pane's
 `view`. Views are not saved.
 `window.control.dock {edge}` (desktop app) docks the Control bar to the top of the window, under the menu bar
-(`edge: "top"`, the default), or to its bottom (`"bottom"`), and returns `{edge}`. The bar's panel menu runs it with
-Dock to Top and Dock to Bottom, the edge in use checked, and so does a drag of the bar's gripper, which docks the bar at
-the edge the pointer is released nearer and shows a band along that edge while it moves. The edge is kept with the
-workspace, and a workspace saved without it docks the bar at the top. Another `edge`, or none, fails with "`edge` must
-be one of top, bottom" and leaves the bar where it is.
+(`edge: "top"`, the default), or to its bottom (`"bottom"`), or floats it over the window (`"float"`), and returns
+`{edge}`. A floating bar floats where it last floated; the first time, its top-left corner is at 60, 80 in window
+points. It is 800 points wide, or as wide as the window when that is narrower, takes no room from the canvas, and is
+kept inside the window below the menu bar. The bar's panel menu runs the command with Dock to Top and Dock to Bottom,
+the edge in use checked and neither while the bar floats. So does a drag of the bar's gripper: released within 24
+points of the top (under the menu bar) or the bottom of the window it docks the bar at that edge, showing a band along
+that edge while it moves, and released farther from both edges it floats the bar there, showing the bar's outline while
+it moves. In a window too short for a floating bar between those two zones, the release docks the bar at the nearer
+edge. Escape cancels the drag, and a release outside the window leaves the bar where it was. The edge, whether the bar
+floats and where it floats are kept with the workspace, and a workspace saved without them docks the bar at the edge it
+names, or at the top. Another `edge`, or none, fails with "`edge` must be one of top, bottom, float" and leaves the bar
+where it is.
 `window.control.options {group, visible?}` (desktop app) turns a group of the Control bar's options on (`visible:
 true`), off (`false`) or toggles it (omitted), and returns `{group, visible}`. The groups are `snapping` (the Snapping
 menu), `anchors` (Convert and Anchors), `toolOptions` (the active tool's options), `objectOptions` (Isolate Selected
