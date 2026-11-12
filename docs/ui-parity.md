@@ -4,6 +4,8 @@
 >
 > Vector Halftone preview update (2026-11-10): temporary dot selection marks are hidden, and the bounding box stays available (#6369).
 >
+> **Eraser fill update (2026-11-11):** filled open paths without a visible painted stroke retain fill outside the sweep (#6582); stroked paths retain main behavior; scores and estimates unchanged.
+>
 > Numeric spinner update (2026-11-10): held mouse arrows repeat past the click timeout; scores and estimates unchanged (#6307).
 
 > **Flyout update:** 2026-11-06 — resizable icon-strip flyouts and bottom-aligned panel footers (#5713); scores and estimates unchanged.
@@ -158,6 +160,7 @@ tools, never checked side by side) isn't captured row by row.
 | Anchor Point and Curvature tools' own cursors | done | the caret on the anchor it converts; the pen nib with a curve badge |
 | Free Transform's Cmd/Ctrl side-shear cursor | done | two arrows passing along the side (ShearH, ShearV), instead of the resize arrow across it |
 | Cursors of their own for Lasso, Magic Wand, the freehand tools, Shaper, Live Paint Bucket, Measure, Print Tiling, the symbolism tools, vertical type, Scissors (over a segment and away), Mesh and Puppet Warp | partial | each tool returns its own cursor and Use Precise Cursors turns them into the crosshair; until they're drawn they borrow the crosshair, the I-beam, the Pen's add cursor or not-allowed |
+| Eraser: filled open paths and compound holes | partial | Fill-only open paths preserve fill outside the sweep and compound holes under their fill rule (#6582). Focused engine tests cover open/closed geometry, raster output, compound holes and self-crossing fill. Filled-and-stroked open paths retain main behavior; that fill behavior is not claimed fixed. See G11 in [gaps.md](gaps.md#g11-correctness-bugs-in-core-tools). |
 | Blob Brush and Eraser: the tip's outline at the pointer | done | before a press and while painting, the outline of the tip (its size, angle and roundness, at the zoom) follows the pointer, black on a white halo, round a small centre dot; `[` / `]` and Tool Options change it at once; precise cursors (Caps Lock) show only the crosshair; it goes when the pointer leaves the canvas, while Cmd/Ctrl lends a selection tool and while Alt lends the Blob Brush the Smooth tool (#4977); `crates/tools/src/draw2/gesture.rs` and its tests While the button is down a round Blob Brush shows the outline of the area it will add, rounded at both ends, not a line as wide as the brush that ends square (#4343). |
 | Busy cursor during long operations | done | Background open, save and export show the system progress cursor (gap G1) |
 | Each anchor snaps to Smart Guides and construction angles | done | `DrawSnap` |
@@ -531,6 +534,7 @@ before release (#6373). [Paint faces and edges](https://helpx.adobe.com/illustra
 | 2026-11-11 | minor | Ordinary Save to a location refusing writes offers Save As (#6146); cancellation preserves the original path and modified state; automation receives READ_ONLY_LOCATION. Scores and estimates unchanged. Validation pending. |
 | 2026-11-11 | minor | Outline view: a click on a path's outline selects it through an image or a gradient mesh in front, which Outline draws as a frame or mesh lines (#6437). |
 | 2026-11-11 | minor | A middle-click on a document tab (or its ×) closes it as the × does; closing a document's last view with unsaved changes asks to save first (#6506). VectorCraft addition; scores and estimates unchanged. |
+| 2026-11-11 | minor | Eraser: fill-only open contours and compound holes use area cutting; stroked open paths retain main behavior (#6582). Scores and estimates unchanged. |
 | 2026-11-11 | minor | Files that record no units (PDF, EPS or `.ai` without ruler units, raster images, metafiles, Affinity files, importer plug-ins) open and revert in Preferences › Units › General instead of points; native, SVG and DXF files and `.ai`/EPS ruler units are kept (#5820). Scores and estimates unchanged. |
 | 2026-11-11 | minor | Blob Brush: while painting, the preview of a round tip is the outline of the area the stroke adds, round at both ends, as the stroke it commits (#4343). Scores unchanged (estimated). |
 | 2026-11-10 | minor | Symbol libraries: Inventory Icons joins Basic Shapes, UI Frames and Map Markers as a fourth built-in library (Sword, Shield, Potion, Key, Gem; no default 9-slice). |
