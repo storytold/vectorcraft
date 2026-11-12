@@ -209,7 +209,8 @@ pub(crate) struct Interp {
     /// Bytes of the copies [`Self::get_own_property`] made flattening the rope of a String
     /// object, which the heap's total adds before the next limit check.
     flattened: std::cell::Cell<usize>,
-    /// Fuel for the units those copies took, which the next step takes.
+    /// Fuel for the units those copies took and the rope nodes it read in place, which the next
+    /// step takes.
     pub(crate) flattened_fuel: std::cell::Cell<u64>,
     /// The global code's default XML namespace URI (ECMA-357 section 12.1).
     pub(crate) xml_default_uri: Key,
@@ -1246,18 +1247,33 @@ impl Interp {
                 if let Some(i) = array_index(k)
                     && (i as usize) < s.len()
                 {
-                    if s.is_rope() {
-                        // Flattening copies the units. The run ends here when the fuel for the
-                        // copy is not left; otherwise the next step takes it, and the next limit
-                        // check adds the copy's bytes.
-                        let fuel = self.flattened_fuel.get().saturating_add((s.len() / crate::string_builtins::UNITS_PER_FUEL) as u64 + 1);
-                        if fuel > self.fuel {
-                            return Err(Abrupt::Limit(LimitKind::Fuel));
+                    let unit = if s.is_rope() {
+                        let owed = self.flattened_fuel.get();
+                        let flattened = self.flattened.get().saturating_add(string_bytes(s.len()));
+                        if self.heap.bytes.saturating_add(flattened) > self.limits.heap_bytes {
+                            // The copy does not fit without a collection, which needs `&mut self`:
+                            // the unit is read along the rope instead, a unit of fuel per node.
+                            let Some((unit, visited)) = s.unit_at(i as usize, self.fuel.saturating_sub(owed)) else {
+                                return Err(Abrupt::Limit(LimitKind::Fuel));
+                            };
+                            self.flattened_fuel.set(owed.saturating_add(visited));
+                            unit
+                        } else {
+                            // Flattening copies the units. The run ends here when the fuel for
+                            // the copy is not left; otherwise the next step takes it, and the
+                            // next limit check adds the copy's bytes.
+                            let fuel = owed.saturating_add((s.len() / crate::string_builtins::UNITS_PER_FUEL) as u64 + 1);
+                            if fuel > self.fuel {
+                                return Err(Abrupt::Limit(LimitKind::Fuel));
+                            }
+                            self.flattened_fuel.set(fuel);
+                            self.flattened.set(flattened);
+                            s.flat().get(i as usize).copied()
                         }
-                        self.flattened_fuel.set(fuel);
-                        self.flattened.set(self.flattened.get().saturating_add(string_bytes(s.len())));
+                    } else {
+                        s.flat().get(i as usize).copied()
                     }
-                    let unit = s.flat().get(i as usize).copied().unwrap_or(0);
+                    .unwrap_or(0);
                     return Ok(Some(Prop::Data { value: Value::String(Str::from_units(vec![unit])), flags: ENUMERABLE }));
                 }
             }

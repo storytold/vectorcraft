@@ -314,23 +314,15 @@ fn operators_and_builtins_count_a_flattened_rope_against_the_heap() {
     // Three ropes of about 524,288 units, each 1 MiB once flat, with a 3 MiB heap.
     let build = "var s = 'x'; for (var i = 0; i < 19; i++) s = s + s; var t = s + 'y', u = s + 'z';";
     let limits = Limits { heap_bytes: 3 << 20, ..Limits::default() };
-    let not_stopped: Vec<_> = [
-        "X < 'a'",
-        "X == 1",
-        "+X",
-        "X[0]",
-        "new String(X)[0]",
-        "({})[{ toString: function () { return X; } }]",
-        "JSON.stringify(0, null, X)",
-        "[1].join(X)",
-    ]
-    .into_iter()
-    .filter(|read| {
-        let src = format!("{build} {}; {}; {}; 0", read.replace('X', "s"), read.replace('X', "t"), read.replace('X', "u"));
-        let result = Realm::with_options(Options::default(), limits.clone()).run(&src);
-        !matches!(result, Err(ref e) if e.kind == RunErrorKind::Limit(LimitKind::Heap))
-    })
-    .collect();
+    let not_stopped: Vec<_> =
+        ["X < 'a'", "X == 1", "+X", "X[0]", "({})[{ toString: function () { return X; } }]", "JSON.stringify(0, null, X)", "[1].join(X)"]
+            .into_iter()
+            .filter(|read| {
+                let src = format!("{build} {}; {}; {}; 0", read.replace('X', "s"), read.replace('X', "t"), read.replace('X', "u"));
+                let result = Realm::with_options(Options::default(), limits.clone()).run(&src);
+                !matches!(result, Err(ref e) if e.kind == RunErrorKind::Limit(LimitKind::Heap))
+            })
+            .collect();
     assert!(not_stopped.is_empty(), "not stopped by the heap limit: {not_stopped:?}");
 }
 
@@ -386,10 +378,22 @@ fn a_string_object_counts_its_flattened_rope_against_the_heap() {
     let lengths =
         Realm::with_options(Options::default(), limits.clone()).run(&format!("{build} Object(s).length + new String(t).length + Object(u).length"));
     assert_eq!(lengths, Ok(JsValue::Number(1_572_866.0)));
-    for read in ["Object(X)[0]", "new String(X)[0]", "0 in Object(X)", "Object(X).hasOwnProperty(0)", "X.first()"] {
-        let src = format!("{build} {}; {}; {}; 0", read.replace('X', "s"), read.replace('X', "t"), read.replace('X', "u"));
-        let e = fail_with(Realm::with_options(Options::default(), limits.clone()), &src);
-        assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{read}: {e:?}");
+    // Two copies fit. The third read finds no room for its copy and reads the unit along the
+    // rope, so the live heap stays within the limit.
+    for (read, expected) in [
+        ("Object(X)[0]", "xxx"),
+        ("new String(X)[0]", "xxx"),
+        ("0 in Object(X)", "truetruetrue"),
+        ("Object(X).hasOwnProperty(0)", "truetruetrue"),
+        ("X.first()", "xxx"),
+        ("Object(X)[524288]", "undefinedyz"),
+    ] {
+        let src = format!("{build} '' + ({}) + ({}) + ({})", read.replace('X', "s"), read.replace('X', "t"), read.replace('X', "u"));
+        let mut realm = Realm::with_options(Options::default(), limits.clone());
+        assert_eq!(realm.run(&src), Ok(JsValue::String(expected.into())), "{read}");
+        let interp = realm.interp();
+        interp.collect_garbage();
+        assert!(interp.heap.bytes <= limits.heap_bytes, "{read}: {} bytes live", interp.heap.bytes);
     }
     let wrapped =
         Realm::with_options(Options::default(), Limits::default()).run(&format!("{build} Object(t)[524288] + new String(u)[524288] + t.first()"));
