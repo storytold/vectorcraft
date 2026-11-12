@@ -6992,7 +6992,9 @@ the middle of its bounding box's right side, hollow on point type and filled on 
 Type and Convert To Point Type. Either keeps the text and its styles and is one undo step; `ids` picks the objects
 (default: the selection). A frame of threaded text that `type.convertToPointType` converts leaves its thread with the
 text it holds, and the story flows through the other frames without that text; a thread left with one frame is no
-longer a thread.
+longer a thread. Area type with Dynamic Text (Block) on becomes point type with Dynamic Text off, at the sizes Block
+set its lines to, as `type.dynamicText {on: false}` leaves them; converting it back to area type does not turn Block
+on again.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.convertToAreaType","params":{"ids":[42]}}}
