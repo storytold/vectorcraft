@@ -220,7 +220,7 @@ fn cloned_and_mutated_blobs_cannot_reuse_an_old_runtime_face() {
 fn file_font_height_references_measure_the_owned_face() {
     use vectorcraft_doc::FontHeightReference;
     let db = FontDb::with_font_dirs(vec![]);
-    let owned = blob(400.0);
+    let owned = ImageBlob::new(FILE_FONT_MIME, crate::test_fonts::height_font(true).expect("the fixture has explicit OS/2 heights"));
     let mut t = text("k");
     assert!(db.bind_file_fonts(&mut t, |_| Some(&owned)));
     let face = db.file_faces(&t)[0].clone().unwrap();

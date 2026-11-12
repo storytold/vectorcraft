@@ -32,8 +32,10 @@ native open/save, source-tab close, clipboard relinking, Undo/Redo and export. P
 older-version save, recovery and installed-font-removal regressions cover resource-lifetime paths.
 The serde round-trip regressions use a test-only `serde_json` dependency; the read-only harakat
 panic probe asserts unwind safety locally without restricting production font interfaces.
-Existing PDF respacing and composite-font regressions remain. **Only formatting has been checked;
-compilation and runtime proof remain pending.** No parity score or estimate changes.
+The height-reference regression uses a fixture with explicit OS/2 cap-height metadata.
+Existing PDF respacing and composite-font regressions remain. **OPS reports successful focused
+text-test compilation; the corrected height fixture and broader runtime checks await verification.**
+No parity score or estimate changes.
 
 **Fidelity** is estimated unless a test is named. Test sources: unit and property tests per crate
 (`crates/svg/tests`, `crates/pdf/tests`, `crates/format/tests/prop_format.rs`), import fuzzing
