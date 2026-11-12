@@ -140,6 +140,27 @@ pub(super) fn symbol_unused(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "names": names }))
 }
 
+/// `symbol.sortByName`: the symbols in name order, ignoring case; a stable sort, so names that
+/// differ only in case keep their order. The current symbol is stored by name first, so a document
+/// whose current symbol is its first one keeps that symbol current. Nothing is changed, and no undo
+/// step is added, when the symbols are already in order.
+pub(super) fn symbol_sort(s: &mut Session, _: &Value) -> Result<Value> {
+    let key = |sym: &Symbol| sym.name.to_lowercase();
+    let d = &s.doc()?.doc;
+    if d.symbols.is_sorted_by_key(key) {
+        return ok();
+    }
+    let current = current_symbol(d).or_else(|| symbol_names(d).into_iter().next());
+    s.edit("Sort by Name", |d, _| {
+        if let Some(name) = current {
+            d.unknown.insert(CURRENT_SYMBOL.into(), json!(name));
+        }
+        d.symbols.sort_by_cached_key(key);
+        Ok(())
+    })?;
+    ok()
+}
+
 fn symbol_names(d: &Document) -> Vec<String> {
     d.symbols.iter().map(|s| s.name.clone()).collect()
 }

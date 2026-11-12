@@ -1173,6 +1173,56 @@ fn a_click_just_outside_the_canvas_does_not_reach_the_tool() {
     assert_eq!(selected(&app), vec![vectorcraft_doc::NodeId(id)]);
 }
 
+/// The box-drawing shape tools show the bounding box of the shape just drawn (#5477). A drag of
+/// its bottom-right handle with the tool still active scales that shape, as with the Selection
+/// tool, rather than drawing a second shape from the handle.
+#[test]
+fn a_shape_tool_scales_the_shape_just_drawn_by_its_bounding_box_handle() {
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    for tool in ["rectangle", "roundedRectangle", "ellipse", "polygon", "star"] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool(tool);
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let drag = |app: &mut VectorcraftApp, a: Pos2, b: Pos2| {
+            for ev in [
+                egui::Event::PointerMoved(a),
+                button(a, true),
+                egui::Event::PointerMoved(a.lerp(b, 0.5)),
+                egui::Event::PointerMoved(b),
+                button(b, false),
+            ] {
+                frame(app, &ctx, vec![ev]);
+            }
+            frame(app, &ctx, vec![]);
+        };
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        drag(&mut app, xf.to_screen(Point::new(150.0, 120.0)), xf.to_screen(Point::new(210.0, 170.0)));
+        let objects = |app: &VectorcraftApp| {
+            let mut n = 0;
+            app.session.active().unwrap().doc.walk(|node| n += usize::from(node.path_data().is_some()));
+            n
+        };
+        assert_eq!(objects(&app), 1, "{tool}: the drag draws one shape");
+        let before = app.selection_box().unwrap_or_else(|| panic!("{tool}: the shape just drawn shows its box"));
+        // The bottom-right handle, dragged 40 pt along the box's width and 30 pt along its height
+        // (a polygon's or star's box turns with the shape).
+        let (corner, to) = (Point::new(before.rect.x1, before.rect.y1), Point::new(before.rect.x1 + 40.0, before.rect.y1 + 30.0));
+        drag(&mut app, xf.to_screen(before.to_doc() * corner), xf.to_screen(before.to_doc() * to));
+        let after = app.selection_box().unwrap_or_else(|| panic!("{tool}: the shape stays selected"));
+        let label = app.session.active().and_then(|st| st.history.undo.last().map(|e| e.label.clone()));
+        assert_eq!(objects(&app), 1, "{tool}: no second shape, last step {label:?}");
+        assert!(
+            (after.rect.width() - before.rect.width() - 40.0).abs() < 0.5 && (after.rect.height() - before.rect.height() - 30.0).abs() < 0.5,
+            "{tool}: {:?} -> {:?}, last step {label:?}",
+            before.rect,
+            after.rect
+        );
+        assert_eq!(label.as_deref(), Some("Scale"), "{tool}");
+    }
+}
+
 #[test]
 fn a_drag_from_a_ruler_onto_the_canvas_makes_a_guide() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -1192,7 +1242,7 @@ fn a_drag_from_a_ruler_onto_the_canvas_makes_a_guide() {
         frame(app, &ctx, vec![egui::Event::PointerMoved(to)]);
         frame(app, &ctx, vec![button(to, false)]);
     };
-    let guides = |app: &VectorcraftApp| app.session.active().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect::<Vec<_>>();
+    let guides = |app: &VectorcraftApp| app.session.active().unwrap().doc.ruler_guides().iter().map(|g| (g.vertical, g.pos)).collect::<Vec<_>>();
     // From the top ruler: a horizontal guide where the button was released.
     let to = pos2(rect.center().x, rect.top() + 120.0);
     drag(&mut app, pos2(rect.center().x, rect.top() - RULER / 2.0), to);
@@ -1234,8 +1284,8 @@ fn artboard_guide_label_colors_only_its_own_guides() {
     {
         let st = app.session.active_mut().unwrap();
         let doc = std::sync::Arc::make_mut(&mut st.doc);
-        let last = doc.guides.len() - 1;
-        doc.guides[last].artboard = Some(gone);
+        let last = doc.ruler_guides().last().and_then(|g| g.id).unwrap();
+        assert!(doc.edit_ruler_guide(last, |g| g.artboard = Some(gone)));
     }
     app.ui.view.guides = true;
     let ctx = egui::Context::default();
@@ -1304,7 +1354,7 @@ fn a_guide_dragged_out_of_a_ruler_shows_while_dragged() {
         };
         assert!(shapes(&mut app, &ctx).iter().any(across), "real-time drawing {real_time}: the guide shows while dragged");
         frame(&mut app, &ctx, vec![button(at, false)]);
-        assert_eq!(app.session.active().unwrap().doc.guides.len(), 1, "real-time drawing {real_time}: released, it is made");
+        assert_eq!(app.session.active().unwrap().doc.ruler_guides().len(), 1, "real-time drawing {real_time}: released, it is made");
     }
 }
 
@@ -1383,7 +1433,7 @@ fn new_ruler_guides_follow_alt_through_preview_release_and_undo() {
             frame(&mut app, &ctx, vec![button(from, true, initially_alt)]);
             frame(&mut app, &ctx, vec![Event::PointerMoved(at)]);
             let assert_guide = |app: &VectorcraftApp, alt: bool, pos: Point| {
-                let guides = &app.session.active().unwrap().doc.guides;
+                let guides = &app.session.active().unwrap().doc.ruler_guides();
                 assert_eq!(guides.len(), 1);
                 assert_eq!(guides[0].vertical, source_vertical != alt);
                 let expected = if source_vertical != alt { pos.x } else { pos.y };
@@ -1463,7 +1513,7 @@ fn new_ruler_guide_alt_cancel_keeps_document_and_redo() {
             frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::ALT), Event::PointerMoved(from)]);
             frame(&mut app, &ctx, vec![button(from, true)]);
             frame(&mut app, &ctx, vec![Event::PointerMoved(at)]);
-            let guides = &app.session.active().unwrap().doc.guides;
+            let guides = &app.session.active().unwrap().doc.ruler_guides();
             assert_eq!(guides.len(), 1);
             assert_eq!(guides[0].vertical, !source_vertical);
             let artboard = (tool == "artboard").then_some(before.artboards[0].id);
@@ -1474,7 +1524,7 @@ fn new_ruler_guide_alt_cancel_keeps_document_and_redo() {
             assert_eq!(history(&app), before_history);
             app.session.execute("edit.redo", &json!({})).unwrap();
             assert!(app.session.active().unwrap().doc.art_bounds().is_some());
-            assert!(app.session.active().unwrap().doc.guides.is_empty());
+            assert!(app.session.active().unwrap().doc.ruler_guides().is_empty());
         }
     }
 }
@@ -1513,14 +1563,14 @@ fn cmd_ruler_drags_make_artboard_guides_with_the_preference_on() {
             let board = app.session.active().unwrap().doc.artboards[0].id;
             drag(&mut app, Point::new(80.0, 120.0));
             let st = app.session.active().unwrap();
-            assert_eq!(st.doc.guides.len(), 1, "vertical {source_vertical}, on {on}");
-            assert_eq!(st.doc.guides[0].vertical, source_vertical);
-            assert_eq!(st.doc.guides[0].artboard, on.then_some(board), "vertical {source_vertical}, on {on}");
+            assert_eq!(st.doc.ruler_guides().len(), 1, "vertical {source_vertical}, on {on}");
+            assert_eq!(st.doc.ruler_guides()[0].vertical, source_vertical);
+            assert_eq!(st.doc.ruler_guides()[0].artboard, on.then_some(board), "vertical {source_vertical}, on {on}");
             // Beyond the artboard's right or bottom edge.
             let beyond = xf.to_doc(rect.right_bottom() - egui::vec2(2.0, 2.0));
             assert!(beyond.x > 400.0 && beyond.y > 300.0, "{beyond:?}");
             drag(&mut app, beyond);
-            assert_eq!(app.session.active().unwrap().doc.guides.len(), if on { 1 } else { 2 }, "vertical {source_vertical}, on {on}");
+            assert_eq!(app.session.active().unwrap().doc.ruler_guides().len(), if on { 1 } else { 2 }, "vertical {source_vertical}, on {on}");
         }
     }
 }
@@ -1547,7 +1597,7 @@ fn guides_from_the_rulers_snap_and_artboard_guides_span_their_artboard() {
         frame(app, &ctx, vec![egui::Event::PointerMoved(to)]);
         frame(app, &ctx, vec![button(to, false)]);
     };
-    let guides = |app: &VectorcraftApp| app.session.active().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect::<Vec<_>>();
+    let guides = |app: &VectorcraftApp| app.session.active().unwrap().doc.ruler_guides().iter().map(|g| (g.vertical, g.pos)).collect::<Vec<_>>();
     // 3 px off the middle of the top and bottom sides: onto the line through them.
     let mid = xf.to_screen(Point::new(200.0, 150.0));
     drag(&mut app, pos2(rect.left() - RULER / 2.0, mid.y), mid + vec2(3.0, 40.0));
@@ -1596,7 +1646,7 @@ fn the_selection_tool_moves_and_deletes_ruler_guides() {
         frame(app, &ctx, vec![egui::Event::PointerMoved(to)]);
         frame(app, &ctx, vec![button(to, false)]);
     };
-    let guides = |app: &VectorcraftApp| app.session.active().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect::<Vec<_>>();
+    let guides = |app: &VectorcraftApp| app.session.active().unwrap().doc.ruler_guides().iter().map(|g| (g.vertical, g.pos)).collect::<Vec<_>>();
     // Two guides out of the rulers.
     let (h, v) = (pos2(rect.center().x + 30.0, rect.center().y + 20.0), pos2(rect.center().x - 40.0, rect.center().y));
     drag(&mut app, pos2(h.x, rect.top() - RULER / 2.0), h);
@@ -1607,7 +1657,7 @@ fn the_selection_tool_moves_and_deletes_ruler_guides() {
     drag(&mut app, h, to);
     let st = app.session.active().unwrap();
     assert_eq!(guides(&app), [(false, xf.to_doc(to).y), (true, xf.to_doc(v).x)]);
-    assert_eq!((st.selection.guides.clone(), st.selection.objects.clone()), (vec![0], vec![]));
+    assert_eq!((vectorcraft_engine::cmd::guide_indexes(&st.doc, &st.selection.guides), st.selection.objects.clone()), (vec![0], vec![]));
     assert_eq!(st.history.undo.last().unwrap().label, "Move Guide");
     let picked = Tokens::get(&ctx).selection;
     let s = shapes(&mut app, &ctx);
@@ -2800,10 +2850,13 @@ fn cached_frames_keep_their_scale_during_resize_rotation_and_dpi_changes() {
                 "{old_rot}° -> {new_rot}°, DPI {old_ppp} -> {new_ppp}, pixel={pixel}: {vertex:?}"
             );
         }
-        // Deliver the actual replacement and verify that it replaces the cached key.
+        // Deliver the actual replacement and verify that it replaces the cached key. The frame
+        // reports a slow render: when a parallel test makes a placed document's bitmap, the key's
+        // process-wide `placed` generation moves, and the next frame goes to the controlled worker
+        // instead of rendering over the delivered frame on this thread.
         let img = app.canvas.renderer.render(&job.doc, job.w, job.h, job.view, &job.opts);
         let expected = job.key.clone();
-        completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 1.0, moved: 0, reused: false }).unwrap();
+        completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 50.0, moved: 0, reused: false }).unwrap();
         frame(&mut app, size, new_ppp);
         assert_eq!(app.canvas.key.as_ref(), Some(&expected), "the worker's frame arrived");
     }
@@ -4804,6 +4857,45 @@ fn a_selected_objects_on_path_group_shows_its_space_widget() {
     app.run("edit.clear", json!({"ids": [b]})).unwrap();
     app.run("select.set", json!({"ids": [g]})).unwrap();
     assert_eq!(widgets(&mut app), 0, "one object");
+}
+
+/// A selected Objects on Path group whose objects have room to move along the path shows its Move
+/// All widget, a white diamond below its first object, with the Selection and Objects on Path tools;
+/// objects spread evenly to both ends of an open path have no room, and show none.
+#[test]
+fn a_selected_objects_on_path_group_shows_its_move_all_widget_when_it_has_room() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let line = id(app.session.execute("shape.line", &json!({"x1": 20, "y1": 200, "x2": 380, "y2": 200})).unwrap());
+    let a = id(app.session.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap());
+    let b = id(app.session.execute("shape.rectangle", &json!({"x": 80, "y": 40, "width": 20, "height": 20})).unwrap());
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let g = id(app.session.execute("object.objectsOnPath.attach", &json!({"path": line})).unwrap());
+    let ctx = egui::Context::default();
+    // A diamond: its top and bottom corners one above the other, its full height apart.
+    let diamond = |d: &egui::epaint::PathShape| {
+        let h = 2.0 * vectorcraft_tools::objects_on_path::MOVE_ALL_HALF_PX;
+        let [top, _, bottom, _] = d.points[..] else { return false };
+        d.closed && d.fill == Color32::WHITE && top.x == bottom.x && (bottom.y - top.y - h).abs() < 1e-3
+    };
+    let widgets = |app: &mut VectorcraftApp| shapes(app, &ctx).iter().filter(|s| matches!(s, Shape::Path(d) if diamond(d))).count();
+    app.select_tool("selection");
+    assert_eq!(widgets(&mut app), 0, "Auto: the objects reach both ends");
+    app.session.execute("object.objectsOnPath.options", &json!({"ids": [g], "spacing": 60})).unwrap();
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("objectsOnPath");
+    assert_eq!(widgets(&mut app), 1);
+    app.select_tool("directSelection");
+    assert_eq!(widgets(&mut app), 0);
+    app.select_tool("selection");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(widgets(&mut app), 0, "an object in the group, not the group");
+    // One object can move along the path whatever its Space.
+    app.session.execute("object.objectsOnPath.options", &json!({"ids": [g], "spacing": "auto"})).unwrap();
+    app.run("edit.clear", json!({"ids": [b]})).unwrap();
+    app.run("select.set", json!({"ids": [g]})).unwrap();
+    assert_eq!(widgets(&mut app), 1, "one object");
 }
 
 /// The shapes Type → Show Hidden Characters draws in one frame, seen through `xf`.
@@ -6892,6 +6984,49 @@ fn a_brush_dropped_on_a_path_is_applied_to_it() {
 }
 
 #[test]
+fn a_brush_with_art_dropped_off_the_art_places_a_copy_of_its_art_there() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("path.create", &json!({"anchors": [{"x": 100, "y": 150}, {"x": 300, "y": 150}]})).unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let drop = |app: &mut VectorcraftApp, name: &str, at: Point| {
+        let def = app.session.execute("brush.get", &json!({"name": name})).unwrap();
+        let at = xf.to_screen(at);
+        egui::DragAndDrop::set_payload(&ctx, widgets::PanelDrag::Brush { name: name.into(), def });
+        let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+        frame(app, &ctx, vec![egui::Event::PointerMoved(at), up]);
+    };
+    let undo = app.session.active().unwrap().history.undo.len();
+    // A calligraphic brush has no art: nothing.
+    drop(&mut app, "3 pt. Round", Point::new(200.0, 250.0));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    // An art brush: a copy of its art, centered where it lands, selected.
+    drop(&mut app, "Arrow", Point::new(200.0, 250.0));
+    let st = app.session.active().unwrap();
+    assert_eq!(st.history.undo.len(), undo + 1);
+    assert_eq!(st.history.undo.last().unwrap().label, "Place Brush Art");
+    let [placed] = st.selection.objects.as_slice() else { panic!("one object selected: {:?}", st.selection.objects) };
+    let b = st.doc.node(*placed).unwrap().geometric_bounds().unwrap();
+    assert!((b.center() - Point::new(200.0, 250.0)).hypot() < 0.1, "{b:?}");
+    // A scatter brush and a pattern brush (its tiles, in one group) place their art too.
+    for (i, name) in ["Dots", "Chain"].into_iter().enumerate() {
+        let at = Point::new(80.0 + 200.0 * i as f64, 60.0);
+        drop(&mut app, name, at);
+        let st = app.session.active().unwrap();
+        assert_eq!(st.history.undo.len(), undo + 2 + i, "{name}");
+        let [placed] = st.selection.objects.as_slice() else { panic!("{name}: one object selected: {:?}", st.selection.objects) };
+        let n = st.doc.node(*placed).unwrap();
+        assert!((n.geometric_bounds().unwrap().center() - at).hypot() < 0.1, "{name}");
+        if name == "Chain" {
+            assert_eq!(n.children().unwrap()[0].name.as_deref(), Some("Side Tile"));
+        }
+    }
+}
+
+#[test]
 fn a_library_brush_dropped_on_a_path_is_added_and_applied_in_one_step() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
@@ -7072,6 +7207,36 @@ fn art_moved_off_the_canvas_waits_and_drops_on_the_panel() {
     assert!(st.interaction.is_none());
     assert_eq!(*st.doc, *before);
     assert_eq!(st.history.undo.len(), undo);
+}
+
+/// Art Alt-dragged off the canvas (a copy while it moves there) reaches the panels as the art the
+/// drag started with, which is what stays when the release over a panel takes the copy back.
+#[test]
+fn art_alt_dragged_off_the_canvas_reaches_the_panels_as_the_original() {
+    use egui::{Event, Modifiers};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    let id = vectorcraft_doc::NodeId(id);
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let before = app.session.active().unwrap().doc.clone();
+    let button = |pos: Pos2, pressed: bool| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::ALT };
+    let start = xf.to_screen(Point::new(100.0, 100.0));
+    frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::ALT), Event::PointerMoved(start), button(start, true)]);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(start + vec2(40.0, 0.0))]);
+    let st = app.session.active().unwrap();
+    assert_eq!(st.interaction.as_ref().map(|i| i.label.as_str()), Some("Copy"));
+    assert!(!st.selection.objects.contains(&id), "the copy is selected while it moves");
+    frame(&mut app, &ctx, vec![Event::PointerMoved(pos2(850.0, 100.0))]);
+    assert_eq!(egui::DragAndDrop::payload::<widgets::PanelDrag>(&ctx).as_deref(), Some(&widgets::PanelDrag::Art(vec![id])));
+    frame(&mut app, &ctx, vec![button(pos2(850.0, 100.0), false)]);
+    let st = app.session.active().unwrap();
+    assert!(st.interaction.is_none());
+    assert_eq!(*st.doc, *before, "the copy goes, the original stays");
+    assert!(st.doc.node(id).is_some());
 }
 
 /// #4233: the Direct and Group Selection tools hand art they move whole to the panels too (Asset
@@ -9512,7 +9677,7 @@ fn ruler_guide_origin_ui(alt: bool, cancel: bool) {
             frame(&mut app, &ctx, vec![button(from, true)]);
             frame(&mut app, &ctx, vec![Event::PointerMoved(to)]);
             let check = |app: &VectorcraftApp, switched: bool, expected: Point| {
-                let guides = &app.session.active().unwrap().doc.guides;
+                let guides = &app.session.active().unwrap().doc.ruler_guides();
                 assert_eq!(guides.len(), 1);
                 let vertical = source_vertical != switched;
                 assert_eq!(guides[0].vertical, vertical);
@@ -9522,7 +9687,7 @@ fn ruler_guide_origin_ui(alt: bool, cancel: bool) {
             assert_eq!(history(&app).0, original_history.0, "preview has no undo entry");
             if cancel {
                 // Cancellation is a baseline positive control, independent of snap correctness.
-                assert_eq!(app.session.active().unwrap().doc.guides.len(), 1);
+                assert_eq!(app.session.active().unwrap().doc.ruler_guides().len(), 1);
                 frame(&mut app, &ctx, vec![Event::PointerMoved(from), button(from, false)]);
                 assert_eq!(app.session.active().unwrap().doc, before);
                 assert_eq!(app.session.active().unwrap().selection, selection);
@@ -9543,7 +9708,17 @@ fn ruler_guide_origin_ui(alt: bool, cancel: bool) {
             check(&app, alt, release);
             let st = app.session.active().unwrap();
             assert_eq!(st.doc.ruler_origin_for(0), origin);
-            assert_eq!(st.doc.layers, before.layers, "the rectangle tool draws no artwork");
+            let art = |d: &vectorcraft_doc::Document| {
+                d.layers
+                    .iter()
+                    .map(|l| {
+                        let mut l = vectorcraft_doc::Node::clone(l);
+                        l.strip_ruler_guides();
+                        l
+                    })
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(art(&st.doc), art(&before), "the rectangle tool draws no artwork");
             assert_eq!(st.selection, selection);
             assert_eq!(history(&app), (original_history.0 + 1, 0, true));
             assert_eq!(st.history.undo.last().unwrap().label, "New Guide");
@@ -9621,8 +9796,9 @@ fn ruler_guide_origin_tooltip_matches_selected_guide_fields() {
         frame(&mut app, &ctx, vec![Event::PointerMoved(from)]);
         frame(&mut app, &ctx, vec![button(from, true)]);
         frame(&mut app, &ctx, vec![Event::PointerMoved(to)]);
-        assert!((app.session.active().unwrap().doc.guides[0].pos - target).abs() < 1e-4);
-        assert_eq!(app.session.active().unwrap().selection.guides, vec![0]);
+        assert!((app.session.active().unwrap().doc.ruler_guides()[0].pos - target).abs() < 1e-4);
+        let st = app.session.active().unwrap();
+        assert_eq!(vectorcraft_engine::cmd::guide_indexes(&st.doc, &st.selection.guides), vec![0]);
         // Observe the real selected-guide field; no expected strings are inserted into UI state.
         let fields = egui::Context::default();
         crate::theme::install_fonts(&fields);
@@ -9652,7 +9828,7 @@ fn ruler_guide_origin_tooltip_matches_selected_guide_fields() {
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
         frame(&mut app, &ctx, vec![button(to, false)]);
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
-        assert!((app.session.active().unwrap().doc.guides[0].pos - target).abs() < 1e-4, "stored coordinate remains absolute");
+        assert!((app.session.active().unwrap().doc.ruler_guides()[0].pos - target).abs() < 1e-4, "stored coordinate remains absolute");
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(app.session.active().unwrap().doc, before);
     }

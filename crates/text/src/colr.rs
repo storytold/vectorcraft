@@ -169,6 +169,17 @@ impl<'a> Tree<'a> {
         }
     }
 
+    /// Glyph `gid`'s outline in the current transform; empty once the glyph is over budget, so
+    /// the layers that follow cost nothing (a compact layer list can name one big outline often).
+    fn layer_outline(&mut self, gid: GlyphId) -> BezPath {
+        if self.too_large {
+            return BezPath::new();
+        }
+        let mut path = outline(self.font, self.location, gid);
+        path.apply_affine(self.transform());
+        path
+    }
+
     fn transform(&self) -> Affine {
         self.transforms.last().copied().unwrap_or(FLIP)
     }
@@ -359,8 +370,7 @@ impl ColorPainter for Tree<'_> {
     }
 
     fn push_clip_glyph(&mut self, glyph_id: GlyphId) {
-        let mut clip = outline(self.font, self.location, glyph_id);
-        clip.apply_affine(self.transform());
+        let clip = self.layer_outline(glyph_id);
         self.charge(&clip);
         self.open(Open { clip: Some(clip), blend: None, children: vec![], flooded: false });
     }
@@ -392,8 +402,7 @@ impl ColorPainter for Tree<'_> {
 
     /// The glyph's outline filled, the brush moved by `brush_transform` (the glyph stays).
     fn fill_glyph(&mut self, glyph_id: GlyphId, brush_transform: Option<Transform>, brush: Brush<'_>) {
-        let mut path = outline(self.font, self.location, glyph_id);
-        path.apply_affine(self.transform());
+        let path = self.layer_outline(glyph_id);
         let brush_xf = self.transform() * brush_transform.as_ref().map_or(Affine::IDENTITY, affine);
         self.transforms.push(brush_xf);
         self.fill_path(&path, &brush);

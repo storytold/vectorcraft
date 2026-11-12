@@ -26,10 +26,10 @@ use crate::cmd::{CommandSpec, bad, command_specs};
 use crate::{EngineError, Result};
 
 /// The API level of the commands' parameters.
-pub const API_VERSION: u32 = 2;
+pub const API_VERSION: u32 = 3;
 
 /// [`schema_hash`] at each API level, oldest first; the last row is [`API_VERSION`]'s.
-pub const SCHEMA_HASHES: &[(u32, u64)] = &[(1, 0x9cdb_1087_7074_855c), (2, 0x0e31_5d96_7bc9_2653)];
+pub const SCHEMA_HASHES: &[(u32, u64)] = &[(1, 0x9cdb_1087_7074_855c), (2, 0x0e31_5d96_7bc9_2653), (3, 0xffe0_58a3_2f0c_aa2a)];
 
 /// The hash of every built-in command's schema ([`vectorcraft_apischema::hash`]).
 pub fn schema_hash() -> u64 {

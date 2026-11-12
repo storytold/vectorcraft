@@ -36,6 +36,9 @@ pub const MAX_STEPS: u32 = 1000;
 const FREEFORM_MESH: u32 = 8;
 /// Columns (around the centre) of the mesh a radial gradient expands to.
 const RADIAL_MESH_COLS: usize = 8;
+/// Largest turn between a conic gradient's mesh columns, so their straight outer edges stay
+/// close enough to a circle to reach past the box.
+const CONIC_MESH_GAP: f64 = 1.0 / 32.0;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -44,7 +47,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand…",
             ["Object"],
             None,
-            "{object?: true (symbol instances without effects (their fills' and strokes' included) and not in perspective → their art, as Break Link to Symbol places it (the instances that art holds stay instances), type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step; a dimension whose art an option changes becomes a plain group of its art, except one selected with art it measures, directly or in groups without fills, strokes or effects of their own: its lines and label stay as they are, and if the new art no longer fits its link it stays where it was, no longer linked → {ids}",
+            "{object?: true (symbol instances without effects (their fills' and strokes' included) and not in perspective → their art, as Break Link to Symbol places it (the instances that art holds stay instances), type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients, wedges around the center for conic ones, nested squares for diamond ones) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step; a dimension whose art an option changes becomes a plain group of its art, except one selected with art it measures, directly or in groups without fills, strokes or effects of their own: its lines and label stay as they are, and if the new art no longer fits its link it stays where it was, no longer linked → {ids}",
             has_selection,
             expand
         ),
@@ -534,7 +537,7 @@ fn expand_piece_leaves(
         }
         return;
     }
-    for c in n.children_mut().into_iter().flatten() {
+    for c in n.children_mut().into_iter().flatten().filter(|c| !c.is_ruler_guide()) {
         expand_piece_leaves(d, Arc::make_mut(c), left, expanded, expand);
     }
 }
@@ -1279,7 +1282,13 @@ fn breaks(g: &Gradient, t0: f64, t1: f64, max_gap: f64) -> Vec<(f64, (Color, f32
 /// end, the vector across it (radial: the ellipse's other axis), and the parameter ranges that
 /// cover the box (linear: along the vector `t0..t1` and across it `s0..s1` in points; radial:
 /// `0..t1`, each level's ellipse centred on the way from the focal point to the start).
+/// A conic gradient also has its placement, the box and the radius in its frame that reaches
+/// past the box's corners ([`Frame::pieces`] and [`Frame::mesh`] go around its center). A
+/// diamond gradient has its frame ([`vectorcraft_color::GradientGeom::diamond_frame`]; `None`
+/// when it has no extent), the box and the level of the square that reaches its corners.
 struct Frame {
+    conic: Option<(vectorcraft_color::GradientGeom, Rect, f64)>,
+    diamond: Option<(Option<Affine>, Rect, f64)>,
     radial: bool,
     start: Point,
     focal: Point,
@@ -1309,7 +1318,19 @@ impl Frame {
         }
         // Keep a sliver of span so the art maps back invertibly.
         t1 = t1.max(t0 + 1e-6);
-        Self { radial, start: geom.start, focal: geom.focal_point(), along, across, t0, t1, s0, s1 }
+        let conic = (g.gradient.kind == GradientKind::Conic).then(|| {
+            let to_unit = geom.conic_frame().inverse();
+            let reach = corners.iter().map(|c| (to_unit * *c).to_vec2().hypot()).fold(0.0f64, f64::max).max(1e-6);
+            // Past the corners, and far enough out that the chords between columns at most
+            // CONIC_MESH_GAP of a turn apart stay outside them.
+            let reach = if reach.is_finite() { reach * 1.01 / (std::f64::consts::PI * CONIC_MESH_GAP).cos() } else { 1.0 };
+            (geom, bounds, reach)
+        });
+        let diamond = (g.gradient.kind == GradientKind::Diamond).then(|| {
+            let reach = corners.iter().map(|c| geom.param_at(GradientKind::Diamond, *c)).fold(0.0f64, f64::max);
+            (geom.diamond_frame(), bounds, if reach.is_finite() { reach.max(1e-6) * 1.01 } else { 1.0 })
+        });
+        Self { conic, diamond, radial, start: geom.start, focal: geom.focal_point(), along, across, t0, t1, s0, s1 }
     }
 
     /// Linear: the point at parameter `t` along and `s` across. Radial: the point at parameter `t`
@@ -1325,6 +1346,46 @@ impl Frame {
     /// A gradient mesh covering the box: columns (linear) or rings (radial) where the colour
     /// changes, so it paints the gradient exactly.
     fn mesh(&self, g: &Gradient) -> GradientMesh {
+        if let Some((geom, _, reach)) = &self.conic {
+            // Columns around the center where the color changes, at most CONIC_MESH_GAP of a turn
+            // apart so the outer edge stays past the box; the seam is two columns in one place.
+            let br = breaks(g, 0.0, 1.0, CONIC_MESH_GAP);
+            let us: Vec<f64> = br.iter().map(|(t, _)| *t).collect();
+            let frame = geom.conic_frame();
+            let at = |u: f64, v: f64| {
+                let a = u * std::f64::consts::TAU;
+                frame * Point::new(reach * v * a.cos(), reach * v * a.sin())
+            };
+            return GradientMesh::from_grid(&us, &[0.0, 1.0], &at, &|_, c, _| br[c].1);
+        }
+        if let Some((frame, b, reach)) = &self.diamond {
+            let Some(frame) = frame else {
+                // No extent: the whole box is the last stop.
+                let last = g.sample_keep_model(1.0);
+                let at = |u: f64, v: f64| Point::new(b.x0 + u * b.width(), b.y0 + v * b.height());
+                return GradientMesh::from_grid(&[0.0, 1.0], &[0.0, 1.0], &at, &|_, _, _| last);
+            };
+            // Rings of squares where the color changes, with columns at the corners: each patch
+            // lies between two rings along one side, where the level runs straight across it.
+            let br = breaks(g, 0.0, *reach, f64::INFINITY);
+            let ts: Vec<f64> = br.iter().map(|(t, _)| t / reach).collect();
+            let at = |u: f64, v: f64| *frame * (diamond_perimeter(u).to_vec2() * (v * reach)).to_point();
+            const CORNERS: [f64; 5] = [0.0, 0.25, 0.5, 0.75, 1.0];
+            let mut mesh = GradientMesh::from_grid(&CORNERS, &ts, &at, &|r, _, _| br[r].1);
+            // Every column is at a corner, where `from_grid`'s tangent is the mean of the two
+            // sides: each handle along a ring points a third of the way along its own side, so
+            // the sides stay straight.
+            let side = |v: f64, from: usize, to: Option<&f64>| to.map_or(vectorcraft_geom::Vec2::ZERO, |&u| (at(u, v) - at(CORNERS[from], v)) / 3.0);
+            for (r, &v) in ts.iter().enumerate() {
+                for c in 0..CORNERS.len() {
+                    if let Some(point) = mesh.points.get_mut(r * CORNERS.len() + c) {
+                        point.handles[0] = side(v, c, CORNERS.get(c + 1));
+                        point.handles[1] = side(v, c, c.checked_sub(1).and_then(|i| CORNERS.get(i)));
+                    }
+                }
+            }
+            return mesh;
+        }
         // Rings as close as the columns around them, so the mesh draws smoothly.
         let gap = if self.radial { (self.t1 - self.t0) / RADIAL_MESH_COLS as f64 } else { f64::INFINITY };
         let br = breaks(g, self.t0, self.t1, gap);
@@ -1340,13 +1401,44 @@ impl Frame {
 
     /// `n` solid shapes covering the box in paint order, each coloured as the gradient in the
     /// middle of its band: for a linear gradient, rectangles from each band's start to the far
-    /// end, for a radial one, nested ellipses (largest first). Each paints over the ones
-    /// below except its band, so no seam shows between bands. With translucent stops each shape
-    /// is just its band, so nothing doubles up.
+    /// end, for a radial one, nested ellipses (largest first), for a conic one, wedges around the
+    /// center from each band's start to the seam, for a diamond one, nested squares (largest
+    /// first). Each paints over the ones below except its band, so no seam shows between bands.
+    /// With translucent stops each shape is just its band, so nothing doubles up.
     fn pieces(&self, g: &Gradient, n: usize) -> Vec<(PathData, (Color, f32))> {
+        let opaque = g.stops.iter().all(|s| s.opacity >= 1.0);
+        if let Some((geom, b, _)) = &self.conic {
+            return geom
+                .conic_wedges(*b, n, opaque)
+                .into_iter()
+                .map(|(pts, t)| (PathData::single(SubPath::polyline(&pts, true)), g.sample_keep_model(t as f32)))
+                .collect();
+        }
+        if let Some((frame, b, reach)) = &self.diamond {
+            let Some(frame) = frame else {
+                return vec![(shapes::rectangle(*b), g.sample_keep_model(1.0))];
+            };
+            // Nested squares about the center, largest first, as a radial gradient's ellipses.
+            let step = reach / n as f64;
+            let square = |t: f64| -> SubPath {
+                let pts: Vec<Point> = [0.0, 0.25, 0.5, 0.75].iter().map(|&u| *frame * (diamond_perimeter(u).to_vec2() * t).to_point()).collect();
+                SubPath::polyline(&pts, true)
+            };
+            return (0..n)
+                .rev()
+                .map(|k| {
+                    let mut shape = PathData::single(square((k + 1) as f64 * step));
+                    if !opaque && k > 0 {
+                        let mut hole = square(k as f64 * step);
+                        hole.reverse();
+                        shape.subpaths.push(hole);
+                    }
+                    (shape, g.sample_keep_model(((k as f64 + 0.5) * step) as f32))
+                })
+                .collect();
+        }
         let step = (self.t1 - self.t0) / n as f64;
         let color = |k: usize| g.sample_keep_model((self.t0 + (k as f64 + 0.5) * step) as f32);
-        let opaque = g.stops.iter().all(|s| s.opacity >= 1.0);
         if self.radial {
             let ellipse = |t: f64| {
                 let c = self.focal + (self.start - self.focal) * t;
@@ -1375,4 +1467,15 @@ impl Frame {
             })
             .collect()
     }
+}
+
+/// The point a fraction `u` (0..1) of the way around the square with corners (1, 0), (0, 1),
+/// (-1, 0) and (0, -1), from the first: a diamond gradient's last stop in its frame.
+fn diamond_perimeter(u: f64) -> Point {
+    const CORNERS: [(f64, f64); 5] = [(1.0, 0.0), (0.0, 1.0), (-1.0, 0.0), (0.0, -1.0), (1.0, 0.0)];
+    let s = if u.is_finite() { u.clamp(0.0, 1.0) * 4.0 } else { 0.0 };
+    let i = (s.floor() as usize).min(3);
+    let f = s - i as f64;
+    let ((x0, y0), (x1, y1)) = (CORNERS.get(i).copied().unwrap_or((1.0, 0.0)), CORNERS.get(i + 1).copied().unwrap_or((1.0, 0.0)));
+    Point::new(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f)
 }

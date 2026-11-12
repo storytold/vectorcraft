@@ -588,7 +588,8 @@ fn may_hit(parent: &Node, i: usize, c: &Node, p: Point, opt: HitOptions, symbols
     if !c.visible || editable_only && (c.locked || c.is_template()) {
         return false;
     }
-    if opt.skip_guides && matches!(c.kind, NodeKind::Path { guide: true, .. }) {
+    // A ruler guide is picked by the guide commands, never by an object hit test.
+    if c.is_ruler_guide() || opt.skip_guides && matches!(c.kind, NodeKind::Path { guide: true, .. }) {
         return false;
     }
     // (An envelope's content sits where it was, not where the envelope draws it.)
@@ -794,6 +795,10 @@ thread_local! {
     static LEAVES_TESTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// What a click at `p` hits on leaf object `n`: its outline, strokes and fills, its frame or its
+/// bounds, by kind. Raster effects (drop shadows, glows, blurs) do not take clicks: the area they
+/// paint beyond the object is left out here and in [`cull_reach`], so a click there reaches the
+/// object under it.
 fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option<HitKind> {
     #[cfg(test)]
     LEAVES_TESTED.with(|c| c.set(c.get() + 1));
@@ -1256,7 +1261,7 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
         // marquee touches none of it, as clicks don't (#5309).
         Some(s) if !doc.is_editable(s.id) => vec![],
         Some(s) => match s.children() {
-            Some(c) => c.iter().enumerate().filter(|(i, _)| !shaper_hides(s, *i, scope)).map(|(_, c)| (c, r)).collect(),
+            Some(c) => c.iter().enumerate().filter(|(i, c)| !c.is_ruler_guide() && !shaper_hides(s, *i, scope)).map(|(_, c)| (c, r)).collect(),
             // A single object isolated: only it.
             None => doc
                 .parent_of(s.id)
@@ -1285,7 +1290,7 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
                 if c.visible && !c.locked && !c.is_template() {
                     out.extend(layer_objects(c, r));
                 }
-            } else {
+            } else if !c.is_ruler_guide() {
                 out.push((c, r));
             }
         }

@@ -151,8 +151,10 @@ struct View<'a> {
     /// Where the row thumbnails come from.
     thumbs: ThumbSource<'a>,
     sel: HashSet<NodeId>,
-    /// The selected ruler guides.
+    /// The selected ruler guides, as indexes into [`Self::ruler_guides`].
     guides: Vec<usize>,
+    /// The document's ruler guides ([`Document::ruler_guides`]).
+    ruler_guides: Vec<vectorcraft_doc::Guide>,
     target: Option<NodeId>,
     current: Option<NodeId>,
     rows: Vec<NodeId>,
@@ -262,7 +264,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         doc: &doc,
         thumbs: ThumbSource::of(app, st, &doc),
         sel: st.selection.objects.iter().copied().collect(),
-        guides: st.selection.guides.clone(),
+        guides: vectorcraft_engine::cmd::guide_indexes(&doc, &st.selection.guides),
+        ruler_guides: doc.ruler_guides(),
         target: st.selection.target,
         current: st.current_layer(),
         rows,
@@ -468,7 +471,8 @@ fn listed_when_opened(doc: &Document, open: &OpenRows, opts: &PanelOptions, quer
         open.set(*a, true);
     }
     let mut rows = vec![];
-    push_rows(layer, 0, false, (Color32::PLACEHOLDER, true), (&open, opts, query, filter, doc), &mut rows);
+    // Only object rows are looked for, so the guide rows are left out.
+    push_rows(layer, 0, false, (Color32::PLACEHOLDER, true), (&open, opts, query, filter, &[]), &mut rows);
     rows.iter().any(|r| r.node.id == id && r.guide.is_none() && !r.spine)
 }
 

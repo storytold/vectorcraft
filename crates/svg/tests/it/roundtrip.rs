@@ -951,6 +951,22 @@ fn import_tspan_far_below_is_bounded() {
 }
 
 #[test]
+fn import_many_tspans_far_apart_are_bounded_together() {
+    // Each tspan 9,999 lines (auto leading 14.4 pt) below the last: each within the limit of one gap,
+    // two hundred of them were two million line breaks.
+    let spans: String = (1..=200).map(|i| format!(r#"<tspan x="5" y="{}">{i}</tspan>"#, 20.0 + 14.4 * 9_999.0 * i as f64)).collect();
+    let d = import_art(&format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><text x="5" y="20" font-size="12">a{spans}</text></svg>"#
+    ));
+    let a = art(&d);
+    let NodeKind::Text(t) = &a[0].kind else { panic!() };
+    let text = t.plain_text();
+    assert!(text.ends_with("200"), "{}", &text[text.len().saturating_sub(20)..]);
+    let breaks = text.matches('\n').count();
+    assert!(breaks <= 10_200, "{breaks} line breaks");
+}
+
+#[test]
 fn import_tspan_on_the_same_baseline_stays_on_the_line() {
     // Styled runs positioned on the line's own baseline (as Illustrator writes them, with x and y on
     // every tspan) are one line, not a line break before each run.

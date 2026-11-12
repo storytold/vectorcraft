@@ -507,6 +507,23 @@ pub(crate) fn given_objects(s: &Session, p: &Value, command: &str) -> Result<Opt
         Some(v) => Ok(Some(vec![checked_id(s, v, command)?])),
     }
 }
+/// The objects `p` gives `command`, as [`given_objects`] reads them, checked only for their form:
+/// for a command that looks its objects up itself, outside the document's layers too.
+pub(crate) fn given_object_ids(p: &Value, command: &str) -> Result<Option<Vec<NodeId>>> {
+    if p.get("ids").is_some_and(|v| !v.is_null()) {
+        return ids_param(p, "ids", command);
+    }
+    match p.get("id").filter(|v| !v.is_null()) {
+        None => Ok(None),
+        Some(Value::String(r)) if r.starts_with('$') => {
+            Err(bad(command, format!("`id` is the step reference {r:?}, which only `run` and `command_batch` resolve")))
+        }
+        Some(v) => {
+            let id = v.as_u64().map(NodeId).ok_or_else(|| bad(command, format!("invalid object id {v}: expected a non-negative integer")))?;
+            Ok(Some(vec![id]))
+        }
+    }
+}
 /// `v` as an index, a count or a byte offset: past `usize::MAX` reads as `usize::MAX`, past the end of any list.
 pub(crate) fn index(v: u64) -> usize {
     usize::try_from(v).unwrap_or(usize::MAX)
@@ -519,17 +536,23 @@ pub(crate) fn checked_ids_param(s: &Session, p: &Value, key: &str, command: &str
 }
 
 /// The objects a command acts on: `ids` when given (every one checked, and those inside another
-/// given one dropped), else the selected objects.
+/// given one dropped), else (`ids` left out or null) the selected objects.
 pub(crate) fn checked_ids_or_selection(s: &Session, p: &Value, command: &str) -> Result<Vec<NodeId>> {
-    if p.get("ids").is_some() { Ok(edit::outermost(&s.doc()?.doc, checked_ids_param(s, p, "ids", command)?)) } else { edit::selected_roots(s) }
+    if p.get("ids").is_some_and(|v| !v.is_null()) {
+        Ok(edit::outermost(&s.doc()?.doc, checked_ids_param(s, p, "ids", command)?))
+    } else {
+        edit::selected_roots(s)
+    }
 }
 
 pub(crate) fn checked_id(s: &Session, value: &Value, command: &str) -> Result<NodeId> {
     let id = value.as_u64().map(NodeId).ok_or_else(|| bad(command, format!("invalid object id {value}: expected a non-negative integer")))?;
-    if s.doc()?.doc.node(id).is_none() {
-        return Err(bad(command, format!("no such object id {value}")));
+    match s.doc()?.doc.node(id) {
+        None => Err(bad(command, format!("no such object id {value}"))),
+        // The guide commands take ruler guides by index.
+        Some(n) if n.is_ruler_guide() => Err(bad(command, format!("id {value} is a ruler guide, not an object"))),
+        Some(_) => Ok(id),
     }
-    Ok(id)
 }
 
 /// `v` as exactly `N` finite numbers (`[x, y]`, `[x, y, width, height]`…): `None` when it isn't an
@@ -689,10 +712,11 @@ pub(crate) fn leaf_targets(s: &Session, ids: &[NodeId]) -> Result<Vec<NodeId>> {
     let compound = |id: NodeId| d.parent_of(id).filter(|p| d.node(*p).is_some_and(owns));
     let mut out = vec![];
     for id in ids {
-        let Some(n) = d.node(*id) else { continue };
+        // A ruler guide has no appearance to paint, given or in a layer.
+        let Some(n) = d.node(*id).filter(|n| !n.is_ruler_guide()) else { continue };
         match &n.kind {
             NodeKind::Group { .. } | NodeKind::Layer { .. } if !n.is_compound_shape() => n.walk(&mut |c| {
-                if !c.is_container() || owns(c) {
+                if (!c.is_container() && !c.is_ruler_guide()) || owns(c) {
                     out.push(c.id)
                 }
             }),
@@ -742,6 +766,8 @@ pub(crate) fn unique_name_from(base: &str, next: &mut std::collections::HashMap<
 /// The most presets one presets file imports: each is looked up among the saved ones.
 pub(crate) const MAX_IMPORTED_PRESETS: usize = 1000;
 
+pub(crate) use addons::DecodedImages;
+pub use docmenu::guide_indexes;
 pub(crate) use edit::{settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;
 pub(crate) use object::{keep_aligned_in, refresh_pixel_aligned};

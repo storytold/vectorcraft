@@ -55,7 +55,7 @@ fn needs(n: &Node) -> bool {
 /// a clipping path too complex to cut the art with. `label` is the effect's name. The art is cut
 /// for the solid effect `n` carries ([`resolve_for`]).
 pub(crate) fn resolve<'a>(doc: Option<&Document>, n: &'a Node, label: &str) -> Result<Cow<'a, Node>, String> {
-    let every_fill = super::solid(&n.appearance.effects).is_some_and(|(_, fx)| fx.id == super::ROTATE);
+    let every_fill = super::solid(&n.appearance.effects).is_some_and(|(_, fx)| super::is_plane(&fx.id));
     resolve_for(doc, n, label, every_fill)
 }
 
@@ -191,7 +191,7 @@ impl Resolver<'_> {
         let mut changed = false;
         for c in children {
             self.spend(1)?;
-            if !c.visible || matches!(c.kind, NodeKind::Path { guide: true, .. }) {
+            if !c.visible || c.is_guide() {
                 continue;
             }
             if matches!(c.kind, NodeKind::Image(_)) {
@@ -279,7 +279,7 @@ impl Resolver<'_> {
                 kids = nest(n, cut, 0);
             } else {
                 for c in n.children().into_iter().flatten() {
-                    if !c.visible || matches!(c.kind, NodeKind::Path { guide: true, .. }) {
+                    if !c.visible || c.is_guide() {
                         continue;
                     }
                     if let Some(c) = self.clipped(c, clip, depth + 1)? {

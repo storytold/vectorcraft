@@ -107,7 +107,7 @@ impl Fixes {
         let white = usize::from(self.remove_white_overprint && self.unset_white(n));
         let blacks = self.overprint_black > 0.0 && (!self.text_only || matches!(n.kind, NodeKind::Text(_)));
         let mut counts = (white, usize::from(blacks && black.apply(n, spots)));
-        for c in n.children_mut().into_iter().flatten() {
+        for c in n.children_mut().into_iter().flatten().filter(|c| !c.is_ruler_guide()) {
             let (w, b) = self.overprint(Arc::make_mut(c), black, spots);
             counts = (counts.0 + w, counts.1 + b);
         }
