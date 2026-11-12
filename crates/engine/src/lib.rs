@@ -258,6 +258,8 @@ pub struct Session {
     pub recovery: cmd::recovery::Recovery,
     /// The running script's job, while there is one: the mutation lease ([`script`]).
     pub(crate) script_key: Option<script::JobKey>,
+    /// The named script engines this session keeps ([`script`]).
+    pub(crate) script_engines: script::EnginesKey,
     /// Stops the running script at its next instruction; the same flag for every run.
     pub(crate) script_stop: vectorcraft_js::Interrupt,
     /// The report of the run that ended last.
