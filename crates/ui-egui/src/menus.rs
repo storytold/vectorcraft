@@ -71,10 +71,8 @@ pub(crate) use invoke::graph_dialog;
 #[cfg(test)]
 pub(crate) use invoke::with_held_keys;
 pub use invoke::{click_target, invoke, invoke_from_system_menu};
-#[cfg(test)]
 pub(crate) use labels::lists_plugin;
-#[cfg(test)]
-use labels::shows_a_name;
+pub(crate) use labels::shows_a_name;
 pub use labels::{CONTEXT_LABELS, DYNAMIC_LABELS, display_label, dynamic_label, item_shortcut, menu_strings};
 pub use run::{check_params, run_ui_command};
 pub(crate) use run::{normalize_panel, opt_bool, opt_index, opt_number};

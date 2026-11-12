@@ -852,6 +852,17 @@ font-technology	Variable	Μεταβλητές
 	The selected character's font is not available.	Η γραμματοσειρά του επιλεγμένου χαρακτήρα δεν είναι διαθέσιμη.
 	No alternates for the selected character.	Δεν υπάρχουν εναλλακτικοί για τον επιλεγμένο χαρακτήρα.
 	Double-click to replace	Διπλό κλικ για αντικατάσταση
+	Select one character with the Type tool first.	Επιλέξτε πρώτα έναν χαρακτήρα με το εργαλείο κειμένου.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	Ο γλύφος {glyph} ανήκει στη γραμματοσειρά {font}, όχι σε αυτήν του επιλεγμένου κειμένου ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	Ο γλύφος {glyph} ανήκει στο {base} (U+{base_code}) {place}· η επιλογή σας είναι {sel} (U+{code}).
+	at the start of a word	στην αρχή μιας λέξης
+	in the middle of a word	στη μέση μιας λέξης
+	at the end of a word	στο τέλος μιας λέξης
+	standing alone	όταν στέκεται μόνος
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	Ο γλύφος {glyph} δεν είναι εναλλακτικός του {sel} (U+{code}) όπως βρίσκεται στη λέξη του.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Διπλό κλικ για εισαγωγή του {base} (U+{code}): μια μορφή παρουσίασης δεν συνδέεται, το γράμμα συνδέεται.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Εισήχθη το {base} (U+{code}) αντί για μορφή παρουσίασης: η γραμματοσειρά το συνδέει με τους γείτονες ανάλογα με τη θέση.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Καμία λειτουργία OpenType δεν σχεδιάζει αυτόν τον γλύφο εδώ, οπότε αντικαθιστά τον γλύφο του χαρακτήρα και μπορεί να μην συνδέεται με τους γειτονικούς χαρακτήρες.
 	Double-click to insert	Διπλό κλικ για εισαγωγή
 	Double-click to rename	Διπλό κλικ για μετονομασία
 	Double-click to target the contents	Διπλό κλικ για επιλογή του περιεχομένου ως στόχου
@@ -1765,6 +1776,8 @@ font-technology	Variable	Μεταβλητές
 	Message:	Μήνυμα:
 	Metadata:	Μεταδεδομένα:
 	Method:	Μέθοδος:
+	Pad	Συνέχιση
+	Repeats	Επαναλήψεις
 	Millimeters	Χιλιοστά
 	Minimize	Ελαχιστοποίηση
 	Mode:	Λειτουργία:
@@ -1971,6 +1984,7 @@ font-technology	Variable	Μεταβλητές
 	Rotate View Tool	Εργαλείο περιστροφής προβολής (Rotate View Tool)
 	Trackpad Gesture to Rotate View	Περιστροφή προβολής με χειρονομία στην επιφάνεια αφής
 	Hold a Tool Shortcut to Use the Tool Temporarily	Προσωρινή χρήση εργαλείου κρατώντας πατημένη τη συντόμευσή του
+	Show Bounding Box While Moving and Drawing	Εμφάνιση πλαισίου οριοθέτησης κατά τη μετακίνηση και τη σχεδίαση
 	Rotate…	Περιστροφή…
 	Rotation	Περιστροφή
 	Rows:	Γραμμές:
@@ -3842,6 +3856,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	Split Into Grid…	Διαίρεση σε πλέγμα…
 	Split Path	Διαίρεση διαδρομής
 	spot	πλακάτο
+	Spot Color Objects	Αντικείμενα με χρώματα spot
+	Pattern Objects	Αντικείμενα με μοτίβα
+	Gradient Objects	Αντικείμενα με ντεγκραντέ
 	Spot Colors	Πλακάτα χρώματα
 	Spot Colors…	Πλακάτα χρώματα…
 	Stacked Bar Graph Tool	Στοιβαγμένο ραβδόγραμμα (Stacked Bar Graph Tool)
@@ -4362,6 +4379,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: το `{h}` δεν είναι έγκυρο χρώμα, όπως το "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: επιτρέπονται το πολύ {MAX_TABLE} χρώματα
 @msg	command `{0}` is not available right now: {1}	η εντολή `{0}` δεν είναι διαθέσιμη αυτήν τη στιγμή: {1}
+@msg	command `{id}` is not available right now	η εντολή `{id}` δεν είναι διαθέσιμη αυτήν τη στιγμή
 @msg	compound paths can only contain paths	οι σύνθετες διαδρομές μπορούν να περιέχουν μόνο διαδρομές
 @msg	compressed (RLE) bitmaps can't be read yet	τα συμπιεσμένα (RLE) bitmap δεν μπορούν ακόμη να διαβαστούν
 @msg	damaged	κατεστραμμένο
@@ -5844,6 +5862,8 @@ effect	Points	Σημεία
 @msg	the screen color sampler is already open	η δειγματοληψία χρώματος από την οθόνη είναι ήδη ανοιχτή
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	αυτό είναι αρχείο PostScript (ένα .ai αποθηκευμένο σε παλαιότερη μορφή ή χωρίς συμβατότητα PDF, ή αρχείο EPS), όχι PDF: οι εντολές Αρχείο › Άνοιγμα και Αρχείο › Τοποθέτηση το διαβάζουν ως EPS
 @msg	this system has no screen color sampler	αυτό το σύστημα δεν έχει δειγματοληψία χρώματος από την οθόνη
+@msg	the screen color sampler did not answer	η δειγματοληψία χρώματος από την οθόνη δεν απάντησε
+@msg	the screen color sampler failed	η δειγματοληψία χρώματος από την οθόνη απέτυχε
 @msg	the image can't be read as a texture	η εικόνα δεν μπορεί να διαβαστεί ως υφή
 
 # User Interface › Accent Color
@@ -6040,6 +6060,9 @@ axis	Y Axis	Άξονας Y
 @msg	`dither` applies to gradient fills (paint.setFill)	Το `dither` ισχύει για γεμίσματα ντεγκραντέ (paint.setFill)
 @msg	`dither` must be true or false	Το `dither` πρέπει να είναι true ή false
 @msg	`method` must be classic or perceptual	Το `method` πρέπει να είναι classic ή perceptual
+@msg	`spread` must be pad, repeat or reflect	Το `spread` πρέπει να είναι pad, repeat ή reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	Το `repeats` πρέπει να είναι ακέραιος από 1 έως {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	Το `spread` ισχύει για γραμμικά, ακτινικά, κωνικά και ρομβοειδή ντεγκραντέ
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Να εγκατασταθεί το «{name}», που ζητά μεγάλο υπολογιστικό προϋπολογισμό;
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Κάθε εκτέλεση μπορεί να διαρκέσει έως {minutes} λεπτά και να κάνει {times} φορές τη δουλειά που επιτρέπεται στα άλλα πρόσθετα. Εκτελείται στο παρασκήνιο και μπορείτε να την ακυρώσετε.
@@ -6955,3 +6978,8 @@ breakText	Glyphs	Γλύφοι
 @msg	Some islands could not be joined to the area around the art	Ορισμένες νησίδες δεν ήταν δυνατό να συνδεθούν με την περιοχή γύρω από το γραφικό
 @msg	`width` must be from {lo} to {hi} pt	Το `width` πρέπει να είναι από {lo} έως {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	Το `count` πρέπει να είναι ακέραιος από 1 έως {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Πλαίσιο και γραμμές αφαίρεσης περισσευμάτων…
+	Weed Box and Lines	Πλαίσιο και γραμμές αφαίρεσης περισσευμάτων
+	Margin	Περιθώριο
+	Box	Πλαίσιο
+	Swatch	Δείγμα χρώματος

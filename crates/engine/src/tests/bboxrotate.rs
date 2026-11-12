@@ -375,3 +375,72 @@ fn the_selection_tool_reports_a_transforming_drag() {
     assert!(s.tool_busy() && !s.tool_transforming());
     s.pointer(&ev(PointerKind::Up, 550.0, 450.0), v).unwrap();
 }
+
+/// With General › Show Bounding Box While Moving and Drawing on, a move drag's bounding box is the
+/// box measured once, at the drag's start, offset by each step's move: with Real-time Drawing on
+/// and off, the later steps do not measure the selection again. Off, only the Selection tool with
+/// Real-time Drawing off gives a box (the art waits for the release).
+#[test]
+fn a_move_drag_measures_the_bounding_box_once() {
+    for (real_time, while_moving) in [(true, true), (false, true), (true, false), (false, false)] {
+        let what = format!("real time {real_time}, box while moving {while_moving}");
+        let mut s = session();
+        let id = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+        sel(&mut s, &[id]);
+        s.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": real_time})).unwrap();
+        s.execute("prefs.set", &json!({"key": "boundingBoxWhileMovingAndDrawing", "value": while_moving})).unwrap();
+        let v = ViewInfo::default();
+        s.select_tool("selection", v).unwrap();
+        let ev = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y).with_mods(Mods::default());
+        s.pointer(&ev(PointerKind::Down, 150.0, 125.0), v).unwrap();
+        assert_eq!(s.move_drag_box(), None, "{what}: not before the drag begins");
+        s.pointer(&ev(PointerKind::Drag, 170.0, 135.0), v).unwrap();
+        if real_time && !while_moving {
+            assert_eq!(s.move_drag_box(), None, "{what}: no box during the move");
+            s.pointer(&ev(PointerKind::Up, 170.0, 135.0), v).unwrap();
+            continue;
+        }
+        assert_eq!(s.move_drag_box(), Some(OrientedBox::aligned(Rect::new(120.0, 110.0, 220.0, 160.0))), "{what}");
+        // The measurement made at the drag's start is the one each step offsets: replaced by a
+        // stand-in, the next step's box is the stand-in moved.
+        let it = s.doc_mut().unwrap().interaction.as_mut().unwrap();
+        assert_eq!(it.move_box.get(), Some(&Some(OrientedBox::aligned(Rect::new(100.0, 100.0, 200.0, 150.0)))), "{what}: measured at the start");
+        it.move_box = std::sync::OnceLock::from(Some(OrientedBox::aligned(Rect::new(0.0, 0.0, 10.0, 10.0))));
+        s.pointer(&ev(PointerKind::Drag, 200.0, 165.0), v).unwrap();
+        assert_eq!(s.move_drag_box(), Some(OrientedBox::aligned(Rect::new(50.0, 40.0, 60.0, 50.0))), "{what}: not measured again");
+        s.pointer(&ev(PointerKind::Up, 200.0, 165.0), v).unwrap();
+        assert_eq!(s.move_drag_box(), None, "{what}: none after the release");
+        assert_eq!(selection_box(&s), OrientedBox::aligned(Rect::new(150.0, 140.0, 250.0, 190.0)), "{what}: moved");
+    }
+}
+
+/// A shape being drawn has no preview applied after a step that failed (with Real-time Drawing on,
+/// also when the failed command left a document other than the interaction's snapshot), and with
+/// Real-time Drawing off, where the document stays at the snapshot. A successful step with Real-time
+/// Drawing on applies it.
+#[test]
+fn a_shape_being_drawn_reports_whether_a_preview_is_applied() {
+    for real_time in [true, false] {
+        let what = format!("real time {real_time}");
+        let mut s = session();
+        s.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": real_time})).unwrap();
+        let v = ViewInfo::default();
+        s.select_tool("rectangle", v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 160.0, 140.0), v).unwrap();
+        assert_eq!(s.interaction_unapplied(), !real_time, "{what}: after a step that succeeded");
+        assert!(s.preview("shape.rectangle", &json!({"x": "left"})).is_err(), "{what}: the preview fails");
+        assert!(s.interaction_unapplied(), "{what}: after a step that failed");
+        if real_time {
+            // A failed command that copied the document on write leaves another document than the
+            // snapshot; no preview is applied all the same.
+            let st = s.doc_mut().unwrap();
+            st.doc = std::sync::Arc::new((*st.doc).clone());
+            assert!(s.interaction_unapplied(), "{what}: a failed step with a copied document");
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 180.0, 150.0), v).unwrap();
+        assert_eq!(s.interaction_unapplied(), !real_time, "{what}: the next step succeeded");
+        s.pointer(&PointerEvent::new(PointerKind::Up, 180.0, 150.0), v).unwrap();
+        assert!(!s.interaction_unapplied(), "{what}: no interaction after the release");
+    }
+}

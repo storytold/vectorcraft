@@ -881,6 +881,17 @@ font-technology	Variable	Variabla
 	The selected character's font is not available.	Typsnittet för det markerade tecknet är inte tillgängligt.
 	No alternates for the selected character.	Inga alternativ för det markerade tecknet.
 	Double-click to replace	Dubbelklicka för att ersätta
+	Select one character with the Type tool first.	Markera först ett tecken med textverktyget.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} är en glyf i {font}, inte i det typsnitt den markerade texten är satt i ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} hör till {base} (U+{base_code}) {place}; din markering är {sel} (U+{code}).
+	at the start of a word	i början av ett ord
+	in the middle of a word	mitt i ett ord
+	at the end of a word	i slutet av ett ord
+	standing alone	när det står ensamt
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} är inget alternativ till {sel} (U+{code}) som det står i sitt ord.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dubbelklicka för att infoga {base} (U+{code}) i stället: en presentationsform ansluter inte, bokstaven gör det.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) infogades i stället för en presentationsform: typsnittet ansluter det till grannarna efter position.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Ingen OpenType-funktion ritar den här glyfen här, så den ersätter tecknets glyf och ansluter kanske inte till grannteckenen.
 	Double-click to insert	Dubbelklicka för att infoga
 	Double-click to rename	Dubbelklicka för att byta namn
 	Double-click to target the contents	Dubbelklicka för att välja innehållet som mål
@@ -1935,6 +1946,8 @@ font-technology	Variable	Variabla
 	Metallic Gradients	Metalliska gradienter
 	Meters	Meter
 	Method:	Metod:
+	Pad	Förläng
+	Repeats	Upprepningar
 	Millimeters	Millimeter
 	Minify	Minifiera
 	Minimal	Minimal
@@ -2866,6 +2879,7 @@ digits	Malayalam	Malayalam
 	Rotate View Tool	Verktyget Rotera vy
 	Trackpad Gesture to Rotate View	Rotera vyn med en gest på styrplattan
 	Hold a Tool Shortcut to Use the Tool Temporarily	Håll ned ett verktygs kortkommando för att använda verktyget tillfälligt
+	Show Bounding Box While Moving and Drawing	Visa begränsningsram vid flyttning och ritning
 	Rotate…	Rotera…
 	Rotation	Rotation
 	Roughen…	Ojämn…
@@ -3340,6 +3354,9 @@ digits	Malayalam	Malayalam
 	Split Path	Dela bana
 	spot	dekor
 	Spot Color	Dekorfärg
+	Spot Color Objects	Objekt med dekorfärger
+	Pattern Objects	Objekt med mönster
+	Gradient Objects	Objekt med gradienter
 	Spot Colors	Dekorfärger
 	Spot Colors…	Dekorfärger…
 	Spread:	Spridning:
@@ -4310,6 +4327,7 @@ axis	Both	Båda
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` är inte en färg som "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: högst {MAX_TABLE} färger
 @msg	command `{0}` is not available right now: {1}	kommandot `{0}` är inte tillgängligt just nu: {1}
+@msg	command `{id}` is not available right now	kommandot `{id}` är inte tillgängligt just nu
 @msg	compound paths can only contain paths	sammansatta banor kan bara innehålla banor
 @msg	compressed (RLE) bitmaps can't be read yet	komprimerade (RLE) bitmappar kan inte läsas än
 @msg	damaged	skadad
@@ -5847,6 +5865,8 @@ theme	Appearance	Utseende
 @msg	the screen color sampler is already open	färghämtningen från skärmen är redan öppen
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	det här är en PostScript-fil (en .ai sparad i ett äldre format eller utan PDF-kompatibilitet, eller en EPS-fil), inte en PDF: Fil › Öppna och Fil › Placera läser den som EPS
 @msg	this system has no screen color sampler	det här systemet saknar färghämtning från skärmen
+@msg	the screen color sampler did not answer	färghämtningen från skärmen svarade inte
+@msg	the screen color sampler failed	färghämtningen från skärmen misslyckades
 @msg	the image can't be read as a texture	bilden kan inte läsas som en textur
 
 # User Interface › Accent Color
@@ -6111,6 +6131,9 @@ axis	Y Axis	Y-axel
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gäller gradientfyllningar (paint.setFill)
 @msg	`dither` must be true or false	`dither` måste vara true eller false
 @msg	`method` must be classic or perceptual	`method` måste vara classic eller perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` måste vara pad, repeat eller reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` måste vara ett heltal från 1 till {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gäller för linjära, radiella och koniska gradienter och rombgradienter
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Installera ”{name}”, som begär en stor beräkningsbudget?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Varje körning kan ta upp till {minutes} minuter och göra {times} gånger så mycket arbete som andra plugins får. Den körs i bakgrunden och du kan avbryta den.
@@ -8372,7 +8395,7 @@ digits	Hindi	Hindi
 @msg	width must be positive	width måste vara positiv
 @msg	width out of range	bredden ligger utanför tillåtet omfång
 @msg	width/height must be > 0	bredd/höjd måste vara > 0
-@msg	width/height must be positive and within the canvas	bredd/höjd måste vara positiva och inom arbetsytan
+@msg	width and height must be more than 0 and at most {limit}	bredd och höjd måste vara större än 0 och högst {limit}
 @msg	x and y must be finite numbers	x och y måste vara ändliga tal
 @msg	x and y must be given together	x och y måste anges tillsammans
 @msg	zone needs an anchor: dock beside a panel with anchor, or in a new dock column with side (Start or End)	zone behöver ett ankare: docka bredvid en panel med anchor eller i en ny dockkolumn med side (Start eller End)
@@ -8481,3 +8504,8 @@ digits	Hindi	Hindi
 @msg	Some islands could not be joined to the area around the art	Vissa öar kunde inte förbindas med området runt teckningen
 @msg	`width` must be from {lo} to {hi} pt	`width` måste vara från {lo} till {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` måste vara ett heltal från 1 till {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Rensningsram och rensningslinjer…
+	Weed Box and Lines	Rensningsram och rensningslinjer
+	Margin	Marginal
+	Box	Ram
+	Swatch	Färgruta

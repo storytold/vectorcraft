@@ -6326,6 +6326,7 @@ dependencies = [
  "craft-window",
  "eframe",
  "egui",
+ "futures-lite",
  "image",
  "log",
  "muda",
