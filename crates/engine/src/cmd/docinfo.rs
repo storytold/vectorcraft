@@ -1380,7 +1380,7 @@ mod tests {
 
     /// Spot Color Objects leaves out a fill or stroke at an opacity of 0, which prints no ink, and
     /// keeps the object while another of its fills or strokes prints the spot color. Gradient
-    /// Objects still lists a clear gradient fill.
+    /// Objects leaves out a clear gradient fill as well.
     #[test]
     fn spot_color_objects_skip_clear_fills_and_strokes() {
         let mut s = Session::new();
@@ -1412,7 +1412,7 @@ mod tests {
                 s.execute("appearance.setItem", &json!({"index": index, "opacity": 0})).unwrap();
             }
         }
-        assert_eq!(spots(&mut s), (vec![], None, Some(1)));
+        assert_eq!(spots(&mut s), (vec![], None, None));
     }
 
     /// Document Info › Objects counts an object with a gradient or a pattern on both its fill and
