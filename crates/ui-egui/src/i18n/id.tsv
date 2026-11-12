@@ -248,6 +248,10 @@
 	Blend Options…	Opsi blend…
 	Expand	Perluas
 	Replace Spine	Ganti spine
+	Create Spine	Buat spine
+	Create Spine:	Buat spine:
+	Always	Selalu
+	Never	Tidak pernah
 	Reverse Spine	Balikkan spine
 	Reverse Front to Back	Balikkan depan ke belakang
 	Envelope Distort	Distorsi amplop
@@ -754,6 +758,14 @@
 	Damp Paper	Kertas Basah
 	Outlines and Rules	Garis luar dan garis
 	Hand-Drawn	Gambar tangan
+	Painted and Sketched	Lukisan dan sketsa
+	Washed Blue	Biru luntur
+	Bristle Ochre	Oker kuas kering
+	Pastel Heather	Ungu pastel
+	Charcoal Shade	Bayangan arang
+	Ink Contour	Kontur tinta
+	Wet Ink	Tinta basah
+	Fine Pen	Pena halus
 	Gradient Finishes	Finishing gradien
 	Shape Effects	Efek bentuk
 	Blends and Transparency	Blend dan transparansi
@@ -2194,6 +2206,8 @@ digits	Malayalam	Malayalam
 	Export Selected Art Only	Ekspor hanya karya seni terpilih
 	Number of Colors:	Jumlah warna:
 	Raster File Format:	Format file raster:
+	Include Placed Images	Sertakan gambar yang ditempatkan
+	Include Fill Hatches	Sertakan arsiran isian
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	Warna sejati memerlukan versi 2004 atau lebih baru: yang ditulis adalah warna terdekat dari 256 warna.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Teks menjadi garis luar, dan stroke yang tidak dapat digambar oleh garis CAD menjadi bentuk terisi.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Teks tetap berupa teks, dan setiap stroke menjadi garis dengan ketebalan dan pola putus-putusnya.
@@ -5853,6 +5867,7 @@ swatch	Bright Violet	Violet cerah
 	Ruby	Ruby
 	Geometric Guides	Panduan Geometris
 	Geometric Patterns	Pola Geometris
+	Grit Textures	Tekstur Butiran
 	Ease In	Awal Lambat
 	Ease Out	Akhir Lambat
 	Ease In Out	Awal dan Akhir Lambat
@@ -5906,6 +5921,7 @@ axis	Y Axis	Sumbu Y
 	Version: {version}	Versi: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Instal “{name}” sebagai pengganti plug-in dengan ID yang sama?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	File ini bukan plug-in yang sebelumnya diinstal dengan ID ini. File ini mendapatkan pengaturan dan cache yang disimpan untuk ID tersebut.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Otomatisasi meminta untuk menginstal plug-in ini. Untuk menginstalnya, pilih Objek › Plug-in › Instal plug-in… sendiri.
 	File SHA-256: {hash}	SHA-256 file: {hash}
 	Read the objects it is given	Membaca objek yang diberikan kepadanya
 	Change, add and delete objects in the document	Mengubah, menambah, dan menghapus objek dalam dokumen
@@ -6399,6 +6415,8 @@ breakText	Glyphs	Glif
 	Delete the selected brushes?	Hapus kuas yang dipilih?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Stroke menggunakan satu atau beberapa kuas ini. Lepaskan kuas dari stroke tersebut dan hapus kuasnya?
 	Remove Strokes	Hapus Stroke
+	Place Brush Art	Tempatkan karya seni kuas
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` tidak memiliki karya seni (hanya kuas sebar, kuas seni, dan kuas pola yang memilikinya)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Alat penyusunan
 	Arrange in Grid…	Susun dalam grid…

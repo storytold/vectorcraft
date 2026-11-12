@@ -82,7 +82,13 @@ impl Session {
             && params.get("ids").is_none_or(Value::is_null)
             && params.get("id").and_then(Value::as_str).is_some_and(|e| !e.starts_with('$'));
         if cmd::params::id_stands_for_ids(spec.params) && !effect_named && self.active().is_some() {
-            cmd::given_objects(self, params, id)?;
+            // `effect.refreshDeferred` looks its objects up itself: they can also be in the art of
+            // a symbol, pattern, brush or opacity mask.
+            if id == "effect.refreshDeferred" {
+                cmd::given_object_ids(params, id)?;
+            } else {
+                cmd::given_objects(self, params, id)?;
+            }
         }
         if SELECTS_GIVEN_IDS.contains(&id) {
             self.check_given_ids(id, params)?;

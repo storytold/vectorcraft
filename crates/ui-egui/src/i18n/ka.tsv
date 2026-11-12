@@ -220,6 +220,10 @@
 	Blend Options…	გადასვლის პარამეტრები…
 	Expand	გაშლა
 	Replace Spine	ხერხემლის ჩანაცვლება
+	Create Spine	ხერხემლის შექმნა
+	Create Spine:	ხერხემლის შექმნა:
+	Always	ყოველთვის
+	Never	არასოდეს
 	Reverse Spine	ხერხემლის შებრუნება
 	Reverse Front to Back	რიგის შებრუნება წინიდან უკან
 	Envelope Distort	გარსით დეფორმაცია
@@ -714,6 +718,14 @@
 	Damp Paper	ნესტიანი ქაღალდი
 	Outlines and Rules	კონტურები და ხაზები
 	Hand-Drawn	ხელით დახატული
+	Painted and Sketched	დახატული და ესკიზური
+	Washed Blue	გარეცხილი ლურჯი
+	Bristle Ochre	ფუნჯის ოხრა
+	Pastel Heather	პასტელის იისფერი
+	Charcoal Shade	ნახშირის ჩრდილი
+	Ink Contour	მელნის კონტური
+	Wet Ink	სველი მელანი
+	Fine Pen	წვრილი კალამი
 	Gradient Finishes	გრადიენტული ზედაპირები
 	Shape Effects	ფიგურის ეფექტები
 	Blends and Transparency	გადასვლები და გამჭვირვალობა
@@ -2117,6 +2129,8 @@ digits	Malayalam	მალაიალამური
 	Export Selected Art Only	მხოლოდ მონიშნული ნახატის ექსპორტირება
 	Number of Colors:	ფერების რაოდენობა:
 	Raster File Format:	რასტრული ფაილის ფორმატი:
+	Include Placed Images	განთავსებული გამოსახულებების ჩართვა
+	Include Fill Hatches	შევსებების დაშტრიხვის ჩართვა
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	სრულ ფერს სჭირდება 2004 ან უფრო ახალი ვერსია: იწერება 256 ფერიდან უახლოესი.
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	ტექსტი კონტურებად იქცევა, ხოლო ის კონტურები, რომლებსაც CAD-ხაზი ვერ ხატავს, შევსებულ ფიგურებად.
 	Type stays text, and every stroke is a line with its lineweight and dashes.	ტექსტი ტექსტად რჩება, ყოველი კონტური კი ხაზია თავისი სისქითა და ტირეებით.
@@ -4027,6 +4041,7 @@ font-technology	Variable	ცვლადი
 @msg	`globalAdjust` must be an object	`globalAdjust` უნდა იყოს ობიექტი
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` უნდა იყოს 1, 3 ან 5
 @msg	`stops` must be an array	`stops` უნდა იყოს მასივი
+@msg	`{key}` must be an array	`{key}` უნდა იყოს მასივი
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` უნდა იყოს SVG-ის პარამეტრების ობიექტი (იხ. document.formats)
 @msg	`{_1}` is no save command	`{_1}` შენახვის ბრძანება არ არის
 @msg	`{area}` is no recovery area name	`{area}` აღდგენის არის სახელი არ არის
@@ -5959,6 +5974,7 @@ imageTrace	Outline	კონტური
 	Ruby	რუბი
 	Geometric Guides	გეომეტრიული მიმმართველები
 	Geometric Patterns	გეომეტრიული პატერნები
+	Grit Textures	მარცვლოვანი ტექსტურები
 	Ease In	ნელი დასაწყისი
 	Ease Out	ნელი დასასრული
 	Ease In Out	ნელი დასაწყისი და დასასრული
@@ -6028,6 +6044,8 @@ axis	Y Axis	Y ღერძი
 	Version: {version}	ვერსია: {version}
 	Install “{name}” in place of the plug-in with the same ID?	დავაყენოთ „{name}“ იმავე ID-ის მქონე პლაგინის ნაცვლად?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	ეს ფაილი არ არის ამ ID-ით ადრე დაყენებული პლაგინი. ის მიიღებს ამ ID-სთვის შენახულ პარამეტრებს და ქეშს.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	ავტომატიზაციამ ამ პლაგინის დაყენება მოითხოვა. მის დასაყენებლად აირჩიეთ ობიექტი › პლაგინები › პლაგინის დაყენება… თავად.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	ავტომატიზაციამ ამ პლაგინის დაყენება მოითხოვა. მის დასაყენებლად აირჩიეთ ობიექტი › პლაგინები › პლაგინის დაყენება… თავად.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}“ სხვა მოდულია, ვიდრე პლაგინი ID-ით {_1}, და მიიღებდა მისთვის შენახულ პარამეტრებს და ქეშს: მომხმარებლის თანხმობის შემდეგ დააყენეთ ის `replace: true` პარამეტრით
 	File SHA-256: {hash}	ფაილის SHA-256: {hash}
 	Read the objects it is given	მიღებული ობიექტების წაკითხვა
@@ -6090,6 +6108,12 @@ axis	Y Axis	Y ღერძი
 @msg	command {name}: `label` must be 1-64 printable characters	ბრძანება {name}: `label` უნდა შედგებოდეს 1-64 დასაბეჭდი სიმბოლოსგან
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	ბრძანება {name}: გამოიყენეთ 1-{MAX_COMMAND_ID} სიმბოლოიანი id a-z 0-9 _ სიმბოლოებიდან, რომელიც ასოთი იწყება
 @msg	command {name}: {e}	ბრძანება {name}: {e}
+@msg	manifest: {e}	მანიფესტი: {e}
+@msg	manifest: {e} at line {line} column {column}	მანიფესტი: {e} (სტრიქონი {line}, სვეტი {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` უნდა იყოს ბრძანებების სია, თითოეული `id`-ით და `label`-ით
+@msg	command {name} must be an object with an `id` and a `label`	ბრძანება {name} უნდა იყოს ობიექტი `id`-ით და `label`-ით
+@msg	missing field `{key}`	აკლია ველი `{key}`
+@msg	duplicate field `{key}`	ველი `{key}` ორჯერაა
 @msg	only a filter or a live effect declares `commands`	`commands`-ს მხოლოდ ფილტრი ან ცოცხალი ეფექტი აცხადებს
 @msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	მოდულს არ აქვს `hash`-ში მითითებული SHA-256: არაფერი დაყენებულა
@@ -6527,6 +6551,10 @@ anchor	Points:	წერტილები:
 @msg	features lists at most {max} tags	features შეიძლება შეიცავდეს არაუმეტეს {max} ტეგს
 @msg	unknown OpenType feature `{t}`	უცნობი OpenType შესაძლებლობა `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} უნდა იყოს 0-ზე მეტი და არაუმეტეს {max}-ისა რიცხვი
+@msg	{label} must be at most {max} characters	{label} უნდა შეიცავდეს არაუმეტეს {max} სიმბოლოს
+@msg	{label} must be one character	{label} უნდა იყოს ერთი სიმბოლო
+@msg	at most {max} tab stops	არაუმეტეს {max} ტაბულაციის გაჩერება
+@msg	unknown align `{other}`	უცნობი სწორება `{other}`
 @msg	no character style `{name}`	სიმბოლოს სტილი `{name}` ვერ მოიძებნა
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6688,6 +6716,8 @@ breakText	Glyphs	გლიფები
 	Delete the selected brushes?	წაიშალოს არჩეული ფუნჯები?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	კონტურები იყენებს ამ ფუნჯებიდან ერთს ან მეტს. მოიხსნას ფუნჯები ამ კონტურებიდან და წაიშალოს ფუნჯები?
 	Remove Strokes	კონტურების მოხსნა
+	Place Brush Art	ფუნჯის ნახატის განთავსება
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` ნახატი არ აქვს (ნახატი მხოლოდ გაფანტვის, მხატვრულ და პატერნის ფუნჯებს აქვს)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	განლაგების ხელსაწყოები
 	Arrange in Grid…	ბადეში განლაგება…

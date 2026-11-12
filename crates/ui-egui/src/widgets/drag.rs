@@ -30,7 +30,8 @@ pub enum PanelDrag {
     /// `place`).
     LibrarySymbol { library: String, name: String },
     /// A Brushes panel brush (`def`: its definition, for the chip at the pointer): the path it is
-    /// dropped on takes it (`brush.apply`).
+    /// dropped on takes it (`brush.apply`); dropped where there is no art, a scatter, art or pattern
+    /// brush places a copy of its art there (`brush.placeArt`).
     Brush { name: String, def: serde_json::Value },
     /// A brush of a brush library panel (`name`: its name in `library`): the path it is dropped on
     /// takes it (`brush.addFromLibrary` with `apply`), and the Brushes panel adds it.

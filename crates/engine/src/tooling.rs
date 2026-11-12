@@ -751,6 +751,27 @@ impl Session {
         self.apply_actions(acts).map(drop)
     }
 
+    /// The rulers' origin dragged out of their corner, whatever the tool, with the pointer at `p` in
+    /// document space (none off the canvas): where it goes, snapped as a drawn point is
+    /// ([`vectorcraft_tools::rulerguide::OriginDrag`]), the targets gathered on the drag's first
+    /// call. It changes nothing: the caller sets the origin where the button is released
+    /// (`document.setRulerOrigin`) and ends the drag ([`Session::end_ruler_origin_drag`]).
+    pub fn ruler_origin_drag(&mut self, p: Option<Point>, view: ViewInfo) -> Option<Point> {
+        let drag = match self.ruler_origin.take() {
+            Some(d) => Some(d),
+            None => self.with_tool_cx(view, |_, cx| Some(vectorcraft_tools::rulerguide::OriginDrag::new(cx))),
+        };
+        let Some(mut drag) = drag else { return p };
+        let at = self.with_tool_cx(view, |_, cx| drag.pointer(cx, p));
+        self.ruler_origin = Some(drag);
+        at
+    }
+
+    /// The drag of the rulers' origin ended, released or cancelled: its guides go.
+    pub fn end_ruler_origin_drag(&mut self) {
+        self.ruler_origin = None;
+    }
+
     /// Time passed while the pointer button is held (`dt` seconds; see [`Tool::tick`]): the
     /// desktop app ticks every frame of a press, agents with `holdMs` on a pointer event.
     pub fn tool_tick(&mut self, dt: f64, view: ViewInfo) -> Result<Vec<UiRequest>> {
@@ -1111,6 +1132,9 @@ impl Session {
         if let Some(g) = self.ruler_guide.take() {
             v.extend(self.with_tool_cx(view, |_, cx| g.overlays(cx)));
             self.ruler_guide = Some(g);
+        }
+        if let Some(d) = &self.ruler_origin {
+            v.extend(d.overlays());
         }
         let deferred_preview = self.unapplied_interaction_preview();
         if let Some(d) = self.active() {

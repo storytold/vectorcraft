@@ -1468,6 +1468,14 @@ file-filter	Templates	Шаблони
 	Hair Space	Волосяна шпація
 	Hand Tool	Інструмент «Рука»
 	Hand-Drawn	Намальований від руки
+	Painted and Sketched	Мальовані та ескізні
+	Washed Blue	Розмитий синій
+	Bristle Ochre	Охра пензлем
+	Pastel Heather	Пастельний верес
+	Charcoal Shade	Тінь вугіллям
+	Ink Contour	Контур тушшю
+	Wet Ink	Мокра туш
+	Fine Pen	Тонке перо
 	Handles	Маркери
 	Hard Light	Жорстке світло
 	Hard Mix	Жорстке накладання
@@ -2675,6 +2683,8 @@ digits	Malayalam	Малаялам
 	Range:	Діапазон:
 	Raster Effects	Растрові ефекти
 	Raster File Format:	Формат растрового файлу:
+	Include Placed Images	Включати розміщені зображення
+	Include Fill Hatches	Включати штрихування заливок
 	Raster Sample Size:	Розмір растрового зразка:
 	Raster/Vector Balance:	Баланс растрових/векторних:
 	Rasterize	Растеризувати
@@ -2856,6 +2866,10 @@ digits	Malayalam	Малаялам
 	Replace Font	Замінити шрифт
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Замініть його іншим файлом або ігноруйте: зображення продовжать показувати попередній перегляд, збережений з документом.
 	Replace Spine	Замінити вісь
+	Create Spine	Створити вісь
+	Create Spine:	Створити вісь:
+	Always	Завжди
+	Never	Ніколи
 	Replace Symbol	Замінити символ
 	Reset Transformation	Скинути трансформацію
 	Replace With Font	Замінити шрифтом
@@ -4280,6 +4294,7 @@ axis	Both	Обидві
 @msg	`globalAdjust` must be an object	`globalAdjust` має бути об’єктом
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` має бути 1, 3 або 5
 @msg	`stops` must be an array	`stops` має бути масивом
+@msg	`{key}` must be an array	`{key}` має бути масивом
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` має бути об’єктом параметрів SVG (див. document.formats)
 @msg	`{_1}` is no save command	`{_1}` не є командою збереження
 @msg	`{area}` is no recovery area name	`{area}` не є ім’ям області відновлення
@@ -5622,6 +5637,7 @@ lighting	Light	Світло
 	Ruby	Рубі
 	Geometric Guides	Геометричні напрямні
 	Geometric Patterns	Геометричні візерунки
+	Grit Textures	Зернисті текстури
 	Ease In	Плавний початок
 	Ease Out	Плавне завершення
 	Ease In Out	Плавний початок і завершення
@@ -5682,6 +5698,8 @@ axis	Y Axis	Вісь Y
 	Version: {version}	Версія: {version}
 	Install “{name}” in place of the plug-in with the same ID?	Встановити «{name}» замість модуля з тим самим ID?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Цей файл не є модулем, установленим раніше з цим ID. Він отримає налаштування й кеш, збережені для цього ID.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Автоматизація попросила встановити цей модуль. Щоб установити його, виберіть «Об’єкт › Модулі › Встановити модуль…» самостійно.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Автоматизація попросила встановити цей модуль. Щоб установити його, виберіть «Об’єкт › Модулі › Встановити модуль…» самостійно.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	«{name}» відрізняється від модуля з ID {_1} і отримав би збережені для нього налаштування й кеш: встановіть його з `replace: true`, коли користувач погодиться
 	File SHA-256: {hash}	SHA-256 файлу: {hash}
 	Read the objects it is given	Читати передані йому об’єкти
@@ -5744,6 +5762,12 @@ axis	Y Axis	Вісь Y
 @msg	command {name}: `label` must be 1-64 printable characters	команда {name}: `label` має містити 1-64 друковані символи
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	команда {name}: використайте id з 1-{MAX_COMMAND_ID} символів a-z 0-9 _, що починається з літери
 @msg	command {name}: {e}	команда {name}: {e}
+@msg	manifest: {e}	маніфест: {e}
+@msg	manifest: {e} at line {line} column {column}	маніфест: {e} (рядок {line}, стовпець {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` має бути списком команд, кожна з `id` і `label`
+@msg	command {name} must be an object with an `id` and a `label`	команда {name} має бути об'єктом з `id` і `label`
+@msg	missing field `{key}`	немає поля `{key}`
+@msg	duplicate field `{key}`	поле `{key}` вказано двічі
 @msg	only a filter or a live effect declares `commands`	`commands` оголошує лише фільтр або динамічний ефект
 @msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	модуль має не той SHA-256, що вказаний у `hash`: нічого не встановлено
@@ -6109,6 +6133,10 @@ anchor	Points:	Точки:
 @msg	features lists at most {max} tags	features містить не більше {max} тегів
 @msg	unknown OpenType feature `{t}`	невідома функція OpenType `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} має бути числом більше 0 і не більше {max}
+@msg	{label} must be at most {max} characters	{label} має містити не більше {max} символів
+@msg	{label} must be one character	{label} має бути одним символом
+@msg	at most {max} tab stops	не більше {max} позицій табуляції
+@msg	unknown align `{other}`	невідоме вирівнювання `{other}`
 @msg	no character style `{name}`	Стиль символів `{name}` не знайдено
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6271,6 +6299,8 @@ breakText	Glyphs	Гліфи
 	Delete the selected brushes?	Видалити вибрані пензлі?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Обведення використовують один або кілька з цих пензлів. Забрати пензлі з цих обведень і видалити пензлі?
 	Remove Strokes	Забрати обведення
+	Place Brush Art	Розмістити малюнок пензля
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	у `{name}` немає малюнка (він є лише в пензлів-розпорошень, художніх і візерункових пензлів)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Інструменти розміщення
 	Arrange in Grid…	Розмістити сіткою…

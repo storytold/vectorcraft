@@ -1,8 +1,8 @@
 //! The Blend panel drawn headless: Window › Blend opens it, and its controls do nothing until the
 //! selection allows them. Make needs two or more objects, Spacing and Orientation need a blend or
-//! two or more objects, and the other buttons need a blend. Make blends the selection, Spacing and
-//! Orientation edit the selected blend through `object.blend.options`, and each other button runs
-//! its Object › Blend command.
+//! two or more objects, and the other buttons need a blend. Make blends the selection, Create Spine
+//! sets whether new blends get a spine, Spacing and Orientation edit the selected blend through
+//! `object.blend.options`, and each other button runs its Object › Blend command.
 
 use egui::{Event, Pos2, Rect, pos2, vec2};
 use serde_json::json;
@@ -39,6 +39,11 @@ impl Frames {
 
     /// The center of the text `label` the panel draws.
     fn text(&mut self, app: &mut VectorcraftApp, label: &str) -> Pos2 {
+        self.find_text(app, label).unwrap_or_else(|texts| panic!("no {label:?} in {texts:?}"))
+    }
+
+    /// The center of the text `label` the panel draws, or every text it draws.
+    fn find_text(&mut self, app: &mut VectorcraftApp, label: &str) -> Result<Pos2, Vec<(String, Rect)>> {
         self.run(app, vec![]);
         let out = self.run(app, vec![]);
         let mut texts = vec![];
@@ -50,7 +55,7 @@ impl Frames {
             }
         }
         out.shapes.iter().for_each(|c| collect(&c.shape, &mut texts));
-        texts.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("no {label:?} in {texts:?}")).1.center()
+        texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).ok_or(texts)
     }
 
     /// The center of the button that screen readers name `label`.
@@ -124,7 +129,19 @@ fn window_blend_opens_the_panel() {
     crate::menus::invoke(&mut app, "window.panel", item.params.clone());
     assert!(crate::panel_docking::showing(&app.ui, ID));
     let text = crate::tests_labels::painted_text(&mut app, |app, ui| super::show_icon_panel(app, ui, ID));
-    for label in ["Make", "Spacing:", "Orientation:", "Direction:", "Reverse Front to Back", "Reverse Spine", "Replace Spine", "Expand", "Release"] {
+    for label in [
+        "Make",
+        "Create Spine:",
+        "Auto",
+        "Spacing:",
+        "Orientation:",
+        "Direction:",
+        "Reverse Front to Back",
+        "Reverse Spine",
+        "Replace Spine",
+        "Expand",
+        "Release",
+    ] {
         assert!(text.contains(label), "{label} in {text}");
     }
     assert!(!text.contains("on the roadmap"), "{text}");
@@ -224,6 +241,39 @@ fn each_button_runs_its_blend_command() {
     f.click_text(&mut app, "Release");
     let objects = top(&app);
     assert!(objects.len() >= 2 && objects.iter().all(|(_, blend)| !blend), "the keys are back: {objects:?}");
+}
+
+#[test]
+fn create_spine_sets_what_new_blends_get_whatever_is_selected() {
+    let (mut app, id) = blended();
+    let (before, depth) = (spec(&app, id), undo_depth(&app));
+    let mode = |app: &mut VectorcraftApp| app.session.execute("object.blend.createSpine", &json!({})).unwrap()["mode"].clone();
+    let mut f = Frames::new();
+    f.text(&mut app, "Create Spine:");
+    f.click_text(&mut app, "Auto");
+    f.click_text(&mut app, "Never");
+    assert_eq!(mode(&mut app), "never");
+    assert_eq!((spec(&app, id), undo_depth(&app)), (before, depth), "the selected blend and the undo history stay as they were");
+    f.text(&mut app, "Never");
+    // Nothing selected: the dropdown still shows and sets the setting.
+    app.run("select.none", json!({})).unwrap();
+    f.click_text(&mut app, "Never");
+    f.click_text(&mut app, "Always");
+    assert_eq!(mode(&mut app), "always");
+    f.click_text(&mut app, "Always");
+    f.click_text(&mut app, "Never");
+    // A blend made now has no spine: Reverse Spine and easing are dimmed for it.
+    app.run("edit.undo", json!({})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    f.click_text(&mut app, "Make");
+    let (g, blend) = top(&app)[0];
+    assert!(blend && spec(&app, g).no_spine, "{:?}", top(&app));
+    let made = spec(&app, g);
+    let depth = undo_depth(&app);
+    f.click_text(&mut app, "Reverse Spine");
+    f.click_text(&mut app, "Ease In");
+    assert!(f.find_text(&mut app, "Ease Out In").is_err(), "the Type menu did not open");
+    assert_eq!((spec(&app, g), undo_depth(&app), app.ui.status.as_str()), (made, depth, ""), "nothing ran");
 }
 
 #[test]
