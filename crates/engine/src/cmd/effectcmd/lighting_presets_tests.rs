@@ -130,3 +130,17 @@ fn lighting_presets_refuse_revolve_classic() {
     assert_eq!(s.doc().unwrap().doc, before);
     assert!(!s.doc().unwrap().is_dirty());
 }
+
+#[test]
+fn lighting_presets_refuse_rotate_classic() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = s.execute("shape.rectangle", &json!({"x":100,"y":100,"width":80,"height":60})).unwrap()["id"].as_u64().unwrap();
+    s.execute("effect.apply", &json!({"effect":"threeD.classicRotate","item":null,"params":{"lightRotation":40}})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    let before = s.doc().unwrap().doc.clone();
+    let err = s.execute("effect.lightingPreset", &json!({"ids":[id],"index":0,"item":null,"preset":"diffuse"})).unwrap_err().to_string();
+    assert!(err.contains(&format!("object {id}: Rotate (Classic) at index 0 has no lighting presets")), "{err}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert!(!s.doc().unwrap().is_dirty());
+}

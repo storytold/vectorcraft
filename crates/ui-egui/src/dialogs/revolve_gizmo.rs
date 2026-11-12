@@ -24,11 +24,7 @@ pub(crate) fn lighting(d: &Dialog) -> bool {
 /// surface?
 fn lit(d: &Dialog) -> bool {
     let id = d.str("__effect");
-    if id == vectorcraft_effects::CLASSIC_EXTRUDE || id == CLASSIC_REVOLVE {
-        matches!(d.str("surface").as_str(), "diffuse" | "plastic")
-    } else {
-        d.bool("shade")
-    }
+    if vectorcraft_effects::is_classic_three_d(&id) { matches!(d.str("surface").as_str(), "diffuse" | "plastic") } else { d.bool("shade") }
 }
 
 pub(crate) fn hint(d: &Dialog) -> &'static str {

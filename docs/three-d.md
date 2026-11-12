@@ -141,7 +141,7 @@ them all. The members stay editable: moving or editing one reshapes the solids. 
 
 ## Clipping groups, blends and symbol instances
 
-Every 3D effect (Extrude & Bevel, Extrude & Bevel (Classic), Inflate, Rotate, Revolve and Revolve (Classic)) also applies to a clipping
+Every 3D effect (Extrude & Bevel, Extrude & Bevel (Classic), Inflate, Rotate, Rotate (Classic), Revolve and Revolve (Classic)) also applies to a clipping
 group, a blend or a symbol instance, alone or inside a group or layer. The help page says that effects apply to
 objects, groups or layers ([Apply and modify effects](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/apply-filter-effects/apply-and-modify-effects.html)),
 that a clipping mask hides everything outside its shape ([Clipping masks](https://helpx.adobe.com/illustrator/using/clipping-masks.html)),
@@ -279,7 +279,7 @@ Our reading:
   command is refused with "The 3D shadow is too complex; turn Shadows off or simplify the art", and a loaded
   file draws the source path.
 - Canvas, SVG and PDF exports draw the shadow, the art's bounds take it in, and Expand Appearance keeps it as a
-  path below the faces. Extrude & Bevel (Classic) and Revolve (Classic) have no shadow.
+  path below the faces. Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) have no shadow.
 
 ## Parameters (`effect.apply`, `effect.setParams`)
 
@@ -336,9 +336,10 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   outline crosses. An outline of tens of thousands of points that crosses nearly every cell (a comb of 4,000 teeth
   across the shape) is refused because the 3D surface is too complex; a closed path of 65,536 points round a
   circle builds.
-- **3D (Classic)**: Extrude & Bevel (Classic) and Revolve (Classic) are built, with their surface types and blend
-  steps. Revolve (Classic) sweeps the surface Revolve sweeps, at 64 segments for a full turn, and draws every face back
-  to front, so it has no Draw Hidden Faces setting. Rotate (Classic), the track cube, map art, Turntable and 3D export
+- **3D (Classic)**: Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) are built, with their surface
+  types and blend steps. Revolve (Classic) sweeps the surface Revolve sweeps, at 64 segments for a full turn, and draws
+  every face back to front, so it has no Draw Hidden Faces setting. Rotate (Classic) turns the plane Rotate turns, seen
+  from either side, with the No Shading and Diffuse surfaces only. The track cube, map art, Turntable and 3D export
   are separate, unbuilt items.
 
 Release measurements and a repeatable CLI scene are in [3D lighting performance](3d-lighting-performance.md).

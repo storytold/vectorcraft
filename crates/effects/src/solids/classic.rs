@@ -1,6 +1,6 @@
 //! Extrude & Bevel (Classic): the solid Extrude & Bevel builds from a path, drawn with the classic
 //! surfaces (Wireframe, No Shading, Diffuse and Plastic), their highlight, blend steps and shading
-//! color.
+//! color. Rotate (Classic): the plane Rotate turns, drawn with the No Shading and Diffuse surfaces.
 use std::sync::Arc;
 
 use serde_json::Value;
@@ -12,6 +12,10 @@ use vectorcraft_three_d::{Bevel, BevelShape, ClassicShading, ClassicSurface, Ext
 use crate::util::{flag, num, text};
 
 pub const CLASSIC_EXTRUDE: &str = "threeD.classicExtrude";
+pub const CLASSIC_ROTATE: &str = "threeD.classicRotate";
+
+/// The surfaces Rotate (Classic) takes: No Shading and Diffuse.
+pub const ROTATE_SURFACES: [&str; 2] = ["none", "diffuse"];
 
 /// The width of a Wireframe edge, in points.
 const WIRE: f64 = 0.5;
@@ -105,6 +109,29 @@ const FLAGS: [&str; 4] = ["cap", "bevelInside", "lightBehind", "drawHiddenFaces"
 /// `shadingCustom` name a surface, a shading color and a #rrggbb color.
 pub fn validate(p: &Value) -> Result<(), String> {
     validate_classic(CLASSIC_EXTRUDE, p, &RANGES, &FLAGS)
+}
+
+/// Rotate (Classic)'s numeric parameters: (key, lowest, highest, whole numbers only).
+const ROTATE_RANGES: [(&str, f64, f64, bool); 9] = [
+    ("rotationX", -180.0, 180.0, false),
+    ("rotationY", -180.0, 180.0, false),
+    ("rotationZ", -180.0, 180.0, false),
+    ("perspectiveAngle", 0.0, 160.0, false),
+    ("lightRotation", -180.0, 180.0, false),
+    ("lightHeight", 0.0, 90.0, false),
+    ("lightIntensity", 0.0, 100.0, false),
+    ("ambient", 0.0, 100.0, false),
+    ("blendSteps", 1.0, 256.0, true),
+];
+
+/// Check Rotate (Classic)'s parameters `p` (its defaults filled in) as [`validate`] checks Extrude &
+/// Bevel (Classic)'s, with `surface` No Shading or Diffuse only.
+pub fn validate_rotate(p: &Value) -> Result<(), String> {
+    validate_classic(CLASSIC_ROTATE, p, &ROTATE_RANGES, &["lightBehind"])?;
+    if p.get("surface").is_some_and(|v| !v.as_str().is_some_and(|s| ROTATE_SURFACES.contains(&s))) {
+        return Err(format!("`surface` must be one of {}", ROTATE_SURFACES.join(", ")));
+    }
+    Ok(())
 }
 
 /// Check the parameters `p` of classic 3D effect `id` (its defaults filled in): every key is one of

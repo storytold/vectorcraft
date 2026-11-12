@@ -1,5 +1,5 @@
 //! Compact controls for the 3D and Materials effects: Extrude & Bevel, Revolve, Inflate and Rotate,
-//! and Extrude & Bevel (Classic) and Revolve (Classic), whose own controls are in
+//! and Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic), whose own controls are in
 //! `three_d_classic`. The object and the rotation and light gizmos live on the artboard. All document changes run through the effect
 //! dialog's existing preview/commit commands.
 
@@ -146,11 +146,11 @@ pub(super) fn c3(s: &'static str) -> &'static str {
 }
 
 /// Extrude & Bevel, Inflate, Extrude & Bevel (Classic) and Revolve (Classic): Object, Rotation and
-/// Lighting tabs (Rotate has no Object tab). The rotation gizmo shows on the first two, the light
-/// gizmo on Lighting.
+/// Lighting tabs (Rotate and Rotate (Classic) have no Object tab). The rotation gizmo shows on the
+/// first two, the light gizmo on Lighting.
 fn solid_controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id: &str) {
-    let classic = id == CLASSIC_EXTRUDE || id == CLASSIC_REVOLVE;
-    let object = id == EXTRUDE || id == INFLATE || classic;
+    let classic = vectorcraft_effects::is_classic_three_d(id);
+    let object = id == EXTRUDE || id == INFLATE || id == CLASSIC_EXTRUDE || id == CLASSIC_REVOLVE;
     let mut tabs = vec![];
     if object {
         tabs.push(tl!("Object"));

@@ -540,6 +540,22 @@ fn classic_revolve_is_in_the_3d_classic_submenu() {
     assert!(at("Extrude & Bevel (Classic)…").unwrap() < at("Revolve (Classic)…").unwrap());
 }
 
+/// Effect › 3D and Materials › 3D (Classic) › Rotate (Classic)… opens its effect dialog, after
+/// Revolve (Classic)…, and nowhere else.
+#[test]
+fn classic_rotate_is_in_the_3d_classic_submenu() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let entries = menu_entries(&app);
+    let classic: Vec<_> = entries.iter().filter(|e| e.params.get("effect").and_then(Value::as_str) == Some("threeD.classicRotate")).collect();
+    assert_eq!(classic.len(), 1, "listed once");
+    let e = classic[0];
+    assert_eq!(e.path, ["Effect", "3D and Materials", "3D (Classic)"]);
+    assert_eq!((e.label.as_str(), e.command.as_deref()), ("Rotate (Classic)…", Some("effect.dialog")));
+    let at = |label: &str| entries.iter().position(|x| x.label == label && x.path.get(1).is_some_and(|p| p == "3D and Materials"));
+    assert!(at("Revolve (Classic)…").unwrap() < at("Rotate (Classic)…").unwrap());
+}
+
 /// A document's 25 views are all listed at the bottom of the View menu, by name, and the last
 /// one brings back its zoom, centre and rotation after the view changed.
 #[test]
