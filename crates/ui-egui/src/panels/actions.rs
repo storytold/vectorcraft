@@ -957,13 +957,15 @@ fn recording_start(app: &VectorcraftApp) -> Option<usize> {
 
 /// Where Stop Playing/Recording puts the steps of the recording in progress: the index of the set,
 /// and of the action New Action made for it, or None for the new action Stop adds after the set's
-/// last action. None when there is no recording, or no set to put them in.
+/// last action. None when there is no recording, no set to put them in, or the action New Action
+/// made for it was deleted, so that Stop keeps none of them.
 fn recording_target(app: &VectorcraftApp) -> Option<(usize, Option<usize>)> {
     let (set, ..) = app.ui.recording.as_ref()?;
-    let into = app.ui.recording_into;
-    let holder = into.and_then(|id| app.ui.action_sets.iter().position(|s| s.actions.iter().any(|a| a.id == id))).unwrap_or(*set);
-    let s = app.ui.action_sets.get(holder)?;
-    Some((holder, into.and_then(|id| s.actions.iter().position(|a| a.id == id))))
+    let Some(id) = app.ui.recording_into else {
+        app.ui.action_sets.get(*set)?;
+        return Some((*set, None));
+    };
+    app.ui.action_sets.iter().enumerate().find_map(|(holder, s)| Some((holder, Some(s.actions.iter().position(|a| a.id == id)?))))
 }
 
 /// The set that Stop Playing/Recording leaves when the recording in progress has recorded `steps`,
@@ -4729,6 +4731,30 @@ mod tests {
         assert!(app.ui.recording.is_some(), "the recording goes on");
         app.run(STOP_RECORDING, json!({})).unwrap();
         assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 1, "the scale's step is left out");
+        assert!(files::read_set(&files::write_set(&app.ui.action_sets[0]), "Test").is_ok());
+    }
+
+    /// When the action New Action made for the recording in progress is deleted, Stop
+    /// Playing/Recording keeps none of its steps, so no limit stops a recorded command, even with
+    /// the set's file at 8 MiB.
+    #[test]
+    fn a_deleted_recording_action_does_not_limit_recorded_commands() {
+        let (mut app, x) = app_with_three_moves();
+        let gone = Action::new("Gone", vec![]);
+        let id = gone.id;
+        app.ui.action_sets[0].actions.push(gone);
+        app.run(START_RECORDING, json!({})).unwrap();
+        app.ui.recording_into = Some(id);
+        app.ui.action_sets[0].actions.retain(|a| a.id != id);
+        let pad = |n: usize| ("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
+        app.ui.action_sets[0].actions[0].steps = vec![pad(0)];
+        let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
+        app.ui.action_sets[0].actions[0].steps = vec![pad(room)];
+        let before = x(&app);
+        app.run("object.move", json!({"dx": 1, "dy": 0})).unwrap();
+        assert_ne!(x(&app), before, "the move ran");
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        assert_eq!(app.ui.action_sets[0].actions.len(), 1, "no action is added");
         assert!(files::read_set(&files::write_set(&app.ui.action_sets[0]), "Test").is_ok());
     }
 
