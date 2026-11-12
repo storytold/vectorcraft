@@ -2864,13 +2864,14 @@ already walks Image Trace. Short agent entry points:
   the file at `path`, else a picked one, or the file's text `data`, adds its set after the other sets and returns
   `{set, name, actions}`. A set named like one already in the panel gets the next free number (`Print 2`), and the
   other sets and the current set stay as they are. An action set file (`.vcactions`) is JSON:
-  `{"format": "vcactions", "version": 1, 2 or 3, "name", "actions": [{"name", "steps": [{"command", "params", "excluded"?}]}]}`, each step
+  `{"format": "vcactions", "version": 1 to 4, "name", "actions": [{"name", "steps": [{"command", "params", "excluded"?}]}]}`, each step
   a command id and its params as `command.batch` takes them, or a stop: the command `action.stop` with
-  `{message, allowContinue}`. `excluded: true` preserves a step but omits it from playback;
-  an absent or false flag includes the step. Files with stops use version 3, and files with excluded steps and no stops
-  use version 2, so older builds refuse them
-  instead of playing the excluded steps or failing at a stop; other files use version 1. A file with another `format` or a `version` other than
-  1, 2 or 3, a stop whose message is not text or whose `allowContinue` is not true or false, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
+  `{message, allowContinue}`. A Select Object step is the command `select.byNote` with `{note, caseSensitive,
+  wholeWord}`. `excluded: true` preserves a step but omits it from playback;
+  an absent or false flag includes the step. Files with Select Object steps use version 4, files with stops and no
+  Select Object step use version 3, and files with excluded steps and neither use version 2, so older builds refuse them
+  instead of playing the excluded steps or failing at a stop or a Select Object step; other files use version 1. A file with another `format` or a `version` other than
+  1 to 4, a stop whose message is not text or whose `allowContinue` is not true or false, a Select Object step whose params `ui.action.insertSelectObject` would refuse, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
   refused, and no set is added. So is a file whose set `ui.actionSet.save` would write larger than 8 MiB (a file with
   less white space, a set name that gets a number, or an `.aia` set), with the error `the action set would be larger
   than 8 MiB`. The Actions panel menu's Save Actions… and Load Actions… run these; Load Actions… is
@@ -2963,6 +2964,28 @@ already walks Image Trace. Short agent entry points:
   `actionInsertMenuItem` dialog (`find`, `command`, `params`, `set`, `action`, `step`): typing in Find and pressing
   Find picks the one item whose menu path, shown name or command id holds every word typed, or lists the matches, and
   OK runs this.
+- Actions: `ui.action.insertSelectObject {set?, action?, step?, note, caseSensitive?, wholeWord?}` inserts a Select
+  Object step without running it. The step is `select.byNote {note, caseSensitive, wholeWord}`: during playback it
+  selects the objects whose Attributes note matches `note`, and the steps after it act on them. `note` loses its
+  leading and trailing spaces and must then be 1 to 1,024 bytes; `caseSensitive` and `wholeWord` default to false. The
+  place, the selected step and the result are as `ui.action.insertStop` has them. A missing or empty note, a param of
+  another type, params that are not an object, an index past the last set, action or step, no action and no
+  recording, or a step that would give the action more than 10,000 steps or its set's file more than 8 MiB is an
+  error, and then nothing changes. When the step finds no object, the playback stops there with that error: at
+  Accelerated the whole batch is undone as for any failing step, and at Step by Step and Pause For the steps already
+  played stay. The panel's row for the step reads `Select Object: <note>`. The panel menu's Select Object… opens the
+  `actionSelectObject` dialog, Set Selection (`note`, `caseSensitive`, `wholeWord`, `set`, `action`, `step`), whose OK
+  runs this; OK is off while the note is empty. The two options, the 1,024-byte limit and stopping when nothing is
+  found are VectorCraft's own rules.
+- Select: `select.byNote {note, caseSensitive?, wholeWord?}` selects the objects whose Attributes note
+  (`attributes.set {note}`) holds `note` without its leading and trailing spaces, and returns `{count, ids}`. By default
+  the text may be anywhere in the note and in any letter case. `caseSensitive: true` asks for the same letter case, and
+  `wholeWord: true` for no letter, digit or `_` right before or after the text. It looks at the objects Select All
+  takes and the objects inside them, and leaves out hidden and locked objects and art on a locked artboard; in
+  isolation mode it looks inside the isolated group only. An object whose note matches is selected without the objects
+  inside it, and a member whose note matches is selected on its own. The objects found replace the selection, in paint
+  order. The command makes no undo step, and Select › Reselect repeats it. An empty note, a note longer than 1,024
+  bytes, a param of another type, or no object found is an error, and then the selection stays as it was.
 - Actions: `ui.action.continue {}` plays on from the stop the playing action waits at, on the document active now, and
   closes the stop's message box (`actionStopMessage`). The next step runs at once, or at Accelerated the steps up to
   the next stop as one undo step. It returns `{results, pending, atStop?}`. With no action waiting at a stop it is an

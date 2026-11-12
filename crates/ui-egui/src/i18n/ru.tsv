@@ -5837,6 +5837,16 @@ axis	Y Axis	Ось Y
 @msg	Batch cannot play an action with a stop	Пакет не может воспроизвести действие с остановкой
 	Insert Menu Item…	Вставить пункт меню…
 	Insert Menu Item	Вставить пункт меню
+	Select Object…	Выделить объект…
+	Select Object	Выделить объект
+	Set Selection	Задать выделение
+	Case Sensitive	С учетом регистра
+	Whole Word	Слово целиком
+	Select Object: {note}	Выделить объект: {note}
+	Select by Note	Выделить по примечанию
+@msg	the note is empty	примечание пустое
+@msg	the note is longer than 1,024 bytes	примечание длиннее 1024 байт
+@msg	no object that can be selected has a note matching “{query}”	ни у одного объекта, который можно выделить, нет примечания, совпадающего с «{query}»
 	Menu Item:	Пункт меню:
 	No menu item matches.	Нет подходящих пунктов меню.
 	Several menu items match. Choose one from the list.	Подходит несколько пунктов меню. Выберите один из списка.

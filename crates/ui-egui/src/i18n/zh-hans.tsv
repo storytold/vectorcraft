@@ -6064,6 +6064,16 @@ axis	Y Axis	Y 轴
 @msg	Batch cannot play an action with a stop	批处理无法播放含有停止的动作
 	Insert Menu Item…	插入菜单项…
 	Insert Menu Item	插入菜单项
+	Select Object…	选择对象…
+	Select Object	选择对象
+	Set Selection	设置选区
+	Case Sensitive	区分大小写
+	Whole Word	全字匹配
+	Select Object: {note}	选择对象：{note}
+	Select by Note	按注释选择
+@msg	the note is empty	注释为空
+@msg	the note is longer than 1,024 bytes	注释超过 1,024 字节
+@msg	no object that can be selected has a note matching “{query}”	没有可选对象的注释与“{query}”匹配
 	Menu Item:	菜单项：
 	No menu item matches.	没有匹配的菜单项。
 	Several menu items match. Choose one from the list.	有多个菜单项匹配。请从列表中选择一个。

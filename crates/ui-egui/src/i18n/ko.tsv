@@ -5812,6 +5812,16 @@ axis	Y Axis	Y축
 @msg	Batch cannot play an action with a stop	일괄 처리에서는 중지가 있는 액션을 재생할 수 없습니다
 	Insert Menu Item…	메뉴 항목 삽입…
 	Insert Menu Item	메뉴 항목 삽입
+	Select Object…	개체 선택…
+	Select Object	개체 선택
+	Set Selection	선택 영역 설정
+	Case Sensitive	대/소문자 구분
+	Whole Word	전체 단어
+	Select Object: {note}	개체 선택: {note}
+	Select by Note	참고로 선택
+@msg	the note is empty	참고가 비어 있습니다
+@msg	the note is longer than 1,024 bytes	참고가 1,024바이트보다 깁니다
+@msg	no object that can be selected has a note matching “{query}”	선택할 수 있는 개체 중 참고가 “{query}”와(과) 일치하는 개체가 없습니다
 	Menu Item:	메뉴 항목:
 	No menu item matches.	일치하는 메뉴 항목이 없습니다.
 	Several menu items match. Choose one from the list.	여러 메뉴 항목이 일치합니다. 목록에서 하나를 선택하세요.

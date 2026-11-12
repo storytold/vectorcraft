@@ -11,6 +11,7 @@ use super::object::can_align;
 use super::wand::{fill_of, stroke_of};
 use super::{
     CommandSpec, Result, Session, bad, bool_or, checked_id, checked_ids_param, cmd, color_value, has_doc, has_selection, index, ok, str_param,
+    switch_or, text_param,
 };
 use crate::DocState;
 
@@ -102,6 +103,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{fill?: colour, stroke?: colour (as paint.setFill's color, #rrggbbaa and #rgba refused; at least one)} select the objects whose fill (and stroke) reads as that colour in #rrggbb, as document.inspect reports colours, whatever its swatch or tint; with both, the objects that match both. No object needs to be selected first; Select > Reselect repeats it → {count}",
             has_doc,
             select_color
+        ),
+        cmd!(
+            "select.byNote",
+            "Select by Note",
+            [],
+            None,
+            "{note, caseSensitive?: bool, wholeWord?: bool} select the objects whose Attributes note (attributes.set) holds `note`, without its leading and trailing spaces (1 to 1,024 bytes): anywhere in the note and in any letter case by default; caseSensitive (default false) asks for the same letter case, and wholeWord (default false) for no letter, digit or _ right before or after it. It looks at the objects Select All takes and the objects inside them, leaving out hidden and locked objects and art on a locked artboard; an object whose note matches is selected without the objects inside it. The objects found replace the selection, in paint order. No object found is an error that leaves the selection as it was. Not an undo step; Select > Reselect repeats it. The Actions panel's Select Object step (ui.action.insertSelectObject) runs this → {count, ids} (resulting selection)",
+            has_doc,
+            by_note
         ),
         cmd!(
             "select.same.fillColor",
@@ -728,6 +738,73 @@ fn select_color(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let reads_as = |paint: Paint, hex: Option<&str>| hex.is_none_or(|h| paint.color().is_some_and(|c| c.to_hex() == h));
     select_where(s, C, p, |d, n| paint_reported(d, n) && reads_as(fill_of(n), fill.as_deref()) && reads_as(stroke_of(n).0, stroke.as_deref()))
+}
+
+/// The longest note, in bytes, that Select by Note searches for.
+const MAX_NOTE_QUERY: usize = 1024;
+
+/// Select by Note: the objects whose Attributes note holds `note` ([`note_matches`]). An object
+/// whose note matches is selected without the objects inside it. With none found, the selection
+/// stays as it was.
+fn by_note(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "select.byNote";
+    let query = text_param(p, "note", C)?.map(str::trim).unwrap_or_default();
+    if query.is_empty() {
+        return Err(bad(C, "the note is empty"));
+    }
+    if query.len() > MAX_NOTE_QUERY {
+        return Err(bad(C, "the note is longer than 1,024 bytes"));
+    }
+    let case_sensitive = switch_or(p, "caseSensitive", false, C)?;
+    let whole_word = switch_or(p, "wholeWord", false, C)?;
+    let not_found = || bad(C, format!("no object that can be selected has a note matching “{query}”"));
+    let st = s.doc()?;
+    let locks = st.doc.locked_artboards();
+    let mut ids = vec![];
+    walk_selectable(&st.doc, st.isolation, |n| {
+        let note = n.extras().attrs.as_deref().map_or("", |a| a.note.as_str());
+        if note_matches(note, query, case_sensitive, whole_word) && is_selectable(&st.doc, st.isolation, &locks, n.id) {
+            ids.push(n.id);
+            return false;
+        }
+        true
+    });
+    // The selection leaves out guides under Lock Guides and hidden slices, whatever selects them.
+    let mut found = st.selection.clone();
+    found.set(ids.iter().copied());
+    crate::deselect_hidden(&s.menu, &st.doc, &mut found);
+    if found.objects.is_empty() {
+        return Err(not_found());
+    }
+    let before = st.selection.objects.clone();
+    s.select(|_, sel| sel.set(ids.iter().copied()))?;
+    let st = s.doc_mut()?;
+    st.last_selection_cmd = Some((C.to_string(), p.clone(), before));
+    selection_result(s)
+}
+
+/// Whether `note` holds `query`: anywhere, and in any letter case unless `case_sensitive`. With
+/// `whole_word`, the text right before and right after it is not a letter, a digit or `_`.
+fn note_matches(note: &str, query: &str, case_sensitive: bool, whole_word: bool) -> bool {
+    if note.is_empty() || query.is_empty() {
+        return false;
+    }
+    let (note, query) = if case_sensitive { (note.to_string(), query.to_string()) } else { (note.to_lowercase(), query.to_lowercase()) };
+    if !whole_word {
+        return note.contains(&query);
+    }
+    let word = |c: char| c.is_alphanumeric() || c == '_';
+    let mut from = 0;
+    while let Some(at) = note.get(from..).and_then(|rest| rest.find(&query)).map(|i| from + i) {
+        let before = note[..at].chars().next_back();
+        let after = note[at + query.len()..].chars().next();
+        if !before.is_some_and(word) && !after.is_some_and(word) {
+            return true;
+        }
+        // Matches may overlap: look again from the next character.
+        from = at + note[at..].chars().next().map_or(1, char::len_utf8);
+    }
+    false
 }
 
 /// Does `document.inspect` report a fill and stroke for `n`? A compound path's are its own, though

@@ -6037,6 +6037,16 @@ axis	Y Axis	Y-as
 @msg	Batch cannot play an action with a stop	Batch kan geen actie met een stop afspelen
 	Insert Menu Item…	Menu-item invoegen…
 	Insert Menu Item	Menu-item invoegen
+	Select Object…	Object selecteren…
+	Select Object	Object selecteren
+	Set Selection	Selectie instellen
+	Case Sensitive	Hoofdlettergevoelig
+	Whole Word	Heel woord
+	Select Object: {note}	Object selecteren: {note}
+	Select by Note	Selecteren op notitie
+@msg	the note is empty	de notitie is leeg
+@msg	the note is longer than 1,024 bytes	de notitie is langer dan 1024 bytes
+@msg	no object that can be selected has a note matching “{query}”	geen selecteerbaar object heeft een notitie die overeenkomt met „{query}”
 	Menu Item:	Menu-item:
 	No menu item matches.	Geen menu-item komt overeen.
 	Several menu items match. Choose one from the list.	Meerdere menu-items komen overeen. Kies er een uit de lijst.
