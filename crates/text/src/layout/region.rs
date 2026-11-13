@@ -226,10 +226,21 @@ fn band_intervals(polys: &[Vec<Point>], top: f64, bottom: f64) -> Vec<(f64, f64)
     let (top, bottom) = (top.min(bottom), top.max(bottom));
     // Contours that meet along an edge cross the middle of the band at the same x, up to a few
     // units of rounding: the intervals on either side of it join (an edge that bounds the
-    // shape there is still subtracted below).
-    let mut mid = poly_intervals(polys, (top + bottom) * 0.5);
+    // shape there is still subtracted below). A vertical edge crosses the middle at its own x with
+    // no rounding, so a gap at one is never taken for a seam.
+    let y = (top + bottom) * 0.5;
+    let mut upright: Vec<f64> = polys
+        .iter()
+        .flat_map(|poly| poly.iter().zip(poly.iter().cycle().skip(1)))
+        .filter(|(a, b)| a.x == b.x && (a.y <= y) != (b.y <= y))
+        .map(|(a, _)| a.x)
+        .collect();
+    upright.sort_by(f64::total_cmp);
+    let upright = |x: f64| upright.binary_search_by(|v| v.total_cmp(&x)).is_ok();
+    let mut mid = poly_intervals(polys, y);
     mid.dedup_by(|next, prev| {
-        let seam = next.0 - prev.1 <= 8.0 * f64::EPSILON * prev.1.abs().max(next.0.abs()).max(1.0);
+        let gap = next.0 - prev.1;
+        let seam = gap <= 8.0 * f64::EPSILON * prev.1.abs().max(next.0.abs()).max(1.0) && (gap <= 0.0 || !(upright(prev.1) || upright(next.0)));
         if seam {
             prev.1 = prev.1.max(next.1);
         }
@@ -609,6 +620,13 @@ fn lines_cross_an_edge_two_contours_share() {
     ]);
     let cells = Region::cells(&apart, &LayoutOptions::default(), &[]);
     assert_spans(&cells[0].spans(40.0, 60.0), &[(x, x + 50.0), (x + 50.01, x + 100.0)]);
+    // So does a gap of 1e-7 pt between vertical edges there, a few units of rounding wide.
+    let apart = polygon_path(&[
+        &[(x, 0.0), (x + 50.0, 0.0), (x + 50.0, 100.0), (x, 100.0)],
+        &[(x + 50.0 + 1e-7, 0.0), (x + 100.0, 0.0), (x + 100.0, 100.0), (x + 50.0 + 1e-7, 100.0)],
+    ]);
+    let cells = Region::cells(&apart, &LayoutOptions::default(), &[]);
+    assert_spans(&cells[0].spans(40.0, 60.0), &[(x, x + 50.0), (x + 50.0 + 1e-7, x + 100.0)]);
 }
 
 /// A frame of 200 thin slanted strips, whose edges in the band overlap in x far more than
