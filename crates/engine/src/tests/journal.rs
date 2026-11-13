@@ -274,29 +274,34 @@ fn a_batch_fit_selection_replays_but_an_action_uses_the_current_selection() {
 }
 
 /// The journal records the `index` a batch's Fit to Artwork Bounds step took from the batch's
-/// `artboard`, so a replay fits that artboard even when the Artboard tool then has several selected.
+/// `artboard`, or the command's default (the first artboard) when the batch names none, so a replay
+/// fits that artboard even when the Artboard tool then has several selected.
 #[test]
 fn a_batch_fit_step_records_the_batchs_artboard() {
     let fitted = three_fitted_artboards();
     let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
-    let mut s = Session::new();
-    let was = three_artboards_with_art(&mut s);
-    let start = s.journal.len();
     let steps = json!([{"command": "artboard.fitToArt", "params": {}}]);
-    s.execute("command.batch", &json!({"artboard": 1, "commands": steps})).unwrap();
-    assert_eq!(boards(&s), [was[0], fitted[1], was[2]]);
-    let (id, p) = s.journal.last().unwrap().clone();
-    assert_eq!((id.as_str(), &p["commands"][0]["params"]), ("command.batch", &json!({"index": 1})));
-    let mut r = Session::new();
-    for (n, (id, p)) in s.journal.iter().enumerate() {
-        if n == start {
-            r.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
-            r.set_tool_option("selected", &json!([0, 2]));
+    for (batch, index, picks) in [(json!({"artboard": 1, "commands": steps}), 1, json!([0, 2])), (json!({"commands": steps}), 0, json!([1, 2]))] {
+        let mut s = Session::new();
+        let was = three_artboards_with_art(&mut s);
+        let start = s.journal.len();
+        s.execute("command.batch", &batch).unwrap();
+        let mut want = was.clone();
+        want[index] = fitted[index];
+        assert_eq!(boards(&s), want, "{batch}");
+        let (id, p) = s.journal.last().unwrap().clone();
+        assert_eq!((id.as_str(), &p["commands"][0]["params"]), ("command.batch", &json!({ "index": index })));
+        let mut r = Session::new();
+        for (n, (id, p)) in s.journal.iter().enumerate() {
+            if n == start {
+                r.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+                r.set_tool_option("selected", &picks);
+            }
+            r.execute(id, p).unwrap();
         }
-        r.execute(id, p).unwrap();
+        assert_eq!(boards(&r), want, "{batch}: the replay fits artboard {index}, not the selected ones");
+        assert_eq!(s.journal_for_action(start), [("command.batch".to_string(), json!({"commands": steps}))]);
     }
-    assert_eq!(boards(&r), boards(&s), "the replay fits artboard 2, not the selected ones");
-    assert_eq!(s.journal_for_action(start), [("command.batch".to_string(), json!({"commands": steps}))]);
 }
 
 /// A batch step with `"params": null` gets the Artboard tool's selected artboards, or else the

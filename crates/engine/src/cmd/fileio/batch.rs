@@ -83,7 +83,8 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
 /// `index` nor `indices`, while the Artboard tool is chosen with two or more artboards selected when
 /// the step runs, gets those as its `indices`. Otherwise a step that resizes the active artboard
 /// ([`crate::FIT_ACTIVE_ARTBOARD`]) and names no `index` (nor `indices`, for Fit to Artwork Bounds)
-/// gets that artboard as its `index`. A Fit to Artwork Bounds step's journal entry records the
+/// gets that artboard as its `index`. A Fit to Artwork Bounds step that still names neither gets
+/// `index` 0, the command's default. A Fit to Artwork Bounds step's journal entry records the
 /// `indices` or `index` it got.
 /// `grouped` gets each step's undo groups, as [`Session::batch_steps`] keeps them.
 fn run_steps(
@@ -118,17 +119,13 @@ fn run_steps(
             && (params.get("artboards").is_some() || (params.get("artboard").is_none() && !crate::cmd::edit::artboard_tool_picks(s).is_empty()));
         // A Fit to Artwork Bounds step that names neither `index` nor `indices`, while the Artboard
         // tool is chosen with two or more artboards selected, fits those.
-        let fit_picks = if id == "artboard.fitToArt" && params.get("index").is_none() && params.get("indices").is_none() {
-            crate::cmd::edit::artboard_tool_picks(s)
-        } else {
-            Vec::new()
-        };
+        let fit_unnamed = id == "artboard.fitToArt" && params.get("index").is_none() && params.get("indices").is_none();
+        let fit_picks = if fit_unnamed { crate::cmd::edit::artboard_tool_picks(s) } else { Vec::new() };
         if !fit_picks.is_empty()
             && let Some(o) = params.as_object_mut()
         {
             o.insert("indices".into(), json!(fit_picks));
         }
-        let mut fit_index = false;
         if let Some(a) = artboard
             && let Some(key) = key
             && params.get(key).is_none()
@@ -138,7 +135,15 @@ fn run_steps(
             && let Some(o) = params.as_object_mut()
         {
             o.insert(key.into(), json!(usize::try_from(a).map_or(last, |a| a.min(last))));
-            fit_index = id == "artboard.fitToArt";
+        }
+        // With neither, the step fits the command's default, the first artboard, named here so the
+        // journal records it.
+        if fit_unnamed
+            && params.get("index").is_none()
+            && params.get("indices").is_none()
+            && let Some(o) = params.as_object_mut()
+        {
+            o.insert("index".into(), json!(0));
         }
         // The documents with an undo group open, held so that the step's first edit in one copies it.
         let start = s.active().map(|d| d.uid);
@@ -151,9 +156,9 @@ fn run_steps(
         grouped.push(step_groups(s, start, &held));
         // The step's journal entry records what it took from the preferences or the clock (a
         // save's date, a new document's), as a command of its own would, and the artboards a Fit to
-        // Artwork Bounds step took from the Artboard tool or the batch, so a replay does not fit the
-        // artboards the Artboard tool has selected then.
-        if (noted != params || !fit_picks.is_empty() || fit_index)
+        // Artwork Bounds step took from the Artboard tool, the batch or the command's default, so a
+        // replay does not fit the artboards the Artboard tool has selected then.
+        if (noted != params || fit_unnamed)
             && let Some(c) = c.as_object_mut()
         {
             c.insert("params".into(), noted);
