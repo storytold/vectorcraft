@@ -317,7 +317,7 @@ pub fn save_plan(s: &Session, mode: SaveMode, p: &Value) -> Result<SavePlan> {
     let notes = top
         .filter(|k| !reads_option(format, k))
         .chain(nested.filter(|k| !reads_option(format, k)).map(|k| format!("options.{k}")))
-        .map(|k| format!("`{k}` was not used: {} files don't read it", written.label))
+        .map(|k| unused_option_note(&k, &written))
         .collect();
     let lossy_source = super::lossy_source(st, p);
     Ok(SavePlan { mode, path, format, options, name, folder, modified, notes, lossy_source })
@@ -465,6 +465,12 @@ fn range_text(picked: &[usize]) -> String {
 /// settings (`createLayers`…) and presets. A save drops each option its format doesn't read.
 pub fn reads_option(f: &Format, key: &str) -> bool {
     f.options.iter().any(|o| o.name == key) || (is_pdf(f) && (super::pdf::OPTIONS.iter().any(|o| o.name == key) || super::pdf::is_setting(key)))
+}
+
+/// The note a save or an export gives for option `key`, as the request names it, which the file it
+/// writes (`written`, see [`written_as`]) doesn't read.
+pub(super) fn unused_option_note(key: &str, written: &Format) -> String {
+    format!("`{key}` was not used: {} files don't read it", written.label)
 }
 
 /// Formats that carry the whole native document: they lose nothing, and record links relative to
@@ -636,7 +642,7 @@ fn without_pdf(f: &Format) -> Format {
 /// `f` named, in its errors and notes, as the file a save with options `p` writes: a version 7
 /// `.ai` as the legacy `.ai`, and a `.ai` or `.ait` with `pdfCompatible: false` as one saved
 /// without PDF content.
-fn written_as(cmd: &str, f: &Format, p: &Value) -> Format {
+pub(super) fn written_as(cmd: &str, f: &Format, p: &Value) -> Format {
     if f.id == "ai" && super::legacy_ai::wanted(cmd, f, p).unwrap_or(false) {
         super::legacy_ai::named(f)
     } else if matches!(f.id, "ai" | "ait") && !bool_or(p, "pdfCompatible", true) {
@@ -729,6 +735,10 @@ fn encode_ai_pages(cmd: &str, f: &Format, doc: &Document, p: &Value, editing: bo
         // Keep upstream AI PDF layers, including hidden layers, unless a standard decides.
         if o.get("standard").is_none_or(Value::is_null) {
             o.entry("createLayers").or_insert(json!(true));
+        }
+        // A page longer than 14,400 pt keeps its `UserUnit` (PDF export writes it in points).
+        if o.get("longPagesInPoints").is_none_or(Value::is_null) {
+            o.insert("longPagesInPoints".into(), json!(false));
         }
         if let Some(c) = o.get("compress").and_then(Value::as_bool) {
             let compression = o.entry("compression").or_insert_with(|| json!({}));

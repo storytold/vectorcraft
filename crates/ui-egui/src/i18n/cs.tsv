@@ -108,6 +108,8 @@
 	Blend Vertically	Prolnout svisle
 	Convert to CMYK	Převést na CMYK
 	Convert to Grayscale	Převést na stupně šedi
+	Convert to Indexed Color	Převést na indexované barvy
+	Convert to Indexed Color…	Převést na indexované barvy…
 	Convert to RGB	Převést na RGB
 	Invert Colors	Invertovat barvy
 	Overprint Black…	Přetisknout černou…
@@ -1844,6 +1846,8 @@ digits	Malayalam	Malajálamské
 	Objects on Path Tool	Nástroj Objekty na cestě
 	Attach Objects on Path	Připojit objekty na cestu
 	Expand Objects on Path	Rozložit objekty na cestě
+	Detach	Odpojit
+	Detach Object from Path	Odpojit objekt od cesty
 	Release Live Paint	Uvolnit živou malbu
 	Release Repeat	Uvolnit opakování
 	Release Slice	Uvolnit řez
@@ -3887,6 +3891,11 @@ theme	Appearance	Motiv
 	Primary	Primární
 	Printing / Exporting	Tisk / export
 	Real-time Drawing and Editing	Kreslení a úpravy v reálném čase
+	Use Monitor Profile for Canvas	Použít profil monitoru pro plátno
+	The canvas is drawn in sRGB.	Plátno se vykresluje v sRGB.
+	Canvas display profile:	Profil displeje pro plátno:
+	The system matches the window to the display's colors.	Systém přizpůsobuje okno barvám displeje.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nebyl nalezen použitelný profil displeje: plátno se vykresluje v sRGB.
 	Render Threads (-1 = Automatic)	Vlákna vykreslování (-1 = automaticky)
 	Reset Preferences	Obnovit předvolby
 	Export Preferences…	Exportovat předvolby…
@@ -4649,6 +4658,9 @@ imageTrace	Outline	Obrys
 @msg	Couldn't open {name}: {e}	{name} nelze otevřít: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} nelze umístit: dokument, na který byl přetažen, byl zavřen
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} nelze umístit: dokument, do kterého se umísťoval, byl zavřen
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} nelze umístit: dokument, na který byl přetažen, byl vrácen k uložené verzi
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} nelze umístit: dokument, do kterého se umísťoval, byl vrácen k uložené verzi
+@msg	Couldn't paste: the document it was pasted in was reverted	Nelze vložit: dokument, do kterého se vkládalo, byl vrácen k uložené verzi
 @msg	Couldn't read {name}: {e}	{name} nelze přečíst: {e}
 @msg	Couldn't save recovery data: {e}	Data pro obnovení nelze uložit: {e}
 @msg	Create Outlines: select text objects	Převést na křivky: vyberte textové objekty
@@ -5076,6 +5088,7 @@ imageTrace	Outline	Obrys
 @msg	paths contain invalid coordinates	cesty obsahují neplatné souřadnice
 @msg	paths: give at least one file	paths: zadejte alespoň jeden soubor
 @msg	replace: the object to replace was changed or deleted	replace: objekt k nahrazení byl změněn nebo odstraněn
+@msg	the document it was prepared for is no longer active	dokument, pro který bylo připraveno, už není aktivní
 @msg	pattern missing	chybí vzorek
 @msg	patterns nested too deeply are filled with mid-grey	příliš hluboko vnořené vzorky se vyplní středně šedou
 @msg	percent must be above 0 and at most 6400, not {p}	percent musí být větší než 0 a nejvýše 6400, ne {p}
@@ -5111,6 +5124,7 @@ imageTrace	Outline	Obrys
 @msg	select a repeat	vyberte opakování
 @msg	select an Intertwine group	vyberte skupinu propletení
 @msg	select an Objects on Path group	vyberte skupinu objektů na cestě
+@msg	choose the object to detach with its Select/Move widget	vyberte objekt k odpojení jeho ovládacím prvkem Vybrat/Přesunout
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	cesta uvnitř složené cesty, prolnutí, obálky, opakování nebo skupiny propletení nemůže přijmout objekty
 @msg	a clipping path can't take objects	ořezová cesta nemůže přijmout objekty
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objekty uvnitř prolnutí, obálky, opakování nebo skupiny propletení nelze připojit na cestu
@@ -5710,6 +5724,8 @@ imageTrace	Outline	Obrys
 	Spectrum	Spektrum
 # Rendering intents, recolor methods, gradient kinds
 	Perceptual	Percepční
+	Hue Clockwise	Odstín ve směru hodinových ručiček
+	Hue Counterclockwise	Odstín proti směru hodinových ručiček
 	Relative Colorimetric	Relativní kolorimetrický
 	Absolute Colorimetric	Absolutní kolorimetrický
 	Exact	Přesná
@@ -5959,7 +5975,9 @@ mark-style	Japanese	Japonské
 @msg	`{GRAPHICS}` face must be front or back	face v `{GRAPHICS}` musí být front nebo back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} v `{GRAPHICS}` musí být číslo od {lo} do {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musí být pole
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafika se mapuje na rovinné stěny: použijte typ objektu Vysunutí nebo Rovina
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafika se mapuje na typy objektu Rovina, Vysunutí a Rotační těleso
+@msg	Revolve maps graphics onto its side: map them onto the front	Rotační těleso mapuje grafiku na svůj bok: umístěte ji na přední stranu
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafika je pro tento povrch příliš složitá: zjednodušte kresbu symbolů nebo snižte Segmenty
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` přijímá nejvýše {MAX_GRAPHICS} grafik
 @msg	A plane has one face: map its graphics onto the front	Rovina má jednu stranu: umístěte její grafiku na přední stranu
 @msg	The graphics are too complex: simplify the symbols' art	Grafika je příliš složitá: zjednodušte kresbu symbolů
@@ -6305,7 +6323,7 @@ axis	Y Axis	osa Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` platí pro výplně přechodem (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` platí pro výplně přechodem (paint.setFill)
 @msg	`dither` must be true or false	`dither` musí být true nebo false
-@msg	`method` must be classic or perceptual	`method` musí být classic nebo perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` musí být classic, perceptual, hue-clockwise nebo hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` musí být pad, repeat nebo reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` musí být celé číslo od 1 do {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` platí pro lineární, kruhové, kuželové a kosočtverečné přechody
@@ -6548,6 +6566,7 @@ axis	Y Axis	osa Y
 	Continue	Pokračovat
 	Continue Action	Pokračovat v akci
 	Delete Action Step	Odstranit krok akce
+	Move Action Step	Přesunout krok akce
 	Press Play Current Selection in the Actions panel to go on.	Chcete-li pokračovat, stiskněte na panelu Akce tlačítko Přehrát aktuální výběr.
 	Stop: {message}	Zastavení: {message}
 @msg	no action is waiting at a stop	žádná akce nečeká na zastavení
@@ -6719,6 +6738,22 @@ axis	Y Axis	osa Y
 	Graphite Pencil	Grafitová tužka
 	Wax Crayon	Vosková pastelka
 	Charcoal Dust	Uhlový prach
+	Notched Ribbon	Vroubkovaná stuha
+	Double Line	Dvojitá čára
+	Wave	Vlna
+	Teardrop	Slza
+	Striped Ribbon	Pruhovaná stuha
+	Fine Nib	Jemný hrot
+	Broad Nib	Široký hrot
+	Chisel	Dláto
+	Round Pen	Kulaté pero
+	Pressure Pen	Tlakové pero
+	Beads	Korálky
+	Dash Dot	Čárka-tečka
+	Scallops	Feston
+	Stars	Hvězdy
+	Triangles	Trojúhelníky
+	Sparkles	Jiskry
 	Save Brush Library…	Uložit knihovnu štětců…
 @msg	`{_1}` has no brushes to apply	`{_1}` nemá žádné štětce k použití
 @msg	missing `library` (see brush.libraries)	chybí `library` (viz brush.libraries)

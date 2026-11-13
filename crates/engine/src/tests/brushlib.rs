@@ -721,3 +721,24 @@ fn other_documents_brushes_load_and_unreadable_files_are_errors() {
     let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
     assert_eq!(vectorcraft_brush::library(&vectorcraft_format::load(&bytes).unwrap()).len(), 1);
 }
+
+/// A library file whose brushes repeat a name loads with the later brush numbered, and each one
+/// can be added to a document by its own name.
+#[test]
+fn a_library_file_that_repeats_a_brush_name_loads_with_the_later_one_numbered() {
+    use vectorcraft_brush::{Brush, Calligraphic};
+    let nib = |size: f64| Brush { name: "Nib".into(), kind: BrushKind::Calligraphic(Calligraphic { size, ..Default::default() }) };
+    let mut file = vectorcraft_doc::Document::new(100.0, 100.0);
+    vectorcraft_brush::store(&mut file, &[nib(1.0), nib(2.0)]);
+    let b64 = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&file));
+    let mut s = session();
+    let r = run(&mut s, "brush.loadLibrary", json!({"dataBase64": b64, "name": "Nibs.vectorcraft"}));
+    let library = r["library"].as_str().unwrap().to_string();
+    let listed = run(&mut s, "brush.library", json!({ "library": library }));
+    let names: Vec<&str> = listed["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Nib", "Nib 2"]);
+    let r = run(&mut s, "brush.addFromLibrary", json!({"library": library, "name": "Nib 2"}));
+    assert_eq!(strs(&r["added"]), ["Nib 2"]);
+    let size = |b: Brush| if let BrushKind::Calligraphic(c) = b.kind { c.size } else { 0.0 };
+    assert_eq!(size(brush(&s, "Nib 2")), 2.0);
+}

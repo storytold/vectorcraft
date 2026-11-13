@@ -172,6 +172,13 @@ fn accepted(doc: &'static str, depth: usize) -> Option<Vec<&'static str>> {
     Some(keys)
 }
 
+/// Every key the description `doc` takes, those of the commands its `…` entries name included, or
+/// `None` when that isn't known: it doesn't parse, a `…` entry names no command, or one names a
+/// command in [`UNCHECKED`].
+pub(crate) fn accepted_keys(doc: &'static str) -> Option<Vec<&'static str>> {
+    accepted(doc, 0)
+}
+
 /// Does the description `doc` name `key` as a parameter (its own keys, and those of the commands
 /// its `…` entries name)?
 pub fn takes_key(doc: &'static str, key: &str) -> bool {
@@ -773,9 +780,7 @@ fn check_export_options(id: &str, params: &Value) -> Result<()> {
             NO_SAVE_FORMAT
         }
         "document.export" | "document.exportSelection" | "document.serialize" => {
-            // `richBlack` is Appearance of Black's setting for a raster export, and `params` an
-            // exporter plug-in's own.
-            keys.extend(["includeArtboardFill", "selectedOnly", "richBlack", "params"]);
+            keys.extend(super::fileio::EXPORT_PARAMS);
             keys.extend(FORMATS.iter().filter(|f| f.write).flat_map(|f| f.options).map(|o| o.name));
             NO_FORMAT
         }

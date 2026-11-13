@@ -15,8 +15,45 @@ use super::{
     ARTBOARD_PARAMS, Format, default_name, encode_all, encode_with_warnings, merge, with_black_output, writable, write_encoded, write_or_return,
 };
 
+/// The keys the export commands take for every format, beside the path, the format and the
+/// options `document.formats` lists for each: `richBlack` is Appearance of Black's setting for a
+/// raster export, and `params` an exporter plug-in's own.
+pub(crate) const EXPORT_PARAMS: [&str; 4] = ["includeArtboardFill", "selectedOnly", "richBlack", "params"];
+
+/// A note for each option in `p` that some format takes but the file an export of `cmd` writes in
+/// `f` doesn't read (`{format: pdf, quality: 80}`), in the wording of a save's note. An exporter
+/// plug-in's format gets none. The notes cover the formats' options only: a key of the command's
+/// own ([`EXPORT_PARAMS`]) and an artboard choice that a selection export leaves out get none.
+pub fn unused_option_notes(cmd: &str, f: &Format, p: &Value) -> Vec<String> {
+    let Some(given) = p.as_object() else { return Vec::new() };
+    if vectorcraft_plugins::export::by_format(f.id).is_some() {
+        return Vec::new();
+    }
+    let listed = |k: &str| super::FORMATS.iter().filter(|f| f.write).flat_map(|f| f.options).any(|o| o.name == k);
+    let written = super::save::written_as(cmd, f, p);
+    let legacy = f.id == "ai" && super::legacy_ai::wanted(cmd, f, p).unwrap_or(false);
+    let reads = |k: &str| match (f.id, k) {
+        // A legacy `.ai` file is not a PDF: it reads its own options only.
+        ("ai", _) if legacy => super::legacy_ai::reads(k),
+        // The other `.ai` files don't read the legacy file's options, and `preserveEditing` is
+        // on for them whatever is given.
+        ("ai", "preserveEditing") => false,
+        ("ai", _) if super::legacy_ai::LEGACY_ONLY.contains(&k) => false,
+        // An export writes one file: only a save writes each artboard to a file of its own, and
+        // a native file's `range` names those files.
+        ("vectorcraft" | "template" | "ai", "separateArtboards") | ("vectorcraft" | "template", "range") => false,
+        _ => super::save::reads_option(f, k),
+    };
+    given
+        .iter()
+        .filter(|(k, v)| !v.is_null() && !EXPORT_PARAMS.contains(&k.as_str()) && listed(k) && !reads(k))
+        .map(|(k, _)| super::save::unused_option_note(k, &written))
+        .collect()
+}
+
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.serialize", Some(text_param(p, "format", "document.serialize")?.unwrap_or("vectorcraft")), None)?;
+    let unused = unused_option_notes("document.serialize", f, p);
     let expanded = expand_presets(s, "document.serialize", p)?;
     let p = with_black_output(s, &expanded);
     let (doc, display_doc_title) = source(s, f, &p, "document.serialize")?;
@@ -27,7 +64,8 @@ pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     {
         o.insert("_displayDocTitle".into(), json!(display_doc_title));
     }
-    let enc = encode_all(doc, f.id, &q)?;
+    let mut enc = encode_all(doc, f.id, &q)?;
+    enc.add_setting_notes(unused);
     let files = enc.named(doc, &default_name(doc, f.extensions[0]));
     let (main, linked) = files.split_at(enc.files.len());
     // Text formats come back as text; an SVG in UTF-16 or ISO 8859-1 also as its bytes.
@@ -58,6 +96,7 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
         super::check_not_lossy_overwrite(s.doc()?, path, p, "document.export")?;
     }
     let f = writable("document.export", text_param(p, "format", "document.export")?, path)?;
+    let unused = unused_option_notes("document.export", f, p);
     let expanded = expand_presets(s, "document.export", p)?;
     let p = with_black_output(s, &expanded);
     let (doc, display_doc_title) = source(s, f, &p, "document.export")?;
@@ -68,7 +107,8 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     {
         o.insert("_displayDocTitle".into(), json!(display_doc_title));
     }
-    let enc = encode_all(doc, f.id, &q)?;
+    let mut enc = encode_all(doc, f.id, &q)?;
+    enc.add_setting_notes(unused);
     write_encoded(path, &default_name(doc, f.extensions[0]), doc, &enc, json!({ "format": f.id, "warnings": enc.notes() }))
 }
 
@@ -315,12 +355,18 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
         super::check_not_lossy_overwrite(s.doc()?, path, p, C)?;
     }
     let f = writable(C, text_param(p, "format", C)?, path)?;
+    let unused = unused_option_notes(C, f, p);
     let expanded = expand_presets(s, C, p)?;
     let p = with_black_output(s, &expanded);
     let (d, bounds) = selection(s, C, f.id == "txt")?;
     // The encoder's warnings (options accepted but not applied, features approximated or left
     // out), as document.export reports them.
-    let (bytes, warnings) = encode_with_warnings(&d, f.id, &without_artboards(&p))?;
+    let (bytes, mut warnings) = encode_with_warnings(&d, f.id, &without_artboards(&p))?;
+    for note in unused {
+        if !warnings.contains(&note) {
+            warnings.push(note);
+        }
+    }
     write_or_return(path, &bytes, json!({ "format": f.id, "warnings": warnings, "bounds": [bounds.x0, bounds.y0, bounds.width(), bounds.height()] }))
 }
 

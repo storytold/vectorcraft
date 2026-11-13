@@ -96,6 +96,18 @@ pub(crate) fn rgb_gradient_art(
     composed_art(id, path, paint, Ramp::Rgb(light), 0.75)
 }
 
+/// The narrow stroke of a facet's own `paint`, `width` wide, that closes the hairline seam between
+/// it and its neighbors where each is antialiased alone. Its joins are round: a facet seen almost
+/// edge-on is a sharp sliver, and a mitered seam would reach far past its tip as a thorn, where a
+/// round one reaches no more than half its width past the facet. Revolve's meets() counts on a
+/// stroked seam reaching no more than half its width; faces drawn as clipped groups (whose clip,
+/// in `composed_art`, already outlines the seam with round joins) are measured by their box.
+pub(crate) fn seam_stroke(paint: Paint, width: f64) -> vectorcraft_doc::StrokeLayer {
+    let mut edge = vectorcraft_doc::StrokeLayer::new(paint, width);
+    edge.join = vectorcraft_doc::LineJoin::Round;
+    edge
+}
+
 /// Smooth Inflate triangles keep the seam within their narrow projected footprint.
 pub(crate) fn facet_art(
     id: vectorcraft_doc::NodeId,
@@ -109,8 +121,7 @@ pub(crate) fn facet_art(
         let light = vectorcraft_three_d::LightGradient { diffuse: r, ambient: 0.0, color: [1.0; 3] };
         if let Some(color) = paint.color() {
             let paint = smooth_paint(light, color);
-            let mut edge = vectorcraft_doc::StrokeLayer::new(paint.clone(), seam);
-            edge.join = vectorcraft_doc::LineJoin::Round;
+            let edge = seam_stroke(paint.clone(), seam);
             return vectorcraft_doc::Node::path(
                 id,
                 path.clone(),
@@ -131,7 +142,7 @@ pub(crate) fn solid_surface(id: vectorcraft_doc::NodeId, facets: &[vectorcraft_t
     use kurbo::Shape;
     use std::sync::Arc;
     use vectorcraft_doc::color::BlendMode;
-    use vectorcraft_doc::{Appearance, Node, NodeKind, StrokeLayer};
+    use vectorcraft_doc::{Appearance, Node, NodeKind};
     use vectorcraft_geom::{BezPath, PathData, Rect, shapes};
 
     let mut boundary = BezPath::new();
@@ -163,8 +174,7 @@ pub(crate) fn solid_surface(id: vectorcraft_doc::NodeId, facets: &[vectorcraft_t
                 } else {
                     Paint::solid(shade(Color::WHITE, color.map(|c| c * face.illumination[channel])))
                 };
-                let mut edge = StrokeLayer::new(paint.clone(), (face.thickness() / 2.0).clamp(0.05, 0.75));
-                edge.join = vectorcraft_doc::LineJoin::Round;
+                let edge = seam_stroke(paint.clone(), (face.thickness() / 2.0).clamp(0.05, 0.75));
                 Arc::new(Node::path(
                     id,
                     face.path(),

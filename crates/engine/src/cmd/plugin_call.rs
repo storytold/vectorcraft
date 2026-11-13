@@ -244,25 +244,44 @@ pub fn location_keys(spec: &CommandSpec) -> Vec<(&'static str, Location)> {
     keys
 }
 
-/// Commands and the param key in [`FILE_KEYS`] that, in them, names part of the document (a path of
-/// its art, a setting, an attribute it stores or a result field), not a file.
+/// Commands and the param of theirs, a key in [`FILE_KEYS`], that names part of the document (a path
+/// of its art, a setting or an attribute it stores), not a file. Each names a param the command
+/// takes ([`takes_param`]).
 pub(crate) const NOT_FILES: &[(&str, &str)] = &[
-    ("object.setLiveShape", "path"),
-    ("path.reverse", "paths"),
-    ("object.pathfinder.options", "paths"),
-    ("object.maskImage", "path"),
     ("text.createInPath", "path"),
-    ("imageTrace.make", "paths"),
     ("symbol.instance.setAppearance", "path"),
     ("symbol.instance.selectPart", "path"),
     ("object.objectsOnPath.attach", "path"),
-    ("svgInteractivity.info", "files"),
-    ("addon.cleanup.rejoin", "paths"),
 ];
 
 /// Commands and the keys from the top of their params down to a key in [`FILE_KEYS`] that, there,
-/// names part of the document, not a file: a custom arrowhead's outline in `stroke.set`.
-const NESTED_NOT_FILES: &[(&str, &[&str])] = &[("stroke.set", &["startArrow", "Custom", "path"]), ("stroke.set", &["endArrow", "Custom", "path"])];
+/// names part of the document, not a file: a custom arrowhead's outline in `stroke.set`, and the
+/// path fidelity setting (0 to 100) of Image Trace's tracing settings. The first key of each is a
+/// param the command takes ([`takes_param`]).
+const NESTED_NOT_FILES: &[(&str, &[&str])] = &[
+    ("stroke.set", &["startArrow", "Custom", "path"]),
+    ("stroke.set", &["endArrow", "Custom", "path"]),
+    ("imageTrace.make", &["params", "paths"]),
+    ("imageTrace.make", &["savedPreset", "paths"]),
+    ("imageTrace.makeAndExpand", &["params", "paths"]),
+    ("imageTrace.makeAndExpand", &["savedPreset", "paths"]),
+];
+
+/// Does `spec` take `key` as a param: its params description names it as one of its keys, or one
+/// of the commands its `…` entries name does ([`super::params::accepted_keys`]), or its schema has
+/// it? When the description doesn't say which keys it takes, any `key:` in its text counts
+/// ([`names_key`]). A word in its prose, in a nested object or in its result isn't a param.
+fn takes_param(spec: &CommandSpec, key: &str) -> bool {
+    spec.schema.is_some_and(|s| s.params.iter().any(|p| p.name == key)) || described_param(spec.params, key)
+}
+
+/// [`takes_param`] for the params description `doc` alone.
+fn described_param(doc: &'static str, key: &str) -> bool {
+    match super::params::accepted_keys(doc) {
+        Some(keys) => keys.contains(&key),
+        None => names_key(doc, key) || super::params::takes_key(doc, key),
+    }
+}
 
 /// Is command id `id` one a plug-in may never call, from its id alone ([`DENIED_PREFIXES`],
 /// [`FILE_WORDS`])?
@@ -286,16 +305,14 @@ pub(crate) fn denied(spec: &CommandSpec) -> Option<&'static str> {
     None
 }
 
-/// Why a plug-in may never call `spec` from its id ([`denied_id`]) or its params (a key in
-/// [`FILE_KEYS`] that [`NOT_FILES`] doesn't name for it), or `None`.
+/// Why a plug-in may never call `spec` from its id ([`denied_id`]) or its params (a param in
+/// [`FILE_KEYS`], [`takes_param`], that [`NOT_FILES`] doesn't name for it), or `None`.
 fn denied_by_rule(spec: &CommandSpec) -> Option<&'static str> {
     let id = spec.id;
     if denied_id(id) {
         return Some("id");
     }
-    let mut keys = FILE_KEYS.iter().filter(|k| !NOT_FILES.contains(&(id, **k)));
-    let in_schema = |k: &str| spec.schema.is_some_and(|s| s.params.iter().any(|p| p.name == k));
-    if keys.any(|k| names_key(spec.params, k) || in_schema(k)) {
+    if FILE_KEYS.iter().any(|k| !NOT_FILES.contains(&(id, *k)) && takes_param(spec, k)) {
         return Some("file key");
     }
     None
@@ -579,9 +596,10 @@ impl Saved {
 mod tests {
     use super::*;
 
-    /// Every command in the registry is sorted: the ones a plug-in may call name no file, folder,
-    /// clipboard, preference or script in their params text, and the known file, document, script
-    /// and history commands are refused.
+    /// Every command in the registry is sorted: the ones a plug-in may call take no file, folder,
+    /// clipboard, preference or script param, and the known file, document, script and history
+    /// commands are refused. Each [`NOT_FILES`] key, and the first key of each [`NESTED_NOT_FILES`]
+    /// list, is a param its command takes, not a word in its description's prose or result.
     #[test]
     fn every_command_is_sorted() {
         let specs = crate::cmd::command_specs();
@@ -602,18 +620,43 @@ mod tests {
             "edit.copy",
             "edit.paste",
             "prefs.set",
+            "stroke.arrowheads.list",
         ] {
             let Some(spec) = crate::cmd::find_command(id) else { panic!("no command {id}") };
             assert!(denied(spec).is_some(), "{id} is allowed");
         }
-        for id in ["select.all", "object.transform", "path.reverse", "symbol.instance.selectPart"] {
+        for id in [
+            "select.all",
+            "object.transform",
+            "path.reverse",
+            "symbol.instance.selectPart",
+            "object.setLiveShape",
+            "object.maskImage",
+            "imageTrace.make",
+            "svgInteractivity.info",
+            "addon.cleanup.rejoin",
+        ] {
             let Some(spec) = crate::cmd::find_command(id) else { panic!("no command {id}") };
             assert_eq!(denied(spec), None, "{id} is refused");
         }
-        for (id, key) in NOT_FILES {
+        let Some(options) = crate::cmd::find_command("object.pathfinder.options") else { panic!("no command object.pathfinder.options") };
+        assert_eq!(denied(options), Some("reviewed"));
+        let real = |id: &str, key: &str| {
             let Some(spec) = crate::cmd::find_command(id) else { panic!("no command {id}") };
-            let described = crate::cmd::params::doc_keys(spec.params).is_ok_and(|p| p.keys.contains(key));
-            assert!(names_key(spec.params, key) || described, "{id} has no `{key}` param");
+            let in_schema = spec.schema.is_some_and(|s| s.params.iter().any(|p| p.name == key));
+            let Some(described) = crate::cmd::params::accepted_keys(spec.params) else {
+                panic!("{id}: its params description doesn't say which keys it takes")
+            };
+            in_schema || described.contains(&key)
+        };
+        for (id, key) in NOT_FILES {
+            assert!(FILE_KEYS.contains(key), "{id} `{key}` isn't a file key");
+            assert!(real(id, key), "{id} has no `{key}` param");
+        }
+        for (id, keys) in NESTED_NOT_FILES {
+            let (Some(first), Some(last)) = (keys.first(), keys.last()) else { panic!("{id}: an empty key list") };
+            assert!(FILE_KEYS.contains(last), "{id} {keys:?} doesn't end at a file key");
+            assert!(real(id, first), "{id} has no `{first}` param");
         }
         let leaks: Vec<&str> = specs
             .iter()
@@ -621,7 +664,7 @@ mod tests {
             .filter(|c| {
                 let lower = c.id.to_ascii_lowercase();
                 FILE_WORDS.iter().any(|w| lower.contains(w))
-                    || FILE_KEYS.iter().any(|k| names_key(c.params, k) && !NOT_FILES.contains(&(c.id, *k)))
+                    || FILE_KEYS.iter().any(|k| takes_param(c, k) && !NOT_FILES.contains(&(c.id, *k)))
                     || names_key(c.params, "sourceDocument")
             })
             .map(|c| c.id)
@@ -685,10 +728,23 @@ mod tests {
         assert!(names_file("object.move", &json!({"opts": ["object.setLiveShape", {"path": "/tmp/x"}]})));
         assert!(!names_file("effect.apply", &json!({"effect": "distort.glass", "params": {"distortion": 5, "textureImage": "frosted"}})));
         assert!(!names_file("object.move", &json!({"dx": 5, "dy": 0, "ids": [1, 2], "opts": {"copy": false}})));
-        // `path` is a shape's path in object.setLiveShape, but only as its own param.
-        assert!(!names_file("object.setLiveShape", &json!({"path": [[0, 0], [1, 1]]})));
-        assert!(names_file("object.setLiveShape", &json!({"options": {"path": "/tmp/x"}})));
+        // `path` is the path text is set on in text.createInPath, but only as its own param.
+        assert!(!names_file("text.createInPath", &json!({"path": 5, "text": "a"})));
+        assert!(names_file("text.createInPath", &json!({"options": {"path": "/tmp/x"}})));
         assert!(names_file("object.move", &json!({"path": [[0, 0]]})));
+        // object.setLiveShape takes no `path`; its description says "on any path:" in its prose.
+        assert!(names_file("object.setLiveShape", &json!({"path": "/tmp/x"})));
+        // Image Trace's path fidelity setting, only inside its tracing settings.
+        for id in ["imageTrace.make", "imageTrace.makeAndExpand"] {
+            assert!(!names_file(id, &json!({"preset": "Default", "params": {"mode": "color", "paths": 50}})));
+            assert!(!names_file(id, &json!({"savedPreset": {"paths": 50, "corners": 75}})));
+            assert!(names_file(id, &json!({"paths": 50})));
+            assert!(names_file(id, &json!({"params": {"paths": 50, "path": "/tmp/x"}})));
+            assert!(names_file(id, &json!({"params": {"file": "/tmp/x"}})));
+            assert!(names_file(id, &json!({"params": {"paths": {"file": "/tmp/x"}}})));
+            assert!(names_file(id, &json!({"options": {"paths": 50}})));
+        }
+        assert!(names_file("object.move", &json!({"params": {"paths": 50}})));
         // A custom arrowhead's outline in stroke.set, only where stroke.set takes one.
         let outline = json!({"subpaths": []});
         assert!(!names_file("stroke.set", &json!({"endArrow": {"Custom": {"name": "A", "path": outline}}})));
@@ -778,13 +834,13 @@ mod tests {
             }
             location
         };
-        assert_eq!(at(ParamsPlace::of("object.setLiveShape"), &["path"]), None);
-        assert_eq!(at(ParamsPlace::of("object.setLiveShape"), &["options", "path"]), Some(Location::File));
+        assert_eq!(at(ParamsPlace::of("text.createInPath"), &["path"]), None);
+        assert_eq!(at(ParamsPlace::of("text.createInPath"), &["options", "path"]), Some(Location::File));
         assert_eq!(at(ParamsPlace::of("stroke.set"), &["endArrow", "Custom", "path"]), None);
         assert_eq!(at(ParamsPlace::of("stroke.set"), &["endArrow", "Custom", "file"]), Some(Location::File));
         assert_eq!(at(ParamsPlace::of("no.such.command"), &["path"]), Some(Location::File));
         assert_eq!(at(ParamsPlace::top(None), &["destinationFolder"]), Some(Location::Folder));
-        let call = json!({"command": "object.setLiveShape", "params": {"path": [[0, 0]]}});
+        let call = json!({"command": "text.createInPath", "params": {"path": [[0, 0]]}});
         let carried = call.as_object().and_then(ParamsPlace::carried);
         let (inner, location) = ParamsPlace::of("command.batch").member("params", carried);
         assert_eq!(location, None);
@@ -792,11 +848,44 @@ mod tests {
         assert_eq!(ParamsPlace::carried(&serde_json::Map::new()).map(|_| ()), None);
         let unknown = json!({"command": "no.such.command", "params": {}});
         assert!(unknown.as_object().and_then(ParamsPlace::carried).is_none());
-        let step = [json!("object.setLiveShape"), json!({"path": [[0, 0]]})];
+        let step = [json!("text.createInPath"), json!({"path": [[0, 0]]})];
         let place = ParamsPlace::top(None).item(1, ParamsPlace::step(&step));
         assert_eq!(place.member("path", None).1, None);
         assert_eq!(ParamsPlace::top(None).item(0, ParamsPlace::step(&step)).member("path", None).1, Some(Location::File));
-        assert!(ParamsPlace::step(&[json!("object.setLiveShape")]).is_none());
+        assert!(ParamsPlace::step(&[json!("text.createInPath")]).is_none());
+    }
+
+    /// A file key counts as a command's param only where its description takes it: not a word in
+    /// the prose after the params, in a nested object or in the result. A description that doesn't
+    /// say which keys it takes counts any `key:` in its text.
+    #[test]
+    fn a_param_is_a_key_the_description_takes() {
+        assert!(described_param("{path: id, text?: string}", "path"));
+        assert!(described_param("{id?|ids?, path?: id}", "path"));
+        assert!(!described_param("{id?, radius?: pt} rounds the corners on any path: …", "path"));
+        assert!(!described_param("{ids?: [id]} reverses the paths: their direction", "paths"));
+        assert!(!described_param("{} → {id, path: the mask's path}", "path"));
+        assert!(!described_param("{params?: {paths: 0-100}}", "paths"));
+        // The keys of the command a `…` entry names.
+        assert!(described_param("{…as links.relink}", "folder"));
+        assert!(!described_param("{…as links.relink}", "url"));
+        // No parameter object, or a `…` entry that names no command: any `key:` counts.
+        assert!(described_param("path: a file", "path"));
+        assert!(described_param("{…more settings, id?} saves to path: a file", "path"));
+        assert!(!described_param("{…more settings, id?} reverses the subpath: x", "path"));
+        for (id, key) in [
+            ("object.setLiveShape", "path"),
+            ("path.reverse", "paths"),
+            ("object.pathfinder.options", "paths"),
+            ("object.maskImage", "path"),
+            ("imageTrace.make", "paths"),
+            ("svgInteractivity.info", "files"),
+            ("addon.cleanup.rejoin", "paths"),
+        ] {
+            let Some(spec) = crate::cmd::find_command(id) else { panic!("no command {id}") };
+            assert!(!takes_param(spec, key), "{id} takes `{key}`");
+            assert!(!NOT_FILES.contains(&(id, key)), "{id} `{key}` is exempt");
+        }
     }
 
     #[test]

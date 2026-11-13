@@ -2634,6 +2634,34 @@ fn gradient_options_and_links_the_data_cant_hold_are_reported() {
     let back = read_back(&doc);
     let Paint::Gradient(g) = back.layers[0].children().unwrap()[0].appearance.items[0].paint() else { panic!("a gradient") };
     assert_eq!((color(&g.gradient.stops[0].color), g.gradient.stops[0].swatch.as_deref()), (color(&BRAND), None));
+    // A gradient mixed around the hue wheel, either way, is written as a classic one of the stops
+    // on its curve, no more than the reader reads, and opens with the colors it had.
+    for method in [vectorcraft_color::gradient::GradientMethod::HueClockwise, vectorcraft_color::gradient::GradientMethod::HueCounterclockwise] {
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut g = sunset();
+        g.method = method;
+        let want = g.clone();
+        let n = painted(
+            &mut doc,
+            shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)),
+            vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(g, None, None)))],
+        );
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(out.warnings, [writer::GRADIENT_HUE], "{method:?}");
+        let back = read_back(&doc);
+        let Paint::Gradient(g) = back.layers[0].children().unwrap()[0].appearance.items[0].paint() else { panic!("a gradient") };
+        assert!(g.gradient.method.is_classic(), "{method:?}");
+        let written = g.gradient.stops.len();
+        assert!((want.stops.len() + 1..=crate::import::MAX_GRADIENT_STOPS).contains(&written), "{method:?}: {written} stops");
+        for k in 0..=100 {
+            let t = k as f32 / 100.0;
+            let ((a, ao), (b, bo)) = (want.sample(t), g.gradient.sample(t));
+            let (a, b) = (a.to_rgb(), b.to_rgb());
+            assert!(a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.03) && (ao - bo).abs() < 0.03, "{method:?} at {t}: {a:?} {ao} vs {b:?} {bo}");
+        }
+    }
 }
 
 /// A pattern whose art reaches past its tile is written as its tiles cut to the shape: a definition
@@ -8378,8 +8406,9 @@ fn brushes_the_reader_cant_read_are_left_out() {
     }
     left_out(vec![Brush { name: "A/B".into(), ..keep.clone() }], "slash");
     left_out(vec![Brush { kind: BrushKind::Bristle(Bristle::default()), ..keep.clone() }], "a second brush of the name");
-    // A Pattern brush named "X" is left out, so a Calligraphic brush named "X" after it comes back. A
-    // path with "X" is drawn with the Pattern brush, so it comes back as its drawn look.
+    // A Pattern brush named "X" is left out, so a Calligraphic brush named "X" after it comes back,
+    // as "X 2", the name the library gives it when it is read. A path with "X" is drawn with the
+    // Pattern brush, so it comes back as its drawn look.
     let mut doc = Document::new(300.0, 200.0);
     let x = Brush { name: "X".into(), ..keep.clone() };
     vectorcraft_brush::store(&mut doc, &[Brush { name: "X".into(), kind: BrushKind::Pattern(PatternBrush::default()) }, x.clone()]);
@@ -8387,7 +8416,7 @@ fn brushes_the_reader_cant_read_are_left_out() {
     let out = export_ai_editing(&doc, &opts()).unwrap();
     assert!(out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
     let back = read_back(&doc);
-    assert_eq!(vectorcraft_brush::library(&back), [x]);
+    assert_eq!(vectorcraft_brush::library(&back), [Brush { name: "X 2".into(), ..x }]);
     let n = &back.layers[0].children().unwrap()[0];
     assert!(n.appearance.stroke().is_none_or(|s| s.brush.is_none()), "not with the other brush of the name: {n:#?}");
 }

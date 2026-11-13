@@ -116,6 +116,8 @@
 	Blend Vertically	Sulauta pystysuunnassa
 	Convert to CMYK	Muunna CMYK:ksi
 	Convert to Grayscale	Muunna harmaasävyiseksi
+	Convert to Indexed Color	Muunna indeksoiduiksi väreiksi
+	Convert to Indexed Color…	Muunna indeksoiduiksi väreiksi…
 	Convert to RGB	Muunna RGB:ksi
 	Invert Colors	Käännä värit
 	Overprint Black…	Päällepainata musta…
@@ -1817,6 +1819,8 @@ digits	Malayalam	Malajalam
 	Objects on Path Tool	Objektit polulla -työkalu
 	Attach Objects on Path	Kiinnitä objektit polulle
 	Expand Objects on Path	Laajenna objektit polulla
+	Detach	Irrota
+	Detach Object from Path	Irrota objekti polulta
 	Release Live Paint	Vapauta elävä maalaus
 	Release Repeat	Vapauta toisto
 	Release Slice	Vapauta siivu
@@ -3811,6 +3815,11 @@ theme	Appearance	Ulkoasu
 	Primary	Ensisijainen
 	Printing / Exporting	Tulostus / vienti
 	Real-time Drawing and Editing	Reaaliaikainen piirto ja muokkaus
+	Use Monitor Profile for Canvas	Käytä näytön profiilia kankaalle
+	The canvas is drawn in sRGB.	Kangas piirretään sRGB-tilassa.
+	Canvas display profile:	Kankaan näyttöprofiili:
+	The system matches the window to the display's colors.	Järjestelmä sovittaa ikkunan näytön väreihin.
+	No usable display profile was found: the canvas is drawn in sRGB.	Käyttökelpoista näyttöprofiilia ei löytynyt: kangas piirretään sRGB-tilassa.
 	Render Threads (-1 = Automatic)	Renderöintisäikeet (-1 = automaattinen)
 	Reset Preferences	Palauta asetukset
 	Export Preferences…	Vie asetukset…
@@ -4563,6 +4572,9 @@ imageTrace	Outline	Ääriviiva
 @msg	Couldn't open {name}: {e}	Tiedostoa {name} ei voitu avata: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Kohdetta {name} ei voitu sijoittaa: asiakirja, johon se pudotettiin, on suljettu
 @msg	Couldn't place {name}: the document it was placed in was closed	Kohdetta {name} ei voitu sijoittaa: asiakirja, johon sitä sijoitettiin, on suljettu
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Kohdetta {name} ei voitu sijoittaa: asiakirja, johon se pudotettiin, on palautettu tallennettuun versioon
+@msg	Couldn't place {name}: the document it was placed in was reverted	Kohdetta {name} ei voitu sijoittaa: asiakirja, johon sitä sijoitettiin, on palautettu tallennettuun versioon
+@msg	Couldn't paste: the document it was pasted in was reverted	Liittäminen ei onnistunut: asiakirja, johon liitettiin, on palautettu tallennettuun versioon
 @msg	Couldn't read {name}: {e}	Tiedostoa {name} ei voitu lukea: {e}
 @msg	Couldn't save recovery data: {e}	Palautustietoja ei voitu tallentaa: {e}
 @msg	Create Outlines: select text objects	Muunna ääriviivoiksi: valitse tekstiobjekteja
@@ -4982,6 +4994,7 @@ imageTrace	Outline	Ääriviiva
 @msg	paths contain invalid coordinates	polut sisältävät virheellisiä koordinaatteja
 @msg	paths: give at least one file	paths: anna vähintään yksi tiedosto
 @msg	replace: the object to replace was changed or deleted	replace: korvattavaa objektia on muutettu tai se on poistettu
+@msg	the document it was prepared for is no longer active	asiakirja, jota varten se valmisteltiin, ei ole enää aktiivinen
 @msg	pattern missing	kuvio puuttuu
 @msg	patterns nested too deeply are filled with mid-grey	liian syvälle sisäkkäiset kuviot täytetään keskiharmaalla
 @msg	percent must be above 0 and at most 6400, not {p}	percent-arvon on oltava yli 0 ja enintään 6400, ei {p}
@@ -5603,6 +5616,8 @@ imageTrace	Outline	Ääriviiva
 	Vivid	Eloisa
 	Spectrum	Spektri
 	Perceptual	Havainnollinen
+	Hue Clockwise	Sävy myötäpäivään
+	Hue Counterclockwise	Sävy vastapäivään
 	Relative Colorimetric	Suhteellinen kolorimetrinen
 	Absolute Colorimetric	Absoluuttinen kolorimetrinen
 	Exact	Tarkka
@@ -5841,7 +5856,9 @@ mark-style	Japanese	Japanilainen
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`-kohteen face-arvon on oltava front tai back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-kohteen {key}-arvon on oltava luku, joka on vähintään {lo} ja enintään {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` on oltava taulukko
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafiikat sijoitetaan tasaisille pinnoille: käytä objektityyppiä Pursota tai Taso
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiikat sijoitetaan objektityypeille Taso, Pursota ja Pyöräytä
+@msg	Revolve maps graphics onto its side: map them onto the front	Pyöräytä sijoittaa grafiikat kylkeensä: sijoita ne etupuolelle
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiikat ovat liian monimutkaisia tälle pinnalle: yksinkertaista symbolien kuvitusta tai pienennä Segmentit-arvoa
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` hyväksyy enintään {MAX_GRAPHICS} grafiikkaa
 @msg	A plane has one face: map its graphics onto the front	Tasolla on yksi puoli: sijoita sen grafiikat etupuolelle
 @msg	The graphics are too complex: simplify the symbols' art	Grafiikat ovat liian monimutkaisia: yksinkertaista symbolien kuvitusta
@@ -6049,6 +6066,7 @@ mark-style	Japanese	Japanilainen
 @msg	no bound object reports a value (locked objects and embedded images report none)	mikään sidottu objekti ei ilmoita arvoa (lukitut objektit ja upotetut kuvat eivät ilmoita arvoa)
 @msg	select an Intertwine group	valitse lomitusryhmä
 @msg	select an Objects on Path group	valitse Objektit polulla -ryhmä
+@msg	choose the object to detach with its Select/Move widget	valitse irrotettava objekti sen Valitse/Siirrä-säätimellä
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	yhdistelmäpolun, sulautuksen, vääristyskuoren, toiston tai lomitusryhmän sisällä olevaan polkuun ei voi kiinnittää objekteja
 @msg	a clipping path can't take objects	leikkauspolkuun ei voi kiinnittää objekteja
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	sulautuksen, vääristyskuoren, toiston tai lomitusryhmän sisällä olevia objekteja ei voi kiinnittää polulle
@@ -6335,7 +6353,7 @@ axis	Y Axis	Y-akseli
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` koskee liukuväritäyttöjä (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` koskee liukuväritäyttöjä (paint.setFill)
 @msg	`dither` must be true or false	`dither` on oltava true tai false
-@msg	`method` must be classic or perceptual	`method` on oltava classic tai perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` on oltava classic, perceptual, hue-clockwise tai hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` on oltava pad, repeat tai reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` on oltava kokonaisluku väliltä 1–{MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` koskee lineaarisia, säteittäisiä ja kartiomaisia liukuvärejä sekä vinoneliöliukuvärejä
@@ -6578,6 +6596,7 @@ axis	Y Axis	Y-akseli
 	Continue	Jatka
 	Continue Action	Jatka toimintoa
 	Delete Action Step	Poista toiminnon vaihe
+	Move Action Step	Siirrä toiminnon vaihe
 	Press Play Current Selection in the Actions panel to go on.	Jatka valitsemalla Toiminnot-paneelista Toista nykyinen valinta.
 	Stop: {message}	Pysäytys: {message}
 @msg	no action is waiting at a stop	mikään toiminto ei odota pysäytyksessä
@@ -6749,6 +6768,22 @@ axis	Y Axis	Y-akseli
 	Graphite Pencil	Grafiittikynä
 	Wax Crayon	Vahaliitu
 	Charcoal Dust	Hiilipöly
+	Notched Ribbon	Lovettu nauha
+	Double Line	Kaksoisviiva
+	Wave	Aalto
+	Teardrop	Pisara
+	Striped Ribbon	Raidallinen nauha
+	Fine Nib	Ohut kärki
+	Broad Nib	Leveä kärki
+	Chisel	Taltta
+	Round Pen	Pyöreä kynä
+	Pressure Pen	Painekynä
+	Beads	Helmet
+	Dash Dot	Viiva-piste
+	Scallops	Kaarireunus
+	Stars	Tähdet
+	Triangles	Kolmiot
+	Sparkles	Kipinät
 	Save Brush Library…	Tallenna sivellinkirjasto…
 @msg	`{_1}` has no brushes to apply	Kohteessa `{_1}` ei ole käytettäviä siveltimiä
 @msg	missing `library` (see brush.libraries)	`library` puuttuu (katso brush.libraries)

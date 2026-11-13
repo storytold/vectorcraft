@@ -161,6 +161,9 @@ pub struct CacheKey {
     /// The Image Trace objects drawn with their source image
     /// ([`vectorcraft_render::RenderOptions::trace_source`]).
     pub trace_source: Option<std::sync::Arc<Vec<vectorcraft_doc::NodeId>>>,
+    /// The display profile the frame is converted into ([`crate::display_profile::DisplayProfile::key`]),
+    /// 0 for none.
+    pub display: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default)]

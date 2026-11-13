@@ -182,6 +182,8 @@ digits	Malayalam	マラヤーラム数字
 	Blend Vertically	上下にブレンド
 	Convert to CMYK	CMYK に変換
 	Convert to Grayscale	グレースケールに変換
+	Convert to Indexed Color	インデックスカラーに変換
+	Convert to Indexed Color…	インデックスカラーに変換…
 	Convert to RGB	RGB に変換
 	Invert Colors	カラー反転
 	Overprint Black…	オーバープリントブラック…
@@ -1992,6 +1994,8 @@ antiAlias	Sharp	シャープ
 	Objects on Path Tool	パス上のオブジェクトツール
 	Attach Objects on Path	パス上のオブジェクトをアタッチ
 	Expand Objects on Path	パス上のオブジェクトを拡張
+	Detach	切り離し
+	Detach Object from Path	オブジェクトをパスから切り離し
 	Release Live Paint	ライブペイントを解除
 	Release Repeat	リピートを解除
 	Release Slice	スライスを解除
@@ -2789,6 +2793,11 @@ mark-style	Japanese	日本式
 	Rating:	評価:
 	Real World:	実寸:
 	Real-time Drawing and Editing	リアルタイム描画および編集
+	Use Monitor Profile for Canvas	キャンバスにモニタープロファイルを使用
+	The canvas is drawn in sRGB.	キャンバスは sRGB で描画されます。
+	Canvas display profile:	キャンバスのディスプレイプロファイル:
+	The system matches the window to the display's colors.	システムがウィンドウをディスプレイのカラーに合わせます。
+	No usable display profile was found: the canvas is drawn in sRGB.	使用できるディスプレイプロファイルが見つかりません。キャンバスは sRGB で描画されます。
 	Rearrange All Artboards	すべてのアートボードを再配置
 	Rearrange	再配置
 	Select All Artboards	すべてのアートボードを選択
@@ -4577,6 +4586,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	select a repeat	リピートを選択してください
 @msg	select an Intertwine group	織り交ぜグループを選択してください
 @msg	select an Objects on Path group	パス上のオブジェクトグループを選択してください
+@msg	choose the object to detach with its Select/Move widget	切り離すオブジェクトを選択/移動ウィジェットで選んでください
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	複合パス、ブレンド、エンベロープ、リピートまたは織り交ぜグループ内のパスにはオブジェクトをアタッチできません
 @msg	a clipping path can't take objects	クリッピングパスにはオブジェクトをアタッチできません
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	ブレンド、エンベロープ、リピートまたは織り交ぜグループ内のオブジェクトはパスにアタッチできません
@@ -5179,10 +5189,14 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no user library folder here	この環境にはユーザーライブラリフォルダーがありません
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} を配置できませんでした: ドロップ先のドキュメントは閉じられています
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} を配置できませんでした: 配置先のドキュメントは閉じられています
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} を配置できませんでした: ドロップ先のドキュメントは保存済みの状態に戻されました
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} を配置できませんでした: 配置先のドキュメントは保存済みの状態に戻されました
+@msg	Couldn't paste: the document it was pasted in was reverted	貼り付けられませんでした: 貼り付け先のドキュメントは保存済みの状態に戻されました
 @msg	no files to place	配置するファイルがありません
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` は VectorCraft ドキュメント、PDF、PDF 互換の .ai ファイルのいずれでもありません
 @msg	paths: give at least one file	paths: ファイルを 1 つ以上指定してください
 @msg	replace: the object to replace was changed or deleted	replace: 置き換えるオブジェクトは変更または削除されています
+@msg	the document it was prepared for is no longer active	準備したときのドキュメントがもうアクティブではありません
 @msg	Couldn't place {name}: {e}	{name} を配置できませんでした: {e}
 @msg	no print service	プリントサービスがありません
 @msg	the print job has no data	プリントジョブにデータがありません
@@ -5619,7 +5633,10 @@ lighting	Light	ライト
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` の face には front または back を指定してください
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` の {key} は {lo} から {hi} までの数値にしてください
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` は配列にしてください
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	グラフィックは平らな面にマッピングされます。オブジェクトの種類に押し出しまたは平面を使用してください
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	グラフィックはオブジェクトの種類が平面、押し出し、回転体のときにマッピングされます
+	Graphics map onto the Plane, Extrude and Revolve object types.	グラフィックはオブジェクトの種類が平面、押し出し、回転体のときにマッピングされます。
+@msg	Revolve maps graphics onto its side: map them onto the front	回転体はグラフィックを側面にマッピングします。前面にマッピングしてください
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	グラフィックがこのサーフェスには複雑すぎます。シンボルのアートを単純化するか、分割数を減らしてください
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` に指定できるグラフィックは {MAX_GRAPHICS} 個までです
 @msg	A plane has one face: map its graphics onto the front	平面には面が 1 つしかありません。グラフィックは前面にマッピングしてください
 @msg	The graphics are too complex: simplify the symbols' art	グラフィックが複雑すぎます。シンボルのアートを単純化してください
@@ -5996,7 +6013,9 @@ axis	Y Axis	Y 軸
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` はグラデーションの塗りに適用されます (paint.setFill)
 @msg	`dither` must be true or false	`dither` には true または false を指定してください
 	Perceptual	知覚的
-@msg	`method` must be classic or perceptual	`method` には classic または perceptual を指定してください
+	Hue Clockwise	時計回りの色相
+	Hue Counterclockwise	反時計回りの色相
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` には classic、perceptual、hue-clockwise または hue-counterclockwise を指定してください
 @msg	`spread` must be pad, repeat or reflect	`spread` には pad、repeat または reflect を指定してください
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` には 1 から {MAX_REPEATS} までの整数を指定してください
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` は線形、円形、円錐およびひし形グラデーションに適用されます
@@ -6239,6 +6258,7 @@ axis	Y Axis	Y 軸
 	Continue	続行
 	Continue Action	アクションを続行
 	Delete Action Step	アクションステップを削除
+	Move Action Step	アクションステップを移動
 	Press Play Current Selection in the Actions panel to go on.	続行するには、アクションパネルの「選択項目を再生」を押します。
 	Stop: {message}	停止: {message}
 @msg	no action is waiting at a stop	停止で待機中のアクションはありません
@@ -6410,6 +6430,22 @@ axis	Y Axis	Y 軸
 	Graphite Pencil	黒鉛鉛筆
 	Wax Crayon	ワックスクレヨン
 	Charcoal Dust	木炭の粉
+	Notched Ribbon	ノッチリボン
+	Double Line	二重線
+	Wave	波
+	Teardrop	しずく
+	Striped Ribbon	ストライプリボン
+	Fine Nib	細いペン先
+	Broad Nib	太いペン先
+	Chisel	平ノミ
+	Round Pen	丸ペン
+	Pressure Pen	筆圧ペン
+	Beads	ビーズ
+	Dash Dot	一点鎖線
+	Scallops	スカラップ
+	Stars	星
+	Triangles	三角形
+	Sparkles	きらめき
 	Save Brush Library…	ブラシライブラリを保存…
 @msg	`{_1}` has no brushes to apply	`{_1}` に適用できるブラシがありません
 @msg	missing `library` (see brush.libraries)	`library` がありません (brush.libraries を参照)

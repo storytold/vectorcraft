@@ -158,6 +158,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "edit.colors.saturate",
     "edit.colors.toCMYK",
     "edit.colors.toGrayscale",
+    "edit.colors.toIndexed",
     "edit.colors.toRGB",
     "edit.duplicate",
     "edit.findNext",
@@ -166,6 +167,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "effect.deferredStatus",
     "effect.duplicate",
     "effect.expandAppearance",
+    "effect.expandAsWireframes",
     "effect.list",
     "effect.move",
     "effect.remove",
@@ -314,6 +316,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "object.move",
     "object.nudge",
     "object.objectsOnPath.attach",
+    "object.objectsOnPath.detach",
     "object.objectsOnPath.expand",
     "object.objectsOnPath.moveMember",
     "object.objectsOnPath.options",
@@ -689,8 +692,8 @@ pub(super) const ALLOWED: &[&str] = &[
 ];
 
 /// Commands a plug-in may not call although no rule refuses them, in order: they change the
-/// preferences, a tool's options, a drag's state or the font names the whole app knows, or run
-/// plug-ins again.
+/// preferences, a tool's options, a drag's state or the font names the whole app knows, run
+/// plug-ins again, or read a file and report where it is on disk.
 pub(super) const DENIED: &[&str] = &[
     "addon.cleanup.splitText",
     "addon.pathtools.movePointsTogether",
@@ -702,5 +705,6 @@ pub(super) const DENIED: &[&str] = &[
     "object.liquify",
     "object.pathfinder.options",
     "stroke.arrowheads.edit",
+    "stroke.arrowheads.list",
     "type.compositeFonts.set",
 ];
