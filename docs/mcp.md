@@ -3115,8 +3115,13 @@ already walks Image Trace. Short agent entry points:
   reply's `defined` lists the variables the import defined. While the variables are
   locked, an import whose header would define a variable fails with "variables are locked".
   A `dataset.import` file that isn't UTF-8 is read as Windows-1252, unless it starts with the UTF-8 byte-order mark.
-  A file that starts with a UTF-16 byte-order mark is read as UTF-16, and a file without one that holds NUL bytes is
-  refused. `csv` and `data` are read as the text they hold.
+  A file that starts with a UTF-16 byte-order mark is read as UTF-16. A file without one that holds NUL bytes is read
+  as UTF-16 when at least half of its two-byte units hold a NUL byte, as characters from U+0001 to U+00FF do, in the
+  byte order that reads a line break (`\n` or `\r`). It is refused when fewer of its units hold a NUL byte (UTF-8 or
+  Windows-1252 text with stray NUL bytes, or UTF-16 text made mostly of other characters, which needs a byte-order
+  mark), when both byte orders read a line break (the text holds U+0A00 or U+0D00), when it has an odd length, and
+  when it isn't valid UTF-16 in that order or holds a NUL character. A file with no line break has no data rows and is
+  refused for that. `csv` and `data` are read as the text they hold.
 - Variable libraries: `variable.loadLibrary {path|xml|dataBase64}` (the Variables panel menu's Load Variable
   Library…) replaces the document's variables and data sets with a variable library's in one undo step. A load, like a
   `dataset.import`, adds no undo step when it leaves the variables and data sets as they were. The library
