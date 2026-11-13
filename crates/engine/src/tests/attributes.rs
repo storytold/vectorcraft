@@ -1,4 +1,5 @@
-//! Window → Attributes (`attributes.set`, `attributes.info`, `path.setFillRule`, `path.reverse`),
+//! Window → Attributes (`attributes.set`, `attributes.info`, `path.setFillRule`, `path.reverse`,
+//! and `select.byNote`, which selects objects by their note),
 //! the links SVG export writes for objects with a URL, and what objects keep for other software
 //! (their `data-*` attributes and their attributes in other applications' namespaces).
 
@@ -214,6 +215,140 @@ fn object_data_is_set_saved_and_written_to_svg() {
     let native = vectorcraft_format::save(&s.doc().unwrap().doc, false);
     let back = vectorcraft_format::load(&native).unwrap();
     assert_eq!(back.node(a).unwrap().extras().attrs, s.doc().unwrap().doc.node(a).unwrap().extras().attrs);
+}
+
+/// The selected objects after `select.byNote` with `p`, or its error.
+fn by_note(s: &mut Session, p: Value) -> std::result::Result<Vec<u64>, String> {
+    s.execute("select.byNote", &p).map_err(|e| e.to_string())?;
+    Ok(s.doc().unwrap().selection.objects.iter().map(|id| id.0).collect())
+}
+
+fn note(s: &mut Session, id: NodeId, note: &str) {
+    run(s, "attributes.set", json!({"ids": [id.0], "note": note}));
+}
+
+/// Select by Note finds a note anywhere and in any letter case by default, replaces the selection
+/// with every object it finds, in paint order, and is not an undo step. Case Sensitive and Whole
+/// Word narrow it; Reselect repeats it.
+#[test]
+fn select_by_note_matches_part_of_a_note_in_any_case_unless_asked() {
+    let mut s = session();
+    let [a, b, c, d] = [0.0, 20.0, 40.0, 60.0].map(|x| rect(&mut s, x));
+    note(&mut s, a, "Logo front");
+    note(&mut s, b, "logo");
+    note(&mut s, c, "Logotype");
+    note(&mut s, d, "back");
+    run(&mut s, "select.set", json!({"ids": [d.0]}));
+    let undo = s.doc().unwrap().history.undo.len();
+    assert_eq!(by_note(&mut s, json!({"note": "  LOGO "})), Ok(vec![a.0, b.0, c.0]), "outer spaces are left out");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    assert_eq!(by_note(&mut s, json!({"note": "logo", "caseSensitive": true})), Ok(vec![b.0]));
+    assert_eq!(by_note(&mut s, json!({"note": "logo", "wholeWord": true})), Ok(vec![a.0, b.0]));
+    assert_eq!(by_note(&mut s, json!({"note": "Logo", "caseSensitive": true, "wholeWord": true})), Ok(vec![a.0]));
+    assert_eq!(by_note(&mut s, json!({"note": "o f"})), Ok(vec![a.0]), "spaces inside the note count");
+    run(&mut s, "select.none", json!({}));
+    run(&mut s, "select.reselect", json!({}));
+    assert_eq!(s.doc().unwrap().selection.objects, [a]);
+}
+
+/// Whole Word looks at every place the text occurs, also places that overlap.
+#[test]
+fn select_by_note_whole_word_matches_overlapping_places_and_other_scripts() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0);
+    let matches = |s: &mut Session, text: &str, p: Value| {
+        note(s, a, text);
+        by_note(s, p).is_ok()
+    };
+    assert!(matches(&mut s, "a aa a a", json!({"note": "a a", "wholeWord": true})));
+    assert!(!matches(&mut s, "aa_a", json!({"note": "a", "wholeWord": true})));
+    assert!(matches(&mut s, "x-ray, x", json!({"note": "x", "wholeWord": true})));
+    assert!(matches(&mut s, "ÉTIQUETTE", json!({"note": "étiquette"})));
+    assert!(!matches(&mut s, "ÉTIQUETTE", json!({"note": "étiquette", "caseSensitive": true})));
+    assert!(matches(&mut s, "标签 一", json!({"note": "一", "wholeWord": true})));
+    assert!(!matches(&mut s, "", json!({"note": "a"})));
+}
+
+/// Letter case is compared one character at a time: a final Σ, whose lowercase is ς, matches Σ
+/// and σ. Whole Word looks at the characters of the note itself, so a letter whose lowercase
+/// takes two characters (İ) neither ends a word early nor matches half of itself.
+#[test]
+fn select_by_note_compares_letter_case_per_character() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0);
+    let matches = |s: &mut Session, text: &str, p: Value| {
+        note(s, a, text);
+        by_note(s, p).is_ok()
+    };
+    assert!(matches(&mut s, "ΟΣ", json!({"note": "Σ"})));
+    assert!(matches(&mut s, "ΟΣ", json!({"note": "σ"})));
+    assert!(matches(&mut s, "ΟΣ", json!({"note": "ος", "wholeWord": true})));
+    assert!(!matches(&mut s, "ΟΣ", json!({"note": "σ", "caseSensitive": true})));
+    assert!(!matches(&mut s, "İx", json!({"note": "i", "wholeWord": true})));
+    assert!(matches(&mut s, "İ x", json!({"note": "İ", "wholeWord": true})));
+    assert!(!matches(&mut s, "İ x", json!({"note": "i", "wholeWord": true})));
+}
+
+/// Select by Note leaves out hidden and locked objects, selects a group whose note matches without
+/// its members and a member whose note matches on its own, keeps to the isolated group, and leaves
+/// the selection as it was when it finds nothing. Bad params are errors that change nothing.
+#[test]
+fn select_by_note_takes_only_objects_that_can_be_selected() {
+    let mut s = session();
+    let [a, b, c, d, e] = [0.0, 10.0, 20.0, 30.0, 40.0].map(|x| rect(&mut s, x));
+    for id in [a, b, c, d, e] {
+        note(&mut s, id, "tag");
+    }
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    run(&mut s, "object.hide", json!({}));
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    run(&mut s, "object.lock", json!({}));
+    run(&mut s, "select.set", json!({"ids": [c.0, d.0]}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    note(&mut s, g, "tag group");
+    assert_eq!(by_note(&mut s, json!({"note": "tag"})), Ok(vec![g.0, e.0]), "the group, not its members");
+    note(&mut s, g, "box");
+    assert_eq!(by_note(&mut s, json!({"note": "tag"})), Ok(vec![c.0, d.0, e.0]));
+    run(&mut s, "object.isolate", json!({"id": g.0}));
+    assert_eq!(by_note(&mut s, json!({"note": "tag"})), Ok(vec![c.0, d.0]), "inside the isolated group only");
+    run(&mut s, "select.set", json!({"ids": [c.0]}));
+    let missing = by_note(&mut s, json!({"note": "nothing"})).unwrap_err();
+    assert!(missing.contains("no object that can be selected has a note matching “nothing”"), "{missing}");
+    assert_eq!(s.doc().unwrap().selection.objects, [c], "the selection stays");
+    for bad in [
+        json!({}),
+        json!({"note": "   "}),
+        json!({"note": 5}),
+        json!({"note": "x".repeat(1025)}),
+        json!({"note": "tag", "caseSensitive": "yes"}),
+        json!({"note": "tag", "wholeWord": 1}),
+    ] {
+        assert!(s.execute("select.byNote", &bad).is_err(), "{bad}");
+        assert_eq!(s.doc().unwrap().selection.objects, [c], "{bad}");
+    }
+    assert!(by_note(&mut s, json!({"note": "x".repeat(1024)})).is_err_and(|e| e.contains("no object")), "1,024 bytes is allowed");
+}
+
+/// Under Lock Guides a guide whose note matches is not a match, and a search that finds only such
+/// guides leaves the selection and the Puppet Warp pins on it as they were.
+#[test]
+fn select_by_note_leaves_locked_guides_out_before_changing_the_selection() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    let g = rect(&mut s, 50.0);
+    note(&mut s, g, "edge");
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    run(&mut s, "view.guides.make", json!({}));
+    run(&mut s, "view.guides.lock", json!({"locked": true}));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    run(&mut s, "object.puppetWarp", json!({"id": a.0, "rest": true, "pins": [[25, 25]], "moved": [[25, 25]]}));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    assert!(s.doc().unwrap().doc.puppet.is_some(), "a pin on the rectangle");
+    let missing = by_note(&mut s, json!({"note": "edge"})).unwrap_err();
+    assert!(missing.contains("no object that can be selected"), "{missing}");
+    let st = s.doc().unwrap();
+    assert_eq!(st.selection.objects, [a], "the selection stays");
+    assert!(st.doc.puppet.is_some(), "the pins stay");
 }
 
 /// An object's attributes in other applications' XML namespaces are its own, as its `data-*`
