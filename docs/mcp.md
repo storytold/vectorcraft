@@ -6138,7 +6138,11 @@ recorded action leaves both out. Art copied from no artboard keeps its place on 
 offset to that one on the others. An index the document does not have, a repeated index, a value that is not an index
 or an empty list fails, and nothing is pasted. Copied artboards come back once, where they were, whichever artboards
 are named. `layer.pasteRemembersLayers {on?}` (a document option, `document.inspect` → `pasteRemembersLayers`)
-pastes objects back into the layers they came from, by name, making missing ones. Drawing modes (`view.drawMode`) apply
+pastes objects back into the layers and sublayers they came from: in the same document while those are still there,
+else by the names of the layer and the layers around it (the topmost chain that matches the most names, a shown and
+unlocked one first). A missing sublayer is made inside its layer, and a missing top-level layer on top, in the paste's
+undo step. When a matched layer, or a layer around it, is hidden or locked, the paste fails and nothing is pasted.
+Drawing modes (`view.drawMode`) apply
 too: in Draw Inside, `edit.paste`, `edit.pasteInPlace` and `edit.pasteOnAllArtboards` put the objects inside the
 object drawn into (its clip group, made on the first paste), whatever Paste Remembers Layers says; in Draw Behind,
 `edit.pasteInPlace` and `edit.pasteOnAllArtboards` put them just below the selection. `edit.pasteInFront` and
