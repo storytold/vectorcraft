@@ -3465,6 +3465,19 @@ digits	Malayalam	Malayálam
 	Spot Color Objects	Objetos con tintas planas
 	Pattern Objects	Objetos con motivos
 	Gradient Objects	Objetos con degradados
+	Font Details	Detalles de fuentes
+	Linked Images	Imágenes vinculadas
+	Embedded Images	Imágenes incrustadas
+	Compound Paths	Trazados compuestos
+	Text Objects	Objetos de texto
+	Placed Documents	Documentos colocados
+	Symbol Instances	Instancias de símbolo
+	Gradient Meshes	Mallas de degradado
+	Blends	Fusiones
+	Envelopes	Envolventes
+	Intertwine Groups	Grupos entrelazados
+	Opacity Masks	Máscaras de opacidad
+	Objects with Effects	Objetos con efectos
 	Spot Colors	Tintas planas
 	Spot Colors…	Tintas planas…
 	Spread:	Extensión:
@@ -4155,6 +4168,10 @@ axis	Both	Ambos
 	Dock Panel	Anclar panel
 	Dock to Top	Anclar arriba
 	Dock to Bottom	Anclar abajo
+	Dock to Left	Anclar a la izquierda
+	Dock to Right	Anclar a la derecha
+	Dock Toolbar	Anclar barra de herramientas
+	Float Toolbar	Hacer flotar la barra de herramientas
 	Control Bar Options	Opciones de la barra de control
 	Tool Options	Opciones de herramienta
 	Object Options	Opciones de objeto

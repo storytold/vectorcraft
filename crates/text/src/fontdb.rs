@@ -105,6 +105,8 @@ pub struct FontDb {
     family_cache: Mutex<Option<Arc<[String]>>>,
     menu_cache: Mutex<Option<MenuFamilies>>,
     generation: AtomicU64,
+    /// This database's [`FontDb::id`].
+    id: u64,
     /// System fallback state: characters no system font covers.
     #[cfg(not(target_arch = "wasm32"))]
     sys: Mutex<SysFallback>,

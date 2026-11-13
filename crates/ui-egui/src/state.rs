@@ -868,7 +868,8 @@ impl FloatingFlyout {
 }
 
 /// A toolbar made with Window › Toolbars › New Toolbar (`window.toolbar.new`): it floats on its
-/// own, filled with tools from the All Tools drawer, and is kept with the workspace it was made in.
+/// own or docks along the window's left or right edge, filled with tools from the All Tools drawer,
+/// and is kept with the workspace it was made in.
 /// The groups torn off it are kept with it (`floating`), so the Tools panel's strips
 /// (`UiState::floating_flyouts`) hold none of them.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -881,8 +882,16 @@ pub struct CustomToolbar {
     /// It shows (Window › Toolbars › its name toggles it).
     #[serde(default = "yes")]
     pub shown: bool,
-    /// Top-left corner in screen points.
+    /// Top-left corner in screen points while it floats; while it is docked, where it floated last.
     pub pos: [f32; 2],
+    /// Its place in the stack of toolbars docked along one of the window's edges (0 at the top),
+    /// while it is docked there; none while it floats at `pos`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dock: Option<u32>,
+    /// It docks along the window's right edge, not the left: the edge it is docked at, or while it
+    /// floats the edge it docked at last.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dock_right: bool,
     /// The tool each slot of several tools shows, chosen last (keyed by the slot's first tool).
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub slot_tool: std::collections::BTreeMap<String, String>,
