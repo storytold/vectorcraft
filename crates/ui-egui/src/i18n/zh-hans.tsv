@@ -4375,6 +4375,7 @@ imageTrace	Outline	轮廓
 @msg	objects can't be nested more than 32 deep	对象的嵌套不能超过 32 层
 @msg	the SVG's elements are nested more than {0} deep	SVG 的元素嵌套超过 {0} 层
 @msg	unknown command `{0}`	未知命令 `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	“{action}”的步骤 {step} 运行未知命令 `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	未知命令 `{0}`；您是否想输入 `{1}`？
 @msg	`{what}` closes nothing	`{what}` 没有可结束的内容
 @msg	`{what}` closes something it didn't open	`{what}` 结束了并非由它开始的内容
@@ -4708,6 +4709,7 @@ imageTrace	Outline	轮廓
 @msg	no action set to save	没有要存储的动作组
 @msg	the action set file can't be read in full	无法完整读取动作组文件
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	已载入“{name}”：已略过 {n} 个步骤
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	已载入“{name}”：保留了 {n} 个含未知命令的步骤；第一个：“{action}”，步骤 {step}，`{command}`
 @msg	not an action set file	不是动作组文件
 @msg	the action set file is larger than 8 MiB	动作组文件大于 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`：参考将大于 {MAX_BYTES} 字节

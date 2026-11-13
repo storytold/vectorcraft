@@ -4628,6 +4628,7 @@ theme	Appearance	Erscheinungsbild
 @msg	no action set to save	kein Aktionssatz zum Speichern
 @msg	the action set file can't be read in full	die Aktionssatzdatei kann nicht vollständig gelesen werden
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	„{name}“ geladen: {n} Schritt wurde ausgelassen|„{name}“ geladen: {n} Schritte wurden ausgelassen
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	„{name}“ geladen: {n} Schritt hat einen unbekannten Befehl und wurde behalten: „{action}“, Schritt {step}, `{command}`|„{name}“ geladen: {n} Schritte haben unbekannte Befehle und wurden behalten; der erste: „{action}“, Schritt {step}, `{command}`
 @msg	not an action set file	keine Aktionssatzdatei
 @msg	the action set file is larger than 8 MiB	die Aktionssatzdatei ist größer als 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: die Referenz wäre größer als {MAX_BYTES} Byte
@@ -4869,6 +4870,7 @@ theme	Appearance	Erscheinungsbild
 @msg	tool shortcuts must be a single key (optionally with Shift)	Tastaturbefehle für Werkzeuge müssen aus einer einzelnen Taste bestehen (optional mit Shift)
 @msg	truncated	abgeschnitten
 @msg	unknown command `{0}`	unbekannter Befehl `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	Schritt {step} von „{action}“ führt den unbekannten Befehl `{command}` aus
 @msg	unknown command `{0}`; did you mean `{1}`?	unbekannter Befehl `{0}`; meinten Sie `{1}`?
 @msg	unknown effect `{id}`	unbekannter Effekt `{id}`
 @msg	unknown format	unbekanntes Format

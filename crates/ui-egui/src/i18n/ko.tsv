@@ -4607,6 +4607,7 @@ theme	Appearance	외관
 @msg	objects can't be nested more than 32 deep	개체는 32단계보다 깊게 중첩할 수 없습니다
 @msg	the SVG's elements are nested more than {0} deep	SVG 요소가 {0}단계보다 깊게 중첩되어 있습니다
 @msg	unknown command `{0}`	알 수 없는 명령 `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	“{action}”의 단계 {step}에서 알 수 없는 명령 `{command}`을(를) 실행합니다
 @msg	unknown command `{0}`; did you mean `{1}`?	알 수 없는 명령 `{0}`: `{1}`을(를) 의미하셨습니까?
 @msg	`{what}` closes nothing	`{what}`이(가) 닫는 항목이 없습니다
 @msg	`{what}` closes something it didn't open	`{what}`이(가) 열지 않은 항목을 닫습니다
@@ -4952,6 +4953,7 @@ theme	Appearance	외관
 @msg	no action set to save	저장할 액션 세트가 없습니다
 @msg	the action set file can't be read in full	액션 세트 파일을 전부 읽을 수 없습니다
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}”을(를) 불러왔습니다. 단계 {n}개를 제외했습니다
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	“{name}”을(를) 불러왔습니다. 알 수 없는 명령이 있는 단계 {n}개를 그대로 두었습니다. 첫 번째: “{action}”, 단계 {step}, `{command}`
 @msg	not an action set file	액션 세트 파일이 아닙니다
 @msg	the action set file is larger than 8 MiB	액션 세트 파일이 8 MiB보다 큽니다
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: 참조가 {MAX_BYTES}바이트보다 커집니다

@@ -4162,6 +4162,7 @@ axis	Both	Ambos
 @msg	no action set to save	nenhum conjunto de ações para salvar
 @msg	the action set file can't be read in full	o arquivo de conjunto de ações não pode ser lido por inteiro
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” carregado: {n} etapa foi omitida|“{name}” carregado: {n} etapas foram omitidas
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	“{name}” carregado: {n} etapa tem um comando desconhecido e foi mantida: “{action}”, etapa {step}, `{command}`|“{name}” carregado: {n} etapas têm comandos desconhecidos e foram mantidas; a primeira: “{action}”, etapa {step}, `{command}`
 @msg	not an action set file	não é um arquivo de conjunto de ações
 @msg	the action set file is larger than 8 MiB	o arquivo de conjunto de ações tem mais de 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: a referência teria mais de {MAX_BYTES} bytes
@@ -4401,6 +4402,7 @@ axis	Both	Ambos
 @msg	tool shortcuts must be a single key (optionally with Shift)	os atalhos de ferramenta devem ser uma única tecla (opcionalmente com Shift)
 @msg	truncated	truncado
 @msg	unknown command `{0}`	comando desconhecido `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	a etapa {step} de “{action}” executa o comando desconhecido `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	comando desconhecido `{0}`; você quis dizer `{1}`?
 @msg	unknown effect `{id}`	efeito desconhecido `{id}`
 @msg	unknown format	formato desconhecido

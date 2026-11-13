@@ -4837,6 +4837,7 @@ imageTrace	Outline	Kontur
 @msg	no action set to save	brak zestawu operacji do zapisania
 @msg	the action set file can't be read in full	nie można odczytać całego pliku zestawu operacji
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Wczytano „{name}”: pominięto {n} krok|Wczytano „{name}”: pominięto {n} kroki|Wczytano „{name}”: pominięto {n} kroków
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Wczytano „{name}”: {n} krok ma nieznane polecenie i został zachowany: „{action}”, krok {step}, `{command}`|Wczytano „{name}”: {n} kroki mają nieznane polecenia i zostały zachowane; pierwszy: „{action}”, krok {step}, `{command}`|Wczytano „{name}”: {n} kroków ma nieznane polecenia i zostało zachowanych; pierwszy: „{action}”, krok {step}, `{command}`
 @msg	not an action set file	to nie jest plik zestawu operacji
 @msg	the action set file is larger than 8 MiB	plik zestawu operacji jest większy niż 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: dokumentacja byłaby większa niż {MAX_BYTES} bajtów
@@ -5080,6 +5081,7 @@ imageTrace	Outline	Kontur
 @msg	tool shortcuts must be a single key (optionally with Shift)	skróty narzędzi muszą być pojedynczym klawiszem (opcjonalnie z Shift)
 @msg	truncated	obcięty
 @msg	unknown command `{0}`	nieznane polecenie `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	krok {step} operacji „{action}” uruchamia nieznane polecenie `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	nieznane polecenie `{0}`; czy chodziło o `{1}`?
 @msg	unknown effect `{id}`	nieznany efekt `{id}`
 @msg	unknown format	nieznany format
