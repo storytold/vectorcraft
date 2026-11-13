@@ -7730,6 +7730,55 @@ fn a_top_object_envelope_opens_live_with_its_outline() {
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
 }
 
+/// A top object whose saved grid has three patches across, its top edge one curve split into
+/// thirds, maps its contents along that one curve. In this synthetic file the drawn art is drawn by
+/// VectorCraft's own map of the unsplit curve, so the envelope opens live only when the split side
+/// maps the same way, and the contents' first quarter ends a quarter of the way along the curve.
+#[test]
+fn a_top_object_whose_top_is_one_curve_split_in_thirds_opens_live() {
+    use kurbo::{CubicBez, ParamCurve};
+    use vectorcraft_doc::live::EnvelopeKind;
+    // In the document: the top runs from (40, 20) to (160, 20), its parameter fast at the start.
+    let top = CubicBez::new((40.0, 20.0), (112.0, -16.0), (154.0, 2.0), (160.0, 20.0));
+    let thirds = [top.subsegment(0.0..1.0 / 3.0), top.subsegment(1.0 / 3.0..2.0 / 3.0), top.subsegment(2.0 / 3.0..1.0)];
+    // Art space has y up: row 1 is the top. The bottom row and the columns are straight.
+    let up = |p: Point| (p.x, 100.0 - p.y);
+    let at = move |(i, j): (usize, usize)| {
+        if j == 1 { up(if i == 0 { top.p0 } else { thirds[i - 1].p3 }) } else { (40.0 + 40.0 * i as f64, 20.0) }
+    };
+    let handle = move |p: (usize, usize), q: (usize, usize)| match (p, q) {
+        ((i, 1), (k, 1)) if k == i + 1 => up(thirds[i].p1),
+        ((i, 1), (k, 1)) if k + 1 == i => up(thirds[k].p2),
+        _ => {
+            let ((x, y), (u, v)) = (at(p), at(q));
+            (x + (u - x) / 3.0, y + (v - y) / 3.0)
+        }
+    };
+    let shape = mesh_text(3, 1, &at, &handle, None);
+    // The contents: two red bars at the box's left and right ends, drawn by the unsplit curve.
+    let mut bp = kurbo::BezPath::new();
+    bp.move_to(top.p0);
+    bp.curve_to(top.p1, top.p2, top.p3);
+    bp.line_to((160.0, 80.0));
+    bp.line_to((40.0, 80.0));
+    bp.close_path();
+    let one_curve = EnvelopeKind::TopObject { path: vectorcraft_geom::PathData::from_bezpath(&bp), corners: Some([0, 1, 2, 3]) };
+    let src = Rect::new(40.0, 20.0, 160.0, 80.0);
+    let bars = [Rect::new(40.0, 20.0, 70.0, 80.0), Rect::new(130.0, 20.0, 160.0, 80.0)];
+    let content: String = bars.iter().map(|b| format!("{RED}{}f\n", rect_path(b.x0, b.y0, b.x1, b.y1))).collect();
+    let drawn: String = bars.iter().map(|b| drawn_box(&one_curve, src, *b)).collect();
+    let r = read_ok(&layer(&envelope_of(&shape, ENVELOPE_KEYS, &content, 3, &drawn)));
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let (_, kind, ..) = live_envelope(&a[0]);
+    let EnvelopeKind::TopObject { path, .. } = kind else { panic!("{kind:?}") };
+    assert_eq!(path.anchor_count(), 8, "{path:?}");
+    let map = vectorcraft_doc::live::envelope_mapper(kind, src);
+    let (p, want) = (map(Point::new(70.0, 20.0)), top.eval(0.25));
+    assert!((p - want).hypot() < 0.02, "{p:?}, want {want:?}");
+}
+
 /// Envelope Options come from the options word, Fidelity from its own key.
 #[test]
 fn an_envelope_reads_its_options_and_fidelity() {

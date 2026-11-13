@@ -1327,25 +1327,37 @@ impl Spine {
         let s = if s.is_finite() { s.clamp(0.0, self.length()) } else { 0.0 };
         let sp = &self.subpath;
         let n = sp.segment_count();
-        let mut start = 0.0;
-        for i in 0..n {
-            let c = sp.segment(i);
-            let end = self.anchor_length(i + 1).unwrap_or(self.length());
-            if s <= end || i + 1 == n {
-                let local_s = (s - start).max(0.0) / (end - start).max(1e-12) * c.arclen(1e-9);
-                let t = c.inv_arclen(local_s, 1e-9).clamp(0.0, 1.0);
-                let e = c.eval(t);
-                let tv = c.deriv().eval(t).to_vec2();
-                // Where a handle sits on its anchor the derivative vanishes there: take the
-                // direction between points a little before and after instead.
-                let tv = if tv.hypot2() < 1e-24 { c.eval((t + 1e-3).min(1.0)) - c.eval((t - 1e-3).max(0.0)) } else { tv };
-                return (Point::new(e.x, e.y), tv.y.atan2(tv.x));
-            }
-            start = end;
+        if n == 0 {
+            return (self.pts.first().copied().unwrap_or_default(), 0.0);
         }
-        // Only a spine without segments gets here: the loop returns at the last one.
-        (self.pts.first().copied().unwrap_or_default(), 0.0)
+        let i = segment_at(&self.anchors, n, s, || {});
+        let c = sp.segment(i);
+        let start = if i == 0 { 0.0 } else { self.anchor_length(i).unwrap_or(0.0) };
+        let end = self.anchor_length(i + 1).unwrap_or(self.length());
+        let local_s = (s - start).max(0.0) / (end - start).max(1e-12) * c.arclen(1e-9);
+        let t = c.inv_arclen(local_s, 1e-9).clamp(0.0, 1.0);
+        let e = c.eval(t);
+        let tv = c.deriv().eval(t).to_vec2();
+        // Where a handle sits on its anchor the derivative vanishes there: take the
+        // direction between points a little before and after instead.
+        let tv = if tv.hypot2() < 1e-24 { c.eval((t + 1e-3).min(1.0)) - c.eval((t - 1e-3).max(0.0)) } else { tv };
+        (Point::new(e.x, e.y), tv.y.atan2(tv.x))
     }
+}
+
+/// The segment of a spine with `n` segments (`n > 0`) that holds arc length `s`: the first one whose
+/// end is at or past `s`, or the last one when none is. `anchors` holds the arc length at each
+/// anchor, so segment `i` ends at `anchors[i + 1]`, and the last segment of a closed spine, which has
+/// no entry for its end, ends at the spine's length. The lengths never decrease (each is a sum of
+/// distances that are not negative, at most `+inf` and never NaN), so a binary search finds the
+/// segment in about `log2(n)` comparisons. `probe` is called once for each comparison.
+fn segment_at(anchors: &[f64], n: usize, s: f64, mut probe: impl FnMut()) -> usize {
+    let ends = anchors.get(1..n.min(anchors.len())).unwrap_or_default();
+    ends.partition_point(|&end| {
+        probe();
+        end < s
+    })
+    .min(n.saturating_sub(1))
 }
 
 /// The anchor of the first subpath each key sits on, when they are all valid for `n` anchors.
@@ -1890,6 +1902,76 @@ mod tests {
         assert!((angle - std::f64::consts::FRAC_PI_4).abs() < 0.05, "faces the in handle at (50, 50): {angle}");
         let (_, end) = sp.at_length(sp.length());
         assert!(end.is_finite(), "{end}");
+    }
+
+    /// [`Spine::at_length`] by walking the segments from the first, as a reference for the search.
+    fn walked_at_length(sp: &Spine, s: f64) -> (Point, f64) {
+        let s = if s.is_finite() { s.clamp(0.0, sp.length()) } else { 0.0 };
+        let n = sp.subpath.segment_count();
+        let mut start = 0.0;
+        for i in 0..n {
+            let c = sp.subpath.segment(i);
+            let end = sp.anchor_length(i + 1).unwrap_or(sp.length());
+            if s <= end || i + 1 == n {
+                let local_s = (s - start).max(0.0) / (end - start).max(1e-12) * c.arclen(1e-9);
+                let t = c.inv_arclen(local_s, 1e-9).clamp(0.0, 1.0);
+                let e = c.eval(t);
+                let tv = c.deriv().eval(t).to_vec2();
+                let tv = if tv.hypot2() < 1e-24 { c.eval((t + 1e-3).min(1.0)) - c.eval((t - 1e-3).max(0.0)) } else { tv };
+                return (Point::new(e.x, e.y), tv.y.atan2(tv.x));
+            }
+            start = end;
+        }
+        panic!("a spine without segments")
+    }
+
+    /// The search picks the same segment as walking them in order, so points and tangents stay the
+    /// same: on open and closed spines, one segment, curves, and zero-length segments whose anchors
+    /// share an arc length; at every anchor, between anchors, at both ends, past them, and for
+    /// values that are not finite.
+    #[test]
+    fn spine_lookup_matches_walking_the_segments() {
+        let p = Point::new;
+        let bow = SubPath::new(
+            vec![Anchor::smooth(p(0.0, 0.0), p(50.0, 50.0)), Anchor::smooth(p(100.0, 0.0), p(150.0, -50.0)), Anchor::corner(p(200.0, 0.0))],
+            false,
+        );
+        let spines = [
+            SubPath::polyline(&[p(0.0, 0.0), p(10.0, 0.0), p(10.0, 0.0), p(10.0, 0.0), p(30.0, 5.0), p(30.0, 5.0)], false),
+            SubPath::polyline(&[p(0.0, 0.0), p(0.0, 0.0), p(40.0, 0.0), p(40.0, 30.0)], true),
+            SubPath::polyline(&[p(0.0, 0.0), p(40.0, 0.0), p(40.0, 30.0), p(0.0, 0.0)], true),
+            SubPath::polyline(&[p(0.0, 0.0), p(25.0, 25.0)], false),
+            SubPath::polyline(&[p(0.0, 0.0), p(25.0, 25.0)], true),
+            bow.clone(),
+            SubPath { closed: true, ..bow },
+        ];
+        for sub in spines {
+            let sp = Spine::new(&PathData::single(sub)).unwrap();
+            let len = sp.length();
+            let mut lengths = vec![0.0, len, -1.0, len + 1.0, -len, f64::NAN, f64::INFINITY, f64::NEG_INFINITY, f64::MAX, f64::MIN];
+            lengths.extend(sp.anchors.iter().flat_map(|&a| [a, a - 1e-9, a + 1e-9]));
+            lengths.extend((0..=400).map(|k| len * k as f64 / 400.0));
+            for s in lengths {
+                assert_eq!(sp.at_length(s), walked_at_length(&sp, s), "s = {s} on {:?}", sp.anchors);
+            }
+        }
+    }
+
+    /// Finding the segment for an arc length on a spine of thousands of segments takes a few
+    /// comparisons, not one for each segment before it.
+    #[test]
+    fn spine_lookup_compares_a_few_segment_ends() {
+        let pts: Vec<Point> = (0..=4096).map(|i| Point::new(i as f64, if i % 2 == 0 { 0.0 } else { 1.0 })).collect();
+        let sp = Spine::new(&PathData::single(SubPath::polyline(&pts, false))).unwrap();
+        let n = sp.subpath.segment_count();
+        assert_eq!(n, 4096);
+        for s in [sp.length() - 0.5, sp.length(), sp.length() / 2.0, 0.25] {
+            let mut compared = 0;
+            let i = segment_at(&sp.anchors, n, s, || compared += 1);
+            assert!(compared <= 13, "{compared} comparisons at {s}");
+            assert_eq!(sp.at_length(s), walked_at_length(&sp, s));
+            assert!(sp.anchors[i] <= s && (i + 1 == n || s <= sp.anchors[i + 1]), "segment {i} at {s}");
+        }
     }
 
     #[test]

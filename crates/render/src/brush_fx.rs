@@ -125,9 +125,15 @@ impl BrushCache {
 }
 
 /// Cull bounds that allow for brush art reaching past the stroke (scatter, wide nibs), symbol
-/// instances measured by their art from `symbols`, with the brushed strokes in that art.
+/// instances measured by their art from `symbols`, with the brushed strokes in that art. A path
+/// whose live-effect plug-ins paint their pieces leaves that room past each piece
+/// ([`crate::fx::painted_cull_bounds`]). A group or layer leaves that room past each of its
+/// members, as the renderer measures a group by its members (`Renderer::bounds_of`).
 pub(crate) fn cull_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
-    let b = crate::fx::cull_bounds(symbols, n)?;
+    if let Some(b) = crate::fx::painted_cull_bounds(symbols, n) {
+        return b;
+    }
+    let b = crate::fx::brushed_cull_bounds(symbols, n)?;
     let pad = pad(symbols, n);
     Some(b.inflate(pad, pad))
 }
@@ -145,12 +151,15 @@ pub(crate) fn path_cull_bounds(symbols: &SymbolBoxes, n: &Node, visual: impl FnO
 /// How far brush art can paint past `n`'s brushed strokes, or past the brushed strokes in the art
 /// of symbol instance `n`: `16 × w + 8`, where `w` is the widest stroke (at least 1) of `n` when it
 /// has a visible brushed stroke and of the objects in that art that have one
-/// ([`SymbolBoxes::brush_width`]), and 0 when neither has one.
+/// ([`SymbolBoxes::brush_width`]) or the pieces live-effect plug-ins paint for them
+/// ([`crate::fx::painted_brush_width`]), and 0 when neither has one.
 pub(crate) fn pad(symbols: &SymbolBoxes, n: &Node) -> f64 {
     let own = vectorcraft_brush::has_brush(n)
         .then(|| n.appearance.items.iter().filter_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s.width) } else { None }).fold(1.0, f64::max));
     let art = match &n.kind {
-        NodeKind::SymbolInstance { symbol, .. } => symbols.brush_width(symbol).map(|w| w.max(1.0)),
+        NodeKind::SymbolInstance { symbol, .. } => {
+            symbols.brush_width(symbol).into_iter().chain(crate::fx::painted_brush_width(symbols, symbol)).reduce(f64::max).map(|w| w.max(1.0))
+        }
         _ => None,
     };
     own.into_iter().chain(art).reduce(f64::max).map_or(0.0, |w| 16.0 * w + 8.0)

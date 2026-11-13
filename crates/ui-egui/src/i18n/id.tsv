@@ -2675,6 +2675,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	Setel ulang baris ke warna karya seni
 	Color Theme Picker	Pemilih tema warna
 	Click or drag across the art to pick its colors; Shift adds more	Klik atau seret melintasi karya seni untuk mengambil warnanya; Shift menambahkan lagi
+	Prominent Colors	Warna menonjol
+	Save All Colors	Simpan semua warna
+	Save Prominent Colors	Simpan warna menonjol
 	Separate colors into rows	Pisahkan warna ke dalam baris
 	Unlink harmony colors	Lepaskan tautan warna harmoni
 	1 Color Job	Pekerjaan 1 warna
@@ -3338,6 +3341,8 @@ theme	Appearance	Tampilan
 	Rename Library Group	Ganti nama grup pustaka
 	Delete Library Group	Hapus grup pustaka
 	Move Library Item to Group	Pindahkan item pustaka ke grup
+	Rename Library Item	Ganti nama item pustaka
+	Add to Character Styles	Tambahkan ke gaya karakter
 	Rename Library	Ganti nama pustaka
 	Show Library	Tampilkan pustaka
 	Use Library Item	Gunakan item pustaka
@@ -4184,6 +4189,7 @@ imageTrace	Outline	Kontur
 @plural	{n} step|{n} steps	{n} langkah
 @plural	{n} stroke|{n} strokes	{n} goresan
 @msg	no library `{id}`	tidak ada pustaka `{id}`
+@msg	the library has another item of that kind named `{name}`	pustaka sudah memiliki item lain dari jenis itu bernama `{name}`
 @msg	select some type first	pilih beberapa teks terlebih dahulu
 @msg	kerning must be a number, "auto", or "optical"	kerning harus berupa angka, “auto”, atau “optical”
 @msg	{_1} has no {_2} style	{_1} tidak memiliki gaya {_2}
@@ -6013,6 +6019,7 @@ axis	Y Axis	Sumbu Y
 @msg	message must be text	message harus berupa teks
 @msg	allowContinue must be true or false	allowContinue harus true atau false
 @msg	Batch cannot play an action with a stop	Batch tidak dapat memutar tindakan dengan titik henti
+@msg	Batch cannot play an action with a View menu step	Batch tidak dapat memutar tindakan dengan langkah menu Tampilan
 	Insert Menu Item…	Sisipkan item menu…
 	Insert Menu Item	Sisipkan item menu
 	Insert Select Path	Sisipkan pemilihan jalur
@@ -6761,6 +6768,19 @@ breakText	Glyphs	Glif
 	Show where this tool is	Tampilkan letak alat ini
 @msg	missing `tutorial` (see learn.list)	`tutorial` tidak ada (lihat learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial `{id}` tidak dikenal (lihat learn.list)
+	View more	Lihat selengkapnya
+	Finish tutorial	Selesaikan tutorial
+	Next Up	Berikutnya
+	You finished the last tutorial in this skill.	Anda telah menyelesaikan tutorial terakhir dalam keterampilan ini.
+	Back to skills	Kembali ke keterampilan
+	Open Tutorial Sample	Buka contoh tutorial
+	Finish Tutorial	Selesaikan tutorial
+	Next Tutorial	Tutorial berikutnya
+	Back to Skills	Kembali ke keterampilan
+@msg	tutorial `{id}` has no practice sample	tutorial `{id}` tidak memiliki contoh latihan
+@msg	open the practice sample of `{id}` first (see learn.openSample)	buka contoh latihan `{id}` terlebih dahulu (lihat learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	selesaikan `{id}` terlebih dahulu (lihat learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` adalah tutorial terakhir dalam keterampilannya
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Segarkan efek yang ditunda

@@ -16,7 +16,12 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   before the release; a longer drag drags out the dimension of the segment under the pointer. A
   curved segment is measured from end to end. With Smart Guides on, both points also snap into line with other objects'
   anchors and centres, and the second onto the construction guides through the first; the guides
-  show while hovering, before each click.
+  show while hovering, before each click. VectorCraft's own rules decide where a point lands: an
+  anchor within 8 pixels takes it first; a point on a guide stays on the guide where the pointer
+  is, except that it moves onto a segment within the Smart Guides snapping tolerance, or onto the
+  place where a construction guide crosses another object's alignment line within twice that
+  tolerance; a point that no anchor, guide, grid or pixel snapping places lands on the closest
+  point of a segment within 8 pixels.
   A linear dimension is aligned, horizontal or vertical, as the
   [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
   describes: after the second click, clicking again places an aligned dimension, and moving the
