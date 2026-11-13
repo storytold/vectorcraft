@@ -250,3 +250,103 @@ fn a_guide_dragged_on_the_canvas_changes_how_a_scaled_instance_draws() {
     let left = s.doc().unwrap().doc.symbol_nine_slice("Panel").unwrap().left;
     assert!((left - 0.05).abs() < 1e-9, "{left}");
 }
+
+/// The 200 × 150 [`panel`] instance with its left guide 25 % outside the art: the left column
+/// holds no art, so the corner square is in the center column, which runs 0..75 in the art and
+/// 0..175 in the instance, and the center square moves with it. The rows are as before.
+fn assert_left_outside(boxes: &[Rect]) {
+    let k = 175.0 / 75.0;
+    let want = [
+        Rect::new(50.0, 50.0, 250.0, 200.0),
+        Rect::new(50.0, 50.0, 50.0 + 10.0 * k, 60.0),
+        Rect::new(50.0 + 45.0 * k, 115.0, 50.0 + 55.0 * k, 135.0),
+    ];
+    assert_eq!(boxes.len(), want.len(), "{boxes:?}");
+    for (b, w) in boxes.iter().zip(want) {
+        assert!(close(*b, w), "{b:?} vs {w:?} in {boxes:?}");
+    }
+}
+
+/// `symbol.options` takes guides outside the art, within -16..16 and in order on each axis, as
+/// one undo step; a scaled instance then draws by the cells its art falls in, and Break Link to
+/// Symbol gives that art. Values out of range or out of order are refused without an edit.
+#[test]
+fn guides_outside_the_art_are_set_by_command_and_scale_by_the_cells_that_hold_art() {
+    let (mut s, id) = panel();
+    s.execute("symbol.options", &json!({"name": "Panel", "nineSliceGuides": [-0.25, 0.25, 0.25, 0.25]})).unwrap();
+    assert_left_outside(&placed_boxes(&s, id));
+    let list = s.execute("symbol.list", &json!({})).unwrap();
+    assert_eq!(list["symbols"][0]["nineSlice"], json!([-0.25, 0.25, 0.25, 0.25]));
+    for bad in [json!([-16.5, 0.25, 0.25, 0.25]), json!([0.25, 0.25, 0.25, 17]), json!([1.2, 0.25, -0.2, 0.25]), json!([0.25, 0.6, 0.25, 0.6])] {
+        let e = s.execute("symbol.options", &json!({"name": "Panel", "nineSliceGuides": bad})).unwrap_err().to_string();
+        assert!(e.contains("each -16..16"), "{e}");
+    }
+    assert_eq!(s.doc().unwrap().doc.symbol_nine_slice("Panel").unwrap().left, -0.25, "no edit");
+    s.execute("symbol.options", &json!({"name": "Panel", "nineSliceGuides": [1.25, 0.25, -0.5, 0.25]})).unwrap();
+    // Both vertical guides past the art's right edge: the art keeps its width from the left.
+    let boxes = placed_boxes(&s, id);
+    assert!(close(boxes[0], Rect::new(50.0, 50.0, 150.0, 200.0)) && close(boxes[1], Rect::new(50.0, 50.0, 60.0, 60.0)), "{boxes:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_left_outside(&placed_boxes(&s, id));
+    let r = s.execute("symbol.breakLink", &json!({})).unwrap();
+    let art = NodeId(r["ids"][0].as_u64().unwrap());
+    assert_left_outside(&path_boxes(s.doc().unwrap().doc.node(art).unwrap()));
+}
+
+/// Dragging the left guide past the art's left edge on the canvas puts it outside the art, as one
+/// undo step, and the scaled instance draws by the cells that hold art.
+#[test]
+fn a_guide_dragged_past_the_arts_edge_lies_outside_it() {
+    let (mut s, id) = panel();
+    s.execute("symbol.edit", &json!({"name": "Panel"})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("selection", v).unwrap();
+    let e = s.doc().unwrap().doc.edited_nine_slice().unwrap();
+    let ((a, b), (l, r)) = (e.line(NineSliceGuide::Left), (e.line(NineSliceGuide::Left).0.x, e.line(NineSliceGuide::Right).0.x));
+    let y = (a.y + b.y) / 2.0;
+    // The guides lie a quarter in from each edge, so the art's left edge lies half the guides'
+    // distance to the left of the left guide, and 25 % outside it lies as far again.
+    let to = l - (r - l);
+    s.pointer(&PointerEvent::new(PointerKind::Down, l + 1.0, y), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, to, y), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, to, y), v).unwrap();
+    let g = s.doc().unwrap().doc.symbol_nine_slice("Panel").unwrap();
+    assert!((g.left + 0.25).abs() < 1e-9, "{g:?}");
+    let e = s.doc().unwrap().doc.edited_nine_slice().unwrap();
+    assert!((e.line(NineSliceGuide::Left).0.x - to).abs() < 1e-9, "the guide is drawn where it was dropped");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.symbol_nine_slice("Panel").unwrap().left, 0.25, "one undo step");
+    s.execute("edit.redo", &json!({})).unwrap();
+    s.execute("symbol.exitEditing", &json!({})).unwrap();
+    assert_left_outside(&placed_boxes(&s, id));
+}
+
+/// A native file keeps guides outside the art exactly, and an instance opened from it draws as
+/// before saving; a file whose saved guides are out of range or out of order opens with 9-slice
+/// off for that symbol.
+#[test]
+fn guides_outside_the_art_survive_saving_and_reopening_a_native_file() {
+    let (mut s, id) = panel();
+    let guides = [-0.123456789, 1.5, 0.3, -2.75];
+    s.execute("symbol.options", &json!({"name": "Panel", "nineSliceGuides": guides})).unwrap();
+    s.execute("symbol.options", &json!({"name": "Panel", "nineSliceGuides": [-0.25, 0.25, 0.25, 0.25]})).unwrap();
+    s.execute("symbol.options", &json!({"name": "Panel", "nineSliceGuides": guides})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    let g = back.symbol_nine_slice("Panel").unwrap();
+    assert_eq!([g.left, g.top, g.right, g.bottom], guides);
+    let placed = |d: &vectorcraft_doc::Document| {
+        let NodeKind::SymbolInstance { symbol, xf } = &d.node(id).unwrap().kind else { panic!("an instance") };
+        let art = d.symbols.iter().find(|s| &s.name == symbol).unwrap().art.clone();
+        path_boxes(&d.place_symbol_art(symbol, &art, *xf).unwrap())
+    };
+    assert_eq!(placed(&back), placed(&doc));
+    for bad in [json!([-20.0, 0.25, 0.25, 0.25]), json!([0.8, 0.25, 0.5, 0.25]), json!([0.25, 0.25, 0.25]), json!("x")] {
+        let mut d = (*doc).clone();
+        d.unknown.insert(vectorcraft_doc::SYMBOL_NINE_SLICE.into(), json!({ "Panel": bad }));
+        let back = vectorcraft_format::load(&vectorcraft_format::save(&d, false)).unwrap();
+        assert!(back.symbol_nine_slice("Panel").is_none(), "{bad}");
+        let NodeKind::SymbolInstance { symbol, xf } = &back.node(id).unwrap().kind else { panic!("an instance") };
+        assert!(back.symbol_slice_map(symbol, *xf).is_none(), "{bad}: scaled as a whole");
+    }
+}

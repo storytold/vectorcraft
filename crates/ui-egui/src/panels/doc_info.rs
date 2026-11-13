@@ -1,6 +1,6 @@
 //! Document Info panel: the document's setup and what it contains (objects by kind, graphic
-//! styles, brushes, spot colors, patterns, gradients, symbols, fonts and their files, linked and embedded
-//! images, repeat objects), for the whole document or the selection only. The flyout picks one category (or all)
+//! styles, brushes, objects painted with spot colors, with patterns and with gradients, symbols, fonts and their files,
+//! linked and embedded images, repeat objects), for the whole document or the selection only. The flyout picks one category (or all)
 //! and saves the text report (`docInfo.save`, the report File → Package writes too).
 
 use egui::Ui;
@@ -78,12 +78,28 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let label = super::label_or_name(label, !named.contains(&k));
                 if value.is_empty() {
                     widgets::dim_name(ui, label);
+                } else if s["id"] == "brushes" {
+                    row(ui, label, brush_value(value).into());
                 } else {
                     row(ui, label, value.into());
                 }
             }
         }
     });
+}
+
+/// A Brushes row's value in the interface language: the brush's type (`Art Brush`), or that the
+/// Brushes panel does not hold the brush. `document.info` and the text report keep them in English.
+fn brush_value(value: &str) -> &str {
+    match value {
+        "Calligraphic Brush" => tl!("Calligraphic Brush"),
+        "Scatter Brush" => tl!("Scatter Brush"),
+        "Art Brush" => tl!("Art Brush"),
+        "Pattern Brush" => tl!("Pattern Brush"),
+        "Bristle Brush" => tl!("Bristle Brush"),
+        "missing from the Brushes panel" => tl!("missing from the Brushes panel"),
+        _ => value,
+    }
 }
 
 /// The rows of Document Info section `id` labelled by a name (an artboard, a style, a swatch, a
@@ -191,9 +207,32 @@ mod tests {
             menu_text.contains("Font Details")
                 && menu_text.contains("Brushes")
                 && menu_text.contains("Repeat Objects")
+                && menu_text.contains("Gradient Objects")
+                && menu_text.contains("Spot Color Objects")
                 && menu_text.contains("Save…"),
             "{menu_text}"
         );
+        // Gradient Objects lists the objects painted with a gradient by name.
+        let r = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+        let ramp = json!({"kind": "radial", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]});
+        app.session.execute("paint.setFill", &json!({"ids": [r], "gradient": ramp})).unwrap();
+        app.session.execute("layer.setProps", &json!({"id": r, "name": "Glow"})).unwrap();
+        let gradients = crate::tests_labels::painted_text(&mut app, |app, ui| {
+            set_pstate(ui.ctx(), "docinfo-category", "gradients".to_string());
+            show(app, ui);
+        });
+        assert!(gradients.contains("Gradient Objects (1)") && gradients.contains("Glow") && gradients.contains("Radial gradient"), "{gradients}");
+        // Spot Color Objects lists the objects painted with a spot color by name.
+        let spot = json!({"model": "cmyk", "c": 0.0, "m": 0.8, "y": 0.6, "k": 0.0});
+        app.session.execute("swatch.new", &json!({"name": "Signal Red", "color": spot, "spot": true})).unwrap();
+        let badge = app.session.execute("shape.ellipse", &json!({"x": 50, "y": 50, "width": 20, "height": 20})).unwrap()["id"].clone();
+        app.session.execute("paint.setFill", &json!({"ids": [badge], "swatch": "Signal Red"})).unwrap();
+        app.session.execute("layer.setProps", &json!({"id": badge, "name": "Badge"})).unwrap();
+        let spots = crate::tests_labels::painted_text(&mut app, |app, ui| {
+            set_pstate(ui.ctx(), "docinfo-category", "spotColors".to_string());
+            show(app, ui);
+        });
+        assert!(spots.contains("Spot Color Objects (1)") && spots.contains("Badge") && spots.contains("Signal Red"), "{spots}");
         let filtered = crate::tests_labels::painted_text(&mut app, |app, ui| {
             set_pstate(ui.ctx(), "docinfo-category", "fonts".to_string());
             show(app, ui);
@@ -210,6 +249,8 @@ mod tests {
         assert_eq!(r["path"], "/tmp/info.txt");
         let report = String::from_utf8(written.borrow().clone()).unwrap();
         assert!(report.starts_with("Document Info: ") && report.contains("\nFONT DETAILS\n") && report.contains("\nREPEAT OBJECTS\n"), "{report}");
+        assert!(report.contains("\nGRADIENT OBJECTS\nGlow: Radial gradient\n"), "{report}");
+        assert!(report.contains("\nSPOT COLOR OBJECTS\nBadge: Signal Red\n"), "{report}");
     }
 
     /// The report the panel menu's Save… writes with category `category` shown ("" for All
@@ -269,5 +310,31 @@ mod tests {
         // The command takes the category too; an unknown one is an error and writes nothing.
         let err = app.run("docInfo.save", json!({"path": "/tmp/info.txt", "category": "colors"})).unwrap_err();
         assert!(err.contains("category `colors`"), "{err}");
+    }
+
+    /// Brushes shows each brush's type, and a brush the Brushes panel does not hold, in the
+    /// interface language; the saved report keeps them in English.
+    #[test]
+    fn brush_types_show_in_the_interface_language() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let r = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+        app.session.execute("brush.apply", &json!({"ids": [r], "name": "Charcoal"})).unwrap();
+        let brushes = |app: &mut VectorcraftApp| {
+            crate::tests_labels::painted_text(app, |app, ui| {
+                set_pstate(ui.ctx(), "docinfo-category", "brushes".to_string());
+                show(app, ui);
+            })
+        };
+        let english = brushes(&mut app);
+        assert!(english.contains("Charcoal") && english.contains("Art Brush"), "{english}");
+        let Some(de) = crate::i18n::Lang::from_code("de") else { panic!("no German catalog") };
+        crate::i18n::set_current(de);
+        let (german, missing) = (brushes(&mut app), brush_value("missing from the Brushes panel").to_string());
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert!(german.contains("Charcoal") && german.contains("Bildpinsel") && !german.contains("Art Brush"), "{german}");
+        assert_eq!(missing, "fehlt im Bedienfeld „Pinsel“");
+        let report = app.session.execute("document.info", &json!({"category": "brushes", "format": "text"})).unwrap()["text"].to_string();
+        assert!(report.contains("Charcoal: Art Brush"), "{report}");
     }
 }

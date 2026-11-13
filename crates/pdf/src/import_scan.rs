@@ -455,12 +455,15 @@ fn blank_tail(mut bytes: &[u8]) -> bool {
     }
 }
 
-struct Walker<'w, 'p> {
+pub(crate) struct Walker<'w, 'p> {
     ocgs: &'w mut Ocgs,
     /// The groups that are off for the interpreter (none once [`all_on`] turned them on).
     off: HashSet<ObjectIdentifier>,
     xref: &'p craft_pdf::syntax::xref::XRef,
-    fonts: &'w mut FontNames,
+    pub(crate) fonts: &'w mut FontNames,
+    /// The font dictionaries ([`Dict::cache_key`]) whose fonts were noted: a form drawn again with
+    /// the same resources isn't read for its fonts again.
+    pub(crate) font_dicts: HashSet<u128>,
     visible: Vec<bool>,
     ops: usize,
     max_ops: usize,
@@ -632,6 +635,9 @@ impl Walker<'_, '_> {
     }
 
     fn note_fonts(&mut self, res: &Resources<'_>) {
+        if !self.font_dicts.insert(res.fonts.cache_key()) {
+            return;
+        }
         for key in res.fonts.keys() {
             if let Some(f) = res.fonts.get::<Dict<'_>>(key.as_ref())
                 && let Some(name) = font_name(&f)
@@ -1049,13 +1055,20 @@ pub(crate) fn scan_page(page: &Page<'_>, ocgs: &mut Ocgs, all_on: bool, fonts: &
     if scan.cut { Err(incomplete_content()) } else { Ok(scan) }
 }
 
-fn walk_page<'w, 'p>(page: &Page<'p>, ocgs: &'w mut Ocgs, all_on: bool, fonts: &'w mut FontNames, max_form_bytes: usize) -> Walker<'w, 'p> {
+pub(crate) fn walk_page<'w, 'p>(
+    page: &Page<'p>,
+    ocgs: &'w mut Ocgs,
+    all_on: bool,
+    fonts: &'w mut FontNames,
+    max_form_bytes: usize,
+) -> Walker<'w, 'p> {
     let off = if all_on { HashSet::new() } else { ocgs.off.clone() };
     let mut w = Walker {
         ocgs,
         off,
         xref: page.xref(),
         fonts,
+        font_dicts: HashSet::new(),
         visible: vec![],
         ops: 0,
         max_ops: max_ops(),

@@ -1,8 +1,13 @@
 use super::exporter::{MAX_FIELD_PX, MAX_GRADIENT_PX, MAX_PATTERN_DEPTH, color, ctm, in_range, norm, q, to_path, writable, xf};
 use super::{
     Affine, Color, Exporter, GradientKind, LinearGradient, Paint, RadialGradient, Rect, SepColor, SeparationColorant, SeparationSpace, Shape, Size,
-    SpreadMethod, Stop, Surface, Vec2, cmyk, krilla, rgb,
+    SpreadMethod, Stop, Surface, SweepGradient, Vec2, cmyk, krilla, rgb,
 };
+
+/// Most stops a conic gradient's sweep shading holds: past this the PDF writer keeps only some
+/// of them (its calculator function tests the stops one inside another, and viewers limit how
+/// deep), so such a gradient is drawn as an image instead ([`Exporter::area_paint`]).
+pub(super) const MAX_SWEEP_STOPS: usize = 97;
 
 impl Exporter<'_> {
     /// A colour for the page, as the Output settings write it ([`ColorOut::color`]): without
@@ -231,6 +236,24 @@ impl Exporter<'_> {
             Paint::Solid { color: c, swatch, tint } => Some(self.solid(c, swatch.as_deref(), *tint).into()),
             Paint::Gradient(g) => {
                 let geom = g.resolve(bounds);
+                // A linear or radial gradient that repeats or reflects, where it isn't an area
+                // paint ([`Self::padded`]): its stops repeated over `bounds`, padding past them.
+                if matches!(g.gradient.kind, GradientKind::Linear | GradientKind::Radial) && g.gradient.is_spread() {
+                    let paint = match g.gradient.padded_over(&geom, bounds) {
+                        Some(padded) => {
+                            self.warn_capped(padded.capped);
+                            padded_paint(g, padded)
+                        }
+                        // Levels over `bounds` that are not finite (a vector of no length): the
+                        // stops repeated along the vector, padding past it.
+                        None => {
+                            self.warn_capped(true);
+                            let gradient = g.gradient.unrolled().into_owned();
+                            Paint::Gradient(Box::new(vectorcraft_color::GradientPaint { gradient, ..(**g).clone() }))
+                        }
+                    };
+                    return self.paint_in(s, &paint, bounds, space);
+                }
                 let spot = match g.gradient.kind {
                     GradientKind::Freeform => None,
                     _ => self.perceptual_spot_stops(&g.gradient).or_else(|| self.spot_stops(&g.gradient)),
@@ -311,10 +334,43 @@ impl Exporter<'_> {
                             .into(),
                         )
                     }
-                    // Painted areas get an image of the field ([`Self::area`]); elsewhere (gradient
-                    // slices) the average colour stands in.
-                    GradientKind::Freeform => {
-                        self.warn("freeform gradients are exported as their average colour");
+                    // A function-based shading (ISO 32000-1, 8.7.4.5.2) whose calculator function
+                    // turns the angle about the origin into the ramp, once around (0 to 360
+                    // degrees), carried onto the extent ellipse by its frame. Stops that repeat
+                    // or reflect `n` times run over 360/`n` degrees, the function repeating or
+                    // reflecting them past it.
+                    GradientKind::Conic => {
+                        let frame = geom.conic_frame();
+                        if !writable(s, space * frame, Rect::new(-1.0, -1.0, 1.0, 1.0)) {
+                            return None;
+                        }
+                        let (end_angle, spread_method) = match g.gradient.spread {
+                            _ if !g.gradient.is_spread() => (360.0, SpreadMethod::Pad),
+                            vectorcraft_color::GradientSpread::Reflect => (360.0 / g.gradient.repeat_count() as f32, SpreadMethod::Reflect),
+                            _ => (360.0 / g.gradient.repeat_count() as f32, SpreadMethod::Repeat),
+                        };
+                        Some(
+                            SweepGradient {
+                                cx: 0.0,
+                                cy: 0.0,
+                                start_angle: 0.0,
+                                end_angle,
+                                transform: xf(space * frame),
+                                spread_method,
+                                stops,
+                                anti_alias: false,
+                            }
+                            .into(),
+                        )
+                    }
+                    // Painted areas get an image of the field, or a diamond's four linear gradients
+                    // ([`Self::area`]); elsewhere (gradient slices) the average color stands in.
+                    GradientKind::Freeform | GradientKind::Diamond => {
+                        self.warn(if g.gradient.kind == GradientKind::Diamond {
+                            "diamond gradients in gradient slices are exported as their average color"
+                        } else {
+                            "freeform gradients are exported as their average colour"
+                        });
                         let n = g.gradient.stops.len().max(1) as f32;
                         let mut acc = [0.0f32; 3];
                         for s in &g.gradient.stops {
@@ -449,10 +505,100 @@ impl Exporter<'_> {
         g.stops.iter().any(|s| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot)))
     }
 
+    /// Draw diamond gradient `g`, placed on `bounds`, over `area` (inside the current clip) as four
+    /// linear gradients, one for each quadrant of its frame, each equal to the diamond there (PDF
+    /// has no diamond shading; [`vectorcraft_color::GradientGeom::diamond_quadrants`]). The
+    /// quadrants overlap so no hairline shows between them, which needs opaque stops. False
+    /// (nothing drawn) for a diamond with translucent stops or without a frame, for one with a
+    /// quadrant whose shading or outline PDF can't hold, and for a Perceptual one of spot inks
+    /// whose ink curve has too many tints once its stops are repeated, which
+    /// [`Self::field_image`] draws instead.
+    pub(super) fn diamond(&mut self, s: &mut Surface, g: &vectorcraft_color::GradientPaint, bounds: Rect, area: Rect) -> bool {
+        if g.gradient.stops.iter().any(|st| st.opacity < 1.0) {
+            return false;
+        }
+        // A diamond that repeats or reflects: its stops repeated over the levels the area reaches
+        // from the center, then split into quadrants, each of which runs those levels.
+        let (diamond, geom, capped) = match g.gradient.padded_over(&g.resolve(bounds), area.abs()) {
+            Some(padded) => (padded.gradient, padded.geom, padded.capped),
+            None => (g.gradient.clone(), g.resolve(bounds), false),
+        };
+        // A Perceptual one of spot inks whose ink curve no longer fits with its stops repeated.
+        if !diamond.method.is_classic() && !diamond.fits_ink_tints() {
+            return false;
+        }
+        let Some(quadrants) = geom.diamond_quadrants(area.abs()) else { return false };
+        let gradient = vectorcraft_color::Gradient { kind: GradientKind::Linear, ..diamond };
+        let mut drawn = Vec::with_capacity(4);
+        for (outline, geom) in quadrants {
+            let linear = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint { gradient: gradient.clone(), geom: Some(geom), ..g.clone() }));
+            let quadrant = kurbo::BezPath::from_vec(
+                outline
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &p)| if i == 0 { kurbo::PathEl::MoveTo(p) } else { kurbo::PathEl::LineTo(p) })
+                    .chain([kurbo::PathEl::ClosePath])
+                    .collect(),
+            );
+            let (Some(paint), Some(path)) = (self.paint(s, &linear, bounds), to_path(s, &quadrant)) else { return false };
+            drawn.push((paint, path));
+        }
+        self.warn("diamond gradients are exported as four linear gradients");
+        self.warn_capped(capped);
+        for (paint, path) in drawn {
+            s.set_stroke(None);
+            s.set_fill(Some(krilla::paint::Fill { paint, opacity: krilla::num::NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero }));
+            s.draw_path(&path);
+            s.set_fill(None);
+        }
+        true
+    }
+
+    /// Draw linear or radial gradient `g`, placed on `bounds`, that repeats or reflects, over
+    /// `area` (inside the current clip): PDF's axial and radial shadings pad past their ends, so
+    /// its stops are repeated as many times as the area needs
+    /// ([`vectorcraft_color::Gradient::padded_over`]). False (nothing drawn) for another gradient,
+    /// for one whose shading or area PDF can't hold, and for a Perceptual one of spot inks whose
+    /// ink curve has too many tints once repeated, which [`Self::field_image`] draws instead.
+    pub(super) fn padded(&mut self, s: &mut Surface, g: &vectorcraft_color::GradientPaint, bounds: Rect, area: Rect) -> bool {
+        if !matches!(g.gradient.kind, GradientKind::Linear | GradientKind::Radial) {
+            return false;
+        }
+        let Some(padded) = g.gradient.padded_over(&g.resolve(bounds), area.abs()) else { return false };
+        // A Perceptual gradient of spot inks whose ink curve no longer fits once its stops are
+        // repeated is an image, as one with too many stops is.
+        if !g.gradient.method.is_classic() && !padded.gradient.fits_ink_tints() {
+            return false;
+        }
+        let capped = padded.capped;
+        let paint = padded_paint(g, padded);
+        let (Some(paint), Some(path)) = (self.paint(s, &paint, bounds), to_path(s, &kurbo::Shape::to_path(&area.abs(), 0.1))) else {
+            return false;
+        };
+        self.warn_capped(capped);
+        s.set_stroke(None);
+        s.set_fill(Some(krilla::paint::Fill { paint, opacity: krilla::num::NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero }));
+        s.draw_path(&path);
+        s.set_fill(None);
+        true
+    }
+
+    /// Warn when a gradient that repeats or reflects needed more runs of its stops than were
+    /// written.
+    fn warn_capped(&mut self, capped: bool) {
+        if capped {
+            self.warn(format!(
+                "gradients that repeat or reflect are exported with at most {} runs of their stops (at most {} stops); they pad past those",
+                vectorcraft_color::gradient::MAX_SPREAD_RUNS,
+                vectorcraft_color::gradient::MAX_SPREAD_STOPS
+            ));
+        }
+    }
+
     /// Draw gradient `g`, placed on `bounds`, as an image over `area`, sampled at the document's
     /// raster effects resolution where it is drawn (`area` as the current transform sizes it, so
     /// scaled type gets its pixels too): a freeform gradient's colour field (at most
-    /// [`MAX_FIELD_PX`] a side), or a linear or radial gradient (at most [`MAX_GRADIENT_PX`] a side),
+    /// [`MAX_FIELD_PX`] a side), or a linear, radial, conic or diamond gradient (at most [`MAX_GRADIENT_PX`] a side),
     /// with dither's noise when it paints a fill (`fill`). A linear or radial gradient whose stops
     /// are all CMYK and not linked to a spot swatch is a CMYK image, unless its Perceptual curve
     /// has too many stops; any other is an RGB image.
@@ -476,7 +622,11 @@ impl Exporter<'_> {
         let (cols, rows) = (along(w), along(h));
         let field = freeform.then(|| g.freeform_on(b).model_field(spread_scale(b)));
         let cmyk_doc = self.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
-        if !freeform {
+        if g.gradient.kind == GradientKind::Conic {
+            self.warn("conic gradients drawn as pixels (dithered fills, and Perceptual ones other than spot ink shadings), in a PDF/A file or with more than 97 stops are exported as images");
+        } else if g.gradient.kind == GradientKind::Diamond {
+            self.warn("diamond gradients drawn as pixels (dithered fills, and Perceptual ones other than spot ink shadings), with translucent stops or without an extent are exported as images");
+        } else if !freeform {
             self.warn("linear and radial gradients drawn as pixels are exported as images");
         }
         let ramp_inks = if freeform || self.has_spot_stop(&g.gradient) { None } else { g.ink_pixels(b, area, cols, rows, fill) };
@@ -518,6 +668,12 @@ impl Exporter<'_> {
         s.draw_image(img, size);
         s.pop();
     }
+}
+
+/// `g` written as `padded` gives it: its stops repeated, placed there.
+fn padded_paint(g: &vectorcraft_color::GradientPaint, padded: vectorcraft_color::gradient::Padded) -> Paint {
+    let geom = padded.geom;
+    Paint::Gradient(Box::new(vectorcraft_color::GradientPaint { gradient: padded.gradient, geom: Some(geom), angle: geom.angle_deg(), ..g.clone() }))
 }
 
 /// Is `c` paper white: no ink in CMYK or gray, white in RGB or Lab?

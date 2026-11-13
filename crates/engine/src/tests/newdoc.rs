@@ -233,7 +233,7 @@ fn a_saved_preset_with_values_out_of_range_reads_in_range() {
         saved,
         [
             (1.0, 1.0, 1.0, 0.0, vec![0.0, 0.0, 0.0, 9.0]),
-            (163830.0, 163830.0, 1.0, 1.0e5, vec![72.0, 72.0, 72.0, 0.0]),
+            (3_999_856.0, 200000.0, 1.0, 1.0e5, vec![72.0, 72.0, 72.0, 0.0]),
             (10.0, 10.0, 1000.0, 0.0, vec![0.0; 4]),
         ]
     );
@@ -242,12 +242,69 @@ fn a_saved_preset_with_values_out_of_range_reads_in_range() {
     s.execute("file.new", &json!({"preset": "Low"})).unwrap();
     assert_eq!((boards(&s), s.doc().unwrap().doc.setup.bleed), (vec![Rect::new(0.0, 0.0, 1.0, 1.0)], [0.0, 0.0, 0.0, 9.0]));
     s.execute("file.new", &json!({"preset": "High"})).unwrap();
-    assert_eq!((boards(&s), s.doc().unwrap().doc.setup.bleed), (vec![Rect::new(0.0, 0.0, 163830.0, 163830.0)], [72.0, 72.0, 72.0, 0.0]));
+    assert_eq!((boards(&s), s.doc().unwrap().doc.setup.bleed), (vec![Rect::new(0.0, 0.0, 3_999_856.0, 200000.0)], [72.0, 72.0, 72.0, 0.0]));
     s.execute("file.new", &json!({"preset": "Many"})).unwrap();
     assert_eq!(boards(&s).len(), 1000);
     let custom = presets(&mut s, "Recent").into_iter().find(|p| p["name"] == "Custom").unwrap();
     s.execute("file.new", &custom).unwrap();
     assert_eq!(boards(&s).iter().map(|r| r.x0).collect::<Vec<_>>(), [0.0, 100.0, 200.0], "side by side, not overlapping");
+}
+
+/// `file.new` and `artboard.new` take the same largest artboard side (the canvas less the largest
+/// bleed on both sides) and refuse a side just past it, or of 0 or less, with an error that names
+/// the limit in points and, when the document's units aren't points, in those units too.
+#[test]
+fn file_new_and_artboard_new_take_the_same_largest_side() {
+    let max = 3_999_856.0;
+    let in_meters = "at most 3999856 pt (1411.0603 m)";
+    let s = new_doc(json!({"width": max, "height": 170078}));
+    assert_eq!(boards(&s), [Rect::new(0.0, 0.0, max, 170078.0)]);
+    let mut s = Session::new();
+    let err = s.execute("file.new", &json!({"width": max + 1.0, "height": 100})).unwrap_err().to_string();
+    assert!(err.contains("width and height must be more than 0 and at most 3999856 pt") && !err.contains('('), "{err}");
+    let err = s.execute("file.new", &json!({"width": 100, "height": "1412 m", "units": "Meters"})).unwrap_err().to_string();
+    assert!(err.contains(in_meters), "{err}");
+    // The value in other units is rounded down, so it is one file.new takes.
+    let err = s.execute("file.new", &json!({"width": 100, "height": "56000 in", "units": "Inches"})).unwrap_err().to_string();
+    assert!(err.contains("at most 3999856 pt (55553.5555 in)"), "{err}");
+    assert!(s.execute("file.new", &json!({"width": 0, "height": 100})).is_err());
+    assert!(s.doc().is_err(), "no document was made");
+    s.execute("file.new", &json!({"width": "55553.5555 in", "height": 100, "units": "Inches"})).unwrap();
+
+    let mut s = new_doc(json!({"units": "Meters"}));
+    s.execute("artboard.new", &json!({"x": -2_000_000, "y": 0, "width": max, "height": 100})).unwrap();
+    assert_eq!(boards(&s)[1], Rect::new(-2_000_000.0, 0.0, max - 2_000_000.0, 100.0));
+    for p in [
+        json!({"x": -2_000_000, "y": 0, "width": max + 1.0, "height": 100}),
+        json!({"x": 0, "y": 2000, "width": 100, "height": max + 1.0}),
+        json!({"width": 0}),
+        json!({"height": -1}),
+    ] {
+        let err = s.execute("artboard.new", &p).unwrap_err().to_string();
+        assert!(err.contains(in_meters), "{p}: {err}");
+    }
+    assert_eq!(boards(&s).len(), 2, "the refused artboards were not added");
+    // A size taken from a wider artboard is refused too.
+    s.execute("artboard.setProps", &json!({"index": 1, "x": -2_000_000, "y": 0, "width": max + 1.0, "height": 100})).unwrap();
+    for p in [json!({}), json!({"x": 0, "y": 5000, "height": 100}), json!({"side": "bottom", "beside": 1})] {
+        let err = s.execute("artboard.new", &p).unwrap_err().to_string();
+        assert!(err.contains(in_meters), "{p}: {err}");
+    }
+    assert_eq!(boards(&s).len(), 2);
+
+    // A side below 1 pt is kept as given, as file.new keeps it, and a size taken from such an artboard keeps it too.
+    let mut s = new_doc(json!({"width": 0.5, "height": 0.25}));
+    assert_eq!(boards(&s), [Rect::new(0.0, 0.0, 0.5, 0.25)]);
+    s.execute("artboard.new", &json!({"x": 0, "y": 10, "width": 0.5, "height": 0.75})).unwrap();
+    s.execute("artboard.new", &json!({"x": 0, "y": 20})).unwrap();
+    assert_eq!(boards(&s)[1..], [Rect::new(0.0, 10.0, 0.5, 10.75), Rect::new(0.0, 20.0, 0.5, 20.75)]);
+    // artboard.setProps keeps such sides when it changes something else, on a locked artboard too,
+    // and still raises a supplied side to 1 pt.
+    s.execute("artboard.setProps", &json!({"index": 1, "name": "Small"})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 2, "locked": true})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 2, "name": "Small locked"})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 0, "height": 0.5})).unwrap();
+    assert_eq!(boards(&s), [Rect::new(0.0, 0.0, 0.5, 1.0), Rect::new(0.0, 10.0, 0.5, 10.75), Rect::new(0.0, 20.0, 0.5, 20.75)]);
 }
 
 #[test]
@@ -290,6 +347,57 @@ fn a_saved_preset_with_the_resolution_out_of_range_reads_in_range() {
     assert_eq!(ppi, [Some(1.0), Some(2400.0)]);
     s.execute("file.new", &json!({"preset": "Zero"})).unwrap();
     assert_eq!(s.doc().unwrap().doc.raster_effects_ppi, 1.0);
+}
+
+/// Advanced Options › Align New Objects to Pixel Grid starts on in the Mobile and Web presets and
+/// off in the others and without a preset; a `file.new` param overrides the preset; the document
+/// takes the value; saved presets and Recent keep it, and a saved preset from before it reads off.
+#[test]
+fn align_new_objects_to_pixel_grid_follows_the_preset() {
+    let align = |s: &Session| s.doc().unwrap().doc.setup.align_new_objects_to_pixel_grid;
+    let mut s = Session::new();
+    for category in ["Mobile", "Web"] {
+        assert!(presets(&mut s, category).iter().all(|p| p["alignNewObjectsToPixelGrid"] == true), "{category}");
+    }
+    for category in ["Print", "Film & Video", "Art & Illustration", "Branding", "Social"] {
+        assert!(presets(&mut s, category).iter().all(|p| p["alignNewObjectsToPixelGrid"] == false), "{category}");
+    }
+    s.execute("file.new", &json!({"preset": "Web 1920×1080"})).unwrap();
+    assert!(align(&s));
+    assert_eq!(presets(&mut s, "Recent")[0]["alignNewObjectsToPixelGrid"], true);
+    s.execute("file.new", &json!({"preset": "Phone 390×844"})).unwrap();
+    assert!(align(&s));
+    s.execute("file.new", &json!({"preset": "Letter"})).unwrap();
+    assert!(!align(&s));
+    s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+    assert!(!align(&s));
+    s.execute("file.new", &json!({"preset": "Web 1920×1080", "alignNewObjectsToPixelGrid": false})).unwrap();
+    assert!(!align(&s));
+    s.execute("file.new", &json!({"preset": "A4", "alignNewObjectsToPixelGrid": true})).unwrap();
+    assert!(align(&s));
+    assert!(Session::new().execute("file.new", &json!({"alignNewObjectsToPixelGrid": "on"})).is_err());
+    // A Recent entry passed back makes the document it was made as.
+    let recent = presets(&mut s, "Recent")[0].clone();
+    assert_eq!((recent["name"].as_str(), recent["alignNewObjectsToPixelGrid"].as_bool()), (Some("A4"), Some(true)));
+    s.execute("file.new", &recent).unwrap();
+    assert!(align(&s));
+    // Saved presets keep it.
+    s.execute("file.newPresets.save", &json!({"name": "Icons", "width": 64, "height": 64, "alignNewObjectsToPixelGrid": true})).unwrap();
+    s.execute("file.newPresets.save", &json!({"name": "Banner", "preset": "Web 1920×1080", "alignNewObjectsToPixelGrid": false})).unwrap();
+    let saved: Vec<Value> = presets(&mut s, "Saved").iter().map(|p| p["alignNewObjectsToPixelGrid"].clone()).collect();
+    assert_eq!(saved, [json!(true), json!(false)]);
+    s.execute("file.new", &json!({"preset": "Icons"})).unwrap();
+    assert!(align(&s));
+    s.execute("file.new", &json!({"preset": "Banner"})).unwrap();
+    assert!(!align(&s));
+    let prefs: crate::Prefs = serde_json::from_value(s.prefs.to_json()).unwrap();
+    assert_eq!(prefs.new_doc_presets, s.prefs.new_doc_presets);
+    // A saved preset from before the setting reads off, whatever its name.
+    let mut old = Session::new();
+    old.apply_prefs(serde_json::from_value(json!({"newDocPresets": [{"name": "My Web", "width": 100, "height": 100}]})).unwrap());
+    assert_eq!(presets(&mut old, "Saved")[0]["alignNewObjectsToPixelGrid"], false);
+    old.execute("file.new", &json!({"preset": "My Web"})).unwrap();
+    assert!(!align(&old));
 }
 
 #[test]
@@ -403,4 +511,230 @@ fn rearrange_that_moves_no_artboard_records_no_undo_step() {
     let before = history(&s);
     assert_eq!(s.execute("artboard.rearrange", &p).unwrap(), json!({"artboards": 0, "rows": 1, "columns": 1}));
     assert_eq!(history(&s), before);
+}
+
+/// A session whose New Document profiles are in a fresh folder for test `name` (not made yet).
+fn with_profiles(name: &str) -> (Session, std::path::PathBuf) {
+    let dir = std::env::temp_dir().join(format!("vc-newdoc-profiles-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut s = Session::new();
+    s.attach_new_doc_profiles(dir.clone());
+    (s, dir)
+}
+
+fn swatch_names(s: &Session) -> Vec<String> {
+    s.doc().unwrap().doc.swatches.iter().map(|w| w.name.clone()).collect()
+}
+
+/// Edit the Print profile: Brand Red, the Brand Box style, the Badge and Logo symbols (Logo's art an
+/// embedded image) and an image left on its layer, saved.
+fn edit_print_profile(s: &mut Session, dir: &std::path::Path) {
+    // Edit writes the shipped profile and opens it.
+    s.execute("file.newProfiles.edit", &json!({"name": "print"})).unwrap();
+    assert!(dir.join("Print.vectorcraft").is_file());
+    assert_eq!(s.doc().unwrap().doc.color_mode, ColorMode::Cmyk);
+    s.execute("swatch.new", &json!({"name": "Brand Red", "color": "#cc2200"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+    s.execute("graphicStyle.new", &json!({"name": "Brand Box"})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Badge"})).unwrap();
+    // One embedded image becomes a symbol's art, another stays on the profile's layer.
+    let png = |rgb: [u8; 3]| {
+        let mut out = vec![];
+        image::RgbaImage::from_pixel(4, 4, image::Rgba([rgb[0], rgb[1], rgb[2], 255]))
+            .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+            .unwrap();
+        vectorcraft_format::base64_encode(&out)
+    };
+    s.execute("file.place", &json!({"name": "red.png", "dataBase64": png([255, 0, 0]), "link": false})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Logo"})).unwrap();
+    s.execute("file.place", &json!({"name": "blue.png", "dataBase64": png([0, 0, 255]), "link": false})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.images.len(), 2);
+    s.execute("document.save", &json!({})).unwrap();
+    assert_eq!(s.execute("file.newProfiles", &json!({})).unwrap()["profiles"][2]["customized"], true);
+}
+
+#[test]
+fn an_edited_profile_starts_the_documents_of_its_category() {
+    let (mut s, dir) = with_profiles("edited");
+    let listed = s.execute("file.newProfiles", &json!({})).unwrap();
+    let names: Vec<&str> = listed["profiles"].as_array().unwrap().iter().map(|p| p["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Mobile", "Web", "Print", "Film & Video", "Art & Illustration", "Branding", "Social"]);
+    assert!(listed["profiles"].as_array().unwrap().iter().all(|p| p["customized"] == false), "{listed}");
+    edit_print_profile(&mut s, &dir);
+
+    let r = s.execute("file.new", &json!({"preset": "A4"})).unwrap();
+    assert_eq!(r["profile"], "Print", "{r}");
+    assert!(swatch_names(&s).contains(&"Brand Red".to_string()));
+    let d = &s.doc().unwrap().doc;
+    assert!(d.graphic_styles.iter().any(|g| g.name == "Brand Box"));
+    let badge = d.symbols.iter().find(|y| y.name == "Badge").expect("the profile's symbol");
+    assert!(d.symbols.iter().any(|y| y.name == "Logo"));
+    assert_eq!(d.images.len(), 1, "only the symbol's image comes along");
+    // The profile's art stays behind: one empty layer, with an id the symbol's art doesn't use.
+    assert_eq!(d.layers.len(), 1);
+    assert!(d.layers[0].children().is_none_or(Vec::is_empty));
+    let mut symbol_ids = vec![];
+    badge.art.walk(&mut |n| symbol_ids.push(n.id));
+    assert!(!symbol_ids.contains(&d.layers[0].id), "{symbol_ids:?}");
+    assert_eq!(d.artboards[0].rect.width().round(), 595.0);
+    let red = d.swatches.iter().find(|w| w.name == "Brand Red").cloned().unwrap();
+    assert!(matches!(red.paint, vectorcraft_color::Paint::Solid { color: vectorcraft_color::Color::Cmyk { .. }, .. }), "{:?}", red.paint);
+    // In RGB the profile's colors are converted, as Document Color Mode converts them.
+    s.execute("file.new", &json!({"preset": "A4", "colorMode": "rgb"})).unwrap();
+    let red = s.doc().unwrap().doc.swatches.iter().find(|w| w.name == "Brand Red").cloned().expect("converted, not dropped");
+    assert!(matches!(red.paint, vectorcraft_color::Paint::Solid { color: vectorcraft_color::Color::Rgb { .. }, .. }), "{:?}", red.paint);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_profile_follows_the_preset_access_and_reset() {
+    let (mut s, dir) = with_profiles("choice");
+    edit_print_profile(&mut s, &dir);
+    // A request that may not read the folder gets the defaults, and the reason; edit is refused
+    // before anything is written.
+    let elsewhere = dir.with_extension("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let roots = crate::file_access::AutomationRoots::new(&[elsewhere.as_path()], &[dir.as_path()]).unwrap().unwrap();
+    let r = crate::file_access::confine(Some(&roots), || s.execute("file.new", &json!({"preset": "A4"}))).unwrap();
+    assert!(r.get("profile").is_none() && r["profileError"]["profile"] == "Print", "{r}");
+    // The reason does not say where the folder is.
+    let reason = r["profileError"]["reason"].as_str().unwrap_or_default();
+    let folder = dir.file_name().unwrap().to_string_lossy().to_string();
+    assert!(!reason.is_empty() && !reason.contains(&folder), "{reason}");
+    assert!(!swatch_names(&s).contains(&"Brand Red".to_string()));
+    // Nothing tells such a request which profiles have files.
+    let r = crate::file_access::confine(Some(&roots), || s.execute("file.new", &json!({"preset": "Web 1920×1080"}))).unwrap();
+    assert_eq!(r["profileError"]["profile"], "Web", "{r}");
+    let listed = crate::file_access::confine(Some(&roots), || s.execute("file.newProfiles", &json!({}))).unwrap();
+    assert!(listed["profiles"].as_array().unwrap().iter().all(|p| p.get("customized").is_none() && p.get("path").is_none()), "{listed}");
+    assert!(crate::file_access::confine(Some(&roots), || s.execute("file.newProfiles.edit", &json!({"name": "Web"}))).is_err());
+    assert!(!dir.join("Web.vectorcraft").exists());
+    let _ = std::fs::remove_dir_all(&elsewhere);
+    // A saved preset made from a Print preset keeps the profile.
+    s.execute("file.newPresets.save", &json!({"name": "Zine", "preset": "A5"})).unwrap();
+    assert_eq!(presets(&mut s, "Saved")[0]["profile"], "Print");
+    assert_eq!(s.execute("file.new", &json!({"preset": "Zine"})).unwrap()["profile"], "Print");
+
+    // Other categories, no preset and `profile: null` start with the defaults.
+    for p in [json!({"preset": "Web 1920×1080"}), json!({}), json!({"preset": "A4", "profile": null})] {
+        let r = s.execute("file.new", &p).unwrap();
+        assert!(r.get("profile").is_none() && !swatch_names(&s).contains(&"Brand Red".to_string()), "{p}: {r}");
+    }
+    // `profile` picks one for any settings.
+    assert_eq!(s.execute("file.new", &json!({"width": 300, "height": 300, "profile": "PRINT"})).unwrap()["profile"], "Print");
+
+    // Reset deletes the file, once; the shipped profile applies again.
+    assert_eq!(s.execute("file.newProfiles.reset", &json!({"name": "Print"})).unwrap(), json!({"name": "Print", "reset": true}));
+    assert_eq!(s.execute("file.newProfiles.reset", &json!({"name": "Print"})).unwrap(), json!({"name": "Print", "reset": false}));
+    let r = s.execute("file.new", &json!({"preset": "A4"})).unwrap();
+    assert!(r.get("profile").is_none() && !swatch_names(&s).contains(&"Brand Red".to_string()), "{r}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The new document's links find their files from the profile's file, as a document opened from
+/// that file does; a document without a profile has no such file.
+#[test]
+fn the_new_document_links_from_the_profile_file() {
+    let (mut s, dir) = with_profiles("links");
+    edit_print_profile(&mut s, &dir);
+    assert_eq!(s.execute("file.new", &json!({"preset": "A4"})).unwrap()["profile"], "Print");
+    let file = dir.join("Print.vectorcraft").to_string_lossy().to_string();
+    assert_eq!(s.doc().unwrap().links_from.as_deref(), Some(file.as_str()));
+    s.execute("file.new", &json!({"preset": "Web 1920×1080"})).unwrap();
+    assert_eq!(s.doc().unwrap().links_from, None);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A color profile the profile's file carries is installed when this machine lacks it, as opening
+/// the file installs it, so the new document keeps it and a save carries it; one that can't be used
+/// is a warning.
+#[test]
+fn a_profile_brings_the_color_profile_its_file_carries() {
+    use vectorcraft_color::cms;
+    let (mut s, dir) = with_profiles("icc");
+    let builtin = cms::profiles().into_iter().find(|p| p.kind == cms::ProfileKind::Rgb && p.builtin && p.name != cms::SRGB).unwrap();
+    let icc = cms::icc_bytes(&builtin.name).unwrap().to_vec();
+    let name = format!("Profile RGB {}", std::process::id());
+    cms::register_icc(&icc, Some(name.clone())).unwrap();
+    let bytes_of = |v: &Value| vectorcraft_format::base64_decode(v.as_str().expect("base64")).unwrap();
+    s.execute("file.new", &json!({"preset": "Web 1920×1080", "profile": null})).unwrap();
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).color_profiles.rgb = Some(name.clone());
+    let file = String::from_utf8(bytes_of(&s.execute("file.saveCopy", &json!({"compress": false})).unwrap()["dataBase64"])).unwrap();
+    cms::unregister_icc(&name);
+    // A profile made on another machine names a color profile this one lacks.
+    let elsewhere = format!("Profile RGB elsewhere {}", std::process::id());
+    assert!(cms::profile(&elsewhere).is_none());
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Web.vectorcraft"), file.replace(&name, &elsewhere)).unwrap();
+    let r = s.execute("file.new", &json!({"preset": "Web 1920×1080"})).unwrap();
+    assert!(r["profile"] == "Web" && r.get("warnings").is_none(), "{r}");
+    assert_eq!(cms::profile(&elsewhere).map(|p| p.kind), Some(cms::ProfileKind::Rgb));
+    assert_eq!(s.doc().unwrap().doc.color_profiles.rgb.as_deref(), Some(elsewhere.as_str()));
+    let saved: Value = serde_json::from_slice(&bytes_of(&s.execute("file.saveCopy", &json!({"compress": false})).unwrap()["dataBase64"])).unwrap();
+    assert_eq!(vectorcraft_format::base64_decode(saved["profiles"][&elsewhere]["data"].as_str().unwrap()).unwrap(), icc);
+    cms::unregister_icc(&elsewhere);
+    // Damaged profile data starts the document with a warning.
+    let broken = format!("Profile RGB broken {}", std::process::id());
+    let mut v: Value = serde_json::from_str(&file.replace(&name, &broken)).unwrap();
+    v["profiles"][&broken]["data"] = json!("AAAA");
+    std::fs::write(dir.join("Web.vectorcraft"), serde_json::to_vec(&v).unwrap()).unwrap();
+    let r = s.execute("file.new", &json!({"preset": "Web 1920×1080"})).unwrap();
+    assert!(r["profile"] == "Web" && r["warnings"][0].as_str().unwrap_or_default().contains(&broken), "{r}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_damaged_or_oversized_profile_leaves_the_defaults_and_is_reported() {
+    let (mut s, dir) = with_profiles("damaged");
+    s.execute("file.new", &json!({"preset": "Letter", "profile": null})).unwrap();
+    let defaults = swatch_names(&s);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Print.vectorcraft"), b"not a document").unwrap();
+    let r = s.execute("file.new", &json!({"preset": "Letter"})).unwrap();
+    assert_eq!(r["profileError"]["profile"], "Print", "{r}");
+    assert!(!r["profileError"]["reason"].as_str().unwrap_or("").is_empty(), "{r}");
+    assert!(r.get("profile").is_none());
+    assert_eq!(swatch_names(&s), defaults);
+    // Past the limit the file is not read at all (a sparse file of that length).
+    let big = std::fs::File::create(dir.join("Web.vectorcraft")).unwrap();
+    big.set_len(crate::cmd::newdoc::MAX_PROFILE_BYTES + 1).unwrap();
+    drop(big);
+    let r = s.execute("file.new", &json!({"preset": "Web 1920×1080"})).unwrap();
+    assert!(r["profileError"]["reason"].as_str().unwrap_or("").contains("larger than"), "{r}");
+    assert_eq!(s.doc().unwrap().doc.artboards[0].rect.width(), 1920.0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn profile_names_are_checked_and_editing_needs_the_folder() {
+    let mut s = Session::new();
+    for p in [json!({"profile": "Posters"}), json!({"profile": 5}), json!({"profile": ""})] {
+        let e = s.execute("file.new", &p).unwrap_err().to_string();
+        assert!(e.contains("no New Document profile called") && e.contains("Film & Video"), "{p}: {e}");
+    }
+    assert!(s.execute("file.newProfiles.edit", &json!({"name": "Posters"})).is_err());
+    for cmd in ["file.newProfiles.edit", "file.newProfiles.reset"] {
+        let e = s.execute(cmd, &json!({"name": "Print"})).unwrap_err().to_string();
+        assert!(e.contains("preferences folder"), "{cmd}: {e}");
+    }
+    // Without a folder every profile is the shipped one and documents start with the defaults.
+    let r = s.execute("file.newProfiles", &json!({})).unwrap();
+    assert!(r["folder"].is_null() && r["profiles"][0].get("path").is_none(), "{r}");
+    let r = s.execute("file.new", &json!({"preset": "A4"})).unwrap();
+    assert!(r.get("profile").is_none() && r.get("profileError").is_none(), "{r}");
+}
+
+#[test]
+fn the_new_layer_takes_an_id_no_profile_art_has() {
+    // A damaged profile whose symbol art has the id the new layer would otherwise take.
+    let settings = crate::cmd::newdoc::DocSettings::default();
+    let mut profile = settings.document();
+    let next = settings.document().peek_next_id().max(profile.peek_next_id());
+    let art = std::sync::Arc::new(vectorcraft_doc::Node::group(vectorcraft_doc::NodeId(next), vec![]));
+    profile.symbols.push(vectorcraft_doc::Symbol { name: "Badge".into(), art, dynamic: false });
+    let d = settings.document_from_profile(profile);
+    assert_eq!(d.layers.len(), 1);
+    assert_ne!(d.layers[0].id, vectorcraft_doc::NodeId(next));
+    // Ids given out later skip the symbol's art too.
+    assert!(d.peek_next_id() > d.layers[0].id.0 && d.peek_next_id() > next);
 }

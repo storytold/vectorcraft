@@ -99,14 +99,15 @@ pub fn node_summary_opts(n: &Node, opts: SummaryOpts, symbols: &SymbolBoxes) -> 
         NodeKind::Text(t) => {
             v["text"] = json!(t.plain_text());
             // Area type and type on a path: does the text fit (the red overflow "+")? Area type
-            // also reports its fit and Shrink Text's factor (1 unshrunk), and type on a path its
-            // Dynamic Text setting and factor (1 when off).
+            // also reports its fit (`block` for Dynamic Text's Block) and Shrink Text's factor (1
+            // unshrunk), and type on a path its factor (1 when off); both report Dynamic Text.
             if !matches!(t.kind, vectorcraft_doc::TextKind::Point) {
                 let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
                 v["overflow"] = json!(lay.overflow);
                 if matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }) {
-                    v["fit"] = json!(t.area.fit.id());
+                    v["fit"] = json!(crate::cmd::typecmd::fit_id(t));
                     v["fitScale"] = json!(lay.fit_scale);
+                    v["dynamicText"] = json!(t.dynamic_text);
                 } else {
                     v["dynamicText"] = json!(t.dynamic_text);
                     v["fitScale"] = json!(lay.fit_scale);
@@ -284,9 +285,10 @@ fn document_base(s: &Session) -> Value {
     json!({
         "uid": st.uid,
         "title": st.title(),
-        // The File Info title (`file.info`), where `title` comes from the file name once the document has one.
-        "fileInfoTitle": d.title,
-        "path": st.path,
+        // The File Info title (`file.info`): the title the file gave itself, else the document's name. `title` is the tab's name.
+        "fileInfoTitle": d.info_title(),
+        // Null for a confined caller when the file is outside its read roots.
+        "path": st.path.as_deref().filter(|p| crate::file_access::check_read(p).is_ok()),
         "dirty": st.is_dirty(),
         "revision": st.revision,
         "units": d.units.label(),

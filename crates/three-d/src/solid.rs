@@ -14,6 +14,7 @@ use vectorcraft_geom::{BezPath, FillRule, ParamCurve, PathData, Point, Rect, Vec
 use crate::{MAX_FACES, MAX_SOLID_FACES, Revolve, V3, eye_distance, perspective_scale};
 
 mod build;
+mod face_map;
 mod inflate;
 mod membrane;
 mod outline;
@@ -23,14 +24,16 @@ mod rings;
 use build::{Camera, cuts, edge_distance, newell, section};
 pub(crate) use build::{Face3, extrude_faces, plane_faces};
 pub use build::{extrude, plane};
+pub use face_map::{FaceMap, extrude_face_map, plane_face_map};
 #[cfg(test)]
 use inflate::GRID_WORK;
 #[cfg(test)]
 pub(crate) use inflate::INFLATED;
 pub(crate) use inflate::inflate_faces;
-pub use inflate::{inflate, inflate_together};
+pub use inflate::{inflate, inflate_each, inflate_together};
 #[cfg(test)]
 use membrane::{Edges, GRID_BUDGET, MAX_EDGE_ENTRIES, MAX_GRID_WORK, Membrane, cell_triangles};
+pub use rings::TOO_COMPLEX_SURFACE as TOO_COMPLEX_SOLID;
 use rings::signed_area;
 #[cfg(test)]
 use rings::{MAX_SOLID_POINTS, rings};
@@ -242,6 +245,29 @@ impl Default for Inflate {
     }
 }
 
+/// A planar face of a solid that a graphic can be mapped onto: Extrude & Bevel's front cap (the
+/// art itself, or a plane's only face) or its back cap.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum PlanarFace {
+    Front,
+    Back,
+}
+
+impl PlanarFace {
+    pub const ALL: [PlanarFace; 2] = [Self::Front, Self::Back];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Front => "front",
+            Self::Back => "back",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|f| f.id() == s)
+    }
+}
+
 /// One projected polygon. Holes are contours of their own (nonzero winding).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Facet {
@@ -257,6 +283,15 @@ pub struct Facet {
     /// The facet's outline with the profile's curves kept as cubics, for [`Facet::path`]. The
     /// contours stay the polygon that visibility and depth use.
     pub outline: Option<PathData>,
+    /// The facet is a piece of the solid's sides (Extrude & Bevel's walls and bevels, Inflate's
+    /// sides) rather than of its ends (the caps, a plane, Inflate's front and back).
+    pub side: bool,
+    /// The facet is turned away from the viewer: a closed solid keeps it (seen edge-on, or with
+    /// Draw Hidden Faces) and draws it behind the facets turned toward the viewer.
+    pub away: bool,
+    /// The planar end of the solid the facet is: Extrude & Bevel's front or back cap, or a plane
+    /// (its front). `None` for every other facet.
+    pub end: Option<PlanarFace>,
     /// The contours in view space, before projection, for tests that measure depths.
     #[cfg(test)]
     view: Vec<Vec<V3>>,
@@ -287,6 +322,26 @@ impl Facet {
             bp.close_path();
         }
         PathData::from_bezpath(&bp)
+    }
+
+    /// Revolve's face `face` as a facet: its polygon, curved outline, depth, normal and lighting.
+    /// A face that joins the profile's ends round the axis is a side; a cap is an end.
+    pub(crate) fn of_face(face: crate::Face) -> Self {
+        Facet {
+            contours: vec![face.points],
+            depth: face.depth,
+            brightness: face.brightness,
+            illumination: face.illumination,
+            normal: face.normal,
+            rgb_gradient: None,
+            outline: face.outline,
+            side: !face.cap,
+            // A revolved cap is not one of the planar faces graphics map onto.
+            end: None,
+            away: false,
+            #[cfg(test)]
+            view: vec![],
+        }
     }
 }
 

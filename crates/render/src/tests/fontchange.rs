@@ -338,7 +338,7 @@ fn enveloped_type_redraws_when_its_font_becomes_available() {
     let shown = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Word".into(), xf: Affine::translate((150.0, 120.0)) });
     let l = d.layers[0].id;
     for (i, content) in [typed, shown].into_iter().enumerate() {
-        let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+        let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
         let envelope = NodeKind::Envelope {
             content: vec![Arc::new(content)],
             kind: Box::new(kind),
@@ -376,7 +376,7 @@ fn enveloped_type_under_effects_redraws_when_its_font_becomes_available() {
         let mut d = Document::new(300.0, 150.0);
         let style = CharStyle { size: 50.0, font_family: family.into(), ..Default::default() };
         let typed = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 80.0), "Hamburg", style))));
-        let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+        let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
         let envelope = NodeKind::Envelope {
             content: vec![Arc::new(typed)],
             kind: Box::new(kind),
@@ -420,7 +420,7 @@ fn a_renderer_maps_enveloped_type_from_its_glyphs_in_the_current_font() {
     const FAMILY: &str = "Mapped Serif 4";
     let style = CharStyle { size: 50.0, font_family: FAMILY.into(), ..Default::default() };
     let t = TextObject::point(Point::new(10.0, 60.0), "Hamburg", style);
-    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
     let envelope = Node::new(
         vectorcraft_doc::NodeId(1),
         NodeKind::Envelope {

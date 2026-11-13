@@ -576,6 +576,42 @@ fn update_links_reads_files_again_inside_symbols_patterns_and_masks() {
     assert!(images(&s).iter().all(|(_, _, _, size)| *size == (20, 10)), "{:?}", images(&s));
 }
 
+/// An image that Placement Options clip, alone in a group the user made, goes into a new clip group
+/// inside that group when its file grows, in the layers and in a symbol's art; the user's group
+/// stays a plain group.
+#[test]
+fn placement_options_clip_an_image_alone_in_a_group_inside_that_group() {
+    let dir = Folder::new("clip-in-group");
+    let photo = dir.file("photo.png");
+    write(&photo, &png(20, 10, RED));
+    let mut s = session();
+    let mut groups = vec![];
+    for _ in 0..2 {
+        let id = place(&mut s, &photo);
+        s.execute("links.placementOptions", &json!({"ids": [id.0], "preserve": "fill", "clip": true})).unwrap();
+        let g = NodeId(s.execute("object.group", &json!({"ids": [id.0]})).unwrap()["id"].as_u64().unwrap());
+        groups.push((g, id));
+    }
+    let (in_symbol, _) = groups[1];
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [in_symbol.0]})).unwrap();
+    write(&photo, &png(60, 20, BLUE));
+    s.execute("links.update", &json!({})).unwrap();
+    // A plain group holding just a clip group of a clipping path and an image.
+    let plain_of_clip = |n: &vectorcraft_doc::Node| match &n.kind {
+        NodeKind::Group { children, clip: false } => matches!(&children[..], [c] if matches!(&c.kind,
+            NodeKind::Group { children, clip: true } if matches!(&children[..], [p, im]
+                if matches!(p.kind, NodeKind::Path { clipping: true, .. }) && matches!(im.kind, NodeKind::Image(_))))),
+        _ => false,
+    };
+    let d = &s.doc().unwrap().doc;
+    let (g, id) = groups[0];
+    assert!(plain_of_clip(d.node(g).unwrap()), "{:?}", d.node(g));
+    assert_ne!(d.parent_of(id), Some(g), "the image is in a new clip group");
+    let mut found = false;
+    d.symbols[0].art.walk(&mut |n| found |= plain_of_clip(n));
+    assert!(found, "{:?}", d.symbols[0].art);
+}
+
 #[test]
 fn a_missing_link_renders_its_preview_and_relinks() {
     let dir = Folder::new("missing");
@@ -726,6 +762,56 @@ fn relink_each_with_copy_copies_nothing_when_a_file_cant_be_read() {
     assert!(s.execute("links.relink", &json!({"scope": "each", "paths": paths, "copy": true})).is_err());
     assert!(!Path::new(&dir.file("doc/x.png")).exists(), "no copy is left behind");
     assert_eq!(link_path(&s, a), one);
+}
+
+/// With copy, for a client whose read roots don't hold the document's folder: the reply names the
+/// copy by its file name, and a copy refused there keeps the write root and names the folder and
+/// the file by their names.
+#[test]
+fn relink_with_copy_names_the_documents_folder_by_its_name_outside_the_read_roots() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let dir = Folder::new("relink-copy-roots");
+    let one = dir.file("doc/one.png");
+    write(&one, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &one);
+    save(&mut s, &dir.file("doc/poster.vectorcraft"));
+    let x = dir.file("new/x.png");
+    write(&x, &png(60, 30, BLUE));
+    let (new, doc) = (Path::new(&x).parent().unwrap().to_path_buf(), Path::new(&one).parent().unwrap().to_path_buf());
+    let hidden = doc.to_string_lossy().into_owned();
+    let p = json!({"ids": [a.0], "path": x, "copy": true});
+
+    let writes_there = AutomationRoots::new(&[new.as_path()], &[doc.as_path()]).unwrap();
+    let r = confine(writes_there.as_ref(), || s.execute("links.relink", &p)).unwrap();
+    assert_eq!(r["copied"], json!([{"from": x, "to": "x.png"}]), "{r}");
+    assert!(!r.to_string().contains(&hidden), "{r}");
+    std::fs::remove_file(dir.file("doc/x.png")).unwrap();
+
+    let elsewhere = AutomationRoots::new(&[new.as_path()], &[new.as_path()]).unwrap();
+    let root = crate::cmd::findfiles::plain(std::fs::canonicalize(&new).unwrap()).display().to_string();
+    let e = confine(elsewhere.as_ref(), || s.execute("links.relink", &p)).unwrap_err().to_string();
+    assert_eq!(e, format!("doc: automation path rejected: outside the write root {root}: x.png"));
+    assert!(!Path::new(&dir.file("doc/x.png")).exists());
+}
+
+/// With copy, for a document whose path has no folder: outside the read roots the error does not
+/// name the path, and without roots it names it whole.
+#[test]
+fn relink_with_copy_names_a_document_path_without_a_folder_as_the_request_may_see_it() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let dir = Folder::new("relink-copy-no-folder");
+    let mut s = session();
+    s.doc_mut().unwrap().path = Some("/".into());
+    let p = json!({"path": dir.file("x.png"), "copy": true});
+    let roots = AutomationRoots::new(&[dir.0.as_path()], &[dir.0.as_path()]).unwrap();
+    let e = confine(roots.as_ref(), || s.execute("links.relink", &p)).unwrap_err().to_string();
+    assert_eq!(e, "invalid parameters for `links.relink`: a file or folder outside the read roots has no folder");
+    let whole = s.execute("links.relink", &p).unwrap_err().to_string();
+    let doc = crate::cmd::fileio::absolute_path("/");
+    assert_eq!(whole, format!("invalid parameters for `links.relink`: {doc} has no folder"));
 }
 
 /// A scope or paths that doesn't fit is refused, and nothing is relinked.

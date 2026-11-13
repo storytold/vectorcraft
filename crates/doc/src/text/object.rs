@@ -1,6 +1,6 @@
 use super::area::{AreaOptions, PathAlign, PathEffect};
 use super::char_style::CharStyle;
-use super::para_style::ParaStyle;
+use super::para_style::{JustificationOptions, ParaStyle};
 use super::runs::{RubySpan, TextKind, TextRun, TypeAntiAlias, move_anchors, reverse_from_end};
 use super::tabs_lists::{ListCounts, ParaList};
 use super::{Affine, PathData, Point, Rect, TextObject, TextStyleScale, Vec2};
@@ -169,6 +169,19 @@ impl TextObject {
     /// Attributes of paragraph `i` (the last paragraph's past the end).
     pub fn para_at(&self, i: usize) -> &ParaStyle {
         self.paras.get(i).or(self.paras.last()).unwrap_or(&self.para)
+    }
+    /// The Justification… options the layout sets `para` with: its own, except that with Dynamic
+    /// Text's Block on area type ([`Self::dynamic_text`]) the Desired word spacing is the word gap
+    /// ([`AreaOptions::block_gaps`]), and Minimum and Maximum move out to it when it lies outside
+    /// them. The paragraph keeps its own values, which apply again when Block is off.
+    pub fn layout_justification(&self, para: &ParaStyle) -> JustificationOptions {
+        let mut j = para.justification.clone();
+        if self.dynamic_text && matches!(self.kind, TextKind::Area { .. }) {
+            let gap = self.area.block_gaps().0;
+            let [min, _, max] = j.word_spacing;
+            j.word_spacing = [min.min(gap), gap, max.max(gap)];
+        }
+        j
     }
     /// Every paragraph's attributes, one per paragraph.
     pub fn paragraph_styles(&self) -> Vec<ParaStyle> {
@@ -477,6 +490,8 @@ impl crate::Document {
             st.baseline_shift = num("baseline_shift").unwrap_or(st.baseline_shift);
             st.tcy_up_down = num("tcyUpDown").unwrap_or(st.tcy_up_down);
             st.tcy_left_right = num("tcyLeftRight").unwrap_or(st.tcy_left_right);
+            st.aki_left = num("akiLeft").unwrap_or(st.aki_left);
+            st.aki_right = num("akiRight").unwrap_or(st.aki_right);
             st.keep_dimensions_in_range();
             let kept = [
                 ("size", Some(st.size)),
@@ -485,6 +500,8 @@ impl crate::Document {
                 ("baseline_shift", Some(st.baseline_shift)),
                 ("tcyUpDown", Some(st.tcy_up_down)),
                 ("tcyLeftRight", Some(st.tcy_left_right)),
+                ("akiLeft", Some(st.aki_left)),
+                ("akiRight", Some(st.aki_right)),
                 ("leading", st.leading),
             ];
             for (k, v) in kept {

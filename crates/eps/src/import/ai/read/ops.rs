@@ -943,6 +943,29 @@ fn pattern_xf(space: Affine, matrix: Option<Affine>, tile: Rect) -> Option<Affin
     (xf.determinant().abs() >= 1e-12 && xf.as_coeffs().iter().all(|v| v.is_finite())).then_some(xf)
 }
 
+/// A style's pattern (`StyleItem::Pattern`): the file's pattern `name` placed by `matrix` (its
+/// space → art space; `controls` apply first for a pattern defined in the version 7 form, `v7`
+/// those patterns' names) and carried into the document by `space`, with the name `names` give
+/// it there. `None` when the pattern wasn't read (`tiles`: the tiles of those that were, by their
+/// names in the file) or doesn't place.
+pub(super) fn style_pattern(
+    name: &str,
+    matrix: Option<[f64; 6]>,
+    controls: &[f64],
+    tiles: &HashMap<String, Rect>,
+    v7: &HashSet<String>,
+    names: &ShownNames,
+    space: Affine,
+) -> Option<Paint> {
+    let tile = tiles.get(name).copied()?;
+    let mut matrix = matrix.and_then(|m| paint::affine(&m));
+    if v7.contains(name) {
+        matrix = Some(matrix.unwrap_or(Affine::IDENTITY) * pattern_controls(controls)?);
+    }
+    let xf = pattern_xf(space, matrix, tile)?;
+    Some(Paint::Pattern { pattern: names.get(Global::Pattern, name).to_string(), xf })
+}
+
 /// A pattern fill's `x y scaleX scaleY angle reflect axis shear shearAxis` as one transform of the
 /// pattern's space, applied before its initial matrix: the shear (by `shear` degrees along the line
 /// at `shearAxis` degrees), the reflection about the line at `axis` degrees when `reflect` isn't
@@ -1044,7 +1067,8 @@ fn strokes(n: &Node, depth: usize) -> bool {
         || n.children().into_iter().flatten().any(|c| strokes(c, depth + 1))
 }
 
-/// Are all of path or compound path `n`'s segments straight, each anchor's handles on it?
+/// Are all of path or compound path `n`'s segments straight, each anchor's handles on it? Any other
+/// object, a group included, counts as no.
 fn straight(n: &Node) -> bool {
     match &n.kind {
         NodeKind::Path { path, .. } => path.subpaths.iter().flat_map(|s| &s.anchors).all(|a| a.h_in == a.p && a.h_out == a.p),
@@ -1053,10 +1077,21 @@ fn straight(n: &Node) -> bool {
     }
 }
 
+/// Is neither `n` nor anything in it a guide? Deeper than [`MAX_DEPTH`] counts as no.
+fn no_guides(n: &Node, depth: usize) -> bool {
+    depth <= MAX_DEPTH && !n.is_guide() && n.children().into_iter().flatten().all(|c| no_guides(c, depth + 1))
+}
+
+/// The largest Twist angle, in degrees either way, read as a live effect on an object that isn't a
+/// path or compound path with straight segments: VectorCraft's own limit. An object with a larger
+/// Twist keeps the file's drawn look.
+const MAX_TWIST: f64 = 90.0;
+
 /// Is `object` one that style `st`, whose effect moves the outline, is read on? It and everything
-/// in it [`moves_alike`], and the style paints no gradient. Twist is read only on an unstroked path
-/// or compound path with straight segments, and Transform that scales, turns or reflects only when
-/// nothing is stroked (its reference point lies on the bounds without strokes).
+/// in it [`moves_alike`], and the style paints no gradient. Twist is read only when nothing is
+/// stroked: on a path or compound path with straight segments at any angle, or up to [`MAX_TWIST`]
+/// degrees either way on another object with no guide in it. Transform that scales, turns or reflects
+/// is read only when nothing is stroked (its reference point lies on the bounds without strokes).
 fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
     use crate::import::ai::style::StyleItem;
     let stroked = st.items.iter().any(|i| matches!(i, StyleItem::Stroke { paint, .. } if !paint.is_none()))
@@ -1065,7 +1100,9 @@ fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
         && outlines_only(object)
         && object.children().into_iter().flatten().all(|c| moves_alike(c, 1))
         && st.effects.iter().all(|e| match e.id.as_str() {
-            "distort.twist" => !stroked && matches!(object.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) && straight(object),
+            "distort.twist" => {
+                !stroked && (straight(object) || (no_guides(object, 0) && e.params["angle"].as_f64().is_some_and(|a| a.abs() <= MAX_TWIST)))
+            }
             "distort.transform" => {
                 let p = &e.params;
                 !stroked
@@ -1147,15 +1184,15 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
             }
             StyleItem::Pattern { name, matrix, controls } => match placed.get(&format!("{PATTERN_KEY}{}", paints.names.get(Global::Pattern, name))) {
                 Some(p) => AppearanceItem::Fill(FillLayer::new(p.clone())),
-                None => {
-                    let tile = paints.patterns.get(name).copied()?;
-                    let mut matrix = matrix.and_then(|m| paint::affine(&m));
-                    if paints.v7_patterns.contains(name) {
-                        matrix = Some(matrix.unwrap_or(Affine::IDENTITY) * pattern_controls(controls)?);
-                    }
-                    let xf = pattern_xf(paints.space, matrix, tile)?;
-                    AppearanceItem::Fill(FillLayer::new(Paint::Pattern { pattern: paints.names.get(Global::Pattern, name).to_string(), xf }))
-                }
+                None => AppearanceItem::Fill(FillLayer::new(style_pattern(
+                    name,
+                    *matrix,
+                    controls,
+                    paints.patterns,
+                    paints.v7_patterns,
+                    paints.names,
+                    paints.space,
+                )?)),
             },
             StyleItem::Stroke { brush, .. } => {
                 // A brushed stroke draws as its look only with the brush the Brushes panel keeps
@@ -1194,13 +1231,18 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
 
 /// A graphic style's appearance from art style `st`, on no object: `None` when the style isn't one
 /// this reads, or paints with a gradient or a pattern (placed on each object as its drawn look has them).
+/// A style that is one paint is its fill and stroke ([`crate::import::ai::style::ArtStyle::one_paint`]).
 pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle) -> Option<Appearance> {
     use crate::import::ai::style::StyleItem;
     if !st.plain {
         return None;
     }
+    let style_items = match &st.one_paint {
+        Some(one) => one.as_ref().ok()?,
+        None => &st.items,
+    };
     let mut items = vec![];
-    for (n, item) in st.items.iter().enumerate() {
+    for (n, item) in style_items.iter().enumerate() {
         let mut layer = match item {
             StyleItem::Fill(paint) => AppearanceItem::Fill(FillLayer::new(paint.clone())),
             // A graphic style's brush isn't checked against the file's brushes: it is left out.
@@ -1237,8 +1279,11 @@ pub(crate) fn read_style_list(section: &[u8]) -> Vec<String> {
 
 /// Art style `name` of `section` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`],
 /// with a style's one gradient fill as `own_gradient`, the object's own gradient, as [`styled`] reads
-/// it on objects other than type. `None` when the section doesn't define it, the reader doesn't read
-/// it, or it paints with a pattern, a brush or a gradient that isn't the object's own.
+/// it on objects other than type. A stroke that names a brush is read with that brush's name, as
+/// [`styled`] reads it on a path or compound path when the Brushes panel keeps that brush at those
+/// settings, which [`crate::import::ai::brush::BrushesRead::style_reads`] checks. `None` when the section
+/// doesn't define it, the reader doesn't read it, or it paints with a pattern or a gradient that
+/// isn't the object's own.
 pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&Paint>) -> Option<StyleRead> {
     use crate::import::ai::style::StyleItem;
     let mut st = crate::import::ai::style::art_styles(section).remove(name)?;
@@ -1250,7 +1295,21 @@ pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&P
             }
         }
     }
-    let appearance = appearance_from_art_style(&st)?;
+    // The brush names, by item; `appearance_from_art_style` reads a style's items in order.
+    let brushes: Vec<Option<String>> = st
+        .items
+        .iter_mut()
+        .map(|item| match item {
+            StyleItem::Stroke { brush, .. } => brush.take().map(|(name, _)| name),
+            _ => None,
+        })
+        .collect();
+    let mut appearance = appearance_from_art_style(&st)?;
+    for (item, brush) in appearance.items.iter_mut().zip(brushes) {
+        if let (AppearanceItem::Stroke(s), Some(brush)) = (item, brush) {
+            s.brush = Some(brush);
+        }
+    }
     Some(StyleRead { appearance, simple: st.simple, pathfinder: st.pathfinder, transparency: st.transparency })
 }
 

@@ -1,5 +1,5 @@
 use super::envelope::{EnvelopeKind, H_DOWN, H_LEFT, H_RIGHT, H_UP, envelope_grid, mesh_at};
-use super::warp::{WarpStyle, flatten_subpath, resample, warp_point};
+use super::warp::{WarpNet, WarpStyle, flatten_subpath, resample, uses_net, warp_point};
 use super::{
     Affine, Anchor, Arc, Color, CubicBez, Deserialize, Node, ParamCurve, PathData, Point, Rect, Serialize, Shape, SubPath, Vec2, fifty, lerp_color,
     one,
@@ -529,6 +529,10 @@ pub(super) const MAX_BORDER_LINES: usize = 256;
 
 /// The most rounds of new lines a mesh made from a path takes to keep its border on the outline.
 const MAX_BORDER_ROUNDS: usize = 64;
+
+/// A point this close (in points) to a mesh's outline is on it, for [`GradientMesh::locate_within`]
+/// with any tolerance.
+const ON_OUTLINE: f64 = 1e-6;
 
 /// An anchor whose directions in and out differ by more than this (radians) is a corner: a border
 /// edge that can't follow the outline takes a mesh line through its sharpest corner first.
@@ -1436,17 +1440,23 @@ impl GradientMesh {
     }
 
     /// As [`Self::locate`], and for a point outside the mesh within `tol` of its outline, the
-    /// patch and local (u, v) of the nearest point of the mesh's edge.
+    /// patch and local (u, v) of the nearest point of the mesh's edge. A point on the outline
+    /// (within [`ON_OUTLINE`]) locates on its edge on every side, with any `tol`.
     pub fn locate_within(&self, p: Point, tol: f64) -> Option<(usize, usize, f64, f64)> {
-        if !self.is_valid() {
+        if !self.is_valid() || !p.is_finite() {
             return None;
         }
-        let bp = self.outline().to_bezpath();
-        if bp.winding(p) == 0 {
+        // A point on the outline takes the nearest point of the edge on every side: the nonzero
+        // winding number counts a point on some edges as outside (a rectangle's bottom and right
+        // edges) and on the others as inside.
+        if let Some((_, r, c, u, v)) = self.nearest_edge(p, ON_OUTLINE).filter(|e| e.0 <= ON_OUTLINE * ON_OUTLINE) {
+            return Some((r, c, u, v));
+        }
+        if self.outline().to_bezpath().winding(p) == 0 {
             if tol.is_nan() || tol <= 0.0 {
                 return None;
             }
-            return self.nearest_edge(p).filter(|e| e.0 <= tol * tol).map(|(_, r, c, u, v)| (r, c, u, v));
+            return self.nearest_edge(p, tol).filter(|e| e.0 <= tol * tol).map(|(_, r, c, u, v)| (r, c, u, v));
         }
         const N: usize = 16;
         let mut best = (f64::INFINITY, 0, 0, 0.0, 0.0);
@@ -1484,12 +1494,20 @@ impl GradientMesh {
     }
 
     /// The point of the mesh's outer edge nearest `p`: its squared distance from `p`, and its
-    /// boundary patch and local (u, v).
-    fn nearest_edge(&self, p: Point) -> Option<(f64, usize, usize, f64, f64)> {
+    /// boundary patch and local (u, v). Edges whose control points all lie farther than `within`
+    /// from `p` are skipped, so `None` means no edge is within `within`.
+    fn nearest_edge(&self, p: Point, within: f64) -> Option<(f64, usize, usize, f64, f64)> {
         use vectorcraft_geom::kurbo::ParamCurveNearest;
         let (rows, cols) = (self.rows as usize, self.cols as usize);
         let mut best: Option<(f64, usize, usize, f64, f64)> = None;
         let mut take = |e: CubicBez, at: (usize, usize, Option<f64>, Option<f64>)| {
+            // The edge lies inside its control points' box, so a box farther than `within` holds
+            // no point of the edge within it.
+            let b = Rect::from_points(e.p0, e.p1).union_pt(e.p2).union_pt(e.p3);
+            let (dx, dy) = ((b.x0 - p.x).max(p.x - b.x1).max(0.0), (b.y0 - p.y).max(p.y - b.y1).max(0.0));
+            if dx * dx + dy * dy > within * within {
+                return;
+            }
             let n = e.nearest(p, 1e-9);
             if best.is_none_or(|b| n.distance_sq < b.0) {
                 let (r, c, u, v) = at;
@@ -1731,10 +1749,19 @@ pub(super) fn grid_eval(rows: usize, cols: usize, pts: &[Point], u: f64, v: f64)
 pub(super) fn surface_of<'a>(kind: &'a EnvelopeKind, src: Rect, frame: Affine) -> Box<dyn Fn(f64, f64) -> Point + 'a> {
     let flat = move |u: f64, v: f64| frame * Point::new(src.x0 + u * src.width(), src.y0 + v * src.height());
     match kind {
-        EnvelopeKind::Warp { style, bend, h: dh, v: dv, horizontal } => {
+        EnvelopeKind::Warp { style, bend, h: dh, v: dv, horizontal, version } => {
             let st = WarpStyle::from_id(style).unwrap_or(WarpStyle::Arc);
             let b = bend.clamp(-100.0, 100.0) / 100.0;
             let (dh, dv) = (dh.clamp(-100.0, 100.0) / 100.0, dv.clamp(-100.0, 100.0) / 100.0);
+            if uses_net(*version) {
+                let net = WarpNet::new(st, b, dh, dv, src.width(), src.height(), !*horizontal);
+                // Content with no width or no height takes the middle of the patch along that side.
+                let (flat_u, flat_v) = (src.width() <= 0.0, src.height() <= 0.0);
+                return Box::new(move |u: f64, v: f64| {
+                    let (u, v) = (if flat_u { 0.5 } else { u }, if flat_v { 0.5 } else { v });
+                    frame * (src.origin() + net.at(u, v).to_vec2())
+                });
+            }
             let c = src.center();
             let (hw, hh) = (src.width() / 2.0, src.height() / 2.0);
             let horizontal = *horizontal;

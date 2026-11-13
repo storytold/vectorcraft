@@ -32,6 +32,10 @@
 //! gradient (`Bb` … `flag (name) x y angle length … Bg` … `BB`); `stroke fill Xd` says whether it
 //! paints at all. A blend filter's `mode opacity isolate knockout shape Xy` is its transparency.
 //!
+//! A style with no filters is one paint (`/SimpleStyle :` … `/Paint ;` in place of `/ActiveStyle`):
+//! the fill's and stroke's colors and the stroke's style as an object's own paint operators write
+//! them, `stroke fill Xd` turning each on, and an `Xy` for its transparency.
+//!
 //! A stroke with a Calligraphic or Art brush is its own basic filter, `(Adobe Calligraphic Brush
 //! Tool)` or `(Adobe ArtOnPath Brush Tool)`, with its stroke's style and the brush's settings for
 //! the object as entries (see [`super::brush`]).
@@ -202,6 +206,15 @@ pub(super) struct ArtStyle {
     pub transparency: Option<(f32, BlendMode, bool, Knockout)>,
     /// [`Self::effects`] holds Effect › Pathfinder effects, which only a group is read with.
     pub pathfinder: bool,
+    /// A style that is one paint (`/SimpleStyle :`, its paint's operators, `/Paint ;`), when that
+    /// paint is a pattern: its [`StyleItem::Pattern`]. A text document's characters name such
+    /// styles for their fills and strokes (`ate`). `None` for any other paint or style.
+    pub simple_pattern: Option<StyleItem>,
+    /// A style that is one paint: its fill and stroke, bottom first, each there when its
+    /// `stroke fill Xd` turns it on (none when neither is on). `Err` when it turns on a fill or
+    /// stroke whose paint isn't read here (a gradient, a pattern, a color that isn't read) or has
+    /// no `Xd`. `None` for a style with filters, whose paint is [`Self::items`].
+    pub one_paint: Option<Result<Vec<StyleItem>, ()>>,
 }
 
 impl ArtStyle {
@@ -406,9 +419,24 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
     let mut open: Vec<usize> = vec![];
     let mut pending: Option<bool> = None;
     let mut in_basic = false;
-    let mut finish = |name: Option<String>, filters: &mut Vec<Filter>| {
+    // A style that is one paint being read, and its pattern so far.
+    let mut simple: Option<Option<StyleItem>> = None;
+    // The same style's paint operators so far.
+    let mut one_paint: Option<OnePaint> = None;
+    let mut finish = |name: Option<String>, filters: &mut Vec<Filter>, simple_pattern: Option<StyleItem>, one_paint: Option<OnePaint>| {
         if let Some(name) = name {
-            styles.insert(name, style(filters));
+            // Only a style that is one paint holds a pattern for type: one with filters as well
+            // paints with more than that.
+            let simple_pattern = simple_pattern.filter(|_| filters.is_empty());
+            let mut st = ArtStyle { simple_pattern, ..style(filters) };
+            if let Some(one) = one_paint.filter(|_| filters.is_empty()) {
+                if let Some((mode, opacity)) = one.paint.xy {
+                    let (isolate, knockout) = one.paint.xy_group.unwrap_or((false, Knockout::Off));
+                    st.transparency = Some((opacity, super::read::blend_mode(mode), isolate, knockout));
+                }
+                st.one_paint = Some(one.items());
+            }
+            styles.insert(name, st);
         }
         filters.clear();
     };
@@ -445,11 +473,12 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
             }
             Tok::Name(n) => match n {
                 b"KnownStyle" => {
-                    finish(name.take(), &mut filters);
+                    finish(name.take(), &mut filters, simple.take().flatten(), one_paint.take());
                     operands.clear();
                     open.clear();
                     (pending, in_basic, style_entry, other_entry) = (None, false, None, None);
                 }
+                b"SimpleStyle" if filters.is_empty() => (simple, one_paint) = (Some(None), Some(OnePaint::default())),
                 b"FillStyle" => style_entry = Some(Kind::Fill),
                 b"StrokeStyle" | b"BlendStyle" => style_entry = Some(Kind::Other),
                 b"Name" if name.is_none() && filters.is_empty() => name = operands.iter().rev().find_map(|v| names.text(v)),
@@ -549,9 +578,7 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
                         f.repeated |= f.kinds.insert(key, kind).is_some();
                     }
                 }
-                if let Some(f) = filters.last_mut() {
-                    paint_op(f, op, &operands, names);
-                }
+                style_paint_op(&mut filters, &mut simple, &mut one_paint, op, &operands, names);
                 if op == "," || op == ";" || op.starts_with('X') || op.starts_with('B') || op.len() <= 2 {
                     operands.clear();
                 }
@@ -563,7 +590,7 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
             operands.clear();
         }
     }
-    finish(name, &mut filters);
+    finish(name, &mut filters, simple.take().flatten(), one_paint.take());
     styles
 }
 
@@ -696,20 +723,134 @@ fn paint_op(f: &mut Filter, op: &str, vals: &[V], names: &mut Names) {
             f.gradient_of = Some((name, angle));
         }
         "p" => {
-            let name = vals.iter().find(|v| matches!(v, V::Str(_))).and_then(|v| names.text(v));
-            let matrix = vals.iter().rev().find_map(|v| match v {
-                V::Arr(a) => {
-                    let n: Vec<f64> = a.iter().filter_map(V::num).collect();
-                    <[f64; 6]>::try_from(n.as_slice()).ok().filter(|m| m.iter().all(|v| v.is_finite()))
-                }
-                _ => None,
-            });
-            let controls: Vec<f64> =
-                vals.iter().skip_while(|v| !matches!(v, V::Str(_))).skip(1).take_while(|v| !matches!(v, V::Arr(_))).filter_map(V::num).collect();
-            if let Some(name) = name {
-                f.pattern = Some((name, matrix, controls));
+            if let Some(pattern) = pattern_operands(vals, names) {
+                f.pattern = Some(pattern);
             }
         }
+        _ => {}
+    }
+}
+
+/// The operands of `(name) … [matrix] p`: the pattern's name read by `names`, its matrix (six
+/// finite numbers) and the numbers between the name and the matrix. `None` without a name.
+fn pattern_operands(vals: &[V], names: &mut Names) -> Option<(String, Option<[f64; 6]>, Vec<f64>)> {
+    let name = vals.iter().find(|v| matches!(v, V::Str(_))).and_then(|v| names.text(v))?;
+    let matrix = vals.iter().rev().find_map(|v| match v {
+        V::Arr(a) => {
+            let n: Vec<f64> = a.iter().filter_map(V::num).collect();
+            <[f64; 6]>::try_from(n.as_slice()).ok().filter(|m| m.iter().all(|v| v.is_finite()))
+        }
+        _ => None,
+    });
+    let controls: Vec<f64> =
+        vals.iter().skip_while(|v| !matches!(v, V::Str(_))).skip(1).take_while(|v| !matches!(v, V::Arr(_))).filter_map(V::num).collect();
+    Some((name, matrix, controls))
+}
+
+/// A paint operator in a style being read: one of the last filter's (`filters`), else one of a style
+/// that is one paint (`simple` and `one_paint`, while one is read).
+fn style_paint_op(
+    filters: &mut [Filter],
+    simple: &mut Option<Option<StyleItem>>,
+    one_paint: &mut Option<OnePaint>,
+    op: &str,
+    vals: &[V],
+    names: &mut Names,
+) {
+    if let Some(f) = filters.last_mut() {
+        paint_op(f, op, vals, names);
+        return;
+    }
+    if let Some(paint) = simple.as_mut() {
+        simple_paint_op(paint, op, vals, names);
+    }
+    if let Some(one) = one_paint.as_mut() {
+        one.op(op, vals, names);
+    }
+}
+
+/// The paint operators of a style that is one paint (`/SimpleStyle :` … `/Paint ;`), read as a
+/// fill's or stroke's style reads them.
+#[derive(Default)]
+struct OnePaint {
+    paint: Filter,
+    /// Its `stroke fill Xd` was read.
+    xd: bool,
+    /// Its last fill paint is a pattern (`p`) or may be a gradient (`Bg`).
+    fill_unread: bool,
+    /// Its last stroke paint is a pattern (`P`) or may be a gradient (`Bg`).
+    stroke_unread: bool,
+    /// Inside a gradient instance (`flag Bb` … `BB`): whether it paints the stroke (flag 1).
+    instance: Option<bool>,
+}
+
+impl OnePaint {
+    fn op(&mut self, op: &str, vals: &[V], names: &mut Names) {
+        match op {
+            "Xd" => self.xd |= vals.iter().filter_map(V::num).count() >= 2,
+            "p" => self.fill_unread = true,
+            "P" => self.stroke_unread = true,
+            // The flag of the instance it is in says which one it paints, as an object's does
+            // (`Instance::begin` in `paint.rs`); outside one it is read as either one's.
+            "Bb" => self.instance = Some(vals.iter().filter_map(V::num).next_back() == Some(1.0)),
+            "BB" => self.instance = None,
+            "Bg" => match self.instance {
+                Some(true) => self.stroke_unread = true,
+                Some(false) => self.fill_unread = true,
+                None => (self.fill_unread, self.stroke_unread) = (true, true),
+            },
+            // A color replaces what came before it; one that isn't read leaves none.
+            "Xa" | "k" | "g" | "x" | "Xx" | "Xk" | "Xs" | "Xz" | "xa" | "xx" | "xk" | "xs" | "xz" => {
+                (self.fill_unread, self.paint.fill) = (false, None);
+            }
+            "XA" | "K" | "G" | "X" | "XX" | "XK" | "XS" | "XZ" => (self.stroke_unread, self.paint.stroke) = (false, None),
+            _ => {}
+        }
+        paint_op(&mut self.paint, op, vals, names);
+    }
+
+    /// Its fill and stroke ([`ArtStyle::one_paint`]).
+    fn items(&self) -> Result<Vec<StyleItem>, ()> {
+        let f = &self.paint;
+        if !self.xd {
+            return Err(());
+        }
+        let (stroked, filled) = f.paints;
+        let mut items = vec![];
+        if filled {
+            match &f.fill {
+                Some(p) if !self.fill_unread => items.push(StyleItem::Fill(p.clone())),
+                _ => return Err(()),
+            }
+        }
+        if stroked {
+            match &f.stroke {
+                Some(p) if !self.stroke_unread => items.push(StyleItem::Stroke {
+                    paint: p.clone(),
+                    width: f.width,
+                    cap: f.cap,
+                    join: f.join,
+                    miter: f.miter,
+                    dash: f.dash.clone(),
+                    profile: None,
+                    align: StrokeAlign::Center,
+                    brush: None,
+                }),
+                _ => return Err(()),
+            }
+        }
+        Ok(items)
+    }
+}
+
+/// A paint operator of a style that is one paint: a pattern (`p`) is kept as its
+/// [`StyleItem::Pattern`], and any other paint after it (a colour, a stroke's pattern or a
+/// gradient) leaves the style without one.
+fn simple_paint_op(paint: &mut Option<StyleItem>, op: &str, vals: &[V], names: &mut Names) {
+    match op {
+        "p" => *paint = pattern_operands(vals, names).map(|(name, matrix, controls)| StyleItem::Pattern { name, matrix, controls }),
+        "Xa" | "k" | "g" | "x" | "Xx" | "Xk" | "Xs" | "Xz" | "XA" | "K" | "G" | "X" | "XX" | "XK" | "XS" | "XZ" | "xa" | "xx" | "xk" | "xs"
+        | "xz" | "P" | "Bg" => *paint = None,
         _ => {}
     }
 }
@@ -792,6 +933,8 @@ const ANYTHING: Under = Under { strokes: true, patterns: true };
 /// The Transform effect `f` (the factor and radian entries; the percent and degree ones are what
 /// its dialog shows). `None` keeps the drawn look: an entry not read, Random (the file holds no
 /// seed), or a missing Scale Strokes & Effects or Transform Patterns that would change `under`.
+/// The keys are LiveEffect XML's
+/// (https://community.adobe.com/questions-652/how-to-define-values-in-action-menu-command-816878).
 fn transform(f: &Filter, under: Under) -> Option<serde_json::Value> {
     for key in ["scaleH_Percent", "scaleV_Percent", "rotate_Degrees"] {
         entry(f, key, Kind::Real).ok()?;
@@ -841,6 +984,9 @@ fn transform(f: &Filter, under: Under) -> Option<serde_json::Value> {
 /// corners are measured in: the distorted box is laid over the object's own bounds, as the catalog
 /// effect lays it, also when the frame is another size (a unit square, or bounds with the stroke).
 /// No corners is no change; some but not all, or a frame that isn't an upright rectangle, isn't read.
+/// The keys are LiveEffect XML's (https://community.adobe.com/questions-652/pageitem-applyeffect-liveeffectxml-769450),
+/// with the corners in that order
+/// (https://raw.githubusercontent.com/mark1bean/live-effect-functions-for-illustrator/master/scripts/LE_Functions.js).
 fn free_distort(f: &Filter) -> Option<serde_json::Value> {
     let mut corners = [[[0.0; 2]; 4]; 2];
     let mut held = 0;
@@ -895,8 +1041,10 @@ fn points(f: &Filter) -> Option<&'static str> {
     Some(if switch(f, "roundness", Kind::Real).ok()?.unwrap_or(false) { "smooth" } else { "corner" })
 }
 
-/// The Tweak effect `f` (`Adobe Scribble and Tweak`): relative unless `absoluteness` says otherwise,
-/// moving anchors and both handles unless the dictionary turns them off.
+/// The Tweak effect `f` (`TWEAK`): relative unless `absoluteness` says otherwise,
+/// moving anchors and both handles unless the dictionary turns them off. The keys are LiveEffect
+/// XML's: `horz` and `vert` relative, `ahor` and `aver` absolute, and `anch`, `in` and `out`
+/// (https://raw.githubusercontent.com/mark1bean/live-effect-functions-for-illustrator/master/scripts/LE_Functions.js).
 fn tweak(f: &Filter) -> Option<serde_json::Value> {
     let (absolute, h) = sized(f, false, "horz", "ahor")?;
     let (_, v) = sized(f, false, "vert", "aver")?;
@@ -906,7 +1054,9 @@ fn tweak(f: &Filter) -> Option<serde_json::Value> {
 }
 
 /// The Zig Zag effect `f`: absolute unless `absoluteness` says otherwise, 4 ridges and Corner points
-/// when they are missing.
+/// when they are missing. The keys are LiveEffect XML's: `amount` absolute, `relAmount` relative,
+/// `ridges` and `roundness` (https://community.adobe.com/questions-652/pageitem-applyeffect-liveeffectxml-769450,
+/// https://raw.githubusercontent.com/mark1bean/live-effect-functions-for-illustrator/master/scripts/LE_Functions.js).
 fn zig_zag(f: &Filter) -> Option<serde_json::Value> {
     let (absolute, size) = sized(f, true, "relAmount", "amount")?;
     let ridges = real(f, "ridges", 4.0, 0.0..=100.0).filter(|r| r.fract() == 0.0)?;
@@ -1159,6 +1309,7 @@ fn effect(f: &Filter, under: Under) -> Option<Effect> {
                     "horizontal": pct("DeformHoriz"),
                     "vertical": pct("DeformVert"),
                     "orientation": if flag("Rotate") { "vertical" } else { "horizontal" },
+                    "version": vectorcraft_doc::live::WARP_NET,
                 }),
             )
         }
@@ -1166,6 +1317,8 @@ fn effect(f: &Filter, under: Under) -> Option<Effect> {
         TRANSFORM => ("distort.transform", transform(f, under)?),
         FREE_DISTORT => ("distort.freeDistort", free_distort(f)?),
         // Negative puckers (https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/distort-and-transform-effects-in-illustrator.html).
+        // Pucker & Bloat's `d_factor` and Twist's `angle` are LiveEffect XML's keys
+        // (https://community.adobe.com/questions-652/pageitem-applyeffect-liveeffectxml-769450).
         PUCKER_BLOAT => ("distort.puckerBloat", json!({"amount": real(f, "d_factor", 0.0, -200.0..=200.0)?})),
         TWEAK => ("distort.tweak", tweak(f).filter(still)?),
         // A positive angle turns clockwise in both.

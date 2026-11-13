@@ -69,7 +69,7 @@ fn param_error(id: &str, e: &ParamError) -> EngineError {
         Problem::Unknown { keys } => bad(id, format!("unknown parameter `{path}`; it takes: {keys}", keys = keys.join(", "))),
         Problem::Missing => bad(id, format!("missing `{path}`")),
         Problem::WrongType { expected, got } => bad(id, format!("`{path}` must be {expected}, not {got}")),
-        Problem::TooDeep => EngineError::Internal { cmd: id.into(), msg: e.to_string() },
+        Problem::TooDeep => bad(id, format!("`{path}` is nested too deeply")),
     }
 }
 
@@ -244,6 +244,30 @@ mod tests {
         std::mem::forget(params);
         assert!(s.doc().unwrap().doc.views.is_empty());
         assert!(s.doc().unwrap().history.undo.is_empty());
+    }
+
+    /// A value nested past the limit of a sound schema is a parameter error that names it, not an
+    /// internal error: a color list at the nesting limit, where a color string still passes.
+    #[test]
+    fn a_value_nested_too_deeply_is_a_parameter_error() {
+        let levels = vectorcraft_apischema::MAX_DEPTH;
+        let ty = (0..levels).fold(Type::Color, |inner, _| Type::Array(Box::leak(Box::new(inner))));
+        let params: &'static [Param] = Box::leak(Box::new([Param::new("fills", ty)]));
+        let schema = ParamSchema::new(params, "");
+        assert_eq!(schema.definition_problem(), None);
+        let wrapped = |v: Value| (0..levels).fold(v, |inner, _| Value::Array(vec![inner]));
+        assert!(schema.validate(&json!({"fills": wrapped(json!("#ff0000"))})).is_ok());
+        let e = schema.validate(&json!({"fills": wrapped(json!([1, 0, 0]))})).unwrap_err();
+        let path = format!("fills{}", "[0]".repeat(levels));
+        match param_error("view.synthetic", &e) {
+            EngineError::BadParams { cmd, msg } => {
+                assert_eq!(cmd, "view.synthetic");
+                assert_eq!(msg, format!("`{path}` is nested too deeply"));
+            }
+            other => panic!("not a parameter error: {other}"),
+        }
+        let shown = param_error("view.synthetic", &e).to_string();
+        assert!(shown.starts_with("invalid parameters for `view.synthetic`") && !shown.contains("report this bug"), "{shown}");
     }
 
     /// Each command's JSON schema follows the 2020-12 rules, and a validator of those rules, which

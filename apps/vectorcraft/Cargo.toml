@@ -107,12 +107,19 @@ wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
 # wayland-protocols' `unstable` set) made on the window's own connection. MIT, already in the build
 # through winit and rfd.
 wayland-backend = { version = "0.3", features = ["client_system"] }
+# Waits for the screen color sampler's portal answer and for the portal leaving the bus at the same
+# time (src/linux_screen_color/request.rs). Apache-2.0 OR MIT, already in the build through zbus.
+futures-lite = "2"
 
 # The save dialog's file type (src/portal_save.rs, #2679): the desktop portal over D-Bus, on the
 # systems where rfd shows the portal's dialog. MIT, already in the build through accesskit. Pinned
 # exactly: review the diff before bumping.
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 zbus = "=5.19.0"
+# Tells whether arboard reads through the compositor's data-control protocol or through X11, the
+# same check arboard makes (src/clipboard.rs). MIT OR Apache-2.0, already in the build through
+# arboard.
+wl-clipboard-rs = "0.9"
 
 [build-dependencies]
 # Icon + VERSIONINFO for vectorcraft.exe; build.rs only uses it when targeting Windows.

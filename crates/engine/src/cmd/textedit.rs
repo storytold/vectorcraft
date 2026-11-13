@@ -11,8 +11,8 @@ use super::menucmds::whole_or;
 use super::stroke::StrokeChange;
 use super::typecmd::refresh_bounds;
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, has_doc, has_selection, id_param,
-    index, number_or, point_param, str_param, switch_or, targets, text_param,
+    CommandSpec, EngineError, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, has_doc, has_selection, index,
+    number_or, object_param, point_param, str_param, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -40,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), story?: bool = false (all the text of every frame of the threaded story `id` is a frame of, in one undo step; no `start` or `end`), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg counter-clockwise (0: upright), fill?: colour|\"none\", stroke?: colour|\"none\" (#rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings: in vertical type a block of tate-chu-yoko characters moves up by a positive Up/Down and down by a negative one, right by a positive Left/Right and left by a negative one, as one piece with the values of its first character; on a vertical path a positive Up/Down moves it toward the path's start and a positive Left/Right to the path's left; 0 by default; automatic digit blocks and horizontal type do not move; neither turns tateChuYoko on), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), kashidas?: bool (Character panel menu › Kashidas: selected characters allow insertion only when both joined neighbors have it on; on by default), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference: the height of the font that size measures, the em box by default; with a font that has no such height, or one outside 0.1 to 2 em, the em box), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), story?: bool = false (all the text of every frame of the threaded story `id` is a frame of, in one undo step; no `start` or `end`), font?, style?, size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\" (the space after each character), kerningBefore?: 1/1000 em -1000..10000 (the space before a character that starts a line by itself: the first character of the text, of a paragraph or after a forced line break; no effect elsewhere; 0 by default), baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg counter-clockwise (0: upright), fill?: colour|\"none\", stroke?: colour|\"none\" (#rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", \"salt=2\", …] (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off; the range is shaped with its word, so a letter's alternate keeps it joined to its neighbours), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings: in vertical type a block of tate-chu-yoko characters moves up by a positive Up/Down and down by a negative one, right by a positive Left/Right and left by a negative one, as one piece with the values of its first character; on a vertical path a positive Up/Down moves it toward the path's start and a positive Left/Right to the path's left; 0 by default; automatic digit blocks and horizontal type do not move; neither turns tateChuYoko on), akiLeft?, akiRight?: 1/1000 em 0..1000 (Character panel › Insert Aki Left and Right, with Show East Asian Options: space before and after each character in reading order, on its left and right in left-to-right type, on its right and left in right-to-left type, above and below it in vertical type; a ligature or a letter with its marks takes the values of its first character; line wrapping counts it, alignment keeps it at a line's ends and justification does not stretch or narrow it; 0 by default; a value that is not a number or is outside the range is refused, naming the key), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), kashidas?: bool (Character panel menu › Kashidas: selected characters allow insertion only when both joined neighbors have it on; on by default), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference: the height of the font that size measures, the em box by default; with a font that has no such height, or one outside 0.1 to 2 em, the em box), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes), glyphAlternate?: null (takes away the glyph choice text.setGlyphAlternate made on the characters, in the same undo step as the other attributes; any other value is refused)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_range_style
         ),
@@ -58,7 +58,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Glyphs",
             [],
             None,
-            "{id, start: byte (a character of it), gid: glyph id|null} draw that one character with another glyph of its font as one undo step, what a double-click in the Glyphs panel's Show › Alternates for Current Selection does: gid is one of the glyphs text.glyphAlternates lists for it; its own default glyph, or null, puts the default glyph back. The text keeps the character, and its other attributes do not change. The choice is saved with the character's style and names the face it was made in (PostScript name and version): set in another font or version, or after the font goes missing, the character takes its default glyph; typed characters take their default glyphs. Choosing the glyph the character already draws is not an edit. An error when the character's font is not available, the glyph is not one of its alternates, or the character's style does not draw it (All Caps, Small Caps, another numeral system) → {id, start, end (the character's bytes), gid (the glyph drawn)}",
+            "{id, start: byte (a character of it), gid: glyph id|null} draw that one character with another glyph of its font as one undo step, what a double-click in the Glyphs panel's Show › Alternates for Current Selection does: gid is one of the glyphs text.glyphAlternates lists for it, a glyph no character maps and no feature reaches whose name is not another letter's (`a.salt` for a), its own default glyph, or null, puts the default glyph back. The text keeps the character, and its other attributes do not change. The choice is saved with the character's style and names the face it was made in (PostScript name and version): set in another font or version, or after the font goes missing, the character takes its default glyph; typed characters take their default glyphs. Choosing the glyph the character already draws is not an edit. An error when the character's font is not available, the glyph is not one of those, or the character's style does not draw it (All Caps, Small Caps, another numeral system) → {id, start, end (the character's bytes), gid (the glyph drawn)}",
             has_doc,
             set_glyph_alternate
         ),
@@ -85,7 +85,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Area / Path Type",
             [],
             None,
-            "{path: id, mode: \"area\"|\"onPath\", text?: \"\", vertical?: bool = false, at?: [x, y] (on-path start: nearest point), size?, font?, style?, color?, keepModel? (as text.create), fit?: none|autoHeight|shrinkText, fitMinPercent? (area: as text.areaOptions; default autoHeight when the autoSizeAreaType preference is on), placeholder?: bool (placeholder text instead, as text.create), justify?, leadingModel?, charAlign? (as text.create)} turn a path into an area-type frame or a type-on-a-path baseline (the path's paint is dropped) → {id, bounds: {x, y, width, height} (as text.create), overflow?: [id] (the text doesn't fit; left out when it fits)}",
+            "{path: id, mode: \"area\"|\"onPath\", text?: \"\", vertical?: bool = false, at?: [x, y] (on-path start: nearest point), size?: pt 0.1..1296 (outside it: an error), font?, style?, color?, keepModel? (as text.create), fit?: none|autoHeight|shrinkText|block, fitMinPercent?, wordGap?, lineGap? (area: as text.areaOptions; default autoHeight when the autoSizeAreaType preference is on), placeholder?: bool (placeholder text instead, as text.create), justify?, leadingModel?, charAlign? (as text.create)} turn a path into an area-type frame or a type-on-a-path baseline (the path's paint is dropped) → {id, bounds: {x, y, width, height} (as text.create), overflow?: [id] (the text doesn't fit; left out when it fits)}",
             has_doc,
             create_in_path
         ),
@@ -103,7 +103,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Step Type",
             [],
             None,
-            "{attribute: \"size\"|\"leading\"|\"tracking\"|\"kerning\"|\"baselineShift\", by?: steps (1; negative steps down), id?, start?: byte, end?: byte, ids?: [id…] (instead of id)} step type by the Preferences › Type increments (size and leading: typeSizeIncrement, pt; tracking and kerning: trackingIncrement, 1/1000 em; baseline shift: baselineShiftIncrement, pt), what the Type tool's Alt+arrows do (Cmd/Ctrl too: five steps; horizontal: ←/→ kerning at the caret or tracking of the selection, ↑/↓ leading, Shift+↑/↓ baseline shift; vertical: ↓/↑ with or without Shift kerning or tracking, ←/→ leading, Shift+→/← baseline shift; mixed selected text objects use the horizontal mapping). The range of `id`, else the type objects in `ids`, else the text the Type tool has selected (at a caret: kerning steps the character before it, leading its paragraph), else every selected type object → {ids}",
+            "{attribute: \"size\"|\"leading\"|\"tracking\"|\"kerning\"|\"baselineShift\", by?: steps (1; negative steps down), id?, start?: byte, end?: byte, ids?: [id…] (instead of id)} step type by the Preferences › Type increments (size and leading: typeSizeIncrement, pt; tracking and kerning: trackingIncrement, 1/1000 em; baseline shift: baselineShiftIncrement, pt), what the Type tool's Alt+arrows do (Cmd/Ctrl too: five steps; horizontal: ←/→ kerning at the caret or tracking of the selection, ↑/↓ leading, Shift+↑/↓ baseline shift; vertical: ↓/↑ with or without Shift kerning or tracking, ←/→ leading, Shift+→/← baseline shift; mixed selected text objects use the horizontal mapping). The range of `id`, else the type objects in `ids`, else the text the Type tool has selected (at a caret: kerning steps the space after the character before it, or at the start of a line (of the text, a paragraph, or after a forced line break) the space before the character after it (kerningBefore, as text.setRangeStyle), and nothing at an empty line's start; leading its paragraph), else every selected type object → {ids}",
             has_doc,
             type_step
         ),
@@ -148,7 +148,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reset Tracking and Kerning",
             [],
             Some("Cmd+Alt+Q"),
-            "{ids?: [id…]} set tracking to 0 and clear manual kerning without changing the automatic method in all the text of the type objects in `ids`, else in the text the Type tool has selected (at a caret: only the kerning of the character before it), else in every selected type object, as one undo step → {ids}",
+            "{ids?: [id…]} set tracking to 0 and clear manual kerning (kerning and kerningBefore) without changing the automatic method in all the text of the type objects in `ids`, else in the text the Type tool has selected (at a caret: only the kerning there, as type.step steps it), else in every selected type object, as one undo step → {ids}",
             has_selection,
             reset_tracking
         ),
@@ -272,7 +272,7 @@ fn range_of(p: &Value, len: usize, cmd: &str) -> Result<(usize, usize)> {
 
 fn edit_range(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.editRange";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     let t = text_ref(s, id)?;
     let len = edit::runs_len(&t.runs);
     let (a, b) = range_of(p, len, C)?;
@@ -337,7 +337,7 @@ fn clear_param(s: &Session, p: &Value, id: NodeId, c: &str) -> Result<Vec<NodeId
 
 fn start_list(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.startList";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     let t = text_ref(s, id)?;
     let len = edit::runs_len(&t.runs);
     let at = offset_or(p, "at", len, C)?.min(len);
@@ -365,7 +365,7 @@ fn start_list(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn get_range(s: &mut Session, p: &Value) -> Result<Value> {
-    let id = id_param(p, "id").ok_or_else(|| bad("text.getRange", "missing `id`"))?;
+    let id = object_param(p, "id", "text.getRange")?.ok_or_else(|| bad("text.getRange", "missing `id`"))?;
     if switch_or(p, "story", false, "text.getRange")? {
         return get_story(s, p, id);
     }
@@ -430,6 +430,8 @@ pub(crate) struct CharChange {
     leading: Option<Option<f64>>,
     tracking: Option<f64>,
     kerning: Option<Option<f64>>,
+    /// The space before a character that starts a line by itself (`kerningBefore`).
+    kerning_before: Option<f64>,
     optical_kerning: Option<bool>,
     baseline_shift: Option<f64>,
     h_scale: Option<f64>,
@@ -457,6 +459,9 @@ pub(crate) struct CharChange {
     /// Tate-chu-yoko Settings › Up/Down and Left/Right, in points.
     tcy_up_down: Option<f64>,
     tcy_left_right: Option<f64>,
+    /// Insert Aki Left and Right, in 1/1000 em.
+    aki_left: Option<f64>,
+    aki_right: Option<f64>,
     standard_vertical_roman: Option<bool>,
     no_break: Option<bool>,
     digits: Option<vectorcraft_doc::Digits>,
@@ -464,6 +469,8 @@ pub(crate) struct CharChange {
     language: Option<Option<String>>,
     font_axes: Option<AxisChange>,
     font_height_reference: Option<vectorcraft_doc::FontHeightReference>,
+    /// Take away the glyph choice ([`CharStyle::glyph_alternate`]) of the characters (`glyphAlternate: null`).
+    clear_glyph_alternate: bool,
 }
 
 /// `charDirection: "default"|"leftToRight"|"rightToLeft"` → the Character Direction to set (`None`
@@ -485,6 +492,15 @@ pub(crate) fn tcy_offset_param(p: &Value, key: &str, cmd: &str) -> Result<Option
     let Some(v) = p.get(key).filter(|v| !v.is_null()) else { return Ok(None) };
     let v = v.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad(cmd, format!("`{key}` must be a number")))?;
     let (lo, hi) = (-1296.0, 1296.0);
+    if (lo..=hi).contains(&v) { Ok(Some(v)) } else { Err(bad(cmd, format!("`{key}` must be from {lo} to {hi}"))) }
+}
+
+/// `akiLeft` or `akiRight` (Insert Aki Left and Right): a number of thousandths of an em from 0 to
+/// [`vectorcraft_doc::text::MAX_AKI`]. Any other value is an error.
+pub(crate) fn aki_param(p: &Value, key: &str, cmd: &str) -> Result<Option<f64>> {
+    let Some(v) = p.get(key).filter(|v| !v.is_null()) else { return Ok(None) };
+    let v = v.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad(cmd, format!("`{key}` must be a number")))?;
+    let (lo, hi) = (0.0, vectorcraft_doc::text::MAX_AKI);
     if (lo..=hi).contains(&v) { Ok(Some(v)) } else { Err(bad(cmd, format!("`{key}` must be from {lo} to {hi}"))) }
 }
 
@@ -565,7 +581,8 @@ pub(crate) fn change_font_axes(st: &mut CharStyle, change: &AxisChange) {
     }
 }
 
-/// `features: ["dlig", "-liga", …]` → the canonical tag list (differences from the defaults).
+/// `features: ["dlig", "-liga", "salt=2", …]` → the canonical tag list (differences from the
+/// defaults; `salt=1` is written `salt`, `salt=0` and `-salt` leave it out).
 pub(crate) fn features_param(p: &Value, cmd: &str) -> Result<Option<Vec<String>>> {
     let Some(v) = p.get("features").filter(|v| !v.is_null()) else { return Ok(None) };
     let not_tags = || bad(cmd, "features must be a list of tags");
@@ -574,7 +591,8 @@ pub(crate) fn features_param(p: &Value, cmd: &str) -> Result<Option<Vec<String>>
         return Err(bad(
             cmd,
             format!(
-                "unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom; prefix - to turn off)"
+                "unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {}, as `salt=2`)",
+                vectorcraft_text::MAX_FEATURE_VALUE
             ),
         ));
     }
@@ -584,9 +602,9 @@ pub(crate) fn features_param(p: &Value, cmd: &str) -> Result<Option<Vec<String>>
 /// The most entries a `featureChanges` list may have.
 const MAX_FEATURE_CHANGES: usize = 256;
 
-/// A feature tag without its `-` or `+` prefix.
+/// A feature tag without its `-` or `+` prefix and its `=N` value.
 fn feature_name(tag: &str) -> &str {
-    tag.strip_prefix(['-', '+']).unwrap_or(tag)
+    vectorcraft_text::OtFeatures::tag_name(tag)
 }
 
 /// `featureChanges: ["tnum", "-onum", …]` → the features to turn on (or, with `-`, off) on top of
@@ -691,7 +709,7 @@ fn auto_or_num(p: &Value, k: &str, cmd: &str) -> Result<Option<Option<f64>>> {
 impl CharChange {
     /// `setup` gives the superscript, subscript and small caps proportions.
     pub(crate) fn parse(p: &Value, cmd: &str, setup: &vectorcraft_doc::DocSetup) -> Result<Self> {
-        check_numbers(p, &["size", "tracking", "baselineShift", "hScale", "vScale", "rotation", "strokeWidth"], cmd)?;
+        check_numbers(p, &["size", "tracking", "kerningBefore", "baselineShift", "hScale", "vScale", "rotation", "strokeWidth"], cmd)?;
         check_switches(
             p,
             &["underline", "strikethrough", "allCaps", "proportionalMetrics", "tateChuYoko", "standardVerticalRoman", "noBreak", "kashidas"],
@@ -711,7 +729,7 @@ impl CharChange {
         let c = Self {
             font: text_param(p, "font", cmd)?.map(str::to_string),
             style: text_param(p, "style", cmd)?.map(str::to_string),
-            size: num("size"),
+            size: num("size").map(|v| super::typecmd::given_type_size(v, cmd)).transpose()?,
             leading: auto_or_num(p, "leading", cmd)?,
             tracking: num("tracking"),
             kerning: match p.get("kerning") {
@@ -720,6 +738,7 @@ impl CharChange {
                 Some(Value::String(v)) if v.eq_ignore_ascii_case("optical") || v.eq_ignore_ascii_case("auto") => Some(None),
                 Some(v) => Some(Some(v.as_f64().ok_or_else(|| bad(cmd, "kerning must be a number, \"auto\", or \"optical\""))?)),
             },
+            kerning_before: num("kerningBefore"),
             optical_kerning: match p.get("kerning") {
                 Some(Value::String(v)) if v.eq_ignore_ascii_case("optical") => Some(true),
                 Some(Value::String(v)) if v.eq_ignore_ascii_case("auto") => Some(false),
@@ -747,16 +766,22 @@ impl CharChange {
             tate_chu_yoko: flag("tateChuYoko"),
             tcy_up_down: tcy_offset_param(p, "tcyUpDown", cmd)?,
             tcy_left_right: tcy_offset_param(p, "tcyLeftRight", cmd)?,
+            aki_left: aki_param(p, "akiLeft", cmd)?,
+            aki_right: aki_param(p, "akiRight", cmd)?,
             standard_vertical_roman: flag("standardVerticalRoman"),
             no_break: flag("noBreak"),
             digits: digits_param(p, cmd)?,
             language: language_param(p, cmd)?,
             font_axes: font_axes_param(p, cmd)?,
             font_height_reference: font_height_reference_param(p, cmd)?,
+            clear_glyph_alternate: match p.get("glyphAlternate") {
+                None => false,
+                Some(Value::Null) => true,
+                Some(_) => {
+                    return Err(bad(cmd, "`glyphAlternate` takes only null, which takes a glyph choice away (text.setGlyphAlternate makes one)"));
+                }
+            },
         };
-        if c.size.is_some_and(|v| v <= 0.0) {
-            return Err(bad(cmd, "size must be positive"));
-        }
         Ok(c)
     }
 
@@ -777,6 +802,7 @@ impl CharChange {
             && self.leading.is_none()
             && self.tracking.is_none()
             && self.kerning.is_none()
+            && self.kerning_before.is_none()
             && self.optical_kerning.is_none()
             && self.baseline_shift.is_none()
             && self.h_scale.is_none()
@@ -799,12 +825,15 @@ impl CharChange {
             && self.tate_chu_yoko.is_none()
             && self.tcy_up_down.is_none()
             && self.tcy_left_right.is_none()
+            && self.aki_left.is_none()
+            && self.aki_right.is_none()
             && self.standard_vertical_roman.is_none()
             && self.no_break.is_none()
             && self.digits.is_none()
             && self.language.is_none()
             && self.font_axes.is_none()
             && self.font_height_reference.is_none()
+            && !self.clear_glyph_alternate
     }
 
     pub(crate) fn localize(&mut self, t: &TextObject, cmd: &str) -> Result<()> {
@@ -864,6 +893,12 @@ impl CharChange {
         if let Some(v) = self.tcy_left_right {
             st.tcy_left_right = v;
         }
+        if let Some(v) = self.aki_left {
+            st.aki_left = v;
+        }
+        if let Some(v) = self.aki_right {
+            st.aki_right = v;
+        }
         if let Some(v) = self.standard_vertical_roman {
             st.standard_vertical_roman = v;
         }
@@ -882,6 +917,9 @@ impl CharChange {
         }
         if let Some(v) = self.kerning {
             st.kerning = v.map(|k| k.clamp(-1000.0, 10000.0));
+        }
+        if let Some(v) = self.kerning_before {
+            st.kerning_before = v.clamp(-1000.0, 10000.0);
         }
         if let Some(v) = self.optical_kerning {
             st.optical_kerning = v;
@@ -943,6 +981,9 @@ impl CharChange {
         }
         if let Some(v) = &self.language {
             st.language.clone_from(v);
+        }
+        if self.clear_glyph_alternate {
+            st.glyph_alternate = None;
         }
     }
 }
@@ -1254,7 +1295,7 @@ fn drawn_glyph(
 
 fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setGlyphAlternate";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     let gid = match p.get("gid") {
         None => return Err(bad(C, "missing `gid` (a glyph id, or null for the default glyph)")),
         Some(Value::Null) => None,
@@ -1262,7 +1303,9 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let t = text_ref(s, id)?;
     let (ch, bytes, face) = glyph_target(&t, p, C)?;
-    let default = face.glyph_for(ch);
+    let db = vectorcraft_text::FontDb::global();
+    let context = std::cell::OnceCell::new();
+    let contextual = || context.get_or_init(|| vectorcraft_text::alternates_in_context(db, &t, bytes.start));
     let holder = t
         .runs
         .iter()
@@ -1283,6 +1326,16 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     let mut probe = t.clone();
     edit::style_range(&mut probe.runs, bytes.start, bytes.end, |st| st.glyph_alternate = None);
     let probe_lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &probe);
+    // Choices belong to the supplying face, including fallback for a missing grapheme. When the
+    // character overflows, the contextual probe finds that face in an unconstrained frame.
+    let face = probe_lay
+        .glyphs
+        .iter()
+        .find(|g| g.byte <= bytes.start && bytes.start < g.byte.saturating_add(g.len))
+        .and_then(|g| db.face_by_id(g.font_id))
+        .or_else(|| contextual().as_ref().and_then(|f| db.face_by_id(f.font_id)))
+        .unwrap_or(face);
+    let default = face.glyph_for(ch);
     let unchosen = holder
         .as_ref()
         .filter(|_| !styled)
@@ -1290,7 +1343,14 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     let substituted = unchosen.is_some_and(|g| g != default);
     let choice = match gid.filter(|g| *g != default || substituted) {
         None => None,
-        Some(g) if g == default || face.alternates(ch).iter().any(|a| a.gid == g) => Some(face.choice(ch, g)),
+        Some(g)
+            if g == default
+                || face.alternates(ch).iter().any(|a| a.gid == g)
+                || face.is_unlisted_alternate(ch, g)
+                || contextual().as_ref().is_some_and(|f| f.font_id == face.id() && f.alternates.iter().any(|a| a.gid == g)) =>
+        {
+            Some(face.choice(ch, g))
+        }
         Some(g) => return Err(bad(C, format!("glyph {g} is not an alternate of {ch} in {} {}", face.family, face.style))),
     };
     // Without a choice, the glyph drawn in whatever face draws the character, as
@@ -1344,7 +1404,7 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn glyph_alternates(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.glyphAlternates";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     let t = text_ref(s, id)?;
     let (ch, bytes, face) = glyph_target(&t, p, C)?;
     let default = face.glyph_for(ch);
@@ -1359,7 +1419,7 @@ fn glyph_alternates(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.touchType";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     check_numbers(p, &["start"], C)?;
     let start = byte_param(p, "start").ok_or_else(|| bad(C, "missing `start` (the byte offset of a character)"))?;
     if !["dx", "dy", "hScale", "vScale", "rotation"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null())) {
@@ -1585,7 +1645,7 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.createInPath";
-    let pid = id_param(p, "path").ok_or_else(|| bad(C, "missing `path` (a path object id)"))?;
+    let pid = object_param(p, "path", C)?.ok_or_else(|| bad(C, "missing `path` (a path object id)"))?;
     let on_path = match str_param(p, "mode").unwrap_or("area") {
         "area" => false,
         "onPath" | "path" => true,
@@ -1603,7 +1663,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["size"], C)?;
     check_switches(p, &["vertical", "placeholder"], C)?;
     super::color_param(p, "color", C)?;
-    let style = super::create::new_type_style(s, p);
+    let style = super::create::new_type_style(s, p, C)?;
     let text = str_param(p, "text").unwrap_or("").to_string();
     let start = match point_param(p, "at") {
         Some(at) if on_path => vectorcraft_geom::ArcPath::new(path).fraction_at(at).unwrap_or(0.0),
@@ -1637,7 +1697,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     };
     super::create::new_type_alignment(s, p, C, &mut t)?;
     if !on_path {
-        t.area.fit = super::create::new_area_fit(s, p, C)?;
+        super::create::new_area_fit(s, p, C, &mut t)?;
     }
     t.system_layout = s.doc()?.doc.setup.system_layout;
     if bool_or(p, "placeholder", false) {
@@ -1694,17 +1754,16 @@ pub(crate) fn editing_story(s: &Session) -> Vec<NodeId> {
     s.active().map(|st| super::threads::story_of(&st.doc, id)).unwrap_or_default()
 }
 
+/// A text range a type shortcut changes: its type object, its bytes, and the caret's byte when it
+/// came from a caret ([`type_ranges`]).
+pub(crate) type TypeRange = (NodeId, usize, usize, Option<usize>);
+
 /// The text ranges a type shortcut changes: the range of `id`, else all the text of the type
 /// objects in `ids`, else the text the Type tool has selected (all the text of every frame of the
 /// story after Select All in threaded text, [`editing_story`]), else all the text of every selected
 /// type object. At a caret, `at_caret` gives the range from the plain text and the caret's byte
-/// (None: nothing changes there). Each range comes with whether it came from a caret.
-pub(crate) fn type_ranges(
-    s: &mut Session,
-    p: &Value,
-    c: &str,
-    at_caret: impl Fn(&str, usize) -> Option<(usize, usize)>,
-) -> Result<Vec<(NodeId, usize, usize, bool)>> {
+/// (None: nothing changes there). Each range comes with the caret's byte when it came from a caret.
+pub(crate) fn type_ranges(s: &mut Session, p: &Value, c: &str, at_caret: impl Fn(&str, usize) -> Option<(usize, usize)>) -> Result<Vec<TypeRange>> {
     // (text, its range; None: all of it).
     let targets: Vec<(NodeId, Option<(usize, usize)>)> = match super::object_param(p, "id", c)? {
         // An object that isn't type is refused as `ids` of it is.
@@ -1728,10 +1787,10 @@ pub(crate) fn type_ranges(
         let text = text_ref(s, id)?.plain_text();
         let (a, b) = range.map_or((0, text.len()), |(a, b)| (a.min(text.len()), b.min(text.len())));
         let (a, b, caret) = if a < b {
-            (a, b, false)
+            (a, b, None)
         } else {
             match at_caret(&text, a) {
-                Some((a, b)) => (a, b, true),
+                Some((x, y)) => (x, y, Some(a)),
                 None => continue,
             }
         };
@@ -1763,24 +1822,31 @@ fn type_step(s: &mut Session, p: &Value) -> Result<Value> {
             Step::Tracking | Step::Kerning => prefs.tracking_increment,
             Step::BaselineShift => prefs.baseline_shift_increment,
         };
-    // The ranges stepped. At a caret: kerning is the space after the character before it, leading
-    // the paragraph's; the rest wait for a selection.
+    // The ranges stepped. At a caret: kerning is the space after the character before it, or at
+    // the start of a line the space before the character after it (#5111), leading the
+    // paragraph's; the rest wait for a selection.
     let ranges = type_ranges(s, p, C, |text, a| match step {
-        Step::Kerning => Some((edit::prev_char(text, a), a)),
+        Step::Kerning => edit::caret_kerning_target(text, a).map(|(r, _)| (r.start, r.end)),
         Step::Leading => {
             let para = edit::paragraph_at(text, a);
             Some((para.start, para.end))
         }
         _ => None,
     })?;
+    // At a caret, the kerning stepped: (whether it is the space before the character, its value).
     let mut caret_kerning = Vec::with_capacity(ranges.len());
     for &(id, a, b, caret) in &ranges {
-        let value = if matches!(step, Step::Kerning) && caret {
-            let t = text_ref(s, id)?;
-            let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
-            Some(effective_kerning(vectorcraft_text::FontDb::global(), &t, &lay, a, b))
-        } else {
-            None
+        let value = match caret {
+            Some(c) if matches!(step, Step::Kerning) => {
+                let t = text_ref(s, id)?;
+                if edit::caret_kerning_target(&t.plain_text(), c).is_some_and(|(_, before)| before) {
+                    Some((true, edit::style_at(&t.runs, a + 1).kerning_before))
+                } else {
+                    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+                    Some((false, effective_kerning(vectorcraft_text::FontDb::global(), &t, &lay, a, b)))
+                }
+            }
+            _ => None,
         };
         caret_kerning.push(value);
     }
@@ -1829,10 +1895,13 @@ fn type_step(s: &mut Session, p: &Value) -> Result<Value> {
                             st.leading = Some(super::typecmd::local_type_value(t, leading * points + inc, (0.1, 5000.0), false, C)?);
                         }
                         Step::Tracking => st.tracking = (st.tracking + inc).clamp(-1000.0, 10000.0),
-                        Step::Kerning => {
-                            let current = caret_kerning.get(range_index).copied().flatten().unwrap_or_else(|| st.kerning.unwrap_or(0.0));
-                            st.kerning = Some((current + inc).clamp(-1000.0, 10000.0));
-                        }
+                        Step::Kerning => match caret_kerning.get(range_index).copied().flatten() {
+                            Some((true, current)) => st.kerning_before = (current + inc).clamp(-1000.0, 10000.0),
+                            caret => {
+                                let current = caret.map_or_else(|| st.kerning.unwrap_or(0.0), |(_, v)| v);
+                                st.kerning = Some((current + inc).clamp(-1000.0, 10000.0));
+                            }
+                        },
                         Step::BaselineShift => {
                             st.baseline_shift = super::typecmd::local_type_value(t, st.baseline_shift * points + inc, (-1296.0, 1296.0), false, C)?;
                         }
@@ -1849,17 +1918,22 @@ fn type_step(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Cmd/Ctrl+Alt+Q: tracking 0 and manual kerning cleared in the type objects in
 /// `ids`, else in the Type tool's selected text, else in every selected type object. At a caret,
-/// only the kerning of the character before it changes, as Alt+←/→ in horizontal type or Alt+↓/↑ in vertical type kerns there.
-/// The automatic method remains selected.
+/// only the kerning there changes, as Alt+←/→ in horizontal type or Alt+↓/↑ in vertical type kerns
+/// there: of the character before it, or at the start of a line the space before the character
+/// after it ([`edit::caret_kerning_target`]). The automatic method remains selected.
 fn reset_tracking(s: &mut Session, p: &Value) -> Result<Value> {
-    let ranges = type_ranges(s, p, "type.resetTracking", |text, a| Some((edit::prev_char(text, a), a)))?;
+    let ranges = type_ranges(s, p, "type.resetTracking", |text, a| edit::caret_kerning_target(text, a).map(|(r, _)| (r.start, r.end)))?;
     if !ranges.is_empty() {
         s.edit("Reset Tracking and Kerning", |d, _| {
             for &(id, a, b, caret) in &ranges {
                 let t = text_mut(d, id).ok_or(EngineError::NoNode(id))?;
-                edit::style_range(&mut t.runs, a, b, |st| {
-                    st.kerning = None;
-                    if !caret {
+                let before = caret.and_then(|c| edit::caret_kerning_target(&t.plain_text(), c)).map(|(_, before)| before);
+                edit::style_range(&mut t.runs, a, b, |st| match before {
+                    Some(true) => st.kerning_before = 0.0,
+                    Some(false) => st.kerning = None,
+                    None => {
+                        st.kerning = None;
+                        st.kerning_before = 0.0;
                         st.tracking = 0.0;
                     }
                 });
@@ -1975,7 +2049,7 @@ fn fit_headline(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn discard_empty(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.discardEmpty";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     if edit::runs_len(&text_ref(s, id)?.runs) > 0 {
         return Ok(json!({"removed": false}));
     }

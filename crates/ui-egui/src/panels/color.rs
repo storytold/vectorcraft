@@ -12,7 +12,13 @@
 //! the inactive proxy when Alt is also held;
 //! Shift-dragging a slider moves the others in tandem; RGB and HSB show the out-of-gamut warning;
 //! Hide Options leaves just the proxy and the spectrum (the app keeps it between sessions too).
-//! `ui.colorPanel` picks a mode and shows or hides the options as the panel menu does.
+//! Unchecking Show Recent Colors hides the Recent Colors row while applied colors still join the
+//! list (the app keeps it between sessions too).
+//! A double-click right of an RGB field switches R, G and B between 0 to 255 and percent (the app
+//! keeps it between sessions too); Web Safe RGB and the hex field stay in 0 to 255.
+//! `ui.colorPanel` picks a mode, shows or hides the options and checks or unchecks Show Recent
+//! Colors as the panel menu does, and switches RGB to percent and back. `ui.colorRgbPercent`
+//! switches RGB between percent and 0 to 255 from the command palette or a keyboard shortcut.
 
 use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::{Value, json};
@@ -287,6 +293,32 @@ pub fn deserialize_hide_options<'de, D: serde::Deserializer<'de>>(d: D) -> Resul
     Ok(v.as_bool().unwrap_or_default())
 }
 
+/// Serde reader for the saved Show Recent Colors ([`crate::UiState::color_show_recent_colors`]):
+/// `false` hides the row and any other value shows it, so an unknown value doesn't lose the rest
+/// of the preferences.
+pub fn deserialize_show_recent_colors<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    let v = <Value as serde::Deserialize>::deserialize(d)?;
+    Ok(v.as_bool().unwrap_or(true))
+}
+
+/// Serde reader for the saved RGB in percent ([`crate::UiState::color_rgb_percent`]): `true` shows
+/// percent and any other value 0 to 255, so an unknown value doesn't lose the rest of the
+/// preferences.
+pub fn deserialize_rgb_percent<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    let v = <Value as serde::Deserialize>::deserialize(d)?;
+    Ok(v.as_bool().unwrap_or_default())
+}
+
+/// An RGB component (0 to 255) in percent, as the field shows it while RGB shows in percent.
+fn to_percent(v: f32) -> f32 {
+    v * 100.0 / 255.0
+}
+
+/// A percent typed or picked while RGB shows in percent, as an RGB component (0 to 255).
+fn from_percent(p: f32) -> f32 {
+    p * 255.0 / 100.0
+}
+
 /// The mode the panel shows `color` in: with nothing selected (the defaults for new art) the mode
 /// picked last, which the app keeps between sessions, else [`display_mode`].
 fn shown_mode(app: &VectorcraftApp, color: Option<&Color>) -> Mode {
@@ -511,16 +543,20 @@ fn recolor(app: &mut VectorcraftApp, ui: &Ui, tgt: &Target, invert: bool, behind
     }
 }
 
-/// `ui.colorPanel {mode?, options?}`: pick a mode as the panel menu does ([`set_mode`]), and Show
-/// Options (true) or Hide Options (false). → {mode, options, shown}: the mode picked last (null:
-/// none yet), whether the options show, and the mode the panel shows the color in (`tint` for a
-/// tint of a global or spot swatch).
+/// `ui.colorPanel {mode?, options?, recentColors?, rgbPercent?}`: pick a mode as the panel menu
+/// does ([`set_mode`]), Show Options (true) or Hide Options (false), check (true) or uncheck
+/// (false) Show Recent Colors, and show RGB in percent (true) or 0 to 255 (false). → {mode,
+/// options, recentColors, rgbPercent, shown}: the mode picked last (null: none yet), whether the
+/// options show, whether Show Recent Colors is checked, whether RGB shows in percent, and the mode
+/// the panel shows the color in (`tint` for a tint of a global or spot swatch).
 pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let mode = match p.get("mode") {
         None | Some(Value::Null) => None,
         Some(v) => Some(menu_mode(v).ok_or("`mode` must be grayscale, rgb, hsb, cmyk or websafe")?),
     };
     let options = crate::menus::opt_bool(p, "options")?;
+    let recent = crate::menus::opt_bool(p, "recentColors")?;
+    let percent = crate::menus::opt_bool(p, "rgbPercent")?;
     let (fill, stroke) = app.session.proxy_mixed();
     let mixed = if app.session.fill_active { fill } else { stroke };
     if let Some(m) = mode {
@@ -529,12 +565,45 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
     if let Some(shown) = options {
         app.ui.color_hide_options = !shown;
     }
+    if let Some(on) = recent {
+        app.ui.color_show_recent_colors = on;
+    }
+    if let Some(on) = percent {
+        app.ui.color_rgb_percent = on;
+    }
     let tgt = target_with(app, mixed);
     let shown = match tgt.tint() {
         Some(_) => json!("tint"),
         None => json!(shown_mode(app, tgt.color().as_ref())),
     };
-    Ok(json!({"mode": app.ui.color_mode, "options": !app.ui.color_hide_options, "shown": shown}))
+    Ok(json!({
+        "mode": app.ui.color_mode,
+        "options": !app.ui.color_hide_options,
+        "recentColors": app.ui.color_show_recent_colors,
+        "rgbPercent": app.ui.color_rgb_percent,
+        "shown": shown,
+    }))
+}
+
+/// `ui.colorRgbPercent {}`: [`switch_rgb_units`]. A parameter is an error and changes nothing.
+pub(crate) fn rgb_percent_command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    match p {
+        Value::Null => {}
+        Value::Object(o) => {
+            if let Some(key) = o.keys().next() {
+                return Err(format!("unknown parameter `{key}`; the command takes no parameters"));
+            }
+        }
+        got => return Err(format!("the params must be an object, not {got}")),
+    }
+    Ok(json!(switch_rgb_units(app)))
+}
+
+/// Switch the RGB mode's R, G and B between percent and 0 to 255, as a double-click right of an
+/// RGB field does. → whether they now show in percent.
+fn switch_rgb_units(app: &mut VectorcraftApp) -> bool {
+    app.ui.color_rgb_percent = !app.ui.color_rgb_percent;
+    app.ui.color_rgb_percent
 }
 
 /// Tint mode's rows: the swatch's chip and name, and the T slider and field. Returns a new tint
@@ -626,8 +695,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         (Some(c), _) => components(mode, &c),
         (None, _) => vec![0.0; mode.labels().len()],
     };
-    let recent = super::recent_colors_row(app, ui);
-    widgets::divider(ui);
+    // Show Recent Colors draws the Recent Colors row; the Swatches panel's row does not read it.
+    let mut recent = None;
+    if app.ui.color_show_recent_colors {
+        recent = super::recent_colors_row(app, ui);
+        widgets::divider(ui);
+    }
     // An edit of the active colour with its displayed components (`new`), or a colour clicked with
     // Alt held for the inactive proxy (`behind`).
     let mut new: Option<(Color, Live, Vec<f32>)> = None;
@@ -637,6 +710,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // RGB and Grayscale.
     let (shows_gamut, shows_web) = (matches!(mode, Mode::Rgb | Mode::Hsb), !matches!(mode, Mode::WebSafe | Mode::Grayscale));
     let gamut = color.filter(|_| shows_gamut).and_then(|c| gamut_fix(app, ui.ctx(), "color-gamut", &c));
+    // RGB in percent: the fields and sliders show R, G and B from 0 to 100 %, and a double-click
+    // right of an RGB field (`switch_units`) switches them between percent and 0 to 255.
+    let percent = mode == Mode::Rgb && app.ui.color_rgb_percent;
+    let mut switch_units = false;
+    let units_id = ui.scope_id().with("color-units");
     ui.horizontal(|ui| {
         // Left column: proxy, out-of-gamut and out-of-web warnings.
         ui.vertical(|ui| {
@@ -670,6 +748,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 tinted = tint_rows(ui, tint, slider_w, field_w);
                 return;
             }
+            // An RGB slider is narrower by the width and spacing of the cell right of its field, and
+            // an RGB row is as wide as a row in the other modes.
+            let unit_w = 10.0;
+            let slider_w = if mode == Mode::Rgb { slider_w - unit_w - ui.spacing().item_spacing.x } else { slider_w };
             let enabled = color.is_some();
             for (i, lbl) in mode.labels().iter().enumerate() {
                 ui.horizontal(|ui| {
@@ -677,7 +759,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     let v = comps.get(i).copied().unwrap_or(0.0);
                     let track = |x: f32| to32(&track_color(mode, &comps, i, x));
                     let grey = |_x: f32| t.input;
-                    let shown = widgets::SliderValue::field(v as f64, mode.min(i) as f64..=mode.max(i) as f64, mode.suffix(i), 0);
+                    let (field_v, field_max, suffix) = if percent { (to_percent(v), 100.0, "%") } else { (v, mode.max(i), mode.suffix(i)) };
+                    let shown = widgets::SliderValue::field(field_v as f64, mode.min(i) as f64..=field_max as f64, suffix, 0);
                     let (nv, phase) = if enabled {
                         widgets::color_slider_valued(ui, ("color-slider", i), lbl, Some(shown), mode.unit(i, v), slider_w, &track)
                     } else {
@@ -686,7 +769,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     if let Some(nv) = nv
                         && enabled
                     {
-                        let nv = mode.value_at(i, nv);
+                        // In percent the slider picks whole percents.
+                        let nv = if percent { from_percent((nv * 100.0).round()) } else { mode.value_at(i, nv) };
                         let c2 = if shift && mode.tandem() {
                             tandem(mode, &comps, i, nv)
                         } else {
@@ -696,17 +780,33 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         };
                         new = Some((from_components(mode, &c2), phase, c2));
                     }
-                    if let Some(fv) = widgets::plain_field_named(ui, ("color-field", i), Some(lbl), v as f64, mode.suffix(i), 0, field_w)
+                    if let Some(fv) = widgets::plain_field_named(ui, ("color-field", i), Some(lbl), field_v as f64, suffix, 0, field_w)
                         && enabled
                     {
                         let mut c2 = comps.clone();
-                        c2[i] = (fv as f32).clamp(mode.min(i), mode.max(i));
+                        let fv = fv as f32;
+                        c2[i] = (if percent { from_percent(fv) } else { fv }).clamp(mode.min(i), mode.max(i));
                         new = Some((from_components(mode, &c2), Live::Released, c2));
+                    }
+                    // The cell takes no keyboard focus and is highlighted under the pointer. Like
+                    // the fields, it does nothing while the rows are disabled.
+                    if mode == Mode::Rgb {
+                        let (r, _) = ui.allocate_exact_size(vec2(unit_w, 22.0), Sense::hover());
+                        let cell = ui.interact(r, units_id.with(i), Sense::CLICK);
+                        if cell.hovered() && enabled {
+                            ui.painter().rect_filled(r, 2.0, t.hover);
+                        }
+                        if cell.double_clicked() && enabled {
+                            switch_units = true;
+                        }
                     }
                 });
             }
         });
     });
+    if switch_units {
+        switch_rgb_units(app);
+    }
     ui.add_space(4.0);
     // A clicked chip or spectrum colour: the active colour, or with Alt the inactive proxy's.
     let mut pick = |c: Color, phase: Live, new: &mut Option<(Color, Live, Vec<f32>)>| {
@@ -769,6 +869,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let hidden = app.ui.color_hide_options;
     if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
         command(app, &json!({ "options": hidden })).ok();
+    }
+    let recent = app.ui.color_show_recent_colors;
+    if menu_item(ui, tl!("Show Recent Colors"), true, recent) {
+        command(app, &json!({ "recentColors": !recent })).ok();
     }
     ui.separator();
     let tgt = target(app, ui);

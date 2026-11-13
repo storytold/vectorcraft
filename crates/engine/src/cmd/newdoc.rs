@@ -1,13 +1,24 @@
 //! File → New: the settings `file.new` takes, the New Document presets (generated in code, by
 //! category), the user's saved presets and the recently used sizes (both kept in the
 //! preferences), and the artboard grid layout shared with Rearrange All Artboards.
+//!
+//! New Document profiles: each built-in category has a profile, a native document in the
+//! `New Document Profiles` folder next to the preferences ([`Session::attach_new_doc_profiles`]).
+//! `file.new` starts a document of that category with the profile's swatches, graphic styles,
+//! brushes, symbols, character and paragraph styles, rulers, document setup and print settings
+//! ([`DocSettings::document_from_profile`]). The grid stays that of Preferences › Guides & Grid,
+//! which applies to every open document. A category without a profile file starts with the
+//! defaults, and a profile that can't be read leaves them in place and is reported in `file.new`'s
+//! result.
+
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Artboard, Background, ColorMode, Document, Unit};
+use vectorcraft_doc::{Artboard, Background, ColorMode, Document, LayerColor, Node, Unit};
 use vectorcraft_geom::{Point, Rect};
 
-use super::{CommandSpec, Result, Session, always, bad, clock_date, cmd, date_param, str_param};
+use super::{CommandSpec, Result, Session, always, bad, clock_date, cmd, date_param, str_param, switch_or};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -16,7 +27,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Document Presets",
             [],
             None,
-            "{category?: \"Recent\"|\"Saved\"|\"Mobile\"|\"Web\"|\"Print\"|\"Film & Video\"|\"Art & Illustration\"|\"Branding\"|\"Social\"} the New Document presets by category (Recent: the last sizes used; Saved: the user's presets) → {categories: [{name, presets: [{name, size: \"1920 × 1080 px\", width: pt, height: pt, units, orientation, artboards, artboardLayout: {layout, columns, spacing, rightToLeft}, bleed, backgroundContents, colorMode, rasterEffectsPpi, previewMode}]}]}; file.new {preset: name} starts from one",
+            "{category?: \"Recent\"|\"Saved\"|\"Mobile\"|\"Web\"|\"Print\"|\"Film & Video\"|\"Art & Illustration\"|\"Branding\"|\"Social\"} the New Document presets by category (Recent: the last sizes used; Saved: the user's presets) → {categories: [{name, presets: [{name, size: \"1920 × 1080 px\", width: pt, height: pt, units, orientation, artboards, artboardLayout: {layout, columns, spacing, rightToLeft}, bleed, backgroundContents, colorMode, rasterEffectsPpi, previewMode, alignNewObjectsToPixelGrid (on in the Mobile and Web presets)}]}]}; file.new {preset: name} starts from one",
             always,
             list
         ),
@@ -37,6 +48,33 @@ pub fn specs() -> Vec<CommandSpec> {
             "{name} delete a saved New Document preset → {deleted}",
             |s| if s.prefs.new_doc_presets.is_empty() { Err("no saved presets".into()) } else { Ok(()) },
             delete
+        ),
+        cmd!(
+            query "file.newProfiles",
+            "New Document Profiles",
+            [],
+            None,
+            "{} the New Document profiles, one per built-in category of file.newPresets: native documents in the New Document Profiles folder next to the preferences, whose swatches, swatch groups, graphic styles, brushes, symbols, patterns, character and paragraph styles, composite fonts, SVG filters, graph designs, ruler origin and mode, transparency grid, document setup (other than bleed, background and Align New Objects to Pixel Grid), assigned color profiles, Document Raster Effects Settings (other than the resolution) and print settings a new document of that category starts with → {profiles: [{name, customized?: a profile file exists (else the shipped profile, today's defaults, applies), path?; both left out for a request that may not read the folder}], folder?: the folder (none in runs without preferences and on the web)}",
+            always,
+            list_profiles
+        ),
+        cmd!(
+            "file.newProfiles.edit",
+            "Edit Profile",
+            [],
+            None,
+            "{name: a category of file.newPresets} open the category's New Document profile as a document to edit (File › Save keeps the changes for the next file.new); a category without a profile file gets the shipped profile written first → document.open's result",
+            always,
+            edit_profile
+        ),
+        cmd!(
+            "file.newProfiles.reset",
+            "Reset Profile",
+            [],
+            None,
+            "{name: a category of file.newPresets} delete the category's profile file, so the shipped profile (today's defaults) applies again; an open copy of it stays open → {name, reset: whether a file was deleted}",
+            always,
+            reset_profile
         ),
     ]
 }
@@ -144,6 +182,15 @@ pub struct DocSettings {
     #[serde(deserialize_with = "de_ppi")]
     pub raster_effects_ppi: f64,
     pub preview_mode: PreviewMode,
+    /// Align New Objects to Pixel Grid ([`vectorcraft_doc::DocSetup::align_new_objects_to_pixel_grid`]):
+    /// on in the Mobile and Web presets, off in the others and in a saved or Recent preset from
+    /// before it.
+    pub align_new_objects_to_pixel_grid: bool,
+    /// The New Document profile the document starts from (a built-in category's name): the
+    /// category of a built-in preset, kept by the saved and Recent presets made from it; `None`:
+    /// the defaults.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
 }
 
 impl Default for DocSettings {
@@ -163,6 +210,8 @@ impl Default for DocSettings {
             color_mode: ColorMode::Rgb,
             raster_effects_ppi: 72.0,
             preview_mode: PreviewMode::Default,
+            align_new_objects_to_pixel_grid: false,
+            profile: None,
         }
     }
 }
@@ -211,6 +260,8 @@ impl DocSettings {
             "colorMode": color_mode_id(self.color_mode),
             "rasterEffectsPpi": self.raster_effects_ppi,
             "previewMode": self.preview_mode.id(),
+            "alignNewObjectsToPixelGrid": self.align_new_objects_to_pixel_grid,
+            "profile": self.profile,
         })
     }
 
@@ -235,8 +286,8 @@ impl DocSettings {
         if let Some(h) = length("height", self.units)? {
             self.height = h;
         }
-        if !(self.width > 0.0 && self.height > 0.0) || self.width > MAX_SIDE || self.height > MAX_SIDE {
-            return Err(bad(cmd, "width/height must be positive and within the canvas"));
+        if !side_in_range(self.width) || !side_in_range(self.height) {
+            return Err(side_error(cmd, self.units));
         }
         match p.get("orientation").and_then(Value::as_str) {
             None => {}
@@ -272,6 +323,12 @@ impl DocSettings {
         }
         if let Some(m) = p.get("previewMode").filter(|v| !v.is_null()) {
             self.preview_mode = m.as_str().and_then(PreviewMode::parse).ok_or_else(|| bad(cmd, "previewMode must be default, pixel or overprint"))?;
+        }
+        self.align_new_objects_to_pixel_grid = switch_or(p, "alignNewObjectsToPixelGrid", self.align_new_objects_to_pixel_grid, cmd)?;
+        match p.get("profile") {
+            None => {}
+            Some(Value::Null) => self.profile = None,
+            Some(v) => self.profile = Some(profile_name(v, cmd)?.to_string()),
         }
         let extent = self.boards().iter().fold(Rect::ZERO, |a, r| a.union(*r));
         if extent.width().max(extent.height()) + self.bleed.iter().fold(0.0f64, |a, b| a.max(*b)) * 2.0 > crate::MAX_COORD {
@@ -330,6 +387,7 @@ impl DocSettings {
         d.raster_effects_ppi = self.raster_effects_ppi;
         d.setup.bleed = self.bleed;
         d.setup.background = self.background;
+        d.setup.align_new_objects_to_pixel_grid = self.align_new_objects_to_pixel_grid;
         d.artboards = self
             .boards()
             .into_iter()
@@ -349,10 +407,126 @@ impl DocSettings {
             .collect();
         d
     }
+
+    /// The new document started from New Document profile `profile`: [`Self::document`] with the
+    /// profile's swatches, swatch groups, graphic styles, brushes, symbols, patterns and the images
+    /// they use, character and paragraph styles, composite fonts, SVG filters, graph designs, ruler
+    /// origin and mode, transparency grid, document setup (bleed, background and Align New Objects
+    /// to Pixel Grid stay these settings'), assigned color profiles, raster effects settings (the
+    /// resolution stays these settings') and print settings, in these settings' color mode (the
+    /// profile's colors converted as Document Color Mode converts them). The profile's art,
+    /// layers and artboards are left out: the document has one empty layer.
+    pub fn document_from_profile(&self, mut profile: Document) -> Document {
+        if profile.color_mode != self.color_mode {
+            super::colormgmt::set_color_mode(&mut profile, self.color_mode, true, None, super::colormgmt::Grays::Profile);
+        }
+        let profile_next_id = profile.peek_next_id();
+        let mut d = self.document();
+        d.swatches = profile.swatches;
+        d.swatch_groups = profile.swatch_groups;
+        d.graphic_styles = profile.graphic_styles;
+        d.char_styles = profile.char_styles;
+        d.para_styles = profile.para_styles;
+        d.composite_fonts = profile.composite_fonts;
+        d.symbols = profile.symbols;
+        d.graph_designs = profile.graph_designs;
+        d.patterns = profile.patterns;
+        d.images = profile.images;
+        d.svg_filters = profile.svg_filters;
+        d.spot_use_lab = profile.spot_use_lab;
+        d.ruler_origin = profile.ruler_origin;
+        d.rulers = profile.rulers;
+        d.artboard_ruler_origins = profile.artboard_ruler_origins.into_iter().filter(|(id, _)| d.artboards.iter().any(|a| a.id == *id)).collect();
+        d.transparency_grid = profile.transparency_grid;
+        d.print_setup = profile.print_setup;
+        d.color_profiles = profile.color_profiles;
+        // The resolution stays the preset's (raster_effects_ppi); the other raster effects settings
+        // are the profile's.
+        d.raster_effects = profile.raster_effects;
+        let setup = std::mem::replace(&mut d.setup, profile.setup);
+        d.setup.bleed = setup.bleed;
+        d.setup.background = setup.background;
+        d.setup.align_new_objects_to_pixel_grid = setup.align_new_objects_to_pixel_grid;
+        if let Some(brushes) = profile.unknown.get("brushes") {
+            d.unknown.insert("brushes".into(), brushes.clone());
+        }
+        // Symbol, pattern and graph design art keeps the profile's ids, which a damaged file can
+        // have above its counter: the counter goes past all of them, as it does for a loaded
+        // document's layers, before the new layer takes an id.
+        d.raise_next_id(profile_next_id);
+        d.layers = d
+            .symbols
+            .iter()
+            .map(|s| s.art.clone())
+            .chain(d.graph_designs.iter().map(|g| g.art.clone()))
+            .chain(d.patterns.iter().flat_map(|p| p.art.iter().cloned()))
+            .collect();
+        d.fix_next_id();
+        let layer = d.alloc_id();
+        d.layers = vec![Arc::new(Node::layer(layer, "Layer 1", LayerColor::Preset(0)))];
+        // Images only the profile's art used stay behind: an image is kept when an object of the new
+        // document names it in its `key`, as a native save keeps only the images its objects name.
+        let images = std::mem::take(&mut d.images);
+        if !images.is_empty() {
+            d.images = match serde_json::to_value(&d) {
+                Ok(v) => {
+                    let used = image_keys(&v);
+                    images.into_iter().filter(|(k, _)| used.contains(k.as_str())).collect()
+                }
+                Err(_) => images,
+            };
+        }
+        d
+    }
 }
 
-/// Largest artboard side `file.new` accepts, points.
-const MAX_SIDE: f64 = 16383.0 * 10.0;
+/// The string values of every `key` member at any depth of `v`, which name the images a document's
+/// objects use, collected in one pass.
+fn image_keys(v: &Value) -> std::collections::HashSet<&str> {
+    let mut keys = std::collections::HashSet::new();
+    let mut stack = vec![v];
+    while let Some(v) = stack.pop() {
+        match v {
+            Value::Object(m) => {
+                for (k, v) in m {
+                    match v.as_str() {
+                        Some(s) if k == "key" => {
+                            keys.insert(s);
+                        }
+                        _ => stack.push(v),
+                    }
+                }
+            }
+            Value::Array(a) => stack.extend(a),
+            _ => {}
+        }
+    }
+    keys
+}
+
+/// Largest artboard side `file.new` and `artboard.new` accept, points: the span of the canvas
+/// ([`crate::MAX_COORD`] from the origin) less the largest bleed on both sides, 3,999,856 pt.
+pub(crate) const MAX_SIDE: f64 = crate::MAX_COORD - 2.0 * vectorcraft_doc::setup::MAX_BLEED;
+
+/// Is `side` an artboard side `file.new` and `artboard.new` accept: more than 0 and at most [`MAX_SIDE`]?
+pub(crate) fn side_in_range(side: f64) -> bool {
+    side > 0.0 && side <= MAX_SIDE
+}
+
+/// The error of an artboard side outside [`side_in_range`]: the limit in points, and in `units` as
+/// well when they aren't points, rounded down to the decimals [`Unit::number`] shows so the value
+/// shown is one the commands take.
+pub(crate) fn side_error(cmd: &str, units: Unit) -> crate::EngineError {
+    let limit = match units {
+        Unit::Points => format!("{MAX_SIDE} pt"),
+        u => {
+            let step = if matches!(u, Unit::Pixels | Unit::Picas | Unit::Q | Unit::Ha) { 1e3 } else { 1e4 };
+            let shown = (u.from_pt(MAX_SIDE) * step).floor() / step;
+            format!("{MAX_SIDE} pt ({} {})", u.number(u.to_pt(shown)), u.suffix())
+        }
+    };
+    bad(cmd, format!("width and height must be more than 0 and at most {limit}"))
+}
 /// Largest artboard spacing, points.
 const MAX_SPACING: f64 = 1.0e5;
 
@@ -543,6 +717,10 @@ pub const CATEGORIES: &[Category] = &[
     ),
 ];
 
+/// The built-in categories whose presets start with Align New Objects to Pixel Grid on
+/// (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/pixel-preview-mode-for-web-graphics.html>).
+const PIXEL_ALIGNED_CATEGORIES: [&str; 2] = ["Mobile", "Web"];
+
 /// The category tabs in order: Recent, Saved, then the built-in categories.
 pub fn category_names() -> impl Iterator<Item = &'static str> {
     ["Recent", "Saved"].into_iter().chain(CATEGORIES.iter().map(|c| c.0))
@@ -551,7 +729,8 @@ pub fn category_names() -> impl Iterator<Item = &'static str> {
 /// The built-in presets of one category: screen sizes in pixels, the others in `general`
 /// (Preferences ▸ Units ▸ General).
 fn builtin(c: &Category, general: Unit) -> impl Iterator<Item = DocSettings> + '_ {
-    let (_, color_mode, ppi, presets) = *c;
+    let (category, color_mode, ppi, presets) = *c;
+    let align = PIXEL_ALIGNED_CATEGORIES.contains(&category);
     presets.iter().map(move |&(name, w, h, units)| DocSettings {
         name: name.into(),
         width: units.to_pt(w),
@@ -559,6 +738,8 @@ fn builtin(c: &Category, general: Unit) -> impl Iterator<Item = DocSettings> + '
         units: if units == Unit::Pixels { units } else { general },
         color_mode,
         raster_effects_ppi: ppi,
+        align_new_objects_to_pixel_grid: align,
+        profile: Some(category.into()),
         ..DocSettings::default()
     })
 }
@@ -609,7 +790,18 @@ pub(crate) fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
     if size != Some(sorted(&settings)) {
         settings.name = "Custom".into();
     }
-    let mut d = settings.document();
+    let (profile, profile_error) = match settings.profile.as_deref() {
+        Some(name) => match s.read_profile(name) {
+            Ok(p) => (p, None),
+            Err(e) => (None, Some(e)),
+        },
+        None => (None, None),
+    };
+    let applied = profile.is_some();
+    let (mut d, links_from, warnings) = match profile {
+        Some(p) => (settings.document_from_profile(p.doc), Some(p.file), p.warnings),
+        None => (settings.document(), None, vec![]),
+    };
     d.grid = s.prefs.grid();
     d.title = match str_param(p, "name").or(str_param(p, "title")).map(str::trim).filter(|t| !t.is_empty()) {
         // New Document offers the next untitled name: taking it uses it up.
@@ -619,13 +811,26 @@ pub(crate) fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
     };
     d.metadata.created = clock_date(s, "created", date_param(p, "created", C)?);
     let i = s.add_document(d, None);
+    // The profile's links keep their relative paths, which name places from the profile's file, as
+    // a new document from a history state keeps its source's.
+    s.doc_mut()?.links_from = links_from;
     // Overprint Preview is the engine's (the UI turns Pixel Preview on from `previewMode`). Both
     // are views of the whole app, so Default leaves them as they are.
     if settings.preview_mode == PreviewMode::Overprint {
         s.execute("view.overprintPreview", &json!({ "on": true }))?;
     }
     remember(s, &settings);
-    Ok(json!({ "index": i, "previewMode": settings.preview_mode.id() }))
+    let mut out = json!({ "index": i, "previewMode": settings.preview_mode.id() });
+    if applied {
+        out["profile"] = json!(settings.profile);
+    }
+    if !warnings.is_empty() {
+        out["warnings"] = json!(warnings);
+    }
+    if let Some(e) = profile_error {
+        out["profileError"] = json!({ "profile": settings.profile, "reason": e });
+    }
+    Ok(out)
 }
 
 /// Put `settings` first in Recent (one entry per size and units).
@@ -678,4 +883,155 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
     let saved = &mut s.prefs.new_doc_presets;
     let i = saved.iter().position(|q| q.name.eq_ignore_ascii_case(name)).ok_or_else(|| bad(C, format!("no saved preset called `{name}`")))?;
     Ok(json!({ "deleted": saved.remove(i).name }))
+}
+
+/// The largest New Document profile file `file.new` reads, bytes (VectorCraft's own limit); a
+/// larger one is reported and the document starts with the defaults.
+pub const MAX_PROFILE_BYTES: u64 = 64 << 20;
+
+/// `file.new`'s reason for a profile when the request being served may not read the profiles
+/// folder: the folder's path is left out.
+const PROFILE_DENIED: &str = "the request may not read the New Document profiles folder";
+
+/// A profile's file as [`Session::read_profile`] read it.
+struct ReadProfile {
+    doc: Document,
+    /// The file's path, which its links' relative paths name places from.
+    file: String,
+    /// A warning for each color profile the file carries that can't be used.
+    warnings: Vec<String>,
+}
+
+/// The New Document profiles' names: the built-in categories, in tab order.
+pub fn profile_names() -> impl Iterator<Item = &'static str> {
+    CATEGORIES.iter().map(|c| c.0)
+}
+
+/// The profile `v` names (a built-in category, any case).
+fn profile_name(v: &Value, cmd: &str) -> Result<&'static str> {
+    let name = v.as_str().map(str::trim).unwrap_or_default();
+    profile_names().find(|c| c.eq_ignore_ascii_case(name)).ok_or_else(|| {
+        let shown = v.as_str().map_or_else(|| v.to_string(), str::to_string);
+        bad(cmd, format!("no New Document profile called `{shown}` ({})", profile_names().collect::<Vec<_>>().join(", ")))
+    })
+}
+
+impl Session {
+    /// Keep the New Document profiles in the folder `dir` (`New Document Profiles` next to the
+    /// preferences). The folder is made when a profile is first edited.
+    pub fn attach_new_doc_profiles(&mut self, dir: std::path::PathBuf) {
+        self.new_doc_profile_dir = Some(dir);
+    }
+
+    /// The New Document profiles' folder ([`Session::attach_new_doc_profiles`]); none on the web.
+    pub fn new_doc_profile_dir(&self) -> Option<&std::path::Path> {
+        self.new_doc_profile_dir.as_deref().filter(|_| !cfg!(target_arch = "wasm32"))
+    }
+
+    /// The file of profile `name`, whether or not it exists.
+    fn profile_path(&self, name: &str) -> Option<std::path::PathBuf> {
+        Some(self.new_doc_profile_dir()?.join(format!("{name}.{}", vectorcraft_format::EXTENSION)))
+    }
+
+    /// Whether profile `name` has a file, which `file.newProfiles.reset` deletes.
+    pub fn new_doc_profile_customized(&self, name: &str) -> bool {
+        self.profile_path(name).is_some_and(|p| p.is_file())
+    }
+
+    /// Profile `name`'s document, its file's path and a warning for each color profile the file
+    /// carries that can't be used: `None` when it has no file (the shipped profile, the defaults),
+    /// the reason when the request being served may not read it, or its file can't be read, is
+    /// larger than [`MAX_PROFILE_BYTES`] or isn't a native document VectorCraft reads.
+    fn read_profile(&self, name: &str) -> std::result::Result<Option<ReadProfile>, String> {
+        let Some(path) = self.profile_path(name) else { return Ok(None) };
+        let file = path.to_string_lossy().to_string();
+        // Checked before the file is looked for, so a request that may not read the folder learns
+        // nothing of its files, nor where the folder is.
+        let denied = |_| PROFILE_DENIED.to_string();
+        crate::file_access::check_read(&file).map_err(denied)?;
+        if std::fs::symlink_metadata(&path).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) {
+            return Ok(None);
+        }
+        crate::file_access::check_read(&file).map_err(denied)?;
+        let bytes = crate::store::read_capped(&path, MAX_PROFILE_BYTES)?;
+        // The color profiles the file carries are installed where missing, as opening it installs
+        // them, so the new document's assigned profiles draw and are saved with it.
+        let (mut doc, _, warnings) = super::fileio::native_file(&bytes).map_err(|e| e.to_string())?;
+        // Linked images in its symbols, patterns and brushes are read from their files, as placing
+        // a document reads them.
+        super::links::resolve(&mut doc, super::links::LinkBase::file(Some(&file)), false, false);
+        Ok(Some(ReadProfile { doc, file, warnings }))
+    }
+}
+
+/// The shipped profile of category `name`: the defaults, as a document of the category's first
+/// preset.
+fn shipped_profile(s: &Session, name: &str) -> Document {
+    let first = CATEGORIES.iter().find(|c| c.0 == name).and_then(|c| builtin(c, s.default_units()).next());
+    let mut d = first.unwrap_or_default().document();
+    d.title = name.to_string();
+    d
+}
+
+/// `path` when the request being served may read it.
+fn shown(path: &std::path::Path) -> Option<String> {
+    let path = path.to_string_lossy().to_string();
+    crate::file_access::check_read(&path).is_ok().then_some(path)
+}
+
+fn list_profiles(s: &mut Session, _: &Value) -> Result<Value> {
+    let profiles: Vec<Value> = profile_names()
+        .map(|name| {
+            let mut v = json!({ "name": name });
+            match s.profile_path(name) {
+                // A request that may not read the folder learns nothing of its files.
+                Some(path) => {
+                    if let Some(p) = shown(&path) {
+                        v["customized"] = json!(path.is_file());
+                        v["path"] = json!(p);
+                    }
+                }
+                None => v["customized"] = json!(false),
+            }
+            v
+        })
+        .collect();
+    Ok(json!({ "profiles": profiles, "folder": s.new_doc_profile_dir().and_then(shown) }))
+}
+
+/// The file of profile `name` for `cmd` to change, checked against the request's write access.
+fn writable_profile(s: &Session, name: &str, cmd: &str) -> Result<std::path::PathBuf> {
+    let path = s.profile_path(name).ok_or_else(|| bad(cmd, "New Document profiles need the preferences folder, which this run doesn't have"))?;
+    crate::file_access::check_write(&path.to_string_lossy()).map_err(super::EngineError::Other)?;
+    Ok(path)
+}
+
+fn edit_profile(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "file.newProfiles.edit";
+    let name = profile_name(p.get("name").unwrap_or(&Value::Null), C)?;
+    let file = writable_profile(s, name, C)?;
+    let path = file.to_string_lossy().to_string();
+    // document.open reads it next: a profile it can't open is not written either.
+    crate::file_access::check_read(&path).map_err(super::EngineError::Other)?;
+    if !file.exists() {
+        let bytes = vectorcraft_format::save(&shipped_profile(s, name), false);
+        file.parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|()| std::fs::write(&file, bytes))
+            .map_err(|e| super::EngineError::Other(format!("{path}: {e}")))?;
+    }
+    s.execute("document.open", &json!({ "path": path }))
+}
+
+fn reset_profile(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "file.newProfiles.reset";
+    let name = profile_name(p.get("name").unwrap_or(&Value::Null), C)?;
+    let file = writable_profile(s, name, C)?;
+    let path = file.to_string_lossy().to_string();
+    let reset = match std::fs::remove_file(&file) {
+        Ok(()) => true,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+        Err(e) => return Err(super::EngineError::Other(format!("{path}: {e}"))),
+    };
+    Ok(json!({ "name": name, "reset": reset }))
 }

@@ -204,13 +204,13 @@ fn linearised(pdf: &[u8], set: &PdfSettings) -> Result<Vec<u8>, PdfError> {
 }
 
 /// The file the export wrote (`pdf`), finished as `opts` say; `editing`: it carries the editing
-/// data, to seal once the pages are final. What can't be done comes back in `warnings`.
-pub(crate) fn finish(pdf: Vec<u8>, opts: &PdfOptions, editing: bool, warnings: &mut Vec<String>) -> Result<Vec<u8>, PdfError> {
+/// data, to seal once the pages are final. The options it can't apply come back in `settings`.
+pub(crate) fn finish(pdf: Vec<u8>, opts: &PdfOptions, editing: bool, settings: &mut Vec<String>) -> Result<Vec<u8>, PdfError> {
     let set = &opts.settings;
     let pdf = match (set.thumbnails, opts.thumbnails.is_empty()) {
         (true, false) => thumbnails(pdf, &opts.thumbnails, set.standard.is_pdfx())?,
         (true, true) => {
-            warnings.push("page thumbnails need the pages drawn, which weren't given: none are embedded".into());
+            settings.push("page thumbnails need the pages drawn, which weren't given: none are embedded".into());
             pdf
         }
         (false, _) => pdf,
@@ -229,7 +229,7 @@ pub(crate) fn finish(pdf: Vec<u8>, opts: &PdfOptions, editing: bool, warnings: &
     match linearised(&pdf, set) {
         Ok(out) => Ok(out),
         Err(e) => {
-            warnings.push(format!("the file isn't optimized for fast web view: {e}"));
+            settings.push(format!("the file isn't optimized for fast web view: {e}"));
             crate::encrypt::protect(pdf, set)
         }
     }

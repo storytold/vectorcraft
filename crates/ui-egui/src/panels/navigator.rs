@@ -249,11 +249,12 @@ pub fn thumb_to_doc(region: DRect, thumb: Rect, p: egui::Pos2) -> Point {
     Point::new(region.x0 + (p.x as f64 - ox) / s, region.y0 + (p.y as f64 - oy) / s)
 }
 
-/// The view box in the thumbnail: the corners of the canvas `canvas` showing view `v`, mapped
-/// into the document (turned with the view) and then into the thumbnail, cut to the thumbnail
-/// grown by a point. Fewer than three points when the view is outside the thumbnail.
-fn view_box(region: DRect, thumb: Rect, canvas: Rect, v: &crate::state::View) -> Vec<egui::Pos2> {
-    let xf = crate::canvas::Xf::new(canvas, v);
+/// The view box in the thumbnail: the corners of the canvas `canvas` showing view `v` (with the
+/// interface zoomed by `ui_zoom`), mapped into the document (turned with the view) and then into
+/// the thumbnail, cut to the thumbnail grown by a point. Fewer than three points when the view is
+/// outside the thumbnail.
+fn view_box(region: DRect, thumb: Rect, canvas: Rect, v: &crate::state::View, ui_zoom: f32) -> Vec<egui::Pos2> {
+    let xf = crate::canvas::Xf::at(canvas, v, ui_zoom);
     let mut pts: Vec<egui::Pos2> = [canvas.left_top(), canvas.right_top(), canvas.right_bottom(), canvas.left_bottom()]
         .iter()
         .map(|c| doc_to_thumb(region, thumb, xf.to_doc(*c)))
@@ -330,7 +331,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The view box: the canvas's corners in the document, turned with the view, cut to the thumbnail.
     let view = app.view().copied();
     if let (Some(v), Some(cr)) = (view, app.canvas_rect) {
-        let box_points = view_box(region, thumb, cr, &v);
+        let box_points = view_box(region, thumb, cr, &v, app.canvas_ui_zoom);
         if box_points.len() > 2 {
             let color = app.ui.navigator_panel.view_box();
             ui.painter().with_clip_rect(thumb).add(egui::Shape::closed_line(box_points, Stroke::new(1.5, color)));
@@ -447,6 +448,54 @@ mod tests {
             [canvas.left_top(), canvas.right_top(), canvas.right_bottom(), canvas.left_bottom()].map(|c| doc_to_thumb(region, thumb, xf.to_doc(c)));
         assert_eq!(points.len(), 4, "{points:?}");
         assert!(points.iter().zip(&want).all(|(a, b)| a.distance(*b) < 0.5), "{points:?} is not {want:?}");
+    }
+
+    /// With the interface zoomed by Preferences › User Interface › UI Scaling, the view box still
+    /// outlines what the canvas shows: at 400% and UI Scaling 1.5×, a canvas 600 interface points
+    /// wide shows 600 × 1.5 / 4 document points.
+    #[test]
+    fn the_view_box_outlines_the_canvas_at_every_ui_scaling() {
+        use vectorcraft_engine::Session;
+        for ui_zoom in [0.75_f32, 1.5, 2.0] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+            let canvas = Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0));
+            app.canvas_rect = Some(canvas);
+            app.canvas_ui_zoom = ui_zoom;
+            app.run("view.setZoom", json!({"zoom": 400, "center": [200, 150]})).unwrap();
+            let ctx = egui::Context::default();
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+            out.textures_delta.clear();
+            let pasteboard = Tokens::get(&ctx).pasteboard;
+            let thumb = out
+                .shapes
+                .iter()
+                .find_map(|c| match &c.shape {
+                    egui::Shape::Rect(r) if r.fill == pasteboard => Some(r.rect),
+                    _ => None,
+                })
+                .expect("the thumbnail");
+            let red = egui::epaint::ColorMode::Solid(Color32::from_rgb(0xff, 0x30, 0x30));
+            let drawn: Vec<Vec<egui::Pos2>> = out
+                .shapes
+                .into_iter()
+                .filter_map(|c| match c.shape {
+                    egui::Shape::Path(p) if p.closed && p.stroke.color == red => Some(p.points),
+                    _ => None,
+                })
+                .collect();
+            let [points] = &drawn[..] else { panic!("UI Scaling {ui_zoom}×: one view box: {drawn:?}") };
+            let region = CACHE.with(|c| c.borrow().region.unwrap().1);
+            // Each canvas corner is (its offset from the canvas's center) × UI Scaling / zoom
+            // document points from the view's center.
+            let k = f64::from(ui_zoom) / 4.0;
+            let want = [canvas.left_top(), canvas.right_top(), canvas.right_bottom(), canvas.left_bottom()].map(|c| {
+                let d = c - canvas.center();
+                doc_to_thumb(region, thumb, Point::new(200.0 + f64::from(d.x) * k, 150.0 + f64::from(d.y) * k))
+            });
+            assert_eq!(points.len(), 4, "UI Scaling {ui_zoom}×: {points:?}");
+            assert!(points.iter().zip(&want).all(|(a, b)| a.distance(*b) < 0.5), "UI Scaling {ui_zoom}×: {points:?} is not {want:?}");
+        }
     }
 
     /// The panel menu's Panel Options… is enabled, and a click opens the Navigator Panel Options.

@@ -41,8 +41,12 @@ pub(super) fn gradient_def(s: &mut String, w: &Writer, name: &str, g: &Gradient)
                 s.push_str(" 3 ");
             }
         }
-        ps::push_nums(s, &[f64::from(stop.midpoint) * 100.0, f64::from(stop.offset) * 100.0]);
-        s.push_str("%_Bs\n");
+        // The ramp point to five decimals of its percent: a gradient's stops repeated many times
+        // keep their places in each run.
+        ps::push_num(s, f64::from(stop.midpoint) * 100.0);
+        s.push(' ');
+        ps::push_num_places(s, f64::from(stop.offset) * 100.0, 5);
+        s.push_str(" %_Bs\n");
     }
     s.push_str("BD\n%AI5_EndGradient\n");
 }
@@ -201,7 +205,9 @@ pub(super) fn segment_point(path: &BezPath, fraction: f64) -> f64 {
 pub(super) fn direct_fill(p: &Paint) -> bool {
     match p {
         Paint::Solid { .. } => true,
-        Paint::Gradient(g) => g.gradient.kind != GradientKind::Freeform && !g.gradient.stops.is_empty(),
+        Paint::Gradient(g) => {
+            !matches!(g.gradient.kind, GradientKind::Freeform | GradientKind::Conic | GradientKind::Diamond) && !g.gradient.stops.is_empty()
+        }
         _ => false,
     }
 }

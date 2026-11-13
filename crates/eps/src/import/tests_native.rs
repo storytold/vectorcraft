@@ -3128,6 +3128,73 @@ fn type_from_the_text_document_takes_its_character_styles_attributes() {
     assert_eq!(style(2), (solid(Color::cmyk(0.0, 1.0, 0.0, 0.0)), Some(18.0)), "the run's own colour");
 }
 
+/// The PostScript name and version of the face that type from a text document whose font record is
+/// `record` (in place of `/0 (Helvetica)`) is set in.
+fn face_set_from(record: &str) -> (String, String) {
+    let doc = text_document(&[("Hamburg\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]).replacen("/0 (Helvetica)", record, 1);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{record}: {:?}", r.warnings);
+    let face = vectorcraft_text::FontDb::global().style_face(&texts[0].runs[0].style).unwrap();
+    (face.postscript_name(), face.version.clone())
+}
+
+/// Installs the copies of each font `copies` lists, the first of each loaded first.
+fn install(copies: &[(bool, vectorcraft_text::test_fonts::CopyNames<'_>)]) {
+    for (inter, names) in copies {
+        let font = vectorcraft_text::test_fonts::named_copy(*inter, *names).unwrap();
+        assert_eq!(vectorcraft_text::FontDb::global().add_font(font), 1, "{names:?}");
+    }
+}
+
+/// Type from the text document is set in the installed face of exactly the PostScript name its
+/// font record gives, whatever other installed copies answer to that name too: one whose family
+/// is spelled alike but for case and punctuation (`SAMPLE INK` beside `Sample/Ink`, PostScript name
+/// `SampleInk`), one whose PostScript name differs only in case or punctuation (in its own family or
+/// another), or another copy of the same family and style under another PostScript name (an older
+/// build of the font: the type names its version). Those copies set the type at other widths.
+#[test]
+fn type_from_the_text_document_takes_the_face_of_its_exact_postscript_name() {
+    install(&[
+        (true, ("FUZZTEST INK", "Regular", "Version 1.000", "FUZZTESTINK-Regular")),
+        (false, ("Fuzztest/Ink", "Regular", "Version 1.000", "FuzztestInk")),
+        (true, ("CASETEST INK", "Regular", "Version 1.000", "CASETESTINK")),
+        (false, ("Casetest Ink", "Regular", "Version 2.000", "CasetestInk")),
+        (true, ("Copytest Ink", "Regular", "Version 1.000", "CopytestInk-Light")),
+        (false, ("Copytest Ink", "Regular", "Version 2.000", "CopytestInk-Regular")),
+        (true, ("NeuetestInk", "Bold", "Version 1.000", "NeuetestInkBold")),
+        (false, ("Neuetest Ink", "Bold", "Version 1.000", "NeuetestInk-Bold")),
+    ]);
+    assert_eq!(face_set_from("/0 (FuzztestInk)").0, "FuzztestInk", "not the family spelled alike");
+    assert_eq!(face_set_from("/0 (FUZZTESTINK-Regular)").0, "FUZZTESTINK-Regular");
+    assert_eq!(face_set_from("/0 (CasetestInk)").0, "CasetestInk", "not the name in other case, loaded first");
+    assert_eq!(face_set_from("/0 (CASETESTINK)").0, "CASETESTINK");
+    assert_eq!(face_set_from("/0 (CopytestInk-Regular)"), ("CopytestInk-Regular".to_string(), "Version 2.000".to_string()));
+    assert_eq!(face_set_from("/0 (CopytestInk-Light)"), ("CopytestInk-Light".to_string(), "Version 1.000".to_string()));
+    assert_eq!(face_set_from("/0 (NeuetestInk-Bold)").0, "NeuetestInk-Bold", "not the name without its hyphen, in another family");
+    // A name in a case no installed face has still finds the font.
+    assert_eq!(face_set_from("/0 (casetestink)").0, "CASETESTINK");
+}
+
+/// A font record may keep the font's version string (key 5, name ID 5): of two installed copies
+/// with one PostScript name, family and style, the type is set in that version, also when the
+/// record spells the name with other punctuation. A version that isn't installed, or a record
+/// without one, gives the copy the family and style resolve to.
+#[test]
+fn type_from_the_text_document_takes_the_version_its_font_record_keeps() {
+    install(&[(true, ("Vertest Ink", "Regular", "1.0", "VertestInk-Regular")), (false, ("Vertest Ink", "Regular", "1.1", "VertestInk-Regular"))]);
+    let version = |record: &str| face_set_from(record).1;
+    assert_eq!(version("/0 (VertestInk-Regular) /5 (1.1)"), "1.1");
+    assert_eq!(version("/0 (VertestInk-Regular) /5 (1.0)"), "1.0");
+    assert_eq!(version("/0 (VertestInk-Regular)"), "1.0");
+    assert_eq!(version("/0 (VertestInk-Regular) /5 (9.9)"), "1.0");
+    assert_eq!(version("/0 (VertestInk-Regular) /5 ()"), "1.0");
+    // A record whose name differs from the copies' in punctuation alone still picks its version.
+    assert_eq!(version("/0 (Vertest-Ink-Regular) /5 (1.1)"), "1.1");
+    assert_eq!(version("/0 (Vertest-Ink-Regular)"), "1.0");
+}
+
 /// A story with no runs, and a run or paragraph that names no style, is set in `[Normal Character
 /// Style]` and `[Normal Paragraph Style]` before the text document's base attributes. A Large
 /// Canvas copy (1:10) writes the styles at the art's scale (1.2 for 12 points, 0.6 for a 6-point
@@ -3364,6 +3431,90 @@ fn stroked_type_keeps_its_cap_join_and_miter_limit() {
             ("gh".to_string(), 0.0, LineCap::Butt, LineJoin::Miter, 10.0),
         ]
     );
+}
+
+#[test]
+fn type_painted_with_a_pattern_takes_it_from_the_art_style_its_paint_names() {
+    // GUARDS: type filled or stroked with a pattern swatch came in black: the text document keeps
+    // black as the paint's colour, and the pattern is in the art style that key 5 of the paint
+    // names, a style of one paint (`/SimpleStyle`) whose matrix is in art space.
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_geom::Point;
+    let dots = "%AI3_BeginPattern: (Dots)\n(Dots) 0 0 4 4\n%_0 0 0 1 k\n%_1 1 m\n%_3 1 L\n%_3 3 L\n%_1 3 L\n%_f\nE\n%AI3_EndPattern\n";
+    let simple = |name: &str, paint: &str| {
+        format!(
+            "/KnownStyle :\n({name}) /Name ,\n/SimpleStyle :\n0 O\n{paint}\n0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n0 1 Xd\n/Paint ;\n /Def ;\n"
+        )
+    };
+    let pattern = |m: &str| format!("(Dots) 0 0 1 1 0 0 0 0 0 [{m}] p");
+    let styles = [
+        simple("Anon 1", &pattern("1 0 0 1 0 0")),
+        simple("Anon 2", &pattern("2 0 0 2 10 20")),
+        // Styles that give no pattern: one the file doesn't define, a matrix that doesn't place, no
+        // name, a colour after the pattern, a colour, a gradient.
+        simple("Anon 3", "(Absent) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p"),
+        simple("Anon 4", &pattern("0 0 0 0 0 0")),
+        simple("Anon 5", "0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p"),
+        simple("Anon 6", &format!("{}\n0 0 0 1 k", pattern("1 0 0 1 0 0"))),
+        simple("Anon 7", "0 0 0 1 k"),
+        simple("Anon 8", "0 Bb\n2 (Rainbow) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB"),
+    ]
+    .concat();
+    let styles = format!("%AI9_BeginArtStyles\n{styles}%AI9_EndArtStyles\n");
+    let doc = text_document(&[("abcdefghijklmnopq\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let one = "<< /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 /53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /1 18 >>";
+    assert!(doc.contains(one));
+    let black = |style: &str| format!("<< /99 /CAITextPaint /0 << /0 0 /1 [ 1.0 0.0 ] >> /5 ({style}) >>");
+    let run = |own: &str| format!("<< /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 {own} >> >> >> /1 2 >>");
+    let mut runs = vec![run(&format!("/53 {}", black("Anon 1"))), run(&format!("/53 {} /57 true /54 {} /63 2.0", black("Anon 7"), black("Anon 2")))];
+    runs.extend((3..=8).map(|n| run(&format!("/53 {}", black(&format!("Anon {n}"))))));
+    // A style the file doesn't have, over "q" and the story's end.
+    runs.push(run(&format!("/53 {}", black("Anon 9"))));
+    let doc = doc.replacen(one, &runs.join(" "), 1);
+    let art = native_with_text(&format!("{dots}{styles}{}{}", layer("Back", true, &square(10, 10)), layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    let t = texts[0];
+    // Each character's fill and stroke, a pattern as where its tile's top left corner is.
+    let paint = |p: &Paint| match p {
+        Paint::Pattern { pattern, xf } => {
+            let at = t.xf * *xf * Point::ZERO;
+            format!("{pattern} at {:.3} {:.3}", at.x, at.y)
+        }
+        Paint::Solid { color, .. } if *color == Color::gray(1.0) => "black".into(),
+        Paint::None => "none".into(),
+        other => format!("{other:?}"),
+    };
+    let chars: Vec<(char, String, String)> =
+        t.runs.iter().flat_map(|r| r.text.chars().map(|c| (c, paint(&r.style.fill), paint(&r.style.stroke))).collect::<Vec<_>>()).collect();
+    let want = |c: char, fill: &str, stroke: &str| (c, fill.to_string(), stroke.to_string());
+    // The tile's top left (0, 4) in art space, on a page 100 high: (0, 96). Scaled twice and moved
+    // by (10, 20): (10, 28) in art space, (10, 72) in the document.
+    let mut expected = vec![want('a', "Dots at 0.000 96.000", "none"), want('b', "Dots at 0.000 96.000", "none")];
+    expected.extend(['c', 'd'].map(|c| want(c, "black", "Dots at 10.000 72.000")));
+    expected.extend("efghijklmnopq".chars().map(|c| want(c, "black", "none")));
+    assert_eq!(chars, expected);
+    assert_eq!(r.document.pattern("Dots").map(|p| p.tile.height()), Some(4.0));
+}
+
+#[test]
+fn type_keeps_its_manual_kerning() {
+    // GUARDS: the text document's manual kerning (key 8 of a story's text: runs of characters, each
+    // with its value or none) wasn't read, so type the file kerns by hand came in spaced by the
+    // font alone and drifted from the page from each kerned pair on. "Wave": "W" kerned by -140,
+    // "av" automatic, "e" by 60.
+    let doc = text_document(&[("Wave\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let run = "<< /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 /53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /1 5 >>";
+    assert!(doc.contains(run));
+    let kerns = "/8 << /0 [ << /0 << /0 -140 >> /1 1 >> << /0 << >> /1 2 >> << /0 << /0 60 >> /1 1 >> << /0 << >> /1 1 >> ] >>";
+    let doc = doc.replacen(run, &format!("{run} ] >> {kerns}"), 1).replacen(&format!("{kerns} ] >> >>"), &format!("{kerns} >>"), 1);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    let runs: Vec<(String, Option<f64>)> = texts[0].runs.iter().map(|r| (r.text.clone(), r.style.kerning)).collect();
+    assert_eq!(runs, [("W".to_string(), Some(-140.0)), ("av".to_string(), None), ("e".to_string(), Some(60.0))]);
 }
 
 #[test]
@@ -5419,7 +5570,14 @@ fn type_envelope_text(family: &str, paint: Option<&str>) -> String {
 fn arc_envelope(text: &Node, bend: f64) -> Node {
     let mut text = text.clone();
     text.visible = true;
-    let kind = vectorcraft_doc::live::EnvelopeKind::Warp { style: "arc".into(), bend, h: 0.0, v: 0.0, horizontal: true };
+    let kind = vectorcraft_doc::live::EnvelopeKind::Warp {
+        style: "arc".into(),
+        bend,
+        h: 0.0,
+        v: 0.0,
+        horizontal: true,
+        version: vectorcraft_doc::live::WARP_NET,
+    };
     Node::new(
         vectorcraft_doc::NodeId(1_000_000),
         NodeKind::Envelope {
@@ -5796,7 +5954,8 @@ fn a_warp_of_type_opens_as_a_mesh_on_its_saved_grid_and_keeps_its_shape_when_its
 
 /// A warp of stroked type with Distort Appearance whose drawn art maps the type's bounds with its
 /// strokes onto the grid the file saves (not its glyphs' bounds alone) opens live as a mesh envelope
-/// mapping from that box (#3179).
+/// mapping from that box (#3179). The drawn art strokes the bent outlines at the stroke's own weight,
+/// as files draw it (#6644).
 #[test]
 fn a_warp_of_stroked_type_maps_from_its_bounds_with_strokes_where_its_drawn_art_does() {
     use vectorcraft_doc::live::{envelope_content_boxes, envelope_stroke_margin};
@@ -5816,7 +5975,7 @@ fn a_warp_of_stroked_type_maps_from_its_bounds_with_strokes_where_its_drawn_art_
         vectorcraft_doc::NodeId(1_000_000),
         NodeKind::Envelope { content, kind: Box::new(rising_kind()), fidelity: 50.0, editing: false, options, frame: Box::default() },
     );
-    let (drawn, page) = drawn_envelope(&shaped);
+    let (drawn, page) = drawn_stroked_envelope(&shaped);
     let art =
         native_with_text(&layer("Art", true, &format!("{}\n{}", square(10, 10), type_envelope_on(&arc_keys(0.3), &rising_grid(), &drawn, ""))), &doc);
     let r = import(&eps(&format!("{}\n{page}", page_square(10, 10)), &art)).unwrap();
@@ -5831,6 +5990,179 @@ fn a_warp_of_stroked_type_maps_from_its_bounds_with_strokes_where_its_drawn_art_
         }
     });
     assert_eq!(margin, Some(options.bounds_margin));
+}
+
+/// What the type in `content` paints, measured apart from the import: each piece of its outlines
+/// filled, and outlined by kurbo's stroker with each of its strokes' weight, join and miter limit.
+fn painted_by_kurbo(content: &[std::sync::Arc<Node>]) -> kurbo::Rect {
+    use kurbo::Shape;
+    let mut out: Option<kurbo::Rect> = None;
+    for n in content {
+        let outlines = vectorcraft_effects::outline_text(n).unwrap();
+        for piece in outlines.children().unwrap() {
+            let bp = piece.stroke_path().unwrap();
+            out = vectorcraft_geom::union_opt(out, Some(bp.bounding_box()));
+            for s in piece.appearance.painted_strokes() {
+                let join = match s.join {
+                    vectorcraft_doc::LineJoin::Miter => kurbo::Join::Miter,
+                    vectorcraft_doc::LineJoin::Round => kurbo::Join::Round,
+                    vectorcraft_doc::LineJoin::Bevel => kurbo::Join::Bevel,
+                };
+                let stroke = kurbo::Stroke::new(s.width).with_join(join).with_miter_limit(s.miter_limit);
+                let outline = kurbo::stroke(bp.iter(), &stroke, &kurbo::StrokeOpts::default(), 1e-4);
+                out = vectorcraft_geom::union_opt(out, Some(outline.bounding_box()));
+            }
+        }
+    }
+    out.unwrap()
+}
+
+/// A warp of type stroked with miter joins, Distort Appearance on, whose drawn art maps the type from
+/// what it paints, the miter tips at the sharp corners of its X past half the stroke's weight
+/// included, as users' files map some such type, opens live as a mesh envelope on its saved grid
+/// mapping from that box, where its glyphs grown by half the weight don't draw as that art (#6824).
+#[test]
+fn a_warp_of_mitred_type_maps_from_what_its_stroke_paints_where_its_drawn_art_does() {
+    use vectorcraft_doc::live::{envelope_content_boxes, envelope_stroke_margin};
+    let Some(family) = installed_family() else { return };
+    // "FLUX" stroked 4 points wide in black, with miter joins at a limit of 10.
+    let stroked = "/53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> /54 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 0.0 0.0 1.0 ] >> >> /57 true /62 0 /63 4.0 /64 10.0";
+    let doc = type_envelope_text(&family, None).replace("/53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >>", stroked);
+    let mut text = made_envelope_type(&doc);
+    text.visible = true;
+    assert!(
+        matches!(&text.kind, NodeKind::Text(t) if t.runs[0].style.stroke_join == vectorcraft_doc::LineJoin::Miter && t.runs[0].style.stroke_miter_limit == 10.0),
+        "{text:?}"
+    );
+    let content = vec![std::sync::Arc::new(text)];
+    let (half, glyphs) = envelope_content_boxes(&content, kurbo::Affine::IDENTITY).unwrap();
+    let painted = painted_by_kurbo(&content);
+    assert!(painted.x0 < half.x0 - 0.5 || painted.x1 > half.x1 + 0.5, "{painted:?} {half:?}");
+    let mut options = vectorcraft_doc::live::EnvelopeOptions::NEW;
+    options.bounds_margin = envelope_stroke_margin(painted, glyphs).unwrap();
+    let shaped = Node::new(
+        vectorcraft_doc::NodeId(1_000_000),
+        NodeKind::Envelope { content, kind: Box::new(rising_kind()), fidelity: 50.0, editing: false, options, frame: Box::default() },
+    );
+    let (drawn, page) = drawn_stroked_envelope(&shaped);
+    let art =
+        native_with_text(&layer("Art", true, &format!("{}\n{}", square(10, 10), type_envelope_on(&arc_keys(0.3), &rising_grid(), &drawn, ""))), &doc);
+    let r = import(&eps(&format!("{}\n{page}", page_square(10, 10)), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let (envelopes, loose) = envelopes_and_type(&r.document);
+    assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{:?}", r.warnings);
+    assert!(loose.is_empty(), "{loose:?}");
+    // It maps from what the type paints, within a hundredth of a point on each side.
+    let mut margin = None;
+    r.document.walk(|n| {
+        if let NodeKind::Envelope { options, .. } = &n.kind {
+            margin = Some(options.bounds_margin);
+        }
+    });
+    let [top, bottom, left, right] = margin.unwrap().map(f64::from);
+    let from = kurbo::Rect::new(
+        glyphs.x0 - left * glyphs.width(),
+        glyphs.y0 - top * glyphs.height(),
+        glyphs.x1 + right * glyphs.width(),
+        glyphs.y1 + bottom * glyphs.height(),
+    );
+    let off = [from.x0 - painted.x0, from.y0 - painted.y0, from.x1 - painted.x1, from.y1 - painted.y1];
+    assert!(off.iter().all(|d| d.abs() < 0.01), "{from:?} {painted:?}");
+}
+
+/// The drawn art of `envelope` (on the page axes), an envelope of type stroked by its characters,
+/// as the drawn art of `.ai` files strokes type in an envelope: the bent glyph outlines the envelope
+/// draws of its type unstroked, each filled in its type's color, then each stroked with the type's
+/// stroke (its weight, color, join and miter limit) whatever the grid does to it, and the page's
+/// PostScript for them (#6644).
+fn drawn_stroked_envelope(envelope: &Node) -> (String, String) {
+    let NodeKind::Envelope { content, .. } = &envelope.kind else { panic!("an envelope") };
+    let Some(NodeKind::Text(t)) = content.first().map(|c| &c.kind) else { panic!("type") };
+    let stroke = t.runs[0].style.stroke_layer();
+    let mut unstroked = envelope.clone();
+    if let NodeKind::Envelope { content, .. } = &mut unstroked.kind {
+        for c in content.iter_mut() {
+            if let NodeKind::Text(t) = &mut std::sync::Arc::make_mut(c).kind {
+                t.runs.iter_mut().for_each(|r| r.style.stroke = vectorcraft_color::Paint::None);
+            }
+        }
+    }
+    let (fills, fill_page) = drawn_envelope(&unstroked);
+    let [r, g, b] = stroke.paint.color().map_or([0.0; 3], |c| c.to_rgb());
+    let join = match stroke.join {
+        vectorcraft_doc::LineJoin::Miter => 0,
+        vectorcraft_doc::LineJoin::Round => 1,
+        vectorcraft_doc::LineJoin::Bevel => 2,
+    };
+    let (w, limit) = (stroke.width, stroke.miter_limit);
+    let mut art = format!("{fills}0 0 0 0 {r} {g} {b} XA\n{w} w\n{join} j\n{limit} M\n");
+    let mut page = format!("{fill_page}{r} {g} {b} setrgbcolor {w} setlinewidth {join} setlinejoin {limit} setmiterlimit\n");
+    let pt = |p: kurbo::Point| {
+        let (x, y) = to_art(p);
+        format!("{x} {y}")
+    };
+    vectorcraft_effects::expand_live_deep(None, &unstroked).walk(&mut |n| {
+        let NodeKind::Path { path, .. } = &n.kind else { return };
+        for el in path.to_bezpath().elements() {
+            match *el {
+                kurbo::PathEl::MoveTo(p) => {
+                    art += &format!("{} m\n", pt(p));
+                    page += &format!("newpath {} moveto ", pt(p));
+                }
+                kurbo::PathEl::LineTo(p) => {
+                    art += &format!("{} L\n", pt(p));
+                    page += &format!("{} lineto ", pt(p));
+                }
+                kurbo::PathEl::CurveTo(a, c, p) => {
+                    art += &format!("{} {} {} C\n", pt(a), pt(c), pt(p));
+                    page += &format!("{} {} {} curveto ", pt(a), pt(c), pt(p));
+                }
+                kurbo::PathEl::QuadTo(..) => {}
+                kurbo::PathEl::ClosePath => {
+                    art += "s\n";
+                    page += "closepath stroke\n";
+                }
+            }
+        }
+    });
+    (art, page)
+}
+
+/// An envelope of type with a character stroke, Distort Appearance on, whose drawn art strokes the
+/// bent glyph outlines at the stroke's own weight (as `.ai` files draw the strokes of type in an
+/// envelope, however much the grid squeezes or stretches it) opens live: VectorCraft draws the
+/// stroke that way too (#6644).
+#[test]
+fn an_envelope_of_stroked_type_whose_drawn_art_strokes_the_bent_outlines_at_the_weight_opens_live() {
+    let Some(family) = installed_family() else { return };
+    // "FLUX" stroked 1.5 points wide in black with round joins.
+    let stroked = "/53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> /54 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 0.0 0.0 1.0 ] >> >> /57 true /62 1 /63 1.5";
+    let doc = type_envelope_text(&family, None).replace("/53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >>", stroked);
+    let mut text = made_envelope_type(&doc);
+    text.visible = true;
+    assert!(
+        matches!(&text.kind, NodeKind::Text(t) if t.runs[0].style.stroke_width == 1.5 && t.runs[0].style.stroke_join == vectorcraft_doc::LineJoin::Round),
+        "{text:?}"
+    );
+    let shaped = Node::new(
+        vectorcraft_doc::NodeId(1_000_000),
+        NodeKind::Envelope {
+            content: vec![std::sync::Arc::new(text)],
+            kind: Box::new(rising_kind()),
+            fidelity: 50.0,
+            editing: false,
+            options: vectorcraft_doc::live::EnvelopeOptions::NEW,
+            frame: Box::default(),
+        },
+    );
+    let (drawn, page) = drawn_stroked_envelope(&shaped);
+    let art =
+        native_with_text(&layer("Art", true, &format!("{}\n{}", square(10, 10), type_envelope_on(&arc_keys(0.3), &rising_grid(), &drawn, ""))), &doc);
+    let r = import(&eps(&format!("{}\n{page}", page_square(10, 10)), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let (envelopes, loose) = envelopes_and_type(&r.document);
+    assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{:?}", r.warnings);
+    assert!(loose.is_empty(), "{loose:?}");
 }
 
 /// A warp of type whose editing data saves no grid it can be shaped by keeps its drawn art and its
@@ -6836,4 +7168,22 @@ fn text_a_placed_file_covers_only_at_its_first_placement_is_kept() {
     assert!([b.x0 - 30.0, b.y0 - 30.0, b.x1 - 70.0, b.y1 - 70.0].iter().all(|v| v.abs() < 0.01), "on the page's square: {b:?}");
     assert_eq!(text_of(&d.layers[0]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi"], "{w:?}");
     assert!(!w.iter().any(|w| w.contains("doesn't draw")), "{w:?}");
+}
+
+/// #6865: explicitly trusting editing data keeps an artboard larger than its PDF page.
+#[test]
+fn trusted_editing_data_keeps_an_artboard_taller_than_its_pdf_page() {
+    let art = native(&layer("Oversized", true, &square(10, 10))).replace(" 0 0 100 100", " 0 0 12992.726 14637.147");
+    let (d, w, read) = crate::layered_ai(&private(&art), Document::new(12992.7, 14400.0), vec![], false, true, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(names(&d), ["Oversized"], "{w:?}");
+    assert!((d.artboards[0].rect.height() - 14637.147).abs() < 0.001);
+    assert_eq!(kinds(&d.layers[0]), ["path"]);
+    assert!(w.iter().any(|w| w.contains("artboard is larger than the PDF page")), "{w:?}");
+    let child = &d.layers[0].children().unwrap()[0];
+    assert!(child.visual_bounds().unwrap().y0 > 14400.0, "art beyond the PDF page is kept");
+    let (_, w, read) = crate::layered_ai(&private(&art), Document::new(12992.7, 14400.0), vec![], false, false, 1.0);
+    assert!(!read, "default import still rejects the size mismatch: {w:?}");
+    let (_, w, read) = crate::layered_ai(&private(&art), Document::new(12000.0, 14400.0), vec![], false, true, 1.0);
+    assert!(!read, "the uncapped dimension must still match: {w:?}");
 }

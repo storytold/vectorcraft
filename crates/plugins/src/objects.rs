@@ -579,6 +579,11 @@ fn unit(v: f32) -> f32 {
     v.clamp(0.0, 1.0)
 }
 
+/// Process plate `v` in 0..1: NaN is 0, infinities go to the nearest end.
+fn plate(v: f32) -> f32 {
+    if v.is_nan() { 0.0 } else { unit(v) }
+}
+
 /// `c` with its components in range.
 pub(crate) fn clamp_color(c: Color) -> Color {
     match c {
@@ -589,8 +594,8 @@ pub(crate) fn clamp_color(c: Color) -> Color {
     }
 }
 
-/// A paint from plug-in output (`null`: none), with colours, opacities and offsets clamped and
-/// gradient and pattern placements checked.
+/// A paint from plug-in output (`null`: none), with colors, process plates, opacities and
+/// offsets clamped and gradient and pattern placements checked.
 fn decode_paint(v: &Value, at: &str) -> Result<Paint> {
     if v.is_null() {
         return Ok(Paint::None);
@@ -613,16 +618,32 @@ fn decode_paint(v: &Value, at: &str) -> Result<Paint> {
                 s.midpoint = s.midpoint.clamp(0.13, 0.87);
                 s.tint = unit(s.tint);
                 s.color = clamp_color(s.color);
+                if let Some(plates) = &mut s.plates {
+                    *plates = plates.map(plate);
+                }
             }
             stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
             g.angle = g.angle.rem_euclid(360.0);
+            g.gradient.repeats = g.gradient.repeat_count();
+            let conic = g.gradient.kind == vectorcraft_color::GradientKind::Conic;
+            let no_focal = conic || g.gradient.kind == vectorcraft_color::GradientKind::Diamond;
             if let Some(geom) = &mut g.geom {
                 check_point(geom.start, at)?;
                 check_point(geom.end, at)?;
                 if let Some(f) = geom.focal {
                     check_point(f, at)?;
                 }
-                geom.aspect = if geom.aspect.is_finite() { geom.aspect.clamp(0.01, 100.0) } else { 1.0 };
+                // Conic and diamond gradients have no focal point (the commands refuse one).
+                if no_focal {
+                    geom.focal = None;
+                }
+                let a = geom.aspect;
+                // A conic's negative aspect mirrors its sweep, so its sign stays.
+                geom.aspect = match (a.is_finite(), conic) {
+                    (false, _) => 1.0,
+                    (true, true) => a.abs().clamp(0.01, 100.0).copysign(a),
+                    (true, false) => a.clamp(0.01, 100.0),
+                };
             }
             if let Some(ff) = &mut g.freeform {
                 if ff.points.len() > MAX_ITEMS || ff.lines.len() > MAX_ITEMS || ff.lines.iter().any(|l| l.len() > MAX_ITEMS) {
@@ -1231,8 +1252,11 @@ pub fn apply_output(doc: &mut Document, inputs: &[NodeId], out: Vec<OutObject>, 
         match o.id {
             Some(id) => {
                 let mut n = originals.remove(&id).ok_or_else(|| {
-                    let why = if wanted.contains(&id) { "is listed twice" } else { "is not the id of an input object" };
-                    out_err(&at, format!("{} {why}", id.0))
+                    if wanted.contains(&id) {
+                        out_err(&at, format!("{} is listed twice", id.0))
+                    } else {
+                        out_err(&at, format!("{} is not the id of an input object", id.0))
+                    }
                 })?;
                 // Type, images and symbol instances are only read: writing one would make it a path.
                 if input_kind(&n).is_some() && !o.kept {

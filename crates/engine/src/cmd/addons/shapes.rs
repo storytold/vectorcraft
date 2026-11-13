@@ -131,6 +131,8 @@ fn insert_custom(s: &mut Session, label: &str, live: Option<LiveShape>, cs: Cust
         && let Some(n) = std::sync::Arc::make_mut(&mut st.doc).node_mut(NodeId(raw_id))
     {
         cs.write_to_node(n);
+        // A shape drawn pixel-aligned (Align New Objects to Pixel Grid) snaps its stored outline.
+        super::super::object::snap_if_aligned(n);
     }
     Ok(val)
 }
@@ -270,6 +272,7 @@ fn box3d(s: &mut Session, p: &Value) -> Result<Value> {
         && let Some(n) = std::sync::Arc::make_mut(&mut st.doc).node_mut(NodeId(raw_id))
     {
         cs.write_to_node(n);
+        super::super::object::snap_if_aligned(n);
     }
     Ok(val)
 }

@@ -47,21 +47,20 @@ fn export_type_param(p: &Value, cmd: &str) -> Result<Option<SymbolExportType>> {
 }
 
 /// `nineSlice` (bool) and `nineSliceGuides` ([left, top, right, bottom] fractions of the natural
-/// size): `None` leaves the symbol alone, `Some(None)` turns 9-slice off, `Some(Some(g))` turns it
-/// on with guides `g` (the symbol's current ones, else a quarter in from each edge, when none are
-/// given).
+/// size, below 0 or above 1 for a guide outside the art): `None` leaves the symbol alone,
+/// `Some(None)` turns 9-slice off, `Some(Some(g))` turns it on with guides `g` (the symbol's
+/// current ones, else a quarter in from each edge, when none are given).
 fn nine_slice_param(p: &Value, cmd: &str, current: Option<SymbolNineSlice>) -> Result<Option<Option<SymbolNineSlice>>> {
     let on = match p.get("nineSlice") {
         None | Some(Value::Null) => None,
         Some(v) => Some(v.as_bool().ok_or_else(|| bad(cmd, "nineSlice must be true or false"))?),
     };
-    let guides =
-        match p.get("nineSliceGuides") {
-            None | Some(Value::Null) => None,
-            Some(v) => Some(SymbolNineSlice::from_value(v).ok_or_else(|| {
-                bad(cmd, "nineSliceGuides must be [left, top, right, bottom], each 0..1, with left + right < 1 and top + bottom < 1")
-            })?),
-        };
+    let guides = match p.get("nineSliceGuides") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(SymbolNineSlice::from_value(v).ok_or_else(|| {
+            bad(cmd, "nineSliceGuides must be [left, top, right, bottom], each -16..16, with left + right < 1 and top + bottom < 1")
+        })?),
+    };
     Ok(match (on, guides) {
         (Some(false), _) => Some(None),
         (None, None) => None,
@@ -115,6 +114,8 @@ fn art_symbols(n: &Node, out: &mut Vec<String>) {
         if let NodeKind::SymbolInstance { symbol, .. } = &m.kind {
             out.push(symbol.clone());
         }
+        // A graphic on a 3D object draws its symbol's art too.
+        out.extend(vectorcraft_render::effects::graphic_symbols(m));
     });
 }
 
@@ -129,6 +130,8 @@ pub(super) fn symbol_unused(s: &mut Session, _: &Value) -> Result<Value> {
     let patterns = d.patterns.iter().chain(d.pattern_edit.iter().filter_map(|pe| pe.original.as_ref()));
     let trees = d.layers.iter().map(|l| &**l).chain(d.graph_designs.iter().map(|g| &*g.art));
     trees.chain(patterns.flat_map(|p| p.art.iter().map(|n| &**n))).chain(lib.iter().flat_map(|b| b.art())).for_each(|n| art_symbols(n, &mut todo));
+    // A graphic in a graphic style draws its symbol's art wherever the style is applied.
+    todo.extend(d.graphic_styles.iter().flat_map(|g| vectorcraft_render::effects::appearance_graphic_symbols(&g.appearance)));
     let mut used = std::collections::BTreeSet::new();
     while let Some(name) = todo.pop() {
         if !used.contains(&name) {
@@ -138,6 +141,27 @@ pub(super) fn symbol_unused(s: &mut Session, _: &Value) -> Result<Value> {
     }
     let names: Vec<&str> = d.symbols.iter().map(|sym| sym.name.as_str()).filter(|n| !used.contains(*n)).collect();
     Ok(json!({ "names": names }))
+}
+
+/// `symbol.sortByName`: the symbols in name order, ignoring case; a stable sort, so names that
+/// differ only in case keep their order. The current symbol is stored by name first, so a document
+/// whose current symbol is its first one keeps that symbol current. Nothing is changed, and no undo
+/// step is added, when the symbols are already in order.
+pub(super) fn symbol_sort(s: &mut Session, _: &Value) -> Result<Value> {
+    let key = |sym: &Symbol| sym.name.to_lowercase();
+    let d = &s.doc()?.doc;
+    if d.symbols.is_sorted_by_key(key) {
+        return ok();
+    }
+    let current = current_symbol(d).or_else(|| symbol_names(d).into_iter().next());
+    s.edit("Sort by Name", |d, _| {
+        if let Some(name) = current {
+            d.unknown.insert(CURRENT_SYMBOL.into(), json!(name));
+        }
+        d.symbols.sort_by_cached_key(key);
+        Ok(())
+    })?;
+    ok()
 }
 
 fn symbol_names(d: &Document) -> Vec<String> {
@@ -268,6 +292,33 @@ pub(super) fn symbol_options(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(NodeKind::SymbolInstance { symbol, .. }) = d.node_mut(id).map(|node| &mut node.kind) {
                     *symbol = n.clone();
                 }
+            }
+            // The graphics mapped onto 3D objects follow the new name: in the layers, the art of
+            // symbols, patterns, graph designs and brushes, their opacity masks, and graphic styles.
+            let patterns = d.patterns.iter_mut().chain(d.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()));
+            let trees = d
+                .layers
+                .iter_mut()
+                .chain(d.symbols.iter_mut().map(|sym| &mut sym.art))
+                .chain(d.graph_designs.iter_mut().map(|g| &mut g.art))
+                .chain(patterns.flat_map(|p| p.art.iter_mut()));
+            for art in trees.filter(|art| vectorcraft_render::effects::names_graphic_symbol(art, &name)) {
+                vectorcraft_render::effects::rename_graphic_symbol_in(Arc::make_mut(art), &name, n);
+            }
+            let styled = |g: &vectorcraft_doc::GraphicStyle| vectorcraft_render::effects::appearance_graphic_symbols(&g.appearance).contains(&name);
+            if d.graphic_styles.iter().any(styled) {
+                for style in d.graphic_styles.iter_mut() {
+                    vectorcraft_render::effects::rename_appearance_graphic_symbol(&mut style.appearance, &name, n);
+                }
+            }
+            // The brush library is stored again only when a brush's art changed.
+            let mut lib = brush::library(d);
+            let mut brushes = false;
+            for art in lib.iter_mut().flat_map(|b| b.art_mut()) {
+                brushes |= vectorcraft_render::effects::rename_graphic_symbol_in(art, &name, n);
+            }
+            if brushes {
+                brush::store(d, &lib);
             }
             rename_natural_size(d, &name, n);
             d.rename_symbol_registration(&name, n);

@@ -25,6 +25,7 @@ mod db;
 mod dirs;
 mod face;
 mod glyph_pen;
+mod gsub;
 mod lookup;
 mod names;
 mod scan;
@@ -33,6 +34,7 @@ mod traits;
 mod wanted;
 
 pub use alternates::GlyphAlternate;
+pub(crate) use alternates::listed;
 pub use build::style_weight;
 #[cfg(test)]
 use cache::GlyphCache;
@@ -52,6 +54,7 @@ pub(crate) use face::MAX_LIVE_INSTANCES;
 pub(crate) use face::PathAlignHeights;
 pub use face::{FALLBACK_FAMILY, FontFace, IcfMargins};
 pub(crate) use glyph_pen::FlipPen;
+pub use gsub::{GlyphOrigin, JoiningPosition, Substitution, SubstitutionKind};
 #[cfg(not(target_arch = "wasm32"))]
 use names::SysFallback;
 #[cfg(test)]
@@ -190,6 +193,19 @@ mod alias_tests {
         }
         font.extend(head);
         font
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn the_file_search_for_uncovered_characters_stops_at_its_budget() {
+        let db = FontDb::with_font_dirs(vec![]);
+        // The first search scans the font folders, which starts the count again.
+        db.system_fallback('\u{E001}');
+        db.sys.lock().unwrap().file_searches = names::MAX_FILE_SEARCHES;
+        assert!(!db.system_fallback('\u{E000}'));
+        let sys = db.sys.lock().unwrap();
+        assert_eq!(sys.file_searches, names::MAX_FILE_SEARCHES);
+        assert!(!sys.misses.contains(&'\u{E000}'), "an unsearched character is not a remembered miss");
     }
 
     #[test]

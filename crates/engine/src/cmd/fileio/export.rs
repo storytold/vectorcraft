@@ -9,14 +9,14 @@ use vectorcraft_doc::{Document, Node, NodeId, NodeKind, SymbolBoxes};
 
 use crate::DocState;
 
-use super::super::{Result, Session, bad, bool_or, edit, f64_or, str_param};
+use super::super::{Result, Session, bad, check_switches, edit, number_or, switch_or, text_param};
 use super::encode::single_artboard;
 use super::{
     ARTBOARD_PARAMS, Format, default_name, encode_all, encode_with_warnings, merge, with_black_output, writable, write_encoded, write_or_return,
 };
 
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
-    let f = writable("document.serialize", Some(str_param(p, "format").unwrap_or("vectorcraft")), None)?;
+    let f = writable("document.serialize", Some(text_param(p, "format", "document.serialize")?.unwrap_or("vectorcraft")), None)?;
     let expanded = expand_presets(s, "document.serialize", p)?;
     let p = with_black_output(s, &expanded);
     let (doc, display_doc_title) = source(s, f, &p, "document.serialize")?;
@@ -42,7 +42,7 @@ pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
         }
         _ => json!({ "dataBase64": vectorcraft_format::base64_encode(bytes) }),
     };
-    let mut out = merge(data(main.first().map_or(&[][..], |m| &m.1)), json!({ "warnings": enc.warnings }));
+    let mut out = merge(data(main.first().map_or(&[][..], |m| &m.1)), json!({ "warnings": enc.notes() }));
     if main.len() > 1 {
         out["files"] = main.iter().map(|(name, bytes)| merge(json!({ "name": name }), data(bytes))).collect();
     }
@@ -53,11 +53,11 @@ pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
-    let path = str_param(p, "path");
+    let path = text_param(p, "path", "document.export")?;
     if let Some(path) = path {
         super::check_not_lossy_overwrite(s.doc()?, path, p, "document.export")?;
     }
-    let f = writable("document.export", str_param(p, "format"), path)?;
+    let f = writable("document.export", text_param(p, "format", "document.export")?, path)?;
     let expanded = expand_presets(s, "document.export", p)?;
     let p = with_black_output(s, &expanded);
     let (doc, display_doc_title) = source(s, f, &p, "document.export")?;
@@ -69,7 +69,7 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
         o.insert("_displayDocTitle".into(), json!(display_doc_title));
     }
     let enc = encode_all(doc, f.id, &q)?;
-    write_encoded(path, &default_name(doc, f.extensions[0]), doc, &enc, json!({ "format": f.id, "warnings": enc.warnings }))
+    write_encoded(path, &default_name(doc, f.extensions[0]), doc, &enc, json!({ "format": f.id, "warnings": enc.notes() }))
 }
 
 /// The document an export of `st` in format `f` writes ([`export_source`]): a `.ai` or `.ait`
@@ -86,7 +86,7 @@ pub fn export_doc<'a>(st: &'a DocState, f: &Format, p: &Value) -> Result<Cow<'a,
 /// The document an export of `st` writes: the whole document, or with `selectedOnly` just the
 /// selected objects, each in its layers and groups (a clipping group keeps its clipping path).
 pub fn export_source<'a>(st: &'a DocState, p: &Value) -> Result<Cow<'a, Document>> {
-    if !bool_or(p, "selectedOnly", false) {
+    if !switch_or(p, "selectedOnly", false, "document.export")? {
         return Ok(Cow::Borrowed(&*st.doc));
     }
     let keep: HashSet<NodeId> = edit::roots_of(&st.doc, st.selection.in_paint_order(&st.doc)).into_iter().collect();
@@ -237,7 +237,8 @@ fn expand_presets<'a>(s: &Session, cmd: &str, p: &'a Value) -> Result<Cow<'a, Va
 /// The document an export of `f` writes: the active one (see [`export_source`]), or for text
 /// with `selectionOnly` the selected objects alone.
 fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<(Cow<'a, Document>, bool)> {
-    if f.id == "txt" && bool_or(p, "selectionOnly", false) {
+    check_switches(p, &["selectedOnly"], cmd)?;
+    if switch_or(p, "selectionOnly", false, cmd)? && f.id == "txt" {
         let doc = selection(s, cmd, true)?.0;
         let display_doc_title = super::has_own_title(&doc);
         return Ok((Cow::Owned(doc), display_doc_title));
@@ -309,11 +310,11 @@ pub(crate) fn isolated(doc: &Document, ids: &[NodeId], name: &str) -> Option<(Do
 /// are guides, not artwork, and are left out.
 pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.exportSelection";
-    if let Some(path) = str_param(p, "path") {
+    let path = text_param(p, "path", C)?;
+    if let Some(path) = path {
         super::check_not_lossy_overwrite(s.doc()?, path, p, C)?;
     }
-    let path = str_param(p, "path");
-    let f = writable(C, str_param(p, "format"), path)?;
+    let f = writable(C, text_param(p, "format", C)?, path)?;
     let expanded = expand_presets(s, C, p)?;
     let p = with_black_output(s, &expanded);
     let (d, bounds) = selection(s, C, f.id == "txt")?;
@@ -327,11 +328,12 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
 /// `transparent`, with the encoder's warnings.
 pub(super) fn export_for_office(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.exportForOffice";
-    if let Some(path) = str_param(p, "path") {
+    let path = text_param(p, "path", C)?;
+    if let Some(path) = path {
         super::check_not_lossy_overwrite(s.doc()?, path, p, C)?;
     }
-    let path = str_param(p, "path");
-    let ppi = f64_or(p, "ppi", 150.0);
+    let ppi = number_or(p, "ppi", 150.0, C)?;
+    let transparent = switch_or(p, "transparent", false, C)?;
     let doc = &s.doc()?.doc;
     let artboard = match p.get("artboard") {
         None | Some(Value::Null) => 0,
@@ -340,7 +342,7 @@ pub(super) fn export_for_office(s: &mut Session, p: &Value) -> Result<Value> {
     if artboard >= doc.artboards.len() {
         return Err(bad(C, format!("no artboard {artboard} (0-based; the document has {})", doc.artboards.len())));
     }
-    let background = if bool_or(p, "transparent", false) { "transparent" } else { "white" };
+    let background = if transparent { "transparent" } else { "white" };
     let opts = with_black_output(s, &json!({ "ppi": ppi, "background": background, "artboard": artboard }));
     let (bytes, warnings) = encode_with_warnings(doc, "png", &opts)?;
     // The pixel size, from the PNG header.

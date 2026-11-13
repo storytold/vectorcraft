@@ -40,6 +40,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use vectorcraft_js::{Data, HostError, HostItem, Realm, RunError};
 
@@ -77,6 +78,10 @@ pub(crate) const PATH_TOO_LONG: &str = "Script file path exceeds 32,767 characte
 pub(crate) const MASK_TOO_COSTLY: &str = "Script folder mask takes too many steps to match";
 const OVER_RUN_BYTES: &str = "the script opened more file data than one run may open (32 MiB)";
 
+/// The id of the next file a script opens. Ids are unique across runs, so a `File` that a named
+/// engine kept from an earlier run does not name a file a later run opened.
+static NEXT_HANDLE: AtomicU32 = AtomicU32::new(1);
+
 /// The script's file state: its scope, where `Folder.current` starts, the files it has open and how
 /// much it has read.
 pub(crate) struct Disk {
@@ -84,7 +89,6 @@ pub(crate) struct Disk {
     home: String,
     start: String,
     open: HashMap<u32, Open>,
-    next: u32,
     temps: u32,
     bytes: usize,
 }
@@ -94,7 +98,7 @@ impl Disk {
     pub(crate) fn new(scope: &ScriptScope) -> Self {
         let home = home_folder();
         let start = scope.folder().map_or_else(|| home.clone(), |p| p.to_string_lossy().into_owned());
-        Self { scope: scope.clone(), home, start, open: HashMap::new(), next: 1, temps: 0, bytes: 0 }
+        Self { scope: scope.clone(), home, start, open: HashMap::new(), temps: 0, bytes: 0 }
     }
 
     /// The path `text` names from the folder `base`, a platform path; `text`'s URI escapes are
@@ -161,8 +165,10 @@ impl Disk {
         }
         self.bytes += bytes.len();
         let file = Open::new(bytes, encoding).ok_or_else(|| HostError::Error(UNDECODABLE.to_string()))?;
-        let id = self.next;
-        self.next = self.next.wrapping_add(1).max(1);
+        let mut id = NEXT_HANDLE.fetch_add(1, Ordering::Relaxed);
+        while id == 0 || self.open.contains_key(&id) {
+            id = NEXT_HANDLE.fetch_add(1, Ordering::Relaxed);
+        }
         self.open.insert(id, file);
         Ok(id)
     }
@@ -183,11 +189,15 @@ fn home_folder() -> String {
 }
 
 /// The folders `Folder.temp`, `Folder.desktop` and the others name, `null` where there is none.
+/// On the web every one is `null`, and no platform folder is looked up.
 fn locations(home: &str) -> Data {
+    if cfg!(target_arch = "wasm32") {
+        return Data::Object(PLACES.iter().map(|k| (k.to_string(), Data::Null)).collect());
+    }
     let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
     let join = |a: &str, b: &str| Path::new(a).join(b).to_string_lossy().into_owned();
     let exe = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_string_lossy().into_owned()));
-    let temp = std::env::temp_dir().to_string_lossy().into_owned();
+    let temp = temp_folder().to_string_lossy().into_owned();
     let (user_data, app_data, common, system, trash) = if WINDOWS {
         (env("APPDATA"), env("PROGRAMDATA"), env("CommonProgramFiles"), env("SystemRoot"), None)
     } else if cfg!(target_os = "macos") {
@@ -203,7 +213,6 @@ fn locations(home: &str) -> Data {
         (Some(data.clone()), Some("/usr/share".to_string()), Some("/usr/share".to_string()), Some("/".to_string()), Some(join(&data, "Trash")))
     };
     let s = |v: Option<String>| v.map_or(Data::Null, Data::String);
-    let web = cfg!(target_arch = "wasm32");
     let places = vec![
         ("appData", app_data),
         ("appPackage", exe.clone()),
@@ -216,7 +225,15 @@ fn locations(home: &str) -> Data {
         ("trash", trash),
         ("userData", user_data),
     ];
-    Data::Object(places.into_iter().map(|(k, v)| (k.to_string(), if web { Data::Null } else { s(v) })).collect())
+    Data::Object(places.into_iter().map(|(k, v)| (k.to_string(), s(v))).collect())
+}
+
+/// The names [`locations`] gives.
+const PLACES: [&str; 10] = ["appData", "appPackage", "commonFiles", "desktop", "myDocuments", "startup", "system", "temp", "trash", "userData"];
+
+/// The folder for temporary files: the platform's, or on the web the root, where nothing is read.
+fn temp_folder() -> std::path::PathBuf {
+    if cfg!(target_arch = "wasm32") { std::path::PathBuf::from("/") } else { std::env::temp_dir() }
 }
 
 /// The start of an absolute path.
@@ -343,12 +360,12 @@ impl Pathname {
     }
 }
 
-/// `s` with every character but letters, digits and `-_.!~*'()` written as `%xx` escapes of its
+/// `s` with every character but letters, digits and `/-_.!~*'()` written as `%xx` escapes of its
 /// UTF-8 bytes (RFC 2396).
 fn encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
-        if b.is_ascii_alphanumeric() || b"-_.!~*'()".contains(&b) {
+        if b.is_ascii_alphanumeric() || b"/-_.!~*'()".contains(&b) {
             out.push(b as char);
         } else {
             out.push_str(&format!("%{b:02X}"));
@@ -638,10 +655,11 @@ fn millis(t: Option<std::time::SystemTime>) -> Data {
     t.and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(Data::Null, |d| Data::Number(d.as_millis() as f64))
 }
 
-/// One host function of `__vcFiles`, counted and charged as a host call.
-fn call(host: &Rc<Host>, f: fn(&Host, &[Data]) -> Result<Data, HostError>) -> HostItem {
-    let h = host.clone();
+/// One host function of `__vcFiles`, counted and charged as a host call of the run `link` holds.
+fn call(link: &super::Link, f: fn(&Host, &[Data]) -> Result<Data, HostError>) -> HostItem {
+    let l = link.clone();
     HostItem::Function(Rc::new(move |a| {
+        let h = super::current(&l)?;
         bump(&h.counts.file_calls);
         let r = f(&h, &a)?;
         h.charge_call(super::data_size(&r).saturating_add(a.iter().map(super::data_size).sum()))?;
@@ -835,14 +853,39 @@ fn temp_name(host: &Host, _: &[Data]) -> Result<Data, HostError> {
     let mut disk = host.disk.borrow_mut();
     disk.temps += 1;
     let name = format!("vc{:05}.tmp", disk.temps);
-    Ok(Data::String(std::env::temp_dir().join(name).to_string_lossy().into_owned()))
+    Ok(Data::String(temp_folder().join(name).to_string_lossy().into_owned()))
 }
 
-/// Adds `File` and `Folder` to the realm.
-pub(super) fn install(realm: &mut Realm, host: &Rc<Host>) -> Result<(), RunError> {
-    let (start, home) = {
-        let disk = host.disk.borrow();
-        (disk.pathname(&disk.start, &disk.start, false).fs(), disk.home.clone())
+fn locations_of(host: &Host, _: &[Data]) -> Result<Data, HostError> {
+    Ok(locations(&host.disk.borrow().home))
+}
+
+fn encode_text(_: &Host, a: &[Data]) -> Result<Data, HostError> {
+    Ok(Data::String(encode(&arg_text(a, 0))))
+}
+
+fn decode_text(_: &Host, a: &[Data]) -> Result<Data, HostError> {
+    Ok(Data::String(decode(&arg_text(a, 0))))
+}
+
+fn encoding_available(_: &Host, a: &[Data]) -> Result<Data, HostError> {
+    Ok(Data::Bool(Encoding::parse(&arg_text(a, 0)).is_some()))
+}
+
+/// The folder `Folder.current` starts at in the run `host` serves: the script's own folder.
+fn start_folder(host: &Host, _: &[Data]) -> Result<Data, HostError> {
+    let disk = host.disk.borrow();
+    Ok(Data::String(disk.pathname(&disk.start, &disk.start, false).fs()))
+}
+
+/// Adds `File` and `Folder` to the realm, their host functions acting for the run `link` holds.
+pub(super) fn install(realm: &mut Realm, link: &super::Link) -> Result<(), RunError> {
+    let unchecked = |f: fn(&Host, &[Data]) -> Result<Data, HostError>| {
+        let l = link.clone();
+        HostItem::Function(Rc::new(move |a| {
+            let h = super::current(&l)?;
+            f(&h, &a)
+        }))
     };
     let value = |s: &str| HostItem::Value(Data::String(s.to_string()));
     let text = HostItem::Object(vec![
@@ -851,7 +894,6 @@ pub(super) fn install(realm: &mut Realm, host: &Rc<Host>) -> Result<(), RunError
         ("noPicker".into(), value(NO_PICKER)),
         ("badMode".into(), value(BAD_MODE)),
     ]);
-    let pure = |f: fn(&str) -> Data| HostItem::Function(Rc::new(move |a| Ok(f(&arg_text(&a, 0)))));
     let system = if WINDOWS {
         "Windows"
     } else if cfg!(target_os = "macos") {
@@ -863,28 +905,28 @@ pub(super) fn install(realm: &mut Realm, host: &Rc<Host>) -> Result<(), RunError
         ("text".into(), text),
         ("system".into(), value(system)),
         ("lineFeed".into(), value(if WINDOWS { "Windows" } else { "Unix" })),
-        ("current".into(), HostItem::Function(Rc::new(move |_| Ok(Data::String(start.clone()))))),
-        ("locations".into(), HostItem::Function(Rc::new(move |_| Ok(locations(&home))))),
-        ("encode".into(), pure(|s| Data::String(encode(s)))),
-        ("decode".into(), pure(|s| Data::String(decode(s)))),
-        ("encodingAvailable".into(), pure(|s| Data::Bool(Encoding::parse(s).is_some()))),
-        ("parse".into(), call(host, parse)),
-        ("relative".into(), call(host, relative)),
-        ("tempName".into(), call(host, temp_name)),
-        ("stat".into(), call(host, stat)),
-        ("open".into(), call(host, open)),
-        ("close".into(), call(host, close)),
-        ("read".into(), call(host, read)),
-        ("readln".into(), call(host, readln)),
-        ("readch".into(), call(host, readch)),
-        ("seek".into(), call(host, seek)),
-        ("tell".into(), call(host, tell)),
-        ("eof".into(), call(host, eof)),
-        ("encoding".into(), call(host, encoding)),
-        ("setEncoding".into(), call(host, set_encoding)),
-        ("list".into(), call(host, list)),
-        ("resolve".into(), call(host, resolve)),
-        ("execute".into(), call(host, execute)),
+        ("current".into(), unchecked(start_folder)),
+        ("locations".into(), call(link, locations_of)),
+        ("encode".into(), call(link, encode_text)),
+        ("decode".into(), call(link, decode_text)),
+        ("encodingAvailable".into(), call(link, encoding_available)),
+        ("parse".into(), call(link, parse)),
+        ("relative".into(), call(link, relative)),
+        ("tempName".into(), call(link, temp_name)),
+        ("stat".into(), call(link, stat)),
+        ("open".into(), call(link, open)),
+        ("close".into(), call(link, close)),
+        ("read".into(), call(link, read)),
+        ("readln".into(), call(link, readln)),
+        ("readch".into(), call(link, readch)),
+        ("seek".into(), call(link, seek)),
+        ("tell".into(), call(link, tell)),
+        ("eof".into(), call(link, eof)),
+        ("encoding".into(), call(link, encoding)),
+        ("setEncoding".into(), call(link, set_encoding)),
+        ("list".into(), call(link, list)),
+        ("resolve".into(), call(link, resolve)),
+        ("execute".into(), call(link, execute)),
     ];
     realm.define_file_classes(items)
 }
@@ -935,7 +977,7 @@ mod tests {
     #[test]
     fn uri_escapes_are_utf8_both_ways() {
         assert_eq!(encode("caf\u{e9} 1"), "caf%C3%A9%201");
-        assert_eq!(encode("a-_.!~*'()/b"), "a-_.!~*'()%2Fb");
+        assert_eq!(encode("a-_.!~*'()/b"), "a-_.!~*'()/b");
         assert_eq!(decode("caf%C3%A9%20x"), "caf\u{e9} x");
         assert_eq!(decode("100%"), "100%");
         assert_eq!(decode("%E9"), "%E9", "a lone Latin-1 escape is not UTF-8");

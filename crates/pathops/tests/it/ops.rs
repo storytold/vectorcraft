@@ -317,6 +317,24 @@ fn offset_of_an_open_path_whose_ends_meet_is_the_closed_shape_offset() {
 }
 
 #[test]
+fn a_negative_offset_outlines_an_open_path_as_a_positive_one_does() {
+    // Issue #6427 (A4): an inset of an open path was empty. Open subpaths are outlined with a
+    // stroke of width 2|delta| whichever way the offset goes.
+    let line = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(100.0, 0.0)], false));
+    for delta in [2.0, -2.0] {
+        let o = offset_path(&line, delta, Join::Miter, 4.0);
+        assert!(close(ar(&o), 400.0, 1e-6), "delta {delta}: {}", ar(&o));
+        assert_eq!(o.subpaths.len(), 1, "delta {delta}");
+    }
+    // With a closed shape beside it, the shape is inset and the line still outlined.
+    let mut both = rect(0.0, 0.0, 20.0, 10.0);
+    both.subpaths.push(SubPath::polyline(&[Point::new(100.0, 0.0), Point::new(150.0, 0.0)], false));
+    let o = offset_path(&both, -2.0, Join::Miter, 4.0);
+    assert!(close(ar(&o), 16.0 * 6.0 + 50.0 * 4.0, 1e-6), "{}", ar(&o));
+    assert_eq!(o.subpaths.len(), 2);
+}
+
+#[test]
 fn outline_stroke_of_line() {
     let l = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(30.0, 40.0)], false));
     let o = outline_stroke(&l, 4.0, Cap::Butt, Join::Miter, 4.0);
@@ -477,6 +495,42 @@ fn simplify_keeps_a_closed_subpath_that_refits_to_one_curve() {
     let long = rect(0.0, 0.0, 1e9, 0.5);
     let s = simplify_with(&long, &SimplifyOptions { tolerance: 0.1, straight_lines: true, ..Default::default() });
     assert!(max_deviation(&long, &s) <= 0.1 + 1e-6, "{s:?}");
+}
+
+/// An S curve closed by a straight edge of 20,000 anchors, whose curve shows only when it is split in
+/// four, keeps its outline within the tolerance. With corner anchors on the edge, only the curve is
+/// split. With smooth anchors whose handles lie along the edge, four pieces of every segment pass the
+/// limit on pieces: the loop stays as it is, or with straight lines follows lines between samples.
+#[test]
+fn simplify_keeps_a_flat_loop_with_many_anchors_on_its_edge() {
+    let n = 20_000;
+    let step = 100.0 / f64::from(n);
+    let curve_anchors = vec![
+        Anchor::with_handles(Point::new(0.0, 0.0), Point::new(0.0, 0.0), Point::new(0.0, 3.0)),
+        Anchor::with_handles(Point::new(100.0, 0.0), Point::new(0.0, -3.0), Point::new(100.0, 0.0)),
+    ];
+    let curve = PathData::single(SubPath::new(curve_anchors.clone(), false));
+    for smooth_edge in [false, true] {
+        let mut anchors = curve_anchors.clone();
+        anchors.extend((1..n).map(|i| {
+            let p = Point::new(100.0 - f64::from(i) * step, 0.0);
+            if smooth_edge {
+                Anchor::with_handles(p, Point::new(p.x + step / 3.0, 0.0), Point::new(p.x - step / 3.0, 0.0))
+            } else {
+                Anchor::corner(p)
+            }
+        }));
+        let path = PathData::single(SubPath::new(anchors, true));
+        for straight_lines in [false, true] {
+            let s = simplify_with(&path, &SimplifyOptions { tolerance: 4.0, straight_lines, ..Default::default() });
+            let at = format!("smooth edge {smooth_edge}, straight lines {straight_lines}");
+            assert_eq!(s.subpaths.len(), 1, "{at}");
+            let sp = &s.subpaths[0];
+            assert!(sp.closed && sp.area().abs() > 1.0, "{at}: area {}", sp.area());
+            assert!(max_deviation(&curve, &s) <= 4.0 + 1e-6, "{at}: {}", max_deviation(&curve, &s));
+            assert!(!straight_lines || (0..sp.segment_count()).all(|i| sp.segment_is_line(i)), "{at}: a curve is left");
+        }
+    }
 }
 
 /// The Simplify slider's levels: 1 pt at 50, doubled for every 10 levels down and halved for every
