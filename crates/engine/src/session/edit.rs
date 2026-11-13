@@ -234,6 +234,27 @@ impl Session {
         self.active().and_then(|d| d.interaction.as_ref().filter(|it| std::sync::Arc::ptr_eq(&it.doc, &d.doc)).and_then(|it| it.preview.clone()))
     }
 
+    /// Keep `warning`, from a preview that settling an interaction applied, for whatever collects
+    /// such warnings now ([`Session::collect_settled_warnings`]). Nothing keeps it when nothing
+    /// collects, so it is never reported with a later, unrelated command.
+    pub(crate) fn note_settled_warning(&mut self, warning: &str) {
+        if let Some(kept) = &mut self.settled_warnings
+            && !kept.iter().any(|w| w == warning)
+        {
+            kept.push(warning.to_string());
+        }
+    }
+
+    /// Run `f`, and → its result with the warnings of the previews that settling an interaction
+    /// applied while it ran ([`Session::note_settled_warning`]). Warnings an outer `f` collects are
+    /// kept for it.
+    pub(crate) fn collect_settled_warnings<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> (R, Vec<String>) {
+        let outer = self.settled_warnings.replace(Vec::new());
+        let r = f(self);
+        let settled = std::mem::replace(&mut self.settled_warnings, outer).unwrap_or_default();
+        (r, settled)
+    }
+
     pub fn begin_interaction(&mut self, label: &str) -> Result<()> {
         if self.script_running() {
             return Err(EngineError::Busy);
@@ -311,6 +332,8 @@ impl Session {
             self.paint = paint.clone();
         }
         self.pending_paint = None;
+        // The previous preview's Assign Profile is undone with it.
+        self.sync_front_profiles();
         let rw = cmd::distortcmds::perspective_rewrite(self, cmd, params).or_else(|| cmd::bounds_rewrite(self, cmd, params));
         let (cmd, params) = rw.as_ref().map_or((cmd, params), |(c, p)| (c.as_str(), p));
         // A selected object's converted appearance must not replace the current paints while
@@ -436,6 +459,8 @@ impl Session {
         st.undo_interaction();
         // Guides locked and slices locked or hidden during the interaction stay deselected.
         deselect_hidden(&menu, &st.doc, &mut st.selection);
+        // A canceled preview's Assign Profile is undone with it.
+        self.sync_front_profiles();
         // With New Art Has Basic Appearance off, new art takes the appearance of the selection as
         // the document has it again, not as a preview left it.
         self.inherit_new_art();

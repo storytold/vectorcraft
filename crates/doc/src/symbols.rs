@@ -87,6 +87,8 @@ pub struct SymbolBoxes<'a> {
     sliced_placed: Cell<u64>,
     /// The most objects of symbol art [`Self::sliced_visual`] places: [`MAX_SYMBOL_NODES`].
     sliced_most: u64,
+    /// The widths [`Self::measured_width`] has measured, by kind and symbol name.
+    widths: RefCell<HashMap<(&'static str, String), Option<f64>>>,
 }
 
 impl Document {
@@ -107,6 +109,7 @@ impl Document {
             sliced: RefCell::default(),
             sliced_placed: Cell::new(0),
             sliced_most: MAX_SYMBOL_NODES,
+            widths: RefCell::default(),
         }
     }
 }
@@ -245,6 +248,18 @@ impl<'a> SymbolBoxes<'a> {
     /// has one, and when [`Self::art`] is `None`.
     pub fn brush_width(&self, name: &str) -> Option<f64> {
         self.art(name)?.brush
+    }
+
+    /// The width `measure` gives for the symbol named `name`, measured once for these boxes for each
+    /// `kind`, which names what `measure` measures. `measure` may call this again for other names.
+    pub fn measured_width(&self, kind: &'static str, name: &str, measure: impl FnOnce() -> Option<f64>) -> Option<f64> {
+        let key = (kind, name.to_string());
+        if let Some(w) = self.widths.borrow().get(&key) {
+            return *w;
+        }
+        let w = measure();
+        self.widths.borrow_mut().insert(key, w);
+        w
     }
 
     /// How far the visual box of an instance of the symbol named `name` grows in boxes made by

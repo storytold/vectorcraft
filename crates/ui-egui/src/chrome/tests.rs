@@ -2845,6 +2845,96 @@ fn the_artboard_tool_s_control_bar_follows_its_two_groups() {
     assert!(has(&bar, "Name:") && has(&bar, "Move Artwork with Artboard"), "{bar:?}");
 }
 
+/// The separators the docked Control bar draws in window `screen` (vertical lines most of the bar's
+/// height, left of the panel menu button), in order, with whether any other shape is drawn between
+/// each one and the next, or after the last one for the last.
+fn control_bar_separators(app: &mut crate::VectorcraftApp, ctx: &egui::Context, screen: egui::Rect) -> Vec<(f32, bool)> {
+    control_bar_frame_in(app, ctx, screen, vec![]);
+    let out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+    let nodes: Vec<_> = out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default();
+    let menu_left =
+        nodes.iter().find(|n| n.label().is_some_and(|l| l == "Panel menu")).and_then(|n| n.bounds()).map_or(screen.right(), |b| b.x0 as f32);
+    let separator = |s: &egui::Shape| match s {
+        egui::Shape::LineSegment { points: [a, b], .. } if (a.x - b.x).abs() < 0.5 && (a.y - b.y).abs() >= 16.0 => Some(a.x),
+        _ => None,
+    };
+    let (mut lines, mut others) = (vec![], vec![]);
+    for cs in &out.shapes {
+        let r = cs.shape.visual_bounding_rect();
+        if !r.is_finite() || !cs.clip_rect.intersects(r) || r.min.x >= menu_left || r.width() > screen.width() / 2.0 {
+            continue;
+        }
+        match separator(&cs.shape) {
+            Some(x) => lines.push(x),
+            None => others.push(r.center().x),
+        }
+    }
+    lines.sort_by(f32::total_cmp);
+    (0..lines.len())
+        .map(|i| {
+            let next = lines.get(i + 1).copied().unwrap_or(f32::INFINITY);
+            (lines[i], others.iter().any(|&x| x > lines[i] && x < next))
+        })
+        .collect()
+}
+
+/// A Control bar separator stands only between two groups that draw controls: none is left at the
+/// end of the bar when the groups after it are off, do not apply or have no room, and none follows
+/// another with nothing between them, in every window width. With every group on, the separators
+/// between the groups stay.
+#[test]
+fn no_separator_is_left_at_the_end_of_the_control_bar() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let set = |app: &mut crate::VectorcraftApp, groups: &[&str], visible: bool| {
+        for group in groups {
+            app.run("window.control.options", json!({ "group": group, "visible": visible })).unwrap();
+        }
+    };
+    // The first width in each case where a separator has nothing after it.
+    let mut stray = vec![];
+    let mut check = |app: &mut crate::VectorcraftApp, case: &str| {
+        for w in (300..=1500).step_by(50) {
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w as f32, 300.0));
+            let lines = control_bar_separators(app, &ctx, screen);
+            if lines.iter().any(|(_, followed)| !followed) {
+                stray.push(format!("{case}, {w} wide: {lines:?}"));
+                return;
+            }
+        }
+    };
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    let wide = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1500.0, 300.0));
+    assert!(control_bar_separators(&mut app, &ctx, wide).len() >= 2, "the groups keep their separators");
+    check(&mut app, "every group on");
+    set(&mut app, &["transform", "alignDistribute"], false);
+    assert!(!control_bar_separators(&mut app, &ctx, wide).is_empty(), "Fill and Stroke and Opacity keep theirs");
+    check(&mut app, "Transform and Align off");
+    set(&mut app, &["opacity", "graphicStyle"], false);
+    check(&mut app, "Fill and Stroke last");
+    app.run("select.set", json!({ "ids": [] })).unwrap();
+    set(&mut app, &["opacity", "graphicStyle"], true);
+    set(&mut app, &["documentOptions"], false);
+    check(&mut app, "nothing selected, Document Options off");
+    app.select_tool("puppetWarp");
+    set(&mut app, &["fillStroke", "opacity"], false);
+    check(&mut app, "Puppet Warp options last");
+    app.select_tool("ellipse");
+    check(&mut app, "Ellipse options last");
+    set(&mut app, &["fillStroke", "opacity", "documentOptions", "transform", "alignDistribute"], true);
+    app.select_tool("artboard");
+    set(&mut app, &["artboardOptions"], false);
+    check(&mut app, "the artboard's Transform link and Align");
+    set(&mut app, &["alignDistribute"], false);
+    check(&mut app, "the artboard's Transform link last");
+    assert!(stray.is_empty(), "a separator with nothing after it: {stray:#?}");
+}
+
 /// The Anchor Points group holds Convert and Anchors for direct-selected anchors; off, the bar keeps
 /// its Anchor Point label.
 #[test]

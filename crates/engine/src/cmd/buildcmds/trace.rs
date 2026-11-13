@@ -686,8 +686,9 @@ fn color_groups(cmd: &str, d: &mut Document, items: Vec<Arc<Node>>) -> Result<Ve
 }
 
 /// What a trace depends on: the object traced (an image, or an Image Trace object traced again),
-/// its image, and the settings it is traced with. The tracer makes the same paths of the same
-/// inputs, so a trace made away from the command ([`TraceRun`]) stands in for the command's own.
+/// its image, the image's encoded bytes, and the settings it is traced with. The tracer makes the
+/// same paths of the same inputs, so a trace made away from the command ([`TraceRun`]) stands in
+/// for the command's own.
 #[derive(Clone, Debug, PartialEq)]
 struct TraceInputs {
     target: NodeId,
@@ -697,6 +698,9 @@ struct TraceInputs {
     /// Document Library: the library's colours, which the JSON leaves out
     /// ([`tr::TraceParams::swatches`]).
     swatches: Vec<[u8; 3]>,
+    /// The encoded image the tracer decodes: the blob under the image's key, shared with the
+    /// document. Two blobs are equal when they are the same allocation or hold the same bytes.
+    bytes: Arc<Vec<u8>>,
 }
 
 /// What `imageTrace.make` and `imageTrace.makeAndExpand` take from the session before they trace.
@@ -708,7 +712,6 @@ struct Prepared {
     params_json: Value,
     preset_label: String,
     library: Vec<([u8; 3], Paint)>,
-    bytes: Arc<Vec<u8>>,
 }
 
 /// What command `c` with params `p` traces, and how, from the session: everything but the trace.
@@ -756,8 +759,8 @@ fn prepare(s: &Session, c: &str, p: &Value) -> Result<Prepared> {
     let bytes = Arc::clone(&blob.bytes);
     let library = trace_library(c, s, &mut params)?;
     let traced_with = serde_json::to_value(&params).map_err(|e| EngineError::Other(e.to_string()))?;
-    let inputs = TraceInputs { target, image, params: traced_with, swatches: params.swatches.clone() };
-    Ok(Prepared { inputs, trace: params, view, params_json, preset_label, library, bytes })
+    let inputs = TraceInputs { target, image, params: traced_with, swatches: params.swatches.clone(), bytes };
+    Ok(Prepared { inputs, trace: params, view, params_json, preset_label, library })
 }
 
 /// What a trace made of an image: the size in pixels it was decoded at, and the paths.
@@ -775,11 +778,11 @@ impl Traced {
     }
 }
 
-/// Decode the image `bytes` and trace it with `params`, telling `steps` how far it has got
-/// ([`tr::trace_watched`]); [`EngineError::Cancelled`] once `steps` answers `false`.
-fn trace_now(inputs: &TraceInputs, params: &tr::TraceParams, bytes: &[u8], steps: &(dyn Fn(u64, u64) -> bool + Sync)) -> Result<Traced> {
+/// Decode the image bytes of `inputs` and trace them with `params`, telling `steps` how far it has
+/// got ([`tr::trace_watched`]); [`EngineError::Cancelled`] once `steps` answers `false`.
+fn trace_now(inputs: &TraceInputs, params: &tr::TraceParams, steps: &(dyn Fn(u64, u64) -> bool + Sync)) -> Result<Traced> {
     // An image over the tracer's size is traced scaled down (the paths are scaled back).
-    let raster = tr::Raster::decode_to_fit(bytes).map_err(|e| EngineError::Other(e.to_string()))?;
+    let raster = tr::Raster::decode_to_fit(&inputs.bytes).map_err(|e| EngineError::Other(e.to_string()))?;
     if !steps(0, 0) {
         return Err(EngineError::Cancelled);
     }
@@ -841,7 +844,8 @@ impl TraceRun {
         (self.prepared.inputs.image.width, self.prepared.inputs.image.height)
     }
 
-    /// Does it still apply: would the command trace the same object, image and settings now?
+    /// Does it still apply: would the command trace the same object, image, pixels and settings
+    /// now?
     pub fn current(&self, s: &Session) -> bool {
         prepare(s, self.command, &self.params).is_ok_and(|now| now.inputs == self.prepared.inputs)
     }
@@ -850,13 +854,13 @@ impl TraceRun {
     /// failed or stopped ([`EngineError::Cancelled`] once `steps` answers `false`). It touches no
     /// document, so it can run on any thread.
     pub fn run(&self, steps: &(dyn Fn(u64, u64) -> bool + Sync)) -> Result<Traced> {
-        trace_now(&self.prepared.inputs, &self.prepared.trace, &self.prepared.bytes, steps)
+        trace_now(&self.prepared.inputs, &self.prepared.trace, steps)
     }
 }
 
 pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Value> {
     let c = if expand { "imageTrace.makeAndExpand" } else { "imageTrace.make" };
-    let Prepared { inputs, trace, view, params_json, preset_label, library, bytes } = prepare(s, c, p)?;
+    let Prepared { inputs, trace, view, params_json, preset_label, library } = prepare(s, c, p)?;
     let group_by_color = expand && by_color_param(c, p)?;
     // A saved preset's settings join the journal entry, so a replay traces as this run did after
     // the preset is changed, renamed or deleted.
@@ -868,7 +872,7 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
     // A trace handed in for these very inputs ([`TraceRun`]), else one made now.
     let Traced { raster, res, .. } = match s.trace_hand_off.take() {
         Some(traced) if traced.inputs == inputs => traced,
-        _ => trace_now(&inputs, &trace, &bytes, &|_, _| true)?,
+        _ => trace_now(&inputs, &trace, &|_, _| true)?,
     };
     let TraceInputs { target, image: img, .. } = inputs;
     let mut warnings = keep_warnings(&trace, &res);

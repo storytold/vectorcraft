@@ -141,8 +141,13 @@ pub enum Cursor {
     Knife,
     /// The Shaper tool.
     Shaper,
-    /// The Live Paint Bucket.
+    /// The Live Paint Bucket where a click paints nothing: an empty paint bucket.
     LivePaintBucket,
+    /// The Live Paint Bucket where a click fills a face (of a Live Paint group, or a region of
+    /// the selected paths): a filled paint bucket.
+    LivePaintBucketFace,
+    /// The Live Paint Bucket where a click paints an edge of a Live Paint group: a brush.
+    LivePaintBucketEdge,
     /// The Measure tool.
     Measure,
     /// The Print Tiling tool.
@@ -280,6 +285,8 @@ impl Cursor {
             | Cursor::Knife
             | Cursor::Shaper
             | Cursor::LivePaintBucket
+            | Cursor::LivePaintBucketFace
+            | Cursor::LivePaintBucketEdge
             | Cursor::Measure
             | Cursor::PrintTiling
             | Cursor::SymbolSprayer
@@ -320,7 +327,6 @@ impl Cursor {
             | Cursor::Join
             | Cursor::Knife
             | Cursor::Shaper
-            | Cursor::LivePaintBucket
             | Cursor::Measure
             | Cursor::ObjectsOnPath
             | Cursor::PrintTiling

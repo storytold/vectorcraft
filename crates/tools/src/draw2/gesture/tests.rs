@@ -1034,6 +1034,8 @@ fn paintbrush_alt_after_press_closes_without_smoothing_and_empty_selection_draws
     let selected_cx = cx(&d, &selected, &p);
     t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1));
     t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Drag, pts[1].0, pts[1].1).with_mods(alt));
+    // While drawing, Alt shows the closing ring though the selection could be smoothed.
+    assert_eq!(t.cursor(&selected_cx, Point::new(pts[1].0, pts[1].1), alt), Cursor::PaintbrushClose);
     let last = t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Up, pts[2].0, pts[2].1).with_mods(alt));
     assert!(matches!(last.first(), Some(Action::Preview(c, v)) if c == "path.freehand" && v["closed"] == true), "{last:?}");
     let cx = cx(&d, &empty, &p);
@@ -1041,7 +1043,8 @@ fn paintbrush_alt_after_press_closes_without_smoothing_and_empty_selection_draws
     assert!(matches!(last.last().and_then(|a| a.first()), Some(Action::Preview(c, v)) if c == "path.freehand" && v["closed"] == true), "{last:?}");
 }
 
-/// The Paintbrush shows Smooth before an Alt press only with a selected path.
+/// The Paintbrush shows Smooth before an Alt press only with a selected path, and through the
+/// drag that smooths it, with Alt let go too.
 #[test]
 fn paintbrush_alt_cursor_matches_selection_at_press() {
     let (d, id) = doc_with_rect();
@@ -1050,9 +1053,14 @@ fn paintbrush_alt_cursor_matches_selection_at_press() {
     let empty = Selection::default();
     let p = paint();
     let alt = Mods { alt: true, ..Default::default() };
-    let t = GestureTool::new("paintbrush");
+    let mut t = GestureTool::new("paintbrush");
     assert_eq!(t.cursor(&cx(&d, &selected, &p), Point::new(50.0, 150.0), alt), Cursor::Smooth);
     assert_eq!(t.cursor(&cx(&d, &empty, &p), Point::new(50.0, 150.0), alt), Cursor::PaintbrushClose);
+    let selected_cx = cx(&d, &selected, &p);
+    t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0).with_mods(alt));
+    t.pointer(&selected_cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0).with_mods(alt));
+    assert_eq!(t.cursor(&selected_cx, Point::new(150.0, 150.0), alt), Cursor::Smooth);
+    assert_eq!(t.cursor(&selected_cx, Point::new(150.0, 150.0), Mods::default()), Cursor::Smooth);
 }
 
 /// A selected text object leaves Alt Paintbrush drawing a closed stroke with its close cursor.

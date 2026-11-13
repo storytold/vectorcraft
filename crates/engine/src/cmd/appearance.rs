@@ -1365,17 +1365,19 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
         let (fill, stroke) = (attrs.appearance.fill, attrs.appearance.stroke);
         let source_has = |kind: bool| picked.appearance.items.iter().any(|it| it.is_fill() == kind);
         let source_shows = |kind: bool| picked.appearance.items.iter().any(|it| it.is_fill() == kind && it.visible());
+        // A whole pick replaces the stack: it removes the rows of a kind the source has no row of.
+        let whole = fill == FillAttrs::ALL && stroke == StrokeAttrs::ALL;
         let (paints, opacities) = if append {
             let rows = (fill.color && source_shows(true), stroke.color && source_shows(false));
             (rows, rows)
         } else {
             (
                 (fill.color, stroke.color || (stroke.weight && source_has(false))),
-                (fill.transparency && source_has(true), stroke.transparency && source_has(false)),
+                (fill.transparency && (whole || source_has(true)), stroke.transparency && (whole || source_has(false))),
             )
         };
         // A pick of some attributes edits the topmost row of its kind, which may be hidden; `append` and a whole pick write rows.
-        let rows_written = append || (fill == FillAttrs::ALL && stroke == StrokeAttrs::ALL);
+        let rows_written = append || whole;
         let top_shows = |id: NodeId, kind: bool| {
             let items = d.node(id).map_or(&[][..], |n| &n.appearance.items[..]);
             items.iter().rev().find(|it| it.is_fill() == kind).is_some_and(|it| it.visible())
@@ -1389,6 +1391,9 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
                 .collect()
         };
         let mut opacity_rows = top_opacity_changed(&before, d, &targets);
+        // A written row that had paint before the pick counts too when the pick left it without paint, as in
+        // `capture_series_writes`.
+        opacity_rows.extend(painted_rows(&before, written(opacities)));
         opacity_rows.extend(painted_rows(d, written(opacities)));
         let mut rows = top_paint_changed(&before, d, &targets);
         rows.extend(painted_rows(d, written(paints)));

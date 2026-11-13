@@ -753,6 +753,9 @@ fn precise_cursors_replace_every_pen_state() {
         Cursor::ShapeBuilderErase,
         Cursor::AnchorPoint,
         Cursor::Curvature,
+        Cursor::LivePaintBucket,
+        Cursor::LivePaintBucketFace,
+        Cursor::LivePaintBucketEdge,
     ] {
         assert_eq!(c.precise(), Cursor::Crosshair, "{c:?}");
     }
@@ -2471,6 +2474,65 @@ fn deferred_commit_forwards_preview_warnings() {
     s.doc_mut().unwrap().interaction.as_mut().unwrap().preview = Some(("object.liquify".into(), p));
     let ui = s.apply_actions(vec![vectorcraft_tools::Action::Commit]).unwrap();
     assert!(ui.iter().any(|r| matches!(r, UiRequest::Status(m) if m.contains("type"))), "{ui:?}");
+}
+
+/// A session with a rectangle selected, and type too with `with_type`, tool `tool` chosen,
+/// Real-time Drawing off, and an interaction labeled `label` whose deferred Bloat preview warns
+/// that type is skipped when type is selected.
+fn deferred_bloat(label: &str, with_type: bool, tool: &str) -> Session {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let rect = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 200})).unwrap();
+    let text = s.execute("text.create", &json!({"x": 300, "y": 200, "text": "Hi"})).unwrap();
+    let ids = if with_type { json!([rect["id"], text["id"]]) } else { json!([rect["id"]]) };
+    s.execute("select.set", &json!({ "ids": ids })).unwrap();
+    s.select_tool(tool, ViewInfo::default()).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    s.begin_interaction(label).unwrap();
+    let p = json!({"tool": "bloat", "points": [[290.0, 200.0]], "width": 200.0, "height": 200.0});
+    s.doc_mut().unwrap().interaction.as_mut().unwrap().preview = Some(("object.liquify".into(), p));
+    s
+}
+
+/// A command that applies a deferred preview before it runs (Undo, Clear History) reports the
+/// preview's warning in its result, as the tool's own commit reports it; the preview is its own
+/// step, which Undo takes back. A preview without a warning adds none.
+#[test]
+fn settling_a_deferred_preview_keeps_its_warning() {
+    let mut s = deferred_bloat("Bloat", true, "selection");
+    let before = s.doc().unwrap().history.undo.len();
+    let r = s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(r["undone"], "Bloat", "{r}");
+    assert!(r["warning"].as_str().is_some_and(|w| w.contains("type")), "{r}");
+    assert_eq!(r["previewWarning"], r["warning"], "{r}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), before, "the preview was a step of its own, and Undo took it back");
+    let r = s.execute("edit.redo", &json!({})).unwrap();
+    assert!(r.get("warning").is_none() && r.get("previewWarning").is_none(), "nothing was settled: {r}");
+
+    let mut s = deferred_bloat("Bloat", true, "selection");
+    let r = s.execute("edit.clearHistory", &json!({})).unwrap();
+    assert!(r["warning"].as_str().is_some_and(|w| w.contains("type")), "{r}");
+
+    let mut s = deferred_bloat("Bloat", false, "selection");
+    let r = s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(r, json!({"undone": "Bloat"}));
+}
+
+/// Typing kept as its own step when a tool's drag begins, or when a Cmd press lends the Selection
+/// tool, shows its applied preview's warning in the status bar.
+#[test]
+fn settling_typing_for_a_tool_shows_its_preview_warning() {
+    use vectorcraft_tools::{Action, Mods};
+    let warned = |ui: &[UiRequest]| ui.iter().any(|r| matches!(r, UiRequest::Status(m) if m.contains("type")));
+    let mut s = deferred_bloat("Typing", true, "selection");
+    let ui = s.apply_actions(vec![Action::Begin("Move".into())]).unwrap();
+    assert!(warned(&ui), "{ui:?}");
+
+    let mut s = deferred_bloat("Typing", true, "rectangle");
+    let cmd = Mods { cmd: true, ..Default::default() };
+    let ui = s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 380.0).with_mods(cmd), ViewInfo::default()).unwrap();
+    assert!(warned(&ui), "{ui:?}");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 50.0, 380.0).with_mods(cmd), ViewInfo::default()).unwrap();
 }
 
 /// File Handling › Use Low Resolution Proxy for Linked EPS (#394): off by default; toggling it does

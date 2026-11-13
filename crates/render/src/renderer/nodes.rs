@@ -123,7 +123,7 @@ impl Renderer {
     /// ([`effects::plugin_revision`]), drop what the caches keep from plug-in effects: the effect
     /// geometry of paths with a plug-in effect, the cull bounds of objects that have one or hold one,
     /// of symbol instances and of the objects that hold them, and the art drawn for the effects of
-    /// objects with a plug-in effect. Rasters of raster effects and evaluations of live objects hold
+    /// objects that have a plug-in effect or hold one. Rasters of raster effects and evaluations of live objects hold
     /// the revision in their keys when what they draw has a plug-in effect (`fx::Inputs`,
     /// `live::resources_key`).
     ///
@@ -146,7 +146,8 @@ impl Renderer {
         if stale {
             self.fx_geom.retain(|_, e| !effects::has_plugin_effect(&e.node));
             self.geom.retain(|_, e| !holds_plugin_effect(&e.node) && !holds_instance(&e.node));
-            self.fx_arts.retain(|(node, ..)| !effects::has_plugin_effect(node));
+            // The art of a group holds what its members' plug-in effects draw.
+            self.fx_arts.retain(|(node, ..)| !holds_plugin_effect(node));
         }
     }
 
