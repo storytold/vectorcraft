@@ -432,15 +432,23 @@ fn can_toggle(s: &Session) -> std::result::Result<(), String> {
     let [id] = st.selection.objects.as_slice() else {
         return Err(if st.selection.is_empty() { "nothing selected" } else { "select one object" }.into());
     };
-    // A group's contents are checked when Global Edit starts: measuring them here would walk
-    // every object in it each time the menu or the Properties panel asks. Other objects are
-    // measured ([`supported`]), not reduced to their form: the Control bar asks every frame.
-    match st.doc.node(*id) {
-        Some(n) if n.extras().mask.is_none() && plain_group(n) => Ok(()),
-        Some(n) if supported(n) => Ok(()),
-        _ => Err(UNSUPPORTED.into()),
-    }
+    // The object, a group's contents included, is measured ([`supported`]), not reduced to its
+    // form, and the answer is kept until the document's revision moves: the Control bar asks
+    // every frame, and a group's walk takes time with the anchors in it.
+    let ok = match st.global_edit_support.get() {
+        Some((rev, key, ok)) if rev == st.revision && key == *id => ok,
+        _ => {
+            let ok = st.doc.node(*id).is_some_and(supported);
+            st.global_edit_support.set(Some((st.revision, *id, ok)));
+            ok
+        }
+    };
+    if ok { Ok(()) } else { Err(UNSUPPORTED.into()) }
 }
+
+/// [`can_toggle`]'s answer for the one selected object: the revision and the object it was found
+/// for, and whether Global Edit supports it.
+pub type SupportCache = std::cell::Cell<Option<(u64, NodeId, bool)>>;
 
 fn toggle(s: &mut Session, p: &Value) -> Result<Value> {
     if s.doc()?.global_edit.is_some() {
@@ -989,8 +997,7 @@ mod tests {
                 continue;
             }
             asked += 1;
-            let today = n.extras().mask.is_none() && plain_group(&n) || by_form(&n);
-            assert_eq!(can_toggle(&s).is_ok(), today, "seed {seed}");
+            assert_eq!(can_toggle(&s).is_ok(), by_form(&n), "seed {seed}");
             match s.execute(C, &json!({})) {
                 Ok(_) => {
                     assert!(by_form(&n), "seed {seed}");

@@ -1236,7 +1236,8 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
 }
 
 /// Hides in `reply` the libraries hidden now and in `before`, and the paths outside the read root that
-/// `sent`, the request's params, holds ([`handle`]). The `path` and `files` entries of the reply's
+/// `sent`, the request's params, holds ([`handle`]), and the recovery folders outside the read root
+/// that are in use or that a failure message named. The `path` and `files` entries of the reply's
 /// `result`, at any depth, that name a file the request gave inside the write roots, the file it
 /// wrote, stay as given ([`written_paths`]).
 fn hide_in_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value, before: Hiding) {
@@ -1250,6 +1251,11 @@ fn hide_in_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value, before: 
     hiding.merge(before);
     let mut paths = Vec::new();
     sent_paths(sent, &mut paths);
+    // The status text of a recovery copy that failed names the recovery folder it went to.
+    let current = vectorcraft_engine::cmd::recovery::folder(&app.session).map(|(f, _)| f);
+    for folder in app.recovery.named.iter().chain(current.as_ref()) {
+        collect_sent_paths(&json!(folder), true, &mut paths);
+    }
     hiding.set_hidden(paths, cfg!(windows));
     hide_library_ids(reply, &hiding);
     restore_written_paths(reply, kept);
