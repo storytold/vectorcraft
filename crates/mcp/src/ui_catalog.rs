@@ -1248,7 +1248,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.savePdfDialog",
         "Save PDF Dialog",
         "",
-        "{path?, preset?, range?, …document.exportPdf options} open the Save PDF dialog with these options (fields = the options, sections are objects; OK writes path, else asks)",
+        "{path?, preset?, range?, useArtboards?, …document.exportPdf options} open the Save PDF dialog with these options (fields = the options, sections are objects; OK writes path, else asks); useArtboards: false: one page of the visible art's bounds, with no Artboards section",
     ),
     (
         "file.exportAs",
