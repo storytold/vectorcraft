@@ -165,6 +165,31 @@ type ThrowSite = (Rc<Code>, usize);
 /// What [`crate::Realm::observe_code`] calls with each source evaluated at run time.
 pub(crate) type CodeObserver = Rc<dyn Fn(&[u16])>;
 
+/// A built-in function that may wait for the host ([`crate::heap::Func::Pausable`]): it is given
+/// `this` and the arguments, and gives the host call it makes.
+pub(crate) type PausableFn = fn(&mut Interp, Value, &[Value]) -> JsResult<Pause>;
+
+/// What a [`PausableFn`] does with the host's answer: it is given the values it kept and the
+/// answer, and gives the result of its call.
+pub(crate) type ResumeFn = fn(&mut Interp, &[Value], Value) -> JsResult<Value>;
+
+/// The host call a [`PausableFn`] makes: the host function `host` with `args`. Its answer goes to
+/// `resume` with `keep`, at once when the host answers at once. When the host waits
+/// ([`crate::HostError::Wait`]), the run pauses at the call, and `resume` runs when the run goes on
+/// after [`crate::Realm::answer`]; a run ended while it waits ([`crate::Realm::end`]) drops it.
+pub(crate) struct Pause {
+    pub(crate) host: Value,
+    pub(crate) args: Vec<Value>,
+    pub(crate) keep: Vec<Value>,
+    pub(crate) resume: ResumeFn,
+}
+
+/// A [`Pause`] whose host call waits for its answer.
+pub(crate) struct Resumption {
+    resume: ResumeFn,
+    keep: Vec<Value>,
+}
+
 pub(crate) struct Interp {
     pub(crate) heap: Heap,
     pub(crate) stack: Vec<Value>,
@@ -225,6 +250,9 @@ pub(crate) struct Interp {
     pub(crate) can_wait: Rc<std::cell::Cell<bool>>,
     /// A host function's call waits for its result: the value on top of the stack stands in for it.
     pub(crate) waiting: bool,
+    /// The built-in that waits with the host's call ([`Pause::Ask`]): it takes the answer before
+    /// the next instruction runs.
+    pub(crate) resuming: Option<Resumption>,
     /// The message of the uncatchable error a host function ended the run with.
     pub(crate) host_abort: Option<String>,
     /// How much a value passed to or from a host function may carry.
@@ -472,6 +500,7 @@ impl Interp {
             in_slice: false,
             can_wait: Rc::default(),
             waiting: false,
+            resuming: None,
             host_abort: None,
             data_limits: crate::DataLimits::default(),
             source_tag: crate::realm::UNKNOWN_SOURCE,
@@ -682,6 +711,7 @@ impl Interp {
         let mut roots = Roots::default();
         roots.values.extend(self.stack.iter());
         roots.values.extend(self.temp_roots.iter());
+        roots.values.extend(self.resuming.iter().flat_map(|r| r.keep.iter()));
         roots.values.push(&self.last_thrown);
         roots.values.push(&self.last_error);
         roots.values.push(&self.passing);
@@ -746,6 +776,14 @@ impl Interp {
 
     fn step(&mut self) -> JsResult<Option<Value>> {
         self.tick()?;
+        // A built-in that waited for the host takes the answer on top of the stack before the
+        // instruction after its call runs; what it throws is thrown at that call.
+        if let Some(r) = self.resuming.take() {
+            let answer = self.pop()?;
+            let v = self.resume(r, answer)?;
+            self.push(v)?;
+            return Ok(None);
+        }
         let frame = self.frame_mut()?;
         let Some(&op) = frame.code.ops.get(frame.pc) else { return internal("ran past the end of the code") };
         frame.pc += 1;
@@ -2159,6 +2197,16 @@ impl Interp {
                     self.temp_roots.truncate(mark);
                     return Ok(Prepared::Done(r?));
                 }
+                Func::Pausable { f: native, .. } => {
+                    let mark = self.temp_roots.len();
+                    self.temp_roots.push(this.clone());
+                    self.temp_roots.extend(args.iter().cloned());
+                    let held = self.held_bytes;
+                    let r = native(self, this, &args).and_then(|p| self.ask(p));
+                    self.held_bytes = held;
+                    self.temp_roots.truncate(mark);
+                    return Ok(Prepared::Done(r?));
+                }
                 Func::Data { f, name, read } => {
                     // The arguments are read before the function runs, and a result being built
                     // keeps itself reachable.
@@ -2382,6 +2430,41 @@ impl Interp {
             self.define(a, key("callee"), Prop::Data { value: Value::Object(callee), flags: HIDDEN })?;
         }
         Ok(a)
+    }
+
+    /// Makes the host call a [`PausableFn`] gave, whose answer goes to its resume function. A host
+    /// function is called as the script's own code calls it, so it may wait; then the resume
+    /// function is kept for the answer [`crate::Realm::answer`] gives, and the value that stands
+    /// in for that answer is the call's result for now.
+    fn ask(&mut self, p: Pause) -> JsResult<Value> {
+        let Pause { host, args, keep, resume } = p;
+        let mark = self.temp_roots.len();
+        self.temp_roots.push(host.clone());
+        self.temp_roots.extend(args.iter().cloned());
+        self.temp_roots.extend(keep.iter().cloned());
+        let was_waiting = self.waiting;
+        let answer = match self.func_of(&host) {
+            Some(Func::Data { f, name, read }) => self.call_data(&f, &name, &args, &read),
+            _ => self.call(&host, &Value::Undefined, &args),
+        };
+        self.temp_roots.truncate(mark);
+        let answer = answer?;
+        let r = Resumption { resume, keep };
+        if self.waiting && !was_waiting {
+            self.resuming = Some(r);
+            return Ok(answer);
+        }
+        self.resume(r, answer)
+    }
+
+    /// Gives a [`PausableFn`]'s kept values and the host's `answer` to its resume function.
+    fn resume(&mut self, r: Resumption, answer: Value) -> JsResult<Value> {
+        let mark = self.temp_roots.len();
+        self.temp_roots.push(answer.clone());
+        self.temp_roots.extend(r.keep.iter().cloned());
+        let v = (r.resume)(self, &r.keep, answer);
+        self.temp_roots.truncate(mark);
+        v
     }
 
     /// Calls `f` from Rust and returns its result, running the loop again for a function written

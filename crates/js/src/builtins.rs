@@ -38,6 +38,15 @@ pub(crate) fn native(interp: &mut Interp, name: &'static str, f: NativeFn, lengt
     Ok(o)
 }
 
+/// A built-in function object that may wait for the host ([`crate::interp::Pause`]), defined as
+/// `name` on `on` the way [`method`] defines one.
+pub(crate) fn pausable_method(interp: &mut Interp, on: ObjId, name: &'static str, f: crate::interp::PausableFn, length: u32) -> JsResult<()> {
+    let proto = interp.intrinsics.function_proto;
+    let m = alloc(interp, Class::Function(Func::Pausable { f, name }), Some(proto));
+    interp.define(m, key("length"), Prop::Data { value: Value::Number(f64::from(length)), flags: 0 })?;
+    interp.define(on, key(name), Prop::Data { value: Value::Object(m), flags: HIDDEN })
+}
+
 pub(crate) fn method(interp: &mut Interp, on: ObjId, name: &'static str, f: NativeFn, length: u32) -> JsResult<()> {
     let m = native(interp, name, f, length, NativeKind::Plain, false)?;
     interp.define(on, key(name), Prop::Data { value: Value::Object(m), flags: HIDDEN })
@@ -514,7 +523,7 @@ fn function_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) ->
             interp.heap.bytes = interp.heap.bytes.saturating_add(bytes);
             return Ok(Value::String(Str::from_units(units.to_vec())));
         }
-        Some(Func::Native { name, .. }) => format!("function {name}() {{ [native code] }}"),
+        Some(Func::Native { name, .. } | Func::Pausable { name, .. }) => format!("function {name}() {{ [native code] }}"),
         Some(Func::Host { name, .. } | Func::Data { name, .. } | Func::Eval { name, .. }) => format!("function {name}() {{ [native code] }}"),
         Some(Func::Bound { .. }) => "function () { [native code] }".to_string(),
         None => return Err(interp.type_error("Function.prototype.toString was called on a value that is not a function")),

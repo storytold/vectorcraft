@@ -251,6 +251,7 @@ impl Realm {
         interp.last_error = Value::Null;
         interp.host_abort = None;
         interp.waiting = false;
+        interp.resuming = None;
         interp.error_tag = UNKNOWN_SOURCE;
         interp.thrown_mark = None;
         interp.finally_marks.clear();
@@ -286,6 +287,7 @@ impl Realm {
         interp.temp_roots.clear();
         interp.join_stack.clear();
         interp.waiting = false;
+        interp.resuming = None;
         interp.passing = Value::Undefined;
         match result {
             Ok(v) => Ok(interp.to_js_value(&v)),
@@ -375,7 +377,9 @@ impl Realm {
     }
 
     /// Gives the call that waits ([`crate::HostError::Wait`]) its result `d`; the next
-    /// [`Realm::advance`] goes on from there. A result past the heap limit ends the run with that
+    /// [`Realm::advance`] goes on from there. When a built-in such as `File.openDialog` made the
+    /// call, the built-in takes `d` first and gives its own result, and what it throws is thrown
+    /// at its call. A result past the heap limit ends the run with that
     /// limit, and with no call waiting this gives an internal error.
     pub fn answer(&mut self, d: crate::Data) -> Result<(), RunError> {
         let interp = &mut self.interp;

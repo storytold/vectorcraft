@@ -14,8 +14,8 @@
 //!
 //! `write` and `writeln` join their values as `String(value)` gives them, and `writeln` adds the
 //! line end `lineFeed` names: CRLF for `Windows`, CR for `Macintosh` and LF otherwise. The file
-//! dialogs are functions of script code that call the host's `pick`, so that a run can wait there
-//! for the person's answer; they give a `File`, a `Folder`, an array of `File`s or `null`.
+//! dialogs are built-ins that ask the host's `pick` and may pause the run until the person answers
+//! ([`crate::interp::Pause`]); they give a `File`, a `Folder`, an array of `File`s or `null`.
 //!
 //! A method whose host call fails sets `error` and returns `false`, `null` or an empty string. A
 //! count or position that is not a finite number, a negative count and a seek mode other than 0, 1
@@ -24,11 +24,10 @@
 //! true value for; every entry takes fuel.
 
 use crate::HostItem;
-use crate::builtins::{arg, constructor, data, method, native, put_at};
-use crate::bytecode::CodeKind;
+use crate::builtins::{arg, constructor, data, method, native, pausable_method, put_at};
 use crate::heap::{CONFIGURABLE, Class, HIDDEN, NativeFn, NativeKind, OBJECT_BYTES, ObjId, Object, PROP_BYTES, Prop, key, string_bytes};
-use crate::interp::{Abrupt, ErrorType, Interp, JsResult};
-use crate::value::Value;
+use crate::interp::{Abrupt, ErrorType, Interp, JsResult, Pause};
+use crate::value::{Value, index_key};
 
 /// The objects of `File` and `Folder`, kept by the realm, and `Folder.current`.
 #[derive(Clone, Debug)]
@@ -579,69 +578,79 @@ fn writeln(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Val
 
 // ---- file dialogs ----
 
-/// The file dialogs, made from script code so the run can wait at the host's `pick` until the
-/// person answers: `ask` gives `pick`'s arguments and `wrap` turns its answer into objects. A
-/// `filter` that is a function is called with each file picked, and the files it gives a false
-/// value for are left out; when none is left, the dialog gives `null`.
-const DIALOGS: &str = "(function (ask, pick, wrap) {
-  var isArray = Array.isArray;
-  function kept(files, filter) {
-    if (files === null || typeof filter !== 'function') return files;
-    if (!isArray(files)) return filter(files) ? files : null;
-    var out = [];
-    for (var k = 0; k < files.length; k++) if (filter(files[k])) out[out.length] = files[k];
-    return out.length ? out : null;
-  }
-  function dialog(kind, self, prompt, multi, filter) { var a = ask(kind, self, prompt, multi, filter); return kept(wrap(kind, self, pick(a[0], a[1], a[2], a[3], a[4])), filter); }
-  return [
-    function openDialog(prompt, filter, multiSelect) { return dialog('open', null, prompt, multiSelect, filter); },
-    function saveDialog(prompt, filter) { return dialog('save', null, prompt, false, filter); },
-    function openDlg(prompt, filter, multiSelect) { return dialog('open', this, prompt, multiSelect, filter); },
-    function saveDlg(prompt, filter) { return dialog('save', this, prompt, false, filter); },
-    function selectDialog(prompt) { return dialog('folder', null, prompt, false, null); },
-    function selectDlg(prompt) { return dialog('folder', this, prompt, false, null); }
-  ];
-})";
-
-/// `ask(kind, self, prompt, multi, filter)`: `[kind, prompt, multi, start, filter]`, the arguments
-/// of the host's `pick`, where `start` is the path of `self` (a `File` or `Folder`, or `null` for the
-/// class's own dialog) and `filter` the file types, a string, or `""` for any other value. `self`
-/// must be a `File` or `Folder` when it is not `null`.
-fn ask(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    let kind = arg(args, 0);
-    let start = match arg(args, 1) {
-        Value::Null => Value::str(""),
-        s => this_path(i, &s, "dialog")?.1,
+/// Asks the host's `pick` for the dialog `kind` (`open`, `save` or `folder`), with the arguments
+/// `[kind, prompt, multi, start, types]`. `me` is the `File` or `Folder` whose `openDlg`, `saveDlg`
+/// or `selectDlg` was called, or `None` for the class's own dialog: the dialog starts at its path,
+/// and an `{error}` answer sets its `error`. The prompt is `String(prompt)`, or `""` for
+/// `undefined` and `null`. A `filter` that is a string gives the file types; one that is a function
+/// is called with each file picked ([`picked`]). The run may pause at `pick` until the person
+/// answers.
+fn ask_pick(i: &mut Interp, kind: &'static str, me: Option<&Value>, prompt: &Value, multi: bool, filter: &Value) -> JsResult<Pause> {
+    let start = match me {
+        None => Value::str(""),
+        Some(me) => this_path(i, me, "dialog")?.1,
     };
-    let prompt = match arg(args, 2) {
+    let prompt = match prompt {
         Value::Undefined | Value::Null => Value::str(""),
-        p => Value::String(i.to_str(&p)?),
+        p => Value::String(i.to_str(p)?),
     };
-    let multi = Value::Bool(arg(args, 3).truthy());
-    let filter = match arg(args, 4) {
-        f @ Value::String(_) => f,
+    let types = match filter {
+        f @ Value::String(_) => f.clone(),
         _ => Value::str(""),
     };
-    i.rooted(&[kind.clone(), start.clone(), prompt.clone(), filter.clone()], |i| {
-        i.reserve_heap(OBJECT_BYTES + 5 * PROP_BYTES)?;
-        let proto = i.intrinsics.array_proto;
-        let out = i.heap.alloc_object(Object::new(Class::Array { length: 0, length_writable: true }, Some(proto)));
+    let pick = host_value(i, "pick")?;
+    Ok(Pause {
+        host: pick,
+        args: vec![Value::str(kind), prompt, Value::Bool(multi), start, types],
+        keep: vec![Value::Bool(kind == "folder"), me.cloned().unwrap_or(Value::Null), filter.clone()],
+        resume: picked,
+    })
+}
+
+/// What a file dialog gives for `pick`'s `answer`, with `[folder, me, filter]` kept from
+/// [`ask_pick`]: the objects [`wrap`] makes, of which a `filter` that is a function keeps the
+/// files it gives a true value for, or `null` when it keeps none.
+fn picked(i: &mut Interp, keep: &[Value], answer: Value) -> JsResult<Value> {
+    let files = wrap(i, arg(keep, 0).truthy(), &arg(keep, 1), answer)?;
+    let filter = arg(keep, 2);
+    if !i.is_callable(&filter) {
+        return Ok(files);
+    }
+    let Some(o) = files.as_object() else { return Ok(files) };
+    let length = match &i.object(o)?.class {
+        Class::Array { length, .. } => Some(*length),
+        _ => None,
+    };
+    let Some(length) = length else {
+        let kept = i.rooted(std::slice::from_ref(&files), |i| i.call(&filter, &Value::Undefined, std::slice::from_ref(&files)))?;
+        return Ok(if kept.truthy() { files } else { Value::Null });
+    };
+    i.rooted(std::slice::from_ref(&files), |i| {
+        i.reserve_heap(OBJECT_BYTES)?;
+        let array_proto = i.intrinsics.array_proto;
+        let out = i.heap.alloc_object(Object::new(Class::Array { length: 0, length_writable: true }, Some(array_proto)));
         i.rooted(&[Value::Object(out)], |i| {
-            for (at, v) in [kind.clone(), prompt.clone(), multi.clone(), start.clone(), filter.clone()].into_iter().enumerate() {
-                put_at(i, out, at as f64, v)?;
+            let mut n = 0.0;
+            for at in 0..length {
+                i.use_fuel()?;
+                let file = i.get_value(&files, &index_key(at))?;
+                let kept = i.rooted(std::slice::from_ref(&file), |i| i.call(&filter, &Value::Undefined, std::slice::from_ref(&file)))?;
+                if kept.truthy() {
+                    put_at(i, out, n, file)?;
+                    n += 1.0;
+                }
             }
-            Ok(Value::Object(out))
+            Ok(if n > 0.0 { Value::Object(out) } else { Value::Null })
         })
     })
 }
 
-/// `wrap(kind, self, answer)`: the `File` (a `Folder` for a folder dialog) for each path `pick`
-/// gave, an array of them for a list, `null` for `null`, and `null` after setting `self`'s `error`
-/// for `{error}`.
-fn wrap(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
+/// The `File` (a `Folder` for a `folder` dialog) for each path `pick` gave in `answer`, an array of
+/// them for a list, `null` for `null`, and `null` after setting the `error` of `me`, when it is a
+/// `File` or `Folder`, for `{error}`.
+fn wrap(i: &mut Interp, folder: bool, me: &Value, answer: Value) -> JsResult<Value> {
     let c = classes(i)?;
-    let proto = if matches!(arg(args, 0), Value::String(s) if s.to_rust_string() == "folder") { c.folder_proto } else { c.file_proto };
-    let answer = arg(args, 2);
+    let proto = if folder { c.folder_proto } else { c.file_proto };
     match &answer {
         Value::String(_) => return instance(i, proto, answer.clone()),
         Value::Object(_) => {}
@@ -649,7 +658,7 @@ fn wrap(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
     }
     let error = i.rooted(std::slice::from_ref(&answer), |i| field(i, &answer, "error"))?;
     if matches!(error, Value::String(_)) {
-        if let Some(o) = arg(args, 1).as_object()
+        if let Some(o) = me.as_object()
             && matches!(slot(i, o, PATH)?, Value::String(_))
         {
             set_slot(i, o, ERROR, error)?;
@@ -676,33 +685,44 @@ fn wrap(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
     })
 }
 
+/// `File.openDialog(prompt, filter, multiSelect)`.
+fn open_dialog(i: &mut Interp, _: Value, args: &[Value]) -> JsResult<Pause> {
+    ask_pick(i, "open", None, &arg(args, 0), arg(args, 2).truthy(), &arg(args, 1))
+}
+
+/// `File.saveDialog(prompt, filter)`.
+fn save_dialog(i: &mut Interp, _: Value, args: &[Value]) -> JsResult<Pause> {
+    ask_pick(i, "save", None, &arg(args, 0), false, &arg(args, 1))
+}
+
+/// `File.prototype.openDlg(prompt, filter, multiSelect)`.
+fn open_dlg(i: &mut Interp, this: Value, args: &[Value]) -> JsResult<Pause> {
+    ask_pick(i, "open", Some(&this), &arg(args, 0), arg(args, 2).truthy(), &arg(args, 1))
+}
+
+/// `File.prototype.saveDlg(prompt, filter)`.
+fn save_dlg(i: &mut Interp, this: Value, args: &[Value]) -> JsResult<Pause> {
+    ask_pick(i, "save", Some(&this), &arg(args, 0), false, &arg(args, 1))
+}
+
+/// `Folder.selectDialog(prompt)`.
+fn select_dialog(i: &mut Interp, _: Value, args: &[Value]) -> JsResult<Pause> {
+    ask_pick(i, "folder", None, &arg(args, 0), false, &Value::Null)
+}
+
+/// `Folder.prototype.selectDlg(prompt)`.
+fn select_dlg(i: &mut Interp, this: Value, args: &[Value]) -> JsResult<Pause> {
+    ask_pick(i, "folder", Some(&this), &arg(args, 0), false, &Value::Null)
+}
+
 /// Defines the file dialogs on `File`, `Folder` and their prototypes.
 fn dialogs(i: &mut Interp, file: ObjId, file_proto: ObjId, folder: ObjId, folder_proto: ObjId) -> JsResult<()> {
-    let units = i.encode_source(DIALOGS).map_err(|e| i.compile_error_to_abrupt(e))?;
-    let code = i.compile_source(&units, false, CodeKind::Eval).map_err(|e| i.compile_error_to_abrupt(e))?;
-    let make = i.run_global(code, true)?;
-    let c = classes(i)?;
-    let pick = i.rooted(std::slice::from_ref(&make), |i| i.get_value(&Value::Object(c.host), &key("pick")))?;
-    let ask = native(i, "ask", ask, 5, NativeKind::Plain, false)?;
-    let made = i.rooted(&[make.clone(), pick.clone(), Value::Object(ask)], |i| {
-        let wrap = native(i, "wrap", wrap, 3, NativeKind::Plain, false)?;
-        i.call(&make, &Value::Undefined, &[Value::Object(ask), pick.clone(), Value::Object(wrap)])
-    })?;
-    let on = [
-        (file, "openDialog"),
-        (file, "saveDialog"),
-        (file_proto, "openDlg"),
-        (file_proto, "saveDlg"),
-        (folder, "selectDialog"),
-        (folder_proto, "selectDlg"),
-    ];
-    i.rooted(std::slice::from_ref(&made), |i| {
-        for (at, (target, name)) in on.into_iter().enumerate() {
-            let f = i.get_value(&made, &crate::value::number_to_str(at as f64).flat())?;
-            data(i, target, name, f, HIDDEN)?;
-        }
-        Ok(())
-    })
+    pausable_method(i, file, "openDialog", open_dialog, 3)?;
+    pausable_method(i, file, "saveDialog", save_dialog, 2)?;
+    pausable_method(i, file_proto, "openDlg", open_dlg, 3)?;
+    pausable_method(i, file_proto, "saveDlg", save_dlg, 2)?;
+    pausable_method(i, folder, "selectDialog", select_dialog, 1)?;
+    pausable_method(i, folder_proto, "selectDlg", select_dlg, 1)
 }
 
 fn text_static(i: &mut Interp, name: &str, args: &[Value]) -> JsResult<Value> {
@@ -1084,13 +1104,51 @@ pub(crate) fn install(i: &mut Interp, items: Vec<(String, HostItem)>) -> JsResul
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
     use std::rc::Rc;
 
-    use crate::{Data, HostItem, JsValue, Realm};
+    use crate::{Data, HostError, HostItem, JsValue, Progress, Realm};
 
     /// A host whose paths are `/` and a name, where `/d` is a folder holding `a` and `b` and every
     /// other path is missing.
     fn realm() -> Realm {
+        realm_with(|_| Vec::new())
+    }
+
+    /// [`realm`] with a `pick` that waits where it can and throws where it cannot. → the arguments
+    /// of each call, joined with `|`.
+    fn dialog_realm() -> (Realm, Rc<RefCell<Vec<String>>>) {
+        let asked: Rc<RefCell<Vec<String>>> = Rc::default();
+        let calls = asked.clone();
+        let r = realm_with(move |r| {
+            let can_wait = r.wait_flag();
+            let pick = move |a: Vec<Data>| -> Result<Data, HostError> {
+                let text = |d: &Data| match d {
+                    Data::String(s) => s.clone(),
+                    Data::Bool(b) => b.to_string(),
+                    other => format!("{other:?}"),
+                };
+                calls.borrow_mut().push(a.iter().map(text).collect::<Vec<_>>().join("|"));
+                if can_wait.get() { Err(HostError::Wait) } else { Err(HostError::Error("cannot wait here".into())) }
+            };
+            vec![("pick".into(), HostItem::Function(Rc::new(pick)))]
+        });
+        (r, asked)
+    }
+
+    /// Advances the run until it waits or ends. → its value when it ended.
+    fn until_wait(r: &mut Realm) -> Option<JsValue> {
+        for _ in 0..10_000 {
+            match r.advance(1_000).unwrap() {
+                Progress::Done(v) => return Some(v),
+                Progress::Paused if r.waits() => return None,
+                Progress::Paused => {}
+            }
+        }
+        panic!("the run neither waited nor ended")
+    }
+
+    fn realm_with(more: impl FnOnce(&Realm) -> Vec<(String, HostItem)>) -> Realm {
         let f = |g: fn(&[Data]) -> Data| HostItem::Function(Rc::new(move |a: Vec<Data>| Ok(g(&a))));
         let text = |a: &[Data], i: usize| match a.get(i) {
             Some(Data::String(s)) => s.clone(),
@@ -1120,7 +1178,7 @@ mod tests {
             Ok(obj(vec![("entries", Data::Array(vec![e("a"), e("b")]))]))
         };
         let mut r = Realm::new();
-        let items: Vec<(String, HostItem)> = vec![
+        let mut items: Vec<(String, HostItem)> = vec![
             ("text".into(), HostItem::Object(messages.to_vec())),
             ("system".into(), HostItem::Value(Data::String("Unix".into()))),
             ("lineFeed".into(), HostItem::Value(Data::String("Unix".into()))),
@@ -1131,8 +1189,77 @@ mod tests {
             ("tempName".into(), f(|_| Data::String("/tmp1".into()))),
             ("locations".into(), f(|_| Data::Object(vec![]))),
         ];
+        items.extend(more(&r));
         r.define_file_classes(items).unwrap();
         r
+    }
+
+    #[test]
+    fn a_dialog_pauses_the_run_and_its_answer_becomes_files() {
+        let (mut r, asked) = dialog_realm();
+        let v = r.run("[File.openDialog.length, File.prototype.saveDlg.length, String(Folder.selectDialog).indexOf('[native code]') > 0].join()");
+        assert_eq!(v.unwrap(), JsValue::String("3,2,true".into()), "the dialogs are built-ins");
+        r.start("var f = File.openDialog('Pick', 'Text:*.txt', 1); [f.length, f[0].name, f[1].fsName, f[1] instanceof File].join()").unwrap();
+        assert_eq!(until_wait(&mut r), None);
+        assert_eq!(*asked.borrow(), ["open|Pick|true||Text:*.txt"]);
+        r.answer(Data::Array(vec![Data::String("/a".into()), Data::String("/b".into())])).unwrap();
+        assert_eq!(until_wait(&mut r), Some(JsValue::String("2,a,/b,true".into())));
+        r.start("var g = new Folder('d').selectDlg(5); [g.name, g instanceof Folder].join()").unwrap();
+        assert_eq!(until_wait(&mut r), None);
+        assert_eq!(asked.borrow()[1], "folder|5|false|/d|", "the folder's own dialog starts at its path");
+        r.answer(Data::String("/e".into())).unwrap();
+        assert_eq!(until_wait(&mut r), Some(JsValue::String("e,true".into())));
+    }
+
+    #[test]
+    fn a_canceled_dialog_gives_null_and_an_error_answer_sets_error() {
+        let (mut r, asked) = dialog_realm();
+        r.start(
+            "var d = new File('x'); var a = File.saveDialog(); var b = d.saveDlg('Save', function () { return true; }); [a, b, d.error].join('|')",
+        )
+        .unwrap();
+        assert_eq!(until_wait(&mut r), None);
+        r.answer(Data::Null).unwrap();
+        assert_eq!(until_wait(&mut r), None, "a canceled dialog lets the run go on to the next one");
+        assert_eq!(asked.borrow()[1], "save|Save|false|/x|", "a filter that is not a string gives no file types");
+        r.answer(Data::Object(vec![("error".into(), Data::String("denied".into()))])).unwrap();
+        assert_eq!(until_wait(&mut r), Some(JsValue::String("||denied".into())));
+        r.start("File.openDialog(); 'went on'").unwrap();
+        assert_eq!(until_wait(&mut r), None);
+        r.end();
+        assert!(!r.waits() && !r.is_running(), "a run ended at a dialog drops it");
+        assert_eq!(r.run("'next'").unwrap(), JsValue::String("next".into()));
+        let e = r.run("File.openDialog()").unwrap_err();
+        assert!(e.message.contains("cannot wait here"), "a run that cannot pause does not wait: {e:?}");
+        let e = r.run("File.prototype.openDlg.call({})").unwrap_err();
+        assert!(e.message.contains("is not a File or a Folder"), "{e:?}");
+    }
+
+    #[test]
+    fn a_dialog_in_a_function_or_a_loop_resumes_where_it_was_called() {
+        let (mut r, asked) = dialog_realm();
+        let script = "var seen = [];
+            function pickOne(n) {
+                try { var f = File.openDialog('n' + n, function (f) { return f.name !== 'skip'; }); return f === null ? 'none' : f.name; }
+                finally { seen.push('f' + n); }
+            }
+            for (var k = 0; k < 3; k++) seen.push(pickOne(k));
+            var many = File.openDialog('m', function (f) { return f.name !== 'b'; }, true);
+            var thrown;
+            try { File.openDialog('t', function () { throw new Error('no'); }); } catch (e) { thrown = e.message; }
+            seen.concat([many.length, many[1].name, thrown]).join()";
+        r.start(script).unwrap();
+        for answer in ["/a", "/skip", "/c"] {
+            assert_eq!(until_wait(&mut r), None);
+            r.answer(Data::String(answer.into())).unwrap();
+        }
+        assert_eq!(until_wait(&mut r), None);
+        r.answer(Data::Array(["/a", "/b", "/c"].map(|p| Data::String(p.into())).to_vec())).unwrap();
+        assert_eq!(until_wait(&mut r), None);
+        r.collect_garbage();
+        r.answer(Data::String("/a".into())).unwrap();
+        assert_eq!(until_wait(&mut r), Some(JsValue::String("f0,a,f1,none,f2,c,2,c,no".into())));
+        assert_eq!(asked.borrow().len(), 5, "each dialog asked once");
     }
 
     #[test]
