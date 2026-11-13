@@ -3511,6 +3511,12 @@ already walks Image Trace. Short agent entry points:
   `livePaint.fill` does not fill a face that is hidden on its own. With `group`, a point on a hidden face is an
   error. With `ids`, at a point on a hidden face it fills the face there of another Live Paint group among the
   objects; otherwise it returns an error and does not merge the objects.
+  A Live Paint command that changes nothing records no undo step, keeps the redo steps, leaves a saved document saved
+  and replies as usual: `livePaint.fill` (a click, or a Bucket drag) when every face it reaches already has the paint,
+  `livePaint.strokeEdge` when the edge already has the paint and the width, `livePaint.gapOptions` (and the Gap Options
+  dialog's OK) when every group already has the options and `closeGaps` finds no gap, and `livePaint.make` or
+  `livePaint.merge` given one Live Paint group alone, which they select. Such a fill or stroke also leaves the recent
+  colors and the last color as they are. `livePaint.gapOptions` makes a group's faces again, with new ids, only when it adds a path or when Gap Detection is turned on or off or given a new size while it is on.
 
 `brush.selectionArt {ids?|id?}` (a query) replies `{art}`: the object that `brush.new` given the same `ids` or `id`,
 or the same selection, takes as a new scatter or art brush's art and as a new pattern brush's side tile. Several
