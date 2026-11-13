@@ -345,15 +345,7 @@ pub(crate) fn artboard_copy(s: &mut Session, p: &Value, cut: bool) -> Result<Val
     let copied = clip.nodes.len();
     if cut {
         s.edit("Cut Artboard", |d, sel| {
-            if indices.iter().any(|i| *i >= d.artboards.len()) {
-                return Err(EngineError::Other("no such artboard".into()));
-            }
-            // The last first, so the others keep their places; their guides go with them.
-            for &i in indices.iter().rev() {
-                let gone = d.artboards.remove(i).id;
-                d.retire_artboard_id(gone);
-                d.retain_guides(sel, |g| g.artboard != Some(gone));
-            }
+            super::layer::remove_artboards(d, sel, &indices)?;
             d.remove_many(&art)?;
             sel.prune(d);
             Ok(())
