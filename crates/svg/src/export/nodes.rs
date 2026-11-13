@@ -122,14 +122,21 @@ impl Reuse {
 }
 
 /// Are `children` the pieces of a raster mesh warp ([`vectorcraft_doc::live::mesh_warp_image`]):
-/// more than one, each a clip group of a triangle and one and the same image?
+/// more than one, each a clip group of a triangle and one and the same image, or that image masked
+/// by a triangle (Preserve Shape Using Transparency)?
 fn image_pieces(children: &[std::sync::Arc<Node>]) -> bool {
     let mut first: Option<(&str, u32, u32)> = None;
     children.len() > 1
         && children.iter().all(|c| {
-            let NodeKind::Group { children, clip: true } = &c.kind else { return false };
-            let [clip, im] = children.as_slice() else { return false };
-            let (NodeKind::Path { path, .. }, NodeKind::Image(im)) = (&clip.kind, &im.kind) else { return false };
+            let (shape, im) = match (&c.kind, c.extras().mask.as_deref()) {
+                (NodeKind::Group { children, clip: true }, _) => match children.as_slice() {
+                    [clip, im] => (&**clip, &**im),
+                    _ => return false,
+                },
+                (NodeKind::Image(_), Some(m)) => (&*m.art, &**c),
+                _ => return false,
+            };
+            let (NodeKind::Path { path, .. }, NodeKind::Image(im)) = (&shape.kind, &im.kind) else { return false };
             let triangle = path.subpaths.len() == 1 && path.anchor_count() == 3;
             let image = (im.key.as_str(), im.width, im.height);
             triangle && *first.get_or_insert(image) == image
@@ -578,6 +585,16 @@ impl Writer<'_> {
             return;
         }
         let elements = Node::knockout_elements(children);
+        if !elements.is_empty() && elements.iter().all(|c| c.knockout_outline().is_some()) {
+            let pieces: Vec<&Node> = elements.iter().map(|c| &***c).collect();
+            if vectorcraft_effects::warp_pieces_translucent(self.doc, &pieces) {
+                return self.warp_pieces(&elements);
+            }
+            for c in elements {
+                self.node(c);
+            }
+            return;
+        }
         // Where every element over another covers it fully, drawing them in order knocks out as
         // much: the masks would only add seams along the shapes' antialiased edges.
         if elements.iter().skip(1).all(|c| paints_opaque(c)) {
@@ -613,6 +630,46 @@ impl Writer<'_> {
             self.depth -= 1;
             self.line("</g>");
             self.body.push_str(&body);
+        }
+    }
+
+    /// The pieces of a partly transparent mesh-warped image (`elements`) as the elements of a
+    /// knockout group ([`vectorcraft_effects::warp_pieces_translucent`]). Each piece is drawn
+    /// through one mask of where the pieces above it that reach it don't cover
+    /// (their triangles, [`vectorcraft_effects::knockout_silhouette`], black over white):
+    /// only neighbors overlap, so each mask holds a few triangles and no mask nests in another.
+    fn warp_pieces(&mut self, elements: &[&std::sync::Arc<Node>]) {
+        // Each piece's triangle and its box: a piece paints inside its triangle only.
+        let silhouette = |c: &Node| {
+            let b = c.knockout_outline()?.geometric_bounds()?;
+            Some((vectorcraft_effects::knockout_silhouette(c, vectorcraft_doc::color::Color::BLACK)?, b))
+        };
+        let silhouettes: Vec<Option<(Node, Rect)>> = elements.iter().map(|c| silhouette(c)).collect();
+        for (i, c) in elements.iter().enumerate() {
+            let Some((own, reach)) = &silhouettes[i] else { continue };
+            let reach = reach.inflate(1.0, 1.0);
+            let overlaps = |b: &Rect| b.x0 <= reach.x1 && reach.x0 <= b.x1 && b.y0 <= reach.y1 && reach.y0 <= b.y1;
+            let above: Vec<&Node> = silhouettes[i + 1..].iter().flatten().filter(|(_, b)| overlaps(b)).map(|(n, _)| n).collect();
+            if above.is_empty() {
+                self.node(c);
+                continue;
+            }
+            let region = self.region_attrs(&[own]);
+            let anonymous = std::mem::replace(&mut self.anonymous, true);
+            let art: Vec<String> = above.iter().map(|a| self.detached(2, |w| w.node(a))).collect();
+            self.anonymous = anonymous;
+            let mid = self.fresh_id("knockout");
+            self.def(1, &format!("<mask id=\"{mid}\" {MASK} {region}>"));
+            self.def(2, &format!("<rect {region} fill=\"white\"/>"));
+            for a in art {
+                self.defs.push_str(&a);
+            }
+            self.def(1, "</mask>");
+            self.line(&format!("<g mask=\"url(#{mid})\">"));
+            self.depth += 1;
+            self.node(c);
+            self.depth -= 1;
+            self.line("</g>");
         }
     }
 
