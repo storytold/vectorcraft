@@ -5290,6 +5290,13 @@ box is; without `from`, that box is the selection's bounds measured in the turne
 number is an error. Without `angle`, `from` is a box on the page, as before. The Free Transform tool's Perspective Distort and Free Distort send the selection's turned box
 this way, so after a rotation they start from the corners the canvas shows.
 
+After the warp, each warped object's bounding box stands at the angle the warp turns the object's own x axis to at
+the object's center, as measured before the warp. This covers the objects inside a warped group, compound path or clip
+group, each at its own center, and the art of a linked opacity mask; an unlinked mask's art keeps its angle. A warp
+that mirrors the object keeps the angle nearer the old one, and an object whose x axis the warp collapses keeps its
+angle. `object.resetBoundingBox` squares the boxes to the page again. Corners that equal the corners of the box being
+warped (`from`, or the selection's bounds) change nothing and add no undo step. This angle rule is VectorCraft's own.
+
 ```json
 {"name":"run_command","arguments":{"command":"object.distort","params":{"from":[-100,0,0,100],"angle":90,"corners":[[0,100],[0,0],[120,-20],[100,100]]}}}
 ```
@@ -7965,7 +7972,8 @@ CMYK one. Settings saved before these options load with their defaults.
 Every object keeps the angle of its own axes (counter-clockwise degrees; `document.inspect` reports it as a node's
 `rotation`, and the selection's shared angle as `selectionRotation`, 0 when the selected objects differ). Transforms
 turn it with the object while its path geometry is still baked, so after a rotation the bounding box and its handles
-stay square to it, as in the reference app. `object.rotate {angle, absolute: true}` turns the selection to an angle
+stay square to it, as in the reference app. `object.distort` turns it as the warp turns the object at its center
+(see Free Distort on a turned bounding box). `object.rotate {angle, absolute: true}` turns the selection to an angle
 (the Transform and Properties panels' Rotate field), and `object.setBounds` measures width, height and the reference
 point along the turned box (x, y stay page coordinates). Objects turned together share the box. A new group starts
 square to the page. `object.resetBoundingBox` squares the box again without moving the art. It also squares every
