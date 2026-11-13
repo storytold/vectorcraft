@@ -610,6 +610,7 @@ fn duplicate_authored_glyphs_keep_occurrence_order() {
         width: 0.0,
         width_start: 0.0,
         warichu: None,
+        warichu_line: 0.0,
     };
     let before = TextLayout { glyphs: vec![glyph(0), glyph(1)], ..TextLayout::default() };
     assert_eq!(assert_kashida_ownership(&text, &before, &before, &red(), "duplicate glyphs", false), 0);

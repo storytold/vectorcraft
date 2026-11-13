@@ -169,6 +169,7 @@ fn lines_of_clusters(lines: &[&[(usize, usize, f64)]], rtl: bool) -> TextLayout 
                 width: advance,
                 width_start: 0.0,
                 warichu: None,
+                warichu_line: 0.0,
             });
             x += advance;
         }

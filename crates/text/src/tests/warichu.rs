@@ -448,6 +448,91 @@ fn a_click_on_a_block_line_goes_to_its_own_characters() {
     assert_eq!(byte_in_line(&l, 0, l.glyphs[0].origin.x), 0);
 }
 
+/// Selecting characters of a block highlights each on its own line of the block: a character of
+/// the upper line does not highlight the lower one, and a selection that runs from the upper line
+/// to the lower one covers just the selected characters on each. A character with its own
+/// Character Alignment stays on its block line for the highlight and for a click.
+#[test]
+fn a_selection_in_a_block_highlights_its_own_block_line() {
+    let l = layout(db(), &with_block("cdef", marked(20.0)));
+    let (c, d, e) = (&l.glyphs[2], &l.glyphs[3], &l.glyphs[4]);
+    let middle = (c.origin.y + e.origin.y) * 0.5;
+    let extent = |quads: &[[Point; 4]]| {
+        let ys = quads.iter().flatten().map(|p| p.y);
+        let xs = quads.iter().flatten().map(|p| p.x);
+        (
+            xs.clone().fold(f64::INFINITY, f64::min),
+            xs.fold(f64::NEG_INFINITY, f64::max),
+            ys.clone().fold(f64::INFINITY, f64::min),
+            ys.fold(f64::NEG_INFINITY, f64::max),
+        )
+    };
+    // "c", on the upper line.
+    let (x0, x1, y0, y1) = extent(&selection_quads(&l, 2, 3));
+    assert!(y0 < c.origin.y && y1 <= middle + 1e-9, "{y0} {y1} {middle}");
+    assert!((x0 - c.origin.x).abs() < 1e-6 && (x1 - (c.origin.x + c.advance)).abs() < 1e-6, "{x0} {x1}");
+    // "e", on the lower line.
+    let (_, _, y0, y1) = extent(&selection_quads(&l, 4, 5));
+    assert!(y0 >= middle - 1e-9 && y1 > e.origin.y, "{y0} {y1} {middle}");
+    // "de": d on the upper line and e on the lower, nothing of c.
+    let quads = selection_quads(&l, 3, 5);
+    assert_eq!(quads.len(), 2, "{quads:?}");
+    let (x0, _, _, _) = extent(&quads[..1]);
+    assert!((x0 - d.origin.x).abs() < 1e-6, "{x0} {:?}", d.origin);
+    // A selection that runs on past the line's break covers the break after the line's text too.
+    let mut t = with_block("cdef", marked(20.0));
+    t.runs.push(TextRun::new("\u{2028}y", style(20.0)));
+    let l = layout(db(), &t);
+    let z = &l.glyphs[6];
+    let first: Vec<[Point; 4]> = selection_quads(&l, 2, 11).into_iter().filter(|q| q[0].y < l.lines[0].baseline).collect();
+    let (_, x1, _, _) = extent(&first);
+    assert!(x1 > z.origin.x + z.advance + 1.0, "{x1} {:?} {}", z.origin, z.advance);
+    // A character of the upper line with its own Character Alignment stays on that line: on a line
+    // of 40 pt text, where Character Alignment moves a block of 20 pt, "d" is set lower than "c".
+    let mut t = with_block("", marked(20.0));
+    t.runs = vec![
+        TextRun::new("ab", style(40.0)),
+        TextRun::new("c", marked(20.0)),
+        TextRun::new("d", CharStyle { char_align: vectorcraft_doc::CharAlign::EmBoxBottom, ..marked(20.0) }),
+        TextRun::new("ef", marked(20.0)),
+        TextRun::new("z", style(40.0)),
+    ];
+    let l = layout(db(), &t);
+    assert!((l.glyphs[3].origin.y - l.glyphs[2].origin.y).abs() > 0.5, "d is set lower: {:?} {:?}", l.glyphs[2].origin, l.glyphs[3].origin);
+    // "c" and "d" alone take the same band, and "cd" one highlight over both.
+    let band = |a: usize, b: usize| {
+        let (_, _, y0, y1) = extent(&selection_quads(&l, a, b));
+        (y0, y1)
+    };
+    let ((c0, c1), (d0, d1)) = (band(2, 3), band(3, 4));
+    assert!((c0 - d0).abs() < 1e-9 && (c1 - d1).abs() < 1e-9, "{c0} {c1} {d0} {d1}");
+    let quads = selection_quads(&l, 2, 4);
+    assert!(quads.len() == 1 && (quads[0][2].y - c1).abs() < 1e-9, "{quads:?} {c1}");
+    // The lower line's band starts where the upper line's ends.
+    let (e0, _) = band(4, 5);
+    assert!((e0 - c1).abs() < 1e-9, "{e0} {c1}");
+    // A click on the upper line at the end of "d" goes there too, though "d" is set lower than "c".
+    let (c, d) = (&l.glyphs[2], &l.glyphs[3]);
+    assert_eq!(hit_byte(&l, Point::new(d.origin.x + d.advance * 0.75, c.origin.y - 2.0)), 4);
+    // A justified block line's selected characters are highlighted as one piece, over the space
+    // between them too: "im" spread to the length of "mm".
+    let l = layout(db(), &with_block("immm", CharStyle { warichu_align: WarichuAlign::JustifyAll, ..marked(20.0) }));
+    let (i, m) = (&l.glyphs[2], &l.glyphs[3]);
+    assert!(m.origin.x > i.origin.x + i.advance + 1.0, "the line is spread: {:?} {} {:?}", i.origin, i.advance, m.origin);
+    let quads = selection_quads(&l, 2, 4);
+    let (x0, x1, _, _) = extent(&quads);
+    assert!(quads.len() == 1 && (x0 - i.origin.x).abs() < 1e-6 && (x1 - (m.origin.x + m.advance)).abs() < 1e-6, "{quads:?}");
+    // Characters selected together that the bidi order draws apart keep apart: "a" and "א" of
+    // "aאבb", drawn "aבאb", leave "ב" between them out.
+    let l = layout(db(), &with_block("aאבb", CharStyle { warichu_lines: 1, ..marked(20.0) }));
+    let bet = l.glyphs.iter().find(|g| g.byte == 5).map(|g| (l.logical_point(g.origin).x, g.advance)).unwrap();
+    let quads = selection_quads(&l, 2, 5);
+    assert_eq!(quads.len(), 2, "{quads:?}");
+    for q in &quads {
+        assert!(q[1].x <= bet.0 + 1e-6 || q[0].x >= bet.0 + bet.1 - 1e-6, "{q:?} {bet:?}");
+    }
+}
+
 /// Digits marked Warichu in vertical type on a path stand across the column as digits without the
 /// mark do: type on a path does not stack warichu.
 #[test]

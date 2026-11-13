@@ -622,6 +622,7 @@ impl Ctx<'_> {
             width,
             width_start,
             warichu: g.wari.map(|w| w.start),
+            warichu_line: g.wari.map_or(0.0, |w| w.across),
         });
     }
 
