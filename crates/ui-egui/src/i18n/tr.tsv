@@ -5144,6 +5144,7 @@ lighting	Light	Işık
 @msg	unknown parameter `{path}`; it takes: {keys}	bilinmeyen parametre `{path}`; şunları alır: {keys}
 @msg	missing `{path}`	`{path}` eksik
 @msg	`{path}` must be {expected}, not {got}	`{path}` {expected} olmalıdır, {got} değil
+@msg	`{path}` is nested too deeply	`{path}` çok derin iç içe geçmiş
 	1 Layer	1 Katman
 	1 bit	1 bit
 	16 Colors	16 Renk
@@ -6379,6 +6380,16 @@ axis	Y Axis	Y ekseni
 @msg	Batch cannot play an action with a stop	Toplu işlem durak içeren bir eylemi oynatamaz
 	Insert Menu Item…	Menü Öğesi Ekle…
 	Insert Menu Item	Menü Öğesi Ekle
+	Select Object…	Nesne Seç…
+	Select Object	Nesne Seç
+	Set Selection	Seçimi Ayarla
+	Case Sensitive	Büyük/Küçük Harfe Duyarlı
+	Whole Word	Tam Sözcük
+	Select Object: {note}	Nesne Seç: {note}
+	Select by Note	Nota Göre Seç
+@msg	the note is empty	not boş
+@msg	the note is longer than 1,024 bytes	not 1.024 bayttan uzun
+@msg	no object that can be selected has a note matching “{query}”	seçilebilen hiçbir nesnenin notu “{query}” ile eşleşmiyor
 	Menu Item:	Menü öğesi:
 	No menu item matches.	Eşleşen menü öğesi yok.
 	Several menu items match. Choose one from the list.	Birden çok menü öğesi eşleşiyor. Listeden birini seçin.

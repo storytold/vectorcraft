@@ -5717,6 +5717,7 @@ mark-style	Japanese	Japońskie
 @msg	unknown parameter `{path}`; it takes: {keys}	nieznany parametr `{path}`; przyjmuje: {keys}
 @msg	missing `{path}`	brak `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` musi być {expected}, a nie {got}
+@msg	`{path}` is nested too deeply	`{path}` jest zagnieżdżone zbyt głęboko
 	Load EPS into Clipboard	Wczytaj EPS do schowka
 @msg	an image of {w} × {h} pixels is too large to draw	obraz o wymiarach {w} × {h} pikseli jest zbyt duży, aby go narysować
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: to nie jest obraz PNG, JPEG, WebP, TIFF ani BMP
@@ -6277,6 +6278,16 @@ axis	Y Axis	Oś Y
 @msg	Batch cannot play an action with a stop	Przetwarzanie wsadowe nie może odtworzyć operacji z zatrzymaniem
 	Insert Menu Item…	Wstaw polecenie menu…
 	Insert Menu Item	Wstaw polecenie menu
+	Select Object…	Zaznacz obiekt…
+	Select Object	Zaznacz obiekt
+	Set Selection	Ustaw zaznaczenie
+	Case Sensitive	Uwzględniaj wielkość liter
+	Whole Word	Całe słowo
+	Select Object: {note}	Zaznacz obiekt: {note}
+	Select by Note	Zaznacz według notatki
+@msg	the note is empty	notatka jest pusta
+@msg	the note is longer than 1,024 bytes	notatka jest dłuższa niż 1024 bajty
+@msg	no object that can be selected has a note matching “{query}”	żaden obiekt, który można zaznaczyć, nie ma notatki pasującej do „{query}”
 	Menu Item:	Polecenie menu:
 	No menu item matches.	Żadne polecenie menu nie pasuje.
 	Several menu items match. Choose one from the list.	Pasuje kilka poleceń menu. Wybierz jedno z listy.

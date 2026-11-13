@@ -1,4 +1,5 @@
-//! The Artboard tool's canvas menu › Rename: a name for the selected artboards. OK runs
+//! The Artboard tool's canvas menu › Rename, and the Artboards panel's row menu › Rename: a name
+//! for the selected artboards. OK runs
 //! `artboard.rename` as one undo step; with several artboards the name is numbered.
 //!
 //! Fields: `name` (the artboard's name with one artboard, empty with several) and `indices` (the
