@@ -1581,6 +1581,35 @@ fn paintbrush_alt_with_only_two_anchor_line_selected_draws_a_closed_stroke() {
     assert!(matches!(acts.last().and_then(|a| a.get(1)), Some(Action::Commit)), "{acts:?}");
 }
 
+/// A selected two-anchor curve can be smoothed, so Alt Paintbrush smooths it with the Smooth cursor,
+/// as it does a segment along a line that runs past its end and turns back; a two-anchor line whose
+/// handles lie along it between its ends cannot, so Alt still draws the closed stroke.
+#[test]
+fn paintbrush_alt_with_a_two_anchor_curve_selected_smooths() {
+    let p = paint();
+    let alt = Mods { alt: true, ..Default::default() };
+    let cases = [((340.0, 250.0), (360.0, 350.0), true), ((450.0, 300.0), (250.0, 300.0), true), ((330.0, 300.0), (370.0, 300.0), false)];
+    for (h1, h2, smooths) in cases {
+        let (mut d, _) = doc_with_rect();
+        let layer = d.layers[0].id;
+        let id = d.alloc_id();
+        let path = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(vec![
+            vectorcraft_geom::PathEl::MoveTo(Point::new(300.0, 300.0)),
+            vectorcraft_geom::PathEl::CurveTo(Point::new(h1.0, h1.1), Point::new(h2.0, h2.1), Point::new(400.0, 300.0)),
+        ]));
+        d.insert(Some(layer), 1, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let mut selected = Selection::default();
+        selected.set([id]);
+        let cx = cx(&d, &selected, &p);
+        let mut t = GestureTool::new("paintbrush");
+        let want = if smooths { Cursor::Smooth } else { Cursor::PaintbrushClose };
+        assert_eq!(t.cursor(&cx, Point::new(50.0, 150.0), alt), want, "handles {h1:?} {h2:?}");
+        let acts = drag_held(&mut t, &cx, &[(300.0, 300.0), (350.0, 300.0), (400.0, 300.0)], alt);
+        let smoothed = matches!(acts.last().and_then(|a| a.first()), Some(Action::Exec(c, _)) if c == "path.smoothRegion");
+        assert_eq!(smoothed, smooths, "handles {h1:?} {h2:?}: {acts:?}");
+    }
+}
+
 /// #3799: Alt's line starts and ends on Smart Guides as a stroke does, and pressed on an end of
 /// a selected open path it continues the path from that end to the pointer.
 #[test]
