@@ -4756,6 +4756,9 @@ imageTrace	Outline	Obrys
 @msg	`{keep}` is not a side of this axis	`{keep}` není strana této osy
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` musí být `auto` nebo kód jazyka, například `en` nebo `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` musí být barva #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` musí být barva #rrggbb nebo název barvy vrstvy
+@msg	unknown Live Paint option `{key}`	neznámá možnost živé malby `{key}`
+@msg	unknown Shape Builder option `{key}`	neznámá možnost tvorby tvarů `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` musí být barva #rrggbb
 @msg	`{key}` must be a number	`{key}` musí být číslo
 @msg	`{key}` must be a number, not {v}	`{key}` musí být číslo, ne {v}

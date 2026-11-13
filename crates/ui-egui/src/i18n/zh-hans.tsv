@@ -6038,6 +6038,9 @@ lighting	Light	光源
 @msg	a mask has more than one art block	蒙版包含多个图稿块
 @msg	mask art ends outside a mask dictionary	蒙版图稿在蒙版字典之外结束
 @msg	`{key}` must be a #rrggbb color	`{key}` 必须是 #rrggbb 格式的颜色
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` 必须是 #rrggbb 格式的颜色或图层颜色名称
+@msg	unknown Live Paint option `{key}`	未知的实时上色选项 `{key}`
+@msg	unknown Shape Builder option `{key}`	未知的形状生成器选项 `{key}`
 @msg	a linked image can't become a gradient mesh: embed it first	链接的图像无法转换为渐变网格：请先嵌入它
 @msg	the image has no usable size or position	图像没有可用的尺寸或位置
 @msg	the image's pixels can't be read	无法读取图像的像素

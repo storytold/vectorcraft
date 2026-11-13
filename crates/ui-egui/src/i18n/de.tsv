@@ -4370,6 +4370,9 @@ theme	Appearance	Erscheinungsbild
 @msg	`{keep}` is not a side of this axis	`{keep}` ist keine Seite dieser Achse
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` muss `auto` oder ein Sprachcode wie `en` oder `zh-hant` sein
 @msg	`{key}` must be a #rrggbb color	`{key}` muss eine Farbe der Form #rrggbb sein
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` muss eine Farbe der Form #rrggbb oder der Name einer Ebenenfarbe sein
+@msg	unknown Live Paint option `{key}`	unbekannte Option für Interaktiv malen `{key}`
+@msg	unknown Shape Builder option `{key}`	unbekannte Option für Formerstellung `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` muss eine Farbe der Form #rrggbb sein
 @msg	`{key}` must be a number	`{key}` muss eine Zahl sein
 @msg	`{key}` must be a number, not {v}	`{key}` muss eine Zahl sein, nicht {v}

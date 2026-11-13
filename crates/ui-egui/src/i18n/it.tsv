@@ -4499,6 +4499,9 @@ axis	Both	Entrambi
 @msg	`{keep}` is not a side of this axis	`{keep}` non è un lato di questo asse
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` deve essere `auto` o un codice lingua come `en` o `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` deve essere un colore #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` deve essere un colore #rrggbb o il nome di un colore del livello
+@msg	unknown Live Paint option `{key}`	opzione di pittura dinamica sconosciuta `{key}`
+@msg	unknown Shape Builder option `{key}`	opzione del generatore forme sconosciuta `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` deve essere un colore #rrggbb
 @msg	`{key}` must be a number	`{key}` deve essere un numero
 @msg	`{key}` must be a number, not {v}	`{key}` deve essere un numero, non {v}

@@ -3471,7 +3471,10 @@ already walks Image Trace. Short agent entry points:
   tool opens them, dialog `livePaintSelectionOptions`) are `selectFills` and `selectStrokes` (both on), `color` (the
   highlight color, `#rrggbb` or a layer color's name; `#ff2a2a`) and `width` (the highlight's width, 1 to 20 screen
   pixels; 4). The dialog's OK gives an error for a `color` with an alpha part (`#rrggbbaa` or `#rgba`) and changes
-  nothing.
+  nothing. `tool.setOption` gives an error that names the option and sets none of the values, whether the tool is
+  chosen or not, for a `selectFills` or `selectStrokes` that is not `true` or `false`, a `color` that is not `#rrggbb`,
+  `#rgb` (with or without `#`), a layer color's name or a basic color name such as `white`, or that has an alpha part,
+  a `width` that is not a number, and an option the tool does not have. A `width` outside 1 to 20 is set to 1 or 20.
   With `selectStrokes` off, Alt-click selects the face under the pointer as a click does; with
   `selectFills` off, a click selects the edge nearest the pointer as Alt-click does; with both off, a click selects
   no face or edge. A drag of 3 screen pixels or more draws a marquee, and the release runs `select.set {ids}` with
@@ -3488,7 +3491,11 @@ already walks Image Trace. Short agent entry points:
   them, dialog `livePaintBucketOptions`) are `paintFills` (on), `paintStrokes` (off), `highlight` (on), `color` (the
   highlight color, `#rrggbb` or a layer color's name; `#ff2a2a`) and `width` (the face highlight's width, 1 to 20 screen
   pixels; 4; an edge's highlight is half as wide). The dialog's OK gives an error for a `color` with an alpha part
-  (`#rrggbbaa` or `#rgba`) and changes nothing. With `paintFills` alone on, a click runs `livePaint.fill` and Shift-click runs `livePaint.strokeEdge`.
+  (`#rrggbbaa` or `#rgba`) and changes nothing. `tool.setOption` gives an error that names the option and sets none of
+  the values, whether the tool is chosen or not, for a `paintFills`, `paintStrokes` or `highlight` that is not `true`
+  or `false`, a `color` that is not `#rrggbb`, `#rgb` (with or without `#`), a layer color's name or a basic color name
+  such as `white`, or that has an alpha part, a `width` that is not a number, and an option the tool does not have. A
+  `width` outside 1 to 20 is set to 1 or 20. With `paintFills` alone on, a click runs `livePaint.fill` and Shift-click runs `livePaint.strokeEdge`.
   With `paintStrokes` alone on, a click runs `livePaint.strokeEdge` on the edge within 4 screen pixels of the pointer,
   or nothing when none is in reach, and Shift-click runs `livePaint.fill`. With both on, a click runs
   `livePaint.strokeEdge` when an edge is within 4 screen pixels of the pointer and `livePaint.fill` otherwise, and
@@ -9825,7 +9832,12 @@ pointer show the current fill and the swatches before and after it), `selection`
 default; when it is off, merge mode shades no regions), `gapDetection` (off) with `gapLength` (pt, 0 to 72; 3), `clickStrokeSplitsPath` (In Merge Mode,
 Clicking Stroke Splits the Path; off), `highlightStroke` (Highlight Stroke When Editable; on) and `highlightColor`
 (`#rrggbb` or a layer color's name; `#ff4f4f`, the layer color Red). The dialog's OK gives an error for a
-`highlightColor` with an alpha part (`#rrggbbaa` or `#rgba`) and changes nothing. With `clickStrokeSplitsPath` on, in merge mode,
+`highlightColor` with an alpha part (`#rrggbbaa` or `#rgba`) and changes nothing. `tool.setOption` gives an error that
+names the option and sets none of the values, whether the tool is chosen or not, for a switch that is not `true` or
+`false`, a `pickColorFrom` other than `artwork` or `swatches`, a `selection` other than `freeform` or `straightLine`, a
+`gapLength` that is not a number, a `highlightColor` that is not `#rrggbb`, `#rgb` (with or without `#`), a layer
+color's name or a basic color name such as `white`, or that has an alpha part, and an option the tool does not have. A
+`gapLength` outside 0 to 72 is set to 0 or 72. With `clickStrokeSplitsPath` on, in merge mode,
 the pointer shows scissors within 4 screen pixels of a stroke, `highlightStroke` draws the run of stroke under it in
 `highlightColor`, and a click splits that run off its path: the run goes from the anchor or crossing point before the
 pointer to the one after it, the path keeps the rest of it, and a copy of the path with the run, in the path's

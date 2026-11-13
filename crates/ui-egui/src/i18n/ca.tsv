@@ -5260,6 +5260,9 @@ digits	Malayalam	Malaiàlam
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` ha de ser [x, y, width, height]: quatre nombres finits, amb amplada i alçada no negatives
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` ha de ser `auto` o un codi d’idioma com `en` o `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` ha de ser un color #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` ha de ser un color #rrggbb o el nom d’un color de capa
+@msg	unknown Live Paint option `{key}`	opció de pintura interactiva desconeguda `{key}`
+@msg	unknown Shape Builder option `{key}`	opció del constructor de formes desconeguda `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` ha de ser un color #rrggbb
 @msg	`{key}` must be a number	`{key}` ha de ser un nombre
 @msg	`{key}` must be a number not below 0	`{key}` ha de ser un nombre no inferior a 0

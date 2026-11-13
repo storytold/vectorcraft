@@ -4484,6 +4484,9 @@ axis	Both	Оба
 @msg	`{keep}` is not a side of this axis	`{keep}` не является стороной этой оси
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` должно быть `auto` или кодом языка, например `en` или `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` должно быть цветом #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` должно быть цветом #rrggbb или названием цвета слоя
+@msg	unknown Live Paint option `{key}`	неизвестный параметр быстрой заливки `{key}`
+@msg	unknown Shape Builder option `{key}`	неизвестный параметр создания фигур `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` должно быть цветом #rrggbb
 @msg	`{key}` must be a number	`{key}` должно быть числом
 @msg	`{key}` must be a number, not {v}	`{key}` должно быть числом, а не {v}

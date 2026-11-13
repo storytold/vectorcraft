@@ -2821,6 +2821,9 @@ file-filter	Templates	範本
 @msg	a mask has more than one art block	遮色片含有多個圖稿區塊
 @msg	mask art ends outside a mask dictionary	遮色片圖稿在遮色片字典之外結束
 @msg	`{key}` must be a #rrggbb color	`{key}` 必須是 #rrggbb 格式的顏色
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` 必須是 #rrggbb 格式的顏色或圖層顏色名稱
+@msg	unknown Live Paint option `{key}`	未知的即時上色選項 `{key}`
+@msg	unknown Shape Builder option `{key}`	未知的形狀建立選項 `{key}`
 @msg	a linked image can't become a gradient mesh: embed it first	連結的影像無法轉換為漸層網格：請先內嵌
 @msg	the image has no usable size or position	影像沒有可用的尺寸或位置
 @msg	the image's pixels can't be read	無法讀取影像的像素
