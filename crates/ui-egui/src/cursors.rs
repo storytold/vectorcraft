@@ -432,6 +432,42 @@ fn shape_builder(p: &mut Ink, o: Pos2, erase: bool) {
     }
 }
 
+/// The Live Paint Bucket: a paint bucket tipped toward the hotspot at its lower left, its mouth
+/// down-left with a rim across it, and a drop on the hotspot. Empty (white) with a small drop where
+/// a click paints nothing; filled, with a larger drop, where a click fills a face.
+fn paint_bucket(p: &mut Ink, o: Pos2, filled: bool) {
+    // `u` runs from the hotspot up-right into the bucket, `v` across it.
+    let (d, n) = (vec2(1.0, -1.0).normalized(), vec2(1.0, 1.0).normalized());
+    let at = |u: f32, v: f32| o + u * d + v * n;
+    poly(p, vec![at(5.5, -6.0), at(16.5, -4.5), at(16.5, 4.5), at(5.5, 6.0)], if filled { INK } else { HALO }, INK);
+    poly(p, vec![at(4.5, -7.0), at(6.5, -7.0), at(6.5, 7.0), at(4.5, 7.0)], INK, INK);
+    if filled {
+        p.circle_filled(o, 3.5, HALO);
+        p.circle_filled(o, 2.2, INK);
+    } else {
+        p.circle_filled(o, 2.5, HALO);
+        p.circle_filled(o, 1.25, INK);
+    }
+}
+
+/// The Live Paint Bucket over an edge it paints: a brush, its bristles' tip on the hotspot, the
+/// white ferrule and the black handle running up-right.
+fn paint_brush(p: &mut Ink, o: Pos2) {
+    let (d, n) = (vec2(1.0, -1.0).normalized(), vec2(1.0, 1.0).normalized());
+    let at = |u: f32, v: f32| o + u * d + v * n;
+    let bristles = vec![at(0.0, 0.0), at(4.0, -2.2), at(6.0, -2.2), at(6.0, 2.2), at(4.0, 2.2)];
+    let ferrule = vec![at(6.0, -2.0), at(9.0, -2.0), at(9.0, 2.0), at(6.0, 2.0)];
+    let handle = vec![at(9.0, -1.5), at(19.0, -1.2), at(19.0, 1.2), at(9.0, 1.5)];
+    // Every halo first, so no part's halo covers another's outline.
+    for part in [&bristles, &ferrule, &handle] {
+        p.add(Shape::closed_line(part.clone(), Stroke::new(3.0, HALO)));
+    }
+    for (part, fill) in [(bristles, INK), (ferrule, HALO), (handle, INK)] {
+        p.add(Shape::convex_polygon(part.clone(), fill, Stroke::NONE));
+        p.add(Shape::closed_line(part, Stroke::new(1.0, INK)));
+    }
+}
+
 /// The Hand tool and Space: an open hand (palm and four fingers, thumb to the left), or the same
 /// hand closed while it drags the view. Windows has no system hand that isn't a pointing finger
 /// (winit maps egui's Grab and Grabbing to the four-headed move cursor), so it is drawn like the
@@ -480,7 +516,7 @@ fn magnifier(p: &mut Ink, o: Pos2, out: bool) {
 
 /// Every cursor with a glyph: its own, drawn here, or the one it borrows.
 #[cfg(test)]
-const GLYPHS: [Cursor; 93] = [
+const GLYPHS: [Cursor; 95] = [
     Cursor::Hand,
     Cursor::HandGrab,
     Cursor::ZoomIn,
@@ -548,6 +584,8 @@ const GLYPHS: [Cursor; 93] = [
     Cursor::Knife,
     Cursor::Shaper,
     Cursor::LivePaintBucket,
+    Cursor::LivePaintBucketFace,
+    Cursor::LivePaintBucketEdge,
     Cursor::Measure,
     Cursor::PrintTiling,
     Cursor::SymbolSprayer,
@@ -669,6 +707,9 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::LoadedText => loaded_text(ink, p),
         Cursor::ShapeBuilder => shape_builder(ink, p, false),
         Cursor::ShapeBuilderErase => shape_builder(ink, p, true),
+        Cursor::LivePaintBucket => paint_bucket(ink, p, false),
+        Cursor::LivePaintBucketFace => paint_bucket(ink, p, true),
+        Cursor::LivePaintBucketEdge => paint_brush(ink, p),
         Cursor::Hand => hand(ink, p, false),
         Cursor::HandGrab => hand(ink, p, true),
         Cursor::ZoomIn => magnifier(ink, p, false),

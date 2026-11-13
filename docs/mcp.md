@@ -2692,6 +2692,43 @@ kept with the workspace, and built-in workspaces and workspaces saved without it
 {"name":"invoke_menu","arguments":{"command":"window.toolsBesideCanvas","params":{"on":true}}}
 ```
 
+## Docking toolbars made with New Toolbar
+
+A toolbar made with New Toolbar floats when it is made. `window.toolbar.dock {name, side?, order?}` (Dock to Left and
+Dock to Right in the context menu of the toolbar's title bar, remote mode, `invoke_menu`) docks it in a lane along the
+window's left or right edge. On the left, the lane is right of the Tools panel when the Tools panel is docked at the
+window's edge. With Keep Tools Beside the Canvas on and the Tools panel docked on the left, the lane is right of the
+Tools panel beside the canvas, and dropping a title bar on the Tools panel or on the lane docks the toolbar there. `side` is `left` or `right` (`start` and `end` also work); without it, the toolbar docks at the edge it
+docked at last, or at the left the first time. Toolbars docked at one edge stack from the top. `order` is the
+toolbar's place in that stack, 0 at the top, from 0 to the number of other toolbars docked there; without it, the
+toolbar goes at the end, or stays where it is when it is already docked at that edge. Each toolbar takes an equal
+share of the lane's height and its tools scroll in it, and the lane is as wide as its widest toolbar. When the lane
+is too short to give each toolbar 88 points of height, the stack wraps into more columns, left to right, and the lane
+widens, so no toolbar covers another. A lane takes at most half the width the canvas and panels would have (beside
+the canvas, it also leaves the canvas at least 200 points, and the canvas keeps room for one column); when that
+many columns still give a toolbar less than 88 points, the toolbars in those columns show only their title bars, which
+still float, dock and show the context menu. A column too short for all of its title bars shows as many as fit, and
+the mouse wheel over the column scrolls through the others, one toolbar per notch.
+`window.toolbar.float {name, x?, y?}` (Float Toolbar in the same menu) floats it with its top-left corner at `x`, `y`
+in screen points, or where it floated last when both are omitted. Both commands answer
+`{toolbar, floating, side, order, pos}`: `side` is the edge the toolbar docks at (while it floats, the edge it docked
+at last), `order` its place in that edge's stack (null while it floats) and `pos` where it floats (while it is docked,
+where it floated last). A missing or unknown name, a `side` other than left or right, an `order` that is not a whole
+number in range, or only one of `x` and `y` is an error and changes nothing. `window.toolbar.list` reports `floating`,
+`side` and `order` for each toolbar.
+
+With the pointer, dropping a floating toolbar's title bar on the window's left or right edge, or on that edge's lane,
+docks it at the end of that edge's stack; the target lights up while the title bar is dragged over it. Dragging a
+docked toolbar's title bar out of its lane floats it under the pointer. Escape, or the window losing focus, during
+the drag puts the toolbar back where it was. Hiding a docked toolbar keeps its place, renaming it keeps its place, a
+copy made with Manage Toolbars' + floats, and deleting one closes up the stack. Placement is kept with the workspace.
+Toolbars saved before docking existed load floating. The lanes, the edge targets and the stacking are VectorCraft's
+own layout rules.
+
+```json
+{"name":"invoke_menu","arguments":{"command":"window.toolbar.dock","params":{"name":"Toolbar 1","side":"left","order":0}}}
+```
+
 ## Learn panel
 
 Window › Learn and the Explore tutorials button beside the search icon at the right end of the app bar show and hide
@@ -5462,8 +5499,12 @@ the selected artboards (those the Artboard tool has selected, else the active on
 `artboard.fitToSelection` calls it runs without `index`. Both include MCP's `run_command` calls in remote mode. The
 Artboards panel menu's Fit to Artwork Bounds also passes the selected artboards. A batch passes its `artboard` on to
 each of their steps that names no `index`, as the step's `index`. When the document a step runs in has no artboard at
-that index, the step gets that document's last artboard. An action recorded in the Actions panel leaves `index` and
-`indices` out of these steps, and they resize the artboard that is active when the action plays.
+that index, the step gets that document's last artboard. An `artboard.fitToArt` step that names neither `index` nor
+`indices`, while the Artboard tool is chosen with several artboards selected when the step runs, gets those artboards
+as its `indices` instead, and the batch's journal entry records them, so a replay of the journal fits the same
+artboards. A step's own `index` or `indices` is kept. An action recorded in the Actions panel leaves `index` and
+`indices` out of these steps: when the action plays, Fit to Artwork Bounds resizes the artboards the Artboard tool then
+has selected (two or more), else the active artboard, and Fit to Selected Art resizes the active artboard.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.align","params":{"horizontal":"left","to":"artboard","artboard":1}}}

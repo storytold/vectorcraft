@@ -684,8 +684,9 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Done:** custom document ruler origin (#1212): corner drag with preview, double-click reset to the active artboard, relative X/Y inputs and native save/reopen.
 - **Done:** View › Rulers › Change to Global / Artboard Rulers (`view.globalRulers`, Cmd+Alt+R): artboard rulers, a new document's, count from the active artboard, each artboard with its own zero point; rulers, X/Y fields and guide readouts follow the mode, which is saved with the document. Estimate unchanged.
 - **Done (#2849):** View › Rulers › Show Video Rulers (`view.videoRulers`): the rulers show and count the active artboard in video pixels from its top-left corner, a pixel as many points wide as the artboard's Video Ruler Pixel Aspect Ratio and one point tall ([public source](https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/set-video-display-options-for-artboards.html)); Hide Video Rulers returns them to the General unit and the ruler origin. Shift-snapping a new guide to ruler ticks still uses the General unit's ticks. Estimate unchanged.
-- **Partial:** custom toolbars (#1759): Window › Toolbars › New Toolbar makes them, kept with the workspace they
-  were made in, and Window › Toolbars › Manage Toolbars renames, copies and deletes them; docking them is missing.
+- **Done:** custom toolbars (#1759): Window › Toolbars › New Toolbar makes them, kept with the workspace they
+  were made in, and Window › Toolbars › Manage Toolbars renames, copies and deletes them; they dock in lanes along
+  the window's left and right edges (`window.toolbar.dock`, `window.toolbar.float`).
   Inside the estimate below.
 - **Done (#1753):** a saved workspace keeps the width of the dock column.
 - **Done (#4135):** floating panels open in OS windows of their own on the desktop, so they can sit on another monitor; on the web and on Wayland they float inside the window.

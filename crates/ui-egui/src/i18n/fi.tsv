@@ -911,6 +911,10 @@
 	Dock Panel	Telakoi paneeli
 	Dock to Top	Telakoi ylös
 	Dock to Bottom	Telakoi alas
+	Dock to Left	Telakoi vasemmalle
+	Dock to Right	Telakoi oikealle
+	Dock Toolbar	Telakoi työkalurivi
+	Float Toolbar	Kelluta työkalurivi
 	Control Bar Options	Ohjauspalkin asetukset
 	Tool Options	Työkalun asetukset
 	Object Options	Objektin asetukset
@@ -3939,6 +3943,19 @@ theme	Appearance	Ulkoasu
 	Spot Color Objects	Objektit, joissa on spottivärejä
 	Pattern Objects	Objektit, joissa on kuvioita
 	Gradient Objects	Objektit, joissa on liukuvärejä
+	Font Details	Fonttien tiedot
+	Linked Images	Linkitetyt kuvat
+	Embedded Images	Upotetut kuvat
+	Compound Paths	Yhdistelmäpolut
+	Text Objects	Tekstiobjektit
+	Placed Documents	Sijoitetut asiakirjat
+	Symbol Instances	Symbolien ilmentymät
+	Gradient Meshes	Liukuväriverkot
+	Blends	Sulautukset
+	Envelopes	Vääristyskuoret
+	Intertwine Groups	Lomitusryhmät
+	Opacity Masks	Peittävyysmaskit
+	Objects with Effects	Objektit, joissa on tehosteita
 	Spot Colors	Spottivärit
 	Spot Colors (0)	Spottivärit (0)
 	Swatch Options	Värimallin asetukset
