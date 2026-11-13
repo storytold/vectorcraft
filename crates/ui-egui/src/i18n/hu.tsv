@@ -2605,6 +2605,8 @@ file-filter	Templates	Sablonok
 	Move Guide to Layer	Segédvonal áthelyezése rétegre
 	Move in Perspective	Áthelyezés perspektívában
 	Move Library Item to Group	Könyvtárelem áthelyezése csoportba
+	Rename Library Item	Könyvtárelem átnevezése
+	Add to Character Styles	Hozzáadás a karakterstílusokhoz
 	Move Locked and Hidden Artwork with Artboard	Zárolt és rejtett grafika mozgatása a rajztáblával
 	Move Mesh Point	Hálópont áthelyezése
 	Move Mesh Points	Hálópontok áthelyezése
@@ -5314,6 +5316,7 @@ imageTrace	Outline	Körvonal
 @msg	no interaction in progress	nincs folyamatban lévő művelet
 @msg	no key object	nincs kulcsobjektum
 @msg	no library `{id}`	nincs ilyen könyvtár: `{id}`
+@msg	the library has another item of that kind named `{name}`	a könyvtárban már van egy másik ilyen fajta elem `{name}` néven
 @msg	no library `{key}` (see {list})	nincs ilyen könyvtár: `{key}` (lásd: {list})
 @msg	no Live Paint edge near that point	annál a pontnál nincs élőfestés-él
 @msg	no Live Paint face at that point	annál a pontnál nincs élőfestés-felület

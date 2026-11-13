@@ -3542,6 +3542,8 @@ theme	Appearance	Ulkoasu
 	Rename Library Group	Nimeä kirjastoryhmä uudelleen
 	Delete Library Group	Poista kirjastoryhmä
 	Move Library Item to Group	Siirrä kirjaston kohde ryhmään
+	Rename Library Item	Nimeä kirjaston kohde uudelleen
+	Add to Character Styles	Lisää merkkityyleihin
 	Rename Library	Nimeä kirjasto uudelleen
 	Show Library	Näytä kirjasto
 	Use Library Item	Käytä kirjaston kohdetta
@@ -4392,6 +4394,7 @@ imageTrace	Outline	Ääriviiva
 @plural	{n} step|{n} steps	{n} vaihe|{n} vaihetta
 @plural	{n} stroke|{n} strokes	{n} viiva|{n} viivaa
 @msg	no library `{id}`	ei kirjastoa `{id}`
+@msg	the library has another item of that kind named `{name}`	kirjastossa on jo toinen samanlainen kohde nimeltä `{name}`
 @msg	select some type first	valitse ensin tekstiä
 @msg	kerning must be a number, "auto", or "optical"	kerning-arvon on oltava luku, ”auto” tai ”optical”
 @msg	the selection has no gradient fill	valinnalla ei ole liukuväritäyttöä
