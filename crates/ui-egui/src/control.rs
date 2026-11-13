@@ -1088,13 +1088,14 @@ fn leave_out_unreadable_pref_steps(command: &str, params: &mut serde_json::Map<S
 /// paths the request may not read: the value of a path param
 /// ([`vectorcraft_engine::file_access::is_path_key`]: `path`, `file`, `diffPath`, `destinationFolder`
 /// and the like), each path of a list under such a param, and under any other param, as a key too, a
-/// string written as a path ([`unreadable_path_like`]).
+/// string written as a path ([`unreadable_path_like`]). An empty or blank value names no path and stays.
 fn leave_out_unreadable_params(params: &mut serde_json::Map<String, Value>) {
     use vectorcraft_engine::file_access::is_path_key;
+    let shown = |p: &str| p.trim().is_empty() || readable_value(p);
     params.retain(|key, v| {
         !unreadable_path_like(key)
             && match v.as_str() {
-                Some(p) => !unreadable_path_like(p) && !(is_path_key(key) && !readable_value(p)),
+                Some(p) => !unreadable_path_like(p) && !(is_path_key(key) && !shown(p)),
                 None => true,
             }
     });
@@ -1102,7 +1103,7 @@ fn leave_out_unreadable_params(params: &mut serde_json::Map<String, Value>) {
         if let Value::Array(paths) = v
             && is_path_key(key)
         {
-            paths.retain(|p| p.as_str().is_none_or(readable_value));
+            paths.retain(|p| p.as_str().is_none_or(shown));
         }
         leave_out_unreadable_values(v);
     }
