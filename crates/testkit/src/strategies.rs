@@ -2,7 +2,8 @@
 
 use proptest::prelude::*;
 use serde_json::{Value, json};
-use vectorcraft_engine::{Session, command_specs};
+use vectorcraft_engine::cmd::{Location, key_location, location_in, location_keys};
+use vectorcraft_engine::{CommandSpec, Session, command_specs};
 use vectorcraft_geom::{Anchor, PathData, Point, Rect, SubPath};
 
 use crate::fixtures::{art_nodes, top_level_ids};
@@ -473,8 +474,11 @@ pub fn all_param_keys() -> Vec<String> {
     keys.into_iter().collect()
 }
 
-/// Keys of a params doc string like `{x, y, width?, radius?: pt} → {id}` (only the part before `→`).
+/// Keys of a params doc string like `{x, y, width?, radius?: pt} → {id}` (only the part before `→`),
+/// with every key the engine reads in it ([`vectorcraft_engine::cmd::params::doc_keys`]: `path | name`,
+/// `folder? (…)`).
 pub fn param_keys(doc: &str) -> Vec<String> {
+    let described = vectorcraft_engine::cmd::params::doc_keys(doc).map(|p| p.keys).unwrap_or_default();
     let doc = doc.split('→').next().unwrap_or("");
     let chars: Vec<char> = doc.chars().collect();
     let mut out = vec![];
@@ -497,53 +501,112 @@ pub fn param_keys(doc: &str) -> Vec<String> {
             i += 1;
         }
     }
+    out.extend(described.into_iter().map(str::to_string));
     out.sort();
     out.dedup();
     out
 }
 
-/// Parameter-name keys that name a file or folder a command may write: fuzzing these with
-/// arbitrary strings could write files anywhere, so callers substitute a temp path.
+/// The keys of command `spec`: those of its params doc ([`param_keys`]), of its schema and its file
+/// and folder keys ([`location_keys`]).
+pub fn command_param_keys(spec: &CommandSpec) -> Vec<String> {
+    let mut keys = param_keys(spec.params);
+    keys.extend(spec.schema.into_iter().flat_map(|s| s.params.iter().map(|p| p.name.to_string())));
+    keys.extend(location_keys(spec).into_iter().map(|(k, _)| k.to_string()));
+    keys.sort();
+    keys.dedup();
+    keys
+}
+
+/// Parameter-name keys that name a file or folder in some command ([`key_location`]): fuzzing these
+/// with arbitrary strings could write files anywhere, so callers substitute a temp path.
 pub fn is_path_key(k: &str) -> bool {
-    matches!(k, "path" | "diffPath") || is_folder_key(k)
+    key_location(k).is_some()
 }
 
-/// Path keys that name a folder a command creates or writes files into.
+/// Path keys that name a folder a command reads, creates or writes files into ([`key_location`]):
+/// `folder`, `folders`, `dir`, `directory`, `destinationFolder` and `sourceFolder`.
 pub fn is_folder_key(k: &str) -> bool {
-    matches!(k, "folder" | "destinationFolder")
+    key_location(k) == Some(Location::Folder)
 }
 
-/// The location to send under the path key `k`: `safe_path` for a file, a folder next to it for
-/// a folder key.
+/// The location to send under the path key `k`: `safe_path` for a file, a folder next to it (in
+/// the same temp folder) for a folder key.
 pub fn safe_location(k: &str, safe_path: &str) -> String {
-    if is_folder_key(k) { format!("{safe_path}-folder") } else { safe_path.to_string() }
+    location(key_location(k).unwrap_or(Location::File), safe_path)
 }
 
-/// `v`, or the temp location for `k` when `k` is a path key and `v` is a string.
+/// The temp location for a key that names `l`: `safe_path` for a file, a folder next to it (in
+/// the same temp folder) for a folder.
+fn location(l: Location, safe_path: &str) -> String {
+    if l == Location::Folder { format!("{safe_path}-folder") } else { safe_path.to_string() }
+}
+
+/// `v` with every string in it that can name a place on disk sent to the temp location: `v`
+/// itself and the members of arrays in it, at any depth, when `kind` is `Some`, and in an object
+/// at any depth, the strings under a path key ([`is_path_key`]). Other values keep their junk
+/// shape.
+fn redirect(kind: Option<Location>, v: &Value, safe_path: &str) -> Value {
+    match v {
+        Value::String(_) => kind.map_or_else(|| v.clone(), |l| json!(location(l, safe_path))),
+        Value::Array(a) => Value::Array(a.iter().map(|x| redirect(kind, x, safe_path)).collect()),
+        Value::Object(o) => Value::Object(o.iter().map(|(k, x)| (k.clone(), redirect(key_location(k), x, safe_path))).collect()),
+        _ => v.clone(),
+    }
+}
+
+/// `v`, with its strings sent to the temp location when `k` is a path key in any command
+/// ([`is_path_key`]), and the strings under path keys in objects inside it too.
 pub fn safe_value(k: &str, v: &Value, safe_path: &str) -> Value {
-    if is_path_key(k) && v.is_string() { json!(safe_location(k, safe_path)) } else { v.clone() }
+    redirect(key_location(k), v, safe_path)
+}
+
+/// `v` as [`safe_value`] makes it for command `spec` ([`location_in`]): a key that names part of
+/// the document in it keeps its strings.
+pub fn safe_value_for_command(spec: &CommandSpec, k: &str, v: &Value, safe_path: &str) -> Value {
+    redirect(location_in(spec, k), v, safe_path)
 }
 
 /// A deterministic list of junk param objects for `doc` (the command's params doc): each
-/// documented key set to each junk value, all keys junk at once, wrong top-level types.
+/// documented key set to each junk value, all keys junk at once, wrong top-level types. A string
+/// under a key that names a file or folder in any command ([`is_path_key`]) is a temp location.
 pub fn junk_params(doc: &str, safe_path: &str) -> Vec<Value> {
-    let keys = param_keys(doc);
+    junk_params_with(&param_keys(doc), |k, v| safe_value(k, v, safe_path), key_location, safe_path)
+}
+
+/// [`junk_params`] for command `spec`, with the keys of its schema and its file and folder keys too
+/// ([`command_param_keys`]), and a string under each key that names a file or folder in it
+/// ([`location_in`]) a temp location, as are the strings in an array of them and under the path
+/// keys of objects in one (`paths: [{ids, path}]`), which it also sends.
+pub fn junk_params_for_command(spec: &CommandSpec, safe_path: &str) -> Vec<Value> {
+    junk_params_with(&command_param_keys(spec), |k, v| safe_value_for_command(spec, k, v, safe_path), |k| location_in(spec, k), safe_path)
+}
+
+/// The junk cases for `keys`: `safe(k, v)` is what is sent for junk value `v` under `k`, and
+/// `kind(k)` what `k` names on disk, if anything, whose keys also get a list of locations and a
+/// list of objects with a `path`.
+fn junk_params_with(keys: &[String], safe: impl Fn(&str, &Value) -> Value, kind: impl Fn(&str) -> Option<Location>, safe_path: &str) -> Vec<Value> {
     let junk = junk_values();
     let mut out = vec![Value::Null, json!([]), json!("str"), json!(42), json!({"unknownKey": 1})];
-    for k in &keys {
+    for k in keys {
         for (i, v) in junk.iter().enumerate() {
-            let v = safe_value(k, v, safe_path);
+            let v = safe(k, v);
             // Sparse: one key at a time with every junk value, plus a few combos.
             let mut o = serde_json::Map::new();
             o.insert(k.clone(), v.clone());
             out.push(Value::Object(o));
             if i % 5 == 0 {
                 let mut all = serde_json::Map::new();
-                for k2 in &keys {
-                    let v2 = if is_path_key(k2) { json!(safe_location(k2, safe_path)) } else { v.clone() };
+                for k2 in keys {
+                    let v2 = kind(k2).map_or_else(|| v.clone(), |l| json!(location(l, safe_path)));
                     all.insert(k2.clone(), v2);
                 }
                 out.push(Value::Object(all));
+            }
+        }
+        if let Some(l) = kind(k) {
+            for v in [json!(["junk", "", 1]), json!([{"ids": [1], "path": "junk"}, {"path": null}])] {
+                out.push(json!({ k.as_str(): redirect(Some(l), &v, safe_path) }));
             }
         }
     }

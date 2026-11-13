@@ -104,6 +104,92 @@ fn handles_turn_with_the_object_and_scale_along_its_axes() {
     assert!(near(selection_box(&s).rect.width(), 100.0));
 }
 
+/// Presses, drags and lets go with the current tool along `pts`, holding `mods`.
+fn drag_with(s: &mut Session, pts: &[Point], mods: Mods) {
+    let v = ViewInfo::default();
+    let kinds = std::iter::once(PointerKind::Down).chain(std::iter::repeat_n(PointerKind::Drag, pts.len().saturating_sub(2)));
+    for (kind, p) in kinds.chain([PointerKind::Up]).zip(pts) {
+        s.pointer(&PointerEvent::new(kind, p.x, p.y).with_mods(mods), v).unwrap();
+    }
+}
+
+/// The anchors of path `id`, on the page.
+fn anchors(s: &Session, id: NodeId) -> Vec<Point> {
+    s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().anchors().map(|(_, _, an)| an.p).collect()
+}
+
+fn has_point(pts: &[Point], p: Point) -> bool {
+    pts.iter().any(|q| q.distance(p) < 1e-6)
+}
+
+#[test]
+fn free_transform_handles_turn_with_the_object_and_scale_along_its_axes() {
+    let mut s = session();
+    let a = turned_rect(&mut s);
+    let b = selection_box(&s);
+    // The Right handle of the turned box, dragged 50 pt further out along the object's own x axis.
+    let right = b.to_doc() * Handle::Right.pos(b.rect);
+    let to = b.to_doc() * (Handle::Right.pos(b.rect) + vectorcraft_geom::Vec2::new(50.0, 0.0));
+    let n = undo_len(&s);
+    s.select_tool("freeTransform", ViewInfo::default()).unwrap();
+    drag_with(&mut s, &[right, to, to], Mods::default());
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Scale"));
+    // 150 × 50 along its own axes, still at exactly 45°, the left side where it was.
+    assert_eq!(angle(&s, a), b.angle);
+    let nb = selection_box(&s);
+    assert!(near(nb.rect.width(), 150.0) && near(nb.rect.height(), 50.0), "{nb:?}");
+    let left = |b: &OrientedBox| b.to_doc() * Handle::Left.pos(b.rect);
+    assert!(left(&nb).distance(left(&b)) < 1e-6);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(near(selection_box(&s).rect.width(), 100.0));
+}
+
+#[test]
+fn free_transform_shears_along_the_turned_side() {
+    let mut s = session();
+    let a = turned_rect(&mut s);
+    let b = selection_box(&s);
+    let [tl, tr, br, bl] = b.corners();
+    // Dragging the Top handle 20 pt along the object's own top side with Cmd held once the drag
+    // started (a Cmd press is the temporary Selection tool) slides that side along itself; the
+    // bottom side stays.
+    let top = b.to_doc() * Handle::Top.pos(b.rect);
+    let along = b.to_doc() * (Handle::Top.pos(b.rect) + vectorcraft_geom::Vec2::new(20.0, 0.0));
+    let shift = along - top;
+    let v = ViewInfo::default();
+    s.select_tool("freeTransform", v).unwrap();
+    let cmd = Mods { cmd: true, ..Default::default() };
+    for (kind, p, m) in [(PointerKind::Down, top, Mods::default()), (PointerKind::Drag, along, cmd), (PointerKind::Up, along, cmd)] {
+        s.pointer(&PointerEvent::new(kind, p.x, p.y).with_mods(m), v).unwrap();
+    }
+    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Shear"));
+    let pts = anchors(&s, a);
+    for p in [tl + shift, tr + shift, br, bl] {
+        assert!(has_point(&pts, p), "{p:?} not in {pts:?}");
+    }
+}
+
+#[test]
+fn free_transform_distort_starts_from_the_turned_box() {
+    let mut s = session();
+    let a = turned_rect(&mut s);
+    let b = selection_box(&s);
+    let [tl, tr, br, bl] = b.corners();
+    s.select_tool("freeTransform", ViewInfo::default()).unwrap();
+    s.set_tool_option("mode", &json!("distort"));
+    let to = br + vectorcraft_geom::Vec2::new(10.0, 20.0);
+    let n = undo_len(&s);
+    drag_with(&mut s, &[br, to, to], Mods::default());
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("object.distort"));
+    // The dragged corner of the turned box lands under the pointer; the other three stay.
+    let pts = anchors(&s, a);
+    for p in [tl, tr, to, bl] {
+        assert!(has_point(&pts, p), "{p:?} not in {pts:?}");
+    }
+}
+
 #[test]
 fn transform_panel_sizes_follow_the_turned_box() {
     let mut s = session();
@@ -374,4 +460,73 @@ fn the_selection_tool_reports_a_transforming_drag() {
     s.pointer(&ev(PointerKind::Drag, 550.0, 450.0), v).unwrap();
     assert!(s.tool_busy() && !s.tool_transforming());
     s.pointer(&ev(PointerKind::Up, 550.0, 450.0), v).unwrap();
+}
+
+/// With General › Show Bounding Box While Moving and Drawing on, a move drag's bounding box is the
+/// box measured once, at the drag's start, offset by each step's move: with Real-time Drawing on
+/// and off, the later steps do not measure the selection again. Off, only the Selection tool with
+/// Real-time Drawing off gives a box (the art waits for the release).
+#[test]
+fn a_move_drag_measures_the_bounding_box_once() {
+    for (real_time, while_moving) in [(true, true), (false, true), (true, false), (false, false)] {
+        let what = format!("real time {real_time}, box while moving {while_moving}");
+        let mut s = session();
+        let id = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+        sel(&mut s, &[id]);
+        s.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": real_time})).unwrap();
+        s.execute("prefs.set", &json!({"key": "boundingBoxWhileMovingAndDrawing", "value": while_moving})).unwrap();
+        let v = ViewInfo::default();
+        s.select_tool("selection", v).unwrap();
+        let ev = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y).with_mods(Mods::default());
+        s.pointer(&ev(PointerKind::Down, 150.0, 125.0), v).unwrap();
+        assert_eq!(s.move_drag_box(), None, "{what}: not before the drag begins");
+        s.pointer(&ev(PointerKind::Drag, 170.0, 135.0), v).unwrap();
+        if real_time && !while_moving {
+            assert_eq!(s.move_drag_box(), None, "{what}: no box during the move");
+            s.pointer(&ev(PointerKind::Up, 170.0, 135.0), v).unwrap();
+            continue;
+        }
+        assert_eq!(s.move_drag_box(), Some(OrientedBox::aligned(Rect::new(120.0, 110.0, 220.0, 160.0))), "{what}");
+        // The measurement made at the drag's start is the one each step offsets: replaced by a
+        // stand-in, the next step's box is the stand-in moved.
+        let it = s.doc_mut().unwrap().interaction.as_mut().unwrap();
+        assert_eq!(it.move_box.get(), Some(&Some(OrientedBox::aligned(Rect::new(100.0, 100.0, 200.0, 150.0)))), "{what}: measured at the start");
+        it.move_box = std::sync::OnceLock::from(Some(OrientedBox::aligned(Rect::new(0.0, 0.0, 10.0, 10.0))));
+        s.pointer(&ev(PointerKind::Drag, 200.0, 165.0), v).unwrap();
+        assert_eq!(s.move_drag_box(), Some(OrientedBox::aligned(Rect::new(50.0, 40.0, 60.0, 50.0))), "{what}: not measured again");
+        s.pointer(&ev(PointerKind::Up, 200.0, 165.0), v).unwrap();
+        assert_eq!(s.move_drag_box(), None, "{what}: none after the release");
+        assert_eq!(selection_box(&s), OrientedBox::aligned(Rect::new(150.0, 140.0, 250.0, 190.0)), "{what}: moved");
+    }
+}
+
+/// A shape being drawn has no preview applied after a step that failed (with Real-time Drawing on,
+/// also when the failed command left a document other than the interaction's snapshot), and with
+/// Real-time Drawing off, where the document stays at the snapshot. A successful step with Real-time
+/// Drawing on applies it.
+#[test]
+fn a_shape_being_drawn_reports_whether_a_preview_is_applied() {
+    for real_time in [true, false] {
+        let what = format!("real time {real_time}");
+        let mut s = session();
+        s.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": real_time})).unwrap();
+        let v = ViewInfo::default();
+        s.select_tool("rectangle", v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 100.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 160.0, 140.0), v).unwrap();
+        assert_eq!(s.interaction_unapplied(), !real_time, "{what}: after a step that succeeded");
+        assert!(s.preview("shape.rectangle", &json!({"x": "left"})).is_err(), "{what}: the preview fails");
+        assert!(s.interaction_unapplied(), "{what}: after a step that failed");
+        if real_time {
+            // A failed command that copied the document on write leaves another document than the
+            // snapshot; no preview is applied all the same.
+            let st = s.doc_mut().unwrap();
+            st.doc = std::sync::Arc::new((*st.doc).clone());
+            assert!(s.interaction_unapplied(), "{what}: a failed step with a copied document");
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 180.0, 150.0), v).unwrap();
+        assert_eq!(s.interaction_unapplied(), !real_time, "{what}: the next step succeeded");
+        s.pointer(&PointerEvent::new(PointerKind::Up, 180.0, 150.0), v).unwrap();
+        assert!(!s.interaction_unapplied(), "{what}: no interaction after the release");
+    }
 }

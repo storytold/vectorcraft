@@ -14,7 +14,7 @@ use super::{Color32, Drag, Mods, Point, PointerEvent, PointerKind, Pos2, Shape, 
 pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) {
     let (pointer, m, space, hover) = wheel_view(app, ui, resp, rect);
     let v = *app.view().unwrap_or(&View::default());
-    let xf = Xf::new(rect, &v);
+    let xf = Xf::at(rect, &v, app.canvas_ui_zoom);
     // A lifted pen or finger takes the pointer away in the frame it lifts (egui's `PointerGone`),
     // so a tap whose press and lift come in one frame has no hover position: it presses (and
     // double-taps) where it was seen last (#491).
@@ -227,10 +227,11 @@ fn wheel_view(
     // slide. Then turn the view about the pointer for a trackpad rotation ([`trackpad_turn`]). The
     // tool's events below take their document points from the view this moves to.
     if resp.hovered() {
+        let ui_zoom = app.canvas_ui_zoom;
         if (factor - 1.0).abs() > 1e-6
             && let (Some(p), Some(vm)) = (hover, app.view_mut())
         {
-            zoom_about(vm, rect, p, vm.zoom * factor);
+            zoom_about(vm, rect, p, vm.zoom * factor, ui_zoom);
         }
         if scroll != egui::Vec2::ZERO {
             scroll_view(app, ui, scroll);
@@ -239,7 +240,7 @@ fn wheel_view(
             && let Some(deg) = trackpad_turn(ui, app.session.prefs.trackpad_rotate_view)
             && let Some(vm) = app.view_mut()
         {
-            rotate_about(vm, rect, p, deg);
+            rotate_about(vm, rect, p, deg, ui_zoom);
         }
     }
     (pointer, m, space, hover)
@@ -328,12 +329,13 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
     // Where the pointer was in the frame before: a zoom marquee moved with Space follows it.
     let before: Option<Pos2> = ui.data(|dd| dd.get_temp(drag_pos_id()));
     ui.data_mut(|dd| dd.insert_temp(drag_pos_id(), p));
+    let ui_zoom = app.canvas_ui_zoom;
     match d {
         Drag::Pan { start, center, .. } => {
             let ppp = ui.ctx().pixels_per_point();
             if let Some(vm) = app.view_mut() {
                 vm.center = center;
-                pan_pixels(vm, ppp, whole_pixels(p - start, ppp));
+                pan_pixels(vm, (ppp, ui_zoom), whole_pixels(p - start, ppp));
             }
         }
         Drag::RotateView { start_angle, start_rot, snaps } => {
@@ -360,7 +362,7 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
             if exponent != 0.0
                 && let Some(vm) = app.view_mut()
             {
-                zoom_about(vm, rect, start, vm.zoom * exponent.exp());
+                zoom_about(vm, rect, start, vm.zoom * exponent.exp(), ui_zoom);
             }
             ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::ZoomScrub { start, held, moved }));
         }
@@ -446,6 +448,7 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
     });
     // Backtick as it was at the button-up: a key pressed or released later in the frame does not count.
     let backquote = backquote_at_release(ui, egui::PointerButton::Primary, f.backquote_before);
+    let ui_zoom = app.canvas_ui_zoom;
     match d {
         Drag::ZoomBox { start } => {
             let start = zoom_marquee_start(ui, start, before, p, space);
@@ -456,16 +459,16 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
                     // The marquee's center and its size on screen set the view, at any rotation.
                     vm.center = xf.to_doc(r.center());
                     let fill = (rect.width() / r.width()).min(rect.height() / r.height());
-                    vm.zoom = (xf.zoom * f64::from(fill)).clamp(0.0313, 640.0);
+                    vm.zoom = (xf.zoom * f64::from(ui_zoom) * f64::from(fill)).clamp(0.0313, 640.0);
                 } else {
-                    zoom_about(vm, rect, p, crate::state::next_zoom(vm.zoom, !m.alt));
+                    zoom_about(vm, rect, p, crate::state::next_zoom(vm.zoom, !m.alt), ui_zoom);
                 }
             }
         }
         // A click (not held, not dragged) steps the zoom as with the marquee.
         Drag::ZoomScrub { held, moved: false, .. } if held <= HOLD_DELAY => {
             if let Some(vm) = app.view_mut() {
-                zoom_about(vm, rect, p, crate::state::next_zoom(vm.zoom, !m.alt));
+                zoom_about(vm, rect, p, crate::state::next_zoom(vm.zoom, !m.alt), ui_zoom);
             }
         }
         Drag::ZoomScrub { .. } => {}

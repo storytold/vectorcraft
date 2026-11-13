@@ -913,7 +913,7 @@ pub(crate) fn outlined_stroke(
         };
         let art = d.reid(&art);
         let mut art = with_transparency(d, art, st.opacity, st.blend);
-        let raster: Vec<_> = st.effects.iter().filter(|e| !vectorcraft_render::effects::is_geometry(&e.id)).cloned().collect();
+        let raster = vectorcraft_render::effects::without_geometry(&st.effects);
         if !raster.is_empty() {
             if !art.appearance.effects.is_empty() {
                 art = Node::group(d.alloc_id(), vec![Arc::new(art)]);
@@ -963,7 +963,7 @@ pub(crate) fn outlined_stroke(
 /// geometry effects leave nothing to paint, an empty group takes the path's place.
 /// `None` when `l` has no stroke to outline.
 pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Brush], l: &Node) -> Option<Node> {
-    use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry, has_transform_art, is_geometry, reshape};
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry, has_transform_art, reshape, without_geometry};
     if !l.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if outlinable(st))) {
         return None;
     }
@@ -992,7 +992,7 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
                     parts.push(styled_copy(d, l, std::mem::take(&mut fills)));
                 }
                 let mut plain = moved;
-                plain.effects_mut().retain(|e| !is_geometry(&e.id));
+                *plain.effects_mut() = without_geometry(plain.effects());
                 parts.push(styled_copy(d, &shape, vec![plain]));
             }
             AppearanceItem::Stroke(st) if outlinable(st) => {
@@ -1000,7 +1000,7 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
                     parts.push(styled_copy(d, l, std::mem::take(&mut fills)));
                 }
                 let mut plain = st.clone();
-                plain.effects.retain(|e| !is_geometry(&e.id));
+                plain.effects = without_geometry(&st.effects);
                 let stroked = match path.bounds() {
                     Some(b) if has_geometry(&st.effects) => apply_geometry_with(&st.effects, &path, b, &ctx.item(item)),
                     _ => path.clone(),

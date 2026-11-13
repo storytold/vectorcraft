@@ -356,6 +356,58 @@ impl Rendered {
         img.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png).map_err(|e| format!("PNG encoding failed: {e}"))?;
         Ok(buf)
     }
+    /// Each pixel's grey level and alpha: the Rec. 709 luma of its straight colour, with `bilevel`
+    /// black below 128 and white from there up. A clear pixel is white: no ink where a fill
+    /// colour colorizes the image.
+    fn gray_alpha(&self, bilevel: bool) -> Vec<u8> {
+        let straight = self.to_straight();
+        let px = straight.as_chunks::<4>().0;
+        px.iter()
+            .flat_map(|&[r, g, b, a]| {
+                let y = (0.2126 * f32::from(r) + 0.7152 * f32::from(g) + 0.0722 * f32::from(b)).round().clamp(0.0, 255.0) as u8;
+                let y = if a == 0 || (bilevel && y >= 128) {
+                    255
+                } else if bilevel {
+                    0
+                } else {
+                    y
+                };
+                [y, a]
+            })
+            .collect()
+    }
+    /// Encode as a greyscale PNG without metadata (Object › Rasterize's Grayscale colour model):
+    /// grey levels ([`Self::gray_alpha`]), with alpha only when some pixel isn't opaque.
+    pub fn to_gray_png(&self) -> Result<Vec<u8>, String> {
+        encode::png::encode_gray(&self.gray_alpha(false), self.width, self.height, &encode::png::PngOptions::default())
+    }
+    /// Encode in black and white (Object › Rasterize's Bitmap colour model): a 1-bit TIFF at `ppi`
+    /// when every pixel is opaque, else a grey PNG with alpha of only black and white (one-bit grey
+    /// with alpha is no format readers take). Returns the media type and the file.
+    pub fn to_bilevel(&self, ppi: f64) -> Result<(&'static str, Vec<u8>), String> {
+        let gray_alpha = self.gray_alpha(true);
+        let px = gray_alpha.as_chunks::<2>().0;
+        if !px.iter().all(|p| p[1] == 255) {
+            return Ok(("image/png", encode::png::encode_gray(&gray_alpha, self.width, self.height, &encode::png::PngOptions::default())?));
+        }
+        // WhiteIsZero: a set bit is black. Each row starts on a byte.
+        let mut bits = Vec::with_capacity(px.len() / 8 + self.height as usize);
+        for row in px.chunks(self.width.max(1) as usize) {
+            bits.extend(row.chunks(8).map(|byte| byte.iter().enumerate().fold(0u8, |b, (i, p)| b | u8::from(p[0] == 0) << (7 - i))));
+        }
+        let image = encode::tiff::Image {
+            width: self.width,
+            height: self.height,
+            data: &bits,
+            photometric: encode::tiff::Photometric::WhiteIsZero,
+            samples: 1,
+            bits: 1,
+            alpha: false,
+        };
+        let layout =
+            encode::tiff::Layout { byte_order: encode::tiff::ByteOrder::Little, compression: encode::tiff::Compression::PackBits, ppi, icc: None };
+        Ok(("image/tiff", encode::tiff::write(&image, &layout)?))
+    }
     /// Encode as JPEG (flattened on white) at `quality` 1..=100.
     pub fn to_jpeg(&self, quality: u8) -> Result<Vec<u8>, String> {
         encode::jpeg(self, quality, None)

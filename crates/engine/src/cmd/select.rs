@@ -11,6 +11,7 @@ use super::object::can_align;
 use super::wand::{fill_of, stroke_of};
 use super::{
     CommandSpec, Result, Session, bad, bool_or, checked_id, checked_ids_param, cmd, color_value, has_doc, has_selection, index, ok, str_param,
+    switch_or, text_param,
 };
 use crate::DocState;
 
@@ -47,6 +48,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids: [id…]} all ids must be non-negative integers naming existing objects → {count, ids} (resulting selection)",
             has_doc,
             set
+        ),
+        cmd!(
+            "select.storedPath",
+            "Select Path",
+            [],
+            None,
+            "{id: object id, fingerprint: text (\"v1:\" and 16 lowercase hex digits)} the Actions panel's Select Path step: select only the path or compound path `id` when its fingerprint (a hash of its kind, fill rule and anchors, its members' for a compound path) is still `fingerprint` and it can be selected: not hidden or locked, nor in a hidden or locked layer or group, a template layer or on a locked artboard, and inside the isolated object in isolation mode. A missing object, another kind of object, a path whose kind, fill rule or anchors changed, or one that cannot be selected is an error, and the selection stays as it was → {count, ids} (the resulting selection)",
+            has_doc,
+            stored_path
         ),
         cmd!(
             "select.add",
@@ -102,6 +112,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{fill?: colour, stroke?: colour (as paint.setFill's color, #rrggbbaa and #rgba refused; at least one)} select the objects whose fill (and stroke) reads as that colour in #rrggbb, as document.inspect reports colours, whatever its swatch or tint; with both, the objects that match both. No object needs to be selected first; Select > Reselect repeats it → {count}",
             has_doc,
             select_color
+        ),
+        cmd!(
+            "select.byNote",
+            "Select by Note",
+            [],
+            None,
+            "{note, caseSensitive?: bool, wholeWord?: bool} select the objects whose Attributes note (attributes.set) holds `note`, without its leading and trailing spaces (1 to 1,024 bytes): anywhere in the note and in any letter case by default; caseSensitive (default false) asks for the same letter case, and wholeWord (default false) for no letter, digit or _ right before or after it. It looks at the objects Select All takes and the objects inside them, leaving out hidden and locked objects and art on a locked artboard; an object whose note matches is selected without the objects inside it. The objects found replace the selection, in paint order. No object found is an error that leaves the selection as it was. Not an undo step; Select > Reselect repeats it. The Actions panel's Select Object step (ui.action.insertSelectObject) runs this → {count, ids} (resulting selection)",
+            has_doc,
+            by_note
         ),
         cmd!(
             "select.same.fillColor",
@@ -439,6 +458,150 @@ fn selection_result(s: &Session) -> Result<Value> {
     Ok(json!({ "count": selection.len(), "ids": selection.objects }))
 }
 
+/// The prefix of every fingerprint [`path_fingerprint`] gives: the version of its hash.
+const FINGERPRINT_PREFIX: &str = "v1:";
+
+/// FNV-1a (64 bits) over the bytes written to it, starting from the offset basis.
+pub(crate) struct Fnv(pub(crate) u64);
+
+impl Default for Fnv {
+    fn default() -> Self {
+        Self(0xcbf2_9ce4_8422_2325)
+    }
+}
+
+impl std::io::Write for Fnv {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0 = buf.iter().fold(self.0, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3));
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// The fingerprint of the path or compound path `n` that `select.storedPath` compares: FNV-1a (64
+/// bits) over a kind byte, the fill rule and the anchors of the path, or of each member of the
+/// compound path in order, as JSON, written as [`FINGERPRINT_PREFIX`] and 16 lowercase hex digits.
+/// None for any object [`is_storable_kind`] does not take.
+pub fn path_fingerprint(n: &Node) -> Option<String> {
+    fn feed(h: &mut Fnv, n: &Node) -> Option<()> {
+        use std::io::Write;
+        match &n.kind {
+            NodeKind::Path { path, rule, .. } => {
+                h.write_all(b"P").ok()?;
+                serde_json::to_writer(&mut *h, rule).ok()?;
+                serde_json::to_writer(&mut *h, path).ok()
+            }
+            NodeKind::Compound { children, rule } => {
+                h.write_all(b"C").ok()?;
+                serde_json::to_writer(&mut *h, rule).ok()?;
+                h.write_all(&(children.len() as u64).to_le_bytes()).ok()?;
+                children.iter().try_for_each(|c| feed(h, c))
+            }
+            _ => None,
+        }
+    }
+    if !is_storable_kind(n) {
+        return None;
+    }
+    let mut h = Fnv::default();
+    feed(&mut h, n)?;
+    Some(format!("{FINGERPRINT_PREFIX}{:016x}", h.0))
+}
+
+/// Whether `n` is an object a Select Path step can store: a path that is not a guide, or a compound
+/// path whose members all are.
+fn is_storable_kind(n: &Node) -> bool {
+    let path = |n: &Node| matches!(n.kind, NodeKind::Path { guide: false, .. });
+    match &n.kind {
+        NodeKind::Compound { children, .. } => children.iter().all(|c| path(c)),
+        _ => path(n),
+    }
+}
+
+/// The `id` and `fingerprint` of `select.storedPath`'s params `p`, or why they are not ones: an
+/// object with only a non-negative whole `id` and a `fingerprint` that [`path_fingerprint`] could give.
+pub fn stored_path_params(p: &Value) -> std::result::Result<(NodeId, &str), String> {
+    let o = p.as_object().ok_or("`params` must be an object")?;
+    if let Some(key) = o.keys().find(|k| !matches!(k.as_str(), "id" | "fingerprint")) {
+        let keys = "id, fingerprint";
+        return Err(format!("unknown parameter `{key}`; the command takes: {keys}"));
+    }
+    let value = o.get("id").unwrap_or(&Value::Null);
+    let id = value.as_u64().map(NodeId).ok_or_else(|| format!("invalid object id {value}: expected a non-negative integer"))?;
+    let fingerprint = o.get("fingerprint").and_then(Value::as_str).unwrap_or_default();
+    let hex = fingerprint.strip_prefix(FINGERPRINT_PREFIX).unwrap_or_default();
+    if hex.len() != 16 || !hex.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+        return Err("`fingerprint` must be \"v1:\" and 16 lowercase hex digits".into());
+    }
+    Ok((id, fingerprint))
+}
+
+/// Why the object `id` of `st` cannot be the path of a Select Path step: it is not there, is not a
+/// path (not a guide) or compound path ([`is_storable_kind`]), is a member of a compound path, cannot
+/// be selected ([`is_selectable`]), or is on a locked artboard, in isolation mode too.
+fn storable_path(st: &DocState, id: NodeId) -> std::result::Result<(), String> {
+    let value = id.0;
+    let n = st.doc.node(id).ok_or_else(|| format!("no such object id {value}"))?;
+    let in_compound = st.doc.parent_of(id).and_then(|p| st.doc.node(p)).is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. }));
+    if !is_storable_kind(n) || in_compound {
+        return Err(WHOLE_PATH.into());
+    }
+    // In isolation mode `is_selectable` does not look at the locked artboards, so they are checked here too.
+    let locks = st.doc.locked_artboards();
+    if !is_selectable(&st.doc, st.isolation, &locks, id) || locks.holds_id(id) {
+        return Err("the path is hidden or locked, or cannot be selected here".into());
+    }
+    Ok(())
+}
+
+/// What [`storable_selection`] asks for when the selection is not a whole path or compound path.
+const WHOLE_PATH: &str = "select one whole path or compound path";
+
+/// The one object selected in `st` when it can be the path of a Select Path step: a whole path or
+/// compound path that can be selected ([`storable_path`]). An error for no selection, several
+/// objects, a path with ruler guides, anchors or segments of a path alone, a group, type or any other object, a guide, or a
+/// member of a compound path. It does not hash the path, so menus can ask it every frame.
+pub fn storable_selection(st: &DocState) -> std::result::Result<NodeId, String> {
+    let sel = &st.selection;
+    let id = match sel.objects.as_slice() {
+        [] => return Err("select a path".into()),
+        [id] if sel.guides.is_empty() => *id,
+        _ => return Err("select only one path".into()),
+    };
+    if sel.anchors.get(&id).is_some_and(|a| !a.is_empty()) || sel.segments.get(&id).is_some_and(|s| !s.is_empty()) {
+        return Err(WHOLE_PATH.into());
+    }
+    storable_path(st, id)?;
+    Ok(id)
+}
+
+/// The params of a `select.storedPath` step for the path selected in `st` ([`storable_selection`]):
+/// `{id, fingerprint}`.
+pub fn stored_path_step(st: &DocState) -> std::result::Result<Value, String> {
+    let id = storable_selection(st)?;
+    let fingerprint = st.doc.node(id).and_then(path_fingerprint).ok_or(WHOLE_PATH)?;
+    Ok(json!({ "id": id.0, "fingerprint": fingerprint }))
+}
+
+/// `select.storedPath {id, fingerprint}`: selects only the path `id` when it is still the path the
+/// step stored ([`path_fingerprint`]) and can be selected ([`storable_path`]); else an error, and
+/// the selection stays as it was.
+fn stored_path(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "select.storedPath";
+    let (id, fingerprint) = stored_path_params(p).map_err(|e| bad(C, e))?;
+    let st = s.doc()?;
+    let value = id.0;
+    let n = st.doc.node(id).ok_or_else(|| bad(C, format!("no such object id {value}")))?;
+    if path_fingerprint(n).as_deref() != Some(fingerprint) {
+        return Err(bad(C, format!("object {value} is not the stored path: it changed, or the document is another one")));
+    }
+    storable_path(st, id).map_err(|e| bad(C, e))?;
+    s.select(|_, sel| sel.set([id]))?;
+    selection_result(s)
+}
+
 fn key(s: &mut Session, p: &Value) -> Result<Value> {
     let id = p.get("id").map(|value| checked_id(s, value, "select.key")).transpose()?;
     let guide = match p.get("guide").filter(|v| !v.is_null()) {
@@ -728,6 +891,124 @@ fn select_color(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let reads_as = |paint: Paint, hex: Option<&str>| hex.is_none_or(|h| paint.color().is_some_and(|c| c.to_hex() == h));
     select_where(s, C, p, |d, n| paint_reported(d, n) && reads_as(fill_of(n), fill.as_deref()) && reads_as(stroke_of(n).0, stroke.as_deref()))
+}
+
+/// The longest note, in bytes, that Select by Note searches for.
+const MAX_NOTE_QUERY: usize = 1024;
+
+/// Select by Note: the objects whose Attributes note holds `note` ([`note_matches`]). An object
+/// whose note matches is selected without the objects inside it. With none found, the selection
+/// stays as it was.
+fn by_note(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "select.byNote";
+    let query = text_param(p, "note", C)?.map(str::trim).unwrap_or_default();
+    if query.is_empty() {
+        return Err(bad(C, "the note is empty"));
+    }
+    if query.len() > MAX_NOTE_QUERY {
+        return Err(bad(C, "the note is longer than 1,024 bytes"));
+    }
+    let case_sensitive = switch_or(p, "caseSensitive", false, C)?;
+    let whole_word = switch_or(p, "wholeWord", false, C)?;
+    let not_found = || bad(C, format!("no object that can be selected has a note matching “{query}”"));
+    let st = s.doc()?;
+    let locks = st.doc.locked_artboards();
+    let mut ids = vec![];
+    walk_selectable(&st.doc, st.isolation, |n| {
+        let note = n.extras().attrs.as_deref().map_or("", |a| a.note.as_str());
+        if note_matches(note, query, case_sensitive, whole_word) && is_selectable(&st.doc, st.isolation, &locks, n.id) {
+            ids.push(n.id);
+            return false;
+        }
+        true
+    });
+    // The selection leaves out guides under Lock Guides and hidden slices, whatever selects them.
+    let mut found = st.selection.clone();
+    found.set(ids.iter().copied());
+    crate::deselect_hidden(&s.menu, &st.doc, &mut found);
+    if found.objects.is_empty() {
+        return Err(not_found());
+    }
+    let before = st.selection.objects.clone();
+    s.select(|_, sel| sel.set(ids.iter().copied()))?;
+    let st = s.doc_mut()?;
+    st.last_selection_cmd = Some((C.to_string(), p.clone(), before));
+    selection_result(s)
+}
+
+/// Whether `note` holds `query`: anywhere, and in any letter case unless `case_sensitive`. With
+/// `whole_word`, the match starts and ends on whole characters of `note`, and the characters of
+/// `note` right before and right after it are not a letter, a digit or `_`.
+///
+/// Letter case is compared one character at a time ([`fold_case`]), so a final Σ still matches σ,
+/// and each folded character keeps the byte offset of the character of `note` it comes from.
+fn note_matches(note: &str, query: &str, case_sensitive: bool, whole_word: bool) -> bool {
+    if note.is_empty() || query.is_empty() {
+        return false;
+    }
+    let fold = |text: &str| -> Vec<(char, usize)> {
+        let mut out = Vec::with_capacity(text.len());
+        for (at, c) in text.char_indices() {
+            if case_sensitive {
+                out.push((c, at));
+            } else {
+                out.extend(fold_case(c).map(|f| (f, at)));
+            }
+        }
+        out
+    };
+    let folded = fold(note);
+    let query: Vec<char> = fold(query).into_iter().map(|(c, _)| c).collect();
+    let word = |c: char| c.is_alphanumeric() || c == '_';
+    // Whether the match of `query` that starts at `folded[i]` counts.
+    let accept = |i: usize| {
+        if !whole_word {
+            return true;
+        }
+        let (start, last) = (folded[i].1, folded[i + query.len() - 1].1);
+        let starts_whole = i == 0 || folded[i - 1].1 != start;
+        let ends_whole = folded.get(i + query.len()).is_none_or(|(_, at)| *at != last);
+        if !starts_whole || !ends_whole {
+            return false;
+        }
+        let end = last + note[last..].chars().next().map_or(0, char::len_utf8);
+        !note[..start].chars().next_back().is_some_and(word) && !note[end..].chars().next().is_some_and(word)
+    };
+    // Knuth-Morris-Pratt, so a long note takes time in proportion to its length, and every place
+    // the query occurs is tried, also places that overlap. `fail[k]` is the length of the longest
+    // proper prefix of `query[..=k]` that is also its suffix.
+    let mut fail = vec![0; query.len()];
+    let mut k = 0;
+    for i in 1..query.len() {
+        while k > 0 && query[i] != query[k] {
+            k = fail[k - 1];
+        }
+        if query[i] == query[k] {
+            k += 1;
+        }
+        fail[i] = k;
+    }
+    let mut k = 0;
+    for (j, (c, _)) in folded.iter().enumerate() {
+        while k > 0 && *c != query[k] {
+            k = fail[k - 1];
+        }
+        if *c == query[k] {
+            k += 1;
+        }
+        if k == query.len() {
+            if accept(j + 1 - k) {
+                return true;
+            }
+            k = fail[k - 1];
+        }
+    }
+    false
+}
+
+/// `c` in lowercase for a comparison that ignores letter case, with the final sigma ς read as σ.
+fn fold_case(c: char) -> impl Iterator<Item = char> {
+    c.to_lowercase().map(|l| if l == 'ς' { 'σ' } else { l })
 }
 
 /// Does `document.inspect` report a fill and stroke for `n`? A compound path's are its own, though

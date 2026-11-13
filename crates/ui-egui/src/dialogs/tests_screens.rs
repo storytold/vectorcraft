@@ -341,6 +341,32 @@ fn edits_after_ok_do_not_reach_the_files() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// An export into the folder its export preset keeps, with no folder of its own, is written in the
+/// background as one into a folder it names, and the status bar names that folder.
+#[test]
+fn an_export_into_a_presets_folder_writes_in_the_background() {
+    let gate = Gate::default();
+    let (mut app, _, files) = app_with_worker(1, &gate);
+    let dir = temp_folder("preset-folder");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    let settings = json!({"formats": [{"format": "svg"}], "folder": folder});
+    app.run("document.exportPresets.save", json!({"name": "Kept", "settings": settings})).unwrap();
+    let p = json!({"exportPreset": "Kept"});
+    background_export(&mut app, false);
+    let want = on_disk(&app.run("file.exportForScreens", p.clone()).unwrap());
+    assert_eq!(want.len(), 1);
+    let status = app.ui.status.clone();
+    assert_eq!(status, format!("Exported 1 file to {folder}"));
+    std::fs::remove_dir_all(&dir).unwrap();
+    background_export(&mut app, true);
+    assert_eq!(app.run("file.exportForScreens", p).unwrap()["background"], true);
+    assert!(written(&files).is_empty(), "nothing written yet");
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!((files.lock().unwrap().clone(), app.ui.status.clone()), (want, status));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// Cancel stops the export before its next file; the file being written when it came stays.
 #[test]
 fn cancel_stops_the_export_before_its_next_file() {

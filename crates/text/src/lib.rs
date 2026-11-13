@@ -13,6 +13,7 @@
 mod bitmap;
 mod colr;
 mod composer;
+mod context_alternates;
 pub mod craft_fonts;
 pub mod edit;
 pub mod embed;
@@ -34,12 +35,16 @@ pub mod test_fonts;
 pub mod thread;
 
 pub use bitmap::GlyphImage;
+pub use context_alternates::{ContextAlternate, ContextAlternates, alternate_changes, alternates_in_context, is_alternate_feature};
 pub use craft_fonts::{CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
-pub use features::{EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
+pub use features::{
+    EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_FEATURE_VALUE, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by,
+};
 pub use fontdb::{
-    CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, GlyphAlternate, IcfMargins, LentCompositeFonts,
-    PlatformFontFiles, StylisticSet, WantedFont, WantedFonts, app_font_dir, is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files,
-    set_user_font_dirs, set_user_font_dirs_confined, style_weight, system_font_dirs, user_font_dirs,
+    CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, GlyphAlternate, GlyphOrigin, IcfMargins, JoiningPosition,
+    LentCompositeFonts, PlatformFontFiles, StylisticSet, Substitution, SubstitutionKind, WantedFont, WantedFonts, app_font_dir, is_font_file,
+    is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined, style_weight, system_font_dirs,
+    user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
 pub use layout::{envelope_ink, register_envelope_ink};
@@ -49,7 +54,7 @@ pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 pub use kept::{KeptLayoutsFrame, LayoutStamp, keep_layout, take_kept_layout};
 use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
 pub use layout::{decorations, drawn, fit_first_line, fit_source_lines, layout, layout_with, scaled};
-pub use shape::{line_start_space, spacing_scale};
+pub use shape::{aki_space, inseparable, line_start_space, spacing_scale};
 pub use vectorcraft_doc::TextObject;
 
 pub use vectorcraft_doc::{AreaFit, FirstBaseline, TextFlow, VerticalAlign};
