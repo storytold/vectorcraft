@@ -1258,7 +1258,8 @@ pub fn solid_art_in(doc: Option<&Document>, n: &Node) -> Option<Node> {
                 shadows.extend(shadow.into_iter().map(with_later));
                 children.extend(surfaces.into_iter().map(with_later));
             } else {
-                children.push(Arc::new(Node::path(n.id, path.clone(), Appearance { items: vec![item.clone()], ..Default::default() })));
+                let flat = Appearance { items: vec![item.clone()], ..Default::default() };
+                children.push(Arc::new(crate::group::shape_node(n.id, path.clone(), rule, flat)));
             }
         }
         children.splice(0..0, shadows);

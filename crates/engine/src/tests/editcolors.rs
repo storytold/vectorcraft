@@ -77,10 +77,12 @@ fn saturate_needs_a_number_intensity() {
     let mut s = session();
     let a = rect(&mut s, json!("#cc6666"));
     let undo = s.doc().unwrap().history.undo.len();
-    for p in [json!({}), json!({"intensity": "40"}), json!({"intensity": null})] {
+    for p in [json!({}), json!({"intensity": null})] {
         let e = s.execute("edit.colors.saturate", &p).unwrap_err().to_string();
         assert!(e.contains("missing number `intensity`"), "{p}: {e}");
     }
+    let e = s.execute("edit.colors.saturate", &json!({"intensity": "40"})).unwrap_err().to_string();
+    assert!(e.contains("`intensity` must be a number, not \"40\""), "{e}");
     assert_eq!(fill_of(&s, a).to_hex(), "#cc6666");
     assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
     s.execute("edit.colors.saturate", &json!({"intensity": 100})).unwrap();
