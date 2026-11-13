@@ -114,11 +114,12 @@ pub(crate) fn find_in_folder_command(app: &mut VectorcraftApp, folder: Option<St
     Ok(Value::Null)
 }
 
-/// Whether object `id` of the active document is an image (and not a placed document).
+/// Whether object `id` of the active document is an image (and not a placed document), in the
+/// layers or in opacity-mask art or the art of a symbol, graph design or pattern.
 fn is_image(app: &VectorcraftApp, id: &Value) -> bool {
     let Some(id) = id.as_u64() else { return false };
     let st = app.session.active();
-    st.and_then(|st| st.doc.node(vectorcraft_doc::NodeId(id))).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Image(_)))
+    st.and_then(|st| st.doc.stored_node(vectorcraft_doc::NodeId(id))).is_some_and(|(n, _)| matches!(n.kind, vectorcraft_doc::NodeKind::Image(_)))
 }
 
 /// Make the dialog's document the active one: it may be another tab's.

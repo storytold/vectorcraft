@@ -2960,6 +2960,9 @@ mark-style	Japanese	日本式
 	Reset the rows to the artwork's colors	行をアートワークのカラーにリセット
 	Color Theme Picker	カラーテーマピッカー
 	Click or drag across the art to pick its colors; Shift adds more	アートワークをクリックまたはドラッグしてカラーを取得します。Shift キーで追加します
+	Prominent Colors	主要カラー
+	Save All Colors	すべてのカラーを保存
+	Save Prominent Colors	主要カラーを保存
 	Reset to Default	初期設定に戻す
 	Reset to White, Black	白、黒にリセット
 	Reset {name}	{name}をリセット
@@ -3284,6 +3287,20 @@ mark-style	Japanese	日本式
 	Spot Color Objects	特色を使用したオブジェクト
 	Pattern Objects	パターンを使用したオブジェクト
 	Gradient Objects	グラデーションを使用したオブジェクト
+	Font Details	フォントの詳細
+	Linked Images	リンク画像
+	Embedded Images	埋め込み画像
+	Compound Paths	複合パス
+	Text Objects	テキストオブジェクト
+	Placed Documents	配置ドキュメント
+	Symbol Instances	シンボルインスタンス
+	Gradient Meshes	グラデーションメッシュ
+	Blends	ブレンド
+	Envelopes	エンベロープ
+	Intertwine Groups	織り交ぜグループ
+	Opacity Masks	不透明マスク
+	Objects with Effects	効果を使用したオブジェクト
+	Pattern Swatches	パターンスウォッチ
 	Spot Colors	特色
 	Spot Colors…	特色…
 	Spread:	拡散:
@@ -4145,6 +4162,10 @@ axis	Both	両方
 	Dock Panel	パネルをドッキング
 	Dock to Top	上部にドッキング
 	Dock to Bottom	下部にドッキング
+	Dock to Left	左側にドッキング
+	Dock to Right	右側にドッキング
+	Dock Toolbar	ツールバーをドッキング
+	Float Toolbar	ツールバーをフローティング
 	Control Bar Options	コントロールバーオプション
 	Tool Options	ツールオプション
 	Object Options	オブジェクトオプション
@@ -5226,6 +5247,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	every numbered name for it is taken in the Fonts folder	Fonts フォルダーでは、このファイルの番号付きの名前がすべて使われています
 @msg	every numbered name for {name} is taken in the document's folder	ドキュメントのフォルダーでは、{name} の番号付きの名前がすべて使われています
 @msg	No linked files to look for	検索するリンクファイルがありません
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	このリンクはシンボル、グラフデザイン、パターン、または不透明マスクの中にあり、カンバス上に位置がありません
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` はステップ参照 {r} です。ステップ参照を解決できるのは `run` と `command_batch` だけです
 @msg	`ids` must be an array of object ids, not {v}	`ids` はオブジェクト ID の配列にしてください ({v} は使えません)
 @msg	`colors` must be an array of colors, not {v}	`colors` は色の配列にしてください ({v} は使えません)
@@ -6224,6 +6246,7 @@ axis	Y Axis	Y 軸
 @msg	message must be text	message にはテキストを指定してください
 @msg	allowContinue must be true or false	allowContinue には true または false を指定してください
 @msg	Batch cannot play an action with a stop	バッチでは停止を含むアクションを再生できません
+@msg	Batch cannot play an action with a View menu step	バッチでは表示メニューのステップを含むアクションを再生できません
 	Insert Menu Item…	メニュー項目を挿入…
 	Insert Menu Item	メニュー項目を挿入
 	Insert Select Path	パスの選択を挿入
@@ -6407,6 +6430,13 @@ axis	Y Axis	Y 軸
 	Area Text	エリア内文字
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	文字を字形の境界で測定
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	ピクセルにスナップのオプション
+	Pixel Snapping Options…	ピクセルにスナップのオプション…
+	Snap to Pixel While Drawing	描画時にピクセルにスナップ
+	Snap to Pixel While Moving	移動時にピクセルにスナップ
+	Snap to Pixel While Scaling	拡大・縮小時にピクセルにスナップ
+	These options take effect when View › Snap to Pixel is on.	これらのオプションは、表示 › ピクセルにスナップがオンのときに有効になります。
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	グリフにスナップのオプションを表示
 	Hide Snap to Glyph Options	グリフにスナップのオプションを隠す
@@ -7038,6 +7068,19 @@ breakText	Glyphs	字形
 	Show where this tool is	このツールの場所を表示
 @msg	missing `tutorial` (see learn.list)	`tutorial` が指定されていません (learn.list を参照)
 @msg	unknown tutorial `{id}` (see learn.list)	`{id}` は不明なチュートリアルです (learn.list を参照)
+	View more	詳細を見る
+	Finish tutorial	チュートリアルを完了
+	Next Up	次へ
+	You finished the last tutorial in this skill.	このスキルの最後のチュートリアルを完了しました。
+	Back to skills	スキルに戻る
+	Open Tutorial Sample	チュートリアルのサンプルを開く
+	Finish Tutorial	チュートリアルを完了
+	Next Tutorial	次のチュートリアル
+	Back to Skills	スキルに戻る
+@msg	tutorial `{id}` has no practice sample	チュートリアル `{id}` には練習用サンプルがありません
+@msg	open the practice sample of `{id}` first (see learn.openSample)	先に `{id}` の練習用サンプルを開いてください (learn.openSample を参照)
+@msg	finish `{id}` first (see learn.finish)	先に `{id}` を完了してください (learn.finish を参照)
+@msg	`{id}` is the last tutorial in its skill	`{id}` はこのスキルの最後のチュートリアルです
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	保留中の効果を更新

@@ -116,6 +116,7 @@ impl Session {
             screens_hand_off: None,
             recovery: Default::default(),
             in_tool_actions: false,
+            settled_warnings: None,
             previewing: false,
             decoded_images: Default::default(),
             envelope_defaults: None,
@@ -220,11 +221,21 @@ impl Session {
             self.active = Some(index);
             if switched {
                 self.sync_front_composite_fonts();
+                self.sync_front_profiles();
             }
             true
         } else {
             false
         }
+    }
+
+    /// Make the profiles the document in front is assigned the ones colors are drawn and converted
+    /// through, in place of the working spaces (with no document open, or none assigned: the working
+    /// spaces), after a switch, an open, a close, a revert or a restored document brought another
+    /// document or another assignment to the front. The open documents redraw when the active color
+    /// settings change.
+    pub(crate) fn sync_front_profiles(&mut self) {
+        cmd::colormgmt::use_front_profiles(self);
     }
 
     /// Register the composite fonts of the document now in front ([`cmd::compositefonts::sync`]),
@@ -316,6 +327,7 @@ impl Session {
         let i = self.docs.len() - 1;
         self.active = Some(i);
         self.sync_opened_composite_fonts(i);
+        self.sync_front_profiles();
         if self.depth == 0
             && let Some(label) = self.explicit_undo_group.clone()
         {
@@ -384,7 +396,10 @@ impl Session {
         }
         match back_names {
             Some(names) => self.refresh_document_text_bounds(index, |t| t.cached_bounds.is_none() && !sets_in_any(t, &names)),
-            None => self.sync_opened_composite_fonts(index),
+            None => {
+                self.sync_opened_composite_fonts(index);
+                self.sync_front_profiles();
+            }
         }
         true
     }
@@ -403,6 +418,7 @@ impl Session {
         }
         self.active = if self.docs.is_empty() { None } else { Some(index.min(self.docs.len() - 1)) };
         self.sync_front_composite_fonts();
+        self.sync_front_profiles();
         true
     }
 

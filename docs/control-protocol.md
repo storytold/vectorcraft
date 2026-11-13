@@ -417,7 +417,10 @@ button (Add Tool…) opens a menu of every tool under the drawer's headings: a c
 {tool, toolbar}`; the tools already in the toolbar are dimmed under their headings. The drawer has no Show section
 there. `window.floatTools {tool, toolbar}` floats one of its groups, and a group torn off it shows and hides with
 it. `window.toolbar.list` returns the toolbars (`ui.custom_toolbars` in `ui.inspect`: name, slots, shown flag,
-two-column flag, top-left corner, the groups torn off it). They are kept with the workspace they were made in:
+two-column flag, top-left corner, the groups torn off it, and `dock` and `dock_right` while docked or once docked).
+`window.toolbar.dock {name, side?, order?}` docks a toolbar in the lane along the window's left or right edge, and
+`window.toolbar.float {name, x?, y?}` floats it again; dropping its title bar on an edge or dragging it out of its
+lane does the same (see the docking section in `docs/mcp.md`). They are kept with the workspace they were made in:
 switching workspaces shows that workspace's toolbars, Reset Workspace keeps them, and New Workspace starts the new
 workspace with a copy of them.
 

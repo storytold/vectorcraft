@@ -52,7 +52,7 @@ pub const CATEGORIES: [(&str, &str); 13] = [
 ];
 
 /// The object counts of `document.info` and their labels.
-const OBJECT_LABELS: [(&str, &str); 19] = [
+pub const OBJECT_LABELS: [(&str, &str); 19] = [
     ("paths", "Paths"),
     ("compoundPaths", "Compound Paths"),
     ("groups", "Groups"),

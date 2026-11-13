@@ -260,6 +260,35 @@ fn copy_into_the_documents_folder_copies_before_relinking() {
     assert!(!frame(&mut app).contains("Copy into the document's folder"));
 }
 
+/// Copy into the document's folder copies the file of an image in a symbol's art too, picked in the
+/// Links panel by its id.
+#[test]
+fn copy_takes_an_image_in_a_symbol_into_the_documents_folder() {
+    let root = folder("copy-symbol");
+    let mut app = app_for(&root);
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let orig = at(&root, "orig/a.png");
+    write(&orig, &png(3));
+    let placed = app.run("file.place", json!({"path": orig})).unwrap()["ids"][0].clone();
+    app.run("symbol.new", json!({"name": "Mark", "ids": [placed]})).unwrap();
+    let doc = at(&root, "doc/doc.vectorcraft");
+    std::fs::create_dir_all(doc.parent().unwrap()).unwrap();
+    app.run("document.save", json!({"path": doc})).unwrap();
+    write(&at(&root, "found/a.png"), &png(3));
+    let list = app.run("links.list", json!({})).unwrap();
+    let row = list["links"].as_array().unwrap().iter().find(|r| r["owner"]["kind"] == "symbol").cloned().expect("the symbol's image");
+    app.run("ui.findLinksInFolder", json!({"folder": root.join("found"), "ids": [row["id"]]})).unwrap();
+    searched(&mut app);
+    app.ui.dialog.as_mut().unwrap().fields.insert("copy".into(), json!(true));
+    let r = super::super::confirm(&mut app).unwrap();
+    assert_eq!((r["relinked"].as_array().map(Vec::len), &r["failed"]), (Some(1), &json!([])), "{r}");
+    let copy = at(&root, "doc/a.png");
+    assert_eq!(std::fs::read(&copy).unwrap(), png(3));
+    let list = app.run("links.list", json!({})).unwrap();
+    let row = list["links"].as_array().unwrap().iter().find(|r| r["owner"]["kind"] == "symbol").cloned().unwrap();
+    assert_eq!(row["path"], json!(copy), "{list}");
+}
+
 /// With Copy into the document's folder, a placed document is relinked where its file is.
 #[test]
 fn copy_leaves_placed_documents_where_they_are() {

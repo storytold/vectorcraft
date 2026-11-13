@@ -26,10 +26,11 @@ use crate::cmd::{CommandSpec, bad, command_specs};
 use crate::{EngineError, Result};
 
 /// The API level of the commands' parameters.
-pub const API_VERSION: u32 = 3;
+pub const API_VERSION: u32 = 4;
 
 /// [`schema_hash`] at each API level, oldest first; the last row is [`API_VERSION`]'s.
-pub const SCHEMA_HASHES: &[(u32, u64)] = &[(1, 0x9cdb_1087_7074_855c), (2, 0x0e31_5d96_7bc9_2653), (3, 0xffe0_58a3_2f0c_aa2a)];
+pub const SCHEMA_HASHES: &[(u32, u64)] =
+    &[(1, 0x9cdb_1087_7074_855c), (2, 0x0e31_5d96_7bc9_2653), (3, 0xffe0_58a3_2f0c_aa2a), (4, 0x1be4_be72_fe16_54c4)];
 
 /// The hash of every built-in command's schema ([`vectorcraft_apischema::hash`]).
 pub fn schema_hash() -> u64 {
@@ -311,12 +312,17 @@ mod tests {
             ("view.transparencyGrid", json!({"on": 1})),
             ("view.snapToGlyph.options", json!({"bounds": false, "angular": true})),
             ("view.snapToGlyph.options", json!({"bounds": null})),
+            ("view.snapToPixel.options", json!({"drawing": false, "scaling": true})),
+            ("view.snapToPixel.options", json!({"moving": null})),
+            ("view.snapToPixel.options", json!({"moving": "off"})),
+            ("view.snapToPixel.options", json!({"rotating": false})),
             ("view.capsLock", json!(null)),
             ("view.saved.new", json!(null)),
             ("view.saved.edit", json!(null)),
             ("view.saved.list", json!(null)),
             ("view.transparencyGrid", json!(null)),
             ("view.snapToGlyph.options", json!(null)),
+            ("view.snapToPixel.options", json!(null)),
             ("view.capsLock", json!([])),
             ("view.saved.new", json!(5)),
             ("view.transparencyGrid", json!("on")),
@@ -325,7 +331,7 @@ mod tests {
             ("engine.apiReference", json!({"prefix": "view."})),
             ("engine.apiReference", json!([])),
         ];
-        assert_eq!(schemas().len(), 7);
+        assert_eq!(schemas().len(), 8);
         for (id, schema) in schemas() {
             let written = schema.to_json();
             check_schema(&written, id).unwrap_or_else(|e| panic!("{e}\n{written:#}"));
@@ -423,6 +429,7 @@ mod tests {
             ("view.saved.list", "nothing"),
             ("view.transparencyGrid", "session"),
             ("view.snapToGlyph.options", "preferences"),
+            ("view.snapToPixel.options", "preferences"),
         ];
         for (id, writes) in expected {
             let got = listed.iter().find(|(c, _)| *c == id).map(|(_, w)| w.clone());

@@ -2947,6 +2947,9 @@ digits	Malayalam	Малаялам
 	Reset the rows to the artwork's colors	Скинути рядки до кольорів малюнка
 	Color Theme Picker	Вибір колірної теми
 	Click or drag across the art to pick its colors; Shift adds more	Клацніть або проведіть по малюнку, щоб узяти його кольори; Shift додає ще
+	Prominent Colors	Переважні кольори
+	Save All Colors	Зберегти всі кольори
+	Save Prominent Colors	Зберегти переважні кольори
 	Reset to Default	Скинути до значень за замовчуванням
 	Reset to White, Black	Скинути до білого, чорного
 	Reset with Mesh	Скинути із сіткою
@@ -3500,6 +3503,20 @@ effect	Points	Точки
 	Spot Color Objects	Об’єкти з плашковими кольорами
 	Pattern Objects	Об’єкти з візерунками
 	Gradient Objects	Об’єкти з градієнтами
+	Font Details	Відомості про шрифти
+	Linked Images	Пов’язані зображення
+	Embedded Images	Впроваджені зображення
+	Compound Paths	Складені контури
+	Text Objects	Текстові об’єкти
+	Placed Documents	Розміщені документи
+	Symbol Instances	Екземпляри символів
+	Gradient Meshes	Градієнтні сітки
+	Blends	Переходи
+	Envelopes	Оболонки
+	Intertwine Groups	Групи переплетення
+	Opacity Masks	Маски непрозорості
+	Objects with Effects	Об’єкти з ефектами
+	Pattern Swatches	Зразки візерунків
 	Spot Colors	Плашкові кольори
 	Spot Colors…	Плашкові кольори…
 	Spread:	Розворот:
@@ -4192,6 +4209,10 @@ axis	Both	Обидві
 	Dock Panel	Прикріпити панель
 	Dock to Top	Прикріпити вгорі
 	Dock to Bottom	Прикріпити внизу
+	Dock to Left	Прикріпити ліворуч
+	Dock to Right	Прикріпити праворуч
+	Dock Toolbar	Прикріпити панель інструментів
+	Float Toolbar	Від’єднати панель інструментів
 	Control Bar Options	Параметри панелі керування
 	Tool Options	Параметри інструменту
 	Object Options	Параметри об’єкта
@@ -5143,6 +5164,7 @@ axis	Both	Обидві
 @msg	every numbered name for it is taken in the Fonts folder	усі нумеровані імена для нього вже зайняті в папці Fonts
 @msg	every numbered name for {name} is taken in the document's folder	усі нумеровані імена для {name} уже зайняті в папці документа
 @msg	No linked files to look for	Немає пов’язаних файлів для пошуку
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Зв’язок міститься в символі, дизайні діаграми, візерунку або масці непрозорості й не має місця на полотні
 	Services	Служби
 	Hide VectorCraft	Приховати VectorCraft
 	Zoom	Масштаб
@@ -6139,6 +6161,7 @@ axis	Y Axis	Вісь Y
 @msg	message must be text	message має бути текстом
 @msg	allowContinue must be true or false	allowContinue має бути true або false
 @msg	Batch cannot play an action with a stop	Пакет не може відтворити дію із зупинкою
+@msg	Batch cannot play an action with a View menu step	Пакет не може відтворити дію з кроком із меню Перегляд
 	Insert Menu Item…	Вставити пункт меню…
 	Insert Menu Item	Вставити пункт меню
 	Insert Select Path	Вставити виділення контуру
@@ -6322,6 +6345,13 @@ axis	Y Axis	Вісь Y
 	Area Text	Текст в області
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Вимірювати текст за межами гліфа
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Параметри прив’язки до пікселя
+	Pixel Snapping Options…	Параметри прив’язки до пікселя…
+	Snap to Pixel While Drawing	Прив’язати до пікселя під час малювання
+	Snap to Pixel While Moving	Прив’язати до пікселя під час переміщення
+	Snap to Pixel While Scaling	Прив’язати до пікселя під час масштабування
+	These options take effect when View › Snap to Pixel is on.	Ці параметри діють, коли ввімкнено Перегляд › Прив’язати до пікселя.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Показати параметри прив’язки до гліфа
 	Hide Snap to Glyph Options	Приховати параметри прив’язки до гліфа
@@ -6953,6 +6983,19 @@ breakText	Glyphs	Гліфи
 	Show where this tool is	Показати, де розташований цей інструмент
 @msg	missing `tutorial` (see learn.list)	відсутній `tutorial` (див. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	невідомий урок `{id}` (див. learn.list)
+	View more	Докладніше
+	Finish tutorial	Завершити урок
+	Next Up	Далі
+	You finished the last tutorial in this skill.	Ви завершили останній урок цієї навички.
+	Back to skills	Назад до навичок
+	Open Tutorial Sample	Відкрити приклад уроку
+	Finish Tutorial	Завершити урок
+	Next Tutorial	Наступний урок
+	Back to Skills	Назад до навичок
+@msg	tutorial `{id}` has no practice sample	урок `{id}` не має навчального прикладу
+@msg	open the practice sample of `{id}` first (see learn.openSample)	спочатку відкрийте навчальний приклад уроку `{id}` (див. learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	спочатку завершіть `{id}` (див. learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` є останнім уроком своєї навички
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Оновити відкладені ефекти
