@@ -1959,6 +1959,7 @@ file-filter	Templates	範本
 @msg	the layer to flatten into is hidden	要平面化到的圖層已隱藏
 @msg	there are no objects to release	沒有可釋放的物件
 @msg	no library `{id}`	沒有資料庫 `{id}`
+@msg	the library has another item of that kind named `{name}`	資料庫中已有另一個同類項目名為 `{name}`
 @msg	{path}: not a file	{path}：不是檔案
 @msg	{path}: {e}	{path}：{e}
 @msg	can't write .{ext} images	無法寫入 .{ext} 影像
@@ -4681,6 +4682,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Rename Library Group	重新命名資料庫群組
 	Delete Library Group	刪除資料庫群組
 	Move Library Item to Group	將資料庫項目移至群組
+	Rename Library Item	重新命名資料庫項目
+	Add to Character Styles	新增至字元樣式
 	Library	資料庫
 	Rename Library	重新命名資料庫
 	Show Library	顯示資料庫
