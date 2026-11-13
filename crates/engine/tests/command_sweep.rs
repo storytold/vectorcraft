@@ -384,7 +384,6 @@ const DOCUMENT_PARTS: &[(&str, &str)] = &[
     ("object.pathfinder.options", "paths"),
     ("object.maskImage", "path"),
     ("text.createInPath", "path"),
-    ("imageTrace.make", "paths"),
     ("symbol.instance.setAppearance", "path"),
     ("symbol.instance.selectPart", "path"),
     ("object.objectsOnPath.attach", "path"),
