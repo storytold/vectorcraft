@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Text by Font",
             [],
             None,
-            "{family, style?, scope?: \"document\" (default) | {artboards: [index, …] (0-based)} | {layers: [id, …] (layers or sublayers)}} select the text objects using the font, the instances of the symbols whose art uses it, the objects painted with a pattern whose art uses it and the objects whose opacity mask uses it (in type that is not hidden or locked in that art), that are not hidden or locked, in a hidden or locked group or layer, or on a locked artboard; a pattern swatch that nothing paints, or a layer's mask, selects nothing; with scope, only those on one of the artboards (as All on Active Artboard takes them: their bounds overlap it or their center is on it) or in one of the layers → {count}",
+            "{family, style?, scope?: \"document\" (default) | {artboards: [index, …] (0-based)} | {layers: [id, …] (layers or sublayers)}} select the text objects using the font, the instances of the symbols whose art uses it, the text whose inline graphics draw such a symbol, the objects painted with a pattern whose art uses it (by a visible fill or stroke whose opacity is above 0, a stroke wider than 0) and the objects whose opacity mask uses it (in type that is not hidden or locked in that art), that are not hidden or locked, in a hidden or locked group or layer, or on a locked artboard; a pattern swatch that nothing paints, or a layer's mask, selects nothing; with scope, only those on one of the artboards (as All on Active Artboard takes them: their bounds overlap it or their center is on it) or in one of the layers → {count}",
             has_doc,
             select_font
         ),
@@ -108,8 +108,14 @@ fn pattern_being_edited(d: &Document, name: &str) -> bool {
     d.pattern_edit.as_ref().is_some_and(|e| e.pattern == name)
 }
 
+/// Whether fill or stroke `i` paints: it is visible, its opacity is above 0 and, a stroke, it is
+/// wider than 0.
+fn paints(i: &AppearanceItem) -> bool {
+    i.visible() && i.opacity() > 0.0 && !matches!(i, AppearanceItem::Stroke(s) if s.width <= 0.0)
+}
+
 /// The patterns that the fills and strokes `n` draws name (of a text object, also those of its
-/// characters): visible ones, and strokes wider than 0.
+/// characters): those that [`paints`] holds for, and character strokes wider than 0.
 fn paint_patterns(n: &Node) -> impl Iterator<Item = &str> {
     let runs = match &n.kind {
         NodeKind::Text(t) => t.runs.as_slice(),
@@ -118,13 +124,22 @@ fn paint_patterns(n: &Node) -> impl Iterator<Item = &str> {
     n.appearance
         .items
         .iter()
-        .filter(|i| i.visible() && !matches!(i, AppearanceItem::Stroke(s) if s.width <= 0.0))
+        .filter(|i| paints(i))
         .map(AppearanceItem::paint)
         .chain(runs.iter().flat_map(|r| [Some(&r.style.fill), (r.style.stroke_width > 0.0).then_some(&r.style.stroke)]).flatten())
         .filter_map(|p| match p {
             Paint::Pattern { pattern, .. } => Some(pattern.as_str()),
             _ => None,
         })
+}
+
+/// The symbols that the inline graphics in the type of `n` draw.
+fn inline_symbols(n: &Node) -> impl Iterator<Item = &str> {
+    let runs = match &n.kind {
+        NodeKind::Text(t) => t.runs.as_slice(),
+        _ => &[],
+    };
+    runs.iter().filter_map(|r| r.inline.as_ref().map(|art| art.symbol.as_str()))
 }
 
 /// Symbols and patterns, by name: those whose art is in scope.
@@ -135,12 +150,14 @@ struct Resources {
 }
 
 impl Resources {
-    /// Adds what `n` itself shows: the symbol of an instance, the patterns its paints name, and
-    /// what the art of its opacity mask shows (not hidden or locked objects of that art).
+    /// Adds what `n` itself shows: the symbol of an instance, the symbols of the inline graphics in
+    /// its type, the patterns its paints name, and what the art of its opacity mask shows (not
+    /// hidden or locked objects of that art).
     fn add_own(&mut self, n: &Node) {
         if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
             self.symbols.insert(symbol.clone());
         }
+        self.symbols.extend(inline_symbols(n).map(str::to_string));
         self.patterns.extend(paint_patterns(n).map(str::to_string));
         if let Some(m) = n.extras().mask.as_deref() {
             self.add(&m.art);
@@ -486,8 +503,7 @@ impl Printed<'_> {
             NodeKind::Text(t) => drawn_runs(t),
             _ => (vec![], false),
         };
-        let items: Vec<&AppearanceItem> =
-            n.appearance.items.iter().filter(|i| i.visible() && !matches!(i, AppearanceItem::Stroke(s) if s.width <= 0.0)).collect();
+        let items: Vec<&AppearanceItem> = n.appearance.items.iter().filter(|i| paints(i)).collect();
         let patterns: Vec<&str> = items
             .iter()
             .map(|i| i.paint())
@@ -910,13 +926,15 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// Whether `n` or a descendant that is not hidden or locked, nor in a hidden or locked group,
-/// shows type in a font `uses` matches: text set in it, an instance of a symbol in `found`, a paint
-/// naming a pattern in `found`, or such type in the art of its opacity mask.
+/// shows type in a font `uses` matches: text set in it, an instance of a symbol in `found`, an
+/// inline graphic of a symbol in `found`, a paint naming a pattern in `found`, or such type in the
+/// art of its opacity mask.
 fn reaches(n: &Node, uses: &impl Fn(&TextObject) -> bool, found: &Resources) -> bool {
     n.visible
         && !n.locked
         && (matches!(&n.kind, NodeKind::Text(t) if uses(t))
             || matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if found.symbols.contains(symbol))
+            || inline_symbols(n).any(|sym| found.symbols.contains(sym))
             || paint_patterns(n).any(|p| found.patterns.contains(p))
             || n.extras().mask.as_deref().is_some_and(|m| reaches(&m.art, uses, found))
             || n.children().is_some_and(|ch| ch.iter().any(|c| reaches(c, uses, found))))
@@ -964,13 +982,15 @@ fn select_font(s: &mut Session, p: &Value) -> Result<Value> {
         found.patterns.extend(patterns);
     }
     // The objects the Selection tool can reach that show such type: the instances of those
-    // symbols, the objects that those patterns paint, and the objects whose opacity mask holds it
-    // (not layers, which the Selection tool doesn't select).
+    // symbols, the text whose inline graphics draw them, the objects that those patterns paint,
+    // and the objects whose opacity mask holds it (not layers, which the Selection tool doesn't
+    // select).
     let masked: HashSet<NodeId> = masked.into_iter().collect();
     if !found.symbols.is_empty() || !found.patterns.is_empty() || !masked.is_empty() {
         let texts: HashSet<NodeId> = hits.iter().copied().collect();
         d.walk(&mut |n: &Node| {
             let shows = matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if found.symbols.contains(symbol))
+                || inline_symbols(n).any(|sym| found.symbols.contains(sym))
                 || paint_patterns(n).any(|p| found.patterns.contains(p))
                 || (masked.contains(&n.id) && n.extras().mask.as_deref().is_some_and(|m| reaches(&m.art, &uses, &found)));
             if shows && !n.is_layer() && !texts.contains(&n.id) && editable(n.id) {
@@ -1069,6 +1089,37 @@ fn font_list(_: &mut Session, p: &Value) -> Result<Value> {
     }
 }
 
+/// Gives the inline graphics in the type of [`art_texts_of`] the current bounds of their symbols'
+/// art, and lays out again the type whose inline graphics changed. A symbol drawn inline in the
+/// art of another symbol takes one more round, so there is at most one round per symbol.
+fn resolve_art_inline(doc: &mut Document) {
+    for _ in 0..=doc.symbols.len() {
+        let names: BTreeSet<String> =
+            art_texts_of(doc).iter().flat_map(|(_, t, _)| t.runs.iter().filter_map(|r| r.inline.as_ref().map(|a| a.symbol.clone()))).collect();
+        let bounds: BTreeMap<String, Option<Rect>> = names
+            .into_iter()
+            .map(|name| {
+                let b = doc.symbol_art_bounds(&name);
+                (name, b)
+            })
+            .collect();
+        let stale = |t: &TextObject| t.runs.iter().any(|r| r.inline.as_ref().is_some_and(|a| bounds.get(&a.symbol).is_some_and(|b| *b != a.bounds)));
+        let mut changed = false;
+        edit_art_texts_of(doc, &stale, &mut |t| {
+            for a in t.runs.iter_mut().filter_map(|r| r.inline.as_mut()) {
+                if let Some(b) = bounds.get(&a.symbol) {
+                    a.bounds = *b;
+                }
+            }
+            refresh_bounds(t);
+            changed = true;
+        });
+        if !changed {
+            break;
+        }
+    }
+}
+
 pub(crate) fn rescan(s: &mut Session, _: &Value) -> Result<Value> {
     let db = vectorcraft_text::FontDb::global();
     #[cfg(not(target_arch = "wasm32"))]
@@ -1076,7 +1127,9 @@ pub(crate) fn rescan(s: &mut Session, _: &Value) -> Result<Value> {
     #[cfg(target_arch = "wasm32")]
     let faces = 0;
     // The canvas redraws type in the fonts available now (renderers lay it out again when the
-    // fonts change), and the bounds follow; that isn't an edit to save.
+    // fonts change), and the bounds follow, also of the type in opacity masks and in the art of
+    // symbols and patterns; that isn't an edit to save. The type in art is laid out first, and the
+    // inline graphics of the type on the layers then take the new bounds of their symbols' art.
     for d in &mut s.docs {
         let mut texts = vec![];
         d.doc.walk(|n| {
@@ -1084,9 +1137,12 @@ pub(crate) fn rescan(s: &mut Session, _: &Value) -> Result<Value> {
                 texts.push(n.id);
             }
         });
-        if !texts.is_empty() {
+        if !texts.is_empty() || !art_texts_of(&d.doc).is_empty() {
             d.change_unsaved(|doc| {
                 let doc = std::sync::Arc::make_mut(doc);
+                edit_art_texts_of(doc, &|_| true, &mut refresh_bounds);
+                resolve_art_inline(doc);
+                doc.resolve_inline_art();
                 for id in texts {
                     if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
                         refresh_bounds(t);
@@ -1749,6 +1805,158 @@ mod tests {
             s.execute("text.replaceFont", &json!({"from": {"family": "Inter"}, "to": {"family": "Source Sans 3"}, "selectionOnly": true})).unwrap();
         assert_eq!(r, json!({"runs": 1}));
         assert_eq!(symbol_texts(&s.doc().unwrap().doc, None)[0].0.runs[0].style.font_family, "Source Sans 3");
+    }
+
+    /// A pattern in a fill whose opacity is 0 paints nothing: Find doesn't select the object for
+    /// the pattern's type, a selection-only Change leaves that type in its font, and Print doesn't
+    /// count its font.
+    #[test]
+    fn find_font_skips_patterns_at_an_opacity_of_0() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let t = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Ab", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("object.pattern.make", &json!({"ids": [t], "name": "Dots", "edit": false})).unwrap();
+        s.execute("select.set", &json!({"ids": [t]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let painted = s.execute("shape.rectangle", &json!({"x": 0, "y": 20, "width": 50, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"swatch": "Dots", "ids": [painted]})).unwrap();
+        let printed = |s: &Session| {
+            let d = &s.doc().unwrap().doc;
+            printed_type(d, &d.layers, &[Rect::new(-1000.0, -1000.0, 1000.0, 1000.0)]).0.into_iter().map(|(family, ..)| family).collect::<Vec<_>>()
+        };
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 1);
+        assert_eq!(printed(&s), ["Source Serif 4"]);
+        s.edit("Clear the fill", |d, _| {
+            for it in d.node_mut(NodeId(painted)).unwrap().appearance.items.iter_mut() {
+                if let AppearanceItem::Fill(f) = it {
+                    f.opacity = 0.0;
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 0);
+        assert!(printed(&s).is_empty(), "{:?}", printed(&s));
+        s.execute("select.set", &json!({"ids": [painted]})).unwrap();
+        let r = s
+            .execute("text.replaceFont", &json!({"from": {"family": "Source Serif 4"}, "to": {"family": "Source Sans 3"}, "selectionOnly": true}))
+            .unwrap();
+        assert_eq!(r, json!({"runs": 0}));
+        assert_eq!(pattern_families(&s, "Dots"), ["Source Serif 4"]);
+    }
+
+    /// Text whose inline graphic draws a symbol shows the symbol's type: Find selects that text
+    /// and the objects painted with a pattern whose art holds it, and a selection-only Change
+    /// changes the symbol's type.
+    #[test]
+    fn find_font_reaches_symbols_through_inline_graphics() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let serif = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Se", "font": "Source Serif 4"})).unwrap()["id"].clone();
+        s.execute("symbol.new", &json!({"name": "Mark", "ids": [serif]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let inline = |s: &mut Session, y: i32| {
+            let id = s.execute("text.create", &json!({"x": 10, "y": y, "text": "In", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+            s.execute("text.insertInline", &json!({"id": id, "at": 0, "symbol": "Mark"})).unwrap();
+            id
+        };
+        let listed = inline(&mut s, 60);
+        let tiled = inline(&mut s, 100);
+        s.execute("object.pattern.make", &json!({"ids": [tiled], "name": "Loop", "edit": false})).unwrap();
+        s.execute("select.set", &json!({"ids": [tiled]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let painted = s.execute("shape.rectangle", &json!({"x": 0, "y": 140, "width": 50, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"swatch": "Loop", "ids": [painted]})).unwrap();
+        let mut instances = 0;
+        s.doc().unwrap().doc.walk(|n| instances += usize::from(matches!(n.kind, NodeKind::SymbolInstance { .. })));
+        assert_eq!(instances, 0, "the symbol is drawn only by inline graphics");
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 2);
+        let mut selected = s.doc().unwrap().selection.objects.clone();
+        selected.sort();
+        assert_eq!(selected, [NodeId(listed), NodeId(painted)]);
+        s.execute("select.set", &json!({"ids": [painted]})).unwrap();
+        let rows = font_rows(&mut s, json!({"selectionOnly": true}));
+        assert_eq!(rows, [("Inter".to_string(), 2, 1), ("Source Serif 4".to_string(), 1, 1)]);
+        let r = s
+            .execute("text.replaceFont", &json!({"from": {"family": "Source Serif 4"}, "to": {"family": "Source Sans 3"}, "selectionOnly": true}))
+            .unwrap();
+        assert_eq!(r, json!({"runs": 1}));
+        assert_eq!(symbol_texts(&s.doc().unwrap().doc, None)[0].0.runs[0].style.font_family, "Source Sans 3");
+    }
+
+    /// Refresh Font List lays out again the type in opacity masks and in the art of symbols and
+    /// patterns, as it does the type on the layers, and the inline graphics of the type on the
+    /// layers follow the symbols' type as laid out again.
+    #[test]
+    fn rescanning_fonts_refreshes_the_bounds_of_type_in_art() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let owner = s.execute("shape.rectangle", &json!({"x": 0, "y": 20, "width": 50, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        let masked = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Mask", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+        mask_with(&mut s, owner, masked);
+        let tiled = s.execute("text.create", &json!({"x": 10, "y": 60, "text": "Tile", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("object.pattern.make", &json!({"ids": [tiled], "name": "Dots", "edit": false})).unwrap();
+        s.execute("select.set", &json!({"ids": [tiled]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let stale = Rect::new(0.0, 0.0, 1.0, 1.0);
+        s.edit("Make the bounds stale", |d, _| {
+            edit_art_texts_of(d, &|_| true, &mut |t| t.cached_bounds = Some(stale));
+            Ok(())
+        })
+        .unwrap();
+        let bounds = |s: &Session| art_texts_of(&s.doc().unwrap().doc).iter().map(|(_, t, _)| t.cached_bounds).collect::<Vec<_>>();
+        assert_eq!(bounds(&s), [Some(stale), Some(stale)]);
+        s.execute("text.rescanFonts", &json!({})).unwrap();
+        let after = bounds(&s);
+        assert_eq!(after.len(), 2);
+        assert!(after.iter().all(|b| b.is_some_and(|b| b != stale && b.width() > 1.0)), "{after:?}");
+        let marked = s.execute("text.create", &json!({"x": 10, "y": 100, "text": "Se", "font": "Inter"})).unwrap()["id"].clone();
+        s.execute("symbol.new", &json!({"name": "Mark", "ids": [marked]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let line = s.execute("text.create", &json!({"x": 10, "y": 140, "text": "In", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("text.insertInline", &json!({"id": line, "at": 0, "symbol": "Mark"})).unwrap();
+        s.edit("Make the bounds stale", |d, _| {
+            edit_art_texts_of(d, &|_| true, &mut |t| t.cached_bounds = Some(stale));
+            d.resolve_inline_art();
+            Ok(())
+        })
+        .unwrap();
+        let resolved = |s: &Session| {
+            let d = &s.doc().unwrap().doc;
+            matches!(d.inline_resolved(text(d, NodeId(line)).unwrap()), std::borrow::Cow::Borrowed(_))
+        };
+        assert!(resolved(&s), "the inline graphic took the stale bounds");
+        s.execute("text.rescanFonts", &json!({})).unwrap();
+        assert!(resolved(&s), "the inline graphic follows the symbol's type laid out again");
+        // So does an inline graphic in the art of another symbol.
+        let held = s.execute("text.create", &json!({"x": 10, "y": 180, "text": "Out", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("text.insertInline", &json!({"id": held, "at": 0, "symbol": "Mark"})).unwrap();
+        s.execute("symbol.new", &json!({"name": "Outer", "ids": [held]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        s.edit("Make the bounds stale", |d, _| {
+            edit_art_texts_of(d, &|_| true, &mut |t| t.cached_bounds = Some(stale));
+            Ok(())
+        })
+        .unwrap();
+        let shrunk = s.doc().unwrap().doc.symbol_art_bounds("Mark");
+        s.edit("Take the stale bounds", |d, _| {
+            edit_art_texts_of(d, &|_| true, &mut |t| {
+                for a in t.runs.iter_mut().filter_map(|r| r.inline.as_mut()) {
+                    a.bounds = shrunk;
+                }
+            });
+            Ok(())
+        })
+        .unwrap();
+        let nested = |s: &Session| {
+            let d = &s.doc().unwrap().doc;
+            art_texts_of(d).iter().flat_map(|(_, t, _)| t.runs.iter().filter_map(|r| r.inline.as_ref().map(|a| a.bounds))).collect::<Vec<_>>()
+        };
+        assert_eq!(nested(&s), [shrunk]);
+        s.execute("text.rescanFonts", &json!({})).unwrap();
+        let mark = s.doc().unwrap().doc.symbol_art_bounds("Mark");
+        assert_ne!(mark, shrunk);
+        assert_eq!(nested(&s), [mark], "the inline graphic in the art of Outer follows Mark's type laid out again");
     }
 
     /// The font family of text object `id`'s first run.
