@@ -1594,6 +1594,30 @@ pub fn twin_font(newer: bool) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The names of a [`named_copy`]: family, style, version string and PostScript name.
+pub type CopyNames<'a> = (&'a str, &'a str, &'a str, &'a str);
+
+/// The bundled Source Sans 3 Regular or, `inter`, the bundled Inter Regular (glyphs of other
+/// widths) under `names`, as an installed copy of a font: a font library can keep copies whose
+/// names differ only in case or punctuation, or whose family and style are one but whose PostScript
+/// names or versions differ. `None` when it can't be built.
+pub fn named_copy(inter: bool, (family, style, version, postscript): CopyNames<'_>) -> Option<Vec<u8>> {
+    const SOURCE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    const INTER: &[u8] = include_bytes!("../../../assets/fonts/Inter-Regular.ttf");
+    let font = skrifa::FontRef::new(if inter { INTER } else { SOURCE }).ok()?;
+    let full = format!("{family} {style}");
+    let name = name_table(&[(1, family), (2, style), (4, &full), (5, version), (6, postscript)])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`numbered_font`]: styles numbered W3 and W6, and no Regular.
 pub const NUMBERED_FAMILY: &str = "Numtest Mincho";
 
