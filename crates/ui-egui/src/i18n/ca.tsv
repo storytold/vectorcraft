@@ -6103,6 +6103,7 @@ digits	Malayalam	Malaiàlam
 @msg	unknown parameter `{path}`; it takes: {keys}	paràmetre desconegut `{path}`; admet: {keys}
 @msg	missing `{path}`	falta `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` ha de ser {expected}, no {got}
+@msg	`{path}` is nested too deeply	`{path}` està imbricat massa profundament
 @msg	unknown preference `{key}`	preferència desconeguda `{key}`
 @msg	Preferences imported.	S’han importat les preferències.
 @msg	not a preferences file: {e}	no és un fitxer de preferències: {e}

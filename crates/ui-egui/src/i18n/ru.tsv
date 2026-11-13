@@ -5397,6 +5397,7 @@ lighting	Light	Свет
 @msg	unknown parameter `{path}`; it takes: {keys}	неизвестный параметр `{path}`; принимает: {keys}
 @msg	missing `{path}`	отсутствует `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` должно быть {expected}, а не {got}
+@msg	`{path}` is nested too deeply	`{path}` вложено слишком глубоко
 	Load EPS into Clipboard	Загрузить EPS в буфер обмена
 @msg	an image of {w} × {h} pixels is too large to draw	изображение размером {w} × {h} пикселей слишком велико для отрисовки
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: это не изображение PNG, JPEG, WebP, TIFF или BMP

@@ -1784,6 +1784,11 @@ path to a value inside a list or an object, and the document and its undo histor
 → invalid parameters for `view.saved.edit`: `edits[0].delete` must be true or false, not 1
 ```
 
+A schema nests at most 16 lists and objects. A value that would go past that depth is refused with the same kind of
+parameter error, ``invalid parameters for `<id>`: `<path>` is nested too deeply``, where `<path>` is the path to the
+value. A schema that is wrong in itself, such as one that nests past 16 levels or puts a list of ids or a point
+inside 16 lists, is an internal error in the command, and the command does not run.
+
 An omitted value with a `default` takes it (`rotation` 0 in `view.saved.new`); the journal keeps the params as they
 were given. Saved steps played from a journal or an action keep a key the schema does not name, unless its value nests
 more than 16 levels deep, and the values of the parameters it names are checked as in a new call. The schemas of built-in commands belong to API level 3

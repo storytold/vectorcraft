@@ -5153,6 +5153,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	unknown parameter `{path}`; it takes: {keys}	άγνωστη παράμετρος `{path}`· δέχεται: {keys}
 @msg	missing `{path}`	λείπει το `{path}`
 @msg	`{path}` must be {expected}, not {got}	Το `{path}` πρέπει να είναι {expected}, όχι {got}
+@msg	`{path}` is nested too deeply	Το `{path}` έχει υπερβολικά βαθιά ένθεση
 	1 Layer	1 επίπεδο
 	1 bit	1 bit
 	16 Colors	16 χρώματα

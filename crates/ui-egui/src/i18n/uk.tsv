@@ -5391,6 +5391,7 @@ lighting	Light	Світло
 @msg	unknown parameter `{path}`; it takes: {keys}	невідомий параметр `{path}`; приймає: {keys}
 @msg	missing `{path}`	відсутнє `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` має бути {expected}, а не {got}
+@msg	`{path}` is nested too deeply	`{path}` вкладено надто глибоко
 	Load EPS into Clipboard	Завантажити EPS у буфер обміну
 @msg	an image of {w} × {h} pixels is too large to draw	зображення розміром {w} × {h} пікселів завелике для відображення
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: це не зображення PNG, JPEG, WebP, TIFF чи BMP

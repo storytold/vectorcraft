@@ -5676,6 +5676,7 @@ mark-style	Japanese	Japanilainen
 @msg	unknown parameter `{path}`; it takes: {keys}	tuntematon parametri `{path}`; parametrit: {keys}
 @msg	missing `{path}`	`{path}` puuttuu
 @msg	`{path}` must be {expected}, not {got}	`{path}` on oltava {expected}, ei {got}
+@msg	`{path}` is nested too deeply	`{path}` on liian syvällä sisäkkäin
 	Load EPS into Clipboard	Lataa EPS leikepöydälle
 @msg	an image of {w} × {h} pixels is too large to draw	kuva, jonka koko on {w} × {h} pikseliä, on liian suuri piirrettäväksi
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: ei ole PNG-, JPEG-, WebP-, TIFF- tai BMP-kuva

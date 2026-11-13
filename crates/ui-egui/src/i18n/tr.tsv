@@ -5060,6 +5060,7 @@ lighting	Light	Işık
 @msg	unknown parameter `{path}`; it takes: {keys}	bilinmeyen parametre `{path}`; şunları alır: {keys}
 @msg	missing `{path}`	`{path}` eksik
 @msg	`{path}` must be {expected}, not {got}	`{path}` {expected} olmalıdır, {got} değil
+@msg	`{path}` is nested too deeply	`{path}` çok derin iç içe geçmiş
 	1 Layer	1 Katman
 	1 bit	1 bit
 	16 Colors	16 Renk
