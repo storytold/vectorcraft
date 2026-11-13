@@ -4,9 +4,10 @@
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Effect, Node, NodeId};
-use vectorcraft_geom::{Rect, shapes};
+use vectorcraft_geom::{Affine, Anchor, PathData, Point, Rect, SubPath, shapes};
 
-use crate::{RasterFx, bake_document, expand_outlined, raster_effects};
+use crate::geometry::{Budget, MAX_EFFECT_LINES, apply_geometry_carrying_within};
+use crate::{Carry, GeomContext, RasterFx, apply_geometry_carrying, bake_document, expand_outlined, raster_effects};
 
 fn fx(id: &str, params: Value) -> Effect {
     Effect { id: id.into(), params, visible: true }
@@ -650,5 +651,193 @@ fn a_groups_transform_moves_its_members_fills_shadows_beside_their_own_transform
             let drawn = shadows_in(&member);
             assert!(!drawn.is_empty() && near(&drawn, &vec![*want; drawn.len()]), "Scale Strokes & Effects {strokes}: {id} {drawn:?}");
         }
+    }
+}
+
+/// A closed path of `n` curves along the x axis, 2 pt apart, each drawn with 14 lines at 1 px/pt
+/// and with 425 once scaled 1000 times ([`crate::util::line_estimate`]).
+fn wavy(n: usize) -> PathData {
+    let anchors = (0..=n)
+        .map(|i| {
+            let x = 2.0 * i as f64;
+            Anchor::with_handles(Point::new(x, 0.0), Point::new(x - 0.5, -20.0), Point::new(x + 0.5, 20.0))
+        })
+        .collect();
+    PathData::single(SubPath::new(anchors, true))
+}
+
+/// A red path `id` along `path` with object effects `effects`.
+fn path_node(id: u64, path: PathData, effects: Vec<Effect>) -> Node {
+    let mut n = Node::path(NodeId(id), path, Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0));
+    n.appearance.effects = effects;
+    n
+}
+
+/// A Transform effect scaling 1000 times.
+fn thousandfold() -> Effect {
+    transform(json!({"scaleH": 100000, "scaleV": 100000}))
+}
+
+/// `n` baked on its own ([`bake_document`]).
+fn baked(n: Node) -> Node {
+    let id = n.id;
+    let mut d = Document::new(800.0, 800.0);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, n).unwrap();
+    bake_document(&d).unwrap().node(id).unwrap().clone()
+}
+
+/// A Transform effect whose result passes the 8 million lines of the effect budget is left out, so
+/// the art stays where it is, and the shadow before it keeps its offset and blur with it: drawn,
+/// baked for export, and once shown after baking when it is hidden. One within the budget moves
+/// and scales both.
+#[test]
+fn a_transform_past_the_line_budget_moves_the_art_with_its_shadow() {
+    let path = wavy(30_000);
+    assert!(Budget::EFFECTS.fits(Budget::of(&path)), "{:?}", Budget::of(&path));
+    let candidate = Budget::of(&path.transformed(Affine::scale(1000.0)));
+    assert!(candidate.lines > MAX_EFFECT_LINES, "{candidate:?}");
+    let b = path.bounds().unwrap();
+    let n = path_node(30, path.clone(), vec![shadow(10.0, 5.0, 4.0), thousandfold()]);
+    let (g, carry) = apply_geometry_carrying(&n.appearance.effects, &path, b, &GeomContext::of(&n));
+    assert_eq!(g, path, "the art stays where it is");
+    assert!(carry.skipped());
+    let mut drawn = n.appearance.effects.clone();
+    carry.hide_skipped(&mut drawn);
+    assert!(close(drawn_shadow(&drawn), (10.0, 5.0, 4.0)), "drawn {:?}", drawn_shadow(&drawn));
+    let out = baked(n.clone());
+    assert_eq!(out.geometric_bounds(), Some(b));
+    assert!(close(drawn_shadow(&out.appearance.effects), (10.0, 5.0, 4.0)), "baked {:?}", drawn_shadow(&out.appearance.effects));
+    // A hidden shadow keeps its values too, once shown.
+    let mut hidden = shadow(10.0, 5.0, 4.0);
+    hidden.visible = false;
+    let out = baked(path_node(31, path.clone(), vec![hidden, thousandfold()]));
+    let mut shown = out.appearance.effects.clone();
+    shown.iter_mut().for_each(|e| e.visible = true);
+    assert!(close(drawn_shadow(&shown), (10.0, 5.0, 4.0)), "shown {:?}", drawn_shadow(&shown));
+    // A fill's own shadow before its own Transform effect stays too.
+    let mut fill = path_node(35, path.clone(), vec![]);
+    if let Some(item) = fill.appearance.items.first_mut() {
+        *item.effects_mut() = vec![shadow(10.0, 5.0, 4.0), thousandfold()];
+    }
+    let out = baked(fill);
+    assert!(near(&shadows_in(&out), &[(10.0, 5.0)]), "baked fill {:?}", shadows_in(&out));
+    // Within the budget, both move.
+    let doubled = path_node(32, path.clone(), vec![shadow(10.0, 5.0, 4.0), transform(json!({"scaleH": 200, "scaleV": 200}))]);
+    let (g, carry) = apply_geometry_carrying(&doubled.appearance.effects, &path, b, &GeomContext::of(&doubled));
+    assert!(g != path && !carry.skipped());
+    let out = baked(doubled);
+    assert!(close(drawn_shadow(&out.appearance.effects), (20.0, 10.0, 8.0)), "baked {:?}", drawn_shadow(&out.appearance.effects));
+}
+
+/// The art of a path whose Transform effect is left out past the budget ([`crate::shape_art`],
+/// as a group's or a mask's member is drawn) keeps the object's shadow and its fill's shadow with
+/// their own offsets.
+#[test]
+fn the_shape_art_of_a_skipped_transform_keeps_its_shadows() {
+    let mut n = path_node(34, wavy(30_000), vec![shadow(10.0, 5.0, 4.0), thousandfold()]);
+    if let Some(item) = n.appearance.items.first_mut() {
+        *item.effects_mut() = vec![shadow(1.0, 0.5, 0.0)];
+    }
+    let art = crate::shape_art(None, &n, None).unwrap();
+    assert!(near(&shadows_in(&art), &[(10.0, 5.0), (1.0, 0.5)]), "{:?}", shadows_in(&art));
+}
+
+/// A path whose own Transform effect is left out past the budget, in a group whose geometry effect
+/// (a move, which leaves offsets as they are) runs after its members' own, is drawn with its shadow
+/// at its own offset; one within the budget scales the shadow with the path.
+#[test]
+fn a_members_skipped_transform_keeps_its_shadow_under_its_groups_effects() {
+    for (last, want) in [(thousandfold(), (10.0, 5.0)), (transform(json!({"scaleH": 200, "scaleV": 200})), (20.0, 10.0))] {
+        let member = path_node(38, wavy(30_000), vec![shadow(10.0, 5.0, 4.0), last.clone()]);
+        let g = group(37, vec![member], vec![transform(json!({"moveH": 5, "moveV": 5}))]);
+        let art = crate::evaluate_container(None, &g).unwrap();
+        assert!(near(&shadows_in(&node_in(&art, 38)), &[want]), "{last:?}: {:?}", shadows_in(&node_in(&art, 38)));
+    }
+}
+
+/// Of two Transform effects after a shadow, the shadow follows only the ones that ran: the first
+/// left out past the budget, or hidden, and the second within it; and both when the first's
+/// result is exactly at the limit.
+#[test]
+fn only_transforms_that_ran_move_a_preceding_shadow() {
+    let circle = shapes::ellipse(Rect::new(0.0, 0.0, 100.0, 100.0));
+    let b = circle.bounds().unwrap();
+    let doubled = Budget::of(&circle.transformed(Affine::scale(2.0))).lines;
+    assert!(doubled > Budget::of(&circle).lines);
+    let run = |effects: &[Effect], lines: usize| {
+        let mut carry = Carry::default();
+        apply_geometry_carrying_within(effects, &circle, b, &GeomContext::default(), Budget { anchors: 1000, lines }, Some(&mut carry));
+        let mut drawn = effects.to_vec();
+        carry.hide_skipped(&mut drawn);
+        drawn_shadow(&drawn)
+    };
+    let effects = vec![shadow(10.0, 0.0, 4.0), transform(json!({"scaleH": 200, "scaleV": 200})), transform(json!({"rotate": 90}))];
+    // Turned 90° counterclockwise on screen, (10, 0) goes to (0, -10).
+    let only_turned = run(&effects, doubled - 1);
+    assert!(only_turned.0.abs() < 1e-9 && (only_turned.1 + 10.0).abs() < 1e-9 && (only_turned.2 - 4.0).abs() < 1e-9, "{only_turned:?}");
+    let both = run(&effects, doubled);
+    assert!(both.0.abs() < 1e-9 && (both.1 + 20.0).abs() < 1e-9 && (both.2 - 8.0).abs() < 1e-9, "{both:?}");
+    let mut hidden = effects.clone();
+    hidden[1].visible = false;
+    let turned = run(&hidden, doubled);
+    assert!(turned.0.abs() < 1e-9 && (turned.1 + 10.0).abs() < 1e-9 && (turned.2 - 4.0).abs() < 1e-9, "{turned:?}");
+}
+
+/// A fill's own Transform effect left out past the budget, after a Transform effect of that fill
+/// that makes it a piece of its own (Transform Patterns), leaves the piece and the shadow before it
+/// as they were. One within the budget scales both.
+#[test]
+fn a_skipped_item_transform_keeps_its_shadow() {
+    let path = wavy(30_000);
+    let b = path.bounds().unwrap();
+    for (last, want) in [(thousandfold(), (10.0, 5.0)), (transform(json!({"scaleH": 200, "scaleV": 200})), (20.0, 10.0))] {
+        let mut n = path_node(33, path.clone(), vec![]);
+        if let Some(item) = n.appearance.items.first_mut() {
+            *item.effects_mut() = vec![transform(json!({"patterns": true})), shadow(10.0, 5.0, 4.0), last.clone()];
+        }
+        let art = crate::reshape(None, &n, None).unwrap();
+        assert!(near(&shadows_in(&art), &[want]), "{last:?}: {:?}", shadows_in(&art));
+        if want == (10.0, 5.0) {
+            assert_eq!(art.geometric_bounds(), Some(b), "the piece stays where it is");
+        }
+        // The same with the Transform effect before the one that makes the piece.
+        let mut n = path_node(36, path.clone(), vec![]);
+        if let Some(item) = n.appearance.items.first_mut() {
+            *item.effects_mut() = vec![shadow(10.0, 5.0, 4.0), last.clone(), transform(json!({"patterns": true}))];
+        }
+        let art = crate::reshape(None, &n, None).unwrap();
+        assert!(near(&shadows_in(&art), &[want]), "{last:?} first: {:?}", shadows_in(&art));
+    }
+}
+
+/// A group's Transform effect moves each member's shadow as it moves that member: the member whose
+/// result would pass what the budget leaves keeps its shape and its shadow, and the other takes
+/// both.
+#[test]
+fn a_group_transform_follows_only_the_members_it_moved() {
+    let small = path_node(41, shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), vec![shadow(1.0, 0.5, 0.0)]);
+    let large = path_node(42, wavy(30_000), vec![shadow(1.0, 0.5, 0.0)]);
+    let g = group(40, vec![small, large], vec![thousandfold()]);
+    let art = crate::evaluate_container(None, &g).unwrap();
+    assert!(near(&shadows_in(&node_in(&art, 41)), &[(1000.0, 500.0)]), "{:?}", shadows_in(&node_in(&art, 41)));
+    assert!(near(&shadows_in(&node_in(&art, 42)), &[(1.0, 0.5)]), "{:?}", shadows_in(&node_in(&art, 42)));
+}
+
+/// A Transform effect that makes copies, or has Transform Objects off, keeps its own rule for the
+/// shadow before it, past the budget or not: the shadow stays as it is, and the pass does not
+/// report it as left out.
+#[test]
+fn copying_and_object_disabled_transforms_keep_their_existing_shadow_rules() {
+    let path = wavy(30_000);
+    let b = path.bounds().unwrap();
+    for t in [
+        transform(json!({"scaleH": 100000, "scaleV": 100000, "copies": 1})),
+        transform(json!({"scaleH": 100000, "scaleV": 100000, "objects": false})),
+    ] {
+        let effects = vec![shadow(10.0, 5.0, 4.0), t.clone()];
+        let (_, carry) = apply_geometry_carrying(&effects, &path, b, &GeomContext::default());
+        assert!(!carry.skipped(), "{t:?}");
+        assert!(close(drawn_shadow(&effects), (10.0, 5.0, 4.0)), "{t:?}: {:?}", drawn_shadow(&effects));
     }
 }

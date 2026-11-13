@@ -63,6 +63,10 @@ pub enum LimitKind {
 /// evaluator's: code that `eval` or `Function` compiled, or an error with no place.
 pub const UNKNOWN_SOURCE: u32 = u32::MAX;
 
+/// The file and line that line `line` of the source with tag `tag` ([`Realm::error_tag`]) came
+/// from, as `$.line` and `$.stack` give them ([`Realm::set_source_locator`]).
+pub type SourceLocator = std::rc::Rc<dyn Fn(u32, u32) -> (String, u32)>;
+
 /// The source tag after `tag`. Once the tags are used up, every later source gets
 /// [`UNKNOWN_SOURCE`], so no two sources share a tag.
 pub(crate) fn next_tag(tag: u32) -> u32 {
@@ -393,6 +397,13 @@ impl Realm {
     /// Has this realm stop when `interrupt` is set, in place of its own flag.
     pub fn share_interrupt(&mut self, interrupt: &Interrupt) {
         self.interp.interrupt = interrupt.0.clone();
+    }
+
+    /// Has `$.line` give the line `locate` maps the running line to, and `$.stack` give each
+    /// frame's line that way, after the file `locate` names: `function@file:line`. Without a
+    /// locator they give the line of the compiled source, and `$.stack` names no file.
+    pub fn set_source_locator(&mut self, locate: SourceLocator) {
+        self.interp.locator = Some(locate);
     }
 
     /// Which source the last error's `line` and `column` are in: 0 for the script last given to

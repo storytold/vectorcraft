@@ -3,10 +3,14 @@
 //! document links (`svgInteractivity.addFile`, `removeFile`). SVG export writes the events as
 //! event attributes (`onclick="…"`) and the files as `<script xlink:href>` elements; SVG import
 //! reads both back as text. The panel reads everything with `svgInteractivity.info`.
+//!
+//! While read roots are in force, a reply names a linked file outside them by its file name alone
+//! ([`links::shown_script`]), and `removeFile` also takes that name for it.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, MAX_SVG_SCRIPTS, NodeId, SVG_EVENTS};
+use vectorcraft_doc::{Document, LinkInfo, MAX_SVG_SCRIPTS, NodeId, SVG_EVENTS};
 
+use super::links::{self, LinkBase};
 use super::overprint::edit_counted;
 use super::{CommandSpec, Result, Session, bad, cmd, has_doc, str_param, targets};
 
@@ -17,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "SVG Interactivity",
             [],
             None,
-            "{ids?|id?} → {ids, events: [{event, script}…] in the panel's order | null (the objects' events differ), files: [the linked JavaScript files…], eventNames: [the events the panel lists…]} the SVG Interactivity panel's values for ids or the selection",
+            "{ids?|id?} → {ids, events: [{event, script}…] in the panel's order | null (the objects' events differ), files: [the linked JavaScript files…; with automation read roots in force, a file outside them by its file name alone, a URL as it is], eventNames: [the events the panel lists…]} the SVG Interactivity panel's values for ids or the selection",
             has_doc,
             info
         ),
@@ -53,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add JavaScript File",
             [],
             None,
-            "{file: path or URL (written as given, without surrounding spaces)} link a JavaScript file to the document, after the others: SVG export writes a <script xlink:href> for each linked file. A file already linked stays where it is; a document links at most 64 files → {files}",
+            "{file: path or URL (written as given, without surrounding spaces)} link a JavaScript file to the document, after the others: SVG export writes a <script xlink:href> for each linked file. A file already linked (the same text) stays where it is; a document links at most 64 files → {files} (as svgInteractivity.info gives them)",
             has_doc,
             add_file
         ),
@@ -62,7 +66,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove JavaScript File",
             [],
             None,
-            "{file} unlink a JavaScript file from the document → {files}",
+            "{file} unlink a JavaScript file from the document: the file linked as `file` or, with automation read roots in force, a file outside them whose file name is `file`; an error, unlinking nothing, when `file` fits more than one → {files} (as svgInteractivity.info gives them)",
             has_doc,
             remove_file
         ),
@@ -111,7 +115,8 @@ fn edit_events(s: &mut Session, p: &Value, cmd: &str, label: &str, f: impl Fn(&m
 
 fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = targets(s, p)?;
-    let d = &s.doc()?.doc;
+    let st = s.doc()?;
+    let d = &st.doc;
     let lists: Vec<Vec<(String, String)>> = ids.iter().map(|id| events_of(d, *id)).collect();
     let events = lists
         .first()
@@ -120,7 +125,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({
         "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>(),
         "events": events,
-        "files": d.svg_scripts,
+        "files": shown_files(st),
         "eventNames": SVG_EVENTS,
     }))
 }
@@ -157,8 +162,14 @@ fn file_param(p: &Value, cmd: &str) -> Result<String> {
     f.map(str::to_string).ok_or_else(|| bad(cmd, "give `file`, the JavaScript file's path or URL"))
 }
 
+/// The JavaScript files `st` links, in order, as a reply to the caller asking now may name them
+/// ([`links::shown_script`]).
+fn shown_files(st: &crate::DocState) -> Vec<String> {
+    st.doc.svg_scripts.iter().map(|f| links::shown_script(st, f).into_owned()).collect()
+}
+
 fn files(s: &Session) -> Result<Value> {
-    Ok(json!({ "files": s.doc()?.doc.svg_scripts }))
+    Ok(json!({ "files": shown_files(s.doc()?) }))
 }
 
 fn add_file(s: &mut Session, p: &Value) -> Result<Value> {
@@ -180,11 +191,21 @@ fn add_file(s: &mut Session, p: &Value) -> Result<Value> {
 fn remove_file(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "svgInteractivity.removeFile";
     let file = file_param(p, C)?;
-    if !s.doc()?.doc.svg_scripts.contains(&file) {
-        return Err(bad(C, format!("{file:?} isn't linked")));
-    }
+    let st = s.doc()?;
+    let linked = &st.doc.svg_scripts;
+    // A file a reply names by its file name alone is also unlinked by that name, unless the name
+    // also fits another linked file.
+    let doc_path = LinkBase::of(st).doc;
+    let named: Vec<&String> =
+        linked.iter().filter(|f| **f != file && LinkInfo::new(f.as_str()).name() == file && links::script_hidden(f, doc_path)).collect();
+    let stored = match (linked.contains(&file), named.as_slice()) {
+        (true, []) => file,
+        (false, [f]) => (*f).clone(),
+        (false, []) => return Err(bad(C, format!("{file:?} isn't linked"))),
+        _ => return Err(bad(C, format!("{file:?} names more than one linked JavaScript file"))),
+    };
     s.edit("Remove JavaScript File", |d, _| {
-        d.svg_scripts.retain(|f| *f != file);
+        d.svg_scripts.retain(|f| *f != stored);
         Ok(())
     })?;
     files(s)

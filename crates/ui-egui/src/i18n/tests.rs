@@ -63,6 +63,36 @@ fn hindi_rows_use_the_glossary_term_for_what_their_english_names() {
     assert!(wrong.is_empty(), "{} Hindi rows use the wrong term:\n{}", wrong.len(), wrong.join("\n"));
 }
 
+/// Every Hindi row that names a variable says वेरिएबल, never चर, परिवर्तनीय or वैरिएबल, and joining
+/// paths, points, type or lines is जोड़ें, never शामिल हों, which stays for joining the community.
+#[test]
+fn hindi_rows_use_one_term_for_a_variable_and_for_joining_paths() {
+    let hi = Lang::from_code("hi").expect("hi registered");
+    let (entries, _) = parse_entries(hi.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in &entries {
+        let english = src.to_lowercase();
+        let words: Vec<&str> = english.split(|c: char| !c.is_ascii_alphabetic()).collect();
+        let hindi: Vec<&str> = translation.split(|c: char| c.is_whitespace() || c.is_ascii_punctuation() || "।…".contains(c)).collect();
+        let names = |list: &[&str]| words.iter().any(|w| list.contains(w));
+        let other_variable = hindi.iter().any(|w| ["चर", "चरों", "परिवर्तनीय"].contains(w)) || translation.contains("वैरिएबल");
+        if names(&["variable", "variables"]) && (other_variable || !translation.contains("वेरिएबल")) {
+            wrong.push(format!("variable in {src:?} -> {translation:?}"));
+        }
+        if names(&["join", "joining"]) && !names(&["discord"]) && translation.contains("शामिल") {
+            wrong.push(format!("join in {src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Hindi rows use the wrong term:\n{}", wrong.len(), wrong.join("\n"));
+    assert_eq!(tr(hi, "Variable"), "वेरिएबल");
+    assert_eq!(tr(hi, "Load Variable Library…"), "वेरिएबल लाइब्रेरी लोड करें…");
+    assert_eq!(tr(hi, "Join"), "जोड़ें");
+    assert_eq!(tr(hi, "Close or Join"), "बंद करें या जोड़ें");
+    assert_eq!(message(hi, "join needs open paths"), "जोड़ने के लिए खुले पाथ चाहिए");
+    assert_eq!(message(hi, "Join: a subpath went missing"), "जोड़ते समय एक सबपाथ नहीं मिला");
+    assert_eq!(tr(hi, "Join our Discord"), "हमारे डिसकॉर्ड में शामिल हों");
+}
+
 /// Hindi messages and labels keep the condition, quantity and clauses of their English.
 #[test]
 fn hindi_rows_keep_the_meaning_of_their_english() {
@@ -83,6 +113,59 @@ fn hindi_rows_keep_the_meaning_of_their_english() {
     assert!(all.contains("3 आर्टबोर्ड में से 1") && all.contains("सभी आर्टबोर्ड रखने के लिए"), "{all}");
     let left_out = message(hi, "the file was read up to an error (bad xref): what follows it was left out");
     assert!(left_out.contains("उसके बाद का हिस्सा छोड़ दिया गया"), "{left_out}");
+    assert_eq!(message(hi, "unknown align `left`"), "अज्ञात संरेखण `left`");
+    assert_eq!(tr(hi, "Delete Library Group"), "लाइब्रेरी ग्रुप हटाएँ");
+    assert_eq!(message(hi, "not editing an opacity mask"), "ओपेसिटी मास्क संपादित नहीं किया जा रहा है");
+    assert_eq!(
+        message(hi, "a page thumbnail must be RGB pixels, 1 to 256 a side (got 0 × 4)"),
+        "पेज थंबनेल RGB पिक्सल का होना चाहिए, हर तरफ़ 1 से 256 (मिला 0 × 4)"
+    );
+    assert_eq!(message(hi, "invalid angle"), "अमान्य कोण");
+}
+
+/// Hindi messages keep every `a|b|c` list of accepted values exactly as their English writes it.
+#[test]
+fn hindi_messages_keep_their_lists_of_accepted_values() {
+    let hi = Lang::from_code("hi").expect("hi registered");
+    let (entries, _) = parse_entries(hi.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in entries.iter().filter(|(ctx, _, _)| ctx == "@msg") {
+        let lists = src.split(|c: char| !(c.is_ascii_alphabetic() || c == '|')).filter(|w| w.contains('|') && w.split('|').all(|v| !v.is_empty()));
+        for list in lists.filter(|list| !translation.contains(*list)) {
+            wrong.push(format!("{list} in {src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Hindi messages change a list of values:\n{}", wrong.len(), wrong.join("\n"));
+}
+
+/// Hindi rows leave no English connecting word in their sentences. Text in backticks, quotes,
+/// braces and brackets is a name, value or placeholder and keeps its English.
+#[test]
+fn hindi_rows_keep_no_english_words_in_their_sentences() {
+    const ENGLISH: [&str; 13] = ["or", "and", "the", "must", "give", "see", "use", "most", "is", "of", "be", "not", "an"];
+    let hi = Lang::from_code("hi").expect("hi registered");
+    let (entries, _) = parse_entries(hi.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in &entries {
+        let mut prose = String::new();
+        let mut close = None;
+        for c in translation.chars() {
+            match (close, c) {
+                (Some(end), _) if c == end => close = None,
+                (Some(_), _) => {}
+                (None, '`') => close = Some('`'),
+                (None, '"') => close = Some('"'),
+                (None, '“') => close = Some('”'),
+                (None, '{') => close = Some('}'),
+                (None, '[') => close = Some(']'),
+                (None, _) => prose.push(c),
+            }
+        }
+        if let Some(word) = prose.split(|c: char| !c.is_ascii_alphabetic()).find(|w| ENGLISH.contains(w)) {
+            wrong.push(format!("{word} in {src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Hindi rows keep an English word:\n{}", wrong.len(), wrong.join("\n"));
 }
 
 /// Locale tags name their language by region or script (in either case, with an encoding or
@@ -237,6 +320,23 @@ fn font_height_reference_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The Objects on Path Options section's Detach button, its undo step and the message for a
+/// Detach with no object chosen.
+#[test]
+fn objects_on_path_detach_strings_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Detach", "Detach Object from Path"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let choose = "choose the object to detach with its Select/Move widget";
+    assert!(message_literals().contains(choose));
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, choose), choose, "{code}");
+    }
+}
+
 /// The Window › Brush Libraries menu, built from the built-in library table, names each library.
 #[test]
 fn built_in_brush_library_names_are_in_complete_catalogs() {
@@ -251,11 +351,51 @@ fn built_in_brush_library_names_are_in_complete_catalogs() {
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
 
+/// A built-in brush library's panel lists its brushes in the UI language, so every brush of every
+/// built-in library has a row in each complete catalog.
+#[test]
+fn built_in_library_brush_names_are_in_complete_catalogs() {
+    use vectorcraft_engine::cmd::brushlib;
+    let session = vectorcraft_engine::Session::new();
+    let mut names: Vec<String> = brushlib::BUILTIN
+        .iter()
+        .filter_map(|b| brushlib::library(&session, b.id))
+        .flat_map(|(_, lib)| lib.brushes.iter().map(|b| b.name.clone()).collect::<Vec<_>>())
+        .collect();
+    names.sort();
+    names.dedup();
+    assert_eq!(names.len(), 43, "{names:?}");
+    let mut bad = vec![];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        let missing: Vec<&String> = names.iter().filter(|n| lang.catalog().plain(n).is_none()).collect();
+        if !missing.is_empty() {
+            bad.push(format!("{} is missing {missing:?}", lang.code));
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
 /// Preference choices and the marquee's E hint share the same translated labels.
 #[test]
 fn marquee_selection_labels_are_in_complete_catalogs() {
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         for label in ["Marquee Selection", "Touching", "Fully Enclosed", "Drag Direction"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
+/// Preferences › Performance › Use Monitor Profile for Canvas and the note under it.
+#[test]
+fn monitor_profile_labels_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in [
+            "Use Monitor Profile for Canvas",
+            "The canvas is drawn in sRGB.",
+            "Canvas display profile:",
+            "The system matches the window to the display's colors.",
+            "No usable display profile was found: the canvas is drawn in sRGB.",
+        ] {
             assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
         }
     }
@@ -2272,6 +2412,10 @@ const OPEN_SAVE_COUNTED_MESSAGES: &[(&str, &str)] = &[
     ("Saved /out/a.pdf with 1 note: a note", "Saved /out/a.pdf with 2 notes: a note"),
     ("Discarded 1 recovered document", "Discarded 2 recovered documents"),
     ("Restored 1 recovered document: save it to keep it", "Restored 2 recovered documents: save them to keep them"),
+    (
+        "1 linked image changed on disk: Update Links shows the new version. Opened with 1 note: a note",
+        "1 linked image changed on disk: Update Links shows the new version. Opened with 2 notes: a note",
+    ),
 ];
 
 /// The open, save and recovery status messages and the Global Edit options' Results line name a
@@ -2279,15 +2423,18 @@ const OPEN_SAVE_COUNTED_MESSAGES: &[(&str, &str)] = &[
 /// translates both, in the form its plural rule picks.
 #[test]
 fn open_save_and_recovery_messages_take_the_plural_form() {
-    use crate::io::{opened_with_notes, saved_status};
+    use crate::dialogs::missing_links::changed_on_disk_status;
+    use crate::io::{opened_after_notice, opened_with_notes, saved_status};
     use crate::panels::properties::global_edit_results;
     use crate::recovery::recovered_status;
     let saved = |path: &str, n: usize| saved_status(path, &serde_json::json!({ "warnings": vec!["a note"; n] }));
+    let notice = changed_on_disk_status(1);
     let made = [
         (opened_with_notes(1, "a note"), opened_with_notes(2, "a note")),
         (saved("/out/a.pdf", 1), saved("/out/a.pdf", 2)),
         (recovered_status(true, 1), recovered_status(true, 2)),
         (recovered_status(false, 1), recovered_status(false, 2)),
+        (opened_after_notice(&notice, 1, "a note"), opened_after_notice(&notice, 2, "a note")),
     ];
     for ((one, other), (want_one, want_other)) in made.iter().zip(OPEN_SAVE_COUNTED_MESSAGES) {
         assert_eq!((one.as_str(), other.as_str()), (*want_one, *want_other));
@@ -2299,7 +2446,18 @@ fn open_save_and_recovery_messages_take_the_plural_form() {
         for s in OPEN_SAVE_COUNTED_MESSAGES.iter().flat_map(|(one, other)| [one, other]) {
             assert_ne!(message(lang, s), *s, "{code}: {s}");
         }
+        // The line about linked files and the open's line are each shown as the catalog has them.
+        for n in [1, 2] {
+            let shown = message(lang, &opened_after_notice(&notice, n, "a note"));
+            let (link, open) = (message(lang, &notice), message(lang, &opened_with_notes(n, "a note")));
+            assert!(link != notice && shown.starts_with(&link) && shown.ends_with(&open), "{code}: {shown}");
+        }
     }
+    let unreadable = "2 linked files can't be read here: their previews show";
+    assert_eq!(
+        message(de(), &opened_after_notice(unreadable, 3, "a note")),
+        format!("{}. Mit 3 Hinweisen geöffnet: a note", message(de(), unreadable))
+    );
     for l in LANGUAGES.iter().filter(|l| l.complete_menus) {
         let lang = Lang::from_code(l.code).expect("registered");
         for n in [1, 2] {

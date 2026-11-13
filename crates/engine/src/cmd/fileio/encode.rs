@@ -629,6 +629,13 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
     {
         return Ok(Encoded::one_with_notes(bytes, notes));
     }
+    // So does a `.ai` file of the art's bounds (a legacy version 7 `.ai` file has none to leave out).
+    if use_artboards == Some(false)
+        && f.id == "ai"
+        && let Some(enc) = super::save::encode_ai_art_page(C, f, doc, p)?
+    {
+        return Ok(enc);
+    }
     if use_artboards == Some(false)
         && let Some((art, q)) = art_page(C, doc, p)?
     {

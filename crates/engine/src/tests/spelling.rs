@@ -161,7 +161,7 @@ fn a_changed_word_replaces_the_old_one() {
 #[test]
 fn the_custom_dictionary_file_is_read_and_kept_up_to_date() {
     let _one_at_a_time = dictionary_lock();
-    let dir = vectorcraft_testkit::temp_dir("spelling-dictionary");
+    let dir = vectorcraft_testkit::TempDir::new("spelling-dictionary");
     let file = dir.join("Custom Dictionary.txt");
     std::fs::write(&file, "kqzvwx\nnot one word\n\n").unwrap();
     let mut s = session();
@@ -224,7 +224,7 @@ fn in_dictionary(s: &mut Session, word: &str) -> bool {
 #[test]
 fn a_dictionary_file_that_cant_be_read_whole_is_never_written_over() {
     let _one_at_a_time = dictionary_lock();
-    let dir = vectorcraft_testkit::temp_dir("spelling-unreadable");
+    let dir = vectorcraft_testkit::TempDir::new("spelling-unreadable");
     // A folder where the file should be can't be read as one; a file past what craft-proof reads
     // would lose its other words if written back.
     let folder = dir.join("Custom Dictionary.txt");
@@ -248,7 +248,7 @@ fn a_change_that_cant_be_saved_is_taken_back() {
     let _one_at_a_time = dictionary_lock();
     let mut s = session();
     run(&mut s, "text.spelling.addWord", json!({"word": "wkqzvx"}));
-    let dir = vectorcraft_testkit::temp_dir("spelling-rollback");
+    let dir = vectorcraft_testkit::TempDir::new("spelling-rollback");
     let folder = dir.join("Custom Dictionary.txt");
     std::fs::create_dir_all(&folder).unwrap();
     let mut failing = session();
@@ -266,7 +266,7 @@ fn a_change_that_cant_be_saved_is_taken_back() {
 fn a_dictionary_edit_is_saved_whole_or_not_at_all() {
     let _one_at_a_time = dictionary_lock();
     const EDIT: &str = "text.spelling.editDictionary";
-    let dir = vectorcraft_testkit::temp_dir("spelling-edit");
+    let dir = vectorcraft_testkit::TempDir::new("spelling-edit");
     let file = dir.join("Custom Dictionary.txt");
     std::fs::write(&file, "pqzvka\npqzvkb\n").unwrap();
     let mut s = session();
@@ -302,7 +302,7 @@ fn a_dictionary_edit_is_saved_whole_or_not_at_all() {
 fn a_word_another_window_saved_stays_when_this_save_fails() {
     let _one_at_a_time = dictionary_lock();
     use std::os::unix::fs::PermissionsExt;
-    let dir = vectorcraft_testkit::temp_dir("spelling-readonly");
+    let dir = vectorcraft_testkit::TempDir::new("spelling-readonly");
     let file = dir.join("Custom Dictionary.txt");
     std::fs::write(&file, "").unwrap();
     let mut s = session();
