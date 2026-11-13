@@ -37,6 +37,14 @@ pub(super) fn body(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let id = d.str("__effect");
             let defaults = vectorcraft_effects::default_params(&id).unwrap_or(json!({}));
+            // Reset all resets the shape, view and light; the mapped graphics stay.
+            let defaults = match defaults {
+                Value::Object(mut m) => {
+                    m.remove(vectorcraft_effects::GRAPHICS);
+                    Value::Object(m)
+                }
+                other => other,
+            };
             let changed = defaults.as_object().is_some_and(|m| {
                 m.iter().any(|(k, v)| v.as_f64().map_or_else(|| d.fields.get(k) != Some(v), |default| (d.f64(k, default) - default).abs() > 1e-6))
             });
@@ -71,12 +79,22 @@ pub(crate) fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) 
         return solid_controls(app, ui, d, &id);
     }
     let lighting = super::revolve_gizmo::lighting(d);
-    if let Some(tab) = widgets::tab_bar(ui, &[tl!("Rotation"), tl!("Lighting")], usize::from(lighting)) {
-        d.fields.insert("__gizmo".into(), json!(if tab == 1 { "light" } else { "rotation" }));
+    // The panel adds the Materials tab between Rotation and Lighting.
+    let panel = d.bool("__panel");
+    let tabs: Vec<&str> = if panel { vec![tl!("Rotation"), tl!("Materials"), tl!("Lighting")] } else { vec![tl!("Rotation"), tl!("Lighting")] };
+    let current = if lighting { tabs.len() - 1 } else { usize::from(materials(d)) };
+    if let Some(tab) = widgets::tab_bar(ui, &tabs, current) {
+        let light = tab + 1 == tabs.len();
+        d.fields.insert("__gizmo".into(), json!(if light { "light" } else { "rotation" }));
+        d.fields.insert("__tab".into(), json!(if panel && tab == 1 && !light { "materials" } else { "rotation" }));
     }
     ui.add_space(8.0);
     if super::revolve_gizmo::lighting(d) {
         lighting_controls(ui, d);
+        return;
+    }
+    if materials(d) {
+        super::three_d_materials::controls(app, ui, d);
         return;
     }
     let unit = app.session.general_unit();
@@ -140,6 +158,11 @@ pub(crate) fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) 
     });
 }
 
+/// Is the 3D and Materials panel's Materials tab open (the dialog has none)?
+pub(crate) fn materials(d: &Dialog) -> bool {
+    d.bool("__panel") && d.str("__tab") == "materials" && !super::revolve_gizmo::lighting(d)
+}
+
 /// `s` as the 3D effects mean it (a solid's cap, not a stroke's; a bevelled edge, not a join).
 pub(super) fn c3(s: &'static str) -> &'static str {
     crate::i18n::tr_ctx(crate::i18n::current(), "3d", s)
@@ -155,18 +178,34 @@ fn solid_controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id: &
     if object {
         tabs.push(tl!("Object"));
     }
-    tabs.extend([tl!("Rotation"), tl!("Lighting")]);
+    tabs.push(tl!("Rotation"));
+    let rotation_at = tabs.len() - 1;
+    // The panel adds the Materials tab before Lighting (Extrude & Bevel (Classic) has none).
+    let materials_at = (d.bool("__panel") && id != CLASSIC_EXTRUDE).then(|| {
+        tabs.push(tl!("Materials"));
+        tabs.len() - 1
+    });
+    tabs.push(tl!("Lighting"));
     let current = if super::revolve_gizmo::lighting(d) {
         tabs.len() - 1
+    } else if let Some(at) = materials_at.filter(|_| materials(d)) {
+        at
     } else if object && d.str("__tab") != "rotation" {
         0
     } else {
-        tabs.len() - 2
+        rotation_at
     };
     if let Some(tab) = widgets::tab_bar(ui, &tabs, current) {
         let light = tab + 1 == tabs.len();
         d.fields.insert("__gizmo".into(), json!(if light { "light" } else { "rotation" }));
-        d.fields.insert("__tab".into(), json!(if object && tab == 0 { "object" } else { "rotation" }));
+        let kind = if object && tab == 0 {
+            "object"
+        } else if Some(tab) == materials_at {
+            "materials"
+        } else {
+            "rotation"
+        };
+        d.fields.insert("__tab".into(), json!(kind));
     }
     ui.add_space(8.0);
     if super::revolve_gizmo::lighting(d) {
@@ -175,6 +214,8 @@ fn solid_controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id: &
         } else {
             lighting_controls(ui, d);
         }
+    } else if materials_at.is_some() && materials(d) {
+        super::three_d_materials::controls(app, ui, d);
     } else if object && d.str("__tab") != "rotation" {
         let unit = app.session.general_unit();
         if id == CLASSIC_EXTRUDE {
@@ -597,7 +638,11 @@ fn rail_width(ui: &egui::Ui) -> f32 {
 /// A value can be typed, dragged, scrubbed by its label, or moved on its slider.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn number(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, range: (f64, f64), suffix: &str, decimals: usize, unit: Option<Unit>) {
-    let default = vectorcraft_effects::default_params(&d.str("__effect")).and_then(|p| p.get(key).and_then(Value::as_f64)).unwrap_or(0.0);
+    // Values that are not the effect's own parameters (a mapped graphic's) bring their defaults.
+    let default = vectorcraft_effects::default_params(&d.str("__effect"))
+        .and_then(|p| p.get(key).and_then(Value::as_f64))
+        .or_else(|| d.fields.get("__defaults").and_then(|m| m.get(key)).and_then(Value::as_f64))
+        .unwrap_or(0.0);
     let from = |n| unit.map_or(n, |u| u.from_pt(n));
     let to = |n| unit.map_or(n, |u| u.to_pt(n));
     let typed = unit.map(|u| widgets::typed_unit(ui.ctx(), u));

@@ -34,8 +34,15 @@ fn svg_filter_name(s: &Session, xml: &str, cmd: &str) -> Result<String> {
     Ok(name)
 }
 
-/// The effect commands of the Effect menu and the Appearance panel.
+/// The effect commands of the Effect menu and the Appearance panel, and the 3D and Materials
+/// panel's Graphics.
 pub fn specs() -> Vec<CommandSpec> {
+    let mut specs = effect_specs();
+    specs.extend(graphics::specs());
+    specs
+}
+
+fn effect_specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
             "effect.apply",
@@ -458,6 +465,9 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
             let on = at.and_then(|at| at.effects_item(&n.appearance, C).ok()).flatten();
             let on = on.and_then(|i| Some((i, n.appearance.items.get(i)?.effects().len())));
             effects::validate_three_d_at_in(Some(d), n, id, &effect.params, on).map_err(|e| bad(C, e))?;
+            if let Some(name) = effects::missing_symbol(d, &effect.params, None) {
+                return Err(bad(C, format!("no symbol named `{name}`")));
+            }
             if id == effects::REVOLVE && effects::has_revolve(n) {
                 return Err(bad(C, "A profile supports one Revolve effect. Edit the existing effect's options instead."));
             }
@@ -764,6 +774,9 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
                 if to == e.id { effects::merged_params(&e.id, &e.params) } else { effects::three_d_params_as(&e.id, &e.params, to) };
             if let (Some(cur), Value::Object(new)) = (prospective.as_object_mut(), effects::upgrade_params(to, &params)) {
                 cur.extend(new);
+            }
+            if let Some(name) = effects::missing_symbol(d, &prospective, Some(&e.params)) {
+                return Err(bad(C, format!("no symbol named `{name}`")));
             }
             if visible != Some(false) {
                 effects::validate_three_d_at_in(Some(d), n, to, &prospective, target.map(|item| (item, index))).map_err(|e| bad(C, e))?;
@@ -1213,6 +1226,8 @@ fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
     }
     Ok(out)
 }
+
+mod graphics;
 
 #[cfg(test)]
 mod lighting_presets_tests;
