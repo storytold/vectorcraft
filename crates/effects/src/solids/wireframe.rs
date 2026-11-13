@@ -10,7 +10,7 @@ use vectorcraft_three_d::Facet;
 
 use super::{
     Profile, ROTATE, built_solids, facets, geometry, has_solid, is_container, is_plane, is_three_d, label_of, members, object_profile, region,
-    reshape_members, resolve, resolve_for, solid, solid_paints, solid_parts, union_bounds,
+    reshape_members, resolve, resolve_for, solid, solid_paint_sources, solid_parts, union_bounds,
 };
 use crate::{GeomContext, is_geometry};
 
@@ -105,16 +105,16 @@ fn solid_face_paths(doc: Option<&Document>, n: &Node) -> Result<Vec<PathData>, S
     let label = n.appearance.effects.iter().find(|e| e.visible && is_three_d(&e.id)).map_or("This effect", |e| label_of(&e.id));
     let (path, rule) = object_profile(n, label)?;
     let ctx = GeomContext::of(n);
-    let paints = solid_paints(n);
+    let (sources, paints) = solid_paint_sources(n);
     if let Some((index, fx)) = solid(&n.appearance.effects) {
         let path = geometry(&path, n.appearance.effects.get(..index).unwrap_or_default(), &ctx);
         return facet_paths(fx, &[Profile { path, rule, items: paints, opacity: 1.0, scopes: vec![] }]);
     }
     let path = geometry(&path, &n.appearance.effects, &ctx);
     let mut out = vec![];
-    for item in &paints {
+    for (source, item) in sources.into_iter().zip(&paints) {
         if let Some((index, fx)) = solid(item.effects()) {
-            let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(item));
+            let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(source.unwrap_or(item)));
             let faces = facet_paths(fx, &[Profile { path: p, rule, items: vec![item.clone()], opacity: 1.0, scopes: vec![] }])?;
             out.extend(reshaped(faces, item.effects().get(index + 1..).unwrap_or_default(), &GeomContext { doc, ..ctx }));
         }
