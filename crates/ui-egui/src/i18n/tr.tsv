@@ -6694,6 +6694,13 @@ axis	Y Axis	Y ekseni
 	Area Text	Alan Metni
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Yazıyı Glif Sınırlarına Göre Ölç
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Piksel'e Yapışma Seçenekleri
+	Pixel Snapping Options…	Piksel'e Yapışma Seçenekleri…
+	Snap to Pixel While Drawing	Çizerken Piksel'e Yapış
+	Snap to Pixel While Moving	Taşırken Piksel'e Yapış
+	Snap to Pixel While Scaling	Ölçeklerken Piksel'e Yapış
+	These options take effect when View › Snap to Pixel is on.	Bu seçenekler Görünüm › Piksel'e Yapış açıkken etkili olur.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Glif'e Yapışma Seçeneklerini Göster
 	Hide Snap to Glyph Options	Glif'e Yapışma Seçeneklerini Gizle

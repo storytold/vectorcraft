@@ -6200,6 +6200,13 @@ axis	Y Axis	Sumbu Y
 	Area Text	Teks area
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Ukur teks menurut batas glif
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opsi snap ke piksel
+	Pixel Snapping Options…	Opsi snap ke piksel…
+	Snap to Pixel While Drawing	Snap ke piksel saat menggambar
+	Snap to Pixel While Moving	Snap ke piksel saat memindahkan
+	Snap to Pixel While Scaling	Snap ke piksel saat menskalakan
+	These options take effect when View › Snap to Pixel is on.	Opsi ini berlaku saat Tampilan › Snap ke piksel aktif.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Tampilkan opsi snap ke glif
 	Hide Snap to Glyph Options	Sembunyikan opsi snap ke glif

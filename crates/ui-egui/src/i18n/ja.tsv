@@ -6429,6 +6429,13 @@ axis	Y Axis	Y 軸
 	Area Text	エリア内文字
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	文字を字形の境界で測定
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	ピクセルにスナップのオプション
+	Pixel Snapping Options…	ピクセルにスナップのオプション…
+	Snap to Pixel While Drawing	描画時にピクセルにスナップ
+	Snap to Pixel While Moving	移動時にピクセルにスナップ
+	Snap to Pixel While Scaling	拡大・縮小時にピクセルにスナップ
+	These options take effect when View › Snap to Pixel is on.	これらのオプションは、表示 › ピクセルにスナップがオンのときに有効になります。
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	グリフにスナップのオプションを表示
 	Hide Snap to Glyph Options	グリフにスナップのオプションを隠す

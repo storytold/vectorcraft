@@ -6768,6 +6768,13 @@ axis	Y Axis	Y-akseli
 	Area Text	Alueteksti
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mittaa teksti merkin rajoista
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Pikseliin kohdistuksen asetukset
+	Pixel Snapping Options…	Pikseliin kohdistuksen asetukset…
+	Snap to Pixel While Drawing	Kohdista pikseliin piirrettäessä
+	Snap to Pixel While Moving	Kohdista pikseliin siirrettäessä
+	Snap to Pixel While Scaling	Kohdista pikseliin skaalattaessa
+	These options take effect when View › Snap to Pixel is on.	Nämä asetukset ovat voimassa, kun Näytä › Kohdista pikseliin on käytössä.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Näytä merkkiin kohdistuksen asetukset
 	Hide Snap to Glyph Options	Piilota merkkiin kohdistuksen asetukset

@@ -6576,6 +6576,13 @@ axis	Y Axis	Y 轴
 	Area Text	区域文字
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	按字形边界度量文字
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	对齐像素选项
+	Pixel Snapping Options…	对齐像素选项…
+	Snap to Pixel While Drawing	绘制时对齐像素
+	Snap to Pixel While Moving	移动时对齐像素
+	Snap to Pixel While Scaling	缩放时对齐像素
+	These options take effect when View › Snap to Pixel is on.	这些选项在“视图 › 对齐像素”打开时生效。
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	显示靠齐字符选项
 	Hide Snap to Glyph Options	隐藏靠齐字符选项

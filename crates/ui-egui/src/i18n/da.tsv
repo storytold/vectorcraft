@@ -6200,6 +6200,13 @@ axis	Y Axis	Y-akse
 	Area Text	Områdetekst
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mål tekst efter glyfafgrænsning
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Indstillinger for fastgørelse til pixel
+	Pixel Snapping Options…	Indstillinger for fastgørelse til pixel…
+	Snap to Pixel While Drawing	Fastgør til pixel ved tegning
+	Snap to Pixel While Moving	Fastgør til pixel ved flytning
+	Snap to Pixel While Scaling	Fastgør til pixel ved skalering
+	These options take effect when View › Snap to Pixel is on.	Disse indstillinger virker, når Vis › Fastgør til pixel er slået til.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Vis indstillinger for fastgørelse til tegn
 	Hide Snap to Glyph Options	Skjul indstillinger for fastgørelse til tegn

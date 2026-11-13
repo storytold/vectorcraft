@@ -216,10 +216,10 @@ impl GestureTool {
     }
 
     /// Does a straight Knife cut snap to anchors and paths? Only with Smart Guides on, which Snap to
-    /// Pixel and Snap to Grid turn off (`PointSnap::new`). Its ends snap as the Pencil's straight
-    /// line's do: the press, and the release unless Shift keeps it on a 45° step.
+    /// Pixel (for drawing) and Snap to Grid turn off (`PointSnap::new`). Its ends snap as the
+    /// Pencil's straight line's do: the press, and the release unless Shift keeps it on a 45° step.
     fn knife_snaps(&self, cx: &ToolContext) -> bool {
-        self.id == "knife" && self.straight && cx.smart_guides && !cx.snap_to_pixel && !cx.snap_to_grid
+        self.id == "knife" && self.straight && cx.smart_guides && !cx.snaps_to_pixel(crate::PixelOp::Drawing) && !cx.snap_to_grid
     }
 
     /// Does the end of a straight line snap: the Pencil's Alt line's, or a straight Knife cut's

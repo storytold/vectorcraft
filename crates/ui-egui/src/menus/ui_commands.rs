@@ -196,7 +196,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("view.pixelPreview", "Pixel Preview", "Cmd+Alt+Y", "{}"),
     ("view.trimView", "Trim View", "", "{} toggle: hide everything outside the artboards"),
     ("view.cornerWidget", "Hide Corner Widget", "", "{} toggle the live corner widgets"),
-    ("view.snapToPixel", "Snap to Pixel", "", "{} toggle: drawing and moving land on whole pixels"),
+    (
+        "view.snapToPixel",
+        "Snap to Pixel",
+        "",
+        "{} toggle: drawing, moving and scaling land on whole pixels, each while its option in view.snapToPixel.options is on",
+    ),
     (
         "view.snapToGlyph",
         "Snap to Glyph",

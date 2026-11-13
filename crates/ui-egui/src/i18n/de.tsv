@@ -6330,6 +6330,13 @@ axis	Y Axis	Y-Achse
 	Area Text	Flächentext
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Text an Glyphenbegrenzung messen
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Optionen für „An Pixel ausrichten“
+	Pixel Snapping Options…	Optionen für „An Pixel ausrichten“…
+	Snap to Pixel While Drawing	Beim Zeichnen an Pixel ausrichten
+	Snap to Pixel While Moving	Beim Verschieben an Pixel ausrichten
+	Snap to Pixel While Scaling	Beim Skalieren an Pixel ausrichten
+	These options take effect when View › Snap to Pixel is on.	Diese Optionen wirken, wenn Ansicht › An Pixel ausrichten aktiviert ist.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Optionen für „An Glyphe ausrichten“ einblenden
 	Hide Snap to Glyph Options	Optionen für „An Glyphe ausrichten“ ausblenden

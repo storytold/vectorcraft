@@ -6325,6 +6325,13 @@ axis	Y Axis	Y축
 	Area Text	영역 문자
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	글리프 경계로 문자 측정
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	픽셀에 스냅 옵션
+	Pixel Snapping Options…	픽셀에 스냅 옵션…
+	Snap to Pixel While Drawing	그리는 동안 픽셀에 스냅
+	Snap to Pixel While Moving	이동하는 동안 픽셀에 스냅
+	Snap to Pixel While Scaling	크기를 조절하는 동안 픽셀에 스냅
+	These options take effect when View › Snap to Pixel is on.	이 옵션은 보기 › 픽셀에 스냅이 켜져 있을 때 적용됩니다.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	글리프에 스냅 옵션 표시
 	Hide Snap to Glyph Options	글리프에 스냅 옵션 숨기기

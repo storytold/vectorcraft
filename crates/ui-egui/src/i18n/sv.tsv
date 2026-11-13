@@ -6719,6 +6719,13 @@ axis	Y Axis	Y-axel
 	Area Text	Områdestext
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mät text efter glyfgränser
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Alternativ för fäst mot pixel
+	Pixel Snapping Options…	Alternativ för fäst mot pixel…
+	Snap to Pixel While Drawing	Fäst mot pixel vid ritning
+	Snap to Pixel While Moving	Fäst mot pixel vid flyttning
+	Snap to Pixel While Scaling	Fäst mot pixel vid skalning
+	These options take effect when View › Snap to Pixel is on.	De här alternativen gäller när Visa › Fäst mot pixel är på.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Visa alternativ för fäst mot glyf
 	Hide Snap to Glyph Options	Dölj alternativ för fäst mot glyf
