@@ -184,6 +184,44 @@ fn dragging_a_style_onto_delete_deletes_it() {
     }
 }
 
+/// A secondary or middle drag of a style row onto Create New Style or Delete carries no row and
+/// runs nothing; a primary drag still deletes.
+#[test]
+fn only_a_primary_drag_carries_a_style_row() {
+    for kind in [Kind::Char, Kind::Para] {
+        let (mut app, _) = drag_app();
+        let ctx = egui::Context::default();
+        let before = styles(&mut app, kind);
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let commands = app.run_count;
+        for pointer in [egui::PointerButton::Secondary, egui::PointerButton::Middle] {
+            for from_right in [40.0, 12.0] {
+                let button = std::cell::Cell::new(egui::Pos2::ZERO);
+                let mut draw = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
+                    ui.set_width(280.0);
+                    let right = ui.max_rect().right();
+                    show(app, ui, kind);
+                    button.set(egui::pos2(right - from_right, ui.min_rect().bottom() - 12.0));
+                };
+                frame_events(&ctx, &mut app, vec![], &mut draw);
+                let row = text_rect(&frame_events(&ctx, &mut app, vec![], &mut draw), "Body").center();
+                let press = |pos, pressed| egui::Event::PointerButton { pos, button: pointer, pressed, modifiers: Default::default() };
+                frame_events(&ctx, &mut app, vec![egui::Event::PointerMoved(row), press(row, true)], &mut draw);
+                frame_events(&ctx, &mut app, vec![egui::Event::PointerMoved(row + vec2(0.0, 12.0))], &mut draw);
+                let to = button.get();
+                frame_events(&ctx, &mut app, vec![egui::Event::PointerMoved(to)], &mut draw);
+                assert!(!egui::DragAndDrop::has_any_payload(&ctx), "{}: a {pointer:?} drag carries no row", kind.what());
+                frame_events(&ctx, &mut app, vec![press(to, false)], &mut draw);
+                frame_events(&ctx, &mut app, vec![], &mut draw);
+            }
+        }
+        assert_eq!((app.run_count, styles(&mut app, kind)), (commands, before.clone()), "{}: nothing runs", kind.what());
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "no undo step");
+        assert!(drag_row_onto_footer(&ctx, &mut app, kind, "Body", 12.0, false), "{} Styles: Delete is outlined", kind.what());
+        assert_eq!(styles(&mut app, kind).len(), before.len() - 1, "{}: a primary drag deletes Body", kind.what());
+    }
+}
+
 fn capture_app() -> (VectorcraftApp, NodeId, egui::Context) {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
     app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
