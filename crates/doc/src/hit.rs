@@ -569,7 +569,7 @@ fn clip_contains(clip: &Node, p: Point) -> bool {
 
 /// The regions `clip` clips to ([`Node::clip_shapes`]), text counted by its frame as in
 /// [`clip_contains`].
-fn clip_regions(clip: &Node) -> Vec<(vectorcraft_geom::BezPath, vectorcraft_geom::FillRule)> {
+pub fn clip_regions(clip: &Node) -> Vec<(vectorcraft_geom::BezPath, vectorcraft_geom::FillRule)> {
     let frame = |n: &Node| {
         let b = n.geometric_bounds()?;
         Some(Node::path(n.id, vectorcraft_geom::shapes::rectangle(b), Default::default()))
@@ -640,7 +640,7 @@ fn source_of(n: &Node, scope: Option<NodeId>) -> bool {
 /// Do clicks and marquees skip the child `i` of `parent` with `scope` isolated? For a Shaper
 /// Group that is its original shapes (its first child), or, in Construction mode, when they are
 /// isolated, the art the group shows.
-fn shaper_hides(parent: &Node, i: usize, scope: Option<NodeId>) -> bool {
+pub fn shaper_hides(parent: &Node, i: usize, scope: Option<NodeId>) -> bool {
     parent.extras().shaper.is_some() && (i == 0) != source_of(parent, scope)
 }
 
@@ -1356,7 +1356,7 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
 /// The part of a marquee `r` in which it can touch the children of `parent`. For a clip group or a
 /// layer with a clipping mask, this is what [`marquee_in_clip`] returns for its clipping path (None
 /// when the marquee misses it); otherwise it is all of `r`.
-fn marquee_in(parent: &Node, r: Rect) -> Option<Rect> {
+pub fn marquee_in(parent: &Node, r: Rect) -> Option<Rect> {
     match parent.children().and_then(|c| c.first()) {
         Some(clip) if parent.clips() => marquee_in_clip(clip, r),
         _ => Some(r),

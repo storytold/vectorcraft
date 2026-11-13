@@ -265,6 +265,39 @@ fn bad_params_are_errors() {
     assert_eq!((undo_steps(&s), corners(&s)), (steps, before));
 }
 
+/// Art inside two overlapping artboards moves with the one first in artboard order, as with the
+/// other artboard edits, even when Distribute spaces the other one first: artboard 2 at x 140 is
+/// left of artboard 1 at x 200, and the square inside both goes with artboard 1.
+#[test]
+fn art_on_overlapping_artboards_moves_with_the_first_by_index() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("artboard.new", &json!({"x": 200, "y": 0, "width": 100, "height": 100})).unwrap();
+    s.execute("artboard.new", &json!({"x": 140, "y": 0, "width": 100, "height": 100})).unwrap();
+    let sq = s.execute("shape.rectangle", &json!({"x": 210, "y": 10, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let p = json!({"indices": ALL, "to": "artboard", "artboard": 0, "spacing": 10});
+    assert_eq!(s.execute("artboard.distributeSpacing", &p).unwrap(), json!({"moved": [1, 2]}));
+    assert_eq!(corners(&s), [(0.0, 0.0), (220.0, 0.0), (110.0, 0.0)]);
+    assert_eq!(corner(&s, sq), (230.0, 10.0), "with artboard 1, 20 pt to the right");
+}
+
+/// Art inside an artboard that stays and a later one that moves stays with the first: artboard 2
+/// overlaps artboard 0, and aligning it to artboard 0 leaves the square inside both in place.
+#[test]
+fn art_shared_with_an_artboard_that_stays_stays() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("artboard.new", &json!({"x": 200, "y": 0, "width": 100, "height": 100})).unwrap();
+    s.execute("artboard.new", &json!({"x": 60, "y": 0, "width": 100, "height": 100})).unwrap();
+    let sq = s.execute("shape.rectangle", &json!({"x": 70, "y": 10, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let p = json!({"indices": [0, 2], "horizontal": "left", "to": "artboard", "artboard": 0});
+    assert_eq!(s.execute("artboard.align", &p).unwrap(), json!({"moved": [2]}));
+    assert_eq!(corners(&s)[2], (0.0, 0.0));
+    assert_eq!(corner(&s, sq), (70.0, 10.0), "with artboard 0, which stays");
+}
+
 /// An artboard's own guides move with it.
 #[test]
 fn an_artboards_guides_move_with_it() {
