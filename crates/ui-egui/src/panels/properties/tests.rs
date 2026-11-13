@@ -1879,6 +1879,39 @@ fn objects_on_path_options_set_pivot_and_rotate_in_one_undo_step() {
     assert_eq!(undo_depth(&app), depth + 1, "one undo step for both groups");
 }
 
+/// The objects of the Objects on Path group `id`, in their order along the path.
+fn on_path(app: &VectorcraftApp, id: &Value) -> Vec<u64> {
+    let d = &app.session.active().unwrap().doc;
+    let rec = d.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().extras().objects_on_path.as_deref().unwrap();
+    rec.members.iter().map(|m| m.id.0).collect()
+}
+
+/// The help page's Detach in the Objects on Path Options section takes the object chosen with its
+/// Select/Move widget off the path in one undo step and selects it. It is dimmed, and a click does
+/// nothing, until one group is selected with an object chosen.
+#[test]
+fn detach_takes_the_chosen_object_off_the_path() {
+    let (mut app, ctx) = reference_setup(&[]);
+    let group = objects_on_path(&mut app, 150.0, 0.0);
+    let [first, second] = on_path(&app, &group)[..] else { panic!("two objects") };
+    assert!(shows(&panel_frame(&mut app, &ctx, vec![], objects_on_path_options), "Detach"));
+    let depth = undo_depth(&app);
+    click_named(&mut app, &ctx, objects_on_path_options, "Detach");
+    assert_eq!((on_path(&app, &group), undo_depth(&app)), (vec![first, second], depth), "no object chosen: dimmed");
+    let other = objects_on_path(&mut app, 250.0, 0.0);
+    app.run("object.objectsOnPath.selectMember", json!({"member": first})).unwrap();
+    app.run("select.add", json!({"ids": [other]})).unwrap();
+    click_named(&mut app, &ctx, objects_on_path_options, "Detach");
+    assert_eq!(on_path(&app, &group), [first, second], "two groups: dimmed");
+    app.run("object.objectsOnPath.selectMember", json!({"member": first})).unwrap();
+    let depth = undo_depth(&app);
+    click_named(&mut app, &ctx, objects_on_path_options, "Detach");
+    assert_eq!(on_path(&app, &group), [second]);
+    assert_eq!(undo_depth(&app), depth + 1, "one undo step");
+    let sel = &app.session.active().unwrap().selection;
+    assert_eq!((sel.objects.iter().map(|i| i.0).collect::<Vec<_>>(), sel.on_path_member), (vec![first], None));
+}
+
 /// #3759: with area type selected, the Properties panel's Paragraph section shows Align Top, Align
 /// Center, Align Bottom and Justify Vertically; a click sets the alignment on every selected frame
 /// in one undo step. Point type shows none; frames with rows or columns and threaded frames turn

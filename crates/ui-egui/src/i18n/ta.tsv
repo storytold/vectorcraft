@@ -1711,6 +1711,8 @@ antiAlias	Sharp	கூர்மையான
 	Expand Live Paint	நேரடி வண்ணத்தை விரிவாக்கு
 	Expand Object	பொருளை விரிவாக்கு
 	Expand Objects on Path	பாதையில் பொருட்களை விரிவாக்கு
+	Detach	பிரி
+	Detach Object from Path	பாதையிலிருந்து பொருளைப் பிரி
 	Expand Options	விரிவாக்க விருப்பங்கள்
 	Expand Panels	பலகங்களை விரிவாக்கு
 	Expand Repeat	மீள்செய்கையை விரிவாக்கு
@@ -3232,6 +3234,7 @@ antiAlias	Sharp	கூர்மையான
 	Arch	வில்வளைவு
 @msg	select point type or type on a path	புள்ளி உரையையோ பாதையில் உரையையோ தேர்ந்தெடுக்கவும்
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	இழையில் உள்ள பாதையில் உரை இயங்குநிலை உரையைப் பயன்படுத்த முடியாது: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	திறந்த அல்லது கூட்டுப் பாதையிலுள்ள உரையை அதன் மேற்புறத்திலோ கீழ்ப்புறத்திலோ மையப்படுத்த முடியாது: {open}
 	Optimize for fast web view	விரைவான இணைய பார்வைக்கு உகப்பாக்கு
 	Optimized	மேம்படுத்தப்பட்டது
 	Options	விருப்பங்கள்
@@ -3404,6 +3407,8 @@ antiAlias	Sharp	கூர்மையான
 	per slice	ஒரு துண்டுக்கு
 	Percent:	சதவீதம்:
 	Perceptual	உணர்வுசார்
+	Hue Clockwise	சாயல் கடிகாரச் சுழற்சித் திசையில்
+	Hue Counterclockwise	சாயல் கடிகாரச் சுழற்சிக்கு எதிர்த் திசையில்
 	Perceptual Scales	உணர்வுசார் அளவுகோல்கள்
 	Performance	செயல்திறன்
 	Permissions	அனுமதிகள்
@@ -3472,6 +3477,7 @@ antiAlias	Sharp	கூர்மையான
 	Continue	தொடர்
 	Continue Action	செயலைத் தொடர்
 	Delete Action Step	செயல் படியை நீக்கு
+	Move Action Step	செயல் படியை நகர்த்து
 	Press Play Current Selection in the Actions panel to go on.	தொடர, செயல்கள் பலகத்தில் உள்ள தற்போதைய தேர்வை இயக்கு என்பதை அழுத்தவும்.
 	Stop: {message}	நிறுத்தம்: {message}
 @msg	no action is waiting at a stop	எந்தச் செயலும் ஒரு நிறுத்தத்தில் காத்திருக்கவில்லை
@@ -6045,7 +6051,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	`length` must be a number of at most 1000000 pt either way	`length` நேர்மறையாகவோ எதிர்மறையாகவோ அதிகபட்சம் 1000000 pt கொண்ட ஓர் எண்ணாக இருக்க வேண்டும்
 @msg	`library` is a library id or name (see {list})	`library` என்பது நூலக அடையாளம் அல்லது பெயர் ({list} ஐப் பார்க்கவும்)
 @msg	`line` must be true or false	`line` true அல்லது false ஆக இருக்க வேண்டும்
-@msg	`method` must be classic or perceptual	`method` classic அல்லது perceptual ஆக இருக்க வேண்டும்
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` classic, perceptual, hue-clockwise அல்லது hue-counterclockwise ஆக இருக்க வேண்டும்
 @msg	`min` is greater than `max`	`min` ஆனது `max`-ஐ விடப் பெரியது
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors`, `maxAnchors` ஆகியவை முழு எண்களாக இருக்க வேண்டும்
 @msg	`minAngle` ({min_angle}°) can't be more than `maxAngle` ({max_angle}°)	`minAngle` ({min_angle}°) `maxAngle` ({max_angle}°) ஐ விட அதிகமாக இருக்க முடியாது
@@ -7642,6 +7648,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	Replace Spine: select a blend and a path	முதுகெலும்பை மாற்று: ஒரு கலப்பையும் ஒரு பாதையையும் தேர்ந்தெடுக்கவும்
 @msg	replace: select the one object to replace	replace: மாற்ற வேண்டிய ஒரே பொருளைத் தேர்ந்தெடுக்கவும்
 @msg	replace: the object to replace was changed or deleted	replace: மாற்ற வேண்டிய பொருள் மாற்றப்பட்டது அல்லது நீக்கப்பட்டது
+@msg	the document it was prepared for is no longer active	இது தயாரிக்கப்பட்ட ஆவணம் இப்போது செயலில் இல்லை
 @msg	Reset {_1}	{_1} மீட்டமைக்கப்பட்டது
 @msg	resolution must be a number or screen|medium|high	resolution ஓர் எண்ணாக அல்லது screen|medium|high ஆக இருக்க வேண்டும்
 @msg	resolution must be between 1 and 2400 ppi	resolution 1 முதல் 2400 ppi வரை இருக்க வேண்டும்
@@ -7725,6 +7732,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	select an object with a freeform gradient	கட்டற்ற சாய்வு உள்ள ஒரு பொருளைத் தேர்ந்தெடுக்கவும்
 @msg	select an object with an opacity mask	ஒளிபுகாநிலை முகமூடி உள்ள ஒரு பொருளைத் தேர்ந்தெடுக்கவும்
 @msg	select an Objects on Path group	ஒரு பாதையில் பொருட்கள் குழுவைத் தேர்ந்தெடுக்கவும்
+@msg	choose the object to detach with its Select/Move widget	பிரிக்க வேண்டிய பொருளை அதன் தேர்ந்தெடு/நகர்த்து விட்ஜெட்டால் தேர்ந்தெடுக்கவும்
 @msg	select area type	பரப்பு உரையைத் தேர்ந்தெடுக்கவும்
 @msg	select area type (text in a frame)	பரப்பு உரையைத் (சட்டகத்தில் உள்ள உரை) தேர்ந்தெடுக்கவும்
 @msg	select area type and closed paths (at least one area type object)	பரப்பு உரையையும் மூடிய பாதைகளையும் தேர்ந்தெடுக்கவும் (குறைந்தது ஒரு பரப்பு உரைப் பொருள்)
@@ -7915,7 +7923,9 @@ antiAlias	Sharp	கூர்மையான
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` இன் face ஆனது front அல்லது back ஆக இருக்க வேண்டும்
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` இன் {key} ஆனது {lo} முதல் {hi} வரையிலான எண்ணாக இருக்க வேண்டும்
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` ஒரு வரிசையாக இருக்க வேண்டும்
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	வரைகலைகள் தட்டையான முகங்களில் மட்டுமே பொருத்தப்படும்: வெளித்தள்ளு அல்லது தளம் பொருள் வகையைப் பயன்படுத்தவும்
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	வரைகலைகள் தளம், வெளித்தள்ளு, சுழற்றி உருவாக்கு ஆகிய பொருள் வகைகளில் பொருத்தப்படும்
+@msg	Revolve maps graphics onto its side: map them onto the front	சுழற்றி உருவாக்கு வரைகலைகளை அதன் பக்கவாட்டில் பொருத்துகிறது: அவற்றை முன்பக்கத்தில் பொருத்தவும்
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	வரைகலைகள் இந்தப் பரப்புக்கு மிகவும் சிக்கலானவை: சின்னங்களின் ஓவியத்தை எளிதாக்கவும் அல்லது பகுதிகளைக் குறைக்கவும்
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` அதிகபட்சம் {MAX_GRAPHICS} வரைகலைகளை ஏற்கும்
 @msg	A plane has one face: map its graphics onto the front	தளத்துக்கு ஒரே ஒரு முகம் உண்டு: அதன் வரைகலைகளை முன்புறத்தில் பொருத்தவும்
 @msg	The graphics are too complex: simplify the symbols' art	வரைகலைகள் மிகவும் சிக்கலானவை: சின்னங்களின் ஓவியத்தை எளிதாக்கவும்
@@ -8229,6 +8239,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	this PostScript file can't be read ({why}): save it as PDF or SVG in the app that made it	இந்த PostScript கோப்பைப் படிக்க முடியவில்லை ({why}): அதை உருவாக்கிய பயன்பாட்டில் PDF அல்லது SVG ஆகச் சேமிக்கவும்
 @msg	This shortcut file is in a form VectorCraft can't read.	இந்தக் குறுக்குவழிக் கோப்பு VectorCraft படிக்க முடியாத வடிவில் உள்ளது.
 @msg	this system has no screen color sampler	இந்த அமைப்பில் திரை நிற மாதிரி எடுப்பான் இல்லை
+@msg	the screen color sampler did not answer	திரை நிற மாதிரி எடுப்பான் பதிலளிக்கவில்லை
+@msg	the screen color sampler failed	திரை நிற மாதிரி எடுப்பான் தோல்வியடைந்தது
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	இந்தக் கண்டறிதல் {max} க்கு மேற்பட்ட நங்கூரப் புள்ளிகளை உருவாக்கும், ஆவணம் சீராகக் காட்டக்கூடியதை விட அதிகம்: இரைச்சலை உயர்த்தவும், பாதைகள் அல்லது நிறங்களைக் குறைக்கவும், அல்லது குறைந்த நம்பகத்தன்மை முன்னமைவைத் தேர்ந்தெடுக்கவும்
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: பக்கம் {n} இல்லை (கோப்பில் 1 பக்கம் மட்டுமே உள்ளது)
 @msg	thumbnail: no page {v} (the {what} has {count})	thumbnail: பக்கம் {v} இல்லை ({what} இல் {count} பக்கங்கள் உள்ளன)
@@ -8809,15 +8821,39 @@ theme	Appearance	தோற்றப்பாணி
 	Korean Line Break Anywhere	கொரிய உரையில் எங்கும் வரி முறிவு
 	Bunri-Kinshi	Bunri-Kinshi
 	Dry Media	உலர் ஊடகங்கள்
+	Chalk Grain	சுண்ணக்கட்டித் துகள்கள்
+	Graphite Pencil	கிராஃபைட் பென்சில்
+	Wax Crayon	மெழுகு வண்ணக்குச்சி
+	Charcoal Dust	கரித் தூள்
+	Notched Ribbon	வெட்டுவாய் ரிப்பன்
+	Double Line	இரட்டைக் கோடு
+	Wave	அலை
+	Teardrop	கண்ணீர்த் துளி
+	Striped Ribbon	கோடிட்ட ரிப்பன்
+	Fine Nib	மெல்லிய முனை
+	Broad Nib	அகன்ற முனை
+	Chisel	உளி
+	Round Pen	வட்டப் பேனா
+	Pressure Pen	அழுத்தப் பேனா
+	Beads	மணிகள்
+	Dash Dot	கீற்று-புள்ளி
+	Scallops	அலை விளிம்புகள்
+	Stars	நட்சத்திரங்கள்
+	Triangles	முக்கோணங்கள்
+	Sparkles	மின்னல்கள்
 	Optical Effects	ஒளியியல் விளைவுகள்
 	Center on Top	மேற்புறத்தில் மையப்படுத்து
 	Center on Bottom	கீழ்ப்புறத்தில் மையப்படுத்து
 @msg	select type on a closed path	மூடிய பாதையிலுள்ள உரையைத் தேர்ந்தெடுக்கவும்
 @msg	type on a path with no length or no height cannot be centered: {flat}	நீளமோ உயரமோ இல்லாத பாதையிலுள்ள உரையை மையப்படுத்த முடியாது: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	இழையில் உள்ள பாதையிலுள்ள உரையை அதன் மேற்புறத்திலோ கீழ்ப்புறத்திலோ மையப்படுத்த முடியாது: {frames}
 	Spot Color Objects	புள்ளி நிறப் பொருட்கள்
 	Repeats	மீள்செய்கைகள்
 	Weed Box and Lines…	களைநீக்கப் பெட்டியும் கோடுகளும்…
 	Weed Box and Lines	களைநீக்கப் பெட்டியும் கோடுகளும்
+	Margin	ஓரம்
+	Box	பெட்டி
+	Swatch	வண்ண மாதிரி
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	அதற்குப் பதிலாக {base} (U+{code}) ஐச் செருக இருமுறை சொடுக்கவும்: காட்சி வடிவம் இணையாது, எழுத்து இணையும்.
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	காட்சி வடிவத்துக்குப் பதிலாக {base} (U+{code}) செருகப்பட்டது: எழுத்துரு அதை நிலைக்கேற்ப அருகிலுள்ள எழுத்துகளுடன் இணைக்கும்.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	இங்கே எந்த OpenType அம்சமும் இந்த வரியுருவை வரையாது, எனவே அது எழுத்தின் வரியுருவை மாற்றுகிறது; அருகிலுள்ள எழுத்துகளுடன் இணையாமல் போகலாம்.

@@ -276,6 +276,44 @@ fn an_engine_keeps_the_newest_places_within_its_budget() {
     assert_eq!((d_place.0, d_place.1, d_place.2), (None, 0, 0), "a map larger than the budget is not kept");
 }
 
+/// `$.line` and `$.stack` in code an earlier run of a named engine compiled give the line of that
+/// run's file: its script, or a file it included; a script given as text is named by that run's
+/// name. Code `eval` and `Function` compiled keeps its own line, in `[eval]`, and code whose place
+/// the engine did not keep is at line 0 of `[unknown]`.
+#[test]
+fn the_line_and_the_stack_of_code_an_earlier_run_kept_are_at_that_runs_files() {
+    use super::script_include::short_stack;
+    let base: PathBuf = std::env::temp_dir().join(format!("vc-script-engines-line-stack-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&base).unwrap();
+    std::fs::write(base.join("inc.jsxinc"), "\n\nfunction fromInclude() {\n  return [$.line, $.stack];\n}").unwrap();
+    let def = base.join("def.jsx");
+    std::fs::write(&def, "#targetengine e\nvar pad = 1;\n#include \"inc.jsxinc\"\nfunction fromMain() {\n  return fromInclude();\n}").unwrap();
+    let mut s = Session::new();
+    s.execute("script.run", &json!({"path": def.to_string_lossy()})).unwrap();
+    run(&mut s, "#targetengine e\n\nfunction fromText() {\n  return $.stack;\n}").unwrap();
+    let call = |s: &mut Session, code: &str| {
+        let r = s.execute("script.run", &json!({"source": format!("#targetengine e\n\n{code}"), "name": "caller.js"}));
+        r.unwrap_or_else(|e| panic!("{code}: {e}"))["log"][0].clone()
+    };
+    let r = call(&mut s, "vc.log(fromMain());");
+    assert_eq!(r[0], 4, "{r}");
+    assert_eq!(short_stack(&r[1]), "[global]@caller.js:3\nfromMain@def.jsx:5\nfromInclude@inc.jsxinc:4\n");
+    assert_eq!(short_stack(&call(&mut s, "vc.log(fromText());")), "[global]@caller.js:3\nfromText@t.js:4\n");
+    assert_eq!(call(&mut s, "vc.log(eval('\\n\\n$.line'));"), 3);
+    assert_eq!(call(&mut s, "vc.log(eval('\\n$.stack'));"), "[global]@caller.js:3\n[global]@[eval]:2\n");
+    let r = call(&mut s, "vc.log(new Function('\\nreturn $.stack;')());");
+    assert_eq!(r, "[global]@caller.js:3\n[anonymous]@[eval]:4\n", "the line of the function source `Function` compiles");
+    // A map larger than the budget is not kept.
+    TEST_KEPT_MAP_BYTES.with(|b| b.set(Some(1)));
+    let lost = run(&mut s, "#targetengine e\n\n\nfunction lost() {\n  return [$.line, $.stack];\n}");
+    let r = lost.map(|_| call(&mut s, "vc.log(lost());"));
+    TEST_KEPT_MAP_BYTES.with(|b| b.set(None));
+    let r = r.unwrap();
+    assert_eq!(r, json!([0, "[global]@caller.js:3\nlost@[unknown]:0\n"]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// A run of a named engine whose script does not compile defines no code, so it keeps no place
 /// and pushes out none of the places kept before. An included file without a preprocessor line is
 /// first parsed with the script it joins, so its syntax error ends the run as it starts.

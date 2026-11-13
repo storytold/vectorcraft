@@ -1617,6 +1617,8 @@ file-filter	Templates	Шаблони
 	Objects on Path Tool	Інструмент «Об’єкти на контурі»
 	Attach Objects on Path	Прикріпити об’єкти до контуру
 	Expand Objects on Path	Розібрати об’єкти на контурі
+	Detach	Відкріпити
+	Detach Object from Path	Відкріпити об’єкт від контуру
 	Release Live Paint	Звільнити швидку заливку
 	Release Repeat	Звільнити повтор
 	Release Slice	Звільнити фрагмент
@@ -4804,6 +4806,7 @@ axis	Both	Обидві
 @msg	paths contain invalid coordinates	контури містять неприпустимі координати
 @msg	paths: give at least one file	paths: вкажіть щонайменше один файл
 @msg	replace: the object to replace was changed or deleted	replace: об’єкт для заміни було змінено або видалено
+@msg	the document it was prepared for is no longer active	документ, для якого це було підготовлено, більше не активний
 @msg	pattern missing	візерунок відсутній
 @msg	patterns nested too deeply are filled with mid-grey	надто глибоко вкладені візерунки заповнюються сірим
 @msg	percent must be above 0 and at most 6400, not {p}	percent має бути більше 0 і не більше 6400, а не {p}
@@ -4839,6 +4842,7 @@ axis	Both	Обидві
 @msg	select a repeat	виділіть повтор
 @msg	select an Intertwine group	виділіть групу переплетення
 @msg	select an Objects on Path group	виділіть групу об’єктів на контурі
+@msg	choose the object to detach with its Select/Move widget	виберіть об’єкт для відкріплення його елементом «Вибрати/Перемістити»
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	до контуру всередині складеного контуру, переходу, оболонки, повтору або групи переплетення не можна прикріпити об’єкти
 @msg	a clipping path can't take objects	до відсічного контуру не можна прикріпити об’єкти
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	об’єкти всередині переходу, оболонки, повтору або групи переплетення не можна прикріпити до контуру
@@ -5557,7 +5561,9 @@ lighting	Light	Світло
 @msg	`{GRAPHICS}` face must be front or back	face у `{GRAPHICS}` має бути front або back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} у `{GRAPHICS}` має бути числом від {lo} до {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` має бути масивом
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Графіка наноситься на плоскі грані: використайте тип об’єкта «Видавлювання» або «Площина»
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Графіка наноситься на об’єкти типів «Площина», «Видавлювання» та «Обертання»
+@msg	Revolve maps graphics onto its side: map them onto the front	«Обертання» наносить графіку на свою бічну поверхню: розміщуйте її на передній стороні
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Графіка надто складна для цієї поверхні: спростіть ілюстрації символів або зменште «Сегменти»
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` приймає не більше {MAX_GRAPHICS} графічних елементів
 @msg	A plane has one face: map its graphics onto the front	Площина має одну сторону: розміщуйте її графіку на передній стороні
 @msg	The graphics are too complex: simplify the symbols' art	Графіка надто складна: спростіть ілюстрації символів
@@ -5911,7 +5917,9 @@ axis	Y Axis	Вісь Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` застосовується до градієнтних заливок (paint.setFill)
 @msg	`dither` must be true or false	`dither` має бути true або false
 	Perceptual	Перцептивний
-@msg	`method` must be classic or perceptual	`method` має бути classic або perceptual
+	Hue Clockwise	Відтінок за годинниковою стрілкою
+	Hue Counterclockwise	Відтінок проти годинникової стрілки
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` має бути classic, perceptual, hue-clockwise або hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` має бути pad, repeat або reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` має бути цілим числом від 1 до {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` застосовується до лінійних, радіальних, конічних і ромбоподібних градієнтів
@@ -6154,6 +6162,7 @@ axis	Y Axis	Вісь Y
 	Continue	Продовжити
 	Continue Action	Продовжити дію
 	Delete Action Step	Видалити крок дії
+	Move Action Step	Перемістити крок дії
 	Press Play Current Selection in the Actions panel to go on.	Щоб продовжити, натисніть «Відтворити поточне виділення» на панелі «Дії».
 	Stop: {message}	Зупинка: {message}
 @msg	no action is waiting at a stop	жодна дія не очікує на зупинці
@@ -6325,6 +6334,22 @@ axis	Y Axis	Вісь Y
 	Graphite Pencil	Графітний олівець
 	Wax Crayon	Восковий олівець
 	Charcoal Dust	Вугільний пил
+	Notched Ribbon	Стрічка з насічками
+	Double Line	Подвійна лінія
+	Wave	Хвиля
+	Teardrop	Крапля
+	Striped Ribbon	Смугаста стрічка
+	Fine Nib	Тонке перо
+	Broad Nib	Широке перо
+	Chisel	Стамеска
+	Round Pen	Кругле перо
+	Pressure Pen	Перо з натиском
+	Beads	Намистини
+	Dash Dot	Штрихпунктир
+	Scallops	Фестони
+	Stars	Зірки
+	Triangles	Трикутники
+	Sparkles	Іскри
 	Save Brush Library…	Зберегти бібліотеку пензлів…
 @msg	`{_1}` has no brushes to apply	У `{_1}` немає пензлів для застосування
 @msg	missing `library` (see brush.libraries)	не вказано `library` (див. brush.libraries)

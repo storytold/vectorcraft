@@ -463,7 +463,9 @@ impl Exporter<'_> {
     /// than an image?
     pub(super) fn perceptual_spot(&self, g: &vectorcraft_color::GradientPaint, fill: bool) -> bool {
         let gr = &g.gradient;
-        !gr.method.is_classic()
+        // Not one mixed around the hue wheel: its colors between two stops are not tints or
+        // mixes of the stops' inks, so it stays an image.
+        gr.method == vectorcraft_color::GradientMethod::Perceptual
             && gr.kind != GradientKind::Freeform
             && !(fill && gr.dither)
             && (self.one_spot_ink(gr).is_some() || self.device_n_inks_only(gr))
@@ -476,7 +478,7 @@ impl Exporter<'_> {
     /// other gradients, and for an ink too light for lightness to tell its tints apart, which
     /// [`Self::spot_stops`] then writes with the stops' own tints.
     fn perceptual_spot_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<Vec<(f32, krilla::color::Color, f32)>> {
-        if g.method.is_classic() {
+        if g.method != vectorcraft_color::GradientMethod::Perceptual {
             return None;
         }
         let ink = self.one_spot_ink(g)?;
@@ -494,7 +496,7 @@ impl Exporter<'_> {
         let from_stops = g.gradient.kind != GradientKind::Freeform || !g.has_freeform_points();
         if from_stops && self.has_spot_stop(&g.gradient) {
             self.warn(
-                "spot colors in gradients exported as images (freeform or dithered gradients, and Perceptual ones with RGB or Lab stops or too many stops) are written in process colors",
+                "spot colors in gradients exported as images (freeform or dithered gradients, ones mixed around the hue wheel, and Perceptual ones with RGB or Lab stops or too many stops) are written in process colors",
             );
         }
     }
@@ -623,9 +625,9 @@ impl Exporter<'_> {
         let field = freeform.then(|| g.freeform_on(b).model_field(spread_scale(b)));
         let cmyk_doc = self.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
         if g.gradient.kind == GradientKind::Conic {
-            self.warn("conic gradients drawn as pixels (dithered fills, and Perceptual ones other than spot ink shadings), in a PDF/A file or with more than 97 stops are exported as images");
+            self.warn("conic gradients drawn as pixels (dithered fills, ones mixed around the hue wheel, and Perceptual ones other than spot ink shadings), in a PDF/A file or with more than 97 stops are exported as images");
         } else if g.gradient.kind == GradientKind::Diamond {
-            self.warn("diamond gradients drawn as pixels (dithered fills, and Perceptual ones other than spot ink shadings), with translucent stops or without an extent are exported as images");
+            self.warn("diamond gradients drawn as pixels (dithered fills, ones mixed around the hue wheel, and Perceptual ones other than spot ink shadings), with translucent stops or without an extent are exported as images");
         } else if !freeform {
             self.warn("linear and radial gradients drawn as pixels are exported as images");
         }

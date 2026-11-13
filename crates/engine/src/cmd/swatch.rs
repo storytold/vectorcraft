@@ -410,6 +410,8 @@ fn gradient_key(g: &Gradient) -> Option<GradientKey<'_>> {
     let method = match g.method {
         GradientMethod::Classic => 0,
         GradientMethod::Perceptual => 1,
+        GradientMethod::HueClockwise => 2,
+        GradientMethod::HueCounterclockwise => 3,
     };
     Some((kind, method, g.dither, g.painted_spread(), g.stops.iter().map(stop_key).collect::<Option<_>>()?))
 }
