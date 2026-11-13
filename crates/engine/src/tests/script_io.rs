@@ -1492,8 +1492,23 @@ fn script_file_dialog_grants_are_kept_for_the_same_script_text() {
     assert!(s.script_pick(crate::script::files::PickAnswer::Deny));
     assert!(pump_to_picker(&mut s).is_some(), "the run ends");
 
-    let removed = s.execute("script.grants.revoke", &json!({"path": out.to_string_lossy()})).unwrap();
-    assert_eq!(removed["removed"], 1);
+    // Under automation read roots, a path outside them is not looked up: a link there to the
+    // granted file does not name it.
+    #[cfg(unix)]
+    {
+        let link = base.join("link.txt");
+        std::os::unix::fs::symlink(&out, &link).unwrap();
+        let roots = AutomationRoots::new(&[&base.join("main")], &[]).unwrap();
+        let r = confine(roots.as_ref(), || s.execute("script.grants.revoke", &json!({"path": link.to_string_lossy()}))).unwrap();
+        assert_eq!(r["removed"], 0, "{r}");
+        let r = s.execute("script.grants.revoke", &json!({"path": link.to_string_lossy()})).unwrap();
+        assert_eq!(r["removed"], 1, "without roots the link is followed: {r}");
+    }
+    #[cfg(not(unix))]
+    {
+        let removed = s.execute("script.grants.revoke", &json!({"path": out.to_string_lossy()})).unwrap();
+        assert_eq!(removed["removed"], 1);
+    }
     assert_eq!(s.execute("script.grants", &json!({})).unwrap()["grants"], json!([]));
     assert!(s.execute("script.grants.revoke", &json!({})).is_err());
     assert!(!base.join("settings/Script Grants.json.part").exists());

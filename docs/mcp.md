@@ -2348,7 +2348,8 @@ grant, which covers everything in the folder (a file's grant covers its own path
 takes its place), and `file` the grants
 file's path, or `null` without a settings folder. Under automation read roots, a `script`, `path` or `file` outside them
 is given as its file name alone. `script.grants.revoke {script?, path?, all?}` removes the grants of
-a script file, of a path, of both together, or with `all: true` every grant, and returns `{removed}`. While a script
+a script file, of a path, of both together, or with `all: true` every grant, and returns `{removed}`. A path is
+matched after its links are followed; under automation read roots, a path outside them is matched as given. While a script
 runs it is refused with the busy error, as the run keeps the grants it started with. A grants file that is there but
 cannot be read is left as it is: `script.grants.revoke` fails, and a grant picked with Always is not kept. A script
 cannot run either command.

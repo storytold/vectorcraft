@@ -104,7 +104,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Revoke Script File Permissions",
             [],
             None,
-            "{script?: a script file's path, path?: an allowed file or folder's path, all?: true (exactly one of all and the other two)} remove the kept file access of that script, of that path, of both together, or every one; a path is matched as script.grants lists it, after its links are followed; refused with the busy error while a script runs, as the run keeps the grants it started with → {removed: how many}",
+            "{script?: a script file's path, path?: an allowed file or folder's path, all?: true (exactly one of all and the other two)} remove the kept file access of that script, of that path, of both together, or every one; a path is matched as script.grants lists it, after its links are followed (a path outside the automation read roots is matched as given); refused with the busy error while a script runs, as the run keeps the grants it started with → {removed: how many}",
             always,
             grants_revoke
         ),
@@ -358,9 +358,14 @@ fn grants_revoke(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "script.grants.revoke";
     let path_of = |key: &str| match p.get(key) {
         None => Ok(None),
-        Some(Value::String(t)) if !t.is_empty() => {
-            Ok(Some(std::fs::canonicalize(t).map_or_else(|_| t.clone(), |real| crate::cmd::findfiles::plain(real).to_string_lossy().into_owned())))
-        }
+        // A path the request may not read (outside the automation read roots, a network path among
+        // them) is compared as written, without looking it up.
+        Some(Value::String(t)) if !t.is_empty() => Ok(Some(
+            crate::file_access::check_read(t)
+                .ok()
+                .and_then(|()| std::fs::canonicalize(t).ok())
+                .map_or_else(|| t.clone(), |real| crate::cmd::findfiles::plain(real).to_string_lossy().into_owned()),
+        )),
         Some(_) => Err(bad(C, format!("`{key}` must be a path"))),
     };
     let (script_path, path) = (path_of("script")?, path_of("path")?);
