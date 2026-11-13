@@ -66,7 +66,7 @@ mod panelcmds;
 pub mod params;
 mod path;
 pub(crate) mod pathops;
-mod patterncmds;
+pub(crate) mod patterncmds;
 pub mod patternlib;
 pub mod pdfcmds;
 pub mod perspgrid;

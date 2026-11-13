@@ -1,6 +1,6 @@
 # VectorCraft MCP server
 
-> **Last updated:** 2026-11-11 · **Change:** Save location-refusal error (#6146); existing response shapes retained.
+> **Last updated:** 2026-11-13 · **Change:** pattern editing refuses painting the tile with its own pattern (#7095); existing response shapes retained.
 
 `vectorcraft-cli mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio
 (newline-delimited JSON-RPC 2.0; see [Protocol](#protocol) for version negotiation). Agents use it to
@@ -4175,6 +4175,9 @@ In pattern editing mode the tile edge (`pattern.options {showTileEdge}`) and the
 {showSwatchBounds}`: the part of the tiling the swatch repeats, dashed) are drawn in the preference
 `patternTileEdgeColor`. There `object.exitIsolation` (the Exit Isolation Mode item of the canvas context menu and of the
 Layers panel menu) saves the tile art into the pattern and leaves the mode, as `object.pattern.done` does.
+An edit that makes the tile art paint the pattern being edited, directly or through another pattern or a symbol
+it uses (`paint.setFill {swatch}` with the pattern's own swatch, say), is refused with "a pattern can't paint its own
+tile": a pattern painting its own tile draws without end, and Done could not save it.
 
 `object.pattern.make {name?}`, `object.pattern.saveCopy {name?}` and `pattern.options {newName?}` trim the white space
 around the name they are given. The first two number a name that a pattern, a swatch or a color group has ("Dots 2"),
@@ -10999,4 +11002,5 @@ the error text. The interactive fallback applies only to ordinary File > Save, n
 
 | Date | Change |
 |---|---|
+| 2026-11-13 | Pattern editing refuses an edit that makes the tile art paint its own pattern (#7095); no response-shape change. |
 | 2026-11-11 | Document READ_ONLY_LOCATION for saves (#6146); no response-shape change. |
