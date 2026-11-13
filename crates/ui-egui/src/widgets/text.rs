@@ -1,6 +1,8 @@
 use super::labels::{PreviousLabel, label_field, name_field, take_previous_label};
 use super::numeric::mixed_field_named;
-use super::panel_chrome::chevron_cell;
+use super::panel_chrome::{
+    alt_down_in_field, chevron_cell, entry_to_focus, keep_enter_in_presets, open_presets_from_keys, presets_open, return_focus_from_presets,
+};
 use super::{Rect, Response, Stroke, StrokeKind, Tokens, Ui, id_with, vec2};
 
 /// The flag `dialogs::show` raises while it draws the body of a dialog that has just opened; the
@@ -145,10 +147,14 @@ pub(crate) fn own_field_shift_enter(ui: &Ui, id: egui::Id, buf: &mut String, sho
     shift_enter_keeps_focus(ui, id)
 }
 
+/// How far, in points, a focus click may move between press and release and still be a tap that
+/// selects the whole numeric value. Covers pen and trackpad jitter; anything further is a drag.
+const TAP_SLOP: f32 = 1.0;
+
 /// Numeric fields select the whole text on keyboard focus, a completed focus click or a
 /// double-click. A pointer press keeps its caret so dragging selects from the pressed position,
 /// and a short drag the toolkit still counts as a click keeps it too (#1326): only a tap
-/// releases into select-all.
+/// (released within [`TAP_SLOP`] of its press) releases into select-all.
 pub(super) fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
     let pending = resp.id.with("select-all-on-focus-click");
     let press_pos = resp.id.with("select-all-on-focus-press");
@@ -169,13 +175,14 @@ pub(super) fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
         });
     }
     let clicked_focus = released && ui.data_mut(|d| d.remove_temp::<bool>(pending)).unwrap_or(false) && resp.clicked_by(egui::PointerButton::Primary);
-    // A press released a few points away is a short drag, not a tap. egui still reports a
-    // click, and a release inside one character leaves no text selection, so select-all on
-    // release would replace the drag the user just made (#1326).
+    // A pointer released more than a point from its press is a drag, not a tap. egui still
+    // reports a click for a movement under its click tolerance, and a release inside one
+    // character leaves no text selection, so select-all on release would replace the drag the
+    // user just made (#1326). The one point of slack keeps a jittery pen or trackpad tap a tap.
     let dragged = clicked_focus
         && ui
             .data_mut(|d| d.remove_temp::<egui::Pos2>(press_pos))
-            .is_some_and(|p0| ui.input(|i| i.pointer.interact_pos()).is_some_and(|p1| (p1 - p0).length() > 3.0));
+            .is_some_and(|p0| ui.input(|i| i.pointer.interact_pos()).is_some_and(|p1| (p1 - p0).length() > TAP_SLOP));
     if resp.lost_focus() {
         ui.data_mut(|d| {
             d.remove_temp::<bool>(pending);
@@ -380,16 +387,30 @@ pub fn text_presets_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&s
     ui.scope(|ui| {
         // The field and the chevron share a border.
         ui.spacing_mut().item_spacing.x = -1.0;
+        let at = ui.cursor().min;
+        let keyed = alt_down_in_field(ui, Rect::from_min_size(at, vec2(width - 19.0, 26.0)));
         out = text_field_named(ui, &id, name, Some(value), width - 19.0, 1);
         let resp = chevron_cell(ui, 26.0);
+        let keyed = open_presets_from_keys(ui, &resp, keyed);
+        let was_open = presets_open(ui, &resp);
         egui::Popup::menu(&resp).show(|ui| {
             ui.set_min_width(width - 10.0);
-            for p in presets {
-                if ui.selectable_label(*p == value, *p).clicked() {
+            let focus = entry_to_focus(keyed, presets.iter().map(|p| *p == value));
+            for (i, p) in presets.iter().enumerate() {
+                let r = ui.selectable_label(*p == value, *p);
+                if focus == Some(i) {
+                    r.request_focus();
+                }
+                if r.clicked() {
                     out = Some((*p).to_string());
+                    // Enter or Space on the focused entry is a click too, which the menu does not
+                    // close on by itself.
+                    ui.close();
                 }
             }
         });
+        keep_enter_in_presets(ui, was_open);
+        return_focus_from_presets(ui, &resp);
     });
     out
 }

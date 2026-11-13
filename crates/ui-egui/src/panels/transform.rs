@@ -1,8 +1,8 @@
 //! Transform panel: reference point, X/Y/W/H with the constrain link, rotate and shear, flips,
-//! live-shape properties and the Scale Corners / Scale Strokes & Effects options. While the
-//! Artboard tool is in use it shows and edits the active artboard's X/Y/W/H instead (a new W or H
-//! resizes every selected artboard), and with only ruler guides selected their X (vertical guides)
-//! and Y (horizontal ones).
+//! live-shape properties and the Scale Corners / Scale Strokes & Effects / Align to Pixel Grid
+//! options. While the Artboard tool is in use it shows and edits the active artboard's X/Y/W/H
+//! instead (a new W or H resizes every selected artboard), and with only ruler guides selected
+//! their X (vertical guides) and Y (horizontal ones).
 
 use egui::Ui;
 use serde_json::json;
@@ -223,7 +223,7 @@ pub(crate) fn selected_guides(app: &VectorcraftApp) -> Option<(Option<f64>, Opti
         return None;
     }
     let least = |vertical: bool| {
-        st.selection.guides.iter().filter_map(|i| st.doc.guides.get(*i)).filter(|g| g.vertical == vertical).map(|g| g.pos).min_by(f64::total_cmp)
+        st.selection.guides.iter().filter_map(|i| st.doc.ruler_guide(*i)).filter(|g| g.vertical == vertical).map(|g| g.pos).min_by(f64::total_cmp)
     };
     Some((least(true), least(false)))
 }
@@ -363,6 +363,32 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::check(ui, tl!("Scale Strokes & Effects"), ss, true) {
         set_pref(app, "scaleStrokes", !ss);
     }
+    pixel_grid_check(app, ui);
+}
+
+/// The selected objects' Align to Pixel Grid: on or off when they agree, `None` when they differ,
+/// with whether every one can be aligned (a path that is not a guide and not inside a compound path,
+/// or a compound path) and their ids. `None` with nothing selected.
+fn pixel_aligned_state(app: &VectorcraftApp) -> Option<(Option<bool>, bool, Vec<u64>)> {
+    let st = app.session.active()?;
+    let nodes: Vec<&Node> = st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).collect();
+    let first = nodes.first()?.extras().pixel_aligned;
+    let value = nodes.iter().all(|n| n.extras().pixel_aligned == first).then_some(first);
+    let in_compound = |n: &Node| st.doc.parent_of(n.id).and_then(|p| st.doc.node(p)).is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. }));
+    let alignable = nodes.iter().all(|n| matches!(n.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. }) && !in_compound(n));
+    Some((value, alignable, nodes.iter().map(|n| n.id.0).collect()))
+}
+
+/// The Align to Pixel Grid checkbox (`object.setPixelAligned`): a dash when the selected objects
+/// differ, and unavailable unless every selected object can be aligned. A click turns it on for
+/// them all, or off when it is on for them all.
+fn pixel_grid_check(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let (value, alignable, ids) = pixel_aligned_state(app).unwrap_or((Some(false), false, vec![]));
+    if widgets::check3(ui, tl!("Align to Pixel Grid"), value, alignable)
+        && let Err(e) = app.run("object.setPixelAligned", json!({"ids": ids, "on": value != Some(true)}))
+    {
+        app.status(e);
+    }
 }
 
 /// A live rectangle's, polygon's or ellipse's properties (Transform and Properties panels, and the
@@ -484,13 +510,29 @@ pub fn link_width(ui: &Ui) -> f32 {
 pub const CONSTRAIN_LINK_SIZE: f32 = 22.0;
 
 /// The link between W and H (Transform panel, Properties panel, Control bar): one toggle, the
-/// `constrainProportions` preference, which the size fields pass on as `proportional`.
+/// `constrainProportions` preference, which the size fields pass on as `proportional`. It is drawn
+/// after the fields it sits between, so Tab reaches the fields first and the link after them.
 pub fn constrain_link(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let (_, resp) = ui.allocate_exact_size(egui::Vec2::splat(CONSTRAIN_LINK_SIZE), egui::Sense::click());
+    constrain_link_at(app, ui, resp);
+}
+
+/// [`constrain_link`]'s toggle, made over `at`: the Control bar keeps the link's place between W
+/// and H but makes it after H, so Tab goes from W straight to H and finds the link after it. With
+/// the keyboard on it, Space or Enter toggles it, as a dialog's button takes them.
+pub fn constrain_link_at(app: &mut VectorcraftApp, ui: &mut Ui, at: egui::Response) {
     let on = app.session.prefs.constrain_proportions;
     let tip = tl!("Constrain Width and Height Proportions");
-    if widgets::icon_button(ui, if on { "link" } else { "link-2-off" }, tip, on, CONSTRAIN_LINK_SIZE).clicked() {
+    let keyed = at.has_focus()
+        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Space) | i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+    if widgets::paint_icon_button(ui, at, if on { "link" } else { "link-2-off" }, tip, on).clicked() || keyed {
         set_pref(app, "constrainProportions", !on);
     }
+}
+
+/// The room the Control bar keeps for [`constrain_link_at`] between its W and H fields.
+pub fn constrain_link_room(ui: &mut Ui) -> egui::Rect {
+    ui.allocate_exact_size(egui::Vec2::splat(CONSTRAIN_LINK_SIZE), egui::Sense::hover()).0
 }
 
 /// The `copy` param of a command that a field of the Transform panel, the Properties panel's
@@ -533,6 +575,18 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let ss = app.session.prefs.scale_strokes;
     if menu_item(ui, tl!("Scale Strokes & Effects"), true, ss) {
         set_pref(app, "scaleStrokes", !ss);
+    }
+    // The panel's values and the bounding box measure point type by its glyphs' ink.
+    let glyphs = app.session.prefs.type_glyph_bounds;
+    if menu_item(ui, tl!("Measure Type by Glyph Bounds"), true, glyphs) {
+        set_pref(app, "typeGlyphBounds", !glyphs);
+    }
+    // The active document's Align New Objects to Pixel Grid (`document.setup`).
+    let align_new = app.session.active().map(|st| st.doc.setup.align_new_objects_to_pixel_grid);
+    if menu_item(ui, tl!("Align New Objects to Pixel Grid"), align_new.is_some(), align_new == Some(true))
+        && let Err(e) = app.run("document.setup", json!({"alignNewObjectsToPixelGrid": align_new != Some(true)}))
+    {
+        app.status(e);
     }
     ui.separator();
     // What the panel transforms (Transform Object Only / Pattern Only / Both), one checked.

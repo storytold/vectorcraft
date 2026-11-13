@@ -275,6 +275,29 @@ fn art_options_width_follows_the_pen_pressure() {
     assert!((drawn_height(&app, id) - before).abs() < 1e-6);
 }
 
+/// Art Brush Options' Width menu also offers Tilt, Bearing and Rotation, each with the second
+/// width, and shows the one set when it opens again.
+#[test]
+fn art_options_width_follows_tilt_bearing_and_rotation() {
+    let mut app = app();
+    let (id, before) = brushed(&mut app, "Tapered Stroke");
+    for (mode, label) in [("tilt", "Tilt"), ("bearing", "Bearing"), ("rotation", "Rotation")] {
+        app.run("ui.brushOptions", json!({"name": "Tapered Stroke"})).unwrap();
+        set(&mut app, json!({"widthMode": mode, "widthMax": 300}));
+        assert!(shown(&mut app).contains(label), "{mode}");
+        super::super::confirm(&mut app).unwrap();
+        let def = app.run("brush.get", json!({"name": "Tapered Stroke"})).unwrap();
+        assert_eq!((&def["width_mode"], &def["width_max"]), (&json!(mode), &json!(300.0)), "{mode}");
+        // A stroke drawn without the pen's input is half way: 200 %.
+        let after = drawn_height(&app, id);
+        assert!((after - 2.0 * before).abs() < 0.01 * before, "{mode}: {before} then {after}");
+        app.run("ui.brushOptions", json!({"name": "Tapered Stroke"})).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.str("widthMode"), d.f64("widthMax", 0.0)), (mode.into(), 300.0), "{mode}");
+        super::super::cancel(&mut app);
+    }
+}
+
 /// A context with the app's fonts and theme, for [`frame`].
 fn ctx() -> egui::Context {
     let ctx = egui::Context::default();
@@ -312,9 +335,9 @@ fn click_text(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str) {
 
 /// Presses Escape.
 fn escape(ctx: &egui::Context, app: &mut VectorcraftApp) {
-    let key = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
-    frame(ctx, app, vec![key], "");
-    frame(ctx, app, vec![], "");
+    let key = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    frame(ctx, app, vec![key(true)], "");
+    frame(ctx, app, vec![key(false)], "");
 }
 
 /// Scatter, Art and Pattern Brush Options have a Tips button beside Method. A click on it opens
@@ -390,6 +413,24 @@ fn escape_closes_tips_or_the_method_list_and_leaves_the_dialog_open() {
     assert!(app.ui.dialog.is_none(), "Escape cancels Calligraphic Brush Options");
 }
 
+/// Holding Escape closes Tips and leaves Brush Options open until a new press.
+#[test]
+fn holding_escape_closes_tips_and_leaves_the_dialog_open() {
+    let (mut app, ctx) = (app(), ctx());
+    app.run("ui.brushOptions", json!({"name": "Confetti"})).unwrap();
+    set(&mut app, json!({"tips": true}));
+    let key = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    frame(&ctx, &mut app, vec![], "");
+    for repeat in 0..4 {
+        frame(&ctx, &mut app, vec![key(true)], "");
+        let d = app.ui.dialog.as_ref().unwrap_or_else(|| panic!("repeat {repeat}: Brush Options stays open"));
+        assert!(!d.bool("tips"), "repeat {repeat}: Tips closed");
+    }
+    frame(&ctx, &mut app, vec![key(false)], "");
+    frame(&ctx, &mut app, vec![key(true)], "");
+    assert!(app.ui.dialog.is_none(), "a new press cancels Brush Options");
+}
+
 /// Each Colorization Tips sample paints the brush with its own method on the blue stroke:
 /// Confetti's black and gray art keeps its colors with None, its black becomes the stroke color
 /// with Tints and with Hue Shift (black is its key color), and stays black with Tints and Shades.
@@ -418,13 +459,17 @@ fn each_tips_sample_paints_the_brush_with_its_method() {
     assert!(tints != hue && tints != shades && none != shades, "four different samples");
 }
 
-/// `ui.dialog.set` writes any field, `__def` included. With a brush definition that is not
-/// an object, Brush Options and Colorization Tips still draw.
+/// With a brush definition that is not an object, Brush Options and Colorization Tips still draw.
+/// `ui.dialog.set` refuses `__def`, which holds the brush OK saves.
 #[test]
 fn a_brush_definition_that_is_not_an_object_still_draws() {
     let (mut app, ctx) = (app(), ctx());
     app.run("ui.brushOptions", json!({"name": "Confetti"})).unwrap();
-    crate::tests_synthetic::control(&mut app, &ctx, "ui.dialog.set", json!({"field": "__def", "value": 5}));
+    let (req, _) = crate::control::ControlRequest::new("ui.dialog.set", json!({"field": "__def", "value": 5}));
+    let crate::control::Outcome::Done(r) = crate::control::handle(&mut app, &ctx, &req) else { panic!("not done") };
+    assert_eq!(r["error"], "the `brushOptions` dialog cannot set protected field `__def`", "{r}");
+    assert_ne!(app.ui.dialog.as_ref().unwrap().fields.get("__def"), Some(&json!(5)), "the request is refused");
+    set(&mut app, json!({"__def": 5}));
     crate::tests_synthetic::control(&mut app, &ctx, "ui.dialog.set", json!({"field": "tips", "value": true}));
     let text = shown(&mut app);
     assert!(text.contains("Scatter Brush Options") && text.contains("Colorization Tips"), "{text}");

@@ -4,12 +4,15 @@
 
 mod basic_shapes;
 mod blend_export;
+mod clip_text;
 mod colorized_images;
 mod colour_glyphs;
+mod conic;
 mod container_export;
 mod css_rules;
 mod dash_align;
 mod data_attributes;
+mod diamond;
 mod effects_export;
 mod encoding_profile_fonts;
 mod focal;
@@ -29,6 +32,7 @@ mod options;
 mod prop_svg;
 mod raster_paints;
 mod roundtrip;
+mod spread;
 mod stroke_export;
 mod svg_glyphs;
 mod symbols_layers;

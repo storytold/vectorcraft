@@ -425,10 +425,11 @@ impl Renderer {
         if !k.is_finite() || k <= 1e-12 {
             return;
         }
-        // The art in its own coordinates, with its own resources.
+        // The art in its own coordinates, with its own resources (its composite fonts included).
+        let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&e.doc.composite_fonts);
         let symbols = e.doc.symbol_boxes().quick();
         let visible = m.inverse().transform_rect_bbox(f.visible);
-        let inner = Frame { doc: &e.doc, symbols: &symbols, view: f.view * m, visible, px: f.px / k, ..*f };
+        let inner = Frame { doc: &e.doc, symbols: &symbols, view: f.view * m, visible, px: f.px / k, output: f.output * m, ..*f };
         let _inside = Inside::enter();
         self.draw_arc(ctx, &inner, &e.art);
     }

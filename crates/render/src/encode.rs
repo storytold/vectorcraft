@@ -205,18 +205,32 @@ pub fn art_bounds(doc: &Document) -> Option<Rect> {
 /// object of a layer or sublayer whose drawn bounds overlap `rect`, with all of its bounds; a group
 /// or a clipping layer counts as one object. `None` when no object overlaps `rect`.
 pub fn art_bounds_on(doc: &Document, rect: Rect) -> Option<Rect> {
+    art_bounds_on_with(doc, rect, None)
+}
+
+impl crate::Renderer {
+    /// [`art_bounds_on`], its 3D art measured as this renderer draws and keeps it
+    /// (`Renderer::bounds_of`): a pass over each artboard builds each solid once. What it
+    /// keeps is measured with the document's symbol boxes as it first measured them, and found by
+    /// the objects' addresses: give each document its own renderer.
+    pub fn art_bounds_on(&mut self, doc: &Document, rect: Rect) -> Option<Rect> {
+        art_bounds_on_with(doc, rect, Some(self))
+    }
+}
+
+fn art_bounds_on_with(doc: &Document, rect: Rect, mut renderer: Option<&mut crate::Renderer>) -> Option<Rect> {
     // Art flush with an edge from outside can overlap it by a rounding error (#1295).
     let rect = rect.inflate(-1e-6, -1e-6);
-    fn on(symbols: &SymbolBoxes, n: &Node, rect: Rect) -> Option<Rect> {
+    fn on(symbols: &SymbolBoxes, n: &Arc<Node>, rect: Rect, mut renderer: Option<&mut crate::Renderer>) -> Option<Rect> {
         match &n.kind {
             NodeKind::Layer { template: false, clip: false, children, .. } if n.visible => {
-                children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, on(symbols, c, rect)))
+                children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, on(symbols, c, rect, renderer.as_deref_mut())))
             }
-            _ => drawn_bounds(symbols, n).filter(|b| b.x0 < rect.x1 && b.x1 > rect.x0 && b.y0 < rect.y1 && b.y1 > rect.y0),
+            _ => drawn_bounds_with(symbols, n, Some(n), renderer).filter(|b| b.x0 < rect.x1 && b.x1 > rect.x0 && b.y0 < rect.y1 && b.y1 > rect.y0),
         }
     }
     let symbols = doc.symbol_boxes();
-    doc.layers.iter().fold(None, |acc, l| vectorcraft_geom::union_opt(acc, on(&symbols, l, rect)))
+    doc.layers.iter().fold(None, |acc, l| vectorcraft_geom::union_opt(acc, on(&symbols, l, rect, renderer.as_deref_mut())))
 }
 
 /// Bounds of what an export draws of object `n` ([`art_bounds`]): `None` when `n` is hidden, a
@@ -224,16 +238,37 @@ pub fn art_bounds_on(doc: &Document, rect: Rect) -> Option<Rect> {
 /// except in a group or layer with effects of its own that keep all its members (`without_undrawn`
 /// lists them). Symbol instances are measured by their art in `symbols`.
 pub fn drawn_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
+    drawn_bounds_with(symbols, n, None, None)
+}
+
+/// [`drawn_bounds`] of `n` (`held`: `n` as held in its document, which `renderer` keeps what it
+/// measures by).
+fn drawn_bounds_with(symbols: &SymbolBoxes, n: &Node, held: Option<&Arc<Node>>, mut renderer: Option<&mut crate::Renderer>) -> Option<Rect> {
     if !n.visible {
         return None;
     }
     match &n.kind {
-        NodeKind::Layer { template: true, .. } | NodeKind::Path { guide: true, .. } => None,
+        NodeKind::Layer { template: true, .. } | NodeKind::Path { guide: true, .. } | NodeKind::RulerGuide { .. } => None,
         NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } if !fx::has_object_fx(n) => children
             .iter()
             .skip(usize::from(n.extras().shaper.is_some()))
-            .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, drawn_bounds(symbols, c))),
-        _ => crate::effect_bounds(symbols, without_undrawn(n).as_ref().unwrap_or(n)),
+            .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, drawn_bounds_with(symbols, c, Some(c), renderer.as_deref_mut()))),
+        _ => match (without_undrawn(n), held, renderer) {
+            // A new object, measured once a pass by the one it was made from.
+            (Some(kept), Some(a), Some(r)) => {
+                let key = Arc::as_ptr(a) as usize;
+                if let Some((node, b)) = r.pass_bounds.get(&key)
+                    && Arc::ptr_eq(node, a)
+                {
+                    return *b;
+                }
+                let b = crate::bounds::effect_bounds_with(symbols, &kept, None, Some(r));
+                r.pass_bounds.insert(key, (a.clone(), b));
+                b
+            }
+            (Some(kept), _, renderer) => crate::bounds::effect_bounds_with(symbols, &kept, None, renderer),
+            (None, held, renderer) => crate::bounds::effect_bounds_with(symbols, n, held, renderer),
+        },
     }
 }
 
@@ -254,7 +289,7 @@ fn without_undrawn(n: &Node) -> Option<Node> {
     if keeps_all || !matches!(n.kind, NodeKind::Layer { clip: false, .. } | NodeKind::Group { clip: false, .. }) {
         return None;
     }
-    let undrawn = |c: &Node| !c.visible || matches!(c.kind, NodeKind::Layer { template: true, .. } | NodeKind::Path { guide: true, .. });
+    let undrawn = |c: &Node| !c.visible || c.is_guide() || c.is_template();
     let mut changed = false;
     let kept: Vec<Arc<Node>> = n
         .children()?

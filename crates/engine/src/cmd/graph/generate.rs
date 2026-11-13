@@ -1,8 +1,9 @@
-use super::axis::{LABEL_SIZE, MAX_CATEGORY_TICKS, MAX_TICK_MARKS, one_line, tick_values, value_axis};
+use super::axis::{LABEL_SIZE, MAX_CATEGORY_TICKS, MAX_TICK_MARKS, one_line, radar_axis, tick_values, value_axis};
 use super::columns::{Allowance, ColumnArt, column_art, column_designs};
 use super::data::fmt_value;
 use super::labels::{
-    FILLED_LINE_BUDGET, Gen, Role, SHADOW_BUDGET, SHADOW_OPACITY, blank_label, label_size, label_width, polyline, recolour_text, runs, shadow_of,
+    Gen, Role, SHADOW_BUDGET, SHADOW_OPACITY, blank_label, filled_lines_on, label_extra_height, label_shift, label_size, label_width, polyline,
+    recolour_text, runs, shadow_of,
 };
 use super::markers::{MARKER_BUDGET, marker_cost, marker_designs};
 use super::series::{series_marks, with_series_opacity};
@@ -264,7 +265,7 @@ impl<'a> Plot<'a> {
             right_edge: g.rect.x1,
             wedge_labels: vec![],
             on_top: vec![],
-            filled: g.filled_lines && g.rows.len().saturating_mul(nser) <= FILLED_LINE_BUDGET,
+            filled: filled_lines_on(g, nser),
             bars_reach: None,
             shadowed: vec![],
             series: vec![vec![]; nser],
@@ -422,7 +423,7 @@ impl<'a> Plot<'a> {
         let (g, r, ncat, cs) = (self.g, self.r, self.ncat, self.cs);
         let centre = r.center();
         let rad = (r.width().min(r.height()) / 2.0).max(1.0);
-        let (lo, hi, step) = value_axis(g.ticks, g.axis_min, g.axis_max, 0.0, g.rows.iter().flatten().copied().fold(0.0, f64::max));
+        let (lo, hi, step) = radar_axis(g);
         let at = |c: usize, v: f64| {
             let a = -std::f64::consts::FRAC_PI_2 + std::f64::consts::TAU * c as f64 / ncat as f64;
             centre + vectorcraft_geom::Vec2::new(a.cos(), a.sin()) * (rad * ((v - lo) / (hi - lo)).clamp(0.0, 1.0))
@@ -901,18 +902,21 @@ impl<'a> Plot<'a> {
 
     fn legend_label(&mut self, (x, y): (f64, f64), label: &str) -> Arc<Node> {
         let ls = self.ls;
+        let (dx, dy) = label_shift(&self.g.label_styles, label, self.b.d.setup.system_layout);
+        let (x, y) = (x + dx, y + dy);
         self.b.label(Role::Legend, Point::new(x + 12.0, y + 7.5 + (ls - LABEL_SIZE) * 0.35), label, Justify::Left, false)
     }
 
     /// Add Legend Across Top: swatch and label after swatch and label, in rows as wide as the plot, the last row
     /// just above it.
     fn legend_across_top(&mut self) -> Vec<Arc<Node>> {
-        let (g, r, ls) = (self.g, self.r, self.ls);
+        let (g, r, ls, system_layout) = (self.g, self.r, self.ls, self.b.d.setup.system_layout);
         let entries: Vec<(usize, String)> = (0..self.legend_series()).map(|s| (s, self.legend_text(s))).filter(|(_, l)| !blank_label(l)).collect();
-        let mut rows: Vec<Vec<(usize, String, f64)>> = vec![vec![]];
+        let mut rows: Vec<Vec<(usize, String, f64, f64)>> = vec![vec![]];
         let mut used = 0.0;
         for (s, label) in entries {
-            let w = 12.0 + label_width(&g.label_styles, &label) + 12.0;
+            let w = 12.0 + label_width(&g.label_styles, &label, system_layout) + 12.0;
+            let h = ls * 1.8 * label.split('|').count() as f64 + label_extra_height(&g.label_styles, &label, system_layout);
             // The gap after an entry may run past the plot's edge.
             if used + w - 12.0 > r.width() && rows.last().is_some_and(|row| !row.is_empty()) {
                 rows.push(vec![]);
@@ -920,10 +924,10 @@ impl<'a> Plot<'a> {
             }
             used += w;
             if let Some(row) = rows.last_mut() {
-                row.push((s, label, w));
+                row.push((s, label, w, h));
             }
         }
-        let height = |row: &[(usize, String, f64)]| ls * 1.8 * row.iter().map(|(_, l, _)| l.split('|').count()).max().unwrap_or(1) as f64;
+        let height = |row: &[(usize, String, f64, f64)]| row.iter().map(|(.., h)| *h).fold(ls * 1.8, f64::max);
         // Above the plot and anything drawn over it (radar and stacked-pie labels).
         let top = self.b.out.iter().chain(self.on_top.iter()).filter_map(|n| n.geometric_bounds()).map(|bb| bb.y0).fold(r.y0, f64::min);
         let top = self.bars_reach.map_or(top, |b| top.min(b.y0));
@@ -931,7 +935,7 @@ impl<'a> Plot<'a> {
         let mut labels = vec![];
         for row in &rows {
             let mut x = r.x0;
-            for (s, label, w) in row {
+            for (s, label, w, _) in row {
                 self.legend_swatch(*s, (x, y));
                 labels.push(self.legend_label((x, y), label));
                 x += w;
@@ -954,7 +958,7 @@ impl<'a> Plot<'a> {
                 y += ls * 1.8;
                 continue;
             }
-            y += ls * 1.8 * label.split('|').count() as f64;
+            y += ls * 1.8 * label.split('|').count() as f64 + label_extra_height(&self.g.label_styles, &label, self.b.d.setup.system_layout);
             self.legend_swatch(s, (x, row_y));
             labels.push(self.legend_label((x, row_y), &label));
         }

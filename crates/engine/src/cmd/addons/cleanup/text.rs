@@ -12,7 +12,7 @@ use vectorcraft_doc::{CharStyle, Document, Justify, Node, NodeId, NodeKind, Para
 use vectorcraft_geom::{Affine, Point, Vec2};
 use vectorcraft_text::{FontDb, FontMatch, TextLayout, edit};
 
-use crate::cmd::fonts::{edit_symbol_texts, symbol_texts};
+use crate::cmd::fonts::{art_texts_of, edit_art_texts_of};
 use crate::cmd::textedit::{editing_range, editing_story};
 use crate::cmd::typecmd::refresh_bounds;
 use crate::cmd::{CommandSpec, bad, checked_ids_or_selection, cmd, has_doc, has_selection, switch_or, text_param};
@@ -108,7 +108,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Missing Fonts…",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{font?: family (default: the default type font, Source Sans 3; any of its names)} set every character of the document's type (the type in the art of its symbols included) whose font family isn't available in `font`, in the style it has closest to the one each had, as one undo step → {runs (style runs changed), font}",
+            "{font?: family (default: the default type font, Source Sans 3; any of its names)} set every character of the document's type (the type in its opacity masks and in the art of its symbols and patterns included, hidden or locked type and disabled masks too) whose font family isn't available in `font`, in the style it has closest to the one each had, as one undo step → {runs (style runs changed), font}",
             has_doc,
             replace_fonts
         ),
@@ -544,7 +544,11 @@ fn merge(chain: &[&Piece]) -> std::result::Result<TextObject, usize> {
         for (k, w) in off.windows(2).enumerate() {
             let (delta, Some(&(s, e))) = (w[1] - w[0], before.get(k)) else { continue };
             if delta.abs() > 1e-9 {
-                edit::style_range(&mut m.runs, s, e, |st| st.tracking += delta / st.size.max(1e-6) * 1000.0);
+                // Thousandths of the em as the Horizontal Scale draws it (`spacing_scale`).
+                let vertical = m.vertical;
+                edit::style_range(&mut m.runs, s, e, |st| {
+                    st.tracking += delta / (st.size * vectorcraft_text::spacing_scale(st, vertical)).max(1e-6) * 1000.0;
+                });
                 if !TRACKING.contains(&edit::style_at(&m.runs, s).tracking) {
                     return Err(k + 1);
                 }
@@ -802,7 +806,7 @@ fn remove_breaks(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // The characters a Type tool has selected (after Select All in threaded text, all the text of
     // every frame of the story), else all the text of the selected type.
-    let editing = if p.get("ids").is_some() { None } else { editing_range(s)?.filter(|(_, a, b)| a != b) };
+    let editing = if p.get("ids").is_some_and(|v| !v.is_null()) { None } else { editing_range(s)?.filter(|(_, a, b)| a != b) };
     let story = if editing.is_some() { editing_story(s) } else { vec![] };
     let d = &s.doc()?.doc;
     // Each type object with the breaks that go from it.
@@ -962,11 +966,9 @@ fn replace_fonts(s: &mut Session, p: &Value) -> Result<Value> {
     let default = CharStyle::default().font_family;
     let wanted = text_param(p, "font", C)?.filter(|f| !f.trim().is_empty()).unwrap_or(&default);
     let db = FontDb::global();
-    // Any name of the family is stored as its own name.
-    let family = match db.resolve(wanted, "Regular") {
-        Some((f, m)) if m != FontMatch::Missing => f.family.clone(),
-        _ => return Err(bad(C, "the replacement font is not available")),
-    };
+    // Any name of the family is stored as its own name, and a composite font as its own name.
+    let composite = db.composite_font(wanted).is_some();
+    let family = db.stored_family(wanted, "Regular").ok_or_else(|| bad(C, "the replacement font is not available"))?;
     let missing = |st: &CharStyle| db.resolve(&st.font_family, &st.font_style).is_none_or(|(_, m)| m == FontMatch::Missing);
     let lacks = |t: &TextObject| t.runs.iter().any(|r| missing(&r.style));
     let d = &s.doc()?.doc;
@@ -980,16 +982,20 @@ fn replace_fonts(s: &mut Session, p: &Value) -> Result<Value> {
             }
         });
     }
-    // The type in the symbols' art too, which exports name when its font is missing.
-    if ids.is_empty() && !symbol_texts(d, None).into_iter().any(|(t, _)| lacks(t)) {
+    // The type in opacity masks and in the art of symbols and patterns too, hidden or locked type
+    // included, which exports name when its font is missing.
+    if ids.is_empty() && !art_texts_of(d).into_iter().any(|(_, t, _)| lacks(t)) {
         return Err(EngineError::Other("No fonts are missing".into()));
     }
     let runs = s.edit("Replace Missing Fonts", |d, _| {
         let mut runs = 0;
         let mut replace = |t: &mut TextObject| {
             for r in t.runs.iter_mut().filter(|r| missing(&r.style)) {
-                // The style the font has closest to the one the character had.
-                r.style.font_style = db.face(&family, &r.style.font_style).map_or_else(|| r.style.font_style.clone(), |f| f.style.clone());
+                // The style the font has closest to the one the character had (a composite font's
+                // parts name their own styles: the character keeps its style).
+                if !composite {
+                    r.style.font_style = db.face(&family, &r.style.font_style).map_or_else(|| r.style.font_style.clone(), |f| f.style.clone());
+                }
                 r.style.font_family = family.clone();
                 r.style.font_version = None;
                 r.style.font_axes.clear();
@@ -1003,8 +1009,7 @@ fn replace_fonts(s: &mut Session, p: &Value) -> Result<Value> {
                 replace(t);
             }
         }
-        edit_symbol_texts(d, None, &|t, _| lacks(t), &mut replace);
-        drop(replace);
+        edit_art_texts_of(d, &lacks, &mut replace);
         Ok(runs)
     })?;
     Ok(json!({ "runs": runs, "font": family }))

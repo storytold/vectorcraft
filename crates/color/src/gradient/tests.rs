@@ -604,3 +604,453 @@ fn ink_mixes_use_the_mix_position_when_the_lightness_turns_back() {
     }
     assert!(mixes.windows(2).filter(|p| p[1].1 == 0).all(|p| p[0].2 <= p[1].2), "the weights rise: {mixes:?}");
 }
+
+fn cmyk_stop(offset: f32, c: f32, m: f32, y: f32, k: f32) -> GradientStop {
+    GradientStop::new(offset, Color::cmyk(c, m, y, k))
+}
+
+/// The `n` × 1 grid of `g` as a left-to-right linear gradient's ink pixels.
+fn ink_row(g: Gradient, n: u16, fill: bool) -> Vec<[u8; 5]> {
+    let b = Rect::new(0.0, 0.0, f64::from(n), 1.0);
+    GradientPaint::new(g).ink_pixels(b, b, n, 1, fill).expect("CMYK stops").collect()
+}
+
+#[test]
+fn ink_pixels_mix_the_stops_inks_in_cmyk() {
+    let mut g = Gradient::new(GradientKind::Linear, vec![cmyk_stop(0.0, 1.0, 0.0, 0.0, 0.0), cmyk_stop(1.0, 0.0, 0.0, 0.0, 1.0)]);
+    g.stops[1].opacity = 0.5;
+    let px = ink_row(g.clone(), 10, true);
+    let at = |x: f32| (x * 255.0).round() as u8;
+    for (i, p) in px.iter().enumerate() {
+        let t = (i as f32 + 0.5) / 10.0;
+        assert_eq!(*p, [at(1.0 - t), 0, 0, at(t), at(1.0 - t * 0.5)], "pixel {i}");
+    }
+    // An off-center midpoint is halfway between the two stops' inks, not a display RGB mix.
+    g.stops[0].midpoint = 0.25;
+    let px = ink_row(g.clone(), 4, false);
+    assert_eq!(&px[0][..4], &[at(0.75), 0, 0, at(0.25)], "halfway to the midpoint");
+    assert_eq!(&px[1][..4], &[at(0.5 * 5.0 / 6.0), 0, 0, at(0.5 + 0.5 / 6.0)], "a sixth of the way past it");
+    // A hard stop keeps both sides.
+    let hard = Gradient::new(
+        GradientKind::Linear,
+        vec![
+            cmyk_stop(0.0, 1.0, 0.0, 0.0, 0.0),
+            cmyk_stop(0.5, 1.0, 0.0, 0.0, 0.0),
+            cmyk_stop(0.5, 0.0, 1.0, 0.0, 0.0),
+            cmyk_stop(1.0, 0.0, 1.0, 0.0, 0.0),
+        ],
+    );
+    let px = ink_row(hard, 4, false);
+    assert_eq!((&px[1][..4], &px[2][..4]), (&[255, 0, 0, 0][..], &[0, 255, 0, 0][..]));
+}
+
+#[test]
+fn ink_pixels_dither_only_the_inks_the_ramp_has() {
+    let mut g = Gradient::new(GradientKind::Linear, vec![cmyk_stop(0.0, 0.2, 0.0, 0.0, 0.4), cmyk_stop(1.0, 0.8, 0.0, 0.0, 0.4)]);
+    g.dither = true;
+    let noisy = ink_row(g.clone(), 64, true);
+    let plain = ink_row(g.clone(), 64, false);
+    assert_ne!(noisy, plain, "a fill has noise, a stroke none");
+    for (n, p) in noisy.iter().zip(&plain) {
+        assert_eq!((n[1], n[2]), (0, 0), "no ink on the empty plates: {n:?}");
+        assert!(n[0].abs_diff(p[0]) <= 1 && n[3].abs_diff(p[3]) <= 1, "{n:?} {p:?}");
+        assert_eq!(n[4], 255, "opacity has no noise");
+    }
+    assert!(noisy.iter().zip(&plain).any(|(n, p)| n[3] != p[3]), "K gets its own noise");
+    assert!(noisy.iter().zip(&plain).any(|(n, p)| (n[0] != p[0]) != (n[3] != p[3])), "the noise differs from channel to channel");
+}
+
+#[test]
+fn ink_pixels_follow_the_perceptual_curve_as_ink_mixes() {
+    let mut g = Gradient::new(GradientKind::Linear, vec![cmyk_stop(0.0, 0.0, 0.0, 0.0, 0.0), cmyk_stop(1.0, 1.0, 0.0, 0.0, 0.0)]);
+    g.method = GradientMethod::Perceptual;
+    let mixes = g.ink_mixes().unwrap();
+    let ramp = g.ink_ramp().unwrap();
+    assert_eq!(ramp.stops.len(), mixes.len());
+    for ((t, ink), (o, i, w, _)) in ramp.stops.iter().zip(&mixes) {
+        assert_eq!((*t, ink[0]), (*o, if *i == 0 { *w } else { 1.0 }), "cyan at {t}");
+    }
+    let px = ink_row(g, 2, false);
+    assert!(px[0][0] > 0 && px[0][0] < px[1][0], "{px:?}");
+    assert!(px.iter().all(|p| p[1] == 0 && p[2] == 0 && p[3] == 0), "{px:?}");
+}
+
+#[test]
+fn ink_pixels_need_every_stop_in_cmyk() {
+    let b = Rect::new(0.0, 0.0, 2.0, 1.0);
+    let with = |stop: GradientStop| GradientPaint::new(Gradient::new(GradientKind::Linear, vec![cmyk_stop(0.0, 1.0, 0.0, 0.0, 0.0), stop]));
+    assert!(with(cmyk_stop(1.0, 0.0, 0.0, 0.0, 1.0)).ink_pixels(b, b, 2, 1, true).is_some());
+    for other in [Color::rgb(1.0, 0.0, 0.0), Color::gray(0.5), Color::lab(50.0, 10.0, 10.0)] {
+        assert!(with(GradientStop::new(1.0, other)).ink_pixels(b, b, 2, 1, true).is_none(), "{other:?}");
+    }
+    assert!(GradientPaint::new(Gradient::new(GradientKind::Linear, vec![])).ink_pixels(b, b, 2, 1, true).is_none(), "no stops");
+}
+
+/// A Perceptual curve over the limit of [`Gradient::ink_mixes`] has no inks; a Classic gradient of as many stops does.
+#[test]
+fn ink_pixels_stop_at_the_ink_mixes_limit() {
+    let stops: Vec<_> = (0..=MAX_INK_TINTS).map(|i| cmyk_stop(i as f32 / MAX_INK_TINTS as f32, (i % 2) as f32, 0.0, 0.0, 0.0)).collect();
+    let classic = Gradient::new(GradientKind::Linear, stops);
+    let perceptual = Gradient { method: GradientMethod::Perceptual, ..classic.clone() };
+    assert!(!perceptual.fits_ink_tints());
+    let b = Rect::new(0.0, 0.0, 2.0, 1.0);
+    assert!(GradientPaint::new(perceptual).ink_pixels(b, b, 2, 1, false).is_none());
+    assert!(GradientPaint::new(classic).ink_pixels(b, b, 2, 1, false).is_some());
+}
+
+/// A conic placed at `center` with its vector `dx` long to the right and aspect `aspect`.
+fn conic_at(center: Point, dx: f64, aspect: f64) -> GradientGeom {
+    GradientGeom { start: center, end: center + Vec2::new(dx, 0.0), aspect, focal: None }
+}
+
+#[test]
+fn a_conic_turns_clockwise_on_the_page_from_its_vector() {
+    // The page's y runs down: a quarter turn clockwise from a vector pointing right is straight
+    // below the center.
+    let g = conic_at(Point::new(100.0, 100.0), 50.0, 1.0);
+    let t = |x: f64, y: f64| g.param_at(GradientKind::Conic, Point::new(x, y));
+    assert!(t(200.0, 100.0).abs() < 1e-12);
+    assert!((t(100.0, 130.0) - 0.25).abs() < 1e-12);
+    assert!((t(10.0, 100.0) - 0.5).abs() < 1e-12);
+    assert!((t(100.0, 3.0) - 0.75).abs() < 1e-12);
+    // Either side of the seam: the start of the ramp just below the vector, its end just above.
+    assert!(t(200.0, 100.01) < 1e-3);
+    let before = t(200.0, 99.99);
+    assert!(before > 0.999 && before <= 1.0, "{before}");
+    // A flatter extent ellipse turns faster near the vector's line: half as tall, the point 1/8
+    // of a turn around is half as far below it.
+    let squashed = conic_at(Point::new(100.0, 100.0), 50.0, 0.5);
+    let p = Point::new(150.0, 125.0);
+    assert!((squashed.param_at(GradientKind::Conic, p) - 0.125).abs() < 1e-12);
+    assert!(g.param_at(GradientKind::Conic, p) < 0.1);
+    // Mirrored (a negative aspect), it turns counterclockwise.
+    let mirrored = conic_at(Point::new(100.0, 100.0), 50.0, -1.0);
+    assert!(mirrored.is_mirrored() && !g.is_mirrored());
+    assert!((mirrored.param_at(GradientKind::Conic, Point::new(100.0, 70.0)) - 0.25).abs() < 1e-12);
+}
+
+#[test]
+fn a_conic_follows_moves_turns_scales_and_mirrors() {
+    let c = Point::new(10.0, 20.0);
+    let g0 = conic_at(c, 30.0, 1.0);
+    let probes = [c + Vec2::new(5.0, 7.0), c + Vec2::new(-9.0, 2.0), c + Vec2::new(3.0, -11.0)];
+    for a in [
+        Affine::rotate(0.7),
+        Affine::scale(2.5),
+        Affine::translate((4.0, -9.0)) * Affine::rotate(-2.0),
+        Affine::FLIP_X,
+        Affine::FLIP_Y * Affine::rotate(1.1),
+        Affine::scale_non_uniform(2.0, 0.5),
+    ] {
+        let mut g = g0;
+        g.transform(a, GradientKind::Conic);
+        assert!(g.start.distance(a * c) < 1e-9, "{a:?}");
+        for p in probes {
+            let (want, got) = (g0.param_at(GradientKind::Conic, p), g.param_at(GradientKind::Conic, a * p));
+            assert!((want - got).abs() < 1e-9, "{a:?} at {p:?}: {want} vs {got}");
+        }
+    }
+    // A mirror and a mirror back: the same sweep.
+    let mut g = g0;
+    g.transform(Affine::FLIP_X, GradientKind::Conic);
+    assert!(g.is_mirrored());
+    g.transform(Affine::FLIP_X, GradientKind::Conic);
+    assert!(!g.is_mirrored() && (g.aspect - 1.0).abs() < 1e-12);
+    // A conic without a vector, or with a flat extent, turns the other way under a mirror too.
+    for flat in [conic_at(c, 0.0, 1.0), conic_at(c, 30.0, 0.0)] {
+        let mut g = flat;
+        g.transform(Affine::FLIP_Y, GradientKind::Conic);
+        assert!(g.is_mirrored(), "{g:?}");
+        g.transform(Affine::rotate(0.3), GradientKind::Conic);
+        assert!(g.is_mirrored(), "{g:?}");
+        g.transform(Affine::FLIP_X, GradientKind::Conic);
+        assert!(!g.is_mirrored(), "{g:?}");
+    }
+    // Under a shear the seam stays where the vector maps.
+    let shear = Affine::new([1.0, 0.0, 0.6, 1.0, 0.0, 0.0]);
+    let mut g = g0;
+    g.transform(shear, GradientKind::Conic);
+    let on_seam = shear * (c + Vec2::new(20.0, 0.0));
+    assert!(g.param_at(GradientKind::Conic, on_seam) < 1e-9, "{g:?}");
+}
+
+#[test]
+fn conic_kind_names_and_fit() {
+    for s in ["conic", "Conic", "angle", "CONICAL"] {
+        assert_eq!(GradientKind::parse(s), Some(GradientKind::Conic), "{s}");
+    }
+    assert_eq!(GradientKind::parse("spiral"), None);
+    assert_eq!(GradientKind::Conic.label(), "Conic");
+    assert!(GradientKind::Conic.is_centered() && GradientKind::Radial.is_centered() && !GradientKind::Linear.is_centered());
+    let fit = GradientGeom::fit(GradientKind::Conic, Rect::new(0.0, 0.0, 200.0, 100.0), 90.0);
+    assert_eq!(fit.start, Point::new(100.0, 50.0));
+    assert!(fit.end.distance(Point::new(100.0, -50.0)) < 1e-9);
+}
+
+/// Is `p` inside polygon `poly` (non-zero winding)?
+fn inside(poly: &[Point], p: Point) -> bool {
+    let mut w = 0i32;
+    for (i, &a) in poly.iter().enumerate() {
+        let c = poly[(i + 1) % poly.len()];
+        let cross = (c - a).cross(p - a);
+        if a.y <= p.y && c.y > p.y && cross > 0.0 {
+            w += 1;
+        } else if a.y > p.y && c.y <= p.y && cross < 0.0 {
+            w -= 1;
+        }
+    }
+    w != 0
+}
+
+#[test]
+fn conic_wedges_cover_the_box_and_meet_at_the_seam() {
+    let b = Rect::new(0.0, 0.0, 200.0, 100.0);
+    let g = conic_at(Point::new(60.0, 40.0), 30.0, 0.5);
+    let wedges = g.conic_wedges(b, 36, false);
+    assert_eq!(wedges.len(), 36);
+    // Each point of the box lies in the wedge whose share of the turn holds it.
+    for (x, y) in [(1.0, 1.0), (199.0, 99.0), (150.0, 30.0), (10.0, 90.0), (61.0, 39.0), (59.0, 41.0)] {
+        let p = Point::new(x, y);
+        let t = g.param_at(GradientKind::Conic, p);
+        let k = ((t * 36.0).floor() as usize).min(35);
+        assert!(inside(&wedges[k].0, p), "({x}, {y}) at {t} is not in wedge {k}");
+        assert!((wedges[k].1 - (k as f64 + 0.5) / 36.0).abs() < 1e-12);
+    }
+    // Overlapping wedges run on from their own start to the seam.
+    let over = g.conic_wedges(b, 36, true);
+    let frame = g.unit_frame().unwrap();
+    let on = |turn: f64| frame * Point::new(0.5 * (turn * std::f64::consts::TAU).cos(), 0.5 * (turn * std::f64::consts::TAU).sin());
+    assert!(inside(&over[0].0, on(0.5)) && inside(&over[0].0, on(35.9 / 36.0)));
+    assert!(inside(&over[20].0, on(35.9 / 36.0)) && !inside(&over[20].0, on(19.9 / 36.0)));
+    // The count is kept to what a file can hold.
+    assert_eq!(g.conic_wedges(b, 0, false).len(), 1);
+    assert_eq!(g.conic_wedges(b, usize::MAX, false).len(), MAX_CONIC_WEDGES);
+}
+
+/// A conic whose extent can't be drawn (a vector without length, an aspect of 0, or numbers out
+/// of range, as a file can hold them) sweeps from the right about its start, or the origin; the
+/// parameter, the frame and the wedges stay finite.
+#[test]
+fn a_conic_with_no_extent_or_bad_numbers_still_sweeps() {
+    let c = Point::new(50.0, 50.0);
+    for g in [
+        conic_at(c, 0.0, 1.0),
+        conic_at(c, 30.0, 0.0),
+        conic_at(c, 30.0, f64::NAN),
+        conic_at(c, 30.0, f64::INFINITY),
+        conic_at(c, f64::INFINITY, 1.0),
+        GradientGeom { end: Point::new(f64::NAN, 3.0), ..conic_at(c, 30.0, 1.0) },
+    ] {
+        assert!(g.conic_frame().as_coeffs().iter().all(|v| v.is_finite()), "{g:?}");
+        let t = |x: f64, y: f64| g.param_at(GradientKind::Conic, Point::new(x, y));
+        assert!(t(90.0, 50.0).abs() < 1e-12, "{g:?}");
+        assert!((t(50.0, 90.0) - 0.25).abs() < 1e-12, "{g:?}");
+        let wedges = g.conic_wedges(Rect::new(0.0, 0.0, 100.0, 100.0), 4, false);
+        assert!(wedges.iter().flat_map(|(pts, _)| pts).all(|p| p.is_finite()), "{g:?}");
+    }
+    // A flat extent keeps the vector's direction and the sign of its aspect.
+    let down = GradientGeom { end: Point::new(50.0, 80.0), ..conic_at(c, 30.0, 0.0) };
+    assert!(down.param_at(GradientKind::Conic, Point::new(50.0, 90.0)).abs() < 1e-12);
+    assert!((down.param_at(GradientKind::Conic, Point::new(10.0, 50.0)) - 0.25).abs() < 1e-12);
+    for g in [conic_at(c, 0.0, -1.0), conic_at(c, 30.0, -0.0), conic_at(c, 30.0, f64::NEG_INFINITY)] {
+        assert!(g.is_mirrored(), "{g:?}");
+        assert!((g.param_at(GradientKind::Conic, Point::new(50.0, 10.0)) - 0.25).abs() < 1e-12, "{g:?}");
+    }
+    let lost = GradientGeom { start: Point::new(f64::NAN, 0.0), ..conic_at(c, 30.0, 1.0) };
+    assert_eq!(lost.conic_frame(), Affine::IDENTITY);
+    for p in [Point::new(3.0, 4.0), Point::new(f64::NAN, 1.0), Point::new(f64::INFINITY, 0.0)] {
+        let t = lost.param_at(GradientKind::Conic, p);
+        assert!((0.0..=1.0).contains(&t), "{t}");
+    }
+}
+
+/// A conic's pixels (what SVG and PDF draw a dithered or Perceptual one as) follow the sweep,
+/// with one stop as well as many.
+#[test]
+fn conic_pixels_follow_the_sweep() {
+    let b = Rect::new(0.0, 0.0, 4.0, 4.0);
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Conic, Gradient::default().stops));
+    g.geom = Some(conic_at(Point::new(2.0, 2.0), 1.0, 1.0));
+    let px: Vec<[u8; 4]> = g.pixels(b, b, 4, 4, true, &Color::to_rgb).collect();
+    // Below right of the center, early in the sweep: light. Above right, late: dark.
+    assert!(px[3 * 4 + 3][0] > 180 && px[3][0] < 75, "{px:?}");
+    let one = GradientPaint { gradient: Gradient::new(GradientKind::Conic, vec![GradientStop::new(0.3, Color::rgb(1.0, 0.0, 0.0))]), ..g.clone() };
+    assert!(one.pixels(b, b, 4, 4, true, &Color::to_rgb).all(|p| p == [255, 0, 0, 255]));
+    let many = (0..=1000).map(|i| GradientStop::new(i as f32 / 1000.0, Color::gray((i % 2) as f32))).collect();
+    let many = GradientPaint { gradient: Gradient::new(GradientKind::Conic, many), ..g };
+    assert_eq!(many.pixels(b, b, 4, 4, true, &Color::to_rgb).count(), 16);
+}
+
+/// A diamond placed at `center` with its vector `dx` long to the right and aspect `aspect`.
+fn diamond_at(center: Point, dx: f64, aspect: f64) -> GradientGeom {
+    GradientGeom { start: center, end: center + Vec2::new(dx, 0.0), aspect, focal: None }
+}
+
+#[test]
+fn a_diamond_runs_from_its_center_out_to_a_square_with_a_corner_at_the_end_of_its_vector() {
+    let g = diamond_at(Point::new(100.0, 100.0), 50.0, 1.0);
+    let t = |x: f64, y: f64| g.param_at(GradientKind::Diamond, Point::new(x, y));
+    assert!(t(100.0, 100.0).abs() < 1e-12);
+    // The square's corners: at the end of the vector and a quarter turn on from it each way.
+    for (x, y) in [(150.0, 100.0), (100.0, 150.0), (50.0, 100.0), (100.0, 50.0)] {
+        assert!((t(x, y) - 1.0).abs() < 1e-12, "({x}, {y})");
+    }
+    // Halfway along an edge, and halfway out along a diagonal (the middle of the edge's half size).
+    assert!((t(125.0, 125.0) - 1.0).abs() < 1e-12);
+    assert!((t(112.5, 87.5) - 0.5).abs() < 1e-12);
+    // Past the square: more than 1 (the last stop pads on).
+    assert!((t(200.0, 200.0) - 4.0).abs() < 1e-12);
+    // The aspect stretches the square across the vector into a rhombus.
+    let tall = diamond_at(Point::new(100.0, 100.0), 50.0, 2.0);
+    assert!((tall.param_at(GradientKind::Diamond, Point::new(100.0, 200.0)) - 1.0).abs() < 1e-12);
+    assert!((tall.param_at(GradientKind::Diamond, Point::new(150.0, 100.0)) - 1.0).abs() < 1e-12);
+    // Turned: the corner follows the vector.
+    let turned = GradientGeom { end: Point::new(130.0, 140.0), ..g };
+    assert!((turned.param_at(GradientKind::Diamond, Point::new(130.0, 140.0)) - 1.0).abs() < 1e-12);
+    assert!((turned.param_at(GradientKind::Diamond, Point::new(115.0, 120.0)) - 0.5).abs() < 1e-12);
+}
+
+#[test]
+fn diamond_kind_names_and_fit() {
+    for s in ["diamond", "Diamond", "DIAMOND"] {
+        assert_eq!(GradientKind::parse(s), Some(GradientKind::Diamond), "{s}");
+    }
+    assert_eq!(GradientKind::Diamond.label(), "Diamond");
+    assert!(GradientKind::Diamond.is_centered());
+    assert!(GradientKind::ALL.contains(&GradientKind::Diamond));
+    // Level: the square's edges pass through the box's corners, so it covers the box exactly.
+    let b = Rect::new(0.0, 0.0, 200.0, 100.0);
+    let fit = GradientGeom::fit(GradientKind::Diamond, b, 0.0);
+    assert_eq!(fit.start, Point::new(100.0, 50.0));
+    assert!(fit.end.distance(Point::new(250.0, 50.0)) < 1e-9, "{fit:?}");
+    for c in [Point::new(0.0, 0.0), Point::new(200.0, 0.0), Point::new(200.0, 100.0), Point::new(0.0, 100.0)] {
+        assert!((fit.param_at(GradientKind::Diamond, c) - 1.0).abs() < 1e-9, "{c:?}");
+    }
+    // At any angle the square covers the box and runs through its farthest corner, on a square
+    // box too.
+    for b in [b, Rect::new(0.0, 0.0, 100.0, 100.0)] {
+        for angle in [30.0, 45.0, 90.0, -120.0] {
+            let fit = GradientGeom::fit(GradientKind::Diamond, b, angle);
+            let levels = [Point::new(b.x0, b.y0), Point::new(b.x1, b.y0), Point::new(b.x1, b.y1), Point::new(b.x0, b.y1)]
+                .map(|c| fit.param_at(GradientKind::Diamond, c));
+            assert!(levels.iter().all(|&t| t <= 1.0 + 1e-9), "{angle}: {levels:?}");
+            assert!(levels.iter().any(|&t| (t - 1.0).abs() < 1e-9), "{angle}: {levels:?}");
+        }
+    }
+}
+
+#[test]
+fn a_diamond_follows_moves_turns_scales_and_mirrors() {
+    let c = Point::new(10.0, 20.0);
+    let g0 = diamond_at(c, 30.0, 0.5);
+    let probes = [c + Vec2::new(5.0, 7.0), c + Vec2::new(-9.0, 2.0), c + Vec2::new(3.0, -11.0), c + Vec2::new(-20.0, -4.0)];
+    for a in [
+        Affine::rotate(0.7),
+        Affine::scale(2.5),
+        Affine::translate((4.0, -9.0)) * Affine::rotate(-2.0),
+        Affine::FLIP_X,
+        Affine::FLIP_Y * Affine::rotate(1.1),
+        // Along and across the vector.
+        Affine::scale_non_uniform(2.0, 0.5),
+        Affine::scale_non_uniform(-3.0, 0.25),
+    ] {
+        let mut g = g0;
+        g.transform(a, GradientKind::Diamond);
+        assert!(g.start.distance(a * c) < 1e-9, "{a:?}");
+        // A mirror changes nothing a diamond shows: its aspect stays a size.
+        assert!(g.aspect > 0.0, "{a:?}: {g:?}");
+        for p in probes {
+            let (want, got) = (g0.param_at(GradientKind::Diamond, p), g.param_at(GradientKind::Diamond, a * p));
+            assert!((want - got).abs() < 1e-9, "{a:?} at {p:?}: {want} vs {got}");
+        }
+    }
+    // Under a shear the corner stays where the vector maps.
+    let shear = Affine::new([1.0, 0.0, 0.6, 1.0, 0.0, 0.0]);
+    let mut g = g0;
+    g.transform(shear, GradientKind::Diamond);
+    assert!((g.param_at(GradientKind::Diamond, shear * (c + Vec2::new(30.0, 0.0))) - 1.0).abs() < 1e-9, "{g:?}");
+    // Out-of-range numbers: a finite aspect after any transform.
+    for bad in [diamond_at(c, 30.0, f64::NAN), diamond_at(c, f64::INFINITY, 1.0), diamond_at(c, 0.0, 1.0)] {
+        let mut g = bad;
+        g.transform(Affine::rotate(0.4), GradientKind::Diamond);
+        assert!(g.aspect.is_finite(), "{g:?}");
+    }
+}
+
+/// A diamond without a frame (no vector, a flat or a not-finite extent) has no inside: every
+/// point is past its edge and takes the last stop. Points that aren't numbers do too.
+#[test]
+fn a_diamond_with_no_extent_or_bad_numbers_is_its_last_stop() {
+    let c = Point::new(50.0, 50.0);
+    for g in [
+        diamond_at(c, 0.0, 1.0),
+        diamond_at(c, 30.0, 0.0),
+        diamond_at(c, 30.0, f64::NAN),
+        diamond_at(c, f64::INFINITY, 1.0),
+        GradientGeom { start: Point::new(f64::NAN, 0.0), ..diamond_at(c, 30.0, 1.0) },
+    ] {
+        assert!(g.diamond_frame().is_none(), "{g:?}");
+        assert!(g.diamond_quadrants(Rect::new(0.0, 0.0, 100.0, 100.0)).is_none(), "{g:?}");
+        assert_eq!(g.param_at(GradientKind::Diamond, Point::new(60.0, 40.0)), 1.0, "{g:?}");
+    }
+    let g = diamond_at(c, 30.0, 1.0);
+    assert_eq!(g.param_at(GradientKind::Diamond, Point::new(f64::NAN, 1.0)), 1.0);
+    assert!(g.param_at(GradientKind::Diamond, Point::new(f64::INFINITY, 1.0)) >= 1.0);
+}
+
+/// The four linear gradients a format without diamond gradients gets, drawn in order, equal the
+/// diamond everywhere, and each edge drawn lies on the quadrant drawn before it.
+#[test]
+fn diamond_quadrants_are_linear_gradients_that_equal_the_diamond() {
+    let b = Rect::new(0.0, 0.0, 200.0, 100.0);
+    let probes: Vec<Point> = (0..=20).flat_map(|i| (0..=10).map(move |j| Point::new(i as f64 * 10.0 + 0.3, j as f64 * 10.0 + 0.7))).collect();
+    // Squashed and turned, stretched twice as tall as wide, and stretched by a shear.
+    let mut turned = diamond_at(Point::new(60.0, 40.0), 30.0, 0.5);
+    turned.transform(Affine::rotate_about(0.4, Point::new(60.0, 40.0)), GradientKind::Diamond);
+    let mut sheared = diamond_at(Point::new(90.0, 50.0), 25.0, 1.0);
+    sheared.transform(Affine::new([2.0, 0.0, 0.7, 1.0, -60.0, 0.0]), GradientKind::Diamond);
+    for g in [turned, diamond_at(Point::new(100.0, 50.0), 20.0, 2.0), sheared] {
+        let quadrants = g.diamond_quadrants(b).expect("a frame");
+        for p in &probes {
+            // The last quadrant drawn that holds the point paints it.
+            let Some((_, linear)) = quadrants.iter().rev().find(|(poly, _)| inside(poly, *p)) else { panic!("{p:?} is in no quadrant") };
+            let (want, got) = (g.param_at(GradientKind::Diamond, *p), linear.param_at(GradientKind::Linear, *p));
+            assert!((want - got).abs() < 1e-9, "{g:?} at {p:?}: {want} vs {got}");
+        }
+    }
+    let g = turned;
+    let quadrants = g.diamond_quadrants(b).expect("a frame");
+    // Next to each edge of a quadrant drawn later, on either side, the quadrant drawn before it
+    // lies underneath (the first quadrant's edges are covered by the second and the last).
+    let frame = g.diamond_frame().expect("a frame");
+    for (unit, under) in [
+        // The second quadrant's first edge, on the first.
+        (Point::new(0.01, 0.5), 0),
+        (Point::new(-0.01, 0.5), 0),
+        // The third's, on the second.
+        (Point::new(-0.5, 0.01), 1),
+        (Point::new(-0.5, -0.01), 1),
+        // The last's two, on the third and on the first.
+        (Point::new(-0.01, -0.5), 2),
+        (Point::new(0.01, -0.5), 2),
+        (Point::new(0.5, -0.01), 0),
+        (Point::new(0.5, 0.01), 0),
+    ] {
+        assert!(inside(&quadrants[under].0, frame * unit), "{unit:?} lies on quadrant {under}");
+    }
+}
+
+/// A diamond's pixels (what SVG and PDF draw a dithered or Perceptual one as, and what the canvas
+/// draws) follow the squares.
+#[test]
+fn diamond_pixels_follow_the_squares() {
+    let b = Rect::new(0.0, 0.0, 5.0, 5.0);
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Diamond, Gradient::default().stops));
+    g.geom = Some(diamond_at(Point::new(2.5, 2.5), 2.5, 1.0));
+    let px: Vec<[u8; 4]> = g.pixels(b, b, 5, 5, false, &Color::to_rgb).collect();
+    // White at the center, black in the corners, and the same on each side of it.
+    assert!(px[2 * 5 + 2][0] > 200 && px[0][0] < 10 && px[24][0] < 10, "{px:?}");
+    assert_eq!(px[2 * 5 + 1], px[2 * 5 + 3]);
+    assert_eq!(px[5 + 2], px[3 * 5 + 2]);
+    assert_eq!(px[2 * 5 + 1], px[5 + 2]);
+}

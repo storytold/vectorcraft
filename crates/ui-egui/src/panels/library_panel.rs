@@ -573,7 +573,7 @@ pub(crate) fn library_pick_filters(kind: &str) -> Vec<(&'static str, &'static [&
     match kind {
         super::swatches::SwatchLibraries::KIND => fileio::library_open_filters("Swatch libraries", swatchlib::LIBRARY_EXTS).collect(),
         super::graphic_styles::GraphicStyleLibraries::KIND => fileio::library_open_filters("Graphic Style Libraries", &[STYLES_EXT]).collect(),
-        _ => fileio::open_filters().collect(),
+        _ => fileio::builtin_open_filters().collect(),
     }
 }
 
@@ -584,10 +584,7 @@ pub(crate) fn pick_library_file(
     path: Option<String>,
     filters: Vec<(&'static str, &'static [&'static str])>,
 ) -> Result<Option<String>, String> {
-    if path.is_none()
-        && let Some(f) = app.services.open_async.as_mut()
-    {
-        f();
+    if path.is_none() && crate::picks::open_async(app) {
         return Ok(None);
     }
     path.or_else(|| {
@@ -638,9 +635,17 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
             clicked = Some((row.name.to_string(), row.item.is_none(), ui.input(|i| i.modifiers)));
         }
     };
+    // In a sized panel the list fills the space above the footer (#2992), as the Artboards list
+    // does; elsewhere it keeps its 220 pt (280 pt for large thumbnails).
+    let fixed = widgets::panel_footer_bottom(ui).is_some();
+    let list_height = widgets::panel_list_height(ui, if view == View::LargeThumb { 280.0 } else { 220.0 }, 2.0 + ui.spacing().item_spacing.y);
     widgets::list_box(ui, |ui| {
-        let max_height = if view == View::LargeThumb { 280.0 } else { 220.0 };
-        egui::ScrollArea::vertical().id_salt(key(&panel, "scroll")).max_height(max_height).show(ui, |ui| {
+        let scroll = egui::ScrollArea::vertical()
+            .id_salt(key(&panel, "scroll"))
+            .max_height(list_height)
+            .min_scrolled_height(list_height.min(64.0))
+            .auto_shrink([false, !fixed]);
+        scroll.show(ui, |ui| {
             ui.set_width(ui.available_width());
             if rows.is_empty() {
                 widgets::dim_label(ui, if query.trim().is_empty() { tl!("This library is empty.") } else { tl!("No matches.") });
@@ -795,12 +800,14 @@ fn panel_menu<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
 /// The libraries menu (a library panel's library button, the Swatches panel's): every library by
 /// submenu, the open ones checked, between `K`'s head and tail items.
 pub(crate) fn library_menu<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui) {
-    K::menu_head(app, ui);
-    let shown = open_panels(&app.ui);
-    if let Some(id) = library_items(ui, &K::list(app), &|id| shown.contains(&panel_id(K::KIND, id))) {
-        open::<K>(app, &id);
-    }
-    K::menu_tail(app, ui);
+    widgets::menu_scroll(ui, |ui| {
+        K::menu_head(app, ui);
+        let shown = open_panels(&app.ui);
+        if let Some(id) = library_items(ui, &K::list(app), &|id| shown.contains(&panel_id(K::KIND, id))) {
+            open::<K>(app, &id);
+        }
+        K::menu_tail(app, ui);
+    });
 }
 
 /// Menu rows for `libs`: the top-level ones, then a submenu per [`LibraryRef::submenu`], those

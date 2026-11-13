@@ -1,6 +1,8 @@
 //! Linked files changing while their document is open (`link_watch`): `links.updateChanged`,
 //! and the background look following Preferences → File Handling → Update Links.
 
+use std::sync::atomic::Ordering;
+
 use serde_json::{Value, json};
 
 use crate::tests_links::{BLUE, Folder, RED, centre_colour, place, png, session};
@@ -81,6 +83,87 @@ fn a_file_still_being_written_is_tried_again() {
     assert_eq!(colour(&s), RED, "the last good pixels stay");
     save(&path, &full);
     assert_eq!(look(&mut s)["updated"], json!([id.0]));
+    assert_eq!(colour(&s), BLUE);
+}
+
+#[test]
+fn a_look_whose_worker_ended_without_stamps_does_not_stop_later_looks() {
+    let dir = Folder::new("watch-unwound");
+    let path = dir.file("art.png");
+    std::fs::write(&path, png(40, 40, RED)).unwrap();
+    let mut s = session();
+    s.prefs.update_links = "automatically".into();
+    let id = place(&mut s, &path);
+    look(&mut s);
+    let scan = link_watch::LinkScan::default();
+    s.link_scan = Some(scan.clone());
+    // Still running: the look stays in flight.
+    assert!(s.poll_link_scan().is_none());
+    assert!(s.link_scan.is_some(), "a look still running stays");
+    let worker = std::thread::spawn(move || {
+        let _ended = link_watch::Ended(scan);
+        panic!("the look's worker unwinds");
+    });
+    assert!(worker.join().is_err());
+    assert!(s.poll_link_scan().is_none(), "there are no stamps to apply");
+    assert!(s.link_scan.is_none(), "the look ended");
+    save(&path, &png(40, 40, BLUE));
+    assert_eq!(look(&mut s)["updated"], json!([id.0]));
+    assert_eq!(colour(&s), BLUE);
+}
+
+#[test]
+fn a_look_that_stores_its_stamps_between_the_polls_reads_keeps_them() {
+    let dir = Folder::new("watch-stored");
+    let path = dir.file("art.png");
+    std::fs::write(&path, png(40, 40, RED)).unwrap();
+    let mut s = session();
+    s.prefs.update_links = "automatically".into();
+    let id = place(&mut s, &path);
+    look(&mut s);
+    let uid = s.doc().unwrap().uid;
+    let stamps: Vec<_> = link_watch::linked_files(&s.doc().unwrap().doc).into_iter().map(|(p, ids)| (p, ids, Some((1, 1)))).collect();
+    let scan = link_watch::LinkScan::default();
+    s.link_scan = Some(scan.clone());
+    // The worker takes its turn after the slot is read and before the flag is, if the slot is free.
+    let ended = link_watch::ended_without_stamps(&scan, |flag| {
+        if let Ok(mut slot) = scan.0.try_lock() {
+            *slot = Some((uid, stamps.clone()));
+            flag.store(true, Ordering::SeqCst);
+        }
+        flag.load(Ordering::SeqCst)
+    });
+    assert!(!ended, "the worker waits for the poll, so the look has not ended without stamps");
+    // The worker's turn comes once the poll has let go of the slot.
+    let worker = std::thread::spawn({
+        let scan = scan.clone();
+        move || {
+            let _ended = link_watch::Ended(scan.clone());
+            *scan.0.lock().unwrap() = Some((uid, stamps));
+        }
+    });
+    worker.join().unwrap();
+    assert_eq!(s.poll_link_scan().expect("the stamps are applied").unwrap()["updated"], json!([id.0]));
+    assert!(s.link_scan.is_none());
+}
+
+#[test]
+fn a_change_during_a_script_waits_for_the_script_to_end() {
+    let dir = Folder::new("watch-script");
+    let path = dir.file("art.png");
+    std::fs::write(&path, png(40, 40, RED)).unwrap();
+    let mut s = session();
+    s.prefs.update_links = "automatically".into();
+    let id = place(&mut s, &path);
+    look(&mut s);
+    save(&path, &png(40, 40, BLUE));
+    s.start_link_scan();
+    s.wait_link_scan();
+    s.script_frames = true;
+    s.execute("script.run", &json!({"source": "while (true) {}"})).unwrap();
+    assert!(s.poll_link_scan().is_none(), "the finished look waits");
+    assert!(s.script_abandon());
+    assert_eq!(s.poll_link_scan().expect("the stamps are applied").unwrap()["updated"], json!([id.0]));
     assert_eq!(colour(&s), BLUE);
 }
 

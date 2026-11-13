@@ -3,6 +3,7 @@
 use super::bezier::{fit_cubics, tangent};
 use super::geom::{
     Cubic, all_within, arc_cubics, circle_fit, find_corners, finite, resample_closed, resample_open, sample_cubics, smooth_closed, smooth_open,
+    smooth_pinned,
 };
 use super::restore::{RestoreParams, restore_corners};
 use vectorcraft_geom::Point;
@@ -28,6 +29,10 @@ pub(crate) struct Style {
     /// Straight pieces within a few degrees of level or upright are made exactly so (by the
     /// tracer's other modes; Flat Logo leaves them).
     pub upright: bool,
+    /// The outline is the contour of a smooth area: a run between corners is smoothed by `sigma`
+    /// whatever its length (not by at most an eighth of it), and the fit is checked against the
+    /// outline smoothed by `sigma` (not against the outline itself).
+    pub contour: bool,
 }
 
 impl Default for Style {
@@ -46,6 +51,7 @@ impl Default for Style {
             max_dev: 1.4,
             check_step: 0.03,
             upright: false,
+            contour: false,
         }
     }
 }
@@ -111,7 +117,7 @@ fn fit_run(run: &[Point], sg: f64, st: &Style, stats: &mut Stats, segs: &mut Vec
         }
         return;
     }
-    let sm = smooth_open(run, sg);
+    let sm = if st.contour { smooth_pinned(run, sg) } else { smooth_open(run, sg) };
     let (Some(&a), Some(&b)) = (sm.first(), sm.last()) else { return };
     let len = a.distance(b);
     if st.snap && len > 1.5 {
@@ -267,8 +273,10 @@ pub(crate) fn fit_outline(p: &[Point], st: &Style, stats: &mut Stats) -> Option<
         return None;
     }
     let mut local = Stats::default();
-    // The reference is the raw outline, densified so the check never depends on how sparse it is.
-    let reference = resample_closed(p, st.check_step / 0.3).map_or_else(|| p.to_vec(), |(d, _)| d);
+    // The reference is the raw outline, densified so the check never depends on how sparse it is
+    // (and smoothed, for the contour of a smooth area).
+    let reference = resample_closed(p, st.check_step / 0.3)
+        .map_or_else(|| p.to_vec(), |(d, step)| if st.contour { smooth_closed(&d, st.sigma / step) } else { d });
     let checked = |st: &Style, local: &mut Stats| {
         styled_fit(p, st, local).filter(|s| sane(s)).filter(|s| {
             let samples = sample_cubics(s, st.check_step);
@@ -367,6 +375,36 @@ mod tests {
         let segs = fit_outline(&raw, &style, &mut st);
         assert_eq!(st.reverted, 1);
         assert!(segs.is_some_and(|s| !s.is_empty()));
+    }
+
+    #[test]
+    fn a_short_run_between_corners_keeps_to_the_tolerance() {
+        let run = [(0.0, 0.0), (0.12, 0.0), (0.24, 0.6), (0.36, 0.0), (0.48, 0.0)].map(|(x, y)| Point::new(x, y));
+        let (st, sg) = (Style::default(), 0.5);
+        let mut segs = Vec::new();
+        fit_run(&run, sg, &st, &mut Stats::default(), &mut segs);
+        let samples = sample_cubics(&segs, 0.001);
+        for q in smooth_open(&run, sg) {
+            let d = samples.iter().map(|s| s.distance(q)).fold(f64::MAX, f64::min);
+            assert!(d <= st.tol + 1e-3, "{q:?} is {d} from the fit");
+        }
+    }
+
+    #[test]
+    fn a_plain_fit_keeps_a_ragged_outline_within_the_tolerance() {
+        let raw: Vec<Point> = (0..120)
+            .map(|i| {
+                let a = i as f64 / 120.0 * std::f64::consts::TAU;
+                let r = 12.0 + if i % 2 == 0 { 1.0 } else { -1.0 } * (0.2 + i as f64 * 0.02);
+                Point::new(25.0 + r * a.cos(), 25.0 + r * a.sin())
+            })
+            .collect();
+        let tol = Style::default().tol;
+        let samples = sample_cubics(&plain_fit(&raw, tol), 0.005);
+        for q in &raw {
+            let d = samples.iter().map(|s| s.distance(*q)).fold(f64::MAX, f64::min);
+            assert!(d <= tol + 1e-2, "{q:?} is {d} from the fit");
+        }
     }
 
     #[test]

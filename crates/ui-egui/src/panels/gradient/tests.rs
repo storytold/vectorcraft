@@ -1,7 +1,26 @@
 use egui::{Event, Modifiers, PointerButton};
 use vectorcraft_engine::Session;
 
+use super::super::tests_long_popups::{PopupWindow, assert_last_row_scrolls_into_view, assert_short_list_does_not_scroll};
 use super::*;
+
+/// The gradient swatches menu has one row per gradient swatch: with enough of them it stops inside a
+/// short window and the wheel reaches Save to Swatches. With few of them it does not scroll.
+#[test]
+fn a_long_gradient_swatch_menu_scrolls_inside_a_short_window() {
+    let stops = json!([{"offset": 0, "color": "#000000"}, {"offset": 1, "color": "#ffffff"}]);
+    let mut app = app(json!({"gradient": {"stops": stops}}));
+    app.run("swatch.new", json!({"name": "Dusk", "gradient": {"stops": stops}})).unwrap();
+    let paint = current(&app).expect("a gradient fill");
+    let short = paint.clone();
+    let arrow = |window: &PopupWindow| window.clickable(vec2(14.0, 40.0))[0].center();
+    let first = gradient_swatches(&app)[0].0.clone();
+    assert_short_list_does_not_scroll(&mut app, move |app, ui| thumbnail(app, ui, &short, true), arrow, &first, "Save to Swatches");
+    for n in 0..30 {
+        app.run("swatch.new", json!({"name": format!("Long {n}"), "gradient": {"stops": stops}})).unwrap();
+    }
+    assert_last_row_scrolls_into_view(&mut app, 200.0, move |app, ui| thumbnail(app, ui, &paint, true), arrow, &first, "Save to Swatches");
+}
 
 #[test]
 fn offsets_and_json() {
@@ -87,13 +106,14 @@ fn app(fill: Value) -> VectorcraftApp {
 struct Panel {
     ctx: egui::Context,
     time: f64,
+    scope: egui::Id,
 }
 
 impl Panel {
     fn new() -> Self {
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
-        Self { ctx, time: 0.0 }
+        Self { ctx, time: 0.0, scope: egui::Id::NULL }
     }
 
     /// One frame with `events` (and `modifiers` held); returns the texts drawn and where.
@@ -125,23 +145,27 @@ impl Panel {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(260.0, 600.0))),
             ..Default::default()
         };
-        let mut out = self.ctx.run_ui(input, |ui| draw(app, ui));
+        let mut out = self.ctx.run_ui(input, |ui| {
+            self.scope = ui.scope_id();
+            draw(app, ui);
+        });
         out.textures_delta.clear();
         let mut v = vec![];
         out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
         v
     }
 
-    /// The rect of the widget keyed `key` (last frame). egui 0.37's `WidgetRect.parent_id` is
-    /// the parent Ui's unstable `unique_id`, not the stable `scope_id` widgets are salted with;
-    /// debug builds remember the `with(key)` that made each id, so match that.
-    fn widget(&self, key: impl std::hash::Hash + std::fmt::Debug + Copy) -> Rect {
-        let suffix = format!(".with({key:?})");
-        self.ctx
-            .viewport(|vp| {
-                vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).find(|w| format!("{:?}", w.id).ends_with(&suffix)).map(|w| w.rect)
-            })
-            .expect("widget drawn")
+    /// Match actual IDs in the panel or its immediate horizontal rows. `parent_id` is an
+    /// unstable auto ID, and the human-readable `Id` debug source is absent in release builds.
+    fn widget(&self, key: impl egui::AsIdSalt + Copy) -> Rect {
+        // Match Ui::new_child: its default child salt is an IdSalt, not the raw string.
+        let row_scope = self.scope.with(egui::IdSalt::new("child"));
+        let ids = [self.scope.with(key), row_scope.with(key)];
+        // Outside run_ui, read_response can prefer the older this_pass geometry after
+        // end_pass swaps the passes. Use the completed frame, including after Hide Options.
+        let matches: Vec<_> = self.ctx.viewport(|vp| ids.into_iter().filter_map(|id| vp.prev_pass.widgets.get(id).map(|w| w.rect)).collect());
+        assert_eq!(matches.len(), 1, "expected one widget for {key:?}");
+        matches[0]
     }
 
     fn click(&mut self, app: &mut VectorcraftApp, at: Pos2) -> Vec<(String, Pos2)> {
@@ -233,7 +257,7 @@ fn the_proxy_toggles_fill_and_stroke_and_stays_with_options_hidden() {
     let fill = p.widget("fill-proxy");
     p.click(&mut app, fill.left_top() + vec2(2.0, 2.0));
     assert!(app.session.fill_active, "the proxy works with the options hidden");
-    p.widget(("grad-stop", 1));
+    p.widget(("grad-stop", 1_usize));
 }
 
 #[test]
@@ -304,6 +328,44 @@ fn the_method_menu_makes_the_gradient_perceptual() {
     assert_eq!(fill(&app).gradient.method, GradientMethod::Classic);
 }
 
+/// The Spread menu makes the gradient repeat (one undo step), and the Repeats field, dimmed while
+/// it pads, then sets the count.
+#[test]
+fn the_spread_menu_and_repeats_field_set_the_spread() {
+    use vectorcraft_color::GradientSpread;
+    let mut app = app(json!({"gradient": {}}));
+    let mut p = Panel::new();
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    assert!(texts.iter().any(|(t, _)| t == "Spread:"), "{texts:?}");
+    let shown = texts.iter().find(|(t, _)| t == "Pad").expect("Pad shown").1;
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let key = |k, modifiers| Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers };
+    // While it pads, the Repeats field takes no count.
+    let field = p.widget_after(shown);
+    p.click(&mut app, field.center());
+    p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("4".into())], Modifiers::NONE);
+    p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
+    assert_eq!((fill(&app).gradient.repeats, app.session.doc().unwrap().history.undo.len()), (1, undo), "dimmed with Pad");
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    let shown = texts.iter().find(|(t, _)| t == "Pad").expect("Pad shown").1;
+    let texts = p.click(&mut app, shown);
+    let option = texts.iter().find(|(t, _)| t == "Reflect").expect("the menu lists Reflect").1;
+    p.click(&mut app, option);
+    assert_eq!(fill(&app).gradient.spread, GradientSpread::Reflect);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    // The count: typed into the field beside the menu.
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    let shown = texts.iter().find(|(t, _)| t == "Reflect").expect("the menu shows Reflect").1;
+    let field = p.widget_after(shown);
+    p.click(&mut app, field.center());
+    p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("4".into())], Modifiers::NONE);
+    p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
+    assert_eq!(fill(&app).gradient.repeat_count(), 4);
+    app.run("edit.undo", json!({})).unwrap();
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(fill(&app).gradient.spread, GradientSpread::Pad);
+}
+
 #[test]
 fn a_selected_diamond_shows_and_sets_its_midpoint_in_location() {
     let stops = json!([{"offset": 0, "color": "#ffffff", "midpoint": 0.3}, {"offset": 1, "color": "#000000"}]);
@@ -312,7 +374,7 @@ fn a_selected_diamond_shows_and_sets_its_midpoint_in_location() {
     let mut p = Panel::new();
     let texts = p.frame(&mut app, vec![], Modifiers::NONE);
     assert!(texts.iter().any(|(t, _)| t == "100%"), "the stop's location: {texts:?}");
-    let diamond = p.widget(("grad-mid", 0));
+    let diamond = p.widget(("grad-mid", 0_usize));
     let texts = p.click(&mut app, diamond.center());
     assert_eq!(app.session.selected_stop(), None, "the diamond replaces the stop selection");
     assert!(texts.iter().any(|(t, _)| t == "30%"), "the midpoint: {texts:?}");
@@ -324,10 +386,55 @@ fn a_selected_diamond_shows_and_sets_its_midpoint_in_location() {
     p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
     assert!((fill(&app).gradient.stops[0].midpoint - 0.6).abs() < 1e-6, "{:?}", fill(&app).gradient.stops);
     // Clicking a stop selects it again.
-    let stop = p.widget(("grad-stop", 0));
+    let stop = p.widget(("grad-stop", 0_usize));
     let texts = p.click(&mut app, stop.center());
     assert_eq!(app.session.selected_stop(), Some(0));
     assert!(texts.iter().any(|(t, _)| t == "0%"));
+}
+
+/// A mirrored conic's Aspect Ratio field shows the extent's size, and a typed value keeps the
+/// sweep mirrored.
+#[test]
+fn the_aspect_field_keeps_a_mirrored_conic_mirrored() {
+    let mut app = app(json!({"gradient": {"kind": "conic", "aspect": -50}}));
+    let mut p = Panel::new();
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    let field = texts.iter().find(|(t, _)| t == "50%").unwrap_or_else(|| panic!("the aspect field: {texts:?}")).1;
+    p.click(&mut app, field);
+    let key = |k, modifiers| Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers };
+    p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("80".into())], Modifiers::NONE);
+    p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
+    let geom = fill(&app).geom.unwrap();
+    assert!((geom.aspect + 0.8).abs() < 1e-9 && geom.is_mirrored(), "{geom:?}");
+}
+
+/// The Type row's Diamond button (the fourth of five) makes the gradient a diamond, and the
+/// Aspect Ratio field then edits its aspect.
+#[test]
+fn the_diamond_button_makes_a_diamond_whose_aspect_field_edits_it() {
+    let mut app = app(json!({"gradient": {"kind": "linear", "start": [150, 150], "end": [200, 150]}}));
+    let mut p = Panel::new();
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    let label = texts.iter().find(|(t, _)| t == "Type:").unwrap_or_else(|| panic!("the Type row: {texts:?}")).1;
+    let buttons = p.row_after(label, 24.0);
+    assert_eq!(buttons.len(), 5, "Linear, Radial, Conic, Diamond and Freeform");
+    p.click(&mut app, buttons[3].center());
+    assert_eq!(fill(&app).gradient.kind, GradientKind::Diamond);
+    let texts = p.frame(&mut app, vec![], Modifiers::NONE);
+    // The aspect field is the first 100% (above Opacity's).
+    let field = texts
+        .iter()
+        .filter(|(t, _)| t == "100%")
+        .map(|(_, at)| *at)
+        .min_by(|a, b| a.y.total_cmp(&b.y))
+        .unwrap_or_else(|| panic!("the aspect field: {texts:?}"));
+    p.click(&mut app, field);
+    let key = |k, modifiers| Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers };
+    p.frame(&mut app, vec![key(egui::Key::A, Modifiers::COMMAND), Event::Text("80".into())], Modifiers::NONE);
+    p.frame(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)], Modifiers::NONE);
+    let g = fill(&app);
+    assert_eq!(g.gradient.kind, GradientKind::Diamond);
+    assert!((g.geom.unwrap().aspect - 0.8).abs() < 1e-9, "{:?}", g.geom);
 }
 
 #[test]
@@ -455,7 +562,7 @@ fn alt_drag_copies_a_stop_and_alt_dropping_on_a_stop_swaps_colours() {
     let mut app = app(json!({"gradient": {}}));
     let mut p = Panel::new();
     p.frame(&mut app, vec![], Modifiers::NONE);
-    let (a, b) = (p.widget(("grad-stop", 0)).center(), p.widget(("grad-stop", 1)).center());
+    let (a, b) = (p.widget(("grad-stop", 0_usize)).center(), p.widget(("grad-stop", 1_usize)).center());
     let mid = pos2((a.x + b.x) / 2.0, a.y);
     let offsets = |app: &VectorcraftApp| fill(app).gradient.stops.iter().map(|s| (s.offset * 10.0).round() / 10.0).collect::<Vec<_>>();
     // A plain drag moves the stop.
@@ -480,7 +587,7 @@ fn a_dropped_swatch_adds_or_recolours_a_stop() {
     let mut app = app(json!({"gradient": {}}));
     let mut p = Panel::new();
     p.frame(&mut app, vec![], Modifiers::NONE);
-    let (a, b) = (p.widget(("grad-stop", 0)).center(), p.widget(("grad-stop", 1)).center());
+    let (a, b) = (p.widget(("grad-stop", 0_usize)).center(), p.widget(("grad-stop", 1_usize)).center());
     let drop = |p: &mut Panel, app: &mut VectorcraftApp, at: Pos2| {
         egui::DragAndDrop::set_payload(&p.ctx, PanelDrag::paint(Paint::solid(Color::rgb(1.0, 0.0, 0.0))));
         p.frame(app, vec![Event::PointerMoved(at)], Modifiers::NONE);
@@ -490,7 +597,7 @@ fn a_dropped_swatch_adds_or_recolours_a_stop() {
     drop(&mut p, &mut app, pos2((a.x + b.x) / 2.0, a.y - 20.0));
     assert_eq!(hexes(&app), ["#ffffff", "#ff0000", "#000000"]);
     p.frame(&mut app, vec![], Modifiers::NONE);
-    let last = p.widget(("grad-stop", 2)).center();
+    let last = p.widget(("grad-stop", 2_usize)).center();
     drop(&mut p, &mut app, last);
     assert_eq!(hexes(&app), ["#ffffff", "#ff0000", "#ff0000"]);
     // A spot swatch tile dropped on a stop links it: editing the swatch recolours the stop.
@@ -519,7 +626,7 @@ fn a_color_dropped_on_the_ramp_keeps_its_model_in_a_cmyk_document() {
     app.run("paint.setFill", json!({"gradient": {"stops": rgb}, "keepModel": true})).unwrap();
     let mut p = Panel::new();
     p.frame(&mut app, vec![], Modifiers::NONE);
-    let (a, b) = (p.widget(("grad-stop", 0)).center(), p.widget(("grad-stop", 1)).center());
+    let (a, b) = (p.widget(("grad-stop", 0_usize)).center(), p.widget(("grad-stop", 1_usize)).center());
     let at = pos2((a.x + b.x) / 2.0, a.y - 20.0);
     let red = Color::rgb(1.0, 0.0, 0.0);
     egui::DragAndDrop::set_payload(&p.ctx, PanelDrag::paint(Paint::solid(red)));
@@ -535,7 +642,7 @@ fn double_clicking_a_stop_opens_the_shared_popover_beside_it() {
     let mut app = app(json!({"gradient": {}}));
     let mut p = Panel::new();
     p.frame(&mut app, vec![], Modifiers::NONE);
-    let stop = p.widget(("grad-stop", 1));
+    let stop = p.widget(("grad-stop", 1_usize));
     let b = |pressed| Event::PointerButton { pos: stop.center(), button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
     p.frame(&mut app, vec![Event::PointerMoved(stop.center()), b(true), b(false), b(true), b(false)], Modifiers::NONE);
     let d = app.ui.dialog.clone().expect("the popover opened");
@@ -736,7 +843,7 @@ fn a_stop_dragged_off_the_ramp_or_deleted_with_the_button_beside_it_goes() {
     let mut app = app(json!({"gradient": {"stops": stops}}));
     let mut p = Panel::new();
     p.frame(&mut app, vec![], Modifiers::NONE);
-    let mid = p.widget(("grad-stop", 1)).center();
+    let mid = p.widget(("grad-stop", 1_usize)).center();
     // Dragged down off the ramp, the middle stop goes.
     p.drag(&mut app, mid, mid + vec2(0.0, 60.0), Modifiers::NONE);
     assert_eq!(hexes(&app), ["#ffffff", "#000000"]);
@@ -754,7 +861,7 @@ fn a_stop_dragged_off_the_ramp_or_deleted_with_the_button_beside_it_goes() {
     assert_eq!(hexes(&app), ["#ffffff", "#ff0000", "#000000"]);
     app.run("edit.redo", json!({})).unwrap();
     // Two stops stay two: dragged off, the stop comes back, and the button is off.
-    let first = p.widget(("grad-stop", 0)).center();
+    let first = p.widget(("grad-stop", 0_usize)).center();
     p.drag(&mut app, first, first + vec2(0.0, 60.0), Modifiers::NONE);
     assert_eq!(hexes(&app), ["#ffffff", "#000000"]);
     app.run("gradient.selectStop", json!({"index": 0})).unwrap();

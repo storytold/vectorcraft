@@ -23,6 +23,9 @@ pub fn open(app: &mut VectorcraftApp, set: usize, action: usize) -> Result<Value
     if a.steps.iter().enumerate().all(|(i, _)| a.excluded_steps.contains(&i)) {
         return Err("the action has no included steps".into());
     }
+    if crate::panels::actions::has_stop(&a.included_commands()) {
+        return Err("Batch cannot play an action with a stop".into());
+    }
     let name = a.name.clone();
     app.ui.dialog = Some(Dialog::new(KIND, initial_fields(set, action, &name)));
     Ok(Value::Null)
@@ -63,14 +66,6 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         form::check(ui, d, "includeSubdirs", "Include All Subdirectories");
     } else {
         ui.label(egui::RichText::new(tl!("Uses every data set of the open document.")).size(11.5).color(t.text_dim));
-        form::choice(
-            ui,
-            d,
-            "datasetFileNaming",
-            "File Name:",
-            (LABEL, 200.0),
-            &[("fileNumber", "File + Number"), ("fileDataSetName", "File + Data Set Name"), ("dataSetName", "Data Set Name")],
-        );
     }
     ui.add_space(8.0);
 
@@ -83,13 +78,37 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             }
         });
     }
+    if names_data_set_files(d) {
+        form::choice(
+            ui,
+            d,
+            "datasetFileNaming",
+            "File Name:",
+            (LABEL, 200.0),
+            &[("fileNumber", "File + Number"), ("fileDataSetName", "File + Data Set Name"), ("dataSetName", "Data Set Name")],
+        );
+    }
     ui.add_space(6.0);
     widgets::subheader(ui, tl!("Overrides"));
     form::check(ui, d, "overrideOpen", "Override Action \"Open\" Commands");
     form::check(ui, d, "overrideSave", "Override Action \"Save\" Commands");
     form::check(ui, d, "overrideExport", "Override Action \"Export\" Commands");
     form::check(ui, d, "stopOnError", "Stop on Errors");
+    if overwrites_one_file(app, d) {
+        ui.add_space(6.0);
+        ui.label(egui::RichText::new(tl!("Each data set saves over the same file, which keeps only the last data set.")).size(11.5).color(t.warning));
+    }
     false
+}
+
+/// Whether the batch the dialog would run saves every data set over the same file
+/// ([`vectorcraft_engine::cmd::fileio::batch_overwrites_one_file`]).
+fn overwrites_one_file(app: &VectorcraftApp, d: &Dialog) -> bool {
+    let set = d.fields.get("set").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let action = d.fields.get("action").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let steps = app.ui.action_sets.get(set).and_then(|s| s.actions.get(action)).map_or(&[][..], |a| &a.steps[..]);
+    let commands = steps.iter().map(|(c, p)| json!({"command": c, "params": p})).collect();
+    vectorcraft_engine::cmd::fileio::batch_overwrites_one_file(&app.session, &params(d, "", commands))
 }
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
@@ -99,6 +118,9 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let commands = a.included_commands();
     if commands.is_empty() {
         return Err("the action has no included steps".into());
+    }
+    if crate::panels::actions::has_stop(&commands) {
+        return Err("Batch cannot play an action with a stop".into());
     }
     let source = d.str("source");
     if source == "folder" && d.str("folder").trim().is_empty() {
@@ -112,7 +134,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         return Err("open a document with data sets".into());
     }
     let params = params(d, &a.name, commands);
-    let r = app.run("action.batch", params)?;
+    let r = app.replay("action.batch", params)?;
     app.ui.dialog = None;
     let count = r["count"].as_u64().unwrap_or(0);
     let failed = r["failed"].as_u64().unwrap_or(0);
@@ -140,7 +162,8 @@ fn params(d: &Dialog, action_name: &str, commands: Vec<Value>) -> Value {
     });
     if source == "folder" {
         params["folder"] = json!(d.str("folder"));
-    } else if source == "datasets" {
+    }
+    if names_data_set_files(d) {
         params["datasetFileNaming"] = json!(d.str("datasetFileNaming"));
     }
     if destination == "folder" {
@@ -149,12 +172,32 @@ fn params(d: &Dialog, action_name: &str, commands: Vec<Value>) -> Value {
     params
 }
 
+/// Whether the File Name choice names the batch's output: a Data Sets source with a
+/// destination folder. With None or Save and Close the dialog sends no folder, so no file
+/// takes the data set's name.
+fn names_data_set_files(d: &Dialog) -> bool {
+    d.str("source") == "datasets" && d.str("destination") == "folder"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use vectorcraft_engine::Session;
 
-    fn shown(source: &str) -> Vec<String> {
+    fn shown(source: &str, destination: &str) -> Vec<String> {
+        let mut d = Dialog::new(KIND, initial_fields(0, 0, "Test"));
+        d.fields["source"] = json!(source);
+        d.fields["destination"] = json!(destination);
+        render(&mut d)
+    }
+
+    /// Draws `d` once and returns the texts it shows.
+    fn render(d: &mut Dialog) -> Vec<String> {
+        render_in(&mut VectorcraftApp::new(Session::new(), Default::default()), d)
+    }
+
+    /// Draws `d` once over `app` and returns the texts it shows.
+    fn render_in(app: &mut VectorcraftApp, d: &mut Dialog) -> Vec<String> {
         fn collect(shape: &egui::Shape, out: &mut Vec<String>) {
             match shape {
                 egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
@@ -162,13 +205,10 @@ mod tests {
                 _ => {}
             }
         }
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        let mut d = Dialog::new(KIND, initial_fields(0, 0, "Test"));
-        d.fields["source"] = json!(source);
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
         let mut frame = ctx.run_ui(Default::default(), |ui| {
-            body(&mut app, ui, &mut d);
+            body(app, ui, d);
         });
         frame.textures_delta.clear();
         let mut labels = vec![];
@@ -176,11 +216,54 @@ mod tests {
         labels
     }
 
+    /// The File Name row's caption and its selected choice (the dropdown shows only that one).
+    const NAMING: [&str; 2] = ["File Name:", "File + Number"];
+
     #[test]
-    fn file_name_choice_shows_only_for_data_sets() {
-        assert!(shown("datasets").iter().any(|label| label == "File Name:"));
-        assert!(shown("datasets").iter().any(|label| label == "File + Number"));
-        assert!(!shown("folder").iter().any(|label| label == "File Name:"));
+    fn file_name_choice_shows_only_for_data_sets_into_a_folder() {
+        for source in ["folder", "datasets"] {
+            for destination in ["none", "saveAndClose", "folder"] {
+                let labels = shown(source, destination);
+                let expected = source == "datasets" && destination == "folder";
+                for text in NAMING {
+                    assert_eq!(labels.iter().any(|label| label == text), expected, "{source} to {destination}, {text}: {labels:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn file_name_choice_comes_back_after_another_destination() {
+        let mut d = Dialog::new(KIND, initial_fields(0, 0, "Test"));
+        d.fields["source"] = json!("datasets");
+        d.fields["datasetFileNaming"] = json!("dataSetName");
+        for (destination, shown) in [("folder", true), ("none", false), ("saveAndClose", false), ("folder", true)] {
+            d.fields["destination"] = json!(destination);
+            let labels = render(&mut d);
+            assert_eq!(labels.iter().any(|label| label == "File Name:"), shown, "{destination}: {labels:?}");
+            assert_eq!(labels.iter().any(|label| label == "Data Set Name"), shown, "{destination}: {labels:?}");
+            assert_eq!(d.str("datasetFileNaming"), "dataSetName", "{destination}");
+        }
+        assert_eq!(params(&d, "Test", vec![])["datasetFileNaming"], "dataSetName");
+    }
+
+    /// Batch plays an action recorded with a key its command no longer reads, as Play does.
+    #[test]
+    fn an_action_with_a_key_no_longer_read_still_plays_in_a_batch() {
+        use crate::panels::actions::{Action, ActionSet};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("dataset.new", json!({"name": "a"})).unwrap();
+        let old = json!({"x": 10, "y": 10, "width": 20, "height": 20, "cornerStyle": "round"});
+        assert!(app.run("shape.rectangle", old.clone()).is_err());
+        app.ui.action_sets = vec![ActionSet::new("Test", vec![Action::new("Draw", vec![("shape.rectangle".into(), old)])])];
+        let mut d = Dialog::new(KIND, initial_fields(0, 0, "Draw"));
+        d.fields["source"] = json!("datasets");
+        d.fields["destination"] = json!("none");
+        let r = confirm(&mut app, &d).unwrap();
+        assert_eq!((r["count"].clone(), r["failed"].clone()), (json!(1), json!(0)), "{r}");
+        assert_eq!(app.session.active().unwrap().doc.layers[0].children().unwrap().len(), 1);
+        assert!(!app.session.replaying());
     }
 
     #[test]
@@ -192,7 +275,48 @@ mod tests {
             d.fields["datasetFileNaming"] = json!(choice);
             assert_eq!(params(&d, "Test", vec![])["datasetFileNaming"], choice);
         }
+        d.fields["datasetFileNaming"] = json!("dataSetName");
+        for destination in ["none", "saveAndClose"] {
+            d.fields["destination"] = json!(destination);
+            let p = params(&d, "Test", vec![]);
+            assert!(p.get("datasetFileNaming").is_none(), "{destination}: {p}");
+            assert!(p.get("destinationFolder").is_none(), "{destination}: {p}");
+        }
+        d.fields["destination"] = json!("folder");
         d.fields["source"] = json!("folder");
         assert!(params(&d, "Test", vec![]).get("datasetFileNaming").is_none());
+    }
+
+    const ONE_FILE: &str = "Each data set saves over the same file, which keeps only the last data set.";
+
+    #[test]
+    fn data_sets_offer_save_and_close_with_a_warning() {
+        let mut d = Dialog::new(KIND, initial_fields(0, 0, "Test"));
+        d.fields["destination"] = json!("saveAndClose");
+        let labels = render(&mut d);
+        assert!(labels.iter().any(|label| label == "Save and Close"), "{labels:?}");
+        assert!(!labels.iter().any(|label| label == ONE_FILE), "a folder source opens a file per pass: {labels:?}");
+        d.fields["source"] = json!("datasets");
+        let labels = render(&mut d);
+        assert!(labels.iter().any(|label| label == "Save and Close"), "{labels:?}");
+        assert!(labels.iter().any(|label| label == ONE_FILE), "{labels:?}");
+        assert_eq!(params(&d, "Test", vec![])["destination"], "saveAndClose");
+        d.fields["destination"] = json!("folder");
+        assert!(!render(&mut d).iter().any(|label| label == ONE_FILE));
+    }
+
+    #[test]
+    fn data_sets_warn_about_a_recorded_save_left_in_place() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui.action_sets[0].actions[0].steps.push(("document.save".into(), json!({"path": "/x/a.vectorcraft"})));
+        let mut d = Dialog::new(KIND, initial_fields(0, 0, "Test"));
+        d.fields["source"] = json!("datasets");
+        d.fields["destinationFolder"] = json!("/out");
+        assert!(!render_in(&mut app, &mut d).iter().any(|label| label == ONE_FILE), "Override Save points the save into the folder");
+        d.fields["overrideSave"] = json!(false);
+        assert!(render_in(&mut app, &mut d).iter().any(|label| label == ONE_FILE));
+        d.fields["overrideSave"] = json!(true);
+        d.fields["destination"] = json!("none");
+        assert!(render_in(&mut app, &mut d).iter().any(|label| label == ONE_FILE));
     }
 }

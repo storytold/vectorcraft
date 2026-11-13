@@ -27,6 +27,7 @@
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::fileio::{self, ArtboardPick, ScreenSize, pdf};
+use vectorcraft_engine::cmd::params::{drop_unread_row_options, screen_formats};
 
 use super::{DialogSpec, form, png_options, svg_options};
 use crate::state::Dialog;
@@ -108,12 +109,13 @@ pub(crate) fn saved_rows(saved: &Map<String, Value>) -> (Vec<Value>, Option<&str
 /// Open the dialog on its Assets tab with `checked` assets checked (every asset when `None`).
 pub(crate) fn open_assets(app: &mut VectorcraftApp, checked: Option<&[u64]>) {
     open(app);
+    let shown: Vec<u64> = app.session.active().map(|st| picture_assets(st).iter().map(|a| a.id).collect()).unwrap_or_default();
     if let Some(d) = app.ui.dialog.as_mut() {
         d.fields.insert("tab".into(), json!("assets"));
         if let Some(c) = checked {
             d.fields.insert("assets".into(), json!(c));
-            // The list scrolls to the first of them once: new assets land at its end.
-            if let Some(first) = c.first() {
+            // The list scrolls to the first of them it shows, once: new assets land at its end.
+            if let Some(first) = c.iter().find(|id| shown.contains(id)) {
                 d.fields.insert("__scrollTo".into(), json!(first));
             }
         }
@@ -128,7 +130,7 @@ pub fn open(app: &mut VectorcraftApp) {
     let (n, saved, assets) = app
         .session
         .active()
-        .map(|st| (st.doc.artboards.len(), st.doc.export_settings.clone(), st.doc.assets.iter().map(|a| a.id).collect::<Vec<_>>()))
+        .map(|st| (st.doc.artboards.len(), st.doc.export_settings.clone(), picture_assets(st).iter().map(|a| a.id).collect::<Vec<_>>()))
         .unwrap_or_default();
     let get = |k: &str| saved.get(k).filter(|v| !v.is_null());
     let flag = |k: &str, default: bool| get(k).and_then(Value::as_bool).unwrap_or(default);
@@ -212,12 +214,29 @@ pub(crate) fn saved_options(app: &VectorcraftApp, saved: &Map<String, Value>, id
         options.insert("antiAlias".into(), aa.clone());
     }
     if let Some(o) = saved.get("settings").and_then(|v| v.get(id)).and_then(Value::as_object) {
-        options.extend(o.iter().map(|(k, v)| (k.clone(), v.clone())));
+        let mut o = o.clone();
+        drop_unread_row_options(&mut o);
+        options.extend(o);
     }
     options
 }
 
-/// A row with its size as the text the Scale field shows (`2x`, `100w`, `100h`, `72ppi`).
+/// Export settings `settings` (as `document.exportSettings` or a preset holds them) without the
+/// keys the export no longer reads in its rows and per-format settings, and without settings for a
+/// format it doesn't write.
+pub(crate) fn drop_unread_screen_settings(settings: &mut Map<String, Value>) {
+    if let Some(rows) = settings.get_mut("formats").and_then(Value::as_array_mut) {
+        rows.iter_mut().filter_map(Value::as_object_mut).for_each(drop_unread_row_options);
+    }
+    if let Some(all) = settings.get_mut("settings").and_then(Value::as_object_mut) {
+        let formats = screen_formats();
+        all.retain(|id, _| formats.contains(&id.as_str()));
+        all.values_mut().filter_map(Value::as_object_mut).for_each(drop_unread_row_options);
+    }
+}
+
+/// A row with its size as the text the Scale field shows (`2x`, `100w`, `100h`, `72ppi`), without
+/// the keys the export no longer reads.
 fn editable_row(row: &Value) -> Value {
     let num = |k: &str| row.get(k).and_then(Value::as_f64);
     let text = match (num("width"), num("height"), num("ppi"), row.get("scale")) {
@@ -230,6 +249,7 @@ fn editable_row(row: &Value) -> Value {
     };
     let mut r = row.clone();
     if let Some(o) = r.as_object_mut() {
+        drop_unread_row_options(o);
         for k in ["width", "height", "ppi"] {
             o.remove(k);
         }
@@ -575,16 +595,23 @@ fn tiles(
     toggled
 }
 
-/// The checked assets that are still in the document, in panel order.
-fn checked_assets(app: &VectorcraftApp, d: &Dialog) -> Vec<u64> {
-    let on: Vec<u64> = d.fields.get("assets").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).collect()).unwrap_or_default();
-    app.session.active().map(|st| st.doc.assets.iter().map(|a| a.id).filter(|id| on.contains(id)).collect()).unwrap_or_default()
+/// The document's assets exported as pictures, in panel order: 3D assets export as mesh files from
+/// the Asset Export panel (`assets.export3D`).
+fn picture_assets(st: &vectorcraft_engine::DocState) -> Vec<&vectorcraft_doc::ExportAsset> {
+    st.doc.assets.iter().filter(|a| a.format_3d.is_none()).collect()
 }
 
-/// The Assets tab: each asset's thumbnail with its checkbox and name, in a grid or a list.
+/// The checked picture assets that are still in the document, in panel order.
+fn checked_assets(app: &VectorcraftApp, d: &Dialog) -> Vec<u64> {
+    let on: Vec<u64> = d.fields.get("assets").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).collect()).unwrap_or_default();
+    app.session.active().map(|st| picture_assets(st).iter().map(|a| a.id).filter(|id| on.contains(id)).collect()).unwrap_or_default()
+}
+
+/// The Assets tab: each picture asset's thumbnail with its checkbox and name, in a grid or a list.
 fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, list: bool) {
     let Some(st) = app.session.active() else { return };
-    if st.doc.assets.is_empty() {
+    let shown = picture_assets(st);
+    if shown.is_empty() {
         ui.add_space(24.0);
         widgets::dim_label(ui, tl!("No assets yet. Collect art with Object › Collect for Export, or drag it into the Asset Export panel."));
         return;
@@ -592,10 +619,10 @@ fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, list: bool) {
     let mut on = checked_assets(app, d);
     let before = on.clone();
     // Asked for until its row is in view: the dialog's first frame only measures it.
-    let scroll_to = d.fields.get("__scrollTo").and_then(Value::as_u64).filter(|id| st.doc.assets.iter().any(|a| a.id == *id));
+    let scroll_to = d.fields.get("__scrollTo").and_then(Value::as_u64).filter(|id| shown.iter().any(|a| a.id == *id));
     let mut in_view = scroll_to.is_none();
-    let clicked = tiles(ui, "efs-assets", st.doc.assets.len(), list, |ui, i, r| {
-        let Some(a) = st.doc.assets.get(i) else { return (String::new(), String::new(), false) };
+    let clicked = tiles(ui, "efs-assets", shown.len(), list, |ui, i, r| {
+        let Some(a) = shown.get(i) else { return (String::new(), String::new(), false) };
         crate::panels::asset_export::paint_thumb(ui, st, a, r);
         if scroll_to == Some(a.id) {
             if ui.clip_rect().contains_rect(r) {
@@ -607,7 +634,7 @@ fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, list: bool) {
         (a.name.clone(), a.name.clone(), on.contains(&a.id))
     });
     for i in clicked {
-        if let Some(a) = st.doc.assets.get(i) {
+        if let Some(a) = shown.get(i) {
             if on.contains(&a.id) {
                 on.retain(|id| *id != a.id);
             } else {
@@ -757,8 +784,7 @@ fn save_preset_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) 
 /// ones → the names added
 /// (none on the web, where the picked file arrives later and imports through `io::open_bytes`).
 pub(crate) fn import_presets(app: &mut VectorcraftApp) -> Result<Vec<String>, String> {
-    if let Some(f) = app.services.open_async.as_mut() {
-        f();
+    if crate::picks::open_async(app) {
         return Ok(vec![]);
     }
     let pick = crate::FilePick { filters: vec![crate::FilePick::filter("Export presets", fileio::SCREEN_EXPORT_PRESET_EXTS)], ..Default::default() };
@@ -879,7 +905,11 @@ pub(super) fn apply_preset(d: &mut Dialog, preset: &Value) {
         d.fields.insert("formats".into(), json!(rows));
         d.fields.insert("preset".into(), json!(p));
     }
-    if let (Some(all), Some(given)) = (d.fields.get_mut("settings").and_then(Value::as_object_mut), st["settings"].as_object()) {
+    // Settings for a format the export doesn't write, and keys it no longer reads, are left out.
+    let mut given = Map::from_iter([("settings".to_string(), st["settings"].clone())]);
+    drop_unread_screen_settings(&mut given);
+    if let (Some(all), Some(given)) = (d.fields.get_mut("settings").and_then(Value::as_object_mut), given.get("settings").and_then(Value::as_object))
+    {
         for (id, o) in given {
             match (all.get_mut(id).and_then(Value::as_object_mut), o.as_object()) {
                 (Some(mine), Some(o)) => mine.extend(o.iter().map(|(k, v)| (k.clone(), v.clone()))),

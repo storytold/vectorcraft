@@ -26,9 +26,12 @@ const NUMBERS: &[&str] = &["size", "leading", "kerning", "tracking"];
 /// The on, off or unset checkboxes.
 const SWITCHES: &[&str] = &["underline", "strikethrough", "standardVerticalRoman"];
 /// The attributes of Advanced Character Formats, in the order the section shows them.
-const ADVANCED: &[&str] = &["h_scale", "v_scale", "baseline_shift", "rotation", "language"];
+const ADVANCED: &[&str] = &["h_scale", "v_scale", "baseline_shift", "tcyUpDown", "tcyLeftRight", "rotation", "akiLeft", "akiRight", "language"];
 /// The number fields of Advanced Character Formats.
-const ADVANCED_NUMBERS: &[&str] = &["h_scale", "v_scale", "baseline_shift", "rotation"];
+const ADVANCED_NUMBERS: &[&str] = &["h_scale", "v_scale", "baseline_shift", "tcyUpDown", "tcyLeftRight", "rotation", "akiLeft", "akiRight"];
+/// The Insert Aki Left and Right fields, which take the Character panel's presets and stop at
+/// [`vectorcraft_doc::text::MAX_AKI`].
+const AKI: [&str; 2] = ["akiLeft", "akiRight"];
 /// The attributes of Character Color.
 const COLOR: &[&str] = &["fill", "stroke", "stroke_width", "overprint_fill", "overprint_stroke"];
 /// The fields of Character Color: the fill and stroke paints, their tints in percent, the stroke
@@ -78,7 +81,11 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
             "h_scale",
             "v_scale",
             "baseline_shift",
+            "tcyUpDown",
+            "tcyLeftRight",
             "rotation",
+            "akiLeft",
+            "akiRight",
             "language",
             "fill",
             "fill_tint",
@@ -101,7 +108,8 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
             "section",
         ]
     },
-    min_width: 650.0,
+    min_width: 720.0,
+    max_width: Some(720.0),
     ..DialogSpec::FORM
 };
 
@@ -183,9 +191,22 @@ pub(crate) fn swatch_choices(doc: &vectorcraft_doc::Document) -> Value {
     Value::Array(choices.collect())
 }
 
-/// A feature tag without its `-` or `+`.
+/// A feature tag without its `-` or `+` prefix and its `=N` value.
 fn bare(tag: &str) -> &str {
-    tag.trim_start_matches(['-', '+'])
+    let tag = tag.trim_start_matches(['-', '+']);
+    tag.split_once('=').map_or(tag, |(name, _)| name)
+}
+
+/// Is the feature a tag of a style's list sets on? A `tag=N` of a valued feature is off for 0,
+/// which a `-` prefix check misses; every other tag is on unless it starts with `-`.
+fn tag_on(tag: &str) -> bool {
+    let name = bare(tag);
+    let valued = name == "swsh" || vectorcraft_text::EXTRA_FEATURES.contains(&name);
+    if valued && vectorcraft_text::OtFeatures::known_tag(tag) {
+        vectorcraft_text::OtFeatures::from_tags([tag]).feature_value(name).is_some()
+    } else {
+        !tag.starts_with('-')
+    }
 }
 
 /// The OpenType Features fields for a style's `features`: each control is unset unless the list
@@ -198,9 +219,9 @@ fn opentype_fields(features: Option<&Value>) -> Map<String, Value> {
     let mut fields = Map::new();
     for (field, tag) in OT_SWITCHES {
         let last = tags.iter().rev().find(|t| bare(t) == *tag);
-        fields.insert((*field).into(), last.map_or(Value::Null, |t| json!(!t.starts_with('-'))));
+        fields.insert((*field).into(), last.map_or(Value::Null, |t| json!(tag_on(t))));
     }
-    let last_on = |tag: &str| tags.iter().rev().find(|t| bare(t) == tag).map(|t| !t.starts_with('-'));
+    let last_on = |tag: &str| tags.iter().rev().find(|t| bare(t) == tag).map(|t| tag_on(t));
     let figure = names(&FIGURE_TAGS)
         .then(|| FIGURE_VALUES.get(crate::panels::opentype::figure(&f)))
         .flatten()
@@ -211,7 +232,7 @@ fn opentype_fields(features: Option<&Value>) -> Map<String, Value> {
     fields.insert("ot_position".into(), position.map_or(Value::Null, |v| json!(v)));
     let sets: Vec<String> = vectorcraft_text::EXTRA_FEATURES[..20]
         .iter()
-        .filter_map(|set| tags.iter().rev().find(|t| bare(t) == *set).map(|t| if t.starts_with('-') { format!("-{set}") } else { set.to_string() }))
+        .filter_map(|set| tags.iter().rev().find(|t| bare(t) == *set).map(|t| if tag_on(t) { set.to_string() } else { format!("-{set}") }))
         .collect();
     fields.insert("ot_sets".into(), if sets.is_empty() { Value::Null } else { json!(sets) });
     fields
@@ -249,8 +270,13 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
         "h_scale" => tl!("Horizontal Scale"),
         "v_scale" => tl!("Vertical Scale"),
         "baseline_shift" => tl!("Baseline Shift"),
+        "tcyUpDown" => tl!("Tate-chu-yoko Up/Down"),
+        "tcyLeftRight" => tl!("Tate-chu-yoko Left/Right"),
         "rotation" => tl!("Character Rotation"),
-        "fill_tint" | "stroke_tint" => tl!("Tint"),
+        "akiLeft" => tl!("Insert Aki Left"),
+        "akiRight" => tl!("Insert Aki Right"),
+        "fill_tint" => tl!("Fill Tint"),
+        "stroke_tint" => tl!("Stroke Tint"),
         "stroke_width" => tl!("Weight"),
         _ => return Err("unknown character style number field".into()),
     };
@@ -279,7 +305,7 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
             if ["h_scale", "v_scale"].contains(&key) && !(1.0..=10000.0).contains(&n) {
                 return Err(format!("{label} must be a number from 1 to 10000"));
             }
-            if key == "baseline_shift" && !(-1296.0..=1296.0).contains(&n) {
+            if ["baseline_shift", "tcyUpDown", "tcyLeftRight"].contains(&key) && !(-1296.0..=1296.0).contains(&n) {
                 return Err(format!("{label} must be a number from -1296 to 1296"));
             }
             // Weight from 0 to the document limit, a tint from 0% to 100%.
@@ -293,6 +319,9 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
             }
             // An angle from -180 to 180 degrees, as text.setFormat stores it.
             let n = if key == "rotation" { (n + 180.0).rem_euclid(360.0) - 180.0 } else { n };
+            // Insert Aki stops at 0 and at the largest value the style takes, as the Character
+            // panel's fields do.
+            let n = if AKI.contains(&key) { n.clamp(0.0, vectorcraft_doc::text::MAX_AKI) } else { n };
             Ok(Some(json!(n)))
         }
     }
@@ -486,9 +515,18 @@ fn opentype_attrs(d: &Dialog, original: &Map<String, Value>, original_fields: &M
     }
     if !unchanged("ot_sets") {
         let sets = &vectorcraft_text::EXTRA_FEATURES[..20];
+        // A set still on keeps the value its tag gives (`ss01=2`).
+        let before: Vec<String> = tags.iter().filter(|t| sets.contains(&bare(t))).cloned().collect();
         tags.retain(|t| !sets.contains(&bare(t)));
         let listed = d.fields.get("ot_sets").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str);
-        tags.extend(listed.filter(|t| sets.contains(&bare(t))).map(str::to_string));
+        tags.extend(listed.filter(|t| sets.contains(&bare(t))).map(|t| {
+            let kept = before
+                .iter()
+                .rev()
+                .find(|b| bare(b) == bare(t))
+                .filter(|b| !t.starts_with('-') && vectorcraft_text::OtFeatures::known_tag(b) && tag_on(b));
+            kept.map_or_else(|| t.to_string(), Clone::clone)
+        }));
     }
     if !tags.is_empty() {
         attrs.insert("features".into(), json!(tags));
@@ -562,7 +600,7 @@ pub(crate) fn reset_basic(d: &mut Dialog) {
     }
 }
 
-/// Reset Panel in Advanced Character Formats: its five attributes become unset.
+/// Reset Panel in Advanced Character Formats: its nine attributes become unset.
 pub(crate) fn reset_advanced(d: &mut Dialog) {
     d.fields.insert("__resetAdvanced".into(), json!(true));
     for key in ADVANCED_NUMBERS {
@@ -660,18 +698,22 @@ pub(crate) fn basic_body(ui: &mut egui::Ui, d: &mut Dialog) {
             ("kerning", tl!("Kerning")),
             ("tracking", tl!("Tracking")),
         ] {
-            ui.label(caption);
+            let row = ui.label(caption);
             if d.fields.get(key).is_some_and(Value::is_null) {
                 d.fields.insert(key.into(), json!(""));
             }
-            form::text(ui, d, key, 190.0);
+            ui.label_inputs_by(row.id, |ui| form::text(ui, d, key, 190.0));
             ui.end_row();
         }
-        ui.label(tl!("Case"));
-        choice(ui, d, "case", &[("normal", tl!("Normal")), ("allCaps", tl!("All Caps")), ("smallCaps", tl!("Small Caps"))]);
+        let row = ui.label(tl!("Case"));
+        ui.label_inputs_by(row.id, |ui| {
+            choice(ui, d, "case", &[("normal", tl!("Normal")), ("allCaps", tl!("All Caps")), ("smallCaps", tl!("Small Caps"))]);
+        });
         ui.end_row();
-        ui.label(tl!("Position"));
-        choice(ui, d, "position", &[("normal", tl!("Normal")), ("superscript", tl!("Superscript")), ("subscript", tl!("Subscript"))]);
+        let row = ui.label(tl!("Position"));
+        ui.label_inputs_by(row.id, |ui| {
+            choice(ui, d, "position", &[("normal", tl!("Normal")), ("superscript", tl!("Superscript")), ("subscript", tl!("Subscript"))]);
+        });
         ui.end_row();
         for (key, caption) in [
             ("underline", tl!("Underline")),
@@ -692,48 +734,63 @@ pub(crate) fn basic_body(ui: &mut egui::Ui, d: &mut Dialog) {
             }
             ui.end_row();
         }
-        ui.label(tl!("Character Alignment"));
-        choice(
-            ui,
-            d,
-            "charAlign",
-            &[
-                ("romanBaseline", tl!("Roman Baseline")),
-                ("emBoxTop", tl!("Em Box Top/Right")),
-                ("emBoxCenter", tl!("Em Box Center")),
-                ("emBoxBottom", tl!("Em Box Bottom/Left")),
-                ("icfTop", tl!("ICF Top/Right")),
-                ("icfBottom", tl!("ICF Bottom/Left")),
-            ],
-        );
+        let row = ui.label(tl!("Character Alignment"));
+        ui.label_inputs_by(row.id, |ui| {
+            choice(
+                ui,
+                d,
+                "charAlign",
+                &[
+                    ("romanBaseline", tl!("Roman Baseline")),
+                    ("emBoxTop", tl!("Em Box Top/Right")),
+                    ("emBoxCenter", tl!("Em Box Center")),
+                    ("emBoxBottom", tl!("Em Box Bottom/Left")),
+                    ("icfTop", tl!("ICF Top/Right")),
+                    ("icfBottom", tl!("ICF Bottom/Left")),
+                ],
+            );
+        });
         ui.end_row();
     });
 }
 
-/// Advanced Character Formats: Horizontal Scale, Vertical Scale, Baseline Shift, Character Rotation
-/// and Language, each empty (unset) or set.
+/// Advanced Character Formats: Horizontal Scale, Vertical Scale, Baseline Shift, the Tate-chu-yoko
+/// Up/Down and Left/Right, Character Rotation, Insert Aki Left and Right (with the Character
+/// panel's presets) and Language, each empty (unset) or set.
 pub(crate) fn advanced_body(ui: &mut egui::Ui, d: &mut Dialog) {
     egui::Grid::new("character-style-advanced").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
         for (key, caption, unit) in [
             ("h_scale", tl!("Horizontal Scale"), "%"),
             ("v_scale", tl!("Vertical Scale"), "%"),
             ("baseline_shift", tl!("Baseline Shift"), "pt"),
+            ("tcyUpDown", tl!("Tate-chu-yoko Up/Down"), "pt"),
+            ("tcyLeftRight", tl!("Tate-chu-yoko Left/Right"), "pt"),
             ("rotation", tl!("Character Rotation"), "°"),
         ] {
-            ui.label(caption);
+            let row = ui.label(caption);
             if d.fields.get(key).is_some_and(Value::is_null) {
                 d.fields.insert(key.into(), json!(""));
             }
             ui.horizontal(|ui| {
-                form::text(ui, d, key, 160.0);
+                ui.label_inputs_by(row.id, |ui| form::text(ui, d, key, 160.0));
                 ui.label(unit);
             });
             ui.end_row();
         }
-        ui.label(tl!("Language:"));
+        let presets: Vec<String> = crate::panels::character::AKI_PRESETS.iter().map(f64::to_string).collect();
+        let presets: Vec<&str> = presets.iter().map(String::as_str).collect();
+        for (key, caption) in [("akiLeft", tl!("Insert Aki Left")), ("akiRight", tl!("Insert Aki Right"))] {
+            let row = ui.label(caption);
+            let value = if d.fields.get(key).is_none_or(Value::is_null) { String::new() } else { d.str(key) };
+            if let Some(v) = ui.label_inputs_by(row.id, |ui| crate::widgets::text_presets(ui, (KIND, key), &value, &presets, 160.0)) {
+                d.fields.insert(key.into(), json!(v));
+            }
+            ui.end_row();
+        }
+        let row = ui.label(tl!("Language:"));
         let names: Vec<&str> = std::iter::once(" ").chain(vectorcraft_doc::setup::LANGUAGES.iter().map(|(name, _, _)| *name)).collect();
         let current = d.fields.get("language").and_then(Value::as_str).unwrap_or("").to_string();
-        if let Some(i) = crate::widgets::dropdown(ui, (KIND, "language"), &current, &names, 190.0) {
+        if let Some(i) = ui.label_inputs_by(row.id, |ui| crate::widgets::dropdown(ui, (KIND, "language"), &current, &names, 190.0)) {
             d.fields.insert("language".into(), if i == 0 { Value::Null } else { names.get(i).map_or(Value::Null, |name| json!(name)) });
         }
         ui.end_row();
@@ -797,9 +854,9 @@ fn paint_choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str) {
 /// the stroke Weight and Overprint Fill and Overprint Stroke, each unset or set.
 pub(crate) fn color_body(ui: &mut egui::Ui, d: &mut Dialog) {
     egui::Grid::new("character-style-color").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
-        for (key, caption) in [("fill", tl!("Fill")), ("stroke", tl!("Stroke"))] {
-            ui.label(caption);
-            paint_choice(ui, d, key);
+        for (key, caption, tint_name) in [("fill", tl!("Fill"), tl!("Fill Tint")), ("stroke", tl!("Stroke"), tl!("Stroke Tint"))] {
+            let row = ui.label(caption);
+            ui.label_inputs_by(row.id, |ui| paint_choice(ui, d, key));
             ui.end_row();
             let tint_key = format!("{key}_tint");
             ui.label(tl!("Tint"));
@@ -809,20 +866,20 @@ pub(crate) fn color_body(ui: &mut egui::Ui, d: &mut Dialog) {
             let linked = d.fields.get(key).and_then(|p| p.get("swatch")).is_some_and(Value::is_string);
             ui.add_enabled_ui(linked, |ui| {
                 ui.horizontal(|ui| {
-                    form::text(ui, d, &tint_key, 160.0);
+                    form::text_named(ui, d, &tint_key, tint_name, 160.0);
                     ui.label("%");
                 });
             });
             ui.end_row();
         }
-        ui.label(tl!("Weight"));
+        let row = ui.label(tl!("Weight"));
         if d.fields.get("stroke_width").is_none_or(Value::is_null) {
             d.fields.insert("stroke_width".into(), json!(""));
         }
         let stroked = d.fields.get("stroke").and_then(|p| p.get("type")).and_then(Value::as_str) != Some("none");
         ui.add_enabled_ui(stroked, |ui| {
             ui.horizontal(|ui| {
-                form::text(ui, d, "stroke_width", 160.0);
+                ui.label_inputs_by(row.id, |ui| form::text(ui, d, "stroke_width", 160.0));
                 ui.label("pt");
             });
         });
@@ -838,11 +895,11 @@ pub(crate) fn opentype_body(ui: &mut egui::Ui, d: &mut Dialog) {
     let figures: Vec<(&str, &str)> = FIGURE_VALUES.into_iter().zip(crate::panels::opentype::FIGURES).collect();
     let positions: Vec<(&str, &str)> = POSITION_VALUES.into_iter().zip(crate::panels::opentype::POSITIONS).collect();
     egui::Grid::new("character-style-opentype").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
-        ui.label(tl!("Figure:"));
-        choice(ui, d, "ot_figure", &figures);
+        let row = ui.label(tl!("Figure:"));
+        ui.label_inputs_by(row.id, |ui| choice(ui, d, "ot_figure", &figures));
         ui.end_row();
-        ui.label(tl!("Position:"));
-        choice(ui, d, "ot_position", &positions);
+        let row = ui.label(tl!("Position:"));
+        ui.label_inputs_by(row.id, |ui| choice(ui, d, "ot_position", &positions));
         ui.end_row();
         for (key, caption) in [
             ("ot_liga", tl!("Standard Ligatures")),
@@ -885,33 +942,70 @@ pub(crate) fn opentype_body(ui: &mut egui::Ui, d: &mut Dialog) {
     }
 }
 
+/// The key under which the dialog keeps the height its section content was drawn at, for the next
+/// frame.
+fn content_id(ui: &egui::Ui) -> egui::Id {
+    ui.layer_id().id.with("char-style-content")
+}
+
+/// The dialog's body: the section list beside the selected section's content, and below them
+/// Reset Panel, the Preview checkbox and an invalid value's error. The content is at most 420 points
+/// tall, and scrolls when it is taller than that or than the screen less the rest of the window
+/// (as drawn last frame). The section list stays put while the content scrolls. Returns whether
+/// the dialog asks to be canceled (never: Cancel comes from the button row in `dialogs::show`).
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    ui.horizontal(|ui| {
+    let window = ui.ctx().memory(|m| m.area_rect(ui.layer_id().id)).map_or(0.0, |r| r.height());
+    let content = ui.ctx().data(|m| m.get_temp::<f32>(content_id(ui))).unwrap_or(0.0);
+    let rest = (window - content).max(0.0);
+    let room = (ui.ctx().content_rect().height() - rest - 2.0 * super::EDGE_GAP).clamp(0.0, 420.0);
+    let drawn = ui.horizontal(|ui| {
         section_list(ui, d);
         ui.separator();
-        ui.vertical(|ui| {
-            if d.str("section") == "basic" {
-                basic_body(ui, d);
-            } else if d.str("section") == "advanced" {
-                advanced_body(ui, d);
-            } else if d.str("section") == "color" {
-                color_body(ui, d);
-            } else if d.str("section") == "opentype" {
-                opentype_body(ui, d);
-            } else {
-                ui.horizontal(|ui| {
-                    ui.label(tl!("Style Name:"));
-                    form::text(ui, d, "name", 190.0);
-                });
-                ui.separator();
-                if let Ok(attrs) = edited_attrs(d) {
-                    for (key, value) in attrs {
-                        ui.label(format!("{}: {}", super::humanize(&key), value));
+        // The section list handles a click before this frame's content is laid out, so the section
+        // read here is the one just picked: its own scroll offset is used from the first frame.
+        let section = d.str("section");
+        let content_w = ui.available_width();
+        // Long sections scroll both ways: at a large interface scale the window has fewer points, and
+        // a wide row (a character-format grid) must stay inside it rather than widen the window.
+        let shown = egui::ScrollArea::both()
+            .id_salt(("char-style-sections", section))
+            .max_height(room)
+            .min_scrolled_height(room)
+            .max_width(content_w)
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    if d.str("section") == "basic" {
+                        basic_body(ui, d);
+                    } else if d.str("section") == "advanced" {
+                        advanced_body(ui, d);
+                    } else if d.str("section") == "color" {
+                        color_body(ui, d);
+                    } else if d.str("section") == "opentype" {
+                        opentype_body(ui, d);
+                    } else {
+                        ui.horizontal(|ui| {
+                            let row = ui.label(tl!("Style Name:"));
+                            ui.label_inputs_by(row.id, |ui| form::text(ui, d, "name", 190.0));
+                        });
+                        ui.separator();
+                        if let Ok(attrs) = edited_attrs(d) {
+                            for (key, value) in attrs {
+                                ui.label(format!("{}: {}", super::humanize(&key), value));
+                            }
+                        }
                     }
-                }
-            }
-        });
+                });
+            });
+        // `inner_rect` is the height offered before a short section shrinks the area to its content.
+        shown.inner_rect.height().min(shown.content_size.y)
     });
+    let content_h = drawn.inner;
+    let was = ui.ctx().data(|m| m.get_temp::<f32>(content_id(ui)));
+    ui.ctx().data_mut(|m| m.insert_temp(content_id(ui), content_h));
+    if was.is_none_or(|was| (was - content_h).abs() > 0.5) {
+        ui.ctx().request_repaint();
+    }
     reset_button(ui, d);
     match edited_attrs(d) {
         Ok(attrs) => {
@@ -952,6 +1046,349 @@ mod tests {
         out.textures_delta.clear();
     }
 
+    /// The texts a frame drew, with their screen rects.
+    fn texts_of(out: &egui::FullOutput) -> Vec<(String, egui::Rect)> {
+        fn collect(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+            match s {
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, out)),
+                _ => {}
+            }
+        }
+        let mut texts = vec![];
+        for c in &out.shapes {
+            collect(&c.shape, &mut texts);
+        }
+        texts
+    }
+
+    /// The texts of a few headless frames in `ctx` at a screen `w` by `h`, with their screen rects:
+    /// the dialog lays its scroll area out and measures its footer over the first frames.
+    fn frame_texts_in(ctx: &egui::Context, app: &mut VectorcraftApp, w: f32, h: f32) -> Vec<(String, egui::Rect)> {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h));
+        let mut texts = vec![];
+        for _ in 0..5 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            texts = texts_of(&out);
+        }
+        texts
+    }
+
+    /// The texts of a few headless frames at a screen `w` by `h`, and the context they were drawn in.
+    fn frame_texts_at(app: &mut VectorcraftApp, w: f32, h: f32) -> (egui::Context, Vec<(String, egui::Rect)>) {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let texts = frame_texts_in(&ctx, app, w, h);
+        (ctx, texts)
+    }
+
+    /// The General section lists every attribute of the style, so the sections scroll inside a
+    /// window shorter than that list: the buttons stay on the screen, the window keeps its width in
+    /// every section, and the content is clipped by the scroll area's viewport.
+    #[test]
+    fn the_sections_scroll_in_a_window_shorter_than_the_general_list() {
+        let mut app = app();
+        app.run(
+            "charStyle.new",
+            json!({"name": "Body", "attrs": {
+                "font_family": "Source Sans 3", "font_style": "Regular", "size": 24.0, "leading": 30.0,
+                "kerning": 0.0, "tracking": 5.0, "all_caps": false, "small_caps": null,
+                "position": {"kind": "normal", "size": 100.0, "position": 0.0}, "underline": false,
+                "strikethrough": false, "standardVerticalRoman": false, "charAlign": "romanBaseline",
+                "h_scale": 100.0, "v_scale": 100.0, "baseline_shift": 0.0, "rotation": 0.0,
+                "language": "English: USA", "overprint_fill": false, "overprint_stroke": false,
+                "stroke_width": 0.0, "features": ["liga", "calt", "dlig", "swsh", "salt", "titl", "ordn", "frac"]
+            }}),
+        )
+        .unwrap();
+        open(&mut app, "Body").unwrap();
+        let (ctx, texts) = frame_texts_at(&mut app, 900.0, 560.0);
+        let in_screen = |label: &str| {
+            let r = texts.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn")).1;
+            r.top() >= 0.0 && r.bottom() <= 560.0 + 1.0
+        };
+        assert!(in_screen("OK") && in_screen("Cancel"), "the buttons stay on a 560-point screen");
+        let dialog = egui::Id::unique(("dialog", "charStyleOptions"));
+        let width = ctx.memory(|m| m.area_rect(dialog)).expect("the dialog is drawn").width();
+        assert!((700.0..=820.0).contains(&width), "the dialog keeps its 720-point width: {width}");
+        let reset = texts.iter().find(|(text, _)| text == "Reset Panel").expect("the footer is drawn").1.top();
+        assert!(
+            texts.iter().any(|(text, rect)| text.contains(':') && rect.bottom() > reset + 1.0),
+            "the General list is taller than the scroll area and runs under the footer: {texts:?}"
+        );
+        // A short section uses the same width.
+        app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!("basic"));
+        let _ = frame_texts_in(&ctx, &mut app, 900.0, 560.0);
+        let basic = ctx.memory(|m| m.area_rect(dialog)).expect("the dialog is drawn").width();
+        assert!((basic - width).abs() < 0.5, "the width does not change with the section: {width} -> {basic}");
+    }
+
+    /// On a 1920 by 1080 screen the dialog opens with its content 420 points tall when the General
+    /// list is longer than that: the first frame that draws it, with no input, already has the full
+    /// height, and later frames keep it.
+    #[test]
+    fn the_sections_open_at_their_full_height_without_input() {
+        let mut app = app();
+        app.run(
+            "charStyle.new",
+            json!({"name": "Body", "attrs": {
+                "font_family": "Source Sans 3", "font_style": "Regular", "size": 24.0, "leading": 30.0,
+                "kerning": 0.0, "tracking": 5.0, "all_caps": false, "small_caps": null,
+                "position": {"kind": "normal", "size": 100.0, "position": 0.0}, "underline": false,
+                "strikethrough": false, "standardVerticalRoman": false, "charAlign": "romanBaseline",
+                "h_scale": 100.0, "v_scale": 100.0, "baseline_shift": 0.0, "rotation": 0.0,
+                "language": "English: USA", "overprint_fill": false, "overprint_stroke": false,
+                "stroke_width": 0.0, "features": ["liga", "calt", "dlig", "swsh", "salt", "titl", "ordn", "frac"]
+            }}),
+        )
+        .unwrap();
+        open(&mut app, "Body").unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1920.0, 1080.0));
+        let mut drawn = 0;
+        for _ in 0..6 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
+            let texts = texts_of(&out);
+            let top = |label: &str| texts.iter().find(|(text, _)| text == label).map(|r| r.1.top());
+            // The first frame only measures the window and draws no text.
+            let (Some(reset), Some(general)) = (top("Reset Panel"), top("General")) else { continue };
+            drawn += 1;
+            let content = reset - general;
+            assert!(content >= 410.0, "the content is 420 points tall in drawn frame {drawn}: {content}");
+        }
+        assert!(drawn >= 4, "the dialog is drawn: {drawn} frames");
+        // On the smallest window the buttons are on the screen in the first frame that draws them.
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 500.0));
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
+            let texts = texts_of(&out);
+            let Some(ok) = texts.iter().find(|(text, _)| text == "OK").map(|r| r.1) else { continue };
+            let cancel = texts.iter().find(|(text, _)| text == "Cancel").expect("Cancel is drawn with OK").1;
+            assert!(ok.bottom() <= 501.0 && cancel.bottom() <= 501.0, "the buttons are on an 800 by 500 screen when first drawn: {ok:?} {cancel:?}");
+            return;
+        }
+        panic!("the dialog is drawn on an 800 by 500 screen");
+    }
+
+    /// Going back to the long General list from a shorter section keeps OK and Cancel on a small
+    /// screen in the first frame after the switch, not only once the window has measured itself again.
+    #[test]
+    fn switching_to_a_long_section_keeps_the_buttons_on_a_small_screen() {
+        let mut app = app();
+        app.run(
+            "charStyle.new",
+            json!({"name": "Body", "attrs": {
+                "font_family": "Source Sans 3", "font_style": "Regular", "size": 24.0, "leading": 30.0,
+                "kerning": 0.0, "tracking": 5.0, "all_caps": false, "small_caps": null,
+                "position": {"kind": "normal", "size": 100.0, "position": 0.0}, "underline": false,
+                "strikethrough": false, "standardVerticalRoman": false, "charAlign": "romanBaseline",
+                "h_scale": 100.0, "v_scale": 100.0, "baseline_shift": 0.0, "rotation": 0.0,
+                "language": "English: USA", "overprint_fill": false, "overprint_stroke": false,
+                "stroke_width": 0.0, "features": ["liga", "calt", "dlig", "swsh", "salt", "titl", "ordn", "frac"]
+            }}),
+        )
+        .unwrap();
+        open(&mut app, "Body").unwrap();
+        for h in [560.0, 640.0, 720.0] {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, h));
+            for section in ["basic", "advanced", "color", "opentype"] {
+                app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!(section));
+                let _ = frame_texts_in(&ctx, &mut app, 900.0, h);
+                app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!("general"));
+                let mut out =
+                    ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(&mut app, ui.ctx()));
+                out.textures_delta.clear();
+                let texts = texts_of(&out);
+                for label in ["OK", "Cancel"] {
+                    let r = texts.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn")).1;
+                    assert!(r.bottom() <= h + 1.0, "{label} stays on a {h}-point screen going from {section} to General: {r:?}");
+                }
+            }
+        }
+    }
+
+    /// The dialog stays usable in the smallest window the app allows (800 by 500 points): in every
+    /// section the section list, OK and Cancel are on the screen.
+    #[test]
+    fn every_section_and_the_buttons_fit_the_smallest_window() {
+        let mut app = app();
+        app.run("charStyle.new", json!({"name": "Body"})).unwrap();
+        open(&mut app, "Body").unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        const W: f32 = 800.0;
+        const H: f32 = 500.0;
+        let labels = ["General", "Basic Character Formats", "Advanced Character Formats", "Character Color", "OpenType Features", "OK", "Cancel"];
+        for section in ["general", "basic", "advanced", "color", "opentype"] {
+            app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!(section));
+            let texts = frame_texts_in(&ctx, &mut app, W, H);
+            for label in labels {
+                let r = texts.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn in {section}")).1;
+                assert!(r.top() >= 0.0 && r.bottom() <= H + 1.0, "{label} stays on an 800 by 500 screen in {section}: {r:?}");
+            }
+        }
+    }
+
+    /// At 2x UI scale the smallest window (800 by 500 pixels) holds only 400 by 250 points: in
+    /// every section the section list and both buttons stay on the screen.
+    #[test]
+    fn every_section_and_the_buttons_fit_the_smallest_window_at_twice_the_scale() {
+        let mut app = app();
+        app.run(
+            "charStyle.new",
+            json!({"name": "Body", "attrs": {
+                "font_family": "Source Sans 3", "font_style": "Regular", "size": 24.0, "leading": 30.0,
+                "kerning": 0.0, "tracking": 5.0, "all_caps": false, "small_caps": null,
+                "position": {"kind": "normal", "size": 100.0, "position": 0.0}, "underline": false,
+                "strikethrough": false, "standardVerticalRoman": false, "charAlign": "romanBaseline",
+                "h_scale": 100.0, "v_scale": 100.0, "baseline_shift": 0.0, "rotation": 0.0,
+                "language": "English: USA", "overprint_fill": false, "overprint_stroke": false,
+                "stroke_width": 0.0, "features": ["liga", "calt", "dlig", "swsh", "salt", "titl", "ordn", "frac"]
+            }}),
+        )
+        .unwrap();
+        open(&mut app, "Body").unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        ctx.set_zoom_factor(2.0);
+        const W: f32 = 400.0;
+        const H: f32 = 250.0;
+        let labels = ["General", "Basic Character Formats", "Advanced Character Formats", "Character Color", "OpenType Features", "OK", "Cancel"];
+        for section in ["general", "basic", "advanced", "color", "opentype"] {
+            app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!(section));
+            let texts = frame_texts_in(&ctx, &mut app, W, H);
+            for label in labels {
+                let r = texts.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn in {section}")).1;
+                assert!(
+                    r.top() >= 0.0 && r.bottom() <= H + 1.0 && r.left() >= 0.0 && r.right() <= W + 1.0,
+                    "{label} stays on a 400 by 250 point screen at 2x in {section}: {r:?}"
+                );
+            }
+
+            // A wheel over the content scrolls it; the section list and both buttons stay put.
+            let at = egui::Pos2::new(300.0, 60.0);
+            let mut after = texts.clone();
+            for _ in 0..8 {
+                let events = vec![
+                    egui::Event::PointerMoved(at),
+                    egui::Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Point,
+                        delta: egui::vec2(-40.0, -40.0),
+                        phase: egui::TouchPhase::Move,
+                        modifiers: egui::Modifiers::NONE,
+                        source: egui::MouseWheelSource::Unknown,
+                    },
+                ];
+                let mut out = ctx.run_ui(
+                    egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(W, H))), events, ..Default::default() },
+                    |ui| super::super::show(&mut app, ui.ctx()),
+                );
+                out.textures_delta.clear();
+                after = texts_of(&out);
+            }
+            for label in labels {
+                let r = after.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn in {section}")).1;
+                assert!(r.top() >= 0.0 && r.bottom() <= H + 1.0, "{label} stays after scrolling in {section}: {r:?}");
+            }
+        }
+    }
+
+    /// Switching from a scrolled General section to a shorter one and back keeps General's own
+    /// scroll offset: the section is read after the list handles the click, so the click frame
+    /// stores no offset for the section that is leaving.
+    #[test]
+    fn a_scrolled_section_keeps_its_offset_after_switching_away_and_back() {
+        let mut app = app();
+        app.run(
+            "charStyle.new",
+            json!({"name": "Body", "attrs": {
+                "font_family": "Source Sans 3", "font_style": "Regular", "size": 24.0, "leading": 30.0,
+                "kerning": 0.0, "tracking": 5.0, "all_caps": false, "small_caps": null,
+                "position": {"kind": "normal", "size": 100.0, "position": 0.0}, "underline": false,
+                "strikethrough": false, "standardVerticalRoman": false, "charAlign": "romanBaseline",
+                "h_scale": 100.0, "v_scale": 100.0, "baseline_shift": 0.0, "rotation": 0.0,
+                "language": "English: USA", "overprint_fill": false, "overprint_stroke": false,
+                "stroke_width": 0.0, "features": ["liga", "calt", "dlig", "swsh", "salt", "titl", "ordn", "frac"]
+            }}),
+        )
+        .unwrap();
+        open(&mut app, "Body").unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 560.0));
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out =
+                ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            texts_of(&out)
+        };
+        let mut texts = vec![];
+        for _ in 0..5 {
+            texts = frame(&mut app, vec![]);
+        }
+        let y = |texts: &[(String, egui::Rect)], label: &str| {
+            texts.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn")).1.top()
+        };
+        eprintln!("DEBUG initial texts: {texts:?}");
+        let general_top = y(&texts, "Style Name:");
+        let before = texts.clone();
+        // Scroll General down with the wheel.
+        let at = egui::Pos2::new(600.0, 200.0);
+        for _ in 0..8 {
+            let events = vec![
+                egui::Event::PointerMoved(at),
+                egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -40.0),
+                    phase: egui::TouchPhase::Move,
+                    modifiers: egui::Modifiers::NONE,
+                    source: egui::MouseWheelSource::Unknown,
+                },
+            ];
+            texts = frame(&mut app, events);
+        }
+        // Let the smooth wheel scroll finish before changing sections.
+        for _ in 0..15 {
+            texts = frame(&mut app, vec![]);
+        }
+        let scrolled = texts.clone();
+        assert!(
+            before.iter().any(|(label, _)| !scrolled.iter().any(|(other, _)| other == label))
+                && scrolled.iter().any(|(label, _)| !before.iter().any(|(other, _)| other == label)),
+            "General scrolls to other attributes"
+        );
+        // Click Basic Character Formats, then General.
+        let click = |app: &mut VectorcraftApp, label: &str| {
+            let texts = frame(app, vec![]);
+            let pos = texts.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn")).1.center();
+            let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            for e in [egui::Event::PointerMoved(pos), button(true), button(false)] {
+                let _ = frame(app, vec![e]);
+            }
+            let _ = frame(app, vec![]);
+        };
+        click(&mut app, "Basic Character Formats");
+        let basic = frame(&mut app, vec![]);
+        assert!(y(&basic, "Font Family:") < general_top + 40.0, "a short section opens at its top");
+        click(&mut app, "General");
+        let back = frame(&mut app, vec![]);
+        let mut same = 0;
+        for (label, old) in &scrolled {
+            if let Some((_, new)) = back.iter().find(|(text, _)| text == label) {
+                assert!((new.top() - old.top()).abs() < 1.0, "General keeps its offset at {label}: {old:?} -> {new:?}");
+                same += 1;
+            }
+        }
+        assert!(same > 0, "General draws its content again: {back:?}");
+    }
     #[test]
     fn unchanged_basic_fields_preserve_original_keys() {
         for attrs in [
@@ -1173,11 +1610,19 @@ mod tests {
     }
 
     #[test]
-    fn advanced_section_shows_its_five_controls() {
+    fn advanced_section_shows_its_seven_controls() {
         let mut d = dialog_for(json!({}));
         let mut app = app();
         let shown = crate::tests_labels::painted_text(&mut app, |_, ui| advanced_body(ui, &mut d));
-        for label in ["Horizontal Scale", "Vertical Scale", "Baseline Shift", "Character Rotation", "Language:"] {
+        for label in [
+            "Horizontal Scale",
+            "Vertical Scale",
+            "Baseline Shift",
+            "Tate-chu-yoko Up/Down",
+            "Tate-chu-yoko Left/Right",
+            "Character Rotation",
+            "Language:",
+        ] {
             assert!(shown.contains(label), "{label}: {shown}");
         }
     }
@@ -1269,6 +1714,139 @@ mod tests {
         assert!(!def.attrs.contains_key("v_scale"));
     }
 
+    #[test]
+    fn tate_chu_yoko_offsets_show_set_reset_and_keep_their_limits() {
+        let d = dialog_for(json!({"tcyUpDown": 2.0, "size": 12.0}));
+        assert_eq!((d.fields["tcyUpDown"].clone(), d.fields["tcyLeftRight"].clone()), (json!(2.0), json!("")));
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"tcyUpDown": 2.0, "size": 12.0})));
+        // A value a style captured from scaled text stays while its field is untouched.
+        assert_eq!(edited_attrs(&dialog_for(json!({"tcyLeftRight": 3000.0}))).unwrap(), attrs(json!({"tcyLeftRight": 3000.0})));
+
+        let mut d = dialog_for(json!({"tcyUpDown": 2.0}));
+        d.fields.insert("tcyUpDown".into(), json!(""));
+        d.fields.insert("tcyLeftRight".into(), json!("-1296"));
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"tcyLeftRight": -1296.0})));
+        d.fields.insert("tcyLeftRight".into(), json!("0"));
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"tcyLeftRight": 0.0})));
+        for (key, value, message) in [
+            ("tcyUpDown", "1296.1", "Tate-chu-yoko Up/Down must be a number from -1296 to 1296"),
+            ("tcyLeftRight", "-1296.1", "Tate-chu-yoko Left/Right must be a number from -1296 to 1296"),
+            ("tcyUpDown", "high", "Tate-chu-yoko Up/Down must be a number"),
+            ("tcyLeftRight", "NaN", "Tate-chu-yoko Left/Right must be a number"),
+        ] {
+            let mut d = dialog_for(json!({}));
+            d.fields.insert(key.into(), json!(value));
+            assert_eq!(edited_attrs(&d).unwrap_err(), message, "{key} {value}");
+        }
+
+        let mut d = dialog_for(json!({"tcyUpDown": 2.0, "tcyLeftRight": -1.0, "size": 12.0}));
+        d.fields.insert("section".into(), json!("advanced"));
+        reset_section(&mut d);
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"size": 12.0})));
+    }
+
+    #[test]
+    fn tate_chu_yoko_offsets_preview_cancel_and_commit_to_the_style_and_its_text() {
+        let mut app = app();
+        app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 24.0, "tcyLeftRight": 0.0}})).unwrap();
+        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Text"})).unwrap()["id"].as_u64().unwrap();
+        app.run("charStyle.apply", json!({"name": "Body", "id": id})).unwrap();
+        app.run("text.setRangeStyle", json!({"id": id, "start": 2, "end": 4, "tcyLeftRight": 5.0})).unwrap();
+        let before = app.session.doc().unwrap().doc.clone();
+        let undo = app.session.doc().unwrap().history.undo.len();
+        open(&mut app, "Body").unwrap();
+        {
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("section".into(), json!("advanced"));
+            d.fields.insert("tcyUpDown".into(), json!("4"));
+        }
+        frame(&mut app);
+        assert_eq!(app.session.doc().unwrap().doc.char_styles[0].attrs["tcyUpDown"], json!(4.0));
+        super::super::cancel(&mut app);
+        assert_eq!(app.session.doc().unwrap().doc, before);
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+
+        open(&mut app, "Body").unwrap();
+        {
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("tcyUpDown".into(), json!("4"));
+            d.fields.insert("tcyLeftRight".into(), json!("-3"));
+        }
+        super::super::confirm(&mut app).unwrap();
+        let state = app.session.doc().unwrap();
+        assert_eq!(state.history.undo.len(), undo + 1);
+        assert_eq!(state.doc.char_styles[0].attrs, attrs(json!({"size": 24.0, "tcyUpDown": 4.0, "tcyLeftRight": -3.0})));
+        let vectorcraft_doc::NodeKind::Text(t) = &state.doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
+        assert_eq!(t.runs.iter().map(|r| (r.style.tcy_up_down, r.style.tcy_left_right)).collect::<Vec<_>>(), [(4.0, -3.0), (4.0, 5.0)]);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc, before);
+
+        app.run("ui.newCharStyle", json!({})).unwrap();
+        {
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("name".into(), json!("Shifted"));
+            d.fields.insert("tcyLeftRight".into(), json!("6"));
+        }
+        super::super::confirm(&mut app).unwrap();
+        let doc = &app.session.doc().unwrap().doc;
+        let def = doc.char_styles.iter().find(|def| def.name == "Shifted").unwrap();
+        assert_eq!(def.attrs["tcyLeftRight"], json!(6.0));
+    }
+
+    #[test]
+    fn insert_aki_fields_show_set_reset_and_stop_at_the_character_panel_limits() {
+        let d = dialog_for(json!({"akiLeft": 250.0, "size": 12.0}));
+        assert_eq!((d.fields["akiLeft"].clone(), d.fields["akiRight"].clone()), (json!(250.0), json!("")));
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"akiLeft": 250.0, "size": 12.0})));
+
+        let mut d = dialog_for(json!({"akiLeft": 250.0}));
+        d.fields.insert("akiLeft".into(), json!(""));
+        d.fields.insert("akiRight".into(), json!("500"));
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"akiRight": 500.0})));
+        // A typed value stops at 0 and at 1000, as in the Character panel's fields.
+        for (typed, kept) in [("5000", 1000.0), ("-5", 0.0), ("1000", 1000.0)] {
+            d.fields.insert("akiRight".into(), json!(typed));
+            assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"akiRight": kept})), "{typed}");
+        }
+        d.fields.insert("akiLeft".into(), json!("wide"));
+        assert_eq!(edited_attrs(&d).unwrap_err(), "Insert Aki Left must be a number");
+
+        let mut d = dialog_for(json!({"akiLeft": 250.0, "akiRight": 500.0, "size": 12.0}));
+        d.fields.insert("section".into(), json!("advanced"));
+        reset_section(&mut d);
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"size": 12.0})));
+    }
+
+    #[test]
+    fn insert_aki_fields_are_drawn_and_commit_to_the_style_and_its_text() {
+        let mut app = app();
+        app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 24.0}})).unwrap();
+        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Text"})).unwrap()["id"].as_u64().unwrap();
+        app.run("charStyle.apply", json!({"name": "Body", "id": id})).unwrap();
+        open(&mut app, "Body").unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 900.0));
+        let mut d = app.ui.dialog.clone().unwrap();
+        let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| advanced_body(ui, &mut d));
+        let texts = texts_of(&out);
+        out.textures_delta.clear();
+        for label in ["Insert Aki Left", "Insert Aki Right"] {
+            assert!(texts.iter().any(|(text, _)| text == label), "{label} is drawn: {texts:?}");
+        }
+        {
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("akiLeft".into(), json!("250"));
+            d.fields.insert("akiRight".into(), json!("2000"));
+        }
+        super::super::confirm(&mut app).unwrap();
+        let state = app.session.doc().unwrap();
+        assert_eq!(state.doc.char_styles[0].attrs, attrs(json!({"size": 24.0, "akiLeft": 250.0, "akiRight": 1000.0})));
+        let vectorcraft_doc::NodeKind::Text(t) = &state.doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
+        assert!(t.runs.iter().all(|r| (r.style.aki_left, r.style.aki_right) == (250.0, 1000.0)));
+    }
+
     /// The negated tags of the twenty stylistic sets: an explicit empty Stylistic Sets choice.
     fn no_sets() -> Vec<String> {
         vectorcraft_text::EXTRA_FEATURES[..20].iter().map(|s| format!("-{s}")).collect()
@@ -1332,6 +1910,21 @@ mod tests {
     }
 
     #[test]
+    fn a_stored_zero_value_reads_as_off_and_turning_it_on_saves_it() {
+        let mut d = dialog_for(json!({"features": ["ss01=0", "salt=0", "ss02=2"]}));
+        assert_eq!(d.fields["ot_salt"], json!(false));
+        assert_eq!(d.fields["ot_sets"], json!(["-ss01", "ss02"]));
+        d.fields.insert("ot_sets".into(), json!(["ss01", "ss02"]));
+        d.fields.insert("ot_salt".into(), json!(true));
+        assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["salt", "ss01", "ss02=2"]));
+        for last in ["ss01=0", "-ss01", "ss01=65536"] {
+            let mut d = dialog_for(json!({"features": ["ss01=2", last]}));
+            d.fields.insert("ot_sets".into(), json!(["ss01", "ss02"]));
+            assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["ss01", "ss02"]), "{last}: only a valid last on-value is kept");
+        }
+    }
+
+    #[test]
     fn figure_tags_no_menu_entry_matches_leave_the_figure_unset() {
         for features in [json!(["pnum"]), json!(["lnum"]), json!(["onum", "lnum"]), json!(["tnum", "pnum"])] {
             let mut d = dialog_for(json!({ "features": features }));
@@ -1350,8 +1943,8 @@ mod tests {
     fn color_tint_and_weight_outside_their_limits_are_errors() {
         let linked = json!({"type": "solid", "color": {"model": "gray", "k": 0.5}, "swatch": "Ink"});
         for (key, value, message) in [
-            ("fill_tint", "150", "Tint must be a number from 0 to 100"),
-            ("stroke_tint", "-1", "Tint must be a number from 0 to 100"),
+            ("fill_tint", "150", "Fill Tint must be a number from 0 to 100"),
+            ("stroke_tint", "-1", "Stroke Tint must be a number from 0 to 100"),
             ("stroke_width", "-1", "Weight must be a number from 0 to 4000000"),
             ("stroke_width", "thick", "Weight must be a number"),
         ] {
@@ -1544,7 +2137,7 @@ mod tests {
             };
             let shown = crate::i18n::message(crate::i18n::current(), &why);
             let mut fonts = false;
-            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).with_accessibility_check(false).build_ui_state(
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
                 move |ui, app: &mut VectorcraftApp| {
                     if !std::mem::replace(&mut fonts, true) {
                         crate::theme::install_fonts(ui.ctx());
@@ -1561,6 +2154,76 @@ mod tests {
             assert!(super::super::confirm(app).is_err(), "{key} confirm");
             assert!(app.ui.dialog.is_some(), "{key} dialog stays open");
             assert_eq!(app.session.doc().unwrap().doc.char_styles.len(), styles, "{key} style count");
+        }
+    }
+
+    #[test]
+    fn every_section_names_its_inputs_in_both_dialogs() {
+        for new_style in [false, true] {
+            for section in ["general", "basic", "advanced", "color", "opentype"] {
+                let mut app = app();
+                if new_style {
+                    app.run("ui.newCharStyle", json!({})).unwrap();
+                } else {
+                    app.run("charStyle.new", json!({"name": "Body", "attrs": {}})).unwrap();
+                    open(&mut app, "Body").unwrap();
+                }
+                app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!(section));
+                let mut fonts = false;
+                // The harness fails a frame that leaves an input without an accessible name.
+                let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
+                    move |ui, app: &mut VectorcraftApp| {
+                        if !std::mem::replace(&mut fonts, true) {
+                            crate::theme::install_fonts(ui.ctx());
+                            return;
+                        }
+                        super::super::show(app, ui.ctx());
+                    },
+                    app,
+                );
+                h.run_steps(4);
+                assert!(h.unnamed_widgets().is_empty(), "new {new_style}, {section}: {:?}", h.unnamed_widgets());
+            }
+        }
+    }
+
+    #[test]
+    fn fill_and_stroke_tint_fields_have_distinct_names() {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::{NodeT, Queryable};
+        for new_style in [false, true] {
+            let mut app = app();
+            app.run("swatch.new", json!({"name": "Brand", "color": "#2050a0", "global": true})).unwrap();
+            if new_style {
+                app.run("ui.newCharStyle", json!({})).unwrap();
+            } else {
+                app.run("charStyle.new", json!({"name": "Body", "attrs": {}})).unwrap();
+                open(&mut app, "Body").unwrap();
+            }
+            let brand = json!(app.session.doc().unwrap().doc.tint_paint("Brand", 1.0).unwrap());
+            {
+                let d = app.ui.dialog.as_mut().unwrap();
+                d.fields.insert("section".into(), json!("color"));
+                d.fields.insert("fill".into(), brand.clone());
+                d.fields.insert("stroke".into(), brand);
+            }
+            let mut fonts = false;
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
+                move |ui, app: &mut VectorcraftApp| {
+                    if !std::mem::replace(&mut fonts, true) {
+                        crate::theme::install_fonts(ui.ctx());
+                        return;
+                    }
+                    super::super::show(app, ui.ctx());
+                },
+                app,
+            );
+            h.run_steps(4);
+            for name in ["Fill Tint", "Stroke Tint"] {
+                let field = h.get_by_role_and_label(Role::TextInput, name);
+                assert!(!field.accesskit_node().is_disabled(), "new {new_style}: {name} is enabled for a linked swatch");
+            }
+            assert!(h.query_by_role_and_label(Role::TextInput, "Tint").is_none(), "new {new_style}: a field is named only Tint");
         }
     }
 

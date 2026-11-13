@@ -1,5 +1,15 @@
-use super::rings::{MAX_PIECES, MAX_PLANE_POINTS, MAX_SOLID_POINTS, inset, left, rings, signed_area};
-use super::{Bevel, Extrude, Facet, FillRule, MAX_FACES, PathData, Point, Rect, Revolve, V3, View, eye_distance, perspective_scale};
+use vectorcraft_geom::kurbo::ParamCurveDeriv;
+
+use super::outline::{self, Along, Budget, CURVE_TOLERANCE};
+use super::rings::{
+    CURVE_PIECES, MAX_PIECES, MAX_PLANE_POINTS, MAX_SOLID_POINTS, Ring, Span, TOO_COMPLEX_SURFACE, curve_pieces, inset, left, signed_area,
+    solid_rings_traced,
+};
+use super::{
+    Bevel, Extrude, Facet, FillRule, MAX_FACES, MAX_SOLID_FACES, ParamCurve, PathData, PlanarFace, Point, Rect, Revolve, V3, View, eye_distance,
+    perspective_scale,
+};
+use crate::shadow::Projection;
 
 /// Turns 3D points into document points and shades faces for one view.
 pub(super) struct Camera {
@@ -39,7 +49,24 @@ impl Camera {
     pub(super) fn brightness(&self, n: V3) -> f64 {
         crate::brightness(&self.view, n, self.light)
     }
+    /// The document point the view's center projects to, and the eye's distance in front of it
+    /// (`None` without perspective).
+    pub(super) fn center_and_eye(&self) -> (Point, Option<f64>) {
+        (self.origin, self.eye)
+    }
+    /// The rotation and projection this camera draws with, for a shadow cast from its faces.
+    pub(super) fn projection(&self) -> Projection {
+        Projection { view: self.view, origin: self.origin, eye: self.eye }
+    }
 }
+
+/// A face of a solid before projection: its contours in view space (holes running the other way)
+/// and its outward normal.
+pub(crate) type Face3 = (Vec<Vec<V3>>, V3);
+
+/// What a solid's builder makes: its facets, or with a mesh asked for, its faces before projection,
+/// and the projection it used (`None` when nothing was built).
+pub(crate) type Built = (Vec<Facet>, Vec<Face3>, Option<Projection>);
 
 /// Facets being collected for one solid.
 pub(super) struct Builder<'a> {
@@ -47,7 +74,12 @@ pub(super) struct Builder<'a> {
     /// A closed solid hides the faces turned away from the viewer; an open one shows their
     /// insides.
     pub(super) closed: bool,
+    /// A closed solid keeps the faces turned away from the viewer too, with their outward normals,
+    /// drawn behind the others.
+    pub(super) hidden: bool,
     pub(super) facets: Vec<Facet>,
+    /// With `Some`, every face goes here as it is, none hidden or projected, for a mesh.
+    pub(super) mesh: Option<Vec<Face3>>,
 }
 
 /// Where a face goes in the order the facets are drawn, back to front.
@@ -73,6 +105,13 @@ impl Builder<'_> {
         if count < 3 {
             return Ok(());
         }
+        if let Some(mesh) = &mut self.mesh {
+            mesh.push((contours, n.unit()));
+            if mesh.len() > MAX_SOLID_FACES {
+                return Err(TOO_COMPLEX_SURFACE.into());
+            }
+            return Ok(());
+        }
         let centre = contours.iter().flatten().fold(V3::default(), |s, v| V3(s.0 + v.0, s.1 + v.1, s.2 + v.2));
         let centre = V3(centre.0 / count as f64, centre.1 / count as f64, centre.2 / count as f64);
         let n = n.unit();
@@ -83,7 +122,7 @@ impl Builder<'_> {
         // leave gaps.
         let (n, behind) = if facing > 0.0 {
             (n, false)
-        } else if self.closed && facing > -0.02 {
+        } else if self.closed && (facing > -0.02 || self.hidden) {
             (n, true)
         } else if self.closed {
             return Ok(());
@@ -111,12 +150,17 @@ impl Builder<'_> {
             depth,
             brightness: self.camera.brightness(n),
             illumination: crate::illumination(&self.camera.view, n, self.camera.light),
+            normal: [n.0, n.1, n.2],
             rgb_gradient: None,
+            outline: None,
+            side: false,
+            away: behind,
+            end: None,
             #[cfg(test)]
             view,
         });
-        if self.facets.len() > MAX_FACES {
-            return Err("The 3D surface is too complex; simplify the shape".into());
+        if self.facets.len() > MAX_SOLID_FACES {
+            return Err(TOO_COMPLEX_SURFACE.into());
         }
         Ok(())
     }
@@ -149,6 +193,19 @@ impl Builder<'_> {
     /// wall with `cuts` (see [`cuts`]) as `cuts[i]` quads along edge `i`. `outward` is the
     /// direction (before rotation) the band faces away from the solid, for orienting normals.
     pub(super) fn band(&mut self, a: &[V3], b: &[V3], cuts: &[usize], outward: impl Fn(usize) -> V3) -> Result<(), String> {
+        self.curved_band(a, b, cuts, outward, None)
+    }
+
+    /// [`Builder::band`], with `curves` the pieces of curve the rings' edges follow and the
+    /// outlines at `a` and `b`: a quad whose edge is not cut keeps its edges along the profile curved.
+    pub(super) fn curved_band(
+        &mut self,
+        a: &[V3],
+        b: &[V3],
+        cuts: &[usize],
+        outward: impl Fn(usize) -> V3,
+        mut curves: Option<WallCurves>,
+    ) -> Result<(), String> {
         let n = a.len().min(b.len());
         // At 0 and 1, the corners themselves.
         let lerp = |p: V3, q: V3, s: f64| {
@@ -176,16 +233,115 @@ impl Builder<'_> {
                 if normal.dot(self.camera.rotate(outward(i))) < 0.0 {
                     normal = V3(-normal.0, -normal.1, -normal.2);
                 }
+                let before = self.facets.len();
                 self.face(vec![quad], normal, order)?;
+                if self.facets.len() > before
+                    && let Some(f) = self.facets.last_mut()
+                {
+                    f.side = true;
+                }
+                if let Some(w) = curves.as_mut().filter(|_| pieces == 1)
+                    && let Some(span) = w.spans.get(i).copied().flatten()
+                {
+                    self.outline(before, |c| c.first().and_then(|quad| outline::wall(&span, quad, w.near, w.far, w.budget)));
+                }
             }
         }
         Ok(())
     }
 
-    pub(super) fn finish(mut self) -> Vec<Facet> {
-        self.facets.sort_by(|a, b| a.depth.total_cmp(&b.depth));
-        self.facets
+    /// Give the facet that [`Builder::face`] added, when it added one after `before` facets, the
+    /// outline `outline` makes from its projected contours.
+    pub(super) fn outline(&mut self, before: usize, outline: impl FnOnce(&[Vec<Point>]) -> Option<PathData>) {
+        if self.mesh.is_some() || self.facets.len() <= before {
+            return;
+        }
+        if let Some(f) = self.facets.last_mut() {
+            f.outline = outline(&f.contours);
+        }
     }
+
+    /// Mark the facet that [`Builder::face`] added, when it added one after `before` facets, as the
+    /// planar end `end` of the solid.
+    pub(super) fn end(&mut self, before: usize, end: PlanarFace) {
+        if self.mesh.is_some() || self.facets.len() <= before {
+            return;
+        }
+        if let Some(f) = self.facets.last_mut() {
+            f.end = Some(end);
+        }
+    }
+
+    /// How many faces the builder holds: facets, or faces kept for a mesh.
+    pub(super) fn len(&self) -> usize {
+        self.mesh.as_ref().map_or(self.facets.len(), Vec::len)
+    }
+
+    /// The facets back to front, and the faces kept for a mesh (none without [`Builder::mesh`]).
+    pub(super) fn finish(mut self) -> Built {
+        self.facets.sort_by(|a, b| a.depth.total_cmp(&b.depth));
+        (self.facets, self.mesh.unwrap_or_default(), Some(self.camera.projection()))
+    }
+}
+
+/// The curves a band's quads keep: the piece of curve each edge of its rings follows, and the
+/// outlines at its two rings (`None` keeps that ring's edges straight).
+pub(super) struct WallCurves<'a> {
+    pub(super) spans: &'a [Option<Span>],
+    pub(super) near: Option<&'a Along<'a>>,
+    pub(super) far: Option<&'a Along<'a>>,
+    pub(super) budget: &'a mut Budget,
+}
+
+/// Where a point of the art goes in view space at one step: [`Camera::place`] after a [`Turn`],
+/// at depth `z`, as one affine map worked out once for the step.
+pub(super) struct Placing {
+    centre: Point,
+    at_centre: V3,
+    x: V3,
+    y: V3,
+}
+
+impl Placing {
+    pub(super) fn new(camera: &Camera, centre: Point, turn: Turn, z: f64) -> Self {
+        let at = |p: Point| camera.place(turn.apply(p), z);
+        let at_centre = at(centre);
+        let x = at(Point::new(centre.x + 1.0, centre.y)).sub(at_centre);
+        let y = at(Point::new(centre.x, centre.y + 1.0)).sub(at_centre);
+        Self { centre, at_centre, x, y }
+    }
+    pub(super) fn place(&self, p: Point) -> V3 {
+        let (dx, dy) = (p.x - self.centre.x, p.y - self.centre.y);
+        V3(
+            self.at_centre.0 + self.x.0 * dx + self.y.0 * dy,
+            self.at_centre.1 + self.x.1 * dx + self.y.1 * dy,
+            self.at_centre.2 + self.x.2 * dx + self.y.2 * dy,
+        )
+    }
+    /// The map as `(x, y, c)`: an art point `p` goes to `x · p.x + y · p.y + c` in view space.
+    pub(super) fn frame(&self) -> (V3, V3, V3) {
+        (self.x, self.y, self.place(Point::ZERO))
+    }
+}
+
+/// The point `w` points to the left of `span`'s curve at `t`, as the ring runs along it (toward
+/// the filled side): where [`inset`] moves the ring's points, without its miters.
+fn offset(span: &Span, t: f64, w: f64) -> Point {
+    let p = span.curve.eval(t);
+    if w == 0.0 {
+        return p;
+    }
+    let mut d = span.curve.deriv().eval(t).to_vec2();
+    // A handle of zero length leaves no tangent at its end: the curve leaves toward its next point.
+    if d.hypot() < 1e-12 {
+        d = span.curve.p2 - span.curve.p0;
+        if t > 0.5 {
+            d = span.curve.p3 - span.curve.p1;
+        }
+    }
+    let d = if span.t1 < span.t0 { -d } else { d };
+    let l = d.hypot();
+    if l < 1e-12 { p } else { Point::new(p.x - d.y / l * w, p.y + d.x / l * w) }
 }
 
 /// How many pieces each edge of a twisted wall is drawn in, from two neighboring slices of the
@@ -370,21 +526,37 @@ fn steps(o: &Extrude) -> Vec<Step> {
 /// Extrude & Bevel: the shape's outline extruded backwards, with optional twist, taper, bevels
 /// and caps.
 pub fn extrude(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, view: View) -> Result<Vec<Facet>, String> {
+    extrude_faces(path, rule, bounds, options, view, false).map(|(facets, ..)| facets)
+}
+
+/// [`extrude`], or with `mesh` the solid's faces before projection instead of its facets.
+pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, view: View, mesh: bool) -> Result<Built, String> {
     check_bounds(bounds)?;
     let o = options.sanitized();
     // No depth: the flat shape, seen from either side.
     if o.depth <= 0.0 {
-        return plane(path, rule, bounds, view);
+        return plane_faces(path, rule, bounds, view, mesh);
     }
-    let rings = rings(path, rule, bounds.width().max(bounds.height()), MAX_SOLID_POINTS)?;
-    let camera = Camera::new(view, bounds, o.depth);
-    let mut b = Builder { camera: &camera, closed: o.cap, facets: vec![] };
     let steps = steps(&o);
+    // One face for each edge of the outline in each band between two steps, and the two caps:
+    // counted before any point is sampled, and again on the rings, which can have more points
+    // once contours that meet are merged.
+    let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
+    let size = bounds.width().max(bounds.height());
+    let most = curve_pieces(path, size, bands, caps)?;
+    let traced = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most)?;
+    let rings: Vec<&[Point]> = traced.iter().map(|r| r.points.as_slice()).collect();
+    let edges = rings.iter().map(|r| r.len()).fold(0usize, usize::saturating_add);
+    if edges.saturating_mul(bands).saturating_add(caps) > MAX_SOLID_FACES {
+        return Err(TOO_COMPLEX_SURFACE.into());
+    }
+    let camera = Camera::new(view, bounds, o.depth);
+    let mut b = Builder { camera: &camera, closed: o.cap, hidden: o.hidden, facets: vec![], mesh: mesh.then(Vec::new) };
     let z = |t: f64| o.depth / 2.0 - o.depth * t;
     let ring_at =
         |ring: &[Point], s: &Step| -> Vec<V3> { section(&inset(ring, s.inset), bounds, &o, s.t).iter().map(|p| camera.place(*p, z(s.t))).collect() };
     // Every band of a twisted outline, bevels included, is cut as its walls' first slice is (with
-    // bevels and no walls, as its shallowest band is), within the facet limit.
+    // bevels and no walls, as its shallowest band is), within [`MAX_FACES`] facets.
     let depth_of = |s: &[Step]| s.get(1).zip(s.first()).map_or(0.0, |(b, a)| (b.t - a.t).abs());
     let wall = steps
         .windows(2)
@@ -398,7 +570,33 @@ pub fn extrude(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, 
         })
         .collect();
     fit(&mut pieces, steps.len().saturating_sub(1), MAX_FACES);
-    for (ring, pieces) in rings.iter().zip(&pieces) {
+    // The outline at each step, through the profile's curves: exact where the step is not inset,
+    // and within the sampling tolerance (which the inset rings themselves keep to) where it is.
+    let sampled = (size / 2000.0).max(0.05);
+    let maps: Vec<Placing> = steps.iter().map(|s| Placing::new(&camera, bounds.center(), Turn::new(bounds, o.twist, o.taper, s.t), z(s.t))).collect();
+    let at: Vec<_> = steps
+        .iter()
+        .zip(&maps)
+        .map(|(s, m)| {
+            let (w, camera) = (s.inset, &camera);
+            move |span: &Span, t: f64| camera.project(m.place(offset(span, t, w)))
+        })
+        .collect();
+    // A step that is not inset moves the art point by point, affinely without perspective.
+    let point_maps: Vec<_> = maps.iter().map(|m| |p: Point| camera.project(m.place(p))).collect();
+    let along: Vec<Along> = steps
+        .iter()
+        .zip(&at)
+        .zip(&point_maps)
+        .map(|((s, at), map)| Along {
+            at,
+            map: (s.inset == 0.0).then_some(map as &dyn Fn(Point) -> Point),
+            affine: camera.eye.is_none(),
+            tolerance: if s.inset == 0.0 { CURVE_TOLERANCE } else { sampled },
+        })
+        .collect();
+    let mut budget = Budget::default();
+    for ((ring, traced), pieces) in rings.iter().zip(&traced).zip(&pieces) {
         let placed: Vec<Vec<V3>> = steps.iter().map(|s| ring_at(ring, s)).collect();
         for (k, pair) in placed.windows(2).enumerate() {
             let ([a, c], Some(s0), Some(s1)) = (pair, steps.get(k), steps.get(k + 1)) else { continue };
@@ -411,15 +609,26 @@ pub fn extrude(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, 
             } else {
                 0.0
             };
-            b.band(a, c, pieces, |i| outward(ring, i, face))?;
+            // The edges a band shares with a cap follow the cap's curves; the edges between two bands
+            // stay straight, within the sampling tolerance.
+            let (near, far) = (along.get(k).filter(|_| k == 0), along.get(k + 1).filter(|_| k + 2 == steps.len()));
+            let curves = (near.is_some() || far.is_some()).then(|| WallCurves { spans: &traced.spans, near, far, budget: &mut budget });
+            b.curved_band(a, c, pieces, |i| outward(ring, i, face), curves)?;
         }
     }
     if o.cap {
         // A cap turned toward the viewer covers the walls it overlaps, even those nearer than its
         // center: twisted walls, and the walls of a fill inside the solid of its stroke.
-        for (s, n) in [(steps.first(), 1.0), (steps.last(), -1.0)] {
+        let caps = [(steps.first(), along.first(), 1.0, PlanarFace::Front), (steps.last(), along.last(), -1.0, PlanarFace::Back)];
+        for (s, along, n, end) in caps {
             let Some(s) = s else { continue };
+            let before = b.len();
             b.face(rings.iter().map(|r| ring_at(r, s)).collect(), camera.rotate(V3(0.0, 0.0, n)), Order::Last)?;
+            b.end(before, end);
+            if let Some(along) = along {
+                let traced: Vec<&Ring> = traced.iter().collect();
+                b.outline(before, |c| outline::face(&traced, c, along, &mut budget));
+            }
         }
     }
     Ok(b.finish())
@@ -428,16 +637,28 @@ pub fn extrude(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, 
 /// Rotate: the flat art turned in 3D about the centre of `bounds` (which may be larger than the
 /// shape's own, so that every part of one object turns about the same point).
 pub fn plane(path: &PathData, rule: FillRule, bounds: Rect, view: View) -> Result<Vec<Facet>, String> {
+    plane_faces(path, rule, bounds, view, false).map(|(facets, ..)| facets)
+}
+
+/// [`plane`], or with `mesh` its face before projection instead of its facet.
+pub(crate) fn plane_faces(path: &PathData, rule: FillRule, bounds: Rect, view: View, mesh: bool) -> Result<Built, String> {
     check_bounds(bounds)?;
-    let rings = rings(path, rule, bounds.width().max(bounds.height()), MAX_PLANE_POINTS)?;
+    let rings = solid_rings_traced(path, rule, bounds.width().max(bounds.height()), MAX_PLANE_POINTS, CURVE_PIECES)?;
     let camera = Camera::new(view, bounds, 0.0);
-    let mut b = Builder { camera: &camera, closed: false, facets: vec![] };
-    let contours: Vec<Vec<V3>> = rings.iter().map(|r| r.iter().map(|p| camera.place(*p, 0.0)).collect()).collect();
+    let mut b = Builder { camera: &camera, closed: false, hidden: false, facets: vec![], mesh: mesh.then(Vec::new) };
+    let contours: Vec<Vec<V3>> = rings.iter().map(|r| r.points.iter().map(|p| camera.place(*p, 0.0)).collect()).collect();
     // A plane is one flat face, seen from either side. Its normal is turned toward the viewer, so
     // it is drawn last, as a cap is, and planes drawn in one order keep the order they are given in.
     let up = camera.rotate(V3(0.0, 0.0, 1.0));
     let n = if camera.facing(V3::default(), up) < 0.0 { V3(-up.0, -up.1, -up.2) } else { up };
     b.face(contours, n, Order::Last)?;
+    b.end(0, PlanarFace::Front);
+    let m = Placing::new(&camera, bounds.center(), Turn::new(bounds, 0.0, 1.0, 0.0), 0.0);
+    let at = |span: &Span, t: f64| camera.project(m.place(span.curve.eval(t)));
+    let map = |p: Point| camera.project(m.place(p));
+    let along = Along { at: &at, map: Some(&map), affine: camera.eye.is_none(), tolerance: CURVE_TOLERANCE };
+    let rings: Vec<&Ring> = rings.iter().collect();
+    b.outline(0, |c| outline::face(&rings, c, &along, &mut Budget::default()));
     Ok(b.finish())
 }
 

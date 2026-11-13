@@ -128,6 +128,39 @@ fn a_batch_passes_its_artboard_to_each_step_when_it_runs() {
     assert_eq!(s.doc().unwrap().doc.artboards.len(), 1, "in the new document");
 }
 
+/// A Paste in Place, in Front or in Back step that names `artboards` keeps them inside a batch
+/// given `artboard`, and pastes a copy on each; one that names neither takes the batch's artboard,
+/// unless the Artboard tool is chosen with several artboards selected: then it pastes on those.
+#[test]
+fn a_batch_keeps_the_artboards_a_paste_step_names() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+    let boards: Vec<_> = s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+    s.execute("shape.rectangle", &json!({"x": boards[0].x0 + 10.0, "y": boards[0].y0 + 10.0, "width": 20, "height": 20})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let step = |command: &str, params: Value| json!({"command": command, "params": params});
+    for id in ["edit.pasteInPlace", "edit.pasteInFront", "edit.pasteInBack"] {
+        let origins = |r: &Value, s: &Session| {
+            let ids = r["results"][0]["ids"].as_array().unwrap().iter().map(|i| vectorcraft_doc::NodeId(i.as_u64().unwrap())).collect::<Vec<_>>();
+            ids.iter().map(|i| s.doc().unwrap().doc.bounds_of(&[*i], false).unwrap().origin().x).collect::<Vec<_>>()
+        };
+        let r = s.execute("command.batch", &json!({"artboard": 1, "commands": [step(id, json!({"artboards": [0, 2]}))]})).unwrap();
+        assert_eq!(origins(&r, &s), [boards[0].x0 + 10.0, boards[2].x0 + 10.0], "{id}");
+        let r = s.execute("command.batch", &json!({"artboard": 1, "commands": [step(id, json!({}))]})).unwrap();
+        assert_eq!(origins(&r, &s), [boards[1].x0 + 10.0], "{id}: the batch's artboard");
+    }
+    s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    s.set_tool_option("selected", &json!([2, 0]));
+    for id in ["edit.pasteInPlace", "edit.pasteInFront", "edit.pasteInBack"] {
+        let r = s.execute("command.batch", &json!({"artboard": 1, "commands": [step(id, json!({}))]})).unwrap();
+        let ids = r["results"][0]["ids"].as_array().unwrap().iter().map(|i| vectorcraft_doc::NodeId(i.as_u64().unwrap())).collect::<Vec<_>>();
+        let xs: Vec<f64> = ids.iter().map(|i| s.doc().unwrap().doc.bounds_of(&[*i], false).unwrap().origin().x).collect();
+        assert_eq!(xs, [boards[0].x0 + 10.0, boards[2].x0 + 10.0], "{id}: the Artboard tool's selection");
+        let r = s.execute("command.batch", &json!({"artboard": 1, "commands": [step(id, json!({"artboard": 1}))]})).unwrap();
+        assert_eq!(r["results"][0]["ids"].as_array().map(Vec::len), Some(1), "{id}: a step's own `artboard` wins");
+    }
+}
+
 /// A batch passes its `artboard` to each Fit to Artwork Bounds and Fit to Selected Art step that
 /// names no `index`, as their `index` (past the document's last artboard, the last one), and a
 /// step's own `index` is kept. A recorded action leaves out the `index` or `indices` the app
@@ -245,6 +278,280 @@ fn a_batch_step_records_what_it_took_from_the_preferences() {
     assert!(!r.prefs.scale_strokes);
     let doc = |s: &Session| serde_json::to_value(&*s.doc().unwrap().doc).unwrap();
     assert_eq!(doc(&r), doc(&s));
+}
+
+/// A document of three artboards with a rectangle on the second, the Artboard tool chosen and that
+/// artboard selected → the journal's length, where the entries under test start.
+fn second_artboard_selected(s: &mut Session) -> usize {
+    s.execute("file.new", &json!({"width": 400, "height": 200, "created": null})).unwrap();
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 300, "height": 100})).unwrap();
+    s.execute("artboard.new", &json!({"x": 2000, "y": 0, "width": 100, "height": 300})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 1010, "y": 10, "width": 100, "height": 50})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 2})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    s.set_tool_option("selected", &json!([1]));
+    s.journal.len()
+}
+
+/// A new session's Artboard tool has nothing selected, so a replay of a command that took its
+/// artboards from the selection acts on the artboards it recorded, and an action does not keep them.
+#[test]
+fn artboard_commands_record_the_selected_artboards_for_a_replay_and_not_for_an_action() {
+    for (id, params, recorded, action) in [
+        ("artboard.switchOrientation", json!({}), json!({"selectedArtboards": [1], "scaleArt": false}), json!({"scaleArt": false})),
+        ("artboard.rename", json!({"name": "Back"}), json!({"name": "Back", "selectedArtboards": [1]}), json!({"name": "Back"})),
+        (
+            "artboard.duplicate",
+            json!({}),
+            json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false}),
+            json!({"art": true, "lockedAndHidden": false}),
+        ),
+        (
+            "artboard.cut",
+            json!({}),
+            json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false}),
+            json!({"art": true, "lockedAndHidden": false}),
+        ),
+        (
+            "artboard.copy",
+            json!({}),
+            json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false}),
+            json!({"art": true, "lockedAndHidden": false}),
+        ),
+    ] {
+        let mut s = Session::new();
+        let start = second_artboard_selected(&mut s);
+        s.execute(id, &params).unwrap();
+        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), recorded), "{id}");
+        assert_eq!(s.journal_for_action(start), [(id.to_string(), action)], "{id}");
+        assert_eq!(documents(&replayed(&s)), documents(&s), "{id}");
+    }
+}
+
+/// A copy of the artboard the tool had selected replays as a copy of that artboard: what it pastes
+/// is the same.
+#[test]
+fn a_replayed_artboard_copy_pastes_the_selected_artboard() {
+    let mut s = Session::new();
+    second_artboard_selected(&mut s);
+    s.execute("artboard.copy", &json!({})).unwrap();
+    s.execute("artboard.switchOrientation", &json!({"index": 0})).unwrap();
+    s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 4);
+    assert_eq!(documents(&replayed(&s)), documents(&s));
+}
+
+/// The artboards a call names are recorded as given and stay in an action, and a batch step records
+/// the selected ones in its own params.
+#[test]
+fn artboard_commands_keep_a_named_artboard_and_note_a_batch_steps_artboards() {
+    let mut s = Session::new();
+    let start = second_artboard_selected(&mut s);
+    s.execute("artboard.switchOrientation", &json!({"index": 0})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1, json!({"index": 0, "scaleArt": false}));
+    s.execute("artboard.duplicate", &json!({"indices": [0]})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1, json!({"indices": [0], "art": true, "lockedAndHidden": false}));
+    let steps = json!([{"command": "artboard.switchOrientation", "params": {}}]);
+    s.execute("command.batch", &json!({ "commands": steps })).unwrap();
+    assert_eq!(s.journal.last().unwrap().1["commands"][0]["params"], json!({"selectedArtboards": [1], "scaleArt": false}));
+    assert_eq!(documents(&replayed(&s)), documents(&s));
+    let action = s.journal_for_action(start);
+    assert_eq!(action[0].1, json!({"index": 0, "scaleArt": false}));
+    assert_eq!(action[1].1, json!({"indices": [0], "art": true, "lockedAndHidden": false}));
+    assert_eq!(action[2].1["commands"][0]["params"], json!({"scaleArt": false}));
+}
+
+/// A recorded `selectedArtboards` goes ahead of the tool's selection, gives way to a named artboard,
+/// and is checked as `indices` is.
+#[test]
+fn artboard_commands_read_the_recorded_selected_artboards() {
+    let mut s = Session::new();
+    second_artboard_selected(&mut s);
+    let run = |s: &mut Session, p| s.execute("artboard.switchOrientation", &p).map(|r| r["switched"].clone());
+    assert_eq!(run(&mut s, json!({"selectedArtboards": [2]})).unwrap(), json!([2]));
+    assert_eq!(run(&mut s, json!({"selectedArtboards": [2], "index": 0})).unwrap(), json!([0]));
+    for bad in [json!([9]), json!([]), json!("1"), json!(null)] {
+        assert!(run(&mut s, json!({ "selectedArtboards": bad })).is_err(), "{bad}");
+    }
+}
+
+/// A Cut or Copy with the Artboard tool replays on the artboards it took in a new session, where
+/// another tool is chosen: with nothing selected there, and with an object selected that a Cut or
+/// Copy of objects would take. What it pastes is the same.
+#[test]
+fn edit_copy_and_cut_with_the_artboard_tool_replay_on_its_artboards() {
+    for id in ["edit.copy", "edit.cut"] {
+        for select in ["select.all", "select.none"] {
+            let mut s = Session::new();
+            second_artboard_selected(&mut s);
+            s.execute(select, &json!({})).unwrap();
+            s.execute(id, &json!({})).unwrap();
+            let boards = if id == "edit.cut" { 2 } else { 3 };
+            assert_eq!(s.doc().unwrap().doc.artboards.len(), boards, "{id} after {select}");
+            assert_eq!(documents(&replayed(&s)), documents(&s), "{id} after {select}");
+            let entry = s.journal.last().unwrap().clone();
+            s.execute("edit.paste", &json!({})).unwrap();
+            assert_eq!(s.doc().unwrap().doc.artboards.len(), boards + 1, "{id} after {select}");
+            let r = replayed(&s);
+            assert_ne!(r.tool_id(), "artboard");
+            assert_eq!(documents(&r), documents(&s), "{id} after {select}");
+            assert_eq!(entry, (id.to_string(), json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false})), "{id} after {select}");
+        }
+    }
+}
+
+/// A Copy after a Paste takes the pasted artboards, which the Artboard tool selected, and so does its
+/// replay, though `edit.paste` selects nothing in a new session's tool.
+#[test]
+fn edit_copy_after_a_paste_with_the_artboard_tool_replays_on_the_pasted_artboards() {
+    let mut s = Session::new();
+    second_artboard_selected(&mut s);
+    s.execute("edit.copy", &json!({})).unwrap();
+    s.execute("edit.paste", &json!({})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1, json!({"selectedArtboards": [3], "art": true, "lockedAndHidden": false}));
+    s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 5);
+    assert_eq!(documents(&replayed(&s)), documents(&s));
+}
+
+/// A recorded action keeps `edit.copy` and `edit.cut` as given, so when it plays they follow the tool
+/// chosen then, and a batch step records and leaves out the same values. The locked-art preference
+/// that the Artboard tool's copy notes stays in the action.
+#[test]
+fn edit_copy_and_cut_with_the_artboard_tool_record_nothing_for_an_action() {
+    for id in ["edit.copy", "edit.cut"] {
+        let mut s = Session::new();
+        let start = second_artboard_selected(&mut s);
+        s.execute(id, &json!({})).unwrap();
+        let action = s.journal_for_action(start);
+        assert_eq!(action, [(id.to_string(), json!({"lockedAndHidden": false}))], "{id}");
+        let mut played = Session::new();
+        played.execute("file.new", &json!({"width": 400, "height": 200, "created": null})).unwrap();
+        played.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+        played.execute(id, &action[0].1).unwrap();
+        assert_eq!(played.doc().unwrap().doc.artboards.len(), 1, "{id}");
+        assert!(played.clipboard.artboards.is_empty(), "{id}");
+        assert_eq!(played.clipboard.nodes.len(), 1, "{id}");
+
+        let mut s = Session::new();
+        let start = second_artboard_selected(&mut s);
+        let steps = json!([{"command": id, "params": {}}, {"command": "edit.paste", "params": {}}]);
+        s.execute("command.batch", &json!({ "commands": steps })).unwrap();
+        assert_eq!(
+            s.journal.last().unwrap().1["commands"][0]["params"],
+            json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false}),
+            "{id}"
+        );
+        assert_eq!(documents(&replayed(&s)), documents(&s), "{id}");
+        assert_eq!(s.journal_for_action(start)[0].1["commands"][0]["params"], json!({"lockedAndHidden": false}), "{id}");
+    }
+}
+
+/// Without the Artboard tool, Cut and Copy of objects record nothing more than they did.
+#[test]
+fn edit_copy_and_cut_of_objects_record_their_params_as_given() {
+    for id in ["edit.copy", "edit.cut"] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 200, "created": null})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
+        s.execute(id, &json!({})).unwrap();
+        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), json!({})), "{id}");
+        assert!(s.clipboard.artboards.is_empty(), "{id}");
+        assert_eq!(documents(&replayed(&s)), documents(&s), "{id}");
+    }
+}
+
+/// A recorded `selectedArtboards` needs only a document and is checked as `indices` is, as are `art`
+/// and the rule that a cut leaves one artboard. A failed call changes neither the document nor the
+/// clipboard.
+#[test]
+fn edit_copy_and_cut_read_the_recorded_artboards() {
+    for id in ["edit.copy", "edit.cut"] {
+        assert!(matches!(Session::new().execute(id, &json!({"selectedArtboards": [0]})), Err(crate::EngineError::Disabled(..))));
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 200, "created": null})).unwrap();
+        s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 300, "height": 100})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 1010, "y": 10, "width": 100, "height": 50})).unwrap();
+        s.execute("select.none", &json!({})).unwrap();
+        assert!(matches!(s.execute(id, &json!({})), Err(crate::EngineError::Disabled(..))), "{id}");
+        let before = documents(&s);
+        for bad in [
+            json!({"selectedArtboards": [9]}),
+            json!({"selectedArtboards": []}),
+            json!({"selectedArtboards": "1"}),
+            json!({"selectedArtboards": null}),
+            json!({"selectedArtboards": [1], "art": "yes"}),
+        ] {
+            let err = s.execute(id, &bad).unwrap_err().to_string();
+            assert!(err.contains(id) || err.contains("no such artboard"), "{id} {bad}: {err}");
+            assert_eq!(documents(&s), before, "{id} {bad}");
+            assert!(s.clipboard.artboards.is_empty(), "{id} {bad}");
+        }
+        s.execute(id, &json!({"selectedArtboards": [1], "art": false})).unwrap();
+        assert_eq!(s.clipboard.artboards.len(), 1, "{id}");
+        assert!(s.clipboard.nodes.is_empty(), "{id}");
+        assert_eq!(s.journal.last().unwrap().1, json!({"selectedArtboards": [1], "art": false}), "{id}");
+        // Objects selected, `art` is still checked.
+        s.execute("select.all", &json!({})).unwrap();
+        let err = s.execute(id, &json!({"art": "yes"})).unwrap_err().to_string();
+        assert!(err.contains(id), "{id}: {err}");
+    }
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 200, "created": null})).unwrap();
+    assert!(s.execute("edit.cut", &json!({"selectedArtboards": [0]})).is_err());
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 1);
+}
+
+/// `artboard.duplicate` and the cut and copy record the tool's Move/Copy Artwork option: replayed in
+/// a new session, where the option is on, the art stays behind as it did.
+#[test]
+fn artboard_commands_record_the_tools_move_art_option() {
+    for id in ["artboard.duplicate", "artboard.cut", "artboard.copy", "edit.cut", "edit.copy"] {
+        let mut s = Session::new();
+        second_artboard_selected(&mut s);
+        s.set_tool_option("moveArt", &json!(false));
+        s.execute(id, &json!({})).unwrap();
+        assert_eq!(s.journal.last().unwrap().1["art"], json!(false), "{id}");
+        assert_eq!(documents(&replayed(&s)), documents(&s), "{id}");
+    }
+}
+
+/// `artboard.switchOrientation` records the tool's Scale Artwork option: replayed in a new session,
+/// where it is off, the art scales as it did.
+#[test]
+fn artboard_switch_orientation_records_the_tools_scale_art_option() {
+    let mut s = Session::new();
+    second_artboard_selected(&mut s);
+    s.set_tool_option("scaleArt", &json!(true));
+    s.execute("artboard.switchOrientation", &json!({})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1["scaleArt"], json!(true));
+    assert_eq!(documents(&replayed(&s)), documents(&s));
+}
+
+/// `artboard.switchOrientation` records whether locked and hidden art goes along: replayed in a new
+/// session, where the preference is off, the locked art scales as it did.
+#[test]
+fn artboard_switch_orientation_records_whether_locked_art_goes_along() {
+    let mut s = Session::new();
+    second_artboard_selected(&mut s);
+    let r = s.execute("shape.rectangle", &json!({"x": 1150, "y": 10, "width": 100, "height": 50})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [r["id"]], "locked": true})).unwrap();
+    s.prefs.move_locked_with_artboard = true;
+    s.set_tool_option("scaleArt", &json!(true));
+    s.execute("artboard.switchOrientation", &json!({})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1["lockedAndHidden"], json!(true));
+    let r = replayed(&s);
+    assert!(!r.prefs.move_locked_with_artboard);
+    assert_eq!(documents(&r), documents(&s));
+    // The params' own values win over the preferences.
+    let mut t = Session::new();
+    second_artboard_selected(&mut t);
+    t.prefs.move_locked_with_artboard = true;
+    t.execute("artboard.switchOrientation", &json!({"scaleArt": true, "lockedAndHidden": false})).unwrap();
+    assert_eq!(t.journal.last().unwrap().1["lockedAndHidden"], json!(false));
+    assert!(t.execute("artboard.switchOrientation", &json!({"strokes": "yes"})).is_err());
 }
 
 /// Every open document of `s`, as JSON.

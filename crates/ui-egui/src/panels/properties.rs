@@ -159,6 +159,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         crate::panels::image_trace::trace_button(app, ui, ui.available_width());
         actions.push((tl!("Crop Image"), "ui.cropImage"));
         actions.push((tl!("Mask"), "object.maskImage"));
+        // Remove Background at once with its defaults, as the reference app's Quick Actions do
+        // (<https://community.adobe.com/announcements-651/ai-powered-image-editing-features-in-illustrator-1624061>).
+        actions.push((tl!("Remove Background"), crate::addons::image::REMOVE_BACKGROUND));
     }
     // Object › Path's Offset Path and Simplify take paths: type alone could only fail, and offsets
     // live through the Appearance panel's Effect › Path › Offset Path (#2238).
@@ -435,7 +438,7 @@ fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop: &ObjectsO
     egui::Grid::new("props-objects-on-path").num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
         dim_label(ui, tl!("Pivot:"));
         // 9 is no square: the groups' pivots differ.
-        if let Some(i) = widgets::reference_point(ui, oop.pivot.map_or(9, usize::from))
+        if let Some(i) = widgets::reference_point_named(ui, oop.pivot.map_or(9, usize::from), tl!("Pivot:"))
             && oop.pivot.is_none_or(|p| usize::from(p) != i)
         {
             set(app, json!({ "pivot": i }));
@@ -507,8 +510,8 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(4.0);
     let w = (ui.available_width() - 6.0) / 2.0;
     ui.horizontal(|ui| {
-        if widgets::flat_button(ui, tl!("New Artboard"), w).clicked() && app.run("artboard.new", json!({})).is_ok() {
-            super::artboards::select(app, n);
+        if widgets::flat_button(ui, tl!("New Artboard"), w).clicked() {
+            super::artboards::add_new(app);
         }
         let deletable = n > 1 && !super::artboards::deletable(app, n).is_empty();
         if ui.add_enabled_ui(deletable, |ui| widgets::flat_button(ui, tl!("Delete Artboard"), w)).inner.clicked() {
@@ -1014,9 +1017,12 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
             });
         }
         super::paragraph::hyphenate_check(app, ui, &para);
+        // Area type: Dynamic Text's Block and its gaps.
+        dynamic_text::rows(app, ui);
     }
 }
 
+pub(crate) mod dynamic_text;
 pub(crate) mod vertical_align;
 
 #[cfg(test)]

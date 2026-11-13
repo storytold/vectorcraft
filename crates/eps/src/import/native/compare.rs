@@ -56,6 +56,15 @@ pub(in crate::import) fn differ(p: &[u8; 4], q: &[u8; 4]) -> bool {
     lightness(p).abs_diff(lightness(q)) > SAME_PIXEL || (a.min(b) <= WHITE && a.abs_diff(b) > SAME_PIXEL)
 }
 
+/// Do two pixels look different seen on black: in lightness? An object drawn on its own and seen
+/// only on white hides what it draws in white (white type over nothing looks like nothing): seen
+/// on black too, that shows.
+pub(in crate::import) fn differ_on_black(p: &[u8; 4], q: &[u8; 4]) -> bool {
+    // Premultiplied, a pixel is what it shows on black.
+    let on_black = |p: &[u8; 4]| [0, 1, 2].map(|i| u32::from(p[i]));
+    p != q && lightness(on_black(p)).abs_diff(lightness(on_black(q))) > SAME_PIXEL
+}
+
 /// How far apart two pixels' red, green or blue may be for them to be the same colour (a colour
 /// and its CMYK equivalent stay within it; a red and a dark red don't).
 const SAME_COLOUR: u32 = 64;
@@ -113,7 +122,7 @@ pub(super) fn comparison_samples(doc: &Document) -> u32 {
     let (mut images, mut vector) = (false, false);
     doc.walk(|n| match n.kind {
         NodeKind::Image(_) => images = true,
-        NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Path { clipping: true, .. } => {}
+        NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Path { clipping: true, .. } | NodeKind::RulerGuide { .. } => {}
         _ => vector = true,
     });
     if images && !vector { 4 } else { 1 }
@@ -705,7 +714,8 @@ fn compared_with_solid(x: &vectorcraft_render::Rendered, y: &vectorcraft_render:
 }
 
 /// Where the type that shows in `nodes` is, in pixels of `region` drawn at `scale` (with a margin
-/// for the strokes round it).
+/// for the strokes round it). The type in a live envelope isn't: the envelope draws it bent, away
+/// from its text object's box, and is weighed as the art it draws, as its drawn art would be.
 fn type_areas(nodes: &[Arc<Node>], region: Rect, scale: f64, out: &mut Vec<Rect>) {
     for n in nodes.iter().filter(|n| n.visible) {
         if let NodeKind::Text(_) = n.kind
@@ -714,7 +724,9 @@ fn type_areas(nodes: &[Arc<Node>], region: Rect, scale: f64, out: &mut Vec<Rect>
             let px =
                 |r: Rect| Rect::new((r.x0 - region.x0) * scale, (r.y0 - region.y0) * scale, (r.x1 - region.x0) * scale, (r.y1 - region.y0) * scale);
             out.push(px(b.inflate(OUTLINE_REACH, OUTLINE_REACH)));
-        } else if let Some(c) = n.children() {
+        } else if !matches!(n.kind, NodeKind::Envelope { .. })
+            && let Some(c) = n.children()
+        {
             type_areas(c, region, scale, out);
         }
     }

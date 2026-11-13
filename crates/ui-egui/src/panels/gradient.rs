@@ -28,9 +28,9 @@
 use egui::{Color32, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::gradient::{
-    MIN_STOPS, duplicate_stop, insert_stop, midpoint_from_pos, midpoint_pos, move_stop, remove_stop, set_midpoint, swap_stop_colors,
+    MAX_REPEATS, MIN_STOPS, duplicate_stop, insert_stop, midpoint_from_pos, midpoint_pos, move_stop, remove_stop, set_midpoint, swap_stop_colors,
 };
-use vectorcraft_color::{Color, Freeform, FreeformMode, Gradient, GradientKind, GradientMethod, GradientPaint, GradientStop, Paint};
+use vectorcraft_color::{Color, Freeform, FreeformMode, Gradient, GradientKind, GradientMethod, GradientPaint, GradientSpread, GradientStop, Paint};
 use vectorcraft_doc::{NodeId, StrokeGradientMode};
 
 use super::{active_paint, live_run, pstate, set_pstate};
@@ -124,8 +124,8 @@ fn dragged_stops(origin: &[GradientStop], i: usize, offset: f32, copy: bool, ove
 
 // ---------- shared edits ----------
 
-/// The Type row: Linear, Radial and Freeform for the paint behind the active proxy (one of them
-/// lit when it is a gradient). The Gradient panel's and the Properties panel's.
+/// The Type row: Linear, Radial, Conic, Diamond and Freeform for the paint behind the active
+/// proxy (one of them lit when it is a gradient). The Gradient panel's and the Properties panel's.
 pub(crate) fn type_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     let kind = current(app).map(|g| g.gradient.kind);
     ui.horizontal(|ui| {
@@ -133,6 +133,8 @@ pub(crate) fn type_row(app: &mut VectorcraftApp, ui: &mut Ui) {
         for (k, icon, tip) in [
             (GradientKind::Linear, "dc-grad-linear", tl!("Linear Gradient")),
             (GradientKind::Radial, "dc-grad-radial", tl!("Radial Gradient")),
+            (GradientKind::Conic, "dc-grad-conic", tl!("Conic Gradient")),
+            (GradientKind::Diamond, "dc-grad-diamond", tl!("Diamond Gradient")),
             (GradientKind::Freeform, "dc-grad-freeform", tl!("Freeform Gradient")),
         ] {
             if widgets::icon_button(ui, icon, tip, kind == Some(k), 24.0).clicked() {
@@ -313,6 +315,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     method_row(app, ui, &g, is_grad);
+    spread_row(app, ui, &g, is_grad);
     // The proxy beside the angle and aspect ratio fields.
     ui.horizontal(|ui| {
         super::proxy(app, ui, 36.0);
@@ -344,17 +347,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     edit(app, json!({"reverse": true}), Live::Released);
                 }
             });
-            let radial = kind == GradientKind::Radial && placed;
+            let radial = kind.is_centered() && placed;
             ui.horizontal(|ui| {
                 icons::icon(ui, "scaling", 15.0, if radial { t.icon } else { t.text_disabled }).on_hover_text(tl!("Aspect Ratio"));
-                let asp = g.geom.map_or(100.0, |x| (x.aspect * 1000.0).round() / 10.0);
+                // A mirrored conic's negative aspect shows as its size; an edit keeps the mirror.
+                let mirror = g.geom.map_or(1.0, |x| if x.is_mirrored() && kind == GradientKind::Conic { -1.0 } else { 1.0 });
+                let asp = g.geom.map_or(100.0, |x| (x.aspect.abs() * 1000.0).round() / 10.0);
                 let set = ui
                     .add_enabled_ui(radial, |ui| {
                         widgets::spin_plain_named(ui, "grad-aspect", Some(tl!("Aspect Ratio")), asp, "%", 1, 104.0, 1.0, 0.5, &ASPECT_PRESETS)
                     })
                     .inner;
                 if let Some(a) = set {
-                    edit(app, json!({"aspect": a}), Live::Released);
+                    edit(app, json!({"aspect": a * mirror}), Live::Released);
                 }
             });
         });
@@ -392,6 +397,39 @@ fn method_row(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad:
         }
     });
 }
+
+/// The Spread row: what a linear, radial, conic or diamond gradient paints past the ends of its
+/// stops (Pad, Repeat or Reflect), and how many times Repeat and Reflect run the stops along the
+/// vector (1 to [`MAX_REPEATS`]; dimmed with Pad).
+fn spread_row(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad: bool) {
+    let spreads = [(GradientSpread::Pad, tl!("Pad")), (GradientSpread::Repeat, tl!("Repeat")), (GradientSpread::Reflect, tl!("Reflect"))];
+    let current = g.gradient.spread;
+    let shown = spreads.iter().find(|(s, _)| *s == current).map_or("", |(_, l)| *l);
+    ui.horizontal(|ui| {
+        widgets::dim_label(ui, tl!("Spread:"));
+        let labels = spreads.map(|(_, l)| l);
+        let chosen = ui.add_enabled_ui(is_grad, |ui| widgets::dropdown_names(ui, "grad-spread", shown, &labels, 80.0)).inner;
+        if let Some((s, _)) = chosen.and_then(|i| spreads.get(i))
+            && *s != current
+        {
+            edit(app, json!({"spread": s.label().to_lowercase()}), Live::Released);
+        }
+        let on = is_grad && !current.is_pad();
+        let n = f64::from(g.gradient.repeat_count());
+        let set = ui
+            .add_enabled_ui(on, |ui| widgets::spin_plain_named(ui, "grad-repeats", Some(tl!("Repeats")), n, "", 0, 56.0, 1.0, 1.0, &REPEAT_PRESETS))
+            .inner;
+        if let Some(r) = set {
+            let r = r.round().clamp(1.0, f64::from(MAX_REPEATS));
+            if r != n {
+                edit(app, json!({"repeats": r}), Live::Released);
+            }
+        }
+    });
+}
+
+/// The Repeats field's menu.
+const REPEAT_PRESETS: [f64; 6] = [1.0, 2.0, 3.0, 4.0, 5.0, 10.0];
 
 /// The Presets row: a menu of the preset gradients by library (theme), then the
 /// saved ones; a choice applies to the gradient behind the active proxy, keeping its placement
@@ -547,26 +585,28 @@ fn thumbnail(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad: 
     icons::paint(ui, "chevron-down", Rect::from_center_size(dr.center(), vec2(12.0, 12.0)), if dresp.hovered() { t.text_strong } else { t.icon });
     let dresp = dresp.on_hover_text(tl!("Gradient swatches"));
     egui::Popup::menu(&dresp).show(|ui| {
-        ui.set_min_width(200.0);
-        let mut chosen = None;
-        let swatches = gradient_swatches(app);
-        if swatches.is_empty() {
-            widgets::dim_label(ui, tl!("No gradient swatches"));
-        }
-        for (name, grad) in &swatches {
-            // The gradient swatch the gradient was applied from is lit.
-            if gradient_row(ui, &t, grad, name, g.swatch.as_ref() == Some(name)).clicked() {
-                chosen = Some(name.clone());
+        widgets::menu_scroll(ui, |ui| {
+            ui.set_min_width(200.0);
+            let mut chosen = None;
+            let swatches = gradient_swatches(app);
+            if swatches.is_empty() {
+                widgets::dim_label(ui, tl!("No gradient swatches"));
             }
-        }
-        ui.separator();
-        if menu_item(ui, tl!("Save to Swatches"), is_grad, false) {
-            save_to_swatches(app, g);
-        }
-        if let Some(name) = chosen {
-            super::apply_click(app, ui, json!({ "swatch": name }));
-            ui.close();
-        }
+            for (name, grad) in &swatches {
+                // The gradient swatch the gradient was applied from is lit.
+                if gradient_row(ui, &t, grad, name, g.swatch.as_ref() == Some(name)).clicked() {
+                    chosen = Some(name.clone());
+                }
+            }
+            ui.separator();
+            if menu_item(ui, tl!("Save to Swatches"), is_grad, false) {
+                save_to_swatches(app, g);
+            }
+            if let Some(name) = chosen {
+                super::apply_click(app, ui, json!({ "swatch": name }));
+                ui.close();
+            }
+        });
     });
 }
 

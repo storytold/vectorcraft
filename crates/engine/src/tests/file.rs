@@ -62,6 +62,35 @@ fn serialize_and_reopen() {
 }
 
 #[test]
+fn export_params_of_the_wrong_type_are_refused_and_null_keeps_the_default() {
+    let mut s = session();
+    s.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hello"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 200, "y": 100, "width": 80, "height": 40})).unwrap();
+    for (cmd, p, msg) in [
+        ("document.serialize", json!({"format": 5}), "`format` must be a string"),
+        ("document.serialize", json!({"format": "svg", "selectedOnly": "true"}), "`selectedOnly` must be true or false"),
+        ("document.serialize", json!({"format": "txt", "selectionOnly": 1}), "`selectionOnly` must be true or false"),
+        ("document.serialize", json!({"format": "txt", "selectionOnly": true, "selectedOnly": "false"}), "`selectedOnly` must be true or false"),
+        ("document.export", json!({"format": "svg", "path": 5}), "`path` must be a string"),
+        ("document.exportSelection", json!({"format": "png", "path": 5}), "`path` must be a string"),
+        ("document.exportSelection", json!({"format": 5}), "`format` must be a string"),
+        ("document.exportForOffice", json!({"ppi": "300"}), "`ppi` must be a number"),
+        ("document.exportForOffice", json!({"transparent": "true"}), "`transparent` must be true or false"),
+        ("document.exportForOffice", json!({"path": 5}), "`path` must be a string"),
+    ] {
+        let e = match s.execute(cmd, &p) {
+            Ok(r) => panic!("{cmd} {p} gave {r}"),
+            Err(e) => e.to_string(),
+        };
+        assert!(e.contains(msg), "{cmd} {p}: {e}");
+    }
+    let r = s.execute("document.serialize", &json!({"format": null, "selectedOnly": null})).unwrap();
+    assert_eq!(r, s.execute("document.serialize", &json!({})).unwrap());
+    let r = s.execute("document.exportForOffice", &json!({"ppi": null, "transparent": null, "path": null})).unwrap();
+    assert_eq!(r, s.execute("document.exportForOffice", &json!({})).unwrap());
+}
+
+#[test]
 fn save_and_open_path() {
     let mut s = session();
     s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 80, "height": 40})).unwrap();
@@ -445,6 +474,27 @@ fn export_selection_keeps_the_effects_in_the_crop() {
         let art = s.execute("document.export", &json!({"format": "png", "useArtboards": false, "background": "transparent"})).unwrap();
         assert!(png(&art) == img, "{effect}: the same image as the art's bounds");
     }
+}
+
+/// An Outer Glow at its default Screen mode on the bare page is in a PNG on white and in a JPEG,
+/// and in a transparent PNG (#6125).
+#[test]
+fn a_screen_outer_glow_is_in_raster_exports() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.outerGlow"})).unwrap();
+    let mut pixel = |p: serde_json::Value| {
+        let v = s.execute("document.export", &p).unwrap();
+        let img = image::load_from_memory(&vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()).unwrap().to_rgba8();
+        // 2 pt past the square's stroke, on the right.
+        *img.get_pixel(122, 110)
+    };
+    for p in [json!({"format": "png", "background": "white"}), json!({"format": "jpg"})] {
+        let px = pixel(p.clone());
+        assert!(px[0] > 235 && px[1] > 235 && px[2] < 235, "{p}: yellow on white: {px:?}");
+    }
+    let px = pixel(json!({"format": "png", "background": "transparent"}));
+    assert!(px[3] > 0 && px[0] > 235 && px[1] > 235 && px[2] < 40, "the glow is yellow in the transparent image: {px:?}");
 }
 
 /// A group's own drop shadow is inside the crop of the group's selection export too.

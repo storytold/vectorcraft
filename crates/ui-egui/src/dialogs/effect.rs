@@ -24,8 +24,39 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     preview: true,
     // Load Texture… adds the texture it reads.
     passes: |d, field| field == vectorcraft_effects::pixel::TEXTURE_IMAGE && matches!(d.str("__effect").as_str(), GLASS | TEXTURIZER),
+    // OK could only fail the same way: off, beside the reason the dialog shows (#6140).
+    ok_enabled: Some(|_, d| !(vectorcraft_effects::is_three_d(&d.str("__effect")) && d.fields.contains_key(form::REFUSED))),
     ..DialogSpec::FORM
 };
+
+/// The field holding the values a 3D effect's dialog last tried with Preview off.
+const TRIED: &str = "__tried";
+
+/// A 3D effect refuses objects it can't build from and values it can't draw, in the dialog as OK
+/// would: shows why under Preview (#6140). With Preview off no preview has tried `params`, so they
+/// are tried here, when they change, and rolled back at once.
+fn three_d_refusal(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, cmd: &str, params: Value) {
+    if d.bool("preview") {
+        d.fields.remove(TRIED);
+    } else if !app.session.in_interaction() && d.fields.get(TRIED) != Some(&params) {
+        // Waits for another interaction to end: trying inside it would replace its preview and
+        // cancel it. A failure to begin leaves no interaction: the preview below then reports it.
+        let _ = app.session.begin_interaction(&d.str("__label"));
+        match app.session.preview(cmd, &params) {
+            Ok(_) => {
+                d.fields.remove(form::REFUSED);
+            }
+            Err(e) => form::note_refusal(d, &e),
+        }
+        // Only a try: without an interaction there is nothing to roll back.
+        let _ = app.session.cancel_interaction();
+        d.fields.insert(TRIED.into(), params);
+    }
+    if let Some(why) = d.fields.get(form::REFUSED).and_then(Value::as_str) {
+        ui.add_space(6.0);
+        ui.add(egui::Label::new(egui::RichText::new(why).color(Tokens::get(ui.ctx()).warning)).wrap());
+    }
+}
 
 /// The effect's name (`__label`, English) in the UI language: the catalog may carry it with or
 /// without its trailing ellipsis. A plug-in effect's name is shown as it is.
@@ -64,6 +95,10 @@ pub(super) const EXISTS_SPEC: DialogSpec = DialogSpec {
 /// or add `effect`, first asking when that list already has it.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let id = p.get("effect").and_then(Value::as_str).unwrap_or_default();
+    // An SVG filter is chosen and edited in Apply SVG Filter.
+    if id == vectorcraft_effects::SVG_FILTER {
+        return super::svg_filter::open(app, p);
+    }
     let info = vectorcraft_effects::effect_info(id).ok_or_else(|| format!("unknown effect `{id}`"))?;
     // The list the effect goes to: `item` as given, else the active item's (the object's without
     // one). A new effect keeps `item` unresolved, so `effect.apply` targets each object as usual.
@@ -166,7 +201,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if vectorcraft_effects::is_three_d(&id) {
         super::revolve::body(app, ui, d);
         let (cmd, params) = command(d);
-        form::preview(app, ui, d, &d.str("__label"), cmd, params);
+        form::preview(app, ui, d, &d.str("__label"), cmd, params.clone());
+        three_d_refusal(app, ui, d, cmd, params);
         return false;
     }
     // Plug-in effects get fields from their parameter schema; colour adjustments their sliders.
@@ -346,15 +382,29 @@ fn choices(effect: &str, key: &str) -> Option<form::Choices> {
 
 /// The parameters whose dialogs list their values in their own bodies, as (label, value), each
 /// label as that dialog passes it to its dropdown or radio buttons, which translate it into the UI
-/// language: Revolve's edge, Extrude & Bevel's bevel (Rounded translated in the "3d" context
-/// first), every Warp style's orientation, Rasterize's Color Model (its `document` value labeled
+/// language: the edge of both Revolves, the bevel of both Extrude & Bevels (Rounded translated in
+/// the "3d" context first), the surface and shading color of the classic 3D effects, every Warp style's
+/// orientation, Rasterize's Color Model (its `document` value labeled
 /// CMYK when `cmyk`, for a document in CMYK, and RGB otherwise), Background and Anti-aliasing, and
 /// the channel of Levels and Curves.
 pub(super) fn own_choices(effect: &str, key: &str, cmyk: bool) -> Option<Vec<(&'static str, &'static str)>> {
     let c3 = |s: &'static str| crate::i18n::tr_ctx(crate::i18n::current(), "3d", s);
     Some(match (effect, key) {
-        (vectorcraft_effects::REVOLVE, "edge") => vec![(tl!("Left"), "left"), (tl!("Right"), "right")],
-        (vectorcraft_effects::EXTRUDE, "bevel") => vec![
+        (vectorcraft_effects::REVOLVE | vectorcraft_effects::CLASSIC_REVOLVE, "edge") => vec![(tl!("Left"), "left"), (tl!("Right"), "right")],
+        (
+            vectorcraft_effects::REVOLVE | vectorcraft_effects::EXTRUDE | vectorcraft_effects::INFLATE | vectorcraft_effects::ROTATE,
+            "shadowPosition",
+        ) => {
+            vec![(tl!("Behind Object"), "behind"), (tl!("Below Object"), "below")]
+        }
+        (vectorcraft_effects::CLASSIC_EXTRUDE | vectorcraft_effects::CLASSIC_REVOLVE, "surface") => {
+            vec![(tl!("Wireframe"), "wireframe"), (tl!("No Shading"), "none"), (tl!("Diffuse"), "diffuse"), (tl!("Plastic"), "plastic")]
+        }
+        (vectorcraft_effects::CLASSIC_ROTATE, "surface") => vec![(tl!("No Shading"), "none"), (tl!("Diffuse"), "diffuse")],
+        (vectorcraft_effects::CLASSIC_EXTRUDE | vectorcraft_effects::CLASSIC_REVOLVE | vectorcraft_effects::CLASSIC_ROTATE, "shadingColor") => {
+            vec![(tl!("Black"), "black"), (tl!("Custom"), "custom"), (tl!("None"), "none")]
+        }
+        (vectorcraft_effects::EXTRUDE | vectorcraft_effects::CLASSIC_EXTRUDE, "bevel") => vec![
             (tl!("None"), "none"),
             (tl!("Classic"), "classic"),
             (c3("Rounded"), "rounded"),
@@ -710,12 +760,21 @@ fn drop_shadow_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::
     d.fields.extend(own);
     let darkness = d.str("shade").eq_ignore_ascii_case("darkness");
     ui.add_space(4.0);
+    // A double-click on Color's swatch asks for the Color Picker over this dialog (#5364).
+    let mut pick = None;
     egui::Grid::new("fx-shade").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
         if widgets::radio(ui, tl!("Color"), !darkness, true) {
             d.fields.insert("shade".into(), json!("color"));
         }
         ui.add_enabled_ui(!darkness, |ui| {
-            form::color_text(ui, d, "color", 128.0);
+            ui.horizontal(|ui| {
+                form::color_text(ui, d, "color", 128.0);
+                if let Some(c) = d.fields.get("color").and_then(vectorcraft_engine::cmd::color_value)
+                    && form::colour_swatch(ui, "color", c)
+                {
+                    pick = Some(c);
+                }
+            });
         });
         ui.end_row();
         if widgets::radio(ui, tl!("Darkness"), darkness, true) {
@@ -728,7 +787,11 @@ fn drop_shadow_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::
         });
         ui.end_row();
     });
-    values_changed(d)
+    let changed = values_changed(d);
+    if let Some(c) = pick {
+        *d = super::color_picker::over_effect(d, "color", c);
+    }
+    changed
 }
 
 /// A curve's graph of its points `pts` (0..1 each; input across, output up), as Curves and
@@ -819,6 +882,13 @@ fn command(d: &Dialog) -> (&'static str, Value) {
         p["item"] = item.unwrap_or(Value::Null);
         p["params"] = params;
         let id = d.str("__effect");
+        // Each target keeps the map its own Warp draws with: the dialog's `version` is the first
+        // target's.
+        if super::warp_effect::is_warp(&id)
+            && let Some(Value::Object(m)) = p.get_mut("params")
+        {
+            m.remove("version");
+        }
         // The displayed style comes from the first target. Preserve other targets' Warp IDs
         // unless the user deliberately chooses Style, including after a preview rollback.
         if super::warp_effect::is_warp(&id) && d.bool("__warp_style_changed") {
@@ -902,6 +972,14 @@ mod tests {
         for (effect, key) in [
             (vectorcraft_effects::REVOLVE, "edge"),
             (vectorcraft_effects::EXTRUDE, "bevel"),
+            (vectorcraft_effects::CLASSIC_EXTRUDE, "bevel"),
+            (vectorcraft_effects::CLASSIC_EXTRUDE, "surface"),
+            (vectorcraft_effects::CLASSIC_EXTRUDE, "shadingColor"),
+            (vectorcraft_effects::CLASSIC_REVOLVE, "edge"),
+            (vectorcraft_effects::CLASSIC_REVOLVE, "surface"),
+            (vectorcraft_effects::CLASSIC_REVOLVE, "shadingColor"),
+            (vectorcraft_effects::CLASSIC_ROTATE, "surface"),
+            (vectorcraft_effects::CLASSIC_ROTATE, "shadingColor"),
             ("warp.arc", "orientation"),
             ("warp.twist", "orientation"),
             (vectorcraft_effects::RASTERIZE, "background"),
@@ -1112,6 +1190,67 @@ mod tests {
             let fx = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0];
             assert_eq!(fx.params.get(key).and_then(Value::as_f64), applied, "{effect}: OK applies it");
         }
+    }
+
+    /// Effect > Stylize > Drop Shadow: Color has a swatch beside its field, as Outer Glow's does
+    /// (#5364); a double-click opens the Color Picker over the dialog, whose OK fills Color and
+    /// comes back, and the effect applies the picked colour. With Darkness chosen the swatch is
+    /// dimmed and opens nothing.
+    #[test]
+    fn drop_shadow_colour_swatch_opens_the_color_picker() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("effect.dialog", json!({"effect": DROP_SHADOW})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        let frame = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { time: Some(time), events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            out
+        };
+        for n in 0..6 {
+            frame(&mut app, f64::from(n) * 0.01, vec![]);
+        }
+        let rect = ctx.read_response(form::colour_swatch_id("color")).expect("the colour swatch is drawn").rect;
+        let swatch = |out: &egui::FullOutput| {
+            out.shapes.iter().find_map(|c| match &c.shape {
+                egui::Shape::Rect(r) if r.rect == rect => Some(r.fill),
+                _ => None,
+            })
+        };
+        assert_eq!(swatch(&frame(&mut app, 0.2, vec![])), Some(egui::Color32::BLACK), "the swatch shows the shadow's #000000");
+        let pos = rect.center();
+        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        let double_click = |app: &mut VectorcraftApp, t: f64| {
+            frame(app, t, vec![egui::Event::PointerMoved(pos), button(true)]);
+            frame(app, t + 0.05, vec![button(false)]);
+            frame(app, t + 0.1, vec![button(true)]);
+            frame(app, t + 0.15, vec![button(false)]);
+            frame(app, t + 0.2, vec![]);
+        };
+        // With Darkness chosen the swatch opens nothing.
+        app.ui.dialog.as_mut().unwrap().fields.insert("shade".into(), json!("darkness"));
+        frame(&mut app, 0.25, vec![]);
+        double_click(&mut app, 0.3);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, "effect", "a dimmed swatch opens nothing");
+        app.ui.dialog.as_mut().unwrap().fields.insert("shade".into(), json!("color"));
+        frame(&mut app, 0.6, vec![]);
+        double_click(&mut app, 0.7);
+        let d = app.ui.dialog.as_ref().expect("a dialog");
+        assert_eq!(d.kind, "colorPicker", "a double-click opens the Color Picker over Drop Shadow");
+        assert_eq!(d.fields.get("color").and_then(vectorcraft_engine::cmd::color_value), Some(Color::rgb(0.0, 0.0, 0.0)), "on the shadow's colour");
+        app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#0000ff"));
+        super::super::confirm(&mut app).unwrap();
+        let d = app.ui.dialog.as_ref().expect("Drop Shadow is back");
+        assert_eq!((d.kind.as_str(), d.fields.get("color")), ("effect", Some(&json!("#0000ff"))), "OK fills Color and comes back");
+        frame(&mut app, 1.2, vec![]);
+        super::super::confirm(&mut app).unwrap();
+        let st = app.session.doc().unwrap();
+        let fx = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0];
+        assert_eq!((fx.id.as_str(), fx.params.get("color")), (DROP_SHADOW, Some(&json!("#0000ff"))), "Drop Shadow takes the picked colour");
     }
 
     /// Effect > Stylize > Drop Shadow and Outer Glow: Opacity, the offsets, Blur and Darkness have

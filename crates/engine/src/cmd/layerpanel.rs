@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 
 use super::layer::{NewLayers, row_roots, rows_param};
-use super::{CommandSpec, Result, Session, bad, checked_id, cmd, has_doc, id_param, ok, switch_or};
+use super::{CommandSpec, Result, Session, bad, checked_id, cmd, has_doc, object_param, ok, switch_or};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -255,9 +255,9 @@ fn merge_into(d: &mut Document, into: NodeId, others: &[NodeId]) -> Result<()> {
     let mut all = std::mem::take(ch);
     all.extend(taken);
     all.sort_by(|a, b| keys.get(&a.id).cmp(&keys.get(&b.id)));
+    // Ruler guides (the merged layers' among them) stay above the art, each kind in that order.
+    all.sort_by_key(|c| c.is_ruler_guide());
     *ch = all;
-    // The merged layers' guides go to it too.
-    d.rehome_guides(into);
     Ok(())
 }
 
@@ -318,9 +318,8 @@ fn flatten(s: &mut Session, p: &Value) -> Result<Value> {
     let others: Vec<NodeId> = d.layers.iter().filter(|l| l.id != into && l.visible && !l.is_template()).map(|l| l.id).collect();
     let hidden: Vec<NodeId> = d.layers.iter().filter(|l| l.id != into && !l.visible && !l.is_template()).map(|l| l.id).collect();
     s.edit("Flatten Artwork", |d, sel| {
-        d.remove_many(&hidden)?;
         // Hidden layers are discarded with their guides.
-        d.drop_guides_of_deleted_layers(sel);
+        d.remove_many(&hidden)?;
         merge_into(d, into, &others)?;
         sel.prune(d);
         sel.deselect_uneditable(d);
@@ -336,7 +335,7 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.releaseToLayers";
     let build = switch_or(p, "build", false, C)?;
     let st = s.doc()?;
-    let id = match id_param(p, "id") {
+    let id = match object_param(p, "id", C)? {
         Some(id) => id,
         None => match st.highlighted_rows().as_slice() {
             [id] => *id,
@@ -349,8 +348,8 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
         NodeKind::Group { .. } => true,
         _ => return Err(bad(C, "release a layer or a group")),
     };
-    // Its objects, bottom first (sublayers stay as they are).
-    let objects: Vec<NodeId> = n.children().into_iter().flatten().filter(|c| !c.is_layer()).map(|c| c.id).collect();
+    // Its objects, bottom first (sublayers and ruler guides stay as they are).
+    let objects: Vec<NodeId> = n.children().into_iter().flatten().filter(|c| !c.is_layer() && !c.is_ruler_guide()).map(|c| c.id).collect();
     if objects.is_empty() {
         return Err(EngineError::Other("there are no objects to release".into()));
     }
@@ -386,7 +385,8 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let new: Vec<NodeId> = layers.iter().map(|l| l.id).collect();
         let ch = d.children_mut(Some(parent))?;
-        let at = index.min(ch.len());
+        // Below the parent's ruler guides.
+        let at = index.min(Node::guide_run_start(ch));
         ch.splice(at..at, layers);
         // Copied type whose layout caches `reid` dropped has them again.
         if build {
@@ -434,8 +434,9 @@ fn reverse(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn locate(s: &mut Session, p: &Value) -> Result<Value> {
+    let id = object_param(p, "id", "layer.locate")?;
     let st = s.doc_mut()?;
-    let id = id_param(p, "id").or_else(|| st.selection.objects.last().copied()).ok_or_else(|| bad("layer.locate", "nothing selected"))?;
+    let id = id.or_else(|| st.selection.objects.last().copied()).ok_or_else(|| bad("layer.locate", "nothing selected"))?;
     let ancestry = st.doc.ancestry(id).ok_or(EngineError::NoNode(id))?;
     st.layer_rows = vec![id];
     st.revision += 1;

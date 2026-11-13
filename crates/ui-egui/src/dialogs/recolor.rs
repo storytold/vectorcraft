@@ -25,6 +25,13 @@
 //! Opened on colours alone (the Color Guide's Edit or Apply Colors without art), OK saves the new
 //! colours as a colour group named `groupName`.
 //!
+//! The Color Theme Picker button beside the tabs turns on picking from the canvas: a click on an
+//! object takes the palette of the object a Selection tool click takes, a drag takes the palette
+//! of the art inside its marquee, and Shift adds to the picks so far (`recolor.pickTheme`). The
+//! rows that aren't excluded take the picked colors as their new colors, the most used color first
+//! and repeating when the rows outnumber them, and the art previews them; OK keeps them as one
+//! undo step. A new count of Colors keeps the picks: the new rows take them again.
+//!
 //! Fields (`ui.dialog.set`): `rows` ([{from: [keys], to: key, exclude?, tint?: percent of a spot
 //! color}]), `colors` (null: Auto, or a count), `method`, `preserveWhite`, `preserveBlack`,
 //! `preserveGrays`, `limitTo` (library id, "document" for the document's swatches, "" for none),
@@ -33,7 +40,9 @@
 //! a gray and Tint for a spot color; `global`: Global Adjust, on the Edit tab), `globalAdjust`
 //! (`{saturation, brightness, temperature, luminosity}` in percent, sent as `recolor.apply`'s
 //! `globalAdjust` in every slider mode), `display` (the Edit tab's `smooth`, `segmented` or `bars`;
-//! unset: `smooth`). Changing `colors`, a preserve flag or `limitTo` reduces the rows again.
+//! unset: `smooth`), `themePicker` (the Color Theme Picker is on), `themePicks` (its picks, as
+//! `recolor.pickTheme`'s `picks`; a new list recolors the rows). Changing `colors`, a preserve
+//! flag or `limitTo` reduces the rows again.
 
 use egui::{Rect, Sense, Ui, pos2, vec2};
 use serde_json::{Value, json};
@@ -142,7 +151,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         "preserveWhite": kept("preserveWhite", true), "preserveBlack": kept("preserveBlack", true),
         "preserveGrays": kept("preserveGrays", false), "limitTo": limit,
         "group": group, "groupName": if new_group { Some(NEW_GROUP) } else { group }, "tab": "assign", "rule": Harmony::Complementary.id(), "linked": true,
-        "preview": true, "__art": art, "__assign": assign, "__newGroup": new_group,
+        "preview": true, THEME_PICKER: false, THEME_PICKS: [], "__art": art, "__assign": assign, "__newGroup": new_group,
     });
     let mut d = Dialog::new(KIND, fields);
     // Without art the rows are there from the start: limit them now (art's rows snap as they reduce).
@@ -203,6 +212,99 @@ fn sync(app: &mut VectorcraftApp, d: &mut Dialog) {
         Err(e) => app.status(e.to_string()),
     }
     d.fields.insert(DONE.into(), sig);
+    // New rows take the colors picked with the Color Theme Picker again.
+    d.fields.remove(THEME_DONE);
+}
+
+/// The fields of the Color Theme Picker: whether a click or drag on the canvas picks colors, and
+/// the picks so far (`recolor.pickTheme`'s `picks`); the picks the rows last took them from.
+const THEME_PICKER: &str = "themePicker";
+const THEME_PICKS: &str = "themePicks";
+const THEME_DONE: &str = "__themePicked";
+
+/// When the picks of the Color Theme Picker changed, give the rows that aren't excluded the
+/// palette of the art picked (`recolor.pickTheme`, as many colors as those rows), in row order;
+/// with fewer colors than rows, the colors repeat. Picks that touch no art leave the rows as they
+/// are.
+fn sync_theme(app: &mut VectorcraftApp, d: &mut Dialog) {
+    let picks = d.fields.get(THEME_PICKS).cloned().unwrap_or(Value::Null);
+    if !picks.as_array().is_some_and(|a| !a.is_empty()) || d.fields.get(THEME_DONE) == Some(&picks) {
+        return;
+    }
+    d.fields.insert(THEME_DONE.into(), picks.clone());
+    let mut rs = rows(d);
+    let active = active_rows(&rs);
+    if active.is_empty() {
+        return;
+    }
+    // The art as it is, not as the preview shows it; the preview runs again afterwards.
+    if d.fields.remove(super::form::PREVIEWED).is_some() {
+        let _ = app.session.cancel_interaction();
+    }
+    let colors = match app.session.execute("recolor.pickTheme", &json!({"picks": picks, "colors": active.len().min(64)})) {
+        Ok(r) => r["colors"].as_array().map(|a| a.iter().filter_map(color_value).collect::<Vec<_>>()).unwrap_or_default(),
+        Err(e) => return app.status(e.to_string()),
+    };
+    if colors.is_empty() {
+        return;
+    }
+    for (n, &i) in active.iter().enumerate() {
+        set_to(&mut rs[i], &colors[n % colors.len()]);
+    }
+    snap(app, d, &mut rs);
+    d.fields.insert("rows".into(), Value::Array(rs));
+    // The rows hold no slider edit.
+    d.fields.remove(COMPS);
+}
+
+/// The picks recolor.pickTheme takes at most; the oldest go first.
+const MAX_PICKS: usize = 256;
+
+/// While the Color Theme Picker is on: a layer over the canvas, under the dialog, takes the clicks
+/// and drags there as picks (with Shift they add to the picks so far, else they replace them) and
+/// draws a drag's marquee, whose sides follow the document's axes.
+fn theme_overlay(app: &VectorcraftApp, ctx: &egui::Context, d: &mut Dialog) {
+    let (Some(rect), Some(view)) = (app.canvas_rect, app.view()) else { return };
+    let xf = crate::canvas::Xf::at(rect, view, app.canvas_ui_zoom);
+    let accent = Tokens::get(ctx).accent;
+    let id = egui::Id::unique("recolor-theme-picker");
+    let shown = egui::Area::new(id).order(egui::Order::Middle).fixed_pos(rect.min).movable(false).show(ctx, |ui| {
+        let resp = ui.allocate_rect(rect, Sense::click_and_drag()).on_hover_cursor(egui::CursorIcon::Crosshair);
+        let shift = ui.input(|i| i.modifiers.shift);
+        // Where a press on the canvas began, kept from the first frame that sees it for the frame
+        // that releases it (the pointer forgets it then).
+        let from = egui::Id::unique("recolor-theme-drag");
+        if let Some(o) = ui.input(|i| i.pointer.press_origin()).filter(|o| rect.contains(*o)) {
+            ui.data_mut(|m| m.insert_temp(from, o));
+        }
+        if resp.clicked() {
+            ui.data_mut(|m| m.remove::<egui::Pos2>(from));
+            let p = xf.to_doc(resp.interact_pointer_pos().or(ui.input(|i| i.pointer.latest_pos()))?);
+            return Some((json!({"at": [p.x, p.y]}), shift));
+        }
+        if !(resp.dragged() || resp.drag_stopped()) {
+            return None;
+        }
+        let a = ui.data(|m| m.get_temp::<egui::Pos2>(from))?;
+        let b = ui.input(|i| i.pointer.latest_pos());
+        let (a, b) = (xf.to_doc(a), xf.to_doc(b?));
+        if resp.drag_stopped() {
+            ui.data_mut(|m| m.remove::<egui::Pos2>(from));
+            return Some((json!({"rect": [a.x, a.y, b.x, b.y]}), shift));
+        }
+        let corners = [(a.x, a.y), (b.x, a.y), (b.x, b.y), (a.x, b.y), (a.x, a.y)];
+        let pts: Vec<egui::Pos2> = corners.iter().map(|&(x, y)| xf.to_screen(vectorcraft_geom::Point::new(x, y))).collect();
+        ui.painter().with_clip_rect(rect).extend(egui::Shape::dashed_line(&pts, egui::Stroke::new(1.0, accent), 4.0, 3.0));
+        None
+    });
+    // Above the backdrop of the dialog (which a click elsewhere raises), still under its window.
+    ctx.move_to_top(egui::LayerId::new(egui::Order::Middle, id));
+    let Some((pick, add)) = shown.inner else { return };
+    let mut picks = if add { d.fields.get(THEME_PICKS).and_then(Value::as_array).cloned().unwrap_or_default() } else { vec![] };
+    picks.push(pick);
+    let extra = picks.len().saturating_sub(MAX_PICKS);
+    picks.drain(..extra);
+    d.fields.insert(THEME_PICKS.into(), Value::Array(picks));
 }
 
 /// With Limit to Library, the rows' new colours snap to the library's nearest colours.
@@ -262,6 +364,11 @@ fn excluded(row: &Value) -> bool {
     row["exclude"].as_bool().unwrap_or(false)
 }
 
+/// The seed for the next Randomize: one past the last, held at `u64::MAX`.
+fn next_seed(d: &Dialog) -> u64 {
+    (d.f64("__seed", 0.0) as u64).saturating_add(1)
+}
+
 fn selection(d: &Dialog) -> Vec<usize> {
     d.fields.get("__sel").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).map(|i| i as usize).collect()).unwrap_or_default()
 }
@@ -293,13 +400,19 @@ fn apply_params(d: &Dialog) -> Value {
 
 fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     sync(app, d);
+    sync_theme(app, d);
     let t = Tokens::get(ui.ctx());
+    let picking = d.bool(THEME_PICKER);
     ui.horizontal(|ui| {
         let tab = d.str("tab");
         for (id, label) in [("assign", tl!("Assign")), ("edit", tl!("Edit"))] {
             if ui.selectable_label(tab == id || (id == "assign" && tab != "edit"), egui::RichText::new(label).font(theme::semibold(12.5))).clicked() {
                 d.fields.insert("tab".into(), json!(id));
             }
+        }
+        ui.add_space(8.0);
+        if widgets::icon_button(ui, "pipette", tl!("Color Theme Picker"), picking, 24.0).clicked() {
+            d.fields.insert(THEME_PICKER.into(), json!(!picking));
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             // The label is drawn after the menu (right-to-left), so it cannot name it by adjacency.
@@ -311,6 +424,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     });
     widgets::divider(ui);
     ui.add_space(4.0);
+    if d.bool(THEME_PICKER) {
+        widgets::dim_label(ui, tl!("Click or drag across the art to pick its colors; Shift adds more"));
+        ui.add_space(4.0);
+        theme_overlay(app, ui.ctx(), d);
+        sync_theme(app, d);
+    }
     let mut rs = rows(d);
     let top = ui.cursor().top();
     let (changed, pick) = if d.str("tab") == "edit" { (edit_tab(app, ui, d, &mut rs), None) } else { assign_tab(app, ui, d, &mut rs) };
@@ -359,6 +478,7 @@ pub(super) fn with_new_color(app: &VectorcraftApp, mut d: Dialog, i: usize, c: C
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut d = d.clone();
     sync(app, &mut d);
+    sync_theme(app, &mut d);
     if d.bool("__newGroup") {
         // The new colors with the Global Adjust, snapped to Limit to Library, as `recolor.apply`
         // gives them to a group.
@@ -546,7 +666,7 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
             [("arrow-left-right", tl!("Randomly change color order"), false), ("sparkles", tl!("Randomly change saturation and brightness"), true)]
         {
             if widgets::icon_button_enabled(ui, icon, tip, false, rows.len() > 1 || sb, 24.0).clicked() {
-                let seed = d.f64("__seed", 0.0) as u64 + 1;
+                let seed = next_seed(d);
                 d.fields.insert("__seed".into(), json!(seed));
                 let p = json!({"map": rows, "order": !sb, "saturationBrightness": sb, "seed": seed});
                 match app.session.execute("recolor.randomize", &p) {
@@ -604,8 +724,8 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
             // Import a library (.ase, .acb, .gpl, .vcswatches or a document's swatches) and limit to it.
             if app.services.pick_open.is_some() && widgets::icon_button(ui, "folder-open", tl!("Other Library…"), false, 24.0).clicked() {
                 let r = crate::picks::in_dialog(app, d, |app, d| {
-                    let pick =
-                        crate::FilePick { filters: crate::FilePick::filters(vectorcraft_engine::cmd::fileio::open_filters()), ..Default::default() };
+                    let filters = crate::FilePick::filters(vectorcraft_engine::cmd::fileio::builtin_open_filters());
+                    let pick = crate::FilePick { filters, ..Default::default() };
                     let Some(path) = crate::picks::open(app, &pick) else { return Ok(()) };
                     let r = app.run("swatch.library.load", json!({ "path": path }))?;
                     d.fields.insert("limitTo".into(), r["library"].clone());
@@ -897,6 +1017,7 @@ fn sliders(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value]
 fn merge(rows: &mut Vec<Value>, sel: &[usize]) {
     let mut sel: Vec<usize> = sel.iter().copied().filter(|i| *i < rows.len()).collect();
     sel.sort_unstable();
+    sel.dedup();
     let Some((&first, rest)) = sel.split_first() else { return };
     let mut moved = vec![];
     for &i in rest.iter().rev() {
@@ -1208,6 +1329,25 @@ mod tests {
         assert_eq!(r[2]["to"], "rgb 0 0 128");
     }
 
+    /// A selection that lists a row twice merges it once, as `ui.dialog.set` can store one.
+    #[test]
+    fn merge_takes_a_repeated_row_once() {
+        let mut r = rows();
+        merge(&mut r, &[0, 2, 2]);
+        assert_eq!(r.len(), 2);
+        assert_eq!(r[0]["from"], json!(["rgb 255 0 0", "rgb 0 255 0"]));
+        merge(&mut r, &[1, 1]);
+        assert_eq!(r.len(), 2);
+    }
+
+    /// Randomize after a seed past `u64::MAX` keeps the largest seed.
+    #[test]
+    fn next_seed_holds_at_the_largest() {
+        assert_eq!(next_seed(&Dialog::new("recolor", json!({}))), 1);
+        assert_eq!(next_seed(&Dialog::new("recolor", json!({"__seed": 4}))), 5);
+        assert_eq!(next_seed(&Dialog::new("recolor", json!({"__seed": 1e30}))), u64::MAX);
+    }
+
     #[test]
     fn linked_handles_move_together() {
         let mut r = rows();
@@ -1406,6 +1546,137 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let to = super::rows(app.ui.dialog.as_ref().unwrap())[i]["to"].clone();
         assert!(to.as_str().is_some_and(|k| k.starts_with("cmyk ")), "a color picked as RGB is CMYK in a CMYK document: {to}");
+    }
+
+    /// A 15 pt square at (`x`, 10) filled with `fill`, without a stroke.
+    fn square(app: &mut VectorcraftApp, x: f64, fill: &str) -> u64 {
+        let id = app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 15, "height": 15})).unwrap()["id"].as_u64().unwrap();
+        app.run("paint.setFill", json!({"ids": [id], "color": fill})).unwrap();
+        app.run("paint.setStroke", json!({"ids": [id], "none": true})).unwrap();
+        id
+    }
+
+    fn fill_hex(app: &VectorcraftApp, id: u64) -> String {
+        let doc = &app.session.doc().unwrap().doc;
+        doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.fill().and_then(|f| f.paint.color()).unwrap().to_hex()
+    }
+
+    /// Red and blue squares selected, and green and yellow squares beside them; Recolor Artwork
+    /// open on the selection with the Exact method, one frame drawn.
+    fn theme_setup(app: &mut VectorcraftApp, ctx: &egui::Context) -> [u64; 2] {
+        app.run("file.new", json!({"width": 300, "height": 100})).unwrap();
+        let art = [square(app, 10.0, "#ff0000"), square(app, 40.0, "#0000ff")];
+        square(app, 100.0, "#00ff00");
+        square(app, 130.0, "#ffff00");
+        app.run("select.set", json!({"ids": art})).unwrap();
+        app.run("ui.recolorDialog", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("method".into(), json!(Method::Exact.id()));
+        crate::theme::install_fonts(ctx);
+        frame(app, ctx, 0.0, vec![], 0);
+        art
+    }
+
+    fn new_colors(app: &VectorcraftApp) -> Vec<Value> {
+        super::rows(app.ui.dialog.as_ref().unwrap()).iter().map(|r| r["to"].clone()).collect()
+    }
+
+    /// The Color Theme Picker's picks (the `themePicks` field) give the rows that aren't excluded
+    /// the palette of the art picked, in row order, repeating it when the rows outnumber its
+    /// colors, and the art previews them. Picks that touch no art leave the rows as they are, and
+    /// OK keeps the recolor as one undo step.
+    #[test]
+    fn theme_picks_give_the_rows_the_palette_of_the_art_picked() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        let [red, blue] = theme_setup(&mut app, &ctx);
+        let mut start = new_colors(&app);
+        start.sort_by_key(Value::to_string);
+        assert_eq!(start, [json!("rgb 0 0 255"), json!("rgb 255 0 0")]);
+        // The red art's row and the blue art's row.
+        let row_of = |app: &VectorcraftApp, key: &str| super::rows(app.ui.dialog.as_ref().unwrap()).iter().position(|r| r["from"][0] == key).unwrap();
+        let (r, b) = (row_of(&app, "rgb 255 0 0"), row_of(&app, "rgb 0 0 255"));
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let set = |app: &mut VectorcraftApp, picks: Value| {
+            app.ui.dialog.as_mut().unwrap().fields.insert(THEME_PICKS.into(), picks);
+        };
+        set(&mut app, json!([{"at": [107, 17]}]));
+        frame(&mut app, &ctx, 0.1, vec![], 0);
+        assert_eq!(new_colors(&app), [json!("rgb 0 255 0"), json!("rgb 0 255 0")], "one color for both rows");
+        assert_eq!((fill_hex(&app, red), fill_hex(&app, blue)), ("#00ff00".into(), "#00ff00".into()), "the art previews it");
+        set(&mut app, json!([{"at": [107, 17]}, {"rect": [125, 5, 150, 30]}]));
+        frame(&mut app, &ctx, 0.2, vec![], 0);
+        assert_eq!(new_colors(&app), [json!("rgb 0 255 0"), json!("rgb 255 255 0")], "a pick added: two colors");
+        // An excluded row (the red art's) keeps its new color.
+        let d = app.ui.dialog.as_mut().unwrap();
+        let mut rs = super::rows(d);
+        rs[r]["exclude"] = json!(true);
+        d.fields.insert("rows".into(), Value::Array(rs));
+        let kept = new_colors(&app)[r].clone();
+        set(&mut app, json!([{"at": [47, 17]}]));
+        frame(&mut app, &ctx, 0.3, vec![], 0);
+        let after = new_colors(&app);
+        assert_eq!((&after[r], &after[b]), (&kept, &json!("rgb 0 0 255")));
+        set(&mut app, json!([{"at": [250, 80]}]));
+        frame(&mut app, &ctx, 0.4, vec![], 0);
+        assert_eq!(new_colors(&app), after, "empty canvas: the rows stay");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "nothing is committed before OK");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!((fill_hex(&app, red), fill_hex(&app, blue)), ("#ff0000".into(), "#0000ff".into()), "the excluded row kept red");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    }
+
+    /// One frame with `modifiers` held.
+    fn frame_with(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<egui::Event>, modifiers: egui::Modifiers) {
+        let events = std::iter::once(egui::Event::ModifiersChanged(modifiers)).chain(events).collect();
+        let input = egui::RawInput { time: Some(time), events, ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| super::super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+    }
+
+    /// With the Color Theme Picker on, a click on the canvas picks the object there and a Shift-drag
+    /// adds the art inside its marquee; with it off the dialog takes no picks from the canvas.
+    #[test]
+    fn the_theme_picker_takes_clicks_and_shift_drags_on_the_canvas() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        let [red, _] = theme_setup(&mut app, &ctx);
+        // Clear of the dialog, which centers itself in the screen.
+        let canvas = Rect::from_min_size(pos2(-1000.0, -1000.0), vec2(3000.0, 3000.0));
+        app.canvas_rect = Some(canvas);
+        let xf = crate::canvas::Xf::new(canvas, app.view().unwrap());
+        let at = |x: f64, y: f64| xf.to_screen(vectorcraft_geom::Point::new(x, y));
+        let button = |pos, pressed, modifiers| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+        let none = egui::Modifiers::NONE;
+        let click = |app: &mut VectorcraftApp, pos: egui::Pos2, t: f64| {
+            frame_with(app, &ctx, t, vec![egui::Event::PointerMoved(pos), button(pos, true, none)], none);
+            frame_with(app, &ctx, t + 0.05, vec![button(pos, false, none)], none);
+            frame_with(app, &ctx, t + 0.1, vec![], none);
+        };
+        let green = at(107.0, 17.0);
+        assert!(canvas.contains(green), "{green:?}");
+        click(&mut app, green, 1.0);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get(THEME_PICKS), Some(&json!([])), "off: no picks");
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get(THEME_PICKER), Some(&json!(false)), "the fields `ui.dialog.set` can set");
+        app.ui.dialog.as_mut().unwrap().fields.insert(THEME_PICKER.into(), json!(true));
+        for n in 0..5 {
+            frame_with(&mut app, &ctx, 2.0 + f64::from(n) * 0.01, vec![], none);
+        }
+        click(&mut app, green, 3.0);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields[THEME_PICKS].as_array().map(Vec::len), Some(1));
+        assert_eq!(new_colors(&app), [json!("rgb 0 255 0"), json!("rgb 0 255 0")]);
+        assert_eq!(fill_hex(&app, red), "#00ff00", "the art previews the picked color");
+        // A Shift-drag around the yellow square.
+        let shift = egui::Modifiers::SHIFT;
+        let (a, b) = (at(125.0, 5.0), at(150.0, 30.0));
+        frame_with(&mut app, &ctx, 4.0, vec![egui::Event::PointerMoved(a), button(a, true, shift)], shift);
+        frame_with(&mut app, &ctx, 4.05, vec![egui::Event::PointerMoved(a + (b - a) * 0.5)], shift);
+        frame_with(&mut app, &ctx, 4.1, vec![egui::Event::PointerMoved(b)], shift);
+        frame_with(&mut app, &ctx, 4.15, vec![button(b, false, shift)], shift);
+        frame_with(&mut app, &ctx, 4.2, vec![], none);
+        let picks = app.ui.dialog.as_ref().unwrap().fields[THEME_PICKS].clone();
+        assert_eq!(picks.as_array().map(Vec::len), Some(2), "{picks}");
+        assert!(picks[1].get("rect").is_some(), "{picks}");
+        assert_eq!(new_colors(&app), [json!("rgb 0 255 0"), json!("rgb 255 255 0")]);
     }
 
     /// In a CMYK document colors opened alone are saved as a new color group in their own model.

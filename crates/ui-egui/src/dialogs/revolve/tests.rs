@@ -149,6 +149,24 @@ fn command_driven_fields_preview_and_small_windows_keep_the_buttons_reachable() 
 }
 
 #[test]
+fn the_shadows_switch_shows_its_settings_and_turns_the_shadow_on_in_one_undo_step() {
+    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", EXTRUDE, vec2(1280.0, 900.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    h.click(h.rect("Lighting").center());
+    assert!(!h.texts.iter().any(|(s, _)| s == "Shadow Bounds"), "the settings show only while shadows are on");
+    h.click(h.rect("Shadows").center());
+    assert_eq!(h.app.ui.dialog.as_ref().unwrap().fields.get("shadow"), Some(&json!(true)));
+    assert!(h.texts.iter().any(|(s, _)| s == "Distance from Object"));
+    let state = h.app.session.doc().unwrap();
+    let node = state.doc.node(state.selection.objects[0]).unwrap();
+    assert_eq!(node.appearance.effects[0].params["shadow"], json!(true), "the preview draws the shadow");
+    dialogs::confirm(&mut h.app).unwrap();
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
+}
+
+#[test]
 fn lighting_tab_shows_light_fields_and_keeps_the_dialog_compact() {
     let mut h = Harness::new(vec2(1280.0, 900.0));
     h.settle();
@@ -158,7 +176,9 @@ fn lighting_tab_shows_light_fields_and_keeps_the_dialog_compact() {
         assert!(Rect::from_min_size(Pos2::ZERO, h.screen).contains_rect(h.rect(label)));
     }
     let panel = h.ctx.memory(|m| m.area_rect(Id::unique(("dialog", "effect")).with("revolve"))).unwrap();
-    assert!(panel.width() < 420.0 && panel.height() < 570.0, "compact lighting controls with light management: {panel:?}");
+    // The Shadows switch adds one 28-point row to the 570-point bound; its settings show only
+    // while it is on.
+    assert!(panel.width() < 420.0 && panel.height() < 600.0, "compact lighting controls with light management: {panel:?}");
     h.drag(h.rect("Height").center(), vec2(24.0, 0.0));
     assert_ne!(h.value("lightHeight"), 30.0);
     h.click(h.response(("revolve-reset", "lightHeight")).center());
@@ -295,6 +315,149 @@ fn the_other_3d_effects_show_their_options_and_position_presets() {
         h.settle();
         h.rect("Custom");
     }
+}
+
+/// Extrude & Bevel (Classic): its extrude and bevel options on the Object tab, Position on the
+/// Rotation tab, and the surface with its lights, highlight, blend steps and shading color on the
+/// Lighting tab; OK keeps the edit as one undo step.
+#[test]
+fn classic_extrude_bevel_shows_its_options_and_applies_as_one_step() {
+    use vectorcraft_effects::CLASSIC_EXTRUDE;
+    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", CLASSIC_EXTRUDE, vec2(1400.0, 1000.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    for text in ["Depth", "Cap", "Bevel Shape", "Height", "Bevel Inside"] {
+        h.rect(text);
+    }
+    assert!(!h.texts.iter().any(|(t, _)| t == "Twist" || t == "Taper" || t == "Width"), "the newer effect's options stay out");
+    assert!(!h.ctx.read_response(Id::unique(("revolve-reset", "bevelHeight"))).unwrap().enabled(), "no bevel: its height is off");
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("__tab".into(), json!("rotation"));
+    h.settle();
+    for text in ["Presets", "Rotation X", "Perspective", "Off-Axis Front"] {
+        h.rect(text);
+    }
+    h.click(h.rect("Lighting").center());
+    h.settle();
+    for text in [
+        "Surface",
+        "Plastic",
+        "Light Intensity",
+        "Ambient Light",
+        "Highlight Intensity",
+        "Highlight Size",
+        "Blend Steps",
+        "Shading Color",
+        "Draw Hidden Faces",
+    ] {
+        h.rect(text);
+    }
+    assert!(h.ctx.read_response(Id::unique(("revolve-reset", "highlightSize"))).unwrap().enabled());
+    // The light gizmo is on for a lit surface.
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag the light, or its rings. Shift snaps to 15°.");
+    // Diffuse has no highlight; Wireframe and No Shading take no light.
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("surface".into(), json!("diffuse"));
+    h.settle();
+    assert!(!h.ctx.read_response(Id::unique(("revolve-reset", "highlightSize"))).unwrap().enabled());
+    assert!(h.ctx.read_response(Id::unique(("revolve-reset", "ambient"))).unwrap().enabled());
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("surface".into(), json!("wireframe"));
+    h.settle();
+    assert!(!h.ctx.read_response(Id::unique(("revolve-reset", "ambient"))).unwrap().enabled());
+    assert!(h.ctx.read_response(Id::unique(("revolve-reset", "drawHiddenFaces"))).unwrap().enabled());
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag values or labels. Double-click a value to type.");
+    // A custom shading color shows its color row.
+    let d = h.app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("surface".into(), json!("diffuse"));
+    d.fields.insert("shadingColor".into(), json!("custom"));
+    h.settle();
+    h.rect("#000000");
+    dialogs::confirm(&mut h.app).unwrap();
+    let state = h.app.session.doc().unwrap();
+    let fx = &state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0];
+    assert_eq!(fx.id, CLASSIC_EXTRUDE);
+    assert_eq!((fx.params["surface"].clone(), fx.params["shadingColor"].clone()), (json!("diffuse"), json!("custom")));
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
+}
+
+/// Revolve (Classic): its angle, cap, offset and axis side on the Object tab, Position on the
+/// Rotation tab, and the classic surface on the Lighting tab, without Draw Hidden Faces; OK keeps
+/// the edit as one undo step.
+#[test]
+fn classic_revolve_shows_its_options_and_applies_as_one_step() {
+    use vectorcraft_effects::CLASSIC_REVOLVE;
+    let mut h = Harness::with("M100 40 L130 60 L130 140 L100 160", CLASSIC_REVOLVE, vec2(1400.0, 1000.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    for text in ["Angle", "Cap", "Offset", "Axis side", "Left"] {
+        h.rect(text);
+    }
+    assert!(!h.texts.iter().any(|(t, _)| t == "Segments" || t == "Revolve angle" || t == "Depth"), "the other effects' options stay out");
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("__tab".into(), json!("rotation"));
+    h.settle();
+    for text in ["Presets", "Rotation X", "Perspective", "Off-Axis Front"] {
+        h.rect(text);
+    }
+    h.click(h.rect("Lighting").center());
+    h.settle();
+    for text in ["Surface", "Plastic", "Light Intensity", "Ambient Light", "Highlight Size", "Blend Steps", "Shading Color"] {
+        h.rect(text);
+    }
+    assert!(!h.texts.iter().any(|(t, _)| t == "Draw Hidden Faces"), "every face is drawn");
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag the light, or its rings. Shift snaps to 15°.");
+    let d = h.app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("edge".into(), json!("right"));
+    d.fields.insert("offset".into(), json!(12.0));
+    d.fields.insert("surface".into(), json!("wireframe"));
+    h.settle();
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag values or labels. Double-click a value to type.");
+    dialogs::confirm(&mut h.app).unwrap();
+    let state = h.app.session.doc().unwrap();
+    let fx = &state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0];
+    assert_eq!(fx.id, CLASSIC_REVOLVE);
+    assert_eq!(
+        (fx.params["edge"].clone(), fx.params["offset"].as_f64(), fx.params["surface"].clone()),
+        (json!("right"), Some(12.0), json!("wireframe"))
+    );
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
+}
+
+/// Rotate (Classic): Position on the Rotation tab, with no Object tab, and No Shading or Diffuse
+/// on the Lighting tab, without the highlight or Draw Hidden Faces; OK keeps the edit as one undo
+/// step.
+#[test]
+fn classic_rotate_shows_its_options_and_applies_as_one_step() {
+    use vectorcraft_effects::CLASSIC_ROTATE;
+    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", CLASSIC_ROTATE, vec2(1400.0, 1000.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    for text in ["Rotation", "Presets", "Rotation X", "Perspective", "Off-Axis Front"] {
+        h.rect(text);
+    }
+    assert!(!h.texts.iter().any(|(t, _)| t == "Object" || t == "Depth" || t == "Angle"), "no Object tab");
+    h.click(h.rect("Lighting").center());
+    h.settle();
+    for text in ["Surface", "Diffuse", "Light Intensity", "Ambient Light", "Blend Steps", "Shading Color"] {
+        h.rect(text);
+    }
+    assert!(
+        !h.texts.iter().any(|(t, _)| t == "Highlight Intensity" || t == "Highlight Size" || t == "Draw Hidden Faces"),
+        "no highlight and no hidden faces"
+    );
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag the light, or its rings. Shift snaps to 15°.");
+    let d = h.app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("surface".into(), json!("none"));
+    d.fields.insert("rotationY".into(), json!(40.0));
+    h.settle();
+    assert_eq!(dialogs::revolve_gizmo::hint(h.app.ui.dialog.as_ref().unwrap()), "Drag values or labels. Double-click a value to type.");
+    dialogs::confirm(&mut h.app).unwrap();
+    let state = h.app.session.doc().unwrap();
+    let fx = &state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0];
+    assert_eq!(fx.id, CLASSIC_ROTATE);
+    assert_eq!((fx.params["surface"].clone(), fx.params["rotationY"].as_f64()), (json!("none"), Some(40.0)));
+    assert!(fx.params.get("highlightSize").is_none() && fx.params.get("drawHiddenFaces").is_none());
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
 }
 
 #[test]

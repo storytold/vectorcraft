@@ -118,7 +118,7 @@ impl TransformTool {
             return Some(*p);
         }
         // Anchors selected with Direct Selection transform alone, about their own centre.
-        vectorcraft_effects::preview::anchor_bounds(cx.selection, cx.doc, cx.preview_bounds)
+        vectorcraft_effects::preview::anchor_bounds_with(cx.selection, cx.doc, cx.bounds_measure())
             .map(|b| b.center())
             .or_else(|| selection_box(cx).map(|b| b.center()))
     }

@@ -54,8 +54,9 @@ use build::{Frame, MADE, prune_unseen};
 use compare::{
     MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, PageView, Shares, compare, compared, comparison_render, comparison_samples, differ, differ_in_colour,
 };
-pub use layers::{AiLayers, ai_alone, ai_alone_on_page, ai_layers_alone, layered_ai, layered_ai_from};
+pub use layers::{AiLayers, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard, layered_ai, layered_ai_from};
 pub(super) use layers::{layered, program_alone};
+pub(crate) use slots::MAX_TEXT;
 pub use slots::is_loss;
 #[cfg(test)]
 use slots::join_pieces;

@@ -22,6 +22,8 @@
 //!   a box shows where); Alt copies them. A dimmed copy of the row follows the pointer. Layers
 //!   dropped in the empty space under the last row go below the bottom layer. Dropped on the trash
 //!   they are deleted, on New Layer duplicated.
+//! - Deleting rows from the panel (the trash, rows dropped on it, Delete Selection, Delete and
+//!   Backspace) asks first when a layer or sublayer among them holds art ([`delete`]).
 //! - The triangle opens or closes a row; Alt-click does the same to everything inside it.
 //! - Double-clicking a name renames it; double-clicking elsewhere on a row opens its options.
 //! - A target circle targets its layer, group or object (`layer.target`); dragging it onto another
@@ -60,7 +62,7 @@ mod rows;
 mod thumbs;
 
 use controls::{bottom_bar, filter_button};
-pub use controls::{expand, menu, set_filter};
+pub use controls::{delete, expand, menu, set_filter};
 pub(crate) use model::shown_name;
 pub use model::{Filter, ObjectKind, RowState};
 #[cfg(test)]
@@ -151,8 +153,10 @@ struct View<'a> {
     /// Where the row thumbnails come from.
     thumbs: ThumbSource<'a>,
     sel: HashSet<NodeId>,
-    /// The selected ruler guides.
+    /// The selected ruler guides, as indexes into [`Self::ruler_guides`].
     guides: Vec<usize>,
+    /// The document's ruler guides ([`Document::ruler_guides`]).
+    ruler_guides: Vec<vectorcraft_doc::Guide>,
     target: Option<NodeId>,
     current: Option<NodeId>,
     rows: Vec<NodeId>,
@@ -176,6 +180,9 @@ struct Out {
     column: Option<Option<ColumnDrag>>,
     /// Rows to open or close, and whether to open them.
     toggle: Vec<(NodeId, bool)>,
+    /// The highlighted rows after this frame's row click, when one happened: the click's action
+    /// runs after `delete_key`, so `view.rows` is still the state before it.
+    rows_after_click: Option<Vec<NodeId>>,
 }
 
 /// The panel state that says the Layers panel's rows have the keyboard ([`super::has_row_keys`]).
@@ -259,7 +266,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         doc: &doc,
         thumbs: ThumbSource::of(app, st, &doc),
         sel: st.selection.objects.iter().copied().collect(),
-        guides: st.selection.guides.clone(),
+        guides: vectorcraft_engine::cmd::guide_indexes(&doc, &st.selection.guides),
+        ruler_guides: doc.ruler_guides(),
         target: st.selection.target,
         current: st.current_layer(),
         rows,
@@ -361,20 +369,30 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Keyboard: Delete removes the highlighted rows while the panel has the keyboard (a row was
     // clicked last, not the canvas).
     // The panel keeps it while it is drawn ([`super::has_row_keys`]); the app's shortcuts leave
-    // Delete and Backspace to it meanwhile ([`super::rows_take_delete`]).
+    // Delete and Backspace to it meanwhile ([`super::rows_take_delete`]). With no highlighted rows
+    // left (the last one was deleted) the panel gives the keys back, so Delete clears the selected
+    // art again instead of doing nothing.
     let pressed_outside = ui.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| !list_rect.contains(p)));
-    let focus = super::has_row_keys(ui.ctx(), ROW_KEYS) && !pressed_outside;
+    // A click's highlight action runs after this block, so read the rows it will leave, not the
+    // snapshot `view.rows` took before it.
+    let rows = out.rows_after_click.as_deref().unwrap_or(&view.rows);
+    let focus = super::has_row_keys(ui.ctx(), ROW_KEYS) && !pressed_outside && !rows.is_empty();
     super::set_row_keys(ui.ctx(), ROW_KEYS, focus);
     if focus
-        && !view.rows.is_empty()
+        && !rows.is_empty()
         && ui.ctx().memory(|m| m.focused().is_none())
         && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete) || i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace))
     {
-        out.actions.push(("layer.delete".into(), json!({})));
+        out.actions.push(("ui.layerDelete".into(), json!({})));
     }
     bottom_bar(app, ui, &view, &doc, &mut out.actions);
     for (c, p) in out.actions {
         app.run(&c, p).ok();
+    }
+    // A deletion that took the last highlighted row leaves the panel nothing to delete. Release the
+    // keys now, not at the next draw, so the very next frame's Delete reaches Edit › Clear.
+    if app.session.active().is_some_and(|st| st.highlighted_rows().is_empty()) {
+        super::set_row_keys(ui.ctx(), ROW_KEYS, false);
     }
     see_selection(app, ui, selected);
 }
@@ -455,7 +473,8 @@ fn listed_when_opened(doc: &Document, open: &OpenRows, opts: &PanelOptions, quer
         open.set(*a, true);
     }
     let mut rows = vec![];
-    push_rows(layer, 0, false, (Color32::PLACEHOLDER, true), (&open, opts, query, filter, doc), &mut rows);
+    // Only object rows are looked for, so the guide rows are left out.
+    push_rows(layer, 0, false, (Color32::PLACEHOLDER, true), (&open, opts, query, filter, &[]), &mut rows);
     rows.iter().any(|r| r.node.id == id && r.guide.is_none() && !r.spine)
 }
 

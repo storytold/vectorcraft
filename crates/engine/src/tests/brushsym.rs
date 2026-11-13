@@ -253,6 +253,367 @@ fn selection_art_is_the_art_new_brush_takes() {
     assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "only brush.new is an undo step");
 }
 
+fn undo_steps(s: &Session) -> usize {
+    s.doc().unwrap().history.undo.len()
+}
+
+fn selected(s: &Session) -> Vec<NodeId> {
+    s.doc().unwrap().selection.objects.clone()
+}
+
+/// The JSON of object `id`, as `brush.options` params take art.
+fn art_json(s: &mut Session, id: NodeId) -> Value {
+    s.execute("brush.selectionArt", &json!({"ids": [id.0]})).unwrap()["art"].clone()
+}
+
+/// `brush.placeArt` places a copy of an art or scatter brush's art centered where it is dropped
+/// (by default on the first artboard's center), selected, in one undo step; brushes without art,
+/// unknown brushes and a position that is not a number are refused.
+#[test]
+fn place_art_puts_a_copy_of_the_brush_art_where_it_is_dropped() {
+    let mut s = session();
+    let r = rect(&mut s, 10.0, 20.0, 40.0, 8.0);
+    s.execute("brush.new", &json!({"type": "art", "name": "Bar", "ids": [r.0]})).unwrap();
+    let steps = undo_steps(&s);
+    let id = NodeId(s.execute("brush.placeArt", &json!({"name": "Bar", "x": 100, "y": 80})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(undo_steps(&s), steps + 1);
+    assert_eq!(selected(&s), vec![id]);
+    assert_ne!(id, r, "a copy, not the art the brush was made from");
+    assert!(close(bounds(&s, id), Rect::new(80.0, 76.0, 120.0, 84.0), 1e-6), "{:?}", bounds(&s, id));
+    // Without a position: the first artboard's center (the document is 400 × 300).
+    let scatter = NodeId(s.execute("brush.placeArt", &json!({"name": "Dots"})).unwrap()["id"].as_u64().unwrap());
+    let c = bounds(&s, scatter).center();
+    assert!((c.x - 200.0).abs() < 1e-6 && (c.y - 150.0).abs() < 1e-6, "{c:?}");
+    let steps = undo_steps(&s);
+    for (p, msg) in [
+        (json!({"name": "3 pt. Round"}), "`3 pt. Round` has no art (only scatter, art and pattern brushes do)"),
+        (json!({"name": "Bristle Round"}), "`Bristle Round` has no art (only scatter, art and pattern brushes do)"),
+        (json!({"name": "Nope"}), "no brush named `Nope`"),
+    ] {
+        let e = s.execute("brush.placeArt", &p).unwrap_err();
+        assert!(e.to_string().contains(msg), "{p}: {e}");
+    }
+    assert!(s.execute("brush.placeArt", &json!({"name": "Bar", "x": "100"})).is_err());
+    assert_eq!(undo_steps(&s), steps, "a refused call adds no undo step");
+}
+
+/// Brush art holding an instance of a symbol whose art lies away from the symbol's origin (as
+/// imported symbols can) is centered by that art, not by the box an instance has without its
+/// document.
+#[test]
+fn placed_art_with_a_symbol_instance_is_centered_by_the_symbols_art() {
+    let mut s = session();
+    let r = rect(&mut s, 300.0, 10.0, 100.0, 40.0);
+    let art = node(&s, r);
+    s.execute("edit.clear", &json!({"ids": [r.0]})).unwrap();
+    let st = s.doc_mut().unwrap();
+    let d = std::sync::Arc::make_mut(&mut st.doc);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Off".into(), art: std::sync::Arc::new(art) });
+    let layer = d.layers[0].id;
+    let inst = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::translate((50.0, 50.0));
+    d.insert(Some(layer), usize::MAX, Node::new(inst, NodeKind::SymbolInstance { symbol: "Off".into(), xf })).unwrap();
+    let inst = inst.0;
+    s.execute("brush.new", &json!({"type": "art", "name": "Stamp", "ids": [inst]})).unwrap();
+    let id = NodeId(s.execute("brush.placeArt", &json!({"name": "Stamp", "x": 200, "y": 150})).unwrap()["id"].as_u64().unwrap());
+    let st = s.doc().unwrap();
+    let b = st.doc.bounds_of(&[id], false).unwrap();
+    assert!((b.center().x - 200.0).abs() < 1e-6 && (b.center().y - 150.0).abs() < 1e-6, "{b:?}");
+    assert!((b.width() - 100.0).abs() < 1e-6, "{b:?}");
+}
+
+/// A pattern brush with side, outer corner and start tiles, the side tile with a repeat frame
+/// wider than its art: → its name.
+fn framed_pattern_brush(s: &mut Session) -> String {
+    let side = rect(s, 0.0, 0.0, 20.0, 10.0);
+    let corner = rect(s, 0.0, 40.0, 10.0, 10.0);
+    let start = rect(s, 0.0, 80.0, 6.0, 10.0);
+    let name = s.execute("brush.new", &json!({"type": "pattern", "name": "Rail", "ids": [side.0]})).unwrap()["name"].as_str().unwrap().to_string();
+    let params = json!({
+        "side": art_json(s, side),
+        "side_frame": Rect::new(-2.0, 0.0, 22.0, 10.0),
+        "outer_corner": art_json(s, corner),
+        "start": art_json(s, start),
+    });
+    s.execute("brush.options", &json!({"name": name, "params": params})).unwrap();
+    name
+}
+
+/// `brush.placeArt` lays a pattern brush's tiles out left to right, each in a group named for its
+/// tile, with an unpainted rectangle at the back of a tile with a repeat frame marking that frame.
+#[test]
+fn pattern_brushes_place_their_tiles_in_a_row() {
+    let mut s = session();
+    let name = framed_pattern_brush(&mut s);
+    let id = NodeId(s.execute("brush.placeArt", &json!({"name": name, "x": 200, "y": 150})).unwrap()["id"].as_u64().unwrap());
+    let placed = node(&s, id);
+    let tiles: Vec<Node> = placed.children().unwrap().iter().map(|c| (**c).clone()).collect();
+    let names: Vec<&str> = tiles.iter().map(|t| t.name.as_deref().unwrap_or("")).collect();
+    assert_eq!(names, ["Side Tile", "Outer Corner Tile", "Start Tile"]);
+    let boxes: Vec<Rect> = tiles.iter().map(|t| t.geometric_bounds().unwrap()).collect();
+    assert!(boxes.windows(2).all(|w| (w[1].x0 - w[0].x1 - 10.0).abs() < 1e-6), "10 pt apart, left to right: {boxes:?}");
+    // The side tile: the frame's rectangle, unpainted, behind the art.
+    let side = tiles[0].children().unwrap();
+    assert_eq!(side.len(), 2);
+    let marker = &side[0];
+    assert!(marker.appearance.items.iter().all(|i| match i {
+        vectorcraft_doc::AppearanceItem::Fill(f) => f.paint.is_none(),
+        vectorcraft_doc::AppearanceItem::Stroke(st) => st.paint.is_none(),
+    }));
+    let frame = marker.geometric_bounds().unwrap();
+    assert!((frame.width() - 24.0).abs() < 1e-6 && (frame.height() - 10.0).abs() < 1e-6, "{frame:?}");
+    assert_eq!(tiles[1].children().unwrap().len(), 1, "no frame, no rectangle");
+}
+
+/// `brush.replaceArt` reads the tiles `brush.placeArt` places back tile by tile, frames included:
+/// every tile and the frame keep their sizes, and the frame keeps its place around the art.
+#[test]
+fn placed_pattern_tiles_go_back_into_the_brush_tile_by_tile() {
+    let mut s = session();
+    let name = framed_pattern_brush(&mut s);
+    let before = s.execute("brush.get", &json!({"name": name})).unwrap();
+    let id = NodeId(s.execute("brush.placeArt", &json!({"name": name, "x": 200, "y": 150})).unwrap()["id"].as_u64().unwrap());
+    let steps = undo_steps(&s);
+    s.execute("brush.replaceArt", &json!({"name": name, "ids": [id.0]})).unwrap();
+    assert_eq!(undo_steps(&s), steps + 1);
+    let after = s.execute("brush.get", &json!({"name": name})).unwrap();
+    let size = |v: &Value| {
+        let n: Node = serde_json::from_value(v.clone()).unwrap();
+        let b = n.geometric_bounds().unwrap();
+        (b.width(), b.height())
+    };
+    for key in ["side", "outer_corner", "start"] {
+        let (a, b) = (size(&before[key]), size(&after[key]));
+        assert!((a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6, "{key}: {a:?} → {b:?}");
+    }
+    assert!(after.get("end").is_none_or(Value::is_null) && after.get("inner_corner").is_none_or(Value::is_null));
+    let frame: Rect = serde_json::from_value(after["side_frame"].clone()).unwrap();
+    let art: Node = serde_json::from_value(after["side"].clone()).unwrap();
+    let art = art.geometric_bounds().unwrap();
+    assert!((frame.width() - 24.0).abs() < 1e-6 && (art.x0 - frame.x0 - 2.0).abs() < 1e-6, "{frame:?} around {art:?}");
+    assert!(after["outer_corner_frame"].is_null() || after.get("outer_corner_frame").is_none());
+}
+
+/// Art that is not the tiles `brush.placeArt` places becomes a pattern brush's side tile, and the
+/// other tiles stay; one tile group alone replaces only that tile.
+#[test]
+fn other_art_replaces_the_side_tile_of_a_pattern_brush() {
+    let mut s = session();
+    let name = framed_pattern_brush(&mut s);
+    let before = s.execute("brush.get", &json!({"name": name})).unwrap();
+    let r = rect(&mut s, 100.0, 100.0, 30.0, 12.0);
+    s.execute("brush.replaceArt", &json!({"name": name, "ids": [r.0]})).unwrap();
+    let after = s.execute("brush.get", &json!({"name": name})).unwrap();
+    let side: Node = serde_json::from_value(after["side"].clone()).unwrap();
+    assert!(close(side.geometric_bounds().unwrap(), Rect::new(100.0, 100.0, 130.0, 112.0), 1e-6));
+    assert!(after.get("side_frame").is_none_or(Value::is_null), "the old frame goes with the old art");
+    assert_eq!((&after["outer_corner"], &after["start"]), (&before["outer_corner"], &before["start"]));
+    // One placed tile, its group dragged back alone: only the start tile changes.
+    let id = NodeId(s.execute("brush.placeArt", &json!({"name": name})).unwrap()["id"].as_u64().unwrap());
+    let start = node(&s, id).children().unwrap()[2].clone();
+    assert_eq!(start.name.as_deref(), Some("Start Tile"));
+    s.execute("brush.replaceArt", &json!({"name": name, "ids": [start.id.0]})).unwrap();
+    let last = s.execute("brush.get", &json!({"name": name})).unwrap();
+    assert_eq!((&last["side"], &last["outer_corner"]), (&after["side"], &after["outer_corner"]));
+    let art: Node = serde_json::from_value(last["start"].clone()).unwrap();
+    assert!(close(art.geometric_bounds().unwrap(), start.geometric_bounds().unwrap(), 1e-6), "the start tile is the placed one");
+    assert!(art.name.is_none(), "the tile's name stays on the canvas");
+}
+
+/// `brush.replaceArt` gives a brush new art in one undo step: strokes that use it redraw with it,
+/// or with `applyToStrokes: false` keep the brush as it was while a copy with the new art becomes
+/// the current brush. A brush no stroke uses changes in place either way.
+#[test]
+fn replace_art_applies_to_strokes_or_leaves_them_on_the_old_brush() {
+    let mut s = session();
+    let r = rect(&mut s, 10.0, 200.0, 40.0, 8.0);
+    s.execute("brush.new", &json!({"type": "art", "name": "Bar", "ids": [r.0]})).unwrap();
+    let path = line(&mut s);
+    s.execute("brush.apply", &json!({"name": "Bar", "ids": [path.0]})).unwrap();
+    let thin = brushed_bounds(&s, path).height();
+    // A path painted with a brush made from the taller art: what the stroke should draw.
+    let tall = rect(&mut s, 10.0, 220.0, 40.0, 20.0);
+    s.execute("brush.new", &json!({"type": "art", "name": "Tall", "ids": [tall.0]})).unwrap();
+    let reference = line(&mut s);
+    s.execute("brush.apply", &json!({"name": "Tall", "ids": [reference.0]})).unwrap();
+    let want = brushed_bounds(&s, reference).height();
+    assert!(want > thin * 2.0, "{want} against {thin}");
+    // Apply to Strokes: the stroke redraws with the taller art.
+    let steps = undo_steps(&s);
+    let r = s.execute("brush.replaceArt", &json!({"name": "Bar", "ids": [tall.0]})).unwrap();
+    assert_eq!(r["name"], "Bar");
+    assert_eq!(undo_steps(&s), steps + 1);
+    assert!((brushed_bounds(&s, path).height() - want).abs() < 1e-6);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!((brushed_bounds(&s, path).height() - thin).abs() < 1e-9, "undo puts the old art back");
+    s.execute("edit.redo", &json!({})).unwrap();
+    // Leave Strokes: the stroke keeps Bar as it was; Bar copy has the new art, after Bar, current.
+    let short = rect(&mut s, 10.0, 260.0, 40.0, 4.0);
+    let bar = s.execute("brush.get", &json!({"name": "Bar"})).unwrap();
+    let r = s.execute("brush.replaceArt", &json!({"name": "Bar", "ids": [short.0], "applyToStrokes": false})).unwrap();
+    assert_eq!(r["name"], "Bar copy");
+    assert_eq!(brush_of(&s, path).as_deref(), Some("Bar"));
+    assert_eq!(s.execute("brush.get", &json!({"name": "Bar"})).unwrap(), bar);
+    assert!((brushed_bounds(&s, path).height() - want).abs() < 1e-6);
+    let copy: Node = serde_json::from_value(s.execute("brush.get", &json!({"name": "Bar copy"})).unwrap()["art"].clone()).unwrap();
+    assert!((copy.geometric_bounds().unwrap().height() - 4.0).abs() < 1e-6);
+    let list = s.execute("brush.list", &json!({})).unwrap();
+    assert_eq!(list["current"], "Bar copy");
+    let names: Vec<&str> = list["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect();
+    let at = names.iter().position(|n| *n == "Bar").unwrap();
+    assert_eq!(names.get(at + 1), Some(&"Bar copy"));
+    // No stroke uses Bar copy: its art changes in place, with or without applying.
+    s.execute("brush.replaceArt", &json!({"name": "Bar copy", "ids": [tall.0], "applyToStrokes": false})).unwrap();
+    assert!(s.execute("brush.get", &json!({"name": "Bar copy 2"})).is_err());
+}
+
+/// `brush.replaceArt` refuses a brush without art, an unknown brush, an empty selection, art with no
+/// width and an `applyToStrokes` that is not a boolean, and changes nothing then.
+#[test]
+fn replace_art_refuses_what_it_cannot_take() {
+    let mut s = session();
+    let r = rect(&mut s, 10.0, 20.0, 40.0, 8.0);
+    let flat = s.execute("shape.line", &json!({"x1": 50, "y1": 100, "x2": 50, "y2": 160})).unwrap()["id"].as_u64().unwrap();
+    let lib = s.execute("brush.list", &json!({})).unwrap();
+    let steps = undo_steps(&s);
+    for (p, msg) in [
+        (json!({"name": "3 pt. Round", "ids": [r.0]}), "`3 pt. Round` has no art (only scatter, art and pattern brushes do)"),
+        (json!({"name": "Bristle Round", "ids": [r.0]}), "`Bristle Round` has no art (only scatter, art and pattern brushes do)"),
+        (json!({"name": "Nope", "ids": [r.0]}), "no brush named `Nope`"),
+        (json!({"name": "Arrow", "ids": [flat]}), "the selected art has no width"),
+        (json!({"name": "Chain", "ids": [flat]}), "the selected art has no width"),
+        (json!({"name": "Arrow", "ids": [r.0], "applyToStrokes": "no"}), "`applyToStrokes` must be true or false"),
+    ] {
+        let e = s.execute("brush.replaceArt", &p).unwrap_err();
+        assert!(e.to_string().contains(msg), "{p}: {e}");
+    }
+    s.select(|_, sel| sel.clear()).unwrap();
+    let e = s.execute("brush.replaceArt", &json!({"name": "Arrow"})).unwrap_err();
+    assert!(e.to_string().contains("nothing selected"), "{e}");
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!(s.execute("brush.list", &json!({})).unwrap(), lib);
+}
+
+/// An instance of a symbol whose art has no width is art with no width for `brush.new` and
+/// `brush.replaceArt`, although an instance's box without its document has width.
+#[test]
+fn a_symbol_whose_art_has_no_width_makes_no_brush_art() {
+    let mut s = session();
+    let flat = NodeId(s.execute("shape.line", &json!({"x1": 50, "y1": 100, "x2": 50, "y2": 160})).unwrap()["id"].as_u64().unwrap());
+    let art = node(&s, flat);
+    s.execute("edit.clear", &json!({"ids": [flat.0]})).unwrap();
+    let st = s.doc_mut().unwrap();
+    let d = std::sync::Arc::make_mut(&mut st.doc);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Flat".into(), art: std::sync::Arc::new(art) });
+    let layer = d.layers[0].id;
+    let inst = d.alloc_id();
+    d.insert(Some(layer), usize::MAX, Node::new(inst, NodeKind::SymbolInstance { symbol: "Flat".into(), xf: vectorcraft_geom::Affine::IDENTITY }))
+        .unwrap();
+    assert!(node(&s, inst).geometric_bounds().is_some_and(|b| b.width() > 1.0), "the box an instance has without its document");
+    for (cmd, p) in [("brush.new", json!({"type": "art", "ids": [inst.0]})), ("brush.replaceArt", json!({"name": "Arrow", "ids": [inst.0]}))] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(e.to_string().contains("the selected art has no width"), "{cmd}: {e}");
+    }
+}
+
+/// `brush.replaceArt` checks only the art it is given: a tile the pattern brush already has that
+/// has no width does not stop another tile from being replaced.
+#[test]
+fn replace_art_checks_only_the_tiles_it_is_given() {
+    let mut s = session();
+    let flat = NodeId(s.execute("shape.line", &json!({"x1": 50, "y1": 100, "x2": 50, "y2": 160})).unwrap()["id"].as_u64().unwrap());
+    let end = art_json(&mut s, flat);
+    s.execute("brush.options", &json!({"name": "Chain", "params": {"end": end}})).unwrap();
+    let r = rect(&mut s, 10.0, 20.0, 40.0, 8.0);
+    s.execute("brush.replaceArt", &json!({"name": "Chain", "ids": [r.0]})).unwrap();
+    let side: Node = serde_json::from_value(s.execute("brush.get", &json!({"name": "Chain"})).unwrap()["side"].clone()).unwrap();
+    assert!(close(side.geometric_bounds().unwrap(), bounds(&s, r), 1e-6));
+}
+
+/// Tile `key` (`side`, `start`…) of pattern brush `name`.
+fn tile_art(s: &mut Session, name: &str, key: &str) -> Node {
+    serde_json::from_value(s.execute("brush.get", &json!({"name": name})).unwrap()[key].clone()).unwrap()
+}
+
+/// A pattern brush tile placed with `brush.placeArt` and given back with `brush.replaceArt` is the
+/// art it was, not that art inside the tile's group, however many times it goes out and back.
+#[test]
+fn pattern_tiles_go_out_and_back_without_gaining_a_group() {
+    let mut s = session();
+    let name = framed_pattern_brush(&mut s);
+    let size = |n: &Node| {
+        let b = n.geometric_bounds().unwrap();
+        (b.width(), b.height())
+    };
+    let first = tile_art(&mut s, &name, "side");
+    assert!(matches!(first.kind, NodeKind::Path { .. }), "{:?}", first.kind);
+    for round in 1..=2 {
+        let id = s.execute("brush.placeArt", &json!({"name": name})).unwrap()["id"].as_u64().unwrap();
+        s.execute("brush.replaceArt", &json!({"name": name, "ids": [id]})).unwrap();
+        let side = tile_art(&mut s, &name, "side");
+        assert!(matches!(side.kind, NodeKind::Path { .. }), "round {round}: {:?}", side.kind);
+        let (a, b) = (size(&first), size(&side));
+        assert!((a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6, "round {round}: {a:?} → {b:?}");
+    }
+}
+
+/// A tile group whose art was deleted, leaving only the rectangle that marks its frame, is art with
+/// no width: the brush keeps its tile.
+#[test]
+fn a_tile_group_holding_only_its_frame_is_refused() {
+    let mut s = session();
+    let name = framed_pattern_brush(&mut s);
+    let before = s.execute("brush.get", &json!({"name": name})).unwrap();
+    let id = NodeId(s.execute("brush.placeArt", &json!({"name": name})).unwrap()["id"].as_u64().unwrap());
+    let side = node(&s, id).children().unwrap()[0].clone();
+    assert_eq!(side.name.as_deref(), Some("Side Tile"));
+    let art = side.children().unwrap()[1].id;
+    s.execute("edit.clear", &json!({"ids": [art.0]})).unwrap();
+    let steps = undo_steps(&s);
+    let e = s.execute("brush.replaceArt", &json!({"name": name, "ids": [side.id.0]})).unwrap_err();
+    assert!(e.to_string().contains("the selected art has no width"), "{e}");
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!(s.execute("brush.get", &json!({"name": name})).unwrap(), before);
+}
+
+/// Two groups named for the same tile: the frontmost one is the tile's art.
+#[test]
+fn the_frontmost_group_named_for_a_tile_is_that_tile() {
+    let mut s = session();
+    let name = framed_pattern_brush(&mut s);
+    let back = rect(&mut s, 10.0, 10.0, 20.0, 10.0);
+    let front = rect(&mut s, 10.0, 40.0, 30.0, 10.0);
+    let (back, front) = (node(&s, back), node(&s, front));
+    s.execute("edit.clear", &json!({"ids": [back.id.0, front.id.0]})).unwrap();
+    let st = s.doc_mut().unwrap();
+    let d = std::sync::Arc::make_mut(&mut st.doc);
+    let tile = |d: &mut Document, n: Node| {
+        let mut g = Node::group(d.alloc_id(), vec![std::sync::Arc::new(n)]);
+        g.name = Some("Start Tile".into());
+        std::sync::Arc::new(g)
+    };
+    let tiles = vec![tile(d, back), tile(d, front)];
+    let both = Node::group(d.alloc_id(), tiles);
+    let both_id = both.id;
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), usize::MAX, both).unwrap();
+    s.execute("brush.replaceArt", &json!({"name": name, "ids": [both_id.0]})).unwrap();
+    let start = tile_art(&mut s, &name, "start");
+    assert!((start.geometric_bounds().unwrap().width() - 30.0).abs() < 1e-6, "{:?}", start.geometric_bounds());
+}
+
+/// Type is art for `brush.replaceArt` as it is for `brush.new`: taken as it is.
+#[test]
+fn replace_art_takes_type_as_brush_new_does() {
+    let mut s = session();
+    let t = s.execute("text.create", &json!({"x": 20, "y": 60, "text": "Hi", "size": 24})).unwrap()["id"].as_u64().unwrap();
+    let want = art_json(&mut s, NodeId(t));
+    s.execute("brush.replaceArt", &json!({"name": "Arrow", "ids": [t]})).unwrap();
+    assert_eq!(s.execute("brush.get", &json!({"name": "Arrow"})).unwrap()["art"], want);
+    let made = s.execute("brush.new", &json!({"type": "art", "ids": [t]})).unwrap()["name"].as_str().unwrap().to_string();
+    assert_eq!(s.execute("brush.get", &json!({"name": made})).unwrap()["art"], want);
+}
+
 #[test]
 fn brush_options_rename_duplicate_and_delete_update_strokes() {
     let mut s = session();
@@ -1321,6 +1682,106 @@ fn break_link_counts_the_instances_mask_art() {
     assert!(matches!(node(&s, inst).kind, NodeKind::SymbolInstance { .. }), "it stays an instance");
 }
 
+/// A hidden, a locked and a plain instance of one symbol in a group, the group selected.
+fn group_with_hidden_and_locked_instances(s: &mut Session) -> (NodeId, String) {
+    let (shown, name, _) = make_symbol(s);
+    let hidden = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 300, "y": 200})).unwrap()["id"].as_u64().unwrap());
+    let locked = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 300, "y": 100})).unwrap()["id"].as_u64().unwrap());
+    select(s, &[shown, hidden, locked]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    doc.node_mut(hidden).unwrap().visible = false;
+    doc.node_mut(locked).unwrap().locked = true;
+    select(s, &[group]);
+    (group, name)
+}
+
+/// The visibility and lock state of the children of `group`, in paint order.
+fn shown_and_locked(s: &Session, group: NodeId) -> Vec<(bool, bool)> {
+    let g = node(s, group);
+    let NodeKind::Group { children, .. } = &g.kind else { panic!("a group: {}", g.kind_label()) };
+    assert!(children.iter().all(|c| !matches!(c.kind, NodeKind::SymbolInstance { .. })), "every instance is expanded");
+    children.iter().map(|c| (c.visible, c.locked)).collect()
+}
+
+/// Break Link to Symbol on a selected group keeps a hidden instance's art hidden and a locked
+/// instance's art locked, and selects only the art that can be selected.
+#[test]
+fn break_link_keeps_hidden_and_locked_instances_hidden_and_locked() {
+    let mut s = session();
+    let (group, _) = group_with_hidden_and_locked_instances(&mut s);
+    let r = s.execute("symbol.breakLink", &json!({})).unwrap();
+    assert_eq!(r["ids"].as_array().unwrap().len(), 3, "{r}");
+    assert_eq!(shown_and_locked(&s, group), vec![(true, false), (false, false), (true, true)]);
+    let d = &s.doc().unwrap().doc;
+    let selected: Vec<NodeId> = s.doc().unwrap().selection.objects.to_vec();
+    assert_eq!(selected.len(), 1, "{selected:?}");
+    assert!(selected.iter().all(|id| d.node(*id).is_some_and(|n| n.visible && !n.locked)), "{selected:?}");
+}
+
+/// Break Link to Symbol on a selected group does not select the art of a shown, unlocked instance
+/// that sits in a hidden or a locked group inside it.
+#[test]
+fn break_link_leaves_art_in_hidden_or_locked_groups_unselected() {
+    let mut s = session();
+    let (shown, name, _) = make_symbol(&mut s);
+    let subgroup = |s: &mut Session, y: i64| {
+        let id = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 300, "y": y})).unwrap()["id"].as_u64().unwrap());
+        select(s, &[id]);
+        NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap())
+    };
+    let hidden = subgroup(&mut s, 200);
+    let locked = subgroup(&mut s, 100);
+    select(&mut s, &[shown, hidden, locked]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    doc.node_mut(hidden).unwrap().visible = false;
+    doc.node_mut(locked).unwrap().locked = true;
+    select(&mut s, &[group]);
+    let r = s.execute("symbol.breakLink", &json!({})).unwrap();
+    assert_eq!(r["ids"].as_array().unwrap().len(), 3, "{r}");
+    let d = &s.doc().unwrap().doc;
+    let selected: Vec<NodeId> = s.doc().unwrap().selection.objects.to_vec();
+    assert_eq!(selected.len(), 1, "{selected:?}");
+    let a = d.ancestry(selected[0]).unwrap();
+    assert!(!a.contains(&hidden) && !a.contains(&locked), "{a:?}");
+}
+
+/// Break Link to Symbol on an instance just placed on a locked artboard selects the art that
+/// replaces it, which stays new art there. The art of an older instance there, named by id, is not
+/// selected.
+#[test]
+fn break_link_keeps_new_art_on_a_locked_artboard_selected() {
+    let mut s = session();
+    let (old, name, _) = make_symbol(&mut s);
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 400, "height": 400})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    select(&mut s, &[old]);
+    s.execute("object.move", &json!({"dx": 1000, "dy": 0})).unwrap();
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "moved onto the locked artboard");
+    let inst = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 1100, "y": 100})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(s.doc().unwrap().selection.objects.to_vec(), [inst], "placed art is selected");
+    let r = s.execute("symbol.breakLink", &json!({})).unwrap();
+    let art: Vec<NodeId> = r["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    assert_eq!(art.len(), 1, "{r}");
+    assert_eq!(s.doc().unwrap().selection.objects.to_vec(), art, "the art that replaces it");
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects.to_vec(), art, "the art stays editable");
+    let r = s.execute("symbol.breakLink", &json!({"ids": [old.0]})).unwrap();
+    assert_eq!(r["ids"].as_array().unwrap().len(), 1, "{r}");
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the older instance's art");
+}
+
+/// Delete Symbol, expanding the instances, keeps a hidden instance's art hidden and a locked
+/// instance's art locked.
+#[test]
+fn delete_symbol_keeps_hidden_and_locked_instances_hidden_and_locked() {
+    let mut s = session();
+    let (group, name) = group_with_hidden_and_locked_instances(&mut s);
+    s.execute("symbol.delete", &json!({"name": name})).unwrap();
+    assert_eq!(shown_and_locked(&s, group), vec![(true, false), (false, false), (true, true)]);
+}
+
 #[test]
 fn delete_duplicate_and_replace_symbols() {
     let mut s = session();
@@ -1341,6 +1802,150 @@ fn delete_duplicate_and_replace_symbols() {
     doc.walk(|n| plain += matches!(n.kind, NodeKind::Path { .. }) as i32);
     assert_eq!(plain, 2, "both instances of Small were expanded");
     assert!(s.execute("symbol.delete", &json!({"name": "Small"})).is_err());
+}
+
+fn xf_of(s: &Session, id: NodeId) -> vectorcraft_geom::Affine {
+    match node(s, id).kind {
+        NodeKind::SymbolInstance { xf, .. } => xf,
+        _ => panic!("{id:?} is not a symbol instance"),
+    }
+}
+
+fn close_xf(a: vectorcraft_geom::Affine, b: vectorcraft_geom::Affine) -> bool {
+    a.as_coeffs().iter().zip(b.as_coeffs()).all(|(x, y)| (x - y).abs() < 1e-9)
+}
+
+fn undo_len(s: &Session) -> usize {
+    s.doc().unwrap().history.undo.len()
+}
+
+/// Reset Transformation gives rotated, scaled, sheared and reflected instances (in a group too)
+/// their symbol's own scale again, each keeping the center of its bounding box, as one undo step.
+#[test]
+fn reset_transformation_restores_the_symbols_scale_and_keeps_the_center() {
+    let mut s = session();
+    let (a, name, placed) = make_symbol(&mut s);
+    let b = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 300, "y": 200})).unwrap()["id"].as_u64().unwrap());
+    let c = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 100, "y": 220})).unwrap()["id"].as_u64().unwrap());
+    let master = xf_of(&s, b).with_translation(vectorcraft_geom::Vec2::ZERO);
+    select(&mut s, &[a]);
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    s.execute("object.scale", &json!({"sx": 150, "sy": 50})).unwrap();
+    select(&mut s, &[b]);
+    s.execute("object.shear", &json!({"angle": 20})).unwrap();
+    select(&mut s, &[c]);
+    s.execute("object.reflect", &json!({"axis": "vertical"})).unwrap();
+    let turned: Vec<_> = [a, b, c].iter().map(|id| xf_of(&s, *id)).collect();
+    let centers: Vec<_> = [a, b, c].iter().map(|id| bounds(&s, *id).center()).collect();
+    let plain = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    select(&mut s, &[b, c]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    select(&mut s, &[a, group, plain]);
+    let plain_before = node(&s, plain);
+    let before = undo_len(&s);
+    let r = s.execute("symbol.instance.resetTransform", &json!({})).unwrap();
+    assert_eq!(r["ids"], json!([a.0, b.0, c.0]));
+    assert_eq!(undo_len(&s), before + 1, "one undo step");
+    for (id, center) in [a, b, c].into_iter().zip(&centers) {
+        let got = bounds(&s, id);
+        assert!((got.width() - placed.width()).abs() < 1e-9 && (got.height() - placed.height()).abs() < 1e-9, "{id:?}: {got:?}");
+        assert!((got.center() - *center).hypot() < 1e-9, "{id:?} keeps its center: {got:?} vs {center:?}");
+        let xf = xf_of(&s, id);
+        assert!(close_xf(xf.with_translation(vectorcraft_geom::Vec2::ZERO), master), "{id:?}: {xf:?}");
+    }
+    assert!(node(&s, plain) == plain_before, "other objects are left as they are");
+    s.execute("edit.undo", &json!({})).unwrap();
+    for (id, xf) in [a, b, c].into_iter().zip(turned) {
+        assert!(close_xf(xf_of(&s, id), xf), "Undo gives {id:?} its own transform back");
+    }
+}
+
+/// An instance of a symbol whose art lies away from the symbol's origin (as imported symbols can)
+/// keeps the center of the box its art fills when Reset Transformation turns it back.
+#[test]
+fn reset_transformation_keeps_the_center_of_art_away_from_the_origin() {
+    let mut s = session();
+    let r = rect(&mut s, 300.0, 10.0, 20.0, 20.0);
+    let art = node(&s, r);
+    s.execute("edit.clear", &json!({"ids": [r.0]})).unwrap();
+    let st = s.doc_mut().unwrap();
+    let d = std::sync::Arc::make_mut(&mut st.doc);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Off".into(), art: std::sync::Arc::new(art) });
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::translate((100.0, 100.0)) * vectorcraft_geom::Affine::rotate(0.5);
+    d.insert(Some(layer), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "Off".into(), xf })).unwrap();
+    let measured = |s: &Session| s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    let before = measured(&s);
+    assert_eq!(s.execute("symbol.instance.resetTransform", &json!({"ids": [id.0]})).unwrap()["ids"], json!([id.0]));
+    let after = measured(&s);
+    assert!((after.center() - before.center()).hypot() < 1e-9, "{after:?} vs {before:?}");
+    assert!((after.width() - 20.0).abs() < 1e-9 && (after.height() - 20.0).abs() < 1e-9, "{after:?}");
+}
+
+/// A stored natural size that is not positive (from a damaged file: zero or negative on either
+/// side) does not flatten or mirror the instance: Reset Transformation gives it the art's own
+/// size, as drawing the symbol does.
+#[test]
+fn reset_transformation_ignores_a_stored_size_that_is_not_positive() {
+    for size in [json!([0.0, 20.0]), json!([-20.0, 20.0]), json!([20.0, -5.0]), json!([-20.0, -20.0])] {
+        let mut s = session();
+        let r = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+        let art = node(&s, r);
+        s.execute("edit.clear", &json!({"ids": [r.0]})).unwrap();
+        let st = s.doc_mut().unwrap();
+        let d = std::sync::Arc::make_mut(&mut st.doc);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Flat".into(), art: std::sync::Arc::new(art) });
+        d.unknown.insert(vectorcraft_doc::SYMBOL_SIZES.to_string(), json!({ "Flat": size }));
+        let layer = d.layers[0].id;
+        let id = d.alloc_id();
+        let xf = vectorcraft_geom::Affine::translate((100.0, 100.0)) * vectorcraft_geom::Affine::rotate(0.5);
+        d.insert(Some(layer), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "Flat".into(), xf })).unwrap();
+        assert_eq!(s.execute("symbol.instance.resetTransform", &json!({"ids": [id.0]})).unwrap()["ids"], json!([id.0]), "{size}");
+        let after = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+        assert!((after.width() - 20.0).abs() < 1e-9 && (after.height() - 20.0).abs() < 1e-9, "{size}: {after:?}");
+        assert!(close_xf(xf_of(&s, id).with_translation(vectorcraft_geom::Vec2::ZERO), vectorcraft_geom::Affine::IDENTITY), "{size}: not mirrored");
+    }
+}
+
+/// Reset Transformation adds no undo step for an instance already at its symbol's scale or for
+/// one in perspective, and refuses an id naming no object and objects without an instance,
+/// changing nothing.
+#[test]
+fn reset_transformation_leaves_unchanged_instances_and_refuses_bad_ids() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 1000, "height": 800})).unwrap();
+    let (inst, name, _) = make_symbol(&mut s);
+    let before = undo_len(&s);
+    assert_eq!(s.execute("symbol.instance.resetTransform", &json!({"ids": [inst.0]})).unwrap()["ids"], json!([]));
+    assert_eq!(undo_len(&s), before, "nothing changed: no undo step");
+    let plain = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    select(&mut s, &[inst]);
+    s.execute("object.rotate", &json!({"angle": 45})).unwrap();
+    let turned = s.doc().unwrap().doc.clone();
+    let before = undo_len(&s);
+    for bad in [json!({"ids": [inst.0, 999_999]}), json!({"id": 999_999}), json!({"ids": [plain.0]}), json!({"ids": "x"})] {
+        assert!(s.execute("symbol.instance.resetTransform", &bad).is_err(), "{bad}");
+    }
+    assert!(*s.doc().unwrap().doc == *turned && undo_len(&s) == before, "the refusals change nothing");
+    // An instance in perspective is left as it is.
+    s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
+    let projected = NodeId(s.execute("symbol.place", &json!({"name": name, "x": 500, "y": 350})).unwrap()["id"].as_u64().unwrap());
+    select(&mut s, &[projected]);
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    s.execute("perspective.attach", &json!({"ids": [projected.0], "plane": "right"})).unwrap();
+    let xf = xf_of(&s, projected);
+    let before = undo_len(&s);
+    assert_eq!(s.execute("symbol.instance.resetTransform", &json!({"ids": [projected.0]})).unwrap()["ids"], json!([]));
+    assert!(undo_len(&s) == before && close_xf(xf_of(&s, projected), xf), "an instance in perspective stays as it was");
+    // Selected with a turned instance, the instance in perspective still stays as it was, and only
+    // the other one is reset and returned, in one undo step.
+    select(&mut s, &[inst, projected]);
+    assert_eq!(s.execute("symbol.instance.resetTransform", &json!({})).unwrap()["ids"], json!([inst.0]));
+    assert_eq!(undo_len(&s), before + 1, "one undo step");
+    assert!(close_xf(xf_of(&s, projected), xf), "the instance in perspective stays as it was");
+    let reset = xf_of(&s, inst).with_translation(vectorcraft_geom::Vec2::ZERO);
+    assert!(close_xf(reset, s.doc().unwrap().doc.symbol_natural_xf(&name)), "the turned instance is reset: {reset:?}");
 }
 
 /// New Symbol and Duplicate Symbol trim the name they are given, as Symbol Options trims
@@ -1706,4 +2311,64 @@ fn symbol_unused_lists_the_symbols_nothing_places_and_delete_takes_several() {
         assert!(s.execute("symbol.delete", &bad).is_err(), "{bad}");
     }
     assert_eq!(names(&s).len(), 6);
+}
+
+/// Symbols panel › Sort by Name: the document's symbols in name order, ignoring case, with names
+/// that differ only in case kept in their order, as one undo step that keeps the current symbol
+/// and every instance; sorting symbols already in order adds no undo step.
+#[test]
+fn symbol_sort_by_name_orders_the_symbols_in_one_undo_step() {
+    let mut s = session();
+    let names = |s: &mut Session| -> Vec<String> {
+        let list = s.execute("symbol.list", &json!({})).unwrap();
+        list["symbols"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap_or_default().to_string()).collect()
+    };
+    let current = |s: &mut Session| s.execute("symbol.list", &json!({})).unwrap()["current"].clone();
+    let made = ["leaf", "Badge", "apple", "Leaf", "Zed"];
+    for (i, name) in made.into_iter().enumerate() {
+        rect(&mut s, 20.0 * i as f64, 0.0, 10.0, 10.0);
+        s.execute("symbol.new", &json!({"name": name})).unwrap();
+    }
+    // No current symbol stored: the first one is current.
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).unknown.remove("currentSymbol");
+    assert_eq!(current(&mut s), "leaf");
+    let instances = |s: &Session| {
+        let mut v = vec![];
+        s.doc().unwrap().doc.walk(|n| {
+            if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+                v.push((n.id, symbol.clone()));
+            }
+        });
+        v
+    };
+    let placed = instances(&s);
+    assert_eq!(placed.len(), 5);
+    let before = s.doc().unwrap().history.undo.len();
+    s.execute("symbol.sortByName", &json!({})).unwrap();
+    assert_eq!(names(&mut s), ["apple", "Badge", "leaf", "Leaf", "Zed"]);
+    assert_eq!(current(&mut s), "leaf", "the current symbol stays current");
+    assert_eq!(instances(&s), placed, "every instance keeps its symbol");
+    assert_eq!(s.doc().unwrap().history.undo.len(), before + 1, "one undo step");
+    // Already in order: nothing changes and no undo step is added.
+    let revision = s.doc().unwrap().revision;
+    s.execute("symbol.sortByName", &json!({})).unwrap();
+    assert_eq!((s.doc().unwrap().history.undo.len(), s.doc().unwrap().revision), (before + 1, revision));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(names(&mut s), made);
+    assert_eq!(current(&mut s), "leaf");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(names(&mut s), ["apple", "Badge", "leaf", "Leaf", "Zed"]);
+    // An explicitly current symbol stays current too.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("symbol.setCurrent", &json!({"name": "Zed"})).unwrap();
+    s.execute("symbol.sortByName", &json!({})).unwrap();
+    assert_eq!(current(&mut s), "Zed");
+    // Run as a batch step it sorts as well, and with no symbols it adds no undo step.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("command.batch", &json!({"commands": [{"command": "symbol.sortByName", "params": {}}]})).unwrap();
+    assert_eq!(names(&mut s), ["apple", "Badge", "leaf", "Leaf", "Zed"]);
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let before = s.doc().unwrap().history.undo.len();
+    s.execute("symbol.sortByName", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), before);
 }

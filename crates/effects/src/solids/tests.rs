@@ -45,10 +45,15 @@ fn every_solid_draws_shaded_faces_and_leaves_the_source_editable() {
         assert_eq!(n.path_data(), Some(&source), "{id}");
         assert!(!faces(&art).is_empty(), "{id}");
         // The faces are the fill's red or the stroke's black, shaded: never brighter, never another
-        // hue.
+        // hue. The classic Plastic surface, its default, also lightens a face toward white, which
+        // scales every channel's distance from white by the same factor and so keeps r - g to
+        // r - b at 6 to 7.
         for f in faces(&art) {
             let [r, g, b] = fill_rgb(f);
-            assert!(r <= 0.8 + 1e-6 && (g * 4.0 - r).abs() < 1e-4 && (b * 8.0 - r).abs() < 1e-4 || id == ROTATE, "{id}: {r} {g} {b}");
+            let shaded = r <= 0.8 + 1e-6 && (g * 4.0 - r).abs() < 1e-4 && (b * 8.0 - r).abs() < 1e-4;
+            let highlighted =
+                id == CLASSIC_EXTRUDE && [r, g, b].iter().all(|c| (0.0..=1.0).contains(c)) && ((r - g) * 7.0 - (r - b) * 6.0).abs() < 1e-4;
+            assert!(shaded || highlighted || id == ROTATE, "{id}: {r} {g} {b}");
         }
         // The art follows the source when it moves.
         let before = art.visual_bounds().unwrap();
@@ -175,6 +180,137 @@ fn the_front_caps_are_drawn_last_in_the_order_of_the_appearance() {
     }
 }
 
+/// A C, open to the right: two concave corners where its walls meet the walls of the notch.
+fn letter_c() -> BezPath {
+    let mut b = BezPath::new();
+    b.move_to((100.0, 100.0));
+    b.line_to((200.0, 100.0));
+    b.line_to((200.0, 130.0));
+    b.line_to((130.0, 130.0));
+    b.line_to((130.0, 170.0));
+    b.line_to((200.0, 170.0));
+    b.line_to((200.0, 200.0));
+    b.line_to((100.0, 200.0));
+    b.close_path();
+    b
+}
+
+/// The pairs (blue, red) of `walls`, by index, where the blue face is drawn first and the two
+/// faces' bounds overlap.
+fn red_after_blue(walls: &[&Node]) -> Vec<(usize, usize)> {
+    let bounds: Vec<Rect> = walls.iter().map(|f| f.path_data().and_then(PathData::bounds).unwrap()).collect();
+    let overlap = |a: &Rect, b: &Rect| a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+    let mut out = vec![];
+    for (i, a) in walls.iter().enumerate() {
+        for (j, b) in walls.iter().enumerate().skip(i + 1) {
+            if blue(a) && !blue(b) && overlap(&bounds[i], &bounds[j]) {
+                out.push((i, j));
+            }
+        }
+    }
+    out
+}
+
+/// An opaque stroke's solid holds the fill's edge, so the fill's walls are drawn before every
+/// face of the stroke they overlap, and the stroke's walls cover them at the concave corners of a
+/// turned C, in Extrude & Bevel and Extrude & Bevel (Classic). The front caps stay last, the
+/// fill's below the stroke's.
+#[test]
+fn a_fills_walls_are_drawn_before_the_stroke_faces_over_them() {
+    let views = [json!({}), json!({"rotationX": -20, "rotationY": -40, "rotationZ": 0}), json!({"rotationX": 25, "rotationY": -55, "rotationZ": 10})];
+    for id in [EXTRUDE, CLASSIC_EXTRUDE] {
+        for view in &views {
+            let mut params = view.clone();
+            params["depth"] = json!(60);
+            let mut n = stroked(&letter_c());
+            n.appearance.effects.push(fx(id, params));
+            let art = solid_art(&n).unwrap();
+            let faces = faces(&art);
+            let [walls @ .., fill_cap, stroke_cap] = faces.as_slice() else { panic!("{id} {view}: the caps") };
+            assert!(!blue(fill_cap) && blue(stroke_cap), "{id} {view}: the caps last");
+            assert!(walls.iter().any(|f| !blue(f)) && walls.iter().any(|f| blue(f)), "{id} {view}: walls of both");
+            let wrong = red_after_blue(walls);
+            assert!(wrong.is_empty(), "{id} {view}: fill walls after the stroke faces over them: {wrong:?} of {}", walls.len());
+        }
+    }
+    // Strokes aligned inside or outside keep the fill's walls, in that order. A dashed stroke
+    // leaves the fill's walls in the gaps between its dashes, and they keep their depths.
+    use vectorcraft_doc::StrokeAlign;
+    for (dash, align) in [(true, StrokeAlign::Center), (false, StrokeAlign::Inside), (false, StrokeAlign::Outside)] {
+        let mut n = stroked(&letter_c());
+        if let Some(AppearanceItem::Stroke(s)) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_))) {
+            s.dash = dash.then(|| vectorcraft_doc::Dash { pattern: vec![12.0, 12.0], offset: 0.0, align_corners: false });
+            s.align = align;
+        }
+        n.appearance.effects.push(fx(EXTRUDE, views[1].clone()));
+        let art = solid_art(&n).unwrap();
+        let faces = faces(&art);
+        let [walls @ .., _, _] = faces.as_slice() else { panic!("{align:?}: the caps") };
+        assert!(walls.iter().any(|f| !blue(f)), "{align:?}: the fill's walls");
+        if !dash {
+            assert!(red_after_blue(walls).is_empty(), "{align:?}");
+        }
+    }
+}
+
+/// The order keeps depths except where a shape's fill wall turned toward the viewer overlaps a
+/// face of the same shape's stroke drawn before it: the wall then goes just before that face. A
+/// cap, a face turned away, another shape's stroke, a stroke face the wall does not overlap and an
+/// effect without caps keep the order of the depths.
+#[test]
+fn the_draw_order_moves_a_fill_wall_before_the_stroke_faces_it_overlaps() {
+    let at = |depth: f64, x: f64, member: usize, paints: Paints, side: bool, away: bool| Placed {
+        depth,
+        side,
+        away,
+        bounds: Rect::new(x, 0.0, x + 10.0, 10.0),
+        member,
+        paints,
+    };
+    // 0 the fill's wall; 1 the stroke's wall over it; 2 another shape's stroke over it; 3 a stroke
+    // wall elsewhere; 4 a stroke face turned away; 5 a fill cap; 6 the stroke's cap, nearer; 7 a
+    // fill wall at the stroke wall's depth.
+    let faces = [
+        at(5.0, 0.0, 0, Paints::Fill, true, false),
+        at(3.0, 5.0, 0, Paints::Stroke, true, false),
+        at(2.0, 5.0, 1, Paints::Stroke, true, false),
+        at(1.0, 50.0, 0, Paints::Stroke, true, false),
+        at(0.0, 0.0, 0, Paints::Stroke, true, true),
+        at(4.0, 0.0, 0, Paints::Fill, false, false),
+        at(6.0, 0.0, 0, Paints::Stroke, false, false),
+        at(3.0, 0.0, 0, Paints::Fill, true, false),
+    ];
+    assert_eq!(draw_order(&faces, true), [4, 3, 2, 0, 7, 1, 5, 6]);
+    assert_eq!(draw_order(&faces, false), [4, 3, 2, 1, 7, 5, 0, 6]);
+    // A shape with no stroke, and a stroke without a width, move nothing.
+    // Only a stroke whose solid hides the fill's whole edge counts: an opaque, plain stroke with a
+    // width on a closed shape.
+    let stroke = |f: &dyn Fn(&mut StrokeLayer)| {
+        let mut s = StrokeLayer::new(Paint::solid(BLUE), 6.0);
+        f(&mut s);
+        AppearanceItem::Stroke(s)
+    };
+    assert!(Paints::of(&stroke(&|_| {}), true) == Paints::Stroke);
+    assert!(Paints::of(&stroke(&|_| {}), false) == Paints::Other, "an open shape");
+    assert!(Paints::of(&stroke(&|s| s.width = 0.0), true) == Paints::Other, "no width");
+    let dash = vectorcraft_doc::Dash { pattern: vec![4.0, 4.0], offset: 0.0, align_corners: false };
+    assert!(Paints::of(&stroke(&|s| s.dash = Some(dash.clone())), true) == Paints::Other, "dashes");
+    assert!(Paints::of(&stroke(&|s| s.brush = Some("brush".into())), true) == Paints::Other);
+    assert!(Paints::of(&stroke(&|s| s.paint = Paint::None), true) == Paints::Other);
+    assert!(Paints::of(&stroke(&|s| s.paint = Paint::Pattern { pattern: "p".into(), xf: Affine::IDENTITY }), true) == Paints::Other, "a pattern");
+    use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let gradient = |opacity: f32| {
+        let mut end = GradientStop::new(1.0, RED);
+        end.opacity = opacity;
+        Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, BLUE), end]))))
+    };
+    assert!(Paints::of(&stroke(&|s| s.paint = gradient(1.0)), true) == Paints::Stroke, "an opaque gradient");
+    assert!(Paints::of(&stroke(&|s| s.paint = gradient(0.5)), true) == Paints::Other, "a gradient with a transparent stop");
+    let other = |p: Paints| if p == Paints::Stroke { Paints::Other } else { p };
+    let unstroked: Vec<Placed> = faces.iter().map(|f| at(f.depth, f.bounds.x0, f.member, other(f.paints), f.side, f.away)).collect();
+    assert_eq!(draw_order(&unstroked, true), draw_order(&faces, false));
+}
+
 /// A stroked open path builds a ribbon, the stroke's outline, not the area the path would enclose
 /// if it were closed: for an L of two 100 pt legs, a 6 pt band with butt ends and a mitered corner.
 #[test]
@@ -200,12 +336,12 @@ fn a_stroked_open_path_builds_a_ribbon() {
 /// still draws.
 #[test]
 fn a_stroke_past_the_limits_is_left_out() {
-    // 1,500 corners: within the 2,048 points of the fill's solid, but not the stroke's outline.
-    let points: Vec<Point> = (0..1500)
+    // 40,000 corners: within the 65,536 points of the fill's solid, but not the stroke's outline.
+    let points: Vec<Point> = (0..40_000)
         .map(|k| {
-            let (s, c) = (k as f64 * std::f64::consts::TAU / 1500.0).sin_cos();
-            let r = if k % 2 == 0 { 100.0 } else { 96.0 };
-            Point::new(200.0 + r * c, 200.0 + r * s)
+            let (s, c) = (k as f64 * std::f64::consts::TAU / 40_000.0).sin_cos();
+            let r = if k % 2 == 0 { 10_000.0 } else { 9_999.0 };
+            Point::new(20_000.0 + r * c, 20_000.0 + r * s)
         })
         .collect();
     let path = PathData::single(vectorcraft_geom::SubPath::polyline(&points, true));
@@ -215,6 +351,142 @@ fn a_stroke_past_the_limits_is_left_out() {
         let art = solid_art(&n).unwrap_or_else(|| panic!("{id}: the fill's solid draws"));
         assert!(!faces(&art).is_empty() && faces(&art).iter().all(|f| !blue(f)), "{id}");
     }
+}
+
+/// Each solid [`built_solids`] gives for effect `id` on `n` within `limit` faces together, as its
+/// face count (`None` for a stroke left out) or the error, every result the iterator gives.
+fn solid_faces(id: &str, n: &Node, limit: usize) -> Vec<Result<Option<usize>, String>> {
+    let shapes = [Profile { path: profile(n).unwrap().0, rule: FillRule::NonZero, items: solid_paints(n), opacity: 1.0, scopes: vec![] }];
+    let p = crate::merged_params(id, &json!({}));
+    let (parts, bounds) = solid_parts(&shapes, union_bounds(&shapes).unwrap());
+    built_solids(id, &p, &parts, bounds, limit).map(|r| r.map(|f| f.map(|f| f.len()))).collect()
+}
+
+/// The solids of one object count their faces together: at the limit they all build, one face past
+/// it is an error, and the solids after the one that passes it are never built.
+#[test]
+fn an_objects_solids_count_their_faces_together() {
+    for id in [EXTRUDE, CLASSIC_EXTRUDE, INFLATE] {
+        let mut n = square_node();
+        // A second stroke, so a solid follows the one that passes the limit.
+        let stroke = n.appearance.items[1].clone();
+        n.appearance.items.push(stroke);
+        let counts: Vec<usize> = solid_faces(id, &n, MAX_OBJECT_FACES).into_iter().map(|c| c.unwrap().unwrap()).collect();
+        assert!(counts.len() == 3 && counts.iter().all(|c| *c > 0), "{id}: {counts:?}");
+        let total: usize = counts.iter().sum();
+        assert!(solid_faces(id, &n, total).iter().all(Result::is_ok), "{id}: at the limit");
+        let past = solid_faces(id, &n, total - 1);
+        assert_eq!(past.last(), Some(&Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string())), "{id}");
+        SOLIDS_BUILT.with(|b| b.set(0));
+        let past = solid_faces(id, &n, counts[0] + counts[1] - 1);
+        assert!(past.len() == 2 && past[1].is_err(), "{id}: {past:?}");
+        assert_eq!(SOLIDS_BUILT.with(std::cell::Cell::get), 2, "{id}: the second stroke's solid is never built");
+    }
+}
+
+/// A convex polygon of `corners` corners about (20,000, 20,000), filled red, with no stroke.
+fn polygon_node(id: u64, corners: usize) -> Node {
+    let points: Vec<Point> = (0..corners)
+        .map(|k| {
+            let (s, c) = (k as f64 * std::f64::consts::TAU / corners as f64).sin_cos();
+            Point::new(20_000.0 + 10_000.0 * c, 20_000.0 + 10_000.0 * s)
+        })
+        .collect();
+    let path = PathData::single(vectorcraft_geom::SubPath::polyline(&points, true));
+    Node::path(NodeId(id), path, Appearance::basic(Paint::solid(RED), Paint::None, 0.0))
+}
+
+/// A group whose members' solids each fit, but not all of them together, draws its source art, and
+/// the commands that check the effect report the error, as do its mesh and its wireframe; one
+/// member fewer, within the limit, draws.
+#[test]
+fn a_groups_solids_together_past_the_limit_draw_the_source() {
+    let member = polygon_node(1, 16_384);
+    let mut alone = member.clone();
+    alone.appearance.effects.push(fx(EXTRUDE, json!({})));
+    let [Ok(Some(each))] = solid_faces(EXTRUDE, &alone, MAX_OBJECT_FACES)[..] else { panic!("one solid") };
+    // Members stacked in one place each build the same solid.
+    let fits = MAX_OBJECT_FACES / each;
+    let group = |count: usize| {
+        let members = (0..count)
+            .map(|k| {
+                let mut m = member.clone();
+                m.id = NodeId(k as u64 + 1);
+                Arc::new(m)
+            })
+            .collect();
+        let mut g = Node::group(NodeId(9999), members);
+        g.appearance.effects.push(fx(EXTRUDE, json!({})));
+        g
+    };
+    let within = group(fits);
+    assert!(validate_solid(&within, EXTRUDE, &json!({})).is_ok(), "{fits} × {each} faces");
+    assert!(solid_art(&within).is_some());
+    let past = group(fits + 1);
+    assert_eq!(validate_solid(&past, EXTRUDE, &json!({})), Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string()));
+    assert!(solid_art(&past).is_none(), "the source art draws");
+    assert_eq!(three_d_meshes(&past), Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string()));
+    assert_eq!(three_d_wireframe_in(None, &past), Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string()));
+}
+
+/// A fill and strokes whose solids each fit, but not all of them together, draw the source art,
+/// and the strokes after the one past the limit are not left out to make room.
+#[test]
+fn a_fill_and_strokes_together_past_the_limit_draw_the_source() {
+    let mut n = polygon_node(1, 16_384);
+    n.appearance.effects.push(fx(EXTRUDE, json!({})));
+    let stroke = AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(BLUE), 20.0));
+    n.appearance.items.push(stroke.clone());
+    // Strokes alike each build the same solid.
+    let [Ok(Some(fill)), Ok(Some(each))] = solid_faces(EXTRUDE, &n, MAX_OBJECT_FACES)[..] else { panic!("a fill's solid and a stroke's") };
+    let fits = (MAX_OBJECT_FACES - fill) / each;
+    assert!(fits >= 2, "{fill} + {fits} × {each}");
+    n.appearance.items.extend(std::iter::repeat_n(stroke, fits - 1));
+    assert!(validate_solid(&n, EXTRUDE, &json!({})).is_ok(), "{fill} + {fits} × {each}");
+    let art = solid_art(&n).unwrap();
+    assert!(faces(&art).iter().any(|f| blue(f)));
+    n.appearance.items.push(AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(BLUE), 20.0)));
+    assert_eq!(validate_solid(&n, EXTRUDE, &json!({})), Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string()));
+    assert!(solid_art(&n).is_none(), "the source art draws");
+}
+
+/// The check builds the solids from the shapes the art draws them from: after the geometry effects
+/// before the 3D effect, on an object, on its fill and on a group. Copies a Transform effect before
+/// it makes that take the solids past the limit fail the check, as the art then draws the source.
+#[test]
+fn the_check_counts_the_faces_after_the_geometry_effects_before() {
+    let mut alone = polygon_node(1, 16_384);
+    alone.appearance.effects.push(fx(EXTRUDE, json!({})));
+    let [Ok(Some(each))] = solid_faces(EXTRUDE, &alone, MAX_OBJECT_FACES)[..] else { panic!("one solid") };
+    // Side by side, each copy builds the same solid.
+    let copies = |k: usize| fx("distort.transform", json!({"moveH": 30_000.0, "copies": k}));
+    for (k, fits) in [(1, true), (MAX_OBJECT_FACES / each, false)] {
+        let mut n = polygon_node(1, 16_384);
+        n.appearance.effects = vec![copies(k), fx(EXTRUDE, json!({}))];
+        assert_eq!(validate_solid(&n, EXTRUDE, &json!({})).is_ok(), fits, "on the object, {k} copies");
+        assert_eq!(solid_art(&n).is_some(), fits, "on the object, {k} copies");
+        let mut f = polygon_node(1, 16_384);
+        f.appearance.items[0].effects_mut().extend([copies(k), fx(EXTRUDE, json!({}))]);
+        assert_eq!(validate_three_d_at(&f, EXTRUDE, &json!({}), (Some(0), 1)).is_ok(), fits, "on the fill, {k} copies");
+        assert_eq!(solid_art(&f).is_some(), fits, "on the fill, {k} copies");
+        let mut g = Node::group(NodeId(9999), vec![Arc::new(polygon_node(1, 16_384))]);
+        g.appearance.effects = vec![copies(k), fx(EXTRUDE, json!({}))];
+        assert_eq!(validate_solid(&g, EXTRUDE, &json!({})).is_ok(), fits, "on a group, {k} copies");
+        assert_eq!(solid_art(&g).is_some(), fits, "on a group, {k} copies");
+        // A new effect goes after the copies.
+        let mut new = polygon_node(1, 16_384);
+        new.appearance.effects = vec![copies(k)];
+        assert_eq!(validate_three_d_at(&new, EXTRUDE, &json!({}), (None, 1)).is_ok(), fits, "a new effect, {k} copies");
+    }
+    // A hidden effect checked at its own index counts only the effects before it: copies after it
+    // copy the drawn art once it is shown again.
+    let mut hidden = polygon_node(1, 16_384);
+    let mut extrude = fx(EXTRUDE, json!({}));
+    extrude.visible = false;
+    hidden.appearance.effects = vec![extrude, copies(MAX_OBJECT_FACES / each)];
+    assert!(validate_three_d_at(&hidden, EXTRUDE, &json!({}), (None, 0)).is_ok());
+    hidden.appearance.effects[0].visible = true;
+    assert!(solid_art(&hidden).is_some());
 }
 
 /// At no volume Inflate's front is flat: turned, the fill's cells are all drawn before the stroke's,
@@ -279,15 +551,16 @@ fn a_translucent_stroke_is_a_surface_of_its_own() {
 }
 
 /// With a light that is not white, a fill in a gradient with transparent stops is drawn with an
-/// opacity mask over its whole surface: the fill's solid and the stroke's stay surfaces of their
-/// own, and the mask stays on the fill's. Under a white light the same object is one surface.
+/// opacity mask: its faces still take their places in the one order of the fill's and the
+/// stroke's faces, in runs that each carry the mask. Under a white light the faces carry the
+/// gradient itself and no mask.
 #[test]
-fn a_masked_surface_under_a_colored_light_stays_whole() {
+fn a_masked_surface_under_a_colored_light_keeps_the_shared_face_order() {
     use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
     let mut half = GradientStop::new(1.0, RED);
     half.opacity = 0.5;
     let gradient = GradientPaint::new(Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, RED), half]));
-    for (lights, surfaces) in [(json!({"lights": [{"color": "#ff8080"}]}), 2), (json!({}), 1)] {
+    for (lights, masked) in [(json!({"lights": [{"color": "#ff8080"}]}), true), (json!({}), false)] {
         let mut n = stroked_rect(100.0);
         if let Some(AppearanceItem::Fill(f)) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Fill(_))) {
             f.paint = Paint::Gradient(Box::new(gradient.clone()));
@@ -295,8 +568,10 @@ fn a_masked_surface_under_a_colored_light_stays_whole() {
         n.appearance.effects.push(fx(EXTRUDE, lights.clone()));
         let art = solid_art(&n).unwrap();
         let drawn = art.children().unwrap();
-        assert_eq!(drawn.len(), surfaces, "{lights}");
-        assert_eq!(drawn[0].extras().mask.is_some(), surfaces == 2, "{lights}");
+        assert_eq!(drawn.len(), 1, "{lights}: one order of faces");
+        let runs: Vec<&Arc<Node>> = drawn[0].children().unwrap().iter().filter(|c| c.extras().mask.is_some()).collect();
+        assert_eq!(!runs.is_empty(), masked, "{lights}");
+        assert!(runs.iter().all(|r| r.children().unwrap().iter().all(|f| !blue(f))), "{lights}: the mask stays on the fill's faces");
     }
 }
 
@@ -318,6 +593,68 @@ fn transparency_stays_on_the_whole_surface_and_items_take_their_own_effect() {
     assert!(matches!(surfaces[1].kind, NodeKind::Path { .. }));
 }
 
+/// Two nested squares drawn in the same direction, so only the even-odd rule leaves a hole.
+fn nested_squares() -> [PathData; 2] {
+    [(100.0, 200.0), (130.0, 170.0)].map(|(lo, hi)| {
+        let mut b = BezPath::new();
+        b.move_to((lo, lo));
+        b.line_to((hi, lo));
+        b.line_to((hi, hi));
+        b.line_to((lo, hi));
+        b.close_path();
+        PathData::from_bezpath(&b)
+    })
+}
+
+/// The nested squares as an even-odd compound path and as one even-odd path, painted by `items`.
+fn even_odd_shapes(items: Vec<AppearanceItem>) -> [Node; 2] {
+    let [outer, inner] = nested_squares();
+    let appearance = Appearance { items, ..Default::default() };
+    let children = vec![
+        Arc::new(Node::path(NodeId(2), outer.clone(), Appearance::default())),
+        Arc::new(Node::path(NodeId(3), inner.clone(), Appearance::default())),
+    ];
+    let mut compound = Node::new(NodeId(1), NodeKind::Compound { children, rule: FillRule::EvenOdd });
+    compound.appearance = appearance.clone().into();
+    let both = PathData::new(outer.subpaths.into_iter().chain(inner.subpaths).collect());
+    [compound, crate::group::shape_node(NodeId(1), both, FillRule::EvenOdd, appearance)]
+}
+
+/// Check that `art` draws `item` as one flat child: an even-odd path with a hole in the middle,
+/// below the 3D art after it.
+fn assert_flat_item_keeps_the_hole(art: &Node, item: &AppearanceItem, what: &str) {
+    use vectorcraft_geom::hit::fill_contains;
+    let children = art.children().unwrap();
+    let flat: Vec<usize> =
+        (0..children.len()).filter(|&i| children[i].appearance.items == [item.clone()] && children[i].path_data().is_some()).collect();
+    let [index] = flat[..] else { panic!("{what}: one flat child, got {flat:?}") };
+    let NodeKind::Path { path, rule, .. } = &children[index].kind else { panic!("{what}: a path") };
+    assert_eq!(*rule, FillRule::EvenOdd, "{what}");
+    let bez = path.to_bezpath();
+    assert!(fill_contains(&bez, *rule, Point::new(110.0, 150.0)), "{what}: the ring is filled");
+    assert!(!fill_contains(&bez, *rule, Point::new(150.0, 150.0)), "{what}: the hole stays open");
+    assert!(index + 1 < children.len(), "{what}: the 3D art is drawn above");
+}
+
+#[test]
+fn a_fill_or_stroke_without_the_effect_keeps_the_even_odd_hole() {
+    let red = AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(Paint::solid(RED)));
+    let blue = AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(Paint::solid(BLUE)));
+    let stroke = AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::BLACK), 4.0));
+    for id in SOLIDS {
+        // The top fill and then the top stroke take the effect; the fill below stays flat.
+        for (top, on) in [(&red, "fill"), (&stroke, "stroke")] {
+            let mut lifted = top.clone();
+            lifted.effects_mut().push(fx(id, json!({})));
+            for (n, shape) in even_odd_shapes(vec![blue.clone(), lifted]).into_iter().zip(["compound path", "path"]) {
+                let what = format!("{id} on the top {on} of a {shape}");
+                let art = solid_art(&n).unwrap_or_else(|| panic!("{what}"));
+                assert_flat_item_keeps_the_hole(&art, &blue, &what);
+            }
+        }
+    }
+}
+
 #[test]
 fn export_and_expand_bake_faces_with_their_own_ids() {
     for id in SOLIDS {
@@ -325,7 +662,7 @@ fn export_and_expand_bake_faces_with_their_own_ids() {
         let mut n = square_node();
         n.id = d.alloc_id();
         n.appearance.effects.push(fx(id, json!({"bevel": "rounded"})));
-        assert_eq!(crate::bake_appearance(&n), solid_art(&n), "{id}");
+        assert_eq!(crate::bake_appearance(None, &n), solid_art(&n), "{id}");
         let mut stroke = |_: &mut Document, _: &PathData, _: FillRule, _: &StrokeLayer| None;
         let art = crate::expand_leaf(&mut d, &n, &mut stroke).unwrap();
         let mut ids = std::collections::HashSet::new();
@@ -351,7 +688,7 @@ fn a_twisted_tapered_hollow_inflate_exports_and_expands() {
     let params = json!({"twist": 120, "taper": 50, "cap": false, "bothSides": true, "rotationX": -20, "rotationY": 35});
     n.appearance.effects.push(fx(INFLATE, params));
     let art = solid_art(&n).unwrap();
-    assert_eq!(crate::bake_appearance(&n), Some(art.clone()));
+    assert_eq!(crate::bake_appearance(None, &n), Some(art.clone()));
     assert!(faces(&art).len() > 20, "{} faces", faces(&art).len());
     let mut stroke = |_: &mut Document, _: &PathData, _: FillRule, _: &StrokeLayer| None;
     let expanded = crate::expand_leaf(&mut d, &n, &mut stroke).unwrap();
@@ -462,8 +799,8 @@ fn parameters_are_validated_and_lengths_scale_with_the_object() {
     let n = square_node();
     assert!(validate_solid(&n, EXTRUDE, &json!({"bevel": "rounded", "depth": 80})).is_ok());
     assert!(validate_solid(&n, EXTRUDE, &json!({"bevel": "fancy"})).unwrap_err().contains("bevel must be"));
-    let text = Node::group(NodeId(2), vec![]);
-    assert!(validate_solid(&text, INFLATE, &json!({})).unwrap_err().contains("requires a path"));
+    let empty = Node::group(NodeId(2), vec![]);
+    assert!(validate_solid(&empty, INFLATE, &json!({})).unwrap_err().contains("requires a group holding a shape"));
     for (id, key) in [(EXTRUDE, "depth"), (EXTRUDE, "bevelWidth"), (EXTRUDE, "bevelHeight"), (INFLATE, "depth")] {
         assert!(crate::is_length(id, key, false), "{id} {key}");
     }
@@ -539,4 +876,357 @@ fn colored_solid_inflate_batches_channels_and_clips_once_per_surface() {
     assert_eq!(surfaces, 2);
     assert_eq!(clips, surfaces);
     assert_eq!(groups, 1 + 6 * surfaces, "group count must not grow with triangle count");
+}
+
+/// `square_node` moved right by `dx`, with id `id` and fill `fill`.
+fn square_at(id: u64, dx: f64, fill: Color) -> Node {
+    let mut n = square_node();
+    n.id = NodeId(id);
+    n.transform(Affine::translate((dx, 0.0)), false);
+    n.appearance.items = Appearance::basic(Paint::solid(fill), Paint::None, 0.0).items;
+    n
+}
+
+#[test]
+fn a_3d_effect_on_a_group_turns_every_member_about_one_shared_axis() {
+    // Two squares side by side, 100 pt apart, in a group: 100–200 and 300–400 across.
+    let group = |id: &str, params: Value| {
+        let mut g = Node::group(NodeId(9), vec![Arc::new(square_at(1, 0.0, RED)), Arc::new(square_at(2, 200.0, BLUE))]);
+        g.appearance.effects.push(fx(id, params));
+        g
+    };
+    let turned = json!({"rotationX": 0, "rotationY": 60, "rotationZ": 0});
+    for id in SOLIDS {
+        let g = group(id, json!({}));
+        assert!(validate_solid(&g, id, &json!({})).is_ok(), "{id}");
+        let art = solid_art(&g).unwrap_or_else(|| panic!("{id}"));
+        assert_eq!(art.id, NodeId(9), "{id}: the art is the group's");
+        assert!(art.appearance.effects.iter().all(|e| !is_three_d(&e.id)), "{id}");
+        // Both members draw, each in its own fill.
+        let mut colours = vec![];
+        art.walk(&mut |c| {
+            if c.path_data().is_some() {
+                colours.push(fill_rgb(c));
+            }
+        });
+        assert!(colours.iter().any(|c| c[2] > c[0]) && colours.iter().any(|c| c[0] > c[2]), "{id}: red and blue faces");
+    }
+    // Turned 60° about y, the members turn together about the group's centre (x = 250): the
+    // pair spans half its width; turned each about its own centre they would stay 100 pt apart.
+    let b = solid_art(&group(ROTATE, turned.clone())).unwrap().visual_bounds().unwrap();
+    assert!((b.center().x - 250.0).abs() < 1e-3, "{b:?}");
+    assert!((b.width() - 300.0 * 0.5).abs() < 1.0, "{b:?}");
+    let mut alone = square_at(2, 200.0, BLUE);
+    alone.appearance.effects.push(fx(ROTATE, turned));
+    let own = solid_art(&alone).unwrap().visual_bounds().unwrap();
+    assert!((own.center().x - 350.0).abs() < 1e-3, "{own:?}");
+    // Hidden members and guides are left out; a group holding what can't become a solid is
+    // refused with what to do.
+    let mut g = group(EXTRUDE, json!({}));
+    let mut woven = Node::group(NodeId(5), vec![Arc::new(square_at(6, 0.0, RED))]);
+    woven.kind = NodeKind::Intertwine { children: woven.children().unwrap().clone() };
+    if let NodeKind::Group { children, .. } = &mut g.kind {
+        children.push(Arc::new(woven));
+    }
+    let err = validate_solid(&g, EXTRUDE, &json!({})).unwrap_err();
+    assert!(err.contains("release or expand its other objects"), "{err}");
+    assert!(err.contains("type, groups, clipping groups, blends and symbol instances"), "{err}");
+    assert!(solid_art(&g).is_none(), "drawn as the group it is");
+}
+
+/// The red square without its stroke, with Extrude & Bevel (Classic) and `params`.
+fn classic(params: Value) -> Node {
+    let mut n = square_node();
+    n.appearance.items.retain(|i| matches!(i, AppearanceItem::Fill(_)));
+    n.appearance.effects.push(fx(CLASSIC_EXTRUDE, params));
+    n
+}
+
+fn classic_faces(params: Value) -> Vec<Node> {
+    let art = solid_art(&classic(params)).unwrap();
+    faces(&art).into_iter().cloned().collect()
+}
+
+fn close3(a: [f32; 3], b: [f32; 3]) -> bool {
+    a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-4)
+}
+
+#[test]
+fn classic_surfaces_draw_edges_flat_paint_soft_light_and_a_highlight() {
+    // Wireframe: the edges of every face, the hidden ones too, in the paint; no fills.
+    let wire = classic_faces(json!({"surface": "wireframe"}));
+    let plastic = classic_faces(json!({}));
+    assert_eq!(plastic.len(), 3, "a box shows three faces");
+    assert_eq!(wire.len(), 6, "and has six");
+    for f in &wire {
+        let [AppearanceItem::Stroke(s)] = &f.appearance.items[..] else { panic!("a stroke alone: {:?}", f.appearance.items) };
+        assert_eq!(s.paint, Paint::solid(RED));
+    }
+    // No Shading: every face in the art's own paint, a CMYK color kept as it is.
+    assert!(classic_faces(json!({"surface": "none"})).iter().all(|f| close3(fill_rgb(f), RED.to_rgb())));
+    let cmyk = Paint::solid(Color::Cmyk { c: 0.1, m: 0.9, y: 0.8, k: 0.0 });
+    let mut n = classic(json!({"surface": "none"}));
+    if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+        f.paint = cmyk.clone();
+    }
+    for f in faces(&solid_art(&n).unwrap()) {
+        let AppearanceItem::Fill(fill) = &f.appearance.items[0] else { panic!("a fill first") };
+        assert_eq!(fill.paint, cmyk);
+    }
+    // Diffuse: the red darkened toward black by how far each face turns from the light, so the
+    // faces differ but keep their hue.
+    let diffuse: Vec<[f32; 3]> = classic_faces(json!({"surface": "diffuse"})).iter().map(fill_rgb).collect();
+    assert!(diffuse.iter().all(|[r, g, b]| *r <= 0.8 + 1e-6 && (g * 4.0 - r).abs() < 1e-4 && (b * 8.0 - r).abs() < 1e-4), "{diffuse:?}");
+    assert!(diffuse.windows(2).any(|w| !close3(w[0], w[1])), "{diffuse:?}");
+    // Plastic: the same faces, one of them lightened toward white by the highlight.
+    let shiny: Vec<[f32; 3]> =
+        classic_faces(json!({"highlightIntensity": 100, "highlightSize": 100, "lightHeight": 60})).iter().map(fill_rgb).collect();
+    let soft: Vec<[f32; 3]> = classic_faces(json!({"surface": "diffuse", "lightHeight": 60})).iter().map(fill_rgb).collect();
+    assert!(shiny.iter().zip(&soft).any(|(s, d)| s[1] > d[1] + 0.01), "{shiny:?} {soft:?}");
+    assert!(shiny.iter().zip(&soft).all(|(s, d)| s[1] >= d[1] - 1e-4));
+    // Without highlight, Plastic shades as Diffuse.
+    let dull: Vec<[f32; 3]> = classic_faces(json!({"highlightIntensity": 0, "lightHeight": 60})).iter().map(fill_rgb).collect();
+    assert!(dull.iter().zip(&soft).all(|(a, b)| close3(*a, *b)));
+}
+
+#[test]
+fn classic_shading_color_blend_steps_and_lights() {
+    let base = json!({"surface": "diffuse", "ambient": 20});
+    let with = |extra: Value| {
+        let mut p = base.clone();
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        classic_faces(p).iter().map(fill_rgb).collect::<Vec<_>>()
+    };
+    // A custom shading color darkens toward that color; None keeps the paint.
+    assert!(with(json!({"shadingColor": "custom", "shadingCustom": "#0000ff"})).iter().any(|c| c[2] > c[0] / 8.0 + 0.01));
+    assert!(with(json!({"shadingColor": "none"})).iter().all(|c| close3(*c, RED.to_rgb())));
+    // One blend step: every face fully lit or fully in shadow.
+    let stepped = with(json!({"blendSteps": 1, "ambient": 0}));
+    assert!(stepped.iter().all(|c| close3(*c, RED.to_rgb()) || close3(*c, [0.0; 3])), "{stepped:?}");
+    // No light: the ambient share of the red. Two lights add up.
+    let dark = with(json!({"lightIntensity": 0, "blendSteps": 256}));
+    assert!(dark.iter().all(|c| (c[0] - 0.8 * 0.2).abs() < 0.01), "{dark:?}");
+    let one = with(json!({"lights": [{"intensity": 30}], "blendSteps": 256}));
+    let two = with(json!({"lights": [{"intensity": 30}, {"intensity": 30}], "blendSteps": 256}));
+    assert!(one.iter().zip(&two).all(|(a, b)| b[0] >= a[0] - 1e-4) && one.iter().zip(&two).any(|(a, b)| b[0] > a[0] + 0.01));
+    // Draw Hidden Faces keeps the faces turned away, drawn first.
+    assert_eq!(with(json!({"drawHiddenFaces": true})).len(), 6);
+}
+
+#[test]
+fn classic_bevel_height_extent_and_cap_shape_the_solid() {
+    let bounds = |p: Value| solid_art(&classic(p)).unwrap().visual_bounds().unwrap();
+    let front = json!({"rotationX": 0, "rotationY": 0, "rotationZ": 0, "bevel": "classic", "bevelHeight": 10});
+    let out = bounds(front.clone());
+    let mut inside = front.clone();
+    inside["bevelInside"] = json!(true);
+    // Straight on, a bevel added around the shape widens it; one carved into it keeps its size.
+    assert!(out.width() > 100.0 + 15.0, "{out:?}");
+    let carved = bounds(inside);
+    assert!((carved.width() - 100.0).abs() < 2.0, "{carved:?}");
+    // Hollow: no caps, so the walls seen from inside show too.
+    assert!(classic_faces(json!({"cap": false})).len() > classic_faces(json!({})).len());
+    // The depth sets how far back the solid goes.
+    let side = json!({"rotationX": 0, "rotationY": 90, "rotationZ": 0});
+    let mut deep = side.clone();
+    deep["depth"] = json!(120);
+    assert!((bounds(deep).width() - 120.0).abs() < 1.0);
+}
+
+/// A gradient fill with a transparent stop is shaded opaque and masked by its own transparency, so
+/// the shading does not cover the transparent part; an opaque gradient needs no mask.
+#[test]
+fn classic_shading_keeps_a_gradients_transparency() {
+    use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    for (end, masked) in [(0.25, true), (1.0, false)] {
+        let mut stop = GradientStop::new(1.0, RED);
+        stop.opacity = end;
+        let gradient = GradientPaint::new(Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, RED), stop]));
+        let mut n = classic(json!({}));
+        if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+            f.paint = Paint::Gradient(Box::new(gradient));
+        }
+        let art = solid_art(&n).unwrap();
+        let surface = &art.children().unwrap()[0];
+        let mut has_mask = false;
+        surface.walk(&mut |c| has_mask |= c.extras().mask.is_some());
+        assert_eq!(has_mask, masked, "{end}");
+        let mut opaque = true;
+        surface.walk(&mut |c| {
+            for item in &c.appearance.items {
+                if let AppearanceItem::Fill(f) = item
+                    && let Paint::Gradient(g) = &f.paint
+                {
+                    opaque &= g.gradient.stops.iter().all(|s| s.opacity == 1.0);
+                }
+            }
+        });
+        assert!(opaque, "{end}: the faces are drawn opaque");
+    }
+}
+
+/// A group member in a gradient with transparent stops keeps the shared back-to-front order of
+/// every member's faces: its faces go in runs that carry its opacity mask, and the other member's
+/// faces are drawn between them where they are in front of some and behind others. Here a square
+/// frame in the gradient holds a square in its hole: the frame's inner walls are behind the square
+/// and its front cap is in front of the square's walls.
+#[test]
+fn a_member_in_a_transparent_gradient_keeps_the_shared_face_order() {
+    use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let square = |b: &mut BezPath, x0: f64, x1: f64, clockwise: bool| {
+        let corners = [(x0, x0), (x1, x0), (x1, x1), (x0, x1)];
+        let mut points = corners.to_vec();
+        if !clockwise {
+            points.reverse();
+        }
+        b.move_to(points[0]);
+        for p in &points[1..] {
+            b.line_to(*p);
+        }
+        b.close_path();
+    };
+    let art = |id: &str, params: &Value, end_opacity: f32| {
+        let mut end = GradientStop::new(1.0, Color::BLACK);
+        end.opacity = end_opacity;
+        let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, RED), end]))));
+        let mut b = BezPath::new();
+        square(&mut b, 100.0, 300.0, true);
+        square(&mut b, 150.0, 250.0, false);
+        let frame = Node::path(NodeId(1), PathData::from_bezpath(&b), Appearance::basic(gradient, Paint::None, 0.0));
+        let mut b = BezPath::new();
+        square(&mut b, 185.0, 215.0, true);
+        let inner = Node::path(NodeId(2), PathData::from_bezpath(&b), Appearance::basic(Paint::solid(BLUE), Paint::None, 0.0));
+        let mut g = Node::group(NodeId(3), vec![Arc::new(frame), Arc::new(inner)]);
+        g.appearance.effects.push(fx(id, params.clone()));
+        solid_art(&g).unwrap_or_else(|| panic!("{id}"))
+    };
+    // The drawing order: `M` for a group with an opacity mask, `F` for a face outside one.
+    fn visit(n: &Node, order: &mut String) {
+        if n.extras().mask.is_some() {
+            order.push('M');
+            return;
+        }
+        if n.path_data().is_some() {
+            order.push('F');
+        }
+        for c in n.children().into_iter().flatten() {
+            visit(c, order);
+        }
+    }
+    let order = |art: &Node| {
+        let mut order = String::new();
+        visit(art, &mut order);
+        order
+    };
+    for (id, params) in [(CLASSIC_EXTRUDE, json!({})), (EXTRUDE, json!({"lights": [{"color": "#ff8080"}]}))] {
+        assert!(!order(&art(id, &params, 1.0)).contains('M'), "{id}: an opaque gradient needs no mask");
+        let masked = order(&art(id, &params, 0.5));
+        let (first, last) = (masked.find('M').unwrap(), masked.rfind('M').unwrap());
+        assert!(masked.get(first..last).is_some_and(|between| between.contains('F')), "{id}: faces between the member's runs: {masked}");
+    }
+}
+
+#[test]
+fn classic_parameters_are_checked() {
+    let n = classic(json!({}));
+    let check = |p: Value| validate_solid(&n, CLASSIC_EXTRUDE, &crate::merged_params(CLASSIC_EXTRUDE, &p));
+    assert!(check(json!({})).is_ok());
+    assert!(check(json!({"surface": "wireframe", "shadingColor": "custom", "shadingCustom": "#12aBcd", "blendSteps": 256, "bevel": "ogee"})).is_ok());
+    for (p, says) in [
+        (json!({"surface": "glossy"}), "`surface` must be one of wireframe, none, diffuse, plastic"),
+        (json!({"shadingColor": "red"}), "`shadingColor` must be one of black, custom, none"),
+        (json!({"shadingCustom": "blue"}), "`shadingCustom` must be a #rrggbb color"),
+        (json!({"shadingCustom": "#fff"}), "`shadingCustom` must be a #rrggbb color"),
+        (json!({"depth": 2001}), "`depth` must be between 0 and 2000 (got 2001)"),
+        (json!({"bevelHeight": 0}), "`bevelHeight` must be between 1 and 100 (got 0)"),
+        (json!({"ambient": -1}), "`ambient` must be between 0 and 100 (got -1)"),
+        (json!({"blendSteps": 2.5}), "`blendSteps` must be a whole number between 1 and 256 (got 2.5)"),
+        (json!({"blendSteps": 0}), "`blendSteps` must be a whole number between 1 and 256 (got 0)"),
+        (json!({"highlightSize": "big"}), "`highlightSize` must be a number"),
+        (json!({"cap": "yes"}), "`cap` must be true or false"),
+        (json!({"drawHiddenFaces": 1}), "`drawHiddenFaces` must be true or false"),
+        (json!({"bevel": "fancy"}), "bevel must be none or one of"),
+        (json!({"twist": 10}), "unknown parameter `twist`"),
+        (json!({"lights": []}), "lights must contain one to ten lights"),
+    ] {
+        let err = check(p.clone()).unwrap_err();
+        assert!(err.starts_with(says), "{p}: {err}");
+    }
+}
+
+/// The red square, stroked black, with Rotate (Classic) and `params`: its surfaces, the fill's
+/// plane first, then the stroke's outline.
+fn classic_rotate(params: Value) -> Vec<Node> {
+    let mut n = square_node();
+    n.appearance.effects.push(fx(CLASSIC_ROTATE, params));
+    solid_art(&n).unwrap().children().unwrap().iter().map(|s| (**s).clone()).collect()
+}
+
+#[test]
+fn classic_rotate_turns_every_fill_and_stroke_as_one_plane() {
+    let front = json!({"rotationX": 0, "rotationY": 0, "rotationZ": 0});
+    let surfaces = classic_rotate(front.clone());
+    assert_eq!(surfaces.len(), 2, "the fill's plane and the stroke's outline");
+    assert!(surfaces.iter().all(|s| s.children().unwrap().len() == 1), "each is one flat face");
+    let fill = surfaces[0].visual_bounds().unwrap();
+    assert!((fill.width() - 100.0).abs() < 1.0 && (fill.height() - 100.0).abs() < 1.0, "{fill:?}");
+    // Turned 60° about the vertical axis, the square shows half its width and all its height,
+    // about the center of its bounds.
+    let turned = classic_rotate(json!({"rotationX": 0, "rotationY": 60, "rotationZ": 0}))[0].visual_bounds().unwrap();
+    assert!((turned.width() - 50.0).abs() < 1.0 && (turned.height() - 100.0).abs() < 1.0, "{turned:?}");
+    assert!((turned.center().x - 150.0).abs() < 1.0, "{turned:?}");
+    // Turned past 90°, the back of the plane is drawn.
+    let back = classic_rotate(json!({"rotationX": 0, "rotationY": 150, "rotationZ": 0}));
+    assert!(back[0].visual_bounds().is_some_and(|b| (b.width() - 100.0 * 30f64.to_radians().cos()).abs() < 1.0));
+}
+
+#[test]
+fn classic_rotate_shades_with_no_shading_or_diffuse() {
+    let rgb = |p: Value| fill_rgb(&classic_rotate(p)[0].children().unwrap()[0]);
+    // No Shading keeps the paint, the color itself kept.
+    let mut n = square_node();
+    n.appearance.effects.push(fx(CLASSIC_ROTATE, json!({"surface": "none"})));
+    let art = solid_art(&n).unwrap();
+    let AppearanceItem::Fill(f) = &faces(&art)[0].appearance.items[0] else { panic!("a fill first") };
+    assert_eq!(f.paint, Paint::solid(RED));
+    // Diffuse: straight on with the light in front, the face is fully lit; turned away from the
+    // light, it is the red darkened toward black.
+    let lit = json!({"rotationX": 0, "rotationY": 0, "rotationZ": 0, "lightHeight": 90});
+    assert!(close3(rgb(lit), RED.to_rgb()));
+    let [r, g, b] = rgb(json!({"rotationX": 0, "rotationY": 70, "rotationZ": 0, "lightHeight": 90}));
+    assert!(r < 0.8 - 0.05 && (g * 4.0 - r).abs() < 1e-4 && (b * 8.0 - r).abs() < 1e-4, "{r} {g} {b}");
+    // No light: the ambient share of the red. A custom shading color darkens toward that color;
+    // None keeps the paint.
+    let dark = rgb(json!({"lightIntensity": 0, "ambient": 20, "blendSteps": 256}));
+    assert!((dark[0] - 0.8 * 0.2).abs() < 0.01, "{dark:?}");
+    let blue = rgb(json!({"lightIntensity": 0, "ambient": 20, "shadingColor": "custom", "shadingCustom": "#0000ff"}));
+    assert!(blue[2] > blue[0] / 8.0 + 0.01, "{blue:?}");
+    assert!(close3(rgb(json!({"lightIntensity": 0, "shadingColor": "none"})), RED.to_rgb()));
+}
+
+#[test]
+fn classic_rotate_parameters_are_checked() {
+    let n = square_node();
+    let check = |p: Value| validate_solid(&n, CLASSIC_ROTATE, &crate::merged_params(CLASSIC_ROTATE, &p));
+    assert!(check(json!({})).is_ok());
+    assert!(check(json!({"surface": "none", "shadingColor": "custom", "shadingCustom": "#12aBcd", "blendSteps": 1})).is_ok());
+    for (p, says) in [
+        (json!({"surface": "plastic"}), "`surface` must be one of none, diffuse"),
+        (json!({"surface": "wireframe"}), "`surface` must be one of none, diffuse"),
+        (json!({"surface": 2}), "`surface` must be one of"),
+        (json!({"shadingColor": "red"}), "`shadingColor` must be one of black, custom, none"),
+        (json!({"shadingCustom": "#fff"}), "`shadingCustom` must be a #rrggbb color"),
+        (json!({"rotationX": 181}), "`rotationX` must be between -180 and 180 (got 181)"),
+        (json!({"perspectiveAngle": 161}), "`perspectiveAngle` must be between 0 and 160 (got 161)"),
+        (json!({"lightIntensity": 101}), "`lightIntensity` must be between 0 and 100 (got 101)"),
+        (json!({"blendSteps": 0}), "`blendSteps` must be a whole number between 1 and 256 (got 0)"),
+        (json!({"lightBehind": 1}), "`lightBehind` must be true or false"),
+        (json!({"highlightSize": 50}), "unknown parameter `highlightSize`"),
+        (json!({"drawHiddenFaces": true}), "unknown parameter `drawHiddenFaces`"),
+        (json!({"shadow": true}), "unknown parameter `shadow`"),
+        (json!({"lights": []}), "lights must contain one to ten lights"),
+    ] {
+        let err = check(p.clone()).unwrap_err();
+        assert!(err.starts_with(says), "{p}: {err}");
+    }
 }

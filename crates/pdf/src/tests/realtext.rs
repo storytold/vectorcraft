@@ -470,6 +470,21 @@ fn numbers_in_threaded_frames_are_written_as_text_in_each_frame() {
     assert_markers_in_place(&d, &back, &drawn.iter().map(String::as_str).collect::<Vec<_>>(), 0.1);
 }
 
+/// The numbers of list paragraphs at a deeper level are written as text where the canvas draws
+/// them, 18 pt further in, each level with its own count.
+#[test]
+fn numbers_at_a_deeper_list_level_are_written_as_text_where_the_canvas_draws_them() {
+    let number = |level| Some(ParaList::numbered(NumberStyle::Arabic).at_level(level));
+    let d = doc(vec![listed("first\nsecond\nthird\nfourth", &[number(1), number(2), number(2), number(1)])]);
+    let origins = marker_origins(&d);
+    let x = |m: usize| origins.get(m).and_then(|o| o.first()).map_or(f64::NAN, |p| p.x);
+    assert!((x(1) - x(0) - 18.0).abs() < 1e-6 && (x(3) - x(0)).abs() < 1e-6, "{origins:?}");
+    let back = import_as(&pdf(&d, false).bytes, TextAs::Text);
+    let all = texts(&back).concat();
+    assert!(before(&all, "1.", "first") && before(&all, "2.", "third") && all.matches("2.").count() == 2, "{all}");
+    assert_markers_in_place(&d, &back, &["1.", "1.", "2.", "2."], 0.1);
+}
+
 /// A number set in oldstyle figures (the first character's OpenType features) is written as its
 /// digits, though the character map gives the digits other glyphs. The reopened type has no
 /// OpenType features and sets lining figures, so only where each number starts is compared.
@@ -674,7 +689,7 @@ fn subset_thresholds_below_100_percent_are_accepted_with_a_warning() {
     let d = doc(vec![TextObject::point(Point::new(20.0, 60.0), "Subset", style(24.0))]);
     let settings: PdfSettings = serde_json::from_value(json!({"advanced": {"outlineText": false, "fontSubsetPercent": 40}})).unwrap();
     let r = export_with_report(&d, &PdfOptions { settings, ..Default::default() }).unwrap();
-    assert!(r.warnings.iter().any(|w| w.contains("subset")), "{:?}", r.warnings);
+    assert!(r.setting_notes.iter().any(|w| w.contains("subset")), "{:?}", r.setting_notes);
     assert_eq!(texts(&import_as(&r.bytes, TextAs::Text)), ["Subset"]);
 }
 
@@ -957,4 +972,245 @@ fn dithered_type_keeps_its_resolution_when_scaled_and_stays_searchable() {
     let ops = String::from_utf8_lossy(&scaled).split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(ops.contains("3 Tr"), "the characters as invisible text");
     assert_eq!(texts(&import_as(&scaled, TextAs::Text)), ["Dither"]);
+}
+
+/// Exact craft-fonts face: a substituted Arabic font would miss Noto's dot decomposition.
+fn mark_text(text: &str) -> Option<TextObject> {
+    // The craft-fonts build of the face: a system font of the same family (Linux distributions
+    // install one) can lack the Latin and digit glyphs these fixtures shape with it.
+    let bundled = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.family == "Noto Sans Arabic" && f.style == "Regular");
+    let face = FontDb::global().face("Noto Sans Arabic", "Regular").filter(|f| bundled && f.family == "Noto Sans Arabic");
+    let Some(face) = face else {
+        assert!(std::env::var("CRAFT_FONTS_REQUIRED").as_deref() != Ok("1"), "Noto Sans Arabic is required");
+        eprintln!("SKIPPED: PDF mark-text regression needs craft-fonts Noto Sans Arabic");
+        return None;
+    };
+    Some(TextObject::point(Point::new(30.0, 100.0), text, CharStyle { font_family: face.family.clone(), ..style(32.0) }))
+}
+
+/// Decode semantic cluster mappings directly: ActualText replaces its enclosed glyphs, whose
+/// CIDs otherwise resolve through the active font's ToUnicode. A shared mark glyph can only
+/// carry one ToUnicode value; its other clusters must still occur exactly once via ActualText.
+fn mark_stream(bytes: &[u8]) -> (usize, Vec<String>, Vec<String>) {
+    use craft_pdf::syntax::{
+        Pdf,
+        content::UntypedIter,
+        object::{Dict, Object, Stream},
+    };
+    let file = Pdf::new(Arc::new(bytes.to_vec())).unwrap();
+    let page = &file.pages()[0];
+    let resources = page.raw().get::<Dict<'_>>(b"Resources").unwrap();
+    let fonts = resources.get::<Dict<'_>>(b"Font").unwrap();
+    let mut font_maps = std::collections::BTreeMap::new();
+    for name in fonts.keys() {
+        let font = fonts.get::<Dict<'_>>(name.as_ref()).unwrap();
+        let cmap = font.get::<Stream<'_>>(b"ToUnicode").unwrap().decoded().unwrap();
+        let cmap = std::str::from_utf8(&cmap).unwrap();
+        let mut mappings = std::collections::BTreeMap::new();
+        // The writer emits bfchar entries with a hexadecimal UTF-16BE destination.
+        for block in cmap.split("beginbfchar").skip(1) {
+            for entry in block.split("endbfchar").next().unwrap().lines().filter(|l| l.trim_start().starts_with('<')) {
+                let mut pair = entry.split_whitespace();
+                let cid = u16::from_str_radix(pair.next().unwrap().trim_matches(['<', '>']), 16).unwrap();
+                let value = pair.next().unwrap().trim_matches(['<', '>']);
+                let units = (0..value.len()).step_by(4).map(|i| u16::from_str_radix(&value[i..i + 4], 16).unwrap()).collect::<Vec<_>>();
+                assert!(mappings.insert(cid, String::from_utf16(&units).unwrap()).is_none());
+            }
+        }
+        let unique: std::collections::BTreeSet<_> = mappings.values().collect();
+        assert_eq!(unique.len(), mappings.len(), "a cluster must not be assigned to multiple glyphs: {mappings:?}");
+        font_maps.insert(name.as_ref().to_vec(), mappings);
+    }
+    let mut ops = UntypedIter::new(page.page_stream().unwrap());
+    let (mut batches, mut actual, mut mapped) = (0, vec![], vec![]);
+    let (mut marked, mut font) = (vec![], vec![]);
+    while let Some(op) = ops.next() {
+        match &**op.operator {
+            b"BT" => batches += 1,
+            b"Tf" => {
+                let Some(Object::Name(name)) = op.operands().next() else { panic!("font name") };
+                font = name.as_ref().to_vec();
+            }
+            b"BMC" | b"BDC" => {
+                let replacement = op.operands().find_map(|operand| {
+                    if let Object::Dict(d) = operand {
+                        d.get::<craft_pdf::syntax::object::String<'_>>(b"ActualText").map(|s| crate::import_scan::text_string(s.as_bytes()))
+                    } else {
+                        None
+                    }
+                });
+                if let Some(text) = &replacement {
+                    assert!(!marked.contains(&true), "no nested replacement in these fixtures");
+                    actual.push(text.clone());
+                    mapped.push(text.clone());
+                }
+                marked.push(replacement.is_some());
+            }
+            b"EMC" => {
+                marked.pop().unwrap();
+            }
+            b"Tj" | b"TJ" if !marked.contains(&true) => {
+                let strings: Vec<_> = op
+                    .operands()
+                    .flat_map(|o| match o {
+                        Object::String(s) => vec![s.clone()],
+                        Object::Array(a) => a.iter::<craft_pdf::syntax::object::String<'_>>().collect(),
+                        _ => vec![],
+                    })
+                    .collect();
+                for string in strings {
+                    let (cids, trailing) = string.as_bytes().as_chunks::<2>();
+                    assert!(trailing.is_empty());
+                    for cid in cids {
+                        let cid = u16::from_be_bytes(*cid);
+                        mapped.push(font_maps[&font].get(&cid).expect("unspanned glyph needs a Unicode mapping").clone());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    assert!(marked.is_empty());
+    (batches, actual, mapped)
+}
+
+/// Every contour, including each dot and harakat, must stay at the outline export's position.
+fn mark_placement(real: &[u8], outlined: &[u8]) {
+    use vectorcraft_geom::{PathEl, Shape};
+    let contours = |bytes: &[u8]| {
+        let mut boxes = vec![];
+        import_as(bytes, TextAs::Outlines).walk(|n| {
+            let paths = match &n.kind {
+                NodeKind::Path { path, .. } => vec![path.to_bezpath()],
+                _ => vec![],
+            };
+            for path in paths {
+                let mut contour = BezPath::new();
+                for el in path.elements() {
+                    if matches!(el, PathEl::MoveTo(_)) && contour.elements().len() > 1 {
+                        boxes.push(std::mem::take(&mut contour).bounding_box());
+                    }
+                    contour.push(*el);
+                }
+                if contour.elements().len() > 1 {
+                    boxes.push(contour.bounding_box());
+                }
+            }
+        });
+        boxes
+    };
+    let (got, mut want) = (contours(real), contours(outlined));
+    assert!(!got.is_empty());
+    assert_eq!(got.len(), want.len(), "every outline contour is retained");
+    for a in got {
+        let (i, distance) = want
+            .iter()
+            .enumerate()
+            .map(|(i, b)| (i, [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].into_iter().map(f64::abs).fold(0.0, f64::max)))
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .unwrap();
+        assert!(distance < 0.05, "contour {a:?} moved by {distance} pt; nearest {:?}", want[i]);
+        want.remove(i);
+    }
+}
+
+fn check_mark_clusters(text: &str) {
+    let Some(t) = mark_text(text) else { return };
+    let layout = vectorcraft_text::layout(FontDb::global(), &t);
+    let face = FontDb::global().face("Noto Sans Arabic", "Regular").unwrap();
+    assert!(layout.glyphs.iter().all(|g| g.font_id == face.id() && g.gid != 0), "no fallback or missing glyphs");
+    assert_eq!(layout.lines.len(), 1);
+    let mut clusters = std::collections::BTreeMap::<_, Vec<_>>::new();
+    for g in &layout.glyphs {
+        clusters.entry((g.byte, g.len)).or_default().push(g);
+    }
+    let repeated: Vec<_> = clusters.iter().filter(|(_, glyphs)| glyphs.len() > 1).collect();
+    assert!(!repeated.is_empty(), "fixture must shape into multi-glyph clusters");
+    assert!(
+        repeated.iter().any(|(_, gs)| gs.windows(2).any(|w| (w[0].xf.as_coeffs()[5] - w[1].xf.as_coeffs()[5]).abs() > 0.01)),
+        "marks have vertical offsets"
+    );
+    assert!(repeated.iter().any(|(_, gs)| gs.iter().any(|g| g.advance.abs() < 1e-6)), "zero-advance marks, including dots in unvocalized شنطة");
+    let d = doc(vec![t]);
+    let r = pdf(&d, false);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let (batches, actual, mappings) = mark_stream(&r.bytes);
+    assert_eq!(batches, 1, "one batch per compatible layout line: {text}");
+    let mut expected_actual: Vec<_> = repeated.iter().map(|((byte, len), _)| text[*byte..byte + len].to_string()).collect();
+    let mut actual = actual;
+    actual.sort();
+    expected_actual.sort();
+    assert_eq!(actual, expected_actual, "each multi-glyph cluster has exactly one semantic replacement");
+    let mut expected: Vec<_> = clusters.keys().map(|(byte, len)| text[*byte..byte + len].to_string()).collect();
+    let mut mappings = mappings;
+    expected.sort();
+    mappings.sort();
+    assert_eq!(mappings, expected, "each source cluster maps exactly once through ActualText or ToUnicode");
+    mark_placement(&r.bytes, &pdf(&d, true).bytes);
+}
+
+#[test]
+fn mark_text_harakat_clusters_are_mapped_once() {
+    check_mark_clusters("مُحَمَّد");
+}
+
+#[test]
+fn mark_text_zero_advance_dot_clusters_are_mapped_once() {
+    check_mark_clusters("شنطة");
+}
+
+#[test]
+fn mark_text_mixed_arabic_latin_and_digits_are_mapped_once() {
+    check_mark_clusters("ABC 12 مُحَمَّد شنطة");
+}
+
+#[test]
+fn mark_text_columns_and_rotations_keep_their_boundaries() {
+    let mut vertical = TextObject::point(Point::new(200.0, 30.0), "§§\n§§", style(24.0));
+    vertical.vertical = true;
+    let layout = vectorcraft_text::layout(FontDb::global(), &vertical);
+    assert_eq!(layout.lines.len(), 2);
+    let d = doc(vec![vertical]);
+    let r = pdf(&d, false);
+    assert_eq!(mark_stream(&r.bytes).0, 2, "one text batch per vertical column");
+    mark_placement(&r.bytes, &pdf(&d, true).bytes);
+
+    let mut arc = BezPath::new();
+    arc.move_to((40.0, 200.0));
+    arc.curve_to((100.0, 80.0), (260.0, 80.0), (320.0, 200.0));
+    let mut t = TextObject::point(Point::ZERO, "CURVE", style(24.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&arc), start: 0.0, end: None };
+    let layout = vectorcraft_text::layout(FontDb::global(), &t);
+    assert!(layout.glyphs.windows(2).all(|w| (w[0].angle - w[1].angle).abs() > 1e-4));
+    let d = doc(vec![t]);
+    let r = pdf(&d, false);
+    assert_eq!(mark_stream(&r.bytes).0, layout.glyphs.len(), "different rotations still split");
+    mark_placement(&r.bytes, &pdf(&d, true).bytes);
+}
+
+#[test]
+fn mark_text_pdf_x_variants_export() {
+    let Some(t) = mark_text("مُحَمَّد شنطة") else { return };
+    let d = doc(vec![t]);
+    for (standard, compatibility) in [("pdfX1a", "1.3"), ("pdfX3", "1.3"), ("pdfX4", "1.6")] {
+        let settings: PdfSettings =
+            serde_json::from_value(json!({"standard": standard, "compatibility": compatibility, "advanced": {"outlineText": false}})).unwrap();
+        let r = export_with_report(&d, &PdfOptions { settings, ..Default::default() }).unwrap();
+        assert_eq!(mark_stream(&r.bytes).0, 1, "{standard}");
+        mark_placement(&r.bytes, &pdf(&d, true).bytes);
+    }
+}
+
+#[test]
+#[ignore = "#6165: editable-text importer does not consume ActualText; run explicitly to track the exact round trip"]
+fn mark_text_reader_round_trip_harakat() {
+    let Some(t) = mark_text("مُحَمَّد") else { return };
+    assert_eq!(texts(&import_as(&pdf(&doc(vec![t]), false).bytes, TextAs::Text)), ["مُحَمَّد"]);
+}
+
+#[test]
+#[ignore = "#6165: editable-text importer does not consume ActualText; run explicitly to track the exact round trip"]
+fn mark_text_reader_round_trip_dots() {
+    let Some(t) = mark_text("شنطة") else { return };
+    assert_eq!(texts(&import_as(&pdf(&doc(vec![t]), false).bytes, TextAs::Text)), ["شنطة"]);
 }

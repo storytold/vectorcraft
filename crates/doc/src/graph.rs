@@ -136,9 +136,11 @@ impl crate::Document {
     }
 }
 
-/// The character style a graph's labels keep through regeneration once formatted (Format the text in graphs): the
-/// value axis numbers, the category labels (category axis, radar spokes, pie names) and the legend labels (beside or
-/// across the top, or in pie wedges). `None` draws the default 9 pt black.
+/// The character style and anti-aliasing method a graph's labels keep through regeneration once formatted (Format
+/// the text in graphs): the value axis numbers, the category labels (category axis, radar spokes, pie names) and the
+/// legend labels (beside or across the top, or in pie wedges). `None` draws the default 9 pt black. The `*_para`
+/// fields are the paragraph attributes each kind keeps the same way (`None`: the defaults); the graph still sets each
+/// label's alignment.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct LabelStyles {
@@ -148,6 +150,22 @@ pub struct LabelStyles {
     pub categories: Option<crate::CharStyle>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub legend: Option<crate::CharStyle>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub values_para: Option<crate::ParaStyle>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub categories_para: Option<crate::ParaStyle>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub legend_para: Option<crate::ParaStyle>,
+    /// The anti-aliasing method the value axis numbers keep once set (Character panel › Anti-aliasing Method).
+    /// `None` draws them Sharp.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub values_anti_alias: Option<crate::text::TypeAntiAlias>,
+    /// The anti-aliasing method the category labels keep once set. `None` draws them Sharp.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub categories_anti_alias: Option<crate::text::TypeAntiAlias>,
+    /// The anti-aliasing method the legend labels keep once set. `None` draws them Sharp.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub legend_anti_alias: Option<crate::text::TypeAntiAlias>,
 }
 
 impl LabelStyles {
@@ -321,6 +339,20 @@ pub struct SeriesPaint {
     /// Opacity (0..1) of the topmost stroke of each path directly in the series group, as [`Self::fill_opacity`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stroke_opacity: Option<f32>,
+    /// Blend mode of the topmost fill of each path directly in the series group, as [`Self::fill_opacity`]. Absent: Normal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fill_blend: Option<vectorcraft_color::BlendMode>,
+    /// Blend mode of the topmost stroke of each path directly in the series group, as [`Self::fill_opacity`]. Absent:
+    /// Normal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stroke_blend: Option<vectorcraft_color::BlendMode>,
+    /// Object opacity (0..1) of each path directly in the series group, taken from the object opacity set on one of them.
+    /// Absent: fully opaque.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opacity: Option<f32>,
+    /// Object blend mode of each path directly in the series group, as [`Self::opacity`]. Absent: Normal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blend: Option<vectorcraft_color::BlendMode>,
 }
 
 /// Graph data and options. `rows` are categories (one per row of the Graph Data window), each
@@ -511,7 +543,9 @@ impl GraphSpec {
                 out.push_str(&field(self.categories.get(i).map(String::as_str).unwrap_or_default(), true));
                 out.push(',');
             }
-            out.push_str(&r.iter().map(|v| v.map(|v| v.to_string()).unwrap_or_default()).collect::<Vec<_>>().join(","));
+            let line = r.iter().map(|v| v.map(|v| v.to_string()).unwrap_or_default()).collect::<Vec<_>>().join(",");
+            // A lone blank value would be an empty line, which readers skip; a quoted empty field keeps the row.
+            out.push_str(if line.is_empty() && !labelled { "\"\"" } else { &line });
             out.push('\n');
         }
         out

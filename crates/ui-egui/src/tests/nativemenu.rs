@@ -155,7 +155,8 @@ fn language_and_appearance_are_in_the_app_menu() {
 
 /// Everything the in-window bar lists is in the Mac menu bar, once: what moved to the app menu
 /// (About, Settings, Quit, Language, UI Brightness) leaves its other places, and Join Our Discord
-/// stays under Help.
+/// stays under Help. The Mac bar is laid out from the in-window bar's own read of the menus: Type ›
+/// Font and the plug-in rows come from process-wide state that a test running alongside can change.
 #[test]
 fn every_in_window_item_is_in_the_mac_menu_bar_once() {
     let app = app(true);
@@ -171,7 +172,7 @@ fn every_in_window_item_is_in_the_mac_menu_bar_once() {
         n
     };
     let in_window = native_menu::from_tree(&app, &menus::menu_tree());
-    let mac = bar(&app);
+    let mac = native_menu::mac_layout(&app, &in_window, Lang::EN).bar;
     let (a, b) = (count(&in_window), count(&mac));
     // The in-window application menu's commands, its submenus' included.
     let moved: Vec<&str> = MenuBar { menus: vec![in_window.menus[0].clone()] }.items().iter().filter_map(|it| it.command).collect();
@@ -225,19 +226,26 @@ fn a_command_keeps_a_system_key_it_is_bound_to() {
 }
 
 /// A native menu can't turn a plain item into a check item in place: opening a document or
-/// selecting must not change the menus' structure, or every change rebuilds them.
+/// selecting must not change the menus' structure, or every change rebuilds them. The four reads run
+/// undisturbed: a font or plug-in that a test running alongside adds between two of them changes the
+/// key.
 #[test]
 fn documents_and_selections_change_state_not_structure() {
-    let empty = native_menu::structure_key(&bar(&app(false)));
-    let mut a = app(true);
-    assert_eq!(native_menu::structure_key(&bar(&a)), empty, "a document with a selected rectangle");
-    a.run("select.none", json!({})).unwrap();
-    a.run("text.create", json!({"x": 50, "y": 50, "text": "Hi"})).unwrap();
-    assert!(!a.session.active().unwrap().selection.objects.is_empty());
-    assert_eq!(native_menu::structure_key(&bar(&a)), empty, "type selected");
-    // A recent file is a new item: the menus are rebuilt.
-    crate::io::note_recent(&mut a, "/art/a.svg");
-    assert_ne!(native_menu::structure_key(&bar(&a)), empty);
+    let (_m, (empty, drawn, typed, recent)) = undisturbed(|_| {
+        let key = |app: &VectorcraftApp| native_menu::structure_key(&bar(app));
+        let empty = key(&app(false));
+        let mut a = app(true);
+        let drawn = key(&a);
+        a.run("select.none", json!({})).unwrap();
+        a.run("text.create", json!({"x": 50, "y": 50, "text": "Hi"})).unwrap();
+        assert!(!a.session.active().unwrap().selection.objects.is_empty());
+        let typed = key(&a);
+        crate::io::note_recent(&mut a, "/art/a.svg");
+        (empty, drawn, typed, key(&a))
+    });
+    assert_eq!(drawn, empty, "a document with a selected rectangle");
+    assert_eq!(typed, empty, "type selected");
+    assert_ne!(recent, empty, "a recent file is a new item: the menus are rebuilt");
 }
 
 #[test]
@@ -675,48 +683,51 @@ fn the_app_bar_hides_its_menus_with_the_mac_menu_bar() {
 /// answers, the menus are as before and work again.
 #[test]
 fn the_menu_bar_is_inert_while_a_file_dialog_is_open() {
-    let mut m = Mac::new(true);
-    m.app.services.dialogs_are_sheets = true;
-    let (shown, _) = crate::tests_picks::off_the_ui_thread(&mut m.app.services);
-    m.app.run("shape.rectangle", json!({"x": 200, "y": 150, "width": 20, "height": 20})).unwrap();
-    m.app.run("select.none", json!({})).unwrap();
-    m.frame(vec![]);
     let rows = |bar: &MenuBar| bar.items().iter().map(|it| (it.command, it.params.clone(), it.enabled)).collect::<Vec<_>>();
-    let before = m.fake.last();
-    let system = [native_menu::HIDE, native_menu::HIDE_OTHERS, native_menu::MINIMIZE];
-    assert!(system.iter().all(|c| find(&before, c).enabled));
-    assert!(m.app.run("file.open", json!({})).is_err());
-    assert!(m.app.file_dialog_open());
-    m.frame(vec![]);
-    let inert = m.fake.last();
-    for it in inert.items() {
-        let kept = it.command.is_some_and(|c| system.contains(&c));
-        assert_eq!(it.enabled, kept, "{:?} {} while the dialog is open", it.command, it.label);
-    }
-    // A click that raced the menu going inert isn't run; Minimize is.
-    let rulers = (m.app.ui.view.rulers, find(&before, "view.rulers").clone());
-    m.fake.report(native_menu::Event::Click(rulers.1.clone()));
-    m.frame(vec![]);
-    assert_eq!(m.app.ui.view.rulers, rulers.0);
-    m.fake.report(native_menu::Event::Click(find(&inert, native_menu::MINIMIZE).clone()));
-    assert!(m.frame(vec![]).viewport_output[&egui::ViewportId::ROOT].commands.contains(&egui::ViewportCommand::Minimized(true)));
-    // A key equivalent that raced it doesn't reach egui.
-    let mut k = crate::shortcuts::parse("Cmd+A").unwrap();
-    k.modifiers.mac_cmd = k.modifiers.command;
-    m.fake.report(native_menu::Event::Key(k));
-    let mut raw = egui::RawInput::default();
-    m.app.raw_input_hook(&m.ctx, &mut raw);
-    assert!(!raw.events.iter().any(|e| matches!(e, Event::Key { .. })), "{:?}", raw.events);
-    m.key_equivalent("Cmd+A");
-    assert_eq!(m.selected(), 0, "⌘A selected nothing");
-    // Cancelled: the menus are as before, and work again.
-    shown.answer(&[]);
-    m.frame(vec![]);
-    m.frame(vec![]);
-    assert!(!m.app.file_dialog_open());
-    // Every row from before is back as it was (tests running alongside may add plug-in rows).
-    let after = rows(&m.fake.last());
-    assert!(rows(&before).iter().all(|r| after.contains(r)), "the menus are as before");
+    // The menus read before the dialog and after it are compared, so the whole run is undisturbed:
+    // a test running alongside can add or remove a composite font or a plug-in in between.
+    let (mut m, (before, after, rulers)) = undisturbed(|m| {
+        m.app.services.dialogs_are_sheets = true;
+        let (shown, _) = crate::tests_picks::off_the_ui_thread(&mut m.app.services);
+        m.app.run("shape.rectangle", json!({"x": 200, "y": 150, "width": 20, "height": 20})).unwrap();
+        m.app.run("select.none", json!({})).unwrap();
+        m.frame(vec![]);
+        let before = m.fake.last();
+        let system = [native_menu::HIDE, native_menu::HIDE_OTHERS, native_menu::MINIMIZE];
+        assert!(system.iter().all(|c| find(&before, c).enabled));
+        assert!(m.app.run("file.open", json!({})).is_err());
+        assert!(m.app.file_dialog_open());
+        m.frame(vec![]);
+        let inert = m.fake.last();
+        for it in inert.items() {
+            let kept = it.command.is_some_and(|c| system.contains(&c));
+            assert_eq!(it.enabled, kept, "{:?} {} while the dialog is open", it.command, it.label);
+        }
+        // A click that raced the menu going inert isn't run; Minimize is.
+        let rulers = (m.app.ui.view.rulers, find(&before, "view.rulers").clone());
+        m.fake.report(native_menu::Event::Click(rulers.1.clone()));
+        m.frame(vec![]);
+        assert_eq!(m.app.ui.view.rulers, rulers.0);
+        m.fake.report(native_menu::Event::Click(find(&inert, native_menu::MINIMIZE).clone()));
+        assert!(m.frame(vec![]).viewport_output[&egui::ViewportId::ROOT].commands.contains(&egui::ViewportCommand::Minimized(true)));
+        // A key equivalent that raced it doesn't reach egui.
+        let mut k = crate::shortcuts::parse("Cmd+A").unwrap();
+        k.modifiers.mac_cmd = k.modifiers.command;
+        m.fake.report(native_menu::Event::Key(k));
+        let mut raw = egui::RawInput::default();
+        m.app.raw_input_hook(&m.ctx, &mut raw);
+        assert!(!raw.events.iter().any(|e| matches!(e, Event::Key { .. })), "{:?}", raw.events);
+        m.key_equivalent("Cmd+A");
+        assert_eq!(m.selected(), 0, "⌘A selected nothing");
+        // Cancelled: the menus are as before, and work again.
+        shown.answer(&[]);
+        m.frame(vec![]);
+        m.frame(vec![]);
+        assert!(!m.app.file_dialog_open());
+        (rows(&before), rows(&m.fake.last()), rulers)
+    });
+    // Every row from before is back as it was.
+    assert!(before.iter().all(|r| after.contains(r)), "the menus are as before");
     m.fake.report(native_menu::Event::Click(rulers.1));
     m.frame(vec![]);
     assert_eq!(m.app.ui.view.rulers, !rulers.0);

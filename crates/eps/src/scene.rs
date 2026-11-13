@@ -42,6 +42,14 @@ const SPOT_GRADIENTS_L2: &str =
     "gradients mixing a spot color with other inks are written in process colors at PostScript Level 2 (Level 3 keeps the spot inks)";
 const SPOT_GRADIENTS_SHARED: &str = "gradients whose spot inks can't share a DeviceN color space are written without the spot inks";
 const SPOT_GRADIENTS_PERCEPTUAL: &str = "Perceptual gradients of spot colors are written in process colors";
+const CONIC_WEDGES: &str = "conic gradients are written as solid wedges (EPS has no conic shading)";
+const DIAMOND_QUADRANTS: &str = "diamond gradients are written as four linear gradients (EPS has no diamond shading)";
+const SPREAD_CAPPED: &str =
+    "gradients that repeat or reflect are written with at most 256 runs of their stops (at most 16384 stops); they pad past those";
+/// Wedges a conic gradient is written as: one a degree.
+const CONIC_WEDGE_COUNT: usize = 360;
+/// Decimals of a smooth shading's stitching function bounds (stop offsets, 0 to 1).
+const BOUNDS_PLACES: u32 = 7;
 /// The most colorants a DeviceN color space may have (PostScript's limit).
 const MAX_DEVICE_N: usize = 32;
 const MISSING_PATTERN: &str = "missing patterns are written as mid-grey";
@@ -359,6 +367,8 @@ impl<'a> Scene<'a> {
             }
             NodeKind::Text(t) => self.text(n, t),
             NodeKind::Image(im) => {
+                let shown = self.doc.shown_image(n, im);
+                let im = &*shown;
                 let blob = self.doc.image_blob(im);
                 match n.extras().colorize.as_deref() {
                     Some(p @ Paint::Solid { .. }) if blob.is_none_or(|b| b.gray_source().is_some()) => {
@@ -389,6 +399,8 @@ impl<'a> Scene<'a> {
                     self.node(c, false);
                 }
             }
+            // Ruler guides draw on screen only.
+            NodeKind::RulerGuide { .. } => {}
         }
         if self.body.len() > MAX_BODY {
             self.body.truncate(was);
@@ -929,10 +941,28 @@ impl<'a> Scene<'a> {
         (space, out)
     }
 
-    /// Paint all of `area` (inside the current clip) with linear or radial gradient `g`, placed on
-    /// `bounds`: a smooth shading at Level 3, else stepped fills.
+    /// Paint all of `area` (inside the current clip) with linear, radial, conic or diamond gradient
+    /// `g`, placed on `bounds`: a smooth shading at Level 3, else stepped fills (a conic: wedges at
+    /// both levels; a diamond: four linear gradients, [`Self::diamond_quadrants`]).
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect, area: Rect) {
         let geom = g.resolve(bounds);
+        // A linear, radial or diamond gradient that repeats or reflects: PostScript's shadings
+        // pad past their ends, so its stops are repeated as many times as the area needs.
+        if let Some(padded) = g.gradient.padded_over(&geom, area) {
+            if padded.capped {
+                self.warn(SPREAD_CAPPED);
+            }
+            let geom = padded.geom;
+            let paint = GradientPaint { gradient: padded.gradient, geom: Some(geom), angle: geom.angle_deg(), ..g.clone() };
+            return self.gradient(&paint, bounds, area);
+        }
+        // One whose levels over the area are not finite (a vector of no length): its stops
+        // repeated along the vector, padding past it.
+        if g.gradient.is_spread() && g.gradient.kind != GradientKind::Conic {
+            self.warn(SPREAD_CAPPED);
+            let paint = GradientPaint { gradient: g.gradient.unrolled().into_owned(), ..g.clone() };
+            return self.gradient(&paint, bounds, area);
+        }
         let (space, stops) = self.gradient_stops(&g.gradient);
         if !stops.windows(2).any(|w| w[1].0 > w[0].0) {
             if let Some((_, c)) = stops.first() {
@@ -944,6 +974,8 @@ impl<'a> Scene<'a> {
         let space = &space;
         let smooth = self.o.level == Level::Three && !self.o.compatible_gradients;
         match g.gradient.kind {
+            GradientKind::Conic => self.conic_steps(&geom, area, space, &stops, &g.gradient),
+            GradientKind::Diamond => self.diamond_quadrants(&geom, area, space, &stops, smooth),
             GradientKind::Radial => {
                 let r = geom.length().max(1e-6);
                 let squash = geom.radial_squash();
@@ -972,6 +1004,72 @@ impl<'a> Scene<'a> {
         }
     }
 
+    /// A conic gradient as [`CONIC_WEDGE_COUNT`] solid wedges about its center covering `area`
+    /// (PostScript has no conic shading), each running on to the seam under the next, so no
+    /// hairline shows between neighbors ([`vectorcraft_color::GradientGeom::conic_wedges`]).
+    /// Stops of `g` that repeat or reflect get that many wedges for each time they run around.
+    fn conic_steps(
+        &mut self,
+        geom: &vectorcraft_color::GradientGeom,
+        area: Rect,
+        space: &GradientSpace,
+        stops: &[(f64, Vec<f32>)],
+        g: &vectorcraft_color::Gradient,
+    ) {
+        self.warn(CONIC_WEDGES);
+        let spread = g.spreader();
+        let at = |t: f64| match stops.windows(2).find(|w| t <= w[1].0) {
+            Some(w) if w[1].0 > w[0].0 => mix(&w[0].1, &w[1].1, ((t - w[0].0) / (w[1].0 - w[0].0)).clamp(0.0, 1.0) as f32),
+            Some(w) => w[1].1.clone(),
+            None => stops.last().map_or_else(Vec::new, |s| s.1.clone()),
+        };
+        for (pts, t) in geom.conic_wedges(area, g.conic_wedge_count(CONIC_WEDGE_COUNT), true) {
+            self.set_comps(space, &at(spread(t)));
+            for (i, p) in pts.iter().enumerate() {
+                push_nums(&mut self.body, &[p.x, p.y]);
+                self.line(if i == 0 { "newpath moveto" } else { "lineto" });
+            }
+            self.line("closepath fill");
+        }
+    }
+
+    /// A diamond gradient over `area` as four linear gradients, each clipped to a quadrant of its
+    /// frame and equal to the diamond there (PostScript has no diamond shading;
+    /// [`vectorcraft_color::GradientGeom::diamond_quadrants`]): smooth axial shadings, else
+    /// stepped fills. Each quadrant but the last runs on under the next (stops are opaque here),
+    /// so no hairline shows between them. A diamond without an extent is its last stop.
+    fn diamond_quadrants(
+        &mut self,
+        geom: &vectorcraft_color::GradientGeom,
+        area: Rect,
+        space: &GradientSpace,
+        stops: &[(f64, Vec<f32>)],
+        smooth: bool,
+    ) {
+        let Some(quadrants) = geom.diamond_quadrants(area) else {
+            if let Some((_, c)) = stops.last() {
+                self.set_comps(space, c);
+                self.rect_fill(area);
+            }
+            return;
+        };
+        self.warn(DIAMOND_QUADRANTS);
+        for (pts, q) in quadrants {
+            self.line("q");
+            for (i, p) in pts.iter().enumerate() {
+                push_nums(&mut self.body, &[p.x, p.y]);
+                self.line(if i == 0 { "newpath moveto" } else { "lineto" });
+            }
+            self.line("closepath clip newpath");
+            if smooth {
+                self.shading(2, space, &[q.start.x, q.start.y, q.end.x, q.end.y], stops);
+            } else {
+                self.linear_steps(q.start, q.end, area, space, stops);
+            }
+            self.line("Q");
+        }
+    }
+
     /// A Level 3 smooth shading of `kind` (2 axial, 3 radial) at `coords`, extended both ways.
     fn shading(&mut self, kind: u8, space: &GradientSpace, coords: &[f64], stops: &[(f64, Vec<f32>)]) {
         let n = space.n();
@@ -993,8 +1091,12 @@ impl<'a> Scene<'a> {
                     f.push('\n');
                 }
                 f.push_str("] /Bounds [");
-                let bounds: Vec<f64> = many.iter().skip(1).map(|w| w[0].0).collect();
-                push_nums(&mut f, &bounds);
+                // Seven decimals: a gradient's stops repeated hundreds or thousands of times
+                // (`Gradient::padded_over`) keep their places in each run.
+                for w in many.iter().skip(1) {
+                    ps::push_num_places(&mut f, w[0].0, BOUNDS_PLACES);
+                    f.push(' ');
+                }
                 f.push_str("] /Encode [");
                 f.push_str(&"0 1 ".repeat(many.len()));
                 f.push_str("] >>");
@@ -1098,6 +1200,7 @@ impl<'a> Scene<'a> {
     /// Paint all of `area` with an image of freeform gradient `g` placed on `bounds`, sampled at
     /// the document's raster effects resolution (at most [`MAX_FIELD_PX`] a side).
     fn field_image(&mut self, g: &GradientPaint, bounds: Rect, area: Rect) {
+        use vectorcraft_color::cms::Model;
         use vectorcraft_color::freeform::{painted_box, spread_scale};
         let Some(b) = painted_box(bounds) else { return };
         let area = area.abs();
@@ -1108,11 +1211,24 @@ impl<'a> Scene<'a> {
         let k = (self.doc.raster_effects_ppi / 72.0).min(MAX_FIELD_PX / long);
         let along = |len: f64| (len * k).ceil().clamp(1.0, MAX_FIELD_PX) as u16;
         let (cols, rows) = (along(area.width()), along(area.height()));
-        let field = g.freeform_on(b).field_with(spread_scale(b), &|c| c.to_rgb());
+        let field = g.freeform_on(b).model_field(spread_scale(b));
         let q = |v: f32| (unit(v) * 255.0).round() as u8;
-        let rgba: Vec<u8> = field.grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect();
+        let (w, h) = (u32::from(cols), u32::from(rows));
+        let image = if field.model() == Some(Model::Cmyk) || (self.cmyk && field.model() == Some(Model::Gray)) {
+            let inks: Vec<u8> = field
+                .grid(area, cols, rows)
+                .flat_map(|(color, a)| {
+                    let [c, m, y, k] = color.to_cmyk();
+                    [q(c), q(m), q(y), q(k), q(a)]
+                })
+                .collect();
+            self.encode_inks(&inks, w, h)
+        } else {
+            let rgba: Vec<u8> = field.display_grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect();
+            self.encode_image(&rgba, w, h)
+        };
         let place = Affine::translate(area.origin().to_vec2()) * Affine::scale_non_uniform(area.width(), area.height());
-        if let Some(image) = self.encode_image(&rgba, u32::from(cols), u32::from(rows)) {
+        if let Some(image) = image {
             self.place_image(&image, place);
         }
     }
@@ -1313,41 +1429,65 @@ impl<'a> Scene<'a> {
     /// Level 3 (a key colour no opaque pixel has), white at Level 2; partly transparent ones over
     /// white. `None` for an empty image.
     fn encode_image(&mut self, rgba: &[u8], w: u32, h: u32) -> Option<String> {
+        let space = if self.cmyk { Space::Cmyk } else { Space::Rgb };
+        let mut cache: HashMap<[u8; 3], [u8; 4]> = HashMap::new();
+        let cms = self.cms.clone();
+        let intent = cms.settings().intent;
+        self.encode_samples(rgba.as_chunks::<4>().0, w, h, space, |p: &[u8; 4], al| {
+            let rgb = [0, 1, 2].map(|i| ((u32::from(p[i]) * al + 255 * (255 - al) + 127) / 255) as u8);
+            match space {
+                Space::Cmyk => *cache
+                    .entry(rgb)
+                    .or_insert_with(|| cms.srgb_to_cmyk(rgb.map(|x| f32::from(x) / 255.0), intent).map(|x| (unit(x) * 255.0).round() as u8)),
+                _ => [rgb[0], rgb[1], rgb[2], 0],
+            }
+        })
+    }
+
+    /// Straight CMYK pixels with opacity (five bytes a pixel, `w` × `h`, rows from the top), drawn
+    /// as [`Self::encode_image`] draws its pixels and keeping their ink amounts: partly
+    /// transparent pixels lay down that share of each ink.
+    fn encode_inks(&mut self, cmyka: &[u8], w: u32, h: u32) -> Option<String> {
+        self.encode_samples(cmyka.as_chunks::<5>().0, w, h, Space::Cmyk, |p: &[u8; 5], al| {
+            [0, 1, 2, 3].map(|i| ((u32::from(p[i]) * al + 127) / 255) as u8)
+        })
+    }
+
+    /// Pixels (`w` × `h`, rows from the top, each ending in its opacity) as the operators and data
+    /// that draw them in `space` on the unit square. `sample` gives the samples of a pixel that
+    /// isn't clear, from the pixel and its opacity.
+    fn encode_samples<const N: usize>(
+        &mut self,
+        px: &[[u8; N]],
+        w: u32,
+        h: u32,
+        space: Space,
+        mut sample: impl FnMut(&[u8; N], u32) -> [u8; 4],
+    ) -> Option<String> {
         if w == 0 || h == 0 {
             return None;
         }
-        let px = rgba.as_chunks::<4>().0;
-        let clear = px.iter().any(|p| p[3] == 0);
-        if px.iter().any(|p| p[3] > 0 && p[3] < 255) {
+        let opacity = |p: &[u8; N]| p[N - 1];
+        let clear = px.iter().any(|p| opacity(p) == 0);
+        if px.iter().any(|p| opacity(p) > 0 && opacity(p) < 255) {
             self.warn(IMAGE_PARTLY);
         }
         let keyed = clear && self.o.level == Level::Three;
         if clear && !keyed {
             self.warn(IMAGE_ALPHA_L2);
         }
-        let space = if self.cmyk { Space::Cmyk } else { Space::Rgb };
         let n = space.n();
         // The key colour, which opaque pixels that happen to have it are nudged off.
         let key: [u8; 4] = [255, 0, 255, 0];
         // White: no ink, or full light.
         let white: [u8; 4] = if space == Space::Cmyk { [0; 4] } else { [255; 4] };
-        let mut cache: HashMap<[u8; 3], [u8; 4]> = HashMap::new();
-        let cms = self.cms.clone();
-        let intent = cms.settings().intent;
         let mut data = Vec::with_capacity(px.len() * n);
         for p in px {
-            if p[3] == 0 {
+            if opacity(p) == 0 {
                 data.extend(if keyed { &key } else { &white }.iter().take(n));
                 continue;
             }
-            let al = u32::from(p[3]);
-            let rgb = [0, 1, 2].map(|i| ((u32::from(p[i]) * al + 255 * (255 - al) + 127) / 255) as u8);
-            let mut v = match space {
-                Space::Cmyk => *cache
-                    .entry(rgb)
-                    .or_insert_with(|| cms.srgb_to_cmyk(rgb.map(|x| f32::from(x) / 255.0), intent).map(|x| (unit(x) * 255.0).round() as u8)),
-                _ => [rgb[0], rgb[1], rgb[2], 0],
-            };
+            let mut v = sample(p, u32::from(opacity(p)));
             if keyed && v.iter().take(n).eq(key.iter().take(n)) {
                 v[1] = 1;
             }

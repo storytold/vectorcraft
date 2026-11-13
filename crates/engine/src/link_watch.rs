@@ -33,7 +33,7 @@ pub type LinkScan = Arc<(Mutex<Option<(u64, Vec<(String, Vec<u64>, Option<Stamp>
 
 /// Held by a look's worker: marks the look as ended and wakes [`Session::wait_link_scan`] when
 /// dropped, whether the worker returned or unwound.
-struct Ended(LinkScan);
+pub(crate) struct Ended(pub(crate) LinkScan);
 
 impl Drop for Ended {
     fn drop(&mut self) {
@@ -42,6 +42,14 @@ impl Drop for Ended {
         ended.store(true, Ordering::SeqCst);
         finished.notify_all();
     }
+}
+
+/// Whether a look's worker ended without storing stamps, with `read_ended` reading the flag. The
+/// worker stores its stamps and marks the look as ended under the slot's lock, and this holds that
+/// lock across both reads, so a look whose worker is storing its stamps never counts as ended without them.
+pub(crate) fn ended_without_stamps(scan: &LinkScan, read_ended: impl FnOnce(&AtomicBool) -> bool) -> bool {
+    let stamps = scan.0.lock().unwrap_or_else(PoisonError::into_inner);
+    stamps.is_none() && read_ended(&scan.2)
 }
 
 /// The stamp of the linked file stored as `path` in the document saved at `doc_path`; `None` when
@@ -76,9 +84,9 @@ pub(crate) fn update_changed(s: &mut Session, _: &Value) -> Result<Value> {
 
 impl Session {
     /// Start stamping the active document's linked files on a worker thread, unless a look is
-    /// still running (or the build has no files to look at: the web app).
+    /// still running, a script is running (or the build has no files to look at: the web app).
     pub fn start_link_scan(&mut self) {
-        if self.link_scan.is_some() || cfg!(target_arch = "wasm32") {
+        if self.link_scan.is_some() || self.script_key.is_some() || cfg!(target_arch = "wasm32") {
             return;
         }
         let Some(st) = self.active() else { return };
@@ -107,9 +115,14 @@ impl Session {
         }
     }
 
-    /// Apply a finished look (`None` while there is none, or it is still running): see
-    /// [`Session::apply_link_stamps`].
+    /// Apply a finished look (`None` while there is none, it is still running, or a script is
+    /// running): see [`Session::apply_link_stamps`]. A look whose worker ended without stamps is
+    /// cleared, also with `None`, so the next one can start.
     pub fn poll_link_scan(&mut self) -> Option<Result<Value>> {
+        if self.script_key.is_some() {
+            return None;
+        }
+        self.link_scan.take_if(|scan| ended_without_stamps(scan, |ended| ended.load(Ordering::SeqCst)));
         let (uid, stamps) = self.link_scan.as_ref()?.0.lock().unwrap_or_else(PoisonError::into_inner).take()?;
         self.link_scan = None;
         Some(self.apply_link_stamps(uid, stamps, false))
@@ -117,7 +130,8 @@ impl Session {
 
     /// Block until the look in flight has ended (at once when none is running), so that the next
     /// [`Session::poll_link_scan`] applies its stamps. A look whose worker stopped without stamps
-    /// ends too, and the poll then returns `None`. For tests that drive the look step by step.
+    /// ends too, and the poll then clears it and returns `None`. For tests that drive the look step
+    /// by step.
     pub fn wait_link_scan(&self) {
         let Some(scan) = &self.link_scan else { return };
         let (done, finished, ended) = &**scan;
@@ -170,7 +184,9 @@ impl Session {
         if changed.is_empty() {
             return Ok(none());
         }
-        let ids: Vec<u64> = changed.iter().flat_map(|(_, ids)| ids.iter().copied()).collect();
+        // Each once: a DCS file and its plate files list the same objects.
+        let mut seen = HashSet::new();
+        let ids: Vec<u64> = changed.iter().flat_map(|(_, ids)| ids.iter().copied()).filter(|id| seen.insert(*id)).collect();
         let mode = if update { "automatically" } else { self.prefs.update_links.as_str() };
         match mode {
             "automatically" => {

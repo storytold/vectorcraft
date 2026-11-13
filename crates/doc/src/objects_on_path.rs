@@ -180,6 +180,24 @@ impl ObjectsOnPath {
         });
         Some((spacing, start))
     }
+    /// Move the object `member` to the place on the path of the object `target`: the objects
+    /// between them each move one place toward where `member` was, except the objects for which
+    /// `fixed` is true, which keep their places and are passed over. Only the order changes, not the
+    /// Space or the start. Returns `member`'s new index, or `None` when either one is not an object
+    /// of the group.
+    pub fn move_member(&mut self, member: NodeId, target: NodeId, fixed: impl Fn(NodeId) -> bool) -> Option<usize> {
+        let moves = |id: NodeId| id == member || id == target || !fixed(id);
+        let slots: Vec<usize> = (0..self.members.len()).filter(|&i| moves(self.members[i].id)).collect();
+        let from = slots.iter().position(|&i| self.members[i].id == member)?;
+        let to = slots.iter().position(|&i| self.members[i].id == target)?;
+        let mut moving: Vec<_> = slots.iter().map(|&i| self.members[i]).collect();
+        let m = moving.remove(from);
+        moving.insert(to, m);
+        for (&i, m) in slots.iter().zip(moving) {
+            self.members[i] = m;
+        }
+        Some(slots[to])
+    }
     /// The children given new ids (a copy of the group): the path and the objects by their new ids.
     pub fn rename(&mut self, ids: &HashMap<NodeId, NodeId>) {
         let to = |id: NodeId| ids.get(&id).copied().unwrap_or(id);
@@ -488,6 +506,36 @@ mod tests {
     }
 
     #[test]
+    fn moving_an_object_shifts_the_ones_between_it_and_its_new_place() {
+        let (a, b, c) =
+            (rect(2, Rect::new(0.0, 0.0, 10.0, 10.0)), rect(3, Rect::new(20.0, 0.0, 30.0, 10.0)), rect(4, Rect::new(40.0, 0.0, 50.0, 10.0)));
+        let rec = ObjectsOnPath { spacing: Some(30.0), start: 5.0, ..ObjectsOnPath::new(NodeId(1), &[&a, &b, &c], CENTER, 15.0) };
+        let order = |r: &ObjectsOnPath| r.members.iter().map(|m| m.id.0).collect::<Vec<_>>();
+        let free = |_: NodeId| false;
+        let mut fwd = rec.clone();
+        assert_eq!(fwd.move_member(NodeId(2), NodeId(4), free), Some(2));
+        assert_eq!(order(&fwd), [3, 4, 2], "the first to the last place");
+        assert_eq!((fwd.spacing, fwd.start, fwd.pivot, fwd.rotate), (rec.spacing, rec.start, rec.pivot, rec.rotate));
+        let mut back = rec.clone();
+        assert_eq!(back.move_member(NodeId(4), NodeId(2), free), Some(0));
+        assert_eq!(order(&back), [4, 2, 3], "the last to the first place");
+        let mut same = rec.clone();
+        assert_eq!(same.move_member(NodeId(3), NodeId(3), free), Some(1));
+        assert_eq!(same, rec, "onto its own place");
+        let mut other = rec.clone();
+        assert_eq!(other.move_member(NodeId(1), NodeId(3), free), None, "the path is not one of the objects");
+        assert_eq!(other.move_member(NodeId(3), NodeId(9), free), None);
+        assert_eq!(other, rec);
+        // A fixed object between them keeps its place; the others pass over it.
+        let mut over = rec.clone();
+        assert_eq!(over.move_member(NodeId(2), NodeId(4), |id| id == NodeId(3)), Some(2));
+        assert_eq!(order(&over), [4, 3, 2], "the first and last trade places round the fixed one");
+        let mut back_over = rec.clone();
+        assert_eq!(back_over.move_member(NodeId(4), NodeId(2), |id| id == NodeId(3)), Some(0));
+        assert_eq!(order(&back_over), [4, 3, 2]);
+    }
+
+    #[test]
     fn a_group_saved_without_space_reads_as_auto() {
         let a = rect(2, Rect::new(0.0, 0.0, 10.0, 10.0));
         let rec = ObjectsOnPath::new(NodeId(1), &[&a], CENTER, 0.0);
@@ -572,7 +620,8 @@ mod tests {
         place(&mut g, &symbols);
         g.transform(Affine::new([2.0, 0.0, 0.0, 1.0, 0.0, 0.0]), false);
         let rec = g.extras().objects_on_path.as_deref().cloned().unwrap();
-        assert_eq!((rec.spacing, rec.start), (Some(40.0), 20.0));
+        // The spine measures arc length along the curve, so within rounding of the exact values.
+        assert!(rec.spacing.is_some_and(|d| (d - 40.0).abs() < 1e-9) && (rec.start - 20.0).abs() < 1e-9, "{rec:?}");
         place(&mut g, &symbols);
         let x = |id| g.children().and_then(|c| c.iter().find(|c| c.id == id).cloned()).unwrap().geometric_bounds().unwrap().center().x;
         assert!((x(NodeId(2)) - 20.0).abs() < 1e-9 && (x(NodeId(3)) - 60.0).abs() < 1e-9, "{} {}", x(NodeId(2)), x(NodeId(3)));

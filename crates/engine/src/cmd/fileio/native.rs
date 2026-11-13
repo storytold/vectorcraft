@@ -48,7 +48,7 @@ pub const OPTIONS: &[FormatOption] = &[
     FormatOption {
         name: "pdfCompatible",
         ty: "boolean",
-        default: "false",
+        default: "true",
         description: "also carry a PDF of every artboard, for apps that read PDF (a larger file)",
     },
 ];
@@ -109,7 +109,7 @@ pub const AI_OPTIONS: &[FormatOption] = &[
         name: "editingData",
         ty: "boolean",
         default: "true",
-        description: "also carry an editing copy of the artwork in the form other apps that open .ai files read: layers and sublayers, groups, compound paths, paths, fills and strokes, colors, linear and radial gradients, patterns on a grid of tiles, swatches, artboards, the transparency of objects and layers, objects' opacity masks, clipping groups and layers clipped by a path, embedded images with their pixels, and linked images as placed files with a preview, with type, other patterns, symbols, other clipping objects and live objects as plain filled and stroked paths, freeform gradients, gradients along or across a stroke and gradients of more than 256 stops as their average color, gradients that dither or mix perceptually as classic ones, and gradient stops linked to global process colors as their colors (written only with every artboard, as Preserve Editing is)",
+        description: "also carry an editing copy of the artwork in the form other apps that open .ai files read: layers and sublayers, groups, compound paths, paths, fills and strokes, colors, linear and radial gradients, patterns on a grid of tiles, swatches, artboards and which one is active, the transparency of objects and layers, objects' opacity masks, clipping groups and layers clipped by a path, embedded images with their pixels, linked images as placed files with a preview, point type, area type and type on a path as text, and symbols and their instances, with other type, other patterns, other clipping objects, other symbol instances and live objects as plain filled and stroked paths, freeform gradients, gradients along or across a stroke and gradients of more than 256 stops as their average color, gradients that dither or mix perceptually as classic ones, and gradient stops linked to global process colors as their colors (written only with every artboard, as Preserve Editing is)",
     },
     FormatOption {
         name: "aiVersion",
@@ -146,7 +146,7 @@ struct NativeOptions {
     precision: Option<Value>,
     include_linked: bool,
     embed_profiles: Option<bool>,
-    pdf_compatible: bool,
+    pdf_compatible: Option<bool>,
 }
 
 /// What [`save_options`] leaves to [`encode`] (rendering and encoding take time).
@@ -171,7 +171,9 @@ pub(super) fn save_options(cmd: &str, f: &Format, doc: &Document, p: &Value) -> 
         so.profiles = embedded_profiles(doc);
     }
     so.check().map_err(|e| bad(cmd, e.to_string()))?;
-    Ok((so, Extras { preview: o.preview, pdf: o.pdf_compatible }))
+    let pdf = o.pdf_compatible.unwrap_or(true);
+    so.pdf_compatible = Some(pdf);
+    Ok((so, Extras { preview: o.preview, pdf }))
 }
 
 /// The `precision` option `v`: a whole number of decimal places, 0 to
@@ -213,9 +215,11 @@ pub(super) fn encode_to(cmd: &str, f: &Format, doc: &Document, p: &Value, w: imp
     if extras.preview {
         so.preview = preview_png(&drawn)?;
     }
-    if extras.pdf {
-        // Every artboard as PDF pages (no editing data: the file is the native document).
-        so.pdf = Some(super::pdf::encode(cmd, &drawn, &json!({ "range": "all", "preserveEditing": false }))?.0);
+    if extras.pdf && !drawn.artboards.is_empty() {
+        // Every artboard as PDF pages (no editing data: the file is the native document), dated by
+        // the document's File Info, so the same document and dates give the same bytes.
+        let at = drawn.metadata.modified.or(drawn.metadata.created);
+        so.pdf = Some(super::pdf::encode_at(cmd, &drawn, &json!({ "range": "all", "preserveEditing": false }), at)?.0);
     }
     drop(drawn);
     let native = match full {

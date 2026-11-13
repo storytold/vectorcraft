@@ -19,7 +19,15 @@ pub(crate) fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Fr
         }
         Paint::Gradient(g) if g.gradient.kind == GradientKind::Freeform => crate::freeform::set_freeform_paint(ctx, g, bounds, f.ink),
         Paint::Gradient(g) => {
-            let geom = g.resolve(bounds);
+            // A gradient that repeats or reflects: one run of its stops over its period, which
+            // the renderer extends past both ends.
+            let spread = g.gradient.is_spread();
+            let geom = if spread { g.resolve(bounds).period(g.gradient.kind, g.gradient.repeat_count()) } else { g.resolve(bounds) };
+            let extend = match g.gradient.spread {
+                _ if !spread => peniko::Extend::Pad,
+                vectorcraft_color::GradientSpread::Reflect => peniko::Extend::Reflect,
+                _ => peniko::Extend::Repeat,
+            };
             let adjusted = f.ink.gradient(&g.gradient);
             let gradient = adjusted.as_ref().unwrap_or(&g.gradient);
             let ink = if adjusted.is_some() { f.ink.base() } else { f.ink };
@@ -40,6 +48,16 @@ pub(crate) fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Fr
                     };
                     g.with_stops(stops.as_slice())
                 }
+                GradientKind::Conic => {
+                    // One turn about the origin, carried onto the extent ellipse: its frame starts
+                    // the sweep along the vector, and a mirrored frame reverses it. Repeated `n`
+                    // times, one run takes 1/n of the turn.
+                    ctx.set_paint_transform(geom.conic_frame());
+                    let turn = if spread { std::f32::consts::TAU / g.gradient.repeat_count() as f32 } else { std::f32::consts::TAU };
+                    peniko::Gradient::new_sweep((0.0, 0.0), 0.0, turn).with_stops(stops.as_slice())
+                }
+                // peniko has no diamond gradient: it is drawn as pixels, as a dithered fill is.
+                GradientKind::Diamond => return crate::dither::set_dithered_paint(ctx, g, bounds, bounds, f.ink, false),
                 _ => {
                     ctx.reset_paint_transform();
                     let (s, e) =
@@ -49,7 +67,7 @@ pub(crate) fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Fr
             };
             // Colour and opacity blend each on its own, as the model samples them and as the PDF
             // and SVG exports draw them (peniko's default premultiplies).
-            ctx.set_paint(grad.with_interpolation_alpha_space(peniko::InterpolationAlphaSpace::Unpremultiplied));
+            ctx.set_paint(grad.with_extend(extend).with_interpolation_alpha_space(peniko::InterpolationAlphaSpace::Unpremultiplied));
             true
         }
         Paint::Pattern { pattern, xf } => crate::pattern::set_pattern_paint(ctx, pattern, *xf, f),
@@ -61,7 +79,19 @@ pub(crate) fn set_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Fr
 pub(crate) fn set_fill_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, f: &Frame) -> bool {
     match p {
         Paint::Gradient(g) if g.gradient.dither && g.gradient.kind != GradientKind::Freeform && !g.gradient.stops.is_empty() => {
-            crate::dither::set_dithered_paint(ctx, g, bounds, f.ink)
+            crate::dither::set_dithered_paint(ctx, g, bounds, bounds, f.ink, true)
+        }
+        _ => set_paint(ctx, p, bounds, f),
+    }
+}
+
+/// [`set_paint`] for a stroke whose outline (miters, caps and arrowheads included) fits the box
+/// `area` gives: a diamond gradient, drawn as pixels, is sampled over that box too, so the parts
+/// of the outline past `bounds` get the diamond's colors there. `area` runs only for a diamond.
+pub(crate) fn set_stroke_paint(ctx: &mut RenderContext, p: &Paint, bounds: Rect, area: impl FnOnce() -> Rect, f: &Frame) -> bool {
+    match p {
+        Paint::Gradient(g) if g.gradient.kind == GradientKind::Diamond && !g.gradient.stops.is_empty() => {
+            crate::dither::set_dithered_paint(ctx, g, bounds, area(), f.ink, false)
         }
         _ => set_paint(ctx, p, bounds, f),
     }

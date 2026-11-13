@@ -271,6 +271,28 @@ fn guides_are_not_layers() {
     assert_eq!(parse(&export(&b.build(), &o)).count, -3, "the group and the square");
 }
 
+/// Ruler guides on a layer and a sublayer change nothing in the export: the same file with and
+/// without Maximum Editability, the same drawn bounds and the same cached size of each layer.
+#[test]
+fn ruler_guides_are_not_exported() {
+    use vectorcraft_doc::{NodeId, NodeKind};
+    let plain = doc();
+    let mut guided = plain.clone();
+    let guide = |id, vertical, pos| Node::new(NodeId(id), NodeKind::RulerGuide { vertical, pos, artboard: None });
+    let (bottom, inner) = (guided.layers[0].id, guided.layers[1].children().unwrap().last().unwrap().id);
+    guided.insert(Some(bottom), usize::MAX, guide(900, true, 20.0)).unwrap();
+    guided.insert(Some(bottom), usize::MAX, guide(901, false, 15.0)).unwrap();
+    guided.insert(Some(inner), usize::MAX, guide(902, true, 3.0)).unwrap();
+    for psd in [PsdOptions::default(), PsdOptions { max_editability: true, ..PsdOptions::default() }] {
+        assert_eq!(export(&guided, &opts(psd.clone())), export(&plain, &opts(psd)));
+    }
+    assert_eq!(art_bounds(&guided), art_bounds(&plain));
+    for (g, p) in guided.layers.iter().zip(&plain.layers) {
+        assert_eq!(crate::drawn_bounds(&guided, g), crate::drawn_bounds(&plain, p));
+        assert_eq!(crate::lru::node_bytes(g), crate::lru::node_bytes(p));
+    }
+}
+
 #[test]
 fn a_background_colour_is_the_bottom_layer() {
     let doc = doc();
@@ -320,4 +342,13 @@ fn the_profile_and_the_size_limit() {
     let o = RasterExportOptions { ppi: 72.0 * 301.0, ..RasterExportOptions::default() };
     let err = Renderer::new().export_region(&doc, doc.artboards[0].rect, RasterFormat::Psd, &o).unwrap_err();
     assert!(err.contains(&MAX_SIDE.to_string()), "{err}");
+}
+
+#[test]
+fn long_unicode_name_is_cut_on_a_character_boundary() {
+    let mut b = DocBuilder::new(100.0, 60.0);
+    b.layer(&("a".repeat(254) + "😀"));
+    b.rect(Rect::new(0.0, 0.0, 5.0, 5.0), Color::rgb8(0, 0, 0), |_| {});
+    let file = export(&b.build(), &opts(PsdOptions::default()));
+    assert_eq!(parse(&file).records.last().unwrap().name, "a".repeat(254));
 }

@@ -1,9 +1,9 @@
 //! Artboard rotation and light controls for the active 3D effect dialog (Extrude & Bevel, Revolve,
-//! Inflate, Rotate). Gestures edit fields;
+//! Inflate, Rotate and the classic 3D effects). Gestures edit fields;
 //! the existing effect preview applies commands and owns OK, Cancel and undo.
 use egui::{Align2, FontId, Id, Pos2, Rect, Sense, Stroke, Vec2, vec2};
 use serde_json::json;
-use vectorcraft_effects::REVOLVE;
+use vectorcraft_effects::{CLASSIC_REVOLVE, REVOLVE};
 use vectorcraft_geom::Point;
 use vectorcraft_three_d::Revolve;
 
@@ -20,8 +20,15 @@ pub(crate) fn lighting(d: &Dialog) -> bool {
     d.str("__gizmo") == "light"
 }
 
+/// Does the effect take light: Shading on, or for the classic 3D effects a Diffuse or Plastic
+/// surface?
+fn lit(d: &Dialog) -> bool {
+    let id = d.str("__effect");
+    if vectorcraft_effects::is_classic_three_d(&id) { matches!(d.str("surface").as_str(), "diffuse" | "plastic") } else { d.bool("shade") }
+}
+
 pub(crate) fn hint(d: &Dialog) -> &'static str {
-    if !d.bool("preview") || (lighting(d) && !d.bool("shade")) {
+    if !d.bool("preview") || (lighting(d) && !lit(d)) {
         tl!("Drag values or labels. Double-click a value to type.")
     } else if lighting(d) {
         tl!("Drag the light, or its rings. Shift snaps to 15°.")
@@ -85,10 +92,11 @@ impl Geometry {
         let state = app.session.active()?;
         let node = state.doc.node(*state.selection.objects.first()?)?;
         let bounds = node.geometric_bounds()?;
-        let xf = Xf::new(app.canvas_rect?, app.view()?);
+        let xf = app.canvas_xf()?;
         let options = super::revolve::light_options(d);
-        // Revolve turns about its axis; the others about the centre of the art's bounds.
-        let origin = if d.str("__effect") == REVOLVE { options.rotation_origin(bounds) } else { bounds.center() };
+        // Both Revolves turn about their axis; the others about the centre of the art's bounds.
+        let id = d.str("__effect");
+        let origin = if id == REVOLVE || id == CLASSIC_REVOLVE { options.rotation_origin(bounds) } else { bounds.center() };
         let center = xf.to_screen(origin);
         if !center.x.is_finite() || !center.y.is_finite() || !xf.rect.contains(center) {
             return None;
@@ -190,7 +198,7 @@ fn snap_height(height: f64, snap: bool) -> f64 {
 
 pub(super) fn show(app: &VectorcraftApp, ctx: &egui::Context, d: &mut Dialog) {
     let light_mode = lighting(d);
-    if !d.bool("preview") || (light_mode && !d.bool("shade")) {
+    if !d.bool("preview") || (light_mode && !lit(d)) {
         clear(ctx);
         return;
     }

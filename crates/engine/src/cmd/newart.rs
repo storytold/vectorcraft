@@ -5,8 +5,8 @@
 //! `stroke.set` whatever is selected), a graphic style clicked with nothing selected (more fills
 //! and strokes, effects, opacity and blend mode, and the link to the style) or, with the Appearance
 //! panel's New Art Has Basic Appearance off, the whole appearance of the last selection. With the
-//! option on (the default) an inherited appearance gives new art its top stroke's options only.
-//! `paint.default` resets it.
+//! option on (the default) an inherited appearance gives new art its top stroke's options only,
+//! and a change of selection loads only the proxies. `paint.default` resets it.
 
 use std::borrow::Cow;
 
@@ -25,7 +25,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Art Has Basic Appearance",
             ["Window", "Appearance"],
             None,
-            "{on?: bool (omitted: toggle)} the Appearance panel option (the preference newArtBasic, on by default): on, new art takes one fill and stroke (with the Stroke panel's options); off, the whole appearance of the last selected object (every fill, stroke and effect, opacity and blend mode) → {on}",
+            "{on?: bool (omitted: toggle)} the Appearance panel option (the preference newArtBasic, on by default): on, new art takes one fill and stroke (with the Stroke panel's options), the fill, stroke and weight the selection shares when it last changed; off, the whole appearance of the last selected object (every fill, stroke and effect, opacity and blend mode) → {on}",
             always,
             set_basic
         ),
@@ -212,6 +212,36 @@ impl Session {
         let style = super::style::linked_style(&st.doc, n).map(|g| g.name.clone());
         let (ap, opacity, blend) = (super::style::captured(n), n.opacity, n.blend);
         self.take_new_art(ap, opacity, blend, style, true);
+    }
+
+    /// After a command changed the selection, with New Art Has Basic Appearance on: the fill and
+    /// stroke proxies and the weight take what the selection shows in them, so new art looks like
+    /// it. A paint the selected objects don't share (a "?" proxy) stays as it was, and art without
+    /// paint (a placed image that isn't colorized, whose None would make new art invisible) changes
+    /// nothing. The template is left alone, and without a stroke to show the weight stays too.
+    pub(crate) fn load_selection_paints(&mut self) {
+        if !self.prefs.new_art_basic {
+            return;
+        }
+        let has_paint = self
+            .proxy_source(false)
+            .is_some_and(|(n, _)| matches!(n.kind, NodeKind::Text(_)) || !n.appearance.items.is_empty() || n.extras().colorize.is_some());
+        if !has_paint {
+            return;
+        }
+        let (fill_mixed, stroke_mixed) = self.proxy_mixed();
+        let (fill, stroke) = self.proxy_paints();
+        let weight_mixed = self.active().is_some_and(|st| st.stroke_mixed().weight);
+        let weight = self.shown_stroke().filter(|st| st.paint != Paint::None && !weight_mixed).map(|st| st.width);
+        if !fill_mixed {
+            self.paint.fill = unplaced(&fill);
+        }
+        if !stroke_mixed {
+            self.paint.stroke = unplaced(&stroke);
+        }
+        if let Some(width) = weight {
+            self.paint.stroke_width = width;
+        }
     }
 }
 

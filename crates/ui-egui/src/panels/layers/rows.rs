@@ -91,6 +91,9 @@ pub(super) fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
     if click.moves_anchor() {
         ui.data_mut(|d| d.insert_temp(key("anchor"), id));
     }
+    let mut rows = view.rows.clone();
+    widgets::apply_row_click(&mut rows, &click);
+    out.rows_after_click = Some(rows);
     let ids = |rows: &[NodeId]| rows.iter().map(|r| r.0).collect::<Vec<_>>();
     out.actions.push(match click {
         widgets::RowClick::Only(id) => ("layer.setCurrent".into(), json!({"id": id.0})),
@@ -119,7 +122,7 @@ fn takes(n: &Node, drag: &LayersDrag, doc: &Document) -> bool {
 fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
     let (t, h) = (&view.t, view.h);
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click_and_drag());
-    let Some(g) = view.doc.guides.get(i) else { return };
+    let Some(g) = view.ruler_guides.get(i) else { return };
     let selected = view.guides.contains(&i);
     let editable = view.doc.guide_editable(g);
     if editable && resp.hovered() {
@@ -149,11 +152,12 @@ fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
         out.actions.push(("guide.select".into(), json!({"indexes": [i], "toggle": m.shift || m.command})));
     }
     // Dragged: the selected guides when this is one of them, else this one, to another layer's row.
-    if editable && resp.drag_started() {
+    // Only the primary button drags a guide row.
+    if editable && resp.drag_started_by(egui::PointerButton::Primary) {
         let guides = if selected { view.guides.clone() } else { vec![i] };
         egui::DragAndDrop::set_payload(ui.ctx(), LayersDrag::Guides(guides));
     }
-    if resp.dragged() {
+    if resp.dragged_by(egui::PointerButton::Primary) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     }
     // Guides dropped here go to this guide's layer.
@@ -360,7 +364,7 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
     }
     let sq_resp = ui.interact(egui::Rect::from_center_size(sq, vec2(18.0, h)), ui.scope_id().with(("selsq", n.id.0)), Sense::click_and_drag());
     // Dragging the selected-art square carries the selection to another row.
-    if (is_sel || child_sel) && sq_resp.drag_started() {
+    if (is_sel || child_sel) && sq_resp.drag_started_by(egui::PointerButton::Primary) {
         egui::DragAndDrop::set_payload(ui.ctx(), LayersDrag::Art);
     }
     let m = ui.input(|i| i.modifiers);
@@ -393,8 +397,9 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             out.actions.push(("assets.add".into(), json!({ "ids": collect_ids.clone(), "multiple": multiple })));
         });
     });
-    // Dragging rows: the highlighted rows when this is one of them, else this row.
-    if resp.drag_started() && view.column.is_none() {
+    // Dragging rows: the highlighted rows when this is one of them, else this row. Only the primary
+    // button drags; the secondary button opens the row menu, and a drag with it moves nothing.
+    if resp.drag_started_by(egui::PointerButton::Primary) && view.column.is_none() {
         let ids = if view.rows.contains(&n.id) { view.rows.clone() } else { vec![n.id] };
         egui::DragAndDrop::set_payload(ui.ctx(), LayersDrag::Rows(ids));
         let grab = resp.interact_pointer_pos().map_or(vec2(h, h / 2.0), |p| p - r.min);
@@ -403,7 +408,7 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             d.insert_temp(key("grabbed"), n.id);
         });
     }
-    if resp.dragged() {
+    if resp.dragged_by(egui::PointerButton::Primary) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     }
     drop_target(ui, view, n, r, x - 16.0, open, &resp, out);
@@ -486,10 +491,10 @@ fn eye_and_lock(ui: &mut Ui, view: &View, n: &Node, r: egui::Rect, out: &mut Out
     } else if lr.clicked() {
         out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "locked": !n.locked})));
     }
-    // Dragging down a column gives every row it passes this row's new state.
-    if er.drag_started() {
+    // Dragging down a column with the primary button gives every row it passes this row's new state.
+    if er.drag_started_by(egui::PointerButton::Primary) {
         out.column = Some(Some(ColumnDrag { eye: true, value: !n.visible, ids: vec![n.id.0] }));
-    } else if lr.drag_started() {
+    } else if lr.drag_started_by(egui::PointerButton::Primary) {
         out.column = Some(Some(ColumnDrag { eye: false, value: !n.locked, ids: vec![n.id.0] }));
     } else if let Some(c) = out.column.clone().unwrap_or_else(|| view.column.clone())
         && !c.ids.contains(&n.id.0)
@@ -564,7 +569,10 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
 /// copies it) or the trash.
 fn target_circle(ui: &mut Ui, n: &Node, c: egui::Pos2, h: f32, targeted: bool, actions: &mut Vec<(String, Value)>, t: &Tokens) -> egui::Response {
     let resp = ui.interact(egui::Rect::from_center_size(c, vec2(16.0, h)), ui.scope_id().with(("target", n.id.0)), Sense::click_and_drag());
-    widgets::drag_source(ui, &resp, || PanelDrag::Appearance(n.id));
+    // Only the primary button carries the appearance away.
+    if resp.drag_started_by(egui::PointerButton::Primary) {
+        egui::DragAndDrop::set_payload(ui.ctx(), PanelDrag::Appearance(n.id));
+    }
     let held = resp.dnd_hover_payload::<PanelDrag>().is_some_and(|d| matches!(*d, PanelDrag::Appearance(id) if id != n.id));
     if let Some(d) = resp.dnd_release_payload::<PanelDrag>()
         && let PanelDrag::Appearance(source) = *d
@@ -581,7 +589,7 @@ fn target_circle(ui: &mut Ui, n: &Node, c: egui::Pos2, h: f32, targeted: bool, a
     if has_styled_target(n) {
         ui.painter().circle_filled(c, 3.2, t.icon);
     }
-    if resp.dragged() {
+    if resp.dragged_by(egui::PointerButton::Primary) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     }
     resp

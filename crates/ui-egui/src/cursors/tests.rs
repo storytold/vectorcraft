@@ -349,6 +349,9 @@ fn the_canvas_hands_the_tool_cursor_to_the_os_and_idles_while_the_pointer_rests(
         assert_eq!(img, &app.canvas.cursors.get(Cursor::Arrow, 1.0).unwrap());
         // Where the OS can't show the bitmap, its system cursor.
         assert_eq!(out.platform_output.cursor_icon, egui::CursorIcon::Default);
+    } else if cfg!(target_os = "macos") {
+        assert_eq!(out.platform_output.cursor_icon, egui::CursorIcon::Default);
+        assert!(out.platform_output.cursor_image.is_none());
     } else {
         assert_eq!(out.platform_output.cursor_icon, egui::CursorIcon::None);
     }

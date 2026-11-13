@@ -76,7 +76,9 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
 /// starts (one for all the steps in that document), so a step may open, switch or close documents.
 /// A step that acts on the active artboard ([`crate::ON_ACTIVE_ARTBOARD`]) and names none gets
 /// `artboard`, as the Artboards panel shows it in the document the step runs in: past that
-/// document's last artboard, the last one. A step that resizes the active artboard
+/// document's last artboard, the last one; a Paste in Place, in Front or in Back step that names
+/// `artboards` keeps them, and one that names neither, while the Artboard tool is chosen with
+/// several artboards selected, pastes on those. A step that resizes the active artboard
 /// ([`crate::FIT_ACTIVE_ARTBOARD`]) and names no `index` gets that artboard as its `index`.
 /// `grouped` gets each step's undo groups, as [`Session::batch_steps`] keeps them.
 fn run_steps(
@@ -92,6 +94,9 @@ fn run_steps(
         if id == "command.batch" {
             return Err(bad("command.batch", "batches cannot nest"));
         }
+        if id == "prefs.import" {
+            return Err(bad("command.batch", "`prefs.import` runs on its own, not as a batch step"));
+        }
         if s.active().is_some() {
             s.begin_interaction(label)?;
         }
@@ -101,9 +106,14 @@ fn run_steps(
         } else {
             crate::FIT_ACTIVE_ARTBOARD.contains(&id.as_str()).then_some("index")
         };
+        // A paste step that names its `artboards` keeps them; one that names neither key, while the
+        // Artboard tool is chosen with several artboards selected, pastes on those.
+        let names_artboards = id.starts_with("edit.pasteIn")
+            && (params.get("artboards").is_some() || (params.get("artboard").is_none() && !crate::cmd::edit::artboard_tool_picks(s).is_empty()));
         if let Some(a) = artboard
             && let Some(key) = key
             && params.get(key).is_none()
+            && !names_artboards
             && let Some(last) = s.active().and_then(|d| d.doc.artboards.len().checked_sub(1))
             && let Some(o) = params.as_object_mut()
         {

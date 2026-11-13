@@ -1,8 +1,12 @@
+use vectorcraft_geom::Point;
+
 use super::entry::RgbInCmyk;
 use super::{
     Affine, Arc, BezPath, BlendMode, Color, Compatibility, Document, Exporter, Fill, FillRule, HashMap, HashSet, Node, NormalizedF32, Path,
-    PathBuilder, PathEl, Rect, Shape, Standard, Surface, Transform, cmyk, krilla, luma, rgb,
+    PathBuilder, PathEl, Rect, Shape, Standard, Surface, cmyk, krilla, luma, rgb,
 };
+
+pub(super) use crate::surface::xf;
 
 /// How deep inline graphics nest before they are left out.
 pub(super) const MAX_INLINE_DEPTH: u32 = 4;
@@ -31,6 +35,7 @@ impl<'a> Exporter<'a> {
             knockout: doc.page_knockout,
             lab_spots: vec![],
             interpolate: set.standard != Standard::PdfA2b,
+            sweeps: set.standard != Standard::PdfA2b,
             // PDF 1.3 and 1.4 files are written with the PDF 1.4 settings ([`Writer::new`]).
             sixteen_bit: !matches!(set.compatibility, Compatibility::Pdf13 | Compatibility::Pdf14),
             compression: &set.compression,
@@ -47,6 +52,7 @@ impl<'a> Exporter<'a> {
             in_layer: 0,
             paper: Rect::ZERO,
             symbol_nodes: 0,
+            symbol_limit: vectorcraft_doc::MAX_SYMBOL_NODES,
             overprint: false,
             overprinted: false,
             invisible: false,
@@ -63,16 +69,18 @@ impl<'a> Exporter<'a> {
     }
 }
 
-/// Glyphs written together as real text: the same font at the same size along one baseline.
+/// Glyphs written together as real text: the same font, size and orientation on one layout line.
 pub(super) struct GlyphLine {
     pub(super) face: u32,
     pub(super) font: krilla::text::Font,
     pub(super) size: f64,
     /// The glyph space (krilla's, y down, at `size`) → text space, at the line's start.
     pub(super) frame: Affine,
-    /// Glyph id, pen position and advance along the line (in glyph space), and the characters it
+    /// The layout line (or vertical column); offsets alone do not identify a line.
+    pub(super) layout_line: usize,
+    /// Glyph id, position and horizontal advance (in glyph space), and the characters it
     /// stands for (bytes of the plain text, or of the list marker's text).
-    pub(super) glyphs: Vec<(u32, f64, f64, std::ops::Range<usize>)>,
+    pub(super) glyphs: Vec<(u32, Point, f64, std::ops::Range<usize>)>,
     /// The list marker the glyphs belong to, by its first glyph's index in the layout
     /// ([`TextLayout::marker_of`]); `None` for glyphs of the plain text.
     pub(super) marker: Option<usize>,
@@ -90,11 +98,6 @@ pub(super) const MAX_GRADIENT_PX: f64 = 4096.0;
 /// 6.1.13). The PDF writer writes a whole number in the `i32` range as an integer, and in builds
 /// with overflow checks it panics on -2,147,483,648.
 pub(super) const MAX_COORD: f64 = 1e9;
-
-pub(super) fn xf(a: Affine) -> Transform {
-    let c = a.as_coeffs();
-    Transform::from_row(c[0] as f32, c[1] as f32, c[2] as f32, c[3] as f32, c[4] as f32, c[5] as f32)
-}
 
 /// The current transform of surface `s` in the content stream it draws into, without that stream's
 /// root transform (a page's y flip).
@@ -198,9 +201,12 @@ pub(super) fn cover(s: &mut Surface, page: Rect, level: u8, opacity: f32) {
 /// group of that opacity that, unlike the writer's opacity groups, is not isolated.
 /// The cover is white, so a reader that takes every soft mask as a luminosity mask shows the same.
 pub(super) fn constant_mask(s: &mut Surface, page: Rect, alpha: f32) -> krilla::mask::Mask {
+    let transform = s.group_transform();
     let mut sb = s.stream_builder();
-    let mut ms = sb.surface();
+    let mut ms = Surface::stream(sb.surface());
+    ms.push_transform(&transform);
     cover(&mut ms, page, 255, alpha);
+    ms.pop();
     ms.finish();
     krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Alpha)
 }

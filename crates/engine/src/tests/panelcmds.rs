@@ -2,7 +2,7 @@
 
 use serde_json::json;
 use vectorcraft_color::{Color, GradientKind, Paint};
-use vectorcraft_doc::{AppearanceItem, NodeKind};
+use vectorcraft_doc::{AppearanceItem, LayerColor, NodeKind};
 
 use crate::*;
 
@@ -64,7 +64,7 @@ fn edit_gradient_angle_reverse_and_errors() {
     assert_eq!(g.gradient.stops[0].color.to_hex(), "#0000ff");
     assert!((g.gradient.stops[0].midpoint - 0.8).abs() < 1e-6, "{:?}", g.gradient.stops);
     assert!(s.execute("paint.editGradient", &json!({"stops": [{"offset": 0, "color": "#fff"}]})).is_err());
-    assert!(s.execute("paint.editGradient", &json!({"kind": "conic"})).is_err());
+    assert!(s.execute("paint.editGradient", &json!({"kind": "spiral"})).is_err());
 }
 
 #[test]
@@ -117,6 +117,60 @@ fn artboards_reorder_and_duplicate() {
     assert!(d.artboards[2].rect.x0 >= d.artboards[1].rect.x1);
     s.execute("artboard.reorder", &json!({"index": 1, "to": 0})).unwrap();
     assert_eq!(s.doc().unwrap().doc.artboards[0].name, "Second");
+}
+
+/// `artboard.new {beside, side}` adds an empty artboard the size of artboard `beside`, 20 pt from
+/// that side of it, and `artboard.duplicate {index, side}` puts the copy and its art there; each is
+/// one undo step. An unknown side, `beside` without `side`, and `side` with a size or place are
+/// refused and change nothing.
+#[test]
+fn artboards_are_added_and_duplicated_on_a_side() {
+    let mut s = session();
+    let id = rect(&mut s);
+    let board = |s: &Session, i: usize| s.doc().unwrap().doc.artboards[i].rect;
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let src = board(&s, 0);
+    let before = undo(&s);
+    assert_eq!(s.execute("artboard.new", &json!({"beside": 0, "side": "bottom"})).unwrap()["index"], 1);
+    assert_eq!(board(&s, 1), src + vectorcraft_geom::Vec2::new(0.0, src.height() + 20.0), "same size, 20 pt below");
+    assert_eq!(undo(&s), before + 1, "one undo step");
+    assert!(!s.doc().unwrap().doc.artboard_has_art(board(&s, 1)), "the new artboard is empty");
+    s.execute("artboard.new", &json!({"beside": 0, "side": "left"})).unwrap();
+    assert_eq!(board(&s, 2), src + vectorcraft_geom::Vec2::new(-(src.width() + 20.0), 0.0));
+    s.execute("artboard.new", &json!({"side": "top"})).unwrap();
+    assert_eq!(board(&s, 3), board(&s, 2) + vectorcraft_geom::Vec2::new(0.0, -(src.height() + 20.0)), "by default beside the last");
+    s.execute("artboard.new", &json!({"side": "top", "beside": null, "x": null})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    let before = undo(&s);
+    let out = s.execute("artboard.duplicate", &json!({"index": 0, "side": "right", "art": true})).unwrap();
+    assert_eq!(out["index"], 4);
+    let dv = vectorcraft_geom::Vec2::new(src.width() + 20.0, 0.0);
+    assert_eq!(board(&s, 4), src + dv, "the copy sits 20 pt right of the artboard it copies");
+    let copies: Vec<NodeId> = out["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    assert_eq!(copies.len(), 1);
+    let bounds = |s: &Session, id: NodeId| s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    assert_eq!(bounds(&s, copies[0]), bounds(&s, id) + dv, "its art goes with it");
+    assert_eq!(undo(&s), before + 1, "one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 4, "undo takes the copy and its art away together");
+    assert!(s.doc().unwrap().doc.node(copies[0]).is_none());
+
+    let before = s.doc().unwrap().doc.clone();
+    let steps = undo(&s);
+    for (cmd, p, msg) in [
+        ("artboard.new", json!({"beside": 0, "side": "middle"}), "`side` must be"),
+        ("artboard.new", json!({"beside": 0, "side": 3}), "`side` must be"),
+        ("artboard.new", json!({"beside": 0}), "`beside` needs `side`"),
+        ("artboard.new", json!({"side": "left", "width": 100}), "leave out x, y, width and height"),
+        ("artboard.new", json!({"beside": 9, "side": "left"}), "no such artboard"),
+        ("artboard.duplicate", json!({"index": 0, "side": "inside"}), "`side` must be"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains(msg), "{cmd} {p}: {e}");
+        assert_eq!(*s.doc().unwrap().doc, *before, "{cmd} {p} changes nothing");
+        assert_eq!(undo(&s), steps, "{cmd} {p}");
+    }
 }
 
 /// An artboard's background color (Properties › Artboards › Fill): `artboard.setProps {color}` sets
@@ -241,6 +295,150 @@ fn artboard_reorder_past_u32_goes_last() {
     assert_eq!(s.doc().unwrap().doc.artboards.last().map(|a| a.name.as_str()), Some("Second"));
 }
 
+/// `artboard.rename`: one artboard takes the name trimmed, several take it numbered in artboard
+/// order in one undo step, and a locked artboard is renamed too.
+#[test]
+fn artboard_rename_numbers_several_in_one_undo_step() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    s.execute("artboard.new", &json!({})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 2, "locked": true})).unwrap();
+    let names = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect::<Vec<_>>();
+    let steps = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("artboard.rename", &json!({"index": 0, "name": " Cover "})).unwrap()["renamed"], json!([0]));
+    assert_eq!(names(&s)[0], "Cover");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    // Listed out of order and twice: artboard order, once each.
+    assert_eq!(s.execute("artboard.rename", &json!({"indices": [2, 1, 2], "name": "Page"})).unwrap()["renamed"], json!([1, 2]));
+    assert_eq!(names(&s)[1..], ["Page-1", "Page-2"]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 2, "one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_ne!(names(&s)[1], "Page-1", "one undo restores both");
+    assert_ne!(names(&s)[2], "Page-2");
+}
+
+/// `artboard.rename` with nothing to change records no undo step, and without `index` or `indices`
+/// acts on the artboards the Artboard tool has selected.
+#[test]
+fn artboard_rename_records_nothing_when_nothing_changes() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    s.execute("artboard.rename", &json!({"indices": [0, 1], "name": "Page"})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("artboard.rename", &json!({"indices": [0, 1], "name": "Page"})).unwrap()["renamed"], json!([]));
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    s.set_tool_option("selected", &json!([1]));
+    assert_eq!(s.execute("artboard.rename", &json!({"name": "Back"})).unwrap()["renamed"], json!([1]));
+    assert_eq!(s.doc().unwrap().doc.artboards[1].name, "Back");
+}
+
+/// `artboard.rename` refuses an empty or missing name, a name that is not a string and an unknown
+/// artboard, and leaves the document and its undo history as they were.
+#[test]
+fn artboard_rename_refuses_bad_params() {
+    let mut s = session();
+    let steps = s.doc().unwrap().history.undo.len();
+    for p in [
+        json!({"index": 0, "name": "  "}),
+        json!({"index": 0}),
+        json!({"index": 0, "name": 7}),
+        json!({"index": 9, "name": "A"}),
+        json!({"indices": [], "name": "A"}),
+        json!({"indices": [0, 9], "name": "A"}),
+        json!({"index": "0", "name": "A"}),
+    ] {
+        assert!(s.execute("artboard.rename", &p).is_err(), "{p}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    assert_eq!(s.doc().unwrap().doc.artboards[0].name, "Artboard 1");
+}
+
+/// `artboard.switchOrientation` swaps width and height of each artboard named in one undo step,
+/// each top-left corner staying put; a square one and a locked one stay as they are.
+#[test]
+fn artboard_switch_orientation_swaps_each_in_one_undo_step() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 1000, "y": 10, "width": 300, "height": 100})).unwrap();
+    s.execute("artboard.new", &json!({"x": 2000, "y": 20, "width": 50, "height": 50})).unwrap();
+    s.execute("artboard.new", &json!({"x": 3000, "y": 30, "width": 40, "height": 60})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 3, "locked": true})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    let r = s.execute("artboard.switchOrientation", &json!({"indices": [0, 1, 2, 3]})).unwrap();
+    assert_eq!(r["switched"], json!([0, 1]));
+    let rects: Vec<_> = s.doc().unwrap().doc.artboards.iter().map(|a| (a.rect.x0, a.rect.y0, a.rect.width(), a.rect.height())).collect();
+    assert_eq!(rects, [(0.0, 0.0, 600.0, 800.0), (1000.0, 10.0, 100.0, 300.0), (2000.0, 20.0, 50.0, 50.0), (3000.0, 30.0, 40.0, 60.0)]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards[1].rect.width(), 300.0);
+    assert_eq!(s.doc().unwrap().doc.artboards[0].rect.width(), 800.0, "one undo restores both");
+}
+
+/// `artboard.switchOrientation`: a square artboard records no undo step, every artboard locked is an
+/// error, and bad params change nothing.
+#[test]
+fn artboard_switch_orientation_refuses_and_records_nothing() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 2000, "y": 0, "width": 50, "height": 50})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("artboard.switchOrientation", &json!({"index": 1})).unwrap()["switched"], json!([]));
+    assert_eq!(s.execute("artboard.switchOrientation", &json!({"index": 0})).unwrap_err().to_string(), "the artboard is locked");
+    for p in [json!({"index": 9}), json!({"indices": []}), json!({"index": "1"}), json!({"index": 1, "scaleArt": "yes"})] {
+        assert!(s.execute("artboard.switchOrientation", &p).is_err(), "{p}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+}
+
+/// `artboard.switchOrientation` takes the art along with `scaleArt`, and by default follows the
+/// Artboard tool's Scale Artwork with Artboard option.
+#[test]
+fn artboard_switch_orientation_scales_art_with_the_tools_option() {
+    let mut s = session();
+    let id = rect(&mut s);
+    let width = |s: &Session| s.doc().unwrap().doc.bounds_of(&[id], false).unwrap().width();
+    let was = width(&s);
+    s.execute("artboard.switchOrientation", &json!({"index": 0})).unwrap();
+    assert_eq!(width(&s), was, "the art stays by default");
+    s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    s.set_tool_option("scaleArt", &json!(true));
+    s.execute("artboard.switchOrientation", &json!({"index": 0})).unwrap();
+    assert_ne!(width(&s), was, "the tool's option scales the art");
+}
+
+/// `artboard.fitToArt` records no undo step when every artboard already fits its art.
+#[test]
+fn artboard_fit_to_art_records_nothing_when_it_already_fits() {
+    let mut s = session();
+    rect(&mut s);
+    s.execute("artboard.fitToArt", &json!({"index": 0})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    let was = s.doc().unwrap().doc.artboards[0].rect;
+    s.execute("artboard.fitToArt", &json!({"index": 0})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    assert_eq!(s.doc().unwrap().doc.artboards[0].rect, was);
+}
+
+/// `edit.paste {artboardsAt}` centers the copied artboards on the point as they lay. A value that is
+/// not a point is an error.
+#[test]
+fn paste_centers_copied_artboards_on_artboards_at() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 100, "height": 100})).unwrap();
+    s.execute("artboard.copy", &json!({"indices": [0, 1]})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    for bad in [json!("here"), json!([1]), json!(["1", "2"]), json!([1, 2, 3]), json!(null)] {
+        assert!(s.execute("edit.paste", &json!({"artboardsAt": bad})).is_err(), "{bad}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    let r = s.execute("edit.paste", &json!({"artboardsAt": [5000.0, 7000.0]})).unwrap();
+    assert_eq!(r["artboards"], json!([2, 3]));
+    let d = &s.doc().unwrap().doc;
+    let together = d.artboards[2].rect.union(d.artboards[3].rect).center();
+    assert_eq!((together.x, together.y), (5000.0, 7000.0));
+    assert_eq!(d.artboards[3].rect.x0 - d.artboards[2].rect.x0, 1000.0, "as they lay");
+}
+
 /// The artboards' left edges and names.
 fn boards(s: &Session) -> Vec<(f64, String)> {
     s.doc().unwrap().doc.artboards.iter().map(|a| (a.rect.x0, a.name.clone())).collect()
@@ -341,6 +539,11 @@ fn artboard_commands_refuse_a_boolean_or_number_given_as_text() {
         ("artboard.duplicate", "art", json!({"index": 0, "art": "false"})),
         ("artboard.copy", "art", json!({"index": 0, "art": "true"})),
         ("artboard.cut", "art", json!({"index": 1, "art": 0})),
+        ("artboard.move", "lockedAndHidden", json!({"index": 0, "dx": 10, "moveArt": true, "lockedAndHidden": "true"})),
+        ("artboard.duplicate", "lockedAndHidden", json!({"index": 0, "lockedAndHidden": "true"})),
+        ("artboard.copy", "lockedAndHidden", json!({"index": 0, "lockedAndHidden": 1})),
+        ("artboard.cut", "lockedAndHidden", json!({"index": 1, "lockedAndHidden": 0})),
+        ("artboard.rearrange", "lockedAndHidden", json!({"spacing": 100, "lockedAndHidden": "true"})),
     ]
     .into_iter()
     .map(|(cmd, key, p)| not_a_switch(cmd, p, key))
@@ -595,7 +798,7 @@ fn copied_artboards_take_a_free_id_and_keep_their_own_guides() {
         let mut kept = vec![];
         for i in [1, 0] {
             s.execute("artboard.delete", &json!({"index": i})).unwrap();
-            kept.push(s.doc().unwrap().doc.guides.iter().map(|g| g.artboard).collect::<Vec<_>>());
+            kept.push(s.doc().unwrap().doc.ruler_guides().iter().map(|g| g.artboard).collect::<Vec<_>>());
             s.execute("edit.undo", &json!({})).unwrap();
         }
         got.push((cmd, s.doc().unwrap().doc.artboards.iter().map(|a| a.id).collect::<Vec<_>>(), kept));
@@ -815,6 +1018,86 @@ fn art_also_on_a_locked_artboard_stays_when_another_artboard_moves() {
     s.prefs.move_locked_with_artboard = true;
     let moved = s.execute("artboard.move", &json!({"index": 0, "dx": 0, "dy": 1000, "moveArt": true})).unwrap();
     assert_eq!(ids(&moved["moved"]), [free.0, held.0], "with the preference on, it moves");
+}
+
+/// Two artboards with the Artboard tool on the second, which holds a plain, a locked and a hidden
+/// rectangle, under prefs moveLockedWithArtboard `on`.
+fn locked_art_session(on: bool) -> Session {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    let mut shape = |x: u32| s.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 40, "height": 20})).unwrap()["id"].clone();
+    let (_, locked, hidden) = (shape(840), shape(900), shape(960));
+    s.execute("object.lock", &json!({"ids": [locked]})).unwrap();
+    s.execute("object.hide", &json!({"ids": [hidden]})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.select_tool("artboard", ViewInfo::default()).unwrap();
+    s.set_tool_option("selected", &json!([1]));
+    s.prefs.move_locked_with_artboard = on;
+    s
+}
+
+/// The bounds of every object in the document, and how many objects the clipboard holds.
+fn art_and_clipboard(s: &Session) -> (Vec<Option<vectorcraft_geom::Rect>>, usize) {
+    let mut art = vec![];
+    for layer in &s.doc().unwrap().doc.layers {
+        layer.walk(&mut |n| {
+            if !n.is_layer() {
+                art.push(n.geometric_bounds());
+            }
+        });
+    }
+    (art, s.clipboard.nodes.len())
+}
+
+/// A command that takes art with an artboard journals whether locked and hidden art went along, so
+/// a replay under the other preference takes the same art, in one undo step.
+#[test]
+fn artboard_commands_journal_the_locked_art_preference() {
+    let run = |on: bool, cmd: &str, p: &serde_json::Value| {
+        let mut s = locked_art_session(on);
+        s.execute(cmd, p).unwrap();
+        (art_and_clipboard(&s), s.journal.last().unwrap().clone())
+    };
+    let mut differ = vec![];
+    for (cmd, p) in [
+        ("artboard.duplicate", json!({"index": 1, "art": true})),
+        ("artboard.copy", json!({"index": 1, "art": true})),
+        ("artboard.cut", json!({"index": 1, "art": true})),
+        ("artboard.move", json!({"index": 1, "dx": 0, "dy": 1000, "moveArt": true})),
+        ("artboard.move", json!({"index": 1, "dx": 0, "dy": 1000, "moveArt": true, "copy": true})),
+        ("artboard.rearrange", json!({"layout": "row", "spacing": 100})),
+        ("edit.copy", json!({})),
+        ("edit.cut", json!({})),
+        // A null reads as a key left out.
+        ("artboard.duplicate", json!({"index": 1, "art": true, "lockedAndHidden": null})),
+        ("artboard.rearrange", json!({"layout": "row", "spacing": 100, "lockedAndHidden": null})),
+        ("edit.cut", json!({"lockedAndHidden": null})),
+    ] {
+        let (with, (id_with, p_with)) = run(true, cmd, &p);
+        let (without, (id_without, p_without)) = run(false, cmd, &p);
+        assert_ne!(with, without, "{cmd} {p}: an omitted param reads the preference");
+        if run(false, &id_with, &p_with).0 != with {
+            differ.push(format!("{cmd} {p}, replayed with the preference off"));
+        }
+        if run(true, &id_without, &p_without).0 != without {
+            differ.push(format!("{cmd} {p}, replayed with the preference on"));
+        }
+
+        let mut s = locked_art_session(true);
+        let (doc, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+        s.execute(cmd, &p).unwrap();
+        if !cmd.ends_with("copy") {
+            assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{cmd} {p}: one undo step");
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(s.doc().unwrap().doc, doc, "{cmd} {p}: undone");
+        }
+    }
+    assert!(differ.is_empty(), "{differ:#?}");
+    // With the Artboard tool chosen, a bad value is refused as it is by the command run.
+    let mut s = locked_art_session(false);
+    let calls: Vec<_> =
+        ["edit.copy", "edit.cut"].map(|cmd| crate::tests::not_a_switch(cmd, json!({"lockedAndHidden": "true"}), "lockedAndHidden")).to_vec();
+    assert_eq!(crate::tests::not_refused(&mut s, &calls), Vec::<String>::new());
 }
 
 /// A locked artboard keeps its place and size: `artboard.setProps` refuses a new rectangle but
@@ -1104,6 +1387,128 @@ fn artboard_video_display_options_are_set_in_one_undo_step() {
     assert_eq!(video(&s, 1), (false, 10.0), "10 is in range");
 }
 
+/// Artboard Options' guide label: `artboard.setProps {guideLabel}` takes a layer color's name or
+/// `#rrggbb` and null clears it, each change one undo step, also on a locked artboard (whose
+/// rectangle stays locked) and for several artboards in one list; a value equal to the artboard's
+/// adds no undo step. `artboard.new` takes it, a duplicate and an undone delete keep it, and
+/// `inspect_document` reports it. A bad value anywhere in a list changes nothing.
+#[test]
+fn artboard_guide_labels_are_set_and_cleared_in_one_undo_step() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    let label = |s: &Session, i: usize| s.doc().unwrap().doc.artboards[i].guide_label;
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    assert_eq!((label(&s, 0), label(&s, 1)), (None, None), "no label by default");
+    let u0 = undo(&s);
+    s.execute("artboard.setProps", &json!({"index": 1, "guideLabel": "Red"})).unwrap();
+    assert_eq!((label(&s, 0), label(&s, 1)), (None, Some(LayerColor::Preset(1))), "only that artboard");
+    s.execute("artboard.setProps", &json!({"index": 1, "guideLabel": "#12aBcd"})).unwrap();
+    assert_eq!(label(&s, 1), Some(LayerColor::Custom([0x12, 0xab, 0xcd])));
+    s.execute("artboard.setProps", &json!({"index": 1, "guideLabel": null})).unwrap();
+    assert_eq!(label(&s, 1), None, "null clears it");
+    assert_eq!(undo(&s), u0 + 3, "one undo step each");
+    for was in [Some(LayerColor::Custom([0x12, 0xab, 0xcd])), Some(LayerColor::Preset(1)), None] {
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(label(&s, 1), was);
+    }
+    s.execute("edit.redo", &json!({})).unwrap();
+    // The same label again, or a list that changes nothing: no undo step.
+    let u = undo(&s);
+    s.execute("artboard.setProps", &json!({"index": 1, "guideLabel": "Red"})).unwrap();
+    s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "guideLabel": null}, {"index": 1, "guideLabel": "Red"}]})).unwrap();
+    assert_eq!(undo(&s), u, "nothing changed, no undo step");
+    // A locked artboard takes a label; its rectangle stays locked.
+    s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+    let rect0 = s.doc().unwrap().doc.artboards[0].rect;
+    s.execute("artboard.setProps", &json!({"index": 0, "guideLabel": "Gold"})).unwrap();
+    assert_eq!(label(&s, 0), Some(LayerColor::Preset(15)));
+    assert!(s.execute("artboard.setProps", &json!({"index": 0, "x": 999, "guideLabel": "Teal"})).is_err());
+    assert_eq!((s.doc().unwrap().doc.artboards[0].rect, label(&s, 0)), (rect0, Some(LayerColor::Preset(15))));
+    let u = undo(&s);
+    s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "guideLabel": "Teal"}, {"index": 1, "guideLabel": "#000000"}]})).unwrap();
+    assert_eq!((label(&s, 0), label(&s, 1)), (Some(LayerColor::Preset(11)), Some(LayerColor::Custom([0, 0, 0]))), "each its own");
+    assert_eq!(undo(&s), u + 1, "in one undo step");
+    let doc = crate::inspect::document(&s);
+    assert_eq!((doc["artboards"][0]["guideLabel"].clone(), doc["artboards"][1]["guideLabel"].clone()), (json!("Teal"), json!("#000000")));
+    s.execute("artboard.setProps", &json!({"index": 1, "guideLabel": null})).unwrap();
+    assert!(crate::inspect::document(&s)["artboards"][1].get("guideLabel").is_none(), "no label isn't reported");
+    let copy = s.execute("artboard.duplicate", &json!({"index": 0})).unwrap()["index"].as_u64().unwrap() as usize;
+    assert_eq!(label(&s, copy), Some(LayerColor::Preset(11)), "a duplicate keeps it");
+    let made = s.execute("artboard.new", &json!({"guideLabel": "Violet"})).unwrap()["index"].as_u64().unwrap() as usize;
+    assert_eq!(label(&s, made), Some(LayerColor::Preset(14)), "a new artboard takes it");
+    let plain = s.execute("artboard.new", &json!({})).unwrap()["index"].as_u64().unwrap() as usize;
+    assert_eq!(label(&s, plain), None);
+    s.execute("artboard.delete", &json!({"index": made})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(label(&s, made), Some(LayerColor::Preset(14)), "undoing a delete brings it back");
+    let before = s.doc().unwrap().doc.clone();
+    let bads = [
+        json!("red"),
+        json!(" Red"),
+        json!("#12345"),
+        json!("#1234567"),
+        json!("#12345678"),
+        json!("#fff"),
+        json!("#gg0000"),
+        json!(1),
+        json!([1, 2, 3]),
+        json!({"Preset": 1}),
+        json!(true),
+    ];
+    for bad in bads {
+        assert!(s.execute("artboard.setProps", &json!({"index": 1, "guideLabel": bad})).is_err(), "{bad}");
+        assert!(s.execute("artboard.new", &json!({"guideLabel": bad})).is_err(), "{bad}");
+        assert!(
+            s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "guideLabel": "Red"}, {"index": 1, "guideLabel": bad}]})).is_err(),
+            "{bad}"
+        );
+    }
+    assert!(s.execute("artboard.setProps", &json!({"artboards": [{"index": 1, "guideLabel": "Red"}, {"index": 1, "guideLabel": "Red"}]})).is_err());
+    assert!(s.execute("artboard.setProps", &json!({"artboards": [{"index": 1, "guideLabel": "Red"}, {"index": 99, "guideLabel": "Red"}]})).is_err());
+    assert_eq!(*s.doc().unwrap().doc, *before, "a bad value changes nothing");
+}
+
+/// The native format keeps the guide label, as `{"Preset": n}` or `{"Custom": [r, g, b]}`. An
+/// artboard without one is written as before labels could be set, and a preset outside the layer
+/// colors in a file reads as no label. Exports leave the label out.
+#[test]
+fn artboard_guide_labels_round_trip_through_the_native_format() {
+    let mut s = session();
+    rect(&mut s);
+    s.execute("artboard.new", &json!({})).unwrap();
+    let save = |s: &Session| vectorcraft_format::save(&s.doc().unwrap().doc, false);
+    let before = save(&s);
+    let plain = (*s.doc().unwrap().doc).clone();
+    s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "guideLabel": "Green"}, {"index": 1, "guideLabel": "#102030"}]})).unwrap();
+    let bytes = save(&s);
+    let saved: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let ab = |i: usize| saved["document"]["artboards"][i]["guide_label"].clone();
+    assert_eq!((ab(0), ab(1)), (json!({"Preset": 2}), json!({"Custom": [16, 32, 48]})));
+    let back = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(back.artboards, s.doc().unwrap().doc.artboards);
+    // Screen-only: SVG and PDF exports are the same as without the labels.
+    let on = (*s.doc().unwrap().doc).clone();
+    assert_eq!(vectorcraft_svg::export(&on, &Default::default()), vectorcraft_svg::export(&plain, &Default::default()));
+    let options = vectorcraft_pdf::PdfOptions { created: Some(0), ..Default::default() };
+    assert_eq!(crate::export_pdf(&on, &options).unwrap(), crate::export_pdf(&plain, &options).unwrap());
+    s.execute("artboard.setProps", &json!({"artboards": [{"index": 0, "guideLabel": null}, {"index": 1, "guideLabel": null}]})).unwrap();
+    assert_eq!(save(&s), before, "without labels, the file is as it was");
+    // A file's labels as another writer might put them: a preset past the layer colors reads as
+    // none, and a label that isn't a layer color at all is refused.
+    let mut edited = saved.clone();
+    edited["document"]["artboards"][0]["guide_label"] = json!({"Preset": 27});
+    edited["document"]["artboards"][1]["guide_label"] = json!({"Preset": 26});
+    let back = vectorcraft_format::load(&serde_json::to_vec(&edited).unwrap()).unwrap();
+    assert_eq!((back.artboards[0].guide_label, back.artboards[1].guide_label), (None, Some(LayerColor::Preset(26))));
+    for bad in [json!({"Preset": 256}), json!({"Custom": [1, 2]}), json!("Red"), json!({"Custom": [1, 2, 300]})] {
+        edited["document"]["artboards"][0]["guide_label"] = bad.clone();
+        assert!(vectorcraft_format::load(&serde_json::to_vec(&edited).unwrap()).is_err(), "{bad}");
+    }
+    edited["document"]["artboards"][0]["guide_label"] = json!(null);
+    let back = vectorcraft_format::load(&serde_json::to_vec(&edited).unwrap()).unwrap();
+    assert_eq!(back.artboards[0].guide_label, None);
+}
+
 /// The native format keeps Show Video Safe Areas and the Video Ruler Pixel Aspect Ratio. A
 /// document whose artboards hide the safe areas and have square pixels is written byte for byte as
 /// before they could be set, a file written without the two keys opens with the safe areas off
@@ -1270,12 +1675,12 @@ fn delete_empty_artboards_deletes_those_with_no_art_in_one_step() {
     assert_eq!(s.execute("artboard.deleteEmpty", &json!({})).unwrap(), json!({"deleted": [0, 2]}));
     let st = s.doc().unwrap();
     assert_eq!(artboard_names(&s), ["Artboard 2"]);
-    assert_eq!(st.doc.guides.len(), 1, "the deleted artboards' guides go with them");
+    assert_eq!(st.doc.ruler_guides().len(), 1, "the deleted artboards' guides go with them");
     assert_eq!(st.doc.node(art).map(|n| n.geometric_bounds()), before.node(art).map(|n| n.geometric_bounds()), "the art stays");
     assert_eq!(st.history.undo.len(), steps + 1);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(artboard_names(&s), ["Artboard 1", "Artboard 2", "Artboard 3"]);
-    assert_eq!(s.doc().unwrap().doc.guides.len(), 3);
+    assert_eq!(s.doc().unwrap().doc.ruler_guides().len(), 3);
 }
 
 /// What counts as art: hidden and locked objects, an object straddling two artboards and one
@@ -1477,6 +1882,189 @@ fn delete_empty_artboards_enabled_state_matches_the_command_on_varied_documents(
     assert!(enabled_count > 5 && enabled_count < 55, "both answers come up: {enabled_count} of 60 enabled");
 }
 
+/// Delete Empty Artboards' enabled state, as a menu asks for it, and how many times asking measured
+/// a document on this thread.
+fn delete_empty_enabled_counted(s: &Session) -> (bool, usize) {
+    let spec = crate::cmd::command_specs().iter().find(|c| c.id == "artboard.deleteEmpty").unwrap();
+    let measures = || crate::doc_state::EMPTY_ARTBOARD_MEASURES.with(std::cell::Cell::get);
+    let before = measures();
+    let enabled = (spec.enabled)(s).is_ok();
+    (enabled, measures() - before)
+}
+
+/// A menu asks on every frame while it is open: the first frame measures the document, and the
+/// others, a change of the selection among them, do not.
+#[test]
+fn delete_empty_artboards_check_measures_a_document_once() {
+    let mut s = row_of_artboards(2);
+    let art = box_at(&mut s, 10.0, 20.0);
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1), "the first frame");
+    for _ in 0..10 {
+        assert_eq!(delete_empty_enabled_counted(&s), (true, 0), "a later frame");
+    }
+    s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 0), "after a change of the selection");
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 0), "after another change of the selection");
+}
+
+/// Whether Fit to Artwork Bounds has art to fit on `indices`, as a menu asks for it, with the
+/// plug-ins' and fonts' generations `outside`, and how many times asking measured a document on
+/// this thread.
+fn art_to_fit_counted(s: &Session, indices: &[usize], outside: (u64, u64)) -> (bool, usize) {
+    let measures = || crate::doc_state::ART_TO_FIT_MEASURES.with(std::cell::Cell::get);
+    let before = measures();
+    let any = s.doc().unwrap().any_art_to_fit_with(indices, outside);
+    (any, measures() - before)
+}
+
+/// A menu asks whether Fit to Artwork Bounds has art on every frame while it is open: the answer is
+/// measured once for a version of the document and the artboards asked about, kept through a change
+/// of the selection or the view, and measured again after an edit, for other artboards, and when
+/// the plug-ins or the fonts change.
+#[test]
+fn art_to_fit_is_measured_once_for_a_version_of_the_document() {
+    let mut s = row_of_artboards(2);
+    let both = [0, 1];
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (false, 1), "the first frame");
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (false, 0), "a later frame");
+    let art = box_at(&mut s, 10.0, 20.0);
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (true, 1), "an edit puts art on artboard 1");
+    s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (true, 0), "after a change of the selection");
+    s.execute("view.transparencyGrid", &json!({})).unwrap();
+    assert_eq!(art_to_fit_counted(&s, &both, (0, 0)), (true, 0), "after a change of the view");
+    assert_eq!(art_to_fit_counted(&s, &[1], (0, 0)), (false, 1), "other artboards");
+    assert_eq!(art_to_fit_counted(&s, &[1], (1, 0)), (false, 1), "a plug-in installed or removed");
+    assert_eq!(art_to_fit_counted(&s, &[1], (1, 1)), (false, 1), "fonts installed");
+    assert_eq!(art_to_fit_counted(&s, &[1], (1, 1)), (false, 0));
+}
+
+/// A change made to the document in place (`Arc::make_mut`, with no other holder and no change
+/// of revision) is measured again: the kept answer holds the document it measured weakly, so a
+/// changed document is a new allocation, not the old address.
+#[test]
+fn art_to_fit_follows_a_change_in_place() {
+    let mut s = row_of_artboards(2);
+    box_at(&mut s, 10.0, 20.0);
+    assert_eq!(art_to_fit_counted(&s, &[0], (0, 0)), (true, 1), "art on artboard 1");
+    let st = s.doc_mut().unwrap();
+    assert_eq!(Arc::strong_count(&st.doc), 1, "the undo history holds the document before the edit");
+    let (revision, empty_spot) = (st.revision, st.doc.artboards[1].rect);
+    Arc::make_mut(&mut st.doc).artboards[0].rect = empty_spot;
+    assert_eq!(st.revision, revision);
+    assert_eq!(art_to_fit_counted(&s, &[0], (0, 0)), (false, 1), "artboard 1 moved off the art");
+}
+
+/// The enabled state follows an edit, an undo, a redo, an added and a removed artboard, a locked
+/// artboard, and each change measures the document once.
+#[test]
+fn delete_empty_artboards_check_follows_each_change_to_the_document() {
+    let mut s = row_of_artboards(2);
+    box_at(&mut s, 10.0, 20.0);
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1), "artboard 2 is empty");
+
+    let on_second = box_at(&mut s, 410.0, 20.0);
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 1), "an edit puts art on artboard 2");
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 0));
+
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1), "Undo takes the art off artboard 2");
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 0));
+
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 1), "Redo puts it back");
+
+    s.execute("select.set", &json!({"ids": [on_second.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 1000, "dy": 0})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1), "an edit moves the art off artboard 2");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 1));
+
+    s.execute("artboard.new", &json!({"x": 2000, "y": 0, "width": 200, "height": 150})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1), "a new artboard is empty");
+
+    s.execute("artboard.setProps", &json!({"index": 2, "locked": true})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 1), "a locked artboard stays");
+    s.execute("artboard.setProps", &json!({"index": 2, "locked": false})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1), "unlocked, it can go");
+
+    s.execute("artboard.delete", &json!({"index": 2})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 1), "with the empty artboard removed, none is left");
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 0));
+}
+
+/// A change made to the document directly, with nothing else holding it and no new revision, is
+/// measured again too.
+#[test]
+fn delete_empty_artboards_check_follows_a_change_in_place() {
+    let mut s = row_of_artboards(2);
+    box_at(&mut s, 10.0, 20.0);
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1));
+    let st = s.doc_mut().unwrap();
+    assert_eq!(Arc::strong_count(&st.doc), 1, "the undo history holds the document before the edit");
+    let revision = st.revision;
+    Arc::make_mut(&mut st.doc).artboards.truncate(1);
+    assert_eq!(st.revision, revision);
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 1), "one artboard left");
+}
+
+/// Each open document has its own answer: switching documents gives the other's without measuring
+/// again, and an edit to one leaves the other's alone.
+#[test]
+fn delete_empty_artboards_check_follows_a_document_switch() {
+    let mut s = row_of_artboards(2);
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1), "two empty artboards: the second can go");
+    s.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 1), "the new document has one artboard");
+    assert!(s.set_active(0));
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 0), "the first document's answer stands");
+    assert!(s.set_active(1));
+    assert_eq!(delete_empty_enabled_counted(&s), (false, 0), "the second document's answer stands");
+    s.execute("artboard.new", &json!({"x": 400, "y": 0, "width": 200, "height": 150})).unwrap();
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 1), "the second document has an empty artboard now");
+    assert!(s.set_active(0));
+    assert_eq!(delete_empty_enabled_counted(&s), (true, 0), "the edit to the second document leaves the first's answer");
+}
+
+/// On documents made from a fixed seed, after each of a run of changes, the enabled state is what
+/// measuring every artboard of the document gives.
+#[test]
+fn delete_empty_artboards_check_matches_measuring_after_varied_changes() {
+    let mut seed: u64 = 0x0de1_e7e0_e3b7;
+    let mut next = |n: u64| {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        (seed >> 33) % n
+    };
+    let mut answers = [0usize; 2];
+    let mut measured = 0;
+    for _ in 0..30 {
+        let mut s = row_of_artboards(1 + next(3) as usize);
+        for _ in 0..12 {
+            let artboards = s.doc().unwrap().doc.artboards.len();
+            let index = next(artboards as u64);
+            // A change can be refused (nothing to undo, a locked artboard): the state still has to match.
+            let _ = match next(7) {
+                0 => s.execute("shape.rectangle", &json!({"x": next(1200) as f64 - 50.0, "y": 10, "width": 20, "height": 20})),
+                1 => s.execute("edit.undo", &json!({})),
+                2 => s.execute("edit.redo", &json!({})),
+                3 => s.execute("artboard.new", &json!({"x": 400 * (artboards + 1), "y": 0, "width": 200, "height": 150})),
+                4 => s.execute("artboard.delete", &json!({"index": index})),
+                5 => s.execute("artboard.setProps", &json!({"index": index, "locked": next(2) == 0})),
+                _ => s.execute("select.all", &json!({})),
+            };
+            let (enabled, count) = delete_empty_enabled_counted(&s);
+            measured += count;
+            answers[usize::from(enabled)] += 1;
+            let d = &s.doc().unwrap().doc;
+            assert_eq!(enabled, d.artboards.len() > 1 && d.artboards.iter().any(|a| !a.locked && !d.artboard_has_art(a.rect)));
+            assert_eq!(delete_empty_enabled_counted(&s), (enabled, 0), "a second frame");
+        }
+    }
+    assert!(answers[0] > 30 && answers[1] > 30, "both answers come up: {answers:?}");
+    assert!(measured < 360, "changes of the selection alone do not measure: {measured} of 360");
+}
+
 /// On paths and compound paths made from a fixed seed (curves, open and closed, with strokes of
 /// every join, cap and alignment, miter limits, arrowheads, width profiles and dashes), an
 /// artboard has art exactly when an object's visual bounds meet it, for artboards just inside,
@@ -1521,7 +2109,7 @@ fn empty_artboard_checks_match_the_visual_bounds_on_varied_strokes() {
                 st.cap = [LineCap::Butt, LineCap::Round, LineCap::Square][next(3) as usize];
                 st.align = [StrokeAlign::Center, StrokeAlign::Inside, StrokeAlign::Outside][next(3) as usize];
                 st.miter_limit = 1.0 + next(20) as f64;
-                let mut head = || (next(3) == 0).then(|| Arrowhead::ALL[next(Arrowhead::ALL.len() as u64) as usize]);
+                let mut head = || (next(3) == 0).then(|| Arrowhead::ALL[next(Arrowhead::ALL.len() as u64) as usize].clone());
                 (st.start_arrow, st.end_arrow) = (head(), head());
                 st.arrow_scale = (50.0 + next(250) as f64, 50.0 + next(250) as f64);
                 if next(3) == 0 {

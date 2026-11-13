@@ -22,6 +22,25 @@ fn snaps_to_anchor_and_alignment() {
     assert_eq!(p.y, 200.0);
 }
 
+/// #4312: a Shift move slides the selection along its line onto a ruler guide, but not far to
+/// meet one a nearly parallel line only reaches a long way off.
+#[test]
+fn a_slide_along_a_line_lands_the_bounds_on_a_ruler_guide_within_reach() {
+    let t = Targets { rulers: vec![Ruler { vertical: true, pos: 300.0, span: None }], ..Targets::default() };
+    let r = Rect::new(248.0, 10.0, 298.0, 40.0);
+    let p = Point::new(270.0, 25.0);
+    // Level: the right edge is 2 short of the guide, which is the way along the line.
+    assert_eq!(t.snap_moved_along_to_rulers(p, r, Vec2::new(1.0, 0.0), 4.0).0, Vec2::new(2.0, 0.0));
+    // On the diagonal it is 2.8 along.
+    let (d, ov) = t.snap_moved_along_to_rulers(p, r, Vec2::new(1.0, 1.0), 4.0);
+    assert!((d - Vec2::new(2.0, 2.0)).hypot() < 1e-9 && !ov.is_empty(), "{d:?}");
+    // Nearly upright, it would take about 118 along the line to meet the guide.
+    assert_eq!(t.snap_moved_along_to_rulers(p, r, Vec2::new(0.017, 1.0), 4.0).0, Vec2::ZERO);
+    // A guide of an artboard needs the selection to run past it.
+    let bounded = Targets { rulers: vec![Ruler { vertical: true, pos: 300.0, span: Some((100.0, 200.0)) }], ..Targets::default() };
+    assert_eq!(bounded.snap_moved_along_to_rulers(p, r, Vec2::new(1.0, 0.0), 4.0).0, Vec2::ZERO);
+}
+
 #[test]
 fn rect_snap_aligns_edges() {
     let (d, id) = doc_with_rect();
@@ -423,9 +442,9 @@ fn drawn_points_land_on_intersections() {
         let id = d.alloc_id();
         d.insert(Some(l), 1, Node::path(id, path, Appearance::default_art())).unwrap();
     }
-    d.guides.push(vectorcraft_doc::Guide::new(true, 400.0));
-    d.guides.push(vectorcraft_doc::Guide::new(false, 300.0));
-    d.guides.push(vectorcraft_doc::Guide::new(false, 150.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 400.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 300.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 150.0));
     let (s, p) = (Selection::default(), paint());
     let c = ToolContext { guides: true, ..cx(&d, &s, &p) };
     let t = Targets::for_drawing(&d, &[], None, None).styled(&c).with_rulers(&c);
@@ -593,8 +612,8 @@ fn bisection_finds_what_a_scan_finds() {
 #[test]
 fn drawn_points_snap_to_ruler_guides_with_smart_guides_on() {
     let (mut d, _) = doc_with_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(false, 313.0));
-    d.guides.push(vectorcraft_doc::Guide::new(true, 331.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 313.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 331.0));
     let (s, p) = (Selection::default(), paint());
     let c = cx(&d, &s, &p);
     let mut snap = DrawSnap::default();
@@ -837,7 +856,7 @@ fn each_snap_to_glyph_option_takes_away_only_its_own_guides() {
     for (off, less) in [
         (GlyphSnap { baseline: false, ..all }, [1, 0, 0, 0]),
         (GlyphSnap { x_height: false, ..all }, [1, 0, 0, 0]),
-        (GlyphSnap { bounds: false, ..all }, [4, 4, 0, 0]),
+        (GlyphSnap { bounds: false, ..all }, [2, 2, 0, 0]),
         (GlyphSnap { proximity: false, ..all }, [0, 2, 0, 0]),
         (GlyphSnap { anchors: false, ..all }, [0, 0, 0, anchors]),
         (GlyphSnap { angular: false, ..all }, [0, 0, 0, 0]),
@@ -851,8 +870,8 @@ fn each_snap_to_glyph_option_takes_away_only_its_own_guides() {
     let p = Point::new(400.0, x_height + 2.0);
     assert!((Targets::for_drawing(&d, &[], None, Some(all)).snap_point(p, 4.0).0.y - x_height).abs() < 1e-9);
     assert_eq!(Targets::for_drawing(&d, &[], None, Some(GlyphSnap { x_height: false, ..all })).snap_point(p, 4.0).0.y, p.y);
-    // Rotated type: its baseline, x-height and width edges and its strokes run at an angle, all
-    // Angular Guides; its glyph bounds still run across and down the page.
+    // Rotated type: its baseline, x-height, width edges, glyph bounds and strokes run at an angle,
+    // all Angular Guides (the corners of its glyph bounds stay points to land on).
     let (d, _) = glyph_doc("H", 20f64.to_radians());
     let (on, off) = (count(&d, all), count(&d, GlyphSnap { angular: false, ..all }));
     assert!(on[2] > 0, "{on:?}");
@@ -890,4 +909,46 @@ fn a_shift_constrained_point_slides_onto_a_rotated_baseline() {
     let from = Leave::segment(&c, crossing - Vec2::new(60.0, 0.0), true);
     let (q, _) = Targets::for_drawing(&d, &[], None, Some(GlyphSnap::default())).snap_from(crossing + Vec2::new(1.5, 0.3), Some(&from), 4.0);
     assert!(q.distance(crossing) < 1e-9, "{q:?} vs {crossing:?}");
+}
+
+/// The corners of a glyph's bounds, from its outline in its own frame placed as the glyph is.
+fn glyph_corners(t: &vectorcraft_doc::TextObject) -> [Point; 4] {
+    let lay = layout_text(FontDb::global(), t);
+    let g = lay.glyphs.iter().find(|g| !g.outline.elements().is_empty()).expect("a glyph with an outline");
+    let r = (g.xf.inverse() * g.outline.clone()).bounding_box();
+    [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)].map(|p| t.xf * g.xf * p)
+}
+
+/// Snap to Glyph › Glyph Bounds (#5112): each corner of a glyph's bounds is a point a drawn point
+/// lands on, also where its outline curves (the right of `B`, where no anchor is), and the corners
+/// turn with rotated type. Glyph Bounds off, they are gone.
+#[test]
+fn a_drawn_point_lands_on_a_corner_of_a_glyphs_bounds() {
+    let style = vectorcraft_doc::CharStyle { size: 200.0, ..Default::default() };
+    for angle in [0.0, 30f64.to_radians()] {
+        let (d, t) = glyph_doc_with("B", angle, style.clone());
+        let corners = glyph_corners(&t);
+        for (i, c) in corners.into_iter().enumerate() {
+            let p = c + Vec2::new(2.0, -1.5);
+            let (q, ov) = Targets::for_drawing(&d, &[], None, Some(GlyphSnap::default())).snap_point(p, 4.0);
+            assert!(q.distance(c) < 1e-9, "angle {angle}: {q:?} vs corner {c:?}");
+            // The left corners of `B` are anchors of its stem too; the right ones, on its curved
+            // side, come from its bounds alone.
+            if i == 0 || i == 3 {
+                continue;
+            }
+            assert!(ov.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "glyph")), "{ov:?}");
+            let off = GlyphSnap { bounds: false, ..GlyphSnap::default() };
+            let (q, _) = Targets::for_drawing(&d, &[], None, Some(off)).snap_point(p, 4.0);
+            assert!(q.distance(c) > 1e-3, "Glyph Bounds off: {q:?} still on {c:?}");
+        }
+        // The right edge of the rotated glyph runs at its angle: a point beside it, far from the
+        // corners, lands on it.
+        let (tr, br) = (corners[1], corners[2]);
+        let dir = (br - tr) / (br - tr).hypot();
+        let p = tr.midpoint(br) + Vec2::new(-dir.y, dir.x) * 1.5;
+        let (q, _) =
+            Targets::for_drawing(&d, &[], None, Some(GlyphSnap { anchors: false, proximity: false, ..GlyphSnap::default() })).snap_point(p, 4.0);
+        assert!((q - tr).cross(dir).abs() < 1e-6, "angle {angle}: {q:?} is off the right edge");
+    }
 }

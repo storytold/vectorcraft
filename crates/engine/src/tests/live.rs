@@ -2,7 +2,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::live::{self, BlendOrientation, BlendSpacing, EnvelopeKind};
+use vectorcraft_doc::live::{self, BlendOrientation, BlendSpacing, EnvelopeKind, PreserveShape};
 use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_geom::{Point, Rect};
 
@@ -85,6 +85,12 @@ fn refuses_non_boolean(s: &mut Session, cmd: &str, p: &Value, key: &str) {
     let r = s.execute(cmd, p);
     let want = format!("`{key}` must be true or false");
     assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}");
+}
+
+/// `cmd` with `p` fails with the error `want`.
+fn refuses_with(s: &mut Session, cmd: &str, p: &Value, want: &str) {
+    let r = s.execute(cmd, p);
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == want), "{cmd} {p}: {r:?}");
 }
 
 // ---------- Blend ----------
@@ -231,13 +237,13 @@ fn blend_smooth_colour_steps_from_colour_distance() {
     let mut s = session();
     let (_, _, g) = blend(&mut s, json!({}));
     let n = steps_of(&s, g).len() - 2;
-    assert_eq!(n, 128, "black→white: one step per two levels");
-    // Consecutive steps differ by at most ~2 levels.
+    assert_eq!(n, 254, "black→white: one step per level");
+    // Consecutive steps differ by about a level.
     let st = steps_of(&s, g);
     for w in st.windows(2) {
         let x = w[0].appearance.fill_paint().color().unwrap().to_rgb()[0];
         let y = w[1].appearance.fill_paint().color().unwrap().to_rgb()[0];
-        assert!((x - y).abs() <= 2.5 / 255.0);
+        assert!((x - y).abs() <= 1.5 / 255.0);
     }
 }
 
@@ -248,7 +254,9 @@ fn blend_smooth_colour_same_colours_uses_distance() {
     let b = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
     sel(&mut s, &[a, b]);
     let g = id_of(&s.execute("object.blend.make", &json!({"smooth": true})).unwrap());
-    assert_eq!(steps_of(&s, g).len() - 2, 20);
+    // The edges are 40 pt apart, 3.6 times the keys' 11 pt visible width (their 1 pt strokes
+    // included): rounded, less one.
+    assert_eq!(steps_of(&s, g).len() - 2, 3);
 }
 
 #[test]
@@ -416,6 +424,93 @@ fn blend_replace_spine_follows_path() {
     assert!(first.distance(Point::new(100.0, 300.0)) < 1.0, "{first:?}");
 }
 
+/// #6809: after Replace Spine, moving a key object moves the drawn key and its end of the spine,
+/// not only the key's selection outline.
+#[test]
+fn moving_a_key_of_a_replaced_spine_blend_moves_what_is_drawn() {
+    let mut s = session();
+    let (a, _, g) = blend(&mut s, json!({"steps": 5}));
+    let arc = id_of(&s.execute("path.create", &json!({"d": "M100 300 C100 245 145 200 200 200 C255 200 300 245 300 300"})).unwrap());
+    sel(&mut s, &[g, arc]);
+    s.execute("object.blend.replaceSpine", &json!({})).unwrap();
+    let center = |n: &Node| n.geometric_bounds().unwrap().center();
+    let before = steps_of(&s, g);
+    assert!(center(&before[0]).distance(Point::new(100.0, 300.0)) < 1e-6);
+    // Direct Selection picks the key inside the blend; the drag moves it.
+    sel(&mut s, &[a]);
+    s.execute("object.move", &json!({"dx": -50, "dy": 40})).unwrap();
+    let key = center(&node(&s, a));
+    assert!(key.distance(Point::new(50.0, 340.0)) < 1e-6, "{key:?}");
+    let after = steps_of(&s, g);
+    assert_eq!(after.len(), before.len());
+    let drawn = center(&after[0]);
+    assert!(drawn.distance(key) < 1e-6, "the key is drawn where it was moved to: {drawn:?}, outline at {key:?}");
+    assert!(center(&after[1]).distance(center(&before[1])) > 1.0, "the first step follows the moved key");
+    let last = center(&after[after.len() - 1]);
+    assert!(last.distance(Point::new(300.0, 300.0)) < 1e-6, "the other key stays put: {last:?}");
+    // Undo puts the key back on the spine as Replace Spine left it.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let back = steps_of(&s, g);
+    assert!(center(&back[0]).distance(Point::new(100.0, 300.0)) < 1e-6);
+    assert!(center(&back[1]).distance(center(&before[1])) < 1e-6);
+}
+
+/// #6809 on a closed spine, where both end keys start on its first point: moving the first key
+/// moves its end of the spine without dragging the last key's end along.
+#[test]
+fn moving_the_first_key_of_a_closed_replaced_spine_blend_moves_what_is_drawn() {
+    let mut s = session();
+    let (a, _, g) = blend(&mut s, json!({"steps": 5}));
+    let square = id_of(&s.execute("path.create", &json!({"d": "M100 100 L300 100 L300 300 L100 300 Z"})).unwrap());
+    sel(&mut s, &[g, square]);
+    s.execute("object.blend.replaceSpine", &json!({})).unwrap();
+    let center = |n: &Node| n.geometric_bounds().unwrap().center();
+    let before = steps_of(&s, g);
+    assert!(center(&before[0]).distance(Point::new(100.0, 100.0)) < 1e-6);
+    sel(&mut s, &[a]);
+    s.execute("object.move", &json!({"dx": -50, "dy": -40})).unwrap();
+    let key = center(&node(&s, a));
+    assert!(key.distance(Point::new(50.0, 60.0)) < 1e-6, "{key:?}");
+    let after = steps_of(&s, g);
+    assert_eq!(after.len(), before.len());
+    let drawn = center(&after[0]);
+    assert!(drawn.distance(key) < 1e-6, "the key is drawn where it was moved to: {drawn:?}, outline at {key:?}");
+    assert!(center(&after[1]).distance(center(&before[1])) > 1.0, "the first step follows the moved key");
+    let last = center(&after[after.len() - 1]);
+    assert!(last.distance(Point::new(100.0, 100.0)) < 1e-6, "the other key stays put: {last:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let back = steps_of(&s, g);
+    assert!(center(&back[0]).distance(Point::new(100.0, 100.0)) < 1e-6);
+    assert!(center(&back[1]).distance(center(&before[1])) < 1e-6);
+}
+
+/// #6809 on a closed spine pinned by a spine edit: the end keys get points of their own, so
+/// moving the first key afterwards still moves only its end.
+#[test]
+fn moving_the_first_key_of_a_pinned_closed_spine_blend_moves_what_is_drawn() {
+    let mut s = session();
+    let (a, _, g) = blend(&mut s, json!({"steps": 5}));
+    let square = id_of(&s.execute("path.create", &json!({"d": "M100 100 L300 100 L300 300 L100 300 Z"})).unwrap());
+    sel(&mut s, &[g, square]);
+    s.execute("object.blend.replaceSpine", &json!({})).unwrap();
+    // Dragging a corner away from the keys pins the spine to them.
+    s.execute("object.blend.spine.moveAnchor", &json!({"id": g.0, "anchor": 2, "x": 320, "y": 320})).unwrap();
+    let NodeKind::Blend { spec, .. } = node(&s, g).kind else { panic!() };
+    assert_eq!(spec.key_anchors.len(), 2, "{:?}", spec.key_anchors);
+    let center = |n: &Node| n.geometric_bounds().unwrap().center();
+    let before = steps_of(&s, g);
+    sel(&mut s, &[a]);
+    s.execute("object.move", &json!({"dx": -50, "dy": -40})).unwrap();
+    let key = center(&node(&s, a));
+    assert!(key.distance(Point::new(50.0, 60.0)) < 1e-6, "{key:?}");
+    let after = steps_of(&s, g);
+    assert_eq!(after.len(), before.len());
+    let drawn = center(&after[0]);
+    assert!(drawn.distance(key) < 1e-6, "the key is drawn where it was moved to: {drawn:?}, outline at {key:?}");
+    let last = center(&after[after.len() - 1]);
+    assert!(last.distance(Point::new(100.0, 100.0)) < 1e-6, "the other key stays put: {last:?}");
+}
+
 #[test]
 fn blend_align_to_path_rotates_steps() {
     let mut s = session();
@@ -475,8 +570,8 @@ fn envelope_warp_make_and_content_stays_inside_bounds() {
     let pts = all_anchors(&out);
     assert!(pts.len() > 4, "curves are subdivided");
     assert!(pts.iter().all(|p| b.contains(*p)), "{b:?}");
-    // It really is bent: the sides moved down.
-    assert!(pts.iter().any(|p| p.y > 201.0));
+    // It really is bent: the top corners swung out past the sides.
+    assert!(pts.iter().any(|p| p.x < 99.0) && pts.iter().any(|p| p.x > 301.0));
 }
 
 #[test]
@@ -527,6 +622,25 @@ fn envelope_top_object_maps_corners() {
     }
     let b = node(&s, e).geometric_bounds().unwrap();
     assert!(close(b.x0, 350.0) && close(b.y1, 250.0));
+}
+
+/// Each piece of a top object's side takes a share of the content in proportion to its control
+/// polygon, spread by its curve parameter. The top side's two curves have polygons of 64.7 and
+/// 166.5, so the content's middle lands on the second curve at t = 0.3056, (482.6, 106.4); by
+/// length it would land at (493.7, 106.9), and by equal shares at the anchor (440, 100).
+#[test]
+fn envelope_top_object_shares_a_side_by_control_polygon_length() {
+    let mut s = session();
+    let left = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let right = rect(&mut s, 200.0, 100.0, 100.0, 100.0);
+    let d = "M400 100 C410 80 430 80 440 100 C460 110 590 110 600 100 L600 200 L400 200 Z";
+    let t = id_of(&s.execute("path.create", &json!({ "d": d })).unwrap());
+    sel(&mut s, &[left, right, t]);
+    let e = id_of(&s.execute("object.envelope.makeWithTopObject", &json!({})).unwrap());
+    let pts = all_anchors(&live::expand_live(&node(&s, e)));
+    let near = |c: Point| pts.iter().map(|p| p.distance(c)).fold(f64::INFINITY, f64::min);
+    assert!(near(Point::new(482.6, 106.37)) < 0.5, "the middle of the top: {pts:?}");
+    assert!(near(Point::new(500.0, 200.0)) < 0.5, "the middle of the bottom: {pts:?}");
 }
 
 #[test]
@@ -745,6 +859,73 @@ fn envelope_options_refuse_a_boolean_given_as_text() {
     assert!(matches!(&node(&s, warp).kind, NodeKind::Envelope { options, .. } if !options.anti_alias && options.distort_appearance));
 }
 
+/// Make with Warp, Reset with Warp and Envelope Options refuse a warp `style` that is not text or
+/// names no warp, and an `orientation` other than horizontal or vertical: no envelope is made, a
+/// warp envelope keeps its warp, and no undo step is added. Null is read as the key left out.
+#[test]
+fn envelope_warps_refuse_an_invalid_style_or_orientation() {
+    let mut s = session();
+    let a = text_rect(&mut s);
+    sel(&mut s, &[a]);
+    let n = undo_len(&s);
+    let calls = [
+        (json!({"style": 5}), "`style` must be a string"),
+        (json!({"style": ["arch"], "bend": 40}), "`style` must be a string"),
+        (json!({"style": "foo"}), "unknown warp style `foo`"),
+        (json!({"orientation": 1}), "`orientation` must be one of horizontal, vertical"),
+        (json!({"orientation": true, "horizontal": true}), "`orientation` must be one of horizontal, vertical"),
+        (json!({"orientation": "diagonal"}), "`orientation` must be one of horizontal, vertical"),
+    ];
+    for (p, want) in &calls {
+        refuses_with(&mut s, "object.envelope.makeWithWarp", p, want);
+    }
+    assert_eq!(undo_len(&s), n, "nothing changed");
+    assert!(matches!(node(&s, a).kind, NodeKind::Path { .. }), "not enveloped");
+    let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": null, "orientation": null, "bend": 30})).unwrap());
+    assert!(matches!(&node(&s, e).kind, NodeKind::Envelope { kind, .. }
+        if matches!(&**kind, EnvelopeKind::Warp { style, horizontal: true, .. } if style == "arc")));
+    let (before, n) = (node(&s, e), undo_len(&s));
+    for cmd in ["object.envelope.resetWithWarp", "object.envelope.options"] {
+        for (p, want) in &calls {
+            refuses_with(&mut s, cmd, p, want);
+        }
+    }
+    assert_eq!((node(&s, e), undo_len(&s)), (before, n), "nothing changed");
+    s.execute("select.none", &json!({})).unwrap();
+    for (p, want) in &calls {
+        refuses_with(&mut s, "object.envelope.options", p, want);
+    }
+    sel(&mut s, &[e]);
+    s.execute("object.envelope.resetWithWarp", &json!({"style": "warp.flag", "orientation": "vertical"})).unwrap();
+    assert!(matches!(&node(&s, e).kind, NodeKind::Envelope { kind, .. }
+        if matches!(&**kind, EnvelopeKind::Warp { style, horizontal: false, .. } if style == "flag")));
+}
+
+/// Envelope Options refuses a `preserveShape` that is not text, for the selected envelope and for
+/// the options new envelopes get, and changes neither; null keeps the current value.
+#[test]
+fn envelope_options_refuse_a_preserve_shape_that_is_not_text() {
+    let mut s = session();
+    let a = text_rect(&mut s);
+    sel(&mut s, &[a]);
+    let e = id_of(&s.execute("object.envelope.makeWithMesh", &json!({"rows": 2, "cols": 2})).unwrap());
+    let calls = [json!({"preserveShape": 1}), json!({"preserveShape": true, "antiAlias": false}), json!({"preserveShape": ["transparency"]})];
+    for ids in [vec![e], vec![]] {
+        sel(&mut s, &ids);
+        let before = (node(&s, e), undo_len(&s));
+        for p in &calls {
+            refuses_with(&mut s, "object.envelope.options", p, "`preserveShape` must be a string");
+        }
+        assert_eq!((node(&s, e), undo_len(&s)), before, "nothing changed with {ids:?} selected");
+    }
+    assert_eq!(s.envelope_defaults, None, "the options new envelopes get stayed");
+    sel(&mut s, &[e]);
+    s.execute("object.envelope.options", &json!({"preserveShape": "transparency"})).unwrap();
+    s.execute("object.envelope.options", &json!({"preserveShape": null, "antiAlias": false})).unwrap();
+    assert!(matches!(&node(&s, e).kind, NodeKind::Envelope { options, .. }
+        if options.preserve_shape == PreserveShape::Transparency && !options.anti_alias));
+}
+
 #[test]
 fn envelope_renders_distorted() {
     let mut s = session();
@@ -851,6 +1032,34 @@ fn mesh_point_colour_move_and_undo() {
     assert!(s.execute("object.mesh.setPointColor", &json!({"id": a.0, "index": 99, "color": "#000000"})).is_err());
 }
 
+/// #2752: a Mesh tool click on a star, solid or gradient filled, gives a mesh with every point of
+/// the star on its border, in one undo step that gives the star back.
+#[test]
+fn a_mesh_tool_click_keeps_a_stars_points() {
+    for gradient in [false, true] {
+        let mut s = session();
+        let a = id_of(&s.execute("shape.star", &json!({"cx": 300, "cy": 300, "radius1": 200, "radius2": 80, "points": 5})).unwrap());
+        if gradient {
+            s.execute("paint.setFill", &json!({"ids": [a.0], "gradient": {"kind": "linear"}})).unwrap();
+        } else {
+            fill(&mut s, a, "#0000ff");
+        }
+        let star = node(&s, a).path_data().unwrap().clone();
+        sel(&mut s, &[a]);
+        let undos = undo_len(&s);
+        s.execute("object.mesh.create", &json!({"at": [300, 300]})).unwrap();
+        assert_eq!(undo_len(&s), undos + 1);
+        let m = mesh_of(&s, a);
+        let border = m.outline().to_bezpath();
+        for anchor in &star.subpaths[0].anchors {
+            assert!(m.points.iter().any(|q| q.p.distance(anchor.p) < 1e-6), "{:?} is not a mesh point", anchor.p);
+            assert!(vectorcraft_geom::Shape::bounding_box(&border).inflate(1e-6, 1e-6).contains(anchor.p));
+        }
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(node(&s, a).path_data(), Some(&star));
+    }
+}
+
 /// A mesh point's `color` with an alpha part (`#rrggbbaa` or `#rgba`) is refused and changes
 /// nothing, also when `opacity` is given and when Add Mesh Line takes it; `#rrggbb` still sets it.
 #[test]
@@ -927,7 +1136,12 @@ fn mesh_points_move_and_colour_together() {
         assert!(s.execute("object.mesh.movePoints", &p).is_err(), "{p}");
     }
     assert!(s.execute("object.mesh.setPointColor", &json!({"id": a.0, "points": [0, 9], "color": "#000000"})).is_err());
-    assert_eq!(((mesh_of(&s, a), mesh_of(&s, b)), undo_len(&s)), (before, n), "nothing changed");
+    assert_eq!(((mesh_of(&s, a), mesh_of(&s, b)), undo_len(&s)), (before.clone(), n), "nothing changed");
+    // A call that changes no point records no undo step.
+    s.execute("object.mesh.movePoints", &json!({"id": a.0, "points": [], "dx": 1, "dy": 1})).unwrap();
+    s.execute("object.mesh.movePoints", &json!({"id": a.0, "points": [0, 1], "dx": 0, "dy": 0})).unwrap();
+    s.execute("object.mesh.setPointColor", &json!({"id": a.0, "points": [2, 6], "color": "#0000ff", "opacity": 0.25})).unwrap();
+    assert_eq!(((mesh_of(&s, a), mesh_of(&s, b)), undo_len(&s)), (before, n), "no change, no undo step");
 }
 
 #[test]
@@ -973,6 +1187,47 @@ fn mesh_add_line_on_the_edge_from_just_outside() {
     assert!(m.points[r["index"].as_u64().unwrap() as usize].p.distance(Point::new(140.0, 200.0)) < 0.5);
     assert!(s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 140, "y": 202})).is_err(), "no tolerance: outside");
     assert!(s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 140, "y": 210, "tolerance": 3})).is_err(), "past the tolerance");
+}
+
+/// `object.mesh.addLine` and Create Gradient Mesh `at` a point exactly on the outline add their
+/// lines there with no tolerance, on the bottom and right edges as on the top and left ones.
+#[test]
+fn mesh_add_line_exactly_on_the_edge_needs_no_tolerance() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    let r = s.execute("object.mesh.create", &json!({"at": [50, 100]})).unwrap();
+    let m = mesh_of(&s, a);
+    assert_eq!((m.rows, m.cols), (1, 2), "a column through the bottom edge");
+    assert!(m.points[r["index"].as_u64().unwrap() as usize].p.distance(Point::new(50.0, 100.0)) < 0.5);
+    for (x, y) in [(100.0, 30.0), (20.0, 0.0), (0.0, 80.0)] {
+        let r = s.execute("object.mesh.addLine", &json!({"id": a.0, "x": x, "y": y})).unwrap();
+        let p = mesh_of(&s, a).points[r["index"].as_u64().unwrap() as usize].p;
+        assert!(p.distance(Point::new(x, y)) < 0.5, "({x}, {y}): {p:?}");
+    }
+    assert_eq!((mesh_of(&s, a).rows, mesh_of(&s, a).cols), (3, 3));
+    let n = undo_len(&s);
+    assert!(s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 60, "y": 100.01})).is_err(), "just outside");
+    assert_eq!(undo_len(&s), n, "nothing changed");
+}
+
+/// `object.mesh.addLine` at a point that is already a mesh point (a corner, a point on an edge or
+/// inside) adds no line and records no undo step; with a new `color` there it is one step.
+#[test]
+fn mesh_add_line_at_a_mesh_point_records_no_undo_step() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    let (before, n) = (mesh_of(&s, a), undo_len(&s));
+    for (x, y) in [(0.0, 0.0), (100.0, 100.0), (50.0, 100.0), (100.0, 50.0), (50.0, 50.0)] {
+        let r = s.execute("object.mesh.addLine", &json!({"id": a.0, "x": x, "y": y})).unwrap();
+        let p = mesh_of(&s, a).points[r["index"].as_u64().unwrap() as usize].p;
+        assert!(p.distance(Point::new(x, y)) < 0.5, "({x}, {y}): {p:?}");
+        assert_eq!((mesh_of(&s, a), undo_len(&s)), (before.clone(), n), "({x}, {y}): nothing changed");
+    }
+    s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 100, "y": 100, "color": "#00ff00"})).unwrap();
+    assert_eq!(undo_len(&s), n + 1, "a new color is a step");
 }
 
 /// A mesh point `index`, and `rows`, `cols` or `columns` for Create Gradient Mesh, that is not a

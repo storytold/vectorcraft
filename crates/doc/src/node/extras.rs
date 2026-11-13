@@ -66,6 +66,15 @@ pub struct NodeExtras {
     /// As an instance of a dynamic symbol, its own appearance changes to objects of the symbol's
     /// art (see [`crate::symbol_overrides`]); empty for none.
     pub symbol_overrides: Vec<crate::SymbolOverride>,
+    /// As an envelope with margins in Edit Contents, the margins its strokes gave when Edit Contents
+    /// began ([`crate::live::EnvelopeOptions::bounds_margin`]).
+    pub envelope_edit_margin: Option<[f32; 4]>,
+    /// Transform panel › Align to Pixel Grid: the path's or compound path's horizontal and vertical
+    /// segments stay on the pixel grid when it is transformed.
+    pub pixel_aligned: bool,
+    /// Image Tools › Color Mask: the colors an image hides while its pixels stay as they are
+    /// ([`crate::color_mask`]).
+    pub color_mask: Option<Box<crate::color_mask::ColorMask>>,
 }
 
 /// No extras: what [`Node::extras`] gives for a node without any.
@@ -91,6 +100,9 @@ pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
     compound_shape: false,
     shape_mode: crate::ShapeMode::Add,
     symbol_overrides: Vec::new(),
+    envelope_edit_margin: None,
+    pixel_aligned: false,
+    color_mask: None,
 };
 
 /// A node's [`NodeExtras`], if it has any ([`Node::extras`]). Extras that are all unset equal

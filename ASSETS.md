@@ -1,5 +1,21 @@
 # Asset attribution
 
+## Indic hyphenation patterns
+
+| Asset | Author | Source | Licence | Notes |
+|---|---|---|---|---|
+| `crates/text/patterns/hyph-hi.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-hi.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-mr.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-mr.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-gu.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-gu.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-bn.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-bn.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-pa.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-pa.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-ta.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-ta.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-te.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-te.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-kn.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-kn.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-ml.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-ml.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-or.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-or.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-as.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-as.tex | MIT (selected option) | Unmodified; full license in file |
+
 Every non-code asset in this repository (icons, images, fonts, example art, colour profiles, presets) is listed here with its author, source and licence. `cargo xtask assets` (part of `cargo xtask ci`) fails if an asset file is missing from this table.
 
 **Policy (mandatory):** VectorCraft contains **no Adobe iconography, images, artwork, presets, swatch/brush/symbol/pattern libraries or ICC profiles**. Every asset is either original work by VectorCraft contributors, or third-party material under an open licence (OSI open source, public domain / CC0, or Creative Commons that allows redistribution), and it is attributed below. Screenshots of Adobe software are never committed. The one exception is the ArtCraft name, wordmark and logos in `docs/brand/`: ArtCraft trademarks, not open source, usable only under [`docs/brand/LICENSE-brand.txt`](docs/brand/LICENSE-brand.txt).
@@ -143,6 +159,8 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/dc-free-transform.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-fx.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-gamut.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-grad-conic.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-grad-diamond.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-grad-freeform.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-grad-linear.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-grad-radial.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
@@ -249,6 +267,7 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/flip-vertical-2.svg` | Lucide Icons and Contributors | https://lucide.dev (lucide-static v1.49.0; header kept in file) | ISC (`assets/icons/LICENSE-lucide.txt`) |  |
 | `assets/icons/folder-open.svg` | Lucide Icons and Contributors | https://lucide.dev (lucide-static v1.49.0; header kept in file) | ISC (`assets/icons/LICENSE-lucide.txt`) |  |
 | `assets/icons/frame.svg` | Lucide Icons and Contributors | https://lucide.dev (lucide-static v1.49.0; header kept in file) | ISC (`assets/icons/LICENSE-lucide.txt`) |  |
+| `assets/icons/graduation-cap.svg` | Lucide Icons and Contributors | https://lucide.dev (lucide-static v1.49.0; header kept in file) | ISC (`assets/icons/LICENSE-lucide.txt`) | Learn panel, Explore tutorials button |
 | `assets/icons/grid-3x3.svg` | Lucide Icons and Contributors | https://lucide.dev (lucide-static v1.49.0; header kept in file) | ISC (`assets/icons/LICENSE-lucide.txt`) |  |
 | `assets/icons/group.svg` | Lucide Icons and Contributors | https://lucide.dev (lucide-static v1.49.0; header kept in file) | ISC (`assets/icons/LICENSE-lucide.txt`) |  |
 | `assets/icons/hand.svg` | Lucide Icons and Contributors | https://lucide.dev (lucide-static v1.49.0; header kept in file) | ISC (`assets/icons/LICENSE-lucide.txt`) |  |
@@ -352,6 +371,18 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `crates/engine/tests/fixtures/jpeg2000/checker.jp2` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | a 2 × 2 checker encoded with FFmpeg's JPEG 2000 encoder; SHA-256 `3de9c2bb5b8aaec241d939b795002a68eb3d50e41d51c43368000804ad3de057` |
 | `crates/engine/tests/fixtures/jpeg2000/checker-raw.j2k` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | a 2 × 2 checker encoded with FFmpeg's JPEG 2000 encoder; SHA-256 `76fa51ab8ccbc2534098b26b8e7fe16dd886e2b6298ba52d06a6b1bde9b61d9e` |
 | `crates/engine/tests/fixtures/jpeg2000/checker-300ppi.jp2` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | a 2 × 2 checker encoded with FFmpeg's JPEG 2000 encoder; SHA-256 `1b1aeed8975d3cdc832da6ecf5855852d07d0c490105121e61a8aefb31af009b` |
+| `crates/engine/tests/fixtures/heif/quadrants.heic` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | 32 × 32 red, green, blue and white quadrants encoded with libheif's `heif-enc` 1.23.2 (x265); SHA-256 `122d14963fe899daa736cd216902cf4fc8f2192b3a0ba81f94004adcd71a0ff5` |
+| `crates/engine/tests/fixtures/heif/quadrants-alpha.heic` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | the quadrants with a transparent right half, encoded with `heif-enc` 1.23.2; SHA-256 `55b5a537401ead742714c3a1bc526559ec8c1ba97cdb7f43ac63f4037167475b` |
+| `crates/engine/tests/fixtures/heif/quadrants-10bit.heic` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | the quadrants at 10 bits, encoded with `heif-enc` 1.23.2; SHA-256 `11014848c6a838e5799d87e034eff1b06b816712ed70ba451bd582d72741774f` |
+| `crates/engine/tests/fixtures/heif/quadrants-grid.heic` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | 128 × 128 quadrants as a 2 × 2 grid of 64 × 64 tiles, encoded with `heif-enc` 1.23.2; SHA-256 `5802f8715110954eb9c58d4bdcc10d1200426a48cf726f1b88dfb60da825ba7a` |
+| `crates/engine/tests/fixtures/heif/quadrants-300ppi.heic` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | the quadrants with EXIF resolution tags of 300 ppi, encoded with `heif-enc` 1.23.2; SHA-256 `6a344a6de04fc5fceaee46b6e0028b12478c90bdcb6f6f14ed8c86a44cb203d7` |
+| `crates/engine/tests/fixtures/heif/wide-rotated.heic` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | 32 × 16 red and blue halves stored with a quarter-turn rotation, encoded with `heif-enc` 1.23.2; SHA-256 `e3a2c3a9beb4066c13d6deb8e1311805c6aac485fde8784f1ee317dd95b89973` |
+| `crates/engine/tests/fixtures/heif/wide-rotated-300x150.heic` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | the rotated halves with EXIF resolution tags of 300 ppi across and 150 ppi down, encoded with `heif-enc` 1.23.2; SHA-256 `79ad7945cd2c1ea9d3e70ac9b93d9a162fd8ce37541a0f3de44e12f04745921d` |
+| `crates/engine/tests/fixtures/heif/tones.heic` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | 32 × 32 quadrants of four mid tones, encoded with `heif-enc` 1.23.2; SHA-256 `29ed7d75fbfbc4c298eb2da3a6b62625a150cd6bfe5b7ff1d847437501b1b4b1` |
+| `crates/engine/tests/fixtures/heif/tones-p3-nclx.heic` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | the tones labeled Display P3 in an `nclx` color box, encoded with `heif-enc` 1.23.2; SHA-256 `baeb32ffa58ac1ac29a00c9e388b9281f4acb4695c4681e4933d0ad061447101` |
+| `crates/engine/tests/fixtures/heif/tones-p3-icc.heic` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | the tones with VectorCraft's own Display P3 ICC profile (`vectorcraft_color::cms::icc_bytes`), encoded with `heif-enc` 1.23.2; SHA-256 `472e1a123b9515926a8985a04c3f680387e8c410dbf8f7ff0cfb8cb99c89e93b` |
+| `crates/engine/tests/fixtures/heif/tones-p3-icc-only.heic` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | the tones with VectorCraft's own Display P3 ICC profile as their only color box, encoded with `heif-enc` 1.23.2; SHA-256 `2654fdd21e56641107db20b3f4d0a66a86420ac040d42ddf55e20f7e789d5c55` |
+| `crates/engine/tests/fixtures/heif/quadrants-grid16.heic` | VectorCraft contributors | Original test image authored for VectorCraft's tests | MIT OR Apache-2.0 | 32 × 32 quadrants as a 2 × 2 grid of 16 × 16 tiles, each cropped from a 64 × 64 picture, encoded with `heif-enc` 1.23.2; SHA-256 `bd114ee66cdac10142729dc9dddfa1cd96993a5cefa54c2f25b65496652f007f` |
 
 ## Assets embedded by the PDF backend
 

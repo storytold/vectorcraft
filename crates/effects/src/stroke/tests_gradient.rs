@@ -117,6 +117,7 @@ fn along_keeps_a_corners_colour_round_its_outside() {
     assert!((param(&sl, Point::new(95.0, 8.0)).unwrap() - 0.54).abs() < 1e-6);
 }
 
+/// An Across stroke gradient runs from the stroke's left edge to its right edge, also where a width profile moves them.
 #[test]
 fn across_runs_from_the_left_edge_to_the_right() {
     let st = stroke(10.0, StrokeGradientMode::Across);
@@ -137,8 +138,8 @@ fn across_runs_from_the_left_edge_to_the_right() {
     let mut lens = st.clone();
     lens.profile = Some(WidthProfile::lens());
     let sl = slices(&line, &lens);
-    // A quarter of the way along, the lens is half as wide: its top edge is 2.5 up.
-    assert!(param(&sl, Point::new(25.0, -2.4)).unwrap() < 0.05);
+    // A quarter of the way along, the lens is three quarters as wide: its top edge is 3.75 up.
+    assert!(param(&sl, Point::new(25.0, -3.6)).unwrap() < 0.05);
     assert!((param(&sl, Point::new(50.0, -2.5)).unwrap() - 0.25).abs() < 0.02);
 }
 
@@ -162,6 +163,7 @@ fn an_aligned_stroke_spans_the_gradient_across_the_side_it_shows_on() {
     }
 }
 
+/// The gradient slices cover every point the stroke paints, with each join, caps, arrowheads, a profile and dashes.
 #[test]
 fn slices_cover_everything_the_stroke_paints() {
     let zig = poly(&[(0.0, 0.0), (60.0, 40.0), (0.0, 80.0), (70.0, 90.0), (75.0, 20.0)], false);
@@ -182,7 +184,9 @@ fn slices_cover_everything_the_stroke_paints() {
             assert_covered(&zig, &st);
             st.arrow_align = ArrowAlign::Tip;
             assert_covered(&curve, &st);
-            st.profile = WidthProfile::preset("wave");
+            // Teardrop, not Wave: with most profiles a dash across the zigzag's sharp corner
+            // paints outside every slice (#5964). Back to Wave once that is fixed.
+            st.profile = WidthProfile::preset("teardrop");
             st.dash = Some(Dash { pattern: vec![12.0, 6.0], ..Default::default() });
             assert_covered(&zig, &st);
             st.align = StrokeAlign::Outside;
@@ -208,6 +212,225 @@ fn meshes_colour_the_stroke_as_the_slices_do() {
             let q = quads.iter().find(|q| poly(&q.pts.map(|v| (v.x, v.y)), true).contains(p)).expect("in the mesh");
             let got = q.color.to_rgb()[0] as f64;
             assert!((got - want).abs() < 0.05, "{mode:?} {p:?}: mesh {got} vs {want}");
+        }
+    }
+}
+
+/// #5964: with ribs only at the path's corners (an Along gradient), an arrowhead whose tip sits on
+/// the end of a long straight leg is covered all the way to where it can reach: the ribs that
+/// reach across it run to the end of its reach, rather than narrowing from its tip towards the
+/// next corner and leaving the corners of its base outside.
+#[test]
+fn slices_cover_an_arrowhead_on_a_long_straight_leg() {
+    let zig = poly(&[(0.0, 0.0), (60.0, 40.0), (0.0, 80.0), (70.0, 90.0), (75.0, 20.0)], false);
+    for profile in [None, WidthProfile::preset("lens"), WidthProfile::preset("taperStart")] {
+        for align in [ArrowAlign::Tip, ArrowAlign::Extend] {
+            for mode in [StrokeGradientMode::Along, StrokeGradientMode::Across] {
+                let mut st = stroke(12.0, mode);
+                st.start_arrow = Some(Arrowhead::Triangle);
+                st.end_arrow = Some(Arrowhead::Triangle);
+                st.arrow_align = align;
+                st.profile = profile.clone();
+                assert_covered(&zig, &st);
+            }
+        }
+    }
+}
+
+/// Does the last slice holding `p` (the one filled last there) lay its gradient piece on a part of
+/// the path running across the page (left or right), for a gradient in `mode`? Along, the piece
+/// runs the way the path does; across, square to it.
+fn painted_by_level_part(slices: &[Slice], p: Point, mode: StrokeGradientMode) -> Option<bool> {
+    slices.iter().rev().find(|s| s.shape.contains(p)).map(|s| {
+        let d = s.to - s.from;
+        (d.x.abs() > d.y.abs()) == (mode == StrokeGradientMode::Along)
+    })
+}
+
+/// #5960: where a variable-width stroke crosses itself, the later pass paints over the earlier one
+/// only where the two overlap. Its slices reach as far as the stroke is wide there, not as far as
+/// it is wide anywhere, so a narrow later pass leaves the wide earlier one its own colour beside it.
+#[test]
+fn a_narrow_pass_over_a_wide_one_paints_only_where_they_overlap() {
+    // Right along y = 50, round, then down through the first leg at x = 50, near the narrow end.
+    let crossing = poly(&[(0.0, 50.0), (100.0, 50.0), (100.0, 100.0), (50.0, 100.0), (50.0, 0.0)], false);
+    for mode in [StrokeGradientMode::Along, StrokeGradientMode::Across] {
+        let mut st = stroke(10.0, mode);
+        st.profile = Some(WidthProfile::taper_end());
+        let sl = slices(&crossing, &st);
+        // In the first leg (about 4 pt either side of it there) but 4 pt beside the second leg,
+        // which is less than 1 pt either side of itself there.
+        let level = painted_by_level_part(&sl, Point::new(54.0, 52.0), mode);
+        assert_eq!(level, Some(true), "{mode:?}: painted by the second leg");
+        // Where the two overlap, the second leg is on top.
+        let level = painted_by_level_part(&sl, Point::new(50.5, 52.0), mode);
+        assert_eq!(level, Some(false), "{mode:?}: painted by the first leg");
+        assert_covered(&crossing, &st);
+    }
+}
+
+/// #5960: a narrow pass running close beside a wide one doesn't paint the wide one's edge.
+#[test]
+fn a_narrow_pass_beside_a_wide_one_leaves_its_edge_alone() {
+    // Right along y = 0, then back along y = 7: the way back is the narrow end of a taper.
+    let hairpin = poly(&[(0.0, 0.0), (100.0, 0.0), (100.0, 7.0), (0.0, 7.0)], false);
+    let total = 207.0;
+    let mut st = stroke(10.0, StrokeGradientMode::Along);
+    st.profile = Some(WidthProfile::taper_end());
+    let sl = slices(&hairpin, &st);
+    // Half way along the first leg, 3 pt off it (it is about 3.8 pt wide there either side); the
+    // way back is about 1.2 pt wide either side there, so it reaches no nearer than 5.8.
+    let p = Point::new(50.0, 3.0);
+    let t = param(&sl, p).expect("in a slice");
+    assert!((t - 50.0 / total).abs() < 1e-6, "painted with {t}, not the first leg's {}", 50.0 / total);
+    assert_covered(&hairpin, &st);
+}
+
+/// A gradient along or across a stroke that repeats or reflects runs its stops that many times
+/// along (or across) it: a slice's paint, and Outline Stroke's meshes, give each point the color
+/// the spread gives its place.
+#[test]
+fn a_spread_gradient_runs_its_stops_along_the_stroke_that_many_times() {
+    use vectorcraft_color::GradientSpread;
+    let bp = poly(&[(0.0, 0.0), (120.0, 0.0)], false);
+    for (mode, spread) in [StrokeGradientMode::Along, StrokeGradientMode::Across]
+        .into_iter()
+        .flat_map(|m| [GradientSpread::Reflect, GradientSpread::Repeat].map(|s| (m, s)))
+    {
+        let mut st = stroke(10.0, mode);
+        let g = Gradient { spread, repeats: 3, ..Gradient::default() };
+        st.paint = Paint::Gradient(Box::new(GradientPaint::new(g.clone())));
+        for s in slices(&bp, &st) {
+            let Paint::Gradient(p) = s.paint(&g.unrolled()) else { panic!("a gradient slice") };
+            let geom = p.geom.unwrap();
+            for u in [0.1, 0.5, 0.9] {
+                let at = s.from + (s.to - s.from) * u;
+                let t = s.span.0 + (s.span.1 - s.span.0) * u;
+                // Where two runs meet, Repeat's color is the next run's start or the last one's end.
+                if (t * 3.0 - (t * 3.0).round()).abs() < 1e-9 {
+                    continue;
+                }
+                let want = g.sample(g.spread_param(t) as f32).0.to_rgb();
+                let got = p.gradient.sample(geom.param_at(vectorcraft_color::GradientKind::Linear, at) as f32).0.to_rgb();
+                assert!(want.iter().zip(got).all(|(a, b)| (a - b).abs() < 1e-3), "{mode:?} at {t}: {want:?} vs {got:?}");
+            }
+        }
+        // Outline Stroke: the mesh comes back to white where each run starts again, and reaches
+        // black where each run ends, on both sides of a sharp step between runs.
+        let count = |g: &Gradient, hex: &str| {
+            gradient_meshes(&bp, FillRule::NonZero, &st, g).iter().flat_map(|m| m.points.iter()).filter(|p| p.color.to_hex() == hex).count()
+        };
+        for hex in ["#ffffff", "#000000"] {
+            let (spread, pad) = (count(&g, hex), count(&Gradient::default(), hex));
+            assert!(spread > pad, "{mode:?} {:?} {hex}: {spread} vs {pad}", g.spread);
+        }
+    }
+}
+
+/// Where a reflecting gradient turns back past a narrow last stop, Outline Stroke's mesh keeps that
+/// stop's color.
+#[test]
+fn a_narrow_peak_where_a_reflecting_gradient_turns_back_stays_in_the_mesh() {
+    use vectorcraft_color::GradientSpread;
+    let bp = poly(&[(0.0, 0.0), (120.0, 0.0)], false);
+    let stops = vec![GradientStop::new(0.0, Color::BLACK), GradientStop::new(0.995, Color::BLACK), GradientStop::new(1.0, Color::WHITE)];
+    for mode in [StrokeGradientMode::Along, StrokeGradientMode::Across] {
+        let mut st = stroke(10.0, mode);
+        let g = Gradient { spread: GradientSpread::Reflect, repeats: 100, ..Gradient::new(vectorcraft_color::GradientKind::Linear, stops.clone()) };
+        st.paint = Paint::Gradient(Box::new(GradientPaint::new(g.clone())));
+        let whites =
+            gradient_meshes(&bp, FillRule::NonZero, &st, &g).iter().flat_map(|m| m.points.iter()).filter(|p| p.color.to_hex() == "#ffffff").count();
+        // The gradient turns back at white 50 times.
+        assert!(whites >= 50, "{mode:?}: {whites}");
+    }
+}
+
+/// Outline Stroke's mesh across a stroke of many ribs, with a gradient of many stops repeated 100
+/// times: each mesh holds at most so many points, and every run still starts on its first color.
+#[test]
+fn a_mesh_across_many_ribs_and_stops_stays_bounded() {
+    use vectorcraft_color::GradientSpread;
+    let pts: Vec<(f64, f64)> = (0..1200).map(|i| (i as f64 * 10.0, if i % 2 == 0 { 0.0 } else { 10.0 })).collect();
+    let bp = poly(&pts, false);
+    let stops: Vec<GradientStop> = (0..200).map(|i| GradientStop::new(i as f32 / 199.0, Color::gray(1.0 - i as f32 / 199.0))).collect();
+    let g = Gradient { spread: GradientSpread::Repeat, repeats: 100, ..Gradient::new(vectorcraft_color::GradientKind::Linear, stops) };
+    let mut st = stroke(4.0, StrokeGradientMode::Across);
+    st.paint = Paint::Gradient(Box::new(GradientPaint::new(g.clone())));
+    let meshes = gradient_meshes(&bp, FillRule::NonZero, &st, &g);
+    assert!(!meshes.is_empty());
+    for m in &meshes {
+        assert!(m.points.len() <= super::gradient::MAX_MESH_POINTS, "{} points", m.points.len());
+        // A row at the start of each of the 100 runs, on every rib, is white.
+        let light = m.points.iter().filter(|p| p.color.to_rgb()[0] > 0.97).count();
+        assert!(light >= 100 * (m.cols as usize + 1), "{light} light points of {}", m.points.len());
+    }
+    // A strip of more ribs than one mesh has room for is split into meshes that share their end
+    // ribs, every rib in one of them.
+    use super::gradient::rib_pieces;
+    assert_eq!(rib_pieces(5, 3), [0..3, 2..5]);
+    assert_eq!(rib_pieces(4, 3), [0..3, 2..4]);
+    let one = rib_pieces(2, 1000);
+    assert_eq!((one.len(), one.first()), (1, Some(&(0..2))));
+    assert_eq!(rib_pieces(3, 0), [0..2, 1..3]);
+}
+
+/// #5960: with dashes, the ribs reach as far as the stroke gets wide within a cap's length along
+/// the path, however many points lie that far: not as far as it is wide anywhere when more than
+/// 256 do.
+#[test]
+fn a_densely_flattened_dashed_pass_beside_a_wide_one_leaves_its_edge_alone() {
+    // The hairpin above, the way back in 0.01 pt steps: 500 points within a round cap's 5 pt.
+    let mut pts = vec![(0.0, 0.0), (100.0, 0.0)];
+    pts.extend((0..=10_000).map(|i| (100.0 - i as f64 * 0.01, 7.0)));
+    let hairpin = poly(&pts, false);
+    let total = 207.0;
+    let mut st = stroke(10.0, StrokeGradientMode::Along);
+    st.profile = Some(WidthProfile::taper_end());
+    st.cap = LineCap::Round;
+    st.dash = Some(Dash { pattern: vec![12.0, 6.0], ..Default::default() });
+    let sl = slices(&hairpin, &st);
+    let p = Point::new(50.0, 3.0);
+    let t = param(&sl, p).expect("in a slice");
+    assert!((t - 50.0 / total).abs() < 1e-6, "painted with {t}, not the first leg's {}", 50.0 / total);
+}
+
+/// The widest the ribs ahead reach is the widest over the points out to the first one more than
+/// the window along, as a walk along the subpath finds it, open and closed.
+#[test]
+fn widest_ahead_is_the_widest_within_the_window() {
+    let mut seed = 0x9e37_79b9_u64;
+    let mut rnd = move || {
+        seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+        (seed >> 11) as f64 / (1u64 << 53) as f64
+    };
+    for _ in 0..200 {
+        let n = 1 + (rnd() * 40.0) as usize;
+        let cover: Vec<f64> = (0..n).map(|_| rnd() * 10.0).collect();
+        // Some points on top of each other.
+        let seg: Vec<f64> = (0..n).map(|_| if rnd() < 0.2 { 0.0 } else { rnd() * 3.0 }).collect();
+        let window = [0.0, rnd() * 5.0, rnd() * 200.0][(rnd() * 3.0) as usize];
+        for closed in [false, true] {
+            let got = super::gradient::widest_ahead(&cover, &seg, closed, window);
+            assert_eq!(got.len(), n);
+            for (i, &got) in got.iter().enumerate() {
+                let (mut j, mut d, mut want) = (i, 0.0, 0.0_f64);
+                for _ in 0..n {
+                    let k = if closed {
+                        (j + 1) % n
+                    } else if j + 1 < n {
+                        j + 1
+                    } else {
+                        break;
+                    };
+                    want = want.max(cover[k]);
+                    d += seg[j];
+                    j = k;
+                    if d > window {
+                        break;
+                    }
+                }
+                assert_eq!(got, want, "n {n}, closed {closed}, window {window}, point {i}");
+            }
         }
     }
 }

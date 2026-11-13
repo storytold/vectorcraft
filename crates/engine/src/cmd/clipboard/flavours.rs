@@ -182,7 +182,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load Image into Clipboard",
             [],
             None,
-            "{dataBase64 (PNG, JPEG, GIF, WebP, TIFF or BMP bytes), mime?: the type the system clipboard gave (an image/… type; the format is read from the bytes), center?: [x, y]} replace the clipboard with the image, embedded at 100% of its physical size (its resolution, else 72 ppi), centred on `center` (default: the first artboard) → {count, width, height (pt), pixelWidth, pixelHeight}; then run edit.paste. A PNG, JPEG, GIF or WebP image whose pixels can't be read (a file cut short) is an error",
+            "{dataBase64 (PNG, JPEG, GIF, WebP, TIFF, BMP, Targa, PCX, PSD, PSB or JPEG XL bytes), mime?: the type the system clipboard gave (an image/… type; the format is read from the bytes), center?: [x, y]} replace the clipboard with the image, embedded at 100% of its physical size (its resolution, else 72 ppi), centered on `center` (default: the first artboard) → {count, width, height (pt), pixelWidth, pixelHeight}; then run edit.paste. A PNG, JPEG, GIF or WebP image whose pixels can't be read (a file cut short) is an error",
             has_doc,
             import_image
         ),
@@ -191,7 +191,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load Text into Clipboard",
             [],
             None,
-            "{text, center?: [x, y]} replace the clipboard with point text of `text` (one paragraph per line; trailing line breaks dropped) in the default type style, centred on `center` (default: the first artboard) → {count}; then run edit.paste",
+            "{text, center?: [x, y], table?: true} replace the clipboard with point text of `text` (one paragraph per line; trailing line breaks dropped) in the default type style, centred on `center` (default: the first artboard) → {count}; then run edit.paste. Cells copied from a spreadsheet (tab-separated, at least two columns, every row with the same number of cells, cells in double quotes may hold tabs and line breaks; at most 1000 rows, 256 columns and 20,000 cells) become a group \"Table\": point type for each cell that holds text, in columns as wide as their widest cell and rows as tall as their tallest, over a group \"Gridlines\" of 0.5 pt black lines around every cell → {count, rows, columns}; table: false pastes them as plain text",
             has_doc,
             import_text
         ),
@@ -491,9 +491,24 @@ fn import_text(s: &mut Session, p: &Value) -> Result<Value> {
     if text.trim().is_empty() {
         return Err(bad(C, "the text is empty"));
     }
-    let mut t = TextObject::point(Point::ZERO, text, super::super::create::new_type_style(s, &Value::Null));
-    t.system_layout = s.doc()?.doc.setup.system_layout;
-    crate::cmd::typecmd::refresh_bounds(&mut t);
+    let style = super::super::create::new_type_style(s, &Value::Null, C)?;
+    let system_layout = s.doc()?.doc.setup.system_layout;
+    let layout = |t: &mut TextObject| {
+        t.system_layout = system_layout;
+        crate::cmd::typecmd::refresh_bounds(t);
+    };
+    let table = match p.get("table").filter(|v| !v.is_null()) {
+        None => true,
+        Some(v) => v.as_bool().ok_or_else(|| bad(C, "table must be true or false"))?,
+    };
+    // Cells copied from a spreadsheet paste as a table of type over gridlines.
+    if let Some(rows) = table.then(|| super::table::parse(text)).flatten() {
+        let n = super::table::table(&rows, &style, layout);
+        let count = s.load_clipboard(Clipboard { nodes: vec![n], ..Default::default() }, p)?;
+        return Ok(json!({ "count": count, "rows": rows.len(), "columns": rows.first().map_or(0, Vec::len) }));
+    }
+    let mut t = TextObject::point(Point::ZERO, text, style);
+    layout(&mut t);
     let n = Node::new(NodeId(1), NodeKind::Text(Box::new(t)));
     let count = s.load_clipboard(Clipboard { nodes: vec![n], ..Default::default() }, p)?;
     Ok(json!({ "count": count }))

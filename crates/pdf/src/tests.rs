@@ -8,13 +8,16 @@ use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, shapes};
 
 use crate::*;
 
+mod actual_text;
 mod blend;
 mod charstroke;
 mod cmykblend;
 mod cmykimages;
 mod colorize;
 mod compression;
+mod conic;
 mod dashalign;
+mod diamond;
 mod editing;
 mod encrypt;
 mod file_info;
@@ -30,6 +33,7 @@ mod layers;
 mod links;
 pub(super) mod live_text;
 mod marks;
+mod measuring;
 mod mesh_export;
 mod output;
 mod pdf13;
@@ -40,7 +44,9 @@ mod printadvanced;
 mod reader_compat;
 mod reader_streaming;
 mod realtext;
+mod reshaped;
 mod settings;
+mod spread;
 pub(super) mod stroke;
 mod strokeout;
 mod text_placement;
@@ -129,6 +135,7 @@ fn one_page_per_artboard_with_sizes() {
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     });
     d.artboards.push(Artboard {
         id: 3,
@@ -140,6 +147,7 @@ fn one_page_per_artboard_with_sizes() {
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     });
     let bytes = export(&d, &PdfOptions::default()).unwrap();
     let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
@@ -160,6 +168,7 @@ fn artboard_range_and_bad_index() {
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     });
     let bytes = export(&d, &PdfOptions { artboards: Some(vec![1]), ..Default::default() }).unwrap();
     let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
@@ -747,7 +756,7 @@ fn an_image_whose_pixels_cant_be_decoded_is_left_out_with_one_note() {
 }
 
 /// #2023: a group's Transform effect copies an image among its members as it does the paths: the
-/// PDF draws the image three times, where the effect put it.
+/// PDF draws the image three times, where the effect put it, the original on top.
 #[test]
 fn a_group_transform_effect_exports_its_image_copies() {
     let mut d = doc(200.0, 100.0);
@@ -774,7 +783,7 @@ fn a_group_transform_effect_exports_its_image_copies() {
     let out = roundtrip(&d);
     let lefts: Vec<f64> =
         leaves(&out).iter().filter(|n| matches!(n.kind, NodeKind::Image(_))).filter_map(|n| n.geometric_bounds()).map(|b| b.x0.round()).collect();
-    assert_eq!(lefts, [20.0, 70.0, 120.0]);
+    assert_eq!(lefts, [120.0, 70.0, 20.0]);
 }
 
 /// Build a PDF with a correct xref table from object bodies.
@@ -891,6 +900,7 @@ fn import_max_pages_and_multi_page() {
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     });
     add(&mut d, rect_node(Rect::new(10.0, 10.0, 50.0, 50.0), Color::BLACK));
     add(&mut d, rect_node(Rect::new(310.0, 10.0, 350.0, 50.0), Color::BLACK));

@@ -125,6 +125,30 @@ fn break_area_type_into_lines_paragraphs_and_glyphs() {
     }
 }
 
+/// Tracked area type broken into lines or paragraphs stays where it was, however it is aligned:
+/// a wrap after a hyphen or at a space becomes a line break or a paragraph's end, and the line
+/// leaves the tracking after its last character out of its width there as it did at the wrap.
+/// (Words chosen without a kerning pair across the wrap, which the pieces don't keep.)
+#[test]
+fn break_tracked_area_type_keeps_its_aligned_lines_in_place() {
+    for justify in ["center", "right"] {
+        for text_of in ["Mode-Mode-Mode", "Wave Wave Wave"] {
+            for by in ["paragraphs", "lines"] {
+                let mut s = session();
+                let id = text(&mut s, json!({"x": 40, "y": 40, "text": text_of, "size": 20, "area": {"width": 90, "height": 200}}));
+                s.execute("text.setRangeStyle", &json!({"id": id.0, "tracking": 200})).unwrap();
+                s.execute("text.setStyle", &json!({"ids": [id.0], "justify": justify})).unwrap();
+                let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &obj(&s, id));
+                assert!(lay.lines.len() > 1, "{text_of}: it wraps");
+                let was = glyphs(&s, &[id]);
+                select(&mut s, &[id]);
+                let pieces = ids(&s.execute("addon.cleanup.breakText", &json!({"by": by})).unwrap());
+                assert_same_places(&was, &glyphs(&s, &pieces));
+            }
+        }
+    }
+}
+
 #[test]
 fn break_text_refuses_what_it_cannot_break() {
     let mut s = session();
@@ -174,6 +198,24 @@ fn combine_joins_only_pieces_on_one_line_turned_alike() {
     assert!(doc.node(b).is_none() && doc.node(c).is_some() && doc.node(d).is_some());
     select(&mut s, &[c, d]);
     assert!(other(s.execute("addon.cleanup.combineText", &json!({}))).contains("combine"));
+}
+
+/// Pieces in horizontally scaled type: the tracking that puts each back where it was is measured in
+/// the em as the Horizontal Scale draws it (`vectorcraft_text::spacing_scale`), as layout spaces it.
+#[test]
+fn combine_puts_horizontally_scaled_pieces_back_where_they_were() {
+    let mut s = session();
+    let a = text(&mut s, json!({"x": 50, "y": 100, "text": "Left", "size": 20}));
+    let b = text(&mut s, json!({"x": 160, "y": 100, "text": "Right", "size": 20}));
+    for id in [a, b] {
+        s.execute("text.setRangeStyle", &json!({"id": id.0, "hScale": 200})).unwrap();
+    }
+    let was = glyphs(&s, &[a, b]);
+    select(&mut s, &[a, b]);
+    let r = s.execute("addon.cleanup.combineText", &json!({})).unwrap();
+    assert_eq!(ids(&r), [a]);
+    assert_eq!(obj(&s, a).plain_text(), "Left Right");
+    assert_same_places(&was, &glyphs(&s, &[a]));
 }
 
 /// Join Point Text makes one object of stacked one-line pieces: lines top to bottom as paragraphs,
@@ -243,6 +285,18 @@ fn remove_breaks_in_the_characters_a_type_tool_selected() {
     select(&mut s, &[id]);
     edit_text(&mut s, id, 0, 2);
     s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph"})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "a b\nc");
+}
+
+/// `ids: null` is `ids` left out: the characters the Type tool selected lose their breaks, and
+/// the rest of the text keeps them.
+#[test]
+fn remove_breaks_with_ids_null_in_the_characters_a_type_tool_selected() {
+    let mut s = session();
+    let id = text(&mut s, json!({"x": 40, "y": 60, "text": "a\nb\nc", "size": 12}));
+    select(&mut s, &[id]);
+    edit_text(&mut s, id, 0, 2);
+    s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph", "ids": null})).unwrap();
     assert_eq!(obj(&s, id).plain_text(), "a b\nc");
 }
 
@@ -360,4 +414,54 @@ fn replace_missing_fonts_reaches_the_type_in_symbols() {
     assert_eq!(r["runs"].as_u64(), Some(1), "{r}");
     s.execute("symbol.exitEditing", &json!({})).unwrap();
     assert_eq!(crate::cmd::fonts::substitution_warning(&s.doc().unwrap().doc), None);
+}
+
+/// Replace Missing Fonts reaches the type in opacity masks (of a hidden object, disabled, in a
+/// symbol's art) and in a pattern swatch nothing paints with, and the export warning, the missing
+/// fonts list and Find Font name that type's font until it is replaced.
+#[test]
+fn replace_missing_fonts_reaches_the_type_in_masks_and_patterns() {
+    let mut s = session();
+    let mask = |s: &mut Session, owner: NodeId, art: NodeId| {
+        s.edit("Mask", |d, _| {
+            let art = d.remove(art)?;
+            d.node_mut(owner).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new((*art).clone(), true)));
+            Ok(())
+        })
+        .unwrap();
+    };
+    let lost = |s: &mut Session| text(s, json!({"x": 40, "y": 60, "text": "Lost", "size": 20, "font": "No Such Font Family"}));
+    let rect =
+        |s: &mut Session| NodeId(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    let (hidden, disabled, in_symbol) = (rect(&mut s), rect(&mut s), rect(&mut s));
+    for owner in [hidden, disabled, in_symbol] {
+        let t = lost(&mut s);
+        mask(&mut s, owner, t);
+    }
+    s.execute("select.set", &json!({"ids": [hidden.0]})).unwrap();
+    s.execute("object.hide", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [disabled.0]})).unwrap();
+    s.execute("transparency.disableOpacityMask", &json!({})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [in_symbol.0]})).unwrap();
+    let t = lost(&mut s);
+    s.execute("object.pattern.make", &json!({"ids": [t.0], "name": "Unused", "edit": false})).unwrap();
+    select(&mut s, &[t]);
+    s.execute("edit.clear", &json!({})).unwrap();
+    let mut on_layers = 0;
+    s.doc().unwrap().doc.walk(|n| on_layers += usize::from(matches!(n.kind, NodeKind::Text(_))));
+    assert_eq!(on_layers, 0, "the type is only in masks, a symbol and a pattern");
+    let missing = |s: &Session| crate::cmd::fontfiles::missing_fonts(&s.doc().unwrap().doc).into_iter().map(|f| f.family).collect::<Vec<_>>();
+    assert_eq!(missing(&s), ["No Such Font Family"]);
+    assert!(crate::cmd::fonts::substitution_warning(&s.doc().unwrap().doc).is_some_and(|w| w.contains("No Such Font Family")));
+    let listed = s.execute("text.fonts", &json!({})).unwrap();
+    assert_eq!((listed[0]["family"].as_str(), listed[0]["objects"].as_u64()), (Some("No Such Font Family"), Some(4)), "{listed}");
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+    let r = s.execute("addon.cleanup.replaceFonts", &json!({})).unwrap();
+    assert_eq!(r["runs"].as_u64(), Some(4), "{r}");
+    assert_eq!(steps(&s), before + 1);
+    assert!(missing(&s).is_empty());
+    assert_eq!(crate::cmd::fonts::substitution_warning(&s.doc().unwrap().doc), None);
+    assert_eq!(other(s.execute("addon.cleanup.replaceFonts", &json!({}))), "No fonts are missing");
+    assert_eq!(steps(&s), before + 1);
 }

@@ -966,7 +966,7 @@ enum Item {
 /// The selected objects (or `ids`) as a library graphic (its id and name set by the caller).
 fn graphic_of(s: &Session, p: &Value, cmd: &str) -> Result<LibraryGraphic> {
     let st = s.doc()?;
-    let ids = match ids_param(p, "ids") {
+    let ids = match ids_param(p, "ids", cmd)? {
         Some(ids) => ids,
         None => st.selection.in_paint_order(&st.doc),
     };
@@ -1006,7 +1006,7 @@ fn color_of(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<NewColor>
         let given = NewColor { name: color.to_hex(), color, spot: None, tint: 1.0 };
         return Ok(spot_color(s, given, swatch, tint));
     }
-    match selected_paint(s, p, stroke)? {
+    match selected_paint(s, p, stroke, cmd)? {
         Paint::Solid { color, swatch, tint } => {
             let swatch = swatch.filter(|n| !n.is_empty());
             let name = swatch.clone().unwrap_or_else(|| color.to_hex());
@@ -1029,13 +1029,18 @@ fn spot_color(s: &Session, c: NewColor, swatch: Option<String>, tint: f32) -> Ne
 
 /// The first selected object's (or `ids`') fill (`stroke`: stroke) paint (type's: its first
 /// character's, as the proxy shows it), else the default one.
-fn selected_paint(s: &Session, p: &Value, stroke: bool) -> Result<Paint> {
+fn selected_paint(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<Paint> {
     let st = s.doc()?;
-    let ids = match ids_param(p, "ids") {
+    let ids = match ids_param(p, "ids", cmd)? {
         Some(ids) => ids,
         None => st.selection.objects.clone(),
     };
     let from_art = ids.iter().filter_map(|id| st.doc.node(*id)).find_map(|n| {
+        // Only a gradient needs the object measured for its placement.
+        let paint = n.proxy_paint_only(stroke, None)?;
+        if !matches!(paint, Paint::Gradient(_)) {
+            return Some(paint.clone());
+        }
         let (paint, to_doc, bounds) = n.proxy_paint(stroke, None)?;
         // Type's characters paint in its own space: a gradient there takes its placement in the
         // document, so that it keeps the direction it shows.
@@ -1066,7 +1071,7 @@ fn gradient_of(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<Librar
             let sw = s.doc()?.doc.swatch(name).filter(|w| matches!(w.paint, Paint::Gradient(_)));
             (Some(name.to_string()), sw.ok_or_else(|| bad(cmd, format!("no gradient swatch `{name}`")))?.paint.clone())
         }
-        None => (None, selected_paint(s, p, stroke)?),
+        None => (None, selected_paint(s, p, stroke, cmd)?),
     };
     let Paint::Gradient(mut g) = paint else {
         return Err(bad(cmd, if stroke { "the selection has no gradient stroke" } else { "the selection has no gradient fill" }));
@@ -1089,7 +1094,7 @@ fn pattern_of(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<Library
             _ if d.pattern(name).is_some() => name.to_string(),
             _ => return Err(bad(cmd, format!("no pattern swatch `{name}`"))),
         },
-        None => match selected_paint(s, p, stroke)? {
+        None => match selected_paint(s, p, stroke, cmd)? {
             Paint::Pattern { pattern, .. } => pattern,
             _ => return Err(bad(cmd, if stroke { "the selection has no pattern stroke" } else { "the selection has no pattern fill" })),
         },
@@ -1298,7 +1303,7 @@ fn use_pattern(s: &mut Session, data: &Value, stroke: bool) -> Result<String> {
     let choices = SwatchChoices::default();
     // The pattern's name in the document, worked out on a copy: nothing to add is no edit.
     let mut probe = (*s.doc()?.doc).clone();
-    let imported = clip.import_into(&mut probe, &choices, false);
+    let imported = clip.import_into(&mut probe, &choices, false)?;
     let renamed = imported.renamed.iter().find(|r| r["kind"] == "pattern" && r["from"] == name.as_str()).and_then(|r| r["to"].as_str());
     let target = renamed.unwrap_or(&name).to_string();
     let paint = vectorcraft_doc::pattern::pattern_paint(&target);
@@ -1310,7 +1315,7 @@ fn use_pattern(s: &mut Session, data: &Value, stroke: bool) -> Result<String> {
     in_one_step(s, |s| {
         if added {
             s.edit("Add to Swatches", |d, _| {
-                clip.import_into(d, &choices, false);
+                clip.import_into(d, &choices, false)?;
                 if !has_swatch(d) {
                     let swatch = d.free_swatch_name(&target);
                     d.swatches.push(vectorcraft_color::Swatch { name: swatch, paint: paint.clone(), global: false, spot: false });

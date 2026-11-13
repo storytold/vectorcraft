@@ -11,6 +11,7 @@ pub mod blend;
 pub mod cancel;
 pub mod clipnest;
 pub mod cmyk;
+pub mod color_mask;
 pub mod compound_shape;
 pub mod corners;
 pub mod depth;
@@ -19,6 +20,7 @@ pub mod graph;
 mod halftone_radii;
 pub mod hit;
 mod id_index;
+pub use id_index::tree_walks;
 pub mod inks;
 mod inline;
 pub mod intertwine;
@@ -31,8 +33,8 @@ pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
 pub use symbol_export_type::{SYMBOL_EXPORT_TYPE, SymbolExportType};
 pub use symbol_nine_slice::{
-    EditedNineSlice, MAX_SLICE_GROWTH, MIN_CENTER_BAND, NineSliceGuide, NineSliceMap, PAINTED_EFFECTS, SYMBOL_NINE_SLICE, SymbolNineSlice,
-    charge_symbol_art,
+    EditedNineSlice, MAX_GUIDE_FRACTION, MAX_SLICE_GROWTH, MIN_CENTER_BAND, NineSliceGuide, NineSliceMap, PAINTED_EFFECTS, SYMBOL_NINE_SLICE,
+    SymbolNineSlice, charge_symbol_art,
 };
 pub use symbol_overrides::SymbolOverride;
 pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
@@ -50,7 +52,7 @@ pub mod overprint;
 pub mod pattern;
 pub mod perspective;
 mod pixels;
-pub use pixels::{GraySource, MAX_RASTER_ALLOC};
+pub use pixels::{GraySource, MAX_RASTER_ALLOC, PixelPick};
 pub mod placed_document;
 pub mod plugin_data;
 pub mod profiles;
@@ -60,6 +62,7 @@ pub mod rastersettings;
 mod reach;
 pub mod recolor;
 pub mod selection;
+pub mod separated;
 pub mod setup;
 pub mod shaper;
 pub mod slices;
@@ -81,8 +84,8 @@ pub(crate) mod skip;
 
 pub use appearance::StrokeGradientMode;
 pub use appearance::{
-    AngleProfile, Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, PressureProfile, ProfilePreset,
-    SavedProfile, StrokeAlign, StrokeLayer, WidthProfile,
+    AngleProfile, Appearance, AppearanceItem, ArrowAlign, Arrowhead, CustomArrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, PressureProfile,
+    ProfilePreset, SavedProfile, StrokeAlign, StrokeLayer, WidthProfile,
 };
 pub use assets::ExportAsset;
 pub use compound_shape::ShapeMode;
@@ -108,7 +111,7 @@ pub use placed_document::{PageBox, PlacedDocument};
 pub use profiles::ColorProfiles;
 pub use puppet::{PuppetPin, PuppetPins};
 pub use rastersettings::{RasterColorModel, RasterEffectsSettings};
-pub use selection::{AnchorRef, SegmentRef, Selection};
+pub use selection::{AnchorRef, SegmentRef, Selection, SymbolPart};
 pub use setup::{Background, DocSetup, ExportText, GridSize, Quotes};
 pub use slices::{CellAlign, CellVAlign, Slice, SliceArea, SliceKind, SliceOptions, SliceSource};
 pub use style_libs::StyleLibrary;
@@ -116,10 +119,11 @@ pub use text::FontHeightReference;
 pub use text::GlyphChoice;
 pub use text::{
     AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,
-    JustificationOptions, Justify, Kinsoku, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, RubyAlign, RubyPosition,
-    RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextFlow, TextKind, TextObject, TextRun, TextStyleDef, TextWrap, VerticalAlign,
-    WrapShape,
+    JustificationOptions, Justify, Kinsoku, KinsokuShoriType, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, RubyAlign,
+    RubyPosition, RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextFlow, TextKind, TextObject, TextRun, TextStyleDef, TextWrap,
+    VerticalAlign, WrapShape,
 };
+pub use text::{CharClass, CompositeFont, CompositePart, CompositeParts};
 pub use trace::TraceView;
 pub use variables::{DataSet, DataValue, Variable, VariableKind, Variables};
 pub use vectorcraft_color as color;
@@ -140,7 +144,7 @@ mod limits;
 mod records;
 mod units;
 
-pub use artboard::{Artboard, LockedArtboards, RetiredArtboardId, VIDEO_PIXEL_ASPECT_RANGE, VIDEO_SAFE_INSETS};
+pub use artboard::{ARTBOARD_GAP, Artboard, ArtboardSide, LockedArtboards, RetiredArtboardId, VIDEO_PIXEL_ASPECT_RANGE, VIDEO_SAFE_INSETS};
 pub use canvas_range::BeyondCanvas;
 #[cfg(test)]
 use document_ext::free_id;
@@ -149,7 +153,7 @@ pub use guides::{GridPrefs, Guide, RulerMode};
 #[cfg(test)]
 use limits::MAX_NEXT_ID;
 pub use limits::{DocError, FORMAT_VERSION, MAX_COORD};
-pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, Symbol, SymbolEdit};
+pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, SvgFilter, Symbol, SymbolEdit};
 pub use units::{ColorMode, Unit, parse_number};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -194,6 +198,9 @@ pub struct Document {
     /// Paragraph styles (besides the built-in [Normal Paragraph Style]).
     #[serde(default, skip_serializing_if = "skip::is_empty_vec")]
     pub para_styles: Shared<Vec<TextStyleDef>>,
+    /// Type › Composite Fonts…: the composite fonts defined in the document, by name.
+    #[serde(default, skip_serializing_if = "skip::is_empty_vec")]
+    pub composite_fonts: Shared<Vec<CompositeFont>>,
     /// Threaded text: area-type frames one story flows through, in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub text_threads: Vec<Vec<NodeId>>,
@@ -202,8 +209,12 @@ pub struct Document {
     /// Object › Graph › Design…: art graphs can draw as markers.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub graph_designs: Vec<GraphDesign>,
-    #[serde(default)]
-    pub guides: Vec<Guide>,
+    /// The saved form of the ruler guides: read from a file, then made into
+    /// [`NodeKind::RulerGuide`] nodes on their layers ([`Document::guides_into_nodes`]), and
+    /// written from those nodes when saving ([`Document::guides_to_saved`]). Empty in between.
+    /// Each entry read counts as an object against the read's node budget.
+    #[serde(default, rename = "guides", deserialize_with = "crate::node::counted_list")]
+    saved_guides: Vec<Guide>,
     /// View → New View… (at most [`SavedView::MAX`]); saved with the document.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub views: Vec<SavedView>,
@@ -254,11 +265,11 @@ pub struct Document {
     /// File → Document Setup (bleed, transparency grid, paper, type options).
     #[serde(default, skip_serializing_if = "skip::is_default")]
     pub setup: DocSetup,
-    /// Layers panel → Paste Remembers Layers: pasted objects go back into the layers (by name)
-    /// they were copied from instead of the current layer.
+    /// Layers panel → Paste Remembers Layers: pasted objects go back into the layers and
+    /// sublayers they were copied from instead of the current layer.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub paste_remembers_layers: bool,
-    /// File → File Info (the title is [`Document::title`]).
+    /// File → File Info (its title is [`Document::info_title`]).
     #[serde(default, skip_serializing_if = "skip::is_default")]
     pub metadata: DocMetadata,
     /// Effect → Document Raster Effects Settings besides the resolution
@@ -309,6 +320,10 @@ pub struct Document {
     /// given) SVG export links with `<script>` elements, in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub svg_scripts: Vec<String>,
+    /// Effect › SVG Filters: the SVG filters the document holds (at most [`SvgFilter::MAX`]), in
+    /// the order the submenu lists them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub svg_filters: Vec<SvgFilter>,
     /// Puppet Warp pins on the selected artwork while the tool edits it ([`PuppetPins`]): editing
     /// state, never saved.
     #[serde(skip)]
@@ -326,10 +341,15 @@ pub struct Document {
     #[serde(skip)]
     pub retired_artboard_id: RetiredArtboardId,
     /// The id of the artboard an imported file names as its active one (a `.ai` file's
-    /// `CropAreaActive`): the document opens with that artboard active. `None`: the first. Never
-    /// saved.
+    /// `CropAreaActive`): the document opens with that artboard active. A `.ai` save or export
+    /// names it as the file's active artboard. `None`: the first. Native files do not keep it.
     #[serde(skip)]
     pub opened_artboard: Option<u32>,
+    /// The file this document was read from recorded its units (a `.ai` file's
+    /// `%AI5_RulerUnits`): it opens in them. A file that records none opens in Preferences ›
+    /// Units › General (#5820). Native files do not keep it: they always keep their units.
+    #[serde(skip)]
+    pub units_from_file: bool,
     /// Some object is a dimension (the Dimension tool): edits refresh dimensions only while this
     /// is set, so documents without any pay nothing for them.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -337,6 +357,9 @@ pub struct Document {
     /// Where each node is in the tree, for lookups by id ([`id_index`]): a cache, never saved.
     #[serde(skip)]
     index: id_index::IdIndex,
+    /// The ruler guides as [`Document::ruler_guides`] lists them: a cache, never saved.
+    #[serde(skip)]
+    guide_cache: document_guides::GuideCache,
 }
 
 fn ppi72() -> f64 {

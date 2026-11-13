@@ -3,15 +3,14 @@ use super::handlers::{
     Args, absolute_path, add_text, answer_dialog, apply_paint, draw_path, draw_shape, exec, image_result, max_side, need_ui, req_str, screenshot,
     select_ids, transform,
 };
-use super::{ARTBOARD_PARAMS, Backend, Map, ToolResult, Value, format, json, save_reads_option, writable_format};
+use super::{ARTBOARD_PARAMS, Backend, Map, ToolResult, Value, json, writable_format};
 
 /// The `menu` argument of the command listings.
 pub(super) const MENU_FILTER: &str =
     "Case-insensitive substring of the menu path, its levels joined with \" > \" (e.g. \"Object\", \"Object > Path\")";
 
 /// The `brief` argument of the command listings.
-pub(super) const BRIEF: &str =
-    "Leave out each command's params description (the bulk of the catalogue); run command_list with the id as filter to read it";
+pub(super) const BRIEF: &str = "Leave out each command's params description and its schema and inputSchema (the bulk of the catalogue); run command_list with the id as filter to read them";
 
 /// The `max_side` argument of the window captures.
 pub(super) const MAX_SIDE_WINDOW: &str =
@@ -30,7 +29,7 @@ pub(super) fn trace_views(a: &Args) -> Result<bool, String> {
 
 /// The command catalogue narrowed by the listing tools' arguments: `filter` (or `query`) on the
 /// id, label and menu path, `menu` on the menu path, `enabledOnly`, and `brief` (no `params`
-/// text: the full catalogue is too large for many clients, #2173).
+/// text, `schema` or `inputSchema`: the full catalogue is too large for many clients, #2173).
 fn filter_commands(all: Value, a: &Args) -> Value {
     let text = |k: &str| a.get(k).and_then(Value::as_str).map(str::to_lowercase).filter(|s| !s.is_empty());
     let needle = text("filter").or_else(|| text("query"));
@@ -63,7 +62,9 @@ fn filter_commands(all: Value, a: &Args) -> Value {
             .filter(hit)
             .map(|mut c| {
                 if brief && let Some(o) = c.as_object_mut() {
-                    o.remove("params");
+                    for key in ["params", "schema", "inputSchema"] {
+                        o.remove(key);
+                    }
                 }
                 c
             })
@@ -191,7 +192,13 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
         "screenshot" => screenshot(b, a),
         "open_file" => {
             let path = absolute_path(b, req_str(a, "path")?)?;
-            j(b.call("app.open", json!({"path": path}))?)
+            let mut p = json!({"path": path});
+            for k in ["importer", "params"] {
+                if let Some(v) = a.get(k).filter(|v| !v.is_null()) {
+                    p[k] = v.clone();
+                }
+            }
+            j(b.call("app.open", p)?)
         }
         "save_file" => {
             let mut p = json!({"path": a.get("path").and_then(Value::as_str).map(|p| absolute_path(b, p)).transpose()?});
@@ -205,14 +212,7 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             if b.has_ui() {
                 p["wait"] = json!(true);
             }
-            let mut r = b.call("app.save", p)?;
-            let notes = save_file_warnings(a, r.get("format").and_then(Value::as_str));
-            if let Some(o) = r.as_object_mut().filter(|_| !notes.is_empty()) {
-                let mut all = o.get("warnings").and_then(Value::as_array).cloned().unwrap_or_default();
-                all.extend(notes.into_iter().map(Value::from));
-                o.insert("warnings".into(), Value::Array(all));
-            }
-            j(r)
+            j(b.call("app.save", p)?)
         }
         "export" => {
             // One params object for every backend; the named arguments win over `options` (a named
@@ -288,21 +288,6 @@ fn named_export_params(a: &Args) -> &'static [&'static str] {
     } else {
         &["path", "format", "artboard", "range", "outlineText"]
     }
-}
-
-/// What `save_file` with arguments `a` adds to the save's `warnings`, for a file written in format
-/// `written` (none when nothing was written yet): each key in `options` that the format doesn't
-/// read. The save itself warns about `compress`, `version`, `preview` and `precision` given at the
-/// top level.
-fn save_file_warnings(a: &Args, written: Option<&str>) -> Vec<String> {
-    let Some(f) = written.and_then(format) else { return vec![] };
-    let nested = a.get("options").and_then(Value::as_object);
-    nested
-        .into_iter()
-        .flatten()
-        .filter(|(key, v)| !v.is_null() && !save_reads_option(f, key))
-        .map(|(key, _)| format!("`options.{key}` was not used: {} files don't read it", f.label))
-        .collect()
 }
 
 /// Run one tool. Failures (unknown tool, bad arguments, command errors) come back as an

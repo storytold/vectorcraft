@@ -11,7 +11,7 @@ use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, BezPath, Rect, Shape, Vec2};
 
 use super::{MAX_NEST, Writer, Xy};
-use crate::ai_ops::{average, unit};
+use crate::ai_ops::{self, average, unit};
 use crate::ps;
 
 pub(in crate::ai_editing) const GRADIENTS: &str =
@@ -21,6 +21,8 @@ pub(in crate::ai_editing) const SWATCH_PLACEMENT: &str =
     "the placement of pattern swatches that move, turn or scale their pattern is left out of the editing data for other apps";
 pub(in crate::ai_editing) const GRADIENT_MIX: &str =
     "gradients that mix their colors perceptually or dither are written as classic gradients in the editing data for other apps";
+pub(in crate::ai_editing) const CONIC: &str =
+    "conic gradients are written as linear gradients along their vector, with the same stops, in the editing data for other apps";
 pub(in crate::ai_editing) const STOP_LINKS: &str =
     "gradient stops linked to global process colors are written as their colors in the editing data for other apps";
 /// The length of a linear gradient's caps (`Bc`): the canvas's side.
@@ -43,10 +45,21 @@ pub(super) struct PatternOut {
     used: bool,
 }
 
-/// Can `g` be written as a gradient (a linear or radial one with stops, no more than the `.ai`
-/// reader reads)?
+pub(in crate::ai_editing) const DIAMOND: &str =
+    "diamond gradients are written as radial gradients through their corners, with the same stops, in the editing data for other apps";
+pub(in crate::ai_editing) const SPREAD: &str = "gradients that repeat or reflect are written with their stops repeated across the shape (at most 256 stops, padding past them) in the editing data for other apps";
+
+/// Can `g` be written as a gradient (a linear, radial, conic or diamond one with stops, no more
+/// than the `.ai` reader reads; a conic is written linear, [`CONIC`], and a diamond radial,
+/// [`DIAMOND`])?
 fn writable_gradient(g: &Gradient) -> bool {
     g.kind != GradientKind::Freeform && !g.stops.is_empty() && g.stops.len() <= crate::import::MAX_GRADIENT_STOPS
+}
+
+/// Is a gradient of `kind` written as a radial one: a radial gradient, or a diamond (the ellipse
+/// through its square's corners, [`DIAMOND`])?
+fn written_radial(kind: GradientKind) -> bool {
+    matches!(kind, GradientKind::Radial | GradientKind::Diamond)
 }
 
 /// The first name of `Gradient`, `Gradient 2`, `Gradient 3`, … numbered `next` or higher for
@@ -73,11 +86,13 @@ impl Writer<'_> {
     pub(in crate::ai_editing) fn reserve_swatch_gradients(&mut self) {
         let doc = self.doc;
         for sw in doc.swatches_iter() {
+            // As `swatch_paint` writes it: the stops of one that repeats or reflects repeated.
             if let Paint::Gradient(g) = &sw.paint
-                && writable_gradient(&g.gradient)
+                && let gradient = g.gradient.unrolled_within(crate::import::MAX_GRADIENT_STOPS)
+                && writable_gradient(&gradient)
                 && !self.gradients.iter().any(|d| d.name == sw.name)
             {
-                self.gradients.push(GradientDef { name: sw.name.clone(), gradient: g.gradient.clone(), swatch: true, used: false });
+                self.gradients.push(GradientDef { name: sw.name.clone(), gradient: gradient.into_owned(), swatch: true, used: false });
             }
         }
     }
@@ -103,14 +118,49 @@ impl Writer<'_> {
         name
     }
 
+    /// The gradient definitions' state, for [`Self::gradient_rollback`]: their count, which ones the
+    /// art uses, and the next name's number.
+    pub(super) fn gradient_mark(&self) -> (usize, Vec<bool>, u64) {
+        (self.gradients.len(), self.gradients.iter().map(|d| d.used).collect(), self.next_gradient)
+    }
+
+    /// The gradient definitions as they were at `mark` ([`Self::gradient_mark`]).
+    pub(super) fn gradient_rollback(&mut self, mark: (usize, Vec<bool>, u64)) {
+        let (len, used, next) = mark;
+        self.gradients.truncate(len);
+        for (d, u) in self.gradients.iter_mut().zip(used) {
+            d.used = u;
+        }
+        self.next_gradient = next;
+    }
+
     /// `p` as the paint of a fill or stroke whose gradient is placed on `bounds`: a gradient is
     /// placed there (it then no longer depends on the shape it paints, which may be cut); one the
     /// data can't hold is its average color, with a warning.
     pub(super) fn placed(&mut self, p: &Paint, bounds: Rect) -> Paint {
+        self.placed_over(p, bounds, bounds)
+    }
+
+    /// [`Self::placed`] for paint that reaches `area`: a gradient that repeats or reflects is
+    /// written with its stops repeated over `area`.
+    fn placed_over(&mut self, p: &Paint, bounds: Rect, area: Rect) -> Paint {
         let Paint::Gradient(g) = p else { return p.clone() };
-        let geom = g.resolve(bounds);
+        let mut geom = g.resolve(bounds);
+        // The data has no spread: a gradient that repeats or reflects is written with its stops
+        // repeated over `area` (a conic one, written linear, around its turn).
+        let mut g: GradientPaint = (**g).clone();
+        if g.gradient.is_spread() {
+            self.warn(SPREAD);
+            match g.gradient.padded_within(&geom, area, crate::import::MAX_GRADIENT_STOPS) {
+                Some(padded) => {
+                    g.gradient = padded.gradient;
+                    geom = padded.geom;
+                }
+                None => g.gradient = g.gradient.unrolled_within(crate::import::MAX_GRADIENT_STOPS).into_owned(),
+            }
+        }
         let finite = [geom.start.x, geom.start.y, geom.end.x, geom.end.y, geom.aspect].iter().all(|v| v.is_finite());
-        let radial = g.gradient.kind == GradientKind::Radial;
+        let radial = written_radial(g.gradient.kind);
         if g.gradient.kind == GradientKind::Freeform {
             self.warn(GRADIENTS);
             return Paint::solid(average(&g.gradient));
@@ -119,13 +169,16 @@ impl Writer<'_> {
             self.warn(GRADIENT_SHAPES);
             return Paint::solid(average(&g.gradient));
         }
-        Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..(**g).clone() }))
+        Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..g }))
     }
 
-    /// The fills and strokes of `n` that paint (outline `bounds`), their gradients placed
-    /// ([`Self::placed`]): a fill's on the shape's bounds, a stroke's on what it paints. A gradient
-    /// along or across a stroke is its average color (the stroke is written as its outline).
-    pub(super) fn items(&mut self, n: &vectorcraft_doc::Node, bounds: Rect) -> Vec<AppearanceItem> {
+    /// The fills and strokes of `n` that paint (outline `bp`), their gradients placed
+    /// ([`Self::placed`]): a fill's on the shape's bounds, a stroke's on what it paints, the stops
+    /// of one that repeats or reflects repeated over the box the stroke paints, miter spikes
+    /// included ([`StrokeLayer::bounds_on`]). A gradient along or across a stroke is its average
+    /// color (the stroke is written as its outline).
+    pub(super) fn items(&mut self, n: &vectorcraft_doc::Node, bp: &BezPath) -> Vec<AppearanceItem> {
+        let bounds = bp.bounding_box();
         super::visible_items(n)
             .into_iter()
             .map(|i| match i {
@@ -136,7 +189,11 @@ impl Writer<'_> {
                             self.warn(GRADIENTS);
                             Paint::solid(average(&g.gradient))
                         }
-                        None => self.placed(&s.paint, s.paint_bounds(bounds)),
+                        None => {
+                            let spread = matches!(&s.paint, Paint::Gradient(g) if g.gradient.is_spread());
+                            let reach = if spread { s.bounds_on(bp, bounds) } else { bounds };
+                            self.placed_over(&s.paint, s.paint_bounds(bounds), reach)
+                        }
                     };
                     AppearanceItem::Stroke(StrokeLayer { paint, ..s.clone() })
                 }
@@ -222,24 +279,11 @@ impl Writer<'_> {
     /// last stop; a radial one's `… Bm` (the unit circle onto its extent ellipse).
     fn instance(&mut self, g: &GradientPaint, stroke: bool, clip: bool, path: &BezPath) {
         let Some(geom) = g.geom else { return };
-        let name = self.define_gradient(&g.gradient, g.swatch.as_deref());
         self.line(if stroke { "1 Bb" } else { "Bb" });
+        self.instance_head(g, clip, path);
         let m = self.grad_space;
         let u = geom.end - geom.start;
-        let radial = g.gradient.kind == GradientKind::Radial;
-        let place = placement(&geom, radial, &(self.canvas * path.clone()), self.canvas);
-        if radial {
-            let c = m * geom.start;
-            let off = geom.focal.map_or(Vec2::ZERO, |f| m * f - c);
-            let (angle, fraction) = if off.hypot() > 1e-9 { place.focal } else { (0.0, 0.0) };
-            let off = if fraction > 0.0 { off } else { Vec2::ZERO };
-            ps::push_nums(&mut self.body, &[off.x, off.y, angle, fraction]);
-            self.line("Bh");
-        }
-        let _ = write!(self.body, "{} {} ", u8::from(!clip), ps::bytes(name.as_bytes()));
-        ps::push_nums(&mut self.body, &place.bg);
-        ps::push_nums(&mut self.body, &place.transform.as_coeffs());
-        self.line("1 Bg");
+        let radial = written_radial(g.gradient.kind);
         // The unit vector along the gradient, and across it as long.
         let frame = |from: f64, to: f64| {
             let p = geom.start + u * from;
@@ -267,6 +311,33 @@ impl Writer<'_> {
         matrix(frame(last, last + CAP / len), "Bc");
     }
 
+    /// A gradient instance's focal point (`Bh`, radial gradients only) and its `Bg` line, as
+    /// [`Self::instance`] writes them; also what a fill's art style holds after its `Bb`.
+    pub(super) fn instance_head(&mut self, g: &GradientPaint, clip: bool, path: &BezPath) {
+        let Some(mut geom) = g.geom else { return };
+        if g.gradient.kind != GradientKind::Radial {
+            // Only a radial gradient has a focal point (a plug-in's or a file's other kinds can
+            // carry one that draws nothing): a diamond's circle stays centered.
+            geom.focal = None;
+        }
+        let name = self.define_gradient(&g.gradient, g.swatch.as_deref());
+        let m = self.grad_space;
+        let radial = written_radial(g.gradient.kind);
+        let place = placement(&geom, radial, &(self.canvas * path.clone()), self.canvas);
+        if radial {
+            let c = m * geom.start;
+            let off = geom.focal.map_or(Vec2::ZERO, |f| m * f - c);
+            let (angle, fraction) = if off.hypot() > 1e-9 { place.focal } else { (0.0, 0.0) };
+            let off = if fraction > 0.0 { off } else { Vec2::ZERO };
+            ps::push_nums(&mut self.body, &[off.x, off.y, angle, fraction]);
+            self.line("Bh");
+        }
+        let _ = write!(self.body, "{} {} ", u8::from(!clip), ps::bytes(name.as_bytes()));
+        ps::push_nums(&mut self.body, &place.bg);
+        ps::push_nums(&mut self.body, &place.transform.as_coeffs());
+        self.line("1 Bg");
+    }
+
     /// A gradient definition: `%AI5_BeginGradient: (name)`, `(name) type stops Bd` (type 0 linear,
     /// 1 radial), `[`, each stop on a `%_` line (`color style opacity 6 midpoint rampPoint Bs`), a
     /// linear gradient's from the last to the first and a radial one's from the first to the last,
@@ -275,8 +346,14 @@ impl Writer<'_> {
         if d.gradient.dither || !d.gradient.method.is_classic() {
             self.warn(GRADIENT_MIX);
         }
+        if d.gradient.kind == GradientKind::Conic {
+            self.warn(CONIC);
+        }
+        if d.gradient.kind == GradientKind::Diamond {
+            self.warn(DIAMOND);
+        }
         let name = ps::bytes(d.name.as_bytes());
-        let radial = d.gradient.kind == GradientKind::Radial;
+        let radial = written_radial(d.gradient.kind);
         let _ = writeln!(s, "%AI5_BeginGradient: {name}\n{name} {} {} Bd\n[", u8::from(radial), d.gradient.stops.len());
         let mut stops = sorted_stops(&d.gradient);
         if !radial {
@@ -294,7 +371,11 @@ impl Writer<'_> {
     /// A stop's color and its style: gray `lightness 0`, CMYK `c m y k 1`, RGB (and Lab, as RGB)
     /// `c m y k r g b 2` with its CMYK equivalent; a spot color its full color's CMYK equivalent,
     /// then its RGB values when it isn't CMYK, its name and how much lighter than the full color,
-    /// then `3` (CMYK), or `1 4` (RGB, and Lab as RGB).
+    /// then `3` (CMYK), or `1 4` (RGB, and Lab as RGB). RGB values are an RGB color's own (in the
+    /// working RGB space) and a Lab color's display RGB ([`ai_ops::rgb_values`]). An RGB color's CMYK
+    /// equivalent is converted from its values as written ([`ai_ops::as_written`]), a Lab color's
+    /// from its Lab values, and a spot color's CMYK equivalent and RGB values both come from its full
+    /// color as the palette writes it.
     fn stop_color(&mut self, s: &mut String, stop: &GradientStop) {
         let doc = self.doc;
         let intent = self.cms.settings().intent;
@@ -303,11 +384,12 @@ impl Writer<'_> {
             && let Paint::Solid { color: full, swatch: None, .. } = sw.paint
         {
             if sw.spot {
+                let full = ai_ops::as_written(full);
                 let cmyk = self.cms.to_cmyk(&doc.linked_color(full, true), intent).map(unit);
                 ps::push_nums(s, &cmyk.map(f64::from));
                 let rgb = !matches!(full, Color::Cmyk { .. });
                 if rgb {
-                    ps::push_nums(s, &full.to_rgb().map(|v| f64::from(unit(v))));
+                    ps::push_nums(s, &ai_ops::rgb_values(full).map(f64::from));
                 }
                 s.push_str(&ps::bytes(name.as_bytes()));
                 s.push(' ');
@@ -329,9 +411,10 @@ impl Writer<'_> {
                 s.push_str("1 ");
             }
             color @ (Color::Rgb { .. } | Color::Lab { .. }) => {
-                let cmyk = self.cms.to_cmyk(&color, intent).map(unit);
+                let source = if matches!(color, Color::Rgb { .. }) { ai_ops::as_written(color) } else { color };
+                let cmyk = self.cms.to_cmyk(&source, intent).map(unit);
                 ps::push_nums(s, &cmyk.map(f64::from));
-                ps::push_nums(s, &color.to_rgb().map(|v| f64::from(unit(v))));
+                ps::push_nums(s, &ai_ops::rgb_values(color).map(f64::from));
                 s.push_str("2 ");
             }
         }
@@ -341,9 +424,10 @@ impl Writer<'_> {
 
     /// Can pattern `name` be written as a definition and painted with from here: the document has
     /// it, its tiles make a grid, its art is within its tile and holds something, and it isn't used
-    /// in another pattern's tile or nested more than [`MAX_NEST`] deep?
+    /// in another pattern's tile or a symbol's art (the reader keeps no symbol whose art paints with
+    /// a pattern) or nested more than [`MAX_NEST`] deep?
     pub(super) fn pattern_writable(&self, name: &str) -> bool {
-        if !self.defining.is_empty() || self.nest >= MAX_NEST {
+        if !self.defining.is_empty() || self.nest >= MAX_NEST || self.in_symbol {
             return false;
         }
         if self.patterns.iter().any(|p| p.name == name) {
@@ -355,7 +439,8 @@ impl Writer<'_> {
     /// Write pattern `name`'s definition, once: `%AI3_BeginPattern: (name)`, `(name) llx lly urx
     /// ury` (the tile, y up), the tile's box (an unpainted path whose dictionary marks it,
     /// `AIPattern_Editor_Backing_Tile_Rect`) and the art on `%_` lines, `E`, `%AI3_EndPattern`.
-    /// False when it can't be ([`Self::pattern_writable`]).
+    /// False when it can't be ([`Self::pattern_writable`]), or when its box and art don't all fit
+    /// within the object limit ([`Self::take_objects`]).
     fn define_pattern(&mut self, name: &str) -> bool {
         if !self.pattern_writable(name) {
             return false;
@@ -366,7 +451,9 @@ impl Writer<'_> {
             return true;
         }
         let doc = self.doc;
-        let Some(def) = doc.pattern(name) else { return false };
+        // The tile's box is an object of the definition ([`Self::take_objects`]).
+        let (before, bound) = (self.charges(), self.bound.len());
+        let Some(def) = doc.pattern(name).filter(|_| self.take_objects(1)) else { return false };
         self.defining.push(name.to_string());
         // The art is written in the pattern's space, y up, from the state a definition starts in.
         let saved = (
@@ -389,15 +476,24 @@ impl Writer<'_> {
         self.line("n\n%_/ArtDictionary :\n%_1 /Bool (AIPattern_Editor_Backing_Tile_Rect) ,\n%_;\n%_");
         self.nest += 1;
         self.hidden += 1;
+        // The tile's effects are its own, not those of a drawn look that first uses it.
+        let in_look = std::mem::take(&mut self.in_look);
         for a in &def.art {
             self.node(a);
         }
+        self.in_look = in_look;
         self.hidden -= 1;
         self.nest -= 1;
         let art;
         (art, (self.to_art, self.grad_space, self.canvas), self.state, self.gs, self.clip, self.block_end) = saved;
         let art = std::mem::replace(&mut self.body, art);
         self.defining.pop();
+        if self.left_out_since(before) {
+            self.give_back(before, &art);
+            self.bound.truncate(bound);
+            return false;
+        }
+        self.keep_since(before);
         let tile = Affine::FLIP_Y.transform_rect_bbox(def.tile);
         let quoted = ps::bytes(name.as_bytes());
         let mut text = format!("%AI3_BeginPattern: {quoted}\n{quoted} ");
@@ -460,12 +556,21 @@ impl Writer<'_> {
     /// `(name) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p`. False for other paint, and for paint that can't
     /// be written.
     pub(super) fn swatch_paint(&mut self, s: &mut String, sw: &vectorcraft_color::swatch::Swatch) -> bool {
+        // A swatch has no placement: one that repeats or reflects holds its stops repeated along
+        // its vector.
+        let unrolled = match &sw.paint {
+            Paint::Gradient(g) => Some(g.gradient.unrolled_within(crate::import::MAX_GRADIENT_STOPS)),
+            _ => None,
+        };
         match &sw.paint {
-            Paint::Gradient(g) if writable_gradient(&g.gradient) => {
+            Paint::Gradient(g) if unrolled.as_deref().is_some_and(writable_gradient) => {
+                if g.gradient.is_spread() {
+                    self.warn(SPREAD);
+                }
                 let swatch = Some(sw.name.as_str());
-                let name = self.define_gradient(&g.gradient, swatch);
+                let name = self.define_gradient(unrolled.as_deref().unwrap_or(&g.gradient), swatch);
                 s.push_str("Bb\n");
-                if g.gradient.kind == GradientKind::Radial {
+                if written_radial(g.gradient.kind) {
                     s.push_str("0 0 0 0 Bh\n");
                 }
                 let _ = writeln!(s, "2 {} 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB", ps::bytes(name.as_bytes()));

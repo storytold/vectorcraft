@@ -1,7 +1,7 @@
 use super::writer::Writer;
 use super::{
-    Affine, AreaOptions, BezPath, CharPosition, CharStyle, Gradient, GradientKind, Paint, ParaStyle, PathEffect, StrokeLayer, TextKind, TextObject,
-    Write, latin, ps, stroke,
+    Affine, AreaOptions, BezPath, CharPosition, CharStyle, CompositeFont, Document, Gradient, GradientKind, Paint, ParaStyle, PathAlign, PathEffect,
+    StrokeLayer, TextKind, TextObject, Write, latin, ps, stroke,
 };
 
 /// A gradient definition: `%AI5_BeginGradient: (name)`, `(name) type stops Bd`, `[`, the stops
@@ -41,8 +41,12 @@ pub(super) fn gradient_def(s: &mut String, w: &Writer, name: &str, g: &Gradient)
                 s.push_str(" 3 ");
             }
         }
-        ps::push_nums(s, &[f64::from(stop.midpoint) * 100.0, f64::from(stop.offset) * 100.0]);
-        s.push_str("%_Bs\n");
+        // The ramp point to five decimals of its percent: a gradient's stops repeated many times
+        // keep their places in each run.
+        ps::push_num(s, f64::from(stop.midpoint) * 100.0);
+        s.push(' ');
+        ps::push_num_places(s, f64::from(stop.offset) * 100.0, 5);
+        s.push_str(" %_Bs\n");
     }
     s.push_str("BD\n%AI5_EndGradient\n");
 }
@@ -78,10 +82,11 @@ pub(super) fn latin_string(name: &str) -> String {
     ps::bytes(&bytes)
 }
 
-/// Can type `t` be written as text: 8-bit text can hold it ([`holds_as_text`]) and no character
-/// is rotated ([`rotated`])?
-pub(super) fn writable(t: &TextObject) -> bool {
-    holds_as_text(t) && !rotated(t)
+/// Can type `t` of document `doc` be written as text: 8-bit text can hold it ([`holds_as_text`]),
+/// no character is rotated ([`rotated`]) and no run is set in one of the document's composite
+/// fonts, which a reader can't find by its name?
+pub(super) fn writable(doc: &Document, t: &TextObject) -> bool {
+    holds_as_text(t) && !rotated(t) && !t.runs.iter().any(|r| CompositeFont::named(&doc.composite_fonts, &r.style.font_family).is_some())
 }
 
 /// Has type `t` visible characters with Character Rotation? A legacy `.ai` text object's character
@@ -114,6 +119,8 @@ pub(super) fn lost_attributes(t: &TextObject) -> bool {
     let run_lost = |s: &CharStyle| {
         s.underline
             || s.strikethrough
+            || s.kerning.is_some_and(|k| k != 0.0)
+            || s.optical_kerning
             || s.small_caps.is_some()
             || s.position != CharPosition::Normal
             || !s.features.is_empty()
@@ -122,8 +129,28 @@ pub(super) fn lost_attributes(t: &TextObject) -> bool {
     let para_lost = |p: &ParaStyle| p.space_after != 0.0 || !p.tabs.is_empty() || p.list.is_some();
     t.runs.iter().any(|r| run_lost(&r.style))
         || t.paragraph_styles().iter().any(para_lost)
+        || t.optical_margin
+        || t.system_layout
+        || !t.fractional_widths
         || (matches!(t.kind, TextKind::Area { .. }) && t.area != AreaOptions::default())
-        || (matches!(t.kind, TextKind::OnPath { .. }) && (t.path_effect != PathEffect::default() || t.path_spacing != 0.0))
+        || (matches!(t.kind, TextKind::OnPath { .. })
+            && (t.path_effect != PathEffect::default() || t.path_align != PathAlign::default() || t.path_spacing != 0.0 || end_bracket(t)))
+        || several_paths(&t.kind)
+}
+
+/// Does type on a path `t` end before its path does (an open path's end, or once around a
+/// closed path)? A legacy `.ai` text path holds where the type starts and no end (§15).
+fn end_bracket(t: &TextObject) -> bool {
+    let (TextKind::OnPath { path, .. }, Some((start, end))) = (&t.kind, t.kind.path_span()) else { return false };
+    let reach = if path.is_closed() { end - start } else { end };
+    reach < 1.0 - 1e-9
+}
+
+/// Has the frame of area type, or the path of type on a path, `kind` more than one subpath with
+/// anchors? A legacy `.ai` text object is written with the first one only.
+fn several_paths(kind: &TextKind) -> bool {
+    let (TextKind::Area { frame: path } | TextKind::OnPath { path, .. }) = kind else { return false };
+    path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).count() > 1
 }
 
 /// The font type in style `st` is set in: its PostScript name, whether it's TrueType, and its
@@ -178,7 +205,9 @@ pub(super) fn segment_point(path: &BezPath, fraction: f64) -> f64 {
 pub(super) fn direct_fill(p: &Paint) -> bool {
     match p {
         Paint::Solid { .. } => true,
-        Paint::Gradient(g) => g.gradient.kind != GradientKind::Freeform && !g.gradient.stops.is_empty(),
+        Paint::Gradient(g) => {
+            !matches!(g.gradient.kind, GradientKind::Freeform | GradientKind::Conic | GradientKind::Diamond) && !g.gradient.stops.is_empty()
+        }
         _ => false,
     }
 }

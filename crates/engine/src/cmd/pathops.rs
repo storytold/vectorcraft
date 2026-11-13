@@ -14,9 +14,10 @@ use vectorcraft_pathops as po;
 use vectorcraft_pathops::{BoolOp, PathfinderOp};
 
 use super::edit::selected_roots;
+use super::expand::{fill_shape, reshaped, seeded};
 use super::{
-    CommandSpec, EngineError, Result, Session, always, bad, bool_or, checked_ids_or_selection, cmd, has_doc, has_selected_path, has_selection,
-    number_or, str_param, switch_or,
+    CommandSpec, EngineError, Result, Session, always, bad, check_switches, checked_ids_or_selection, cmd, has_doc, has_selected_path, has_selection,
+    number_or, switch_or, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -134,7 +135,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Outline Stroke",
             ["Object", "Path"],
             None,
-            "{} replace stroked paths with filled outlines → {ids}",
+            "{} replace stroked paths with filled outlines; a dimension whose lines are outlined becomes a plain group of its art, except one selected with art it measures, directly or in groups without fills, strokes or effects of their own: its lines stay as they are, and if the outlined art no longer fits its link it stays where it was, no longer linked → {ids}",
             has_selection,
             outline_stroke
         ),
@@ -218,6 +219,41 @@ pub(crate) fn len_param(p: &Value, key: &str) -> Option<f64> {
         Value::String(s) => vectorcraft_doc::Unit::Points.parse(s).filter(|v| v.is_finite()).or_else(|| num_param(p, key)),
         _ => num_param(p, key),
     }
+}
+
+/// The number `p` gives `cmd` for `key`, or `None` when `p` leaves it out or gives null. A string
+/// counts only when all of it is a number (`"20"`). Any other value, such as `true`, `"wide"` or
+/// `"20abc"`, is an error: "`{key}` must be a number, not {v}".
+pub(crate) fn number_given(p: &Value, key: &str, cmd: &str) -> Result<Option<f64>> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => match v {
+            Value::String(s) => whole_number(s),
+            _ => num_param(p, key),
+        }
+        .map(Some)
+        .ok_or_else(|| bad(cmd, format!("`{key}` must be a number, not {v}"))),
+    }
+}
+
+/// The distance `p` gives `cmd` for `key`, or `None` when `p` leaves it out or gives null. A string
+/// counts only when all of it is a length that [`vectorcraft_doc::Unit::parse`] reads (`"5 mm"`) or a
+/// number. Any other value, such as `"20abc"`, is an error, as [`number_given`] gives it.
+pub(crate) fn length_given(p: &Value, key: &str, cmd: &str) -> Result<Option<f64>> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => match v {
+            Value::String(s) => vectorcraft_doc::Unit::Points.parse(s).filter(|v| v.is_finite()).or_else(|| whole_number(s)),
+            _ => num_param(p, key),
+        }
+        .map(Some)
+        .ok_or_else(|| bad(cmd, format!("`{key}` must be a number, not {v}"))),
+    }
+}
+
+/// `s` as a finite number when all of it, spaces around it aside, is one.
+fn whole_number(s: &str) -> Option<f64> {
+    s.trim().parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
 fn ids_json(ids: &[NodeId]) -> Value {
@@ -307,7 +343,7 @@ pub(crate) fn pf_leaves(d: &Document, n: &Node, out: &mut Vec<Node>) {
     match &n.kind {
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
             let hook = |c: &Node| vectorcraft_render::effects::outline_object(Some(d), c);
-            match vectorcraft_render::effects::compound_shape_art(n, Some(&hook)) {
+            match vectorcraft_render::effects::compound_shape_art(Some(d), n, Some(&hook)) {
                 Some(art) => out.push(art),
                 None => children.iter().for_each(|c| pf_leaves(d, c, out)),
             }
@@ -683,21 +719,22 @@ fn run_pf(s: &mut Session, p: &Value, op: PathfinderOp) -> Result<Value> {
 /// Pathfinder panel › Trap ([`vectorcraft_render::effects::trap`]): the traps between the selected
 /// objects' leaf shapes, as one group of overprinting paths above the topmost selected object.
 fn trap(s: &mut Session, p: &Value) -> Result<Value> {
-    use vectorcraft_render::effects::trap::{TRAP_LABEL, TrapOptions, TrapSource, trap_appearance, traps};
+    use vectorcraft_render::effects::trap::{TRAP_LABEL, TrapOptions, TrapSource, trap_appearance, try_traps};
     const ID: &str = "object.pathfinder.trap";
     let mut q = p.clone();
-    if let Some(t) = len_param(p, "thickness") {
+    if let Some(t) = length_given(p, "thickness", ID)? {
         if !(po::TRAP_MIN_WIDTH..=po::TRAP_MAX_WIDTH).contains(&t) {
             return Err(bad(ID, "thickness must be from 0.01 to 5000 pt"));
         }
         q["thickness"] = json!(t);
     }
-    if num_param(p, "heightWidth").is_some_and(|v| !(1.0..=1000.0).contains(&v)) {
+    if number_given(p, "heightWidth", ID)?.is_some_and(|v| !(1.0..=1000.0).contains(&v)) {
         return Err(bad(ID, "heightWidth must be from 1 to 1000 %"));
     }
-    if num_param(p, "tintReduction").is_some_and(|v| !(0.0..=100.0).contains(&v)) {
+    if number_given(p, "tintReduction", ID)?.is_some_and(|v| !(0.0..=100.0).contains(&v)) {
         return Err(bad(ID, "tintReduction must be from 0 to 100 %"));
     }
+    check_switches(p, &["trapsWithProcessColor", "reverseTraps"], ID)?;
     // The effect-only settings stay at their defaults.
     if let Some(o) = q.as_object_mut() {
         o.remove("precision");
@@ -721,7 +758,12 @@ fn trap(s: &mut Session, p: &Value) -> Result<Value> {
         if sources.iter().filter(|s| s.fill.color().is_some()).count() < 2 {
             return Err(EngineError::Other("Trap: select two or more objects filled with solid colours".into()));
         }
-        let made = traps(&sources, &options);
+        let Some(made) = try_traps(&sources, &options) else {
+            return Err(EngineError::Other(format!(
+                "Trap: more than {} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time",
+                vectorcraft_render::effects::trap::MAX_NEAR_PAIRS
+            )));
+        };
         if made.is_empty() {
             return Err(EngineError::Other("Trap: no edges of different colours meet among the selected objects".into()));
         }
@@ -742,21 +784,23 @@ fn trap(s: &mut Session, p: &Value) -> Result<Value> {
 
 // ---------- Offset Path ----------
 
-fn join_param(p: &Value, key: &str) -> po::Join {
-    match str_param(p, key).map(str::to_ascii_lowercase).as_deref() {
-        Some("round") => po::Join::Round,
-        Some("bevel") => po::Join::Bevel,
-        _ => po::Join::Miter,
+fn join_param(p: &Value, key: &str, cmd: &str) -> Result<po::Join> {
+    match text_param(p, key, cmd)?.map(str::to_ascii_lowercase).as_deref() {
+        None | Some("miter") => Ok(po::Join::Miter),
+        Some("round") => Ok(po::Join::Round),
+        Some("bevel") => Ok(po::Join::Bevel),
+        Some(_) => Err(bad(cmd, format!("`{key}` must be one of miter, round, bevel"))),
     }
 }
 
 fn offset_path(s: &mut Session, p: &Value) -> Result<Value> {
-    let delta = len_param(p, "offset").unwrap_or(10.0);
+    const C: &str = "object.path.offsetPath";
+    let delta = length_given(p, "offset", C)?.unwrap_or(10.0);
     if delta.abs() > 1e5 {
-        return Err(bad("object.path.offsetPath", "offset out of range"));
+        return Err(bad(C, "offset out of range"));
     }
-    let join = join_param(p, "joins");
-    let miter = num_param(p, "miterLimit").unwrap_or(4.0).clamp(1.0, 500.0);
+    let join = join_param(p, "joins", C)?;
+    let miter = number_given(p, "miterLimit", C)?.unwrap_or(4.0).clamp(1.0, 500.0);
     let roots = selected_roots(s)?;
     let ids = s.edit("Offset Path", |d, sel| {
         let (mut out, mut above) = (vec![], vec![]);
@@ -852,7 +896,7 @@ pub(crate) fn outlined_stroke(
         };
         let art = d.reid(&art);
         let mut art = with_transparency(d, art, st.opacity, st.blend);
-        let raster: Vec<_> = st.effects.iter().filter(|e| !vectorcraft_render::effects::is_geometry(&e.id)).cloned().collect();
+        let raster = vectorcraft_render::effects::without_geometry(&st.effects);
         if !raster.is_empty() {
             if !art.appearance.effects.is_empty() {
                 art = Node::group(d.alloc_id(), vec![Arc::new(art)]);
@@ -891,24 +935,60 @@ pub(crate) fn outlined_stroke(
 
 /// Path `l` with every stroke outlined, in appearance order: runs of fills stay on copies of
 /// the path, each stroke becomes its outline (or brush art), grouped when there are several.
+/// As on the canvas, the path's geometry effects ([`reshaped`]) shape the path first, and each
+/// stroke's own geometry effects then shape the path that stroke outlines; [`outlined_stroke`]
+/// gets the stroke without them. A fill with a random Transform effect paints the outline its
+/// geometry effects make of the path, on a copy of its own. A path whose Transform effect copies
+/// it with a gradient, or has Scale Strokes & Effects or Transform Patterns on, becomes the art the
+/// canvas draws for it, each copy with its own gradient, stroke width and pattern, and its strokes
+/// outlined before the art gets new ids. Random in a Transform effect takes its seed
+/// from the object's id, so these effects give the outline the values the canvas drew. When the
+/// geometry effects leave nothing to paint, an empty group takes the path's place.
 /// `None` when `l` has no stroke to outline.
 pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Brush], l: &Node) -> Option<Node> {
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry, has_transform_art, reshape, without_geometry};
     if !l.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if outlinable(st))) {
         return None;
     }
+    if has_transform_art(l) {
+        let mut art = reshape(Some(&*d), l, None)?;
+        outline_member_strokes(d, brushes, &mut art);
+        return Some(d.reid(&art));
+    }
+    let reshaped = reshaped(d, l);
+    let l = reshaped.as_ref().unwrap_or(l);
     let (path, rule) = node_path(l)?;
+    let ctx = GeomContext::of(l);
     // A fill belongs to the source path, whether open or closed. Converting its stroke
     // preserves that fill on a separate copy (including compound member geometry).
     let mut parts: Vec<Node> = vec![];
     let mut fills: Vec<AppearanceItem> = vec![];
     for item in &l.appearance.items {
         match item {
-            AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() => fills.push(item.clone()),
+            AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() => {
+                let shaped = f.effects.iter().any(seeded).then(|| path.bounds().and_then(|b| fill_shape(d, l, item, &path, b))).flatten();
+                let Some((shape, _, _, moved)) = shaped else {
+                    fills.push(item.clone());
+                    continue;
+                };
+                if !fills.is_empty() {
+                    parts.push(styled_copy(d, l, std::mem::take(&mut fills)));
+                }
+                let mut plain = moved;
+                *plain.effects_mut() = without_geometry(plain.effects());
+                parts.push(styled_copy(d, &shape, vec![plain]));
+            }
             AppearanceItem::Stroke(st) if outlinable(st) => {
                 if !fills.is_empty() {
                     parts.push(styled_copy(d, l, std::mem::take(&mut fills)));
                 }
-                parts.extend(outlined_stroke(d, brushes, &path, rule, st));
+                let mut plain = st.clone();
+                plain.effects = without_geometry(&st.effects);
+                let stroked = match path.bounds() {
+                    Some(b) if has_geometry(&st.effects) => apply_geometry_with(&st.effects, &path, b, &ctx.item(item)),
+                    _ => path.clone(),
+                };
+                parts.extend(outlined_stroke(d, brushes, &stroked, rule, &plain));
             }
             _ => {}
         }
@@ -916,7 +996,25 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
     if !fills.is_empty() {
         parts.push(styled_copy(d, l, fills));
     }
+    let reshapes = reshaped.is_some()
+        || l.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if outlinable(st) && has_geometry(&st.effects)));
+    if parts.is_empty() && reshapes {
+        // The geometry effects leave nothing to paint, as on the canvas: an empty group takes the path's place.
+        parts.push(Node::group(d.alloc_id(), vec![]));
+    }
     assemble(d, l, parts)
+}
+
+/// Outline the strokes of every member of group `n`, however deep ([`outline_strokes`]).
+fn outline_member_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Brush], n: &mut Node) {
+    let Some(children) = n.children_mut() else { return };
+    for c in children.iter_mut() {
+        if let Some(o) = outline_strokes(d, brushes, c) {
+            *c = Arc::new(o);
+        } else if c.children().is_some() {
+            outline_member_strokes(d, brushes, Arc::make_mut(c));
+        }
+    }
 }
 
 /// A plain copy of path `l` (new ids, no transparency, name or mask) painted with `items`.
@@ -980,6 +1078,12 @@ pub(crate) fn replace_leaves(d: &mut Document, root: NodeId, mut f: impl FnMut(&
 fn outline_stroke(s: &mut Session, _: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
     let ids = s.edit("Outline Stroke", |d, sel| {
+        let before = d.clone();
+        // A dimension selected with the art it measures keeps its own lines: it is out of the
+        // document while the art is outlined.
+        let lifted = super::dimension::lift(d, &roots);
+        let kept = !lifted.is_empty();
+        let ended = super::dimension::end_links(d, &roots);
         let brushes = vectorcraft_brush::library(d);
         let mut new_sel = vec![];
         let mut changed = 0;
@@ -988,7 +1092,10 @@ fn outline_stroke(s: &mut Session, _: &Value) -> Result<Value> {
             new_sel.push(id);
             changed += n;
         }
-        if changed == 0 {
+        super::dimension::put_back(d, lifted);
+        // A dimension whose source was outlined stays where it was, no longer linked.
+        super::dimension::restore_unchanged(&before, d, ended);
+        if changed == 0 || (kept && d.layers == before.layers) {
             return Err(EngineError::Other("Outline Stroke: no stroked paths selected".into()));
         }
         sel.set(new_sel.iter().copied());
@@ -1107,23 +1214,21 @@ pub fn auto_simplify_level(s: &Session) -> Result<f64> {
 }
 
 fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.path.simplify";
+    let (auto, given_level, given_tolerance) = (switch_or(p, "auto", false, C)?, number_given(p, "level", C)?, length_given(p, "tolerance", C)?);
+    let corner_angle = number_given(p, "cornerAngle", C)?.unwrap_or(30.0).clamp(0.0, 180.0);
+    let (straight_lines, whole) = (switch_or(p, "straightLines", false, C)?, switch_or(p, "wholePaths", false, C)?);
     // With auto, the slider's level is Auto-Simplify's for the selection's size; otherwise it is the level given.
-    let level = if bool_or(p, "auto", false) {
+    let level = if auto {
         Some(auto_simplify_level(s)?)
     } else {
-        num_param(p, "level").map(|l| if l.is_finite() { l.round().clamp(0.0, 100.0) } else { po::SIMPLIFY_LEVEL })
+        given_level.map(|l| if l.is_finite() { l.round().clamp(0.0, 100.0) } else { po::SIMPLIFY_LEVEL })
     };
     let tolerance = match level {
         Some(l) => po::simplify_level_tolerance(l),
-        None => len_param(p, "tolerance").unwrap_or(1.0),
+        None => given_tolerance.unwrap_or(1.0),
     };
-    let opts = po::SimplifyOptions {
-        tolerance: tolerance.clamp(1e-4, 1e4),
-        corner_angle_deg: num_param(p, "cornerAngle").unwrap_or(30.0).clamp(0.0, 180.0),
-        straight_lines: bool_or(p, "straightLines", false),
-        smooth: 0.0,
-    };
-    let whole = bool_or(p, "wholePaths", false);
+    let opts = po::SimplifyOptions { tolerance: tolerance.clamp(1e-4, 1e4), corner_angle_deg: corner_angle, straight_lines, smooth: 0.0 };
     // A path with segments direct-selected simplifies only their runs, and keeps those runs (and the
     // other anchors it had selected) direct-selected.
     let roots = selected_roots(s)?;
@@ -1197,10 +1302,17 @@ fn grid_axis(p: &Value, n: f64, [size, gutter, total]: [&str; 3], extent: f64) -
 }
 
 fn split_into_grid(s: &mut Session, p: &Value) -> Result<Value> {
-    let rows = num_param(p, "rows").unwrap_or(2.0).round();
-    let cols = num_param(p, "columns").unwrap_or(2.0).round();
+    const C: &str = "object.path.splitIntoGrid";
+    let rows = number_given(p, "rows", C)?.unwrap_or(2.0).round();
+    let cols = number_given(p, "columns", C)?.unwrap_or(2.0).round();
     if !(1.0..=500.0).contains(&rows) || !(1.0..=500.0).contains(&cols) {
-        return Err(bad("object.path.splitIntoGrid", "rows and columns must be 1..500"));
+        return Err(bad(C, "rows and columns must be 1..500"));
+    }
+    let add_guides = switch_or(p, "addGuides", false, C)?;
+    // Each distance [`grid_axis`] reads is a number, a string with a unit or null, checked before the
+    // selection, so a bad one is an error whatever is selected.
+    for key in ["height", "rowGutter", "totalHeight", "width", "columnGutter", "totalWidth", "gutter"] {
+        length_given(p, key, C)?;
     }
     let too_small = || EngineError::Other("Split Into Grid: select paths large enough for the grid".into());
     // The selected paths, back to front: one grid over them all replaces them, where the topmost
@@ -1221,7 +1333,7 @@ fn split_into_grid(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(too_small());
     }
     let mut edges: Vec<(bool, f64)> = Vec::new();
-    if bool_or(p, "addGuides", false) {
+    if add_guides {
         // Row-major cells: the first row has the column edges, each row's first cell the row edges.
         let bounds = cells.iter().filter_map(PathData::bounds);
         edges.extend(bounds.clone().take(cols).flat_map(|c| [(true, c.x0), (true, c.x1)]));
@@ -1239,7 +1351,9 @@ fn split_into_grid(s: &mut Session, p: &Value) -> Result<Value> {
             let node = shape_node(d, c, Some(&top));
             out.push(d.insert(par, idx + k, node)?);
         }
-        d.guides.extend(edges.iter().map(|&(vertical, pos)| vectorcraft_doc::Guide { layer, ..vectorcraft_doc::Guide::new(vertical, pos) }));
+        for &(vertical, pos) in &edges {
+            d.add_ruler_guide(&vectorcraft_doc::Guide { layer, ..vectorcraft_doc::Guide::new(vertical, pos) });
+        }
         sel.set(out.iter().copied());
         Ok(out)
     })?;
@@ -1256,9 +1370,10 @@ fn is_painted(a: &Appearance) -> bool {
 }
 
 fn clean_up(s: &mut Session, p: &Value) -> Result<Value> {
-    let stray = bool_or(p, "strayPoints", true);
-    let unpainted = bool_or(p, "unpaintedObjects", true);
-    let empty_text = bool_or(p, "emptyTextPaths", true);
+    const C: &str = "object.path.cleanUp";
+    let stray = switch_or(p, "strayPoints", true, C)?;
+    let unpainted = switch_or(p, "unpaintedObjects", true, C)?;
+    let empty_text = switch_or(p, "emptyTextPaths", true, C)?;
     let found = {
         let d = &s.doc()?.doc;
         let mut v = vec![];

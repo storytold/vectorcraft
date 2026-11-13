@@ -56,6 +56,24 @@ fn s<'a>(p: &'a Value, k: &str) -> Option<&'a str> {
     p.get(k).and_then(Value::as_str)
 }
 
+/// An optional param read with `read`: none when it is omitted or null, else an error naming the
+/// key when `read` gets nothing from its value.
+fn opt<T>(p: &Value, k: &str, read: impl Fn(&Value) -> Option<T>, what: &str) -> Result<Option<T>, String> {
+    match p.get(k) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => read(v).map(Some).ok_or_else(|| format!("`{k}` must be {what}")),
+    }
+}
+
+fn opt_bool(p: &Value, k: &str) -> Result<Option<bool>, String> {
+    opt(p, k, Value::as_bool, "true or false")
+}
+
+/// A pointer packet's `mods`: none when omitted or null, else an object of booleans.
+fn packet_mods(p: &Value) -> Result<Option<Mods>, String> {
+    opt(p, "mods", |m| m.as_object().and_then(|_| serde_json::from_value(m.clone()).ok()), "an object of true or false values")
+}
+
 pub(crate) fn pointer_kind(k: &str) -> Option<PointerKind> {
     Some(match k {
         "down" => PointerKind::Down,
@@ -129,10 +147,17 @@ impl Headless {
     fn exec(&mut self, id: &str, params: &Value) -> Result<Value, String> {
         // A key the command's description doesn't name is an error, not a default (#1442).
         match HOST_COMMANDS.iter().find(|c| c.0 == id) {
-            Some((_, _, doc)) => vectorcraft_engine::check_keys(id, doc, params),
-            None => self.session.check_params(id, params),
+            Some((_, _, doc)) => vectorcraft_engine::check_keys(id, doc, params).map_err(|e| e.to_string())?,
+            None if vectorcraft_engine::find_command(id).is_some() => {
+                self.session.check_params(id, params).map_err(|e| e.to_string())?;
+            }
+            None if crate::ui_catalog::UI_COMMANDS.iter().any(|(cid, ..)| *cid == id) => {
+                return Err(format!(
+                    "`{id}` is a desktop UI command (`ui: true`); start `vectorcraft --control 7979` and use `vectorcraft-cli mcp --connect`"
+                ));
+            }
+            None => self.session.check_params(id, params).map_err(|e| e.to_string())?,
         }
-        .map_err(|e| e.to_string())?;
         match id {
             "file.open" => self.open(params),
             "file.save" => self.save(params),
@@ -146,8 +171,29 @@ impl Headless {
 
     fn commands(&self) -> Value {
         let mut v: Vec<Value> = self.session.commands().into_iter().map(|c| serde_json::to_value(c).unwrap_or_default()).collect();
+        let mut seen: std::collections::HashSet<String> = v.iter().filter_map(|c| c.get("id").and_then(Value::as_str).map(str::to_owned)).collect();
         for (id, label, params) in HOST_COMMANDS {
+            if !seen.insert((*id).to_owned()) {
+                continue;
+            }
             v.push(json!({"id": id, "label": label, "menu": [], "shortcut": null, "params": params, "enabled": true, "host": true}));
+        }
+        // Desktop menu commands (`UI_COMMANDS`): listed for discovery with `ui: true`. Running one
+        // that only the desktop app implements still needs `--connect` (see `exec`).
+        for (id, label, shortcut, params) in crate::ui_catalog::UI_COMMANDS {
+            if !seen.insert((*id).to_owned()) {
+                continue;
+            }
+            let sc = if shortcut.is_empty() { Value::Null } else { json!(shortcut) };
+            v.push(json!({
+                "id": id,
+                "label": label,
+                "menu": [],
+                "shortcut": sc,
+                "params": params,
+                "enabled": true,
+                "ui": true,
+            }));
         }
         Value::Array(v)
     }
@@ -173,6 +219,8 @@ impl Headless {
                 UiRequest::Place(p) => {
                     self.session.execute("file.place", &p).map_err(|e| e.to_string())?;
                 }
+                // The host keeps its view's artboard on a press, as for the presses it hands over.
+                UiRequest::HeldPress { .. } => {}
             }
         }
         Ok(())
@@ -180,34 +228,37 @@ impl Headless {
 
     fn pointer(&mut self, p: &Value) -> Result<Value, String> {
         let events = p.get("events").and_then(Value::as_array).ok_or("missing `events`")?;
-        let base: Mods = p.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or_default();
+        let base = packet_mods(p)?.unwrap_or_default();
         let default = PointerEvent::json_backquote(p, false)?;
         let held = events.iter().map(|e| PointerEvent::json_backquote(e, default)).collect::<Result<Vec<_>, _>>()?;
+        // Every event is read before any is sent, so a malformed packet sends none of them.
+        let read = events
+            .iter()
+            .zip(held)
+            .map(|(e, backquote)| {
+                let mods = packet_mods(e)?.unwrap_or(base);
+                let kind = s(e, "kind").unwrap_or("");
+                let kind = pointer_kind(kind).ok_or_else(|| format!("unknown pointer kind `{kind}` (down|drag|up|move|doubleclick)"))?;
+                PointerEvent::json_check(e)?;
+                if s(e, "space") == Some("screen") {
+                    return Err("screen-space pointer events need the desktop app; use document coordinates".to_string());
+                }
+                let x = e.get("x").and_then(Value::as_f64).ok_or("pointer event needs numeric `x`")?;
+                let y = e.get("y").and_then(Value::as_f64).ok_or("pointer event needs numeric `y`")?;
+                Ok((e, kind, Point::new(x, y), mods, backquote))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
         self.ensure_document();
         let mut requests = vec![];
-        for (e, backquote) in events.iter().zip(held) {
-            let kind = s(e, "kind").unwrap_or("");
-            let kind = pointer_kind(kind).ok_or_else(|| format!("unknown pointer kind `{kind}` (down|drag|up|move|doubleclick)"))?;
-            if s(e, "space") == Some("screen") {
-                return Err("screen-space pointer events need the desktop app; use document coordinates".into());
-            }
-            let x = e.get("x").and_then(Value::as_f64).ok_or("pointer event needs numeric `x`")?;
-            let y = e.get("y").and_then(Value::as_f64).ok_or("pointer event needs numeric `y`")?;
-            let mods = e.get("mods").and_then(|m| serde_json::from_value(m.clone()).ok()).unwrap_or(base);
-            let ev = PointerEvent {
-                kind,
-                pos: Point::new(x, y),
-                mods,
-                backquote,
-                pressure: PointerEvent::json_pressure(e),
-                pen: PointerEvent::json_pen(e),
-            };
+        for (e, kind, pos, mods, backquote) in read {
+            let ev = PointerEvent { kind, pos, mods, backquote, pressure: PointerEvent::json_pressure(e), pen: PointerEvent::json_pen(e) };
             let reqs = self.session.pointer(&ev, self.view).map_err(|e| e.to_string())?;
             self.apply_ui_requests(reqs, &mut requests)?;
-            // With no frames to show the highlight in later, a hover waits for the work the tool
-            // runs on another thread.
-            if kind == PointerKind::Move && self.session.tool_waiting() {
-                self.session.tool_poll(self.view, true).map_err(|e| e.to_string())?;
+            // With no frames to show the highlight or apply an edit in later, each event waits for
+            // the work the tool runs on another thread (a hover's map, a release's merge).
+            if self.session.tool_waiting() {
+                let reqs = self.session.tool_poll(self.view, true).map_err(|e| e.to_string())?;
+                self.apply_ui_requests(reqs, &mut requests)?;
             }
             let hold = PointerEvent::json_hold(e);
             if hold > 0.0 {
@@ -222,8 +273,8 @@ impl Headless {
 
     fn key(&mut self, p: &Value) -> Result<Value, String> {
         let key = s(p, "key").ok_or("missing `key`")?;
-        let b = |n: &str| p.get(n).and_then(Value::as_bool).unwrap_or(false);
-        let mods = Mods { shift: b("shift"), alt: b("alt"), cmd: b("cmd"), ctrl: b("ctrl"), ..Mods::default() };
+        let b = |n: &str| opt_bool(p, n).map(|on| on.unwrap_or(false));
+        let mods = Mods { shift: b("shift")?, alt: b("alt")?, cmd: b("cmd")?, ctrl: b("ctrl")?, ..Mods::default() };
         // A letter reaches the tool only when the tool claims it without Cmd, Ctrl or Alt (E while
         // a selection marquee is dragged); otherwise it is a shortcut.
         let mut tk = tool_key(key);
@@ -265,16 +316,18 @@ impl Headless {
     }
 
     fn render(&mut self, p: &Value) -> Result<Value, String> {
+        let idx = opt(p, "artboard", |v| v.as_u64().and_then(|i| usize::try_from(i).ok()), "a whole number of 0 or more")?.unwrap_or(0);
+        let scale = opt(p, "scale", Value::as_f64, "a number")?.unwrap_or(1.0).clamp(0.01, 16.0);
+        let trace_views = opt_bool(p, "traceViews")? == Some(true);
+        let data = opt_bool(p, "data")? == Some(true);
         let st = self.session.active().ok_or("no document")?;
         let doc = st.doc.clone();
-        let idx = p.get("artboard").and_then(Value::as_u64).unwrap_or(0) as usize;
         let r = doc.artboards.get(idx).map(|a| a.rect).ok_or("no such artboard")?;
-        let scale = p.get("scale").and_then(Value::as_f64).unwrap_or(1.0).clamp(0.01, 16.0);
         vectorcraft_render::raster_size(r, scale)?;
         // Rendered with the options of a PNG export on white, so its pixels are the exported file's.
         // `traceViews: true` draws Image Trace objects as their View shows them, as the canvas does.
         let mut opts = RasterExportOptions { background: Some([255; 3]), ..Default::default() }.render_options(RasterFormat::Png);
-        opts.trace_views = p.get("traceViews").and_then(Value::as_bool) == Some(true);
+        opts.trace_views = trace_views;
         let img = self.renderer.render_region_with(&doc, r, scale, &opts);
         // A cancelled render stops drawing: the picture is not whole and is not written.
         vectorcraft_engine::cancel::check().map_err(|e| e.to_string())?;
@@ -286,7 +339,7 @@ impl Headless {
                 vectorcraft_format::write_atomic(std::path::Path::new(path), &png).map_err(|e| format!("write {path}: {e}"))?;
                 out["path"] = json!(path);
                 // `data: true` asks for the image as well as the file.
-                if p.get("data").and_then(Value::as_bool) == Some(true) {
+                if data {
                     out["pngBase64"] = json!(vectorcraft_format::base64_encode(&png));
                 }
             }
@@ -295,11 +348,18 @@ impl Headless {
         Ok(out)
     }
 
-    /// `app.open {path}`: any readable file as a new active document (`document.open`).
+    /// `app.open {path, importer?, params?}`: any readable file as a new active document
+    /// (`document.open`, with the importer plug-in `importer` names and its parameters `params`).
     pub fn open(&mut self, p: &Value) -> Result<Value, String> {
         let path = s(p, "path").ok_or("missing `path`")?;
+        let mut params = json!({"path": path});
+        for k in ["importer", "params"] {
+            if let Some(v) = p.get(k).filter(|v| !v.is_null()) {
+                params[k] = v.clone();
+            }
+        }
         let roots = self.roots.clone();
-        file_access::confine(roots.as_ref(), || self.session.execute("document.open", &json!({"path": path}))).map_err(|e| e.to_string())
+        file_access::confine(roots.as_ref(), || self.session.execute("document.open", &params)).map_err(|e| e.to_string())
     }
 
     /// `app.save {path?, format?, options?}`: `document.save` (by default the document's own path and
@@ -315,6 +375,8 @@ impl Headless {
 
     /// `app.export {path?, format?, …}`: `document.export` (format defaults to the path's extension).
     pub fn export(&mut self, p: &Value) -> Result<Value, String> {
+        // The key check of `document.export` runs before the file is written.
+        self.session.check_params("document.export", p).map_err(|e| e.to_string())?;
         let roots = self.roots.clone();
         file_access::confine(roots.as_ref(), || self.session.execute("document.export", p)).map_err(|e| e.to_string())
     }

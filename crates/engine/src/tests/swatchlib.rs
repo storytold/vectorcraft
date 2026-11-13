@@ -639,6 +639,77 @@ fn gradient_libraries_are_listed_and_gradient_swatches_rename_and_take_new_gradi
 }
 
 #[test]
+fn organic_fades_add_with_their_method_midpoints_and_opacities_in_rgb_and_cmyk() {
+    let lib = vectorcraft_color::libraries::builtin_library("organic-fades").unwrap();
+    for mode in ["rgb", "cmyk"] {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 100, "height": 100, "colorMode": mode}));
+        let list = run(&mut s, "swatch.library.list", json!({}));
+        let row = list["libraries"].as_array().unwrap().iter().find(|l| l["id"] == "organic-fades").unwrap().clone();
+        assert_eq!(
+            (row["name"].as_str(), row["category"].as_str(), row["count"].as_u64()),
+            (Some("Organic Fades"), Some("gradients"), Some(lib.len() as u64))
+        );
+        let id = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].clone();
+        let r = run(&mut s, "swatch.library.add", json!({"library": "organic-fades", "names": ["Petal", "Dew"], "apply": "fill"}));
+        assert_eq!((r["added"].clone(), r["applied"].clone()), (json!(["Petal", "Dew"]), json!("Petal")), "{mode}");
+        for name in ["Petal", "Dew"] {
+            // The swatch comes as the library has it: stops (colors as given, opacities, midpoints) and method.
+            let Paint::Gradient(added) = &doc(&s).swatch(name).unwrap().paint else { panic!("{name} is a gradient") };
+            let Paint::Gradient(want) = &lib.swatch(name).unwrap().paint else { panic!("{name} is a gradient") };
+            assert_eq!(added.gradient, want.gradient, "{mode} {name}");
+            assert_eq!(added.gradient.method, vectorcraft_color::GradientMethod::Perceptual);
+            assert!(added.gradient.stops.iter().all(|st| matches!(st.color, Color::Rgb { .. })), "{mode} {name}: the stops stay RGB");
+            assert!(added.gradient.stops.iter().any(|st| st.opacity < 1.0 && (st.midpoint - 0.5).abs() > 0.02), "{mode} {name}");
+        }
+        // The fill takes the fade's method, opacities and midpoints.
+        let fill = doc(&s).node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().appearance.fill_paint();
+        let (Paint::Gradient(fill), Paint::Gradient(want)) = (fill, &lib.swatch("Petal").unwrap().paint) else { panic!("a gradient fill") };
+        assert_eq!(fill.gradient.method, want.gradient.method, "{mode}");
+        let shape = |g: &vectorcraft_color::Gradient| g.stops.iter().map(|st| (st.offset, st.opacity, st.midpoint)).collect::<Vec<_>>();
+        assert_eq!(shape(&fill.gradient), shape(&want.gradient), "{mode}");
+    }
+}
+
+#[test]
+fn holographic_glows_add_whole_in_rgb_and_cmyk_as_one_undo_step() {
+    let lib = vectorcraft_color::libraries::builtin_library("holographic").unwrap();
+    let Paint::Gradient(want) = &lib.swatch("Mint Halo").unwrap().paint else { panic!("Mint Halo is a gradient") };
+    for mode in ["rgb", "cmyk"] {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 100, "height": 100, "colorMode": mode}));
+        let list = run(&mut s, "swatch.library.list", json!({}));
+        let row = list["libraries"].as_array().unwrap().iter().find(|l| l["id"] == "holographic").unwrap().clone();
+        assert_eq!((row["name"].as_str(), row["category"].as_str(), row["count"].as_u64()), (Some("Holographic"), Some("gradients"), Some(14)));
+        let got = run(&mut s, "swatch.library.get", json!({"library": "holographic"}));
+        assert!(got.to_string().contains("Mint Halo"), "{mode}: get lists Mint Halo");
+        let id = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].clone();
+        let node = vectorcraft_doc::NodeId(id.as_u64().unwrap());
+        let before = undo_len(&s);
+        let r = run(&mut s, "swatch.library.add", json!({"library": "holographic", "names": ["Mint Halo"], "apply": "fill"}));
+        assert_eq!((r["added"].clone(), r["applied"].clone()), (json!(["Mint Halo"]), json!("Mint Halo")), "{mode}");
+        assert_eq!(undo_len(&s), before + 1, "{mode}: added and applied as one step");
+        // The swatch comes as the library has it: kind, stops (RGB colors, opacities, midpoints) and method.
+        let Paint::Gradient(added) = &doc(&s).swatch("Mint Halo").unwrap().paint else { panic!("{mode}: a gradient swatch") };
+        assert_eq!(added.gradient, want.gradient, "{mode}");
+        assert!(added.gradient.stops.iter().all(|st| matches!(st.color, Color::Rgb { .. })), "{mode}: the stops stay RGB");
+        assert_eq!(added.gradient.stops.last().map(|st| st.opacity), Some(0.0), "{mode}: clear at the edge");
+        let Paint::Gradient(fill) = doc(&s).node(node).unwrap().appearance.fill_paint() else { panic!("{mode}: a gradient fill") };
+        assert_eq!((fill.gradient.kind, fill.gradient.method), (want.gradient.kind, want.gradient.method), "{mode}");
+        assert_eq!(fill.gradient.stops, want.gradient.stops, "{mode}");
+        run(&mut s, "edit.undo", json!({}));
+        assert!(doc(&s).swatch("Mint Halo").is_none(), "{mode}: undo removes the add");
+        assert!(!matches!(doc(&s).node(node).unwrap().appearance.fill_paint(), Paint::Gradient(_)), "{mode}: and the fill");
+        // A document swatch already named Mint Halo stays; the glow comes in under a number.
+        run(&mut s, "swatch.new", json!({"name": "Mint Halo", "color": "#123456"}));
+        let r = run(&mut s, "swatch.library.add", json!({"library": "holographic", "names": ["Mint Halo"]}));
+        assert_eq!(r["added"], json!(["Mint Halo 2"]), "{mode}");
+        assert!(doc(&s).swatch("Mint Halo").unwrap().paint.color().is_some(), "{mode}: the document's swatch is kept");
+        assert!(matches!(&doc(&s).swatch("Mint Halo 2").unwrap().paint, Paint::Gradient(g) if g.gradient == want.gradient));
+    }
+}
+
+#[test]
 fn pattern_libraries_bring_their_patterns_and_add_each_once() {
     let mut s = session();
     let list = run(&mut s, "swatch.library.list", json!({}));
@@ -765,6 +836,82 @@ fn a_pattern_library_adds_only_the_picked_pattern_and_it_undoes_and_saves() {
     assert_eq!(back.swatch("Checkerboard").map(|w| &w.paint), doc(&s).swatch("Checkerboard").map(|w| &w.paint));
 }
 
+/// Grit Textures is listed after Geometric Patterns. One of its patterns comes in with its swatch
+/// once, as one undo step that also takes both away, and both stay after a save and reopen.
+#[test]
+fn a_grit_texture_adds_once_undoes_and_saves() {
+    let mut s = session();
+    let list = run(&mut s, "swatch.library.list", json!({}));
+    let ids: Vec<&str> =
+        list["libraries"].as_array().unwrap().iter().filter(|l| l["category"] == "patterns").map(|l| l["id"].as_str().unwrap()).collect();
+    assert_eq!(ids, ["geometric-patterns", "grit-textures", "optical-effects"]);
+    let got = run(&mut s, "swatch.library.get", json!({"library": "Grit Textures"}));
+    let names: Vec<&str> = got["swatches"].as_array().unwrap().iter().map(|w| w["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Fine Grain", "Coarse Grit", "Sand", "Speckle", "Stipple", "Scratches", "Sparse Flecks", "Dense Flecks"]);
+    let counts = |d: &vectorcraft_doc::Document| (d.patterns.len(), d.swatches_iter().count());
+    let empty = counts(doc(&s));
+    let undo = undo_len(&s);
+    let r = run(&mut s, "swatch.library.add", json!({"library": "grit-textures", "names": ["Stipple"]}));
+    assert_eq!(r["added"], json!(["Stipple"]));
+    assert_eq!((counts(doc(&s)), undo_len(&s)), ((empty.0 + 1, empty.1 + 1), undo + 1));
+    let def = doc(&s).pattern("Stipple").expect("the pattern comes with its swatch").clone();
+    assert!(def.art.len() >= 144, "{} marks", def.art.len());
+    assert!(matches!(doc(&s).swatch("Stipple").map(|w| &w.paint), Some(Paint::Pattern { pattern, .. }) if pattern == "Stipple"));
+    let r = run(&mut s, "swatch.library.add", json!({"library": "grit-textures", "names": ["Stipple"]}));
+    assert_eq!((r["added"].clone(), r["existing"].clone()), (json!([]), json!(["Stipple"])));
+    assert_eq!((counts(doc(&s)), undo_len(&s)), ((empty.0 + 1, empty.1 + 1), undo + 1), "added once");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(counts(doc(&s)), empty);
+    assert!(doc(&s).pattern("Stipple").is_none() && doc(&s).swatch("Stipple").is_none());
+    run(&mut s, "edit.redo", json!({}));
+    let back = vectorcraft_format::load(&vectorcraft_format::save(doc(&s), false)).unwrap();
+    assert_eq!(back.pattern("Stipple"), Some(&def));
+    assert_eq!(back.swatch("Stipple").map(|w| &w.paint), doc(&s).swatch("Stipple").map(|w| &w.paint));
+}
+
+/// Optical Effects is listed after Grit Textures, and reading it adds nothing. Clicking one of
+/// its patterns brings it with its swatch and fills the selection with it, once, as one undo step
+/// that also takes both away, and both stay after a save and reopen.
+#[test]
+fn an_optical_effect_adds_once_fills_undoes_and_saves() {
+    let mut s = session();
+    let counts = |d: &vectorcraft_doc::Document| (d.patterns.len(), d.swatches_iter().count());
+    let empty = counts(doc(&s));
+    let list = run(&mut s, "swatch.library.list", json!({}));
+    let ids: Vec<&str> =
+        list["libraries"].as_array().unwrap().iter().filter(|l| l["category"] == "patterns").map(|l| l["id"].as_str().unwrap()).collect();
+    assert_eq!(ids, ["geometric-patterns", "grit-textures", "optical-effects"]);
+    let got = run(&mut s, "swatch.library.get", json!({"library": "Optical Effects"}));
+    let names: Vec<&str> = got["swatches"].as_array().unwrap().iter().map(|w| w["name"].as_str().unwrap()).collect();
+    assert_eq!(
+        names,
+        ["Sine Bands", "Ripple Lines", "Interference Rings", "Offset Rings", "Warped Checks", "Pinched Stripes", "Chevron Pulse", "Radiating Lenses"]
+    );
+    assert_eq!(counts(doc(&s)), empty, "reading a library adds no pattern or swatch");
+    let id = vectorcraft_doc::NodeId(run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    let undo = undo_len(&s);
+    let r = run(&mut s, "swatch.library.add", json!({"library": "optical-effects", "names": ["Warped Checks"], "apply": "fill"}));
+    assert_eq!((r["added"].clone(), r["applied"].clone()), (json!(["Warped Checks"]), json!("Warped Checks")));
+    assert_eq!((counts(doc(&s)), undo_len(&s)), ((empty.0 + 1, empty.1 + 1), undo + 1));
+    let def = doc(&s).pattern("Warped Checks").expect("the pattern comes with its swatch").clone();
+    assert_eq!(def.art.len(), 32, "the black cells of an 8 × 8 checkerboard");
+    assert!(matches!(doc(&s).swatch("Warped Checks").map(|w| &w.paint), Some(Paint::Pattern { pattern, .. }) if pattern == "Warped Checks"));
+    let filled = |d: &vectorcraft_doc::Document| matches!(d.node(id).unwrap().appearance.fill_paint(), Paint::Pattern { pattern, .. } if pattern == "Warped Checks");
+    assert!(filled(doc(&s)));
+    let r = run(&mut s, "swatch.library.add", json!({"library": "optical-effects", "names": ["Warped Checks"]}));
+    assert_eq!((r["added"].clone(), r["existing"].clone()), (json!([]), json!(["Warped Checks"])));
+    assert_eq!((counts(doc(&s)), undo_len(&s)), ((empty.0 + 1, empty.1 + 1), undo + 1), "added once");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(counts(doc(&s)), empty);
+    assert!(doc(&s).pattern("Warped Checks").is_none() && doc(&s).swatch("Warped Checks").is_none() && !filled(doc(&s)));
+    run(&mut s, "edit.redo", json!({}));
+    assert!(filled(doc(&s)));
+    let back = vectorcraft_format::load(&vectorcraft_format::save(doc(&s), false)).unwrap();
+    assert_eq!(back.pattern("Warped Checks"), Some(&def));
+    assert_eq!(back.swatch("Warped Checks").map(|w| &w.paint), doc(&s).swatch("Warped Checks").map(|w| &w.paint));
+    assert!(filled(&back));
+}
+
 /// A device name is saved with a `-` after it, which can be another library's own name: neither
 /// library replaces the other, and saving either again replaces only itself.
 #[test]
@@ -790,6 +937,134 @@ fn a_library_named_like_a_device_keeps_the_library_with_its_file_name() {
         assert_eq!(s.swatch_libraries.get(&b).unwrap().1.name, second);
         let _ = std::fs::remove_dir_all(&dir);
     }
+}
+
+/// `.ase` keeps no title, so a library's name comes back from its file name. Whichever is saved
+/// first, `COM¹` and `COM¹-` keep a file each, and saving either again replaces only itself. After
+/// a restart neither can be told from the other, so each gets a new file and replaces neither.
+#[test]
+fn device_named_libraries_without_a_title_keep_their_own_files() {
+    for (first, second) in [("COM¹", "COM¹-"), ("COM¹-", "COM¹")] {
+        let dir = temp_dir("device-ase");
+        let mut s = session();
+        s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+        let save = |s: &mut Session, name: &str| {
+            run(s, "swatch.library.save", json!({"user": true, "name": name, "format": "ase"}))["library"].as_str().unwrap().to_string()
+        };
+        let a = save(&mut s, first);
+        assert_eq!(save(&mut s, first), a, "saving {first} again replaces {first}");
+        let b = save(&mut s, second);
+        assert_ne!(a, b);
+        assert_eq!(save(&mut s, first), a, "saving {first} again replaces {first}");
+        assert_eq!(save(&mut s, second), b, "saving {second} again replaces {second}");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
+        // The next time the app starts.
+        s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+        for (name, count) in [(first, 3), (second, 4)] {
+            let again = save(&mut s, name);
+            assert!(again != a && again != b, "{name}: {again}");
+            assert_eq!(save(&mut s, name), again, "saving {name} again replaces {name}");
+            assert_eq!(std::fs::read_dir(&dir).unwrap().count(), count);
+        }
+        // The numbered file is as unknown as the first.
+        s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+        let numbered = b.strip_prefix("user/").unwrap().strip_suffix(".ase").unwrap().to_string();
+        assert_ne!(save(&mut s, &numbered), b);
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 5);
+        // Any other name goes on replacing its own file after a restart.
+        let other = save(&mut s, "Greys");
+        s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+        assert_eq!(save(&mut s, "Greys"), other);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+/// A file this session saved for `COM¹`, then replaced, is not written over. The next save goes to
+/// a new file and stays there. That holds for `.ase` and `.gpl`, for bytes that still read as a
+/// library and for bytes that don't, including the file the library moved to. A file removed and
+/// put back is still its library's when the bytes are the ones written, and is kept when they are
+/// not. A name that is not a device name still replaces a file that cannot be read.
+#[test]
+fn a_replaced_device_library_file_is_kept() {
+    for format in ["ase", "gpl"] {
+        let other: Vec<u8> = if format == "ase" {
+            vectorcraft_testkit::ase::ase(&[vectorcraft_testkit::ase::Block::Color("Only", b"RGB ", &[1.0, 0.0, 0.0], 2)])
+        } else {
+            b"GIMP Palette\nName: Other\n0 0 0 Black\n".to_vec()
+        };
+        let save = |s: &mut Session| run(s, "swatch.library.save", json!({"user": true, "name": "COM¹", "format": format}));
+        let open = |name: &str| {
+            let dir = temp_dir(name);
+            let mut s = session();
+            s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+            (dir, s)
+        };
+
+        // Replaced with another library.
+        let (dir, mut s) = open(&format!("replaced-lib-{format}"));
+        let first = save(&mut s);
+        let first_id = first["library"].as_str().unwrap().to_string();
+        let first_path = first["path"].as_str().unwrap().to_string();
+        assert_ne!(std::fs::read(&first_path).unwrap(), other);
+        std::fs::write(&first_path, &other).unwrap();
+        let moved = save(&mut s);
+        let moved_id = moved["library"].as_str().unwrap().to_string();
+        assert_ne!(moved_id, first_id);
+        assert_eq!(std::fs::read(&first_path).unwrap(), other, "{format}: the replaced file is left as it is");
+        assert_eq!(save(&mut s)["library"].as_str(), Some(moved_id.as_str()), "{format}: saving again replaces the new file");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        // Replaced with bytes that are not a library, first the file it had, then the one it moved to.
+        let (dir, mut s) = open(&format!("replaced-unread-{format}"));
+        let first = save(&mut s);
+        let first_path = first["path"].as_str().unwrap().to_string();
+        std::fs::write(&first_path, b"not a library").unwrap();
+        let moved = save(&mut s);
+        let moved_id = moved["library"].as_str().unwrap().to_string();
+        let first_id = first["library"].as_str().unwrap();
+        assert_ne!(moved_id, first_id);
+        assert_eq!(std::fs::read(&first_path).unwrap(), b"not a library");
+        assert_eq!(save(&mut s)["library"].as_str(), Some(moved_id.as_str()), "{format}: saving again stays on the new file");
+        let moved_path = moved["path"].as_str().unwrap().to_string();
+        std::fs::write(&moved_path, b"still not").unwrap();
+        let again = save(&mut s);
+        let again_id = again["library"].as_str().unwrap().to_string();
+        assert!(again_id != moved_id && again_id != first_id);
+        assert_eq!(std::fs::read(&moved_path).unwrap(), b"still not");
+        assert_eq!(save(&mut s)["library"].as_str(), Some(again_id.as_str()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        // Removed, the folder listed again, then put back: the hash is checked when it reappears.
+        let (dir, mut s) = open(&format!("replaced-reappear-{format}"));
+        let first = save(&mut s);
+        let first_id = first["library"].as_str().unwrap().to_string();
+        let first_path = first["path"].as_str().unwrap().to_string();
+        let written = std::fs::read(&first_path).unwrap();
+        std::fs::remove_file(&first_path).unwrap();
+        run(&mut s, "swatch.library.list", json!({}));
+        std::fs::write(&first_path, &written).unwrap();
+        assert_eq!(save(&mut s)["library"].as_str(), Some(first_id.as_str()), "{format}: the same bytes are still this library");
+        std::fs::remove_file(&first_path).unwrap();
+        run(&mut s, "swatch.library.list", json!({}));
+        std::fs::write(&first_path, &other).unwrap();
+        let moved = save(&mut s);
+        let moved_id = moved["library"].as_str().unwrap().to_string();
+        assert_ne!(moved_id, first_id);
+        assert_eq!(std::fs::read(&first_path).unwrap(), other, "{format}: different bytes put back are kept");
+        assert_eq!(save(&mut s)["library"].as_str(), Some(moved_id.as_str()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    let dir = temp_dir("replaced-ordinary");
+    let mut s = session();
+    s.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
+    let first = run(&mut s, "swatch.library.save", json!({"user": true, "name": "Greys", "format": "gpl"}));
+    let path = first["path"].as_str().unwrap().to_string();
+    std::fs::write(&path, b"not a library").unwrap();
+    let again = run(&mut s, "swatch.library.save", json!({"user": true, "name": "Greys", "format": "gpl"}));
+    assert_eq!(again["library"], first["library"], "a name that is not a device name replaces its own unreadable file");
+    assert!(std::fs::read(&path).unwrap().starts_with(b"GIMP Palette"));
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// #3602: a library titled with a Windows device name is saved under a name that is not one.

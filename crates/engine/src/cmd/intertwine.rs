@@ -76,8 +76,9 @@ pub fn specs() -> Vec<CommandSpec> {
 // ---------- predicates ----------
 
 /// The Intertwine groups of the selection: selected ones, and those around a selected object.
+/// None while an object of a dynamic symbol instance's art is selected.
 fn selected_groups(s: &Session) -> Vec<NodeId> {
-    let Some(st) = s.active() else { return vec![] };
+    let Some(st) = s.active().filter(|st| st.selection.symbol_part.is_none()) else { return vec![] };
     let mut out = vec![];
     for id in &st.selection.objects {
         let group = st.doc.ancestry(*id).unwrap_or_default().into_iter().rev().find(|a| st.doc.node(*a).is_some_and(is_intertwine));
@@ -92,6 +93,7 @@ fn selected_groups(s: &Session) -> Vec<NodeId> {
 
 fn has_intertwine(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
+    super::edit::no_symbol_part(s)?;
     if selected_groups(s).is_empty() { Err("select an Intertwine group".into()) } else { Ok(()) }
 }
 
@@ -328,7 +330,7 @@ fn raised_area(face: &PathData, i: usize, areas: &[Option<PathData>]) -> PathDat
             .filter(|a| a.bounds().is_some_and(|b| b.overlaps(near)))
             .map(|a| (a, FillRule::NonZero)),
     );
-    let only = po::boolean_n(&paths, |inside| inside.first() == Some(&true) && inside.get(1) == Some(&true) && !inside.iter().skip(2).any(|b| *b));
+    let only = po::boolean_n(&paths, |inside| inside == [0, 1]);
     if only.is_empty() {
         return face.clone();
     }
@@ -378,11 +380,14 @@ fn arrange(s: &mut Session, p: &Value) -> Result<Value> {
             }
             id
         }
-        None => match selected_groups(s).as_slice() {
-            [g] => *g,
-            [] => return Err(bad(C, "select an Intertwine group")),
-            _ => return Err(bad(C, "select one Intertwine group")),
-        },
+        None => {
+            super::edit::refuse_symbol_part(s)?;
+            match selected_groups(s).as_slice() {
+                [g] => *g,
+                [] => return Err(bad(C, "select an Intertwine group")),
+                _ => return Err(bad(C, "select one Intertwine group")),
+            }
+        }
     };
     let at = match p.get("at") {
         Some(_) => Some(point_param(p, "at").filter(|q| q.x.is_finite() && q.y.is_finite()).ok_or_else(|| bad(C, "at must be [x, y]"))?),

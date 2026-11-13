@@ -2,11 +2,12 @@
 //! and embedded images, as rows with a thumbnail, name, page and status. Clicking a row selects
 //! its image, Ctrl/Cmd-click adds or removes it, and Shift-click selects the images of the rows
 //! from the last row clicked without Shift to it (with Ctrl/Cmd, adds them); the buttons Relink,
-//! Go To, Update and Edit Original act on the selected rows; Link Info shows the details of the
-//! first. The flyout adds Relink to Folder, Find in Folder (Find Linked Files:
+//! Go To, Update and Edit Original act on the selected rows (Relink through its dialog, with the
+//! Replace choice: `ui.relinkDialog`); Link Info shows the details of the first. The flyout adds Relink to Folder, Find in Folder (Find Linked Files:
 //! `ui.findLinksInFolder`), Embed / Unembed, Placement Options, Select Linked / Embedded / Missing /
-//! Modified (`addon.select.byLinkStatus`, Shift adds), Show filters, Sort, thumbnail size
-//! and Show in Folder.
+//! Modified (`addon.select.byLinkStatus`, Shift adds), Show filters, Sort, thumbnail size,
+//! Show in Folder and Show DCS Transparency Interactions (a warning on the rows of images placed
+//! from DCS files that are transparent or overlap transparent objects).
 //!
 //! Everything runs through the `links.*` commands (`links.editOriginal` and `links.reveal` are UI
 //! commands: they hand the file to the system).
@@ -36,19 +37,22 @@ struct Options {
     thumb: f32,
     /// The Link Info section is open.
     info: bool,
+    /// Show DCS Transparency Interactions: rows of DCS images that are transparent or overlap
+    /// transparent objects get a warning.
+    dcs: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { show: "all", sort: None, thumb: 28.0, info: true }
+        Self { show: "all", sort: None, thumb: 28.0, info: true, dcs: false }
     }
 }
 
 /// `links.list` and the first selected image's `links.info`, with what they were fetched for.
 #[derive(Clone, Default)]
 struct Cache {
-    /// (document uid, revision, show, sort).
-    key: Option<(u64, u64, &'static str, Option<&'static str>)>,
+    /// (document uid, revision, show, sort, Show DCS Transparency Interactions).
+    key: Option<(u64, u64, &'static str, Option<&'static str>, bool)>,
     at: f64,
     list: Value,
     info: Option<(u64, Value)>,
@@ -68,13 +72,13 @@ fn set_options(ctx: &egui::Context, f: impl FnOnce(&mut Options)) {
 /// seconds) and the Link Info of the first selected image when the section is open.
 fn cached(app: &mut VectorcraftApp, ctx: &egui::Context, o: &Options) -> Option<Cache> {
     let st = app.session.active()?;
-    let key = Some((st.uid, st.revision, o.show, o.sort));
+    let key = Some((st.uid, st.revision, o.show, o.sort, o.dcs));
     let first = selected_images(app).first().copied();
     let now = ctx.input(|i| i.time);
     let mut c: Cache = pstate(ctx, "links-cache");
     let stale = c.key != key || now - c.at > RECHECK;
     if stale {
-        c.list = app.session.execute("links.list", &json!({ "show": o.show, "sort": o.sort })).ok()?;
+        c.list = app.session.execute("links.list", &json!({ "show": o.show, "sort": o.sort, "dcsTransparency": o.dcs })).ok()?;
         (c.key, c.at) = (key, now);
     }
     let want = first.filter(|_| o.info);
@@ -128,16 +132,19 @@ pub(crate) fn updated_status(n: usize) -> String {
     crate::i18n::msg_n(n as u64, "Updated {n} image", "Updated {n} images", &[])
 }
 
-/// Relink images `ids` to a picked file.
-pub(crate) fn relink(app: &mut VectorcraftApp, ids: Vec<u64>) {
-    crate::picks::button(app, move |app| relink_picked(app, ids.clone()));
+/// The status bar's line for `n` relinked images, naming the files `missed` that weren't found.
+pub(crate) fn relinked_status_missed(n: usize, missed: &[&str]) -> String {
+    if missed.is_empty() {
+        relinked_status(n)
+    } else {
+        let (one, other) = ("Relinked {n} image; not in that folder: {names}", "Relinked {n} images; not in that folder: {names}");
+        crate::i18n::msg_n(n as u64, one, other, &[("names", &missed.join(", "))])
+    }
 }
 
-fn relink_picked(app: &mut VectorcraftApp, ids: Vec<u64>) {
-    let pick = crate::FilePick { filters: crate::FilePick::filters(vectorcraft_engine::cmd::fileio::place_filters()), ..Default::default() };
-    let Some(path) = crate::picks::open(app, &pick) else { return };
-    let r = app.run("links.relink", json!({ "ids": ids, "path": path }));
-    report(app, r, |v| relinked_status(v["relinked"].as_array().map_or(0, Vec::len)));
+/// The ids of the selected image objects and placed documents (Relink's dialog).
+pub(crate) fn selected_ids(app: &VectorcraftApp) -> Vec<u64> {
+    selected_images(app)
 }
 
 /// Replace images `ids` with a picked file (Control bar, Properties): it keeps its own aspect
@@ -163,13 +170,7 @@ fn relink_to_picked_folder(app: &mut VectorcraftApp, ids: Vec<u64>) {
     let r = app.run("links.relink", json!({ "ids": ids, "folder": folder }));
     report(app, r, |v| {
         let missed: Vec<&str> = v["notFound"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
-        let n = v["relinked"].as_array().map_or(0, Vec::len);
-        if missed.is_empty() {
-            relinked_status(n)
-        } else {
-            let (one, other) = ("Relinked {n} image; not in that folder: {names}", "Relinked {n} images; not in that folder: {names}");
-            crate::i18n::msg_n(n as u64, one, other, &[("names", &missed.join(", "))])
-        }
+        relinked_status_missed(v["relinked"].as_array().map_or(0, Vec::len), &missed)
     });
 }
 
@@ -282,6 +283,11 @@ fn status_tip(r: &Value) -> String {
         "embedded" => tl!("Embedded").into(),
         _ => path.to_string(),
     };
+    let tip = if r["dcsTransparency"] == true {
+        format!("{tip}\n{}", tl!("Transparent, or overlaps transparent objects: check its separations"))
+    } else {
+        tip
+    };
     // An image shown at reduced size or too large to draw (`links.list`'s note).
     match r["note"].as_str() {
         Some(note) => format!("{tip}\n{}", crate::i18n::msg(note)),
@@ -370,6 +376,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     r["status"].as_str().unwrap_or_default(),
                 );
                 let mut text_right = right - 4.0;
+                if r["dcsTransparency"] == true {
+                    badge(ui, egui::Rect::from_center_size(egui::pos2(text_right - 8.0, rect.center().y), vec2(16.0, 16.0)), "modified");
+                    text_right -= 20.0;
+                }
                 if let Some(page) = r["page"].as_u64() {
                     let g = ui.painter().layout_no_wrap(format!("{page}"), egui::FontId::proportional(11.5), t.text_dim);
                     text_right -= g.size().x;
@@ -426,7 +436,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 go_to(app, id);
             }
             if widgets::icon_button_enabled(ui, "link", tl!("Relink…"), false, !sel.is_empty() && can_pick(app), 24.0).clicked() {
-                relink(app, ids(&sel, |_| true));
+                crate::menus::invoke(app, "ui.relinkDialog", json!({ "ids": ids(&sel, |_| true) }));
             }
             if widgets::icon_button_enabled(ui, "link-2-off", tl!("Break Link"), false, !linked.is_empty(), 24.0).clicked() {
                 break_link(app, linked.clone());
@@ -548,7 +558,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let any = !sel.is_empty();
     let missing_any = list["missing"].as_u64().unwrap_or(0) > 0;
     if menu_item(ui, tl!("Relink…"), any && can_pick(app), false) {
-        relink(app, ids(&sel, |_| true));
+        crate::menus::invoke(app, "ui.relinkDialog", json!({ "ids": ids(&sel, |_| true) }));
     }
     if menu_item(ui, tl!("Relink to Folder…"), (any || missing_any) && app.services.pick_folder.is_some(), false) {
         relink_to_folder(app, ids(&sel, |_| true));
@@ -630,5 +640,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if menu_item(ui, tl!("Show Link Info"), true, o.info) {
         set_options(ui.ctx(), |o| o.info = !o.info);
+    }
+    if menu_item(ui, tl!("Show DCS Transparency Interactions"), true, o.dcs) {
+        set_options(ui.ctx(), |o| o.dcs = !o.dcs);
     }
 }

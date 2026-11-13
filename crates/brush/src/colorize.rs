@@ -13,15 +13,26 @@ fn luminance(c: &Color) -> f32 {
 }
 
 fn map_color(c: &Color, mode: Colorization, key: &Color) -> Color {
-    let lum = luminance(c);
+    // Black ink alone is its own tint: its amount is the tint, not how light it displays (100% K
+    // displays lighter than black).
+    let light = match *c {
+        Color::Cmyk { c, m, y, k } if c == 0.0 && m == 0.0 && y == 0.0 => 1.0 - k,
+        _ => luminance(c),
+    };
+    // A process or gray stroke color's tints and shades stay in its model.
+    let (white, black) = match key {
+        Color::Cmyk { .. } => (Color::cmyk(0.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0)),
+        Color::Gray { .. } => (Color::gray(0.0), Color::gray(1.0)),
+        _ => (Color::WHITE, Color::BLACK),
+    };
     match mode {
         Colorization::None => *c,
-        Colorization::Tints => key.lerp(&Color::WHITE, lum),
+        Colorization::Tints => key.lerp_keep_model(&white, light),
         Colorization::TintsAndShades => {
-            if lum < 0.5 {
-                Color::BLACK.lerp(key, lum * 2.0)
+            if light < 0.5 {
+                key.lerp_keep_model(&black, 1.0 - light * 2.0)
             } else {
-                key.lerp(&Color::WHITE, (lum - 0.5) * 2.0)
+                key.lerp_keep_model(&white, (light - 0.5) * 2.0)
             }
         }
         Colorization::HueShift { key: art_key } => {

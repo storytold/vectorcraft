@@ -20,25 +20,106 @@ fn basic_ops() {
 fn guides_are_selected_on_their_own() {
     let mut s = Selection::default();
     s.add(NodeId(1));
-    s.set_guides([2, 0, 2]);
-    assert_eq!((s.objects.clone(), s.guides.clone()), (vec![], vec![2, 0]));
+    let (g0, g2) = (NodeId(10), NodeId(12));
+    s.set_guides([g2, g0, g2]);
+    assert_eq!((s.objects.clone(), s.guides.clone()), (vec![], vec![g2, g0]));
     assert!(s.has_objects_or_guides() && s.is_empty());
     // Shift-adding an object keeps them; a new selection doesn't.
     s.add(NodeId(1));
-    assert_eq!(s.guides, vec![2, 0]);
+    assert_eq!(s.guides, vec![g2, g0]);
     s.set([NodeId(1)]);
     assert!(s.guides.is_empty());
     // Toggled, a guide joins (or leaves) the selected objects.
-    s.toggle_guide(0);
-    assert_eq!((s.objects.clone(), s.guides.clone()), (vec![NodeId(1)], vec![0]));
-    s.toggle_guide(0);
+    s.toggle_guide(g0);
+    assert_eq!((s.objects.clone(), s.guides.clone()), (vec![NodeId(1)], vec![g0]));
+    s.toggle_guide(g0);
     assert_eq!((s.objects.clone(), s.guides.clone()), (vec![NodeId(1)], vec![]));
-    // Pruning drops guides the document no longer has.
+    // Pruning drops guides the document no longer has, ids of other objects, and guides that are
+    // locked or hidden themselves.
     let mut d = Document::new(100.0, 100.0);
-    d.guides.push(crate::Guide::new(true, 10.0));
-    s.set_guides([0, 1]);
+    let layer = d.layers[0].id;
+    let kept = d.add_ruler_guide(&crate::Guide::new(true, 10.0));
+    let locked = d.add_ruler_guide(&crate::Guide { locked: true, ..crate::Guide::new(true, 20.0) });
+    let hidden = d.add_ruler_guide(&crate::Guide { hidden: true, ..crate::Guide::new(true, 30.0) });
+    s.set_guides([kept, NodeId(9999), layer, locked, hidden]);
     s.prune(&d);
-    assert_eq!(s.guides, vec![0]);
+    assert_eq!(s.guides, vec![kept]);
+}
+
+/// A picked object of a dynamic symbol's instance stays picked while it and the groups and layers
+/// around it in the symbol's art are visible, unlocked and not a template. An art edit that hides
+/// or locks it, or one around it, or makes a layer around it a template, drops the pick.
+#[test]
+fn a_picked_symbol_part_is_dropped_once_it_cannot_be_edited() {
+    let rect = || vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 10.0, 10.0));
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    let leaf = Node::path(d.alloc_id(), rect(), crate::Appearance::default_art());
+    let group = Node::group(d.alloc_id(), vec![Arc::new(leaf)]);
+    let layer = Node::layer(d.alloc_id(), "Inner", crate::LayerColor::Preset(2));
+    let root = Node::group(d.alloc_id(), vec![Arc::new(group), Arc::new(layer)]);
+    d.symbols.push(crate::Symbol { dynamic: true, name: "Parts".into(), art: Arc::new(root.clone()) });
+    let inst = d.alloc_id();
+    d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Parts".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
+    // The layer in the art holds a path too.
+    let in_layer = Node::path(d.alloc_id(), rect(), crate::Appearance::default_art());
+    let mut art = root;
+    if let Some(NodeKind::Layer { children, .. }) = art.children_mut().and_then(|c| c.get_mut(1)).map(|c| &mut Arc::make_mut(c).kind) {
+        children.push(Arc::new(in_layer));
+    }
+    d.symbols[0].art = Arc::new(art.clone());
+    let picked = |d: &Document, path: &[u32]| {
+        let mut s = Selection::default();
+        s.set_symbol_part(inst, path.to_vec());
+        s.prune(d);
+        s.symbol_part.is_some()
+    };
+    assert!(picked(&d, &[0, 0]) && picked(&d, &[1, 0]), "editable parts stay picked");
+    assert!(!picked(&d, &[0]) && !picked(&d, &[1]) && !picked(&d, &[]), "a group or layer does not stay picked");
+    let edited = |change: &dyn Fn(&mut Node)| {
+        let mut d = d.clone();
+        let mut art = art.clone();
+        change(&mut art);
+        d.symbols[0].art = Arc::new(art);
+        d
+    };
+    let child = |art: &mut Node, path: &[usize]| -> Node {
+        let mut n = &*art;
+        for &i in path {
+            n = &n.children().unwrap()[i];
+        }
+        n.clone()
+    };
+    let set = |art: &mut Node, path: &[usize], n: Node| {
+        let mut at = art;
+        for &i in path {
+            at = Arc::make_mut(&mut at.children_mut().unwrap()[i]);
+        }
+        *at = n;
+    };
+    let hidden = edited(&|art| {
+        let mut n = child(art, &[0, 0]);
+        n.visible = false;
+        set(art, &[0, 0], n);
+    });
+    assert!(!picked(&hidden, &[0, 0]), "the part is hidden");
+    let locked_group = edited(&|art| {
+        let mut n = child(art, &[0]);
+        n.locked = true;
+        set(art, &[0], n);
+    });
+    assert!(!picked(&locked_group, &[0, 0]), "the group around it is locked");
+    assert!(picked(&locked_group, &[1, 0]), "a part outside the locked group stays");
+    let template = edited(&|art| {
+        let mut n = child(art, &[1]);
+        if let NodeKind::Layer { template, .. } = &mut n.kind {
+            *template = true;
+        }
+        set(art, &[1], n);
+    });
+    assert!(!picked(&template, &[1, 0]), "the layer around it is a template");
+    let hidden_root = edited(&|art| art.visible = false);
+    assert!(!picked(&hidden_root, &[0, 0]), "the art is hidden");
 }
 
 #[test]
@@ -55,16 +136,26 @@ fn guides_show_and_lock_with_their_layer() {
     assert!(d.guide_shown(&crate::Guide::new(false, 5.0)));
     let gone = crate::Guide { layer: Some(NodeId(9999)), ..crate::Guide::new(true, 1.0) };
     assert!(d.guide_shown(&gone) && d.guide_editable(&gone));
-    d.guides.push(g);
-    assert_eq!(d.guides_on(layer).count(), 1);
-    // Guides on no layer, or a gone one, are adopted by the top visible, unlocked layer.
+    // As a node, a guide shows and locks with its layer and on its own.
+    let id = d.add_ruler_guide(&g);
+    let node = d.ruler_guide(id).unwrap();
+    assert_eq!(d.guides_on(layer), std::slice::from_ref(&node));
+    assert!(!d.guide_shown(&node) && !d.guide_editable(&node), "its layer is hidden");
     d.node_mut(layer).unwrap().visible = true;
     d.node_mut(layer).unwrap().locked = false;
-    d.guides.push(crate::Guide::new(false, 5.0));
-    d.guides.push(gone);
-    assert_eq!(d.adopt_guides(), 2);
-    assert!(d.guides.iter().all(|g| g.layer == Some(layer)));
-    assert_eq!(d.adopt_guides(), 0, "once");
+    assert!(d.guide_shown(&node) && d.guide_editable(&node));
+    d.node_mut(id).unwrap().locked = true;
+    let node = d.ruler_guide(id).unwrap();
+    assert!(d.guide_shown(&node) && !d.guide_editable(&node), "locked itself");
+    d.node_mut(id).unwrap().visible = false;
+    assert!(!d.guide_shown(&node), "hidden itself");
+    // Saved guides on no layer, or a gone one, go on the top visible, unlocked layer.
+    d.saved_guides.push(crate::Guide::new(false, 5.0));
+    d.saved_guides.push(gone);
+    assert_eq!(d.guides_into_nodes(), 2);
+    assert!(d.ruler_guides().iter().all(|g| g.layer == Some(layer)));
+    assert_eq!(d.ruler_guides().len(), 3);
+    assert_eq!(d.guides_into_nodes(), 0, "once");
     // A guide saved before guides had layers reads as one on no layer.
     let old: crate::Guide = serde_json::from_str(r#"{"vertical": true, "pos": 5.0}"#).unwrap();
     assert_eq!(old.layer, None);
@@ -86,6 +177,49 @@ fn selection_changes_clear_the_target() {
     s.target = Some(NodeId(1));
     s.set([NodeId(3)]);
     assert_eq!(s.target, None);
+}
+
+#[test]
+fn a_chosen_object_on_a_path_needs_its_group_selected_alone() {
+    use vectorcraft_geom::{Point, Rect, shapes};
+    let mut d = Document::new(200.0, 200.0);
+    let l = d.layers[0].id;
+    let (line, a, b, g, other) = (d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let line = Node::path(line, shapes::line(Point::new(0.0, 100.0), Point::new(200.0, 100.0)), Default::default());
+    let a = Node::path(a, shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Default::default());
+    let b = Node::path(b, shapes::rectangle(Rect::new(20.0, 0.0, 30.0, 10.0)), Default::default());
+    let rec = crate::objects_on_path::ObjectsOnPath::new(line.id, &[&a, &b], crate::objects_on_path::CENTER, 0.0);
+    let (line_id, a_id) = (line.id, a.id);
+    let mut group = Node::new(g, NodeKind::Group { children: vec![Arc::new(line), Arc::new(a), Arc::new(b)], clip: false });
+    group.extras_mut().objects_on_path = Some(Box::new(rec));
+    d.insert(Some(l), 0, group).unwrap();
+    d.insert(Some(l), 1, Node::path(other, shapes::rectangle(Rect::new(150.0, 0.0, 160.0, 10.0)), Default::default())).unwrap();
+    let mut s = Selection::default();
+    s.set_on_path_member(g, a_id);
+    s.prune(&d);
+    assert_eq!((s.objects.as_slice(), s.on_path_member), (&[g][..], Some(a_id)));
+    s.add(other);
+    assert_eq!(s.on_path_member, None, "another object joins the selection");
+    s.set_on_path_member(g, a_id);
+    s.set([g]);
+    assert_eq!(s.on_path_member, None, "a new selection");
+    // The path is not one of the objects, nor is an object outside the group.
+    for m in [line_id, other] {
+        s.set_on_path_member(g, m);
+        s.prune(&d);
+        assert_eq!(s.on_path_member, None, "{m:?}");
+    }
+    // A locked object is not chosen.
+    s.set_on_path_member(g, a_id);
+    d.node_mut(a_id).unwrap().locked = true;
+    s.prune(&d);
+    assert_eq!((s.objects.as_slice(), s.on_path_member), (&[g][..], None), "locked");
+    d.node_mut(a_id).unwrap().locked = false;
+    // Once the group is a plain group, no object of it is chosen.
+    s.set_on_path_member(g, a_id);
+    d.node_mut(g).unwrap().extras_mut().objects_on_path = None;
+    s.prune(&d);
+    assert_eq!((s.objects.as_slice(), s.on_path_member), (&[g][..], None));
 }
 
 #[test]
@@ -191,7 +325,7 @@ fn random_selection(r: &mut u64, ids: &[NodeId]) -> Selection {
     s.key = s.objects.get(below(r, s.objects.len() as u64) as usize).copied();
     s.target = ids.get(below(r, ids.len() as u64) as usize).copied().filter(|_| below(r, 2) == 0);
     s.slices = ids.iter().copied().take(below(r, 3) as usize).collect();
-    s.guides = vec![1, 0];
+    s.guides = vec![NodeId(1), NodeId(0)];
     s
 }
 

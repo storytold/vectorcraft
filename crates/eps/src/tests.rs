@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use vectorcraft_color::{Color, Gradient, GradientKind, GradientMethod, GradientPaint, GradientStop, Paint, Swatch};
+use vectorcraft_color::{Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientMethod, GradientPaint, GradientStop, Paint, Swatch};
 use vectorcraft_doc::{Appearance, AppearanceItem, Dash, Document, ImageBlob, ImageObject, LineCap, LineJoin, Node, NodeKind};
 use vectorcraft_geom::{Affine, PathData, Point, Rect, shapes};
 
@@ -187,6 +187,137 @@ fn gradients_are_smooth_shadings_at_level_3_and_stepped_fills_at_level_2() {
     assert!(page_of(&radial, &EpsOptions { level: Level::Two, ..opts(&radial) }).contains("0 360 newpath arc fill"));
     let ps = text(&export(&linear, &EpsOptions { level: Level::Two, ..opts(&linear) }, None, None).unwrap());
     assert_eq!(dsc(&ps, "LanguageLevel").as_deref(), Some("2"));
+}
+
+/// PostScript has no conic shading: a conic is solid wedges about its center at both levels, each
+/// running on to the seam, and read back from the PostScript it looks as the canvas paints it.
+#[test]
+fn conic_gradients_are_solid_wedges_at_both_levels() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    for aspect in [1.0, -0.5] {
+        let mut g = GradientPaint::new(Gradient::new(GradientKind::Conic, stops.clone()));
+        g.geom = Some(vectorcraft_color::GradientGeom { start: Point::new(100.0, 70.0), end: Point::new(150.0, 70.0), aspect, focal: None });
+        let paint = Paint::Gradient(Box::new(g));
+        let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), paint, Paint::None, 0.0)]);
+        for o in [opts(&d), EpsOptions { level: Level::Two, ..opts(&d) }] {
+            let out = export(&d, &o, None, None).unwrap();
+            assert!(out.warnings.iter().any(|w| w.contains("conic gradients are written as solid wedges")), "{:?}", out.warnings);
+            let page = page_of(&d, &o);
+            assert!(!page.contains("shfill"), "no shading stands in");
+            assert_eq!(page.matches("closepath fill").count(), 360, "a wedge a degree");
+        }
+        let out = export(&d, &opts(&d), None, None).unwrap();
+        let back = import_with(&out.bytes, false).unwrap().document;
+        vectorcraft_testkit::raster::assert_similar(
+            &vectorcraft_testkit::raster::render_artboard(&d),
+            &vectorcraft_testkit::raster::render_artboard(&back),
+            8.0,
+            0.01,
+        );
+    }
+}
+
+/// PostScript has no diamond shading: a diamond is four axial shadings at Level 3 (stepped fills at
+/// Level 2), each clipped to a quadrant of its frame, and read back from the PostScript it looks
+/// as the canvas paints it, with no hairline between the quadrants.
+#[test]
+fn diamond_gradients_are_four_linear_gradients_clipped_to_quadrants() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Diamond, stops));
+    g.geom = Some(vectorcraft_color::GradientGeom { start: Point::new(100.0, 70.0), end: Point::new(140.0, 40.0), aspect: 0.6, focal: None });
+    let paint = Paint::Gradient(Box::new(g));
+    let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), paint, Paint::None, 0.0)]);
+    for (o, shadings) in [(opts(&d), 4), (EpsOptions { level: Level::Two, ..opts(&d) }, 0)] {
+        let out = export(&d, &o, None, None).unwrap();
+        assert!(out.warnings.iter().any(|w| w.contains("diamond gradients are written as four linear gradients")), "{:?}", out.warnings);
+        let page = page_of(&d, &o);
+        assert_eq!(page.matches("shfill").count(), shadings);
+        assert_eq!(page.matches("closepath clip newpath").count(), 4, "a clip a quadrant");
+    }
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let back = import_with(&out.bytes, false).unwrap().document;
+    vectorcraft_testkit::raster::assert_similar(
+        &vectorcraft_testkit::raster::render_artboard(&d),
+        &vectorcraft_testkit::raster::render_artboard(&back),
+        6.0,
+        0.01,
+    );
+}
+
+/// PostScript's shadings pad past their ends: a linear, radial or diamond gradient that repeats or
+/// reflects is written with its stops repeated over the shape, a conic one as wedges that repeat
+/// with the stops; read back from the PostScript, each looks as the canvas paints it, at Level 3
+/// and Level 2.
+#[test]
+fn spread_gradients_are_written_with_their_stops_repeated() {
+    use vectorcraft_color::{GradientGeom, GradientSpread};
+    let c = Point::new(100.0, 100.0);
+    let around = GradientGeom { start: c, end: c + vectorcraft_geom::Vec2::new(60.0, -25.0), aspect: 0.7, focal: None };
+    let cases = [
+        (GradientKind::Linear, GradientGeom { start: Point::new(70.0, 80.0), end: Point::new(150.0, 110.0), aspect: 1.0, focal: None }),
+        (GradientKind::Radial, around),
+        (GradientKind::Radial, GradientGeom { focal: Some(c + vectorcraft_geom::Vec2::new(-15.0, 12.0)), ..around }),
+        (GradientKind::Conic, around),
+        (GradientKind::Diamond, around),
+    ];
+    for (kind, geom) in cases {
+        for spread in [GradientSpread::Repeat, GradientSpread::Reflect] {
+            let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+            let mut g = GradientPaint::new(Gradient { spread, repeats: 3, ..Gradient::new(kind, stops) });
+            g.geom = Some(geom);
+            let paint = Paint::Gradient(Box::new(g));
+            let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 180.0)), paint, Paint::None, 0.0)]);
+            for o in [opts(&d), EpsOptions { level: Level::Two, ..opts(&d) }] {
+                let out = export(&d, &o, None, None).unwrap();
+                let back = import_with(&out.bytes, false).unwrap().document;
+                let (a, b) = (vectorcraft_testkit::raster::render_artboard(&d), vectorcraft_testkit::raster::render_artboard(&back));
+                let st = vectorcraft_testkit::raster::perceptual_diff(&a, &b, 12.0);
+                assert!(
+                    (st.bad_pixels as f64) < 0.03 * st.pixels as f64,
+                    "{kind:?} {spread:?} level {:?}: {} of {} pixels differ",
+                    o.level,
+                    st.bad_pixels,
+                    st.pixels
+                );
+            }
+        }
+    }
+}
+
+/// A gradient that repeats with no stops (a file can hold one) is written as one that pads, to
+/// EPS, legacy `.ai` and the `.ai` editing data.
+#[test]
+fn a_spread_gradient_without_stops_is_written() {
+    use vectorcraft_color::GradientSpread;
+    for kind in [GradientKind::Linear, GradientKind::Radial, GradientKind::Conic, GradientKind::Diamond] {
+        let g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, repeats: 3, ..Gradient::new(kind, vec![]) });
+        let paint = Paint::Gradient(Box::new(g));
+        let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 180.0)), paint.clone(), paint, 4.0)]);
+        export(&d, &opts(&d), None, None).unwrap();
+        export_legacy_ai(&d, &LegacyAiOptions::default()).unwrap();
+        crate::export_ai_editing(&d, &crate::AiEditingOptions::default()).unwrap();
+    }
+}
+
+/// A gradient repeated 256 times across the shape keeps each run's place: the smooth shading's
+/// stitching bounds lie where the runs meet, to well under a run's thousandth.
+#[test]
+fn many_repeats_keep_their_places_in_a_smooth_shading() {
+    use vectorcraft_color::{GradientGeom, GradientSpread};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    // A run of 0.4 pt across a shape 160 pt wide: capped at 256 runs.
+    let mut g = GradientPaint::new(Gradient { spread: GradientSpread::Repeat, repeats: 100, ..Gradient::new(GradientKind::Linear, stops) });
+    g.geom = Some(GradientGeom { start: Point::new(20.0, 100.0), end: Point::new(60.0, 100.0), aspect: 1.0, focal: None });
+    let paint = Paint::Gradient(Box::new(g));
+    let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 180.0)), paint, Paint::None, 0.0)]);
+    let page = page_of(&d, &opts(&d));
+    let bounds: Vec<f64> =
+        page.split("/Bounds [").nth(1).and_then(|s| s.split(']').next()).unwrap().split_whitespace().map(|v| v.parse().unwrap()).collect();
+    let runs = (bounds.len() + 1) as f64;
+    assert_eq!(runs, 256.0, "{bounds:?}");
+    for b in bounds {
+        assert!((b * runs - (b * runs).round()).abs() < 1e-3, "bound {b} is {} runs along", b * runs);
+    }
 }
 
 #[test]
@@ -574,6 +705,60 @@ fn image_data(page: &str) -> Vec<u8> {
     ps::ascii85_decode(&page[at..end]).unwrap()
 }
 
+/// A square filled with a freeform gradient of `a` on the left and `b` on the right, with those
+/// points at `opacity`, exported: (the page, the middle pixel's samples, the warnings).
+fn freeform_mid(a: Color, b: Color, opacity: f32, n: usize) -> (String, Vec<u8>, Vec<String>) {
+    let p = |x, c| FreeformPoint { opacity, ..FreeformPoint::new(Point::new(x, 100.0), c) };
+    let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+    g.freeform = Some(Freeform { points: vec![p(40.0, a), p(160.0, b)], ..Default::default() });
+    let d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0)), Paint::Gradient(Box::new(g)), Paint::None, 0.0)]);
+    let out = export(&d, &opts(&d), None, None).unwrap();
+    let page = text(&out);
+    let size = |key: &str| {
+        let at = page.find(key).unwrap() + key.len();
+        page[at..].split(' ').next().unwrap().parse::<usize>().unwrap()
+    };
+    let (w, h) = (size("/Width "), size("/Height "));
+    let pixels = ps::inflate(&image_data(&page), 1 << 28).unwrap();
+    let at = (h / 2 * w + w / 2) * n;
+    (page, pixels[at..at + n].to_vec(), out.warnings)
+}
+
+#[test]
+fn freeform_gradients_keep_the_inks_of_cmyk_points_and_mix_in_the_points_model() {
+    let (cyan, black) = (Color::cmyk(1.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    let (page, mid, _) = freeform_mid(cyan, black, 1.0, 4);
+    assert!(page.contains("/DeviceCMYK setcolorspace"), "{page}");
+    assert!(mid.iter().zip([128, 0, 0, 128]).all(|(g, w): (&u8, i32)| (i32::from(*g) - w).abs() <= 6), "{mid:?}");
+    // A partly transparent point lays down that share of each ink.
+    let (_, mid, warnings) = freeform_mid(cyan, black, 0.5, 4);
+    assert!(mid.iter().zip([64, 0, 0, 64]).all(|(g, w): (&u8, i32)| (i32::from(*g) - w).abs() <= 6), "{mid:?}");
+    assert!(warnings.iter().any(|w| w.contains("partly transparent")), "{warnings:?}");
+    // Lab points go out as RGB, mixed first in Lab.
+    let (page, mid, _) = freeform_mid(Color::lab(90.0, -60.0, 40.0), Color::lab(30.0, 60.0, -40.0), 1.0, 3);
+    assert!(page.contains("/DeviceRGB setcolorspace"), "{page}");
+    let want = Color::lab(60.0, 0.0, 0.0).to_rgba8(1.0);
+    assert!(mid.iter().zip(want).all(|(g, w)| g.abs_diff(w) <= 6), "{mid:?} vs {want:?}");
+}
+
+#[test]
+fn gray_freeform_points_are_written_as_black_ink_in_a_cmyk_document() {
+    let p = |x, c| FreeformPoint::new(Point::new(x, 100.0), c);
+    let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+    g.freeform = Some(Freeform { points: vec![p(40.0, Color::gray(0.2)), p(160.0, Color::gray(0.8))], ..Default::default() });
+    let mut d = doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0)), Paint::Gradient(Box::new(g)), Paint::None, 0.0)]);
+    d.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+    let page = text(&export(&d, &opts(&d), None, None).unwrap());
+    let size = |key: &str| {
+        let at = page.find(key).unwrap() + key.len();
+        page[at..].split(' ').next().unwrap().parse::<usize>().unwrap()
+    };
+    let (w, h) = (size("/Width "), size("/Height "));
+    let pixels = ps::inflate(&image_data(&page), 1 << 28).unwrap();
+    let at = (h / 2 * w + w / 2) * 4;
+    assert!(pixels[at..at + 3] == [0, 0, 0] && pixels[at + 3].abs_diff(128) <= 6, "{:?}", &pixels[at..at + 4]);
+}
+
 #[test]
 fn images_are_flate_with_masked_pixels_at_level_3_and_run_length_at_level_2() {
     let d = png_doc();
@@ -867,7 +1052,7 @@ fn a_tiff_preview_sits_behind_the_binary_header() {
     }
     // Asked for but not rendered: the file has no preview, and says so.
     let out = export(&d, &EpsOptions { preview: Preview::TiffColor, ..opts(&d) }, None, None).unwrap();
-    assert!(out.bytes.starts_with(b"%!PS") && out.warnings.iter().any(|w| w.contains("preview")));
+    assert!(out.bytes.starts_with(b"%!PS") && out.setting_notes.iter().any(|w| w.contains("preview")));
 }
 
 #[test]

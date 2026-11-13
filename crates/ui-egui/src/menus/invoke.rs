@@ -1,12 +1,13 @@
-use super::state::{SUBJECT_COMMANDS, has_subject, waits_for_ime};
+use super::state::{SUBJECT_COMMANDS, enabled, has_subject, waits_for_ime};
 use super::{Value, VectorcraftApp, json};
 
 /// What a menu click runs: items whose label ends with "…" and that carry default params open a
-/// generic parameter dialog (fields = the defaults) instead of running immediately.
+/// generic parameter dialog (fields = the defaults) instead of running immediately. A script of the
+/// Scripts folder runs, whatever its name ends with.
 pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
     let dialog = label.ends_with('…')
         && p.as_object().is_some_and(|o| !o.is_empty())
-        && !matches!(id, "effect.dialog" | "window.panel" | "window.brightness" | "view.screenMode" | "plugin.dialog");
+        && !matches!(id, "effect.dialog" | "window.panel" | "window.brightness" | "view.screenMode" | "plugin.dialog" | crate::scripts_menu::COMMAND);
     if dialog {
         return ("ui.paramDialog".into(), json!({"command": id, "label": label.trim_end_matches('…'), "params": p}));
     }
@@ -28,12 +29,13 @@ pub(crate) fn with_held_keys(target: (String, Value), held: egui::Modifiers) -> 
 
 /// The dialog of command `id` that shows the selection's current values (its query): its heading
 /// and the queried values it doesn't show. Type on a Path Options leaves the brackets where they
-/// are.
+/// are. Color Mask opens on the selected image's mask settings (the defaults without one).
 fn queried_dialog(id: &str) -> Option<(&'static str, &'static [&'static str])> {
     Some(match id {
         // Whether the text overflows, and Shrink Text's factor, are read-only facts.
         "text.areaOptions" => ("Area Type Options", &["overflow", "fitScale"]),
         "type.pathOptions" => ("Type on a Path Options", &["start", "end"]),
+        crate::addons::image::COLOR_MASK => ("Color Mask", &["masked"]),
         _ => return None,
     })
 }
@@ -80,6 +82,7 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
         crate::addons::typetools::COMMAND => (crate::addons::typetools::KIND, crate::addons::typetools::fields(app)),
         crate::addons::select::COMMAND => (crate::addons::select::KIND, crate::addons::select::fields(app)),
         "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::open_fields(app)),
+        "artboard.rename" => (crate::dialogs::rename_artboards::KIND, crate::dialogs::rename_artboards::open_fields(app)),
         _ => return None,
     })
 }
@@ -137,6 +140,15 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     if waits_for_ime(app, id) {
         return;
     }
+    // A command chosen while the tool computes an edit on another thread (a Shape Builder merge)
+    // comes after it: the edit is applied first, so the command's dialog, or the app's own dialog
+    // (Recolor Artwork), opens on the art as the gesture left it.
+    let r = app.session.finish_tool_edit();
+    crate::canvas::apply_requests(app, r);
+    // A shortcut or a palette pick on a filter plug-in does nothing while its menu item is dimmed.
+    if id == "plugin.dialog" && !enabled(app, id) {
+        return;
+    }
     if SUBJECT_COMMANDS.contains(&id)
         && p.get("ids").is_none_or(|ids| ids.as_array().is_some_and(Vec::is_empty))
         && p.get("id").is_none()
@@ -149,6 +161,10 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         && let Some((kind, fields)) = menu_dialog(app, id)
     {
         app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
+        return;
+    }
+    // A plug-in command with parameters asks for them, from its menu item or its shortcut.
+    if p.as_object().is_none_or(|o| o.is_empty()) && crate::dialogs::plugin::open_command(app, id) {
         return;
     }
     if open_view_dialog(app, id, &p) || open_object_dialog(app, id, &p) {
@@ -169,6 +185,12 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     // Image Trace traces off the UI thread, with its progress (#3098).
     if matches!(id, "imageTrace.make" | "imageTrace.makeAndExpand") {
         if let Err(e) = crate::trace_runs::start(app, id, p, false) {
+            app.status(e);
+        }
+        return;
+    }
+    if let Some(r) = crate::panels::artboards::run_menu_item(app, id, &p) {
+        if let Err(e) = r {
             app.status(e);
         }
         return;
@@ -260,6 +282,20 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
         let _ = app.run("ui.paramDialog", json!({"command": id, "label": "New View", "params": {"name": name}}));
         return true;
     }
+    // Composite Fonts…: the document's composite fonts, to edit before OK sets them.
+    if id == crate::dialogs::composite_fonts::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::composite_fonts::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Edit Custom Dictionary…: the custom dictionary's words in a list, to add, delete or change.
+    if id == crate::dialogs::custom_dictionary::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::custom_dictionary::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
     // Edit Views…: the saved views in a list, to rename or delete.
     if id == "view.saved.edit" && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::edit_views::open(app) {
@@ -340,10 +376,12 @@ fn open_object_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
         }
         return true;
     }
-    // Export Assets, Remove, Rename and Asset Export Settings with no params, as the command
-    // palette runs them (#4864): the Asset Export panel, where each one is done. A panel that already
-    // shows stays open.
-    if matches!(id, "assets.export" | "assets.remove" | "assets.rename" | "assets.settings.set") && p.as_object().is_none_or(|o| o.is_empty()) {
+    // Export Assets, Remove, Rename, Asset Export Settings, Export 3D Assets and 3D Export Format
+    // with no params, as the command palette runs them (#4864): the Asset Export panel, where each
+    // one is done. A panel that already shows stays open.
+    if matches!(id, "assets.export" | "assets.remove" | "assets.rename" | "assets.settings.set" | "assets.export3D" | "assets.set3DFormat")
+        && p.as_object().is_none_or(|o| o.is_empty())
+    {
         if let Err(e) = crate::panel_docking::reveal_panel(app, crate::panels::asset_export::ID) {
             app.status(e);
         }

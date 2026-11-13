@@ -19,7 +19,7 @@ use super::{
 };
 
 #[cfg(test)]
-pub(crate) use paint::{SLICES_MADE, STROKES_OUTLINED, anchors_moved, offset_between};
+pub(crate) use paint::{CONTROL_BOXES_MEASURED, SLICES_MADE, STROKES_OUTLINED, anchors_moved, offset_between};
 
 mod images;
 mod nodes;
@@ -28,9 +28,13 @@ mod text;
 
 #[cfg(test)]
 pub(crate) use paint::{CROP_STROKES, crop_line};
+#[cfg(test)]
+pub(crate) use text::{edge_coverage, edge_grid, type_reach};
 
 impl Renderer {
     pub fn new() -> Self {
+        // Envelopes map type from its glyphs here too, without an engine session.
+        vectorcraft_text::register_envelope_ink();
         Self {
             texts: FrameCache::new(lru::TEXT_BUDGET, 1024),
             text_ids: PtrMap::default(),
@@ -41,6 +45,9 @@ impl Renderer {
             kept: PtrMap::default(),
             symbols: vec![],
             plugin_revision: 0,
+            brush_library: None,
+            painting_plugins: false,
+            paint_names: 0,
             strokes: PtrMap::default(),
             moved_strokes: PtrMap::default(),
             char_strokes: FrameCache::new(lru::CHAR_STROKE_BUDGET, 0),
@@ -57,12 +64,21 @@ impl Renderer {
             brushes: Default::default(),
             shadows: PtrMap::default(),
             pixel_fx: PtrMap::default(),
+            type_edges: FrameCache::new(lru::TYPE_EDGE_BUDGET, 0),
             doc_inputs: None,
             transparency: None,
             live: live::LiveCache::default(),
             knockout: false,
             shape_of: 0,
             fx_arts: FrameCache::new(lru::FX_ART_BUDGET, 256),
+            measured: PtrMap::default(),
+            measured_bytes: 0,
+            measured_budget: lru::MEASURED_BUDGET,
+            pass_bounds: PtrMap::default(),
+            three_d_bounds: PtrMap::default(),
+            three_d_kept: 0,
+            #[cfg(test)]
+            three_d_sweeps: 0,
             placed_arts: FrameCache::new(lru::PLACED_ART_BUDGET, 256),
             placed_frame: None,
             nested: 0,
@@ -89,28 +105,35 @@ impl Renderer {
         }
     }
 
-    /// Render `doc` into a `width`×`height` image using `view` (document → pixel transform).
+    /// Render `doc` into a `width`×`height` image using `view` (document → pixel transform). Type
+    /// set in one of the document's composite fonts draws in the document's definition, also when
+    /// no session has registered it (a document that is not in front, or read from a file).
     pub fn render(&mut self, doc: &Document, width: u32, height: u32, view: Affine, opts: &RenderOptions) -> Rendered {
-        self.render_as(doc, width, height, view, opts, false)
+        let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
+        let _frame = vectorcraft_text::KeptLayoutsFrame::begin();
+        self.render_as(doc, width, height, view, opts, false, 1)
     }
 
     /// [`Self::render`], or with `inks` the ink amounts in the working CMYK space instead of
-    /// screen colours (4 bytes a pixel, see [`Self::render_region_inks`]).
-    fn render_as(&mut self, doc: &Document, width: u32, height: u32, view: Affine, opts: &RenderOptions, inks: bool) -> Rendered {
+    /// screen colours (4 bytes a pixel, see [`Self::render_region_inks`]). `cell` is the side of a
+    /// pixel of the output in pixels of this render: the supersampling factor while an export
+    /// draws its art at several times its size, else 1 ([`Frame::output`]).
+    #[allow(clippy::too_many_arguments)]
+    fn render_as(&mut self, doc: &Document, width: u32, height: u32, view: Affine, opts: &RenderOptions, inks: bool, cell: u32) -> Rendered {
         let start = now();
         if opts.supersample && opts.anti_alias == AntiAlias::Art && opts.mask_view.is_none() {
             let (w, h) = (width.clamp(1, MAX_CONTEXT_SIDE), height.clamp(1, MAX_CONTEXT_SIDE));
             if let Some(k) = supersample_factor(w, h) {
                 let hard = RenderOptions { anti_alias: AntiAlias::None, supersample: false, ..opts.clone() };
                 let hairline = std::mem::replace(&mut self.hairline, f64::from(k));
-                let big = self.render_as(doc, w * k, h * k, Affine::scale(f64::from(k)) * view, &hard, inks);
+                let big = self.render_as(doc, w * k, h * k, Affine::scale(f64::from(k)) * view, &hard, inks, k);
                 self.hairline = hairline;
                 let pixels = downsample(&big.pixels, big.width as usize, big.height as usize, k as usize);
                 self.stats.micros = now().saturating_sub(start);
                 return Rendered { width: w, height: h, pixels };
             }
         }
-        self.check_plugins();
+        self.check_plugins(doc);
         // The document's own symbols: proofing rewrites the colors and blend modes of their art.
         self.check_symbols(doc);
         let prepared = proof::prepare(doc, opts, &mut self.proof_art);
@@ -126,8 +149,9 @@ impl Renderer {
         let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
         let screen = if opts.rich_black { Ink::RichBlack } else { Ink::Display };
         let symbols = doc.symbol_boxes().quick();
-        let plates = proof::plate_lut(opts);
-        let frame = Frame { mt: threads > 0, doc, symbols: &symbols, view, visible, px, opts, ink: screen, plates: plates.as_deref() };
+        let output = Affine::scale(1.0 / f64::from(cell.max(1))) * view;
+        let plates = proof::plate_lut(opts, doc);
+        let frame = Frame { mt: threads > 0, doc, symbols: &symbols, view, visible, px, opts, ink: screen, output, plates: plates.as_deref() };
         self.begin_frame();
         // View Opacity Mask: the mask's coverage in greyscale instead of the artwork.
         if let Some(m) = opts.mask_view.and_then(|id| doc.node(id)).and_then(|n| n.extras().mask.as_deref()) {
@@ -208,18 +232,23 @@ impl Renderer {
         }
         // Filtered rasters are large: only those of the last frame stay.
         self.pixel_fx.retain(|_, e| e.stamp == g);
+        self.type_edges.sweep(g);
         self.texts.sweep(g);
         self.text_ids.retain(|_, key| self.texts.contains_key(key));
         self.char_strokes.sweep(g);
         self.clips.sweep(g);
         self.clip_paints.sweep(g);
         self.fx_arts.sweep(g);
+        // Only the 3D art still kept (in `fx_arts`) keeps its bounds.
+        self.let_go_of_measured();
         self.placed_arts.sweep(g);
         self.brushes.entries.sweep(g);
         self.live.sweep(g);
     }
 
-    /// Draw frame `f` (`w`×`h` pixels): the background, the artboards and the page's art.
+    /// Draw frame `f` (`w`×`h` pixels): the artboards and the page's art, then the background
+    /// under them. The art blends only with itself, as it does on the canvas, where the paper is
+    /// drawn apart from it: a Screen glow on the bare page stays visible on a white background (#6125).
     fn draw_frame(&mut self, f: &Frame, w: u16, h: u16) -> Vec<u8> {
         let (threads, opts) = (self.threads, f.opts);
         let kept = self.contexts.iter().position(|(t, c)| *t == threads && c.width() == w && c.height() == h);
@@ -232,13 +261,7 @@ impl Renderer {
         };
         // `reset` keeps the threshold of the previous render: set it every time.
         ctx.set_aliasing_threshold(opts.anti_alias.threshold());
-        let render_mode = if opts.precise { vello_cpu::RenderMode::OptimizeQuality } else { vello_cpu::RenderMode::OptimizeSpeed };
-        self.raster = vello_cpu::RasterizerSettings { render_mode, ..Default::default() };
-        if let Some(bg) = opts.background {
-            ctx.set_transform(Affine::IDENTITY);
-            ctx.set_paint(f.ink.fixed(bg));
-            ctx.fill_rect(&kurbo::Rect::new(0.0, 0.0, w as f64, h as f64));
-        }
+        self.raster = raster_settings(opts);
         if opts.artboards && !opts.outline {
             // Paper: white on screen, no ink on the ink planes.
             ctx.set_transform(f.view);
@@ -265,7 +288,11 @@ impl Renderer {
         if self.contexts.len() > 2 {
             self.contexts.remove(0);
         }
-        pm.data_as_u8_slice().to_vec()
+        let mut pixels = pm.data_as_u8_slice().to_vec();
+        if let Some(bg) = opts.background {
+            over_background(&mut pixels, f.ink.fixed8(bg));
+        }
+        pixels
     }
 
     /// The page's art: the layers (or the pattern being edited), inside the page group when the
@@ -315,7 +342,9 @@ impl Renderer {
     pub fn render_region_inks(&mut self, doc: &Document, region: Rect, scale: f64, opts: &RenderOptions) -> Vec<u8> {
         let (w, h) = region_pixels(region, scale);
         let view = Affine::scale(scale) * Affine::translate((-region.x0, -region.y0));
-        self.render_as(doc, w, h, view, opts, true).pixels
+        let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
+        let _frame = vectorcraft_text::KeptLayoutsFrame::begin();
+        self.render_as(doc, w, h, view, opts, true, 1).pixels
     }
 
     /// Render a single node (thumbnails, previews) fitted into `size`×`size` pixels.
@@ -330,26 +359,66 @@ impl Renderer {
 
     /// [`Self::render_node`] with `opts` (e.g. [`RenderOptions::mark_undecoded_images`]).
     pub fn render_node_with(&mut self, doc: &Document, n: &Arc<Node>, w: u16, h: u16, view: Affine, opts: &RenderOptions) -> Option<Rendered> {
-        self.check_plugins();
+        let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
+        self.check_plugins(doc);
         self.check_symbols(doc);
-        let inv = view.inverse();
-        let visible = inv.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
+        let visible = view.inverse().transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
+        let pixels = self.node_pixels(doc, n, (w, h), view, visible, opts, false, 1);
+        Some(Rendered { width: w as u32, height: h as u32, pixels })
+    }
+
+    /// Node `n` drawn into `w`×`h` transparent pixels through `view`, culled to `visible` (document
+    /// space); `forced` draws it whatever its visibility and bounds. With [`RenderOptions::supersample`]
+    /// and Art Optimized edges the art is drawn with hard edges at several times the size and
+    /// averaged down, and [`RenderOptions::precise`] picks the quality render mode, as in a page
+    /// render ([`Self::render_as`], [`Self::draw_frame`]). `cell` is as in [`Self::render_as`].
+    #[allow(clippy::too_many_arguments)]
+    fn node_pixels(
+        &mut self,
+        doc: &Document,
+        n: &Arc<Node>,
+        (w, h): (u16, u16),
+        view: Affine,
+        visible: Rect,
+        opts: &RenderOptions,
+        forced: bool,
+        cell: u32,
+    ) -> Vec<u8> {
+        if opts.supersample
+            && opts.anti_alias == AntiAlias::Art
+            && let Some(k) = supersample_factor(u32::from(w), u32::from(h))
+        {
+            let hard = RenderOptions { anti_alias: AntiAlias::None, supersample: false, ..opts.clone() };
+            // `supersample_factor` keeps each side within MAX_CONTEXT_SIDE, so it fits in a u16.
+            let (bw, bh) = (u32::from(w) * k, u32::from(h) * k);
+            let hairline = std::mem::replace(&mut self.hairline, f64::from(k));
+            let big = self.node_pixels(doc, n, (bw as u16, bh as u16), Affine::scale(f64::from(k)) * view, visible, &hard, forced, k);
+            self.hairline = hairline;
+            return downsample(&big, bw as usize, bh as usize, k as usize);
+        }
         let px = 1.0 / view.determinant().abs().sqrt().max(1e-12);
         let mut ctx = single_threaded_context(w, h);
         ctx.set_aliasing_threshold(opts.anti_alias.threshold());
         let symbols = doc.symbol_boxes().quick();
-        let frame = Frame { mt: false, doc, symbols: &symbols, view, visible, px, opts, ink: Ink::Display, plates: None };
+        let output = Affine::scale(1.0 / f64::from(cell.max(1))) * view;
+        let frame = Frame { mt: false, doc, symbols: &symbols, view, visible, px, opts, ink: Ink::Display, output, plates: None };
+        let raster = std::mem::replace(&mut self.raster, raster_settings(opts));
         self.begin_frame();
         (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);
         self.clip_paths.clear();
-        self.draw_arc(&mut ctx, &frame, n);
-        let pm = self.finish(&mut ctx, vello_cpu::RasterizerSettings::default());
+        if forced {
+            self.draw_forced_arc(&mut ctx, &frame, n);
+        } else {
+            self.draw_arc(&mut ctx, &frame, n);
+        }
+        let pm = self.finish(&mut ctx, self.raster);
         self.end_frame();
-        Some(Rendered { width: w as u32, height: h as u32, pixels: pm.data_as_u8_slice().to_vec() })
+        self.raster = raster;
+        pm.data_as_u8_slice().to_vec()
     }
 
     /// Render any node (also one outside the tree, e.g. opacity-mask art) fitted into
-    /// `size`×`size` pixels, optionally over a solid premultiplied background. A symbol instance
+    /// `size`×`size` pixels, optionally over a solid straight-alpha background. A symbol instance
     /// is fitted by its symbol's art in `doc`.
     pub fn render_node_thumbnail(&mut self, doc: &Document, n: &Node, size: u32, background: Option<[u8; 4]>) -> Option<Rendered> {
         self.render_node_thumbnail_with(doc, n, size, background, &RenderOptions::default())
@@ -369,28 +438,36 @@ impl Renderer {
         background: Option<[u8; 4]>,
         opts: &RenderOptions,
     ) -> Option<Rendered> {
-        self.check_plugins();
+        let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
+        self.check_plugins(doc);
         self.check_symbols(doc);
         let b = brush_fx::cull_bounds(&doc.symbol_boxes(), n)?;
         let w = size.clamp(1, MAX_CONTEXT_SIDE) as u16;
         // A 1-pixel margin on each side, unless the thumbnail is too small to keep one.
         let s = (w as f64 - 2.0).max(1.0) / b.width().max(b.height()).max(1e-6);
         let view = Affine::translate((w as f64 / 2.0, w as f64 / 2.0)) * Affine::scale(s) * Affine::translate(-b.center().to_vec2());
-        let mut ctx = single_threaded_context(w, w);
-        ctx.set_aliasing_threshold(opts.anti_alias.threshold());
+        let mut pixels = self.node_pixels(doc, &Arc::new(n.clone()), (w, w), view, b.inflate(1.0, 1.0), opts, true, 1);
         if let Some(bg) = background {
-            ctx.set_paint(peniko::Color::from_rgba8(bg[0], bg[1], bg[2], bg[3]));
-            ctx.fill_rect(&kurbo::Rect::new(0.0, 0.0, w as f64, w as f64));
+            over_background(&mut pixels, bg);
         }
-        let symbols = doc.symbol_boxes().quick();
-        let frame =
-            Frame { mt: false, doc, symbols: &symbols, view, visible: b.inflate(1.0, 1.0), px: 1.0 / s, opts, ink: Ink::Display, plates: None };
-        self.begin_frame();
-        (self.knockout, self.nested, self.backdrop, self.picture) = (false, 0, None, None);
-        self.clip_paths.clear();
-        self.draw_forced_arc(&mut ctx, &frame, &Arc::new(n.clone()));
-        let pm = self.finish(&mut ctx, vello_cpu::RasterizerSettings::default());
-        self.end_frame();
-        Some(Rendered { width: w as u32, height: w as u32, pixels: pm.data_as_u8_slice().to_vec() })
+        Some(Rendered { width: w as u32, height: w as u32, pixels })
+    }
+}
+
+/// The rasterizer settings for `opts`: the quality render mode when [`RenderOptions::precise`] is set.
+fn raster_settings(opts: &RenderOptions) -> vello_cpu::RasterizerSettings {
+    let render_mode = if opts.precise { vello_cpu::RenderMode::OptimizeQuality } else { vello_cpu::RenderMode::OptimizeSpeed };
+    vello_cpu::RasterizerSettings { render_mode, ..Default::default() }
+}
+
+/// Premultiplied RGBA `pixels` drawn over the solid color `background` (`[r, g, b, a]`, straight).
+pub(crate) fn over_background(pixels: &mut [u8], [r, g, b, a]: [u8; 4]) {
+    let alpha = u32::from(a);
+    let under = [u32::from(r) * alpha / 255, u32::from(g) * alpha / 255, u32::from(b) * alpha / 255, alpha];
+    for p in pixels.as_chunks_mut::<4>().0 {
+        let rest = 255 - u32::from(p[3]);
+        for (v, bg) in p.iter_mut().zip(under) {
+            *v = (u32::from(*v) + (bg * rest + 127) / 255).min(255) as u8;
+        }
     }
 }

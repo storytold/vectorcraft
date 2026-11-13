@@ -9,6 +9,7 @@ use super::slots::{
 use super::{
     Affine, Arc, BTreeSet, Document, Node, NodeId, NodeKind, PathData, Rect, Scaling, Story, Structure, Texts, Unit, VariableKind, Vec2, ai,
 };
+use vectorcraft_doc::PlacedDocument;
 
 /// Which box of the editing copy is the page.
 #[derive(Clone, Copy)]
@@ -21,7 +22,8 @@ pub(super) enum Page {
 
 /// How art moved from a page to its place in the layers' document transforms: its pattern tiles
 /// move with it.
-pub(super) const PAGE_MOVE: Scaling = Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: false, patterns: true };
+pub(super) const PAGE_MOVE: Scaling =
+    Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: false, patterns: true, keep_fit_when_flat: false };
 
 /// The page (`visible`, the file read as its page) and the place of its area in the layers'
 /// document.
@@ -47,7 +49,7 @@ pub(super) struct Frame<'a> {
 /// (a `.ai` saved without its PDF part), its type is made from the file's text document alone and
 /// nothing is compared. `outlined`: the page's type was read as outlines, so it has none to put in
 /// the text objects. `unit`: the size in points of a unit of the page's user space (see
-/// [`layered_ai`]).
+/// [`layered_ai`]). `names`: the encoding of names that aren't UTF-8.
 pub(super) fn build(
     data: &[u8],
     visible: Option<&Document>,
@@ -55,19 +57,23 @@ pub(super) fn build(
     outlined: bool,
     trust: bool,
     unit: f64,
+    names: ai::NameEncoding,
 ) -> Result<(Document, Vec<String>), String> {
     // An EPS (its page is its art) draws a Large Canvas page at full size; a `.ai` keeps its art
     // space, as its PDF part may (#2031).
-    build_from(ai::read(data, matches!(page, Page::Art))?, data, visible, page, outlined, trust, unit)
+    let large_canvas = matches!(page, Page::Art);
+    let structure = if visible.is_some() { ai::read_over_page(data, large_canvas, names)? } else { ai::read_in(data, large_canvas, names)? };
+    build_from(structure, data, visible, page, outlined, trust, unit)
 }
 
 /// [`build`] without a page, for a `.ai` whose PDF part can't be read, its first page `page`
 /// (width and height, either way round) points large in units of `unit` points: the document is
 /// drawn `unit` times as large when its first artboard, or its art's box, has the page's size in
 /// those units and not in points, as [`build_from`] decides with a page; else as many times as
-/// large as its declared large canvas scale when it has the page's size at that scale.
-pub(super) fn build_on_page(data: &[u8], page: (f64, f64), unit: f64) -> Result<(Document, Vec<String>), String> {
-    let structure = ai::read(data, false)?;
+/// large as its declared large canvas scale when it has the page's size at that scale. `names`: the
+/// encoding of names that aren't UTF-8.
+pub(super) fn build_on_page(data: &[u8], page: (f64, f64), unit: f64, names: ai::NameEncoding) -> Result<(Document, Vec<String>), String> {
+    let structure = ai::read_in(data, false, names)?;
     let board = structure.artboard.map(|a| structure.to_doc.transform_rect_bbox(a));
     let art = structure.bbox.map(|[a, b, c, d]| structure.to_doc.transform_rect_bbox(Rect::new(a, b, c, d)));
     let (w, h) = page;
@@ -98,8 +104,7 @@ pub(super) type Built = Result<(Document, Vec<String>), String>;
 /// units ([`page_scale_alone`]). The document is drawn at that scale. Else `Err(structure)`, for
 /// [`build_from`] with the page.
 pub(super) fn build_without_page(structure: Structure, data: &[u8], pages: &[(f64, f64)], unit: f64) -> Result<Built, Box<Structure>> {
-    let Some(scale) = page_scale_alone(&structure, pages, unit).filter(|_| nothing_waits_on_page(&structure) && type_all_made(&structure, data))
-    else {
+    let Some(scale) = alone_scale(&structure, data, pages, unit) else {
         return Err(Box::new(structure));
     };
     let styles = structure.styles_read;
@@ -112,6 +117,12 @@ pub(super) fn build_without_page(structure: Structure, data: &[u8], pages: &[(f6
         (doc, notes)
     });
     Ok(built)
+}
+
+/// The scale [`build_without_page`] draws `structure` (the editing copy `data` read) at on `pages`
+/// in units of `unit` points, when it builds it without the page.
+pub(super) fn alone_scale(structure: &Structure, data: &[u8], pages: &[(f64, f64)], unit: f64) -> Option<f64> {
+    page_scale_alone(structure, pages, unit).filter(|_| nothing_waits_on_page(structure) && type_all_made(structure, data))
 }
 
 /// Is nothing in `structure` waiting on the page: no object unread (the page's art takes its
@@ -180,6 +191,36 @@ fn left_out_of_comparisons(page: Page, mut restyled: Vec<Rect>, placeholders: Ve
     restyled
 }
 
+/// A single PDF page capped at the format's 14,400-unit limit, without user-space scaling.
+/// The other dimension must still match; unrelated page-size mismatches remain errors.
+fn capped_pdf_page(doc: &Document, visible: &Document, board: Rect, page: Rect, unit: f64) -> bool {
+    let capped = |side: f64, pdf: f64| (pdf - 14_400.0).abs() <= 0.5 && side > pdf + 0.5;
+    let matching = |side: f64, pdf: f64| (side - pdf).abs() <= 0.5 || capped(side, pdf);
+    unit == 1.0
+        && doc.artboards.len() == 1
+        && visible.artboards.len() == 1
+        && (capped(board.width(), page.width()) || capped(board.height(), page.height()))
+        && matching(board.width(), page.width())
+        && matching(board.height(), page.height())
+}
+/// The PDF-covered area of a trusted oversized artboard; its full artboard stays in the document.
+fn compared_page_rect(
+    doc: &Document,
+    visible: &Document,
+    board: Rect,
+    pdf: Rect,
+    trusted_page: Option<Page>,
+    unit: f64,
+    warnings: &mut Vec<String>,
+) -> Rect {
+    if matches!(trusted_page, Some(Page::Artboard)) && capped_pdf_page(doc, visible, board, pdf, unit) {
+        warnings.push("the editing data's artboard is larger than the PDF page: the full artboard comes from its editing data".into());
+        Rect::new(board.x0, board.y0, board.x0 + pdf.width(), board.y0 + pdf.height())
+    } else {
+        board
+    }
+}
+
 /// [`build`] from `structure`, the editing copy `data` already read.
 pub(super) fn build_from(
     structure: Structure,
@@ -203,15 +244,18 @@ pub(super) fn build_from(
         restyled,
         placeholders,
         placed_elsewhere,
+        placed_pages,
         envelopes_drawn,
         styles_read,
+        text_patterns,
         canvas_scale,
         xml_ids,
         bindings,
         bindings_skipped,
-        warnings,
+        warped_type,
+        mut warnings,
     } = structure;
-    let restyled = left_out_of_comparisons(page, restyled, placeholders);
+    let mut restyled = left_out_of_comparisons(page, restyled, placeholders);
     // Editing data in the units of the page's user space ([`in_units`]), or at its declared large
     // canvas scale ([`page_scale`]), is compared with the page scaled down to those units, and the
     // document read from it is scaled up by `unit`.
@@ -257,6 +301,7 @@ pub(super) fn build_from(
         {
             (rect, cropped) = (art, true);
         }
+        rect = compared_page_rect(&doc, visible, rect, page_rect, trust.then_some(page), unit, &mut warnings);
         if !fits(&rect) {
             // Both sizes in points as the fields show them, and the editing data's page to the
             // file's as a scale (1:10 is a tenth of its size) when its sides are in proportion and
@@ -284,16 +329,20 @@ pub(super) fn build_from(
                 lone.push(vec![Arc::new(n.clone())]);
             }
         });
-        // A `.ai` read as its PDF part has a page for each artboard, in a row: the type on each
-        // goes where the layers have that artboard.
+        // A `.ai` read as its PDF part has a page for each artboard it was saved with, in a row:
+        // the type on each goes where the layers have that artboard.
         let pages: Vec<Rect> = visible.artboards.iter().map(|a| a.rect).collect();
-        let boards = page_boards(&doc.artboards, first, &pages);
+        let boards = page_boards(&doc, visible, first, &pages);
+        // The first page's type goes to the first artboard only when that artboard is the page's
+        // (every artboard has a page); otherwise it goes to `rect`, the art's box or the editing
+        // data's artboard.
+        let first_board = first > 0 || pages.len() == doc.artboards.len();
+        let board_of = |i: usize| boards.as_ref()?.get(i).filter(|_| i > 0 || first_board);
         let page_moves: Vec<(Rect, Affine)> = pages
             .iter()
             .enumerate()
             .map(|(i, page)| {
-                let move_to_doc =
-                    boards.and_then(|boards| boards.get(i)).map(|board| Affine::translate(board.rect.origin() - page.origin())).unwrap_or(shift);
+                let move_to_doc = board_of(i).map(|board| Affine::translate(board.rect.origin() - page.origin())).unwrap_or(shift);
                 (*page, move_to_doc)
             })
             .collect();
@@ -312,7 +361,7 @@ pub(super) fn build_from(
         }
         for object in shown.iter_mut().chain(hidden.iter_mut()).chain(lone.iter_mut()) {
             let on = page_of(object);
-            let shift = match on.and_then(|(i, page)| Some((boards?.get(i)?, page))) {
+            let shift = match on.and_then(|(i, page)| Some((board_of(i)?, page))) {
                 Some((board, page)) => Affine::translate(board.rect.origin() - page.origin()),
                 None => shift,
             };
@@ -322,7 +371,7 @@ pub(super) fn build_from(
         }
         // Pages cropped to the art are copies of the first, and a PDF saved with some of the
         // artboards can hold any of them.
-        let more = more_pages(boards.filter(|b| !cropped && b.len() == doc.artboards.len()), &pages, comparison_samples(visible));
+        let more = more_pages(boards.as_deref().filter(|b| !cropped && b.len() == doc.artboards.len()), &pages, comparison_samples(visible));
         // An EPS saved as its artboard has the art outside it left out of its page.
         let artboard_page =
             artboard.is_some_and(|a| [a.x0 - art_box.x0, a.y0 - art_box.y0, a.x1 - art_box.x1, a.y1 - art_box.y1].iter().all(|d| d.abs() <= 1.0));
@@ -357,7 +406,7 @@ pub(super) fn build_from(
     // The page's type that needs no text object of the layers: the layers' own legacy text, or
     // placed files that show it.
     let as_outlines = page_type_elsewhere(infos.is_empty(), infos.iter().all(|i| !i.shown), &mut shown, &mut hidden, &doc, &placed_elsewhere)?;
-    let texts = Texts::read(data);
+    let texts = Texts::read(data).map(|t| t.with_patterns(text_patterns));
     // Each story is read once, however many text objects name it.
     let mut read: std::collections::BTreeMap<u32, Option<Arc<Story>>> = Default::default();
     let stories: Vec<Option<Arc<Story>>> = infos
@@ -412,6 +461,20 @@ pub(super) fn build_from(
     }
     // Area type flows around the wrap objects above it before it is compared with the page.
     resolve_text_wrap(&mut doc)?;
+    let bound_text = bound_slots(&doc, &bindings, &xml_ids, VariableKind::Text);
+    let bound_visible = bound_slots(&doc, &bindings, &xml_ids, VariableKind::Visibility);
+    // Without a page to compare the layers with, envelopes of type keep their drawn art: like the
+    // other live envelopes, one opens live only where the layers with it draw as the page.
+    let warped_type = warped_type.compared(frame.is_some(), &mut notes);
+    let bound = [&bound_text, &bound_visible];
+    let typed = settle_warped_type(warped_type, &mut doc, &filled, &threaded_frames, bound, &mut restyled, &mut notes)?;
+    // The live envelopes and what takes the place of each again, when the layers with them don't
+    // draw as the page, with the note that says so.
+    let envelopes_drawn: Vec<(NodeId, Vec<Node>, &str)> = envelopes_drawn
+        .into_iter()
+        .map(|(id, art)| (id, vec![art], ai::ENVELOPE_DRAWN))
+        .chain(typed.into_iter().map(|(id, nodes)| (id, nodes, ai::ENVELOPE_TYPE_DRAWN)))
+        .collect();
     if empty > 0 {
         notes.push(format!("{empty} {}", if frame.is_some() { TEXT_LEFT_OUT } else { TYPE_LEFT_OUT }));
     }
@@ -464,9 +527,14 @@ pub(super) fn build_from(
                     other => match drawn_or_trusted(&frame, &mut view, &mut doc, &envelopes_drawn, &notes, unseen, trust, why, reflow) {
                         Ok(more) => notes.extend(more),
                         // The objects that draw differently from the page come in as its art, from
-                        // the placement that draws closer to it.
+                        // the placement that draws closer to it. The layers don't draw as the page:
+                        // envelopes of type keep their drawn art and their type, hidden.
                         Err(why) => {
-                            let other = other.map(|(_, other, unseen)| (other, unseen));
+                            let typed = type_drawn(&mut doc, &envelopes_drawn);
+                            let other = other.map(|(_, mut other, unseen)| {
+                                type_drawn(&mut other, &envelopes_drawn);
+                                (other, unseen)
+                            });
                             let placements = closer_first(&frame, &mut view, (doc, unseen), other, reflow);
                             let Some((kept, unseen, kept_notes)) = placements.into_iter().find_map(|(base, unseen)| {
                                 keep_differing(&base, &frame, &mut view, &threaded_frames, &shown, reflow).map(|(kept, n)| (kept, unseen, n))
@@ -474,7 +542,8 @@ pub(super) fn build_from(
                                 return Err(why);
                             };
                             doc = kept;
-                            notes.extend(unseen_note(unseen).into_iter().chain(kept_notes));
+                            let typed = typed.then(|| ai::ENVELOPE_TYPE_DRAWN.to_string()).filter(|n| !notes.contains(n));
+                            notes.extend(typed.into_iter().chain(unseen_note(unseen)).chain(kept_notes));
                         }
                     },
                 },
@@ -484,11 +553,62 @@ pub(super) fn build_from(
     }
     doc.limit_depth_noting(&mut notes);
     bind_variables(&mut doc, &bindings, bindings_skipped, &xml_ids, &filled, &mut notes);
+    placed_documents(&mut doc, &placed_pages);
     if small.is_some() {
         scale_document(&mut doc, unit, styles_read);
         relayout_wrapped(&mut doc);
     }
     Ok((doc, notes))
+}
+
+/// The linked images of `pages` that are still in `doc`, opacity-mask art included, as placed
+/// documents of their page and box, over the same place, each showing the same preview until its
+/// file is read. An image bound to an image variable stays a linked image, the object an image
+/// variable binds.
+fn placed_documents(doc: &mut Document, pages: &[ai::PlacedPage]) {
+    if pages.is_empty() {
+        return;
+    }
+    let vars = &doc.variables;
+    let image_bound = |id: &NodeId| {
+        vars.bindings.get(id).is_some_and(|names| names.iter().any(|v| vars.variable(v).is_some_and(|v| v.kind == VariableKind::Image)))
+    };
+    let pages: std::collections::HashMap<NodeId, ai::PlacedPage> = pages.iter().filter(|p| !image_bound(&p.id)).map(|p| (p.id, *p)).collect();
+    for layer in &mut doc.layers {
+        to_placed_documents(Arc::make_mut(layer), &pages);
+    }
+}
+
+/// [`placed_documents`] in `n` and everything in it.
+fn to_placed_documents(n: &mut Node, pages: &std::collections::HashMap<NodeId, ai::PlacedPage>) {
+    // A box too small to take the image's pixels to (its transform not finite) keeps the linked image.
+    if let Some(page) = pages.get(&n.id)
+        && let NodeKind::Image(im) = &n.kind
+        && let Some(link) = &im.link
+        && let (width, height) = page.size
+        && let xf = im.xf * Affine::scale_non_uniform(f64::from(im.width) / width, f64::from(im.height) / height)
+        && xf.as_coeffs().iter().all(|v| v.is_finite())
+        && xf.determinant().abs() > 1e-12
+    {
+        let link = vectorcraft_doc::LinkInfo { page: Some(page.page), ..link.clone() };
+        let placed = PlacedDocument {
+            link,
+            key: im.key.clone(),
+            bounding: page.bounding,
+            page_box: page.page_box,
+            width,
+            height,
+            xf,
+            placement: im.placement,
+        };
+        n.kind = NodeKind::PlacedDocument(Box::new(placed));
+    }
+    if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
+        to_placed_documents(Arc::make_mut(&mut m.art), pages);
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        to_placed_documents(Arc::make_mut(c), pages);
+    }
 }
 
 /// Bind the objects of `doc` to the variables of its library that `bindings` binds them to, each
@@ -549,6 +669,71 @@ fn bind_variables(
         }
     }
     notes.extend(ai::bindings_note(skipped));
+}
+
+/// The objects of `doc`, text object slots among them, that `bindings` binds to a variable of
+/// `kind`, each named by its XML id (`ids`).
+fn bound_slots(
+    doc: &Document,
+    bindings: &[ai::BindingRef],
+    ids: &std::collections::HashMap<String, Option<NodeId>>,
+    kind: VariableKind,
+) -> BTreeSet<NodeId> {
+    bindings
+        .iter()
+        .filter(|b| doc.variables.variable(&b.variable).is_some_and(|v| v.kind == kind))
+        .filter_map(|b| b.target.as_ref().and_then(|t| ids.get(t).copied().flatten()))
+        .collect()
+}
+
+/// Warped type stays type where its live warp draws as its look, and where a text variable binds it
+/// (`bound`'s first set, by slot). Elsewhere the look takes its place, and one note says how many did.
+/// `filled` says what each slot became, and the comparisons with the page leave out the boxes in
+/// `restyled`. Fails as [`resolve_text_wrap`] does when the looks give the wrap shapes too many
+/// anchors. Before that, the envelopes of type open live where they draw as their drawn art, with
+/// the type of their text slots (made type, one text object for the slot, not threaded, bound to
+/// no text variable and no visibility variable, `bound`'s second set, and no wrap object); the
+/// others keep their drawn art, with a note. Returns each live envelope of type's id with what
+/// takes its place again (its hidden type, then its drawn art).
+fn settle_warped_type(
+    mut warped: ai::WarpedType,
+    doc: &mut Document,
+    filled: &std::collections::HashMap<NodeId, Filled>,
+    threaded: &BTreeSet<NodeId>,
+    bound: [&BTreeSet<NodeId>; 2],
+    restyled: &mut Vec<Rect>,
+    notes: &mut Vec<String>,
+) -> Result<Vec<(NodeId, Vec<Node>)>, String> {
+    let [bound_text, bound_visible] = bound;
+    let made = |slot| match filled.get(&slot).map(|f| f.text.as_slice()).filter(|_| !bound_text.contains(&slot)) {
+        Some(&[one]) => Some(one),
+        _ => None,
+    };
+    // An envelope's type: the one text object a slot became (hidden, with nothing else), named as
+    // the slot (made type is no longer weighed against the page: the envelope draws it). A variable
+    // binds the hidden text object a slot became, which the live envelope's type takes the place of
+    // with an id of its own: a slot bound to one keeps its type hidden, and the drawn art stays.
+    let type_of = |doc: &Document, slot: NodeId| {
+        if bound_visible.contains(&slot) {
+            return None;
+        }
+        let id = made(slot).filter(|id| !threaded.contains(id) && filled.get(&slot).is_some_and(|f| f.objects == [*id]))?;
+        let mut text = doc.node(id).filter(|n| matches!(n.kind, NodeKind::Text(_)) && n.extras().wrap.is_none())?.clone();
+        if let Some(name) = text.name.as_deref().and_then(|n| n.strip_prefix(MADE)) {
+            text.name = (!name.is_empty()).then(|| name.to_string());
+        }
+        Some((id, text))
+    };
+    let typed = warped.settle_envelopes(doc, type_of);
+    if !typed.kept.is_empty() && !notes.iter().any(|n| n == ai::ENVELOPE_TYPE_DRAWN) {
+        notes.push(ai::ENVELOPE_TYPE_DRAWN.into());
+    }
+    let replaced = warped.settle(doc, made, threaded, restyled);
+    if replaced > 0 {
+        notes.push(format!("{}: {replaced}", ai::WARPED_TYPE_DRAWN));
+        resolve_text_wrap(doc)?;
+    }
+    Ok(typed.put_back)
 }
 
 /// Most anchors copied into the wrap shapes of a file's area type ([`vectorcraft_doc::text::wrap_work`]).
@@ -1094,7 +1279,7 @@ fn keep_differing(
 }
 
 /// Copy page drawing IDs, including mask art outside the ordinary child tree.
-fn reid_page_art(doc: &mut Document, source: &Node) -> Node {
+pub(super) fn reid_page_art(doc: &mut Document, source: &Node) -> Node {
     let mut copy = doc.reid(source);
     if let Some(mask) = &mut copy.extras_mut().mask {
         mask.art = Arc::new(reid_page_art(doc, &mask.art));
@@ -1153,14 +1338,15 @@ fn slot_content(
 /// The layers `doc` don't draw as the page (`why`), `unseen` text objects of them taken out: the
 /// notes to add when `doc` with each live envelope `drawn` lists replaced by the drawn art it took
 /// the place of (see [`ai::Structure::envelopes_drawn`]) draws as the page, `doc` then being that;
-/// else, with `trust`, the notes for `doc` as it is. An error, `why`, otherwise. The envelope note
-/// is added unless `notes` has it.
+/// else, with `trust`, the notes for `doc` as it is but for its envelopes of type, which keep their
+/// drawn art ([`type_drawn`]). An error, `why`, otherwise. The envelope note is added unless
+/// `notes` has it.
 #[allow(clippy::too_many_arguments)]
 fn drawn_or_trusted(
     frame: &Frame<'_>,
     view: &mut PageView,
     doc: &mut Document,
-    drawn: &[(NodeId, Node)],
+    drawn: &[(NodeId, Vec<Node>, &str)],
     notes: &[String],
     unseen: usize,
     trust: bool,
@@ -1169,25 +1355,59 @@ fn drawn_or_trusted(
 ) -> Result<Vec<String>, String> {
     let unseen_note = |n: usize| (n > 0).then(|| format!("{n} {UNSEEN_TEXT}"));
     let mut put_back = doc.clone();
-    let mut any = false;
-    for (id, art) in drawn {
-        if let Some(n) = put_back.node_mut(*id) {
-            *n = art.clone();
-            any = true;
-        }
+    // Each envelope still there, in place of the art it took the place of.
+    let there: Vec<&(NodeId, Vec<Node>, &str)> = drawn.iter().filter(|(id, ..)| put_back.node(*id).is_some()).collect();
+    // One inside another's art goes with it: only the outermost are put back (a place inside
+    // another place fails the whole put-back).
+    let mut inside = std::collections::HashSet::new();
+    for n in there.iter().filter_map(|(id, ..)| put_back.node(*id)) {
+        n.walk(&mut |c| {
+            if c.id != n.id {
+                inside.insert(c.id);
+            }
+        });
     }
+    let outermost = there.iter().filter(|(id, ..)| !inside.contains(id)).map(|(id, art, _)| (*id, art.clone())).collect();
+    let any = !there.is_empty() && put_back.insert_beside(outermost, true).is_ok();
     if any {
         let more = prune_unseen(frame, view, &mut put_back, reflow);
         if let Ok(note) = compare(frame, view, &put_back, reflow) {
             *doc = put_back;
-            let envelope = (!notes.iter().any(|n| n == ai::ENVELOPE_DRAWN)).then(|| ai::ENVELOPE_DRAWN.to_string());
+            let mut envelope: Vec<String> = vec![];
+            for (.., say) in there {
+                if !notes.iter().chain(&envelope).any(|n| n == say) {
+                    envelope.push(say.to_string());
+                }
+            }
             return Ok(envelope.into_iter().chain(unseen_note(unseen + more)).chain(note).collect());
         }
     }
     if trust {
-        return Ok(unseen_note(unseen).into_iter().chain([format!("{why}: they come from its editing data all the same")]).collect());
+        let typed = type_drawn(doc, drawn).then(|| ai::ENVELOPE_TYPE_DRAWN.to_string()).filter(|n| !notes.contains(n));
+        let trusted = format!("{why}: they come from its editing data all the same");
+        return Ok(typed.into_iter().chain(unseen_note(unseen)).chain([trusted]).collect());
     }
     Err(why)
+}
+
+/// Put each live envelope of type in `drawn` (as [`drawn_or_trusted`] takes them) that `doc` still
+/// has back as its hidden type and its drawn art: whether one was. An envelope of type opens live
+/// only where the layers with it draw as the page, so where they don't, though they are used all
+/// the same (the editing data trusted, or the objects that differ come in as the page's art), it
+/// keeps its drawn art.
+fn type_drawn(doc: &mut Document, drawn: &[(NodeId, Vec<Node>, &str)]) -> bool {
+    let typed: Vec<(NodeId, Vec<Node>)> = drawn
+        .iter()
+        .filter(|(id, _, say)| *say == ai::ENVELOPE_TYPE_DRAWN && doc.node(*id).is_some())
+        .map(|(id, art, _)| (*id, art.clone()))
+        .collect();
+    if typed.is_empty() || doc.insert_beside(typed, true).is_err() {
+        return false;
+    }
+    // The type put back is still marked as made from the text document, which the rest no longer
+    // is once the page has weighed it ([`prune_unseen`]).
+    unmark(&mut doc.layers, true, true, &mut vec![]);
+    true
 }
 
 /// `doc` with the placed files `placed` lists at their other placement (see
@@ -1356,18 +1576,47 @@ fn in_units(board: Option<Rect>, page: &Document, unit: f64) -> bool {
     unit.is_finite() && unit > 1.0 && fits(unit) && !fits(1.0)
 }
 
-/// The most artboards [`shown_artboard`] weighs, a render each.
+/// The most artboards [`shown_artboard`] weighs for the first page, and the most [`page_boards`]
+/// weighs for all the pages after it together, a render each.
 const MAX_BOARDS_WEIGHED: usize = 16;
+
+/// Does artboard `a` have the size of `page`?
+fn board_fits(a: &vectorcraft_doc::Artboard, page: &Rect) -> bool {
+    (a.rect.width() - page.width()).abs() <= 0.5 && (a.rect.height() - page.height()).abs() <= 0.5
+}
+
+/// The last of the artboards `boards` that each page of `pages` can show when every page shows
+/// one, in the pages' order. A page after the first shows an artboard of its size. Working from
+/// the last page back, each page's entry is the last artboard of its size before the next page's
+/// entry. The first page's entry is the artboard before the second page's entry, or the last
+/// artboard when there is one page. `None` when the pages after the first have no such artboards.
+fn last_boards(boards: &[vectorcraft_doc::Artboard], pages: &[Rect]) -> Option<Vec<usize>> {
+    let mut last = vec![0; pages.len()];
+    let mut end = boards.len();
+    for (i, page) in pages.iter().enumerate().skip(1).rev() {
+        let j = (1..end).rev().find(|&j| boards.get(j).is_some_and(|a| board_fits(a, page)))?;
+        *last.get_mut(i)? = j;
+        end = j;
+    }
+    if let Some(l) = last.first_mut() {
+        *l = end.checked_sub(1)?;
+    }
+    Some(last)
+}
 
 /// Which of the artboards of `doc` (the layers' document) the page `page_rect` of `visible` shows,
 /// when `visible` has fewer pages than `doc` has artboards (a PDF saved with a range of them): of
-/// those of the page's size (`fits`), the one whose art draws most like the page, the first of
-/// them on a tie. Else (and for an EPS, whose page is its art) the first artboard (0).
+/// those of the page's size (`fits`) that leave an artboard for each later page ([`last_boards`]),
+/// the one whose art draws most like the page, the first of them on a tie. Else (and for an EPS,
+/// whose page is its art) the first artboard (0).
 fn shown_artboard(doc: &Document, visible: &Document, page: Page, page_rect: Rect, fits: impl Fn(&Rect) -> bool) -> usize {
     if matches!(page, Page::Art) || visible.artboards.len() >= doc.artboards.len() {
         return 0;
     }
-    let sized: Vec<usize> = doc.artboards.iter().enumerate().filter(|(_, a)| fits(&a.rect)).map(|(i, _)| i).take(MAX_BOARDS_WEIGHED).collect();
+    let pages: Vec<Rect> = visible.artboards.iter().map(|a| a.rect).collect();
+    let last = last_boards(&doc.artboards, &pages).and_then(|l| l.first().copied()).unwrap_or(usize::MAX);
+    let sized: Vec<usize> =
+        doc.artboards.iter().enumerate().filter(|(i, a)| *i <= last && fits(&a.rect)).map(|(i, _)| i).take(MAX_BOARDS_WEIGHED).collect();
     if let [only] = sized.as_slice() {
         return *only;
     }
@@ -1407,19 +1656,52 @@ fn pages_touched(bounds: Rect, pages: &[Rect], margin: f64) -> Vec<usize> {
     pages.iter().enumerate().filter(|(_, p)| !b.intersect(**p).is_zero_area()).map(|(i, _)| i).collect()
 }
 
-/// The artboards of the layers' document (`boards`) that the pages show, one a page from the
-/// first page's (`first`), when they are the pages' sizes: every artboard, or those of a PDF saved
-/// with some of them (`first` after the first artboard).
-fn page_boards<'a>(boards: &'a [vectorcraft_doc::Artboard], first: usize, pages: &[Rect]) -> Option<&'a [vectorcraft_doc::Artboard]> {
-    let same = |(a, p): (&vectorcraft_doc::Artboard, &Rect)| (a.rect.width() - p.width()).abs() <= 0.5 && (a.rect.height() - p.height()).abs() <= 0.5;
-    let shown = boards.get(first..first.saturating_add(pages.len()))?;
-    ((first > 0 || pages.len() == boards.len()) && shown.iter().zip(pages).all(same)).then_some(shown)
+/// The artboards of the layers' document (`doc`) that the pages of `visible` (`pages`) show, one a
+/// page, the first page's being `first`, each of its page's size. The artboards are in the pages'
+/// order. A page after the first shows an artboard after the previous page's, and only one that
+/// leaves an artboard for each later page ([`last_boards`]). When several artboards can be the
+/// page's (a PDF saved with some of them), the page shows the one whose art draws most like it,
+/// the first of them on a tie. At most [`MAX_BOARDS_WEIGHED`] artboards are weighed for all the
+/// later pages together, each page's candidates in order: a page takes the best of its candidates
+/// that were weighed, or its first candidate when none of them were. `None` when the pages have no
+/// such artboards.
+fn page_boards(doc: &Document, visible: &Document, first: usize, pages: &[Rect]) -> Option<Vec<vectorcraft_doc::Artboard>> {
+    let boards = &doc.artboards;
+    let same = |j: usize, p: &Rect| boards.get(j).is_some_and(|a| board_fits(a, p));
+    let last = last_boards(boards, pages)?;
+    if !pages.first().is_some_and(|p| same(first, p)) || last.first().is_none_or(|&l| first > l) {
+        return None;
+    }
+    let mut shown = vec![boards.get(first)?.clone()];
+    let (mut after, mut weighed) = (first + 1, 0);
+    for (i, page) in pages.iter().enumerate().skip(1) {
+        let sized: Vec<usize> = (after..=*last.get(i)?).filter(|&j| same(j, page)).collect();
+        let j = match sized.as_slice() {
+            [] => return None,
+            [only] => *only,
+            many => {
+                let weigh: Vec<usize> = many.iter().copied().take(MAX_BOARDS_WEIGHED.saturating_sub(weighed)).collect();
+                weighed += weigh.len();
+                let mut best: Option<(usize, f64)> = None;
+                for (j, a) in weigh.iter().filter_map(|&j| Some((j, boards.get(j)?))) {
+                    let d = difference(visible, *page, doc, a.rect).any;
+                    if best.is_none_or(|(_, b)| d < b) {
+                        best = Some((j, d));
+                    }
+                }
+                best.map_or(many.first().copied(), |(j, _)| Some(j))?
+            }
+        };
+        shown.push(boards.get(j)?.clone());
+        after = j + 1;
+    }
+    Some(shown)
 }
 
 /// Drops the guides of artboards `doc` no longer has: an artboard guide goes with its artboard.
 fn drop_guides_off_boards(doc: &mut Document) {
     let kept: Vec<u32> = doc.artboards.iter().map(|a| a.id).collect();
-    doc.guides.retain(|g| g.artboard.is_none_or(|id| kept.contains(&id)));
+    doc.retain_guides(&mut vectorcraft_doc::Selection::default(), |g| g.artboard.is_none_or(|id| kept.contains(&id)));
 }
 
 /// Draw `doc`'s layers, artboards and guides `k` times as large, from the origin, with their
@@ -1432,12 +1714,11 @@ pub(crate) fn scale_document(doc: &mut Document, k: f64, styles: bool) {
         let layer = Arc::make_mut(layer);
         layer.transform(a, scaling);
         scale_wrap_offsets(layer, k);
+        // A transform leaves ruler guides where they are: their positions scale here.
+        layer.map_ruler_guide_positions(&mut |_, pos| *pos *= k);
     }
     for board in &mut doc.artboards {
         board.rect = a.transform_rect_bbox(board.rect);
-    }
-    for guide in &mut doc.guides {
-        guide.pos *= k;
     }
     if styles {
         for g in doc.graphic_styles.iter_mut() {
@@ -1615,6 +1896,118 @@ mod candidate_tests {
         assert_eq!(more_pages(Some(&tiny_boards), &tiny, 1).len() + 1, MAX_PAGES_COMPARED);
     }
 
+    /// A page after the first doesn't take an artboard that a later page of another size needs,
+    /// even one that draws more like it.
+    #[test]
+    fn a_later_page_leaves_an_artboard_of_each_later_pages_size() {
+        let square = |doc: &mut Document, x: f64| {
+            let art = Node::path(
+                doc.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(Rect::new(x, 10.0, x + 20.0, 30.0)),
+                vectorcraft_doc::Appearance::basic(
+                    vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+                    vectorcraft_color::Paint::None,
+                    0.0,
+                ),
+            );
+            let layer = doc.layers[0].id;
+            doc.insert(Some(layer), 0, art).unwrap();
+        };
+        let board = |doc: &Document, x0: f64, width: f64| vectorcraft_doc::Artboard {
+            rect: Rect::new(x0, 0.0, x0 + width, 100.0),
+            ..doc.artboards[0].clone()
+        };
+        // Artboards of 100, 100, 200, 100 and 100 points, a square on the fourth.
+        let mut doc = Document::new(100.0, 100.0);
+        doc.artboards = [(0.0, 100.0), (150.0, 100.0), (300.0, 200.0), (550.0, 100.0), (700.0, 100.0)].map(|(x, w)| board(&doc, x, w)).to_vec();
+        square(&mut doc, 560.0);
+        // Pages of 100, 100 and 200 points, the second with the fourth artboard's square.
+        let mut page = Document::new(100.0, 100.0);
+        let pages = [Rect::new(0.0, 0.0, 100.0, 100.0), Rect::new(120.0, 0.0, 220.0, 100.0), Rect::new(240.0, 0.0, 440.0, 100.0)];
+        page.artboards = pages.iter().map(|r| board(&page, r.x0, r.width())).collect();
+        square(&mut page, 130.0);
+        let shown = page_boards(&doc, &page, 0, &pages).map(|b| b.iter().map(|a| a.rect.x0).collect::<Vec<_>>());
+        assert_eq!(shown, Some(vec![0.0, 150.0, 300.0]));
+    }
+
+    /// The pages after the first weigh at most [`MAX_BOARDS_WEIGHED`] artboards together: a page
+    /// takes the best of its candidates that were weighed, and a page left with none to weigh
+    /// takes its first candidate, even when a later candidate draws like it.
+    #[test]
+    fn the_later_pages_weigh_a_bounded_number_of_artboards() {
+        let square = |doc: &mut Document, x: f64| {
+            let art = Node::path(
+                doc.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(Rect::new(x, 10.0, x + 20.0, 30.0)),
+                vectorcraft_doc::Appearance::basic(
+                    vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+                    vectorcraft_color::Paint::None,
+                    0.0,
+                ),
+            );
+            let layer = doc.layers[0].id;
+            doc.insert(Some(layer), 0, art).unwrap();
+        };
+        let board = |doc: &Document, x0: f64, width: f64| vectorcraft_doc::Artboard {
+            rect: Rect::new(x0, 0.0, x0 + width, 100.0),
+            ..doc.artboards[0].clone()
+        };
+        // Artboards 0 to 17 are 100 points wide, 150 apart; artboards 18 and 19 are 200 points
+        // wide. The second page's square is on artboard 17 and the third page's on artboard 19.
+        let n = MAX_BOARDS_WEIGHED + 2;
+        let mut doc = Document::new(100.0, 100.0);
+        let mut boards: Vec<vectorcraft_doc::Artboard> = (0..n).map(|i| board(&doc, i as f64 * 150.0, 100.0)).collect();
+        let wide = n as f64 * 150.0;
+        boards.push(board(&doc, wide, 200.0));
+        boards.push(board(&doc, wide + 250.0, 200.0));
+        doc.artboards = boards;
+        square(&mut doc, (n - 1) as f64 * 150.0 + 10.0);
+        square(&mut doc, wide + 260.0);
+        let mut page = Document::new(100.0, 100.0);
+        let pages = [Rect::new(0.0, 0.0, 100.0, 100.0), Rect::new(120.0, 0.0, 220.0, 100.0), Rect::new(240.0, 0.0, 440.0, 100.0)];
+        page.artboards = pages.iter().map(|r| board(&page, r.x0, r.width())).collect();
+        square(&mut page, 130.0);
+        square(&mut page, 250.0);
+        // The second page weighs artboards 1 to 16, which draw alike, and takes artboard 1. The
+        // third page has no weighing left and takes artboard 18.
+        let shown = page_boards(&doc, &page, 0, &pages).map(|b| b.iter().map(|a| a.rect.x0).collect::<Vec<_>>());
+        assert_eq!(shown, Some(vec![0.0, 150.0, wide]));
+    }
+
+    /// The first page of a PDF of some artboards shows an artboard that leaves one for each later
+    /// page, even when a later artboard draws more like it.
+    #[test]
+    fn the_first_page_leaves_an_artboard_for_each_later_page() {
+        let square = |doc: &mut Document, x: f64| {
+            let art = Node::path(
+                doc.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(Rect::new(x, 10.0, x + 20.0, 30.0)),
+                vectorcraft_doc::Appearance::basic(
+                    vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+                    vectorcraft_color::Paint::None,
+                    0.0,
+                ),
+            );
+            let layer = doc.layers[0].id;
+            doc.insert(Some(layer), 0, art).unwrap();
+        };
+        let board = |doc: &Document, x0: f64| vectorcraft_doc::Artboard { rect: Rect::new(x0, 0.0, x0 + 100.0, 100.0), ..doc.artboards[0].clone() };
+        // Three artboards of one size, a square on the third.
+        let mut doc = Document::new(100.0, 100.0);
+        doc.artboards = [0.0, 150.0, 300.0].map(|x| board(&doc, x)).to_vec();
+        square(&mut doc, 310.0);
+        // Two pages, the square on the first.
+        let mut page = Document::new(100.0, 100.0);
+        let pages = [Rect::new(0.0, 0.0, 100.0, 100.0), Rect::new(120.0, 0.0, 220.0, 100.0)];
+        page.artboards = pages.iter().map(|r| board(&page, r.x0)).collect();
+        square(&mut page, 10.0);
+        let fits = |r: &Rect| (r.width() - 100.0).abs() <= 0.5 && (r.height() - 100.0).abs() <= 0.5;
+        let first = shown_artboard(&doc, &page, Page::Artboard, pages[0], fits);
+        assert_eq!(first, 0);
+        let shown = page_boards(&doc, &page, first, &pages).map(|b| b.iter().map(|a| a.rect.x0).collect::<Vec<_>>());
+        assert_eq!(shown, Some(vec![0.0, 150.0]));
+    }
+
     /// A linked image showing a placeholder (`XF`) waits on the page, whose PDF part draws its
     /// pixels: the layers aren't used without it.
     #[test]
@@ -1700,6 +2093,34 @@ mod candidate_tests {
             // Nor is anything copied on the way, as the placed files' other placement does.
             relayout_wrapped(&mut doc);
             assert!(ids.iter().all(|id| wrap_shapes(&doc, *id) == usize::from(ok)), "{texts} text objects");
+        }
+    }
+
+    /// Warped type whose look takes its place, with the type's wrap setting, is held to the same
+    /// limit on wrap shapes: a file whose looks would copy more than `MAX_WRAP_WORK` anchors isn't
+    /// read from its layers.
+    #[test]
+    fn warped_type_replaced_by_its_look_is_held_to_the_wrap_limit() {
+        for (texts, ok) in [(150, true), (250, false)] {
+            let mut doc = Document::new(100.0, 100.0);
+            (0..texts).for_each(|_| _ = insert_area(&mut doc, 0, Rect::new(0.0, 0.0, 100.0, 100.0)));
+            let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(50.0, 50.0), "TILT", Default::default());
+            let mut text = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+            let mut appearance = vectorcraft_doc::Appearance::default();
+            appearance.effects.push(vectorcraft_doc::Effect { id: "warp.arc".into(), params: serde_json::json!({"bend": 40.0}), visible: true });
+            text.appearance = appearance.into();
+            text.extras_mut().wrap = Some(vectorcraft_doc::TextWrap::default());
+            let top = doc.layers[0].children().map_or(0, Vec::len);
+            let id = doc.insert(Some(doc.layers[0].id), top, text).unwrap();
+            let look = insert_wrap(&mut doc, Rect::new(40.0, 0.0, 60.0, 100.0), 10_000);
+            let look = doc.remove(look).unwrap();
+            assert!(resolve_text_wrap(&mut doc).is_ok());
+            let warped = ai::WarpedType::unchecked(vec![(id, (*look).clone())]);
+            let filled = std::collections::HashMap::from([(id, Filled { text: vec![id], objects: vec![id] })]);
+            let mut notes = vec![];
+            let settled = settle_warped_type(warped, &mut doc, &filled, &BTreeSet::new(), [&BTreeSet::new(); 2], &mut vec![], &mut notes);
+            assert_eq!(settled.is_ok(), ok, "{texts} text objects");
+            assert_eq!(notes, ["warped text objects that came in as drawn art, not as editable type: 1"]);
         }
     }
 

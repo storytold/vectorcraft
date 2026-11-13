@@ -225,20 +225,21 @@ fn expand_stroke_region_of_a_round_line_stays_compact() {
     assert_eq!(dense_anchors, anchors, "colinear spine points should not add outline anchors");
 }
 
+/// A line's outline takes its width profile, its dashes (each reading the profile where it sits) or neither.
 #[test]
 fn line_outline_uses_the_profile_dashes_or_a_plain_stroke() {
     let l = line(0.0, 100.0);
     let plain = line_outline(&l, &stroke(10.0, |_| {}), 10.0, 1e-3);
     assert!(near(plain.area().abs(), 1000.0, 1e-6));
     let lens = line_outline(&l, &stroke(10.0, |s| s.profile = Some(WidthProfile::lens())), 10.0, 1e-3);
-    assert!(near(lens.area().abs(), 500.0, 1e-6));
-    // Each dash takes its widths from where it sits along the lens (0 → 1 → 0): the dash over
-    // 0..25 averages a quarter of the width, the one over 50..75 three quarters.
+    // The lens is a parabola between its ends: 2/3 of the full-width band.
+    assert!(near(lens.area().abs(), 2000.0 / 3.0, 0.1));
+    // Each dash takes its widths from where it sits along the lens (0 → 1 → 0).
     let st = stroke(10.0, |s| {
         s.profile = Some(WidthProfile::lens());
         s.dash = Some(dashed(&[25.0, 25.0], 0.0));
     });
-    assert!(near(line_outline(&l, &st, 10.0, 1e-3).area().abs(), 62.5 + 187.5, 1e-6));
+    assert!(near(line_outline(&l, &st, 10.0, 1e-3).area().abs(), 1000.0 / 3.0, 0.1));
     assert!(line_outline(&BezPath::new(), &st, 10.0, 1e-3).elements().is_empty());
 }
 
@@ -279,7 +280,7 @@ fn no_heads_borrows_the_path_and_closed_paths_get_none() {
 #[test]
 fn tip_mode_shortens_the_stroke_by_the_head_and_puts_the_tip_on_the_end_point() {
     for kind in Arrowhead::ALL {
-        let st = arrows(kind, ArrowAlign::Tip, LineCap::Butt);
+        let st = arrows(kind.clone(), ArrowAlign::Tip, LineCap::Butt);
         let l = line(0.0, 100.0);
         let p = stroke_pieces(&l, &st);
         let [h] = &p.heads[..] else { panic!("one head") };
@@ -334,7 +335,7 @@ fn extend_mode_keeps_the_path_and_overhangs_by_the_inset() {
 #[test]
 fn hollow_heads_are_rings_and_the_stroke_stays_out_of_the_hole() {
     for (kind, cap) in [(Arrowhead::CircleOpen, LineCap::Round), (Arrowhead::SquareOpen, LineCap::Square), (Arrowhead::TriangleOpen, LineCap::Butt)] {
-        let st = arrows(kind, ArrowAlign::Tip, cap);
+        let st = arrows(kind.clone(), ArrowAlign::Tip, cap);
         let l = line(0.0, 100.0);
         let p = stroke_pieces(&l, &st);
         let h = &p.heads[0];
@@ -360,7 +361,7 @@ fn hollow_heads_are_rings_and_the_stroke_stays_out_of_the_hole() {
 fn round_caps_never_poke_past_the_tip() {
     for kind in Arrowhead::ALL {
         for scale in [10.0, 100.0, 300.0] {
-            let mut st = arrows(kind, ArrowAlign::Tip, LineCap::Round);
+            let mut st = arrows(kind.clone(), ArrowAlign::Tip, LineCap::Round);
             st.arrow_scale = (scale, scale);
             let l = line(0.0, 100.0);
             let p = stroke_pieces(&l, &st);
@@ -402,8 +403,8 @@ fn degenerate_paths_and_patterns_neither_panic_nor_hang() {
                     for pat in patterns {
                         for off in [0.0, -7.0, 1e12, f64::INFINITY] {
                             let st = stroke(2.0, |s| {
-                                s.start_arrow = Some(kind);
-                                s.end_arrow = Some(kind);
+                                s.start_arrow = Some(kind.clone());
+                                s.end_arrow = Some(kind.clone());
                                 s.arrow_align = align;
                                 s.cap = cap;
                                 s.dash = Some(dashed(pat, off));

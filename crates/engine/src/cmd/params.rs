@@ -6,19 +6,36 @@
 //! by `|`; a `?` marks an optional one, and a `:`, `=` or `(` starts what the entry says about it. An entry that starts
 //! with `…` stands for keys listed elsewhere: those of each command it names after `as` or `of`
 //! (`…settings as file.new`), or, naming none, any key (the options of the format an export picks). Objects inside a value aren't
-//! described key by key, so only the top level is checked.
+//! described key by key, so only the top level is checked, except in the options of an export, a
+//! save or Export for Screens: those are checked against the options of the formats the command
+//! can write, in `marks`, `bleed` and the other objects too ([`check_export_options`]).
 //!
-//! Callers outside the app (the control channel, MCP, the CLI) are answered with a parameter error
-//! for a key the description doesn't name ([`check_params`]): a misspelt `widht` no longer runs the
-//! command with its default. So are the `params` of an effect (#1592): `effect.apply` and
-//! `effect.setParams` answer a key the effect doesn't take, or a value of another type than its
-//! default, with a parameter error ([`check_effect_params`]). [`Session::execute`] itself takes
-//! what it is given, so the journal of an older version still replays, except for an effect's
-//! `color` that the effect can't read and a Levels or Curves `channel` that the effect doesn't
-//! have, which `effect.apply` and `effect.setParams` refuse themselves ([`check_effect_color`],
-//! [`check_effect_channel`]).
+//! [`Session::execute`] answers a key the description doesn't name with a parameter error
+//! ([`check_params`]), for every caller (the app, the control channel, MCP, the CLI) and for the
+//! commands a command runs, the steps of a `command.batch` or an `action.batch` included: a
+//! misspelled `widht` no longer runs the command with its default. So are the `params` of an
+//! effect (#1592): `effect.apply` and
+//! `effect.setParams` answer a key the effect doesn't take, or a value of another type than the
+//! effect reads, with a parameter error ([`check_effect_params`]).
+//!
+//! A command with a parameter schema (`CommandSpec::schema`) is also checked against the schema
+//! before it runs ([`crate::schemas::check`]): the schema refuses a value of the wrong type or out
+//! of range, a missing required parameter and an unknown key at any depth, and fills in declared
+//! defaults, so the command runs with the filled-in params. The check here still runs first for
+//! such a command, so a misspelled top-level key gets the same error from either, and a
+//! `command.batch` or an `action.batch` checks each step's schema before the first step runs. The
+//! keys of commands without a schema, and the options of exports and effects, are checked only as
+//! this module describes.
+//!
+//! Saved steps play through [`Session::replay`] instead: a journal or an action recorded by an older
+//! version, with a key a command no longer reads or an effect parameter it no longer takes, still
+//! plays. A key a schema doesn't name passes there too, and the values of the parameters it names
+//! are still checked. Even there, an effect's `color` that the effect can't read and a Levels or Curves
+//! `channel` that the effect doesn't have are refused by `effect.apply` and `effect.setParams`
+//! themselves ([`check_effect_color`], [`check_effect_channel`]).
 
 use serde_json::Value;
+use vectorcraft_apischema::shown_key;
 
 use super::{bad, command_specs, find_command};
 use crate::Result;
@@ -34,7 +51,7 @@ pub struct ParamKeys<'a> {
 
 /// The text between the braces of the object `doc` starts with and what follows it, or why it
 /// has none.
-fn object_body(doc: &str) -> std::result::Result<(&str, &str), String> {
+pub(crate) fn object_body(doc: &str) -> std::result::Result<(&str, &str), String> {
     // (Named, not written in the `Err`: these are for the tests of the descriptions, not messages
     // the app shows, which the message catalogs would have to translate.)
     let (no_object, not_closed) = ("the description doesn't start with the params object `{…}`", "the params object `{…}` isn't closed");
@@ -61,7 +78,7 @@ fn object_body(doc: &str) -> std::result::Result<(&str, &str), String> {
 }
 
 /// `s` split at each `sep` that is outside brackets, quotes and backticks.
-fn split_top(s: &str, sep: char) -> Vec<&str> {
+pub(crate) fn split_top(s: &str, sep: char) -> Vec<&str> {
     let (mut out, mut depth, mut quote, mut start) = (Vec::new(), 0usize, None, 0);
     for (i, c) in s.char_indices() {
         match (quote, c) {
@@ -81,7 +98,7 @@ fn split_top(s: &str, sep: char) -> Vec<&str> {
     out
 }
 
-fn is_key(s: &str) -> bool {
+pub(crate) fn is_key(s: &str) -> bool {
     let mut chars = s.chars();
     chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_') && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
@@ -233,9 +250,11 @@ pub fn check_keys(id: &str, doc: &'static str, params: &Value) -> Result<()> {
 /// The parameter error of command `id` for `key`, which isn't one of `keys`: with the nearest of
 /// them, or all of them.
 pub(crate) fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError {
+    let near = nearest(key, keys);
+    let key = shown_key(key);
     bad(
         id,
-        match nearest(key, keys) {
+        match near {
             Some(near) => format!("unknown parameter `{key}`; did you mean `{near}`?"),
             None if keys.is_empty() => format!("unknown parameter `{key}`; the command takes no parameters"),
             None => format!("unknown parameter `{key}`; the command takes: {}", keys.join(", ")),
@@ -244,15 +263,15 @@ pub(crate) fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError 
 }
 
 /// `params` of built-in effect `effect`, as command `id` was given them (#1592): only keys the
-/// effect takes (those of its dialog defaults and of its params description), each of its
-/// default's type, a `color` the effect can draw ([`check_effect_color`]) and a Levels or Curves
-/// `channel` the effect has ([`check_effect_channel`]). Numbers out of range pass: the effect
-/// clamps them when it draws. An effect plug-in resolves its own against its manifest, and an
-/// unknown effect is the command's to report.
+/// effect takes (those of its dialog defaults and of its params description), each of the type
+/// the effect reads ([`check_effect_types`]), a `color` the effect can draw ([`check_effect_color`])
+/// and a Levels or Curves `channel` the effect has ([`check_effect_channel`]). Numbers out of range
+/// pass: the effect clamps them when it draws. An installed effect plug-in's are checked against its
+/// manifest, and an unknown effect is the command's to report.
 pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()> {
     let Value::Object(given) = params else { return Ok(()) };
     if effect.starts_with(vectorcraft_plugins::effect::PREFIX) {
-        return Ok(());
+        return check_effect_types(id, effect, params);
     }
     let Some(info) = vectorcraft_render::effects::effect_info(effect) else { return Ok(()) };
     let defaults = info.defaults.as_object();
@@ -263,11 +282,63 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
             keys.push(key);
         }
     }
+    if let Some(key) = given.keys().find(|k| !keys.contains(&k.as_str())) {
+        return Err(unknown(id, key, &keys));
+    }
+    check_effect_types(id, effect, params)?;
+    // An SVG filter's XML is one drawable <filter> element.
+    if effect == vectorcraft_render::effects::SVG_FILTER
+        && let Some(xml) = given.get("xml")
+    {
+        let xml = xml.as_str().ok_or_else(|| bad(id, "`xml` must be a string"))?;
+        vectorcraft_render::effects::svg_filter::check(xml).map_err(|e| bad(id, e))?;
+    }
+    if effect == vectorcraft_render::effects::SVG_FILTER
+        && let Some(scale) = given.get("scale")
+        && !scale.as_f64().is_some_and(|k| (0.001..=1000.0).contains(&k))
+    {
+        return Err(bad(id, "`scale` must be a number from 0.001 to 1000"));
+    }
+    if effect == vectorcraft_render::effects::SVG_FILTER
+        && let Some(origin) = given.get("origin")
+        && !origin.as_array().is_some_and(|o| o.len() == 2 && o.iter().all(|v| v.as_f64().is_some_and(f64::is_finite)))
+    {
+        return Err(bad(id, "`origin` must be [x, y] in points"));
+    }
+    // Its name is the filter's id.
+    if effect == vectorcraft_render::effects::SVG_FILTER && given.contains_key("name") && !given.contains_key("xml") {
+        return Err(bad(id, "an SVG filter is named by its id: give `xml` with `name`"));
+    }
+    // A Warp's map is one this build draws: 0, the earlier map, or its style's Bézier net.
+    let newest = vectorcraft_render::effects::WARP_NET;
+    if effect.starts_with("warp.")
+        && let Some(v) = given.get("version")
+        && vectorcraft_render::effects::warp_version(v).is_none()
+    {
+        return Err(bad(id, format!("`version` must be 0 or {newest}")));
+    }
+    check_effect_color(id, effect, params)?;
+    check_effect_channel(id, effect, params)
+}
+
+/// The type of the values in `params` of effect `effect`, as command `id` was given them: a key
+/// the effect has a dialog default for takes a value of its default's type, a key only the
+/// effect's params description names takes the type the effect reads ([`undefaulted_type`]), and
+/// an installed effect plug-in's take the types its manifest gives them. The `style` of Crop Marks
+/// is `roman` or `japanese`. A number given as text (`"10 pt"`), `true` for a number, `1` for a
+/// switch and `null` for either are refused.
+fn check_effect_types(id: &str, effect: &str, params: &Value) -> Result<()> {
+    let Value::Object(given) = params else { return Ok(()) };
+    if effect.starts_with(vectorcraft_plugins::effect::PREFIX) {
+        return match vectorcraft_plugins::effect::installed(effect) {
+            Some(plugin) => plugin.manifest().resolve_params(params).map(drop).map_err(|why| bad(id, why.to_string())),
+            None => Ok(()),
+        };
+    }
+    let Some(info) = vectorcraft_render::effects::effect_info(effect) else { return Ok(()) };
     for (key, v) in given {
-        if !keys.contains(&key.as_str()) {
-            return Err(unknown(id, key, &keys));
-        }
-        match defaults.and_then(|d| d.get(key)) {
+        let want = info.defaults.get(key).cloned().or_else(|| undefaulted_type(effect, key));
+        match want {
             Some(Value::Number(_)) if !v.is_number() => return Err(bad(id, format!("`{key}` must be a number"))),
             Some(Value::Bool(_)) if !v.is_boolean() => return Err(bad(id, format!("`{key}` must be true or false"))),
             // (A colour is also taken as `[r, g, b]` or as a colour object.)
@@ -275,8 +346,32 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
             _ => {}
         }
     }
-    check_effect_color(id, effect, params)?;
-    check_effect_channel(id, effect, params)
+    // Crop Marks draw one of two styles.
+    if effect == vectorcraft_render::effects::CROP_MARKS
+        && let Some(style) = given.get("style")
+        && style.as_str().and_then(vectorcraft_doc::marks::MarkStyle::parse).is_none()
+    {
+        return Err(bad(id, "`style` must be roman or japanese"));
+    }
+    Ok(())
+}
+
+/// A value of the type effect `effect` reads for `key`, a parameter its params description names
+/// without a dialog default: the earlier 3D Perspective and light (`perspective`, `lightAzimuth`,
+/// `lightElevation`) and Scribble `variation` are numbers, an Outline Stroke's `width` is a number
+/// and a Gaussian Blur's `linear` is true or false. A Glass or Texturizer `textureImage`, an SVG
+/// filter's `name` and `xml`, a Warp's `version` and the `style` of Crop Marks have checks of their
+/// own; they aren't listed.
+pub(crate) fn undefaulted_type(effect: &str, key: &str) -> Option<Value> {
+    use vectorcraft_render::effects;
+    let number = || Some(Value::from(0.0));
+    match key {
+        "perspective" | "lightAzimuth" | "lightElevation" if effects::is_three_d(effect) => number(),
+        "variation" if effect == "stylize.scribble" => number(),
+        "width" if effect == "path.outlineStroke" => number(),
+        "linear" if effect == "blur.gaussian" => Some(Value::Bool(false)),
+        _ => None,
+    }
 }
 
 /// Can an effect read `v` as its `color`: a string [`Color::from_hex`] reads (`#rrggbb`, `#rgb`,
@@ -473,24 +568,273 @@ pub const UNCHECKED: &[&str] = &[
     "webExport.settings",
 ];
 
-/// [`check_keys`] for an engine command, the steps of a `command.batch` included, and
-/// [`check_effect_params`] for the effect `effect.apply` adds. A command the engine doesn't have
-/// passes: running it reports that.
+/// The object options of a PDF export, key by key: the Save PDF settings as a preset stores them,
+/// with the passwords it leaves out.
+fn pdf_option_tree() -> Value {
+    let mut tree = serde_json::to_value(vectorcraft_pdf::PdfSettings::default()).unwrap_or_default();
+    if let Some(security) = tree.get_mut("security").and_then(Value::as_object_mut) {
+        security.extend(["openPassword", "permissionsPassword"].map(|k| (k.to_string(), Value::Null)));
+    }
+    tree
+}
+
+/// `given`, the object at `within` (`marks.`), has only keys of `schema`, the objects inside it too.
+fn check_option_tree(id: &str, within: &str, given: &serde_json::Map<String, Value>, schema: &serde_json::Map<String, Value>) -> Result<()> {
+    for (key, value) in given {
+        match (schema.get(key), value) {
+            (None, _) => {
+                let keys: Vec<&str> = schema.keys().map(String::as_str).collect();
+                let why = match nearest(key, &keys) {
+                    Some(near) => format!("did you mean `{within}{near}`?"),
+                    None => format!("`{}` takes: {}", within.trim_end_matches('.'), keys.join(", ")),
+                };
+                let key = shown_key(key);
+                return Err(bad(id, format!("unknown parameter `{within}{key}`; {why}")));
+            }
+            (Some(Value::Object(inner)), Value::Object(value)) => check_option_tree(id, &format!("{within}{key}."), value, inner)?,
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// `given`, the options object at `within` (`""` for the params themselves, `options.`,
+/// `formats[0].`), has only `keys`, and only their own keys in the PDF and EPS object options
+/// (`trees`). `why_not` says why a key that is not near any of `keys` is refused, and where the
+/// keys are listed.
+fn check_option_keys(id: &str, within: &str, given: &serde_json::Map<String, Value>, keys: &[&str], why_not: &str, trees: &Value) -> Result<()> {
+    for (key, value) in given {
+        if !keys.contains(&key.as_str()) {
+            let near = nearest(key, keys);
+            let key = shown_key(key);
+            return Err(bad(
+                id,
+                match near {
+                    Some(near) => format!("unknown parameter `{within}{key}`; did you mean `{within}{near}`?"),
+                    None => format!("unknown parameter `{within}{key}`; {why_not}"),
+                },
+            ));
+        }
+        if let (Some(Value::Object(schema)), Value::Object(value)) = (trees.get(key), value) {
+            check_option_tree(id, &format!("{within}{key}."), value, schema)?;
+        }
+    }
+    Ok(())
+}
+
+/// Why an export option that no format reads is refused.
+const NO_FORMAT: &str = "no format takes it (see document.formats)";
+
+/// Why a save option that no save format reads is refused.
+const NO_SAVE_FORMAT: &str = "no save format takes it (see file.formatOptions)";
+
+/// The format ids Export for Screens writes: the writable formats, those exporter plug-ins add
+/// included, but those it doesn't write.
+pub fn screen_formats() -> Vec<&'static str> {
+    use super::fileio::{FORMATS, SCREEN_UNWRITTEN_FORMATS, plugin_formats};
+    let added = plugin_formats();
+    FORMATS.iter().chain(added.iter().copied()).filter(|f| f.write && !SCREEN_UNWRITTEN_FORMATS.contains(&f.id)).map(|f| f.id).collect()
+}
+
+/// The keys a format row of Export for Screens, and the settings of a format, take: the row's own
+/// (`format`, `scale`…), `includeArtboardFill` and `richBlack`, which the encoders read from a
+/// row's options (`with_artboard_fills`, the render options), `params`, an exporter plug-in's own,
+/// and a key some format reads, as `document.export` takes them.
+fn screen_option_keys() -> Vec<&'static str> {
+    use super::fileio::{FORMATS, SCREEN_ROW_KEYS};
+    let mut keys: Vec<&str> = SCREEN_ROW_KEYS.to_vec();
+    keys.extend(["includeArtboardFill", "richBlack", "params"]);
+    keys.extend(FORMATS.iter().filter(|f| f.write).flat_map(|f| f.options).map(|o| o.name));
+    keys
+}
+
+/// A format row of Export for Screens, or the settings of a format, without the keys the export
+/// refuses in it ([`check_screen_rows`]), inside `marks`, `svg` and the other object options too:
+/// a saved row or preset that holds a key that is no longer read loads without it.
+pub fn drop_unread_row_options(row: &mut serde_json::Map<String, Value>) {
+    fn retain_tree(o: &mut serde_json::Map<String, Value>, schema: &serde_json::Map<String, Value>) {
+        o.retain(|k, _| schema.contains_key(k));
+        for (k, v) in o.iter_mut() {
+            if let (Some(Value::Object(inner)), Value::Object(v)) = (schema.get(k), v) {
+                retain_tree(v, inner);
+            }
+        }
+    }
+    let keys = screen_option_keys();
+    row.retain(|k, _| keys.contains(&k.as_str()));
+    let trees = screen_option_trees();
+    for (k, v) in row.iter_mut() {
+        if let (Some(Value::Object(schema)), Value::Object(v)) = (trees.get(k), v) {
+            retain_tree(v, schema);
+        }
+    }
+}
+
+/// [`option_trees`] of Export for Screens: its remembered settings mark PDF security whose
+/// passwords were left out with `security.passwordRequired`, which the export reads.
+fn screen_option_trees() -> Value {
+    let mut trees = option_trees();
+    if let Some(security) = trees.get_mut("security").and_then(Value::as_object_mut) {
+        security.insert("passwordRequired".into(), Value::Null);
+    }
+    trees
+}
+
+/// The object options an export or save checks key by key: PDF's `marks`, `bleed` and the others,
+/// the flattener's, and SVG's `svg` with the artboard keys it may carry.
+fn option_trees() -> Value {
+    let mut trees = pdf_option_tree();
+    if let Some(tree) = trees.as_object_mut() {
+        tree.insert("flattener".into(), serde_json::to_value(super::flatten::FlattenOptions::default()).unwrap_or_default());
+        let mut svg = serde_json::to_value(vectorcraft_svg::ExportOptions::default()).unwrap_or_default();
+        if let Some(svg) = svg.as_object_mut() {
+            svg.extend(super::fileio::ARTBOARD_PARAMS.iter().chain(&["useArtboards"]).map(|k| (k.to_string(), Value::Null)));
+        }
+        tree.insert("svg".into(), svg);
+    }
+    trees
+}
+
+/// The format rows (`formats`) and the per-format `settings` of Export for Screens params `p`, at
+/// `within` (`settings.` in `document.exportPresets.save`). A row, and the settings of a format,
+/// take [`screen_option_keys`]; `settings` takes the formats Export for Screens writes.
+fn check_screen_rows(id: &str, within: &str, p: &serde_json::Map<String, Value>) -> Result<()> {
+    let keys = screen_option_keys();
+    let trees = &screen_option_trees();
+    if let Some(Value::Array(rows)) = p.get("formats") {
+        for (i, row) in rows.iter().enumerate() {
+            if let Value::Object(row) = row {
+                check_option_keys(id, &format!("{within}formats[{i}]."), row, &keys, NO_FORMAT, trees)?;
+            }
+        }
+    }
+    if let Some(Value::Object(settings)) = p.get("settings") {
+        let formats = screen_formats();
+        for (format, options) in settings {
+            if !formats.contains(&format.as_str()) {
+                let why = match nearest(format, &formats) {
+                    Some(near) => format!("did you mean `{within}settings.{near}`?"),
+                    None => format!("`{within}settings` takes: {}", formats.join(", ")),
+                };
+                let format = shown_key(format);
+                return Err(bad(id, format!("unknown parameter `{within}settings.{format}`; {why}")));
+            }
+            if let Value::Object(options) = options {
+                check_option_keys(id, &format!("{within}settings.{format}."), options, &keys, NO_FORMAT, trees)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The options of an export or save command `id`. `document.export`, `document.exportSelection`
+/// and `document.serialize` take a key that some format reads (one object can carry several
+/// formats' options; `document.formats` lists them). `document.exportPdf`, `document.pdfSettings`
+/// and `pdf.preset.save` take a key that PDF reads, `document.exportEps` one that EPS reads and
+/// `document.exportDxf` one that DXF reads. `document.save`, `file.saveAs`, `file.saveCopy` and
+/// `file.saveAsTemplate` take, beside the path and in `options`, a key that some save format
+/// reads. `document.exportForScreens` takes the keys it reads, and checks its format rows and
+/// settings ([`check_screen_rows`]), as `document.exportPresets.save` does in its `settings` and
+/// `assets.export` and `assets.settings.set` do in theirs.
+/// Where a command takes `marks`, `bleed`, `flattener`, `svg` or another object option of PDF,
+/// EPS or SVG, only the object's own keys pass ([`option_trees`]). Saved presets are not checked:
+/// one with a key that is no longer read keeps loading.
+fn check_export_options(id: &str, params: &Value) -> Result<()> {
+    use super::fileio::{FORMATS, SAVE_FORMATS, SCREEN_PARAM_KEYS, TEMPLATE_FORMATS, dxf, eps, pdf};
+    let Value::Object(given) = params else { return Ok(()) };
+    match (id, given.get("settings")) {
+        ("document.exportForScreens", _) => {
+            if let Some(key) = given.keys().find(|k| !SCREEN_PARAM_KEYS.contains(&k.as_str())) {
+                return Err(unknown(id, key, &SCREEN_PARAM_KEYS));
+            }
+            return check_screen_rows(id, "", given);
+        }
+        ("document.exportPresets.save", Some(Value::Object(settings))) => {
+            let why = format!("`settings` takes: {}", SCREEN_PARAM_KEYS.join(", "));
+            check_option_keys(id, "settings.", settings, &SCREEN_PARAM_KEYS, &why, &Value::Null)?;
+            return check_screen_rows(id, "settings.", settings);
+        }
+        // Export Assets exports with, and stores, Export for Screens' format rows and settings.
+        ("assets.export" | "assets.settings.set", _) => return check_screen_rows(id, "", given),
+        _ => {}
+    }
+    let mut keys: Vec<&str> = vec!["path", "format", "acknowledgeLoss"];
+    // A save's `options` and the keys they take.
+    let mut inner: Option<(&serde_json::Map<String, Value>, Vec<&str>)> = None;
+    let why_not = match id {
+        "document.save" | "file.saveAs" | "file.saveCopy" | "file.saveAsTemplate" => {
+            let saved = FORMATS.iter().filter(|f| SAVE_FORMATS.contains(&f.id) || TEMPLATE_FORMATS.contains(&f.id));
+            let options: Vec<&str> = saved.flat_map(|f| f.options).map(|o| o.name).collect();
+            if let Some(Value::Object(o)) = given.get("options") {
+                inner = Some((o, options.clone()));
+            }
+            keys.extend(["options", "modified"]);
+            keys.extend(options);
+            NO_SAVE_FORMAT
+        }
+        "document.export" | "document.exportSelection" | "document.serialize" => {
+            // `richBlack` is Appearance of Black's setting for a raster export, and `params` an
+            // exporter plug-in's own.
+            keys.extend(["includeArtboardFill", "selectedOnly", "richBlack", "params"]);
+            keys.extend(FORMATS.iter().filter(|f| f.write).flat_map(|f| f.options).map(|o| o.name));
+            NO_FORMAT
+        }
+        "document.exportPdf" | "document.pdfSettings" | "pdf.preset.save" => {
+            keys.push("includeArtboardFill");
+            keys.extend(pdf::OPTIONS.iter().map(|o| o.name));
+            match id {
+                "document.pdfSettings" => keys.push("includeDocument"),
+                "pdf.preset.save" => keys.extend(["name", "newName", "description"]),
+                _ => {}
+            }
+            "PDF doesn't take it (see document.formats)"
+        }
+        "document.exportEps" => {
+            keys.push("includeArtboardFill");
+            keys.extend(eps::OPTIONS.iter().map(|o| o.name));
+            "EPS doesn't take it (see document.formats)"
+        }
+        "document.exportDxf" => {
+            keys.extend(dxf::OPTIONS.iter().map(|o| o.name));
+            "DXF doesn't take it (see document.formats)"
+        }
+        _ => return Ok(()),
+    };
+    let trees = option_trees();
+    if let Some((o, options)) = inner {
+        check_option_keys(id, "options.", o, &options, NO_SAVE_FORMAT, &trees)?;
+    }
+    check_option_keys(id, "", given, &keys, why_not, &trees)
+}
+
+/// [`check_keys`] for an engine command, the steps of a `command.batch` or an `action.batch` included,
+/// [`check_effect_params`] for the effect `effect.apply` adds and [`check_export_options`] for an
+/// export. A command the engine doesn't have passes: running it reports that.
 pub fn check_params(id: &str, params: &Value) -> Result<()> {
+    check_params_in(id, params, false)
+}
+
+/// [`check_params`] for a step of a batch when `in_batch`: batches can't nest, so the steps of a
+/// `command.batch` or `action.batch` step aren't checked (running it reports that), however deep they go.
+fn check_params_in(id: &str, params: &Value, in_batch: bool) -> Result<()> {
     let Some(spec) = find_command(id) else { return Ok(()) };
     if let ("effect.apply" | "appearance.addEffect", Some(effect), Some(given)) =
         (id, params.get("effect").or_else(|| params.get("id")).and_then(Value::as_str), params.get("params"))
     {
         check_effect_params(id, effect, given)?;
     }
+    check_export_options(id, params)?;
     if UNCHECKED.contains(&id) {
         return Ok(());
     }
     check_keys(id, spec.params, params)?;
-    if id == "command.batch" {
+    if in_batch {
+        crate::schemas::check(spec, params, false)?;
+    }
+    if matches!(id, "command.batch" | "action.batch") && !in_batch {
         for step in params.get("commands").and_then(Value::as_array).into_iter().flatten() {
-            if let (Some(step_id), Some(step_params)) = (step.get("command").and_then(Value::as_str), step.get("params")) {
-                check_params(step_id, step_params)?;
+            if let Some(step_id) = step.get("command").and_then(Value::as_str) {
+                check_params_in(step_id, step.get("params").unwrap_or(&Value::Null), true)?;
             }
         }
     }
@@ -507,8 +851,8 @@ pub(crate) fn nearest_command(id: &str) -> Option<&'static str> {
 /// The error for `id`, which names no command: with the nearest command id, when one is near.
 pub(crate) fn unknown_command(id: &str) -> crate::EngineError {
     match nearest_command(id) {
-        Some(near) => crate::EngineError::UnknownCommandNear(id.to_string(), near.to_string()),
-        None => crate::EngineError::UnknownCommand(id.to_string()),
+        Some(near) => crate::EngineError::UnknownCommandNear(shown_key(id), near.to_string()),
+        None => crate::EngineError::UnknownCommand(shown_key(id)),
     }
 }
 

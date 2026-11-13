@@ -11,6 +11,7 @@
 
 mod flavours;
 pub(crate) mod resources;
+mod table;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -87,8 +88,9 @@ pub struct Clipboard {
     /// The artboard the objects were copied from (none when they lie on no artboard; the first of
     /// [`Self::artboards`] when there are any): Paste on All Artboards keeps their offset to it.
     pub source_artboard: Option<Rect>,
-    /// Per object: the name of the layer it was copied from (Paste Remembers Layers).
-    pub source_layers: Vec<Option<String>>,
+    /// Per object: the layer or sublayer it was copied from and the layers around it (Paste
+    /// Remembers Layers); none when that layer has no name.
+    pub source_layers: Vec<Option<SourceLayer>>,
     /// The open document the objects came from ([`DocState::uid`]): pasting back into it uses its
     /// own resources as they are now.
     pub source_doc: Option<u64>,
@@ -98,6 +100,29 @@ pub struct Clipboard {
     /// The selected ruler guides copied with (or without) the objects (#3226), as canvas guides on
     /// no layer: pasting puts them on the layer new art goes to, moved as the objects are.
     pub guides: Vec<vectorcraft_doc::Guide>,
+}
+
+/// The layer an object was copied from, as Paste Remembers Layers finds it again: the top-level
+/// layer first, down to the layer or sublayer that holds the object.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct SourceLayer {
+    /// The layers' ids in the source document ([`Clipboard::source_doc`]).
+    pub ids: Vec<NodeId>,
+    /// The layers' names (an unnamed layer above the one that holds the object is "").
+    pub names: Vec<String>,
+}
+
+impl SourceLayer {
+    /// The layers around the object `anc` ends with ([`Document::ancestry`]); none when the layer
+    /// that holds it has no name.
+    fn of(d: &Document, anc: &[NodeId]) -> Option<Self> {
+        let layers: Vec<&Node> = anc.iter().rev().skip(1).filter_map(|a| d.node(*a).filter(|l| l.is_layer())).collect();
+        layers.first()?.name.as_ref()?;
+        Some(Self {
+            ids: layers.iter().rev().map(|l| l.id).collect(),
+            names: layers.iter().rev().map(|l| l.name.clone().unwrap_or_default()).collect(),
+        })
+    }
 }
 
 /// Indices of segments selected on `sp` (either explicitly or via incident anchors).
@@ -114,7 +139,8 @@ pub(crate) fn subpath_selected_segments(
     let n = sp.anchors.len();
     let mut selected_segs = BTreeSet::new();
 
-    let has_explicit_segs = seg_refs.is_some_and(|segments| segments.iter().any(|&(s, _)| s == si));
+    // Segments picked anywhere on the path leave anchors out of it, as Clear does.
+    let has_explicit_segs = seg_refs.is_some_and(|segments| !segments.is_empty());
     if has_explicit_segs {
         if let Some(segments) = seg_refs {
             for &(s, seg) in segments {
@@ -208,6 +234,24 @@ pub(crate) fn extract_direct_selection(node: &Node, selection: &Selection) -> Op
     if pieces.is_empty() { None } else { Some(pieces) }
 }
 
+/// Does Copy take `node` unchanged under direct selection, as [`extract_direct_selection`]
+/// returning `None` means: no anchors or segments of it are picked, it is not a path, or the
+/// picked ones cover every segment?
+pub(crate) fn copied_whole(node: &Node, selection: &Selection) -> bool {
+    let seg_refs = selection.segments.get(&node.id);
+    let anchor_refs = selection.anchors.get(&node.id);
+    if seg_refs.is_none() && anchor_refs.is_none() {
+        return true;
+    }
+    let Some(path) = node.path_data() else { return true };
+    let (mut total_segs, mut total_selected) = (0, 0);
+    for (si, sp) in path.subpaths.iter().enumerate() {
+        total_segs += sp.segment_count();
+        total_selected += subpath_selected_segments(sp, si, seg_refs, anchor_refs).len();
+    }
+    total_selected == 0 || total_selected == total_segs
+}
+
 impl Clipboard {
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty() && self.artboards.is_empty() && self.guides.is_empty()
@@ -232,26 +276,58 @@ impl Clipboard {
         let d = &*st.doc;
         let mut nodes = vec![];
         let mut source_layers = vec![];
+        // Each compound's bounds, measured once however many of its members are copied.
+        let mut compound_bounds: std::collections::HashMap<NodeId, Option<vectorcraft_geom::Rect>> = std::collections::HashMap::new();
         for id in roots {
             let (Some(n), Some(anc)) = (d.node(*id), d.ancestry(*id)) else { continue };
-            let layer_name = anc.iter().rev().skip(1).find_map(|a| d.node(*a).filter(|l| l.is_layer())).and_then(|l| l.name.clone());
+            let source_layer = SourceLayer::of(d, &anc);
             let compound_parent = anc.iter().rev().skip(1).find_map(|a| d.node(*a).filter(|p| matches!(p.kind, NodeKind::Compound { .. })));
+            // Gradients fitted to the compound's bounds are pinned there, as a split pins them.
+            let gradient_box = compound_parent
+                .filter(|p| p.appearance.has_unplaced_gradient())
+                .and_then(|p| *compound_bounds.entry(p.id).or_insert_with(|| p.geometric_bounds()));
+            // A compound's member or piece copied on its own takes the compound's look (its paint,
+            // transparency, opacity mask, pixel alignment and fill rule), so it pastes as it looked.
+            // It is linked to the compound's graphic style while it still has that style's look
+            // (a gradient pinned to the compound's bounds does not), else to none.
             let inherit_appearance = |mut piece: Node| {
                 if let Some(parent) = compound_parent
-                    && piece.appearance.items.is_empty()
+                    && let (NodeKind::Compound { rule: compound_rule, .. }, NodeKind::Path { rule, .. }) = (&parent.kind, &mut piece.kind)
                 {
+                    *rule = *compound_rule;
                     piece.appearance = parent.appearance.clone();
+                    if let Some(bounds) = gradient_box {
+                        piece.appearance.pin_gradients(bounds);
+                    }
+                    piece.opacity = parent.opacity;
+                    piece.blend = parent.blend;
+                    piece.isolate = parent.isolate;
+                    piece.knockout = parent.knockout;
+                    piece.knockout_shape = parent.knockout_shape;
+                    let (mask, pixel_aligned) = (parent.extras().mask.clone(), parent.extras().pixel_aligned);
+                    {
+                        let mut extras = piece.extras_mut();
+                        extras.mask = mask;
+                        extras.pixel_aligned = pixel_aligned;
+                    }
+                    let link = parent
+                        .extras()
+                        .graphic_style
+                        .and_then(|g| d.graphic_style_by_id(g))
+                        .filter(|g| super::style::in_sync(&piece, g))
+                        .map(|g| g.id);
+                    piece.extras_mut().graphic_style = link;
                 }
                 piece
             };
             if direct && let Some(pieces) = extract_direct_selection(n, &st.selection) {
                 for piece in pieces {
                     nodes.push(inherit_appearance(piece));
-                    source_layers.push(layer_name.clone());
+                    source_layers.push(source_layer.clone());
                 }
             } else {
                 nodes.push(inherit_appearance(n.clone()));
-                source_layers.push(layer_name);
+                source_layers.push(source_layer);
             }
         }
         // Symbol instances are measured by their art.
@@ -270,7 +346,18 @@ impl Clipboard {
     /// Every object of `src` (each top-level layer's contents) with its resources, for Place and
     /// pasting outside SVG. Their layers don't count for Paste Remembers Layers.
     pub fn from_document(src: &Document) -> Self {
-        let nodes = src.layers.iter().flat_map(|l| l.children().into_iter().flatten()).map(|n| (**n).clone()).collect();
+        // Ruler guides are not objects: the ones of `src`'s layers and sublayers stay behind.
+        let nodes = src
+            .layers
+            .iter()
+            .flat_map(|l| l.children().into_iter().flatten())
+            .filter(|n| !n.is_ruler_guide())
+            .map(|n| {
+                let mut n = (**n).clone();
+                n.strip_ruler_guides();
+                n
+            })
+            .collect();
         Self::gather(src, nodes)
     }
 

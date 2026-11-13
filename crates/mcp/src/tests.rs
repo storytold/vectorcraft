@@ -209,9 +209,77 @@ fn tool_schemas_are_valid() {
         "export",
         "undo",
         "redo",
+        "command_list",
+        "command_run",
+        "command_batch",
+        "doc_inspect",
+        "render_preview",
+        "ui_inspect",
+        "ui_screenshot",
+        "type_text",
+        "answer_dialog",
+        "add_text",
+        "apply_effect",
+        "pathfinder",
+        "transform",
+        "create_graph",
+        "text_wrap",
     ] {
         assert!(names.contains(want), "missing tool {want}");
     }
+    assert_eq!(tools.len(), 33, "parity docs and #6460 expect 33 MCP tools");
+}
+
+/// Headless `command_list` must expose engine commands that a stale release CLI used to omit (#6460).
+#[test]
+fn headless_command_list_includes_post_022_engine_commands() {
+    let mut s = server();
+    rpc(&mut s, 1, "initialize", json!({"protocolVersion": PROTOCOL_VERSION}));
+    s.handle_line(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#);
+    let want = [
+        "actionSet.read",
+        "engine.apiReference",
+        "script.run",
+        "script.stop",
+        "text.spelling.check",
+        "document.move",
+        "document.compare",
+        "edit.newDocumentFromState",
+    ];
+    for (n, id) in want.iter().enumerate() {
+        let r = call(&mut s, 10 + n as u64, "command_list", json!({"filter": id, "brief": true}));
+        assert_eq!(r["isError"], false, "{id}: {r}");
+        let list: Value = serde_json::from_str(&text_of(&r)).unwrap();
+        assert!(list.as_array().unwrap().iter().any(|c| c["id"] == *id), "missing {id} in {list}");
+    }
+}
+
+/// Headless `command_list` lists desktop UI commands with `ui: true` (#6460).
+#[test]
+fn headless_command_list_includes_ui_commands() {
+    let mut s = server();
+    rpc(&mut s, 1, "initialize", json!({"protocolVersion": PROTOCOL_VERSION}));
+    s.handle_line(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#);
+    let want = [
+        "addon.arrange.zoomSelection",
+        "file.newDialog",
+        "view.fitArtboard",
+        "view.rotateReset",
+        "app.quit",
+        "window.arrange.tile",
+        "align.horizontalLeft",
+        "ui.action.play",
+    ];
+    for (n, id) in want.iter().enumerate() {
+        let r = call(&mut s, 20 + n as u64, "command_list", json!({"filter": id, "brief": true}));
+        assert_eq!(r["isError"], false, "{id}: {r}");
+        let list: Value = serde_json::from_str(&text_of(&r)).unwrap();
+        let entry = list.as_array().unwrap().iter().find(|c| c["id"] == *id).unwrap_or_else(|| panic!("missing {id} in {list}"));
+        assert_eq!(entry["ui"], true, "{entry}");
+    }
+    let r = call(&mut s, 40, "command_run", json!({"id": "view.fitArtboard", "params": {}}));
+    assert_eq!(r["isError"], true, "{r}");
+    assert!(text_of(&r).contains("--connect"), "{r}");
 }
 
 // ---------- headless end-to-end ----------
@@ -304,7 +372,7 @@ fn headless_end_to_end() {
 
     // Resources.
     let v = rpc(&mut s, 10, "resources/list", json!({}));
-    assert_eq!(v["result"]["resources"].as_array().unwrap().len(), 3);
+    assert_eq!(v["result"]["resources"].as_array().unwrap().len(), 4);
     let v = rpc(&mut s, 11, "resources/read", json!({"uri": "vectorcraft://document"}));
     let text = v["result"]["contents"][0]["text"].as_str().unwrap();
     assert!(serde_json::from_str::<Value>(text).unwrap()["layers"].is_array());
@@ -498,6 +566,15 @@ fn headless_hover_waits_for_the_shape_builder_map() {
     assert!(!r.is_error, "{r:?}");
     assert!(!h.session.tool_waiting());
     assert!(!h.session.overlays(h.view).is_empty(), "the region under the pointer is highlighted");
+    // A click's reply comes once the merge the tool computes on another thread is applied, with
+    // the selection after it.
+    let click = json!({"events": [{"kind": "down", "x": 115, "y": 110}, {"kind": "up", "x": 115, "y": 110}]});
+    let r = crate::call_tool(&mut h, "pointer_gesture", &click);
+    assert!(!r.is_error, "{r:?}");
+    assert!(!h.session.tool_waiting() && !h.session.tool_editing());
+    let text: String = r.content.iter().filter_map(|c| c["text"].as_str()).collect();
+    let reply: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(reply["selection"].as_array().map(Vec::len), Some(41), "the overlap and the 40 squares, two of them cut: {reply}");
 }
 
 /// inspect_document reads back the paint type's characters show, as add_text and set_paint give it.
@@ -709,6 +786,18 @@ fn errors_are_tool_results_not_crashes() {
 
 /// A fake control server: answers `document.inspect`, echoes `engine.execute`, errors otherwise.
 fn fake_app() -> (String, std::thread::JoinHandle<Vec<Value>>) {
+    fake_app_refusing_confirm(None)
+}
+
+/// [`fake_app`], answering `ui.dialog.confirm` with the error `refusal` when one is given.
+fn fake_app_refusing_confirm(refusal: Option<&'static str>) -> (String, std::thread::JoinHandle<Vec<Value>>) {
+    fake_app_with(refusal, true)
+}
+
+/// [`fake_app_refusing_confirm`]. With `answers_in_set`, `ui.dialog.set {action}` also confirms or
+/// cancels the dialog and replies `{dialog, result}`, as the app does; without it the set ignores
+/// `action`, as an app that predates it does.
+fn fake_app_with(refusal: Option<&'static str>, answers_in_set: bool) -> (String, std::thread::JoinHandle<Vec<Value>>) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap().to_string();
     let h = std::thread::spawn(move || {
@@ -724,6 +813,18 @@ fn fake_app() -> (String, std::thread::JoinHandle<Vec<Value>>) {
                 "engine.execute" => json!({"ok": true, "result": {"echo": msg["params"]}}),
                 "ui.inspect" => json!({"ok": true, "result": {"tool": "selection"}}),
                 "ui.dialog.set" if !dialog_open => json!({"ok": false, "error": "no dialog open"}),
+                "ui.dialog.set" if answers_in_set && msg["params"].get("action").is_some() => {
+                    let dialog = json!({"echo": {"fields": msg["params"]["fields"]}});
+                    match msg["params"]["action"].as_str() {
+                        Some("confirm") if refusal.is_some() => json!({"ok": false, "error": refusal}),
+                        Some("confirm") => json!({"ok": true, "result": {"dialog": dialog, "result": {"echo": {}}}}),
+                        _ => {
+                            dialog_open = false;
+                            json!({"ok": true, "result": {"dialog": dialog, "result": null}})
+                        }
+                    }
+                }
+                "ui.dialog.confirm" if refusal.is_some() => json!({"ok": false, "error": refusal}),
                 m if m.starts_with("ui.dialog.") => {
                     dialog_open &= m != "ui.dialog.cancel";
                     json!({"ok": true, "result": {"echo": msg["params"]}})
@@ -760,8 +861,10 @@ fn remote_forwards_methods() {
     assert_eq!(seen[1]["params"], json!({"command": "object.group", "params": {}}));
 }
 
+/// Fields and `action` go to the app in one `ui.dialog.set`, so the dialog the fields are set in is
+/// the one confirmed or canceled.
 #[test]
-fn answer_dialog_sets_fields_in_order_then_confirms() {
+fn answer_dialog_sets_fields_in_order_and_confirms_in_one_request() {
     let (addr, h) = fake_app();
     let mut s = Server::new(Box::new(Remote::connect(&addr).unwrap()));
     let set = json!([{"field": "discard", "value": true}, {"field": "note"}]);
@@ -770,7 +873,11 @@ fn answer_dialog_sets_fields_in_order_then_confirms() {
     let reply: Value = serde_json::from_str(&text_of(&r)).unwrap();
     let fields = json!([{"field": "discard", "value": true}, {"field": "note", "value": null}]);
     assert_eq!(reply, json!({"dialog": {"echo": {"fields": fields}}, "result": {"echo": {}}}));
-    let r = call(&mut s, 2, "answer_dialog", json!({"action": "cancel"}));
+    let r = call(&mut s, 2, "answer_dialog", json!({"set": set}));
+    assert_eq!(r["isError"], false, "{r}");
+    let reply: Value = serde_json::from_str(&text_of(&r)).unwrap();
+    assert_eq!(reply, json!({"dialog": {"echo": {"fields": fields}}, "result": null}));
+    let r = call(&mut s, 3, "answer_dialog", json!({"action": "cancel"}));
     assert_eq!(r["isError"], false, "{r}");
     // Bad arguments are refused before anything reaches the app.
     for (i, args) in [
@@ -792,8 +899,26 @@ fn answer_dialog_sets_fields_in_order_then_confirms() {
     drop(s);
     let seen = h.join().unwrap();
     let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
-    assert_eq!(methods, ["ui.dialog.set", "ui.dialog.confirm", "ui.dialog.cancel"]);
-    assert_eq!(seen[0]["params"], json!({"fields": fields}));
+    assert_eq!(methods, ["ui.dialog.set", "ui.dialog.set", "ui.dialog.cancel"]);
+    assert_eq!(seen[0]["params"], json!({"fields": fields, "action": "confirm"}));
+    assert_eq!(seen[1]["params"], json!({"fields": fields}));
+}
+
+/// An app whose `ui.dialog.set` predates `action` replies with the dialog alone; the dialog is
+/// then confirmed with its own `ui.dialog.confirm`.
+#[test]
+fn answer_dialog_confirms_separately_when_the_app_set_did_not_answer() {
+    let (addr, h) = fake_app_with(None, false);
+    let mut s = Server::new(Box::new(Remote::connect(&addr).unwrap()));
+    let set = json!([{"field": "copy", "value": true}]);
+    let r = call(&mut s, 1, "answer_dialog", json!({"set": set, "action": "confirm"}));
+    assert_eq!(r["isError"], false, "{r}");
+    let reply: Value = serde_json::from_str(&text_of(&r)).unwrap();
+    assert_eq!(reply, json!({"dialog": {"echo": {"fields": set, "action": "confirm"}}, "result": {"echo": {}}}));
+    drop(s);
+    let seen = h.join().unwrap();
+    let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
+    assert_eq!(methods, ["ui.dialog.set", "ui.dialog.confirm"]);
 }
 
 /// When the app refuses the `ui.dialog.set`, the call is an error and nothing is confirmed.
@@ -811,7 +936,24 @@ fn answer_dialog_does_not_confirm_when_the_app_refuses_the_set() {
     let seen = h.join().unwrap();
     let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
     assert_eq!(methods, ["ui.dialog.cancel", "ui.dialog.set"], "one set call, refused, and no confirm");
-    assert_eq!(seen[1]["params"], json!({"fields": set}));
+    assert_eq!(seen[1]["params"], json!({"fields": set, "action": "confirm"}));
+}
+
+/// The app refuses to confirm a plug-in's install approval for automation: the call is an error
+/// with the app's reason, and nothing else is sent that could install the module.
+#[test]
+fn answer_dialog_reports_that_the_app_refuses_to_approve_a_plugin_install() {
+    let refusal = "Only the person at the keyboard can approve installing a plug-in";
+    let (addr, h) = fake_app_refusing_confirm(Some(refusal));
+    let mut s = Server::new(Box::new(Remote::connect(&addr).unwrap()));
+    let set = json!([{"field": "__params", "value": {"dataBase64": "AAAA"}}]);
+    let r = call(&mut s, 1, "answer_dialog", json!({"set": set, "action": "confirm"}));
+    assert_eq!(r["isError"], true, "{r}");
+    assert!(text_of(&r).contains(refusal), "{r}");
+    drop(s);
+    let seen = h.join().unwrap();
+    let methods: Vec<&str> = seen.iter().map(|m| m["method"].as_str().unwrap()).collect();
+    assert_eq!(methods, ["ui.dialog.set"]);
 }
 
 #[test]
@@ -1310,6 +1452,44 @@ fn headless_backend_methods() {
     assert!(h.call("ui.resize", json!({})).is_err());
 }
 
+/// The headless key, pointer and screenshot calls refuse a value of the wrong type and change
+/// nothing; omitting it or giving null keeps its default.
+#[test]
+fn headless_methods_refuse_params_of_the_wrong_type() {
+    let mut h = Headless::new();
+    h.call("engine.execute", json!({"command": "file.new", "params": {"width": 300, "height": 200}})).unwrap();
+    h.call("ui.tool.select", json!({"tool": "rectangle"})).unwrap();
+    let before = h.call("document.json", json!({})).unwrap();
+    let drag = |mods: Value| json!({"events": [{"kind": "down", "x": 10, "y": 10}, {"kind": "drag", "x": 60, "y": 60, "mods": mods}, {"kind": "up", "x": 60, "y": 60}]});
+    let after_rect = |last: Value| json!({"events": [{"kind": "down", "x": 10, "y": 10}, {"kind": "drag", "x": 60, "y": 60}, {"kind": "up", "x": 60, "y": 60}, last]});
+    for (method, params, key) in [
+        ("ui.render", json!({"artboard": "0"}), "artboard"),
+        ("ui.render", json!({"scale": "2"}), "scale"),
+        ("ui.render", json!({"traceViews": 1}), "traceViews"),
+        ("ui.screenshot", json!({"data": "yes", "path": "x.png"}), "data"),
+        ("ui.key", json!({"key": "Delete", "shift": "true"}), "shift"),
+        ("ui.pointer", drag(json!({"shift": "yes"})), "mods"),
+        ("ui.pointer", json!({"mods": 1, "events": []}), "mods"),
+        ("ui.pointer", drag(json!([true])), "mods"),
+        // A whole rectangle comes before the malformed event, and none of it is drawn.
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": "bad", "y": 0})), "x"),
+        ("ui.pointer", after_rect(json!({"kind": "wiggle", "x": 0, "y": 0})), "wiggle"),
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": 1, "y": 1, "pressure": "bad"})), "pressure"),
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": 1, "y": 1, "holdMs": true})), "holdMs"),
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": 1, "y": 1, "tiltX": "5"})), "tiltX"),
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": 1, "y": 1, "rotation": [0]})), "rotation"),
+        ("ui.pointer", after_rect(json!({"kind": "move", "x": 1, "y": 1, "space": "screeen"})), "space"),
+    ] {
+        let e = h.call(method, params.clone()).unwrap_err();
+        assert!(e.contains(&format!("`{key}`")), "{method} {params}: {e}");
+    }
+    assert_eq!(h.call("document.json", json!({})).unwrap(), before, "a refused call changes nothing");
+    let r = h.call("ui.render", json!({"artboard": null, "scale": null, "traceViews": null})).unwrap();
+    assert_eq!((r["width"].as_u64(), r["height"].as_u64()), (Some(300), Some(200)));
+    h.call("ui.pointer", drag(Value::Null)).unwrap();
+    assert_ne!(h.call("document.json", json!({})).unwrap(), before, "null mods keep the packet's");
+}
+
 // ---------- workflow tools ----------
 
 fn id_of(result: &Value) -> u64 {
@@ -1429,6 +1609,60 @@ fn pointer_gesture_forwards_backquote_on_each_event() {
     let doc = serde_json::from_str::<Value>(&text_of(&inspected)).unwrap();
     let rect = doc["layers"][0]["children"].as_array().unwrap().iter().find(|n| n["id"] == id).unwrap();
     assert_eq!(rect["bounds"]["x"], 100.0, "{doc}");
+}
+
+/// The documented Rotate View calls reach the desktop control methods, preserving document
+/// coordinates and modifiers, and a successful null reset remains a successful MCP response.
+#[test]
+fn rotate_view_calls_forward_to_desktop_control() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    struct Recording(Rc<RefCell<Vec<(String, Value)>>>);
+    impl Backend for Recording {
+        fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
+            self.0.borrow_mut().push((method.into(), params));
+            Ok(Value::Null)
+        }
+        fn has_ui(&self) -> bool {
+            true
+        }
+        fn describe(&self) -> String {
+            "desktop control contract".into()
+        }
+    }
+
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let mut s = Server::new(Box::new(Recording(seen.clone())));
+    let selected = call(&mut s, 1, "select_tool", json!({"tool": "rotateView"}));
+    let turned = call(
+        &mut s,
+        2,
+        "pointer_gesture",
+        json!({"events": [
+        {"kind": "down", "x": 300, "y": 150}, {"kind": "drag", "x": 200, "y": 250}, {"kind": "up", "x": 200, "y": 250}
+    ], "mods": {"shift": true}}),
+    );
+    let reset = call(&mut s, 3, "command_run", json!({"id": "view.rotateReset", "params": {}}));
+    for reply in [&selected, &turned, &reset] {
+        assert_eq!(reply["isError"], false, "{reply}");
+    }
+    assert_eq!(text_of(&reset), "null");
+    assert_eq!(
+        *seen.borrow(),
+        vec![
+            ("ui.tool.select".into(), json!({"tool": "rotateView"})),
+            (
+                "ui.pointer".into(),
+                json!({"events": [
+            {"kind": "down", "x": 300, "y": 150, "space": "doc"},
+            {"kind": "drag", "x": 200, "y": 250, "space": "doc"},
+            {"kind": "up", "x": 200, "y": 250, "space": "doc"}
+        ], "mods": {"shift": true}})
+            ),
+            ("engine.execute".into(), json!({"command": "view.rotateReset", "params": {}}))
+        ]
+    );
 }
 
 /// A `backquote` that is not a boolean is an error, and none of the gesture's events runs.
@@ -1770,6 +2004,10 @@ fn drawing_gestures_snap_to_smart_guides() {
         let b = &made["bounds"];
         [&b["x"], &b["y"], &b["width"], &b["height"]].map(|v| v.as_f64().unwrap())
     };
+    // The rectangle drawn first stays selected, and the press lands on its box's corner handle,
+    // which would scale it instead of drawing.
+    let r = call(&mut s, 30, "run_command", json!({"command": "select.none", "params": {}}));
+    assert_eq!(r["isError"], false, "{r}");
     let events = json!([{"kind": "move", "x": 202, "y": 203}, {"kind": "down", "x": 202, "y": 203}, {"kind": "drag", "x": 330, "y": 341}, {"kind": "up", "x": 330, "y": 341}]);
     assert_eq!(bounds(&mut s, 3, events, "rectangle"), [200.0, 200.0, 130.0, 141.0]);
     let r = call(&mut s, 5, "run_command", json!({"command": "select.none", "params": {}}));

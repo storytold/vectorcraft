@@ -1,5 +1,5 @@
-use super::bounds::{apply, item_effects};
-use super::entries::{Content, DocInputs, Drawn, FX_RASTER_BUDGET, Inputs, KeptImage, Made, Reads, feather_outline};
+use super::bounds::{apply_carrying, item_effects, item_raster};
+use super::entries::{Content, DocInputs, Drawn, FX_RASTER_BUDGET, Inputs, ItemGeom, KeptImage, Made, Reads, feather_outline};
 #[cfg(test)]
 use super::raster::RASTERIZED;
 use super::raster::{
@@ -10,6 +10,22 @@ use super::{
     Affine, AppearanceItem, Arc, BezPath, Channels, DefaultHasher, Document, FillRule, Frame, GeomContext, Hash, Hasher, Ink, Node, PixelFx,
     RasterFx, Rect, RenderContext, Renderer, Shape, blend_mode, effects, fill_rule, paint, peniko,
 };
+
+/// A hash of the names of `doc`'s swatches and patterns, of the paints and spot flags of its global
+/// swatches, and of the Spot Colors option those colors depend on.
+pub(crate) fn paint_names(doc: &Document) -> u64 {
+    let mut h = DefaultHasher::new();
+    doc.spot_use_lab.hash(&mut h);
+    doc.swatches_iter().for_each(|s| {
+        s.name.hash(&mut h);
+        if s.global {
+            s.spot.hash(&mut h);
+            format!("{:?}", s.paint).hash(&mut h);
+        }
+    });
+    doc.patterns.iter().for_each(|p| p.name.hash(&mut h));
+    h.finish()
+}
 
 impl Renderer {
     /// Paint `content` through the content-changing effects of `rfx` (Gaussian Blur, Feather, the
@@ -100,6 +116,7 @@ impl Renderer {
         // The cached raster: of the whole content at full size at this zoom, else of this view (and
         // the margin around it).
         let whole = fits && k >= 1.0;
+        self.stats.view_sized += usize::from(!whole);
         let in_view = (!whole).then(|| ViewCrop::of(f.view, room));
         let stamp = self.stamp;
         let channels = match f.ink.base() {
@@ -397,8 +414,10 @@ impl Renderer {
     /// [`crate::RenderOptions::kept_images_only`], also which pixels and undecodable notes the
     /// image store holds); for type the fonts, whether overprinting shows
     /// ([`crate::proof::overprints`]) and Document Setup's substitution highlights; and the
-    /// plug-ins installed, when an object in it has a plug-in effect, and when it shows symbol or
-    /// pattern art and an object in the document's symbol or pattern art has one.
+    /// plug-ins installed, with the names of the document's swatches and patterns and its pattern
+    /// definitions (a plug-in's painted pieces can name them), when an object in it has a plug-in
+    /// effect, and when it shows symbol or pattern art and an object in the document's symbol or
+    /// pattern art has one.
     pub(crate) fn raster_inputs(&mut self, f: &Frame, n: &Node, reads: Reads) -> Inputs {
         let doc = self.doc_inputs(f.doc);
         let mut h = DefaultHasher::new();
@@ -441,7 +460,7 @@ impl Renderer {
             (vectorcraft_text::FontDb::global().generation(), crate::proof::overprints(f.opts), highlights).hash(&mut h);
         }
         if reads.plugins || (doc.plugins && (reads.symbols || reads.patterns)) {
-            effects::plugin_revision().hash(&mut h);
+            (effects::plugin_revision(), doc.names, doc.patterns).hash(&mut h);
         }
         Inputs { reads, key: h.finish(), _doc: doc }
     }
@@ -469,15 +488,16 @@ impl Renderer {
                 (key, Arc::as_ptr(&blob.bytes) as usize, blob.proxy.as_ref().map(|p| Arc::as_ptr(p) as usize)).hash(h);
             }
         });
-        let found = (patterns, symbols, images, Arc::as_ptr(&cms) as usize);
+        let names = paint_names(doc);
+        let found = (patterns, symbols, images, names, Arc::as_ptr(&cms) as usize);
         let d = match &self.doc_inputs {
-            Some((_, d)) if (d.patterns, d.symbols, d.images, d.cms) == found => d.clone(),
+            Some((_, d)) if (d.patterns, d.symbols, d.images, d.names, d.cms) == found => d.clone(),
             _ => {
                 let doc_art = || doc.patterns.iter().flat_map(|p| &p.art).chain(doc.symbols.iter().map(|s| &s.art));
                 let art = doc_art().map(Arc::downgrade).collect();
                 let pixels = doc.images.values().flat_map(|b| std::iter::once(&b.bytes).chain(&b.proxy)).map(Arc::downgrade).collect();
                 let plugins = doc_art().any(|a| crate::holds_plugin_effect(a));
-                Arc::new(DocInputs { patterns, symbols, images, cms: found.3, plugins, _held: (art, pixels, Arc::downgrade(&cms)) })
+                Arc::new(DocInputs { patterns, symbols, images, names, cms: found.4, plugins, _held: (art, pixels, Arc::downgrade(&cms)) })
             }
         };
         self.doc_inputs = Some((at, d.clone()));
@@ -533,7 +553,8 @@ impl Renderer {
             (true, false) => crate::AntiAlias::Art,
         };
         let opts = crate::RenderOptions { anti_alias, ..f.opts.clone() };
-        let frame = Frame { mt: false, view, visible: rect, px: cell, opts: &opts, ..*f };
+        // The image's pixels are the output's.
+        let frame = Frame { mt: false, view, visible: rect, px: cell, opts: &opts, output: view, ..*f };
         let mut off = frame.offscreen_context(w, h);
         self.inside_layer(|s| paint(s, &mut off, &frame));
         off.flush();
@@ -574,10 +595,15 @@ impl Renderer {
         composite: Option<(vectorcraft_doc::color::BlendMode, f32)>,
         draw: impl FnOnce(&mut Self, &mut RenderContext, &Frame, Option<(vectorcraft_doc::color::BlendMode, f32)>),
     ) {
+        // A filter layer's coarser grid starts where its context does: at the corner of a context
+        // drawn single-threaded, and at the frame's edge for a region cropped to the frame.
+        let screen = Rect::new(0.0, 0.0, f64::from(ctx.width()), f64::from(ctx.height()));
+        self.stats.view_sized += usize::from(!f.mt || f.view.transform_rect_bbox(reach).union(screen) != screen);
         if !f.mt {
             return self.inside_layer(|r| draw(r, ctx, f, composite));
         }
         let Some((x0, y0, w, h, k)) = filter_region(f.view.transform_rect_bbox(reach), (ctx.width(), ctx.height()), blur / f.px) else { return };
+        self.stats.view_sized += usize::from(k < 1.0);
         // During a drag, the region holds at most `DRAG_PIXEL_BUDGET` pixels (#2558).
         let drag = || filter_region_within(f.view.transform_rect_bbox(reach), (ctx.width(), ctx.height()), blur / f.px, DRAG_PIXEL_BUDGET);
         let (x0, y0, w, h, k) = match f.opts.dragging.then(drag).flatten().filter(|r| r.4 < k) {
@@ -624,7 +650,7 @@ impl Renderer {
         g: &BezPath,
         rule: FillRule,
         gctx: &GeomContext,
-        mut cache: Option<&mut Vec<Option<Arc<BezPath>>>>,
+        mut cache: Option<&mut Vec<Option<ItemGeom>>>,
     ) {
         let bounds = g.bounding_box();
         for (j, item) in n.appearance.items.iter().enumerate() {
@@ -633,14 +659,25 @@ impl Renderer {
             }
             // The item's own geometry effects on `g`, from the cache when there is one.
             let slot = cache.as_deref_mut().and_then(|c| c.get_mut(j));
-            let ig: Arc<BezPath> = match slot {
-                Some(Some(ig)) => ig.clone(),
-                Some(s) => s.insert(Arc::new(apply(item_effects(item), g, &gctx.item(item)))).clone(),
-                None => Arc::new(apply(item_effects(item), g, &gctx.item(item))),
+            let made = || {
+                let (ig, carry) = apply_carrying(item_effects(item), g, &gctx.item(item));
+                (Arc::new(ig), Arc::new(carry))
+            };
+            let (ig, carry): ItemGeom = match slot {
+                Some(Some(e)) => e.clone(),
+                Some(s) => s.insert(made()).clone(),
+                None => made(),
             };
             let ig = &*ig;
+            // The item with its gradient moved along with its own effects.
+            let carried = (!carry.is_empty() && matches!(item.paint(), vectorcraft_color::Paint::Gradient(_))).then(|| {
+                let mut ap = vectorcraft_doc::Appearance { items: vec![item.clone()], ..Default::default() };
+                carry.apply(&mut ap);
+                ap.items.pop()
+            });
+            let item = carried.as_ref().and_then(Option::as_ref).unwrap_or(item);
             let ib = if effects::has_geometry(item_effects(item)) && !ig.elements().is_empty() { ig.bounding_box() } else { bounds };
-            let rfx = effects::raster_effects(item_effects(item));
+            let rfx = effects::raster_effects(&item_raster(n, item));
             if rfx.is_empty() {
                 self.paint_item(ctx, f, n, item, ig, rule, ib);
                 continue;

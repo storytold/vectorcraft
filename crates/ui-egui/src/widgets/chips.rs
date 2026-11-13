@@ -33,12 +33,12 @@ pub fn gradient_chip(ui: &Ui, rect: Rect, gradient: &vectorcraft_color::Gradient
     if !(rect.width() > 0.0 && rect.height() > 0.0) {
         return;
     }
-    // Freeform sampling is costly per spot, so it gets a coarse grid (the mesh interpolates).
-    let freeform = gradient.gradient.kind == vectorcraft_color::GradientKind::Freeform;
-    let max = if freeform { 16 } else { 64 };
-    let cols = ((rect.width() / 3.0).ceil() as usize).clamp(1, max);
-    let rows = ((rect.height() / 3.0).ceil() as usize).clamp(1, max);
+    let (cols, rows) = chip_grid(&gradient.gradient, rect.width(), rect.height());
     let colors = gradient_chip_colors(gradient, rect.width(), rect.height(), cols, rows);
+    // Stops below full opacity show a checkerboard through them.
+    if colors.iter().any(|c| c.a() < u8::MAX) {
+        checkerboard(ui, rect);
+    }
     let mut mesh = egui::Mesh::default();
     for (k, color) in colors.into_iter().enumerate() {
         let (i, j) = (k % (cols + 1), k / (cols + 1));
@@ -55,14 +55,64 @@ pub fn gradient_chip(ui: &Ui, rect: Rect, gradient: &vectorcraft_color::Gradient
     ui.painter().add(egui::Shape::mesh(mesh));
 }
 
+/// Most grid cells across (and down) a chip of a gradient that repeats or reflects.
+const SPREAD_CHIP_CELLS: usize = 128;
+
+/// The grid (columns, rows) a `width` x `height` chip of gradient `g` is sampled on: a cell about
+/// every 3 points (at most 64 a side, 16 for a freeform gradient, whose sampling is costly per
+/// spot; the mesh interpolates between them), and for a gradient that repeats or reflects at
+/// least 4 cells a run along each side (at most one a point, and [`SPREAD_CHIP_CELLS`]), so the
+/// grid's points do not all fall at the same place in a run and paint the chip one color. For
+/// such a gradient a side gets a cell or two more when its points would fall at fewer than three
+/// places in a run.
+pub(super) fn chip_grid(g: &vectorcraft_color::Gradient, width: f32, height: f32) -> (usize, usize) {
+    let freeform = g.kind == vectorcraft_color::GradientKind::Freeform;
+    let max = if freeform { 16 } else { 64 };
+    let runs = if g.is_spread() { g.repeat_count() as usize } else { 1 };
+    let least = if runs > 1 { (4 * runs).min(SPREAD_CHIP_CELLS) } else { 1 };
+    let gcd = |mut a: usize, mut b: usize| {
+        while b != 0 {
+            (a, b) = (b, a % b);
+        }
+        a
+    };
+    let side = |len: f32| {
+        let mut cells = ((len / 3.0).ceil() as usize).clamp(1, max).max(least.min(len.ceil() as usize));
+        // Points `i / cells` of the way along fall at `cells / gcd(cells, runs)` places in a run.
+        while runs > 1 && cells / gcd(cells, runs) < 3 {
+            cells += 1;
+        }
+        cells
+    };
+    (side(width), side(height))
+}
+
+/// A white and light gray checkerboard filling `rect`, with cells a quarter of its shorter side
+/// (3 to 8 points).
+fn checkerboard(ui: &Ui, rect: Rect) {
+    let p = ui.painter();
+    p.rect_filled(rect, 0.0, Color32::WHITE);
+    let cell = (rect.width().min(rect.height()) / 4.0).clamp(3.0, 8.0);
+    let cols = (rect.width() / cell).ceil() as usize;
+    let rows = (rect.height() / cell).ceil() as usize;
+    for j in 0..rows {
+        for i in (j % 2..cols).step_by(2) {
+            let min = pos2(rect.left() + cell * i as f32, rect.top() + cell * j as f32);
+            let square = Rect::from_min_size(min, Vec2::splat(cell)).intersect(rect);
+            p.rect_filled(square, 0.0, Color32::from_gray(204));
+        }
+    }
+}
+
 /// The colours at the `(cols + 1) x (rows + 1)` grid points (row by row) of a `width` x `height`
-/// chip showing `gp` as it would look on an object of that size.
+/// chip showing `gp` as it would look on an object of that size, with the gradient's opacity as
+/// their alpha.
 pub(super) fn gradient_chip_colors(gp: &vectorcraft_color::GradientPaint, width: f32, height: f32, cols: usize, rows: usize) -> Vec<Color32> {
     use vectorcraft_color::{GradientGeom, GradientKind};
     let b = vectorcraft_geom::kurbo::Rect::new(0.0, 0.0, width as f64, height as f64);
-    let rgb = |c: vectorcraft_color::Color| {
-        let [r, g, b, _] = c.to_rgba8(1.0);
-        Color32::from_rgb(r, g, b)
+    let rgba = |(c, a): (vectorcraft_color::Color, f32)| {
+        let [r, g, b, a] = c.to_rgba8(if a.is_finite() { a } else { 1.0 });
+        Color32::from_rgba_unmultiplied(r, g, b, a)
     };
     let at = |k: usize| {
         let (i, j) = (k % (cols + 1), k / (cols + 1));
@@ -71,22 +121,26 @@ pub(super) fn gradient_chip_colors(gp: &vectorcraft_color::GradientPaint, width:
     let n = (cols + 1) * (rows + 1);
     if gp.gradient.kind == GradientKind::Freeform {
         let Some(painted) = vectorcraft_color::freeform::painted_box(b) else { return vec![Color32::TRANSPARENT; n] };
-        let field = gp.freeform_on(painted).field(vectorcraft_color::freeform::spread_scale(painted));
+        let field = gp.freeform_on(painted).model_field(vectorcraft_color::freeform::spread_scale(painted));
         return (0..n)
             .map(|k| {
-                let ([r, g, b], _) = field.sample(at(k));
+                let ([r, g, b], a) = field.display_sample(at(k));
                 let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-                Color32::from_rgb(q(r), q(g), q(b))
+                Color32::from_rgba_unmultiplied(q(r), q(g), q(b), q(if a.is_finite() { a } else { 1.0 }))
             })
             .collect();
     }
     // A placed gradient keeps its direction; a fresh one is fitted to the chip at its angle.
     let angle = gp.geom.map_or(gp.angle, |g| g.angle_deg());
-    let geom = GradientGeom::fit(gp.gradient.kind, b, if angle.is_finite() { angle } else { 0.0 });
+    let mut geom = GradientGeom::fit(gp.gradient.kind, b, if angle.is_finite() { angle } else { 0.0 });
+    // A mirrored conic's chip turns the way the gradient does on its object.
+    if gp.gradient.kind == GradientKind::Conic && gp.geom.is_some_and(|g| g.is_mirrored()) {
+        geom.aspect = -1.0;
+    }
     (0..n)
         .map(|k| {
-            let t = geom.param_at(gp.gradient.kind, at(k)).clamp(0.0, 1.0) as f32;
-            rgb(gp.gradient.sample(t).0)
+            let t = gp.gradient.spread_param(geom.param_at(gp.gradient.kind, at(k))).clamp(0.0, 1.0) as f32;
+            rgba(gp.gradient.sample(t))
         })
         .collect()
 }

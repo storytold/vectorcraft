@@ -587,7 +587,8 @@ fn a_deferred_swatch_paste_rejects_a_changed_token_or_closed_document() {
                 &crate::control::ControlRequest::new("ui.dialog.set", json!({"field": "__deferredPaste", "value": 999999})).0,
             );
             let crate::control::Outcome::Done(result) = result else { panic!("expected dialog result") };
-            assert_eq!(result["ok"], true, "{result}");
+            assert_eq!(result["error"], "the `swatchConflict` dialog cannot set protected field `__deferredPaste`", "{result}");
+            app.ui.dialog.as_mut().unwrap().fields.insert("__deferredPaste".into(), json!(999999));
         }
         let error = crate::dialogs::confirm(&mut app).unwrap_err();
         assert!(
@@ -1164,6 +1165,46 @@ fn a_replace_whose_object_was_deleted_meanwhile_places_nothing() {
     placed(&mut app);
     assert!(app.ui.status.contains("the object to replace was changed or deleted"), "{}", app.ui.status);
     assert!(state(&app) == cleared, "nothing placed");
+}
+
+/// A Replace started while a Shape Builder merge is computed on another thread swaps the object
+/// as the merge leaves it: the merge is applied first.
+#[test]
+fn a_replace_during_a_merge_on_another_thread_swaps_the_merged_object() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let path = saved("replace-merge", "photo.tif", &picture(Tiff, 60, 40));
+    let mut app = app(true);
+    for k in 0..40 {
+        app.run("shape.rectangle", json!({"x": k * 10, "y": 0, "width": 20, "height": 20})).unwrap();
+    }
+    app.run("select.all", json!({})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    app.run("tool.select", json!({"tool": "shapeBuilder"})).unwrap();
+    let view = app.view_info();
+    let at = |kind, x| PointerEvent {
+        kind,
+        pos: vectorcraft_geom::Point::new(x, 10.0),
+        mods: Mods::default(),
+        pressure: 1.0,
+        backquote: false,
+        pen: None,
+    };
+    crate::canvas::dispatch(&mut app, &at(PointerKind::Move, 5.0), view);
+    app.session.tool_poll(view, true).unwrap();
+    // A drag across the row merges every square into one object, the one Replace swaps.
+    for (kind, x) in [(PointerKind::Down, 5.0), (PointerKind::Drag, 200.0), (PointerKind::Drag, 405.0), (PointerKind::Up, 405.0)] {
+        crate::canvas::dispatch(&mut app, &at(kind, x), view);
+    }
+    assert!(app.session.tool_editing());
+    start(&mut app, &json!({"path": path, "replace": true}), false).unwrap();
+    assert!(!app.session.tool_editing(), "the merge is applied first");
+    placed(&mut app);
+    assert!(app.ui.status.is_empty(), "{}", app.ui.status);
+    let mut placed_names = vec![];
+    app.session.doc().unwrap().doc.walk(|n| placed_names.extend(n.name.clone()));
+    assert!(placed_names.iter().any(|n| n == "photo.tif"), "the merged art is replaced: {placed_names:?}");
+    let labels: Vec<String> = app.session.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.clone()).collect();
+    assert_eq!(labels.last().map(String::as_str), Some("Shape Builder"), "{labels:?}");
 }
 
 /// A file read while a dialog is open waits for the dialog to close, as a document that opens

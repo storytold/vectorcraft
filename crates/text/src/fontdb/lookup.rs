@@ -15,6 +15,9 @@ use super::{
     Ordering, Size,
 };
 
+/// The most faces [`FontDb::postscript_faces`] gives, and the most families it loads.
+const MAX_POSTSCRIPT_FACES: usize = 16;
+
 impl FontDb {
     /// The family's own name and the style for a name given in a document: any of a family's
     /// names (`ヒラギノ角ゴシック` is Hiragino Sans), a legacy family name (`Hiragino Sans W6` with its
@@ -82,8 +85,11 @@ impl FontDb {
     /// The kind of `family` (whether it sets Japanese, its class), for font menu filters: from a
     /// loaded face, else from the system font scan. Variable when any of its faces, loaded or
     /// scanned, is: a family may install static files beside a variable one. Cheap: no font file
-    /// is read, and a loaded family doesn't start the scan.
+    /// is read, and a loaded family doesn't start the scan. A composite font takes its base font's.
     pub fn family_traits(&self, family: &str) -> FontTraits {
+        if let Some((base, _)) = self.composite_base(family) {
+            return self.family_traits(&base);
+        }
         let loaded = {
             let faces = self.read_faces();
             let mut of_family = faces.iter().filter(|f| f.family.eq_ignore_ascii_case(family));
@@ -101,8 +107,11 @@ impl FontDb {
     }
 
     /// [`face`](Self::face) by any of the family's names ([`canonical`](Self::canonical)), and how
-    /// it matched.
+    /// it matched. A composite font matches as its base font does ([`Self::composite_base`]).
     pub fn resolve(&self, family: &str, style: &str) -> Option<(Arc<FontFace>, FontMatch)> {
+        if let Some((base, base_style)) = self.composite_base(family) {
+            return self.resolve(&base, &base_style);
+        }
         let (family, style) = self.canonical(family, style);
         let f = self.face(&family, &style)?;
         let m = if !f.family.eq_ignore_ascii_case(&family) {
@@ -135,6 +144,33 @@ impl FontDb {
         loaded(self)
     }
 
+    /// Every installed face that [`find_postscript`](Self::find_postscript) could give for `name`
+    /// (its PostScript name ignoring case and anything but letters and digits), its answer first,
+    /// then the others in load order, at most 16 in all: copies of one font in
+    /// other families (`SampleSerif` beside `Sample Serif`) or versions, and names that differ
+    /// only in case. Each family that has one is loaded from the system fonts whole, as
+    /// [`versions`](Self::versions) loads one. Empty when no installed font has the name.
+    pub fn postscript_faces(&self, name: &str) -> Vec<Arc<FontFace>> {
+        let Some(first) = self.find_postscript(name) else { return vec![] };
+        let key = norm(name);
+        let mut families: Vec<String> = vec![first.family.clone()];
+        if let Some(v) = self.aliases.read().unwrap_or_else(|e| e.into_inner()).get(&key) {
+            for a in v.iter().filter(|a| a.paired.is_none() && a.style.is_some()) {
+                if families.len() < MAX_POSTSCRIPT_FACES && !families.iter().any(|f| f.eq_ignore_ascii_case(&a.family)) {
+                    families.push(a.family.clone());
+                }
+            }
+        }
+        for family in &families {
+            self.load_family_files(family);
+        }
+        let mut out = vec![first.clone()];
+        let faces = self.read_faces();
+        let others = faces.iter().filter(|f| f.id != first.id && f.keys.postscript.contains(&key));
+        out.extend(others.take(MAX_POSTSCRIPT_FACES - 1).cloned());
+        out
+    }
+
     /// The (family, style) of the installed face whose PostScript name is `name` (ignoring ASCII
     /// case). Documents name fonts this way, and a family can hold hyphens
     /// ("Rounded-X-Mplus-1c-black" is Rounded-X M+ 1c, black), so the name can't be split.
@@ -159,8 +195,12 @@ impl FontDb {
     /// Resolve a family + style to a face, falling back to the closest style of the family, then to
     /// Source Sans 3 Regular. Installed system fonts are found by name whatever ran before. `None`
     /// only if no font at all is loaded (the bundled fonts failed to parse, or were left out with
-    /// the `bundled-fonts` feature and none was added), in which case text has no glyphs.
+    /// the `bundled-fonts` feature and none was added), in which case text has no glyphs. A
+    /// composite font gives its base font's face ([`Self::composite_base`]).
     pub fn face(&self, family: &str, style: &str) -> Option<Arc<FontFace>> {
+        if let Some((base, base_style)) = self.composite_base(family) {
+            return self.face(&base, &base_style);
+        }
         let (family, style) = self.canonical(family, style);
         let (family, style) = (family.as_str(), style.as_str());
         let found = self.find(family, style);
@@ -352,8 +392,16 @@ impl FontDb {
         self.family_list().iter().find(|f| norm_chars(f).eq(norm_chars(name))).cloned()
     }
 
-    /// Is `family` available (loaded, or installed on the system)?
+    /// Is `family` available (loaded, installed on the system, or a composite font)?
     pub fn has_family(&self, family: &str) -> bool {
+        if self.composite_font(family).is_some() {
+            return true;
+        }
+        self.has_installed_family(family)
+    }
+
+    /// Is `family` available as a loaded or installed font, excluding composite fonts?
+    pub fn has_installed_family(&self, family: &str) -> bool {
         let (family, _) = self.canonical(family, "");
         self.is_loaded(&family) || self.read_catalog().contains_key(&family.to_ascii_lowercase())
     }
@@ -464,7 +512,7 @@ impl FontDb {
     /// Load a system font covering `c` (preferred fallback families first, then any cataloged
     /// file under 40 MB). Returns true if one was loaded. Misses are remembered.
     #[cfg(not(target_arch = "wasm32"))]
-    fn system_fallback(&self, c: char) -> bool {
+    pub(super) fn system_fallback(&self, c: char) -> bool {
         if c.is_control() || c.is_whitespace() {
             return false;
         }
@@ -482,6 +530,13 @@ impl FontDb {
             if !self.is_loaded(fam) && self.load_cataloged(fam) && covered(self) {
                 return true;
             }
+        }
+        {
+            let mut sys = self.sys.lock().unwrap_or_else(|e| e.into_inner());
+            if sys.file_searches >= super::names::MAX_FILE_SEARCHES {
+                return false;
+            }
+            sys.file_searches += 1;
         }
         let mut paths: Vec<PathBuf> = self.read_catalog().values().flat_map(|c| c.faces.iter().map(|cf| cf.path.clone())).collect();
         paths.sort();

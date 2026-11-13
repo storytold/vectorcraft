@@ -14,14 +14,15 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::pattern::{self, Overlap, PATTERN_EDIT_LAYER, PatternDef, PatternEdit, RepeatKind, RepeatSpec, TileType, pattern_paint};
+use vectorcraft_doc::swatches::PaintFn;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Selection};
-use vectorcraft_geom::Rect;
+use vectorcraft_geom::{Point, Rect};
 
 use super::edit::{outermost, selected_roots};
 use super::pathops::Beside;
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, f64_or, has_doc, has_selection, ids_param, matrix_param, ok, point_param,
-    str_param, targets,
+    CommandSpec, EngineError, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, finite_numbers, has_doc, has_selection, ids_param,
+    matrix_param, ok, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -54,7 +55,15 @@ pub fn specs() -> Vec<CommandSpec> {
             in_pattern_edit,
             pattern_done
         ),
-        cmd!("object.pattern.cancel", "Cancel", [], None, "{} leave pattern editing mode, discarding changes", in_pattern_edit, pattern_cancel),
+        cmd!(
+            "object.pattern.cancel",
+            "Cancel",
+            [],
+            None,
+            "{} leave pattern editing mode, discarding changes; a pattern made for this edit is removed with its swatches, and every paint of it, new art's fill and stroke included, becomes none",
+            in_pattern_edit,
+            pattern_cancel
+        ),
         cmd!(
             "object.pattern.saveCopy",
             "Save a Copy",
@@ -78,7 +87,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Pattern",
             [],
             None,
-            "{name} delete a pattern swatch (objects painted with it lose that paint)",
+            "{name} delete a pattern and its swatches; every paint of it, new art's fill and stroke included, becomes none → {unpainted: the number of document paints cleared}",
             has_doc,
             pattern_delete
         ),
@@ -116,7 +125,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Mirror",
             ["Object", "Repeat"],
             None,
-            "{ids?, angle?: deg (90 = vertical axis), offset?: pt (10)} mirror repeat of the selection → {id}",
+            "{ids?, angle?: deg clockwise from level (the mirror axis; 90 = vertical), offset?: pt (10)} mirror repeat of the selection → {id}",
             has_selection,
             repeat_mirror
         ),
@@ -134,7 +143,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Options…",
             ["Object", "Repeat"],
             None,
-            "{instances?, radius?, reverseOverlap?, startAngle?, endAngle?, center?: [x,y] | hSpacing?, vSpacing?, rows?, cols?, gridType?, flipRows?, flipCols? | angle?} set the options of the selected repeats",
+            "{instances?, radius?, reverseOverlap?, startAngle?, endAngle?: deg clockwise (0: where the source art sits), center?: [x,y] | hSpacing?, vSpacing?, rows?, cols?, gridType?, brickOffset?, flipRows?, flipCols? | angle?: deg clockwise from level (the mirror axis; 90 = vertical)} set the options of the selected repeats",
             has_repeat,
             repeat_options
         ),
@@ -189,8 +198,10 @@ fn has_selection_or_ids(s: &Session) -> std::result::Result<(), String> {
     has_doc(s)
 }
 
+/// The repeats of the selection: selected ones, and those around a selected object. None while
+/// an object of a dynamic symbol instance's art is selected.
 fn selected_repeats(s: &Session) -> Vec<NodeId> {
-    let Some(st) = s.active() else { return vec![] };
+    let Some(st) = s.active().filter(|st| st.selection.symbol_part.is_none()) else { return vec![] };
     let mut out = vec![];
     for id in &st.selection.objects {
         for a in st.doc.ancestry(*id).unwrap_or_default().into_iter().rev() {
@@ -207,6 +218,7 @@ fn selected_repeats(s: &Session) -> Vec<NodeId> {
 
 fn has_repeat(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
+    super::edit::no_symbol_part(s)?;
     if selected_repeats(s).is_empty() { Err("select a repeat".into()) } else { Ok(()) }
 }
 
@@ -216,8 +228,8 @@ fn ids_json(ids: &[NodeId]) -> Value {
     json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })
 }
 
-fn roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    match ids_param(p, "ids") {
+fn roots(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
+    match ids_param(p, "ids", cmd)? {
         Some(ids) => {
             let st = s.doc()?;
             let mut sel = Selection::default();
@@ -268,8 +280,9 @@ fn enter_edit(d: &mut Document, sel: &mut Selection, name: &str, original: Optio
 /// Leave editing mode: drop the layer, return the edit record.
 fn leave_edit(d: &mut Document, sel: &mut Selection) -> Result<(PatternEdit, Vec<Arc<Node>>)> {
     let pe = d.pattern_edit.take().ok_or_else(|| EngineError::Other("not in pattern editing mode".into()))?;
-    let art = match d.remove(pe.layer) {
-        Ok(l) => l.children().cloned().unwrap_or_default(),
+    // The tile art: ruler guides on the edit layer are not part of it and stay in the document.
+    let art = match d.remove_edit_layer(pe.layer) {
+        Ok(l) => l.children().into_iter().flatten().cloned().collect(),
         Err(_) => vec![],
     };
     sel.clear();
@@ -284,9 +297,12 @@ fn after_edit_mode(s: &mut Session, layer: Option<NodeId>) -> Result<()> {
     Ok(())
 }
 
+/// The tile type `p` gives `cmd` (`tileType`, `brickOffset`), else `current` with a given brick offset.
+/// A `tileType` that is not a string, or a `brickOffset` that is not a number, is an error.
 fn tile_type_param(p: &Value, cmd: &str, current: TileType) -> Result<TileType> {
+    check_numbers(p, &["brickOffset"], cmd)?;
     let off = p.get("brickOffset").and_then(Value::as_f64).map(|o| if o > 1.0 { o / 100.0 } else { o });
-    match str_param(p, "tileType") {
+    match text_param(p, "tileType", cmd)? {
         Some(t) => TileType::parse(t, off).ok_or_else(|| bad(cmd, format!("unknown tileType `{t}` ({})", TileType::IDS.join("|")))),
         None => Ok(match (current, off) {
             (TileType::BrickByRow { .. }, Some(o)) => TileType::BrickByRow { offset: o },
@@ -303,17 +319,18 @@ fn pattern_make(s: &mut Session, p: &Value) -> Result<Value> {
     if editing(s).is_some() {
         return Err(bad(C, "already in pattern editing mode"));
     }
-    let roots = roots(s, p)?;
+    let roots = roots(s, p, C)?;
     if roots.is_empty() {
         return Err(bad(C, "select the art for the pattern tile"));
     }
     let tt = tile_type_param(p, C, TileType::Grid)?;
+    check_numbers(p, &["width", "height"], C)?;
     let (w, h) = (p.get("width").and_then(Value::as_f64), p.get("height").and_then(Value::as_f64));
     if w.is_some_and(|v| !(v.is_finite() && v > 0.0)) || h.is_some_and(|v| !(v.is_finite() && v > 0.0)) {
         return Err(bad(C, "width/height must be > 0"));
     }
-    let edit = bool_or(p, "edit", true);
-    let wanted = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
+    let edit = switch_or(p, "edit", true, C)?;
+    let wanted = text_param(p, "name", C)?.map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
     let name = s.edit("Make Pattern", |d, sel| {
         let name = match &wanted {
             Some(n) => unique_pattern_name(d, n),
@@ -340,7 +357,7 @@ fn pattern_make(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn pattern_edit(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.pattern.edit";
-    let name = match str_param(p, "name") {
+    let name = match text_param(p, "name", C)? {
         Some(n) => n.to_string(),
         None => {
             // The selected object's fill (or stroke) pattern.
@@ -377,46 +394,121 @@ pub(crate) fn pattern_done(s: &mut Session, _: &Value) -> Result<Value> {
     if editing(s).is_some() {
         s.end_text_edit();
     }
-    let name = s.edit("Done Editing Pattern", |d, sel| {
-        let (pe, art) = leave_edit(d, sel)?;
-        if let Some(def) = d.pattern_mut(&pe.pattern) {
-            def.art = art;
-            if def.size_tile_to_art {
-                def.fit_tile_to_art();
-            }
-        }
-        Ok(pe.pattern)
-    })?;
+    let name = s.edit("Done Editing Pattern", finish_edit)?;
     after_edit_mode(s, None)?;
     Ok(json!({ "name": name }))
 }
 
+/// Leave pattern editing mode in `d`, storing the editing layer's art as the pattern's tile art
+/// (resizing the tile to the art when the pattern does so) → the pattern's name.
+pub(crate) fn finish_edit(d: &mut Document, sel: &mut Selection) -> Result<String> {
+    let (pe, art) = leave_edit(d, sel)?;
+    if let Some(def) = d.pattern_mut(&pe.pattern) {
+        def.art = art;
+        if def.size_tile_to_art {
+            def.fit_tile_to_art();
+        }
+    }
+    Ok(pe.pattern)
+}
+
+/// Leave pattern editing mode, discarding the changes (`object.pattern.cancel`). An existing
+/// pattern gets its definition back, its name included when Pattern Options renamed it while it was
+/// edited and no other pattern, swatch or color group has taken that name since. A new pattern is
+/// removed with its swatches, and every paint of it left in the document and in the fill, stroke
+/// and appearance new art takes becomes no paint ([`forget_pattern`]).
 fn pattern_cancel(s: &mut Session, _: &Value) -> Result<Value> {
-    s.edit("Cancel Pattern Editing", |d, sel| {
+    let changed = s.edit("Cancel Pattern Editing", |d, sel| {
         let (pe, _) = leave_edit(d, sel)?;
         match pe.original {
-            Some(orig) => {
+            Some(mut orig) => {
+                if orig.name != pe.pattern && (d.pattern(&orig.name).is_some() || swatch_name_clash(d, &pe.pattern, &orig.name)) {
+                    orig.name = pe.pattern.clone();
+                }
+                let back = (orig.name != pe.pattern).then(|| orig.name.clone());
                 if let Some(def) = d.pattern_mut(&pe.pattern) {
                     *def = orig;
                 }
+                if let Some(old) = &back {
+                    rename_pattern_uses(d, &pe.pattern, old);
+                }
+                Ok(back.map(|old| (pe.pattern, Some(old))))
             }
             None => {
-                d.patterns.retain(|p| p.name != pe.pattern);
-                d.swatches.retain(|sw| !matches!(&sw.paint, Paint::Pattern { pattern, .. } if *pattern == pe.pattern));
+                forget_pattern(d, &pe.pattern);
+                Ok(Some((pe.pattern, None)))
             }
         }
-        Ok(())
     })?;
     after_edit_mode(s, None)?;
+    if let Some((name, to)) = changed {
+        map_new_art_paints(s, &mut pattern_paints(&name, to.as_deref()))?;
+    }
     ok()
 }
 
+/// A [`PaintFn`] that puts a paint of pattern `to` in place of each paint of pattern `name`, with
+/// its placement kept, or no paint for `to` `None`.
+fn pattern_paints<'a>(name: &'a str, to: Option<&'a str>) -> impl FnMut(&Paint) -> Option<Paint> + 'a {
+    move |p| match p {
+        Paint::Pattern { pattern, xf } if pattern == name => Some(match to {
+            Some(n) => Paint::Pattern { pattern: n.to_string(), xf: *xf },
+            None => Paint::None,
+        }),
+        _ => None,
+    }
+}
+
+/// Remove pattern `name` from `d`: its definition and every swatch, grouped or not, whose paint is
+/// the pattern. Every paint of the pattern left anywhere in the document (the art, opacity masks,
+/// type, symbol definitions, graph designs, graphs' stored series and label paints, other patterns'
+/// tiles, graphic and character styles and the art of brushes) becomes no paint. Returns the number of such paints.
+fn forget_pattern(d: &mut Document, name: &str) -> usize {
+    d.patterns.retain(|p| p.name != name);
+    let is_it = |sw: &vectorcraft_color::Swatch| matches!(&sw.paint, Paint::Pattern { pattern, .. } if pattern == name);
+    d.swatches.retain(|sw| !is_it(sw));
+    for g in &mut d.swatch_groups {
+        g.swatches.retain(|sw| !is_it(sw));
+    }
+    super::swatch::map_all_paints(d, &mut pattern_paints(name, None))
+}
+
+/// Apply `f` to the fill and stroke new art takes and to the paints of its template appearance. A
+/// change is recorded with the step just made, so Undo and Redo put these paints back with the
+/// document.
+fn map_new_art_paints(s: &mut Session, f: &mut PaintFn) -> Result<()> {
+    let start = super::colormgmt::new_art_colors_before(s)?;
+    let old = s.paint.clone();
+    let pd = &mut s.paint;
+    let template = pd.appearance.iter_mut().flat_map(|a| a.items.iter_mut()).map(|it| match it {
+        vectorcraft_doc::AppearanceItem::Fill(f) => &mut f.paint,
+        vectorcraft_doc::AppearanceItem::Stroke(s) => &mut s.paint,
+    });
+    for p in [&mut pd.fill, &mut pd.stroke].into_iter().chain(template) {
+        if let Some(q) = f(p) {
+            *p = q;
+        }
+    }
+    if s.paint != old {
+        super::colormgmt::record_new_art_colors(s, start)?;
+        // The step takes the paints the command finally leaves, after the selection's appearance
+        // is inherited.
+        let st = s.doc()?;
+        if st.interaction.is_none() {
+            let uid = st.uid;
+            s.batch_paint_docs.push(uid);
+        }
+    }
+    Ok(())
+}
+
 fn pattern_save_copy(s: &mut Session, p: &Value) -> Result<Value> {
-    let wanted = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
+    let wanted = text_param(p, "name", "object.pattern.saveCopy")?.map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
     let name = s.edit("Save a Copy", |d, _| {
         let pe = d.pattern_edit.clone().ok_or_else(|| EngineError::Other("not in pattern editing mode".into()))?;
         let mut def = d.pattern(&pe.pattern).cloned().ok_or_else(|| EngineError::Other("pattern missing".into()))?;
-        let art: Vec<Arc<Node>> = d.node(pe.layer).and_then(|l| l.children().cloned()).unwrap_or_default();
+        let art: Vec<Arc<Node>> =
+            d.node(pe.layer).into_iter().flat_map(|l| l.children().into_iter().flatten()).filter(|c| !c.is_ruler_guide()).cloned().collect();
         let name = unique_pattern_name(d, wanted.as_deref().unwrap_or(&format!("{} copy", pe.pattern.trim())));
         def.name = name.clone();
         def.art = copies(d, &art).into_iter().map(Arc::new).collect();
@@ -431,19 +523,21 @@ fn pattern_save_copy(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn pattern_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "pattern.options";
-    let name = match str_param(p, "name") {
+    let name = match text_param(p, "name", C)? {
         Some(n) => n.to_string(),
         None => editing(s).map(|e| e.pattern.clone()).ok_or_else(|| bad(C, "give `name` (or edit a pattern)"))?,
     };
     let cur = s.doc()?.doc.pattern(&name).cloned().ok_or_else(|| bad(C, format!("no pattern `{name}`")))?;
     let tt = tile_type_param(p, C, cur.tile_type)?;
+    check_numbers(p, &["width", "height", "hSpacing", "vSpacing", "copies", "dimCopies"], C)?;
+    check_switches(p, &["sizeTileToArt", "showTileEdge", "showSwatchBounds"], C)?;
     let num = |k: &str| p.get(k).and_then(Value::as_f64);
     for k in ["width", "height"] {
         if num(k).is_some_and(|v| !(v.is_finite() && v > 0.0)) {
             return Err(bad(C, format!("{k} must be > 0")));
         }
     }
-    let new_name = str_param(p, "newName").map(str::trim).filter(|n| !n.is_empty() && *n != name).map(str::to_string);
+    let new_name = text_param(p, "newName", C)?.map(str::trim).filter(|n| !n.is_empty() && *n != name).map(str::to_string);
     if let Some(n) = &new_name {
         let d = &s.doc()?.doc;
         if d.pattern(n).is_some() {
@@ -454,17 +548,22 @@ fn pattern_options(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     let overlap = match p.get("overlap") {
-        Some(o) => Overlap {
-            right_in_front: str_param(o, "h").map_or(cur.overlap.right_in_front, |v| v == "right"),
-            bottom_in_front: str_param(o, "v").map_or(cur.overlap.bottom_in_front, |v| v == "bottom"),
+        None | Some(Value::Null) => cur.overlap,
+        Some(o) if o.is_object() => Overlap {
+            right_in_front: overlap_side(o, "h", ["left", "right"], cur.overlap.right_in_front, C)?,
+            bottom_in_front: overlap_side(o, "v", ["top", "bottom"], cur.overlap.bottom_in_front, C)?,
         },
-        None => cur.overlap,
+        Some(got) => {
+            let (path, expected) = ("overlap", "an object");
+            return Err(bad(C, format!("`{path}` must be {expected}, not {got}")));
+        }
     };
     let edit_layer = editing(s).filter(|e| e.pattern == name).map(|e| e.layer);
     let out_name = new_name.clone().unwrap_or(name.clone());
     s.edit("Pattern Options", |d, _| {
         // While editing, the tile art is the edit layer's.
-        let live_art: Option<Vec<Arc<Node>>> = edit_layer.and_then(|l| d.node(l)).and_then(|l| l.children().cloned());
+        let live_art: Option<Vec<Arc<Node>>> =
+            edit_layer.and_then(|l| d.node(l)).and_then(|l| l.children()).map(|ch| ch.iter().filter(|c| !c.is_ruler_guide()).cloned().collect());
         let def = d.pattern_mut(&name).ok_or_else(|| EngineError::Other("pattern missing".into()))?;
         def.tile_type = tt;
         def.overlap = overlap;
@@ -504,7 +603,23 @@ fn pattern_options(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
+    if let Some(nn) = &new_name {
+        map_new_art_paints(s, &mut pattern_paints(&name, Some(nn)))?;
+    }
     Ok(json!({ "name": out_name }))
+}
+
+/// Side `side` of the `overlap` object `o` gives `cmd`: true for the second of `names`, false for the
+/// first, `current` when `o` leaves it out or gives null. Any other value is an error.
+fn overlap_side(o: &Value, side: &str, names: [&str; 2], current: bool, cmd: &str) -> Result<bool> {
+    match o.get(side) {
+        None | Some(Value::Null) => Ok(current),
+        Some(Value::String(v)) if names.contains(&v.as_str()) => Ok(v == names[1]),
+        Some(_) => {
+            let key = format!("overlap.{side}");
+            Err(bad(cmd, format!("`{key}` must be one of {}", names.join(", "))))
+        }
+    }
 }
 
 /// Is `new` taken for pattern `old` by a swatch or a color group (they share one namespace,
@@ -519,81 +634,32 @@ fn swatch_name_clash(d: &Document, old: &str, new: &str) -> bool {
 }
 
 /// Rename a pattern in swatches, paints and the edit record. Of the swatches named `old`, only the
-/// pattern's own take the new name.
+/// pattern's own take the new name. The paints are renamed wherever [`forget_pattern`] clears them.
 fn rename_pattern_uses(d: &mut Document, old: &str, new: &str) {
-    let fix = |p: &mut Paint| {
-        if let Paint::Pattern { pattern, .. } = p
-            && pattern == old
-        {
-            *pattern = new.to_string();
-        }
-    };
-    for sw in d.swatches.iter_mut().chain(d.swatch_groups.iter_mut().flat_map(|g| g.swatches.iter_mut())) {
+    for sw in d.swatches_iter_mut() {
         if sw.name == old && pattern_name(&sw.paint).is_some_and(|p| p == old) {
             sw.name = new.to_string();
         }
-        fix(&mut sw.paint);
     }
     if let Some(pe) = &mut d.pattern_edit
         && pe.pattern == old
     {
         pe.pattern = new.to_string();
     }
-    let ids = nodes_using(d, Some(old));
-    for id in ids {
-        if let Some(n) = d.node_mut(id) {
-            for it in n.appearance.items.iter_mut() {
-                match it {
-                    vectorcraft_doc::AppearanceItem::Fill(f) => fix(&mut f.paint),
-                    vectorcraft_doc::AppearanceItem::Stroke(s) => fix(&mut s.paint),
-                }
-            }
-        }
-    }
-}
-
-fn nodes_using(d: &Document, name: Option<&str>) -> Vec<NodeId> {
-    let mut ids = vec![];
-    d.walk(|n| {
-        if pattern::uses_pattern(n, name) {
-            ids.push(n.id);
-        }
-    });
-    ids
+    super::swatch::map_all_paints(d, &mut pattern_paints(old, Some(new)));
 }
 
 fn pattern_delete(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "pattern.delete";
-    let name = str_param(p, "name").ok_or_else(|| bad(C, "missing name"))?.to_string();
+    let name = text_param(p, "name", C)?.ok_or_else(|| bad(C, "missing name"))?.to_string();
     if s.doc()?.doc.pattern(&name).is_none() {
         return Err(bad(C, format!("no pattern `{name}`")));
     }
     if editing(s).is_some_and(|e| e.pattern == name) {
         return Err(bad(C, "finish editing the pattern first"));
     }
-    let n = s.edit("Delete Pattern", |d, _| {
-        d.patterns.retain(|p| p.name != name);
-        let is_it = |sw: &vectorcraft_color::Swatch| matches!(&sw.paint, Paint::Pattern { pattern, .. } if *pattern == name);
-        d.swatches.retain(|sw| !is_it(sw));
-        for g in &mut d.swatch_groups {
-            g.swatches.retain(|sw| !is_it(sw));
-        }
-        let ids = nodes_using(d, Some(&name));
-        for id in &ids {
-            if let Some(n) = d.node_mut(*id) {
-                for it in n.appearance.items.iter_mut() {
-                    let p = match it {
-                        vectorcraft_doc::AppearanceItem::Fill(f) => &mut f.paint,
-                        vectorcraft_doc::AppearanceItem::Stroke(s) => &mut s.paint,
-                    };
-                    if matches!(p, Paint::Pattern { pattern, .. } if *pattern == name) {
-                        *p = Paint::None;
-                    }
-                }
-            }
-        }
-        Ok(ids.len())
-    })?;
+    let n = s.edit("Delete Pattern", |d, _| Ok(forget_pattern(d, &name)))?;
+    map_new_art_paints(s, &mut pattern_paints(&name, None))?;
     Ok(json!({ "unpainted": n }))
 }
 
@@ -658,9 +724,9 @@ fn pattern_transform(s: &mut Session, p: &Value) -> Result<Value> {
 // ---------- Repeat ----------
 
 /// Make a repeat from the selection, or switch the selected repeat's kind.
-fn make_repeat(s: &mut Session, p: &Value, label: &str, make: impl Fn(Vec<Arc<Node>>) -> RepeatSpec) -> Result<Value> {
+fn make_repeat(s: &mut Session, p: &Value, cmd: &str, label: &str, make: impl Fn(Vec<Arc<Node>>) -> RepeatSpec) -> Result<Value> {
     let existing = selected_repeats(s);
-    if ids_param(p, "ids").is_none()
+    if ids_param(p, "ids", cmd)?.is_none()
         && let [r] = existing.as_slice()
     {
         let r = *r;
@@ -673,7 +739,7 @@ fn make_repeat(s: &mut Session, p: &Value, label: &str, make: impl Fn(Vec<Arc<No
         })?;
         return Ok(json!({ "id": r.0 }));
     }
-    let roots = roots(s, p)?;
+    let roots = roots(s, p, cmd)?;
     if roots.is_empty() {
         return Err(EngineError::Other("select the art to repeat".into()));
     }
@@ -687,19 +753,26 @@ fn make_repeat(s: &mut Session, p: &Value, label: &str, make: impl Fn(Vec<Arc<No
 }
 
 fn repeat_radial(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.repeat.radial";
+    check_numbers(p, &["instances", "radius"], C)?;
     let n = f64_or(p, "instances", 8.0);
     if !(1.0..=1000.0).contains(&n) {
-        return Err(bad("object.repeat.radial", "instances must be 1..1000"));
+        return Err(bad(C, "instances must be 1..1000"));
     }
-    let radius = p.get("radius").and_then(Value::as_f64).filter(|r| r.is_finite() && *r >= 0.0);
-    make_repeat(s, p, "Radial Repeat", |src| RepeatSpec::radial(src, n as u32, radius))
+    let radius = p.get("radius").and_then(Value::as_f64);
+    if radius.is_some_and(|r| r < 0.0) {
+        let key = "radius";
+        return Err(bad(C, format!("`{key}` must be a number not below 0")));
+    }
+    make_repeat(s, p, C, "Radial Repeat", |src| RepeatSpec::radial(src, n as u32, radius))
 }
 
 fn repeat_grid(s: &mut Session, p: &Value) -> Result<Value> {
+    check_numbers(p, &["hSpacing", "vSpacing", "rows", "cols"], "object.repeat.grid")?;
     let (hs, vs) = (p.get("hSpacing").and_then(Value::as_f64), p.get("vSpacing").and_then(Value::as_f64));
-    let rows = p.get("rows").and_then(Value::as_u64).map(|v| v.clamp(1, 500) as u32);
-    let cols = p.get("cols").and_then(Value::as_u64).map(|v| v.clamp(1, 500) as u32);
-    make_repeat(s, p, "Grid Repeat", |src| {
+    let rows = p.get("rows").and_then(Value::as_f64).map(|v| (v as u32).clamp(1, 500));
+    let cols = p.get("cols").and_then(Value::as_f64).map(|v| (v as u32).clamp(1, 500));
+    make_repeat(s, p, "object.repeat.grid", "Grid Repeat", |src| {
         let b = vectorcraft_doc::live::nodes_bounds(&src).unwrap_or(Rect::new(0.0, 0.0, 10.0, 10.0));
         let mut r = RepeatSpec::grid(src, hs.unwrap_or(b.width() / 4.0), vs.unwrap_or(b.height() / 4.0));
         if let RepeatKind::Grid { rows: rr, cols: cc, .. } = &mut r.kind {
@@ -711,9 +784,10 @@ fn repeat_grid(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn repeat_mirror(s: &mut Session, p: &Value) -> Result<Value> {
+    check_numbers(p, &["angle", "offset"], "object.repeat.mirror")?;
     let angle = f64_or(p, "angle", 90.0);
     let offset = f64_or(p, "offset", 10.0);
-    make_repeat(s, p, "Mirror Repeat", |src| RepeatSpec::mirror(src, angle, offset))
+    make_repeat(s, p, "object.repeat.mirror", "Mirror Repeat", |src| RepeatSpec::mirror(src, angle, offset))
 }
 
 fn repeat_release(s: &mut Session, _: &Value) -> Result<Value> {
@@ -796,16 +870,26 @@ pub(crate) fn expand_repeats(d: &mut Document, roots: &[NodeId]) -> Result<usize
 fn repeat_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.repeat.options";
     let reps = selected_repeats(s);
+    let numbers = ["instances", "radius", "startAngle", "endAngle", "hSpacing", "vSpacing", "rows", "cols", "brickOffset", "angle"];
+    check_numbers(p, &numbers, C)?;
+    check_switches(p, &["reverseOverlap", "flipRows", "flipCols"], C)?;
     let num = |k: &str| p.get(k).and_then(Value::as_f64).filter(|v| v.is_finite());
     let flag = |k: &str| p.get(k).and_then(Value::as_bool);
     if num("instances").is_some_and(|n| !(1.0..=1000.0).contains(&n)) {
         return Err(bad(C, "instances must be 1..1000"));
     }
-    let grid_type = match str_param(p, "gridType") {
+    let grid_type = match text_param(p, "gridType", C)? {
         Some(t) => Some(TileType::parse(t, num("brickOffset")).ok_or_else(|| bad(C, format!("unknown gridType `{t}`")))?),
         None => None,
     };
-    let center = point_param(p, "center");
+    let center = match p.get("center") {
+        None | Some(Value::Null) => None,
+        Some(v) => {
+            let key = "center";
+            let [x, y] = finite_numbers::<2>(v).ok_or_else(|| bad(C, format!("{key} must be [x, y] with finite coordinates")))?;
+            Some(Point::new(x, y))
+        }
+    };
     s.edit("Repeat Options", |d, _| {
         for r in &reps {
             let Some(NodeKind::Repeat(spec)) = d.node_mut(*r).map(|n| &mut n.kind) else { continue };
@@ -845,6 +929,8 @@ fn repeat_options(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                     if let Some(t) = grid_type {
                         *gt = t;
+                    } else if let (Some(v), TileType::BrickByRow { offset } | TileType::BrickByColumn { offset }) = (num("brickOffset"), &mut *gt) {
+                        *offset = v;
                     }
                     if let Some(v) = flag("flipRows") {
                         *flip_rows = v;

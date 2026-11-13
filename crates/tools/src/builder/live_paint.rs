@@ -114,7 +114,8 @@ enum LpPaint {
 }
 
 /// Live Paint Bucket: by default, a click fills the face under the cursor with the current fill,
-/// and Shift-click paints the nearest edge with the current stroke. Alt-click samples a fill or
+/// and dragging fills the faces crossed in that group as one undo step (Escape cancels).
+/// Shift-click paints the nearest edge with the current stroke. Alt-click samples a fill or
 /// stroke into the paint defaults; Alt+Shift-click samples only the color under the pointer.
 /// Clicking selected ordinary paths without Alt makes them a Live Paint group first. Its Tool
 /// Options (double-click the tool) are `paintFills` (on) and `paintStrokes` (off), `highlight`
@@ -130,6 +131,8 @@ pub struct LivePaintBucketTool {
     pub(super) hover: LpHover,
     /// Where the pointer last moved, and whether Shift and Alt were held.
     at: Option<(Point, bool, bool)>,
+    /// The fill command and polyline previewed from the press's snapshot.
+    fill_drag: Option<(Value, Vec<Vec<Point>>)>,
     fills: bool,
     strokes: bool,
     highlight: bool,
@@ -137,12 +140,16 @@ pub struct LivePaintBucketTool {
     width: f64,
 }
 
+/// Maximum points in one Live Paint fill path chunk.
+pub const LP_FILL_CHUNK_POINTS: usize = 4096;
+
 impl Default for LivePaintBucketTool {
     fn default() -> Self {
         Self {
             cache: RegionCache::live_paint(),
             hover: LpHover::None,
             at: None,
+            fill_drag: None,
             fills: true,
             strokes: false,
             highlight: true,
@@ -153,6 +160,36 @@ impl Default for LivePaintBucketTool {
 }
 
 impl LivePaintBucketTool {
+    fn begin_fill(&mut self, params: Value, p: Point) -> Vec<Action> {
+        self.fill_drag = Some((params.clone(), vec![vec![p]]));
+        vec![Action::Begin("Live Paint Bucket".into()), Action::Preview("livePaint.fill".into(), params)]
+    }
+
+    fn drag_fill(&mut self, p: Point) -> Vec<Action> {
+        let Some((params, chunks)) = &mut self.fill_drag else { return vec![] };
+        let Some(points) = chunks.last_mut() else { return vec![] };
+        let Some(&last) = points.last() else { return vec![] };
+        if last == p {
+            return vec![];
+        }
+        if points.len() == LP_FILL_CHUNK_POINTS {
+            // Share the boundary point so no segment is lost between chunks.
+            chunks.push(vec![last, p]);
+        } else {
+            points.push(p);
+        }
+        let mut params = params.clone();
+        let mut chunks = chunks.iter().map(|chunk| json!(chunk.iter().map(|p| [p.x, p.y]).collect::<Vec<_>>()));
+        if let Some(first) = chunks.next() {
+            params["points"] = first;
+        }
+        let continuation: Vec<_> = chunks.collect();
+        if !continuation.is_empty() {
+            params["continuation"] = Value::Array(continuation);
+        }
+        vec![Action::Preview("livePaint.fill".into(), params)]
+    }
+
     /// What a click paints, Shift held or not. Shift switches Paint Fills alone to Paint Strokes
     /// alone and back, and switches both to Paint Fills alone.
     fn paints(&self, shift: bool) -> LpPaint {
@@ -191,6 +228,12 @@ impl Tool for LivePaintBucketTool {
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let p = ev.pos;
+        // A second press finishes the preceding click, including callers without a release.
+        if ev.kind == PointerKind::Down && self.fill_drag.take().is_some() {
+            let mut acts = vec![Action::Commit];
+            acts.extend(self.pointer(cx, ev));
+            return acts;
+        }
         match ev.kind {
             PointerKind::Move => {
                 self.at = Some((p, ev.mods.shift, ev.mods.alt));
@@ -232,16 +275,40 @@ impl Tool for LivePaintBucketTool {
                     return vec![];
                 }
                 if let Some(g) = live_paint_at(cx.doc, p) {
-                    return vec![Action::Exec("livePaint.fill".into(), json!({ "group": g.0, "point": point }))];
+                    return self.begin_fill(json!({ "group": g.0, "point": point }), p);
                 }
                 if self.cache.at(cx, p).is_some() {
                     let roots = sorted_roots(cx.doc, &cx.selection.objects);
-                    return vec![Action::Exec("livePaint.fill".into(), json!({ "ids": json_ids(&roots), "point": point }))];
+                    return self.begin_fill(json!({ "ids": json_ids(&roots), "point": point }), p);
                 }
                 vec![]
             }
+            PointerKind::Drag => self.drag_fill(p),
+            PointerKind::Up => {
+                let mut acts = self.drag_fill(p);
+                if self.fill_drag.take().is_some() {
+                    acts.push(Action::Commit);
+                }
+                acts
+            }
             _ => vec![],
         }
+    }
+
+    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key == ToolKey::Escape && self.fill_drag.take().is_some() { vec![Action::Cancel] } else { vec![] }
+    }
+
+    fn busy(&self) -> bool {
+        self.fill_drag.is_some()
+    }
+
+    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
+        key == ToolKey::Escape && self.busy()
+    }
+
+    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        if self.fill_drag.take().is_some() { vec![Action::Commit] } else { vec![] }
     }
 
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
@@ -282,9 +349,9 @@ impl Tool for LivePaintBucketTool {
         self.cache.waiting()
     }
 
-    fn poll(&mut self, cx: &ToolContext, wait: bool) {
+    fn poll(&mut self, cx: &ToolContext, wait: bool) -> Vec<Action> {
         if !self.cache.waiting() {
-            return;
+            return vec![];
         }
         // As the Shape Builder's: the map that arrives may be for an earlier revision. Over a part
         // of a Live Paint group the hover takes no map.
@@ -297,6 +364,7 @@ impl Tool for LivePaintBucketTool {
                 break;
             }
         }
+        vec![]
     }
 }
 

@@ -1,12 +1,13 @@
 //! Character panel: font family / style, size, leading, kerning, tracking, vertical and horizontal
-//! scale, baseline shift, character rotation and the All Caps, Small Caps, Superscript, Subscript,
-//! Underline and Strikethrough toggles and the Language menu.
+//! scale, baseline shift, character rotation, the anti-aliasing method and the All Caps, Small Caps,
+//! Superscript, Subscript, Underline and Strikethrough toggles and the Language menu.
 
 use std::sync::{Mutex, OnceLock};
 
 use egui::{Key, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::setup::{LANGUAGES, char_language_name};
+use vectorcraft_doc::text::TypeAntiAlias;
 use vectorcraft_doc::{CharStyle, NodeId, NodeKind};
 use vectorcraft_tools::{Mods, ToolKey};
 
@@ -21,6 +22,9 @@ pub const SIZE_PRESETS: [f64; 15] = [6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0,
 /// The Kerning and Tracking dropdowns' presets in 1/1000 em.
 pub const TRACKING_PRESETS: [f64; 14] = [-100.0, -75.0, -50.0, -25.0, -10.0, -5.0, 0.0, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0, 200.0];
 pub const SCALE_PRESETS: [f64; 8] = [25.0, 50.0, 75.0, 90.0, 100.0, 110.0, 125.0, 150.0];
+/// Insert Aki Left and Right presets, in thousandths of an em: none, a quarter, half and a whole
+/// full-width space.
+pub const AKI_PRESETS: [f64; 4] = [0.0, 250.0, 500.0, 1000.0];
 
 /// The stored character style: the selected range's (or the caret's) while the Type
 /// tool edits text, else the first selected text object's first run (including groups). With it, the paragraph
@@ -265,8 +269,9 @@ fn char_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
 
 /// Set the Kerning field's `value` (a number, "auto", or "optical"). At a caret in text the Type tool edits
 /// it is the pair kerning after the character before the caret, as Alt+←/→ steps it
-/// (`type.step`); nowhere to set at the start of the text. Else it is a character attribute like
-/// the others: the selected range, or all the text.
+/// (`type.step`), or at the start of a line the space before the character after it, where Auto
+/// and Optical set no space (#5111); nowhere to set at an empty line's start. Else it is a
+/// character attribute like the others: the selected range, or all the text.
 fn set_kerning(app: &mut VectorcraftApp, value: Value) {
     let Some((id, a, b)) = text_editing(app) else {
         format(app, json!({"kerning": value}));
@@ -277,15 +282,18 @@ fn set_kerning(app: &mut VectorcraftApp, value: Value) {
         return;
     }
     let Some(NodeKind::Text(t)) = app.session.active().and_then(|st| st.doc.node(id)).map(|n| &n.kind) else { return };
-    let start = vectorcraft_text::edit::prev_char(&t.plain_text(), a);
-    if start >= a {
-        return;
-    }
+    let Some((target, before)) = vectorcraft_text::edit::caret_kerning_target(&t.plain_text(), a) else { return };
     end_typing(app);
-    app.run("text.setRangeStyle", json!({"id": id.0, "start": start, "end": a, "kerning": value})).ok();
+    let params = if before {
+        json!({"id": id.0, "start": target.start, "end": target.end, "kerningBefore": value.as_f64().unwrap_or(0.0)})
+    } else {
+        json!({"id": id.0, "start": target.start, "end": target.end, "kerning": value})
+    };
+    app.run("text.setRangeStyle", params).ok();
 }
 
-/// The pair before the caret, in 1/1000 em, using the layout the canvas draws.
+/// The kerning at the caret, in 1/1000 em, using the layout the canvas draws: the pair before it,
+/// or at the start of a line the space before the character after it.
 fn caret_kerning(app: &VectorcraftApp, ui: &Ui) -> Option<(f64, bool)> {
     let (id, a, b) = text_editing(app)?;
     if a != b {
@@ -293,11 +301,12 @@ fn caret_kerning(app: &VectorcraftApp, ui: &Ui) -> Option<(f64, bool)> {
     }
     let NodeKind::Text(t) = &app.session.active()?.doc.node(id)?.kind else { return None };
     let text = t.plain_text();
-    let start = vectorcraft_text::edit::prev_char(&text, a);
-    if start >= a {
-        return None;
-    }
+    let (target, before) = vectorcraft_text::edit::caret_kerning_target(&text, a)?;
+    let start = target.start;
     let style = vectorcraft_text::edit::style_at(&t.runs, start + 1);
+    if before {
+        return Some((style.kerning_before, false));
+    }
     if let Some(v) = style.kerning {
         return Some((v, false));
     }
@@ -444,10 +453,10 @@ impl Field {
 /// Type tool edits, the panel shows, nothing takes the focus and the command fails. → `{field}`.
 pub(crate) fn highlight(app: &mut VectorcraftApp, field: Field) -> Result<Value, String> {
     // `window.panel` would hide a floating panel in front of its window, or an open flyout.
-    if crate::panel_docking::showing(&app.ui, "character") {
+    if crate::panel_docking::visible(&app.ui, "character") {
         app.run("window.panel.activate", json!({"panel": "character"}))?;
     } else {
-        app.run("window.panel", json!({"panel": "character"}))?;
+        crate::panel_docking::reveal_panel(app, "character")?;
     }
     if text_style(app).is_none() {
         app.character_focus = None;
@@ -499,18 +508,16 @@ pub(crate) fn text_editing(app: &VectorcraftApp) -> Option<(NodeId, usize, usize
 }
 
 /// The frames of the threaded story whose whole text the Type tool has selected after Select All,
-/// in thread order; `None` when its selection is in one type object.
+/// in the order of the edited frame's thread as the document holds it now; `None` when its
+/// selection is in one type object.
 pub(crate) fn text_story(app: &VectorcraftApp) -> Option<Vec<NodeId>> {
     let o = app.session.tool_options();
     let st = app.session.active()?;
-    let ids: Vec<NodeId> = o
-        .get("story")?
-        .as_array()?
-        .iter()
-        .filter_map(Value::as_u64)
-        .map(NodeId)
-        .filter(|id| st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))))
-        .collect();
+    let id = NodeId(o.get("editing")?.as_u64()?);
+    if o.get("story")?.as_array()?.is_empty() {
+        return None;
+    }
+    let ids = st.doc.story_of(id);
     (ids.len() >= 2).then_some(ids)
 }
 
@@ -540,11 +547,13 @@ static CLIP_RUNS: Mutex<Option<Value>> = Mutex::new(None);
 
 fn text_copy(app: &mut VectorcraftApp) -> bool {
     let Some((id, a, b)) = text_editing(app) else { return false };
-    if a == b {
+    let story = text_story(app);
+    // An empty selection has nothing to copy, unless the story's text is in the other frames.
+    if a == b && (story.is_none() || app.session.active().is_none_or(|st| st.doc.story_text(id).is_empty())) {
         return false;
     }
     // After Select All in threaded text: the whole story.
-    let range = if text_story(app).is_some() { json!({"id": id.0, "story": true}) } else { json!({"id": id.0, "start": a, "end": b}) };
+    let range = if story.is_some() { json!({"id": id.0, "story": true}) } else { json!({"id": id.0, "start": a, "end": b}) };
     let Ok(r) = app.session.execute("text.getRange", &range) else { return false };
     let runs = r["runs"].clone();
     app.session.set_tool_option("copy", &runs);
@@ -758,10 +767,12 @@ fn cell(ui: &mut Ui, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
     });
 }
 
-/// The Character panel's grid of numeric fields, `w` wide: Font Size, Leading, Kerning and
-/// Tracking, then with `more` the scales, Baseline Shift and Character Rotation (`s`: the style
-/// shown). With Show Font Height Options on, a row under Font Size holds the Set Font Height
-/// Reference dropdown. The Properties panel shows its first rows.
+/// The Character panel's grid of fields, `w` wide: Font Size, Leading, Kerning and Tracking,
+/// then with `more` the scales, Baseline Shift and Character Rotation, and a row with the
+/// Anti-aliasing Method dropdown under Character Rotation (`s`: the style shown), and with Show East
+/// Asian Options on a row with Insert Aki Left and Right. With Show Font
+/// Height Options on, a row under Font Size holds the Set Font Height Reference dropdown. The
+/// Properties panel shows its first rows.
 pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &CharStyle, w: f32, more: bool) {
     let fw = ((w - 66.0) / 2.0).clamp(60.0, 100.0);
     let unit = app.session.type_unit();
@@ -836,7 +847,76 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
             }
         });
         ui.end_row();
+        // Anti-aliasing Method, under Character Rotation.
+        ui.label("");
+        cell(ui, "aa", tl!("Anti-aliasing Method"), |ui| anti_alias_method(app, ui, fw));
+        ui.end_row();
+        // Insert Aki Left and Right, with the East Asian options: space before and after each
+        // character, in thousandths of an em.
+        if app.session.prefs.show_east_asian_options {
+            for (field, label, key, icon) in
+                [("ch-aki-left", tl!("Insert Aki Left"), "akiLeft", "↔A"), ("ch-aki-right", tl!("Insert Aki Right"), "akiRight", "A↔")]
+            {
+                cell(ui, icon, label, |ui| {
+                    let value = shared(app, |s| if key == "akiLeft" { s.aki_left } else { s.aki_right });
+                    if let Some(v) = widgets::spin_plain(ui, field, value, "", 0, fw, 10.0, 0.0, &AKI_PRESETS) {
+                        // The field stops at the largest value the command takes.
+                        format(app, json!({ key: v.min(vectorcraft_doc::text::MAX_AKI) }));
+                    }
+                });
+            }
+            ui.end_row();
+        }
     });
+}
+
+/// The Anti-aliasing Method dropdown, `width` wide: how the edges of the type objects the panel acts
+/// on are drawn as pixels ([`set_anti_alias`]), blank where their methods differ.
+fn anti_alias_method(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
+    // The labels of [`TypeAntiAlias::ALL`], in its order. "Sharp" is looked up under the
+    // `antiAlias` context: the catalogs' plain "Sharp" row is the Contour tool's corner.
+    let sharp = crate::i18n::tr_ctx(crate::i18n::current(), "antiAlias", "Sharp");
+    let labels = [tl!("None"), sharp, tl!("Crisp"), tl!("Strong")];
+    let current = shared_anti_alias(app);
+    let shown = TypeAntiAlias::ALL.iter().zip(labels).find(|(m, _)| Some(**m) == current).map_or("", |(_, l)| l);
+    if let Some(m) = widgets::dropdown_names(ui, "ch-anti-alias", shown, &labels, width).and_then(|i| TypeAntiAlias::ALL.get(i)) {
+        set_anti_alias(app, *m);
+    }
+}
+
+/// The anti-aliasing method of the type objects the panel acts on: the one the Type tool edits,
+/// else the selected type (groups' included). `None` where they differ, or with no type.
+fn shared_anti_alias(app: &VectorcraftApp) -> Option<TypeAntiAlias> {
+    let st = app.session.active()?;
+    let mut acc = Shared::None;
+    match text_editing(app) {
+        Some((id, _, _)) => {
+            if let Some(NodeKind::Text(t)) = st.doc.node(id).map(|n| &n.kind) {
+                acc.add(t.anti_alias);
+            }
+        }
+        None => {
+            for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
+                n.walk(&mut |c| {
+                    if let NodeKind::Text(t) = &c.kind {
+                        acc.add(t.anti_alias);
+                    }
+                });
+            }
+        }
+    }
+    acc.value()
+}
+
+/// Set the anti-aliasing method `m` of the frame the Type tool edits, whatever part of its text
+/// is selected, else the selected type objects (`text.setFormat {antiAlias}`).
+fn set_anti_alias(app: &mut VectorcraftApp, m: TypeAntiAlias) {
+    let mut p = json!({"antiAlias": m.id()});
+    if let Some((id, _, _)) = text_editing(app) {
+        end_typing(app);
+        p["ids"] = json!([id.0]);
+    }
+    app.run("text.setFormat", p).ok();
 }
 
 /// The Font Size combo (Character and Properties panels, Control bar): typed, stepped, scrubbed or
@@ -1321,7 +1401,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.prefs.show_indic_options {
         let digits = shared(app, |s| s.digits);
         ui.add_enabled_ui(has, |ui| {
-            ui.menu_button(format!("   {}", tl!("Digits")), |ui| digits_items(app, ui, digits));
+            ui.menu_button(format!("   {}", tl!("Digits")), |ui| widgets::menu_scroll(ui, |ui| digits_items(app, ui, digits)));
         });
         ui.add_enabled_ui(has, |ui| {
             ui.menu_button(format!("   {}", tl!("Character Direction")), |ui| char_direction_items(app, ui));
@@ -1380,14 +1460,22 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
     first_selected_text(app).is_none_or(|t| t.fractional_widths)
 }
 
-/// Reset Panel: the characters the panel acts on ([`char_cmd`]) take tracking 0, Auto leading and
+/// Reset Panel, in one undo step: the type objects the panel acts on take the Sharp anti-aliasing
+/// method, and the characters the panel acts on ([`char_cmd`]) take tracking 0, Auto leading and
 /// kerning, no baseline shift, 100% scales, no rotation, no underline or strikethrough, All Caps
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
 /// character alignment, Proportional Metrics, Tate-chu-yoko, Standard Vertical Roman Alignment and
-/// No Break off, Tate-chu-yoko Settings Up/Down and Left/Right 0, the Default character direction,
+/// No Break off, Tate-chu-yoko Settings Up/Down and Left/Right 0, Insert Aki Left and Right 0, the Default character direction,
 /// Kashidas on, the Default digits and the Em Box font height reference, whether or not Show East Asian
-/// Options, Show Indic Options and Show Font Height Options are on.
+/// Options, Show Indic Options and Show Font Height Options are on. Inside an undo group that is
+/// already open, the reset is part of that group's step.
 fn reset_panel(app: &mut VectorcraftApp) {
+    // Typing in progress stays an undo step of its own.
+    end_typing(app);
+    let open = app.session.active().is_some_and(|st| st.undo_group.is_some());
+    if !open {
+        app.session.begin_named_undo_group(Some("Reset Panel".into()));
+    }
     let d = CharStyle::default();
     style(app, json!({"tracking": 0, "leading": "auto"}));
     format(
@@ -1396,11 +1484,17 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "kerning": "auto", "baselineShift": 0, "hScale": 100, "vScale": 100, "rotation": 0, "underline": false, "strikethrough": false,
             "allCaps": false, "smallCaps": d.small_caps.is_some(), "position": d.position.id(), "charAlign": d.char_align,
             "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko,
-            "tcyUpDown": d.tcy_up_down, "tcyLeftRight": d.tcy_left_right,
+            "tcyUpDown": d.tcy_up_down, "tcyLeftRight": d.tcy_left_right, "akiLeft": d.aki_left, "akiRight": d.aki_right,
             "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default", "kashidas": d.kashidas,
             "digits": d.digits, "fontHeightReference": d.font_height_reference
         }),
     );
+    set_anti_alias(app, TypeAntiAlias::Sharp);
+    // Closes the active document's undo group only, so an undo group open in another document
+    // stays open.
+    if !open && let Some(st) = app.session.active_mut() {
+        st.undo_group = None;
+    }
 }
 
 #[cfg(test)]

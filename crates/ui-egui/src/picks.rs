@@ -68,14 +68,17 @@ pub(crate) enum Entry {
 /// document active at the time has closed meanwhile.
 const DOCUMENT_FREE: &[&str] = &[
     "file.open",
+    "file.openWith",
     "file.newFromTemplate",
     "ui.installPlugin",
     "ui.checkScript",
+    "ui.runScript",
     "window.swatchLibrary.other",
     "window.graphicStyleLibrary.other",
     "ui.libraryPanel.locate",
     "shortcuts.import",
     "shortcuts.export",
+    "shortcuts.exportText",
     "ui.shortcutImportDialog",
     crate::panels::actions::SAVE_SET,
     crate::panels::actions::LOAD_SET,
@@ -102,6 +105,9 @@ struct Waiting {
     /// The automation roots in force when it was asked for: the entry runs again under them, not
     /// with the desktop's access of the frame the answer comes in.
     scope: ScopeHandle,
+    /// Automation asked for it ([`VectorcraftApp::automation_asked`]): the entry runs again as
+    /// automation's ([`as_automated`]).
+    automated: bool,
 }
 
 /// The app's file dialogs ([`VectorcraftApp`]'s `picks`).
@@ -119,6 +125,20 @@ pub(crate) struct Picks {
     replacing: Option<Replacing>,
     /// The file that question's OK allows to be replaced while what asked runs again.
     replace_ok: Option<String>,
+    /// The files that the OK of the question whether to replace the files a save or export writes
+    /// beside the one picked allows to be replaced while it runs that again
+    /// ([`crate::dialogs::confirm::ask_replace_files`]).
+    pub(crate) replace_files_ok: Vec<String>,
+    /// The files each document's last save wrote beside its own file, by document uid: its next
+    /// save replaces them without asking.
+    pub(crate) written_beside: std::collections::HashMap<u64, Vec<String>>,
+    /// What runs now handles the answer of a file dialog automation opened ([`as_automated`]).
+    automated: bool,
+    /// The web's file pickers opened ([`open_async`]) that have not answered yet
+    /// (`Services::picked_inbox`).
+    web_opens: u32,
+    /// Automation opened one of them: their answers are automation's.
+    web_open_automated: bool,
 }
 
 /// A save dialog's answer that names, once the app gave it an extension, a file that is there.
@@ -149,6 +169,24 @@ impl Picks {
         self.entry = None;
         self.answer = None;
         self.replace_ok = None;
+        self.replace_files_ok.clear();
+        self.automated = false;
+    }
+
+    /// What runs now handles the answer of a file dialog automation opened ([`as_automated`]).
+    pub(crate) fn automated(&self) -> bool {
+        self.automated
+    }
+
+    /// One of the web's file pickers answered (a file, or canceled): whether the answer is
+    /// automation's. Once none is waiting, the next one the person opens answers for the person.
+    pub(crate) fn answer_web_open(&mut self) -> bool {
+        let automated = self.web_open_automated;
+        self.web_opens = self.web_opens.saturating_sub(1);
+        if self.web_opens == 0 {
+            self.web_open_automated = false;
+        }
+        automated
     }
 
     /// The kind of dialog open off the UI thread (`ui.inspect`'s `fileDialog`).
@@ -183,6 +221,38 @@ pub(crate) fn as_entry<R>(app: &mut VectorcraftApp, entry: impl FnOnce() -> Entr
     let r = f(app);
     app.picks.entry = None;
     r
+}
+
+/// Run a continuation under its own entry: a refused Save's panel must resume Save As, not retry
+/// the original Save. Restore the enclosing entry for any work it does afterwards.
+pub(crate) fn as_own_entry<R>(app: &mut VectorcraftApp, entry: Entry, f: impl FnOnce(&mut VectorcraftApp) -> R) -> R {
+    let outer = app.picks.entry.replace(entry);
+    let r = f(app);
+    app.picks.entry = outer;
+    r
+}
+
+/// Run `f` as handling the answer of a file dialog automation opened when `automated` (and inside
+/// one already, as that): [`VectorcraftApp::automation_asked`] is true meanwhile.
+pub(crate) fn as_automated<R>(app: &mut VectorcraftApp, automated: bool, f: impl FnOnce(&mut VectorcraftApp) -> R) -> R {
+    let outer = app.picks.automated;
+    app.picks.automated = outer || automated;
+    let r = f(app);
+    app.picks.automated = outer;
+    r
+}
+
+/// Opens the web's file picker, whose file arrives later through `Services::picked_inbox`, noting
+/// whether automation asked for it ([`VectorcraftApp::automation_asked`]) → false when the host has
+/// none. While a picker automation opened has not answered, every answer is automation's, also one
+/// to a picker the person opened.
+pub(crate) fn open_async(app: &mut VectorcraftApp) -> bool {
+    let automated = app.automation_asked();
+    let Some(f) = app.services.open_async.as_mut() else { return false };
+    f();
+    app.picks.web_opens += 1;
+    app.picks.web_open_automated |= automated;
+    true
 }
 
 /// [`as_entry`] for a panel's or a dialog's button that `f` handles.
@@ -316,8 +386,8 @@ fn ask(app: &mut VectorcraftApp, request: PickRequest) -> Option<PickAnswer> {
     match (app.picks.entry.clone(), app.services.start_pick.as_mut()) {
         (Some(entry), Some(start)) => {
             if let Some(answer) = start(request.clone()) {
-                let doc = entry.document(app);
-                app.picks.waiting = Some(Waiting { request, answer, entry, doc, scope: ScopeHandle::capture() });
+                let (doc, automated) = (entry.document(app), app.automation_asked());
+                app.picks.waiting = Some(Waiting { request, answer, entry, doc, scope: ScopeHandle::capture(), automated });
                 return None;
             }
         }
@@ -364,7 +434,7 @@ pub(crate) fn poll(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // The dialog's thread is gone: as cancelled.
         Err(TryRecvError::Disconnected) => vec![],
     };
-    let Some(Waiting { request, entry, doc, scope, .. }) = app.picks.waiting.take() else { return };
+    let Some(Waiting { request, entry, doc, scope, automated, .. }) = app.picks.waiting.take() else { return };
     app.picks.refused = false;
     // Once more: what waited for the dialog (files from the Finder, the menu bar) goes on.
     ctx.request_repaint();
@@ -376,7 +446,7 @@ pub(crate) fn poll(app: &mut VectorcraftApp, ctx: &egui::Context) {
             return;
         }
         app.picks.answer = Some((request, answer));
-        rerun(app, entry);
+        as_automated(app, automated, |app| rerun(app, entry));
         // An entry that took another way this time leaves the answer unused.
         app.picks.answer = None;
     });
@@ -385,7 +455,7 @@ pub(crate) fn poll(app: &mut VectorcraftApp, ctx: &egui::Context) {
 /// Make the document an entry asked for (`doc`, by its uid) active again before it runs again:
 /// another may be active by now (opened from the Finder, by an agent), or it may be gone → false
 /// when it can't run (the status bar says why).
-fn on_document(app: &mut VectorcraftApp, doc: Option<u64>) -> bool {
+pub(crate) fn on_document(app: &mut VectorcraftApp, doc: Option<u64>) -> bool {
     let Some(uid) = doc else { return true };
     let Some(i) = app.session.documents().iter().position(|d| d.uid == uid) else {
         app.status(tl!("The document was closed while its file dialog was open"));

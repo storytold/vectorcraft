@@ -22,11 +22,20 @@ pub struct ProfilePreset {
 }
 
 impl WidthProfile {
-    /// (left, right) width factors at `t`, linear between points.
+    /// (left, right) width factors at `t`: a smooth curve through the points ([`Self::at_points`]).
     pub fn at(&self, t: f64) -> (f64, f64) {
         Self::at_points(&self.points, t)
     }
     /// [`Self::at`] of a profile's points (a preset's or a saved profile's).
+    ///
+    /// Each side runs through its points on a cubic Hermite curve, its slope at each one the
+    /// weighted harmonic mean of the secants either side (Fritsch–Carlson). That is C1 continuous
+    /// and monotone between points, so it never overshoots them, a point eases into its neighbours
+    /// instead of making a corner, and moving one reshapes the curve as far as its neighbours'
+    /// neighbours (their slopes depend on it). The ends of a run use the one-sided PCHIP slope
+    /// from its first two secants, or the secant when it has only two points, so a two-point
+    /// profile stays a straight taper and the lens is a parabola. Two points at one `t` are still
+    /// a step: each run either side ends independently at it.
     pub fn at_points(p: &[(f64, f64, f64)], t: f64) -> (f64, f64) {
         if p.is_empty() {
             return (1.0, 1.0);
@@ -36,9 +45,21 @@ impl WidthProfile {
         }
         // (Positions go forward; found in log time, so a long profile read from a file is cheap to ask.)
         let i = p.partition_point(|q| q.0 < t);
-        if let (Some(a), Some(b)) = (i.checked_sub(1).and_then(|j| p.get(j)), p.get(i)) {
-            let u = (t - a.0) / (b.0 - a.0).max(1e-9);
-            return (a.1 + (b.1 - a.1) * u, a.2 + (b.2 - a.2) * u);
+        if let (Some(j), Some(b)) = (i.checked_sub(1), p.get(i))
+            && let Some(a) = p.get(j)
+        {
+            let h = b.0 - a.0;
+            let u = (t - a.0) / h.max(1e-9);
+            let linear = (a.1 + (b.1 - a.1) * u, a.2 + (b.2 - a.2) * u);
+            if h <= STEP {
+                return linear;
+            }
+            let side = |v: fn(&(f64, f64, f64)) -> f64, straight: f64| {
+                let y = hermite(v(a), v(b), tangent(p, j, v) * h, tangent(p, i, v) * h, u);
+                // Widths read from a file may be huge: where the curve overflows, the straight line.
+                if y.is_finite() { y } else { straight }
+            };
+            return (side(|q| q.1, linear.0), side(|q| q.2, linear.1));
         }
         p.last().map_or((1.0, 1.0), |l| (l.1, l.2))
     }
@@ -55,14 +76,18 @@ impl WidthProfile {
         // Two swells between narrow necks.
         ProfilePreset { id: "wave", label: "Wave", points: &[(0.0, 0.3, 0.3), (0.25, 1.0, 1.0), (0.5, 0.3, 0.3), (0.75, 1.0, 1.0), (1.0, 0.3, 0.3)] },
     ];
-    /// The widest the stroke gets, as a multiple of its weight: the largest total of the left and
-    /// right factors at any of the points (between them the profile is straight), 1 for a profile
-    /// without points.
+    /// The widest the stroke gets, as a multiple of its weight, 1 for a profile without points.
+    /// Each side's smooth curve stays between the widths of the two points of each span
+    /// ([`Self::at_points`]), but the two sides needn't peak together, so a span counts its wider
+    /// left and its wider right.
     pub fn widest(&self) -> f64 {
-        if self.points.is_empty() {
+        let p = &self.points;
+        if p.is_empty() {
             return 1.0;
         }
-        self.points.iter().map(|&(_, l, r)| (l.max(0.0) + r.max(0.0)) / 2.0).fold(0.0, f64::max)
+        let total = |l: f64, r: f64| (l.max(0.0) + r.max(0.0)) / 2.0;
+        let spans = p.windows(2).map(|w| total(w[0].1.max(w[1].1), w[0].2.max(w[1].2)));
+        p.iter().map(|&(_, l, r)| total(l, r)).chain(spans).fold(0.0, f64::max)
     }
     /// The built-in profile with this id.
     pub fn preset(id: &str) -> Option<Self> {
@@ -177,6 +202,13 @@ impl AngleProfile {
         if v.is_finite() { vectorcraft_geom::normalize_deg(v) } else { 0.0 }
     }
 
+    /// The angle at `t` (0..1) as [`Self::at`] reads it, but in the samples' own running degrees,
+    /// so the whole turns the curve makes along the stroke are kept; 0 without any samples.
+    pub fn unwrapped_at(&self, t: f64) -> f64 {
+        let v = interpolated(&self.points, t).unwrap_or(0.0);
+        if v.is_finite() { v } else { 0.0 }
+    }
+
     /// A profile from (position, degrees) samples in order along the stroke: non-finite ones are
     /// dropped, each sample is joined to the one before it the shorter way round, and the curve is
     /// simplified to within 1° and kept to [`PressureProfile::MAX_POINTS`]. `None` without a sample.
@@ -225,6 +257,67 @@ impl AngleProfile {
     pub fn sample() -> Self {
         Self { points: vec![(0.0, -179.0), (1.0, 179.0)] }
     }
+}
+
+/// How close two width points' positions are to make a step ([`WidthProfile::around`]).
+const STEP: f64 = 1e-7;
+
+/// The one-sided three-point PCHIP slope at the start of a run, from the first two secants.
+/// A sign change caps the slope, and a slope that turns back on the first secant is flattened.
+/// Runs of only two points use their secant instead (see [`tangent`]).
+fn end_slope(h0: f64, h1: f64, d0: f64, d1: f64) -> f64 {
+    let m = ((2.0 * h0 + h1) * d0 - h0 * d1) / (h0 + h1);
+    if !m.is_finite() || m * d0 <= 0.0 {
+        return 0.0;
+    }
+    if d0 * d1 < 0.0 {
+        return if d0 > 0.0 { m.min(3.0 * d0) } else { m.max(3.0 * d0) };
+    }
+    m
+}
+
+/// The slope of one side (`v` reads it from a point) of width profile `p` at its point `j`, in
+/// width per unit of position: Fritsch–Carlson's choice for a monotone cubic curve. It is 0 where
+/// the point is wider or narrower than both neighbours, and the weighted harmonic mean of the
+/// slopes of the spans on either side elsewhere (never more than three times either, so no span
+/// overshoots its points). The ends of a run take the one-sided three-point PCHIP slope, or their
+/// secant when the run has only two points; a step ends the run on each side, so the points either
+/// side of it do not see across it.
+fn tangent(p: &[(f64, f64, f64)], j: usize, v: fn(&(f64, f64, f64)) -> f64) -> f64 {
+    let Some(q) = p.get(j) else { return 0.0 };
+    let before = j.checked_sub(1).and_then(|k| p.get(k)).filter(|a| q.0 - a.0 > STEP);
+    let after = p.get(j + 1).filter(|b| b.0 - q.0 > STEP);
+    let slope = |a: &(f64, f64, f64), b: &(f64, f64, f64)| (v(b) - v(a)) / (b.0 - a.0);
+    match (before, after) {
+        (Some(a), Some(b)) => {
+            let (d0, d1) = (slope(a, q), slope(q, b));
+            if d0 * d1 <= 0.0 {
+                return 0.0;
+            }
+            let (h0, h1) = (q.0 - a.0, b.0 - q.0);
+            3.0 * (h0 + h1) / ((2.0 * h1 + h0) / d0 + (h1 + 2.0 * h0) / d1)
+        }
+        // The end of a run: its previous two points set a one-sided three-point slope, or its
+        // secant when the run has only two points (the point before `a` is on the other side of a
+        // step, or does not exist).
+        (Some(a), None) => {
+            let Some(prev) = j.checked_sub(2).and_then(|k| p.get(k)).filter(|z| a.0 - z.0 > STEP) else { return slope(a, q) };
+            end_slope(q.0 - a.0, a.0 - prev.0, slope(a, q), slope(prev, a))
+        }
+        // The start of a run, symmetrically.
+        (None, Some(b)) => {
+            let Some(next) = p.get(j + 2).filter(|z| z.0 - b.0 > STEP) else { return slope(q, b) };
+            end_slope(b.0 - q.0, next.0 - b.0, slope(q, b), slope(b, next))
+        }
+        (None, None) => 0.0,
+    }
+}
+
+/// The cubic Hermite curve from `y0` to `y1` at `u` (0..1), with end slopes `m0` and `m1` per
+/// whole span.
+fn hermite(y0: f64, y1: f64, m0: f64, m1: f64, u: f64) -> f64 {
+    let (u2, u3) = (u * u, u * u * u);
+    (2.0 * u3 - 3.0 * u2 + 1.0) * y0 + (u3 - 2.0 * u2 + u) * m0 + (-2.0 * u3 + 3.0 * u2) * y1 + (u3 - u2) * m1
 }
 
 /// The value of samples `p` (position, value) at `t`, linear between them; `None` without any.
@@ -341,6 +434,7 @@ pub struct SavedProfile {
 mod tests {
     use super::*;
 
+    /// Widths and steps are found by search, at the ends, between points and at a step.
     #[test]
     fn width_profile_lookups_by_search() {
         let p = WidthProfile { points: vec![(0.0, 0.0, 0.0), (0.5, 1.0, 1.0), (0.5, 0.5, 0.25), (1.0, 0.0, 0.0)] };
@@ -357,5 +451,94 @@ mod tests {
         // 0.4999999 == 0.5 - 1e-7, yet its distance from 0.5 rounds above 1e-7: it is not part of the step.
         let near = WidthProfile { points: vec![(0.4999999, 2.0, 2.0), (0.5, 1.0, 1.0), (0.5, 0.5, 0.25)] };
         assert_eq!(near.around(0.5), ((1.0, 1.0), (0.5, 0.25)));
+    }
+
+    /// The slope of one side of `p` just before and just after `t`.
+    fn slopes(p: &WidthProfile, t: f64) -> (f64, f64) {
+        let e = 1e-6;
+        ((p.at(t).0 - p.at(t - e).0) / e, (p.at(t + e).0 - p.at(t).0) / e)
+    }
+
+    /// #5714: the width flows through a width point instead of turning a corner there.
+    #[test]
+    fn widths_run_smoothly_through_width_points() {
+        // A swell in the middle: flat at its widest, and a quarter of the way along above the
+        // straight ramp from 1 to 3 (2) because the end eases out of the first point.
+        let swell = WidthProfile { points: vec![(0.0, 1.0, 1.0), (0.5, 3.0, 2.0), (1.0, 1.0, 1.0)] };
+        let (before, after) = slopes(&swell, 0.5);
+        assert!(before.abs() < 1e-4 && after.abs() < 1e-4, "{before} {after}");
+        let (l, r) = swell.at(0.25);
+        assert!((l - 2.5).abs() < 1e-12 && (r - 1.75).abs() < 1e-12, "{l} {r}");
+        // Rising on both sides of a point: the slope is the same either side of it.
+        let rise = WidthProfile { points: vec![(0.0, 0.0, 0.0), (0.3, 1.0, 1.0), (1.0, 4.0, 4.0)] };
+        let (before, after) = slopes(&rise, 0.3);
+        assert!(before > 0.0 && (before - after).abs() < 1e-3 * before, "{before} {after}");
+        // Points on one line stay on it.
+        let straight = WidthProfile { points: vec![(0.0, 0.0, 1.0), (0.25, 0.5, 1.0), (1.0, 2.0, 1.0)] };
+        for t in [0.1, 0.25, 0.6, 0.9] {
+            let (l, r) = straight.at(t);
+            assert!((l - 2.0 * t).abs() < 1e-12 && (r - 1.0).abs() < 1e-12, "{t}: {l} {r}");
+        }
+    }
+
+    /// Neither side of a profile goes wider or narrower than the two points of the span it is in.
+    #[test]
+    fn widths_never_pass_the_points_either_side() {
+        for preset in WidthProfile::PRESETS {
+            let p = WidthProfile { points: preset.points.to_vec() };
+            for w in p.points.windows(2) {
+                let (lo, hi) = (w[0].1.min(w[1].1), w[0].1.max(w[1].1));
+                for k in 0..=100 {
+                    let t = w[0].0 + (w[1].0 - w[0].0) * k as f64 / 100.0;
+                    let l = p.at(t).0;
+                    assert!(l >= lo - 1e-12 && l <= hi + 1e-12, "{}: {l} at {t} outside {lo}..{hi}", preset.id);
+                }
+            }
+        }
+        // Uneven spacing and a steep jump next to a gentle rise.
+        let p = WidthProfile { points: vec![(0.0, 0.0, 0.0), (0.05, 1.0, 1.0), (0.9, 1.1, 1.1), (1.0, 5.0, 5.0)] };
+        for k in 0..=1000 {
+            let t = k as f64 / 1000.0;
+            let l = p.at(t).0;
+            let span = p.points.windows(2).find(|w| t >= w[0].0 && t <= w[1].0).map(|w| (w[0].1.min(w[1].1), w[0].1.max(w[1].1)));
+            let (lo, hi) = span.unwrap();
+            assert!(l >= lo - 1e-12 && l <= hi + 1e-12, "{l} at {t}");
+        }
+    }
+
+    /// A step still breaks the width sharply, and the curve on either side ends at it.
+    #[test]
+    fn a_step_ends_the_curve_on_each_side() {
+        let p = WidthProfile { points: vec![(0.0, 1.0, 1.0), (0.5, 3.0, 3.0), (0.5, 1.0, 1.0), (1.0, 2.0, 2.0)] };
+        assert_eq!(p.around(0.5), ((3.0, 3.0), (1.0, 1.0)));
+        // Two points between ends: each side of the step is a straight ramp.
+        assert!((p.at(0.25).0 - 2.0).abs() < 1e-12 && (p.at(0.75).0 - 1.5).abs() < 1e-12);
+    }
+
+    /// `widest()` is at least the stroke's width anywhere along the profile, even where the sides peak apart.
+    #[test]
+    fn widest_covers_every_width_along_the_profile() {
+        let profiles = [
+            vec![(0.0, 1.0, 0.0), (0.5, 0.2, 1.0), (1.0, 1.0, 0.0)],
+            vec![(0.0, 0.0, 1.0), (0.3, 1.0, 0.0), (0.6, 0.0, 1.0), (1.0, 1.0, 1.0)],
+            vec![(0.0, 0.3, 0.3), (0.25, 1.0, 1.0), (0.5, 0.3, 0.3), (0.75, 1.0, 1.0), (1.0, 0.3, 0.3)],
+        ];
+        for points in profiles {
+            let p = WidthProfile { points };
+            let most = (0..=1000).map(|k| p.at(k as f64 / 1000.0)).map(|(l, r)| (l.max(0.0) + r.max(0.0)) / 2.0).fold(0.0, f64::max);
+            assert!(p.widest() >= most - 1e-12, "{} < {most}: {:?}", p.widest(), p.points);
+        }
+        assert_eq!(WidthProfile::lens().widest(), 1.0);
+        assert_eq!(WidthProfile::default().widest(), 1.0);
+    }
+
+    /// Widths read from a file may be absurd: the curve stays finite or falls back to the line.
+    #[test]
+    fn huge_widths_stay_finite() {
+        let p = WidthProfile { points: vec![(0.0, 0.0, 0.0), (0.5, f64::MAX, 1.0), (1.0, -f64::MAX, 0.0)] };
+        for k in 0..=10 {
+            let (l, r) = p.at(k as f64 / 10.0);
+            assert!(!l.is_nan() && r.is_finite(), "{l} {r}");
+        }
     }
 }

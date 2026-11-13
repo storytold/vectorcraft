@@ -1,8 +1,10 @@
 use super::region::Region;
+use super::vertical::stands_upright;
 use super::{
-    Affine, BezPath, Breakpoint, Burasagari, EPS, FirstBaseline, FontDb, HyphenationOptions, Kinsoku, LeadingModel, SGlyph, hyphen_glyph,
-    hyphen_points_in, no_line_end, no_line_start, soft_line_start,
+    Affine, BezPath, Breakpoint, Burasagari, EPS, FirstBaseline, FontDb, HyphenationOptions, Kinsoku, KinsokuShoriType, LeadingModel, SGlyph,
+    hyphen_glyph, is_cjk, no_line_end, no_line_start, points_for, soft_line_start,
 };
+use crate::justify::is_format_control;
 
 /// Vertical metrics of a line: (ascent, descent, leading, cap height, x height).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -62,11 +64,18 @@ pub(super) struct Pen<'r> {
     pub(super) next_top: Option<f64>,
     /// The narrowest word no line from here down is wide enough for (see [`Pen::place`]).
     pub(super) no_room_for: f64,
+    /// Baseline steps still allowed over all the frame's cells and placements (shared by this pen's
+    /// copies): see [`MAX_TOTAL_STEPS`].
+    pub(super) steps_left: std::rc::Rc<std::cell::Cell<usize>>,
 }
 
 /// The largest number of steps layout takes to move a line down a frame cell to find room for it:
 /// in a cell taller than this many leads, a step is the cell's height divided by this.
 const MAX_STEPS: usize = 100_000;
+
+/// The most baseline steps one frame's layout takes in all, over every cell: a cell may take
+/// [`MAX_STEPS`], but rows and columns of tall, narrow-shaped cells would multiply that.
+pub(super) const MAX_TOTAL_STEPS: usize = 10_000_000;
 
 impl Pen<'_> {
     /// Baseline and horizontal span for a line with estimated metrics `est` and indents that starts
@@ -109,7 +118,14 @@ impl Pen<'_> {
             // height when that is more, in at most `MAX_STEPS` steps.
             let step = est.lead.max(1.0).max(r.cell.height() / MAX_STEPS as f64);
             for _ in 0..=MAX_STEPS {
-                if baseline + est.desc > r.bottom() + 0.01 {
+                let left = self.steps_left.get();
+                if left == 0 {
+                    // Out of steps: the frame is full as far as this text goes.
+                    return None;
+                }
+                self.steps_left.set(left - 1);
+                // A baseline a step no longer moves (past a gutter of 1e300, say) won't reach a line.
+                if baseline + est.desc > r.bottom() + 0.01 || baseline + step <= baseline || baseline.is_nan() {
                     break;
                 }
                 // A rectangle's lines are all as wide: none below has more room for the word
@@ -191,7 +207,7 @@ pub(super) fn tab_advance<'t>(tabs: &'t [vectorcraft_doc::TabStop], origin: f64,
 
 /// The width of glyphs `from..to` of `sg` set on a line whose content starts `x_start` from the
 /// tab origin: tabs of the text take what [`tab_advance`] gives them, not the width of their
-/// glyph. The tab after a list marker (length 0) keeps its own width.
+/// glyph. The tab of a list marker (length 0) keeps its own width.
 pub(super) fn set_width(sg: &[SGlyph], from: usize, to: usize, tabs: &[vectorcraft_doc::TabStop], x_start: f64) -> f64 {
     let mut x = x_start;
     for (j, g) in sg.iter().enumerate().take(to).skip(from) {
@@ -238,29 +254,52 @@ pub(super) fn leader_outline(db: &FontDb, g: &SGlyph, leader: &str, origin: f64,
     out
 }
 
-/// Width of the word starting at glyph `i`: its advances up to the first break opportunity (spaces
-/// left out, the hyphen of a soft hyphen in), the least room a line needs not to break inside it.
-/// A list marker at `i` (glyphs of length 0) counts whole, with the word after it.
-pub(super) fn word_width(g: &[SGlyph], i: usize) -> f64 {
+/// Width of the word starting at glyph `i`: its advances up to the first place a line may break
+/// (spaces left out, the hyphen of a soft hyphen in), the least room a line needs not to break
+/// inside it. As in [`break_line`], kinsoku keeps a character that may not end a line with the one
+/// after it, a No Break run (its spaces inside it included) is one word up to a forced line break,
+/// and a cluster is never split. A soft hyphen just before a forced line break adds no hyphen. A list marker at `i` (glyphs of length 0) counts whole, with the word after it. A word
+/// that ends where a line may end is measured as the line is set: without the spaces at its end,
+/// and with its last glyph as narrow as `line_end` sets it; one that ends at a soft hyphen or past
+/// the measured glyphs is not.
+pub(super) fn word_width(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: Kinsoku) -> f64 {
     /// Glyphs measured at most: a word wrapped over many lines is measured again from each line's
     /// start, and one this long is broken inside whatever cell it meets.
     const MAX_GLYPHS: usize = 1024;
     let rest = g.get(i..).unwrap_or_default();
     let marker = rest.iter().take_while(|gl| gl.len == 0).count();
     let mut w: f64 = rest.iter().take(marker).map(|gl| gl.adv).sum();
-    for gl in rest.iter().skip(marker).take(MAX_GLYPHS) {
-        if gl.is_space() {
-            break;
+    let start = i + marker;
+    let mut end = start;
+    // The spaces at the end of what is measured so far (inside a No Break run), and the end of its
+    // last glyph that is not a space.
+    let (mut trailing, mut ink) = (0.0, start);
+    let set = |w: f64, trailing: f64, ink: usize| w - trailing - line_end_credit(g, line_end, ink);
+    while let Some(gl) = g.get(end).filter(|_| end - start < MAX_GLYPHS) {
+        // A forced line break ends the line, inside a No Break run too, as in [`break_line`].
+        if gl.ch == '\u{2028}' {
+            return set(w, trailing, ink);
         }
-        if gl.is_soft_hyphen() {
+        if gl.is_space() && (end == start || !splits_no_break(g, end)) {
+            return set(w, trailing, ink);
+        }
+        let forced_next = g.get(end + 1).is_some_and(|n| n.ch == '\u{2028}');
+        if gl.is_soft_hyphen() && !forced_next && kinsoku_allows(g, end, kinsoku) && !splits_no_break(g, end + 1) {
             return w + hyphen_glyph(gl).adv;
         }
         w += gl.adv;
-        if gl.break_after() {
-            break;
+        end += 1;
+        if gl.is_space() {
+            trailing += gl.adv;
+        } else {
+            (trailing, ink) = (0.0, end);
+        }
+        let cluster_ends = g.get(end).is_none_or(|next| next.byte != gl.byte);
+        if gl.break_after() && cluster_ends && kinsoku_allows(g, end - 1, kinsoku) && !splits_no_break(g, end) {
+            return set(w, trailing, ink);
         }
     }
-    w
+    if end >= g.len() { set(w, trailing, ink) } else { w }
 }
 
 /// Greedy break: returns (end glyph index, hyphenated) for a line starting at `i` of `width`.
@@ -268,7 +307,12 @@ pub(super) fn word_width(g: &[SGlyph], i: usize) -> f64 {
 /// `hyphenate` holds the paragraph's Hyphenation options and the Hyphenation Zone in force when
 /// the line may hyphenate a word; a line whose text before the overflowing word already ends
 /// within the zone breaks before that word. A tab is as wide as it is set: up to its next stop
-/// (`tabs`), with the line's content starting `x_start` from the tab origin.
+/// (`tabs`), with the line's content starting `x_start` from the tab origin. Where kinsoku alone
+/// keeps the line from breaking before the character that overflows, `kinsoku_type` decides
+/// whether the line pushes characters in ([`push_in`]) or out; `hanging` is true when Optical
+/// Margin Alignment or Roman Hanging Punctuation is on, and `vertical` in vertical type.
+/// `line_end[k]` is how much narrower a line ending with glyph `k` is set (Mojikumi); a cluster
+/// that fits only that narrower stays on the line when the line may end after it (empty: none).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn break_line(
     text: &str,
@@ -280,6 +324,10 @@ pub(super) fn break_line(
     hyphenate: Option<(&HyphenationOptions, f64)>,
     burasagari: Burasagari,
     kinsoku: Kinsoku,
+    kinsoku_type: KinsokuShoriType,
+    hanging: bool,
+    vertical: bool,
+    line_end: &[f64],
 ) -> (usize, bool) {
     if !width.is_finite() {
         if let Some(pos) = g[i..].iter().position(|gl| gl.ch == '\u{2028}') {
@@ -299,10 +347,11 @@ pub(super) fn break_line(
         while g.get(cluster_end).is_some_and(|next| next.byte == gl.byte && (next.len == 0) == (gl.len == 0)) {
             cluster_end += 1;
         }
-        // No Break: the marked characters stay on one line, including across a space inside the run.
-        if gl.no_break && gl.ch != '\u{2028}' {
+        // No Break: the marked characters stay on one line, including across a space inside the run;
+        // Bunri-Kinshi keeps an inseparable pair, or a chain of them, on one line too.
+        if gl.ch != '\u{2028}' {
             while let Some(n) = g.get(cluster_end) {
-                if !n.no_break || n.ch == '\u{2028}' {
+                if !splits_no_break(g, cluster_end) || n.ch == '\u{2028}' {
                     break;
                 }
                 let b = n.byte;
@@ -312,7 +361,8 @@ pub(super) fn break_line(
                 }
             }
         }
-        let cluster_width: f64 = if gl.ch == '\t' {
+        // A list marker's glyphs, its tab included, keep their own widths.
+        let cluster_width: f64 = if gl.ch == '\t' && gl.len > 0 {
             tab_advance(tabs, 0.0, x_start + x, g.get(cluster_end..).unwrap_or_default()).0
         } else {
             g[j..cluster_end].iter().map(|glyph| glyph.adv).sum()
@@ -320,13 +370,22 @@ pub(super) fn break_line(
         if gl.ch == '\u{2028}' {
             return (cluster_end, false);
         }
-        if j > first && !gl.is_space() && x + cluster_width > width + EPS {
+        // Measured as the line is set when it ends with this cluster: only the cluster's last glyph
+        // is narrowed, and only where the line may end.
+        let end_credit =
+            Some(line_end_credit(g, line_end, cluster_end)).filter(|&c| c > 0.0 && may_end_after(g, cluster_end, kinsoku)).unwrap_or(0.0);
+        if j > first && !gl.is_space() && x + cluster_width - end_credit > width + EPS {
             // It ends the line with the spaces after it.
             if burasagari != Burasagari::None && hangs(gl) && kinsoku_allows(g, cluster_end - 1, kinsoku) {
                 let mut end = cluster_end;
                 while g.get(end).is_some_and(SGlyph::is_space) {
                     end += 1;
                 }
+                return (end, false);
+            }
+            let pushed_out = last_break.map(|b| b.0);
+            if let Some(end) = push_in(g, i, j, cluster_end, x + cluster_width, width, pushed_out, kinsoku, kinsoku_type, hanging, vertical, line_end)
+            {
                 return (end, false);
             }
             break;
@@ -347,14 +406,14 @@ pub(super) fn break_line(
     if j >= g.len() {
         return (g.len(), false);
     }
-    // Hyphenate the word that overflows.
-    let word_start = last_break.map_or(i, |b| b.0);
+    // Hyphenate the word that overflows. A list marker starting the line is not part of a word.
+    let word_start = last_break.map_or(first, |b| b.0);
     let in_zone = |zone: f64| {
         let mut te = word_start;
-        while te > i && g[te - 1].is_space() {
+        while te > first && g[te - 1].is_space() {
             te -= 1;
         }
-        te > i && zone > 0.0 && width - g[i..te].iter().map(|g| g.adv).sum::<f64>() <= zone + EPS
+        te > first && zone > 0.0 && width - g[i..te].iter().map(|g| g.adv).sum::<f64>() <= zone + EPS
     };
     if let Some((opts, zone)) = hyphenate
         && g[j].is_letter()
@@ -468,9 +527,34 @@ pub(super) fn optical_hangs_rtl(line: &[(&SGlyph, f64)], share: fn(&SGlyph) -> f
     (left, right, left_glyphs, right_glyphs)
 }
 
-/// Would a line ending at glyph index `end` split a No Break run?
+/// How much narrower a line whose last character is glyph `end - 1` is set: `line_end` of that
+/// glyph ([`break_line`]), at most its advance, and 0 when it is not finite.
+fn line_end_credit(g: &[SGlyph], line_end: &[f64], end: usize) -> f64 {
+    let Some(k) = end.checked_sub(1) else { return 0.0 };
+    match (line_end.get(k), g.get(k)) {
+        (Some(&credit), Some(gl)) if credit.is_finite() && credit > 0.0 => credit.min(gl.adv.max(0.0)),
+        _ => 0.0,
+    }
+}
+
+/// May [`break_line`] end a line after glyph `end - 1` (and the spaces after it)? At the paragraph's
+/// end or a forced line break, and where it records a break without a hyphen.
+fn may_end_after(g: &[SGlyph], end: usize, kinsoku: Kinsoku) -> bool {
+    let mut e = end;
+    while g.get(e).is_some_and(SGlyph::is_space) {
+        e += 1;
+    }
+    if e >= g.len() || g[e].ch == '\u{2028}' {
+        return true;
+    }
+    let Some(last) = e.checked_sub(1).and_then(|k| g.get(k)) else { return false };
+    last.break_after() && last.len > 0 && !last.is_soft_hyphen() && kinsoku_allows(g, e - 1, kinsoku) && !splits_no_break(g, e)
+}
+
+/// Would a line ending at glyph index `end` split a No Break run, or an inseparable pair that
+/// Bunri-Kinshi keeps together ([`SGlyph::keeps_next`])?
 fn splits_no_break(g: &[SGlyph], end: usize) -> bool {
-    end > 0 && g.get(end - 1).is_some_and(|a| a.no_break) && g.get(end).is_some_and(|b| b.no_break)
+    end > 0 && g.get(end - 1).is_some_and(|a| (a.no_break && g.get(end).is_some_and(|b| b.no_break)) || (a.keeps_next && g.get(end).is_some()))
 }
 
 /// Does kinsoku allow a line break after glyph `j`? Not after an opening bracket, nor before a
@@ -489,6 +573,145 @@ fn kinsoku_between(before: char, after: Option<char>, kinsoku: Kinsoku) -> bool 
         Kinsoku::Hard => !no_line_end(before) && after.is_none_or(|c| !no_line_start(c)),
         Kinsoku::Soft => !no_line_end(before) && after.is_none_or(|c| !no_line_start(c) || soft_line_start(c)),
     }
+}
+
+/// The share of an em by which a push-in ([`push_in`]) may close each gap next to a CJK character
+/// on the line, measured on the character before the gap.
+pub(super) const PUSH_IN_SQUEEZE: f64 = 0.1;
+
+/// The most glyphs after the overflowing cluster a push-in ([`push_in`]) takes onto the line; a
+/// longer run of characters kinsoku keeps together pushes out.
+const PUSH_IN_RUN: usize = 16;
+
+/// Kinsoku Shori Type: the end of the line from `i` that overflows `width` at the cluster
+/// `j..cluster_end` (the line is `x` wide through it) when the line pushes in, or None when it
+/// pushes out. A line pushes in only where kinsoku rules out the break before `j`: a character
+/// that may not end a line comes before it (an opening bracket or quotation mark, Latin ones
+/// included), or one that may not start a line comes at `j`. It then takes the characters up to
+/// the next break kinsoku allows (not at a soft hyphen), and the spaces after it, when closing
+/// its gaps next to CJK characters, each by up to [`PUSH_IN_SQUEEZE`] of an em of the character
+/// before it, makes room for them. Push In First tries this before it pushes out. Push Out First
+/// tries it only when pushing out, to the line's last allowed break `pushed_out`, would leave the
+/// line short by more than an em of the character before `j`. Push Out Only never pushes in, and
+/// neither does a line holding a tab or right-to-left text, nor one where the characters taken in
+/// reach a space after a character that may not end a line. With `hanging` (Optical Margin
+/// Alignment or Roman Hanging Punctuation), the gaps that hanging punctuation keeps open are not
+/// counted. `vertical`: the line is a column of vertical type ([`squeeze_em`]). Both lines are
+/// measured with their last character set as narrow as `line_end` sets it ([`break_line`]).
+#[allow(clippy::too_many_arguments)]
+fn push_in(
+    g: &[SGlyph],
+    i: usize,
+    j: usize,
+    cluster_end: usize,
+    x: f64,
+    width: f64,
+    pushed_out: Option<usize>,
+    kinsoku: Kinsoku,
+    kinsoku_type: KinsokuShoriType,
+    hanging: bool,
+    vertical: bool,
+    line_end: &[f64],
+) -> Option<usize> {
+    if kinsoku == Kinsoku::None || kinsoku_type == KinsokuShoriType::PushOutOnly {
+        return None;
+    }
+    let before = g.get(j.checked_sub(1)?)?;
+    if before.len == 0 || g.get(j)?.no_break || splits_no_break(g, j) || kinsoku_allows(g, j - 1, kinsoku) {
+        return None;
+    }
+    let allowed = |k: usize| {
+        k >= g.len()
+            || (g[k].byte != g[k - 1].byte
+                && kinsoku_allows(g, k - 1, kinsoku)
+                && !splits_no_break(g, k)
+                && (g[k].is_space() || (g[k - 1].break_after() && !g[k - 1].is_soft_hyphen())))
+    };
+    let (mut end, mut x) = (cluster_end, x);
+    while !allowed(end) {
+        let gl = &g[end];
+        // A space here follows a character kinsoku keeps off a line's end: the line pushes out.
+        if gl.is_space() || gl.ch == '\t' || gl.ch == '\u{2028}' || gl.no_break || end - cluster_end >= PUSH_IN_RUN {
+            return None;
+        }
+        x += gl.adv;
+        end += 1;
+    }
+    // A tab's width depends on where it falls; a line with one (other than a list marker's)
+    // pushes out.
+    if g[i..end].iter().any(|h| h.ch == '\t' && h.len > 0) {
+        return None;
+    }
+    // With `hanging`, punctuation keeps the gap after a mark that may hang at the line's start,
+    // and the gap before one that may hang at its end ([`optical_hangs`]): those gaps are not
+    // counted.
+    let mut last = end;
+    while last > i && g[last - 1].is_space() {
+        last -= 1;
+    }
+    // A line holding right-to-left text is reordered before it is drawn, and justification closes
+    // the gaps between its glyphs in that order: it pushes out.
+    if g[i..last].iter().any(|h| h.len > 0 && h.level.is_rtl()) {
+        return None;
+    }
+    let punct = |k: usize| g.get(k).is_some_and(optical_punct);
+    let quote = |k: usize| g.get(k).is_some_and(|h| is_quote(h.ch));
+    let may_hang = |a: usize| {
+        hanging
+            && ((a == i && punct(i))
+                || (a == i + 1 && punct(i) && quote(i + 1))
+                || (a + 2 == last && punct(last - 1))
+                || (a + 3 == last && punct(last - 2) && quote(last - 1)))
+    };
+    let room: f64 = (i..end - 1).filter(|&a| closes(g, a, end) && !may_hang(a)).map(|a| PUSH_IN_SQUEEZE * squeeze_em(&g[a], vertical)).sum();
+    if x - line_end_credit(g, line_end, last) - width > room + EPS {
+        return None;
+    }
+    if kinsoku_type == KinsokuShoriType::PushOutFirst {
+        let mut kept = pushed_out.filter(|&b| b > i).unwrap_or(i);
+        while kept > i && g[kept - 1].is_space() {
+            kept -= 1;
+        }
+        let set = if kept > i { line_end_credit(g, line_end, kept) } else { 0.0 };
+        let short = width - (g[i..kept].iter().map(|h| h.adv).sum::<f64>() - set);
+        if short <= squeeze_em(before, vertical) + EPS {
+            return None;
+        }
+    }
+    while g.get(end).is_some_and(SGlyph::is_space) {
+        end += 1;
+    }
+    if g.get(end).is_some_and(|h| h.ch == '\u{2028}') {
+        end += 1;
+    }
+    Some(end)
+}
+
+/// May a push-in close the gap after glyph `a`? A gap between two characters, at least one of them
+/// CJK, outside a tate-chu-yoko block, a list marker and a shaped cluster, and not next to a space,
+/// a tab or an inline graphic before it, nor inside an inseparable pair that Bunri-Kinshi keeps
+/// together. Zero-width format controls take no gap: the gap is the one between the visible
+/// characters on either side, before `end`, as the layout justifies it.
+fn closes(g: &[SGlyph], a: usize, end: usize) -> bool {
+    let Some(p) = g.get(a).filter(|p| !is_format_control(p.ch)) else { return false };
+    let Some(n) = g.get(a + 1..end).and_then(|rest| rest.iter().find(|n| !is_format_control(n.ch))) else { return false };
+    p.len > 0
+        && !p.keeps_next
+        && p.byte != n.byte
+        && p.inline.is_none()
+        && !p.is_space()
+        && !n.is_space()
+        && p.ch != '\t'
+        && !n.continues_tcy()
+        && (is_cjk(p.ch) || is_cjk(n.ch))
+}
+
+/// The em a push-in measures in, along the line: `g`'s em at its Horizontal Scale, as Mojikumi's
+/// spacing is, or at its Vertical Scale when it stands upright in vertical type and the font's
+/// vertical metrics set its length down the column ([`super::vertical::upright_cell`]).
+pub(super) fn squeeze_em(g: &SGlyph, vertical: bool) -> f64 {
+    let down_the_column = vertical && stands_upright(g) && g.face.vertical_glyph(g.gid).is_some();
+    g.face.units_per_em() * if down_the_column { g.sy } else { g.sx }
 }
 
 #[cfg(test)]
@@ -519,8 +742,20 @@ fn soft_kinsoku_lets_small_kana_and_the_prolonged_sound_mark_start_a_line() {
 }
 
 /// Glyph indices inside `g[ws..we]` (a word) where a hyphenated break may go under `opts`, in the
-/// language of the word's first letter.
+/// language of the word's first letter; never next to a Hangul letter, which takes no hyphen, and
+/// nowhere in a Korean word that Korean Line Break Anywhere off keeps whole.
 fn hyphen_breaks(text: &str, g: &[SGlyph], ws: usize, we: usize, opts: &HyphenationOptions) -> Vec<usize> {
+    if g.get(ws..we).is_some_and(|word| word.iter().any(|h| h.keeps_word)) {
+        return Vec::new();
+    }
+    let mut points = word_hyphen_breaks(text, g, ws, we, opts);
+    let hangul = |i: usize| g.get(i).is_some_and(|h| h.inline.is_none() && crate::shape::is_hangul(h.ch));
+    points.retain(|&k| !hangul(k.wrapping_sub(1)) && !hangul(k));
+    points
+}
+
+/// [`hyphen_breaks`] before the points next to Hangul are left out.
+fn word_hyphen_breaks(text: &str, g: &[SGlyph], ws: usize, we: usize, opts: &HyphenationOptions) -> Vec<usize> {
     // Strip leading/trailing punctuation (quotes, commas).
     let (mut a, mut b) = (ws, we);
     while a < b && !g[a].is_letter() {
@@ -543,7 +778,7 @@ fn hyphen_breaks(text: &str, g: &[SGlyph], ws: usize, we: usize, opts: &Hyphenat
             starts.entry(g[k].byte).or_insert(k);
         }
     }
-    hyphen_points_in(word, opts, g[a].hyphenates).into_iter().filter_map(|ci| starts.get(offs.get(ci)?).copied()).collect()
+    points_for(word, opts, g[a].hyphen_language).into_iter().filter_map(|ci| starts.get(offs.get(ci)?).copied()).collect()
 }
 
 /// Break candidates for the every-line composer: hyphenation points under `hyphenate` (the
@@ -554,7 +789,9 @@ pub(super) fn candidates(text: &str, g: &[SGlyph], hyphenate: Option<&Hyphenatio
     let mut v = vec![];
     let mut ws = 0;
     for (j, gl) in g.iter().enumerate() {
-        let end_of_word = gl.is_space() || gl.break_after();
+        // A list marker (the glyphs of length 0 here) ends before the first word.
+        let marker_end = gl.len == 0 && g.get(j + 1).is_some_and(|n| n.len > 0);
+        let end_of_word = gl.is_space() || gl.break_after() || marker_end;
         if end_of_word {
             if let Some(opts) = hyphenate
                 && j > ws
@@ -584,4 +821,27 @@ pub(super) fn candidates(text: &str, g: &[SGlyph], hyphenate: Option<&Hyphenatio
     v.sort_by_key(|b| b.end);
     v.dedup_by_key(|b| b.end);
     v
+}
+
+#[cfg(test)]
+#[test]
+fn a_pen_out_of_baseline_steps_finds_no_room() {
+    let frame = kurbo::Shape::to_path(&kurbo::Rect::new(0.0, 0.0, 400.0, 400.0), 0.1);
+    let regions = Region::cells(&frame, &super::LayoutOptions::default(), &[]);
+    let est = Metrics { asc: 10.0, desc: 3.0, lead: 14.0, cap: 7.0, xh: 5.0, top: 10.0 };
+    let pen = |steps| Pen {
+        regions: Some(&regions),
+        ri: 0,
+        prev: None,
+        pending: 0.0,
+        fb: FirstBaseline::Ascent,
+        fb_min: 0.0,
+        queued: vec![],
+        model: LeadingModel::default(),
+        next_top: None,
+        no_room_for: f64::INFINITY,
+        steps_left: std::rc::Rc::new(std::cell::Cell::new(steps)),
+    };
+    assert!(pen(MAX_TOTAL_STEPS).place(est, 0.0, 0.0, 0.0).is_some());
+    assert!(pen(0).place(est, 0.0, 0.0, 0.0).is_none());
 }

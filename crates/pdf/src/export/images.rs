@@ -165,6 +165,9 @@ impl Exporter<'_> {
     pub(super) fn masked_image(&mut self, im: &vectorcraft_doc::ImageObject, m: &vectorcraft_doc::OpacityMask, interpolate: bool) -> Option<Image> {
         let art = &m.art;
         let NodeKind::Image(mi) = &art.kind else { return None };
+        // A color-masked image in the mask's art masks with the pixels it shows.
+        let shown = self.doc.shown_image(art, mi);
+        let mi = &*shown;
         let plain =
             art.opacity >= 1.0 && art.blend == BlendMode::Normal && art.extras().mask.is_none() && !art.appearance.effects.iter().any(|e| e.visible);
         if m.invert || !plain || (mi.xf, mi.width, mi.height) != (im.xf, im.width, im.height) {
@@ -254,10 +257,20 @@ pub(super) fn png_8_bit(bytes: &[u8]) -> Option<Vec<u8>> {
     Some(png)
 }
 
+/// Most pixels an image may have to be embedded: twice what the app reads (64 million), so every image
+/// it holds is still written.
+const MAX_EMBED_PIXELS: u64 = 1 << 27;
+
 /// Image `blob` as it is: PNG, JPEG, GIF and WebP through the PDF writer (JPEG data unchanged),
 /// other formats decoded. Without `sixteen_bit` (a file before PDF 1.5), a PNG of 16 bits a
 /// sample is written at 8 bits ([`png_8_bit`]).
 pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixteen_bit: bool) -> Option<Image> {
+    // The header's size first: the writer's decoders allocate what it declares, and the encoded
+    // bytes of an image that is far larger than any the app reads may be a few kilobytes.
+    let size = image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice())).with_guessed_format().ok()?.into_dimensions();
+    if size.is_ok_and(|(w, h)| u64::from(w) * u64::from(h) > MAX_EMBED_PIXELS) {
+        return None;
+    }
     let bytes = blob.bytes.as_ref().clone();
     let direct = match blob.mime.as_str() {
         "image/png" if !sixteen_bit && png_16_bit(&bytes) => png_8_bit(&bytes).and_then(|png| Image::from_png(png.into(), interpolate).ok()),
@@ -280,6 +293,18 @@ mod tests {
     use vectorcraft_color::{Color, Paint};
     use vectorcraft_doc::{Document, ImageBlob, ImageObject};
     use vectorcraft_geom::Affine;
+
+    #[test]
+    fn an_image_whose_header_declares_far_more_pixels_than_the_app_reads_is_left_out() {
+        // A real 8 × 8 PNG whose IHDR (width, height at 16..24) claims 65535 × 65535, with its CRC fixed.
+        let mut png = vec![];
+        image::DynamicImage::ImageRgb8(image::RgbImage::new(8, 8)).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        png[16..24].copy_from_slice(&[0, 0, 0xFF, 0xFF, 0, 0, 0xFF, 0xFF]);
+        let crc =
+            !png[12..29].iter().fold(!0u32, |c, b| (0..8).fold(c ^ u32::from(*b), |c, _| if c & 1 == 1 { 0xEDB8_8320 ^ (c >> 1) } else { c >> 1 }));
+        png[29..33].copy_from_slice(&crc.to_be_bytes());
+        assert!(super::embed(&ImageBlob::png(png), false, true).is_none());
+    }
 
     #[test]
     fn colorized_image_caches_rejected_images() {

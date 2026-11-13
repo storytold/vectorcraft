@@ -29,6 +29,7 @@ pub fn is_loss(note: &str) -> bool {
     note.ends_with(TEXT_LEFT_OUT)
         || note.ends_with(TYPE_LEFT_OUT)
         || note.ends_with("they came in as the page's art")
+        || note.starts_with(ai::WARPED_TYPE_DRAWN)
         || note == PAGE_TYPE_LEFT_OUT
         || note == PAGE_TYPE_UNCHECKED
         || [ART_LEFT_OUT, LAYERS_UNREAD, DREW_DIFFERENTLY, crate::import::graphics::TOO_MUCH, crate::import::graphics::FAR_AWAY]
@@ -43,7 +44,7 @@ pub(super) const MAX_SLOTS: usize = 5000;
 const MAX_PIECES: usize = 2000;
 
 /// Most bytes of text in the text objects of the layers (a story named twice counts twice).
-pub(super) const MAX_TEXT: usize = 16 << 20;
+pub(crate) const MAX_TEXT: usize = 16 << 20;
 
 /// Most pairs of a text object and a piece of the page's type compared, and of a glyph the page
 /// kept as outlines and a node of the page's type.
@@ -286,11 +287,12 @@ pub(super) fn fill_slots(
         let Some(n) = nodes.get(i) else { break };
         if let Some(story) = slot_of(n.name.as_deref()) {
             let slot = n.id;
-            let visible = n.visible;
+            let (visible, locked) = (n.visible, n.locked);
             let name = names.get(&n.id);
             let frame = ai::slot_frame(n.name.as_deref());
             let state = (n.opacity, n.blend, n.isolate, n.knockout);
-            let transparent = see_through(n);
+            let shape = n.knockout_shape;
+            let transparent = see_through(n) || shape;
             // A text object that is a wrap object stays one.
             let wrap = n.extras().wrap;
             // An art style read onto the slot (fills, strokes and effects round the characters) is the type's.
@@ -306,6 +308,9 @@ pub(super) fn fill_slots(
                             let mut p = reid(doc, p);
                             if !visible {
                                 Arc::make_mut(&mut p).visible = false;
+                            }
+                            if locked {
+                                Arc::make_mut(&mut p).locked = true;
                             }
                             if let Some(name) = name.filter(|_| matches!(p.kind, NodeKind::Text(_))) {
                                 Arc::make_mut(&mut p).name = Some(name.clone());
@@ -333,10 +338,11 @@ pub(super) fn fill_slots(
                         }
                         if let [p] = parts.as_mut_slice() {
                             let p = Arc::make_mut(p);
-                            (p.opacity, p.blend, p.isolate, p.knockout) = state;
+                            (p.opacity, p.blend, p.isolate, p.knockout, p.knockout_shape) = (state.0, state.1, state.2, state.3, shape);
                         } else if transparent {
                             let mut group = Node::group(doc.alloc_id(), std::mem::take(&mut parts));
-                            (group.opacity, group.blend, group.isolate, group.knockout) = state;
+                            (group.opacity, group.blend, group.isolate, group.knockout, group.knockout_shape) =
+                                (state.0, state.1, state.2, state.3, shape);
                             parts.push(Arc::new(group));
                         }
                     }
@@ -372,7 +378,7 @@ pub(super) fn fill_slots(
                     if let Some(story) = story {
                         made.push((story, frame, text.id));
                     }
-                    text.visible = visible;
+                    (text.visible, text.locked) = (visible, locked);
                     // Type with an art style is what the page draws as the style's look: it is seen.
                     let seen = seen || styled.is_some();
                     if let Some(appearance) = styled {
@@ -384,7 +390,7 @@ pub(super) fn fill_slots(
                     // Type the page shows is kept; other made type is weighed against the page.
                     text.name = if seen { name.cloned() } else { Some(format!("{MADE}{}", name.map_or("", String::as_str))) };
                     // The type takes the slot's transparency.
-                    (text.opacity, text.blend, text.isolate, text.knockout) = state;
+                    (text.opacity, text.blend, text.isolate, text.knockout, text.knockout_shape) = (state.0, state.1, state.2, state.3, shape);
                     if wrap.is_some() {
                         text.extras_mut().wrap = wrap;
                     }
@@ -440,7 +446,21 @@ pub(super) fn letters(s: &str) -> String {
 /// the page draws a right-to-left paragraph's words in the order they show (" 120.5 mm " as
 /// "mm 120.5"), its text object keeps them in the order they are typed.
 pub(super) fn words(s: &str) -> Vec<String> {
-    s.split_whitespace().map(letters).filter(|w| !w.is_empty()).collect()
+    word_pieces(s).map(letters).filter(|w| !w.is_empty()).collect()
+}
+
+/// The words of `s`, split at spaces and at private-use characters too. The page's type names a
+/// font's ligature glyph that has no character of its own (`uniE028`, the Adobe Glyph List
+/// specification's `uniXXXX` names: <https://github.com/adobe-type-tools/agl-specification>) by a
+/// private-use character, where its text object has the letters ("Qual\u{E028}y" for
+/// "Quality"): what is around it is compared, each piece as a word.
+pub(super) fn word_pieces(s: &str) -> impl Iterator<Item = &str> {
+    s.split(|c: char| c.is_whitespace() || private_use(c)).filter(|w| !w.is_empty())
+}
+
+/// Is `c` in one of Unicode's private use areas (Unicode Standard §23.5)?
+fn private_use(c: char) -> bool {
+    matches!(u32::from(c), 0xE000..=0xF8FF | 0xF0000..=0xFFFFD | 0x100000..=0x10FFFD)
 }
 
 /// Does `n` hold type that is where `story` lays one of its lines out: the line, or a piece of it

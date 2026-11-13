@@ -656,13 +656,13 @@ fn simplify_refreshes_changed_path_selection_and_undo() {
     let kept = NodeId(s.execute("path.create", &json!({"anchors": [{"x": 350, "y": 180}]})).unwrap()["id"].as_u64().unwrap());
     let unrelated = rect(&mut s, 400.0, 200.0, 40.0, 30.0);
     s.edit("selection fixture", |d, sel| {
-        d.guides.push(vectorcraft_doc::Guide::new(true, 30.0));
+        let guide = d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 30.0));
         sel.set([kept, id]);
         sel.anchors.insert(id, [(0, 19)].into_iter().collect());
         sel.anchors.insert(kept, [(0, 0)].into_iter().collect());
         sel.key = Some(kept);
         sel.target = Some(id);
-        sel.guides.push(0);
+        sel.guides.push(guide);
         Ok(())
     })
     .unwrap();
@@ -781,7 +781,7 @@ fn split_into_grid_options() {
         rect(&mut s, 10.0, 20.0, 110.0, 50.0);
         let r = s.execute("object.path.splitIntoGrid", &p).unwrap();
         let cells: Vec<Rect> = ids(&r).iter().map(|id| bounds(&s, *id)).collect();
-        let guides: Vec<(bool, f64)> = s.doc().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect();
+        let guides: Vec<(bool, f64)> = s.doc().unwrap().doc.ruler_guides().iter().map(|g| (g.vertical, g.pos)).collect();
         assert_eq!(r["guides"], guides.len());
         (cells, guides)
     };
@@ -812,13 +812,16 @@ fn split_into_grid_options() {
     assert!(close(bounds(&s, r[0]), Rect::new(0.0, 0.0, 40.0, 60.0), 1e-9) && close(bounds(&s, r[1]), Rect::new(60.0, 0.0, 100.0, 60.0), 1e-9));
     let st = s.doc().unwrap();
     assert!(r.iter().all(|id| node(&s, *id).appearance == node(&s, r[0]).appearance) && st.doc.node(back).is_none() && st.doc.node(front).is_none());
-    assert_eq!(st.doc.layers[0].children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>(), [kept, r[0], r[1]], "above the path left alone");
+    let art: Vec<NodeId> = st.doc.layers[0].children().unwrap().iter().filter(|n| !n.is_ruler_guide()).map(|n| n.id).collect();
+    assert_eq!(art, [kept, r[0], r[1]], "above the path left alone");
+    let children = st.doc.layers[0].children().unwrap();
+    assert!(children.len() == 9 && children[3..].iter().all(|n| n.is_ruler_guide()), "the six guides are above the art");
     assert_eq!(st.selection.objects, r);
-    assert!(st.doc.guides.iter().all(|g| g.layer == Some(st.doc.layers[0].id)));
+    assert!(st.doc.ruler_guides().iter().all(|g| g.layer == Some(st.doc.layers[0].id)));
     assert_eq!(st.history.undo.len(), undo + 1);
     s.execute("edit.undo", &json!({})).unwrap();
     let st = s.doc().unwrap();
-    assert!(st.doc.node(back).is_some() && st.doc.node(front).is_some() && st.doc.guides.is_empty());
+    assert!(st.doc.node(back).is_some() && st.doc.node(front).is_some() && st.doc.ruler_guides().is_empty());
     // A grid with no room for its gutters is refused and changes nothing.
     assert!(s.execute("object.path.splitIntoGrid", &json!({"columns": 4, "gutter": 50})).is_err());
     assert!(s.execute("object.path.splitIntoGrid", &json!({"width": -5})).is_err());
@@ -842,6 +845,71 @@ fn clean_up_removes_junk() {
     let d = &s.doc().unwrap().doc;
     assert!(d.node(keep).is_some());
     assert!(d.node(unpainted).is_none() && d.node(stray).is_none() && d.node(empty).is_none());
+}
+
+/// Offset Path, Simplify, Split Into Grid and Clean Up refuse a param of the wrong type with an
+/// error naming the param, and leave the document, the selection and the undo history as they were.
+/// Null keeps a param's default, and a distance still takes a string with a unit.
+#[test]
+fn path_commands_refuse_a_param_of_the_wrong_type() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 50.0, 40.0);
+    s.execute("path.create", &json!({"anchors": [{"x": 5, "y": 5}]})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.doc.clone(), st.selection.objects.clone(), st.history.undo.len())
+    };
+    let before = state(&s);
+    let number = |k: &str, v: &str| format!("`{k}` must be a number, not {v}");
+    let switch = |k: &str| format!("`{k}` must be true or false");
+    for (cmd, p, want) in [
+        ("object.path.offsetPath", json!({"offset": true}), number("offset", "true")),
+        ("object.path.offsetPath", json!({"offset": "wide"}), number("offset", "\"wide\"")),
+        ("object.path.offsetPath", json!({"offset": "10abc"}), number("offset", "\"10abc\"")),
+        ("object.path.offsetPath", json!({"offset": 5, "miterLimit": "4x"}), number("miterLimit", "\"4x\"")),
+        ("object.path.offsetPath", json!({"offset": 5, "joins": 3}), "`joins` must be a string".to_string()),
+        ("object.path.offsetPath", json!({"offset": 5, "joins": "pointy"}), "`joins` must be one of miter, round, bevel".to_string()),
+        ("object.path.offsetPath", json!({"offset": 5, "miterLimit": [4]}), number("miterLimit", "[4]")),
+        ("object.path.simplify", json!({"auto": "true"}), switch("auto")),
+        ("object.path.simplify", json!({"level": false}), number("level", "false")),
+        ("object.path.simplify", json!({"level": 50, "tolerance": {}}), number("tolerance", "{}")),
+        ("object.path.simplify", json!({"cornerAngle": "sharp"}), number("cornerAngle", "\"sharp\"")),
+        ("object.path.simplify", json!({"straightLines": 1}), switch("straightLines")),
+        ("object.path.simplify", json!({"wholePaths": "no"}), switch("wholePaths")),
+        ("object.path.splitIntoGrid", json!({"rows": "many"}), number("rows", "\"many\"")),
+        ("object.path.splitIntoGrid", json!({"columns": true}), number("columns", "true")),
+        ("object.path.splitIntoGrid", json!({"gutter": false}), number("gutter", "false")),
+        ("object.path.splitIntoGrid", json!({"rowGutter": 2, "gutter": "x"}), number("gutter", "\"x\"")),
+        ("object.path.splitIntoGrid", json!({"height": 5, "totalHeight": [1]}), number("totalHeight", "[1]")),
+        ("object.path.splitIntoGrid", json!({"width": "wide"}), number("width", "\"wide\"")),
+        ("object.path.splitIntoGrid", json!({"columnGutter": true}), number("columnGutter", "true")),
+        ("object.path.splitIntoGrid", json!({"totalWidth": {}}), number("totalWidth", "{}")),
+        ("object.path.splitIntoGrid", json!({"rowGutter": "a"}), number("rowGutter", "\"a\"")),
+        ("object.path.splitIntoGrid", json!({"addGuides": "yes"}), switch("addGuides")),
+        ("object.path.cleanUp", json!({"strayPoints": "false"}), switch("strayPoints")),
+        ("object.path.cleanUp", json!({"unpaintedObjects": 0}), switch("unpaintedObjects")),
+        ("object.path.cleanUp", json!({"emptyTextPaths": "no"}), switch("emptyTextPaths")),
+    ] {
+        let r = s.execute(cmd, &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}");
+        assert!(state(&s) == before, "{cmd} {p} changed the document, the selection or the undo history");
+    }
+    // Null takes the default: a 10 pt offset with mitered joins.
+    let r = ids(&s.execute("object.path.offsetPath", &json!({"offset": null, "joins": null, "miterLimit": null})).unwrap());
+    assert!(close(bounds(&s, r[0]), Rect::new(90.0, 90.0, 160.0, 150.0), 1e-2), "{:?}", bounds(&s, r[0]));
+    // A distance with a unit, and a join named in capitals.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = ids(&s.execute("object.path.offsetPath", &json!({"offset": "0.1 in", "joins": "Bevel"})).unwrap());
+    assert!(close(bounds(&s, r[0]), Rect::new(92.8, 92.8, 157.2, 147.2), 1e-2), "{:?}", bounds(&s, r[0]));
+    // Null switches keep Clean Up's defaults, which remove the stray point.
+    let r = s.execute("object.path.cleanUp", &json!({"strayPoints": null, "unpaintedObjects": null, "emptyTextPaths": null})).unwrap();
+    assert_eq!(r["removed"], 1);
+    // Split Into Grid with null counts and a gutter with a unit: two by two, 0.5 in apart.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = ids(&s.execute("object.path.splitIntoGrid", &json!({"rows": null, "columns": null, "gutter": "0.5 in", "addGuides": null})).unwrap());
+    assert_eq!(r.len(), 4);
+    assert!(close(bounds(&s, r[0]), Rect::new(100.0, 100.0, 107.0, 102.0), 1e-9), "{:?}", bounds(&s, r[0]));
 }
 
 #[test]

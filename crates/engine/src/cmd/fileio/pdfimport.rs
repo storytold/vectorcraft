@@ -7,7 +7,7 @@ use vectorcraft_doc::{ColorMode, Document};
 use vectorcraft_pdf::{Choice, CropTo, ImportOptions, PdfError, TextAs};
 
 use super::super::colormgmt::Grays;
-use super::super::{Result, Session, bad, f64_or, parse_range, str_param};
+use super::super::{Result, Session, bad, check_numbers, number_or, parse_range, text_param};
 use super::{err, source};
 
 /// The `document.open` options besides the file. The PDF ones (pages, box, password, text,
@@ -28,8 +28,10 @@ pub struct LoadOptions {
     /// What a PDF's text becomes.
     pub text_as: TextAs,
     /// A PDF's optional content groups become layers (else one layer per page, without the art
-    /// that is off).
+    /// that is off), and a PSD or PSB file's layers become layers (else its merged image opens).
     pub layers: bool,
+    /// A PSD or PSB file's hidden layers come in, hidden (`hiddenLayers`; else they are left out).
+    pub hidden_layers: bool,
     /// How a DXF drawing comes in (the `dxf` param, see [`super::dxfimport`]).
     pub dxf: vectorcraft_cad::ImportOptions,
     /// An Illustrator EPS or `.ai` that carries the editing copy of its art opens from it (its
@@ -39,6 +41,9 @@ pub struct LoadOptions {
     /// A `.ai` opens from its editing copy even where that draws differently from its PDF part
     /// (which can be older than it), with a warning, instead of from the PDF part.
     pub trust_editing_data: bool,
+    /// The encoding names in a `.ai` or EPS's editing data are read in when they aren't UTF-8
+    /// (`legacyNameEncoding`).
+    pub legacy_names: vectorcraft_eps::NameEncoding,
     /// A PDF or `.ai` saved with Preserve Editing opens from the VectorCraft document it carries;
     /// off, it opens as another app would open it, from the editing copy of its art or its pages.
     pub native: bool,
@@ -54,9 +59,11 @@ impl Default for LoadOptions {
             grays: Grays::default(),
             text_as: TextAs::default(),
             layers: true,
+            hidden_layers: false,
             dxf: Default::default(),
             editing_data: true,
             trust_editing_data: false,
+            legacy_names: vectorcraft_eps::NameEncoding::default(),
             native: true,
         }
     }
@@ -65,8 +72,10 @@ impl Default for LoadOptions {
 impl LoadOptions {
     /// From command params: `pages` (`"2-3, 5"`, a page number or `"all"`), `page` (one page, when
     /// `pages` isn't given), `cropTo` (or `crop`), `password`, `colorMode` (`rgb` | `cmyk`) with `grays`,
-    /// `textAs` (`text` | `outlines`), `layers` (true | false), `editingData` (true | false | `always`) and `dxf`
-    /// (the DXF import options).
+    /// `textAs` (`text` | `outlines`), `layers` (true | false), `hiddenLayers` (true | false),
+    /// `editingData` (true | false | `always`),
+    /// `legacyNameEncoding` (one of [`vectorcraft_eps::NameEncoding::LABELS`]) and `dxf` (the DXF
+    /// import options).
     pub fn from_params(cmd: &str, p: &Value) -> Result<Self> {
         let pages = match p.get("pages").filter(|v| !v.is_null()).or_else(|| p.get("page").filter(|v| !v.is_null())) {
             None => None,
@@ -75,27 +84,53 @@ impl LoadOptions {
             Some(Value::Number(n)) => Some(n.to_string()),
             Some(v) => return Err(bad(cmd, format!("pages must be a range such as \"2-3\" or a page number, not {v}"))),
         };
-        let crop = choice(cmd, "cropTo", str_param(p, "cropTo").or_else(|| str_param(p, "crop")))?;
-        let password = str_param(p, "password").filter(|s| !s.is_empty()).map(str::to_string);
-        let color_mode = match str_param(p, "colorMode").map(str::to_ascii_lowercase).as_deref() {
+        let (crop_to, crop_alias) = (text_param(p, "cropTo", cmd)?, text_param(p, "crop", cmd)?);
+        let crop = choice(cmd, "cropTo", crop_to.or(crop_alias))?;
+        let password = text_param(p, "password", cmd)?.filter(|s| !s.is_empty()).map(str::to_string);
+        let color_mode = match text_param(p, "colorMode", cmd)?.map(str::to_ascii_lowercase).as_deref() {
             None => None,
             Some("rgb") => Some(ColorMode::Rgb),
             Some("cmyk") => Some(ColorMode::Cmyk),
             Some(m) => return Err(bad(cmd, format!("colorMode must be rgb or cmyk, not `{m}`"))),
         };
         let grays = Grays::param(cmd, p)?;
-        let text_as = choice(cmd, "textAs", str_param(p, "textAs"))?;
+        let text_as = choice(cmd, "textAs", text_param(p, "textAs", cmd)?)?;
         let layers = match p.get("layers").filter(|v| !v.is_null()) {
             None => true,
             Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "layers must be true or false"))?,
+        };
+        let hidden_layers = match p.get("hiddenLayers").filter(|v| !v.is_null()) {
+            None => false,
+            Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "hiddenLayers must be true or false"))?,
         };
         let (editing_data, trust_editing_data) = match p.get("editingData").filter(|v| !v.is_null()) {
             None => (true, false),
             Some(Value::String(s)) if s.eq_ignore_ascii_case("always") => (true, true),
             Some(v) => (v.as_bool().ok_or_else(|| bad(cmd, "editingData must be true, false or \"always\""))?, false),
         };
+        let legacy_names = match p.get("legacyNameEncoding").filter(|v| !v.is_null()) {
+            None => vectorcraft_eps::NameEncoding::default(),
+            Some(v) => v
+                .as_str()
+                .and_then(vectorcraft_eps::NameEncoding::from_label)
+                .ok_or_else(|| bad(cmd, format!("legacyNameEncoding must be one of {}", vectorcraft_eps::NameEncoding::LABELS.join(", "))))?,
+        };
         let dxf = super::dxfimport::options(cmd, p.get("dxf"))?;
-        Ok(Self { pages, crop, password, color_mode, grays, text_as, layers, dxf, editing_data, trust_editing_data, native: true })
+        Ok(Self {
+            pages,
+            crop,
+            password,
+            color_mode,
+            grays,
+            text_as,
+            layers,
+            hidden_layers,
+            dxf,
+            editing_data,
+            trust_editing_data,
+            legacy_names,
+            native: true,
+        })
     }
 
     /// Does the document read only part of the file, or read it differently (a page range, another
@@ -172,6 +207,7 @@ const INFO: &str = "document.pdfInfo";
 pub(super) fn pdf_info(_: &mut Session, p: &Value) -> Result<Value> {
     let bytes = source(p, INFO)?.bytes;
     let o = LoadOptions::from_params(INFO, p)?;
+    check_numbers(p, &["thumbnailSize"], INFO)?;
     // Programs whose header is only `%!` are PostScript too, as `clipboard.importEps` reads them.
     if bytes.starts_with(b"%!") || vectorcraft_pdf::is_postscript(&bytes) {
         return postscript_info(&bytes, p);
@@ -229,7 +265,7 @@ fn postscript_info(bytes: &[u8], p: &Value) -> Result<Value> {
 /// A PNG of `doc`'s first artboard, `thumbnailSize` px (default 160, from 16 to 1024) on its longer
 /// side, base64.
 fn thumbnail(doc: &Document, p: &Value) -> Result<String> {
-    let size = f64_or(p, "thumbnailSize", 160.0).clamp(16.0, 1024.0);
+    let size = number_or(p, "thumbnailSize", 160.0, INFO)?.clamp(16.0, 1024.0);
     let r = doc.artboards.first().map(|a| a.rect).ok_or_else(|| err("the page has no area"))?;
     let png = super::encode(doc, "png", &json!({"scale": size / r.width().max(r.height()).max(1.0)}))?;
     Ok(vectorcraft_format::base64_encode(&png))

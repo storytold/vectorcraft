@@ -368,6 +368,79 @@ fn a_transparent_image_is_flattened_with_the_art_under_it_which_stays() {
     assert_eq!(colour_at(page, 10.0, 20.0), [255, 0, 0], "the square outside the image");
 }
 
+/// A transparent image longer than the renderer draws at its own resolution (32,768 pixels a
+/// side) is flattened whole, at a lower resolution.
+#[test]
+fn a_long_transparent_image_is_flattened_whole() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 4600})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 4600})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    let p = json!({"name": "i.png", "dataBase64": vectorcraft_format::base64_encode(&png(2000, 1600, [0, 0, 0, 128])), "at": [50, 50]});
+    s.execute("file.place", &p).unwrap();
+    // 10 × 4500 pt: about 600 ppi, so 37,500 pixels long.
+    s.execute("object.setBounds", &json!({"x": 10, "y": 10, "width": 10, "height": 4500, "reference": 0})).unwrap();
+    let before = [colour_at(&s.doc().unwrap().doc, 15.0, 100.0), colour_at(&s.doc().unwrap().doc, 15.0, 4400.0)];
+    assert!(before.iter().all(|c| c[0] < 200), "the image darkens the red: {before:?}");
+    let r = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7"})).unwrap();
+    assert!(warnings(&r).iter().any(|w| w.contains("flattened with the art under them")), "{r}");
+    s.execute("document.open", &json!({"name": "t.ai", "dataBase64": r["dataBase64"]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let after = [colour_at(d, 15.0, 100.0), colour_at(d, 15.0, 4400.0)];
+    for (a, b) in before.iter().zip(&after) {
+        assert!(a.iter().zip(b).all(|(a, b)| a.abs_diff(*b) <= 3), "{before:?} {after:?}");
+    }
+}
+
+/// A `size`×`size` PNG of a black disk of radius `r` pixels with an anti-aliased edge, clear
+/// around it, 72 ppi.
+fn disk(size: u32, r: f64) -> Vec<u8> {
+    let c = f64::from(size) / 2.0;
+    let img = image::RgbaImage::from_fn(size, size, |x, y| {
+        let d = (f64::from(x) + 0.5 - c).hypot(f64::from(y) + 0.5 - c);
+        image::Rgba([0, 0, 0, ((r + 0.5 - d).clamp(0.0, 1.0) * 255.0).round() as u8])
+    });
+    let mut out = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    out
+}
+
+/// #5264: the clip around a flattened image follows its edge smoothly: a disk's clip is a ring of
+/// sloped segments close to the disk's edge, not a staircase of horizontal and vertical steps.
+#[test]
+fn a_flattened_images_clip_follows_its_edge_smoothly() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 180, "height": 80})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let p = json!({"name": "disk.png", "dataBase64": vectorcraft_format::base64_encode(&disk(64, 25.0)), "at": [100, 50]});
+    s.execute("file.place", &p).unwrap();
+    let r = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7"})).unwrap();
+    s.execute("document.open", &json!({"name": "t.ai", "dataBase64": r["dataBase64"]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let mut clips = vec![];
+    d.walk(|n| {
+        if let (vectorcraft_doc::NodeKind::Path { clipping: true, .. }, Some(pd)) = (&n.kind, n.path_data()) {
+            clips.push(pd.clone());
+        }
+    });
+    assert_eq!(clips.len(), 1, "{clips:?}");
+    let sub = &clips[0].subpaths;
+    assert_eq!(sub.len(), 1);
+    let pts: Vec<_> = sub[0].anchors.iter().map(|a| a.p).collect();
+    assert!(pts.len() >= 16, "{pts:?}");
+    // Its centre: the file's page may sit elsewhere than the artboard.
+    let n = pts.len() as f64;
+    let (cx, cy) = (pts.iter().map(|p| p.x).sum::<f64>() / n, pts.iter().map(|p| p.y).sum::<f64>() / n);
+    for p in &pts {
+        let r = (p.x - cx).hypot(p.y - cy);
+        assert!((24.5..=27.5).contains(&r), "an anchor {r} pt from the centre: {pts:?}");
+    }
+    let sloped = pts.iter().zip(pts.iter().cycle().skip(1)).filter(|(a, b)| (a.x - b.x).abs() > 0.1 && (a.y - b.y).abs() > 0.1).count();
+    assert!(sloped * 2 >= pts.len(), "{sloped} of {} segments are sloped: {pts:?}", pts.len());
+}
+
 /// How many of reply `r`'s warnings say that an image couldn't be decoded, as raster exports do.
 fn undecoded_notes(r: &Value) -> usize {
     warnings(r).iter().filter(|w| *w == "an image couldn't be decoded and is missing from the picture").count()

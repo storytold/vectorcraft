@@ -824,6 +824,176 @@ fn units_scale_coordinates_and_set_insunits() {
 }
 
 #[test]
+fn the_cnc_preset_writes_version_2000_in_millimeters_with_type_as_paths_and_strokes_as_lines() {
+    let mut d = text_doc("Cut", 20.0);
+    let layer = d.layers[0].id;
+    let frame = path(&mut d, shapes::rectangle(Rect::new(5.0, 5.0, 195.0, 95.0)), Paint::None, Paint::solid(Color::BLACK), 10.0);
+    d.insert(Some(layer), usize::MAX, frame).unwrap();
+    let o = DxfOptions { region: d.artboards[0].rect, ..DxfPreset::Cnc.options() };
+    let out = export(&d, &o).unwrap();
+    let p = pairs(&out.bytes);
+    assert_eq!(header(&p, "$ACADVER").as_deref(), Some("AC1015"));
+    assert_eq!(header(&p, "$INSUNITS").as_deref(), Some("4"));
+    let k = kinds(&out);
+    assert!(!k.iter().any(|k| matches!(k.as_str(), "TEXT" | "MTEXT" | "IMAGE")), "type is paths: {k:?}");
+    assert!(k.len() > 2, "the glyphs' outlines: {k:?}");
+    // The 10 pt stroke (wider than the widest lineweight) is one center line, not a filled outline.
+    assert_eq!(k.last().map(String::as_str), Some("LWPOLYLINE"), "{k:?}");
+    assert_ne!(k.get(k.len() - 2).map(String::as_str), Some("LWPOLYLINE"), "{k:?}");
+    assert!(out.images.is_empty());
+    assert_eq!(DxfPreset::of(&o), DxfPreset::Cnc);
+    assert_eq!(DxfPreset::of(&DxfOptions { colors: ColorDepth::True, ..o.clone() }), DxfPreset::Custom);
+    assert_eq!(DxfPreset::of(&DxfOptions { include_images: true, ..o.clone() }), DxfPreset::Custom);
+    assert_eq!(DxfPreset::of(&DxfOptions { include_hatches: true, ..o.clone() }), DxfPreset::Custom);
+    assert_eq!(DxfPreset::of(&DxfOptions::default()), DxfPreset::Custom);
+    assert_eq!(DxfPreset::from_id(" CNC "), Some(DxfPreset::Cnc));
+}
+
+/// A 4 × 2 px PNG placed at (10, 20) under key `raster-1`, and before it in paint order
+/// `fill`'s rectangle.
+fn image_and_fill_doc(fill: Paint) -> Document {
+    let mut png = vec![];
+    image::RgbaImage::from_pixel(4, 2, image::Rgba([0, 0, 255, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut d = doc_with(|d| {
+        let im = ImageObject {
+            key: "raster-1".into(),
+            width: 4,
+            height: 2,
+            xf: Affine::translate((10.0, 20.0)) * Affine::scale(5.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        vec![
+            path(d, shapes::rectangle(Rect::new(50.0, 10.0, 150.0, 60.0)), fill, Paint::None, 0.0),
+            Node::new(d.alloc_id(), NodeKind::Image(Box::new(im))),
+        ]
+    });
+    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
+    d
+}
+
+const IMAGES_OFF: &str = "placed images are left out (Include Placed Images is off)";
+const HATCHES_OFF: &str = "fill hatches are left out: filled areas are written as their outlines (Include Fill Hatches is off)";
+
+#[test]
+fn fills_without_hatches_keep_their_outlines() {
+    let d = shapes_doc();
+    let out = export(&d, &DxfOptions { include_hatches: false, ..opts(&d) }).unwrap();
+    assert_eq!(kinds(&out), ["LWPOLYLINE", "LWPOLYLINE", "CIRCLE"], "the fill's outline, the stroke, the circle");
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    assert_eq!(out.setting_notes, [HATCHES_OFF]);
+    let e = entities(&out);
+    assert_eq!((get(&e[0], 70), get(&e[0], 370)), (Some("1"), None), "the closed outline, without a lineweight");
+    // Hatches stay by default, with no note.
+    let on = export(&d, &opts(&d)).unwrap();
+    assert!(kinds(&on).iter().any(|k| k == "HATCH") && on.setting_notes.is_empty());
+    // The outlines are the ones written beside hatches, also for overlapping subpaths, which are
+    // merged first; a fill with no area (a flat rectangle, a diagonal line) writes nothing either way.
+    let compound = doc_with(|d| {
+        let mut bp = shapes::rectangle(Rect::new(10.0, 10.0, 60.0, 60.0)).to_bezpath();
+        bp.extend(shapes::rectangle(Rect::new(40.0, 40.0, 90.0, 90.0)).to_bezpath().elements().iter().copied());
+        let p = PathData::from_bezpath(&bp);
+        vec![
+            path(d, p, Paint::solid(Color::BLACK), Paint::None, 0.0),
+            path(d, shapes::rectangle(Rect::new(10.0, 70.0, 90.0, 70.0)), Paint::solid(Color::BLACK), Paint::None, 0.0),
+            path(d, shapes::line(Point::new(100.0, 10.0), Point::new(150.0, 60.0)), Paint::solid(Color::BLACK), Paint::None, 0.0),
+        ]
+    });
+    let without_hatches = |o: &DxfOutput| {
+        let mut e = entities(o);
+        e.retain(|x| kind(x) != "HATCH");
+        e.into_iter().map(|x| x.into_iter().filter(|p| p.0 != 5).collect::<Pairs>()).collect::<Vec<_>>()
+    };
+    let (c_on, c_off) =
+        (export(&compound, &opts(&compound)).unwrap(), export(&compound, &DxfOptions { include_hatches: false, ..opts(&compound) }).unwrap());
+    assert_eq!(kinds(&c_on), ["LWPOLYLINE", "HATCH"], "one merged outline");
+    assert_eq!(without_hatches(&c_off), without_hatches(&c_on));
+    assert_eq!(without_hatches(&out), without_hatches(&on));
+    // Strokes outlined for their look are areas too: their outlines stay.
+    let altered =
+        export(&d, &DxfOptions { include_hatches: false, alter_paths: true, preserve: Preserve::Editability, version: DxfVersion::R14, ..opts(&d) })
+            .unwrap();
+    assert!(!kinds(&altered).iter().any(|k| k == "HATCH") && !kinds(&altered).is_empty(), "{:?}", kinds(&altered));
+    // Nothing filled: no note.
+    let lines = doc_with(|d| vec![path(d, shapes::ellipse(Rect::new(120.0, 20.0, 180.0, 80.0)), Paint::None, Paint::solid(Color::BLACK), 1.0)]);
+    let none = export(&lines, &DxfOptions { include_hatches: false, ..opts(&lines) }).unwrap();
+    assert!(none.warnings.is_empty() && none.setting_notes.is_empty());
+    // R12 has no hatches anyway: the same outlines, and its own note alone.
+    let r12 = |include_hatches| export(&d, &DxfOptions { version: DxfVersion::R12, include_hatches, ..opts(&d) }).unwrap();
+    let (off, on) = (r12(false), r12(true));
+    assert_eq!(off.bytes, on.bytes);
+    assert_eq!(off.warnings, on.warnings);
+    assert!(off.setting_notes.is_empty());
+}
+
+#[test]
+fn an_open_path_s_fill_outline_keeps_its_closing_edge() {
+    let mut bp = vectorcraft_geom::BezPath::new();
+    bp.move_to((10.0, 10.0));
+    bp.line_to((90.0, 10.0));
+    bp.line_to((50.0, 80.0));
+    let open = PathData::from_bezpath(&bp);
+    let d = doc_with(|d| vec![path(d, open.clone(), Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 1.0)]);
+    let closed = |e: &Pairs| get(e, 70).and_then(|v| v.trim().parse::<i64>().ok()).is_some_and(|v| v & 1 == 1);
+    for include_hatches in [false, true] {
+        let out = export(&d, &DxfOptions { include_hatches, ..opts(&d) }).unwrap();
+        let e: Vec<Pairs> = entities(&out).into_iter().filter(|x| kind(x) == "LWPOLYLINE").collect();
+        assert_eq!(e.len(), 2, "the fill's outline and the stroke: {:?}", kinds(&out));
+        assert!(closed(&e[0]), "the fill's outline closes as the fill does (hatches {include_hatches})");
+        assert!(!closed(&e[1]), "the stroke stays open (hatches {include_hatches})");
+    }
+    // R12 writes the outline alone, closed too.
+    let fill_only = doc_with(|d| vec![path(d, open.clone(), Paint::solid(Color::BLACK), Paint::None, 0.0)]);
+    let r12 = export(&fill_only, &DxfOptions { version: DxfVersion::R12, ..opts(&fill_only) }).unwrap();
+    let e = entities(&r12);
+    assert_eq!(kind(&e[0]), "POLYLINE", "{:?}", kinds(&r12));
+    assert!(closed(&e[0]), "R12's outline closes as the fill does");
+}
+
+#[test]
+fn images_can_be_left_out_with_their_files() {
+    let d = image_and_fill_doc(Paint::None);
+    let out = export(&d, &DxfOptions { include_images: false, ..opts(&d) }).unwrap();
+    assert!(entities(&out).is_empty() && out.images.is_empty(), "{:?}", kinds(&out));
+    let p = pairs(&out.bytes);
+    assert!(!section(&p, "OBJECTS").iter().any(|o| matches!(kind(o), "IMAGEDEF" | "IMAGEDEF_REACTOR" | "RASTERVARIABLES")));
+    assert!(!section(&p, "CLASSES").iter().any(|o| get(o, 1) == Some("IMAGE")));
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    assert_eq!(out.setting_notes, [IMAGES_OFF]);
+    // An image that can't be decoded is not read when images are left out.
+    let mut broken = d.clone();
+    broken.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(b"not a png".to_vec()), proxy: None });
+    let left_out = export(&broken, &DxfOptions { include_images: false, ..opts(&broken) }).unwrap();
+    assert!(left_out.warnings.is_empty(), "{:?}", left_out.warnings);
+    assert_eq!(left_out.setting_notes, [IMAGES_OFF]);
+    assert!(export(&broken, &opts(&broken)).unwrap().warnings.iter().any(|w| w.contains("couldn't be decoded")));
+    // R12 has no images anyway: its own note alone.
+    let r12 = export(&d, &DxfOptions { version: DxfVersion::R12, include_images: false, ..opts(&d) }).unwrap();
+    assert!(r12.warnings.iter().any(|w| w.contains("no images")) && r12.setting_notes.is_empty());
+}
+
+#[test]
+fn images_and_hatches_are_left_out_independently_and_the_cnc_preset_leaves_out_both() {
+    let d = image_and_fill_doc(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    let run = |o: DxfOptions| export(&d, &DxfOptions { region: d.artboards[0].rect, ..o }).unwrap();
+    let both = run(DxfOptions::default());
+    assert_eq!(kinds(&both), ["LWPOLYLINE", "HATCH", "IMAGE"]);
+    assert_eq!(both.images.len(), 1);
+    let no_images = run(DxfOptions { include_images: false, ..DxfOptions::default() });
+    assert_eq!((kinds(&no_images), no_images.images.len()), (vec!["LWPOLYLINE".to_string(), "HATCH".into()], 0));
+    let no_hatches = run(DxfOptions { include_hatches: false, ..DxfOptions::default() });
+    assert_eq!((kinds(&no_hatches), no_hatches.images.len()), (vec!["LWPOLYLINE".to_string(), "IMAGE".into()], 1));
+    // CNC / CAM: the cutting path alone, with no image file and both notes.
+    let cnc = run(DxfPreset::Cnc.options());
+    assert_eq!(kinds(&cnc), ["LWPOLYLINE"]);
+    assert!(cnc.images.is_empty());
+    assert!(cnc.setting_notes.iter().any(|w| w == IMAGES_OFF) && cnc.setting_notes.iter().any(|w| w == HATCHES_OFF), "{:?}", cnc.setting_notes);
+    let custom = DxfPreset::Custom.options();
+    assert!(custom.include_images && custom.include_hatches, "Custom keeps both");
+}
+
+#[test]
 fn layers_become_dxf_layers() {
     let mut d = shapes_doc();
     let second = d.add_layer(Some("Dims: <top>"));
@@ -1052,15 +1222,15 @@ fn a_bullet_is_text_of_its_own_before_its_paragraph() {
 
 /// A numbered list paragraph's number and period are a TEXT entity of their own where they are
 /// drawn, in the order they are drawn: in a right-to-left paragraph the period comes first, at the
-/// number's left.
+/// number's left, with the marker aligned left or right.
 #[test]
 fn a_number_is_text_of_its_own_before_its_paragraph() {
-    use vectorcraft_doc::text::{NumberStyle, ParaList};
-    let numbered = |text: &str, count: u32| {
+    use vectorcraft_doc::text::{ListAlign, NumberStyle, ParaList};
+    let numbered_aligned = |text: &str, count: u32, align: ListAlign| {
         let mut d = text_doc(text, 20.0);
         let id = d.layers[0].children().unwrap()[0].id;
         if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
-            t.para.list = Some(ParaList::numbered(NumberStyle::Arabic));
+            t.para.list = Some(ParaList::numbered(NumberStyle::Arabic).aligned(align));
             t.para.left_indent = 30.0;
             t.para.first_line_indent = -30.0;
             t.list_count = count;
@@ -1068,10 +1238,27 @@ fn a_number_is_text_of_its_own_before_its_paragraph() {
         let out = export(&d, &DxfOptions { version: DxfVersion::R2018, preserve: Preserve::Editability, ..opts(&d) }).unwrap();
         entities(&out).iter().map(|e| (get(e, 1).map(str::to_string), all(e, 10)[0])).collect::<Vec<_>>()
     };
+    let numbered = |text: &str, count: u32| numbered_aligned(text, count, ListAlign::Left);
     assert_eq!(numbered("Item", 11), [(Some("12.".to_string()), 10.0), (Some("Item".to_string()), 40.0)]);
     let rtl = numbered("שלום", 11);
     assert_eq!(rtl.iter().map(|(s, _)| s.clone().unwrap_or_default()).collect::<Vec<_>>(), ["שלום", ".12"]);
     assert!(rtl[1].1 > rtl[0].1, "the number right of the text: {rtl:?}");
+    // Aligned right, the number keeps its order and moves right, against the text.
+    let right = numbered_aligned("Item", 11, ListAlign::Right);
+    assert_eq!((right[0].0.as_deref(), right[1].clone()), (Some("12."), (Some("Item".to_string()), 40.0)));
+    assert!(right[0].1 > 10.0 && right[0].1 < 40.0, "{right:?}");
+    let rtl = numbered_aligned("שלום", 11, ListAlign::Right);
+    assert_eq!(rtl.iter().map(|(s, _)| s.clone().unwrap_or_default()).collect::<Vec<_>>(), ["שלום", ".12"]);
+    // A mixed paragraph: the period follows the paragraph's direction, not the script of the
+    // words it holds, with either alignment.
+    let marker = |text: &str, align: ListAlign| {
+        let out = numbered_aligned(text, 11, align);
+        out.into_iter().filter_map(|(s, _)| s).find(|s| s.contains("12")).unwrap_or_default()
+    };
+    for align in [ListAlign::Left, ListAlign::Right] {
+        assert_eq!(marker("Item שלום", align), "12.", "{align:?}");
+        assert_eq!(marker("שלום Item", align), ".12", "{align:?}");
+    }
 }
 
 /// Area type that Shrink Text to Fit scales down is written at the height it draws at.

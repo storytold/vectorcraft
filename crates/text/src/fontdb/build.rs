@@ -72,11 +72,16 @@ pub(super) fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Opt
         bytes,
         index,
         path,
+        plans: std::sync::Mutex::new(Vec::new()),
         ideographic_centre: std::sync::OnceLock::new(),
         icf_margins: std::sync::OnceLock::new(),
+        path_align: std::sync::OnceLock::new(),
         colour_bitmaps,
         colour_layers,
         svg_glyphs,
+        gsub: std::sync::OnceLock::new(),
+        unencoded: std::sync::OnceLock::new(),
+        named_chars: std::sync::OnceLock::new(),
     })
 }
 

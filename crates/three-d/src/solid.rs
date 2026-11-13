@@ -11,19 +11,29 @@
 
 use vectorcraft_geom::{BezPath, FillRule, ParamCurve, PathData, Point, Rect, Vec2};
 
-use crate::{MAX_FACES, Revolve, V3, eye_distance, perspective_scale};
+use crate::{MAX_FACES, MAX_SOLID_FACES, Revolve, V3, eye_distance, perspective_scale};
 
 mod build;
+mod face_map;
 mod inflate;
 mod membrane;
+mod outline;
 mod rings;
 
 #[cfg(test)]
 use build::{Camera, cuts, edge_distance, newell, section};
+pub(crate) use build::{Face3, extrude_faces, plane_faces};
 pub use build::{extrude, plane};
-pub use inflate::{inflate, inflate_together};
+pub use face_map::{FaceMap, extrude_face_map, plane_face_map};
 #[cfg(test)]
-use membrane::{Edges, Membrane, cell_triangles};
+use inflate::GRID_WORK;
+#[cfg(test)]
+pub(crate) use inflate::INFLATED;
+pub(crate) use inflate::inflate_faces;
+pub use inflate::{inflate, inflate_each, inflate_together};
+#[cfg(test)]
+use membrane::{Edges, GRID_BUDGET, MAX_EDGE_ENTRIES, MAX_GRID_WORK, Membrane, cell_triangles};
+pub use rings::TOO_COMPLEX_SURFACE as TOO_COMPLEX_SOLID;
 use rings::signed_area;
 #[cfg(test)]
 use rings::{MAX_SOLID_POINTS, rings};
@@ -201,11 +211,14 @@ pub struct Extrude {
     /// Closed ends (a solid) or open ones (a hollow tube).
     pub cap: bool,
     pub bevel: Option<Bevel>,
+    /// Keep the faces of a closed solid that are turned away from the viewer (Draw Hidden Faces,
+    /// and the classic Wireframe surface), drawn behind the faces turned toward it.
+    pub hidden: bool,
 }
 
 impl Default for Extrude {
     fn default() -> Self {
-        Self { depth: 50.0, twist: 0.0, taper: 1.0, cap: true, bevel: None }
+        Self { depth: 50.0, twist: 0.0, taper: 1.0, cap: true, bevel: None, hidden: false }
     }
 }
 
@@ -232,6 +245,29 @@ impl Default for Inflate {
     }
 }
 
+/// A planar face of a solid that a graphic can be mapped onto: Extrude & Bevel's front cap (the
+/// art itself, or a plane's only face) or its back cap.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum PlanarFace {
+    Front,
+    Back,
+}
+
+impl PlanarFace {
+    pub const ALL: [PlanarFace; 2] = [Self::Front, Self::Back];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Front => "front",
+            Self::Back => "back",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|f| f.id() == s)
+    }
+}
+
 /// One projected polygon. Holes are contours of their own (nonzero winding).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Facet {
@@ -239,8 +275,23 @@ pub struct Facet {
     pub depth: f64,
     pub brightness: f64,
     pub illumination: [f64; 3],
+    /// The face's unit normal in view space (x right, y down, z toward the viewer), turned to the
+    /// side the viewer sees.
+    pub normal: [f64; 3],
     /// Smooth lighting on an inflated triangle, before clipping individual RGB channels.
     pub rgb_gradient: Option<crate::RgbGradient>,
+    /// The facet's outline with the profile's curves kept as cubics, for [`Facet::path`]. The
+    /// contours stay the polygon that visibility and depth use.
+    pub outline: Option<PathData>,
+    /// The facet is a piece of the solid's sides (Extrude & Bevel's walls and bevels, Inflate's
+    /// sides) rather than of its ends (the caps, a plane, Inflate's front and back).
+    pub side: bool,
+    /// The facet is turned away from the viewer: a closed solid keeps it (seen edge-on, or with
+    /// Draw Hidden Faces) and draws it behind the facets turned toward the viewer.
+    pub away: bool,
+    /// The planar end of the solid the facet is: Extrude & Bevel's front or back cap, or a plane
+    /// (its front). `None` for every other facet.
+    pub end: Option<PlanarFace>,
     /// The contours in view space, before projection, for tests that measure depths.
     #[cfg(test)]
     view: Vec<Vec<V3>>,
@@ -256,7 +307,11 @@ impl Facet {
         if perimeter > 0.0 { 2.0 * area / perimeter } else { 0.0 }
     }
 
+    /// The facet's outline: its curved outline when it has one, else its contours.
     pub fn path(&self) -> PathData {
+        if let Some(path) = &self.outline {
+            return path.clone();
+        }
         let mut bp = BezPath::new();
         for c in &self.contours {
             let Some(first) = c.first() else { continue };
@@ -267,6 +322,26 @@ impl Facet {
             bp.close_path();
         }
         PathData::from_bezpath(&bp)
+    }
+
+    /// Revolve's face `face` as a facet: its polygon, curved outline, depth, normal and lighting.
+    /// A face that joins the profile's ends round the axis is a side; a cap is an end.
+    pub(crate) fn of_face(face: crate::Face) -> Self {
+        Facet {
+            contours: vec![face.points],
+            depth: face.depth,
+            brightness: face.brightness,
+            illumination: face.illumination,
+            normal: face.normal,
+            rgb_gradient: None,
+            outline: face.outline,
+            side: !face.cap,
+            // A revolved cap is not one of the planar faces graphics map onto.
+            end: None,
+            away: false,
+            #[cfg(test)]
+            view: vec![],
+        }
     }
 }
 
@@ -309,3 +384,6 @@ mod tests;
 
 #[cfg(test)]
 mod tests_inflate_shading;
+
+#[cfg(test)]
+mod tests_limits;

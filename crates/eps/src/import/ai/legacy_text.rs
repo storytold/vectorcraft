@@ -2,19 +2,24 @@
 //! text paths (`a b c d tx ty startPt Tp`, an area's frame, one for each linked area, or the path
 //! type runs along, `TP`), the modal character and paragraph attributes
 //! (`Tr Tf Ts Tz Tt TA Tl Ta Ti`, and §15.4.7 and §22's letter and word spacing `TC TW`, hanging
-//! punctuation `Tq`, hyphenation `Th` and tab stops `Xb Xe XB`), the paint style, and the characters (`Tx`, `Tj`,
-//! overflow `TX`; `\r` ends a paragraph). Type set in rendering modes 4 to 7 is a mask (§5.7): the
+//! punctuation `Tq`, hyphenation `Th` and tab stops `Xb Xe XB`, and §15.3.4's writing direction `TV`,
+//! Roman character rotation `Tv`, Kumi blocks `Ty TY` and binding punctuation `Tg`), the paint
+//! style, and the characters (`Tx`, `Tj`, overflow `TX`; `\r` ends a paragraph). Type set in rendering modes 4 to 7 is a mask (§5.7): the
 //! text object clips the objects of its clipping group. Final-form operators (the
 //! computed positions, §15.1) are skipped: the type is laid out again. Strings are decoded by the
 //! encoding pairs of the current font's `TZ`, then by the file's `TE` encoding unless that `TZ`'s
 //! `useDefault` is 0, else as Windows-1252; a re-encoded font `/_name` is the font its `%AI3_BeginEncoding` or `TZ` names
-//! (else `name`).
+//! (else `name`). Strings in a composite font named `base-CMap` (CJK type) whose `TZ` gives no
+//! encoding pairs are decoded by that predefined CMap instead, and the font is `base`.
+
+use std::sync::Arc;
 
 use kurbo::{Affine, BezPath, ParamCurve, ParamCurveArclen};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{CharStyle, Justify, NodeKind, ParaStyle, TabAlign, TabStop, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{Burasagari, CharStyle, Justify, NodeKind, ParaStyle, TabAlign, TabStop, TextKind, TextObject, TextRun};
 use vectorcraft_geom::AnchorKind;
 
+use super::super::super::predefined_cmap::{self, CMapCodes, composite_font};
 use super::super::obj::V;
 use super::art::path_data;
 use super::{FLIP, GState, HashSet, Kind, Node, NodeId, Reader};
@@ -51,6 +56,9 @@ const LINKED_AREAS_LEFT_OUT: &str = "linked type areas past VectorCraft's limits
 /// The warning when type set in a mask rendering mode can't be a clipping path: type in linked
 /// areas (several frames), in wraparound text or in a compound path doesn't clip.
 const MASK_NOT_CLIPPED: &str = "type used as a mask in linked areas, wraparound text or a compound path doesn't clip";
+/// The warning when `TV` changes after a text object's first character: the object keeps the
+/// direction of that character.
+const DIRECTION_CHANGE_LEFT_OUT: &str = "type that changes writing direction inside a text object opens in the direction of its first character";
 
 /// A text path (`Tp` … `TP`).
 #[derive(Debug, Default)]
@@ -72,6 +80,17 @@ struct ParaRun {
     count: usize,
     /// [`TypeState::tabs_version`] when the last of them started.
     tabs_version: u64,
+}
+
+/// An overflow paragraph break (`(\r) TX`) read before any more type, with the state in force
+/// where it was read.
+#[derive(Debug)]
+struct PendingBreak {
+    /// `TV` at the break.
+    vertical: bool,
+    /// The attributes and [`TypeState::tabs_version`] of the empty paragraph the break ends, when
+    /// it ends one that no character started.
+    para: Option<(ParaStyle, u64)>,
 }
 
 /// A text object being read.
@@ -97,10 +116,14 @@ pub(super) struct LegacyText {
     /// The current paragraph's attributes are in `paras`.
     para_taken: bool,
     /// An overflow paragraph break (`(\r) TX`) not yet followed by type: the story's end.
-    pending_break: bool,
+    pending_break: Option<PendingBreak>,
     /// Characters were set in a mask rendering mode (`Tr` 4 to 7): the text object is a clipping
     /// path (§5.7).
     clips: bool,
+    /// `TV` at its first character: VectorCraft keeps one writing direction for each text object.
+    vertical: bool,
+    /// A later character was set in the other direction.
+    direction_changed: bool,
     /// The state when it began (lock, visibility), and whether it began on a `%_` line.
     gs: GState,
     hidden: bool,
@@ -176,6 +199,10 @@ pub(super) struct TypeState {
     tabs_version: u64,
     /// `Tr`.
     render: i64,
+    /// `TV`: vertical writing.
+    vertical: bool,
+    /// `TY`: a Kumi block recorded for later use, which horizontal type keeps as its mark.
+    kumi_recorded: bool,
     /// The encoding strings are in, by code (`TE`); None where it says nothing.
     encoding: Vec<Option<char>>,
     /// Re-encoded fonts' original names (`%AI3_BeginEncoding: _new old`, or `TZ`'s).
@@ -183,8 +210,14 @@ pub(super) struct TypeState {
     /// Re-encoded fonts' own encodings (`TZ`), by the new font's name: what its encoding pairs
     /// change, by code (None where they say nothing), and whether `TE`'s encoding applies to it.
     font_encodings: Vec<(String, Vec<Option<char>>, bool)>,
+    /// The new fonts' names whose `TZ` gives encoding pairs, which no composite font has.
+    paired_fonts: Vec<String>,
     /// The font `Tf` set last, as the file names it.
     font: Option<String>,
+    /// How strings in that font decode, when it is a composite font ([`composite_font`]).
+    cmap: Option<Arc<CMapCodes>>,
+    /// The predefined CMaps read so far, by name (`None` when one couldn't be read).
+    cmaps: Vec<(String, Option<Arc<CMapCodes>>)>,
     /// Between `Xb` and `XB`: the tab stops of the tab definition read so far.
     tabs: Option<Vec<TabStop>>,
     chars: usize,
@@ -197,10 +230,15 @@ impl Default for TypeState {
             para: ParaStyle::default(),
             tabs_version: 0,
             render: 0,
+            vertical: false,
+            kumi_recorded: false,
             encoding: vec![None; 256],
             fonts: vec![],
             font_encodings: vec![],
+            paired_fonts: vec![],
             font: None,
+            cmap: None,
+            cmaps: vec![],
             tabs: None,
             chars: 0,
         }
@@ -226,6 +264,9 @@ impl TypeState {
 
     /// A string's bytes, in the current font.
     fn decode(&self, bytes: &[u8]) -> String {
+        if let Some(cmap) = &self.cmap {
+            return cmap.decode(bytes);
+        }
         let own = self.font.as_ref().and_then(|f| self.font_encodings.iter().find(|(n, _, _)| n == f));
         let (own, te) = own.map_or((None, true), |(_, e, te)| (Some(e.as_slice()), *te));
         bytes
@@ -239,6 +280,16 @@ impl TypeState {
                     .unwrap_or_else(|| latin::decode(b))
             })
             .collect()
+    }
+
+    /// How strings in a font with predefined CMap `cmap` decode; `None` when the CMap can't be read.
+    fn cmap_codes(&mut self, cmap: &str) -> Option<Arc<CMapCodes>> {
+        if let Some((_, codes)) = self.cmaps.iter().find(|(n, _)| n == cmap) {
+            return codes.clone();
+        }
+        let codes = predefined_cmap::codes(cmap).map(Arc::new);
+        self.cmaps.push((cmap.to_string(), codes.clone()));
+        codes
     }
 }
 
@@ -316,6 +367,9 @@ impl Reader<'_> {
         let pairs = pairs.iter().rposition(|v| matches!(v, V::Mark)).map_or(pairs, |m| pairs.get(m + 1..).unwrap_or_default());
         let mut table = vec![None; 256];
         encoding_pairs(&mut table, pairs);
+        if pairs.iter().any(|v| matches!(v, V::Name(_))) {
+            st.paired_fonts.push(new.clone());
+        }
         st.font_encodings.push((new.clone(), table, te));
     }
 
@@ -444,12 +498,26 @@ impl Reader<'_> {
                 let Some(at) = vals.iter().position(|v| matches!(v, V::Name(_))) else { return };
                 if let Some(V::Name(name)) = vals.get(at) {
                     st.font = Some(name.clone());
-                    let name =
+                    let full =
                         st.fonts.iter().find(|(new, _)| new == name).map_or_else(|| name.trim_start_matches('_').to_string(), |(_, old)| old.clone());
-                    let (family, style) = super::super::super::text::family_style(&name);
+                    // A font whose `TZ` gives encoding pairs is re-encoded, which a composite font
+                    // can't be; a `TZ` without pairs only names the font.
+                    let reencoded = st.paired_fonts.contains(name);
+                    let (name, cmap) = match composite_font(&full).filter(|_| !reencoded) {
+                        Some((base, cmap)) => (base, st.cmap_codes(cmap)),
+                        None => (full.as_str(), None),
+                    };
+                    st.cmap = cmap;
+                    // The installed face of that PostScript name, as type from a text document
+                    // takes it; else the name split into a family and style.
+                    let text = super::super::super::text::named_font(name, None);
+                    let (family, style, version) = text.unwrap_or_else(|| {
+                        let (family, style) = super::super::super::text::family_style(name);
+                        (family, style, None)
+                    });
                     st.style.font_family = family;
                     st.style.font_style = style;
-                    st.style.font_version = None;
+                    st.style.font_version = version;
                 }
                 if let Some(size) = vals.get(at + 1).and_then(V::num).filter(|s| s.is_finite() && *s > 0.0) {
                     st.style.size = size.min(MAX_SIZE);
@@ -534,6 +602,19 @@ impl Reader<'_> {
                     st.para.roman_hanging = on;
                 }
             }
+            // `bindrepeat Tg` (§15.3.4): 1 and 3 turn binding punctuation on, and 0 and 2 turn it
+            // off. VectorCraft's own mapping opens it on as Burasagari's Force setting and off as no
+            // Burasagari. The repeat character (2 and 3) is not kept.
+            "Tg" => {
+                let burasagari = match n0 {
+                    Some(1.0 | 3.0) => Some(Burasagari::Forced),
+                    Some(0.0 | 2.0) => Some(Burasagari::None),
+                    _ => None,
+                };
+                if let Some(b) = burasagari {
+                    st.para.burasagari = b;
+                }
+            }
             // `hyphenate limitHyphLines minLeadHyphen minTailHyphen maxHyphLines Th`, kept to the
             // ranges `text.setFormat` takes.
             "Th" => {
@@ -545,6 +626,31 @@ impl Reader<'_> {
                 h.after_first = letters(lead, 1.0, 15.0);
                 h.before_last = letters(tail, 1.0, 15.0);
                 h.hyphen_limit = if limit { letters(max, 0.0, 25.0) } else { 0 };
+            }
+            // `direction TV` (§15.3.4): 0 horizontal, 1 vertical.
+            "TV" => {
+                if let Some(on) = n0.and_then(flag) {
+                    st.vertical = on;
+                }
+            }
+            // `rotation Tv`: in vertical writing, 0 rotates Roman characters 90 degrees clockwise and
+            // 1 keeps them upright.
+            "Tv" => {
+                if let Some(on) = n0.and_then(flag) {
+                    st.style.standard_vertical_roman = on;
+                }
+            }
+            // `kumi Ty`: 1 begins a Kumi block and 0 ends it.
+            "Ty" => {
+                if let Some(on) = n0.and_then(flag) {
+                    st.style.tate_chu_yoko = on;
+                }
+            }
+            // `kumi TY`: as `Ty`, for a block that does not appear in the set text.
+            "TY" => {
+                if let Some(on) = n0.and_then(flag) {
+                    st.kumi_recorded = on;
+                }
             }
             // A tab definition (§22.6): `numDots numTabs Xb` begins it, each
             // `leader decimal tabType tabPosition Xe` describes one tab stop, and `XB` ends it. The
@@ -593,7 +699,10 @@ impl Reader<'_> {
         }
         // Overflow text ending the story with a paragraph break (`(\r) TX`) adds no paragraph.
         if w == "TX" && decoded == "\n" {
-            t.pending_break = true;
+            if t.pending_break.is_none() {
+                let para = (!t.para_taken).then(|| (st.para.clone(), st.tabs_version));
+                t.pending_break = Some(PendingBreak { vertical: st.vertical, para });
+            }
             return;
         }
         // As many characters as the file's allowance has left.
@@ -603,8 +712,16 @@ impl Reader<'_> {
         }
         let decoded: String = decoded.chars().take(room).collect();
         st.chars += decoded.chars().count();
+        // A break read before these characters keeps the direction and paragraph attributes it was
+        // read with, and is the story's first character when nothing came before it.
+        let brk = t.pending_break.take();
+        if t.runs.is_empty() {
+            t.vertical = brk.as_ref().map_or(st.vertical, |b| b.vertical);
+        }
+        t.direction_changed |= st.vertical != t.vertical || brk.as_ref().is_some_and(|b| b.vertical != t.vertical);
         let gs = &self.gs;
         let mut style = st.style.clone();
+        style.tate_chu_yoko |= st.kumi_recorded && !t.vertical;
         // Characters in modes 4 to 7 make the whole text object the mask, not each run (§5.7); 7
         // paints nothing, nor does 3 (invisible).
         t.clips |= (4..=7).contains(&st.render);
@@ -620,7 +737,10 @@ impl Reader<'_> {
         (style.stroke_cap, style.stroke_join, style.stroke_miter_limit, style.stroke_dash) = (gs.cap, gs.join, gs.miter, gs.dash.clone());
         (style.overprint_fill, style.overprint_stroke) = (gs.overprint_fill, gs.overprint_stroke);
         let mut text = String::new();
-        if std::mem::take(&mut t.pending_break) {
+        if let Some(brk) = brk {
+            if let Some((mut para, tabs_version)) = brk.para {
+                t.begin_para(&mut para, tabs_version);
+            }
             text.push('\n');
             t.para_taken = false;
         }
@@ -669,6 +789,9 @@ impl Reader<'_> {
         if t.kind == 1 && (t.past_limit || all_areas > placed.len()) {
             self.warn(LINKED_AREAS_LEFT_OUT);
         }
+        if t.direction_changed {
+            self.warn(DIRECTION_CHANGE_LEFT_OUT);
+        }
         let mut paras = std::mem::take(&mut t.paras);
         if paras.is_empty() {
             paras.push(ParaRun { style: self.type_state.para.clone(), count: 1, tabs_version: 0 });
@@ -682,6 +805,7 @@ impl Reader<'_> {
         for (m, kind) in placed {
             let mut obj = TextObject::point(kurbo::Point::ZERO, "", last_style.clone());
             obj.kind = kind;
+            obj.vertical = t.vertical;
             obj.xf = to_doc * m * FLIP;
             match story.take() {
                 Some((runs, paras)) => {

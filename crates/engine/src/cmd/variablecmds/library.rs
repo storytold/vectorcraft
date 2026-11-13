@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use super::{
-    BTreeMap, BTreeSet, DataSet, DataValue, EngineError, MAX_NAME, Result, Session, Value, Variable, VariableKind, absolute_path, bad, json, named,
-    read_file_head, str_param, variables_unlocked, write_file,
+    BTreeMap, BTreeSet, DataSet, DataValue, Document, EngineError, MAX_NAME, NodeId, NodeKind, Result, Session, Value, Variable, VariableKind,
+    Variables, absolute_path, bad, json, named, read_file_head, str_param, variables_unlocked, write_file,
 };
 
 /// The namespace of a variable library's elements, the default namespace of its data sets' values,
@@ -169,12 +171,20 @@ fn without_doctype(xml: &str, cmd: &str) -> Result<String> {
 }
 
 /// A variable library as Load Variable Library reads it: the names of its text variables in the
-/// order it declares them, the name and `trait` of each variable of another kind, and its data
-/// sets with their text values.
-struct Library {
+/// order it declares them, the name and `trait` of each variable of another kind, its data sets
+/// with their text values, and the element id each text variable's `docRef` names.
+pub(crate) struct Library {
     text: Vec<String>,
     other: Vec<(String, String)>,
     datasets: Vec<DataSet>,
+    refs: Vec<(String, String)>,
+}
+
+impl Library {
+    /// The element ids the text variables' `docRef`s name.
+    pub(crate) fn elements(&self) -> std::collections::HashSet<String> {
+        self.refs.iter().map(|(_, e)| e.clone()).collect()
+    }
 }
 
 /// Read a variable library: XML whose `variableSets` element holds `variableSet` elements, each
@@ -200,7 +210,7 @@ fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
         return Err(bad(cmd, "the file holds no `variableSets` element"));
     };
     let sets: Vec<roxmltree::Node> = root.children().filter(|n| is(n, "variableSet")).collect();
-    let (mut text, mut other, mut declared) = (Vec::new(), Vec::new(), BTreeSet::new());
+    let (mut text, mut other, mut declared, mut refs) = (Vec::new(), Vec::new(), BTreeSet::new(), Vec::new());
     for var in sets.iter().flat_map(|s| s.children()).filter(|n| is(n, "variables")).flat_map(|v| v.children()).filter(|n| is(n, "variable")) {
         let name = named(var.attribute("varName"), "varName", cmd)?;
         if !declared.insert(name.clone()) {
@@ -210,7 +220,14 @@ fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
             return Err(bad(cmd, format!("the variable library declares more than {MAX_LIBRARY_VARIABLES} variables")));
         }
         match var.attribute("trait") {
-            Some("textcontent") => text.push(name),
+            Some("textcontent") => {
+                // `docRef="id('…')"` names the element of the variable's bound object.
+                let element = var.attribute("docRef").and_then(|r| r.trim().strip_prefix("id('")?.strip_suffix("')")).filter(|e| !e.is_empty());
+                if let Some(element) = element {
+                    refs.push((name.clone(), element.to_string()));
+                }
+                text.push(name);
+            }
             Some(t) => other.push((name, t.chars().take(MAX_NAME).collect())),
             None => return Err(bad(cmd, format!("variable `{name}` has no `trait`"))),
         }
@@ -253,7 +270,152 @@ fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
         }
         datasets.push(DataSet { name, values });
     }
-    Ok(Library { text, other, datasets })
+    Ok(Library { text, other, datasets, refs })
+}
+
+/// The variable library an SVG carries (SVG Options › Include Variable Data), read as
+/// [`parse_library`] reads one, or `None` when the SVG holds no `variableSets` element. The
+/// element is read on its own, from its start tag to the end tag that closes it
+/// ([`variable_sets_range`]), with each reference to an
+/// entity whose name starts with `ns_` replaced by the value the text before the element declares
+/// for it (up to [`MAX_LIBRARY_ENTITIES`] of them, plain text of at most [`MAX_NAME`] bytes), as
+/// files name the library's namespaces with such entities. The `ns_vars`, `ns_custom` and
+/// `ns_flows` entities take the library's namespaces when the file doesn't declare them. An
+/// element larger than [`MAX_LIBRARY_BYTES`], before or after the replacements, is refused.
+pub(crate) fn svg_library(svg: &str) -> Option<Result<Library>> {
+    const C: &str = "document.open";
+    let (start, end) = variable_sets_range(svg)?;
+    let read = || {
+        let end = end.ok_or_else(|| bad(C, "the variable library declares no variables"))?;
+        let element = svg.get(start..end).unwrap_or_default();
+        if element.len() > MAX_LIBRARY_BYTES {
+            return Err(bad(C, format!("the variable library is larger than {MAX_LIBRARY_BYTES} bytes")));
+        }
+        let mut entities: Vec<(String, String)> = Vec::new();
+        for decl in svg.get(..start).unwrap_or_default().split("<!ENTITY").skip(1).take(MAX_LIBRARY_ENTITIES) {
+            let decl = decl.trim_start();
+            let Some((name, rest)) = decl.split_once(|c: char| c.is_ascii_whitespace()) else { continue };
+            let rest = rest.trim_start();
+            let Some(quote) = rest.chars().next().filter(|q| matches!(q, '"' | '\'')) else { continue };
+            let Some(value) = rest.get(1..).and_then(|v| v.split(quote).next()) else { continue };
+            if name.starts_with("ns_") && name.len() <= MAX_NAME && value.len() <= MAX_NAME && !value.contains(['<', '&', '%', '"']) {
+                entities.push((format!("&{name};"), value.to_string()));
+            }
+        }
+        for (name, value) in [("&ns_vars;", NS_VARIABLES), ("&ns_custom;", NS_CUSTOM), ("&ns_flows;", NS_FLOWS)] {
+            if !entities.iter().any(|(n, _)| n == name) {
+                entities.push((name.to_string(), value.to_string()));
+            }
+        }
+        // Counted before anything is replaced, so a hostile file can't make a large text first.
+        let grown =
+            entities.iter().map(|(name, value)| element.matches(name.as_str()).count() * value.len().saturating_sub(name.len())).sum::<usize>();
+        if element.len() + grown > MAX_LIBRARY_BYTES {
+            return Err(bad(C, format!("the variable library's entities expand to more than {MAX_LIBRARY_BYTES} bytes")));
+        }
+        let mut element = element.to_string();
+        for (name, value) in &entities {
+            element = element.replace(name.as_str(), value);
+        }
+        parse_library(&format!("<svg>{element}</svg>"), C)
+    };
+    Some(read())
+}
+
+/// Where the first `variableSets` element of `svg` that is markup starts, and where the end tag
+/// that closes it ends (`None` when no end tag does), or `None` when there is no such element.
+/// Comments, CDATA sections, processing instructions and the document type declaration are
+/// skipped, so text inside them that looks like the element is not taken for it.
+fn variable_sets_range(svg: &str) -> Option<(usize, Option<usize>)> {
+    const NAME: &str = "variableSets";
+    // The element's name ends at white space, `>` or `/`.
+    let named = |rest: &str| rest.strip_prefix(NAME).is_some_and(|r| r.starts_with(|c: char| c.is_ascii_whitespace() || matches!(c, '>' | '/')));
+    if !svg.contains("<variableSets") {
+        return None;
+    }
+    let (mut at, mut start, mut depth) = (0, None, 0usize);
+    while let Some(off) = svg.get(at..).and_then(|s| s.find('<')) {
+        at += off;
+        let rest = svg.get(at..).unwrap_or_default();
+        // The end of a construct that holds text, or of the tag at `at`.
+        let past = |close: &str| rest.find(close).map(|e| at + e + close.len());
+        let next = if rest.starts_with("<!--") {
+            past("-->")
+        } else if rest.starts_with("<![CDATA[") {
+            past("]]>")
+        } else if rest.starts_with("<?") {
+            past("?>")
+        } else if rest.starts_with("<!DOCTYPE") {
+            // An internal subset ends at `]`, then the declaration at `>`.
+            match (rest.find('['), rest.find('>')) {
+                (Some(open), Some(gt)) if open < gt => {
+                    rest.get(open..).and_then(|s| s.find(']')).and_then(|c| rest.get(open + c..)?.find('>').map(|g| at + open + c + g + 1))
+                }
+                (_, gt) => gt.map(|g| at + g + 1),
+            }
+        } else if let Some(close) = rest.strip_prefix("</") {
+            let tag_end = past(">");
+            if let Some(s) = start
+                && named(close)
+            {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some((s, tag_end));
+                }
+            }
+            tag_end
+        } else {
+            let tag_end = past(">");
+            if named(rest.get(1..).unwrap_or_default()) {
+                let empty = tag_end.and_then(|e| svg.get(..e)).is_some_and(|t| t.ends_with("/>"));
+                if start.is_none() {
+                    start = Some(at);
+                }
+                if empty && depth == 0 {
+                    return Some((at, tag_end));
+                }
+                depth += usize::from(!empty);
+            }
+            tag_end
+        };
+        let Some(next) = next else { break };
+        at = next;
+    }
+    start.map(|s| (s, None))
+}
+
+/// Give `doc`, opened from an SVG, the variable data `lib` it carries ([`svg_library`]): the
+/// library's text variables, its data sets, no active data set, and each text variable bound to
+/// the type object made of the element its `docRef` names, or the one type object among the
+/// objects a group made of it holds (`found`: the object made of each element, by id). A `docRef`
+/// that names no type object, or one another variable is bound to already, binds nothing. The art
+/// stays as the file draws it. The warning about the variables of other kinds that were left out,
+/// if any.
+pub(crate) fn give_svg_library(doc: &mut Document, lib: Library, found: &HashMap<String, NodeId>) -> Option<String> {
+    let mut vars =
+        Variables { variables: lib.text.iter().map(|n| Variable { name: n.clone(), kind: VariableKind::Text }).collect(), ..Variables::default() };
+    vars.datasets = lib.datasets;
+    // A type object written with a paint of its own, or with fills and strokes of its appearance,
+    // is a group around its text (and the appearance's paths).
+    let text_of = |id: NodeId| match doc.node(id).map(|n| &n.kind) {
+        Some(NodeKind::Text(_)) => Some(id),
+        Some(NodeKind::Group { children, .. }) => {
+            let mut texts = children.iter().filter(|c| matches!(c.kind, NodeKind::Text(_)));
+            match (texts.next(), texts.next()) {
+                (Some(one), None) => Some(one.id),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
+    for (name, element) in &lib.refs {
+        let Some(id) = found.get(element).and_then(|id| text_of(*id)) else { continue };
+        if !vars.bindings.contains_key(&id) {
+            vars.bind(id, name);
+        }
+    }
+    doc.variables = vars.into();
+    left_out_warning(lib.other.iter().map(|(_, t)| t.as_str()))
 }
 
 /// Load Variable Library: replace the document's variables and data sets with a variable library's

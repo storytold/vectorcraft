@@ -1,6 +1,6 @@
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, StrokeLayer};
-use vectorcraft_geom::{Affine, BezPath, Point, Rect, shapes};
+use vectorcraft_geom::{Affine, BezPath, Point, Rect, Vec2, shapes};
 
 use super::*;
 
@@ -296,6 +296,101 @@ fn pattern_places_corner_tiles() {
     for n in out.iter().filter(|n| !curved(n)) {
         let NodeKind::Path { path, .. } = &n.kind else { continue };
         assert_eq!(path.subpaths[0].anchors.len(), 4, "a rectangle tile on a straight run stays four anchors");
+    }
+}
+
+/// A pattern brush whose corner tiles have a 4 × 4 pt frame and, as art, a 2 × 2 pt square in the
+/// top-left quarter of the frame. Corner art joins a side tile on its right to one below it, so
+/// that quarter is on the outside of the turn. `inner` and `outer` say which kinds of corner have
+/// art; `flips` are the brush's Flip Along and Flip Across.
+fn marked_corner_brush(inner: bool, outer: bool, (flip_along, flip_across): (bool, bool)) -> Brush {
+    let marker =
+        Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, -2.0, 2.0, 0.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let mut b = pattern_brush(PatternFit::Stretch, false);
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        let frame = Some(Rect::new(0.0, -2.0, 4.0, 2.0));
+        if inner {
+            (p.inner_corner, p.inner_corner_frame) = (Some(marker.clone()), frame);
+        }
+        if outer {
+            (p.outer_corner, p.outer_corner_frame) = (Some(marker), frame);
+        }
+        (p.flip_along, p.flip_across) = (flip_along, flip_across);
+    }
+    b
+}
+
+/// Each combination of corner art (both kinds, inner only, outer only) and of the two flips.
+fn marked_corner_brushes() -> Vec<(String, Brush)> {
+    let mut v = vec![];
+    for (inner, outer) in [(true, true), (true, false), (false, true)] {
+        for flips in [(false, false), (true, false), (false, true), (true, true)] {
+            v.push((format!("inner {inner}, outer {outer}, flips {flips:?}"), marked_corner_brush(inner, outer, flips)));
+        }
+    }
+    v
+}
+
+/// The bounds of the 2 × 2 pt corner markers among `out`, turned or not.
+fn marker_bounds(out: &[Node]) -> Vec<Rect> {
+    out.iter().filter_map(Node::geometric_bounds).filter(|r| r.width() < 3.0 && r.height() < 3.0).collect()
+}
+
+/// Corner tiles are square to the sides at a right angle and turn 90° with each turn of the path:
+/// on a square drawn either way round, each corner's marker fills the quarter of the band's corner
+/// outside the turn, with the brush flipped or not and with art for one kind of corner only
+/// (#6110).
+#[test]
+fn pattern_corner_tiles_are_square_to_the_sides() {
+    let doc = Document::new(1.0, 1.0);
+    let sq = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)).to_bezpath();
+    let mut reversed = BezPath::new();
+    reversed.move_to((0.0, 0.0));
+    for (x, y) in [(0.0, 100.0), (100.0, 100.0), (100.0, 0.0)] {
+        reversed.line_to((x, y));
+    }
+    reversed.close_path();
+    // The square turns the same way at all four corners, and the reversed square the other way,
+    // so one draws only inner corner tiles and the other only outer ones.
+    for (name, brush) in marked_corner_brushes() {
+        for path in [&sq, &reversed] {
+            let out = stroke_pieces(&doc, &brush, path, &stroke(1.0));
+            let marks = marker_bounds(&out);
+            assert_eq!(marks.len(), 4, "{name}: one marker a corner");
+            for (corner, outside) in SQUARE_CORNERS {
+                let want = Rect::from_points(corner, outside);
+                assert!(
+                    marks
+                        .iter()
+                        .any(|r| near(r.x0, want.x0, 1e-6) && near(r.y0, want.y0, 1e-6) && near(r.x1, want.x1, 1e-6) && near(r.y1, want.y1, 1e-6)),
+                    "{name}: the marker at {corner:?} fills {want:?}: {marks:?}"
+                );
+            }
+        }
+    }
+}
+
+/// At a corner that is not a right angle, a corner tile splits the difference between the two
+/// sides: its marker lies on the line that halves the angle, outside the turn, for sharp and
+/// shallow turns either way. Near a hairpin the marker moves smoothly towards the line the path
+/// arrives on.
+#[test]
+fn pattern_corner_tiles_sit_on_the_corners_diagonal() {
+    let doc = Document::new(1.0, 1.0);
+    for (name, brush) in marked_corner_brushes() {
+        for turn in [-179.9_f64, -170.0, -135.0, -60.0, -45.0, 45.0, 60.0, 135.0, 170.0, 179.9] {
+            let (a, b) = (Vec2::new(1.0, 0.0), Vec2::new(turn.to_radians().cos(), turn.to_radians().sin()));
+            let mut bp = BezPath::new();
+            bp.move_to((0.0, 0.0));
+            bp.line_to((50.0, 0.0));
+            bp.line_to(Point::new(50.0, 0.0) + b * 50.0);
+            let out = stroke_pieces(&doc, &brush, &bp, &stroke(1.0));
+            let marks = marker_bounds(&out);
+            assert_eq!(marks.len(), 1, "{name}, {turn}°: one corner marker");
+            let away = a - b;
+            let want = Point::new(50.0, 0.0) + away / away.hypot() * 2.0_f64.sqrt();
+            assert!(marks[0].center().distance(want) < 1e-6, "{name}, {turn}°: the marker is at {:?}, not {want:?}", marks[0].center());
+        }
     }
 }
 
@@ -699,6 +794,55 @@ fn tints_colorization_uses_stroke_colour() {
     white.appearance.set_fill(Paint::solid(Color::WHITE));
     colorize(&mut white, Colorization::Tints, &Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
     assert_eq!(white.appearance.fill_paint().color().unwrap().to_rgb(), [1.0, 1.0, 1.0]);
+}
+
+/// Black ink alone is a tint by its amount: a process black stroke leaves it as it is, and another
+/// process stroke color takes that share of its inks. Tints of a process color stay process.
+#[test]
+fn tints_of_black_ink_are_its_amount_of_the_stroke_color() {
+    let tinted = |art: Color, stroke: Color| {
+        let mut n = rect_art(1.0, 1.0);
+        n.appearance.set_fill(Paint::solid(art));
+        colorize(&mut n, Colorization::Tints, &Paint::solid(stroke));
+        n.appearance.fill_paint().color().unwrap()
+    };
+    let ink = Color::cmyk(0.0, 0.0, 0.0, 0.6);
+    let close = |a: Color, b: Color| {
+        let (Color::Cmyk { c, m, y, k }, Color::Cmyk { c: c2, m: m2, y: y2, k: k2 }) = (a, b) else { panic!("{a:?} {b:?}") };
+        (c - c2).abs() < 1e-5 && (m - m2).abs() < 1e-5 && (y - y2).abs() < 1e-5 && (k - k2).abs() < 1e-5
+    };
+    assert!(close(tinted(ink, Color::cmyk(0.0, 0.0, 0.0, 1.0)), ink));
+    assert!(close(tinted(ink, Color::cmyk(0.0, 1.0, 1.0, 0.0)), Color::cmyk(0.0, 0.6, 0.6, 0.0)));
+    let [r, g, b] = tinted(ink, Color::rgb(1.0, 0.0, 0.0)).to_rgb();
+    assert!((r - 1.0).abs() < 1e-5 && (g - 0.4).abs() < 1e-5 && (b - 0.4).abs() < 1e-5, "{r} {g} {b}");
+    let Color::Gray { k } = tinted(ink, Color::gray(0.5)) else { panic!("tints of a gray stroke color stay gray") };
+    assert!((k - 0.3).abs() < 1e-5, "{k}");
+}
+
+/// Under Tints and Shades black ink stays black, however light 100% K displays, and a band of black
+/// ink is its amount: K 0.5 is the stroke color. A process or gray stroke color stays in its model.
+#[test]
+fn tints_and_shades_of_black_ink_go_by_its_amount() {
+    let mapped = |k: f32, stroke: Color| {
+        let mut n = rect_art(1.0, 1.0);
+        n.appearance.set_fill(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, k)));
+        colorize(&mut n, Colorization::TintsAndShades, &Paint::solid(stroke));
+        n.appearance.fill_paint().color().unwrap()
+    };
+    let close = |a: [f32; 4], b: [f32; 4]| a.iter().zip(&b).all(|(x, y)| (x - y).abs() < 1e-5);
+    let inks = |c: Color| {
+        let Color::Cmyk { c, m, y, k } = c else { panic!("a process color: {c:?}") };
+        [c, m, y, k]
+    };
+    let orange = Color::cmyk(0.0, 0.6, 1.0, 0.0);
+    assert!(close(inks(mapped(1.0, orange)), [0.0, 0.0, 0.0, 1.0]), "black stays black");
+    assert!(close(inks(mapped(0.5, orange)), [0.0, 0.6, 1.0, 0.0]), "the stroke color");
+    assert!(close(inks(mapped(0.25, orange)), [0.0, 0.3, 0.5, 0.0]), "a tint");
+    assert!(close(inks(mapped(0.75, orange)), [0.0, 0.3, 0.5, 0.5]), "a shade");
+    let Color::Gray { k } = mapped(0.75, Color::gray(0.4)) else { panic!("a gray stroke color stays gray") };
+    assert!((k - 0.7).abs() < 1e-5, "{k}");
+    let [r, g, b] = mapped(1.0, Color::rgb(1.0, 0.0, 0.0)).to_rgb();
+    assert!(r < 1e-5 && g < 1e-5 && b < 1e-5, "black stays black: {r} {g} {b}");
 }
 
 /// Point type at (0, 0) whose characters are painted `fill` and `stroke` (1 pt wide).
@@ -1225,6 +1369,62 @@ fn art_brush_width_follows_the_pressure() {
     // A brush without the new fields is written back without them.
     let plain = serde_json::to_value(art_brush(rect_art(10.0, 4.0), ArtScale::Stretch)).unwrap();
     assert!(plain.get("width_mode").is_none() && plain.get("width_max").is_none(), "{plain}");
+}
+
+/// Art Brush Options: Width on Tilt goes from Width with the pen lying flat to the second width
+/// upright, and on Bearing or Rotation from Width at −180° to the second width at 180°, along the
+/// stroke as the pen recorded it; each mode reads only its own input.
+#[test]
+fn art_brush_width_follows_tilt_bearing_and_rotation() {
+    let brush = |mode: Variation| {
+        let mut b = art_brush(rect_art(10.0, 4.0), ArtScale::Stretch);
+        if let BrushKind::Art(a) = &mut b.kind {
+            (a.width, a.width_mode, a.width_max) = (50.0, Some(mode), Some(300.0));
+        }
+        b
+    };
+    let bp = line(0.0, 0.0, 100.0, 0.0);
+    let draw = |b: &Brush, st: &StrokeLayer| stroke_pieces(&Document::new(1.0, 1.0), b, &bp, st);
+    // Tilt, upright at the start (300 %: 6 pt either side of 4 pt art) to flat at the end (50 %: 1 pt).
+    let upright_to_flat = StrokeLayer { tilt: Some(vectorcraft_doc::PressureProfile { points: vec![(0.0, 0.0), (1.0, 1.0)] }), ..stroke(1.0) };
+    let out = draw(&brush(Variation::Tilt), &upright_to_flat);
+    assert!(near(half_width(&out, 0.0, 1.0), 6.0, 0.1), "{}", half_width(&out, 0.0, 1.0));
+    assert!(near(half_width(&out, 99.0, 100.0), 1.0, 0.1), "{}", half_width(&out, 99.0, 100.0));
+    assert!(near(half_width(&out, 49.0, 51.0), 3.5, 0.15), "{}", half_width(&out, 49.0, 51.0));
+    // Bearing and Rotation: half way at 0°, a quarter of the way at −90°, three quarters at 90°.
+    for (mode, angle, half) in [
+        (Variation::Bearing, 0.0, 3.5),
+        (Variation::Bearing, -90.0, 2.25),
+        (Variation::Bearing, 90.0, 4.75),
+        (Variation::Rotation, -90.0, 2.25),
+        (Variation::Rotation, 90.0, 4.75),
+    ] {
+        let st = if mode == Variation::Bearing { posed(Some(0.5), Some(angle), None) } else { posed(None, None, Some(angle)) };
+        let h = bounds(&draw(&brush(mode), &st)).height();
+        assert!(near(h, 2.0 * half, 1e-6), "{mode:?} {angle}: {h}");
+    }
+    // Each mode reads its own input: without it (the pressure, or another of the pen's values
+    // recorded instead), the art is half way between the two widths.
+    let others = [
+        (Variation::Tilt, posed(None, Some(90.0), Some(90.0))),
+        (Variation::Tilt, pressed(vec![(0.0, 0.0), (1.0, 1.0)])),
+        (Variation::Bearing, posed(Some(0.0), None, Some(90.0))),
+        (Variation::Rotation, posed(Some(0.0), Some(90.0), None)),
+        (Variation::Pressure, posed(Some(0.0), Some(90.0), Some(90.0))),
+    ];
+    for (mode, st) in others {
+        let h = bounds(&draw(&brush(mode), &st)).height();
+        assert!(near(h, 7.0, 1e-6), "{mode:?}: {h}");
+    }
+    // The pen's modes are kept when a definition is read, and Random is read as Fixed.
+    let lib = parse_library(&serde_json::json!([
+        {"name": "t", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "tilt", "width_max": 300.0},
+        {"name": "b", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "bearing", "width_max": 300.0},
+        {"name": "r", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "rotation", "width_max": 300.0},
+        {"name": "x", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "random", "width_max": 300.0},
+    ]));
+    let modes: Vec<_> = lib.iter().map(|b| if let BrushKind::Art(a) = &b.kind { a.width_mode } else { None }).collect();
+    assert_eq!(modes, [Some(Variation::Tilt), Some(Variation::Bearing), Some(Variation::Rotation), None]);
 }
 
 /// Definitions from files and commands are kept within their ranges.

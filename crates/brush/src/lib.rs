@@ -370,11 +370,14 @@ pub struct ArtBrush {
     pub scale: ArtScale,
     /// Width in percent.
     pub width: f64,
-    /// How the width varies along a stroke: `None` (Fixed) always `width`; Pressure goes from
-    /// `width` at the lightest pen pressure to [`Self::width_max`] at the heaviest.
+    /// How the width varies along a stroke: `None` (Fixed) always `width`; a mode that follows the
+    /// pen goes from `width` to [`Self::width_max`] over the ranges [`Variation`] gives: Pressure
+    /// from the lightest pressure to the heaviest, Tilt from the pen lying flat to upright, Bearing
+    /// and Rotation from −180° to 180° (half way at 0°).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub width_mode: Option<Variation>,
-    /// The width at the heaviest pen pressure (%), for Pressure (`width` without one).
+    /// The second width (%) of a mode that follows the pen: at the heaviest pressure, upright, or
+    /// at 180° (`width` without one).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub width_max: Option<f64>,
     pub flip_along: bool,
@@ -388,11 +391,11 @@ impl ArtBrush {
     /// The range of the width (%).
     pub const WIDTH_RANGE: (f64, f64) = (1.0, 1000.0);
 
-    /// The widths (%) at the lightest and the heaviest pen pressure: `width` for both unless the
-    /// width follows the pressure.
+    /// The widths (%) where the pen reads 0 and 1 for the width's mode (the lightest and the
+    /// heaviest pressure, for Pressure): `width` for both unless the width follows the pen.
     pub fn width_range(&self) -> (f64, f64) {
         match self.width_mode {
-            Some(Variation::Pressure) => (self.width, self.width_max.unwrap_or(self.width)),
+            Some(m) if m.follows_pen() => (self.width, self.width_max.unwrap_or(self.width)),
             _ => (self.width, self.width),
         }
     }
@@ -475,6 +478,10 @@ pub struct PatternBrush {
     pub side_frame: Option<Rect>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub side_swatch: Option<String>,
+    /// Art for the corners where the path turns towards the side tile's top (`-y`); `inner_corner`
+    /// is the art for the corners where it turns the other way. Both are drawn as the corner that
+    /// joins a side tile on its right to one below it, and each corner tile is turned so that
+    /// those two arms meet the sides.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub outer_corner: Option<Node>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -709,8 +716,8 @@ impl Brush {
             }
             BrushKind::Art(a) => {
                 a.width = within(a.width, ArtBrush::WIDTH_RANGE, 100.0);
-                // The width follows the pen's pressure or stays fixed.
-                if a.width_mode != Some(Variation::Pressure) {
+                // The width follows the pen (its pressure, tilt, bearing or rotation) or stays fixed.
+                if !a.width_mode.is_some_and(Variation::follows_pen) {
                     a.width_mode = None;
                 }
                 a.width_max = a.width_max.map(|w| within(w, ArtBrush::WIDTH_RANGE, a.width));
@@ -802,7 +809,7 @@ pub fn stroke_pieces(doc: &Document, brush: &Brush, bp: &BezPath, stroke: &Strok
     let mut out = match &brush.kind {
         BrushKind::Calligraphic(c) => calli::calligraphic(c, bp, w, stroke, &brush.name),
         BrushKind::Bristle(b) => calli::bristle(b, bp, w, &stroke.paint, &brush.name),
-        BrushKind::Art(a) => warp::art(a, bp, w, stroke.pressure.as_ref()),
+        BrushKind::Art(a) => warp::art(a, bp, w, stroke),
         BrushKind::Scatter(s) => warp::scatter(s, bp, w, stroke, &brush.name),
         BrushKind::Pattern(p) => warp::pattern(p, bp, w),
     };

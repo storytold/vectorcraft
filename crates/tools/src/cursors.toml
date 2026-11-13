@@ -26,7 +26,7 @@ id = "Arrow"
 group = "Selection"
 shown_when = [
     "The Selection tool over empty canvas or over an unselected object (no Alt).",
-    "Dragging with the Selection tool (a move), or with Direct Selection (an anchor, a segment or a handle).",
+    "Dragging with the Selection tool (a move), with Direct Selection (an anchor, a segment or a handle), or with a shape tool (from the selection's centre point).",
     "Any tool with no cursor of its own (Touch Type, Rotate View).",
     "The resting state of Live Paint Selection, Reshape (away from a path), Free Transform, Puppet Warp and Crop Image (nothing selected or outside the box), the Perspective Grid (locked or away from handles) and Perspective Selection.",
 ]
@@ -94,6 +94,7 @@ id = "Move"
 group = "Selection"
 shown_when = [
     "The Selection tool over a selected object, or over any object with Alt held (once an Alt-drag starts, SelectionCopy shows).",
+    "The shape tools over a selected object's centre point (Attributes › Show Center), before a press there moves it (while the drag runs the arrow is plain, SelectionCopy with Alt, ArrowHollow while it snaps).",
     "Reshape over a path or while dragging.",
     "Inside the Free Transform and Crop Image boxes.",
     "Puppet Warp over a pin.",
@@ -101,6 +102,7 @@ shown_when = [
     "The Artboard tool inside an artboard.",
     "The Gradient tool over the annotator's handles and during most gradient drags.",
     "The Perspective Grid and Perspective Selection over plane widgets and handles.",
+    "Selection and Objects on Path over an Objects on Path group's Move All widget, and while dragging it.",
 ]
 hotspot = "The centre."
 look = "A four-way move cursor."
@@ -230,7 +232,7 @@ id = "Curvature"
 group = "Pen"
 shown_when = [
     "The Curvature tool over empty canvas, or anywhere while drawing a path away from its points.",
-    "Elsewhere the Curvature tool borrows Pen-family cursors: PenAdd over a segment, Move over an anchor, PenContinue at an open end, PenConvert with Alt, PenClose over the first point of the path being drawn.",
+    "Elsewhere the Curvature tool borrows Pen-family cursors: PenAdd over a segment, Move over an anchor, PenContinue at an open end of a selected path (Alt held or not), PenConvert with Alt over any other anchor or a point of the path being drawn, PenClose over the first point of the path being drawn.",
 ]
 hotspot = "The nib's tip."
 look = "The Pen nib with a curve badge."
@@ -376,7 +378,9 @@ look = "An arc with an arrowhead at each end. RotateToward is the same arc, turn
 [[cursor]]
 id = "RotateToward"
 group = "Transform and resize"
-shown_when = ["Selection and Free Transform in the rotate zone just outside a bounding-box corner, and while rotating there. The Rotate, Gradient and Puppet Warp rotate cursors don't turn."]
+shown_when = [
+    "Selection, Free Transform and the shape tools (Rectangle, Rounded Rectangle, Ellipse, Polygon, Star) in the rotate zone just outside a bounding-box corner, and while rotating there. The Rotate, Gradient and Puppet Warp rotate cursors don't turn.",
+]
 hotspot = "Below the arc, in its empty middle, as for Rotate."
 look = "The Rotate arc drawn for the top-right corner (direction 1). VectorCraft turns it in 45° steps so it wraps whichever corner the pointer is at."
 

@@ -120,7 +120,7 @@ fn suffix(kind: &str, key: &str) -> Option<&'static str> {
 /// The fields of the form dialogs ([`grid`]) that the dialog's own body draws, by dialog kind.
 fn own_rows(kind: &str) -> &'static [&'static str] {
     match kind {
-        "artboardOptions" => &["color", super::artboard_options::PIXEL_ASPECT],
+        "artboardOptions" => &["color", super::artboard_options::GUIDE_LABEL, super::artboard_options::PIXEL_ASPECT],
         // The grids' Reference Point is their 9-point locator.
         "rectangularGrid" | "polarGrid" => &["reference"],
         _ => &[],
@@ -177,7 +177,7 @@ pub(super) fn colour_swatch_id(key: &str) -> egui::Id {
 /// The colour swatch beside the colour field `key`, showing `colour`: a double-click asks for the
 /// Color Picker over this dialog, whose OK fills the field ([`super::color_picker::over_effect`]).
 /// Returns whether the picker was asked for.
-fn colour_swatch(ui: &mut egui::Ui, key: &str, colour: Color) -> bool {
+pub(super) fn colour_swatch(ui: &mut egui::Ui, key: &str, colour: Color) -> bool {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(egui::vec2(20.0, 18.0), egui::Sense::hover());
     let resp = ui.interact(rect, colour_swatch_id(key), egui::Sense::click());
@@ -974,6 +974,19 @@ fn rail_ends_w(ui: &mut egui::Ui, width: f32, (left, right): (&str, &str)) {
 /// The field where [`preview`] keeps the parameters it last previewed.
 pub(super) const PREVIEWED: &str = "__previewed";
 
+/// The field holding why the dialog's command last refused its values, for the dialog to show.
+pub(super) const REFUSED: &str = "__refused";
+
+/// Keeps why the command refused the dialog's values in [`REFUSED`]: a refused value's message is
+/// written for the user, so it goes without the command's id that the error's text puts before it.
+pub(super) fn note_refusal(d: &mut Dialog, e: &vectorcraft_engine::EngineError) {
+    let why = match e {
+        vectorcraft_engine::EngineError::BadParams { msg, .. } => msg.clone(),
+        other => other.to_string(),
+    };
+    d.fields.insert(REFUSED.into(), json!(why));
+}
+
 /// The Preview checkbox of a dialog that previews `cmd` on the canvas: while it is on, `params` run
 /// again on the interaction's snapshot whenever they differ from the last preview (whether a widget
 /// or `ui.dialog.set` changed them); turning it off rolls back.
@@ -1030,8 +1043,14 @@ pub(super) fn preview_now(app: &mut crate::VectorcraftApp, d: &mut Dialog, label
     if d.fields.get(PREVIEWED) != Some(&params) || !app.session.in_interaction() {
         let _ = app.session.begin_interaction(label);
         match app.session.preview(cmd, &params) {
-            Ok(r) => result = Some(r),
-            Err(e) => app.status(e.to_string()),
+            Ok(r) => {
+                d.fields.remove(REFUSED);
+                result = Some(r);
+            }
+            Err(e) => {
+                note_refusal(d, &e);
+                app.status(e.to_string());
+            }
         }
         d.fields.insert(PREVIEWED.into(), params);
     }
@@ -1117,10 +1136,11 @@ pub(super) fn bleed(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::Un
     }
 }
 
-/// A small grey caption above a field (New Document's details column).
-pub(super) fn caption(ui: &mut egui::Ui, text: &str) {
+/// A small grey caption above a field (New Document's details column) → its response, so the field
+/// can be named by it.
+pub(super) fn caption(ui: &mut egui::Ui, text: &str) -> egui::Response {
     let t = Tokens::get(ui.ctx());
-    ui.label(egui::RichText::new(tl!(text)).size(11.0).color(t.text_dim));
+    ui.label(egui::RichText::new(tl!(text)).size(11.0).color(t.text_dim))
 }
 
 #[cfg(test)]
