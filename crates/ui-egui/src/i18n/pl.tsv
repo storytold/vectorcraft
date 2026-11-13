@@ -3483,6 +3483,8 @@ theme	Appearance	Wygląd
 	Rename Library Group	Zmień nazwę grupy biblioteki
 	Delete Library Group	Usuń grupę biblioteki
 	Move Library Item to Group	Przenieś element biblioteki do grupy
+	Rename Library Item	Zmień nazwę elementu biblioteki
+	Add to Character Styles	Dodaj do stylów znakowych
 	Rename Library	Zmień nazwę biblioteki
 	Show Library	Pokaż bibliotekę
 	Use Library Item	Użyj elementu biblioteki
@@ -4304,6 +4306,7 @@ imageTrace	Outline	Kontur
 @plural	{n} step|{n} steps	{n} krok|{n} kroki|{n} kroków
 @plural	{n} stroke|{n} strokes	{n} obrys|{n} obrysy|{n} obrysów
 @msg	no library `{id}`	brak biblioteki `{id}`
+@msg	the library has another item of that kind named `{name}`	biblioteka ma już inny element tego rodzaju o nazwie `{name}`
 @msg	select some type first	najpierw zaznacz tekst
 @msg	kerning must be a number, "auto", or "optical"	kerning musi być liczbą, „auto” lub „optical”
 @msg	the selection has no gradient fill	zaznaczenie nie ma gradientu wypełnienia

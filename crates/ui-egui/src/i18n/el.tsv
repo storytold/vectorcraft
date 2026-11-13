@@ -2266,6 +2266,7 @@ axis	Both	Και τα δύο
 	Document Options	Επιλογές εγγράφου
 	Dock Control Bar	Αγκύρωση γραμμής ελέγχου
 @msg	no library `{id}`	Δεν υπάρχει βιβλιοθήκη με αναγνωριστικό `{id}`
+@msg	the library has another item of that kind named `{name}`	η βιβλιοθήκη έχει ήδη άλλο στοιχείο αυτού του είδους με όνομα `{name}`
 @msg	select some type first	Επιλέξτε πρώτα κάποιο κείμενο
 @msg	kerning must be a number, "auto", or "optical"	το kerning πρέπει να είναι αριθμός, «auto» ή «optical»
 @msg	the selection has no gradient fill	η επιλογή δεν έχει ντεγκραντέ γεμίσματος
@@ -4055,6 +4056,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Rename Library Group	Μετονομασία ομάδας βιβλιοθήκης
 	Delete Library Group	Διαγραφή ομάδας βιβλιοθήκης
 	Move Library Item to Group	Μετακίνηση στοιχείου βιβλιοθήκης σε ομάδα
+	Rename Library Item	Μετονομασία στοιχείου βιβλιοθήκης
+	Add to Character Styles	Προσθήκη στα στυλ χαρακτήρων
 	Rename Library	Μετονομασία βιβλιοθήκης
 	Show Library	Εμφάνιση βιβλιοθήκης
 	Use Library Item	Χρήση στοιχείου βιβλιοθήκης

@@ -3709,6 +3709,8 @@ font-technology	Variable	Variáveis
 	Rename Library Group	Renomear grupo de biblioteca
 	Delete Library Group	Excluir grupo de biblioteca
 	Move Library Item to Group	Mover item da biblioteca para o grupo
+	Rename Library Item	Renomear item da biblioteca
+	Add to Character Styles	Adicionar aos Estilos de Caractere
 	Library	Biblioteca
 	Rename Library	Renomear biblioteca
 	Show Library	Mostrar biblioteca
@@ -3746,6 +3748,7 @@ axis	Both	Ambos
 	Drag to float the toolbar	Arraste para flutuar a barra de ferramentas
 	Drag to the window's left or right edge to dock	Arraste até a borda esquerda ou direita da janela para encaixar
 @msg	no library `{id}`	nenhuma biblioteca `{id}`
+@msg	the library has another item of that kind named `{name}`	a biblioteca já tem outro item desse tipo chamado `{name}`
 @msg	select some type first	selecione algum texto primeiro
 @msg	kerning must be a number, "auto", or "optical"	O kerning deve ser um número, “auto” ou “optical”
 @msg	the selection has no gradient fill	a seleção não tem gradiente de preenchimento

@@ -3337,6 +3337,8 @@ theme	Appearance	Tampilan
 	Rename Library Group	Ganti nama grup pustaka
 	Delete Library Group	Hapus grup pustaka
 	Move Library Item to Group	Pindahkan item pustaka ke grup
+	Rename Library Item	Ganti nama item pustaka
+	Add to Character Styles	Tambahkan ke gaya karakter
 	Rename Library	Ganti nama pustaka
 	Show Library	Tampilkan pustaka
 	Use Library Item	Gunakan item pustaka
@@ -4187,6 +4189,7 @@ imageTrace	Outline	Kontur
 @plural	{n} step|{n} steps	{n} langkah
 @plural	{n} stroke|{n} strokes	{n} goresan
 @msg	no library `{id}`	tidak ada pustaka `{id}`
+@msg	the library has another item of that kind named `{name}`	pustaka sudah memiliki item lain dari jenis itu bernama `{name}`
 @msg	select some type first	pilih beberapa teks terlebih dahulu
 @msg	kerning must be a number, "auto", or "optical"	kerning harus berupa angka, “auto”, atau “optical”
 @msg	{_1} has no {_2} style	{_1} tidak memiliki gaya {_2}

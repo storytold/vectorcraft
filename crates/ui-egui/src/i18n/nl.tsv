@@ -25,6 +25,507 @@
 @msg	{key} must be [x, y] with finite coordinates	{key} moet [x, y] met eindige coördinaten zijn
 @msg	ids must contain 1–10000 object ids	ids moet 1–10000 object-id’s bevatten
 
+# Status and error messages: 3D assets, type on a path, scripts and their File and $ objects, presets,
+# PDF page sizes, Objects on Path, plug-ins, file readers and data sets. Names in backticks, command ids,
+# double-quoted values and bare true, false and null stay as the English writes them; names the user
+# gave are quoted „…”, and numbers use a period between thousands (2.048).
+@msg	{what} can't be exported in 3D: {e}	{what} kan niet in 3D worden geëxporteerd: {e}
+@msg	asset {id} isn't a 3D asset	asset {id} is geen 3D-asset
+@msg	asset {id} is a 3D asset: assets.export3D writes it	asset {id} is een 3D-asset: assets.export3D schrijft het weg
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	nog geen 3D-assets: verzamel eerst een object met een 3D-effect (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	selecteer een object met een 3D-effect (of geef de id’s ervan)
+@msg	select point type or type on a path	selecteer punttekst of tekst op een pad
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	tekst op een pad in gekoppelde tekst kan geen dynamische tekst gebruiken: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	tekst op een open of samengesteld pad kan niet op de boven- of onderkant worden gecentreerd: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	tekst op een pad zonder lengte of hoogte kan niet worden gecentreerd: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	tekst op een pad in gekoppelde tekst kan niet op de boven- of onderkant worden gecentreerd: {frames}
+@msg	select type on a closed path	selecteer tekst op een gesloten pad
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` staat voor gewijzigde instellingen: sla de voorinstelling onder een andere naam op
+@msg	the selection has no gradient fill	de selectie heeft geen verloopvulling
+@msg	the selection has no gradient stroke	de selectie heeft geen verloopcontour
+@msg	the selection has no pattern fill	de selectie heeft geen patroonvulling
+@msg	the selection has no pattern stroke	de selectie heeft geen patrooncontour
+@msg	no gradient swatch `{name}`	geen verloopstaal `{name}`
+@msg	no pattern swatch `{name}`	geen patroonstaal `{name}`
+@msg	the library item is damaged	het bibliotheekitem is beschadigd
+@msg	its zlib compression is damaged	de zlib-compressie ervan is beschadigd
+@msg	its Zstandard compression is damaged	de Zstandard-compressie ervan is beschadigd
+@msg	it decompresses to more than {_1} MB	gedecomprimeerd is het groter dan {_1} MB
+@msg	its editing data is for a different page	zijn bewerkingsgegevens horen bij een andere pagina
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` moet "emBox", "capHeight", "xHeight" of "icfBox" zijn
+@msg	Choose a .js or .jsx script	Kies een .js- of .jsx-script
+@msg	Ran {name}	{name} uitgevoerd
+@msg	The script was stopped and its changes were undone	Het script is gestopt en de wijzigingen ervan zijn ongedaan gemaakt
+@msg	a script is running: stop it or wait for it to finish	er wordt een script uitgevoerd: stop het of wacht tot het klaar is
+@msg	this is a compiled script, which cannot be run; use its source text	dit is een gecompileerd script, dat niet kan worden uitgevoerd; gebruik de brontekst ervan
+@msg	the script is not UTF-8 text	het script is geen UTF-8-tekst
+@msg	the script is too large to run	het script is te groot om uit te voeren
+@msg	a drag or an undo group is open; finish it before running a script	er is nog een sleepbeweging of een groep voor ongedaan maken open; rond die af voordat je een script uitvoert
+@msg	the script left a document that cannot be kept	het script heeft een document achtergelaten dat niet kan worden behouden
+@msg	the script is no longer in the Scripts folder	het script staat niet meer in de map Scripts
+@msg	the script's run is no longer available	de uitvoering van het script is niet meer beschikbaar
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	een mislukte opdracht heeft stappen voor ongedaan maken gewijzigd die niet konden worden teruggezet, dus is het script gestopt
+@msg	a recovery copy could not be written, so the script was not run	er kon geen herstelkopie worden geschreven, dus is het script niet uitgevoerd
+@msg	Script file access denied	Toegang tot het scriptbestand geweigerd
+@msg	Script file exceeds 8 MiB	Het scriptbestand is groter dan 8 MiB
+@msg	Script file is not open	Het scriptbestand is niet geopend
+@msg	Script file cannot be decoded	Het scriptbestand kan niet worden gedecodeerd
+@msg	Script file is not a regular file	Het scriptbestand is geen gewoon bestand
+@msg	Script file does not exist	Het scriptbestand bestaat niet
+@msg	Script file could not be read	Het scriptbestand kon niet worden gelezen
+@msg	Script folder has more than 2,048 entries	De scriptmap bevat meer dan 2.048 items
+@msg	Script file open mode must be r, w, e or a	De openmodus van een scriptbestand moet r, w, e of a zijn
+@msg	Script file writing is not available	Schrijven naar scriptbestanden is niet beschikbaar
+@msg	Script file dialogs are not available	Dialoogvensters voor scriptbestanden zijn niet beschikbaar
+@msg	Script files cannot be opened in another application	Scriptbestanden kunnen niet in een andere toepassing worden geopend
+@msg	Script file access is unavailable on the web	Toegang tot scriptbestanden is niet beschikbaar op het web
+@msg	Script has 256 files open	Het script heeft 256 bestanden geopend
+@msg	Script file path exceeds 32,767 characters	Het pad van het scriptbestand is langer dan 32.767 tekens
+@msg	Script folder mask takes too many steps to match	Het masker van de scriptmap vraagt te veel stappen om te vergelijken
+@msg	the script opened more file data than one run may open (32 MiB)	het script heeft meer bestandsgegevens geopend dan één uitvoering mag openen (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: verwacht een positie en een modus
+@msg	vc.run: give a command id, as a string	vc.run: geef een opdracht-id, als string
+@msg	vc.run: takes a command id and an object of parameters	vc.run: verwacht een opdracht-id en een object met parameters
+@msg	vc.run: the parameters must be an object	vc.run: de parameters moeten een object zijn
+@msg	vc.run: the result{place} is too large for a script	vc.run: het resultaat{place} is te groot voor een script
+@msg	$.evalFile requires a file path	$.evalFile vereist een bestandspad
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: de time-out moet een eindig aantal milliseconden zijn, 0 of meer
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: verwacht een bestandspad en een time-out
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: regel {line}, kolom {column} van {file}: {e} (opgeworpen)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: regel {line}, kolom {column}: {e} (opgeworpen)
+@msg	{name}: {e} (thrown)	{name}: {e} (opgeworpen)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: regel {line}, kolom {column} van {file}: {e} (limiet)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: regel {line}, kolom {column}: {e} (limiet)
+@msg	{name}: {e} (limit)	{name}: {e} (limiet)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: regel {line}, kolom {column} van {file}: {e} (syntaxisfout)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: regel {line}, kolom {column}: {e} (syntaxisfout)
+@msg	{name}: {e} (syntax)	{name}: {e} (syntaxisfout)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: regel {line}, kolom {column} van {file}: {e} (gestopt)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: regel {line}, kolom {column}: {e} (gestopt)
+@msg	{name}: {e} (stopped)	{name}: {e} (gestopt)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: regel {line}, kolom {column} van {file}: {e} (interne fout)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: regel {line}, kolom {column}: {e} (interne fout)
+@msg	{name}: {e} (internal)	{name}: {e} (interne fout)
+@msg	{e} (these files stay written: {paths})	{e} (deze bestanden blijven geschreven: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: geef een naam, als string
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: geef een landinstelling zoals "en" of "de_DE", of null voor die van de interface
+@msg	$.localize: give true or false	$.localize: geef true of false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: alleen 512, dat lokalisatie inschakelt, of 0 kan worden ingesteld
+@msg	$.flags: give a number	$.flags: geef een getal
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: scripts lezen en schrijven hier alleen UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: geef de naam van een codering, als string
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: de grootte van de geheugencache kan niet worden ingesteld
+@msg	$.setenv: give a value, as a string	$.setenv: geef een waarde, als string
+@msg	$.setenv: only {_1} can be set	$.setenv: alleen {_1} kan worden ingesteld
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: een waarde heeft maximaal {MAX_ENV_BYTES} letters, cijfers en _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: geef een aantal milliseconden van 0 tot {MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: geef een aantal milliseconden
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: een uitvoering kan niet wachten binnen een callback van een ingebouwde functie, een getter, een conversie of een bestand dat $.evalFile uitvoert; roep het aan vanuit de eigen code van het script
+@msg	$.bp: scripts here have no debugger	$.bp: scripts hebben hier geen debugger
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: scripts kunnen nog geen dialoogvenster tonen
+@msg	{name}: give a message	{name}: geef een bericht
+@msg	{name}: give the text the field starts with	{name}: geef de tekst waarmee het veld begint
+@msg	{name}: the message is longer than 16 KiB	{name}: het bericht is langer dan 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: de titel is langer dan 256 bytes
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: de tekst waarmee het veld begint is langer dan 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: een dialoogvenster kan niet openen binnen een callback van een ingebouwde functie, een getter, een conversie of een bestand dat $.evalFile uitvoert; roep het aan vanuit de eigen code van het script
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: het volgende antwoord in `answers` is voor {_1}, niet voor {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` heeft geen antwoord meer voor dit dialoogvenster
+@msg	vc.document{place} is too large for a script	vc.document{place} is te groot voor een script
+@msg	vc.log: the log of this run is full	vc.log: het logboek van deze uitvoering is vol
+@msg	this function's script run has ended	de scriptuitvoering van deze functie is beëindigd
+@msg	the script made more host calls than one run may make	het script heeft meer hostaanroepen gedaan dan één uitvoering mag doen
+@msg	the script passed more data to and from commands than one run may pass	het script heeft meer gegevens van en naar opdrachten doorgegeven dan één uitvoering mag doorgeven
+@msg	the script added more objects and data to the documents than one run may add	het script heeft meer objecten en gegevens aan de documenten toegevoegd dan één uitvoering mag toevoegen
+@msg	{what}: the object is not a File or a Folder	{what}: het object is geen File of Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: het aantal moet een eindig getal zijn, 0 of meer
+@msg	File.seek: the position must be a finite number	File.seek: de positie moet een eindig getal zijn
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: de modus moet 0, 1 of 2 zijn
+@msg	script file is compiled: {value}	het scriptbestand is gecompileerd: {value}
+@msg	`name` must be the name of a script engine	`name` moet de naam van een scriptengine zijn
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	de hoofdscriptengine is bij elke uitvoering nieuw en wordt nooit bewaard, dus kan hij niet worden verwijderd
+@msg	there is no script engine named {name}	er is geen scriptengine met de naam {name}
+@msg	Running a script	Er wordt een script uitgevoerd
+@msg	Data Recovery can't keep copies in {path}: {e}	Gegevensherstel kan geen kopieën bewaren in {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Plug-ins kunnen niet worden geladen uit {path}: {e}
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 schrijft verouderde .ai-bestanden, geen .ait-sjablonen
+@msg	`groupColors` must be an array	`groupColors` moet een array zijn
+@msg	`preserve` must be an object	`preserve` moet een object zijn
+@msg	`{key}` must be an array	`{key}` moet een array zijn
+@msg	`{key}` must be a profile name or null	`{key}` moet een profielnaam of null zijn
+@msg	`top` and `below` can't both be true	`top` en `below` kunnen niet allebei true zijn
+@msg	`select` must be true or false	`select` moet true of false zijn
+@msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` en `maxAnchors` moeten gehele getallen zijn
+@msg	`{key}` must be a number not below 0	`{key}` moet een getal van minstens 0 zijn
+@msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` moet [x, y, width, height] zijn: vier eindige getallen, width en height niet negatief
+@msg	`{min_key}` is greater than `{max_key}`	`{min_key}` is groter dan `{max_key}`
+@msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	geef minstens een van `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
+@msg	a process color can't colorize a grayscale image with transparency: use a spot color, black or white	een proceskleur kan een grijswaardenafbeelding met transparantie niet inkleuren: gebruik een steunkleur, zwart of wit
+@msg	`name` is empty	`name` is leeg
+@msg	`newName` is empty	`newName` is leeg
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` is een ingebouwde voorinstelling en kan niet worden gewijzigd: sla hem onder een andere naam op
+@msg	`{name}` is a built-in preset and stays	`{name}` is een ingebouwde voorinstelling en blijft bestaan
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` is null, de naam van een laagkleur of #rrggbb
+@msg	the Simplify slider is not open	de schuifregelaar Vereenvoudigen is niet geopend
+@msg	the Smooth slider is not open	de schuifregelaar Gladmaken is niet geopend
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	de pagina van tekengebied {n} is {size}, langer dan de paginalimiet van PDF van 14.400 pt (200 in): hij wordt geschreven met een UserUnit van {unit}, dus apps die UserUnit negeren tonen hem zoveel keer kleiner
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	de pagina van tekengebied {n} is {size}, langer dan de paginalimiet van PDF van 14.400 pt (200 in): {label}-pagina’s worden zonder UserUnit in punten geschreven, en apps die zich aan de limiet houden snijden de pagina af op 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 heeft geen UserUnit, die een pagina langer dan 14.400 pt (200 in) nodig heeft om zijn formaat te behouden: het bestand wordt geschreven als PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 heeft geen UserUnit, die een pagina langer dan 14.400 pt (200 in) nodig heeft om binnen de paginalimiet van PDF/A-2 van 14.400 eenheden te blijven: het bestand wordt geschreven als PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	de pagina van tekengebied {n} is {size}, te lang en te smal voor paginazijden van PDF van 3 tot 14.400 eenheden: hij wordt geschreven met een UserUnit van {unit}, die de korte zijde op minstens 3 eenheden houdt, en apps die zich aan de limiet houden snijden de lange zijde af op 14.400 eenheden
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label}-bestanden bevatten reële getallen tot {max}, en de pagina van tekengebied {n}, {side} pt lang, heeft grotere nodig: kies PDF 1.6 of later zonder PDF/X-standaard, of een kleiner tekengebied
+@msg	line {line}: value for `{var}` must be true or false	regel {line}: de waarde voor `{var}` moet true of false zijn
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	regel {line}: de waarde voor `{var}` is langer dan {MAX_GRAPH_CSV} bytes
+@msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	de naam van een borstelpenseel mag maximaal {max} tekens hebben: `{name}` heeft er {count}
+@msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` is geen VectorCraft-document, geen PDF en geen PDF-compatibel .ai-bestand
+@msg	no saved preset named `{name}`	geen opgeslagen voorinstelling met de naam `{name}`
+@msg	no saved preset named `{name}` to rename	geen opgeslagen voorinstelling met de naam `{name}` om te hernoemen
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: de verwijzing zou groter worden dan {MAX_BYTES} bytes
+@msg	the artboard is locked	het tekengebied is vergrendeld
+@msg	node {_1} is on a locked artboard	knooppunt {_1} staat op een vergrendeld tekengebied
+@msg	thumbnail: no page {n} (the file has 1)	miniatuur: geen pagina {n} (het bestand heeft er 1)
+@msg	select an Objects on Path group	selecteer een groep Objecten op pad
+@msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	een pad binnen een samengesteld pad, mengsel, omvorming, herhaling of verstrengelingsgroep kan geen objecten opnemen
+@msg	a clipping path can't take objects	een knippad kan geen objecten opnemen
+@msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objecten binnen een mengsel, omvorming, herhaling of verstrengelingsgroep kunnen niet aan een pad worden gekoppeld
+@msg	a clipping path can't be attached to a path	een knippad kan niet aan een pad worden gekoppeld
+@msg	`background` must be edges, corners or colors	`background` moet edges, corners of colors zijn
+@msg	`match` must be distance or channels	`match` moet distance of channels zijn
+@msg	`{key}` must be from 0 to 100	`{key}` moet van 0 tot 100 zijn
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` moet 1 tot 16 kleuren bevatten, elk hexadecimaal (#rrggbb of #rgb) of black, white, red, green of blue
+@msg	the linked image shows its preview: embed or relink it first	de gekoppelde afbeelding toont haar voorvertoning: sluit haar eerst in of koppel haar opnieuw
+@msg	a CMYK image has no transparency to set	een CMYK-afbeelding heeft geen transparantie om in te stellen
+@msg	every pixel matches the background: no image would be left	elke pixel komt overeen met de achtergrond: er zou geen afbeelding overblijven
+@msg	an image of {w} × {h} pixels is too large to change	een afbeelding van {w} × {h} pixels is te groot om te wijzigen
+@msg	select an image with a color mask	selecteer een afbeelding met een kleurmasker
+@msg	the color mask's settings are out of range	de instellingen van het kleurmasker vallen buiten het bereik
+@msg	a CMYK image can't take a color mask	een CMYK-afbeelding kan geen kleurmasker krijgen
+@msg	the mask would hide every pixel	het masker zou elke pixel verbergen
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Herkleuren voltooid; ongewijzigd gelaten: {locked} en {hidden}
+@msg	Recolor completed; {objects} were left unchanged	Herkleuren voltooid; ongewijzigd gelaten: {objects}
+@msg	Recolor completed; {objects} was left unchanged	Herkleuren voltooid; ongewijzigd gelaten: {objects}
+@msg	1 locked object	1 vergrendeld element
+@msg	{n} locked objects	{n} vergrendelde elementen
+@msg	1 hidden object	1 verborgen element
+@msg	{n} hidden objects	{n} verborgen elementen
+@msg	panels can't be shown in Presentation Mode	panelen kunnen niet worden getoond in de presentatiemodus
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	onbekende voorinstelling `{name}`: geen ingebouwde of opgeslagen voorinstelling (zie imageTrace.presets)
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	meer dan {MAX_CSV_ROWS} gegevenssets: Gegevenssets importeren leest er maximaal {MAX_CSV_ROWS}
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	meer dan {MAX_CSV_COLS} variabelen: Gegevenssets importeren leest er maximaal {MAX_CSV_COLS}
+@msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` en `options.{key}: {inner}` spreken elkaar tegen: geef de optie één keer
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} is een exportplug-in (Bestand › Exporteren › Exporteren als…)
+@msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` is {size} bytes (limiet {MAX_DOCUMENT_DATA})
+@msg	a mask that covers several layers comes in as a clipping group in each layer it covers	een masker dat meerdere lagen bedekt, wordt ingelezen als een knipgroep in elke laag die het bedekt
+@msg	a graph's records don't end where they should: its art was read as it is	de records van een grafiek eindigen niet waar ze zouden moeten: de illustratie ervan is gelezen zoals ze is
+@msg	`{w}` takes no operands	`{w}` neemt geen operanden
+@msg	a wraparound group is inside a compound path	een tekstomloopgroep staat binnen een samengesteld pad
+@msg	it ends inside a multi-layer mask	het eindigt binnen een masker over meerdere lagen
+@msg	a multi-layer mask's operators are out of order	de operatoren van een masker over meerdere lagen staan in de verkeerde volgorde
+@msg	a multi-layer mask needs one clipping path	een masker over meerdere lagen heeft één knippad nodig
+@msg	a group crosses a multi-layer mask	een groep doorkruist een masker over meerdere lagen
+@msg	graphs come in as plain art, without their data or settings	grafieken worden ingelezen als gewone illustraties, zonder hun gegevens of instellingen
+@msg	source must be the id of a Shaper Group's original shape	source moet de id van de oorspronkelijke vorm van een Shapergroep zijn
+@msg	group must be the id of a Shaper Group	group moet de id van een Shapergroep zijn
+@msg	the shape is not an editable original shape of that Shaper Group	de vorm is geen bewerkbare oorspronkelijke vorm van die Shapergroep
+@msg	id {value} is a layer, not an object	id {value} is een laag, geen object
+@msg	id {value} is a layer, not an object; move layers with layer.move	id {value} is een laag, geen object; verplaats lagen met layer.move
+@msg	the PCX file is cut short	het PCX-bestand is afgebroken
+@msg	the PCX file's header is damaged	de header van het PCX-bestand is beschadigd
+@msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX-bestanden met {bits}-bits pixels in {planes} vlakken kunnen niet worden gelezen
+@msg	the Pixar file is cut short	het Pixar-bestand is afgebroken
+@msg	the Pixar file's header is damaged	de header van het Pixar-bestand is beschadigd
+@msg	the Pixar file's image data is damaged	de afbeeldingsgegevens van het Pixar-bestand zijn beschadigd
+@msg	the JPEG 2000 file can't be read	het JPEG 2000-bestand kan niet worden gelezen
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	het JPEG 2000-bestand heeft een niet-ondersteunde kleurruimte of JPX-inhoud
+@msg	the HEIC or HEIF file can't be read	het HEIC- of HEIF-bestand kan niet worden gelezen
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	het HEIC- of HEIF-bestand bevat een soort afbeelding die niet kan worden gelezen
+@msg	HEIC and HEIF images can't be opened in this build	HEIC- en HEIF-afbeeldingen kunnen in deze build niet worden geopend
+@msg	the JPEG XL file is cut short	het JPEG XL-bestand is afgebroken
+@msg	the JPEG XL container is too large to read	de JPEG XL-container is te groot om te lezen
+@msg	CMYK JPEG XL images can't be read	CMYK-afbeeldingen in JPEG XL kunnen niet worden gelezen
+@msg	the JPEG XL file can't be read: {e}	het JPEG XL-bestand kan niet worden gelezen: {e}
+@msg	the params must be an object, not {got}	de parameters moeten een object zijn, niet {got}
+@msg	unknown parameter `{path}`; the object takes no keys	onbekende parameter `{path}`; het object accepteert geen sleutels
+@msg	unknown parameter `{path}`; it takes: {keys}	onbekende parameter `{path}`; het accepteert: {keys}
+@msg	missing `{path}`	`{path}` ontbreekt
+@msg	`{path}` must be {expected}, not {got}	`{path}` moet {expected} zijn, niet {got}
+@msg	`{path}` is nested too deeply	`{path}` is te diep genest
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: geen PNG-, JPEG-, WebP-, TIFF- of BMP-afbeelding
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	de afbeelding is {iw} × {ih} pixels en het tekengebied is bij die breedte {rw} × {rh} pixels: hun verhoudingen verschillen
+@msg	`threshold` must be a number from 0 to 1	`threshold` moet een getal van 0 tot 1 zijn
+@msg	background {v}: a color such as "#808080"	background {v}: een kleur zoals "#808080"
+@msg	comparing with an image file isn't available in the browser	vergelijken met een afbeeldingsbestand is niet beschikbaar in de browser
+@msg	columns {first} and {column} both name the variable `{name}`	kolommen {first} en {column} noemen allebei de variabele `{name}`
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	niets uit gegevensset {name} is toegepast: geen enkel object is gekoppeld aan een variabele waarvoor de set een waarde heeft
+@msg	no bound object reports a value (locked objects and embedded images report none)	geen enkel gekoppeld object geeft een waarde (vergrendelde objecten en ingesloten afbeeldingen geven er geen)
+@msg	Edit Original opens image and document files only; “{name}” is not one	Origineel bewerken opent alleen afbeeldings- en documentbestanden; „{name}” is er geen
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	alleen http-, https- en mailto-URL’s worden in de browser geopend, niet „{url}”
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} opent een andere app: alleen de persoon achter het toetsenbord kan dit uitvoeren
+@msg	“{name}” is not a file	„{name}” is geen bestand
+@msg	too many changed shortcuts	te veel gewijzigde sneltoetsen
+@msg	byColor must be true or false	byColor moet true of false zijn
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor kan groepen van Automatisch groeperen niet splitsen: traceer zonder Automatisch groeperen
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor kan een tracering met een live Padvinder-effect niet hergroeperen: vouw uit zonder byColor
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` vereist `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` vereist `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` vereist `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	geen kleurgroep `{name}` in het document (zie swatch.list)
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} behoudt 1 van de {n} tekengebieden van het document: het bestand wordt met één tekengebied opnieuw geopend. Schakel Bewerkbaarheid behouden in om ze allemaal te behouden.
+@msg	`spread` must be pad, repeat or reflect	`spread` moet pad, repeat of reflect zijn
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` moet een geheel getal van 1 tot {MAX_REPEATS} zijn
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` geldt voor lineaire, radiale, conische en ruitvormige verlopen
+@msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} is voltooid, maar het document of de plug-in is intussen gewijzigd: voer het opnieuw uit
+@msg	Running “{name}”…	„{name}” wordt uitgevoerd…
+@msg	a live effect runs while the document is drawn, so it can't be `heavy`	een live-effect wordt uitgevoerd terwijl het document wordt getekend, dus kan het niet `heavy` zijn
+@msg	an exporter always gets an export's budget: leave `budget` out	een exportplug-in krijgt altijd het budget van een export: laat `budget` weg
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}” vraagt om een groot rekenbudget (elke uitvoering tot {minutes} minuten en {times} keer het gebruikelijke aantal instructies): een persoon moet dit goedkeuren in de desktop-app, of geef `allowHeavy: true` door in een sessie die is gestart met --allow-plugin-grants
+@msg	`name` must be 1-64 printable characters	`name` moet uit 1-64 afdrukbare tekens bestaan
+@msg	`version`, `description` or `author` is too long	`version`, `description` of `author` is te lang
+@msg	`warnings` must be a list of strings	`warnings` moet een lijst met strings zijn
+@msg	`{k}` must be one of {_1}	`{k}` moet een van {_1} zijn
+@msg	`{k}` must be {what}	`{k}` moet {what} zijn
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	een exportplug-in declareert 1 tot {MAX_EXTENSIONS} `extensions`
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	maximaal {MAX_UNGROUPED} parameters buiten groepen: geef de andere een `group`
+@msg	can't encode the input	de invoer kan niet worden gecodeerd
+@msg	expected {"dataBase64"}	verwacht: {"dataBase64"}
+@msg	expected {"objects"}	verwacht: {"objects"}
+@msg	export `{name}`: {e}	export `{name}`: {e}
+@msg	extension {e} is listed twice	extensie {e} staat twee keer in de lijst
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	extensie {e}: gebruik 1-16 kleine letters en cijfers, zonder de punt
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	ongeldige id {_1}: gebruik 1-64 tekens uit A-Z a-z 0-9 . _ -
+@msg	invalid parameter name {k}	ongeldige parameternaam {k}
+@msg	manifest is not UTF-8	het manifest is geen UTF-8
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	het manifest is te lang (limiet {MAX_MANIFEST_BYTES} bytes)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	het manifest telt {_1} bytes (limiet {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	de module telt {_1} bytes (limiet {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	goedkeuring nodig: de plug-in vraagt om {0}, wat de gebruiker toestaat wanneer hij die afzonderlijk installeert
+@msg	not JSON: {e}	geen JSON: {e}
+@msg	not a WebAssembly binary (missing \0asm header)	geen WebAssembly-binair bestand (de header \0asm ontbreekt)
+@msg	parameter `{k}`: {what}	parameter `{k}`: {what}
+@msg	parameter `{name}`: {what}	parameter `{name}`: {what}
+@msg	plug-in parameters must be a JSON object	plug-in-parameters moeten een JSON-object zijn
+@msg	the module must export its linear memory as `memory`	de module moet haar lineaire geheugen exporteren als `memory`
+@msg	the objects to change are no longer in the document	de te wijzigen objecten staan niet meer in het document
+@msg	the runtime panicked	de runtime is vastgelopen
+@msg	unexpected host trap	onverwachte trap in de host
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version gaf {v} terug; deze host implementeert versie {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc gaf 0 terug (onvoldoende geheugen)
+@msg	vc_alloc returned a block outside memory	vc_alloc gaf een blok buiten het geheugen terug
+@msg	vc_run returned error code {packed}	vc_run gaf foutcode {packed} terug
+@msg	{_1} is not a file	{_1} is geen bestand
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} is {_2} bytes (limiet {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objecten (limiet {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what} wijst buiten het geheugen
+@msg	`angle` must be a number	`angle` moet een getal zijn
+@msg	`aspect` must be from 0.01 to 100	`aspect` moet van 0,01 tot 100 zijn
+@msg	`cap` must be "butt", "round" or "square"	`cap` moet "butt", "round" of "square" zijn
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` moet "nonzero" of "evenodd" zijn
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` moet een https://-adres van maximaal {MAX_HELP_URL} bytes zijn
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` moet uit 1-{MAX_HELP} afdrukbare tekens bestaan
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` moet een effect-id van 1-{MAX_EFFECT_ID} bytes zijn
+@msg	`id` must be the id of an input object	`id` moet de id van een invoerobject zijn
+@msg	`join` must be "miter", "round" or "bevel"	`join` moet "miter", "round" of "bevel" zijn
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` en `group` moeten uit 1-{MAX_LABEL} afdrukbare tekens bestaan
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` moet 1-{MAX_TEXT} zijn, en de standaardwaarde niet langer
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` en `maxItems` moeten 0-{MAX_LIST} zijn, `maxItems` minstens 1, en de standaardwaarde zoveel items
+@msg	`name` must be a string	`name` moet een string zijn
+@msg	`opacity` must be a number	`opacity` moet een getal zijn
+@msg	`type` must be "path" or "compound"	`type` moet "path" of "compound" zijn
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` moet uit 1-{MAX_UNIT} afdrukbare tekens bestaan
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` noemt 1 tot {MAX_CONDITION_VALUES} waarden voor `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` noemt `{other}`, dat geen parameter is die vóór deze is gedeclareerd
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` noemt maximaal {MAX_CONDITIONS} parameters
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` neemt de waarden van `{other}`, een selectievakje of een keuzelijst
+@msg	`visible` must be true or false	`visible` moet true of false zijn
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` moet een getal van {_1} tot {_2} zijn
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` moet een array van maximaal {MAX_ITEMS} items zijn
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	een standaardkleur moet een kleurobject of een hexadecimale string zoals "#3a7bd5" zijn
+@msg	a color object or a hex string such as "#3a7bd5"	een kleurobject of een hexadecimale string zoals "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	een verloop in vrije vorm bevat maximaal {MAX_ITEMS} punten en lijnen
+@msg	a freeform gradient line names a point it doesn't have	een lijn van een verloop in vrije vorm noemt een punt dat het verloop niet heeft
+@msg	a gradient needs 1-{MAX_ITEMS} stops	een verloop heeft 1-{MAX_ITEMS} kleurstops nodig
+@msg	a list of numbers	een lijst met getallen
+@msg	a list of {min_items} to {max_items} numbers	een lijst met {min_items} tot {max_items} getallen
+@msg	a new object needs a `path`	een nieuw object heeft een `path` nodig
+@msg	a number	een getal
+@msg	a painted live effect returns only `objects`	een geschilderd live-effect geeft alleen `objects` terug
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	een stuk van een geschilderd live-effect heeft alleen `path`, `fillRule`, `fills` en `strokes`
+@msg	a read-only object was left out	een alleen-lezen object is weggelaten
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	een alleen-lezen object is weggelaten: geef het terug, als alleen {"id"} of zoals het is gegeven
+@msg	a string	een string
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	een contour heeft alleen `paint`, `width`, `join`, `cap` en `miterLimit`
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	een contour moet {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} zijn
+@msg	an effect must be {"id", "params"?, "visible"?}	een effect moet {"id", "params"?, "visible"?} zijn
+@msg	an effect on a fill returns only `fills`	een effect op een vulling geeft alleen `fills` terug
+@msg	an effect on a stroke returns only `strokes`	een effect op een contour geeft alleen `strokes` terug
+@msg	an object must be a JSON object	een object moet een JSON-object zijn
+@msg	bad range	ongeldig bereik
+@msg	choices must be 1-64 non-empty, printable strings	keuzes moeten 1-64 niet-lege, afdrukbare strings zijn
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	coördinaat buiten bereik (limiet ±{MAX_COORD} pt)
+@msg	default is not one of the options	de standaardwaarde is geen van de opties
+@msg	each piece needs a `path`	elk stuk heeft een `path` nodig
+@msg	is listed twice	staat twee keer in de lijst
+@msg	pattern transform out of range	patroontransformatie buiten bereik
+@msg	read-only field '{field}' changed	alleen-lezen veld '{field}' is gewijzigd
+@msg	stops must be in order of `offset`	kleurstops moeten op volgorde van `offset` staan
+@msg	the document has no pattern {pattern}	het document heeft geen patroon {pattern}
+@msg	the document has no swatch {n}	het document heeft geen staal {n}
+@msg	the output	de uitvoer
+@msg	the path has no anchor points	het pad heeft geen ankerpunten
+@msg	too many anchor points (limit {MAX_ANCHORS})	te veel ankerpunten (limiet {MAX_ANCHORS})
+@msg	true or false	true of false
+@msg	a number >= {_1}	een getal >= {_1}
+@msg	a number > {_1}	een getal > {_1}
+@msg	a number <= {_1}	een getal <= {_1}
+@msg	a number < {_1}	een getal < {_1}
+@msg	a number {_1} to {_2}	een getal van {_1} tot {_2}
+@msg	a number >= {_1} and < {_2}	een getal >= {_1} en < {_2}
+@msg	a number > {_1} and <= {_2}	een getal > {_1} en <= {_2}
+@msg	a number > {_1} and < {_2}	een getal > {_1} en < {_2}
+@msg	a number ({_1})	een getal ({_1})
+@msg	a number >= {_1} ({_2})	een getal >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	een getal > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	een getal <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	een getal < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	een getal van {_1} tot {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	een getal >= {_1} en < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	een getal > {_1} en <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	een getal > {_1} en < {_2} ({_3})
+@msg	an integer	een geheel getal
+@msg	an integer >= {_1}	een geheel getal >= {_1}
+@msg	an integer <= {_1}	een geheel getal <= {_1}
+@msg	an integer {_1} to {_2}	een geheel getal van {_1} tot {_2}
+@msg	one of {_1}	een van {_1}
+@msg	an object id (a non-negative integer)	een object-id (een niet-negatief geheel getal)
+@msg	a list of object ids	een lijst met object-id's
+@msg	a color (a string, [r, g, b] or an object)	een kleur (een tekenreeks, [r, g, b] of een object)
+@msg	[x, y] (two numbers)	[x, y] (twee getallen)
+@msg	an object	een object
+@msg	a list	een lijst
+@msg	unknown key `{k}`; the keys here are {_1}	onbekende sleutel `{k}`; de sleutels hier zijn {_1}
+@msg	{_1} is listed twice	{_1} staat twee keer in de lijst
+@msg	{_1} is not the id of an input object	{_1} is niet de id van een invoerobject
+@msg	{_1} is read-only	{_1} is alleen-lezen
+@msg	{what} must be from {lo} to {hi}	{what} moet van {lo} tot {hi} zijn
+@msg	a color component	een kleurcomponent
+@msg	a plate	een drukplaat
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Automatisering vroeg om deze plug-in te installeren. Kies zelf Object › Plug-ins › Plug-in installeren… om hem te installeren.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}” is een andere module dan de plug-in met id {_1} en zou de instellingen en cache krijgen die daarvoor worden bewaard: installeer hem met `replace: true` zodra de gebruiker akkoord gaat
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	„{name}” noemt `{id}` in `commandAllowlist`, die een plug-in niet mag aanroepen
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: de `commandAllowlist` van het manifest noemt deze opdracht niet
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: de id of de argumenten liggen buiten het geheugen van de module
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: de id of de argumenten zijn geen UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: de argumenten zijn geen JSON-object
+@msg	only a filter with the usual budget declares `commandAllowlist`	alleen een filter met het gebruikelijke budget declareert `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	opdrachtaanroepen ({MAX_CALLS} aanroepen en {MAX_CALL_BYTES} bytes per uitvoering)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	grootte van een opdrachtaanroep (vc_call `{shown}`: {len} bytes, limiet {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	maximaal {MAX_ALLOWED_COMMANDS} opdrachten in `commandAllowlist`
+@msg	a plug-in may not call this command	een plug-in mag deze opdracht niet aanroepen
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` vereist de machtiging `commands`, en `commands` vereist een `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` noemt `{shown}`, dat geen opdracht-id is of twee keer in de lijst staat
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	machtiging `{permission}` vereist plug-in-API-niveau {PROGRESS_API}: geef `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	de module importeert `env.{name}` met een ander type dan dat van de host: het is {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	de module importeert `env.{name}`, dat een plug-in alleen mag gebruiken op plug-in-API-niveau {PROGRESS_API} (`api` {PROGRESS_API}) en met de machtiging `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	de module importeert `{from}.{name}`, dat de host niet aanbiedt: een plug-in mag alleen de `env.vc_*`-functies importeren die docs/plugins.md noemt (plug-in-API-niveau 2), en geen WASI, bestanden of netwerk
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` is {_1}; deze host implementeert plug-in-API-niveaus 1 tot {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` mag alleen true zijn
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` is alleen voor een live-effect (`kind` "effect") bij `api` 2
+@msg	`grant` must be a list of permission names	`grant` moet een lijst met namen van machtigingen zijn
+@msg	`grant` names an unknown permission `{shown}`	`grant` noemt een onbekende machtiging `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	een plug-in van het soort `{_1}` heeft de machtiging `{_2}` nodig
+@msg	at most {MAX_PERMISSIONS} `permissions`	maximaal {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	machtiging `{shown}` geldt niet voor een plug-in van het soort `{_1}`
+@msg	permission `{shown}` is listed twice	machtiging `{shown}` staat twee keer in de lijst
+@msg	only a filter declares `inputs`	alleen een filter declareert `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` noemt een onbekend objectsoort `{shown}`: gebruik type, image of symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` noemt `{shown}` twee keer
+@msg	`inputs` needs `api` 2 or later	`inputs` vereist `api` 2 of hoger
+@msg	`inputs` needs the permission `doc.read`	`inputs` vereist de machtiging `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	geheugenbudget (object {_1} heeft {size} bytes invoer nodig, {left} over)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	objectbudget (meer dan {MAX_OBJECTS} alleen-lezen objecten)
+@msg	instruction budget	instructiebudget
+@msg	time budget	tijdbudget
+@msg	memory budget (the selection is too large to hand over)	geheugenbudget (de selectie is te groot om door te geven)
+@msg	output size ({what} is {len} bytes, limit {max})	uitvoergrootte ({what} is {len} bytes, limiet {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	de toekenning van de plug-in kan niet uit de plug-inopslag worden verwijderd
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	machtiging `{shown}` is gereserveerd voor een latere plug-in-API; deze host kent haar niet toe
+@msg	unknown permission `{shown}`	onbekende machtiging `{shown}`
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	„{name}” vraagt om de machtigingen {asked}: een persoon moet ze goedkeuren in de desktop-app, of geef `grant` door in een sessie die is gestart met --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` en `allowHeavy` werken alleen in een sessie die is gestart met --allow-plugin-grants: keur de plug-in goed in de desktop-app
+@msg	Only the person at the keyboard can approve installing a plug-in	Alleen de persoon achter het toetsenbord kan het installeren van een plug-in goedkeuren
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}” heeft `{p}` niet gekregen, wat de uitvoer ervan nodig heeft: er is niets gewijzigd
+@msg	a heavy filter runs in the background, so it can't declare `commands`	een zwaar filter wordt op de achtergrond uitgevoerd, dus kan het geen `commands` declareren
+@msg	at most {MAX_COMMANDS} `commands`	maximaal {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	opdracht {name} is twee keer gedeclareerd
+@msg	command {name}: `label` must be 1-64 printable characters	opdracht {name}: `label` moet uit 1-64 afdrukbare tekens bestaan
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	opdracht {name}: gebruik een id van 1-{MAX_COMMAND_ID} tekens uit a-z 0-9 _ die met een letter begint
+@msg	command {name}: {e}	opdracht {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} op regel {line} kolom {column}
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` moet een lijst met opdrachten zijn, elk met een `id` en een `label`
+@msg	command {name} must be an object with an `id` and a `label`	opdracht {name} moet een objectwaarde met een `id` en een `label` zijn
+@msg	missing field `{key}`	veld `{key}` ontbreekt
+@msg	duplicate field `{key}`	dubbel veld `{key}`
+@msg	only a filter or a live effect declares `commands`	alleen een filter of een live-effect declareert `commands`
+@msg	“{name}” › {label}: {e}	„{name}” › {label}: {e}
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	de module heeft niet de SHA-256 die `hash` opgeeft: er is niets geïnstalleerd
+@msg	select one object	selecteer één object
+@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	geen vergelijkbare objecten gevonden (gedraaide of gespiegelde kopieën worden niet herkend); wijzig de Opties voor globale bewerking en probeer het opnieuw
+@msg	Global Edit is off	Globale bewerking staat uit
+@msg	only an object of the Global Edit other than the one it started from can be left out	alleen een ander object van de globale bewerking dan het object waarmee die begon, kan worden weggelaten
+@msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all of een bereik zoals 1, 3-5, niet {v}
+@msg	`{_1}` has no symbols to place	`{_1}` heeft geen symbolen om te plaatsen
+@msg	missing `library` (see symbol.libraries)	`library` ontbreekt (zie symbol.libraries)
+@msg	no symbol `{n}`	geen symbool `{n}`
+@msg	no symbol `{n}` in `{_1}`	geen symbool `{n}` in `{_1}`
+@msg	no symbol library `{key}` (see symbol.libraries)	geen symboolbibliotheek `{key}` (zie symbol.libraries)
+@msg	the document has no symbols to save	het document heeft geen symbolen om op te slaan
+@msg	`{_1}` has no brushes to apply	`{_1}` heeft geen penselen om toe te passen
+@msg	missing `library` (see brush.libraries)	`library` ontbreekt (zie brush.libraries)
+@msg	no brush `{n}`	geen penseel `{n}`
+@msg	no brush `{n}` in `{_1}`	geen penseel `{n}` in `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	geen penseelbibliotheek `{key}` (zie brush.libraries)
+@msg	the document has no brushes to save	het document heeft geen penselen om op te slaan
+@msg	a {width}×{height} screenshot's byte count overflows	het aantal bytes van een schermafbeelding van {width}×{height} loopt over
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	de {what} van het venster ({points} punten × {scale} DPI) kan geen formaat voor een schermafbeelding geven
+@msg	{label} must be a number	{label} moet een getal zijn
+@msg	{label} must be a number of at least 0.1	{label} moet een getal van minstens 0,1 zijn
+@msg	{label} must be a number from {min} to {max}	{label} moet een getal van {min} tot {max} zijn
+@msg	{label} must be a whole number from {min} to {max}	{label} moet een geheel getal van {min} tot {max} zijn
+@msg	features lists at most {max} tags	features noemt maximaal {max} tags
+@msg	unknown OpenType feature `{t}`	onbekende OpenType-functie `{t}`
+@msg	{label} must be a number above 0 and at most {max}	{label} moet een getal boven 0 en maximaal {max} zijn
+@msg	{label} must be at most {max} characters	{label} mag maximaal {max} tekens lang zijn
+@msg	{label} must be one character	{label} moet één teken zijn
+@msg	at most {max} tab stops	maximaal {max} tabstops
+@msg	unknown align `{other}`	onbekende uitlijning `{other}`
+@msg	no character style `{name}`	geen tekenstijl `{name}`
+@msg	{_1} is an importer (File › Open With)	{_1} is een importplug-in (Bestand › Openen met)
+@msg	missing `importer` (see document.formats)	`importer` ontbreekt (zie document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` moet een indelings-id van een plug-in zijn (zie document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}” opent {_1}-bestanden, niet `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` is een plug-in van het soort `{_2}`, geen importplug-in
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` is een plug-in van het soort `{_2}`, geen exportplug-in
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` is een importplug-in: open een bestand met document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` is een exportplug-in: exporteer met document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` is een live-effect: pas het toe met effect.apply {{"effect": "{_2}"}}
+@msg	the importer returned no objects	de importplug-in heeft geen objecten teruggegeven
+@msg	an importer returns `objects` and `warnings`, not `{key}`	een importplug-in geeft `objects` en `warnings` terug, niet `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	het bestand is groter dan de {MAX_INPUT_BYTES} bytes die een importplug-in leest
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	een importplug-in declareert 1 tot {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	alleen een exportplug-in of een importplug-in declareert `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	een importplug-in krijgt altijd het budget van een import: laat `budget` weg
+@msg	only paths and compound paths can be aligned to the pixel grid	alleen paden en samengestelde paden kunnen op het pixelraster worden uitgelijnd
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` en `last` moeten nummers zijn van regels die de console bevat, first vóór last
+@msg	no plug-in effect is deferred	er is geen plug-in-effect uitgesteld
+@msg	The selected art has no islands to bridge	De geselecteerde illustratie heeft geen eilanden om te overbruggen
+@msg	No bridge of this width fits across the selected art	Geen brug van deze breedte past over de geselecteerde illustratie
+@msg	Some islands could not be joined to the area around the art	Sommige eilanden konden niet worden verbonden met het gebied rond de illustratie
+@msg	`width` must be from {lo} to {hi} pt	`width` moet van {lo} tot {hi} pt zijn
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` moet een geheel getal van 1 tot {MAX_BRIDGES_PER_ISLAND} zijn
+
 	File	Bestand
 	New…	Nieuw…
 	New Without Dialog	Nieuw zonder dialoogvenster
@@ -3351,6 +3852,8 @@ theme	Appearance	Vormgeving
 	Rename Library Group	Bibliotheekgroep hernoemen
 	Delete Library Group	Bibliotheekgroep verwijderen
 	Move Library Item to Group	Bibliotheekitem naar groep verplaatsen
+	Rename Library Item	Bibliotheekitem hernoemen
+	Add to Character Styles	Aan tekenstijlen toevoegen
 	Rename Library	Bibliotheek hernoemen
 	Show Library	Bibliotheek weergeven
 	Use Library Item	Bibliotheekitem gebruiken
@@ -4201,6 +4704,7 @@ imageTrace	Outline	Contour
 @plural	{n} step|{n} steps	{n} stap|{n} stappen
 @plural	{n} stroke|{n} strokes	{n} lijn|{n} lijnen
 @msg	no library `{id}`	geen bibliotheek `{id}`
+@msg	the library has another item of that kind named `{name}`	de bibliotheek heeft al een ander item van die soort met de naam `{name}`
 @msg	select some type first	selecteer eerst wat tekst
 @msg	kerning must be a number, "auto", or "optical"	kerning moet een getal, ‘auto’ of ‘optical’ zijn
 @msg	{_1} has no {_2} style	{_1} heeft geen {_2}stijl
@@ -4578,6 +5082,7 @@ imageTrace	Outline	Contour
 @msg	not a valid plug-in module: {0}	geen geldige plug-inmodule: {0}
 @msg	not an EMF or WMF file	geen EMF- of WMF-bestand
 @msg	not an HP-GL file	geen HP-GL-bestand
+@msg	not a PICT file	geen PICT-bestand
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` moet een array van 1 tot 255 #rrggbb-kleuren zijn
 @msg	not found	niet gevonden
 @msg	not in pattern editing mode	niet in patroonbewerkingsmodus
@@ -4913,6 +5418,7 @@ imageTrace	Outline	Contour
 @msg	choose the font files to add	kies de lettertypebestanden die je wilt toevoegen
 @msg	not a file	geen bestand
 @msg	not a font file	geen lettertypebestand
+@msg	the active document changed while the question was open; nothing was deleted	het actieve document is gewijzigd terwijl de vraag openstond; er is niets verwijderd
 @msg	that document is no longer open	dat document is niet langer geopend
 @msg	larger than 256 MB	groter dan 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	de bestanden lopen op tot meer dan 1 GB: voeg er minder tegelijk toe
@@ -5334,6 +5840,65 @@ mark-style	Japanese	Japans
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} kan geen massief object maken van een afbeelding: traceer deze eerst met Object › Afbeelding traceren › Maken.
 @msg	{label} requires a shape with at least two anchors	{label} vereist een vorm met minstens twee ankerpunten
 @msg	The shape is too complex for a 3D effect	De vorm is te complex voor een 3D-effect
+@msg	Extrude & Bevel	Extruderen en afschuinen
+@msg	Revolve	Draaien
+@msg	Inflate	Opblazen
+@msg	Rotate	Roteren
+@msg	Extrude & Bevel (Classic)	Extruderen en afschuinen (klassiek)
+@msg	Revolve (Classic)	Draaien (klassiek)
+@msg	Rotate (Classic)	Roteren (klassiek)
+@msg	This effect	Dit effect
+@msg	clipping paths	knippaden
+@msg	other objects	andere objecten
+@msg	{label} requires a group holding a shape with at least two anchors	{label} vereist een groep met een vorm met minstens twee ankerpunten
+@msg	Revolve requires a group holding a shape with at least two anchors	Draaien vereist een groep met een vorm met minstens twee ankerpunten
+@msg	Revolve requires a shape with at least two anchors	Draaien vereist een vorm met minstens twee ankerpunten
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} op een groep vereist paden, samengestelde paden, tekst, groepen, knipgroepen, vermengingen en symboolinstanties: geef eerst het volgende vrij of breid het uit: {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} op een groep neemt maximaal {MAX_MEMBERS} objecten op
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	Een 3D-effect op een groep of laag hoort op de groep zelf, niet op de vulling of contour ervan
+@msg	a 3D effect on a group's fill or stroke draws nothing	een 3D-effect op de vulling of contour van een groep tekent niets
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	een 3D-effect op de vulling of contour van een groep tekent niets om te exporteren
+@msg	The 3D object is too complex to export	Het 3D-object is te complex om te exporteren
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	het object heeft geen 3D-effect (Extruderen en afschuinen, Draaien, Opblazen of Roteren)
+@msg	its 3D effect builds no solid	het 3D-effect ervan maakt geen massief object
+@msg	bevel must be none or one of {_1}	bevel moet none of een van {_1} zijn
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan van deze illustratie geen massieve objecten maken: de symboolinstanties, vermengingen en knipgroepen ervan bevatten te veel objecten
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} kan geen massief object maken van de instantie van symbool "{symbol}": de illustratie van het symbool is niet beschikbaar
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: het knippad is te complex om de illustratie mee uit te knippen
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} neemt maximaal {MAX_MEMBERS} objecten op
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} kan geen massieve objecten maken van illustraties die meer dan {MAX_DEPTH} niveaus diep genest zijn
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	De verf van Draaien is te complex voor dit oppervlak; verlaag Segmenten of vereenvoudig het verloop
+@msg	Revolve edge must be left or right	Draaien: edge moet left of right zijn
+@msg	Revolve cap must be a boolean	Draaien: cap moet een booleaanse waarde zijn
+@msg	the revolved object has no fill or stroke	het gedraaide object heeft geen vulling of contour
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor moet een dekkende RGB-kleur in de vorm #rrggbb zijn
+@msg	lights must contain one to ten lights	lights moet één tot tien lichten bevatten
+@msg	each light must be an object	elk licht moet een object zijn
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	onbekende lichtinstelling: gebruik color, intensity, rotation, height, softness of behind
+@msg	light {key} must be a number from {min} to {max}	licht: {key} moet een getal van {min} tot {max} zijn
+@msg	light color must use opaque #rrggbb	color van een licht moet een dekkend #rrggbb gebruiken
+@msg	light behind must be true or false	behind van een licht moet true of false zijn
+@msg	shadow must be true or false	shadow moet true of false zijn
+@msg	shadowPosition must be behind or below	shadowPosition moet behind of below zijn
+@msg	{key} must be a number from {min} to {max}	{key} moet een getal van {min} tot {max} zijn
+@msg	each of `{GRAPHICS}` must be an object	elk item van `{GRAPHICS}` moet een object zijn
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	items van `{GRAPHICS}` nemen symbol, face, x, y, scale en rotation aan, niet `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	elk item van `{GRAPHICS}` heeft `symbol` nodig, de naam van een symbool
+@msg	`{GRAPHICS}` face must be front or back	face in `{GRAPHICS}` moet front of back zijn
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} in `{GRAPHICS}` moet een getal van {lo} tot {hi} zijn
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` moet een array zijn
+@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Illustraties worden op platte vlakken geplaatst: gebruik het objecttype Extruderen of Vlak
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` neemt maximaal {MAX_GRAPHICS} illustraties op
+@msg	A plane has one face: map its graphics onto the front	Een vlak heeft één zijde: plaats de illustraties ervan op de voorkant
+@msg	The graphics are too complex: simplify the symbols' art	De illustraties zijn te complex: vereenvoudig de illustraties van de symbolen
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	De illustratie van een grafisch element mag maximaal {MAX_LEVELS} niveaus diep genest zijn: vereenvoudig de illustratie van het symbool
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	De illustratie van een grafisch element mag symbolen maximaal {MAX_NESTING} niveaus diep nesten: vereenvoudig de illustratie van het symbool
+@msg	A graphic's art holds too many objects: simplify the symbol's art	De illustratie van een grafisch element bevat te veel objecten: vereenvoudig de illustratie van het symbool
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	Een grafisch element tekent maximaal {MAX_PIECES} vullingen en contouren: vereenvoudig de illustratie van het symbool
+@msg	`surface` must be one of {_1}	`surface` moet een van {_1} zijn
+@msg	{label} draws the source art for this object instead of its 3D surface	{label} tekent voor dit object de bronillustratie in plaats van het 3D-oppervlak
+@msg	{label} draws no faces for this object	{label} tekent geen vlakken voor dit object
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	het draadmodel heeft meer dan {MAX_WIRE_EDGES} randen
 @msg	The 3D surface is too complex; simplify the shape	Het 3D-oppervlak is te complex; vereenvoudig de vorm
 	Transform Objects	Objecten transformeren
 @msg	unknown parameter `{key}`; did you mean `{near}`?	onbekende parameter `{key}`; bedoelde je `{near}`?
@@ -6819,6 +7384,7 @@ breakText	Glyphs	Glyphs
 # Deferred plug-in effects
 	Refresh Deferred Effects	Uitgestelde effecten vernieuwen
 	Deferred Effects	Uitgestelde effecten
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Geopend met {n} uitgesteld plug-in-effect. Effect › Uitgestelde effecten vernieuwen voert het uit.|Geopend met {n} uitgestelde plug-in-effecten. Effect › Uitgestelde effecten vernieuwen voert ze uit.
 
 # Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
 	Cutting Tools	Snijgereedschap

@@ -3183,6 +3183,8 @@ theme	Appearance	იერსახე
 	Rename Library Group	ბიბლიოთეკის ჯგუფის სახელის შეცვლა
 	Delete Library Group	ბიბლიოთეკის ჯგუფის წაშლა
 	Move Library Item to Group	ბიბლიოთეკის ელემენტის ჯგუფში გადატანა
+	Rename Library Item	ბიბლიოთეკის ელემენტის სახელის შეცვლა
+	Add to Character Styles	სიმბოლოს სტილებში დამატება
 	Rename Library	ბიბლიოთეკის სახელის შეცვლა
 	Show Library	ბიბლიოთეკის ჩვენება
 	Use Library Item	ბიბლიოთეკის ელემენტის გამოყენება
@@ -3990,6 +3992,7 @@ font-technology	Variable	ცვლადი
 @plural	{n} step|{n} steps	ნაბიჯი: {n}
 @plural	{n} stroke|{n} strokes	კონტური: {n}
 @msg	no library `{id}`	ბიბლიოთეკა `{id}` არ არსებობს
+@msg	the library has another item of that kind named `{name}`	ბიბლიოთეკას უკვე აქვს ამ ტიპის სხვა ელემენტი სახელით `{name}`
 @msg	select some type first	ჯერ მონიშნეთ ტექსტი
 @msg	kerning must be a number, "auto", or "optical"	kerning უნდა იყოს რიცხვი, „auto“ ან „optical“
 @msg	the selection has no gradient fill	მონიშნულს შევსების გრადიენტი არ აქვს

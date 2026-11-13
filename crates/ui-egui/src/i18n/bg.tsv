@@ -3495,6 +3495,8 @@ digits	Malayalam	Малаялам
 	Rename Library Group	Преименуване на библиотечна група
 	Delete Library Group	Изтриване на библиотечна група
 	Move Library Item to Group	Преместване на библиотечен елемент в група
+	Rename Library Item	Преименуване на елемент от библиотека
+	Add to Character Styles	Добавяне към стилове на знаци
 	Library	Библиотека
 	Rename Library	Преименуване на библиотека
 	Show Library	Показване на библиотека
@@ -4068,6 +4070,7 @@ axis	Both	И двете
 	Drag to the window's left or right edge to dock	Плъзнете до левия или десния ръб на прозореца за закотвяне
 	Float Tool Group	Плаваща група инструменти
 @msg	no library `{id}`	няма библиотека `{id}`
+@msg	the library has another item of that kind named `{name}`	библиотеката вече има друг елемент от този вид с име `{name}`
 @msg	select some type first	първо изберете текст
 @msg	kerning must be a number, "auto", or "optical"	kerning трябва да е число, „auto“ или „optical“
 @msg	{_1} has no {_2} style	{_1} няма стил {_2}
