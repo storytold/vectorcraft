@@ -6068,6 +6068,7 @@ mark-style	Japanese	Japonesas
 @msg	no such color	cor inexistente
 @msg	{_1} cannot be used on Windows	{_1} não pode ser usado no Windows
 @msg	more than one action is named “{_1}”	mais de uma ação se chama “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	a ação “{_1}” define a preferência de pasta {_2}; exclua essa etapa para salvar o conjunto
 @msg	no symbol named `{n}`	nenhum símbolo chamado `{n}`
 	Smudge Stick…	Esfuminho…
 	Smudge Stick	Esfuminho

@@ -293,6 +293,24 @@ fn an_absolute_path_outside_the_read_root_is_unreadable() {
     });
 }
 
+/// Under a read root, an absolute path or a `file:` URL outside it is written as a path also with
+/// whitespace around it, and a recorded step's text param loses it; a path inside the root stays.
+#[test]
+fn a_spaced_absolute_path_outside_the_read_root_is_left_out() {
+    let base = crate::tests_folder::Folder::new("unreadable-spaced");
+    std::fs::create_dir_all(base.join("in")).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&base.join("in")], &[]).unwrap();
+    let inside = format!(" {} ", base.join("in").join("a.svg").to_string_lossy());
+    let mut params = json!({"target": " /outside/root/x", "name": "\tfile:///outside/root/x ", "keep": inside, "list": [" /outside/root/y"]});
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        assert!(super::unreadable_path_like(" /outside/root/x"));
+        assert!(super::unreadable_path_like("\tfile:///outside/root/x "));
+        assert!(!super::unreadable_path_like(&inside), "{inside}");
+        super::leave_out_unreadable_params(params.as_object_mut().unwrap());
+    });
+    assert_eq!(params, json!({"keep": inside, "list": []}));
+}
+
 /// Without a read root, a `file:` URL that names another host may be read, and a recorded step keeps
 /// it.
 #[test]

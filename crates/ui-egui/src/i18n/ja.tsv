@@ -5818,6 +5818,7 @@ lighting	Light	ライト
 @msg	no such color	指定されたカラーが見つかりません
 @msg	{_1} cannot be used on Windows	{_1} は Windows では使用できません
 @msg	more than one action is named “{_1}”	「{_1}」という名前のアクションが複数あります
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	アクション「{_1}」がフォルダーの環境設定 {_2} を設定しています。セットを保存するにはそのステップを削除してください
 @msg	no symbol named `{n}`	`{n}` という名前のシンボルはありません
 	Smudge Stick…	スマッジスティック…
 	Smudge Stick	スマッジスティック

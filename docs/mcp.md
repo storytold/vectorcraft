@@ -148,12 +148,14 @@ the suite) keep the agent to the folders you give it:
   in a recorded action's steps in `ui.action_sets`, also in a batch step's commands, the `path`, `paths`, `file`,
   `files` and `folder` params, a param whose name ends in `Path`, `Paths`, `File`, `Files` or `Folder` (`diffPath`,
   `destinationFolder`), the entries of a list under such a param, and under any other param, as a key or in any
-  list, an absolute path or a `file:` URL outside the roots (any case of `file:`, `%XX` escapes decoded; a URL that
+  list, an absolute path or a `file:` URL outside the roots, also with whitespace around it (any case of `file:`, `%XX` escapes decoded; a URL that
   names another host is always left out), and `~`, a path under `~` or a path that starts with `./` or `../`
   (either separator) that resolves outside the roots from the app's working folder; and the folder
-  preferences in `ui.engine_prefs` and in an open Preferences dialog's `ui.dialog.fields`
-  (`fontsFolder`, `pluginsFolder`, `scratchPrimary`, `scratchSecondary`, `recoveryFolder`, `templatesFolder`; an
-  empty folder and the scratch disk choices `Startup` and `None` stay). A library loaded from a file outside the
+  preferences in `ui.engine_prefs`, in an open Preferences dialog's `ui.dialog.fields` and in a recorded
+  `prefs.set` step (its `value` for such a `key`, and the entries of `values`), also in a batch step's commands
+  (`fontsFolder`, `pluginsFolder`, `scratchPrimary`, `scratchSecondary`, `recoveryFolder`, `templatesFolder`, checked
+  as written and trimmed, a bare name or a subfolder from the app's working folder; an empty folder and the scratch
+  disk choices `Startup` and `None` stay). A library loaded from a file outside the
   roots shows as `loaded/<file name>` wherever `ui_inspect` and `ui.docking` name it: its id, its panel's id, the
   Color Guide's `ui.color_guide_limit`, a closed panel's key in `ui.docking_hidden` and the `library` and `panel`
   params of a recorded action's steps in `ui.action_sets`, and the keys of shortcut overrides (`panel:<panel id>`
@@ -3152,7 +3154,11 @@ already walks Image Trace. Short agent entry points:
   after the set (the web downloads it), and returns `{path}`. `id` holds the panel's own set id, which the panel menu
   passes: the set with this id is saved wherever it is when the file dialog answers, and `set` is not read. A set that
   would be larger than 8 MiB as a file, has more than 1,000 actions or has an action of more than 10,000 steps is not
-  written, and the command returns the same error as a load of such a file. `ui.actionSet.load {path? | data?}` reads
+  written, and the command returns the same error as a load of such a file. Nor is a set with a `prefs.set` step, also
+  in a batch step's commands, that sets a folder preference (`fontsFolder`, `pluginsFolder`, `scratchPrimary`,
+  `scratchSecondary`, `recoveryFolder`, `templatesFolder`) to a folder, which names a folder on this computer: the
+  error `the action “<name>” sets the folder preference <key>; delete that step to save the set` names the first such
+  action and preference. An empty folder and the scratch disk choices `Startup` and `None` save. `ui.actionSet.load {path? | data?}` reads
   the file at `path`, else a picked one, or the file's text `data`, adds its set after the other sets and returns
   `{set, name, actions}`. A set named like one already in the panel gets the next free number (`Print 2`), and the
   other sets and the current set stay as they are. An action set file (`.vcactions`) is JSON:
@@ -6118,12 +6124,13 @@ Preferences. `prefs.reset` resets the preferences at once, without the question.
 `prefs.export {path?}` writes the preferences as a JSON file, `{"format": "vectorcraft-preferences", "version": 1,
 "prefs": {…}}`, and replies `{path, count}`; without `path` it replies `{data, count}` with the file's text. The file
 holds every preference `prefs.list` lists and the `eyedropper`, `perspectiveWidget`, `pathfinder`, `glyphSnap` and
-`pixelSnap` groups. It leaves out the folder preferences (`fontsFolder`, `pluginsFolder`, `recoveryFolder`, `templatesFolder`) and
-saved presets. An export over 1 MB, the most `prefs.import` reads, is an error and writes nothing.
+`pixelSnap` groups. It leaves out the folder preferences (`fontsFolder`, `pluginsFolder`, `scratchPrimary`, `scratchSecondary`,
+`recoveryFolder`, `templatesFolder`) and saved presets. An export over 1 MB, the most `prefs.import` reads, is an error and writes nothing.
 `prefs.import {path | data}` applies such a file and replies `{imported}`, the number of preferences it
 set. It checks every value first, as `prefs.set` does: a file over 1 MB, malformed JSON, another `format`, a newer
 `version`, an empty `prefs`, an unknown preference, a value of the wrong type or out of range, or a folder preference
-is an error, and nothing changes. Preferences the file leaves out keep their values. An import leaves the open
+is an error, and nothing changes. For `scratchPrimary` and `scratchSecondary` only a folder is an error: an empty
+value and the choices `Startup` and `None` are read. Preferences the file leaves out keep their values. An import leaves the open
 document's units as they are, records no undo step, and is saved with the other preferences. An open Preferences
 dialog shows the imported values. `prefs.import` is refused as a `command.batch` step. The dialog's Export Preferences… and Import Preferences… buttons run the two
 commands with a save or open dialog; the web build downloads the exported file and has no Import Preferences… button.

@@ -5735,6 +5735,7 @@ lighting	Light	광원
 @msg	no such color	해당 색상이 없습니다
 @msg	{_1} cannot be used on Windows	{_1}은(는) Windows에서 사용할 수 없습니다
 @msg	more than one action is named “{_1}”	“{_1}”(이)라는 이름의 액션이 둘 이상 있습니다
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	액션 “{_1}”이(가) 폴더 환경 설정 {_2}을(를) 설정합니다. 세트를 저장하려면 해당 단계를 삭제하세요
 @msg	no symbol named `{n}`	이름이 `{n}`인 심볼이 없습니다
 	Smudge Stick…	문지르기 막대…
 	Smudge Stick	문지르기 막대

@@ -5774,6 +5774,7 @@ lighting	Light	Luce
 @msg	no such color	colore inesistente
 @msg	{_1} cannot be used on Windows	{_1} non può essere usato su Windows
 @msg	more than one action is named “{_1}”	più di un’azione si chiama “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	l’azione “{_1}” imposta la preferenza della cartella {_2}; elimina quel passaggio per salvare il set
 @msg	no symbol named `{n}`	nessun simbolo denominato `{n}`
 	Smudge Stick…	Sfumino…
 	Smudge Stick	Sfumino

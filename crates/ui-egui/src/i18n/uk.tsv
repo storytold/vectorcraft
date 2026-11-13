@@ -5754,6 +5754,7 @@ lighting	Light	Світло
 @msg	no such color	такого кольору немає
 @msg	{_1} cannot be used on Windows	Сполучення {_1} не можна використовувати у Windows
 @msg	more than one action is named “{_1}”	кілька дій мають назву «{_1}»
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	дія «{_1}» задає параметр папки {_2}; видаліть цей крок, щоб зберегти набір
 @msg	no symbol named `{n}`	немає символу з назвою `{n}`
 	Smudge Stick…	Розтушовування…
 	Smudge Stick	Розтушовування

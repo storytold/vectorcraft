@@ -5987,6 +5987,7 @@ lighting	Light	光源
 @msg	no such color	没有此颜色
 @msg	{_1} cannot be used on Windows	{_1} 在 Windows 上不能使用
 @msg	more than one action is named “{_1}”	有多个动作名为“{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	动作“{_1}”设置了文件夹首选项 {_2}；请删除该步骤后再存储动作组
 @msg	no symbol named `{n}`	没有名为 `{n}` 的符号
 	Smudge Stick…	涂抹棒…
 	Smudge Stick	涂抹棒
