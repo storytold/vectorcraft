@@ -616,6 +616,8 @@ font-technology	Variable	Variabla
 	Convert to Artboards	Konvertera till ritytor
 	Convert to CMYK	Konvertera till CMYK
 	Convert to Grayscale	Konvertera till gråskala
+	Convert to Indexed Color	Konvertera till indexerade färger
+	Convert to Indexed Color…	Konvertera till indexerade färger…
 	Convert To Outlines	Konvertera till konturbanor
 	Convert To Point Type	Konvertera till punkttext
 	Convert to RGB	Konvertera till RGB
@@ -4251,6 +4253,9 @@ axis	Both	Båda
 @msg	Couldn't open {name}: {e}	Kunde inte öppna {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Kunde inte placera {name}: dokumentet det släpptes på har stängts
 @msg	Couldn't place {name}: the document it was placed in was closed	Kunde inte placera {name}: dokumentet det placerades i har stängts
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Kunde inte placera {name}: dokumentet det släpptes på har återgått till sparad version
+@msg	Couldn't place {name}: the document it was placed in was reverted	Kunde inte placera {name}: dokumentet det placerades i har återgått till sparad version
+@msg	Couldn't paste: the document it was pasted in was reverted	Kunde inte klistra in: dokumentet det klistrades in i har återgått till sparad version
 @msg	Couldn't read {name}: {e}	Kunde inte läsa {name}: {e}
 @msg	Couldn't save recovery data: {e}	Kunde inte spara återställningsdata: {e}
 @msg	Create Outlines: select text objects	Skapa konturer: markera textobjekt
@@ -5677,6 +5682,8 @@ lighting	Light	Ljus
 	Pen	Penna
 	Pentagram	Pentagram
 	Perceptual	Perceptuell
+	Hue Clockwise	Nyans medurs
+	Hue Counterclockwise	Nyans moturs
 	Phone 360×800	Telefon 360×800
 	Phone 375×667	Telefon 375×667
 	Phone 375×812	Telefon 375×812
@@ -6333,7 +6340,7 @@ axis	Y Axis	Y-axel
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` gäller gradientfyllningar (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gäller gradientfyllningar (paint.setFill)
 @msg	`dither` must be true or false	`dither` måste vara true eller false
-@msg	`method` must be classic or perceptual	`method` måste vara classic eller perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` måste vara classic, perceptual, hue-clockwise eller hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` måste vara pad, repeat eller reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` måste vara ett heltal från 1 till {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gäller för linjära, radiella och koniska gradienter och rombgradienter
@@ -6535,6 +6542,7 @@ axis	Y Axis	Y-axel
 	Continue	Fortsätt
 	Continue Action	Fortsätt åtgärd
 	Delete Action Step	Radera åtgärdssteg
+	Move Action Step	Flytta åtgärdssteg
 	Press Play Current Selection in the Actions panel to go on.	Fortsätt genom att trycka på Spela upp aktuell markering i panelen Åtgärder.
 	Stop: {message}	Stopp: {message}
 @msg	no action is waiting at a stop	ingen åtgärd väntar vid ett stopp
@@ -6706,6 +6714,22 @@ axis	Y Axis	Y-axel
 	Graphite Pencil	Grafitpenna
 	Wax Crayon	Vaxkrita
 	Charcoal Dust	Koldamm
+	Notched Ribbon	Hackat band
+	Double Line	Dubbellinje
+	Wave	Våg
+	Teardrop	Droppe
+	Striped Ribbon	Randigt band
+	Fine Nib	Fin spets
+	Broad Nib	Bred spets
+	Chisel	Mejsel
+	Round Pen	Rund penna
+	Pressure Pen	Tryckpenna
+	Beads	Pärlor
+	Dash Dot	Streck-punkt
+	Scallops	Bågkant
+	Stars	Stjärnor
+	Triangles	Trianglar
+	Sparkles	Gnistor
 	Save Brush Library…	Spara penselbibliotek…
 @msg	`{_1}` has no brushes to apply	`{_1}` har inga penslar att använda
 @msg	missing `library` (see brush.libraries)	`library` saknas (se brush.libraries)

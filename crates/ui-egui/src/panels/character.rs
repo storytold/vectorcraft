@@ -929,8 +929,13 @@ fn set_anti_alias(app: &mut VectorcraftApp, m: TypeAntiAlias) {
 /// The Font Size combo (Character and Properties panels, Control bar): typed, stepped, scrubbed or
 /// picked from the presets, in the type unit, blank where the selected text's sizes differ.
 pub(crate) fn size_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, width: f32) {
+    size_field_named(app, ui, id, None, width);
+}
+
+/// [`size_field`] named `name` for screen readers, where no label stands beside it.
+fn size_field_named(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, name: Option<&str>, width: f32) {
     let size = shared_effective(app, |s| s.size);
-    if let Some(v) = widgets::spin_field(ui, id, size, app.session.type_unit(), width, 1.0, 0.1, &SIZE_PRESETS) {
+    if let Some(v) = widgets::spin_field_named(ui, id, name, size, app.session.type_unit(), width, 1.0, 0.1, &SIZE_PRESETS) {
         style(app, json!({"size": v}));
     }
 }
@@ -1043,7 +1048,7 @@ pub(crate) fn font_pickers(app: &mut VectorcraftApp, ui: &mut Ui, s: &CharStyle,
         "cb-font" => Some(crate::font_menu::WheelOwner::Control),
         _ => None,
     };
-    font_pickers_owned(app, ui, s, ids, widths, wheel_owner);
+    font_pickers_owned(app, ui, s, ids, widths, wheel_owner, (None, None));
 }
 
 fn font_pickers_owned(
@@ -1053,16 +1058,17 @@ fn font_pickers_owned(
     ids: (&str, &str),
     widths: (f32, f32),
     wheel_owner: Option<crate::font_menu::WheelOwner>,
+    a11y: (Option<&str>, Option<&str>),
 ) {
     crate::font_menu::sync_wheel_target(app, ui.ctx(), ui.ctx().viewport_id());
     let sample = crate::font_menu::sample_text(app);
-    let look = crate::font_menu::MenuLook { wheel: true, wheel_owner, ..crate::font_menu::MenuLook::of(app) };
+    let look = crate::font_menu::MenuLook { wheel: true, wheel_owner, name: a11y.0, ..crate::font_menu::MenuLook::of(app) };
     if let Some(pick) = crate::font_menu::font_menu(ui, ids.0, &s.font_family, widths.0, sample.as_deref(), look) {
         crate::font_menu::apply(app, ui.ctx(), pick);
     }
     let styles = vectorcraft_text::FontDb::global().styles(&s.font_family);
     let names: Vec<&str> = styles.iter().map(String::as_str).collect();
-    if let Some(name) = widgets::dropdown_names(ui, ids.1, &s.font_style, &names, widths.1).and_then(|i| names.get(i)) {
+    if let Some(name) = widgets::dropdown_names_named(ui, ids.1, a11y.1, &s.font_style, &names, widths.1).and_then(|i| names.get(i)) {
         style(app, json!({"style": name}));
     }
 }
@@ -1157,6 +1163,35 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     crate::chrome::group_separator(ui);
 }
 
+/// The Contextual Task Bar's widths of the font family menu, the font style dropdown and the
+/// Font Size combo.
+pub(crate) const TASK_BAR_WIDTHS: [f32; 3] = [140.0, 90.0, 76.0];
+
+/// The smallest share of [`TASK_BAR_WIDTHS`] the Contextual Task Bar's type controls narrow to.
+const TASK_BAR_MIN_SCALE: f32 = 0.4;
+
+/// The gaps between the Contextual Task Bar's type controls.
+fn task_bar_gaps() -> f32 {
+    6.0 * (TASK_BAR_WIDTHS.len() - 1) as f32
+}
+
+/// The narrowest room the Contextual Task Bar's type controls fit in, with their spacing.
+pub(crate) fn task_bar_min_room() -> f32 {
+    TASK_BAR_MIN_SCALE * TASK_BAR_WIDTHS.iter().sum::<f32>() + task_bar_gaps()
+}
+
+/// The Contextual Task Bar's type controls while type is selected or edited: the font family and
+/// style menus and the Font Size combo, as the Control bar has them, named for screen readers.
+/// They narrow, down to 40% of their widths, to fit in `room` points with their spacing.
+pub(crate) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, room: f32) {
+    let Some((s, _)) = text_style(app) else { return };
+    let k = ((room - task_bar_gaps()) / TASK_BAR_WIDTHS.iter().sum::<f32>()).clamp(TASK_BAR_MIN_SCALE, 1.0);
+    let [family, style, size] = TASK_BAR_WIDTHS.map(|w| w * k);
+    let owner = Some(crate::font_menu::WheelOwner::TaskBar);
+    font_pickers_owned(app, ui, &s, ("tb-font", "tb-font-style"), (family, style), owner, (Some(tl!("Font Family")), Some(tl!("Style"))));
+    size_field_named(app, ui, "tb-font-size", Some(tl!("Font Size")), size);
+}
+
 /// The panel state key of the panel menu's Show Snap to Glyph Options.
 const SNAP_TO_GLYPH_OPTIONS: &str = "ch-snap-to-glyph-options";
 /// Set when Show Snap to Glyph Options is chosen: the next frame scrolls the panel to the options,
@@ -1227,7 +1262,7 @@ fn attributes(app: &mut VectorcraftApp, ui: &mut Ui, owner: crate::font_menu::Wh
     if let Some(f) = app.character_focus {
         widgets::arm_field_focus(ui.ctx(), f.salt());
     }
-    font_pickers_owned(app, ui, &s, ("ch-font", "ch-style"), (w - 4.0, w - 4.0), Some(owner));
+    font_pickers_owned(app, ui, &s, ("ch-font", "ch-style"), (w - 4.0, w - 4.0), Some(owner), (None, None));
     variable_font(app, ui, &s, w - 4.0);
     ui.add_space(2.0);
     let hidden = pstate::<bool>(ui.ctx(), "ch-hide-options");

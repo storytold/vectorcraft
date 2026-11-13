@@ -529,9 +529,9 @@ impl Writer<'_> {
             self.warn(if freeform {
                 "freeform gradients are written as images clipped to their shapes"
             } else if conic {
-                "conic gradients with translucent stops, dither or the Perceptual method are written as images clipped to their shapes"
+                "conic gradients with translucent stops, dither or a method other than Classic are written as images clipped to their shapes"
             } else if g.gradient.kind == GradientKind::Diamond {
-                "diamond gradients with translucent stops, dither, the Perceptual method or no extent are written as images clipped to their shapes"
+                "diamond gradients with translucent stops, dither, a method other than Classic or no extent are written as images clipped to their shapes"
             } else {
                 "linear and radial gradients drawn as pixels are written as images clipped to their shapes"
             });

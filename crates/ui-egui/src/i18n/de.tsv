@@ -607,6 +607,8 @@ font-technology	Variable	Variabel
 	Convert to Artboards	In Zeichenflächen umwandeln
 	Convert to CMYK	In CMYK konvertieren
 	Convert to Grayscale	In Graustufen konvertieren
+	Convert to Indexed Color	In indizierte Farben konvertieren
+	Convert to Indexed Color…	In indizierte Farben konvertieren…
 	Convert To Outlines	In Pfade umwandeln
 	Convert To Point Type	In Punkttext umwandeln
 	Convert to RGB	In RGB konvertieren
@@ -4264,6 +4266,9 @@ theme	Appearance	Erscheinungsbild
 @msg	Couldn't open {name}: {e}	{name} konnte nicht geöffnet werden: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} konnte nicht platziert werden: Das Dokument, auf das die Datei gezogen wurde, wurde geschlossen
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} konnte nicht platziert werden: Das Dokument, in dem die Datei platziert wurde, wurde geschlossen
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} konnte nicht platziert werden: Das Dokument, auf das die Datei gezogen wurde, wurde auf die letzte Version zurückgesetzt
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} konnte nicht platziert werden: Das Dokument, in dem die Datei platziert wurde, wurde auf die letzte Version zurückgesetzt
+@msg	Couldn't paste: the document it was pasted in was reverted	Konnte nicht eingefügt werden: Das Dokument, in das eingefügt wurde, wurde auf die letzte Version zurückgesetzt
 @msg	Couldn't read {name}: {e}	{name} konnte nicht gelesen werden: {e}
 @msg	Couldn't save recovery data: {e}	Wiederherstellungsdaten konnten nicht gespeichert werden: {e}
 @msg	Create Outlines: select text objects	In Pfade umwandeln: Wählen Sie Textobjekte aus
@@ -5903,7 +5908,9 @@ axis	Y Axis	Y-Achse
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gilt für Verlaufsflächen (paint.setFill)
 @msg	`dither` must be true or false	`dither` muss true oder false sein
 	Perceptual	Perzeptiv
-@msg	`method` must be classic or perceptual	`method` muss classic oder perceptual sein
+	Hue Clockwise	Farbton im Uhrzeigersinn
+	Hue Counterclockwise	Farbton gegen den Uhrzeigersinn
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` muss classic, perceptual, hue-clockwise oder hue-counterclockwise sein
 @msg	`spread` must be pad, repeat or reflect	`spread` muss pad, repeat oder reflect sein
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` muss eine ganze Zahl von 1 bis {MAX_REPEATS} sein
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gilt für lineare, radiale, konische Verläufe und Rautenverläufe
@@ -6146,6 +6153,7 @@ axis	Y Axis	Y-Achse
 	Continue	Fortsetzen
 	Continue Action	Aktion fortsetzen
 	Delete Action Step	Aktionsschritt löschen
+	Move Action Step	Aktionsschritt verschieben
 	Press Play Current Selection in the Actions panel to go on.	Klicken Sie im Bedienfeld „Aktionen“ auf „Aktuelle Auswahl abspielen“, um fortzufahren.
 	Stop: {message}	Stopp: {message}
 @msg	no action is waiting at a stop	keine Aktion wartet an einem Stopp
@@ -6317,6 +6325,22 @@ axis	Y Axis	Y-Achse
 	Graphite Pencil	Graphitstift
 	Wax Crayon	Wachsmalstift
 	Charcoal Dust	Kohlestaub
+	Notched Ribbon	Gekerbtes Band
+	Double Line	Doppellinie
+	Wave	Welle
+	Teardrop	Tropfen
+	Striped Ribbon	Gestreiftes Band
+	Fine Nib	Feine Feder
+	Broad Nib	Breite Feder
+	Chisel	Meißel
+	Round Pen	Runde Feder
+	Pressure Pen	Druckfeder
+	Beads	Perlen
+	Dash Dot	Strich-Punkt
+	Scallops	Bogenkante
+	Stars	Sterne
+	Triangles	Dreiecke
+	Sparkles	Funkeln
 	Save Brush Library…	Pinsel-Bibliothek speichern…
 @msg	`{_1}` has no brushes to apply	`{_1}` hat keine Pinsel zum Anwenden
 @msg	missing `library` (see brush.libraries)	`library` fehlt (siehe brush.libraries)

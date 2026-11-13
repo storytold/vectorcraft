@@ -230,6 +230,10 @@ the suite) keep the agent to the folders you give it:
   value and a linked JavaScript file in `svg_scripts` outside them by its file name alone (a JavaScript file given
   as a URL is kept), and leaves out the `folder` of `export_settings` (the settings Export
   for Screens last used) when that folder is outside them. The document itself is not changed.
+- `svgInteractivity.info`, `svgInteractivity.addFile` and `svgInteractivity.removeFile` name a linked JavaScript
+  file outside the read roots by its file name alone in `files`, as `document.json` does, and `removeFile` takes that
+  name for it (see SVG interactivity). In a frame a request drives, the JavaScript Files dialog lists such a file by
+  its file name, and `ui_inspect` gives the file selected in the dialog the same way.
 - `plugin.list`, `plugin.safeMode`, `file.recovery.*` and `ui_inspect`'s `scriptReport` leave out the paths
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
   folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`
@@ -267,7 +271,8 @@ the suite) keep the agent to the folders you give it:
   Links in an opened document that point outside the read roots show as missing.
 - An error names a path the client gave as given. A path the client did not give (the document's own file
   in a save without `path` and in `file.revert`, also inside `action.batch`, an export preset's folder, the
-  Scripts folder, the document's folder in `links.relink {copy}`) is named
+  Scripts folder, the document's folder in `links.relink {copy}`, a New Document profile's file in
+  `file.newProfiles.edit` and `file.newProfiles.reset`) is named
   whole only inside the read roots; outside them the error names it by its file name, or as
   `a file or folder outside the read roots` when it has none, and keeps the roots and the reason, for example
   `automation path rejected: outside the write root /work/project/out: poster.vectorcraft`.
@@ -1279,7 +1284,7 @@ canvas draws it as pixels, out to the miters, caps and arrowheads of a stroke. P
 have no diamond gradient: one of opaque stops is written as four linear gradients, one for each quarter of the
 square, clipped to the shape (PDF as axial shadings). In PDF and SVG, one with translucent stops, a dithered fill or
 a square with no area is an image, and so is a Perceptual one, except in PDF when its stops are spot colors that the
-Method paragraph below describes. SVG writes one on type characters as a radial gradient through the square's
+Method paragraph below describes. One mixed around the hue wheel is always an image in PDF and SVG. SVG writes one on type characters as a radial gradient through the square's
 corners. PDF import reads a function-based shading (type 1) whose color is the same along each square about the
 origin of its space, with corners on its axes, as a diamond gradient. CSS writes a radial gradient through the
 square's corners. A swatch library saved as CSS gets four `linear-gradient` layers, one for each quarter of the box,
@@ -1323,7 +1328,7 @@ change its colors least. Each run keeps its ends; sharp steps and swatch-linked 
 but a run with more of them than its share of the limit loses some. The same applies to a gradient along or across a
 stroke, and to CSS's conic gradient, past 16,384 stops, and to Outline Stroke's mesh past 1,024. For CSS the 16,384
 counts the gradient's stops before they are written: CSS then adds a stop for each midpoint, and for a Perceptual
-gradient stops along each span's curve, so the written gradient can hold more. PDF
+gradient or one mixed around the hue wheel stops along each span's curve, so the written gradient can hold more. PDF
 import finds a sharp step between two colors in an axial or radial shading by halving the spans between its samples,
 so the step reads back where it is in the file (to 1/64 × 2^-14 of the axis) instead of blurred across the samples
 around it. A shading takes at most 16,384 samples, so the steps past the point where that budget runs out stay
@@ -1352,10 +1357,26 @@ stops whose other stops are all paper white or written in CMYK or gray, that is 
 does not have too many stops (a diamond as four such shadings). An export that converts colors to a CMYK destination profile writes RGB and Lab stops in CMYK, and so does a
 CMYK document unless the export converts colors to an RGB destination profile. PDF writes tints of one spot ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK
 or gray inks as a DeviceN shading.
+`hue-clockwise` and `hue-counterclockwise` (VectorCraft's own methods) mix a linear, radial, conic or diamond
+gradient's colors around the hue wheel: hue, saturation and brightness each change evenly from one stop to the next.
+With `hue-clockwise` the hue angle falls (red, magenta, blue, cyan, green, yellow, red), which is clockwise on the
+app's color wheels, and with `hue-counterclockwise` it rises. The angle keeps one direction between two stops, as the
+fixed-direction rules of [CSS Color 4](https://www.w3.org/TR/css-color-4/#hue-interpolation) do, so red to blue passes
+through green one way and through magenta the other. Two stops whose hues are less than half a color level apart
+count as one hue and keep it, so a color and a tint or shade of it do not turn the wheel; their saturation and
+brightness still change evenly, which is not the mix `classic` gives. A stop whose RGB numbers are less than half a
+color level apart is gray: it takes the hue of the stop it mixes with, and a black stop takes that stop's saturation
+too. SVG and PDF exports write such a gradient as an RGB image at the Document Raster Effects resolution, in a CMYK
+document and with CMYK stops too, and with spot color stops (with a warning). EPS writes it as a shading in process
+colors, and a legacy `.ai` file and the `.ai` editing data get the colors between its stops as stops of their own, in
+process colors (at most 256, with a warning). `reverse` turns a hue method the other way with the stops, so the ramp
+keeps its colors, and a Reflect spread mirrors the colors of each run. The names also read in any case, and with a
+space or an underscore for the hyphen, or without it.
 `paint.setFill`/`paint.setStroke` take it in `gradient` too:
 
 ```json
 {"name":"run_command","arguments":{"command":"paint.editGradient","params":{"method":"perceptual"}}}
+{"name":"run_command","arguments":{"command":"paint.editGradient","params":{"method":"hue-clockwise"}}}
 ```
 
 Freeform gradients: `paint.editGradient {kind: "freeform"}` places four or more colour points inside each selected
@@ -1465,7 +1486,9 @@ preferences (the folder the desktop app uses, so both see the same ones; `VECTOR
   working spaces and the file stay as they are. The profiles in use are those of the document in front, after
   `file.new`, `document.open`, `document.activate`, `file.close`, `file.revert`, `edit.undo`, `edit.redo` and a
   failed `command.batch` too; with none assigned, or no document open, the working spaces are. The `workingCmyk`
-  target of `view.proofSetup` simulates the working CMYK space in such a document too.
+  target of `view.proofSetup` simulates the working CMYK space in such a document too. `color.convert`'s
+  `outOfGamut` and `deltaE`, `color.gamutCheck`, and the out-of-gamut warning of the Color panel and Color Picker
+  check against the assigned CMYK profile, else the working CMYK space; the warning updates when either changes.
 
 Not remembered: the document, anything else. Nothing is read or written when
 `VECTORCRAFT_NO_PREFS` is set, and a server confined with `--automation-read-root` or
@@ -1604,8 +1627,18 @@ hides the dock, no panel is checked, and the panel shows again with the dock in 
 Control bar stay as they are.
 
 The export commands limit those keys. `document.export`, `document.exportSelection`, `document.serialize`, `app.export`
-and `file.export` refuse a key that no format takes, and ignore a key that only another format takes
-(`{"format": "pdf", "quality": 80}` writes the PDF). `document.exportPdf`, `document.pdfSettings` and `pdf.preset.save`
+and `file.export` refuse a key that no format takes. They accept a key that only another format takes and do not use
+it: `{"format": "pdf", "quality": 80}` writes the PDF, and the reply's `warnings` name the key
+("`quality` was not used: PDF files don't read it"), in the wording of a save's note. The warning names the kind of
+file written. A legacy `.ai` file (`aiVersion: "7"`) reads `outlineText`, `hiddenObjects`, `transparentImages`, the
+artboard choice and `useArtboards`, and beside `aiVersion` no other option
+("`compress` was not used: legacy .ai (version 7) files don't read it"). The other `.ai` files don't read those three
+options or `preserveEditing`, which is always on for a `.ai` file. An export doesn't read `separateArtboards`, or
+`range` for a `vectorcraft` or `template` file: a save reads them to write each artboard to a file of its own. In the
+desktop app, `app.export` and `file.exportAs` give these warnings in the reply and the status bar
+when automation asked for the export. An `app.export` that returns before the file is written (`background: true`)
+gives them in that reply. An export that first asks a question (the one before replacing a file) and that a person
+then answers gives none. `document.exportPdf`, `document.pdfSettings` and `pdf.preset.save`
 refuse a key that PDF doesn't take, `document.exportEps` one that EPS doesn't take and `document.exportDxf` one that DXF
 doesn't take. Each of them refuses an unknown key inside an option object it takes (`marks`, `bleed`, `compression`,
 `output`, `advanced`, `security`, `flattener`, `svg`), naming its path:
@@ -3167,10 +3200,15 @@ already walks Image Trace. Short agent entry points:
   would give the set more than 1,000 actions (`the action set file holds more than 1,000 actions`) or a file larger
   than 8 MiB (`the action set would be larger than 8 MiB`), and then no recording starts. The panel's Create
   New Action button and menu's New Action… open the `actionNew` dialog, whose Record runs this.
-- Actions: `ui.action.record {set?}` starts recording a new action in the chosen set, or the current set when `set`
-  is left out, and returns `{set, name}`. With no sets, it creates Set 1. The action gets the next available
-  `Action N` name in that set. The Actions panel's Begin Recording button runs this command. An invalid set or an
-  existing recording is an error and leaves the sets and recording unchanged, and so is a set where the new action
+- Actions: `ui.action.record {set?, action?, after?}` starts recording a new action in the chosen set, or the current
+  set when `set` is left out, and returns `{set, name}`. With no sets, it creates Set 1. The action gets the next
+  available `Action N` name in that set. With `action`, it records into the action at `action` in set `set` instead
+  and returns `{set, action, name}`: `ui.action.stop` puts the recorded steps after step `after` of that action, or
+  after its last step when `after` is left out, and the steps after them keep whether they are excluded. The Actions
+  panel's Begin Recording button runs this command with the selected action and its selected step, and with neither
+  when no action is selected. `action` without `set`, `after` without `action`, an index past the last set, action or
+  step, an invalid set or an existing recording is an error and leaves the sets and recording unchanged, and so is a
+  set where the new action
   would give it more than 1,000 actions or an action set file larger than 8 MiB. While a recording (this one or
   `ui.action.new`'s) is in progress, a recorded command whose step would give the action more than 10,000 steps, or
   its set's action set file more than 8 MiB, is an error with the reason (`the action already has 10,000 steps`, `the
@@ -3296,6 +3334,20 @@ already walks Image Trace. Short agent entry points:
   they are excluded, and no step of that action stays selected. A Record Stop dialog open on that step closes, and one
   open on a later step of the action follows it up. A missing or invalid index is an error, and then nothing changes.
   Undo does not restore a deleted step. The panel's Delete Selection runs this for the selected step.
+- Actions: `ui.action.moveStep {set, action, step, toSet?, toAction?, before}` moves one step, a stop or a command, of
+  the action at `action` in set `set` into the action at `toAction` in set `toSet` (by default the same set and
+  action), before the step at index `before` there, or after its last step when `before` is its number of steps.
+  `before` counts the steps as they are before the move. It returns `{set, action, step, moved}` with the step's new
+  place. The step keeps its params and whether it is excluded, and the other steps keep theirs. A selected step stays
+  selected; a moved selected step makes its new action the selected one and its set the current one. A Record Stop
+  dialog open on a step follows the step, and the steps that the recording in progress adds to either action stay
+  after the steps that were before them. A step put back just before or just after itself does not move, and
+  `moved` is `false`. A missing or invalid index, or a move that would give the action more than 10,000 steps or its
+  set's action set file more than 8 MiB, counting the steps that the recording in progress adds to the set, is an
+  error, and then nothing changes. Undo does not move the step back. In the Actions panel, dragging a step row moves
+  the step: a line shows where it goes, before or after the row under the pointer, or first in an action whose name
+  row it is over (after the last step when the action's steps are hidden), and releasing the button off those rows
+  leaves the step where it was.
 - Actions: `ui.action.playbackOptions {speed?, seconds?}` sets how the Actions panel plays actions and returns
   `{speed, seconds}`. `speed` is `accelerated` (the default: every step at once), `step` (one step at a time, with the
   window drawn after each step before the next runs) or `pause` (a pause of `seconds` between steps). `seconds` is a
@@ -3304,8 +3356,8 @@ already walks Image Trace. Short agent entry points:
   preferences. The panel menu's Playback Options… opens the `actionPlayback` dialog (`speed`, `seconds`), whose OK runs
   this. Batch… (`action.batch`) plays every step at once whatever the setting.
 - Actions: `ui.action.stop {}` ends the recording in progress and keeps its steps, in the action `ui.action.new` made
-  for it, else in a new action after the last action of its set, and returns `{stopped}`. It also ends an action
-  playing at Step by Step or Pause For, or one waiting at a stop, whose message box closes: the steps already played
+  for it or the action `ui.action.record` named, at the place it named, else in a new action after the last action of
+  its set, and returns `{stopped}`. It also ends an action playing at Step by Step or Pause For, or one waiting at a stop, whose message box closes: the steps already played
   stay, and the rest do not play. With nothing
   recording or playing it changes nothing. The panel's Stop Playing/Recording button runs this.
 - Action sets: `ui.actionSet.delete {sets?: [index], ids?: [id]}` deletes the Actions panel's sets at these indexes
@@ -3381,7 +3433,9 @@ already walks Image Trace. Short agent entry points:
   nothing when it touches none. `selectFills` off leaves the faces out, and `selectStrokes` off leaves the edges out. A click and a marquee run their command on the
   release, and Escape between the press and the release removes the marquee so that the release runs nothing. The
   tool does not highlight or select the faces and edges of a Live Paint group that is locked, on a locked layer or on
-  a locked artboard, or in isolation mode outside the isolated art.
+  a locked artboard, or in isolation mode outside the isolated art. In the app, the tool's cursor shows what a click
+  at the pointer selects under these rules: the arrow with a filled square for a face, with a short line for an edge,
+  and with an x for nothing. It keeps the look it had at the press until the release.
   The Live Paint Bucket's options (`tool.setOption {tool: "livePaintBucket", values}`; double-clicking the tool opens
   them, dialog `livePaintBucketOptions`) are `paintFills` (on), `paintStrokes` (off), `highlight` (on), `color` (the
   highlight color, `#rrggbb` or a layer color's name; `#ff2a2a`) and `width` (the face highlight's width, 1 to 20 screen
@@ -3810,11 +3864,32 @@ with one gray channel, so a PDF writes it in gray.
 `edit.colors.saturate` needs `intensity`, a number from -100 to 100 (a number outside the range counts as its nearest
 end). Without one, or with `null`, it answers `` missing number `intensity` ``; with a value that is not a number, such as
 `"40"`, it answers `` `intensity` must be a number, not "40" ``. Either way it changes nothing.
-The `edit.colors.*` commands, `edit.colors.overprintBlack` and `addon.color.filter` answer a `fill`, `stroke`,
-`includeImages`, `includePatterns`, `convert`, `remove`, `includeCmyBlacks` or `includeSpotBlacks` that is not true or
-false with `` `fill` must be true or false ``, naming the key, a `percentage` that is not a number with
-`` `percentage` must be a number ``, and a `mode` that is not a string with `` `mode` must be a string ``. They change
-nothing and record no undo step. A null counts as a key left out.
+The `edit.colors.*` commands other than `edit.colors.toIndexed`, `edit.colors.overprintBlack` and
+`addon.color.filter` answer a `fill`, `stroke`, `includeImages`, `includePatterns`, `convert`, `remove`,
+`includeCmyBlacks` or `includeSpotBlacks` that is not true or false with `` `fill` must be true or false ``, naming the
+key, a `percentage` that is not a number with `` `percentage` must be a number ``, and a `mode` that is not a string
+with `` `mode` must be a string ``. They change nothing and record no undo step. A null counts as a key left out.
+
+`edit.colors.toIndexed` (Edit › Edit Colors › Convert to Indexed Color…) stores each embedded image in the selection (or
+`ids`), in groups too, as an indexed-color PNG: a palette of at most 256 RGB colors, with each pixel the index of one.
+`reduction` chooses the palette: `selective` (the default), `perceptual`, `adaptive`, `web`, `gray` and `blackWhite`
+choose it as a PNG-8 export does; `uniform` takes evenly spaced levels of red, green and blue (2 to 6 levels, the most
+whose cube fits in `colors` with one entry left for transparency); `document` takes the colors of the document's
+swatches (at most 255). `colors` (2 to 256, default 256) is the most palette entries, the transparent one included;
+`uniform` needs at least 9, and `blackWhite` and `document` refuse it. `dither` is `diffusion` (the default), `pattern`,
+`noise` or `none`, and `ditherAmount` is 0 to 100 (default 100). Reduction and dither ids are read as a PNG-8 export
+reads them, ignoring case. Pixels under half opacity become one transparent entry and the others become opaque in their
+own color. Linked images, colorized image fills and the images of color glyphs in outlined type keep their pixels. Each
+image that changes becomes a new image, in one undo step for all of them. An image that is already an indexed PNG and
+would show the same pixels is left as it is, and no undo step is recorded when no image changes. `notChanged` counts the
+locked and hidden objects Select All left out that hold an image that is not an indexed PNG yet. An image of more than
+134,217,728 pixels (33,554,432 in the web app) is refused with an error, read from the file's header before any pixel is
+decoded, and nothing changes. A value out of range or of the wrong type, such as `"colors": "8"`, is refused with an
+error and changes nothing.
+
+```json
+{"name":"run_command","arguments":{"command":"edit.colors.toIndexed","params":{"reduction":"adaptive","colors":32,"dither":"pattern"}}}
+```
 
 The reply of `recolor.apply` and of every command above except the Blend commands has `notChanged: {locked, hidden}`.
 When the selection is exactly what `select.all` takes (in isolation mode, what it takes inside the isolated group), it
@@ -4617,7 +4692,7 @@ paper white, 0 %) exports to PDF as a Separation shading, and one that mixes spo
 inks exports as a DeviceN shading. A gradient that mixes a spot ink with colors written in RGB or Lab is written in
 process colors, with a warning; an export that converts colors to a CMYK destination profile writes RGB and Lab stops
 in CMYK, and so does a CMYK document unless the export converts colors to an RGB destination profile. Freeform gradients and dithered fills export to PDF as images in process colors, and Method
-above covers Perceptual gradients.
+above covers Perceptual gradients and gradients mixed around the hue wheel.
 
 ```json
 {"name":"run_command","arguments":{"command":"paint.editGradient","params":{"stops":[{"offset":0,"swatch":"Ink"},{"offset":1,"swatch":"Ink","tint":20}]}}}
@@ -4689,6 +4764,14 @@ not read, at most 256 symbols are read, and a symbol that paints nothing, reache
 tip, has more than 65,536 anchors in its art or in the shapes it paints, has shapes that cannot be combined into one,
 or has more than 4,096 anchors once united is listed in `skipped`. `stroke.arrowheads.list` returns each head's `name`, `reach` and `halfWidth`, the `file`
 path, the `skipped` symbols and any read `error`.
+
+Under automation read roots (see the automation roots section above), the arrowheads file counts as a path the client
+did not give. `stroke.arrowheads.list` returns `file` as `null` when the file is outside the read roots, and its
+`error` names the file by its file name; the heads, `skipped` and the reason stay. `stroke.arrowheads.edit` and
+`stroke.arrowheads.reload` refuse a file outside the read roots with the root-check error, naming the file by its file
+name: `edit` then makes no folder or file and neither opens the file nor brings it to the front, and `reload` does not
+read it. Inside the read roots, `edit` opens the file under the client's roots. The Stroke panel menu's Edit
+Arrowheads… is not confined.
 
 `stroke.set {endArrow: {"custom": name}}` puts a custom head on a stroke. The stroke keeps a copy of the head's art,
 so the document draws it, saves it and exports it to SVG and PDF the same way without the arrowheads file.
@@ -4825,7 +4908,12 @@ files) and `eventNames` (the 19 events the panel lists, from `onfocusin` to `ons
 event's script where they have one (an empty `script` removes it); `svgInteractivity.removeEvent {event, ids?}` and
 `svgInteractivity.clearEvents {ids?}` remove one event or all of them. Each is one undo step.
 `svgInteractivity.addFile {file}` and `svgInteractivity.removeFile {file}` link and unlink a JavaScript file (a path
-or a URL, kept as given without surrounding spaces); a document links at most 64 files. `ui.javascriptFilesDialog {}`
+or a URL, kept as given without surrounding spaces); a document links at most 64 files. `addFile` takes a file as
+already linked only when the same text is linked. With automation read roots in force, `info`, `addFile` and
+`removeFile` name a linked file outside them by its file name alone in `files` (a relative path is taken from the
+document's folder, and a URL is kept), and `removeFile` also unlinks such a file by that name. When the name fits
+more than one linked file (two such files, or such a file and a file linked as that name), `removeFile` returns an
+error and unlinks nothing. `ui.javascriptFilesDialog {}`
 opens the JavaScript Files dialog, whose Choose… puts a picked file in as a `file:///` URL. SVG export writes each event
 as an event attribute on the object's element (`onclick="…"`; with the SVG Tiny 1.2 profile it leaves them out with a
 warning) and each file as `<script xlink:href>`. SVG import reads the event attributes the panel lists and the
@@ -5549,11 +5637,12 @@ the selected artboards (those the Artboard tool has selected, else the active on
 Artboards panel menu's Fit to Artwork Bounds also passes the selected artboards. A batch passes its `artboard` on to
 each of their steps that names no `index`, as the step's `index`. When the document a step runs in has no artboard at
 that index, the step gets that document's last artboard. An `artboard.fitToArt` step that names neither `index` nor
-`indices`, while the Artboard tool is chosen with several artboards selected when the step runs, gets those artboards
-as its `indices` instead, and the batch's journal entry records them, so a replay of the journal fits the same
-artboards. A step's own `index` or `indices` is kept. An action recorded in the Actions panel leaves `index` and
-`indices` out of these steps: when the action plays, Fit to Artwork Bounds resizes the artboards the Artboard tool then
-has selected (two or more), else the active artboard, and Fit to Selected Art resizes the active artboard.
+`indices`, while the Artboard tool is chosen with two or more artboards selected when the step runs, gets those
+artboards as its `indices` instead. The batch's journal entry records the `indices` or `index` such a step got, so a
+replay of the journal fits the same artboards. A step's own `index` or `indices` is kept. An action recorded in the
+Actions panel leaves `index` and `indices` out of these steps: when the action plays, Fit to Artwork Bounds resizes the
+artboards the Artboard tool then has selected (two or more), else the active artboard, and Fit to Selected Art resizes
+the active artboard.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.align","params":{"horizontal":"left","to":"artboard","artboard":1}}}
@@ -5739,7 +5828,9 @@ Tiling tool. It returns `{tool}` and adds no undo step. When the tool cannot be 
 and the drawing tool stay as they were, and it adds no undo step; `tool.select`, `ui.cropImage`,
 `addon.pathtools.cornerTool` and `addon.pathtools.sharedEdgeTool` also return the error when their tool cannot be
 chosen. Pencil as the first drawing tool and the list of selection tools
-are VectorCraft's own rules. A tap in Presentation Mode runs nothing.
+are VectorCraft's own rules. A tap in Presentation Mode runs nothing. Under VectorCraft's own rule, a tap on the canvas
+while a modal dialog is open runs nothing, and fingers already down when it opens make no tap when they lift, during
+the dialog or after it closes.
 
 `gridlineEvery` (72 pt by default) and `gridSubdivisions` (8 by default) set the document grid that View › Show Grid
 draws, and View › Snap to Grid snaps to its subdivisions. Changing either sets the grid of every open document.
@@ -6124,7 +6215,10 @@ document. With no document open they fail with "no document open". `document.act
 the current one. `document.move {from?, to}` reorders open documents the way dragging a document tab along the tab strip
 does: `from` defaults to the current document, `to` is the destination index, documents between them shift by one, the
 current document stays current, and each document keeps its own view (#5663). It is an engine command, so headless and
-remote `command_list` both list it.
+remote `command_list` both list it. `file.close {index}` on a document other than the current one leaves the current
+document current, and its tool keeps its state; closing the current document makes the document in the next tab
+current, or the one before it when it was the last tab. In the desktop app a modified document comes to the front first,
+to ask whether to save it.
 `window.arrange.tile` (Window › Arrange › Tile) shows every open document in its own pane, edge to edge in the document
 area, in a grid of as many columns as the square root of the number of documents, rounded up, and fits each document to
 its pane; with fewer than two documents open it leaves the view and `tiled` as they are. It returns `{tiled, panes}`.
@@ -6227,6 +6321,9 @@ with the defaults.
   them.
 - `file.newProfiles.reset {name}` deletes the category's file, so the shipped profile applies again, and returns
   `{name, reset}`. `reset` is false when there was no file. A copy of the profile that is open stays open.
+- Under automation roots, `file.newProfiles.edit` needs write and read access to the profile's file and
+  `file.newProfiles.reset` needs write access. An error names the file whole only inside the read roots, and
+  otherwise by its file name.
 
 The profile is read on every `file.new`, so a replayed journal or a recorded action uses the profile as it is when it
 runs, as `document.open` reads its file when it runs. A file larger than 64 MiB (VectorCraft's own limit) is not read.
@@ -7086,6 +7183,10 @@ color, even one of the same color, and Registration are not spot colors; the spo
 Color Objects and `objects.spots` counts them; spot swatches no art uses are not listed; with `selectionOnly`, those
 in the selection), `spotColorNames` and `spotColors` (the spot colors those objects use) and `pathLength` (pt: the total length of the paths, compound paths' pieces included and guides left
 out, which objects lists as Path Length in the document's units, say for a cut line or an LED strip along the letters);
+`brushNames`, `brushes`, `spotObjects`, `patternObjects` and `gradientObjects` leave out hidden objects, objects at an
+opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0, their characters' paints and
+colorized images included, and so does `selectionOnly` for an object selected inside such a group or layer, while
+`objects` still counts them as paths, groups and the other kinds;
 `format: "text"` returns the plain-text report Document Info › Save… (`docInfo.save {path?, selectionOnly?, category?}`:
 only `category` when given, else every category) and the package report write.
 

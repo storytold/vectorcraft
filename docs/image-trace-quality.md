@@ -156,6 +156,34 @@ under 0.9 px RMS from the gradient's contours, 1.13 px when smoothed as edges, a
 four corners); `layers::tests` (a ramp, flat colors in palette entries far apart, close flat colors, a
 thin flat stroke, colors off the line between their entries, and Grayscale's grays, each read from both
 sides of the crack) and `subpixel::tests` (the rule, and one decision for a whole piece from either side).
+## Blurred edges
+`settled` moved a blend pixel to a side of its edge only when the picture's own colors on both sides lay
+within 2 px of it, so the middle of an edge blurred over more than about 4 px kept the palette's
+in-between tones and traced as rings of thin paths around the edge. In Color with a Limited palette of
+at most 16 colors and in Grayscale with at most 16 grays, `cut_edge::settled_wide` now does the work, by
+VectorCraft's own rule (RGB distances, 0 to 255 a channel; Grayscale reads each pixel as its gray). A
+blend pixel with no own pixel of its color within 4 px pairs the 8 own colors within 8 px that are nearest
+to its color. It takes the nearer side of the pair it is best a blend of when that pair explains it twice
+as well as its own color, or when it lies between the two and off the line between them by less than 0.15
+of their distance apart. Of two pairs that fit equally well it takes the closer pair. Other palettes,
+High Fidelity Photo, Low Fidelity Photo and Black and White keep `settled`.
+Measured with the harness below on `main` at `77970c6924`, before and after the change (256 px variants
+unless stated): 16 Colors on blurred flat art 9.0 paths to 3.0, 158 anchors to 34, 0.239 px off to 0.069;
+6 Colors 6.0 paths to 3.0, 118 anchors to 33, 0.226 px off to 0.071; scanned, 16 Colors 8.0 paths to 3.0
+and 0.259 px off to 0.110, 6 Colors 7.5 paths to 3.0 and 0.235 px off to 0.093. On each preset's own
+inputs (section 1), 6 Colors went from 4.1 paths to 3.0 and 0.143 px off to 0.101, and 16 Colors from 4.6
+paths to 3.0 and 0.145 px off to 0.100. Auto Color does not change. Worse by more than 5% (25 of 211 rows
+that moved, most of them variants of the same inputs): askew shapes, odd px 11 to 22 with 6 Colors (paths
+4.0 to 4.3, odd colours 0.3 to 0.7), 23 to 26 with 3 Colors, 17 to 22 with 16 Colors and 27 to 30 with
+Shades of Gray; thin lines, missed max 23.5 to 45.3 px with 16 Colors, and with Shades of Gray paths 5.3 to
+7.3, anchors 36 to 41 and odd colours 3.0 to 5.0; linear gradients with 3 Colors, paths 3.0 to 3.3, and
+with 6 Colors with Gradients, paths 1.3 to 1.5 and anchors 13 to 16; two- and three-stop gradients with 6
+Colors with Gradients, paths 1.2 to 1.3; gradient and photo with 16 Colors, overlap px 0.0 to 0.2 and
+specks 0.8 to 1.0. The tables below are the previous measurement, not a rerun.
+Tests on code-drawn images: `tests::a_blurred_edge_is_no_ring_of_a_tone_between_its_sides` (a disc
+blurred into a 10 px ramp, 16 Colors), `tests::grayscale_settles_a_blurred_edge_between_its_own_two_grays`,
+`tests::grayscale_settles_a_tinted_blurred_edge_by_its_lightness`,
+`tests::the_photo_presets_keep_the_tones_of_a_blurred_edge` and `quantize::cut_edge::tests`.
 ## Staircases in smooth areas
 Where a band border in a gradient or a shaded area runs at a slant, its pixels form a staircase whose
 steps are two or more pixels long. One piece of outline can run along a sharp edge in the image and then
