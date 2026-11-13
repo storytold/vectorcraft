@@ -118,6 +118,21 @@ fn several_artboards_get_a_sub_folder_each_and_a_range_picks_them() {
 }
 
 #[test]
+fn ten_layers_or_more_get_numbers_of_one_width_so_names_sort_in_stacking_order() {
+    let mut s = two_layers();
+    for i in 3..=12 {
+        new_layer(&mut s, &format!("L{i}"));
+        rect(&mut s, 10.0, 10.0, 10.0, 10.0);
+    }
+    let names = names(&s.execute(C, &json!({})).unwrap());
+    assert_eq!(names.len(), 12);
+    assert_eq!([&names[0], &names[1], &names[9], &names[11]], ["01.back.svg", "02.front.svg", "10.l10.svg", "12.l12.svg"]);
+    let mut sorted = names.clone();
+    sorted.sort();
+    assert_eq!(sorted, names, "a plain sort by name keeps the stacking order");
+}
+
+#[test]
 fn an_artboard_picked_twice_is_exported_once() {
     let mut s = two_layers();
     let r = s.execute(C, &json!({"artboards": [0, 0]})).unwrap();
@@ -166,10 +181,12 @@ fn zip_holds_the_folder() {
     let title = super::file_stem(&s.doc().unwrap().doc.title);
     assert_eq!(r["name"], json!(format!("{title}.zip")));
     assert_eq!(r["files"], json!(["1.back.svg", "2.front.svg"]));
-    let zip = b64(&r);
-    assert_eq!(&zip[..2], b"PK");
-    let text = String::from_utf8_lossy(&zip);
-    assert!(text.contains(&format!("{title}/2.front.svg")), "entries are inside the folder");
+    // Read back, every entry's CRC and size checked: the folder's files, the same bytes as
+    // exported without the ZIP.
+    let entries = super::zip::entries(&b64(&r)).unwrap();
+    let plain = files(&s.execute(C, &json!({})).unwrap());
+    let expected: Vec<(String, Vec<u8>)> = plain.into_iter().map(|(n, b)| (format!("{title}/{n}"), b)).collect();
+    assert_eq!(entries, expected, "entries are inside the folder");
 }
 
 /// A temporary folder this test made itself (never one already there), removed when the test

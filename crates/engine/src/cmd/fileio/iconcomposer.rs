@@ -10,7 +10,8 @@
 //! made with the date and time after the name (`Icon 2026-11-12 09.30.00`, UTC). A document of
 //! several artboards gets a sub-folder per chosen artboard, named after it. Each file is named
 //! `<n>.<layer name>.<svg|png>` in lower case, `n` counting the exported layers of that artboard
-//! from the back (1) to the front, so the files sort in stacking order. A layer is left out when it
+//! from the back (1) to the front, padded with zeros to the width of the largest (`01` … `12`), so
+//! the files sort in stacking order by name too. A layer is left out when it
 //! is hidden, a template, or has no visible art that overlaps the artboard; the objects of a layer
 //! that lie wholly off the artboard are left out of its file.
 
@@ -178,23 +179,29 @@ fn layer_files(doc: &Document, boards: &[usize], subfolders: Option<&[String]>, 
     for (i, b) in boards.iter().enumerate() {
         let Some(artboard) = doc.artboards.get(*b) else { continue };
         let sub = subfolders.and_then(|s| s.get(i));
-        let mut number = 0usize;
-        // Bottom first: the back layer is 1.
+        // Bottom first: the back layer is 1. The layers are found before any is encoded, so the
+        // numbers can be padded to one width: `01` … `12` sort by name as they stack.
+        let mut layers = vec![];
         for layer in doc.layers.iter().filter(|l| l.is_layer() && l.visible && !l.is_template()) {
             vectorcraft_doc::cancel::check()?;
             let Some(d) = layer_doc(doc, layer, artboard.rect, &artboard.name) else { continue };
             if count >= MAX_FILES {
                 return Err(bad(C, format!("more than {MAX_FILES} layer files: export fewer artboards at a time")));
             }
-            number += 1;
             count += 1;
+            layers.push((layer, d));
+        }
+        let width = layers.len().to_string().len();
+        for (n, (layer, d)) in layers.into_iter().enumerate() {
+            vectorcraft_doc::cancel::check()?;
+            let number = n + 1;
             let (bytes, notes) = encode_with_warnings(&d, format, &options)?;
             for w in notes {
                 if !warnings.contains(&w) {
                     warnings.push(w);
                 }
             }
-            let file = format!("{number}.{}.{format}", safe_name(&layer.display_name(), "Layer")).to_lowercase();
+            let file = format!("{number:0width$}.{}.{format}", safe_name(&layer.display_name(), "Layer")).to_lowercase();
             let path = sub.map_or_else(|| file.clone(), |s| format!("{s}/{file}"));
             sink.put(sub.map(String::as_str), LayerFile { path, bytes })?;
         }

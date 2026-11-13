@@ -16,7 +16,8 @@ VectorCraft's own design, worked out from what Icon Composer takes in.
   them. PNG files are drawn at 1 pixel per point on a transparent background (a 1024 × 1024 pt artboard gives
   1024 × 1024 px), and the artboard's background color is left out.
 - **Names in stacking order.** Files are named `<n>.<layer name>.svg` (or `.png`) in lower case. `n` counts from 1 for
-  the back layer to the front one, so the files sort in stacking order. Characters that can't be in a file name on
+  the back layer to the front one, padded with zeros when there are ten layers or more (`01` … `12`), so the files
+  sort in stacking order by name. Characters that can't be in a file name on
   every platform become `-`.
 - **A folder per export.** The files go in a new folder named after the document, inside the folder you choose. When
   a folder of that name is already there, the new one has the date and time (UTC) after the name, so an export
