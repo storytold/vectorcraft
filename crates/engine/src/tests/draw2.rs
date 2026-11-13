@@ -1367,6 +1367,32 @@ fn smooth_tool_reduces_jagged_path() {
     assert_eq!(p.subpaths[0].anchors[0].p, Point::new(100.0, 200.0));
 }
 
+/// The anchors a zigzag `amplitude` points high keeps after one `path.smoothRegion` drag along it
+/// at `fidelity`, with the path, the drag, its radius and the Fidelity all scaled by `scale`: the
+/// same drag on screen zoomed in 1 / `scale` times.
+fn smoothed_zigzag_anchors(amplitude: f64, fidelity: f64, scale: f64) -> usize {
+    let mut s = session();
+    let anchors: Vec<_> =
+        (0..=40).map(|i| json!({"x": (100.0 + i as f64 * 5.0) * scale, "y": (200.0 + if i % 2 == 0 { 0.0 } else { amplitude }) * scale})).collect();
+    let r = s.execute("path.create", &json!({"anchors": anchors})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let drag: Vec<_> = [(90.0, 200.0), (200.0, 200.0), (310.0, 200.0)].iter().map(|&(x, y)| json!([x * scale, y * scale])).collect();
+    s.execute("path.smoothRegion", &json!({"points": drag, "radius": 12.0 * scale, "fidelity": fidelity * scale})).unwrap();
+    path(&s, id).anchor_count()
+}
+
+/// The Smooth tool sends its Fidelity (screen pixels) in points at Fidelity / zoom, so
+/// `path.smoothRegion` refits at the tolerance it is sent from the lowest Fidelity at the highest
+/// zoom (0.05 px at 64000 %) to the highest at the lowest zoom (100 px at 3.13 %): a drag smooths
+/// as much on screen at any zoom.
+#[test]
+fn smooth_region_refits_at_the_tolerance_sent_at_any_zoom() {
+    for (amplitude, fidelity, scale) in [(1.5, 0.05, 1.0 / 640.0), (1.5, 0.05, 1.0 / 8.0), (5.0, 20.0, 1.0 / 0.0313), (5.0, 20.0, 4.0)] {
+        let want = smoothed_zigzag_anchors(amplitude, fidelity, 1.0);
+        assert_eq!(smoothed_zigzag_anchors(amplitude, fidelity, scale), want, "{amplitude} pt zigzag at {fidelity} px, zoom {}", 1.0 / scale);
+    }
+}
+
 /// A drag of the Smooth tool along a line jagged by up to 6 pt leaves no corner between a curve and
 /// a line: every anchor between the path's ends turns by at most 1°.
 #[test]
@@ -1604,6 +1630,210 @@ fn smoothing_a_whole_closed_path_smooths_a_bump_at_its_start() {
     let (start, far) = (bump(0.0), bump(PI));
     assert!(far < 5.0, "the far bump stays {far} pt high");
     assert!(start <= far + 0.5, "the bump at the start stays {start} pt high, the far one {far} pt");
+}
+
+/// `path.smoothRegion` along `drag` with the Smooth tool's reach and default Fidelity → the ids changed.
+fn smooth_pass_ids(s: &mut Session, drag: &[Point]) -> serde_json::Value {
+    let pts: Vec<_> = drag.iter().map(|p| json!([p.x, p.y])).collect();
+    s.execute("path.smoothRegion", &json!({"points": pts, "radius": 12, "fidelity": 2.5})).unwrap()["ids"].clone()
+}
+
+/// The corner, in degrees, at each anchor between two segments of `p`'s first open subpath.
+fn smooth_test_kinks(p: &PathData) -> Vec<f64> {
+    let sp = &p.subpaths[0];
+    (1..sp.segment_count())
+        .map(|i| {
+            let (a, b) = (sp.segment(i - 1), sp.segment(i));
+            let tin = if a.p3.distance(a.p2) > 1e-9 { a.p3 - a.p2 } else { a.p3 - a.p1 };
+            let tout = if b.p1.distance(b.p0) > 1e-9 { b.p1 - b.p0 } else { b.p2 - b.p0 };
+            tin.cross(tout).atan2(tin.dot(tout)).abs().to_degrees()
+        })
+        .collect()
+}
+
+/// A 200 pt segment rising to a sharp peak at (200, 125) in its middle, then a 100 pt line:
+/// (100, 200) to (300, 200) to (400, 200).
+fn long_peak_segment(s: &mut Session) -> NodeId {
+    let anchors = [
+        json!({"x": 100.0, "y": 200.0, "out": [200.0, 100.0]}),
+        json!({"x": 300.0, "y": 200.0, "in": [200.0, 100.0]}),
+        json!({"x": 400.0, "y": 200.0}),
+    ];
+    smooth_test_path(s, &anchors, false)
+}
+
+/// The sharpest bend of `p` between x = 180 and 220: the most it turns, in radians per point, over
+/// points about half a point apart.
+fn sharpest_bend_near_200(p: &PathData) -> f64 {
+    use kurbo::ParamCurve;
+    let sp = &p.subpaths[0];
+    let pts: Vec<Point> = (0..sp.segment_count()).flat_map(|i| (0..=800).map(move |k| sp.segment(i).eval(f64::from(k) / 800.0))).collect();
+    pts.windows(3)
+        .filter(|w| (180.0..=220.0).contains(&w[1].x))
+        .map(|w| (w[1] - w[0], w[2] - w[1]))
+        .filter(|(u, v)| u.hypot() > 1e-6 && v.hypot() > 1e-6)
+        .map(|(u, v)| u.cross(v).atan2(u.dot(v)).abs() / (0.5 * (u.hypot() + v.hypot())))
+        .fold(0.0, f64::max)
+}
+
+/// A drag along the middle of a long segment smooths the stretch under it although both of the
+/// segment's anchors are out of reach; the rest of the segment and the line after it keep their shape.
+#[test]
+fn a_smooth_drag_along_a_segment_smooths_it_with_its_anchors_out_of_reach() {
+    use kurbo::ParamCurve;
+    let mut s = session();
+    let id = long_peak_segment(&mut s);
+    let before = path(&s, id);
+    let drag = smooth_drag_along(126.0, 185.0, 215.0);
+    assert_eq!(smooth_pass_ids(&mut s, &drag), json!([id.0]));
+    let after = path(&s, id);
+    let (b0, b1) = (sharpest_bend_near_200(&before), sharpest_bend_near_200(&after));
+    assert!(b1 < 0.97 * b0, "the peak's sharpest bend {b0} -> {b1}");
+    let kinks = smooth_test_kinks(&after);
+    // The anchors where the reach was cut join smoothly; the corner before the line stays.
+    assert!(kinks[..kinks.len() - 1].iter().all(|k| *k < 0.5), "{kinks:?}");
+    let a = &after.subpaths[0].anchors;
+    assert_eq!((a[0].p, a[0].h_out.y < 200.0), (Point::new(100.0, 200.0), true), "the first anchor keeps its place: {:?}", a[0]);
+    let (end, last) = (a[a.len() - 2], a[a.len() - 1]);
+    assert!(end.p == Point::new(300.0, 200.0) && !end.has_out(), "the segment's end keeps its place: {end:?}");
+    assert_eq!(last, before.subpaths[0].anchors[2], "and the line after it stays");
+    // Every point of the segment farther than the reach from the drag is still on the path.
+    let seg = before.subpaths[0].segment(0);
+    let sp = &after.subpaths[0];
+    let on_after: Vec<Point> = (0..sp.segment_count()).flat_map(|i| (0..=400).map(move |k| sp.segment(i).eval(f64::from(k) / 400.0))).collect();
+    let off_drag = |q: Point| {
+        drag.windows(2)
+            .map(|w| {
+                let ab = w[1] - w[0];
+                (w[0] + ab * ((q - w[0]).dot(ab) / ab.hypot2()).clamp(0.0, 1.0)).distance(q)
+            })
+            .fold(f64::INFINITY, f64::min)
+    };
+    for q in (0..=200).map(|k| seg.eval(f64::from(k) / 200.0)).filter(|q| off_drag(*q) > 14.0) {
+        let gap = on_after.iter().map(|r| r.distance(q)).fold(f64::INFINITY, f64::min);
+        assert!(gap < 1.0, "{q:?} is {gap} pt off the smoothed path");
+    }
+}
+
+/// A drag that reaches a segment at its first anchor, leaves it and comes back to its middle smooths
+/// the middle too, and the stretch between stays as it was.
+#[test]
+fn a_smooth_drag_that_comes_back_to_a_segment_smooths_where_it_comes_back() {
+    use kurbo::ParamCurve;
+    let mut s = session();
+    let id = long_peak_segment(&mut s);
+    let before = path(&s, id);
+    let drag = [Point::new(100.0, 200.0), Point::new(100.0, 320.0), Point::new(185.0, 320.0), Point::new(185.0, 126.0), Point::new(215.0, 126.0)];
+    assert_eq!(smooth_pass_ids(&mut s, &drag), json!([id.0]));
+    let after = path(&s, id);
+    let (b0, b1) = (sharpest_bend_near_200(&before), sharpest_bend_near_200(&after));
+    assert!(b1 < 0.97 * b0, "the peak's sharpest bend {b0} -> {b1}");
+    let between = before.subpaths[0].segment(0).eval(0.3);
+    let sp = &after.subpaths[0];
+    let gap = (0..sp.segment_count())
+        .flat_map(|i| (0..=400).map(move |k| sp.segment(i).eval(f64::from(k) / 400.0)))
+        .map(|r| r.distance(between))
+        .fold(f64::INFINITY, f64::min);
+    assert!(gap < 0.5, "{between:?} is {gap} pt off the smoothed path");
+}
+
+/// A click on a curve 100,000 pt long, between the places a fixed number of samples along it would
+/// look at, still finds the curve under it.
+#[test]
+fn a_smooth_drag_finds_a_very_long_curve_under_it() {
+    use kurbo::ParamCurve;
+    let mut s = session();
+    let anchors = [json!({"x": 0.0, "y": 0.0, "out": [30000.0, -9000.0]}), json!({"x": 100000.0, "y": 0.0, "in": [70000.0, -9000.0]})];
+    let id = smooth_test_path(&mut s, &anchors, false);
+    let at = path(&s, id).subpaths[0].segment(0).eval(0.5 + 0.5 / 1024.0);
+    assert_eq!(smooth_pass_ids(&mut s, &[at]), json!([id.0]));
+}
+
+/// A click just within the reach of a segment's peak, with both of the segment's anchors out of
+/// reach, smooths the segment although only a few points of it are within the reach.
+#[test]
+fn a_smooth_click_that_only_just_reaches_a_segment_smooths_it() {
+    let mut s = session();
+    let id = long_peak_segment(&mut s);
+    let before = path(&s, id);
+    assert_eq!(smooth_pass_ids(&mut s, &[Point::new(200.0, 113.1)]), json!([id.0]));
+    assert_ne!(path(&s, id), before);
+}
+
+/// A drag that runs along a very long curve first and then crosses a second curve away from its
+/// middle, with both of its anchors out of reach, smooths the second curve too: each curve in reach
+/// gets the same share of the search, so the long one does not use it all.
+#[test]
+fn a_long_curve_searched_first_leaves_the_next_curve_its_share() {
+    let mut s = session();
+    let long = smooth_test_path(
+        &mut s,
+        &[json!({"x": 0.0, "y": 0.0, "out": [30000.0, 1.0]}), json!({"x": 100000.0, "y": 0.0, "in": [70000.0, 1.0]})],
+        false,
+    );
+    let next = smooth_test_path(
+        &mut s,
+        &[json!({"x": 100100.0, "y": -100.0, "out": [100130.0, 200.0]}), json!({"x": 100100.0, "y": 900.0, "in": [100130.0, 600.0]})],
+        false,
+    );
+    s.execute("select.set", &json!({"ids": [long.0, next.0]})).unwrap();
+    let before = path(&s, next);
+    let mut drag: Vec<Point> = (0..=1000).map(|i| Point::new(f64::from(i) * 100.0, 0.0)).collect();
+    drag.push(Point::new(100200.0, 0.0));
+    let ids = smooth_pass_ids(&mut s, &drag);
+    assert!(ids.as_array().is_some_and(|v| v.contains(&json!(next.0))), "{ids}");
+    assert_ne!(path(&s, next), before);
+}
+
+/// An open path of two anchors is smoothed: an S-curve smoothed along its whole length.
+#[test]
+fn smoothing_smooths_an_open_two_anchor_path() {
+    use kurbo::ParamCurve;
+    let mut s = session();
+    let anchors = [json!({"x": 100.0, "y": 200.0, "out": [170.0, 130.0]}), json!({"x": 200.0, "y": 200.0, "in": [130.0, 270.0]})];
+    let id = smooth_test_path(&mut s, &anchors, false);
+    let before = path(&s, id);
+    let seg = before.subpaths[0].segment(0);
+    let drag: Vec<Point> = (0..=20).map(|k| seg.eval(f64::from(k) / 20.0)).collect();
+    assert_eq!(smooth_pass_ids(&mut s, &drag), json!([id.0]));
+    let after = path(&s, id);
+    let (t0, t1) = (total_turning(&before), total_turning(&after));
+    assert!(t1 < t0, "open: turning {t0} -> {t1}");
+    let a = &after.subpaths[0].anchors;
+    assert_eq!((a[0].p, a[a.len() - 1].p), (Point::new(100.0, 200.0), Point::new(200.0, 200.0)), "the ends stay");
+}
+
+/// A closed path of two anchors is smoothed along the middle of one side and stays closed.
+#[test]
+fn smoothing_smooths_a_closed_two_anchor_path() {
+    use kurbo::ParamCurve;
+    let mut s = session();
+    let anchors = [
+        json!({"x": 100.0, "y": 300.0, "in": [100.0, 400.0], "out": [100.0, 200.0]}),
+        json!({"x": 300.0, "y": 300.0, "in": [300.0, 160.0], "out": [300.0, 440.0]}),
+    ];
+    let id = smooth_test_path(&mut s, &anchors, true);
+    let before = path(&s, id);
+    let top = before.subpaths[0].segment(0);
+    let mid = top.eval(0.5);
+    assert_eq!(smooth_pass_ids(&mut s, &[mid - kurbo::Vec2::new(10.0, 0.0), mid + kurbo::Vec2::new(10.0, 0.0)]), json!([id.0]));
+    let after = path(&s, id);
+    assert!(after.subpaths[0].closed && after != before, "{after:?}");
+}
+
+/// A drag that passes nowhere near a path's segments, or only over the middle of a straight
+/// segment, leaves the path as it was.
+#[test]
+fn smoothing_leaves_paths_out_of_reach_and_straight_segments_alone() {
+    let mut s = session();
+    let id = long_peak_segment(&mut s);
+    let before = path(&s, id);
+    assert_eq!(smooth_pass_ids(&mut s, &smooth_drag_along(260.0, 100.0, 400.0)), json!([]), "60 pt off the path");
+    assert_eq!(path(&s, id), before);
+    let line = smooth_test_path(&mut s, &[json!({"x": 100.0, "y": 400.0}), json!({"x": 300.0, "y": 400.0}), json!({"x": 300.0, "y": 450.0})], false);
+    let before = path(&s, line);
+    assert_eq!(smooth_pass_ids(&mut s, &smooth_drag_along(400.0, 190.0, 210.0)), json!([]), "a straight segment");
+    assert_eq!(path(&s, line), before);
 }
 
 #[test]

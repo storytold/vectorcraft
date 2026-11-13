@@ -2732,6 +2732,11 @@ digits	Malayalam	Малаялам
 	Rating:	Рейтинг:
 	Real World:	Реальный мир:
 	Real-time Drawing and Editing	Рисование и редактирование в реальном времени
+	Use Monitor Profile for Canvas	Использовать профиль монитора для холста
+	The canvas is drawn in sRGB.	Холст отображается в sRGB.
+	Canvas display profile:	Профиль дисплея для холста:
+	The system matches the window to the display's colors.	Система согласует цвета окна с дисплеем.
+	No usable display profile was found: the canvas is drawn in sRGB.	Подходящий профиль дисплея не найден: холст отображается в sRGB.
 	Rearrange All Artboards	Переставить все монтажные области
 	Rearrange	Переставить
 	Select All Artboards	Выделить все монтажные области
@@ -3670,6 +3675,11 @@ digits	Malayalam	Малаялам
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Параметры Tate-chu-yoko…
 	Tate-chu-yoko Settings	Параметры Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Параметры Warichu…
+	Warichu Settings	Параметры Warichu
+	Lines:	Строки:
+	Line Gap:	Интервал между строками:
 	Composite Fonts…	Составные шрифты…
 	Composite Fonts	Составные шрифты
 	Export Composite Fonts	Экспорт составных шрифтов
@@ -4385,6 +4395,10 @@ axis	Both	Оба
 @msg	Couldn't paste: the document it was pasted in was reverted	Не удалось вставить: документ, в который выполнялась вставка, был возвращён к сохранённой версии
 @msg	Couldn't read {name}: {e}	Не удалось прочитать {name}: {e}
 @msg	Couldn't save recovery data: {e}	Не удалось сохранить данные восстановления: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не удалось сохранить данные восстановления для {title}: {e}. Копии сохраняются в {folder}, папку восстановления по умолчанию; чтобы использовать другую папку, задайте Настройки → Работа с файлами → Восстановление данных → Папка (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не удалось сохранить данные восстановления для {title}: {e}. Копии сохраняются в {folder}, папку, заданную в настройках; чтобы использовать другую папку, задайте Настройки → Работа с файлами → Восстановление данных → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не удалось сохранить данные восстановления: {e}. Копии сохраняются в {folder}, папку восстановления по умолчанию; чтобы использовать другую папку, задайте Настройки → Работа с файлами → Восстановление данных → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не удалось сохранить данные восстановления: {e}. Копии сохраняются в {folder}, папку, заданную в настройках; чтобы использовать другую папку, задайте Настройки → Работа с файлами → Восстановление данных → Папка (recoveryFolder)
 @msg	Create Outlines: select text objects	Создание контуров: выделите текстовые объекты
 @msg	Create from Guides: the document has no artboard	Создание из направляющих: в документе нет монтажной области
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Создание из направляющих: направляющие образуют более {MAX_PIECES} фрагментов
@@ -4470,6 +4484,9 @@ axis	Both	Оба
 @msg	`{keep}` is not a side of this axis	`{keep}` не является стороной этой оси
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` должно быть `auto` или кодом языка, например `en` или `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` должно быть цветом #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` должно быть цветом #rrggbb или названием цвета слоя
+@msg	unknown Live Paint option `{key}`	неизвестный параметр быстрой заливки `{key}`
+@msg	unknown Shape Builder option `{key}`	неизвестный параметр создания фигур `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` должно быть цветом #rrggbb
 @msg	`{key}` must be a number	`{key}` должно быть числом
 @msg	`{key}` must be a number, not {v}	`{key}` должно быть числом, а не {v}
@@ -4629,6 +4646,7 @@ axis	Both	Оба
 @msg	internal error: {msg} (please report this bug)	внутренняя ошибка: {msg} (пожалуйста, сообщите об этой ошибке)
 @msg	invalid PDF setting: {0}	недопустимый параметр PDF: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	страница монтажной области {n} имеет размер {size}, что больше ограничения PDF на размер страницы в 14 400 pt (200 in): она записывается с UserUnit {unit}, поэтому приложения, которые игнорируют UserUnit, показывают её во столько же раз меньше
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	страница монтажной области {n} имеет размер {size}, что больше ограничения PDF на размер страницы в 14 400 pt (200 in): она записывается с UserUnit {unit}, поэтому приложения, которые игнорируют UserUnit, показывают её во столько же раз меньше: включите «Записывать страницы длиннее 200 in в полном размере, в пунктах»
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	страница монтажной области {n} имеет размер {size}, что больше ограничения PDF на размер страницы в 14 400 pt (200 in): страницы {label} записываются без UserUnit, в пунктах, и приложения, соблюдающие ограничение, обрезают страницу до 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	в PDF 1.5 нет UserUnit, который нужен странице длиннее 14 400 pt (200 in), чтобы сохранить размер: файл записывается как PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	в PDF 1.4 нет UserUnit, который нужен странице длиннее 14 400 pt (200 in), чтобы уложиться в предел страницы PDF/A-2 в 14 400 единиц: файл записывается как PDF 1.6
@@ -5069,6 +5087,7 @@ axis	Both	Оба
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Отменён {n} восстановленный документ|Отменено {n} восстановленных документа|Отменено {n} восстановленных документов
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Восстановлен {n} документ: сохраните его, чтобы оставить|Восстановлено {n} документа: сохраните их, чтобы оставить|Восстановлено {n} документов: сохраните их, чтобы оставить
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Открыто с {n} примечанием: {first}|Открыто с {n} примечаниями: {first}|Открыто с {n} примечаниями: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Открыто с {n} примечанием: {first}|{notice}. Открыто с {n} примечаниями: {first}|{notice}. Открыто с {n} примечаниями: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Сохранено: {path} с {n} примечанием: {first}|Сохранено: {path} с {n} примечаниями: {first}|Сохранено: {path} с {n} примечаниями: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Внедрено {n} изображение; отсутствует {missing}: сначала восстановите связи|Внедрено {n} изображения; отсутствует {missing}: сначала восстановите связи|Внедрено {n} изображений; отсутствует {missing}: сначала восстановите связи
 @msgplural	Embedded {n} image|Embedded {n} images	Внедрено {n} изображение|Внедрено {n} изображения|Внедрено {n} изображений
@@ -6849,6 +6868,8 @@ anchor	Points:	Точки:
 	Anchor Inspector	Инспектор опорных точек
 	Add Points at Crossings	Добавить точки на пересечениях
 	Split at Crossings	Разрезать на пересечениях
+	Trim at Crossings Tool	Инструмент «Подрезка на пересечениях»
+	Trim at Crossings	Подрезать на пересечениях
 	Extend Path	Продлить контур
 	Measure & Inspect	Измерение и анализ
 	Set Anchor	Задать опорную точку
@@ -7539,3 +7560,9 @@ shape	Open	Открытый
 	Margin	Поле
 	Box	Рамка
 	Swatch	Образец
+	Banner Hems and Grommets…	Подгибы и люверсы баннера…
+	Banner Hems and Grommets	Подгибы и люверсы баннера
+	Hem	Подгиб
+	Grommets	Люверсы
+	Grommet Inset	Отступ люверсов от края
+	Diameter	Диаметр
