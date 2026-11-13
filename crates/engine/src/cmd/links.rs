@@ -416,6 +416,26 @@ fn keep_eps_preview(low_res_proxy_eps: bool, g: &Group, d: &Document) -> bool {
     low_res_proxy_eps && g.document.is_none() && linked_eps(&g.link) && previewing(d, &g.key)
 }
 
+/// Is the linked file `f` found a DCS file? Only the start of the file is read, unless a binary EPS
+/// header puts its PostScript further on; a DCS file read in full stays in `f`. A file that can't
+/// be read is not one.
+fn is_dcs_file(f: &mut Found) -> bool {
+    use super::place::dcs;
+    if let Some(b) = &f.bytes {
+        return dcs::is_dcs(b);
+    }
+    let Ok(head) = fileio::read_file_head(&f.path, dcs::HEAD_BYTES) else { return false };
+    if let Some(is) = dcs::head_is_dcs(&head, f.size) {
+        return is;
+    }
+    let Ok(b) = f.read() else { return false };
+    let is = dcs::is_dcs(&b);
+    if is {
+        f.bytes = Some(b);
+    }
+    is
+}
+
 /// Does group `g` of `d` show something other than its file: an image its preview, a placed
 /// document nothing (its file's bytes are gone)?
 fn stale(d: &Document, g: &Group) -> bool {
@@ -638,9 +658,13 @@ fn clip_shape((frame, room): Clip) -> PathData {
 enum ClipTo {
     /// It stays as it is.
     Keep,
-    /// It is clipped to this path: the clipping path of the clip group holding just it changes,
-    /// else it goes into a new clip group.
+    /// It is clipped to this path (Placement Options' clip): the clipping path of the clip group
+    /// holding just it changes, else it goes into a new clip group.
     Path(PathData),
+    /// It is clipped to this path, the clipping path its DCS file draws it through: as [`ClipTo::Path`],
+    /// except that a plain group holding just it (as [`ClipTo::Off`] leaves one) becomes a clip group
+    /// again.
+    File(PathData),
     /// It goes into a new clip group of this path, inside the clip group that holds it.
     Nest(PathData),
     /// The clipping path of the clip group holding just it goes (a DCS file's clipping path that
@@ -702,7 +726,7 @@ fn clip_to(
     match img.clip.as_ref().map(|path| path.transformed(new_xf)) {
         // A clipping mask made in the document stays, with the file's clip group inside it.
         Some(path) if held.is_some() && !file_held => ClipTo::Nest(path),
-        Some(path) => ClipTo::Path(path),
+        Some(path) => ClipTo::File(path),
         None if file_held => ClipTo::Off,
         None => ClipTo::Keep,
     }
@@ -751,7 +775,7 @@ impl Nested<'_> {
         let mut new = Arc::new(new);
         self.update(&mut new, true);
         *n = match clip {
-            ClipTo::Path(path) | ClipTo::Nest(path) => Arc::new(self.clip_group(new, path)),
+            ClipTo::Path(path) | ClipTo::File(path) | ClipTo::Nest(path) => Arc::new(self.clip_group(new, path)),
             ClipTo::Keep | ClipTo::Off => new,
         };
     }
@@ -767,12 +791,16 @@ impl Nested<'_> {
         let mut slots: Vec<(usize, Arc<Node>)> = vec![];
         // The object a clip group that loses its clipping path holds alone.
         let mut declipped = None;
+        // The clipping path and object of a plain group holding just the object, which becomes a
+        // clip group again.
+        let mut reclipped = None;
         if let Some(children) = n.children() {
             // A clip group holding just the object: its clipping path changes.
             let clip_path = match (&n.kind, &children[..]) {
                 (NodeKind::Group { clip: true, .. }, [c, _]) if matches!(c.kind, NodeKind::Path { clipping: true, .. }) => Some(c),
                 _ => None,
             };
+            let plain = matches!((&n.kind, &children[..]), (NodeKind::Group { clip: false, .. }, [_]));
             for (i, c) in children.iter().enumerate() {
                 if !(nested && (self.pick)(c)) {
                     let mut new = Arc::clone(c);
@@ -791,14 +819,15 @@ impl Nested<'_> {
                 self.update(&mut new, true);
                 match (clip, clip_path) {
                     (ClipTo::Keep, _) => slots.push((i, new)),
-                    (ClipTo::Path(clip), Some(path)) if i == 1 => {
+                    (ClipTo::Path(clip) | ClipTo::File(clip), Some(path)) if i == 1 => {
                         let mut path = Node::clone(path);
                         if let NodeKind::Path { path: p, .. } = &mut path.kind {
                             *p = clip;
                         }
                         slots.extend([(0, Arc::new(path)), (1, new)]);
                     }
-                    (ClipTo::Path(clip) | ClipTo::Nest(clip), _) => {
+                    (ClipTo::File(clip), None) if plain => reclipped = Some((clip, new)),
+                    (ClipTo::Path(clip) | ClipTo::File(clip) | ClipTo::Nest(clip), _) => {
                         let group = self.clip_group(new, clip);
                         slots.push((i, Arc::new(group)));
                     }
@@ -807,12 +836,20 @@ impl Nested<'_> {
                 }
             }
         }
-        if mask.is_none() && slots.is_empty() && declipped.is_none() {
+        if mask.is_none() && slots.is_empty() && declipped.is_none() && reclipped.is_none() {
             return;
         }
+        let reclipped = reclipped.map(|(clip, object)| (Arc::new(self.clipping_path(clip)), object));
         let n = Arc::make_mut(n);
         if let (Some(art), Some(m)) = (mask, n.extras_if_any().and_then(|e| e.mask.as_mut())) {
             m.art = art;
+        }
+        // A plain group of just the object that becomes a clip group again.
+        if let Some((path, object)) = reclipped {
+            if let NodeKind::Group { children, clip } = &mut n.kind {
+                (*children, *clip) = (vec![path, object], true);
+            }
+            return;
         }
         // A clip group that stays as a plain group of just the object.
         if let Some(object) = declipped {
@@ -832,14 +869,17 @@ impl Nested<'_> {
 
     /// A clip group of `object` clipped to `clip`, as [`clip_image_to`] makes one in the layers.
     fn clip_group(&mut self, object: Arc<Node>, clip: PathData) -> Node {
-        let (path_id, group_id) = (NodeId(self.next), NodeId(self.next + 1));
-        self.next += 2;
-        let none = vectorcraft_color::Paint::None;
-        let mut path = Node::path(path_id, clip, Appearance::basic(none.clone(), none, 0.0));
-        if let NodeKind::Path { clipping, .. } = &mut path.kind {
-            *clipping = true;
-        }
+        let path = self.clipping_path(clip);
+        let group_id = NodeId(self.next);
+        self.next += 1;
         Node::new(group_id, NodeKind::Group { children: vec![Arc::new(path), object], clip: true })
+    }
+
+    /// A clipping path of `clip`, with the next node id.
+    fn clipping_path(&mut self, clip: PathData) -> Node {
+        let id = NodeId(self.next);
+        self.next += 1;
+        clipping_path(id, clip)
     }
 }
 
@@ -975,15 +1015,41 @@ fn clip_image_to(d: &mut Document, id: NodeId, path: PathData) -> Result<()> {
     new_clip_group(d, id, path)
 }
 
+/// Clip object `id` of `d` to `path`, the clipping path its DCS file draws it through: the clipping
+/// path of the clip group holding just it changes, a plain group holding just it (as [`unclip`]
+/// leaves one) becomes a clip group again, else it goes into a new clip group.
+fn clip_file_to(d: &mut Document, id: NodeId, path: PathData) -> Result<()> {
+    if set_clip_path(d, id, path.clone()) {
+        return Ok(());
+    }
+    let plain = d.parent_of(id).filter(|g| match d.node(*g).map(|n| &n.kind) {
+        Some(NodeKind::Group { children, clip: false }) => matches!(&children[..], [o] if o.id == id),
+        _ => false,
+    });
+    let Some(g) = plain else { return new_clip_group(d, id, path) };
+    let clip = clipping_path(d.alloc_id(), path);
+    d.insert(Some(g), 0, clip)?;
+    if let Some(Node { kind: NodeKind::Group { clip, .. }, .. }) = d.node_mut(g) {
+        *clip = true;
+    }
+    Ok(())
+}
+
+/// A clipping path `id` of `path`, unpainted.
+fn clipping_path(id: NodeId, path: PathData) -> Node {
+    let none = vectorcraft_color::Paint::None;
+    let mut clip = Node::path(id, path, Appearance::basic(none.clone(), none, 0.0));
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    clip
+}
+
 /// Put object `id` of `d` into a new clip group of `path`, where it is.
 fn new_clip_group(d: &mut Document, id: NodeId, path: PathData) -> Result<()> {
     let (par, index, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
     let image = d.remove(id)?;
-    let none = vectorcraft_color::Paint::None;
-    let mut clip = Node::path(d.alloc_id(), path, Appearance::basic(none.clone(), none, 0.0));
-    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
-        *clipping = true;
-    }
+    let clip = clipping_path(d.alloc_id(), path);
     let group = Node::new(d.alloc_id(), NodeKind::Group { children: vec![std::sync::Arc::new(clip), image], clip: true });
     d.insert(par, index, group)?;
     Ok(())
@@ -1061,6 +1127,7 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
     clips.into_iter().try_for_each(|(id, clip)| match clip {
         ClipTo::Keep => Ok(()),
         ClipTo::Path(path) => clip_image_to(d, id, path),
+        ClipTo::File(path) => clip_file_to(d, id, path),
         ClipTo::Nest(path) => new_clip_group(d, id, path),
         ClipTo::Off => unclip(d, id),
     })
@@ -1203,6 +1270,9 @@ pub fn resolve(d: &mut Document, base: LinkBase, update: bool, low_res_proxy_eps
             }
             (Status::Ok, Some(mut f)) => {
                 let preview = previewing(d, &g.key);
+                // A DCS file is read in full even with the proxy: its plates print and separate on
+                // their own inks.
+                let eps_preview = eps_preview && !is_dcs_file(&mut f);
                 if let Some((blob, hash)) = read_images.get(&f.path).filter(|_| preview && !eps_preview).cloned() {
                     store_image(d, &g.key, blob, true);
                     let link = f.link_hashed(hash, &g.link);
@@ -1996,15 +2066,21 @@ fn status_rank(status: &str) -> usize {
 /// holds them) or overlap an object that is, as Show DCS Transparency Interactions marks them.
 fn dcs_transparency(d: &Document) -> BTreeSet<NodeId> {
     /// Each visible DCS image's id, bounds and whether it is transparent, and the bounds of each
-    /// other visible object with its own transparency.
-    fn walk(d: &Document, n: &Node, held: bool, images: &mut Vec<(NodeId, Rect, bool)>, see_through: &mut Vec<Rect>) {
+    /// other visible object with its own transparency; bounds are cut to `clip`, the bounds of the
+    /// clipping paths of the clip groups and layers holding the object.
+    fn walk(d: &Document, n: &Node, held: bool, clip: Option<Rect>, images: &mut Vec<(NodeId, Rect, bool)>, see_through: &mut Vec<Rect>) {
         if !n.visible {
             return;
         }
         let own = n.shows_own_transparency();
+        // The part of the object that shows through `clip`; none when it is clipped away.
+        let shown = n.geometric_bounds().and_then(|b| match clip {
+            Some(c) => Some(c.intersect(b)).filter(|i| i.area() > 0.0),
+            None => Some(b),
+        });
         match &n.kind {
             NodeKind::Image(im) if d.images.get(&im.key).is_some_and(ImageBlob::is_separated) => {
-                if let Some(b) = n.geometric_bounds() {
+                if let Some(b) = shown {
                     images.push((n.id, b, held || own));
                     // A transparent DCS image is an object with its own transparency for the
                     // others it overlaps.
@@ -2013,16 +2089,25 @@ fn dcs_transparency(d: &Document) -> BTreeSet<NodeId> {
                     }
                 }
             }
-            _ if own => see_through.extend(n.geometric_bounds()),
+            _ if own => see_through.extend(shown),
             _ => {}
         }
-        for c in n.children().into_iter().flatten() {
-            walk(d, c, held || own, images, see_through);
+        let Some(children) = n.children() else { return };
+        // A clip group's or clipping layer's first child clips the others.
+        let clip = match &n.kind {
+            NodeKind::Group { clip: true, .. } | NodeKind::Layer { clip: true, .. } => match children.first().and_then(|c| c.geometric_bounds()) {
+                Some(c) => Some(clip.map_or(c, |o| o.intersect(c))),
+                None => clip,
+            },
+            _ => clip,
+        };
+        for c in children {
+            walk(d, c, held || own, clip, images, see_through);
         }
     }
     let (mut images, mut see_through) = (vec![], vec![]);
     for l in &d.layers {
-        walk(d, l, false, &mut images, &mut see_through);
+        walk(d, l, false, None, &mut images, &mut see_through);
     }
     images
         .into_iter()

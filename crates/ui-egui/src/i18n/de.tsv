@@ -791,6 +791,8 @@ font-technology	Variable	Variabel
 	Delete Width Point	Breitenpunkt löschen
 	Delete Workspace	Arbeitsbereich löschen
 	Delete {kind} Style	{kind}format löschen
+	Delete the selected items and their artwork?	Die ausgewählten Elemente und ihr Bildmaterial löschen?
+	Delete this layer and its artwork?	Diese Ebene und ihr Bildmaterial löschen?
 	Delete “{name}”?	„{name}“ löschen?
 	Depth:	Tiefe:
 	Description	Beschreibung
@@ -1011,12 +1013,14 @@ font-technology	Variable	Variabel
 	Enable Contextual Task Bar	Kontextbezogene Taskleiste aktivieren
 	Enable copying of text, images and other content	Kopieren von Text, Bildern und anderen Inhalten zulassen
 	Enable in-menu font previews	Schriftvorschau im Menü aktivieren
+	Show samples on white	Muster auf Weiß anzeigen
 	Enable Missing Glyph Protection	Schutz vor fehlenden Glyphen aktivieren
 	Enable Opacity Mask	Deckkraftmaske aktivieren
 	Enable plaintext metadata	Klartext-Metadaten zulassen
 	Enable Rubber Band for	Gummiband aktivieren für
 	Enable text access for screen readers	Textzugriff für Bildschirmlesegeräte zulassen
 	Enable Touch Gestures	Touch-Gesten aktivieren
+	Switch Selection and Drawing Modes	Zwischen Auswahl- und Zeichenmodus wechseln
 	Enable Touch Workspace	Touch-Arbeitsbereich aktivieren
 	Encoding	Kodierung
 	Encoding:	Kodierung:
@@ -2047,6 +2051,10 @@ file-filter	Templates	Vorlagen
 	Long	Lang
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-Satz
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-Satz
 	Kinsoku Shori Type	Kinsoku-Shori-Typ
 	Push In First	Zuerst einziehen
@@ -4631,6 +4639,7 @@ theme	Appearance	Erscheinungsbild
 @msg	not a valid plug-in module: {0}	kein gültiges Plug-in-Modul: {0}
 @msg	not an EMF or WMF file	keine EMF- oder WMF-Datei
 @msg	not an HP-GL file	keine HP-GL-Datei
+@msg	not a PICT file	keine PICT-Datei
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` muss ein Array von 1 bis 255 Farben der Form #rrggbb sein
 @msg	not found	nicht gefunden
 @msg	not in pattern editing mode	nicht im Musterbearbeitungsmodus
@@ -5013,6 +5022,7 @@ theme	Appearance	Erscheinungsbild
 @msg	choose the font files to add	wählen Sie die Schriftdateien aus, die hinzugefügt werden sollen
 @msg	not a file	keine Datei
 @msg	not a font file	keine Schriftdatei
+@msg	the active document changed while the question was open; nothing was deleted	das aktive Dokument hat sich geändert, während die Frage offen war; es wurde nichts gelöscht
 @msg	that document is no longer open	dieses Dokument ist nicht mehr geöffnet
 @msg	larger than 256 MB	größer als 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	die Dateien sind zusammen größer als 1 GB: Fügen Sie weniger auf einmal hinzu
@@ -5454,6 +5464,65 @@ lighting	Light	Licht
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} kann aus einem Bild keinen Körper erstellen: Zeichnen Sie es zuerst mit Objekt › Bildnachzeichner › Erstellen nach.
 @msg	{label} requires a shape with at least two anchors	{label} erfordert eine Form mit mindestens zwei Ankerpunkten
 @msg	The shape is too complex for a 3D effect	Die Form ist für einen 3D-Effekt zu komplex
+@msg	Extrude & Bevel	Extrudieren und abgeflachte Kante
+@msg	Revolve	Kreiseln
+@msg	Inflate	Aufblasen
+@msg	Rotate	Drehen
+@msg	Extrude & Bevel (Classic)	Extrudieren und abgeflachte Kante (klassisch)
+@msg	Revolve (Classic)	Kreiseln (klassisch)
+@msg	Rotate (Classic)	Drehen (klassisch)
+@msg	This effect	Dieser Effekt
+@msg	clipping paths	Schnittpfade
+@msg	other objects	andere Objekte
+@msg	{label} requires a group holding a shape with at least two anchors	{label} erfordert eine Gruppe mit einer Form mit mindestens zwei Ankerpunkten
+@msg	Revolve requires a group holding a shape with at least two anchors	Kreiseln erfordert eine Gruppe mit einer Form mit mindestens zwei Ankerpunkten
+@msg	Revolve requires a shape with at least two anchors	Kreiseln erfordert eine Form mit mindestens zwei Ankerpunkten
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} auf einer Gruppe braucht Pfade, zusammengesetzte Pfade, Text, Gruppen, Schnittgruppen, Angleichungen und Symbolinstanzen: Geben Sie zuerst Folgendes frei oder wandeln Sie es um: {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} auf einer Gruppe nimmt höchstens {MAX_MEMBERS} Objekte auf
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	Ein 3D-Effekt auf einer Gruppe oder Ebene gehört auf die Gruppe selbst, nicht auf ihre Fläche oder Kontur
+@msg	a 3D effect on a group's fill or stroke draws nothing	ein 3D-Effekt auf der Fläche oder Kontur einer Gruppe zeichnet nichts
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	ein 3D-Effekt auf der Fläche oder Kontur einer Gruppe zeichnet nichts, das exportiert werden kann
+@msg	The 3D object is too complex to export	Das 3D-Objekt ist zu komplex für den Export
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	das Objekt hat keinen 3D-Effekt (Extrudieren und abgeflachte Kante, Kreiseln, Aufblasen oder Drehen)
+@msg	its 3D effect builds no solid	sein 3D-Effekt erzeugt keinen Körper
+@msg	bevel must be none or one of {_1}	bevel muss none oder einer der folgenden Werte sein: {_1}
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kann aus diesem Bildmaterial keine Körper erstellen: Seine Symbolinstanzen, Angleichungen und Schnittgruppen enthalten zu viele Objekte
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} kann keinen Körper aus der Instanz des Symbols „{symbol}“ erstellen: Das Bildmaterial des Symbols ist nicht verfügbar
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: Der Schnittpfad ist zu komplex, um das Bildmaterial damit zu beschneiden
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} nimmt höchstens {MAX_MEMBERS} Objekte auf
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} kann keine Körper aus Bildmaterial erstellen, das mehr als {MAX_DEPTH} Ebenen tief verschachtelt ist
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Die Farbe von Kreiseln ist für diese Oberfläche zu komplex; verringern Sie Segmente oder vereinfachen Sie den Verlauf
+@msg	Revolve edge must be left or right	Kreiseln: edge muss left oder right sein
+@msg	Revolve cap must be a boolean	Kreiseln: cap muss ein boolescher Wert sein
+@msg	the revolved object has no fill or stroke	das gekreiselte Objekt hat keine Fläche oder Kontur
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor muss eine deckende RGB-Farbe der Form #rrggbb sein
+@msg	lights must contain one to ten lights	lights muss ein bis zehn Lichter enthalten
+@msg	each light must be an object	jedes Licht muss ein Objekt sein
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	unbekannte Lichteinstellung: Verwenden Sie color, intensity, rotation, height, softness oder behind
+@msg	light {key} must be a number from {min} to {max}	Licht: {key} muss eine Zahl von {min} bis {max} sein
+@msg	light color must use opaque #rrggbb	color eines Lichts muss ein deckendes #rrggbb sein
+@msg	light behind must be true or false	behind eines Lichts muss true oder false sein
+@msg	shadow must be true or false	shadow muss true oder false sein
+@msg	shadowPosition must be behind or below	shadowPosition muss behind oder below sein
+@msg	{key} must be a number from {min} to {max}	{key} muss eine Zahl von {min} bis {max} sein
+@msg	each of `{GRAPHICS}` must be an object	jeder Eintrag von `{GRAPHICS}` muss ein Objekt sein
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}`-Einträge nehmen symbol, face, x, y, scale und rotation an, nicht `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	jeder Eintrag von `{GRAPHICS}` braucht `symbol`, den Namen eines Symbols
+@msg	`{GRAPHICS}` face must be front or back	face in `{GRAPHICS}` muss front oder back sein
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} in `{GRAPHICS}` muss eine Zahl von {lo} bis {hi} sein
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` muss ein Array sein
+@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafiken werden auf ebene Seiten abgebildet: Verwenden Sie den Objekttyp Extrudieren oder Ebene
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` nimmt höchstens {MAX_GRAPHICS} Grafiken auf
+@msg	A plane has one face: map its graphics onto the front	Eine Ebene hat nur eine Seite: Bilden Sie ihre Grafiken auf der Vorderseite ab
+@msg	The graphics are too complex: simplify the symbols' art	Die Grafiken sind zu komplex: Vereinfachen Sie das Bildmaterial der Symbole
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	Das Bildmaterial einer Grafik darf höchstens {MAX_LEVELS} Ebenen tief verschachtelt sein: Vereinfachen Sie das Bildmaterial des Symbols
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	Das Bildmaterial einer Grafik darf Symbole höchstens {MAX_NESTING} Ebenen tief verschachteln: Vereinfachen Sie das Bildmaterial des Symbols
+@msg	A graphic's art holds too many objects: simplify the symbol's art	Das Bildmaterial einer Grafik enthält zu viele Objekte: Vereinfachen Sie das Bildmaterial des Symbols
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	Eine Grafik zeichnet höchstens {MAX_PIECES} Flächen und Konturen: Vereinfachen Sie das Bildmaterial des Symbols
+@msg	`surface` must be one of {_1}	`surface` muss einer der folgenden Werte sein: {_1}
+@msg	{label} draws the source art for this object instead of its 3D surface	{label} zeichnet für dieses Objekt das Ausgangsbildmaterial statt seiner 3D-Oberfläche
+@msg	{label} draws no faces for this object	{label} zeichnet für dieses Objekt keine Seiten
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	das Drahtmodell hat mehr als {MAX_WIRE_EDGES} Kanten
 @msg	The 3D surface is too complex; simplify the shape	Die 3D-Oberfläche ist zu komplex; vereinfachen Sie die Form
 	Transform Objects	Objekte transformieren
 @msg	unknown parameter `{key}`; did you mean `{near}`?	unbekannter Parameter `{key}`; meinten Sie `{near}`?
@@ -5917,6 +5986,35 @@ axis	Y Axis	Y-Achse
 @msg	the path has no anchor points	der Pfad hat keine Ankerpunkte
 @msg	too many anchor points (limit {MAX_ANCHORS})	zu viele Ankerpunkte (Grenze {MAX_ANCHORS})
 @msg	true or false	true oder false
+@msg	a number >= {_1}	eine Zahl >= {_1}
+@msg	a number > {_1}	eine Zahl > {_1}
+@msg	a number <= {_1}	eine Zahl <= {_1}
+@msg	a number < {_1}	eine Zahl < {_1}
+@msg	a number {_1} to {_2}	eine Zahl von {_1} bis {_2}
+@msg	a number >= {_1} and < {_2}	eine Zahl >= {_1} und < {_2}
+@msg	a number > {_1} and <= {_2}	eine Zahl > {_1} und <= {_2}
+@msg	a number > {_1} and < {_2}	eine Zahl > {_1} und < {_2}
+@msg	a number ({_1})	eine Zahl ({_1})
+@msg	a number >= {_1} ({_2})	eine Zahl >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	eine Zahl > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	eine Zahl <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	eine Zahl < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	eine Zahl von {_1} bis {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	eine Zahl >= {_1} und < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	eine Zahl > {_1} und <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	eine Zahl > {_1} und < {_2} ({_3})
+@msg	an integer	eine ganze Zahl
+@msg	an integer >= {_1}	eine ganze Zahl >= {_1}
+@msg	an integer <= {_1}	eine ganze Zahl <= {_1}
+@msg	an integer {_1} to {_2}	eine ganze Zahl von {_1} bis {_2}
+@msg	one of {_1}	einer der Werte {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` muss einer der Werte {_1} sein, nicht {got}
+@msg	an object id (a non-negative integer)	eine Objekt-ID (eine nicht negative ganze Zahl)
+@msg	a list of object ids	eine Liste von Objekt-IDs
+@msg	a color (a string, [r, g, b] or an object)	eine Farbe (eine Zeichenkette, [r, g, b] oder ein Objekt)
+@msg	[x, y] (two numbers)	[x, y] (zwei Zahlen)
+@msg	an object	ein Objekt
+@msg	a list	eine Liste
 @msg	unknown key `{k}`; the keys here are {_1}	unbekannter Schlüssel `{k}`; die Schlüssel hier sind {_1}
 @msg	{_1} is listed twice	{_1} ist doppelt aufgeführt
 @msg	{_1} is not the id of an input object	{_1} ist nicht die ID eines Eingabeobjekts
@@ -6026,6 +6124,13 @@ axis	Y Axis	Y-Achse
 @msg	Batch cannot play an action with a stop	Die Stapelverarbeitung kann keine Aktion mit einem Stopp abspielen
 	Insert Menu Item…	Menübefehl einfügen…
 	Insert Menu Item	Menübefehl einfügen
+	Insert Select Path	Pfadauswahl einfügen
+	Select Path	Pfad auswählen
+@msg	select one whole path or compound path	wählen Sie einen ganzen Pfad oder zusammengesetzten Pfad aus
+@msg	select only one path	wählen Sie nur einen Pfad aus
+@msg	the path is hidden or locked, or cannot be selected here	der Pfad ist ausgeblendet oder gesperrt oder kann hier nicht ausgewählt werden
+@msg	object {value} is not the stored path: it changed, or the document is another one	Objekt {value} ist nicht der gespeicherte Pfad: Er wurde geändert, oder es ist ein anderes Dokument
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` muss aus "v1:" und 16 hexadezimalen Ziffern in Kleinbuchstaben bestehen
 	Select Object…	Objekt auswählen…
 	Select Object	Objekt auswählen
 	Set Selection	Auswahl festlegen
@@ -6750,7 +6855,9 @@ breakText	Glyphs	Glyphen
 @msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}“ öffnet {_1}-Dateien, nicht `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` ist ein Plug-in der Art `{_2}`, kein Import-Plug-in
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` ist ein Plug-in der Art `{_2}`, kein Export-Plug-in
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` ist ein Import-Plug-in: Öffnen Sie eine Datei mit document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` ist ein Import-Plug-in: Öffnen Sie eine Datei mit document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` ist ein Export-Plug-in: Exportieren Sie mit document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` ist ein Live-Effekt: Wenden Sie ihn mit effect.apply {{"effect": "{_2}"}} an
 @msg	the importer returned no objects	das Import-Plug-in hat keine Objekte zurückgegeben
 @msg	an importer returns `objects` and `warnings`, not `{key}`	ein Import-Plug-in gibt `objects` und `warnings` zurück, nicht `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	die Datei ist größer als die {MAX_INPUT_BYTES} Byte, die ein Import-Plug-in liest

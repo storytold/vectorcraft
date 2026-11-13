@@ -1768,6 +1768,10 @@ digits	Malayalam	მალაიალამური
 	Long	გრძელი
 	Stylistic	სტილისტური
 	Mojikumi Set	Mojikumi-ის ნაკრები
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-ის ნაკრები
 	Kinsoku Shori Type	Kinsoku Shori-ის ტიპი
 	Push In First	ჯერ შეტანა
@@ -1903,6 +1907,8 @@ digits	Malayalam	მალაიალამური
 	Weight:	სისქე:
 	Art using a deleted global swatch keeps its colour.	წაშლილი გლობალური ფერის ნიმუშის მქონე ნახატი თავის ფერს ინარჩუნებს.
 	Color Group: {name}	ფერთა ჯგუფი: {name}
+	Delete the selected items and their artwork?	წაიშალოს მონიშნული ელემენტები და მათი ნახატი?
+	Delete this layer and its artwork?	წაიშალოს ეს შრე და მისი ნახატი?
 	Delete “{name}”?	წაიშალოს „{name}“?
 	Document Swatches	დოკუმენტის ფერის ნიმუშები
 	Edit or Apply Color Group	ფერთა ჯგუფის რედაქტირება ან გამოყენება
@@ -3360,9 +3366,11 @@ theme	Appearance	იერსახე
 	Enable Background Export	ფონური ექსპორტის ჩართვა
 	Enable Background Save	ფონური შენახვის ჩართვა
 	Enable in-menu font previews	შრიფტების წინასწარი ნახვა მენიუში
+	Show samples on white	ნიმუშების ჩვენება თეთრ ფონზე
 	Enable Missing Glyph Protection	გამოტოვებული გლიფებისგან დაცვის ჩართვა
 	Enable Rubber Band for	რეზინის ზოლის ჩართვა:
 	Enable Touch Gestures	შეხების ჟესტების ჩართვა
+	Switch Selection and Drawing Modes	მონიშვნისა და ხატვის რეჟიმების გადართვა
 	Enable Touch Workspace	სენსორული სამუშაო სივრცის ჩართვა
 	English: UK	ინგლისური: ბრიტანეთი
 	Every (minutes)	ყოველ (წუთში)
@@ -4384,6 +4392,7 @@ font-technology	Variable	ცვლადი
 @msg	not a valid plug-in module: {0}	ეს არ არის პლაგინის სწორი მოდული: {0}
 @msg	not an EMF or WMF file	ეს არ არის EMF ან WMF ფაილი
 @msg	not an HP-GL file	ეს არ არის HP-GL ფაილი
+@msg	not a PICT file	ეს არ არის PICT ფაილი
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` უნდა იყოს 1-დან 255-მდე #rrggbb ფერის მასივი
 @msg	not found	ვერ მოიძებნა
 @msg	not in pattern editing mode	პატერნის რედაქტირების რეჟიმი არ არის ჩართული
@@ -4733,6 +4742,7 @@ font-technology	Variable	ცვლადი
 @msg	choose the font files to add	აირჩიეთ დასამატებელი შრიფტის ფაილები
 @msg	not a file	ფაილი არ არის
 @msg	not a font file	შრიფტის ფაილი არ არის
+@msg	the active document changed while the question was open; nothing was deleted	აქტიური დოკუმენტი შეიცვალა, სანამ კითხვა ღია იყო; არაფერი წაშლილა
 @msg	that document is no longer open	ის დოკუმენტი აღარ არის გახსნილი
 @msg	larger than 256 MB	256 MB-ზე დიდია
 @msg	the files come to more than 1 GB: add fewer at a time	ფაილები 1 GB-ს აჭარბებს: დაამატეთ ნაკლები ერთდროულად
@@ -5167,6 +5177,65 @@ font-technology	Variable	ცვლადი
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label}: გამოსახულებიდან მყარი სხეულის აგება შეუძლებელია. ჯერ მოახდინეთ მისი ვექტორიზაცია ბრძანებით ობიექტი › გამოსახულების ვექტორიზაცია › შექმნა.
 @msg	{label} requires a shape with at least two anchors	{label}: საჭიროა ფიგურა მინიმუმ ორი საყრდენი წერტილით
 @msg	The shape is too complex for a 3D effect	ფიგურა ზედმეტად რთულია 3D ეფექტისთვის
+@msg	Extrude & Bevel	ამოწევა და წაკვეთა
+@msg	Revolve	ბრუნვა
+@msg	Inflate	გაბერვა
+@msg	Rotate	შემობრუნება
+@msg	Extrude & Bevel (Classic)	ამოწევა და წაკვეთა (კლასიკური)
+@msg	Revolve (Classic)	ბრუნვა (კლასიკური)
+@msg	Rotate (Classic)	შემობრუნება (კლასიკური)
+@msg	This effect	ეს ეფექტი
+@msg	clipping paths	მომჭრელი ტრაექტორიები
+@msg	other objects	სხვა ობიექტები
+@msg	{label} requires a group holding a shape with at least two anchors	{label}: საჭიროა ჯგუფი, რომელიც შეიცავს ფიგურას მინიმუმ ორი საყრდენი წერტილით
+@msg	Revolve requires a group holding a shape with at least two anchors	ბრუნვა: საჭიროა ჯგუფი, რომელიც შეიცავს ფიგურას მინიმუმ ორი საყრდენი წერტილით
+@msg	Revolve requires a shape with at least two anchors	ბრუნვა: საჭიროა ფიგურა მინიმუმ ორი საყრდენი წერტილით
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} ჯგუფზე: საჭიროა ტრაექტორიები, შედგენილი ტრაექტორიები, ტექსტი, ჯგუფები, მომჭრელი ჯგუფები, გადასვლები და სიმბოლოს ეგზემპლარები; ჯერ გაათავისუფლეთ ან დაშალეთ ეს ელემენტები: {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} ჯგუფზე: მაქსიმუმ {MAX_MEMBERS} ობიექტი
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	ჯგუფის ან ფენის 3D ეფექტი თავად ჯგუფზე უნდა იყოს და არა მის შევსებაზე ან კონტურზე
+@msg	a 3D effect on a group's fill or stroke draws nothing	ჯგუფის შევსებაზე ან კონტურზე 3D ეფექტი არაფერს ხატავს
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	ჯგუფის შევსებაზე ან კონტურზე 3D ეფექტი ექსპორტისთვის არაფერს ხატავს
+@msg	The 3D object is too complex to export	3D ობიექტი ზედმეტად რთულია ექსპორტისთვის
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	ობიექტს არ აქვს 3D ეფექტი (ამოწევა და წაკვეთა, ბრუნვა, გაბერვა ან შემობრუნება)
+@msg	its 3D effect builds no solid	მისი 3D ეფექტი სხეულს არ ქმნის
+@msg	bevel must be none or one of {_1}	bevel უნდა იყოს none ან ერთ-ერთი: {_1}
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: ამ ნახატიდან სხეულების შექმნა შეუძლებელია: მისი სიმბოლოს ეგზემპლარები, გადასვლები და მომჭრელი ჯგუფები ზედმეტად ბევრ ობიექტს შეიცავს
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: სიმბოლოს „{symbol}“ ეგზემპლარიდან სხეულის შექმნა შეუძლებელია: სიმბოლოს ნახატი მიუწვდომელია
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: მომჭრელი ტრაექტორია ზედმეტად რთულია ნახატის მოსაჭრელად
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1}: მაქსიმუმ {MAX_MEMBERS} ობიექტი
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1}: შეუძლებელია სხეულების შექმნა {MAX_DEPTH} დონეზე ღრმად ჩადგმული ნახატიდან
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	ბრუნვის საღებავი ზედმეტად რთულია ამ ზედაპირისთვის; შეამცირეთ სეგმენტები ან გაამარტივეთ გრადიენტი
+@msg	Revolve edge must be left or right	ბრუნვა: edge უნდა იყოს left ან right
+@msg	Revolve cap must be a boolean	ბრუნვა: cap უნდა იყოს ლოგიკური მნიშვნელობა
+@msg	the revolved object has no fill or stroke	მობრუნებულ ობიექტს არ აქვს შევსება ან კონტური
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor უნდა იყოს გაუმჭვირვალე RGB ფერი #rrggbb ფორმით
+@msg	lights must contain one to ten lights	lights უნდა შეიცავდეს ერთიდან ათამდე სინათლეს
+@msg	each light must be an object	თითოეული სინათლე უნდა იყოს ობიექტი
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	სინათლის უცნობი პარამეტრი: გამოიყენეთ color, intensity, rotation, height, softness ან behind
+@msg	light {key} must be a number from {min} to {max}	სინათლე: {key} უნდა იყოს რიცხვი {min}-დან {max}-მდე
+@msg	light color must use opaque #rrggbb	სინათლის color უნდა იყოს გაუმჭვირვალე #rrggbb
+@msg	light behind must be true or false	სინათლის behind უნდა იყოს true ან false
+@msg	shadow must be true or false	shadow უნდა იყოს true ან false
+@msg	shadowPosition must be behind or below	shadowPosition უნდა იყოს behind ან below
+@msg	{key} must be a number from {min} to {max}	{key} უნდა იყოს რიცხვი {min}-დან {max}-მდე
+@msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}`-ის თითოეული ჩანაწერი უნდა იყოს ობიექტი
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}`-ის ჩანაწერები იღებს symbol, face, x, y, scale და rotation მნიშვნელობებს და არა `{k}`-ს
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}`-ის თითოეულ ჩანაწერს სჭირდება `symbol`, სიმბოლოს სახელი
+@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`-ის face უნდა იყოს front ან back
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-ის {key} უნდა იყოს რიცხვი {lo}-დან {hi}-მდე
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` უნდა იყოს მასივი
+@msg	Graphics map onto planar faces: use the Extrude or Plane object type	გრაფიკა ბრტყელ წახნაგებზე თავსდება: გამოიყენეთ ობიექტის ტიპი „ამოწევა“ ან „სიბრტყე“
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` იღებს მაქსიმუმ {MAX_GRAPHICS} გრაფიკას
+@msg	A plane has one face: map its graphics onto the front	სიბრტყეს ერთი მხარე აქვს: მისი გრაფიკა წინა მხარეზე განათავსეთ
+@msg	The graphics are too complex: simplify the symbols' art	გრაფიკა ზედმეტად რთულია: გაამარტივეთ სიმბოლოების ნახატი
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	გრაფიკის ნახატი შეიძლება ჩადგმული იყოს მაქსიმუმ {MAX_LEVELS} დონეზე: გაამარტივეთ სიმბოლოს ნახატი
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	გრაფიკის ნახატში სიმბოლოები შეიძლება ჩადგმული იყოს მაქსიმუმ {MAX_NESTING} დონეზე: გაამარტივეთ სიმბოლოს ნახატი
+@msg	A graphic's art holds too many objects: simplify the symbol's art	გრაფიკის ნახატი ზედმეტად ბევრ ობიექტს შეიცავს: გაამარტივეთ სიმბოლოს ნახატი
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	გრაფიკა ხატავს მაქსიმუმ {MAX_PIECES} შევსებას და კონტურს: გაამარტივეთ სიმბოლოს ნახატი
+@msg	`surface` must be one of {_1}	`surface` უნდა იყოს ერთ-ერთი: {_1}
+@msg	{label} draws the source art for this object instead of its 3D surface	{label}: ამ ობიექტისთვის 3D ზედაპირის ნაცვლად საწყისი ნახატი იხატება
+@msg	{label} draws no faces for this object	{label}: ამ ობიექტისთვის არცერთი წახნაგი არ იხატება
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	კარკასს {MAX_WIRE_EDGES}-ზე მეტი წიბო აქვს
 @msg	The 3D surface is too complex; simplify the shape	3D ზედაპირი ზედმეტად რთულია; გაამარტივეთ ფიგურა
 	Transform Objects	ობიექტების გარდაქმნა
 @msg	unknown parameter `{key}`; did you mean `{near}`?	უცნობი პარამეტრი `{key}`; იქნებ `{near}` იგულისხმეთ?
@@ -6277,6 +6346,35 @@ axis	Y Axis	Y ღერძი
 @msg	the path has no anchor points	ტრაექტორიას საყრდენი წერტილები არ აქვს
 @msg	too many anchor points (limit {MAX_ANCHORS})	ძალიან ბევრი საყრდენი წერტილი (ლიმიტი {MAX_ANCHORS})
 @msg	true or false	true ან false
+@msg	a number >= {_1}	რიცხვი >= {_1}
+@msg	a number > {_1}	რიცხვი > {_1}
+@msg	a number <= {_1}	რიცხვი <= {_1}
+@msg	a number < {_1}	რიცხვი < {_1}
+@msg	a number {_1} to {_2}	რიცხვი {_1}-დან {_2}-მდე
+@msg	a number >= {_1} and < {_2}	რიცხვი >= {_1} და < {_2}
+@msg	a number > {_1} and <= {_2}	რიცხვი > {_1} და <= {_2}
+@msg	a number > {_1} and < {_2}	რიცხვი > {_1} და < {_2}
+@msg	a number ({_1})	რიცხვი ({_1})
+@msg	a number >= {_1} ({_2})	რიცხვი >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	რიცხვი > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	რიცხვი <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	რიცხვი < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	რიცხვი {_1}-დან {_2}-მდე ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	რიცხვი >= {_1} და < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	რიცხვი > {_1} და <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	რიცხვი > {_1} და < {_2} ({_3})
+@msg	an integer	მთელი რიცხვი
+@msg	an integer >= {_1}	მთელი რიცხვი >= {_1}
+@msg	an integer <= {_1}	მთელი რიცხვი <= {_1}
+@msg	an integer {_1} to {_2}	მთელი რიცხვი {_1}-დან {_2}-მდე
+@msg	one of {_1}	ერთ-ერთი მნიშვნელობა {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` უნდა იყოს ერთ-ერთი მნიშვნელობა {_1} და არა {got}
+@msg	an object id (a non-negative integer)	ობიექტის იდენტიფიკატორი (არაუარყოფითი მთელი რიცხვი)
+@msg	a list of object ids	ობიექტების იდენტიფიკატორების სია
+@msg	a color (a string, [r, g, b] or an object)	ფერი (სტრიქონი, [r, g, b] ან ობიექტი)
+@msg	[x, y] (two numbers)	[x, y] (ორი რიცხვი)
+@msg	an object	ობიექტი
+@msg	a list	სია
 @msg	unknown key `{k}`; the keys here are {_1}	უცნობი გასაღები `{k}`; აქ გასაღებებია: {_1}
 @msg	{_1} is listed twice	{_1} ორჯერაა მითითებული
 @msg	{_1} is not the id of an input object	{_1} შემავალი ობიექტის ID არ არის
@@ -6386,6 +6484,13 @@ axis	Y Axis	Y ღერძი
 @msg	Batch cannot play an action with a stop	პაკეტურ დამუშავებას არ შეუძლია გაჩერების მქონე მოქმედების შესრულება
 	Insert Menu Item…	მენიუს ელემენტის ჩასმა…
 	Insert Menu Item	მენიუს ელემენტის ჩასმა
+	Insert Select Path	ტრაექტორიის მონიშვნის ჩასმა
+	Select Path	ტრაექტორიის მონიშვნა
+@msg	select one whole path or compound path	მონიშნეთ ერთი მთლიანი ტრაექტორია ან შედგენილი ტრაექტორია
+@msg	select only one path	მონიშნეთ მხოლოდ ერთი ტრაექტორია
+@msg	the path is hidden or locked, or cannot be selected here	ტრაექტორია დამალული ან ჩაკეტილია, ან აქ ვერ მოინიშნება
+@msg	object {value} is not the stored path: it changed, or the document is another one	ობიექტი {value} არ არის შენახული ტრაექტორია: ის შეიცვალა, ან დოკუმენტი სხვაა
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` უნდა იყოს "v1:" და 16 პატარა თექვსმეტობითი ციფრი
 	Select Object…	ობიექტის მონიშვნა…
 	Select Object	ობიექტის მონიშვნა
 	Set Selection	მონიშვნის დაყენება
@@ -7264,7 +7369,9 @@ font-script	Japanese	იაპონური
 @msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}“ ხსნის {_1} ფაილებს და არა `{_2}`-ს
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` არის `{_2}` სახის პლაგინი და არა იმპორტის პლაგინი
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` არის `{_2}` სახის პლაგინი და არა ექსპორტის პლაგინი
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` იმპორტის პლაგინია: გახსენით ფაილი document.open {{"importer"}"}}-ით
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` იმპორტის პლაგინია: გახსენით ფაილი document.open {{"importer": "{_2}"}}-ით
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` ექსპორტის პლაგინია: მოახდინეთ ექსპორტი document.export {{"format": "{_2}"}}-ით
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` ცოცხალი ეფექტია: გამოიყენეთ ის effect.apply {{"effect": "{_2}"}}-ით
 @msg	the importer returned no objects	იმპორტის პლაგინმა ობიექტები არ დააბრუნა
 @msg	an importer returns `objects` and `warnings`, not `{key}`	იმპორტის პლაგინი აბრუნებს `objects`-ს და `warnings`-ს და არა `{key}`-ს
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	ფაილი აღემატება {MAX_INPUT_BYTES} ბაიტს, რომელსაც იმპორტის პლაგინი კითხულობს

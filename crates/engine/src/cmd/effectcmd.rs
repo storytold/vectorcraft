@@ -16,7 +16,7 @@ use vectorcraft_render::effects;
 use super::appearance::{ItemTarget, aligned, appearance_targets, index_param, item_indices, item_target, item_target_at};
 use super::expand::has_seeded;
 use super::rasterfx;
-use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, fileio, has_doc, str_param, switch_or};
+use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, check_switches, cmd, fileio, has_doc, str_param, switch_or};
 
 /// The name of the `svg.filter` effect drawing `xml`: its `<filter>` id. An effect names the
 /// document's filter of that name, so `xml` that differs from the document's filter of the same
@@ -76,7 +76,7 @@ fn effect_specs() -> Vec<CommandSpec> {
             "Effect Options",
             [],
             None,
-            "{index: int, params?: {…} (merged into the current parameters), warpStyle?: string (an existing Warp style suffix, e.g. arc or flag; changes only an applied Warp in place), threeDType?: plane|extrude|revolve|inflate (the 3D and Materials panel's object type: changes only an applied 3D effect in place into Rotate, Extrude & Bevel, Revolve or Inflate; the settings the new effect also takes keep their values, rotation angles wrapped into -180..180 outside Revolve, and the others start at its defaults; params then merge into the new effect's; the type the effect already has, with nothing else given, changes nothing and records no undo step), visible?: bool, item?: appearance item index|null (as effect.remove), ids?|id?: [..], target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} → {ids}",
+            "{index: int, params?: {…} (merged into the current parameters), warpStyle?: string (an existing Warp style suffix, e.g. arc or flag; changes only an applied Warp in place; params are checked against the new style), threeDType?: plane|extrude|revolve|inflate (the 3D and Materials panel's object type: changes only an applied 3D effect in place into Rotate, Extrude & Bevel, Revolve or Inflate; the settings the new effect also takes keep their values, rotation angles wrapped into -180..180 outside Revolve, and the others start at its defaults; params then merge into the new effect's; the type the effect already has, with nothing else given, changes nothing and records no undo step), visible?: bool (any other value but null is refused, when a step plays too), item?: appearance item index|null (as effect.remove), ids?|id?: [..], target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} → {ids}",
             has_doc,
             set_params
         ),
@@ -457,9 +457,10 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
         for (target, at) in targets.iter().copied().zip(item.per_target(s, &targets)) {
             let d = &s.doc()?.doc;
             let n = d.node(target).ok_or(EngineError::NoNode(target))?;
-            // A new effect goes after the item's others.
+            // A new effect goes after the item's (or the object's) others.
             let on = at.and_then(|at| at.effects_item(&n.appearance, C).ok()).flatten();
-            let on = on.and_then(|i| Some((i, n.appearance.items.get(i)?.effects().len())));
+            let on = on.and_then(|i| Some((Some(i), n.appearance.items.get(i)?.effects().len())));
+            let on = on.unwrap_or((None, n.appearance.effects.len()));
             effects::validate_three_d_at_in(Some(d), n, id, &effect.params, on).map_err(|e| bad(C, e))?;
             if let Some(name) = effects::missing_symbol(d, &effect.params, None) {
                 return Err(bad(C, format!("no symbol named `{name}`")));
@@ -649,13 +650,26 @@ pub(crate) fn set_params_effects(s: &Session, p: &Value) -> Vec<String> {
         return vec![];
     };
     let Ok(targets) = effect_targets(s, p, item, index, C) else { return vec![] };
-    // A 3D effect whose type `threeDType` changes takes the new effect's parameters.
+    // A 3D effect whose type `threeDType` changes, and a Warp whose style `warpStyle` changes, take
+    // the new effect's parameters.
     let kind = three_d_type(p, C).ok().flatten();
+    let warp = p.get("warpStyle").and_then(Value::as_str).filter(|style| effects::WarpStyle::from_id(style).is_some());
     let effect = |&(id, at, index): &(NodeId, Option<usize>, usize)| {
         let id = &st.doc.node(id)?.appearance.effects_at(at)?.get(index)?.id;
-        Some(kind.filter(|_| effects::is_three_d(id)).map_or_else(|| id.clone(), str::to_string))
+        Some(edited_effect_id(id, kind, warp))
     };
     targets.iter().filter_map(effect).collect()
+}
+
+/// The id effect `id` has once `effect.setParams` sets its 3D type to `kind` or its Warp style to
+/// `warp` (each when given and when `id` is an effect of that family).
+fn edited_effect_id(id: &str, kind: Option<&str>, warp: Option<&str>) -> String {
+    let is_warp = id.strip_prefix("warp.").and_then(effects::WarpStyle::from_id).is_some();
+    match (kind, warp) {
+        (Some(to), _) if effects::is_three_d(id) => to.to_string(),
+        (_, Some(style)) if is_warp => format!("warp.{style}"),
+        _ => id.to_string(),
+    }
 }
 
 /// The effect `threeDType` in `p` turns a 3D effect into ([`effects::THREE_D_TYPES`]), when given.
@@ -718,6 +732,7 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
             Ok(format!("warp.{style}"))
         })
         .transpose()?;
+    check_switches(p, &["visible"], C)?;
     let visible = p.get("visible").and_then(Value::as_bool);
     let item = item_target(s, p, C)?;
     let edited = set_params_effects(s, p);
@@ -772,7 +787,7 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
                 return Err(bad(C, format!("no symbol named `{name}`")));
             }
             if visible != Some(false) {
-                effects::validate_three_d_at_in(Some(d), n, to, &prospective, target.map(|item| (item, index))).map_err(|e| bad(C, e))?;
+                effects::validate_three_d_at_in(Some(d), n, to, &prospective, (target, index)).map_err(|e| bad(C, e))?;
             } else {
                 // Hidden, the effect draws nothing, so its object need not fit. The values given are
                 // checked, and after a change of 3D type so is every value it keeps.

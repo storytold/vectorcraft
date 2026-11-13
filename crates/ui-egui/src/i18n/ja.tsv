@@ -71,12 +71,16 @@ digits	Malayalam	マラヤーラム数字
 	Flip	反転
 	Japanese	日本語
 	Join Our Discord	Discord に参加
-	Line-end Punctuation Half Width	行末約物半角
+	Line-end Punctuation Half Width	行末・連続約物半角
 	Insert Kashidas	カシーダを挿入
 	Kashidas	カシーダ
 	Long	長い
 	Stylistic	スタイリスティック
 	Mojikumi Set	文字組み
+	YakumonoHankaku	約物半角
+	GyomatsuYakumonoHankaku	行末約物半角
+	GyomatsuYakumonoZenkaku	行末約物全角
+	YakumonoZenkaku	約物全角
 	Kinsoku Set	禁則処理
 	Kinsoku Shori Type	禁則調整方式
 	Push In First	追い込み優先
@@ -1471,6 +1475,8 @@ antiAlias	Sharp	シャープ
 	Delete theme	テーマを削除
 	Delete this saved preset	この保存済みプリセットを削除
 	Delete {kind} Style	{kind}スタイルを削除
+	Delete the selected items and their artwork?	選択した項目とそのアートワークを削除しますか？
+	Delete this layer and its artwork?	このレイヤーとそのアートワークを削除しますか？
 	Delete “{name}”?	「{name}」を削除しますか？
 	Depth:	深さ:
 	Description	説明
@@ -1635,9 +1641,11 @@ antiAlias	Sharp	シャープ
 	Enable Opacity Mask	不透明マスクを有効にする
 	Enable Rubber Band for	ラバーバンドを有効にする対象
 	Enable Touch Gestures	タッチジェスチャーを有効にする
+	Switch Selection and Drawing Modes	選択モードと描画モードを切り替え
 	Enable Touch Workspace	タッチワークスペースを有効にする
 	Enable copying of text, images and other content	テキスト、イメージ、その他のコンテンツのコピーを許可
 	Enable in-menu font previews	メニュー内でフォントプレビューを有効にする
+	Show samples on white	サンプルを白地に表示
 	Enable plaintext metadata	プレーンテキストのメタデータを有効にする
 	Enable text access for screen readers	スクリーンリーダー用にテキストアクセスを有効にする
 	Encoding	エンコーディング
@@ -4746,6 +4754,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{bpp}-bit bitmaps can't be read	{bpp} ビットのビットマップは読み込めません
 @msg	not an EMF or WMF file	EMF ファイルでも WMF ファイルでもありません
 @msg	not an HP-GL file	HP-GL ファイルではありません
+@msg	not a PICT file	PICT ファイルではありません
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` は 1〜255 個の #rrggbb 形式のカラーの配列にしてください
 @msg	its layers use {_1}, which aren't read yet	レイヤーで使用されている {_1} はまだ読み込めません
 @msg	the EMF header is damaged	EMF ヘッダーが破損しています
@@ -5206,6 +5215,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	choose the font files to add	追加するフォントファイルを選択してください
 @msg	not a file	ファイルではありません
 @msg	not a font file	フォントファイルではありません
+@msg	the active document changed while the question was open; nothing was deleted	質問が開いている間にアクティブなドキュメントが変わったため、何も削除されませんでした
 @msg	that document is no longer open	そのドキュメントはもう開かれていません
 @msg	larger than 256 MB	256 MB を超えています
 @msg	the files come to more than 1 GB: add fewer at a time	ファイルの合計が 1 GB を超えています: 一度に追加するファイルを減らしてください
@@ -5538,6 +5548,65 @@ lighting	Light	ライト
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} は画像から立体を作成できません。先に「オブジェクト › 画像トレース › 作成」でトレースしてください。
 @msg	{label} requires a shape with at least two anchors	{label} には 2 つ以上のアンカーポイントを持つシェイプが必要です
 @msg	The shape is too complex for a 3D effect	シェイプが複雑すぎるため 3D 効果を適用できません
+@msg	Extrude & Bevel	押し出しとベベル
+@msg	Revolve	回転体
+@msg	Inflate	膨張
+@msg	Rotate	回転
+@msg	Extrude & Bevel (Classic)	押し出しとベベル（クラシック）
+@msg	Revolve (Classic)	回転体（クラシック）
+@msg	Rotate (Classic)	回転（クラシック）
+@msg	This effect	この効果
+@msg	clipping paths	クリッピングパス
+@msg	other objects	その他のオブジェクト
+@msg	{label} requires a group holding a shape with at least two anchors	{label} には 2 つ以上のアンカーポイントを持つシェイプを含むグループが必要です
+@msg	Revolve requires a group holding a shape with at least two anchors	回転体には 2 つ以上のアンカーポイントを持つシェイプを含むグループが必要です
+@msg	Revolve requires a shape with at least two anchors	回転体には 2 つ以上のアンカーポイントを持つシェイプが必要です
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	グループの {label} には、パス、複合パス、テキスト、グループ、クリッピンググループ、ブレンド、シンボルインスタンスが必要です。先に次を解除または分割してください: {what}。
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	グループの {label} で扱えるオブジェクトは {MAX_MEMBERS} 個までです
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	グループまたはレイヤーの 3D 効果は、塗りや線ではなくグループ自体に適用されます
+@msg	a 3D effect on a group's fill or stroke draws nothing	グループの塗りまたは線にある 3D 効果は何も描画しません
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	グループの塗りまたは線にある 3D 効果には書き出せる描画がありません
+@msg	The 3D object is too complex to export	3D オブジェクトが複雑すぎるため書き出せません
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	オブジェクトに 3D 効果 (押し出しとベベル、回転体、膨張、回転) がありません
+@msg	its 3D effect builds no solid	3D 効果からソリッドが作成されません
+@msg	bevel must be none or one of {_1}	bevel には none または {_1} のいずれかを指定してください
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} はこのアートからソリッドを作成できません。シンボルインスタンス、ブレンド、クリッピンググループに含まれるオブジェクトが多すぎます
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} はシンボル「{symbol}」のインスタンスからソリッドを作成できません。シンボルのアートを使用できません
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: クリッピングパスが複雑すぎるため、アートを切り抜けません
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} で扱えるオブジェクトは {MAX_MEMBERS} 個までです
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} は {MAX_DEPTH} 階層より深く入れ子になったアートからソリッドを作成できません
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	回転体のペイントがこのサーフェスには複雑すぎます。分割数を減らすか、グラデーションを単純化してください
+@msg	Revolve edge must be left or right	回転体: edge には left または right を指定してください
+@msg	Revolve cap must be a boolean	回転体: cap はブール値にしてください
+@msg	the revolved object has no fill or stroke	回転体のオブジェクトに塗りも線もありません
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor は #rrggbb 形式の不透明な RGB カラーにしてください
+@msg	lights must contain one to ten lights	lights には 1 から 10 個のライトを含めてください
+@msg	each light must be an object	各ライトはオブジェクトにしてください
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	不明なライトの設定です。color、intensity、rotation、height、softness、behind のいずれかを使用してください
+@msg	light {key} must be a number from {min} to {max}	ライト: {key} は {min} から {max} までの数値にしてください
+@msg	light color must use opaque #rrggbb	ライトの color は不透明な #rrggbb にしてください
+@msg	light behind must be true or false	ライトの behind は true または false にしてください
+@msg	shadow must be true or false	shadow は true または false にしてください
+@msg	shadowPosition must be behind or below	shadowPosition には behind または below を指定してください
+@msg	{key} must be a number from {min} to {max}	{key} は {min} から {max} までの数値にしてください
+@msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}` の各項目はオブジェクトにしてください
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` の項目に指定できるのは symbol、face、x、y、scale、rotation で、`{k}` は指定できません
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}` の各項目にはシンボルの名前 `symbol` が必要です
+@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` の face には front または back を指定してください
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` の {key} は {lo} から {hi} までの数値にしてください
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` は配列にしてください
+@msg	Graphics map onto planar faces: use the Extrude or Plane object type	グラフィックは平らな面にマッピングされます。オブジェクトの種類に押し出しまたは平面を使用してください
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` に指定できるグラフィックは {MAX_GRAPHICS} 個までです
+@msg	A plane has one face: map its graphics onto the front	平面には面が 1 つしかありません。グラフィックは前面にマッピングしてください
+@msg	The graphics are too complex: simplify the symbols' art	グラフィックが複雑すぎます。シンボルのアートを単純化してください
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	グラフィックのアートの入れ子は {MAX_LEVELS} 階層までです。シンボルのアートを単純化してください
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	グラフィックのアートでシンボルを入れ子にできるのは {MAX_NESTING} 階層までです。シンボルのアートを単純化してください
+@msg	A graphic's art holds too many objects: simplify the symbol's art	グラフィックのアートに含まれるオブジェクトが多すぎます。シンボルのアートを単純化してください
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	グラフィックが描画できる塗りと線は {MAX_PIECES} 個までです。シンボルのアートを単純化してください
+@msg	`surface` must be one of {_1}	`surface` は {_1} のいずれかにしてください
+@msg	{label} draws the source art for this object instead of its 3D surface	{label} はこのオブジェクトの 3D サーフェスの代わりに元のアートを描画します
+@msg	{label} draws no faces for this object	{label} はこのオブジェクトに面を描画しません
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	ワイヤーフレームの辺が {MAX_WIRE_EDGES} 本を超えています
 @msg	The 3D surface is too complex; simplify the shape	3D サーフェスが複雑すぎます。シェイプを単純化してください
 	Transform Objects	オブジェクトの変形
 @msg	unknown parameter `{key}`; did you mean `{near}`?	`{key}` は不明なパラメーターです。`{near}` のことですか?
@@ -6016,6 +6085,35 @@ axis	Y Axis	Y 軸
 @msg	the path has no anchor points	パスにアンカーポイントがありません
 @msg	too many anchor points (limit {MAX_ANCHORS})	アンカーポイントが多すぎます (上限 {MAX_ANCHORS})
 @msg	true or false	true または false
+@msg	a number >= {_1}	{_1} 以上の数値
+@msg	a number > {_1}	{_1} より大きい数値
+@msg	a number <= {_1}	{_1} 以下の数値
+@msg	a number < {_1}	{_1} 未満の数値
+@msg	a number {_1} to {_2}	{_1} から {_2} までの数値
+@msg	a number >= {_1} and < {_2}	{_1} 以上 {_2} 未満の数値
+@msg	a number > {_1} and <= {_2}	{_1} より大きく {_2} 以下の数値
+@msg	a number > {_1} and < {_2}	{_1} より大きく {_2} 未満の数値
+@msg	a number ({_1})	数値 ({_1})
+@msg	a number >= {_1} ({_2})	{_1} 以上の数値 ({_2})
+@msg	a number > {_1} ({_2})	{_1} より大きい数値 ({_2})
+@msg	a number <= {_1} ({_2})	{_1} 以下の数値 ({_2})
+@msg	a number < {_1} ({_2})	{_1} 未満の数値 ({_2})
+@msg	a number {_1} to {_2} ({_3})	{_1} から {_2} までの数値 ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	{_1} 以上 {_2} 未満の数値 ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	{_1} より大きく {_2} 以下の数値 ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	{_1} より大きく {_2} 未満の数値 ({_3})
+@msg	an integer	整数
+@msg	an integer >= {_1}	{_1} 以上の整数
+@msg	an integer <= {_1}	{_1} 以下の整数
+@msg	an integer {_1} to {_2}	{_1} から {_2} までの整数
+@msg	one of {_1}	{_1} のいずれか
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` は {_1} のいずれかにしてください ({got} は使えません)
+@msg	an object id (a non-negative integer)	オブジェクト ID (0 以上の整数)
+@msg	a list of object ids	オブジェクト ID のリスト
+@msg	a color (a string, [r, g, b] or an object)	カラー (文字列、[r, g, b] またはオブジェクト)
+@msg	[x, y] (two numbers)	[x, y] (2 つの数値)
+@msg	an object	オブジェクト
+@msg	a list	リスト
 @msg	unknown key `{k}`; the keys here are {_1}	`{k}` は不明なキーです。ここで使えるキー: {_1}
 @msg	{_1} is listed twice	{_1} が 2 回指定されています
 @msg	{_1} is not the id of an input object	{_1} は入力オブジェクトの ID ではありません
@@ -6125,6 +6223,13 @@ axis	Y Axis	Y 軸
 @msg	Batch cannot play an action with a stop	バッチでは停止を含むアクションを再生できません
 	Insert Menu Item…	メニュー項目を挿入…
 	Insert Menu Item	メニュー項目を挿入
+	Insert Select Path	パスの選択を挿入
+	Select Path	パスを選択
+@msg	select one whole path or compound path	パス全体または複合パスを 1 つ選択してください
+@msg	select only one path	パスを 1 つだけ選択してください
+@msg	the path is hidden or locked, or cannot be selected here	パスが非表示またはロックされているか、ここでは選択できません
+@msg	object {value} is not the stored path: it changed, or the document is another one	オブジェクト {value} は保存されたパスではありません: 変更されたか、別のドキュメントです
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` は "v1:" と小文字の 16 進数字 16 桁である必要があります
 	Select Object…	オブジェクトを選択…
 	Select Object	オブジェクトを選択
 	Set Selection	選択範囲を設定
@@ -6849,7 +6954,9 @@ breakText	Glyphs	字形
 @msg	“{shown}” opens {_1} files, not `{_2}`	「{shown}」が開くのは {_1} ファイルで、`{_2}` ではありません
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` は種類 `{_2}` のプラグインで、読み込みプラグインではありません
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` は種類 `{_2}` のプラグインで、書き出しプラグインではありません
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` は読み込みプラグインです: document.open {{"importer"}"}} でファイルを開いてください
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` は読み込みプラグインです: document.open {{"importer": "{_2}"}} でファイルを開いてください
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` は書き出しプラグインです: document.export {{"format": "{_2}"}} で書き出してください
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` はライブ効果です: effect.apply {{"effect": "{_2}"}} で適用してください
 @msg	the importer returned no objects	読み込みプラグインがオブジェクトを返しませんでした
 @msg	an importer returns `objects` and `warnings`, not `{key}`	読み込みプラグインが返すのは `objects` と `warnings` で、`{key}` ではありません
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	ファイルが読み込みプラグインの読み取る {MAX_INPUT_BYTES} バイトを超えています

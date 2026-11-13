@@ -1190,6 +1190,32 @@ fn distort_rejects_malformed_coordinates_and_ids_without_editing_art() {
     assert_eq!(undo_len(&s), history + 1);
 }
 
+/// `object.distort` with `angle` reads `from` as a box in the frame turned by it, as the Free
+/// Transform tool sends a turned bounding box: corners where that box already stands leave the art.
+#[test]
+fn distort_reads_from_in_a_turned_frame_and_rejects_a_bad_angle() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let original = bounds(&s, a);
+    let bx = vectorcraft_doc::OrientedBox { angle: 90.0, rect: Rect::new(-100.0, 0.0, 0.0, 100.0) };
+    let corners: Vec<serde_json::Value> = bx.corners().iter().map(|c| json!([c.x, c.y])).collect();
+    let history = undo_len(&s);
+    for p in [
+        json!({"corners": corners, "from": [-100, 0, 0, 100], "angle": "90", "ids": [a.0]}),
+        json!({"corners": corners, "from": [-100, 0, 0, 100], "angle": [90], "ids": [a.0]}),
+    ] {
+        assert!(s.execute("object.distort", &p).is_err(), "invalid input: {p}");
+        assert!(close(bounds(&s, a), original));
+        assert_eq!(undo_len(&s), history);
+    }
+    s.execute("object.distort", &json!({"corners": corners, "from": [-100, 0, 0, 100], "angle": 90, "ids": [a.0]})).unwrap();
+    assert!(close(bounds(&s, a), original), "{:?}", bounds(&s, a));
+    assert_eq!(undo_len(&s), history + 1);
+    // Without `from`, the box is the objects' bounds in the turned frame: the same box here.
+    s.execute("object.distort", &json!({"corners": corners, "angle": 90, "ids": [a.0]})).unwrap();
+    assert!(close(bounds(&s, a), original), "{:?}", bounds(&s, a));
+}
+
 /// `artboard.move` and `artboard.delete` take several artboards at once (#1139): one undo step
 /// each, the art on each moving with it, and one artboard always left.
 #[test]

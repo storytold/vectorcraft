@@ -104,6 +104,9 @@ pub struct Prefs {
     pub font_names_in_english: bool,
     pub auto_size_area_type: bool,
     pub font_preview: bool,
+    /// Type › Show samples on white: the font menus draw each family's sample in dark type on a
+    /// white area in every brightness (off by default).
+    pub font_samples_on_white: bool,
     pub font_preview_size: String,
     pub recent_fonts_count: u32,
     pub missing_glyph_protection: bool,
@@ -427,6 +430,7 @@ impl Default for Prefs {
             font_names_in_english: true,
             auto_size_area_type: false,
             font_preview: true,
+            font_samples_on_white: false,
             font_preview_size: s("medium"),
             recent_fonts_count: 10,
             missing_glyph_protection: true,
