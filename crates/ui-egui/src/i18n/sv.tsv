@@ -3505,6 +3505,8 @@ digits	Malayalam	Malayalam
 	Rename Library Group	Byt namn på biblioteksgrupp
 	Delete Library Group	Radera biblioteksgrupp
 	Move Library Item to Group	Flytta biblioteksobjekt till grupp
+	Rename Library Item	Byt namn på biblioteksobjekt
+	Add to Character Styles	Lägg till i teckenstilar
 	Library	Bibliotek
 	Rename Library	Byt namn på bibliotek
 	Show Library	Visa bibliotek
@@ -4078,6 +4080,7 @@ axis	Both	Båda
 	Drag to the window's left or right edge to dock	Dra till fönstrets vänster- eller högerkant för att docka
 	Float Tool Group	Gör verktygsgruppen flytande
 @msg	no library `{id}`	inget bibliotek `{id}`
+@msg	the library has another item of that kind named `{name}`	biblioteket har redan ett annat objekt av den sorten med namnet `{name}`
 @msg	select some type first	markera någon text först
 @msg	kerning must be a number, "auto", or "optical"	kerning måste vara ett tal, ”auto” eller ”optical”
 @msg	the selection has no gradient fill	markeringen har ingen fyllnadsgradient
