@@ -948,6 +948,55 @@ pub fn insert_menu_item(app: &mut VectorcraftApp, p: &Value) -> Result<Value, St
     insert(app, p, (command.to_string(), params))
 }
 
+/// The command a Select Object step runs, with {note, caseSensitive, wholeWord} as its params: it
+/// selects the objects whose Attributes note matches.
+pub const SELECT_OBJECT_STEP: &str = "select.byNote";
+
+/// The longest note a Select Object step searches for, in bytes, as `select.byNote` takes it.
+const MAX_SELECT_NOTE: usize = 1024;
+
+/// The note, Case Sensitive and Whole Word in a Select Object step's params, the note without its
+/// leading and trailing spaces. Case Sensitive and Whole Word may be left out. No note, an empty
+/// note or one longer than 1,024 bytes, a value of another type, or params that are not an object
+/// is an error.
+pub(crate) fn select_object_params(p: &Value) -> Result<(String, bool, bool), String> {
+    if !p.is_object() {
+        return Err("`params` must be an object".into());
+    }
+    let key = "note";
+    let note = match p.get(key) {
+        None | Some(Value::Null) => "",
+        Some(v) => v.as_str().ok_or_else(|| format!("`{key}` must be a string"))?,
+    }
+    .trim();
+    if note.is_empty() {
+        return Err("the note is empty".into());
+    }
+    if note.len() > MAX_SELECT_NOTE {
+        return Err("the note is longer than 1,024 bytes".into());
+    }
+    let flag = |key: &str| match p.get(key) {
+        None | Some(Value::Null) => Ok(false),
+        Some(v) => v.as_bool().ok_or_else(|| format!("`{key}` must be true or false")),
+    };
+    Ok((note.to_string(), flag("caseSensitive")?, flag("wholeWord")?))
+}
+
+/// The command that inserts a Select Object step ([`insert_select_object`]).
+pub const INSERT_SELECT_OBJECT: &str = "ui.action.insertSelectObject";
+
+/// `ui.action.insertSelectObject {set?, action?, step?, note, caseSensitive?, wholeWord?}`: inserts
+/// a Select Object step, without running it. Playback selects the objects whose Attributes note
+/// matches `note` ([`SELECT_OBJECT_STEP`]); a playback that finds none stops there with an error.
+/// The note and options are as [`select_object_params`] reads them. The place is as [`insert_stop`]
+/// takes it, and the step is selected as a stop is. Bad params, or a place [`insert_stop`]
+/// refuses, is an error, and then nothing changes. Set Selection's OK runs this. → {set, action,
+/// step}, or {recording: true}
+pub fn insert_select_object(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let (note, case_sensitive, whole_word) = select_object_params(p)?;
+    insert(app, p, (SELECT_OBJECT_STEP.to_string(), json!({"note": note, "caseSensitive": case_sensitive, "wholeWord": whole_word})))
+}
+
 /// The journal entry the recording in progress records from.
 fn recording_start(app: &VectorcraftApp) -> Option<usize> {
     let (_, _, start) = app.ui.recording.as_ref()?;
@@ -1256,7 +1305,7 @@ pub const DELETE_STEP: &str = "ui.action.deleteStep";
 
 /// `ui.action.deleteStep {set, action, step}`: deletes step `step`, a stop or a command, of the
 /// action at index `action` of set `set`. The steps after it keep whether they are excluded, and
-/// no step of that action stays selected. A Record Stop or Insert Menu Item dialog open on that step
+/// no step of that action stays selected. A Record Stop, Insert Menu Item or Set Selection dialog open on that step
 /// closes, and one open on a later step of the action follows it up. A missing or invalid index is an error, and
 /// then nothing changes. Undo does not bring the step back. Delete Selection runs this for the
 /// selected step. → {set, action, step}
@@ -1567,10 +1616,12 @@ fn holds_set(d: &crate::state::Dialog) -> bool {
         || (d.kind == crate::dialogs::action_set_options::KIND && d.fields.contains_key("set"))
 }
 
-/// Whether dialog `d` is a Record Stop or Insert Menu Item dialog, which holds the place of a new
-/// step in its `set`, `action` and `step` fields.
+/// Whether dialog `d` is a Record Stop, Insert Menu Item or Set Selection dialog, which holds the
+/// place of a new step in its `set`, `action` and `step` fields.
 fn holds_step(d: &crate::state::Dialog) -> bool {
-    d.kind == crate::dialogs::action_stop::RECORD_KIND || d.kind == crate::dialogs::action_insert_menu_item::KIND
+    d.kind == crate::dialogs::action_stop::RECORD_KIND
+        || d.kind == crate::dialogs::action_insert_menu_item::KIND
+        || d.kind == crate::dialogs::action_select_object::KIND
 }
 
 /// The command that duplicates an action or an action set ([`duplicate`]).
@@ -1624,8 +1675,8 @@ pub fn duplicate(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         edited.actions.insert(a + 1, copy);
         edit_keeps_set_loadable(app, Some(set), &edited)?;
         app.ui.action_sets[set] = edited;
-        // A Batch, Record Stop or Insert Menu Item dialog open on a later action of the set follows it
-        // down.
+        // A Batch, Record Stop, Insert Menu Item or Set Selection dialog open on a later action of the
+        // set follows it down.
         if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == crate::dialogs::action_batch::KIND || holds_step(d))
             && d.fields.get("set").and_then(index) == Some(set)
             && let Some(da) = d.fields.get("action").and_then(index).filter(|&da| da > a)
@@ -1705,6 +1756,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     if widgets::menu_item(ui, tl!("Insert Menu Item…"), recording || has, false) {
         let step = selected_step(app, ui.ctx(), selected);
         crate::dialogs::action_insert_menu_item::open(app, if recording { None } else { selected }, step);
+    }
+    if widgets::menu_item(ui, tl!("Select Object…"), recording || has, false) {
+        let step = selected_step(app, ui.ctx(), selected);
+        crate::dialogs::action_select_object::open(app, if recording { None } else { selected }, step);
     }
     if widgets::menu_item(ui, tl!("Action Options…"), has, false)
         && let Some((s, a)) = selected
@@ -1892,10 +1947,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                             current = Some(si);
                             sets_selected = vec![si];
                         }
-                        // A stop's row shows its message; other steps show their command.
+                        // A stop's row shows its message, and a Select Object step's its note; other
+                        // steps show their command.
                         let shown = if command == STOP_STEP {
                             let message = params.get("message").and_then(Value::as_str).and_then(|m| m.lines().next()).unwrap_or_default();
                             crate::i18n::fmt(tl!("Stop: {message}"), &[("message", message)])
+                        } else if command == SELECT_OBJECT_STEP {
+                            let note = params.get("note").and_then(Value::as_str).and_then(|m| m.lines().next()).unwrap_or_default();
+                            crate::i18n::fmt(tl!("Select Object: {note}"), &[("note", note)])
                         } else {
                             command.clone()
                         };
@@ -3087,7 +3146,7 @@ mod tests {
             (json!(long.to_string()), "an action in the action set file has more than 10,000 steps"),
             (json!(" ".repeat(files::MAX_SET_FILE + 1)), "the action set file is larger than 8 MiB"),
             (
-                json!("{\"format\": \"vcactions\", \"version\": 4, \"name\": \"S\", \"actions\": []}"),
+                json!("{\"format\": \"vcactions\", \"version\": 5, \"name\": \"S\", \"actions\": []}"),
                 "the action set file needs a later version of VectorCraft",
             ),
         ] {
@@ -5520,7 +5579,7 @@ mod tests {
                 json!({"format": "vcactions", "version": version, "name": "Old", "actions": [{"name": "A", "steps": [{"command": "object.move"}]}]});
             assert_eq!(files::read_set(&old.to_string(), "Test").unwrap().actions[0].steps.len(), 1, "version {version}");
         }
-        let later = json!({"format": "vcactions", "version": 4, "name": "New", "actions": []});
+        let later = json!({"format": "vcactions", "version": 5, "name": "New", "actions": []});
         assert_eq!(files::read_set(&later.to_string(), "Test").unwrap_err(), "the action set file needs a later version of VectorCraft");
         for params in [json!({"message": 5}), json!({"allowContinue": "yes"}), json!(42)] {
             let stop = json!({"command": "action.stop", "params": params});
@@ -5663,5 +5722,183 @@ mod tests {
         assert_eq!(app.ui.dialog.as_ref().unwrap().fields["set"], json!(1), "a deleted set above moves it up");
         app.run(DELETE_SETS, json!({"sets": [1]})).unwrap();
         assert_eq!(open_kind(&app), None, "deleting its set closes it");
+    }
+
+    /// [`app_with_three_moves`] with a second rectangle whose Attributes note is "Badge front" →
+    /// (the app, the first rectangle's x offset, the second rectangle's x offset).
+    #[allow(clippy::type_complexity)]
+    fn app_with_a_noted_rect() -> (VectorcraftApp, Box<dyn Fn(&VectorcraftApp) -> f64>, Box<dyn Fn(&VectorcraftApp) -> f64>) {
+        let (mut app, x) = app_with_three_moves();
+        let first = app.session.active().unwrap().selection.objects.clone();
+        let id = vectorcraft_doc::NodeId(
+            app.run("shape.rectangle", json!({"x": 100, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap(),
+        );
+        app.run("attributes.set", json!({"ids": [id.0], "note": "Badge front"})).unwrap();
+        app.run("select.set", json!({"ids": first.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+        let noted = move |app: &VectorcraftApp| app.session.active().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().x0 - 100.0;
+        (app, Box::new(x), Box::new(noted))
+    }
+
+    /// A Select Object step goes after the given step, or at the action's end, runs nothing when it
+    /// goes in, and plays as `select.byNote`: the steps after it act on the objects it selects.
+    #[test]
+    fn insert_select_object_goes_after_the_given_step_and_plays_as_a_selection_by_note() {
+        let (mut app, x, noted) = app_with_a_noted_rect();
+        let selection = app.session.active().unwrap().selection.clone();
+        let r = app.run(INSERT_SELECT_OBJECT, json!({"set": 0, "action": 0, "step": 0, "note": "  badge "})).unwrap();
+        assert_eq!(r, json!({"set": 0, "action": 0, "step": 1}));
+        assert_eq!(app.session.active().unwrap().selection, selection, "inserting runs nothing");
+        let action = &app.ui.action_sets[0].actions[0];
+        assert_eq!(action.steps[1], (SELECT_OBJECT_STEP.to_string(), json!({"note": "badge", "caseSensitive": false, "wholeWord": false})));
+        app.run(INSERT_SELECT_OBJECT, json!({"set": 0, "action": 0, "note": "Badge", "caseSensitive": true, "wholeWord": true})).unwrap();
+        assert_eq!(app.ui.action_sets[0].actions[0].steps[4].1, json!({"note": "Badge", "caseSensitive": true, "wholeWord": true}));
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!((x(&app), noted(&app)), (1.0, 6.0), "the moves after the step move the object with the note");
+        let ids = &app.session.active().unwrap().selection.objects;
+        assert_eq!(ids.len(), 1);
+    }
+
+    /// A playback whose Select Object step finds no object stops there with the step's error, at
+    /// every speed, and runs none of the steps after it.
+    #[test]
+    fn a_select_object_step_that_finds_nothing_stops_the_playback() {
+        for speed in ["accelerated", "step"] {
+            let (mut app, x, noted) = app_with_a_noted_rect();
+            app.run(PLAYBACK_OPTIONS, json!({"speed": speed})).unwrap();
+            app.ui.action_sets[0].actions[0].insert_step(0, (SELECT_OBJECT_STEP.into(), json!({"note": "missing"})));
+            let selection = app.session.active().unwrap().selection.clone();
+            let e = play(&mut app, 0, 0).unwrap_err();
+            assert!(e.contains("no object that can be selected has a note matching “missing”"), "{speed}: {e}");
+            play_out(&mut app);
+            assert_eq!((x(&app), noted(&app)), (0.0, 0.0), "{speed}: nothing after it runs");
+            assert_eq!(app.session.active().unwrap().selection, selection, "{speed}: the selection stays");
+            assert!(app.ui.action_playing.is_none(), "{speed}");
+        }
+    }
+
+    #[test]
+    fn insert_select_object_refuses_bad_params_and_changes_nothing() {
+        let (mut app, _, _) = app_with_a_noted_rect();
+        let place = |extra: Value| {
+            let mut p = json!({"set": 0, "action": 0});
+            if let (Some(p), Some(extra)) = (p.as_object_mut(), extra.as_object()) {
+                p.extend(extra.clone());
+            }
+            p
+        };
+        for (params, want) in [
+            (place(json!({})), "the note is empty"),
+            (place(json!({"note": " \t "})), "the note is empty"),
+            (place(json!({"note": 5})), "`note` must be a string"),
+            (place(json!({"note": "x".repeat(1025)})), "the note is longer than 1,024 bytes"),
+            (place(json!({"note": "x", "caseSensitive": "yes"})), "`caseSensitive` must be true or false"),
+            (place(json!({"note": "x", "wholeWord": 0})), "`wholeWord` must be true or false"),
+            (place(json!({"note": "x", "action": 5})), "no such action"),
+            (place(json!({"note": "x", "step": 9})), "no such action step"),
+            (json!({"note": "x"}), "no such action"),
+            (json!(["note"]), "`params` must be an object"),
+        ] {
+            assert_eq!(app.run(INSERT_SELECT_OBJECT, params.clone()).unwrap_err(), want, "{params}");
+            assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 3, "{params}");
+        }
+        assert!(app.run(INSERT_SELECT_OBJECT, place(json!({"note": "x".repeat(1024)}))).is_ok(), "1,024 bytes goes in");
+    }
+
+    /// A saved Select Object step loads back as it was, in a version 4 file that older builds refuse;
+    /// a file whose Select Object step has bad params is refused, also inside a recorded batch.
+    #[test]
+    fn a_saved_select_object_step_survives_and_bad_ones_are_refused() {
+        let (mut app, _, _) = app_with_a_noted_rect();
+        app.run(INSERT_SELECT_OBJECT, json!({"set": 0, "action": 0, "note": "Badge", "wholeWord": true})).unwrap();
+        let saved = files::write_set(&app.ui.action_sets[0]);
+        let file: Value = serde_json::from_str(&saved).unwrap();
+        assert_eq!(file["version"], json!(4), "older builds must refuse a Select Object step");
+        assert_eq!(
+            file["actions"][0]["steps"][3],
+            json!({"command": "select.byNote", "params": {"note": "Badge", "caseSensitive": false, "wholeWord": true}})
+        );
+        let loaded = files::read_set(&saved, "Test").unwrap();
+        assert_eq!(loaded.actions[0].steps, app.ui.action_sets[0].actions[0].steps);
+        app.ui.action_sets[0].actions[0].steps.push(("action.stop".into(), json!({"message": ""})));
+        let file: Value = serde_json::from_str(&files::write_set(&app.ui.action_sets[0])).unwrap();
+        assert_eq!(file["version"], json!(4), "with a stop too");
+        for params in [json!({}), json!({"note": "  "}), json!({"note": 5}), json!({"note": "a", "caseSensitive": 1}), json!(null), json!(42)] {
+            let step = json!({"command": "select.byNote", "params": params});
+            for step in [step.clone(), json!({"command": "command.batch", "params": {"commands": [step]}})] {
+                let bad = json!({"format": "vcactions", "version": 4, "name": "Bad", "actions": [{"name": "A", "steps": [step]}]});
+                assert_eq!(files::read_set(&bad.to_string(), "Test").unwrap_err(), "not an action set file", "{step}");
+            }
+        }
+        let nested = json!({"commands": [{"command": "select.byNote", "params": {"note": "Inner"}}]});
+        let set = ActionSet::new("Nested", vec![Action::new("A", vec![("command.batch".into(), nested)])]);
+        assert_eq!(serde_json::from_str::<Value>(&files::write_set(&set)).unwrap()["version"], json!(4), "a step in a recorded batch counts");
+    }
+
+    /// The panel menu's Select Object… opens Set Selection on the selected step's place, with an
+    /// empty note and both options off; Cancel inserts nothing, and OK inserts the step after the
+    /// selected step, whose row shows the note. While recording, the step goes into the recording.
+    /// With nothing selected and nothing recording, the item is off.
+    #[test]
+    fn select_object_in_the_menu_opens_set_selection_and_inserts_on_ok() {
+        use super::super::tests_appearance::{click, frame_events};
+        let (mut app, _, _) = app_with_a_noted_rect();
+        app.ui.action_set = Some(0);
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        let open = |ctx: &egui::Context, app: &mut VectorcraftApp| {
+            let texts = frame_events(ctx, app, vec![], menu);
+            let item = texts.iter().find(|(s, _)| s.trim() == "Select Object…").map(|(_, r)| *r).expect("Select Object… in the menu");
+            click(ctx, app, item.center(), menu);
+        };
+        open(&ctx, &mut app);
+        assert_eq!(open_kind(&app), None, "nothing selected and nothing recording: the item is off");
+
+        click_first_step(&ctx, &mut app);
+        open(&ctx, &mut app);
+        let d = app.ui.dialog.as_ref().expect("Select Object… opens Set Selection");
+        assert_eq!(d.kind, crate::dialogs::action_select_object::KIND);
+        assert_eq!((&d.fields["set"], &d.fields["action"], &d.fields["step"]), (&json!(0), &json!(0), &json!(0)));
+        assert_eq!((d.str("note"), d.bool("caseSensitive"), d.bool("wholeWord")), (String::new(), false, false));
+        crate::dialogs::cancel(&mut app);
+        assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 3, "Cancel inserts nothing");
+
+        open(&ctx, &mut app);
+        // A field of another type (set through ui.dialog.set) is an error, and the dialog stays.
+        for (key, value) in [("note", json!(5)), ("caseSensitive", json!("yes")), ("wholeWord", json!(1))] {
+            if let Some(d) = app.ui.dialog.as_mut() {
+                d.fields.insert("note".into(), json!("Badge"));
+                d.fields.insert("caseSensitive".into(), json!(false));
+                d.fields.insert("wholeWord".into(), json!(false));
+                d.fields.insert(key.into(), value.clone());
+            }
+            assert!(crate::dialogs::confirm(&mut app).is_err(), "`{key}`: {value} is an error");
+            assert_eq!(open_kind(&app), Some(crate::dialogs::action_select_object::KIND), "`{key}`: the dialog stays open");
+            assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 3, "`{key}`: nothing is inserted");
+        }
+        if let Some(d) = app.ui.dialog.as_mut() {
+            d.fields.insert("note".into(), json!("Badge"));
+            d.fields.insert("caseSensitive".into(), json!(true));
+            d.fields.insert("wholeWord".into(), json!(false));
+        }
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(open_kind(&app), None, "OK closes Set Selection");
+        let action = &app.ui.action_sets[0].actions[0];
+        assert_eq!(action.steps[1], (SELECT_OBJECT_STEP.to_string(), json!({"note": "Badge", "caseSensitive": true, "wholeWord": false})));
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        assert!(texts.iter().any(|(s, _)| s == "Select Object: Badge"), "the step's row shows the note: {texts:?}");
+
+        app.run(START_RECORDING, json!({})).unwrap();
+        open(&ctx, &mut app);
+        assert!(!app.ui.dialog.as_ref().is_some_and(|d| d.fields.contains_key("set")), "while recording it goes into the recording");
+        if let Some(d) = app.ui.dialog.as_mut() {
+            d.fields.insert("note".into(), json!("While recording"));
+        }
+        crate::dialogs::confirm(&mut app).unwrap();
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        let recorded = app.ui.action_sets[0].actions.last().unwrap();
+        assert_eq!(
+            recorded.steps,
+            [(SELECT_OBJECT_STEP.to_string(), json!({"note": "While recording", "caseSensitive": false, "wholeWord": false}))]
+        );
     }
 }
