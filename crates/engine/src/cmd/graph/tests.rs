@@ -5280,3 +5280,66 @@ fn graph_commands_refuse_params_of_the_wrong_type() {
     s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, null], [2, 3]], "series": null, "transpose": null})).unwrap();
     assert_eq!(spec(&s).cells(), vec![vec![Some(1.0), None], vec![Some(2.0), Some(3.0)]]);
 }
+
+/// A `.ai` in PostScript form whose graph's records read whole (version 7 specification, appendix A)
+/// opens as a graph whose data can be edited: Graph Data redraws it on its plot. Saving it as `.ai`
+/// says its data and settings aren't written, in either form.
+#[test]
+fn a_graph_opened_from_ai_keeps_its_data_for_editing() {
+    let graph = "%_Gs\n%_100 200 300 100 Gb\n%_5 0 0 14 0 1 0 0 6 44 Gy\n%_10 2 0 0 90 80 0 Gd\n\
+        %_1 () Ga\n%_0 13 0 0 0 0 0 () GA\n%_2 () Ga\n%_0 14 0 0 0 0 0 () GA\n%_4 () Ga\n%_0 14 0 0 0 0 0 () GA\n\
+        %_2 2 1 1 Gz\n%_() Gc (East) Gc (Q1) Gc 5 Gc GC\n\
+        u\nu\n0.6 0 1 0 k\n110 100 m\n110 150 L\n130 150 L\n130 100 L\nf\nU\n%_2 1 0 0 Go\n\
+        u\n0 0 0 1 K\n100 200 m\n100 100 L\n300 100 L\nS\nU\nU\n%_GS\n";
+    let text = format!(
+        "%!PS-Adobe-3.0\n%%Creator: a script\n%%BoundingBox: 0 0 400 400\n%AI5_FileFormat 3\n%AI3_Cropmarks: 0 0 400 400\n%%EndComments\n\
+         %%BeginProlog\n%%EndProlog\n%%BeginSetup\n%%EndSetup\n%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Graph) Ln\n0 A\n{graph}LB\n\
+         %AI5_EndLayer--\n%%PageTrailer\n%%Trailer\n%%EOF\n"
+    );
+    let dir = vectorcraft_testkit::temp_dir("graph-ai-open");
+    let path = dir.join("graph.ai");
+    std::fs::write(&path, text).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": path})).unwrap();
+    let mut found = vec![];
+    s.doc().unwrap().doc.walk(|n| {
+        if n.extras().graph.is_some() {
+            found.push(n.id);
+        }
+    });
+    assert_eq!(found.len(), 1);
+    let id = found[0];
+    let before = spec(&s, id);
+    assert_eq!(
+        (before.series.as_slice(), before.categories.as_slice(), before.rows.as_slice()),
+        (&["East".to_string()][..], &["Q1".to_string()][..], &[vec![5.0]][..])
+    );
+    // The fill of the series' first mark.
+    let series_fill = |s: &Session| {
+        let mut fill = None;
+        s.doc().unwrap().doc.walk(|n| {
+            if n.extras().series_index == Some(0) && fill.is_none() {
+                let first = n.children().and_then(|c| c.first().cloned());
+                fill = first.and_then(|m| m.appearance.items.iter().find(|i| i.is_fill()).map(|i| i.paint().clone()));
+            }
+        });
+        fill
+    };
+    let painted = series_fill(&s);
+    assert!(painted.is_some());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",East\nQ1,8\nQ2,2"})).unwrap();
+    let after = spec(&s, id);
+    assert_eq!(after.rows, [[8.0], [2.0]]);
+    assert_eq!(after.rect, before.rect, "the graph is redrawn on its plot");
+    assert_eq!(series_fill(&s), painted, "the series keeps the file's paint");
+    for (name, version) in [("v7.ai", Some("7")), ("pdf.ai", None)] {
+        let mut p = json!({"path": dir.join(name), "format": "ai"});
+        if let Some(v) = version {
+            p["aiVersion"] = json!(v);
+        }
+        let r = s.execute("file.saveAs", &p).unwrap();
+        let notes = r["warnings"].as_array().cloned().unwrap_or_default();
+        assert!(notes.iter().any(|w| w.as_str().is_some_and(|w| w.starts_with("graphs are written as their art"))), "{name}: {r}");
+    }
+}

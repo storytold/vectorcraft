@@ -9,7 +9,7 @@ use super::{
     ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
     TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
-use super::{CONIC, CONIC_WEDGES, DIAMOND, HUE_STOPS, SPREAD, SPREAD_CAPPED};
+use super::{CONIC, CONIC_WEDGES, DIAMOND, GRAPHS, HUE_STOPS, SPREAD, SPREAD_CAPPED};
 
 pub(super) struct Writer<'a> {
     doc: &'a Document,
@@ -253,6 +253,9 @@ impl<'a> Writer<'a> {
         }
         if n.name.as_deref().is_some_and(|s| !s.is_empty()) && !n.is_layer() {
             self.warn(NAMES);
+        }
+        if n.extras().graph.is_some() {
+            self.warn(GRAPHS);
         }
         let locked = locked || n.locked;
         match &n.kind {

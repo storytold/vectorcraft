@@ -232,7 +232,14 @@ private editing data. VectorCraft:
   from 0 to 9 leaves the mode as it was.
   Legacy `.ai` placed EPS files in the version 7 form (`` ` `` … `~` with no `%AI5_BeginPlace`) are read like
   other placed files without a preview: as the page's art in their box. Graphs (`%_Gs` … `%_GS`) come in as their
-  drawn art, as plain groups, paths and type, without their data or settings, with a note.
+  drawn art. A grouped column, stacked column, line or area graph also keeps its table, type, axes and settings
+  when every record has the shape and values the version 7 specification's appendix A gives
+  ([the specification](https://13thmonkey.org/documentation/fonts/AI7FileFormat.pdf), printed pp. 109–112
+  and 146–158), its table holds at least one number, its art draws the plot's left and bottom edges, and each series'
+  group is tagged once and paints its marks with one fill and one stroke, which the graph keeps as that series'
+  paint; Graph Data then edits it. Other graphs (pie and scatter graphs, graphs with designs or
+  customizations, records of later versions) come in as plain groups, paths and type, with a note. Saving a graph to
+  `.ai`, in either form, writes its art without its data or settings, with a warning.
   Legacy `.ai` patterns in the version 7 form (a list of `@` and `&` layers, `_ &` for the tile's background)
   open as pattern swatches, with a fill's offset, scale, rotation, reflection and shear applied before its
   matrix. Legacy `.ai` linked images in
