@@ -1,6 +1,7 @@
-//! The metafile reader: the format parsers (`emf`, `wmf`) play their records on a [`Player`], a
-//! small model of the device context they draw into (objects, transforms, the current position,
-//! the path bracket, the clip), which turns what they draw into document objects.
+//! The metafile reader: the format parsers (`emf`, `wmf`, and `pict` for QuickDraw pictures) play
+//! their records on a [`Player`], a small model of the device context they draw into (objects,
+//! transforms, the current position, the path bracket, the clip), which turns what they draw into
+//! document objects.
 //!
 //! Fills and strokes become paths with a fill and a stroke; lines drawn one after another with the
 //! same pen join into one path. Clips become clipping groups around what they clip. Images keep
@@ -8,6 +9,7 @@
 //! doesn't know are counted and skipped, with one warning.
 
 mod emf;
+pub(crate) mod pict;
 mod wmf;
 
 use std::sync::Arc;
@@ -787,15 +789,25 @@ impl Player {
         if img.width == 0 || img.height == 0 {
             return;
         }
+        let (w, h) = (f64::from(img.width), f64::from(img.height));
+        self.image_xf(img, Affine::translate((dest.x0, dest.y0)) * Affine::scale_non_uniform(dest.width() / w, dest.height() / h), opacity);
+    }
+
+    /// An image placed by `xf` (its pixels, from the top-left, → logical), at `opacity`. An image
+    /// that `xf` flattens or sends past finite numbers is left out, and adds nothing to the
+    /// document's images.
+    pub(crate) fn image_xf(&mut self, img: Rgba, xf: Affine, opacity: f64) {
+        if img.width == 0 || img.height == 0 {
+            return;
+        }
+        let xf = self.xf() * xf;
+        if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
+            return;
+        }
         let Ok(png) = img.to_png() else { return self.warn(BAD_IMAGE) };
         let blob = ImageBlob::new("image/png", png);
         let key = blob.content_key();
         self.doc.images.entry(key.clone()).or_insert(blob);
-        let (w, h) = (f64::from(img.width), f64::from(img.height));
-        let xf = self.xf() * Affine::translate((dest.x0, dest.y0)) * Affine::scale_non_uniform(dest.width() / w, dest.height() / h);
-        if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
-            return;
-        }
         let im = ImageObject { key, width: img.width, height: img.height, xf, link: None, placement: Default::default(), pixels: None };
         let mut n = Node::new(vectorcraft_doc::NodeId(0), NodeKind::Image(Box::new(im)));
         n.opacity = opacity.clamp(0.0, 1.0) as f32;

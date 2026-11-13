@@ -1853,6 +1853,10 @@ digits	Malayalam	Malayalam
 	Long	Lang
 	Stylistic	Stilistisch
 	Mojikumi Set	Mojikumi-set
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-set
 	Kinsoku Shori Type	Kinsoku Shori-type
 	Push In First	Eerst inschuiven
@@ -1988,6 +1992,8 @@ digits	Malayalam	Malayalam
 	Weight:	Dikte:
 	Art using a deleted global swatch keeps its colour.	Artwork met een verwijderd globaal staal behoudt zijn kleur.
 	Color Group: {name}	Kleurgroep: {name}
+	Delete the selected items and their artwork?	De geselecteerde items en hun artwork verwijderen?
+	Delete this layer and its artwork?	Deze laag en het artwork erin verwijderen?
 	Delete “{name}”?	„{name}” verwijderen?
 	Document Swatches	Documentstalen
 	Edit or Apply Color Group	Kleurgroep bewerken of toepassen
@@ -3530,9 +3536,11 @@ theme	Appearance	Vormgeving
 	Enable Background Export	Achtergrondexport inschakelen
 	Enable Background Save	Achtergrondopslag inschakelen
 	Enable in-menu font previews	Lettertypevoorbeelden in het menu inschakelen
+	Show samples on white	Voorbeelden op wit tonen
 	Enable Missing Glyph Protection	Beveiliging tegen ontbrekende glyphs inschakelen
 	Enable Rubber Band for	Rubberband inschakelen voor
 	Enable Touch Gestures	Touchgebaren inschakelen
+	Switch Selection and Drawing Modes	Wisselen tussen selectie- en tekenmodus
 	Enable Touch Workspace	Touch-werkruimte inschakelen
 	English: UK	Engels: VK
 	Every (minutes)	Elke (minuten)
@@ -4315,6 +4323,7 @@ imageTrace	Outline	Contour
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` moet een geheel getal tussen {min} en {max} zijn (kreeg {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` moet tussen {min} en {max} liggen (kreeg {x})
 @msg	`{key}` must be one of {_1}	`{key}` moet een van {_1} zijn
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` moet een van {_1} zijn, niet {got}
 @msg	`{key}` must be true or false	`{key}` moet true of false zijn
 @msg	`{k}` must be [x, y]	`{k}` moet [x, y] zijn
 @msg	`{name}` has no options	`{name}` heeft geen opties
@@ -6056,6 +6065,13 @@ axis	Y Axis	Y-as
 @msg	Batch cannot play an action with a stop	Batch kan geen actie met een stop afspelen
 	Insert Menu Item…	Menu-item invoegen…
 	Insert Menu Item	Menu-item invoegen
+	Insert Select Path	Pad selecteren invoegen
+	Select Path	Pad selecteren
+@msg	select one whole path or compound path	selecteer één volledig pad of samengesteld pad
+@msg	select only one path	selecteer slechts één pad
+@msg	the path is hidden or locked, or cannot be selected here	het pad is verborgen of vergrendeld, of kan hier niet worden geselecteerd
+@msg	object {value} is not the stored path: it changed, or the document is another one	object {value} is niet het opgeslagen pad: het is gewijzigd, of het document is een ander
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` moet "v1:" zijn, gevolgd door 16 hexadecimale cijfers in kleine letters
 	Select Object…	Object selecteren…
 	Select Object	Object selecteren
 	Set Selection	Selectie instellen
