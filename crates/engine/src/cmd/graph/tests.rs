@@ -2043,6 +2043,27 @@ fn a_paint_command_on_several_marks_of_a_series_stores_the_frontmost_ones_paint(
     assert_eq!(spec(&s, id).series_paints[0].stroke, Some(Paint::None));
 }
 
+/// Apply Fill to Stroke on two marks whose strokes already have their fills, while the series stores the front mark's
+/// stroke: the back mark's stroke is taken first and the front mark's after it, so the graph ends up storing what it
+/// stored before. The document and its undo history stay as they are.
+#[test]
+fn a_paint_command_that_leaves_a_series_stored_paint_as_it_was_records_no_undo_step() {
+    let (mut s, id, _, marks) = column_marks();
+    for (mark, hex, weight) in [(marks[0], "#ff0000", 3), (marks[1], "#0000ff", 2)] {
+        s.execute("appearance.setItem", &json!({"ids": [mark.0], "index": top_row(&s, mark, true), "color": hex})).unwrap();
+        s.execute("appearance.setItem", &json!({"ids": [mark.0], "index": top_row(&s, mark, false), "color": hex, "weight": weight})).unwrap();
+    }
+    let drawn: Vec<NodeId> = series_parts(&s, id, 0).iter().map(|m| m.id).filter(|m| marks[..2].contains(m)).collect();
+    assert_eq!(drawn, [marks[0], marks[1]], "the second mark is in front");
+    let was = s.doc().unwrap().doc.clone();
+    let blue = fill_of(&s, marks[1]);
+    assert_eq!(spec(&s, id).series_paints[0].stroke, Some(blue));
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("addon.color.fillToStroke", &json!({"ids": [marks[1].0, marks[0].0]})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, was);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
 /// A stroke set on a Filled Lines band with `paint.setStroke` or Apply Fill to Stroke is not stored: the band keeps its
 /// color and its thin black outline when the graph is drawn again. A fill set with `paint.setFill` is stored.
 #[test]

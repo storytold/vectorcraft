@@ -209,13 +209,32 @@ fn series_draws_bands(g: &GraphSpec, i: usize) -> bool {
     }
 }
 
-/// Store each capture (graph, series index, fill or stroke, paint, stroke weight) in its series. Returns whether a
-/// series' captured fill or stroke changed.
-fn store_series_paints(doc: &mut Document, captures: Vec<(NodeId, usize, bool, Paint, Option<f64>)>) -> bool {
+/// Each graph's stored series paints before an edit's first capture into it. A later capture can put back what an earlier
+/// one changed, so an edit compares what it leaves with these ([`settle_series_paints`]).
+type SeriesPaintsBefore = HashMap<NodeId, Vec<vectorcraft_doc::SeriesPaint>>;
+
+/// Does any graph in `before` now store other series paints than it did before the edit's first capture? Slots the
+/// captures added past the old end and left empty are removed again, so they do not count as a change.
+fn settle_series_paints(doc: &mut Document, before: SeriesPaintsBefore) -> bool {
     let mut changed = false;
+    for (graph, was) in before {
+        let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
+        let empty = vectorcraft_doc::SeriesPaint::default();
+        if spec.series_paints.get(was.len()..).is_some_and(|added| added.iter().all(|slot| *slot == empty)) {
+            spec.series_paints.truncate(was.len());
+        }
+        changed |= spec.series_paints != was;
+    }
+    changed
+}
+
+/// Store each capture (graph, series index, fill or stroke, paint, stroke weight) in its series. Returns whether a
+/// series' captured fill or stroke differs from what the graph stored before the first capture.
+fn store_series_paints(doc: &mut Document, captures: Vec<(NodeId, usize, bool, Paint, Option<f64>)>) -> bool {
+    let mut before = SeriesPaintsBefore::new();
     for (graph, index, fill, paint, width) in captures {
         let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
-        let was = spec.series_paints.clone();
+        before.entry(graph).or_insert_with(|| spec.series_paints.clone());
         // `index` is below the graph's series count (`series_members`).
         if spec.series_paints.len() <= index {
             spec.series_paints.resize(index + 1, vectorcraft_doc::SeriesPaint::default());
@@ -227,9 +246,8 @@ fn store_series_paints(doc: &mut Document, captures: Vec<(NodeId, usize, bool, P
             slot.stroke = Some(paint);
             slot.stroke_width = width;
         }
-        changed |= spec.series_paints != was;
     }
-    changed
+    settle_series_paints(doc, before)
 }
 
 /// Copy the opacity and blend mode of the topmost visible fill (`true`) or stroke (`false`) of generated series art just
@@ -256,14 +274,14 @@ pub(crate) fn capture_series_opacity(doc: &mut Document, edited: &[(NodeId, bool
             Some((r.graph, r.index, *fill, (opacity < 1.0).then_some(opacity), (blend != BlendMode::Normal).then_some(blend)))
         })
         .collect();
-    let mut changed = false;
+    let mut before = SeriesPaintsBefore::new();
     for (graph, index, fill, kept, blend) in captures {
         let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
         // A fully opaque Normal row on a series the graph keeps nothing for leaves the graph as it is.
         if kept.is_none() && blend.is_none() && spec.series_paints.len() <= index {
             continue;
         }
-        let was = spec.series_paints.clone();
+        before.entry(graph).or_insert_with(|| spec.series_paints.clone());
         // `index` is below the graph's series count (`series_members`).
         if spec.series_paints.len() <= index {
             spec.series_paints.resize(index + 1, vectorcraft_doc::SeriesPaint::default());
@@ -274,32 +292,30 @@ pub(crate) fn capture_series_opacity(doc: &mut Document, edited: &[(NodeId, bool
         } else {
             (slot.stroke_opacity, slot.stroke_blend) = (kept, blend);
         }
-        changed |= spec.series_paints != was;
     }
-    changed
+    settle_series_paints(doc, before)
 }
 
 /// Copy the object opacity and blend mode of generated series art just edited (`edited`) into that series' object opacity
 /// and blend mode. Called inside the same document edit, so both undo together. Returns whether a series' kept object
 /// opacity or blend mode changed.
 pub(crate) fn capture_series_object_opacity(doc: &mut Document, edited: &[NodeId]) -> bool {
-    let mut changed = false;
+    let mut before = SeriesPaintsBefore::new();
     for (graph, index, opacity, blend) in object_opacity_captures(doc, edited) {
         let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
         // A fully opaque Normal object on a series the graph keeps nothing for leaves the graph as it is.
         if opacity.is_none() && blend.is_none() && spec.series_paints.len() <= index {
             continue;
         }
-        let was = spec.series_paints.clone();
+        before.entry(graph).or_insert_with(|| spec.series_paints.clone());
         // `index` is below the graph's series count (`series_members`).
         if spec.series_paints.len() <= index {
             spec.series_paints.resize(index + 1, vectorcraft_doc::SeriesPaint::default());
         }
         let Some(slot) = spec.series_paints.get_mut(index) else { continue };
         (slot.opacity, slot.blend) = (opacity, blend);
-        changed |= spec.series_paints != was;
     }
-    changed
+    settle_series_paints(doc, before)
 }
 
 /// Would [`capture_series_object_opacity`] change what the graph stores for `edited`? Reads the document without copying

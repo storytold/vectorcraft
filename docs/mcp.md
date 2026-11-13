@@ -759,9 +759,10 @@ paint before the command and has none after it does not change the paint the gra
 `paint.setStroke`, `paint.none`, `addon.color.fillToStroke` and `addon.color.strokeToFill` follow the same rules, and so
 does `library.use` when it applies a gradient or pattern. They write the topmost row of the kind; `paint.setFill` and
 `paint.setStroke` write the row `item` names instead, and without ids the three `paint.*` commands write the active
-row of the Appearance panel when it is of that kind. The graph stores the paint only when the written row is the
-topmost visible one of its kind, or when the command changes what the mark shows. A paint written to a hidden row or to
-a row under the topmost visible one is not stored, and the mark loses it when the graph is drawn again. A mark whose row
+row of the Appearance panel when it is of that kind. The graph stores only the paint of the topmost visible row of the
+kind, and only when the command wrote that row or changed its paint or weight. A paint written to a hidden row or to a
+row under the topmost visible one is not stored, also when that row shows through a translucent row above it, and the
+mark loses it when the graph is drawn again. A mark whose row
 already has the paint counts as written, so its paint replaces the one another mark of the series left on the graph.
 When one of these commands writes several paths of a series, the frontmost of them sets what the graph stores.
 An `appearance.*` command or `graphicStyle.apply` given a series group's id, and
