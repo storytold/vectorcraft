@@ -107,7 +107,10 @@ fn a_large_image_traced_as_a_flat_logo_shows_the_size_it_was_traced_at() {
     app.run("file.place", json!({"name": "logo.png", "dataBase64": data, "link": false})).unwrap();
     trace_with(&mut app, "Flat Logo");
     assert!(target(&app).2.is_some(), "the image is traced: {}", app.ui.status);
-    assert_eq!(app.ui.status, "Flat Logo traced the image at 801 × 801 pixels, averaged down from 1602 × 1602.");
+    let note = "Flat Logo traced the image at 801 × 801 pixels, averaged down from 1602 × 1602.";
+    let status = format!("Traced with 1 note: {note}");
+    assert_eq!(app.ui.status, status);
+    assert_eq!(app.ui.status_notes, Some((status, vec![note.to_string()])));
 }
 
 #[test]
