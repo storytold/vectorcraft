@@ -116,6 +116,8 @@
 	Blend Vertically	Sulauta pystysuunnassa
 	Convert to CMYK	Muunna CMYK:ksi
 	Convert to Grayscale	Muunna harmaasävyiseksi
+	Convert to Indexed Color	Muunna indeksoiduiksi väreiksi
+	Convert to Indexed Color…	Muunna indeksoiduiksi väreiksi…
 	Convert to RGB	Muunna RGB:ksi
 	Invert Colors	Käännä värit
 	Overprint Black…	Päällepainata musta…
@@ -3813,6 +3815,11 @@ theme	Appearance	Ulkoasu
 	Primary	Ensisijainen
 	Printing / Exporting	Tulostus / vienti
 	Real-time Drawing and Editing	Reaaliaikainen piirto ja muokkaus
+	Use Monitor Profile for Canvas	Käytä näytön profiilia kankaalle
+	The canvas is drawn in sRGB.	Kangas piirretään sRGB-tilassa.
+	Canvas display profile:	Kankaan näyttöprofiili:
+	The system matches the window to the display's colors.	Järjestelmä sovittaa ikkunan näytön väreihin.
+	No usable display profile was found: the canvas is drawn in sRGB.	Käyttökelpoista näyttöprofiilia ei löytynyt: kangas piirretään sRGB-tilassa.
 	Render Threads (-1 = Automatic)	Renderöintisäikeet (-1 = automaattinen)
 	Reset Preferences	Palauta asetukset
 	Export Preferences…	Vie asetukset…
@@ -4565,6 +4572,9 @@ imageTrace	Outline	Ääriviiva
 @msg	Couldn't open {name}: {e}	Tiedostoa {name} ei voitu avata: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Kohdetta {name} ei voitu sijoittaa: asiakirja, johon se pudotettiin, on suljettu
 @msg	Couldn't place {name}: the document it was placed in was closed	Kohdetta {name} ei voitu sijoittaa: asiakirja, johon sitä sijoitettiin, on suljettu
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Kohdetta {name} ei voitu sijoittaa: asiakirja, johon se pudotettiin, on palautettu tallennettuun versioon
+@msg	Couldn't place {name}: the document it was placed in was reverted	Kohdetta {name} ei voitu sijoittaa: asiakirja, johon sitä sijoitettiin, on palautettu tallennettuun versioon
+@msg	Couldn't paste: the document it was pasted in was reverted	Liittäminen ei onnistunut: asiakirja, johon liitettiin, on palautettu tallennettuun versioon
 @msg	Couldn't read {name}: {e}	Tiedostoa {name} ei voitu lukea: {e}
 @msg	Couldn't save recovery data: {e}	Palautustietoja ei voitu tallentaa: {e}
 @msg	Create Outlines: select text objects	Muunna ääriviivoiksi: valitse tekstiobjekteja

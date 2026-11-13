@@ -108,6 +108,8 @@
 	Blend Vertically	Prolnout svisle
 	Convert to CMYK	Převést na CMYK
 	Convert to Grayscale	Převést na stupně šedi
+	Convert to Indexed Color	Převést na indexované barvy
+	Convert to Indexed Color…	Převést na indexované barvy…
 	Convert to RGB	Převést na RGB
 	Invert Colors	Invertovat barvy
 	Overprint Black…	Přetisknout černou…
@@ -3889,6 +3891,11 @@ theme	Appearance	Motiv
 	Primary	Primární
 	Printing / Exporting	Tisk / export
 	Real-time Drawing and Editing	Kreslení a úpravy v reálném čase
+	Use Monitor Profile for Canvas	Použít profil monitoru pro plátno
+	The canvas is drawn in sRGB.	Plátno se vykresluje v sRGB.
+	Canvas display profile:	Profil displeje pro plátno:
+	The system matches the window to the display's colors.	Systém přizpůsobuje okno barvám displeje.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nebyl nalezen použitelný profil displeje: plátno se vykresluje v sRGB.
 	Render Threads (-1 = Automatic)	Vlákna vykreslování (-1 = automaticky)
 	Reset Preferences	Obnovit předvolby
 	Export Preferences…	Exportovat předvolby…
@@ -4651,6 +4658,9 @@ imageTrace	Outline	Obrys
 @msg	Couldn't open {name}: {e}	{name} nelze otevřít: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} nelze umístit: dokument, na který byl přetažen, byl zavřen
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} nelze umístit: dokument, do kterého se umísťoval, byl zavřen
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} nelze umístit: dokument, na který byl přetažen, byl vrácen k uložené verzi
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} nelze umístit: dokument, do kterého se umísťoval, byl vrácen k uložené verzi
+@msg	Couldn't paste: the document it was pasted in was reverted	Nelze vložit: dokument, do kterého se vkládalo, byl vrácen k uložené verzi
 @msg	Couldn't read {name}: {e}	{name} nelze přečíst: {e}
 @msg	Couldn't save recovery data: {e}	Data pro obnovení nelze uložit: {e}
 @msg	Create Outlines: select text objects	Převést na křivky: vyberte textové objekty

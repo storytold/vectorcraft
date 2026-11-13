@@ -573,6 +573,8 @@ antiAlias	Sharp	Nítido
 	Convert to Artboards	Converter em Mesas de Trabalho
 	Convert to CMYK	Converter para CMYK
 	Convert to Grayscale	Converter para Escala de Cinza
+	Convert to Indexed Color	Converter para Cores Indexadas
+	Convert to Indexed Color…	Converter para Cores Indexadas…
 	Convert to RGB	Converter para RGB
 	Convert to Shape	Converter em Forma
 	Convert to sRGB	Converter para sRGB
@@ -2258,6 +2260,11 @@ digits	Malayalam	Malaiala
 	Rating:	Avaliação:
 	Real World:	Mundo Real:
 	Real-time Drawing and Editing	Desenho e Edição em Tempo Real
+	Use Monitor Profile for Canvas	Usar Perfil do Monitor para a Tela
+	The canvas is drawn in sRGB.	A tela é desenhada em sRGB.
+	Canvas display profile:	Perfil do monitor para a tela:
+	The system matches the window to the display's colors.	O sistema ajusta a janela às cores do monitor.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nenhum perfil de monitor utilizável foi encontrado: a tela é desenhada em sRGB.
 	Rearrange All Artboards	Reorganizar Todas as Mesas de Trabalho
 	Rearrange	Reorganizar
 	Select All Artboards	Selecionar Todas as Mesas de Trabalho
@@ -3810,6 +3817,9 @@ axis	Both	Ambos
 @msg	Couldn't open {name}: {e}	Não foi possível abrir {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Não foi possível inserir {name}: o documento em que foi solto foi fechado
 @msg	Couldn't place {name}: the document it was placed in was closed	Não foi possível inserir {name}: o documento em que estava sendo inserido foi fechado
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Não foi possível inserir {name}: o documento em que foi solto foi revertido
+@msg	Couldn't place {name}: the document it was placed in was reverted	Não foi possível inserir {name}: o documento em que estava sendo inserido foi revertido
+@msg	Couldn't paste: the document it was pasted in was reverted	Não foi possível colar: o documento em que estava sendo colado foi revertido
 @msg	Couldn't read {name}: {e}	Não foi possível ler {name}: {e}
 @msg	Couldn't save recovery data: {e}	Não foi possível salvar os dados de recuperação: {e}
 @msg	Create Outlines: select text objects	Criar contornos: selecione objetos de texto

@@ -946,6 +946,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} open Saturate for the selection (dialog `saturate`, fields `intensity` −100..100, `preview`): previews live, OK runs edit.colors.saturate as one undo step",
     ),
     (
+        "ui.indexedColorDialog",
+        "Convert to Indexed Color…",
+        "",
+        "{} open Convert to Indexed Color for the selection (dialog `indexedColor`, fields `reduction`, `colors` 2..256, `dither`, `ditherAmount` 0..100, `preview`): previews live, OK runs edit.colors.toIndexed as one undo step",
+    ),
+    (
         "window.swatchLibrary",
         "Swatch Library",
         "",

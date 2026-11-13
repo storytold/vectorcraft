@@ -369,17 +369,43 @@ fn restructure(d: &mut Document, scope: &mut Scope, kind: Kind) -> Result<Outcom
             break;
         }
         if let Scope::Objects(roots) = scope {
-            for (id, nodes) in &found {
-                if let Some(at) = roots.iter().position(|r| r == id) {
-                    roots.splice(at..=at, nodes.iter().map(|n| n.id));
-                }
-            }
+            *roots = replace_roots(roots, &found);
         }
         out.ids.extend(found.iter().map(|(id, _)| *id));
         d.insert_beside(found, true)?;
     }
     out.count = out.ids.len();
     Ok(out)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many scope roots [`replace_roots`] looked at on this thread.
+    pub(super) static ROOTS_SEEN: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The scope's objects after a pass replaced `found`: each found object gives way to the ids of
+/// what replaces it, in its place, and the others keep their order. An id that `roots` lists more
+/// than once is replaced at its first places, once for each time `found` lists it. One walk of
+/// `roots`.
+pub(super) fn replace_roots(roots: &[NodeId], found: &[(NodeId, Vec<Node>)]) -> Vec<NodeId> {
+    let mut with: HashMap<NodeId, (&[Node], usize)> = HashMap::with_capacity(found.len());
+    for (id, nodes) in found {
+        with.entry(*id).or_insert((nodes.as_slice(), 0)).1 += 1;
+    }
+    let mut out = Vec::with_capacity(roots.len());
+    for r in roots {
+        #[cfg(test)]
+        ROOTS_SEEN.set(ROOTS_SEEN.get() + 1);
+        match with.get_mut(r) {
+            Some((nodes, left)) if *left > 0 => {
+                *left -= 1;
+                out.extend(nodes.iter().map(|n| n.id));
+            }
+            _ => out.push(*r),
+        }
+    }
+    out
 }
 
 /// Run `f` on a copy of each path in scope (not guides), and keep the copies it changed: `f`
@@ -479,13 +505,38 @@ fn near_points(d: &mut Document, scope: &Scope) -> Result<Outcome> {
 fn artboards(d: &mut Document, sel: &mut Selection, scope: &Scope) -> Result<Outcome> {
     let Scope::Document = scope else { return Ok(Outcome::default()) };
     let empty = empty_artboards(d);
-    // The last first, so the others keep their places.
-    for &i in empty.iter().rev() {
-        if i < d.artboards.len() {
-            let id = d.artboards.remove(i).id;
-            d.retire_artboard_id(id);
-            d.retain_guides(sel, |g| g.artboard != Some(id));
-        }
+    if empty.is_empty() {
+        return Ok(Outcome::default());
     }
+    // `empty` is in artboard order: one walk drops them and the others keep their order.
+    let mut gone: HashSet<u32> = HashSet::with_capacity(empty.len());
+    let mut i = 0;
+    d.artboards.retain(|a| {
+        let keep = empty.binary_search(&i).is_err();
+        i += 1;
+        if !keep {
+            gone.insert(a.id);
+        }
+        keep
+    });
+    count_artboard_pass();
+    for &id in &gone {
+        d.retire_artboard_id(id);
+    }
+    d.retain_guides(sel, |g| !g.artboard.is_some_and(|a| gone.contains(&a)));
+    count_artboard_pass();
     Ok(Outcome { count: empty.len(), ids: vec![], artboards: empty })
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many walks [`artboards`] made over the artboards and the ruler guides on this
+    /// thread.
+    pub(super) static ARTBOARD_PASSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Tests: count one walk over the artboards or the ruler guides.
+fn count_artboard_pass() {
+    #[cfg(test)]
+    ARTBOARD_PASSES.set(ARTBOARD_PASSES.get() + 1);
 }

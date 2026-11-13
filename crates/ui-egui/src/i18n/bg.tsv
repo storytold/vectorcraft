@@ -614,6 +614,8 @@ font-technology	Variable	Променливи
 	Convert to Artboards	Конвертиране в работни области
 	Convert to CMYK	Конвертиране в CMYK
 	Convert to Grayscale	Конвертиране в ска̀ла на сивото
+	Convert to Indexed Color	Конвертиране в индексирани цветове
+	Convert to Indexed Color…	Конвертиране в индексирани цветове…
 	Convert To Outlines	Конвертиране в контури
 	Convert To Point Type	Конвертиране в точков текст
 	Convert to RGB	Конвертиране в RGB
@@ -2623,6 +2625,11 @@ digits	Malayalam	Малаялам
 	Rating:	Оценка:
 	Real World:	Реален свят:
 	Real-time Drawing and Editing	Чертане и редактиране в реално време
+	Use Monitor Profile for Canvas	Използване на профила на монитора за платното
+	The canvas is drawn in sRGB.	Платното се изобразява в sRGB.
+	Canvas display profile:	Профил на дисплея за платното:
+	The system matches the window to the display's colors.	Системата съгласува цветовете на прозореца с дисплея.
+	No usable display profile was found: the canvas is drawn in sRGB.	Не е намерен използваем профил на дисплея: платното се изобразява в sRGB.
 	Rearrange All Artboards	Пренареждане на всички работни области
 	Rearrange	Пренареждане
 	Select All Artboards	Избиране на всички работни области
@@ -4130,6 +4137,9 @@ axis	Both	И двете
 @msg	Couldn't open {name}: {e}	Неуспешно отваряне на {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Неуспешно поставяне на {name}: документът, върху който беше пуснат, е затворен
 @msg	Couldn't place {name}: the document it was placed in was closed	Неуспешно поставяне на {name}: документът, в който се поставяше, е затворен
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Неуспешно поставяне на {name}: документът, върху който беше пуснат, е върнат към запазеното
+@msg	Couldn't place {name}: the document it was placed in was reverted	Неуспешно поставяне на {name}: документът, в който се поставяше, е върнат към запазеното
+@msg	Couldn't paste: the document it was pasted in was reverted	Неуспешно поставяне: документът, в който се поставяше, е върнат към запазеното
 @msg	Couldn't read {name}: {e}	Неуспешно четене на {name}: {e}
 @msg	Couldn't save recovery data: {e}	Неуспешно запазване на данните за възстановяване: {e}
 @msg	Create Outlines: select text objects	Създаване на контури: изберете текстови обекти

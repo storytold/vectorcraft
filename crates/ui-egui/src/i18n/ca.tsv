@@ -906,6 +906,8 @@ antiAlias	Sharp	Nítid
 	Convert to destination (preserve numbers)	Converteix al destí (conserva els números)
 	Convert to Global	Converteix en global
 	Convert to Grayscale	Converteix a escala de grisos
+	Convert to Indexed Color	Converteix a color indexat
+	Convert to Indexed Color…	Converteix a color indexat…
 	Convert To Outlines	Converteix en contorns
 	Convert To Point Type	Converteix en text de punt
 	Convert to RGB	Converteix a RGB
@@ -3403,6 +3405,11 @@ digits	Malayalam	Malaiàlam
 	Real name	Nom real
 	Real World:	Món real:
 	Real-time Drawing and Editing	Dibuix i edició en temps real
+	Use Monitor Profile for Canvas	Utilitza el perfil del monitor per al llenç
+	The canvas is drawn in sRGB.	El llenç es dibuixa en sRGB.
+	Canvas display profile:	Perfil de pantalla del llenç:
+	The system matches the window to the display's colors.	El sistema ajusta la finestra als colors de la pantalla.
+	No usable display profile was found: the canvas is drawn in sRGB.	No s’ha trobat cap perfil de pantalla utilitzable: el llenç es dibuixa en sRGB.
 	Rearrange	Reorganitza
 	Select All Artboards	Selecciona tots els taulers
 	Switch Orientation	Canvia l’orientació
@@ -5542,6 +5549,9 @@ digits	Malayalam	Malaiàlam
 @msg	Couldn't paste: the document it was pasted in was closed	No s’ha pogut enganxar: el document on s’enganxava s’ha tancat
 @msg	Couldn't place {name}: the document it was dropped on was closed	No s’ha pogut col·locar {name}: el document on es va deixar anar estava tancat
 @msg	Couldn't place {name}: the document it was placed in was closed	No s’ha pogut col·locar {name}: el document on es va col·locar estava tancat
+@msg	Couldn't place {name}: the document it was dropped on was reverted	No s’ha pogut col·locar {name}: el document on es va deixar anar s’ha revertit
+@msg	Couldn't place {name}: the document it was placed in was reverted	No s’ha pogut col·locar {name}: el document on es va col·locar s’ha revertit
+@msg	Couldn't paste: the document it was pasted in was reverted	No s’ha pogut enganxar: el document on s’enganxava s’ha revertit
 @msg	Couldn't place {name}: {e}	No s’ha pogut col·locar {name}: {e}
 @msg	Couldn't read {name}: {e}	No s’ha pogut llegir {name}: {e}
 @msg	Couldn't save recovery data: {e}	No s’han pogut desar les dades de recuperació: {e}

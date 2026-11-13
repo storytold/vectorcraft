@@ -627,6 +627,8 @@ font-technology	Variable	Вариативные
 	Convert to Artboards	Преобразовать в монтажные области
 	Convert to CMYK	Преобразовать в CMYK
 	Convert to Grayscale	Преобразовать в оттенки серого
+	Convert to Indexed Color	Преобразовать в индексированные цвета
+	Convert to Indexed Color…	Преобразовать в индексированные цвета…
 	Convert To Outlines	Преобразовать в контуры
 	Convert To Point Type	Преобразовать в точечный текст
 	Convert to RGB	Преобразовать в RGB
@@ -2730,6 +2732,11 @@ digits	Malayalam	Малаялам
 	Rating:	Рейтинг:
 	Real World:	Реальный мир:
 	Real-time Drawing and Editing	Рисование и редактирование в реальном времени
+	Use Monitor Profile for Canvas	Использовать профиль монитора для холста
+	The canvas is drawn in sRGB.	Холст отображается в sRGB.
+	Canvas display profile:	Профиль дисплея для холста:
+	The system matches the window to the display's colors.	Система согласует цвета окна с дисплеем.
+	No usable display profile was found: the canvas is drawn in sRGB.	Подходящий профиль дисплея не найден: холст отображается в sRGB.
 	Rearrange All Artboards	Переставить все монтажные области
 	Rearrange	Переставить
 	Select All Artboards	Выделить все монтажные области
@@ -4378,6 +4385,9 @@ axis	Both	Оба
 @msg	Couldn't open {name}: {e}	Не удалось открыть {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Не удалось поместить {name}: документ, в который его перетащили, был закрыт
 @msg	Couldn't place {name}: the document it was placed in was closed	Не удалось поместить {name}: документ, в который его помещали, был закрыт
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Не удалось поместить {name}: документ, в который его перетащили, был возвращён к сохранённой версии
+@msg	Couldn't place {name}: the document it was placed in was reverted	Не удалось поместить {name}: документ, в который его помещали, был возвращён к сохранённой версии
+@msg	Couldn't paste: the document it was pasted in was reverted	Не удалось вставить: документ, в который выполнялась вставка, был возвращён к сохранённой версии
 @msg	Couldn't read {name}: {e}	Не удалось прочитать {name}: {e}
 @msg	Couldn't save recovery data: {e}	Не удалось сохранить данные восстановления: {e}
 @msg	Create Outlines: select text objects	Создание контуров: выделите текстовые объекты
