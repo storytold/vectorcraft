@@ -3881,6 +3881,16 @@ fn the_edited_symbols_nine_slice_guides_are_drawn_and_dragged_on_the_canvas() {
     assert_eq!(guides_now(&app).left, 0.25, "one undo step");
     app.run("edit.redo", json!({})).unwrap();
     assert!((guides_now(&app).left - 0.1).abs() < 1e-3);
+    // Dragged on past the art's left edge at x = 100, the guide lies outside the art and is drawn
+    // there, along the art's height.
+    let (from, to) = (xf.to_screen(Point::new(110.0, 150.0)), xf.to_screen(Point::new(80.0, 150.0)));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), button(from, true)]);
+    for k in 1..=4 {
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from + (to - from) * k as f32 / 4.0)]);
+    }
+    frame(&mut app, &ctx, vec![button(to, false)]);
+    assert!((guides_now(&app).left + 0.2).abs() < 1e-3, "{:?}", guides_now(&app));
+    assert!(dots(&mut app, Point::new(80.0, 100.0), Point::new(80.0, 200.0)) > 10, "the guide drawn outside the art");
     app.run("symbol.exitEditing", json!({})).unwrap();
     assert_eq!(dots(&mut app, Point::new(110.0, 100.0), Point::new(110.0, 200.0)), 0, "none outside the mode");
 }

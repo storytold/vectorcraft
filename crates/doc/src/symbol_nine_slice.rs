@@ -10,9 +10,18 @@
 //! The cells are sized along the symbol's own axes, and the instance's rotation, shear, reflection
 //! and position then apply to them.
 //!
-//! The guides are stored as fractions (0..1) of the symbol's natural size, measured from the left
-//! and top edges and from the right and bottom edges, so they survive resizing the art. Stored
-//! under [`SYMBOL_NINE_SLICE`] keyed by symbol name; symbols without 9-slice have no entry.
+//! A guide may lie outside the art, and the instance still scales, by the slices the art falls in
+//! ([the help page](https://help.adobe.com/archive/en/illustrator/cs6/illustrator_reference.pdf),
+//! Use 9-slice scaling section). VectorCraft's own rules for that: a guide past an edge of the art
+//! cuts the art at that edge, so the outer cell on its side holds no art; with both guides of an
+//! axis past opposite edges the art scales as a whole along it; with both past the same edge the
+//! art lies in the outer cell at the other edge and keeps its size, from that edge of the instance.
+//!
+//! The guides are stored as fractions of the symbol's natural size, measured from the left and top
+//! edges and from the right and bottom edges, so they survive resizing the art. A fraction below 0
+//! puts a guide past its own edge, and one above 1 past the opposite edge; each lies within
+//! ±[`MAX_GUIDE_FRACTION`], and the two guides of an axis keep their order. Stored under
+//! [`SYMBOL_NINE_SLICE`] keyed by symbol name; symbols without 9-slice have no entry.
 //!
 //! [`NineSliceMap`] places such an instance's art for the canvas, bounds, Break Link, Expand and
 //! the exporters ([`Document::place_symbol_art`]).
@@ -49,11 +58,16 @@ impl Default for SymbolNineSlice {
     }
 }
 
+/// The farthest a guide may lie from its edge, as a fraction of the symbol's width or height, in
+/// either direction (VectorCraft's own rule).
+pub const MAX_GUIDE_FRACTION: f64 = 16.0;
+
 impl SymbolNineSlice {
-    /// Guides from `[left, top, right, bottom]`; `None` unless each is finite, within 0..1, and the
-    /// two on each axis leave a gap between them.
+    /// Guides from `[left, top, right, bottom]`; `None` unless each is finite and within
+    /// ±[`MAX_GUIDE_FRACTION`], and the two on each axis leave a gap between them
+    /// (`left + right < 1`, `top + bottom < 1`).
     pub fn new(left: f64, top: f64, right: f64, bottom: f64) -> Option<Self> {
-        let ok = |v: f64| v.is_finite() && (0.0..=1.0).contains(&v);
+        let ok = |v: f64| v.is_finite() && (-MAX_GUIDE_FRACTION..=MAX_GUIDE_FRACTION).contains(&v);
         (ok(left) && ok(top) && ok(right) && ok(bottom) && left + right < 1.0 && top + bottom < 1.0).then_some(Self { left, top, right, bottom })
     }
 
@@ -102,7 +116,8 @@ pub struct EditedNineSlice {
 }
 
 impl EditedNineSlice {
-    /// Guide `g` as a line across the art's box, from one edge to the other, in the document.
+    /// Guide `g` as a line across the art's box, from one edge to the other, in the document. A
+    /// guide outside the art spans the art's height or width beside it.
     pub fn line(&self, g: NineSliceGuide) -> (Point, Point) {
         let (b, s) = (self.art, self.guides);
         let (a, c) = match g {
@@ -126,14 +141,17 @@ impl EditedNineSlice {
         })
     }
 
-    /// The guides with guide `g` moved across its axis to document point `p`. The guide stays
-    /// within the art's box, and [`MIN_CENTER_BAND`] short of the opposite guide, or where it is
-    /// when the guides are already closer than that. A point that is not finite leaves the guides
-    /// as they are.
+    /// The guides with guide `g` moved across its axis to document point `p`. The guide may pass
+    /// either edge of the art, up to [`MAX_GUIDE_FRACTION`] from its own edge, and stops
+    /// [`MIN_CENTER_BAND`] short of the opposite guide, or where it is when the guides are already
+    /// closer than that. A point that is not finite, or that gives a fraction that is not, leaves
+    /// the guides as they are.
     pub fn moved(&self, g: NineSliceGuide, p: Point) -> SymbolNineSlice {
         let (b, mut out) = (self.art, self.guides);
         let q = self.to_doc.inverse() * p;
-        let fit = |v: f64, other: f64, now: f64| if v.is_finite() { v.clamp(0.0, (1.0 - other - MIN_CENTER_BAND).max(now)) } else { now };
+        let fit = |v: f64, other: f64, now: f64| {
+            if v.is_finite() { v.clamp(-MAX_GUIDE_FRACTION, (1.0 - other - MIN_CENTER_BAND).min(MAX_GUIDE_FRACTION).max(now)) } else { now }
+        };
         match g {
             NineSliceGuide::Left => out.left = fit((q.x - b.x0) / b.width(), out.right, out.left),
             NineSliceGuide::Right => out.right = fit((b.x1 - q.x) / b.width(), out.left, out.right),
@@ -181,20 +199,26 @@ const MAX_SLICE_DEPTH: u32 = 64;
 /// One axis of a 9-slice map: the three cells between the cuts and where each one goes.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct AxisMap {
-    /// The cuts in the art at its natural size: its start, the two guides, its end.
+    /// The cuts in the art at its natural size: its start, the two guides, its end. A guide
+    /// outside the art cuts it at the nearer end, so a cell can be empty.
     src: [f64; 4],
     /// Where the cuts go. The outer cells keep their length unless the scaled length is shorter
-    /// than both together; then both shrink in proportion and the middle cell is empty.
+    /// than both together; then both shrink in proportion and the middle cell is empty. An empty
+    /// cell's start is where the cell before it ends, so the map stays continuous.
     dst: [f64; 4],
 }
 
 impl AxisMap {
-    /// The axis from `lo` to `hi` with guides `near` and `far` (fractions of its length in from
-    /// each end), scaled by `k` (above 0).
+    /// The axis from `lo` to `hi` (`lo < hi`) with guides `near` and `far` (fractions of its
+    /// length in from each end, `near + far < 1`; either may lie past an end), scaled by `k`
+    /// (above 0). With both guides past the far end the art keeps its length from the scaled
+    /// start, and with both past the near end it keeps its length up to the scaled end.
     fn new(lo: f64, hi: f64, near: f64, far: f64, k: f64) -> Self {
         let len = hi - lo;
-        let (a, b) = (near * len, far * len);
-        let src = [lo, lo + a, hi - b, hi];
+        let c1 = (lo + near * len).clamp(lo, hi);
+        let c2 = (hi - far * len).clamp(c1, hi);
+        let src = [lo, c1, c2, hi];
+        let (a, b) = (c1 - lo, hi - c2);
         let (t0, t3) = (k * lo, k * hi);
         let room = t3 - t0;
         let (a, b) = if a + b <= room {
@@ -203,9 +227,15 @@ impl AxisMap {
             let f = (room / (a + b)).max(0.0);
             (a * f, b * f)
         };
-        let t1 = t0 + a;
-        let t2 = (t3 - b).max(t1);
-        Self { src, dst: [t0, t1, t2, t3] }
+        let dst = if c2 > c1 {
+            let t1 = t0 + a;
+            [t0, t1, (t3 - b).max(t1), t3]
+        } else if a > 0.0 {
+            [t0, t0 + a, t0 + a, t3]
+        } else {
+            [t3 - b, t3 - b, t3 - b, t3]
+        };
+        Self { src, dst }
     }
 
     /// The cell `v` lies in; values outside the art belong to the outer cells.
@@ -279,10 +309,11 @@ pub struct NineSliceMap {
 
 impl NineSliceMap {
     /// The map for an instance placed by `xf` that shows art with natural-size transform
-    /// `natural` and geometric bounds `art` (in symbol space). `None` when the art or the
-    /// transform is degenerate, or when the instance is at its natural size on both axes (then
-    /// `xf` places the art as it is).
+    /// `natural` and geometric bounds `art` (in symbol space). `None` when the guides are not ones
+    /// [`SymbolNineSlice::new`] accepts, when the art or the transform is degenerate, or when the
+    /// instance is at its natural size on both axes (then `xf` places the art as it is).
     pub fn new(guides: SymbolNineSlice, art: Rect, natural: Affine, xf: Affine) -> Option<Self> {
+        let guides = SymbolNineSlice::new(guides.left, guides.top, guides.right, guides.bottom)?;
         let b = natural.transform_rect_bbox(art);
         if ![b.x0, b.y0, b.x1, b.y1].into_iter().all(f64::is_finite) || b.width() <= 1e-9 || b.height() <= 1e-9 {
             return None;
@@ -894,6 +925,113 @@ mod tests {
         assert!(got.iter().all(|b| finite(*b)), "{got:?}");
     }
 
+    /// Guides may lie outside the art, up to 16 times its size from their edge, as long as the
+    /// two on each axis keep their order; values that are not finite are refused.
+    #[test]
+    fn guides_outside_the_art_are_accepted_in_order_and_within_the_limit() {
+        let ok = |l, t, r, b| SymbolNineSlice::new(l, t, r, b).is_some();
+        assert!(ok(-0.25, 0.25, 0.25, 0.25));
+        assert!(ok(1.25, 0.25, -0.5, 0.25), "both past the right edge");
+        assert!(ok(0.25, -16.0, 0.25, 16.0) && ok(-16.0, 0.25, -16.0, 0.25));
+        assert!(!ok(-16.5, 0.25, 0.25, 0.25) && !ok(0.25, 0.25, 0.25, 17.0));
+        assert!(!ok(f64::NAN, 0.25, 0.25, 0.25) && !ok(0.25, f64::INFINITY, 0.25, 0.25) && !ok(0.25, 0.25, f64::NEG_INFINITY, 0.25));
+        assert!(!ok(1.2, 0.25, -0.2, 0.25), "the left guide on the right one");
+        assert!(!ok(0.25, 0.6, 0.25, 0.6), "crossed");
+        let g = SymbolNineSlice::from_value(&json!([-0.25, 1.5, 0.5, -1.0])).unwrap();
+        assert_eq!(g, SymbolNineSlice { left: -0.25, top: 1.5, right: 0.5, bottom: -1.0 });
+        assert_eq!(SymbolNineSlice::from_value(&g.to_value()), Some(g));
+        assert!(SymbolNineSlice::from_value(&json!([-0.25, 0.1, 1.5])).is_none());
+        assert!(SymbolNineSlice::from_value(&json!([-20.0, 0.1, 0.5, 0.1])).is_none());
+        // Guides built without the check are not used to place art.
+        let bad = SymbolNineSlice { left: f64::NAN, ..SymbolNineSlice::default() };
+        assert!(NineSliceMap::new(bad, Rect::new(0.0, 0.0, 100.0, 100.0), Affine::IDENTITY, Affine::scale(2.0)).is_none());
+        // Art without width or height has no map, whatever the guides.
+        let out = SymbolNineSlice::new(-0.25, 1.25, 0.25, -0.5).unwrap();
+        for art in [Rect::new(0.0, 0.0, 0.0, 100.0), Rect::new(0.0, 0.0, 100.0, 0.0)] {
+            assert!(NineSliceMap::new(out, art, Affine::IDENTITY, Affine::scale(2.0)).is_none(), "{art:?}");
+        }
+    }
+
+    /// At 200 × 150, a left guide 25 % outside the art leaves the art in the center and right
+    /// columns: the left column holds no art, the center one (0..75) stretches to 0..175 and the
+    /// right one keeps its 25. Both guides outside on opposite sides scale the art as a whole on
+    /// that axis; both past the same side keep the art at its size in the outer cell at the other
+    /// side, from that side of the instance.
+    #[test]
+    fn art_scales_by_the_cells_it_falls_in_when_guides_lie_outside_it() {
+        let xf = Affine::scale_non_uniform(2.0, 1.5);
+        let d = markers(SymbolNineSlice::new(-0.25, 0.25, 0.25, 0.25));
+        let got = boxes(&d, xf);
+        let k = 175.0 / 75.0;
+        assert!(near(got[0], Rect::new(0.0, 0.0, 200.0, 150.0)), "{:?}", got[0]);
+        assert!(near(got[1], Rect::new(0.0, 0.0, 10.0 * k, 10.0)), "the top-left square stretches: {:?}", got[1]);
+        assert!(near(got[2], Rect::new(190.0, 0.0, 200.0, 10.0)), "the top-right corner keeps its size: {:?}", got[2]);
+        assert!(near(got[5], Rect::new(45.0 * k, 65.0, 55.0 * k, 85.0)), "{:?}", got[5]);
+        // Both vertical guides outside, on opposite sides: the art scales as a whole across.
+        let d = markers(SymbolNineSlice::new(-0.25, 0.25, -1.0, 0.25));
+        let got = boxes(&d, xf);
+        assert!(near(got[1], Rect::new(0.0, 0.0, 20.0, 10.0)) && near(got[2], Rect::new(180.0, 0.0, 200.0, 10.0)), "{got:?}");
+        assert!(near(got[5], Rect::new(90.0, 65.0, 110.0, 85.0)), "{:?}", got[5]);
+        // Both past the right edge: the art keeps its width from the instance's left edge.
+        let d = markers(SymbolNineSlice::new(1.2, 0.25, -0.5, 0.25));
+        let got = boxes(&d, xf);
+        assert!(near(got[0], Rect::new(0.0, 0.0, 100.0, 150.0)), "{:?}", got[0]);
+        assert!(near(got[2], Rect::new(90.0, 0.0, 100.0, 10.0)) && near(got[5], Rect::new(45.0, 65.0, 55.0, 85.0)), "{got:?}");
+        // Both past the left edge: the art keeps its width up to the instance's right edge.
+        let d = markers(SymbolNineSlice::new(-0.5, 0.25, 1.2, 0.25));
+        let got = boxes(&d, xf);
+        assert!(near(got[0], Rect::new(100.0, 0.0, 200.0, 150.0)), "{:?}", got[0]);
+        assert!(near(got[1], Rect::new(100.0, 0.0, 110.0, 10.0)), "{:?}", got[1]);
+        // The same rules apply to rows: both horizontal guides above the art keep its height up to
+        // the instance's bottom edge.
+        let d = markers(SymbolNineSlice::new(0.25, -0.5, 0.25, 1.2));
+        let got = boxes(&d, xf);
+        assert!(near(got[0], Rect::new(0.0, 50.0, 200.0, 150.0)), "{:?}", got[0]);
+        assert!(near(got[3], Rect::new(0.0, 140.0, 10.0, 150.0)), "{:?}", got[3]);
+        // Smaller than the art, an art-covered outer cell shrinks in proportion.
+        let d = markers(SymbolNineSlice::new(1.2, 0.25, -0.5, 0.25));
+        let got = boxes(&d, Affine::scale_non_uniform(0.5, 1.5));
+        assert!(near(got[0], Rect::new(0.0, 0.0, 50.0, 150.0)) && near(got[1], Rect::new(0.0, 0.0, 5.0, 10.0)), "{got:?}");
+    }
+
+    /// With guides outside the art, the map stays finite, never runs backward, and does not jump
+    /// at the art's edges or at the guides; objects keep to the cells that hold art.
+    #[test]
+    fn the_map_with_guides_outside_the_art_is_continuous_and_monotone() {
+        let cases = [(-0.25, 0.25), (-0.25, -1.0), (1.2, -0.5), (-0.5, 1.2), (0.0, -16.0), (-16.0, 16.0), (0.25, 0.25)];
+        for (l, r) in cases {
+            let d = markers(SymbolNineSlice::new(l, 0.25, r, 0.25));
+            for sx in [0.3, 2.0, 1e6] {
+                let m = d.symbol_slice_map("S", Affine::scale_non_uniform(sx, 1.5)).unwrap();
+                let at = |x: f64| m.map_point(Point::new(x, 40.0)).x;
+                let mut last = f64::NEG_INFINITY;
+                for i in 0..=1200 {
+                    let x = -10.0 + i as f64 * 0.1;
+                    let v = at(x);
+                    assert!(v.is_finite() && v >= last - 1e-12 * last.abs().max(1.0), "{l} {r} {sx}: {x} → {v} after {last}");
+                    last = v;
+                }
+                for edge in [0.0, 75.0, 100.0] {
+                    let jump = (at(edge + 1e-9) - at(edge - 1e-9)).abs();
+                    assert!(jump < 1e-6 * sx.max(1.0), "{l} {r} {sx}: a jump of {jump} at {edge}");
+                }
+            }
+        }
+        // A gradient bar across the art with the left guide outside is drawn in the two columns
+        // that hold art, not three.
+        let mut d = markers(SymbolNineSlice::new(-0.25, 0.25, 0.25, 0.25));
+        let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+        let bar = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 40.0, 100.0, 60.0)), Appearance::basic(gradient, Paint::None, 0.0));
+        let m = d.symbol_slice_map("S", Affine::scale_non_uniform(2.0, 1.5)).unwrap();
+        assert_eq!(m.place(&bar, &d).children().map(Vec::len), Some(2));
+        assert_eq!(m.most_placed(&bar, &d), 7);
+        // With both guides outside on opposite sides, the bar lies in one cell and is moved whole.
+        let d = markers(SymbolNineSlice::new(-0.25, 0.25, -0.25, 0.25));
+        let m = d.symbol_slice_map("S", Affine::scale_non_uniform(2.0, 1.5)).unwrap();
+        assert!(matches!(m.place(&bar, &d).kind, NodeKind::Path { .. }));
+        assert_eq!(m.most_placed(&bar, &d), 1);
+    }
+
     /// A negative scale reflects the sized cells; a rotation turns them, the corners keeping
     /// their size along the symbol's own axes.
     #[test]
@@ -1456,27 +1594,37 @@ mod tests {
         assert!(d.edited_nine_slice().is_none());
     }
 
-    /// Moving a guide changes that guide alone, follows the pointer across its axis only, stays
-    /// within the art's box and stops short of the opposite guide.
+    /// Moving a guide changes that guide alone, follows the pointer across its axis only, may pass
+    /// either edge of the art up to [`MAX_GUIDE_FRACTION`], and stops short of the opposite guide.
     #[test]
-    fn a_moved_guide_stays_in_the_art_and_short_of_the_opposite_guide() {
+    fn a_moved_guide_passes_the_arts_edges_and_stops_short_of_the_opposite_guide() {
         let xf = Affine::translate((10.0, 20.0)) * Affine::scale(2.0);
         let e = editing(Some(SymbolNineSlice::default()), xf).edited_nine_slice().unwrap();
         let q = SymbolNineSlice { left: 0.25, top: 0.25, right: 0.25, bottom: 0.25 };
         assert_eq!(e.moved(NineSliceGuide::Left, Point::new(30.0, 999.0)), SymbolNineSlice { left: 0.1, ..q });
         assert_eq!(e.moved(NineSliceGuide::Bottom, Point::new(-50.0, 180.0)), SymbolNineSlice { bottom: 0.2, ..q });
-        assert_eq!(e.moved(NineSliceGuide::Top, Point::new(0.0, -500.0)), SymbolNineSlice { top: 0.0, ..q });
-        assert_eq!(e.moved(NineSliceGuide::Right, Point::new(1e6, 0.0)), SymbolNineSlice { right: 0.0, ..q });
+        // Past the art's near edges: the art spans 10..210 across and 20..220 down.
+        assert_eq!(e.moved(NineSliceGuide::Left, Point::new(-40.0, 50.0)), SymbolNineSlice { left: -0.25, ..q });
+        assert_eq!(e.moved(NineSliceGuide::Top, Point::new(0.0, -500.0)), SymbolNineSlice { top: -2.6, ..q });
+        assert_eq!(e.moved(NineSliceGuide::Right, Point::new(1e6, 0.0)), SymbolNineSlice { right: -MAX_GUIDE_FRACTION, ..q });
+        assert_eq!(e.moved(NineSliceGuide::Left, Point::new(-1e300, 0.0)), SymbolNineSlice { left: -MAX_GUIDE_FRACTION, ..q });
         let crossed = e.moved(NineSliceGuide::Left, Point::new(200.0, 50.0));
         assert!((crossed.left - (0.75 - MIN_CENTER_BAND)).abs() < 1e-12, "{crossed:?}");
         assert!(SymbolNineSlice::new(crossed.left, crossed.top, crossed.right, crossed.bottom).is_some());
         assert_eq!(e.moved(NineSliceGuide::Top, Point::new(f64::NAN, f64::NAN)), q);
+        assert_eq!(e.moved(NineSliceGuide::Top, Point::new(0.0, f64::INFINITY)), q);
+        // With the right guide past the art's right edge, the left one may pass that edge too.
+        let wide = SymbolNineSlice { right: -0.5, ..q };
+        let e = editing(Some(wide), xf).edited_nine_slice().unwrap();
+        assert_eq!(e.moved(NineSliceGuide::Left, Point::new(260.0, 50.0)), SymbolNineSlice { left: 1.25, ..wide });
+        assert!(near_point(e.line(NineSliceGuide::Right).0, Point::new(310.0, 20.0)));
+        assert!(near_point(e.line(NineSliceGuide::Right).1, Point::new(310.0, 220.0)));
         // Saved guides closer than the minimum center band keep their place when a drag does not
         // move them closer.
         let narrow = SymbolNineSlice::new(0.00005, 0.25, 0.9999, 0.25).unwrap();
         let e = editing(Some(narrow), xf).edited_nine_slice().unwrap();
         assert_eq!(e.moved(NineSliceGuide::Left, Point::new(200.0, 50.0)), narrow);
-        assert_eq!(e.moved(NineSliceGuide::Left, Point::new(0.0, 50.0)), SymbolNineSlice { left: 0.0, ..narrow });
+        assert_eq!(e.moved(NineSliceGuide::Left, Point::new(0.0, 50.0)), SymbolNineSlice { left: -0.05, ..narrow });
         // A mirrored placement measures along the symbol's own axes.
         let e = editing(Some(SymbolNineSlice::default()), Affine::scale_non_uniform(-1.0, 1.0)).edited_nine_slice().unwrap();
         assert!(near_point(e.line(NineSliceGuide::Left).0, Point::new(-25.0, 0.0)));
