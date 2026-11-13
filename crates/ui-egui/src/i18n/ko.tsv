@@ -70,6 +70,10 @@ digits	Malayalam	말라얄람어
 	Long	길게
 	Stylistic	스타일
 	Mojikumi Set	모지쿠미 세트
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	긴소쿠 세트
 	Kinsoku Shori Type	긴소쿠 처리 유형
 	Push In First	밀어 넣기 우선
@@ -1461,6 +1465,8 @@ antiAlias	Sharp	날카롭게
 	Delete theme	테마 삭제
 	Delete this saved preset	저장된 이 프리셋 삭제
 	Delete {kind} Style	{kind} 스타일 삭제
+	Delete the selected items and their artwork?	선택한 항목과 해당 아트워크를 삭제하시겠습니까?
+	Delete this layer and its artwork?	이 레이어와 해당 아트워크를 삭제하시겠습니까?
 	Delete “{name}”?	“{name}”을(를) 삭제하시겠습니까?
 	Depth:	깊이:
 	Description	설명
@@ -1628,6 +1634,7 @@ antiAlias	Sharp	날카롭게
 	Enable Touch Workspace	터치 작업 영역 사용
 	Enable copying of text, images and other content	텍스트, 이미지 및 기타 콘텐츠 복사 허용
 	Enable in-menu font previews	메뉴에서 글꼴 미리 보기 사용
+	Show samples on white	흰색 바탕에 샘플 표시
 	Enable plaintext metadata	일반 텍스트 메타데이터 사용
 	Enable text access for screen readers	화면 읽기 프로그램의 텍스트 접근 허용
 	Encoding	인코딩
@@ -4673,6 +4680,7 @@ theme	Appearance	외관
 @msg	{bpp}-bit bitmaps can't be read	{bpp}비트 비트맵은 읽을 수 없습니다
 @msg	not an EMF or WMF file	EMF 또는 WMF 파일이 아닙니다
 @msg	not an HP-GL file	HP-GL 파일이 아닙니다
+@msg	not a PICT file	PICT 파일이 아닙니다
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens`는 #rrggbb 색상 1~255개의 배열이어야 합니다
 @msg	its layers use {_1}, which aren't read yet	레이어에 {_1}이(가) 있으며, 아직 읽을 수 없습니다
 @msg	the EMF header is damaged	EMF 헤더가 손상되었습니다
@@ -5133,6 +5141,7 @@ theme	Appearance	외관
 @msg	choose the font files to add	추가할 글꼴 파일을 선택하세요
 @msg	not a file	파일이 아닙니다
 @msg	not a font file	글꼴 파일이 아닙니다
+@msg	the active document changed while the question was open; nothing was deleted	질문이 열려 있는 동안 활성 문서가 바뀌어 아무것도 삭제되지 않았습니다
 @msg	that document is no longer open	해당 문서는 더 이상 열려 있지 않습니다
 @msg	larger than 256 MB	256MB보다 큽니다
 @msg	the files come to more than 1 GB: add fewer at a time	파일의 합계가 1GB를 넘습니다: 한 번에 적게 추가하세요
@@ -6810,7 +6819,9 @@ breakText	Glyphs	글리프
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}”은(는) {_1} 파일을 엽니다. `{_2}`은(는) 열지 않습니다
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}`은(는) `{_2}` 종류의 플러그인이며 가져오기 플러그인이 아닙니다
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}`은(는) `{_2}` 종류의 플러그인이며 내보내기 플러그인이 아닙니다
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}`은(는) 가져오기 플러그인입니다: document.open {{"importer"}"}}로 파일을 여세요
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}`은(는) 가져오기 플러그인입니다: document.open {{"importer": "{_2}"}}로 파일을 여세요
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}`은(는) 내보내기 플러그인입니다: document.export {{"format": "{_2}"}}로 내보내세요
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}`은(는) 라이브 효과입니다: effect.apply {{"effect": "{_2}"}}로 적용하세요
 @msg	the importer returned no objects	가져오기 플러그인이 개체를 반환하지 않았습니다
 @msg	an importer returns `objects` and `warnings`, not `{key}`	가져오기 플러그인은 `{key}`가 아닌 `objects`와 `warnings`를 반환합니다
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	파일이 가져오기 플러그인이 읽는 {MAX_INPUT_BYTES}바이트보다 큽니다

@@ -167,6 +167,8 @@ pub(crate) fn apply_desired(sg: &mut [SGlyph], j: &JustificationOptions, scale_g
             g.sx *= g_des;
             g.dx *= g_des;
             g.kern_shift = (g.kern_shift - g.aki_shift) * g_des + g.aki_shift;
+            // The space Mojikumi took off before the glyph scales with it.
+            g.lead *= g_des;
         }
         f.width = g.adv - aki;
         f.scale = g_des;

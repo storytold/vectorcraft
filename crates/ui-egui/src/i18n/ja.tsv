@@ -71,12 +71,16 @@ digits	Malayalam	マラヤーラム数字
 	Flip	反転
 	Japanese	日本語
 	Join Our Discord	Discord に参加
-	Line-end Punctuation Half Width	行末約物半角
+	Line-end Punctuation Half Width	行末・連続約物半角
 	Insert Kashidas	カシーダを挿入
 	Kashidas	カシーダ
 	Long	長い
 	Stylistic	スタイリスティック
 	Mojikumi Set	文字組み
+	YakumonoHankaku	約物半角
+	GyomatsuYakumonoHankaku	行末約物半角
+	GyomatsuYakumonoZenkaku	行末約物全角
+	YakumonoZenkaku	約物全角
 	Kinsoku Set	禁則処理
 	Kinsoku Shori Type	禁則調整方式
 	Push In First	追い込み優先
@@ -1471,6 +1475,8 @@ antiAlias	Sharp	シャープ
 	Delete theme	テーマを削除
 	Delete this saved preset	この保存済みプリセットを削除
 	Delete {kind} Style	{kind}スタイルを削除
+	Delete the selected items and their artwork?	選択した項目とそのアートワークを削除しますか？
+	Delete this layer and its artwork?	このレイヤーとそのアートワークを削除しますか？
 	Delete “{name}”?	「{name}」を削除しますか？
 	Depth:	深さ:
 	Description	説明
@@ -1638,6 +1644,7 @@ antiAlias	Sharp	シャープ
 	Enable Touch Workspace	タッチワークスペースを有効にする
 	Enable copying of text, images and other content	テキスト、イメージ、その他のコンテンツのコピーを許可
 	Enable in-menu font previews	メニュー内でフォントプレビューを有効にする
+	Show samples on white	サンプルを白地に表示
 	Enable plaintext metadata	プレーンテキストのメタデータを有効にする
 	Enable text access for screen readers	スクリーンリーダー用にテキストアクセスを有効にする
 	Encoding	エンコーディング
@@ -4746,6 +4753,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{bpp}-bit bitmaps can't be read	{bpp} ビットのビットマップは読み込めません
 @msg	not an EMF or WMF file	EMF ファイルでも WMF ファイルでもありません
 @msg	not an HP-GL file	HP-GL ファイルではありません
+@msg	not a PICT file	PICT ファイルではありません
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` は 1〜255 個の #rrggbb 形式のカラーの配列にしてください
 @msg	its layers use {_1}, which aren't read yet	レイヤーで使用されている {_1} はまだ読み込めません
 @msg	the EMF header is damaged	EMF ヘッダーが破損しています
@@ -5206,6 +5214,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	choose the font files to add	追加するフォントファイルを選択してください
 @msg	not a file	ファイルではありません
 @msg	not a font file	フォントファイルではありません
+@msg	the active document changed while the question was open; nothing was deleted	質問が開いている間にアクティブなドキュメントが変わったため、何も削除されませんでした
 @msg	that document is no longer open	そのドキュメントはもう開かれていません
 @msg	larger than 256 MB	256 MB を超えています
 @msg	the files come to more than 1 GB: add fewer at a time	ファイルの合計が 1 GB を超えています: 一度に追加するファイルを減らしてください
@@ -6914,7 +6923,9 @@ breakText	Glyphs	字形
 @msg	“{shown}” opens {_1} files, not `{_2}`	「{shown}」が開くのは {_1} ファイルで、`{_2}` ではありません
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` は種類 `{_2}` のプラグインで、読み込みプラグインではありません
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` は種類 `{_2}` のプラグインで、書き出しプラグインではありません
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` は読み込みプラグインです: document.open {{"importer"}"}} でファイルを開いてください
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` は読み込みプラグインです: document.open {{"importer": "{_2}"}} でファイルを開いてください
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` は書き出しプラグインです: document.export {{"format": "{_2}"}} で書き出してください
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` はライブ効果です: effect.apply {{"effect": "{_2}"}} で適用してください
 @msg	the importer returned no objects	読み込みプラグインがオブジェクトを返しませんでした
 @msg	an importer returns `objects` and `warnings`, not `{key}`	読み込みプラグインが返すのは `objects` と `warnings` で、`{key}` ではありません
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	ファイルが読み込みプラグインの読み取る {MAX_INPUT_BYTES} バイトを超えています
