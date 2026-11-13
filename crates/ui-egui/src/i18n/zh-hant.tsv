@@ -4563,6 +4563,20 @@ digits	Malayalam	馬來亞拉姆數字
 	Spot Color Objects	使用特別色的物件
 	Pattern Objects	使用圖樣的物件
 	Gradient Objects	使用漸層的物件
+	Font Details	字體詳細資訊
+	Linked Images	已連結的影像
+	Embedded Images	嵌入的影像
+	Compound Paths	複合路徑
+	Text Objects	文字物件
+	Placed Documents	已置入的文件
+	Symbol Instances	符號範例
+	Gradient Meshes	漸層網格
+	Blends	漸變
+	Envelopes	封套
+	Intertwine Groups	交織群組
+	Opacity Masks	不透明度遮色片
+	Objects with Effects	使用效果的物件
+	Pattern Swatches	圖樣色票
 	Spot Colors	特別色
 	Spot Colors…	特別色…
 	Spread:	擴散：

@@ -3851,6 +3851,20 @@ mark-style	Japanese	Kiểu Nhật
 	Spot Color Objects	Đối tượng có màu đặc biệt
 	Pattern Objects	Đối tượng có họa tiết
 	Gradient Objects	Đối tượng có chuyển sắc
+	Font Details	Chi tiết phông chữ
+	Linked Images	Hình ảnh đã liên kết
+	Embedded Images	Hình ảnh đã nhúng
+	Compound Paths	Đường dẫn phức
+	Text Objects	Đối tượng văn bản
+	Placed Documents	Tài liệu đã đặt
+	Symbol Instances	Thực thể ký hiệu
+	Gradient Meshes	Lưới chuyển sắc
+	Blends	Hòa trộn
+	Envelopes	Envelope
+	Intertwine Groups	Nhóm đan xen
+	Opacity Masks	Mặt nạ độ mờ
+	Objects with Effects	Đối tượng có hiệu ứng
+	Pattern Swatches	Mẫu màu họa tiết
 	Spot Colors	Màu đặc biệt
 	Spot Colors…	Màu đặc biệt…
 	Spray Radius	Bán kính phun

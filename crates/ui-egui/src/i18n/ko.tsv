@@ -3276,6 +3276,20 @@ mark-style	Japanese	일본식
 	Spot Color Objects	별색을 사용한 개체
 	Pattern Objects	패턴을 사용한 개체
 	Gradient Objects	그레이디언트를 사용한 개체
+	Font Details	글꼴 세부 정보
+	Linked Images	연결된 이미지
+	Embedded Images	포함된 이미지
+	Compound Paths	컴파운드 패스
+	Text Objects	텍스트 개체
+	Placed Documents	가져온 문서
+	Symbol Instances	심볼 인스턴스
+	Gradient Meshes	그레이디언트 메시
+	Blends	블렌드
+	Envelopes	엔벨로프
+	Intertwine Groups	교차 그룹
+	Opacity Masks	불투명 마스크
+	Objects with Effects	효과를 사용한 개체
+	Pattern Swatches	패턴 견본
 	Spot Colors	별색
 	Spot Colors…	별색…
 	Spread:	확산:
