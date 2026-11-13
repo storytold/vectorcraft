@@ -2669,7 +2669,10 @@ compound path or symbol instance selected, it finds the objects of the same shap
 ones), among those `select.all` would take and the objects in their groups, and returns `{active: true, count, ids}`,
 the selected object first (at most 10,000). With a group of such objects selected (nested groups and clipping paths
 included; not type or images), it finds the groups like it: as many objects, in the same order, each of the same
-shape, lying the same way relative to each other (the group moved or scaled as a whole). `appearance` also asks for
+shape, lying the same way relative to each other (the group moved or scaled as a whole). While Global Edit is off,
+the command is disabled for any other selection, including a group that holds type, an image or nothing (it is off in
+the Select menu, the Properties panel's Quick Actions do not show it, and the Control bar does not show its Global Edit
+Options). `appearance` also asks for
 the same fill and stroke (for groups, of each object in them), `size` for the same width and height; `artboards` is
 `"all"` or a range such as `"1, 3-5"`, and `includeCanvas: false` leaves out the objects on no artboard. Missing
 params come from `select.globalEditOptions` (the Global Edit Options, kept for the session; it returns them with
