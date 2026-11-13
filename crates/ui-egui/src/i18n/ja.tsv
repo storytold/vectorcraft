@@ -1638,6 +1638,7 @@ antiAlias	Sharp	シャープ
 	Enable Touch Workspace	タッチワークスペースを有効にする
 	Enable copying of text, images and other content	テキスト、イメージ、その他のコンテンツのコピーを許可
 	Enable in-menu font previews	メニュー内でフォントプレビューを有効にする
+	Show samples on white	サンプルを白地に表示
 	Enable plaintext metadata	プレーンテキストのメタデータを有効にする
 	Enable text access for screen readers	スクリーンリーダー用にテキストアクセスを有効にする
 	Encoding	エンコーディング

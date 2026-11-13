@@ -1308,6 +1308,7 @@ font-technology	Variable	Változó
 	Enable Contextual Task Bar	Helyzetérzékeny műveletsáv bekapcsolása
 	Enable copying of text, images and other content	Szöveg, képek és más tartalom másolásának engedélyezése
 	Enable in-menu font previews	Betűtípus-előnézet a menüben
+	Show samples on white	Minták fehér alapon
 	Enable Missing Glyph Protection	Hiányzó glifák elleni védelem
 	Enable Opacity Mask	Átlátszósági maszk bekapcsolása
 	Enable plaintext metadata	Titkosítatlan metaadatok engedélyezése

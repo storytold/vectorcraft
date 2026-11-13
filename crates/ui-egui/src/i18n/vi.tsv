@@ -1198,6 +1198,7 @@ font-technology	Variable	Biến thiên
 	Enable Contextual Task Bar	Bật thanh tác vụ theo ngữ cảnh
 	Enable copying of text, images and other content	Bật sao chép văn bản, ảnh và nội dung khác
 	Enable in-menu font previews	Bật xem trước phông trong menu
+	Show samples on white	Hiển thị mẫu trên nền trắng
 	Enable Missing Glyph Protection	Bật bảo vệ glyph bị thiếu
 	Enable Opacity Mask	Bật mặt nạ độ mờ
 	Enable plaintext metadata	Bật siêu dữ liệu văn bản thuần

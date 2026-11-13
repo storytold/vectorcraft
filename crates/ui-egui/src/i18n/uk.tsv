@@ -1035,6 +1035,7 @@ font-technology	Variable	Варіативні
 	Enable Contextual Task Bar	Увімкнути контекстну панель завдань
 	Enable copying of text, images and other content	Дозволити копіювання тексту, зображень та іншого вмісту
 	Enable in-menu font previews	Увімкнути попередній перегляд шрифтів у меню
+	Show samples on white	Показувати зразки на білому
 	Enable Missing Glyph Protection	Увімкнути захист відсутніх гліфів
 	Enable Opacity Mask	Увімкнути маску непрозорості
 	Enable plaintext metadata	Увімкнути метадані у вигляді простого тексту

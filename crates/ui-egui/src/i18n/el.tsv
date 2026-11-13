@@ -979,6 +979,7 @@ font-technology	Variable	Μεταβλητές
 	Enable Contextual Task Bar	Ενεργοποίηση γραμμής εργασιών βάσει περιβάλλοντος
 	Enable copying of text, images and other content	Να επιτρέπεται η αντιγραφή κειμένου, εικόνων και άλλου περιεχομένου
 	Enable in-menu font previews	Ενεργοποίηση προεπισκόπησης γραμματοσειρών στα μενού
+	Show samples on white	Εμφάνιση δειγμάτων σε λευκό
 	Enable Missing Glyph Protection	Ενεργοποίηση προστασίας από ελλείποντες γλύφους
 	Enable Opacity Mask	Ενεργοποίηση μάσκας αδιαφάνειας
 	Enable plaintext metadata	Ενεργοποίηση μεταδεδομένων απλού κειμένου
