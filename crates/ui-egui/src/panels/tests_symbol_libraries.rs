@@ -106,6 +106,37 @@ fn clicking_a_library_symbol_adds_it_to_the_documents_symbols_in_one_step() {
     assert!(last_open(&app.ui).is_none());
 }
 
+/// A secondary or middle drag out of a library tile carries no symbol and adds nothing; a primary
+/// drag still carries it.
+#[test]
+fn only_a_primary_drag_carries_a_library_symbol_out() {
+    let mut app = app();
+    let ctx = context();
+    app.run("window.symbolLibrary", json!({"library": "Basic Shapes"})).unwrap();
+    let undo = undo_len(&app);
+    let mut time = 0.0;
+    let mut drag = |app: &mut VectorcraftApp, pointer: PointerButton| {
+        let at = tile(app, &ctx, "Burst", time);
+        let button = |pos, pressed| Event::PointerButton { pos, button: pointer, pressed, modifiers: Modifiers::NONE };
+        frame(&ctx, vec![Event::PointerMoved(at), button(at, true)], time + 0.5, |ui| library_panel::show_window(app, ui.ctx()));
+        for (i, d) in [20.0, 60.0].into_iter().enumerate() {
+            frame(&ctx, vec![Event::PointerMoved(at + vec2(d, d))], time + 0.6 + 0.1 * i as f64, |ui| library_panel::show_window(app, ui.ctx()));
+        }
+        let carried = egui::DragAndDrop::payload::<PanelDrag>(&ctx).map(|p| (*p).clone());
+        let end = at + vec2(60.0, 60.0);
+        frame(&ctx, vec![button(end, false)], time + 0.9, |ui| library_panel::show_window(app, ui.ctx()));
+        frame(&ctx, vec![], time + 1.0, |ui| library_panel::show_window(app, ui.ctx()));
+        time += 2.0;
+        carried
+    };
+    for pointer in [PointerButton::Secondary, PointerButton::Middle] {
+        assert_eq!(drag(&mut app, pointer), None, "a {pointer:?} drag carries nothing");
+    }
+    assert_eq!((symbols(&app).len(), undo_len(&app)), (0, undo), "nothing is added");
+    let carried = drag(&mut app, PointerButton::Primary);
+    assert_eq!(carried, Some(PanelDrag::LibrarySymbol { library: "basic-shapes".into(), name: "Burst".into() }));
+}
+
 #[test]
 fn the_window_menu_and_the_symbols_panel_open_symbol_libraries() {
     let mut app = app();
