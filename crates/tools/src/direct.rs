@@ -28,7 +28,7 @@
 //! Direct Selection also edits a blend's spine: drag its points (Shift-click picks several, which
 //! drag together; a key object on a point moves with it) and, once a point is clicked, its
 //! handles; and the points of selected gradient meshes
-//! and mesh envelopes and their handles ([`MeshEdit`]): Shift-clicks and the marquee pick several,
+//! and of mesh and warp envelopes and their handles ([`MeshEdit`]): Shift-clicks and the marquee pick several,
 //! a click on a gradient mesh's line picks its two ends and one inside a patch the four points
 //! around it, a drag of picked points moves them all, the arrow keys nudge them, and a solid fill
 //! colour or the Transparency panel's opacity goes to a gradient mesh's picked points. Dragging a

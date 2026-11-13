@@ -666,7 +666,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   `graphicStyle.addFromLibrary`).
 - **Missing:** more built-in brush libraries beyond the eight shipped (and further graphic-style libraries beyond the ten shipped, and further symbol libraries beyond Basic
   Shapes, UI Frames, Map Markers, Inventory Icons and Skill Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write;
-  Global Edit of groups holding type or images, and rotated copies as matches; 9-slice guides outside the symbol's art (a dragged guide stops at the art's edge).
+  Global Edit of groups holding type or images, and rotated copies as matches.
 - **Estimate:** 5–15 h.
 
 ## G3 3D and Materials

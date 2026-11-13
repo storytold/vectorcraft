@@ -7139,7 +7139,7 @@ antiAlias	Sharp	शार्प
 @msg	needs points	जरूरत अंक
 @msg	New Window isn't available yet: a document opens in one window	नई विंडो अभी तक उपलब्ध नहीं है: एक डॉक्यूमेंट एक विंडो में खुलता है
 @msg	nineSlice must be true or false	nineSlice को true या false होना चाहिए
-@msg	nineSliceGuides must be [left, top, right, bottom], each 0..1, with left + right < 1 and top + bottom < 1	nineSliceGuides को [left, top, right, bottom] होना चाहिए, हर मान 0..1, और left + right < 1 तथा top + bottom < 1
+@msg	nineSliceGuides must be [left, top, right, bottom], each -16..16, with left + right < 1 and top + bottom < 1	nineSliceGuides को [left, top, right, bottom] होना चाहिए, हर मान -16..16, और left + right < 1 तथा top + bottom < 1
 @msg	no action set is current	कोई कार्रवाई सेट चालू नहीं है
 @msg	no action set to save	बचाने के लिए कोई कार्रवाई सेट नहीं
 @msg	no active data set	कोई सक्रिय डेटा सेट नहीं

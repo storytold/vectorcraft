@@ -1231,13 +1231,18 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
 
 /// A graphic style's appearance from art style `st`, on no object: `None` when the style isn't one
 /// this reads, or paints with a gradient or a pattern (placed on each object as its drawn look has them).
+/// A style that is one paint is its fill and stroke ([`crate::import::ai::style::ArtStyle::one_paint`]).
 pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle) -> Option<Appearance> {
     use crate::import::ai::style::StyleItem;
     if !st.plain {
         return None;
     }
+    let style_items = match &st.one_paint {
+        Some(one) => one.as_ref().ok()?,
+        None => &st.items,
+    };
     let mut items = vec![];
-    for (n, item) in st.items.iter().enumerate() {
+    for (n, item) in style_items.iter().enumerate() {
         let mut layer = match item {
             StyleItem::Fill(paint) => AppearanceItem::Fill(FillLayer::new(paint.clone())),
             // A graphic style's brush isn't checked against the file's brushes: it is left out.
