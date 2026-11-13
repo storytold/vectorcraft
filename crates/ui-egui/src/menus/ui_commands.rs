@@ -1031,6 +1031,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{params?: tracing settings (default: the Default preset's), rename?: a saved preset's name} the Image Trace panel's Manage Presets: open Save as New Preset… for those settings, or with `rename`, Rename… for that saved preset (dialog `imageTracePreset`, field `name`: a new \"Tracing Preset N\" or the preset's name); OK runs imageTrace.presets.save with the name (as `newName` when renaming), and the panel shows the preset it made from its settings",
     ),
     (
+        "ui.tracingPresetsDialog",
+        "Tracing Presets…",
+        "",
+        "{selected?: preset name (default Default)} open Edit → Tracing Presets (dialog `tracingPresets`, field `selected`): the built-in presets (in brackets, read-only) and the saved ones, with the selected one's settings. New… (from the selected preset) and Edit… (a saved one) open the preset editor (dialog `tracingPreset`, fields `name` and `params`, the tracing settings): OK runs imageTrace.presets.save and returns to Tracing Presets, and a name of a built-in preset, Custom or another saved preset keeps the editor open; Cancel returns with nothing saved. Delete runs imageTrace.presets.delete; Import… runs imageTrace.presets.import, and when saved presets have names in the file, asks (dialog `tracingPresetsReplace`) whether to replace them (OK) or keep them (Cancel); Export… runs imageTrace.presets.export on every saved preset",
+    ),
+    (
         "ui.flattenerPreview",
         "Flattener Preview",
         "",

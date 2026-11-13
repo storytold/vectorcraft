@@ -4416,6 +4416,10 @@ mark-style	Japanese	Japán
 	Rename Preset	Előbeállítás átnevezése
 	Save Image Trace Preset	Képvektorizálási előbeállítás mentése
 	Delete Image Trace Preset	Képvektorizálási előbeállítás törlése
+	Tracing Presets…	Vektorizálási előbeállítások…
+	Import Image Trace Presets	Képvektorizálási előbeállítások importálása
+	Export Image Trace Presets	Képvektorizálási előbeállítások exportálása
+	Replace the saved presets that have these names?	Lecseréli az ilyen nevű mentett előbeállításokat?
 	Tracing Result	Vektorizálás eredménye
 	Tracing Result with Outlines	Vektorizálás eredménye vázlattal
 	Tracking	Betűköz

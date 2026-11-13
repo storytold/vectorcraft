@@ -1674,6 +1674,10 @@ font-technology	Variable	Variables
 	Rename Preset	Cambiar nombre del preajuste
 	Save Image Trace Preset	Guardar preajuste de calco de imagen
 	Delete Image Trace Preset	Eliminar preajuste de calco de imagen
+	Tracing Presets…	Preajustes de calco…
+	Import Image Trace Presets	Importar preajustes de calco de imagen
+	Export Image Trace Presets	Exportar preajustes de calco de imagen
+	Replace the saved presets that have these names?	¿Reemplazar los preajustes guardados que tienen estos nombres?
 	Image Trace Presets	Preajustes de calco de imagen
 	Image:	Imagen:
 	Images:	Imágenes:

@@ -1632,6 +1632,10 @@ font-technology	Variable	Variabla
 	Rename Preset	Byt namn på förinställning
 	Save Image Trace Preset	Spara förinställning för bildkalkering
 	Delete Image Trace Preset	Radera förinställning för bildkalkering
+	Tracing Presets…	Förinställningar för vektorisering…
+	Import Image Trace Presets	Importera förinställningar för bildkalkering
+	Export Image Trace Presets	Exportera förinställningar för bildkalkering
+	Replace the saved presets that have these names?	Ersätta sparade förinställningar med dessa namn?
 	Image Trace Presets	Förinställningar för bildkalkering
 	Image:	Bild:
 	Images:	Bilder:

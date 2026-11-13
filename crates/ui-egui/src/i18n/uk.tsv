@@ -1703,6 +1703,10 @@ file-filter	Templates	Шаблони
 	Rename Preset	Перейменувати набір
 	Save Image Trace Preset	Зберегти набір трасування зображення
 	Delete Image Trace Preset	Видалити набір трасування зображення
+	Tracing Presets…	Набори трасування…
+	Import Image Trace Presets	Імпортувати набори трасування зображення
+	Export Image Trace Presets	Експортувати набори трасування зображення
+	Replace the saved presets that have these names?	Замінити збережені набори з цими назвами?
 	Image Trace Presets	Набір трасування зображення
 	Image:	Зображення:
 	Images:	Зображення:

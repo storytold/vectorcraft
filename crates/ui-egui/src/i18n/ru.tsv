@@ -1698,6 +1698,10 @@ file-filter	Templates	Шаблоны
 	Rename Preset	Переименовать набор
 	Save Image Trace Preset	Сохранить набор трассировки изображения
 	Delete Image Trace Preset	Удалить набор трассировки изображения
+	Tracing Presets…	Наборы трассировки…
+	Import Image Trace Presets	Импортировать наборы трассировки изображения
+	Export Image Trace Presets	Экспортировать наборы трассировки изображения
+	Replace the saved presets that have these names?	Заменить сохранённые наборы с этими именами?
 	Image Trace Presets	Наборы трассировки изображения
 	Image:	Изображение:
 	Images:	Изображения:

@@ -4127,6 +4127,10 @@ mark-style	Japanese	Kiểu Nhật
 	Rename Preset	Đổi tên thiết lập sẵn
 	Save Image Trace Preset	Lưu thiết lập sẵn vector hóa ảnh
 	Delete Image Trace Preset	Xóa thiết lập sẵn vector hóa ảnh
+	Tracing Presets…	Thiết lập sẵn vector hóa…
+	Import Image Trace Presets	Nhập thiết lập sẵn vector hóa ảnh
+	Export Image Trace Presets	Xuất thiết lập sẵn vector hóa ảnh
+	Replace the saved presets that have these names?	Thay thế các thiết lập sẵn đã lưu có những tên này?
 	Tracing Result	Kết quả vector hóa
 	Tracing Result with Outlines	Kết quả vector hóa với đường bao
 	Tracking	Giãn chữ

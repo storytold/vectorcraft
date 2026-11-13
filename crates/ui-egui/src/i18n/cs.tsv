@@ -1885,6 +1885,10 @@ digits	Malayalam	Malajálamské
 	Rename Preset	Přejmenovat přednastavení
 	Save Image Trace Preset	Uložit přednastavení vektorizace obrazu
 	Delete Image Trace Preset	Odstranit přednastavení vektorizace obrazu
+	Tracing Presets…	Přednastavení vektorizace…
+	Import Image Trace Presets	Importovat přednastavení vektorizace obrazu
+	Export Image Trace Presets	Exportovat přednastavení vektorizace obrazu
+	Replace the saved presets that have these names?	Nahradit uložená přednastavení s těmito názvy?
 	Method:	Metoda:
 	Pad	Prodloužit
 	Repeats	Počet opakování

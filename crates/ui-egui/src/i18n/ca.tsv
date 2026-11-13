@@ -1110,6 +1110,10 @@ antiAlias	Sharp	Nítid
 	Delete Guide	Suprimeix la guia
 	Delete Guides	Suprimeix les guies
 	Delete Image Trace Preset	Suprimeix el preajust de traçat d’imatge
+	Tracing Presets…	Preajustos de traçat…
+	Import Image Trace Presets	Importa preajustos de traçat d’imatge
+	Export Image Trace Presets	Exporta els preajustos de traçat d’imatge
+	Replace the saved presets that have these names?	Voleu substituir els preajustos desats que tenen aquests noms?
 	Delete Layer	Suprimeix la capa
 	Delete Library	Suprimeix la biblioteca
 	Delete Library Group	Suprimeix el grup de biblioteca

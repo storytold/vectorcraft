@@ -1619,6 +1619,10 @@ font-technology	Variable	Променливи
 	Rename Preset	Преименуване на предварителна настройка
 	Save Image Trace Preset	Запази предварителна настройка за трасиране на изображения
 	Delete Image Trace Preset	Изтриване на предварителна настройка за трасиране на изображения
+	Tracing Presets…	Предварителни настройки за трасиране…
+	Import Image Trace Presets	Импортиране на предварителни настройки за трасиране на изображения
+	Export Image Trace Presets	Експортиране на предварителни настройки за трасиране на изображения
+	Replace the saved presets that have these names?	Да се заменят ли запазените предварителни настройки с тези имена?
 	Image Trace Presets	Предварителни настройки за трасиране на изображения
 	Image:	Изображение:
 	Images:	Изображения:

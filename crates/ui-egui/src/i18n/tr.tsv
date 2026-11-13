@@ -1512,6 +1512,10 @@ font-technology	Variable	Değişken
 	Rename Preset	Ön Ayarı Yeniden Adlandır
 	Save Image Trace Preset	Görüntü İzleme Ön Ayarını Kaydet
 	Delete Image Trace Preset	Görüntü İzleme Ön Ayarını Sil
+	Tracing Presets…	İzleme Ön Ayarları…
+	Import Image Trace Presets	Görüntü İzleme Ön Ayarlarını İçe Aktar
+	Export Image Trace Presets	Görüntü İzleme Ön Ayarlarını Dışa Aktar
+	Replace the saved presets that have these names?	Bu adlara sahip kayıtlı ön ayarlar değiştirilsin mi?
 	Image Trace Presets	Görüntü İzleme Ön Ayarları
 	Image:	Resim:
 	Images:	Görseller:

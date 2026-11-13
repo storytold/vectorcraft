@@ -1674,6 +1674,10 @@ file-filter	Templates	範本
 	Rename Preset	重新命名預設集
 	Save Image Trace Preset	儲存影像描圖預設集
 	Delete Image Trace Preset	刪除影像描圖預設集
+	Tracing Presets…	描圖預設集…
+	Import Image Trace Presets	匯入影像描圖預設集
+	Export Image Trace Presets	匯出影像描圖預設集
+	Replace the saved presets that have these names?	要取代具有這些名稱的已儲存預設集嗎？
 	Image Trace Presets	影像描圖預設集
 	Image:	影像：
 	Images:	影像：

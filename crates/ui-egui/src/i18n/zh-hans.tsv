@@ -1628,6 +1628,10 @@ file-filter	Templates	模板
 	Rename Preset	重命名预设
 	Save Image Trace Preset	保存图像描摹预设
 	Delete Image Trace Preset	删除图像描摹预设
+	Tracing Presets…	描摹预设…
+	Import Image Trace Presets	导入图像描摹预设
+	Export Image Trace Presets	导出图像描摹预设
+	Replace the saved presets that have these names?	替换具有这些名称的已存储预设？
 	Image Trace Presets	图像描摹预设
 	Image:	图像：
 	Images:	图像：

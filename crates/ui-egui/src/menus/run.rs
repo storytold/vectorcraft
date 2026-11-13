@@ -857,6 +857,10 @@ fn run_ui_part9(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "ui.imageTracePresetDialog" => crate::dialogs::trace_presets::open(app, p),
+        "ui.tracingPresetsDialog" => {
+            crate::dialogs::tracing_presets::open(app, s("selected").as_deref());
+            Ok(Value::Null)
+        }
         "ui.flattenerPreview" => crate::panels::flattener_preview::command(app, p),
         "ui.copyScriptConsole" => crate::panels::script_console::copy(app, p),
         "window.graphicStyleLibrary" => crate::panels::graphic_styles::open_library(app, p),

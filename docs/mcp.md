@@ -3220,8 +3220,23 @@ already walks Image Trace. Short agent entry points:
   `builtIn: true`, then the saved ones with `builtIn: false`, and returns a `revision` that grows each time the saved
   presets change. `imageTrace.make {preset}` takes a saved preset's name, with ASCII letters matching in either case.
   Its journal entry records the saved preset's settings as `savedPreset`, so a replay traces with them after the preset
-  is changed, renamed or deleted. In the app,
-  `ui.imageTracePresetDialog {params?, rename?}` opens the Image Trace panel's Save as New Preset… or Rename… dialog.
+  is changed, renamed or deleted. `imageTrace.presets.export {names?, path?}` writes saved presets (default: every one;
+  a built-in preset's name is an error) as a `.vctracepresets` file, VectorCraft's own JSON layout
+  (`{"format": "vctracepresets", "version": 1, "presets": [{"name", "params"}]}`), to `path`, else returns its text as
+  `data`; it refuses more than 1,000 presets or a file over 4 MiB, the limits of the import.
+  `imageTrace.presets.import {path? | data? | dataBase64?, replace?}` adds the presets of such a file (at most
+  4 MiB and 1,000 presets) → `{imported, replaced, skipped}`: a preset with a saved preset's name is skipped unless
+  `replace` is true. Every preset in the file is checked first, and a file with a built-in preset's or `Custom`'s name,
+  two presets of one name, a preset without a name or `params`, settings `imageTrace.presets.save` refuses, or a newer
+  `version` changes nothing. In the app, opening a `.vctracepresets` file (File › Open, a drop, or the file picked
+  for Import… on the web) imports it as Import… does. Also in the app,
+  `ui.imageTracePresetDialog {params?, rename?}` opens the Image Trace panel's Save as New Preset… or Rename… dialog,
+  and `ui.tracingPresetsDialog {selected?}` opens Edit › Tracing Presets…: the built-in presets in brackets (read-only)
+  and the saved ones, with the selected preset's settings. Its New… (from the selected preset) and Edit… (a saved
+  preset) open an editor with the Image Trace panel's settings; OK saves with `imageTrace.presets.save` and Cancel saves
+  nothing, and a built-in preset's name, `Custom` or another saved preset's name keeps the editor open. Delete selects
+  the saved preset below the deleted one, else the one above it, else Default. Import… asks whether to replace saved presets whose names the file holds (Cancel
+  keeps them), and Export… writes every saved preset.
 - Live Paint: `livePaint.make`, `livePaint.merge`, `livePaint.fill {group?, point}`, `livePaint.strokeEdge`,
   `livePaint.info {group}`, `livePaint.release`, `livePaint.expand`, and `livePaint.gapOptions {ids?, detect?, size?,
   color?, closeGaps?}` (Object › Live Paint › Gap Options). Make gives each covered face the fill of its front-most
@@ -5250,7 +5265,7 @@ commands are listed this way:
   (Object › Perspective), under Perspective;
 - `text.spelling.dictionary` (Edit › Edit Custom Dictionary…), under Text;
 - the UI commands `ui.recolorDialog` (Edit › Edit Colors › Recolor Artwork…), `ui.flattenerPresetsDialog`,
-  `ui.printPresetsDialog`, `ui.pdfPresetsDialog`, `ui.perspectivePresetsDialog`, `ui.svgFilterDialog`,
+  `ui.printPresetsDialog`, `ui.pdfPresetsDialog`, `ui.tracingPresetsDialog`, `ui.perspectivePresetsDialog`, `ui.svgFilterDialog`,
   `ui.saveSwatchLibrary`, `ui.saveBrushLibrary`, `ui.saveGraphicStyleLibrary` and `ui.saveSymbolLibrary`, under Ui;
   `file.exportAs` and `file.exportSelection`, under File; `links.editOriginal`, under Links; `type.applyBullets` and
   `type.applyNumbers`, under Type; and `window.toolbar.new`, `window.toolbarColumns`, `window.toolsBesideCanvas`,

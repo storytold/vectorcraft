@@ -136,6 +136,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Transparency Flattener Presets…", "ui.flattenerPresetsDialog"),
                 c("Print Presets…", "ui.printPresetsDialog"),
                 c("PDF Presets…", "ui.pdfPresetsDialog"),
+                c("Tracing Presets…", "ui.tracingPresetsDialog"),
                 c("Perspective Grid Presets…", "ui.perspectivePresetsDialog"),
                 Sep,
                 c("Color Settings…", "edit.colorSettings"),

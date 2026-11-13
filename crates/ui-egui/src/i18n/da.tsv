@@ -1712,6 +1712,10 @@ digits	Malayalam	Malayalam
 	Rename Preset	Omdøb forudindstilling
 	Save Image Trace Preset	Gem forudindstilling til billedsporing
 	Delete Image Trace Preset	Slet forudindstilling til billedsporing
+	Tracing Presets…	Vektoriseringsforudindstillinger…
+	Import Image Trace Presets	Importér forudindstillinger til billedsporing
+	Export Image Trace Presets	Eksportér forudindstillinger til billedsporing
+	Replace the saved presets that have these names?	Vil du erstatte de gemte forudindstillinger med disse navne?
 	Method:	Metode:
 	Pad	Forlæng
 	Repeats	Gentagelser

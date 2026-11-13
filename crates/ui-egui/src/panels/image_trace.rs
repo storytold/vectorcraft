@@ -21,14 +21,14 @@ use super::{first_selected, pstate, set_pstate, swatches};
 use crate::VectorcraftApp;
 use crate::widgets::{self, menu_item};
 
-const MODES: [(&str, &str); 4] = [("blackAndWhite", "Black and White"), ("grayscale", "Grayscale"), ("color", "Color"), ("logo", "Flat Logo")];
+pub(crate) const MODES: [(&str, &str); 4] =
+    [("blackAndWhite", "Black and White"), ("grayscale", "Grayscale"), ("color", "Color"), ("logo", "Flat Logo")];
 
 /// Color mode's palettes (`palette` param ids), in panel order.
-const PALETTES: [&str; 4] = ["limited", "fullTone", "automatic", "documentLibrary"];
+pub(crate) const PALETTES: [&str; 4] = ["limited", "fullTone", "automatic", "documentLibrary"];
 
-/// Palette `id`, in the UI language.
 /// The colour Ignore Color leaves out in `params` (`ignoreColor`, `#rrggbb`): white when there is none.
-fn ignore_color(params: &Value) -> [u8; 3] {
+pub(crate) fn ignore_color(params: &Value) -> [u8; 3] {
     let hex = params["ignoreColor"].as_str().unwrap_or("").trim_start_matches('#');
     let channel = |i: usize| hex.get(i * 2..i * 2 + 2).and_then(|h| u8::from_str_radix(h, 16).ok());
     match (hex.len(), channel(0), channel(1), channel(2)) {
@@ -37,7 +37,8 @@ fn ignore_color(params: &Value) -> [u8; 3] {
     }
 }
 
-fn palette_label(id: &str) -> &'static str {
+/// Palette `id`, in the UI language.
+pub(crate) fn palette_label(id: &str) -> &'static str {
     match id {
         "fullTone" => tl!("Full Tone"),
         "automatic" => tl!("Automatic"),
@@ -48,7 +49,7 @@ fn palette_label(id: &str) -> &'static str {
 
 /// Document Library's Colors choices with the document's swatches: All, then the document's color
 /// groups (`current` checked; `None` is All) → the choice, `Some(None)` for All.
-fn color_group_list(app: &VectorcraftApp, ui: &mut Ui, current: Option<&str>) -> Option<Option<String>> {
+pub(crate) fn color_group_list(app: &VectorcraftApp, ui: &mut Ui, current: Option<&str>) -> Option<Option<String>> {
     let mut chosen = menu_item(ui, "All", true, current.is_none()).then_some(None);
     let groups: Vec<String> = app.session.active().map(|d| d.doc.swatch_groups.iter().map(|g| g.name.clone()).collect()).unwrap_or_default();
     if !groups.is_empty() {
@@ -95,7 +96,7 @@ struct TraceUi {
 
 /// A preset: its name, its parameters, those of its enhanced version (null if it has none), and
 /// whether it is built in (else the user saved it).
-type Preset = (String, Value, Value, bool);
+pub(crate) type Preset = (String, Value, Value, bool);
 
 /// The presets as `imageTrace.presets` listed them at a revision of the saved presets.
 #[derive(Clone)]
@@ -112,8 +113,8 @@ thread_local! {
 
 /// Every preset, built-in then saved. `imageTrace.presets` runs once for each revision of the saved
 /// presets ([`vectorcraft_engine::Session::trace_presets_revision`]); the list is kept in `ctx`'s
-/// memory, which the panel, the Control bar and Properties share.
-fn presets(app: &mut VectorcraftApp, ctx: &egui::Context) -> Arc<Vec<Preset>> {
+/// memory, which the panel, the Control bar, Properties and Edit → Tracing Presets share.
+pub(crate) fn presets(app: &mut VectorcraftApp, ctx: &egui::Context) -> Arc<Vec<Preset>> {
     let id = egui::Id::unique("trace-presets");
     let revision = app.session.trace_presets_revision();
     if let Some(list) = ctx.data(|d| d.get_temp::<PresetList>(id)).filter(|l| l.revision == revision) {
@@ -137,7 +138,7 @@ fn presets(app: &mut VectorcraftApp, ctx: &egui::Context) -> Arc<Vec<Preset>> {
 
 /// The listed preset that `name` finds, as the engine finds presets: a built-in one by its name in
 /// any case, also in brackets (`[Default]`), else a saved one by its exact name in any case.
-fn find_preset<'a>(all: &'a [Preset], name: &str) -> Option<&'a Preset> {
+pub(crate) fn find_preset<'a>(all: &'a [Preset], name: &str) -> Option<&'a Preset> {
     let name = name.trim();
     let key = name.trim_start_matches('[').trim_end_matches(']');
     all.iter().find(|p| p.3 && p.0.eq_ignore_ascii_case(key)).or_else(|| all.iter().find(|p| !p.3 && p.0.eq_ignore_ascii_case(name)))
@@ -266,7 +267,7 @@ pub(crate) fn open_settings(app: &mut VectorcraftApp) {
 /// while the menu is open.
 /// A preset's name as shown: translated as a preset's name where the catalog has it so (the
 /// Outline preset is not the Outline view), as any other string else.
-fn preset_label(name: &str) -> &str {
+pub(crate) fn preset_label(name: &str) -> &str {
     crate::i18n::tr_ctx(crate::i18n::current(), "imageTrace", name)
 }
 
@@ -403,7 +404,7 @@ pub(crate) fn traced(app: &VectorcraftApp, r: &Value) {
     set_pstate(&ctx, "image-trace", st);
 }
 
-fn slider(ui: &mut Ui, label: &str, v: &mut f64, range: std::ops::RangeInclusive<f64>, suffix: &str) -> (bool, bool) {
+pub(crate) fn slider(ui: &mut Ui, label: &str, v: &mut f64, range: std::ops::RangeInclusive<f64>, suffix: &str) -> (bool, bool) {
     let mut out = (false, false);
     ui.horizontal(|ui| {
         ui.add_sized([74.0, 22.0], egui::Label::new(egui::RichText::new(tl!(label)).size(12.0)));
