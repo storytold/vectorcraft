@@ -578,6 +578,8 @@ ramp runs across them.
 `paint.setFill` without `item` on a grayscale or 1-bit image sets the color the image is drawn in: each pixel takes
 the color as far as the pixel is dark, and white pixels are transparent. `none` removes the color. An image with an
 alpha channel takes only a spot color, black or white; a process color is refused.
+A colorized image whose link is missing shows the placeholder, and a color set on it replaces its colorize color. A
+process color is refused there when the image is colorized with a spot color, black or white.
 For `draw_shape` and `draw_path`, omitted paint fields inherit the current [new-art appearance](#new-art).
 For a filled shape or path without an outline, pass an explicit `fill` and `stroke: "none"`.
 Lines start with no fill and a visible stroke.
