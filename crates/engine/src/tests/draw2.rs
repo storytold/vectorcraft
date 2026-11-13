@@ -1393,6 +1393,28 @@ fn smooth_region_refits_at_the_tolerance_sent_at_any_zoom() {
     }
 }
 
+/// Smoothing a path with direct-selected anchors leaves the path selected whole: the selection no
+/// longer names anchors by indices into the anchors the smooth replaced. A selected path the drag
+/// does not reach keeps its anchors selected, and undo brings the old selection back.
+#[test]
+fn smoothing_a_path_drops_its_direct_selected_anchors() {
+    let mut s = session();
+    let anchors: Vec<_> = (0..=40).map(|i| json!({"x": 100.0 + i as f64 * 5.0, "y": 200.0 + if i % 2 == 0 { 0.0 } else { 1.5 }})).collect();
+    let r = s.execute("path.create", &json!({"anchors": anchors})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let other = line(&mut s, 100.0, 500.0, 300.0, 500.0);
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 38]], "mode": "set"})).unwrap();
+    s.execute("select.anchors", &json!({"id": other.0, "anchors": [[0, 1]], "mode": "add"})).unwrap();
+    drag(&mut s, "smooth", &[(90.0, 200.0), (200.0, 200.0), (310.0, 200.0)], Mods::default());
+    assert!(path(&s, id).anchor_count() < 20, "the path is smoothed");
+    let sel = s.doc().unwrap().selection.clone();
+    assert!(sel.contains(id) && sel.contains(other), "{sel:?}");
+    assert!(!sel.anchors.contains_key(&id) && !sel.segments.contains_key(&id), "{sel:?}");
+    assert_eq!(sel.anchors.get(&other), Some(&[(0, 1)].into()), "the path out of reach keeps its anchor");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.anchors.get(&id), Some(&[(0, 38)].into()));
+}
+
 /// #1512: a short drag over a small bump smooths the stretch of path under it. The long straight
 /// sides next to the bump stay straight lines from their far ends, which keep their place.
 #[test]
