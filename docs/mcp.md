@@ -5439,7 +5439,8 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
   scales it too; off (the default) it stays where it is. `artboard.duplicate`, `artboard.copy` and `artboard.cut` copy or
   cut locked and hidden art only with it on. A `lockedAndHidden` param on any of these commands takes its place.
 - `penRubberBand`, `curvatureRubberBand` (on by default): off, the Pen and Curvature tools draw no preview segment to
-  the pointer.
+  the pointer. With either off, the Pen, the Smart Pen (`penRubberBand`) and the Curvature tool (`curvatureRubberBand`)
+  still show the D / Angle / dX / dY readout at the pointer while `measurementLabels` is on.
 - `showHandlesMultipleAnchors` (on by default): off, Direct Selection (and the Anchor Point tool, and the Pen with Alt)
   shows and drags direction handles only while a single anchor is selected. On, the handles of the direct-selected
   anchors, or of every anchor of a path selected as a whole, show and drag. `handleStyle` (`solid`, `hollow`, `large`) draws their ends (desktop app).

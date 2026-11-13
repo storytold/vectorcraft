@@ -718,38 +718,44 @@ impl Tool for CurvatureTool {
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = self.snap.guides().to_vec();
-        let band = cx.curvature_rubber_band && self.drag.is_none();
+        // The rubber band preference hides only the preview curve; Measurement Labels decides the readout.
+        let idle = self.drag.is_none();
+        let band = cx.curvature_rubber_band;
         let mut bp = BezPath::new();
         if self.active(cx).is_none() {
             // The curve on from the current end of a selected path: its last segment and the next.
-            if band
+            if idle
                 && let (Some(e), Some(h)) = (current_end(cx), self.hover)
                 && let Some(sp) = subpath(cx, e.id, e.si)
             {
-                let n = sp.anchors.len();
-                let near = if e.start {
-                    sp.anchors.iter().take(2).rev().map(Anchor::reversed).collect()
-                } else {
-                    sp.anchors.iter().skip(n.saturating_sub(2)).copied().collect()
-                };
-                let mut tail = SubPath::new(near, false);
-                curvature_extend(&mut tail, false, h, self.how(&e), false);
-                tail.to_bezpath_into(&mut bp);
-                o.push(Overlay::Path { path: bp, color: FEEDBACK, width: 1.0, dashed: false });
+                if band {
+                    let n = sp.anchors.len();
+                    let near = if e.start {
+                        sp.anchors.iter().take(2).rev().map(Anchor::reversed).collect()
+                    } else {
+                        sp.anchors.iter().skip(n.saturating_sub(2)).copied().collect()
+                    };
+                    let mut tail = SubPath::new(near, false);
+                    curvature_extend(&mut tail, false, h, self.how(&e), false);
+                    tail.to_bezpath_into(&mut bp);
+                    o.push(Overlay::Path { path: bp, color: FEEDBACK, width: 1.0, dashed: false });
+                }
                 if cx.measurement_labels && e.p.distance(h) > 1e-9 {
                     o.push(Overlay::Measure { p: h + Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: cx.segment_measure_label(e.p, h) });
                 }
             }
             return o;
         }
-        if band
+        if idle
             && !self.closed
             && let Some(h) = self.hover
         {
-            let mut pts = self.pts.clone();
-            pts.push((h, false));
-            curvature_spline(&pts, false).to_bezpath_into(&mut bp);
-            o.push(Overlay::Path { path: bp, color: FEEDBACK, width: 1.0, dashed: false });
+            if band {
+                let mut pts = self.pts.clone();
+                pts.push((h, false));
+                curvature_spline(&pts, false).to_bezpath_into(&mut bp);
+                o.push(Overlay::Path { path: bp, color: FEEDBACK, width: 1.0, dashed: false });
+            }
             if let Some((from, _)) = self.pts.last()
                 && cx.measurement_labels
                 && from.distance(h) > 1e-9
