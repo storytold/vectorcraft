@@ -53,6 +53,8 @@ mod mac_tablet;
 mod mac_window;
 #[cfg(target_os = "macos")]
 mod open_documents;
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
+mod portal_request;
 #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", test))]
 mod portal_save;
 mod prefs_dir;
