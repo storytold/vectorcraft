@@ -17,7 +17,28 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # The gate runs unless a push changes only prose: a pull request (or a push to main) that touches
+  # only Markdown, or a push to a pull request that changed only Markdown besides moving its base,
+  # when the previous head's run passed (merging main to resolve a conflict in docs/, or any merge
+  # of main that leaves the pull request's own changes as they were). If scope fails, the gate
+  # runs.
+  scope:
+    permissions:
+      contents: read
+      actions: read
+    uses: storytold/craft-common-actions/.github/workflows/changed-paths.yml@main
+    with:
+      # Markdown is prose, except ASSETS.md (`xtask assets` reads it) and packaging/ (`xtask brands`
+      # scans it); everything else, docs/images/ included, runs the gate.
+      paths: |
+        !(*.md)
+        ASSETS.md
+        packaging/*
+      since-passed: true
+
   gate:
+    needs: scope
+    if: ${{ !cancelled() && needs.scope.outputs.matched != 'false' }}
     # Tracks @main so suite-wide CI fixes reach every app without a PR in each repository.
     uses: storytold/craft-common-actions/.github/workflows/gate.yml@main
     with:
