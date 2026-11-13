@@ -246,6 +246,33 @@ fn a_custom_bevel_sends_its_name_and_points() {
     assert_eq!((&p[vectorcraft_effects::BEVEL_NAME], &p[vectorcraft_effects::BEVEL_PROFILE]), (&json!("Steps"), &steps));
 }
 
+/// With one Extrude & Bevel on a custom bevel and one without, picking that custom bevel sends its
+/// name and points too, though the form already held them, so both effects take it.
+#[test]
+fn a_custom_bevel_picked_for_a_mixed_selection_reaches_every_effect() {
+    let mut app = app();
+    let notch = json!([[0.0, 0.0], [0.2, 0.6], [0.7, 0.4], [1.0, 1.0]]);
+    let custom = json!({"bevel": "custom", "bevelName": "Notch", "bevelProfile": notch});
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": custom})).unwrap();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let mut fields = target(&app).map(|t| vectorcraft_effects::merged_params(&t.effect, &t.params)).unwrap().as_object().cloned().unwrap();
+    super::mark_mixed(&app, &mut fields);
+    assert_eq!((&fields["bevel"], &fields[vectorcraft_effects::BEVEL_NAME]), (&Value::Null, &json!("Notch")));
+    let before = Value::Object(fields.clone());
+    fields.insert("bevel".into(), json!("custom"));
+    let changed = changed_settings(&before, &Value::Object(fields));
+    assert_eq!(Value::Object(changed.clone()), json!({"bevel": "custom", "bevelName": "Notch", "bevelProfile": notch}));
+    send(&mut app, &egui::Context::default(), changed, false);
+    let st = app.session.active().unwrap();
+    for id in [a, b] {
+        let p = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params;
+        assert_eq!((&p["bevel"], &p[vectorcraft_effects::BEVEL_PROFILE]), (&json!("custom"), &notch), "{id}");
+    }
+}
+
 #[test]
 fn the_panel_finds_a_3d_effect_on_a_fill() {
     let mut app = app();

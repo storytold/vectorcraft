@@ -190,6 +190,47 @@ fn the_bevels_file_is_made_opened_and_reloaded_when_saved() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// `effect.apply` and `effect.setParams` given a custom bevel by name record its points as
+/// `savedBevel`, so a replay draws that bevel after the bevels file no longer has it.
+#[test]
+fn a_replay_draws_the_custom_bevel_the_command_recorded() {
+    let dir = folder("replay");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = rect(&mut s, 20);
+    s.attach_bevels_file(dir.join(bevels::FILE_NAME).to_string_lossy().to_string());
+    s.execute("threeD.bevels.edit", &json!({})).unwrap();
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    let apply = json!({"effect": effects::EXTRUDE, "ids": [id.0], "item": null, "params": {"bevel": {"custom": "Example Bevel"}}});
+    s.execute("effect.apply", &apply).unwrap();
+    let applied = params(&s, id);
+    let (cmd, recorded) = s.journal.last().unwrap().clone();
+    assert_eq!(cmd, "effect.apply");
+    assert_eq!(recorded[bevels::SAVED_BEVEL], applied[effects::BEVEL_PROFILE]);
+    let set = json!({"ids": [id.0], "index": 0, "item": null, "params": {"bevel": {"custom": "Example Bevel"}, "bevelWidth": 9}});
+    s.execute("effect.setParams", &set).unwrap();
+    let edited = params(&s, id);
+    let (_, set_recorded) = s.journal.last().unwrap().clone();
+    assert_eq!(set_recorded[bevels::SAVED_BEVEL], applied[effects::BEVEL_PROFILE]);
+    // The bevels file no longer has the bevel: by name it is refused, and the replays draw it.
+    s.attach_bevels_file(dir.join("Other.vectorcraft").to_string_lossy().to_string());
+    assert!(s.execute("effect.apply", &apply).is_err());
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).unwrap().appearance.effects.is_empty());
+    s.replay("effect.apply", &recorded).unwrap();
+    assert_eq!(params(&s, id), applied);
+    s.replay("effect.setParams", &set_recorded).unwrap();
+    assert_eq!(params(&s, id), edited);
+    // Points given with the name are used in place of the file's.
+    let notch = json!([[0.0, 0.0], [0.2, 0.6], [0.7, 0.4], [1.0, 1.0]]);
+    let mut given = set.clone();
+    given["savedBevel"] = notch.clone();
+    s.execute("effect.setParams", &given).unwrap();
+    assert_eq!((&params(&s, id)[effects::BEVEL_PROFILE], &params(&s, id)[effects::BEVEL_NAME]), (&notch, &json!("Example Bevel")));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn a_document_keeps_its_custom_bevels_without_the_bevels_file() {
     let mut s = Session::new();

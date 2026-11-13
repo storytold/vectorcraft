@@ -491,9 +491,21 @@ pub(crate) fn mark_mixed(app: &VectorcraftApp, fields: &mut Map<String, Value>) 
 }
 
 /// The settings whose values differ between `before` and `after`, with their values in `after`.
+/// A change to a custom bevel (`bevel` `"custom"`, its name or its points) sends all three, so an
+/// effect of a mixed selection that had none takes the whole bevel.
 pub(crate) fn changed_settings(before: &Value, after: &Value) -> Map<String, Value> {
     let Some(after) = after.as_object() else { return Map::new() };
-    after.iter().filter(|(k, v)| before.get(k.as_str()) != Some(*v)).map(|(k, v)| (k.clone(), v.clone())).collect()
+    let mut changed: Map<String, Value> =
+        after.iter().filter(|(k, v)| before.get(k.as_str()) != Some(*v)).map(|(k, v)| (k.clone(), v.clone())).collect();
+    let custom = ["bevel", BEVEL_NAME, BEVEL_PROFILE];
+    if after.get("bevel").and_then(Value::as_str) == Some("custom") && custom.iter().any(|k| changed.contains_key(*k)) {
+        for k in custom {
+            if let Some(v) = after.get(k) {
+                changed.insert(k.into(), v.clone());
+            }
+        }
+    }
+    changed
 }
 
 #[cfg(test)]

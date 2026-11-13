@@ -3529,7 +3529,9 @@ returns each bevel's `name` and `points`, the `file` path, the `skipped` symbols
 and store it as `bevel: "custom"` with `bevelName` and `bevelProfile`, a copy of the points (`[[x, y], …]`, 2 to 64
 shares 0..1 of the width and height from `[0, 0]` to `[1, 1]`), so the document draws the bevel without the file. An
 unknown name, `custom` without `bevelProfile`, points that do not run from `[0, 0]` to `[1, 1]` within 0..1, or a
-`bevelName` that is not a string is refused and the document is not changed. The help page
+`bevelName` that is not a string is refused and the document is not changed. The command's journal entry records the
+points as `savedBevel`, and `savedBevel` given with `{"custom": name}` is used in place of the file's points, so a
+replay draws the same bevel after the file changes or drops the name. The help page
 [Add custom bevel paths](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/add-custom-bevel-paths.html)
 describes custom bevels drawn as open paths and kept as symbols in a bevels document.
 

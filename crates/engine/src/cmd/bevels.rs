@@ -277,19 +277,29 @@ impl Session {
     }
 }
 
+/// The command parameter that holds the points a custom bevel given by name had when the command
+/// ran. The journal records it, so a replay draws the same bevel after the bevels file changes or
+/// loses that name.
+pub const SAVED_BEVEL: &str = "savedBevel";
+
 /// `params` of an effect with `bevel` given as `{custom: name}`: the bevel of the bevels file named
-/// so, stored as `bevel` `"custom"` with its `bevelName` and `bevelProfile`. Other values are left
-/// for the effect to check.
-pub(crate) fn resolve_custom(s: &Session, params: &mut Value, cmd: &str) -> Result<()> {
+/// so, stored as `bevel` `"custom"` with its `bevelName` and `bevelProfile`. The command's
+/// [`SAVED_BEVEL`] points (`p`), when given, are used in place of the file's, and the points used
+/// join the journal entry as [`SAVED_BEVEL`]. Other values are left for the effect to check.
+pub(crate) fn resolve_custom(s: &mut Session, p: &Value, params: &mut Value, cmd: &str) -> Result<()> {
     let Some(Value::Object(o)) = params.get("bevel") else { return Ok(()) };
     let name = match (o.len(), o.get("custom")) {
         (1, Some(Value::String(name))) => name.clone(),
         _ => return Err(bad(cmd, "bevel: give a shape id, or {custom: name} for a bevel of the bevels file (threeD.bevels.list)")),
     };
-    let bevel = s.bevels.get(&name).ok_or_else(|| bad(cmd, format!("no custom bevel {name} (see threeD.bevels.list)")))?;
+    let points = match p.get(SAVED_BEVEL).filter(|v| !v.is_null()) {
+        Some(saved) => saved.clone(),
+        None => s.bevels.get(&name).ok_or_else(|| bad(cmd, format!("no custom bevel {name} (see threeD.bevels.list)")))?.profile_json(),
+    };
+    s.note_journal(SAVED_BEVEL, points.clone());
     params["bevel"] = json!("custom");
-    params[BEVEL_NAME] = json!(bevel.name);
-    params[BEVEL_PROFILE] = bevel.profile_json();
+    params[BEVEL_NAME] = json!(name);
+    params[BEVEL_PROFILE] = points;
     Ok(())
 }
 
