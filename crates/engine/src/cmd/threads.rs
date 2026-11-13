@@ -361,12 +361,59 @@ pub(crate) fn mark_continued(doc: &mut Document) {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many times [`story_of`] and [`ThreadIndex::of`] went through the document's
+    /// threads on this thread.
+    static THREAD_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Tests: how many times [`story_of`] and [`ThreadIndex::of`] have gone through the document's
+/// threads on this thread.
+#[cfg(test)]
+pub(crate) fn thread_scans() -> usize {
+    THREAD_SCANS.with(std::cell::Cell::get)
+}
+
 /// The frames of the thread that `id` is a frame of, in thread order, each area type or type on a
 /// path; empty when `id` is in no thread or the thread has fewer than two such frames.
 pub(crate) fn story_of(d: &Document, id: NodeId) -> Vec<NodeId> {
+    #[cfg(test)]
+    THREAD_SCANS.with(|c| c.set(c.get() + 1));
     let Some(thread) = d.text_threads.iter().find(|t| t.contains(&id)) else { return vec![] };
     let frames: Vec<NodeId> = thread.iter().copied().filter(|f| text_of(d, *f).is_some()).collect();
     if frames.len() >= 2 && frames.contains(&id) { frames } else { vec![] }
+}
+
+/// A document's text threads looked up by frame, built in one pass over them, for a command that
+/// asks [`ThreadIndex::threaded`] of each of many objects.
+pub(crate) struct ThreadIndex<'a> {
+    doc: &'a Document,
+    /// Each object the threads list, with the index of the first thread that lists it.
+    first: std::collections::HashMap<NodeId, usize>,
+    /// Each thread's count of entries that are area type or type on a path.
+    live: Vec<usize>,
+}
+
+impl<'a> ThreadIndex<'a> {
+    pub(crate) fn of(doc: &'a Document) -> Self {
+        #[cfg(test)]
+        THREAD_SCANS.with(|c| c.set(c.get() + 1));
+        let mut first = std::collections::HashMap::new();
+        let mut live = Vec::with_capacity(doc.text_threads.len());
+        for (i, thread) in doc.text_threads.iter().enumerate() {
+            for id in thread {
+                first.entry(*id).or_insert(i);
+            }
+            live.push(thread.iter().filter(|id| text_of(doc, **id).is_some()).count());
+        }
+        Self { doc, first, live }
+    }
+
+    /// Whether `id` is a frame of a thread: [`story_of`] is not empty for it.
+    pub(crate) fn threaded(&self, id: NodeId) -> bool {
+        self.first.get(&id).and_then(|i| self.live.get(*i)).is_some_and(|n| *n >= 2) && text_of(self.doc, id).is_some()
+    }
 }
 
 /// `ids` followed by the other frames of the threads they are in, each once, in thread order.
