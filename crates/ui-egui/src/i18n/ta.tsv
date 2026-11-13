@@ -2872,6 +2872,8 @@ antiAlias	Sharp	கூர்மையான
 	Move in Perspective	முன்னோக்கில் நகர்த்து
 	Move Library Group	நூலகக் குழுவை நகர்த்து
 	Move Library Item to Group	நூலக உருப்படியைக் குழுவிற்கு நகர்த்து
+	Rename Library Item	நூலக உருப்படியின் பெயரை மாற்று
+	Add to Character Styles	எழுத்துப் பாணிகளில் சேர்
 	Move Locked and Hidden Artwork with Artboard	பூட்டப்பட்ட மற்றும் மறைக்கப்பட்ட ஓவியத்தை ஆர்ட்போர்டுடன் நகர்த்து
 	Move Mesh Point	வலைப் புள்ளியை நகர்த்து
 	Move Mesh Points	வலைப் புள்ளிகளை நகர்த்து
@@ -7213,6 +7215,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	no layer {id} (see layer.list)	{id} என்ற அடுக்கு இல்லை (layer.list ஐப் பார்க்கவும்)
 @msg	no layers to export	ஏற்றுமதி செய்ய அடுக்குகள் எதுவும் இல்லை
 @msg	no library `{id}`	`{id}` என்ற நூலகம் இல்லை
+@msg	the library has another item of that kind named `{name}`	நூலகத்தில் `{name}` என்ற பெயரில் அதே வகையான வேறோர் உருப்படி ஏற்கெனவே உள்ளது
 @msg	no library `{key}`	`{key}` என்ற நூலகம் இல்லை
 @msg	no library `{key}` (see {list})	`{key}` என்ற நூலகம் இல்லை ({list} ஐப் பார்க்கவும்)
 @msg	No line breaks to remove	அகற்ற வரி முறிவுகள் எதுவும் இல்லை

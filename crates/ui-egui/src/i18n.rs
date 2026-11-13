@@ -307,7 +307,7 @@ pub static LANGUAGES: [LangInfo; 29] = [
         plural: plural_none,
         complete_menus: true,
         catalog: OnceLock::new(),
-    }, // Dutch; every `nl-*` locale (`nl-NL`, `nl-BE`, `nl_NL.UTF-8`…) resolves here.
+    }, // Dutch: the whole interface and the status and error messages; every `nl-*` locale (`nl-NL`, `nl-BE`, `nl_NL.UTF-8`…) resolves here.
     LangInfo {
         code: "nl",
         name: "Nederlands",
