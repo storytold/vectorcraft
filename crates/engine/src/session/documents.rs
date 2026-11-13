@@ -111,6 +111,7 @@ impl Session {
             place_queue_roots: None,
             image_hand_off: None,
             trace_hand_off: None,
+            concept: Default::default(),
             place_cursor_requests: false,
             package_hand_off: None,
             screens_hand_off: None,

@@ -6900,3 +6900,41 @@ breakText	Glyphs	字符
 	Margin	邊距
 	Box	框
 	Swatch	色票
+	Concept to Vector	概念轉向量
+	Concept to Vector…	概念轉向量…
+	Cancel Concept to Vector Job	取消概念轉向量工作
+	Concept to Vector Providers	概念轉向量提供者
+	Concept to Vector Results	概念轉向量結果
+	Generate Concept to Vector Styles	產生概念轉向量樣式
+	Insert Concept to Vector Styles	插入概念轉向量樣式
+	Offline Image Trace styles, made on this computer	離線影像描圖樣式，在這部電腦上製作
+	Offline styles do not use prompts	離線樣式不使用提示詞
+	Styles	樣式
+	Ink Lines	墨線
+	Flat Color	平塗色
+	Detailed Color	細節色彩
+	Gray Tones	灰色調
+	Generate	產生
+	Insert Selected	插入所選項目
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	概念轉向量已停止：其執行緒未產生結果就結束了（請回報此錯誤）
+@msg	`detail` must be a whole number from 0 to 100	`detail` 必須是介於 0 到 100 的整數
+@msg	`job` must be a job number from conceptVector.generate	`job` 必須是 conceptVector.generate 提供的工作編號
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` 必須列出 `{pid}` 的 1 到 8 個不同樣式 ID（請參閱 conceptVector.providers）
+@msg	`variations` must list different style ids of job {job}	`variations` 必須列出工作 {job} 的不同樣式 ID
+@msg	a provider with the id `{id}` is registered already	ID 為 `{id}` 的提供者已經註冊
+@msg	job {job} has no results to insert: it was canceled	工作 {job} 沒有可插入的結果：它已取消
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	工作 {job} 已失效：其文件、影像或影像位置已變更，請重新產生
+@msg	missing `provider` (see conceptVector.providers)	未提供 `provider`（請參閱 conceptVector.providers）
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	沒有概念轉向量工作 {job}：它從未產生或已被捨棄（請參閱 conceptVector.results）
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	沒有概念轉向量提供者 `{name}`（請參閱 conceptVector.providers）
+@msg	select one image or an unexpanded Image Trace object	請選取一個影像或一個未展開的影像描圖物件
+@msg	the image is locked or hidden	影像已鎖定或隱藏
+@msg	the provider stopped with an internal error: {0}	提供者因內部錯誤而停止：{0}
+@msg	the provider's results do not match the request or are malformed	提供者的結果與要求不符或格式錯誤
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	結果將超過 {0} 個錨點：請降低細節或選擇較少的樣式
+@msg	there is no room for the results to the right of the image	影像右側沒有放置結果的空間
+@msg	the image is on a layer with a clipping mask, which would hide the results	影像位於帶有剪裁遮色片的圖層上，剪裁遮色片會遮住結果
+@msg	the image is on a layer with an opacity mask, which would hide the results	影像位於帶有不透明度遮色片的圖層上，不透明度遮色片會遮住結果
+@msg	`output` must be "vector"	`output` 必須是 "vector"
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` 不接受提示詞，且只製作向量圖稿
+@msg	Making the Concept to Vector styles	正在製作概念轉向量樣式

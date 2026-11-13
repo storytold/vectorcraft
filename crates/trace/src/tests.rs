@@ -657,6 +657,46 @@ fn a_watched_trace_counts_its_layers_and_stops_when_told() {
     assert!(matches!(trace_watched(&img, &p, usize::MAX, &|done, _| done == 0), Err(TraceError::Cancelled)));
 }
 
+/// A trace made a part at a time finds its layers in the first part and traces one layer a part
+/// after it, and gives what one call gives, Auto Grouping, Logo mode and the anchor budget included.
+#[test]
+fn a_trace_made_a_part_at_a_time_matches_one_made_at_once() {
+    fn parts(img: &Raster, p: &TraceParams, max: usize) -> (usize, Result<TraceResult, TraceError>) {
+        let mut s = TraceSteps::new(std::sync::Arc::new(img.clone()), p.clone(), max);
+        let mut n = 0;
+        loop {
+            n += 1;
+            assert!(n < 1000, "the parts never end");
+            match s.step() {
+                Ok(None) => {}
+                Ok(Some(r)) => return (n, Ok(r)),
+                Err(e) => return (n, Err(e)),
+            }
+        }
+    }
+    let img = stripes(120, 8);
+    for p in [
+        TraceParams { mode: Mode::Color, colors: 16, noise: 1, ..TraceParams::default() },
+        TraceParams { mode: Mode::Color, colors: 16, noise: 1, method: Method::Overlapping, auto_grouping: true, ..TraceParams::default() },
+    ] {
+        let at_once = trace_within(&img, &p, usize::MAX).unwrap();
+        let (n, made) = parts(&img, &p, usize::MAX);
+        assert_eq!(made.unwrap(), at_once, "{p:?}");
+        assert!(at_once.palette.len() > 1 && n > 2, "{n} parts for {} colors", at_once.palette.len());
+    }
+    let logo = TraceParams { mode: Mode::Logo, ..TraceParams::default() };
+    let round = disc(64, 32.0, 32.0, 20.0);
+    let (n, made) = parts(&round, &logo, usize::MAX);
+    assert_eq!((n, made.unwrap()), (1, trace_within(&round, &logo, usize::MAX).unwrap()), "Logo mode is one part");
+    let p = TraceParams { mode: Mode::Color, colors: 16, noise: 1, ..TraceParams::default() };
+    let anchors = trace(&img, &p).anchor_count();
+    assert!(matches!(parts(&img, &p, anchors / 2).1, Err(TraceError::TooComplex { max }) if max == anchors / 2));
+    assert_eq!(parts(&img, &p, anchors).1.unwrap(), trace(&img, &p));
+    let mut done = TraceSteps::new(std::sync::Arc::new(Raster::from_fn(0, 0, |_, _| WHITE)), p, usize::MAX);
+    assert_eq!(done.step().unwrap(), Some(TraceResult::default()), "an empty image");
+    assert_eq!(done.step().unwrap(), None, "nothing after the result");
+}
+
 /// Layers traced in parallel come out in the same order every time: bottom (largest) first.
 #[test]
 fn parallel_layers_keep_their_order() {

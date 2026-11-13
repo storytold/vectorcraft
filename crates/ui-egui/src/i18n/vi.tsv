@@ -6866,3 +6866,41 @@ breakText	Glyphs	Glyph
 	Margin	Lề
 	Box	Khung
 	Swatch	Mẫu màu
+	Concept to Vector	Ý tưởng thành vector
+	Concept to Vector…	Ý tưởng thành vector…
+	Cancel Concept to Vector Job	Hủy tác vụ Ý tưởng thành vector
+	Concept to Vector Providers	Nhà cung cấp Ý tưởng thành vector
+	Concept to Vector Results	Kết quả Ý tưởng thành vector
+	Generate Concept to Vector Styles	Tạo kiểu Ý tưởng thành vector
+	Insert Concept to Vector Styles	Chèn kiểu Ý tưởng thành vector
+	Offline Image Trace styles, made on this computer	Kiểu vector hóa ảnh ngoại tuyến, tạo trên máy tính này
+	Offline styles do not use prompts	Kiểu ngoại tuyến không dùng lời nhắc
+	Styles	Kiểu
+	Ink Lines	Nét mực
+	Flat Color	Màu phẳng
+	Detailed Color	Màu chi tiết
+	Gray Tones	Tông xám
+	Generate	Tạo
+	Insert Selected	Chèn mục đã chọn
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Ý tưởng thành vector đã dừng: luồng của nó kết thúc mà không có kết quả (vui lòng báo cáo lỗi này)
+@msg	`detail` must be a whole number from 0 to 100	`detail` phải là số nguyên từ 0 đến 100
+@msg	`job` must be a job number from conceptVector.generate	`job` phải là số tác vụ từ conceptVector.generate
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` phải liệt kê từ 1 đến 8 ID kiểu khác nhau của `{pid}` (xem conceptVector.providers)
+@msg	`variations` must list different style ids of job {job}	`variations` phải liệt kê các ID kiểu khác nhau của tác vụ {job}
+@msg	a provider with the id `{id}` is registered already	Đã đăng ký một nhà cung cấp có ID `{id}`
+@msg	job {job} has no results to insert: it was canceled	Tác vụ {job} không có kết quả để chèn: tác vụ đã bị hủy
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Tác vụ {job} không còn hiệu lực: tài liệu, ảnh hoặc vị trí ảnh của nó đã thay đổi, hãy tạo lại
+@msg	missing `provider` (see conceptVector.providers)	Thiếu `provider` (xem conceptVector.providers)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Không có tác vụ Ý tưởng thành vector {job}: tác vụ chưa từng được tạo hoặc đã bị loại bỏ (xem conceptVector.results)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Không có nhà cung cấp Ý tưởng thành vector `{name}` (xem conceptVector.providers)
+@msg	select one image or an unexpanded Image Trace object	Hãy chọn một ảnh hoặc một đối tượng vector hóa ảnh chưa mở rộng
+@msg	the image is locked or hidden	Ảnh đang bị khóa hoặc bị ẩn
+@msg	the provider stopped with an internal error: {0}	Nhà cung cấp đã dừng do lỗi nội bộ: {0}
+@msg	the provider's results do not match the request or are malformed	Kết quả của nhà cung cấp không khớp với yêu cầu hoặc bị sai định dạng
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	Kết quả sẽ có hơn {0} điểm neo: hãy giảm Chi tiết hoặc chọn ít kiểu hơn
+@msg	there is no room for the results to the right of the image	Không còn chỗ cho kết quả ở bên phải ảnh
+@msg	the image is on a layer with a clipping mask, which would hide the results	Ảnh nằm trên một lớp có mặt nạ cắt, mặt nạ này sẽ che các kết quả
+@msg	the image is on a layer with an opacity mask, which would hide the results	Ảnh nằm trên một lớp có mặt nạ độ mờ, mặt nạ này sẽ che các kết quả
+@msg	`output` must be "vector"	`output` phải là "vector"
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` không nhận lời nhắc và chỉ tạo hình vector
+@msg	Making the Concept to Vector styles	Đang tạo kiểu Ý tưởng thành vector

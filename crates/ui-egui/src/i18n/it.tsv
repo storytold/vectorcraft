@@ -6885,3 +6885,41 @@ breakText	Glyphs	Glifi
 	Margin	Margine
 	Box	Riquadro
 	Swatch	Campione
+	Concept to Vector	Da concetto a vettore
+	Concept to Vector…	Da concetto a vettore…
+	Cancel Concept to Vector Job	Annulla attività Da concetto a vettore
+	Concept to Vector Providers	Fornitori Da concetto a vettore
+	Concept to Vector Results	Risultati Da concetto a vettore
+	Generate Concept to Vector Styles	Genera stili Da concetto a vettore
+	Insert Concept to Vector Styles	Inserisci stili Da concetto a vettore
+	Offline Image Trace styles, made on this computer	Stili di ricalco immagine offline, creati su questo computer
+	Offline styles do not use prompts	Gli stili offline non usano prompt
+	Styles	Stili
+	Ink Lines	Linee a inchiostro
+	Flat Color	Colore piatto
+	Detailed Color	Colore dettagliato
+	Gray Tones	Toni di grigio
+	Generate	Genera
+	Insert Selected	Inserisci selezionati
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Da concetto a vettore si è interrotto: il suo thread è terminato senza risultati (segnala questo bug)
+@msg	`detail` must be a whole number from 0 to 100	`detail` deve essere un numero intero compreso tra 0 e 100
+@msg	`job` must be a job number from conceptVector.generate	`job` deve essere un numero di attività di conceptVector.generate
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` deve elencare da 1 a 8 ID di stile diversi di `{pid}` (vedi conceptVector.providers)
+@msg	`variations` must list different style ids of job {job}	`variations` deve elencare ID di stile diversi dell’attività {job}
+@msg	a provider with the id `{id}` is registered already	Un fornitore con l’ID `{id}` è già registrato
+@msg	job {job} has no results to insert: it was canceled	L’attività {job} non ha risultati da inserire: è stata annullata
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	L’attività {job} non è più valida: il suo documento, l’immagine o la posizione dell’immagine sono cambiati; generala di nuovo
+@msg	missing `provider` (see conceptVector.providers)	Manca `provider` (vedi conceptVector.providers)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Nessuna attività Da concetto a vettore {job}: non è mai stata creata o è stata scartata (vedi conceptVector.results)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Nessun fornitore Da concetto a vettore `{name}` (vedi conceptVector.providers)
+@msg	select one image or an unexpanded Image Trace object	Seleziona un’immagine o un oggetto di ricalco immagine non espanso
+@msg	the image is locked or hidden	L’immagine è bloccata o nascosta
+@msg	the provider stopped with an internal error: {0}	Il fornitore si è interrotto con un errore interno: {0}
+@msg	the provider's results do not match the request or are malformed	I risultati del fornitore non corrispondono alla richiesta o sono malformati
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	I risultati avrebbero più di {0} punti di ancoraggio: riduci Dettaglio o scegli meno stili
+@msg	there is no room for the results to the right of the image	Non c’è spazio per i risultati a destra dell’immagine
+@msg	the image is on a layer with a clipping mask, which would hide the results	L’immagine è su un livello con una maschera di ritaglio, che nasconderebbe i risultati
+@msg	the image is on a layer with an opacity mask, which would hide the results	L’immagine è su un livello con una maschera di opacità, che nasconderebbe i risultati
+@msg	`output` must be "vector"	`output` deve essere "vector"
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` non accetta prompt e crea solo grafica vettoriale
+@msg	Making the Concept to Vector styles	Creazione degli stili Da concetto a vettore

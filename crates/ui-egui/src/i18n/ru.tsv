@@ -7345,3 +7345,41 @@ shape	Open	Открытый
 	Margin	Поле
 	Box	Рамка
 	Swatch	Образец
+	Concept to Vector	Концепт в вектор
+	Concept to Vector…	Концепт в вектор…
+	Cancel Concept to Vector Job	Отменить задание «Концепт в вектор»
+	Concept to Vector Providers	Поставщики «Концепт в вектор»
+	Concept to Vector Results	Результаты «Концепт в вектор»
+	Generate Concept to Vector Styles	Создать стили «Концепт в вектор»
+	Insert Concept to Vector Styles	Вставить стили «Концепт в вектор»
+	Offline Image Trace styles, made on this computer	Офлайн-стили трассировки изображения, созданные на этом компьютере
+	Offline styles do not use prompts	Офлайн-стили не используют запросы
+	Styles	Стили
+	Ink Lines	Линии тушью
+	Flat Color	Плоский цвет
+	Detailed Color	Детальный цвет
+	Gray Tones	Оттенки серого
+	Generate	Создать
+	Insert Selected	Вставить выбранные
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	«Концепт в вектор» остановлен: его поток завершился без результатов (сообщите об этой ошибке)
+@msg	`detail` must be a whole number from 0 to 100	`detail` должно быть целым числом от 0 до 100
+@msg	`job` must be a job number from conceptVector.generate	`job` должно быть номером задания из conceptVector.generate
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` должно содержать от 1 до 8 разных идентификаторов стилей `{pid}` (см. conceptVector.providers)
+@msg	`variations` must list different style ids of job {job}	`variations` должно содержать разные идентификаторы стилей задания {job}
+@msg	a provider with the id `{id}` is registered already	Поставщик с идентификатором `{id}` уже зарегистрирован
+@msg	job {job} has no results to insert: it was canceled	У задания {job} нет результатов для вставки: оно отменено
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Задание {job} больше не действует: изменились его документ, изображение или положение изображения; создайте его заново
+@msg	missing `provider` (see conceptVector.providers)	Не указан `provider` (см. conceptVector.providers)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Нет задания «Концепт в вектор» {job}: оно не создавалось или было удалено (см. conceptVector.results)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Нет поставщика «Концепт в вектор» `{name}` (см. conceptVector.providers)
+@msg	select one image or an unexpanded Image Trace object	Выделите одно изображение или неразобранный объект трассировки изображения
+@msg	the image is locked or hidden	Изображение заблокировано или скрыто
+@msg	the provider stopped with an internal error: {0}	Поставщик остановился с внутренней ошибкой: {0}
+@msg	the provider's results do not match the request or are malformed	Результаты поставщика не соответствуют запросу или повреждены
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	В результатах было бы больше {0} опорных точек: уменьшите «Детали» или выберите меньше стилей
+@msg	there is no room for the results to the right of the image	Справа от изображения нет места для результатов
+@msg	the image is on a layer with a clipping mask, which would hide the results	Изображение находится на слое с обтравочной маской, которая скрыла бы результаты
+@msg	the image is on a layer with an opacity mask, which would hide the results	Изображение находится на слое с непрозрачной маской, которая скрыла бы результаты
+@msg	`output` must be "vector"	`output` должно быть "vector"
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` не принимает запрос и создаёт только векторную графику
+@msg	Making the Concept to Vector styles	Создание стилей «Концепт в вектор»

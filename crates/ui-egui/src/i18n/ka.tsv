@@ -7370,3 +7370,41 @@ font-script	Japanese	იაპონური
 	Margin	ზღვარი
 	Box	ჩარჩო
 	Swatch	ფერის ნიმუში
+	Concept to Vector	კონცეფციიდან ვექტორამდე
+	Concept to Vector…	კონცეფციიდან ვექტორამდე…
+	Cancel Concept to Vector Job	„კონცეფციიდან ვექტორამდე“ დავალების გაუქმება
+	Concept to Vector Providers	„კონცეფციიდან ვექტორამდე“ მომწოდებლები
+	Concept to Vector Results	„კონცეფციიდან ვექტორამდე“ შედეგები
+	Generate Concept to Vector Styles	„კონცეფციიდან ვექტორამდე“ სტილების შექმნა
+	Insert Concept to Vector Styles	„კონცეფციიდან ვექტორამდე“ სტილების ჩასმა
+	Offline Image Trace styles, made on this computer	გამოსახულების ვექტორიზაციის ოფლაინ სტილები, შექმნილი ამ კომპიუტერზე
+	Offline styles do not use prompts	ოფლაინ სტილები მოთხოვნებს არ იყენებს
+	Styles	სტილები
+	Ink Lines	მელნის ხაზები
+	Flat Color	ბრტყელი ფერი
+	Detailed Color	დეტალური ფერი
+	Gray Tones	ნაცრისფერი ტონები
+	Generate	შექმნა
+	Insert Selected	მონიშნულის ჩასმა
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	„კონცეფციიდან ვექტორამდე“ შეჩერდა: მისი ნაკადი შედეგების გარეშე დასრულდა (გთხოვთ, შეგვატყობინოთ ამ შეცდომის შესახებ)
+@msg	`detail` must be a whole number from 0 to 100	`detail` უნდა იყოს მთელი რიცხვი 0-დან 100-მდე
+@msg	`job` must be a job number from conceptVector.generate	`job` უნდა იყოს conceptVector.generate-ის დავალების ნომერი
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` უნდა შეიცავდეს `{pid}`-ის 1-დან 8-მდე განსხვავებულ სტილის ID-ს (იხ. conceptVector.providers)
+@msg	`variations` must list different style ids of job {job}	`variations` უნდა შეიცავდეს {job} დავალების განსხვავებულ სტილის ID-ებს
+@msg	a provider with the id `{id}` is registered already	მომწოდებელი ID-ით `{id}` უკვე რეგისტრირებულია
+@msg	job {job} has no results to insert: it was canceled	{job} დავალებას ჩასასმელი შედეგები არ აქვს: ის გაუქმდა
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	{job} დავალება აღარ მოქმედებს: შეიცვალა მისი დოკუმენტი, გამოსახულება ან გამოსახულების განთავსება; შექმენით ხელახლა
+@msg	missing `provider` (see conceptVector.providers)	`provider` აკლია (იხ. conceptVector.providers)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	„კონცეფციიდან ვექტორამდე“ დავალება {job} არ არსებობს: არასდროს შექმნილა ან გაუქმდა (იხ. conceptVector.results)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	„კონცეფციიდან ვექტორამდე“ მომწოდებელი `{name}` არ არსებობს (იხ. conceptVector.providers)
+@msg	select one image or an unexpanded Image Trace object	მონიშნეთ ერთი გამოსახულება ან ვექტორიზაციის გაუშლელი ობიექტი
+@msg	the image is locked or hidden	გამოსახულება ჩაკეტილი ან დამალულია
+@msg	the provider stopped with an internal error: {0}	მომწოდებელი შიდა შეცდომით შეჩერდა: {0}
+@msg	the provider's results do not match the request or are malformed	მომწოდებლის შედეგები მოთხოვნას არ შეესაბამება ან დაზიანებულია
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	შედეგებს {0}-ზე მეტი საყრდენი წერტილი ექნებოდა: შეამცირეთ დეტალი ან აირჩიეთ ნაკლები სტილი
+@msg	there is no room for the results to the right of the image	გამოსახულების მარჯვნივ შედეგებისთვის ადგილი არ არის
+@msg	the image is on a layer with a clipping mask, which would hide the results	გამოსახულება მოჭრის ნიღბიან ფენაზეა, რომელიც შედეგებს დამალავდა
+@msg	the image is on a layer with an opacity mask, which would hide the results	გამოსახულება გაუმჭვირვალობის ნიღბიან ფენაზეა, რომელიც შედეგებს დამალავდა
+@msg	`output` must be "vector"	`output` უნდა იყოს "vector"
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` მოთხოვნას არ იღებს და მხოლოდ ვექტორულ გრაფიკას ქმნის
+@msg	Making the Concept to Vector styles	იქმნება „კონცეფციიდან ვექტორამდე“ სტილები

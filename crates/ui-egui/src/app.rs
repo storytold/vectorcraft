@@ -156,6 +156,7 @@ impl VectorcraftApp {
             plugin_runs: Default::default(),
             placing: Default::default(),
             trace_runs: Default::default(),
+            concept_runs: Default::default(),
             recovery: Default::default(),
             host_modifiers: Default::default(),
             forwarded: Vec::new(),
@@ -249,6 +250,7 @@ impl VectorcraftApp {
         opening::poll(self);
         plugin_runs::poll(self);
         trace_runs::poll(self);
+        crate::panels::concept_vector::poll(self);
         placing::poll(self);
     }
 
@@ -360,6 +362,7 @@ impl VectorcraftApp {
             || !self.plugin_runs.running.is_empty()
             || !self.placing.pending.is_empty()
             || !self.trace_runs.running.is_empty()
+            || self.concept_runs.busy()
         {
             // Keep the status bar's progress moving and pick the result up when it arrives.
             ctx.request_repaint_after(std::time::Duration::from_millis(100));

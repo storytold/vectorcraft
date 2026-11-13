@@ -6846,3 +6846,41 @@ breakText	Glyphs	글리프
 	Margin	여백
 	Box	상자
 	Swatch	견본
+	Concept to Vector	콘셉트를 벡터로
+	Concept to Vector…	콘셉트를 벡터로…
+	Cancel Concept to Vector Job	콘셉트를 벡터로 작업 취소
+	Concept to Vector Providers	콘셉트를 벡터로 공급자
+	Concept to Vector Results	콘셉트를 벡터로 결과
+	Generate Concept to Vector Styles	콘셉트를 벡터로 스타일 생성
+	Insert Concept to Vector Styles	콘셉트를 벡터로 스타일 삽입
+	Offline Image Trace styles, made on this computer	이 컴퓨터에서 만드는 오프라인 이미지 추적 스타일
+	Offline styles do not use prompts	오프라인 스타일은 프롬프트를 사용하지 않습니다
+	Styles	스타일
+	Ink Lines	잉크 선
+	Flat Color	단색
+	Detailed Color	세밀한 색
+	Gray Tones	회색 톤
+	Generate	생성
+	Insert Selected	선택 항목 삽입
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	콘셉트를 벡터로가 중지되었습니다: 스레드가 결과 없이 끝났습니다(이 버그를 신고해 주세요)
+@msg	`detail` must be a whole number from 0 to 100	`detail`은 0에서 100 사이의 정수여야 합니다
+@msg	`job` must be a job number from conceptVector.generate	`job`은 conceptVector.generate의 작업 번호여야 합니다
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles`에는 `{pid}`의 서로 다른 스타일 ID를 1~8개 지정해야 합니다(conceptVector.providers 참조)
+@msg	`variations` must list different style ids of job {job}	`variations`에는 작업 {job}의 서로 다른 스타일 ID를 지정해야 합니다
+@msg	a provider with the id `{id}` is registered already	ID가 `{id}`인 공급자가 이미 등록되어 있습니다
+@msg	job {job} has no results to insert: it was canceled	작업 {job}에는 삽입할 결과가 없습니다: 취소되었습니다
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	작업 {job}은 더 이상 유효하지 않습니다: 문서, 이미지 또는 이미지 배치가 바뀌었으니 다시 생성하세요
+@msg	missing `provider` (see conceptVector.providers)	`provider`가 없습니다(conceptVector.providers 참조)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	콘셉트를 벡터로 작업 {job}이 없습니다: 만들어진 적이 없거나 삭제되었습니다(conceptVector.results 참조)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	콘셉트를 벡터로 공급자 `{name}`이 없습니다(conceptVector.providers 참조)
+@msg	select one image or an unexpanded Image Trace object	이미지 하나 또는 확장하지 않은 이미지 추적 개체 하나를 선택하세요
+@msg	the image is locked or hidden	이미지가 잠겨 있거나 숨겨져 있습니다
+@msg	the provider stopped with an internal error: {0}	공급자가 내부 오류로 중지되었습니다: {0}
+@msg	the provider's results do not match the request or are malformed	공급자의 결과가 요청과 맞지 않거나 형식이 잘못되었습니다
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	결과의 고정점이 {0}개를 넘습니다: 세부를 낮추거나 스타일을 줄이세요
+@msg	there is no room for the results to the right of the image	이미지 오른쪽에 결과를 놓을 공간이 없습니다
+@msg	the image is on a layer with a clipping mask, which would hide the results	이미지가 클리핑 마스크가 있는 레이어에 있어 결과가 가려집니다
+@msg	the image is on a layer with an opacity mask, which would hide the results	이미지가 불투명 마스크가 있는 레이어에 있어 결과가 가려집니다
+@msg	`output` must be "vector"	`output`은 "vector"여야 합니다
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}`은 프롬프트를 받지 않으며 벡터 아트만 만듭니다
+@msg	Making the Concept to Vector styles	콘셉트를 벡터로 스타일을 만드는 중

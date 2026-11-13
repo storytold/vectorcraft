@@ -97,6 +97,9 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
             // page. Its submenu holds only toggles, so it shows the check mark (`render_items`).
             v.push(sub("Spelling", vec![c("Auto Spell Check", "edit.autoSpellCheck")]));
         }
+        // One image or unexpanded Image Trace object; left out otherwise, as the menu leaves out
+        // every command that can't run.
+        v.push(c("Concept to Vector…", crate::panels::concept_vector::OPEN));
         v.extend([c("Make Guides", "view.guides.make"), Sep, sub("Transform", transform_items())]);
         if intertwine.is_none() {
             v.push(sub("Arrange", arrange_items()));

@@ -7240,3 +7240,41 @@ breakText	Glyphs	Glifák
 	Margin	Margó
 	Box	Keret
 	Swatch	Színminta
+	Concept to Vector	Koncepcióból vektor
+	Concept to Vector…	Koncepcióból vektor…
+	Cancel Concept to Vector Job	Koncepcióból vektor feladat megszakítása
+	Concept to Vector Providers	Koncepcióból vektor szolgáltatók
+	Concept to Vector Results	Koncepcióból vektor eredmények
+	Generate Concept to Vector Styles	Koncepcióból vektor stílusok létrehozása
+	Insert Concept to Vector Styles	Koncepcióból vektor stílusok beszúrása
+	Offline Image Trace styles, made on this computer	Offline képvektorizálási stílusok, ezen a számítógépen készítve
+	Offline styles do not use prompts	Az offline stílusok nem használnak promptot
+	Styles	Stílusok
+	Ink Lines	Tusvonalak
+	Flat Color	Sík szín
+	Detailed Color	Részletes szín
+	Gray Tones	Szürke árnyalatok
+	Generate	Létrehozás
+	Insert Selected	Kijelöltek beszúrása
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	A Koncepcióból vektor leállt: a szála eredmény nélkül ért véget (kérjük, jelentse ezt a hibát)
+@msg	`detail` must be a whole number from 0 to 100	`detail`: 0 és 100 közötti egész szám kell
+@msg	`job` must be a job number from conceptVector.generate	`job`: a conceptVector.generate által adott feladatszám kell
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles`: `{pid}` 1–8 különböző stílusazonosítóját kell felsorolni (lásd conceptVector.providers)
+@msg	`variations` must list different style ids of job {job}	`variations`: a(z) {job} feladat különböző stílusazonosítóit kell felsorolni
+@msg	a provider with the id `{id}` is registered already	Már regisztrálva van egy `{id}` azonosítójú szolgáltató
+@msg	job {job} has no results to insert: it was canceled	A(z) {job} feladatnak nincs beszúrható eredménye: megszakították
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	A(z) {job} feladat már nem érvényes: megváltozott a dokumentuma, a képe vagy a kép elhelyezése; hozza létre újra
+@msg	missing `provider` (see conceptVector.providers)	Hiányzik a `provider` (lásd conceptVector.providers)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Nincs {job} Koncepcióból vektor feladat: soha nem készült el, vagy elvetették (lásd conceptVector.results)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Nincs `{name}` Koncepcióból vektor szolgáltató (lásd conceptVector.providers)
+@msg	select one image or an unexpanded Image Trace object	Jelöljön ki egy képet vagy egy ki nem bontott képvektorizálási objektumot
+@msg	the image is locked or hidden	A kép zárolva van vagy rejtett
+@msg	the provider stopped with an internal error: {0}	A szolgáltató belső hibával leállt: {0}
+@msg	the provider's results do not match the request or are malformed	A szolgáltató eredményei nem felelnek meg a kérésnek, vagy hibásak
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	Az eredményekben több mint {0} horgonypont lenne: csökkentse a Részletességet, vagy válasszon kevesebb stílust
+@msg	there is no room for the results to the right of the image	A kép jobb oldalán nincs hely az eredményeknek
+@msg	the image is on a layer with a clipping mask, which would hide the results	A kép vágómaszkos rétegen van, amely elrejtené az eredményeket
+@msg	the image is on a layer with an opacity mask, which would hide the results	A kép átlátszósági maszkos rétegen van, amely elrejtené az eredményeket
+@msg	`output` must be "vector"	`output`: "vector" kell
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` nem fogad promptot, és csak vektorgrafikát készít
+@msg	Making the Concept to Vector styles	Koncepcióból vektor stílusok készítése

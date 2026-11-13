@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use super::layers::{Layers, parallel_map_at_most};
@@ -175,21 +176,220 @@ pub fn trace_watched(
     max_anchors: usize,
     steps: &(dyn Fn(u64, u64) -> bool + Sync),
 ) -> Result<TraceResult, TraceError> {
-    let (w, h) = (img.width as usize, img.height as usize);
-    if w == 0 || h == 0 || w.checked_mul(h).and_then(|n| n.checked_mul(4)) != Some(img.rgba.len()) {
+    if !traceable(img) {
         return Ok(TraceResult::default());
     }
-    let mut out = trace_paths(img, params, max_anchors, steps)?;
+    let out = trace_paths(img, params, max_anchors, steps)?;
+    Ok(grouped(out, img, params))
+}
+
+/// Whether `img` has pixels, as many as its size says.
+fn traceable(img: &Raster) -> bool {
+    let (w, h) = (img.width as usize, img.height as usize);
+    w > 0 && h > 0 && w.checked_mul(h).and_then(|n| n.checked_mul(4)) == Some(img.rgba.len())
+}
+
+/// `out` with Auto Grouping's parents (see [`TraceResult::parents`]) when `params` asks for them.
+fn grouped(mut out: TraceResult, img: &Raster, params: &TraceParams) -> TraceResult {
     if params.auto_grouping {
         // Abutting areas cannot overlap; stacked layers, Logo's shapes and stroked lines can.
         let stacked = params.method == Method::Overlapping || params.mode == Mode::Logo || params.strokes;
         out.parents = group::parents(&out.paths, img.width as usize, img.height as usize, stacked);
     }
-    Ok(out)
+    out
 }
 
-fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: &(dyn Fn(u64, u64) -> bool + Sync)) -> Result<TraceResult, TraceError> {
-    let (w, h) = (img.width as usize, img.height as usize);
+/// How far a trace has got: see [`trace_watched`].
+type Steps<'s> = &'s (dyn Fn(u64, u64) -> bool + Sync);
+
+fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: Steps) -> Result<TraceResult, TraceError> {
+    let p = match prepare(Source::Borrowed(img), params, max_anchors, steps)? {
+        Begun::Done(out) => return Ok(out),
+        Begun::Layers(p) => p,
+    };
+    let traced = {
+        let job = p.job(0);
+        // A layer takes about ten bytes a pixel of its box while it is traced (its mask, the labels
+        // of its components, the stack that fills them, its edges): as many layers at a time as fit
+        // in half a gigabyte, so that a large image is not traced at the cost of gigabytes.
+        // (Overlapping labels a layer's mask once more before it is traced, with its labels and stack
+        // freed before the trace starts.)
+        let largest = job.boxes.iter().flatten().map(|b| (b.2 - b.0) * (b.3 - b.1)).max().unwrap_or(1).max(1);
+        let at_a_time = ((512 << 20) / (largest * 10)).max(1);
+        let total = p.layers.len() as u64;
+        if !steps(0, total) {
+            return Err(TraceError::Cancelled);
+        }
+        // Once stopped, the layers not started yet are skipped.
+        let (done, stopped) = (AtomicU64::new(0), AtomicBool::new(false));
+        let traced = parallel_map_at_most(at_a_time, &p.layers, |&(r, ci)| {
+            if stopped.load(Ordering::Relaxed) {
+                return None;
+            }
+            let paths = job.layer(r, ci);
+            if !steps(done.fetch_add(1, Ordering::Relaxed) + 1, total) {
+                stopped.store(true, Ordering::Relaxed);
+            }
+            paths
+        });
+        if stopped.load(Ordering::Relaxed) {
+            return Err(TraceError::Cancelled);
+        }
+        traced
+    };
+    (*p).finish(traced)
+}
+
+/// The image a trace works from: borrowed for the length of one call, or shared, for a trace
+/// made a part at a time ([`TraceSteps`]).
+enum Source<'a> {
+    Borrowed(&'a Raster),
+    Shared(Arc<Raster>),
+}
+
+impl std::ops::Deref for Source<'_> {
+    type Target = Raster;
+    fn deref(&self) -> &Raster {
+        match self {
+            Source::Borrowed(img) => img,
+            Source::Shared(img) => img,
+        }
+    }
+}
+
+/// A trace with its colour layers found and ordered, none of them traced yet.
+struct Prepared<'a> {
+    src: Source<'a>,
+    /// A photo's copy with its noise smoothed away, traced in its place (see `smooth`).
+    smoothed: Option<Raster>,
+    params: TraceParams,
+    q: Quantized,
+    /// Ignore Color, background only: `q.labels` with the background [`TRANSPARENT`].
+    cleared: Option<Vec<u16>>,
+    rank: Vec<usize>,
+    left_out: Vec<bool>,
+    boxes: Vec<Option<PixelBox>>,
+    gradients: Vec<Option<TracedGradient>>,
+    bw_tones: [f64; 2],
+    /// The layers to trace, bottom first: `(rank, palette entry)`.
+    layers: Vec<(usize, usize)>,
+    keep_unmatched: Vec<String>,
+    keep_ignored: bool,
+    max_anchors: usize,
+}
+
+/// What preparing a trace gives: the whole result (Logo mode), or its layers to trace.
+enum Begun<'a> {
+    Done(TraceResult),
+    Layers(Box<Prepared<'a>>),
+}
+
+impl Prepared<'_> {
+    /// What tracing one of the layers needs, with `anchors` anchor points made so far.
+    fn job(&self, anchors: usize) -> Layers<'_> {
+        Layers {
+            q: &self.q,
+            traced: self.cleared.as_deref().unwrap_or(&self.q.labels),
+            rank: &self.rank,
+            params: &self.params,
+            img: self.smoothed.as_ref().unwrap_or(&*self.src),
+            left_out: self.left_out.clone(),
+            boxes: self.boxes.clone(),
+            gradients: &self.gradients,
+            bw_tones: self.bw_tones,
+            style: self.params.outline_style(),
+            w: self.src.width as usize,
+            h: self.src.height as usize,
+            anchors: AtomicUsize::new(anchors),
+            max_anchors: self.max_anchors,
+        }
+    }
+
+    /// The result of `traced`, the paths of each of [`Prepared::layers`] in order (`None` for a
+    /// layer that passed the anchor maximum).
+    fn finish(self, traced: Vec<Option<Vec<TracedPath>>>) -> Result<TraceResult, TraceError> {
+        let mut out = TraceResult { keep_unmatched: self.keep_unmatched, keep_ignored: self.keep_ignored, ..TraceResult::default() };
+        for (paths, &(_, ci)) in traced.into_iter().zip(&self.layers) {
+            let paths = paths.ok_or(TraceError::TooComplex { max: self.max_anchors })?;
+            // A layer with no paths adds no color to the palette.
+            if paths.is_empty() {
+                continue;
+            }
+            out.paths.extend(paths);
+            let color = self.q.palette[ci];
+            if !out.palette.contains(&color) {
+                out.palette.push(color);
+            }
+        }
+        Ok(out)
+    }
+}
+
+/// A trace made a part at a time, for a caller with no thread to trace on that must let other
+/// work run between the parts (the web build). The first [`TraceSteps::step`] finds the colour
+/// layers and each later one traces one layer, bottom first, one at a time; the result is the
+/// one [`trace_within`] gives.
+pub struct TraceSteps {
+    img: Arc<Raster>,
+    params: TraceParams,
+    max_anchors: usize,
+    state: StepState,
+}
+
+enum StepState {
+    Start,
+    /// The layers found, the paths of those traced so far, and their anchor points.
+    Layers(Box<Prepared<'static>>, Vec<Option<Vec<TracedPath>>>, usize),
+    Finished,
+}
+
+impl TraceSteps {
+    /// A trace of `img` with `params` that gives up with [`TraceError::TooComplex`] once the paths
+    /// have more than `max_anchors` anchor points; nothing is done until [`TraceSteps::step`].
+    pub fn new(img: Arc<Raster>, params: TraceParams, max_anchors: usize) -> Self {
+        Self { img, params, max_anchors, state: StepState::Start }
+    }
+
+    /// Does the next part → the result once the last part is done, `None` before it. After the
+    /// result or an error, each call gives `None`.
+    pub fn step(&mut self) -> Result<Option<TraceResult>, TraceError> {
+        let (prepared, mut traced, anchors) = match std::mem::replace(&mut self.state, StepState::Finished) {
+            StepState::Finished => return Ok(None),
+            StepState::Start => {
+                if !traceable(&self.img) {
+                    return Ok(Some(TraceResult::default()));
+                }
+                match prepare(Source::Shared(Arc::clone(&self.img)), &self.params, self.max_anchors, &|_, _| true)? {
+                    Begun::Done(out) => return Ok(Some(grouped(out, &self.img, &self.params))),
+                    Begun::Layers(p) if p.layers.is_empty() => return (*p).finish(vec![]).map(|out| Some(grouped(out, &self.img, &self.params))),
+                    Begun::Layers(p) => {
+                        let traced = Vec::with_capacity(p.layers.len());
+                        self.state = StepState::Layers(p, traced, 0);
+                        return Ok(None);
+                    }
+                }
+            }
+            StepState::Layers(p, traced, anchors) => (p, traced, anchors),
+        };
+        let Some(&(r, ci)) = prepared.layers.get(traced.len()) else { return Ok(None) };
+        let (paths, anchors) = {
+            let job = prepared.job(anchors);
+            let paths = job.layer(r, ci);
+            (paths, job.anchors.load(Ordering::Relaxed))
+        };
+        traced.push(Some(paths.ok_or(TraceError::TooComplex { max: self.max_anchors })?));
+        if traced.len() < prepared.layers.len() {
+            self.state = StepState::Layers(prepared, traced, anchors);
+            return Ok(None);
+        }
+        (*prepared).finish(traced).map(|out| Some(grouped(out, &self.img, &self.params)))
+    }
+}
+
+/// Finds the colour layers of `src` traced with `params` and the order they stack in, telling
+/// `steps(0, 0)` after each stage; Logo mode traces the whole image at once.
+fn prepare<'a>(src: Source<'a>, params: &TraceParams, max_anchors: usize, steps: Steps) -> Result<Begun<'a>, TraceError> {
+    let (w, h) = (src.width as usize, src.height as usize);
     // The colors Keep Colors traces (checked in every mode).
     let listed = params
         .keep_colors
@@ -200,7 +400,7 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: &(
     let go_on = || if steps(0, 0) { Ok(()) } else { Err(TraceError::Cancelled) };
     if params.mode == Mode::Logo {
         go_on()?;
-        return logo::trace_logo(img, params, max_anchors);
+        return logo::trace_logo(&src, params, max_anchors).map(Begun::Done);
     }
     // The colour Ignore Color leaves out, if not white.
     let ignore = match &params.ignore_color {
@@ -208,8 +408,8 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: &(
         _ => None,
     };
     // A photo is traced from a copy with its noise smoothed away (see `smooth`).
-    let smoothed = (params.mode != Mode::BlackAndWhite && quantize::continuous_tone(img)).then(|| smooth::smoothed(img));
-    let img = smoothed.as_ref().unwrap_or(img);
+    let smoothed = (params.mode != Mode::BlackAndWhite && quantize::continuous_tone(&src)).then(|| smooth::smoothed(&src));
+    let img = smoothed.as_ref().unwrap_or(&*src);
     go_on()?;
     // Gradients are found first and kept out of the palette: no colour is spent on bands of them.
     // Grayscale finds them in the image's grays (as its flat colours are), so their stops are gray.
@@ -316,62 +516,24 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: &(
         .collect();
     // Every layer is left out although a listed color matches one: Ignore Color left those out.
     let keep_ignored = !listed.is_empty() && layers.is_empty() && order.iter().any(|&ci| is_kept(q.palette[ci], &listed));
-    let job = Layers {
-        q: &q,
-        traced: cleared.as_deref().unwrap_or(&q.labels),
-        rank: &rank,
+    let tones = bw_tones(img, &q);
+    let params = params.clone();
+    Ok(Begun::Layers(Box::new(Prepared {
+        src,
+        smoothed,
         params,
-        img,
+        q,
+        cleared,
+        rank,
         left_out,
         boxes,
-        gradients: &gradients,
-        bw_tones: bw_tones(img, &q),
-        style: params.outline_style(),
-        w,
-        h,
-        anchors: AtomicUsize::new(0),
+        gradients,
+        bw_tones: tones,
+        layers,
+        keep_unmatched,
+        keep_ignored,
         max_anchors,
-    };
-    let mut out = TraceResult { keep_unmatched, keep_ignored, ..TraceResult::default() };
-    // A layer takes about ten bytes a pixel of its box while it is traced (its mask, the labels
-    // of its components, the stack that fills them, its edges): as many layers at a time as fit
-    // in half a gigabyte, so that a large image is not traced at the cost of gigabytes.
-    // (Overlapping labels a layer's mask once more before it is traced, with its labels and stack
-    // freed before the trace starts.)
-    let largest = job.boxes.iter().flatten().map(|b| (b.2 - b.0) * (b.3 - b.1)).max().unwrap_or(1).max(1);
-    let at_a_time = ((512 << 20) / (largest * 10)).max(1);
-    let total = layers.len() as u64;
-    if !steps(0, total) {
-        return Err(TraceError::Cancelled);
-    }
-    // Once stopped, the layers not started yet are skipped.
-    let (done, stopped) = (AtomicU64::new(0), AtomicBool::new(false));
-    let traced = parallel_map_at_most(at_a_time, &layers, |&(r, ci)| {
-        if stopped.load(Ordering::Relaxed) {
-            return None;
-        }
-        let paths = job.layer(r, ci);
-        if !steps(done.fetch_add(1, Ordering::Relaxed) + 1, total) {
-            stopped.store(true, Ordering::Relaxed);
-        }
-        paths
-    });
-    if stopped.load(Ordering::Relaxed) {
-        return Err(TraceError::Cancelled);
-    }
-    for (paths, &(_, ci)) in traced.into_iter().zip(&layers) {
-        let paths = paths.ok_or(TraceError::TooComplex { max: max_anchors })?;
-        // A layer with no paths adds no color to the palette.
-        if paths.is_empty() {
-            continue;
-        }
-        out.paths.extend(paths);
-        let color = q.palette[ci];
-        if !out.palette.contains(&color) {
-            out.palette.push(color);
-        }
-    }
-    Ok(out)
+    })))
 }
 
 /// The luminance of white and of black in a Black and White quantisation: what its lightest

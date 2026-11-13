@@ -7256,3 +7256,41 @@ breakText	Glyphs	Glyfy
 	Margin	Okraj
 	Box	Rámeček
 	Swatch	Vzorek
+	Concept to Vector	Koncept na vektor
+	Concept to Vector…	Koncept na vektor…
+	Cancel Concept to Vector Job	Zrušit úlohu Koncept na vektor
+	Concept to Vector Providers	Poskytovatelé Koncept na vektor
+	Concept to Vector Results	Výsledky Koncept na vektor
+	Generate Concept to Vector Styles	Vytvořit styly Koncept na vektor
+	Insert Concept to Vector Styles	Vložit styly Koncept na vektor
+	Offline Image Trace styles, made on this computer	Offline styly vektorizace obrazu, vytvořené na tomto počítači
+	Offline styles do not use prompts	Offline styly nepoužívají výzvy
+	Styles	Styly
+	Ink Lines	Linky tuší
+	Flat Color	Plochá barva
+	Detailed Color	Podrobná barva
+	Gray Tones	Odstíny šedi
+	Generate	Vytvořit
+	Insert Selected	Vložit vybrané
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Koncept na vektor se zastavil: jeho vlákno skončilo bez výsledků (nahlaste prosím tuto chybu)
+@msg	`detail` must be a whole number from 0 to 100	`detail` musí být celé číslo od 0 do 100
+@msg	`job` must be a job number from conceptVector.generate	`job` musí být číslo úlohy z conceptVector.generate
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` musí uvádět 1 až 8 různých ID stylů poskytovatele `{pid}` (viz conceptVector.providers)
+@msg	`variations` must list different style ids of job {job}	`variations` musí uvádět různá ID stylů úlohy {job}
+@msg	a provider with the id `{id}` is registered already	Poskytovatel s ID `{id}` je již zaregistrován
+@msg	job {job} has no results to insert: it was canceled	Úloha {job} nemá žádné výsledky k vložení: byla zrušena
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Úloha {job} již neplatí: změnil se její dokument, obraz nebo umístění obrazu; vytvořte ji znovu
+@msg	missing `provider` (see conceptVector.providers)	Chybí `provider` (viz conceptVector.providers)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Úloha Koncept na vektor {job} neexistuje: nikdy nevznikla nebo byla zahozena (viz conceptVector.results)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Poskytovatel Koncept na vektor `{name}` neexistuje (viz conceptVector.providers)
+@msg	select one image or an unexpanded Image Trace object	Vyberte jeden obraz nebo nerozdělený objekt vektorizace obrazu
+@msg	the image is locked or hidden	Obraz je zamčený nebo skrytý
+@msg	the provider stopped with an internal error: {0}	Poskytovatel se zastavil s vnitřní chybou: {0}
+@msg	the provider's results do not match the request or are malformed	Výsledky poskytovatele neodpovídají požadavku nebo jsou poškozené
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	Výsledky by měly více než {0} kotevních bodů: snižte Detail nebo zvolte méně stylů
+@msg	there is no room for the results to the right of the image	Vpravo od obrazu není pro výsledky místo
+@msg	the image is on a layer with a clipping mask, which would hide the results	Obraz je ve vrstvě s ořezovou maskou, která by výsledky skryla
+@msg	the image is on a layer with an opacity mask, which would hide the results	Obraz je ve vrstvě s maskou krytí, která by výsledky skryla
+@msg	`output` must be "vector"	`output` musí být "vector"
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` nepřijímá výzvu a vytváří jen vektorovou grafiku
+@msg	Making the Concept to Vector styles	Vytvářejí se styly Koncept na vektor

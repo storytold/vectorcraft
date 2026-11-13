@@ -7291,3 +7291,41 @@ breakText	Glyphs	Merkit
 	Margin	Marginaali
 	Box	Kehys
 	Swatch	Värimalli
+	Concept to Vector	Konseptista vektoriksi
+	Concept to Vector…	Konseptista vektoriksi…
+	Cancel Concept to Vector Job	Peruuta Konseptista vektoriksi -työ
+	Concept to Vector Providers	Konseptista vektoriksi -palveluntarjoajat
+	Concept to Vector Results	Konseptista vektoriksi -tulokset
+	Generate Concept to Vector Styles	Luo Konseptista vektoriksi -tyylit
+	Insert Concept to Vector Styles	Lisää Konseptista vektoriksi -tyylit
+	Offline Image Trace styles, made on this computer	Kuvan jäljityksen offline-tyylit, tehty tällä tietokoneella
+	Offline styles do not use prompts	Offline-tyylit eivät käytä kehotteita
+	Styles	Tyylit
+	Ink Lines	Musteviivat
+	Flat Color	Tasainen väri
+	Detailed Color	Yksityiskohtainen väri
+	Gray Tones	Harmaasävyt
+	Generate	Luo
+	Insert Selected	Lisää valitut
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Konseptista vektoriksi pysähtyi: sen säie päättyi ilman tuloksia (ilmoita tästä virheestä)
+@msg	`detail` must be a whole number from 0 to 100	`detail` on oltava kokonaisluku 0–100
+@msg	`job` must be a job number from conceptVector.generate	`job` on oltava conceptVector.generate-komennon antama työn numero
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` on luetteloitava 1–8 eri tyylitunnusta palveluntarjoajalta `{pid}` (katso conceptVector.providers)
+@msg	`variations` must list different style ids of job {job}	`variations` on luetteloitava työn {job} eri tyylitunnukset
+@msg	a provider with the id `{id}` is registered already	Palveluntarjoaja, jonka tunnus on `{id}`, on jo rekisteröity
+@msg	job {job} has no results to insert: it was canceled	Työllä {job} ei ole lisättäviä tuloksia: se peruutettiin
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	Työ {job} ei ole enää voimassa: sen asiakirja, kuva tai kuvan sijoitus muuttui; luo se uudelleen
+@msg	missing `provider` (see conceptVector.providers)	`provider` puuttuu (katso conceptVector.providers)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	Konseptista vektoriksi -työtä {job} ei ole: sitä ei koskaan tehty tai se hylättiin (katso conceptVector.results)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	Konseptista vektoriksi -palveluntarjoajaa `{name}` ei ole (katso conceptVector.providers)
+@msg	select one image or an unexpanded Image Trace object	Valitse yksi kuva tai laajentamaton kuvan jäljitysobjekti
+@msg	the image is locked or hidden	Kuva on lukittu tai piilotettu
+@msg	the provider stopped with an internal error: {0}	Palveluntarjoaja pysähtyi sisäiseen virheeseen: {0}
+@msg	the provider's results do not match the request or are malformed	Palveluntarjoajan tulokset eivät vastaa pyyntöä tai ovat virheellisiä
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	Tuloksissa olisi yli {0} ankkuripistettä: pienennä Yksityiskohta-arvoa tai valitse vähemmän tyylejä
+@msg	there is no room for the results to the right of the image	Kuvan oikealla puolella ei ole tilaa tuloksille
+@msg	the image is on a layer with a clipping mask, which would hide the results	Kuva on tasolla, jolla on leikkausmaski, joka piilottaisi tulokset
+@msg	the image is on a layer with an opacity mask, which would hide the results	Kuva on tasolla, jolla on peittävyysmaski, joka piilottaisi tulokset
+@msg	`output` must be "vector"	`output` on oltava "vector"
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` ei ota kehotetta ja tekee vain vektorigrafiikkaa
+@msg	Making the Concept to Vector styles	Luodaan Konseptista vektoriksi -tyylejä

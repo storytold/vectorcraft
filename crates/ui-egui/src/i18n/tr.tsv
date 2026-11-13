@@ -7212,3 +7212,41 @@ breakText	Glyphs	Glifler
 	Margin	Kenar Boşluğu
 	Box	Kutu
 	Swatch	Renk Örneği
+	Concept to Vector	Konseptten Vektöre
+	Concept to Vector…	Konseptten Vektöre…
+	Cancel Concept to Vector Job	Konseptten Vektöre İşini İptal Et
+	Concept to Vector Providers	Konseptten Vektöre Sağlayıcıları
+	Concept to Vector Results	Konseptten Vektöre Sonuçları
+	Generate Concept to Vector Styles	Konseptten Vektöre Stilleri Oluştur
+	Insert Concept to Vector Styles	Konseptten Vektöre Stillerini Ekle
+	Offline Image Trace styles, made on this computer	Çevrimdışı Görüntü İzleme stilleri, bu bilgisayarda yapılır
+	Offline styles do not use prompts	Çevrimdışı stiller istem kullanmaz
+	Styles	Stiller
+	Ink Lines	Mürekkep Çizgileri
+	Flat Color	Düz Renk
+	Detailed Color	Ayrıntılı Renk
+	Gray Tones	Gri Tonlar
+	Generate	Oluştur
+	Insert Selected	Seçilenleri Ekle
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Konseptten Vektöre durdu: iş parçacığı sonuç vermeden sona erdi (lütfen bu hatayı bildirin)
+@msg	`detail` must be a whole number from 0 to 100	`detail` 0 ile 100 arasında bir tam sayı olmalıdır
+@msg	`job` must be a job number from conceptVector.generate	`job` conceptVector.generate tarafından verilen bir iş numarası olmalıdır
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles`, `{pid}` için 1 ile 8 arasında farklı stil kimliği listelemelidir (bkz. conceptVector.providers)
+@msg	`variations` must list different style ids of job {job}	`variations`, {job} işinin farklı stil kimliklerini listelemelidir
+@msg	a provider with the id `{id}` is registered already	`{id}` kimlikli bir sağlayıcı zaten kayıtlı
+@msg	job {job} has no results to insert: it was canceled	{job} işinin eklenecek sonucu yok: iptal edildi
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	{job} işi artık geçerli değil: belgesi, görüntüsü veya görüntünün yerleşimi değişti; yeniden oluşturun
+@msg	missing `provider` (see conceptVector.providers)	`provider` eksik (bkz. conceptVector.providers)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	{job} numaralı Konseptten Vektöre işi yok: hiç yapılmadı veya atıldı (bkz. conceptVector.results)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	`{name}` adlı Konseptten Vektöre sağlayıcısı yok (bkz. conceptVector.providers)
+@msg	select one image or an unexpanded Image Trace object	Bir görüntü veya genişletilmemiş bir Görüntü İzleme nesnesi seçin
+@msg	the image is locked or hidden	Görüntü kilitli veya gizli
+@msg	the provider stopped with an internal error: {0}	Sağlayıcı dahili bir hatayla durdu: {0}
+@msg	the provider's results do not match the request or are malformed	Sağlayıcının sonuçları istekle eşleşmiyor veya bozuk
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	Sonuçlarda {0} bağlantı noktasından fazlası olurdu: Ayrıntı'yı düşürün veya daha az stil seçin
+@msg	there is no room for the results to the right of the image	Görüntünün sağında sonuçlar için yer yok
+@msg	the image is on a layer with a clipping mask, which would hide the results	Görüntü, sonuçları gizleyecek bir kırpma maskesi olan bir katmanda
+@msg	the image is on a layer with an opacity mask, which would hide the results	Görüntü, sonuçları gizleyecek bir opaklık maskesi olan bir katmanda
+@msg	`output` must be "vector"	`output` "vector" olmalıdır
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` istem almaz ve yalnızca vektör çizim yapar
+@msg	Making the Concept to Vector styles	Konseptten Vektöre stilleri yapılıyor
