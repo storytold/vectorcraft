@@ -969,7 +969,11 @@ SVG writes one file per artboard of a `range`); `useArtboards: false` exports th
 its effects paint, the effects of groups, type and images included. `artboard.fitToArt` measures the art the same
 way. `document.exportPdf {useArtboards: false}` writes that one page as well, and ignores `artboard`, `artboards` and
 `range`. A PDF of that page, from either command, carries no Preserve Editing data; when Preserve Editing is on (as it
-is in VectorCraft Default), the export comes back with a warning that says so.
+is in VectorCraft Default), the export comes back with a warning that says so. A `.ai` export with
+`useArtboards: false` writes that one page too, without the native document and without the editing copy for other
+apps (`editingData`), and always comes back with the warning `Preserve editing was left out: an .ai file of the art's
+bounds would replace the document's artboards when reopened`; with `pdfCompatible: false` it is refused, whatever
+`editingData` says. A legacy version 7 `.ai` (`aiVersion: "7"`) of the art's bounds is written as before.
 Export As PDF continues in the Save PDF dialog with Use Artboards on or off; with it off, the dialog has no
 Artboards section and the page is the bounds of the visible art.
 
