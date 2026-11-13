@@ -167,9 +167,13 @@ pub(super) fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({ "ids": [], "before": 0, "after": 0 }));
     }
     let ids: Vec<NodeId> = plan.iter().map(|(id, _)| *id).collect();
-    s.edit("Smooth", |d, _| {
+    s.edit("Smooth", |d, sel| {
         for (id, np) in plan {
             *path_mut(d, id)? = np;
+            // The smoothed path has new anchors, so the old anchor and segment indices are
+            // dropped and the path stays selected whole.
+            sel.anchors.remove(&id);
+            sel.segments.remove(&id);
         }
         Ok(())
     })?;
