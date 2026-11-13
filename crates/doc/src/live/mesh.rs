@@ -530,6 +530,10 @@ pub(super) const MAX_BORDER_LINES: usize = 256;
 /// The most rounds of new lines a mesh made from a path takes to keep its border on the outline.
 const MAX_BORDER_ROUNDS: usize = 64;
 
+/// A point this close (in points) to a mesh's outline is on it, for [`GradientMesh::locate_within`]
+/// with any tolerance.
+const ON_OUTLINE: f64 = 1e-6;
+
 /// An anchor whose directions in and out differ by more than this (radians) is a corner: a border
 /// edge that can't follow the outline takes a mesh line through its sharpest corner first.
 const SHARP_TURN: f64 = 0.01;
@@ -1436,17 +1440,24 @@ impl GradientMesh {
     }
 
     /// As [`Self::locate`], and for a point outside the mesh within `tol` of its outline, the
-    /// patch and local (u, v) of the nearest point of the mesh's edge.
+    /// patch and local (u, v) of the nearest point of the mesh's edge. A point on the outline
+    /// (within [`ON_OUTLINE`]) locates on its edge on every side, with any `tol`.
     pub fn locate_within(&self, p: Point, tol: f64) -> Option<(usize, usize, f64, f64)> {
-        if !self.is_valid() {
+        if !self.is_valid() || !p.is_finite() {
             return None;
         }
-        let bp = self.outline().to_bezpath();
-        if bp.winding(p) == 0 {
+        // A point on the outline takes the nearest point of the edge on every side: the nonzero
+        // winding number counts a point on some edges as outside (a rectangle's bottom and right
+        // edges) and on the others as inside.
+        let edge = self.nearest_edge(p);
+        if let Some((_, r, c, u, v)) = edge.filter(|e| e.0 <= ON_OUTLINE * ON_OUTLINE) {
+            return Some((r, c, u, v));
+        }
+        if self.outline().to_bezpath().winding(p) == 0 {
             if tol.is_nan() || tol <= 0.0 {
                 return None;
             }
-            return self.nearest_edge(p).filter(|e| e.0 <= tol * tol).map(|(_, r, c, u, v)| (r, c, u, v));
+            return edge.filter(|e| e.0 <= tol * tol).map(|(_, r, c, u, v)| (r, c, u, v));
         }
         const N: usize = 16;
         let mut best = (f64::INFINITY, 0, 0, 0.0, 0.0);
