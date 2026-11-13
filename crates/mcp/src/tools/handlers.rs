@@ -437,16 +437,50 @@ pub(super) fn screenshot(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, St
     }
 }
 
-/// The window of an app from before `ui.screenshot {data}`, captured through a temporary file.
+/// The window of an app from before `ui.screenshot {data}`, captured through a temporary file in a
+/// new folder of its own inside the system's temporary folder ([`new_capture_folder`]). The folder
+/// and everything in it are removed once the capture is read, and also when the app or the read
+/// fails.
 fn old_window_capture(b: &mut dyn Backend, max: Option<u32>) -> Result<ToolResult, String> {
-    let tmp = std::env::temp_dir().join(format!("vectorcraft-window-{}.png", std::process::id())).to_string_lossy().to_string();
-    let r = b.call("ui.screenshot", json!({"path": tmp}))?;
-    let png = std::fs::read(&tmp).map_err(|e| format!("read {tmp}: {e}"))?;
-    // Best effort: a temporary file left behind is harmless.
-    std::fs::remove_file(&tmp).ok();
+    let dir = new_capture_folder(&std::env::temp_dir())?;
+    let tmp = dir.join("window.png").to_string_lossy().to_string();
+    let captured = b.call("ui.screenshot", json!({"path": tmp})).and_then(|r| Ok((std::fs::read(&tmp).map_err(|e| format!("read {tmp}: {e}"))?, r)));
+    // Best effort: a folder that can't be removed holds only this capture, and on unix only its
+    // owner can open it.
+    let _ = std::fs::remove_dir_all(&dir);
+    let (png, r) = captured?;
     let mut info = json!({"window": true, "width": r.get("width"), "height": r.get("height"), "path": Value::Null});
     let png = fit_capture(png, max, &mut info)?;
     Ok(image_result(&png, info))
+}
+
+/// A new folder in `parent` named `vectorcraft-window-` followed by the process id, `-` and a count
+/// of the process's captures; on unix only its owner can open it. A name that is already taken, by
+/// an earlier process with the same id or by anyone else, is skipped for the next count.
+fn new_capture_folder(parent: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    loop {
+        let dir = parent.join(format!("vectorcraft-window-{}-{}", std::process::id(), NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+        match private_folder().create(&dir) {
+            Ok(()) => return Ok(dir),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(format!("{}: {e}", dir.display())),
+        }
+    }
+}
+
+/// A builder for folders that only their owner can read, write or open (mode 0o700).
+#[cfg(unix)]
+fn private_folder() -> std::fs::DirBuilder {
+    let mut b = std::fs::DirBuilder::new();
+    std::os::unix::fs::DirBuilderExt::mode(&mut b, 0o700);
+    b
+}
+
+/// A builder for folders: a plain one outside unix.
+#[cfg(not(unix))]
+fn private_folder() -> std::fs::DirBuilder {
+    std::fs::DirBuilder::new()
 }
 
 /// `max_side`: absent, or an integer in 1..4096.
