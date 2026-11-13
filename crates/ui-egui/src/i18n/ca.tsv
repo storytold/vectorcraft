@@ -1481,6 +1481,7 @@ antiAlias	Sharp	Nítid
 	Enable Rubber Band for	Activa la goma elàstica per a
 	Enable text access for screen readers	Activa l’accés al text per als lectors de pantalla
 	Enable Touch Gestures	Activa els gestos tàctils
+	Switch Selection and Drawing Modes	Canvia entre els modes de selecció i de dibuix
 	Enable Touch Workspace	Activa l’espai de treball tàctil
 	Encoding	Codificació
 	Encoding and writing the file…	S’està codificant i escrivint el fitxer…
@@ -6478,6 +6479,35 @@ digits	Malayalam	Malaiàlam
 @msg	the path has no anchor points	el traçat no té punts d’ancoratge
 @msg	too many anchor points (limit {MAX_ANCHORS})	massa punts d’ancoratge (límit {MAX_ANCHORS})
 @msg	true or false	true o false
+@msg	a number >= {_1}	un nombre >= {_1}
+@msg	a number > {_1}	un nombre > {_1}
+@msg	a number <= {_1}	un nombre <= {_1}
+@msg	a number < {_1}	un nombre < {_1}
+@msg	a number {_1} to {_2}	un nombre de {_1} a {_2}
+@msg	a number >= {_1} and < {_2}	un nombre >= {_1} i < {_2}
+@msg	a number > {_1} and <= {_2}	un nombre > {_1} i <= {_2}
+@msg	a number > {_1} and < {_2}	un nombre > {_1} i < {_2}
+@msg	a number ({_1})	un nombre ({_1})
+@msg	a number >= {_1} ({_2})	un nombre >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	un nombre > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	un nombre <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	un nombre < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	un nombre de {_1} a {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	un nombre >= {_1} i < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	un nombre > {_1} i <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	un nombre > {_1} i < {_2} ({_3})
+@msg	an integer	un enter
+@msg	an integer >= {_1}	un enter >= {_1}
+@msg	an integer <= {_1}	un enter <= {_1}
+@msg	an integer {_1} to {_2}	un enter de {_1} a {_2}
+@msg	one of {_1}	un de {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` ha de ser un de {_1}, no {got}
+@msg	an object id (a non-negative integer)	un identificador d’objecte (un enter no negatiu)
+@msg	a list of object ids	una llista d’identificadors d’objecte
+@msg	a color (a string, [r, g, b] or an object)	un color (una cadena, [r, g, b] o un objecte)
+@msg	[x, y] (two numbers)	[x, y] (dos nombres)
+@msg	an object	un objecte
+@msg	a list	una llista
 @msg	unknown key `{k}`; the keys here are {_1}	clau desconeguda `{k}`; les claus aquí són {_1}
 @msg	{_1} is listed twice	{_1} apareix dues vegades
 @msg	{_1} is not the id of an input object	{_1} no és l’id d’un objecte d’entrada

@@ -1044,6 +1044,7 @@ font-technology	Variable	Варіативні
 	Enable Rubber Band for	Включити «гумову смугу» для
 	Enable text access for screen readers	Дозволити доступ до тексту для програм читання з екрану
 	Enable Touch Gestures	Увімкнути сенсорні жести
+	Switch Selection and Drawing Modes	Перемкнути режими виділення та малювання
 	Enable Touch Workspace	Включити сенсорне робоче середовище
 	Encoding	Кодування
 	Encoding:	Кодування:
@@ -5998,6 +5999,35 @@ axis	Y Axis	Вісь Y
 @msg	the path has no anchor points	контур не має опорних точок
 @msg	too many anchor points (limit {MAX_ANCHORS})	забагато опорних точок (межа {MAX_ANCHORS})
 @msg	true or false	true або false
+@msg	a number >= {_1}	число >= {_1}
+@msg	a number > {_1}	число > {_1}
+@msg	a number <= {_1}	число <= {_1}
+@msg	a number < {_1}	число < {_1}
+@msg	a number {_1} to {_2}	число від {_1} до {_2}
+@msg	a number >= {_1} and < {_2}	число >= {_1} і < {_2}
+@msg	a number > {_1} and <= {_2}	число > {_1} і <= {_2}
+@msg	a number > {_1} and < {_2}	число > {_1} і < {_2}
+@msg	a number ({_1})	число ({_1})
+@msg	a number >= {_1} ({_2})	число >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	число > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	число <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	число < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	число від {_1} до {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	число >= {_1} і < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	число > {_1} і <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	число > {_1} і < {_2} ({_3})
+@msg	an integer	ціле число
+@msg	an integer >= {_1}	ціле число >= {_1}
+@msg	an integer <= {_1}	ціле число <= {_1}
+@msg	an integer {_1} to {_2}	ціле число від {_1} до {_2}
+@msg	one of {_1}	одне зі значень {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` має бути одним зі значень {_1}, а не {got}
+@msg	an object id (a non-negative integer)	ідентифікатор об’єкта (невід’ємне ціле число)
+@msg	a list of object ids	список ідентифікаторів об’єктів
+@msg	a color (a string, [r, g, b] or an object)	колір (рядок, [r, g, b] або об’єкт)
+@msg	[x, y] (two numbers)	[x, y] (два числа)
+@msg	an object	об’єкт
+@msg	a list	список
 @msg	unknown key `{k}`; the keys here are {_1}	невідомий ключ `{k}`; тут допустимі ключі {_1}
 @msg	{_1} is listed twice	{_1} вказано двічі
 @msg	{_1} is not the id of an input object	{_1} не є ідентифікатором вхідного об’єкта

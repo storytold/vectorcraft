@@ -300,8 +300,9 @@ struct MenuState {
     /// The highlighted row and the query and filters it belongs to.
     highlight: Option<usize>,
     query: String,
-    /// The filters (kept from one opening to the next): script (0..[`SCRIPTS`]), kind, font
-    /// technology (variable fonts only) and favourites only.
+    /// The filters (kept from one opening to the next, and the same in every font menu:
+    /// [`Filters`]): script (0..[`SCRIPTS`]), kind, font technology (variable fonts only) and
+    /// favorites only.
     script: usize,
     class: Option<FontClass>,
     variable_only: bool,
@@ -324,6 +325,35 @@ struct MenuState {
     wheel_target: Option<WheelTarget>,
 }
 
+/// The filters of [`MenuState`], one set for every font menu (the Character panel's, the Control
+/// bar's, the Properties panel's…): a filter chosen in one menu is on in all of them. They last
+/// for the session.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct Filters {
+    script: usize,
+    class: Option<FontClass>,
+    variable_only: bool,
+    favorites_only: bool,
+}
+
+impl Filters {
+    fn of(st: &MenuState) -> Self {
+        Self { script: st.script, class: st.class, variable_only: st.variable_only, favorites_only: st.favorites_only }
+    }
+
+    fn apply(self, st: &mut MenuState) {
+        st.script = self.script;
+        st.class = self.class;
+        st.variable_only = self.variable_only;
+        st.favorites_only = self.favorites_only;
+    }
+}
+
+/// Where the filters every font menu shares are kept ([`Filters`]).
+fn filters_id() -> egui::Id {
+    egui::Id::unique("font-menu-filters")
+}
+
 /// The font family menu showing `current`, `width` points wide, rows sampling `sample` (the
 /// selected text; `None`: a generic sample).
 pub fn font_menu(
@@ -336,6 +366,7 @@ pub fn font_menu(
 ) -> Option<FontPick> {
     let state_id = ui.scope_id().with(&id).with("font-menu");
     let mut st: MenuState = ui.data(|d| d.get_temp(state_id)).unwrap_or_default();
+    ui.data(|d| d.get_temp::<Filters>(filters_id())).unwrap_or_default().apply(&mut st);
     let target = ui.data(|d| d.get_temp(wheel_fields_id(ui.ctx().viewport_id()).with("target")));
     let target_changed = st.wheel_target != target;
     if target_changed {
@@ -416,7 +447,10 @@ pub fn font_menu(
     if matches!(out, Some(FontPick::Chosen(..))) {
         st.previewed = None;
     }
-    ui.data_mut(|d| d.insert_temp(state_id, st));
+    ui.data_mut(|d| {
+        d.insert_temp(filters_id(), Filters::of(&st));
+        d.insert_temp(state_id, st);
+    });
     out
 }
 

@@ -982,6 +982,7 @@ antiAlias	Sharp	锐利
 	Enable Rubber Band for	为这些工具启用橡皮筋预览
 	Enable text access for screen readers	启用屏幕阅读器的文字访问
 	Enable Touch Gestures	启用触控手势
+	Switch Selection and Drawing Modes	切换选择与绘图模式
 	Enable Touch Workspace	启用触控工作区
 	Encoding	编码
 	Encoding:	编码：
@@ -6231,6 +6232,35 @@ axis	Y Axis	Y 轴
 @msg	the path has no anchor points	路径没有锚点
 @msg	too many anchor points (limit {MAX_ANCHORS})	锚点过多（上限 {MAX_ANCHORS}）
 @msg	true or false	true 或 false
+@msg	a number >= {_1}	大于或等于 {_1} 的数字
+@msg	a number > {_1}	大于 {_1} 的数字
+@msg	a number <= {_1}	小于或等于 {_1} 的数字
+@msg	a number < {_1}	小于 {_1} 的数字
+@msg	a number {_1} to {_2}	{_1} 到 {_2} 之间的数字
+@msg	a number >= {_1} and < {_2}	大于或等于 {_1} 且小于 {_2} 的数字
+@msg	a number > {_1} and <= {_2}	大于 {_1} 且小于或等于 {_2} 的数字
+@msg	a number > {_1} and < {_2}	大于 {_1} 且小于 {_2} 的数字
+@msg	a number ({_1})	数字（{_1}）
+@msg	a number >= {_1} ({_2})	大于或等于 {_1} 的数字（{_2}）
+@msg	a number > {_1} ({_2})	大于 {_1} 的数字（{_2}）
+@msg	a number <= {_1} ({_2})	小于或等于 {_1} 的数字（{_2}）
+@msg	a number < {_1} ({_2})	小于 {_1} 的数字（{_2}）
+@msg	a number {_1} to {_2} ({_3})	{_1} 到 {_2} 之间的数字（{_3}）
+@msg	a number >= {_1} and < {_2} ({_3})	大于或等于 {_1} 且小于 {_2} 的数字（{_3}）
+@msg	a number > {_1} and <= {_2} ({_3})	大于 {_1} 且小于或等于 {_2} 的数字（{_3}）
+@msg	a number > {_1} and < {_2} ({_3})	大于 {_1} 且小于 {_2} 的数字（{_3}）
+@msg	an integer	整数
+@msg	an integer >= {_1}	大于或等于 {_1} 的整数
+@msg	an integer <= {_1}	小于或等于 {_1} 的整数
+@msg	an integer {_1} to {_2}	{_1} 到 {_2} 之间的整数
+@msg	one of {_1}	{_1} 之一
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` 必须是 {_1} 之一，而不是 {got}
+@msg	an object id (a non-negative integer)	对象 ID（非负整数）
+@msg	a list of object ids	对象 ID 列表
+@msg	a color (a string, [r, g, b] or an object)	颜色（字符串、[r, g, b] 或对象）
+@msg	[x, y] (two numbers)	[x, y]（两个数字）
+@msg	an object	对象
+@msg	a list	列表
 @msg	unknown key `{k}`; the keys here are {_1}	未知键 `{k}`；此处可用的键：{_1}
 @msg	{_1} is listed twice	{_1} 列出了两次
 @msg	{_1} is not the id of an input object	{_1} 不是输入对象的 ID

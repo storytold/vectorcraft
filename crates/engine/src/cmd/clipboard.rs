@@ -88,8 +88,9 @@ pub struct Clipboard {
     /// The artboard the objects were copied from (none when they lie on no artboard; the first of
     /// [`Self::artboards`] when there are any): Paste on All Artboards keeps their offset to it.
     pub source_artboard: Option<Rect>,
-    /// Per object: the name of the layer it was copied from (Paste Remembers Layers).
-    pub source_layers: Vec<Option<String>>,
+    /// Per object: the layer or sublayer it was copied from and the layers around it (Paste
+    /// Remembers Layers); none when that layer has no name.
+    pub source_layers: Vec<Option<SourceLayer>>,
     /// The open document the objects came from ([`DocState::uid`]): pasting back into it uses its
     /// own resources as they are now.
     pub source_doc: Option<u64>,
@@ -99,6 +100,29 @@ pub struct Clipboard {
     /// The selected ruler guides copied with (or without) the objects (#3226), as canvas guides on
     /// no layer: pasting puts them on the layer new art goes to, moved as the objects are.
     pub guides: Vec<vectorcraft_doc::Guide>,
+}
+
+/// The layer an object was copied from, as Paste Remembers Layers finds it again: the top-level
+/// layer first, down to the layer or sublayer that holds the object.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct SourceLayer {
+    /// The layers' ids in the source document ([`Clipboard::source_doc`]).
+    pub ids: Vec<NodeId>,
+    /// The layers' names (an unnamed layer above the one that holds the object is "").
+    pub names: Vec<String>,
+}
+
+impl SourceLayer {
+    /// The layers around the object `anc` ends with ([`Document::ancestry`]); none when the layer
+    /// that holds it has no name.
+    fn of(d: &Document, anc: &[NodeId]) -> Option<Self> {
+        let layers: Vec<&Node> = anc.iter().rev().skip(1).filter_map(|a| d.node(*a).filter(|l| l.is_layer())).collect();
+        layers.first()?.name.as_ref()?;
+        Some(Self {
+            ids: layers.iter().rev().map(|l| l.id).collect(),
+            names: layers.iter().rev().map(|l| l.name.clone().unwrap_or_default()).collect(),
+        })
+    }
 }
 
 /// Indices of segments selected on `sp` (either explicitly or via incident anchors).
@@ -256,7 +280,7 @@ impl Clipboard {
         let mut compound_bounds: std::collections::HashMap<NodeId, Option<vectorcraft_geom::Rect>> = std::collections::HashMap::new();
         for id in roots {
             let (Some(n), Some(anc)) = (d.node(*id), d.ancestry(*id)) else { continue };
-            let layer_name = anc.iter().rev().skip(1).find_map(|a| d.node(*a).filter(|l| l.is_layer())).and_then(|l| l.name.clone());
+            let source_layer = SourceLayer::of(d, &anc);
             let compound_parent = anc.iter().rev().skip(1).find_map(|a| d.node(*a).filter(|p| matches!(p.kind, NodeKind::Compound { .. })));
             // Gradients fitted to the compound's bounds are pinned there, as a split pins them.
             let gradient_box = compound_parent
@@ -299,11 +323,11 @@ impl Clipboard {
             if direct && let Some(pieces) = extract_direct_selection(n, &st.selection) {
                 for piece in pieces {
                     nodes.push(inherit_appearance(piece));
-                    source_layers.push(layer_name.clone());
+                    source_layers.push(source_layer.clone());
                 }
             } else {
                 nodes.push(inherit_appearance(n.clone()));
-                source_layers.push(layer_name);
+                source_layers.push(source_layer);
             }
         }
         // Symbol instances are measured by their art.

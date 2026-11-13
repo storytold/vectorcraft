@@ -1012,6 +1012,7 @@ font-technology	Variable	Değişken
 	Enable Rubber Band for	Lastik Bandı Etkinleştir
 	Enable text access for screen readers	Ekran okuyucular için metin erişimini etkinleştirin
 	Enable Touch Gestures	Dokunma Hareketlerini Etkinleştir
+	Switch Selection and Drawing Modes	Seçim ve Çizim Modları Arasında Geçiş Yap
 	Enable Touch Workspace	Dokunmatik Çalışma Alanını Etkinleştir
 	Encoding	Kodlama
 	Encoding:	Kodlama:
@@ -6349,6 +6350,35 @@ axis	Y Axis	Y ekseni
 @msg	the path has no anchor points	yolun bağlantı noktası yok
 @msg	too many anchor points (limit {MAX_ANCHORS})	çok fazla bağlantı noktası (sınır {MAX_ANCHORS})
 @msg	true or false	true veya false
+@msg	a number >= {_1}	bir sayı >= {_1}
+@msg	a number > {_1}	bir sayı > {_1}
+@msg	a number <= {_1}	bir sayı <= {_1}
+@msg	a number < {_1}	bir sayı < {_1}
+@msg	a number {_1} to {_2}	{_1} ile {_2} arasında bir sayı
+@msg	a number >= {_1} and < {_2}	bir sayı >= {_1} ve < {_2}
+@msg	a number > {_1} and <= {_2}	bir sayı > {_1} ve <= {_2}
+@msg	a number > {_1} and < {_2}	bir sayı > {_1} ve < {_2}
+@msg	a number ({_1})	bir sayı ({_1})
+@msg	a number >= {_1} ({_2})	bir sayı >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	bir sayı > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	bir sayı <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	bir sayı < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	{_1} ile {_2} arasında bir sayı ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	bir sayı >= {_1} ve < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	bir sayı > {_1} ve <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	bir sayı > {_1} ve < {_2} ({_3})
+@msg	an integer	bir tam sayı
+@msg	an integer >= {_1}	bir tam sayı >= {_1}
+@msg	an integer <= {_1}	bir tam sayı <= {_1}
+@msg	an integer {_1} to {_2}	{_1} ile {_2} arasında bir tam sayı
+@msg	one of {_1}	{_1} değerlerinden biri
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` {_1} değerlerinden biri olmalıdır, {got} değil
+@msg	an object id (a non-negative integer)	bir nesne kimliği (negatif olmayan bir tam sayı)
+@msg	a list of object ids	bir nesne kimlikleri listesi
+@msg	a color (a string, [r, g, b] or an object)	bir renk (bir dize, [r, g, b] veya bir nesne)
+@msg	[x, y] (two numbers)	[x, y] (iki sayı)
+@msg	an object	bir nesne
+@msg	a list	bir liste
 @msg	unknown key `{k}`; the keys here are {_1}	bilinmeyen anahtar `{k}`; buradaki anahtarlar: {_1}
 @msg	{_1} is listed twice	{_1} iki kez listelenmiş
 @msg	{_1} is not the id of an input object	{_1} bir girdi nesnesinin kimliği değil

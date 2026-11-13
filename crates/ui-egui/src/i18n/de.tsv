@@ -1020,6 +1020,7 @@ font-technology	Variable	Variabel
 	Enable Rubber Band for	Gummiband aktivieren für
 	Enable text access for screen readers	Textzugriff für Bildschirmlesegeräte zulassen
 	Enable Touch Gestures	Touch-Gesten aktivieren
+	Switch Selection and Drawing Modes	Zwischen Auswahl- und Zeichenmodus wechseln
 	Enable Touch Workspace	Touch-Arbeitsbereich aktivieren
 	Encoding	Kodierung
 	Encoding:	Kodierung:
@@ -5984,6 +5985,35 @@ axis	Y Axis	Y-Achse
 @msg	the path has no anchor points	der Pfad hat keine Ankerpunkte
 @msg	too many anchor points (limit {MAX_ANCHORS})	zu viele Ankerpunkte (Grenze {MAX_ANCHORS})
 @msg	true or false	true oder false
+@msg	a number >= {_1}	eine Zahl >= {_1}
+@msg	a number > {_1}	eine Zahl > {_1}
+@msg	a number <= {_1}	eine Zahl <= {_1}
+@msg	a number < {_1}	eine Zahl < {_1}
+@msg	a number {_1} to {_2}	eine Zahl von {_1} bis {_2}
+@msg	a number >= {_1} and < {_2}	eine Zahl >= {_1} und < {_2}
+@msg	a number > {_1} and <= {_2}	eine Zahl > {_1} und <= {_2}
+@msg	a number > {_1} and < {_2}	eine Zahl > {_1} und < {_2}
+@msg	a number ({_1})	eine Zahl ({_1})
+@msg	a number >= {_1} ({_2})	eine Zahl >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	eine Zahl > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	eine Zahl <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	eine Zahl < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	eine Zahl von {_1} bis {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	eine Zahl >= {_1} und < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	eine Zahl > {_1} und <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	eine Zahl > {_1} und < {_2} ({_3})
+@msg	an integer	eine ganze Zahl
+@msg	an integer >= {_1}	eine ganze Zahl >= {_1}
+@msg	an integer <= {_1}	eine ganze Zahl <= {_1}
+@msg	an integer {_1} to {_2}	eine ganze Zahl von {_1} bis {_2}
+@msg	one of {_1}	einer der Werte {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` muss einer der Werte {_1} sein, nicht {got}
+@msg	an object id (a non-negative integer)	eine Objekt-ID (eine nicht negative ganze Zahl)
+@msg	a list of object ids	eine Liste von Objekt-IDs
+@msg	a color (a string, [r, g, b] or an object)	eine Farbe (eine Zeichenkette, [r, g, b] oder ein Objekt)
+@msg	[x, y] (two numbers)	[x, y] (zwei Zahlen)
+@msg	an object	ein Objekt
+@msg	a list	eine Liste
 @msg	unknown key `{k}`; the keys here are {_1}	unbekannter Schlüssel `{k}`; die Schlüssel hier sind {_1}
 @msg	{_1} is listed twice	{_1} ist doppelt aufgeführt
 @msg	{_1} is not the id of an input object	{_1} ist nicht die ID eines Eingabeobjekts

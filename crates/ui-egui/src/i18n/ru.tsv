@@ -1039,6 +1039,7 @@ font-technology	Variable	Вариативные
 	Enable Rubber Band for	Включить «резиновую полосу» для
 	Enable text access for screen readers	Разрешить доступ к тексту для программ чтения с экрана
 	Enable Touch Gestures	Включить сенсорные жесты
+	Switch Selection and Drawing Modes	Переключить режимы выделения и рисования
 	Enable Touch Workspace	Включить сенсорную рабочую среду
 	Encoding	Кодировка
 	Encoding:	Кодировка:
@@ -6004,6 +6005,35 @@ axis	Y Axis	Ось Y
 @msg	the path has no anchor points	у контура нет опорных точек
 @msg	too many anchor points (limit {MAX_ANCHORS})	слишком много опорных точек (предел {MAX_ANCHORS})
 @msg	true or false	true или false
+@msg	a number >= {_1}	число >= {_1}
+@msg	a number > {_1}	число > {_1}
+@msg	a number <= {_1}	число <= {_1}
+@msg	a number < {_1}	число < {_1}
+@msg	a number {_1} to {_2}	число от {_1} до {_2}
+@msg	a number >= {_1} and < {_2}	число >= {_1} и < {_2}
+@msg	a number > {_1} and <= {_2}	число > {_1} и <= {_2}
+@msg	a number > {_1} and < {_2}	число > {_1} и < {_2}
+@msg	a number ({_1})	число ({_1})
+@msg	a number >= {_1} ({_2})	число >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	число > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	число <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	число < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	число от {_1} до {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	число >= {_1} и < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	число > {_1} и <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	число > {_1} и < {_2} ({_3})
+@msg	an integer	целое число
+@msg	an integer >= {_1}	целое число >= {_1}
+@msg	an integer <= {_1}	целое число <= {_1}
+@msg	an integer {_1} to {_2}	целое число от {_1} до {_2}
+@msg	one of {_1}	одно из значений {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` должно быть одним из значений {_1}, а не {got}
+@msg	an object id (a non-negative integer)	идентификатор объекта (неотрицательное целое число)
+@msg	a list of object ids	список идентификаторов объектов
+@msg	a color (a string, [r, g, b] or an object)	цвет (строка, [r, g, b] или объект)
+@msg	[x, y] (two numbers)	[x, y] (два числа)
+@msg	an object	объект
+@msg	a list	список
 @msg	unknown key `{k}`; the keys here are {_1}	неизвестный ключ `{k}`; здесь допустимы ключи {_1}
 @msg	{_1} is listed twice	{_1} указан дважды
 @msg	{_1} is not the id of an input object	{_1} не является идентификатором входного объекта

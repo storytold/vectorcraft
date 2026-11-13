@@ -1823,6 +1823,11 @@ parameter error, ``invalid parameters for `<id>`: `<path>` is nested too deeply`
 value. A schema that is wrong in itself, such as one that nests past 16 levels or puts a list of ids or a point
 inside 16 lists, is an internal error in the command, and the command does not run.
 
+The command API returns these errors in English. The desktop app's status bar shows them in the interface language,
+the requirement after "must be" included (a number and its range and unit, an integer, a list of names, an object id,
+a color, a point, an object or a list); the parameter's path, the refused value, the bounds, the unit and the names stay
+as the English gives them.
+
 An omitted value with a `default` takes it (`rotation` 0 in `view.saved.new`); the journal keeps the params as they
 were given. Saved steps played from a journal or an action keep a key the schema does not name, unless its value nests
 more than 16 levels deep, and the values of the parameters it names are checked as in a new call. The schemas of built-in commands belong to API level 3
@@ -5544,6 +5549,15 @@ point deltas from an unnamed source in the desktop app, or line deltas that are 
 trackpad gesture holds Alt, it zooms until it ends, also after Alt is let go. The control channel's
 `ui.wheel` with `cmd: true` turns the wheel with Cmd/Ctrl held.
 
+With Preferences › Devices › Enable Touch Gestures on, a two-finger tap on the canvas undoes and a three-finger tap
+redoes. In the Touch workspace a two-finger tap runs `tool.toggleTouchMode` (Switch Selection and Drawing Modes, `{}`,
+desktop app) instead and undoes nothing ([the help page](https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/touch-workspace-in-illustrator.html)).
+From the Selection, Direct Selection, Group Selection, Magic Wand, Lasso or Perspective Selection tool it chooses the
+drawing tool chosen last in the window, or the Pencil tool when none has been chosen yet; from any other tool it
+chooses the Selection tool, and the tool left becomes the drawing tool unless it is the Hand, Rotate View, Zoom or Print
+Tiling tool. It returns `{tool}` and adds no undo step. Pencil as the first drawing tool and the list of selection tools
+are VectorCraft's own rules. A tap in Presentation Mode runs nothing.
+
 `gridlineEvery` (72 pt by default) and `gridSubdivisions` (8 by default) set the document grid that View › Show Grid
 draws, and View › Snap to Grid snaps to its subdivisions. Changing either sets the grid of every open document.
 `file.new` gives a new document that grid, and `document.open`, `file.newFromTemplate` and `file.revert` give it to
@@ -6064,7 +6078,8 @@ stays as a plain group of the image, with its id, name, visibility and transpare
 even-odd fill rule stays as it is). The link shows as modified when a plate file of its own changes
 or is gone, as it does when the DCS file changes, and the app's link watch acts on a changed plate file as on a
 changed DCS file. `links.relink {copy: true}` fails for a DCS file that reads plate files of its own, and copies
-nothing. These rules are VectorCraft's own: the screen, composite print and exports show the image as its plates
+nothing. Opening a document reads a DCS file and its plates again even with the `lowResProxyEps` preference, which
+keeps the saved preview of other linked EPS files. These rules are VectorCraft's own: the screen, composite print and exports show the image as its plates
 mixed into CMYK (each ink amount times the ink's CMYK values, plates combined as `1 − (1 − a)(1 − b)`); Separations
 Preview and `file.print` separations show each plate on its own ink, and a spot plate prints as the document's swatch
 of its ink (else its CMYK values) with `spotsToProcess`. Separations Preview shows a reduced image's plates as the
@@ -6123,7 +6138,11 @@ recorded action leaves both out. Art copied from no artboard keeps its place on 
 offset to that one on the others. An index the document does not have, a repeated index, a value that is not an index
 or an empty list fails, and nothing is pasted. Copied artboards come back once, where they were, whichever artboards
 are named. `layer.pasteRemembersLayers {on?}` (a document option, `document.inspect` → `pasteRemembersLayers`)
-pastes objects back into the layers they came from, by name, making missing ones. Drawing modes (`view.drawMode`) apply
+pastes objects back into the layers and sublayers they came from: in the same document while those are still there,
+else by the names of the layer and the layers around it (the topmost chain that matches the most names, a shown and
+unlocked one first). A missing sublayer is made inside its layer, and a missing top-level layer on top, in the paste's
+undo step. When a matched layer, or a layer around it, is hidden or locked, the paste fails and nothing is pasted.
+Drawing modes (`view.drawMode`) apply
 too: in Draw Inside, `edit.paste`, `edit.pasteInPlace` and `edit.pasteOnAllArtboards` put the objects inside the
 object drawn into (its clip group, made on the first paste), whatever Paste Remembers Layers says; in Draw Behind,
 `edit.pasteInPlace` and `edit.pasteOnAllArtboards` put them just below the selection. `edit.pasteInFront` and
