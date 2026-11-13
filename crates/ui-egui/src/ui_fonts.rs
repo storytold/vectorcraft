@@ -485,25 +485,27 @@ mod tests {
 
     /// A character painted while no font covers it is reported once, and draws once a font that
     /// covers it is added (as the web fetches one), with no further search while the fonts stay
-    /// the same.
+    /// the same. The character is a private-use one, which no craft-fonts face covers either (the
+    /// database holds them when the build embeds craft-fonts).
     #[test]
     fn a_font_added_later_draws_characters_painted_before_it() {
-        use vectorcraft_text::test_fonts::{TALL_IDEOGRAPH_FAMILY, tall_ideograph_font};
+        use vectorcraft_text::test_fonts::{PRIVATE_USE_CHAR, PRIVATE_USE_FAMILY, private_use_font};
         let db: &'static FontDb = Box::leak(Box::new(FontDb::with_font_dirs(vec![])));
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
         let mut fonts = UiFonts::default();
-        frame_in(&ctx, &mut fonts, "Layer 编", db);
-        assert!(!has_glyph(&ctx, '编'), "no font covers 编 yet");
-        assert_eq!(REPORTED.with(|r| r.borrow().clone()), ['编'], "reported once");
-        frame_in(&ctx, &mut fonts, "Layer 编", db);
+        let text = format!("Layer {PRIVATE_USE_CHAR}");
+        frame_in(&ctx, &mut fonts, &text, db);
+        assert!(!has_glyph(&ctx, PRIVATE_USE_CHAR), "no font covers the character yet");
+        assert_eq!(REPORTED.with(|r| r.borrow().clone()), [PRIVATE_USE_CHAR], "reported once");
+        frame_in(&ctx, &mut fonts, &text, db);
         assert!(fonts.pending.is_none() && REPORTED.with(|r| r.borrow().len()) == 1, "no new search while the fonts are the same");
-        db.add_font(tall_ideograph_font().expect("the test face builds"));
-        assert!(db.face(TALL_IDEOGRAPH_FAMILY, "Regular").is_some());
+        db.add_font(private_use_font().expect("the test face builds"));
+        assert!(db.face(PRIVATE_USE_FAMILY, "Regular").is_some());
         // The next frame looks again and adds the face; the one after draws with it.
-        frame_in(&ctx, &mut fonts, "Layer 编", db);
-        frame_in(&ctx, &mut fonts, "Layer 编", db);
-        assert!(has_glyph(&ctx, '编'), "the added face draws 编");
+        frame_in(&ctx, &mut fonts, &text, db);
+        frame_in(&ctx, &mut fonts, &text, db);
+        assert!(has_glyph(&ctx, PRIVATE_USE_CHAR), "the added face draws the character");
         assert!(fonts.uncovered.is_empty());
         assert_eq!(REPORTED.with(|r| r.borrow().len()), 1, "a covered character is not reported again");
     }

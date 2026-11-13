@@ -1322,6 +1322,19 @@ fn remapped_source_sans(family: &str, postscript: &str, mapping: &[(char, char)]
     Some(builder.build())
 }
 
+/// The family of [`private_use_font`].
+pub const PRIVATE_USE_FAMILY: &str = "Private Use Sans";
+
+/// The character [`private_use_font`] maps: the first code point of Supplementary Private Use
+/// Area-A, which no bundled or craft-fonts face covers.
+pub const PRIVATE_USE_CHAR: char = '\u{F0000}';
+
+/// A face that maps only [`PRIVATE_USE_CHAR`] to the bundled Source Sans 3 `H` outline, for tests
+/// that need a character no other font covers, with or without craft-fonts.
+pub fn private_use_font() -> Option<Vec<u8>> {
+    remapped_source_sans(PRIVATE_USE_FAMILY, "PrivateUseSans-Regular", &[(PRIVATE_USE_CHAR, 'H')])
+}
+
 /// The family of [`tall_ideograph_font`].
 pub const TALL_IDEOGRAPH_FAMILY: &str = "Tall Ideograph Sans";
 
