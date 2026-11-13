@@ -1086,7 +1086,7 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
                     subpaths.extend(super::path::without_segments(sp, &cuts));
                 } else {
                     // Picked anchors leave the path with their connections, as Clear removes them.
-                    let gone: BTreeSet<usize> = anchor_refs.into_iter().flatten().filter_map(|&(s, a)| (s == si).then_some(a)).collect();
+                    let gone: BTreeSet<usize> = anchor_refs.into_iter().flat_map(|refs| super::path::subpath_refs(refs, si)).collect();
                     subpaths.extend(super::path::without_anchors(sp, &gone));
                 }
             }
