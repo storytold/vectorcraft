@@ -10363,7 +10363,8 @@ Tools:
   0.002) and `together` (Keep Shared Points Together).
 - **Trim at Crossings Tool** (`trimAtCrossings`): removes stretches of paths between the places where they are crossed,
   on any path that can be edited, selected or not. A click runs `addon.pathtools.trim` with `at`, for the path within 4
-  screen pixels of the pointer. A drag draws a rectangle and runs it with `rect` on release. An Alt-drag draws a
+  screen pixels of the pointer. A drag draws a rectangle and runs it with `rect` on release; once the pointer has
+  gone 3 screen pixels from the press, the gesture stays a drag even when it ends near the press. An Alt-drag draws a
   freehand line and runs it with `points` on release; a line of more than 65,536 points is dropped. Nothing changes
   while dragging, and Escape during a drag removes nothing. The tool has no options.
 
@@ -10458,8 +10459,9 @@ Commands:
   ([x, y, width, height]) removes every stretch the rectangle touches. `points` (2 to 100,000 points) removes every
   stretch the line through them crosses. Exactly one of the three is given, with coordinates within ±10,000,000 pt.
   Every path that can be edited takes part, selected or not, compound path members included. Hidden and locked paths,
-  guides and clipping paths are not trimmed and do not count as crossing; type, images and symbol instances take no
-  part. A path that ends on another marks a place on the other. Paths that lie along each other do not cross there.
+  guides and clipping paths are not trimmed and do not count as crossing, the members of a compound clipping path
+  included; type, images and symbol instances take no part. In isolation mode only paths inside the isolated object
+  are trimmed, and paths outside it still count as crossing. A path that ends on another marks a place on the other. Paths that lie along each other do not cross there.
   Crossings are found on the paths' own outlines, without strokes, brushes or effects. A closed path that loses a
   stretch becomes open. An open path that loses a middle stretch becomes two paths with its appearance, in its place in
   the stacking order. A path that nothing crosses is removed whole, a compound path that loses its last member is
@@ -10467,7 +10469,8 @@ Commands:
   pieces of a selected path are selected, and anchors and segments direct-selected on a trimmed path are deselected;
   the rest of the selection stays as it was. One undo step, none when nothing is removed. Only a path that `at`,
   `rect` or `points` reaches is searched for crossings. The command is refused when such a path has more than 10,000
-  segments, when more than 200,000 segments of other paths lie in its box, when the paths it trims make more than about
+  segments, when more than 200,000 segments of other paths lie in its box, when the number of paths `rect` or `points`
+  reaches times the number of paths that take part is more than 50,000,000, when the paths it trims make more than about
   60,000,000 pairs of segments to compare in all, when the curves are too tangled to find where they cross, or when
   checking `points` against the paths would take more than 60,000,000 comparisons. These rules are VectorCraft's own.
   → `{ids, removed}`: the paths left of those trimmed, and the stretches removed.

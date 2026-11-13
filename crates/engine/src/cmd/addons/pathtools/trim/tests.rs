@@ -253,6 +253,73 @@ fn a_clipping_path_is_not_trimmed_and_does_not_count_as_crossing() {
 }
 
 #[test]
+fn the_members_of_a_compound_clipping_path_are_not_trimmed_and_do_not_count_as_crossing() {
+    let mut s = session();
+    let (h, v1, _) = across_and_uprights(&mut s);
+    let extra = line(&mut s, &[(250.0, 250.0), (260.0, 260.0)], false);
+    s.execute("select.set", &json!({"ids": [v1.0, extra.0]})).unwrap();
+    let compound = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [h.0, compound.0]})).unwrap();
+    s.execute("object.clippingMask.make", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let n = steps(&s);
+    // A click on the clipping path's member changes nothing, and the rectangle over it neither.
+    assert_eq!(s.execute(TRIM, &json!({"at": [100, 60]})).unwrap()["removed"], json!(0));
+    assert_eq!(s.execute(TRIM, &json!({"rect": [245, 245, 20, 20]})).unwrap()["removed"], json!(0));
+    assert_eq!((steps(&s), path(&s, v1).anchor_count(), path(&s, extra).anchor_count()), (n, 2, 2));
+    // The clipped line across is crossed by the second upright only: its stretch from the start goes.
+    assert_eq!(s.execute(TRIM, &json!({"at": [150, 100]})).unwrap()["removed"], json!(1));
+    assert!(near(ends(&s, h).0, 200.0, 100.0) && near(ends(&s, h).1, 300.0, 100.0));
+}
+
+#[test]
+fn in_isolation_mode_only_the_isolated_objects_paths_are_trimmed() {
+    let mut s = session();
+    let (h, v1, v2) = across_and_uprights(&mut s);
+    s.execute("select.set", &json!({"ids": [v1.0, v2.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    // The line across is outside the group: a click or a rectangle on it leaves it whole.
+    assert_eq!(s.execute(TRIM, &json!({"at": [150, 100]})).unwrap()["removed"], json!(0));
+    assert_eq!(s.execute(TRIM, &json!({"rect": [140, 90, 20, 20]})).unwrap()["removed"], json!(0));
+    assert!(near(ends(&s, h).0, 0.0, 100.0) && near(ends(&s, h).1, 300.0, 100.0));
+    // It still crosses the uprights: a rectangle over the tops of both removes them down to it.
+    assert_eq!(s.execute(TRIM, &json!({"rect": [90, 40, 120, 20]})).unwrap()["removed"], json!(2));
+    assert!(near(ends(&s, v1).0, 100.0, 100.0) && near(ends(&s, v2).0, 200.0, 100.0));
+    assert!(near(ends(&s, h).0, 0.0, 100.0) && near(ends(&s, h).1, 300.0, 100.0));
+    // An isolated path is trimmed itself.
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    s.execute("object.isolate", &json!({"id": h.0})).unwrap();
+    assert_eq!(s.execute(TRIM, &json!({"at": [150, 100]})).unwrap()["removed"], json!(1));
+    assert!(near(ends(&s, h).1, 100.0, 100.0));
+}
+
+#[test]
+fn a_rectangle_over_too_many_paths_to_check_is_refused() {
+    let mut s = session();
+    // 7,072 short lines apart from each other: each of them against every other is past the limit.
+    s.edit("many", |d, _| {
+        let layer = d.layers[0].id;
+        for i in 0..7072 {
+            let (x, y) = ((i % 100) as f64 * 3.0, (i / 100) as f64 * 3.0);
+            let sp = vectorcraft_geom::SubPath::polyline(&[Point::new(x, y), Point::new(x + 1.0, y)], false);
+            let id = d.alloc_id();
+            let top = d.node(layer).unwrap().children().unwrap().len();
+            d.insert(Some(layer), top, vectorcraft_doc::Node::path(id, PathData::single(sp), Default::default()))?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let n = steps(&s);
+    let err = s.execute(TRIM, &json!({"rect": [-10, -10, 400, 300]})).unwrap_err().to_string();
+    assert!(err.contains("too many paths"), "{err}");
+    assert_eq!((steps(&s), stack(&s).len()), (n, 7072));
+    // A rectangle over a few of them is checked.
+    assert_eq!(s.execute(TRIM, &json!({"rect": [-1, -1, 5, 2]})).unwrap()["removed"], json!(2));
+}
+
+#[test]
 fn a_path_too_large_to_search_is_refused_only_when_touched() {
     let mut s = session();
     let (h, ..) = across_and_uprights(&mut s);

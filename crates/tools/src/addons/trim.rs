@@ -30,6 +30,8 @@ pub struct TrimTool {
     /// An Alt-drag's freehand line (empty for a rectangle).
     line: Vec<Point>,
     freehand: bool,
+    /// The pointer went `MIN_DRAG_PX` or more from the press: the gesture is a drag from then on.
+    moved: bool,
 }
 
 impl TrimTool {
@@ -37,6 +39,7 @@ impl TrimTool {
         self.start = None;
         self.line.clear();
         self.freehand = false;
+        self.moved = false;
     }
 }
 
@@ -61,11 +64,13 @@ impl Tool for TrimTool {
                 self.start = Some(ev.pos);
                 self.end = ev.pos;
                 self.freehand = ev.mods.alt;
+                self.moved = false;
                 self.line = if self.freehand { vec![ev.pos] } else { vec![] };
                 vec![]
             }
             PointerKind::Drag if self.start.is_some() => {
                 self.end = ev.pos;
+                self.moved |= self.start.is_some_and(|start| start.distance(ev.pos) >= cx.tol(MIN_DRAG_PX));
                 if self.freehand && self.line.last().is_none_or(|p| p.distance(ev.pos) >= cx.tol(1.0)) {
                     // A line cut short would cross other stretches than the one drawn: drop it.
                     if self.line.len() >= MAX_POINTS {
@@ -79,12 +84,11 @@ impl Tool for TrimTool {
             PointerKind::Up => {
                 let Some(start) = self.start else { return vec![] };
                 let mut line = std::mem::take(&mut self.line);
-                let freehand = self.freehand;
+                let (freehand, moved) = (self.freehand, self.moved);
                 self.reset();
                 // A press that stayed near where it started is a click, even when a freehand line
-                // took a few points on the way.
-                let near = |p: &Point| start.distance(*p) < cx.tol(MIN_DRAG_PX);
-                if near(&ev.pos) && line.iter().all(near) {
+                // took a few points on the way. One that went farther stays a drag when it comes back.
+                if !moved && start.distance(ev.pos) < cx.tol(MIN_DRAG_PX) {
                     return vec![Action::Exec(COMMAND.into(), json!({"at": [start.x, start.y], "tolerance": cx.tol(REACH).min(100.0)}))];
                 }
                 if !freehand {
@@ -112,7 +116,7 @@ impl Tool for TrimTool {
         self.start.is_some() && key == ToolKey::Escape
     }
 
-    fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
+    fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
         let Some(start) = self.start else { return vec![] };
         if self.freehand {
             return if self.line.len() < 2 {
@@ -121,7 +125,7 @@ impl Tool for TrimTool {
                 vec![Overlay::Path { path: polygon(&self.line, false), color: FEEDBACK, width: 1.0, dashed: false }]
             };
         }
-        if start.distance(self.end) < cx.tol(MIN_DRAG_PX) { vec![] } else { vec![Overlay::Marquee(Rect::from_points(start, self.end))] }
+        if self.moved { vec![Overlay::Marquee(Rect::from_points(start, self.end))] } else { vec![] }
     }
 
     fn cursor(&self, _cx: &ToolContext, _p: Point, _mods: Mods) -> Cursor {
@@ -173,6 +177,25 @@ mod tests {
         assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
         assert!(!t.busy() && t.overlays(&cx).is_empty());
         assert!(t.pointer(&cx, &ev(PointerKind::Up, 60.0, 60.0)).is_empty());
+    }
+
+    #[test]
+    fn a_drag_that_comes_back_near_the_press_stays_a_rectangle() {
+        let (d, _) = doc_with_rect();
+        let (sel, p) = (Selection::default(), paint());
+        let cx = cx(&d, &sel, &p);
+        let mut t = TrimTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, 0.0, 0.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 20.0, 20.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 1.0, 1.0));
+        assert!(matches!(t.overlays(&cx).as_slice(), [Overlay::Marquee(r)] if *r == Rect::new(0.0, 0.0, 1.0, 1.0)));
+        let up = t.pointer(&cx, &ev(PointerKind::Up, 1.0, 1.0));
+        assert_eq!(up, vec![Action::Exec(COMMAND.into(), json!({"rect": [0.0, 0.0, 1.0, 1.0]}))]);
+        // A drag that stays within a pixel or two is still a click.
+        t.pointer(&cx, &ev(PointerKind::Down, 0.0, 0.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 2.0, 0.0));
+        let up = t.pointer(&cx, &ev(PointerKind::Up, 1.0, 1.0));
+        assert!(matches!(up.as_slice(), [Action::Exec(_, v)] if v.get("at").is_some()), "{up:?}");
     }
 
     #[test]

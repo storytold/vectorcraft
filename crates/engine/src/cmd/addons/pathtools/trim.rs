@@ -3,6 +3,8 @@
 //! touches, or every stretch a line through some points crosses. It works on every path that can
 //! be edited, selected or not.
 
+use std::collections::HashSet;
+
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, NodeId, NodeKind};
 use vectorcraft_geom::kurbo::{Line, PathSeg};
@@ -33,7 +35,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         "Trim at Crossings",
         [],
         None,
-        "{at: [x, y], tolerance?: pt 0..100 (3; how near `at` a path counts as under it)} or {rect: [x, y, width, height]} or {points: [[x, y]…] (2 to 100000 points)} remove stretches of paths, a stretch running between two neighboring places where the path is crossed by another path or by itself, or from such a place to an open end: `at` removes the stretch of the nearest path at that point, `rect` every stretch the rectangle touches, `points` every stretch the line through the points crosses. Give exactly one of the three. Every path that can be edited takes part, selected or not, compound path members included; hidden and locked paths, guides and clipping paths are neither trimmed nor counted as crossing. A path that ends on another marks a place on the other; paths that lie along each other don't cross. A closed path that loses a stretch becomes open, an open path that loses a middle stretch becomes two paths with its appearance in its place in the stacking order, and a path nothing crosses is removed whole; a live shape becomes a plain path. One undo step, none when nothing is removed → {ids (the paths left of those trimmed), removed (stretches)}",
+        "{at: [x, y], tolerance?: pt 0..100 (3; how near `at` a path counts as under it)} or {rect: [x, y, width, height]} or {points: [[x, y]…] (2 to 100000 points)} remove stretches of paths, a stretch running between two neighboring places where the path is crossed by another path or by itself, or from such a place to an open end: `at` removes the stretch of the nearest path at that point, `rect` every stretch the rectangle touches, `points` every stretch the line through the points crosses. Give exactly one of the three. Every path that can be edited takes part, selected or not, compound path members included; hidden and locked paths, guides and clipping paths (compound ones' members included) are neither trimmed nor counted as crossing; in isolation mode only paths inside the isolated object are trimmed. A path that ends on another marks a place on the other; paths that lie along each other don't cross. A closed path that loses a stretch becomes open, an open path that loses a middle stretch becomes two paths with its appearance in its place in the stacking order, and a path nothing crosses is removed whole; a live shape becomes a plain path. One undo step, none when nothing is removed → {ids (the paths left of those trimmed), removed (stretches)}",
         has_doc,
         trim
     )]
@@ -91,12 +93,24 @@ fn pick(p: &Value) -> Result<Pick> {
 type Part<'a> = (NodeId, &'a PathData, Rect);
 
 /// The paths that take part, bottom to top: the ones that can be edited, without guides and
-/// clipping paths.
+/// clipping paths. The clipping path of a clip group or a clipped layer is left out whole, the
+/// members of a compound clipping path included.
 fn parts(d: &Document) -> Vec<Part<'_>> {
     let editable = d.editable();
+    let mut masks = HashSet::new();
+    d.walk(|n| {
+        if n.clips()
+            && let Some(first) = n.children().and_then(|c| c.first())
+        {
+            first.walk(&mut |m| {
+                masks.insert(m.id);
+            });
+        }
+    });
     let mut out = vec![];
     d.walk(|n| {
         if let NodeKind::Path { path, guide: false, clipping: false, .. } = &n.kind
+            && !masks.contains(&n.id)
             && let Some(b) = path.control_bounds()
             && editable(n.id)
         {
@@ -108,6 +122,8 @@ fn parts(d: &Document) -> Vec<Part<'_>> {
 
 /// Most box tests one command makes between a line's pieces and the paths' segments.
 const MAX_LINE_TESTS: usize = 60_000_000;
+/// Most tests one command makes between the boxes of the paths to trim and of the other paths.
+const MAX_BOX_TESTS: usize = 50_000_000;
 
 /// Does the line through `pts` cross `sp`? Each piece of the line compared costs one of `budget`;
 /// `None` once it is spent.
@@ -203,14 +219,22 @@ fn trimmed(
 }
 
 fn trim(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "addon.pathtools.trim";
     let pick = pick(p)?;
-    let d = &s.doc()?.doc;
+    let st = s.doc()?;
+    let d = &st.doc;
     let parts = parts(d);
+    // In isolation mode only the isolated object's paths are trimmed; paths outside it still cross them.
+    let root = crate::cmd::ordinary_isolation(st);
+    let in_scope = |id: NodeId| root.is_none_or(|r| id == r || crate::cmd::inside_isolation(d, r, id));
     // The paths to trim, each with the place `at` falls on.
     let targets: Vec<(usize, Option<pt::Place>)> = match &pick {
         Pick::At(at, tolerance) => {
             let mut best: Option<(usize, pt::Place, f64)> = None;
-            for (i, (_, path, b)) in parts.iter().enumerate() {
+            for (i, (id, path, b)) in parts.iter().enumerate() {
+                if !in_scope(*id) {
+                    continue;
+                }
                 let b = b.inflate(*tolerance, *tolerance);
                 if !(b.x0 <= at.x && at.x <= b.x1 && b.y0 <= at.y && at.y <= b.y1) {
                     continue;
@@ -225,9 +249,14 @@ fn trim(s: &mut Session, p: &Value) -> Result<Value> {
             }
             best.map(|(i, on, _)| (i, Some(on))).into_iter().collect()
         }
-        Pick::Rect(r) => parts.iter().enumerate().filter(|(_, (_, _, b))| b.overlaps(*r)).map(|(i, _)| (i, None)).collect(),
-        Pick::Line(_, r) => parts.iter().enumerate().filter(|(_, (_, _, b))| b.overlaps(*r)).map(|(i, _)| (i, None)).collect(),
+        Pick::Rect(r) | Pick::Line(_, r) => {
+            parts.iter().enumerate().filter(|(_, (id, _, b))| in_scope(*id) && b.overlaps(*r)).map(|(i, _)| (i, None)).collect()
+        }
     };
+    // Each path to trim has its box tested against every other path's.
+    if targets.len().saturating_mul(parts.len()) > MAX_BOX_TESTS {
+        return Err(bad(C, "the rectangle or line reaches too many paths to check"));
+    }
     let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
     let mut removed = 0;
     let mut budget = MAX_LINE_TESTS;
