@@ -5158,6 +5158,8 @@ axis	Both	Entrambi
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	un'immagine incorporata di {_1} × {_2} pixel è stata ridotta a {_3} × {_4} pixel per mantenere i livelli
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	le immagini collegate mostrano l'anteprima a bassa risoluzione salvata nel file finché i loro file non vengono trovati: ricollegale nel pannello Collegamenti
 @msg	linked type areas past VectorCraft's limits were left out	le aree di testo concatenate oltre i limiti di VectorCraft sono state omesse
+@msg	the Line Breaking setting of legacy type was left out	l’impostazione di interruzione di riga del testo in formato precedente è stata omessa
+@msg	the Japanese layout rules of legacy type were left out	le regole di composizione giapponese del testo in formato precedente sono state omesse
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	il testo che cambia direzione di scrittura all’interno di un oggetto di testo si apre nella direzione del suo primo carattere
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	il testo usato come maschera in aree concatenate, testo attorno o un tracciato composto non ritaglia
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	le immagini collegate senza anteprima nel file mostrano un segnaposto finché i loro file non vengono trovati: ricollegale nel pannello Collegamenti

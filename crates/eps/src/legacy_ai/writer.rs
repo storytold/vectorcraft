@@ -833,6 +833,8 @@ impl<'a> Writer<'a> {
         self.line("TP");
         let mut para = 0usize;
         let mut para_start = true;
+        // No character of the current paragraph has been written.
+        let mut line_start = true;
         for run in &t.runs {
             let text = if run.style.all_caps { run.text.to_uppercase() } else { run.text.clone() };
             let mut pieces = text.split('\n').peekable();
@@ -846,14 +848,38 @@ impl<'a> Writer<'a> {
                     para_start = false;
                 }
                 self.char_style(&run.style, t.para_at(para));
-                let mut bytes: Vec<u8> = piece.chars().filter_map(latin::encode).collect();
+                // The space before a line's first character, kerning before it (§15.4.6.1).
+                if line_start && !piece.is_empty() && run.style.kerning_before != 0.0 {
+                    self.kern(run.style.kerning_before);
+                }
+                line_start = false;
+                // Manual kerning after each character, a soft hyphen as a discretionary hyphen
+                // (§15.4.10.1).
+                let kerning = run.style.kerning.filter(|k| *k != 0.0);
+                let mut bytes = vec![];
+                for c in piece.chars() {
+                    if c == '\u{ad}' {
+                        self.text_string(&mut bytes);
+                        self.line("T+");
+                        if let Some(k) = kerning {
+                            self.kern(k);
+                        }
+                        continue;
+                    }
+                    let Some(b) = latin::encode(c) else { continue };
+                    bytes.push(b);
+                    if let Some(k) = kerning {
+                        self.text_string(&mut bytes);
+                        self.kern(k);
+                    }
+                }
                 if ends_paragraph {
                     bytes.push(b'\r');
                     para += 1;
                     para_start = true;
+                    line_start = true;
                 }
-                self.body.push_str(&ps::bytes(&bytes));
-                self.line(" Tx");
+                self.text_string(&mut bytes);
             }
         }
         if self.kumi {
@@ -861,6 +887,22 @@ impl<'a> Writer<'a> {
             self.kumi = false;
         }
         self.line("TO");
+    }
+
+    /// `bytes` as a string of characters, `(…) Tx`, when there are any; `bytes` is left empty.
+    fn text_string(&mut self, bytes: &mut Vec<u8>) {
+        if !bytes.is_empty() {
+            self.body.push_str(&ps::bytes(bytes));
+            self.line(" Tx");
+            bytes.clear();
+        }
+    }
+
+    /// Manual kerning of `k` 1/1000 em between the characters before and after it: `0 k Tk`.
+    fn kern(&mut self, k: f64) {
+        self.body.push_str("0 ");
+        ps::push_num(&mut self.body, finite(k, 0.0));
+        self.line(" Tk");
     }
 
     /// A paragraph's attributes: alignment `Ta` and indents `Ti` (first line's, left, right).

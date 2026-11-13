@@ -8309,6 +8309,8 @@ antiAlias	Sharp	शार्प
 @msg	type dimension must be finite	टाइप का आयाम परिमित होना चाहिए
 @msg	type must be static or dynamic, not {v}	type: प्रकार स्थिर या गतिशील होना चाहिए, न कि {v}
 @msg	type objects can't be isolated	टाइप ऑब्जेक्ट्स को आइसोलेट नहीं किया जा सकता
+@msg	the Line Breaking setting of legacy type was left out	पुराने प्रारूप के टेक्स्ट की लाइन ब्रेकिंग सेटिंग छोड़ दी गई
+@msg	the Japanese layout rules of legacy type were left out	पुराने प्रारूप के टेक्स्ट के जापानी लेआउट नियम छोड़ दिए गए
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	टेक्स्ट ऑब्जेक्ट के भीतर लेखन दिशा बदलने वाला टेक्स्ट अपने पहले वर्ण की दिशा में खुलता है
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	लिंक्ड एरिया, रैपअराउंड टेक्स्ट या कंपाउंड पाथ में मास्क के रूप में इस्तेमाल किया गया टाइप क्लिप नहीं करता
 @msg	Unembedded to {_1}	एम्बेड हटाकर {_1} में रखा गया

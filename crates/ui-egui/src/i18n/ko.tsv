@@ -4627,6 +4627,8 @@ theme	Appearance	외관
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	레이어를 유지하기 위해 {_1} × {_2} 픽셀의 포함된 이미지를 {_3} × {_4} 픽셀로 줄였습니다
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	연결된 그림은 해당 파일을 찾을 때까지 파일에 저장된 저해상도 미리 보기로 표시됩니다: 링크 패널에서 다시 연결하세요
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft 한도를 넘는 연결된 문자 영역은 제외되었습니다
+@msg	the Line Breaking setting of legacy type was left out	이전 형식 문자의 줄 바꿈 설정이 생략되었습니다
+@msg	the Japanese layout rules of legacy type were left out	이전 형식 문자의 일본어 조판 규칙이 생략되었습니다
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	문자 개체 안에서 쓰기 방향이 바뀌는 문자는 첫 글자의 방향으로 열립니다
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	연결된 영역, 문자 감싸기 또는 컴파운드 패스에서 마스크로 사용된 문자는 클리핑하지 않습니다
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	파일에 미리 보기가 없는 연결된 그림은 해당 파일을 찾을 때까지 자리 표시자로 표시됩니다: 링크 패널에서 다시 연결하세요

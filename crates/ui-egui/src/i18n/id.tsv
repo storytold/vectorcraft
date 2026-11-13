@@ -4903,6 +4903,8 @@ imageTrace	Outline	Kontur
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	gambar tersemat berukuran {_1} × {_2} piksel diperkecil menjadi {_3} × {_4} piksel agar lapisannya tetap terjaga
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	gambar tertaut menampilkan pratinjau resolusi rendah yang tersimpan dalam berkas sampai berkasnya ditemukan: tautkan ulang di panel Tautan
 @msg	linked type areas past VectorCraft's limits were left out	area teks tertaut di luar batas VectorCraft dihilangkan
+@msg	the Line Breaking setting of legacy type was left out	pengaturan pemisah baris teks format lama dihilangkan
+@msg	the Japanese layout rules of legacy type were left out	aturan tata letak Jepang teks format lama dihilangkan
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	teks yang mengubah arah penulisan di dalam objek teks dibuka dengan arah karakter pertamanya
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	teks yang digunakan sebagai masker di area tertaut, teks terbungkus, atau jalur majemuk tidak memotong
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	gambar tertaut tanpa pratinjau dalam berkas menampilkan penanda tempat sampai berkasnya ditemukan: tautkan ulang di panel Tautan

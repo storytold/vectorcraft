@@ -4959,6 +4959,8 @@ imageTrace	Outline	Körvonal
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	egy {_1} × {_2} képpontos beágyazott kép {_3} × {_4} képpontosra lett kicsinyítve, hogy a rétegek megmaradjanak
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	a csatolt képek a fájlban mentett kis felbontású előnézetet mutatják, amíg a fájljaik elő nem kerülnek: csatold őket újra a Csatolások panelen
 @msg	linked type areas past VectorCraft's limits were left out	a VectorCraft korlátain túli csatolt szövegterületek kimaradtak
+@msg	the Line Breaking setting of legacy type was left out	a régi formátumú szöveg sortörési beállítása kimaradt
+@msg	the Japanese layout rules of legacy type were left out	a régi formátumú szöveg japán tördelési szabályai kimaradtak
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	a szövegobjektumon belül írásirányt váltó szöveg az első karakterének irányában nyílik meg
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	a csatolt területeken, körbefuttatott szövegben vagy összetett útvonalban maszkként használt szöveg nem vág ki
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	a fájlban előnézet nélküli csatolt képek helyőrzőt mutatnak, amíg a fájljaik elő nem kerülnek: csatold őket újra a Csatolások panelen
