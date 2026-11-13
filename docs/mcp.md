@@ -5884,8 +5884,11 @@ The profile is read on every `file.new`, so a replayed journal or a recorded act
 runs, as `document.open` reads its file when it runs. A file larger than 64 MiB (VectorCraft's own limit) is not read.
 When the file cannot be read, is too large or is not a native document, or the request's read roots leave out the
 folder (whether or not the file exists), the document starts with the defaults and
-`file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar. In
-the New Document dialog, Manage Profiles lists the profiles with Edit and Reset buttons. Edit is available only when
+`file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar. The
+reason given when the read roots leave out the folder does not name the folder's path. Color profiles the profile's
+file carries are installed when they are missing, as `document.open` installs them, and each one that can't be used
+adds a line to `file.new`'s `warnings`. The new document's links find their files through relative paths from the
+profile's file until the document is saved. In the New Document dialog, Manage Profiles lists the profiles with Edit and Reset buttons. Edit is available only when
 there is a profiles folder, and Reset only for a profile that has a file. An unknown profile name is an error that
 lists the names.
 
