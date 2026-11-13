@@ -2260,6 +2260,11 @@ digits	Malayalam	Malaiala
 	Rating:	Avaliação:
 	Real World:	Mundo Real:
 	Real-time Drawing and Editing	Desenho e Edição em Tempo Real
+	Use Monitor Profile for Canvas	Usar Perfil do Monitor para a Tela
+	The canvas is drawn in sRGB.	A tela é desenhada em sRGB.
+	Canvas display profile:	Perfil do monitor para a tela:
+	The system matches the window to the display's colors.	O sistema ajusta a janela às cores do monitor.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nenhum perfil de monitor utilizável foi encontrado: a tela é desenhada em sRGB.
 	Rearrange All Artboards	Reorganizar Todas as Mesas de Trabalho
 	Rearrange	Reorganizar
 	Select All Artboards	Selecionar Todas as Mesas de Trabalho

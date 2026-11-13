@@ -762,8 +762,7 @@ outline, so these commands do not store a stroke paint or weight for a series th
 designs keep their own paint. A row that had no
 paint before the command and has none after it does not change the paint the graph stores. `paint.setFill`,
 `paint.setStroke`, `paint.none` and the commands that apply one paint kind to the other store the topmost row of the kind
-even when it is hidden, and store a stroke set on a band. `stroke.set`, `paint.editGradient` and the recolor commands do
-not store a series' paint.
+even when it is hidden, and store a stroke set on a band.
 
 `appearance.addFill`, `appearance.addStroke`, `appearance.setItem`, `appearance.removeItem`,
 `appearance.duplicateItem`, `appearance.moveItem`, `appearance.clear`, `appearance.reduceToBasic`,
@@ -788,6 +787,21 @@ The other commands given a series group's id edit the group itself, and the grap
 `transparency.set` and `object.setProps` with an opacity or blend mode for the object, the `effect.*` commands and
 `appearance.addEffect`, and the paint, stroke and gradient commands with a fill or stroke `item`, which is a row of the
 group's own stack. The Appearance panel and `appearance.setActiveItem` read the selected group's own rows.
+
+The graph also stores a paint or stroke weight that one of these commands changes on the topmost visible fill or stroke
+of a path directly in a series: a weight set with `stroke.set`, `stroke.weightUp` or `stroke.weightDown`; a gradient
+made, placed or edited with `paint.editGradient`, `paint.setGradientGeom`, `paint.freeform.addPoint`,
+`paint.freeform.setPoint`, `paint.freeform.deletePoint`, `paint.freeform.addLine` or `paint.freeform.splitLine`; and a
+color changed by `paint.invert`, `paint.complement`, `edit.colors.invert`, `edit.colors.adjustBalance`,
+`edit.colors.saturate`, `edit.colors.toCMYK`, `edit.colors.toGrayscale`, `edit.colors.toRGB`,
+`edit.colors.blendFrontToBack`, `edit.colors.blendHorizontally`, `edit.colors.blendVertically`, `recolor.apply`,
+`addon.color.filter`, `addon.color.applyNearestSwatch` or the ink limit of `addon.color.printFixes`. The recolor
+commands store it too when they are given a series group, the graph or a group that holds the graph. A row a command
+leaves as it was keeps what the graph stores. When one command changes several paths of a series, the frontmost of
+them sets what the graph stores. A gradient is stored with its placement, and every path of the series takes that
+placement when the graph is drawn again. The graph does not store a stroke's dashes, caps, joins, arrowheads, width
+profile or brush. These commands do not store the colors they give a graph's axes and labels, which are drawn again
+with the paint they had.
 
 `text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
 it sets for each kind of label it reaches (value axis numbers, category labels, legend labels), and every label of that
@@ -3019,7 +3033,10 @@ already walks Image Trace. Short agent entry points:
   is unused, and offers Remove Strokes or Cancel when one of them is in use.
 - Brushes: `brush.list`, `brush.get {name}`, `brush.apply {name, ids?}`, `brush.new {type, name?, params?, ids?}`,
   `brush.setCurrent {name}`, `brush.options {name, params?, newName?}`, `brush.delete {name} | {names}`,
-  `brush.duplicate {name, newName?} | {names}`, `brush.freehand`, `object.expandBrush {ids?}`. `brush.new`,
+  `brush.duplicate {name, newName?} | {names}`, `brush.freehand`, `object.expandBrush {ids?}`. A document or brush
+  library file whose brushes repeat a name is read with the first brush of that name as stored and each later one
+  numbered with the first "`<name>` 2", "`<name>` 3"… the file does not have; strokes of the name keep the first
+  brush. `brush.new`,
   `brush.duplicate` and `brush.options` trim the white space around the name they are given. A blank `name` gives
   the type's default name ("New Calligraphic Brush" for a calligraphic brush), and a blank `newName` gives
   "`<name>` copy" in `brush.duplicate` and keeps the name in `brush.options`. A Hue Shift `colorization` given to
@@ -5813,6 +5830,21 @@ colours stay as they are. `antiAliasedBitmaps` (off by default;
 desktop app): in View › Pixel Preview, on softens placed and embedded bitmaps; off, their pixels stay hard-edged.
 `disableAutoAddDelete` (off by default): on, the Pen no longer adds or deletes an anchor when a click lands on a
 segment or an anchor of a selected path.
+
+`monitorProfileDisplay` (Preferences › Performance › Use Monitor Profile for Canvas, on by default; desktop app)
+converts the canvas from sRGB into the ICC profile of the display that shows most of the main window, as the last
+step before it is drawn: the art, the artboards' paper and the transparency grid. On Windows the profile is the
+display's default profile for its standard color mode; on X11 it is colord's profile for the RandR output, then the
+output's `_ICC_PROFILE` property when colord has no usable profile, then the screen's when only one output is active. A display with Windows Advanced
+Color on (HDR or Automatic Color Management) and macOS windows are converted by the system, and nothing is converted
+again. In a Wayland session, and where no profile is set or the profile is not an RGB display profile of at most 1 MiB,
+the canvas stays sRGB. The app reads the display again every 10 seconds and when the window moves to another display.
+Exports, `ui.render`, the document, panels and thumbnails are not converted; with Proof Colors on, the proof is drawn
+first and then converted. The art is converted before it is drawn over the converted paper, so the blend of a
+translucent object or an antialiased edge with the paper can differ slightly from a conversion of the blended color.
+`ui.inspect` returns `displayProfile`: `{enabled, display, source, profile, from, applied, reason,
+osManaged}`, where `source` is `profile`, `srgbProfile` (a profile that shows sRGB unchanged), `system`, `none`,
+`pending` or `unsupported`, `applied` says whether the canvas is converted, and `reason` says why not.
 
 `ctrlWheelScrollsSideways` (on by default): on, Cmd/Ctrl with a mouse wheel's whole notches scrolls the canvas sideways
 instead of zooming while `zoomWithMouseWheel` is off; off, Cmd/Ctrl-wheel zooms about the pointer. Alt + Cmd/Ctrl-wheel

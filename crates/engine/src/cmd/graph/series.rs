@@ -103,6 +103,25 @@ fn series_members(doc: &Document) -> HashMap<NodeId, SeriesRef> {
     out
 }
 
+/// The objects directly in a series group among `roots` and inside them, for an edit that reaches graph series marks
+/// without naming them. They may include objects of groups that only look like series groups; the capture functions
+/// check each one.
+pub(crate) fn series_marks_in(doc: &Document, roots: &[NodeId]) -> Vec<NodeId> {
+    let mut out = Vec::new();
+    for id in roots {
+        if doc.parent_of(*id).and_then(|p| doc.node(p)).is_some_and(|g| g.extras().series_index.is_some()) {
+            out.push(*id);
+        }
+        let Some(root) = doc.node(*id) else { continue };
+        root.walk(&mut |n| {
+            if n.extras().series_index.is_some() {
+                out.extend(n.children().into_iter().flatten().map(|c| c.id));
+            }
+        });
+    }
+    out
+}
+
 /// Group Selection on a graph series targets its constituent marks and legend swatch, not a
 /// group-level appearance which the generated art does not inherit. Other ids pass through.
 pub(crate) fn paint_targets(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> {

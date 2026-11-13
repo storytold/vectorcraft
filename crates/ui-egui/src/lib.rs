@@ -34,6 +34,7 @@ pub mod credits;
 pub mod cursors;
 mod custom_toolbars;
 pub mod dialogs;
+pub mod display_profile;
 pub mod doc_windows;
 pub mod dock;
 mod edit_toolbar;
@@ -145,6 +146,9 @@ pub struct VectorcraftApp {
     clipboard_probe: Option<clipboard_probe::Probe>,
     pub services: Services,
     pub canvas: CanvasCache,
+    /// The main window's display profile, which the canvas is drawn through
+    /// ([`display_profile`]); the desktop app reports what it reads into it.
+    pub display_profile: display_profile::DisplayProfile,
     pub perf: Perf,
     /// Docking state that lives for the session only.
     pub(crate) dock_rt: panel_docking::Runtime,

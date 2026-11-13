@@ -75,6 +75,10 @@ pub struct NodeExtras {
     /// Image Tools › Color Mask: the colors an image hides while its pixels stay as they are
     /// ([`crate::color_mask`]).
     pub color_mask: Option<Box<crate::color_mask::ColorMask>>,
+    /// A piece of an image a raster mesh warp cut up ([`crate::live::mesh_warp_image`]): in a
+    /// knockout group its knockout shape is the whole area of its triangle, not only where the
+    /// image is opaque ([`Node::knockout_outline`]).
+    pub warp_piece: bool,
 }
 
 /// No extras: what [`Node::extras`] gives for a node without any.
@@ -103,6 +107,7 @@ pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
     envelope_edit_margin: None,
     pixel_aligned: false,
     color_mask: None,
+    warp_piece: false,
 };
 
 /// A node's [`NodeExtras`], if it has any ([`Node::extras`]). Extras that are all unset equal

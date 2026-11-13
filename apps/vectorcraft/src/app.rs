@@ -219,6 +219,9 @@ impl App {
             self.app.services.dock_monitors = window::dock_monitors(w, zoom);
             self.monitors_listed = Some((now, zoom));
         }
+        if let Some(w) = &self.winit_window {
+            self.display_profile.tick(w, now, self.app.session.prefs.monitor_profile_display, &self.app.display_profile, ctx);
+        }
         self.app.tick(ctx);
         if self.pending_maximize {
             if let Some(w) = &self.winit_window {

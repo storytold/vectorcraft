@@ -671,7 +671,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         fonts.extend(super::fonts::art_texts_of(d).into_iter().flat_map(|(_, t, _)| t.runs.iter().map(|r| super::fonts::font_of(&r.style))));
     }
     let font_names: Vec<String> = fonts.iter().map(super::fonts::font_label).collect();
-    // Each brush the art uses with its type, found by name in the Brushes panel as the renderer finds it (the last of two
+    // Each brush the art uses with its type, found by name in the Brushes panel as the renderer finds it (the first of two
     // brushes with one name); a brush the panel does not hold draws as a plain stroke and has no type. A row names the type
     // as the New Brush dialog does (`Art Brush`), and the panel translates these values when it shows them.
     let kinds: HashMap<&str, &vectorcraft_brush::BrushKind> = library.iter().map(|b| (b.name.as_str(), &b.kind)).collect();
@@ -948,7 +948,7 @@ mod tests {
         let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
         d.node_mut(NodeId(missing)).unwrap().appearance.stroke_mut().unwrap().paint = Paint::None;
         assert_eq!(s.execute("document.info", &json!({"category": "brushes"})).unwrap()["brushes"], json!([]));
-        // Two panel brushes with one name: the type is the one the renderer draws with, the last one's.
+        // Two panel brushes with one name: the type is the one the renderer draws with, the first one's.
         let twin = square(&mut s, 140.0);
         s.execute("brush.apply", &json!({"ids": [twin], "name": "Charcoal"})).unwrap();
         let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
@@ -958,7 +958,7 @@ mod tests {
         lib.extend(kinds.into_iter().map(|kind| vectorcraft_brush::Brush { name: "Twin".into(), kind }));
         vectorcraft_brush::store(d, &lib);
         d.node_mut(NodeId(twin)).unwrap().appearance.stroke_mut().unwrap().brush = Some("Twin".into());
-        assert_eq!(s.execute("document.info", &json!({"category": "brushes"})).unwrap()["brushes"], json!([{"name": "Twin", "type": "scatter"}]));
+        assert_eq!(s.execute("document.info", &json!({"category": "brushes"})).unwrap()["brushes"], json!([{"name": "Twin", "type": "art"}]));
         // Type: a brushed stroke on drawn characters is listed, one on spaces alone is not.
         let blank = s.execute("text.create", &json!({"x": 10, "y": 60, "text": "  "})).unwrap()["id"].as_u64().unwrap();
         let word = s.execute("text.create", &json!({"x": 10, "y": 90, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();

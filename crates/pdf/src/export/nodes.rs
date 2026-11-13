@@ -84,6 +84,23 @@ impl Exporter<'_> {
         if elements.is_empty() {
             return;
         }
+        if elements.iter().all(|(c, _)| c.knockout_outline().is_some()) {
+            let pieces: Vec<&Node> = elements.iter().map(|(c, _)| *c).collect();
+            if isolated {
+                s.push_isolated();
+            }
+            if vectorcraft_effects::warp_pieces_translucent(self.doc, &pieces) {
+                self.warp_pieces(s, &elements, page);
+            } else {
+                for (c, m) in &elements {
+                    self.measured_node(s, c, page, false, Some(m));
+                }
+            }
+            if isolated {
+                s.pop();
+            }
+            return;
+        }
         let several = elements.len() > 1;
         // A PDF knockout group (`/K`) knocks out by the area each element paints. Where an element
         // above another knocks out by less (its opacity or mask defines its knockout shape, or it
@@ -135,6 +152,72 @@ impl Exporter<'_> {
         if group {
             s.pop();
         }
+    }
+
+    /// The pieces of a partly transparent mesh-warped image (`elements`, each with its box) as the
+    /// elements of a knockout group ([`vectorcraft_effects::warp_pieces_translucent`]). Each piece
+    /// is drawn through one soft mask of where the pieces above it that reach its box don't cover
+    /// ([`vectorcraft_effects::knockout_silhouette`]): only neighbors overlap, so each mask holds a
+    /// few triangles and no mask nests in another. A piece above that overlaps it only over opaque
+    /// pixels ([`vectorcraft_effects::WarpSeams`]) is left out of its mask.
+    fn warp_pieces(&mut self, s: &mut Surface, elements: &[(&Node, Measured)], page: Rect) {
+        // Each piece's triangle and its box: a piece paints inside its triangle only.
+        let silhouette = |c: &Node| {
+            let b = c.knockout_outline()?.geometric_bounds()?;
+            Some((vectorcraft_effects::knockout_silhouette(c, vectorcraft_doc::color::Color::WHITE)?, b))
+        };
+        let silhouettes: Vec<Option<(Node, Rect)>> = elements.iter().map(|(c, _)| silhouette(c)).collect();
+        let pieces: Vec<&Node> = elements.iter().map(|(c, _)| *c).collect();
+        let seams = vectorcraft_effects::WarpSeams::new(self.doc, &pieces);
+        for (i, (c, measured)) in elements.iter().enumerate() {
+            let Some((_, reach)) = &silhouettes[i] else { continue };
+            let reach = reach.inflate(1.0, 1.0);
+            let shapes: Vec<(&Node, Option<&Measured>)> = silhouettes
+                .iter()
+                .enumerate()
+                .skip(i + 1)
+                .filter_map(|(j, s)| s.as_ref().filter(|(_, b)| rects_overlap(*b, reach) && seams.shows_through(i, j)))
+                .map(|(n, _)| (n, None))
+                .collect();
+            if shapes.is_empty() {
+                self.measured_node(s, c, page, false, Some(measured));
+                continue;
+            }
+            let mask = self.shapes_mask(s, &shapes, page);
+            s.push_mask(mask);
+            self.measured_node(s, c, page, false, Some(measured));
+            s.pop();
+        }
+    }
+
+    /// A luminosity mask that is 1 − the coverage of `shapes` (each with its box when measured):
+    /// white, then black through an alpha mask of the shapes drawn one over another.
+    fn shapes_mask(&mut self, s: &mut Surface, shapes: &[(&Node, Option<&Measured>)], page: Rect) -> krilla::mask::Mask {
+        let transform = s.group_transform();
+        let mut sb = s.stream_builder();
+        let mut ms = Surface::stream(sb.surface());
+        ms.push_transform(&transform);
+        cover(&mut ms, page, 255, 1.0);
+        let alpha = {
+            let transform = ms.group_transform();
+            let mut ab = ms.stream_builder();
+            let mut als = Surface::stream(ab.surface());
+            als.push_transform(&transform);
+            let overprint = std::mem::take(&mut self.overprint);
+            for (shape, measured) in shapes {
+                self.measured_node(&mut als, shape, page, false, *measured);
+            }
+            self.overprint = overprint;
+            als.pop();
+            als.finish();
+            krilla::mask::Mask::new(ab.finish(), krilla::mask::MaskType::Alpha)
+        };
+        ms.push_mask(alpha);
+        cover(&mut ms, page, 0, 1.0);
+        ms.pop();
+        ms.pop();
+        ms.finish();
+        krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity)
     }
 
     /// A luminosity mask that is 1 − the knockout shapes of `shapes` (each with its box): white,

@@ -4124,6 +4124,11 @@ theme	Appearance	Vormgeving
 	Primary	Primair
 	Printing / Exporting	Afdrukken / exporteren
 	Real-time Drawing and Editing	Tekenen en bewerken in realtime
+	Use Monitor Profile for Canvas	Monitorprofiel gebruiken voor canvas
+	The canvas is drawn in sRGB.	Het canvas wordt in sRGB getekend.
+	Canvas display profile:	Weergaveprofiel van het canvas:
+	The system matches the window to the display's colors.	Het systeem stemt het venster af op de kleuren van het scherm.
+	No usable display profile was found: the canvas is drawn in sRGB.	Geen bruikbaar weergaveprofiel gevonden: het canvas wordt in sRGB getekend.
 	Render Threads (-1 = Automatic)	Renderthreads (-1 = automatisch)
 	Reset Preferences	Voorkeuren herstellen
 	Export Preferences…	Voorkeuren exporteren…

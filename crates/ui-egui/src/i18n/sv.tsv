@@ -2640,6 +2640,11 @@ digits	Malayalam	Malayalam
 	Rating:	Betyg:
 	Real World:	Verkligt mått:
 	Real-time Drawing and Editing	Ritning och redigering i realtid
+	Use Monitor Profile for Canvas	Använd skärmprofil för arbetsytan
+	The canvas is drawn in sRGB.	Arbetsytan ritas i sRGB.
+	Canvas display profile:	Arbetsytans skärmprofil:
+	The system matches the window to the display's colors.	Systemet anpassar fönstret till skärmens färger.
+	No usable display profile was found: the canvas is drawn in sRGB.	Ingen användbar skärmprofil hittades: arbetsytan ritas i sRGB.
 	Rearrange All Artboards	Ordna om alla ritytor
 	Rearrange	Ordna om
 	Select All Artboards	Markera alla ritytor
