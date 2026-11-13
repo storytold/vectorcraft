@@ -2944,6 +2944,8 @@ mark-style	Japanese	日本式
 	Edit Arrowheads…	矢印を編集…
 	Reload Arrowheads	矢印を再読み込み
 	Reset the rows to the artwork's colors	行をアートワークのカラーにリセット
+	Color Theme Picker	カラーテーマピッカー
+	Click or drag across the art to pick its colors; Shift adds more	アートワークをクリックまたはドラッグしてカラーを取得します。Shift キーで追加します
 	Reset to Default	初期設定に戻す
 	Reset to White, Black	白、黒にリセット
 	Reset {name}	{name}をリセット

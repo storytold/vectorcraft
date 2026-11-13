@@ -3987,6 +3987,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Reset Rotate View	重設旋轉檢視
 	Rotate View to Selection	依選取範圍旋轉檢視
 	Reset the rows to the artwork's colors	將各列重設為圖稿的顏色
+	Color Theme Picker	色彩主題選取器
+	Click or drag across the art to pick its colors; Shift adds more	按一下或拖過圖稿以選取其顏色；按住 Shift 可加入更多
 	Reset to Default	重設為預設值
 	Reset to White, Black	重設為白色、黑色
 	Reset with Mesh	以網格重設

@@ -11,6 +11,7 @@ use vectorcraft_color::recolor::{ColorKey, GlobalAdjust, Method, Preserve, Rng, 
 use vectorcraft_color::{Color, Paint, Swatch};
 use vectorcraft_doc::swatches::{node_colors, node_paints, override_paints};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_geom::{Point, Rect};
 
 use super::colorcmds::{NotChanged, Recolor, Scope, left_out};
 use super::{CommandSpec, Result, Session, always, bad, checked_ids_param, cmd, color_value, has_doc, index, str_param, switch_or, text_param};
@@ -53,7 +54,825 @@ pub fn specs() -> Vec<CommandSpec> {
             always,
             randomize
         ),
+        cmd!(
+            query "recolor.pickTheme",
+            "Color Theme Picker",
+            [],
+            None,
+            "{picks: [{at: [x, y]} (a click: the object a Selection tool click there takes, with everything inside it) | {rect: [x0, y0, x1, y1]} (a marquee: every painted object it touches, and the part of each image inside it)] (1 to 256, in document points), colors?: 5 (1 to 64)} → {colors: [colour keys, the most used first], objects: the number of objects read} the colour palette of the art picked, for Recolor Artwork's Color Theme Picker: visible fills and strokes, gradient stops, text, mesh points, pattern tiles (with the patterns they use), the art of symbol instances (placed through their 9-slice guides), the colorize colour of an image it applies to and other images' pixels (at most 65,536 pixels of each pick of an image, spread evenly, and 1,048,576 pixels of at most 64 images in all; pixels less than half opaque and images that can't be decoded are left out). In a clip group, or under an opacity mask that clips, only what shows inside the clipping path or the mask art is read; a blend, envelope or repeat a marquee touches is read whole. Hidden or fully transparent objects and fill or stroke items are left out; locked objects are read. Each object read weighs the same, shared among its colours (an image's among its pixels; the vector art a symbol instance places counts as one object, each image it places on its own); similar colours merge (k-means in Lab) into at most `colors`, each shown by its most used colour in its own model. Picks that touch no art give no colours. Changes nothing",
+            has_doc,
+            pick_theme
+        ),
     ]
+}
+
+/// The pixels one read of an image by the Color Theme Picker takes, at most, the pixels all its
+/// reads share, and the images one pick reads, at most.
+const THEME_PIXELS: usize = 65_536;
+const THEME_TOTAL_PIXELS: usize = 1 << 20;
+const MAX_THEME_IMAGES: usize = 64;
+/// The image reads one pick queues, at most.
+const MAX_THEME_READS: usize = 4096;
+/// The stroke segments the opacity masks one pick reads are outlined along, at most.
+const MASK_OUTLINE_SEGMENTS: usize = 20_000;
+/// The point-in-region tests one pick makes to find whether outlines show through clip groups,
+/// and the clipping-path elements the pixels of one image are tested against, at most.
+const THEME_WORK: usize = 4_000_000;
+/// The picks one `recolor.pickTheme` takes, and the colours it gives, at most.
+const MAX_PICKS: usize = 256;
+const MAX_THEME_COLORS: u64 = 64;
+/// The objects the Color Theme Picker reads through, one inside another, at most.
+const MAX_THEME_DEPTH: usize = 256;
+
+/// A pick of the Color Theme Picker: a click at a point or a marquee.
+enum Pick {
+    At(Point),
+    Area(Rect),
+}
+
+impl Pick {
+    /// `{at: [x, y]}` or `{rect: [x0, y0, x1, y1]}`, finite numbers.
+    fn param(v: &Value, cmd: &str) -> Result<Self> {
+        let numbers = |a: &Value, n: usize| -> Option<Vec<f64>> {
+            let a = a.as_array().filter(|a| a.len() == n)?;
+            a.iter().map(|x| x.as_f64().filter(|x| x.is_finite())).collect()
+        };
+        match (v.get("at"), v.get("rect")) {
+            (Some(at), None) => {
+                numbers(at, 2).map(|p| Pick::At(Point::new(p[0], p[1]))).ok_or_else(|| bad(cmd, format!("`at` must be [x, y] (got {at})")))
+            }
+            (None, Some(r)) => numbers(r, 4)
+                .map(|r| Pick::Area(Rect::new(r[0], r[1], r[2], r[3]).abs()))
+                .ok_or_else(|| bad(cmd, format!("`rect` must be [x0, y0, x1, y1] (got {r})"))),
+            _ => Err(bad(cmd, format!("each pick is {{at: [x, y]}} or {{rect: [x0, y0, x1, y1]}} (got {v})"))),
+        }
+    }
+}
+
+/// A filled region: its outline and fill rule.
+type Region = (vectorcraft_geom::BezPath, vectorcraft_geom::FillRule);
+
+/// An image the Color Theme Picker reads: its pixels, where it lies, the marquee it is read in
+/// (`None`: all of it) and the region the clip groups around it show (`None`: unclipped). An
+/// image its colorize paint applies to ([`vectorcraft_doc::ImageBlob::takes_colorize`]) gives that
+/// paint's colours where a pixel read shows ink (opaque and darker than white).
+#[derive(Clone)]
+struct ImageRead<'a> {
+    blob: &'a vectorcraft_doc::ImageBlob,
+    xf: vectorcraft_geom::Affine,
+    size: (f64, f64),
+    area: Option<Rect>,
+    clip: Option<Vec<Region>>,
+    colorize: Option<Vec<Color>>,
+}
+
+/// The colours the Color Theme Picker has read: each object weighs 1, shared among its colours.
+struct Theme<'a> {
+    d: &'a Document,
+    boxes: vectorcraft_doc::SymbolBoxes<'a>,
+    samples: Vec<(Color, f32)>,
+    /// The images to read, each image decoded once for all its reads ([`Self::read_images`]),
+    /// and the images they read.
+    images: Vec<ImageRead<'a>>,
+    blobs: std::collections::HashSet<*const vectorcraft_doc::ImageBlob>,
+    /// What the clip groups being read show, in document space: the union of these regions
+    /// (none: nothing shows); `None` outside clip groups.
+    clip: Option<Vec<Region>>,
+    /// The colours of the patterns read so far, and the patterns whose tiles are being read.
+    pattern_colors: HashMap<String, (Vec<Color>, Vec<ImageRead<'a>>)>,
+    pattern_stack: Vec<String>,
+    /// The region tests [`Self::shows`] has made.
+    work: std::cell::Cell<usize>,
+    /// The object isolated in isolation mode.
+    scope: Option<NodeId>,
+    /// The stroke segments opacity masks may still be outlined along ([`mask_regions`]).
+    mask_budget: usize,
+    objects: usize,
+}
+
+/// The region both `a` and `b` (each a union of regions) cover, filled non-zero.
+fn intersect_regions(a: &[Region], b: &[Region]) -> Vec<Region> {
+    let paths: Vec<vectorcraft_geom::PathData> = a.iter().chain(b).map(|(bp, _)| vectorcraft_geom::PathData::from_bezpath(bp)).collect();
+    let inputs: Vec<(&vectorcraft_geom::PathData, vectorcraft_geom::FillRule)> =
+        paths.iter().zip(a.iter().chain(b)).map(|(p, (_, rule))| (p, *rule)).collect();
+    let split = a.len();
+    let both = vectorcraft_pathops::boolean_n(&inputs, |inside| inside.iter().any(|i| *i < split) && inside.iter().any(|i| *i >= split));
+    if both.subpaths.is_empty() { vec![] } else { vec![(both.to_bezpath(), vectorcraft_geom::FillRule::NonZero)] }
+}
+
+impl<'a> Theme<'a> {
+    fn new(d: &'a Document) -> Self {
+        Self {
+            d,
+            boxes: d.symbol_boxes(),
+            samples: vec![],
+            images: vec![],
+            blobs: std::collections::HashSet::new(),
+            clip: None,
+            pattern_colors: HashMap::new(),
+            pattern_stack: vec![],
+            work: std::cell::Cell::new(0),
+            scope: None,
+            mask_budget: MASK_OUTLINE_SEGMENTS,
+            objects: 0,
+        }
+    }
+
+    fn add(&mut self, colors: Vec<Color>) {
+        if colors.is_empty() {
+            return;
+        }
+        let w = 1.0 / colors.len() as f32;
+        self.samples.extend(colors.into_iter().map(|c| (c, w)));
+        self.objects += 1;
+    }
+
+    /// Read the images queued, each image's pixels decoded once, as colours: the pixels a read
+    /// gives that fall in one cell of 16 levels a channel merge into their average, weighted by how
+    /// many there are, and the cells of all the reads add up, so the images give at most 16³
+    /// colours. Images that can't be decoded give none. The first [`MAX_THEME_IMAGES`] images
+    /// are read, and all the reads share [`THEME_TOTAL_PIXELS`] pixels (each read at least one, at
+    /// most [`THEME_PIXELS`]).
+    fn read_images(&mut self) {
+        let reads = std::mem::take(&mut self.images);
+        // The reads of each image, in the order its first read came.
+        let mut by_image: Vec<(*const vectorcraft_doc::ImageBlob, Vec<&ImageRead>)> = vec![];
+        for r in &reads {
+            let key: *const vectorcraft_doc::ImageBlob = r.blob;
+            match by_image.iter().position(|(k, _)| *k == key) {
+                Some(i) => by_image[i].1.push(r),
+                None if by_image.len() < MAX_THEME_IMAGES => by_image.push((key, vec![r])),
+                None => {}
+            }
+        }
+        let count: usize = by_image.iter().map(|(_, g)| g.len()).sum();
+        let budget = (THEME_TOTAL_PIXELS / count.max(1)).clamp(1, THEME_PIXELS);
+        let mut pixels: HashMap<[u8; 3], ([f64; 3], f64)> = HashMap::new();
+        for (_, group) in by_image {
+            let keeps: Vec<Box<dyn Fn(f64, f64) -> bool + '_>> = group
+                .iter()
+                .map(|r| {
+                    let (xf, (w, h), area, clip) = (r.xf, r.size, r.area, &r.clip);
+                    Box::new(move |u: f64, v: f64| {
+                        let p = xf * Point::new(u * w, v * h);
+                        area.is_none_or(|a| a.contains(p))
+                            && clip.as_ref().is_none_or(|rs| rs.iter().any(|(bp, rule)| vectorcraft_geom::hit::fill_contains(bp, *rule, p)))
+                    }) as Box<dyn Fn(f64, f64) -> bool + '_>
+                })
+                .collect();
+            let picks: Vec<vectorcraft_doc::PixelPick> = group
+                .iter()
+                .zip(&keeps)
+                .map(|(r, keep)| {
+                    use vectorcraft_geom::kurbo::Shape;
+                    let (w, h) = r.size;
+                    let inv = r.xf.inverse();
+                    // The box sampled: the marquee, cut to the clipping paths' bounds, so a small
+                    // region a clip shows of a large image is still sampled densely.
+                    let clip_box = r.clip.as_ref().map(|rs| rs.iter().map(|(bp, _)| bp.bounding_box()).reduce(|a, b| a.union(b)).unwrap_or_default());
+                    let region = match (r.area, clip_box) {
+                        (Some(a), Some(c)) => Some(a.intersect(c)),
+                        (a, c) => a.or(c),
+                    };
+                    let box_uv = region.map(|a| {
+                        let uv: Vec<Point> =
+                            [(a.x0, a.y0), (a.x1, a.y0), (a.x0, a.y1), (a.x1, a.y1)].into_iter().map(|(x, y)| inv * Point::new(x, y)).collect();
+                        let low = |f: fn(&Point) -> f64| uv.iter().map(f).fold(f64::INFINITY, f64::min);
+                        let high = |f: fn(&Point) -> f64| uv.iter().map(f).fold(f64::NEG_INFINITY, f64::max);
+                        [low(|p| p.x) / w, low(|p| p.y) / h, high(|p| p.x) / w, high(|p| p.y) / h]
+                    });
+                    (box_uv, keep.as_ref())
+                })
+                .collect();
+            // Each sampled pixel inside a clip group is tested against the clipping regions: the
+            // pixels one image gives keep that work within THEME_WORK path elements.
+            let elements =
+                group.iter().map(|r| r.clip.as_ref().map_or(0, |rs| rs.iter().map(|(bp, _)| bp.elements().len()).sum::<usize>())).max().unwrap_or(0);
+            let budget = THEME_WORK.checked_div(elements).map_or(budget, |w| budget.min(w.max(1)));
+            let Some(each) = group[0].blob.sample_pixels(&picks, budget) else { continue };
+            for (px, read) in each.into_iter().zip(&group) {
+                if let Some(colors) = &read.colorize {
+                    // Ink: an opaque pixel darker than white takes the colorize paint.
+                    if !colors.is_empty() && px.iter().any(|p| p[3] >= 128 && p[..3].iter().any(|v| *v < 255)) {
+                        let w = 1.0 / colors.len().max(1) as f32;
+                        self.samples.extend(colors.iter().map(|c| (*c, w)));
+                        self.objects += 1;
+                    }
+                    continue;
+                }
+                let mut cells: HashMap<[u8; 3], ([u64; 3], u64)> = HashMap::new();
+                for [r, g, b, _] in px.into_iter().filter(|p| p[3] >= 128) {
+                    let cell = cells.entry([r >> 4, g >> 4, b >> 4]).or_default();
+                    for (sum, v) in cell.0.iter_mut().zip([r, g, b]) {
+                        *sum += u64::from(v);
+                    }
+                    cell.1 += 1;
+                }
+                let total: u64 = cells.values().map(|c| c.1).sum();
+                if total == 0 {
+                    continue;
+                }
+                for (key, (sum, n)) in cells {
+                    let cell = pixels.entry(key).or_default();
+                    for (acc, s) in cell.0.iter_mut().zip(sum) {
+                        *acc += s as f64 / total as f64;
+                    }
+                    cell.1 += n as f64 / total as f64;
+                }
+                self.objects += 1;
+            }
+        }
+        let mut cells: Vec<_> = pixels.into_iter().collect();
+        // The same order on every run.
+        cells.sort_unstable_by_key(|c| c.0);
+        for (_, (sum, w)) in cells {
+            let [r, g, b] = sum.map(|s| (s / w).round().clamp(0.0, 255.0) as u8);
+            self.samples.push((Color::rgb8(r, g, b), w as f32));
+        }
+    }
+
+    /// Read `n` and everything visible inside it: each image (its part inside `area` when given,
+    /// and inside the clipping paths around it) and each other object with colours of its own
+    /// (that touches `area` when given, and shows inside the clipping paths around it). The art a
+    /// symbol instance shows (with a dynamic instance's own paints), placed where the instance
+    /// draws it, and the objects a blend, an envelope or a repeat draws elsewhere than they lie,
+    /// are read whole when the instance or the live object touches `area`. `depth` counts the
+    /// objects passed through: deeper art is left out. An enabled opacity mask that clips (and is
+    /// not inverted) shows the object only where its mask art is lighter than black
+    /// ([`mask_regions`]), as a clip group would.
+    fn read(&mut self, n: &Node, area: Option<Rect>, depth: usize) {
+        let Some(mask) = n.extras().mask.as_deref().filter(|m| !m.disabled && m.clip && !m.invert) else {
+            return self.read_unmasked(n, area, depth);
+        };
+        let regions = mask_regions(&mask.art, &mut self.mask_budget);
+        let outer = self.clip.clone();
+        self.clip = Some(match &outer {
+            None => regions,
+            Some(o) => intersect_regions(o, &regions),
+        });
+        self.read_unmasked(n, area, depth);
+        self.clip = outer;
+    }
+
+    /// [`Self::read`] without `n`'s opacity mask.
+    fn read_unmasked(&mut self, n: &Node, area: Option<Rect>, depth: usize) {
+        // Hidden and fully transparent objects show nothing.
+        if depth > MAX_THEME_DEPTH || !n.visible || n.opacity <= 0.0 || matches!(n.kind, NodeKind::Path { guide: true, .. }) {
+            return;
+        }
+        let touches = area.is_none_or(|r| self.touches(n, r));
+        match &n.kind {
+            NodeKind::Image(im) => {
+                if !touches {
+                    return;
+                }
+                // A document keeps its images' pixels in its image store.
+                let Some(blob) = self.d.images.get(&im.key) else { return };
+                // An image with a colorize paint shows that paint's color, not its own pixels;
+                // other paints its appearance has (with effects that draw them) count as well.
+                let colorized = n.extras().colorize.is_some() && blob.takes_colorize();
+                let own = if colorized || n.extras().colorize.is_none() {
+                    self.own(n, true)
+                } else {
+                    // A colorize paint the image does not take (a linked image's preview)
+                    // shows nothing.
+                    let mut plain = n.clone();
+                    plain.extras_mut().colorize = None;
+                    self.own(&plain, true)
+                };
+                let colorize = if colorized {
+                    Some(own)
+                } else {
+                    if self.shows(n, area) {
+                        self.add(own);
+                    }
+                    None
+                };
+                let size = (f64::from(im.width.max(1)), f64::from(im.height.max(1)));
+                self.queue_image(ImageRead { blob, xf: im.xf, size, area, clip: self.clip.clone(), colorize });
+                return;
+            }
+            NodeKind::SymbolInstance { symbol, xf } => {
+                if touches
+                    && self.shows(n, area)
+                    && let Some(s) = self.d.symbols.iter().find(|s| s.name == *symbol)
+                {
+                    // The instance's own paints; its overrides show in its art.
+                    let own = self.own(n, false);
+                    self.add(own);
+                    // The art as the instance places it: through the symbol's 9-slice guides when
+                    // it has them, else by the instance's transform. Art that would place too many
+                    // objects is left out, as the renderer leaves it out.
+                    let dynamic = (!n.extras().symbol_overrides.is_empty()).then(|| vectorcraft_doc::symbol_overrides::dynamic_art(&s.art, n));
+                    if let Some(placed) = self.d.place_symbol_art(symbol, dynamic.as_ref().unwrap_or(&s.art), *xf) {
+                        // The vector art counts as one object, each of its colours once, so an
+                        // object the 9-slice guides cut into several copies does not count more.
+                        // Each image placed is read on its own, as images are elsewhere.
+                        let (samples, objects) = (self.samples.len(), self.objects);
+                        self.read(&placed, None, depth + 1);
+                        let added = self.samples.split_off(samples);
+                        self.objects = objects;
+                        let mut seen = std::collections::HashSet::new();
+                        let colors: Vec<Color> = added.into_iter().map(|(c, _)| c).filter(|c| seen.insert(ColorKey::of(c))).collect();
+                        self.add(colors);
+                    }
+                }
+                return;
+            }
+            NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) => {
+                if touches && self.shows(n, area) {
+                    let own = self.own(n, true);
+                    self.add(own);
+                    // The copies are drawn elsewhere than the objects lie: the clipping paths
+                    // around the live object, tested above, do not apply to the objects.
+                    let clip = self.clip.take();
+                    for c in n.children().into_iter().flatten() {
+                        self.read(c, None, depth + 1);
+                    }
+                    self.clip = clip;
+                }
+                return;
+            }
+            _ => {}
+        }
+        if touches && self.shows(n, area) {
+            let own = self.own(n, true);
+            self.add(own);
+        }
+        // A compound path's members are its geometry: the compound paints them.
+        if matches!(n.kind, NodeKind::Compound { .. }) {
+            return;
+        }
+        // A clip group's clipping path paints whole, over the art it clips: it is read in the
+        // marquee as given and under the clip groups around it alone.
+        let clip_child = n.children().and_then(|c| c.first()).filter(|_| n.clips());
+        if let Some(first) = clip_child {
+            self.read(first, area, depth + 1);
+        }
+        let inner = match area {
+            Some(r) => match vectorcraft_doc::hit::marquee_in(n, r) {
+                Some(inner) => Some(inner),
+                None => return,
+            },
+            None => None,
+        };
+        // A clip group shows its art where its clipping path's regions and the clip groups around
+        // it all show.
+        let outer = self.clip.clone();
+        if n.clips()
+            && let Some(first) = n.children().and_then(|c| c.first())
+        {
+            let regions: Vec<Region> = vectorcraft_doc::hit::clip_regions(first);
+            self.clip = Some(match &outer {
+                None => regions,
+                Some(o) => intersect_regions(o, &regions),
+            });
+        }
+        // A Shaper Group's original shapes, which the group keeps but does not show, are left out.
+        for (i, c) in n.children().into_iter().flatten().enumerate().skip(usize::from(clip_child.is_some())) {
+            if !vectorcraft_doc::hit::shaper_hides(n, i, self.scope) {
+                self.read(c, inner, depth + 1);
+            }
+        }
+        self.clip = outer;
+    }
+
+    /// Does `n` show inside the region the clip groups around it show, in `area` when given? Its
+    /// box (cut to `area`) meets a region of it: the region's outline crosses the box, or a point
+    /// on a 9 × 9 grid over the part of the box inside the region's bounds lies in the region.
+    fn shows(&self, n: &Node, area: Option<Rect>) -> bool {
+        use vectorcraft_geom::kurbo::Shape;
+        let Some(regions) = &self.clip else { return true };
+        let Some(b) = n.visual_bounds_with(&self.boxes) else { return false };
+        let b = area.map_or(b, |r| b.intersect(r));
+        let valid = |r: &Rect| r.width() >= 0.0 && r.height() >= 0.0;
+        if !valid(&b) {
+            return false;
+        }
+        // A path or compound path paints along its outline, and inside it where it has a visible
+        // fill: a point along the outline, or (filled) a point of a 9 × 9 grid over the part of the
+        // box inside a region's bounds that lies in both its fill and the region, must show.
+        let filled = has_fill(n);
+        let outline: Option<(Vec<&vectorcraft_geom::PathData>, vectorcraft_geom::FillRule)> = match &n.kind {
+            NodeKind::Path { path, rule, .. } => Some((vec![path], *rule)),
+            NodeKind::Compound { children, rule } => Some((children.iter().filter(|c| c.visible).filter_map(|c| c.path_data()).collect(), *rule)),
+            _ => None,
+        };
+        if let Some((paths, own_rule)) = outline {
+            use vectorcraft_geom::ParamCurve;
+            use vectorcraft_geom::kurbo::ParamCurveArclen;
+            // The work all these tests do is bounded: past it, objects count as shown.
+            if self.work.get() > THEME_WORK {
+                return true;
+            }
+            let half = stroke_reach(n);
+            let cost: usize = regions.iter().map(|(bp, _)| bp.elements().len().max(1)).sum();
+            let in_region = |p: Point| {
+                // Past the work allowed, the outline counts as shown.
+                if self.work.get() > THEME_WORK {
+                    return true;
+                }
+                self.work.set(self.work.get() + cost);
+                regions.iter().any(|(bp, rule)| {
+                    vectorcraft_geom::hit::fill_contains(bp, *rule, p) || half > 0.0 && vectorcraft_geom::hit::stroke_contains(bp, 0.0, half, p)
+                })
+            };
+            let mut fill = vectorcraft_geom::BezPath::new();
+            for p in &paths {
+                fill.extend(p.to_bezpath().elements().iter().copied());
+            }
+            // At most 4,096 points along the outline, shared among its segments by length, no
+            // farther apart than half the smallest region's width or height where that allows.
+            let step = regions
+                .iter()
+                .map(|(bp, _)| bp.bounding_box())
+                .chain(area)
+                .map(|rb| rb.width().min(rb.height()))
+                .fold(f64::INFINITY, f64::min)
+                .max(0.01)
+                / 2.0;
+            // With a marquee, only the outline inside it (within the stroke's reach) counts.
+            let picked = area.map(|r| r.inflate(half, half));
+            let segs: Vec<(vectorcraft_geom::PathSeg, f64)> = fill
+                .segments()
+                .take(4096)
+                .map(|s| {
+                    let len = s.arclen(0.5);
+                    (s, if len.is_finite() { len } else { 0.0 })
+                })
+                .collect();
+            let total: f64 = segs.iter().map(|(_, l)| l).sum();
+            let points = (total / step).ceil().clamp(64.0, 4096.0);
+            let along = segs.iter().any(|(seg, len)| {
+                let n = if total > 0.0 { (points * len / total).round().clamp(1.0, 4096.0) as u32 } else { 1 };
+                (0..=n).any(|i| {
+                    let p = seg.eval(f64::from(i) / f64::from(n));
+                    picked.is_none_or(|r| r.contains(p)) && in_region(p)
+                })
+            });
+            return along
+                || filled
+                    && regions.iter().any(|(bp, _)| {
+                        let g = b.intersect(bp.bounding_box());
+                        valid(&g)
+                            && (0..81).any(|i| {
+                                let p = Point::new(g.x0 + g.width() * f64::from(i % 9) / 8.0, g.y0 + g.height() * f64::from(i / 9) / 8.0);
+                                in_region(p) && vectorcraft_geom::hit::fill_contains(&fill, own_rule, p)
+                            })
+                    });
+        }
+        regions.iter().any(|(bp, rule)| {
+            let g = b.intersect(bp.bounding_box());
+            valid(&g)
+                && (vectorcraft_geom::hit::intersects_rect(&vectorcraft_geom::PathData::from_bezpath(bp), b)
+                    || (0..81).any(|i| {
+                        let p = Point::new(g.x0 + g.width() * f64::from(i % 9) / 8.0, g.y0 + g.height() * f64::from(i / 9) / 8.0);
+                        vectorcraft_geom::hit::fill_contains(bp, *rule, p)
+                    }))
+        })
+    }
+
+    /// Does the marquee `r` touch what `n` paints? A path or a compound path is touched where its
+    /// outline comes within half its widest visible stroke of `r` or, when it has a visible fill,
+    /// where `r`'s centre lies in that fill; any other object is touched by its box.
+    fn touches(&self, n: &Node, r: Rect) -> bool {
+        let boxed = n.visual_bounds_with(&self.boxes).is_some_and(|b| b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1);
+        let filled = || has_fill(n);
+        let half = stroke_reach(n);
+        let near = r.inflate(half, half);
+        let crosses = |paths: &[&vectorcraft_geom::PathData], rule: vectorcraft_geom::FillRule| {
+            paths.iter().any(|p| vectorcraft_geom::hit::intersects_rect(p, near))
+                || filled() && {
+                    let mut bp = vectorcraft_geom::BezPath::new();
+                    for p in paths {
+                        bp.extend(p.to_bezpath().elements().iter().copied());
+                    }
+                    // A point on a 5 × 5 grid over the part of the marquee in the path's box lies
+                    // in its fill.
+                    use vectorcraft_geom::kurbo::Shape;
+                    let g = r.intersect(bp.bounding_box());
+                    g.width() >= 0.0
+                        && g.height() >= 0.0
+                        && (0..25).any(|i| {
+                            let p = Point::new(g.x0 + g.width() * f64::from(i % 5) / 4.0, g.y0 + g.height() * f64::from(i / 5) / 4.0);
+                            vectorcraft_geom::hit::fill_contains(&bp, rule, p)
+                        })
+                }
+        };
+        match &n.kind {
+            NodeKind::Path { path, rule, .. } => boxed && crosses(&[path], *rule),
+            NodeKind::Compound { children, rule } => {
+                let paths: Vec<&vectorcraft_geom::PathData> = children.iter().filter(|c| c.visible).filter_map(|c| c.path_data()).collect();
+                boxed && crosses(&paths, *rule)
+            }
+            _ => boxed,
+        }
+    }
+}
+
+/// The regions where opacity mask art `art` lets the masked object show: the regions
+/// ([`vectorcraft_doc::hit::clip_regions`]) of its visible paths and compound paths filled lighter
+/// than black (a solid color, a gradient with a stop lighter than black, or a pattern), the
+/// outlines of the strokes lighter than black they have (dashes read as solid), the frames of its
+/// images, the boxes of its type painted lighter than black, the boxes of art with effects (with
+/// what the effects reach), and the regions of its clip groups and live objects whole. Black,
+/// unfilled and unstroked paths without effects hide; how light the art is beyond that is not
+/// read. Strokes are outlined along at most `budget` segments in all (it counts down); past that
+/// a stroke counts by its box grown by half its width.
+fn mask_regions(art: &Node, budget: &mut usize) -> Vec<Region> {
+    // Any color but black lets the masked art show.
+    fn light(p: &Paint) -> bool {
+        let lit = |c: &Color| c.to_rgba8(1.0)[..3].iter().any(|v| *v > 0);
+        match p {
+            Paint::None => false,
+            Paint::Solid { color, .. } => lit(color),
+            Paint::Gradient(g) => g.gradient.stops.iter().any(|s| lit(&s.color)),
+            _ => true,
+        }
+    }
+    fn walk(n: &Node, depth: usize, out: &mut Vec<Region>, budget: &mut usize) {
+        use vectorcraft_geom::kurbo::Shape;
+        // The mask art's root masks even when it is hidden.
+        // Guides draw nothing.
+        if depth > MAX_THEME_DEPTH || depth > 0 && (!n.visible || n.opacity <= 0.0) || matches!(n.kind, NodeKind::Path { guide: true, .. }) {
+            return;
+        }
+        // Art with effects can show light anywhere near it (a glow on black art): it counts
+        // whole, as a clipping path would.
+        let effects = !n.appearance.effects.is_empty()
+            || n.appearance.items.iter().any(|it| match it {
+                vectorcraft_doc::AppearanceItem::Fill(l) => l.visible && !l.effects.is_empty(),
+                vectorcraft_doc::AppearanceItem::Stroke(l) => l.visible && !l.effects.is_empty(),
+            });
+        if effects {
+            if let Some(b) = n.visual_bounds() {
+                out.push((b.to_path(0.1), vectorcraft_geom::FillRule::NonZero));
+            }
+            return;
+        }
+        let lit = n
+            .appearance
+            .items
+            .iter()
+            .any(|it| matches!(it, vectorcraft_doc::AppearanceItem::Fill(l) if l.visible && l.opacity > 0.0 && light(&l.paint)));
+        let stroke = n
+            .appearance
+            .items
+            .iter()
+            .filter_map(|it| match it {
+                vectorcraft_doc::AppearanceItem::Stroke(l) if l.visible && l.opacity > 0.0 && l.width > 0.0 && light(&l.paint) => Some(l.width / 2.0),
+                _ => None,
+            })
+            .fold(None, |a: Option<f64>, w| Some(a.map_or(w, |a| a.max(w))));
+        let boxed = |out: &mut Vec<Region>| {
+            if let Some(b) = n.geometric_bounds() {
+                out.push((b.to_path(0.1), vectorcraft_geom::FillRule::NonZero));
+            }
+        };
+        match &n.kind {
+            NodeKind::Path { .. } | NodeKind::Compound { .. } => {
+                if lit {
+                    out.extend(vectorcraft_doc::hit::clip_regions(n));
+                }
+                // A stroke shows the art along it: its outline with round ends and corners, a
+                // dashed stroke read as solid (the most it can show).
+                if let Some(half) = stroke {
+                    let paths: Vec<&vectorcraft_geom::PathData> = match &n.kind {
+                        NodeKind::Path { path, .. } => vec![path],
+                        NodeKind::Compound { children, .. } => children.iter().filter_map(|c| c.path_data()).collect(),
+                        _ => vec![],
+                    };
+                    for p in paths {
+                        // Past MASK_OUTLINE_SEGMENTS outlined segments, a stroke counts by its
+                        // box grown by half its width.
+                        let segments = p.to_bezpath().elements().len();
+                        if *budget < segments {
+                            if let Some(b) = p.bounds().filter(|_| half.is_finite()) {
+                                out.push((b.inflate(half, half).to_path(0.1), vectorcraft_geom::FillRule::NonZero));
+                            }
+                            continue;
+                        }
+                        *budget -= segments;
+                        let region = vectorcraft_pathops::outline_stroke(
+                            p,
+                            half * 2.0,
+                            vectorcraft_pathops::Cap::Round,
+                            vectorcraft_pathops::Join::Round,
+                            10.0,
+                        );
+                        if !region.subpaths.is_empty() {
+                            out.push((region.to_bezpath(), vectorcraft_geom::FillRule::NonZero));
+                        }
+                    }
+                }
+            }
+            NodeKind::Image(_) => out.extend(vectorcraft_doc::hit::clip_regions(n)),
+            NodeKind::Text(t) => {
+                if lit || stroke.is_some() || t.runs.iter().any(|r| light(&r.style.fill) || r.style.stroke_width > 0.0 && light(&r.style.stroke)) {
+                    boxed(out);
+                }
+            }
+            NodeKind::Group { clip: false, .. } | NodeKind::Layer { clip: false, .. } => {
+                // A Shaper Group's original shapes are kept but not drawn.
+                for (i, c) in n.children().into_iter().flatten().enumerate() {
+                    if !vectorcraft_doc::hit::shaper_hides(n, i, None) {
+                        walk(c, depth + 1, out, budget);
+                    }
+                }
+            }
+            // Clip groups, live objects and placed documents count by the regions they clip to.
+            _ => out.extend(vectorcraft_doc::hit::clip_regions(n)),
+        }
+    }
+    let mut out = vec![];
+    walk(art, 0, &mut out, budget);
+    out
+}
+
+/// Does `n` have a fill item that paints: visible, not fully transparent and not None?
+fn has_fill(n: &Node) -> bool {
+    n.appearance
+        .items
+        .iter()
+        .any(|it| matches!(it, vectorcraft_doc::AppearanceItem::Fill(l) if l.visible && l.opacity > 0.0 && !matches!(l.paint, Paint::None)))
+}
+
+/// How far `n`'s widest painting stroke reaches from its path: half its width (0 without one).
+fn stroke_reach(n: &Node) -> f64 {
+    let paints = |l: &vectorcraft_doc::StrokeLayer| l.visible && l.opacity > 0.0 && !matches!(l.paint, Paint::None) && l.width.is_finite();
+    n.appearance
+        .items
+        .iter()
+        .filter_map(|it| match it {
+            vectorcraft_doc::AppearanceItem::Stroke(l) if paints(l) => Some(l.width.max(0.0) / 2.0),
+            _ => None,
+        })
+        .fold(0.0, f64::max)
+}
+
+/// The paints `m` shows: its visible fill items and its visible strokes wider than 0, its text's
+/// fills and strokes wider than 0, and its colorize paint.
+fn shown_paints(m: &Node) -> impl Iterator<Item = &Paint> {
+    let runs = match &m.kind {
+        NodeKind::Text(t) => t.runs.as_slice(),
+        _ => &[],
+    };
+    let items = m.appearance.items.iter().filter_map(|it| match it {
+        vectorcraft_doc::AppearanceItem::Fill(l) if l.visible && l.opacity > 0.0 => Some(&l.paint),
+        vectorcraft_doc::AppearanceItem::Stroke(l) if l.visible && l.opacity > 0.0 && l.width > 0.0 => Some(&l.paint),
+        _ => None,
+    });
+    let text = runs.iter().flat_map(|r| std::iter::once(&r.style.fill).chain((r.style.stroke_width > 0.0).then_some(&r.style.stroke)));
+    items.chain(text).chain(m.extras().colorize.as_deref())
+}
+
+/// Add the colours `m` shows itself to `out` (solid colours, gradient stops, its text's colours
+/// and its mesh points; the paints a dynamic symbol instance keeps for objects of its art only
+/// when `overrides` is set), and the names of the patterns it paints with to `patterns`, leaving
+/// out names already there.
+fn paint_colors_of(m: &Node, overrides: bool, out: &mut Vec<Color>, patterns: &mut Vec<String>) {
+    let kept = override_paints(m).filter(|_| overrides);
+    for p in shown_paints(m).chain(kept) {
+        match p {
+            Paint::Solid { color, .. } => out.push(*color),
+            Paint::Gradient(g) => out.extend(g.gradient.stops.iter().map(|s| s.color)),
+            Paint::Pattern { pattern, .. } if !patterns.contains(pattern) => patterns.push(pattern.clone()),
+            _ => {}
+        }
+    }
+    if let NodeKind::Mesh(mesh) = &m.kind {
+        out.extend(mesh.points.iter().map(|p| p.color));
+    }
+}
+
+impl<'a> Theme<'a> {
+    /// Queue image read `r`, within the limits of a pick: at most [`MAX_THEME_READS`] reads of
+    /// [`MAX_THEME_IMAGES`] images; nothing inside clip groups that show nothing.
+    fn queue_image(&mut self, r: ImageRead<'a>) {
+        if self.images.len() >= MAX_THEME_READS || r.clip.as_ref().is_some_and(Vec::is_empty) {
+            return;
+        }
+        let key: *const vectorcraft_doc::ImageBlob = r.blob;
+        if !self.blobs.contains(&key) {
+            if self.blobs.len() >= MAX_THEME_IMAGES {
+                return;
+            }
+            self.blobs.insert(key);
+        }
+        self.images.push(r);
+    }
+
+    /// The colours `m` paints itself ([`paint_colors_of`]; a dynamic symbol instance's paints for
+    /// objects of its art only with `overrides`), and the colours its pattern tiles show, read as
+    /// document art is read (clip groups and symbols included; the tiles' images join this pick's
+    /// image reads). Each pattern's colours
+    /// are read once; a pattern whose tile uses itself, directly or through other patterns, adds
+    /// nothing more the second time.
+    fn own(&mut self, m: &Node, overrides: bool) -> Vec<Color> {
+        let mut out = vec![];
+        let mut patterns: Vec<String> = vec![];
+        paint_colors_of(m, overrides, &mut out, &mut patterns);
+        for name in patterns {
+            if let Some((colors, reads)) = self.pattern_colors.get(&name) {
+                out.extend(colors);
+                // The tiles' images count again for each use, within the pick's limits.
+                let reads = reads.clone();
+                for r in reads {
+                    self.queue_image(r);
+                }
+                continue;
+            }
+            if self.pattern_stack.contains(&name) || self.pattern_stack.len() >= MAX_THEME_DEPTH {
+                continue;
+            }
+            let Some(def) = self.d.pattern(&name) else { continue };
+            let mut sub = Theme::new(self.d);
+            sub.pattern_stack = std::mem::take(&mut self.pattern_stack);
+            sub.pattern_stack.push(name.clone());
+            sub.pattern_colors = std::mem::take(&mut self.pattern_colors);
+            // The tiles' images join this pick's image reads, within its limits.
+            sub.images = std::mem::take(&mut self.images);
+            sub.blobs = std::mem::take(&mut self.blobs);
+            // The tiles share this pick's limits on work too.
+            sub.work.set(self.work.get());
+            sub.mask_budget = self.mask_budget;
+            let before = sub.images.len();
+            for a in &def.art {
+                sub.read(a, None, 0);
+            }
+            sub.pattern_stack.pop();
+            self.pattern_stack = std::mem::take(&mut sub.pattern_stack);
+            self.pattern_colors = std::mem::take(&mut sub.pattern_colors);
+            let reads: Vec<ImageRead<'a>> = sub.images.get(before..).unwrap_or_default().to_vec();
+            self.images = std::mem::take(&mut sub.images);
+            self.blobs = std::mem::take(&mut sub.blobs);
+            self.work.set(sub.work.get());
+            self.mask_budget = sub.mask_budget;
+            let colors: Vec<Color> = sub.samples.iter().map(|(c, _)| *c).collect();
+            out.extend(&colors);
+            self.pattern_colors.insert(name, (colors, reads));
+        }
+        out
+    }
+}
+
+fn pick_theme(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "recolor.pickTheme";
+    let picks = match p.get("picks") {
+        Some(Value::Array(a)) if !a.is_empty() && a.len() <= MAX_PICKS => a.iter().map(|v| Pick::param(v, C)).collect::<Result<Vec<_>>>()?,
+        Some(Value::Array(a)) => return Err(bad(C, format!("`picks` must hold 1 to {MAX_PICKS} picks (got {})", a.len()))),
+        Some(v) => return Err(bad(C, format!("`picks` must be an array (got {v})"))),
+        None => return Err(bad(C, "missing `picks`")),
+    };
+    let n = super::menucmds::whole_or(p, "colors", 5, C)?;
+    if !(1..=MAX_THEME_COLORS).contains(&n) {
+        return Err(bad(C, format!("`colors` must be between 1 and {MAX_THEME_COLORS} (got {n})")));
+    }
+    let st = s.doc()?;
+    let d = &st.doc;
+    let mut theme = Theme::new(d);
+    theme.scope = st.isolation;
+    // In isolation mode: the isolated object, everything inside it and the containers around it.
+    let scope: Option<std::collections::HashSet<NodeId>> = st.isolation.and_then(|iso| d.node(iso)).map(|iso| {
+        let mut allowed = std::collections::HashSet::new();
+        iso.walk(&mut |m| {
+            allowed.insert(m.id);
+        });
+        let mut up = d.parent_of(iso.id);
+        while let Some(p) = up {
+            allowed.insert(p);
+            up = d.parent_of(p);
+        }
+        allowed
+    });
+    for pick in picks {
+        match pick {
+            Pick::At(pt) => {
+                // In isolation mode only the isolated art (and the groups around it) can be hit;
+                // isolated Shaper Group originals are hittable then.
+                let opt = vectorcraft_doc::hit::HitOptions { scope: st.isolation, ..Default::default() };
+                let hit = match &scope {
+                    Some(allowed) => vectorcraft_doc::hit::hit_test_visible_skipping(d, pt, opt, &|id| !allowed.contains(&id)),
+                    None => vectorcraft_doc::hit::hit_test_visible(d, pt, opt),
+                };
+                if let Some(n) = hit.and_then(|h| d.node(h.top_object(st.isolation))) {
+                    theme.read(n, None, 0);
+                }
+            }
+            Pick::Area(r) => match st.isolation.and_then(|iso| d.node(iso)) {
+                // In isolation mode a marquee reads the isolated art alone.
+                Some(iso) => theme.read(iso, Some(r), 0),
+                None => {
+                    for l in &d.layers {
+                        theme.read(l, Some(r), 0);
+                    }
+                }
+            },
+        }
+    }
+    theme.read_images();
+    let colors = vectorcraft_color::recolor::theme_palette(&theme.samples, index(n));
+    Ok(json!({"colors": colors.iter().map(key_str).collect::<Vec<_>>(), "objects": theme.objects}))
 }
 
 /// A colour the art uses: how often, and the global swatch it is linked to.
