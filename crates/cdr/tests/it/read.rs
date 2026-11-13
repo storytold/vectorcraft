@@ -1326,6 +1326,32 @@ fn a_missing_or_repeating_clipped_group_keeps_the_container() {
     assert_eq!(d.warnings, vec![Warning::TooDeep]);
 }
 
+/// Each chunk of a clipped group counts toward the clipped chunk limit every time a container
+/// names the group, empty groups included; past it the containers stay as plain shapes, and a
+/// group cut off at the limit leaves out its guidelines too.
+#[test]
+fn containers_naming_one_group_stop_at_the_clipped_chunk_limit() {
+    let v = V(1100);
+    // The group walks 53 chunks: its `spnd`, a guideline, 50 empty groups and a rectangle.
+    let mut guide = vec![0; 12];
+    guide.extend(90_000_000i32.to_le_bytes());
+    guide.extend([v.coord(36.0), v.coord(0.0)].concat());
+    let mut contents = vec![synth::object(v, 0x16, &[(16000, guide)], None)];
+    contents.extend((0..50).map(|_| list(b"grp ", vec![])));
+    contents.push(clip_rect(v, 10.0, &[], [0.0, 0.0]));
+    let containers: Vec<synth::Node> = (0..20).map(|_| clip_rect(v, 40.0, &[synth::container(0x77)], [0.0, 0.0])).collect();
+    let file = clip_drawing(1100, vec![(0x77, contents)], containers);
+    let count = |objects: &[Object]| objects.iter().filter(|o| matches!(o, Object::Clip { .. })).count();
+    let d = read(&file, Limits::default()).unwrap();
+    assert_eq!((count(&d.pages[0].layers[0].objects), d.pages[0].layers[0].guides.len()), (20, 20));
+    assert!(d.warnings.is_empty(), "{:?}", d.warnings);
+    // The sixth container's walk stops after its guideline and 8 empty groups.
+    let d = read(&file, Limits { clipped_chunks: 53 * 5 + 10, ..Limits::default() }).unwrap();
+    let layer = &d.pages[0].layers[0];
+    assert_eq!((layer.objects.len(), count(&layer.objects), layer.guides.len()), (20, 5, 5));
+    assert_eq!(d.warnings, vec![Warning::TooDeep]);
+}
+
 /// A container, fill, outline or style argument too short for the id it names is damage: the
 /// shape comes in as a plain shape without that id.
 #[test]

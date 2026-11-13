@@ -26,6 +26,9 @@ pub struct Limits {
     /// Dashes of all outlines together, an outline's counted again for every shape that uses it.
     /// Past them a shape's outline is solid, with a warning.
     pub dashes: usize,
+    /// Chunks walked inside clipped groups, all containers together, a group's counted again for
+    /// every container that names it. Past them a container's group is left out, with a warning.
+    pub clipped_chunks: usize,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -45,6 +48,7 @@ impl Default for Limits {
             coordinates: 16_000_000,
             arguments: 64,
             dashes: 16_000_000,
+            clipped_chunks: 2_000_000,
         }
     }
 
@@ -61,6 +65,7 @@ impl Default for Limits {
             coordinates: 16_000_000,
             arguments: 64,
             dashes: 8_000_000,
+            clipped_chunks: 2_000_000,
         }
     }
 }
@@ -74,13 +79,14 @@ pub(crate) struct Budget {
     objects: usize,
     coordinates: usize,
     dashes: usize,
+    clipped_chunks: usize,
     /// A request for coordinates was refused since [`Budget::coordinates_refused`] last asked.
     refused: bool,
 }
 
 impl Budget {
     pub(crate) fn new(limits: Limits) -> Self {
-        Budget { limits, inflated: 0, chunks: 0, objects: 0, coordinates: 0, dashes: 0, refused: false }
+        Budget { limits, inflated: 0, chunks: 0, objects: 0, coordinates: 0, dashes: 0, clipped_chunks: 0, refused: false }
     }
 
     /// Whether a request for coordinates was refused since the last call, which tells a shape
@@ -146,5 +152,14 @@ impl Budget {
             }
             None => false,
         }
+    }
+
+    /// One more chunk walked inside a clipped group, or `false` past the limit.
+    pub(crate) fn take_clipped_chunk(&mut self) -> bool {
+        if self.clipped_chunks >= self.limits.clipped_chunks {
+            return false;
+        }
+        self.clipped_chunks += 1;
+        true
     }
 }

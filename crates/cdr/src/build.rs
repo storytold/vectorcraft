@@ -55,6 +55,8 @@ struct Ctx<'a, 'b> {
     clips: HashMap<u32, &'b Chunk>,
     /// The clipped groups being read, innermost last.
     open_clips: Vec<u32>,
+    /// Whether the walk of a clipped group stopped at the clipped chunk limit.
+    clip_cut: bool,
 }
 
 /// The most clipped groups read one inside another: VectorCraft's own limit.
@@ -93,6 +95,7 @@ pub(crate) fn drawing(ix: &Index, budget: &mut Budget, warn: &mut Vec<Warning>) 
         styles,
         clips: HashMap::new(),
         open_clips: Vec::new(),
+        clip_cut: false,
     };
     for g in found.clpt.iter().flat_map(|c| ix.children(c)).filter(|g| g.is_list(b"grp ")) {
         if let Some(id) = ix.children(g).iter().find(|c| &c.id == b"spnd").and_then(|c| Rd::new(ix.data(c)).u32()) {
@@ -366,6 +369,13 @@ impl<'a, 'b> Ctx<'a, 'b> {
                 continue;
             };
             top.next += 1;
+            // Every chunk of a clipped group counts, empty groups included, each time a container
+            // names the group; past the limit the group is left out.
+            if !self.open_clips.is_empty() && !self.budget.take_clipped_chunk() {
+                push(self.warn, Warning::TooDeep);
+                self.clip_cut = true;
+                return Vec::new();
+            }
             if c.is_list(b"obj ") {
                 if let Some(o) = self.object(c, guides, &outer) {
                     top.objects.push(o);
@@ -471,8 +481,9 @@ impl<'a, 'b> Ctx<'a, 'b> {
     }
 
     /// `container` and the objects of the clipped group `id`, which keep their own transforms.
-    /// A group that isn't there is damage; one already being read, or past the depth limit, is
-    /// left out with the limit warning. Either way the container stays, as a plain shape.
+    /// A group that isn't there is damage; one already being read, past the depth limit or past
+    /// the chunks clipped groups may walk is left out with the limit warning, the guidelines it
+    /// holds included. Either way the container stays, as a plain shape.
     fn clip(&mut self, container: Box<Shape>, id: u32, guides: &mut Vec<Guideline>) -> Object {
         let Some(&group) = self.clips.get(&id) else {
             push(self.warn, Warning::Damaged);
@@ -483,9 +494,13 @@ impl<'a, 'b> Ctx<'a, 'b> {
             return Object::Shape(container);
         }
         self.open_clips.push(id);
-        let ix = self.ix;
+        let (ix, mark) = (self.ix, guides.len());
         let objects = self.objects(ix.children(group), guides);
         self.open_clips.pop();
+        if std::mem::take(&mut self.clip_cut) {
+            guides.truncate(mark);
+            return Object::Shape(container);
+        }
         if objects.is_empty() {
             return Object::Shape(container);
         }
@@ -616,12 +631,14 @@ impl<'a, 'b> Ctx<'a, 'b> {
             });
             self.outlines.insert(id, read);
         }
-        let o = self.outlines.get(&id)?.as_ref()?;
-        if o.dashes.is_empty() || self.budget.take_dashes(o.dashes.len()) {
-            return Some(o.clone());
+        let o = self.outlines.get_mut(&id)?.as_mut()?;
+        // The dashes left only shrink, so an outline refused once is refused for every later
+        // shape: its dashes are dropped from the cache, and later shapes take it solid.
+        if !o.dashes.is_empty() && !self.budget.take_dashes(o.dashes.len()) {
+            o.dashes = Vec::new();
+            push(self.warn, Warning::TooDeep);
         }
-        push(self.warn, Warning::TooDeep);
-        Some(Outline { dashes: Vec::new(), ..o.clone() })
+        Some(o.clone())
     }
 }
 
@@ -658,5 +675,38 @@ mod tests {
         assert_eq!(layer_kind([0x18, 0, 1, 0x98], true), LayerKind::Desktop);
         assert_eq!(layer_kind([0x48, 0, 1, 0x98], false), LayerKind::Desktop);
         assert_eq!(layer_kind([0x4a, 1, 1, 0x98], true), LayerKind::Guides);
+    }
+
+    /// An outline record refused at the dash limit keeps no dashes in the cache, so the shapes
+    /// that use it later copy none.
+    #[test]
+    fn an_outline_past_the_dash_limit_keeps_no_dashes() {
+        let v = crate::synth::V(1100);
+        let pen = crate::synth::Pen { line_type: 4, width: 1.0, cap: 0, join: 0 };
+        let record = v.outline(1, pen, &crate::synth::color(5, [0, 0, 0, 255]), &[3, 1, 3]);
+        let file = crate::synth::riff(1100, &[]);
+        let mut budget = Budget::new(crate::Limits { dashes: 4, ..crate::Limits::default() });
+        let mut warn = Vec::new();
+        let ix = crate::riff::Index::build(&file, None, &mut budget, &mut warn).unwrap();
+        let mut cx = Ctx {
+            ix: &ix,
+            p: layout::for_version(1100).unwrap(),
+            budget: &mut budget,
+            warn: &mut warn,
+            fill_chunks: HashMap::new(),
+            outline_chunks: HashMap::from([(1, record.as_slice())]),
+            fills: HashMap::new(),
+            outlines: HashMap::new(),
+            styles: Ok(Styles::default()),
+            clips: HashMap::new(),
+            open_clips: Vec::new(),
+            clip_cut: false,
+        };
+        assert_eq!(cx.outline(1).map(|o| o.dashes.len()), Some(3));
+        for _ in 0..3 {
+            assert_eq!(cx.outline(1).map(|o| o.dashes.len()), Some(0));
+            assert_eq!(cx.outlines.get(&1).and_then(|o| o.as_ref()).map(|o| o.dashes.len()), Some(0));
+        }
+        assert_eq!(*cx.warn, vec![Warning::TooDeep]);
     }
 }
