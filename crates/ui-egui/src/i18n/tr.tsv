@@ -4129,6 +4129,9 @@ axis	Both	Her İkisi
 @msg	Couldn't open {name}: {e}	{name} açılamadı: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} yerleştirilemedi: bırakıldığı belge kapatıldı
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} yerleştirilemedi: yerleştirildiği belge kapatıldı
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} yerleştirilemedi: bırakıldığı belge geri döndürüldü
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} yerleştirilemedi: yerleştirildiği belge geri döndürüldü
+@msg	Couldn't paste: the document it was pasted in was reverted	Yapıştırılamadı: yapıştırıldığı belge geri döndürüldü
 @msg	Couldn't read {name}: {e}	{name} okunamadı: {e}
 @msg	Couldn't save recovery data: {e}	Kurtarma verileri kaydedilemedi: {e}
 @msg	Create Outlines: select text objects	Anahatlar Oluştur: metin nesnelerini seçin

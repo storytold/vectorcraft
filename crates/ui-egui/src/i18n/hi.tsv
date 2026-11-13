@@ -6659,6 +6659,9 @@ antiAlias	Sharp	शार्प
 @msg	Couldn't place {name}: {e}	नहीं रह सकता {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	नहीं था {name}: यह डॉक्यूमेंट बंद हो गया था
 @msg	Couldn't place {name}: the document it was placed in was closed	नहीं था {name}: यह डॉक्यूमेंट बंद किया गया था
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} प्लेस नहीं कर सका: जिस डॉक्यूमेंट पर इसे छोड़ा गया था, उसे मूल स्थिति में लाया गया
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} प्लेस नहीं कर सका: जिस डॉक्यूमेंट में इसे प्लेस किया जा रहा था, उसे मूल स्थिति में लाया गया
+@msg	Couldn't paste: the document it was pasted in was reverted	पेस्ट नहीं कर सका: जिस डॉक्यूमेंट में पेस्ट किया जा रहा था, उसे मूल स्थिति में लाया गया
 @msg	Couldn't read {name}: {e}	नहीं पढ़ सकता {name}: {e}
 @msg	Couldn't save recovery data: {e}	रिकवरी डेटा सेव नहीं किया जा सका: {e}
 @msg	counterPer `{c}`: item or file	counterPer `{c}`: item या file

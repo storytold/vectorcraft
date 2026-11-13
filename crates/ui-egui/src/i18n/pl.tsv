@@ -4475,6 +4475,9 @@ imageTrace	Outline	Kontur
 @msg	Couldn't open {name}: {e}	Nie udało się otworzyć {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Nie udało się umieścić {name}: dokument, na który go upuszczono, został zamknięty
 @msg	Couldn't place {name}: the document it was placed in was closed	Nie udało się umieścić {name}: dokument, w którym był umieszczany, został zamknięty
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Nie udało się umieścić {name}: dokument, na który go upuszczono, został przywrócony
+@msg	Couldn't place {name}: the document it was placed in was reverted	Nie udało się umieścić {name}: dokument, w którym był umieszczany, został przywrócony
+@msg	Couldn't paste: the document it was pasted in was reverted	Nie udało się wkleić: dokument, do którego wklejano, został przywrócony
 @msg	Couldn't read {name}: {e}	Nie udało się odczytać {name}: {e}
 @msg	Couldn't save recovery data: {e}	Nie udało się zapisać danych odzyskiwania: {e}
 @msg	Create Outlines: select text objects	Utwórz kontury: zaznacz obiekty tekstowe

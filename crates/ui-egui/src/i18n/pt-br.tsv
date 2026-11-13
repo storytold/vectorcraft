@@ -3810,6 +3810,9 @@ axis	Both	Ambos
 @msg	Couldn't open {name}: {e}	Não foi possível abrir {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Não foi possível inserir {name}: o documento em que foi solto foi fechado
 @msg	Couldn't place {name}: the document it was placed in was closed	Não foi possível inserir {name}: o documento em que estava sendo inserido foi fechado
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Não foi possível inserir {name}: o documento em que foi solto foi revertido
+@msg	Couldn't place {name}: the document it was placed in was reverted	Não foi possível inserir {name}: o documento em que estava sendo inserido foi revertido
+@msg	Couldn't paste: the document it was pasted in was reverted	Não foi possível colar: o documento em que estava sendo colado foi revertido
 @msg	Couldn't read {name}: {e}	Não foi possível ler {name}: {e}
 @msg	Couldn't save recovery data: {e}	Não foi possível salvar os dados de recuperação: {e}
 @msg	Create Outlines: select text objects	Criar contornos: selecione objetos de texto
