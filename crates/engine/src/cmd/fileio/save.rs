@@ -730,6 +730,10 @@ fn encode_ai_pages(cmd: &str, f: &Format, doc: &Document, p: &Value, editing: bo
         if o.get("standard").is_none_or(Value::is_null) {
             o.entry("createLayers").or_insert(json!(true));
         }
+        // A page longer than 14,400 pt keeps its `UserUnit` (PDF export writes it in points).
+        if o.get("longPagesInPoints").is_none_or(Value::is_null) {
+            o.insert("longPagesInPoints".into(), json!(false));
+        }
         if let Some(c) = o.get("compress").and_then(Value::as_bool) {
             let compression = o.entry("compression").or_insert_with(|| json!({}));
             if let Some(m) = compression.as_object_mut() {
