@@ -2487,8 +2487,8 @@ them again with the key object. When the call changes nothing, it records no und
 Other `object.setProps` calls leave the selection unchanged.
 
 `object.unlockAll` and `object.showAll` unlock or show every locked or hidden object in the document and select
-them → `{count}`. In isolation mode they take only the objects inside the isolated object. With `scope: "group"` they
-take only the objects inside the groups that hold the selected objects:
+them → `{count}`. Ruler guides locked or hidden on their own are counted, and are selected as guides. In isolation
+mode they take only the objects inside the isolated object. With `scope: "group"` they take only the objects inside the groups that hold the selected objects:
 for each selected object, the group nearest above it, or the object itself when it is a group. The objects of a
 group inside another such group are counted once. With no selected object in a group, the call returns the error
 "nothing selected is in a group" and changes nothing. `scope: "document"` is the default, and any other value is
@@ -2793,12 +2793,22 @@ vertical guide, the y of a horizontal one, in points) → `{index}`. With `artbo
 artboard guide: it runs across that artboard only, moves with it (`artboard.move`, a pure move in
 `artboard.setProps`, `artboard.rearrange`), scales with it (`artboard.setProps {scaleArt}`), is copied with it (`artboard.duplicate`, `artboard.move {copy}`) and is
 deleted with it (`artboard.delete`); without, a canvas guide runs across the whole canvas. `guide.list` →
-`[{index, vertical, pos, selected, artboard?}…]` (`artboard` only for artboard guides).
+`[{index, id, vertical, pos, selected, artboard?, layer?, hidden, locked, shown, editable}…]` (`artboard` only for
+artboard guides; `id` is the guide's node and `layer` the layer it is on; `hidden` and `locked` are its own state,
+`shown` and `editable` also take its layer into account). `layer.setProps {ids: [id…], visible?, locked?}` hides or
+locks guides on their own, as the eye and lock on a guide's row in the Layers panel do; a hidden guide is not drawn
+and does not snap, and a locked one is drawn and snaps but can't be selected, moved or deleted.
 `guide.select {indexes: [index…], toggle?}` selects guides on their own (the art is deselected; `toggle` adds or
 removes them) → `{selected}`. `guide.move {index, pos}` puts one guide somewhere, `guide.move {dx?, dy?, copy?}`
 moves the selected ones (vertical guides by `dx`, horizontal ones by `dy`; `copy` leaves them and selects the
-moved copies), and `guide.remove {index?}` deletes one guide or the selected ones → `{count}`; each is one undo
-step. With guides selected, `edit.clear` (Delete) deletes them and `object.nudge` (the arrow keys) nudges them.
+moved copies), and `guide.remove {index?, indexes?}` deletes one guide, the guides `indexes` (not with `index`; an
+index given twice counts once; a hidden or locked guide among them is an error and nothing is deleted) or the
+selected ones → `{count}`; each is one undo step. An `indexes` list of `guide.select`, `guide.remove` or
+`guide.setLayer` holds at most 10,000 entries; a longer one is an error. With guides selected, `edit.clear` (Delete) deletes them and `object.nudge` (the
+arrow keys) nudges them. Object › Lock › Selection (`object.lock`) and Object › Hide › Selection (`object.hide`) lock
+or hide the selected guides on their own, with the selected art, in one undo step, except in isolation mode.
+`object.unlockAll` and `object.showAll` with the default scope, outside isolation mode, also unlock or show the
+guides locked or hidden on their own and select them as guides.
 View › Guides › Lock Guides (`view.guides.lock`) deselects them and the paths made into guides, in every open
 document, and refuses these commands until unlocked. While it is on, a command that selects art, such as `edit.undo`,
 `edit.redo`, `object.exitIsolation`, `object.unlockAll`, `object.showAll` or `edit.paste`, leaves the guides out.
@@ -4422,6 +4432,13 @@ and `layerRows`, the rows highlighted in the panel.
   draws and is clicked in outline, Ctrl/Cmd-click its eye), `dimImages` (0–100, or false) and `color` (an index 0–26,
   `#rrggbb` or a preset name; a hex color with an alpha part, `#rrggbbaa` or `#rgba`, is an error, and so it is in
   `layer.new` and `layer.newSublayer`). Several rows change in one undo step (a drag down the eye or lock column).
+  A ruler guide's row has its own eye and lock: `ids` may name ruler guides (their `id` in `guide.list`), which take
+  `visible` and `locked`. They can be changed while the guide's layer is hidden or locked, and the guide shows
+  or can be edited only when its layer allows it as well. Alt-click on a guide row's eye or lock acts on the other
+  layers, as on any row in that layer. A click on a guide row selects the guide (`guide.select`) and clears the
+  highlighted rows (`layer.highlight {ids: [], mode: "set"}`), so Delete then runs `edit.clear` on the guide; with no
+  row highlighted, the trash button runs `edit.clear` on the selected guides and art, and guide rows dropped on the
+  trash are deleted (`guide.remove {indexes}`).
 - **Dragging rows**: `layer.move {ids, target, place?: above|below|inside, copy?}` moves rows beside a row or into a
   layer or group (on top of its contents), keeping their stacking order; `copy` (Alt-drag) moves copies. Layers go
   only in layers or at the top level and objects in layers and groups (an object placed beside a top-level layer goes
