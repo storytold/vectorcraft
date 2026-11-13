@@ -5,6 +5,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use serde_json::{Value, json};
+use vectorcraft_engine::cmd::{Location, ParamsPlace};
 use vectorcraft_engine::{Session, command_specs};
 use vectorcraft_testkit::catch_quiet;
 use vectorcraft_testkit::fixtures::Fixture;
@@ -271,36 +272,37 @@ fn tool_edit_cases(c: &vectorcraft_engine::CommandSpec, path: &str) -> Vec<Value
     cases
 }
 
-/// The strings in `v`, the value at `at` in a case of command `id`, that name a place on disk
-/// outside `dir`, as `id at: value`: `v` itself and the members of arrays in it when `named` (it is
-/// under a key that names a file or folder), and in objects at any depth, the values under such
-/// keys ([`names_location`]).
-fn outside_locations(id: &str, at: &str, v: &Value, named: bool, dir: &std::path::Path, out: &mut std::collections::BTreeSet<String>) {
+/// The strings in `v`, the value at `at` (found at `place`) in a case of command `id`, that name a
+/// place on disk outside `dir`, as `id at: value`: `v` itself and the members of arrays in it when
+/// `named` (it is under a key that names a file or folder), and in objects at any depth, the values
+/// under such keys as the command reads them (`vectorcraft_engine::cmd::ParamsPlace`).
+fn outside_locations(
+    id: &str,
+    at: &str,
+    v: &Value,
+    place: ParamsPlace,
+    named: bool,
+    dir: &std::path::Path,
+    out: &mut std::collections::BTreeSet<String>,
+) {
     match v {
         Value::String(s) if named && !std::path::Path::new(s).starts_with(dir) => {
             out.insert(format!("{id} {at}: {v}"));
         }
         Value::Array(a) => {
+            let step = ParamsPlace::step(a);
             for (i, x) in a.iter().enumerate() {
-                outside_locations(id, &format!("{at}[{i}]"), x, named, dir, out);
+                outside_locations(id, &format!("{at}[{i}]"), x, place.item(i, step), named, dir, out);
             }
         }
         Value::Object(o) => {
+            let carried = ParamsPlace::carried(o);
             for (k, x) in o {
-                outside_locations(id, &format!("{at}.{k}"), x, names_location(None, k), dir, out);
+                let (below, location) = place.member(k, carried);
+                outside_locations(id, &format!("{at}.{k}"), x, below, location.is_some(), dir, out);
             }
         }
         _ => {}
-    }
-}
-
-/// Does `key` name a file or folder, in command `spec` when given: a key in
-/// `vectorcraft_engine::cmd::key_location`'s list that `vectorcraft_engine::cmd::location_in` keeps
-/// for `spec`.
-fn names_location(spec: Option<&vectorcraft_engine::CommandSpec>, key: &str) -> bool {
-    match spec {
-        Some(spec) => vectorcraft_engine::cmd::location_in(spec, key).is_some(),
-        None => vectorcraft_engine::cmd::key_location(key).is_some(),
     }
 }
 
@@ -308,7 +310,8 @@ fn names_location(spec: Option<&vectorcraft_engine::CommandSpec>, key: &str) -> 
 /// (`vectorcraft_engine::cmd::location_keys`, so a command added later is checked too) or inside
 /// an object or an array at any depth, is inside the sweep's temp folder, so no run reads or
 /// writes in the working directory. `every_command_with_junk_params` sends every such key of every
-/// command alone in at least one case ([`junk_cases`]).
+/// command alone in at least one case ([`junk_cases`]). Which catalog keys name a file or folder is
+/// checked on its own by [`catalog_path_keys_match_location_policy`].
 #[test]
 fn sweep_cases_name_files_only_inside_the_temp_folder() {
     let path = safe_path();
@@ -329,13 +332,113 @@ fn sweep_cases_name_files_only_inside_the_temp_folder() {
         for p in &cases {
             let Some(o) = p.as_object() else { continue };
             for (k, v) in o {
-                outside_locations(c.id, k, v, names_location(Some(c), k), &dir, &mut outside);
+                let (below, location) = ParamsPlace::top(Some(c)).member(k, None);
+                outside_locations(c.id, k, v, below, location.is_some(), &dir, &mut outside);
             }
         }
     }
     assert!(unsent.is_empty(), "every_command_with_junk_params sends no case for {unsent:?}");
     let outside: Vec<String> = outside.into_iter().collect();
     assert!(outside.is_empty(), "{} cases name a location outside {}:\n{}", outside.len(), dir.display(), outside.join("\n"));
+}
+
+/// The param keys that name a file or a folder, and which.
+const LOCATION_KEYS: &[(&str, Location)] = &[
+    ("path", Location::File),
+    ("paths", Location::File),
+    ("file", Location::File),
+    ("files", Location::File),
+    ("diffPath", Location::File),
+    ("folder", Location::Folder),
+    ("dir", Location::Folder),
+    ("directory", Location::Folder),
+    ("destinationFolder", Location::Folder),
+    ("sourceFolder", Location::Folder),
+    ("fontsFolder", Location::Folder),
+    ("pluginsFolder", Location::Folder),
+    ("recoveryFolder", Location::Folder),
+    ("templatesFolder", Location::Folder),
+];
+
+/// Param keys that read like a file or folder key ([`reads_like_a_location`]) and name neither:
+/// web links, an export's grouping of its files, and choices and switches.
+const NOT_LOCATIONS: &[&str] = &[
+    "url",
+    "copyrightUrl",
+    "folders",
+    "alignToPath",
+    "wholePaths",
+    "emptyTextPaths",
+    "sortPaths",
+    "alterPaths",
+    "includeLinkedFiles",
+    "linksFolder",
+];
+
+/// Commands and the key in [`LOCATION_KEYS`] that, at the top of their params, names part of the
+/// document (a path of its art, a result field), not a file.
+const DOCUMENT_PARTS: &[(&str, &str)] = &[
+    ("object.setLiveShape", "path"),
+    ("path.reverse", "paths"),
+    ("object.pathfinder.options", "paths"),
+    ("object.maskImage", "path"),
+    ("text.createInPath", "path"),
+    ("imageTrace.make", "paths"),
+    ("symbol.instance.setAppearance", "path"),
+    ("symbol.instance.selectPart", "path"),
+    ("object.objectsOnPath.attach", "path"),
+    ("svgInteractivity.info", "files"),
+    ("addon.cleanup.rejoin", "paths"),
+];
+
+/// Does param key `k` read like one that names a file, a folder or a link: a bare name for one, or a
+/// name that ends like one?
+fn reads_like_a_location(k: &str) -> bool {
+    const ENDS: &[&str] = &["Path", "Paths", "File", "Files", "Folder", "Folders", "Dir", "Directory", "Url", "URL"];
+    matches!(k, "path" | "paths" | "file" | "files" | "folder" | "folders" | "dir" | "directory" | "url") || ENDS.iter().any(|end| k.ends_with(end))
+}
+
+/// Every key of every command that reads like a file or folder key (in its params description, the
+/// commands its `…` entries name and its schema) is in [`LOCATION_KEYS`] or [`NOT_LOCATIONS`], so a
+/// command that adds one fails here until it is sorted. The generic classifications
+/// (`vectorcraft_engine::cmd::key_location`, `vectorcraft_engine::file_access::is_path_key`) agree
+/// with those lists, and each command reads such a key as they say (`location_in`), less
+/// [`DOCUMENT_PARTS`].
+#[test]
+fn catalog_path_keys_match_location_policy() {
+    use vectorcraft_engine::cmd::{key_location, location_in, params::takes_key};
+    let catalog: Vec<(&vectorcraft_engine::CommandSpec, Vec<String>)> = command_specs().iter().map(|c| (c, command_param_keys(c))).collect();
+    let mut keys: std::collections::BTreeSet<String> =
+        catalog.iter().flat_map(|(_, keys)| keys.iter().filter(|k| reads_like_a_location(k)).cloned()).collect();
+    keys.extend(LOCATION_KEYS.iter().map(|(k, _)| k.to_string()).chain(NOT_LOCATIONS.iter().map(|k| k.to_string())));
+    let mut wrong = vec![];
+    for k in &keys {
+        let want = LOCATION_KEYS.iter().find(|(l, _)| l == k).map(|(_, l)| *l);
+        if want.is_none() && !NOT_LOCATIONS.contains(&k.as_str()) {
+            wrong.push(format!("`{k}` is in neither LOCATION_KEYS nor NOT_LOCATIONS"));
+            continue;
+        }
+        if key_location(k) != want {
+            wrong.push(format!("key_location(`{k}`) is {:?}, not {want:?}", key_location(k)));
+        }
+        if vectorcraft_engine::file_access::is_path_key(k) != want.is_some() {
+            wrong.push(format!("is_path_key(`{k}`) is {}", want.is_none()));
+        }
+        for (c, named) in &catalog {
+            if !named.contains(k) && !(c.params.contains('…') && takes_key(c.params, k)) {
+                continue;
+            }
+            let here = if DOCUMENT_PARTS.contains(&(c.id, k.as_str())) { None } else { want };
+            if location_in(c, k) != here {
+                wrong.push(format!("{}: location_in(`{k}`) is {:?}, not {here:?}", c.id, location_in(c, k)));
+            }
+        }
+    }
+    for (id, key) in DOCUMENT_PARTS {
+        let named = catalog.iter().any(|(c, _)| c.id == *id && c.params.contains(key));
+        assert!(named, "{id} doesn't name `{key}`");
+    }
+    assert!(wrong.is_empty(), "{} keys are classified unlike the reviewed lists:\n{}", wrong.len(), wrong.join("\n"));
 }
 
 /// The cases sweep keys the command catalog names as files and folders: `document.open`'s
