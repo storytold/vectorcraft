@@ -2,13 +2,14 @@
 //! (see [`crate::ai_editing`] for the form).
 
 use std::fmt::Write;
+use std::sync::Arc;
 
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{FillLayer, ImageBlob, ImageObject, LinkInfo};
 use vectorcraft_geom::{Affine, FillRule, PathData, Rect, Shape};
 
 use super::{Writer, Xy};
-use crate::ps;
+use crate::{ai_ops, ps};
 
 pub(in crate::ai_editing) const IMAGES: &str = "images that can't be decoded or have more than 33,554,432 pixels are written as their outlines filled mid gray in the editing data for other apps";
 pub(in crate::ai_editing) const IMAGE_DEPTH: &str = "images of 16 bits a channel are written at 8 bits a channel in the editing data for other apps";
@@ -26,8 +27,11 @@ pub(in crate::ai_editing) const PAYLOAD: char = '\u{1}';
 /// What starts the line of an image's samples: `XI` and its payload, then `%%EndData`.
 pub(super) const SAMPLES_LINE: &str = "XI\u{1}";
 
+/// An image's pixels as the data holds them, and whether it had 16 bits a channel ([`Samples::of`]).
+pub(super) type Read = Arc<(Samples, bool)>;
+
 /// An image's pixels as the data holds them.
-struct Samples {
+pub(super) struct Samples {
     /// `/DeviceGray`, `/DeviceRGB` or `/DeviceCMYK`.
     space: &'static str,
     /// The image type of `XI` (§8.1): 1 gray, 3 RGB, 4 CMYK.
@@ -79,6 +83,19 @@ impl Samples {
         Some((Samples { space, kind, width, height, color, alpha }, deep))
     }
 
+    /// The pixels of `window` (`[x0, y0, x1, y1]`, within the image) alone.
+    fn window(&self, window: [u32; 4]) -> Samples {
+        let [x0, y0, x1, y1] = window;
+        Samples {
+            space: self.space,
+            kind: self.kind,
+            width: x1 - x0,
+            height: y1 - y0,
+            color: ai_ops::window_samples(&self.color, self.width, usize::from(self.kind), window),
+            alpha: self.alpha.as_ref().map(|a| ai_ops::window_samples(a, self.width, 1, window)),
+        }
+    }
+
     /// `XI`'s fourth flag as the files users sent have it: 0 gray, 1 RGB, 2 CMYK, 16 more with an
     /// alpha channel.
     fn reserved(&self) -> u8 {
@@ -95,10 +112,13 @@ impl Writer<'_> {
     /// Image object `im` of transparency `xy`: embedded, a raster ([`Self::raster`]); linked, a
     /// placed file with a preview ([`Self::placed_file`]), except in a part of the data written on
     /// `%_` lines and in a symbol's art. One whose pixels can't be read is its outline filled mid gray. Where the art is
-    /// cut to a clipping path, the image is in a clipping group of that path.
+    /// cut to a clipping path, the image is in a clipping group of that path; a raster of pixels
+    /// written whole already is then the part of them that the path shows ([`ai_ops::image_window`]).
     pub(super) fn image(&mut self, im: &ImageObject, xy: Xy) {
         let doc = self.doc;
-        let Some((samples, deep)) = doc.image_blob(im).and_then(Samples::of) else {
+        let blob = doc.image_blob(im);
+        let read = blob.and_then(|b| self.samples(b));
+        let Some((samples, deep)) = read.as_deref() else {
             let bounds = PathData::from_bezpath(&(im.xf * Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height)).to_path(0.1)));
             self.warn(IMAGES);
             return self.fill_object(&bounds, FillRule::NonZero, &FillLayer::new(Paint::solid(Color::gray(0.5))), xy);
@@ -112,7 +132,7 @@ impl Writer<'_> {
         if !self.take_objects(1 + clipping) {
             return;
         }
-        if deep {
+        if *deep {
             self.warn(IMAGE_DEPTH);
         }
         let cut = self.clip.take();
@@ -128,13 +148,38 @@ impl Writer<'_> {
             Some(link) if self.hidden == 0 && !self.in_symbol => {
                 // Cut to a region, the placed file is in a clipping group.
                 self.placed = cut.is_none();
-                self.placed_file(link, &samples, (im.width.max(1), im.height.max(1)), im.xf);
+                self.placed_file(link, samples, (im.width.max(1), im.height.max(1)), im.xf);
             }
             other => {
                 if other.is_some() {
                     self.warn(LINKS_EMBEDDED);
                 }
-                self.raster(&samples, im.xf * fit);
+                // An image written whole already: the part its region shows, placed where it is in
+                // the image (the pieces of a warped image each show a small part of the same one).
+                // An object's editable original (on `%_` lines) and an image in an opacity mask's art
+                // are written whole.
+                let data = blob.map(|b| &b.bytes);
+                let written = self.hidden == 0 && data.is_some_and(|d| self.whole_images.contains_key(&(Arc::as_ptr(d) as usize)));
+                let window = written
+                    .then(|| {
+                        let clips: Vec<_> = self.shown.iter().cloned().chain(cut.iter().map(PathData::to_bezpath)).collect();
+                        ai_ops::image_window(&clips, im.xf * fit, (samples.width, samples.height))
+                    })
+                    .flatten();
+                match window {
+                    Some(window) => {
+                        self.raster(&samples.window(window), im.xf * fit * Affine::translate((f64::from(window[0]), f64::from(window[1]))))
+                    }
+                    None => {
+                        if let Some(d) = data {
+                            // `raster` adds the samples as the next payload. A copy written whole on
+                            // `%_` lines after an earlier whole copy keeps the earlier one's entry.
+                            let next = self.payloads.len();
+                            self.whole_images.entry(Arc::as_ptr(d) as usize).or_insert_with(|| (d.clone(), next));
+                        }
+                        self.raster(samples, im.xf * fit);
+                    }
+                }
             }
         }
         if let Some(region) = &cut {
@@ -229,6 +274,20 @@ impl Writer<'_> {
             "%AI17_Begin_Content_if_version_gt:24 5\n%AI26_BeginPlacedObjectPreview\n{pw} {ph} {} 32 17 {mark}\n%AI26_EndPlacedObjectPreview\n%AI17_End_Versioned_Content\n~\n%AI5_EndPlace",
             pw * 4
         );
+    }
+
+    /// The pixels of `blob` ([`Samples::of`]), read once for images that follow one another with
+    /// the same data.
+    fn samples(&mut self, blob: &ImageBlob) -> Option<Read> {
+        if let Some((last, read)) = &self.last_samples
+            && Arc::ptr_eq(&last.bytes, &blob.bytes)
+            && last.mime == blob.mime
+        {
+            return read.clone();
+        }
+        let read = Samples::of(blob).map(Arc::new);
+        self.last_samples = Some((blob.clone(), read.clone()));
+        read
     }
 
     /// Keep `bytes` to go in the program where the mark this returns is.

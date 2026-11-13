@@ -270,6 +270,15 @@ pub(super) struct Writer<'a> {
     /// How many more envelopes may be written live: as many as the reader checks in one file
     /// ([`crate::import::ENVELOPE_CHECKS`]).
     envelopes_left: usize,
+    /// The image read last and its pixels ([`images::Samples::of`], `None` when they can't be
+    /// read): the pieces of a warped image, which follow one another, read them once.
+    last_samples: Option<(vectorcraft_doc::ImageBlob, Option<images::Read>)>,
+    /// The images written whole so far, by the address of their data (which each entry keeps), each
+    /// with the index of its samples in [`Self::payloads`].
+    whole_images: HashMap<usize, (Arc<Vec<u8>>, usize)>,
+    /// The outlines of the clipping groups the art being written is in, in the document (empty in
+    /// a definition, an opacity mask's art and a brush's art, which are written apart from them).
+    shown: Vec<vectorcraft_geom::BezPath>,
 }
 
 impl<'a> Writer<'a> {
@@ -334,6 +343,9 @@ impl<'a> Writer<'a> {
             definition_objects: 0,
             definition_symbol_nodes: 0,
             max_objects: crate::import::MAX_EDITING_OBJECTS,
+            last_samples: None,
+            whole_images: HashMap::new(),
+            shown: vec![],
         }
     }
 
@@ -400,14 +412,20 @@ impl<'a> Writer<'a> {
 
     /// Art written since `c` as `lines` is not used: the objects and symbol art charged since are
     /// given back, except those of the definitions written since, and the images `lines` marks
-    /// are emptied (the others keep their indices).
+    /// are emptied (the others keep their indices). An image whose whole copy is among them is no
+    /// longer written whole ([`Self::whole_images`]).
     fn give_back(&mut self, c: Charges, lines: &str) {
         self.objects = c.objects + (self.definition_objects - c.kept_objects);
         self.symbol_nodes = c.symbol_nodes + (self.definition_symbol_nodes - c.kept_symbol_nodes);
+        let mut emptied = HashSet::new();
         for index in lines.split(PAYLOAD).skip(1).step_by(2) {
-            if let Some(p) = index.parse::<usize>().ok().and_then(|i| self.payloads.get_mut(i)) {
+            if let Some((i, p)) = index.parse::<usize>().ok().and_then(|i| Some((i, self.payloads.get_mut(i)?))) {
                 *p = Vec::new();
+                emptied.insert(i);
             }
+        }
+        if !emptied.is_empty() {
+            self.whole_images.retain(|_, (_, i)| !emptied.contains(i));
         }
     }
 
@@ -654,7 +672,23 @@ impl<'a> Writer<'a> {
             }
             NodeKind::Compound { rule, .. } => self.shape(n, &compound_path(n), *rule, xy),
             NodeKind::Text(_) => self.text(n, xy),
-            NodeKind::Image(im) => self.image(&self.doc.shown_image(n, im), xy),
+            NodeKind::Image(im) => {
+                // An opacity mask that clips shows the image within what its art paints only (its
+                // effects and its symbol instances' art included, as the renderer measures it).
+                let masked = n
+                    .extras()
+                    .mask
+                    .as_ref()
+                    .filter(|m| m.clip && !m.invert && !m.disabled)
+                    .and_then(|m| vectorcraft_render::painted_bounds(self.doc, &m.art));
+                if let Some(b) = masked {
+                    self.shown.push(b.to_path(0.1));
+                }
+                self.image(&self.doc.shown_image(n, im), xy);
+                if masked.is_some() {
+                    self.shown.pop();
+                }
+            }
             NodeKind::SymbolInstance { symbol, xf } if self.live_instance_in_room(n, symbol, *xf) => self.symbol_instance(symbol, *xf, xy),
             NodeKind::SymbolInstance { symbol, xf } => {
                 if !self.open_group("u") {
@@ -828,6 +862,7 @@ impl<'a> Writer<'a> {
     fn mask(&mut self, m: &OpacityMask) -> bool {
         let outer = std::mem::take(&mut self.body);
         let (state, gs, clip) = (self.state, self.gs, self.clip.take());
+        let shown_by = std::mem::take(&mut self.shown);
         let (charges, bound) = (self.charges(), self.bound.len());
         (self.state, self.gs) = (Some((false, false)), Some(Xy::OPAQUE));
         // The canvas draws the art's root even when it is hidden, and the reader puts a hidden object
@@ -861,6 +896,7 @@ impl<'a> Writer<'a> {
         self.hidden -= 1;
         self.nest -= 1;
         let lines = std::mem::replace(&mut self.body, outer);
+        self.shown = shown_by;
         if self.left_out_since(charges) {
             // The art isn't written, nor are the variable bindings of its objects.
             self.give_back(charges, &lines);
@@ -946,9 +982,11 @@ impl<'a> Writer<'a> {
             }
         }
         self.clip_paint_part(first, &path, rule, &fills);
+        self.shown.push(path.to_bezpath());
         for c in rest {
             self.node(c);
         }
+        self.shown.pop();
         self.clip_paint_part(first, &path, rule, &strokes);
         self.state(first.locked, !first.visible);
         let start = self.body.len();

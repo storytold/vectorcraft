@@ -7228,6 +7228,276 @@ fn an_image_on_hidden_lines_does_not_come_in_beside_its_look() {
     assert_eq!(art[0].name.as_deref(), Some("Photo"));
 }
 
+/// A 64 × 64 RGB image, every pixel of it different, 128 pt square at (20, 10) in `doc`.
+fn speckled_photo(doc: &mut Document) -> Node {
+    let px = image::RgbImage::from_fn(64, 64, |x, y| image::Rgb([(x * 4) as u8, (y * 4) as u8, ((x * 7 + y * 13) % 256) as u8]));
+    image_node(doc, ImageBlob::png(png_of(px.into())), (64, 64), Affine::new([2.0, 0.0, 0.0, 2.0, 20.0, 10.0]), None)
+}
+
+/// The sizes `%%BeginData:` gives the images' samples in the program written from `doc`.
+fn sample_sizes(doc: &Document) -> Vec<usize> {
+    let program = export_ai_editing(doc, &opts()).unwrap().program;
+    String::from_utf8_lossy(&program).lines().filter_map(|l| l.strip_prefix("%%BeginData: ")?.trim().parse().ok()).collect()
+}
+
+/// The samples of a 64 × 64 RGB image, as `%%BeginData:` counts them (`XI` and CR LF too).
+const SPECKLED_WHOLE: usize = 64 * 64 * 3 + 4;
+
+/// The pieces of an image cut into a raster mesh warp (as Object › Expand leaves a Warp or an
+/// envelope on an image) are written as the image whole once, then each as the part of it that its
+/// triangle shows: the file holds a little more than the image's pixels rather than a copy for every
+/// piece, and it reads back drawing as it did.
+#[test]
+fn the_pieces_of_a_warped_image_are_written_as_the_parts_they_show() {
+    // GUARDS: each of a warped image's 200 pieces was written with all of the image's samples.
+    let doc = photo_doc(|d| {
+        let photo = speckled_photo(d);
+        let NodeKind::Image(im) = &photo.kind else { panic!("not an image") };
+        let bend = |p: vectorcraft_geom::Point| vectorcraft_geom::Point::new(p.x, p.y + 12.0 * ((p.x - 20.0) / 128.0 * std::f64::consts::PI).sin());
+        vectorcraft_doc::live::mesh_warp_image(&photo, im, &bend, 10, false, false)
+    });
+    let sizes = sample_sizes(&doc);
+    assert_eq!(sizes.len(), 200, "{sizes:?}");
+    assert_eq!(sizes[0], SPECKLED_WHOLE, "the first piece holds the whole image");
+    // Each piece holds its cell (two triangles share one) and 2 pixels more around it.
+    let total: usize = sizes.iter().sum();
+    assert!(total < 10 * SPECKLED_WHOLE, "{total} bytes of samples for an image of {SPECKLED_WHOLE}");
+    let back = read_back(&doc);
+    let st = vectorcraft_testkit::raster::perceptual_diff(
+        &vectorcraft_testkit::raster::render_artboard(&doc),
+        &vectorcraft_testkit::raster::render_artboard(&back),
+        8.0,
+    );
+    assert!((st.bad_pixels as f64) < 0.005 * st.pixels as f64, "{} of {} pixels differ", st.bad_pixels, st.pixels);
+}
+
+/// The pieces of a warped image that Preserve Shape Using Transparency cuts with opacity masks that
+/// clip are written as the parts their masks show, and the file reads back drawing as it did.
+#[test]
+fn masked_pieces_of_a_warped_image_are_written_as_the_parts_they_show() {
+    // GUARDS: each masked piece of a warped image was written with all of the image's samples.
+    let doc = photo_doc(|d| {
+        let photo = speckled_photo(d);
+        let NodeKind::Image(im) = &photo.kind else { panic!("not an image") };
+        let bend = |p: vectorcraft_geom::Point| vectorcraft_geom::Point::new(p.x, p.y + 12.0 * ((p.x - 20.0) / 128.0 * std::f64::consts::PI).sin());
+        vectorcraft_doc::live::mesh_warp_image(&photo, im, &bend, 4, false, true)
+    });
+    let sizes = sample_sizes(&doc);
+    assert_eq!(sizes.len(), 32, "{sizes:?}");
+    assert_eq!(sizes[0], SPECKLED_WHOLE, "the first piece holds the whole image");
+    let total: usize = sizes.iter().sum();
+    assert!(total < 6 * SPECKLED_WHOLE, "{total} bytes of samples for an image of {SPECKLED_WHOLE}");
+    let back = read_back(&doc);
+    let st = vectorcraft_testkit::raster::perceptual_diff(
+        &vectorcraft_testkit::raster::render_artboard(&doc),
+        &vectorcraft_testkit::raster::render_artboard(&back),
+        8.0,
+    );
+    assert!((st.bad_pixels as f64) < 0.005 * st.pixels as f64, "{} of {} pixels differ", st.bad_pixels, st.pixels);
+}
+
+/// An image with a live Warp keeps its pixels whole once, and its drawn look's pieces are each the
+/// part of them they show: it reads back as the image with its Warp live.
+#[test]
+fn an_image_with_a_live_warp_writes_its_pixels_whole_once() {
+    // GUARDS: a live Warp's drawn look wrote all of the image's samples for each of its pieces.
+    let doc = photo_doc(|d| {
+        let mut photo = speckled_photo(d);
+        photo.appearance = Appearance { effects: vec![fx("warp.arc", serde_json::json!({"bend": 40.0}))], ..Appearance::default() }.into();
+        photo
+    });
+    let sizes = sample_sizes(&doc);
+    assert!(sizes.len() > 100, "{sizes:?}");
+    assert_eq!(sizes.iter().filter(|s| **s == SPECKLED_WHOLE).count(), 1, "{sizes:?}");
+    let total: usize = sizes.iter().sum();
+    assert!(total < 10 * SPECKLED_WHOLE, "{total} bytes of samples for an image of {SPECKLED_WHOLE}");
+    let back = read_back(&doc);
+    let art = back.layers[0].children().unwrap();
+    assert_eq!(art.len(), 1, "{:#?}", lines(&back));
+    assert!(matches!(art[0].kind, NodeKind::Image(_)), "{:?}", art[0].kind);
+    assert_eq!(art[0].appearance.effects.len(), 1, "{:?}", art[0].appearance);
+}
+
+/// An image cut to a clipping path is written with all of its pixels when it is the first of them
+/// written, so releasing the clipping path shows the whole image; a second copy cut to a small part
+/// is written as that part, 2 pixels more on each side.
+#[test]
+fn a_clipped_image_written_first_keeps_all_of_its_pixels() {
+    let window = |d: &mut Document| {
+        let photo = speckled_photo(d);
+        let corner = clipping(d, shapes::rectangle(Rect::new(30.0, 20.0, 50.0, 40.0)));
+        group(d, vec![corner, photo], true)
+    };
+    let doc = photo_doc(|d| {
+        let (a, b) = (window(d), window(d));
+        group(d, vec![a, b], false)
+    });
+    let sizes = sample_sizes(&doc);
+    assert_eq!(sizes.len(), 2, "{sizes:?}");
+    assert_eq!(sizes[0], SPECKLED_WHOLE);
+    // The path shows 10 × 10 pixels.
+    assert_eq!(sizes[1], 14 * 14 * 3 + 4, "{sizes:?}");
+    let back = read_back(&doc);
+    let st = vectorcraft_testkit::raster::perceptual_diff(
+        &vectorcraft_testkit::raster::render_artboard(&doc),
+        &vectorcraft_testkit::raster::render_artboard(&back),
+        8.0,
+    );
+    assert!((st.bad_pixels as f64) < 0.002 * st.pixels as f64, "{} of {} pixels differ", st.bad_pixels, st.pixels);
+}
+
+/// The images in `n` and its members, each as its count of effects, its width and its height.
+fn images_in(n: &Node, out: &mut Vec<(usize, u32, u32)>) {
+    if let NodeKind::Image(im) = &n.kind {
+        out.push((n.appearance.effects.len(), im.width, im.height));
+    }
+    for c in n.children().into_iter().flatten() {
+        images_in(c, out);
+    }
+}
+
+/// A copy of an image written whole already that its clipping path shows none of is written as one
+/// pixel of it.
+#[test]
+fn a_copy_of_an_image_that_does_not_show_is_one_pixel() {
+    // GUARDS: a copy whose clipping path missed the image was written with all of its pixels.
+    let doc = photo_doc(|d| {
+        let photo = speckled_photo(d);
+        let corner = clipping(d, shapes::rectangle(Rect::new(30.0, 20.0, 50.0, 40.0)));
+        let first = group(d, vec![corner, photo], true);
+        let photo = speckled_photo(d);
+        let away = clipping(d, shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 5.0)));
+        let second = group(d, vec![away, photo], true);
+        group(d, vec![first, second], false)
+    });
+    assert_eq!(sample_sizes(&doc), [SPECKLED_WHOLE, 3 + 4]);
+}
+
+/// A 200 × 100 document of: the speckled image when `first`; a square whose opacity mask's art is
+/// the image then six squares; the image in a small clipping group.
+fn mask_art_then_clipped_photo(first: bool) -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    if first {
+        let photo = speckled_photo(&mut doc);
+        doc.insert(Some(layer), usize::MAX, photo).unwrap();
+    }
+    let mut masked = square(&mut doc, Rect::new(10.0, 10.0, 50.0, 50.0), Color::gray(0.5));
+    // The image, then more objects than the clipping group after the mask holds.
+    let mut members = vec![speckled_photo(&mut doc)];
+    for i in 0..6 {
+        let x = f64::from(i) * 10.0;
+        members.push(square(&mut doc, Rect::new(x, 0.0, x + 5.0, 5.0), Color::rgb(1.0, 1.0, 1.0)));
+    }
+    let art = group(&mut doc, members, false);
+    masked.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    doc.insert(Some(layer), usize::MAX, masked).unwrap();
+    let photo = speckled_photo(&mut doc);
+    let corner = clipping(&mut doc, shapes::rectangle(Rect::new(30.0, 20.0, 50.0, 40.0)));
+    let clipped = group(&mut doc, vec![corner, photo], true);
+    doc.insert(Some(layer), usize::MAX, clipped).unwrap();
+    doc
+}
+
+/// For each object limit from none to all of `doc`'s objects: whether the mask is written, and the
+/// sizes `%%BeginData:` gives the images' samples on `%_` lines (the mask's art) and on the others.
+fn samples_within_each_limit(doc: &Document) -> Vec<(usize, bool, Vec<usize>, Vec<usize>)> {
+    let read = crate::import::objects_read(&export_ai_editing(doc, &opts()).unwrap().program).unwrap();
+    (0..=read)
+        .map(|max| {
+            let text = String::from_utf8_lossy(&export_within(doc, &opts(), max).unwrap().program).replace("\r\n", "\n");
+            let size = |l: &str| l.strip_prefix("%%BeginData: ")?.trim().parse::<usize>().ok();
+            let hidden = text.lines().filter_map(|l| size(l.strip_prefix("%_")?)).collect();
+            let shown = text.lines().filter_map(size).collect();
+            (max, text.contains("(AI9_Mask)"), hidden, shown)
+        })
+        .collect()
+}
+
+/// An image whose whole copy was in art left out for the object limit (here an opacity mask's art)
+/// is written whole again where it is next written, even cut to a small clipping path: the file
+/// always holds all of its pixels once.
+#[test]
+fn an_image_whose_whole_copy_is_left_out_is_written_whole_again() {
+    // GUARDS: once the mask's art was left out, the clipped copy was written as the part it shows.
+    let mut left_out_with_copy = 0;
+    for (max, mask, hidden, shown) in samples_within_each_limit(&mask_art_then_clipped_photo(false)) {
+        if hidden.is_empty() && shown.is_empty() {
+            continue;
+        }
+        assert!(hidden.contains(&SPECKLED_WHOLE) || shown.contains(&SPECKLED_WHOLE), "room for {max}: {hidden:?} {shown:?}");
+        left_out_with_copy += usize::from(!mask);
+    }
+    assert!(left_out_with_copy > 0, "no room left the mask out and kept the clipped copy");
+}
+
+/// An image written whole, then whole again in an opacity mask's art left out for the object limit,
+/// is not written whole a third time: the first copy is kept, and the clipped copy after the mask is
+/// the part it shows.
+#[test]
+fn an_image_written_whole_before_art_left_out_stays_written_whole() {
+    // GUARDS: the mask's copy took the first copy's place, so giving it back wrote the clipped copy whole.
+    let mut left_out = 0;
+    for (max, mask, _, shown) in samples_within_each_limit(&mask_art_then_clipped_photo(true)) {
+        assert!(shown.iter().filter(|s| **s == SPECKLED_WHOLE).count() <= 1, "room for {max}: {shown:?}");
+        left_out += usize::from(!mask && shown.len() == 2);
+    }
+    assert!(left_out > 0, "no room left the mask out and kept both copies");
+}
+
+/// An image with a live Warp in a small clipping group keeps all of its pixels: its drawn look is
+/// written first, and neither the look nor the image itself is cut to the clipping path, so it
+/// reads back with its Warp live and every pixel it had.
+#[test]
+fn a_clipped_image_with_a_live_warp_keeps_all_of_its_pixels() {
+    // GUARDS: the image under a live Warp was cut to the clipping path around it.
+    let doc = photo_doc(|d| {
+        let mut photo = speckled_photo(d);
+        photo.appearance = Appearance { effects: vec![fx("warp.arc", serde_json::json!({"bend": 40.0}))], ..Appearance::default() }.into();
+        let corner = clipping(d, shapes::rectangle(Rect::new(30.0, 20.0, 60.0, 50.0)));
+        group(d, vec![corner, photo], true)
+    });
+    let sizes = sample_sizes(&doc);
+    assert_eq!(sizes.iter().filter(|s| **s == SPECKLED_WHOLE).count(), 1, "the look's first piece: {sizes:?}");
+    let total: usize = sizes.iter().sum();
+    assert!(total < 10 * SPECKLED_WHOLE, "{total} bytes of samples for an image of {SPECKLED_WHOLE}");
+    // The image itself, on `%_` lines.
+    let program = export_ai_editing(&doc, &opts()).unwrap().program;
+    let hidden: Vec<usize> =
+        String::from_utf8_lossy(&program).lines().filter_map(|l| l.strip_prefix("%_%%BeginData: ")?.trim().parse().ok()).collect();
+    assert_eq!(hidden, [SPECKLED_WHOLE]);
+    let back = read_back(&doc);
+    let mut images = vec![];
+    for n in back.layers[0].children().unwrap() {
+        images_in(n, &mut images);
+    }
+    assert_eq!(images, [(1, 64, 64)], "{:#?}", lines(&back));
+}
+
+/// An image cut by an opacity mask whose art has an effect that paints past its path keeps the
+/// pixels the effect shows: a copy of an image written whole already is cut to all that its mask
+/// paints.
+#[test]
+fn a_masked_image_keeps_the_pixels_its_mask_effects_show() {
+    // GUARDS: the copy was cut to the mask art's path, short of what its Offset Path paints.
+    let doc = photo_doc(|d| {
+        let photo = speckled_photo(d);
+        let corner = clipping(d, shapes::rectangle(Rect::new(20.0, 10.0, 24.0, 14.0)));
+        let first = group(d, vec![corner, photo], true);
+        let mut masked = speckled_photo(d);
+        let mut ap = Appearance::basic(solid(Color::WHITE), Paint::None, 0.0);
+        ap.effects = vec![fx("path.offsetPath", serde_json::json!({"offset": 30.0}))];
+        let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(70.0, 40.0, 80.0, 50.0)), ap);
+        masked.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(art), clip: true, invert: false, disabled: false, linked: true }));
+        group(d, vec![first, masked], false)
+    });
+    let sizes = sample_sizes(&doc);
+    assert_eq!(sizes.len(), 2, "{sizes:?}");
+    assert_eq!(sizes[0], SPECKLED_WHOLE);
+    // The offset art covers (40, 10) to (110, 80): 35 × 35 pixels of the image.
+    assert!(sizes[1] >= 35 * 35 * 3, "{sizes:?}");
+}
+
 /// A linked image, an image with an opacity mask, and an image with a Warp and another effect are
 /// written as their drawn art, with no art style.
 #[test]
