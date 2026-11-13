@@ -1228,7 +1228,7 @@ fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
         Some(l) => po::simplify_level_tolerance(l),
         None => given_tolerance.unwrap_or(1.0),
     };
-    let opts = po::SimplifyOptions { tolerance: tolerance.clamp(1e-4, 1e4), corner_angle_deg: corner_angle, straight_lines, smooth: 0.0 };
+    let opts = po::SimplifyOptions { tolerance: tolerance.clamp(1e-4, 1e4), corner_angle_deg: corner_angle, straight_lines, ..Default::default() };
     // A path with segments direct-selected simplifies only their runs, and keeps those runs (and the
     // other anchors it had selected) direct-selected.
     let roots = selected_roots(s)?;

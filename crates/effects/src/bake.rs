@@ -424,6 +424,8 @@ fn container_keeping_type(d: &Document, n: &Node) -> Option<Node> {
     if !kept {
         return None;
     }
+    // The members' own effects run first, as on the canvas.
+    crate::group::members_as_drawn(Some(d), &mut m);
     reshape_leaves(&mut m, &fx, &n.appearance.effects, Some(d));
     m.appearance.effects = crate::raster::without_geometry(&m.appearance.effects);
     m.appearance.effects.retain(|e| !is_pathfinder(&e.id));

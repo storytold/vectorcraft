@@ -242,6 +242,8 @@ impl DimensionTool {
     /// a link to its path); else where Smart Guides put it (another object's anchor or centre, in
     /// line with one, or for the second point on a construction guide through the first), its
     /// guides showing; else on the closest point of the line under the pointer; else `p` itself.
+    /// A point the guides leave where the pointer is (right on a guide line) stays there, and with
+    /// Snap to Pixel or Snap to Grid on a point stays where they place it.
     fn snap_linear(&mut self, cx: &ToolContext, p: Point) -> (Point, Option<PointRef>) {
         let leave = self.points.last().map(|(first, _)| crate::guides::Leave::segment(cx, *first, false));
         let guided = self.snap.hover(cx, p, &[], leave.as_ref());
@@ -249,7 +251,7 @@ impl DimensionTool {
             self.snap.clear();
             return (point, Some(reference));
         }
-        if guided.distance(p) > 1e-9 {
+        if guided.distance(p) > 1e-9 || !self.snap.guides().is_empty() || cx.snap_to_pixel || cx.snap_to_grid {
             return (guided, None);
         }
         // Not on an anchor or a guide: snap to the closest point of the line (#2432).
@@ -842,6 +844,54 @@ mod tests {
                 assert_eq!(at(a, b, p), Aligned, "{a:?} to {b:?}, pointer at {p:?}");
             }
         }
+    }
+
+    /// A point that Smart Guides leave where the pointer already is (the pointer right on a
+    /// construction guide or in line with a target) stays on the guide the overlays show. It
+    /// does not move to the nearest point of a segment within the pick's reach. Off the guides,
+    /// a point near a segment still lands on it.
+    #[test]
+    fn a_point_on_a_guide_stays_on_the_guide() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let click = |t: &mut DimensionTool, x: f64, y: f64| {
+            t.pointer(&c, &PointerEvent::new(PointerKind::Move, x, y));
+            t.pointer(&c, &PointerEvent::new(PointerKind::Down, x, y));
+            t.pointer(&c, &PointerEvent::new(PointerKind::Up, x, y));
+        };
+        let mut t = DimensionTool::default();
+        // In line with the rectangle's center, 6 units right of its right edge.
+        assert_eq!(t.snap_linear(&c, Point::new(206.0, 150.0)), (Point::new(206.0, 150.0), None));
+        assert!(!t.snap.guides().is_empty());
+        // Off the guides, beside the edge: the closest point of the edge.
+        let (on_edge, reference) = t.snap_linear(&c, Point::new(206.0, 170.5));
+        assert!(on_edge.distance(Point::new(200.0, 170.5)) < 1e-4 && reference.is_none(), "{on_edge:?}");
+        // The first point, above the rectangle, then straight down along the vertical
+        // construction guide through it, past the right edge.
+        click(&mut t, 206.0, 50.0);
+        assert_eq!(t.points, vec![(Point::new(206.0, 50.0), None)]);
+        for y in [150.0, 170.5, 190.0] {
+            assert_eq!(t.snap_linear(&c, Point::new(206.0, y)), (Point::new(206.0, y), None), "on the construction guide at y = {y}");
+            assert!(!t.snap.guides().is_empty());
+        }
+        click(&mut t, 206.0, 170.5);
+        let dim = t.pending.as_ref().expect("both points were picked");
+        assert_eq!((dim.a, dim.b), (Point::new(206.0, 50.0), Point::new(206.0, 170.5)));
+        // The second point, off the edge, is held against the rectangle's anchors.
+        let Some(DimensionSource::Points { free_b: Some(free), .. }) = &dim.source else { panic!("{:?}", dim.source) };
+        assert!(matches!(free, FreePoint::Anchors { .. }), "{free:?}");
+        // A pointer already on a gridline crossing or on a whole pixel stays there too, and one
+        // off the grid lands on the grid, not on the edge.
+        let grid = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+        let step = grid.grid_step();
+        let on_grid = Point::new((200.0 / step).ceil() * step, (170.0 / step).round() * step);
+        assert!(on_grid.x > 200.0 + 1e-6 && on_grid.x - 200.0 < 8.0, "{on_grid:?} is off the edge, within the pick's reach");
+        assert_eq!(DimensionTool::default().snap_linear(&grid, on_grid), (on_grid, None));
+        let off_grid = on_grid + Vec2::new(-step * 0.3, 0.2);
+        assert_eq!(DimensionTool::default().snap_linear(&grid, off_grid), (on_grid, None));
+        let pixel = ToolContext { snap_to_pixel: true, ..cx(&d, &s, &p) };
+        assert_eq!(DimensionTool::default().snap_linear(&pixel, Point::new(206.0, 170.0)), (Point::new(206.0, 170.0), None));
     }
 
     #[test]

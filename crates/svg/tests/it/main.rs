@@ -20,6 +20,7 @@ mod font_weights;
 mod foreign_attributes;
 mod gradients;
 mod ids;
+mod image_orientation;
 mod import_details;
 mod import_live;
 mod import_text;
