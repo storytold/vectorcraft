@@ -6063,6 +6063,7 @@ axis	Y Axis	Y-as
 @msg	message must be text	message moet tekst zijn
 @msg	allowContinue must be true or false	allowContinue moet true of false zijn
 @msg	Batch cannot play an action with a stop	Batch kan geen actie met een stop afspelen
+@msg	Batch cannot play an action with a View menu step	Batch kan geen actie met een stap uit het menu Beeld afspelen
 	Insert Menu Item…	Menu-item invoegen…
 	Insert Menu Item	Menu-item invoegen
 	Insert Select Path	Pad selecteren invoegen

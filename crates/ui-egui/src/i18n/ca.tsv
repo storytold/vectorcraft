@@ -4049,6 +4049,7 @@ digits	Malayalam	Malaiàlam
 @msg	message must be text	message ha de ser text
 @msg	allowContinue must be true or false	allowContinue ha de ser true o false
 @msg	Batch cannot play an action with a stop	Lot no pot reproduir una acció amb una aturada
+@msg	Batch cannot play an action with a View menu step	Lot no pot reproduir una acció amb un pas del menú Visualitza
 	Insert Menu Item…	Insereix un element de menú…
 	Insert Menu Item	Insereix un element de menú
 	Insert Select Path	Insereix una selecció de traçat

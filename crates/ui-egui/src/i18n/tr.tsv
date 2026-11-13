@@ -6486,6 +6486,7 @@ axis	Y Axis	Y ekseni
 @msg	message must be text	"message" metin olmalıdır
 @msg	allowContinue must be true or false	"allowContinue" true veya false olmalıdır
 @msg	Batch cannot play an action with a stop	Toplu işlem durak içeren bir eylemi oynatamaz
+@msg	Batch cannot play an action with a View menu step	Toplu işlem Görünüm menüsü adımı içeren bir eylemi oynatamaz
 	Insert Menu Item…	Menü Öğesi Ekle…
 	Insert Menu Item	Menü Öğesi Ekle
 	Insert Select Path	Yol Seçimi Ekle

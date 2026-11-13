@@ -6121,6 +6121,7 @@ axis	Y Axis	Y-Achse
 @msg	message must be text	message muss Text sein
 @msg	allowContinue must be true or false	allowContinue muss true oder false sein
 @msg	Batch cannot play an action with a stop	Die Stapelverarbeitung kann keine Aktion mit einem Stopp abspielen
+@msg	Batch cannot play an action with a View menu step	Die Stapelverarbeitung kann keine Aktion mit einem Schritt aus dem Menü Ansicht abspielen
 	Insert Menu Item…	Menübefehl einfügen…
 	Insert Menu Item	Menübefehl einfügen
 	Insert Select Path	Pfadauswahl einfügen

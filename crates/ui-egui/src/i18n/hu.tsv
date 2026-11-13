@@ -6513,6 +6513,7 @@ axis	Y Axis	Y tengely
 @msg	message must be text	message: szöveg kell
 @msg	allowContinue must be true or false	allowContinue: true vagy false kell
 @msg	Batch cannot play an action with a stop	A kötegelt feldolgozás nem játszhat le megállást tartalmazó műveletet
+@msg	Batch cannot play an action with a View menu step	A kötegelt feldolgozás nem játszhat le Nézet menübeli lépést tartalmazó műveletet
 	Insert Menu Item…	Menüelem beszúrása…
 	Insert Menu Item	Menüelem beszúrása
 	Insert Select Path	Útvonal kijelölésének beszúrása

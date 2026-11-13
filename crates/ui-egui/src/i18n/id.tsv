@@ -6012,6 +6012,7 @@ axis	Y Axis	Sumbu Y
 @msg	message must be text	message harus berupa teks
 @msg	allowContinue must be true or false	allowContinue harus true atau false
 @msg	Batch cannot play an action with a stop	Batch tidak dapat memutar tindakan dengan titik henti
+@msg	Batch cannot play an action with a View menu step	Batch tidak dapat memutar tindakan dengan langkah menu Tampilan
 	Insert Menu Item…	Sisipkan item menu…
 	Insert Menu Item	Sisipkan item menu
 	Insert Select Path	Sisipkan pemilihan jalur

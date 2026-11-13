@@ -1,6 +1,6 @@
 //! Action set files: the Actions panel menu's Save Actions… and Load Actions….
 //!
-//! An action set file (`.vcactions`) is JSON: `{"format": "vcactions", "version": 1 to 5, "name",
+//! An action set file (`.vcactions`) is JSON: `{"format": "vcactions", "version": 1 to 6, "name",
 //! "actions": [{"name", "steps": [{"command", "params", "excluded"?}], "key"?, "color"?}]}`. Each step is a
 //! command id and its params, as `command.batch` takes them, or a stop: the command `action.stop`
 //! with `{"message", "allowContinue"}`. A Select Object step is the command `select.byNote` with
@@ -10,9 +10,10 @@
 //! or with a value that is not one, has none. `excluded: true` keeps a step but skips it during
 //! playback. Sets with exclusions use version 2 so older builds refuse them rather than replay
 //! excluded steps, sets with stops use version 3 so older builds refuse them rather than fail at a
-//! stop, sets with Select Object steps use version 4 and sets with Select Path steps use version 5 so
-//! older builds refuse them rather than fail at that step. Other sets use version 1, and earlier
-//! version 1 to 4 files still work.
+//! stop, sets with Select Object steps use version 4, sets with Select Path steps use version 5 and
+//! sets with View menu steps ([`crate::menus::plays_in_app`]), whose params are an object, use
+//! version 6 so older builds refuse them rather than fail at that step. Other sets use version 1, and
+//! earlier version 1 to 5 files still work.
 //! Load Actions… also reads the action sets another app saves as text (`.aia`, through
 //! `actionSet.read`).
 
@@ -173,7 +174,9 @@ pub fn write_set(set: &ActionSet) -> String {
     let has_select_object = steps().any(|(command, params)| !select_objects_in(command, params).is_empty());
     let has_select_path = steps().any(|(command, params)| !select_paths_in(command, params).is_empty());
     let has_stop = steps().any(|(command, params)| !stops_in(command, params).is_empty());
+    let has_ui_step = steps().any(|(command, _)| crate::menus::plays_in_app(command));
     let version = match (has_select_path, has_select_object, has_stop, set.actions.iter().any(|a| !a.excluded_steps.is_empty())) {
+        _ if has_ui_step => 6,
         (true, ..) => 5,
         (false, true, ..) => 4,
         (false, false, true, _) => 3,
@@ -193,7 +196,7 @@ pub fn read_set(text: &str, name: &str) -> Result<ActionSet, String> {
     if f.format != ACTIONS_EXT {
         return Err("not an action set file".into());
     }
-    if !matches!(f.version, 1..=5) {
+    if !matches!(f.version, 1..=6) {
         return Err("the action set file needs a later version of VectorCraft".into());
     }
     if f.actions.len() > MAX_SET_ACTIONS {
@@ -212,6 +215,10 @@ pub fn read_set(text: &str, name: &str) -> Result<ActionSet, String> {
     }
     let mut select_objects = f.actions.iter().flat_map(|a| &a.steps).flat_map(|s| select_objects_in(&s.command, &s.params));
     if select_objects.any(|p| super::select_object_params(p).is_err()) {
+        return Err("not an action set file".into());
+    }
+    let mut ui_steps = f.actions.iter().flat_map(|a| &a.steps).filter(|s| crate::menus::plays_in_app(&s.command));
+    if ui_steps.any(|s| !s.params.is_object()) {
         return Err("not an action set file".into());
     }
     let actions = f

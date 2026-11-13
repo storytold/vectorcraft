@@ -6135,6 +6135,7 @@ axis	Y Axis	Вісь Y
 @msg	message must be text	message має бути текстом
 @msg	allowContinue must be true or false	allowContinue має бути true або false
 @msg	Batch cannot play an action with a stop	Пакет не може відтворити дію із зупинкою
+@msg	Batch cannot play an action with a View menu step	Пакет не може відтворити дію з кроком із меню Перегляд
 	Insert Menu Item…	Вставити пункт меню…
 	Insert Menu Item	Вставити пункт меню
 	Insert Select Path	Вставити виділення контуру

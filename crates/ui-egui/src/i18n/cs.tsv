@@ -6530,6 +6530,7 @@ axis	Y Axis	osa Y
 @msg	message must be text	message musí být text
 @msg	allowContinue must be true or false	allowContinue musí být true nebo false
 @msg	Batch cannot play an action with a stop	Dávka nemůže přehrát akci se zastavením
+@msg	Batch cannot play an action with a View menu step	Dávka nemůže přehrát akci s krokem z nabídky Zobrazení
 	Insert Menu Item…	Vložit položku nabídky…
 	Insert Menu Item	Vložit položku nabídky
 	Insert Select Path	Vložit výběr cesty

@@ -6384,6 +6384,7 @@ axis	Y Axis	Oś Y
 @msg	message must be text	message musi być tekstem
 @msg	allowContinue must be true or false	allowContinue musi mieć wartość true lub false
 @msg	Batch cannot play an action with a stop	Przetwarzanie wsadowe nie może odtworzyć operacji z zatrzymaniem
+@msg	Batch cannot play an action with a View menu step	Przetwarzanie wsadowe nie może odtworzyć operacji z krokiem z menu Widok
 	Insert Menu Item…	Wstaw polecenie menu…
 	Insert Menu Item	Wstaw polecenie menu
 	Insert Select Path	Wstaw zaznaczenie ścieżki

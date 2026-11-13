@@ -6136,6 +6136,7 @@ axis	Y Axis	Trục Y
 @msg	message must be text	message phải là văn bản
 @msg	allowContinue must be true or false	allowContinue phải là true hoặc false
 @msg	Batch cannot play an action with a stop	Hàng loạt không thể phát hành động có điểm dừng
+@msg	Batch cannot play an action with a View menu step	Hàng loạt không thể phát hành động có bước của menu Hiển thị
 	Insert Menu Item…	Chèn mục menu…
 	Insert Menu Item	Chèn mục menu
 	Insert Select Path	Chèn chọn đường dẫn

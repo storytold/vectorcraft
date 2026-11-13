@@ -6560,6 +6560,7 @@ axis	Y Axis	Y-akseli
 @msg	message must be text	message on oltava tekstiä
 @msg	allowContinue must be true or false	allowContinue on oltava true tai false
 @msg	Batch cannot play an action with a stop	Erä ei voi toistaa toimintoa, jossa on pysäytys
+@msg	Batch cannot play an action with a View menu step	Erä ei voi toistaa toimintoa, jossa on Näytä-valikon vaihe
 	Insert Menu Item…	Lisää valikkokohta…
 	Insert Menu Item	Lisää valikkokohta
 	Insert Select Path	Lisää polun valinta

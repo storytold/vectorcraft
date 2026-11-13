@@ -6155,6 +6155,7 @@ axis	Y Axis	Asse Y
 @msg	message must be text	message deve essere testo
 @msg	allowContinue must be true or false	allowContinue deve essere true o false
 @msg	Batch cannot play an action with a stop	L'elaborazione batch non può eseguire un'azione con un'interruzione
+@msg	Batch cannot play an action with a View menu step	L'elaborazione batch non può eseguire un'azione con un passaggio del menu Visualizza
 	Insert Menu Item…	Inserisci voce di menu…
 	Insert Menu Item	Inserisci voce di menu
 	Insert Select Path	Inserisci selezione tracciato

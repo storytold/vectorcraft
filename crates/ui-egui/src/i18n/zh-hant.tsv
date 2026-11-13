@@ -6173,6 +6173,7 @@ axis	Y Axis	Y 軸
 @msg	message must be text	message 必須是文字
 @msg	allowContinue must be true or false	allowContinue 必須是 true 或 false
 @msg	Batch cannot play an action with a stop	批次無法播放含有停止的動作
+@msg	Batch cannot play an action with a View menu step	批次無法播放含有檢視選單步驟的動作
 	Insert Menu Item…	插入選單項目…
 	Insert Menu Item	插入選單項目
 	Insert Select Path	插入選取路徑

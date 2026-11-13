@@ -6141,6 +6141,7 @@ axis	Y Axis	Ось Y
 @msg	message must be text	message должно быть текстом
 @msg	allowContinue must be true or false	allowContinue должно быть true или false
 @msg	Batch cannot play an action with a stop	Пакет не может воспроизвести действие с остановкой
+@msg	Batch cannot play an action with a View menu step	Пакет не может воспроизвести действие с шагом из меню Просмотр
 	Insert Menu Item…	Вставить пункт меню…
 	Insert Menu Item	Вставить пункт меню
 	Insert Select Path	Вставить выделение контура

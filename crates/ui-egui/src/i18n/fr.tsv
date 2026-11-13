@@ -6525,6 +6525,7 @@ axis	Y Axis	Axe Y
 @msg	message must be text	message doit être du texte
 @msg	allowContinue must be true or false	allowContinue doit valoir true ou false
 @msg	Batch cannot play an action with a stop	Le traitement par lots ne peut pas exécuter un script comportant un arrêt
+@msg	Batch cannot play an action with a View menu step	Le traitement par lots ne peut pas exécuter un script comportant une étape du menu Affichage
 	Insert Menu Item…	Insérer une commande de menu…
 	Insert Menu Item	Insérer une commande de menu
 	Insert Select Path	Insérer une sélection de tracé

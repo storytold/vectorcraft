@@ -6481,6 +6481,7 @@ axis	Y Axis	Y ღერძი
 @msg	message must be text	message უნდა იყოს ტექსტი
 @msg	allowContinue must be true or false	allowContinue უნდა იყოს true ან false
 @msg	Batch cannot play an action with a stop	პაკეტურ დამუშავებას არ შეუძლია გაჩერების მქონე მოქმედების შესრულება
+@msg	Batch cannot play an action with a View menu step	პაკეტურ დამუშავებას არ შეუძლია ხედის მენიუს ნაბიჯის მქონე მოქმედების შესრულება
 	Insert Menu Item…	მენიუს ელემენტის ჩასმა…
 	Insert Menu Item	მენიუს ელემენტის ჩასმა
 	Insert Select Path	ტრაექტორიის მონიშვნის ჩასმა
