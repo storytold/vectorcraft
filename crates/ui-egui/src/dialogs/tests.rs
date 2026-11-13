@@ -2289,7 +2289,13 @@ fn dialog_sliders_report_the_numbers_their_fields_show() {
     app.run("tool.options", json!({"tool": "smooth"})).unwrap();
     set(&mut app, "fidelity", json!(0.25));
     let shown = tree(|ui| show(&mut app, ui.ctx()));
-    assert_eq!(slider_value(&shown, "Fidelity:"), v(0.25, (0.05, 20.0), "0.25pt"));
+    assert_eq!(slider_value(&shown, "Fidelity:"), v(0.25, (0.05, 20.0), "0.25px"), "the Smooth tool's Fidelity is on screen (#4671)");
+    // The Blob Brush's Fidelity is in points.
+    app.ui.dialog = None;
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    set(&mut app, "fidelity", json!(2.5));
+    let shown = tree(|ui| show(&mut app, ui.ctx()));
+    assert_eq!(slider_value(&shown, "Fidelity:"), v(2.5, (0.01, 20.0), "2.5pt"));
     app.ui.dialog = None;
     app.run("paint.setFill", json!({"color": "#ff8000"})).unwrap();
     app.run("ui.colorPicker", json!({})).unwrap();
