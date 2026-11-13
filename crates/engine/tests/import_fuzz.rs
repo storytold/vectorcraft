@@ -4247,8 +4247,9 @@ proptest! {
         let library = ai::editing_data(200.0, 100.0, &header);
         survive("one-paint style library", || Some(vectorcraft_eps::layered_ai(library.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
         let file = ai::ai(library.as_bytes(), ai::page_pdf());
-        // How many objects C's look reached, and what applying it answered.
-        let (mut styled, mut applied) = (0, Value::Null);
+        // How many objects C's look reached, what applying it answered, and whether that look is
+        // C's red 2 pt stroke with no fill.
+        let (mut styled, mut applied, mut red_stroke) = (0, Value::Null, false);
         survive("one-paint styles applied", || {
             let mut s = rich_session();
             let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file), "name": "fuzz.ai"});
@@ -4259,13 +4260,17 @@ proptest! {
             applied = no_panic(s.execute("graphicStyle.addFromLibrary", &json!({"library": library, "names": ["C"], "apply": true}))).ok()?;
             let d = (*s.doc().ok()?.doc).clone();
             if let Some(look) = applied["applied"].as_str().and_then(|name| d.graphic_style(name)).map(|g| &g.appearance) {
+                let strokes = look.items.iter().filter(|i| matches!(i, vectorcraft_doc::AppearanceItem::Stroke(_))).count();
+                red_stroke = look.fill().is_none()
+                    && strokes == 1
+                    && look.stroke().is_some_and(|s| (s.paint.color(), s.width) == (Some(vectorcraft_color::Color::cmyk(0.0, 1.0, 1.0, 0.0)), 2.0));
                 d.walk(|n| styled += usize::from(n.appearance == *look));
             }
             Some(d)
         })?;
         // Text that isn't a paint operator can leave a string or a comment open over the style list.
         if ops.iter().all(|(_, paint)| *paint) {
-            prop_assert!(applied["applied"].is_string() && styled > 0, "the stroke style wasn't applied: {applied}");
+            prop_assert!(applied["applied"].is_string() && red_stroke && styled > 0, "the stroke style wasn't applied: {applied}");
         }
     }
 
