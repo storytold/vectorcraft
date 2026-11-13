@@ -31,12 +31,14 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
     });
     ui.add_space(4.0);
     // A recent colour paints the active proxy (Alt: the inactive one), as a swatch does, and
-    // becomes the Color Guide's base color.
-    if let Some(c) = crate::panels::recent_colors_row(app, ui) {
-        crate::panels::color_guide::choose_base(app, c);
-        crate::panels::apply_click(app, ui, json!({"color": crate::panels::color_json(&c)}));
+    // becomes the Color Guide's base color. The panel menu's Show Recent Colors hides the row.
+    if app.ui.swatches_show_recent_colors {
+        if let Some(c) = crate::panels::recent_colors_row(app, ui) {
+            crate::panels::color_guide::choose_base(app, c);
+            crate::panels::apply_click(app, ui, json!({"color": crate::panels::color_json(&c)}));
+        }
+        widgets::divider(ui);
     }
-    widgets::divider(ui);
     widgets::subheader(ui, tl!("Swatch Tiles"));
     let query = if pstate(ui.ctx(), "swatch-show-find") { widgets::search_field(ui, find_id(), tl!("Find")) } else { String::new() };
     let items = entries(app, kind, &query);

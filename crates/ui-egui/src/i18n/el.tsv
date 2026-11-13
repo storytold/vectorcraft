@@ -1814,6 +1814,7 @@ font-technology	Variable	Μεταβλητές
 	Art Brush	Πινέλο σχεδίου
 	Bristle Brush	Πινέλο με τρίχες
 	Pattern Brush	Πινέλο μοτίβου
+	missing from the Brushes panel	λείπει από τον πίνακα Πινέλα
 	Select art to make a scatter, art or pattern brush.	Επιλέξτε σχέδιο για να δημιουργήσετε πινέλο διασποράς, σχεδίου ή μοτίβου.
 	Brush Art	Σχέδιο πινέλου
 	New Layer…	Νέο επίπεδο…
@@ -2319,6 +2320,85 @@ axis	Both	Και τα δύο
 @msg	the script's run is no longer available	η εκτέλεση του σεναρίου δεν είναι πλέον διαθέσιμη
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	μια εντολή που απέτυχε άλλαξε βήματα αναίρεσης που δεν ήταν δυνατό να επαναφερθούν, οπότε το σενάριο σταμάτησε
 @msg	a recovery copy could not be written, so the script was not run	δεν ήταν δυνατή η εγγραφή αντιγράφου ανάκτησης, οπότε το σενάριο δεν εκτελέστηκε
+@msg	Script file access denied	Η πρόσβαση στο αρχείο σεναρίου απορρίφθηκε
+@msg	Script file exceeds 8 MiB	Το αρχείο σεναρίου υπερβαίνει τα 8 MiB
+@msg	Script file is not open	Το αρχείο σεναρίου δεν είναι ανοιχτό
+@msg	Script file cannot be decoded	Δεν είναι δυνατή η αποκωδικοποίηση του αρχείου σεναρίου
+@msg	Script file is not a regular file	Το αρχείο σεναρίου δεν είναι κανονικό αρχείο
+@msg	Script file does not exist	Το αρχείο σεναρίου δεν υπάρχει
+@msg	Script file could not be read	Δεν ήταν δυνατή η ανάγνωση του αρχείου σεναρίου
+@msg	Script folder has more than 2,048 entries	Ο φάκελος σεναρίου έχει περισσότερες από 2.048 καταχωρίσεις
+@msg	Script file open mode must be r, w, e or a	Ο τρόπος ανοίγματος του αρχείου σεναρίου πρέπει να είναι r, w, e ή a
+@msg	Script file writing is not available	Η εγγραφή αρχείων σεναρίου δεν είναι διαθέσιμη
+@msg	Script file dialogs are not available	Τα παράθυρα διαλόγου αρχείων σεναρίου δεν είναι διαθέσιμα
+@msg	Script files cannot be opened in another application	Τα αρχεία σεναρίου δεν μπορούν να ανοίξουν σε άλλη εφαρμογή
+@msg	Script file access is unavailable on the web	Η πρόσβαση σε αρχεία σεναρίου δεν είναι διαθέσιμη στο web
+@msg	Script has 256 files open	Το σενάριο έχει 256 ανοιχτά αρχεία
+@msg	Script file path exceeds 32,767 characters	Η διαδρομή του αρχείου σεναρίου υπερβαίνει τους 32.767 χαρακτήρες
+@msg	Script folder mask takes too many steps to match	Η αντιστοίχιση της μάσκας φακέλου σεναρίου χρειάζεται πάρα πολλά βήματα
+@msg	the script opened more file data than one run may open (32 MiB)	το σενάριο άνοιξε περισσότερα δεδομένα αρχείων από όσα επιτρέπεται να ανοίξει μία εκτέλεση (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: δέχεται μια θέση και έναν τρόπο
+@msg	vc.run: give a command id, as a string	vc.run: δώστε ένα αναγνωριστικό εντολής, ως συμβολοσειρά
+@msg	vc.run: takes a command id and an object of parameters	vc.run: δέχεται ένα αναγνωριστικό εντολής και ένα αντικείμενο παραμέτρων
+@msg	vc.run: the parameters must be an object	vc.run: οι παράμετροι πρέπει να είναι αντικείμενο
+@msg	vc.run: the result{place} is too large for a script	vc.run: το αποτέλεσμα{place} είναι πολύ μεγάλο για σενάριο
+@msg	$.evalFile requires a file path	Το $.evalFile απαιτεί διαδρομή αρχείου
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: το χρονικό όριο πρέπει να είναι πεπερασμένος αριθμός χιλιοστών του δευτερολέπτου, 0 ή περισσότερο
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: δέχεται μια διαδρομή αρχείου και ένα χρονικό όριο
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: γραμμή {line}, στήλη {column} στο {file}: {e} (εξαίρεση)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: γραμμή {line}, στήλη {column}: {e} (εξαίρεση)
+@msg	{name}: {e} (thrown)	{name}: {e} (εξαίρεση)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: γραμμή {line}, στήλη {column} στο {file}: {e} (όριο)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: γραμμή {line}, στήλη {column}: {e} (όριο)
+@msg	{name}: {e} (limit)	{name}: {e} (όριο)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: γραμμή {line}, στήλη {column} στο {file}: {e} (συντακτικό σφάλμα)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: γραμμή {line}, στήλη {column}: {e} (συντακτικό σφάλμα)
+@msg	{name}: {e} (syntax)	{name}: {e} (συντακτικό σφάλμα)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: γραμμή {line}, στήλη {column} στο {file}: {e} (διακόπηκε)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: γραμμή {line}, στήλη {column}: {e} (διακόπηκε)
+@msg	{name}: {e} (stopped)	{name}: {e} (διακόπηκε)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: γραμμή {line}, στήλη {column} στο {file}: {e} (εσωτερικό σφάλμα)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: γραμμή {line}, στήλη {column}: {e} (εσωτερικό σφάλμα)
+@msg	{name}: {e} (internal)	{name}: {e} (εσωτερικό σφάλμα)
+@msg	{e} (these files stay written: {paths})	{e} (αυτά τα αρχεία παραμένουν γραμμένα: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: δώστε ένα όνομα, ως συμβολοσειρά
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: δώστε μια τοπική ρύθμιση όπως "en" ή "de_DE", ή null για αυτή της διεπαφής
+@msg	$.localize: give true or false	$.localize: δώστε true ή false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: μπορεί να οριστεί μόνο το 512, που ενεργοποιεί την τοπικοποίηση, ή το 0
+@msg	$.flags: give a number	$.flags: δώστε έναν αριθμό
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: τα σενάρια εδώ διαβάζουν και γράφουν μόνο UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: δώστε το όνομα μιας κωδικοποίησης, ως συμβολοσειρά
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: το μέγεθος της κρυφής μνήμης δεν μπορεί να οριστεί
+@msg	$.setenv: give a value, as a string	$.setenv: δώστε μια τιμή, ως συμβολοσειρά
+@msg	$.setenv: only {_1} can be set	$.setenv: μπορούν να οριστούν μόνο τα {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: μια τιμή έχει το πολύ {MAX_ENV_BYTES} γράμματα, ψηφία και _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: δώστε έναν αριθμό χιλιοστών του δευτερολέπτου από 0 έως {MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: δώστε έναν αριθμό χιλιοστών του δευτερολέπτου
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: μια εκτέλεση δεν μπορεί να περιμένει μέσα σε επανάκληση ενσωματωμένης συνάρτησης, getter, μετατροπή ή αρχείο που εκτελεί το $.evalFile· καλέστε το από τον κώδικα του ίδιου του σεναρίου
+@msg	$.bp: scripts here have no debugger	$.bp: τα σενάρια εδώ δεν έχουν πρόγραμμα εντοπισμού σφαλμάτων
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: τα σενάρια δεν μπορούν ακόμη να εμφανίσουν παράθυρο διαλόγου
+@msg	{name}: give a message	{name}: δώστε ένα μήνυμα
+@msg	{name}: give the text the field starts with	{name}: δώστε το κείμενο με το οποίο ξεκινά το πεδίο
+@msg	{name}: the message is longer than 16 KiB	{name}: το μήνυμα είναι μεγαλύτερο από 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: ο τίτλος είναι μεγαλύτερος από 256 byte
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: το κείμενο με το οποίο ξεκινά το πεδίο είναι μεγαλύτερο από 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: ένα παράθυρο διαλόγου δεν μπορεί να ανοίξει μέσα σε επανάκληση ενσωματωμένης συνάρτησης, getter, μετατροπή ή αρχείο που εκτελεί το $.evalFile· καλέστε το από τον κώδικα του ίδιου του σεναρίου
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: η επόμενη απάντηση στο `answers` είναι για το {_1}, όχι για το {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: το `answers` δεν έχει άλλη απάντηση για αυτό το παράθυρο διαλόγου
+@msg	vc.document{place} is too large for a script	το vc.document{place} είναι πολύ μεγάλο για σενάριο
+@msg	vc.log: the log of this run is full	vc.log: το αρχείο καταγραφής αυτής της εκτέλεσης είναι γεμάτο
+@msg	this function's script run has ended	η εκτέλεση σεναρίου αυτής της συνάρτησης έχει τελειώσει
+@msg	the script made more host calls than one run may make	το σενάριο έκανε περισσότερες κλήσεις στον κεντρικό υπολογιστή από όσες επιτρέπονται σε μία εκτέλεση
+@msg	the script passed more data to and from commands than one run may pass	το σενάριο μετέφερε περισσότερα δεδομένα προς και από εντολές από όσα επιτρέπονται σε μία εκτέλεση
+@msg	the script added more objects and data to the documents than one run may add	το σενάριο πρόσθεσε στα έγγραφα περισσότερα αντικείμενα και δεδομένα από όσα επιτρέπονται σε μία εκτέλεση
+@msg	{what}: the object is not a File or a Folder	{what}: το αντικείμενο δεν είναι File ούτε Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: το πλήθος πρέπει να είναι πεπερασμένος αριθμός, 0 ή περισσότερο
+@msg	File.seek: the position must be a finite number	File.seek: η θέση πρέπει να είναι πεπερασμένος αριθμός
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: ο τρόπος πρέπει να είναι 0, 1 ή 2
+@msg	script file is compiled: {value}	το αρχείο σεναρίου είναι μεταγλωττισμένο: {value}
+@msg	`name` must be the name of a script engine	το `name` πρέπει να είναι το όνομα μιας μηχανής σεναρίων
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	η κύρια μηχανή σεναρίων είναι νέα σε κάθε εκτέλεση και δεν διατηρείται ποτέ, οπότε δεν μπορεί να απορριφθεί
+@msg	there is no script engine named {name}	δεν υπάρχει μηχανή σεναρίων με όνομα {name}
 @msg	Running a script	Εκτελείται σενάριο
 @msg	Copied the script report	Η αναφορά του σεναρίου αντιγράφηκε
 @msg	Corners edits the corners of a path	Η εντολή Γωνίες επεξεργάζεται τις γωνίες μιας διαδρομής
@@ -3284,6 +3364,8 @@ theme	Appearance	Εμφάνιση
 	Profile inclusion:	Συμπερίληψη προφίλ:
 	Projecting Cap	Προεξέχον άκρο
 	Proportional Metrics	Αναλογικές μετρικές
+	Insert Aki Left	Εισαγωγή aki αριστερά
+	Insert Aki Right	Εισαγωγή aki δεξιά
 	Arabic	Αραβικά
 	Hindi	Χίντι
 	Farsi	Περσικά
@@ -3499,6 +3581,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Reset Rotate View	Επαναφορά περιστροφής προβολής
 	Rotate View to Selection	Περιστροφή προβολής ως προς την επιλογή
 	Reset the rows to the artwork's colors	Επαναφορά γραμμών στα χρώματα του σχεδίου
+	Color Theme Picker	Επιλογέας χρωματικού θέματος
+	Click or drag across the art to pick its colors; Shift adds more	Κάντε κλικ ή σύρετε πάνω στο σχέδιο για να πάρετε τα χρώματά του· το Shift προσθέτει κι άλλα
 	Reset to White, Black	Επαναφορά σε λευκό και μαύρο
 	Reset with Mesh	Επαναφορά με πλέγμα
 	Reset with Mesh…	Επαναφορά με πλέγμα…
@@ -3763,6 +3847,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Show Note	Εμφάνιση σημείωσης
 	Show Options	Εμφάνιση επιλογών
 	Show Recent Colors	Εμφάνιση πρόσφατων χρωμάτων
+	Toggle RGB Percent	Εναλλαγή RGB σε ποσοστό
 	Show Original Path	Εμφάνιση αρχικής διαδρομής
 	Open this dialog with these settings next time	Άνοιγμα αυτού του παραθύρου με αυτές τις ρυθμίσεις την επόμενη φορά
 	Auto-Simplify	Αυτόματη απλοποίηση
