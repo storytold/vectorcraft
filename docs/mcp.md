@@ -9118,7 +9118,8 @@ font's variation axes (`tag`, `name`, `min`, `default`, `max`, `hidden`, and `va
 first style), empty for a static font. `text.rescanFonts`
 (Character panel menu › Refresh Font List) scans the font folders again, for fonts installed or removed since the app
 started: type set in a font that became available redraws in it, and type set in a family that was removed redraws in
-the fallback font and is listed as missing, without editing the document. The app does so by
+the fallback font and is listed as missing, without editing the document. The type in opacity masks and in the art of
+symbols and pattern swatches is laid out again too, and inline graphics take the new size of their symbols' art. The app does so by
 itself when its window comes to the front and a font folder changed meanwhile.
 
 ```json
