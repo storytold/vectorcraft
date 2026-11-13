@@ -868,6 +868,10 @@
 	Dock Panel	Zadokuj panel
 	Dock to Top	Zadokuj u góry
 	Dock to Bottom	Zadokuj u dołu
+	Dock to Left	Zadokuj po lewej
+	Dock to Right	Zadokuj po prawej
+	Dock Toolbar	Zadokuj pasek narzędzi
+	Float Toolbar	Odepnij pasek narzędzi
 	Control Bar Options	Opcje paska sterowania
 	Tool Options	Opcje narzędzia
 	Object Options	Opcje obiektu
@@ -1757,6 +1761,8 @@ digits	Malayalam	Malajalam
 	Objects on Path Tool	Narzędzie Obiekty na ścieżce
 	Attach Objects on Path	Dołącz obiekty do ścieżki
 	Expand Objects on Path	Rozszerz obiekty na ścieżce
+	Detach	Odłącz
+	Detach Object from Path	Odłącz obiekt od ścieżki
 	Release Live Paint	Uwolnij aktywne malowanie
 	Release Repeat	Uwolnij powtórzenie
 	Release Slice	Uwolnij plasterek
@@ -3874,6 +3880,20 @@ theme	Appearance	Wygląd
 	Spot Color Objects	Obiekty z kolorami dodatkowymi
 	Pattern Objects	Obiekty ze wzorkami
 	Gradient Objects	Obiekty z gradientami
+	Font Details	Szczegóły czcionek
+	Linked Images	Połączone obrazy
+	Embedded Images	Osadzone obrazy
+	Compound Paths	Ścieżki złożone
+	Text Objects	Obiekty tekstowe
+	Placed Documents	Umieszczone dokumenty
+	Symbol Instances	Wystąpienia symboli
+	Gradient Meshes	Siatki gradientowe
+	Blends	Przejścia
+	Envelopes	Koperty
+	Intertwine Groups	Grupy przeplatania
+	Opacity Masks	Maski krycia
+	Objects with Effects	Obiekty z efektami
+	Pattern Swatches	Próbki wzorków
 	Spot Colors	Kolory dodatkowe
 	Swatch Options	Opcje próbki
 	Ungroup Color Group	Rozgrupuj grupę kolorów
@@ -4910,6 +4930,7 @@ imageTrace	Outline	Kontur
 @msg	paths contain invalid coordinates	ścieżki zawierają nieprawidłowe współrzędne
 @msg	paths: give at least one file	paths: podaj co najmniej jeden plik
 @msg	replace: the object to replace was changed or deleted	replace: obiekt do zastąpienia został zmieniony lub usunięty
+@msg	the document it was prepared for is no longer active	dokument, dla którego to przygotowano, nie jest już aktywny
 @msg	pattern missing	brak wzorka
 @msg	patterns nested too deeply are filled with mid-grey	zbyt głęboko zagnieżdżone wzorki są wypełniane średnią szarością
 @msg	percent must be above 0 and at most 6400, not {p}	percent musi być większy od 0 i nie większy niż 6400, nie {p}
@@ -4945,6 +4966,7 @@ imageTrace	Outline	Kontur
 @msg	select a repeat	zaznacz powtórzenie
 @msg	select an Intertwine group	zaznacz grupę przeplotu
 @msg	select an Objects on Path group	zaznacz grupę obiektów na ścieżce
+@msg	choose the object to detach with its Select/Move widget	wybierz obiekt do odłączenia jego uchwytem Zaznacz/Przesuń
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	do ścieżki wewnątrz ścieżki złożonej, przejścia, koperty, powtórzenia lub grupy przeplotu nie można dołączyć obiektów
 @msg	a clipping path can't take objects	do ścieżki przycinającej nie można dołączyć obiektów
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	obiektów wewnątrz przejścia, koperty, powtórzenia lub grupy przeplotu nie można dołączyć do ścieżki
@@ -5270,6 +5292,7 @@ imageTrace	Outline	Kontur
 @msg	every numbered name for it is taken in the Fonts folder	wszystkie numerowane nazwy dla niego są zajęte w folderze czcionek
 @msg	every numbered name for {name} is taken in the document's folder	wszystkie numerowane nazwy dla {name} są zajęte w folderze dokumentu
 @msg	No linked files to look for	Brak połączonych plików do wyszukania
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Łącze znajduje się w symbolu, wzorze wykresu, wzorku lub masce krycia i nie ma miejsca na obszarze roboczym
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` to odwołanie do kroku {r}, które rozwiązują tylko `run` i `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` musi być tablicą identyfikatorów obiektów, nie {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` musi być tablicą kolorów, nie {v}
@@ -5569,6 +5592,8 @@ imageTrace	Outline	Kontur
 	High Contrast 3	Wysoki kontrast 3
 	Pentagram	Pentagram
 	Perceptual	Percepcyjna
+	Hue Clockwise	Barwa zgodnie z ruchem wskazówek zegara
+	Hue Counterclockwise	Barwa przeciwnie do ruchu wskazówek zegara
 	Relative Colorimetric	Kolorymetryczna względna
 	Absolute Colorimetric	Kolorymetryczna bezwzględna
 	Exact	Dokładne
@@ -5797,7 +5822,9 @@ mark-style	Japanese	Japońskie
 @msg	`{GRAPHICS}` face must be front or back	face w `{GRAPHICS}` musi mieć wartość front lub back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} w `{GRAPHICS}` musi być liczbą od {lo} do {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musi być tablicą
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafiki są nakładane na płaskie ściany: użyj typu obiektu Wyciągnięcie lub Płaszczyzna
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiki są nakładane na obiekty typu Płaszczyzna, Wyciągnięcie i Obrót
+@msg	Revolve maps graphics onto its side: map them onto the front	Obrót nakłada grafiki na swoją powierzchnię boczną: umieść je na przedniej stronie
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiki są zbyt złożone dla tej powierzchni: uprość rysunki symboli lub zmniejsz Segmenty
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` przyjmuje najwyżej {MAX_GRAPHICS} grafik
 @msg	A plane has one face: map its graphics onto the front	Płaszczyzna ma jedną stronę: umieść jej grafiki na przedniej stronie
 @msg	The graphics are too complex: simplify the symbols' art	Grafiki są zbyt złożone: uprość rysunki symboli
@@ -6167,7 +6194,7 @@ axis	Y Axis	Oś Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` dotyczy wypełnień gradientem (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` dotyczy wypełnień gradientem (paint.setFill)
 @msg	`dither` must be true or false	`dither` musi mieć wartość true lub false
-@msg	`method` must be classic or perceptual	`method` musi mieć wartość classic lub perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` musi mieć wartość classic, perceptual, hue-clockwise lub hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` musi mieć wartość pad, repeat lub reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` musi być liczbą całkowitą od 1 do {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` dotyczy gradientów liniowych, radialnych, stożkowych i rombowych
@@ -6410,6 +6437,7 @@ axis	Y Axis	Oś Y
 	Continue	Kontynuuj
 	Continue Action	Kontynuuj operację
 	Delete Action Step	Usuń krok operacji
+	Move Action Step	Przenieś krok operacji
 	Press Play Current Selection in the Actions panel to go on.	Aby kontynuować, naciśnij Odtwórz bieżące zaznaczenie w panelu Operacje.
 	Stop: {message}	Zatrzymanie: {message}
 @msg	no action is waiting at a stop	żadna operacja nie czeka na zatrzymaniu
@@ -6581,6 +6609,22 @@ axis	Y Axis	Oś Y
 	Graphite Pencil	Ołówek grafitowy
 	Wax Crayon	Kredka woskowa
 	Charcoal Dust	Pył węglowy
+	Notched Ribbon	Wstęga z nacięciami
+	Double Line	Podwójna linia
+	Wave	Fala
+	Teardrop	Łza
+	Striped Ribbon	Wstęga w paski
+	Fine Nib	Cienka stalówka
+	Broad Nib	Szeroka stalówka
+	Chisel	Dłuto
+	Round Pen	Okrągłe pióro
+	Pressure Pen	Pióro z naciskiem
+	Beads	Koraliki
+	Dash Dot	Kreska-kropka
+	Scallops	Feston
+	Stars	Gwiazdy
+	Triangles	Trójkąty
+	Sparkles	Iskry
 	Save Brush Library…	Zapisz bibliotekę pędzli…
 @msg	`{_1}` has no brushes to apply	`{_1}` nie ma pędzli do zastosowania
 @msg	missing `library` (see brush.libraries)	brak `library` (zobacz brush.libraries)
@@ -6600,6 +6644,13 @@ axis	Y Axis	Oś Y
 	Area Text	Tekst akapitowy
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mierz tekst według granic glifów
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opcje przyciągania do pikseli
+	Pixel Snapping Options…	Opcje przyciągania do pikseli…
+	Snap to Pixel While Drawing	Przyciągaj do pikseli podczas rysowania
+	Snap to Pixel While Moving	Przyciągaj do pikseli podczas przesuwania
+	Snap to Pixel While Scaling	Przyciągaj do pikseli podczas skalowania
+	These options take effect when View › Snap to Pixel is on.	Te opcje działają, gdy włączona jest opcja Widok › Przyciągaj do pikseli.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Pokaż opcje przyciągania do glifów
 	Hide Snap to Glyph Options	Ukryj opcje przyciągania do glifów

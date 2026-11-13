@@ -868,9 +868,12 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// A TIFF with more strips or tiles than the decoder can count
 /// ([`vectorcraft_doc::cmyk::oversized_tiff`]) is refused as too large to draw. JPEG XL images are
 /// read with [`jxlread`] and stored as PNG, with the ICC profile their colors are left in.
-/// A PNG, JPEG, GIF, WebP or TIFF whose orientation ([`exif_orientation`]) turns or flips it is
+/// A PNG, JPEG, GIF, WebP or TIFF whose orientation ([`vectorcraft_doc::cmyk::exif_orientation`]) turns or flips it is
 /// stored as it is shown, with its resolution's axes swapped when it turns a quarter; a CMYK JPEG
-/// or TIFF keeps its inks, 8 bits each, as a CMYK TIFF ([`vectorcraft_doc::cmyk::turned_cmyk`]).
+/// or TIFF keeps its inks, at the 8 or 16 bits the file has, and its CMYK ICC profile as a CMYK
+/// TIFF ([`vectorcraft_doc::cmyk::turned_cmyk`]). An image the decoder reads and that is stored as
+/// PNG keeps its gray or RGB samples at 8 or 16 bits, and the gray or RGB ICC profile they are in;
+/// other samples become 8-bit RGBA.
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let ppi = super::ppi::resolution(bytes);
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
@@ -909,7 +912,7 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let f = image_format(kind).ok_or_else(|| err(format!("{kind:?} images can't be opened (see document.formats)")))?;
     // A photo whose EXIF orientation turns or flips it (a camera held upright) is stored as it is
     // seen, so it places the way it was taken (#4284); the others keep their own bytes.
-    let orientation = matches!(f.id, "png" | "jpg" | "gif" | "webp" | "tiff").then(|| exif_orientation(bytes)).flatten();
+    let orientation = matches!(f.id, "png" | "jpg" | "gif" | "webp" | "tiff").then(|| vectorcraft_doc::cmyk::exif_orientation(bytes)).flatten();
     let turned = orientation.is_some();
     // The resolution describes the stored pixels; a quarter turn swaps its axes.
     let quarter = orientation.is_some_and(|o| o.to_exif() >= 5);
@@ -933,47 +936,60 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
         let cms = vectorcraft_color::cms::active();
         vectorcraft_doc::cmyk::extra_samples_tiff_rgba(bytes, |c| cms.cmyk_to_srgb(c, false))
     };
+    // The ICC profile of the samples the image decoder reads; the other readers give sRGB pixels.
+    let mut icc = None;
     let mut img = match (f.id == "tiff").then(extra_samples).flatten() {
         Some(img) => image::DynamicImage::ImageRgba8(img),
         None => match (f.id == "tiff").then(|| vectorcraft_doc::cmyk::group3_tiff_rgba(bytes)).flatten() {
             Some(read) => image::DynamicImage::ImageRgba8(read.map_err(err)?),
             None => {
                 use image::ImageDecoder as _;
-                let decoder = reader.into_decoder().map_err(err)?;
+                let mut decoder = reader.into_decoder().map_err(err)?;
                 // The allowance counts the decoded samples and the RGBA pixels they become (#1717).
                 let (w, h) = decoder.dimensions();
                 if decoder.total_bytes() > MAX_RASTER_ALLOC || u64::from(w) * u64::from(h) * 4 > MAX_RASTER_ALLOC {
                     return Err(err(format!("an image of {w} × {h} pixels is too large to draw")));
                 }
+                // A profile the decoder can't read leaves the image without one. The image decoder
+                // reads a TIFF's tags within the size of its pixels, so a small TIFF's profile is
+                // read by the TIFF decoder itself.
+                icc = match f.id {
+                    "tiff" => vectorcraft_doc::cmyk::tiff_icc_profile(bytes),
+                    _ => decoder.icc_profile().ok().flatten(),
+                };
                 image::DynamicImage::from_decoder(decoder).map_err(err)?
             }
         },
     };
     img.apply_orientation(orientation.unwrap_or(image::metadata::Orientation::NoTransforms));
-    let mut img = img.into_rgba8();
     if f.id == "tga" {
+        let mut img = img.into_rgba8();
         super::tgaread::fix_alpha(bytes, &mut img);
+        return as_png(img, None, shown_ppi);
     }
-    as_png(img, None, shown_ppi)
+    use image::DynamicImage as D;
+    let img = match img {
+        D::ImageLuma8(_) | D::ImageLumaA8(_) | D::ImageRgb8(_) | D::ImageRgba8(_) => img,
+        D::ImageLuma16(_) | D::ImageLumaA16(_) | D::ImageRgb16(_) | D::ImageRgba16(_) => img,
+        other => D::ImageRgba8(other.into_rgba8()),
+    };
+    let icc = icc.filter(|icc| png_takes_icc(&img, icc));
+    as_png(img, icc, shown_ppi)
 }
 
-/// The EXIF orientation of encoded image `bytes` when it turns or flips the pixels; `None` when
-/// it leaves them as stored, or the image has none. A TIFF the image decoder can't open (one with
-/// extra samples) has its Orientation tag read from its first image
-/// ([`vectorcraft_doc::cmyk::tiff_orientation`]).
-pub(crate) fn exif_orientation(bytes: &[u8]) -> Option<image::metadata::Orientation> {
-    use image::ImageDecoder as _;
-    use image::metadata::Orientation;
-    let decoded = || image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_decoder().ok()?.orientation().ok();
-    let tagged = || vectorcraft_doc::cmyk::tiff_orientation(bytes).and_then(|v| Orientation::from_exif(u8::try_from(v).ok()?));
-    decoded().or_else(tagged).filter(|o| *o != Orientation::NoTransforms)
+/// Can a PNG of `img`'s samples carry ICC profile `icc`? Its color space must be the samples':
+/// `GRAY` for gray samples, `RGB ` for RGB ones.
+fn png_takes_icc(img: &image::DynamicImage, icc: &[u8]) -> bool {
+    let want = if img.color().has_color() { *b"RGB " } else { *b"GRAY" };
+    vectorcraft_doc::cmyk::icc_color_space(icc) == Some(want)
 }
 
 /// `img` stored as a PNG that keeps the file's resolution and carries `icc`, the ICC profile its
-/// colors are in.
-pub(super) fn as_png(img: image::RgbaImage, icc: Option<Vec<u8>>, ppi: Option<(f64, f64)>) -> Result<RasterImage> {
+/// colors are in. `img` has samples a PNG holds: 8 or 16 bits of gray or RGB, with or without alpha.
+pub(super) fn as_png(img: impl Into<image::DynamicImage>, icc: Option<Vec<u8>>, ppi: Option<(f64, f64)>) -> Result<RasterImage> {
     use image::ImageEncoder as _;
-    let size = img.dimensions();
+    let img: image::DynamicImage = img.into();
+    let size = (img.width(), img.height());
     let mut png = Vec::new();
     let mut encoder = image::codecs::png::PngEncoder::new(&mut png);
     if let Some(icc) = icc {

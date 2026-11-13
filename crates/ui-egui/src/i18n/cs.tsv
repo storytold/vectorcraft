@@ -923,6 +923,10 @@
 	Dock Panel	Ukotvit panel
 	Dock to Top	Ukotvit nahoru
 	Dock to Bottom	Ukotvit dolů
+	Dock to Left	Ukotvit vlevo
+	Dock to Right	Ukotvit vpravo
+	Dock Toolbar	Ukotvit panel nástrojů
+	Float Toolbar	Plovoucí panel nástrojů
 	Control Bar Options	Možnosti ovládacího panelu
 	Tool Options	Možnosti nástroje
 	Object Options	Možnosti objektu
@@ -1840,6 +1844,8 @@ digits	Malayalam	Malajálamské
 	Objects on Path Tool	Nástroj Objekty na cestě
 	Attach Objects on Path	Připojit objekty na cestu
 	Expand Objects on Path	Rozložit objekty na cestě
+	Detach	Odpojit
+	Detach Object from Path	Odpojit objekt od cesty
 	Release Live Paint	Uvolnit živou malbu
 	Release Repeat	Uvolnit opakování
 	Release Slice	Uvolnit řez
@@ -4015,6 +4021,19 @@ theme	Appearance	Motiv
 	Spot Color Objects	Objekty s přímými barvami
 	Pattern Objects	Objekty se vzorky
 	Gradient Objects	Objekty s přechody
+	Font Details	Podrobnosti písem
+	Linked Images	Propojené obrazy
+	Embedded Images	Vložené obrazy
+	Compound Paths	Složené cesty
+	Text Objects	Textové objekty
+	Placed Documents	Umístěné dokumenty
+	Symbol Instances	Instance symbolů
+	Gradient Meshes	Přechodové sítě
+	Blends	Prolnutí
+	Envelopes	Obálky
+	Intertwine Groups	Skupiny proplétání
+	Opacity Masks	Masky krytí
+	Objects with Effects	Objekty s efekty
 	Spot Colors	Přímé barvy
 	Spot Colors (0)	Přímé barvy (0)
 	Swatch Options	Možnosti položky vzorníku
@@ -5085,6 +5104,7 @@ imageTrace	Outline	Obrys
 @msg	paths contain invalid coordinates	cesty obsahují neplatné souřadnice
 @msg	paths: give at least one file	paths: zadejte alespoň jeden soubor
 @msg	replace: the object to replace was changed or deleted	replace: objekt k nahrazení byl změněn nebo odstraněn
+@msg	the document it was prepared for is no longer active	dokument, pro který bylo připraveno, už není aktivní
 @msg	pattern missing	chybí vzorek
 @msg	patterns nested too deeply are filled with mid-grey	příliš hluboko vnořené vzorky se vyplní středně šedou
 @msg	percent must be above 0 and at most 6400, not {p}	percent musí být větší než 0 a nejvýše 6400, ne {p}
@@ -5120,6 +5140,7 @@ imageTrace	Outline	Obrys
 @msg	select a repeat	vyberte opakování
 @msg	select an Intertwine group	vyberte skupinu propletení
 @msg	select an Objects on Path group	vyberte skupinu objektů na cestě
+@msg	choose the object to detach with its Select/Move widget	vyberte objekt k odpojení jeho ovládacím prvkem Vybrat/Přesunout
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	cesta uvnitř složené cesty, prolnutí, obálky, opakování nebo skupiny propletení nemůže přijmout objekty
 @msg	a clipping path can't take objects	ořezová cesta nemůže přijmout objekty
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objekty uvnitř prolnutí, obálky, opakování nebo skupiny propletení nelze připojit na cestu
@@ -5444,6 +5465,7 @@ imageTrace	Outline	Obrys
 @msg	every numbered name for it is taken in the Fonts folder	ve složce Fonts jsou obsazena všechna číslovaná jména pro tento soubor
 @msg	every numbered name for {name} is taken in the document's folder	ve složce dokumentu jsou obsazena všechna číslovaná jména pro {name}
 @msg	No linked files to look for	Žádné propojené soubory k vyhledání
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Propojení je uvnitř symbolu, návrhu grafu, vzorku nebo masky krytí a nemá na plátně žádné místo
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` je odkaz na krok {r}, který vyhodnocují jen `run` a `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` musí být pole ID objektů, ne {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` musí být pole barev, ne {v}
@@ -5718,6 +5740,8 @@ imageTrace	Outline	Obrys
 	Spectrum	Spektrum
 # Rendering intents, recolor methods, gradient kinds
 	Perceptual	Percepční
+	Hue Clockwise	Odstín ve směru hodinových ručiček
+	Hue Counterclockwise	Odstín proti směru hodinových ručiček
 	Relative Colorimetric	Relativní kolorimetrický
 	Absolute Colorimetric	Absolutní kolorimetrický
 	Exact	Přesná
@@ -5967,7 +5991,9 @@ mark-style	Japanese	Japonské
 @msg	`{GRAPHICS}` face must be front or back	face v `{GRAPHICS}` musí být front nebo back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} v `{GRAPHICS}` musí být číslo od {lo} do {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musí být pole
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafika se mapuje na rovinné stěny: použijte typ objektu Vysunutí nebo Rovina
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafika se mapuje na typy objektu Rovina, Vysunutí a Rotační těleso
+@msg	Revolve maps graphics onto its side: map them onto the front	Rotační těleso mapuje grafiku na svůj bok: umístěte ji na přední stranu
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafika je pro tento povrch příliš složitá: zjednodušte kresbu symbolů nebo snižte Segmenty
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` přijímá nejvýše {MAX_GRAPHICS} grafik
 @msg	A plane has one face: map its graphics onto the front	Rovina má jednu stranu: umístěte její grafiku na přední stranu
 @msg	The graphics are too complex: simplify the symbols' art	Grafika je příliš složitá: zjednodušte kresbu symbolů
@@ -6313,7 +6339,7 @@ axis	Y Axis	osa Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` platí pro výplně přechodem (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` platí pro výplně přechodem (paint.setFill)
 @msg	`dither` must be true or false	`dither` musí být true nebo false
-@msg	`method` must be classic or perceptual	`method` musí být classic nebo perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` musí být classic, perceptual, hue-clockwise nebo hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` musí být pad, repeat nebo reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` musí být celé číslo od 1 do {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` platí pro lineární, kruhové, kuželové a kosočtverečné přechody
@@ -6556,6 +6582,7 @@ axis	Y Axis	osa Y
 	Continue	Pokračovat
 	Continue Action	Pokračovat v akci
 	Delete Action Step	Odstranit krok akce
+	Move Action Step	Přesunout krok akce
 	Press Play Current Selection in the Actions panel to go on.	Chcete-li pokračovat, stiskněte na panelu Akce tlačítko Přehrát aktuální výběr.
 	Stop: {message}	Zastavení: {message}
 @msg	no action is waiting at a stop	žádná akce nečeká na zastavení
@@ -6727,6 +6754,22 @@ axis	Y Axis	osa Y
 	Graphite Pencil	Grafitová tužka
 	Wax Crayon	Vosková pastelka
 	Charcoal Dust	Uhlový prach
+	Notched Ribbon	Vroubkovaná stuha
+	Double Line	Dvojitá čára
+	Wave	Vlna
+	Teardrop	Slza
+	Striped Ribbon	Pruhovaná stuha
+	Fine Nib	Jemný hrot
+	Broad Nib	Široký hrot
+	Chisel	Dláto
+	Round Pen	Kulaté pero
+	Pressure Pen	Tlakové pero
+	Beads	Korálky
+	Dash Dot	Čárka-tečka
+	Scallops	Feston
+	Stars	Hvězdy
+	Triangles	Trojúhelníky
+	Sparkles	Jiskry
 	Save Brush Library…	Uložit knihovnu štětců…
 @msg	`{_1}` has no brushes to apply	`{_1}` nemá žádné štětce k použití
 @msg	missing `library` (see brush.libraries)	chybí `library` (viz brush.libraries)
@@ -6746,6 +6789,13 @@ axis	Y Axis	osa Y
 	Area Text	Text v oblasti
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Měřit text podle hranic glyfů
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Možnosti přichytávání k obrazovým bodům
+	Pixel Snapping Options…	Možnosti přichytávání k obrazovým bodům…
+	Snap to Pixel While Drawing	Přichytávat k obrazovým bodům při kreslení
+	Snap to Pixel While Moving	Přichytávat k obrazovým bodům při přesouvání
+	Snap to Pixel While Scaling	Přichytávat k obrazovým bodům při změně velikosti
+	These options take effect when View › Snap to Pixel is on.	Tyto volby se uplatní, když je zapnuto Zobrazení › Přichytávat k obrazovým bodům.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Zobrazit možnosti přichytávání ke glyfům
 	Hide Snap to Glyph Options	Skrýt možnosti přichytávání ke glyfům

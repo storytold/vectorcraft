@@ -73,9 +73,9 @@ const MOVED_SLACK: f64 = 0.5;
 const KNOWN_BITS: i64 = 0b111 | 1 << 16 | 1 << 17;
 /// More of the inked pixels than this differing, each with all its neighbours, and the envelope
 /// doesn't come out as drawn.
-const MAX_SOLID: f64 = 0.03;
+pub(crate) const MAX_SOLID: f64 = 0.03;
 /// More of the inked pixels than this differing at all, and the envelope doesn't come out as drawn.
-const MAX_ANY: f64 = 0.1;
+pub(crate) const MAX_ANY: f64 = 0.1;
 
 /// The whole number of entry `key`: `None` when it is missing, `Some(None)` when it isn't one.
 fn whole(o: &Obj, key: &str) -> Option<Option<i64>> {
@@ -648,6 +648,9 @@ pub(crate) enum TypeKept {
     Budget,
     /// Its live envelope doesn't draw as its drawn art.
     Differs,
+    /// A page that the layers, which don't draw as it, were compared with holds it against them
+    /// ([`WarpedType::open_alone`]).
+    Page,
 }
 
 /// What [`WarpedType::settle_envelopes`] did.
@@ -657,9 +660,10 @@ pub(crate) struct TypedSettled {
     pub(crate) live: usize,
     /// Why each of the others kept its drawn art.
     pub(crate) kept: Vec<TypeKept>,
-    /// Each live envelope's id, with what takes its place again when the layers with it don't draw
-    /// as the page: its hidden type, then its drawn art.
-    pub(crate) put_back: Vec<(NodeId, Vec<Node>)>,
+    /// Each live envelope's place among the envelopes of type (in the order they were read) and
+    /// id, with what takes its place again when the layers with it don't draw as the page: its
+    /// hidden type, then its drawn art.
+    pub(crate) put_back: Vec<(usize, NodeId, Vec<Node>)>,
 }
 
 /// The text objects read with a Warp and the envelopes of type, and what the import has left of the
@@ -672,6 +676,9 @@ pub struct WarpedType {
     pub(super) checks: usize,
     pub(super) spent: Spent,
     pub(super) page: Option<Rect>,
+    /// The envelopes of type that may open live in layers built without a page, by their place
+    /// among them ([`Self::open_alone`]): none when `None`.
+    pub(super) alone: Option<BTreeSet<usize>>,
 }
 
 impl WarpedType {
@@ -682,12 +689,31 @@ impl WarpedType {
 
     /// These, for layers `compared` with a page. Layers that aren't leave the envelopes of type
     /// their drawn art and their hidden type, with the note ([`TYPE_DRAWN`]) added to `notes`: a
-    /// live envelope opens only where the page chooses it.
+    /// live envelope opens only where the page chooses it. Unless [`Self::open_alone`] names some:
+    /// then they all wait, as with a page, and only those named may stay live.
     pub(crate) fn compared(mut self, compared: bool, notes: &mut Vec<String>) -> Self {
-        if !compared && !std::mem::take(&mut self.envelopes).is_empty() && !notes.iter().any(|n| n == TYPE_DRAWN) {
+        if !compared && self.alone.is_none() && !std::mem::take(&mut self.envelopes).is_empty() && !notes.iter().any(|n| n == TYPE_DRAWN) {
             notes.push(TYPE_DRAWN.into());
         }
         self
+    }
+
+    /// Let the envelopes of type at `places` (among them, in the order they were read) open live in
+    /// layers built without a page, where they draw as their drawn art: a page these same layers,
+    /// read the same way, were compared with weighed them and didn't hold them against the layers'
+    /// difference from it. All the envelopes of type are settled as they were then, in the same
+    /// order and with the same checks, so each that opens live draws as it was weighed; then the
+    /// others get their drawn art back ([`Self::settle_envelopes`]). `count` is how many envelopes
+    /// of type that reading had: a reading with another number of them names none.
+    pub(crate) fn open_alone(&mut self, places: &[usize], count: usize) {
+        if self.envelopes.len() == count {
+            self.alone = Some(places.iter().copied().filter(|i| *i < count).collect());
+        }
+    }
+
+    /// How many envelopes of type wait for their type.
+    pub(crate) fn envelope_count(&self) -> usize {
+        self.envelopes.len()
     }
 
     /// Make each envelope of type live where it draws as its drawn art, its contents' text slots
@@ -713,15 +739,27 @@ impl WarpedType {
         doc.layers.iter().for_each(|l| collect_shown(l, &mut shown));
         let envelopes = std::mem::take(&mut self.envelopes);
         let mut waiting = envelopes.len();
-        for envelope in envelopes {
+        for (place, envelope) in envelopes.into_iter().enumerate() {
             waiting -= 1;
             match self.typed_live(doc, envelope, &type_of, &shown, waiting) {
-                Ok(put_back) => {
+                Ok((id, put_back)) => {
                     settled.live += 1;
-                    settled.put_back.push(put_back);
+                    settled.put_back.push((place, id, put_back));
                 }
                 Err(why) => settled.kept.push(why),
             }
+        }
+        // Built without a page, the envelopes [`Self::open_alone`] doesn't name get their drawn art
+        // and hidden type back. One inside another that got its own back went with that art.
+        if let Some(free) = &self.alone {
+            let (stay, back): (Vec<_>, Vec<_>) = std::mem::take(&mut settled.put_back).into_iter().partition(|(place, ..)| free.contains(place));
+            for (_, id, nodes) in back {
+                if doc.insert_beside(vec![(id, nodes)], true).is_ok() || doc.node(id).is_none() {
+                    settled.live = settled.live.saturating_sub(1);
+                    settled.kept.push(TypeKept::Page);
+                }
+            }
+            settled.put_back = stay;
         }
         settled
     }

@@ -255,7 +255,7 @@ fn bar_of(app: &VectorcraftApp) -> Option<(bool, Bar)> {
 pub fn control_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let Some((editing, bar)) = bar_of(app) else { return };
     let mut run: Option<(&str, Value)> = None;
-    ui.separator();
+    crate::chrome::group_separator(ui);
     for (contents, icon, tip) in [(false, "dc-mesh", tl!("Edit Envelope")), (true, "shapes", tl!("Edit Contents"))] {
         if widgets::icon_button(ui, icon, tip, editing == contents, 24.0).clicked() && editing != contents {
             run = Some(("object.envelope.editContents", json!({ "editing": contents })));

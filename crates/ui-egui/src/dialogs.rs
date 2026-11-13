@@ -88,6 +88,7 @@ pub mod perspective_grid;
 pub mod perspective_options;
 pub mod perspective_plane;
 pub mod perspective_presets;
+pub mod pixel_snap_options;
 pub mod place;
 pub mod placement_options;
 pub mod plugin;
@@ -453,6 +454,7 @@ registry! {
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
     NavigatorPanelOptions: [navigator_panel_options::KIND] => navigator_panel_options::SPEC,
     PathfinderOptions: [pathfinder_options::KIND] => pathfinder_options::SPEC,
+    PixelSnapOptions: [pixel_snap_options::KIND] => pixel_snap_options::SPEC,
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
     RenameArtboards: [rename_artboards::KIND] => rename_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,

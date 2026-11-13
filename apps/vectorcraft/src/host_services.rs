@@ -426,8 +426,9 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         // Its calls are marked for the hang report (`hang_watch`).
         system_clipboard: Some(Box::new(vectorcraft_ui_egui::hang_beacon::Marked(clipboard::system_clipboard(clip)))),
         // Linux checks whether Paste has something to take on a background thread: an X11 clipboard
-        // owner that never answers holds a read for up to 4 s. Windows only asks which formats the
-        // clipboard holds and macOS asks the pasteboard server, so they check in line.
+        // owner that never answers holds a text read for up to 4 s for each format it tries, and
+        // quitting waits up to `CLIPBOARD_PROBE_STOP_WAIT` for that thread. Windows only asks which
+        // formats the clipboard holds and macOS asks the pasteboard server, so they check in line.
         // The probe's handle is made on its own thread, from the window (`Send`), not its raw display.
         clipboard_probe: cfg!(target_os = "linux").then(|| Box::new(move || clipboard::system_clipboard(clip_probe)) as ClipboardProbeFactory),
         // Help → Discord / website / GitHub, the Discord button, About and Home links.

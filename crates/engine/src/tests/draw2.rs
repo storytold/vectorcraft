@@ -1367,6 +1367,37 @@ fn smooth_tool_reduces_jagged_path() {
     assert_eq!(p.subpaths[0].anchors[0].p, Point::new(100.0, 200.0));
 }
 
+/// A drag of the Smooth tool along a line jagged by up to 6 pt leaves no corner between a curve and
+/// a line: every anchor between the path's ends turns by at most 1°.
+#[test]
+fn smooth_tool_leaves_no_corner_where_a_curve_meets_a_line() {
+    let mut s = session();
+    let mut seed = 7u64;
+    let anchors: Vec<_> = (0..=60)
+        .map(|i| {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            let noise = ((seed >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0;
+            json!({"x": 100.0 + f64::from(i) * 5.0, "y": 200.0 + 6.0 * noise})
+        })
+        .collect();
+    let r = s.execute("path.create", &json!({"anchors": anchors})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let drag_points: Vec<(f64, f64)> = (0..=64).map(|i| (90.0 + f64::from(i) * 5.0, 200.0)).collect();
+    drag(&mut s, "smooth", &drag_points, Mods::default());
+    let p = path(&s, id);
+    let sp = &p.subpaths[0];
+    assert!(sp.anchors.len() < 61, "the path is smoothed: {}", sp.anchors.len());
+    let dir = |v: kurbo::Vec2, w: kurbo::Vec2, chord: kurbo::Vec2| [v, w, chord].into_iter().find(|d| d.hypot() > 1e-9).unwrap_or(chord);
+    for i in 1..sp.segment_count() {
+        let (prev, next) = (sp.segment(i - 1), sp.segment(i));
+        let arrive = dir(prev.p3 - prev.p2, prev.p3 - prev.p1, prev.p3 - prev.p0);
+        let leave = dir(next.p1 - next.p0, next.p2 - next.p0, next.p3 - next.p0);
+        let turn = arrive.cross(leave).atan2(arrive.dot(leave)).abs().to_degrees();
+        let kinds = (sp.segment_is_line(i - 1), sp.segment_is_line(i));
+        assert!(turn <= 1.0, "anchor {i} turns {turn}° (lines before and after: {kinds:?}): {:?}", sp.anchors[i]);
+    }
+}
+
 /// Smoothing a path with direct-selected anchors leaves the path selected whole: the selection no
 /// longer names anchors by indices into the anchors the smooth replaced. A selected path the drag
 /// does not reach keeps its anchors selected, and undo brings the old selection back.
@@ -2716,6 +2747,49 @@ fn remove_anchor_points_selects_one_next_anchor_per_subpath_and_per_path() {
     assert_eq!(anchor_points(&s, id), original);
     assert_eq!(selected_anchors(&s, id), [(0, 0), (1, 1), (1, 2)]);
     assert_eq!(selected_anchors(&s, other), [(0, 0)]);
+}
+
+#[test]
+fn remove_anchor_points_on_many_paths_and_subpaths_matches_removing_one_at_a_time() {
+    // Many anchors over many subpaths and paths, curved and straight, open and closed: each
+    // subpath ends as removing its anchors one at a time, the last first, leaves it. Paths left
+    // with nothing go, the rest stay selected in order, and one undo step brings all back.
+    let mut s = session();
+    let curvy = "M0 0 C10 20 30 20 40 0 C50 -20 70 -20 80 0 C90 20 110 20 120 0 C130 -20 150 -20 160 0 Z \
+                 M0 100 L40 120 C60 140 80 80 100 100 L140 90 L180 110 L220 100";
+    let ids: Vec<NodeId> = (0..4).map(|i| path_from(&mut s, if i == 2 { "M0 0 L10 0 L20 5" } else { curvy })).collect();
+    let picks: [&[(usize, usize)]; 4] =
+        [&[(0, 0), (0, 2), (0, 3), (1, 1), (1, 2), (1, 5)], &[(0, 1), (1, 0), (1, 6)], &[(0, 0), (0, 1)], &[(0, 3), (1, 3), (1, 4)]];
+    for (k, (&id, &anchors)) in ids.iter().zip(&picks).enumerate() {
+        let mode = if k == 0 { "set" } else { "add" };
+        s.execute("select.anchors", &json!({"id": id.0, "anchors": anchors, "mode": mode})).unwrap();
+    }
+    let before: Vec<PathData> = ids.iter().map(|&id| path(&s, id)).collect();
+    assert_eq!(s.execute("path.removeAnchors", &json!({})).unwrap()["removedObjects"], 1);
+    for (k, &id) in ids.iter().enumerate() {
+        let mut want = before[k].clone();
+        let mut order = picks[k].to_vec();
+        order.sort_unstable_by(|a, b| b.cmp(a));
+        for (si, ai) in order {
+            vectorcraft_pathops::remove_anchor(&mut want.subpaths[si], ai);
+        }
+        want.subpaths.retain(|sp| sp.anchors.len() >= 2);
+        if want.subpaths.is_empty() {
+            assert!(s.doc().unwrap().doc.node(id).is_none(), "path {k} goes");
+        } else {
+            assert_eq!(path(&s, id).subpaths, want.subpaths, "path {k}");
+        }
+    }
+    let kept = [ids[0], ids[1], ids[3]];
+    assert_eq!(s.doc().unwrap().selection.objects, kept);
+    s.execute("edit.undo", &json!({})).unwrap();
+    for (k, &id) in ids.iter().enumerate() {
+        assert_eq!(path(&s, id), before[k]);
+        assert_eq!(selected_anchors(&s, id), picks[k]);
+    }
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(ids[2]).is_none());
+    assert_eq!(s.doc().unwrap().selection.objects, kept);
 }
 
 #[test]
@@ -4643,6 +4717,12 @@ fn blob_anchors(s: &mut Session, fidelity: f64) -> usize {
 /// [`blob_anchors`] with the blob scaled by `scale`: drawn the same on screen zoomed in 1 / `scale`
 /// times.
 fn scaled_blob_anchors(s: &mut Session, fidelity: f64, scale: f64) -> usize {
+    blob_anchors_through(s, "path.freehand", &json!({}), Some(fidelity), scale)
+}
+
+/// [`scaled_blob_anchors`] drawn with `command` and the params in `extra`, at `fidelity` (with none,
+/// the command's default).
+fn blob_anchors_through(s: &mut Session, command: &str, extra: &serde_json::Value, fidelity: Option<f64>, scale: f64) -> usize {
     let pts: Vec<_> = (0..1200)
         .map(|i| {
             let a = i as f64 / 1200.0 * std::f64::consts::TAU;
@@ -4650,7 +4730,14 @@ fn scaled_blob_anchors(s: &mut Session, fidelity: f64, scale: f64) -> usize {
             json!([(400.0 + r * a.cos()) * scale, (300.0 + r * a.sin()) * scale])
         })
         .collect();
-    let r = s.execute("path.freehand", &json!({"points": pts, "closed": true, "fidelity": fidelity, "keepSelected": false})).unwrap();
+    let mut p = json!({"points": pts, "closed": true, "keepSelected": false});
+    if let Some(f) = fidelity {
+        p["fidelity"] = json!(f);
+    }
+    if let (Some(p), Some(extra)) = (p.as_object_mut(), extra.as_object()) {
+        p.extend(extra.clone());
+    }
+    let r = s.execute(command, &p).unwrap();
     path(s, NodeId(r["id"].as_u64().unwrap())).subpaths.iter().map(|sp| sp.anchors.len()).sum()
 }
 
@@ -4662,13 +4749,11 @@ fn pencil_fidelity_goes_down_to_a_hundredth_and_lower_keeps_more() {
     assert!(counts.windows(2).all(|w| w[0] <= w[1]), "{counts:?}");
     // Below the old floor of 0.05 the stroke keeps more of itself.
     assert!(counts[4] > counts[2], "{counts:?}");
-    // Below the floor, the lowest Fidelity (0.01 px) at the highest zoom (64000 %), is read as the
-    // floor (#5729).
+    // The floor is the lowest Fidelity (0.01 px) at the highest zoom (64000 %) (#5729); below it,
+    // `pencil_takes_fidelity_within_its_range_and_rejects_the_rest`.
     let floor = vectorcraft_tools::draw2::MIN_FIDELITY / 640.0;
     let at_floor = blob_anchors(&mut s, floor);
     assert!(at_floor >= counts[4], "{counts:?}");
-    assert_eq!(blob_anchors(&mut s, floor / 10.0), at_floor);
-    assert_eq!(blob_anchors(&mut s, 0.0), at_floor);
 }
 
 /// #5729: the tools send Fidelity / zoom, so a stroke drawn the same on screen zoomed in keeps as
@@ -4681,6 +4766,89 @@ fn pencil_fit_keeps_its_anchors_on_a_stroke_drawn_zoomed_in() {
         for zoom in [4.0, 64.0, 640.0] {
             assert_eq!(scaled_blob_anchors(&mut s, fidelity / zoom, 1.0 / zoom), want, "{fidelity} at {zoom}x");
         }
+    }
+}
+
+/// The tools send Fidelity / zoom up to the highest Fidelity (100 px) at the lowest zoom (3.13 %):
+/// a stroke drawn the same on screen zoomed out keeps as many anchors as at 100 %, as a Pencil or a
+/// Paintbrush stroke and through `brush.freehand` with a brush. A tolerance above
+/// `MAX_FIT_TOLERANCE` is an error, and a stroke given no Fidelity is fitted at 1.5 pt.
+#[test]
+fn pencil_fit_keeps_its_anchors_on_a_stroke_drawn_zoomed_out() {
+    let mut s = session();
+    let max = vectorcraft_tools::draw2::MAX_FIT_TOLERANCE;
+    // The blob six times the size, so that 100 px still keeps some of its waves.
+    let big = 6.0;
+    for (command, extra) in [
+        ("path.freehand", json!({})),
+        ("path.freehand", json!({"style": "brush"})),
+        ("brush.freehand", json!({"style": "brush", "brush": "3 pt. Round"})),
+    ] {
+        for fidelity in [20.0, 100.0] {
+            let want = blob_anchors_through(&mut s, command, &extra, Some(fidelity), big);
+            for zoom in [0.2, 0.0313] {
+                let got = blob_anchors_through(&mut s, command, &extra, Some(fidelity / zoom), big / zoom);
+                assert_eq!(got, want, "{command} {extra}: {fidelity} px at {zoom}x");
+                // Fitted at 100 pt, the stroke on screen would keep the detail of a finer Fidelity.
+                if fidelity / zoom > 100.0 {
+                    let at_100 = blob_anchors_through(&mut s, command, &extra, Some(100.0), big / zoom);
+                    assert!(at_100 > want, "{command} {extra}: {fidelity} px at {zoom}x, 100 pt keeps {at_100} of {want}");
+                }
+            }
+        }
+        let mut p = json!({"points": [[0, 0], [100, 50], [200, 0]], "fidelity": max * 10.0});
+        if let (Some(p), Some(extra)) = (p.as_object_mut(), extra.as_object()) {
+            p.extend(extra.clone());
+        }
+        let err = s.execute(command, &p).unwrap_err().to_string();
+        assert!(err.contains("`fidelity` must be from"), "{command} {extra}: {err}");
+        let default = blob_anchors_through(&mut s, command, &extra, None, 1.0);
+        assert_eq!(default, blob_anchors_through(&mut s, command, &extra, Some(1.5), 1.0), "{command} {extra}");
+    }
+}
+
+/// `path.freehand` and `brush.freehand` take a `fidelity` from `MIN_FIT_TOLERANCE` (the lowest
+/// Fidelity at the highest zoom) to `MAX_FIT_TOLERANCE` (the highest at the lowest zoom), both ends
+/// included, and reject a value just outside either end, a tenth of the lowest, 0, a negative one or
+/// a huge one, leaving the document as it was.
+#[test]
+fn pencil_takes_fidelity_within_its_range_and_rejects_the_rest() {
+    let (lo, hi) = (vectorcraft_tools::draw2::MIN_FIT_TOLERANCE, vectorcraft_tools::draw2::MAX_FIT_TOLERANCE);
+    let points = json!([[0, 0], [100, 50], [200, 0], [300, 50]]);
+    for (command, extra) in [("path.freehand", json!({})), ("brush.freehand", json!({"style": "brush", "brush": "3 pt. Round"}))] {
+        let run = |s: &mut Session, fidelity: f64| {
+            let mut p = json!({"points": points, "fidelity": fidelity});
+            if let (Some(p), Some(extra)) = (p.as_object_mut(), extra.as_object()) {
+                p.extend(extra.clone());
+            }
+            s.execute(command, &p)
+        };
+        let mut s = session();
+        for fidelity in [100.0 / 0.0313, hi, lo, 0.01 / 640.0] {
+            let r = run(&mut s, fidelity);
+            assert!(r.as_ref().is_ok_and(|r| r["id"].is_u64()), "{command}: {fidelity} pt: {r:?}");
+        }
+        let before = s.doc().unwrap().doc.clone();
+        for fidelity in [f64::from_bits(hi.to_bits() + 1), f64::from_bits(lo.to_bits() - 1), lo / 10.0, 0.0, -1.5, 1e300] {
+            let err = run(&mut s, fidelity).unwrap_err().to_string();
+            assert!(err.contains("`fidelity` must be from"), "{command}: {fidelity} pt: {err}");
+        }
+        assert_eq!(s.doc().unwrap().doc, before, "{command}");
+    }
+}
+
+/// A stroke that continues an open path closes it when it ends within four Fidelities of the path's
+/// other end, at most 400 pt away: at the coarsest Fidelity one ending 1000 pt away leaves it open,
+/// and one ending 300 pt away closes it.
+#[test]
+fn pencil_extend_closes_within_400_pt_at_any_fidelity() {
+    let mut s = session();
+    let max = vectorcraft_tools::draw2::MAX_FIT_TOLERANCE;
+    for (end, closed) in [([0, 1000], false), ([0, 300], true)] {
+        let l = line(&mut s, 0.0, 0.0, 2000.0, 0.0);
+        let points = json!([[2000, 0], [2000, 1000], [1000, 1500], end]);
+        s.execute("path.freehand", &json!({"points": points, "fidelity": max, "extend": {"id": l.0}, "keepSelected": false})).unwrap();
+        assert_eq!(path(&s, l).subpaths[0].closed, closed, "ending at {end:?}");
     }
 }
 

@@ -12,10 +12,10 @@ use vectorcraft_testkit::invariants::{check_all, check_session, doc_json};
 use vectorcraft_testkit::strategies::{command_param_keys, junk_params_for_command, junk_values, param_keys, safe_value_for_command};
 
 /// Commands that replace/close the active document or touch the filesystem are fine to call, but
-/// their file and folder params are redirected into a temp dir (`safe_value_for_command`, which
-/// `junk_params_for_command` applies, by the keys the command catalog names as files and folders).
-fn safe_path() -> String {
-    vectorcraft_testkit::temp_dir("sweep").join("out.bin").to_string_lossy().to_string()
+/// their file and folder params are redirected into the test's temp dir `dir` (`safe_value_for_command`,
+/// which `junk_params_for_command` applies, by the keys the command catalog names as files and folders).
+fn safe_path(dir: &std::path::Path) -> String {
+    dir.join("out.bin").to_string_lossy().to_string()
 }
 
 /// `r`, after failing the case if the command panicked. The engine's guard reports a panic as
@@ -219,7 +219,8 @@ fn junk_cases(c: &vectorcraft_engine::CommandSpec, path: &str) -> Vec<Value> {
 
 #[test]
 fn every_command_with_junk_params() {
-    let path = safe_path();
+    let dir = vectorcraft_testkit::TempDir::new("sweep");
+    let path = safe_path(&dir);
     let mut failures = vec![];
     let mut calls = 0usize;
     for fx in Fixture::ALL {
@@ -311,8 +312,8 @@ fn names_location(spec: Option<&vectorcraft_engine::CommandSpec>, key: &str) -> 
 /// command alone in at least one case ([`junk_cases`]).
 #[test]
 fn sweep_cases_name_files_only_inside_the_temp_folder() {
-    let path = safe_path();
-    let dir = vectorcraft_testkit::temp_dir("sweep");
+    let dir = vectorcraft_testkit::TempDir::new("sweep");
+    let path = safe_path(&dir);
     let mut unsent = vec![];
     let mut outside = std::collections::BTreeSet::new();
     for c in command_specs() {
@@ -344,8 +345,8 @@ fn sweep_cases_name_files_only_inside_the_temp_folder() {
 /// `paths: [{ids, path}]`, each with a string in the temp folder, and a folder key a folder there.
 #[test]
 fn sweep_cases_send_the_file_keys_of_the_command_catalog() {
-    let path = safe_path();
-    let dir = vectorcraft_testkit::temp_dir("sweep");
+    let dir = vectorcraft_testkit::TempDir::new("sweep");
+    let path = safe_path(&dir);
     let spec = |id: &str| command_specs().iter().find(|c| c.id == id).unwrap();
     let inside = |v: &Value| v.as_str().is_some_and(|s| std::path::Path::new(s).starts_with(&dir));
     for (id, key) in [
@@ -381,7 +382,8 @@ fn sweep_cases_send_the_file_keys_of_the_command_catalog() {
 /// document as it was, still applies after it.
 #[test]
 fn commands_that_do_not_wait_for_a_tool_edit_change_no_document() {
-    let path = safe_path();
+    let dir = vectorcraft_testkit::TempDir::new("sweep");
+    let path = safe_path(&dir);
     let mut failures = vec![];
     for fx in [Fixture::Single, Fixture::Multi] {
         for c in command_specs().iter().filter(|c| !vectorcraft_engine::waits_for_tool_edit(c.id)) {
@@ -1127,7 +1129,8 @@ fn serializable_cases(c: &vectorcraft_engine::CommandSpec, path: &str) -> Vec<Va
 /// After a successful fuzzed call, the document still round-trips and exports.
 #[test]
 fn fuzzed_calls_keep_documents_serializable() {
-    let path = safe_path();
+    let dir = vectorcraft_testkit::TempDir::new("sweep");
+    let path = safe_path(&dir);
     let mut failures = vec![];
     for c in command_specs() {
         for p in serializable_cases(c, &path) {
@@ -1196,7 +1199,8 @@ fn recovery_commands_with_a_damaged_store_and_junk_params() {
     ] {
         store.write(name, bytes).unwrap();
     }
-    let path = safe_path();
+    let dir = vectorcraft_testkit::TempDir::new("sweep");
+    let path = safe_path(&dir);
     for fx in Fixture::ALL {
         for id in ["file.recovery.save", "file.recovery.list", "file.recovery.restore", "file.recovery.discard"] {
             let spec = command_specs().iter().find(|c| c.id == id).unwrap();
@@ -1216,7 +1220,8 @@ fn recovery_commands_with_a_damaged_store_and_junk_params() {
 /// interaction or a broken tree.
 #[test]
 fn envelope_commands_with_junk_params_on_envelopes() {
-    let path = safe_path();
+    let dir = vectorcraft_testkit::TempDir::new("sweep");
+    let path = safe_path(&dir);
     let makes: [(&str, Value); 3] = [
         ("object.envelope.makeWithWarp", json!({"style": "twist", "bend": 80})),
         ("object.envelope.makeWithMesh", json!({"rows": 2, "cols": 3})),
@@ -1262,7 +1267,8 @@ fn envelope_commands_with_junk_params_on_envelopes() {
 #[test]
 fn text_commands_with_junk_params_on_inline_graphics() {
     use vectorcraft_testkit::fixtures::{ellipse, exec, id_of, select};
-    let path = safe_path();
+    let dir = vectorcraft_testkit::TempDir::new("sweep");
+    let path = safe_path(&dir);
     let setup = || {
         let mut s = Fixture::Multi.session();
         let e = ellipse(&mut s, 400.0, 300.0, 20.0, 20.0);

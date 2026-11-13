@@ -55,6 +55,8 @@ pub enum WheelOwner {
     Control,
     /// The Character popover attached to this Control bar link.
     ControlPopover(egui::Id),
+    /// The Contextual Task Bar's type controls.
+    TaskBar,
 }
 
 impl WheelOwner {
@@ -67,6 +69,12 @@ impl WheelOwner {
             Self::Control => return app.ui.control_bar && app.ui.screen_mode < 2,
             Self::ControlPopover(anchor) => {
                 return app.ui.control_bar && app.ui.screen_mode < 2 && widgets::popover_is_open(ctx, anchor);
+            }
+            Self::TaskBar => {
+                return app.ui.task_bar
+                    && app.ui.screen_mode < 3
+                    && crate::canvas::task_bar_shows_type(app)
+                    && crate::canvas::task_bar_shows_fonts(ctx);
             }
             Self::Character => "character",
             Self::Properties => {
@@ -106,12 +114,24 @@ pub struct MenuLook<'a> {
     pub wheel: bool,
     /// Its owner, so a field hidden before the next layout cannot capture wheel input.
     pub wheel_owner: Option<WheelOwner>,
+    /// The name screen readers give the closed field when no label stands beside it.
+    pub name: Option<&'a str>,
 }
 
 impl Default for MenuLook<'static> {
     /// Samples on in the theme's colors, English names, medium rows, no favorites, no wheel.
     fn default() -> Self {
-        Self { samples: true, on_white: false, english_names: true, row: ROW, favorites: &[], recent: &[], wheel: false, wheel_owner: None }
+        Self {
+            samples: true,
+            on_white: false,
+            english_names: true,
+            row: ROW,
+            favorites: &[],
+            recent: &[],
+            wheel: false,
+            wheel_owner: None,
+            name: None,
+        }
     }
 }
 
@@ -131,6 +151,7 @@ impl<'a> MenuLook<'a> {
             recent: app.recent_fonts(),
             wheel: false,
             wheel_owner: None,
+            name: None,
         }
     }
 }
@@ -367,7 +388,11 @@ pub fn font_menu(
     let state_id = ui.scope_id().with(&id).with("font-menu");
     let mut st: MenuState = ui.data(|d| d.get_temp(state_id)).unwrap_or_default();
     ui.data(|d| d.get_temp::<Filters>(filters_id())).unwrap_or_default().apply(&mut st);
-    let target = ui.data(|d| d.get_temp(wheel_fields_id(ui.ctx().viewport_id()).with("target")));
+    // The viewport is read outside `ui.data`. The closure of `ui.data` runs with the context
+    // locked, and a second lock taken inside it blocks once a font-sample thread is waiting to
+    // request a repaint.
+    let wheel_fields = wheel_fields_id(ui.ctx().viewport_id());
+    let target = ui.data(|d| d.get_temp(wheel_fields.with("target")));
     let target_changed = st.wheel_target != target;
     if target_changed {
         st.wheel_order = None;
@@ -378,7 +403,7 @@ pub fn font_menu(
     // The search field and filters stay in place over the rows, which scroll. The rows are all
     // one height (a family's styles too), so only those in view are laid out: there are thousands
     // of families.
-    let (field, shown) = widgets::combo_menu_field(ui, &id, current, width, |menu| {
+    let (field, shown) = widgets::combo_menu_field_named(ui, &id, look.name, current, width, |menu| {
         menu.height(height).show_rows_with_header(
             |ui| {
                 // Wider than a narrow field, so the filters keep their rows and long names show.
@@ -435,10 +460,8 @@ pub fn font_menu(
                 out = Some(FontPick::Wheel(steps));
             }
         }
-        let queued = ui.data(|d| {
-            d.get_temp::<WheelFields>(wheel_fields_id(ui.ctx().viewport_id()))
-                .is_some_and(|fields| fields.queued.iter().any(|event| event.field == field.id))
-        });
+        let queued =
+            ui.data(|d| d.get_temp::<WheelFields>(wheel_fields).is_some_and(|fields| fields.queued.iter().any(|event| event.field == field.id)));
         if drawn || (!field.contains_pointer() && !queued) {
             st.wheel_order = None;
             ui.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));

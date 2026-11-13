@@ -238,6 +238,8 @@ pub(crate) struct Interp {
     pub(crate) code_observer: Option<CodeObserver>,
     /// The tag of the source the last run's error was raised in.
     pub(crate) error_tag: u32,
+    /// Where `$.line` and `$.stack` find the file and line of a compiled line.
+    pub(crate) locator: Option<crate::realm::SourceLocator>,
     /// The mark of the host error ([`crate::HostError::Marked`]) whose exception or limit is
     /// propagating.
     pub(crate) thrown_mark: Option<u32>,
@@ -476,6 +478,7 @@ impl Interp {
             evaluated: 0,
             code_observer: None,
             error_tag: crate::realm::UNKNOWN_SOURCE,
+            locator: None,
             thrown_mark: None,
             finally_marks: Vec::new(),
             finally_sites: Vec::new(),

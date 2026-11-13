@@ -242,6 +242,51 @@ fn control_export_refuses_an_option_no_format_takes() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `app.export` with a path writes the file when given an option only another format reads, and
+/// its warnings name that option, as `document.export`'s do without a path. `file.exportAs` run
+/// as a command does the same; an export that automation did not ask for gets no such note.
+#[test]
+fn control_export_notes_an_option_the_format_does_not_read() {
+    let (mut app, tx, base) = confined("export-unused");
+    let r = request(&mut app, &tx, "app.open", json!({"path": s(base.join("in/a.svg"))}));
+    assert_eq!(r["ok"], true, "{r}");
+    let note = json!("`quality` was not used: PDF files don't read it");
+    let path = base.join("out/a.pdf");
+    let r = request(&mut app, &tx, "app.export", json!({"format": "pdf", "quality": 80, "path": s(path.clone()), "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(path.is_file() && r["result"]["warnings"].as_array().is_some_and(|w| w.contains(&note)), "{r}");
+    let r = request(&mut app, &tx, "app.export", json!({"format": "pdf", "quality": 80}));
+    assert!(r["result"]["warnings"].as_array().is_some_and(|w| w.contains(&note)), "{r}");
+    let r = request(&mut app, &tx, "app.export", json!({"format": "jpg", "quality": 80, "path": s(base.join("out/a.jpg")), "wait": true}));
+    assert!(r["result"]["warnings"].as_array().is_some_and(|w| !w.iter().any(|w| w.to_string().contains("was not used"))), "{r}");
+    let params = json!({"format": "pdf", "quality": 80, "path": s(base.join("out/b.pdf"))});
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "file.exportAs", "params": params}));
+    assert!(r["result"]["warnings"].as_array().is_some_and(|w| w.contains(&note)), "{r}");
+    assert!(app.ui.status.contains("`quality` was not used"), "{}", app.ui.status);
+    let r = crate::io::export(&mut app, Some("pdf"), Some(s(base.join("out/c.pdf"))), &json!({"quality": 80})).unwrap();
+    assert!(r["warnings"].as_array().is_some_and(|w| !w.contains(&note)), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A Background Export replies before the file is written: its reply names the options the format
+/// does not read at once, as a background save's does, and has no `warnings` when there are none.
+#[test]
+fn control_background_export_notes_an_option_the_format_does_not_read() {
+    let shared: SharedWriteFn = std::sync::Arc::new(|p: &str, b: &[u8]| vectorcraft_format::write_atomic(Path::new(p), b).map_err(|e| e.to_string()));
+    let (mut app, tx, base) = confined_with("export-unused-background", Some(shared));
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    let r = request(&mut app, &tx, "app.export", json!({"format": "pdf", "quality": 80, "path": s(base.join("out/a.pdf"))}));
+    assert_eq!(r["result"]["background"], true, "{r}");
+    assert_eq!(r["result"]["warnings"], json!(["`quality` was not used: PDF files don't read it"]), "{r}");
+    crate::background::wait_all(&mut app);
+    let r = request(&mut app, &tx, "app.export", json!({"format": "jpg", "quality": 80, "path": s(base.join("out/a.jpg"))}));
+    assert_eq!(r["result"]["background"], true, "{r}");
+    assert!(r["result"].get("warnings").is_none(), "{r}");
+    crate::background::wait_all(&mut app);
+    assert!(base.join("out/a.pdf").is_file() && base.join("out/a.jpg").is_file());
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `app.save`, and `file.save` and `file.exportForScreens` run as commands, refuse a key no save
 /// format or no format takes before anything is written.
 #[test]

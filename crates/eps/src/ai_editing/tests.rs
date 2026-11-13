@@ -2634,6 +2634,34 @@ fn gradient_options_and_links_the_data_cant_hold_are_reported() {
     let back = read_back(&doc);
     let Paint::Gradient(g) = back.layers[0].children().unwrap()[0].appearance.items[0].paint() else { panic!("a gradient") };
     assert_eq!((color(&g.gradient.stops[0].color), g.gradient.stops[0].swatch.as_deref()), (color(&BRAND), None));
+    // A gradient mixed around the hue wheel, either way, is written as a classic one of the stops
+    // on its curve, no more than the reader reads, and opens with the colors it had.
+    for method in [vectorcraft_color::gradient::GradientMethod::HueClockwise, vectorcraft_color::gradient::GradientMethod::HueCounterclockwise] {
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut g = sunset();
+        g.method = method;
+        let want = g.clone();
+        let n = painted(
+            &mut doc,
+            shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)),
+            vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(g, None, None)))],
+        );
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(out.warnings, [writer::GRADIENT_HUE], "{method:?}");
+        let back = read_back(&doc);
+        let Paint::Gradient(g) = back.layers[0].children().unwrap()[0].appearance.items[0].paint() else { panic!("a gradient") };
+        assert!(g.gradient.method.is_classic(), "{method:?}");
+        let written = g.gradient.stops.len();
+        assert!((want.stops.len() + 1..=crate::import::MAX_GRADIENT_STOPS).contains(&written), "{method:?}: {written} stops");
+        for k in 0..=100 {
+            let t = k as f32 / 100.0;
+            let ((a, ao), (b, bo)) = (want.sample(t), g.gradient.sample(t));
+            let (a, b) = (a.to_rgb(), b.to_rgb());
+            assert!(a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.03) && (ao - bo).abs() < 0.03, "{method:?} at {t}: {a:?} {ao} vs {b:?} {bo}");
+        }
+    }
 }
 
 /// A pattern whose art reaches past its tile is written as its tiles cut to the shape: a definition
@@ -7108,6 +7136,124 @@ fn every_effect_a_graphic_style_holds_is_read_back() {
     let p = program_shown(&doc);
     assert!(p.contains("7.5 /Real (amount) ,") && p.contains("0 /Real (roundness) ,"), "{p}");
     assert!(p.contains("7.5 /Real (moveV_Pts) ,") && p.contains("0.5236 /Real (rotate_Radians) ,"), "{p}");
+}
+
+/// An embedded 8 × 8 image of a color ramp, `Photo`, 80 pt square at (20, 10) in `doc`, at half
+/// opacity, with `effects`.
+fn warped_photo(doc: &mut Document, effects: Vec<vectorcraft_doc::Effect>) -> Node {
+    let ramp = image::RgbImage::from_fn(8, 8, |x, y| image::Rgb([(x * 32) as u8, (y * 32) as u8, 160]));
+    let mut photo = image_node(doc, ImageBlob::png(png_of(ramp.into())), (8, 8), Affine::new([10.0, 0.0, 0.0, 10.0, 20.0, 10.0]), None);
+    photo.name = Some("Photo".into());
+    photo.opacity = 0.5;
+    photo.appearance = Appearance { effects, ..Appearance::default() }.into();
+    photo
+}
+
+/// A 200 × 100 document holding `photo`, made by [`warped_photo`].
+fn photo_doc(photo: impl FnOnce(&mut Document) -> Node) -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let n = photo(&mut doc);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    doc
+}
+
+/// An embedded image with one Warp is written with an art style of that Warp, its bent pieces as its
+/// drawn look and the image itself on `%_` lines: it reads back as the image, its pixels, placement,
+/// name and opacity as they were, with its Warp live and its settings kept.
+#[test]
+fn an_image_with_a_warp_reads_back_with_its_warp_live() {
+    // GUARDS: an image with a Warp was written as its drawn pieces alone, and read back without its Warp.
+    for (id, params) in [
+        ("warp.arc", serde_json::json!({"bend": 40.0})),
+        ("warp.flag", serde_json::json!({"bend": -30.0, "horizontal": 10.0, "vertical": 0.0, "orientation": "vertical"})),
+    ] {
+        let doc = photo_doc(|d| warped_photo(d, vec![fx(id, params.clone())]));
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS), "{id}: {:?}", out.warnings);
+        let back = read_back(&doc);
+        let art = back.layers[0].children().unwrap();
+        assert_eq!(art.len(), 1, "{id}: {:#?} {:?}", lines(&back), out.warnings);
+        let (mut want, mut got) = (vec![], vec![]);
+        pictures(&doc, doc.layers[0].children().unwrap(), "", &mut want);
+        pictures(&back, art, "", &mut got);
+        assert_eq!(got, want, "{id}");
+        let [warp] = art[0].appearance.effects.as_slice() else { panic!("{id}: {:?}", art[0].appearance) };
+        assert_eq!(warp.id, id);
+        let (w, g) = (vectorcraft_effects::merged_params(id, &params), vectorcraft_effects::merged_params(&warp.id, &warp.params));
+        for key in ["bend", "horizontal", "vertical"] {
+            assert!((g[key].as_f64().unwrap() - w[key].as_f64().unwrap()).abs() < 6e-3, "{id} {key}: {g} for {w}");
+        }
+        assert_eq!(g["orientation"], w["orientation"], "{id}");
+    }
+}
+
+/// An image whose style's Warp bends it another way than its drawn look keeps that look, with the
+/// note, and the file as written opens with the image.
+#[test]
+fn an_image_whose_warp_draws_otherwise_than_its_look_keeps_its_look() {
+    // GUARDS: an image read with its Warp live whatever its drawn look showed.
+    let doc = photo_doc(|d| warped_photo(d, vec![fx("warp.arc", serde_json::json!({"bend": 40.0}))]));
+    let program = export_ai_editing(&doc, &opts()).unwrap().program;
+    let (from, to) = (b"0.4 /Real (DeformValue)".as_slice(), b"-0.4 /Real (DeformValue)".as_slice());
+    let at = program.windows(from.len()).position(|w| w == from).expect("the warp's bend");
+    let mut other = program.clone();
+    other.splice(at..at + from.len(), to.iter().copied());
+    let (back, warnings) = crate::ai_alone(&other).unwrap();
+    let art = back.layers[0].children().unwrap();
+    assert_eq!(art.len(), 1, "{art:#?}");
+    assert!(matches!(art[0].kind, NodeKind::Group { .. }), "the drawn look: {:?}", art[0].kind);
+    assert!(art[0].appearance.effects.is_empty(), "{:?}", art[0].appearance);
+    assert!(warnings.iter().any(|w| w.contains("drawn look")), "{warnings:?}");
+    let (back, _) = crate::ai_alone(&program).unwrap();
+    assert!(matches!(back.layers[0].children().unwrap()[0].kind, NodeKind::Image(_)));
+}
+
+/// An image on `%_` lines is the copy of a styled object, as other objects there are: with a style
+/// the file doesn't define, its drawn look stands for it, named as it is, and the image doesn't come
+/// in beside the look.
+#[test]
+fn an_image_on_hidden_lines_does_not_come_in_beside_its_look() {
+    // GUARDS: an image whose samples were on `%_` lines came in as a second, visible object.
+    let doc = photo_doc(|d| warped_photo(d, vec![fx("warp.arc", serde_json::json!({"bend": 40.0}))]));
+    let program = export_ai_editing(&doc, &opts()).unwrap().program;
+    let (from, to) = (b"1 (Anon 1) XW".as_slice(), b"1 (Unknown) XW".as_slice());
+    let at = program.windows(from.len()).position(|w| w == from).expect("the image's style");
+    let mut unknown = program.clone();
+    unknown.splice(at..at + from.len(), to.iter().copied());
+    let (back, _) = crate::ai_alone(&unknown).unwrap();
+    let art = back.layers[0].children().unwrap();
+    assert_eq!(art.len(), 1, "{:#?}", lines(&back));
+    assert!(matches!(art[0].kind, NodeKind::Group { .. }), "the drawn look: {:?}", art[0].kind);
+    assert_eq!(art[0].name.as_deref(), Some("Photo"));
+}
+
+/// A linked image, an image with an opacity mask, and an image with a Warp and another effect are
+/// written as their drawn art, with no art style.
+#[test]
+fn other_warped_images_are_written_as_their_drawn_art() {
+    let arc = || fx("warp.arc", serde_json::json!({"bend": 40.0}));
+    let linked = photo_doc(|d| {
+        let mut n = warped_photo(d, vec![arc()]);
+        if let NodeKind::Image(im) = &mut n.kind {
+            im.link = Some(vectorcraft_doc::LinkInfo::new("/art/photo.png"));
+        }
+        n
+    });
+    let masked = photo_doc(|d| {
+        let mut n = warped_photo(d, vec![arc()]);
+        let white =
+            Node::path(d.alloc_id(), shapes::rectangle(Rect::new(20.0, 10.0, 100.0, 90.0)), Appearance::basic(solid(Color::WHITE), Paint::None, 0.0));
+        n.extras_mut().mask = Some(Box::new(OpacityMask::new(white, false)));
+        n
+    });
+    let stacked = photo_doc(|d| warped_photo(d, vec![arc(), fx("stylize.feather", serde_json::json!({"radius": 2.0}))]));
+    for (what, doc) in [("linked", linked), ("masked", masked), ("stacked", stacked)] {
+        assert!(!program_shown(&doc).contains("1 (Anon"), "{what}");
+        let back = read_back(&doc);
+        let art = back.layers[0].children().unwrap();
+        assert!(art.iter().all(|n| n.appearance.effects.is_empty()), "{what}: {art:#?}");
+    }
 }
 
 /// Every kind of appearance a style isn't written for is written as its drawn look, with a warning.

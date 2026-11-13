@@ -454,10 +454,10 @@ pub fn spec(key: &str) -> Option<&'static PrefSpec> {
 /// Preferences kept as one object with a command of their own instead of [`PREF_SPECS`] rows (they
 /// aren't in the Preferences dialog): the Eyedropper Options (`eyedropper.setOptions`), the
 /// Perspective Grid Options (`perspective.widget.options`), the Pathfinder Options
-/// (`object.pathfinder.options`) and the Snap to Glyph options (`view.snapToGlyph.options`).
-/// `prefs.get` and `prefs.set` take them by key (a partial object updates what it names) and
-/// `prefs.reset` without a category resets them.
-pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget", "pathfinder", "glyphSnap"];
+/// (`object.pathfinder.options`), the Snap to Glyph options (`view.snapToGlyph.options`) and the
+/// Pixel Snapping Options (`view.snapToPixel.options`). `prefs.get` and `prefs.set` take them by key
+/// (a partial object updates what it names) and `prefs.reset` without a category resets them.
+pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget", "pathfinder", "glyphSnap", "pixelSnap"];
 
 /// Validate a value for preference group `key` against `current`.
 fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<Value, String> {
@@ -475,6 +475,10 @@ fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<
         }
         "glyphSnap" => {
             let cur: vectorcraft_tools::GlyphSnap = serde_json::from_value(current.clone()).unwrap_or_default();
+            cur.merged(v).map(|o| json!(o))
+        }
+        "pixelSnap" => {
+            let cur: vectorcraft_tools::PixelSnap = serde_json::from_value(current.clone()).unwrap_or_default();
             cur.merged(v).map(|o| json!(o))
         }
         "perspectiveWidget" => {
@@ -788,7 +792,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Preferences",
             [],
             None,
-            "{path?} write the preferences as a JSON file {format: \"vectorcraft-preferences\", version: 1, prefs: {key: value, …}}: every preference prefs.list lists and the eyedropper, perspectiveWidget, pathfinder and glyphSnap groups, without the folder preferences fontsFolder, pluginsFolder, recoveryFolder and templatesFolder and without saved presets; a file over 1 MB, which prefs.import would refuse, is an error and is not written → {path, count}; without path → {data: the file's text, count}",
+            "{path?} write the preferences as a JSON file {format: \"vectorcraft-preferences\", version: 1, prefs: {key: value, …}}: every preference prefs.list lists and the eyedropper, perspectiveWidget, pathfinder, glyphSnap and pixelSnap groups, without the folder preferences fontsFolder, pluginsFolder, recoveryFolder and templatesFolder and without saved presets; a file over 1 MB, which prefs.import would refuse, is an error and is not written → {path, count}; without path → {data: the file's text, count}",
             always,
             export
         ),
