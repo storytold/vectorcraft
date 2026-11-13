@@ -1813,6 +1813,8 @@ digits	Malayalam	Malajalam
 	Objects on Path Tool	Alat objekti na putanji
 	Attach Objects on Path	Priloži objekte na putanju
 	Expand Objects on Path	Proširi objekte na putanji
+	Detach	Odvoji
+	Detach Object from Path	Odvoji objekat s putanje
 	Release Live Paint	Oslobodi živo bojenje
 	Release Repeat	Oslobodi ponavljanje
 	Release Slice	Oslobodi isječak
@@ -4945,6 +4947,7 @@ imageTrace	Outline	Obris
 @msg	select a repeat	odaberite ponavljanje
 @msg	select an Intertwine group	odaberite Intertwine grupu
 @msg	select an Objects on Path group	odaberite grupu objekata na putanji
+@msg	choose the object to detach with its Select/Move widget	odaberite objekat koji želite odvojiti njegovom ručicom Odaberi/Pomjeri
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	putanja unutar složene putanje, stapanja, omotnice, ponavljanja ili Intertwine grupe ne može primiti objekte
 @msg	a clipping path can't take objects	putanja isijecanja ne može primiti objekte
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objekti unutar stapanja, omotnice, ponavljanja ili Intertwine grupe ne mogu se priložiti putanji

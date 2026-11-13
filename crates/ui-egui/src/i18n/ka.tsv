@@ -5739,6 +5739,7 @@ imageTrace	Outline	კონტური
 	Arrange Intertwine Area	გადახლართვის არის დალაგება
 @msg	select an Intertwine group	მონიშნეთ გადახლართვის ჯგუფი
 @msg	select an Objects on Path group	მონიშნეთ ტრაექტორიაზე ობიექტების ჯგუფი
+@msg	choose the object to detach with its Select/Move widget	მოსახსნელი ობიექტი აირჩიეთ მისი არჩევა/გადატანის ვიჯეტით
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	შედგენილ ტრაექტორიაში, გადასვლაში, გარსში, გამეორებაში ან გადახლართვის ჯგუფში მყოფ ტრაექტორიაზე ობიექტების მიმაგრება ვერ ხერხდება
 @msg	a clipping path can't take objects	მომჭრელ ტრაექტორიაზე ობიექტების მიმაგრება ვერ ხერხდება
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	გადასვლაში, გარსში, გამეორებაში ან გადახლართვის ჯგუფში მყოფი ობიექტების ტრაექტორიაზე მიმაგრება ვერ ხერხდება
@@ -6001,6 +6002,8 @@ imageTrace	Outline	კონტური
 	Objects on Path Tool	ტრაექტორიაზე ობიექტების ხელსაწყო
 	Attach Objects on Path	ობიექტების ტრაექტორიაზე მიმაგრება
 	Expand Objects on Path	ტრაექტორიაზე ობიექტების გაშლა
+	Detach	მოხსნა
+	Detach Object from Path	ობიექტის ტრაექტორიიდან მოხსნა
 	Release Live Paint	ცოცხალი შეღებვის მოხსნა
 	Release Repeat	გამეორების მოხსნა
 	Release Slice	ნაჭრის მოხსნა

@@ -1592,6 +1592,8 @@ file-filter	Templates	Vorlagen
 	Objects on Path Tool	Objekte-auf-Pfad-Werkzeug
 	Attach Objects on Path	Objekte an Pfad anhängen
 	Expand Objects on Path	Objekte auf Pfad umwandeln
+	Detach	Lösen
+	Detach Object from Path	Objekt vom Pfad lösen
 	Release Live Paint	„Interaktiv malen“ zurückwandeln
 	Release Repeat	Wiederholung zurückwandeln
 	Release Slice	Slice zurückwandeln
@@ -4728,6 +4730,7 @@ theme	Appearance	Erscheinungsbild
 @msg	select a repeat	wählen Sie eine Wiederholung aus
 @msg	select an Intertwine group	wählen Sie eine Verflechtungsgruppe aus
 @msg	select an Objects on Path group	wählen Sie eine Gruppe „Objekte auf Pfad“ aus
+@msg	choose the object to detach with its Select/Move widget	wählen Sie das zu lösende Objekt mit seinem Steuerelement „Auswählen/Verschieben“ aus
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	ein Pfad in einem zusammengesetzten Pfad, einer Angleichung, einer Hülle, einer Wiederholung oder einer Verflechtungsgruppe kann keine Objekte aufnehmen
 @msg	a clipping path can't take objects	ein Schnittpfad kann keine Objekte aufnehmen
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	die Objekte in einer Angleichung, einer Hülle, einer Wiederholung oder einer Verflechtungsgruppe können nicht an einen Pfad angehängt werden

@@ -1586,6 +1586,8 @@ font-technology	Variable	Variables
 	Objects on Path Tool	Outil Objets sur tracé
 	Attach Objects on Path	Attacher des objets au tracé
 	Expand Objects on Path	Décomposer les objets sur tracé
+	Detach	Détacher
+	Detach Object from Path	Détacher l’objet du tracé
 	Release Live Paint	Annuler la peinture dynamique
 	Release Repeat	Annuler la répétition
 	Release Slice	Annuler la tranche
@@ -4793,6 +4795,7 @@ axis	Both	Les deux
 @msg	select a repeat	sélectionnez une répétition
 @msg	select an Intertwine group	sélectionnez un groupe entrelacé
 @msg	select an Objects on Path group	sélectionnez un groupe d’objets sur tracé
+@msg	choose the object to detach with its Select/Move widget	choisissez l’objet à détacher avec sa commande Sélectionner/Déplacer
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	un tracé à l’intérieur d’un tracé transparent, d’un dégradé de formes, d’une enveloppe, d’une répétition ou d’un groupe entrelacé ne peut pas recevoir d’objets
 @msg	a clipping path can't take objects	un tracé d’écrêtage ne peut pas recevoir d’objets
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	les objets à l’intérieur d’un dégradé de formes, d’une enveloppe, d’une répétition ou d’un groupe entrelacé ne peuvent pas être attachés à un tracé

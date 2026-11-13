@@ -1982,6 +1982,8 @@ antiAlias	Sharp	날카롭게
 	Objects on Path Tool	패스 위 개체 도구
 	Attach Objects on Path	패스 위 개체 부착
 	Expand Objects on Path	패스 위 개체 확장
+	Detach	분리
+	Detach Object from Path	패스에서 개체 분리
 	Release Live Paint	라이브 페인트 해제
 	Release Repeat	반복 해제
 	Release Slice	분할 해제
@@ -4504,6 +4506,7 @@ theme	Appearance	외관
 @msg	select a repeat	반복을 선택하세요
 @msg	select an Intertwine group	교차 그룹을 선택하세요
 @msg	select an Objects on Path group	패스 위 개체 그룹을 선택하세요
+@msg	choose the object to detach with its Select/Move widget	분리할 개체를 선택/이동 위젯으로 고르세요
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	컴파운드 패스, 블렌드, 엔벨로프, 반복 또는 교차 그룹 안의 패스에는 개체를 부착할 수 없습니다
 @msg	a clipping path can't take objects	클리핑 패스에는 개체를 부착할 수 없습니다
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	블렌드, 엔벨로프, 반복 또는 교차 그룹 안의 개체는 패스에 부착할 수 없습니다

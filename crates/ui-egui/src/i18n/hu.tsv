@@ -2003,6 +2003,8 @@ file-filter	Templates	Sablonok
 	Objects on Path Tool	Objektumok útvonalon
 	Attach Objects on Path	Objektumok csatolása útvonalhoz
 	Expand Objects on Path	Objektumok útvonalon kibontása
+	Detach	Leválasztás
+	Detach Object from Path	Objektum leválasztása az útvonalról
 	Release Live Paint	Élő festés megszüntetése
 	Release Repeat	Ismétlés megszüntetése
 	Release Slice	Szelet megszüntetése
@@ -5561,6 +5563,7 @@ imageTrace	Outline	Körvonal
 @msg	select a repeat	jelölj ki egy ismétlést
 @msg	select an Intertwine group	jelölj ki egy összefonási csoportot
 @msg	select an Objects on Path group	jelölj ki egy Objektumok útvonalon csoportot
+@msg	choose the object to detach with its Select/Move widget	válaszd ki a leválasztandó objektumot a Kijelölés/Mozgatás vezérlőjével
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	összetett útvonalban, összemosásban, burkolóban, ismétlésben vagy összefonási csoportban lévő útvonalhoz nem csatolhatók objektumok
 @msg	a clipping path can't take objects	vágóútvonalhoz nem csatolhatók objektumok
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	összemosásban, burkolóban, ismétlésben vagy összefonási csoportban lévő objektumok nem csatolhatók útvonalhoz

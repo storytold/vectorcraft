@@ -1617,6 +1617,8 @@ file-filter	Templates	Шаблони
 	Objects on Path Tool	Інструмент «Об’єкти на контурі»
 	Attach Objects on Path	Прикріпити об’єкти до контуру
 	Expand Objects on Path	Розібрати об’єкти на контурі
+	Detach	Відкріпити
+	Detach Object from Path	Відкріпити об’єкт від контуру
 	Release Live Paint	Звільнити швидку заливку
 	Release Repeat	Звільнити повтор
 	Release Slice	Звільнити фрагмент
@@ -4840,6 +4842,7 @@ axis	Both	Обидві
 @msg	select a repeat	виділіть повтор
 @msg	select an Intertwine group	виділіть групу переплетення
 @msg	select an Objects on Path group	виділіть групу об’єктів на контурі
+@msg	choose the object to detach with its Select/Move widget	виберіть об’єкт для відкріплення його елементом «Вибрати/Перемістити»
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	до контуру всередині складеного контуру, переходу, оболонки, повтору або групи переплетення не можна прикріпити об’єкти
 @msg	a clipping path can't take objects	до відсічного контуру не можна прикріпити об’єкти
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	об’єкти всередині переходу, оболонки, повтору або групи переплетення не можна прикріпити до контуру

@@ -10094,11 +10094,26 @@ order along the path changes: Space, the start, Pivot, Rotate and the children's
 new place along the path counted from 0. `object.objectsOnPath.selectMember {member}` takes the same kind of `member`
 and returns `{group, member}`.
 
+`object.objectsOnPath.detach {member?}` takes one object off the path: `member`, or without it the object chosen with
+the Select/Move widget of the one selected group (otherwise it fails with "choose the object to detach with its
+Select/Move widget"). `member` takes the same kind of object as `moveMember`, and neither it nor the group may be
+hidden or locked. The object leaves the group and goes just above it in the group's layer or group, staying where it
+is drawn, and becomes the selection; when the group is itself an object on another group's path, the object goes just
+above that outer group, so it does not join its path. The objects after it move up the path in their order: with Auto Space they spread
+evenly again (on an open path the first and last on its ends while two or more are left), and a Space value and the
+start are kept, drawn as close as the path has room for. Hidden and locked objects left in the group move up too. The
+group, its path and its options stay even with one object or none left, and an object moved back into it joins the
+path. It is one undo step, and undo puts the object back on the path with the choice it had. It returns
+`{group, member}`. In the desktop app, Detach in the Properties panel's Objects on Path Options section sends it, and
+is dimmed until one group is selected with an object chosen. To take several objects off at once, drag their rows out
+of the group in the Layers panel (`layer.move`).
+
 ```json
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"objectsOnPath","values":{"pivot":7,"rotate":30}}}}
 {"name":"run_command","arguments":{"command":"object.objectsOnPath.attach","params":{"path":30,"ids":[12,15,18]}}}
 {"name":"run_command","arguments":{"command":"object.objectsOnPath.options","params":{"pivot":7,"rotate":15}}}
 {"name":"run_command","arguments":{"command":"object.objectsOnPath.options","params":{"spacing":24,"start":0}}}
+{"name":"run_command","arguments":{"command":"object.objectsOnPath.detach","params":{"member":15}}}
 {"name":"run_command","arguments":{"command":"object.objectsOnPath.expand","params":{}}}
 ```
 

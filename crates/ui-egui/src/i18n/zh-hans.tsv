@@ -1543,6 +1543,8 @@ file-filter	Templates	模板
 	Objects on Path Tool	路径上的对象工具
 	Attach Objects on Path	附加路径上的对象
 	Expand Objects on Path	扩展路径上的对象
+	Detach	分离
+	Detach Object from Path	将对象从路径分离
 	Release Live Paint	释放实时上色
 	Release Repeat	释放重复
 	Release Slice	释放切片
@@ -4275,6 +4277,7 @@ imageTrace	Outline	轮廓
 @msg	select a repeat	请选择一个重复对象
 @msg	select an Intertwine group	请选择一个交织组
 @msg	select an Objects on Path group	请选择一个路径上的对象组
+@msg	choose the object to detach with its Select/Move widget	请用对象的“选择/移动”控件选择要分离的对象
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	复合路径、混合对象、封套、重复对象或交织组中的路径无法附加对象
 @msg	a clipping path can't take objects	剪切路径无法附加对象
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	混合对象、封套、重复对象或交织组中的对象无法附加到路径
