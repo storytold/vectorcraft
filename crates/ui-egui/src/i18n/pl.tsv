@@ -6160,8 +6160,8 @@ axis	Y Axis	Oś Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	wtyczka eksportu deklaruje od 1 do {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	najwyżej {MAX_UNGROUPED} parametrów poza grupami: pozostałym nadaj `group`
 @msg	can't encode the input	nie można zakodować danych wejściowych
-@msg	expected {"dataBase64"}	oczekiwano {"dataBase64"}
-@msg	expected {"objects"}	oczekiwano {"objects"}
+@msg	expected {{"dataBase64": "…"}}	oczekiwano {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	oczekiwano {{"objects": [...]}}
 @msg	export `{name}`: {e}	eksport modułu `{name}`: {e}
 @msg	extension {e} is listed twice	rozszerzenie {e} występuje dwa razy
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	rozszerzenie {e}: użyj 1-16 małych liter i cyfr, bez kropki
@@ -6225,11 +6225,11 @@ axis	Y Axis	Oś Y
 @msg	a painted live effect returns only `objects`	malujący efekt dynamiczny zwraca tylko `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	element malującego efektu dynamicznego ma tylko `path`, `fillRule`, `fills` i `strokes`
 @msg	a read-only object was left out	pominięto obiekt tylko do odczytu
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	pominięto obiekt tylko do odczytu: zwróć go jako samo {"id"} lub w postaci, w jakiej został przekazany
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	pominięto obiekt tylko do odczytu: zwróć go jako samo {{"id": …}} lub w postaci, w jakiej został przekazany
 @msg	a string	ciągiem znaków
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	obrys ma tylko `paint`, `width`, `join`, `cap` i `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	obrys musi mieć postać {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	efekt musi mieć postać {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	obrys musi mieć postać {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	efekt musi mieć postać {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	efekt wypełnienia zwraca tylko `fills`
 @msg	an effect on a stroke returns only `strokes`	efekt obrysu zwraca tylko `strokes`
 @msg	an object must be a JSON object	obiekt musi być obiektem JSON

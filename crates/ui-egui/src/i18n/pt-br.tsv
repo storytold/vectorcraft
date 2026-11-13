@@ -6221,8 +6221,8 @@ axis	Y Axis	Eixo Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	um plug-in de exportação declara de 1 a {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	no máximo {MAX_UNGROUPED} parâmetros fora de grupos: dê um `group` aos outros
 @msg	can't encode the input	não é possível codificar a entrada
-@msg	expected {"dataBase64"}	esperado {"dataBase64"}
-@msg	expected {"objects"}	esperado {"objects"}
+@msg	expected {{"dataBase64": "…"}}	esperado {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	esperado {{"objects": [...]}}
 @msg	export `{name}`: {e}	exportação do módulo `{name}`: {e}
 @msg	extension {e} is listed twice	a extensão {e} aparece duas vezes
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	extensão {e}: use 1-16 letras minúsculas e dígitos, sem o ponto
@@ -6286,11 +6286,11 @@ axis	Y Axis	Eixo Y
 @msg	a painted live effect returns only `objects`	um efeito dinâmico de pintura retorna apenas `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	uma peça de um efeito dinâmico de pintura tem apenas `path`, `fillRule`, `fills` e `strokes`
 @msg	a read-only object was left out	um objeto somente leitura foi omitido
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	um objeto somente leitura foi omitido: retorne-o como {"id"} sozinho ou como foi recebido
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	um objeto somente leitura foi omitido: retorne-o como {{"id": …}} sozinho ou como foi recebido
 @msg	a string	uma string
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	um traçado tem apenas `paint`, `width`, `join`, `cap` e `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	um traçado deve ser {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	um efeito deve ser {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	um traçado deve ser {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	um efeito deve ser {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	um efeito em um preenchimento retorna apenas `fills`
 @msg	an effect on a stroke returns only `strokes`	um efeito em um traçado retorna apenas `strokes`
 @msg	an object must be a JSON object	um objeto deve ser um objeto JSON
@@ -7160,7 +7160,7 @@ swatch	Lime	Lima
 	Line Weight:	Espessura da linha:
 	Load Variable Library	Carregar biblioteca de variáveis
 swatch	Magenta	Magenta
-@msg	not an RTF file: it doesn't start with {\\rtf	não é um arquivo RTF: ele não começa com {\\rtf
+@msg	not an RTF file: it doesn't start with {{\\rtf	não é um arquivo RTF: ele não começa com {{\\rtf
 swatch	Ocean	Oceano
 shape	Open	Aberta
 swatch	Orange	Laranja
