@@ -690,6 +690,10 @@ font-technology	Variable	Değişken
 	Corner Color	Köşe Rengi
 	Contiguous	Bitişik
 	Each Channel	Her Kanal
+	Color Mask…	Renk Maskesi…
+	Color Mask	Renk Maskesi
+	Remove Color Mask	Renk Maskesini Kaldır
+	Apply Color Mask	Renk Maskesini Uygula
 	Mask	Maske
 	Crop Marks	Kırpma İşaretleri
 	Crop To	Kırpma Hedefi
@@ -4536,6 +4540,10 @@ axis	Both	Her İkisi
 @msg	a CMYK image has no transparency to set	CMYK görüntüsünde ayarlanacak saydamlık yok
 @msg	every pixel matches the background: no image would be left	her piksel arka planla eşleşiyor: hiç görüntü kalmaz
 @msg	an image of {w} × {h} pixels is too large to change	{w} × {h} piksellik bir görüntü değiştirilemeyecek kadar büyük
+@msg	select an image with a color mask	renk maskesi olan bir resim seç
+@msg	the color mask's settings are out of range	renk maskesinin ayarları izin verilen aralığın dışında
+@msg	a CMYK image can't take a color mask	CMYK görüntüsüne renk maskesi uygulanamaz
+@msg	the mask would hide every pixel	maske her pikseli gizlerdi
 @msg	select an object in perspective	perspektifte bir nesne seç
 @msg	select artwork (or a colour group) to recolor	yeniden renklendirilecek resmi (veya bir renk grubunu) seçin
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Yeniden renklendirme tamamlandı; değiştirilmeden kalan: {locked} ve {hidden}

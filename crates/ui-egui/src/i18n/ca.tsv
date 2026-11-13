@@ -1011,6 +1011,10 @@ antiAlias	Sharp	Nítid
 	Corner Color	Color de les cantonades
 	Contiguous	Contigu
 	Each Channel	Cada canal
+	Color Mask…	Màscara de color…
+	Color Mask	Màscara de color
+	Remove Color Mask	Elimina la màscara de color
+	Apply Color Mask	Aplica la màscara de color
 	Crop Marks	Marques de retall
 	Crop To	Retalla fins a
 	Cross	Creu
@@ -5967,6 +5971,10 @@ digits	Malayalam	Malaiàlam
 @msg	a CMYK image has no transparency to set	una imatge CMYK no té transparència per establir
 @msg	every pixel matches the background: no image would be left	cada píxel coincideix amb el fons: no quedaria cap imatge
 @msg	an image of {w} × {h} pixels is too large to change	una imatge de {w} × {h} píxels és massa gran per canviar-la
+@msg	select an image with a color mask	selecciona una imatge amb una màscara de color
+@msg	the color mask's settings are out of range	la configuració de la màscara de color és fora de l’interval
+@msg	a CMYK image can't take a color mask	una imatge CMYK no pot tenir una màscara de color
+@msg	the mask would hide every pixel	la màscara amagaria tots els píxels
 @msg	select an Image Trace object	selecciona un objecte d’Image Trace
 @msg	select an Intertwine group	selecciona un grup Intertwine
 @msg	select an object in perspective	selecciona un objecte en perspectiva

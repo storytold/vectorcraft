@@ -199,6 +199,10 @@
 	Corner Color	Hjørnefarve
 	Contiguous	Sammenhængende
 	Each Channel	Hver kanal
+	Color Mask…	Farvemaske…
+	Color Mask	Farvemaske
+	Remove Color Mask	Fjern farvemaske
+	Apply Color Mask	Anvend farvemaske
 	Edit Path	Redigér kurve
 	Mask	Maskér
 	Rasterize…	Rasterisér…

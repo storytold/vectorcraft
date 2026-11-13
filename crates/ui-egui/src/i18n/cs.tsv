@@ -212,6 +212,10 @@
 	Corner Color	Barva rohů
 	Contiguous	Souvislé
 	Each Channel	Každý kanál
+	Color Mask…	Barevná maska…
+	Color Mask	Barevná maska
+	Remove Color Mask	Odstranit barevnou masku
+	Apply Color Mask	Použít barevnou masku
 	Edit Path	Upravit cestu
 	Mask	Maska
 	Rasterize…	Rastrovat…
@@ -5096,6 +5100,10 @@ imageTrace	Outline	Obrys
 @msg	a CMYK image has no transparency to set	obraz CMYK nemá průhlednost, kterou by bylo možné nastavit
 @msg	every pixel matches the background: no image would be left	každý obrazový bod odpovídá pozadí: nezbyl by žádný obraz
 @msg	an image of {w} × {h} pixels is too large to change	obraz o velikosti {w} × {h} obrazových bodů je příliš velký na změnu
+@msg	select an image with a color mask	vyberte obraz s barevnou maskou
+@msg	the color mask's settings are out of range	nastavení barevné masky jsou mimo rozsah
+@msg	a CMYK image can't take a color mask	obraz CMYK nemůže mít barevnou masku
+@msg	the mask would hide every pixel	maska by skryla všechny obrazové body
 @msg	select an object in perspective	vyberte objekt v perspektivě
 @msg	select artwork (or a colour group) to recolor	vyberte kresbu (nebo skupinu barev) k přebarvení
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Přebarvení dokončeno; beze změny: {locked} a {hidden}
