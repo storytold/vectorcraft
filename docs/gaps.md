@@ -621,6 +621,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   them in proportion, as one undo step ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-similar-objects.html));
   on a group (#4939), the groups like it (the same objects at the same places, moved or scaled) take an edit
   made to an object inside it at the object in the same place ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-groups-with-similar-objects.html));
+  a group that holds type or an image is not taken, as Global Edit does not take images or text
+  ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-similar-objects.html));
   with one such object or group selected with the Selection tool, the objects Start Global Edit would take are
   highlighted on the canvas before it starts (`selecting_one_object_highlights_the_similar_objects_before_global_edit_starts`);
   dynamic symbols (#4938): Symbol Options › Symbol Type (Dynamic Symbol / Static Symbol; `type` on
@@ -667,7 +669,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   `graphicStyle.addFromLibrary`).
 - **Missing:** more built-in brush libraries beyond the eight shipped (and further graphic-style libraries beyond the ten shipped, and further symbol libraries beyond Basic
   Shapes, UI Frames, Map Markers, Inventory Icons and Skill Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write;
-  Global Edit of groups holding type or images, and rotated copies as matches.
+  Global Edit of rotated copies as matches.
 - **Estimate:** 5–15 h.
 
 ## G3 3D and Materials
