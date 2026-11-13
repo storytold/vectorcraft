@@ -228,8 +228,8 @@ fn sync(app: &mut VectorcraftApp, d: &mut Dialog) {
 
 /// The fields of Prominent Colors: the weights the rows are to take (`recolor.weigh`'s `weights`,
 /// one per row; a new list moves the rows' current colors), the weights they last took, each row's
-/// share of the art's uses (`recolor.weigh`'s `shares`) and the rows' current colors those were
-/// read for; a drag of a part's edge (each part's share of the bar while it lasts); and a request
+/// share of the art's uses (`recolor.weigh`'s `shares`) and the rows' current colors, exclusions
+/// and whether each has a new color, which those were read for; a drag of a part's edge (each part's share of the bar while it lasts); and a request
 /// from the New Color Group menu (`all` or `prominent`).
 const WEIGHTS: &str = "weights";
 const WEIGHED: &str = "__weighed";
@@ -273,7 +273,8 @@ fn sync_weights(app: &mut VectorcraftApp, d: &mut Dialog) {
         }
     }
     let rs = rows(d);
-    let of = Value::Array(rs.iter().map(|r| json!([r["from"], excluded(r)])).collect());
+    // A row with a new color takes a color before one without, so that changes the shares too.
+    let of = Value::Array(rs.iter().map(|r| json!([r["from"], excluded(r), !r["to"].is_null()])).collect());
     if d.fields.get(SHARES_OF) == Some(&of) {
         return;
     }
@@ -1873,6 +1874,23 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!(fill_hex(&app, purple), "#ffff00");
         assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    }
+
+    /// A row that takes a new color takes the colors it shares with other rows, so the bar reads
+    /// the shares again.
+    #[test]
+    fn a_new_color_for_a_row_reads_the_shares_again() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        prominent_setup(&mut app, &ctx);
+        let rows = json!([{"from": [RED, PURPLE], "to": null}, {"from": [RED, BLUE], "to": "rgb 255 255 0"}]);
+        app.ui.dialog.as_mut().unwrap().fields.insert("rows".into(), rows);
+        frame(&mut app, &ctx, 0.1, vec![], 0);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields[SHARES], json!([25.0, 75.0]));
+        let rows = json!([{"from": [RED, PURPLE], "to": "rgb 0 255 0"}, {"from": [RED, BLUE], "to": "rgb 255 255 0"}]);
+        app.ui.dialog.as_mut().unwrap().fields.insert("rows".into(), rows);
+        frame(&mut app, &ctx, 0.2, vec![], 0);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields[SHARES], json!([75.0, 25.0]));
     }
 
     /// Dragging the edge between two parts of the bar to the left gives the right-hand part more

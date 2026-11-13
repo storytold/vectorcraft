@@ -1418,6 +1418,38 @@ fn weigh_moves_colors_to_the_rows_weights_and_changes_nothing() {
     assert_eq!(r["map"][2]["from"], json!(["#00ff00", PURPLE]));
 }
 
+/// A colour that two rows list moves only where recolor.apply recolors it with the row it moved
+/// to, so the shares describe the recolor.
+#[test]
+fn weigh_keeps_a_moved_color_from_rows_that_also_list_it() {
+    const GREEN: &str = "rgb 0 255 0";
+    let mut s = session();
+    let [_, _, purple, _] = prominent_art(&mut s);
+    rect(&mut s, json!("#00ff00"));
+    select_all(&mut s);
+    // The purple moves from the first row to the third; the second row's entry for it goes.
+    let map = json!([{"from": [RED, PURPLE], "to": "#000000"}, {"from": [BLUE, PURPLE], "to": "#ffffff"}, {"from": [GREEN], "to": "#ffff00"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [2, 1, 2]}));
+    assert_eq!(r["map"][0]["from"], json!([RED]));
+    assert_eq!(r["map"][1]["from"], json!([BLUE]));
+    assert_eq!(r["map"][2]["from"], json!([GREEN, PURPLE]));
+    assert_eq!(r["shares"], json!([40.0, 20.0, 40.0]));
+    run(&mut s, "recolor.apply", json!({"map": r["map"], "method": "exact"}));
+    assert_eq!(fill(&s, purple).to_hex(), "#ffff00", "the purple takes the row it moved to");
+    // A colour that another row lists first stays: that row would take it back.
+    let mut s = session();
+    let [_, _, purple, _] = prominent_art(&mut s);
+    rect(&mut s, json!("#00ff00"));
+    select_all(&mut s);
+    let map = json!([{"from": [RED, PURPLE], "to": "#000000"}, {"from": [PURPLE, BLUE], "to": "#ffffff"}, {"from": [GREEN], "to": "#ffff00"}]);
+    let r = run(&mut s, "recolor.weigh", json!({"map": map, "weights": [2, 1, 2]}));
+    assert_eq!(r["map"][0]["from"], json!([RED, PURPLE]));
+    assert_eq!(r["map"][1]["from"], json!([PURPLE, BLUE]));
+    assert_eq!(r["shares"], json!([60.0, 20.0, 20.0]));
+    run(&mut s, "recolor.apply", json!({"map": r["map"], "method": "exact"}));
+    assert_eq!(fill(&s, purple).to_hex(), "#000000", "the purple keeps the first row's colour");
+}
+
 #[test]
 fn weigh_moves_the_tints_of_a_global_swatch_together() {
     let mut s = session();

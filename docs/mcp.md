@@ -3729,7 +3729,9 @@ rows come back unchanged. `weights` holds one number of 0 or more per row; an ex
 at least one other row needs a weight above 0. As VectorCraft's own rule, current colors then move one at a time
 between the rows that are not excluded and have a new color (`to`), as long as a move brings each row's share of the uses nearer its share of the
 weights. Of those moves, it takes first the color nearest in Lab to the first color of the row it goes to, compared
-with the row it leaves. A row keeps its first color, and the tints of one global swatch in a row move together. The
+with the row it leaves. A row keeps its first color, and the tints of one global swatch in a row move together. A
+color that the first color of another row with a new color also lists stays where it is. When a color moves, other
+rows with a new color drop their own entries for it, so `recolor.apply` recolors it with the row it moved to. The
 colors that can move are compared with the rows at most 50,000,000 times in all; when those colors times the rows
 that are not excluded pass that, no color moves. Colors that stay in a row keep their order, and the colors that come
 to it follow them. The command changes nothing; `recolor.apply` with the returned `map` recolors the art. In the Recolor Artwork dialog the

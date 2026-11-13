@@ -70,7 +70,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Prominent Colors",
             [],
             None,
-            "{map: rows [{from, to, …}] or {current: new} as recolor.apply, weights?: [numbers ≥ 0, one per row; an excluded row's is ignored, and at least one other must be above 0], ids?: as recolor.colors} → {map: the rows as given, each with its current colours (from) moved as below, shares: [one per row: its percent of the uses (recolor.colors' count) of the current colours of the rows that aren't excluded; 0 for an excluded row]} for Recolor Artwork's Prominent Colors (VectorCraft's own rule): without weights the rows stay as they are. With weights, current colours move one at a time between the rows that aren't excluded and have a new colour (to), while a move brings each row's share of the uses nearer its share of the weights, first the colour nearest in Lab to the first colour of the row it goes to compared with the row it leaves; a row's first colour stays in it, the tints of one global swatch in a row move together, and a use counts for the row recolor.apply recolors it with (rows with a new colour first, an exact colour before a hex one, the first row that lists it), else for the first other row that lists it. The colours that can move are compared with the rows at most 50,000,000 times in all, and when they times the rows that aren't excluded pass that, none move. Changes nothing",
+            "{map: rows [{from, to, …}] or {current: new} as recolor.apply, weights?: [numbers ≥ 0, one per row; an excluded row's is ignored, and at least one other must be above 0], ids?: as recolor.colors} → {map: the rows as given, each with its current colours (from) moved as below, shares: [one per row: its percent of the uses (recolor.colors' count) of the current colours of the rows that aren't excluded; 0 for an excluded row]} for Recolor Artwork's Prominent Colors (VectorCraft's own rule): without weights the rows stay as they are. With weights, current colours move one at a time between the rows that aren't excluded and have a new colour (to), while a move brings each row's share of the uses nearer its share of the weights, first the colour nearest in Lab to the first colour of the row it goes to compared with the row it leaves; a row's first colour stays in it, the tints of one global swatch in a row move together, a colour that another row with a new colour lists first stays where it is, the other rows with a new colour drop their entries for a colour that moves, and a use counts for the row recolor.apply recolors it with (rows with a new colour first, an exact colour before a hex one, the first row that lists it), else for the first other row that lists it. The colours that can move are compared with the rows at most 50,000,000 times in all, and when they times the rows that aren't excluded pass that, none move. Changes nothing",
             has_doc,
             weigh
         ),
@@ -1126,25 +1126,35 @@ fn weigh(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Each current colour's uses and global swatch. A use counts where recolor.apply recolors it:
     // rows with a new colour first, exact colours before hex colours, the first row that lists it;
-    // then the other rows, in the same way.
-    let mut take = |m: &Match| -> (usize, Option<String>) {
-        let hits: Vec<usize> = match m {
-            Match::Key(k) => by_key.get(k).copied().into_iter().collect(),
-            Match::Hex(h) => by_hex.get(h).cloned().unwrap_or_default(),
-        };
-        let (mut uses, mut link) = (0, None);
-        for u in hits.into_iter().filter_map(|i| used[i].take()) {
-            uses += u.count;
-            link = link.or(u.swatch);
-        }
-        (uses, link)
-    };
+    // then the other rows, in the same way. `owner` holds the row and entry that took each colour,
+    // and `shadows` the entries of rows with a new colour whose colours other entries took.
+    let mut owner: Vec<Option<(usize, usize)>> = vec![None; used.len()];
+    let mut shadows: Vec<(usize, usize, Vec<usize>)> = vec![];
     let mut found: Vec<Vec<(usize, Option<String>)>> = rows.iter().map(|r| vec![(0, None); r.from.len()]).collect();
     for recolors in [true, false] {
         for hex in [false, true] {
             for (r, row) in rows.iter().enumerate().filter(|(_, r)| r.new_color().is_some() == recolors) {
                 for (e, m) in row.from.iter().enumerate().filter(|(_, m)| matches!(m, Match::Hex(_)) == hex) {
-                    found[r][e] = take(m);
+                    let hits: Vec<usize> = match m {
+                        Match::Key(k) => by_key.get(k).copied().into_iter().collect(),
+                        Match::Hex(h) => by_hex.get(h).cloned().unwrap_or_default(),
+                    };
+                    let (mut uses, mut link, mut took, mut taken) = (0, None, false, vec![]);
+                    for i in hits {
+                        match used[i].take() {
+                            Some(u) => {
+                                uses += u.count;
+                                link = link.or(u.swatch);
+                                took = true;
+                                owner[i] = Some((r, e));
+                            }
+                            None => taken.push(i),
+                        }
+                    }
+                    found[r][e] = (uses, link);
+                    if recolors && !took && !taken.is_empty() {
+                        shadows.push((r, e, taken));
+                    }
                 }
             }
         }
@@ -1152,20 +1162,39 @@ fn weigh(s: &mut Session, p: &Value) -> Result<Value> {
     // The units that move: in each row that isn't excluded, the colours linked to one global
     // swatch go together, each other colour on its own, and the unit of the first colour stays.
     let (mut units, mut members): (Vec<WeighUnit>, Vec<(usize, Vec<usize>)>) = (vec![], vec![]);
+    let mut unit_of: HashMap<(usize, usize), usize> = HashMap::new();
     for (n, &r) in active.iter().enumerate() {
         let mut groups: Vec<(Option<&String>, Vec<usize>, usize)> = vec![];
+        let mut by_link: HashMap<&String, usize> = HashMap::new();
         for (e, (uses, link)) in found[r].iter().enumerate() {
-            match groups.iter_mut().find(|g| link.is_some() && g.0 == link.as_ref()) {
-                Some(g) => {
-                    g.1.push(e);
-                    g.2 += uses;
+            let g = match link {
+                Some(l) => *by_link.entry(l).or_insert_with(|| {
+                    groups.push((Some(l), vec![], 0));
+                    groups.len() - 1
+                }),
+                None => {
+                    groups.push((None, vec![], 0));
+                    groups.len() - 1
                 }
-                None => groups.push((link.as_ref(), vec![e], *uses)),
-            }
+            };
+            groups[g].1.push(e);
+            groups[g].2 += uses;
         }
         for (k, (_, entries, uses)) in groups.into_iter().enumerate() {
+            for &e in &entries {
+                unit_of.insert((r, e), units.len());
+            }
             units.push(WeighUnit { color: rows[r].from[entries[0]].color(), uses: uses as f64, row: n, fixed: k == 0 });
             members.push((r, entries));
+        }
+    }
+    // recolor.apply matches a colour to the first row with a new colour that lists it. A colour
+    // that another such row's first colour also lists stays where it is; another row's other
+    // entries for a colour that moves are dropped from that row below.
+    let owners = |taken: &[usize]| -> Vec<usize> { taken.iter().filter_map(|&i| unit_of.get(&owner[i]?).copied()).collect() };
+    for (_, _, taken) in shadows.iter().filter(|(_, e, _)| *e == 0) {
+        for u in owners(taken) {
+            units[u].fixed = true;
         }
     }
     if let Some(w) = &weights {
@@ -1187,14 +1216,19 @@ fn weigh(s: &mut Session, p: &Value) -> Result<Value> {
     let mut out = given_rows(p);
     if weights.is_some() {
         // Each row's colours: those that stayed, in their order, then those that came to it.
+        // A row's entry for a colour that moved to another row would take it back, so it goes.
+        let moved = |u: usize| active[units[u].row] != members[u].0;
+        let dropped: std::collections::HashSet<(usize, usize)> =
+            shadows.iter().filter(|(_, e, taken)| *e != 0 && owners(taken).into_iter().any(moved)).map(|(r, e, _)| (*r, *e)).collect();
         let old: Vec<Vec<Value>> = out.iter().map(|r| r["from"].as_array().cloned().unwrap_or_default()).collect();
         let mut stayed: Vec<Vec<usize>> = active.iter().map(|_| vec![]).collect();
         let mut came: Vec<Vec<Value>> = active.iter().map(|_| vec![]).collect();
         for (u, (r, entries)) in units.iter().zip(&members) {
+            let kept = entries.iter().copied().filter(|&e| !dropped.contains(&(*r, e)));
             if active[u.row] == *r {
-                stayed[u.row].extend(entries);
+                stayed[u.row].extend(kept);
             } else {
-                came[u.row].extend(entries.iter().filter_map(|&e| old[*r].get(e).cloned()));
+                came[u.row].extend(kept.filter_map(|e| old[*r].get(e).cloned()));
             }
         }
         for (n, &r) in active.iter().enumerate() {
