@@ -3466,6 +3466,16 @@ antiAlias	Sharp	शार्प
 @msg	Batch cannot play an action with a stop	बैच स्टॉप वाला एक्शन नहीं चला सकता
 	Insert Menu Item…	मेनू आइटम जोड़ें…
 	Insert Menu Item	मेनू आइटम जोड़ें
+	Select Object…	ऑब्जेक्ट सिलेक्ट करें…
+	Select Object	ऑब्जेक्ट सिलेक्ट करें
+	Set Selection	सिलेक्शन सेट करें
+	Case Sensitive	केस सेंसिटिव
+	Whole Word	पूरा शब्द
+	Select Object: {note}	ऑब्जेक्ट सिलेक्ट करें: {note}
+	Select by Note	नोट द्वारा चुनें
+@msg	the note is empty	नोट खाली है
+@msg	the note is longer than 1,024 bytes	नोट 1,024 बाइट से लंबा है
+@msg	no object that can be selected has a note matching “{query}”	सिलेक्ट किए जा सकने वाले किसी भी ऑब्जेक्ट का नोट “{query}” से मेल नहीं खाता
 	Menu Item:	मेनू आइटम:
 	No menu item matches.	कोई मेनू आइटम मेल नहीं खाता।
 	Several menu items match. Choose one from the list.	कई मेनू आइटम मेल खाते हैं। सूची से एक चुनें।

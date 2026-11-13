@@ -6419,6 +6419,16 @@ axis	Y Axis	Axe Y
 @msg	Batch cannot play an action with a stop	Le traitement par lots ne peut pas exécuter un script comportant un arrêt
 	Insert Menu Item…	Insérer une commande de menu…
 	Insert Menu Item	Insérer une commande de menu
+	Select Object…	Sélectionner un objet…
+	Select Object	Sélectionner un objet
+	Set Selection	Définir la sélection
+	Case Sensitive	Respecter la casse
+	Whole Word	Mot entier
+	Select Object: {note}	Sélectionner un objet : {note}
+	Select by Note	Sélectionner par remarque
+@msg	the note is empty	la remarque est vide
+@msg	the note is longer than 1,024 bytes	la remarque dépasse 1 024 octets
+@msg	no object that can be selected has a note matching “{query}”	aucun objet sélectionnable n’a de remarque correspondant à « {query} »
 	Menu Item:	Commande de menu :
 	No menu item matches.	Aucune commande de menu ne correspond.
 	Several menu items match. Choose one from the list.	Plusieurs commandes de menu correspondent. Choisissez-en une dans la liste.

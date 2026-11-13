@@ -480,6 +480,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "select.allOnArtboard",
     "select.anchors",
     "select.anchorsMany",
+    "select.byNote",
     "select.color",
     "select.font",
     "select.globalEdit",
