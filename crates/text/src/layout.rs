@@ -42,6 +42,8 @@ use breaking::{break_line, candidates};
 pub use driver::{decorations, drawn, fit_first_line, fit_source_lines, layout, layout_with, scaled};
 #[cfg(test)]
 pub(crate) use driver::{fit_passes, layout_faces_per_call};
+#[cfg(test)]
+pub(crate) use on_path::{layout_trying_each_start, path_arrangements};
 use vertical::{TcyStyle, stands_upright, tate_chu_yoko, upright_cell, upright_centre, upright_extent, whole_character_widths};
 
 #[cfg(test)]
