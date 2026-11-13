@@ -5069,8 +5069,9 @@ the Align To choice, and while there is a key object or a key guide they send th
 With the Artboard tool chosen, the same buttons and UI commands, and the Control bar's Align and Distribute buttons,
 run `artboard.align`, `artboard.distribute` and `artboard.distributeSpacing` on the artboards the tool has selected.
 Align To then offers Align to Selection and Align to Artboard. Align to Artboard sends `to: "artboard"`, which keeps the
-tool's active artboard in place, and the Distribute buttons then send the Distribute Spacing value as `spacing`. Align
-to Selection sends `to: "selection"`. The Distribute buttons need two or more selected artboards.
+tool's active artboard in place, and the Distribute buttons then send the Distribute Spacing value as `spacing`, which
+can then be negative. Align to Selection sends `to: "selection"`. The Distribute buttons need two or more selected
+artboards with Align to Artboard, and three or more with Align to Selection.
 
 Edit › Keyboard Shortcuts and `shortcuts.list` leave out a command with no default shortcut when a key press cannot
 run it: no item of the menu bar runs it, it opens no dialog when run without params, and it is one of these:
@@ -6037,7 +6038,8 @@ artboard it names is locked. When no artboard changes, the command records no un
 Align and distribute artboards ([Align and distribute artboards](https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/align-and-distribute-artboards.html)):
 three commands move whole artboards, by default those the Artboard tool has selected, else its active one. Each takes
 `index? | indices?`, `to?: "selection"|"artboard"`, `artboard?: n`, `moveArt?`, `patterns?` and `lockedAndHidden?`, and
-returns `{moved: [index…]}`.
+returns `{moved: [index…]}`. With `moveArt`, art inside two of the artboards goes with the one first in artboard order, and stays when that one
+stays.
 
 - `artboard.align {horizontal?: "left"|"center"|"right", vertical?: "top"|"center"|"bottom"}` moves each artboard until
   the named edge or center is on that edge or center of the bounds of all the artboards named. One of the two
