@@ -232,7 +232,7 @@ id = "Curvature"
 group = "Pen"
 shown_when = [
     "The Curvature tool over empty canvas, or anywhere while drawing a path away from its points.",
-    "Elsewhere the Curvature tool borrows Pen-family cursors: PenAdd over a segment, Move over an anchor, PenContinue at an open end, PenConvert with Alt, PenClose over the first point of the path being drawn.",
+    "Elsewhere the Curvature tool borrows Pen-family cursors: PenAdd over a segment, Move over an anchor, PenContinue at an open end of a selected path (Alt held or not), PenConvert with Alt over any other anchor or a point of the path being drawn, PenClose over the first point of the path being drawn.",
 ]
 hotspot = "The nib's tip."
 look = "The Pen nib with a curve badge."

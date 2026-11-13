@@ -4672,6 +4672,7 @@ axis	Both	Ambos
 @msg	unknown parameter `{path}`; it takes: {keys}	parâmetro desconhecido `{path}`; aceita: {keys}
 @msg	missing `{path}`	falta `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` deve ser {expected}, não {got}
+@msg	`{path}` is nested too deeply	`{path}` está aninhado com profundidade excessiva
 	Load EPS into Clipboard	Carregar EPS na Área de Transferência
 	Drawer menu	Menu da gaveta
 	Toolbar: Show Controls	Barra de ferramentas: Mostrar controles
@@ -6338,6 +6339,16 @@ axis	Y Axis	Eixo Y
 @msg	Batch cannot play an action with a stop	Lote não pode reproduzir uma ação com uma parada
 	Insert Menu Item…	Inserir Item de Menu…
 	Insert Menu Item	Inserir Item de Menu
+	Select Object…	Selecionar Objeto…
+	Select Object	Selecionar Objeto
+	Set Selection	Definir Seleção
+	Case Sensitive	Diferenciar Maiúsculas e Minúsculas
+	Whole Word	Palavra Inteira
+	Select Object: {note}	Selecionar Objeto: {note}
+	Select by Note	Selecionar por Nota
+@msg	the note is empty	a nota está vazia
+@msg	the note is longer than 1,024 bytes	a nota tem mais de 1.024 bytes
+@msg	no object that can be selected has a note matching “{query}”	nenhum objeto que pode ser selecionado tem uma nota correspondente a “{query}”
 	Menu Item:	Item de menu:
 	No menu item matches.	Nenhum item de menu corresponde.
 	Several menu items match. Choose one from the list.	Vários itens de menu correspondem. Escolha um da lista.
