@@ -773,9 +773,7 @@ fn check_export_options(id: &str, params: &Value) -> Result<()> {
             NO_SAVE_FORMAT
         }
         "document.export" | "document.exportSelection" | "document.serialize" => {
-            // `richBlack` is Appearance of Black's setting for a raster export, and `params` an
-            // exporter plug-in's own.
-            keys.extend(["includeArtboardFill", "selectedOnly", "richBlack", "params"]);
+            keys.extend(super::fileio::EXPORT_PARAMS);
             keys.extend(FORMATS.iter().filter(|f| f.write).flat_map(|f| f.options).map(|o| o.name));
             NO_FORMAT
         }

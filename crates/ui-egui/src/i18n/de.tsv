@@ -607,6 +607,8 @@ font-technology	Variable	Variabel
 	Convert to Artboards	In Zeichenflächen umwandeln
 	Convert to CMYK	In CMYK konvertieren
 	Convert to Grayscale	In Graustufen konvertieren
+	Convert to Indexed Color	In indizierte Farben konvertieren
+	Convert to Indexed Color…	In indizierte Farben konvertieren…
 	Convert To Outlines	In Pfade umwandeln
 	Convert To Point Type	In Punkttext umwandeln
 	Convert to RGB	In RGB konvertieren
@@ -1592,6 +1594,8 @@ file-filter	Templates	Vorlagen
 	Objects on Path Tool	Objekte-auf-Pfad-Werkzeug
 	Attach Objects on Path	Objekte an Pfad anhängen
 	Expand Objects on Path	Objekte auf Pfad umwandeln
+	Detach	Lösen
+	Detach Object from Path	Objekt vom Pfad lösen
 	Release Live Paint	„Interaktiv malen“ zurückwandeln
 	Release Repeat	Wiederholung zurückwandeln
 	Release Slice	Slice zurückwandeln
@@ -3435,6 +3439,20 @@ effect	Points	Punkte
 	Spot Color Objects	Objekte mit Volltonfarben
 	Pattern Objects	Objekte mit Mustern
 	Gradient Objects	Objekte mit Verläufen
+	Font Details	Schriftdetails
+	Linked Images	Verknüpfte Bilder
+	Embedded Images	Eingebettete Bilder
+	Compound Paths	Zusammengesetzte Pfade
+	Text Objects	Textobjekte
+	Placed Documents	Platzierte Dokumente
+	Symbol Instances	Symbolinstanzen
+	Gradient Meshes	Verlaufsgitter
+	Blends	Angleichungen
+	Envelopes	Hüllen
+	Intertwine Groups	Verflechtungsgruppen
+	Opacity Masks	Deckkraftmasken
+	Objects with Effects	Objekte mit Effekten
+	Pattern Swatches	Musterfarbfelder
 	Spot Colors	Volltonfarben
 	Spot Colors…	Volltonfarben…
 	Spread:	Ausbreitung:
@@ -4077,6 +4095,10 @@ theme	Appearance	Erscheinungsbild
 	Dock Panel	Bedienfeld andocken
 	Dock to Top	Oben andocken
 	Dock to Bottom	Unten andocken
+	Dock to Left	Links andocken
+	Dock to Right	Rechts andocken
+	Dock Toolbar	Werkzeugleiste andocken
+	Float Toolbar	Werkzeugleiste ablösen
 	Control Bar Options	Optionen der Steuerungsleiste
 	Tool Options	Werkzeugoptionen
 	Object Options	Objektoptionen
@@ -4244,6 +4266,9 @@ theme	Appearance	Erscheinungsbild
 @msg	Couldn't open {name}: {e}	{name} konnte nicht geöffnet werden: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} konnte nicht platziert werden: Das Dokument, auf das die Datei gezogen wurde, wurde geschlossen
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} konnte nicht platziert werden: Das Dokument, in dem die Datei platziert wurde, wurde geschlossen
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} konnte nicht platziert werden: Das Dokument, auf das die Datei gezogen wurde, wurde auf die letzte Version zurückgesetzt
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} konnte nicht platziert werden: Das Dokument, in dem die Datei platziert wurde, wurde auf die letzte Version zurückgesetzt
+@msg	Couldn't paste: the document it was pasted in was reverted	Konnte nicht eingefügt werden: Das Dokument, in das eingefügt wurde, wurde auf die letzte Version zurückgesetzt
 @msg	Couldn't read {name}: {e}	{name} konnte nicht gelesen werden: {e}
 @msg	Couldn't save recovery data: {e}	Wiederherstellungsdaten konnten nicht gespeichert werden: {e}
 @msg	Create Outlines: select text objects	In Pfade umwandeln: Wählen Sie Textobjekte aus
@@ -4674,6 +4699,7 @@ theme	Appearance	Erscheinungsbild
 @msg	paths contain invalid coordinates	die Pfade enthalten ungültige Koordinaten
 @msg	paths: give at least one file	paths: Geben Sie mindestens eine Datei an
 @msg	replace: the object to replace was changed or deleted	replace: Das zu ersetzende Objekt wurde geändert oder gelöscht
+@msg	the document it was prepared for is no longer active	das Dokument, für das es vorbereitet wurde, ist nicht mehr aktiv
 @msg	pattern missing	das Muster fehlt
 @msg	patterns nested too deeply are filled with mid-grey	zu tief verschachtelte Muster werden mit mittlerem Grau gefüllt
 @msg	percent must be above 0 and at most 6400, not {p}	percent muss über 0 und höchstens 6400 sein, nicht {p}
@@ -4709,6 +4735,7 @@ theme	Appearance	Erscheinungsbild
 @msg	select a repeat	wählen Sie eine Wiederholung aus
 @msg	select an Intertwine group	wählen Sie eine Verflechtungsgruppe aus
 @msg	select an Objects on Path group	wählen Sie eine Gruppe „Objekte auf Pfad“ aus
+@msg	choose the object to detach with its Select/Move widget	wählen Sie das zu lösende Objekt mit seinem Steuerelement „Auswählen/Verschieben“ aus
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	ein Pfad in einem zusammengesetzten Pfad, einer Angleichung, einer Hülle, einer Wiederholung oder einer Verflechtungsgruppe kann keine Objekte aufnehmen
 @msg	a clipping path can't take objects	ein Schnittpfad kann keine Objekte aufnehmen
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	die Objekte in einer Angleichung, einer Hülle, einer Wiederholung oder einer Verflechtungsgruppe können nicht an einen Pfad angehängt werden
@@ -5033,6 +5060,7 @@ theme	Appearance	Erscheinungsbild
 @msg	every numbered name for it is taken in the Fonts folder	alle nummerierten Namen dafür sind im Schriftenordner bereits vergeben
 @msg	every numbered name for {name} is taken in the document's folder	alle nummerierten Namen für {name} sind im Ordner des Dokuments bereits vergeben
 @msg	No linked files to look for	Keine verknüpften Dateien zum Suchen
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Die Verknüpfung befindet sich in einem Symbol, einem Diagrammdesign, einem Muster oder einer Deckkraftmaske und hat keinen Platz auf der Zeichenfläche
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Dienste
@@ -5516,7 +5544,9 @@ lighting	Light	Licht
 @msg	`{GRAPHICS}` face must be front or back	face in `{GRAPHICS}` muss front oder back sein
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} in `{GRAPHICS}` muss eine Zahl von {lo} bis {hi} sein
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` muss ein Array sein
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafiken werden auf ebene Seiten abgebildet: Verwenden Sie den Objekttyp Extrudieren oder Ebene
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiken werden auf die Objekttypen Ebene, Extrudieren und Kreiseln abgebildet
+@msg	Revolve maps graphics onto its side: map them onto the front	Kreiseln bildet Grafiken auf seiner Mantelfläche ab: Bilden Sie sie auf der Vorderseite ab
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Die Grafiken sind für diese Oberfläche zu komplex: Vereinfachen Sie das Bildmaterial der Symbole oder verringern Sie Segmente
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` nimmt höchstens {MAX_GRAPHICS} Grafiken auf
 @msg	A plane has one face: map its graphics onto the front	Eine Ebene hat nur eine Seite: Bilden Sie ihre Grafiken auf der Vorderseite ab
 @msg	The graphics are too complex: simplify the symbols' art	Die Grafiken sind zu komplex: Vereinfachen Sie das Bildmaterial der Symbole
@@ -5878,7 +5908,9 @@ axis	Y Axis	Y-Achse
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gilt für Verlaufsflächen (paint.setFill)
 @msg	`dither` must be true or false	`dither` muss true oder false sein
 	Perceptual	Perzeptiv
-@msg	`method` must be classic or perceptual	`method` muss classic oder perceptual sein
+	Hue Clockwise	Farbton im Uhrzeigersinn
+	Hue Counterclockwise	Farbton gegen den Uhrzeigersinn
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` muss classic, perceptual, hue-clockwise oder hue-counterclockwise sein
 @msg	`spread` must be pad, repeat or reflect	`spread` muss pad, repeat oder reflect sein
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` muss eine ganze Zahl von 1 bis {MAX_REPEATS} sein
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gilt für lineare, radiale, konische Verläufe und Rautenverläufe
@@ -6121,6 +6153,7 @@ axis	Y Axis	Y-Achse
 	Continue	Fortsetzen
 	Continue Action	Aktion fortsetzen
 	Delete Action Step	Aktionsschritt löschen
+	Move Action Step	Aktionsschritt verschieben
 	Press Play Current Selection in the Actions panel to go on.	Klicken Sie im Bedienfeld „Aktionen“ auf „Aktuelle Auswahl abspielen“, um fortzufahren.
 	Stop: {message}	Stopp: {message}
 @msg	no action is waiting at a stop	keine Aktion wartet an einem Stopp
@@ -6292,6 +6325,22 @@ axis	Y Axis	Y-Achse
 	Graphite Pencil	Graphitstift
 	Wax Crayon	Wachsmalstift
 	Charcoal Dust	Kohlestaub
+	Notched Ribbon	Gekerbtes Band
+	Double Line	Doppellinie
+	Wave	Welle
+	Teardrop	Tropfen
+	Striped Ribbon	Gestreiftes Band
+	Fine Nib	Feine Feder
+	Broad Nib	Breite Feder
+	Chisel	Meißel
+	Round Pen	Runde Feder
+	Pressure Pen	Druckfeder
+	Beads	Perlen
+	Dash Dot	Strich-Punkt
+	Scallops	Bogenkante
+	Stars	Sterne
+	Triangles	Dreiecke
+	Sparkles	Funkeln
 	Save Brush Library…	Pinsel-Bibliothek speichern…
 @msg	`{_1}` has no brushes to apply	`{_1}` hat keine Pinsel zum Anwenden
 @msg	missing `library` (see brush.libraries)	`library` fehlt (siehe brush.libraries)
@@ -6311,6 +6360,13 @@ axis	Y Axis	Y-Achse
 	Area Text	Flächentext
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Text an Glyphenbegrenzung messen
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Optionen für „An Pixel ausrichten“
+	Pixel Snapping Options…	Optionen für „An Pixel ausrichten“…
+	Snap to Pixel While Drawing	Beim Zeichnen an Pixel ausrichten
+	Snap to Pixel While Moving	Beim Verschieben an Pixel ausrichten
+	Snap to Pixel While Scaling	Beim Skalieren an Pixel ausrichten
+	These options take effect when View › Snap to Pixel is on.	Diese Optionen wirken, wenn Ansicht › An Pixel ausrichten aktiviert ist.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Optionen für „An Glyphe ausrichten“ einblenden
 	Hide Snap to Glyph Options	Optionen für „An Glyphe ausrichten“ ausblenden

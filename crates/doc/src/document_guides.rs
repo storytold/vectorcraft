@@ -554,6 +554,13 @@ impl Document {
             t.cached_baselines.clear();
             t.cached_ink = None;
         }
+        // Opacity-mask art is stored art too: the copy's gets ids of its own.
+        if let Some(art) = n.extras().mask.as_ref().map(|m| Arc::clone(&m.art)) {
+            let art = Arc::new(self.reid(&art));
+            if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
+                m.art = art;
+            }
+        }
         let on_path = n.extras().objects_on_path.is_some();
         let mut renamed = std::collections::HashMap::new();
         if let Some(ch) = n.children_mut() {

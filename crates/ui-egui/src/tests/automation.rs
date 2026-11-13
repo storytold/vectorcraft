@@ -242,6 +242,51 @@ fn control_export_refuses_an_option_no_format_takes() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `app.export` with a path writes the file when given an option only another format reads, and
+/// its warnings name that option, as `document.export`'s do without a path. `file.exportAs` run
+/// as a command does the same; an export that automation did not ask for gets no such note.
+#[test]
+fn control_export_notes_an_option_the_format_does_not_read() {
+    let (mut app, tx, base) = confined("export-unused");
+    let r = request(&mut app, &tx, "app.open", json!({"path": s(base.join("in/a.svg"))}));
+    assert_eq!(r["ok"], true, "{r}");
+    let note = json!("`quality` was not used: PDF files don't read it");
+    let path = base.join("out/a.pdf");
+    let r = request(&mut app, &tx, "app.export", json!({"format": "pdf", "quality": 80, "path": s(path.clone()), "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(path.is_file() && r["result"]["warnings"].as_array().is_some_and(|w| w.contains(&note)), "{r}");
+    let r = request(&mut app, &tx, "app.export", json!({"format": "pdf", "quality": 80}));
+    assert!(r["result"]["warnings"].as_array().is_some_and(|w| w.contains(&note)), "{r}");
+    let r = request(&mut app, &tx, "app.export", json!({"format": "jpg", "quality": 80, "path": s(base.join("out/a.jpg")), "wait": true}));
+    assert!(r["result"]["warnings"].as_array().is_some_and(|w| !w.iter().any(|w| w.to_string().contains("was not used"))), "{r}");
+    let params = json!({"format": "pdf", "quality": 80, "path": s(base.join("out/b.pdf"))});
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "file.exportAs", "params": params}));
+    assert!(r["result"]["warnings"].as_array().is_some_and(|w| w.contains(&note)), "{r}");
+    assert!(app.ui.status.contains("`quality` was not used"), "{}", app.ui.status);
+    let r = crate::io::export(&mut app, Some("pdf"), Some(s(base.join("out/c.pdf"))), &json!({"quality": 80})).unwrap();
+    assert!(r["warnings"].as_array().is_some_and(|w| !w.contains(&note)), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A Background Export replies before the file is written: its reply names the options the format
+/// does not read at once, as a background save's does, and has no `warnings` when there are none.
+#[test]
+fn control_background_export_notes_an_option_the_format_does_not_read() {
+    let shared: SharedWriteFn = std::sync::Arc::new(|p: &str, b: &[u8]| vectorcraft_format::write_atomic(Path::new(p), b).map_err(|e| e.to_string()));
+    let (mut app, tx, base) = confined_with("export-unused-background", Some(shared));
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    let r = request(&mut app, &tx, "app.export", json!({"format": "pdf", "quality": 80, "path": s(base.join("out/a.pdf"))}));
+    assert_eq!(r["result"]["background"], true, "{r}");
+    assert_eq!(r["result"]["warnings"], json!(["`quality` was not used: PDF files don't read it"]), "{r}");
+    crate::background::wait_all(&mut app);
+    let r = request(&mut app, &tx, "app.export", json!({"format": "jpg", "quality": 80, "path": s(base.join("out/a.jpg"))}));
+    assert_eq!(r["result"]["background"], true, "{r}");
+    assert!(r["result"].get("warnings").is_none(), "{r}");
+    crate::background::wait_all(&mut app);
+    assert!(base.join("out/a.pdf").is_file() && base.join("out/a.jpg").is_file());
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `app.save`, and `file.save` and `file.exportForScreens` run as commands, refuse a key no save
 /// format or no format takes before anything is written.
 #[test]
@@ -497,6 +542,30 @@ fn ui_inspect_checks_a_folder_preference_as_written() {
     let prefs = r["result"]["ui"]["engine_prefs"].as_object().unwrap();
     assert_eq!(prefs.get("fontsFolder").and_then(Value::as_str), Some(inside.as_str()), "{r}");
     assert!(!prefs.contains_key("templatesFolder"), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` names the file selected in JavaScript Files by its file name alone when it is
+/// outside the read root, and keeps one inside it; the person sees the whole path.
+#[test]
+fn ui_inspect_hides_a_selected_javascript_file_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect-javascript-files");
+    let (inside, outside) = (s(base.join("in/menu.js")), s(base.join("outside/menu.js")));
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    for f in [&inside, &outside] {
+        app.run("svgInteractivity.addFile", json!({ "file": f })).unwrap();
+    }
+    let kind = crate::dialogs::javascript_files::KIND;
+    app.ui.dialog = Some(Dialog::new(kind, json!({"file": "", "selected": outside})));
+    let selected = |v: &Value| v["ui"]["dialog"]["fields"]["selected"].clone();
+    assert_eq!(selected(&crate::control::inspect(&app, &egui::Context::default())), json!(outside), "the person's");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(selected(&r["result"]), "menu.js", "{r}");
+    assert!(!r.to_string().contains(&json!(outside).to_string().trim_matches('"').to_string()), "{r}");
+    app.ui.dialog = Some(Dialog::new(kind, json!({"file": "", "selected": inside})));
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(selected(&r["result"]), json!(inside), "{r}");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("selected")), Some(inside), "the dialog is not changed");
     let _ = std::fs::remove_dir_all(base);
 }
 

@@ -58,7 +58,7 @@ mod context;
 mod cursor;
 mod input;
 
-pub use context::{GlyphSnap, MarqueeMode, PaintDefaults, ScreenFrame, ToolContext};
+pub use context::{GlyphSnap, MarqueeMode, PaintDefaults, PixelOp, PixelSnap, ScreenFrame, ToolContext};
 pub use cursor::Cursor;
 pub use input::{Action, Mods, PenPose, PointerEvent, PointerKind, ToolKey};
 
@@ -135,6 +135,12 @@ pub trait Tool: Send {
     }
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
         vec![]
+    }
+    /// Did the last [`Tool::overlays`] leave part of its overlays for later calls (the band of a
+    /// long smoothing drag, outlined again after a zoom change)? The host then draws again on the
+    /// next frame, even when the pointer holds still.
+    fn overlays_pending(&self) -> bool {
+        false
     }
     fn cursor(&self, _cx: &ToolContext, _p: Point, _mods: Mods) -> Cursor {
         Cursor::Arrow
@@ -542,6 +548,7 @@ pub(crate) mod testutil {
             snap_to_grid: false,
             show_bbox: true,
             snap_to_pixel: false,
+            pixel_snap: crate::PixelSnap::default(),
             snap_to_point: true,
             snap_tangent: true,
             snap_perpendicular: true,
@@ -641,10 +648,11 @@ mod cursor_tests {
         ] {
             assert_eq!(cursor_at(id, &d, away), c, "{id}");
             assert_eq!(c.precise(), Cursor::Crosshair, "{id}");
-            // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it.
+            // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it. The
+            // Live Paint Bucket's bucket is drawn.
             let stand_in = match id {
                 "mesh" => Some(Cursor::PenAdd),
-                "blobBrush" | "eraser" => None,
+                "blobBrush" | "eraser" | "livePaintBucket" => None,
                 _ => Some(Cursor::Crosshair),
             };
             assert_eq!(c.stand_in(), stand_in, "{id}");

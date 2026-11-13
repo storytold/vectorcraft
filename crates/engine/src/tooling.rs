@@ -25,7 +25,8 @@ pub struct ViewInfo {
     /// View → Pixel Preview: while it is on, the tools use no Smart Guides.
     pub pixel_preview: bool,
     pub show_bbox: bool,
-    /// View → Snap to Pixel: drawing and moving land on whole pixels (points at 72 ppi).
+    /// View → Snap to Pixel: drawing, moving and scaling land on whole pixels (points at 72 ppi),
+    /// each while its Pixel Snapping option (`view.snapToPixel.options`) is on.
     pub snap_to_pixel: bool,
     /// View → Snap to Point: picked points (a transform's reference point) land on anchors.
     pub snap_to_point: bool,
@@ -368,6 +369,7 @@ impl Session {
             // Snap to Grid and Snap to Pixel are exclusive, as in Illustrator; left both on, the grid
             // wins instead of pixels quietly rounding every drag to whole points (#1816).
             snap_to_pixel: view.snap_to_pixel && !view.snap_to_grid,
+            pixel_snap: self.prefs.pixel_snap,
             snap_to_point: view.snap_to_point,
             snap_tangent: self.prefs.snap_tangent,
             snap_perpendicular: self.prefs.snap_perpendicular,
@@ -800,6 +802,12 @@ impl Session {
     /// Does the active tool want [`Session::tool_tick`]s now?
     pub fn tool_wants_ticks(&self) -> bool {
         self.tool.wants_ticks()
+    }
+
+    /// Did the active tool leave part of its overlays for the next frame
+    /// ([`vectorcraft_tools::Tool::overlays_pending`])?
+    pub fn tool_overlays_pending(&self) -> bool {
+        self.tool.overlays_pending()
     }
 
     /// Does the active tool build a stroke from every position the pointer passed
