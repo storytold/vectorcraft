@@ -882,3 +882,50 @@ fn the_variable_filter_lists_only_variable_families() {
     assert!(lasting.iter().all(|f| has(&again, f)), "{again:?}");
     assert!(has(&again, TWO_AXIS_FAMILY) && has(&again, "Source Sans 3") && has(&again, "JetBrains Mono"), "{again:?}");
 }
+
+/// A Type › Font menu item's sample follows Show samples on white: dark type on a white slot,
+/// or the interface's dimmed text color with nothing behind it. The slot is white while the
+/// sample is still rendering too.
+#[test]
+fn a_menu_items_sample_follows_show_samples_on_white() {
+    use crate::theme::{Brightness, Tokens};
+    let dark = Tokens::for_brightness(Brightness::Light).text;
+    for b in Brightness::ALL {
+        let t = Tokens::for_brightness(b);
+        for on_white in [false, true] {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            ctx.data_mut(|d| d.insert_temp(egui::Id::NULL, t));
+            let slot = egui::Rect::from_min_size(egui::pos2(40.0, 20.0), super::MENU_SAMPLE_SIZE);
+            let frame = || {
+                let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::menu_item_sample(ui, slot, "Inter", on_white));
+                out.textures_delta.clear();
+                out.shapes
+            };
+            frame();
+            super::wait_for_samples(&ctx);
+            let shapes = frame();
+            let tints: Vec<_> = shapes
+                .iter()
+                .filter_map(|s| match &s.shape {
+                    egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default() => m.vertices.first().map(|v| v.color),
+                    _ => None,
+                })
+                .collect();
+            let papers =
+                shapes.iter().filter(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.fill == super::SAMPLE_PAPER && r.rect == slot)).count();
+            assert_eq!(tints, [if on_white { dark } else { t.text_dim }], "{}, on white {on_white}", b.id());
+            assert_eq!(papers, usize::from(on_white), "{}, on white {on_white}", b.id());
+        }
+    }
+    // While a family's sample is still rendering, its slot is already white.
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let slot = egui::Rect::from_min_size(egui::pos2(40.0, 20.0), super::MENU_SAMPLE_SIZE);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::menu_item_sample(ui, slot, "JetBrains Mono", true));
+    out.textures_delta.clear();
+    let shapes = out.shapes;
+    super::wait_for_samples(&ctx);
+    assert!(!shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default())), "no sample");
+    assert!(shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.fill == super::SAMPLE_PAPER && r.rect == slot)), "the slot is white");
+}

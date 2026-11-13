@@ -217,9 +217,10 @@ pub struct Session {
     /// groups: for each step, the documents ([`DocState::uid`]) whose undo groups it belongs to, and
     /// the index of the document it left active when it changed the active document.
     pub(crate) batch_steps: Option<Vec<(Vec<u64>, Option<usize>)>>,
-    /// After `command.batch` kept a color-mode step's new-art colors, until the top-level command
-    /// has inherited the selection's appearance: the documents ([`DocState::uid`]) whose newest
-    /// history step takes the colors the batch finally left.
+    /// After `command.batch` kept a color-mode step's new-art colors, or a pattern command recorded
+    /// the new-art paints it changed, until the top-level command has inherited the selection's
+    /// appearance: the documents ([`DocState::uid`]) whose newest history step takes the colors the
+    /// command finally left.
     pub(crate) batch_paint_docs: Vec<u64>,
     /// The composite fonts (lowercase names) that the open documents defined when the font
     /// database was last brought in step with them ([`cmd::compositefonts::sync`]).

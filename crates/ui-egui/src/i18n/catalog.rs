@@ -47,23 +47,42 @@ const MAX_MESSAGE_LEN: usize = 2000;
 
 impl Template {
     /// `None` for a template that can't be matched reliably: no literal text, or two placeholders
-    /// in a row (where one ends and the next begins is unknowable).
+    /// in a row (where one ends and the next begins is unknowable). `{{` and `}}` are a literal `{`
+    /// and `}`, as in a Rust format string, and so is a `{` with no `}` after it.
     fn parse(source: &str, forms: Vec<String>, counted: bool) -> Option<Template> {
         let mut pieces = Vec::new();
+        let mut text = String::new();
         let mut rest = source;
-        while let Some(a) = rest.find('{') {
+        while let Some(a) = rest.find(['{', '}']) {
+            text.push_str(rest.get(..a)?);
             let after = rest.get(a + 1..)?;
-            let b = after.find('}')?;
-            if a > 0 {
-                pieces.push(Piece::Text(rest.get(..a)?.to_string()));
+            let brace = if rest.get(a..)?.starts_with('{') { '{' } else { '}' };
+            if let Some(escaped) = after.strip_prefix(brace) {
+                text.push(brace);
+                rest = escaped;
+                continue;
+            }
+            if brace == '}' {
+                text.push('}');
+                rest = after;
+                continue;
+            }
+            let Some(b) = after.find('}') else {
+                text.push('{');
+                rest = after;
+                continue;
+            };
+            if !text.is_empty() {
+                pieces.push(Piece::Text(std::mem::take(&mut text)));
             } else if matches!(pieces.last(), Some(Piece::Hole(_))) {
                 return None;
             }
             pieces.push(Piece::Hole(after.get(..b)?.to_string()));
             rest = after.get(b + 1..)?;
         }
-        if !rest.is_empty() {
-            pieces.push(Piece::Text(rest.to_string()));
+        text.push_str(rest);
+        if !text.is_empty() {
+            pieces.push(Piece::Text(text));
         }
         let literal = pieces.iter().map(|p| if let Piece::Text(t) = p { t.len() } else { 0 }).sum();
         (literal > 0).then_some(Template { pieces, literal, forms, counted })
@@ -175,7 +194,7 @@ impl Catalog {
                     c.plurals.insert(src, tr.split('|').map(str::to_string).collect());
                 }
                 "@msg" => {
-                    if src.contains('{') {
+                    if src.contains('{') || src.contains("}}") {
                         c.templates.extend(Template::parse(&src, vec![tr], false));
                     } else {
                         c.messages.insert(src, tr);
@@ -237,13 +256,17 @@ impl Catalog {
     }
 }
 
-/// `{name}` placeholders of a template, in order of appearance.
+/// `{name}` placeholders of a template, in order of appearance; `{{` is a literal brace.
 #[cfg(test)]
 pub fn placeholders(s: &str) -> Vec<&str> {
     let mut out = Vec::new();
     let mut rest = s;
     while let Some(a) = rest.find('{') {
         let after = &rest[a + 1..];
+        if let Some(escaped) = after.strip_prefix('{') {
+            rest = escaped;
+            continue;
+        }
         match after.find('}') {
             Some(b) => {
                 out.push(&after[..b]);

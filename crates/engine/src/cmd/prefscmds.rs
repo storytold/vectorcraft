@@ -212,6 +212,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("fontNamesInEnglish", "Type", "Options", "Show Font Names in English", bool),
     p!("autoSizeAreaType", "Type", "Options", "Auto Size New Area Type", bool),
     p!("fontPreview", "Type", "Options", "Enable in-menu font previews", bool),
+    p!("fontSamplesOnWhite", "Type", "Options", "Show samples on white", bool),
     p!("fontPreviewSize", "Type", "Options", "Font Preview Size", choice(&[("small", "Small"), ("medium", "Medium"), ("large", "Large")])),
     p!("recentFontsCount", "Type", "Options", "Number of Recent Fonts", int(1, 15)),
     p!("missingGlyphProtection", "Type", "Options", "Enable Missing Glyph Protection", bool),

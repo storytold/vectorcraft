@@ -1163,6 +1163,8 @@ antiAlias	Sharp	Nítid
 	Delete Width Point	Suprimeix el punt d’amplada
 	Delete Workspace	Suprimeix l’espai de treball
 	Delete {kind} Style	Suprimeix l’estil de {kind}
+	Delete the selected items and their artwork?	Voleu suprimir els elements seleccionats i el seu art?
+	Delete this layer and its artwork?	Voleu suprimir aquesta capa i el seu art?
 	Delete “{name}”?	Voleu suprimir “{name}”?
 	Depth	Profunditat
 	Depth:	Profunditat:
@@ -1472,6 +1474,7 @@ antiAlias	Sharp	Nítid
 	Enable copying of text, images and other content	Activa la còpia de text, imatges i altre contingut
 	Enable Guides for 9-Slice Scaling	Activa les guies per a l’escalat de 9 talls
 	Enable in-menu font previews	Activa les previsualitzacions de tipus de lletra als menús
+	Show samples on white	Mostra les mostres sobre fons blanc
 	Enable Missing Glyph Protection	Activa la protecció de glifs absents
 	Enable Opacity Mask	Activa la màscara d’opacitat
 	Enable plaintext metadata	Activa les metadades en text pla
@@ -2592,6 +2595,10 @@ digits	Malayalam	Malaiàlam
 	Modify	Modifica
 	Mojikumi	Ajust mojikumi
 	Mojikumi Set	Conjunt mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Monitor RGB	RGB del monitor
 	Mono	Monocrom
 	Monochromatic	Monocromàtic
@@ -5821,6 +5828,7 @@ digits	Malayalam	Malaiàlam
 @msg	not a VectorCraft shortcut set (missing `overrides`)	no és un conjunt de dreceres de VectorCraft (falta `overrides`)
 @msg	not an EMF or WMF file	no és un fitxer EMF o WMF
 @msg	not an HP-GL file	no és un fitxer HP-GL
+@msg	not a PICT file	no és un fitxer PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` ha de ser una matriu d’1 a 255 colors #rrggbb
 @msg	not an RTF file: it doesn't start with {\\rtf	no és un fitxer RTF: no comença amb {\\rtf
 @msg	not found	no s’ha trobat
@@ -6034,6 +6042,7 @@ digits	Malayalam	Malaiàlam
 @msg	t, dx and dy must be finite	t, dx i dy han de ser finits
 @msg	Targa files are RGB: colorModel rgb	Els fitxers Targa són RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Ajustament de text: selecciona un objecte d’ajustament
+@msg	the active document changed while the question was open; nothing was deleted	el document actiu ha canviat mentre la pregunta era oberta; no s’ha suprimit res
 @msg	that document is no longer open	aquest document ja no està obert
 @msg	Extrude & Bevel	Extrudeix i bisella
 @msg	Revolve	Revoluciona
@@ -7201,7 +7210,9 @@ breakText	Glyphs	Glifs
 @msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» obre fitxers {_1}, no `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` és un complement del tipus `{_2}`, no un importador
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` és un complement del tipus `{_2}`, no un exportador
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` és un importador: obriu un fitxer amb document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` és un importador: obriu un fitxer amb document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` és un exportador: exporteu amb document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` és un efecte dinàmic: apliqueu-lo amb effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	l’importador no ha retornat cap objecte
 @msg	an importer returns `objects` and `warnings`, not `{key}`	un importador retorna `objects` i `warnings`, no `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	el fitxer supera els {MAX_INPUT_BYTES} bytes que llegeix un importador

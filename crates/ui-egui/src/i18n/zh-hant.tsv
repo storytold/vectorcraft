@@ -774,6 +774,8 @@ font-technology	Variable	可變
 	Delete Width Point	刪除寬度點
 	Delete Workspace	刪除工作區
 	Delete {kind} Style	刪除{kind}樣式
+	Delete the selected items and their artwork?	要刪除所選項目及其圖稿嗎？
+	Delete this layer and its artwork?	要刪除此圖層及其圖稿嗎？
 	Delete “{name}”?	要刪除「{name}」嗎？
 	Depth:	深度：
 	Description	描述
@@ -1003,6 +1005,7 @@ font-technology	Variable	可變
 	Enable Contextual Task Bar	啟用快捷工作列
 	Enable copying of text, images and other content	啟用複製文字、影像與其他內容
 	Enable in-menu font previews	啟用選單內字體預覽
+	Show samples on white	在白色背景上顯示樣本
 	Enable Missing Glyph Protection	啟用遺失字符保護
 	Enable Opacity Mask	啟用不透明度遮色片
 	Enable plaintext metadata	啟用純文字中繼資料
@@ -2212,6 +2215,7 @@ file-filter	Templates	範本
 @msg	{bpp}-bit bitmaps can't be read	無法讀取 {bpp} 位元點陣圖
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 檔案
 @msg	not an HP-GL file	不是 HP-GL 檔案
+@msg	not a PICT file	不是 PICT 檔案
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 必須是由 1 到 255 個 #rrggbb 格式顏色組成的陣列
 @msg	its layers use {_1}, which aren't read yet	其圖層使用了 {_1}，目前尚無法讀取
 @msg	the EMF header is damaged	EMF 檔頭已損毀
@@ -2662,6 +2666,7 @@ file-filter	Templates	範本
 @msg	choose the font files to add	請選擇要加入的字體檔案
 @msg	not a file	不是檔案
 @msg	not a font file	不是字體檔案
+@msg	the active document changed while the question was open; nothing was deleted	問題開啟期間作用中文件已變更；未刪除任何內容
 @msg	that document is no longer open	該文件已不再開啟
 @msg	larger than 256 MB	大於 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	檔案總計超過 1 GB：請每次少加入一些
@@ -3111,6 +3116,10 @@ file-filter	Templates	範本
 	Long	長
 	Stylistic	風格化
 	Mojikumi Set	標點間距
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku 集
 	Kinsoku Shori Type	Kinsoku 處理方式
 	Push In First	先推入
@@ -6867,7 +6876,9 @@ breakText	Glyphs	字符
 @msg	“{shown}” opens {_1} files, not `{_2}`	「{shown}」開啟的是 {_1} 檔案，不是 `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` 是 `{_2}` 類型的增效模組，不是匯入增效模組
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` 是 `{_2}` 類型的增效模組，不是匯出增效模組
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` 是匯入增效模組：請用 document.open {{"importer"}"}} 開啟檔案
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` 是匯入增效模組：請用 document.open {{"importer": "{_2}"}} 開啟檔案
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` 是匯出增效模組：請用 document.export {{"format": "{_2}"}} 匯出
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` 是即時效果：請用 effect.apply {{"effect": "{_2}"}} 套用
 @msg	the importer returned no objects	匯入增效模組未傳回任何物件
 @msg	an importer returns `objects` and `warnings`, not `{key}`	匯入增效模組傳回 `objects` 和 `warnings`，不是 `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	檔案超過匯入增效模組讀取的 {MAX_INPUT_BYTES} 位元組

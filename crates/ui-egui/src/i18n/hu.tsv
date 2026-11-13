@@ -1042,6 +1042,8 @@ font-technology	Variable	Változó
 	Delete Width Point	Szélességi pont törlése
 	Delete Workspace	Munkaterület törlése
 	Delete {kind} Style	Stílus törlése: {kind}
+	Delete the selected items and their artwork?	Törlöd a kijelölt elemeket a grafikájukkal együtt?
+	Delete this layer and its artwork?	Törlöd ezt a réteget a grafikájával együtt?
 	Delete “{name}”?	Törlöd ezt: „{name}”?
 	Depth:	Színmélység:
 	Descender	Lenyúló szár
@@ -1308,6 +1310,7 @@ font-technology	Variable	Változó
 	Enable Contextual Task Bar	Helyzetérzékeny műveletsáv bekapcsolása
 	Enable copying of text, images and other content	Szöveg, képek és más tartalom másolásának engedélyezése
 	Enable in-menu font previews	Betűtípus-előnézet a menüben
+	Show samples on white	Minták fehér alapon
 	Enable Missing Glyph Protection	Hiányzó glifák elleni védelem
 	Enable Opacity Mask	Átlátszósági maszk bekapcsolása
 	Enable plaintext metadata	Titkosítatlan metaadatok engedélyezése
@@ -2567,6 +2570,10 @@ file-filter	Templates	Sablonok
 	Long	Hosszú
 	Stylistic	Stilisztikai
 	Mojikumi Set	Mojikumi-készlet
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Monitor RGB	Monitor-RGB
 	Mono	Egyszínű
 	Monochromatic	Egyszínű
@@ -5391,6 +5398,7 @@ imageTrace	Outline	Körvonal
 @msg	not a blend	nem összemosás
 @msg	not an EMF or WMF file	nem EMF- vagy WMF-fájl
 @msg	not an HP-GL file	nem HP-GL-fájl
+@msg	not a PICT file	nem PICT-fájl
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens`: 1–255 #rrggbb szín tömbje kell
 @msg	not found	nem található
 @msg	not in pattern editing mode	nem mintázatszerkesztő módban vagy
@@ -5598,6 +5606,7 @@ imageTrace	Outline	Körvonal
 @msg	SVG parse error: {0}	SVG-elemzési hiba: {0}
 @msg	Targa files are RGB: colorModel rgb	a Targa-fájlok RGB-k: colorModel rgb
 @msg	Text Wrap: select a wrap object	Szöveg körbefuttatása: jelölj ki egy körbefuttató objektumot
+@msg	the active document changed while the question was open; nothing was deleted	az aktív dokumentum megváltozott, amíg a kérdés nyitva volt; semmi sem lett törölve
 @msg	that document is no longer open	az a dokumentum már nincs megnyitva
 @msg	the art could not be sampled	a grafikából nem sikerült mintát venni
 @msg	the art has no bounds	a grafikának nincsenek határai
@@ -7204,7 +7213,9 @@ breakText	Glyphs	Glifák
 @msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}” {_1} fájlokat nyit meg, nem `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}`: `{_2}` fajtájú bővítmény, nem importáló bővítmény
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}`: `{_2}` fajtájú bővítmény, nem exportáló bővítmény
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` importáló bővítmény: nyisson meg egy fájlt a document.open {{"importer"}"}} paranccsal
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` importáló bővítmény: nyisson meg egy fájlt a document.open {{"importer": "{_2}"}} paranccsal
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` exportáló bővítmény: exportáljon a document.export {{"format": "{_2}"}} paranccsal
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` élő effektus: alkalmazza az effect.apply {{"effect": "{_2}"}} paranccsal
 @msg	the importer returned no objects	az importáló bővítmény nem adott vissza objektumot
 @msg	an importer returns `objects` and `warnings`, not `{key}`	az importáló bővítmény `objects` és `warnings` értéket ad vissza, nem `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	a fájl nagyobb annál a {MAX_INPUT_BYTES} bájtnál, amit egy importáló bővítmény beolvas

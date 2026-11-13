@@ -4,15 +4,17 @@
 //! Alt from centre), outside the corners rotates, inside moves, and Cmd-dragging a side handle
 //! shears along that side. A scale snaps as the Selection tool's does. The Perspective Distort and Free Distort modes (tool option `mode`, or
 //! Cmd / Cmd+Alt+Shift while dragging a corner like classic Illustrator) move the corners of the
-//! box and preview `object.distort`.
+//! box and preview `object.distort`. After a rotation the box stays turned with the selection, as
+//! the Selection tool's does: its handles scale, shear and distort along the selection's own sides.
 
 use serde_json::{Value, json};
+use vectorcraft_doc::OrientedBox;
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use super::{BLUE, polygon, rect_corners};
 use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag};
 use crate::guides::{PointSnap, Targets};
-use crate::select::{matrix_json, selection_bounds};
+use crate::select::{handle_cursor, matrix_json, screen_handle, selection_box};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -69,7 +71,8 @@ impl Op {
 #[derive(Clone, Copy, Debug)]
 struct Drag {
     op: Op,
-    rect: Rect,
+    /// The selection's bounding box at the press, turned with the selection.
+    bx: OrientedBox,
     start: Point,
     began: bool,
 }
@@ -170,28 +173,37 @@ impl FreeTransformTool {
         }
     }
 
-    fn classify(&self, cx: &ToolContext, r: Rect, p: Point, m: Mods) -> Option<Op> {
-        let tol = cx.tol(5.0);
-        if let Some(h) = hit_handle(r, p, tol) {
+    /// What a press at `p` on box `bx` does, read in the box's own frame.
+    fn classify(&self, cx: &ToolContext, bx: &OrientedBox, p: Point, m: Mods) -> Option<Op> {
+        let (tol, r, lp) = (cx.tol(5.0), bx.rect, bx.to_local(p));
+        if let Some(h) = hit_handle(r, lp, tol) {
             return Some(self.handle_op(h, m));
         }
-        if self.mode == DistortMode::Free && in_rotate_zone(r, p, tol, cx.tol(18.0)).is_some() {
+        if self.mode == DistortMode::Free && in_rotate_zone(r, lp, tol, cx.tol(18.0)).is_some() {
             return Some(Op::Rotate);
         }
-        r.contains(p).then_some(Op::Move)
+        r.contains(lp).then_some(Op::Move)
     }
 
     fn preview(&mut self, cx: &ToolContext, d: Drag, p: Point, m: Mods) -> Action {
         let shift = m.shift || self.constrain;
+        let bx = d.bx;
         let delta = p - d.start;
+        // The drag along the box's own sides.
+        let local = bx.to_local(p) - bx.to_local(d.start);
         self.guides.clear();
         let xf = match d.op {
             Op::Corners(h, mode) => {
-                let q = distort_quad(d.rect, h, delta, mode);
+                let q = distort_quad(bx.rect, h, local, mode).map(|c| bx.to_doc() * c);
                 self.quad = Some(q);
                 self.measure = cx.measurement_labels.then(|| (p, cx.offset_label(delta.x, delta.y)));
                 let corners: Vec<Value> = q.iter().map(|c| json!([c.x, c.y])).collect();
-                return Action::Preview("object.distort".into(), json!({ "corners": corners, "from": [d.rect.x0, d.rect.y0, d.rect.x1, d.rect.y1] }));
+                let r = bx.rect;
+                let mut params = json!({ "corners": corners, "from": [r.x0, r.y0, r.x1, r.y1] });
+                if bx.angle != 0.0 {
+                    params["angle"] = json!(bx.angle);
+                }
+                return Action::Preview("object.distort".into(), params);
             }
             Op::Move => {
                 let v = move_delta(d.start, p, shift, cx.constrain_angle);
@@ -199,22 +211,23 @@ impl FreeTransformTool {
                 Affine::translate(v)
             }
             Op::Scale(h) => {
-                let mut a = scale_for_drag(d.rect, h, p, shift, m.alt);
+                // Scaled in the box's own frame, then turned back onto the page.
+                let mut a = scale_for_drag(bx.rect, h, bx.to_local(p), shift, m.alt);
                 if let Some(t) = &self.targets {
-                    (a, self.guides) = t.snap_scale(cx, &vectorcraft_doc::OrientedBox::aligned(d.rect), h, a, shift, m.alt);
+                    (a, self.guides) = t.snap_scale(cx, &bx, h, a, shift, m.alt);
                 }
-                let nr = a.transform_rect_bbox(d.rect);
+                let nr = a.transform_rect_bbox(bx.rect);
                 self.measure = cx.transform_tools_guides.then(|| (p, cx.size_label(nr.width(), nr.height())));
-                a
+                bx.conjugate(a)
             }
-            Op::Shear(h) => shear_for_side(d.rect, h, delta, m.alt),
+            Op::Shear(h) => bx.conjugate(shear_for_side(bx.rect, h, local, m.alt)),
             Op::Rotate => {
-                let (a, deg) = rotate_for_drag(d.rect.center(), d.start, p, shift);
+                let (a, deg) = rotate_for_drag(bx.center(), d.start, p, shift);
                 self.measure = cx.transform_tools_guides.then(|| (p, format!("{:.1}°", -deg)));
                 a
             }
         };
-        self.quad = Some(rect_corners(d.rect).map(|c| xf * c));
+        self.quad = Some(bx.corners().map(|c| xf * c));
         Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(xf), "copy": false }))
     }
 }
@@ -233,10 +246,10 @@ impl Tool for FreeTransformTool {
         match ev.kind {
             PointerKind::Down => {
                 self.drag = None;
-                let Some(r) = selection_bounds(cx) else { return vec![] };
-                if let Some(op) = self.classify(cx, r, p, ev.mods) {
+                let Some(bx) = selection_box(cx) else { return vec![] };
+                if let Some(op) = self.classify(cx, &bx, p, ev.mods) {
                     self.targets = op.handle().is_some().then(|| PointSnap::new(cx, || Targets::for_scale(cx)));
-                    self.drag = Some(Drag { op, rect: r, start: p, began: false });
+                    self.drag = Some(Drag { op, bx, start: p, began: false });
                 }
                 vec![]
             }
@@ -292,10 +305,12 @@ impl Tool for FreeTransformTool {
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = vec![];
-        let quad = match (self.quad, selection_bounds(cx)) {
-            (Some(q), _) => q,
-            (None, Some(r)) => rect_corners(r),
-            _ => return o,
+        let quad = match self.quad {
+            Some(q) => q,
+            None => match selection_box(cx) {
+                Some(bx) => bx.corners(),
+                None => return o,
+            },
         };
         o.push(Overlay::Path { path: polygon(&quad, true), color: BLUE, width: 1.0, dashed: false });
         for i in 0..4 {
@@ -313,19 +328,17 @@ impl Tool for FreeTransformTool {
     }
 
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
-        let Some(r) = selection_bounds(cx) else { return Cursor::Arrow };
-        match self.drag.map(|d| d.op).or_else(|| self.classify(cx, r, p, m)) {
-            Some(Op::Rotate) => Cursor::rotate_about_in_view(r.center(), p, cx.view_angle()),
+        let Some(bx) = self.drag.map(|d| d.bx).or_else(|| selection_box(cx)) else { return Cursor::Arrow };
+        // The box's angle as it shows on screen.
+        let shown = bx.angle - cx.view_angle();
+        match self.drag.map(|d| d.op).or_else(|| self.classify(cx, &bx, p, m)) {
+            Some(Op::Rotate) => Cursor::rotate_about_in_view(bx.center(), p, cx.view_angle()),
             Some(Op::Move) => Cursor::Move,
-            Some(Op::Shear(Handle::Top | Handle::Bottom)) => Cursor::ShearH,
-            Some(Op::Shear(_)) => Cursor::ShearV,
-            Some(Op::Scale(h)) => match h {
-                Handle::Top | Handle::Bottom => Cursor::ResizeV,
-                Handle::Left | Handle::Right => Cursor::ResizeH,
-                Handle::TopLeft | Handle::BottomRight => Cursor::ResizeNwSe,
-                Handle::TopRight | Handle::BottomLeft => Cursor::ResizeNeSw,
-            }
-            .turned(cx.view_angle()),
+            Some(Op::Shear(h)) => match screen_handle(h, shown) {
+                Handle::Top | Handle::Bottom | Handle::TopLeft | Handle::BottomRight => Cursor::ShearH,
+                _ => Cursor::ShearV,
+            },
+            Some(Op::Scale(h)) => handle_cursor(h, shown),
             Some(Op::Corners(..)) => Cursor::Crosshair,
             None => Cursor::Arrow,
         }
@@ -420,6 +433,43 @@ mod tests {
         assert_eq!(t.cursor(&c, Point::new(150.0, 100.0), Mods::default()), Cursor::ResizeH, "top-middle");
         assert_eq!(t.cursor(&c, Point::new(200.0, 200.0), Mods::default()), Cursor::ResizeNeSw, "bottom-right");
         assert_eq!(t.cursor(&c, Point::new(207.0, 93.0), Mods::default()), Cursor::RotateToward(3), "out from the top right");
+    }
+
+    /// After a 30° turn the box, its handles and their cursors turn with the selection, and a side
+    /// handle scales along the selection's own width.
+    #[test]
+    fn the_box_and_its_handles_turn_with_the_selection() {
+        let (mut d, id) = doc_with_rect();
+        let c = Vec2::new(150.0, 150.0);
+        let turn = Affine::translate(c) * Affine::rotate(-30f64.to_radians()) * Affine::translate(-c);
+        d.node_mut(id).unwrap().transform(turn, false);
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let bx = selection_box(&cx).unwrap();
+        assert!((bx.angle - 30.0).abs() < 1e-9, "{bx:?}");
+        let mut t = FreeTransformTool::default();
+        let shown: Vec<Point> = t.overlays(&cx).iter().filter_map(|o| if let Overlay::Anchor { p, .. } = o { Some(*p) } else { None }).collect();
+        for corner in bx.corners() {
+            assert!(shown.iter().any(|q| q.distance(corner) < 1e-9), "{corner:?} not in {shown:?}");
+        }
+        let top = bx.to_doc() * Handle::Top.pos(bx.rect);
+        assert_eq!(t.cursor(&cx, top, Mods::default()), Cursor::ResizeNwSe, "the top handle, turned 30°");
+        // The Right handle dragged 100 pt out along the selection's own x axis doubles its width.
+        let right = bx.to_doc() * Handle::Right.pos(bx.rect);
+        let to = bx.to_doc() * (Handle::Right.pos(bx.rect) + Vec2::new(100.0, 0.0));
+        t.pointer(&cx, &ev(PointerKind::Down, right.x, right.y));
+        let a = t.pointer(&cx, &ev(PointerKind::Drag, to.x, to.y));
+        assert_eq!(a[0], Action::Begin("Scale".into()));
+        let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+        let m: Vec<f64> = v["matrix"].as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect();
+        let m = Affine::new([m[0], m[1], m[2], m[3], m[4], m[5]]);
+        let local = bx.to_doc().inverse() * m * bx.to_doc();
+        let want = Affine::translate((bx.rect.x0, 0.0)) * Affine::scale_non_uniform(2.0, 1.0) * Affine::translate((-bx.rect.x0, 0.0));
+        for (got, want) in local.as_coeffs().iter().zip(want.as_coeffs()) {
+            assert!((got - want).abs() < 1e-9, "{local:?}");
+        }
     }
 
     #[test]

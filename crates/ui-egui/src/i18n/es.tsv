@@ -812,6 +812,8 @@ font-technology	Variable	Variables
 	Delete Width Point	Eliminar punto de anchura
 	Delete Workspace	Eliminar espacio de trabajo
 	Delete {kind} Style	Eliminar estilo de {kind}
+	Delete the selected items and their artwork?	¿Eliminar los elementos seleccionados y su ilustración?
+	Delete this layer and its artwork?	¿Eliminar esta capa y su ilustración?
 	Delete “{name}”?	¿Eliminar “{name}”?
 	Depth:	Profundidad:
 	Description	Descripción
@@ -1032,6 +1034,7 @@ font-technology	Variable	Variables
 	Enable Contextual Task Bar	Activar barra de tareas contextual
 	Enable copying of text, images and other content	Permitir copiar texto, imágenes y otro contenido
 	Enable in-menu font previews	Activar vista previa de fuentes en el menú
+	Show samples on white	Mostrar muestras sobre blanco
 	Enable Missing Glyph Protection	Activar protección de glifos ausentes
 	Enable Opacity Mask	Activar máscara de opacidad
 	Enable plaintext metadata	Activar metadatos en texto sin formato
@@ -2041,6 +2044,10 @@ font-technology	Variable	Variables
 	Long	Larga
 	Stylistic	Estilística
 	Mojikumi Set	Conjunto de mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Conjunto de kinsoku
 	Kinsoku Shori Type	Tipo de kinsoku shori
 	Push In First	Primero hacia dentro
@@ -4706,6 +4713,7 @@ axis	Both	Ambos
 @msg	not a valid plug-in module: {0}	no es un módulo de plugin válido: {0}
 @msg	not an EMF or WMF file	no es un archivo EMF ni WMF
 @msg	not an HP-GL file	no es un archivo HP-GL
+@msg	not a PICT file	no es un archivo PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` debe ser una lista de 1 a 255 colores #rrggbb
 @msg	not found	no se encontró
 @msg	not in pattern editing mode	no está en el modo de edición de motivos
@@ -5088,6 +5096,7 @@ axis	Both	Ambos
 @msg	choose the font files to add	elige los archivos de fuentes que quieres agregar
 @msg	not a file	no es un archivo
 @msg	not a font file	no es un archivo de fuente
+@msg	the active document changed while the question was open; nothing was deleted	el documento activo cambió mientras la pregunta estaba abierta; no se eliminó nada
 @msg	that document is no longer open	ese documento ya no está abierto
 @msg	larger than 256 MB	mayor de 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	los archivos suman más de 1 GB: agrega menos a la vez
@@ -7163,7 +7172,9 @@ breakText	Glyphs	Glifos
 @msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» abre archivos {_1}, no `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` es un plugin de tipo `{_2}`, no un plugin de importación
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` es un plugin de tipo `{_2}`, no un plugin de exportación
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` es un plugin de importación: abra un archivo con document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` es un plugin de importación: abra un archivo con document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` es un plugin de exportación: exporte con document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` es un efecto interactivo: aplíquelo con effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	el plugin de importación no devolvió ningún objeto
 @msg	an importer returns `objects` and `warnings`, not `{key}`	un plugin de importación devuelve `objects` y `warnings`, no `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	el archivo supera los {MAX_INPUT_BYTES} bytes que lee un plugin de importación
