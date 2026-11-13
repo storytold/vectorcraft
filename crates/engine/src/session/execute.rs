@@ -3,6 +3,27 @@ use super::{
     strip_replay_only, waits_for_tool_edit,
 };
 
+/// A command's result `r` with the warnings of the previews that settling an interaction applied
+/// before it ran: `previewWarning` holds them, and `warning` too when the command gives none of its
+/// own, so the status bar shows the command's own warning when there is one. A null result becomes
+/// an object holding them; any other result that isn't an object is returned as it is.
+fn with_settled_warnings(mut r: Value, settled: &[String]) -> Value {
+    if settled.is_empty() {
+        return r;
+    }
+    if r.is_null() {
+        r = Value::Object(serde_json::Map::new());
+    }
+    if let Value::Object(m) = &mut r {
+        let w = Value::String(settled.join("; "));
+        if m.get("warning").is_none_or(Value::is_null) {
+            m.insert("warning".into(), w.clone());
+        }
+        m.insert("previewWarning".into(), w);
+    }
+    r
+}
+
 impl Session {
     /// `spec`'s `enabled` with `ids` selected instead of the selection, which is then put back.
     fn enabled_with_selection(&mut self, spec: &CommandSpec, ids: Vec<NodeId>) -> std::result::Result<(), String> {
@@ -54,7 +75,14 @@ impl Session {
             self.finish_tool_edit_later()?;
         }
         let outer = std::mem::replace(&mut self.reading, !spec.journal || JOURNALED_READS.contains(&id));
-        let r = self.execute_spec(spec, id, params);
+        // A preview that a top-level command applied first (a drag with Real-time Drawing off, kept
+        // before Undo) reports its warning in the command's result.
+        let r = if self.depth == 0 {
+            let (r, settled) = self.collect_settled_warnings(|s| s.execute_spec(spec, id, params));
+            r.map(|v| with_settled_warnings(v, &settled))
+        } else {
+            self.execute_spec(spec, id, params)
+        };
         self.reading = outer;
         r
     }
@@ -362,5 +390,27 @@ impl Session {
             st.sync_new_art();
         }
         r
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::with_settled_warnings;
+
+    /// The command's own warning stays the one the status bar shows, and the settled preview's is
+    /// kept beside it; a null result holds the preview's; other results are left as they are.
+    #[test]
+    fn settled_warnings_join_the_result() {
+        let settled = ["a".to_string(), "b".to_string()];
+        assert_eq!(
+            with_settled_warnings(json!({"ran": 1, "warning": "own"}), &settled),
+            json!({"ran": 1, "warning": "own", "previewWarning": "a; b"})
+        );
+        assert_eq!(with_settled_warnings(json!({"warning": null}), &settled), json!({"warning": "a; b", "previewWarning": "a; b"}));
+        assert_eq!(with_settled_warnings(json!(null), &settled[..1]), json!({"warning": "a", "previewWarning": "a"}));
+        assert_eq!(with_settled_warnings(json!([1]), &settled), json!([1]));
+        assert_eq!(with_settled_warnings(json!({"ran": 1}), &[]), json!({"ran": 1}));
     }
 }
