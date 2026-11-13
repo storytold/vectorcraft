@@ -521,6 +521,26 @@ pub(crate) fn rows_take_delete(ctx: &egui::Context) -> bool {
     has_row_keys(ctx, layers::ROW_KEYS) || has_row_keys(ctx, appearance::ROW_KEYS)
 }
 
+/// How near a scrolled list's top or bottom edge a drag scrolls it ([`scroll_at_edges`]).
+const DRAG_SCROLL_EDGE: f32 = 28.0;
+
+/// While something is dragged near the top or bottom edge of a scrolled list (`ui`: its contents),
+/// scroll that way, faster nearer the edge, and draw the next frame so a pointer held still keeps
+/// it scrolling. The pointer must be over the list's width.
+pub(crate) fn scroll_at_edges(ui: &mut Ui) {
+    let Some(pos) = ui.ctx().pointer_hover_pos() else { return };
+    let view = ui.clip_rect();
+    if !view.x_range().contains(pos.x) {
+        return;
+    }
+    let speed = |depth: f32| if (0.0..DRAG_SCROLL_EDGE).contains(&depth) { 2.0 + 10.0 * (1.0 - depth / DRAG_SCROLL_EDGE) } else { 0.0 };
+    let delta = speed(pos.y - view.top()) - speed(view.bottom() - pos.y);
+    if delta != 0.0 {
+        ui.scroll_with_delta(vec2(0.0, delta));
+        ui.ctx().request_repaint();
+    }
+}
+
 /// [`crate::i18n::label_or_name`] in the UI language.
 pub(crate) fn label_or_name(s: &str, built_in: bool) -> &str {
     crate::i18n::label_or_name(crate::i18n::current(), s, built_in)

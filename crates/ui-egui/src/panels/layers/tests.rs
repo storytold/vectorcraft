@@ -1232,6 +1232,156 @@ fn dragging_rows_moves_them_into_other_layers_and_alt_copies() {
     let _ = (layer, c);
 }
 
+/// One headless frame of the panel on a short screen (300 × 260) with `events` (Alt held when
+/// `alt`): for every row name painted inside the list's view, its center, and the view.
+fn short_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, alt: bool) -> (HashMap<String, egui::Pos2>, egui::Rect) {
+    let mut events = events;
+    events.insert(0, egui::Event::ModifiersChanged(egui::Modifiers { alt, ..Default::default() }));
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(300.0, 260.0));
+    let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| show(app, ui));
+    out.textures_delta.clear();
+    // The rows' eye column dividers are drawn clipped to the list's view.
+    let border = Tokens::get(ctx).input_border;
+    let view = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::LineSegment { stroke, .. } if stroke.color == border && c.clip_rect.height() < screen.height() => Some(c.clip_rect),
+            _ => None,
+        })
+        .unwrap_or(egui::Rect::NOTHING);
+    let mut names = HashMap::new();
+    for c in &out.shapes {
+        if let egui::Shape::Text(t) = &c.shape
+            && t.galley.text().starts_with("Layer ")
+            && view.contains_rect(c.clip_rect)
+        {
+            let center = t.pos + t.galley.size() / 2.0;
+            if c.clip_rect.contains(center) {
+                names.insert(t.galley.text().to_string(), center);
+            }
+        }
+    }
+    (names, view)
+}
+
+/// A document of 30 empty layers named `Layer 1` (the bottom one) to `Layer 30` (the top one):
+/// more rows than [`short_frame`]'s list shows.
+fn thirty_layers() -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    for i in 2..=30 {
+        app.session.execute("layer.new", &json!({"top": true, "name": format!("Layer {i}")})).unwrap();
+    }
+    app
+}
+
+/// The layers' names, bottom first.
+fn layer_names(app: &VectorcraftApp) -> Vec<String> {
+    app.session.active().unwrap().doc.layers.iter().map(|l| l.display_name()).collect()
+}
+
+/// Hold the button still at `at` (a row is held) until `name`'s row is fully in view; → its center.
+fn hold_until(app: &mut VectorcraftApp, ctx: &egui::Context, at: egui::Pos2, name: &str, alt: bool) -> Option<egui::Pos2> {
+    short_frame(app, ctx, vec![egui::Event::PointerMoved(at)], alt);
+    for _ in 0..500 {
+        let (names, view) = short_frame(app, ctx, vec![], alt);
+        if let Some(&c) = names.get(name)
+            && c.y - ROW_MEDIUM / 2.0 >= view.top()
+            && c.y + ROW_MEDIUM / 2.0 <= view.bottom()
+        {
+            return Some(c);
+        }
+    }
+    None
+}
+
+#[test]
+fn rows_held_near_the_bottom_or_top_edge_scroll_the_list_to_a_row_out_of_view() {
+    let mut app = thirty_layers();
+    let ctx = egui::Context::default();
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let (names, view) = short_frame(&mut app, &ctx, vec![], false);
+    assert!(names.contains_key("Layer 30") && !names.contains_key("Layer 1"), "the list overflows: {names:?}");
+    let before = (undo(&app), layer_names(&app));
+    // Layer 30 held still just above the list's bottom edge: the list scrolls down to Layer 1.
+    let grab = names["Layer 30"];
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab)], false);
+    short_frame(&mut app, &ctx, vec![button(grab, true)], false);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab + vec2(0.0, 6.0))], false);
+    let edge = egui::pos2(grab.x, view.bottom() - 3.0);
+    let target = hold_until(&mut app, &ctx, edge, "Layer 1", false).expect("Layer 1 scrolled into view while the row was held");
+    assert_eq!((undo(&app), layer_names(&app)), before, "scrolling alone changes nothing");
+    // Dropped on the upper edge of Layer 1's row: above it.
+    let drop = target - vec2(0.0, ROW_MEDIUM * 0.4);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(drop)], false);
+    short_frame(&mut app, &ctx, vec![button(drop, false)], false);
+    let names = layer_names(&app);
+    assert_eq!(&names[..2], ["Layer 1", "Layer 30"], "{names:?}");
+    assert_eq!(undo(&app), before.0 + 1);
+    // Released, the list stays where it is with the pointer in the top band.
+    let (rows, _) = short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(egui::pos2(drop.x, view.top() + 3.0))], false);
+    for _ in 0..10 {
+        assert_eq!(short_frame(&mut app, &ctx, vec![], false).0, rows, "no scrolling after the release");
+    }
+    // Layer 2, Alt-dragged to the top edge: the list scrolls back up, and dropped on the lower edge
+    // of Layer 29's row a copy goes below it.
+    let grab = rows["Layer 2"];
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab)], true);
+    short_frame(&mut app, &ctx, vec![button(grab, true)], true);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab - vec2(0.0, 6.0))], true);
+    let (_, view) = short_frame(&mut app, &ctx, vec![], true);
+    let target = hold_until(&mut app, &ctx, egui::pos2(grab.x, view.top() + 3.0), "Layer 29", true).expect("Layer 29 scrolled into view");
+    let drop = target + vec2(0.0, ROW_MEDIUM * 0.4);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(drop)], true);
+    short_frame(&mut app, &ctx, vec![button(drop, false)], true);
+    let names = layer_names(&app);
+    assert_eq!(names.len(), 31);
+    assert_eq!((names[28].as_str(), names[30].as_str()), ("Layer 28", "Layer 29"), "{names:?}");
+    assert!(names[29].starts_with("Layer 2"), "the copy, below Layer 29: {names:?}");
+    assert_eq!(names[2], "Layer 2", "the original stays");
+}
+
+#[test]
+fn the_list_scrolls_only_for_rows_held_over_it() {
+    let mut app = thirty_layers();
+    let ctx = egui::Context::default();
+    let (rows, view) = short_frame(&mut app, &ctx, vec![], false);
+    // The pointer in the bottom band with no button down: nothing scrolls.
+    let edge = egui::pos2(150.0, view.bottom() - 3.0);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(edge)], false);
+    for _ in 0..20 {
+        assert_eq!(short_frame(&mut app, &ctx, vec![], false).0, rows, "hovering scrolls nothing");
+    }
+    // A row held in the bottom band beside the list (right of its view): nothing scrolls, and
+    // the release there moves nothing.
+    let before = layer_names(&app);
+    let grab = rows["Layer 30"];
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab)], false);
+    short_frame(&mut app, &ctx, vec![button(grab, true)], false);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab + vec2(0.0, 6.0))], false);
+    let beside = egui::pos2(view.right() + 2.0, view.bottom() - 3.0);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(beside)], false);
+    // (Layer 30's dimmed copy follows the pointer, so another row is compared.)
+    assert!(rows.contains_key("Layer 27"));
+    for _ in 0..20 {
+        assert_eq!(short_frame(&mut app, &ctx, vec![], false).0.get("Layer 27"), rows.get("Layer 27"), "held beside the list");
+    }
+    short_frame(&mut app, &ctx, vec![button(beside, false)], false);
+    short_frame(&mut app, &ctx, vec![], false);
+    assert_eq!(layer_names(&app), before);
+    // The eye column dragged down into the band: a column drag, which scrolls nothing.
+    let eye = egui::pos2(12.0, grab.y);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(eye)], false);
+    short_frame(&mut app, &ctx, vec![button(eye, true)], false);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(eye + vec2(0.0, 6.0))], false);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(egui::pos2(12.0, view.bottom() - 3.0))], false);
+    for _ in 0..20 {
+        assert_eq!(short_frame(&mut app, &ctx, vec![], false).0, rows, "a column drag");
+    }
+    short_frame(&mut app, &ctx, vec![button(egui::pos2(12.0, view.bottom() - 3.0), false)], false);
+}
+
 /// The centres of the bottom bar's buttons, right to left from under the right end of its top
 /// divider: Delete, New Layer, New Sublayer, Make/Release Clipping Mask, Locate Object.
 fn bar_buttons(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<egui::Pos2> {

@@ -49,8 +49,6 @@ const LIST_VIEW: &str = "library-list-view";
 const BAR: f32 = 42.0;
 /// The least height the list takes.
 const MIN_LIST: f32 = 140.0;
-/// How near the list's top or bottom edge a drag scrolls it.
-const EDGE: f32 = 28.0;
 
 /// The current library: its id and a copy of it (the panel menu acts on it after reading).
 fn current(app: &VectorcraftApp) -> Option<(String, Library)> {
@@ -311,7 +309,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             });
             if items.grab.is_some() {
-                scroll_at_edges(ui);
+                super::scroll_at_edges(ui);
             }
         });
         out.inner_rect
@@ -656,22 +654,6 @@ fn no_group_strip(ui: &mut Ui) {
         t.text_dim,
     );
     ui.add_space(6.0);
-}
-
-/// While something is dragged near the top or bottom edge of the scrolled list (`ui`: its
-/// contents), scroll that way, faster nearer the edge.
-fn scroll_at_edges(ui: &mut Ui) {
-    let Some(pos) = ui.ctx().pointer_hover_pos() else { return };
-    let view = ui.clip_rect();
-    if !view.x_range().contains(pos.x) {
-        return;
-    }
-    let speed = |depth: f32| if (0.0..EDGE).contains(&depth) { 2.0 + 10.0 * (1.0 - depth / EDGE) } else { 0.0 };
-    let delta = speed(pos.y - view.top()) - speed(view.bottom() - pos.y);
-    if delta != 0.0 {
-        ui.scroll_with_delta(vec2(0.0, delta));
-        ui.ctx().request_repaint();
-    }
 }
 
 /// The drag in progress held over a section of the list (`sections`, seen through `clip`), away
