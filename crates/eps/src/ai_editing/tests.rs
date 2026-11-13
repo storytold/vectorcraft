@@ -4423,7 +4423,7 @@ fn type_attributes_the_data_cant_hold_are_reported() {
     let back = read_back(&doc);
     assert!(matches!(back.layers[0].children().unwrap()[0].kind, NodeKind::Text(_)));
     // Any other attribute the text document doesn't hold is reported too: No Break, a paragraph's
-    // left-to-right direction set on it, Optical Margin Alignment, a font version, a font that isn't
+    // left-to-right direction set on it, Optical Margin Alignment, a font that isn't
     // installed whose name doesn't come back (a hyphen in its family), a Lab color,
     // small capitals at another size, right-to-left letters aligned to the start of a paragraph
     // without a direction of its own, tracking that isn't a whole number.
@@ -4432,7 +4432,6 @@ fn type_attributes_the_data_cant_hold_are_reported() {
         |t| t.runs[0].style.tracking = 12.5,
         |t| t.para.direction = Some(vectorcraft_doc::ParaDirection::LeftToRight),
         |t| t.optical_margin = true,
-        |t| t.runs[0].style.font_version = Some("2.0".into()),
         |t| t.runs[0].style.font_family = "my-missing font".into(),
         |t| t.runs[0].style.fill = Paint::solid(MINT),
         |t| t.runs[0].style.small_caps = Some(80.0),
@@ -4455,9 +4454,128 @@ fn type_attributes_the_data_cant_hold_are_reported() {
         missing.runs[0].style.font_family = "Missing Sans Probe".into();
         missing.runs[0].style.font_style = "Bold Italic".into();
         assert!(with(missing).is_empty());
+        // A version that isn't installed draws in the face the font resolves to, and comes back in it.
+        let mut uninstalled = t.clone();
+        uninstalled.runs[0].style.font_version = Some("2.0".into());
+        assert!(with(uninstalled).is_empty());
         edit(&mut t);
         assert_eq!(with(t), [writer::TYPE_ATTRIBUTES]);
     }
+}
+
+/// Installs the copies of each font `copies` lists, the first of each loaded first.
+fn install_copies(copies: &[(bool, vectorcraft_text::test_fonts::CopyNames<'_>)]) {
+    for (inter, names) in copies {
+        let font = vectorcraft_text::test_fonts::named_copy(*inter, *names).unwrap();
+        assert_eq!(vectorcraft_text::FontDb::global().add_font(font), 1, "{names:?}");
+    }
+}
+
+/// A run's text, font family and font version, as [`fonts_saved`] reads them back.
+type SavedRun = (String, String, Option<String>);
+
+/// A 200 × 100 document of point type whose runs are `runs` (text, family, version).
+fn runs_doc(runs: &[(&str, &str, Option<&str>)]) -> Document {
+    use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut t = TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "", style(18.0, Color::BLACK));
+    t.runs = runs
+        .iter()
+        .map(|(text, family, version)| {
+            let st = CharStyle { font_family: (*family).into(), font_version: version.map(Into::into), ..style(18.0, Color::BLACK) };
+            TextRun::new(*text, st)
+        })
+        .collect();
+    let n = text_node(&mut doc, t);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    doc
+}
+
+/// [`runs_doc`] saved and read back: the save's warnings, and the runs read back.
+fn fonts_saved(runs: &[(&str, &str, Option<&str>)]) -> (Vec<String>, Vec<SavedRun>) {
+    let doc = runs_doc(runs);
+    let warnings = export_ai_editing(&doc, &opts()).unwrap().warnings;
+    let back = read_back(&doc);
+    let NodeKind::Text(t) = &back.layers[0].children().unwrap()[0].kind else { panic!("type comes back as type") };
+    (warnings, t.runs.iter().map(|r| (r.text.clone(), r.style.font_family.clone(), r.style.font_version.clone())).collect())
+}
+
+/// How many fonts the font set of [`runs_doc`] names, the hidden characters' font aside.
+fn fonts_written(runs: &[(&str, &str, Option<&str>)]) -> usize {
+    text_document(&program(&runs_doc(runs))).matches("/CoolTypeFont").count() - 1
+}
+
+/// Type in a font installed beside a family spelled alike but for case and punctuation
+/// (`Sample/Ink`, PostScript name `SampleInk`, beside `SAMPLE INK`), or beside a copy whose
+/// PostScript name differs only in case (the type naming its version), is written under its
+/// PostScript name and read back in its own family and version, so nothing about its font is
+/// reported lost.
+#[test]
+fn type_in_a_font_beside_a_family_spelled_alike_keeps_its_font() {
+    install_copies(&[
+        (true, ("SAVETEST INK", "Regular", "Version 1.000", "SAVETESTINK-Regular")),
+        (false, ("Savetest/Ink", "Regular", "Version 1.000", "SavetestInk")),
+        (true, ("CASESAVE INK", "Regular", "Version 1.000", "CASESAVEINK")),
+        (false, ("Casesave Ink", "Regular", "Version 2.000", "CasesaveInk")),
+    ]);
+    let (warnings, back) = fonts_saved(&[("Kept", "Savetest/Ink", None)]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(back, [("Kept".to_string(), "Savetest/Ink".to_string(), None)]);
+    let (warnings, back) = fonts_saved(&[("Kept", "Casesave Ink", Some("Version 2.000"))]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(back, [("Kept".to_string(), "Casesave Ink".to_string(), Some("Version 2.000".to_string()))]);
+}
+
+/// Type in a static font's version that the family and style don't resolve to (two installed
+/// copies of one PostScript name, family and style) is written with that version (`/5`) and comes
+/// back in it, without a note; two runs in two versions are two fonts of the set.
+#[test]
+fn type_in_another_version_of_a_static_font_keeps_it() {
+    install_copies(&[(true, ("Rttest Ink", "Regular", "1.0", "RttestInk-Regular")), (false, ("Rttest Ink", "Regular", "1.1", "RttestInk-Regular"))]);
+    let (warnings, back) = fonts_saved(&[("Kept", "Rttest Ink", Some("1.1"))]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(back, [("Kept".to_string(), "Rttest Ink".to_string(), Some("1.1".to_string()))]);
+    let (warnings, back) = fonts_saved(&[("Old", "Rttest Ink", None), ("New", "Rttest Ink", Some("1.1"))]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(back, [("Old".to_string(), "Rttest Ink".to_string(), None), ("New".to_string(), "Rttest Ink".to_string(), Some("1.1".to_string()))]);
+    // A run naming the version its family and style resolve to anyway, or one that isn't
+    // installed, is in the same face as a run naming none: one font of the set, and no note.
+    let (warnings, back) = fonts_saved(&[("Same", "Rttest Ink", Some("1.0")), ("Gone", "Rttest Ink", Some("9.9")), ("Plain", "Rttest Ink", None)]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert!(back.iter().all(|(_, family, version)| family == "Rttest Ink" && version.is_none()), "{back:?}");
+    assert_eq!(fonts_written(&[("Same", "Rttest Ink", Some("1.0")), ("Gone", "Rttest Ink", Some("9.9")), ("Plain", "Rttest Ink", None)]), 1);
+}
+
+/// Type in the copy of a font that its family names, beside a copy of the same PostScript name in
+/// another family that the name alone gives first, is written with its version (`/5`), so it comes
+/// back in its own copy and family, without a note.
+#[test]
+fn type_in_a_copy_its_postscript_name_alone_doesnt_give_keeps_it() {
+    install_copies(&[
+        (true, ("RvdupsaveInk", "Regular", "2.0", "RvdupsaveInk-Regular")),
+        (false, ("Rvdupsave Ink", "Regular", "1.0", "RvdupsaveInk-Regular")),
+    ]);
+    let (warnings, back) = fonts_saved(&[("Kept", "Rvdupsave Ink", None)]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(back.iter().map(|r| r.1.as_str()).collect::<Vec<_>>(), ["Rvdupsave Ink"]);
+    let (warnings, back) = fonts_saved(&[("Kept", "RvdupsaveInk", None)]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(back.iter().map(|r| r.1.as_str()).collect::<Vec<_>>(), ["RvdupsaveInk"]);
+}
+
+/// A version string longer than the reader takes (256 bytes) isn't one it can pick a copy by: type
+/// in such a copy, which its name alone doesn't give back, is reported as losing its font.
+#[test]
+fn a_version_longer_than_the_reader_takes_is_reported() {
+    let long = "9".repeat(300);
+    install_copies(&[
+        (true, ("Longtest Ink", "Regular", "1.0", "LongtestInk-Regular")),
+        (false, ("Longtest Ink", "Regular", &long, "LongtestInk-Regular")),
+    ]);
+    let (warnings, back) = fonts_saved(&[("Long", "Longtest Ink", Some(&long))]);
+    assert_eq!(warnings, [writer::TYPE_ATTRIBUTES]);
+    assert_eq!(back, [("Long".to_string(), "Longtest Ink".to_string(), None)]);
 }
 
 /// On a large canvas, area type, threaded frames and type on a path stay type: the frames and
