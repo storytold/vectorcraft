@@ -132,6 +132,7 @@ pub mod tate_chu_yoko;
 mod text_export;
 pub mod text_import;
 mod three_d_classic;
+pub(crate) mod three_d_materials;
 mod tiff_bmp_tga;
 pub mod tile_edge_color;
 mod tools;
@@ -368,6 +369,7 @@ registry! {
     JavaScriptFiles: [javascript_files::KIND] => javascript_files::SPEC,
     SvgFilter: [svg_filter::KIND] => svg_filter::SPEC,
     NewDocumentMore: [new_document::MORE] => new_document::MORE_SPEC,
+    NewDocumentProfiles: [new_document::PROFILES] => new_document::MORE_SPEC,
     Place: [place::KIND] => place::SPEC,
     RasterOptions: ["pngOptions", "jpgOptions", "webpOptions", "gifOptions", "png8Options"] => png_options::SPEC,
     ExportAs: ["exportAs"] => export_as::SPEC,

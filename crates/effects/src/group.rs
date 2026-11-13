@@ -257,6 +257,9 @@ fn reshaped(src: &Node, n: &Node, doc: Option<&Document>) -> Node {
         if carry.moves(&m.appearance) {
             carry.apply(&mut m.appearance);
         }
+        // So do the raster effects of its fills and strokes, by `n`'s Transform effects
+        // ([`crate::follow_items`]).
+        crate::raster::follow_items_of(&mut m, &n.appearance.effects);
     }
     without_geometry_effects(&mut m);
     m

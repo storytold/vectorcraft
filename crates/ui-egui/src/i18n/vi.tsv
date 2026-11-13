@@ -2801,6 +2801,7 @@ digits	Hindi	Hindi
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Đường dẫn: {paths}    Điểm neo: {anchors}    Màu: {colors}
 	Pattern	Họa tiết
 	Pattern Brush	Cọ họa tiết
+	missing from the Brushes panel	không có trong bảng Cọ
 	Pattern Brush Options	Tùy chọn cọ họa tiết
 	Pattern Editing	Chỉnh sửa họa tiết
 	Pattern Options	Tùy chọn họa tiết

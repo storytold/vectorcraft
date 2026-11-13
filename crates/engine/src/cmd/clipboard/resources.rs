@@ -86,6 +86,10 @@ fn paint_refs(p: &Paint, f: Visit) {
 }
 
 fn appearance_refs(a: &Appearance, f: Visit) {
+    // The graphics mapped onto the faces of its 3D effects name symbols.
+    for s in vectorcraft_render::effects::appearance_graphic_symbols(a) {
+        f(Ref::Name(Res::Symbol, &s));
+    }
     for it in &a.items {
         paint_refs(it.paint(), f);
         if let AppearanceItem::Stroke(l) = it
@@ -617,6 +621,17 @@ impl Relink {
                 if let Some((name, xml)) = filter_of(e).and_then(|k| self.filters.get(&k)) {
                     e.params["name"] = json!(name);
                     e.params["xml"] = json!(xml);
+                }
+            }
+        }
+        // A 3D effect's mapped graphics follow their symbols' names in the document. Each name is
+        // looked up once, so renames that chain (A to B, B to C) do not apply twice.
+        let items = a.items.iter_mut().flat_map(|i| i.effects_mut().iter_mut());
+        for e in a.effects.iter_mut().chain(items).filter(|e| vectorcraft_render::effects::takes_graphics(&e.id)) {
+            let list = e.params.get_mut(vectorcraft_render::effects::GRAPHICS).and_then(Value::as_array_mut);
+            for g in list.into_iter().flatten() {
+                if let Some(Value::String(s)) = g.get_mut("symbol") {
+                    self.name(Res::Symbol, s);
                 }
             }
         }
