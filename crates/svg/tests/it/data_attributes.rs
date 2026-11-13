@@ -98,7 +98,7 @@ fn unicode_data_names_survive_each_encoding() {
                 }
                 if encoding == Encoding::Latin1 {
                     assert_eq!(out.encoding, Encoding::Utf8, "XML names cannot use character references");
-                    assert!(!out.warnings.is_empty());
+                    assert!(!out.setting_notes.is_empty());
                     assert!(!out.svg.contains("ISO-8859-1"));
                 } else {
                     assert_eq!(out.encoding, encoding);

@@ -45,6 +45,7 @@ use vectorcraft_doc::{NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_drag, scale_for_drag};
+use crate::blendwidget::{self, BlendWidgetDrag};
 use crate::corners::{self, CornerDrag, over_widget};
 use crate::guides::{PointSnap, Targets, distance_guides, hold_on_path};
 use crate::objects_on_path::{
@@ -131,6 +132,8 @@ enum State {
     Corner(CornerDrag),
     /// Dragging a live ellipse's pie widget.
     Pie(PieDrag),
+    /// Dragging a selected blend's Appearance or Easing widget.
+    BlendWidget(BlendWidgetDrag),
     /// Dragging an Objects on Path group's Rotate All widget.
     RotateAll(RotateAllDrag),
     /// Dragging an Objects on Path group's Space widget.
@@ -236,7 +239,8 @@ pub(crate) struct MoveSnap {
     copy_targets: Option<Targets>,
     copy_points: Option<Targets>,
     /// With Smart Guides on, the ruler guides View › Snap to Point still pulls the grabbed point
-    /// onto (#1534), and lines the bounds up with (#5746); `points` holds them with Smart Guides off.
+    /// onto (#1534), and lines the bounds up with (#5746), within the Snapping Tolerance as drawing
+    /// does; `points` holds them with Smart Guides off.
     rulers: Option<Targets>,
 }
 
@@ -300,7 +304,7 @@ impl MoveSnap {
         // axis without one that Smart Guides left free, the bounds line up with the ruler guides
         // (#5746), alongside the Smart Guides.
         if let Some(t) = &self.rulers {
-            let (adj, ov, held) = t.snap_moved_to_rulers(start + d, self.bounds.map(|b| b + d), cx.tol(cx.snap_tolerance), taken);
+            let (adj, ov, held) = t.snap_moved_to_rulers(start + d, self.bounds.map(|b| b + d), cx.snap_tol(), taken);
             if adj != Vec2::ZERO {
                 d += adj;
                 if held {
@@ -370,7 +374,7 @@ impl MoveSnap {
             }
         }
         if let Some(t) = &self.rulers {
-            let (q, ov) = t.snap_point_along(start + d, u, cx.tol(cx.snap_tolerance));
+            let (q, ov) = t.snap_point_along(start + d, u, cx.snap_tol());
             if q != start + d {
                 d = q - start;
                 guides = ov;
@@ -379,7 +383,7 @@ impl MoveSnap {
             {
                 // Nothing else lined up: the bounds slide along the line onto a ruler guide, as
                 // they do without Shift (#4312).
-                let (adj, ov) = t.snap_moved_along_to_rulers(start + d, b + d, u, cx.tol(cx.snap_tolerance));
+                let (adj, ov) = t.snap_moved_along_to_rulers(start + d, b + d, u, cx.snap_tol());
                 d += adj;
                 guides = ov;
             }
@@ -757,14 +761,18 @@ impl Tool for SelectionTool {
 
     /// E during a marquee drag switches the marquee between the objects it touches and only the
     /// objects inside it. Escape during a drag (a move or an Alt-drag copy, a bounding-box scale or
-    /// rotation, a marquee, a corner widget, a pie widget, the Rotate All, Space, Move All or Select/Move widget, the brackets of type on a path, a mirror
+    /// rotation, a marquee, a corner widget, a pie widget, a blend widget, the Rotate All, Space, Move All or Select/Move widget, the brackets of type on a path, a mirror
     /// axis, a grid repeat's handles, a ruler guide) cancels it: what it changed goes back, no copy
     /// is left, and the tool waits for the next press. With the pointer loaded with text, Escape
     /// drops the text.
-    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+    fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
         // Up and Down while a corner widget is pressed: the corners' kind (#2898).
         if let (ToolKey::Up | ToolKey::Down, State::Corner(c)) = (key, &mut self.state) {
             return c.step_kind(key == ToolKey::Up);
+        }
+        // The arrows while a blend widget is pressed: its value, by one (Shift: ten).
+        if let (ToolKey::Up | ToolKey::Down | ToolKey::Left | ToolKey::Right, State::BlendWidget(d)) = (key, &mut self.state) {
+            return d.step(cx, matches!(key, ToolKey::Up | ToolKey::Right), mods.shift);
         }
         if key == ToolKey::Letter('e')
             && let State::Marquee { enclosed, .. } = &mut self.state
@@ -816,10 +824,23 @@ impl Tool for SelectionTool {
         out
     }
 
+    /// Switching tools during a blend widget's drag cancels it, as Escape does: its value goes back.
+    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        match std::mem::take(&mut self.state) {
+            State::BlendWidget(d) if d.adjusting() => vec![Action::Cancel],
+            State::BlendWidget(_) => vec![],
+            other => {
+                self.state = other;
+                vec![]
+            }
+        }
+    }
+
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
         match self.state {
             State::Marquee { .. } => key == ToolKey::Letter('e'),
             State::Corner(_) => matches!(key, ToolKey::Up | ToolKey::Down),
+            State::BlendWidget(_) => matches!(key, ToolKey::Up | ToolKey::Down | ToolKey::Left | ToolKey::Right),
             State::Loaded { .. } | State::Mirror(_) | State::GridRepeat(_) | State::NineSlice(_) => key == ToolKey::Escape,
             _ => false,
         }
@@ -850,6 +871,7 @@ impl Tool for SelectionTool {
             State::Moving { began: true, .. } | State::Scaling { .. } | State::Rotating { .. } => true,
             State::Corner(c) => c.adjusting(),
             State::Pie(d) => d.adjusting(),
+            State::BlendWidget(d) => d.adjusting(),
             State::RotateAll(d) => d.adjusting(),
             State::Space(d) => d.adjusting(),
             State::MoveAll(d) => d.adjusting(),
@@ -1024,6 +1046,15 @@ impl Tool for SelectionTool {
                 self.state = State::Idle;
                 d.finish()
             }
+            (PointerKind::Drag, State::BlendWidget(mut d)) => {
+                let out = d.drag(cx, p);
+                self.state = State::BlendWidget(d);
+                out
+            }
+            (PointerKind::Up, State::BlendWidget(d)) => {
+                self.state = State::Idle;
+                d.finish()
+            }
             (PointerKind::Drag, State::RotateAll(mut d)) => {
                 let out = d.drag(cx, p, m.shift);
                 self.state = State::RotateAll(d);
@@ -1122,6 +1153,7 @@ impl Tool for SelectionTool {
             }),
             State::Corner(c) => o.extend(c.overlays(cx)),
             State::Pie(d) => o.extend(d.overlays(cx)),
+            State::BlendWidget(d) => o.extend(d.overlays(cx)),
             State::RotateAll(d) => o.extend(d.overlays(cx)),
             State::Space(d) => o.extend(d.overlays(cx)),
             State::MoveAll(d) => o.extend(d.overlays(cx)),
@@ -1176,7 +1208,7 @@ impl Tool for SelectionTool {
             State::Moving { began: true, .. } if m.alt => return Cursor::SelectionCopy,
             State::Moving { began: true, .. } => return if self.snapped { Cursor::ArrowHollow } else { Cursor::Arrow },
             State::Corner(_) => return Cursor::CornerRadius,
-            State::Pie(_) => return Cursor::ArrowHollow,
+            State::Pie(_) | State::BlendWidget(_) => return Cursor::ArrowHollow,
             State::RotateAll(_) => return Cursor::Rotate,
             State::Space(_) => return Cursor::ArrowHollow,
             State::MoveAll(_) | State::Member(_) => return Cursor::Move,
@@ -1197,6 +1229,9 @@ impl Tool for SelectionTool {
             return Cursor::CornerRadius;
         }
         if near_selected && pie::over_widget(cx, p) {
+            return Cursor::ArrowHollow;
+        }
+        if blendwidget::over_widget(cx, p) {
             return Cursor::ArrowHollow;
         }
         if over_rotate_all(cx, p) {
@@ -1348,14 +1383,19 @@ pub(crate) fn release_guide_at(cx: &ToolContext, p: Point, m: Mods) -> Option<Ac
 /// handle that sits where `h` appears on screen, in 45° steps. In a turned view, `angle` is the
 /// box's own angle less [`ToolContext::view_angle`].
 pub(crate) fn handle_cursor(h: Handle, angle: f64) -> Cursor {
-    let steps = if angle.is_finite() { (angle / 45.0).round() as i64 } else { 0 };
-    let h = Handle::ALL.get((h as i64 - steps).rem_euclid(8) as usize).copied().unwrap_or(h);
-    match h {
+    match screen_handle(h, angle) {
         Handle::Top | Handle::Bottom => Cursor::ResizeV,
         Handle::Left | Handle::Right => Cursor::ResizeH,
         Handle::TopLeft | Handle::BottomRight => Cursor::ResizeNwSe,
         Handle::TopRight | Handle::BottomLeft => Cursor::ResizeNeSw,
     }
+}
+
+/// The handle of an upright box that sits where handle `h` of a box turned by `angle`
+/// (counter-clockwise degrees) appears, in 45° steps.
+pub(crate) fn screen_handle(h: Handle, angle: f64) -> Handle {
+    let steps = if angle.is_finite() { (angle / 45.0).round() as i64 } else { 0 };
+    Handle::ALL.get((h as i64 - steps).rem_euclid(8) as usize).copied().unwrap_or(h)
 }
 
 #[cfg(test)]
@@ -1518,6 +1558,11 @@ impl SelectionTool {
         if let Some(a) = release_guide_at(cx, p, m) {
             return vec![a];
         }
+        // A selected blend's widget takes a plain double-click: the artwork under it is neither
+        // edited nor isolated.
+        if blendwidget::over_widget(cx, p) {
+            return vec![];
+        }
         if crate::rulerguide::guide_at(cx, p).is_some() {
             return vec![];
         }
@@ -1557,7 +1602,7 @@ impl SelectionTool {
             self.state = State::Loaded { from, before: port == crate::text::Port::In, press: None };
             return Some(vec![]);
         }
-        // 1. Live Corners widgets, pie widgets, the Rotate All, Space, Move All and Select/Move widgets and type on a path's brackets, then the
+        // 1. Live Corners widgets, pie widgets, blend widgets, the Rotate All, Space, Move All and Select/Move widgets and type on a path's brackets, then the
         // bounding-box handles of the current selection.
         if let Some(c) = CornerDrag::hit(cx, ev, false) {
             self.state = State::Corner(c);
@@ -1565,6 +1610,10 @@ impl SelectionTool {
         }
         if let Some(d) = PieDrag::hit(cx, ev) {
             self.state = State::Pie(d);
+            return Some(vec![]);
+        }
+        if let Some(d) = BlendWidgetDrag::hit(cx, ev) {
+            self.state = State::BlendWidget(d);
             return Some(vec![]);
         }
         if let Some(d) = RotateAllDrag::hit(cx, ev) {

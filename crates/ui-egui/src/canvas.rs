@@ -61,7 +61,7 @@ use outline::KEY_OUTLINE;
 use outline::{OVERLAY_MAX_ANCHORS, c32, node_outline, walk_drawn};
 #[cfg(test)]
 use overlays::selected_anchor;
-use overlays::{HandleLook, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
+use overlays::{HandleLook, blend_widgets_overlay, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
 pub use panes::Panes;
 pub(crate) use panes::{consolidate, pane, tile, tiled_area};
 use raster::{changed_pixels, pixel_region, upload};
@@ -327,9 +327,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // their pixels as they rasterize, hard-edged.
     let smooth_images = pixel.is_none() || app.session.prefs.anti_aliased_bitmaps;
     let plugins = plugin_key(&mut app.canvas.plugin_keys, &app.session, st);
+    let placed = placed_key(&mut app.canvas.placed_keys, &app.session, st);
     // The frame renders the view at its zoom in the interface's points, as `xf` maps it.
     let drawn = v.on_screen(app.canvas_ui_zoom);
-    let key = cache_key(app, ui, st, &t, &drawn, (w, h, ppp), (pixel, smooth_images, plugins));
+    let key = cache_key(app, ui, st, &t, &drawn, (w, h, ppp), (pixel, smooth_images, plugins, placed));
     // Placed documents' bitmaps are being made: draw again when they are ready.
     if vectorcraft_render::placed_document::busy() {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(30));
@@ -409,6 +410,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
         if !revolve_edit {
             shaper_widget_overlay(app, &painter, &xf);
+            crate::panels::three_d::paint_graphic_handles(app, &painter, &xf);
         }
     }
     ime_geometry(app, ui.ctx(), &xf);
@@ -443,14 +445,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The pointer on the canvas: the tool's input, unless the context menu or the 3D gizmo has the press.
-fn canvas_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) {
-    // A press on the canvas while the context menu is open only closes it (a drag too, which egui
-    // alone would leave open); the tool doesn't get it.
+pub(crate) fn canvas_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect) {
     if app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active) {
         // The artboard's 3D gizmo owns these gestures while its options are open.
         // Do not let a ring drag also move or deselect the editable source path.
     } else if resp.context_menu_opened() && resp.hovered() && ui.input(|i| i.pointer.any_pressed()) {
+        // A press on the canvas while the context menu is open only closes it (a drag too, which
+        // egui alone would leave open); neither the tool nor a graphic's handle gets it.
         egui::Popup::close_all(ui.ctx());
+    } else if crate::panels::three_d::graphic_handles_input(app, ui, resp, rect) {
+        // A mapped graphic's handle, shown while the 3D and Materials panel's Materials tab is
+        // open, has the press: the drag moves the graphic, not the object.
     } else {
         handle_input(app, ui, resp, rect);
         // `hover_doc` is the document point under the pointer in the view `handle_input` left. The
@@ -579,7 +584,7 @@ fn cache_key(
     t: &Tokens,
     v: &View,
     (w, h, ppp): (u32, u32, f32),
-    (pixel, smooth_images, plugins): (Option<[i64; 4]>, bool, u64),
+    (pixel, smooth_images, plugins, placed): (Option<[i64; 4]>, bool, u64, u64),
 ) -> CacheKey {
     // Paths made into guides are drawn as the ruler guides are (Preferences › Guides & Grid).
     let guide_look = LineLook::guides(&app.session.prefs, t);
@@ -603,7 +608,7 @@ fn cache_key(
         anti_alias: app.session.prefs.anti_aliased_artwork,
         highlight_alternate_glyphs: app.session.prefs.highlight_alternate_glyphs,
         highlight_substituted_fonts: app.session.prefs.highlight_substituted_fonts,
-        placed: vectorcraft_render::placed_document::generation(),
+        placed,
         plugins,
         pixel,
         smooth_images,
@@ -635,6 +640,83 @@ fn plugin_key(
             key
         }
     }
+}
+
+/// [`CacheKey::placed`] of document `st`, one of the documents open in `session`. `keys` holds each
+/// document's value and the placed-document bitmap generations it was checked at
+/// ([`vectorcraft_render::placed_document::generation`]).
+fn placed_key(
+    keys: &mut std::collections::HashMap<u64, crate::PlacedKey>,
+    session: &vectorcraft_engine::Session,
+    st: &vectorcraft_engine::DocState,
+) -> u64 {
+    placed_key_at(keys, session, st, vectorcraft_render::placed_document::generation(), vectorcraft_render::placed_document::made_between)
+}
+
+/// [`placed_key`] at generation `now`, with `made` giving the files whose bitmaps were made between
+/// two generations ([`vectorcraft_render::placed_document::made_between`]). The value becomes `now`
+/// when `st` shows a placed document of a file whose bitmap was made since the last check, or when
+/// `made` no longer knows which files they were and `st` shows a placed document of a file in its
+/// images, as [`vectorcraft_render::placed_area`] decides (every file shows while a pattern is
+/// edited). Otherwise it stays: a bitmap made for another document, or for a file `st` keeps only
+/// for Undo, leaves this document's frame as it is. A document checked for the first time takes
+/// `now`.
+fn placed_key_at(
+    keys: &mut std::collections::HashMap<u64, crate::PlacedKey>,
+    session: &vectorcraft_engine::Session,
+    st: &vectorcraft_engine::DocState,
+    now: u64,
+    made: impl FnOnce(u64, u64) -> Option<std::collections::HashSet<String>>,
+) -> u64 {
+    let entry = match keys.get(&st.uid).copied() {
+        Some(p) if p.checked == now => return p.key,
+        None => crate::PlacedKey { checked: now, key: now, before: (now, now) },
+        Some(p) => {
+            let images = &st.doc.images;
+            // The files made that `st` holds: a placed document of one of them may show.
+            let files: std::collections::HashSet<String> = if images.is_empty() {
+                Default::default()
+            } else {
+                match made(p.checked, now) {
+                    Some(files) => files.into_iter().filter(|f| images.contains_key(f)).collect(),
+                    None => images.keys().cloned().collect(),
+                }
+            };
+            let stays = matches!(vectorcraft_render::placed_area(&st.doc, &files), vectorcraft_render::Changed::Nothing);
+            if stays { crate::PlacedKey { checked: now, ..p } } else { crate::PlacedKey { checked: now, key: now, before: (p.key, p.checked) } }
+        }
+    };
+    keys.retain(|uid, _| session.documents().iter().any(|d| d.uid == *uid));
+    keys.insert(st.uid, entry);
+    entry.key
+}
+
+/// The generation after which the bitmaps made decide what a frame shown at [`CacheKey::placed`]
+/// value `shown` draws again at value `key`, with `entry` the document's [`crate::PlacedKey`]. When
+/// the value changed once since `shown`, it is the last generation `shown` was checked at: no
+/// bitmap of the document's placed documents was made between `shown` and that generation.
+/// Otherwise it is `shown`.
+fn placed_since(entry: Option<&crate::PlacedKey>, shown: u64, key: u64) -> u64 {
+    entry.filter(|p| p.key == key && p.before.0 == shown).map_or(shown, |p| p.before.1)
+}
+
+/// What placed documents' bitmaps change in `doc` between a frame shown at [`CacheKey::placed`]
+/// value `shown` and the frame at value `key`: where `doc` shows the files whose bitmaps were made
+/// after [`placed_since`], with `entry` the document's [`crate::PlacedKey`] and `made` giving the
+/// files whose bitmaps were made between two generations
+/// ([`vectorcraft_render::placed_document::made_between`]). None when those files are no longer
+/// known.
+fn placed_changes(
+    entry: Option<&crate::PlacedKey>,
+    shown: u64,
+    key: u64,
+    doc: &vectorcraft_doc::Document,
+    made: impl FnOnce(u64, u64) -> Option<std::collections::HashSet<String>>,
+) -> Option<vectorcraft_render::Changed> {
+    if shown == key {
+        return Some(vectorcraft_render::Changed::Nothing);
+    }
+    Some(vectorcraft_render::placed_area(doc, &made(placed_since(entry, shown, key), key)?))
 }
 
 /// Once the first view of a document has been drawn, the status bar says how many plug-in effect
@@ -1206,6 +1288,9 @@ fn selection_visuals(
             app.canvas.hidden_chars = hidden_chars;
             hidden_chars_overlay(app, painter, xf);
         }
+    }
+    if !revolve_edit {
+        blend_widgets_overlay(app, painter, xf);
     }
     // Edit › Spelling › Auto Spell Check: shown with the edges hidden too, as it marks the type
     // rather than the selection.

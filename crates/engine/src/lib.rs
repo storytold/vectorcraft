@@ -32,6 +32,7 @@ pub use cmd::distortcmds::perspective_click;
 pub use cmd::params::{check_keys, check_params};
 pub use cmd::pathops::auto_simplify_level;
 pub use cmd::rasterfx::{export_pdf, flatten_raster_effects};
+pub use cmd::select::{path_fingerprint, storable_selection, stored_path_params, stored_path_step};
 pub use cmd::{CommandInfo, CommandSpec, command_specs, find_command};
 pub use cmd::{EyedropperOptions, PathfinderOptions};
 pub use journal::Journal;
@@ -151,6 +152,11 @@ pub struct Session {
     pub symbol_libraries: cmd::symbollib::Libraries,
     /// User Defined and loaded brush libraries (Window → Brush Libraries); not saved.
     pub brush_libraries: cmd::brushlib::Libraries,
+    /// The custom arrowheads of the arrowheads file (`stroke.arrowheads.*`); none without one.
+    pub arrowheads: cmd::arrowheads::Arrowheads,
+    /// The id each loaded library outside a request's read roots has been shown under, by its own id
+    /// ([`cmd::swatchlib::concealed_library_ids`]), kept for the session.
+    shown_library_ids: std::sync::Mutex<std::collections::BTreeMap<String, String>>,
     /// The Libraries panel's libraries of graphics, colours and text styles (`library.*`).
     pub libraries: cmd::library::Libraries,
     /// Where the saved PDF presets are kept, one file each; `None`: only for the session
@@ -171,6 +177,9 @@ pub struct Session {
     /// The Scripts folder, whose scripts File › Scripts lists; `None`: no folder
     /// ([`Session::attach_scripts_dir`]).
     scripts_dir: Option<std::path::PathBuf>,
+    /// The folder of the New Document profiles `file.new` starts documents from; `None`: none,
+    /// every document starts with the defaults ([`Session::attach_new_doc_profiles`]).
+    new_doc_profile_dir: Option<std::path::PathBuf>,
     /// A filter's output that a run made in the background handed in for `plugin.run` to apply
     /// ([`cmd::plugin::FilterRun::hand_in`]); the next `plugin.run` takes it.
     plugin_output: Option<cmd::plugin::HandedIn>,
@@ -208,9 +217,10 @@ pub struct Session {
     /// groups: for each step, the documents ([`DocState::uid`]) whose undo groups it belongs to, and
     /// the index of the document it left active when it changed the active document.
     pub(crate) batch_steps: Option<Vec<(Vec<u64>, Option<usize>)>>,
-    /// After `command.batch` kept a color-mode step's new-art colors, until the top-level command
-    /// has inherited the selection's appearance: the documents ([`DocState::uid`]) whose newest
-    /// history step takes the colors the batch finally left.
+    /// After `command.batch` kept a color-mode step's new-art colors, or a pattern command recorded
+    /// the new-art paints it changed, until the top-level command has inherited the selection's
+    /// appearance: the documents ([`DocState::uid`]) whose newest history step takes the colors the
+    /// command finally left.
     pub(crate) batch_paint_docs: Vec<u64>,
     /// The composite fonts (lowercase names) that the open documents defined when the font
     /// database was last brought in step with them ([`cmd::compositefonts::sync`]).

@@ -42,20 +42,75 @@ fn style_word(w: &str) -> String {
     .to_string()
 }
 
+/// A font's PostScript name without a subset prefix (`ABCDEF+`) or the `*1` of a re-encoded copy
+/// (`ABCDEF+RollerBabyBV*1` is `RollerBabyBV`).
+fn bare_name(name: &str) -> &str {
+    let name = match name.split_once('+') {
+        Some((prefix, rest)) if prefix.len() == 6 && prefix.bytes().all(|b| b.is_ascii_uppercase()) => rest,
+        _ => name,
+    };
+    match name.rsplit_once('*') {
+        Some((base, n)) if !base.is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) => base,
+        _ => name,
+    }
+}
+
+/// The font of type that a text document's font record names: by `name`, its PostScript name, and
+/// `version`, the version string (name ID 5) the record keeps, if any. An installed face of that
+/// name gives its font ([`named_font`]). Without one, `name` is split ([`family_style`]) and the
+/// family spelled as an available family is ([`FontDb::find_family`]: `MicrosoftYaHei` is
+/// Microsoft YaHei). → (family, style, version).
+///
+/// [`FontDb::find_family`]: vectorcraft_text::FontDb::find_family
+pub(crate) fn document_font(name: &str, version: Option<&str>) -> (String, String, Option<String>) {
+    named_font(name, version).unwrap_or_else(|| {
+        let (family, style) = family_style(name);
+        let family = vectorcraft_text::FontDb::global().find_family(&family).unwrap_or(family);
+        (family, style, None)
+    })
+}
+
+/// The font of type set in the installed face of PostScript name `name` (a subset prefix and a
+/// re-encoded copy's `*1` aside) in `version` ([`postscript_face`]): that face's own family and
+/// style, and its version when the family and style alone resolve to another installed copy of
+/// the font. A library can keep two copies under one family and style that differ in their
+/// PostScript names or their versions, and draw the same text at different widths. → (family,
+/// style, version); `None` when no installed face has the name.
+pub(crate) fn named_font(name: &str, version: Option<&str>) -> Option<(String, String, Option<String>)> {
+    let face = postscript_face(bare_name(name), version)?;
+    // As the PDF import names a version: only one that the family and style don't resolve to.
+    let default = vectorcraft_text::FontDb::global().face(&face.family, &face.style);
+    let version = default.filter(|d| d.version != face.version).map(|_| face.version.clone());
+    Some((face.family.clone(), face.style.clone(), version))
+}
+
+/// The installed face of PostScript name `name` (without a subset prefix), among the installed
+/// faces that answer to it ([`FontDb::postscript_faces`]): those of exactly that name when there
+/// are any (PostScript names are case-sensitive, so `SampleSans` isn't the face named
+/// `SAMPLESANS`, and `SampleSerif-Bold` isn't `SampleSerifBold`), and of those the one in
+/// `version` when it is installed, else the first. `None` when no installed face has the name.
+///
+/// [`FontDb::postscript_faces`]: vectorcraft_text::FontDb::postscript_faces
+pub(crate) fn postscript_face(name: &str, version: Option<&str>) -> Option<Arc<vectorcraft_text::FontFace>> {
+    let db = vectorcraft_text::FontDb::global();
+    let found = db.find_postscript(name)?;
+    if found.postscript_name() == name && version.is_none_or(|v| v == found.version) {
+        return Some(found);
+    }
+    let faces = db.postscript_faces(name);
+    let named: Vec<_> = faces.iter().filter(|f| f.postscript_name() == name).cloned().collect();
+    let pool = if named.is_empty() { faces } else { named };
+    let in_version = version.and_then(|v| pool.iter().find(|f| f.version == v).cloned());
+    Some(in_version.or_else(|| pool.into_iter().next()).unwrap_or(found))
+}
+
 /// A font's family and style from its PostScript name, without a subset prefix (`ABCDEF+`) or the
 /// `*1` of a re-encoded copy (`ABCDEF+RollerBabyBV*1`): an installed or bundled face of that
 /// exact name gives its own (a family can hold hyphens: `rounded-x-mplus-1c-black` is Rounded-X
 /// M+ 1c, black); else the name is split, `Helvetica-BoldOblique` → (`Helvetica`, `Bold
 /// Oblique`), `TimesNewRomanPS-BoldMT` → (`Times New Roman`, `Bold`).
 pub fn family_style(name: &str) -> (String, String) {
-    let name = match name.split_once('+') {
-        Some((prefix, rest)) if prefix.len() == 6 && prefix.bytes().all(|b| b.is_ascii_uppercase()) => rest,
-        _ => name,
-    };
-    let name = match name.rsplit_once('*') {
-        Some((base, n)) if !base.is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) => base,
-        _ => name,
-    };
+    let name = bare_name(name);
     if let Some(face) = vectorcraft_text::FontDb::global().find_postscript(name) {
         return (face.family.clone(), face.style.clone());
     }
@@ -186,22 +241,15 @@ impl Interp<'_> {
                 // The procedure shows or places each character: it gets its code and width.
                 let s = self.pop_str()?.to_vec();
                 let proc = self.pop_proc()?;
-                // In a CIDFont only named, a code may be several bytes: the procedure gets each
-                // code's value.
+                // In a CIDFont only named, a code may be several bytes: the procedure runs once for
+                // each code.
                 if let Some(named) = self.named_cid_type(&s)? {
-                    let mut chars = named.codes.text.chars();
-                    for &(code, n) in &named.codes.codes {
-                        let mut one = Decoded::default();
-                        one.push(code, chars.by_ref().take(n));
-                        let v = self.named_cid_width(&named, &one)?;
-                        self.push(Obj::Int(i64::from(code)))?;
-                        self.push_num(v.x)?;
-                        self.push_num(v.y)?;
-                        if !self.body(&proc)? {
-                            break;
-                        }
-                    }
-                    return Ok(());
+                    let root = self.g.font.clone();
+                    let before = self.cshow.take();
+                    let r = self.named_cshow(named, &proc, root.clone());
+                    self.cshow = before;
+                    self.g.font = root;
+                    return r;
                 }
                 for b in s {
                     let v = self.width_of(&[b])?;
@@ -252,7 +300,12 @@ impl Interp<'_> {
             SetCharWidth => self.glyph_width = Some(self.nums::<2>()?),
             SetCacheDevice2 => self.glyph_width = Some(self.nums::<10>()?[..2].try_into().unwrap_or_default()),
             RootFont => {
-                let font = match self.g.font.clone() {
+                // Inside a `cshow` procedure the composite font, unless the procedure set a font.
+                let root = match (&self.cshow, &self.g.font) {
+                    (Some(c), Some(f)) if f.same(&c.selected) => Some(c.root.clone()),
+                    _ => None,
+                };
+                let font = match root.or_else(|| self.g.font.clone()) {
                     Some(f) => f,
                     None => self.find_font(&Obj::name(DEFAULT_FONT))?,
                 };
@@ -553,11 +606,11 @@ impl Interp<'_> {
         if !(size.is_finite() && size > 1e-3 && size < 1e5) {
             return ps_err("undefinedresult", "a font size");
         }
-        let (family, font_style) = family_style(&name);
-        // The available family's own spelling: `MicrosoftYaHei` is Microsoft YaHei, not "Microsoft Ya Hei".
-        let font_family = vectorcraft_text::FontDb::global().find_family(&family).unwrap_or(family);
+        // The installed face of that PostScript name, as type from a text document takes it; else
+        // the available family's own spelling: `MicrosoftYaHei` is Microsoft YaHei, not "Microsoft Ya Hei".
+        let (font_family, font_style, font_version) = document_font(&name, None);
         let fill = if self.g.paint.is_none() { Paint::solid(vectorcraft_color::Color::BLACK) } else { self.g.paint.clone() };
-        let style = CharStyle { font_family, font_style, size, fill, stroke: Paint::None, ..CharStyle::default() };
+        let style = CharStyle { font_family, font_style, font_version, size, fill, stroke: Paint::None, ..CharStyle::default() };
         let mut t = TextObject::point(Point::ZERO, text, style);
         t.vertical = vertical;
         let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
@@ -791,18 +844,16 @@ impl Interp<'_> {
         self.push(Obj::Int(code.into()))?;
         self.push(Obj::Int(next.into()))?;
         // The procedure sees the font the file set, not the one type in a CIDFont only named is
-        // set in; a font it sets stays current.
-        let Some(outer) = self.kshow_font.take() else {
-            self.call(p.clone())?;
-            return Ok(self.user_point()? - pen);
+        // set in, and the current font is restored when it completes (PLRM 3rd ed., `kshow`).
+        // A `kshow` the procedure runs sees the font the procedure set.
+        let outer = self.kshow_font.take();
+        let inner = match outer.clone() {
+            Some(outer) => self.g.font.replace(outer),
+            None => self.g.font.clone(),
         };
-        let inner = self.g.font.replace(outer.clone());
         let r = self.call(p.clone());
-        // Once the procedure sets a font, it and the later procedures see that one.
-        if self.g.font.as_ref().is_some_and(|f| f.same(&outer)) {
-            self.g.font = inner;
-            self.kshow_font = Some(outer);
-        }
+        self.kshow_font = outer;
+        self.g.font = inner;
         r?;
         Ok(self.user_point()? - pen)
     }
@@ -960,6 +1011,15 @@ struct NamedCid {
     ems: bool,
 }
 
+/// A `cshow` procedure running over type in a CIDFont only named ([`Interp::named_cshow`]): the
+/// CIDFont it sees as current, the composite font `rootfont` gives while that CIDFont is current,
+/// and the type of the code it was given.
+pub(super) struct CShowFont {
+    selected: DictRef,
+    root: DictRef,
+    code: NamedCid,
+}
+
 /// What drawing a glyph does with it.
 #[derive(Clone, Copy, PartialEq)]
 enum Draw {
@@ -1092,7 +1152,17 @@ impl Interp<'_> {
     /// stands for none), set as type in the font of its CIDFont's name, vertical over a vertical
     /// CMap (`WMode` 1). Control codes stand for no character. Type in a CMap VectorCraft can't
     /// read is left out, with a warning, each of its codes moving the point one em.
+    /// Inside a `cshow` procedure over such type, with the CIDFont current, the string must be the
+    /// one byte the procedure was given, else a `rangecheck` error, and it stands for the code
+    /// the procedure was given (PLRM 3rd ed., `cshow`: the glyph of the selected CID).
     fn named_cid_type(&mut self, s: &[u8]) -> Res<Option<NamedCid>> {
+        if let Some(named) = self.cshow_code(true) {
+            let given = named.codes.codes.first().map(|&(code, _)| code & 0xff);
+            if s.len() != 1 || given != s.first().map(|&b| u32::from(b)) {
+                return ps_err("rangecheck", "a string shown in cshow");
+            }
+            return Ok(Some(named));
+        }
         let Some(cmap) = self.named_cid_parts().map(|(cmap, ..)| cmap) else { return Ok(None) };
         // Each code is looked up in the CMap's mappings.
         self.spend(s.len() as u64)?;
@@ -1120,6 +1190,9 @@ impl Interp<'_> {
     /// The font [`Self::named_cid_type`] sets type in, with no codes yet, when the current font is
     /// a CID-keyed font over a predefined CMap the file doesn't define.
     fn named_cid_font(&mut self) -> Res<Option<NamedCid>> {
+        if let Some(named) = self.cshow_code(false) {
+            return Ok(Some(named));
+        }
         let Some((_, font, name, vertical)) = self.named_cid_parts() else { return Ok(None) };
         // The composite font is copied under the CIDFont's name for every string: charged by
         // its size, so a huge font dictionary shown in a loop runs out of the budget.
@@ -1128,6 +1201,23 @@ impl Interp<'_> {
         let mut named = font.borrow().clone();
         named.insert(Key::name("FontName"), name);
         Ok(Some(NamedCid { codes: Decoded::default(), font: DictRef::new(named), vertical, ems: vertical }))
+    }
+
+    /// The type of the code a running `cshow` procedure was given ([`Self::named_cshow`]), with
+    /// that code when `code` and with none otherwise, while the CIDFont it selected is current.
+    fn cshow_code(&self, code: bool) -> Option<NamedCid> {
+        let c = self.cshow.as_ref()?;
+        if !self.g.font.as_ref().is_some_and(|f| f.same(&c.selected)) {
+            return None;
+        }
+        let mut codes = Decoded::default();
+        if code {
+            let mut chars = c.code.codes.text.chars();
+            for &(value, n) in &c.code.codes.codes {
+                codes.push(value, chars.by_ref().take(n));
+            }
+        }
+        Some(NamedCid { codes, font: c.code.font.clone(), vertical: c.code.vertical, ems: c.code.ems })
     }
 
     /// The CMap's name, the composite font, the CIDFont's name and the writing mode of
@@ -1191,11 +1281,39 @@ impl Interp<'_> {
         let before = std::mem::replace(&mut self.kshow_font, saved.clone());
         let r = self.show_codes(&named.codes, widths.as_deref(), spacing, named.vertical, &kern, draw);
         self.kshow_font = before;
-        // A font the `kshow` procedure set stays current.
-        if self.g.font.as_ref().is_none_or(|f| f.same(&named.font)) {
-            self.g.font = saved;
-        }
+        self.g.font = saved;
         r
+    }
+
+    /// `cshow`'s procedure `proc` run for each code of type `named` in composite font `root`, with
+    /// the code's last byte and its width (PLRM 3rd ed., `cshow`). While it runs the CIDFont is the
+    /// current font and `rootfont` gives `root`; a show operator in the CIDFont shows the code's
+    /// character, whatever its string (see [`Self::named_cid_type`]). The current font is restored
+    /// when the procedure completes.
+    fn named_cshow(&mut self, named: NamedCid, proc: &Obj, root: Option<DictRef>) -> Res {
+        let Some(composite) = root.clone() else { return Ok(()) };
+        let dep = named.font.borrow().get(&Key::name("FDepVector")).and_then(|v| v.items()?.get(0));
+        let selected = match dep {
+            Some(Obj::Dict(d)) => d,
+            _ => named.font.clone(),
+        };
+        let mut chars = named.codes.text.chars();
+        for &(code, n) in &named.codes.codes {
+            let mut one = NamedCid { codes: Decoded::default(), font: named.font.clone(), vertical: named.vertical, ems: named.ems };
+            one.codes.push(code, chars.by_ref().take(n));
+            let v = self.named_cid_width(&one, &one.codes)?;
+            self.push(Obj::Int(i64::from(code & 0xff)))?;
+            self.push_num(v.x)?;
+            self.push_num(v.y)?;
+            self.cshow = Some(CShowFont { selected: selected.clone(), root: composite.clone(), code: one });
+            self.g.font = Some(selected.clone());
+            let go = self.body(proc);
+            self.g.font = root.clone();
+            if !go? {
+                break;
+            }
+        }
+        Ok(())
     }
 
     /// How far codes `codes` of type `named` move the current point (user space) when

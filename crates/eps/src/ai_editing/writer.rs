@@ -644,7 +644,7 @@ impl<'a> Writer<'a> {
             }
             NodeKind::Compound { rule, .. } => self.shape(n, &compound_path(n), *rule, xy),
             NodeKind::Text(_) => self.text(n, xy),
-            NodeKind::Image(im) => self.image(im, xy),
+            NodeKind::Image(im) => self.image(&self.doc.shown_image(n, im), xy),
             NodeKind::SymbolInstance { symbol, xf } if self.live_instance_in_room(n, symbol, *xf) => self.symbol_instance(symbol, *xf, xy),
             NodeKind::SymbolInstance { symbol, xf } => {
                 if !self.open_group("u") {
@@ -1037,10 +1037,11 @@ impl<'a> Writer<'a> {
             AppearanceItem::Fill(f) => self.fill_object(path, rule, f, xy),
             AppearanceItem::Stroke(s) if self.direct_stroke(s) => self.path_object(path, rule, None, Some(s), xy),
             AppearanceItem::Stroke(s) => {
-                // In a drawn look a brushed stroke is kept by the object's art style, which is written
-                // only when the reader reads the brush back from it; a styled group's members are
-                // written again after the look, and warn there.
-                if !(self.in_look && s.brush.is_some()) {
+                // In a styled path's or compound path's drawn look the stroke, brushed or not, is kept
+                // by the object's art style, which is written only when the reader reads the object's
+                // appearance (and its brush) back from it. A styled group's style holds no fills or
+                // strokes: its members are written again after the look, and warn there.
+                if !self.in_look {
                     self.warn(STROKES);
                 }
                 self.wrote_fixed = true;
@@ -1357,8 +1358,9 @@ impl<'a> Writer<'a> {
         self.plain_color(*color, stroke);
     }
 
-    /// A color that names no swatch: `g` (gray), `k` (CMYK), else `c m y k r g b Xa` (RGB, and
-    /// Lab as RGB), with its CMYK equivalent.
+    /// A color that names no swatch: `g` (gray), `k` (CMYK), else `c m y k r g b Xa` (RGB in the
+    /// working RGB space, and Lab as display RGB), with its CMYK equivalent (an RGB color's from its
+    /// values as written, a Lab color's from its Lab values).
     fn plain_color(&mut self, color: Color, stroke: bool) {
         let s = &mut self.body;
         let op = |fill: &'static str, line: &'static str| if stroke { line } else { fill };
@@ -1373,19 +1375,22 @@ impl<'a> Writer<'a> {
                 let _ = writeln!(s, "{}", op("k", "K"));
             }
             Color::Rgb { .. } | Color::Lab { .. } => {
-                let cmyk = self.cms.to_cmyk(&color, self.cms.settings().intent).map(unit);
+                let source = if matches!(color, Color::Rgb { .. }) { ai_ops::as_written(color) } else { color };
+                let cmyk = self.cms.to_cmyk(&source, self.cms.settings().intent).map(unit);
                 ps::push_nums(s, &cmyk.map(f64::from));
-                ps::push_nums(s, &color.to_rgb().map(|v| f64::from(unit(v))));
+                ps::push_nums(s, &ai_ops::rgb_values(color).map(f64::from));
                 let _ = writeln!(s, "{}", op("Xa", "XA"));
             }
         }
     }
 
     /// A spot (`spot`) or global process color `name` of full color `full` at `tint`, written to
-    /// `s`: its CMYK equivalent, its RGB or Lab values, the name, how much lighter than the full
-    /// color, and for any but a CMYK spot color (`x`) the model (0 CMYK, 1 RGB, 2 Lab) before
-    /// `Xx` (spot) or `Xk` (global process).
+    /// `s`: its CMYK equivalent (from its RGB or Lab values as written), its RGB or Lab values
+    /// (clamped as [`ai_ops::as_written`] clamps them), the name, how much lighter than the full
+    /// color, and for any but a CMYK spot color (`x`) the model (0 CMYK, 1 RGB, 2 Lab) before `Xx`
+    /// (spot) or `Xk` (global process).
     fn named(&self, s: &mut String, name: &str, full: Color, tint: f32, spot: bool, stroke: bool) {
+        let full = ai_ops::as_written(full);
         let cmyk = self.cms.to_cmyk(&self.doc.linked_color(full, spot), self.cms.settings().intent).map(unit);
         ps::push_nums(s, &cmyk.map(f64::from));
         let model = match full {
@@ -1481,7 +1486,8 @@ impl<'a> Writer<'a> {
         true
     }
 
-    /// The spot color swatches, with their full colors' CMYK equivalents, for the header.
+    /// The spot color swatches, with their full colors' CMYK equivalents (as the palette writes
+    /// them), for the header.
     pub(super) fn spot_swatches(&self) -> Vec<(String, [f32; 4])> {
         let intent = self.cms.settings().intent;
         self.doc
@@ -1489,7 +1495,7 @@ impl<'a> Writer<'a> {
             .filter(|sw| sw.spot)
             .filter_map(|sw| match sw.paint {
                 Paint::Solid { color, swatch: None, .. } => {
-                    Some((sw.name.clone(), self.cms.to_cmyk(&self.doc.linked_color(color, true), intent).map(unit)))
+                    Some((sw.name.clone(), self.cms.to_cmyk(&self.doc.linked_color(ai_ops::as_written(color), true), intent).map(unit)))
                 }
                 _ => None,
             })

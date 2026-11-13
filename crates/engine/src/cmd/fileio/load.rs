@@ -73,6 +73,8 @@ pub struct RasterImage {
     pub height: u32,
     /// The resolution the file declares (see [`super::ppi::resolution`]).
     pub ppi: Option<(f64, f64)>,
+    /// A DCS file's clipping path, in the image's pixel space ([`crate::cmd::place::dcs`]).
+    pub clip: Option<vectorcraft_geom::PathData>,
 }
 
 pub(super) fn err(e: impl std::fmt::Display) -> EngineError {
@@ -131,6 +133,12 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     }
     if let Some(f) = image::guess_format(bytes).ok().and_then(image_format) {
         return Some(f);
+    }
+    // A version 2 PICT is known by its version opcodes after the picture's frame, at byte 522 of a
+    // file or byte 10 of a bare picture (version 1 by its file's name), so a format whose
+    // signature starts the file is checked first.
+    if vectorcraft_metafile::is_pict(bytes) {
+        return format("pict");
     }
     if clipboard::looks_like_svg(&String::from_utf8_lossy(&bytes[..bytes.len().min(4096)])) {
         return format("svg");
@@ -380,6 +388,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     let (mut doc, mut warnings, restored) = match format.id {
         // EPS, .ps and PostScript .ai: the document our EPS files carry, else the PostScript read.
         _ if matches!(format.id, "eps" | "ps") || vectorcraft_pdf::is_postscript(bytes) => {
+            // A DCS file's plates print from its file: it is only placed linked.
+            if crate::cmd::place::dcs::is_dcs(bytes) {
+                return Err(err(format!("can't open `{}`: {}", file_name(name), crate::cmd::place::dcs::LINK_ONLY)));
+            }
             let editing = vectorcraft_eps::has_native(bytes).then_some((true, || vectorcraft_eps::native(bytes)));
             restore_or_import(editing, || {
                 let r = vectorcraft_eps::import_names(bytes, opts.editing_data, opts.trust_editing_data, opts.legacy_names)
@@ -398,7 +410,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             let editing = vectorcraft_svg::editing(&text).map(|e| (e.intact, move || vectorcraft_format::base64_decode(&e.data)));
             // Relative links are found in the SVG's folder (when `name` is a path).
             let folder = std::path::Path::new(name).parent().map(|f| f.to_string_lossy()).filter(|f| !f.is_empty()).map(|f| absolute_path(&f));
-            restore_or_import(editing, || import_svg(&text, folder.as_deref()))?
+            restore_or_import(editing, || open_svg(&text, folder.as_deref()))?
         }
         "pdf" | "ai" | "ait" => {
             // The file is read and checked once, for the document it carries, its pages, the
@@ -499,6 +511,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             let (doc, warnings) = super::metafile::import(bytes)?;
             (doc, warnings, false)
         }
+        "pict" => {
+            let (doc, warnings) = super::metafile::import_pict(bytes)?;
+            (doc, warnings, false)
+        }
         "hpgl" => {
             let i = vectorcraft_cad::hpgl::import(bytes).map_err(err)?;
             (i.document, i.warnings, false)
@@ -573,6 +589,33 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
 /// own): rasters stay linked, SVG files become art, missing ones placeholders (see
 /// [`vectorcraft_svg::ImportOptions`]).
 pub(crate) fn import_svg(text: &str, folder: Option<&str>) -> Result<(Document, Vec<String>)> {
+    import_svg_finding(text, folder, &std::collections::HashSet::new()).map(|(doc, warnings, _)| (doc, warnings))
+}
+
+/// [`import_svg`] for a document opened from an SVG: with the variable data the file carries (SVG
+/// Options › Include Variable Data), read as [`crate::cmd::variablecmds::svg_library`] says. Variable
+/// data that can't be read is left out with a warning; the art opens either way.
+fn open_svg(text: &str, folder: Option<&str>) -> Result<(Document, Vec<String>)> {
+    let lib = match crate::cmd::variablecmds::svg_library(text) {
+        None => return import_svg(text, folder),
+        Some(Err(e)) => {
+            let (doc, mut warnings) = import_svg(text, folder)?;
+            warnings.push(format!("the file's variable data wasn't read: {e}"));
+            return Ok((doc, warnings));
+        }
+        Some(Ok(lib)) => lib,
+    };
+    let (mut doc, mut warnings, found) = import_svg_finding(text, folder, &lib.elements())?;
+    warnings.extend(crate::cmd::variablecmds::give_svg_library(&mut doc, lib, &found));
+    Ok((doc, warnings))
+}
+
+/// [`import_svg`], also returning the object made of each element whose id `ids` lists.
+fn import_svg_finding(
+    text: &str,
+    folder: Option<&str>,
+    ids: &std::collections::HashSet<String>,
+) -> Result<(Document, Vec<String>, vectorcraft_svg::Found)> {
     // The importer reads on a thread of its own (for its stack): what may be read is what may be
     // read here.
     let scope = crate::file_access::ScopeHandle::capture();
@@ -588,7 +631,7 @@ pub(crate) fn import_svg(text: &str, folder: Option<&str>) -> Result<(Document, 
             Some((bytes, link))
         })
     };
-    vectorcraft_svg::import_with(text, &vectorcraft_svg::ImportOptions { folder, read: Some(&read) }).map_err(err)
+    vectorcraft_svg::import_finding(text, &vectorcraft_svg::ImportOptions { folder, read: Some(&read) }, ids).map_err(err)
 }
 
 /// Open a file's bytes as the new active document (what `document.open` does) →
@@ -987,13 +1030,13 @@ fn stored(bytes: Vec<u8>, mime: &'static str, (width, height): (u32, u32), ppi: 
         return Err(err("the image is empty"));
     }
     let blob = ImageBlob::new(mime, bytes);
-    Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi })
+    Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi, clip: None })
 }
 
 /// An image as a document of its physical size at the resolution it declares (as Place sizes it;
 /// 72 ppi, 1 px = 1 pt, when it declares none), the image named after the file.
 pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
-    let RasterImage { key, blob, width, height, ppi } = raster_image(bytes)?;
+    let RasterImage { key, blob, width, height, ppi, .. } = raster_image(bytes)?;
     let (sx, sy) = crate::cmd::place::pt_per_px(ppi);
     let mut d = Document::new(width as f64 * sx, height as f64 * sy);
     let layer = d.layers[0].id;

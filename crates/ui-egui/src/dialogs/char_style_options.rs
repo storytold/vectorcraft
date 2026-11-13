@@ -26,9 +26,12 @@ const NUMBERS: &[&str] = &["size", "leading", "kerning", "tracking"];
 /// The on, off or unset checkboxes.
 const SWITCHES: &[&str] = &["underline", "strikethrough", "standardVerticalRoman"];
 /// The attributes of Advanced Character Formats, in the order the section shows them.
-const ADVANCED: &[&str] = &["h_scale", "v_scale", "baseline_shift", "tcyUpDown", "tcyLeftRight", "rotation", "language"];
+const ADVANCED: &[&str] = &["h_scale", "v_scale", "baseline_shift", "tcyUpDown", "tcyLeftRight", "rotation", "akiLeft", "akiRight", "language"];
 /// The number fields of Advanced Character Formats.
-const ADVANCED_NUMBERS: &[&str] = &["h_scale", "v_scale", "baseline_shift", "tcyUpDown", "tcyLeftRight", "rotation"];
+const ADVANCED_NUMBERS: &[&str] = &["h_scale", "v_scale", "baseline_shift", "tcyUpDown", "tcyLeftRight", "rotation", "akiLeft", "akiRight"];
+/// The Insert Aki Left and Right fields, which take the Character panel's presets and stop at
+/// [`vectorcraft_doc::text::MAX_AKI`].
+const AKI: [&str; 2] = ["akiLeft", "akiRight"];
 /// The attributes of Character Color.
 const COLOR: &[&str] = &["fill", "stroke", "stroke_width", "overprint_fill", "overprint_stroke"];
 /// The fields of Character Color: the fill and stroke paints, their tints in percent, the stroke
@@ -81,6 +84,8 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
             "tcyUpDown",
             "tcyLeftRight",
             "rotation",
+            "akiLeft",
+            "akiRight",
             "language",
             "fill",
             "fill_tint",
@@ -268,6 +273,8 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
         "tcyUpDown" => tl!("Tate-chu-yoko Up/Down"),
         "tcyLeftRight" => tl!("Tate-chu-yoko Left/Right"),
         "rotation" => tl!("Character Rotation"),
+        "akiLeft" => tl!("Insert Aki Left"),
+        "akiRight" => tl!("Insert Aki Right"),
         "fill_tint" => tl!("Fill Tint"),
         "stroke_tint" => tl!("Stroke Tint"),
         "stroke_width" => tl!("Weight"),
@@ -312,6 +319,9 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
             }
             // An angle from -180 to 180 degrees, as text.setFormat stores it.
             let n = if key == "rotation" { (n + 180.0).rem_euclid(360.0) - 180.0 } else { n };
+            // Insert Aki stops at 0 and at the largest value the style takes, as the Character
+            // panel's fields do.
+            let n = if AKI.contains(&key) { n.clamp(0.0, vectorcraft_doc::text::MAX_AKI) } else { n };
             Ok(Some(json!(n)))
         }
     }
@@ -590,7 +600,7 @@ pub(crate) fn reset_basic(d: &mut Dialog) {
     }
 }
 
-/// Reset Panel in Advanced Character Formats: its seven attributes become unset.
+/// Reset Panel in Advanced Character Formats: its nine attributes become unset.
 pub(crate) fn reset_advanced(d: &mut Dialog) {
     d.fields.insert("__resetAdvanced".into(), json!(true));
     for key in ADVANCED_NUMBERS {
@@ -745,7 +755,8 @@ pub(crate) fn basic_body(ui: &mut egui::Ui, d: &mut Dialog) {
 }
 
 /// Advanced Character Formats: Horizontal Scale, Vertical Scale, Baseline Shift, the Tate-chu-yoko
-/// Up/Down and Left/Right, Character Rotation and Language, each empty (unset) or set.
+/// Up/Down and Left/Right, Character Rotation, Insert Aki Left and Right (with the Character
+/// panel's presets) and Language, each empty (unset) or set.
 pub(crate) fn advanced_body(ui: &mut egui::Ui, d: &mut Dialog) {
     egui::Grid::new("character-style-advanced").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
         for (key, caption, unit) in [
@@ -764,6 +775,16 @@ pub(crate) fn advanced_body(ui: &mut egui::Ui, d: &mut Dialog) {
                 ui.label_inputs_by(row.id, |ui| form::text(ui, d, key, 160.0));
                 ui.label(unit);
             });
+            ui.end_row();
+        }
+        let presets: Vec<String> = crate::panels::character::AKI_PRESETS.iter().map(f64::to_string).collect();
+        let presets: Vec<&str> = presets.iter().map(String::as_str).collect();
+        for (key, caption) in [("akiLeft", tl!("Insert Aki Left")), ("akiRight", tl!("Insert Aki Right"))] {
+            let row = ui.label(caption);
+            let value = if d.fields.get(key).is_none_or(Value::is_null) { String::new() } else { d.str(key) };
+            if let Some(v) = ui.label_inputs_by(row.id, |ui| crate::widgets::text_presets(ui, (KIND, key), &value, &presets, 160.0)) {
+                d.fields.insert(key.into(), json!(v));
+            }
             ui.end_row();
         }
         let row = ui.label(tl!("Language:"));
@@ -921,27 +942,23 @@ pub(crate) fn opentype_body(ui: &mut egui::Ui, d: &mut Dialog) {
     }
 }
 
-/// The key under which the dialog keeps its footer's height for the next frame: the dialog's own
-/// id, so the stored value is found on every frame.
-fn footer_id(ui: &egui::Ui) -> egui::Id {
-    ui.layer_id().id.with("char-style-footer")
+/// The key under which the dialog keeps the height its section content was drawn at, for the next
+/// frame.
+fn content_id(ui: &egui::Ui) -> egui::Id {
+    ui.layer_id().id.with("char-style-content")
 }
 
-/// The dialog's body: the section list beside the selected section's content, which scrolls when it
-/// is taller than the window (General lists every attribute of the style and OpenType every
-/// feature), and the footer below it - Reset Panel, the Preview checkbox and an invalid value's
-/// error. The content's height is the space the footer leaves, measured last frame, so the buttons
-/// stay on screen at any interface scale; the section list is outside the scroll area and stays put
-/// while the content scrolls. Returns whether the dialog asks to be cancelled (never: Cancel comes
-/// from the button row in `dialogs::show`).
+/// The dialog's body: the section list beside the selected section's content, and below them
+/// Reset Panel, the Preview checkbox and an invalid value's error. The content is at most 420 points
+/// tall, and scrolls when it is taller than that or than the screen less the rest of the window
+/// (as drawn last frame). The section list stays put while the content scrolls. Returns whether
+/// the dialog asks to be canceled (never: Cancel comes from the button row in `dialogs::show`).
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    // The content scrolls inside a shorter window: General lists every attribute of the style and
-    // OpenType every feature, so the window stays within the screen and its buttons stay visible.
-    // The footer was measured last frame, so the room left for the content keeps it on screen at any
-    // interface scale; the section list stays put while the content scrolls.
-    let footer = ui.ctx().data(|m| m.get_temp::<f32>(footer_id(ui)).unwrap_or(120.0));
-    let room = (ui.available_height() - footer - 8.0).clamp(0.0, 420.0);
-    ui.horizontal(|ui| {
+    let window = ui.ctx().memory(|m| m.area_rect(ui.layer_id().id)).map_or(0.0, |r| r.height());
+    let content = ui.ctx().data(|m| m.get_temp::<f32>(content_id(ui))).unwrap_or(0.0);
+    let rest = (window - content).max(0.0);
+    let room = (ui.ctx().content_rect().height() - rest - 2.0 * super::EDGE_GAP).clamp(0.0, 420.0);
+    let drawn = ui.horizontal(|ui| {
         section_list(ui, d);
         ui.separator();
         // The section list handles a click before this frame's content is laid out, so the section
@@ -950,9 +967,13 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         let content_w = ui.available_width();
         // Long sections scroll both ways: at a large interface scale the window has fewer points, and
         // a wide row (a character-format grid) must stay inside it rather than widen the window.
-        egui::ScrollArea::both().id_salt(("char-style-sections", section)).max_height(room).max_width(content_w).auto_shrink([false, true]).show(
-            ui,
-            |ui| {
+        let shown = egui::ScrollArea::both()
+            .id_salt(("char-style-sections", section))
+            .max_height(room)
+            .min_scrolled_height(room)
+            .max_width(content_w)
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
                 ui.vertical(|ui| {
                     if d.str("section") == "basic" {
                         basic_body(ui, d);
@@ -975,27 +996,23 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                         }
                     }
                 });
-            },
-        );
+            });
+        // `inner_rect` is the height offered before a short section shrinks the area to its content.
+        shown.inner_rect.height().min(shown.content_size.y)
     });
-    let footer_h = ui
-        .scope(|ui| {
-            reset_button(ui, d);
-            match edited_attrs(d) {
-                Ok(attrs) => {
-                    let params = json!({"name": d.str("__style"), "to": d.str("name"), "attrs": attrs});
-                    form::preview(app, ui, d, tl!("Character Style Options"), "charStyle.edit", params);
-                }
-                Err(why) => attrs_error(ui, &why),
-            }
-        })
-        .response
-        .rect
-        .height();
-    let was = ui.ctx().data(|m| m.get_temp::<f32>(footer_id(ui)));
-    ui.ctx().data_mut(|m| m.insert_temp(footer_id(ui), footer_h));
-    if was != Some(footer_h) {
+    let content_h = drawn.inner;
+    let was = ui.ctx().data(|m| m.get_temp::<f32>(content_id(ui)));
+    ui.ctx().data_mut(|m| m.insert_temp(content_id(ui), content_h));
+    if was.is_none_or(|was| (was - content_h).abs() > 0.5) {
         ui.ctx().request_repaint();
+    }
+    reset_button(ui, d);
+    match edited_attrs(d) {
+        Ok(attrs) => {
+            let params = json!({"name": d.str("__style"), "to": d.str("name"), "attrs": attrs});
+            form::preview(app, ui, d, tl!("Character Style Options"), "charStyle.edit", params);
+        }
+        Err(why) => attrs_error(ui, &why),
     }
     false
 }
@@ -1106,6 +1123,98 @@ mod tests {
         let basic = ctx.memory(|m| m.area_rect(dialog)).expect("the dialog is drawn").width();
         assert!((basic - width).abs() < 0.5, "the width does not change with the section: {width} -> {basic}");
     }
+
+    /// On a 1920 by 1080 screen the dialog opens with its content 420 points tall when the General
+    /// list is longer than that: the first frame that draws it, with no input, already has the full
+    /// height, and later frames keep it.
+    #[test]
+    fn the_sections_open_at_their_full_height_without_input() {
+        let mut app = app();
+        app.run(
+            "charStyle.new",
+            json!({"name": "Body", "attrs": {
+                "font_family": "Source Sans 3", "font_style": "Regular", "size": 24.0, "leading": 30.0,
+                "kerning": 0.0, "tracking": 5.0, "all_caps": false, "small_caps": null,
+                "position": {"kind": "normal", "size": 100.0, "position": 0.0}, "underline": false,
+                "strikethrough": false, "standardVerticalRoman": false, "charAlign": "romanBaseline",
+                "h_scale": 100.0, "v_scale": 100.0, "baseline_shift": 0.0, "rotation": 0.0,
+                "language": "English: USA", "overprint_fill": false, "overprint_stroke": false,
+                "stroke_width": 0.0, "features": ["liga", "calt", "dlig", "swsh", "salt", "titl", "ordn", "frac"]
+            }}),
+        )
+        .unwrap();
+        open(&mut app, "Body").unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1920.0, 1080.0));
+        let mut drawn = 0;
+        for _ in 0..6 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
+            let texts = texts_of(&out);
+            let top = |label: &str| texts.iter().find(|(text, _)| text == label).map(|r| r.1.top());
+            // The first frame only measures the window and draws no text.
+            let (Some(reset), Some(general)) = (top("Reset Panel"), top("General")) else { continue };
+            drawn += 1;
+            let content = reset - general;
+            assert!(content >= 410.0, "the content is 420 points tall in drawn frame {drawn}: {content}");
+        }
+        assert!(drawn >= 4, "the dialog is drawn: {drawn} frames");
+        // On the smallest window the buttons are on the screen in the first frame that draws them.
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 500.0));
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
+            let texts = texts_of(&out);
+            let Some(ok) = texts.iter().find(|(text, _)| text == "OK").map(|r| r.1) else { continue };
+            let cancel = texts.iter().find(|(text, _)| text == "Cancel").expect("Cancel is drawn with OK").1;
+            assert!(ok.bottom() <= 501.0 && cancel.bottom() <= 501.0, "the buttons are on an 800 by 500 screen when first drawn: {ok:?} {cancel:?}");
+            return;
+        }
+        panic!("the dialog is drawn on an 800 by 500 screen");
+    }
+
+    /// Going back to the long General list from a shorter section keeps OK and Cancel on a small
+    /// screen in the first frame after the switch, not only once the window has measured itself again.
+    #[test]
+    fn switching_to_a_long_section_keeps_the_buttons_on_a_small_screen() {
+        let mut app = app();
+        app.run(
+            "charStyle.new",
+            json!({"name": "Body", "attrs": {
+                "font_family": "Source Sans 3", "font_style": "Regular", "size": 24.0, "leading": 30.0,
+                "kerning": 0.0, "tracking": 5.0, "all_caps": false, "small_caps": null,
+                "position": {"kind": "normal", "size": 100.0, "position": 0.0}, "underline": false,
+                "strikethrough": false, "standardVerticalRoman": false, "charAlign": "romanBaseline",
+                "h_scale": 100.0, "v_scale": 100.0, "baseline_shift": 0.0, "rotation": 0.0,
+                "language": "English: USA", "overprint_fill": false, "overprint_stroke": false,
+                "stroke_width": 0.0, "features": ["liga", "calt", "dlig", "swsh", "salt", "titl", "ordn", "frac"]
+            }}),
+        )
+        .unwrap();
+        open(&mut app, "Body").unwrap();
+        for h in [560.0, 640.0, 720.0] {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, h));
+            for section in ["basic", "advanced", "color", "opentype"] {
+                app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!(section));
+                let _ = frame_texts_in(&ctx, &mut app, 900.0, h);
+                app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!("general"));
+                let mut out =
+                    ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(&mut app, ui.ctx()));
+                out.textures_delta.clear();
+                let texts = texts_of(&out);
+                for label in ["OK", "Cancel"] {
+                    let r = texts.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn")).1;
+                    assert!(r.bottom() <= h + 1.0, "{label} stays on a {h}-point screen going from {section} to General: {r:?}");
+                }
+            }
+        }
+    }
+
     /// The dialog stays usable in the smallest window the app allows (800 by 500 points): in every
     /// section the section list, OK and Cancel are on the screen.
     #[test]
@@ -1682,6 +1791,60 @@ mod tests {
         let doc = &app.session.doc().unwrap().doc;
         let def = doc.char_styles.iter().find(|def| def.name == "Shifted").unwrap();
         assert_eq!(def.attrs["tcyLeftRight"], json!(6.0));
+    }
+
+    #[test]
+    fn insert_aki_fields_show_set_reset_and_stop_at_the_character_panel_limits() {
+        let d = dialog_for(json!({"akiLeft": 250.0, "size": 12.0}));
+        assert_eq!((d.fields["akiLeft"].clone(), d.fields["akiRight"].clone()), (json!(250.0), json!("")));
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"akiLeft": 250.0, "size": 12.0})));
+
+        let mut d = dialog_for(json!({"akiLeft": 250.0}));
+        d.fields.insert("akiLeft".into(), json!(""));
+        d.fields.insert("akiRight".into(), json!("500"));
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"akiRight": 500.0})));
+        // A typed value stops at 0 and at 1000, as in the Character panel's fields.
+        for (typed, kept) in [("5000", 1000.0), ("-5", 0.0), ("1000", 1000.0)] {
+            d.fields.insert("akiRight".into(), json!(typed));
+            assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"akiRight": kept})), "{typed}");
+        }
+        d.fields.insert("akiLeft".into(), json!("wide"));
+        assert_eq!(edited_attrs(&d).unwrap_err(), "Insert Aki Left must be a number");
+
+        let mut d = dialog_for(json!({"akiLeft": 250.0, "akiRight": 500.0, "size": 12.0}));
+        d.fields.insert("section".into(), json!("advanced"));
+        reset_section(&mut d);
+        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"size": 12.0})));
+    }
+
+    #[test]
+    fn insert_aki_fields_are_drawn_and_commit_to_the_style_and_its_text() {
+        let mut app = app();
+        app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 24.0}})).unwrap();
+        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Text"})).unwrap()["id"].as_u64().unwrap();
+        app.run("charStyle.apply", json!({"name": "Body", "id": id})).unwrap();
+        open(&mut app, "Body").unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 900.0));
+        let mut d = app.ui.dialog.clone().unwrap();
+        let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| advanced_body(ui, &mut d));
+        let texts = texts_of(&out);
+        out.textures_delta.clear();
+        for label in ["Insert Aki Left", "Insert Aki Right"] {
+            assert!(texts.iter().any(|(text, _)| text == label), "{label} is drawn: {texts:?}");
+        }
+        {
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("akiLeft".into(), json!("250"));
+            d.fields.insert("akiRight".into(), json!("2000"));
+        }
+        super::super::confirm(&mut app).unwrap();
+        let state = app.session.doc().unwrap();
+        assert_eq!(state.doc.char_styles[0].attrs, attrs(json!({"size": 24.0, "akiLeft": 250.0, "akiRight": 1000.0})));
+        let vectorcraft_doc::NodeKind::Text(t) = &state.doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
+        assert!(t.runs.iter().all(|r| (r.style.aki_left, r.style.aki_right) == (250.0, 1000.0)));
     }
 
     /// The negated tags of the twenty stylistic sets: an explicit empty Stylistic Sets choice.

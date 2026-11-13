@@ -27,6 +27,7 @@ mod csv;
 mod library;
 
 use csv::{MAX_GRAPH_CSV, dataset_export, dataset_import};
+pub(crate) use library::{give_svg_library, svg_library};
 use library::{load_library, save_library};
 
 /// The longest variable or dataset name, in characters (names arrive from MCP and files).
@@ -46,9 +47,9 @@ fn selection_and_unlocked(s: &Session) -> std::result::Result<(), String> {
     variables_unlocked(s)
 }
 
-/// Ends a typing session as [`Session::edit`] would, before a helper below compares the document,
+/// Ends a typing session as [`Session::edit`] would, before a command compares the document,
 /// so the typing is its own undo step whether or not the command then changes anything.
-fn settle_typing(s: &mut Session) -> Result<()> {
+pub(super) fn settle_typing(s: &mut Session) -> Result<()> {
     if !s.previewing && super::typing_in_progress(s) {
         super::settle_interaction(s)?;
     }

@@ -150,7 +150,7 @@ impl Renderer {
         let screen = if opts.rich_black { Ink::RichBlack } else { Ink::Display };
         let symbols = doc.symbol_boxes().quick();
         let output = Affine::scale(1.0 / f64::from(cell.max(1))) * view;
-        let plates = proof::plate_lut(opts);
+        let plates = proof::plate_lut(opts, doc);
         let frame = Frame { mt: threads > 0, doc, symbols: &symbols, view, visible, px, opts, ink: screen, output, plates: plates.as_deref() };
         self.begin_frame();
         // View Opacity Mask: the mask's coverage in greyscale instead of the artwork.

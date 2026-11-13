@@ -158,6 +158,8 @@ pub enum HiddenObjects {
 pub struct LegacyAiOutput {
     pub bytes: Vec<u8>,
     pub warnings: Vec<String>,
+    /// Notes on what the options asked for: hidden objects left out or written visible.
+    pub setting_notes: Vec<String>,
 }
 
 /// Whether image node `n` of `doc` is written as a 1-bit image mask in its colorize color
@@ -177,7 +179,7 @@ pub fn writes_image_mask(doc: &Document, n: &Node) -> bool {
     matches!(n.extras().colorize.as_deref(), Some(Paint::Solid { .. }))
         && !n.extras().mask.as_ref().is_some_and(|m| !m.disabled)
         && doc
-            .image_blob(im)
+            .image_blob(&doc.shown_image(n, im))
             .is_some_and(|b| b.takes_colorize() && fits(&b.bytes) && b.coverage().is_some_and(|(_, _, c)| c.iter().all(|&v| v == 0 || v == 255)))
 }
 
@@ -269,7 +271,7 @@ pub fn export_legacy_ai(doc: &Document, o: &LegacyAiOptions) -> Result<LegacyAiO
     // The page trailer as the specification's script has it (§3); the document trailer takes the
     // prolog's dictionary off the dictionary stack (its procedure set termination, §3).
     s.push_str("%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\nend\n%%EOF\n");
-    Ok(LegacyAiOutput { bytes: s.into_bytes(), warnings: w.warnings })
+    Ok(LegacyAiOutput { bytes: s.into_bytes(), warnings: w.warnings, setting_notes: w.setting_notes })
 }
 
 #[cfg(test)]

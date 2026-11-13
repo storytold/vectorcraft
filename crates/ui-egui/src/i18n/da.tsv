@@ -199,6 +199,10 @@
 	Corner Color	Hjørnefarve
 	Contiguous	Sammenhængende
 	Each Channel	Hver kanal
+	Color Mask…	Farvemaske…
+	Color Mask	Farvemaske
+	Remove Color Mask	Fjern farvemaske
+	Apply Color Mask	Anvend farvemaske
 	Edit Path	Redigér kurve
 	Mask	Maskér
 	Rasterize…	Rasterisér…
@@ -1494,6 +1498,8 @@ lighting	Light	Lys
 	Leading	Linjeafstand
 	No Break	Ingen ombrydning
 	Proportional Metrics	Proportionale metrikker
+	Insert Aki Left	Indsæt aki til venstre
+	Insert Aki Right	Indsæt aki til højre
 	Character Direction	Tegnretning
 	Digits	Cifre
 	Arabic	Arabisk
@@ -1513,6 +1519,7 @@ digits	Malayalam	Malayalam
 	Select a text object to edit its character attributes.	Markér et tekstobjekt for at redigere dets tegnattributter.
 	Show Options	Vis indstillinger
 	Show Recent Colors	Vis seneste farver
+	Toggle RGB Percent	Skift RGB i procent
 	Small Caps	Kapitæler
 	Small Caps (on the roadmap)	Kapitæler (på vejkortet)
 	Standard Vertical Roman Alignment	Standard lodret romersk justering
@@ -1768,6 +1775,8 @@ digits	Malayalam	Malayalam
 	Modified since it was read: {path}	Ændret siden den blev læst: {path}
 	No Thumbnails	Ingen miniaturer
 	Nothing matches the Show filter.	Intet matcher Vis-filteret.
+	Show DCS Transparency Interactions	Vis DCS-gennemsigtighedsinteraktioner
+	Transparent, or overlaps transparent objects: check its separations	Gennemsigtig eller overlapper gennemsigtige objekter: kontrollér dens separationer
 	PPI	PPI
 	Relink…	Sammenkæd igen…
 	Find Linked Files	Find sammenkædede filer
@@ -1830,6 +1839,10 @@ digits	Malayalam	Malayalam
 	Long	Lang
 	Stylistic	Stilistisk
 	Mojikumi Set	Mojikumi-sæt
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-sæt
 	Kinsoku Shori Type	Kinsoku Shori-type
 	Push In First	Skub ind først
@@ -1840,6 +1853,7 @@ digits	Malayalam	Malayalam
 	Right-to-Left Paragraph Direction	Afsnitsretning fra højre mod venstre
 	Roman Hanging Punctuation	Romersk hængende tegnsætning
 	Korean Line Break Anywhere	Koreansk linjeskift hvor som helst
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Indstillinger for østasiatisk komposition
 	Korean Composition Settings	Indstillinger for koreansk komposition
 	Select a text object to edit its paragraph attributes.	Markér et tekstobjekt for at redigere dets afsnitsattributter.
@@ -1964,6 +1978,8 @@ digits	Malayalam	Malayalam
 	Weight:	Vægt:
 	Art using a deleted global swatch keeps its colour.	Grafik, der bruger en slettet global farveprøve, bevarer sin farve.
 	Color Group: {name}	Farvegruppe: {name}
+	Delete the selected items and their artwork?	Slet de valgte elementer og deres grafik?
+	Delete this layer and its artwork?	Slet dette lag og dets grafik?
 	Delete “{name}”?	Slet »{name}«?
 	Document Swatches	Dokumentfarveprøver
 	Edit or Apply Color Group	Redigér eller anvend farvegruppe
@@ -2657,6 +2673,8 @@ digits	Malayalam	Malayalam
 	Randomly change saturation and brightness	Ændr mætning og lysstyrke tilfældigt
 	Recolor this row	Omfarv denne række
 	Reset the rows to the artwork's colors	Nulstil rækkerne til grafikkens farver
+	Color Theme Picker	Farvetemavælger
+	Click or drag across the art to pick its colors; Shift adds more	Klik eller træk hen over grafikken for at hente dens farver; Skift tilføjer flere
 	Separate colors into rows	Opdel farver i rækker
 	Unlink harmony colors	Fjern sammenkædning af harmonifarver
 	1 Color Job	1-farvejob
@@ -2910,6 +2928,7 @@ antiAlias	Sharp	Skarp
 	Hide Code	Skjul kode
 	Images:	Billeder:
 	Include Metadata	Medtag metadata
+	Include Variable Data	Medtag variabeldata
 	Internal CSS	Intern CSS
 	Layer Names	Lagnavne
 	Minify	Minificér
@@ -3105,6 +3124,7 @@ theme	Appearance	Udseende
 	Art Brush	Grafikpensel
 	Bristle Brush	Børstepensel
 	Pattern Brush	Mønsterpensel
+	missing from the Brushes panel	mangler i panelet Pensler
 	Select art to make a scatter, art or pattern brush.	Markér grafik for at oprette en spredningspensel, grafikpensel eller mønsterpensel.
 	Brush Art	Penselgrafik
 	New Symbol	Nyt symbol
@@ -3343,6 +3363,7 @@ theme	Appearance	Udseende
 	Move Mesh Points	Flyt meshpunkter
 	Move Spine Point	Flyt rygradpunkt
 	Reshape Spine Segment	Omform rygradsegment
+	Blend Easing	Blandingens acceleration
 	Reset with Mesh	Nulstil med mesh
 	Reset with Warp	Nulstil med forvrængning
 	Set Mesh Point Color	Angiv farve for meshpunkt
@@ -3501,6 +3522,7 @@ theme	Appearance	Udseende
 	Enable Background Export	Aktivér eksport i baggrunden
 	Enable Background Save	Aktivér lagring i baggrunden
 	Enable in-menu font previews	Aktivér skrifttypeforhåndsvisning i menuer
+	Show samples on white	Vis eksempler på hvidt
 	Enable Missing Glyph Protection	Aktivér beskyttelse mod manglende glyffer
 	Enable Rubber Band for	Aktivér gummibånd for
 	Enable Touch Gestures	Aktivér berøringsbevægelser
@@ -3668,6 +3690,10 @@ theme	Appearance	Udseende
 	Add to Profiles	Føj til profiler
 	Delete Profile	Slet profil
 	Reset Profiles	Nulstil profiler
+	Arrowheads	Pilespidser
+	Edit Arrowheads	Redigér pilespidser
+	Edit Arrowheads…	Redigér pilespidser…
+	Reload Arrowheads	Genindlæs pilespidser
 	Stroke Options	Konturindstillinger
 	Width Profiles	Breddeprofiler
 	Apply Graphic Style	Anvend grafikstil
@@ -5986,6 +6012,23 @@ axis	Y Axis	Y-akse
 @msg	Batch cannot play an action with a stop	Batch kan ikke afspille en handling med et stop
 	Insert Menu Item…	Indsæt menupunkt…
 	Insert Menu Item	Indsæt menupunkt
+	Insert Select Path	Indsæt kurvemarkering
+	Select Path	Markér kurve
+@msg	select one whole path or compound path	markér én hel kurve eller sammensat kurve
+@msg	select only one path	markér kun én kurve
+@msg	the path is hidden or locked, or cannot be selected here	kurven er skjult eller låst, eller kan ikke markeres her
+@msg	object {value} is not the stored path: it changed, or the document is another one	objekt {value} er ikke den gemte kurve: den er ændret, eller dokumentet er et andet
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` skal være "v1:" og 16 hexadecimale cifre med små bogstaver
+	Select Object…	Markér objekt…
+	Select Object	Markér objekt
+	Set Selection	Angiv markering
+	Case Sensitive	Forskel på store og små bogstaver
+	Whole Word	Helt ord
+	Select Object: {note}	Markér objekt: {note}
+	Select by Note	Markér efter note
+@msg	the note is empty	noten er tom
+@msg	the note is longer than 1,024 bytes	noten er længere end 1.024 byte
+@msg	no object that can be selected has a note matching “{query}”	intet objekt, der kan markeres, har en note, der matcher »{query}«
 	Menu Item:	Menupunkt:
 	No menu item matches.	Intet menupunkt passer.
 	Several menu items match. Choose one from the list.	Flere menupunkter passer. Vælg et fra listen.
@@ -6086,6 +6129,11 @@ axis	Y Axis	Y-akse
 	User Brush Library 9	Brugerpenselbibliotek 9
 	User Brush Library 10	Brugerpenselbibliotek 10
 	Art Ribbons	Kunstbånd
+	Ink and Wash	Blæk og lavering
+	Tapered Ink	Tilspidset blæk
+	Brush Pen	Penselpen
+	Soft Wash	Blød lavering
+	Pooling Wash	Lavering med rand
 	Zigzag	Zigzag
 	Burst Ray	Burststråle
 	Dash Trail	Streget spor
@@ -6706,6 +6754,8 @@ breakText	Glyphs	Glyffer
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Korte praktiske vejledninger til de vigtigste værktøjer, ordnet efter færdighed. Vælg en færdighed for at se dens vejledninger.
 	List Tutorials	Vis vejledninger
 	Show Tutorial	Vis vejledning
+	Show Tool Location	Vis værktøjets placering
+	Show where this tool is	Vis, hvor dette værktøj er
 @msg	missing `tutorial` (see learn.list)	`tutorial` mangler (se learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	ukendt vejledning `{id}` (se learn.list)
 

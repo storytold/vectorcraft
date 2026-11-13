@@ -10,7 +10,7 @@ mod stroke_style;
 
 pub use layers::{Effect, FillLayer, StrokeGradientMode, StrokeLayer, stroke_paint_bounds};
 pub use profile::{AngleProfile, PressureProfile, ProfilePreset, SavedProfile, WidthProfile};
-pub use stroke_style::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, StrokeAlign};
+pub use stroke_style::{ArrowAlign, Arrowhead, CustomArrowhead, Dash, LineCap, LineJoin, StrokeAlign};
 
 /// One entry of the appearance stack.
 // A stroke takes 328 bytes and a fill 104; an appearance holds a few of each.
