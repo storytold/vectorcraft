@@ -12480,3 +12480,30 @@ fn auto_spell_check_is_a_toggle_of_the_canvas_lines() {
     assert_eq!(count(&mut app), 0, "off");
     assert!(app.canvas.spelling.lines.is_empty(), "no node is kept");
 }
+
+/// The text caret blinks (#6406): on for [`overlays::CARET_BLINK`] seconds after it moves, off as
+/// long, on again; it starts over on whenever it moves, stays on without focus, and other
+/// overlays stay put.
+#[test]
+fn the_text_caret_blinks_and_starts_over_when_it_moves() {
+    let caret = |x: f64| Overlay::Caret { a: Point::new(x, 0.0), b: Point::new(x, 10.0) };
+    let guide = Overlay::Line { a: Point::ZERO, b: Point::new(5.0, 5.0), color: [0, 0, 0], dashed: false };
+    let mut state = None;
+    let mut frame = |now: f64, focused: bool, x: f64| {
+        let (o, next) = overlays::blink_caret(&mut state, now, focused, vec![guide.clone(), caret(x)]);
+        assert!(o.contains(&guide), "the other overlays stay");
+        (o.contains(&caret(x)), next)
+    };
+    let half = overlays::CARET_BLINK;
+    assert_eq!(frame(10.0, true, 1.0), (true, Some(half)), "on when it appears");
+    assert!(frame(10.0 + half * 0.5, true, 1.0).0);
+    let (on, next) = frame(10.0 + half * 1.25, true, 1.0);
+    assert!(!on && (next.unwrap() - half * 0.75).abs() < 1e-9, "off for the second half: {next:?}");
+    assert!(frame(10.0 + half * 2.1, true, 1.0).0, "on again");
+    assert!(!frame(10.0 + half * 3.5, true, 1.0).0);
+    assert!(frame(10.0 + half * 3.6, true, 2.0).0, "moving it turns it on");
+    assert!(!frame(10.0 + half * 4.7, true, 2.0).0, "and it blinks from there");
+    assert_eq!(frame(10.0 + half * 4.7, false, 2.0), (true, None), "without focus it stays on, with no repaints");
+    let (o, next) = overlays::blink_caret(&mut state, 20.0, true, vec![guide.clone()]);
+    assert_eq!((o.len(), next, state), (1, None, None), "no caret: nothing to blink");
+}

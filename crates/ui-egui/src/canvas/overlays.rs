@@ -348,6 +348,41 @@ pub(super) fn ime_geometry(app: &mut VectorcraftApp, ctx: &egui::Context, xf: &X
     app.ime_caret_rect = Some((r, r));
 }
 
+/// How long the text caret stays on, and then off, while it blinks (seconds).
+pub(crate) const CARET_BLINK: f64 = 0.53;
+
+/// Whether the text caret shows `elapsed` seconds after it last moved: on for [`CARET_BLINK`],
+/// off as long, and so on (#6406). Without focus the window isn't being typed in, so the caret
+/// stays on.
+pub(crate) fn caret_shown(elapsed: f64, focused: bool) -> bool {
+    !focused || !elapsed.is_finite() || elapsed < 0.0 || (elapsed / CARET_BLINK).floor() as u64 % 2 == 0
+}
+
+/// `overlays` with the text caret blinking: `caret` (its ends' bits and when it got there) starts
+/// over when the caret moves, and the caret is left out while it is off. Returns the overlays and
+/// the seconds until the caret next turns on or off (None: nothing to blink).
+pub(crate) fn blink_caret(caret: &mut Option<([u64; 4], f64)>, now: f64, focused: bool, mut overlays: Vec<Overlay>) -> (Vec<Overlay>, Option<f64>) {
+    let shown = overlays.iter().find_map(|o| match o {
+        Overlay::Caret { a, b } => Some([a.x, a.y, b.x, b.y].map(f64::to_bits)),
+        _ => None,
+    });
+    let Some(at) = shown else {
+        *caret = None;
+        return (overlays, None);
+    };
+    let since = match *caret {
+        Some((was, since)) if was == at => since,
+        _ => now,
+    };
+    *caret = Some((at, since));
+    let elapsed = (now - since).max(0.0);
+    if !caret_shown(elapsed, focused) {
+        overlays.retain(|o| !matches!(o, Overlay::Caret { .. }));
+    }
+    let next = focused.then(|| CARET_BLINK - elapsed % CARET_BLINK);
+    (overlays, next)
+}
+
 pub(super) fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens, look: HandleLook) {
     for o in overlays {
         match o {
@@ -385,6 +420,9 @@ pub(super) fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t:
                 } else {
                     stroke_path(p, path, xf, s);
                 }
+            }
+            Overlay::Caret { a, b } => {
+                p.line_segment([xf.to_screen(*a), xf.to_screen(*b)], Stroke::new(1.0, Color32::BLACK));
             }
             Overlay::Line { a, b, color, dashed } => {
                 let s = Stroke::new(1.0, c32(*color));

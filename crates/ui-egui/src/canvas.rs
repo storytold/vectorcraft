@@ -407,6 +407,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         original_path_overlay(app, &painter, &xf);
 
         let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, selection_marks, hover_still), revolve_edit, view_info);
+        let (now, focused) = ui.input(|i| (i.time, i.focused));
+        let (overlays, toggle) = overlays::blink_caret(&mut app.canvas.caret, now, focused, overlays);
+        if let Some(secs) = toggle {
+            ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(secs.max(0.01)));
+        }
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
         if !revolve_edit {
             shaper_widget_overlay(app, &painter, &xf);

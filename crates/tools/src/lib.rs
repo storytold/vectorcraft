@@ -73,6 +73,8 @@ pub enum Overlay {
     Path { path: BezPath, color: [u8; 3], width: f32, dashed: bool },
     /// A line segment (smart guide, handle line).
     Line { a: Point, b: Point, color: [u8; 3], dashed: bool },
+    /// The text caret, a black line from `a` to `b`, which the canvas blinks (#6406).
+    Caret { a: Point, b: Point },
     /// An anchor square: filled = selected.
     Anchor { p: Point, color: [u8; 3], filled: bool, size: f32 },
     /// A Curvature tool point, drawn as a circle; filled = the last touched point.
