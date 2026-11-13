@@ -6645,6 +6645,22 @@ axis	Y Axis	Άξονας Y
 	Graphite Pencil	Μολύβι γραφίτη
 	Wax Crayon	Κηρομπογιά
 	Charcoal Dust	Σκόνη κάρβουνου
+	Notched Ribbon	Οδοντωτή κορδέλα
+	Double Line	Διπλή γραμμή
+	Wave	Κύμα
+	Teardrop	Δάκρυ
+	Striped Ribbon	Ριγέ κορδέλα
+	Fine Nib	Λεπτή πένα
+	Broad Nib	Φαρδιά πένα
+	Chisel	Σμίλη
+	Round Pen	Στρογγυλή πένα
+	Pressure Pen	Πένα πίεσης
+	Beads	Χάντρες
+	Dash Dot	Παύλα-τελεία
+	Scallops	Φεστόνια
+	Stars	Αστέρια
+	Triangles	Τρίγωνα
+	Sparkles	Σπίθες
 	Save Brush Library…	Αποθήκευση βιβλιοθήκης πινέλων…
 @msg	`{_1}` has no brushes to apply	Η `{_1}` δεν έχει πινέλα για εφαρμογή
 @msg	missing `library` (see brush.libraries)	λείπει το `library` (δείτε brush.libraries)

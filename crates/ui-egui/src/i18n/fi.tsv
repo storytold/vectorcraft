@@ -6724,6 +6724,22 @@ axis	Y Axis	Y-akseli
 	Graphite Pencil	Grafiittikynä
 	Wax Crayon	Vahaliitu
 	Charcoal Dust	Hiilipöly
+	Notched Ribbon	Lovettu nauha
+	Double Line	Kaksoisviiva
+	Wave	Aalto
+	Teardrop	Pisara
+	Striped Ribbon	Raidallinen nauha
+	Fine Nib	Ohut kärki
+	Broad Nib	Leveä kärki
+	Chisel	Taltta
+	Round Pen	Pyöreä kynä
+	Pressure Pen	Painekynä
+	Beads	Helmet
+	Dash Dot	Viiva-piste
+	Scallops	Kaarireunus
+	Stars	Tähdet
+	Triangles	Kolmiot
+	Sparkles	Kipinät
 	Save Brush Library…	Tallenna sivellinkirjasto…
 @msg	`{_1}` has no brushes to apply	Kohteessa `{_1}` ei ole käytettäviä siveltimiä
 @msg	missing `library` (see brush.libraries)	`library` puuttuu (katso brush.libraries)

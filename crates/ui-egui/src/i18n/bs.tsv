@@ -6201,6 +6201,22 @@ axis	Y Axis	Y osa
 	Graphite Pencil	Grafitna olovka
 	Wax Crayon	Voštana bojica
 	Charcoal Dust	Ugljena prašina
+	Notched Ribbon	Zarezana traka
+	Double Line	Dvostruka linija
+	Wave	Talas
+	Teardrop	Suza
+	Striped Ribbon	Prugasta traka
+	Fine Nib	Tanki vrh
+	Broad Nib	Široki vrh
+	Chisel	Dlijeto
+	Round Pen	Okruglo pero
+	Pressure Pen	Pero na pritisak
+	Beads	Perle
+	Dash Dot	Crta-tačka
+	Scallops	Festoni
+	Stars	Zvijezde
+	Triangles	Trouglovi
+	Sparkles	Iskrice
 	Save Brush Library…	Sačuvaj biblioteku četkica…
 @msg	`{_1}` has no brushes to apply	`{_1}` nema četkica za primjenu
 @msg	missing `library` (see brush.libraries)	nedostaje `library` (pogledajte brush.libraries)

@@ -6609,6 +6609,22 @@ axis	Y Axis	Eixo Y
 	Graphite Pencil	Lápis de Grafite
 	Wax Crayon	Giz de Cera
 	Charcoal Dust	Pó de Carvão
+	Notched Ribbon	Fita Entalhada
+	Double Line	Linha Dupla
+	Wave	Onda
+	Teardrop	Lágrima
+	Striped Ribbon	Fita Listrada
+	Fine Nib	Pena Fina
+	Broad Nib	Pena Larga
+	Chisel	Cinzel
+	Round Pen	Pena Redonda
+	Pressure Pen	Pena de Pressão
+	Beads	Contas
+	Dash Dot	Traço-Ponto
+	Scallops	Festões
+	Stars	Estrelas
+	Triangles	Triângulos
+	Sparkles	Brilhos
 	Save Brush Library…	Salvar Biblioteca de Pincéis…
 @msg	`{_1}` has no brushes to apply	`{_1}` não tem pincéis para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)

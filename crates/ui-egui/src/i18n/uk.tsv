@@ -6299,6 +6299,22 @@ axis	Y Axis	Вісь Y
 	Graphite Pencil	Графітний олівець
 	Wax Crayon	Восковий олівець
 	Charcoal Dust	Вугільний пил
+	Notched Ribbon	Стрічка з насічками
+	Double Line	Подвійна лінія
+	Wave	Хвиля
+	Teardrop	Крапля
+	Striped Ribbon	Смугаста стрічка
+	Fine Nib	Тонке перо
+	Broad Nib	Широке перо
+	Chisel	Стамеска
+	Round Pen	Кругле перо
+	Pressure Pen	Перо з натиском
+	Beads	Намистини
+	Dash Dot	Штрихпунктир
+	Scallops	Фестони
+	Stars	Зірки
+	Triangles	Трикутники
+	Sparkles	Іскри
 	Save Brush Library…	Зберегти бібліотеку пензлів…
 @msg	`{_1}` has no brushes to apply	У `{_1}` немає пензлів для застосування
 @msg	missing `library` (see brush.libraries)	не вказано `library` (див. brush.libraries)

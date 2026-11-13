@@ -6650,6 +6650,22 @@ axis	Y Axis	Y ekseni
 	Graphite Pencil	Grafit Kalem
 	Wax Crayon	Mum Boya
 	Charcoal Dust	Kömür Tozu
+	Notched Ribbon	Çentikli Şerit
+	Double Line	Çift Çizgi
+	Wave	Dalga
+	Teardrop	Gözyaşı
+	Striped Ribbon	Çizgili Şerit
+	Fine Nib	İnce Uç
+	Broad Nib	Geniş Uç
+	Chisel	Keski
+	Round Pen	Yuvarlak Kalem
+	Pressure Pen	Basınçlı Kalem
+	Beads	Boncuklar
+	Dash Dot	Çizgi Nokta
+	Scallops	Fistolar
+	Stars	Yıldızlar
+	Triangles	Üçgenler
+	Sparkles	Parıltılar
 	Save Brush Library…	Fırça Kitaplığını Kaydet…
 @msg	`{_1}` has no brushes to apply	`{_1}` içinde uygulanacak fırça yok
 @msg	missing `library` (see brush.libraries)	`library` eksik (bkz. brush.libraries)

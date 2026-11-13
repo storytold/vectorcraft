@@ -6532,6 +6532,22 @@ axis	Y Axis	Y 轴
 	Graphite Pencil	石墨铅笔
 	Wax Crayon	蜡笔
 	Charcoal Dust	炭粉
+	Notched Ribbon	凹口丝带
+	Double Line	双线
+	Wave	波浪
+	Teardrop	泪滴
+	Striped Ribbon	条纹丝带
+	Fine Nib	细笔尖
+	Broad Nib	宽笔尖
+	Chisel	凿形
+	Round Pen	圆头笔
+	Pressure Pen	压感笔
+	Beads	珠串
+	Dash Dot	点划线
+	Scallops	扇贝边
+	Stars	星形
+	Triangles	三角形
+	Sparkles	闪光
 	Save Brush Library…	保存画笔库…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中没有可应用的画笔
 @msg	missing `library` (see brush.libraries)	缺少 `library`（请参阅 brush.libraries）

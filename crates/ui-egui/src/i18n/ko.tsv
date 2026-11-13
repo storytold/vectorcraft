@@ -6280,6 +6280,22 @@ axis	Y Axis	Y축
 	Graphite Pencil	흑연 연필
 	Wax Crayon	왁스 크레용
 	Charcoal Dust	목탄 가루
+	Notched Ribbon	노치 리본
+	Double Line	이중선
+	Wave	물결
+	Teardrop	눈물방울
+	Striped Ribbon	줄무늬 리본
+	Fine Nib	가는 펜촉
+	Broad Nib	넓은 펜촉
+	Chisel	끌
+	Round Pen	둥근 펜
+	Pressure Pen	필압 펜
+	Beads	구슬
+	Dash Dot	일점쇄선
+	Scallops	스캘럽
+	Stars	별
+	Triangles	삼각형
+	Sparkles	반짝임
 	Save Brush Library…	브러시 라이브러리 저장…
 @msg	`{_1}` has no brushes to apply	`{_1}`에 적용할 브러시가 없습니다
 @msg	missing `library` (see brush.libraries)	`library`가 없습니다(brush.libraries 참조)

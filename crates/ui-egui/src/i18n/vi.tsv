@@ -6300,6 +6300,22 @@ axis	Y Axis	Trục Y
 	Graphite Pencil	Bút chì than chì
 	Wax Crayon	Bút sáp màu
 	Charcoal Dust	Bụi than
+	Notched Ribbon	Dải băng khía
+	Double Line	Đường đôi
+	Wave	Sóng
+	Teardrop	Giọt lệ
+	Striped Ribbon	Dải băng sọc
+	Fine Nib	Ngòi mảnh
+	Broad Nib	Ngòi rộng
+	Chisel	Đục
+	Round Pen	Bút tròn
+	Pressure Pen	Bút áp lực
+	Beads	Hạt cườm
+	Dash Dot	Gạch chấm
+	Scallops	Viền vỏ sò
+	Stars	Ngôi sao
+	Triangles	Tam giác
+	Sparkles	Lấp lánh
 	Save Brush Library…	Lưu thư viện cọ…
 @msg	`{_1}` has no brushes to apply	`{_1}` không có cọ nào để áp dụng
 @msg	missing `library` (see brush.libraries)	thiếu `library` (xem brush.libraries)
