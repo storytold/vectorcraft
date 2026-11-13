@@ -2871,6 +2871,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	Zeilen auf die Farben der Grafik zurücksetzen
 	Color Theme Picker	Farbthema-Auswahl
 	Click or drag across the art to pick its colors; Shift adds more	Klicken oder ziehen Sie über die Grafik, um ihre Farben aufzunehmen; Umschalt fügt weitere hinzu
+	Prominent Colors	Hervorstechende Farben
+	Save All Colors	Alle Farben speichern
+	Save Prominent Colors	Hervorstechende Farben speichern
 	Reset to Default	Auf Standard zurücksetzen
 	Reset to White, Black	Auf Weiß, Schwarz zurücksetzen
 	Reset with Mesh	Mit Gitter zurücksetzen

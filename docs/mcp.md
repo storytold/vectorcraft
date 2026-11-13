@@ -3719,6 +3719,30 @@ excluded take the palette as their new colors in row order, the colors repeating
 {"name":"run_command","arguments":{"command":"recolor.pickTheme","params":{"picks":[{"at":[120,80]},{"rect":[200,40,320,140]}],"colors":4}}}
 ```
 
+`recolor.weigh {map, weights?, ids?}` is the dialog's Prominent Colors bar. It takes rows as `recolor.apply` does and
+returns them as `map`, each with `from` as a list, and `shares`: for each row, its percent of the uses (the `count` of
+`recolor.colors`) of the current colors of the rows that are not excluded, and 0 for an excluded row. A use counts for
+the row that `recolor.apply` recolors it with (rows with a new color first, an exact color before a hex color, then
+the first row that lists it), and otherwise for the first other row that lists it. A current color that no art uses
+counts nothing. Without `weights` the
+rows come back unchanged. `weights` holds one number of 0 or more per row; an excluded row's weight is ignored, and
+at least one other row needs a weight above 0. As VectorCraft's own rule, current colors then move one at a time
+between the rows that are not excluded and have a new color (`to`), as long as a move brings each row's share of the uses nearer its share of the
+weights. Of those moves, it takes first the color nearest in Lab to the first color of the row it goes to, compared
+with the row it leaves. A row keeps its first color, and the tints of one global swatch in a row move together. The
+colors that can move are compared with the rows at most 50,000,000 times in all; when those colors times the rows
+that are not excluded pass that, no color moves. Colors that stay in a row keep their order, and the colors that come
+to it follow them. The command changes nothing; `recolor.apply` with the returned `map` recolors the art. In the Recolor Artwork dialog the
+bar sits under the Edit tab's wheel: each row with a share is a part as wide as that share, in the row's new color,
+the largest first. Dragging the edge between two parts moves width between them, and when the drag ends the widths
+become the `weights` field, which moves the rows' current colors and previews the result. The New Color Group menu
+beside the link button runs `swatch.newGroup` right away, as its own undo step: Save All Colors saves the new colors
+of the rows that are not excluded, in row order, and Save Prominent Colors saves the bar's colors in the bar's order.
+
+```json
+{"name":"run_command","arguments":{"command":"recolor.weigh","params":{"map":[{"from":["rgb 255 0 0","rgb 128 0 204"],"to":"#00ff00"},{"from":["rgb 0 0 255"],"to":"#ffff00"}],"weights":[1,1]}}}
+```
+
 The `recolor.*` commands refuse parameters of the wrong form. A `limitTo` or `method` that is not a string gets the
 error for an unknown library or method. Other wrong-form parameters get an error that names them.
 `includeImages`, `includePatterns`, a row's `exclude`, `order`, `saturationBrightness` and the `white`, `black` and

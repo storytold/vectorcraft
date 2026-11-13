@@ -19,7 +19,13 @@
 //! show the new colors on the smooth wheel, on a segmented wheel (solid patches of 24 hues by 5
 //! saturations; its markers move as freely) or as color bars (one per new color, in row order: click
 //! one to select it for the sliders, drag one to move its row, which changes no color); the dialog
-//! opens on the smooth wheel. The preset menu sets up a 1, 2 or 3
+//! opens on the smooth wheel. With art, the Prominent Colors bar under the wheel shows the new
+//! colors, each part as wide as its row's share of the art's uses, the largest first; dragging the
+//! edge between two parts moves width between them, and when the drag ends the rows' current
+//! colors move toward those widths (`recolor.weigh`), and the art previews them. The New Color
+//! Group menu beside the link button saves the new colors (Save All Colors, in row order) or the
+//! bar's colors (Save Prominent Colors, in its order) as a color group right away, a step of its
+//! own. The preset menu sets up a 1, 2 or 3
 //! colour job or a library. Opened on a colour group (Edit or Apply Color Group), OK also rewrites
 //! the group with the new colours (renamed by `groupName`); without art only the group changes.
 //! Opened on colours alone (the Color Guide's Edit or Apply Colors without art), OK saves the new
@@ -41,8 +47,9 @@
 //! (`{saturation, brightness, temperature, luminosity}` in percent, sent as `recolor.apply`'s
 //! `globalAdjust` in every slider mode), `display` (the Edit tab's `smooth`, `segmented` or `bars`;
 //! unset: `smooth`), `themePicker` (the Color Theme Picker is on), `themePicks` (its picks, as
-//! `recolor.pickTheme`'s `picks`; a new list recolors the rows). Changing `colors`, a preserve
-//! flag or `limitTo` reduces the rows again.
+//! `recolor.pickTheme`'s `picks`; a new list recolors the rows), `weights` (one per row, as
+//! `recolor.weigh`'s; a new list moves the rows' current colors toward them). Changing `colors`, a
+//! preserve flag or `limitTo` reduces the rows again (and drops `weights`).
 
 use egui::{Rect, Sense, Ui, pos2, vec2};
 use serde_json::{Value, json};
@@ -151,7 +158,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         "preserveWhite": kept("preserveWhite", true), "preserveBlack": kept("preserveBlack", true),
         "preserveGrays": kept("preserveGrays", false), "limitTo": limit,
         "group": group, "groupName": if new_group { Some(NEW_GROUP) } else { group }, "tab": "assign", "rule": Harmony::Complementary.id(), "linked": true,
-        "preview": true, THEME_PICKER: false, THEME_PICKS: [], "__art": art, "__assign": assign, "__newGroup": new_group,
+        "preview": true, THEME_PICKER: false, THEME_PICKS: [], WEIGHTS: null, "__art": art, "__assign": assign, "__newGroup": new_group,
     });
     let mut d = Dialog::new(KIND, fields);
     // Without art the rows are there from the start: limit them now (art's rows snap as they reduce).
@@ -214,6 +221,182 @@ fn sync(app: &mut VectorcraftApp, d: &mut Dialog) {
     d.fields.insert(DONE.into(), sig);
     // New rows take the colors picked with the Color Theme Picker again.
     d.fields.remove(THEME_DONE);
+    // Weights given for the old rows don't apply to the new ones.
+    d.fields.remove(WEIGHTS);
+    d.fields.remove(WEIGHED);
+}
+
+/// The fields of Prominent Colors: the weights the rows are to take (`recolor.weigh`'s `weights`,
+/// one per row; a new list moves the rows' current colors), the weights they last took, each row's
+/// share of the art's uses (`recolor.weigh`'s `shares`) and the rows' current colors those were
+/// read for; a drag of a part's edge (each part's share of the bar while it lasts); and a request
+/// from the New Color Group menu (`all` or `prominent`).
+const WEIGHTS: &str = "weights";
+const WEIGHED: &str = "__weighed";
+const SHARES: &str = "__shares";
+const SHARES_OF: &str = "__sharesOf";
+const BAR_DRAG: &str = "__barDrag";
+const SAVE_GROUP: &str = "__saveGroup";
+/// Height of the Prominent Colors bar, and the smallest share of it a drag leaves a part.
+const PROMINENT_H: f32 = 18.0;
+const MIN_PART: f64 = 0.01;
+/// The ids of the bar's part `n` and of the edge after part `k`, with `n` or `k`.
+const PROMINENT_PART: &str = "recolor-prominent-part";
+const PROMINENT_EDGE: &str = "recolor-prominent-edge";
+
+/// Cancel the preview, so commands read the art's own colors; it runs again afterwards.
+fn cancel_preview(app: &mut VectorcraftApp, d: &mut Dialog) {
+    if d.fields.remove(super::form::PREVIEWED).is_some() {
+        let _ = app.session.cancel_interaction();
+    }
+}
+
+/// With art: when `weights` changed, move the rows' current colors toward them
+/// (`recolor.weigh`); when the rows' current colors changed, read each row's share of the art's
+/// uses again.
+fn sync_weights(app: &mut VectorcraftApp, d: &mut Dialog) {
+    if !d.bool("__art") {
+        return;
+    }
+    if let Some(w) = d.fields.get(WEIGHTS).filter(|w| !w.is_null()).cloned()
+        && d.fields.get(WEIGHED) != Some(&w)
+    {
+        d.fields.insert(WEIGHED.into(), w.clone());
+        cancel_preview(app, d);
+        match app.session.execute("recolor.weigh", &json!({"map": rows(d), "weights": w})) {
+            Ok(r) => {
+                if let Some(m) = r["map"].as_array() {
+                    d.fields.insert("rows".into(), Value::Array(m.clone()));
+                }
+            }
+            Err(e) => app.status(e.to_string()),
+        }
+    }
+    let rs = rows(d);
+    let of = Value::Array(rs.iter().map(|r| json!([r["from"], excluded(r)])).collect());
+    if d.fields.get(SHARES_OF) == Some(&of) {
+        return;
+    }
+    cancel_preview(app, d);
+    let shares = match app.session.execute("recolor.weigh", &json!({"map": rs})) {
+        Ok(r) => r["shares"].clone(),
+        Err(e) => {
+            app.status(e.to_string());
+            json!([])
+        }
+    };
+    d.fields.insert(SHARES.into(), shares);
+    d.fields.insert(SHARES_OF.into(), of);
+}
+
+/// The parts of the Prominent Colors bar: each row that isn't excluded and has a share of the
+/// art's uses, with that share in percent, the largest share first (on a tie, the first row).
+fn prominent_parts(d: &Dialog, rows: &[Value]) -> Vec<(usize, f64)> {
+    let shares = d.fields.get(SHARES).and_then(Value::as_array).cloned().unwrap_or_default();
+    let mut parts: Vec<(usize, f64)> = shares
+        .iter()
+        .enumerate()
+        .filter_map(|(i, s)| Some((i, s.as_f64().filter(|s| *s > 0.0)?)))
+        .filter(|(i, _)| rows.get(*i).is_some_and(|r| !excluded(r)))
+        .collect();
+    parts.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
+    parts
+}
+
+/// The Prominent Colors bar: a part per row of [`prominent_parts`] with the row's new color, as wide
+/// as its share of the art's uses. A drag of the edge between two parts moves width from one to
+/// the other (each keeps at least [`MIN_PART`] of the bar); when it ends, the parts' widths become
+/// the rows' `weights`.
+fn prominent_bar(ui: &mut Ui, d: &mut Dialog, rows: &[Value]) {
+    let t = Tokens::get(ui.ctx());
+    let parts = prominent_parts(d, rows);
+    let (bar, resp) = ui.allocate_exact_size(vec2(ui.available_width(), PROMINENT_H), Sense::hover());
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, ui.is_enabled(), tl!("Prominent Colors")));
+    if parts.is_empty() {
+        ui.painter().rect_stroke(bar, 1.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+        return;
+    }
+    let total: f64 = parts.iter().map(|p| p.1).sum();
+    let mut widths: Vec<f64> = match d.fields.get(BAR_DRAG).and_then(Value::as_array) {
+        Some(w) if w.len() == parts.len() => w.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect(),
+        _ => parts.iter().map(|p| p.1 / total).collect(),
+    };
+    let w = f64::from(bar.width());
+    let edge = |k: usize, widths: &[f64]| bar.left() + (widths[..=k].iter().sum::<f64>() * w) as f32;
+    let mut left = bar.left();
+    for (n, (i, _)) in parts.iter().enumerate() {
+        let right = if n + 1 == parts.len() { bar.right() } else { edge(n, &widths) };
+        let r = Rect::from_min_max(pos2(left, bar.top()), pos2(right, bar.bottom()));
+        let c = to_color(&rows[*i]).or_else(|| from_colors(&rows[*i]).first().copied()).unwrap_or_default();
+        chip(ui, r, c, false);
+        let share = (widths[n] * 100.0).round();
+        ui.interact(r, egui::Id::unique((PROMINENT_PART, n)), Sense::hover()).on_hover_text(format!("{} {}: {share}%", tl!("Color"), i + 1));
+        left = right;
+    }
+    let mut ended = false;
+    for k in 0..parts.len() - 1 {
+        let x = edge(k, &widths);
+        let handle = Rect::from_center_size(pos2(x, bar.center().y), vec2(8.0, PROMINENT_H));
+        let h = ui.interact(handle, egui::Id::unique((PROMINENT_EDGE, k)), Sense::drag()).on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
+        if h.dragged() && w > 0.0 {
+            // Each part keeps MIN_PART, or half of the two parts' width when they are narrower.
+            let pair = widths[k] + widths[k + 1];
+            let least = MIN_PART.min(pair / 2.0);
+            let moved = (widths[k] + f64::from(h.drag_delta().x) / w).clamp(least, pair - least);
+            widths[k] = moved;
+            widths[k + 1] = pair - moved;
+            d.fields.insert(BAR_DRAG.into(), json!(widths));
+        }
+        if h.hovered() || h.dragged() {
+            ui.painter().vline(x, bar.y_range(), egui::Stroke::new(2.0, t.accent));
+        }
+        ended |= h.drag_stopped();
+    }
+    if ended && d.fields.remove(BAR_DRAG).is_some() {
+        let mut weights = vec![0.0; rows.len()];
+        for ((i, _), x) in parts.iter().zip(&widths) {
+            weights[*i] = (x * 10_000.0).round() / 100.0;
+        }
+        d.fields.insert(WEIGHTS.into(), json!(weights));
+    }
+}
+
+/// The colors a new color group takes from rows `rs`: each row's new color with the Global Adjust,
+/// snapped to Limit to Library, as `recolor.apply` gives them to a group; a row without a new color
+/// gives its first current color, which the art keeps.
+fn group_colors<'a>(app: &VectorcraftApp, d: &Dialog, rs: impl Iterator<Item = &'a Value>) -> Vec<Value> {
+    let adjust = global_adjust(adjust_values(d));
+    let limit = d.str("limitTo");
+    let palette = Some(limit).filter(|l| !l.is_empty()).and_then(|l| swatchlib::limit_palette(&app.session, &l));
+    rs.filter_map(|r| match to_color(r) {
+        None => from_colors(r).first().map(key),
+        Some(_) if adjust.is_identity() => Some(r["to"].clone()),
+        Some(c) => {
+            let c = adjust.apply(c);
+            Some(key(&palette.as_ref().map_or(c, |p| p.nearest(c))))
+        }
+    })
+    .collect()
+}
+
+/// The New Color Group menu's request: save the new colors of the rows that aren't excluded (Save
+/// All Colors, in row order; a row without one gives its first current color) or of the Prominent Colors bar (Save Prominent Colors, in its order)
+/// as a new color group, a step of its own (`swatch.newGroup`).
+fn save_group(app: &mut VectorcraftApp, d: &mut Dialog, which: &str) {
+    let rs = rows(d);
+    let order: Vec<usize> = match which {
+        "prominent" => prominent_parts(d, &rs).into_iter().map(|p| p.0).collect(),
+        _ => (0..rs.len()).filter(|&i| !excluded(&rs[i])).collect(),
+    };
+    let colors = group_colors(app, d, order.iter().filter_map(|&i| rs.get(i)));
+    if colors.is_empty() {
+        return;
+    }
+    // The group is added to the document itself, not to the preview, which runs again afterwards.
+    cancel_preview(app, d);
+    if let Err(e) = app.run("swatch.newGroup", json!({"colors": colors, "keepModel": true})) {
+        app.status(e);
+    }
 }
 
 /// The fields of the Color Theme Picker: whether a click or drag on the canvas picks colors, and
@@ -401,6 +584,7 @@ fn apply_params(d: &Dialog) -> Value {
 fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     sync(app, d);
     sync_theme(app, d);
+    sync_weights(app, d);
     let t = Tokens::get(ui.ctx());
     let picking = d.bool(THEME_PICKER);
     ui.horizontal(|ui| {
@@ -444,6 +628,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
         }
         d.fields.insert("rows".into(), Value::Array(rs));
     }
+    sync_weights(app, d);
+    if let Some(which) = d.fields.remove(SAVE_GROUP) {
+        save_group(app, d, which.as_str().unwrap_or_default());
+    }
     if d.fields.get("group").is_some_and(Value::is_string) || d.bool("__newGroup") {
         ui.add_space(6.0);
         ui.horizontal(|ui| {
@@ -479,25 +667,9 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut d = d.clone();
     sync(app, &mut d);
     sync_theme(app, &mut d);
+    sync_weights(app, &mut d);
     if d.bool("__newGroup") {
-        // The new colors with the Global Adjust, snapped to Limit to Library, as `recolor.apply`
-        // gives them to a group.
-        let adjust = global_adjust(adjust_values(&d));
-        let limit = d.str("limitTo");
-        let palette = Some(limit).filter(|l| !l.is_empty()).and_then(|l| swatchlib::limit_palette(&app.session, &l));
-        let colors: Vec<Value> = rows(&d)
-            .into_iter()
-            .filter(|r| !excluded(r))
-            .map(|r| {
-                to_color(&r).filter(|_| !adjust.is_identity()).map_or_else(
-                    || r["to"].clone(),
-                    |c| {
-                        let c = adjust.apply(c);
-                        key(&palette.as_ref().map_or(c, |p| p.nearest(c)))
-                    },
-                )
-            })
-            .collect();
+        let colors = group_colors(app, &d, rows(&d).iter().filter(|r| !excluded(r)));
         return form::commit_preview(app, "swatch.newGroup", json!({"name": d.str("groupName"), "colors": colors, "keepModel": true}));
     }
     let r = form::commit_preview(app, CMD, apply_params(&d))?;
@@ -1091,6 +1263,18 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value
             if widgets::icon_button(ui, if linked { "link" } else { "link-2-off" }, tip, linked, 24.0).clicked() {
                 d.fields.insert("linked".into(), json!(!linked));
             }
+            // New Color Group: save the wheel's colors or the Prominent Colors as a color group.
+            let button = widgets::icon_button(ui, "dc-folder", tl!("New Color Group"), false, 24.0);
+            let prominent = d.bool("__art") && !prominent_parts(d, rows).is_empty();
+            let saved = egui::Popup::menu(&button).show(|ui| {
+                if widgets::menu_item_name(ui, tl!("Save All Colors"), rows.iter().any(|r| !excluded(r)), false) {
+                    return Some("all");
+                }
+                widgets::menu_item_name(ui, tl!("Save Prominent Colors"), prominent, false).then_some("prominent")
+            });
+            if let Some(which) = saved.and_then(|r| r.inner) {
+                d.fields.insert(SAVE_GROUP.into(), json!(which));
+            }
             ui.add_space(8.0);
             // The mode of the color sliders under the wheel: the selected new color in a color
             // mode, or Global Adjust for all of them.
@@ -1122,6 +1306,11 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value
             _ => w = widgets::harmony_wheel(ui, "recolor-wheel", WHEEL, &colors, marked),
         });
     });
+    // Prominent Colors: the art's new colors, each as wide as its share of the art.
+    if d.bool("__art") {
+        ui.add_space(6.0);
+        prominent_bar(ui, d, rows);
+    }
     if let Some(k) = w.pressed {
         d.fields.insert("__sel".into(), json!([active[k]]));
     }
@@ -1623,6 +1812,130 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!((fill_hex(&app, red), fill_hex(&app, blue)), ("#ff0000".into(), "#0000ff".into()), "the excluded row kept red");
         assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    }
+
+    const RED: &str = "rgb 255 0 0";
+    const PURPLE: &str = "rgb 128 0 204";
+    const BLUE: &str = "rgb 0 0 255";
+
+    /// Two red squares, a purple one and a blue one, selected; Recolor Artwork open on them on the
+    /// Edit tab with the Exact method and the rows set: the blue to yellow, then the red and purple
+    /// to green (the purple's square id last). One frame drawn.
+    fn prominent_setup(app: &mut VectorcraftApp, ctx: &egui::Context) -> u64 {
+        app.run("file.new", json!({"width": 300, "height": 100})).unwrap();
+        let ids = [square(app, 10.0, "#ff0000"), square(app, 40.0, "#ff0000"), square(app, 70.0, "#8000cc"), square(app, 100.0, "#0000ff")];
+        app.run("select.set", json!({"ids": ids})).unwrap();
+        app.run("ui.recolorDialog", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("method".into(), json!(Method::Exact.id()));
+        d.fields.insert("tab".into(), json!("edit"));
+        crate::theme::install_fonts(ctx);
+        frame(app, ctx, 0.0, vec![], 0);
+        let rows = json!([{"from": [BLUE], "to": "rgb 255 255 0"}, {"from": [RED, PURPLE], "to": "rgb 0 255 0"}]);
+        app.ui.dialog.as_mut().unwrap().fields.insert("rows".into(), rows);
+        frame(app, ctx, 0.01, vec![], 0);
+        ids[2]
+    }
+
+    fn froms(app: &VectorcraftApp) -> Vec<Value> {
+        super::rows(app.ui.dialog.as_ref().unwrap()).iter().map(|r| r["from"].clone()).collect()
+    }
+
+    /// The Prominent Colors bar holds each row's share of the art's uses, the largest first; new
+    /// `weights` move the rows' current colors toward them, the art previews the result, and only
+    /// OK commits it, as one undo step.
+    #[test]
+    fn weights_move_the_rows_colors_and_the_art_previews_them() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        let purple = prominent_setup(&mut app, &ctx);
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!(d.fields[SHARES], json!([25.0, 75.0]));
+        assert_eq!(prominent_parts(d, &super::rows(d)), [(1, 75.0), (0, 25.0)], "the largest share first");
+        assert_eq!(fill_hex(&app, purple), "#00ff00", "the art previews the rows");
+        let undo = app.session.doc().unwrap().history.undo.len();
+        app.ui.dialog.as_mut().unwrap().fields.insert(WEIGHTS.into(), json!([50, 50]));
+        frame(&mut app, &ctx, 0.1, vec![], 0);
+        assert_eq!(froms(&app), [json!([BLUE, PURPLE]), json!([RED])]);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields[SHARES], json!([50.0, 50.0]));
+        assert_eq!(fill_hex(&app, purple), "#ffff00", "the moved color previews its new row's color");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "nothing is committed before OK");
+        // A new count of Colors reduces the rows again and drops the weights.
+        app.ui.dialog.as_mut().unwrap().fields.insert("colors".into(), json!(2));
+        frame(&mut app, &ctx, 0.2, vec![], 0);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get(WEIGHTS), None);
+        app.ui
+            .dialog
+            .as_mut()
+            .unwrap()
+            .fields
+            .insert("rows".into(), json!([{"from": [BLUE, PURPLE], "to": "rgb 255 255 0"}, {"from": [RED], "to": "rgb 0 255 0"}]));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(fill_hex(&app, purple), "#ffff00");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    }
+
+    /// Dragging the edge between two parts of the bar to the left gives the right-hand part more
+    /// weight; when the drag ends, the rows' current colors move.
+    #[test]
+    fn dragging_a_prominent_edge_moves_colors_between_rows() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        let purple = prominent_setup(&mut app, &ctx);
+        let edge = |ctx: &egui::Context| ctx.read_response(egui::Id::unique((PROMINENT_EDGE, 0usize))).map(|r| r.rect);
+        let mut last = None;
+        for n in 0..10 {
+            frame(&mut app, &ctx, 0.02 + f64::from(n) * 0.001, vec![], 0);
+            let r = edge(&ctx);
+            if r.is_some() && r == last {
+                break;
+            }
+            last = r;
+        }
+        let at = edge(&ctx).expect("the edge between the two parts").center();
+        let bar = ctx.read_response(egui::Id::unique((PROMINENT_PART, 0usize))).unwrap().rect;
+        // From 75% to 50%: a quarter of the bar to the left.
+        let to = at - vec2((bar.width() / 0.75) * 0.25, 0.0);
+        let button =
+            |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        frame(&mut app, &ctx, 0.1, vec![egui::Event::PointerMoved(at), button(at, true)], 0);
+        for k in 1..=5 {
+            frame(&mut app, &ctx, 0.1 + f64::from(k) * 0.02, vec![egui::Event::PointerMoved(at + (to - at) * (k as f32 / 5.0))], 0);
+        }
+        assert!(app.ui.dialog.as_ref().unwrap().fields.contains_key(BAR_DRAG), "the drag is under way");
+        assert_eq!(froms(&app)[0], json!([BLUE]), "the rows wait for the drag to end");
+        frame(&mut app, &ctx, 0.3, vec![button(to, false)], 0);
+        frame(&mut app, &ctx, 0.32, vec![], 0);
+        let d = app.ui.dialog.as_ref().unwrap();
+        let w = d.fields[WEIGHTS].as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect::<Vec<_>>();
+        assert!((w[0] - 50.0).abs() < 2.0 && (w[1] - 50.0).abs() < 2.0, "{w:?}");
+        assert_eq!(froms(&app), [json!([BLUE, PURPLE]), json!([RED])]);
+        assert_eq!(fill_hex(&app, purple), "#ffff00");
+    }
+
+    /// The New Color Group menu's Save All Colors saves the new colors in row order and Save
+    /// Prominent Colors the bar's colors, the largest share first, each as its own step; the
+    /// preview of the recolor runs on.
+    #[test]
+    fn save_all_and_prominent_colors_make_color_groups() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        let purple = prominent_setup(&mut app, &ctx);
+        let groups = |app: &VectorcraftApp| app.session.doc().unwrap().doc.swatch_groups.len();
+        let last = |app: &VectorcraftApp| -> Vec<String> {
+            let doc = &app.session.doc().unwrap().doc;
+            doc.swatch_groups.last().unwrap().swatches.iter().map(|w| w.paint.color().unwrap().to_hex()).collect()
+        };
+        let (n, undo) = (groups(&app), app.session.doc().unwrap().history.undo.len());
+        for (which, colors, t) in [("all", ["#ffff00", "#00ff00"], 0.1), ("prominent", ["#00ff00", "#ffff00"], 0.2)] {
+            app.ui.dialog.as_mut().unwrap().fields.insert(SAVE_GROUP.into(), json!(which));
+            frame(&mut app, &ctx, t, vec![], 0);
+            frame(&mut app, &ctx, t + 0.01, vec![], 0);
+            assert_eq!(last(&app), colors, "{which}");
+            assert_eq!(fill_hex(&app, purple), "#00ff00", "{which}: the art still previews the rows");
+        }
+        assert_eq!(groups(&app), n + 2);
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 2, "a step for each group");
     }
 
     /// One frame with `modifiers` held.
