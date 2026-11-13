@@ -2245,6 +2245,37 @@ fn alt_arrows_step_selected_type_object() {
     assert_ne!(selected[0], vectorcraft_doc::NodeId(rect), "a non-type object is still copied by Alt+arrow");
 }
 
+/// With the Live Paint Bucket, a plain Right picks the next color swatch, while Alt+Right keeps
+/// copying and nudging the selection, and a Shift+Right released within the same frame is still a
+/// Shift+Right that picks no swatch.
+#[test]
+fn live_paint_bucket_takes_only_plain_arrows_for_swatches() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let rect = app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [rect]})).unwrap();
+    let first = vectorcraft_tools::builder::color_swatches(&app.session.active().unwrap().doc)[0].name.clone();
+    app.session.execute("paint.setFill", &json!({"swatch": first, "ids": []})).unwrap();
+    app.select_tool("livePaintBucket");
+    let fill = app.session.paint.fill.clone();
+
+    frame(&mut app, press(Key::ArrowRight, Modifiers::ALT));
+    assert_eq!(app.session.paint.fill, fill, "Alt+Right picks no swatch");
+    let selected = &app.session.active().unwrap().selection.objects;
+    assert_ne!(selected.as_slice(), [vectorcraft_doc::NodeId(rect)], "Alt+Right copies and nudges the selection");
+
+    let shift_then_released = vec![
+        egui::Event::ModifiersChanged(Modifiers::SHIFT),
+        egui::Event::Key { key: Key::ArrowRight, physical_key: Some(Key::ArrowRight), pressed: true, repeat: false, modifiers: Modifiers::SHIFT },
+        egui::Event::ModifiersChanged(Modifiers::NONE),
+    ];
+    frame(&mut app, shift_then_released);
+    assert_eq!(app.session.paint.fill, fill, "Shift+Right picks no swatch");
+
+    frame(&mut app, press(Key::ArrowRight, Modifiers::NONE));
+    assert_ne!(app.session.paint.fill, fill, "a plain Right picks the next swatch");
+}
+
 /// #793: with a layout without Latin letters the one-key shortcuts go by the key's position:
 /// the P key typing Persian `ح` chooses the Pen, the V key typing Russian `м` the Selection
 /// tool. A Latin layout keeps the letter typed: AZERTY's A (the Q key's place) is A.

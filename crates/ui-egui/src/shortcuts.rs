@@ -878,8 +878,23 @@ fn claimed_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewIn
         // The Smart Pen Tool's Tab while it draws a path (the key otherwise hides the panels).
         (Key::Tab, ToolKey::Tab),
     ] {
-        if !rows_take(k) && ctx.input(|i| i.key_pressed(k)) && app.session.tool_claims_key(tk, view) && ctx.input_mut(|i| i.consume_key(m, k)) {
-            let r = app.session.tool_key(tk, crate::canvas::mods(m, false), view);
+        // The modifiers held when the key went down, which can differ from the frame's at its end.
+        let pm = ctx.input(|i| {
+            i.events
+                .iter()
+                .rev()
+                .find_map(|e| match e {
+                    egui::Event::Key { key, pressed: true, modifiers, .. } if *key == k => Some(*modifiers),
+                    _ => None,
+                })
+                .unwrap_or(m)
+        });
+        if !rows_take(k)
+            && ctx.input(|i| i.key_pressed(k))
+            && app.session.tool_claims_key_with(tk, crate::canvas::mods(pm, false), view)
+            && ctx.input_mut(|i| i.consume_key(pm, k))
+        {
+            let r = app.session.tool_key(tk, crate::canvas::mods(pm, false), view);
             // Keyboard actions can change the Artboard tool's active board too. Keep the
             // navigator aligned with its valid survivor, as pointer dispatch does.
             if r.is_ok()

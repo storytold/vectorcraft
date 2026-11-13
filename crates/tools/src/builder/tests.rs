@@ -1113,7 +1113,12 @@ fn bucket_options_choose_what_a_click_paints() {
     };
     let (face, edge) = (Some(Rect::new(50.0, 0.0, 100.0, 50.0)), Some(Rect::new(50.0, 0.0, 50.0, 50.0)));
     let mut t = LivePaintBucketTool::default();
-    assert_eq!(t.options(), json!({"paintFills": true, "paintStrokes": false, "highlight": true, "color": "#ff2a2a", "width": 4.0}));
+    assert_eq!(
+        t.options(),
+        json!({"paintFills": true, "paintStrokes": false, "cursorSwatchPreview": true, "highlight": true, "color": "#ff2a2a", "width": 4.0})
+    );
+    // The highlight alone, without the swatch chips.
+    t.set_option("cursorSwatchPreview", &json!(false));
     // Paint Fills alone: 1 pt from the edge, a click fills the face and Shift-click strokes the edge.
     assert_eq!((click(&mut t, 51.0, Mods::default()), hovered(&mut t, 51.0, Mods::default())), (fill(51.0), face));
     assert_eq!((click(&mut t, 51.0, shift), hovered(&mut t, 51.0, shift)), (stroke(51.0), edge));
@@ -1231,6 +1236,7 @@ fn bucket_fills_a_region_of_a_selection_that_mixes_a_group_and_paths() {
     s.set([g]);
     let live = cx(&d, &s, &p);
     let mut t = LivePaintBucketTool::default();
+    t.set_option("cursorSwatchPreview", &json!(false));
     t.pointer(&live, &ev(PointerKind::Move, pos.x, pos.y));
     t.poll(&live, true);
     assert!(t.overlays(&live).is_empty());
@@ -1245,6 +1251,7 @@ fn bucket_strokes_alone_paints_and_highlights_no_region_of_the_selection() {
     let p = paint();
     let cx = cx(&d, &s, &p);
     let mut t = LivePaintBucketTool::default();
+    t.set_option("cursorSwatchPreview", &json!(false));
     t.pointer(&cx, &ev(PointerKind::Move, 75.0, 50.0));
     t.poll(&cx, true);
     assert!(!t.overlays(&cx).is_empty(), "Paint Fills highlights the region");
@@ -1263,6 +1270,7 @@ fn bucket_options_set_the_highlight() {
     let p = paint();
     let cx = cx(&d, &s, &p);
     let mut t = LivePaintBucketTool::default();
+    t.set_option("cursorSwatchPreview", &json!(false));
     let highlight = |t: &mut LivePaintBucketTool| {
         t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
         match t.overlays(&cx).as_slice() {
@@ -1299,6 +1307,7 @@ fn bucket_highlights_an_edge_thinner_than_a_face() {
     let p = paint();
     let cx = cx(&d, &s, &p);
     let mut t = LivePaintBucketTool::default();
+    t.set_option("cursorSwatchPreview", &json!(false));
     let width = |t: &mut LivePaintBucketTool, x: f64, shift: bool| {
         t.pointer(&cx, &ev(PointerKind::Move, x, 25.0).with_mods(Mods { shift, ..Default::default() }));
         match t.overlays(&cx).as_slice() {
@@ -1517,7 +1526,7 @@ fn bucket_hover_builds_a_large_map_on_another_thread() {
     poll_until_ready(&mut t, &cx);
     assert!(matches!(t.hover, LpHover::Region(_)), "{:?}", t.hover);
     assert_eq!((t.cache.builds, t.cache.background), (1, 1));
-    assert_eq!(t.overlays(&cx).len(), 1);
+    assert_eq!(t.overlays(&cx).iter().filter(|o| matches!(o, Overlay::Path { .. })).count(), 1);
 }
 
 #[test]
@@ -1883,6 +1892,7 @@ fn live_paint_edges_outside_the_faces_come_from_the_nearest_visible_group() {
         };
         assert_eq!(lp_click(&mut sel, &cx, ev(PointerKind::Down, x, y).with_mods(alt)), vec![picked]);
         let mut bucket = LivePaintBucketTool::default();
+        bucket.set_option("cursorSwatchPreview", &json!(false));
         bucket.pointer(&cx, &ev(PointerKind::Move, x, y).with_mods(shift));
         assert_eq!(edge_x(&bucket.overlays(&cx)), want.map(|w| w.2));
         let stroked = want.map(|(g, ..)| Action::Exec("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": [x, y], "tolerance": 4.0 })));
@@ -1926,6 +1936,7 @@ fn live_paint_tools_skip_hidden_edges() {
         };
         assert_eq!(lp_click(&mut sel, &cx, ev(PointerKind::Down, x, 50.0).with_mods(alt)), vec![picked], "x {x}");
         let mut bucket = LivePaintBucketTool::default();
+        bucket.set_option("cursorSwatchPreview", &json!(false));
         bucket.pointer(&cx, &ev(PointerKind::Move, x, 50.0).with_mods(shift));
         assert_eq!(edge_x(&bucket.overlays(&cx)), want.map(|w| w.2), "x {x}");
         let stroked = want.map(|(g, ..)| Action::Exec("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": [x, 50.0], "tolerance": 4.0 })));
@@ -1953,6 +1964,7 @@ fn live_paint_tools_skip_hidden_faces() {
     };
     // Where the faces overlap, both tools take the back group's face under the hidden one.
     let mut bucket = LivePaintBucketTool::default();
+    bucket.set_option("cursorSwatchPreview", &json!(false));
     bucket.pointer(&cx, &ev(PointerKind::Move, 75.0, 50.0));
     assert_eq!(part(&bucket.overlays(&cx)), Some(Rect::new(0.0, 0.0, 100.0, 100.0)));
     let fill = Action::Preview("livePaint.fill".into(), json!({ "group": back.0, "point": [75.0, 50.0] }));
