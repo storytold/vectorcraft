@@ -758,9 +758,31 @@ designs keep their own paint. A row that had no
 paint before the command and has none after it does not change the paint the graph stores. `paint.setFill`,
 `paint.setStroke`, `paint.none` and the commands that apply one paint kind to the other store the topmost row of the kind
 even when it is hidden, and store a stroke set on a band. `stroke.set`, `paint.editGradient` and the recolor commands do
-not store a series' paint. An `appearance.*` command or `graphicStyle.apply` given a series group's id, and
-`graphicStyle.redefine` on a series group linked to the style, edit the group's own rows, and the graph does not store
-them.
+not store a series' paint.
+
+`appearance.addFill`, `appearance.addStroke`, `appearance.setItem`, `appearance.removeItem`,
+`appearance.duplicateItem`, `appearance.moveItem`, `appearance.clear`, `appearance.reduceToBasic`,
+`appearance.showAllHidden`, `appearance.transfer` (as its `target`), `graphicStyle.apply`, and `transparency.set` with a
+fill or stroke `item`, given a series group's id or the selected series group, edit the paths directly in the group as
+if each had been given, and the group keeps no rows of its own. A series group with no path directly in it, for example
+one drawn with a column design, and a series group that has a fill or stroke row of its own, as a document saved by an
+earlier version can hold, are edited themselves by these commands, and `appearance.moveItem` with `from: "contents"`
+moves the group's own Contents row. `appearance.clear`, `appearance.reduceToBasic`, `appearance.showAllHidden` and
+`graphicStyle.breakLink` edit the group as well as its paths. `graphicStyle.apply` without `add` and
+`appearance.transfer` onto the group clear the group's own effects, opacity, blend mode, isolation, knockout and style
+link, and `graphicStyle.apply` with `add` unlinks the group. With `appearance.transfer`, a `source` that is one of the
+target group's paths keeps its look on a move, and a `source` that is the group's only path is an error.
+`graphicStyle.redefine` gives the style to the paths directly in a series group linked to it, whether or not the group
+has rows of its own, links them, and clears and unlinks the group; the source and the paths linked to the style whose
+look was edited keep their look. Read as a source, by `graphicStyle.new`, `graphicStyle.redefine` or
+`appearance.transfer`, a series group that has no fill, stroke, effect, opacity, blend mode, isolation, knockout or
+style link of its own gives the look and the style link of the topmost path directly in it, and a move with
+`appearance.transfer` clears each of those paths; a series group that has one of them is read itself.
+
+The other commands given a series group's id edit the group itself, and the graph does not store what they set on it:
+`transparency.set` and `object.setProps` with an opacity or blend mode for the object, the `effect.*` commands and
+`appearance.addEffect`, and the paint, stroke and gradient commands with a fill or stroke `item`, which is a row of the
+group's own stack. The Appearance panel and `appearance.setActiveItem` read the selected group's own rows.
 
 `text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
 it sets for each kind of label it reaches (value axis numbers, category labels, legend labels), and every label of that
