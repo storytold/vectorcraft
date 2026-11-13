@@ -444,6 +444,22 @@ antiAlias	Sharp	शार्प
 	Graphite Pencil	ग्रेफाइट पेंसिल
 	Wax Crayon	मोम क्रेयॉन
 	Charcoal Dust	चारकोल धूल
+	Notched Ribbon	नोकदार रिबन
+	Double Line	दोहरी लाइन
+	Wave	लहर
+	Teardrop	आंसू की बूंद
+	Striped Ribbon	धारीदार रिबन
+	Fine Nib	बारीक निब
+	Broad Nib	चौड़ी निब
+	Chisel	छेनी
+	Round Pen	गोल पेन
+	Pressure Pen	प्रेशर पेन
+	Beads	मोती
+	Dash Dot	डैश डॉट
+	Scallops	स्कैलप
+	Stars	तारे
+	Triangles	त्रिभुज
+	Sparkles	चमक
 	Art using a deleted global swatch keeps its colour.	हटाए गए ग्लोबल स्वॉच वाला आर्टवर्क अपना रंग बनाए रखता है।
 	Artboard	आर्टबोर्ड
 	Artboard {n} of {total}	{total} में से आर्टबोर्ड {n}
@@ -3412,6 +3428,8 @@ antiAlias	Sharp	शार्प
 	per slice	प्रति स्लाइस
 	Percent:	प्रतिशत:
 	Perceptual	परसेप्चुअल
+	Hue Clockwise	ह्यू घड़ी की दिशा में
+	Hue Counterclockwise	ह्यू घड़ी की विपरीत दिशा में
 	Perceptual Scales	अवधारणात्मक स्केल
 	Performance	प्रदर्शन
 	Permissions	अनुमतियां
@@ -3480,6 +3498,7 @@ antiAlias	Sharp	शार्प
 	Continue	जारी रखें
 	Continue Action	एक्शन जारी रखें
 	Delete Action Step	एक्शन का चरण हटाएं
+	Move Action Step	एक्शन का चरण खिसकाएं
 	Press Play Current Selection in the Actions panel to go on.	आगे बढ़ने के लिए एक्शन्स पैनल में वर्तमान सिलेक्शन प्ले करें दबाएँ।
 	Stop: {message}	स्टॉप: {message}
 @msg	no action is waiting at a stop	कोई एक्शन स्टॉप पर प्रतीक्षा नहीं कर रहा है
@@ -6077,7 +6096,7 @@ antiAlias	Sharp	शार्प
 @msg	`length` must be a number of at most 1000000 pt either way	`length` को 1000000 pt में से एक होना चाहिए।
 @msg	`library` is a library id or name (see {list})	`library` एक लाइब्रेरी आईडी या नाम है ( {list} देखें)
 @msg	`line` must be true or false	`line` को true या false होना चाहिए
-@msg	`method` must be classic or perceptual	`method` क्लासिक या अवधारणात्मक होना चाहिए
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` classic, perceptual, hue-clockwise या hue-counterclockwise होना चाहिए
 @msg	`spread` must be pad, repeat or reflect	`spread` pad, repeat या reflect होना चाहिए
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 1 से {MAX_REPEATS} तक की पूर्ण संख्या होनी चाहिए
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` रैखिक, रेडियल, शंक्वाकार और डायमंड ग्रेडिएंट्स पर लागू होता है

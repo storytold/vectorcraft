@@ -268,6 +268,30 @@ fn built_in_brush_library_names_are_in_complete_catalogs() {
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
 
+/// A built-in brush library's panel lists its brushes in the UI language, so every brush of every
+/// built-in library has a row in each complete catalog.
+#[test]
+fn built_in_library_brush_names_are_in_complete_catalogs() {
+    use vectorcraft_engine::cmd::brushlib;
+    let session = vectorcraft_engine::Session::new();
+    let mut names: Vec<String> = brushlib::BUILTIN
+        .iter()
+        .filter_map(|b| brushlib::library(&session, b.id))
+        .flat_map(|(_, lib)| lib.brushes.iter().map(|b| b.name.clone()).collect::<Vec<_>>())
+        .collect();
+    names.sort();
+    names.dedup();
+    assert_eq!(names.len(), 43, "{names:?}");
+    let mut bad = vec![];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        let missing: Vec<&String> = names.iter().filter(|n| lang.catalog().plain(n).is_none()).collect();
+        if !missing.is_empty() {
+            bad.push(format!("{} is missing {missing:?}", lang.code));
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
 /// Preference choices and the marquee's E hint share the same translated labels.
 #[test]
 fn marquee_selection_labels_are_in_complete_catalogs() {
