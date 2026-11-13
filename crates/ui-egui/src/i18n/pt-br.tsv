@@ -2446,6 +2446,9 @@ digits	Malayalam	Malaiala
 	Reset the rows to the artwork's colors	Redefinir as linhas para as cores da arte
 	Color Theme Picker	Seletor de Tema de Cores
 	Click or drag across the art to pick its colors; Shift adds more	Clique ou arraste sobre a arte para pegar suas cores; Shift adiciona mais
+	Prominent Colors	Cores Proeminentes
+	Save All Colors	Salvar Todas as Cores
+	Save Prominent Colors	Salvar Cores Proeminentes
 	Reset to Default	Redefinir para o Padrão
 	Reset to White, Black	Redefinir para Branco, Preto
 	Reset with Mesh…	Redefinir com Malha…
@@ -2910,6 +2913,19 @@ digits	Malayalam	Malaiala
 	Spot Color Objects	Objetos com cores spot
 	Pattern Objects	Objetos com padrões
 	Gradient Objects	Objetos com gradientes
+	Font Details	Detalhes das fontes
+	Linked Images	Imagens vinculadas
+	Embedded Images	Imagens incorporadas
+	Compound Paths	Caminhos compostos
+	Text Objects	Objetos de texto
+	Placed Documents	Documentos colocados
+	Symbol Instances	Instâncias de símbolo
+	Gradient Meshes	Malhas de gradiente
+	Blends	Mesclagens
+	Envelopes	Envelopes
+	Intertwine Groups	Grupos entrelaçados
+	Opacity Masks	Máscaras de opacidade
+	Objects with Effects	Objetos com efeitos
 	Spot Colors	Cores Spot
 	Spot Colors…	Cores Spot…
 	Spread:	Propagação:
@@ -3379,6 +3395,10 @@ imageTrace	Outline	Contorno
 	Dock Panel	Encaixar Painel
 	Dock to Top	Encaixar na Parte Superior
 	Dock to Bottom	Encaixar na Parte Inferior
+	Dock to Left	Encaixar à Esquerda
+	Dock to Right	Encaixar à Direita
+	Dock Toolbar	Encaixar Barra de Ferramentas
+	Float Toolbar	Flutuar Barra de Ferramentas
 	Control Bar Options	Opções da Barra de Controle
 	Tool Options	Opções de Ferramenta
 	Object Options	Opções de Objeto
@@ -3705,6 +3725,8 @@ font-technology	Variable	Variáveis
 	Rename Library Group	Renomear grupo de biblioteca
 	Delete Library Group	Excluir grupo de biblioteca
 	Move Library Item to Group	Mover item da biblioteca para o grupo
+	Rename Library Item	Renomear item da biblioteca
+	Add to Character Styles	Adicionar aos Estilos de Caractere
 	Library	Biblioteca
 	Rename Library	Renomear biblioteca
 	Show Library	Mostrar biblioteca
@@ -3742,6 +3764,7 @@ axis	Both	Ambos
 	Drag to float the toolbar	Arraste para flutuar a barra de ferramentas
 	Drag to the window's left or right edge to dock	Arraste até a borda esquerda ou direita da janela para encaixar
 @msg	no library `{id}`	nenhuma biblioteca `{id}`
+@msg	the library has another item of that kind named `{name}`	a biblioteca já tem outro item desse tipo chamado `{name}`
 @msg	select some type first	selecione algum texto primeiro
 @msg	kerning must be a number, "auto", or "optical"	O kerning deve ser um número, “auto” ou “optical”
 @msg	the selection has no gradient fill	a seleção não tem gradiente de preenchimento
@@ -5340,6 +5363,7 @@ axis	Both	Ambos
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	o texto de área em molduras baixas demais para uma linha da fonte em que aparece recebeu molduras mais altas ({_1}): senão o texto não apareceria
 @msg	every numbered name for {name} is taken in the document's folder	todos os nomes numerados para {name} já existem na pasta do documento
 @msg	No linked files to look for	Nenhum arquivo vinculado para procurar
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	O link está dentro de um símbolo, projeto de gráfico, padrão ou máscara de opacidade e não tem lugar na tela
 	De-Interlace	Desentrelaçar
 	Eliminate	Eliminar
 	Create New Fields by	Criar Novos Campos por
@@ -6445,6 +6469,7 @@ axis	Y Axis	Eixo Y
 @msg	message must be text	message deve ser texto
 @msg	allowContinue must be true or false	allowContinue deve ser true ou false
 @msg	Batch cannot play an action with a stop	Lote não pode reproduzir uma ação com uma parada
+@msg	Batch cannot play an action with a View menu step	Lote não pode reproduzir uma ação com uma etapa do menu Exibir
 	Insert Menu Item…	Inserir Item de Menu…
 	Insert Menu Item	Inserir Item de Menu
 	Insert Select Path	Inserir Seleção de Caminho
@@ -6628,6 +6653,13 @@ axis	Y Axis	Eixo Y
 	Area Text	Texto de Área
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Medir Texto pelos Limites do Glifo
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opções de Ajuste ao Pixel
+	Pixel Snapping Options…	Opções de Ajuste ao Pixel…
+	Snap to Pixel While Drawing	Ajustar ao Pixel ao Desenhar
+	Snap to Pixel While Moving	Ajustar ao Pixel ao Mover
+	Snap to Pixel While Scaling	Ajustar ao Pixel ao Dimensionar
+	These options take effect when View › Snap to Pixel is on.	Essas opções têm efeito quando Exibir › Ajustar ao Pixel está ativado.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostrar Opções de Ajuste ao Glifo
 	Hide Snap to Glyph Options	Ocultar Opções de Ajuste ao Glifo
@@ -7413,6 +7445,19 @@ swatch	Yellow Green	Verde-amarelado
 	Show where this tool is	Mostrar onde está esta ferramenta
 @msg	missing `tutorial` (see learn.list)	falta `tutorial` (veja learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial desconhecido `{id}` (veja learn.list)
+	View more	Ver mais
+	Finish tutorial	Concluir tutorial
+	Next Up	A seguir
+	You finished the last tutorial in this skill.	Você concluiu o último tutorial desta habilidade.
+	Back to skills	Voltar às habilidades
+	Open Tutorial Sample	Abrir Amostra do Tutorial
+	Finish Tutorial	Concluir Tutorial
+	Next Tutorial	Próximo Tutorial
+	Back to Skills	Voltar às Habilidades
+@msg	tutorial `{id}` has no practice sample	o tutorial `{id}` não tem amostra de prática
+@msg	open the practice sample of `{id}` first (see learn.openSample)	abra primeiro a amostra de prática de `{id}` (veja learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	conclua primeiro `{id}` (veja learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` é o último tutorial da sua habilidade
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Atualizar Efeitos Adiados

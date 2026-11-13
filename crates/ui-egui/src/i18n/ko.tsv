@@ -2949,6 +2949,9 @@ mark-style	Japanese	일본식
 	Reset the rows to the artwork's colors	행을 아트웍 색상으로 재설정
 	Color Theme Picker	색상 테마 피커
 	Click or drag across the art to pick its colors; Shift adds more	아트웍을 클릭하거나 드래그하여 색상을 가져옵니다. Shift 키로 더 추가합니다
+	Prominent Colors	주요 색상
+	Save All Colors	모든 색상 저장
+	Save Prominent Colors	주요 색상 저장
 	Reset to Default	기본값으로 재설정
 	Reset to White, Black	흰색, 검정으로 재설정
 	Reset {name}	{name} 재설정
@@ -3273,6 +3276,20 @@ mark-style	Japanese	일본식
 	Spot Color Objects	별색을 사용한 개체
 	Pattern Objects	패턴을 사용한 개체
 	Gradient Objects	그레이디언트를 사용한 개체
+	Font Details	글꼴 세부 정보
+	Linked Images	연결된 이미지
+	Embedded Images	포함된 이미지
+	Compound Paths	컴파운드 패스
+	Text Objects	텍스트 개체
+	Placed Documents	가져온 문서
+	Symbol Instances	심볼 인스턴스
+	Gradient Meshes	그레이디언트 메시
+	Blends	블렌드
+	Envelopes	엔벨로프
+	Intertwine Groups	교차 그룹
+	Opacity Masks	불투명 마스크
+	Objects with Effects	효과를 사용한 개체
+	Pattern Swatches	패턴 견본
 	Spot Colors	별색
 	Spot Colors…	별색…
 	Spread:	확산:
@@ -3353,6 +3370,8 @@ mark-style	Japanese	일본식
 	Rename Library Group	라이브러리 그룹 이름 바꾸기
 	Delete Library Group	라이브러리 그룹 삭제
 	Move Library Item to Group	라이브러리 항목을 그룹으로 이동
+	Rename Library Item	라이브러리 항목 이름 바꾸기
+	Add to Character Styles	문자 스타일에 추가
 	Library	라이브러리
 	Rename Library	라이브러리 이름 바꾸기
 	Show Library	라이브러리 표시
@@ -4127,6 +4146,10 @@ axis	Both	양쪽
 	Dock Panel	패널 고정
 	Dock to Top	위쪽에 고정
 	Dock to Bottom	아래쪽에 고정
+	Dock to Left	왼쪽에 고정
+	Dock to Right	오른쪽에 고정
+	Dock Toolbar	도구 막대 고정
+	Float Toolbar	도구 막대 분리
 	Control Bar Options	컨트롤 막대 옵션
 	Tool Options	도구 옵션
 	Object Options	개체 옵션
@@ -4418,6 +4441,7 @@ theme	Appearance	외관
 @msg	the layer to flatten into is hidden	병합 대상 레이어가 숨겨져 있습니다
 @msg	there are no objects to release	해제할 개체가 없습니다
 @msg	no library `{id}`	`{id}` 라이브러리가 없습니다
+@msg	the library has another item of that kind named `{name}`	라이브러리에 같은 종류의 다른 항목 `{name}`이(가) 이미 있습니다
 @msg	{path}: not a file	{path}: 파일이 아닙니다
 @msg	{path}: {e}	{path}: {e}
 @msg	can't write .{ext} images	.{ext} 이미지는 쓸 수 없습니다
@@ -5149,6 +5173,7 @@ theme	Appearance	외관
 @msg	every numbered name for it is taken in the Fonts folder	글꼴 폴더에서 이를 위한 번호 이름이 모두 사용 중입니다
 @msg	every numbered name for {name} is taken in the document's folder	문서 폴더에서 {name}을(를) 위한 번호 이름이 모두 사용 중입니다
 @msg	No linked files to look for	찾을 링크된 파일이 없습니다
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	링크가 심볼, 그래프 디자인, 패턴 또는 불투명 마스크 안에 있어 캔버스에 위치가 없습니다
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id`는 단계 참조 {r}이며, `run`과 `command_batch`만 이를 해석합니다
 @msg	`ids` must be an array of object ids, not {v}	`ids`는 {v}이(가) 아니라 개체 id 배열이어야 합니다
 @msg	`colors` must be an array of colors, not {v}	`colors`는 {v}이(가) 아니라 색상 배열이어야 합니다
@@ -6116,6 +6141,7 @@ axis	Y Axis	Y축
 @msg	message must be text	message의 값은 텍스트여야 합니다
 @msg	allowContinue must be true or false	allowContinue의 값은 true 또는 false여야 합니다
 @msg	Batch cannot play an action with a stop	일괄 처리에서는 중지가 있는 액션을 재생할 수 없습니다
+@msg	Batch cannot play an action with a View menu step	일괄 처리에서는 보기 메뉴 단계가 있는 액션을 재생할 수 없습니다
 	Insert Menu Item…	메뉴 항목 삽입…
 	Insert Menu Item	메뉴 항목 삽입
 	Insert Select Path	패스 선택 삽입
@@ -6299,6 +6325,13 @@ axis	Y Axis	Y축
 	Area Text	영역 문자
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	글리프 경계로 문자 측정
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	픽셀에 스냅 옵션
+	Pixel Snapping Options…	픽셀에 스냅 옵션…
+	Snap to Pixel While Drawing	그리는 동안 픽셀에 스냅
+	Snap to Pixel While Moving	이동하는 동안 픽셀에 스냅
+	Snap to Pixel While Scaling	크기를 조절하는 동안 픽셀에 스냅
+	These options take effect when View › Snap to Pixel is on.	이 옵션은 보기 › 픽셀에 스냅이 켜져 있을 때 적용됩니다.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	글리프에 스냅 옵션 표시
 	Hide Snap to Glyph Options	글리프에 스냅 옵션 숨기기
@@ -6930,6 +6963,19 @@ breakText	Glyphs	글리프
 	Show where this tool is	이 도구의 위치 표시
 @msg	missing `tutorial` (see learn.list)	`tutorial`이 없습니다(learn.list 참조)
 @msg	unknown tutorial `{id}` (see learn.list)	알 수 없는 튜토리얼 `{id}`(learn.list 참조)
+	View more	자세히 보기
+	Finish tutorial	튜토리얼 완료
+	Next Up	다음
+	You finished the last tutorial in this skill.	이 기술의 마지막 튜토리얼을 완료했습니다.
+	Back to skills	기술로 돌아가기
+	Open Tutorial Sample	튜토리얼 샘플 열기
+	Finish Tutorial	튜토리얼 완료
+	Next Tutorial	다음 튜토리얼
+	Back to Skills	기술로 돌아가기
+@msg	tutorial `{id}` has no practice sample	튜토리얼 `{id}`에 연습용 샘플이 없습니다
+@msg	open the practice sample of `{id}` first (see learn.openSample)	먼저 `{id}`의 연습용 샘플을 여세요(learn.openSample 참조)
+@msg	finish `{id}` first (see learn.finish)	먼저 `{id}`을(를) 완료하세요(learn.finish 참조)
+@msg	`{id}` is the last tutorial in its skill	`{id}`은(는) 해당 기술의 마지막 튜토리얼입니다
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	보류된 효과 새로 고침

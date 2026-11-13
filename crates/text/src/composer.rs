@@ -61,10 +61,51 @@ pub(crate) struct Params {
     pub hyphen_limit: usize,
 }
 
-struct Node {
+/// The search gave up: it ran past its budget ([`Measure::line`]).
+#[derive(Debug)]
+pub(crate) struct Exhausted;
+
+/// Where each line of a paragraph goes and how wide it is: the measure a line gets may depend on
+/// the lines set above it (their heights move it down a shaped frame, or past a wrap object).
+pub(crate) trait Measure {
+    /// What the measure of the next line depends on; breaks reached with equal states are
+    /// interchangeable from there on.
+    type State: Clone + PartialEq;
+    /// The state of the paragraph's first line.
+    fn first(&mut self) -> Self::State;
+    /// The width of the line of glyphs `pos..end` set from `state`, and the state of the line
+    /// after it; `Ok(None)` when the line can't be set (the frame is full), and [`Exhausted`] when
+    /// the search is to stop.
+    fn line(&mut self, state: &Self::State, pos: usize, end: usize) -> Result<Option<(f64, Self::State)>, Exhausted>;
+    /// Whether a line from `state` longer than `pos..end`, which [`Measure::line`] just measured,
+    /// may get more room than it. While it may, a line from `state` that is too long, or that
+    /// can't be set, does not end the reach of `state`. Lines from a state are all as wide by
+    /// default.
+    fn may_widen(&mut self, _state: &Self::State, _pos: usize, _end: usize) -> bool {
+        false
+    }
+}
+
+/// Line widths by line number: `width(k)` for line `k`, lines from `uniform_from` on all as wide.
+struct ByLine<'a> {
+    width: &'a dyn Fn(usize) -> f64,
+    uniform_from: usize,
+}
+
+impl Measure for ByLine<'_> {
+    type State = usize;
+    fn first(&mut self) -> usize {
+        0
+    }
+    fn line(&mut self, &line: &usize, _: usize, _: usize) -> Result<Option<(f64, usize)>, Exhausted> {
+        Ok(Some(((self.width)(line), (line + 1).min(self.uniform_from))))
+    }
+}
+
+struct Node<S> {
     pos: usize,
-    /// Line number of the next line, clamped to `uniform_from`.
-    line: usize,
+    /// The measure of the next line (its line number, clamped to `uniform_from`, for [`compose`]).
+    state: S,
     fitness: u8,
     demerits: f64,
     /// Lines in a row ending with a hyphen up to this break (at most `hyphen_limit`, or 1 with no
@@ -132,6 +173,19 @@ pub(crate) fn compose(
     flex: &[Flex],
     p: &Params,
 ) -> Option<Vec<(usize, bool)>> {
+    compose_with(g, &mut ByLine { width, uniform_from: p.uniform_from }, start_credit, end_credit, cands, flex, p)
+}
+
+/// [`compose`] with each line's width from `measure`, which follows where the lines above it went.
+pub(crate) fn compose_with<M: Measure>(
+    g: &[SGlyph],
+    measure: &mut M,
+    start_credit: &dyn Fn(usize) -> f64,
+    end_credit: &dyn Fn(usize) -> f64,
+    cands: &[Breakpoint],
+    flex: &[Flex],
+    p: &Params,
+) -> Option<Vec<(usize, bool)>> {
     let n = g.len();
     if n == 0 {
         return Some(vec![]);
@@ -165,14 +219,14 @@ pub(crate) fn compose(
     all.push(Breakpoint { end: n, hyphen: 0.0 });
     let (adj_demerits, hyphen_penalty) =
         if p.ragged { (ADJ_DEMERITS_RAGGED, HYPHEN_PENALTY_RAGGED) } else { (ADJ_DEMERITS_JUSTIFIED, HYPHEN_PENALTY) };
-    let mut nodes = vec![Node { pos: 0, line: 0, fitness: 1, demerits: 0.0, hyphens: 0, prev: None }];
+    let mut nodes = vec![Node { pos: 0, state: measure.first(), fitness: 1, demerits: 0.0, hyphens: 0, prev: None }];
     let mut active: Vec<usize> = vec![0];
     for bp in &all {
         let last = bp.end == n;
         let hyphen = bp.hyphen > 0.0;
         // `automatic` is true for a hyphenation point and false for a soft hyphen typed in the text.
         let automatic = hyphen && !bp.end.checked_sub(1).and_then(|k| g.get(k)).is_some_and(SGlyph::is_soft_hyphen);
-        let mut best: Vec<(usize, u8, usize, f64, usize)> = vec![]; // (line, fitness, hyphens, demerits, from)
+        let mut best: Vec<(M::State, u8, usize, f64, usize)> = vec![]; // (state, fitness, hyphens, demerits, from)
         let mut keep = Vec::with_capacity(active.len());
         for &ai in &active {
             let Some(a) = nodes.get(ai) else { continue };
@@ -182,13 +236,25 @@ pub(crate) fn compose(
             // last glyph's advance, so a longer line from the same node is never narrower.
             let end = if hyphen || t <= a.pos { 0.0 } else { line_end_credit(t) };
             let natural = w[t] - w[a.pos] - credit - end + bp.hyphen;
-            let lw = width(a.line);
-            // Adjustment ratio, badness and whether the line ends the active node's reach.
-            let Some(ratio) = adjustment_ratio(natural, lw, st[t] - st[a.pos], sh[t] - sh[a.pos], last, p) else { continue };
-            if ratio < -1.0 {
-                // Too long already; longer lines from this node only get worse.
+            // A line that can't be set (no room left in the frame) ends this node's reach, unless a
+            // longer line may be placed elsewhere (a taller line steps down the frame by its own
+            // leading).
+            let Some((lw, next)) = measure.line(&a.state, a.pos, bp.end).ok()? else {
+                if measure.may_widen(&a.state, a.pos, bp.end) {
+                    keep.push(ai);
+                }
                 continue;
-            }
+            };
+            // Adjustment ratio, badness and whether the line ends the active node's reach.
+            let ratio = adjustment_ratio(natural, lw, st[t] - st[a.pos], sh[t] - sh[a.pos], last, p);
+            let Some(ratio) = ratio.filter(|&r| r >= -1.0 || r.is_nan()) else {
+                // Too long already; longer lines from this node only get worse, unless they may
+                // get more room (a taller line set lower down a shaped frame).
+                if measure.may_widen(&a.state, a.pos, bp.end) {
+                    keep.push(ai);
+                }
+                continue;
+            };
             keep.push(ai);
             if automatic && p.hyphen_limit > 0 && a.hyphens >= p.hyphen_limit {
                 continue;
@@ -214,22 +280,21 @@ pub(crate) fn compose(
                 d += adj_demerits;
             }
             let total = a.demerits + d;
-            let line = (a.line + 1).min(p.uniform_from);
             // With a limit, breaks reached with different runs of hyphenated lines stay apart.
             let hyphens = match (hyphen, p.hyphen_limit) {
                 (false, _) => 0,
                 (true, 0) => 1,
                 (true, limit) => (a.hyphens + 1).min(limit),
             };
-            match best.iter_mut().find(|b| b.0 == line && b.1 == fit && b.2 == hyphens) {
+            match best.iter_mut().find(|b| b.0 == next && b.1 == fit && b.2 == hyphens) {
                 Some(b) if b.3 <= total => {}
-                Some(b) => *b = (line, fit, hyphens, total, ai),
-                None => best.push((line, fit, hyphens, total, ai)),
+                Some(b) => *b = (next, fit, hyphens, total, ai),
+                None => best.push((next, fit, hyphens, total, ai)),
             }
         }
         active = keep;
-        for (line, fitness, hyphens, demerits, from) in best {
-            nodes.push(Node { pos: bp.end, line, fitness, demerits, hyphens, prev: Some(from) });
+        for (state, fitness, hyphens, demerits, from) in best {
+            nodes.push(Node { pos: bp.end, state, fitness, demerits, hyphens, prev: Some(from) });
             active.push(nodes.len() - 1);
         }
         if active.is_empty() || active.len() > MAX_ACTIVE {

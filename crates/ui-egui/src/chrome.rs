@@ -18,6 +18,7 @@ mod hints;
 mod status_bar;
 mod tabs;
 
+pub(crate) use control_bar::group_separator;
 pub use control_bar::{
     AnchorControls, CONTROL_BAR_EDGES, CONTROL_BAR_GROUPS, anchor_buttons, anchor_controls, control_bar, control_bar_moving, control_bar_placement,
     read_hidden_groups,

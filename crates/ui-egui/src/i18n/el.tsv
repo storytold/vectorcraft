@@ -2257,6 +2257,10 @@ axis	Both	Και τα δύο
 	Dock Panel	Αγκύρωση πάνελ
 	Dock to Top	Αγκύρωση επάνω
 	Dock to Bottom	Αγκύρωση κάτω
+	Dock to Left	Αγκύρωση αριστερά
+	Dock to Right	Αγκύρωση δεξιά
+	Dock Toolbar	Αγκύρωση γραμμής εργαλείων
+	Float Toolbar	Αιωρούμενη γραμμή εργαλείων
 	Control Bar Options	Επιλογές γραμμής ελέγχου
 	Tool Options	Επιλογές εργαλείου
 	Object Options	Επιλογές αντικειμένου
@@ -2266,6 +2270,7 @@ axis	Both	Και τα δύο
 	Document Options	Επιλογές εγγράφου
 	Dock Control Bar	Αγκύρωση γραμμής ελέγχου
 @msg	no library `{id}`	Δεν υπάρχει βιβλιοθήκη με αναγνωριστικό `{id}`
+@msg	the library has another item of that kind named `{name}`	η βιβλιοθήκη έχει ήδη άλλο στοιχείο αυτού του είδους με όνομα `{name}`
 @msg	select some type first	Επιλέξτε πρώτα κάποιο κείμενο
 @msg	kerning must be a number, "auto", or "optical"	το kerning πρέπει να είναι αριθμός, «auto» ή «optical»
 @msg	the selection has no gradient fill	η επιλογή δεν έχει ντεγκραντέ γεμίσματος
@@ -3597,6 +3602,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	Reset the rows to the artwork's colors	Επαναφορά γραμμών στα χρώματα του σχεδίου
 	Color Theme Picker	Επιλογέας χρωματικού θέματος
 	Click or drag across the art to pick its colors; Shift adds more	Κάντε κλικ ή σύρετε πάνω στο σχέδιο για να πάρετε τα χρώματά του· το Shift προσθέτει κι άλλα
+	Prominent Colors	Κυρίαρχα χρώματα
+	Save All Colors	Αποθήκευση όλων των χρωμάτων
+	Save Prominent Colors	Αποθήκευση κυρίαρχων χρωμάτων
 	Reset to White, Black	Επαναφορά σε λευκό και μαύρο
 	Reset with Mesh	Επαναφορά με πλέγμα
 	Reset with Mesh…	Επαναφορά με πλέγμα…
@@ -3965,6 +3973,20 @@ digits	Malayalam	Μαλαγιάλαμ
 	Spot Color Objects	Αντικείμενα με χρώματα spot
 	Pattern Objects	Αντικείμενα με μοτίβα
 	Gradient Objects	Αντικείμενα με ντεγκραντέ
+	Font Details	Λεπτομέρειες γραμματοσειρών
+	Linked Images	Συνδεδεμένες εικόνες
+	Embedded Images	Ενσωματωμένες εικόνες
+	Compound Paths	Σύνθετες διαδρομές
+	Text Objects	Αντικείμενα κειμένου
+	Placed Documents	Τοποθετημένα έγγραφα
+	Symbol Instances	Στιγμιότυπα συμβόλων
+	Gradient Meshes	Πλέγματα ντεγκραντέ
+	Blends	Αναμείξεις
+	Envelopes	Περιβλήματα
+	Intertwine Groups	Ομάδες διαπλοκής
+	Opacity Masks	Μάσκες αδιαφάνειας
+	Objects with Effects	Αντικείμενα με εφέ
+	Path Length	Μήκος διαδρομής
 	Spot Colors	Πλακάτα χρώματα
 	Spot Colors…	Πλακάτα χρώματα…
 	Stacked Bar Graph Tool	Στοιβαγμένο ραβδόγραμμα (Stacked Bar Graph Tool)
@@ -4051,6 +4073,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Rename Library Group	Μετονομασία ομάδας βιβλιοθήκης
 	Delete Library Group	Διαγραφή ομάδας βιβλιοθήκης
 	Move Library Item to Group	Μετακίνηση στοιχείου βιβλιοθήκης σε ομάδα
+	Rename Library Item	Μετονομασία στοιχείου βιβλιοθήκης
+	Add to Character Styles	Προσθήκη στα στυλ χαρακτήρων
 	Rename Library	Μετονομασία βιβλιοθήκης
 	Show Library	Εμφάνιση βιβλιοθήκης
 	Use Library Item	Χρήση στοιχείου βιβλιοθήκης
@@ -5051,6 +5075,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	every numbered name for it is taken in the Fonts folder	όλα τα αριθμημένα ονόματά του χρησιμοποιούνται ήδη στον φάκελο γραμματοσειρών
 @msg	every numbered name for {name} is taken in the document's folder	όλα τα αριθμημένα ονόματα για το {name} χρησιμοποιούνται ήδη στον φάκελο εγγράφου
 @msg	No linked files to look for	Δεν υπάρχουν συνδεδεμένα αρχεία για αναζήτηση
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Ο σύνδεσμος βρίσκεται μέσα σε σύμβολο, σχεδιασμό γραφήματος, μοτίβο ή μάσκα αδιαφάνειας και δεν έχει θέση στον καμβά
 	Hide VectorCraft	Απόκρυψη VectorCraft
 	Bring All to Front	Μεταφορά όλων στο προσκήνιο
 	Break Link	Κατάργηση σύνδεσης
@@ -6481,6 +6506,7 @@ axis	Y Axis	Άξονας Y
 @msg	message must be text	Το message πρέπει να είναι κείμενο
 @msg	allowContinue must be true or false	Το allowContinue πρέπει να είναι true ή false
 @msg	Batch cannot play an action with a stop	Η μαζική επεξεργασία δεν μπορεί να αναπαράγει ενέργεια με διακοπή
+@msg	Batch cannot play an action with a View menu step	Η μαζική επεξεργασία δεν μπορεί να αναπαράγει ενέργεια με βήμα από το μενού Προβολή
 	Insert Menu Item…	Εισαγωγή στοιχείου μενού…
 	Insert Menu Item	Εισαγωγή στοιχείου μενού
 	Insert Select Path	Εισαγωγή επιλογής διαδρομής
@@ -6664,6 +6690,13 @@ axis	Y Axis	Άξονας Y
 	Area Text	Κείμενο περιοχής
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Μέτρηση κειμένου με βάση τα όρια γλυφής
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Επιλογές προσκόλλησης σε εικονοστοιχείο
+	Pixel Snapping Options…	Επιλογές προσκόλλησης σε εικονοστοιχείο…
+	Snap to Pixel While Drawing	Προσκόλληση σε εικονοστοιχείο κατά τη σχεδίαση
+	Snap to Pixel While Moving	Προσκόλληση σε εικονοστοιχείο κατά τη μετακίνηση
+	Snap to Pixel While Scaling	Προσκόλληση σε εικονοστοιχείο κατά την αλλαγή κλίμακας
+	These options take effect when View › Snap to Pixel is on.	Αυτές οι επιλογές ισχύουν όταν είναι ενεργή η επιλογή Προβολή › Προσκόλληση σε εικονοστοιχείο.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Εμφάνιση επιλογών προσκόλλησης σε γλυφή
 	Hide Snap to Glyph Options	Απόκρυψη επιλογών προσκόλλησης σε γλυφή
@@ -7292,6 +7325,19 @@ breakText	Glyphs	Γλύφοι
 	Show where this tool is	Εμφάνιση της θέσης αυτού του εργαλείου
 @msg	missing `tutorial` (see learn.list)	λείπει το `tutorial` (δείτε learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	άγνωστος οδηγός εκμάθησης `{id}` (δείτε learn.list)
+	View more	Προβολή περισσότερων
+	Finish tutorial	Ολοκλήρωση οδηγού
+	Next Up	Επόμενο
+	You finished the last tutorial in this skill.	Ολοκληρώσατε τον τελευταίο οδηγό εκμάθησης αυτής της δεξιότητας.
+	Back to skills	Πίσω στις δεξιότητες
+	Open Tutorial Sample	Άνοιγμα δείγματος οδηγού εκμάθησης
+	Finish Tutorial	Ολοκλήρωση οδηγού εκμάθησης
+	Next Tutorial	Επόμενος οδηγός εκμάθησης
+	Back to Skills	Πίσω στις δεξιότητες
+@msg	tutorial `{id}` has no practice sample	ο οδηγός εκμάθησης `{id}` δεν έχει δείγμα εξάσκησης
+@msg	open the practice sample of `{id}` first (see learn.openSample)	ανοίξτε πρώτα το δείγμα εξάσκησης του `{id}` (δείτε learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	ολοκληρώστε πρώτα το `{id}` (δείτε learn.finish)
+@msg	`{id}` is the last tutorial in its skill	το `{id}` είναι ο τελευταίος οδηγός εκμάθησης της δεξιότητάς του
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Ανανέωση εφέ σε αναμονή

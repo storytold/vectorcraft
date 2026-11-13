@@ -3788,6 +3788,103 @@ fn a_trace_run_needs_the_library_colours_it_traced_with() {
     assert!(!run.current(&s), "{name} changed");
 }
 
+/// `image_doc`'s image with its disc 20 px to the left: the same size, other pixels.
+fn moved_disc_png() -> Vec<u8> {
+    vectorcraft_trace::Raster::from_fn(100, 100, |x, y| {
+        let (dx, dy) = (x as f64 + 0.5 - 30.0, y as f64 + 0.5 - 50.0);
+        if dx * dx + dy * dy <= 900.0 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }
+    })
+    .encode_png()
+}
+
+/// Puts `bytes` under the image key `key`, or takes the key's image data away (`None`).
+fn set_image_data(s: &mut Session, key: &str, bytes: Option<Vec<u8>>) {
+    s.edit("image data", |d, _| {
+        match bytes {
+            Some(b) => d.images.insert(key.into(), ImageBlob::new("image/png", b)),
+            None => d.images.remove(key),
+        };
+        Ok(())
+    })
+    .unwrap();
+}
+
+/// The middle of the first traced path of the Image Trace object the reply `r` names, in x.
+fn traced_center_x(s: &Session, r: &Value) -> f64 {
+    outline(&traced_paths(&node(s, NodeId(r["id"].as_u64().unwrap())))[0]).0.bounds().unwrap().center().x
+}
+
+/// A trace made away from its command no longer applies once the pixels under its image's key
+/// change, though the object, its image record and the settings stay as they were; both commands
+/// then trace the pixels there now. The same bytes in another allocation still apply.
+#[test]
+fn a_trace_run_needs_the_pixels_it_traced() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    for command in ["imageTrace.make", "imageTrace.makeAndExpand"] {
+        let mut s = session();
+        image_doc(&mut s);
+        let run = cmd::TraceRun::prepare(&s, command, &p).unwrap();
+        let traced = run.run(&|_, _| true).unwrap();
+        // The same bytes, allocated anew: still current.
+        let same = s.doc().unwrap().doc.images["img1"].bytes.to_vec();
+        set_image_data(&mut s, "img1", Some(same));
+        assert!(run.current(&s), "{command}: equal bytes");
+        // Other pixels under the same key: no longer current, and the hand-off is dropped.
+        set_image_data(&mut s, "img1", Some(moved_disc_png()));
+        assert!(!run.current(&s), "{command}: other pixels");
+        traced.hand_in(&mut s);
+        let r = s.execute(command, run.params()).unwrap();
+        assert!(s.trace_hand_off.is_none(), "{command}: dropped");
+        // The disc is now at image x 30, which the ×2 placement at 50 puts at 110.
+        let x = traced_center_x(&s, &r);
+        assert!((x - 110.0).abs() < 1.5, "{command}: traced the pixels there now, at {x}");
+    }
+}
+
+/// Image data that is missing or empty: a run made before it went no longer applies, the run's
+/// command gives the error it gives without a run, and nothing panics.
+#[test]
+fn a_trace_run_of_missing_or_empty_image_data() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    let mut s = session();
+    image_doc(&mut s);
+    let run = cmd::TraceRun::prepare(&s, "imageTrace.make", &p).unwrap();
+    let traced = run.run(&|_, _| true).unwrap();
+    set_image_data(&mut s, "img1", None);
+    assert!(!run.current(&s), "missing");
+    traced.hand_in(&mut s);
+    let e = s.execute(run.command(), run.params()).unwrap_err().to_string();
+    assert!(e.contains("image data `img1` is missing"), "{e}");
+    set_image_data(&mut s, "img1", Some(vec![]));
+    assert!(!run.current(&s), "empty");
+    let empty = cmd::TraceRun::prepare(&s, "imageTrace.make", &p).unwrap();
+    assert!(empty.current(&s), "two empty blobs are equal");
+    assert!(matches!(empty.run(&|_, _| true), Err(EngineError::Other(_))));
+    assert!(matches!(s.execute(run.command(), run.params()), Err(EngineError::Other(_))));
+}
+
+/// Tracing an Image Trace object again follows the same rule: once the pixels of the image it
+/// holds change, a run made before no longer applies, and the command traces the pixels there now.
+#[test]
+fn a_trace_run_of_an_image_trace_object_needs_its_pixels() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    let mut s = session();
+    image_doc(&mut s);
+    let g = s.execute("imageTrace.make", &p).unwrap()["id"].as_u64().unwrap();
+    let again = json!({"id": g, "params": {"ignoreWhite": true}});
+    let run = cmd::TraceRun::prepare(&s, "imageTrace.make", &again).unwrap();
+    assert_eq!(run.target(), NodeId(g));
+    let traced = run.run(&|_, _| true).unwrap();
+    assert!(run.current(&s));
+    set_image_data(&mut s, "img1", Some(moved_disc_png()));
+    assert!(!run.current(&s));
+    traced.hand_in(&mut s);
+    let r = s.execute(run.command(), run.params()).unwrap();
+    assert!(s.trace_hand_off.is_none(), "dropped");
+    let x = traced_center_x(&s, &r);
+    assert!((x - 110.0).abs() < 1.5, "traced the pixels there now, at {x}");
+}
+
 /// Shapes: the disc of the test image comes out as a live ellipse where the image lies, the same
 /// circle as its traced path; without the option it is a plain path.
 #[test]
