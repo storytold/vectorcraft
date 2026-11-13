@@ -886,6 +886,71 @@ fn font_height_references_show_their_icons() {
     }
 }
 
+/// In the open Set Font Height Reference list, the current reference's row is drawn on the
+/// accent-tinted selection fill, so its icon draws the measure in the name's colour rather than
+/// the accent, which would lose its contrast there; the other rows keep the accent (#6304).
+#[test]
+fn the_highlighted_font_height_icon_keeps_its_contrast() {
+    use super::super::tests_appearance::click;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hx", "size": 12})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    set_pstate(&ctx, FONT_HEIGHT_OPTIONS, true);
+    let accent = Tokens::get(&ctx).accent;
+    // Every text drawn with its rect, and every stroke drawn with its rect and colour.
+    let frame = |ctx: &egui::Context, app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        out.textures_delta.clear();
+        fn collect(s: &egui::Shape, texts: &mut Vec<(String, egui::Rect)>, strokes: &mut Vec<(egui::Rect, egui::Color32)>) {
+            match s {
+                egui::Shape::Text(t) => texts.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, texts, strokes)),
+                egui::Shape::LineSegment { stroke, .. } => strokes.push((s.visual_bounding_rect(), stroke.color)),
+                egui::Shape::Path(p) => {
+                    if let egui::epaint::ColorMode::Solid(c) = p.stroke.color {
+                        strokes.push((s.visual_bounding_rect(), c));
+                    }
+                }
+                egui::Shape::Rect(r) => strokes.push((s.visual_bounding_rect(), r.stroke.color)),
+                _ => {}
+            }
+        }
+        let (mut texts, mut strokes) = (vec![], vec![]);
+        for c in &out.shapes {
+            collect(&c.shape, &mut texts, &mut strokes);
+        }
+        (texts, strokes)
+    };
+    // The stroke colours in the icon's place before the text `rect`.
+    let colours = |strokes: &[(egui::Rect, egui::Color32)], rect: egui::Rect| -> Vec<egui::Color32> {
+        let place = egui::Rect::from_min_max(
+            egui::pos2(rect.min.x - FONT_HEIGHT_ICON - 8.0, rect.center().y - 10.0),
+            egui::pos2(rect.min.x, rect.center().y + 10.0),
+        );
+        strokes.iter().filter(|(r, _)| r.is_finite() && place.contains_rect(*r)).map(|(_, c)| *c).collect()
+    };
+    frame(&ctx, &mut app);
+    let (texts, _) = frame(&ctx, &mut app);
+    let field = texts.iter().find(|(t, _)| t == "Em Box").map(|(_, r)| *r).expect("the closed field shows Em Box");
+    click(&ctx, &mut app, field.center(), show);
+    frame(&ctx, &mut app);
+    let (texts, strokes) = frame(&ctx, &mut app);
+    let row = |name: &str| texts.iter().rev().find(|(t, _)| t == name).map(|(_, r)| *r).unwrap_or_else(|| panic!("the open list shows {name}"));
+    // The list fades in, so colours are compared without their alpha.
+    let rgb = |c: egui::Color32| {
+        let [r, g, b, _] = c.to_srgba_unmultiplied();
+        [r, g, b]
+    };
+    let is_accent = |c: &egui::Color32| rgb(*c).iter().zip(rgb(accent)).all(|(a, b)| a.abs_diff(b) <= 4);
+    let current = colours(&strokes, row("Em Box"));
+    assert!(!current.is_empty() && !current.iter().any(is_accent), "the highlighted Em Box icon draws in the accent: {current:?}");
+    let other = colours(&strokes, row("Cap Height"));
+    assert!(other.iter().any(is_accent), "the other rows keep the accent measure: {other:?}");
+}
+
 /// Tate-chu-yoko is in the panel menu with the East Asian options, and choosing it marks the
 /// selected characters.
 #[test]

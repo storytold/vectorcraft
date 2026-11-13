@@ -37,9 +37,11 @@ pub fn dropdown_names_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<
 
 /// [`dropdown_names`] whose options each show an icon before their name, in the open list and in
 /// the closed field, so that a name that says little on its own is shown with a picture of what it
-/// means (#6304). `icon(ui, rect, index, ink)` paints option `index`'s icon into `rect`, an
-/// `icon_size` square, with `ink`, the colour the row's name is drawn in. `current` is the option
-/// shown; `None` shows a blank field (characters that differ).
+/// means (#6304). `icon(ui, rect, index, ink, highlighted)` paints option `index`'s icon into
+/// `rect`, an `icon_size` square, with `ink`, the colour the row's name is drawn in;
+/// `highlighted` is true on the open list's row of the current option, drawn on the selection
+/// fill, where an accent-coloured mark would lose its contrast. `current` is the option shown;
+/// `None` shows a blank field (characters that differ).
 pub fn dropdown_icon_names(
     ui: &mut Ui,
     id: impl std::hash::Hash,
@@ -47,18 +49,21 @@ pub fn dropdown_icon_names(
     options: &[&str],
     width: f32,
     icon_size: f32,
-    icon: impl Fn(&Ui, Rect, usize, egui::Color32),
+    icon: impl Fn(&Ui, Rect, usize, egui::Color32, bool),
 ) -> Option<usize> {
     let icon = &icon;
-    let atom = move |i: usize| egui::Atom::paint(Vec2::splat(icon_size), move |ui, a| icon(ui, a.rect, i, a.fallback_text_color));
+    let atom = move |i: usize, highlighted: bool| {
+        egui::Atom::paint(Vec2::splat(icon_size), move |ui, a| icon(ui, a.rect, i, a.fallback_text_color, highlighted))
+    };
     let shown = match current.and_then(|i| options.get(i).map(|name| (i, *name))) {
-        Some((i, name)) => (atom(i), egui::RichText::new(name).size(12.0)).into_atoms(),
+        Some((i, name)) => (atom(i, false), egui::RichText::new(name).size(12.0)).into_atoms(),
         None => egui::RichText::new("").size(12.0).into_atoms(),
     };
     combo_atoms_named(ui, id, None, shown, width, |ui| {
         let mut chosen = None;
         for (i, o) in options.iter().enumerate() {
-            if ui.add(egui::Button::selectable(current == Some(i), (atom(i), *o))).clicked() {
+            let on = current == Some(i);
+            if ui.add(egui::Button::selectable(on, (atom(i, on), *o))).clicked() {
                 chosen = Some(i);
             }
         }

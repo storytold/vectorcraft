@@ -951,8 +951,11 @@ fn font_height_reference(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
     let labels = [tl!("Em Box"), tl!("Cap Height"), tl!("x-Height"), tl!("ICF Box")];
     let current = shared(app, |s| s.font_height_reference);
     let shown = FONT_HEIGHT_REFERENCES.iter().position(|(r, _)| Some(*r) == current);
-    let mark = Tokens::get(ui.ctx()).accent;
-    let icon = |ui: &Ui, rect: egui::Rect, i: usize, ink: egui::Color32| {
+    let accent = Tokens::get(ui.ctx()).accent;
+    let icon = |ui: &Ui, rect: egui::Rect, i: usize, ink: egui::Color32, highlighted: bool| {
+        // On the highlighted row the selection fill is accent-tinted, so the measure takes the
+        // name's colour there to keep its contrast.
+        let mark = if highlighted { ink } else { accent };
         if let Some((r, _)) = FONT_HEIGHT_REFERENCES.get(i) {
             paint_font_height_icon(ui.painter(), rect, *r, ink, mark);
         }
