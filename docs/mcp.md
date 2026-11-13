@@ -6064,7 +6064,10 @@ document. With no document open they fail with "no document open". `document.act
 the current one. `document.move {from?, to}` reorders open documents the way dragging a document tab along the tab strip
 does: `from` defaults to the current document, `to` is the destination index, documents between them shift by one, the
 current document stays current, and each document keeps its own view (#5663). It is an engine command, so headless and
-remote `command_list` both list it.
+remote `command_list` both list it. `file.close {index}` on a document other than the current one leaves the current
+document current, and its tool keeps its state; closing the current document makes the document in the next tab
+current, or the one before it when it was the last tab. In the desktop app a modified document comes to the front first,
+to ask whether to save it.
 `window.arrange.tile` (Window › Arrange › Tile) shows every open document in its own pane, edge to edge in the document
 area, in a grid of as many columns as the square root of the number of documents, rounded up, and fits each document to
 its pane; with fewer than two documents open it leaves the view and `tiled` as they are. It returns `{tiled, panes}`.
