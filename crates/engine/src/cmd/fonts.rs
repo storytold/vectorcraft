@@ -114,23 +114,30 @@ fn paints(i: &AppearanceItem) -> bool {
     i.visible() && i.opacity() > 0.0 && !matches!(i, AppearanceItem::Stroke(s) if s.width <= 0.0)
 }
 
+/// The name of pattern paint `p`.
+fn pattern_name(p: &Paint) -> Option<&str> {
+    match p {
+        Paint::Pattern { pattern, .. } => Some(pattern.as_str()),
+        _ => None,
+    }
+}
+
+/// The fill and, when it is wider than 0, the stroke of the characters of `r`.
+fn run_paints(r: &TextRun) -> impl Iterator<Item = &Paint> {
+    [Some(&r.style.fill), (r.style.stroke_width > 0.0).then_some(&r.style.stroke)].into_iter().flatten()
+}
+
 /// The patterns that the fills and strokes `n` draws name (of a text object, also those of its
-/// characters): those that [`paints`] holds for, and character strokes wider than 0.
-fn paint_patterns(n: &Node) -> impl Iterator<Item = &str> {
-    let runs = match &n.kind {
-        NodeKind::Text(t) => t.runs.as_slice(),
-        _ => &[],
-    };
-    n.appearance
-        .items
-        .iter()
-        .filter(|i| paints(i))
-        .map(AppearanceItem::paint)
-        .chain(runs.iter().flat_map(|r| [Some(&r.style.fill), (r.style.stroke_width > 0.0).then_some(&r.style.stroke)]).flatten())
-        .filter_map(|p| match p {
-            Paint::Pattern { pattern, .. } => Some(pattern.as_str()),
-            _ => None,
-        })
+/// characters): those that [`paints`] holds for, and the character paints of the runs that draw
+/// (as [`drawn_runs`] finds them: not the overset runs of area type or type on a path).
+fn paint_patterns(n: &Node) -> Vec<&str> {
+    let mut out: Vec<&str> = n.appearance.items.iter().filter(|i| paints(i)).filter_map(|i| pattern_name(i.paint())).collect();
+    if let NodeKind::Text(t) = &n.kind
+        && t.runs.iter().flat_map(run_paints).any(|p| pattern_name(p).is_some())
+    {
+        out.extend(drawn_runs(t).0.into_iter().flat_map(run_paints).filter_map(pattern_name));
+    }
+    out
 }
 
 /// The symbols that the inline graphics in the type of `n` draw.
@@ -158,7 +165,7 @@ impl Resources {
             self.symbols.insert(symbol.clone());
         }
         self.symbols.extend(inline_symbols(n).map(str::to_string));
-        self.patterns.extend(paint_patterns(n).map(str::to_string));
+        self.patterns.extend(paint_patterns(n).into_iter().map(str::to_string));
         if let Some(m) = n.extras().mask.as_deref() {
             self.add(&m.art);
         }
@@ -935,7 +942,7 @@ fn reaches(n: &Node, uses: &impl Fn(&TextObject) -> bool, found: &Resources) -> 
         && (matches!(&n.kind, NodeKind::Text(t) if uses(t))
             || matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if found.symbols.contains(symbol))
             || inline_symbols(n).any(|sym| found.symbols.contains(sym))
-            || paint_patterns(n).any(|p| found.patterns.contains(p))
+            || paint_patterns(n).into_iter().any(|p| found.patterns.contains(p))
             || n.extras().mask.as_deref().is_some_and(|m| reaches(&m.art, uses, found))
             || n.children().is_some_and(|ch| ch.iter().any(|c| reaches(c, uses, found))))
 }
@@ -991,7 +998,7 @@ fn select_font(s: &mut Session, p: &Value) -> Result<Value> {
         d.walk(&mut |n: &Node| {
             let shows = matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if found.symbols.contains(symbol))
                 || inline_symbols(n).any(|sym| found.symbols.contains(sym))
-                || paint_patterns(n).any(|p| found.patterns.contains(p))
+                || paint_patterns(n).into_iter().any(|p| found.patterns.contains(p))
                 || (masked.contains(&n.id) && n.extras().mask.as_deref().is_some_and(|m| reaches(&m.art, &uses, &found)));
             if shows && !n.is_layer() && !texts.contains(&n.id) && editable(n.id) {
                 hits.push(n.id);
@@ -1843,6 +1850,44 @@ mod tests {
             .unwrap();
         assert_eq!(r, json!({"runs": 0}));
         assert_eq!(pattern_families(&s, "Dots"), ["Source Serif 4"]);
+    }
+
+    /// Characters of area type that don't fit its frame paint nothing: their pattern's type isn't
+    /// found through them until they are drawn.
+    #[test]
+    fn find_font_skips_patterns_of_overset_characters() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let t = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Ab", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("object.pattern.make", &json!({"ids": [t], "name": "Dots", "edit": false})).unwrap();
+        s.execute("select.set", &json!({"ids": [t]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let area = s
+            .execute(
+                "text.create",
+                &json!({"x": 10, "y": 60, "text": "A\nB", "font": "Source Sans 3", "size": 20, "area": {"width": 100, "height": 40}}),
+            )
+            .unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        s.execute("text.setRangeStyle", &json!({"id": area, "start": 2, "end": 3, "font": "Inter"})).unwrap();
+        let paint_run = |s: &mut Session, letter: &'static str| {
+            s.edit("Paint a run with the pattern", |d, _| {
+                if let Some(NodeKind::Text(t)) = d.node_mut(NodeId(area)).map(|n| &mut n.kind) {
+                    for r in t.runs.iter_mut().filter(|r| r.text.contains(letter)) {
+                        r.style.fill = Paint::Pattern { pattern: "Dots".into(), xf: Default::default() };
+                    }
+                }
+                Ok(())
+            })
+            .unwrap();
+        };
+        paint_run(&mut s, "B");
+        let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), text(&s.doc().unwrap().doc, NodeId(area)).unwrap());
+        assert!(laid.overflow, "the second line doesn't fit the frame");
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 0);
+        paint_run(&mut s, "A");
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 1);
     }
 
     /// Text whose inline graphic draws a symbol shows the symbol's type: Find selects that text
