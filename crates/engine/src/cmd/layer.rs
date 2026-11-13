@@ -994,18 +994,51 @@ fn artboard_delete(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-/// Delete artboards `indices` (sorted) of `d` with their guides; at least one must be left.
-fn remove_artboards(d: &mut Document, sel: &mut vectorcraft_doc::Selection, indices: &[usize]) -> Result<()> {
+/// Delete artboards `indices` (sorted, each once) of `d` with their guides; at least one must be
+/// left. The other artboards keep their order, no later artboard takes a deleted one's id, and
+/// `sel` forgets the deleted guides. One walk over the artboards and one over the ruler guides,
+/// however many go. Delete Artboard, Delete Empty Artboards, Cut Artboard and Artwork Cleanup's
+/// Empty Artboards.
+pub(crate) fn remove_artboards(d: &mut Document, sel: &mut vectorcraft_doc::Selection, indices: &[usize]) -> Result<()> {
+    if indices.iter().any(|i| *i >= d.artboards.len()) {
+        return Err(EngineError::Other("no such artboard".into()));
+    }
     if indices.len() >= d.artboards.len() {
         return Err(EngineError::Other("a document needs at least one artboard".into()));
     }
-    // The last first, so the others keep their places; their guides go with them.
-    for &i in indices.iter().rev() {
-        let id = d.artboards.remove(i).id;
-        d.retire_artboard_id(id);
-        d.retain_guides(sel, |g| g.artboard != Some(id));
+    if indices.is_empty() {
+        return Ok(());
     }
+    let mut gone: HashSet<u32> = HashSet::with_capacity(indices.len());
+    let mut i = 0;
+    d.artboards.retain(|a| {
+        let keep = indices.binary_search(&i).is_err();
+        i += 1;
+        if !keep {
+            gone.insert(a.id);
+        }
+        keep
+    });
+    count_artboard_pass();
+    for &id in &gone {
+        d.retire_artboard_id(id);
+    }
+    d.retain_guides(sel, |g| !g.artboard.is_some_and(|a| gone.contains(&a)));
+    count_artboard_pass();
     Ok(())
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many walks [`remove_artboards`] made over the artboards and the ruler guides on
+    /// this thread.
+    pub(crate) static ARTBOARD_PASSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Tests: count one walk over the artboards or the ruler guides.
+fn count_artboard_pass() {
+    #[cfg(test)]
+    ARTBOARD_PASSES.set(ARTBOARD_PASSES.get() + 1);
 }
 
 /// The artboards Delete Empty Artboards deletes: those with no artwork
