@@ -4,7 +4,7 @@ use std::borrow::Cow;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, GradientPaint, Paint};
-use vectorcraft_doc::{Appearance, CharStyle, Document, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Appearance, CharStyle, Document, GraySource, Node, NodeId, NodeKind};
 
 use super::appearance::{ItemTarget, appearance_targets, edit_items, edit_items_then, item_target};
 use super::gradient::{item_paint_bounds, place_paint, place_run_paint, run_paint_mut, run_stroke_weight, unplaced};
@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab; #rrggbbaa and #rgba are refused), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, method?: classic|perceptual (as paint.editGradient; default classic), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg counter-clockwise (0: the gradient runs left to right), start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits), dither?: bool (linear and radial fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear or radial `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white); with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's fill changes for this instance only (solid, none, gradient or pattern) → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab; #rrggbbaa and #rgba are refused), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|conic|diamond|freeform (conic, also accepted as angle or conical: the stops sweep once around the center `start`, clockwise from the vector; diamond: the stops run from the center `start` out to a square with a corner at `end`), method?: classic|perceptual (as paint.editGradient; default classic), spread?: pad|repeat|reflect (as paint.editGradient; default pad), repeats?: 1..100 (as paint.editGradient; default 1), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg counter-clockwise (0: the gradient runs left to right), start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial, conic and diamond; a negative one mirrors a conic's sweep, counterclockwise, and is an error for the other kinds; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits; an error with a conic or diamond), dither?: bool (linear, radial, conic and diamond fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear, radial, conic or diamond `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white); with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's fill changes for this instance only (solid, none, gradient or pattern) → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -641,7 +641,7 @@ fn paint_new_art(s: &mut Session, paint: &Paint, fill: bool) {
     }
 }
 
-/// Does `p` ask for `span: "selection"` (#2127)? Only a linear or radial gradient the targets
+/// Does `p` ask for `span: "selection"` (#2127)? Only a linear, radial, conic or diamond gradient the targets
 /// would each fit to their own bounds can span them: one with its own vector (`start`/`end`),
 /// a freeform one or a gradient swatch already has its placement.
 fn spans_targets(p: &Value, paint: &Paint) -> std::result::Result<bool, String> {
@@ -656,7 +656,7 @@ fn spans_targets(p: &Value, paint: &Paint) -> std::result::Result<bool, String> 
         return Err("span: \"selection\" places a `gradient`, not a swatch".into());
     }
     if g.gradient.kind == vectorcraft_color::GradientKind::Freeform || g.freeform.is_some() {
-        return Err("span: \"selection\" places a linear or radial gradient, not a freeform one".into());
+        return Err("span: \"selection\" places a linear, radial, conic or diamond gradient, not a freeform one".into());
     }
     if g.geom.is_some() {
         return Err(
@@ -718,7 +718,8 @@ fn colorized_images(d: &Document, ids: &[NodeId], paint: &Paint) -> std::result:
 }
 
 /// The message for a process color on a grayscale image with an alpha channel.
-const PROCESS_ON_TRANSPARENCY: &str = "a process color can't colorize a grayscale image with transparency: use a spot color, black or white";
+pub(super) const PROCESS_ON_TRANSPARENCY: &str =
+    "a process color can't colorize a grayscale image with transparency: use a spot color, black or white";
 
 /// Can `paint` colorize a grayscale image with an alpha channel: a color linked to a spot swatch
 /// of `d`, black or white?
@@ -737,11 +738,7 @@ pub(super) fn check_colorized(d: &Document) -> std::result::Result<(), String> {
     let mut refused = false;
     let mut visit = |n: &Node| {
         vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
-            if let (NodeKind::Image(im), Some(paint)) = (&m.kind, m.extras().colorize.as_deref())
-                && !refused
-                && !colorizes_transparency(d, paint)
-                && d.image_blob(im).and_then(|b| b.gray_source()).is_some_and(|g| g.alpha)
-            {
+            if !refused && gray_colorized_with_process(d, m).is_some_and(|g| g.alpha) {
                 refused = true;
             }
         })
@@ -759,6 +756,13 @@ pub(super) fn check_colorized(d: &Document) -> std::result::Result<(), String> {
 /// an edit doesn't fail over an image it didn't change.
 pub(super) fn check_colorized_kept(was_ok: bool, d: &Document) -> std::result::Result<(), String> {
     if was_ok { check_colorized(d) } else { Ok(()) }
+}
+
+/// How the pixels of `n` are gray, when `n` is a grayscale or 1-bit image colorized with a color
+/// that [`colorizes_transparency`] refuses. Such an image can't have an alpha channel.
+pub(super) fn gray_colorized_with_process(d: &Document, n: &Node) -> Option<GraySource> {
+    let (NodeKind::Image(im), Some(paint)) = (&n.kind, n.extras().colorize.as_deref()) else { return None };
+    if colorizes_transparency(d, paint) { None } else { d.image_blob(im).and_then(|b| b.gray_source()) }
 }
 
 /// Is `e` the refusal of [`check_colorized`]?

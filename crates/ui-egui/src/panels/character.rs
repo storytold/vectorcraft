@@ -266,8 +266,9 @@ fn char_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
 
 /// Set the Kerning field's `value` (a number, "auto", or "optical"). At a caret in text the Type tool edits
 /// it is the pair kerning after the character before the caret, as Alt+←/→ steps it
-/// (`type.step`); nowhere to set at the start of the text. Else it is a character attribute like
-/// the others: the selected range, or all the text.
+/// (`type.step`), or at the start of a line the space before the character after it, where Auto
+/// and Optical set no space (#5111); nowhere to set at an empty line's start. Else it is a
+/// character attribute like the others: the selected range, or all the text.
 fn set_kerning(app: &mut VectorcraftApp, value: Value) {
     let Some((id, a, b)) = text_editing(app) else {
         format(app, json!({"kerning": value}));
@@ -278,15 +279,18 @@ fn set_kerning(app: &mut VectorcraftApp, value: Value) {
         return;
     }
     let Some(NodeKind::Text(t)) = app.session.active().and_then(|st| st.doc.node(id)).map(|n| &n.kind) else { return };
-    let start = vectorcraft_text::edit::prev_char(&t.plain_text(), a);
-    if start >= a {
-        return;
-    }
+    let Some((target, before)) = vectorcraft_text::edit::caret_kerning_target(&t.plain_text(), a) else { return };
     end_typing(app);
-    app.run("text.setRangeStyle", json!({"id": id.0, "start": start, "end": a, "kerning": value})).ok();
+    let params = if before {
+        json!({"id": id.0, "start": target.start, "end": target.end, "kerningBefore": value.as_f64().unwrap_or(0.0)})
+    } else {
+        json!({"id": id.0, "start": target.start, "end": target.end, "kerning": value})
+    };
+    app.run("text.setRangeStyle", params).ok();
 }
 
-/// The pair before the caret, in 1/1000 em, using the layout the canvas draws.
+/// The kerning at the caret, in 1/1000 em, using the layout the canvas draws: the pair before it,
+/// or at the start of a line the space before the character after it.
 fn caret_kerning(app: &VectorcraftApp, ui: &Ui) -> Option<(f64, bool)> {
     let (id, a, b) = text_editing(app)?;
     if a != b {
@@ -294,11 +298,12 @@ fn caret_kerning(app: &VectorcraftApp, ui: &Ui) -> Option<(f64, bool)> {
     }
     let NodeKind::Text(t) = &app.session.active()?.doc.node(id)?.kind else { return None };
     let text = t.plain_text();
-    let start = vectorcraft_text::edit::prev_char(&text, a);
-    if start >= a {
-        return None;
-    }
+    let (target, before) = vectorcraft_text::edit::caret_kerning_target(&text, a)?;
+    let start = target.start;
     let style = vectorcraft_text::edit::style_at(&t.runs, start + 1);
+    if before {
+        return Some((style.kerning_before, false));
+    }
     if let Some(v) = style.kerning {
         return Some((v, false));
     }
@@ -445,10 +450,10 @@ impl Field {
 /// Type tool edits, the panel shows, nothing takes the focus and the command fails. → `{field}`.
 pub(crate) fn highlight(app: &mut VectorcraftApp, field: Field) -> Result<Value, String> {
     // `window.panel` would hide a floating panel in front of its window, or an open flyout.
-    if crate::panel_docking::showing(&app.ui, "character") {
+    if crate::panel_docking::visible(&app.ui, "character") {
         app.run("window.panel.activate", json!({"panel": "character"}))?;
     } else {
-        app.run("window.panel", json!({"panel": "character"}))?;
+        crate::panel_docking::reveal_panel(app, "character")?;
     }
     if text_style(app).is_none() {
         app.character_focus = None;

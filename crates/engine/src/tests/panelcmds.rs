@@ -64,7 +64,7 @@ fn edit_gradient_angle_reverse_and_errors() {
     assert_eq!(g.gradient.stops[0].color.to_hex(), "#0000ff");
     assert!((g.gradient.stops[0].midpoint - 0.8).abs() < 1e-6, "{:?}", g.gradient.stops);
     assert!(s.execute("paint.editGradient", &json!({"stops": [{"offset": 0, "color": "#fff"}]})).is_err());
-    assert!(s.execute("paint.editGradient", &json!({"kind": "conic"})).is_err());
+    assert!(s.execute("paint.editGradient", &json!({"kind": "spiral"})).is_err());
 }
 
 #[test]
@@ -2109,7 +2109,7 @@ fn empty_artboard_checks_match_the_visual_bounds_on_varied_strokes() {
                 st.cap = [LineCap::Butt, LineCap::Round, LineCap::Square][next(3) as usize];
                 st.align = [StrokeAlign::Center, StrokeAlign::Inside, StrokeAlign::Outside][next(3) as usize];
                 st.miter_limit = 1.0 + next(20) as f64;
-                let mut head = || (next(3) == 0).then(|| Arrowhead::ALL[next(Arrowhead::ALL.len() as u64) as usize]);
+                let mut head = || (next(3) == 0).then(|| Arrowhead::ALL[next(Arrowhead::ALL.len() as u64) as usize].clone());
                 (st.start_arrow, st.end_arrow) = (head(), head());
                 st.arrow_scale = (50.0 + next(250) as f64, 50.0 + next(250) as f64);
                 if next(3) == 0 {

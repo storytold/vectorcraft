@@ -155,8 +155,10 @@ fn find_filters_list_view_and_arrows_step_through_the_libraries() {
     assert!(ctx.read_response(tile_id(panel, "#00FF00")).is_none());
     let first = SWATCH_IDS[0];
     let last = SwatchLibraries::list(&app).pop().unwrap().id;
-    assert_eq!(last, "geometric-patterns", "gradient and then pattern libraries come after the swatch libraries");
+    assert_eq!(last, "optical-effects", "gradient and then pattern libraries come after the swatch libraries");
     assert_eq!(neighbour::<SwatchLibraries>(&app, "radial-glows", 1).as_deref(), Some("geometric-patterns"));
+    assert_eq!(neighbour::<SwatchLibraries>(&app, "geometric-patterns", 1).as_deref(), Some("grit-textures"));
+    assert_eq!(neighbour::<SwatchLibraries>(&app, "grit-textures", 1).as_deref(), Some("optical-effects"));
     assert_eq!(neighbour::<SwatchLibraries>(&app, first, -1), Some(last), "wraps around");
     assert_eq!(neighbour::<SwatchLibraries>(&app, "web-safe-216", 1).as_deref(), Some(SWATCH_IDS[1]));
 }

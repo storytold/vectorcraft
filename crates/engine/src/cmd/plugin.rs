@@ -52,7 +52,7 @@ use vectorcraft_plugins::{Budget, Command, Kind, Plugin, effect, export, objects
 
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param, switch_or};
 
-use vectorcraft_plugins::permissions::{self, Grant, Permission};
+use vectorcraft_plugins::permissions::{self, Grant, GrantToken, Permission};
 
 /// What a plug-in error looks like to the user. A run the caller cancelled changed nothing.
 fn err(e: vectorcraft_plugins::Error) -> EngineError {
@@ -62,13 +62,28 @@ fn err(e: vectorcraft_plugins::Error) -> EngineError {
     }
 }
 
+/// Under automation read roots, a reply names a file or folder outside them by its name alone.
+fn shown_file(path: &str) -> String {
+    super::fileio::shown_path(path).into_owned()
+}
+
+/// A plug-in turned off for the next launch, or the one a launch stopped at, as a reply shows it: a
+/// file outside the automation read roots is named by its file name.
+fn shown_item(item: &safe_mode::Item) -> Value {
+    let mut v = item.to_json();
+    if let Some(file) = item.file.as_deref() {
+        v["file"] = json!(shown_file(file));
+    }
+    v
+}
+
 /// JSON description of an installed plug-in.
 pub fn describe(p: &Plugin) -> Value {
     let m = p.manifest();
     let mut v = json!({
         "id": m.id, "name": m.name, "version": m.version, "kind": m.kind.name(), "author": m.author, "description": m.description,
         "params": m.params_doc(), "paramsSchema": serde_json::to_value(m).ok().and_then(|v| v.get("params").cloned()),
-        "size": p.size(), "source": p.source(),
+        "size": p.size(), "source": p.source().map(shown_file),
         "permissions": permissions::names(&m.permissions()), "hash": p.hash(), "api": m.api,
     });
     match m.kind {
@@ -741,17 +756,18 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Installed plug-ins stay installed after a restart (#2541). The module is written first and its
     // grant only once it is there; when the grant can't be written, the store gets the module it
-    // held back. A failed write of that module is only logged, and the grant then doesn't cover
-    // the new module. A stored module that can't be read back isn't replaced by one that needs a
-    // grant.
+    // held back. A failed write of that module is only logged: the store then holds the new module,
+    // which the grant doesn't cover. A write that reports a failure may still have put the old
+    // module back, so the store is read again to tell which module it holds. A stored module that
+    // can't be read back isn't replaced by one that needs a grant.
     let previous = s.stored_plugin_bytes(plugin.id());
     let mut stored = (previous.is_ok() || !m.asks_permissions()) && s.store_plugin(plugin.id(), &bytes);
+    let holds_new = |s: &Session| s.stored_plugin_bytes(plugin.id()).is_ok_and(|held| held.as_deref() == Some(&bytes[..]));
     if m.asks_permissions() {
         let g = Grant { id: m.id.clone(), hash: plugin.hash().to_string(), permissions: wanted };
-        registry::grant(g.clone());
+        registry::grant(GrantToken::after_engine_approval(g.clone()));
         if stored && !s.store_grant(&m.id, Some(g)) {
-            s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref());
-            stored = false;
+            stored = !s.put_back_plugin(plugin.id(), previous.ok().flatten().as_deref()) && holds_new(s);
         }
     } else {
         // This module takes the id over, so nothing the user approved for the id applies any more.
@@ -759,14 +775,16 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         // When the write failed, the old stored module stays in the folder and needs its grant at
         // the next launch. A grant that can't be removed still approves the old bytes, so the store
         // gets the module it held back. When that module can't be read or written back, or there
-        // was none, no module goes with the grant, and the grant stops counting for this session. A
-        // grants file that is too large or doesn't hold a list approves nothing, and the new module
-        // stays; one that can't be opened or read may approve the old bytes once it reads again.
+        // was none, no module goes with the grant, and the grant stops counting for every session in
+        // the process attached to the folder. A grants file that is too large or doesn't hold a list
+        // approves nothing, and the new module stays; one that can't be opened or read may approve
+        // the old bytes once it reads again.
+        let writes = s.grant_writes();
         if stored && !s.store_grant(&m.id, None) && s.holds_plugin_grant(&m.id) {
             let back = previous.as_ref().is_ok_and(|held| s.put_back_plugin(plugin.id(), held.as_deref()));
-            stored = !back;
+            stored = !back && holds_new(s);
             if !back || matches!(previous, Ok(None)) {
-                s.ignore_stored_grant(&m.id);
+                s.ignore_stored_grant(&m.id, writes);
             }
         }
     }
@@ -786,7 +804,8 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     if changed {
         s.store_disabled_plugins();
     }
-    let mut v = describe_installed(&registry::install(plugin));
+    let installed = registry::install(plugin).map_err(err)?;
+    let mut v = describe_installed(&installed);
     if !unknown.is_empty() {
         v["unknownCommands"] = json!(unknown);
     }
@@ -885,7 +904,7 @@ fn load_folder(s: &Session, folder: &str) -> Value {
         None if crate::file_access::current().is_none() => Ok(()),
         None => Err(format!("automation path rejected: {} isn't valid text", f.display())),
     };
-    match registry::load_folder_where(std::path::Path::new(folder), allow, s.plugin_approver()) {
+    match registry::load_folder_where(std::path::Path::new(folder), allow, s.plugin_folder_approver()) {
         Ok(r) => {
             for id in &r.loaded {
                 s.attach_plugin_storage(id);
@@ -928,9 +947,46 @@ fn describe_installed(p: &Plugin) -> Value {
     v
 }
 
+/// The folder load `report` as a reply shows it: under automation read roots, a folder outside them
+/// is `null` and a failed file outside them is named by its file name, in the errors too.
+fn shown_report(mut report: Value) -> Value {
+    let mut hidden: Vec<(String, String)> = vec![];
+    if let Some(failed) = report.get_mut("failed").and_then(Value::as_array_mut) {
+        for row in failed {
+            let Some(file) = row.get("file").and_then(Value::as_str).map(str::to_string) else { continue };
+            let shown = shown_file(&file);
+            if shown != file {
+                row["file"] = json!(shown);
+                hidden.push((file, shown));
+            }
+        }
+    }
+    if let Some(folder) = report.get("folder").and_then(Value::as_str).map(str::to_string) {
+        let shown = shown_file(&folder);
+        if shown != folder {
+            report["folder"] = Value::Null;
+            hidden.push((folder, shown));
+        }
+    }
+    // A failed file's path holds its folder's: the longer paths are put back first.
+    hidden.sort_by_key(|(path, _)| std::cmp::Reverse(path.len()));
+    let unnamed = |text: &str| hidden.iter().fold(text.to_string(), |t, (path, name)| t.replace(path.as_str(), name));
+    if let Some(e) = report.get("error").and_then(Value::as_str).map(unnamed) {
+        report["error"] = json!(e);
+    }
+    if let Some(failed) = report.get_mut("failed").and_then(Value::as_array_mut) {
+        for row in failed {
+            if let Some(e) = row.get("error").and_then(Value::as_str).map(unnamed) {
+                row["error"] = json!(e);
+            }
+        }
+    }
+    report
+}
+
 fn list(_: &mut Session, _: &Value) -> Result<Value> {
-    let folder = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, _, r)| r.clone());
-    let disabled: Vec<Value> = safe_mode::disabled().iter().map(safe_mode::Item::to_json).collect();
+    let folder = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, _, r)| shown_report(r.clone()));
+    let disabled: Vec<Value> = safe_mode::disabled().iter().map(shown_item).collect();
     Ok(
         json!({"plugins": registry::list().iter().map(|p| describe_installed(p)).collect::<Vec<_>>(), "folder": folder, "safeMode": safe_mode::active(), "disabled": disabled}),
     )
@@ -942,9 +998,31 @@ fn safe_mode_state(_: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({
         "active": safe_mode::active(),
         "source": safe_mode::source().map(safe_mode::Source::name),
-        "disabled": safe_mode::disabled().iter().map(safe_mode::Item::to_json).collect::<Vec<_>>(),
-        "pendingItem": safe_mode::previous().map(|i| i.to_json()),
+        "disabled": safe_mode::disabled().iter().map(shown_item).collect::<Vec<_>>(),
+        "pendingItem": safe_mode::previous().map(|i| shown_item(&i)),
     }))
+}
+
+/// The file of a plug-in `plugin.safeMode` lists as `file`, or `plugin.list` as `source`: one they name
+/// by its file name (outside the automation read roots) is found by that name, when no other listed
+/// file has it.
+fn listed_file(file: String) -> String {
+    let mut listed: Vec<String> = safe_mode::disabled()
+        .into_iter()
+        .chain(safe_mode::previous())
+        .filter_map(|i| i.file)
+        .chain(registry::list().iter().filter_map(|p| p.source().map(str::to_string)))
+        .collect();
+    listed.sort();
+    listed.dedup();
+    if listed.contains(&file) {
+        return file;
+    }
+    let mut named = listed.into_iter().filter(|f| shown_file(f) == file);
+    match (named.next(), named.next()) {
+        (Some(f), None) => f,
+        _ => file,
+    }
 }
 
 /// `plugin.setEnabled`: turns a plug-in on or off for the next launch, by `id` or by `file` (a
@@ -968,7 +1046,7 @@ fn set_enabled(s: &mut Session, p: &Value) -> Result<Value> {
             let stored = if enabled { s.stored_plugin_file(&id).map(safe_mode::Item::file) } else { None };
             (registry::get(&id).map(|p| safe_mode::Item::of(&p)).unwrap_or(safe_mode::Item { id: Some(id), ..Default::default() }), stored)
         }
-        (None, Some(file)) => (safe_mode::Item::file(file), None),
+        (None, Some(file)) => (safe_mode::Item::file(listed_file(file)), None),
         (None, None) => return Err(bad(C, "give `id` or `file` (see plugin.safeMode)")),
     };
     let items: Vec<&safe_mode::Item> = std::iter::once(&item).chain(stored.as_ref()).collect();
@@ -982,7 +1060,7 @@ fn set_enabled(s: &mut Session, p: &Value) -> Result<Value> {
     // Without a plug-in folder (a session confined to automation roots), or when the list there
     // can't take the change, the change stays in this process and goes with the next change that saves.
     let saved = !changed || s.store_disabled_plugins();
-    Ok(json!({"changed": changed, "saved": saved, "disabled": safe_mode::disabled().iter().map(safe_mode::Item::to_json).collect::<Vec<_>>()}))
+    Ok(json!({"changed": changed, "saved": saved, "disabled": safe_mode::disabled().iter().map(shown_item).collect::<Vec<_>>()}))
 }
 
 fn info(_: &mut Session, p: &Value) -> Result<Value> {
@@ -1051,7 +1129,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null, safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
@@ -1096,7 +1174,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Plug-in",
             [],
             None,
-            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, the command fails and the plug-in stays installed); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it → {removed}",
+            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, the command fails and the plug-in stays installed; when the settings can't be moved back either, the error names the folder they stay in, and the next load, install or removal of the plug-in moves them back); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it → {removed}",
             always,
             remove
         ),
@@ -1123,7 +1201,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Safe Mode",
             [],
             None,
-            "{} → {active: bool (no plug-in loads or runs: plugin.install, .run, .reload and exporters fail, live effects draw their object's geometry unchanged and the objects keep their effects), source: \"flag\" (started with --safe-mode) | \"startup\" (the user chose Safe Mode, or hasn't chosen yet, after a launch that stopped while a plug-in was loading) | null, disabled: [{id, file, name, label}] (turned off for the next launch; id is null for one known only by its file), pendingItem: {id, file, name, label} | null (the plug-in the last launch was loading when it stopped, until the user chooses; it may not be what stopped it)}. Safe Mode is chosen at launch, never by a command",
+            "{} → {active: bool (no plug-in loads or runs: plugin.install, .run, .reload and exporters fail, live effects draw their object's geometry unchanged and the objects keep their effects), source: \"flag\" (started with --safe-mode) | \"startup\" (the user chose Safe Mode, or hasn't chosen yet, after a launch that stopped while a plug-in was loading) | null, disabled: [{id, file, name, label}] (turned off for the next launch; id is null for one known only by its file; under automation read roots, a file outside them is named by its file name here and in pendingItem, and plugin.setEnabled takes that name), pendingItem: {id, file, name, label} | null (the plug-in the last launch was loading when it stopped, until the user chooses; it may not be what stopped it)}. Safe Mode is chosen at launch, never by a command",
             always,
             safe_mode_state
         ),
@@ -1132,7 +1210,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Enable on Re-launch",
             [],
             None,
-            "{id | file: a plug-in as plugin.safeMode's disabled lists it, enabled: bool} turn a plug-in on or off for the next launch (Help › Safe Mode's Enable on Re-launch); nothing loads, unloads or is uninstalled now. Turning on by id also turns on the file the plug-in is stored in. Turning on one that isn't disabled is an error. plugin.install of a disabled plug-in turns it on → {changed, saved: false when the change isn't in the plug-in folder for the next launch (a session without one, or the list there can't be read or written or is full; it is saved with the next change that saves), disabled}",
+            "{id | file: a plug-in as plugin.safeMode's disabled lists it or as plugin.list's source (under automation read roots, a file outside them by the file name shown, when no other listed file has it), enabled: bool} turn a plug-in on or off for the next launch (Help › Safe Mode's Enable on Re-launch); nothing loads, unloads or is uninstalled now. Turning on by id also turns on the file the plug-in is stored in. Turning on one that isn't disabled is an error. plugin.install of a disabled plug-in turns it on → {changed, saved: false when the change isn't in the plug-in folder for the next launch (a session without one, or the list there can't be read or written or is full; it is saved with the next change that saves), disabled}",
             always,
             set_enabled
         ),

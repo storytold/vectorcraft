@@ -420,37 +420,6 @@ fn pdf_and_svg_write_the_effected_object_as_an_image() {
     assert!(svg.contains("feGaussianBlur") && !svg.contains("<image"));
 }
 
-/// #2485: effects measured on the document's raster grid (Color Halftone's cells, De-Interlace's
-/// lines, Rasterize's pixels) keep the 72 ppi grid in a PDF whose images get at least 150 ppi: the
-/// floor samples them more finely without changing how they look.
-#[test]
-fn pdf_floor_keeps_grid_effects_at_the_documents_resolution() {
-    for (id, params) in [("pixelate.colorHalftone", "{}"), ("video.deinterlace", r#"{"create": "interpolation"}"#), ("rasterize", "{}")] {
-        let (mut s, g) = striped();
-        let params: Value = serde_json::from_str(params).unwrap();
-        s.execute("effect.apply", &json!({"effect": id, "ids": [g], "params": params})).unwrap();
-        let doc = s.doc().unwrap().doc.clone();
-        assert_eq!(doc.raster_effects_ppi, 72.0);
-        let r = crate::cmd::rasterfx::export_pdf_with_report(&doc, &Default::default()).unwrap();
-        assert!(r.warnings.is_empty(), "{id}: {:?}", r.warnings);
-        let back = vectorcraft_pdf::import(&r.bytes).unwrap();
-        let mut ppi = 0.0_f64;
-        back.walk(|n| {
-            if let NodeKind::Image(im) = &n.kind {
-                ppi = ppi.max(72.0 / im.xf.as_coeffs()[0]);
-            }
-        });
-        // Rasterize's pixels are its look: its image stays at the document's 72 ppi.
-        if id == "rasterize" {
-            assert!((ppi - 72.0).abs() < 1.0, "{id}: {ppi} ppi");
-        } else {
-            assert!(ppi >= 150.0 - 1e-6, "{id}: {ppi} ppi");
-        }
-        let diff = mean_diff(&render(&s), &Renderer::new().render_region(&back, Rect::new(0.0, 0.0, 200.0, 200.0), 1.0, true));
-        assert!(diff < 0.03, "{id}: PDF reads back {:.2}% off", diff * 100.0);
-    }
-}
-
 #[test]
 fn expand_appearance_makes_an_image() {
     let (mut s, g) = striped();

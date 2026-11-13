@@ -538,6 +538,220 @@ fn indent_markers_after_select_all_follow_text_that_reflows_into_the_next_frame(
     }
 }
 
+/// A story of twelve paragraphs that wrap, threaded through three frames: the first two frames each
+/// end inside a paragraph, which runs on into the next frame. → the app and the frames in thread
+/// order.
+fn split_story_app() -> (VectorcraftApp, [u64; 3]) {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 900, "height": 1000})).unwrap();
+    // Each paragraph takes more lines than a short frame holds.
+    let words = "aaa bbb ccc ddd eee fff ggg hhh iii jjj ".repeat(3);
+    let story = (1..=12).map(|i| format!("p{i} {}", words.trim_end())).collect::<Vec<_>>().join("\n");
+    let a = app.run("text.create", json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 50}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let b = app.run("text.thread.add", json!({"from": a, "rect": [300, 10, 150, 50]})).unwrap()["id"].as_u64().unwrap();
+    let c = app.run("text.thread.add", json!({"from": b, "rect": [600, 10, 250, 950]})).unwrap()["id"].as_u64().unwrap();
+    for id in [b, c] {
+        assert!(text_of(&app, id).first_para_continues, "frame {id} starts inside a paragraph: {:?}", text_of(&app, id).plain_text());
+    }
+    (app, [a, b, c])
+}
+
+fn text_of(app: &VectorcraftApp, id: u64) -> vectorcraft_doc::TextObject {
+    match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("not text"),
+    }
+}
+
+/// Each paragraph of the story of `frames` by its first word, with its left indent and first-line
+/// position, counted once; each piece of a paragraph split between frames has the same values.
+fn story_paragraphs(app: &VectorcraftApp, frames: &[u64]) -> Vec<(String, f64, f64)> {
+    let mut out: Vec<(String, f64, f64)> = vec![];
+    for (k, id) in frames.iter().enumerate() {
+        let t = text_of(app, *id);
+        for (i, text) in t.plain_text().split('\n').enumerate() {
+            let p = t.para_at(i);
+            let values = (p.left_indent, p.left_indent + p.first_line_indent);
+            if i == 0 && k > 0 && t.first_para_continues {
+                let last = out.last().unwrap();
+                assert_eq!((last.1, last.2), values, "both pieces of {} agree", last.0);
+            } else if !text.is_empty() {
+                out.push((text.split(' ').next().unwrap_or_default().to_string(), values.0, values.1));
+            }
+        }
+    }
+    out
+}
+
+/// Where each target is in the story: its frame's place in `frames` and its start there.
+fn story_positions(targets: &[IndentTarget], frames: &[u64]) -> Vec<(usize, usize)> {
+    targets.iter().map(|p| (frames.iter().position(|f| *f == p.id).unwrap(), p.start)).collect()
+}
+
+/// With the Selection tool on every frame of a threaded story, selected last frame first, the
+/// indent markers list each paragraph of the story once, in the story's order, and a marker drag
+/// over mixed indents sets every paragraph in one undo step, the two split paragraphs included.
+#[test]
+fn indent_markers_on_selected_threaded_frames_follow_the_story_and_set_a_split_paragraph_once() {
+    let (mut app, [a, b, c]) = split_story_app();
+    app.run("text.setFormat", json!({"ids": [c], "leftIndent": 10})).unwrap();
+    app.run("select.set", json!({"ids": [c, b, a]})).unwrap();
+    assert_eq!(app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect::<Vec<_>>(), vec![c, b, a]);
+    let before = story_paragraphs(&app, &[a, b, c]);
+    assert_eq!(before.len(), 12, "{before:?}");
+    assert!(before.iter().any(|p| p.1 == 0.0) && before.iter().any(|p| p.1 == 10.0), "{before:?}");
+    let (node, para, span) = current_para(&app).unwrap();
+    let targets = indent_targets(&app, &node);
+    let positions = story_positions(&targets, &[a, b, c]);
+    assert_eq!(positions.len(), 12, "one target for each paragraph of the story: {positions:?}");
+    assert!(positions.windows(2).all(|w| w[0] < w[1]), "the targets follow the story: {positions:?}");
+    let undo = app.session.active().unwrap().history.undo.len();
+    set_marker(&mut app, IndentMarker::Upper, 60.0, &para, span, &targets, false);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+    let after = story_paragraphs(&app, &[a, b, c]);
+    assert_eq!(after.iter().map(|p| &p.0).collect::<Vec<_>>(), before.iter().map(|p| &p.0).collect::<Vec<_>>());
+    for (was, now) in before.iter().zip(&after) {
+        assert_eq!((now.1, now.2), (was.1, 60.0), "{} keeps its left indent and starts at 60 pt: {after:?}", now.0);
+    }
+}
+
+/// A marker drag over many paragraphs of a threaded story with mixed indents sends one
+/// `text.setFormat` for all of them, in one undo step, and a drag that changes no paragraph runs
+/// nothing.
+#[test]
+fn indent_markers_over_many_threaded_paragraphs_send_one_format_command() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 900, "height": 3000})).unwrap();
+    let story = (1..=128).map(|i| format!("p{i}")).collect::<Vec<_>>().join("\n");
+    let a = app.run("text.create", json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 100}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let b = app.run("text.thread.add", json!({"from": a, "rect": [300, 10, 200, 2900]})).unwrap()["id"].as_u64().unwrap();
+    app.run("text.setFormat", json!({"ids": [b], "leftIndent": 10})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let before = story_paragraphs(&app, &[a, b]);
+    assert_eq!(before.len(), 128, "{before:?}");
+    assert!(before.iter().any(|p| p.1 == 0.0) && before.iter().any(|p| p.1 == 10.0), "{before:?}");
+    let steps = |app: &VectorcraftApp| (app.session.active().unwrap().history.undo.len(), app.session.journal.len());
+    let drag = |app: &mut VectorcraftApp, marker, to| {
+        let (node, para, span) = current_para(app).unwrap();
+        let targets = indent_targets(app, &node);
+        assert_eq!(targets.len(), 128);
+        set_marker(app, marker, to, &para, span, &targets, false);
+    };
+    let (undo, journal) = steps(&app);
+    drag(&mut app, IndentMarker::Upper, 60.0);
+    assert_eq!(steps(&app), (undo + 1, journal + 1));
+    let (name, params) = app.session.journal.last().cloned().unwrap();
+    assert_eq!(name, "command.batch");
+    let commands = params["commands"].as_array().unwrap();
+    assert_eq!(commands.len(), 1, "one command for every paragraph");
+    assert_eq!(commands[0]["command"], "text.setFormat");
+    assert_eq!(commands[0]["params"]["paragraphIndents"].as_array().unwrap().len(), 128);
+    let after = story_paragraphs(&app, &[a, b]);
+    for (was, now) in before.iter().zip(&after) {
+        assert_eq!((&now.0, now.1, now.2), (&was.0, was.1, 60.0), "{after:?}");
+    }
+    // The same position again changes no paragraph.
+    drag(&mut app, IndentMarker::Upper, 60.0);
+    assert_eq!(steps(&app), (undo + 1, journal + 1), "nothing ran");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(story_paragraphs(&app, &[a, b]), before);
+    app.run("edit.redo", json!({})).unwrap();
+    assert_eq!(story_paragraphs(&app, &[a, b]), after);
+}
+
+/// After Select All in threaded text, a paragraph split between two frames is one target.
+#[test]
+fn indent_markers_after_select_all_list_a_split_paragraph_once() {
+    let (mut app, [a, b, c]) = split_story_app();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 0, "caret": 0}));
+    app.run("select.all", json!({})).unwrap();
+    let ids = [a, b, c].map(vectorcraft_doc::NodeId);
+    assert_eq!(super::super::character::text_story(&app), Some(ids.to_vec()));
+    let (node, _, _) = current_para(&app).unwrap();
+    let positions = story_positions(&indent_targets(&app, &node), &[a, b, c]);
+    assert_eq!(positions.len(), 12, "{positions:?}");
+    assert!(positions.windows(2).all(|w| w[0] < w[1]), "{positions:?}");
+}
+
+/// With the Selection tool on any frame of a threaded story, the indent markers list every
+/// paragraph of the story, each once in story order: a selected story is one text. Text in a
+/// selected group is listed with the story's frames, and an empty text object keeps its one
+/// paragraph.
+#[test]
+fn indent_markers_on_some_threaded_frames_list_the_whole_story_once() {
+    let (mut app, [a, b, c]) = split_story_app();
+    let count = |app: &VectorcraftApp, id: u64| text_of(app, id).paragraph_count();
+    let targets_of = |app: &mut VectorcraftApp, ids: Vec<u64>| {
+        app.run("select.set", json!({"ids": ids})).unwrap();
+        let (node, _, _) = current_para(app).unwrap();
+        story_positions(&indent_targets(app, &node), &[a, b, c])
+    };
+    let story = count(&app, a) + count(&app, b) + count(&app, c) - 2;
+    let all = targets_of(&mut app, vec![c, a, b]);
+    assert_eq!(all.len(), story, "two frames that share a paragraph list it once: {all:?}");
+    assert!(all.windows(2).all(|w| w[0] < w[1]), "{all:?}");
+    for frame in [a, b, c] {
+        assert_eq!(targets_of(&mut app, vec![frame]), all, "frame {frame} alone lists the whole story");
+    }
+    // A grouped empty text object besides the last frame of the story.
+    let empty = app.run("text.create", json!({"x": 10, "y": 900, "text": "", "area": {"width": 100, "height": 40}})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [empty, c]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(c)).unwrap().clone();
+    let targets = indent_targets(&app, &node);
+    let ids: Vec<u64> = targets.iter().map(|p| p.id).collect();
+    assert_eq!(ids.iter().filter(|id| **id == empty).count(), 1, "{ids:?}");
+    let in_story: Vec<IndentTarget> = targets.into_iter().filter(|p| p.id != empty).collect();
+    assert_eq!(story_positions(&in_story, &[a, b, c]), all);
+}
+
+/// A marker drag on one selected frame of a threaded story sets every paragraph of the story, in
+/// its locked and hidden frames too, in one undo step, whether the paragraphs share their indents
+/// or have their own.
+#[test]
+fn indent_markers_on_one_threaded_frame_set_its_locked_and_hidden_frames() {
+    let (mut app, [a, b, c]) = split_story_app();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("object.lock", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    app.run("object.hide", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    // Every paragraph has the same indents.
+    let (node, para, span) = current_para(&app).unwrap();
+    let targets = indent_targets(&app, &node);
+    assert_eq!(targets.len(), 12);
+    let undo = app.session.active().unwrap().history.undo.len();
+    set_marker(&mut app, IndentMarker::Upper, 30.0, &para, span, &targets, false);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+    let shared = story_paragraphs(&app, &[a, b, c]);
+    assert_eq!(shared.len(), 12, "{shared:?}");
+    assert!(shared.iter().all(|p| (p.1, p.2) == (0.0, 30.0)), "{shared:?}");
+    // The paragraphs of the hidden frame have a left indent of their own.
+    app.run("text.setFormat", json!({"ids": [c], "leftIndent": 10})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    let before = story_paragraphs(&app, &[a, b, c]);
+    assert_eq!(before.len(), 12, "{before:?}");
+    assert!(before.iter().any(|p| p.1 == 0.0) && before.iter().any(|p| p.1 == 10.0), "{before:?}");
+    let (node, para, span) = current_para(&app).unwrap();
+    let targets = indent_targets(&app, &node);
+    assert_eq!(targets.len(), 12);
+    let undo = app.session.active().unwrap().history.undo.len();
+    set_marker(&mut app, IndentMarker::Upper, 60.0, &para, span, &targets, false);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+    let after = story_paragraphs(&app, &[a, b, c]);
+    assert_eq!(after.iter().map(|p| &p.0).collect::<Vec<_>>(), before.iter().map(|p| &p.0).collect::<Vec<_>>());
+    for (was, now) in before.iter().zip(&after) {
+        assert_eq!((now.1, now.2), (was.1, 60.0), "{} keeps its left indent and starts at 60 pt: {after:?}", now.0);
+    }
+}
+
 #[test]
 fn lower_marker_bounds_cover_each_touched_first_line() {
     let targets = [
@@ -1120,6 +1334,35 @@ fn panel_menu_does_not_change_stops_while_an_indent_marker_is_selected() {
     assert_eq!(current(&app).unwrap().1, before);
     choose(&ctx, &mut app, "Delete Tab");
     assert_eq!(current(&app).unwrap().1, before);
+}
+
+/// With 256 stops, a click on an empty part of the ruler adds none and shows the limit in the
+/// status bar. Repeat Tab near the end of the list adds copies only up to 256 stops and shows the
+/// limit too.
+#[test]
+fn the_ruler_and_repeat_tab_stop_at_256_stops() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({})).unwrap();
+    app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a	b", "area": {"width": 300, "height": 100}})).unwrap();
+    // 250 stops 1 pt apart from 0 pt, then six 2 pt apart from 260 pt.
+    let start: Vec<f64> = (0..250).map(f64::from).chain((0..6).map(|i| 260.0 + 2.0 * f64::from(i))).collect();
+    let stops: Vec<Value> = start.iter().map(|p| json!({"position": p})).collect();
+    app.session.execute("text.tabs.set", &json!({ "stops": stops })).unwrap();
+    let ctx = egui::Context::default();
+    let positions = |app: &VectorcraftApp| current(app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>();
+    set_pstate(&ctx, "tabs-sel", 3usize);
+    drag_on_ruler(&ctx, &mut app, 290.0, 290.0, false);
+    assert_eq!(positions(&app), start);
+    assert_eq!(pstate::<usize>(&ctx, "tabs-sel"), 3);
+    assert_eq!(app.ui.status, "at most 256 tab stops");
+    // Repeat Tab on the stop at 260 pt (11 pt past the one before it): five copies, not 20.
+    app.status("");
+    set_pstate(&ctx, "tabs-sel", 250usize);
+    choose(&ctx, &mut app, "Repeat Tab");
+    let repeated = positions(&app);
+    assert_eq!(repeated.len(), 256);
+    assert_eq!(repeated[249..], [249.0, 260.0, 271.0, 282.0, 293.0, 304.0, 315.0]);
+    assert_eq!(app.ui.status, "at most 256 tab stops");
 }
 
 /// Repeat Tab on the first stop spaces the copies by the stop's distance from the paragraph's

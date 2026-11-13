@@ -215,6 +215,20 @@ pub fn check_read(path: &str) -> Result<(), String> {
     current().map_or(Ok(()), |r| r.check(path, Access::Read))
 }
 
+/// Is `path`, under a read root, written as an absolute path of another platform: outside Windows, one
+/// that starts with a drive (`C:`) or a `\`? [`check_read`] reads it as a name in the working folder.
+pub fn written_elsewhere(path: &str) -> bool {
+    let foreign = path.starts_with('\\') || matches!(path.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic());
+    !cfg!(windows) && foreign && current().is_some()
+}
+
+/// Does a command param named `key` hold a file or folder path: `path`, `paths`, `file`, `files`,
+/// `folder`, or a name ending in `Path`, `Paths`, `File`, `Files` or `Folder` (`diffPath`,
+/// `destinationFolder`)?
+pub fn is_path_key(key: &str) -> bool {
+    matches!(key, "path" | "paths" | "file" | "files" | "folder") || ["Path", "Paths", "File", "Files", "Folder"].iter().any(|end| key.ends_with(end))
+}
+
 /// May `path` be written here? Always, without roots in force.
 pub fn check_write(path: &str) -> Result<(), String> {
     current().map_or(Ok(()), |r| r.check(path, Access::Write))?;
@@ -463,7 +477,10 @@ impl ScriptScope {
         let real = match std::fs::canonicalize(path) {
             Ok(real) => real,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Err(if std::fs::symlink_metadata(path).is_ok() { ScriptRead::Refused } else { ScriptRead::Missing });
+                if std::fs::symlink_metadata(path).is_ok() || !self.missing_inside(path) {
+                    return Err(ScriptRead::Refused);
+                }
+                return Err(ScriptRead::Missing);
             }
             Err(e) => return Err(ScriptRead::Failed(e.to_string())),
         };
@@ -471,6 +488,18 @@ impl ScriptScope {
             return Err(ScriptRead::Refused);
         }
         Ok(real)
+    }
+
+    /// Is the missing `path` inside a granted folder: does the nearest folder above it that exists
+    /// lie inside one? On a file system where case matters, `MAIN/x` beside the granted `main` is
+    /// outside, whether `MAIN` exists or not. A link above it that leads to nothing is outside too,
+    /// so a script cannot tell whether the folder a link leads to exists.
+    fn missing_inside(&self, path: &Path) -> bool {
+        path.ancestors()
+            .skip(1)
+            .find(|a| std::fs::symlink_metadata(a).is_ok())
+            .and_then(|a| std::fs::canonicalize(a).ok())
+            .is_some_and(|real| self.roots.iter().any(|r| inside(&real, r)))
     }
 
     /// What the file or folder at `path` is, located as [`ScriptScope::locate`] locates it.

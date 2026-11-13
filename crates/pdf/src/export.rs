@@ -13,7 +13,7 @@ use krilla::geom::{Path, PathBuilder, Size};
 use krilla::image::Image;
 use krilla::num::NormalizedF32;
 use krilla::page::PageSettings;
-use krilla::paint::{Fill, LinearGradient, RadialGradient, SpreadMethod, Stop, Stroke, StrokeDash};
+use krilla::paint::{Fill, LinearGradient, RadialGradient, SpreadMethod, Stop, Stroke, StrokeDash, SweepGradient};
 use krilla::text::{Glyph, GlyphId, KrillaGlyph};
 use kurbo::{PathEl, Shape, Vec2};
 use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
@@ -43,7 +43,6 @@ pub(crate) use entry::{RgbInCmyk, leaving_out_undecodable};
 pub use entry::{check_page_sizes, export, export_with_report, page_areas};
 #[cfg(test)]
 use exporter::{MAX_COORD, writable, xf};
-pub use exporter::{MIN_RASTER_PPI, pdf_raster_ppi};
 #[cfg(test)]
 use images::{png_8_bit, png_16_bit};
 #[cfg(test)]
@@ -69,6 +68,9 @@ pub(crate) struct Exporter<'a> {
     lab_spots: Vec<(String, vectorcraft_color::cms::Lab)>,
     /// Images may ask viewers to smooth them (not in PDF/A).
     interpolate: bool,
+    /// Conic gradients may be written as sweep shadings, whose PostScript calculator functions
+    /// PDF/A forbids; otherwise they are drawn as images ([`Self::area_paint`]).
+    sweeps: bool,
     /// Images may have 16 bits a sample (PDF 1.5 and later); in earlier files they are written at
     /// 8 bits ([`embed`]).
     sixteen_bit: bool,
@@ -127,14 +129,6 @@ pub(crate) struct Exporter<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn raster_ppi_has_a_150_floor() {
-        assert_eq!(pdf_raster_ppi(72.0), MIN_RASTER_PPI);
-        assert_eq!(pdf_raster_ppi(f64::NAN), MIN_RASTER_PPI);
-        // A higher document ppi still wins.
-        assert_eq!(pdf_raster_ppi(300.0), 300.0);
-    }
 
     #[test]
     fn writable_bounds_values_the_transform_and_values_through_it() {

@@ -191,7 +191,8 @@ impl<'a> Device<'a> for Builder<'_> {
                 if self.type_glyph(o, transform * glyph_transform, scale, Some(paint), stroke.as_ref(), overprint) {
                     return;
                 }
-                self.flush_text();
+                // A line kept as outlines leaves them open: this glyph joins them.
+                self.end_text();
                 let mut bp = o.outline();
                 bp.apply_affine(transform * glyph_transform);
                 let (paint, opacity) = self.paint(paint, stroke.is_some(), self.walked(true));
@@ -285,6 +286,12 @@ impl<'a> Device<'a> for Builder<'_> {
                     self.add_image(key, || Some((ImageBlob::new("image/jpeg", bytes), w, h)), transform);
                     return;
                 }
+                // Drawn before: the image is there already, so its pixels aren't converted again.
+                if let Some(sf) = self.raster_scales.get(&key).copied().filter(|_| self.image_keys.contains_key(&key)) {
+                    let xf = transform * Affine::scale_non_uniform(sf.0 as f64, sf.1 as f64);
+                    self.add_image(key, || None, xf);
+                    return;
+                }
                 let mut decoded: Option<Decoded> = None;
                 r.with_rgba(
                     |img, alpha| {
@@ -303,6 +310,7 @@ impl<'a> Device<'a> for Builder<'_> {
                     self.warn("an image could not be decoded and was skipped");
                     return;
                 };
+                self.raster_scales.insert(key, sf);
                 let xf = transform * Affine::scale_non_uniform(sf.0 as f64, sf.1 as f64);
                 self.add_image(key, || rgba_png(rgba, w, h).map(|png| (ImageBlob::new("image/png", png), w, h)), xf);
             }

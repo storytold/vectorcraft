@@ -15,7 +15,11 @@ use crate::{FilePick, Services, VectorcraftApp, dialogs};
 
 mod export;
 mod open;
+mod read_only_save;
 mod save;
+
+#[cfg(test)]
+mod tests_read_only_save;
 
 pub use export::{EXPORT_CANCELLED, cancel_exports, export, export_for_screens, export_pdf, hide_exports, reveal, save_command_output};
 pub(crate) use export::{
@@ -29,8 +33,9 @@ pub use open::{
 };
 #[cfg(test)]
 pub(crate) use open::{open_file, opened_with_notes};
+pub(crate) use save::save_current;
 pub use save::{ask_format_options, ask_pdf_options, remember_active_artboard, remember_view, save, save_pdf};
-pub(crate) use save::{export_path, is_web, report_saved, target_path, write_named, write_reporting, write_to};
+pub(crate) use save::{export_path, is_web, notes_of, report_saved, show_with_notes, target_path, write_named, write_reporting, write_to};
 #[cfg(test)]
 pub(crate) use save::{report_write_error, saved_status};
 
@@ -78,6 +83,98 @@ mod tests {
         // An agent's `file.open {path}` gets the error back and no dialog.
         assert!(app.run("file.open", json!({"path": "/docs/gone.ai"})).is_err());
         assert!(app.ui.dialog.is_none());
+    }
+
+    /// A file opened with a note about its page first and a note that its layers weren't read
+    /// second: the status bar names the layers note, counts both, and keeps both, the layers note
+    /// first, for its hover. A message about its linked files still replaces that message. Two
+    /// notes of what was left out keep the order the import gave them, and an open without notes
+    /// leaves the message and the notes an earlier open left.
+    #[test]
+    fn an_open_names_the_note_of_what_was_left_out_first() {
+        use vectorcraft_testkit::ai;
+        let (mut app, _) = app();
+        let damaged = b"%AI12_CompressedData not zlib";
+        let notes = notes_of;
+        let pdf = ai::pdf(damaged, "0 g 150 20 100 60 re f");
+        let r = open_bytes(&mut app, "damaged.pdf", &pdf, None).unwrap();
+        let [page, layers] = &notes(&r)[..] else { panic!("two notes: {r}") };
+        assert!(layers.contains("layers weren't read") && !page.contains("layers weren't read"), "{r}");
+        assert_eq!(app.ui.status, opened_with_notes(2, layers));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), vec![layers.clone(), page.clone()])));
+
+        // A message about its linked files replaces the open's message, as before.
+        app.session.prefs.update_links = "manually".into();
+        let mut linked = r.clone();
+        linked["modifiedLinks"] = json!([{ "ids": [1] }]);
+        opened(&mut app, &linked);
+        assert_eq!(app.ui.status, dialogs::missing_links::changed_on_disk_status(1));
+        assert_eq!(app.ui.status_notes, Some((opened_with_notes(2, layers), vec![layers.clone(), page.clone()])));
+
+        let r = open_bytes(&mut app, "damaged.ai", &ai::ai(damaged, ai::page_pdf()), None).unwrap();
+        let both = notes(&r);
+        assert_eq!(both.len(), 2, "{r}");
+        assert_eq!(app.ui.status, opened_with_notes(2, &both[0]));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), both)));
+
+        let r = open_document(&mut app, "page.pdf", &pdf, None, &json!({"editingData": false})).unwrap();
+        let [only] = &notes(&r)[..] else { panic!("one note: {r}") };
+        assert_eq!(app.ui.status, opened_with_notes(1, only));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), vec![only.clone()])));
+
+        let clean = br#"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="10" height="10"/></svg>"#;
+        open_bytes(&mut app, "damaged.pdf", &pdf, None).unwrap();
+        let shown = (app.ui.status.clone(), app.ui.status_notes.clone());
+        let r = open_bytes(&mut app, "clean.svg", clean, None).unwrap();
+        assert_eq!(r["warnings"], json!([]), "{r}");
+        assert_eq!((app.ui.status.clone(), app.ui.status_notes.clone()), shown);
+    }
+
+    /// A save and an export with several notes: the status bar names the first, counts them, and
+    /// keeps every one of them, in the reply's order, for its hover. A save without notes keeps
+    /// none.
+    #[test]
+    fn a_save_and_an_export_keep_every_note_for_the_hover() {
+        let (mut app, _) = app();
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let r = app.run("file.save", json!({"path": "/out/a.svg", "compress": true})).unwrap();
+        let notes = notes_of(&r);
+        assert_eq!(notes.len(), 2, "{r}");
+        assert!(notes[0].starts_with("SVG keeps the artwork but not everything"), "{r}");
+        assert_eq!(app.ui.status, saved_status("/out/a.svg", &r));
+        assert!(app.ui.status.contains("with 2 notes"), "{}", app.ui.status);
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
+
+        app.run("file.save", json!({"path": "/out/b.vectorcraft"})).unwrap();
+        assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("Saved /out/b.vectorcraft", &None));
+
+        // A PDF export of a knockout group and of type in a font that isn't installed.
+        app.run("text.create", json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        app.run("object.group", json!({})).unwrap();
+        app.run("transparency.set", json!({"knockout": "on"})).unwrap();
+        let r = export(&mut app, Some("pdf"), Some("/out/c.pdf".into()), &json!({})).unwrap();
+        let notes = notes_of(&r);
+        assert_eq!(notes.len(), 2, "{r}");
+        assert_eq!(app.ui.status, exported_with_notes("/out/c.pdf", notes.len(), &notes[0]));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
+    }
+
+    /// An export whose encoder notes an option it didn't apply (lossy WebP) before what the file
+    /// loses (type in a font that isn't installed): the status bar names what the file loses, and
+    /// the hover lists it first.
+    #[test]
+    fn an_export_names_what_the_file_loses_before_a_note_on_the_options() {
+        let (mut app, _) = app();
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("text.create", json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
+        let r = export(&mut app, Some("webp"), Some("/out/d.webp".into()), &json!({"lossless": false})).unwrap();
+        let notes = notes_of(&r);
+        assert_eq!(notes.len(), 2, "{r}");
+        assert!(notes[0].contains("Nonexistent Sans Probe"), "{r}");
+        assert!(notes[1].starts_with("lossy WebP"), "{r}");
+        assert_eq!(app.ui.status, exported_with_notes("/out/d.webp", 2, &notes[0]));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
     }
 
     /// #1685: a save or an export that can't write its file says so in a dialog that names the

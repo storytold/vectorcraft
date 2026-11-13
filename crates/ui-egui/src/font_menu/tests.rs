@@ -21,12 +21,13 @@ fn the_thai_filter_lists_fonts_with_thai() {
 /// stay clear of it.
 #[test]
 fn the_scroll_bar_leaves_the_stars_clear() {
-    // Every family starred, so each row draws its star.
+    // Every family starred, so each row draws its star. Tests running alongside add fonts and
+    // composite fonts to the process-wide database, which the menu lists too: the ★ filter keeps
+    // the rows to the families starred here.
     let all = vectorcraft_text::FontDb::global().families();
-    let families = all.len();
     let ctx = egui::Context::default();
     let area = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(300.0, 160.0));
-    let mut st = super::MenuState::default();
+    let mut st = super::MenuState { favorites_only: true, ..Default::default() };
     let look = super::MenuLook { samples: false, favorites: &all, ..Default::default() };
     let mut stars = vec![];
     for _ in 0..3 {
@@ -45,6 +46,7 @@ fn the_scroll_bar_leaves_the_stars_clear() {
             })
             .collect();
     }
+    let families = st.rows.len();
     assert!(!stars.is_empty() || families == 0, "{families} families, no row stars drawn");
     // The rows don't fill the list without enough families to scroll, and then there is no bar.
     if families as f32 * look.row > area.height() {
@@ -56,10 +58,114 @@ fn the_scroll_bar_leaves_the_stars_clear() {
     }
 }
 
+/// In a wide row the sample starts after the widest name and a gap, not halfway along, even for a
+/// name wider than the menu widens itself for; the sample keeps its room, and a row too narrow for
+/// both gives the name half of it. Without samples the name runs to the star.
+#[test]
+fn the_sample_starts_after_the_widest_name() {
+    use super::{DISCLOSURE, NAME_GAP, NAME_MAX, SAMPLE_W, STAR, name_column};
+    assert_eq!(name_column(500.0, 100.0, true), DISCLOSURE + 100.0 + NAME_GAP);
+    assert_eq!(name_column(600.0, NAME_MAX + 80.0, true), DISCLOSURE + NAME_MAX + 80.0 + NAME_GAP);
+    assert_eq!(name_column(600.0, 1000.0, true), 600.0 - STAR - 2.0 - SAMPLE_W);
+    assert_eq!(name_column(200.0, 100.0, true), 100.0);
+    assert_eq!(name_column(500.0, 100.0, false), 500.0 - STAR);
+}
+
+/// The widest label is the widest one laid out, though it has fewer characters than others, or
+/// characters that are narrow on their own.
+#[test]
+fn the_widest_label_is_the_widest_laid_out() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut labels: Vec<String> = ["WWWWWWWW", "Mm", "", "ffi ffl fi fl", "Source Serif 4 Display Semibold"].map(str::to_string).into();
+    labels.push("i".repeat(40));
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let font = egui::FontId::proportional(super::NAME_SIZE);
+        let laid_out = |l: &String| ui.painter().layout_no_wrap(l.clone(), font.clone(), egui::Color32::WHITE).size().x;
+        let widest = labels.iter().map(laid_out).fold(0.0, f32::max);
+        assert_eq!(super::widest_label(ui, labels.clone()), widest);
+        for l in &labels {
+            assert_eq!(super::widest_label(ui, vec![l.clone()]), laid_out(l), "{l}");
+        }
+        assert_eq!(super::widest_label(ui, vec![]), 0.0);
+    });
+    out.textures_delta.clear();
+}
+
+/// The widest family name is measured again when the interface's fonts change, as they do when
+/// faces for another script are added to it, not only when the font list does.
+#[test]
+fn the_widest_name_is_measured_again_when_the_interface_fonts_change() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |f: &mut dyn FnMut(&mut egui::Ui)| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| f(ui));
+        out.textures_delta.clear();
+    };
+    // A width no name has, kept as if measured for the fonts as they are.
+    frame(&mut |ui| {
+        let key = super::family_name_key(ui, true);
+        ui.data_mut(|d| d.insert_temp(super::family_name_id(), (key, -1.0_f32)));
+    });
+    frame(&mut |ui| {
+        let data = ui.ctx().fonts(|f| f.definitions().font_data.values().next().cloned()).expect("an interface font");
+        ui.ctx().add_font(egui::epaint::text::FontInsert { name: "font-menu-test-face".into(), data: (*data).clone(), families: vec![] });
+    });
+    frame(&mut |ui| assert!(super::family_name_width(ui, true) >= 0.0, "measured again"));
+}
+
+/// Without a row of filters drawn yet, the menu still makes room for the widest name, its sample,
+/// the star and the scroll bar; without samples it is the sample's room narrower.
+#[test]
+fn the_menu_makes_room_for_the_widest_name_and_its_sample() {
+    use super::{DISCLOSURE, NAME_GAP, NAME_MAX, SAMPLE_W, STAR};
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0))), ..Default::default() };
+    let mut out = ctx.run_ui(input, |ui| {
+        let st = super::MenuState::default();
+        let look = super::MenuLook::default();
+        let names = super::name_width(ui, look.english_names, &st.rows).min(NAME_MAX);
+        assert!(names > 0.0, "a family is listed");
+        let width = super::menu_width(ui, &st, look);
+        assert!(width >= DISCLOSURE + names + NAME_GAP + SAMPLE_W + STAR, "the menu is {width} wide for a name {names} wide");
+        let plain = super::menu_width(ui, &st, super::MenuLook { samples: false, ..look });
+        assert!((width - plain - SAMPLE_W).abs() < 0.01, "{width} with samples, {plain} without");
+    });
+    out.textures_delta.clear();
+}
+
+/// The style names of the families expanded in the listed rows count toward the names' width;
+/// those of a family expanded earlier but not listed now do not.
+#[test]
+fn only_listed_style_names_widen_the_names() {
+    use super::{Row, STYLE_INDENT};
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let long = format!("SemiCondensed ExtraLight Italic {}", "W".repeat(80));
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let families = super::name_width(ui, true, &[]);
+        let font = egui::FontId::proportional(super::NAME_SIZE);
+        let style = STYLE_INDENT + ui.painter().layout_no_wrap(long.clone(), font, egui::Color32::WHITE).size().x;
+        assert!(style > families, "the style name is wider than every family name");
+        let listed = [Row::Family("A".into()), Row::Style("A".into(), long.clone())];
+        assert_eq!(super::name_width(ui, true, &listed), style);
+        assert!(super::name_width(ui, true, &listed[..1]) < style, "a style not listed is not measured");
+    });
+    out.textures_delta.clear();
+}
+
 use super::{Row, remap_highlight};
 
 fn family(name: &str) -> Row {
     Row::Family(name.to_string())
+}
+
+/// The families the font menu lists that stay listed, in its order: the menu's list without the
+/// composite fonts at its top, which tests running alongside define and remove in the process-wide
+/// database.
+fn lasting_families() -> Vec<String> {
+    vectorcraft_text::FontDb::global().family_list().iter().filter(|f| !f.starts_with('.')).cloned().collect()
 }
 
 #[test]
@@ -86,7 +192,7 @@ fn recent_fonts_are_first_available_unique_and_expandable() {
 
 #[test]
 fn recent_section_rebuilds_and_arrows_skip_its_headings() {
-    let names = vectorcraft_text::FontDb::global().menu_family_list();
+    let names = lasting_families();
     if names.len() < 3 {
         return;
     }
@@ -135,7 +241,7 @@ fn recent_section_rebuilds_and_arrows_skip_its_headings() {
 
 #[test]
 fn recent_fonts_obey_search_and_favorite_filters() {
-    let names = vectorcraft_text::FontDb::global().menu_family_list();
+    let names = lasting_families();
     if names.len() < 3 {
         return;
     }
@@ -176,7 +282,7 @@ fn recent_fonts_obey_search_and_favorite_filters() {
 
 #[test]
 fn opening_on_another_font_keeps_the_recent_section_visible() {
-    let names = vectorcraft_text::FontDb::global().menu_family_list();
+    let names = lasting_families();
     let Some(current) = names.last() else { return };
     let recent = vec![names[0].clone()];
     let ctx = egui::Context::default();
@@ -244,7 +350,7 @@ fn the_wheel_steps_one_family_per_notch_and_stops_at_the_ends() {
 /// others in the database's order, under the favourites (and other) filters.
 #[test]
 fn the_wheel_follows_the_menus_order_and_filters() {
-    let names = vectorcraft_text::FontDb::global().menu_family_list();
+    let names = lasting_families();
     if names.len() < 3 {
         return;
     }
@@ -770,8 +876,9 @@ fn the_variable_filter_lists_only_variable_families() {
     assert_eq!(frame(&mut st, vec![], &favorites).0, [TWO_AXIS_FAMILY]);
     st.favorites_only = false;
     // Off again: every family is listed.
+    let lasting = lasting_families();
     let again = click(&mut st, &favorites);
     assert!(!st.variable_only);
-    assert_eq!(again, frame(&mut st, vec![], &[]).0);
+    assert!(lasting.iter().all(|f| has(&again, f)), "{again:?}");
     assert!(has(&again, TWO_AXIS_FAMILY) && has(&again, "Source Sans 3") && has(&again, "JetBrains Mono"), "{again:?}");
 }

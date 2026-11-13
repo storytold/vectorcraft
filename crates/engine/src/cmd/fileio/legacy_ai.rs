@@ -136,20 +136,23 @@ pub(super) fn encode(cmd: &str, f: &Format, doc: &Document, p: &Value) -> Result
         }
         let images = see_through_images(&d, mode);
         if !images.is_empty() {
-            note(&mut enc.warnings, if mode == SeeThrough::Flatten { FLATTENED } else { OMITTED });
             if mode == SeeThrough::Flatten {
+                note(&mut enc.warnings, FLATTENED);
                 flatten_images(&mut d, &images)?;
             } else {
+                // A note on the options: `transparentImages: omit` leaves them out.
+                enc.add_setting_notes([OMITTED.to_string()]);
                 for (_, id) in images {
                     let _ = d.remove(id); // Inside an image left out before: gone already.
                 }
             }
         }
-        let o = vectorcraft_eps::LegacyAiOptions { title: doc.title.clone(), created, hidden, outline_text };
+        let o = vectorcraft_eps::LegacyAiOptions { title: doc.info_title().to_owned(), created, hidden, outline_text };
         let out = vectorcraft_eps::export_legacy_ai(&d, &o).map_err(|e| bad(cmd, e))?;
         for w in placed.iter().chain(&out.warnings) {
             note(&mut enc.warnings, w);
         }
+        enc.add_setting_notes(out.setting_notes);
         enc.files.push((Some(b), out.bytes));
     }
     // Expanding raster effects and flattening images draw the art, and an image the renderer

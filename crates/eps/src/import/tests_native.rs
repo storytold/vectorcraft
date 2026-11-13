@@ -3367,6 +3367,71 @@ fn stroked_type_keeps_its_cap_join_and_miter_limit() {
 }
 
 #[test]
+fn type_painted_with_a_pattern_takes_it_from_the_art_style_its_paint_names() {
+    // GUARDS: type filled or stroked with a pattern swatch came in black: the text document keeps
+    // black as the paint's colour, and the pattern is in the art style that key 5 of the paint
+    // names, a style of one paint (`/SimpleStyle`) whose matrix is in art space.
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_geom::Point;
+    let dots = "%AI3_BeginPattern: (Dots)\n(Dots) 0 0 4 4\n%_0 0 0 1 k\n%_1 1 m\n%_3 1 L\n%_3 3 L\n%_1 3 L\n%_f\nE\n%AI3_EndPattern\n";
+    let simple = |name: &str, paint: &str| {
+        format!(
+            "/KnownStyle :\n({name}) /Name ,\n/SimpleStyle :\n0 O\n{paint}\n0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n0 1 Xd\n/Paint ;\n /Def ;\n"
+        )
+    };
+    let pattern = |m: &str| format!("(Dots) 0 0 1 1 0 0 0 0 0 [{m}] p");
+    let styles = [
+        simple("Anon 1", &pattern("1 0 0 1 0 0")),
+        simple("Anon 2", &pattern("2 0 0 2 10 20")),
+        // Styles that give no pattern: one the file doesn't define, a matrix that doesn't place, no
+        // name, a colour after the pattern, a colour, a gradient.
+        simple("Anon 3", "(Absent) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p"),
+        simple("Anon 4", &pattern("0 0 0 0 0 0")),
+        simple("Anon 5", "0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p"),
+        simple("Anon 6", &format!("{}\n0 0 0 1 k", pattern("1 0 0 1 0 0"))),
+        simple("Anon 7", "0 0 0 1 k"),
+        simple("Anon 8", "0 Bb\n2 (Rainbow) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB"),
+    ]
+    .concat();
+    let styles = format!("%AI9_BeginArtStyles\n{styles}%AI9_EndArtStyles\n");
+    let doc = text_document(&[("abcdefghijklmnopq\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let one = "<< /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 /53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /1 18 >>";
+    assert!(doc.contains(one));
+    let black = |style: &str| format!("<< /99 /CAITextPaint /0 << /0 0 /1 [ 1.0 0.0 ] >> /5 ({style}) >>");
+    let run = |own: &str| format!("<< /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 {own} >> >> >> /1 2 >>");
+    let mut runs = vec![run(&format!("/53 {}", black("Anon 1"))), run(&format!("/53 {} /57 true /54 {} /63 2.0", black("Anon 7"), black("Anon 2")))];
+    runs.extend((3..=8).map(|n| run(&format!("/53 {}", black(&format!("Anon {n}"))))));
+    // A style the file doesn't have, over "q" and the story's end.
+    runs.push(run(&format!("/53 {}", black("Anon 9"))));
+    let doc = doc.replacen(one, &runs.join(" "), 1);
+    let art = native_with_text(&format!("{dots}{styles}{}{}", layer("Back", true, &square(10, 10)), layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    let t = texts[0];
+    // Each character's fill and stroke, a pattern as where its tile's top left corner is.
+    let paint = |p: &Paint| match p {
+        Paint::Pattern { pattern, xf } => {
+            let at = t.xf * *xf * Point::ZERO;
+            format!("{pattern} at {:.3} {:.3}", at.x, at.y)
+        }
+        Paint::Solid { color, .. } if *color == Color::gray(1.0) => "black".into(),
+        Paint::None => "none".into(),
+        other => format!("{other:?}"),
+    };
+    let chars: Vec<(char, String, String)> =
+        t.runs.iter().flat_map(|r| r.text.chars().map(|c| (c, paint(&r.style.fill), paint(&r.style.stroke))).collect::<Vec<_>>()).collect();
+    let want = |c: char, fill: &str, stroke: &str| (c, fill.to_string(), stroke.to_string());
+    // The tile's top left (0, 4) in art space, on a page 100 high: (0, 96). Scaled twice and moved
+    // by (10, 20): (10, 28) in art space, (10, 72) in the document.
+    let mut expected = vec![want('a', "Dots at 0.000 96.000", "none"), want('b', "Dots at 0.000 96.000", "none")];
+    expected.extend(['c', 'd'].map(|c| want(c, "black", "Dots at 10.000 72.000")));
+    expected.extend("efghijklmnopq".chars().map(|c| want(c, "black", "none")));
+    assert_eq!(chars, expected);
+    assert_eq!(r.document.pattern("Dots").map(|p| p.tile.height()), Some(4.0));
+}
+
+#[test]
 fn orientation_and_tate_chu_yoko_values_it_cant_use_are_ignored() {
     for bad in ["(2)", "2.5", "1e300", "-2", "1", "true", "[ 2 ]"] {
         let doc = vertical_text_document(&text_document(&[("x1\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]), 0.0)
@@ -5419,7 +5484,14 @@ fn type_envelope_text(family: &str, paint: Option<&str>) -> String {
 fn arc_envelope(text: &Node, bend: f64) -> Node {
     let mut text = text.clone();
     text.visible = true;
-    let kind = vectorcraft_doc::live::EnvelopeKind::Warp { style: "arc".into(), bend, h: 0.0, v: 0.0, horizontal: true };
+    let kind = vectorcraft_doc::live::EnvelopeKind::Warp {
+        style: "arc".into(),
+        bend,
+        h: 0.0,
+        v: 0.0,
+        horizontal: true,
+        version: vectorcraft_doc::live::WARP_NET,
+    };
     Node::new(
         vectorcraft_doc::NodeId(1_000_000),
         NodeKind::Envelope {
@@ -5796,7 +5868,8 @@ fn a_warp_of_type_opens_as_a_mesh_on_its_saved_grid_and_keeps_its_shape_when_its
 
 /// A warp of stroked type with Distort Appearance whose drawn art maps the type's bounds with its
 /// strokes onto the grid the file saves (not its glyphs' bounds alone) opens live as a mesh envelope
-/// mapping from that box (#3179).
+/// mapping from that box (#3179). The drawn art strokes the bent outlines at the stroke's own weight,
+/// as files draw it (#6644).
 #[test]
 fn a_warp_of_stroked_type_maps_from_its_bounds_with_strokes_where_its_drawn_art_does() {
     use vectorcraft_doc::live::{envelope_content_boxes, envelope_stroke_margin};
@@ -5816,7 +5889,7 @@ fn a_warp_of_stroked_type_maps_from_its_bounds_with_strokes_where_its_drawn_art_
         vectorcraft_doc::NodeId(1_000_000),
         NodeKind::Envelope { content, kind: Box::new(rising_kind()), fidelity: 50.0, editing: false, options, frame: Box::default() },
     );
-    let (drawn, page) = drawn_envelope(&shaped);
+    let (drawn, page) = drawn_stroked_envelope(&shaped);
     let art =
         native_with_text(&layer("Art", true, &format!("{}\n{}", square(10, 10), type_envelope_on(&arc_keys(0.3), &rising_grid(), &drawn, ""))), &doc);
     let r = import(&eps(&format!("{}\n{page}", page_square(10, 10)), &art)).unwrap();
@@ -5831,6 +5904,101 @@ fn a_warp_of_stroked_type_maps_from_its_bounds_with_strokes_where_its_drawn_art_
         }
     });
     assert_eq!(margin, Some(options.bounds_margin));
+}
+
+/// The drawn art of `envelope` (on the page axes), an envelope of type stroked by its characters,
+/// as the drawn art of `.ai` files strokes type in an envelope: the bent glyph outlines the envelope
+/// draws of its type unstroked, each filled in its type's color, then each stroked with the type's
+/// stroke (its weight, color, join and miter limit) whatever the grid does to it, and the page's
+/// PostScript for them (#6644).
+fn drawn_stroked_envelope(envelope: &Node) -> (String, String) {
+    let NodeKind::Envelope { content, .. } = &envelope.kind else { panic!("an envelope") };
+    let Some(NodeKind::Text(t)) = content.first().map(|c| &c.kind) else { panic!("type") };
+    let stroke = t.runs[0].style.stroke_layer();
+    let mut unstroked = envelope.clone();
+    if let NodeKind::Envelope { content, .. } = &mut unstroked.kind {
+        for c in content.iter_mut() {
+            if let NodeKind::Text(t) = &mut std::sync::Arc::make_mut(c).kind {
+                t.runs.iter_mut().for_each(|r| r.style.stroke = vectorcraft_color::Paint::None);
+            }
+        }
+    }
+    let (fills, fill_page) = drawn_envelope(&unstroked);
+    let [r, g, b] = stroke.paint.color().map_or([0.0; 3], |c| c.to_rgb());
+    let join = match stroke.join {
+        vectorcraft_doc::LineJoin::Miter => 0,
+        vectorcraft_doc::LineJoin::Round => 1,
+        vectorcraft_doc::LineJoin::Bevel => 2,
+    };
+    let (w, limit) = (stroke.width, stroke.miter_limit);
+    let mut art = format!("{fills}0 0 0 0 {r} {g} {b} XA\n{w} w\n{join} j\n{limit} M\n");
+    let mut page = format!("{fill_page}{r} {g} {b} setrgbcolor {w} setlinewidth {join} setlinejoin {limit} setmiterlimit\n");
+    let pt = |p: kurbo::Point| {
+        let (x, y) = to_art(p);
+        format!("{x} {y}")
+    };
+    vectorcraft_effects::expand_live_deep(None, &unstroked).walk(&mut |n| {
+        let NodeKind::Path { path, .. } = &n.kind else { return };
+        for el in path.to_bezpath().elements() {
+            match *el {
+                kurbo::PathEl::MoveTo(p) => {
+                    art += &format!("{} m\n", pt(p));
+                    page += &format!("newpath {} moveto ", pt(p));
+                }
+                kurbo::PathEl::LineTo(p) => {
+                    art += &format!("{} L\n", pt(p));
+                    page += &format!("{} lineto ", pt(p));
+                }
+                kurbo::PathEl::CurveTo(a, c, p) => {
+                    art += &format!("{} {} {} C\n", pt(a), pt(c), pt(p));
+                    page += &format!("{} {} {} curveto ", pt(a), pt(c), pt(p));
+                }
+                kurbo::PathEl::QuadTo(..) => {}
+                kurbo::PathEl::ClosePath => {
+                    art += "s\n";
+                    page += "closepath stroke\n";
+                }
+            }
+        }
+    });
+    (art, page)
+}
+
+/// An envelope of type with a character stroke, Distort Appearance on, whose drawn art strokes the
+/// bent glyph outlines at the stroke's own weight (as `.ai` files draw the strokes of type in an
+/// envelope, however much the grid squeezes or stretches it) opens live: VectorCraft draws the
+/// stroke that way too (#6644).
+#[test]
+fn an_envelope_of_stroked_type_whose_drawn_art_strokes_the_bent_outlines_at_the_weight_opens_live() {
+    let Some(family) = installed_family() else { return };
+    // "FLUX" stroked 1.5 points wide in black with round joins.
+    let stroked = "/53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> /54 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 0.0 0.0 1.0 ] >> >> /57 true /62 1 /63 1.5";
+    let doc = type_envelope_text(&family, None).replace("/53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >>", stroked);
+    let mut text = made_envelope_type(&doc);
+    text.visible = true;
+    assert!(
+        matches!(&text.kind, NodeKind::Text(t) if t.runs[0].style.stroke_width == 1.5 && t.runs[0].style.stroke_join == vectorcraft_doc::LineJoin::Round),
+        "{text:?}"
+    );
+    let shaped = Node::new(
+        vectorcraft_doc::NodeId(1_000_000),
+        NodeKind::Envelope {
+            content: vec![std::sync::Arc::new(text)],
+            kind: Box::new(rising_kind()),
+            fidelity: 50.0,
+            editing: false,
+            options: vectorcraft_doc::live::EnvelopeOptions::NEW,
+            frame: Box::default(),
+        },
+    );
+    let (drawn, page) = drawn_stroked_envelope(&shaped);
+    let art =
+        native_with_text(&layer("Art", true, &format!("{}\n{}", square(10, 10), type_envelope_on(&arc_keys(0.3), &rising_grid(), &drawn, ""))), &doc);
+    let r = import(&eps(&format!("{}\n{page}", page_square(10, 10)), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    let (envelopes, loose) = envelopes_and_type(&r.document);
+    assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{:?}", r.warnings);
+    assert!(loose.is_empty(), "{loose:?}");
 }
 
 /// A warp of type whose editing data saves no grid it can be shaped by keeps its drawn art and its
@@ -6836,4 +7004,22 @@ fn text_a_placed_file_covers_only_at_its_first_placement_is_kept() {
     assert!([b.x0 - 30.0, b.y0 - 30.0, b.x1 - 70.0, b.y1 - 70.0].iter().all(|v| v.abs() < 0.01), "on the page's square: {b:?}");
     assert_eq!(text_of(&d.layers[0]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi"], "{w:?}");
     assert!(!w.iter().any(|w| w.contains("doesn't draw")), "{w:?}");
+}
+
+/// #6865: explicitly trusting editing data keeps an artboard larger than its PDF page.
+#[test]
+fn trusted_editing_data_keeps_an_artboard_taller_than_its_pdf_page() {
+    let art = native(&layer("Oversized", true, &square(10, 10))).replace(" 0 0 100 100", " 0 0 12992.726 14637.147");
+    let (d, w, read) = crate::layered_ai(&private(&art), Document::new(12992.7, 14400.0), vec![], false, true, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(names(&d), ["Oversized"], "{w:?}");
+    assert!((d.artboards[0].rect.height() - 14637.147).abs() < 0.001);
+    assert_eq!(kinds(&d.layers[0]), ["path"]);
+    assert!(w.iter().any(|w| w.contains("artboard is larger than the PDF page")), "{w:?}");
+    let child = &d.layers[0].children().unwrap()[0];
+    assert!(child.visual_bounds().unwrap().y0 > 14400.0, "art beyond the PDF page is kept");
+    let (_, w, read) = crate::layered_ai(&private(&art), Document::new(12992.7, 14400.0), vec![], false, false, 1.0);
+    assert!(!read, "default import still rejects the size mismatch: {w:?}");
+    let (_, w, read) = crate::layered_ai(&private(&art), Document::new(12000.0, 14400.0), vec![], false, true, 1.0);
+    assert!(!read, "the uncapped dimension must still match: {w:?}");
 }

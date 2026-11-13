@@ -4,7 +4,7 @@
 //! The built-in presets are the gradient swatches of the built-in swatch libraries
 //! ([`vectorcraft_color::libraries`]: the app's own computed palettes), each listed under its
 //! library's name. Saved presets are kept with the preferences ([`crate::Prefs::gradient_presets`]),
-//! so every document has them. A preset is the colour ramp (type, stops, method, dither), not a
+//! so every document has them. A preset is the color ramp (type, stops, method, dither, spread), not a
 //! placement: applying one edits the gradient in place, as `paint.editGradient` does.
 
 use serde::{Deserialize, Serialize};
@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient Presets",
             [],
             None,
-            "{} → {presets: [{name, library: the built-in library (theme) it comes from, null for a saved one, builtIn, gradient: {kind, stops, method?, dither?} (as paint.setFill's `gradient`)}]} the Gradient panel's presets: the built-in ones by library, then the saved ones; names are unique",
+            "{} → {presets: [{name, library: the built-in library (theme) it comes from, null for a saved one, builtIn, gradient: {kind, stops, method?, dither?, spread?, repeats?} (as paint.setFill's `gradient`)}]} the Gradient panel's presets: the built-in ones by library, then the saved ones; names are unique",
             always,
             list
         ),
@@ -33,7 +33,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Gradient Preset",
             [],
             None,
-            "{name: a preset's name (gradient.presets.list), stroke?, item?, ids?|id?, target? (as paint.editGradient)} give the gradient behind the active proxy (or the targeted fill or stroke) the preset's type, stops and method, and a fill its dither, keeping its placement; a solid or no paint becomes the gradient. One undo step, as paint.editGradient → {name, ids: the objects painted (none: only the default changed)}",
+            "{name: a preset's name (gradient.presets.list), stroke?, item?, ids?|id?, target? (as paint.editGradient)} give the gradient behind the active proxy (or the targeted fill or stroke) the preset's type, stops, method, spread and repeats (a freeform preset's: the first three), and a fill its dither, keeping its placement; a solid or no paint becomes the gradient. One undo step, as paint.editGradient → {name, ids: the objects painted (none: only the default changed)}",
             has_doc,
             apply
         ),
@@ -42,7 +42,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Gradient Preset",
             [],
             None,
-            "{name?: (default: a new \"Gradient Preset N\"; unique, any case, and not a built-in preset's)} save the gradient behind the active proxy (paint.toggleActive picks Fill or Stroke) as a preset, kept with the preferences: its type, stops, method and dither (stops linked to a swatch keep their colour, unlinked) → {name}",
+            "{name?: (default: a new \"Gradient Preset N\"; unique, any case, and not a built-in preset's)} save the gradient behind the active proxy (paint.toggleActive picks Fill or Stroke) as a preset, kept with the preferences: its type, stops, method, dither, spread and repeats (stops linked to a swatch keep their colour, unlinked) → {name}",
             can_save,
             save
         ),
@@ -90,12 +90,13 @@ fn builtin_presets() -> impl Iterator<Item = GradientPresetEntry> {
     })
 }
 
-/// Do `a` and `b` have the same colour ramp (type, method, dither and stops), swatch links aside?
+/// Do `a` and `b` have the same color ramp (type, method, dither, spread as it paints and stops),
+/// swatch links aside?
 fn same_ramp(a: &Gradient, b: &Gradient) -> bool {
     let stop = |x: &vectorcraft_color::GradientStop, y: &vectorcraft_color::GradientStop| {
         (x.offset, x.color, x.opacity, x.midpoint) == (y.offset, y.color, y.opacity, y.midpoint)
     };
-    (a.kind, a.method, a.dither) == (b.kind, b.method, b.dither)
+    (a.kind, a.method, a.dither, a.painted_spread()) == (b.kind, b.method, b.dither, b.painted_spread())
         && a.stops.len() == b.stops.len()
         && a.stops.iter().zip(&b.stops).all(|(x, y)| stop(x, y))
 }
@@ -107,6 +108,40 @@ fn unlinked(g: &Gradient) -> Gradient {
         s.set_color(s.color, None);
     }
     g
+}
+
+/// Give each saved preset in `saved` a name no built-in preset or earlier saved one has (any case):
+/// a clash becomes the first free "<name> N", N from 2. Returns the renames as (old, new).
+pub(crate) fn rename_clashing_presets(saved: &mut [GradientPreset]) -> Vec<(String, String)> {
+    if saved.is_empty() {
+        return vec![];
+    }
+    let builtin: std::collections::HashSet<String> = builtin_presets().map(|e| e.name.to_ascii_lowercase()).collect();
+    let mut taken: std::collections::HashSet<String> =
+        builtin.iter().cloned().chain(saved.iter().map(|p| p.name.trim().to_ascii_lowercase())).collect();
+    let mut kept = std::collections::HashSet::new();
+    // The next suffix to try for each name, so many presets with one name take linear time.
+    let mut next: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
+    let mut renamed = vec![];
+    for p in saved {
+        let key = p.name.trim().to_ascii_lowercase();
+        if !builtin.contains(&key) && kept.insert(key.clone()) {
+            continue;
+        }
+        let base = p.name.trim();
+        let n = next.entry(key).or_insert(2);
+        let name = loop {
+            let candidate = format!("{base} {n}");
+            *n += 1;
+            if !taken.contains(&candidate.to_ascii_lowercase()) {
+                break candidate;
+            }
+        };
+        taken.insert(name.to_ascii_lowercase());
+        kept.insert(name.to_ascii_lowercase());
+        renamed.push((std::mem::replace(&mut p.name, name.clone()), name));
+    }
+    renamed
 }
 
 impl Session {
@@ -181,6 +216,11 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     o.insert("kind".into(), json!(g.kind.label().to_lowercase()));
     o.insert("stops".into(), stops_json(&g.stops));
     o.insert("method".into(), json!(g.method.label().to_lowercase()));
+    // A freeform preset takes no spread (paint.editGradient refuses one).
+    if g.kind != vectorcraft_color::GradientKind::Freeform {
+        o.insert("spread".into(), json!(g.spread.label().to_lowercase()));
+        o.insert("repeats".into(), json!(g.repeat_count()));
+    }
     // Dither is a fill's (paint.editGradient refuses it on a stroke).
     if !stroke {
         o.insert("dither".into(), json!(g.dither));

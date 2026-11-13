@@ -64,11 +64,12 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 /// Does this dialog show a Preview checkbox? Grid Repeat Options does: the public page for the
 /// grid options lists one, and the radial and mirror pages do not. Type on a Path Options does
 /// too (#5360), as public tutorials of the dialog show, and Type Tools › Release Type on a Path
-/// works the same way (#5532). (Cancel rolls a preview back whichever dialog started it.)
+/// works the same way (#5532), and so do Image Tools › Remove Background and Cutting Tools › Weed
+/// Box and Lines. (Cancel rolls a preview back whichever dialog started it.)
 fn previews(d: &Dialog) -> bool {
     match d.str("__command").as_str() {
         "object.repeat.options" => d.fields.contains_key("gridType"),
-        "type.pathOptions" | crate::addons::typetools::RELEASE => true,
+        "type.pathOptions" | crate::addons::typetools::RELEASE | crate::addons::image::REMOVE_BACKGROUND | crate::addons::cutting::WEED => true,
         _ => false,
     }
 }
@@ -86,6 +87,19 @@ fn call(d: &Dialog) -> (String, Value) {
     {
         o.remove("rowGutter");
     }
+    // Weed Box and Lines: a Spacing of 0, or none, leaves the Count in use; any other Spacing is
+    // sent instead of the Count, so the command refuses one below 0.
+    if d.str("__command") == crate::addons::cutting::WEED
+        && let Some(o) = params.as_object_mut()
+    {
+        let zero = |s: &Value| match s {
+            Value::Null => true,
+            Value::String(t) => vectorcraft_doc::Unit::Points.parse(t).or_else(|| t.trim().parse().ok()) == Some(0.0),
+            v => v.as_f64() == Some(0.0),
+        };
+        let by_count = o.get("spacing").is_none_or(zero);
+        o.remove(if by_count { "spacing" } else { "count" });
+    }
     (d.str("__command"), params)
 }
 
@@ -101,10 +115,12 @@ fn lengths(command: &str) -> &'static [&'static str] {
         "graph.create" => &["width", "height"],
         "shape.flare" => &["diameter", "pathLength"],
         "perspective.grid.set" => &["cell", "distance"],
+        crate::addons::cutting::WEED => &["margin", "spacing", "gap", "weight"],
         "object.repeat.options" => &["radius", "hSpacing", "vSpacing"],
-        "text.areaOptions" => &["width", "height", "gutter", "rowGutter", "inset", "firstBaselineMin"],
+        "text.areaOptions" => &["width", "height", "gutter", "rowGutter", "inset", "firstBaselineMin", "lineGap"],
         "type.pathOptions" => &["spacing"],
         "object.pathfinder.trap" => &["thickness"],
+        crate::addons::cutting::BRIDGES => &["width"],
         _ => &[],
     }
 }
@@ -113,10 +129,13 @@ fn lengths(command: &str) -> &'static [&'static str] {
 /// names isn't it (the rest follow, by name).
 fn order(command: &str) -> &'static [&'static str] {
     match command {
+        crate::addons::cutting::WEED => &["margin", "box", "direction", "count", "spacing", "gap", "weight", "swatch"],
         // The public Trap options' order.
         "object.pathfinder.trap" => &["thickness", "heightWidth", "tintReduction", "trapsWithProcessColor", "reverseTraps"],
         "addon.color.printFixes" => &["inkLimit", "excludePureBlack", "removeWhiteOverprint", "overprintBlack", "textOnly", "fill", "stroke"],
         crate::addons::typetools::RELEASE => &["mode", "keepOriginal"],
+        crate::addons::image::REMOVE_BACKGROUND => &["background", "colors", "contiguous", "match", "tolerance", "softness"],
+        crate::addons::cutting::BRIDGES => &["width", "count", "direction", "keepOriginal"],
         _ => &[],
     }
 }
@@ -127,15 +146,19 @@ fn choices(command: &str, key: &str) -> Option<form::Choices> {
         ("type.pathOptions", "effect") => Some(crate::menus::PATH_EFFECTS),
         ("type.pathOptions", "alignToPath") => Some(PATH_ALIGN),
         (crate::addons::typetools::RELEASE, "mode") => Some(crate::addons::typetools::RELEASE_MODES),
+        (crate::addons::cutting::BRIDGES, "direction") => Some(crate::addons::cutting::BRIDGE_DIRECTIONS),
         ("text.areaOptions", "fit") => Some(AREA_FIT),
         ("text.areaOptions", "firstBaseline") => Some(FIRST_BASELINE),
         ("text.areaOptions", "verticalAlign") => Some(VERTICAL_ALIGN),
+        (crate::addons::cutting::WEED, "direction") => Some(crate::addons::cutting::WEED_DIRECTIONS),
         ("graph.setType", "type") => Some(GRAPH_KINDS.as_slice()),
         ("graph.setType", "valueAxis") => Some(GRAPH_VALUE_AXIS),
         ("graph.setType", "tickLength" | "rightTickLength" | "categoryTickLength") => Some(GRAPH_TICK_LENGTH),
         ("graph.setType", "pieLegend") => Some(PIE_LEGEND),
         ("graph.setType", "piePosition") => Some(PIE_POSITION),
         ("graph.setType", "pieSort") => Some(PIE_SORT),
+        (crate::addons::image::REMOVE_BACKGROUND, "background") => Some(crate::addons::image::BACKGROUNDS),
+        (crate::addons::image::REMOVE_BACKGROUND, "match") => Some(crate::addons::image::MATCHES),
         _ => None,
     }
 }
@@ -156,8 +179,8 @@ const RASTERIZE_CMYK: form::Choices = &[("CMYK", "cmyk"), ("Grayscale", "graysca
 /// Type on a Path Options › Align to Path.
 const PATH_ALIGN: form::Choices = &[("Ascender", "ascender"), ("Descender", "descender"), ("Center", "center"), ("Baseline", "baseline")];
 
-/// Area Type Options › Fit.
-const AREA_FIT: form::Choices = &[("None", "none"), ("Auto Size", "autoHeight"), ("Shrink Text to Fit", "shrinkText")];
+/// Area Type Options › Fit (Block is Dynamic Text's, as `type.dynamicText` sets it).
+const AREA_FIT: form::Choices = &[("None", "none"), ("Auto Size", "autoHeight"), ("Shrink Text to Fit", "shrinkText"), ("Block", "block")];
 
 /// Area Type Options › First Baseline.
 const FIRST_BASELINE: form::Choices =

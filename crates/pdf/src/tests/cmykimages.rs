@@ -514,11 +514,10 @@ fn freeform_gradients_of_cmyk_points_are_written_as_cmyk_images() {
     assert_ne!(w[0].space, "DeviceCMYK", "converted to RGB");
 }
 
-/// A 100 × 100 pt document of `mode` whose square is filled with `g`, at 300 ppi (above the PDF
-/// export's 150 ppi floor): 417 pixels a side.
+/// A 100 × 100 pt document of `mode` whose square is filled with `g`, at one pixel a point.
 fn gradient_doc(mode: ColorMode, g: Gradient) -> Document {
     let mut d = Document::new_with_mode(100.0, 100.0, mode);
-    d.raster_effects_ppi = 300.0;
+    d.raster_effects_ppi = 72.0;
     let square = Node::path(
         d.alloc_id(),
         shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)),
@@ -551,14 +550,14 @@ fn dithered_and_perceptual_gradients_of_cmyk_stops_are_written_as_cmyk_images() 
                 assert_eq!(w[0].space, "DeviceCMYK", "{mode:?} {kind:?} dither {dither}");
                 let back = import(&out.bytes).unwrap();
                 let inks = all_images(&back)[0].cmyk().unwrap();
-                assert_eq!((inks.width, inks.height), (417, 417));
+                assert_eq!((inks.width, inks.height), (100, 100));
                 assert!(inks.data.chunks(4).all(|p| p[1] == 0 && p[2] == 0), "{mode:?} {kind:?} dither {dither}: only cyan and black");
                 if kind == GradientKind::Linear {
-                    let row = &inks.data[208 * 417 * 4..209 * 417 * 4];
+                    let row = &inks.data[50 * 400..51 * 400];
                     assert!(close(&row[..4], &[254, 0, 0, 1], 3), "{mode:?} dither {dither}: {:?}", &row[..4]);
-                    assert!(close(&row[416 * 4..], &[1, 0, 0, 254], 3), "{mode:?} dither {dither}: {:?}", &row[416 * 4..]);
+                    assert!(close(&row[396..], &[1, 0, 0, 254], 3), "{mode:?} dither {dither}: {:?}", &row[396..]);
                     if dither {
-                        assert!(close(&row[208 * 4..208 * 4 + 4], &[127, 0, 0, 128], 3), "{mode:?}: {:?}", &row[208 * 4..208 * 4 + 4]);
+                        assert!(close(&row[50 * 4..50 * 4 + 4], &[127, 0, 0, 128], 3), "{mode:?}: {:?}", &row[50 * 4..50 * 4 + 4]);
                     }
                 }
             }

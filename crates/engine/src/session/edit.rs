@@ -267,6 +267,7 @@ impl Session {
             isolation: st.isolation,
             perspective_again: None,
             copies: None,
+            move_box: std::sync::OnceLock::new(),
         });
         Ok(())
     }
@@ -335,6 +336,7 @@ impl Session {
 
     pub fn commit_interaction(&mut self) -> Result<()> {
         self.clear_deferred_overlay_cache();
+        self.decoded_images.empty();
         if let Some(paint) = self.active().and_then(|st| st.interaction.as_ref()).and_then(|it| it.preview_paint.clone()) {
             self.paint = paint;
         }
@@ -414,6 +416,7 @@ impl Session {
 
     pub fn cancel_interaction(&mut self) -> Result<()> {
         self.clear_deferred_overlay_cache();
+        self.decoded_images.empty();
         self.pending_paint = None;
         if let Some(paint) = self
             .active()

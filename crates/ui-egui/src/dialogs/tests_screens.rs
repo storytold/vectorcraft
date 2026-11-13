@@ -341,6 +341,32 @@ fn edits_after_ok_do_not_reach_the_files() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// An export into the folder its export preset keeps, with no folder of its own, is written in the
+/// background as one into a folder it names, and the status bar names that folder.
+#[test]
+fn an_export_into_a_presets_folder_writes_in_the_background() {
+    let gate = Gate::default();
+    let (mut app, _, files) = app_with_worker(1, &gate);
+    let dir = temp_folder("preset-folder");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    let settings = json!({"formats": [{"format": "svg"}], "folder": folder});
+    app.run("document.exportPresets.save", json!({"name": "Kept", "settings": settings})).unwrap();
+    let p = json!({"exportPreset": "Kept"});
+    background_export(&mut app, false);
+    let want = on_disk(&app.run("file.exportForScreens", p.clone()).unwrap());
+    assert_eq!(want.len(), 1);
+    let status = app.ui.status.clone();
+    assert_eq!(status, format!("Exported 1 file to {folder}"));
+    std::fs::remove_dir_all(&dir).unwrap();
+    background_export(&mut app, true);
+    assert_eq!(app.run("file.exportForScreens", p).unwrap()["background"], true);
+    assert!(written(&files).is_empty(), "nothing written yet");
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!((files.lock().unwrap().clone(), app.ui.status.clone()), (want, status));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// Cancel stops the export before its next file; the file being written when it came stays.
 #[test]
 fn cancel_stops_the_export_before_its_next_file() {
@@ -505,6 +531,35 @@ fn the_status_bar_says_when_an_image_could_not_be_decoded() {
     place(&mut web);
     web.run("file.exportForScreens", json!({"zip": true, "formats": rows})).unwrap();
     assert_eq!(web.ui.status, format!("Saved Untitled-1.zip {NOTE}"));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// An export into a folder with several notes, from Export for Screens and from the Asset Export
+/// panel: the status bar names the first, counts them, and keeps every one of them for its hover.
+#[test]
+fn an_export_into_a_folder_keeps_every_note_for_the_hover() {
+    let mut png = Vec::new();
+    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let dir = temp_folder("notes");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    let rows = json!([{"format": "png", "scale": "1x", "suffix": ""}]);
+    let (mut app, _) = app(1, false);
+    vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({"at": [10, 10]}));
+    app.run("text.create", json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
+    let r = app.run("file.exportForScreens", json!({"folder": folder, "formats": rows})).unwrap();
+    let notes = crate::io::notes_of(&r);
+    assert_eq!(notes.len(), 2, "{r}");
+    assert!(app.ui.status.starts_with(&format!("Saved {folder} with 2 notes: {}", notes[0])), "{}", app.ui.status);
+    assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
+    app.ui.status_notes = None;
+    app.run("select.all", json!({})).unwrap();
+    app.run("assets.add", json!({"multiple": false})).unwrap();
+    let r = crate::io::export_files(&mut app, "assets.export", json!({"folder": folder, "formats": rows})).unwrap();
+    let notes = crate::io::notes_of(&r);
+    assert_eq!(notes.len(), 2, "{r}");
+    assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)), "assets.export");
     let _ = std::fs::remove_dir_all(dir);
 }
 

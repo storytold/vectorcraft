@@ -433,6 +433,30 @@ fn redefining_the_symbol_keeps_the_changes_whose_objects_remain() {
 }
 
 #[test]
+fn redefining_the_symbol_drops_paints_its_new_objects_do_not_draw() {
+    let mut s = session();
+    let inst = pair(&mut s, "dynamic");
+    let p = json!({"id": inst.0, "path": [1], "fill": "#ff0000", "stroke": "#ff0000", "opacity": 50});
+    s.execute("symbol.instance.setAppearance", &p).unwrap();
+    // The second object is now an image, which draws no fill or stroke of its own.
+    let a = square(&mut s, 10.0);
+    place_image(&mut s);
+    let image = top(&s);
+    s.execute("symbol.update", &json!({"name": "Pair", "ids": [a.0, image.0]})).unwrap();
+    let o = node(&s, inst).extras().symbol_overrides.clone();
+    assert_eq!(o.len(), 1, "the opacity change stays: {o:?}");
+    assert_eq!((&o[0].fill, &o[0].stroke, o[0].opacity), (&None, &None, Some(0.5)));
+    // A change of paint alone goes with its paint: the first object is now a blend.
+    s.execute("symbol.instance.setAppearance", &json!({"id": inst.0, "path": [0], "stroke": "#ff0000"})).unwrap();
+    let (b, c) = (square(&mut s, 10.0), square(&mut s, 60.0));
+    let blend = id(&s.execute("object.blend.make", &json!({"ids": [b.0, c.0], "steps": 1})).unwrap());
+    let d = square(&mut s, 120.0);
+    s.execute("symbol.update", &json!({"name": "Pair", "ids": [blend.0, d.0]})).unwrap();
+    let o = node(&s, inst).extras().symbol_overrides.clone();
+    assert_eq!(o.iter().map(|o| o.path.clone()).collect::<Vec<_>>(), [vec![1]], "{o:?}");
+}
+
+#[test]
 fn replace_symbol_drops_the_changes_made_for_the_old_symbol() {
     let mut s = session();
     // "Other": two blue squares in the same places, the instance taken off the canvas.
@@ -1309,7 +1333,7 @@ fn a_lent_selection_tool_moves_the_instance_of_a_picked_object() {
 #[test]
 fn read_only_commands_read_the_instance_of_a_picked_object() {
     let mut failures = Vec::new();
-    for spec in crate::cmd::command_specs().iter().filter(|c| !c.journal) {
+    for spec in crate::cmd::command_specs().iter().filter(|c| !c.journal && crate::runs_with_empty_params(c.id)) {
         let mut s = session();
         let inst = pair(&mut s, "dynamic");
         s.execute("symbol.instance.selectPart", &json!({"id": inst.0, "path": [1]})).unwrap();

@@ -82,8 +82,8 @@ pub(crate) mod skip;
 
 pub use appearance::StrokeGradientMode;
 pub use appearance::{
-    AngleProfile, Appearance, AppearanceItem, ArrowAlign, Arrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, PressureProfile, ProfilePreset,
-    SavedProfile, StrokeAlign, StrokeLayer, WidthProfile,
+    AngleProfile, Appearance, AppearanceItem, ArrowAlign, Arrowhead, CustomArrowhead, Dash, Effect, FillLayer, LineCap, LineJoin, PressureProfile,
+    ProfilePreset, SavedProfile, StrokeAlign, StrokeLayer, WidthProfile,
 };
 pub use assets::ExportAsset;
 pub use compound_shape::ShapeMode;
@@ -267,7 +267,7 @@ pub struct Document {
     /// they were copied from instead of the current layer.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub paste_remembers_layers: bool,
-    /// File → File Info (the title is [`Document::title`]).
+    /// File → File Info (its title is [`Document::info_title`]).
     #[serde(default, skip_serializing_if = "skip::is_default")]
     pub metadata: DocMetadata,
     /// Effect → Document Raster Effects Settings besides the resolution

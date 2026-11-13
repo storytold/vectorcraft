@@ -495,6 +495,8 @@ fn a_stack_of_fills_with_effects_of_their_own_is_read_as_itself() {
     // The warp is the whole object's; the characters paint below every item.
     let [warp] = st.effects.as_slice() else { panic!("{:?}", st.effects) };
     assert_eq!((warp.id.as_str(), &warp.params["bend"], &warp.params["orientation"]), ("warp.arch", &json!(5.0), &json!("horizontal")));
+    // A file's warp bends as its style's Bézier net.
+    assert_eq!(warp.params["version"], json!(vectorcraft_doc::live::WARP_NET));
     assert_eq!(st.contents_index, None);
 }
 
@@ -1025,8 +1027,7 @@ fn affine_corners_are_a_parallelogram_however_far_they_reach() {
 
 #[test]
 fn roughen_keeps_the_drawn_look() {
-    // Its outline is random and the file holds no seed; at a size of 0 the effect still redraws the
-    // path's segments.
+    // Its outline is random and the file holds no seed.
     assert_eq!(read_effect("Adobe Roughen", "30 /Real (size) ,\n"), None);
     assert_eq!(read_effect("Adobe Roughen", ""), None);
 }
@@ -1495,4 +1496,19 @@ fn art_styles_read_registration_and_named_colors() {
     assert!(st_stroke.plain);
     let [StyleItem::Stroke { paint: Paint::Solid { swatch, tint, .. }, .. }] = st_stroke.items.as_slice() else { panic!("{st_stroke:?}") };
     assert_eq!((swatch.as_deref(), *tint), (Some(vectorcraft_color::swatch::REGISTRATION), 0.0));
+}
+
+/// Only a style that is one paint holds a pattern for type: the same pattern paint in a style that
+/// also has filters gives none, whichever comes first.
+#[test]
+fn only_a_style_of_one_pattern_paint_holds_a_pattern_for_type() {
+    let simple = "/SimpleStyle :\n0 O\n(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n0 1 Xd\n/Paint ;\n";
+    let active = "/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n1 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
+        /FillStyle : 0 O\n1 0 0 0 k\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n;\n";
+    let styles = |body: &str| art_styles_in(format!("/KnownStyle :\n(S) /Name ,\n{body} /Def ;\n").as_bytes(), &mut Names::default());
+    assert!(styles(simple).get("S").is_some_and(|s| s.simple_pattern.is_some()));
+    for body in [format!("{simple}{active}"), format!("{active}{simple}")] {
+        assert!(styles(&body).get("S").is_none_or(|s| s.simple_pattern.is_none()), "{body}");
+    }
 }

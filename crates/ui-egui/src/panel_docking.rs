@@ -270,6 +270,12 @@ pub(crate) fn showing(ui: &UiState, panel: &str) -> bool {
     (ui.open_panel.as_deref() == Some(panel) && iconic) || (!iconic && layout.panel_state(&panel.to_string()) == craft_ui::docking::PanelState::Front)
 }
 
+/// Can `panel` be seen: [`showing`] while the dock is shown (Tab and Shift+Tab hide it) and
+/// Presentation Mode is off? The Window menu's check marks follow this.
+pub(crate) fn visible(ui: &UiState, panel: &str) -> bool {
+    ui.dock && ui.screen_mode < 3 && showing(ui, panel)
+}
+
 /// Can either panel that uses row thumbnails be seen, including in a floating window or flyout?
 /// An iconic group's open flyout is named for the icon that opened it; its active tab can differ.
 fn thumbnail_panel_showing(ui: &UiState, ctx: &egui::Context) -> bool {
@@ -343,19 +349,31 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, params: &Value) -> Opt
 
 /// `window.panel {panel}`: show a panel. One in an icon column opens (or puts away) its flyout;
 /// one in front of its floating window hides; one in a group comes to the front; one closed with a remembered place comes back there; a
-/// library panel or a panel the dock has no place for floats.
+/// library panel or a panel the dock has no place for floats. A flyout or floating panel is put
+/// away only while it can be seen ([`visible`]): with the dock hidden by Tab or Shift+Tab, the
+/// dock shows again with the panel where it was, and the toolbar and Control bar stay as they are.
+/// Presentation Mode hides every panel, so there the command fails and changes nothing.
 fn show_panel(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String> {
     let raw = params.get("panel").and_then(Value::as_str).unwrap_or_default();
     let panel = normalize(raw).ok_or_else(|| format!("unknown panel `{raw}`"))?;
+    if app.ui.screen_mode >= 3 {
+        return Err("panels can't be shown in Presentation Mode".into());
+    }
+    place_panel(app, panel)
+}
+
+/// [`show_panel`] for a known panel, in any screen mode.
+fn place_panel(app: &mut VectorcraftApp, panel: &str) -> Result<Value, String> {
+    let was_visible = visible(&app.ui, panel);
     let layout = layout_of(&app.ui);
     app.ui.dock = true;
     if in_iconic_column(&layout, panel) {
-        app.ui.open_panel = if app.ui.open_panel.as_deref() == Some(panel) { None } else { Some(panel.into()) };
+        app.ui.open_panel = if was_visible { None } else { Some(panel.into()) };
         return Ok(json!({"open": app.ui.open_panel}));
     }
     // A floating panel in front of its window hides again, as an icon panel's flyout does: its
     // shortcut shows and hides it.
-    if floating_window(&layout, panel).is_some() && layout.panel_state(&panel.to_string()) == craft_ui::docking::PanelState::Front {
+    if was_visible && floating_window(&layout, panel).is_some() {
         return shared_command(app, "window.panel.close", &json!({"panel": panel}));
     }
     if !layout.contains(&panel.to_string()) && !app.ui.docking_hidden.contains_key(panel) && crate::panels::library_panel::parse(panel).is_some() {
@@ -404,14 +422,15 @@ fn restore_hidden_group(app: &mut VectorcraftApp, panel: &str) -> Result<Value, 
     Ok(result)
 }
 
-/// Show `panel` as `window.panel` does, but leave it be when it already shows ([`showing`]): a
-/// command that opens a panel to work in (Edit › Color Settings…) never puts it away.
+/// Show `panel` as `window.panel` does, but leave it be when it can be seen already ([`visible`]):
+/// a command that opens a panel to work in (Edit › Color Settings…) never puts it away. In
+/// Presentation Mode the panel comes to the front of its group and shows when the mode ends.
 pub(crate) fn reveal_panel(app: &mut VectorcraftApp, panel: &str) -> Result<Value, String> {
-    if showing(&app.ui, panel) {
-        app.ui.dock = true;
+    if visible(&app.ui, panel) {
         return Ok(json!({"open": panel}));
     }
-    show_panel(app, &json!({ "panel": panel }))
+    let id = normalize(panel).ok_or_else(|| format!("unknown panel `{panel}`"))?;
+    place_panel(app, id)
 }
 
 /// `window.collapseDock {collapsed?}`: collapse every dock column to icons, or expand the outer
@@ -950,6 +969,7 @@ impl Transaction {
         if let Some(saved) = &location.group {
             apply(&mut candidate, Action::ResizeGroup { panel: panel.clone(), height: saved.height })?;
             apply(&mut candidate, Action::ResizeFlyoutWidth { panel: panel.clone(), width: saved.flyout_width })?;
+            apply(&mut candidate, Action::MoveFlyoutTop { panel: panel.clone(), offset: saved.flyout_offset })?;
             apply(&mut candidate, Action::SetMinimized { panel: panel.clone(), minimized: saved.minimized })?;
         }
         self.workspace.layout = candidate;
@@ -1089,6 +1109,7 @@ fn known(action: &Action<String>) -> bool {
         | Action::ResizeColumn { panel, .. }
         | Action::ResizeGroup { panel, .. }
         | Action::ResizeFlyoutWidth { panel, .. }
+        | Action::MoveFlyoutTop { panel, .. }
         | Action::ResizeIconic { panel, .. }
         | Action::SetNative { panel, .. }
         | Action::SetMonitor { panel, .. } => registered(panel),
@@ -1238,18 +1259,28 @@ fn palette_window_state(modal: bool, popup: bool, active: bool) -> (egui::Window
 /// Sends the palette windows of `layout` the level and visibility [`palette_window_state`] gives
 /// when they change. craft-ui varies a palette's level through the viewport builder, which egui
 /// applies when the window opens and not to one already on screen, so the commands go explicitly to
-/// the windows there are.
+/// the windows there are. A window that opens while the others are hidden (a panel floated under a
+/// dialog, a menu, a flyout or the drawer) opens shown at its palette level, so it gets the commands
+/// in its first frame.
 #[cfg(not(target_arch = "wasm32"))]
 fn palette_window_levels(ctx: &egui::Context, layout: &Layout<String>, modal: bool, popup: bool) {
     let active = ctx.input(|i| i.focused || i.raw.viewports.values().any(|v| v.focused == Some(true)));
     let key = area_id().with("palette-levels-state");
-    if ctx.data(|d| d.get_temp::<(bool, bool, bool)>(key)) == Some((modal, popup, active)) {
-        return;
-    }
-    ctx.data_mut(|d| d.insert_temp(key, (modal, popup, active)));
-
+    let state = (modal, popup, active);
+    let windows: Vec<u64> = layout.floating.iter().map(|window| window.id).collect();
+    let sent = ctx.data(|d| d.get_temp::<((bool, bool, bool), Vec<u64>)>(key));
     let (level, visible) = palette_window_state(modal, popup, active);
-    for window in &layout.floating {
+    // The windows that already have this state's commands.
+    let known: &[u64] = match &sent {
+        Some((was, ids)) if *was == state && !visible => ids,
+        Some((was, _)) if *was == state => &windows,
+        _ => &[],
+    };
+    let fresh: Vec<u64> = windows.iter().copied().filter(|id| !known.contains(id)).collect();
+    if sent.as_ref().is_none_or(|(was, ids)| *was != state || *ids != windows) {
+        ctx.data_mut(|d| d.insert_temp(key, (state, windows)));
+    }
+    for window in layout.floating.iter().filter(|window| fresh.contains(&window.id)) {
         let viewport = craft_ui::docking::DockArea::<String>::window_viewport(area_id(), window.id);
         ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::WindowLevel(level));
         ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::Visible(visible));

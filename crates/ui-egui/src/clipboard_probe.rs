@@ -14,8 +14,11 @@ use crate::sysclip::ClipboardProbeFactory;
 /// How often the worker looks at the clipboard while the UI wants to know.
 const PROBE_INTERVAL: Duration = Duration::from_millis(250);
 
-/// How long dropping the probe waits for the worker to let go of its clipboard handle.
-const STOP_WAIT: Duration = Duration::from_millis(250);
+/// How long dropping the probe (when the app quits) waits for the worker to let go of its clipboard
+/// handle (VectorCraft's own bound). arboard's X11 reads wait up to 4 s for each text format they
+/// ask for; when a look is still waiting after this bound, the app quits without waiting longer,
+/// and what it copied may not reach the clipboard manager.
+const STOP_WAIT: Duration = Duration::from_secs(5);
 
 /// The background clipboard check ([`crate::VectorcraftApp`]'s `clipboard_probe`).
 pub(crate) struct Probe {
@@ -89,8 +92,8 @@ impl Probe {
 }
 
 impl Drop for Probe {
-    /// Wake the worker to stop and wait (a moment at most: it may be stuck on an owner that never
-    /// answers) until it has let go of its clipboard handle.
+    /// Wake the worker to stop and wait ([`STOP_WAIT`] at most: it may be stuck on an owner that
+    /// never answers) until it has let go of its clipboard handle.
     fn drop(&mut self) {
         self.wants = None;
         let end = Instant::now() + STOP_WAIT;

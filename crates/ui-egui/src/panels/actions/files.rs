@@ -31,10 +31,10 @@ pub const ACTIONS_EXT: &str = "vcactions";
 pub(super) const MAX_SET_FILE: usize = 8 << 20;
 
 /// The most actions [`read_set`] reads from one file.
-const MAX_SET_ACTIONS: usize = 1000;
+pub(super) const MAX_SET_ACTIONS: usize = 1000;
 
 /// The most steps [`read_set`] reads in one action.
-const MAX_ACTION_STEPS: usize = 10_000;
+pub(super) const MAX_ACTION_STEPS: usize = 10_000;
 
 /// The most left-out steps that Load Actions… lists for an action set another app saved.
 const MAX_SKIPPED: usize = 1000;
@@ -72,6 +72,51 @@ struct FileStep {
 
 fn is_false(value: &bool) -> bool {
     !value
+}
+
+/// A step as [`write_set`] writes it when it is included: [`FileStep`] without `excluded`.
+#[derive(Serialize)]
+struct IncludedStep<'a> {
+    command: &'a str,
+    params: &'a Value,
+}
+
+/// The bytes that excluding one step adds to the text [`write_set`] writes: a comma, a line
+/// break, the indent and `"excluded": true`.
+pub(super) const EXCLUDED_BYTES: usize = 28;
+
+/// The bytes more that a step adds to the text [`write_set`] writes as an action's first step than
+/// [`step_bytes`] counts: a line break on each side of the step and the indent of the closing
+/// bracket, in place of a comma and a line break.
+pub(super) const FIRST_STEP_BYTES: usize = 6;
+
+/// The bytes that the included step `(command, params)` adds to the text [`write_set`] writes when
+/// it goes after the last step of an action. As the action's first step it adds
+/// [`FIRST_STEP_BYTES`] more.
+pub(super) fn step_bytes(command: &str, params: &Value) -> usize {
+    /// Counts the bytes and the line breaks written to it.
+    #[derive(Default)]
+    struct Count {
+        bytes: usize,
+        breaks: usize,
+    }
+    impl std::io::Write for Count {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.bytes += buf.len();
+            self.breaks += buf.iter().filter(|&&b| b == b'\n').count();
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut count = Count::default();
+    if serde_json::to_writer_pretty(&mut count, &IncludedStep { command, params }).is_err() {
+        return MAX_SET_FILE + 1;
+    }
+    // In the file every line of the step is indented by 8 more spaces, and a comma and a line break
+    // come before it.
+    count.bytes + 8 * (count.breaks + 1) + 2
 }
 
 /// The params of the stops in a step: a stop's own, or those of the stops a `command.batch` step
@@ -329,6 +374,8 @@ fn load_aia(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
     }
     let AiaLoad { mut set, skipped, left_out } = aia_set(&read, "Actions");
     set.name = free_set_name(&app.ui.action_sets, &set.name);
+    // The set must save as a file that Load Actions… reads, which can be larger than the file read.
+    super::edit_keeps_set_loadable(app, None, &set)?;
     let (name, actions) = (set.name.clone(), set.actions.len());
     app.ui.action_sets.push(set);
     if left_out > 0 {
@@ -350,14 +397,17 @@ fn load_aia(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
 /// same name as one in the panel gets the next free number (`Print 2`). Loaded actions keep their
 /// function keys. The current set and the other sets stay as they are →
 /// `{set: index, name, actions: n}`. Where the host can read part of a file (the desktop), a file
-/// larger than 8 MiB is refused after its first 8 MiB and one byte are read.
+/// larger than 8 MiB is refused after its first 8 MiB and one byte are read. A set that Save
+/// Actions… would write as a file Load Actions… refuses (larger than 8 MiB, as a file with less
+/// white space or a name that gets a number can give) is refused too, and no set is added.
 ///
 /// An action set another app saved as text (`.aia`, read with `actionSet.read`) comes in with its
 /// actions and the steps that stand for a VectorCraft command ([`step_name`], [`step_commands`]),
 /// with no params; a step that is off in the file is excluded from playback. A set with no name is
 /// called after the file, else `Actions`. The other steps are left out and listed, and the status
 /// bar says how many → `{set, name, actions, skipped: [{action, step}] (at most 1,000), leftOut: n}`.
-/// Such a file that `actionSet.read` marks `truncated` is refused, and no set is added.
+/// Such a file that `actionSet.read` marks `truncated` is refused, and so is one whose set Save
+/// Actions… would write larger than 8 MiB; then no set is added.
 pub fn load_set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let (text, stem) = match p.get("data") {
         Some(Value::String(data)) => {
@@ -398,6 +448,8 @@ pub fn load_set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     };
     let mut set = read_set(&text, if stem.is_empty() { "Actions" } else { &stem })?;
     set.name = free_set_name(&app.ui.action_sets, &set.name);
+    // A number added to the name can make a file at the limit larger than it.
+    super::edit_keeps_set_loadable(app, None, &set)?;
     let (name, actions) = (set.name.clone(), set.actions.len());
     app.ui.action_sets.push(set);
     Ok(json!({ "set": app.ui.action_sets.len() - 1, "name": name, "actions": actions }))

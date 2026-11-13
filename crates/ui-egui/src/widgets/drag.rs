@@ -4,12 +4,13 @@ use super::{Paint, Rect, Response, Stroke, StrokeKind, Tokens, Ui, Vec2};
 /// handler for all of them (`canvas::panel_drop`); a chip of a dragged paint follows the pointer.
 #[derive(Clone, Debug, PartialEq)]
 pub enum PanelDrag {
-    /// A paint: Swatches panel tiles, a Fill/Stroke proxy or the Gradient panel's thumbnail. Art it
-    /// is dropped on takes `params` (`{swatch}`, `{color}`, `{gradient}`…; null for a colour group,
-    /// which paints nothing) through the active proxy's `paint.setFill`/`paint.setStroke`; the
-    /// Gradient panel's ramp takes its colour as a stop; the Swatches panel moves `rows`, or makes
-    /// a swatch of a paint dragged from elsewhere. `library`: the Libraries panel colour it is
-    /// (library id, colour name), which that panel moves to where it is dropped.
+    /// A paint: Swatches panel tiles, a Fill/Stroke proxy, a Recent Colors chip or the Gradient
+    /// panel's thumbnail. Art it is dropped on takes `params` (`{swatch}`, `{color}`, `{gradient}`…;
+    /// null for a colour group, which paints nothing) through the active proxy's
+    /// `paint.setFill`/`paint.setStroke`; the Gradient panel's ramp takes its colour as a stop; the
+    /// Swatches panel moves `rows`, or makes a swatch of a paint dragged from elsewhere. `library`:
+    /// the Libraries panel colour it is (library id, colour name), which that panel moves to where
+    /// it is dropped.
     Paint { paint: Paint, params: serde_json::Value, rows: Option<SwatchRows>, library: Option<(String, String)> },
     /// The Appearance panel's thumbnail: art it is dropped on takes object `0`'s appearance
     /// (`appearance.copyFrom`); the Graphic Styles panel makes a style of it.
@@ -30,7 +31,8 @@ pub enum PanelDrag {
     /// `place`).
     LibrarySymbol { library: String, name: String },
     /// A Brushes panel brush (`def`: its definition, for the chip at the pointer): the path it is
-    /// dropped on takes it (`brush.apply`).
+    /// dropped on takes it (`brush.apply`); dropped where there is no art, a scatter, art or pattern
+    /// brush places a copy of its art there (`brush.placeArt`).
     Brush { name: String, def: serde_json::Value },
     /// A brush of a brush library panel (`name`: its name in `library`): the path it is dropped on
     /// takes it (`brush.addFromLibrary` with `apply`), and the Brushes panel adds it.
@@ -67,9 +69,9 @@ pub struct SwatchRows {
 }
 
 impl PanelDrag {
-    /// `paint` dragged from a Fill/Stroke proxy or the Gradient panel's thumbnail. A gradient
-    /// carries no placement: it fits the art it lands on (freeform points are placed afresh there,
-    /// coloured like the dragged ones).
+    /// `paint` dragged from a Fill/Stroke proxy, a Recent Colors chip or the Gradient panel's
+    /// thumbnail. A gradient carries no placement: it fits the art it lands on (freeform points are
+    /// placed afresh there, coloured like the dragged ones).
     pub fn paint(mut paint: Paint) -> Self {
         if let Paint::Gradient(g) = &mut paint {
             g.geom = None;

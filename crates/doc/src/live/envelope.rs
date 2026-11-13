@@ -3,6 +3,10 @@ use super::mesh::{GradientMesh, MeshPoint, grid_len, grid_points, surface_of};
 use super::{Affine, Arc, Color, Deserialize, Node, NodeId, NodeKind, PathData, Point, Rect, Serialize, Vec2, yes};
 use vectorcraft_geom::Homography;
 
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
 /// How an envelope distorts its content.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -19,6 +23,10 @@ pub enum EnvelopeKind {
         v: f64,
         #[serde(default = "yes")]
         horizontal: bool,
+        /// The map the warp draws with: [`WARP_NET`](super::WARP_NET) for its style's Bézier net,
+        /// 0 (as in files from before the version existed) for [`warp_point`](super::warp_point).
+        #[serde(default, skip_serializing_if = "is_zero")]
+        version: u32,
     },
     /// A `(rows+1)×(cols+1)` grid of points (row-major) the content's bounding box maps onto.
     Mesh {
@@ -78,7 +86,9 @@ pub struct EnvelopeOptions {
     /// Rasters: Preserve Shape Using.
     pub preserve_shape: PreserveShape,
     /// Distort Appearance: strokes and live effects are applied before the distortion, so they
-    /// bend with the art (off: they apply to the distorted paths).
+    /// bend with the art (off: they apply to the distorted paths). Type's strokes are the exception:
+    /// they paint along its distorted glyph outlines at their own weight either way, as `.ai` files
+    /// draw them (#6644).
     pub distort_appearance: bool,
     /// Distort Linear Gradients (with Distort Appearance): placed gradients bend with the art.
     pub distort_linear_gradients: bool,
@@ -638,6 +648,7 @@ pub(super) fn expand_envelope(
         hooks,
         options,
         depth: 0,
+        type_outlines: false,
     };
     content.iter().map(|c| map_node(c, &w)).collect()
 }

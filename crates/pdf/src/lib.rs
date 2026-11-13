@@ -75,13 +75,13 @@ mod syntax;
 
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};
 pub use encrypt::Encryption;
-pub use export::{MIN_RASTER_PPI, check_page_sizes, export, export_with_report, page_areas, pdf_raster_ppi};
+pub use export::{check_page_sizes, export, export_with_report, page_areas};
 pub use file_info::{FileInfo, file_info};
 #[cfg(any(test, feature = "read-count"))]
 pub use import::imports_of;
 pub use import::{
-    INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE, holds_outlines,
-    import, import_opened, import_with_report, is_glyph_outlines, is_outlines_note,
+    INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, RESHAPED_TEXT_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE,
+    holds_outlines, import, import_opened, import_with_report, is_glyph_outlines, is_outlines_note,
 };
 #[cfg(any(test, feature = "read-count"))]
 pub use pages::reads_of;
@@ -213,7 +213,10 @@ pub struct ImportReport {
 #[derive(Clone, Debug)]
 pub struct ExportReport {
     pub bytes: Vec<u8>,
+    /// What the file leaves out of the document or writes differently.
     pub warnings: Vec<String>,
+    /// Notes on the options: one the export didn't apply or applied another way.
+    pub setting_notes: Vec<String>,
 }
 
 #[derive(Debug, thiserror::Error, PartialEq)]

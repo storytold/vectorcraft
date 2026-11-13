@@ -277,7 +277,7 @@ fn effect_mode(e: &Effect) -> Option<BlendMode> {
 /// The images of the shadows and outer glows of `n`, one per blend mode they use (in the order
 /// the modes first come), each composited with its mode: rendered alone, over nothing, they can't
 /// blend with the art below the object, so the image does.
-fn below_images(d: &mut Document, n: &Node, scale: f64) -> Option<Vec<Node>> {
+fn below_images(d: &mut Document, n: &Node) -> Option<Vec<Node>> {
     let mut modes: Vec<BlendMode> = vec![];
     for mode in raster_fx(n).iter().filter_map(RasterFx::mode) {
         if !modes.contains(&mode) {
@@ -285,7 +285,7 @@ fn below_images(d: &mut Document, n: &Node, scale: f64) -> Option<Vec<Node>> {
         }
     }
     if modes.len() < 2 {
-        let mut image = raster_image(d, n, true, false, scale)?;
+        let mut image = raster_image(d, n, true, false)?;
         image.blend = modes.first().copied().unwrap_or_default();
         return Some(vec![image]);
     }
@@ -294,7 +294,7 @@ fn below_images(d: &mut Document, n: &Node, scale: f64) -> Option<Vec<Node>> {
         .map(|mode| {
             let mut only = n.clone();
             retain_effects(&mut only, false, &|e| effect_mode(e).is_none_or(|m| m == mode));
-            let mut image = raster_image(d, &only, true, false, scale)?;
+            let mut image = raster_image(d, &only, true, false)?;
             image.blend = mode;
             Some(image)
         })
@@ -302,13 +302,12 @@ fn below_images(d: &mut Document, n: &Node, scale: f64) -> Option<Vec<Node>> {
 }
 
 /// The raster effects of `n` (its own, its fills' and strokes') as an embedded image of `d`
-/// rendered at `scale` pixels per point (the document's raster effects resolution, or a PDF
-/// export's finer one), or at a Rasterize effect's finer one (an
+/// rendered at the document's raster effects resolution, or at a Rasterize effect's finer one (an
 /// object whose only raster effect is its own Rasterize gets [`rasterize_effect_image`]'s image),
 /// without `n`'s transparency (that stays on the object). With `below` (they all paint below it:
 /// shadows and outer glows) the image holds just them; with `members` too, a group's or layer's
 /// image leaves out its members' raster effects (they get images of their own).
-pub(crate) fn raster_image(d: &mut Document, n: &Node, below: bool, members: bool, scale: f64) -> Option<Node> {
+pub(crate) fn raster_image(d: &mut Document, n: &Node, below: bool, members: bool) -> Option<Node> {
     if !below && let Some(image) = rasterize_effect_image(d, n) {
         return Some(image);
     }
@@ -326,17 +325,11 @@ pub(crate) fn raster_image(d: &mut Document, n: &Node, below: bool, members: boo
         b
     });
     // A Rasterize effect at a finer resolution than the document's is rendered at its own.
-    let scale =
-        raster_fx(n).iter().filter_map(|fx| if let RasterFx::Rasterize(r) = fx { r.ppi } else { None }).fold(scale, |s, ppi| s.max(ppi / 72.0));
+    let scale = raster_fx(n)
+        .iter()
+        .filter_map(|fx| if let RasterFx::Rasterize(r) = fx { r.ppi } else { None })
+        .fold(effects_scale(d), |s, ppi| s.max(ppi / 72.0));
     effect_image(d, &whole, bare.as_ref(), scale)
-}
-
-/// `n`'s Effect › Rasterize and where it is in `n`'s effects, when that is its only visible raster
-/// effect and is its own (not a fill's or a stroke's).
-fn own_rasterize(n: &Node) -> Option<(effects::Rasterize, usize)> {
-    let [RasterFx::Rasterize(r)] = raster_fx(n)[..] else { return None };
-    let at = n.appearance.effects.iter().position(|e| e.visible && e.id == effects::RASTERIZE)?;
-    Some((r, at))
 }
 
 /// The image Object › Rasterize makes of `n` with the options of `n`'s Effect › Rasterize, when
@@ -344,7 +337,8 @@ fn own_rasterize(n: &Node) -> Option<(effects::Rasterize, usize)> {
 /// without that effect and without its transparency, which stays on the object. `None` otherwise,
 /// or when the image can't be made.
 fn rasterize_effect_image(d: &mut Document, n: &Node) -> Option<Node> {
-    let (r, at) = own_rasterize(n)?;
+    let [RasterFx::Rasterize(r)] = raster_fx(n)[..] else { return None };
+    let at = n.appearance.effects.iter().position(|e| e.visible && e.id == effects::RASTERIZE)?;
     let p = json!({
         "ppi": r.ppi.unwrap_or(d.raster_effects_ppi),
         "colorModel": r.color_model.id(),
@@ -568,7 +562,7 @@ fn walk_inner(out: &mut Document, n: &Node, report: &mut FlattenReport) -> Optio
     let mut v = n.clone();
     strip_raster(&mut v, false);
     let mut m = if below {
-        let images = below_images(out, n, report.scale)?;
+        let images = below_images(out, n)?;
         for image in &images {
             report.record(n, image);
         }
@@ -579,13 +573,8 @@ fn walk_inner(out: &mut Document, n: &Node, report: &mut FlattenReport) -> Optio
         }
         m
     } else {
-        let image = raster_image(out, n, false, false, report.scale)?;
-        // Its own Rasterize's image keeps that effect's resolution: its pixels are its look.
-        if let Some((r, _)) = own_rasterize(n) {
-            report.record_at(n, &image, r.ppi.unwrap_or(effects_scale(out) * 72.0));
-        } else {
-            report.record(n, &image);
-        }
+        let image = raster_image(out, n, false, false)?;
+        report.record(n, &image);
         replace_with_image(v, image)
     };
     walk_mask(out, &mut m, report);
@@ -656,20 +645,13 @@ pub fn export_pdf(doc: &Document, opts: &vectorcraft_pdf::PdfOptions) -> std::re
     export_pdf_with_report(doc, opts).map(|r| r.bytes)
 }
 
-/// Like [`export_pdf`], also returning the writer's warnings (options not applied yet, features
-/// approximated or left out).
+/// Like [`export_pdf`], also returning the writer's warnings (features approximated or left out)
+/// and its notes on the options (options not applied yet).
 pub fn export_pdf_with_report(
     doc: &Document,
     opts: &vectorcraft_pdf::PdfOptions,
 ) -> std::result::Result<vectorcraft_pdf::ExportReport, vectorcraft_pdf::PdfError> {
-    // A PDF is zoomed and printed: request at least `vectorcraft_pdf::MIN_RASTER_PPI`, even when
-    // the document's raster effects resolution is the 72 ppi screen default (soft edges look
-    // blurry when zoomed). The 64 Mpx cap per image still holds.
-    // Only the sampling gets finer: the document keeps its resolution, so effects measured on its
-    // raster grid (Color Halftone's cells, De-Interlace's lines, Rasterize's pixels) look as on
-    // the canvas.
-    let scale = effects_scale(doc).max(vectorcraft_pdf::MIN_RASTER_PPI / 72.0);
-    let mut report = FlattenReport::at_scale(Which::All, doc, scale);
+    let mut report = FlattenReport::new(Which::All, doc);
     let flat = flatten(doc, &mut report);
     // Flattening stops early when cancelled, leaving a half-flattened copy that must not be written.
     vectorcraft_doc::cancel::check().map_err(|_| vectorcraft_pdf::PdfError::Cancelled)?;

@@ -437,11 +437,24 @@ fn drag(app: &mut VectorcraftApp, ctx: &egui::Context, from: Pos2, to: Pos2, tim
 
 /// [`drag`] with `modifiers` held.
 fn drag_with(app: &mut VectorcraftApp, ctx: &egui::Context, from: Pos2, to: Pos2, modifiers: Modifiers, time: f64) {
+    drag_drawn(app, ctx, from, to, modifiers, time, show);
+}
+
+/// [`drag_with`] over the panels `draw` draws.
+fn drag_drawn(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    from: Pos2,
+    to: Pos2,
+    modifiers: Modifiers,
+    time: f64,
+    draw: fn(&mut VectorcraftApp, &mut Ui),
+) {
     let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers };
-    frame_with(app, ctx, vec![Event::PointerMoved(from), button(from, true)], modifiers, time, show);
-    frame_with(app, ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], modifiers, time + 0.1, show);
-    frame_with(app, ctx, vec![Event::PointerMoved(to)], modifiers, time + 0.2, show);
-    frame_with(app, ctx, vec![Event::PointerMoved(to), button(to, false)], modifiers, time + 0.3, show);
+    frame_with(app, ctx, vec![Event::PointerMoved(from), button(from, true)], modifiers, time, draw);
+    frame_with(app, ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], modifiers, time + 0.1, draw);
+    frame_with(app, ctx, vec![Event::PointerMoved(to)], modifiers, time + 0.2, draw);
+    frame_with(app, ctx, vec![Event::PointerMoved(to), button(to, false)], modifiers, time + 0.3, draw);
 }
 
 fn names_of(app: &VectorcraftApp, group: Option<&str>) -> Vec<String> {
@@ -551,6 +564,124 @@ fn a_proxy_dropped_on_the_panel_becomes_a_swatch() {
     frame(&mut app, &ctx, vec![Event::PointerMoved(at), release], 1.0, show);
     assert_eq!(names_of(&app, Some("Brights")).last().map(String::as_str), Some("R=18 G=52 B=86"), "dropped on a group's colour: into that group");
     assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none());
+}
+
+/// The center of the Recent Colors chip `i` drawn by `draw` in a frame at `time`: the chip of the
+/// panel's row, or (`color`) of the Color panel's row, drawn in a child whose scope id `draw` keeps
+/// in the panel state `"test-color-scope"`.
+fn recent_chip(app: &mut VectorcraftApp, ctx: &egui::Context, i: usize, time: f64, draw: fn(&mut VectorcraftApp, &mut Ui), color: bool) -> Pos2 {
+    let mut chip = None;
+    let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0)));
+    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), screen_rect, ..Default::default() }, |ui| {
+        draw(app, ui);
+        let scope = if color { pstate::<Option<egui::Id>>(ctx, "test-color-scope").expect("the Color panel is drawn") } else { ui.scope_id() };
+        chip = ctx.read_response(scope.with(("recent", i))).map(|r| r.rect.center());
+    });
+    out.textures_delta.clear();
+    chip.unwrap_or_else(|| panic!("recent chip {i} is drawn"))
+}
+
+/// A rectangle filled with a CMYK color and then an RGB one, so Recent Colors holds the RGB color
+/// first and the CMYK one second; → its id and the CMYK color.
+fn art_with_two_recent_colors(app: &mut VectorcraftApp) -> (vectorcraft_doc::NodeId, Color) {
+    let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("paint.setFill", json!({"ids": [id], "color": {"c": 10, "m": 60, "y": 20, "k": 5}, "keepModel": true})).unwrap();
+    app.run("paint.setFill", json!({"ids": [id], "color": "#2050a0"})).unwrap();
+    let cmyk = app.session.recent_colors[1];
+    assert!(matches!(cmyk, Color::Cmyk { .. }), "the second recent color is CMYK: {cmyk:?}");
+    (vectorcraft_doc::NodeId(id), cmyk)
+}
+
+/// The fill of art `id`.
+fn fill_of(app: &VectorcraftApp, id: vectorcraft_doc::NodeId) -> Option<Paint> {
+    app.session.doc().unwrap().doc.node(id).map(|n| n.appearance.fill_paint())
+}
+
+/// A Recent Colors chip dragged onto the swatch list becomes a swatch of its color, in its color
+/// model, as one undo step; the drag paints no art, and a color that is already a swatch is added
+/// again under another name.
+#[test]
+fn a_recent_color_dragged_onto_the_list_becomes_a_swatch() {
+    let mut app = app();
+    let ctx = context();
+    let (id, cmyk) = art_with_two_recent_colors(&mut app);
+    frame(&mut app, &ctx, vec![], 0.0, show);
+    let art = fill_of(&app, id);
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let (count, brights) = (app.session.doc().unwrap().doc.swatches_iter().count(), names_of(&app, Some("Brights")).len());
+    // Onto a grouped swatch: into that group, at its end.
+    let chip = recent_chip(&mut app, &ctx, 1, 0.5, show, false);
+    drag(&mut app, &ctx, chip, tile_center(&ctx, "Bright Red"), 1.0);
+    let d = app.session.doc().unwrap();
+    let group = &d.doc.swatch_groups.iter().find(|g| g.name == "Brights").unwrap().swatches;
+    assert_eq!(group.len(), brights + 1, "{}", app.ui.status);
+    let first = group.last().cloned().expect("a swatch");
+    assert_eq!(first.paint, Paint::solid(cmyk), "the chip's color, still CMYK");
+    assert_eq!(d.history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(fill_of(&app, id), art, "the drag paints no art");
+    assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none());
+    // The same color again, onto an ungrouped swatch: a second swatch under another name.
+    frame(&mut app, &ctx, vec![], 2.0, show);
+    let chip = recent_chip(&mut app, &ctx, 1, 2.5, show, false);
+    drag(&mut app, &ctx, chip, tile_center(&ctx, "Red"), 3.0);
+    let newest = app.session.doc().unwrap().doc.swatches.last().cloned().expect("a swatch");
+    assert_eq!(newest.paint, Paint::solid(cmyk));
+    assert_ne!(newest.name, first.name, "another name");
+    assert_eq!(app.session.doc().unwrap().doc.swatches_iter().count(), count + 2);
+    // Undo takes the last one off.
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc.swatches_iter().count(), count + 1);
+}
+
+/// A color Alt-dropped on Registration, which can't be edited, becomes a new swatch and leaves
+/// Registration as it is.
+#[test]
+fn a_color_alt_dropped_on_registration_becomes_a_new_swatch() {
+    let mut app = app();
+    let ctx = context();
+    let (_, cmyk) = art_with_two_recent_colors(&mut app);
+    frame(&mut app, &ctx, vec![], 0.0, show);
+    let registration = app.session.doc().unwrap().doc.swatch(REGISTRATION).map(|w| w.paint.clone());
+    let count = app.session.doc().unwrap().doc.swatches_iter().count();
+    let chip = recent_chip(&mut app, &ctx, 1, 0.5, show, false);
+    drag_with(&mut app, &ctx, chip, tile_center(&ctx, REGISTRATION), Modifiers::ALT, 1.0);
+    let d = &app.session.doc().unwrap().doc;
+    assert_eq!(d.swatches_iter().count(), count + 1, "{}", app.ui.status);
+    assert_eq!(d.swatches.last().map(|w| w.paint.clone()), Some(Paint::solid(cmyk)));
+    assert_eq!(d.swatch(REGISTRATION).map(|w| w.paint.clone()), registration, "Registration is unchanged");
+}
+
+/// A Recent Colors chip of the Color panel dragged onto the Swatches panel becomes a swatch; a click
+/// on it still paints the selected art.
+#[test]
+fn a_recent_color_dragged_from_the_color_panel_becomes_a_swatch() {
+    fn both(app: &mut VectorcraftApp, ui: &mut Ui) {
+        show(app, ui);
+        ui.push_id("color", |ui| {
+            crate::panels::color::show(app, ui);
+            set_pstate(ui.ctx(), "test-color-scope", Some(ui.scope_id()));
+        });
+    }
+    let mut app = app();
+    let ctx = context();
+    app.ui.color_show_recent_colors = true;
+    let (id, cmyk) = art_with_two_recent_colors(&mut app);
+    frame(&mut app, &ctx, vec![], 0.0, both);
+    let count = app.session.doc().unwrap().doc.swatches_iter().count();
+    let art = fill_of(&app, id);
+    let chip = recent_chip(&mut app, &ctx, 1, 0.5, both, true);
+    drag_drawn(&mut app, &ctx, chip, tile_center(&ctx, "Red"), Modifiers::NONE, 1.0, both);
+    let d = &app.session.doc().unwrap().doc;
+    assert_eq!(d.swatches_iter().count(), count + 1, "{}", app.ui.status);
+    assert_eq!(d.swatches.last().map(|w| w.paint.clone()), Some(Paint::solid(cmyk)));
+    assert_eq!(fill_of(&app, id), art, "the drag paints no art");
+    // A click on the chip paints the selected art.
+    app.run("select.set", json!({"ids": [id.0]})).unwrap();
+    frame(&mut app, &ctx, vec![], 2.0, both);
+    let chip = recent_chip(&mut app, &ctx, 1, 2.5, both, true);
+    let button = |pressed| Event::PointerButton { pos: chip, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    frame(&mut app, &ctx, vec![Event::PointerMoved(chip), button(true), button(false)], 3.0, both);
+    assert_eq!(fill_of(&app, id).and_then(|f| f.color()), Some(cmyk), "a click paints the art");
 }
 
 #[test]
@@ -769,4 +900,62 @@ fn lab_spot_tiles_show_the_colour_the_spot_colors_options_pick() {
     app.run("swatch.spotOptions", json!({"useLab": false})).unwrap();
     assert_eq!(tile(&app), app.session.active().unwrap().doc.global_color("Ink").unwrap());
     assert!(matches!(tile(&app), Color::Cmyk { .. }));
+}
+
+/// One headless frame of the panel menu; returns its painted labels.
+fn menu_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> Vec<(String, Rect)> {
+    let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 700.0))), events, ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| menu(app, ui));
+    out.textures_delta.clear();
+    crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
+}
+
+/// Click the panel menu's item `label`.
+fn click_menu_item(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
+    let labels = menu_frame(app, ctx, vec![]);
+    let at = labels.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no {label} in the menu"));
+    let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    menu_frame(app, ctx, vec![Event::PointerMoved(at), button(true)]);
+    menu_frame(app, ctx, vec![button(false)]);
+}
+
+/// The panel menu's Show Recent Colors hides and shows the panel's Recent Colors row (#6617):
+/// checked by default, applied colors still join the list while the row is hidden, and the Color
+/// panel keeps its own row and setting.
+#[test]
+fn show_recent_colors_hides_and_shows_the_swatches_row() {
+    let mut app = app();
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    let ctx = context();
+    let menu_ctx = context();
+    // The first recent chip, if the panel draws one (the second frame's answer counts, since egui
+    // also answers for a widget the frame before drew).
+    let chip = |app: &mut VectorcraftApp| {
+        let mut chip = None;
+        for _ in 0..2 {
+            let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0)));
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| {
+                show(app, ui);
+                chip = ctx.read_response(ui.scope_id().with(("recent", 0usize))).map(|r| r.rect);
+            });
+            out.textures_delta.clear();
+        }
+        chip
+    };
+    assert!(chip(&mut app).is_some(), "the row shows by default");
+    click_menu_item(&mut app, &menu_ctx, "✓ Show Recent Colors");
+    assert!(!app.ui.swatches_show_recent_colors);
+    assert!(chip(&mut app).is_none(), "unchecked, the row is hidden");
+    app.run("paint.setFill", json!({"color": "#00ff00"})).unwrap();
+    assert_eq!(app.session.recent_colors.first().map(|c| c.to_hex()).as_deref(), Some("#00ff00"), "colors still join the list");
+    assert_eq!(app.run("ui.colorPanel", json!({})).unwrap()["recentColors"], true, "the Color panel keeps its setting");
+    click_menu_item(&mut app, &menu_ctx, "Show Recent Colors");
+    assert!(chip(&mut app).is_some(), "checking the item shows the row again");
+    // The app keeps it with the preferences; a saved value that isn't true or false reads as on.
+    let saved = |v: Value| {
+        let mut prefs = serde_json::to_value(crate::UiState::default()).unwrap();
+        prefs["swatches_show_recent_colors"] = v;
+        serde_json::from_value::<crate::UiState>(prefs).unwrap().swatches_show_recent_colors
+    };
+    assert_eq!((saved(json!(false)), saved(json!(true)), saved(json!("no"))), (false, true, true));
 }

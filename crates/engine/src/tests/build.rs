@@ -793,8 +793,9 @@ fn shape_builder_applies_a_merge_before_what_comes_next() {
             let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
             assert_eq!(labels, ["Move", "Shape Builder"]);
         }),
-        // The proof views redraw every document (a new revision); they are left off, as the
-        // other tests of the process-wide proof view expect.
+        // The proof views apply the merge first by command id (`WAIT_FOR_TOOL_EDIT`), also when
+        // the view does not change and no document gets a new revision. They are left off, as
+        // the other tests of the process-wide proof view expect.
         ("Separations Preview", |s, _, _| {
             s.execute("view.separationsPreview", &json!({"on": false})).unwrap();
         }),
@@ -806,6 +807,13 @@ fn shape_builder_applies_a_merge_before_what_comes_next() {
         }),
         ("Proof Setup", |s, _, _| {
             s.execute("view.proofSetup", &json!({})).unwrap();
+        }),
+        ("a proof view that changes", |s, _, _| {
+            let _v = crate::tests_colormgmt::DefaultView::new();
+            s.execute("view.proofColors", &json!({"on": true})).unwrap();
+            let on = s.doc().unwrap().revision;
+            s.execute("view.proofColors", &json!({"on": false})).unwrap();
+            assert!(s.doc().unwrap().revision > on, "the view changes and the documents get new revisions");
         }),
         ("a preference", |s, _, _| {
             let every = s.prefs.gridline_every;
@@ -2943,6 +2951,120 @@ fn merged_live_paint_groups_keep_the_bottom_groups_gap_options() {
     assert_eq!(merged(off.clone(), six), GapOptions { detect: true, size: GapSize::Small, color: blue });
     // With detection off in every group, the bottom group's options.
     assert_eq!(merged(off, json!({"detect": false})), GapOptions { detect: false, size: GapSize::Custom(12.0), color: blue });
+}
+
+#[test]
+fn live_paint_bucket_drag_fills_multiple_faces() {
+    let mut s = session();
+    let g = live(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = Paint::solid(Color::rgb(0.0, 1.0, 1.0));
+    let before = s.doc().unwrap().doc.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+    // Skip the middle face between pointer events, as can happen in a fast drag.
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 125.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
+    let gn = node(&s, g);
+    for x in [25.0, 75.0, 125.0] {
+        let f = vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap();
+        assert_eq!(f.appearance.fill_paint(), s.paint.fill, "dragged face at {x}");
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, before, "one Undo restores every face");
+    s.pointer(&PointerEvent::new(PointerKind::Move, 125.0, 50.0), v).unwrap();
+    assert!(!s.overlays(v).is_empty(), "hover still highlights a face");
+    assert_eq!(s.doc().unwrap().doc, before, "hover does not paint");
+}
+
+#[test]
+fn live_paint_bucket_drag_crosses_thin_grid_cells_and_can_cancel() {
+    for (deferred, cancel) in [(false, false), (false, true), (true, false)] {
+        let mut s = session();
+        let ids = [rect(&mut s, 0.0, 0.0, 150.0, 100.0), line(&mut s, (50.0, 0.0), (50.0, 100.0)), line(&mut s, (50.25, 0.0), (50.25, 100.0))];
+        s.execute("select.set", &json!({"ids": ids.map(|i| i.0)})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let v = ViewInfo::default();
+        s.select_tool("livePaintBucket", v).unwrap();
+        s.prefs.real_time_drawing = !deferred;
+        s.paint.fill = Paint::solid(Color::rgb(0.0, 1.0, 1.0));
+        s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 125.0, 50.0), v).unwrap();
+        if cancel {
+            assert!(s.tool_busy());
+            assert!(s.tool_claims_key(ToolKey::Escape, v));
+            s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+            assert!(!s.tool_busy());
+            assert!(!s.tool_claims_key(ToolKey::Escape, v));
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
+        if !cancel {
+            let g = s.doc().unwrap().selection.objects[0];
+            let gn = node(&s, g);
+            for x in [25.0, 50.125, 125.0] {
+                let f = vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap();
+                assert_eq!(f.appearance.fill_paint(), s.paint.fill, "deferred={deferred}, x={x}");
+            }
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        assert!(s.doc().unwrap().doc == before, "deferred={deferred}, cancel={cancel}: original paths and selection art must be restored");
+    }
+}
+
+#[test]
+fn live_paint_bucket_long_drag_keeps_late_turns_and_release_as_one_undo() {
+    for cancel in [false, true] {
+        let mut s = session();
+        let ids = [rect(&mut s, 0.0, 0.0, 150.0, 100.0), line(&mut s, (50.0, 0.0), (50.0, 100.0)), line(&mut s, (100.0, 0.0), (100.0, 100.0))];
+        s.execute("select.set", &json!({"ids": ids.map(|id| id.0)})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let v = ViewInfo::default();
+        s.select_tool("livePaintBucket", v).unwrap();
+        s.prefs.real_time_drawing = false;
+        s.paint.fill = Paint::solid(Color::rgb(0.0, 1.0, 1.0));
+        s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+        for i in 1..4096 {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, 25.0 + f64::from(i) / 10000.0, 50.0), v).unwrap();
+        }
+        // Turn around the middle face after the chunk limit, then enter the right face on Up.
+        for (x, y) in [(25.0, 150.0), (125.0, 150.0)] {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, x, y), v).unwrap();
+        }
+        if cancel {
+            s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
+        if !cancel {
+            let g = s.doc().unwrap().selection.objects[0];
+            let gn = node(&s, g);
+            for x in [25.0, 125.0] {
+                assert_eq!(vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap().appearance.fill_paint(), s.paint.fill);
+            }
+            assert_eq!(vectorcraft_tools::builder::face_at(&gn, Point::new(75.0, 50.0)).unwrap().appearance.fill_paint(), Paint::solid(Color::WHITE));
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        assert!(s.doc().unwrap().doc == before, "long drag is one cancellable undo step");
+    }
+}
+
+#[test]
+fn live_paint_bucket_drag_rejects_invalid_points_atomically() {
+    let mut s = session();
+    let g = live(&mut s);
+    let before = s.doc().unwrap().doc.clone();
+    for points in
+        [json!([]), json!([[26.0, 50.0]]), json!([[25.0, 50.0], [null, 0]]), json!([[25.0, 50.0], [1e30, 0]]), json!(vec![[25.0, 50.0]; 4097])]
+    {
+        assert!(s.execute("livePaint.fill", &json!({"group": g.0, "point": [25.0, 50.0], "points": points})).is_err());
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+    for continuation in [json!(null), json!([[[26.0, 50.0], [125.0, 50.0]]]), json!([vec![[25.0, 50.0]; 4097]])] {
+        assert!(
+            s.execute("livePaint.fill", &json!({"group": g.0, "point": [25.0, 50.0], "points": [[25.0, 50.0]], "continuation": continuation}))
+                .is_err()
+        );
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
 }
 
 #[test]

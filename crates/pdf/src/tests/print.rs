@@ -349,7 +349,7 @@ fn every_copy_on_a_sheet_draws_the_same_symbol_instances() {
     w.page(&mut ex, &sheet).unwrap();
     assert_eq!(ex.symbol_limit, 10, "the limit is the export's again after the sheet");
     w.absorb(ex);
-    let (bytes, _) = w.finish(&mut std::collections::HashSet::new(), false).unwrap();
+    let (bytes, ..) = w.finish(&mut std::collections::HashSet::new(), false).unwrap();
     let p = pages(&bytes);
     let left = p[0].1.iter().filter(|(r, _)| r.x0 < 200.0).count();
     assert_eq!((left, p[0].1.len() - left), (3, 3), "one instance in each copy: {:?}", p[0].1);
