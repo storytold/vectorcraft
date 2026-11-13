@@ -4697,13 +4697,15 @@ an `anchor` or `segment` in the same way. The document does not change and no un
 after the new anchor on its subpath are numbered one higher, and a selected segment that the new anchor splits stays
 selected as its two halves, with the new anchor as an end of both that moves with them. Undo restores the path and
 the selection in one step.
-`path.close {id, subpath?, in?, out?, independent?}` closes an open subpath (by default the last open one). `in` places
+`path.close {id, subpath?, at?, in?, out?, independent?}` closes an open subpath (by default the last open one). `at`
+moves the first anchor to `[x, y]`, its handles with it, before `in` and `out` are placed. `in` places
 the first anchor's incoming handle as `path.setHandle` places a handle: a smooth anchor turns its outgoing handle to
 stay in line and keeps that handle's length, and a corner keeps its outgoing handle where it is. With
 `independent: true` the anchor becomes a corner first, so its outgoing handle does not move. `out`, placed after `in`,
 is the first anchor's outgoing handle, and makes the anchor a corner. A Pen press on the first anchor sends `in` at
 the anchor with `independent: true`. The Pen's and the Smart Pen's closing drags send the mirror of the pointer as
-`in`, and once Alt is held they also send `out` at the outgoing handle's position when Alt went down.
+`in`, and once Alt is held they also send `out` at the outgoing handle's position when Alt went down. Once Space held
+during the Pen's closing drag has moved the first anchor, the drag also sends `at` at the anchor's new position.
 
 `path.reshape {id, x, y, dx, dy, tol?, focal?, radius?}` (a Reshape tool drag) grabs the path at `x`, `y`, adding an
 anchor there unless one lies within `tol` (3 by default), and moves that point by `dx`, `dy`.
@@ -4752,7 +4754,7 @@ an `x` without a `y`, or a `y` without an `x`, with "x and y must be given toget
 `path.blob` refuse a point in `points` whose x or y is not a number, such as `["10", 10]` or a point written as a
 string, with "x and y must both be numbers". All of them except `path.curvature` refuse a pen pressure, tilt or
 rotation that is neither a number nor null with `` `pressure` must be a number, not "0.5" ``, naming the key
-(`pressure`, `tiltX`, `tiltY` or `rotation`). `path.close` refuses an `in` or `out` that is not `[x, y]`
+(`pressure`, `tiltX`, `tiltY` or `rotation`). `path.close` refuses an `at`, `in` or `out` that is not `[x, y]`
 with `` `in` must be [x, y] ``, naming the key.
 
 These commands refuse a string, a number or another value that is not true or false with
