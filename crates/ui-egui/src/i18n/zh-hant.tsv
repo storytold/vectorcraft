@@ -4010,6 +4010,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Reset the rows to the artwork's colors	將各列重設為圖稿的顏色
 	Color Theme Picker	色彩主題選取器
 	Click or drag across the art to pick its colors; Shift adds more	按一下或拖過圖稿以選取其顏色；按住 Shift 可加入更多
+	Prominent Colors	主要顏色
+	Save All Colors	儲存所有顏色
+	Save Prominent Colors	儲存主要顏色
 	Reset to Default	重設為預設值
 	Reset to White, Black	重設為白色、黑色
 	Reset with Mesh	以網格重設

@@ -2949,6 +2949,9 @@ mark-style	Japanese	일본식
 	Reset the rows to the artwork's colors	행을 아트웍 색상으로 재설정
 	Color Theme Picker	색상 테마 피커
 	Click or drag across the art to pick its colors; Shift adds more	아트웍을 클릭하거나 드래그하여 색상을 가져옵니다. Shift 키로 더 추가합니다
+	Prominent Colors	주요 색상
+	Save All Colors	모든 색상 저장
+	Save Prominent Colors	주요 색상 저장
 	Reset to Default	기본값으로 재설정
 	Reset to White, Black	흰색, 검정으로 재설정
 	Reset {name}	{name} 재설정

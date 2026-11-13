@@ -2904,6 +2904,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	Réinitialiser les lignes avec les couleurs de l’illustration
 	Color Theme Picker	Sélecteur de thème de couleurs
 	Click or drag across the art to pick its colors; Shift adds more	Cliquez ou faites glisser sur l’illustration pour prélever ses couleurs ; Maj en ajoute d’autres
+	Prominent Colors	Couleurs dominantes
+	Save All Colors	Enregistrer toutes les couleurs
+	Save Prominent Colors	Enregistrer les couleurs dominantes
 	Reset to Default	Rétablir les valeurs par défaut
 	Reset to White, Black	Réinitialiser à blanc, noir
 	Reset with Mesh	Réinitialiser avec un filet
