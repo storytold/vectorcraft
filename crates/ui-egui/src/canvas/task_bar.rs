@@ -13,6 +13,12 @@ pub(crate) fn task_bar_rect(ctx: &egui::Context) -> Option<egui::Rect> {
     ctx.memory(|m| m.areas().is_visible(&egui::LayerId::new(egui::Order::Middle, id)).then(|| m.area_rect(id)).flatten())
 }
 
+/// Whether the Contextual Task Bar, where it was last drawn, held the font controls: on a canvas
+/// too narrow for them it leaves them out.
+pub(crate) fn task_bar_shows_fonts(ctx: &egui::Context) -> bool {
+    task_bar_rect(ctx).is_some() && ctx.data(|d| d.get_temp::<bool>(task_bar_id().with("fonts")).unwrap_or(false))
+}
+
 /// Whether the objects `ids` (or anything inside them) are painted with a colour: a solid colour,
 /// a gradient's stops or a mesh's points, which Recolor Artwork can change.
 pub(crate) fn has_colors(doc: &vectorcraft_doc::Document, ids: &[vectorcraft_doc::NodeId]) -> bool {
@@ -235,6 +241,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let bounds = xf.rect.shrink(8.0);
     // On a canvas too narrow for the type controls at their narrowest, the bar leaves them out.
     let fonts = fonts && bounds.width() - 18.0 >= crate::panels::character::task_bar_min_room();
+    ui.ctx().data_mut(|d| d.insert_temp(task_bar_id().with("fonts"), fonts));
     // The width of the bar's frame (margins and stroke), its handle, Fill and Stroke chips,
     // Recolor Artwork, Lock or Shape Properties, and More Options, each after a 6-point gap.
     let chips: f32 =

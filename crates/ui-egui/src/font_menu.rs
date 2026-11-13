@@ -70,7 +70,12 @@ impl WheelOwner {
             Self::ControlPopover(anchor) => {
                 return app.ui.control_bar && app.ui.screen_mode < 2 && widgets::popover_is_open(ctx, anchor);
             }
-            Self::TaskBar => return crate::canvas::task_bar_shows_type(app) && crate::canvas::task_bar_rect(ctx).is_some(),
+            Self::TaskBar => {
+                return app.ui.task_bar
+                    && app.ui.screen_mode < 3
+                    && crate::canvas::task_bar_shows_type(app)
+                    && crate::canvas::task_bar_shows_fonts(ctx);
+            }
             Self::Character => "character",
             Self::Properties => {
                 let selected = app.session.active().and_then(|document| document.selection.objects.first().and_then(|id| document.doc.node(*id)));

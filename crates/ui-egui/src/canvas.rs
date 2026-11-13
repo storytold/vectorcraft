@@ -70,7 +70,7 @@ pub use selection_marks::SelectionMarks;
 #[cfg(test)]
 pub(crate) use task_bar::chip_paints;
 use task_bar::task_bar;
-pub(crate) use task_bar::{has_colors, task_bar_rect, task_bar_shows_type};
+pub(crate) use task_bar::{has_colors, task_bar_rect, task_bar_shows_fonts, task_bar_shows_type};
 #[cfg(test)]
 use tool_overlays::{DIAL_RADIUS, HiddenMarks};
 pub use tool_overlays::{HiddenChars, SpellingMarks};

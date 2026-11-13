@@ -769,6 +769,47 @@ fn selected_types_font_controls_take_a_second_row_on_a_narrow_canvas() {
     assert!(canvas.contains_rect(r) && r.height() < 60.0, "no font controls on a 160 px screen: {r:?} in {canvas:?}");
 }
 
+/// When the canvas narrows so far that the bar leaves its font controls out, the font family
+/// field it drew before no longer takes the mouse wheel.
+#[test]
+fn a_task_bar_without_its_font_controls_leaves_their_wheel() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "type"})).unwrap();
+    app.run("text.create", json!({"x": 20, "y": 60, "text": "Hello", "size": 20})).unwrap();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let draw = |app: &mut VectorcraftApp, width: f32| {
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(width, 700.0));
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| canvas::show(app, ui));
+            out.textures_delta.clear();
+        }
+    };
+    draw(&mut app, 1000.0);
+    let bar = canvas::task_bar_rect(&ctx).expect("the task bar shows");
+    let viewport = egui::ViewportId::ROOT;
+    let points = (0..(bar.width() / 4.0) as usize).flat_map(|x| (0..(bar.height() / 4.0) as usize).map(move |y| (x, y)));
+    let field = points
+        .map(|(x, y)| bar.min + vec2(x as f32 * 4.0, y as f32 * 4.0))
+        .find(|p| crate::font_menu::wheel_field_layer_for_test(&ctx, viewport, *p).is_some())
+        .expect("the bar's font family field takes the wheel");
+    draw(&mut app, 160.0);
+    assert!(canvas::task_bar_rect(&ctx).is_some(), "the bar still shows, without its font controls");
+    crate::font_menu::sync_wheel_target(&app, &ctx, viewport);
+    assert!(crate::font_menu::wheel_field_layer_for_test(&ctx, viewport, field).is_none(), "the left-out field at {field:?} still takes the wheel");
+
+    // Hiding the bar (Window › Contextual Task Bar) releases the field before the next layout.
+    draw(&mut app, 1000.0);
+    assert!(crate::font_menu::wheel_field_layer_for_test(&ctx, viewport, field).is_some(), "the field is back");
+    app.run("window.taskBar", json!({})).unwrap();
+    crate::font_menu::sync_wheel_target(&app, &ctx, viewport);
+    assert!(
+        crate::font_menu::wheel_field_layer_for_test(&ctx, viewport, field).is_none(),
+        "the hidden bar's field at {field:?} still takes the wheel"
+    );
+}
+
 /// While a Type tool edits type, the Fill chip shows the selected characters' fill, and "?" where
 /// their fills differ.
 #[test]
