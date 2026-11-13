@@ -505,7 +505,10 @@ fn graphics_are_checked() {
     }
     assert!(check(ROTATE, json!([{"symbol": "Mark", "face": "back"}])).is_err());
     assert!(check(INFLATE, json!([{"symbol": "Mark"}])).is_err());
-    assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark"}]})).is_err());
+    // Revolve takes graphics on its side, named the front; Revolve (Classic) takes none.
+    assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark"}]})).is_ok());
+    assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark", "face": "back"}]})).is_err());
+    assert!(validate_three_d_params(crate::CLASSIC_REVOLVE, &json!({"graphics": [{"symbol": "Mark"}]})).is_err());
     // A loaded file's invalid entries are left out when drawn.
     assert_eq!(mapped_graphics(&json!({"graphics": [{"symbol": "Mark"}, {"face": "back"}, 3]})).len(), 1);
 }
@@ -691,4 +694,37 @@ fn a_symbol_instance_in_a_graphic_draws_as_the_canvas_shows_it() {
     let pieces = pieces_of(&d, d.symbols.iter().find(|s| s.name == "WideShaded").unwrap()).unwrap();
     let area: f64 = pieces.iter().map(|p| p.path.to_bezpath().area().abs()).sum();
     assert!((area - 30_000.0).abs() < 1e-3, "{area}");
+}
+
+#[test]
+fn curves_are_cut_one_at_a_time_and_the_work_stops_at_the_limit() {
+    let ellipse = shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 6.0)).to_bezpath();
+    // Cut curve by curve, a path gives the points it gives cut whole.
+    for scale in [1.0, 100.0, 10_000.0] {
+        let placed = Affine::scale(scale) * ellipse.clone();
+        let mut whole = vec![];
+        vectorcraft_geom::kurbo::flatten(placed.iter(), SURFACE_TOLERANCE, |el| {
+            if let PathEl::MoveTo(p) | PathEl::LineTo(p) = el {
+                whole.push(p);
+            }
+        });
+        let mut points = 0;
+        let cut: Vec<Point> = straight_pieces(&placed, &mut points).unwrap().into_iter().flatten().collect();
+        assert_eq!(points, cut.len());
+        assert_eq!(cut.len(), whole.len(), "{scale}");
+        assert!(cut.iter().zip(&whole).all(|(a, b)| a.distance(*b) < 1e-9), "{scale}");
+    }
+    // Past the limit no further curve is cut: of 1,000 ellipses that each take more than 3,000
+    // points, the count stops within one curve of the limit.
+    let mut many = BezPath::new();
+    (0..1000).for_each(|_| many.extend(Affine::scale(10_000.0) * ellipse.clone()));
+    let mut points = 0;
+    assert!(straight_pieces(&many, &mut points).is_none());
+    assert!(points > MAX_ELEMENTS && points < MAX_ELEMENTS + 2000, "{points}");
+    // A curve that reaches farther than any surface, or to no finite point, is not cut at all.
+    for scale in [1e12, f64::INFINITY] {
+        let mut points = 0;
+        assert!(straight_pieces(&(Affine::scale(scale) * ellipse.clone()), &mut points).is_none());
+        assert!(points <= 1, "{scale}: {points}");
+    }
 }

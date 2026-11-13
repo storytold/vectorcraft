@@ -96,13 +96,18 @@ pub fn revolve_options(p: &Value) -> Revolve {
         smooth_shading: true,
         cap_ends: flag(p, "cap", true),
         curve_samples: None,
+        map_surface: false,
     }
 }
 
 /// The options Revolve (`id` [`REVOLVE`]) or Revolve (Classic) ([`CLASSIC_REVOLVE`]) with
-/// parameters `p` sweeps its surface with.
+/// parameters `p` sweeps its surface with. A Revolve with graphics lays out its side for them.
 fn options_of(id: &str, p: &Value) -> Revolve {
-    if id == CLASSIC_REVOLVE { classic::options(p) } else { revolve_options(p) }
+    if id == CLASSIC_REVOLVE {
+        classic::options(p)
+    } else {
+        Revolve { map_surface: id == REVOLVE && !crate::solids::mapped_graphics(p).is_empty(), ..revolve_options(p) }
+    }
 }
 
 /// The options effect `fx`, a Revolve or a Revolve (Classic), sweeps its surface with.
@@ -140,6 +145,16 @@ pub(crate) fn validate_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value)
         let options = shared_options(&shapes, options_of(id, p))?;
         let mut copies = 0;
         shapes.iter().try_for_each(|s| check_surface(&s.path, b, options, surface_item(&s.items), &mut copies))?;
+        match graphics_member(&shapes, b, options).and_then(|k| shapes.get(k)) {
+            Some(s) => check_graphics(doc, id, &s.path, b, options, p)?,
+            // With no member to carry them, the graphics' art must still fit its limits.
+            None => {
+                if let Some(doc) = doc.filter(|_| id == REVOLVE && !crate::solids::mapped_graphics(p).is_empty()) {
+                    crate::solids::graphics::validate_symbols(doc, p)?;
+                    crate::solids::graphics::validate_surface_symbols(doc, p)?;
+                }
+            }
+        }
         let casting = shapes.iter().filter(|s| surface_item(&s.items).is_some_and(|i| paint_of(i).1 * s.opacity > 0.0));
         return check_shadow(p, casting.map(|s| &s.path), b, options);
     }
@@ -151,7 +166,36 @@ pub(crate) fn validate_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value)
     let b = path.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
     let paints = solid_paints(n);
     check_surface(&path, b, options_of(id, p), surface_item(&paints), &mut 0)?;
+    check_graphics(doc, id, &path, b, options_of(id, p), p)?;
     check_shadow(p, [&path], b, options_of(id, p))
+}
+
+/// An error when the graphics in Revolve (`id`) parameters `p`, with the symbols of `doc`, are past
+/// their limits on the surface of `path` about the axis of `b`: their art, or the parts they draw
+/// on its faces ([`crate::solids::graphics::surface_parts`]). Without `doc` nothing is drawn, and
+/// nothing is checked.
+fn check_graphics(doc: Option<&Document>, id: &str, path: &PathData, b: Rect, options: Revolve, p: &Value) -> Result<(), String> {
+    let graphics = crate::solids::mapped_graphics(p);
+    let Some(doc) = doc.filter(|_| id == REVOLVE && !graphics.is_empty()) else { return Ok(()) };
+    crate::solids::graphics::validate_symbols(doc, p)?;
+    crate::solids::graphics::validate_surface_symbols(doc, p)?;
+    let faces = vectorcraft_three_d::revolve(path, b, options)?;
+    match crate::solids::graphics::surface_parts(Some(doc), NodeId(0), &graphics, &faces, &|_, c| Paint::solid(c)) {
+        Some(_) => Ok(()),
+        None => Err("The graphics are too complex for this surface: simplify the symbols' art or reduce Segments".into()),
+    }
+}
+
+/// The member of a group whose side takes the group's graphics: the first with the longest
+/// profile among those with a fill or stroke.
+fn graphics_member(shapes: &[Profile], b: Rect, options: Revolve) -> Option<usize> {
+    shapes
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| surface_item(&s.items).is_some())
+        .filter_map(|(k, s)| vectorcraft_three_d::revolve_surface_size(&s.path, b, options).map(|(_, h)| (k, h)))
+        .fold(None, |best: Option<(usize, f64)>, (k, h)| if best.is_some_and(|(_, top)| top >= h) { best } else { Some((k, h)) })
+        .map(|(k, _)| k)
 }
 
 /// With the shadow of Revolve parameters `p` on, an error when the surfaces of `paths` it is cast
@@ -168,16 +212,17 @@ fn check_shadow<'a>(p: &Value, paths: impl IntoIterator<Item = &'a PathData>, b:
 /// appearance item `target` of `n` ([`validate_item_of`]).
 #[cfg(test)]
 pub(crate) fn validate_item_revolve(n: &Node, p: &Value, target: usize, index: usize) -> Result<(), String> {
-    validate_item_of(n, REVOLVE, p, target, index)
+    validate_item_of(None, n, REVOLVE, p, target, index)
 }
 
 /// [`validate_revolve`] for a Revolve or Revolve (Classic), `id`, with parameters `p` at index
 /// `index` of the effects of appearance item `target` of `n`. The surfaces of every fill and stroke
 /// that carries one, `target`'s included, share one budget of paint copies, as in [`art`]. A visible
-/// object-level Revolve draws in place of those surfaces.
-pub(crate) fn validate_item_of(n: &Node, id: &str, p: &Value, target: usize, index: usize) -> Result<(), String> {
+/// object-level Revolve draws in place of those surfaces. With `doc`, `target`'s graphics must fit
+/// its surface ([`check_graphics`]).
+pub(crate) fn validate_item_of(doc: Option<&Document>, n: &Node, id: &str, p: &Value, target: usize, index: usize) -> Result<(), String> {
     if is_container(n) || visible(&n.appearance.effects) || target >= n.appearance.items.len() {
-        return validate_in(None, n, id, p);
+        return validate_in(doc, n, id, p);
     }
     validate_params_of(id, p)?;
     const EMPTY: &str = "Revolve requires a shape with at least two anchors";
@@ -200,6 +245,9 @@ pub(crate) fn validate_item_of(n: &Node, id: &str, p: &Value, target: usize, ind
         let path = geometry(&path, at.and_then(|at| effects.get(..at)).unwrap_or(effects), &ctx.item(item));
         let b = path.bounds().ok_or(EMPTY)?;
         check_surface(&path, b, options, crate::paints(item).then_some(item), &mut copies)?;
+        if i == target {
+            check_graphics(doc, kind, &path, b, options, &params)?;
+        }
         check_shadow(&params, [&path], b, options)?;
     }
     Ok(())
@@ -234,7 +282,7 @@ fn shared_options(shapes: &[Profile], options: Revolve) -> Result<Revolve, Strin
 }
 
 /// The item whose paint an object's surface takes: its top fill, else its top stroke.
-fn surface_item(items: &[AppearanceItem]) -> Option<&AppearanceItem> {
+pub(crate) fn surface_item(items: &[AppearanceItem]) -> Option<&AppearanceItem> {
     items.iter().rev().find(|i| matches!(i, AppearanceItem::Fill(_))).or_else(|| items.last())
 }
 
@@ -255,6 +303,7 @@ pub(crate) fn validate_revolve_params(p: &Value) -> Result<(), String> {
 /// only its own parameters, each in its range.
 pub(crate) fn validate_params_of(id: &str, p: &Value) -> Result<(), String> {
     validate_revolve_params(p)?;
+    crate::solids::graphics::validate(id, p)?;
     if id == CLASSIC_REVOLVE {
         classic::validate(p)?;
     }
@@ -304,9 +353,12 @@ fn group_shadow(id: NodeId, fx: &Effect, shapes: &[Profile], b: Rect, options: R
 
 /// One object's surface of revolution about the axis of `b`, and each face's depth. `copies` counts
 /// the bytes of the paint copies of every surface of the object. Revolve (Classic) draws every face
-/// with its classic surface, as Extrude & Bevel (Classic) does.
+/// with its classic surface, as Extrude & Bevel (Classic) does. Revolve's graphics, with the
+/// symbols of `doc`, are drawn on the faces of the side ([`crate::solids::graphics::surface_parts`]):
+/// a face with a part of a graphic is a group of the face and that part.
 #[allow(clippy::too_many_arguments)]
 fn surface(
+    doc: Option<&Document>,
     n: &Node,
     path: &PathData,
     b: Rect,
@@ -336,10 +388,18 @@ fn surface(
     if *copies > MAX_PAINT_COPIES {
         return None;
     }
+    let graphics = crate::solids::mapped_graphics(&merged_params(&fx.id, &fx.params));
+    let shade = |face: &vectorcraft_three_d::Face, c: Color| graphic_paint(face, c, colored);
+    // Graphics past the limits are left out, and the surface draws without them.
+    let mut parts =
+        if graphics.is_empty() { vec![] } else { crate::solids::graphics::surface_parts(doc, n.id, &graphics, &faces, &shade).unwrap_or_default() };
+    let drawn = parts.iter().any(|p| !p.is_empty());
     // Visibility is an expansion option, never a change to live geometry or export baking.
     // Keep all faces for paints whose coverage we cannot prove opaque. A bounded visibility
-    // failure also retains the complete surface rather than losing any of the user's art.
+    // failure also retains the complete surface rather than losing any of the user's art. With
+    // graphics drawn, every face stays, each with its part of the graphics.
     let visible = (expand
+        && !drawn
         && flag(&fx.params, "expandVisibleOnly", true)
         && paint.color().is_some()
         && opacity == 1.0
@@ -414,7 +474,16 @@ fn surface(
                 .collect();
             Arc::new(Node::path(n.id, face.path, Appearance { items, ..Default::default() }))
         })
-        .collect();
+        .collect::<Vec<_>>();
+    let children = if drawn {
+        children
+            .into_iter()
+            .zip(parts.iter_mut().map(std::mem::take).chain(std::iter::repeat_with(Vec::new)))
+            .map(|(face, part)| if part.is_empty() { face } else { Arc::new(Node::group(n.id, std::iter::once(face).chain(part).collect())) })
+            .collect()
+    } else {
+        children
+    };
     let mut group = Node::group(n.id, children);
     group.opacity = opacity;
     group.blend = blend;
@@ -422,11 +491,33 @@ fn surface(
 }
 
 /// A surface of one object about the bounds of `path`, built with options derived from `fx`.
-/// `copies` is the count [`surface`] adds to.
-fn object_surface(n: &Node, path: &PathData, fx: &Effect, item: &AppearanceItem, expand: bool, copies: &mut usize) -> Option<Node> {
+/// `copies` is the count [`surface`] adds to; its graphics take the symbols of `doc`.
+fn object_surface(
+    doc: Option<&Document>,
+    n: &Node,
+    path: &PathData,
+    fx: &Effect,
+    item: &AppearanceItem,
+    expand: bool,
+    copies: &mut usize,
+) -> Option<Node> {
     let b = path.bounds()?;
     let (paint, opacity, blend) = paint_of(item);
-    surface(n, path, b, fx_options(fx), fx, paint, opacity, blend, expand, copies).map(|(_, art)| art)
+    surface(doc, n, path, b, fx_options(fx), fx, paint, opacity, blend, expand, copies).map(|(_, art)| art)
+}
+
+/// The paint of a graphic's solid color `c` on `face`, shaded as the face shades a solid fill of
+/// that color: across the face with its smooth shading, under colored lights (`colored`) with
+/// their color.
+fn graphic_paint(face: &vectorcraft_three_d::Face, c: Color, colored: bool) -> Paint {
+    if colored {
+        return face
+            .light_gradient
+            .map_or_else(|| Paint::solid(crate::lighting::shade(c, face.illumination)), |g| crate::lighting::smooth_paint(g, c));
+    }
+    let [r, g, b] = c.to_rgb();
+    let color = |s: f64| Color::rgb(r * s as f32, g * s as f32, b * s as f32);
+    face.gradient.map_or_else(|| Paint::solid(color(face.brightness)), |g| shading_paint(g, color, |_| 1.0))
 }
 
 fn shading_paint(g: vectorcraft_three_d::ShadeGradient, color: impl Fn(f64) -> Color, opacity: impl Fn(f64) -> f32) -> Paint {
@@ -592,7 +683,7 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
     }
     let n = &*resolve_for(doc, n, "Revolve", false).ok()?;
     if is_container(n) {
-        return group_art(n, expand);
+        return group_art(doc, n, expand);
     }
     let (path, rule) = profile(n)?;
     let ctx = GeomContext::of(n);
@@ -606,7 +697,7 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
         let paints = solid_paints(n);
         let item = surface_item(&paints)?;
         let expand = expand && !n.appearance.effects.iter().skip(index + 1).any(|e| e.visible && is_geometry(&e.id));
-        let surface = object_surface(n, &path, fx, item, expand, &mut copies)?;
+        let surface = object_surface(doc, n, &path, fx, item, expand, &mut copies)?;
         if let Some(b) = path.bounds()
             && let Some(shadow) = shadow_of(n.id, fx, &path, item, b, fx_options(fx)).ok()?
         {
@@ -632,7 +723,7 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
                 let fx = item.effects().get(index)?;
                 let p = geometry(&path, item.effects().get(..index)?, &ctx.item(original));
                 let expand = expand && !item.effects().iter().skip(index + 1).any(|e| e.visible && is_geometry(&e.id));
-                let mut art = object_surface(n, &p, fx, item, expand, &mut copies)?;
+                let mut art = object_surface(doc, n, &p, fx, item, expand, &mut copies)?;
                 art.appearance.effects = item.effects().iter().skip(index + 1).filter(|e| !is_revolve(&e.id)).cloned().collect();
                 if let Some(b) = p.bounds()
                     && let Some(mut shadow) = shadow_of(n.id, fx, &p, item, b, fx_options(fx)).ok()?
@@ -774,7 +865,7 @@ pub(crate) fn overlaps(a: Rect, b: Rect) -> bool {
 /// [`art`] of group or layer `n`: every member swept about one axis on the bounds of all of them,
 /// each in its own paint. Every member's faces are drawn in one back-to-front order. `None` when
 /// the effect is only on the group's own fills or strokes or when its members can't be revolved.
-fn group_art(n: &Node, expand: bool) -> Option<Node> {
+fn group_art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
     let index = n.appearance.effects.iter().position(|e| e.visible && is_revolve(&e.id))?;
     let fx = n.appearance.effects.get(index)?;
     let mut shapes = members(n, "").ok()?;
@@ -785,14 +876,17 @@ fn group_art(n: &Node, expand: bool) -> Option<Node> {
     let mut copies = 0;
     let mut surfaces = vec![];
     let mut opaque = true;
-    for s in &shapes {
+    // The graphics go once, on the side of the member with the longest profile.
+    let longest = graphics_member(&shapes, b, options);
+    for (k, s) in shapes.iter().enumerate() {
         let Some(item) = surface_item(&s.items) else { continue };
         // The opacity and blending of the member and the groups it is in apply through its scopes.
         let (paint, opacity, blend) = paint_of(item);
         opaque &= opacity >= 1.0 && blend == Default::default() && s.scopes.is_empty();
         // A member with transparency of its own keeps every face, as a transparent object does.
         let expand = expand && s.scopes.is_empty();
-        let (depths, art) = surface(n, &s.path, b, options, fx, paint, opacity, blend, expand, &mut copies)?;
+        let doc = doc.filter(|_| longest == Some(k));
+        let (depths, art) = surface(doc, n, &s.path, b, options, fx, paint, opacity, blend, expand, &mut copies)?;
         surfaces.push((depths, art, s.scopes.as_slice()));
     }
     if surfaces.is_empty() {
@@ -1517,3 +1611,7 @@ mod tests {
         assert_eq!(expand_revolve_art(&sample), revolve_art(&sample));
     }
 }
+
+#[cfg(test)]
+#[path = "revolve/tests_graphics.rs"]
+mod tests_graphics;

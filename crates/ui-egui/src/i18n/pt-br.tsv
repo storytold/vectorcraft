@@ -5884,7 +5884,9 @@ mark-style	Japanese	Japonesas
 @msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` deve ser front ou back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` deve ser um número de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` deve ser uma matriz
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Os gráficos são mapeados em faces planas: use o tipo de objeto Extrusão ou Plano
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Os gráficos são mapeados nos tipos de objeto Plano, Extrusão e Revolver
+@msg	Revolve maps graphics onto its side: map them onto the front	Revolver mapeia os gráficos na sua lateral: mapeie-os na face frontal
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Os gráficos são complexos demais para esta superfície: simplifique a arte dos símbolos ou reduza Segmentos
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` aceita no máximo {MAX_GRAPHICS} gráficos
 @msg	A plane has one face: map its graphics onto the front	Um plano tem uma única face: mapeie seus gráficos na face frontal
 @msg	The graphics are too complex: simplify the symbols' art	Os gráficos são complexos demais: simplifique a arte dos símbolos

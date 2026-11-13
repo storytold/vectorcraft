@@ -5510,7 +5510,9 @@ lighting	Light	Licht
 @msg	`{GRAPHICS}` face must be front or back	face in `{GRAPHICS}` muss front oder back sein
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} in `{GRAPHICS}` muss eine Zahl von {lo} bis {hi} sein
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` muss ein Array sein
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafiken werden auf ebene Seiten abgebildet: Verwenden Sie den Objekttyp Extrudieren oder Ebene
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiken werden auf die Objekttypen Ebene, Extrudieren und Kreiseln abgebildet
+@msg	Revolve maps graphics onto its side: map them onto the front	Kreiseln bildet Grafiken auf seiner Mantelfläche ab: Bilden Sie sie auf der Vorderseite ab
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Die Grafiken sind für diese Oberfläche zu komplex: Vereinfachen Sie das Bildmaterial der Symbole oder verringern Sie Segmente
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` nimmt höchstens {MAX_GRAPHICS} Grafiken auf
 @msg	A plane has one face: map its graphics onto the front	Eine Ebene hat nur eine Seite: Bilden Sie ihre Grafiken auf der Vorderseite ab
 @msg	The graphics are too complex: simplify the symbols' art	Die Grafiken sind zu komplex: Vereinfachen Sie das Bildmaterial der Symbole

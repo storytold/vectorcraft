@@ -5406,7 +5406,9 @@ lighting	Light	Ljus
 @msg	`{GRAPHICS}` face must be front or back	face i `{GRAPHICS}` måste vara front eller back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} i `{GRAPHICS}` måste vara ett tal från {lo} till {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` måste vara en matris
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafik placeras på plana sidor: använd objekttypen Extrudera eller Plan
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafik placeras på objekttyperna Plan, Extrudera och Rotera runt axel
+@msg	Revolve maps graphics onto its side: map them onto the front	Rotera runt axel placerar grafik på sin mantelyta: placera den på framsidan
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiken är för komplex för den här ytan: förenkla symbolernas teckning eller minska Segment
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` tar högst {MAX_GRAPHICS} grafiker
 @msg	A plane has one face: map its graphics onto the front	Ett plan har en sida: placera dess grafik på framsidan
 @msg	The graphics are too complex: simplify the symbols' art	Grafiken är för komplex: förenkla symbolernas teckning
