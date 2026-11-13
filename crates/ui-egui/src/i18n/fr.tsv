@@ -1586,6 +1586,8 @@ font-technology	Variable	Variables
 	Objects on Path Tool	Outil Objets sur tracé
 	Attach Objects on Path	Attacher des objets au tracé
 	Expand Objects on Path	Décomposer les objets sur tracé
+	Detach	Détacher
+	Detach Object from Path	Détacher l’objet du tracé
 	Release Live Paint	Annuler la peinture dynamique
 	Release Repeat	Annuler la répétition
 	Release Slice	Annuler la tranche
@@ -4761,6 +4763,7 @@ axis	Both	Les deux
 @msg	paths contain invalid coordinates	les tracés contiennent des coordonnées non valides
 @msg	paths: give at least one file	paths : indiquez au moins un fichier
 @msg	replace: the object to replace was changed or deleted	replace : l’objet à remplacer a été modifié ou supprimé
+@msg	the document it was prepared for is no longer active	le document pour lequel il a été préparé n’est plus actif
 @msg	pattern missing	motif manquant
 @msg	patterns nested too deeply are filled with mid-grey	les motifs imbriqués trop profondément sont remplis de gris moyen
 @msg	percent must be above 0 and at most 6400, not {p}	percent doit être supérieur à 0 et au plus égal à 6400, pas {p}
@@ -4796,6 +4799,7 @@ axis	Both	Les deux
 @msg	select a repeat	sélectionnez une répétition
 @msg	select an Intertwine group	sélectionnez un groupe entrelacé
 @msg	select an Objects on Path group	sélectionnez un groupe d’objets sur tracé
+@msg	choose the object to detach with its Select/Move widget	choisissez l’objet à détacher avec sa commande Sélectionner/Déplacer
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	un tracé à l’intérieur d’un tracé transparent, d’un dégradé de formes, d’une enveloppe, d’une répétition ou d’un groupe entrelacé ne peut pas recevoir d’objets
 @msg	a clipping path can't take objects	un tracé d’écrêtage ne peut pas recevoir d’objets
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	les objets à l’intérieur d’un dégradé de formes, d’une enveloppe, d’une répétition ou d’un groupe entrelacé ne peuvent pas être attachés à un tracé
@@ -5118,6 +5122,7 @@ axis	Both	Les deux
 @msg	every numbered name for it is taken in the Fonts folder	tous les noms numérotés pour ce fichier sont déjà pris dans le dossier Fonts
 @msg	every numbered name for {name} is taken in the document's folder	tous les noms numérotés pour {name} sont déjà pris dans le dossier du document
 @msg	No linked files to look for	Aucun fichier lié à rechercher
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Le lien se trouve dans un symbole, une conception de graphe, un motif ou un masque d’opacité et n’a pas de place sur le canevas
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Services
@@ -5535,7 +5540,9 @@ lighting	Light	Lumière
 @msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` doit valoir front ou back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` doit être un nombre de {lo} à {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` doit être un tableau
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Les graphiques s'appliquent sur des faces planes : utilisez le type d'objet Extrusion ou Plan
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Les graphiques s'appliquent aux types d'objet Plan, Extrusion et Révolution
+@msg	Revolve maps graphics onto its side: map them onto the front	Révolution applique les graphiques sur sa face latérale : appliquez-les sur la face avant
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Les graphiques sont trop complexes pour cette surface : simplifiez l'illustration des symboles ou réduisez Segments
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` accepte au plus {MAX_GRAPHICS} graphiques
 @msg	A plane has one face: map its graphics onto the front	Un plan n'a qu'une face : appliquez ses graphiques sur la face avant
 @msg	The graphics are too complex: simplify the symbols' art	Les graphiques sont trop complexes : simplifiez l'illustration des symboles
@@ -6739,6 +6746,13 @@ axis	Y Axis	Axe Y
 	Area Text	Texte captif
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mesurer le texte d’après les limites du glyphe
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Options de magnétisme du pixel
+	Pixel Snapping Options…	Options de magnétisme du pixel…
+	Snap to Pixel While Drawing	Magnétisme du pixel lors du dessin
+	Snap to Pixel While Moving	Magnétisme du pixel lors du déplacement
+	Snap to Pixel While Scaling	Magnétisme du pixel lors de la mise à l’échelle
+	These options take effect when View › Snap to Pixel is on.	Ces options s’appliquent lorsque Affichage › Magnétisme du pixel est activé.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Afficher les options de magnétisme du glyphe
 	Hide Snap to Glyph Options	Masquer les options de magnétisme du glyphe

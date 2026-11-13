@@ -1546,6 +1546,8 @@ antiAlias	Sharp	Nítid
 	Expand Live Paint	Expandeix la pintura interactiva
 	Expand Object	Expandeix l’objecte
 	Expand Objects on Path	Expandeix els objectes del traçat
+	Detach	Separa
+	Detach Object from Path	Separa l’objecte del traçat
 	Expand Options	Opcions d’expansió
 	Expand Panels	Expandeix els panells
 	Expand Repeat	Expandeix la repetició
@@ -5760,6 +5762,7 @@ digits	Malayalam	Malaiàlam
 @msg	the library has another item of that kind named `{name}`	la biblioteca ja té un altre element d’aquest tipus anomenat `{name}`
 @msg	no library `{key}` (see {list})	no hi ha la biblioteca `{key}` (vegeu {list})
 @msg	No linked files to look for	No hi ha fitxers enllaçats per buscar
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	L’enllaç és dins d’un símbol, un disseny de gràfic, un motiu o una màscara d’opacitat i no té lloc al llenç
 @msg	no Live Paint edge near that point	no hi ha cap aresta de pintura interactiva a prop d’aquell punt
 @msg	no Live Paint face at that point	no hi ha cap cara de pintura interactiva en aquell punt
 @msg	no native format	no hi ha format natiu
@@ -5970,6 +5973,7 @@ digits	Malayalam	Malaiàlam
 @msg	Reload the page to go on (changes not saved yet may be lost).	Recarrega la pàgina per continuar (els canvis encara no desats es poden perdre).
 @msg	Replace Spine: select a blend and a path	Substitueix l’espina: selecciona una fusió i un traçat
 @msg	replace: the object to replace was changed or deleted	replace: l’objecte que s’havia de substituir s’ha canviat o suprimit
+@msg	the document it was prepared for is no longer active	el document per al qual es va preparar ja no està actiu
 @msg	Reset {_1}	Restableix {_1}
 @msg	resolutions must be between 1 and 2400 ppi	les resolucions han de ser entre 1 i 2400 ppi
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	S’ha restaurat {n} document recuperat: desa’l per conservar-lo|S’han restaurat {n} documents recuperats: desa’ls per conservar-los
@@ -6025,6 +6029,7 @@ digits	Malayalam	Malaiàlam
 @msg	select an Intertwine group	selecciona un grup Intertwine
 @msg	select an object in perspective	selecciona un objecte en perspectiva
 @msg	select an Objects on Path group	selecciona un grup d’objectes sobre un traçat
+@msg	choose the object to detach with its Select/Move widget	tria l’objecte que vols separar amb el seu control Selecciona/Mou
 @msg	select artwork (or a colour group) to recolor	selecciona la il·lustració (o un grup de colors) per recolorejar
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloració completada; sense canvis: {locked} i {hidden}
 @msg	Recolor completed; {objects} were left unchanged	Recoloració completada; sense canvis: {objects}
@@ -6123,7 +6128,9 @@ digits	Malayalam	Malaiàlam
 @msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` ha de ser front o back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` ha de ser un nombre de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` ha de ser una matriu
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Els gràfics s’apliquen a cares planes: fes servir el tipus d’objecte Extrusió o Pla
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Els gràfics s’apliquen als tipus d’objecte Pla, Extrusió i Revolució
+@msg	Revolve maps graphics onto its side: map them onto the front	Revoluciona aplica els gràfics al seu lateral: aplica’ls a la cara davantera
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Els gràfics són massa complexos per a aquesta superfície: simplifica la il·lustració dels símbols o redueix Segments
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` admet com a màxim {MAX_GRAPHICS} gràfics
 @msg	A plane has one face: map its graphics onto the front	Un pla té una sola cara: aplica’n els gràfics a la cara davantera
 @msg	The graphics are too complex: simplify the symbols' art	Els gràfics són massa complexos: simplifica la il·lustració dels símbols
@@ -6707,6 +6714,13 @@ theme	Appearance	Aparença
 	Area Text	Text d’àrea
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mesura el text pels límits del glif
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opcions d’ajust al píxel
+	Pixel Snapping Options…	Opcions d’ajust al píxel…
+	Snap to Pixel While Drawing	Ajusta al píxel en dibuixar
+	Snap to Pixel While Moving	Ajusta al píxel en moure
+	Snap to Pixel While Scaling	Ajusta al píxel en escalar
+	These options take effect when View › Snap to Pixel is on.	Aquestes opcions tenen efecte quan Visualitza › Ajusta al píxel està activat.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostra les opcions d’ajust al glif
 	Hide Snap to Glyph Options	Amaga les opcions d’ajust al glif

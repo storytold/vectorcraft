@@ -1612,6 +1612,8 @@ file-filter	Templates	Шаблоны
 	Objects on Path Tool	Инструмент «Объекты на контуре»
 	Attach Objects on Path	Прикрепить объекты к контуру
 	Expand Objects on Path	Разобрать объекты на контуре
+	Detach	Открепить
+	Detach Object from Path	Открепить объект от контура
 	Release Live Paint	Освободить быструю заливку
 	Release Repeat	Освободить повтор
 	Release Slice	Освободить фрагмент
@@ -4809,6 +4811,7 @@ axis	Both	Оба
 @msg	paths contain invalid coordinates	контуры содержат недопустимые координаты
 @msg	paths: give at least one file	paths: укажите как минимум один файл
 @msg	replace: the object to replace was changed or deleted	replace: заменяемый объект был изменён или удалён
+@msg	the document it was prepared for is no longer active	документ, для которого это было подготовлено, больше не активен
 @msg	pattern missing	узор отсутствует
 @msg	patterns nested too deeply are filled with mid-grey	слишком глубоко вложенные узоры заполняются серым
 @msg	percent must be above 0 and at most 6400, not {p}	percent должен быть больше 0 и не более 6400, а не {p}
@@ -4844,6 +4847,7 @@ axis	Both	Оба
 @msg	select a repeat	выделите повтор
 @msg	select an Intertwine group	выделите группу переплетения
 @msg	select an Objects on Path group	выделите группу объектов на контуре
+@msg	choose the object to detach with its Select/Move widget	выберите открепляемый объект его элементом «Выбрать/Переместить»
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	к контуру внутри составного контура, перехода, оболочки, повтора или группы переплетения нельзя прикрепить объекты
 @msg	a clipping path can't take objects	к контуру обрезки нельзя прикрепить объекты
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	объекты внутри перехода, оболочки, повтора или группы переплетения нельзя прикрепить к контуру
@@ -5168,6 +5172,7 @@ axis	Both	Оба
 @msg	every numbered name for it is taken in the Fonts folder	все нумерованные имена для него уже заняты в папке Fonts
 @msg	every numbered name for {name} is taken in the document's folder	все нумерованные имена для {name} уже заняты в папке документа
 @msg	No linked files to look for	Нет связанных файлов для поиска
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Связь находится внутри символа, дизайна диаграммы, узора или непрозрачной маски и не имеет места на холсте
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Службы
@@ -5568,7 +5573,9 @@ lighting	Light	Свет
 @msg	`{GRAPHICS}` face must be front or back	face в `{GRAPHICS}` должен быть front или back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} в `{GRAPHICS}` должен быть числом от {lo} до {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` должен быть массивом
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Графика наносится на плоские грани: используйте тип объекта «Выдавливание» или «Плоскость»
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Графика наносится на объекты типов «Плоскость», «Выдавливание» и «Вращение»
+@msg	Revolve maps graphics onto its side: map them onto the front	«Вращение» наносит графику на свою боковую поверхность: размещайте её на передней стороне
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Графика слишком сложна для этой поверхности: упростите иллюстрации символов или уменьшите «Сегменты»
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` принимает не более {MAX_GRAPHICS} графических элементов
 @msg	A plane has one face: map its graphics onto the front	У плоскости одна сторона: размещайте её графику на передней стороне
 @msg	The graphics are too complex: simplify the symbols' art	Графика слишком сложна: упростите иллюстрации символов
@@ -6721,6 +6728,13 @@ theme	Appearance	Оформление
 	Area Text	Текст в области
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Измерять текст по границам глифа
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Параметры привязки к пикселю
+	Pixel Snapping Options…	Параметры привязки к пикселю…
+	Snap to Pixel While Drawing	Привязать к пикселю при рисовании
+	Snap to Pixel While Moving	Привязать к пикселю при перемещении
+	Snap to Pixel While Scaling	Привязать к пикселю при масштабировании
+	These options take effect when View › Snap to Pixel is on.	Эти параметры действуют, когда включено Просмотр › Привязать к пикселю.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Показать параметры привязки к глифу
 	Hide Snap to Glyph Options	Скрыть параметры привязки к глифу

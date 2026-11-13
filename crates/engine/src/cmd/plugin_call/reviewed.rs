@@ -314,6 +314,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "object.move",
     "object.nudge",
     "object.objectsOnPath.attach",
+    "object.objectsOnPath.detach",
     "object.objectsOnPath.expand",
     "object.objectsOnPath.moveMember",
     "object.objectsOnPath.options",

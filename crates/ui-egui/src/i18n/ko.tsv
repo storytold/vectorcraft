@@ -1982,6 +1982,8 @@ antiAlias	Sharp	날카롭게
 	Objects on Path Tool	패스 위 개체 도구
 	Attach Objects on Path	패스 위 개체 부착
 	Expand Objects on Path	패스 위 개체 확장
+	Detach	분리
+	Detach Object from Path	패스에서 개체 분리
 	Release Live Paint	라이브 페인트 해제
 	Release Repeat	반복 해제
 	Release Slice	분할 해제
@@ -4508,6 +4510,7 @@ theme	Appearance	외관
 @msg	select a repeat	반복을 선택하세요
 @msg	select an Intertwine group	교차 그룹을 선택하세요
 @msg	select an Objects on Path group	패스 위 개체 그룹을 선택하세요
+@msg	choose the object to detach with its Select/Move widget	분리할 개체를 선택/이동 위젯으로 고르세요
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	컴파운드 패스, 블렌드, 엔벨로프, 반복 또는 교차 그룹 안의 패스에는 개체를 부착할 수 없습니다
 @msg	a clipping path can't take objects	클리핑 패스에는 개체를 부착할 수 없습니다
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	블렌드, 엔벨로프, 반복 또는 교차 그룹 안의 개체는 패스에 부착할 수 없습니다
@@ -5114,6 +5117,7 @@ theme	Appearance	외관
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}`은(는) VectorCraft 문서, PDF 또는 PDF 호환 .ai 파일이 아닙니다
 @msg	paths: give at least one file	paths: 파일을 하나 이상 지정하세요
 @msg	replace: the object to replace was changed or deleted	replace: 바꿀 개체가 변경되었거나 삭제되었습니다
+@msg	the document it was prepared for is no longer active	준비한 문서가 더 이상 활성 상태가 아닙니다
 @msg	Couldn't place {name}: {e}	{name}을(를) 가져올 수 없습니다: {e}
 @msg	no print service	인쇄 서비스가 없습니다
 @msg	the print job has no data	인쇄 작업에 데이터가 없습니다
@@ -5177,6 +5181,7 @@ theme	Appearance	외관
 @msg	every numbered name for it is taken in the Fonts folder	글꼴 폴더에서 이를 위한 번호 이름이 모두 사용 중입니다
 @msg	every numbered name for {name} is taken in the document's folder	문서 폴더에서 {name}을(를) 위한 번호 이름이 모두 사용 중입니다
 @msg	No linked files to look for	찾을 링크된 파일이 없습니다
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	링크가 심볼, 그래프 디자인, 패턴 또는 불투명 마스크 안에 있어 캔버스에 위치가 없습니다
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id`는 단계 참조 {r}이며, `run`과 `command_batch`만 이를 해석합니다
 @msg	`ids` must be an array of object ids, not {v}	`ids`는 {v}이(가) 아니라 개체 id 배열이어야 합니다
 @msg	`colors` must be an array of colors, not {v}	`colors`는 {v}이(가) 아니라 색상 배열이어야 합니다
@@ -5544,7 +5549,9 @@ lighting	Light	광원
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`의 face는 front 또는 back이어야 합니다
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`의 {key}은(는) {lo}에서 {hi} 사이의 숫자여야 합니다
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}`은(는) 배열이어야 합니다
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	그래픽은 평평한 면에 매핑됩니다. 돌출 또는 평면 개체 유형을 사용하십시오
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	그래픽은 평면, 돌출, 회전체 개체 유형에 매핑됩니다
+@msg	Revolve maps graphics onto its side: map them onto the front	회전체는 그래픽을 옆면에 매핑합니다. 앞면에 매핑하십시오
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	그래픽이 이 표면에 비해 너무 복잡합니다. 심볼의 아트를 단순화하거나 세그먼트를 줄이십시오
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}`에는 그래픽을 최대 {MAX_GRAPHICS}개까지 넣을 수 있습니다
 @msg	A plane has one face: map its graphics onto the front	평면에는 면이 하나뿐입니다. 그래픽을 앞면에 매핑하십시오
 @msg	The graphics are too complex: simplify the symbols' art	그래픽이 너무 복잡합니다. 심볼의 아트를 단순화하십시오
@@ -6331,6 +6338,13 @@ axis	Y Axis	Y축
 	Area Text	영역 문자
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	글리프 경계로 문자 측정
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	픽셀에 스냅 옵션
+	Pixel Snapping Options…	픽셀에 스냅 옵션…
+	Snap to Pixel While Drawing	그리는 동안 픽셀에 스냅
+	Snap to Pixel While Moving	이동하는 동안 픽셀에 스냅
+	Snap to Pixel While Scaling	크기를 조절하는 동안 픽셀에 스냅
+	These options take effect when View › Snap to Pixel is on.	이 옵션은 보기 › 픽셀에 스냅이 켜져 있을 때 적용됩니다.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	글리프에 스냅 옵션 표시
 	Hide Snap to Glyph Options	글리프에 스냅 옵션 숨기기

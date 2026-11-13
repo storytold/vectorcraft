@@ -367,7 +367,11 @@ pub fn font_menu(
     let state_id = ui.scope_id().with(&id).with("font-menu");
     let mut st: MenuState = ui.data(|d| d.get_temp(state_id)).unwrap_or_default();
     ui.data(|d| d.get_temp::<Filters>(filters_id())).unwrap_or_default().apply(&mut st);
-    let target = ui.data(|d| d.get_temp(wheel_fields_id(ui.ctx().viewport_id()).with("target")));
+    // The viewport is read outside `ui.data`. The closure of `ui.data` runs with the context
+    // locked, and a second lock taken inside it blocks once a font-sample thread is waiting to
+    // request a repaint.
+    let wheel_fields = wheel_fields_id(ui.ctx().viewport_id());
+    let target = ui.data(|d| d.get_temp(wheel_fields.with("target")));
     let target_changed = st.wheel_target != target;
     if target_changed {
         st.wheel_order = None;
@@ -435,10 +439,8 @@ pub fn font_menu(
                 out = Some(FontPick::Wheel(steps));
             }
         }
-        let queued = ui.data(|d| {
-            d.get_temp::<WheelFields>(wheel_fields_id(ui.ctx().viewport_id()))
-                .is_some_and(|fields| fields.queued.iter().any(|event| event.field == field.id))
-        });
+        let queued =
+            ui.data(|d| d.get_temp::<WheelFields>(wheel_fields).is_some_and(|fields| fields.queued.iter().any(|event| event.field == field.id)));
         if drawn || (!field.contains_pointer() && !queued) {
             st.wheel_order = None;
             ui.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
