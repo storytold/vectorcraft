@@ -404,17 +404,28 @@ impl Session {
         true
     }
 
+    /// Close the document in tab `index` (`file.close`). Closing a tab other than the current one
+    /// keeps the current document current, and its tool keeps its state: no document is switched
+    /// to. Closing the current document makes the tab now at `index` current, or the last tab when
+    /// it was the last one. False, changing nothing, when `index` is past the last document.
     pub fn close_document(&mut self, index: usize) -> bool {
         if index >= self.docs.len() {
             return false;
         }
-        self.reset_tool_for_doc_switch();
+        let front = self.active().map(|d| d.uid).filter(|_| self.active != Some(index));
+        if front.is_none() {
+            self.reset_tool_for_doc_switch();
+        }
         // Closed (saved or discarded): nothing left to recover.
         let uid = self.docs[index].uid;
         cmd::recovery::forget(self, uid);
         let old = self.docs.remove(index);
         if let Some(stash) = &mut self.batch_stash {
             stash.push(old);
+        }
+        if let Some(uid) = front {
+            self.active = self.docs.iter().position(|d| d.uid == uid);
+            return true;
         }
         self.active = if self.docs.is_empty() { None } else { Some(index.min(self.docs.len() - 1)) };
         self.sync_front_composite_fonts();
