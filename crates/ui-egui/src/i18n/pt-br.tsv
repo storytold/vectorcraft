@@ -6253,6 +6253,13 @@ axis	Y Axis	Eixo Y
 @msg	Batch cannot play an action with a stop	Lote não pode reproduzir uma ação com uma parada
 	Insert Menu Item…	Inserir Item de Menu…
 	Insert Menu Item	Inserir Item de Menu
+	Insert Select Path	Inserir Seleção de Caminho
+	Select Path	Selecionar Caminho
+@msg	select one whole path or compound path	selecione um caminho inteiro ou um caminho composto
+@msg	select only one path	selecione apenas um caminho
+@msg	the path is hidden or locked, or cannot be selected here	o caminho está oculto ou bloqueado, ou não pode ser selecionado aqui
+@msg	object {value} is not the stored path: it changed, or the document is another one	o objeto {value} não é o caminho armazenado: ele mudou, ou o documento é outro
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` deve ser "v1:" e 16 dígitos hexadecimais minúsculos
 	Menu Item:	Item de menu:
 	No menu item matches.	Nenhum item de menu corresponde.
 	Several menu items match. Choose one from the list.	Vários itens de menu correspondem. Escolha um da lista.

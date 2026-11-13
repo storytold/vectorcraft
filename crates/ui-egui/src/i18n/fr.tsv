@@ -6333,6 +6333,13 @@ axis	Y Axis	Axe Y
 @msg	Batch cannot play an action with a stop	Le traitement par lots ne peut pas exécuter un script comportant un arrêt
 	Insert Menu Item…	Insérer une commande de menu…
 	Insert Menu Item	Insérer une commande de menu
+	Insert Select Path	Insérer une sélection de tracé
+	Select Path	Sélectionner le tracé
+@msg	select one whole path or compound path	sélectionnez un tracé entier ou un tracé transparent
+@msg	select only one path	sélectionnez un seul tracé
+@msg	the path is hidden or locked, or cannot be selected here	le tracé est masqué ou verrouillé, ou ne peut pas être sélectionné ici
+@msg	object {value} is not the stored path: it changed, or the document is another one	l’objet {value} n’est pas le tracé enregistré : il a été modifié, ou il s’agit d’un autre document
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` doit être "v1:" suivi de 16 chiffres hexadécimaux en minuscules
 	Menu Item:	Commande de menu :
 	No menu item matches.	Aucune commande de menu ne correspond.
 	Several menu items match. Choose one from the list.	Plusieurs commandes de menu correspondent. Choisissez-en une dans la liste.

@@ -5949,6 +5949,13 @@ axis	Y Axis	Ось Y
 @msg	Batch cannot play an action with a stop	Пакет не может воспроизвести действие с остановкой
 	Insert Menu Item…	Вставить пункт меню…
 	Insert Menu Item	Вставить пункт меню
+	Insert Select Path	Вставить выделение контура
+	Select Path	Выделить контур
+@msg	select one whole path or compound path	выделите один целый контур или составной контур
+@msg	select only one path	выделите только один контур
+@msg	the path is hidden or locked, or cannot be selected here	контур скрыт или заблокирован либо не может быть выделен здесь
+@msg	object {value} is not the stored path: it changed, or the document is another one	объект {value} не является сохранённым контуром: он изменился или это другой документ
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` должен состоять из "v1:" и 16 шестнадцатеричных цифр в нижнем регистре
 	Menu Item:	Пункт меню:
 	No menu item matches.	Нет подходящих пунктов меню.
 	Several menu items match. Choose one from the list.	Подходит несколько пунктов меню. Выберите один из списка.

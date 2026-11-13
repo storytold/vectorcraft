@@ -6294,6 +6294,13 @@ axis	Y Axis	Y ekseni
 @msg	Batch cannot play an action with a stop	Toplu işlem durak içeren bir eylemi oynatamaz
 	Insert Menu Item…	Menü Öğesi Ekle…
 	Insert Menu Item	Menü Öğesi Ekle
+	Insert Select Path	Yol Seçimi Ekle
+	Select Path	Yolu Seç
+@msg	select one whole path or compound path	bir yolun tamamını veya bir bileşik yolu seçin
+@msg	select only one path	yalnızca bir yol seçin
+@msg	the path is hidden or locked, or cannot be selected here	yol gizli veya kilitli ya da burada seçilemiyor
+@msg	object {value} is not the stored path: it changed, or the document is another one	{value} nesnesi kaydedilen yol değil: değişti ya da belge başka
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` "v1:" ve 16 küçük harfli onaltılık basamak olmalıdır
 	Menu Item:	Menü öğesi:
 	No menu item matches.	Eşleşen menü öğesi yok.
 	Several menu items match. Choose one from the list.	Birden çok menü öğesi eşleşiyor. Listeden birini seçin.

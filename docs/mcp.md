@@ -3070,6 +3070,26 @@ already walks Image Trace. Short agent entry points:
   `actionInsertMenuItem` dialog (`find`, `command`, `params`, `set`, `action`, `step`): typing in Find and pressing
   Find picks the one item whose menu path, shown name or command id holds every word typed, or lists the matches, and
   OK runs this.
+- Actions: `ui.action.insertSelectPath {set?, action?, step?}` inserts a Select Path step for the path selected in the
+  active document, without changing the selection or the art. The step is `select.storedPath {id, fingerprint}`: the
+  path's id and a fingerprint of its kind, fill rule and anchors (`v1:` and 16 lowercase hex digits, FNV-1a over them).
+  The selection must be one whole path or compound path that can be selected. Anchors or segments of a path alone,
+  several objects, a path with selected ruler guides, a group, type or any other object, a guide, a member of a compound
+  path, and a hidden or locked object are refused. A path inside a group can be stored on its own. The place, the selected step and the result are
+  as for `ui.action.insertStop`. No document, a selection that is not such a path, params that are not an object, an
+  index past the last set, action or step, no action and no recording, or a step past the 10,000-step and 8 MiB limits
+  is an error, and then nothing changes. The panel menu's Insert Select Path runs this for the selected step or action,
+  or the recording in progress, and is off while the selection is not such a path. The step's row in the panel reads
+  Select Path. An action set file holding the step is version 4, and Load Actions… refuses a step whose params are not
+  an id and such a fingerprint.
+- Actions: `select.storedPath {id, fingerprint}` selects only the path `id` while its fingerprint is still
+  `fingerprint` and it can be selected: not hidden or locked, nor in a hidden or locked layer or group, a template
+  layer or on a locked artboard, and inside the isolated object in isolation mode. A missing object, another kind of
+  object, a path whose kind, fill rule or anchors changed (moving it changes its anchors), or one that cannot be selected
+  is an error, and the selection stays as it was. So a Select Path step finds its path in the document it was stored
+  from, and in another document only an object with the same id and the same fingerprint. A selection change alone adds
+  no undo step. In an Accelerated playback the error undoes the steps before it, and at Step by Step and Pause For it
+  ends the playback after them. Returns `{count, ids}`. These rules are VectorCraft's own.
 - Actions: `ui.action.continue {}` plays on from the stop the playing action waits at, on the document active now, and
   closes the stop's message box (`actionStopMessage`). The next step runs at once, or at Accelerated the steps up to
   the next stop as one undo step. It returns `{results, pending, atStop?}`. With no action waiting at a stop it is an

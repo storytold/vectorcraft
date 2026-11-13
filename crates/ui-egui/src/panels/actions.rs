@@ -948,6 +948,31 @@ pub fn insert_menu_item(app: &mut VectorcraftApp, p: &Value) -> Result<Value, St
     insert(app, p, (command.to_string(), params))
 }
 
+/// The command that inserts a Select Path step ([`insert_select_path`]).
+pub const INSERT_SELECT_PATH: &str = "ui.action.insertSelectPath";
+
+/// The command id of a Select Path step in [`Action::steps`], with {id, fingerprint} as its params:
+/// playback selects that path of the active document when it is still the path the step stored.
+pub const SELECT_PATH_STEP: &str = "select.storedPath";
+
+/// `ui.action.insertSelectPath {set?, action?, step?}`: inserts a step that selects the path
+/// selected now, without changing the selection or the art. The selection must be one whole path or
+/// compound path that can be selected ([`vectorcraft_engine::storable_selection`]). The step stores
+/// the path's id and a fingerprint of it ([`vectorcraft_engine::path_fingerprint`]), and playback
+/// selects that path only while it is still there unchanged. The place is as [`insert_stop`] takes
+/// it, and the step is selected as a stop is. No document, a selection that is not such a path, a
+/// param of another type, params that are not an object, or a place [`insert_stop`] refuses is an
+/// error, and then nothing changes. The panel menu's Insert Select Path runs this.
+/// → {set, action, step}, or {recording: true}
+pub fn insert_select_path(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    if !p.is_object() {
+        return Err("`params` must be an object".into());
+    }
+    let st = app.session.active().ok_or("no document open")?;
+    let params = vectorcraft_engine::stored_path_step(st)?;
+    insert(app, p, (SELECT_PATH_STEP.to_string(), params))
+}
+
 /// The journal entry the recording in progress records from.
 fn recording_start(app: &VectorcraftApp) -> Option<usize> {
     let (_, _, start) = app.ui.recording.as_ref()?;
@@ -1706,6 +1731,17 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         let step = selected_step(app, ui.ctx(), selected);
         crate::dialogs::action_insert_menu_item::open(app, if recording { None } else { selected }, step);
     }
+    let path = app.session.active().is_some_and(|st| vectorcraft_engine::storable_selection(st).is_ok());
+    if widgets::menu_item(ui, tl!("Insert Select Path"), (recording || has) && path, false) {
+        let place = match (recording, selected, selected_step(app, ui.ctx(), selected)) {
+            (true, ..) | (false, None, _) => json!({}),
+            (false, Some((s, a)), None) => json!({"set": s, "action": a}),
+            (false, Some((s, a)), Some(step)) => json!({"set": s, "action": a, "step": step}),
+        };
+        if let Err(e) = app.run(INSERT_SELECT_PATH, place) {
+            app.status(e);
+        }
+    }
     if widgets::menu_item(ui, tl!("Action Options…"), has, false)
         && let Some((s, a)) = selected
     {
@@ -1892,10 +1928,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
                             current = Some(si);
                             sets_selected = vec![si];
                         }
-                        // A stop's row shows its message; other steps show their command.
+                        // A stop's row shows its message, and a Select Path step's its name; other
+                        // steps show their command.
                         let shown = if command == STOP_STEP {
                             let message = params.get("message").and_then(Value::as_str).and_then(|m| m.lines().next()).unwrap_or_default();
                             crate::i18n::fmt(tl!("Stop: {message}"), &[("message", message)])
+                        } else if command == SELECT_PATH_STEP {
+                            tl!("Select Path").to_string()
                         } else {
                             command.clone()
                         };
@@ -3087,7 +3126,7 @@ mod tests {
             (json!(long.to_string()), "an action in the action set file has more than 10,000 steps"),
             (json!(" ".repeat(files::MAX_SET_FILE + 1)), "the action set file is larger than 8 MiB"),
             (
-                json!("{\"format\": \"vcactions\", \"version\": 4, \"name\": \"S\", \"actions\": []}"),
+                json!("{\"format\": \"vcactions\", \"version\": 5, \"name\": \"S\", \"actions\": []}"),
                 "the action set file needs a later version of VectorCraft",
             ),
         ] {
@@ -4474,6 +4513,175 @@ mod tests {
         assert_eq!(recorded.steps, [("object.group".to_string(), json!({}))]);
     }
 
+    /// [`app_with_three_moves`] with a second rectangle, 100 pt to the right, and the first one
+    /// selected again → (the app, the left edge of the first one as it moves, the ids of both).
+    fn app_with_two_rectangles() -> (VectorcraftApp, impl Fn(&VectorcraftApp) -> f64, [u64; 2]) {
+        let (mut app, x) = app_with_three_moves();
+        let first = app.session.active().unwrap().selection.objects[0].0;
+        let second = app.run("shape.rectangle", json!({"x": 110, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [first]})).unwrap();
+        (app, x, [first, second])
+    }
+
+    fn left_of(app: &VectorcraftApp, id: u64) -> f64 {
+        app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap().x0
+    }
+
+    #[test]
+    fn insert_select_path_stores_the_selected_path_changes_nothing_and_plays_by_selecting_it() {
+        let (mut app, x, [first, second]) = app_with_two_rectangles();
+        app.ui.action_sets[0].actions[0].excluded_steps = BTreeSet::from([0, 2]);
+        let doc = app.session.active().unwrap().doc.clone();
+        let journal = app.session.journal.len();
+        let undo = undo_steps(&app);
+        let r = app.run(INSERT_SELECT_PATH, json!({"set": 0, "action": 0, "step": 0})).unwrap();
+        assert_eq!(r, json!({"set": 0, "action": 0, "step": 1}));
+        assert!(std::sync::Arc::ptr_eq(&app.session.active().unwrap().doc, &doc), "inserting edits nothing");
+        assert_eq!(app.session.journal.len(), journal, "and records nothing");
+        assert_eq!(undo_steps(&app), undo, "and adds no undo step");
+        let action = &app.ui.action_sets[0].actions[0];
+        assert_eq!(action.steps[1].0, SELECT_PATH_STEP);
+        assert_eq!(action.steps[1].1["id"], json!(first));
+        assert!(action.steps[1].1["fingerprint"].as_str().is_some_and(|f| f.starts_with("v1:")), "{:?}", action.steps[1]);
+        assert_eq!(action.excluded_steps, BTreeSet::from([0, 3]), "the step excluded after the insertion point moved with it");
+        assert!(!action.excluded_steps.contains(&1), "the new step is included");
+
+        app.run("select.set", json!({"ids": [second]})).unwrap();
+        let before = undo_steps(&app);
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(app.session.active().unwrap().selection.objects, [vectorcraft_doc::NodeId(first)], "the step selected the stored path");
+        assert_eq!(x(&app), 2.0, "the move after it moved the stored path");
+        assert_eq!(left_of(&app, second), 110.0, "and not the path selected before");
+        assert_eq!(undo_steps(&app), before + 1, "the action plays as one undo step");
+    }
+
+    #[test]
+    fn a_select_path_step_plays_step_by_step_and_a_changed_path_ends_the_playback() {
+        let (mut app, x, [_, second]) = app_with_two_rectangles();
+        app.ui.action_sets[0].actions[0].steps.truncate(1);
+        app.run(INSERT_SELECT_PATH, json!({"set": 0, "action": 0})).unwrap();
+        app.ui.action_sets[0].actions[0].steps.push(("object.move".into(), json!({"dx": 4, "dy": 0})));
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap();
+        let before = undo_steps(&app);
+        app.run("select.set", json!({"ids": [second]})).unwrap();
+        assert_eq!(undo_steps(&app), before, "a selection change alone is no undo step");
+        play(&mut app, 0, 0).unwrap();
+        play_out(&mut app);
+        assert_eq!(left_of(&app, second), 111.0, "the first move moved the path selected when the action started");
+        assert_eq!(x(&app), 4.0, "the step selected the stored path, and the last move moved it");
+        assert_eq!(undo_steps(&app), before + 2, "each move its own undo step, and the selection change none, as select.set adds none");
+
+        // The stored path has moved since: the step ends the playback, and the move after it does not run.
+        app.run("select.set", json!({"ids": [second]})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        play_out(&mut app);
+        assert!(app.ui.status.contains("is not the stored path"), "{}", app.ui.status);
+        assert_eq!(app.session.active().unwrap().selection.objects, [vectorcraft_doc::NodeId(second)], "the selection stays as it was");
+        assert_eq!((left_of(&app, second), x(&app)), (112.0, 4.0), "the step before it ran, the one after it did not");
+    }
+
+    #[test]
+    fn insert_select_path_refuses_what_is_not_one_whole_path_and_changes_nothing() {
+        let (mut app, _, [first, second]) = app_with_two_rectangles();
+        let place = json!({"set": 0, "action": 0});
+        let refused = |app: &mut VectorcraftApp, params: Value, want: &str| {
+            let selection = app.session.active().map(|st| st.selection.objects.clone());
+            assert_eq!(app.run(INSERT_SELECT_PATH, params.clone()).unwrap_err(), want, "{params}");
+            assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 3, "{params}");
+            assert_eq!(app.session.active().map(|st| st.selection.objects.clone()), selection, "{params}");
+        };
+        app.run("select.set", json!({"ids": [first, second]})).unwrap();
+        refused(&mut app, place.clone(), "select only one path");
+        app.run("select.none", json!({})).unwrap();
+        refused(&mut app, place.clone(), "select a path");
+        app.run("select.anchors", json!({"id": first, "anchors": [[0, 0]], "mode": "set"})).unwrap();
+        refused(&mut app, place.clone(), "select one whole path or compound path");
+        app.run("select.set", json!({"ids": [first, second]})).unwrap();
+        let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [group]})).unwrap();
+        refused(&mut app, place.clone(), "select one whole path or compound path");
+        app.run("select.set", json!({"ids": [first]})).unwrap();
+        for (params, want) in [
+            (json!({}), "no such action"),
+            (json!({"set": 0}), "no such action"),
+            (json!({"set": 1, "action": 0}), "no such action"),
+            (json!({"set": 0, "action": 1}), "no such action"),
+            (json!({"set": "0", "action": 0}), "no such action"),
+            (json!({"set": 0, "action": 0, "step": 3}), "no such action step"),
+            (json!({"set": 0, "action": 0, "step": null}), "no such action step"),
+            (json!(5), "`params` must be an object"),
+            (json!(null), "`params` must be an object"),
+        ] {
+            refused(&mut app, params, want);
+        }
+        let mut empty = app_with_sets();
+        assert_eq!(empty.run(INSERT_SELECT_PATH, json!({"set": 0, "action": 0})).unwrap_err(), "no document open");
+    }
+
+    #[test]
+    fn insert_select_path_goes_into_the_recording() {
+        let (mut app, _, [first, _]) = app_with_two_rectangles();
+        app.run(START_RECORDING, json!({})).unwrap();
+        assert_eq!(app.run(INSERT_SELECT_PATH, json!({})).unwrap(), json!({"recording": true}));
+        assert_eq!(app.session.active().unwrap().selection.objects, [vectorcraft_doc::NodeId(first)]);
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        let recorded = app.ui.action_sets[0].actions.last().unwrap();
+        assert_eq!(recorded.steps.len(), 1);
+        assert_eq!((recorded.steps[0].0.as_str(), &recorded.steps[0].1["id"]), (SELECT_PATH_STEP, &json!(first)));
+    }
+
+    #[test]
+    fn a_saved_select_path_step_survives_and_a_damaged_one_is_refused() {
+        let (mut app, _, _) = app_with_two_rectangles();
+        app.run(INSERT_SELECT_PATH, json!({"set": 0, "action": 0, "step": 0})).unwrap();
+        let saved = files::write_set(&app.ui.action_sets[0]);
+        assert_eq!(serde_json::from_str::<Value>(&saved).unwrap()["version"], json!(4), "older builds must refuse a Select Path step");
+        let loaded = files::read_set(&saved, "Test").unwrap();
+        assert_eq!(loaded.actions[0].steps, app.ui.action_sets[0].actions[0].steps);
+        let step = app.ui.action_sets[0].actions[0].steps[1].clone();
+        let nested = json!({"commands": [{"command": SELECT_PATH_STEP, "params": step.1}]});
+        let set = ActionSet::new("Nested", vec![Action::new("A", vec![("command.batch".into(), nested)])]);
+        assert_eq!(serde_json::from_str::<Value>(&files::write_set(&set)).unwrap()["version"], json!(4), "a step in a recorded batch counts");
+        for params in
+            [json!({"id": 3}), json!({"id": -1, "fingerprint": step.1["fingerprint"]}), json!({"id": 3, "fingerprint": "v1:xyz"}), json!(42)]
+        {
+            let bad = json!({"command": SELECT_PATH_STEP, "params": params});
+            for s in [bad.clone(), json!({"command": "command.batch", "params": {"commands": [bad]}})] {
+                let file = json!({"format": "vcactions", "version": 4, "name": "Bad", "actions": [{"name": "A", "steps": [s]}]});
+                assert_eq!(files::read_set(&file.to_string(), "Test").unwrap_err(), "not an action set file", "{s}");
+            }
+        }
+    }
+
+    #[test]
+    fn insert_select_path_in_the_menu_needs_a_path_and_shows_its_row() {
+        use super::super::tests_appearance::{click, frame_events, text_rect};
+        let (mut app, _, [first, _]) = app_with_two_rectangles();
+        app.ui.action_set = Some(0);
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        let menu_click = |ctx: &egui::Context, app: &mut VectorcraftApp| {
+            let texts = frame_events(ctx, app, vec![], menu);
+            let item = texts.iter().find(|(s, _)| s.trim() == "Insert Select Path").map(|(_, r)| *r).expect("Insert Select Path in the menu");
+            click(ctx, app, item.center(), menu);
+        };
+        menu_click(&ctx, &mut app);
+        assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 3, "no action selected and nothing recording: the item is off");
+
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, "Three Moves").center(), show);
+        app.run("select.none", json!({})).unwrap();
+        menu_click(&ctx, &mut app);
+        assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 3, "no path selected: the item is off");
+
+        app.run("select.set", json!({"ids": [first]})).unwrap();
+        menu_click(&ctx, &mut app);
+        let steps = &app.ui.action_sets[0].actions[0].steps;
+        assert_eq!((steps.len(), steps[3].0.as_str()), (4, SELECT_PATH_STEP), "the action selected: the step goes at its end");
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        assert!(texts.iter().any(|(s, _)| s == "Select Path"), "the step's row names it: {texts:?}");
+    }
+
     /// An action stays one that Load Actions… reads back: a stop or a menu item that would give it
     /// more than 10,000 steps, or its set's file more than 8 MiB, is refused, and the action keeps its
     /// steps and exclusions as they were.
@@ -5520,7 +5728,7 @@ mod tests {
                 json!({"format": "vcactions", "version": version, "name": "Old", "actions": [{"name": "A", "steps": [{"command": "object.move"}]}]});
             assert_eq!(files::read_set(&old.to_string(), "Test").unwrap().actions[0].steps.len(), 1, "version {version}");
         }
-        let later = json!({"format": "vcactions", "version": 4, "name": "New", "actions": []});
+        let later = json!({"format": "vcactions", "version": 5, "name": "New", "actions": []});
         assert_eq!(files::read_set(&later.to_string(), "Test").unwrap_err(), "the action set file needs a later version of VectorCraft");
         for params in [json!({"message": 5}), json!({"allowContinue": "yes"}), json!(42)] {
             let stop = json!({"command": "action.stop", "params": params});

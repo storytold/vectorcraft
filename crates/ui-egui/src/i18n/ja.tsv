@@ -6028,6 +6028,13 @@ axis	Y Axis	Y 軸
 @msg	Batch cannot play an action with a stop	バッチでは停止を含むアクションを再生できません
 	Insert Menu Item…	メニュー項目を挿入…
 	Insert Menu Item	メニュー項目を挿入
+	Insert Select Path	パスの選択を挿入
+	Select Path	パスを選択
+@msg	select one whole path or compound path	パス全体または複合パスを 1 つ選択してください
+@msg	select only one path	パスを 1 つだけ選択してください
+@msg	the path is hidden or locked, or cannot be selected here	パスが非表示またはロックされているか、ここでは選択できません
+@msg	object {value} is not the stored path: it changed, or the document is another one	オブジェクト {value} は保存されたパスではありません: 変更されたか、別のドキュメントです
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` は "v1:" と小文字の 16 進数字 16 桁である必要があります
 	Menu Item:	メニュー項目:
 	No menu item matches.	一致するメニュー項目がありません。
 	Several menu items match. Choose one from the list.	複数のメニュー項目が一致します。リストから 1 つ選択してください。

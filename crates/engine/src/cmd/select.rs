@@ -49,6 +49,15 @@ pub fn specs() -> Vec<CommandSpec> {
             set
         ),
         cmd!(
+            "select.storedPath",
+            "Select Path",
+            [],
+            None,
+            "{id: object id, fingerprint: text (\"v1:\" and 16 lowercase hex digits)} the Actions panel's Select Path step: select only the path or compound path `id` when its fingerprint (a hash of its kind, fill rule and anchors, its members' for a compound path) is still `fingerprint` and it can be selected: not hidden or locked, nor in a hidden or locked layer or group, a template layer or on a locked artboard, and inside the isolated object in isolation mode. A missing object, another kind of object, a path whose kind, fill rule or anchors changed, or one that cannot be selected is an error, and the selection stays as it was → {count, ids} (the resulting selection)",
+            has_doc,
+            stored_path
+        ),
+        cmd!(
             "select.add",
             "Add to Selection",
             [],
@@ -437,6 +446,150 @@ fn toggle(s: &mut Session, p: &Value) -> Result<Value> {
 fn selection_result(s: &Session) -> Result<Value> {
     let selection = &s.doc()?.selection;
     Ok(json!({ "count": selection.len(), "ids": selection.objects }))
+}
+
+/// The prefix of every fingerprint [`path_fingerprint`] gives: the version of its hash.
+const FINGERPRINT_PREFIX: &str = "v1:";
+
+/// FNV-1a (64 bits) over the bytes written to it, starting from the offset basis.
+pub(crate) struct Fnv(pub(crate) u64);
+
+impl Default for Fnv {
+    fn default() -> Self {
+        Self(0xcbf2_9ce4_8422_2325)
+    }
+}
+
+impl std::io::Write for Fnv {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0 = buf.iter().fold(self.0, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3));
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// The fingerprint of the path or compound path `n` that `select.storedPath` compares: FNV-1a (64
+/// bits) over a kind byte, the fill rule and the anchors of the path, or of each member of the
+/// compound path in order, as JSON, written as [`FINGERPRINT_PREFIX`] and 16 lowercase hex digits.
+/// None for any object [`is_storable_kind`] does not take.
+pub fn path_fingerprint(n: &Node) -> Option<String> {
+    fn feed(h: &mut Fnv, n: &Node) -> Option<()> {
+        use std::io::Write;
+        match &n.kind {
+            NodeKind::Path { path, rule, .. } => {
+                h.write_all(b"P").ok()?;
+                serde_json::to_writer(&mut *h, rule).ok()?;
+                serde_json::to_writer(&mut *h, path).ok()
+            }
+            NodeKind::Compound { children, rule } => {
+                h.write_all(b"C").ok()?;
+                serde_json::to_writer(&mut *h, rule).ok()?;
+                h.write_all(&(children.len() as u64).to_le_bytes()).ok()?;
+                children.iter().try_for_each(|c| feed(h, c))
+            }
+            _ => None,
+        }
+    }
+    if !is_storable_kind(n) {
+        return None;
+    }
+    let mut h = Fnv::default();
+    feed(&mut h, n)?;
+    Some(format!("{FINGERPRINT_PREFIX}{:016x}", h.0))
+}
+
+/// Whether `n` is an object a Select Path step can store: a path that is not a guide, or a compound
+/// path whose members all are.
+fn is_storable_kind(n: &Node) -> bool {
+    let path = |n: &Node| matches!(n.kind, NodeKind::Path { guide: false, .. });
+    match &n.kind {
+        NodeKind::Compound { children, .. } => children.iter().all(|c| path(c)),
+        _ => path(n),
+    }
+}
+
+/// The `id` and `fingerprint` of `select.storedPath`'s params `p`, or why they are not ones: an
+/// object with only a non-negative whole `id` and a `fingerprint` that [`path_fingerprint`] could give.
+pub fn stored_path_params(p: &Value) -> std::result::Result<(NodeId, &str), String> {
+    let o = p.as_object().ok_or("`params` must be an object")?;
+    if let Some(key) = o.keys().find(|k| !matches!(k.as_str(), "id" | "fingerprint")) {
+        let keys = "id, fingerprint";
+        return Err(format!("unknown parameter `{key}`; the command takes: {keys}"));
+    }
+    let value = o.get("id").unwrap_or(&Value::Null);
+    let id = value.as_u64().map(NodeId).ok_or_else(|| format!("invalid object id {value}: expected a non-negative integer"))?;
+    let fingerprint = o.get("fingerprint").and_then(Value::as_str).unwrap_or_default();
+    let hex = fingerprint.strip_prefix(FINGERPRINT_PREFIX).unwrap_or_default();
+    if hex.len() != 16 || !hex.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+        return Err("`fingerprint` must be \"v1:\" and 16 lowercase hex digits".into());
+    }
+    Ok((id, fingerprint))
+}
+
+/// Why the object `id` of `st` cannot be the path of a Select Path step: it is not there, is not a
+/// path (not a guide) or compound path ([`is_storable_kind`]), is a member of a compound path, cannot
+/// be selected ([`is_selectable`]), or is on a locked artboard, in isolation mode too.
+fn storable_path(st: &DocState, id: NodeId) -> std::result::Result<(), String> {
+    let value = id.0;
+    let n = st.doc.node(id).ok_or_else(|| format!("no such object id {value}"))?;
+    let in_compound = st.doc.parent_of(id).and_then(|p| st.doc.node(p)).is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. }));
+    if !is_storable_kind(n) || in_compound {
+        return Err(WHOLE_PATH.into());
+    }
+    // In isolation mode `is_selectable` does not look at the locked artboards, so they are checked here too.
+    let locks = st.doc.locked_artboards();
+    if !is_selectable(&st.doc, st.isolation, &locks, id) || locks.holds_id(id) {
+        return Err("the path is hidden or locked, or cannot be selected here".into());
+    }
+    Ok(())
+}
+
+/// What [`storable_selection`] asks for when the selection is not a whole path or compound path.
+const WHOLE_PATH: &str = "select one whole path or compound path";
+
+/// The one object selected in `st` when it can be the path of a Select Path step: a whole path or
+/// compound path that can be selected ([`storable_path`]). An error for no selection, several
+/// objects, a path with ruler guides, anchors or segments of a path alone, a group, type or any other object, a guide, or a
+/// member of a compound path. It does not hash the path, so menus can ask it every frame.
+pub fn storable_selection(st: &DocState) -> std::result::Result<NodeId, String> {
+    let sel = &st.selection;
+    let id = match sel.objects.as_slice() {
+        [] => return Err("select a path".into()),
+        [id] if sel.guides.is_empty() => *id,
+        _ => return Err("select only one path".into()),
+    };
+    if sel.anchors.get(&id).is_some_and(|a| !a.is_empty()) || sel.segments.get(&id).is_some_and(|s| !s.is_empty()) {
+        return Err(WHOLE_PATH.into());
+    }
+    storable_path(st, id)?;
+    Ok(id)
+}
+
+/// The params of a `select.storedPath` step for the path selected in `st` ([`storable_selection`]):
+/// `{id, fingerprint}`.
+pub fn stored_path_step(st: &DocState) -> std::result::Result<Value, String> {
+    let id = storable_selection(st)?;
+    let fingerprint = st.doc.node(id).and_then(path_fingerprint).ok_or(WHOLE_PATH)?;
+    Ok(json!({ "id": id.0, "fingerprint": fingerprint }))
+}
+
+/// `select.storedPath {id, fingerprint}`: selects only the path `id` when it is still the path the
+/// step stored ([`path_fingerprint`]) and can be selected ([`storable_path`]); else an error, and
+/// the selection stays as it was.
+fn stored_path(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "select.storedPath";
+    let (id, fingerprint) = stored_path_params(p).map_err(|e| bad(C, e))?;
+    let st = s.doc()?;
+    let value = id.0;
+    let n = st.doc.node(id).ok_or_else(|| bad(C, format!("no such object id {value}")))?;
+    if path_fingerprint(n).as_deref() != Some(fingerprint) {
+        return Err(bad(C, format!("object {value} is not the stored path: it changed, or the document is another one")));
+    }
+    storable_path(st, id).map_err(|e| bad(C, e))?;
+    s.select(|_, sel| sel.set([id]))?;
+    selection_result(s)
 }
 
 fn key(s: &mut Session, p: &Value) -> Result<Value> {

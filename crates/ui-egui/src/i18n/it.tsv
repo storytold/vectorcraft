@@ -5963,6 +5963,13 @@ axis	Y Axis	Asse Y
 @msg	Batch cannot play an action with a stop	L'elaborazione batch non può eseguire un'azione con un'interruzione
 	Insert Menu Item…	Inserisci voce di menu…
 	Insert Menu Item	Inserisci voce di menu
+	Insert Select Path	Inserisci selezione tracciato
+	Select Path	Seleziona tracciato
+@msg	select one whole path or compound path	seleziona un tracciato intero o un tracciato composto
+@msg	select only one path	seleziona un solo tracciato
+@msg	the path is hidden or locked, or cannot be selected here	il tracciato è nascosto o bloccato, oppure non può essere selezionato qui
+@msg	object {value} is not the stored path: it changed, or the document is another one	l’oggetto {value} non è il tracciato memorizzato: è cambiato, oppure il documento è un altro
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` deve essere "v1:" seguito da 16 cifre esadecimali minuscole
 	Menu Item:	Voce di menu:
 	No menu item matches.	Nessuna voce di menu corrisponde.
 	Several menu items match. Choose one from the list.	Corrispondono più voci di menu. Sceglierne una dall’elenco.

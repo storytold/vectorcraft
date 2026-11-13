@@ -1,14 +1,16 @@
 //! Action set files: the Actions panel menu's Save Actions… and Load Actions….
 //!
-//! An action set file (`.vcactions`) is JSON: `{"format": "vcactions", "version": 1, 2 or 3, "name",
+//! An action set file (`.vcactions`) is JSON: `{"format": "vcactions", "version": 1, 2, 3 or 4, "name",
 //! "actions": [{"name", "steps": [{"command", "params", "excluded"?}], "key"?, "color"?}]}`. Each step is a
 //! command id and its params, as `command.batch` takes them, or a stop: the command `action.stop`
-//! with `{"message", "allowContinue"}`. `key` is the action's function key
+//! with `{"message", "allowContinue"}`. A Select Path step is the command `select.storedPath` with
+//! `{"id", "fingerprint"}`. `key` is the action's function key
 //! (`{"key": 1 to 15, "cmd", "shift"}`) and `color` its Button Mode color; an action without them,
 //! or with a value that is not one, has none. `excluded: true` keeps a step but skips it during
 //! playback. Sets with exclusions use version 2 so older builds refuse them rather than replay
-//! excluded steps, and sets with stops use version 3 so older builds refuse them rather than fail
-//! at a stop. Other sets use version 1, and earlier version 1 and 2 files still work.
+//! excluded steps, sets with stops use version 3 so older builds refuse them rather than fail at a
+//! stop, and sets with Select Path steps use version 4 so older builds refuse them rather than fail
+//! at the step. Other sets use version 1, and earlier version 1, 2 and 3 files still work.
 //! Load Actions… also reads the action sets another app saves as text (`.aia`, through
 //! `actionSet.read`).
 
@@ -132,6 +134,20 @@ fn stops_in<'a>(command: &str, params: &'a Value) -> Vec<&'a Value> {
     steps.filter(|step| super::is_stop(step)).map(|step| step.get("params").unwrap_or(&Value::Null)).collect()
 }
 
+/// The params of the Select Path steps in a step: a Select Path step's own, or those of the Select
+/// Path steps a `command.batch` step holds.
+fn select_paths_in<'a>(command: &str, params: &'a Value) -> Vec<&'a Value> {
+    if command == super::SELECT_PATH_STEP {
+        return vec![params];
+    }
+    if command != "command.batch" {
+        return vec![];
+    }
+    let steps = params.get("commands").and_then(Value::as_array).into_iter().flatten();
+    let select_path = |step: &&Value| step.get("command").and_then(Value::as_str) == Some(super::SELECT_PATH_STEP);
+    steps.filter(select_path).map(|step| step.get("params").unwrap_or(&Value::Null)).collect()
+}
+
 /// `set` as the text of an action set file.
 pub fn write_set(set: &ActionSet) -> String {
     let actions = set
@@ -150,10 +166,12 @@ pub fn write_set(set: &ActionSet) -> String {
         })
         .collect();
     let has_stop = set.actions.iter().flat_map(|a| &a.steps).any(|(command, params)| !stops_in(command, params).is_empty());
-    let version = match (has_stop, set.actions.iter().any(|a| !a.excluded_steps.is_empty())) {
-        (true, _) => 3,
-        (false, true) => 2,
-        (false, false) => 1,
+    let has_select_path = set.actions.iter().flat_map(|a| &a.steps).any(|(command, params)| !select_paths_in(command, params).is_empty());
+    let version = match (has_select_path, has_stop, set.actions.iter().any(|a| !a.excluded_steps.is_empty())) {
+        (true, ..) => 4,
+        (false, true, _) => 3,
+        (false, false, true) => 2,
+        (false, false, false) => 1,
     };
     let file = SetFile { format: ACTIONS_EXT.into(), version, name: set.name.clone(), actions };
     serde_json::to_string_pretty(&file).unwrap_or_default()
@@ -168,7 +186,7 @@ pub fn read_set(text: &str, name: &str) -> Result<ActionSet, String> {
     if f.format != ACTIONS_EXT {
         return Err("not an action set file".into());
     }
-    if !matches!(f.version, 1..=3) {
+    if !matches!(f.version, 1..=4) {
         return Err("the action set file needs a later version of VectorCraft".into());
     }
     if f.actions.len() > MAX_SET_ACTIONS {
@@ -179,6 +197,10 @@ pub fn read_set(text: &str, name: &str) -> Result<ActionSet, String> {
     }
     let mut stops = f.actions.iter().flat_map(|a| &a.steps).flat_map(|s| stops_in(&s.command, &s.params));
     if stops.any(|p| super::stop_params(p).is_err()) {
+        return Err("not an action set file".into());
+    }
+    let mut select_paths = f.actions.iter().flat_map(|a| &a.steps).flat_map(|s| select_paths_in(&s.command, &s.params));
+    if select_paths.any(|p| vectorcraft_engine::stored_path_params(p).is_err()) {
         return Err("not an action set file".into());
     }
     let actions = f
