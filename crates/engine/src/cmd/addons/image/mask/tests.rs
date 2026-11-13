@@ -765,7 +765,7 @@ fn pdf_x1a_and_x3_flatten_the_hidden_pixels() {
 /// image whose background was removed, and `transparentImages: "omit"` leaves both out.
 #[test]
 fn legacy_ai_flattens_a_masked_image_as_a_see_through_one() {
-    let warnings = |s: &Session, p: &Value| crate::cmd::fileio::encode_all(doc(s), "ai", p).unwrap().warnings;
+    let warnings = |s: &Session, p: &Value| crate::cmd::fileio::encode_all(doc(s), "ai", p).unwrap().notes();
     let (mut masked, _) = open(&framed());
     masked.execute(COLOR_MASK, &hide_white()).unwrap();
     let (mut cleared, _) = open(&framed());
