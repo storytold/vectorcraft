@@ -364,7 +364,7 @@ fn control_polygon(c: &CubicBez) -> f64 {
 /// of the split lie in line, their lengths in proportion to the spans of its parameter the two
 /// pieces take; split where the curve stops (a cusp), both handles lie on the anchor, and the
 /// pieces' second derivatives there, in proportion to the squares of the spans, give the proportion
-/// instead. Those proportions give each piece's span, and the curve follows from the first
+/// instead (whichever of the two pairs is the longer). Those proportions give each piece's span, and the curve follows from the first
 /// piece's start and its handle, and the last piece's end and its handle, scaled up by their spans.
 /// Every piece is then checked against that curve's piece over its span, so error can't build up
 /// from one split to the next (the first piece's start and handle, and the last piece's end and
@@ -379,16 +379,13 @@ fn one_curve(pieces: &[CubicBez]) -> Option<CubicBez> {
     for pair in pieces.windows(2) {
         let [a, b] = pair else { return None };
         let (into, out) = (a.p3.distance(a.p2), b.p0.distance(b.p1));
-        let ratio = if into.max(out) <= ONE_CURVE {
-            // Split where the curve stops (a cusp), both handles lie on the anchor and say nothing
-            // of the spans; how far each piece bends away from its anchor, in proportion to the
-            // squares of the spans, says it instead.
-            let bend_in = ((a.p3 - a.p2) - (a.p2 - a.p1)).hypot();
-            let bend_out = ((b.p2 - b.p1) - (b.p1 - b.p0)).hypot();
-            (bend_out / bend_in).sqrt()
-        } else {
-            out / into
-        };
+        // How far each piece bends away from the anchor goes with the squares of the spans. Split
+        // where the curve stops (a cusp), both handles lie on the anchor and say nothing of the
+        // spans, and the bends say it; where the curve runs straight through the split, the bends
+        // are nothing and the handles say it. Whichever pair is the longer is the one to go by.
+        let bend_in = ((a.p3 - a.p2) - (a.p2 - a.p1)).hypot();
+        let bend_out = ((b.p2 - b.p1) - (b.p1 - b.p0)).hypot();
+        let ratio = if into.min(out) >= bend_in.min(bend_out) { out / into } else { (bend_out / bend_in).sqrt() };
         let next = spans.last().copied().unwrap_or(1.0) * ratio;
         if !(next.is_finite() && next > 0.0) {
             return None;

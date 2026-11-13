@@ -629,6 +629,23 @@ mod tests {
     }
 
     #[test]
+    fn a_split_curve_keeps_the_top_object_patch_where_it_barely_moves_and_runs_straight() {
+        // A straight top curve that barely moves at t = 0.25 and doesn't bend there: split there,
+        // the handles at the split are a few thousandths of a point long and the pieces don't bend
+        // at all, and the patch with the corners given stays the unsplit curve's.
+        let slow = CubicBez::new((0.0, 0.0), (28.578125, 0.0), (-57.109375, 0.0), (200.0, 0.0));
+        let pieces = [slow.subsegment(0.0..0.25), slow.subsegment(0.25..1.0)];
+        let (into, out) = (pieces[0].p3.distance(pieces[0].p2), pieces[1].p0.distance(pieces[1].p1));
+        assert!(into > 0.0 && out > 0.0 && into.max(out) < 0.01, "{into} {out}");
+        let whole = Coons::from_top_object(&top_of_pieces(&[slow]), Some([0, 1, 2, 3])).unwrap();
+        let c = Coons::from_top_object(&top_of_pieces(&pieces), Some([0, 2, 3, 4])).unwrap();
+        for (u, v) in [(0.1, 0.0), (0.25, 0.0), (0.3, 0.2), (0.5, 0.5), (0.62, 0.0), (0.9, 0.7), (0.97, 1.0)] {
+            let (p, q) = (c.eval(u, v), whole.eval(u, v));
+            assert!(p.distance(q) < 1e-6, "({u}, {v}) → {p:?}, unsplit {q:?}");
+        }
+    }
+
+    #[test]
     fn a_top_object_joins_a_split_curve_saved_with_rounded_coordinates() {
         // A file saves the pieces of a curve split into thirds, or into tenths, with its
         // coordinates rounded to 0.001 pt, on an outline 5, 200 or 5,000 pt wide: the side is
