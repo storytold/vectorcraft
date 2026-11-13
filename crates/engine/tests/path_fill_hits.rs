@@ -143,3 +143,102 @@ fn compound_hit_uses_visible_fill_stack() {
     ];
     assert_eq!(observed, expected, "render and hit-test observations by Compound fill-stack case");
 }
+
+#[test]
+fn hit_respects_open_stroke_caps_with_hidden_fill() {
+    use vectorcraft_doc::{LineCap, LineJoin};
+    use vectorcraft_geom::{BezPath, PathData};
+
+    let mut observed = Vec::new();
+    let mut expected = Vec::new();
+    // Round and Square are legitimate controls before the Butt regression.
+    for (cap, endpoint_pixel, endpoint_hit) in [
+        (LineCap::Round, [0, 0, 0, 255], Some(HitKind::Stroke)),
+        (LineCap::Square, [0, 0, 0, 255], Some(HitKind::Stroke)),
+        (LineCap::Butt, [255, 255, 255, 255], None),
+    ] {
+        for join in [LineJoin::Miter, LineJoin::Round] {
+            let mut hidden = fill(Paint::solid(Color::BLACK));
+            hidden.visible = false;
+            for (name, fills) in [
+                ("hidden painted fill", vec![hidden]),
+                ("absent fill", vec![]),
+                ("explicit Fill None", vec![fill(Paint::None)]),
+                ("visible fill on a zero-area line", vec![fill(Paint::solid(Color::BLACK))]),
+            ] {
+                let mut doc = Document::new(160.0, 96.0);
+                let layer = doc.layers[0].id;
+                let id = doc.alloc_id();
+                let mut appearance = Appearance::default();
+                appearance.items.extend(fills.into_iter().map(AppearanceItem::Fill));
+                let mut stroke = StrokeLayer::new(Paint::solid(Color::BLACK), 10.0);
+                stroke.cap = cap;
+                stroke.join = join;
+                appearance.items.push(AppearanceItem::Stroke(stroke));
+                let path = PathData::from_bezpath(&BezPath::from_svg("M24 48 L124 48").unwrap());
+                doc.insert(Some(layer), usize::MAX, Node::path(id, path, appearance)).unwrap();
+                let mut renderer = Renderer::new();
+                renderer.threads = 0;
+                let image = renderer.render(
+                    &doc,
+                    160,
+                    96,
+                    Affine::IDENTITY,
+                    &RenderOptions { background: Some([255, 255, 255, 255]), artboards: false, ..RenderOptions::default() },
+                );
+                let options = HitOptions { tol: 0.5, ..HitOptions::default() };
+                let end = hit_test(&doc, Point::new(20.0, 48.0), options).map(|hit| hit.kind);
+                let body = hit_test(&doc, Point::new(60.0, 48.0), options).map(|hit| hit.kind);
+                assert_eq!(image.pixel(60, 48), [0, 0, 0, 255], "INPUT: {cap:?}/{join:?}/{name} stroke body must draw");
+                assert_eq!(body, Some(HitKind::Stroke), "INPUT: {cap:?}/{join:?}/{name} stroke body must hit");
+                observed.push((cap, join, name, image.pixel(20, 48), end, image.pixel(60, 48), body));
+                expected.push((cap, join, name, endpoint_pixel, endpoint_hit, [0, 0, 0, 255], Some(HitKind::Stroke)));
+            }
+        }
+    }
+    assert_eq!(observed, expected, "visible stroke caps and hit testing must agree, including hidden-fill paths");
+}
+
+#[test]
+fn hit_respects_hidden_fill_stroke_joins() {
+    use vectorcraft_doc::{LineCap, LineJoin};
+    use vectorcraft_geom::{BezPath, PathData};
+
+    let mut observed = Vec::new();
+    let mut expected = Vec::new();
+    for (join, joint_painted, joint_hit) in
+        [(LineJoin::Round, true, Some(HitKind::Stroke)), (LineJoin::Miter, true, Some(HitKind::Stroke)), (LineJoin::Bevel, false, None)]
+    {
+        let mut doc = Document::new(160.0, 96.0);
+        let layer = doc.layers[0].id;
+        let id = doc.alloc_id();
+        let mut hidden = fill(Paint::solid(Color::BLACK));
+        hidden.visible = false;
+        let mut appearance = Appearance::default();
+        appearance.items.push(AppearanceItem::Fill(hidden));
+        let mut stroke = StrokeLayer::new(Paint::solid(Color::BLACK), 10.0);
+        stroke.cap = LineCap::Round;
+        stroke.join = join;
+        appearance.items.push(AppearanceItem::Stroke(stroke));
+        let path = PathData::from_bezpath(&BezPath::from_svg("M32 64 L96 64 L96 24").unwrap());
+        doc.insert(Some(layer), usize::MAX, Node::path(id, path, appearance)).unwrap();
+        let mut renderer = Renderer::new();
+        renderer.threads = 0;
+        let image = renderer.render(
+            &doc,
+            160,
+            96,
+            Affine::IDENTITY,
+            &RenderOptions { background: Some([255, 255, 255, 255]), artboards: false, ..RenderOptions::default() },
+        );
+        let options = HitOptions { tol: 0.5, ..HitOptions::default() };
+        let joint = hit_test(&doc, Point::new(99.0, 67.0), options).map(|hit| hit.kind);
+        let body = hit_test(&doc, Point::new(60.0, 64.0), options).map(|hit| hit.kind);
+        assert_eq!(image.pixel(60, 64), [0, 0, 0, 255], "INPUT: {join:?} stroke body must draw");
+        assert_eq!(body, Some(HitKind::Stroke), "INPUT: {join:?} stroke body must hit");
+        // Round's corner pixel can be antialiased; only its visible paint is required.
+        observed.push((join, image.pixel(99, 67) != [255, 255, 255, 255], joint));
+        expected.push((join, joint_painted, joint_hit));
+    }
+    assert_eq!(observed, expected, "hidden-fill stroke joins must match actual CPU paint at the outer joint");
+}

@@ -752,8 +752,9 @@ fn hit_stroke(n: &Node, bp: &vectorcraft_geom::BezPath, rule: vectorcraft_geom::
     stroke_contains(bp, 0.0, opt.tol, p).then_some(HitKind::Outline)
 }
 
-/// Check the body without assembling a `BezPath`. A miss near a joint or cap may still hit a
-/// miter or square cap, so the caller falls back to the full stroke check there.
+/// Check the body without assembling a `BezPath`. Near an end or joint, the caller uses the
+/// full stroke check for non-round caps or joins: Butt and Bevel can reject a radial body hit,
+/// while Miter and Square can extend beyond it.
 fn near_path_body(path: &PathData, p: Point, radius: f64, decoration_reach: f64) -> Option<(bool, bool)> {
     if !radius.is_finite() || radius < 0.0 || !decoration_reach.is_finite() || decoration_reach < 0.0 {
         return None;
@@ -832,10 +833,10 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
                     path,
                     p,
                     s.width / 2.0 + opt.tol,
-                    if s.join == crate::LineJoin::Miter || s.cap == crate::LineCap::Square { s.reach() + opt.tol } else { 0.0 },
+                    if s.join != crate::LineJoin::Round || s.cap != crate::LineCap::Round { s.reach() + opt.tol } else { 0.0 },
                 )
             {
-                if hit {
+                if hit && !near_decoration {
                     return Some(HitKind::Stroke);
                 }
                 if !near_decoration {
