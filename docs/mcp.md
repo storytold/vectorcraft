@@ -762,8 +762,7 @@ outline, so these commands do not store a stroke paint or weight for a series th
 designs keep their own paint. A row that had no
 paint before the command and has none after it does not change the paint the graph stores. `paint.setFill`,
 `paint.setStroke`, `paint.none` and the commands that apply one paint kind to the other store the topmost row of the kind
-even when it is hidden, and store a stroke set on a band. `stroke.set`, `paint.editGradient` and the recolor commands do
-not store a series' paint.
+even when it is hidden, and store a stroke set on a band.
 
 `appearance.addFill`, `appearance.addStroke`, `appearance.setItem`, `appearance.removeItem`,
 `appearance.duplicateItem`, `appearance.moveItem`, `appearance.clear`, `appearance.reduceToBasic`,
@@ -788,6 +787,21 @@ The other commands given a series group's id edit the group itself, and the grap
 `transparency.set` and `object.setProps` with an opacity or blend mode for the object, the `effect.*` commands and
 `appearance.addEffect`, and the paint, stroke and gradient commands with a fill or stroke `item`, which is a row of the
 group's own stack. The Appearance panel and `appearance.setActiveItem` read the selected group's own rows.
+
+The graph also stores a paint or stroke weight that one of these commands changes on the topmost visible fill or stroke
+of a path directly in a series: a weight set with `stroke.set`, `stroke.weightUp` or `stroke.weightDown`; a gradient
+made, placed or edited with `paint.editGradient`, `paint.setGradientGeom`, `paint.freeform.addPoint`,
+`paint.freeform.setPoint`, `paint.freeform.deletePoint`, `paint.freeform.addLine` or `paint.freeform.splitLine`; and a
+color changed by `paint.invert`, `paint.complement`, `edit.colors.invert`, `edit.colors.adjustBalance`,
+`edit.colors.saturate`, `edit.colors.toCMYK`, `edit.colors.toGrayscale`, `edit.colors.toRGB`,
+`edit.colors.blendFrontToBack`, `edit.colors.blendHorizontally`, `edit.colors.blendVertically`, `recolor.apply`,
+`addon.color.filter`, `addon.color.applyNearestSwatch` or the ink limit of `addon.color.printFixes`. The recolor
+commands store it too when they are given a series group, the graph or a group that holds the graph. A row a command
+leaves as it was keeps what the graph stores. When one command changes several paths of a series, the frontmost of
+them sets what the graph stores. A gradient is stored with its placement, and every path of the series takes that
+placement when the graph is drawn again. The graph does not store a stroke's dashes, caps, joins, arrowheads, width
+profile or brush. These commands do not store the colors they give a graph's axes and labels, which are drawn again
+with the paint they had.
 
 `text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
 it sets for each kind of label it reaches (value axis numbers, category labels, legend labels), and every label of that
