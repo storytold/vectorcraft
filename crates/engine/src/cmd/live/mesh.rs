@@ -298,13 +298,16 @@ pub(super) fn mesh_add_line(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // The lines are added to a copy of the object. A point that is already a mesh point adds none:
     // when its color stays too, nothing changes and no undo step is recorded. The grid is compared,
-    // not the node: a mesh envelope stored without handles takes them in any edit.
+    // not the node: a mesh envelope stored without handles takes them in any edit, and keeps no
+    // colors, so only its points and handles count.
     let orig = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?.kind.clone();
+    let colored = matches!(orig, NodeKind::Mesh(_));
     let mut kind = orig.clone();
     let (i, same) = edit_kind(&mut kind, C, true, |m| {
         let before = m.clone();
         let i = add(m)?;
-        Ok((i, *m == before))
+        let shape = |g: &GradientMesh| (g.rows, g.cols, g.points.iter().map(|q| (q.p, q.handles)).collect::<Vec<_>>());
+        Ok((i, if colored { *m == before } else { shape(m) == shape(&before) }))
     })?;
     if same {
         return Ok(json!({ "index": i }));

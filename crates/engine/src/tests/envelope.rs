@@ -124,7 +124,8 @@ fn reset_with_warp_and_mesh_switch_the_kind_and_keep_the_content() {
 }
 
 /// `object.mesh.addLine` at a point a mesh envelope already has (one stored without handles) adds
-/// no line and records no undo step; a point between its lines adds them as one step.
+/// no line and records no undo step, with or without a `color`; a point between its lines adds
+/// them as one step.
 #[test]
 fn mesh_envelope_add_line_at_a_mesh_point_records_no_undo_step() {
     let mut s = session();
@@ -137,6 +138,9 @@ fn mesh_envelope_add_line_at_a_mesh_point_records_no_undo_step() {
         s.execute("object.mesh.addLine", &json!({"id": e.0, "x": x, "y": y})).unwrap();
         assert_eq!((kind(&s, e), undo_len(&s)), (before.clone(), n), "({x}, {y}): nothing changed");
     }
+    // An envelope's points carry no color, so a color there changes nothing either.
+    s.execute("object.mesh.addLine", &json!({"id": e.0, "x": 200, "y": 150, "color": "#00ff00"})).unwrap();
+    assert_eq!((kind(&s, e), undo_len(&s)), (before.clone(), n), "a color changes nothing");
     s.execute("object.mesh.addLine", &json!({"id": e.0, "x": 150, "y": 125})).unwrap();
     assert!(matches!(kind(&s, e), EnvelopeKind::Mesh { rows: 3, cols: 3, .. }), "{:?}", kind(&s, e));
     assert_eq!(undo_len(&s), n + 1);
