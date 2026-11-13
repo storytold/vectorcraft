@@ -15,7 +15,8 @@
 //! Use 9-slice scaling section). VectorCraft's own rules for that: a guide past an edge of the art
 //! cuts the art at that edge, so the outer cell on its side holds no art; with both guides of an
 //! axis past opposite edges the art scales as a whole along it; with both past the same edge the
-//! art lies in the outer cell at the other edge and keeps its size, from that edge of the instance.
+//! art lies in the outer cell at the other edge and keeps its size, from that edge of the instance,
+//! or shrinks to the instance's width or height when the instance is smaller than the art.
 //!
 //! The guides are stored as fractions of the symbol's natural size, measured from the left and top
 //! edges and from the right and bottom edges, so they survive resizing the art. A fraction below 0
@@ -212,7 +213,8 @@ impl AxisMap {
     /// The axis from `lo` to `hi` (`lo < hi`) with guides `near` and `far` (fractions of its
     /// length in from each end, `near + far < 1`; either may lie past an end), scaled by `k`
     /// (above 0). With both guides past the far end the art keeps its length from the scaled
-    /// start, and with both past the near end it keeps its length up to the scaled end.
+    /// start, and with both past the near end it keeps its length up to the scaled end; when the
+    /// scaled length is shorter than the art, the art shrinks to the scaled length.
     fn new(lo: f64, hi: f64, near: f64, far: f64, k: f64) -> Self {
         let len = hi - lo;
         let c1 = (lo + near * len).clamp(lo, hi);
