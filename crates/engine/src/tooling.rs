@@ -810,6 +810,12 @@ impl Session {
         self.tool.wants_ticks()
     }
 
+    /// Did the active tool leave part of its overlays for the next frame
+    /// ([`vectorcraft_tools::Tool::overlays_pending`])?
+    pub fn tool_overlays_pending(&self) -> bool {
+        self.tool.overlays_pending()
+    }
+
     /// Does the active tool build a stroke from every position the pointer passed
     /// ([`vectorcraft_tools::Tool::wants_samples`])?
     pub fn tool_wants_samples(&self) -> bool {
@@ -1311,14 +1317,12 @@ impl Session {
         {
             return Err(format!("unknown tool `{t}`"));
         }
-        // The active tool's merge being computed is applied with the options it was started with.
-        if tool.is_none_or(|t| t == self.tool.id()) {
-            self.finish_tool_edit_later().map_err(|e| e.to_string())?;
-        }
         let mut values = p.get("values").and_then(Value::as_object).cloned().unwrap_or_default();
         if let Some(k) = p.get("key").and_then(Value::as_str) {
             values.insert(k.to_string(), p.get("value").cloned().unwrap_or(Value::Null));
         }
+        // Every value is checked before any is set, so an invalid one changes nothing.
+        vectorcraft_tools::builder::check_builder_options(tool.unwrap_or(self.tool.id()), &values)?;
         // The Place queue is read later, by a click outside any automation scope: its files must
         // be readable now, under the roots of whoever sets it.
         if let Some(entries) = values.get("queue").and_then(|q| q.get("entries")).and_then(Value::as_array) {
@@ -1335,6 +1339,10 @@ impl Session {
             {
                 return Err("Unknown dimension mode".into());
             }
+        }
+        // The active tool's merge being computed is applied with the options it was started with.
+        if tool.is_none_or(|t| t == self.tool.id()) {
+            self.finish_tool_edit_later().map_err(|e| e.to_string())?;
         }
         Ok(self.set_tool_options(tool, &values))
     }

@@ -107,6 +107,8 @@
 	Blend Vertically	ვერტიკალურად შერევა
 	Convert to CMYK	CMYK-ად გარდაქმნა
 	Convert to Grayscale	ნაცრისფერ ტონებად გარდაქმნა
+	Convert to Indexed Color	ინდექსირებულ ფერებად გარდაქმნა
+	Convert to Indexed Color…	ინდექსირებულ ფერებად გარდაქმნა…
 	Convert to RGB	RGB-ად გარდაქმნა
 	Invert Colors	ფერების ინვერსია
 	Overprint Black…	შავის ზედდაბეჭდვა…
@@ -1478,6 +1480,11 @@ digits	Malayalam	მალაიალამური
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Tate-chu-yoko პარამეტრები…
 	Tate-chu-yoko Settings	Tate-chu-yoko პარამეტრები
+	Warichu	Warichu
+	Warichu Settings…	Warichu პარამეტრები…
+	Warichu Settings	Warichu პარამეტრები
+	Lines:	სტრიქონები:
+	Line Gap:	სტრიქონებს შორის ღრეჩო:
 	Composite Fonts…	კომპოზიტური შრიფტები…
 	Composite Fonts	კომპოზიტური შრიფტები
 	Export Composite Fonts	კომპოზიტური შრიფტების ექსპორტი
@@ -3451,6 +3458,11 @@ theme	Appearance	იერსახე
 	Primary	ძირითადი
 	Printing / Exporting	ბეჭდვა / ექსპორტირება
 	Real-time Drawing and Editing	რეალურ დროში ხატვა და რედაქტირება
+	Use Monitor Profile for Canvas	მონიტორის პროფილის გამოყენება ტილოსთვის
+	The canvas is drawn in sRGB.	ტილო sRGB-ში იხატება.
+	Canvas display profile:	ტილოს ეკრანის პროფილი:
+	The system matches the window to the display's colors.	სისტემა ფანჯარას ეკრანის ფერებს უსადაგებს.
+	No usable display profile was found: the canvas is drawn in sRGB.	გამოსაყენებელი ეკრანის პროფილი ვერ მოიძებნა: ტილო sRGB-ში იხატება.
 	Render Threads (-1 = Automatic)	ნაკადები (-1 = ავტომატური)
 	Reset Preferences	პარამეტრების ჩამოყრა
 	Export Preferences…	პარამეტრების ექსპორტირება…
@@ -4046,8 +4058,15 @@ font-technology	Variable	ცვლადი
 @msg	Couldn't open {name}: {e}	{name} ვერ გაიხსნა: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} ვერ განთავსდა: დოკუმენტი, რომელზეც ის ჩამოაგდეს, დაიხურა
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} ვერ განთავსდა: დოკუმენტი, რომელშიც ის თავსდებოდა, დაიხურა
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} ვერ განთავსდა: დოკუმენტი, რომელზეც ის ჩამოაგდეს, წინა ვერსიაზე დაბრუნდა
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} ვერ განთავსდა: დოკუმენტი, რომელშიც ის თავსდებოდა, წინა ვერსიაზე დაბრუნდა
+@msg	Couldn't paste: the document it was pasted in was reverted	ჩასმა ვერ მოხერხდა: დოკუმენტი, რომელშიც ის ჩაისმებოდა, წინა ვერსიაზე დაბრუნდა
 @msg	Couldn't read {name}: {e}	{name} ვერ წაიკითხა: {e}
 @msg	Couldn't save recovery data: {e}	აღდგენის მონაცემები ვერ შეინახა: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	დოკუმენტის {title} აღდგენის მონაცემები ვერ შეინახა: {e}. ასლები ინახება საქაღალდეში {folder}, რომელიც აღდგენის ნაგულისხმევი საქაღალდეა; სხვა საქაღალდის გამოსაყენებლად მიუთითეთ პარამეტრები → ფაილების დამუშავება → მონაცემთა აღდგენა → საქაღალდე (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	დოკუმენტის {title} აღდგენის მონაცემები ვერ შეინახა: {e}. ასლები ინახება საქაღალდეში {folder}, რომელიც პარამეტრებშია მითითებული; სხვა საქაღალდის გამოსაყენებლად მიუთითეთ პარამეტრები → ფაილების დამუშავება → მონაცემთა აღდგენა → საქაღალდე (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	აღდგენის მონაცემები ვერ შეინახა: {e}. ასლები ინახება საქაღალდეში {folder}, რომელიც აღდგენის ნაგულისხმევი საქაღალდეა; სხვა საქაღალდის გამოსაყენებლად მიუთითეთ პარამეტრები → ფაილების დამუშავება → მონაცემთა აღდგენა → საქაღალდე (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	აღდგენის მონაცემები ვერ შეინახა: {e}. ასლები ინახება საქაღალდეში {folder}, რომელიც პარამეტრებშია მითითებული; სხვა საქაღალდის გამოსაყენებლად მიუთითეთ პარამეტრები → ფაილების დამუშავება → მონაცემთა აღდგენა → საქაღალდე (recoveryFolder)
 @msg	Create Outlines: select text objects	კონტურების შექმნა: მონიშნეთ ტექსტური ობიექტები
 @msg	Create from Guides: the document has no artboard	დამხმარე ხაზებიდან შექმნა: დოკუმენტს სამუშაო დაფა არ აქვს
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	დამხმარე ხაზებიდან შექმნა: დამხმარე ხაზები {MAX_PIECES}-ზე მეტ ნაჭერს ქმნის
@@ -4273,6 +4292,7 @@ font-technology	Variable	ცვლადი
 @msg	internal error: {msg} (please report this bug)	შიდა შეცდომა: {msg} (გთხოვთ, შეგვატყობინოთ ამ ხარვეზის შესახებ)
 @msg	invalid PDF setting: {0}	PDF-ის არასწორი პარამეტრი: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	სამუშაო დაფა {n}-ის გვერდი არის {size}, რაც აღემატება PDF-ის გვერდის ლიმიტს 14 400 pt (200 in): ის იწერება UserUnit {unit}-ით, ამიტომ აპები, რომლებიც UserUnit-ს უგულებელყოფენ, მას ამდენჯერ პატარას აჩვენებენ
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	სამუშაო დაფა {n}-ის გვერდი არის {size}, რაც აღემატება PDF-ის გვერდის ლიმიტს 14 400 pt (200 in): ის იწერება UserUnit {unit}-ით, ამიტომ აპები, რომლებიც UserUnit-ს უგულებელყოფენ, მას ამდენჯერ პატარას აჩვენებენ: ჩართეთ „200 in-ზე გრძელი გვერდების სრული ზომით, პუნქტებში ჩაწერა“
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	სამუშაო დაფა {n}-ის გვერდი არის {size}, რაც აღემატება PDF-ის გვერდის ლიმიტს 14 400 pt (200 in): {label} გვერდები იწერება UserUnit-ის გარეშე, პუნქტებში, და აპები, რომლებიც ლიმიტს იცავენ, გვერდს 200 in-ზე ჭრიან
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5-ს არ აქვს UserUnit, რომელიც 14 400 pt-ზე (200 in) გრძელ გვერდს ზომის შესანარჩუნებლად სჭირდება: ფაილი იწერება როგორც PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4-ს არ აქვს UserUnit, რომელიც 14 400 pt-ზე (200 in) გრძელ გვერდს PDF/A-2-ის 14 400 ერთეულიანი გვერდის ზღვარში დასარჩენად სჭირდება: ფაილი იწერება როგორც PDF 1.6
@@ -4444,6 +4464,7 @@ font-technology	Variable	ცვლადი
 @msg	paths contain invalid coordinates	ტრაექტორიებში არასწორი კოორდინატებია
 @msg	paths: give at least one file	paths: მიუთითეთ ერთი ფაილი მაინც
 @msg	replace: the object to replace was changed or deleted	replace: ჩასანაცვლებელი ობიექტი შეიცვალა ან წაიშალა
+@msg	the document it was prepared for is no longer active	დოკუმენტი, რომლისთვისაც მომზადდა, აღარ არის აქტიური
 @msg	pattern missing	პატერნი აკლია
 @msg	patterns nested too deeply are filled with mid-grey	ზედმეტად ღრმად ჩადგმული პატერნები საშუალო ნაცრისფრით ივსება
 @msg	percent must be above 0 and at most 6400, not {p}	percent უნდა იყოს 0-ზე მეტი და არაუმეტეს 6400-ისა და არა {p}
@@ -4677,6 +4698,7 @@ font-technology	Variable	ცვლადი
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	უარყოფილია აღდგენილი დოკუმენტები: {n}
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	აღდგენილია დოკუმენტები: {n}: შესანარჩუნებლად შეინახეთ ისინი
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	გაიხსნა, შენიშვნები: {n}: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. გაიხსნა, შენიშვნები: {n}: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	შენახულია {path}, შენიშვნები: {n}: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	ჩაშენებულია გამოსახულებები: {n}; აკლია {missing}: ჯერ ხელახლა მიაბით
 @msgplural	Embedded {n} image|Embedded {n} images	ჩაშენებულია გამოსახულებები: {n}
@@ -5025,6 +5047,8 @@ font-technology	Variable	ცვლადი
 	High Contrast 3	მაღალი კონტრასტი 3
 	Pentagram	პენტაგრამა
 	Perceptual	აღქმითი
+	Hue Clockwise	ფერის ტონი საათის ისრის მიმართულებით
+	Hue Counterclockwise	ფერის ტონი საათის ისრის საწინააღმდეგოდ
 	Relative Colorimetric	ფარდობითი კოლორიმეტრიული
 	Absolute Colorimetric	აბსოლუტური კოლორიმეტრიული
 	Exact	ზუსტი
@@ -5248,7 +5272,9 @@ font-technology	Variable	ცვლადი
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`-ის face უნდა იყოს front ან back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-ის {key} უნდა იყოს რიცხვი {lo}-დან {hi}-მდე
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` უნდა იყოს მასივი
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	გრაფიკა ბრტყელ წახნაგებზე თავსდება: გამოიყენეთ ობიექტის ტიპი „ამოწევა“ ან „სიბრტყე“
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	გრაფიკა თავსდება ობიექტის ტიპებზე „სიბრტყე“, „ამოწევა“ და „ბრუნვა“
+@msg	Revolve maps graphics onto its side: map them onto the front	ბრუნვა გრაფიკას თავის გვერდით ზედაპირზე ათავსებს: განათავსეთ ისინი წინა მხარეზე
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	გრაფიკა ზედმეტად რთულია ამ ზედაპირისთვის: გაამარტივეთ სიმბოლოების ნახატი ან შეამცირეთ სეგმენტები
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` იღებს მაქსიმუმ {MAX_GRAPHICS} გრაფიკას
 @msg	A plane has one face: map its graphics onto the front	სიბრტყეს ერთი მხარე აქვს: მისი გრაფიკა წინა მხარეზე განათავსეთ
 @msg	The graphics are too complex: simplify the symbols' art	გრაფიკა ზედმეტად რთულია: გაამარტივეთ სიმბოლოების ნახატი
@@ -5737,6 +5763,7 @@ imageTrace	Outline	კონტური
 	Arrange Intertwine Area	გადახლართვის არის დალაგება
 @msg	select an Intertwine group	მონიშნეთ გადახლართვის ჯგუფი
 @msg	select an Objects on Path group	მონიშნეთ ტრაექტორიაზე ობიექტების ჯგუფი
+@msg	choose the object to detach with its Select/Move widget	მოსახსნელი ობიექტი აირჩიეთ მისი არჩევა/გადატანის ვიჯეტით
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	შედგენილ ტრაექტორიაში, გადასვლაში, გარსში, გამეორებაში ან გადახლართვის ჯგუფში მყოფ ტრაექტორიაზე ობიექტების მიმაგრება ვერ ხერხდება
 @msg	a clipping path can't take objects	მომჭრელ ტრაექტორიაზე ობიექტების მიმაგრება ვერ ხერხდება
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	გადასვლაში, გარსში, გამეორებაში ან გადახლართვის ჯგუფში მყოფი ობიექტების ტრაექტორიაზე მიმაგრება ვერ ხერხდება
@@ -5999,6 +6026,8 @@ imageTrace	Outline	კონტური
 	Objects on Path Tool	ტრაექტორიაზე ობიექტების ხელსაწყო
 	Attach Objects on Path	ობიექტების ტრაექტორიაზე მიმაგრება
 	Expand Objects on Path	ტრაექტორიაზე ობიექტების გაშლა
+	Detach	მოხსნა
+	Detach Object from Path	ობიექტის ტრაექტორიიდან მოხსნა
 	Release Live Paint	ცოცხალი შეღებვის მოხსნა
 	Release Repeat	გამეორების მოხსნა
 	Release Slice	ნაჭრის მოხსნა
@@ -6074,6 +6103,9 @@ imageTrace	Outline	კონტური
 @msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor ვერ გადააჯგუფებს ტრასირებას აქტიური Pathfinder ეფექტით: გააფართოვეთ byColor-ის გარეშე
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` ბიბლიოთეკის პანელი არ არის (იხ. window.swatchLibrary)
 @msg	`{key}` must be a #rrggbb color	`{key}` უნდა იყოს #rrggbb ფერი
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` უნდა იყოს #rrggbb ფერი ან ფენის ფერის სახელი
+@msg	unknown Live Paint option `{key}`	ცოცხალი შეღებვის უცნობი პარამეტრი `{key}`
+@msg	unknown Shape Builder option `{key}`	ფიგურების კონსტრუქტორის უცნობი პარამეტრი `{key}`
 @msg	a key object sits on that point	ამ წერტილზე საკვანძო ობიექტი მდებარეობს
 @msg	a linked image can't become a gradient mesh: embed it first	დაკავშირებული გამოსახულება გრადიენტულ ბადედ ვერ გადაიქცევა: ჯერ ჩააშენეთ ის
 @msg	a mask has more than one art block	ნიღაბს ერთზე მეტი ნახატის ბლოკი აქვს
@@ -6257,7 +6289,7 @@ axis	Y Axis	Y ღერძი
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` ვრცელდება გრადიენტულ შევსებებზე (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` ვრცელდება გრადიენტულ შევსებებზე (paint.setFill)
 @msg	`dither` must be true or false	`dither` უნდა იყოს true ან false
-@msg	`method` must be classic or perceptual	`method` უნდა იყოს classic ან perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` უნდა იყოს classic, perceptual, hue-clockwise ან hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` უნდა იყოს pad, repeat ან reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` უნდა იყოს მთელი რიცხვი 1-დან {MAX_REPEATS}-მდე
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` ეხება წრფივ, რადიალურ, კონუსურ და რომბულ გრადიენტებს
@@ -6500,6 +6532,7 @@ axis	Y Axis	Y ღერძი
 	Continue	გაგრძელება
 	Continue Action	მოქმედების გაგრძელება
 	Delete Action Step	მოქმედების ნაბიჯის წაშლა
+	Move Action Step	მოქმედების ნაბიჯის გადატანა
 	Press Play Current Selection in the Actions panel to go on.	გასაგრძელებლად მოქმედებების პანელზე დააჭირეთ „მიმდინარე მონიშნულის შესრულებას“.
 	Stop: {message}	გაჩერება: {message}
 @msg	no action is waiting at a stop	გაჩერებაზე არცერთი მოქმედება არ ელოდება
@@ -6671,6 +6704,22 @@ axis	Y Axis	Y ღერძი
 	Graphite Pencil	გრაფიტის ფანქარი
 	Wax Crayon	ცვილის ფანქარი
 	Charcoal Dust	ნახშირის მტვერი
+	Notched Ribbon	დაკბილული ლენტი
+	Double Line	ორმაგი ხაზი
+	Wave	ტალღა
+	Teardrop	წვეთი
+	Striped Ribbon	ზოლიანი ლენტი
+	Fine Nib	წვრილი წვერი
+	Broad Nib	განიერი წვერი
+	Chisel	საჭრეთელი
+	Round Pen	მრგვალი კალამი
+	Pressure Pen	დაწოლის კალამი
+	Beads	მძივები
+	Dash Dot	ტირე-წერტილი
+	Scallops	ფესტონები
+	Stars	ვარსკვლავები
+	Triangles	სამკუთხედები
+	Sparkles	ნაპერწკლები
 	Save Brush Library…	ფუნჯების ბიბლიოთეკის შენახვა…
 @msg	`{_1}` has no brushes to apply	`{_1}`-ში გამოსაყენებელი ფუნჯები არ არის
 @msg	missing `library` (see brush.libraries)	`library` აკლია (იხ. brush.libraries)
@@ -6855,6 +6904,8 @@ anchor	Points:	წერტილები:
 	Anchor Inspector	საყრდენი წერტილების ინსპექტორი
 	Add Points at Crossings	წერტილების დამატება გადაკვეთებზე
 	Split at Crossings	დაყოფა გადაკვეთებზე
+	Trim at Crossings Tool	გადაკვეთებზე წაკვეთის ხელსაწყო
+	Trim at Crossings	წაკვეთა გადაკვეთებზე
 	Extend Path	ტრაექტორიის გაგრძელება
 	Measure & Inspect	გაზომვა და შემოწმება
 	Set Anchor	საყრდენი წერტილის დაყენება
@@ -7523,3 +7574,9 @@ font-script	Japanese	იაპონური
 	Margin	ზღვარი
 	Box	ჩარჩო
 	Swatch	ფერის ნიმუში
+	Banner Hems and Grommets…	ბანერის ნაკეცები და ლუვერები…
+	Banner Hems and Grommets	ბანერის ნაკეცები და ლუვერები
+	Hem	ნაკეცი
+	Grommets	ლუვერები
+	Grommet Inset	ლუვერების დაშორება კიდიდან
+	Diameter	დიამეტრი

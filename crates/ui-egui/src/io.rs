@@ -26,13 +26,13 @@ pub(crate) use export::{
     export_files, exported_with_notes, file_url, open_in_app, open_original, reveal_path, run_to_file, save_command_output_named,
 };
 pub(crate) use open::report_installed;
-pub(crate) use open::{EXPORT_PRESETS, import_presets, open_with_on, opened};
+pub(crate) use open::{EXPORT_PRESETS, import_presets, open_with_on, opened, show_opened};
 pub use open::{
     MAX_RECENT_FILES, OpensAs, ask_revert, install_module, install_plugin, new_from_template, note_recent, open_bytes, open_dialog, open_document,
     open_path, open_path_with, open_reporting, open_with, opens_as, place_bytes, recent_files, report_open_error,
 };
 #[cfg(test)]
-pub(crate) use open::{open_file, opened_with_notes};
+pub(crate) use open::{open_file, opened_after_notice, opened_with_notes};
 pub(crate) use save::save_current;
 pub use save::{ask_format_options, ask_pdf_options, remember_active_artboard, remember_view, save, save_pdf};
 pub(crate) use save::{export_path, is_web, notes_of, report_saved, show_with_notes, target_path, write_named, write_reporting, write_to};
@@ -87,9 +87,8 @@ mod tests {
 
     /// A file opened with a note about its page first and a note that its layers weren't read
     /// second: the status bar names the layers note, counts both, and keeps both, the layers note
-    /// first, for its hover. A message about its linked files still replaces that message. Two
-    /// notes of what was left out keep the order the import gave them, and an open without notes
-    /// leaves the message and the notes an earlier open left.
+    /// first, for its hover. Two notes of what was left out keep the order the import gave them,
+    /// and an open without notes leaves the message and the notes an earlier open left.
     #[test]
     fn an_open_names_the_note_of_what_was_left_out_first() {
         use vectorcraft_testkit::ai;
@@ -102,14 +101,6 @@ mod tests {
         assert!(layers.contains("layers weren't read") && !page.contains("layers weren't read"), "{r}");
         assert_eq!(app.ui.status, opened_with_notes(2, layers));
         assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), vec![layers.clone(), page.clone()])));
-
-        // A message about its linked files replaces the open's message, as before.
-        app.session.prefs.update_links = "manually".into();
-        let mut linked = r.clone();
-        linked["modifiedLinks"] = json!([{ "ids": [1] }]);
-        opened(&mut app, &linked);
-        assert_eq!(app.ui.status, dialogs::missing_links::changed_on_disk_status(1));
-        assert_eq!(app.ui.status_notes, Some((opened_with_notes(2, layers), vec![layers.clone(), page.clone()])));
 
         let r = open_bytes(&mut app, "damaged.ai", &ai::ai(damaged, ai::page_pdf()), None).unwrap();
         let both = notes(&r);
@@ -128,6 +119,38 @@ mod tests {
         let r = open_bytes(&mut app, "clean.svg", clean, None).unwrap();
         assert_eq!(r["warnings"], json!([]), "{r}");
         assert_eq!((app.ui.status.clone(), app.ui.status_notes.clone()), shown);
+    }
+
+    /// A file opened with two notes and a modified linked file while Update Links doesn't ask: the
+    /// status bar shows the line about the linked file, then counts the notes and names the first
+    /// of what was left out, and keeps both notes, in that order, for its hover.
+    #[test]
+    fn an_open_with_modified_links_keeps_link_notice_and_import_notes_reachable() {
+        let (mut app, _) = app();
+        let pdf = vectorcraft_testkit::ai::pdf(b"%AI12_CompressedData not zlib", "0 g 150 20 100 60 re f");
+        let r = open_bytes(&mut app, "damaged.pdf", &pdf, None).unwrap();
+        let [page, layers] = &notes_of(&r)[..] else { panic!("two notes: {r}") };
+        app.session.prefs.update_links = "manually".into();
+        let mut linked = r.clone();
+        linked["modifiedLinks"] = json!([{ "ids": [1] }]);
+        opened(&mut app, &linked);
+        let notice = dialogs::missing_links::changed_on_disk_status(1);
+        assert_eq!(app.ui.status, opened_after_notice(&notice, 2, layers));
+        assert!(app.ui.status.starts_with(&notice) && app.ui.status.ends_with(&opened_with_notes(2, layers)), "{}", app.ui.status);
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), vec![layers.clone(), page.clone()])));
+        assert!(app.ui.dialog.is_none());
+    }
+
+    /// File › New from Template… shows the notes of the file it opens, as File › Open does.
+    #[test]
+    fn new_from_template_preserves_open_warnings() {
+        let (mut app, _) = app();
+        let pdf = vectorcraft_testkit::ai::pdf(b"%AI12_CompressedData not zlib", "0 g 150 20 100 60 re f");
+        app.services.read = Some(Box::new(move |_: &str| Ok(pdf.clone())));
+        let r = new_from_template(&mut app, Some("/templates/damaged.pdf".into())).unwrap();
+        let [page, layers] = &notes_of(&r)[..] else { panic!("two notes: {r}") };
+        assert_eq!(app.ui.status, opened_with_notes(2, layers));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), vec![layers.clone(), page.clone()])));
     }
 
     /// A save and an export with several notes: the status bar names the first, counts them, and

@@ -218,6 +218,8 @@ pub(crate) struct TextLine {
     /// The strokes of its glyphs' outlines drawn between them, one per glyph with ink so far
     /// (written right after the line).
     pub held: Vec<Node>,
+    /// Whether this line holds Type 3 font glyphs.
+    pub has_type3: bool,
 }
 
 /// Where the file put a glyph: the glyph's index in the line, and its advance in the file's font
@@ -266,6 +268,7 @@ impl TextLine {
             drawn_spaces: vec![],
             drawn_space: None,
             held: vec![],
+            has_type3: false,
         }
     }
 

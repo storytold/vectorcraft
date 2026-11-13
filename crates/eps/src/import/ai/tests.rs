@@ -7159,7 +7159,6 @@ fn twist_is_read_on_curves_compound_paths_and_groups_with_nothing_stroked_up_to_
     let object = |hidden: &str| {
         format!("0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{}0 BB\n1 (Bent) XW\n", rect_path(16.0, 16.0, 64.0, 54.0), hidden.replace('\n', "\n%_"))
     };
-    let square = object(&format!("{}f\n", rect_path(20.0, 20.0, 60.0, 50.0)));
     let oval = "20 35 m\n20 45 60 45 60 35 c\n60 25 20 25 20 35 c\n";
     let curved = object(&format!("{oval}f\n"));
     let ring = object(&format!("*u\n{oval}f\n30 35 m\n30 40 50 40 50 35 c\n50 30 30 30 30 35 c\nf\n*U\n"));
@@ -7184,7 +7183,6 @@ fn twist_is_read_on_curves_compound_paths_and_groups_with_nothing_stroked_up_to_
         ("a twisted group", read(&twist(90.0, None), &distort_group()), 2),
         ("a group with a hidden member", read(&twist(45.0, None), &hidden_member), 2),
         ("a curve twisted a quarter turn back", read(&twist(-90.0, BLUE_FILL), &curved), 0),
-        ("a square twisted three quarters of a turn, as before", read(&twist(270.0, BLUE_FILL), &square), 0),
         ("a straight compound path with a guide, as before", read(&twist(45.0, BLUE_FILL), &with_guide(&rect_path(20.0, 20.0, 60.0, 50.0))), 2),
     ] {
         assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
@@ -7205,6 +7203,45 @@ fn twist_is_read_on_curves_compound_paths_and_groups_with_nothing_stroked_up_to_
         ("a curve twisted past a quarter turn", read(&twist(91.0, BLUE_FILL), &curved)),
         ("a curve twisted half a turn back", read(&twist(-180.0, BLUE_FILL), &curved)),
         ("a group twisted past a quarter turn", read(&twist(135.0, None), &distort_group())),
+    ] {
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert!(a[0].appearance.effects.is_empty(), "{what}: the drawn look: {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+    }
+}
+
+#[test]
+fn twist_is_read_on_straight_paths_and_compound_paths_up_to_half_a_turn() {
+    // GUARDS: a path or compound path with straight segments was read with a live Twist at any angle.
+    // The object, `hidden` painted with its style, under its drawn look.
+    let object = |hidden: &str| {
+        format!("0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{}0 BB\n1 (Bent) XW\n", rect_path(16.0, 16.0, 64.0, 54.0), hidden.replace('\n', "\n%_"))
+    };
+    let square = object(&format!("{}f\n", rect_path(20.0, 20.0, 60.0, 50.0)));
+    let frame = object(&format!("*u\n{}f\n{}f\n*U\n", rect_path(20.0, 20.0, 60.0, 50.0), rect_path(30.0, 30.0, 50.0, 40.0)));
+    let twist = |angle: f64| distort_styles("Adobe Twirl", &format!("{angle} /Real (angle) ,\n"), BLUE_FILL);
+    let read = |angle: f64, art_: &str| read_ok(&format!("{}{}", twist(angle), layer(art_)));
+    for (what, r, members, angle) in [
+        ("a square twisted half a turn", read(180.0, &square), 0, 180.0),
+        ("a square twisted half a turn back", read(-180.0, &square), 0, -180.0),
+        ("a straight compound path twisted half a turn", read(180.0, &frame), 2, 180.0),
+    ] {
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert_eq!(a[0].children().map_or(0, |c| c.len()), members, "{what}: the object, not its look: {a:#?}");
+        let [e] = a[0].appearance.effects.as_slice() else { panic!("{what}: {:?}", a[0].appearance) };
+        assert_eq!((e.id.as_str(), e.params["angle"].as_f64()), ("distort.twist", Some(angle)), "{what}");
+    }
+    for (what, r) in [
+        ("a square twisted just past half a turn", read(181.0, &square)),
+        ("a square twisted just past half a turn back", read(-181.0, &square)),
+        ("a square twisted three quarters of a turn", read(270.0, &square)),
+        ("a square twisted three quarters of a turn back", read(-270.0, &square)),
+        ("a square twisted two turns", read(720.0, &square)),
+        ("a square twisted ten turns", read(3600.0, &square)),
+        ("a straight compound path twisted a full turn", read(360.0, &frame)),
     ] {
         let a = art(&r.doc);
         assert_eq!(a.len(), 1, "{what}: {a:#?}");
@@ -8280,7 +8317,7 @@ fn warped_type_on_the_page_spends_what_is_left_of_the_budget() {
     let copy = |w: &super::envelope::WarpedLook| super::envelope::WarpedLook { slot: w.slot, look: w.look.clone(), left_out: None };
     let page = Some(Rect::new(0.0, 60.0, 60.0, 100.0));
     let settle = |w: &super::envelope::WarpedLook, spent| {
-        let warped = super::envelope::WarpedType { looks: vec![copy(w)], envelopes: vec![], checks: 1, spent, page };
+        let warped = super::envelope::WarpedType { looks: vec![copy(w)], envelopes: vec![], checks: 1, spent, page, alone: None };
         warped.settle(&mut doc.clone(), Some, &Default::default(), &mut vec![])
     };
     let spent = || super::envelope::Spent { any: MAX_DIFFERENCE / 2.0, solid: MAX_SOLID_DIFFERENCE / 2.0 };
