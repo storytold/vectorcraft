@@ -88,6 +88,9 @@ const WHEEL: f32 = 220.0;
 /// Height of the Edit tab's color bars area (the wheel with its Brightness slider), and of a bar.
 const BARS_H: f32 = WHEEL + 31.0;
 const BAR_H: f32 = 22.0;
+/// Without the Prominent Colors bar, the Edit tab's gaps above the wheel and above the sliders.
+const WHEEL_GAP: f32 = 8.0;
+const SLIDERS_GAP: f32 = 6.0;
 /// Height of the rows table, and of either tab (so switching tabs doesn't resize the dialog).
 const TABLE_H: f32 = 182.0;
 const TAB_H: f32 = 400.0;
@@ -237,8 +240,9 @@ const SHARES: &str = "__shares";
 const SHARES_OF: &str = "__sharesOf";
 const BAR_DRAG: &str = "__barDrag";
 const SAVE_GROUP: &str = "__saveGroup";
-/// Height of the Prominent Colors bar, and the smallest share of it a drag leaves a part.
-const PROMINENT_H: f32 = 18.0;
+/// Height of the Prominent Colors bar, and the smallest share of it a drag leaves a part. With the
+/// bar the Edit tab leaves out [`WHEEL_GAP`] and [`SLIDERS_GAP`], which keeps the tab's height.
+const PROMINENT_H: f32 = 10.0;
 const MIN_PART: f64 = 0.01;
 /// The ids of the bar's part `n` and of the edge after part `k`, with `n` or `k`.
 const PROMINENT_PART: &str = "recolor-prominent-part";
@@ -1282,7 +1286,12 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value
             mode_menu(ui, d, &target, true);
         });
     });
-    ui.add_space(8.0);
+    // With art the Prominent Colors bar has the room of the two gaps, so the tab is no taller with
+    // it: on a short screen all of the tab but the chips has to fit.
+    let art = d.bool("__art");
+    if !art {
+        ui.add_space(WHEEL_GAP);
+    }
     let colors: Vec<Color> = active.iter().filter_map(|&i| to_color(&rows[i])).collect();
     let marked = base.and_then(|b| active.iter().position(|&i| i == b));
     let display = d.str("display");
@@ -1308,8 +1317,7 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value
         });
     });
     // Prominent Colors: the art's new colors, each as wide as its share of the art.
-    if d.bool("__art") {
-        ui.add_space(6.0);
+    if art {
         prominent_bar(ui, d, rows);
     }
     if let Some(k) = w.pressed {
@@ -1335,7 +1343,9 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut [Value
     if !ui.input(|i| i.pointer.any_down()) {
         d.fields.remove(DRAG);
     }
-    ui.add_space(6.0);
+    if !art {
+        ui.add_space(SLIDERS_GAP);
+    }
     if d.str("sliderMode") == GLOBAL {
         let sample = base.and_then(|b| to_color(&rows[b])).unwrap_or(Color::rgb(0.8, 0.45, 0.25));
         global_sliders(ui, d, sample);

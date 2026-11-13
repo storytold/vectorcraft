@@ -3723,8 +3723,8 @@ excluded take the palette as their new colors in row order, the colors repeating
 returns them as `map`, each with `from` as a list, and `shares`: for each row, its percent of the uses (the `count` of
 `recolor.colors`) of the current colors of the rows that are not excluded, and 0 for an excluded row. A use counts for
 the row that `recolor.apply` recolors it with (rows with a new color first, an exact color before a hex color, then
-the first row that lists it), and otherwise for the first other row that lists it. A current color that no art uses
-counts nothing. Without `weights` the
+the first row that lists it), and otherwise for the first other row that is not excluded and lists it. A current
+color that no art uses counts nothing. Without `weights` the
 rows come back unchanged. `weights` holds one number of 0 or more per row; an excluded row's weight is ignored, and
 at least one other row needs a weight above 0. As VectorCraft's own rule, current colors then move one at a time
 between the rows that are not excluded and have a new color (`to`), as long as a move brings each row's share of the uses nearer its share of the

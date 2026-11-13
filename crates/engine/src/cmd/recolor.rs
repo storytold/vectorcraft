@@ -70,7 +70,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Prominent Colors",
             [],
             None,
-            "{map: rows [{from, to, …}] or {current: new} as recolor.apply, weights?: [numbers ≥ 0, one per row; an excluded row's is ignored, and at least one other must be above 0], ids?: as recolor.colors} → {map: the rows as given, each with its current colours (from) moved as below, shares: [one per row: its percent of the uses (recolor.colors' count) of the current colours of the rows that aren't excluded; 0 for an excluded row]} for Recolor Artwork's Prominent Colors (VectorCraft's own rule): without weights the rows stay as they are. With weights, current colours move one at a time between the rows that aren't excluded and have a new colour (to), while a move brings each row's share of the uses nearer its share of the weights, first the colour nearest in Lab to the first colour of the row it goes to compared with the row it leaves; a row's first colour stays in it, the tints of one global swatch in a row move together, a colour that another row with a new colour lists first stays where it is, the other rows with a new colour drop their entries for a colour that moves, and a use counts for the row recolor.apply recolors it with (rows with a new colour first, an exact colour before a hex one, the first row that lists it), else for the first other row that lists it. The colours that can move are compared with the rows at most 50,000,000 times in all, and when they times the rows that aren't excluded pass that, none move. Changes nothing",
+            "{map: rows [{from, to, …}] or {current: new} as recolor.apply, weights?: [numbers ≥ 0, one per row; an excluded row's is ignored, and at least one other must be above 0], ids?: as recolor.colors} → {map: the rows as given, each with its current colours (from) moved as below, shares: [one per row: its percent of the uses (recolor.colors' count) of the current colours of the rows that aren't excluded; 0 for an excluded row]} for Recolor Artwork's Prominent Colors (VectorCraft's own rule): without weights the rows stay as they are. With weights, current colours move one at a time between the rows that aren't excluded and have a new colour (to), while a move brings each row's share of the uses nearer its share of the weights, first the colour nearest in Lab to the first colour of the row it goes to compared with the row it leaves; a row's first colour stays in it, the tints of one global swatch in a row move together, a colour that another row with a new colour lists first stays where it is, the other rows with a new colour drop their entries for a colour that moves, and a use counts for the row recolor.apply recolors it with (rows with a new colour first, an exact colour before a hex one, the first row that lists it), else for the first other row that isn't excluded and lists it. The colours that can move are compared with the rows at most 50,000,000 times in all, and when they times the rows that aren't excluded pass that, none move. Changes nothing",
             has_doc,
             weigh
         ),
@@ -1126,14 +1126,14 @@ fn weigh(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Each current colour's uses and global swatch. A use counts where recolor.apply recolors it:
     // rows with a new colour first, exact colours before hex colours, the first row that lists it;
-    // then the other rows, in the same way. `owner` holds the row and entry that took each colour,
+    // then the other rows that aren't excluded, in the same way. `owner` holds the row and entry that took each colour,
     // and `shadows` the entries of rows with a new colour whose colours other entries took.
     let mut owner: Vec<Option<(usize, usize)>> = vec![None; used.len()];
     let mut shadows: Vec<(usize, usize, Vec<usize>)> = vec![];
     let mut found: Vec<Vec<(usize, Option<String>)>> = rows.iter().map(|r| vec![(0, None); r.from.len()]).collect();
     for recolors in [true, false] {
         for hex in [false, true] {
-            for (r, row) in rows.iter().enumerate().filter(|(_, r)| r.new_color().is_some() == recolors) {
+            for (r, row) in rows.iter().enumerate().filter(|(_, r)| !r.exclude && r.new_color().is_some() == recolors) {
                 for (e, m) in row.from.iter().enumerate().filter(|(_, m)| matches!(m, Match::Hex(_)) == hex) {
                     let hits: Vec<usize> = match m {
                         Match::Key(k) => by_key.get(k).copied().into_iter().collect(),

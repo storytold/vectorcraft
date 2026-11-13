@@ -1375,6 +1375,9 @@ fn weigh_gives_each_rows_share_of_the_uses() {
     // An excluded row has no share, and the others share the uses.
     let excl = json!([{"from": [RED, PURPLE], "to": null}, {"from": [BLUE], "to": null, "exclude": true}]);
     assert_eq!(run(&mut s, "recolor.weigh", json!({"map": excl}))["shares"], json!([100.0, 0.0]));
+    // An excluded row before another that lists the same colour doesn't take its uses.
+    let first = json!([{"from": [RED], "exclude": true}, {"from": [RED]}, {"from": [BLUE, PURPLE]}]);
+    assert_eq!(run(&mut s, "recolor.weigh", json!({"map": first}))["shares"], json!([0.0, 50.0, 50.0]));
     // A current colour that no art uses counts nothing, and a use counts for the first row only.
     let twice = json!({"map": [{"from": [RED, "#123456"]}, {"from": [RED, PURPLE, BLUE]}]});
     assert_eq!(run(&mut s, "recolor.weigh", twice)["shares"], json!([50.0, 50.0]));
