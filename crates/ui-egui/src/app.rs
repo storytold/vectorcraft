@@ -88,6 +88,8 @@ impl VectorcraftApp {
                 selection_box: None,
                 selection_bounds: None,
                 content_bounds: None,
+                plugin_keys: Default::default(),
+                placed_keys: Default::default(),
                 cursors: Default::default(),
                 view_moved: None,
                 hover_cursor: None,
@@ -96,6 +98,7 @@ impl VectorcraftApp {
                 panes: Default::default(),
                 windows: crate::doc_windows::Windows::new(known),
             },
+            display_profile: Default::default(),
             perf: Perf::default(),
             dock_rt: Default::default(),
             titlebar_inset: 0.0,
@@ -126,6 +129,7 @@ impl VectorcraftApp {
             updates_rt: Default::default(),
             frame_rate: Default::default(),
             canvas_rect: None,
+            canvas_ui_zoom: 1.0,
             control_rotate_press: None,
             hover_doc: None,
             titlebar_from_env: false,
@@ -134,6 +138,7 @@ impl VectorcraftApp {
             last_window_title: String::new(),
             fullscreen_for_mode: false,
             graphics_adapter: None,
+            beacon: &crate::hang_beacon::BEACON,
             place: Default::default(),
             system_paste: false,
             clipboard_image_request: None,
@@ -340,8 +345,15 @@ impl VectorcraftApp {
         screen_color::poll(self, ctx);
         self.poll_finished_work();
         crate::script_runs::poll(self);
-        if self.session.script_running() && !self.session.script_waiting() {
-            ctx.request_repaint();
+        // A panel's, a dialog's or the text input's commit journaled in the frame before.
+        crate::panels::actions::after_journaled_edit(self);
+        crate::scripts_menu::poll(self, ctx);
+        if self.session.script_running() && !self.session.script_waiting() && self.session.script_dialog().is_none() {
+            // A script in `$.sleep` goes on when its time is up; until then the app can idle.
+            match self.session.script_sleep_left() {
+                Some(left) => ctx.request_repaint_after(left),
+                None => ctx.request_repaint(),
+            }
         }
         #[cfg(not(target_arch = "wasm32"))]
         self.tick_link_updates(ctx, now);
@@ -369,9 +381,7 @@ impl VectorcraftApp {
             unsaved::finish_pending(self);
             if self.session.script_running() {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                if self.ui.dialog.is_none() {
-                    self.ui.dialog = Some(crate::state::Dialog::new(dialogs::script_run::CLOSE_KIND, serde_json::json!({})));
-                }
+                dialogs::script_run::ask_to_close(self);
             } else if self.file_sheet_open() {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 self.status(picks::busy());
@@ -570,10 +580,10 @@ impl VectorcraftApp {
             chrome::hint_bar(self, ui);
         }
         if (self.ui.screen_mode >= 3 || (!self.ui.status_bar && !self.ui.help_bar))
-            && !(self.ui.control_bar && self.ui.control_bar_bottom && self.ui.screen_mode < 2)
+            && !(self.ui.control_bar && self.ui.control_bar_bottom && !self.ui.control_bar_floating && self.ui.screen_mode < 2)
         {
             // Keeps the previous frame's value valid for menus drawn above, before the bars. A
-            // Control bar docked at the bottom has set it to the bar's top.
+            // Control bar docked at the bottom has set it to the bar's top; a floating one sets none.
             widgets::set_menu_floor(&ctx, ctx.content_rect().bottom());
         }
         if self.ui.toolbar && self.ui.screen_mode < 3 {
@@ -592,9 +602,12 @@ impl VectorcraftApp {
             // Toolbar too.
             toolbar::show_custom(self, ui.ctx());
         }
+        // The lanes along the window's edges where toolbars made with New Toolbar dock.
+        crate::custom_toolbars::lanes(self, ui);
         panels::library_panel::tidy(self);
         // The canvas and the panels: one docking layout. Tab hides the panels but not the canvas.
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| panel_docking::show(self, ui));
+        panels::learn::locate::tidy(self, &ctx);
         crate::doc_windows::show(self, &ctx);
         dialogs::show(self, &ctx);
         updates_ui::show(self, &ctx);

@@ -99,12 +99,17 @@ pub fn node_summary_opts(n: &Node, opts: SummaryOpts, symbols: &SymbolBoxes) -> 
         NodeKind::Text(t) => {
             v["text"] = json!(t.plain_text());
             // Area type and type on a path: does the text fit (the red overflow "+")? Area type
-            // also reports its fit and Shrink Text's factor (1 unshrunk).
+            // also reports its fit (`block` for Dynamic Text's Block) and Shrink Text's factor (1
+            // unshrunk), and type on a path its factor (1 when off); both report Dynamic Text.
             if !matches!(t.kind, vectorcraft_doc::TextKind::Point) {
                 let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
                 v["overflow"] = json!(lay.overflow);
                 if matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }) {
-                    v["fit"] = json!(t.area.fit.id());
+                    v["fit"] = json!(crate::cmd::typecmd::fit_id(t));
+                    v["fitScale"] = json!(lay.fit_scale);
+                    v["dynamicText"] = json!(t.dynamic_text);
+                } else {
+                    v["dynamicText"] = json!(t.dynamic_text);
                     v["fitScale"] = json!(lay.fit_scale);
                 }
             }
@@ -112,6 +117,8 @@ pub fn node_summary_opts(n: &Node, opts: SummaryOpts, symbols: &SymbolBoxes) -> 
         _ => {}
     }
     if let Some(ch) = n.children() {
+        // A layer's ruler guides are listed by `guide.list`, not as its objects.
+        let ch: Vec<&std::sync::Arc<Node>> = ch.iter().filter(|c| !c.is_ruler_guide()).collect();
         let total = ch.len();
         let take_n = opts.child_limit.map_or(total, |l| l.min(total as u64) as usize);
         if opts.depth.is_none_or(|d| d > 0) {
@@ -133,13 +140,17 @@ pub fn document(s: &Session) -> Value {
     document_opts(s, SummaryOpts::default())
 }
 
-/// An artboard's name and rectangle, its background color (`#rrggbb`) when it has one,
+/// An artboard's name and rectangle, its background color (`#rrggbb`) when it has one, its guide
+/// label (a layer color's name or `#rrggbb`) when it has one,
 /// `locked: true` when it is locked, `showCenterMark: true`, `showCrossHairs: true` and
 /// `showVideoSafeAreas: true` when it shows them, and `videoRulerPixelAspectRatio` when it isn't 1.
 fn artboard_summary(a: &vectorcraft_doc::Artboard) -> Value {
     let mut v = json!({"name": a.name, "x": a.rect.x0, "y": a.rect.y0, "width": a.rect.width(), "height": a.rect.height()});
     if let Some(c) = a.color {
         v["color"] = json!(c.to_hex());
+    }
+    if let Some(c) = a.guide_label {
+        v["guideLabel"] = json!(c.label_text());
     }
     for (key, on) in [
         ("locked", a.locked),
@@ -199,6 +210,10 @@ fn ancestors(d: &Document, id: vectorcraft_doc::NodeId) -> Vec<u64> {
 }
 
 fn collect_kind<'a>(n: &'a Node, kind: &str, path: &mut Vec<u64>, out: &mut Vec<Hit<'a>>) {
+    // Ruler guides are not objects (`guide.list` lists them).
+    if n.is_ruler_guide() {
+        return;
+    }
     if n.kind_label().eq_ignore_ascii_case(kind) {
         out.push((n, path.clone()));
     }
@@ -270,9 +285,10 @@ fn document_base(s: &Session) -> Value {
     json!({
         "uid": st.uid,
         "title": st.title(),
-        // The File Info title (`file.info`), where `title` comes from the file name once the document has one.
-        "fileInfoTitle": d.title,
-        "path": st.path,
+        // The File Info title (`file.info`): the title the file gave itself, else the document's name. `title` is the tab's name.
+        "fileInfoTitle": d.info_title(),
+        // Null for a confined caller when the file is outside its read roots.
+        "path": st.path.as_deref().filter(|p| crate::file_access::check_read(p).is_ok()),
         "dirty": st.is_dirty(),
         "revision": st.revision,
         "units": d.units.label(),
@@ -291,7 +307,7 @@ fn document_base(s: &Session) -> Value {
         // The key object Align aligns to and Distribute Spacing spaces from (`select.key`).
         "key": st.selection.key.map(|k| k.0),
         // The ruler guide that is the key instead (`select.key {guide}`): an index into `guide.list`.
-        "keyGuide": st.selection.key_guide,
+        "keyGuide": st.selection.key_guide.and_then(|id| crate::cmd::guide_indexes(d, &[id]).first().copied()),
         "history": st.history.undo.iter().map(|h| h.label.clone()).collect::<Vec<_>>(),
         "redo": st.history.redo.iter().rev().map(|h| h.label.clone()).collect::<Vec<_>>(),
         "objects": d.node_count(),
@@ -428,7 +444,8 @@ pub fn find_nodes(doc: &Document, filter: &FindFilter, limit: u64) -> (Vec<Value
         ids: Vec<NodeId>,
     }
     fn walk(nodes: &[Arc<Node>], w: &mut Walk) {
-        for n in nodes.iter().rev() {
+        // Ruler guides are not objects (`guide.list` lists them).
+        for n in nodes.iter().rev().filter(|n| !n.is_ruler_guide()) {
             if w.filter.hits(n, &w.symbols) {
                 w.ids.push(n.id);
                 if (w.out.len() as u64) < w.limit {

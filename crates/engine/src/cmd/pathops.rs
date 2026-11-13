@@ -135,7 +135,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Outline Stroke",
             ["Object", "Path"],
             None,
-            "{} replace stroked paths with filled outlines; a dimension whose lines are outlined, or selected with the art it measures when that art is outlined, becomes a plain group of its art → {ids}",
+            "{} replace stroked paths with filled outlines; a dimension whose lines are outlined becomes a plain group of its art, except one selected with art it measures, directly or in groups without fills, strokes or effects of their own: its lines stay as they are, and if the outlined art no longer fits its link it stays where it was, no longer linked → {ids}",
             has_selection,
             outline_stroke
         ),
@@ -221,23 +221,39 @@ pub(crate) fn len_param(p: &Value, key: &str) -> Option<f64> {
     }
 }
 
-/// The number `p` gives `cmd` for `key`, as [`num_param`] reads it, or `None` when `p` leaves it out
-/// or gives null. Any other value, such as `true` or `"wide"`, is an error: "`{key}` must be a
-/// number, not {v}".
+/// The number `p` gives `cmd` for `key`, or `None` when `p` leaves it out or gives null. A string
+/// counts only when all of it is a number (`"20"`). Any other value, such as `true`, `"wide"` or
+/// `"20abc"`, is an error: "`{key}` must be a number, not {v}".
 pub(crate) fn number_given(p: &Value, key: &str, cmd: &str) -> Result<Option<f64>> {
     match p.get(key) {
         None | Some(Value::Null) => Ok(None),
-        Some(v) => num_param(p, key).map(Some).ok_or_else(|| bad(cmd, format!("`{key}` must be a number, not {v}"))),
+        Some(v) => match v {
+            Value::String(s) => whole_number(s),
+            _ => num_param(p, key),
+        }
+        .map(Some)
+        .ok_or_else(|| bad(cmd, format!("`{key}` must be a number, not {v}"))),
     }
 }
 
-/// The distance `p` gives `cmd` for `key`, as [`len_param`] reads it (`"5 mm"` included), or `None`
-/// when `p` leaves it out or gives null. Any other value is an error, as [`number_given`] gives it.
+/// The distance `p` gives `cmd` for `key`, or `None` when `p` leaves it out or gives null. A string
+/// counts only when all of it is a length that [`vectorcraft_doc::Unit::parse`] reads (`"5 mm"`) or a
+/// number. Any other value, such as `"20abc"`, is an error, as [`number_given`] gives it.
 pub(crate) fn length_given(p: &Value, key: &str, cmd: &str) -> Result<Option<f64>> {
     match p.get(key) {
         None | Some(Value::Null) => Ok(None),
-        Some(v) => len_param(p, key).map(Some).ok_or_else(|| bad(cmd, format!("`{key}` must be a number, not {v}"))),
+        Some(v) => match v {
+            Value::String(s) => vectorcraft_doc::Unit::Points.parse(s).filter(|v| v.is_finite()).or_else(|| whole_number(s)),
+            _ => num_param(p, key),
+        }
+        .map(Some)
+        .ok_or_else(|| bad(cmd, format!("`{key}` must be a number, not {v}"))),
     }
+}
+
+/// `s` as a finite number when all of it, spaces around it aside, is one.
+fn whole_number(s: &str) -> Option<f64> {
+    s.trim().parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
 fn ids_json(ids: &[NodeId]) -> Value {
@@ -703,7 +719,7 @@ fn run_pf(s: &mut Session, p: &Value, op: PathfinderOp) -> Result<Value> {
 /// Pathfinder panel › Trap ([`vectorcraft_render::effects::trap`]): the traps between the selected
 /// objects' leaf shapes, as one group of overprinting paths above the topmost selected object.
 fn trap(s: &mut Session, p: &Value) -> Result<Value> {
-    use vectorcraft_render::effects::trap::{TRAP_LABEL, TrapOptions, TrapSource, trap_appearance, traps};
+    use vectorcraft_render::effects::trap::{TRAP_LABEL, TrapOptions, TrapSource, trap_appearance, try_traps};
     const ID: &str = "object.pathfinder.trap";
     let mut q = p.clone();
     if let Some(t) = length_given(p, "thickness", ID)? {
@@ -742,7 +758,12 @@ fn trap(s: &mut Session, p: &Value) -> Result<Value> {
         if sources.iter().filter(|s| s.fill.color().is_some()).count() < 2 {
             return Err(EngineError::Other("Trap: select two or more objects filled with solid colours".into()));
         }
-        let made = traps(&sources, &options);
+        let Some(made) = try_traps(&sources, &options) else {
+            return Err(EngineError::Other(format!(
+                "Trap: more than {} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time",
+                vectorcraft_render::effects::trap::MAX_NEAR_PAIRS
+            )));
+        };
         if made.is_empty() {
             return Err(EngineError::Other("Trap: no edges of different colours meet among the selected objects".into()));
         }
@@ -875,7 +896,7 @@ pub(crate) fn outlined_stroke(
         };
         let art = d.reid(&art);
         let mut art = with_transparency(d, art, st.opacity, st.blend);
-        let raster: Vec<_> = st.effects.iter().filter(|e| !vectorcraft_render::effects::is_geometry(&e.id)).cloned().collect();
+        let raster = vectorcraft_render::effects::without_geometry(&st.effects);
         if !raster.is_empty() {
             if !art.appearance.effects.is_empty() {
                 art = Node::group(d.alloc_id(), vec![Arc::new(art)]);
@@ -925,7 +946,7 @@ pub(crate) fn outlined_stroke(
 /// geometry effects leave nothing to paint, an empty group takes the path's place.
 /// `None` when `l` has no stroke to outline.
 pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Brush], l: &Node) -> Option<Node> {
-    use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry, has_transform_art, is_geometry, reshape};
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_carrying, has_geometry, has_transform_art, reshape, without_geometry};
     if !l.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if outlinable(st))) {
         return None;
     }
@@ -954,7 +975,7 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
                     parts.push(styled_copy(d, l, std::mem::take(&mut fills)));
                 }
                 let mut plain = moved;
-                plain.effects_mut().retain(|e| !is_geometry(&e.id));
+                *plain.effects_mut() = without_geometry(plain.effects());
                 parts.push(styled_copy(d, &shape, vec![plain]));
             }
             AppearanceItem::Stroke(st) if outlinable(st) => {
@@ -962,11 +983,16 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
                     parts.push(styled_copy(d, l, std::mem::take(&mut fills)));
                 }
                 let mut plain = st.clone();
-                plain.effects.retain(|e| !is_geometry(&e.id));
                 let stroked = match path.bounds() {
-                    Some(b) if has_geometry(&st.effects) => apply_geometry_with(&st.effects, &path, b, &ctx.item(item)),
+                    Some(b) if has_geometry(&st.effects) => {
+                        let (stroked, carry) = apply_geometry_carrying(&st.effects, &path, b, &ctx.item(item));
+                        // Its raster effects follow only the Transform effects that moved it.
+                        carry.hide_skipped(&mut plain.effects);
+                        stroked
+                    }
                     _ => path.clone(),
                 };
+                plain.effects = without_geometry(&plain.effects);
                 parts.extend(outlined_stroke(d, brushes, &stroked, rule, &plain));
             }
             _ => {}
@@ -1058,7 +1084,11 @@ fn outline_stroke(s: &mut Session, _: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
     let ids = s.edit("Outline Stroke", |d, sel| {
         let before = d.clone();
-        let mut ended = super::dimension::end_links(d, &roots);
+        // A dimension selected with the art it measures keeps its own lines: it is out of the
+        // document while the art is outlined.
+        let lifted = super::dimension::lift(d, &roots);
+        let kept = !lifted.is_empty();
+        let ended = super::dimension::end_links(d, &roots);
         let brushes = vectorcraft_brush::library(d);
         let mut new_sel = vec![];
         let mut changed = 0;
@@ -1067,10 +1097,10 @@ fn outline_stroke(s: &mut Session, _: &Value) -> Result<Value> {
             new_sel.push(id);
             changed += n;
         }
-        // A dimension whose source was outlined stays plain: its link no longer fits that art.
-        ended.retain(|e| e.source_kept(&before, d));
-        super::dimension::restore_unchanged(d, ended);
-        if changed == 0 {
+        super::dimension::put_back(d, lifted);
+        // A dimension whose source was outlined stays where it was, no longer linked.
+        super::dimension::restore_unchanged(&before, d, ended);
+        if changed == 0 || (kept && d.layers == before.layers) {
             return Err(EngineError::Other("Outline Stroke: no stroked paths selected".into()));
         }
         sel.set(new_sel.iter().copied());
@@ -1203,7 +1233,7 @@ fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
         Some(l) => po::simplify_level_tolerance(l),
         None => given_tolerance.unwrap_or(1.0),
     };
-    let opts = po::SimplifyOptions { tolerance: tolerance.clamp(1e-4, 1e4), corner_angle_deg: corner_angle, straight_lines, smooth: 0.0 };
+    let opts = po::SimplifyOptions { tolerance: tolerance.clamp(1e-4, 1e4), corner_angle_deg: corner_angle, straight_lines, ..Default::default() };
     // A path with segments direct-selected simplifies only their runs, and keeps those runs (and the
     // other anchors it had selected) direct-selected.
     let roots = selected_roots(s)?;
@@ -1326,7 +1356,9 @@ fn split_into_grid(s: &mut Session, p: &Value) -> Result<Value> {
             let node = shape_node(d, c, Some(&top));
             out.push(d.insert(par, idx + k, node)?);
         }
-        d.guides.extend(edges.iter().map(|&(vertical, pos)| vectorcraft_doc::Guide { layer, ..vectorcraft_doc::Guide::new(vertical, pos) }));
+        for &(vertical, pos) in &edges {
+            d.add_ruler_guide(&vectorcraft_doc::Guide { layer, ..vectorcraft_doc::Guide::new(vertical, pos) });
+        }
         sel.set(out.iter().copied());
         Ok(out)
     })?;

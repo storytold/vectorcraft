@@ -3,12 +3,13 @@ use super::encoding::{
     unit, writable,
 };
 use super::{
-    Affine, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule, Gradient,
-    GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
-    LAYER_COLORS, LAYER_NAME, LIVE, LayerColor, LegacyAiOptions, MAX_IMAGE_PIXELS, MAX_NEST, NAMES, Node, NodeKind, PATTERNS, Paint, ParaDirection,
-    ParaStyle, PathData, ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE,
-    TYPE_ATTRIBUTES, TextKind, TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
+    Affine, AppearanceItem, Arc, BezPath, BlendMode, CharStyle, Cms, Color, DYNAMIC_TEXT, Document, ELLIPTICAL, FREEFORM, FillLayer, FillRule,
+    Gradient, GradientKind, GradientPaint, HEX_LINE, HIDDEN, HIDDEN_LAYER, HIDDEN_SHOWN, HiddenObjects, IMAGE_ALPHA, ImageBlob, Justify, LARGE_IMAGE,
+    LAYER_NAME, LIVE, LegacyAiOptions, MAX_IMAGE_PIXELS, MAX_NEST, NAMES, Node, NodeKind, PATTERNS, Paint, ParaDirection, ParaStyle, PathData,
+    ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
+    TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
+use super::{CONIC, CONIC_WEDGES, DIAMOND, HUE_STOPS, SPREAD, SPREAD_CAPPED};
 
 pub(super) struct Writer<'a> {
     doc: &'a Document,
@@ -23,6 +24,8 @@ pub(super) struct Writer<'a> {
     /// The name each spot color (by its swatch's name) is written with ([`Self::spot`]).
     spot_names: Vec<(String, String)>,
     pub(super) warnings: Vec<String>,
+    /// Notes on what the options asked for ([`crate::LegacyAiOutput::setting_notes`]).
+    pub(super) setting_notes: Vec<String>,
     /// The lock state the last `A` set.
     locked: bool,
     /// Symbols and live objects being written inside one another.
@@ -38,6 +41,10 @@ pub(super) struct Writer<'a> {
     in_hidden: bool,
     /// The fonts type is set in: PostScript name, and whether it's TrueType.
     pub(super) fonts: Vec<(String, bool)>,
+    /// The Standard Vertical Roman Alignment the last `Tv` set (it lasts into later text objects).
+    roman: bool,
+    /// Inside a Kumi block `1 TY` began (Tate-chu-yoko in horizontal type).
+    kumi: bool,
 }
 
 impl<'a> Writer<'a> {
@@ -51,6 +58,7 @@ impl<'a> Writer<'a> {
             spots: vec![],
             spot_names: vec![],
             warnings: vec![],
+            setting_notes: vec![],
             locked: false,
             nest: 0,
             hidden: o.hidden,
@@ -58,12 +66,23 @@ impl<'a> Writer<'a> {
             hidden_art: vec![],
             in_hidden: false,
             fonts: vec![],
+            roman: false,
+            kumi: false,
         }
     }
 
+    /// Note `w`, once, about something of the document that the file leaves out or that reaches
+    /// it changed. A note about an option goes to [`Self::note_setting`].
     fn warn(&mut self, w: &str) {
         if !self.warnings.iter().any(|x| x == w) {
             self.warnings.push(w.to_string());
+        }
+    }
+
+    /// Note `w`, once, about hidden objects left out or written visible as an option asks.
+    fn note_setting(&mut self, w: &str) {
+        if !self.setting_notes.iter().any(|x| x == w) {
+            self.setting_notes.push(w.to_string());
         }
     }
 
@@ -135,14 +154,7 @@ impl<'a> Writer<'a> {
     /// A top-level layer. False when it isn't a layer.
     pub(super) fn layer(&mut self, n: &Node) -> bool {
         let NodeKind::Layer { color, template, printable, children, clip, preview, dim_images } = &n.kind else { return false };
-        let [r, g, b] = match color {
-            LayerColor::Preset(i) => LAYER_COLORS.get(usize::from(*i)).map_or([79, 128, 255], |c| c.1),
-            LayerColor::Custom(rgb) => *rgb,
-        };
-        let index = match color {
-            LayerColor::Preset(i) if usize::from(*i) < LAYER_COLORS.len() => i64::from(*i),
-            _ => -1,
-        };
+        let (index, [r, g, b]) = ai_ops::layer_color(*color);
         let flag = |b: bool| u8::from(b);
         let name = self.layer_name(n.name.as_deref().unwrap_or("Layer"));
         // A template layer doesn't print and shows dimmed.
@@ -159,7 +171,9 @@ impl<'a> Writer<'a> {
         self.locked = false;
         self.line("0 A");
         self.in_hidden = !n.visible;
-        self.contents(children, *clip, false);
+        // Ruler guides are kept in the document's native copy only.
+        let art: Vec<Arc<Node>> = children.iter().filter(|c| !c.is_ruler_guide()).cloned().collect();
+        self.contents(&art, *clip, false);
         self.in_hidden = false;
         self.line("LB\n%AI5_EndLayer--");
         true
@@ -173,14 +187,7 @@ impl<'a> Writer<'a> {
         }
         let art = std::mem::take(&mut self.hidden_art);
         let NodeKind::Layer { color, template, printable, .. } = &n.kind else { return false };
-        let [r, g, b] = match color {
-            LayerColor::Preset(i) => LAYER_COLORS.get(usize::from(*i)).map_or([79, 128, 255], |c| c.1),
-            LayerColor::Custom(rgb) => *rgb,
-        };
-        let index = match color {
-            LayerColor::Preset(i) if usize::from(*i) < LAYER_COLORS.len() => i64::from(*i),
-            _ => -1,
-        };
+        let (index, [r, g, b]) = ai_ops::layer_color(*color);
         let name = format!("{} (hidden)", n.name.as_deref().unwrap_or("Layer"));
         let name = self.layer_name(&name);
         let _ = writeln!(
@@ -223,10 +230,14 @@ impl<'a> Writer<'a> {
 
     /// One object (inside a container locked when `locked`).
     fn node(&mut self, n: &Node, locked: bool) {
+        // Ruler guides are kept in the document's native copy only.
+        if n.is_ruler_guide() {
+            return;
+        }
         if !n.visible && !self.in_hidden {
             match self.hidden {
                 HiddenObjects::Omit => {
-                    self.warn(HIDDEN);
+                    self.note_setting(HIDDEN);
                     return;
                 }
                 HiddenObjects::Layer => {
@@ -234,7 +245,7 @@ impl<'a> Writer<'a> {
                     self.hidden_art.push((n.clone(), locked || n.locked));
                     return;
                 }
-                HiddenObjects::Visible => self.warn(HIDDEN_SHOWN),
+                HiddenObjects::Visible => self.note_setting(HIDDEN_SHOWN),
             }
         }
         if n.opacity < 1.0 || n.blend != BlendMode::Normal || n.extras().mask.as_ref().is_some_and(|m| !m.disabled) {
@@ -272,7 +283,8 @@ impl<'a> Writer<'a> {
             }
             NodeKind::Image(im) => {
                 self.lock(locked);
-                let blob = self.doc.image_blob(im);
+                let shown = self.doc.shown_image(n, im);
+                let blob = self.doc.image_blob(&shown);
                 // A colorize color the renderer draws the image in.
                 let colorize =
                     n.extras().colorize.as_deref().filter(|p| matches!(p, Paint::Solid { .. }) && blob.is_some_and(ImageBlob::takes_colorize));
@@ -306,6 +318,8 @@ impl<'a> Writer<'a> {
                     self.nest -= 1;
                 }
             }
+            // Ruler guides are kept in the document's native copy only.
+            NodeKind::RulerGuide { .. } => {}
         }
     }
 
@@ -429,6 +443,16 @@ impl<'a> Writer<'a> {
         if direct_fill(&f.paint) {
             return self.path_object(path, rule, Some(f), None);
         }
+        if let Paint::Gradient(g) = &f.paint
+            && g.gradient.kind == GradientKind::Conic
+        {
+            return self.conic_object(path, rule, f, g);
+        }
+        if let Paint::Gradient(g) = &f.paint
+            && g.gradient.kind == GradientKind::Diamond
+        {
+            return self.diamond_object(path, rule, f, g);
+        }
         let Paint::Pattern { pattern, xf } = &f.paint else {
             // A freeform gradient: its average colour.
             self.warn(FREEFORM);
@@ -464,6 +488,72 @@ impl<'a> Writer<'a> {
             self.node(t, locked);
         }
         self.lock(locked);
+        self.line("Q");
+    }
+
+    /// A conic gradient fill (the format has no conic gradient) as [`CONIC_WEDGES`] solid wedges
+    /// about its center clipped to `path` (filled by `rule`), each running on to the seam under
+    /// the next ([`vectorcraft_color::GradientGeom::conic_wedges`]).
+    fn conic_object(&mut self, path: &PathData, rule: FillRule, f: &FillLayer, g: &GradientPaint) {
+        self.warn(CONIC);
+        if g.gradient.stops.iter().any(|s| s.opacity < 1.0) {
+            self.warn(TRANSPARENCY);
+        }
+        let area = path.to_bezpath().bounding_box();
+        let wedges = g.resolve(area).conic_wedges(area, g.gradient.conic_wedge_count(CONIC_WEDGES), true);
+        let spread = g.gradient.spreader();
+        self.line("q");
+        self.fill_rule(rule);
+        let several = path.subpaths.len() > 1;
+        if several {
+            self.line("*u");
+        }
+        for sp in path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()) {
+            self.mask(sp);
+        }
+        if several {
+            self.line("*U");
+        }
+        for (pts, t) in wedges {
+            let (color, _) = g.gradient.sample_keep_model(spread(t) as f32);
+            let wedge = FillLayer { paint: Paint::solid(color), ..f.clone() };
+            self.path_object(&PathData::single(SubPath::polyline(&pts, true)), FillRule::NonZero, Some(&wedge), None);
+        }
+        self.line("Q");
+    }
+
+    /// A diamond gradient fill (the format has no diamond gradient) as four linear gradients
+    /// clipped to `path` (filled by `rule`), one for each quadrant of its frame and equal to the
+    /// diamond there, each running on under the next
+    /// ([`vectorcraft_color::GradientGeom::diamond_quadrants`]). A diamond without an extent is its
+    /// last stop.
+    fn diamond_object(&mut self, path: &PathData, rule: FillRule, f: &FillLayer, g: &GradientPaint) {
+        let area = path.to_bezpath().bounding_box();
+        let Some(quadrants) = g.resolve(area).diamond_quadrants(area) else {
+            let color = g.gradient.stops.last().map_or(Color::gray(0.5), |s| s.color);
+            let flat = FillLayer { paint: Paint::solid(color), ..f.clone() };
+            return self.path_object(path, rule, Some(&flat), None);
+        };
+        self.warn(DIAMOND);
+        self.line("q");
+        self.fill_rule(rule);
+        let several = path.subpaths.len() > 1;
+        if several {
+            self.line("*u");
+        }
+        for sp in path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()) {
+            self.mask(sp);
+        }
+        if several {
+            self.line("*U");
+        }
+        let gradient = Gradient { kind: GradientKind::Linear, ..g.gradient.clone() };
+        for (pts, geom) in quadrants {
+            // Not named after the swatch: the definition is a linear gradient, not the swatch's.
+            let linear = GradientPaint { gradient: gradient.clone(), geom: Some(geom), swatch: None, ..g.clone() };
+            let quadrant = FillLayer { paint: Paint::Gradient(Box::new(linear)), ..f.clone() };
+            self.path_object(&PathData::single(SubPath::polyline(&pts, true)), FillRule::NonZero, Some(&quadrant), None);
+        }
         self.line("Q");
     }
 
@@ -556,7 +646,8 @@ impl<'a> Writer<'a> {
             // Grey is ink coverage; the format's grey is lightness.
             Color::Gray { k } => Ink::Gray(unit(1.0 - k)),
             Color::Cmyk { c, m, y, k } => Ink::Cmyk([c, m, y, k].map(unit)),
-            Color::Rgb { r, g, b } => Ink::Rgb(self.cms.to_cmyk(color, intent).map(unit), [r, g, b].map(unit)),
+            // The CMYK equivalent of the RGB values as written.
+            Color::Rgb { r, g, b } => Ink::Rgb(self.cms.to_cmyk(&ai_ops::as_written(*color), intent).map(unit), [r, g, b].map(unit)),
             Color::Lab { .. } => {
                 let rgb = color.to_rgb().map(unit);
                 Ink::Rgb(self.cms.to_cmyk(color, intent).map(unit), rgb)
@@ -602,6 +693,32 @@ impl<'a> Writer<'a> {
     /// (its distance a fraction of the radius, at most 1, §3.5.5; `0 0 0 0 Bh` at the center,
     /// §3.5.6), `1 (name) x y angle length 1 0 0 1 0 0 Bg`.
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect) -> String {
+        // A gradient mixed around the hue wheel (the format's gradients mix their stops' colors
+        // directly): the stops on its curve, no more than the reader reads, in a definition of
+        // its own.
+        if g.gradient.method.is_hue() {
+            self.warn(HUE_STOPS);
+            let curve = g.gradient.as_classic_curve();
+            let gradient = if curve.is_spread() { curve } else { curve.fitted(crate::import::MAX_GRADIENT_STOPS).into_owned() };
+            let p = GradientPaint { gradient, swatch: None, ..g.clone() };
+            return self.gradient(&p, bounds);
+        }
+        // A gradient that repeats or reflects (the format's gradients pad past their ends): its
+        // stops repeated as many times as `bounds` needs, in a definition of its own, no more
+        // stops than the reader reads.
+        if let Some(padded) = g.gradient.padded_within(&g.resolve(bounds), bounds, crate::import::MAX_GRADIENT_STOPS) {
+            self.warn(if padded.capped { SPREAD_CAPPED } else { SPREAD });
+            let geom = padded.geom;
+            let p = GradientPaint { gradient: padded.gradient, geom: Some(geom), angle: geom.angle_deg(), swatch: None, ..g.clone() };
+            return self.gradient(&p, bounds);
+        }
+        // One whose levels over `bounds` are not finite (a vector of no length): its stops
+        // repeated along the vector, padding past it.
+        if g.gradient.is_spread() {
+            self.warn(SPREAD_CAPPED);
+            let p = GradientPaint { gradient: g.gradient.unrolled_within(crate::import::MAX_GRADIENT_STOPS).into_owned(), swatch: None, ..g.clone() };
+            return self.gradient(&p, bounds);
+        }
         let name = self.define(&g.gradient, g.swatch.as_deref());
         for stop in &g.gradient.stops {
             if stop.opacity < 1.0 {
@@ -663,15 +780,15 @@ impl<'a> Writer<'a> {
     // ---------- type ----------
 
     /// Type: a text object when the format can hold it as text, else its outlines (type with
-    /// rotated characters among them, which keeps their rotation). A run whose
-    /// font size measures a height other than the em box is written at the em size it is drawn
-    /// at ([`vectorcraft_text::FontDb::font_heights_resolved`]).
+    /// rotated characters among them, which keeps their rotation).
     fn text(&mut self, t: &TextObject) {
         if !invertible(t.xf) {
             return;
         }
-        let resolved = vectorcraft_text::FontDb::global().font_heights_resolved(t);
-        let t = &*resolved;
+        // Written as text or as outlines, the type keeps its drawn sizes but not the setting.
+        if t.dynamic_text && matches!(t.kind, TextKind::OnPath { .. }) {
+            self.warn(DYNAMIC_TEXT);
+        }
         if !self.outline_text {
             if writable(self.doc, t) {
                 return self.text_object(t);
@@ -689,17 +806,18 @@ impl<'a> Writer<'a> {
     /// A text object (§15): `type To`, the text path (`a b c d tx ty startPt Tp`, an area's frame
     /// or the path type runs along, `TP`), then each run's style and characters, `TO`. The matrix
     /// takes text space (y up, the first baseline's start for point type) to art space; the frame
-    /// and path are in art space, as the specification's examples have them (§15.5).
+    /// and path are in art space, as the specification's examples have them (§15.5). Type that
+    /// Shrink Text to Fit or Dynamic Text scales is written in the styles it draws in, fitted at
+    /// the sizes the Character panel shows; then a run whose font size measures a height other
+    /// than the em box is written at the em size it is drawn at
+    /// ([`vectorcraft_text::FontDb::font_heights_resolved`]).
     fn text_object(&mut self, t: &TextObject) {
         if lost_attributes(t) {
             self.warn(TYPE_ATTRIBUTES);
         }
-        // Area type that Shrink Text to Fit scales down is written in the styles it draws in.
-        let fitted = matches!((&t.kind, t.area.fit), (TextKind::Area { .. }, vectorcraft_doc::AreaFit::ShrinkText { .. }))
-            .then(|| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).fit_scale)
-            .filter(|f| *f != 1.0)
-            .map(|f| vectorcraft_text::scaled(t, f));
-        let t = fitted.as_ref().unwrap_or(t);
+        let fitted = vectorcraft_text::drawn(t);
+        let resolved = vectorcraft_text::FontDb::global().font_heights_resolved(&fitted);
+        let t = &*resolved;
         let m = self.to_art * t.xf * Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
         let (kind, path, start) = match &t.kind {
             TextKind::Point => (0, None, 0.0),
@@ -748,6 +866,10 @@ impl<'a> Writer<'a> {
                 self.line(" Tx");
             }
         }
+        if self.kumi {
+            self.line("0 TY");
+            self.kumi = false;
+        }
         self.line("TO");
     }
 
@@ -767,7 +889,8 @@ impl<'a> Writer<'a> {
     }
 
     /// A run's character attributes and paint style: `Tr`, its fill and stroke, `Tf`, `Ts`, `Tz`,
-    /// `Tt`, `TA`, and the leading with the space before its paragraph, `Tl`.
+    /// `Tt`, `TA`, and the leading with the space before its paragraph, `Tl`; then `Tv` and `TY`
+    /// where Standard Vertical Roman Alignment or Tate-chu-yoko changes.
     fn char_style(&mut self, st: &CharStyle, p: &ParaStyle) {
         let fill = !st.fill.is_none();
         let stroke = st.has_stroke();
@@ -805,6 +928,14 @@ impl<'a> Writer<'a> {
         let leading = st.leading.unwrap_or_else(|| p.justification.auto_leading_for(st.size));
         ps::push_nums(&mut self.body, &[finite(leading, size * 1.2), finite(p.space_before, 0.0)]);
         self.line("Tl");
+        if st.standard_vertical_roman != self.roman {
+            self.roman = st.standard_vertical_roman;
+            self.line(if self.roman { "1 Tv" } else { "0 Tv" });
+        }
+        if st.tate_chu_yoko != self.kumi {
+            self.kumi = st.tate_chu_yoko;
+            self.line(if self.kumi { "1 TY" } else { "0 TY" });
+        }
     }
 
     /// Type as its glyphs' outlines: a group of a compound path for each run, with the run's fill

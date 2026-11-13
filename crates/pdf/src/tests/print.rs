@@ -33,6 +33,7 @@ fn artboard(id: u32, x: f64) -> Artboard {
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     }
 }
 
@@ -274,11 +275,8 @@ fn an_artboard_that_does_not_fit_prints_one_copy_per_sheet() {
     let d = doc(700.0, 900.0, &[(Rect::new(0.0, 0.0, 700.0, 900.0), rgb(0.0, 0.0, 1.0))]);
     let r = job(&d, json!({"copiesPerSheet": true}));
     assert_eq!(r.pages, 1);
-    assert!(
-        r.warnings.iter().any(|w| w == "Artboard 1 with its bleed and marks doesn't fit the imageable area: it prints one copy per sheet"),
-        "{:?}",
-        r.warnings
-    );
+    // A note on the options; the art that doesn't print is what the job loses.
+    assert_eq!(r.setting_notes, ["Artboard 1 with its bleed and marks doesn't fit the imageable area: it prints one copy per sheet"]);
     assert!(r.warnings.iter().any(|w| w.contains("larger than the imageable area")), "{:?}", r.warnings);
     assert_eq!(r.bytes, job(&d, json!({})).bytes, "printed as without copies per sheet");
     assert!(preview(&d, &settings(json!({"copiesPerSheet": true}))).unwrap().sheets[0].copies.is_empty());
@@ -348,7 +346,7 @@ fn every_copy_on_a_sheet_draws_the_same_symbol_instances() {
     w.page(&mut ex, &sheet).unwrap();
     assert_eq!(ex.symbol_limit, 10, "the limit is the export's again after the sheet");
     w.absorb(ex);
-    let (bytes, _) = w.finish(&mut std::collections::HashSet::new(), false).unwrap();
+    let (bytes, ..) = w.finish(&mut std::collections::HashSet::new(), false).unwrap();
     let p = pages(&bytes);
     let left = p[0].1.iter().filter(|(r, _)| r.x0 < 200.0).count();
     assert_eq!((left, p[0].1.len() - left), (3, 3), "one instance in each copy: {:?}", p[0].1);

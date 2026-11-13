@@ -43,9 +43,20 @@ pub type ReadHeadFn = Box<dyn Fn(&str, usize) -> Result<Vec<u8>, String>>;
 
 pub type WriteFn = Box<dyn FnMut(&str, &[u8]) -> Result<(), String>>;
 
-pub type ExistsFn = Box<dyn Fn(&str) -> bool>;
+/// A save writer that keeps typed filesystem failures, on either the UI or background thread.
+pub type SaveWriteFn = Arc<dyn Fn(&str, &[u8]) -> vectorcraft_engine::Result<()> + Send + Sync>;
+
+/// A typed save writer for native files encoded directly into the output.
+pub type SaveStreamFn =
+    Arc<dyn Fn(&str, &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>) -> vectorcraft_engine::Result<()> + Send + Sync>;
+
+/// Shared, so Background Save and Export can check from a worker thread too.
+pub type ExistsFn = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
 pub type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
+
+/// The web open picker's answers in order: the picked file, or `None` when it was canceled.
+pub type PickedInbox = Arc<Mutex<Vec<Option<(String, Vec<u8>)>>>>;
 
 /// Starts a browser download of the bytes under a file name; an error when it couldn't be started
 /// (the save or export then fails as a refused write does: #1693).
@@ -86,14 +97,21 @@ pub struct Services {
     pub read_head: Option<ReadHeadFn>,
     pub write: Option<WriteFn>,
     /// Is there a file or folder at a path (desktop)? The app asks before replacing a file that a
-    /// save panel's name names once the app gives it an extension ([`picks::ask_to_replace`]).
-    /// Without it, no file counts as there.
+    /// save panel's name names once the app gives it an extension ([`picks::ask_to_replace`]), and
+    /// before a save or export replaces a file it writes beside that one (a file per artboard, a
+    /// linked image). Without it, no file counts as there.
     pub exists: Option<ExistsFn>,
-    /// Files that arrived asynchronously (web open / drops): (name, bytes).
+    /// Files that arrived asynchronously (web drops): (name, bytes).
     pub inbox: Option<Inbox>,
+    /// Web: the open picker's answers (`open_async`). A file opens as automation's when automation
+    /// opened a picker that has not answered yet.
+    pub picked_inbox: Option<PickedInbox>,
+    /// Web: files the page's script handed over (`window.vectorcraft.openFile`). They open as
+    /// automation's.
+    pub page_inbox: Option<Inbox>,
     /// Web: trigger a browser download instead of writing a path.
     pub download: Option<DownloadFn>,
-    /// Web: start an async open (bytes arrive via `inbox`).
+    /// Web: start an async open (bytes arrive via `picked_inbox`).
     pub open_async: Option<Box<dyn FnMut()>>,
     /// Read the system clipboard's text (desktop). Without it, pasted text only arrives with
     /// egui's Paste event (web, and keyboard paste everywhere).
@@ -129,6 +147,10 @@ pub struct Services {
     /// stream into the file as they are encoded instead of being held whole in memory first.
     /// Without it they are encoded, then written with `write` / `write_shared`.
     pub stream_shared: Option<background::SharedStreamFn>,
+    /// Typed writers for document saves only. Without them the existing string writers are used
+    /// and failures keep their normal dialog. Downloads never use these callbacks.
+    pub save_write: Option<SaveWriteFn>,
+    pub save_stream: Option<SaveStreamFn>,
     /// Open a file (or a folder) in the system's default app for it (desktop: Edit Original, Show
     /// Package). Without it (the web) those answer with an error.
     pub open_file: Option<RevealFn>,
@@ -138,9 +160,10 @@ pub struct Services {
     pub open_in_photocraft: Option<OpenInFn>,
     /// Show a folder picker; returns its path (desktop: Relink to Folder, Package).
     pub pick_folder: Option<Box<dyn FnMut() -> Option<String>>>,
-    /// Show the system's color sampler, which picks a color anywhere on the screen (macOS, and
-    /// browsers with an EyeDropper): Sample Color from Screen ([`screen_color`]). Without it that
-    /// command answers with an error and the Color Picker's eyedropper button is gray.
+    /// Show the system's color sampler, which picks a color anywhere on the screen (macOS, Linux
+    /// through the desktop portal, and browsers with an EyeDropper): Sample Color from Screen
+    /// ([`screen_color`]). Without it that command answers with an error and the Color Picker's
+    /// eyedropper button is gray.
     pub screen_color: Option<screen_color::StartSampler>,
     /// Where Data Recovery keeps its copies when not in a folder (the web's browser storage;
     /// tests): installed into the session ([`vectorcraft_engine::cmd::recovery`]).
@@ -179,6 +202,10 @@ pub struct Services {
     /// reports for a window on that monitor. Empty on the web, and where the host cannot place a
     /// window by these points, which sends floating panels to the main window's monitor.
     pub dock_monitors: Vec<craft_ui::docking::Monitor>,
+    /// The text Help › Copy Troubleshooting Info copies (desktop: the platform, the graphics
+    /// processor, recent commands and frame times, and the hang reports of this session and the
+    /// one before). Without it the command copies the version only ([`crate::troubleshooting`]).
+    pub troubleshooting: Option<Box<dyn Fn() -> String>>,
 }
 
 /// Rewrites one window's raw input before egui reads it ([`Services::native_input_hook`]).

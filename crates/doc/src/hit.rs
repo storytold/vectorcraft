@@ -569,7 +569,7 @@ fn clip_contains(clip: &Node, p: Point) -> bool {
 
 /// The regions `clip` clips to ([`Node::clip_shapes`]), text counted by its frame as in
 /// [`clip_contains`].
-fn clip_regions(clip: &Node) -> Vec<(vectorcraft_geom::BezPath, vectorcraft_geom::FillRule)> {
+pub fn clip_regions(clip: &Node) -> Vec<(vectorcraft_geom::BezPath, vectorcraft_geom::FillRule)> {
     let frame = |n: &Node| {
         let b = n.geometric_bounds()?;
         Some(Node::path(n.id, vectorcraft_geom::shapes::rectangle(b), Default::default()))
@@ -588,7 +588,8 @@ fn may_hit(parent: &Node, i: usize, c: &Node, p: Point, opt: HitOptions, symbols
     if !c.visible || editable_only && (c.locked || c.is_template()) {
         return false;
     }
-    if opt.skip_guides && matches!(c.kind, NodeKind::Path { guide: true, .. }) {
+    // A ruler guide is picked by the guide commands, never by an object hit test.
+    if c.is_ruler_guide() || opt.skip_guides && matches!(c.kind, NodeKind::Path { guide: true, .. }) {
         return false;
     }
     // (An envelope's content sits where it was, not where the envelope draws it.)
@@ -639,7 +640,7 @@ fn source_of(n: &Node, scope: Option<NodeId>) -> bool {
 /// Do clicks and marquees skip the child `i` of `parent` with `scope` isolated? For a Shaper
 /// Group that is its original shapes (its first child), or, in Construction mode, when they are
 /// isolated, the art the group shows.
-fn shaper_hides(parent: &Node, i: usize, scope: Option<NodeId>) -> bool {
+pub fn shaper_hides(parent: &Node, i: usize, scope: Option<NodeId>) -> bool {
     parent.extras().shaper.is_some() && (i == 0) != source_of(parent, scope)
 }
 
@@ -794,6 +795,10 @@ thread_local! {
     static LEAVES_TESTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// What a click at `p` hits on leaf object `n`: its outline, strokes and fills, its frame or its
+/// bounds, by kind. Raster effects (drop shadows, glows, blurs) do not take clicks: the area they
+/// paint beyond the object is left out here and in [`cull_reach`], so a click there reaches the
+/// object under it.
 fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option<HitKind> {
     #[cfg(test)]
     LEAVES_TESTED.with(|c| c.set(c.get() + 1));
@@ -870,10 +875,10 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             on_type_path(n, t, p, opt.tol).then_some(HitKind::Outline)
         }
         // An image is hit within its frame (on the frame's edge only with Selection by Path Only,
-        // #3291), and where its own fills and strokes paint ([`image_paint`]) except in outline
-        // mode.
+        // #3291, and in outline mode where the frame is all that is drawn, #6437), and where its
+        // own fills and strokes paint ([`image_paint`]) except in outline mode.
         NodeKind::Image(im) => {
-            if opt.path_only {
+            if opt.path_only || (opt.outline && !symbols.document().setup.outline_images) {
                 use vectorcraft_geom::kurbo::Shape;
                 let mut frame = Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height)).to_path(0.1);
                 frame.apply_affine(im.xf);
@@ -908,6 +913,10 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             let bp = m.outline().to_bezpath();
             if stroke_contains(&bp, 0.0, opt.tol, p) {
                 return Some(HitKind::Outline);
+            }
+            // Outline mode draws the mesh lines, not the colours between them (#6437).
+            if opt.outline {
+                return stroke_contains(&m.lines().to_bezpath(), 0.0, opt.tol, p).then_some(HitKind::Outline);
             }
             (!opt.path_only && fill_contains(&bp, vectorcraft_geom::FillRule::NonZero, p)).then_some(HitKind::Fill)
         }
@@ -1252,7 +1261,7 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
         // marquee touches none of it, as clicks don't (#5309).
         Some(s) if !doc.is_editable(s.id) => vec![],
         Some(s) => match s.children() {
-            Some(c) => c.iter().enumerate().filter(|(i, _)| !shaper_hides(s, *i, scope)).map(|(_, c)| (c, r)).collect(),
+            Some(c) => c.iter().enumerate().filter(|(i, c)| !c.is_ruler_guide() && !shaper_hides(s, *i, scope)).map(|(_, c)| (c, r)).collect(),
             // A single object isolated: only it.
             None => doc
                 .parent_of(s.id)
@@ -1281,7 +1290,7 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
                 if c.visible && !c.locked && !c.is_template() {
                     out.extend(layer_objects(c, r));
                 }
-            } else {
+            } else if !c.is_ruler_guide() {
                 out.push((c, r));
             }
         }
@@ -1347,7 +1356,7 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
 /// The part of a marquee `r` in which it can touch the children of `parent`. For a clip group or a
 /// layer with a clipping mask, this is what [`marquee_in_clip`] returns for its clipping path (None
 /// when the marquee misses it); otherwise it is all of `r`.
-fn marquee_in(parent: &Node, r: Rect) -> Option<Rect> {
+pub fn marquee_in(parent: &Node, r: Rect) -> Option<Rect> {
     match parent.children().and_then(|c| c.first()) {
         Some(clip) if parent.clips() => marquee_in_clip(clip, r),
         _ => Some(r),

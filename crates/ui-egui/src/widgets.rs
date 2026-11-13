@@ -45,13 +45,13 @@ pub use drag::{
 };
 #[cfg(test)]
 use dropdowns::combo_button_id;
-#[cfg(test)]
-pub(crate) use dropdowns::menu_floor;
-pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field, combo_named, field_focused_in, popover_is_open};
+pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field_named, combo_named, field_focused_in, popover_is_open};
 pub use dropdowns::{
-    dropdown, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style, menu_room, menu_scroll,
-    panel_scroll, popover, set_menu_floor, strip_scroll,
+    dropdown, dropdown_icon_names, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style,
+    menu_room, menu_scroll, panel_scroll, popover, set_menu_floor, strip_scroll,
 };
+#[cfg(test)]
+pub(crate) use dropdowns::{menu_floor, menu_room_either};
 pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_label, section_header, section_toggle, section_toggle_name, subheader};
 pub(crate) use labels::{label_field, take_previous_label, text_width};
 pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
@@ -658,6 +658,27 @@ mod menu_room_tests {
         assert_eq!(menu_room(100.0, 24.0, 92.0), 92.0);
     }
 
+    /// A popup opens below its button while that leaves the minimum height, even when the list
+    /// then scrolls.
+    #[test]
+    fn a_menu_opens_below_while_that_side_has_the_minimum() {
+        assert_eq!(menu_room_either(300.0, 800.0, 980.0), 288.0);
+        assert_eq!(menu_room_either(132.0, 800.0, 980.0), 120.0);
+    }
+
+    /// With less than the minimum below, the list takes the room above, up to the window's height.
+    #[test]
+    fn a_menu_opens_above_when_below_is_too_short() {
+        assert_eq!(menu_room_either(40.0, 500.0, 980.0), 488.0);
+        assert_eq!(menu_room_either(40.0, 500.0, 300.0), 300.0);
+    }
+
+    /// With little room on either side, the list keeps the minimum height.
+    #[test]
+    fn a_menu_keeps_the_minimum_with_little_room_either_side() {
+        assert_eq!(menu_room_either(40.0, 60.0, 980.0), 120.0);
+    }
+
     /// The floor one window records does not reach a menu in another window of the same context.
     #[test]
     fn the_menu_floor_applies_in_the_window_that_recorded_it() {
@@ -709,11 +730,152 @@ mod gradient_chip_tests {
         assert_eq!(at(&up, 0, 2), at(&up, 4, 2));
     }
 
+    /// A conic chip sweeps clockwise from its angle, or counterclockwise when the gradient is
+    /// mirrored.
+    #[test]
+    fn conic_chip_sweeps_the_way_the_gradient_turns() {
+        let at = |colors: &[Color32], i: usize, j: usize| colors[j * 5 + i].r();
+        let mut gp = paint(GradientKind::Conic, 0.0);
+        let chip = gradient_chip_colors(&gp, 20.0, 20.0, 4, 4);
+        // From the right: a quarter turn on is below the center, halfway around left of it.
+        assert!(at(&chip, 2, 4).abs_diff(191) <= 2 && at(&chip, 2, 0).abs_diff(64) <= 2, "{chip:?}");
+        assert!(at(&chip, 0, 2).abs_diff(128) <= 2, "{chip:?}");
+        let c = vectorcraft_geom::kurbo::Point::new(50.0, 50.0);
+        gp.geom =
+            Some(vectorcraft_color::GradientGeom { start: c, end: c + vectorcraft_geom::kurbo::Vec2::new(10.0, 0.0), aspect: -1.0, focal: None });
+        let mirrored = gradient_chip_colors(&gp, 20.0, 20.0, 4, 4);
+        assert!(at(&mirrored, 2, 4).abs_diff(64) <= 2 && at(&mirrored, 2, 0).abs_diff(191) <= 2, "{mirrored:?}");
+    }
+
+    /// A diamond chip runs from the center out to a square whose edges pass through the chip's
+    /// corners: halfway along an edge and halfway to a corner are the same color.
+    #[test]
+    fn diamond_chip_runs_out_to_the_corners() {
+        let at = |colors: &[Color32], i: usize, j: usize| colors[j * 5 + i].r();
+        let chip = gradient_chip_colors(&paint(GradientKind::Diamond, 0.0), 20.0, 20.0, 4, 4);
+        assert_eq!((at(&chip, 2, 2), at(&chip, 0, 0), at(&chip, 4, 4)), (255, 0, 0), "{chip:?}");
+        for (i, j) in [(2, 0), (0, 2), (1, 1), (3, 3)] {
+            assert!(at(&chip, i, j).abs_diff(128) <= 2, "({i}, {j}): {chip:?}");
+        }
+    }
+
+    /// A gradient that repeats or reflects as many times as a chip has cells (8 on a 24-point chip)
+    /// still shows its runs: the grid gets more cells than runs, so its points do not all sample
+    /// the same place in a run.
+    #[test]
+    fn a_chip_repeated_once_a_cell_is_not_one_color() {
+        for spread in [vectorcraft_color::GradientSpread::Repeat, vectorcraft_color::GradientSpread::Reflect] {
+            let mut gp = paint(GradientKind::Linear, 0.0);
+            gp.gradient.spread = spread;
+            gp.gradient.repeats = 8;
+            let (cols, rows) = chips::chip_grid(&gp.gradient, 24.0, 24.0);
+            assert!(cols > 8 && rows > 8, "{spread:?}: {cols} x {rows}");
+            let chip = gradient_chip_colors(&gp, 24.0, 24.0, cols, rows);
+            let row: std::collections::HashSet<Color32> = chip.iter().take(cols + 1).copied().collect();
+            assert!(row.len() > 2, "{spread:?}: {row:?}");
+        }
+        // A gradient that pads keeps a cell about every 3 points.
+        assert_eq!(chips::chip_grid(&Gradient::default(), 24.0, 24.0), (8, 8));
+        // Many runs give a small chip at most a cell a point.
+        let mut many = paint(GradientKind::Linear, 0.0).gradient;
+        many.spread = vectorcraft_color::GradientSpread::Repeat;
+        many.repeats = 100;
+        assert_eq!(chips::chip_grid(&many, 24.0, 12.0), (24, 12));
+        assert_eq!(chips::chip_grid(&many, 400.0, 400.0), (128, 128));
+        // A count that matches a chip's points still shows its runs.
+        let mut gp = paint(GradientKind::Linear, 0.0);
+        gp.gradient.spread = vectorcraft_color::GradientSpread::Repeat;
+        gp.gradient.repeats = 23;
+        let (cols, rows) = chips::chip_grid(&gp.gradient, 23.0, 23.0);
+        let chip = gradient_chip_colors(&gp, 23.0, 23.0, cols, rows);
+        let row: std::collections::HashSet<Color32> = chip.iter().take(cols + 1).copied().collect();
+        assert!(row.len() > 2, "{cols}: {row:?}");
+    }
+
     #[test]
     fn radial_chip_runs_from_the_centre_out() {
         let colors = gradient_chip_colors(&paint(GradientKind::Radial, 0.0), 20.0, 20.0, 4, 4);
         assert_eq!(colors[2 * 5 + 2], Color32::WHITE);
         assert_eq!(colors[0], Color32::BLACK);
+    }
+
+    /// A stop at opacity 0 is clear on the chip of every kind, and one at 50% half clear.
+    #[test]
+    fn chip_shows_the_stops_opacity() {
+        use vectorcraft_color::{Color, GradientStop};
+        for kind in [GradientKind::Linear, GradientKind::Radial, GradientKind::Conic] {
+            let mut gp = paint(kind, 0.0);
+            gp.gradient.stops = vec![
+                GradientStop { opacity: 0.5, ..GradientStop::new(0.0, Color::BLACK) },
+                GradientStop { opacity: 0.0, ..GradientStop::new(1.0, Color::BLACK) },
+            ];
+            let chip = gradient_chip_colors(&gp, 20.0, 20.0, 4, 4);
+            let (lo, hi) = chip.iter().fold((u8::MAX, 0), |(lo, hi), c| (lo.min(c.a()), hi.max(c.a())));
+            // No grid point of a conic chip lands exactly at the end of its sweep.
+            assert!(lo <= if kind == GradientKind::Conic { 12 } else { 0 }, "{kind:?}: {chip:?}");
+            assert!(hi.abs_diff(128) <= 1, "{kind:?}: {chip:?}");
+        }
+        let at = |colors: &[Color32], i: usize, j: usize| colors[j * 5 + i];
+        let mut gp = paint(GradientKind::Linear, 0.0);
+        gp.gradient.stops[1].opacity = 0.0;
+        let chip = gradient_chip_colors(&gp, 20.0, 20.0, 4, 4);
+        assert_eq!(at(&chip, 0, 2), Color32::WHITE);
+        assert_eq!(at(&chip, 4, 2).a(), 0);
+        // Radial: an opaque edge around a clear center.
+        let mut gp = paint(GradientKind::Radial, 0.0);
+        gp.gradient.stops[0].opacity = 0.0;
+        let chip = gradient_chip_colors(&gp, 20.0, 20.0, 4, 4);
+        assert_eq!(at(&chip, 2, 2).a(), 0);
+        assert_eq!(chip[0], Color32::BLACK);
+    }
+
+    /// A chip with a clear stop draws a checkerboard under the gradient; an opaque one does not.
+    #[test]
+    fn a_clear_gradient_chip_has_a_checkerboard_under_it() {
+        let ctx = egui::Context::default();
+        let shapes = |gp: &GradientPaint| {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| gradient_chip(ui, Rect::from_min_size(pos2(10.0, 10.0), vec2(20.0, 20.0)), gp));
+            out.textures_delta.clear();
+            out.shapes.into_iter().map(|s| s.shape).collect::<Vec<_>>()
+        };
+        let opaque = shapes(&paint(GradientKind::Linear, 0.0));
+        assert!(matches!(opaque[..], [egui::Shape::Mesh(_)]), "{opaque:?}");
+        let mut gp = paint(GradientKind::Linear, 0.0);
+        gp.gradient.stops[1].opacity = 0.0;
+        let clear = shapes(&gp);
+        let n = clear.len();
+        assert!(n > 2 && matches!(clear[n - 1], egui::Shape::Mesh(_)), "{clear:?}");
+        let fills: std::collections::HashSet<_> =
+            clear[..n - 1].iter().filter_map(|s| if let egui::Shape::Rect(r) = s { Some(r.fill) } else { None }).collect();
+        assert_eq!(fills, [Color32::WHITE, Color32::from_gray(204)].into_iter().collect(), "{clear:?}");
+    }
+
+    #[test]
+    fn freeform_chip_shows_the_points_opacity() {
+        use vectorcraft_color::{Color, Freeform, FreeformPoint};
+        use vectorcraft_geom::kurbo::Point;
+        let mut gp = paint(GradientKind::Freeform, 0.0);
+        let clear = FreeformPoint { opacity: 0.0, ..FreeformPoint::new(Point::new(10.0, 10.0), Color::BLACK) };
+        gp.freeform = Some(Freeform { points: vec![clear], ..Default::default() });
+        let chip = gradient_chip_colors(&gp, 20.0, 20.0, 4, 4);
+        assert!(chip.iter().all(|c| c.a() == 0), "{chip:?}");
+    }
+
+    /// A Holographic glow's chip is clear at the corners and nearly opaque at the center; a foil's
+    /// chip is opaque everywhere.
+    #[test]
+    fn holographic_chips_show_a_glow_clear_at_its_edge_and_a_foil_opaque() {
+        use vectorcraft_color::Paint;
+        let lib = vectorcraft_color::libraries::builtin_library("holographic").unwrap();
+        let chip = |name: &str| match &lib.swatch(name).unwrap().paint {
+            Paint::Gradient(g) => gradient_chip_colors(g, 20.0, 20.0, 4, 4),
+            p => panic!("{name}: {p:?}"),
+        };
+        let glow = chip("Mint Halo");
+        assert!([0, 4, 20, 24].iter().all(|&i| glow[i].a() == 0), "{glow:?}");
+        assert!(glow[2 * 5 + 2].a() >= 240, "{glow:?}");
+        let foil = chip("Prism Veil");
+        assert!(foil.iter().all(|c| c.a() == 255), "{foil:?}");
     }
 
     #[test]

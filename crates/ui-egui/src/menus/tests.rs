@@ -131,6 +131,57 @@ fn hovering_another_title_switches_the_open_menu() {
 }
 
 #[test]
+fn opening_the_file_menu_reads_the_scripts_folder_again() {
+    let dir = std::env::temp_dir().join(format!("vc-menu-bar-scripts-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut session = vectorcraft_engine::Session::new();
+    session.attach_scripts_dir(dir.clone());
+    let mut app = VectorcraftApp::new(session, crate::Services::default());
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    // The scripts File › Scripts lists.
+    let listed = || {
+        let (_, file) = menu_tree().into_iter().find(|(title, _)| *title == "File").unwrap();
+        let scripts = file.iter().find_map(|item| match item {
+            Item::Sub("Scripts", items) => Some(items.clone()),
+            _ => None,
+        });
+        scripts
+            .unwrap()
+            .iter()
+            .filter_map(|item| if let Item::Cmd(label, crate::scripts_menu::COMMAND, _) = item { Some(*label) } else { None })
+            .collect::<Vec<_>>()
+    };
+    // One frame of the bar, then the listing a read it started gave.
+    let frame = |app: &mut VectorcraftApp| {
+        let titles = bar_frame(app, &ctx, vec![]);
+        crate::scripts_menu::wait();
+        titles
+    };
+    std::fs::write(dir.join("a.js"), "").unwrap();
+    frame(&mut app);
+    let titles = frame(&mut app);
+    assert!(listed().is_empty(), "the bar reads nothing while its menus are closed");
+    egui::Popup::open_id(&ctx, titles[0].1);
+    frame(&mut app);
+    assert_eq!(listed(), ["a"]);
+    // While File stays open the folder is not read again.
+    std::fs::write(dir.join("b.js"), "").unwrap();
+    frame(&mut app);
+    assert_eq!(listed(), ["a"]);
+    // Nor when another menu opens; the next time File opens it is.
+    egui::Popup::open_id(&ctx, titles[1].1);
+    let t = frame(&mut app);
+    assert_eq!((open_titles(&ctx, &t), listed()), (vec![1], vec!["a"]));
+    egui::Popup::open_id(&ctx, titles[0].1);
+    frame(&mut app);
+    assert_eq!(listed(), ["a", "b"]);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn a_popup_covering_a_title_does_not_switch_menus() {
     let ctx = egui::Context::default();
     let p = egui::pos2(90.0, 12.0);
@@ -262,6 +313,144 @@ fn optical_margin_alignment_is_a_checked_type_menu_item() {
     assert_eq!(checked(&app, "type.orientation.horizontal", &Value::Null), Some(false));
 }
 
+/// Type › Dynamic Text runs `type.dynamicText`, is enabled for point type and for type on a path
+/// and area type that are in no thread, and is checked while the selected type has it on.
+#[test]
+fn dynamic_text_is_a_checked_type_menu_item() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let ids: Vec<&str> = menu_tree()
+        .into_iter()
+        .filter(|(menu, _)| *menu == "Type")
+        .flat_map(|(_, items)| items)
+        .filter_map(|item| match item {
+            Item::Cmd("Dynamic Text", id, _) => Some(id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ids, ["type.dynamicText"]);
+    let id = "type.dynamicText";
+    assert_eq!(checked(&app, id, &Value::Null), Some(false));
+    assert!(!enabled(&app, id));
+    let point = app.run("text.create", json!({"x": 10, "y": 10, "text": "Point"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [point]})).unwrap();
+    assert!(enabled(&app, id), "point type, which it turns into area type with Block on");
+    assert_eq!(checked(&app, id, &Value::Null), Some(false), "point type");
+    let path = app.run("path.create", json!({"d": "M60 150 L340 150"})).unwrap()["id"].clone();
+    let t = app.run("text.createInPath", json!({"path": path, "mode": "onPath", "text": "Along", "at": [60, 150]})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [t]})).unwrap();
+    assert!(enabled(&app, id));
+    assert_eq!(checked(&app, id, &Value::Null), Some(false));
+    app.run(id, json!({})).unwrap();
+    assert_eq!(checked(&app, id, &Value::Null), Some(true));
+    app.run(id, json!({})).unwrap();
+    assert_eq!(checked(&app, id, &Value::Null), Some(false));
+    let frame = app.run("shape.rectangle", json!({"x": 60, "y": 200, "width": 200, "height": 100})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [t, frame]})).unwrap();
+    app.run("text.thread.create", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [t]})).unwrap();
+    assert!(!enabled(&app, id), "type on a path in a thread");
+    // Area type takes Block, and the item is checked while it is on.
+    let area = app.run("text.create", json!({"x": 10, "y": 400, "text": "Block", "area": {"width": 100, "height": 50}})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [area]})).unwrap();
+    assert!(enabled(&app, id), "area type");
+    assert_eq!(checked(&app, id, &Value::Null), Some(false));
+    app.run(id, json!({})).unwrap();
+    assert_eq!(checked(&app, id, &Value::Null), Some(true));
+    // Point type first: unchecked, as the item turns it on.
+    app.run("select.set", json!({"ids": [point, area]})).unwrap();
+    assert_eq!(checked(&app, id, &Value::Null), Some(false), "point type first");
+    app.run(id, json!({})).unwrap();
+    assert_eq!(checked(&app, id, &Value::Null), Some(true), "both on");
+}
+
+/// Type › Type on a Path › Center on Top and Center on Bottom run `type.pathCenter.top` and
+/// `.bottom`, which the command palette also runs without params, and are enabled for type on a
+/// closed path only.
+#[test]
+fn center_on_top_and_bottom_are_type_on_a_path_items() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let items: Vec<(&str, &str)> = menu_tree()
+        .into_iter()
+        .filter(|(menu, _)| *menu == "Type")
+        .flat_map(|(_, items)| items)
+        .filter_map(|item| match item {
+            Item::Sub("Type on a Path", children) => Some(children),
+            _ => None,
+        })
+        .flatten()
+        .filter_map(|item| match item {
+            Item::Cmd(label, id, Value::Null) if id.starts_with("type.pathCenter") => Some((label, id)),
+            _ => None,
+        })
+        .collect();
+    let ids = ["type.pathCenter.top", "type.pathCenter.bottom"];
+    assert_eq!(items, [("Center on Top", ids[0]), ("Center on Bottom", ids[1])]);
+    let palette = crate::palette::items();
+    for (label, id) in items {
+        assert!(palette.iter().any(|(l, i, _)| l == &format!("Type › Type on a Path › {label}") && i == id), "{label}");
+    }
+    let line = app.run("path.create", json!({"d": "M60 150 L340 150"})).unwrap()["id"].clone();
+    let open = app.run("text.createInPath", json!({"path": line, "mode": "onPath", "text": "Along", "at": [60, 150]})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [open]})).unwrap();
+    assert!(ids.iter().all(|id| !enabled(&app, id)), "type on an open path");
+    let square = app.run("path.create", json!({"d": "M60 200 L160 200 L160 300 L60 300 Z"})).unwrap()["id"].clone();
+    let closed = app.run("text.createInPath", json!({"path": square, "mode": "onPath", "text": "Round", "at": [60, 200]})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [closed]})).unwrap();
+    assert!(ids.iter().all(|id| enabled(&app, id)));
+    app.run("select.set", json!({"ids": [closed, open]})).unwrap();
+    assert!(ids.iter().all(|id| !enabled(&app, id)), "type on a closed path and on an open one");
+    // A palette pick runs the command with no params.
+    app.run("select.set", json!({"ids": [closed]})).unwrap();
+    crate::palette::run_pick(&mut app, ids[0]);
+    let doc = &app.session.active().unwrap().doc;
+    let start = match &doc.node(vectorcraft_doc::NodeId(closed.as_u64().unwrap())).unwrap().kind {
+        vectorcraft_doc::NodeKind::Text(t) => match t.kind {
+            vectorcraft_doc::TextKind::OnPath { start, .. } => start,
+            ref k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    };
+    // Once round, the middle of the top edge an eighth of the way round.
+    assert!((start - 0.625).abs() < 1e-6, "{start}");
+}
+
+/// Type › Dynamic Text Presets › Circle, Arch and Bow run `type.dynamicTextPreset` with their
+/// preset, enabled for point type and type on a path but not for area type alone.
+#[test]
+fn dynamic_text_presets_are_a_type_submenu() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let items: Vec<(&str, &str, Value)> = menu_tree()
+        .into_iter()
+        .filter(|(menu, _)| *menu == "Type")
+        .flat_map(|(_, items)| items)
+        .filter_map(|item| match item {
+            Item::Sub("Dynamic Text Presets", children) => Some(children),
+            _ => None,
+        })
+        .flatten()
+        .filter_map(|item| match item {
+            Item::Cmd(label, id, p) => Some((label, id, p)),
+            _ => None,
+        })
+        .collect();
+    let id = "type.dynamicTextPreset";
+    assert_eq!(items, [("Circle", id, json!({"preset": "circle"})), ("Arch", id, json!({"preset": "arch"})), ("Bow", id, json!({"preset": "bow"}))]);
+    assert!(!enabled(&app, id));
+    let area = app.run("text.create", json!({"x": 10, "y": 200, "text": "Area", "area": {"width": 100, "height": 50}})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [area]})).unwrap();
+    assert!(!enabled(&app, id), "area type");
+    let point = app.run("text.create", json!({"x": 10, "y": 10, "text": "Point"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [point]})).unwrap();
+    assert!(enabled(&app, id));
+    app.run(id, json!({"preset": "arch"})).unwrap();
+    // Now type on a path with Dynamic Text on, so Type › Dynamic Text is checked.
+    assert!(enabled(&app, id));
+    assert_eq!(checked(&app, "type.dynamicText", &Value::Null), Some(true));
+}
+
 /// Type › Optical Margin Alignment menu check uses `shared_text_flag`; mixed values stay unchecked.
 #[test]
 fn optical_margin_alignment_menu_unchecked_when_shared_flag_none() {
@@ -391,6 +580,38 @@ fn classic_extrude_bevel_is_in_the_3d_classic_submenu() {
     assert_eq!((e.label.as_str(), e.command.as_deref()), ("Extrude & Bevel (Classic)…", Some("effect.dialog")));
     let at = |label: &str| entries.iter().position(|x| x.label == label && x.path.get(1).is_some_and(|p| p == "3D and Materials"));
     assert!(at("Materials…").unwrap() < at("Extrude & Bevel (Classic)…").unwrap());
+}
+
+/// Effect › 3D and Materials › 3D (Classic) › Revolve (Classic)… opens its effect dialog, after
+/// Extrude & Bevel (Classic)…, and nowhere else.
+#[test]
+fn classic_revolve_is_in_the_3d_classic_submenu() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let entries = menu_entries(&app);
+    let classic: Vec<_> = entries.iter().filter(|e| e.params.get("effect").and_then(Value::as_str) == Some("threeD.classicRevolve")).collect();
+    assert_eq!(classic.len(), 1, "listed once");
+    let e = classic[0];
+    assert_eq!(e.path, ["Effect", "3D and Materials", "3D (Classic)"]);
+    assert_eq!((e.label.as_str(), e.command.as_deref()), ("Revolve (Classic)…", Some("effect.dialog")));
+    let at = |label: &str| entries.iter().position(|x| x.label == label && x.path.get(1).is_some_and(|p| p == "3D and Materials"));
+    assert!(at("Extrude & Bevel (Classic)…").unwrap() < at("Revolve (Classic)…").unwrap());
+}
+
+/// Effect › 3D and Materials › 3D (Classic) › Rotate (Classic)… opens its effect dialog, after
+/// Revolve (Classic)…, and nowhere else.
+#[test]
+fn classic_rotate_is_in_the_3d_classic_submenu() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let entries = menu_entries(&app);
+    let classic: Vec<_> = entries.iter().filter(|e| e.params.get("effect").and_then(Value::as_str) == Some("threeD.classicRotate")).collect();
+    assert_eq!(classic.len(), 1, "listed once");
+    let e = classic[0];
+    assert_eq!(e.path, ["Effect", "3D and Materials", "3D (Classic)"]);
+    assert_eq!((e.label.as_str(), e.command.as_deref()), ("Rotate (Classic)…", Some("effect.dialog")));
+    let at = |label: &str| entries.iter().position(|x| x.label == label && x.path.get(1).is_some_and(|p| p == "3D and Materials"));
+    assert!(at("Revolve (Classic)…").unwrap() < at("Rotate (Classic)…").unwrap());
 }
 
 /// A document's 25 views are all listed at the bottom of the View menu, by name, and the last

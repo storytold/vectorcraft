@@ -9,7 +9,7 @@
 //!   permission): no WASI, file system, network, clock or randomness. A module that
 //!   imports anything else is rejected;
 //! - an **instruction budget** (fuel) per call, metered in slices so a wall-clock deadline is
-//!   also enforced (native builds), so infinite loops end with an error. A filter may ask for a
+//!   also enforced, so infinite loops end with an error. A filter may ask for a
 //!   larger one ([`Budget::Heavy`]), which the host lets the user allow before installing it;
 //! - a **linear-memory cap**, a **recursion-depth cap** and wasmi's strict module limits;
 //! - a **fresh instance per run**, so no state leaks between calls; what a plug-in keeps is only
@@ -34,6 +34,7 @@
 //! runs through `vc_run` with the command's id in `_context`.
 #![forbid(unsafe_code)]
 
+pub mod deferred;
 pub mod dialog;
 pub mod effect;
 pub mod export;
@@ -53,6 +54,8 @@ pub use dialog::ParamUi;
 pub use host::{LogLevel, LogLine, Report};
 pub use manifest::{Budget, Command, InputKind, Kind, Manifest, Param, ParamSpec};
 pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Limits, Plugin, heavy_terms};
+#[doc(hidden)]
+pub use runtime::{BYTES_COPIED_PER_FUEL, FUEL_SLICE};
 
 /// What the host puts before a plug-in's id to name what it adds: its live effect
 /// (`plugin.<id>`, [`effect`]) or its file format ([`export`], [`import`]).
@@ -86,6 +89,10 @@ pub enum Error {
     /// Safe Mode is on ([`safe_mode`]): no plug-in loads or runs.
     #[error("Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally")]
     SafeMode,
+    /// The module lists permissions that no recorded grant gives this very module
+    /// ([`registry::approved`]): it names them, comma-separated.
+    #[error("needs approval: it asks for {0}, which the user grants when installing it on its own")]
+    NeedsApproval(String),
     #[error("{0}")]
     Io(String),
 }

@@ -58,6 +58,11 @@ pub struct CanvasCache {
     pub selection_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
     /// [`VectorcraftApp::content_bounds`] for (document uid, revision).
     pub content_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
+    /// [`CacheKey::plugins`] by document uid, with the plug-in revision
+    /// ([`vectorcraft_render::effects::plugin_revision`]) it was last checked at.
+    pub plugin_keys: std::collections::HashMap<u64, (u64, u64)>,
+    /// [`CacheKey::placed`] by document uid ([`canvas::placed_key`]).
+    pub placed_keys: std::collections::HashMap<u64, PlacedKey>,
     /// The tools' cursors as OS cursor bitmaps.
     pub cursors: cursors::Images,
     /// The view the canvas last drew and when it last changed (egui's input time): while it moves,
@@ -77,6 +82,20 @@ pub struct CanvasCache {
     pub panes: canvas::Panes,
     /// Window › Arrange › Float in Window: what the floating document windows keep between frames.
     pub windows: crate::doc_windows::Windows,
+}
+
+/// [`CanvasCache::placed_keys`]: a document's [`CacheKey::placed`] and the placed-document bitmap
+/// generations ([`vectorcraft_render::placed_document::generation`]) it was checked at.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PlacedKey {
+    /// The last generation the document was checked at.
+    pub checked: u64,
+    /// The document's [`CacheKey::placed`]: the generation of its first check, or of the last check
+    /// that found a newly made bitmap the document may show.
+    pub key: u64,
+    /// The value before it last changed, and the last generation that value was checked at: no
+    /// bitmap of a placed document the document shows was made between the two.
+    pub before: (u64, u64),
 }
 
 /// [`CanvasCache::slices`]: the layout of the slices of (document uid, revision).
@@ -117,8 +136,16 @@ pub struct CacheKey {
     pub highlight_alternate_glyphs: bool,
     /// Type › Highlight Substituted Fonts.
     pub highlight_substituted_fonts: bool,
-    /// [`vectorcraft_render::placed_document::generation`]: placed documents' bitmaps made since.
+    /// A [`vectorcraft_render::placed_document::generation`] that changes when the frame may show a
+    /// newly made bitmap of a placed document ([`canvas::placed_key`]). Bitmaps of files that only
+    /// other documents hold leave it as it is, unless more bitmaps were made since the last check
+    /// than are recorded and the document shows a placed document.
     pub placed: u64,
+    /// The plug-in revision ([`vectorcraft_render::effects::plugin_revision`]) of the last plug-in
+    /// install or removal, or of the last time deferred plug-in effect stages gave results, after
+    /// which the document drew a plug-in effect ([`vectorcraft_render::draws_plugin_effects`]): a
+    /// frame drawn before it draws those effects as the plug-ins installed then did. 0 until then.
+    pub plugins: u64,
     /// View › Pixel Preview: the document pixels rendered (x0, y0, x1, y1), one per point, shown
     /// with hard edges. None: the art is rendered for the screen.
     pub pixel: Option<[i64; 4]>,
@@ -134,6 +161,9 @@ pub struct CacheKey {
     /// The Image Trace objects drawn with their source image
     /// ([`vectorcraft_render::RenderOptions::trace_source`]).
     pub trace_source: Option<std::sync::Arc<Vec<vectorcraft_doc::NodeId>>>,
+    /// The display profile the frame is converted into ([`crate::display_profile::DisplayProfile::key`]),
+    /// 0 for none.
+    pub display: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default)]

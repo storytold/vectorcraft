@@ -71,6 +71,11 @@ pub struct Prefs {
     /// A single-key tool shortcut held down chooses its tool until the key is let go, and then the
     /// tool active before comes back; a quick press chooses the tool for good.
     pub hold_tool_keys: bool,
+    /// With View › Show Bounding Box on, the bounding box stays visible while a drag moves the
+    /// selection, and the shape tools that show it draw it around the shape being drawn. Off (the
+    /// default), it hides during a move and while a shape is drawn, except that a Selection tool
+    /// move with Real-time Drawing off still moves the box.
+    pub bounding_box_while_moving_and_drawing: bool,
     /// Offset for Paste / duplicate (Illustrator pastes to the view centre; we offset by this).
     pub paste_offset: f64,
     // Selection & Anchor Display
@@ -99,6 +104,9 @@ pub struct Prefs {
     pub font_names_in_english: bool,
     pub auto_size_area_type: bool,
     pub font_preview: bool,
+    /// Type › Show samples on white: the font menus draw each family's sample in dark type on a
+    /// white area in every brightness (off by default).
+    pub font_samples_on_white: bool,
     pub font_preview_size: String,
     pub recent_fonts_count: u32,
     pub missing_glyph_protection: bool,
@@ -124,6 +132,9 @@ pub struct Prefs {
     pub guide_style: String,
     /// Lock Guides by Default: the app starts with View › Guides › Lock Guides on.
     pub lock_guides_by_default: bool,
+    /// Artboard Guides with Cmd/Ctrl + Ruler Drag: Cmd/Ctrl held when a guide is dragged out of a
+    /// ruler makes it a guide of the active artboard, or with the Artboard tool a canvas guide.
+    pub cmd_ruler_drag_artboard_guides: bool,
     pub grid_color: String,
     pub grid_style: String,
     pub gridline_every: f64,
@@ -209,6 +220,10 @@ pub struct Prefs {
     /// Wayland session, where dropped files arrive (#1151); `x11WithPen` opens it through XWayland
     /// only when a pen is attached (#2028). Read when the app starts.
     pub linux_display_server: String,
+    /// The desktop canvas converts its sRGB into the ICC profile of the display that shows the
+    /// window, where the system doesn't (Windows without Advanced Color, X11). Display only: it
+    /// changes no document, proof or export.
+    pub monitor_profile_display: bool,
     // File Handling
     pub background_save: bool,
     pub background_export: bool,
@@ -249,6 +264,9 @@ pub struct Prefs {
     /// Character panel › Show Snap to Glyph Options: which guides View › Snap to Glyph gives
     /// (`view.snapToGlyph.options`; a preference group, see [`cmd::prefscmds::PREF_GROUPS`]).
     pub glyph_snap: vectorcraft_tools::GlyphSnap,
+    /// Pixel Snapping Options: whether View › Snap to Pixel snaps drawing, moving and scaling
+    /// (`view.snapToPixel.options`; a preference group, see [`cmd::prefscmds::PREF_GROUPS`]).
+    pub pixel_snap: vectorcraft_tools::PixelSnap,
     /// Edit → Transparency Flattener Presets: the user's presets (the built-in ones aren't stored).
     /// Not a `prefs.set` key or group (resetting the preferences keeps them): `flattener.presets.*`
     /// edit it.
@@ -394,6 +412,7 @@ impl Default for Prefs {
             scrub_numeric_fields: true,
             trackpad_rotate_view: true,
             hold_tool_keys: true,
+            bounding_box_while_moving_and_drawing: false,
             paste_offset: 10.0,
             selection_tolerance: 3.0,
             marquee_selection: "touching".into(),
@@ -418,6 +437,7 @@ impl Default for Prefs {
             font_names_in_english: true,
             auto_size_area_type: false,
             font_preview: true,
+            font_samples_on_white: false,
             font_preview_size: s("medium"),
             recent_fonts_count: 10,
             missing_glyph_protection: true,
@@ -434,6 +454,7 @@ impl Default for Prefs {
             guide_color: s("#4affff"),
             guide_style: s("lines"),
             lock_guides_by_default: false,
+            cmd_ruler_drag_artboard_guides: false,
             grid_color: s("#c8c8c8"),
             grid_style: s("lines"),
             gridline_every: 72.0,
@@ -482,6 +503,7 @@ impl Default for Prefs {
             real_time_drawing: true,
             render_threads: -1,
             linux_display_server: s("automatic"),
+            monitor_profile_display: true,
             background_save: true,
             background_export: true,
             autosave_recovery: true,
@@ -509,6 +531,7 @@ impl Default for Prefs {
             eyedropper: Default::default(),
             pathfinder: Default::default(),
             glyph_snap: Default::default(),
+            pixel_snap: Default::default(),
             flattener_presets: vec![],
             trace_presets: vec![],
             gradient_presets: vec![],

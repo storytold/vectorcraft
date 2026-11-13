@@ -21,6 +21,11 @@ pub struct Hooks<'a> {
     /// Distort Appearance: a path's strokes and geometry effects baked into filled art (`None`
     /// when it has none to bake).
     pub appearance: Outliner<'a>,
+    /// Distort Appearance for the pieces of type's glyph outlines: their geometry effects baked
+    /// as [`Hooks::appearance`] bakes them, their strokes left as strokes, which then paint along
+    /// the bent outlines at their own weight (#6644). `None` when a piece has nothing to bake, and
+    /// without this hook nothing in type's outlines is baked.
+    pub type_appearance: Outliner<'a>,
     /// Distort Pattern Fills: the tiles a pattern fill lays (see [`PatternTiles`]).
     pub pattern: Option<PatternTiles<'a>>,
     /// The document whose symbols' art counts toward the instance budget of a Repeat of their
@@ -61,6 +66,12 @@ pub(super) struct Warper<'a> {
     pub(super) options: EnvelopeOptions,
     /// How many hooks the art being mapped came through.
     pub(super) depth: u32,
+    /// Are groups marked as type's glyph outlines ([`crate::NodeExtras::type_outlines`]) in the art
+    /// being mapped type that live evaluation outlined: the type of the envelope's contents, or of
+    /// a live object in them, such as an envelope inside the envelope? Their strokes then paint
+    /// along the bent outlines at their own weight (#6644). Groups so marked in the contents as
+    /// they are, art an earlier Expand made of type, are plain art.
+    pub(super) type_outlines: bool,
 }
 
 impl Warper<'_> {
@@ -108,7 +119,8 @@ pub(super) fn map_node(n: &Node, w: &Warper) -> Node {
     {
         out.appearance.warp_linear_gradients(b, &|p| affine_near(w.f, p, w.eps));
     }
-    if let Some(m) = out.extras_if_any().and_then(|e| e.mask.as_mut()) {
+    // A linked opacity mask bends with the object it masks; an unlinked one stays where it is.
+    if let Some(m) = out.extras_if_any().and_then(|e| e.mask.as_mut()).filter(|m| m.linked) {
         m.art = Arc::new(map_node(&m.art, w));
     }
     match &mut out.kind {
@@ -117,6 +129,13 @@ pub(super) fn map_node(n: &Node, w: &Warper) -> Node {
             *live = None;
         }
         NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => {
+            // Type's glyph outlines: with Distort Appearance too, their strokes paint along the
+            // bent outlines at their own weight, as `.ai` files draw them (#6644). Their pieces are
+            // baked by `type_appearance`, which keeps strokes as strokes; their geometry effects,
+            // gradients and pattern fills follow the options as a path's do. The group's opacity
+            // mask, mapped above, bends as other art does.
+            let typed = Warper { hooks: Hooks { appearance: w.hooks.type_appearance, ..w.hooks }, ..*w };
+            let w = if w.type_outlines && n.extras().type_outlines { &typed } else { w };
             for c in children.iter_mut() {
                 *c = Arc::new(map_node(c, w));
             }
@@ -124,14 +143,17 @@ pub(super) fn map_node(n: &Node, w: &Warper) -> Node {
         NodeKind::Mesh(m) => m.map(w.f),
         NodeKind::Blend { .. } | NodeKind::Envelope { .. } | NodeKind::Repeat(_) | NodeKind::Intertwine { .. } => {
             if let Some(d) = &deeper {
-                return map_node(&expanded_group_hooks(n, w.hooks), d);
+                // The type's outlines in its art are type (an envelope inside the envelope, #6644).
+                return map_node(&expanded_group_hooks(n, w.hooks), &Warper { type_outlines: true, ..*d });
             }
         }
         NodeKind::Text(_) | NodeKind::SymbolInstance { .. } => {
             if let Some(d) = &deeper
                 && let Some(o) = w.hooks.outline.and_then(|h| h(n))
             {
-                return map_node(&carry_look(n, o), d);
+                // Type's outlines are type (#6644, the group arm above).
+                let d = Warper { type_outlines: d.type_outlines || matches!(n.kind, NodeKind::Text(_)), ..*d };
+                return map_node(&carry_look(n, o), &d);
             }
         }
         NodeKind::Image(im) => {
@@ -140,6 +162,8 @@ pub(super) fn map_node(n: &Node, w: &Warper) -> Node {
         }
         // Its art is plain, so it warps at this depth.
         NodeKind::PlacedDocument(_) => return map_node(&expanded_group_hooks(n, w.hooks), w),
+        // A ruler guide has no shape to warp.
+        NodeKind::RulerGuide { .. } => {}
     }
     out
 }
@@ -155,29 +179,60 @@ fn affine_between(s: [Point; 3], d: [Point; 3]) -> Option<Affine> {
     a.is_finite().then_some(a)
 }
 
-/// Image `n` (`im`) pushed through the warp as a raster mesh warp: its frame cut into
-/// `w.cells`² cells of two triangles, each a clip group showing the image under the affine map
-/// that takes the triangle where the warp takes its corners (with Preserve Shape Using
-/// Transparency, the image masked by the triangle; with Anti-Alias off, drawn without smoothing).
-/// Each piece reaches a little past its edges (at most half a point) so neighbours overlap and no
-/// seams show.
+/// Image `n` (`im`) pushed through the envelope's warp as a raster mesh warp ([`mesh_warp_image`]
+/// with `w.cells` cells, Preserve Shape Using Transparency and Anti-Alias as the envelope's
+/// options say).
 fn warp_image(n: &Node, im: &ImageObject, w: &Warper) -> Node {
     let k = w.cells.max(1);
-    // Two triangles a cell, three objects each; an image an inner envelope already cut into
-    // pieces is cut again here, so the pieces count against [`MAX_GENERATED`]. Past it, the image
-    // is left out.
-    if !Generating::charge(k.saturating_mul(k).saturating_mul(6)) {
+    // An image an inner envelope already cut into pieces is cut again here, so the pieces count
+    // against [`MAX_GENERATED`]. Past it, the image is left out.
+    if !Generating::charge(mesh_warp_cost(k)) {
         let mut g = n.clone();
         g.kind = NodeKind::Group { children: vec![], clip: false };
         return g;
     }
+    mesh_warp_image(n, im, w.f, k, !w.options.anti_alias, w.options.preserve_shape == PreserveShape::Transparency)
+}
+
+/// How many objects [`mesh_warp_image`] makes of one image with `cells` rows and columns: two
+/// triangles a cell, three objects each.
+pub fn mesh_warp_cost(cells: usize) -> usize {
+    let k = cells.max(1);
+    k.saturating_mul(k).saturating_mul(6)
+}
+
+/// Image `n` (`im`) pushed through point map `f` as a raster mesh warp: its frame cut into
+/// `cells`² cells of two triangles, each a clip group showing the image under the affine map
+/// that takes the triangle where `f` takes its corners (with `masked`, the image masked by the
+/// triangle instead; with `pixelated`, drawn without smoothing). Each piece reaches a little past
+/// its edges (at most half a point) so neighbors overlap and no seams show. Each piece keeps the
+/// color `n` colorizes a grayscale image with, and `n`'s color mask. The result is a group with `n`'s id, name,
+/// transparency, opacity mask and appearance. It is a knockout group and each piece is a
+/// [`crate::NodeExtras::warp_piece`], so where pieces overlap only the top one draws and a
+/// partly transparent image keeps its own alpha there. More cells than [`MAX_GENERATED`] objects
+/// allow make an empty group.
+pub fn mesh_warp_image(n: &Node, im: &ImageObject, f: &dyn Fn(Point) -> Point, cells: usize, pixelated: bool, masked: bool) -> Node {
+    let k = cells.max(1);
+    let mut g = n.clone();
+    g.kind = NodeKind::Group { children: vec![], clip: false };
+    g.knockout = crate::Knockout::On;
+    if let Some(e) = g.extras_if_any() {
+        e.colorize = None;
+    }
+    if mesh_warp_cost(k) > MAX_GENERATED {
+        return g;
+    }
+    // A grayscale image's fill color colorizes each piece; the group of pieces takes none.
+    let colorize = n.extras().colorize.clone();
+    // Each piece shows what the image shows: its color mask's masked pixels.
+    let color_mask = n.extras().color_mask.clone();
     let (pw, ph) = (im.width as f64, im.height as f64);
     let at = |i: usize, j: usize| Point::new(pw * i as f64 / k as f64, ph * j as f64 / k as f64);
     let mut pieces = Vec::with_capacity(2 * k * k);
     for j in 0..k {
         for i in 0..k {
             let s = [at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1)];
-            let d = s.map(|p| (w.f)(im.xf * p));
+            let d = s.map(|p| f(im.xf * p));
             for t in [[0, 1, 2], [0, 2, 3]] {
                 let (st, dt) = (t.map(|v| s[v]), t.map(|v| d[v]));
                 let Some(xf) = affine_between(st, dt) else { continue };
@@ -193,23 +248,28 @@ fn warp_image(n: &Node, im: &ImageObject, w: &Warper) -> Node {
                     .collect();
                 let shape = PathData::single(SubPath::polyline(&tri, true));
                 let mut image = Node::new(n.id, NodeKind::Image(Box::new(ImageObject { xf, ..im.clone() })));
-                image.extras_mut().pixelated = !w.options.anti_alias;
-                if w.options.preserve_shape == PreserveShape::Transparency {
+                image.extras_mut().pixelated = pixelated;
+                image.extras_mut().colorize = colorize.clone();
+                image.extras_mut().color_mask = color_mask.clone();
+                if masked {
                     // Preserve Shape Using Transparency: the triangle is the piece's alpha (a
                     // white opacity mask) instead of its clipping path.
                     let white = Node::path(n.id, shape, Appearance::basic(Paint::solid(Color::WHITE), Paint::None, 0.0));
-                    pieces.push(Arc::new(image.with_mask(Some(Box::new(crate::OpacityMask::new(white, true))))));
+                    let mut piece = image.with_mask(Some(Box::new(crate::OpacityMask::new(white, true))));
+                    piece.extras_mut().warp_piece = true;
+                    pieces.push(Arc::new(piece));
                     continue;
                 }
                 let mut clip = Node::path(n.id, shape, Appearance::default());
                 if let NodeKind::Path { clipping, .. } = &mut clip.kind {
                     *clipping = true;
                 }
-                pieces.push(Arc::new(Node::new(n.id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(image)], clip: true })));
+                let mut piece = Node::new(n.id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(image)], clip: true });
+                piece.extras_mut().warp_piece = true;
+                pieces.push(Arc::new(piece));
             }
         }
     }
-    let mut g = n.clone();
     g.kind = NodeKind::Group { children: pieces, clip: false };
     g
 }
@@ -437,8 +497,11 @@ pub fn subtree_has_live(n: &Node) -> bool {
     any
 }
 
-/// Largest stroke outset in a subtree (for visual bounds of envelopes). With `symbols`, the
-/// outsets in the art of the symbols its instances show count too
+/// Largest stroke outset in a subtree (for visual bounds of envelopes, blends and repeats, and the
+/// reach of symbol art), type's character strokes included as type's own visual bounds measure them
+/// ([`crate::TextObject::char_stroke_outset`]): in an envelope they paint at their own weight
+/// around the bent glyphs, past its grid where the glyphs reach its edge (#6644). With
+/// `symbols`, the outsets in the art of the symbols its instances show count too
 /// ([`crate::symbols::ArtBox::reach`]), grown by [`crate::SymbolBoxes::brush_pad`]. In boxes made
 /// by [`crate::SymbolBoxes::without_art_strokes`], the outsets in the art do not count, and the pad
 /// does.
@@ -447,6 +510,9 @@ pub(crate) fn max_outset(nodes: &[Arc<Node>], symbols: Option<&crate::SymbolBoxe
     for n in nodes {
         n.walk(&mut |c| {
             o = o.max(c.appearance.outset());
+            if let NodeKind::Text(t) = &c.kind {
+                o = o.max(t.char_stroke_outset());
+            }
             if let (Some(s), NodeKind::SymbolInstance { symbol, .. }) = (symbols, &c.kind)
                 && let Some(art) = s.art(symbol)
             {

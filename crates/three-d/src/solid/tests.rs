@@ -98,6 +98,33 @@ fn hidden_faces_draw_every_face_of_the_solid_behind_the_visible_ones() {
     }
 }
 
+/// Each facet says whether it is a piece of the solid's sides and whether it is turned away from
+/// the viewer: a box's walls and bevels are sides and its two caps are not; Inflate's sides are
+/// sides and its front is not.
+#[test]
+fn facets_tell_the_sides_from_the_ends_and_the_faces_turned_away() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let v = View { rotation_x: 20.0, rotation_y: 30.0, ..front() };
+    let bevel = Bevel { width: 10.0, height: 10.0, ..Bevel::default() };
+    for o in [Extrude { hidden: true, ..Extrude::default() }, Extrude { hidden: true, bevel: Some(bevel), ..Extrude::default() }] {
+        let all = extrude(&p, FillRule::EvenOdd, b, o, v).unwrap();
+        let ends: Vec<&Facet> = all.iter().filter(|f| !f.side).collect();
+        let [a, c] = ends[..] else { panic!("two caps among {} facets", all.len()) };
+        let along = a.normal[0] * c.normal[0] + a.normal[1] * c.normal[1] + a.normal[2] * c.normal[2];
+        assert!(close(along, -1.0, 1e-9), "the caps face opposite ways: {along}");
+        assert!(all.len() > 6 || o.bevel.is_none(), "the bevel adds sides");
+        // The faces turned away are drawn first, the others after them.
+        let away = all.iter().take_while(|f| f.away).count();
+        assert!(away > 0 && all[away..].iter().all(|f| !f.away), "{away} of {}", all.len());
+    }
+    let shown = extrude(&p, FillRule::EvenOdd, b, Extrude::default(), v).unwrap();
+    assert!(shown.iter().all(|f| !f.away));
+    let puff = inflate(&p, FillRule::EvenOdd, b, Inflate { depth: 20.0, ..Inflate::default() }, v).unwrap();
+    assert!(puff.iter().any(|f| f.side) && puff.iter().any(|f| !f.side));
+    let flat = inflate(&p, FillRule::EvenOdd, b, Inflate::default(), v).unwrap();
+    assert!(!flat.is_empty() && flat.iter().all(|f| !f.side));
+}
+
 #[test]
 fn taper_shrinks_the_back_and_twist_turns_it() {
     let (p, b) = shape(&square(0.0, 0.0, 100.0));
@@ -125,6 +152,46 @@ fn taper_shrinks_the_back_and_twist_turns_it() {
     // Its walls are cut into slices that follow the turn.
     let open = extrude(&p, FillRule::EvenOdd, b, Extrude { twist: 45.0, ..o }, View { rotation_x: -20.0, rotation_y: 30.0, ..front() }).unwrap();
     assert!(open.len() > 2 * 8, "{}", open.len());
+}
+
+/// A flat facet carries its plane: the depth it gives at each corner of its drawing is the corner's
+/// view-space depth, with and without perspective. A piece of a twisted wall whose corners lie off
+/// one plane has none.
+#[test]
+fn a_flat_facet_measures_its_depth_on_its_plane() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let o = Extrude { depth: 60.0, cap: true, ..Extrude::default() };
+    for perspective in [0.0, 50.0] {
+        let view = View { rotation_x: -20.0, rotation_y: 30.0, perspective, ..front() };
+        let flat = extrude(&p, FillRule::EvenOdd, b, o, view).unwrap();
+        assert!(!flat.is_empty());
+        for f in &flat {
+            assert!(f.plane.is_some(), "{perspective}");
+            for (q, v) in f.contours.iter().flatten().zip(f.view.iter().flatten()) {
+                let d = f.depth_at(*q);
+                assert!(d.is_some_and(|d| close(d, v.2, 1e-6)), "{perspective}: {d:?} against {}", v.2);
+            }
+        }
+        let twisted = extrude(&p, FillRule::EvenOdd, b, Extrude { twist: 90.0, ..o }, view).unwrap();
+        assert!(twisted.iter().any(|f| f.side && f.plane.is_none()), "{perspective}");
+    }
+}
+
+/// A flat face with a corner at or past the eye, which the projection holds just in front of the
+/// eye, has no plane: its drawing no longer matches the plane's projection there.
+#[test]
+fn a_face_reaching_past_the_eye_has_no_plane() {
+    use super::build::{Builder, Order};
+    let (_, b) = shape(&square(0.0, 0.0, 100.0));
+    let camera = Camera::new(View { perspective: 50.0, ..front() }, b, 0.0);
+    let eye = camera.center_and_eye().1.unwrap();
+    for (far, has_plane) in [(eye / 2.0, true), (2.0 * eye, false)] {
+        let mut builder = Builder { camera: &camera, closed: false, hidden: false, facets: vec![], mesh: None };
+        let corners = vec![V3(-10.0, -10.0, 0.0), V3(10.0, -10.0, 0.0), V3(0.0, 10.0, far)];
+        builder.face(vec![corners], V3(0.0, -far, 20.0), Order::Depth).unwrap();
+        assert_eq!(builder.facets.len(), 1, "{far}");
+        assert_eq!(builder.facets[0].plane.is_some(), has_plane, "{far}");
+    }
 }
 
 #[test]

@@ -8,10 +8,10 @@ use vectorcraft_doc::{AreaFit, Document, Justify, Node, NodeId, NodeKind, RubyAl
 use vectorcraft_geom::{Affine, PathData, Vec2};
 
 use super::edit::selected_roots;
-use super::pathops::{len_param, num_param, shape_node};
+use super::pathops::{length_given, number_given, shape_node};
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, id_param, index, number_or, ok,
-    str_param, switch_or, targets,
+    CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, index, number_or, object_param,
+    ok, str_param, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -93,7 +93,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Area Type Options…",
             ["Type"],
             None,
-            "{ids?|id?, width?: pt, height?: pt, rows?, columns?, gutter?: pt (between rows and columns), rowGutter?: pt|null (between rows when it differs from gutter, which is then between columns; gutter given alone sets both; the reply gives the rows' gutter either way), inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|fixed, firstBaselineMin?: pt, verticalAlign?: top|center|bottom|justify, flow?: columns|rows (Text Flow: down each column's rows, then across, the default; or across each row's columns, then down), fit?: none|autoHeight|shrinkText, fitMinPercent?: 10..100, …the keys of its own reply (it can be passed back; the values it only reports are ignored)} set the selected area type's options (each frame takes the options given over its own and keeps the rest; fit resolves against each frame's own; options that change nothing add no undo step); width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (with fit autoHeight, Auto Size, the frame's height follows the text after every edit and height is ignored; setting the height by hand turns it off); fit shrinkText scales overflowing text down (size, leading, baseline shift) by the largest factor down to fitMinPercent % (default 50) that makes it fit (none given: query) → the first object's options, plus overflow (the text doesn't fit its frame) and fitScale (Shrink Text's factor, 1 unshrunk)",
+            "{ids?|id?, width?: pt, height?: pt, rows?, columns?, gutter?: pt (between rows and columns), rowGutter?: pt|null (between rows when it differs from gutter, which is then between columns; gutter given alone sets both; the reply gives the rows' gutter either way), inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|fixed, firstBaselineMin?: pt, verticalAlign?: top|center|bottom|justify, flow?: columns|rows (Text Flow: down each column's rows, then across, the default; or across each row's columns, then down), fit?: none|autoHeight|shrinkText|block, fitMinPercent?: 10..100, wordGap?: % 0..1000, lineGap?: pt -1296..1296, …the keys of its own reply (it can be passed back; the values it only reports are ignored)} set the selected area type's options (each frame takes the options given over its own and keeps the rest; fit resolves against each frame's own; options that change nothing add no undo step); width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (with fit autoHeight, Auto Size, the frame's height follows the text after every edit and height is ignored; setting the height by hand turns it off); fit shrinkText scales overflowing text down (size, leading, baseline shift) by the largest factor down to fitMinPercent % (default 50) that makes it fit; fit block is Dynamic Text's Block, as type.dynamicText sets it (in place of Auto Size and Shrink Text to Fit; threaded frames are refused; another fit turns it off, keeping the sizes it wrote), and wordGap and lineGap set its gaps (kept while Block is off; out of range is an error) (none given: query) → the first object's options, plus wordGap and lineGap, overflow (the text doesn't fit its frame) and fitScale (Shrink Text's factor, 1 unshrunk)",
             has_selection,
             area_options
         ),
@@ -138,7 +138,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", …] OpenType, featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", \"salt=2\", …] OpenType (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_style
         ),
@@ -249,16 +249,16 @@ fn ruby(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = text_targets(s, p, C)?;
     let range = TextRange::parse(p, C)?;
     let remove = switch_or(p, "remove", false, C)?;
-    let reading = str_param(p, "text").map(str::trim).filter(|t| !t.is_empty()).map(str::to_string);
+    let reading = text_param(p, "text", C)?.map(str::trim).filter(|t| !t.is_empty()).map(str::to_string);
     if !remove && reading.is_none() {
         return Err(bad(C, "give `text` (the reading) or `remove`"));
     }
-    let position = match str_param(p, "position").map(str::to_ascii_lowercase).as_deref() {
+    let position = match text_param(p, "position", C)?.map(str::to_ascii_lowercase).as_deref() {
         None | Some("above") | Some("right") => RubyPosition::Above,
         Some("below") | Some("left") => RubyPosition::Below,
         Some(_) => return Err(bad(C, "`position` is above or below")),
     };
-    let align = match str_param(p, "align").map(str::to_ascii_lowercase).as_deref() {
+    let align = match text_param(p, "align", C)?.map(str::to_ascii_lowercase).as_deref() {
         None | Some("center") | Some("centre") => RubyAlign::Center,
         Some("start") | Some("left") | Some("top") => RubyAlign::Start,
         Some("end") | Some("right") | Some("bottom") => RubyAlign::End,
@@ -304,11 +304,13 @@ fn ruby(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Recompute the layout caches (bounds and baselines) after a text edit. Every engine text edit ends here (typing
 /// through `text.editRange` too), inside its `Session::edit`, so this is where Auto Size area type
-/// ([`vectorcraft_doc::AreaFit::AutoHeight`]) fits its frame to the text: part of the same undo
-/// step as the edit.
+/// ([`vectorcraft_doc::AreaFit::AutoHeight`]) fits its frame to the text, and Dynamic Text's Block
+/// (`dynamic_text` on area type, [`block::block_fit`]) sizes each line to the frame: part of the
+/// same undo step as the edit.
 pub(crate) fn refresh_bounds(t: &mut TextObject) {
     // Edits that changed the paragraph count keep one paragraph style per paragraph.
     t.normalize_paras();
+    block::block_fit(t);
     auto_height(t);
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
     t.cached_bounds = Some(lay.bounds);
@@ -320,6 +322,7 @@ pub(crate) fn refresh_bounds(t: &mut TextObject) {
 /// ([`vectorcraft_text::take_kept_layout`]) instead of laying the object out again.
 pub(crate) fn refresh_bounds_for_first_frame(t: &mut TextObject) {
     t.normalize_paras();
+    block::block_fit(t);
     auto_height(t);
     let stamp = vectorcraft_text::LayoutStamp::now();
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
@@ -596,6 +599,7 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
         if texts.is_empty() {
             return Err(EngineError::Other("Create Outlines: select text objects".into()));
         }
+        let before = (!super::dimension::reached(d, &roots).is_empty()).then(|| d.clone());
         let ended = super::dimension::end_links(d, &roots);
         let mut new_sel: Vec<NodeId> = roots.iter().copied().filter(|r| !texts.contains(r)).collect();
         let mut out = vec![];
@@ -691,7 +695,9 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
                 new_sel.push(gid);
             }
         }
-        super::dimension::restore_unchanged(d, ended);
+        if let Some(before) = &before {
+            super::dimension::restore_unchanged(before, d, ended);
+        }
         // Outlined frames of threaded text leave their threads with the text they show.
         super::threads::leave_threads(d, &threaded);
         sel.set(new_sel);
@@ -707,6 +713,20 @@ pub(crate) fn text_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<Node
         return Err(bad(cmd, "no text objects selected"));
     }
     Ok(t)
+}
+
+/// The type sizes a command takes, in points.
+pub(crate) const TYPE_SIZES: (f64, f64) = (0.1, 1296.0);
+
+/// A type size `size` that a command was given: an error naming the range when it is outside
+/// [`TYPE_SIZES`].
+pub(crate) fn given_type_size(size: f64, cmd: &str) -> Result<f64> {
+    let (lo, hi) = TYPE_SIZES;
+    if !(lo..=hi).contains(&size) {
+        let key = "size";
+        return Err(bad(cmd, format!("`{key}` must be from {lo} to {hi}")));
+    }
+    Ok(size)
 }
 
 /// Clamp in the units shown to the user, then compensate the text's affine. Clamping
@@ -812,19 +832,18 @@ pub(crate) fn justify_param(v: &str) -> Option<Justify> {
 
 fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setStyle";
-    let font = str_param(p, "font").map(str::to_string);
-    let style = str_param(p, "style").map(str::to_string);
-    let size = len_param(p, "size");
-    if size.is_some_and(|v| v <= 0.0) {
-        return Err(bad(C, "size must be positive"));
-    }
+    let font = text_param(p, "font", C)?.map(str::to_string);
+    let style = text_param(p, "style", C)?.map(str::to_string);
+    let size = length_given(p, "size", C)?.map(|v| given_type_size(v, C)).transpose()?;
     let leading = match p.get("leading") {
         None | Some(Value::Null) => None,
         Some(Value::String(a)) if a.eq_ignore_ascii_case("auto") => Some(None),
-        Some(_) => Some(Some(len_param(p, "leading").ok_or_else(|| bad(C, "leading must be a number or \"auto\""))?.clamp(0.1, 5000.0))),
+        Some(_) => {
+            Some(Some(length_given(p, "leading", C).ok().flatten().ok_or_else(|| bad(C, "leading must be a number or \"auto\""))?.clamp(0.1, 5000.0)))
+        }
     };
-    let tracking = num_param(p, "tracking");
-    let justify = match str_param(p, "justify") {
+    let tracking = number_given(p, "tracking", C)?;
+    let justify = match text_param(p, "justify", C)? {
         Some(j) => Some(justify_param(j).ok_or_else(|| bad(C, "justify must be auto|left|center|right|justifyAll"))?),
         None => None,
     };
@@ -1021,7 +1040,7 @@ pub(crate) fn reshape_area_with(t: &mut TextObject, f: impl FnOnce(&mut TextObje
 }
 
 /// Area type's text, if `n` is area type.
-fn area_text(n: Option<&Node>) -> Option<&TextObject> {
+pub(crate) fn area_text(n: Option<&Node>) -> Option<&TextObject> {
     match n.map(|n| &n.kind) {
         Some(NodeKind::Text(t)) if matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }) => Some(t),
         _ => None,
@@ -1054,10 +1073,15 @@ fn size_area(t: &mut TextObject, w: Option<f64>, h: Option<f64>) -> bool {
     reshape_area_with(t, |t| t.transform_area(a))
 }
 
-/// The fit `p` asks for (`fit`: none|autoHeight|shrinkText or `{"shrinkText": {"minPercent"}}`,
-/// `fitMinPercent`), starting from `cur`. None when `p` sets neither (or only `fitMinPercent`
-/// while the fit isn't Shrink Text).
-pub(crate) fn fit_param(p: &Value, cur: AreaFit, c: &str) -> Result<Option<AreaFit>> {
+/// A fit `p` asks for: the Area Type Options fit, and whether Dynamic Text's Block
+/// ([`TextObject::dynamic_text`]) is on. Block's fit is [`AreaFit::None`]: it replaces Auto Size
+/// and Shrink Text to Fit.
+pub(crate) type FitChoice = (AreaFit, bool);
+
+/// The fit `p` asks for (`fit`: none|autoHeight|shrinkText|block or `{"shrinkText": {"minPercent"}}`,
+/// `fitMinPercent`), starting from `cur` (`block`: Block is on). None when `p` sets neither (or only
+/// `fitMinPercent` while the fit isn't Shrink Text).
+pub(crate) fn fit_param(p: &Value, cur: AreaFit, block: bool, c: &str) -> Result<Option<FitChoice>> {
     check_numbers(p, &["fitMinPercent"], c)?;
     let min = p.get("fitMinPercent").and_then(Value::as_f64);
     let cur_min = match cur {
@@ -1066,21 +1090,48 @@ pub(crate) fn fit_param(p: &Value, cur: AreaFit, c: &str) -> Result<Option<AreaF
     };
     let fit = match p.get("fit") {
         None | Some(Value::Null) => match (cur, min) {
-            (AreaFit::ShrinkText { .. }, Some(m)) => AreaFit::ShrinkText { min_percent: m },
+            (AreaFit::ShrinkText { .. }, Some(m)) if !block => AreaFit::ShrinkText { min_percent: m },
             _ => return Ok(None),
         },
+        Some(Value::String(id)) if is_block_id(id) => return Ok(Some((AreaFit::None, true))),
         Some(Value::String(id)) => {
-            AreaFit::parse(id, min.or(cur_min)).ok_or_else(|| bad(c, format!("fit must be none|autoHeight|shrinkText, got {id}")))?
+            AreaFit::parse(id, min.or(cur_min)).ok_or_else(|| bad(c, format!("fit must be none|autoHeight|shrinkText|block, got {id}")))?
         }
         Some(v) => match serde_json::from_value::<AreaFit>(v.clone()).map_err(|e| bad(c, format!("bad fit: {e}")))? {
             AreaFit::ShrinkText { min_percent } => AreaFit::ShrinkText { min_percent: min.unwrap_or(min_percent) },
             f => f,
         },
     };
-    Ok(Some(match fit {
-        AreaFit::ShrinkText { min_percent } => AreaFit::ShrinkText { min_percent: AreaFit::clamp_percent(min_percent) },
-        f => f,
-    }))
+    Ok(Some((
+        match fit {
+            AreaFit::ShrinkText { min_percent } => AreaFit::ShrinkText { min_percent: AreaFit::clamp_percent(min_percent) },
+            f => f,
+        },
+        false,
+    )))
+}
+
+/// Whether a `fit` id names Dynamic Text's Block (case, spaces, dashes and underscores ignored).
+fn is_block_id(id: &str) -> bool {
+    matches!(id.to_ascii_lowercase().replace([' ', '-', '_'], "").as_str(), "block" | "dynamictext")
+}
+
+/// The `fit` id area type reports: `block` while Dynamic Text's Block is on, else its fit's.
+pub(crate) fn fit_id(t: &TextObject) -> &'static str {
+    if t.dynamic_text { "block" } else { t.area.fit.id() }
+}
+
+/// Dynamic Text's Block gaps `p` gives: `wordGap` (% of a word space, 0..1000) and `lineGap` (pt,
+/// -1296..1296). A value that is not a number, or is outside its range, is an error.
+pub(crate) fn block_gaps(p: &Value, c: &str) -> Result<(Option<f64>, Option<f64>)> {
+    let gap = |key: &str, (lo, hi): (f64, f64)| -> Result<Option<f64>> {
+        match number_given(p, key, c)? {
+            Some(v) if !(v.is_finite() && (lo..=hi).contains(&v)) => Err(bad(c, format!("`{key}` must be from {lo} to {hi}, not {v}"))),
+            v => Ok(v),
+        }
+    };
+    use vectorcraft_doc::AreaOptions as O;
+    Ok((gap("wordGap", O::WORD_GAP)?, gap("lineGap", O::LINE_GAP)?))
 }
 
 /// Area type's options as `text.areaOptions` reports them: the Area Type Options with `fit` as
@@ -1090,7 +1141,7 @@ pub(crate) fn area_options_json(t: &TextObject) -> Result<Value> {
     let mut v = serde_json::to_value(&t.area).map_err(|e| EngineError::Other(e.to_string()))?;
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
     if let Some(o) = v.as_object_mut() {
-        o.insert("fit".into(), json!(t.area.fit.id()));
+        o.insert("fit".into(), json!(fit_id(t)));
         o.insert("flow".into(), json!(t.area.flow));
         // The gutter between rows, the gutter's when the rows have none of their own.
         o.insert("rowGutter".into(), json!(t.area.row_gutter.unwrap_or(t.area.gutter)));
@@ -1099,6 +1150,9 @@ pub(crate) fn area_options_json(t: &TextObject) -> Result<Value> {
             _ => AreaFit::DEFAULT_MIN_PERCENT,
         };
         o.insert("fitMinPercent".into(), json!(min));
+        let (word_gap, line_gap) = t.area.block_gaps();
+        o.insert("wordGap".into(), json!(word_gap));
+        o.insert("lineGap".into(), json!(line_gap));
         if let Some((w, h, _)) = area_size(t) {
             o.insert("width".into(), json!(w));
             o.insert("height".into(), json!(h));
@@ -1127,8 +1181,9 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
     // Checked once up front (its errors don't depend on the frame); each frame resolves `fit`
     // against its own setting below.
     let cur = area_text(s.doc()?.doc.node(first)).map(|t| t.area.clone()).unwrap_or_default();
-    fit_param(p, cur.fit, C)?;
-    let fit_given = p.get("fit").is_some_and(|v| !v.is_null()) || p.get("fitMinPercent").is_some_and(|v| !v.is_null());
+    fit_param(p, cur.fit, false, C)?;
+    let (word_gap, line_gap) = block_gaps(p, C)?;
+    let fit_given = ["fit", "fitMinPercent", "wordGap", "lineGap"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null()));
     let size = |k: &str| p.get(k).and_then(Value::as_f64).filter(|x| x.is_finite()).map(|x| x.clamp(1.0, 100_000.0));
     let (w, h) = (size("width"), size("height"));
     let given: Vec<(&String, &Value)> = p.as_object().into_iter().flatten().filter(|(k, _)| AREA_KEYS.contains(&k.as_str())).collect();
@@ -1137,7 +1192,7 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Each area type takes the options given over its own (#3759): setting one option on several
     // frames leaves their other options as they were.
-    let merged = |own: &vectorcraft_doc::AreaOptions| -> Result<vectorcraft_doc::AreaOptions> {
+    let merged = |own: &vectorcraft_doc::AreaOptions, block: bool| -> Result<(vectorcraft_doc::AreaOptions, bool)> {
         let mut v = serde_json::to_value(own).map_err(|e| EngineError::Other(e.to_string()))?;
         if let Some(o) = v.as_object_mut() {
             for (k, val) in &given {
@@ -1157,17 +1212,29 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
         opts.inset = finite(opts.inset).clamp(0.0, 10_000.0);
         opts.first_baseline_min = finite(opts.first_baseline_min).clamp(0.0, 10_000.0);
         // Each frame's fit from its own (`fitMinPercent` alone changes only Shrink Text frames).
-        opts.fit = fit_param(p, own.fit, C)?.unwrap_or(own.fit);
-        Ok(opts)
+        let (fit, block) = fit_param(p, own.fit, block, C)?.unwrap_or((own.fit, block));
+        opts.fit = fit;
+        opts.word_gap = word_gap.unwrap_or(own.word_gap);
+        opts.line_gap = line_gap.unwrap_or(own.line_gap);
+        Ok((opts, block))
     };
     let d = &s.doc()?.doc;
-    let planned: Vec<(NodeId, vectorcraft_doc::AreaOptions)> = ids
+    let planned: Vec<(NodeId, (vectorcraft_doc::AreaOptions, bool))> = ids
         .iter()
-        .filter_map(|id| area_text(d.node(*id)).map(|t| (*id, &t.area)))
-        .map(|(id, own)| merged(own).map(|o| (id, o)))
+        .filter_map(|id| area_text(d.node(*id)).map(|t| (*id, t)))
+        .map(|(id, t)| merged(&t.area, t.dynamic_text).map(|o| (id, o)))
         .collect::<Result<_>>()?;
-    let apply = |t: &mut TextObject, opts: &vectorcraft_doc::AreaOptions| {
+    // Dynamic Text's Block is refused for threaded frames, as `type.dynamicText` refuses it.
+    let frames: Vec<String> =
+        planned.iter().filter(|(id, (_, block))| *block && !super::threads::story_of(d, *id).is_empty()).map(|(id, _)| id.0.to_string()).collect();
+    if !frames.is_empty() {
+        let frames = frames.join(", ");
+        return Err(bad(C, format!("area type in a thread cannot use Dynamic Text: {frames}")));
+    }
+    let apply = |t: &mut TextObject, (opts, block): &(vectorcraft_doc::AreaOptions, bool)| {
         t.area = opts.clone();
+        // Block off keeps the sizes it wrote into the characters.
+        t.dynamic_text = *block;
         // Auto Size sets the height (Illustrator's dialog turns the Height field off).
         let h = if opts.fit == AreaFit::AutoHeight { None } else { h };
         // A resized frame has laid its text out again; otherwise the new options do here.
@@ -1217,7 +1284,7 @@ fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let mut items = Vec::with_capacity(raw.len());
     for it in raw {
-        let id = id_param(it, "id").ok_or_else(|| bad(C, "missing id"))?;
+        let id = object_param(it, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
         let mut refs = super::select::checked_refs(it.get("anchors"), C)?;
         refs.sort_unstable();
         refs.dedup();
@@ -1248,7 +1315,7 @@ fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn reshape_path(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.reshapePath";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let mut refs = super::select::checked_refs(p.get("anchors"), C)?;
     refs.sort_unstable();
     refs.dedup();
@@ -1279,10 +1346,10 @@ fn reshape_path(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setPathHandle";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let si = super::draw2::usize_opt(p, "subpath", C)?.unwrap_or(0);
     let ai = p.get("anchor").and_then(Value::as_u64).map(index).ok_or_else(|| bad(C, "missing anchor"))?;
-    let out = str_param(p, "which") != Some("in");
+    let out = super::object::choice(p, C, "which", &["in", "out"])? != Some("in");
     let pos = vectorcraft_geom::Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
     let independent = switch_or(p, "independent", false, C)?;
     let node = s.doc()?.doc.node(id);
@@ -1308,6 +1375,10 @@ fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
 
 #[cfg(test)]
 mod area_tests;
+mod block;
+pub(crate) use block::needed_room;
+#[cfg(test)]
+mod block_tests;
 
 /// Width of the first line and of the space it can fill, with `tracking` on the first paragraph.
 /// The third value is where the first line ends in the plain text.

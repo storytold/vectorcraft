@@ -945,6 +945,34 @@ fn library_defaults_store_and_find() {
     assert_eq!(unique_name(&lib, "Arrow"), "Arrow 2");
 }
 
+/// A stored library that repeats a name reads with the first brush of that name as stored and each
+/// later one numbered, past every name the library already has; strokes of the name keep drawing
+/// the first brush.
+#[test]
+fn repeated_brush_names_are_numbered_when_read() {
+    let mut d = Document::new(100.0, 100.0);
+    let named = |name: &str, size: f64| Brush { name: name.into(), ..calli(0.0, 100.0, size) };
+    store(&mut d, &[named("Nib", 1.0), named("Nib 2", 2.0), named("Nib", 3.0), named("Other", 4.0), named("Nib", 5.0), named("Nib 2", 6.0)]);
+    let lib = library(&d);
+    let names: Vec<&str> = lib.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(names, ["Nib", "Nib 2", "Nib 3", "Other", "Nib 4", "Nib 2 2"]);
+    let size = |b: &Brush| if let BrushKind::Calligraphic(c) = &b.kind { c.size } else { 0.0 };
+    assert_eq!(lib.iter().map(size).collect::<Vec<_>>(), [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    assert_eq!(find(&d, "Nib").map(|b| size(&b)), Some(1.0));
+    assert_eq!(find(&d, "Nib 3").map(|b| size(&b)), Some(3.0));
+    // Reading again gives the same names, and the numbered library stored again reads as stored.
+    assert_eq!(library(&d), lib);
+    store(&mut d, &lib);
+    assert_eq!(library(&d), lib);
+    // Many brushes of one name take the numbers in order, past the numbered names the file has.
+    let many: Vec<Brush> = (0..5000).map(|i| named(if i == 1 { "Nib 3" } else { "Nib" }, 1.0)).collect();
+    store(&mut d, &many);
+    let names: Vec<String> = library(&d).into_iter().map(|b| b.name).collect();
+    assert_eq!(names[..5], ["Nib", "Nib 3", "Nib 2", "Nib 4", "Nib 5"]);
+    assert_eq!(names.last().map(String::as_str), Some("Nib 5000"));
+    assert_eq!(names.iter().collect::<std::collections::HashSet<_>>().len(), names.len());
+}
+
 #[test]
 fn brushes_serde_round_trip() {
     let lib = defaults().to_vec();
@@ -1369,6 +1397,62 @@ fn art_brush_width_follows_the_pressure() {
     // A brush without the new fields is written back without them.
     let plain = serde_json::to_value(art_brush(rect_art(10.0, 4.0), ArtScale::Stretch)).unwrap();
     assert!(plain.get("width_mode").is_none() && plain.get("width_max").is_none(), "{plain}");
+}
+
+/// Art Brush Options: Width on Tilt goes from Width with the pen lying flat to the second width
+/// upright, and on Bearing or Rotation from Width at −180° to the second width at 180°, along the
+/// stroke as the pen recorded it; each mode reads only its own input.
+#[test]
+fn art_brush_width_follows_tilt_bearing_and_rotation() {
+    let brush = |mode: Variation| {
+        let mut b = art_brush(rect_art(10.0, 4.0), ArtScale::Stretch);
+        if let BrushKind::Art(a) = &mut b.kind {
+            (a.width, a.width_mode, a.width_max) = (50.0, Some(mode), Some(300.0));
+        }
+        b
+    };
+    let bp = line(0.0, 0.0, 100.0, 0.0);
+    let draw = |b: &Brush, st: &StrokeLayer| stroke_pieces(&Document::new(1.0, 1.0), b, &bp, st);
+    // Tilt, upright at the start (300 %: 6 pt either side of 4 pt art) to flat at the end (50 %: 1 pt).
+    let upright_to_flat = StrokeLayer { tilt: Some(vectorcraft_doc::PressureProfile { points: vec![(0.0, 0.0), (1.0, 1.0)] }), ..stroke(1.0) };
+    let out = draw(&brush(Variation::Tilt), &upright_to_flat);
+    assert!(near(half_width(&out, 0.0, 1.0), 6.0, 0.1), "{}", half_width(&out, 0.0, 1.0));
+    assert!(near(half_width(&out, 99.0, 100.0), 1.0, 0.1), "{}", half_width(&out, 99.0, 100.0));
+    assert!(near(half_width(&out, 49.0, 51.0), 3.5, 0.15), "{}", half_width(&out, 49.0, 51.0));
+    // Bearing and Rotation: half way at 0°, a quarter of the way at −90°, three quarters at 90°.
+    for (mode, angle, half) in [
+        (Variation::Bearing, 0.0, 3.5),
+        (Variation::Bearing, -90.0, 2.25),
+        (Variation::Bearing, 90.0, 4.75),
+        (Variation::Rotation, -90.0, 2.25),
+        (Variation::Rotation, 90.0, 4.75),
+    ] {
+        let st = if mode == Variation::Bearing { posed(Some(0.5), Some(angle), None) } else { posed(None, None, Some(angle)) };
+        let h = bounds(&draw(&brush(mode), &st)).height();
+        assert!(near(h, 2.0 * half, 1e-6), "{mode:?} {angle}: {h}");
+    }
+    // Each mode reads its own input: without it (the pressure, or another of the pen's values
+    // recorded instead), the art is half way between the two widths.
+    let others = [
+        (Variation::Tilt, posed(None, Some(90.0), Some(90.0))),
+        (Variation::Tilt, pressed(vec![(0.0, 0.0), (1.0, 1.0)])),
+        (Variation::Bearing, posed(Some(0.0), None, Some(90.0))),
+        (Variation::Rotation, posed(Some(0.0), Some(90.0), None)),
+        (Variation::Pressure, posed(Some(0.0), Some(90.0), Some(90.0))),
+    ];
+    for (mode, st) in others {
+        let h = bounds(&draw(&brush(mode), &st)).height();
+        assert!(near(h, 7.0, 1e-6), "{mode:?}: {h}");
+    }
+    // The pen's modes are kept when a definition is read, and Random is read as Fixed.
+    let lib = parse_library(&serde_json::json!([
+        {"name": "t", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "tilt", "width_max": 300.0},
+        {"name": "b", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "bearing", "width_max": 300.0},
+        {"name": "r", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "rotation", "width_max": 300.0},
+        {"name": "x", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "random", "width_max": 300.0},
+    ]));
+    let modes: Vec<_> = lib.iter().map(|b| if let BrushKind::Art(a) = &b.kind { a.width_mode } else { None }).collect();
+    assert_eq!(modes, [Some(Variation::Tilt), Some(Variation::Bearing), Some(Variation::Rotation), None]);
 }
 
 /// Definitions from files and commands are kept within their ranges.

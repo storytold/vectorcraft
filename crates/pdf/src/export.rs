@@ -13,7 +13,7 @@ use krilla::geom::{Path, PathBuilder, Size};
 use krilla::image::Image;
 use krilla::num::NormalizedF32;
 use krilla::page::PageSettings;
-use krilla::paint::{Fill, LinearGradient, RadialGradient, SpreadMethod, Stop, Stroke, StrokeDash};
+use krilla::paint::{Fill, LinearGradient, RadialGradient, SpreadMethod, Stop, Stroke, StrokeDash, SweepGradient};
 use krilla::text::{Glyph, GlyphId, KrillaGlyph};
 use kurbo::{PathEl, Shape, Vec2};
 use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
@@ -68,6 +68,9 @@ pub(crate) struct Exporter<'a> {
     lab_spots: Vec<(String, vectorcraft_color::cms::Lab)>,
     /// Images may ask viewers to smooth them (not in PDF/A).
     interpolate: bool,
+    /// Conic gradients may be written as sweep shadings, whose PostScript calculator functions
+    /// PDF/A forbids; otherwise they are drawn as images ([`Self::area_paint`]).
+    sweeps: bool,
     /// Images may have 16 bits a sample (PDF 1.5 and later); in earlier files they are written at
     /// 8 bits ([`embed`]).
     sixteen_bit: bool,

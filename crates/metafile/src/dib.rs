@@ -11,8 +11,8 @@ const MAX_SIDE: u32 = 8192;
 /// Most pixels an image the writers store holds.
 const MAX_PIXELS: u64 = 1 << 24;
 /// Most pixels along a side, and in all, of a bitmap the reader decodes.
-const MAX_READ_SIDE: u32 = 1 << 15;
-const MAX_READ_PIXELS: u64 = 1 << 26;
+pub(crate) const MAX_READ_SIDE: u32 = 1 << 15;
+pub(crate) const MAX_READ_PIXELS: u64 = 1 << 26;
 /// Most pixels the bitmaps of one file may decode to together (four of the largest one), so a small
 /// file of many image records can't cost minutes of decoding (#3600).
 pub(crate) const MAX_FILE_PIXELS: u64 = 1 << 28;
@@ -141,8 +141,30 @@ fn channel(v: u32, mask: u32) -> u8 {
     ((x * 255 + max / 2) / max.max(1)).min(255) as u8
 }
 
+/// PNG `bytes` without its compressed or text ancillary chunks (`iCCP`, `zTXt`, `iTXt`, `tEXt`),
+/// which the pixels don't need and which a decoder expands when it is made. Other bytes, and a PNG
+/// whose chunks don't read to the end, are returned as they are.
+fn png_without_metadata(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
+    const SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
+    if !bytes.starts_with(SIGNATURE) {
+        return bytes.into();
+    }
+    let mut out = SIGNATURE.to_vec();
+    let mut at = SIGNATURE.len();
+    while at < bytes.len() {
+        let (Some(len), Some(kind)) = (bytes.get(at..at + 4), bytes.get(at + 4..at + 8)) else { return bytes.into() };
+        let len = u32::from_be_bytes([len[0], len[1], len[2], len[3]]) as usize;
+        let Some(end) = at.checked_add(12).and_then(|n| n.checked_add(len)).filter(|end| *end <= bytes.len()) else { return bytes.into() };
+        if !matches!(kind, b"iCCP" | b"zTXt" | b"iTXt" | b"tEXt") {
+            out.extend_from_slice(&bytes[at..end]);
+        }
+        at = end;
+    }
+    out.into()
+}
+
 /// Take a bitmap of `w` × `h` from what is `left` of the file's budget, before it is decoded.
-fn charge(w: u32, h: u32, left: &mut u64) -> Result<(), String> {
+pub(crate) fn charge(w: u32, h: u32, left: &mut u64) -> Result<(), String> {
     let n = u64::from(w) * u64::from(h);
     *left = left.checked_sub(n).ok_or(OVER_BUDGET)?;
     Ok(())
@@ -175,12 +197,15 @@ pub(crate) fn decode(bmi: &[u8], bits: &[u8], alpha: Alpha, left: &mut u64) -> R
     };
     if compression == BI_JPEG || compression == BI_PNG {
         // The size comes from the image header, so an over-limit bitmap is refused before any pixels are decoded.
-        let (w, h) = image::ImageReader::new(Cursor::new(bits)).with_guessed_format().map_err(|_| bad())?.into_dimensions().map_err(|_| bad())?;
+        // A PNG's compressed ICC profile and text chunks expand when its decoder is made, and
+        // nothing here uses them: they are left out before the size is read and the pixels decoded.
+        let bits = png_without_metadata(bits);
+        let (w, h) = image::ImageReader::new(Cursor::new(&*bits)).with_guessed_format().map_err(|_| bad())?.into_dimensions().map_err(|_| bad())?;
         if w > MAX_READ_SIDE || h > MAX_READ_SIDE || u64::from(w) * u64::from(h) > MAX_READ_PIXELS {
             return Err("a bitmap is too large to read".into());
         }
         charge(w, h, left)?;
-        let img = image::load_from_memory(bits).map_err(|_| bad())?.to_rgba8();
+        let img = image::load_from_memory(&bits).map_err(|_| bad())?.to_rgba8();
         return Ok(Rgba { width: w, height: h, pixels: img.into_raw() });
     }
     if compression != BI_RGB && compression != BI_BITFIELDS {
@@ -296,6 +321,23 @@ pub(crate) fn split(packed: &[u8]) -> Option<(&[u8], &[u8])> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_pngs_compressed_metadata_is_left_out_before_it_is_decoded() {
+        use image::ImageEncoder;
+        let mut png = vec![];
+        let mut encoder = image::codecs::png::PngEncoder::new(&mut png);
+        encoder.set_icc_profile(vec![0; 1 << 20]).unwrap();
+        encoder.write_image(&[10, 20, 30], 1, 1, image::ExtendedColorType::Rgb8).unwrap();
+        assert!(png.windows(4).any(|w| w == b"iCCP"));
+        let stripped = png_without_metadata(&png);
+        assert!(!stripped.windows(4).any(|w| w == b"iCCP") && stripped.len() < png.len());
+        let img = image::load_from_memory(&stripped).unwrap().to_rgba8();
+        assert_eq!(img.get_pixel(0, 0).0, [10, 20, 30, 255]);
+        // Not a PNG, or a PNG cut short: unchanged.
+        assert_eq!(&*png_without_metadata(b"BM...."), b"BM....");
+        assert_eq!(&*png_without_metadata(&png[..png.len() - 3]), &png[..png.len() - 3]);
+    }
 
     fn sample() -> Rgba {
         // 3 × 2: red, green, blue / half-transparent black, transparent, white.

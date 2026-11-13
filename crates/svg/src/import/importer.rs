@@ -4,10 +4,11 @@ use super::prepass::link;
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BlendMode, Color, Dash, FillLayer, FillRule, Gradient, GradientGeom, GradientKind, GradientPaint,
     GradientStop, ImageBlob, ImageObject, Importer, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, PathData, PatternDef, Point, Rect, Reuse,
-    StrokeLayer, Vec2, fnv1a, fx, shapes, spread, text, vector_effect,
+    StrokeLayer, Vec2, fnv1a, fx, shapes, text, vector_effect,
 };
 use crate::SvgError;
 use kurbo::BezPath;
+use vectorcraft_color::GradientSpread;
 
 /// How many clip paths deep (`<clipPath clip-path>`) an object's clip is read.
 const MAX_CLIP_NEST: usize = 16;
@@ -139,12 +140,16 @@ impl Importer {
         Some(self.doc.alloc_id())
     }
 
-    /// A new object named after element `id` (unless it has none or a made-up one).
+    /// A new object named after element `id` (unless it has none or a made-up one), noted as
+    /// found when [`Importer::wanted`] lists `id`.
     fn named(&mut self, id: &str, kind: NodeKind) -> Option<Node> {
         let nid = self.alloc_id()?;
         let mut n = Node::new(nid, kind);
         if !id.is_empty() && !made_up(id) {
             n.name = Some(self.name_of(id).to_string());
+            if self.wanted.contains(id) {
+                self.found.entry(id.to_string()).or_insert(nid);
+            }
         }
         Some(n)
     }
@@ -194,7 +199,7 @@ impl Importer {
             _ => self.named("", NodeKind::Group { children: kids, clip: false })?,
         };
         // usvg clips a `<use>` of a symbol to its viewport: that only counts when it cuts the art.
-        let whole = g.clip_path().is_none_or(|cp| uncut(cp, ts, &art, xf));
+        let whole = g.clip_path().is_none_or(|cp| uncut(cp, ts, &art, xf, &|p, m| self.clip_text(p, m)));
         let name = match self.symbols.get(&sym) {
             Some(made) if whole && made.art == without_ids(&art) && made.reuse.allows(xf) => made.name.clone(),
             Some(_) => return None,
@@ -246,10 +251,7 @@ impl Importer {
         // space; runs paint in text space.
         let to_text = Affine::scale(grow) * obj.xf.inverse();
         let slot_paint = |im: &mut Self, k: usize, m: Affine| match kids.get(main + 1 + k) {
-            Some(usvg::Node::Path(p)) => p.fill().map_or(Paint::None, |f| {
-                let area = kurbo::Shape::bounding_box(&bezpath(p.data(), m));
-                im.paint(f.paint(), m, Some(area))
-            }),
+            Some(usvg::Node::Path(p)) => p.fill().map_or(Paint::None, |f| im.paint(f.paint(), m)),
             _ => Paint::None,
         };
         let resolved: Vec<Paint> = (0..paints).map(|k| slot_paint(self, k, to_text)).collect();
@@ -500,26 +502,32 @@ impl Importer {
     }
 
     /// Put `art` in layer `l` at `index` (at most its end) unclipped: a clipping mask on the layer
-    /// becomes a clip group in it, holding the art it clipped.
+    /// becomes a clip group in it, holding the art it clipped. The layer's ruler guides stay last,
+    /// outside the clip group.
     pub(super) fn add_unclipped(&mut self, l: &mut Node, index: usize, art: Vec<Arc<Node>>) {
         if art.is_empty() {
             return;
         }
         if let NodeKind::Layer { children, clip: clip @ true, .. } = &mut l.kind {
             *clip = false;
-            let clipped = std::mem::take(children);
+            let mut clipped = std::mem::take(children);
+            let guides = clipped.split_off(Node::guide_run_start(&clipped));
             if let Some(group) = self.named("", NodeKind::Group { children: clipped, clip: true }) {
                 children.push(Arc::new(group));
             }
+            children.extend(guides);
         }
         if let Some(ch) = l.children_mut() {
-            let i = index.min(ch.len());
+            let i = index.min(Node::guide_run_start(ch));
             ch.splice(i..i, art);
         }
     }
 
     fn clip_node(&mut self, cp: &usvg::ClipPath, ts: Affine) -> Option<Node> {
-        let mut shapes = clip_shapes(cp, ts);
+        if let Some(n) = self.clip_type(cp, ts) {
+            return Some(n);
+        }
+        let mut shapes = clip_shapes(cp, ts, &|p, m| self.clip_text(p, m));
         let id = cp.id().to_string();
         if shapes.len() == 1 {
             let (bp, r) = shapes.pop()?;
@@ -540,6 +548,53 @@ impl Importer {
         self.named(&id, NodeKind::Group { children, clip: false })
     }
 
+    /// The glyph outlines, in the document, of the text a clip placeholder path `p` stands for (see
+    /// [`text`]), whose user space `m` maps to the document; nothing when the text is hidden. `None`
+    /// when `p` isn't a placeholder: in a clip path only its id tells (usvg paints clip path content
+    /// black).
+    fn clip_text(&self, p: &usvg::Path, m: Affine) -> Option<Vec<(BezPath, FillRule)>> {
+        if p.id().is_empty() {
+            return None;
+        }
+        let i = self.slots.find(p)?;
+        let t = self.slots.texts.get(i)?;
+        if !p.is_visible() {
+            return Some(vec![]);
+        }
+        let mut bp = BezPath::clone(&*self.slots.outlines(i)?);
+        bp.apply_affine(m * self.slots.inner(p) * t.obj.xf);
+        let r = p.fill().map(|f| rule(f.rule())).unwrap_or_default();
+        Some(if bp.elements().is_empty() { vec![] } else { vec![(bp, r)] })
+    }
+
+    /// Clip path `cp` (on an element whose user space `ts` maps to the document) as live type, when
+    /// all it holds is one visible text that clips by the non-zero rule and has no clip path of its
+    /// own: the text object with no fill or stroke, the same structure Make Clipping Mask produces
+    /// for type.
+    fn clip_type(&mut self, cp: &usvg::ClipPath, ts: Affine) -> Option<Node> {
+        let mut m = ts * aff(cp.transform());
+        let mut kids = cp.root().children();
+        while let [usvg::Node::Group(g)] = kids
+            && g.clip_path().is_none()
+        {
+            m *= aff(g.transform());
+            kids = g.children();
+        }
+        let [usvg::Node::Path(p)] = kids else { return None };
+        if p.id().is_empty() || !p.is_visible() || p.fill().is_some_and(|f| f.rule() == usvg::FillRule::EvenOdd) {
+            return None;
+        }
+        let mut obj = self.slots.texts.get(self.slots.find(p)?)?.obj.clone();
+        obj.xf = m * self.slots.inner(p) * obj.xf;
+        let grow = text::size_scale(&obj, obj.xf);
+        for run in &mut obj.runs {
+            run.style.fill = Paint::None;
+            run.style.stroke = Paint::None;
+        }
+        text::fold_scale(&mut obj, grow);
+        self.named(cp.id(), NodeKind::Text(Box::new(obj)))
+    }
+
     /// One clip path child: a path, or a compound path of its subpaths when it has several.
     fn clip_shape(&mut self, bp: &BezPath, r: FillRule, clipping: bool) -> Option<NodeKind> {
         let subs = PathData::from_bezpath(bp).subpaths;
@@ -555,9 +610,8 @@ impl Importer {
         Some(NodeKind::Compound { children, rule: r })
     }
 
-    /// A usvg paint mapped by `m`, for art covering `area` (after `m`: where a reflected or
-    /// repeated gradient has to reach).
-    fn paint(&mut self, p: &usvg::Paint, m: Affine, area: Option<Rect>) -> Paint {
+    /// A usvg paint mapped by `m`.
+    fn paint(&mut self, p: &usvg::Paint, m: Affine) -> Paint {
         let (kind, base, mut geom) = match p {
             usvg::Paint::Color(c) => return Paint::solid(Color::rgb8(c.red, c.green, c.blue)),
             usvg::Paint::Pattern(pt) => return self.pattern(pt, m),
@@ -584,28 +638,14 @@ impl Importer {
             }
         };
         geom.transform(m * aff(base.transform()), kind);
-        let mut stops = self.stops(base);
-        let reflect = match base.spread_method() {
-            usvg::SpreadMethod::Pad => None,
-            usvg::SpreadMethod::Reflect => Some(true),
-            usvg::SpreadMethod::Repeat => Some(false),
+        let mut gradient = Gradient::new(kind, self.stops(base));
+        // `spreadMethod` is the gradient's spread; its stops run once along the vector.
+        gradient.spread = match base.spread_method() {
+            usvg::SpreadMethod::Pad => GradientSpread::Pad,
+            usvg::SpreadMethod::Reflect => GradientSpread::Reflect,
+            usvg::SpreadMethod::Repeat => GradientSpread::Repeat,
         };
-        if let Some(reflect) = reflect {
-            match area.map(|a| spread::expand(kind, &mut geom, &mut stops, reflect, a)) {
-                Some(spread::Expanded::Whole) => {}
-                Some(spread::Expanded::Capped) => {
-                    self.warn(format!("gradient '{}': spreadMethod repeats more than {} times; it pads after that", base.id(), spread::MAX_PERIODS))
-                }
-                None => self.warn(format!("gradient '{}': spreadMethod approximated as pad", base.id())),
-            }
-        }
-        Paint::Gradient(Box::new(GradientPaint {
-            gradient: Gradient::new(kind, stops),
-            geom: Some(geom),
-            angle: geom.angle_deg(),
-            swatch: None,
-            freeform: None,
-        }))
+        Paint::Gradient(Box::new(GradientPaint { gradient, geom: Some(geom), angle: geom.angle_deg(), swatch: None, freeform: None }))
     }
 
     /// `<pattern>` → a pattern swatch painted with the pattern's tile placement. The swatch art is
@@ -639,12 +679,12 @@ impl Importer {
         Paint::Pattern { pattern: name, xf }
     }
 
-    /// The fill and stroke of `p` mapped by `m`; `area`: the bounds of the path after `m`.
-    fn appearance(&mut self, p: &usvg::Path, m: Affine, area: Option<Rect>) -> (Appearance, FillRule) {
+    /// The fill and stroke of `p` mapped by `m`.
+    fn appearance(&mut self, p: &usvg::Path, m: Affine) -> (Appearance, FillRule) {
         let mut fill = None;
         let mut r = FillRule::NonZero;
         if let Some(f) = p.fill() {
-            let paint = self.paint(f.paint(), m, area);
+            let paint = self.paint(f.paint(), m);
             let mut fl = FillLayer::new(paint);
             fl.opacity = f.opacity().get();
             r = rule(f.rule());
@@ -655,9 +695,7 @@ impl Importer {
             // A non-scaling stroke is as wide on screen whatever `m` does: the path takes `m`, so a
             // stroke of that width in the document is exact.
             let scale = if self.non_scaling.contains(p.id()) { self.screen } else { m.determinant().abs().sqrt() };
-            // The stroke reaches past the path (miters further: a generous margin).
-            let reach = s.width().get() as f64 * scale * (s.miterlimit().get() as f64).max(1.0);
-            let paint = self.paint(s.paint(), m, area.map(|a| a.inflate(reach, reach)));
+            let paint = self.paint(s.paint(), m);
             let mut sl = StrokeLayer::new(paint, s.width().get() as f64 * scale);
             sl.opacity = s.opacity().get();
             sl.cap = match s.linecap() {
@@ -696,7 +734,7 @@ impl Importer {
         if path.is_empty() {
             return None;
         }
-        let (appearance, r) = self.appearance(p, acc, path.bounds());
+        let (appearance, r) = self.appearance(p, acc);
         // Shared, so a compound path's subpaths don't each copy a gradient's stops.
         let appearance: vectorcraft_doc::Shared<Appearance> = appearance.into();
         let mut n = if path.subpaths.len() > 1 {
@@ -733,6 +771,12 @@ impl Importer {
             .ok()
             .and_then(|r| r.into_dimensions().ok())
             .unwrap_or((size.width().round().max(1.0) as u32, size.height().round().max(1.0) as u32));
+        // A turned CMYK image is stored as the CMYK TIFF of its inks, the size of the PNG usvg got.
+        let cmyk = self.files.stored(i.kind());
+        let (bytes, mime) = match &cmyk {
+            Some(tiff) => (tiff, "image/tiff"),
+            None => (bytes, mime),
+        };
         // A linked file keeps a preview; a placeholder is all a missing one has (its preview).
         let linked = self.files.linked(i.kind());
         let missing = linked.is_some_and(|l| l.missing);
@@ -827,6 +871,8 @@ mod tests {
             max_nodes: 1000,
             error: None,
             nested_svg_images: crate::MAX_NESTED_SVG_IMAGES,
+            wanted: HashSet::new(),
+            found: HashMap::new(),
         };
         let tree = usvg::Tree::from_str(r#"<svg xmlns="http://www.w3.org/2000/svg"/>"#, &usvg::Options::default()).unwrap();
         let res = im.svg_image(&tree, Affine::IDENTITY);

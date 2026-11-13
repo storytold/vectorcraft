@@ -18,9 +18,13 @@ mod hints;
 mod status_bar;
 mod tabs;
 
+pub(crate) use control_bar::group_separator;
+pub use control_bar::{
+    AnchorControls, CONTROL_BAR_EDGES, CONTROL_BAR_GROUPS, anchor_buttons, anchor_controls, control_bar, control_bar_moving, control_bar_placement,
+    read_hidden_groups,
+};
 #[cfg(test)]
-use control_bar::ISOLATION_BUTTON;
-pub use control_bar::{AnchorControls, CONTROL_BAR_EDGES, anchor_buttons, anchor_controls, control_bar};
+use control_bar::{CONTROL_BAR_FLOAT_AT, ISOLATION_BUTTON};
 #[cfg(test)]
 use hints::hint_segments;
 pub use hints::{hint_bar, hint_strings};
@@ -72,8 +76,9 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             // With the macOS menu bar the menus are at the top of the screen instead.
             let menus_end = if app.services.native_menu.is_some() { ui.cursor().min.x } else { menus::menu_bar(app, ui) };
             // The right-side group fills the space after the menus from the right; when it runs
-            // short, Discord goes first (it is also under Help), then the search icon (the palette
-            // stays under its shortcut), then the workspace switcher narrows.
+            // short, Discord goes first (it is also under Help), then Explore tutorials (also
+            // Window › Learn), then the search icon (the palette stays under its shortcut), then
+            // the workspace switcher narrows.
             let full = ui.max_rect();
             let right_edge = if custom { full.right() - titlebar::WIDTH - 10.0 } else { full.right() };
             let right = egui::Rect::from_min_max(egui::pos2(menus_end + 8.0, full.top()), egui::pos2(right_edge, full.bottom()));
@@ -97,7 +102,9 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let icon = 28.0;
             let search = switcher && room >= 64.0 + 8.0 + gap + icon;
             let ws_w = ws_w.min(room - 8.0 - gap - if search { icon } else { 0.0 }).max(64.0);
-            let discord = search && room >= ws_w + 8.0 + gap + icon + 10.0 + gap + crate::community::discord_width(ui, false);
+            // Explore tutorials, beside the search icon, opens the Learn panel.
+            let learn = search && room >= ws_w + 8.0 + 2.0 * (gap + icon);
+            let discord = learn && room >= ws_w + 8.0 + 2.0 * (gap + icon) + 10.0 + gap + crate::community::discord_width(ui, false);
             let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
             let ui = &mut rui;
             // Workspace switcher: shows the current workspace, opens Window → Workspace.
@@ -125,6 +132,14 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 if widgets::icon_button(ui, "search", &tip, app.ui.palette_open, icon).clicked() {
                     app.ui.palette_open = !app.ui.palette_open;
                     app.ui.palette_query.clear();
+                }
+            }
+            if learn {
+                let shown = crate::panels::learn::visible(&app.ui);
+                if widgets::icon_button(ui, "graduation-cap", tl!("Explore tutorials"), shown, icon).clicked()
+                    && let Err(e) = app.run("window.learn", json!({}))
+                {
+                    app.ui.status = e;
                 }
             }
             if discord {

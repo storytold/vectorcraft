@@ -145,6 +145,39 @@ pub(crate) enum Op {
     /// Pushes the completion value, which a `finally` block in script and eval code keeps and
     /// sets back with `SetCompletion` when it ends normally.
     GetCompletion,
+    /// `[qualifier] name` → an E4X name object.
+    XmlMakeName {
+        attribute: bool,
+        qualified: bool,
+    },
+    /// `object name` → the descendants that match.
+    XmlDescendants,
+    /// `value` → the string an embedded expression puts in a literal (0 content, 1 attribute
+    /// value, 2 name, 3 run of attributes).
+    XmlEscape(u8),
+    /// The `parts` strings → the XML or XMLList they spell.
+    XmlLiteral {
+        parts: u32,
+        list: bool,
+    },
+    /// `name` → the value of the name on the nearest XML value in scope that holds it.
+    XmlScopeGet,
+    /// `name` → `object name`: the nearest XML value in scope that holds the name, for an
+    /// assignment, update or `delete`.
+    XmlScopeRef,
+    /// `object` → the filter's state.
+    XmlFilterStart,
+    /// `state` → `state item`, or jumps with `state` when the items are used up.
+    XmlFilterNext(u32),
+    /// `state value` → `state`, the current item kept when the value is truthy.
+    XmlFilterTest,
+    /// `state` → the XMLList of the items kept.
+    XmlFilterEnd,
+    /// `iterator name x₁…xₙ` → `iterator name x₁…xₙ value`: the value under the name a `for each`
+    /// got, read after the `n` values its target pushed.
+    ForEachValue(u32),
+    /// `value` → nothing: sets the default XML namespace of the running code.
+    SetDefaultNamespace,
 }
 
 /// What code is: a function body, a script, or eval code.
@@ -171,6 +204,11 @@ pub(crate) struct Handler {
 pub(crate) struct Source {
     pub(crate) lines: LineTable,
     pub(crate) text: Rc<[u16]>,
+    /// Which source this is, as [`crate::Realm::error_source`] gives it.
+    pub(crate) tag: u32,
+    /// Writes to read-only and getter-only properties, and new properties on objects that are
+    /// not extensible, throw in this source's code even where it is not strict mode code.
+    pub(crate) strict_writes: bool,
 }
 
 #[derive(Debug)]
@@ -190,6 +228,8 @@ pub(crate) struct Code {
     pub(crate) strict: bool,
     /// A function expression's own name, bound inside it.
     pub(crate) self_name: Option<Key>,
+    /// A function declaration's name, which `$.stack` shows.
+    pub(crate) decl_name: Option<Key>,
     pub(crate) params: Vec<Key>,
     pub(crate) vars: Vec<Key>,
     /// Function declarations to instantiate on entry: their names and indices in `functions`.
@@ -267,7 +307,14 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
             let table = finally_tables.get(t as usize).ok_or_else(|| format!("finally table {t} out of range"))?;
             Effect { pops: 2, next: Some(0), jumps: table.iter().map(|&target| (target, 1)).collect() }
         }
-        Op::ForInNext(t) => Effect { pops: 1, next: Some(2), jumps: vec![(t, 1)] },
+        Op::ForInNext(t) | Op::XmlFilterNext(t) => Effect { pops: 1, next: Some(2), jumps: vec![(t, 1)] },
+        Op::XmlMakeName { qualified, .. } => e(1 + u32::from(qualified), 1),
+        Op::XmlDescendants | Op::XmlFilterTest => e(2, 1),
+        Op::XmlEscape(_) | Op::XmlScopeGet | Op::XmlFilterStart | Op::XmlFilterEnd => e(1, 1),
+        Op::XmlLiteral { parts, .. } => e(parts, 1),
+        Op::XmlScopeRef => e(1, 2),
+        Op::ForEachValue(n) => e(n + 2, n + 3),
+        Op::SetDefaultNamespace => e(1, 0),
     })
 }
 

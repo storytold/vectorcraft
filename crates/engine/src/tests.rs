@@ -9,6 +9,7 @@ pub(super) mod adjust;
 mod ai_open_path;
 mod appearance;
 mod areafit;
+mod arrowheads;
 mod assets;
 mod assets_3d;
 mod attributes;
@@ -20,6 +21,7 @@ mod brushlib;
 mod brushsym;
 mod build;
 mod cancel;
+mod caret_kerning;
 mod charstroke;
 pub(super) mod clip;
 mod clipboard;
@@ -42,11 +44,14 @@ mod containers;
 mod css;
 mod cut;
 mod dashalign;
+mod dcs;
 mod distort;
 mod docsetup;
+mod document_close;
 mod document_move;
 mod draw2;
 mod dynamic_symbols;
+mod dynamic_text;
 mod editcolors;
 mod effectedit;
 mod emptytype;
@@ -88,6 +93,7 @@ mod layerclip;
 mod layers;
 mod legacy_ai;
 mod library;
+mod library_roots;
 mod link_paths;
 mod linked_stops;
 mod linkfiles;
@@ -130,6 +136,8 @@ mod place;
 mod placed_document;
 mod plugins;
 mod prefs;
+mod prefs_file;
+mod prefs_roots;
 mod previewbounds;
 mod print;
 mod printadvanced;
@@ -149,8 +157,16 @@ mod repeat_edit;
 mod save;
 mod saveoptions;
 mod scalestrokes;
+mod script_console;
+mod script_dialogs;
+mod script_dollar;
+mod script_engines;
+mod script_folder;
+mod script_include;
+mod script_io;
 mod script_run;
 mod scripts;
+mod select_effects;
 mod select_ids_first;
 mod shaper;
 mod shapetools;
@@ -161,6 +177,7 @@ mod smartguides;
 mod smooth_path;
 mod spelling;
 mod store;
+mod stored_path;
 mod strokegeom;
 mod strokegradient;
 mod strokereach;
@@ -186,12 +203,14 @@ mod toolsettings;
 mod transformfx;
 mod transparencygrid;
 mod trap;
+mod turn_direction;
 mod typearea;
 mod typeglyphbounds;
 mod typescale;
 mod typeundo;
 mod units;
 mod variables;
+mod warp_images;
 mod webexport;
 mod widthpoints;
 mod widthprofiles;
@@ -207,6 +226,18 @@ fn session() -> Session {
 fn rect(s: &mut Session, x: f64, y: f64, w: f64, h: f64) -> NodeId {
     let r = s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": w, "height": h})).unwrap();
     NodeId(r["id"].as_u64().unwrap())
+}
+
+/// The active document's selected ruler guides, by their `guide.list` indexes.
+pub(crate) fn selected_guides(s: &Session) -> Vec<usize> {
+    let st = s.doc().unwrap();
+    crate::cmd::guide_indexes(&st.doc, &st.selection.guides)
+}
+
+/// The active document's key guide, by its `guide.list` index.
+pub(crate) fn key_guide(s: &Session) -> Option<usize> {
+    let st = s.doc().unwrap();
+    st.selection.key_guide.and_then(|k| crate::cmd::guide_indexes(&st.doc, &[k]).first().copied())
 }
 
 #[test]
@@ -3139,7 +3170,7 @@ fn every_command_survives_empty_params() {
     // The view toggles among them flip the process-wide proof view.
     let _proof_view = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
     for sel in [false, true] {
-        for c in command_specs() {
+        for c in command_specs().iter().filter(|c| crate::runs_with_empty_params(c.id)) {
             let mut s = session();
             let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
             rect(&mut s, 20.0, 0.0, 10.0, 10.0);
@@ -3243,12 +3274,610 @@ fn reshape_falloff_follows_arc_length_on_open_paths() {
             .as_u64()
             .unwrap(),
     );
-    s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 0.0, "dx": 0.0, "dy": 100.0, "radius": 250.0})).unwrap();
     let pts: Vec<_> = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors.iter().map(|a| a.p).collect();
     assert!((pts[3].y - 100.0).abs() < 1e-6, "grabbed end moves full delta: {pts:?}");
     assert!(pts[0].y.abs() < 1e-6, "far end stays put: {pts:?}");
     assert!(pts[2].y > 1.0 && pts[2].y < 100.0, "mid-anchor moves partially: {pts:?}");
     assert!(pts[1].y < pts[2].y, "nearer anchors move more: {pts:?}");
+}
+
+/// An open path for the Reshape tests.
+fn reshape_open_path(s: &mut Session, anchors: Value) -> NodeId {
+    NodeId(s.execute("path.create", &json!({"anchors": anchors, "closed": false})).unwrap()["id"].as_u64().unwrap())
+}
+
+/// The anchors of the path's first subpath.
+fn reshape_anchors(s: &Session, id: NodeId) -> Vec<vectorcraft_geom::Anchor> {
+    s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors.clone()
+}
+
+/// The share of the drag an anchor takes at `u` of the way from an end to the grabbed point.
+fn reshape_share(u: f64) -> f64 {
+    u * u * (3.0 - 2.0 * u)
+}
+
+/// Six anchors 100 apart along a zigzag 300 wide and 80 high.
+fn reshape_zigzag() -> Value {
+    json!([{"x": 0, "y": 0}, {"x": 60, "y": 80}, {"x": 120, "y": 0}, {"x": 180, "y": 80}, {"x": 240, "y": 0}, {"x": 300, "y": 80}])
+}
+
+#[test]
+fn reshape_of_an_end_stretches_an_open_path_to_its_other_end() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_zigzag());
+    let before = reshape_anchors(&s, id);
+    s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 80.0, "dx": 20.0, "dy": 50.0})).unwrap();
+    let after = reshape_anchors(&s, id);
+    assert_eq!(after.len(), 6);
+    let moved: Vec<vectorcraft_geom::Vec2> = after.iter().zip(&before).map(|(a, b)| a.p - b.p).collect();
+    assert_eq!(moved[0], vectorcraft_geom::Vec2::ZERO, "the other end stays in place: {moved:?}");
+    for (i, m) in moved.iter().enumerate() {
+        let share = reshape_share(i as f64 / 5.0);
+        assert!((m.x - 20.0 * share).abs() < 1e-9 && (m.y - 50.0 * share).abs() < 1e-9, "anchor {i} takes {share} of the drag: {moved:?}");
+    }
+    assert!(moved.windows(2).all(|w| w[0].y < w[1].y), "each anchor moves less than the one after it: {moved:?}");
+    // The path has no handles, and gets none.
+    assert!(after.iter().all(|a| a.h_in == a.p && a.h_out == a.p), "{after:?}");
+}
+
+#[test]
+fn reshape_of_a_middle_anchor_leaves_both_ends_of_an_open_path_in_place() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, json!([{"x": 0, "y": 0}, {"x": 30, "y": 0}, {"x": 200, "y": 0}, {"x": 230, "y": 0}, {"x": 400, "y": 0}]));
+    s.execute("path.reshape", &json!({"id": id.0, "x": 200.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert_eq!(y.len(), 5, "the grab was on an anchor, so none is added");
+    assert_eq!((y[0], y[2], y[4]), (0.0, 100.0, 0.0), "{y:?}");
+    // Each side is measured from its own end: 30 of 200 on the left, 170 of 200 on the right.
+    assert!((y[1] - 100.0 * reshape_share(0.15)).abs() < 1e-9, "{y:?}");
+    assert!((y[3] - 100.0 * reshape_share(0.85)).abs() < 1e-9, "{y:?}");
+}
+
+#[test]
+fn reshape_keeps_the_handles_of_a_smooth_anchor_in_line() {
+    let mut s = session();
+    let id = reshape_open_path(
+        &mut s,
+        json!([
+            {"x": 0, "y": 0, "out": [40, 0]},
+            {"x": 100, "y": 0, "in": [60, 0], "out": [140, 0], "smooth": true},
+            {"x": 200, "y": 0, "in": [160, 0]}
+        ]),
+    );
+    s.execute("path.reshape", &json!({"id": id.0, "x": 200.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    let a = reshape_anchors(&s, id);
+    // The control polygon is 200 long and the middle anchor is halfway: it takes half the drag,
+    // and its handles, 40 either side, take 0.2 and 0.8 of it.
+    assert!((a[1].p.y - 50.0).abs() < 1e-9 && (a[1].h_in.y - 20.0).abs() < 1e-9 && (a[1].h_out.y - 80.0).abs() < 1e-9, "{a:?}");
+    let (to_in, to_out) = (a[1].h_in - a[1].p, a[1].h_out - a[1].p);
+    assert!(to_in.cross(to_out).abs() < 1e-9 && to_in.dot(to_out) < 0.0, "the handles stay opposite each other: {a:?}");
+    // The end that stays keeps its handle, and the grabbed end's handle moves with it.
+    assert_eq!((a[0].p, a[0].h_out), (Point::new(0.0, 0.0), Point::new(40.0, 0.0)));
+    assert_eq!((a[2].p, a[2].h_in), (Point::new(200.0, 100.0), Point::new(160.0, 100.0)));
+}
+
+/// A `radius` still bounds the reach on an open path, as it did before the path stretched to its ends.
+#[test]
+fn reshape_with_a_radius_moves_only_the_anchors_within_it() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_zigzag());
+    s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 80.0, "dx": 0.0, "dy": 50.0, "radius": 150.0})).unwrap();
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert_eq!(&y[..4], &[0.0, 80.0, 0.0, 80.0], "anchors 200 or more along the path stay: {y:?}");
+    assert!(y[4] > 0.0 && y[4] < 50.0 && y[5] == 130.0, "{y:?}");
+}
+
+#[test]
+fn reshape_measures_an_open_path_along_its_control_polygon() {
+    let mut s = session();
+    // The first segment's control polygon is 60 + 100 + 60 long, its chord 100 and its arc 150 to
+    // 160; the second segment is a line 100 long.
+    let id = reshape_open_path(&mut s, json!([{"x": 0, "y": 0, "out": [0, 60]}, {"x": 100, "y": 0, "in": [100, 60]}, {"x": 200, "y": 0}]));
+    s.execute("path.reshape", &json!({"id": id.0, "x": 200.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    let a = reshape_anchors(&s, id);
+    let u: f64 = 220.0 / 320.0;
+    assert!((a[1].p.y - 100.0 * reshape_share(u)).abs() < 1e-9, "{a:?}");
+    // The in handle lies 160 along the polygon, and takes the share on the tangent line at its anchor.
+    let handle = reshape_share(u) + 6.0 * u * (1.0 - u) * (160.0 / 320.0 - u);
+    assert!((a[1].h_in.y - 60.0 - 100.0 * handle).abs() < 1e-9, "{a:?}");
+    // The end that stays keeps its handle.
+    assert_eq!((a[0].p, a[0].h_out), (Point::new(0.0, 0.0), Point::new(0.0, 60.0)));
+}
+
+#[test]
+fn reshape_of_a_point_on_a_segment_stretches_an_open_path_from_the_new_anchor() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, json!([{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 200, "y": 0}, {"x": 300, "y": 0}]));
+    s.execute("path.reshape", &json!({"id": id.0, "x": 250.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    let p: Vec<Point> = reshape_anchors(&s, id).iter().map(|a| a.p).collect();
+    assert_eq!(p.len(), 5, "the grab adds an anchor: {p:?}");
+    assert_eq!((p[0], p[3], p[4]), (Point::new(0.0, 0.0), Point::new(250.0, 100.0), Point::new(300.0, 0.0)), "{p:?}");
+    assert!((p[1].y - 100.0 * reshape_share(0.4)).abs() < 1e-9 && (p[2].y - 100.0 * reshape_share(0.8)).abs() < 1e-9, "{p:?}");
+}
+
+#[test]
+fn reshape_of_an_end_of_a_two_anchor_path_moves_only_that_end() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, json!([{"x": 0, "y": 0, "out": [30, 0]}, {"x": 100, "y": 0, "in": [70, 0]}]));
+    s.execute("path.reshape", &json!({"id": id.0, "x": 100.0, "y": 0.0, "dx": 10.0, "dy": 50.0})).unwrap();
+    let a = reshape_anchors(&s, id);
+    assert_eq!((a[0].p, a[0].h_out), (Point::new(0.0, 0.0), Point::new(30.0, 0.0)));
+    assert_eq!((a[1].p, a[1].h_in), (Point::new(110.0, 50.0), Point::new(80.0, 50.0)));
+}
+
+#[test]
+fn reshape_keeps_smooth_anchors_on_both_sides_of_the_grabbed_one_in_line() {
+    let mut s = session();
+    // Smooth anchors with handles of unequal length, on a curve, before and after the grabbed anchor.
+    let id = reshape_open_path(
+        &mut s,
+        json!([
+            {"x": 0, "y": 0},
+            {"x": 100, "y": 50, "in": [80, 40], "out": [160, 80], "smooth": true},
+            {"x": 250, "y": 0, "in": [220, 0], "out": [290, 0], "smooth": true},
+            {"x": 400, "y": 60, "in": [340, 90], "out": [420, 50], "smooth": true},
+            {"x": 500, "y": 0}
+        ]),
+    );
+    let before = reshape_anchors(&s, id);
+    s.execute("path.reshape", &json!({"id": id.0, "x": 250.0, "y": 0.0, "dx": 35.0, "dy": -80.0})).unwrap();
+    let a = reshape_anchors(&s, id);
+    let drag = vectorcraft_geom::Vec2::new(35.0, -80.0);
+    assert_eq!((a[2].p - before[2].p, a[2].h_in - before[2].h_in, a[2].h_out - before[2].h_out), (drag, drag, drag));
+    for i in [1, 3] {
+        let (to_in, to_out) = (a[i].h_in - a[i].p, a[i].h_out - a[i].p);
+        assert!(to_in.cross(to_out).abs() < 1e-9 && to_in.dot(to_out) < 0.0, "anchor {i}'s handles stay opposite each other: {a:?}");
+        let moved = a[i].p - before[i].p;
+        assert!(
+            moved.cross(drag).abs() < 1e-9 && moved.hypot() > 1.0 && moved.hypot() < drag.hypot() - 1.0,
+            "anchor {i} takes part of the drag: {a:?}"
+        );
+        // The handle on the grabbed anchor's side moves farther than its anchor, and the other one less.
+        let (h_in, h_out) = ((a[i].h_in - before[i].h_in).hypot(), (a[i].h_out - before[i].h_out).hypot());
+        let (nearer, farther) = if i == 1 { (h_out, h_in) } else { (h_in, h_out) };
+        assert!(nearer > moved.hypot() + 1.0 && farther < moved.hypot() - 1.0, "anchor {i}: {a:?}");
+    }
+    assert_eq!((a[0].p, a[4].p), (before[0].p, before[4].p));
+}
+
+#[test]
+fn reshape_moves_a_long_handle_against_the_drag_to_keep_its_anchor_smooth() {
+    let mut s = session();
+    let id =
+        reshape_open_path(&mut s, json!([{"x": 0, "y": 0}, {"x": 100, "y": 0, "in": [10, 0], "out": [190, 0], "smooth": true}, {"x": 400, "y": 0}]));
+    s.execute("path.reshape", &json!({"id": id.0, "x": 400.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    let a = reshape_anchors(&s, id);
+    // The anchor is a quarter of the way along and takes 0.15625 of the drag. The tangent line
+    // there has slope 1.125, and each handle lies 0.225 of the way from the anchor: the in handle
+    // takes 0.15625 - 0.253125, a share below 0, and the out handle 0.15625 + 0.253125.
+    assert!((a[1].p.y - 15.625).abs() < 1e-9 && (a[1].h_in.y + 9.6875).abs() < 1e-9 && (a[1].h_out.y - 40.9375).abs() < 1e-9, "{a:?}");
+    let (to_in, to_out) = (a[1].h_in - a[1].p, a[1].h_out - a[1].p);
+    assert!(to_in.cross(to_out).abs() < 1e-9 && to_in.dot(to_out) < 0.0, "the handles stay opposite each other: {a:?}");
+}
+
+#[test]
+fn reshape_refuses_a_negative_radius() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_zigzag());
+    let before = reshape_anchors(&s, id);
+    let steps = s.doc().unwrap().history.undo.len();
+    let e = s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 80.0, "dx": 0.0, "dy": 50.0, "radius": -50.0})).unwrap_err();
+    assert!(e.to_string().contains("`radius` must be 0 or more"), "{e}");
+    assert_eq!(reshape_anchors(&s, id), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+}
+
+#[test]
+fn reshape_by_no_distance_on_an_anchor_records_no_undo_step() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_zigzag());
+    let before = reshape_anchors(&s, id);
+    let steps = s.doc().unwrap().history.undo.len();
+    for params in [json!({"id": id.0, "x": 300.0, "y": 80.0}), json!({"id": id.0, "x": 120.0, "y": 0.0, "dx": 0.0, "dy": 0.0, "radius": 40.0})] {
+        s.execute("path.reshape", &params).unwrap();
+    }
+    assert_eq!(reshape_anchors(&s, id), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    // A drag that moves the anchor is still one step.
+    s.execute("path.reshape", &json!({"id": id.0, "x": 300.0, "y": 80.0, "dx": 0.0, "dy": 1.0})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+}
+
+/// Seven anchors 70 apart along a line, from x 0 to x 420.
+fn reshape_line_of_seven() -> Value {
+    json!([{"x": 0, "y": 0}, {"x": 70, "y": 0}, {"x": 140, "y": 0}, {"x": 210, "y": 0}, {"x": 280, "y": 0}, {"x": 350, "y": 0}, {"x": 420, "y": 0}])
+}
+
+#[test]
+fn reshape_with_two_focal_points_moves_the_anchors_between_them_whole() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_line_of_seven());
+    s.execute("path.reshape", &json!({"id": id.0, "x": 280.0, "y": 0.0, "dx": 0.0, "dy": 100.0, "focal": [[0, 2]]})).unwrap();
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert_eq!(&y[2..5], &[100.0, 100.0, 100.0], "both focal points and the anchor between them: {y:?}");
+    assert_eq!((y[0], y[6]), (0.0, 0.0), "the ends stay: {y:?}");
+    // Each side stretches from its own end to its nearer focal point, 140 along the path.
+    assert!((y[1] - 100.0 * reshape_share(0.5)).abs() < 1e-9 && (y[5] - 100.0 * reshape_share(0.5)).abs() < 1e-9, "{y:?}");
+}
+
+#[test]
+fn reshape_of_a_closed_path_selected_whole_moves_all_of_it() {
+    let mut s = session();
+    let r = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let before = s.doc().unwrap().doc.node(r).unwrap().path_data().unwrap().clone();
+    s.execute("path.reshape", &json!({"id": r.0, "x": 0.0, "y": 0.0, "dx": 15.0, "dy": -40.0, "focal": []})).unwrap();
+    let after = s.doc().unwrap().doc.node(r).unwrap().path_data().unwrap().clone();
+    assert_eq!(after.anchor_count(), before.anchor_count(), "a grab on an anchor adds none");
+    let drag = vectorcraft_geom::Vec2::new(15.0, -40.0);
+    for ((_, _, a), (_, _, b)) in after.anchors().zip(before.anchors()) {
+        assert_eq!((a.p - b.p, a.h_in - b.h_in, a.h_out - b.h_out), (drag, drag, drag), "{after:?}");
+    }
+}
+
+#[test]
+fn reshape_leaves_the_anchors_that_are_not_selected_in_place() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_line_of_seven());
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 2], [0, 3], [0, 4], [0, 5]], "mode": "set"})).unwrap();
+    s.execute("path.reshape", &json!({"id": id.0, "x": 350.0, "y": 0.0, "dx": 0.0, "dy": 100.0, "focal": []})).unwrap();
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert_eq!((y[0], y[1], y[5], y[6]), (0.0, 0.0, 100.0, 0.0), "{y:?}");
+    // The stretch runs from the last anchor that is not selected, 280 from the focal point.
+    for i in 2..5 {
+        let u = (i as f64 - 1.0) / 4.0;
+        assert!((y[i] - 100.0 * reshape_share(u)).abs() < 1e-9, "anchor {i} takes {u} of the way: {y:?}");
+    }
+}
+
+/// A step with neither `focal` nor `radius`, as one recorded before focal points, plays as it did
+/// then: the selection does not matter, and a closed path follows with the default falloff.
+#[test]
+fn reshape_without_focal_or_radius_keeps_the_earlier_rule() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_line_of_seven());
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 2], [0, 3], [0, 4], [0, 5]], "mode": "set"})).unwrap();
+    s.execute("path.reshape", &json!({"id": id.0, "x": 350.0, "y": 0.0, "dx": 0.0, "dy": 100.0})).unwrap();
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert_eq!((y[0], y[5], y[6]), (0.0, 100.0, 0.0), "{y:?}");
+    // Anchor 1 is not selected and still takes its share, measured from the end 350 away.
+    for i in 1..5 {
+        let u = i as f64 / 5.0;
+        assert!((y[i] - 100.0 * reshape_share(u)).abs() < 1e-9, "anchor {i} takes {u} of the way: {y:?}");
+    }
+    // `focal: null` is the same as leaving it out.
+    let r = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("path.reshape", &json!({"id": r.0, "x": 0.0, "y": 0.0, "dx": 0.0, "dy": -40.0, "focal": null})).unwrap();
+    let pts: Vec<Point> = s.doc().unwrap().doc.node(r).unwrap().path_data().unwrap().anchors().map(|(_, _, a)| a.p).collect();
+    assert!(pts.contains(&Point::new(0.0, -40.0)), "{pts:?}");
+    assert!(pts.contains(&Point::new(100.0, 100.0)), "the far corner stays: {pts:?}");
+}
+
+#[test]
+fn reshape_of_a_partly_selected_closed_path_stretches_between_the_anchors_that_stay() {
+    let mut s = session();
+    let id = NodeId(
+        s.execute(
+            "path.create",
+            &json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 200, "y": 0}, {"x": 200, "y": 100}, {"x": 100, "y": 100}, {"x": 0, "y": 100}], "closed": true}),
+        )
+        .unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    // Anchors 5, 0, 1 and 2 are selected; 3 and 4 stay. The walk runs 4, 5, 0, 1, 2, 3.
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 5], [0, 0], [0, 1], [0, 2]], "mode": "set"})).unwrap();
+    s.execute("path.reshape", &json!({"id": id.0, "x": 0.0, "y": 0.0, "dx": 0.0, "dy": -50.0, "focal": []})).unwrap();
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert_eq!((y[0], y[3], y[4]), (-50.0, 100.0, 100.0), "{y:?}");
+    // From anchor 4 to the focal point is 200: anchor 5 is halfway. From anchor 3 back to it is
+    // 300: anchor 2 is a third of the way and anchor 1 two thirds.
+    let want = [(5, 100.0 + -50.0 * reshape_share(0.5)), (2, -50.0 * reshape_share(1.0 / 3.0)), (1, -50.0 * reshape_share(2.0 / 3.0))];
+    for (i, w) in want {
+        assert!((y[i] - w).abs() < 1e-9, "anchor {i}: {y:?}");
+    }
+}
+
+#[test]
+fn reshape_of_a_segment_keeps_the_selected_anchors_and_selects_the_new_one() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_line_of_seven());
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 3], [0, 4], [0, 5]], "mode": "set"})).unwrap();
+    s.execute("path.reshape", &json!({"id": id.0, "x": 245.0, "y": 0.0, "dx": 0.0, "dy": 60.0, "focal": [[0, 5]]})).unwrap();
+    let a = reshape_anchors(&s, id);
+    assert_eq!(a.len(), 8, "the grab adds an anchor between 210 and 280");
+    let selected: Vec<(usize, usize)> = s.doc().unwrap().selection.partial(id).unwrap().iter().copied().collect();
+    assert_eq!(selected, vec![(0, 3), (0, 4), (0, 5), (0, 6)], "the same points stay selected, with the new one");
+    // The focal point given before the anchor was added still names the anchor at 350.
+    let y: Vec<f64> = a.iter().map(|a| a.p.y).collect();
+    assert_eq!(&y[4..7], &[60.0, 60.0, 60.0], "{y:?}");
+    assert_eq!((y[0], y[1], y[2], y[7]), (0.0, 0.0, 0.0, 0.0), "{y:?}");
+}
+
+#[test]
+fn reshape_of_a_segment_with_a_selected_anchor_index_past_the_end_does_not_panic() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_line_of_seven());
+    let past = usize::MAX;
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1], [0, past]], "mode": "set"})).unwrap();
+    s.execute("path.reshape", &json!({"id": id.0, "x": 175.0, "y": 0.0, "dx": 0.0, "dy": 10.0})).unwrap();
+    s.execute("path.reshape", &json!({"id": id.0, "x": 105.0, "y": 0.0, "dx": 0.0, "dy": 10.0})).unwrap();
+    assert_eq!(reshape_anchors(&s, id).len(), 9);
+}
+
+#[test]
+fn reshape_of_a_segment_keeps_a_selected_segment_as_its_two_halves() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_line_of_seven());
+    s.execute("select.segments", &json!({"id": id.0, "segments": [[0, 2], [0, 4]], "mode": "set"})).unwrap();
+    s.execute("path.reshape", &json!({"id": id.0, "x": 175.0, "y": 0.0, "dx": 0.0, "dy": 0.0})).unwrap();
+    let st = s.doc().unwrap();
+    let segments: Vec<(usize, usize)> = st.selection.segments[&id].iter().copied().collect();
+    assert_eq!(segments, vec![(0, 2), (0, 3), (0, 5)]);
+    let anchors: Vec<(usize, usize)> = st.selection.partial(id).unwrap().iter().copied().collect();
+    assert_eq!(anchors, vec![(0, 2), (0, 3), (0, 4), (0, 5), (0, 6)], "the new anchor moves with the segment's ends");
+}
+
+#[test]
+fn reshape_moves_only_the_subpaths_with_a_focal_point() {
+    let mut s = session();
+    let id = NodeId(s.execute("path.create", &json!({"d": "M0 0 L100 0 L200 0 M0 100 L100 100 L200 100"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("path.reshape", &json!({"id": id.0, "x": 200.0, "y": 0.0, "dx": 0.0, "dy": 40.0, "focal": []})).unwrap();
+    let pd = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().clone();
+    let y: Vec<Vec<f64>> = pd.subpaths.iter().map(|sp| sp.anchors.iter().map(|a| a.p.y).collect()).collect();
+    assert_eq!(y[1], vec![100.0, 100.0, 100.0], "{y:?}");
+    assert_eq!((y[0][0], y[0][2]), (0.0, 40.0), "{y:?}");
+    // A focal point on the other subpath stretches that one too.
+    s.execute("path.reshape", &json!({"id": id.0, "x": 200.0, "y": 40.0, "dx": 0.0, "dy": 10.0, "focal": [[1, 1]]})).unwrap();
+    let pd = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().clone();
+    assert_eq!(pd.subpaths[1].anchors.iter().map(|a| a.p.y).collect::<Vec<_>>(), vec![100.0, 110.0, 100.0]);
+}
+
+#[test]
+fn reshape_refuses_a_focal_point_that_is_not_an_anchor() {
+    let mut s = session();
+    let id = reshape_open_path(&mut s, reshape_line_of_seven());
+    let before = reshape_anchors(&s, id);
+    for (focal, want) in [
+        (json!([[0, 7]]), "`focal` names [0, 7], which is not an anchor of the path"),
+        (json!([[1, 0]]), "`focal` names [1, 0], which is not an anchor of the path"),
+        (json!([[0, -1]]), "invalid anchor index -1"),
+        (json!({"0": 1}), "`focal` must be an array of [subpath, anchor] pairs"),
+    ] {
+        let e = s.execute("path.reshape", &json!({"id": id.0, "x": 420.0, "y": 0.0, "dx": 0.0, "dy": 10.0, "focal": focal})).unwrap_err();
+        assert!(e.to_string().contains(want), "{e}");
+    }
+    assert_eq!(reshape_anchors(&s, id), before);
+    let steps = s.doc().unwrap().history.undo.len();
+    // An empty `focal` chooses the focal-point rule too, so it cannot go with `radius` either.
+    for focal in [json!([[0, 2]]), json!([])] {
+        let e =
+            s.execute("path.reshape", &json!({"id": id.0, "x": 420.0, "y": 0.0, "dx": 0.0, "dy": 10.0, "focal": focal, "radius": 50.0})).unwrap_err();
+        assert!(e.to_string().contains("`focal` and `radius` cannot be used together"), "{focal}: {e}");
+    }
+    assert_eq!(reshape_anchors(&s, id), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+}
+
+/// The line of seven, selected whole, with the Reshape tool picked.
+fn reshape_tool_on_a_line(s: &mut Session) -> NodeId {
+    let id = reshape_open_path(s, reshape_line_of_seven());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.select_tool("reshape", ViewInfo::default()).unwrap();
+    id
+}
+
+/// Presses at `a`, drags to `b` unless it is `a` (a click), and releases, with Shift when `shift`.
+fn reshape_gesture(s: &mut Session, a: (f64, f64), b: (f64, f64), shift: bool) {
+    let v = ViewInfo::default();
+    let mods = vectorcraft_tools::Mods { shift, ..vectorcraft_tools::Mods::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, a.0, a.1).with_mods(mods), v).unwrap();
+    if a != b {
+        s.pointer(&PointerEvent::new(PointerKind::Drag, b.0, b.1).with_mods(mods), v).unwrap();
+    }
+    s.pointer(&PointerEvent::new(PointerKind::Up, b.0, b.1).with_mods(mods), v).unwrap();
+}
+
+/// Where the Reshape tool draws its highlighted focal points.
+fn reshape_highlights(s: &mut Session) -> Vec<Point> {
+    s.overlays(ViewInfo::default())
+        .into_iter()
+        .filter_map(|o| match o {
+            vectorcraft_tools::Overlay::Anchor { p, filled: true, .. } => Some(p),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn reshape_tool_shift_click_adds_focal_points_that_a_drag_moves_together() {
+    let mut s = session();
+    let id = reshape_tool_on_a_line(&mut s);
+    let steps = s.doc().unwrap().history.undo.len();
+    reshape_gesture(&mut s, (140.0, 0.0), (140.0, 0.0), false);
+    reshape_gesture(&mut s, (280.0, 0.0), (280.0, 0.0), true);
+    assert_eq!(reshape_highlights(&mut s), vec![Point::new(140.0, 0.0), Point::new(280.0, 0.0)]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "a click on an anchor is not an edit");
+    reshape_gesture(&mut s, (280.0, 0.0), (280.0, 100.0), false);
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert_eq!(&y[2..5], &[100.0, 100.0, 100.0], "{y:?}");
+    assert!((y[1] - 50.0).abs() < 1e-9 && (y[5] - 50.0).abs() < 1e-9 && y[0] == 0.0 && y[6] == 0.0, "{y:?}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "the drag is one step");
+    assert_eq!(reshape_highlights(&mut s), vec![Point::new(140.0, 100.0), Point::new(280.0, 100.0)], "the focal points stay highlighted");
+}
+
+#[test]
+fn reshape_tool_shift_click_on_a_focal_point_removes_it_and_a_click_starts_again() {
+    for (clicks, want) in [
+        // Shift-click 140 again: only 280 is a focal point.
+        (vec![(140.0, false), (280.0, true), (140.0, true)], vec![Point::new(280.0, 0.0)]),
+        // A click without Shift: only 350 is a focal point.
+        (vec![(140.0, false), (280.0, true), (350.0, false)], vec![Point::new(350.0, 0.0)]),
+    ] {
+        let mut s = session();
+        let id = reshape_tool_on_a_line(&mut s);
+        for (x, shift) in clicks {
+            reshape_gesture(&mut s, (x, 0.0), (x, 0.0), shift);
+        }
+        assert_eq!(reshape_highlights(&mut s), want);
+        let at = (want[0].x, 0.0);
+        reshape_gesture(&mut s, at, (at.0, 100.0), false);
+        let full = reshape_anchors(&s, id).iter().filter(|a| a.p.y == 100.0).count();
+        assert_eq!(full, 1, "only the dragged focal point moves whole: {:?}", reshape_anchors(&s, id));
+    }
+}
+
+#[test]
+fn reshape_tool_focal_point_stays_its_anchor_when_another_anchor_moves_onto_it() {
+    let mut s = session();
+    let id = reshape_tool_on_a_line(&mut s);
+    reshape_gesture(&mut s, (280.0, 0.0), (280.0, 0.0), false);
+    // Anchor 2 now lies where the focal point, anchor 4, lies.
+    s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 2, "x": 280.0, "y": 0.0})).unwrap();
+    // A Shift-click adds the last anchor, and a drag from it moves it and anchor 4 whole.
+    reshape_gesture(&mut s, (420.0, 0.0), (420.0, 0.0), true);
+    reshape_gesture(&mut s, (420.0, 0.0), (420.0, 100.0), false);
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert!(y[4] == 100.0 && y[6] == 100.0 && y[2] < 100.0, "{y:?}");
+}
+
+#[test]
+fn reshape_tool_anchor_added_before_a_focal_point_keeps_it_highlighted() {
+    let mut s = session();
+    let id = reshape_tool_on_a_line(&mut s);
+    reshape_gesture(&mut s, (280.0, 0.0), (280.0, 0.0), false);
+    // A Shift-click on the segment from 70 to 140 adds anchor 2, before the focal point.
+    reshape_gesture(&mut s, (105.0, 0.0), (105.0, 0.0), true);
+    assert_eq!(reshape_anchors(&s, id).len(), 8);
+    assert_eq!(reshape_highlights(&mut s), vec![Point::new(280.0, 0.0), Point::new(105.0, 0.0)]);
+    // A drag from the added anchor moves both focal points whole.
+    reshape_gesture(&mut s, (105.0, 0.0), (105.0, 40.0), false);
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert!(y[2] == 40.0 && y[5] == 40.0, "{y:?}");
+}
+
+#[test]
+fn reshape_tool_focal_point_moved_by_another_edit_is_not_passed_to_another_anchor() {
+    let mut s = session();
+    let id = reshape_tool_on_a_line(&mut s);
+    reshape_gesture(&mut s, (280.0, 0.0), (280.0, 0.0), false);
+    // The focal point, anchor 4, moves away, and anchor 2 takes its old place.
+    s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 4, "x": 280.0, "y": 50.0})).unwrap();
+    s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 2, "x": 280.0, "y": 0.0})).unwrap();
+    assert_eq!(reshape_highlights(&mut s), vec![]);
+    // A Shift-click adds the last anchor, and a drag from it moves it alone as the focal point.
+    reshape_gesture(&mut s, (420.0, 0.0), (420.0, 0.0), true);
+    assert_eq!(reshape_highlights(&mut s), vec![Point::new(420.0, 0.0)]);
+    reshape_gesture(&mut s, (420.0, 0.0), (420.0, 100.0), false);
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert!(y[6] == 100.0 && y[2] < 100.0, "{y:?}");
+}
+
+#[test]
+fn reshape_tool_drag_from_an_anchor_that_is_not_highlighted_moves_only_it_whole() {
+    let mut s = session();
+    let id = reshape_tool_on_a_line(&mut s);
+    reshape_gesture(&mut s, (140.0, 0.0), (140.0, 0.0), false);
+    reshape_gesture(&mut s, (350.0, 0.0), (350.0, 100.0), false);
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert!(y[2] < 100.0 && y[5] == 100.0, "{y:?}");
+    assert_eq!(reshape_highlights(&mut s), vec![Point::new(350.0, 100.0)]);
+}
+
+#[test]
+fn reshape_tool_click_on_a_segment_adds_a_highlighted_anchor() {
+    let mut s = session();
+    let id = reshape_tool_on_a_line(&mut s);
+    let steps = s.doc().unwrap().history.undo.len();
+    reshape_gesture(&mut s, (140.0, 0.0), (140.0, 0.0), false);
+    reshape_gesture(&mut s, (245.0, 0.0), (245.0, 0.0), true);
+    assert_eq!(reshape_anchors(&s, id).len(), 8);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "adding the anchor is one step");
+    assert_eq!(reshape_highlights(&mut s), vec![Point::new(140.0, 0.0), Point::new(245.0, 0.0)]);
+    reshape_gesture(&mut s, (245.0, 0.0), (245.0, 60.0), false);
+    let a = reshape_anchors(&s, id);
+    assert_eq!((a[2].p.y, a[3].p.y, a[4].p.y), (60.0, 60.0, 60.0), "{a:?}");
+    // Undo takes back the drag, then the added anchor. The highlights stay where the drag left
+    // them, where no anchor is now, so none shows.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(reshape_anchors(&s, id).len(), 7);
+    assert!(reshape_highlights(&mut s).is_empty());
+}
+
+#[test]
+fn reshape_tool_escape_during_a_drag_keeps_the_path_and_its_focal_points() {
+    let mut s = session();
+    let id = reshape_tool_on_a_line(&mut s);
+    let before = reshape_anchors(&s, id);
+    let steps = s.doc().unwrap().history.undo.len();
+    reshape_gesture(&mut s, (140.0, 0.0), (140.0, 0.0), false);
+    reshape_gesture(&mut s, (280.0, 0.0), (280.0, 0.0), true);
+    let v = ViewInfo::default();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 280.0, 0.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 90.0), v).unwrap();
+    assert_ne!(reshape_anchors(&s, id), before, "the preview moves the path");
+    s.tool_key(ToolKey::Escape, vectorcraft_tools::Mods::default(), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 90.0), v).unwrap();
+    assert_eq!(reshape_anchors(&s, id), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    assert_eq!(reshape_highlights(&mut s), vec![Point::new(140.0, 0.0), Point::new(280.0, 0.0)]);
+}
+
+#[test]
+fn reshape_tool_shift_drag_from_an_anchor_that_is_not_highlighted_moves_only_it() {
+    let mut s = session();
+    let id = reshape_tool_on_a_line(&mut s);
+    reshape_gesture(&mut s, (140.0, 0.0), (140.0, 0.0), false);
+    // Shift keeps the drag's angle; the highlighted anchor at 140 does not move whole with it.
+    reshape_gesture(&mut s, (350.0, 0.0), (350.0, 100.0), true);
+    let y: Vec<f64> = reshape_anchors(&s, id).iter().map(|a| a.p.y).collect();
+    assert!(y[5] == 100.0 && y[2] < 100.0, "{y:?}");
+    assert_eq!(reshape_highlights(&mut s), vec![Point::new(350.0, 100.0)]);
+}
+
+#[test]
+fn reshape_tool_click_on_a_curved_segment_highlights_the_anchor_it_adds() {
+    // Points on the curve from 0 to 300, away from its anchors, each clicked from off it on a
+    // new copy of the path.
+    let c = vectorcraft_geom::CubicBez::new(Point::new(0.0, 0.0), Point::new(40.0, -90.0), Point::new(230.0, 110.0), Point::new(300.0, 0.0));
+    for k in 1..60 {
+        let t = 0.05 + 0.015 * f64::from(k);
+        for off in [(0.3, -0.2), (-2.1, 1.7), (2.6, 2.2)] {
+            let mut s = session();
+            let id = NodeId(
+                s.execute(
+                    "path.create",
+                    &json!({"anchors": [{"x": 0, "y": 0, "out": [40, -90]}, {"x": 300, "y": 0, "in": [230, 110]}, {"x": 600, "y": 0}]}),
+                )
+                .unwrap()["id"]
+                    .as_u64()
+                    .unwrap(),
+            );
+            s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+            s.select_tool("reshape", ViewInfo::default()).unwrap();
+            let q = vectorcraft_geom::ParamCurve::eval(&c, t);
+            reshape_gesture(&mut s, (q.x + off.0, q.y + off.1), (q.x + off.0, q.y + off.1), false);
+            let a = reshape_anchors(&s, id);
+            assert_eq!(a.len(), 4, "t {t}, {off:?}");
+            assert_eq!(reshape_highlights(&mut s), vec![a[1].p], "t {t}, {off:?}");
+        }
+    }
+}
+
+#[test]
+fn reshape_tool_leaves_a_locked_or_hidden_path_alone() {
+    for command in ["object.lock", "object.hide"] {
+        let mut s = session();
+        let id = reshape_tool_on_a_line(&mut s);
+        let before = reshape_anchors(&s, id);
+        s.execute(command, &json!({})).unwrap();
+        s.execute("select.set", &json!({"ids": [id.0]})).ok();
+        reshape_gesture(&mut s, (420.0, 0.0), (420.0, 0.0), false);
+        reshape_gesture(&mut s, (420.0, 0.0), (420.0, 60.0), false);
+        assert_eq!(reshape_anchors(&s, id), before, "{command}");
+        assert!(reshape_highlights(&mut s).is_empty(), "{command}");
+    }
 }
 
 #[test]
@@ -3403,6 +4032,38 @@ fn snap_to_pixel_rounds_drawing_and_moves() {
     s.pointer(&PointerEvent::new(PointerKind::Up, 37.3, 34.8), v).unwrap();
     let b = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
     assert_eq!((b.x0, b.y0), (17.0, 16.0));
+}
+
+/// Pixel Snapping Options (`view.snapToPixel.options`): with While Drawing off a rectangle drawn
+/// with Snap to Pixel on keeps its fractional corners while a move still lands on whole pixels, and
+/// with While Moving off a move keeps its fractional offset while drawing snaps again.
+#[test]
+fn pixel_snapping_options_choose_the_edits_snap_to_pixel_rounds() {
+    let mut s = session();
+    let v = ViewInfo { snap_to_pixel: true, smart_guides: false, snap_to_point: false, ..Default::default() };
+    let drag = |s: &mut Session, tool: &str, from: (f64, f64), to: (f64, f64)| {
+        s.select_tool(tool, v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, from.0, from.1), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, to.0, to.1), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, to.0, to.1), v).unwrap();
+    };
+    let bounds = |s: &Session, id| {
+        let b = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+        (b.x0, b.y0, b.x1, b.y1)
+    };
+    s.execute("view.snapToPixel.options", &json!({"drawing": false})).unwrap();
+    drag(&mut s, "rectangle", (10.25, 10.5), (60.5, 40.25));
+    let id = s.doc().unwrap().selection.objects[0];
+    assert_eq!(bounds(&s, id), (10.25, 10.5, 60.5, 40.25), "drawing does not snap");
+    drag(&mut s, "selection", (30.0, 30.0), (37.5, 34.75));
+    assert_eq!(bounds(&s, id).0, 18.0, "moving still snaps the left edge");
+    assert_eq!(bounds(&s, id).1, 15.0, "moving still snaps the top edge");
+    s.execute("view.snapToPixel.options", &json!({"drawing": true, "moving": false})).unwrap();
+    drag(&mut s, "selection", (40.0, 30.0), (45.25, 33.5));
+    assert_eq!((bounds(&s, id).0, bounds(&s, id).1), (23.25, 18.5), "moving does not snap");
+    drag(&mut s, "rectangle", (100.25, 100.5), (140.5, 130.75));
+    let drawn = s.doc().unwrap().selection.objects[0];
+    assert_eq!(bounds(&s, drawn), (100.0, 101.0, 141.0, 131.0), "drawing snaps again");
 }
 
 #[test]
@@ -3626,8 +4287,8 @@ fn given_targets_are_used_as_given_and_range_style_takes_the_selected_type() {
 
 /// #785: commands whose `ids` or `id` the shared check doesn't read (it reads `id` where it stands
 /// for `ids` of one) refuse one that isn't an object id. They don't act on the selection, the
-/// current layer or a new object instead, and the document, the selection and the undo history
-/// stay as they are.
+/// current layer or a new object instead, and the document, the selection, the undo history,
+/// isolation mode and the shown opacity mask stay as they are.
 #[test]
 fn malformed_ids_are_refused_by_commands_that_default_to_the_selection() {
     let mut s = session();
@@ -3675,17 +4336,19 @@ fn malformed_ids_are_refused_by_commands_that_default_to_the_selection() {
             if let Some(p) = p.as_object_mut() {
                 p.insert(key.into(), bad.clone());
             }
-            let (doc, selection, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().selection.clone(), s.doc().unwrap().history.undo.len());
+            let st = s.doc().unwrap();
+            let (doc, selection, undo, modes) = (st.doc.clone(), st.selection.clone(), st.history.undo.len(), (st.isolation, st.mask_view));
             let r = s.execute(cmd, &p);
             let named = |e: &str| e.contains("object id") || e.contains("step reference") || e.contains(&format!("`{key}` must be"));
             let refused = r.as_ref().err().map(|e| e.to_string()).is_some_and(|e| named(&e));
-            let same = s.doc().unwrap().doc == doc && s.doc().unwrap().selection == selection && s.doc().unwrap().history.undo.len() == undo;
+            let st = s.doc().unwrap();
+            let same = st.doc == doc && st.selection == selection && st.history.undo.len() == undo && (st.isolation, st.mask_view) == modes;
             if !(refused && same) {
                 wrong.push(format!("{cmd} {p}: {r:?}, document unchanged: {same}"));
             }
             if !same {
                 let st = s.doc_mut().unwrap();
-                (st.doc, st.selection) = (doc, selection);
+                (st.doc, st.selection, (st.isolation, st.mask_view)) = (doc, selection, modes);
                 st.history.undo.truncate(undo);
             }
         }

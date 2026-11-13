@@ -82,7 +82,8 @@ impl Writer<'_> {
         let heights = vectorcraft_text::FontDb::global().font_heights_resolved(&resolved);
         let t = &*heights;
         let inline = t.runs.iter().any(|r| r.inline.is_some());
-        // Ruby is written as outlines with its base text: a reader's <text> can't place it. So are
+        // Ruby is written as outlines with its base text: a reader's <text> can't place it. So is
+        // type with warichu, whose stacked lines a reader's <text> can't place either. So are
         // small capitals, superscript and subscript and tab leaders, which SVG text doesn't draw (#3869),
         // and a glyph chosen for a character, which a reader's <text> draws with the default glyph. So
         // is type in one of the document's composite fonts, which a reader can't find by its name.
@@ -92,8 +93,12 @@ impl Writer<'_> {
                 || r.style.glyph_alternate.is_some()
                 || vectorcraft_doc::CompositeFont::named(&doc.composite_fonts, &r.style.font_family).is_some()
         }) || std::iter::once(&t.para).chain(&t.paras).any(|p| p.tabs.iter().any(|tab| !tab.leader.is_empty()));
-        let outlined =
-            self.opts.outline_text || t.vertical || !t.ruby.is_empty() || (inline && matches!(t.kind, TextKind::OnPath { .. })) || unwritable;
+        let outlined = self.opts.outline_text
+            || t.vertical
+            || !t.ruby.is_empty()
+            || t.stacks_warichu()
+            || (inline && matches!(t.kind, TextKind::OnPath { .. }))
+            || unwritable;
         let chars = |w: &mut Self, n: &Node| if outlined { w.text_outlines(n, t) } else { w.text(n, t) };
         let painted = n.appearance.items.iter().any(|i| i.visible() && !i.paint().is_none());
         // Live type with an inside or outside character stroke writes that stroke apart from the
@@ -165,6 +170,7 @@ impl Writer<'_> {
             }
         }
         let id = self.id_attr(n);
+        self.note_outlined(n.id);
         let a = self.attrs(&css::transparency(n));
         // Text outlined because SVG text can't draw it (bent glyphs, vertical type, ruby, effects on
         // a path and the like) names its text for screen readers and search; Convert to Outlines
@@ -256,6 +262,25 @@ impl Writer<'_> {
             // It cannot hang glyphs outside the start bracket either.
             if hangs_on_path(t, &lay) {
                 self.warn("type on a path with glyphs hanging outside its brackets is outlined to keep its look");
+                return self.text_outlines(n, t);
+            }
+            // The space before the first character is written as its `dx`; one before a character
+            // after a line break, which the `<textPath>` writes as a space, keeps its look as outlines.
+            let plain = t.plain_text();
+            let mut at = 0;
+            let spaced_break = t.runs.iter().any(|r| {
+                let start = at;
+                at += r.text.len();
+                r.style.kerning_before != 0.0 && (start..at).any(|b| b > 0 && vectorcraft_text::line_start_space(&plain, b, &r.style, false) != 0.0)
+            });
+            if spaced_break {
+                self.warn("type on a path with space before a character after a line break is outlined to keep its look");
+                return self.text_outlines(n, t);
+            }
+            // A `<textPath>` places its characters one after the other: Insert Aki keeps its look as
+            // outlines.
+            if t.runs.iter().any(|r| r.style.aki_left != 0.0 || r.style.aki_right != 0.0) {
+                self.warn("type on a path with Insert Aki is outlined to keep its look");
                 return self.text_outlines(n, t);
             }
             // A `<textPath>` holds the characters of the text, not the bullets or numbers drawn
@@ -508,7 +533,7 @@ impl Writer<'_> {
                 continue;
             };
             if !font.subset {
-                self.warn(&format!("the font {name} is embedded whole: its licence doesn't allow subsetting"));
+                self.note_setting(&format!("the font {name} is embedded whole: its licence doesn't allow subsetting"));
             }
             let shared = uses.iter().filter(|o| described(o) == described(u)).count() > 1;
             let range = if shared { format!(";unicode-range:{}", unicode_range(&u.chars)) } else { String::new() };
@@ -534,8 +559,11 @@ impl Writer<'_> {
         // The <text> element's user space is the document's; gradients span the laid-out text.
         let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
         self.note_fonts(t, &lay);
+        // The styles the layout draws the text in: Dynamic Text scales its sizes, leading and baseline shifts.
+        let fitted = (lay.fit_scale != 1.0).then(|| vectorcraft_text::scaled(t, lay.fit_scale));
+        let drawn = fitted.as_ref().unwrap_or(t);
         let space = (lay.bounds, self.xf * t.xf);
-        let base = self.char_props(&t.first_style(), space);
+        let base = self.char_props(&drawn.first_style(), space);
         let mut props = base.clone();
         let (from, to) = t.kind.path_span().unwrap_or((start, 1.0));
         // The anchor sits where the layout aligns the line within its span.
@@ -556,10 +584,17 @@ impl Writer<'_> {
         let a = self.attrs(&props);
         let offset = fmt_num(at * 100.0, 3);
         let mut s = format!("<text{id} xml:space=\"preserve\"{a}><textPath xlink:href=\"#{pid}\" startOffset=\"{offset}%\">");
-        for run in &t.runs {
+        let plain = drawn.plain_text();
+        let first = drawn.runs.iter().position(|r| !r.text.is_empty());
+        for (i, run) in drawn.runs.iter().enumerate() {
             let mut diff = run_diff(&base, self.char_props(&run.style, space));
             diff.extend(direction_props(&run.style));
-            let a = self.attrs(&diff);
+            let mut a = self.attrs(&diff);
+            // The space before the first character (`kerningBefore`) moves it along the path.
+            let before = if first == Some(i) { vectorcraft_text::line_start_space(&plain, 0, &run.style, false) } else { 0.0 };
+            if before != 0.0 && before.is_finite() {
+                a.push_str(&format!(" dx=\"{}\"", fmt_num(before, self.opts.decimals)));
+            }
             s.push_str(&format!("<tspan{a}>{}</tspan>", xml_text(&run.text.replace('\n', " "))));
         }
         s.push_str("</textPath></text>");
@@ -679,20 +714,23 @@ const PLACE_TOLERANCE: f64 = 1e-6;
 /// caps are upper case. Unless `fewer`, a line that is justified or composed with Mojikumi also
 /// starts a new segment at each character the layout draws elsewhere than a reader continuing
 /// the segment would ([`reader_advances`]): a Justify All line's letter gaps, the gaps between
-/// the characters of a justified Japanese line, and the spacing Mojikumi changes.
+/// the characters of a justified Japanese line, and the spacing Mojikumi changes. Text with Insert
+/// Aki does so on every line, with `fewer` too.
 fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -> Vec<Line> {
     let plain = t.plain_text();
     let mut lines = Vec::with_capacity(lay.lines.len());
     let (mut kerned, mut unkerned) = (None, None);
+    // Insert Aki moves characters from where a reader draws them, with `fewer` too.
+    let aki = t.runs.iter().any(|r| r.style.aki_left != 0.0 || r.style.aki_right != 0.0);
     for line in &lay.lines {
         let para = plain.as_bytes().get(..line.start).map_or(0, |b| b.iter().filter(|&&c| c == b'\n').count());
         let style = t.para_at(para);
         let split_words = !fewer && !matches!(style.justify, Justify::Auto | Justify::Left | Justify::Center | Justify::Right);
         // Each cluster's advance and drawing offset as a reader gives them, by its byte offset.
         // Justification…'s Desired word and letter spacing and glyph scaling move characters from
-        // where a reader draws them, on every line.
-        let spaced = !fewer && !style.justification.desired_is_default();
-        let reader = if split_words || spaced || (!fewer && !style.mojikumi.is_none()) {
+        // where a reader draws them, on every line (Block's word gap among them).
+        let spaced = !fewer && !t.layout_justification(style).desired_is_default();
+        let reader = if aki || split_words || spaced || (!fewer && !style.mojikumi.is_none()) {
             Some(&*kerned.get_or_insert_with(|| reader_advances(t, lay, true)))
         } else {
             None
@@ -747,6 +785,14 @@ fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -
                     // A glyph the layout draws before its pen (Mojikumi) starts that much earlier.
                     let x = g.xf.translation().x - offset;
                     (advance, if (x - g.origin.x).abs() > PLACE_TOLERANCE { x } else { g.origin.x })
+                }
+                // The space before a line's first character (`kerningBefore`) is in its advance and
+                // moves it along the line: a reader sets it that far along, without it. (Shrink
+                // Text to Fit scales it with the sizes.)
+                None if !lay.vertical && !g.rtl && g.len > 0 && run.style.kerning_before != 0.0 => {
+                    let before = vectorcraft_text::line_start_space(&plain, g.byte, &run.style, false) * lay.fit_scale;
+                    let before = if before.is_finite() { before } else { 0.0 };
+                    (g.advance - before, g.origin.x + before)
                 }
                 None => (g.advance, g.origin.x),
             };
@@ -835,10 +881,15 @@ fn reader_advances(t: &TextObject, lay: &vectorcraft_text::TextLayout, kerning: 
         // A reader spaces words and letters as the font does.
         p.justification = vectorcraft_doc::JustificationOptions::default();
     }
-    if !kerning {
-        for r in &mut set.runs {
+    for r in &mut set.runs {
+        if !kerning {
             r.style.kerning.get_or_insert(0.0);
         }
+        // A reader puts no space before a line's first character (`kerningBefore`) and no Insert
+        // Aki: the segment starts that much further along instead.
+        r.style.kerning_before = 0.0;
+        r.style.aki_left = 0.0;
+        r.style.aki_right = 0.0;
     }
     let relaid;
     let glyphs = if set == *t {

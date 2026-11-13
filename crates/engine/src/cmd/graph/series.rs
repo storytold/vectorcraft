@@ -1,7 +1,7 @@
 use vectorcraft_color::BlendMode;
 
 use super::axis::radar_axis;
-use super::labels::{Role, filled_lines_on, label_style};
+use super::labels::{Role, filled_lines_on, label_para, label_style};
 use super::{Arc, CharStyle, Color, Document, GraphKind, GraphSpec, HashMap, Node, NodeId, NodeKind, Paint, Result, Session, Value, bad};
 
 // ---------- generation ----------
@@ -79,6 +79,11 @@ struct SeriesRef {
     index: usize,
 }
 
+/// How many series groups `spec`'s graph has: a group whose index is past it (the index comes from the file) is not one.
+fn series_count(spec: &GraphSpec) -> usize {
+    spec.rows.iter().map(Vec::len).max().unwrap_or(0).clamp(1, vectorcraft_doc::MAX_GRAPH_SERIES)
+}
+
 /// Every node in a graph's series groups (the groups too), found in one pass over the document.
 /// Axes, the legend and groups whose index is past the graph's series (the index comes from the
 /// file) are left out.
@@ -86,7 +91,7 @@ fn series_members(doc: &Document) -> HashMap<NodeId, SeriesRef> {
     let mut out = HashMap::new();
     doc.walk(|n| {
         let Some(spec) = n.extras().graph.as_deref() else { return };
-        let count = spec.rows.iter().map(Vec::len).max().unwrap_or(0).clamp(1, vectorcraft_doc::MAX_GRAPH_SERIES);
+        let count = series_count(spec);
         for group in n.children().into_iter().flatten() {
             let Some(index) = group.extras().series_index.and_then(|i| usize::try_from(i).ok()).filter(|i| *i < count) else { continue };
             let r = SeriesRef { graph: n.id, group: group.id, index };
@@ -95,6 +100,25 @@ fn series_members(doc: &Document) -> HashMap<NodeId, SeriesRef> {
             });
         }
     });
+    out
+}
+
+/// The objects directly in a series group among `roots` and inside them, for an edit that reaches graph series marks
+/// without naming them. They may include objects of groups that only look like series groups; the capture functions
+/// check each one.
+pub(crate) fn series_marks_in(doc: &Document, roots: &[NodeId]) -> Vec<NodeId> {
+    let mut out = Vec::new();
+    for id in roots {
+        if doc.parent_of(*id).and_then(|p| doc.node(p)).is_some_and(|g| g.extras().series_index.is_some()) {
+            out.push(*id);
+        }
+        let Some(root) = doc.node(*id) else { continue };
+        root.walk(&mut |n| {
+            if n.extras().series_index.is_some() {
+                out.extend(n.children().into_iter().flatten().map(|c| c.id));
+            }
+        });
+    }
     out
 }
 
@@ -121,6 +145,38 @@ pub(crate) fn paint_targets(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> {
     }
     out.sort_unstable();
     out.dedup();
+    out
+}
+
+/// `ids` with each graph series group replaced by the paths directly inside it, as [`paint_targets`] reads a series
+/// group: the graph draws its series groups again with no rows of their own. A series group with no such path, other
+/// ids and the art of a graph design pass through, and the order of `ids` is kept.
+pub(crate) fn series_group_marks(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> {
+    series_group_marks_where(doc, ids, |_| true)
+}
+
+/// [`series_group_marks`] for the series groups `stands` accepts; the others pass through.
+pub(crate) fn series_group_marks_where(doc: &Document, ids: &[NodeId], stands: impl Fn(&Node) -> bool) -> Vec<NodeId> {
+    // A series group is a child of a graph with one of the graph's series indexes ([`series_members`]). Each id is
+    // looked up through its parent, with no pass over the document: the panels call this while they draw.
+    let is_series_group = |n: &Node| {
+        let Some(index) = n.extras().series_index.and_then(|i| usize::try_from(i).ok()) else { return false };
+        let graph = doc.parent_of(n.id).and_then(|parent| doc.node(parent)).and_then(|parent| parent.extras().graph.as_deref());
+        graph.is_some_and(|spec| index < series_count(spec))
+    };
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for id in ids {
+        match doc.node(*id) {
+            Some(group) if is_series_group(group) && stands(group) => {
+                let marks: Vec<NodeId> =
+                    group.children().into_iter().flatten().filter(|m| matches!(m.kind, NodeKind::Path { .. })).map(|m| m.id).collect();
+                if marks.is_empty() { out.push(*id) } else { out.extend(marks) }
+            }
+            _ => out.push(*id),
+        }
+    }
+    out.retain(|id| seen.insert(*id));
     out
 }
 
@@ -406,23 +462,34 @@ fn graph_labels(doc: &Document) -> HashMap<NodeId, (NodeId, Role)> {
     out
 }
 
-/// Keep a formatting change made to graph labels `ids` (Character or Appearance, on the whole graph or on labels
-/// picked with Group Selection) for every label of their kind: `change` is applied to the kind's kept style (or
-/// the default one), so the labels look the same when the graph is drawn again. Called inside the same edit, so
-/// they undo together. Returns whether a kept style changed.
-pub(crate) fn capture_label_styles(doc: &mut Document, ids: &[NodeId], change: &dyn Fn(&mut CharStyle)) -> bool {
-    if ids.is_empty() {
-        return false;
-    }
+/// Keep the anti-aliasing method `method` given to graph labels `ids` for every label of their kind, as
+/// [`capture_label_styles`] keeps a formatting change. Returns whether a kept method changed.
+pub(crate) fn capture_label_anti_alias(doc: &mut Document, ids: &[NodeId], method: vectorcraft_doc::text::TypeAntiAlias) -> bool {
     let labels = graph_labels(doc);
-    if labels.is_empty() {
-        return false;
-    }
     let mut kinds: Vec<(NodeId, Role)> = ids.iter().filter_map(|id| labels.get(id).copied()).collect();
     kinds.sort_by_key(|(g, r)| (g.0, *r as u8));
     kinds.dedup();
     let mut changed = false;
     for (graph, role) in kinds {
+        let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
+        let slot = match role {
+            Role::Value => &mut spec.label_styles.values_anti_alias,
+            Role::Category => &mut spec.label_styles.categories_anti_alias,
+            Role::Legend => &mut spec.label_styles.legend_anti_alias,
+        };
+        changed |= *slot != Some(method);
+        *slot = Some(method);
+    }
+    changed
+}
+
+/// Keep a formatting change made to graph labels `ids` (Character or Appearance, on the whole graph or on labels
+/// picked with Group Selection) for every label of their kind: `change` is applied to the kind's kept style (or
+/// the default one), so the labels look the same when the graph is drawn again. Called inside the same edit, so
+/// they undo together. Returns whether a kept style changed.
+pub(crate) fn capture_label_styles(doc: &mut Document, ids: &[NodeId], change: &dyn Fn(&mut CharStyle)) -> bool {
+    let mut changed = false;
+    for (graph, role) in label_kinds(doc, ids) {
         let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
         let mut style = label_style(&spec.label_styles, role);
         change(&mut style);
@@ -435,6 +502,42 @@ pub(crate) fn capture_label_styles(doc: &mut Document, ids: &[NodeId], change: &
         *slot = Some(style);
     }
     changed
+}
+
+/// Keep a paragraph change made to all of the text of graph labels `ids` (Paragraph, on the whole graph or on labels
+/// picked with Group Selection) for every label of their kind, as [`capture_label_styles`] does for character
+/// formats. Returns whether kept attributes changed, or the error `change` returns for the kept attributes.
+pub(crate) fn capture_label_paragraphs(
+    doc: &mut Document,
+    ids: &[NodeId],
+    change: &dyn Fn(&mut vectorcraft_doc::ParaStyle) -> Result<()>,
+) -> Result<bool> {
+    let mut changed = false;
+    for (graph, role) in label_kinds(doc, ids) {
+        let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
+        let mut para = label_para(&spec.label_styles, role);
+        change(&mut para)?;
+        let slot = match role {
+            Role::Value => &mut spec.label_styles.values_para,
+            Role::Category => &mut spec.label_styles.categories_para,
+            Role::Legend => &mut spec.label_styles.legend_para,
+        };
+        changed |= slot.as_ref() != Some(&para);
+        *slot = Some(para);
+    }
+    Ok(changed)
+}
+
+/// The graphs and kinds of label among `ids`, each once.
+fn label_kinds(doc: &Document, ids: &[NodeId]) -> Vec<(NodeId, Role)> {
+    if ids.is_empty() {
+        return vec![];
+    }
+    let labels = graph_labels(doc);
+    let mut kinds: Vec<(NodeId, Role)> = ids.iter().filter_map(|id| labels.get(id).copied()).collect();
+    kinds.sort_by_key(|(g, r)| (g.0, *r as u8));
+    kinds.dedup();
+    kinds
 }
 
 /// The series a command on graph `id` (of `count` series) applies to: `seriesIndexes`, else, with no `id` param, a

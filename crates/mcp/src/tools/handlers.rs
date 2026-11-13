@@ -334,9 +334,10 @@ pub(super) fn transform(b: &mut dyn Backend, a: &Args) -> Result<Value, String> 
 /// Most fields one `answer_dialog` call may set.
 pub(super) const MAX_DIALOG_FIELDS: usize = 256;
 
-/// Sets the open dialog's fields in order with one `ui.dialog.set {fields}`, which stores all of
-/// them or none, then confirms or cancels it. Every argument is checked before anything is sent to
-/// the app.
+/// Sets the open dialog's fields in order with one `ui.dialog.set {fields, action?}`, which stores
+/// all of them or none and then confirms or cancels that same dialog, so a dialog another
+/// connection opens in between is not answered in its place. Every argument is checked before
+/// anything is sent to the app.
 pub(super) fn answer_dialog(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
     let set = match a.get("set") {
         None => &[][..],
@@ -355,21 +356,37 @@ pub(super) fn answer_dialog(b: &mut dyn Backend, a: &Args) -> Result<Value, Stri
         let field = item.get("field").and_then(Value::as_str).ok_or_else(|| format!("set {i}: missing string `field`"))?;
         fields.push(json!({"field": field, "value": item.get("value").cloned().unwrap_or(Value::Null)}));
     }
-    let then = match a.get("action") {
-        None => None,
-        Some(v) if v == "confirm" => Some("ui.dialog.confirm"),
-        Some(v) if v == "cancel" => Some("ui.dialog.cancel"),
+    let (action, then) = match a.get("action") {
+        None => (None, None),
+        Some(v) if v == "confirm" => (Some("confirm"), Some("ui.dialog.confirm")),
+        Some(v) if v == "cancel" => (Some("cancel"), Some("ui.dialog.cancel")),
         Some(_) => return Err("`action` must be confirm or cancel".into()),
     };
     if fields.is_empty() && then.is_none() {
         return Err("give `set` and/or `action`".into());
     }
-    let dialog = if fields.is_empty() { Value::Null } else { b.call("ui.dialog.set", json!({"fields": fields}))? };
-    let result = match then {
-        Some(method) => b.call(method, json!({}))?,
-        None => Value::Null,
-    };
-    Ok(json!({"dialog": dialog, "result": result}))
+    if fields.is_empty() {
+        let result = match then {
+            Some(method) => b.call(method, json!({}))?,
+            None => Value::Null,
+        };
+        return Ok(json!({"dialog": Value::Null, "result": result}));
+    }
+    let mut params = json!({"fields": fields});
+    if let Some(action) = action {
+        params["action"] = json!(action);
+    }
+    let reply = b.call("ui.dialog.set", params)?;
+    match then {
+        None => Ok(json!({"dialog": reply, "result": Value::Null})),
+        // The app answered the dialog in the same request.
+        Some(_) if reply.get("dialog").is_some() => Ok(reply),
+        // An app that predates `action` replied with the dialog alone and did not answer it.
+        Some(method) => {
+            let result = b.call(method, json!({}))?;
+            Ok(json!({"dialog": reply, "result": result}))
+        }
+    }
 }
 
 pub(super) fn screenshot(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
@@ -420,16 +437,50 @@ pub(super) fn screenshot(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, St
     }
 }
 
-/// The window of an app from before `ui.screenshot {data}`, captured through a temporary file.
+/// The window of an app from before `ui.screenshot {data}`, captured through a temporary file in a
+/// new folder of its own inside the system's temporary folder ([`new_capture_folder`]). The folder
+/// and everything in it are removed once the capture is read, and also when the app or the read
+/// fails.
 fn old_window_capture(b: &mut dyn Backend, max: Option<u32>) -> Result<ToolResult, String> {
-    let tmp = std::env::temp_dir().join(format!("vectorcraft-window-{}.png", std::process::id())).to_string_lossy().to_string();
-    let r = b.call("ui.screenshot", json!({"path": tmp}))?;
-    let png = std::fs::read(&tmp).map_err(|e| format!("read {tmp}: {e}"))?;
-    // Best effort: a temporary file left behind is harmless.
-    std::fs::remove_file(&tmp).ok();
+    let dir = new_capture_folder(&std::env::temp_dir())?;
+    let tmp = dir.join("window.png").to_string_lossy().to_string();
+    let captured = b.call("ui.screenshot", json!({"path": tmp})).and_then(|r| Ok((std::fs::read(&tmp).map_err(|e| format!("read {tmp}: {e}"))?, r)));
+    // Best effort: a folder that can't be removed holds only this capture, and on unix only its
+    // owner can open it.
+    let _ = std::fs::remove_dir_all(&dir);
+    let (png, r) = captured?;
     let mut info = json!({"window": true, "width": r.get("width"), "height": r.get("height"), "path": Value::Null});
     let png = fit_capture(png, max, &mut info)?;
     Ok(image_result(&png, info))
+}
+
+/// A new folder in `parent` named `vectorcraft-window-` followed by the process id, `-` and a count
+/// of the process's captures; on unix only its owner can open it. A name that is already taken, by
+/// an earlier process with the same id or by anyone else, is skipped for the next count.
+fn new_capture_folder(parent: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    loop {
+        let dir = parent.join(format!("vectorcraft-window-{}-{}", std::process::id(), NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+        match private_folder().create(&dir) {
+            Ok(()) => return Ok(dir),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(format!("{}: {e}", dir.display())),
+        }
+    }
+}
+
+/// A builder for folders that only their owner can read, write or open (mode 0o700).
+#[cfg(unix)]
+fn private_folder() -> std::fs::DirBuilder {
+    let mut b = std::fs::DirBuilder::new();
+    std::os::unix::fs::DirBuilderExt::mode(&mut b, 0o700);
+    b
+}
+
+/// A builder for folders: a plain one outside unix.
+#[cfg(not(unix))]
+fn private_folder() -> std::fs::DirBuilder {
+    std::fs::DirBuilder::new()
 }
 
 /// `max_side`: absent, or an integer in 1..4096.

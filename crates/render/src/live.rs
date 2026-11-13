@@ -9,7 +9,8 @@
 //! envelope around an instance of it). What the walk behind that key found is kept with the node
 //! and with the document's symbols and patterns as the walk read them ([`Walk`]). A later frame
 //! makes the key from what was kept while the node and the document's symbols and patterns stay
-//! the same. A walk that found a placed file is not kept.
+//! the same. A walk that found a placed file, or an image whose own fills or strokes follow its
+//! pixels, is not kept.
 //! Gradient meshes are tessellated into many small solid-colour quads (vello
 //! has no mesh shading), with the density chosen from the on-screen patch size; each quad is
 //! grown by half a device pixel along its edges so neighbours overlap and no antialiasing seams
@@ -44,7 +45,8 @@ type Walk = (Weak<Node>, Walked, Arc<DocInputs>);
 
 /// Per-renderer cache of evaluated live objects: (live node, its evaluation, [`Found`]), a
 /// [`MeshEntry`] per mesh node and subdivision level, and a [`Walk`] per node whose key
-/// [`Renderer::live_found`] found without finding a placed file.
+/// [`Renderer::live_found`] found without finding a placed file or an image whose own fills or
+/// strokes follow its pixels.
 pub(crate) struct LiveCache {
     expanded: FrameCache<usize, (Arc<Node>, Expanded, Found)>,
     meshes: FrameCache<(usize, usize), MeshEntry>,
@@ -97,7 +99,8 @@ pub fn expand_live(n: &Node) -> Vec<Node> {
 /// What the evaluation of `n` (a live node, or an object whose effect art the renderer keeps with
 /// its inputs, see [`Renderer::live_found`]) reads from the document, placed files,
 /// the fonts, the plug-ins and the color settings, hashed: the art of the symbols, the tilings of
-/// the patterns and the reads of the placed files it shows ([`hash_resources`]), the font
+/// the patterns, the reads of the placed files it shows and the document's pixels for the images
+/// whose own fills or strokes follow them ([`hash_resources`]), the font
 /// generation ([`vectorcraft_text::FontDb::generation`]) when it shows type or a placed file, the
 /// plug-in revision ([`crate::effects::plugin_revision`]) and `names` (the hash of the document's
 /// swatch and pattern names, [`DocInputs`]) when it shows an object with a plug-in effect, since a
@@ -105,13 +108,13 @@ pub fn expand_live(n: &Node) -> Vec<Node> {
 /// while the swatches and patterns they name are in the document, and the color settings (`cms`,
 /// their address). Art is hashed by the addresses of its `Arc`s, which copies of the document
 /// share: a copy of the document has the same key. It also returns weak references to the reads
-/// found, and what the walk found ([`Walked`]) when it found no placed file.
+/// found, and what the walk found ([`Walked`]) when it found no placed file and no such image.
 fn resources_key(doc: &Document, cms: usize, names: u64, n: &Node) -> (u64, Vec<Weak<ReadDocument>>, Option<Walked>) {
     let mut h = DefaultHasher::new();
     let mut shown = Shown::default();
     hash_resources(doc, n, &mut shown, &mut h);
     let walked = Walked { hash: h.finish(), text: shown.text, plugins: shown.plugins };
-    (walked.key(cms, names), shown.reads, (!shown.placed).then_some(walked))
+    (walked.key(cms, names), shown.reads, (!shown.placed && !shown.pixels).then_some(walked))
 }
 
 /// What [`hash_resources`] found in a node: the hash of what it walked, whether it found type or
@@ -153,6 +156,10 @@ struct Shown {
     text: bool,
     /// Whether a placed file was found.
     placed: bool,
+    /// Whether an image whose own fills or strokes follow its pixels was found
+    /// ([`crate::effects::follows_image_pixels`]): the document's pixels for it can change while
+    /// the walk's symbols and patterns stay the same.
+    pixels: bool,
     /// Whether an object with a visible plug-in effect was found.
     plugins: bool,
     /// Weak references to the reads of the placed files found.
@@ -163,9 +170,11 @@ struct Shown {
 /// tilings ([`crate::pattern::hash_tiling`]) of the patterns in the fills and strokes of its
 /// objects and of type's characters, the address of each symbol instance's art, and the address of
 /// the read of each placed file that [`vectorcraft_doc::PlacedDocument::art`] shows (none before
-/// the file is read). It walks `n` and then, one at a time from a list, the opacity-mask, pattern
-/// and symbol art it finds, each pattern and each symbol's art once ([`first_seen`]). `shown`
-/// records the type, placed files, reads and plug-in effects found.
+/// the file is read), and the address of the document's pixels for each image whose
+/// own fills or strokes follow them ([`crate::effects::follows_image_pixels`]). It walks `n` and
+/// then, one at a time from a list, the opacity-mask, pattern and symbol art it finds, each pattern
+/// and each symbol's art once ([`first_seen`]). `shown` records the type, placed files, reads,
+/// such images and plug-in effects found.
 fn hash_resources<'a>(doc: &'a Document, n: &'a Node, shown: &mut Shown, h: &mut DefaultHasher) {
     let mut todo = vec![];
     let mut next = Some(n);
@@ -203,6 +212,12 @@ fn hash_resources<'a>(doc: &'a Document, n: &'a Node, shown: &mut Shown, h: &mut
                     shown.placed = true;
                 }
                 NodeKind::Text(_) => shown.text = true,
+                // The address of the pixels the document holds for the image, which Update Link
+                // replaces under the same key ([`DocInputs`] holds them weakly).
+                NodeKind::Image(im) if crate::effects::follows_image_pixels(c) => {
+                    doc.images.get(&im.key).map(|b| Arc::as_ptr(&b.bytes) as usize).hash(h);
+                    shown.pixels = true;
+                }
                 _ => {}
             }
             if let Some(m) = c.extras().mask.as_deref() {
@@ -442,7 +457,7 @@ impl Renderer {
     /// evaluated live objects, type, symbol art or colors shaded through the color settings. The
     /// key is made from the [`Walk`] kept for `n` while `doc`'s symbols and patterns are those it
     /// read; `n` is walked again when they changed, and in every frame when the walk found a
-    /// placed file.
+    /// placed file or an image whose own fills or strokes follow its pixels.
     pub(crate) fn live_found(&mut self, doc: &Document, n: &Arc<Node>) -> Found {
         let inputs = self.doc_inputs(doc);
         let at = Arc::as_ptr(n) as usize;
@@ -781,7 +796,7 @@ mod tests {
             d.symbols.push(Symbol { dynamic: false, name: format!("S{k}"), art: Arc::new(art) });
         }
         let first = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S0".into(), xf: Affine::IDENTITY });
-        let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+        let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
         let envelope = NodeKind::Envelope {
             content: vec![Arc::new(first)],
             kind: Box::new(kind),
@@ -815,7 +830,7 @@ mod tests {
             d.symbols.push(Symbol { dynamic: false, name: name.into(), art: art.clone() });
         }
         let content = ["A", "B", "C"].map(|s| Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: s.into(), xf: Affine::IDENTITY })));
-        let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+        let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
         let envelope = NodeKind::Envelope {
             content: content.to_vec(),
             kind: Box::new(kind),

@@ -24,7 +24,8 @@ pub enum Method {
     #[default]
     Abutting,
     /// Stacked: every layer extends under the layers above it, within the areas that hold its own
-    /// color.
+    /// color. With Fills (without Create Strokes) each shape is filled whole, and what it encloses
+    /// is stacked above it.
     Overlapping,
 }
 
@@ -114,14 +115,17 @@ pub struct TraceParams {
     pub gradients: bool,
     /// Create: trace areas as filled shapes.
     pub fills: bool,
-    /// Create: trace lines no wider than `stroke_width` as stroked centre lines.
+    /// Create: trace lines no wider than `stroke_width`, and such thin features of wider shapes, as
+    /// stroked center lines.
     pub strokes: bool,
     /// Stroke: the widest feature (px) traced as a stroke.
     pub stroke_width: f64,
     /// Flat Logo mode: the flat colours (`#rrggbb`) to use; empty finds them automatically. White is
     /// traced on its own and cannot be named unless [`logo_white`](Self::logo_white) is off, colours
-    /// closer than about 12 (RGB distance) count as one, and at most ten are used. (Not `palette`:
-    /// that is Color mode's colour source.)
+    /// closer than about 12 (RGB distance) count as one, and at most ten are used. Whether the image
+    /// is flat art (and not refused) is judged by its own colors, which are found the same way as when
+    /// no colors are named; as many are looked for as are named, with white, or as
+    /// [`colors`](Self::colors) gives, whichever is more. (Not `palette`: that is Color mode's colour source.)
     pub logo_colors: Vec<String>,
     /// Flat Logo mode with named `logo_colors`: `true` traces white (every channel 245 or more) as a
     /// color of its own beside the named ones. `false` traces the named colors only: white areas

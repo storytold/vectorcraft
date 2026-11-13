@@ -12,9 +12,9 @@ use vectorcraft_doc::{Document, LinkInfo};
 
 use serde_json::{Value, json};
 
-use super::fileio::{create_dir, write_file};
+use super::fileio::{create_dir, document_path, shown_link, shown_path, write_file};
 use super::links::LinkBase;
-use super::{CommandSpec, Result, Session, bad, bool_or, cmd, has_doc, str_param, unique_name};
+use super::{CommandSpec, Result, Session, bad, cmd, has_doc, switch_or, text_param, unique_name};
 
 const C: &str = "file.package";
 
@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Package",
         [],
         None,
-        "{folder?, name?: (default: \"<document> Folder\"), copyLinks?: true, linksFolder?: true (the linked files go in Links/, else next to the document), relink?: true (the packaged document links to the copies), copyFonts?: true (the fonts its type uses go in Fonts/; fonts whose licence doesn't allow embedding are left out), report?: true (<document> Report.txt)} copy the saved document as it is now into folder/name as <document>.vectorcraft with its linked files and fonts; the open document doesn't change → {folder, files: [paths relative to folder/name], links, fonts (counts copied), missingLinks: [file names not found], skippedFonts: [{font, reason}], warnings: [nested files copied unchanged or cycles/depth stopped]}; no folder → the same with {name: \"<name>.zip\", dataBase64} (a zip of the files in <name>/) instead of folder",
+        "{folder?, name?: (default: \"<document> Folder\"), copyLinks?: true, linksFolder?: true (the linked files go in Links/, else next to the document), relink?: true (the packaged document links to the copies), copyFonts?: true (the fonts its type uses go in Fonts/; fonts whose licence doesn't allow embedding are left out), report?: true (<document> Report.txt)} copy the saved document as it is now into folder/name as <document>.vectorcraft with its linked files and fonts; the open document doesn't change → {folder, files: [paths relative to folder/name], links, fonts (counts copied), missingLinks: [file names not found], skippedFonts: [{font, reason}], warnings: [nested files copied unchanged or cycles/depth stopped]}; no folder → the same with {name: \"<name>.zip\", dataBase64} (a zip of the files in <name>/) instead of folder. The warnings and the report name a file outside the automation read roots by its file name",
         has_doc,
         package
     )]
@@ -178,8 +178,10 @@ impl<'a> Collector<'a> {
 
     /// Warns when a file that placed `.ai` file `source` links (`name`) was copied as `copy`: the
     /// copy of `source` finds it only by its name, beside it.
+    /// `path` is the link's path as the warning names it.
     fn renamed(&mut self, lines: &mut Vec<String>, source: &str, path: &str, name: &str, copy: &str) {
         if Path::new(copy).file_name().and_then(std::ffi::OsStr::to_str) != Some(name) {
+            let source = shown_path(source);
             let message = format!(
                 "{path}: copied as {copy}; the copy of {source} looks for it as {name} and shows the file of that name, if any, else its preview"
             );
@@ -207,11 +209,13 @@ impl<'a> Collector<'a> {
         let section = self.sections.len();
         self.sections.push(vec![]);
         let mut lines = vec![];
-        // The packaged document's sections read as before; a placed document's name its file.
+        // The packaged document's sections read as before; a placed document's name its file. The
+        // report and the warnings name a file outside a confined request's read roots by its name.
+        let shown_source = shown_path(source);
         let heading = |lines: &mut Vec<String>, title: &str| {
             lines.push(title.into());
             if depth > 0 {
-                lines.push(format!("Document: {source}"));
+                lines.push(format!("Document: {shown_source}"));
             }
         };
         // A file's saved path is only meaningful inside its own document.
@@ -243,17 +247,21 @@ impl<'a> Collector<'a> {
             heading(&mut lines, "LINKED FILES");
             for file in linked_files(doc) {
                 let found_path = file.found_path.as_deref().unwrap_or(&file.path);
+                // The stored path, whole when the place it names (read from this document's folder) is
+                // inside the read roots. A file found elsewhere does not show a stored path outside them.
+                let resolved = document_path(&file.path, Some(source)).ok();
+                let shown = shown_link(&file.path, resolved.as_deref()).into_owned();
                 if let Some(ancestor) = self.visiting.get(found_path).cloned() {
                     // The ancestor is already included (possibly the root document). A
                     // cyclic reference cannot have a final content hash until both files
                     // have been written, so leave its size/hash unspecified, not stale.
-                    self.warn(&mut lines, format!("{}: circular placed-document link to {ancestor}; stopped following the cycle", file.path));
+                    self.warn(&mut lines, format!("{shown}: circular placed-document link to {ancestor}; stopped following the cycle"));
                     local.insert(file.path.clone(), Copied { name: ancestor, size: None, hash: None });
                     continue;
                 }
                 if let Some(existing) = self.copies.get(found_path).cloned() {
                     if by_name {
-                        self.renamed(&mut lines, source, &file.path, &file.name, &existing.name);
+                        self.renamed(&mut lines, source, &shown, &file.name, &existing.name);
                     }
                     // Another document may place other pages of a PDF copied already.
                     if self.opts.copy_fonts
@@ -265,8 +273,8 @@ impl<'a> Collector<'a> {
                     continue;
                 }
                 let Some(mut bytes) = file.bytes else {
-                    lines.push(format!("{}: not found ({}), not copied", file.name, file.path));
-                    self.missing.push(if depth == 0 { file.name.clone() } else { format!("{} ({source})", file.name) });
+                    lines.push(format!("{}: not found ({shown}), not copied", file.name));
+                    self.missing.push(if depth == 0 { file.name.clone() } else { format!("{} ({shown_source})", file.name) });
                     continue;
                 };
                 if self.copies.len() >= 10_000 {
@@ -277,7 +285,7 @@ impl<'a> Collector<'a> {
                 let unique = free_name(&name, if self.opts.links_folder { &mut self.link_names } else { &mut self.taken });
                 let destination_file = format!("{dir}{unique}");
                 if by_name {
-                    self.renamed(&mut lines, source, &file.path, &file.name, &destination_file);
+                    self.renamed(&mut lines, source, &shown, &file.name, &destination_file);
                 }
                 // A placed PDF or .ai file is copied as it is, as an image is; the files a .ai file
                 // read from its editing data links are copied beside it.
@@ -285,7 +293,7 @@ impl<'a> Collector<'a> {
                 let placed_file = pages.is_some();
                 if placed_file && let Some(mut art) = super::place::document::editing_data(&file.name, &bytes) {
                     if depth >= vectorcraft_doc::placed_document::MAX_DEPTH {
-                        self.warn(&mut lines, format!("{}: nesting limit reached; copied unchanged without collecting its own links", file.path));
+                        self.warn(&mut lines, format!("{shown}: nesting limit reached; copied unchanged without collecting its own links"));
                     } else {
                         self.collect(&mut art, found_path, &destination_file, depth + 1, true, None)?;
                     }
@@ -296,7 +304,7 @@ impl<'a> Collector<'a> {
                 }
                 if placed_file && super::place::document::is_native(&file.name, &bytes) {
                     if depth >= vectorcraft_doc::placed_document::MAX_DEPTH {
-                        self.warn(&mut lines, format!("{}: nesting limit reached; copied unchanged without collecting its own links", file.path));
+                        self.warn(&mut lines, format!("{shown}: nesting limit reached; copied unchanged without collecting its own links"));
                     } else {
                         match vectorcraft_format::load_file(&bytes) {
                             Ok(saved) => {
@@ -320,8 +328,7 @@ impl<'a> Collector<'a> {
                                         Err(e) => self.warn(
                                             &mut lines,
                                             format!(
-                                                "{}: could not rewrite linked document ({e}); copied unchanged, its own links were not relinked",
-                                                file.path
+                                                "{shown}: could not rewrite linked document ({e}); copied unchanged, its own links were not relinked"
                                             ),
                                         ),
                                     }
@@ -329,7 +336,7 @@ impl<'a> Collector<'a> {
                             }
                             Err(e) => self.warn(
                                 &mut lines,
-                                format!("{}: unreadable linked document ({e}); copied unchanged, its own links were not collected", file.path),
+                                format!("{shown}: unreadable linked document ({e}); copied unchanged, its own links were not collected"),
                             ),
                         }
                     }
@@ -337,7 +344,7 @@ impl<'a> Collector<'a> {
                 let copy = Copied { name: destination_file.clone(), size: Some(bytes.len() as u64), hash: Some(hash_bytes(&bytes)) };
                 self.copies.insert(found_path.to_string(), copy.clone());
                 local.insert(file.path.clone(), copy);
-                lines.push(format!("{} → {destination_file}", file.path));
+                lines.push(format!("{shown} → {destination_file}"));
                 self.entries.push((destination_file, bytes));
             }
             lines.push(String::new());
@@ -451,19 +458,20 @@ impl Session {
 /// name, the report's Document Info text and the document.
 fn prepare(s: &mut Session, p: &Value) -> Result<Package> {
     let o = Options {
-        copy_links: bool_or(p, "copyLinks", true),
-        links_folder: bool_or(p, "linksFolder", true),
-        relink: bool_or(p, "relink", true),
-        copy_fonts: bool_or(p, "copyFonts", true),
-        report: bool_or(p, "report", true),
+        copy_links: switch_or(p, "copyLinks", true, C)?,
+        links_folder: switch_or(p, "linksFolder", true, C)?,
+        relink: switch_or(p, "relink", true, C)?,
+        copy_fonts: switch_or(p, "copyFonts", true, C)?,
+        report: switch_or(p, "report", true, C)?,
     };
+    let given_name = text_param(p, "name", C)?;
+    let folder = text_param(p, "folder", C)?;
     let doc_path = s.doc()?.path.clone().ok_or_else(|| bad(C, "save the document first: Package collects a saved document"))?;
     let stem = Path::new(&doc_path).file_stem().map_or_else(|| "Untitled".into(), |s| s.to_string_lossy().into_owned());
-    let name = str_param(p, "name").map_or_else(|| format!("{stem} Folder"), str::to_string);
+    let name = given_name.map_or_else(|| format!("{stem} Folder"), str::to_string);
     if name.trim().is_empty() || name == "." || name == ".." || name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) {
         return Err(bad(C, format!("`{name}` can't name a folder")));
     }
-    let folder = str_param(p, "folder");
     let root = folder.map(|f| Path::new(f).join(&name));
     let info = if o.report { Some(super::docinfo::report(s, false)?) } else { None };
     let doc = s.doc()?.doc.clone();
@@ -517,7 +525,7 @@ fn collect_and_write(package: Package, write: &mut dyn FnMut(&str, &[u8]) -> Res
     // The report.
     if let Some(info) = info {
         let report_name = free_name(&format!("{stem} Report.txt"), &mut taken);
-        let mut text = format!("Package: {doc_name}\nFrom: {doc_path}\n\n");
+        let mut text = format!("Package: {doc_name}\nFrom: {}\n\n", shown_path(&doc_path));
         lines.iter().for_each(|l| text.push_str(&format!("{l}\n")));
         text.push_str(&info);
         entries.push((report_name, text.into_bytes()));

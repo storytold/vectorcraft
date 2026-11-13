@@ -218,6 +218,8 @@ pub(crate) struct TextLine {
     /// The strokes of its glyphs' outlines drawn between them, one per glyph with ink so far
     /// (written right after the line).
     pub held: Vec<Node>,
+    /// Whether this line holds Type 3 font glyphs.
+    pub has_type3: bool,
 }
 
 /// Where the file put a glyph: the glyph's index in the line, and its advance in the file's font
@@ -266,7 +268,14 @@ impl TextLine {
             drawn_spaces: vec![],
             drawn_space: None,
             held: vec![],
+            has_type3: false,
         }
+    }
+
+    /// Horizontal type whose characters are all read glyph by glyph from the font's mappings (none
+    /// from the file's own ActualText).
+    pub fn mapped(&self) -> bool {
+        self.upright.is_none() && !self.column && !self.authored.contains(&true)
     }
 
     /// The paint the last glyph is filled with.
@@ -633,7 +642,7 @@ impl TextLine {
                 let chars: usize = t.runs.iter().map(|r| r.text.chars().count()).sum();
                 let size = self.at.size;
                 if chars > 1 && length.is_finite() && (length - natural).abs() > size * 0.01 {
-                    let (tracking, spaces) = spacing(&laid, &[], length - natural, chars, size);
+                    let (tracking, spaces) = spacing(&laid, &[], length - natural, chars, size, spacing_em(&t, size));
                     t.runs = tracked(std::mem::take(&mut t.runs), tracking, &spaces);
                 }
             }
@@ -675,7 +684,7 @@ impl TextLine {
             // left in the file's order.
             let total: usize = t.runs.iter().map(|r| r.text.len()).sum();
             let gaps: Vec<(usize, f64)> = if t.para.direction.is_none() { gaps.into_iter().filter(|(b, _)| *b < total).collect() } else { vec![] };
-            let (tracking, spaces) = spacing(&laid, &gaps, length - natural, chars, size);
+            let (tracking, spaces) = spacing(&laid, &gaps, length - natural, chars, size, spacing_em(&t, size));
             t.runs = tracked(std::mem::take(&mut t.runs), tracking, &spaces);
             // Tracked: laid out again for its bounds.
             bounds = vectorcraft_text::layout(db, &t).bounds;
@@ -701,16 +710,19 @@ fn pens(laid: &TextLayout, chars: &[usize]) -> Vec<Option<(f64, f64)>> {
 }
 
 /// `t`'s runs with kerning `kern` and each character's tracking from `own` (points, one per
-/// character, in thousandths of each run's em), characters alike kept in one run.
+/// character, in thousandths of each run's em as its Horizontal Scale draws it), characters alike
+/// kept in one run.
 fn restyled(t: &TextObject, kern: Option<f64>, own: &[f64]) -> Vec<TextRun> {
     let mut out: Vec<TextRun> = Vec::with_capacity(t.runs.len());
     // The run of `t` the last character came from.
     let mut from = None;
     let mut k = 0;
     for (i, r) in t.runs.iter().enumerate() {
-        let size = r.style.size.max(1e-3);
+        // A PDF scales its character spacing by its horizontal scaling (ISO 32000-1 §9.4.4), as
+        // layout scales tracking ([`vectorcraft_text::spacing_scale`]).
+        let em = (r.style.size * vectorcraft_text::spacing_scale(&r.style, t.vertical)).max(1e-3);
         for c in r.text.chars() {
-            let tracking = own.get(k).map_or(0.0, |e| (e / size * 1000.0).clamp(-1000.0, 10000.0));
+            let tracking = own.get(k).map_or(0.0, |e| (e / em * 1000.0).clamp(-1000.0, 10000.0));
             k += 1;
             // Hundredths of a thousandth of an em: no drift along a line, no noise in the panels.
             let tracking = (tracking * 100.0).round() / 100.0;
@@ -971,8 +983,9 @@ pub(crate) fn median(mut v: Vec<f64>) -> Option<f64> {
 /// as `laid`, `extra` points longer, as the file set it: the same after every character, except
 /// the spaces read from gaps or drawn between glyphs (`gaps`: byte offset, gap in points) where
 /// that would put the glyphs after them more than a tenth of an em off (a barcode's digits, set in
-/// groups apart). Those take their own tracking, given with their byte offsets.
-fn spacing(laid: &TextLayout, gaps: &[(usize, f64)], extra: f64, chars: usize, size: f64) -> (f64, Vec<(usize, f64)>) {
+/// groups apart). Those take their own tracking, given with their byte offsets. `em`: the em the
+/// tracking is thousandths of, in points ([`spacing_em`]).
+fn spacing(laid: &TextLayout, gaps: &[(usize, f64)], extra: f64, chars: usize, size: f64, em: f64) -> (f64, Vec<(usize, f64)>) {
     let pairs = chars.saturating_sub(1).max(1) as f64;
     // The advance of the first glyph laid out at each byte offset.
     let space: HashMap<usize, f64> = laid.glyphs.iter().rev().map(|g| (g.byte, g.advance)).collect();
@@ -995,8 +1008,15 @@ fn spacing(laid: &TextLayout, gaps: &[(usize, f64)], extra: f64, chars: usize, s
         tracking = if rest >= 1.0 { (extra - own.iter().map(|(_, need)| need).sum::<f64>()) / rest } else { 0.0 };
     }
     own.sort_by_key(|(b, _)| *b);
-    let em = |pts: f64| (pts / size * 1000.0).clamp(-1000.0, 10000.0).round();
-    (em(tracking), own.into_iter().map(|(b, need)| (b, em(need - tracking))).collect())
+    let thousandths = |pts: f64| (pts / em.max(1e-3) * 1000.0).clamp(-1000.0, 10000.0).round();
+    (thousandths(tracking), own.into_iter().map(|(b, need)| (b, thousandths(need - tracking))).collect())
+}
+
+/// The em the tracking of type `t` set `size` points is thousandths of, in points: the size as its
+/// first run's Horizontal Scale draws it in horizontal type ([`vectorcraft_text::spacing_scale`]),
+/// as a PDF scales its character spacing by its horizontal scaling (ISO 32000-1 §9.4.4).
+fn spacing_em(t: &TextObject, size: f64) -> f64 {
+    size * t.runs.first().map_or(1.0, |r| vectorcraft_text::spacing_scale(&r.style, t.vertical))
 }
 
 /// `runs` with tracking `tracking`, and each space at a byte offset of `spaces` (in order) a run

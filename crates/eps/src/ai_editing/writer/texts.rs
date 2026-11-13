@@ -21,15 +21,15 @@ use std::fmt::Write;
 use kurbo::{ParamCurveArclen, PathSeg};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{
-    AreaOptions, Burasagari, CharStyle, Document, FirstBaseline, Justify, Mojikumi, Node, NodeId, NodeKind, ParaDirection, ParaStyle, PathAlign,
-    PathEffect, TextKind, TextObject, VerticalAlign,
+    AreaOptions, Burasagari, CharStyle, Document, FirstBaseline, Justify, LineCap, LineJoin, Mojikumi, Node, NodeId, NodeKind, ParaDirection,
+    ParaStyle, PathAlign, PathEffect, TextKind, TextObject, VerticalAlign,
 };
 use vectorcraft_geom::{Affine, PathData, Point};
 
 use crate::ps;
 
 /// What the text document holds of type, and what it leaves out.
-pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and stroke weight, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, paragraph alignment, indents, space before and after, hyphenation on or off and right-to-left direction (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
+pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and its weight, cap, join and miter limit, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, paragraph alignment, indents, space before and after, hyphenation on or off and right-to-left direction (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
 
 /// The version of the text document's form (`/98 << /0 n >>`), as the newest files users sent have it.
 const STREAM_VERSION: u32 = 14;
@@ -208,6 +208,7 @@ pub(in crate::ai_editing) fn holds(n: &Node, t: &TextObject) -> bool {
     shape_ok
         && t.wrap.is_empty()
         && t.ruby.is_empty()
+        && !t.stacks_warichu()
         && t.runs.iter().any(|r| r.text.chars().any(|c| !c.is_whitespace()))
         && runs_held(t)
         && plain(n)
@@ -338,6 +339,8 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
         CharStyle {
             font_family: s.font_family.clone(),
             font_style: s.font_style.clone(),
+            // The font record's version (`/5`) names the face; whether it comes back is `font_kept`'s.
+            font_version: s.font_version.clone(),
             size: s.size,
             leading: s.leading,
             tracking: s.tracking.round(),
@@ -347,6 +350,9 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
             fill: unlinked(&s.fill),
             stroke: unlinked(&s.stroke),
             stroke_width: if stroked { s.stroke_width } else { CharStyle::default().stroke_width },
+            stroke_cap: if stroked { s.stroke_cap } else { CharStyle::default().stroke_cap },
+            stroke_join: if stroked { s.stroke_join } else { CharStyle::default().stroke_join },
+            stroke_miter_limit: if stroked { miter_limit(s.stroke_miter_limit) } else { CharStyle::default().stroke_miter_limit },
             all_caps: s.all_caps,
             small_caps: s.small_caps.filter(|v| *v == default_small_caps),
             tate_chu_yoko: s.tate_chu_yoko,
@@ -357,7 +363,19 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
     };
     let run_lost = |s: &CharStyle| {
         let stroked = !s.stroke.is_none();
-        let s = CharStyle { stroke_width: if stroked { s.stroke_width } else { CharStyle::default().stroke_width }, ..s.clone() };
+        // Without a stroke, its weight, cap, join and miter limit draw nothing: nothing is lost.
+        let unstroked = CharStyle::default();
+        let s = if stroked {
+            s.clone()
+        } else {
+            CharStyle {
+                stroke_width: unstroked.stroke_width,
+                stroke_cap: unstroked.stroke_cap,
+                stroke_join: unstroked.stroke_join,
+                stroke_miter_limit: unstroked.stroke_miter_limit,
+                ..s.clone()
+            }
+        };
         // A Lab color is written as RGB.
         let lab = |p: &Paint| matches!(p, Paint::Solid { color: Color::Lab { .. }, .. });
         s != held_char(&s) || lab(&s.fill) || lab(&s.stroke) || !font_kept(&s)
@@ -370,6 +388,9 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
         if p.justify == Justify::Auto && p.direction.is_none() && rtl_letter {
             return true;
         }
+        let hangul =
+            text.chars().any(|c| matches!(c, '\u{1100}'..='\u{11FF}' | '\u{3130}'..='\u{318F}' | '\u{A960}'..='\u{A97F}' | '\u{AC00}'..='\u{D7FF}' | '\u{FFA0}'..='\u{FFDC}'));
+        let pairs = text.chars().zip(text.chars().skip(1)).any(|(a, b)| vectorcraft_text::inseparable(a, b));
         let held = ParaStyle {
             justify: p.justify,
             left_indent: p.left_indent,
@@ -383,6 +404,12 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
             // Width, Standard burasagari) isn't reported: it changes no other script's lines.
             mojikumi: if p.mojikumi == Mojikumi::LineEndHalf { p.mojikumi } else { ParaStyle::default().mojikumi },
             burasagari: if p.burasagari == Burasagari::Standard { p.burasagari } else { ParaStyle::default().burasagari },
+            // The text document has no Korean Line Break Anywhere: it reads back off, which
+            // changes only the lines of a paragraph with Hangul in it.
+            korean_line_break_anywhere: p.korean_line_break_anywhere && !hangul,
+            // Nor Bunri-Kinshi: it reads back off, which changes only the lines of a paragraph
+            // with an inseparable pair in it.
+            bunri_kinshi: p.bunri_kinshi && !pairs,
             ..ParaStyle::default()
         };
         *p != held
@@ -428,15 +455,17 @@ struct FontRecord {
     /// the font's order, in the axis's own units. Empty for a static font, which has none: without
     /// it, an app that opens the file takes a variable font's default instance (#6388).
     design: Vec<f32>,
-    /// For a variable font, its version string (`/5`, name ID 5); empty for a static font.
+    /// Its version string (`/5`, name ID 5): for a variable font, and for a static font whose
+    /// PostScript name alone gives the reader another installed copy (two copies of one font, see
+    /// the reader's `document_font`); else empty.
     version: String,
 }
 
-/// The font the font set names for style `st`: an installed face's PostScript name, and for a
-/// variable font the setting of each of its axes (the named instance's, or the style's own
-/// Variable Font setting, clamped to the axis as layout clamps it) and its version; else its family
-/// and style as `family-style` (the family alone for Regular), the form the reader's
-/// `family_style` splits.
+/// The font the font set names for style `st`: an installed face's PostScript name, its version
+/// for a variable font or when the name alone gives the reader another installed copy, and for a
+/// variable font the setting of each of its axes (the named instance's, or the style's own Variable
+/// Font setting, clamped to the axis as layout clamps it); else its family and style as
+/// `family-style` (the family alone for Regular), the form the reader's `family_style` splits.
 fn font_name(st: &CharStyle) -> FontRecord {
     let db = vectorcraft_text::FontDb::global();
     // The face of that family and style (the font database gives a fallback face for others).
@@ -455,12 +484,41 @@ fn font_name(st: &CharStyle) -> FontRecord {
                     set.map_or(own, |v| (v as f32).clamp(a.min.min(a.max), a.max.max(a.min)))
                 })
                 .collect();
-            let version = if design.is_empty() { String::new() } else { face.version.clone() };
-            FontRecord { name: face.postscript_name(), truetype: face.is_truetype(), design, version }
+            let name = face.postscript_name();
+            // The reader takes the face of a name alone as `postscript_face` finds it.
+            let by_name = crate::import::postscript_face(&name, None).is_some_and(|f| f.id() == face.id());
+            let version = if design.is_empty() && by_name { String::new() } else { face.version.clone() };
+            FontRecord { name, truetype: face.is_truetype(), design, version }
         }
         None if st.font_style.is_empty() || st.font_style == "Regular" => record(st.font_family.clone()),
         None => record(format!("{}-{}", st.font_family, st.font_style.replace(' ', ""))),
     }
+}
+
+/// The text document's number for a stroke's cap (key 61), as PostScript numbers them: 0 butt, 1
+/// round, 2 projecting.
+fn cap_code(cap: LineCap) -> i64 {
+    match cap {
+        LineCap::Butt => 0,
+        LineCap::Round => 1,
+        LineCap::Square => 2,
+    }
+}
+
+/// The text document's number for a stroke's join (key 62), as PostScript numbers them: 0 miter, 1
+/// round, 2 bevel.
+fn join_code(join: LineJoin) -> i64 {
+    match join {
+        LineJoin::Miter => 0,
+        LineJoin::Round => 1,
+        LineJoin::Bevel => 2,
+    }
+}
+
+/// A stroke's miter limit (key 64) as the reader takes it back: at least 1 and at most 500, 10 when
+/// it isn't a number at least 1.
+fn miter_limit(v: f64) -> f64 {
+    if v.is_finite() && v >= 1.0 { v.min(500.0) } else { 10.0 }
 }
 
 /// `v` as the 16.16 fixed-point number a design vector holds (`wght` 700 is 45875200).
@@ -468,12 +526,19 @@ fn fixed(v: f32) -> i64 {
     if v.is_finite() { (f64::from(v) * 65536.0).round() as i64 } else { 0 }
 }
 
-/// Does the font of style `st` come back as itself: the family and style the reader makes of the
-/// name it is written under (as its `char_style` does)?
+/// Does the font of style `st` come back as itself: are the family and style the reader makes of
+/// the record it is written as (its name, and its version as the reader takes it, as its
+/// `char_style` does) the style's own, and the face they and the version read back resolve to the
+/// face of the style? A version that isn't installed draws in the face the font resolves to anyway.
 fn font_kept(st: &CharStyle) -> bool {
-    let (family, style) = crate::family_style(&font_name(st).name);
-    let family = vectorcraft_text::FontDb::global().find_family(&family).unwrap_or(family);
-    family == st.font_family && style == st.font_style
+    let record = font_name(st);
+    let version = crate::import::record_version(&record.version);
+    let (family, style, read) = crate::import::document_font(&record.name, version);
+    let db = vectorcraft_text::FontDb::global();
+    let face = |family: &str, style: &str, version: Option<&str>| db.face_version(family, style, version).map(|f| f.id());
+    family == st.font_family
+        && style == st.font_style
+        && face(&family, &style, read.as_deref()) == face(&st.font_family, &st.font_style, st.font_version.as_deref())
 }
 
 /// Whether `c` is a strong right-to-left letter (`Some(true)`: Hebrew, Arabic, Syriac, Thaana, NKo
@@ -621,7 +686,12 @@ impl TextDoc {
         }
         d.extend([(56, V::Bool(fill.is_some())), (57, V::Bool(stroke.is_some()))]);
         if stroke.is_some() {
-            d.push((63, V::Small(st.stroke_width / scale)));
+            d.extend([
+                (61, V::Int(cap_code(st.stroke_cap))),
+                (62, V::Int(join_code(st.stroke_join))),
+                (63, V::Small(st.stroke_width / scale)),
+                (64, real(miter_limit(st.stroke_miter_limit))),
+            ]);
         }
         dict(d)
     }
@@ -895,6 +965,7 @@ impl TextDoc {
                         && t.wrap.is_empty()
                         && plain(n)
                         && t.ruby.is_empty()
+                        && !t.stacks_warichu()
                         && runs_held(t)
                         && (story_scale(t) / scale - 1.0).abs() <= 1e-9
                         && within_reader(t, scale)
@@ -967,13 +1038,13 @@ impl TextDoc {
             .iter()
             .map(|f| {
                 let mut font = vec![(0, V::Str(f.name.clone())), (2, V::Int(i64::from(f.truetype)))];
-                // A variable font's place in its design space and its version (#6388); a static
-                // font has neither.
+                // A variable font's place in its design space (#6388), and the version of a
+                // variable font or of a static one its name alone doesn't give back.
                 if !f.design.is_empty() {
                     font.push((4, V::List(f.design.iter().map(|v| V::Int(fixed(*v))).collect())));
-                    if !f.version.is_empty() {
-                        font.push((5, V::Str(f.version.clone())));
-                    }
+                }
+                if !f.version.is_empty() {
+                    font.push((5, V::Str(f.version.clone())));
                 }
                 dict(vec![(99, V::Name("CoolTypeFont")), (0, dict(font))])
             })

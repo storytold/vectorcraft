@@ -464,6 +464,34 @@ fn linux_display_server_defaults_to_automatic_and_validates() {
     assert_eq!(s.prefs.linux_display_server, "automatic");
 }
 
+/// Performance › Use Monitor Profile for Canvas: on by default and for preference files written
+/// before it, a boolean only, saved, listed under Performance, and set without changing the
+/// document.
+#[test]
+fn monitor_profile_display_is_on_by_default_and_changes_no_document() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    assert!(s.prefs.monitor_profile_display);
+    let old: Prefs = serde_json::from_value(json!({"gpuPerformance": true})).unwrap();
+    assert!(old.monitor_profile_display);
+    let (revision, doc) = (s.active().unwrap().revision, s.active().unwrap().doc.clone());
+    s.execute("prefs.set", &json!({"key": "monitorProfileDisplay", "value": false})).unwrap();
+    assert!(!s.prefs.monitor_profile_display);
+    assert_eq!(s.prefs.to_json()["monitorProfileDisplay"], false);
+    for bad in [json!("off"), json!(0), json!(null)] {
+        assert!(s.execute("prefs.set", &json!({"key": "monitorProfileDisplay", "value": bad})).is_err(), "{bad}");
+        assert!(!s.prefs.monitor_profile_display);
+    }
+    assert_eq!(s.active().unwrap().revision, revision);
+    assert!(std::sync::Arc::ptr_eq(&s.active().unwrap().doc, &doc), "the document is not edited");
+    let l = s.execute("prefs.list", &json!({})).unwrap();
+    let row = l.as_array().unwrap().iter().find(|e| e["key"] == "monitorProfileDisplay").unwrap().clone();
+    assert_eq!((row["category"].as_str(), row["label"].as_str()), (Some("Performance"), Some("Use Monitor Profile for Canvas")));
+    s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
+    assert!(s.prefs.monitor_profile_display);
+}
+
 /// Linux Display Server's pen choice (#2028): set by value or by label, saved, and off by default.
 #[test]
 fn linux_display_server_has_a_choice_for_an_attached_pen() {
@@ -753,6 +781,12 @@ fn precise_cursors_replace_every_pen_state() {
         Cursor::ShapeBuilderErase,
         Cursor::AnchorPoint,
         Cursor::Curvature,
+        Cursor::LivePaintBucket,
+        Cursor::LivePaintBucketFace,
+        Cursor::LivePaintBucketEdge,
+        Cursor::LivePaintSelectFace,
+        Cursor::LivePaintSelectEdge,
+        Cursor::LivePaintSelectOutside,
     ] {
         assert_eq!(c.precise(), Cursor::Crosshair, "{c:?}");
     }
@@ -1990,9 +2024,12 @@ fn real_time_drawing_off_still_shows_a_dragged_guide() {
     set_pref(&mut s, "realTimeDrawing", json!(false));
     s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 200.0), v).unwrap();
     s.pointer(&PointerEvent::new(PointerKind::Drag, 150.0, 200.0), v).unwrap();
-    assert_eq!(s.doc().unwrap().doc.guides[0].pos, 150.0, "the guide moves while dragged");
+    assert_eq!(s.doc().unwrap().doc.ruler_guides()[0].pos, 150.0, "the guide moves while dragged");
     s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 200.0), v).unwrap();
-    assert_eq!((s.doc().unwrap().doc.guides[0].pos, s.doc().unwrap().history.undo.last().map(|e| e.label.as_str())), (150.0, Some("Move Guide")));
+    assert_eq!(
+        (s.doc().unwrap().doc.ruler_guides()[0].pos, s.doc().unwrap().history.undo.last().map(|e| e.label.as_str())),
+        (150.0, Some("Move Guide"))
+    );
 }
 
 /// With Real-time Drawing off, a 9-slice guide of the edited symbol moved with the Selection tool
@@ -2042,6 +2079,42 @@ fn real_time_drawing_turned_on_mid_drag_still_commits_deferred_preview() {
     set_pref(&mut s, "realTimeDrawing", json!(true));
     s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 150.0), v).unwrap();
     assert_eq!(paths(&s), 1, "the deferred rectangle is committed");
+}
+
+/// With Real-time Drawing off, Undo during a drag keeps the dragged move as its own step and takes
+/// back only that: the rectangle drawn before stays, and Redo brings the move back.
+#[test]
+fn undo_during_a_deferred_drag_takes_back_only_the_drag() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let r = NodeId(s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap());
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    let x = |s: &Session| s.doc().unwrap().doc.node(r).and_then(vectorcraft_doc::Node::geometric_bounds).map(|b| b.x0);
+    let move_by = vectorcraft_tools::Action::Preview("object.move".into(), json!({"dx": 7, "dy": 0}));
+    s.apply_actions(vec![vectorcraft_tools::Action::Begin("Move".into()), move_by]).unwrap();
+    assert_eq!(x(&s), Some(10.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!s.in_interaction());
+    assert_eq!(x(&s), Some(10.0), "the rectangle stays");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(x(&s), Some(17.0), "Redo brings the move back");
+}
+
+/// Undo during a drag whose stored preview fails cancels the drag, as its release would, and then
+/// takes back the step before it.
+#[test]
+fn undo_during_a_deferred_drag_that_fails_cancels_it() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    let bad = vectorcraft_tools::Action::Preview("no.such.command".into(), json!({}));
+    s.apply_actions(vec![vectorcraft_tools::Action::Begin("Bad".into()), bad]).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!s.in_interaction());
+    let d = s.doc().unwrap();
+    assert_eq!(d.doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum::<usize>(), 0, "the rectangle is undone");
+    assert!(d.history.undo.iter().all(|e| e.label != "Bad"));
 }
 
 /// Repeated overlay redraws with Real-time Drawing off reuse the cached deferred feedback.
@@ -2434,6 +2507,65 @@ fn deferred_commit_forwards_preview_warnings() {
     assert!(ui.iter().any(|r| matches!(r, UiRequest::Status(m) if m.contains("type"))), "{ui:?}");
 }
 
+/// A session with a rectangle selected, and type too with `with_type`, tool `tool` chosen,
+/// Real-time Drawing off, and an interaction labeled `label` whose deferred Bloat preview warns
+/// that type is skipped when type is selected.
+fn deferred_bloat(label: &str, with_type: bool, tool: &str) -> Session {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let rect = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 200})).unwrap();
+    let text = s.execute("text.create", &json!({"x": 300, "y": 200, "text": "Hi"})).unwrap();
+    let ids = if with_type { json!([rect["id"], text["id"]]) } else { json!([rect["id"]]) };
+    s.execute("select.set", &json!({ "ids": ids })).unwrap();
+    s.select_tool(tool, ViewInfo::default()).unwrap();
+    set_pref(&mut s, "realTimeDrawing", json!(false));
+    s.begin_interaction(label).unwrap();
+    let p = json!({"tool": "bloat", "points": [[290.0, 200.0]], "width": 200.0, "height": 200.0});
+    s.doc_mut().unwrap().interaction.as_mut().unwrap().preview = Some(("object.liquify".into(), p));
+    s
+}
+
+/// A command that applies a deferred preview before it runs (Undo, Clear History) reports the
+/// preview's warning in its result, as the tool's own commit reports it; the preview is its own
+/// step, which Undo takes back. A preview without a warning adds none.
+#[test]
+fn settling_a_deferred_preview_keeps_its_warning() {
+    let mut s = deferred_bloat("Bloat", true, "selection");
+    let before = s.doc().unwrap().history.undo.len();
+    let r = s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(r["undone"], "Bloat", "{r}");
+    assert!(r["warning"].as_str().is_some_and(|w| w.contains("type")), "{r}");
+    assert_eq!(r["previewWarning"], r["warning"], "{r}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), before, "the preview was a step of its own, and Undo took it back");
+    let r = s.execute("edit.redo", &json!({})).unwrap();
+    assert!(r.get("warning").is_none() && r.get("previewWarning").is_none(), "nothing was settled: {r}");
+
+    let mut s = deferred_bloat("Bloat", true, "selection");
+    let r = s.execute("edit.clearHistory", &json!({})).unwrap();
+    assert!(r["warning"].as_str().is_some_and(|w| w.contains("type")), "{r}");
+
+    let mut s = deferred_bloat("Bloat", false, "selection");
+    let r = s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(r, json!({"undone": "Bloat"}));
+}
+
+/// Typing kept as its own step when a tool's drag begins, or when a Cmd press lends the Selection
+/// tool, shows its applied preview's warning in the status bar.
+#[test]
+fn settling_typing_for_a_tool_shows_its_preview_warning() {
+    use vectorcraft_tools::{Action, Mods};
+    let warned = |ui: &[UiRequest]| ui.iter().any(|r| matches!(r, UiRequest::Status(m) if m.contains("type")));
+    let mut s = deferred_bloat("Typing", true, "selection");
+    let ui = s.apply_actions(vec![Action::Begin("Move".into())]).unwrap();
+    assert!(warned(&ui), "{ui:?}");
+
+    let mut s = deferred_bloat("Typing", true, "rectangle");
+    let cmd = Mods { cmd: true, ..Default::default() };
+    let ui = s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 380.0).with_mods(cmd), ViewInfo::default()).unwrap();
+    assert!(warned(&ui), "{ui:?}");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 50.0, 380.0).with_mods(cmd), ViewInfo::default()).unwrap();
+}
+
 /// File Handling › Use Low Resolution Proxy for Linked EPS (#394): off by default; toggling it does
 /// not replace full-resolution pixels already in the document.
 #[test]
@@ -2696,4 +2828,34 @@ fn snap_to_glyph_options_read_set_and_reset() {
     assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), set);
     s.execute("prefs.reset", &json!({})).unwrap();
     assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), all);
+}
+
+/// Pixel Snapping Options: `view.snapToPixel.options` reads and sets While Drawing, While Moving
+/// and While Scaling, all on by default, kept as the `pixelSnap` preference group; bad keys and
+/// values change nothing, preferences saved without the group read it as all on, and resetting the
+/// preferences turns them all back on.
+#[test]
+fn pixel_snapping_options_read_set_and_reset() {
+    let mut s = Session::new();
+    let all = json!({"drawing": true, "moving": true, "scaling": true});
+    assert_eq!(s.execute("view.snapToPixel.options", &json!({})).unwrap(), all);
+    let set = json!({"drawing": true, "moving": false, "scaling": true});
+    assert_eq!(s.execute("view.snapToPixel.options", &json!({"moving": false})).unwrap(), set);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "pixelSnap"})).unwrap(), set);
+    assert!(!s.prefs.pixel_snap.moving && s.prefs.pixel_snap.drawing && s.prefs.pixel_snap.scaling);
+    for bad in [json!({"moving": 1}), json!({"rotating": false})] {
+        assert!(s.execute("view.snapToPixel.options", &bad).is_err(), "{bad}");
+        assert!(s.execute("prefs.set", &json!({"key": "pixelSnap", "value": bad})).is_err(), "{bad}");
+        assert_eq!(s.execute("view.snapToPixel.options", &json!({})).unwrap(), set, "{bad}");
+    }
+    s.execute("prefs.set", &json!({"key": "pixelSnap", "value": {"scaling": false}})).unwrap();
+    let both = json!({"drawing": true, "moving": false, "scaling": false});
+    assert_eq!(s.execute("view.snapToPixel.options", &json!({})).unwrap(), both);
+    // Preferences written before the group existed, and a group that names only some options.
+    let older: Prefs = serde_json::from_value(json!({"keyboardIncrement": 4})).unwrap();
+    assert_eq!(older.pixel_snap, vectorcraft_tools::PixelSnap::default());
+    let partial: Prefs = serde_json::from_value(json!({"pixelSnap": {"drawing": false}})).unwrap();
+    assert_eq!(partial.pixel_snap, vectorcraft_tools::PixelSnap { drawing: false, moving: true, scaling: true });
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert_eq!(s.execute("view.snapToPixel.options", &json!({})).unwrap(), all);
 }

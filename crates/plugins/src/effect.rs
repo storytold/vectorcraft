@@ -12,7 +12,8 @@
 //! plug-in installation, parameters, input geometry and paints: the plug-in runs again only when
 //! one of them changes. Failures are cached too (the geometry is then drawn unchanged) and
 //! reported by [`last_error`]. The swatches and patterns a painted result names are checked
-//! against the document each time it is used.
+//! against the document each time it is used. While a document is drawn on screen, its first view
+//! shares a time budget and stages without a result are deferred ([`crate::deferred`]).
 
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -22,6 +23,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document};
 use vectorcraft_geom::{FillRule, PathData, Rect};
 
+use crate::deferred::{Allowance, Reason, Stage};
 use crate::objects::{decode, output_geometry, paint_lists};
 use crate::painted::{self, Piece, Scope};
 use crate::{Error, Kind, Limits, Result, registry};
@@ -69,6 +71,9 @@ pub struct Paints<'a> {
     /// The index in `appearance.items` of the fill or stroke whose own effects hold this one;
     /// `None`: one of the object's effects.
     pub item: Option<usize>,
+    /// The object and the effect's place in its list, which a deferred stage is listed by
+    /// ([`crate::deferred`]); `None`: not known, listed as object 0.
+    pub at: Option<Stage>,
 }
 
 /// [`Paints`] as the plug-in is given them: the input object's `fills` and `strokes`, and
@@ -151,7 +156,8 @@ impl Out {
 
 #[derive(Default)]
 struct Cache {
-    entries: HashMap<u64, (Key, Option<Out>)>,
+    /// Each result, or why the run gave none ([`Reason::Timeout`] or [`Reason::Failed`]).
+    entries: HashMap<u64, (Key, std::result::Result<Out, Reason>)>,
     /// The anchors of the entries' inputs and results ([`CACHE_ANCHORS`]).
     anchors: usize,
 }
@@ -294,9 +300,10 @@ pub fn paints_output(id: &str) -> bool {
 /// For an effect that returns painted pieces, the geometry is every piece's path in order, and
 /// `None` when the swatches and patterns they name are refused as [`apply_painted`] refuses them.
 pub fn apply(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: FillRule, paints: Paints, doc: Option<&Document>) -> Option<PathData> {
+    let at = paints.at;
     let (plugin, out) = evaluate(id, params, path, bounds, rule, paints)?;
     if let Out::Pieces(pieces) = &out {
-        references_found(id, &plugin, pieces, doc)?;
+        references_found(id, &plugin, pieces, doc, at)?;
     }
     Some(out.geometry())
 }
@@ -318,9 +325,10 @@ pub fn apply_painted(
     paints: Paints,
     doc: Option<&Document>,
 ) -> Option<Arc<Vec<Piece>>> {
+    let at = paints.at;
     let (plugin, out) = evaluate(id, params, path, bounds, rule, paints)?;
     let Out::Pieces(pieces) = out else { return None };
-    references_found(id, &plugin, &pieces, doc)?;
+    references_found(id, &plugin, &pieces, doc, at)?;
     Some(match doc {
         Some(d) => painted::with_swatch_colors(pieces, d),
         None => pieces,
@@ -329,11 +337,17 @@ pub fn apply_painted(
 
 /// `Some` when every swatch and pattern `pieces` name is in `doc` ([`painted::check_references`]),
 /// recording the outcome for [`last_error`] when there is a document. The document's swatches and
-/// patterns can change while a result stays cached, so each use checks them.
-fn references_found(id: &str, plugin: &crate::Plugin, pieces: &[Piece], doc: Option<&Document>) -> Option<()> {
+/// patterns can change while a result stays cached, so each use checks them. Inside a document's
+/// view, a refusal defers stage `at` as failed.
+fn references_found(id: &str, plugin: &crate::Plugin, pieces: &[Piece], doc: Option<&Document>, at: Option<Stage>) -> Option<()> {
     let checked = painted::check_references(pieces, doc);
     if doc.is_some() {
         note(id, plugin, Origin::References, checked.as_ref().map(|_| ()));
+        if checked.is_err()
+            && let Some(v) = crate::deferred::current()
+        {
+            v.defer(at.unwrap_or_default(), id, Reason::Failed, 0);
+        }
     }
     checked.ok()
 }
@@ -341,12 +355,36 @@ fn references_found(id: &str, plugin: &crate::Plugin, pieces: &[Piece], doc: Opt
 /// Runs plug-in `id` as [`apply`] says, or takes its result from the cache: the plug-in and what
 /// it gave. The launch marker names the plug-in during its first run in this process, and until
 /// every run that started while it ran has ended too ([`crate::safe_mode::loading`]).
+///
+/// Inside a document's view ([`crate::deferred`]), a stage without a result is recorded as
+/// deferred with the reason, and one with a result is no longer deferred. During the view's
+/// budget a run takes at most what is left of it, none starts once it is spent, and a result
+/// that comes back after it ran out is not used; neither is cached or reported by
+/// [`last_error`]. After the first view, a stage deferred with the same input is not run again.
 fn evaluate(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: FillRule, paints: Paints) -> Option<(Arc<crate::Plugin>, Out)> {
+    let view = crate::deferred::current();
+    let stage = paints.at.unwrap_or_default();
+    if let Some(v) = &view {
+        v.visit(stage);
+    }
+    let defer = |reason, key| {
+        if let Some(v) = &view {
+            v.defer(stage, id, reason, key);
+        }
+    };
     if crate::safe_mode::active() {
+        defer(Reason::SafeMode, 0);
         return None;
     }
-    let plugin = registry::get(id).filter(|p| p.manifest().kind == Kind::Effect)?;
-    let resolved = Value::Object(plugin.manifest().resolve_params(params).ok()?);
+    let Some(plugin) = registry::get(id).filter(|p| p.manifest().kind == Kind::Effect) else {
+        defer(Reason::Missing, 0);
+        return None;
+    };
+    let Ok(resolved) = plugin.manifest().resolve_params(params) else {
+        defer(Reason::Failed, 0);
+        return None;
+    };
+    let resolved = Value::Object(resolved);
     let given = paints.given();
     let key = Key {
         serial: plugin.serial(),
@@ -357,14 +395,44 @@ fn evaluate(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: FillR
         path: path.clone(),
     };
     let h = key.hash64();
-    if let Some((k, out)) = CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref().and_then(|c| c.entries.get(&h))
-        && *k == key
-    {
-        return out.clone().map(|o| (plugin, o));
+    let cached = CACHE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .as_ref()
+        .and_then(|c| c.entries.get(&h))
+        .filter(|(k, _)| *k == key)
+        .map(|(_, out)| out.clone());
+    match cached {
+        // A result from the cache counts as a run that gave it.
+        Some(Ok(o)) => {
+            if let Some(v) = &view {
+                v.ran(stage, h);
+            }
+            return Some((plugin, o));
+        }
+        // A refresh runs a stage that failed again.
+        Some(Err(reason)) if !view.as_ref().is_some_and(|v| v.retries(stage, h)) => {
+            defer(reason, h);
+            return None;
+        }
+        _ => {}
     }
+    let allowance = match &view {
+        Some(v) if v.holds(stage, h) => return None,
+        Some(v) => v.allowance(),
+        None => Allowance::Unlimited,
+    };
+    let (wall_time_ms, until) = match allowance {
+        Allowance::Unlimited => (WALL_TIME_MS, None),
+        Allowance::Until { ms, until } => (ms.min(WALL_TIME_MS), Some(until)),
+        Allowance::Spent => {
+            defer(Reason::Budget, h);
+            return None;
+        }
+    };
     let scope = paints.scope();
     let guarded = begin_run(&plugin);
-    let r = run(&plugin, resolved, path, bounds, rule, given, scope);
+    let r = run(&plugin, resolved, path, (bounds, rule), given, scope, wall_time_ms);
     let cancelled = matches!(r, Err(Error::Cancelled));
     if guarded {
         end_run(plugin.serial(), cancelled);
@@ -373,11 +441,28 @@ fn evaluate(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: FillR
     if cancelled {
         return None;
     }
+    let timed_out = matches!(&r, Err(Error::Limit(l)) if l == crate::host::TIME_BUDGET);
+    // A run the budget cut short, or whose result came after the budget ran out, says nothing
+    // about the plug-in either: the stage waits for a later run.
+    let late = until.is_some_and(|u| view.as_ref().is_some_and(|v| v.passed(u)));
+    if (timed_out && wall_time_ms < WALL_TIME_MS) || late {
+        defer(Reason::Budget, h);
+        return None;
+    }
     note(id, &plugin, Origin::Run, r.as_ref().map(|_| ()));
-    let out = r.ok();
-    let size = weight(&key, out.as_ref());
+    let out = r.map_err(|_| if timed_out { Reason::Timeout } else { Reason::Failed });
+    match &out {
+        Ok(_) => {
+            if let Some(v) = &view {
+                v.ran(stage, h);
+            }
+            crate::deferred::resolved(h);
+        }
+        Err(reason) => defer(*reason, h),
+    }
+    let size = weight(&key, out.as_ref().ok());
     if size > CACHE_ANCHORS / 4 {
-        return out.map(|o| (plugin, o));
+        return out.ok().map(|o| (plugin, o));
     }
     let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
     let cache = cache.get_or_insert_with(Cache::default);
@@ -385,15 +470,24 @@ fn evaluate(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: FillR
         *cache = Cache::default();
     }
     if let Some((old, old_out)) = cache.entries.insert(h, (key, out.clone())) {
-        cache.anchors = cache.anchors.saturating_sub(weight(&old, old_out.as_ref()));
+        cache.anchors = cache.anchors.saturating_sub(weight(&old, old_out.as_ref().ok()));
     }
     cache.anchors += size;
-    out.map(|o| (plugin, o))
+    out.ok().map(|o| (plugin, o))
 }
 
-/// One run of `plugin` on `path`, with the object's paints as `given`: geometry, or for an effect
-/// that declares `paintOutput` its pieces, checked for an effect in `scope`.
-fn run(plugin: &crate::Plugin, mut params: Value, path: &PathData, bounds: Rect, rule: FillRule, given: Given, scope: Scope) -> Result<Out> {
+/// One run of `plugin` on `path` (reference box and fill rule `(bounds, rule)`), with the object's
+/// paints as `given`, stopped after `wall_time_ms`: geometry, or for an effect that declares
+/// `paintOutput` its pieces, checked for an effect in `scope`.
+fn run(
+    plugin: &crate::Plugin,
+    mut params: Value,
+    path: &PathData,
+    (bounds, rule): (Rect, FillRule),
+    given: Given,
+    scope: Scope,
+    wall_time_ms: u64,
+) -> Result<Out> {
     let b = json!([bounds.x0, bounds.y0, bounds.x1, bounds.y1]);
     params["_context"] = json!({"mode": "effect", "bounds": b, "item": given.item});
     let rule_name = match rule {
@@ -404,7 +498,9 @@ fn run(plugin: &crate::Plugin, mut params: Value, path: &PathData, bounds: Rect,
         json!({"objects": [{"type": "path", "path": path, "fillRule": rule_name, "bounds": b, "fills": given.fills, "strokes": given.strokes}]});
     let (input, params) = (serde_json::to_vec(&input), serde_json::to_vec(&params));
     let (Ok(input), Ok(params)) = (input, params) else { return Err(Error::Params("can't encode the input".into())) };
-    let limits = Limits { wall_time_ms: WALL_TIME_MS, ..plugin.limits().clone() };
+    let limits = Limits { wall_time_ms, ..plugin.limits().clone() };
+    #[cfg(test)]
+    tests::RUNS_STARTED.with(|n| n.set(n.get() + 1));
     let output = plugin.run_limited(&input, &params, &limits)?;
     if plugin.manifest().paint_output {
         return Ok(Out::Pieces(Arc::new(painted::decode(&output, scope, rule)?)));
@@ -420,6 +516,11 @@ mod tests {
 
     use super::*;
 
+    thread_local! {
+        /// How many plug-in runs this thread started ([`run`]).
+        pub(super) static RUNS_STARTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
     /// Fills and strokes come in paint order, and the item an effect sits on is counted among the
     /// fills or among the strokes.
     #[test]
@@ -427,7 +528,7 @@ mod tests {
         let fill = |c| AppearanceItem::Fill(FillLayer::new(Paint::solid(c)));
         let stroke = |w| AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::BLACK), w));
         let ap = Appearance { items: vec![fill(Color::WHITE), stroke(2.0), fill(Color::BLACK), stroke(5.0)], ..Appearance::default() };
-        let given = |item| Paints { appearance: Some(&ap), item }.given();
+        let given = |item| Paints { appearance: Some(&ap), item, at: None }.given();
         let g = given(None);
         assert_eq!((g.fills.len(), g.strokes.len(), &g.item), (2, 2, &json!("object")));
         assert_eq!(g.strokes.iter().map(|s| s["width"].clone()).collect::<Vec<_>>(), [json!(2.0), json!(5.0)]);
@@ -451,7 +552,7 @@ mod tests {
         // Traps on a long input.
         let first = "(if (i32.gt_u (local.get $il) (i32.const 4096)) (then unreachable))";
         let src = crate::wat::with_imports(&manifest, "", first, r#"{"objects":[]}"#);
-        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap());
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap()).unwrap();
         let doc = Document::new(100.0, 100.0);
         let line = |n: usize| PathData::single(SubPath::polyline(&(0..n).map(|i| Point::new(i as f64, 0.0)).collect::<Vec<_>>(), false));
         let draw =
@@ -482,7 +583,7 @@ mod tests {
         // Traps on a long input.
         let first = "(if (i32.gt_u (local.get $il) (i32.const 4096)) (then unreachable))";
         let src = crate::wat::with_imports(&manifest, "", first, &output);
-        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap());
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap()).unwrap();
         let doc = Document::new(100.0, 100.0);
         let line = |n: usize| PathData::single(SubPath::polyline(&(0..n).map(|i| Point::new(i as f64, 0.0)).collect::<Vec<_>>(), false));
         let draw =
@@ -494,7 +595,139 @@ mod tests {
         assert!(last_error(ID).unwrap().contains("trapped"));
         assert!(draw(&short).is_none(), "from the cache, refused again");
         assert!(last_error(ID).unwrap().contains("swatch"));
+        // Inside a document's view, the refused stage is deferred as failed, also from the cache.
+        let view = crate::deferred::Deferrals::with_clock(Arc::new(|| Some(0)));
+        let at = Stage { object: 3, effect: 1, item: None };
+        let in_view = || {
+            view.view(|| {
+                apply_painted(
+                    ID,
+                    &json!({}),
+                    &short,
+                    Rect::new(0.0, 0.0, 1.0, 1.0),
+                    FillRule::NonZero,
+                    Paints { at: Some(at), ..Paints::default() },
+                    Some(&doc),
+                )
+            })
+        };
+        assert!(in_view().is_none());
+        let listed = || view.list().iter().map(|d| (d.stage, d.reason)).collect::<Vec<_>>();
+        assert_eq!(listed(), [(at, Reason::Failed)]);
+        view.first_view_done();
+        assert!(in_view().is_none());
+        assert_eq!(listed(), [(at, Reason::Failed)], "a later drawing leaves it listed");
         registry::remove(ID);
+    }
+
+    /// A clock that reads `step` milliseconds later each time it is read.
+    fn stepping(step: u64) -> crate::deferred::Clock {
+        let t = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        Arc::new(move || Some(t.fetch_add(step, std::sync::atomic::Ordering::Relaxed)))
+    }
+
+    /// A line of `n` points: a distinct input for each `n`.
+    fn line(n: usize) -> PathData {
+        PathData::single(SubPath::polyline(&(0..n).map(|i| Point::new(i as f64, 0.0)).collect::<Vec<_>>(), false))
+    }
+
+    /// Plug-in `id` drawn on `path` as effect `effect` of object 1: whether it gave a result.
+    fn drawn(id: &str, path: &PathData, effect: usize) -> bool {
+        let at = Some(Stage { object: 1, effect, item: None });
+        apply(id, &json!({}), path, Rect::new(0.0, 0.0, 1.0, 1.0), FillRule::NonZero, Paints { at, ..Paints::default() }, None).is_some()
+    }
+
+    /// The effects of a first view share its budget: once it is spent no run starts, and a result
+    /// that comes back after it ran out is not used. Later drawings leave the deferred stages
+    /// deferred; a drawing outside the view (an export) runs them, and the view then uses the
+    /// result.
+    #[test]
+    fn the_first_view_shares_the_budget_and_defers_the_rest() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        const ID: &str = "test.effect.budget";
+        let src = crate::wat::returning(&crate::wat::manifest(ID, "effect", "{}"), r#"{"objects":[]}"#);
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap()).unwrap();
+        // Each run takes 900 ms by this clock (it is read before and after each run).
+        let view = crate::deferred::Deferrals::with_clock(stepping(450));
+        let ran = view.view(|| (0..4).map(|i| drawn(ID, &line(i + 2), i)).collect::<Vec<_>>());
+        assert_eq!(ran, [true, true, false, false], "the third result comes back at 2,250 ms, the fourth doesn't start");
+        let listed = view.list().iter().map(|d| (d.stage.effect, d.reason, d.plugin.clone())).collect::<Vec<_>>();
+        assert_eq!(listed, [(2, Reason::Budget, ID.to_string()), (3, Reason::Budget, ID.to_string())]);
+        view.first_view_done();
+        assert_eq!(view.take_report(), Some(2));
+        assert!(!view.view(|| drawn(ID, &line(4), 2)), "a later drawing leaves it deferred");
+        assert!(view.view(|| drawn(ID, &line(9), 3)), "an edit to its input runs it");
+        assert_eq!(view.list().len(), 1);
+        assert!(drawn(ID, &line(4), 2), "outside the view it runs");
+        assert_eq!(view.list().len(), 1, "until the view draws it again");
+        assert!(view.view(|| drawn(ID, &line(9), 2)), "an edit to an input whose result is cached");
+        assert!(view.list().is_empty(), "the record of the input it no longer has goes");
+        assert!(view.view(|| drawn(ID, &line(4), 2)), "from the cache");
+        assert!(view.list().is_empty());
+        registry::remove(ID);
+    }
+
+    /// A stage that fails, or whose plug-in is missing, is deferred with that reason, from a run or
+    /// from the cache; a failure is cached and reported as before.
+    #[test]
+    fn failed_and_missing_stages_are_deferred_with_their_reason() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        const ID: &str = "test.effect.deferfailed";
+        // Runs to its instruction budget.
+        let src = crate::wat::spinning(&crate::wat::manifest(ID, "effect", "{}"), 1_000_000_000, r#"{"objects":[]}"#);
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap()).unwrap();
+        let view = crate::deferred::Deferrals::with_clock(stepping(1));
+        assert!(!view.view(|| drawn(ID, &line(2), 0)));
+        assert!(last_error(ID).is_some());
+        assert!(!view.view(|| drawn("test.effect.notinstalled", &line(2), 1)));
+        let reasons = |v: &crate::deferred::Deferrals| v.list().iter().map(|d| d.reason).collect::<Vec<_>>();
+        assert_eq!(reasons(&view), [Reason::Failed, Reason::Missing]);
+        let other = crate::deferred::Deferrals::with_clock(stepping(1));
+        assert!(!other.view(|| drawn(ID, &line(2), 0)));
+        assert_eq!(reasons(&other), [Reason::Failed], "from the cache, in another document");
+        // A refresh runs a stage whose failure is cached again, once, and later drawings take the
+        // failure from the cache.
+        other.first_view_done();
+        let runs = || RUNS_STARTED.with(std::cell::Cell::get);
+        let before = runs();
+        let counts = other.refresh(None, |_| {
+            other.view(|| (drawn(ID, &line(2), 0), drawn(ID, &line(2), 0)));
+            vec![]
+        });
+        assert_eq!((counts.failed, runs() - before), (1, 1));
+        assert!(!other.view(|| drawn(ID, &line(2), 0)));
+        assert_eq!((reasons(&other), runs() - before), (vec![Reason::Failed], 1));
+        registry::remove(ID);
+    }
+
+    /// A run the budget cuts short is deferred for want of time: it is not cached, and the plug-in
+    /// reports no error.
+    #[test]
+    fn a_run_the_budget_cuts_short_is_deferred_for_time() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        const ID: &str = "test.effect.cutshort";
+        const FAST: &str = "test.effect.cutshort.fast";
+        let src = crate::wat::spinning(&crate::wat::manifest(ID, "effect", "{}"), 10_000_000, r#"{"objects":[]}"#);
+        let limits = Limits { fuel_base: 1_000_000_000, ..Limits::default() };
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), limits).unwrap()).unwrap();
+        let fast = crate::wat::returning(&crate::wat::manifest(FAST, "effect", "{}"), r#"{"objects":[]}"#);
+        registry::install(crate::Plugin::load(&wat::parse_str(&fast).unwrap(), Limits::default()).unwrap()).unwrap();
+        // The first run starts the budget at 0 ms and ends at 1,999: the next has 1 ms left, and
+        // ten million steps take longer.
+        let reads = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let clock: crate::deferred::Clock =
+            Arc::new(move || Some(if reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed) == 0 { 0 } else { 1_999 }));
+        let view = crate::deferred::Deferrals::with_clock(clock);
+        assert!(view.view(|| drawn(FAST, &line(2), 0)));
+        assert!(!view.view(|| drawn(ID, &line(2), 1)));
+        assert_eq!(view.list().iter().map(|d| (d.stage.effect, d.reason)).collect::<Vec<_>>(), [(1, Reason::Budget)]);
+        assert_eq!(last_error(ID), None);
+        assert!(drawn(ID, &line(2), 1), "not cached: outside the view it runs to the end");
+        registry::remove(ID);
+        registry::remove(FAST);
     }
 
     /// A first run that is cancelled leaves the next run to be the first: the launch marker names
@@ -504,7 +737,7 @@ mod tests {
         let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         crate::safe_mode::set_active(None);
         let src = crate::wat::spinning(&crate::wat::manifest("test.effect.cancelled", "effect", "{}"), 1_000_000_000, r#"{"objects":[]}"#);
-        let plugin = registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap());
+        let plugin = registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap()).unwrap();
         let ran_first =
             || RUNS.lock().unwrap_or_else(|e| e.into_inner()).as_ref().is_some_and(|r| matches!(r.get(&plugin.serial()), Some(Runs::Done)));
         let draw = || {
@@ -544,7 +777,7 @@ mod tests {
             crate::safe_mode::parse_marker(&std::fs::read(&json[0]).unwrap())
         };
         let src = crate::wat::returning(&crate::wat::manifest("test.effect.overlap", "effect", "{}"), r#"{"objects":[]}"#);
-        let plugin = registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap());
+        let plugin = registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap()).unwrap();
         let named = Some(crate::safe_mode::Item::of(&plugin));
         assert_eq!(marker(), None);
 

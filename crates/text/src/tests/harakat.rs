@@ -152,13 +152,13 @@ fn paint_only_differences_are_told_apart() {
     assert_eq!(harakat_ranges("اللَّهِ", 0.."اللَّهِ".len()), [6..10, 12..14], "shadda and fatha together");
 }
 
-/// The allocation-free comparison must keep the previous comparison's complete contract,
-/// including attributes that affect layout rather than shaping and non-reflexive file values.
+/// Compare every drawing attribute without allocations, retaining PartialEq for non-reflexive
+/// values while allowing features already resolved by shaping.
 #[test]
-fn paint_only_keeps_every_nonpaint_attribute_and_partial_equality() {
+fn paint_only_keeps_every_drawing_attribute_and_partial_equality() {
     use vectorcraft_doc::{CharAlign, CharPosition, Dash, Digits, FontHeightReference, GlyphChoice, LineCap, LineJoin, ParaDirection, StrokeAlign};
 
-    fn previous(a: &CharStyle, b: &CharStyle) -> bool {
+    fn normalized(a: &CharStyle, b: &CharStyle) -> bool {
         let mut b = b.clone();
         b.fill = a.fill.clone();
         b.stroke = a.stroke.clone();
@@ -171,12 +171,14 @@ fn paint_only_keeps_every_nonpaint_attribute_and_partial_equality() {
         b.stroke_dash = a.stroke_dash.clone();
         b.stroke_align = a.stroke_align;
         b.style_name = a.style_name.clone();
+        b.kerning_before = a.kerning_before;
+        b.features = a.features.clone();
         *a == b
     }
 
     fn check(a: &CharStyle, b: &CharStyle, want: bool, name: &str) {
         for (left, right) in [(a, b), (b, a)] {
-            assert_eq!(paint_only(left, right), previous(left, right), "{name}: old contract");
+            assert_eq!(paint_only(left, right), normalized(left, right), "{name}: normalized contract");
         }
         assert_eq!(paint_only(a, b), want, "{name}");
     }
@@ -203,6 +205,7 @@ fn paint_only_keeps_every_nonpaint_attribute_and_partial_equality() {
     field!(leading, Some(60.0), false);
     field!(tracking, 20.0, false);
     field!(kerning, Some(0.0), false);
+    field!(kerning_before, 250.0, true);
     field!(optical_kerning, true, false);
     field!(baseline_shift, 1.0, false);
     field!(h_scale, 90.0, false);
@@ -211,7 +214,7 @@ fn paint_only_keeps_every_nonpaint_attribute_and_partial_equality() {
     field!(underline, true, false);
     field!(strikethrough, true, false);
     field!(all_caps, true, false);
-    field!(features, vec!["-liga".into()], false);
+    field!(features, vec!["-liga".into()], true);
     field!(position, CharPosition::Superscript(Default::default()), false);
     field!(small_caps, Some(80.0), false);
     field!(char_align, CharAlign::EmBoxTop, false);
@@ -292,6 +295,42 @@ fn synthetic_harakat_keep_geometry_with_and_without_gdef_marks() {
     }
 }
 
+#[test]
+fn feature_only_harakat_boundaries_keep_attachment_and_ownership() {
+    let db = FontDb::with_font_dirs(vec![]);
+    assert_eq!(db.add_font(crate::test_fonts::lam_alef_font(b"rlig").expect("the test font builds")), 1);
+    let family = crate::test_fonts::lam_alef_family(b"rlig");
+    let face = db.face(family, "Regular").expect("the test face");
+    const WORD: &str = "بَبَبَ";
+    let plain = TextObject::point(Point::ZERO, WORD, style(family));
+    let before = layout(&db, &plain);
+    assert_eq!(before.glyphs.len(), 6, "three bases with their attached marks");
+    assert!(before.glyphs.iter().any(|g| is_gdef_mark(&face, g.gid)));
+    for feature_marks in [false, true] {
+        for coloured in [false, true] {
+            let mut text = plain.clone();
+            for (byte, ch) in WORD.char_indices() {
+                crate::edit::style_range(&mut text.runs, byte, byte + ch.len_utf8(), |st| {
+                    if is_harakat(ch) == feature_marks {
+                        st.features = vec!["salt=2".into()];
+                    }
+                    if coloured && is_harakat(ch) {
+                        st.fill = red();
+                    }
+                });
+            }
+            let after = layout(&db, &text);
+            assert_eq!(geometry(&after), geometry(&before), "features on marks {feature_marks}, coloured {coloured}");
+            for glyph in &after.glyphs {
+                let mark = is_gdef_mark(&face, glyph.gid);
+                let owner = &run_of(&text, glyph).style;
+                assert_eq!(!owner.features.is_empty(), mark == feature_marks, "each glyph keeps its own character's features");
+                assert_eq!(owner.fill == red(), coloured && mark, "only marks take the mark paint");
+            }
+        }
+    }
+}
+
 /// A range is normalised as `edit::style_range` takes one: clamped, each end moved back to the
 /// start of its character, put in order. Never a silent empty result for a usable range.
 #[test]
@@ -312,6 +351,36 @@ fn harakat_ranges_normalise_their_range() {
 /// the same way, and only a character in that glyph's shaping cluster: repeated glyph ids alone
 /// don't do. A later in-cluster owner is kept only for a GDEF mark glyph on a harakat character;
 /// everything else stays at the cluster start (conservative).
+/// A space before the line's first letter (#5111), set on the letter alone as the Type tool's caret
+/// sets it, keeps the letter's harakat coloured apart attached and in their own colour. Right to
+/// left the space is past the letter's right side, so every glyph stays where it was and the line
+/// is the space longer. Checked with the in-memory Arabic test font (its fatha a `GDEF` mark) in
+/// every environment, and with an installed Arabic face when there is one.
+#[test]
+fn a_space_before_the_first_letter_keeps_its_coloured_harakat() {
+    let db = FontDb::with_font_dirs(vec![]);
+    assert_eq!(db.add_font(crate::test_fonts::lam_alef_font(b"rlig").unwrap()), 1);
+    check_spaced_harakat(&db, crate::test_fonts::lam_alef_family(b"rlig"));
+    if let Some(face) = arabic_face("a_space_before_the_first_letter_keeps_its_coloured_harakat") {
+        check_spaced_harakat(FontDb::global(), &face.family);
+    }
+}
+
+fn check_spaced_harakat(db: &FontDb, family: &str) {
+    const WORD: &str = "بَبَب"; // ب 0, fatha 2, ب 4, fatha 6, ب 8
+    let coloured = text_with_harakat(WORD, family, Some(red()));
+    let mut spaced = coloured.clone();
+    crate::edit::style_range(&mut spaced.runs, 0, 2, |st| st.kerning_before = 250.0);
+    let (a, b) = (layout(db, &coloured), layout(db, &spaced));
+    let placed = |l: &TextLayout| l.glyphs.iter().map(|g| (g.font_id, g.gid, g.byte, g.xf.as_coeffs().map(f64::to_bits))).collect::<Vec<_>>();
+    assert_eq!(placed(&a), placed(&b), "{family}: the same glyphs where they were");
+    assert!(painted(&spaced, &b, &red()) > 0, "{family}: harakat painted apart");
+    assert_eq!(painted(&spaced, &b, &red()), painted(&coloured, &a, &red()), "{family}: the harakat keep their colour");
+    // 250/1000 of the 48 pt em.
+    let length = |l: &TextLayout| l.glyphs.iter().map(|g| g.advance).sum::<f64>();
+    assert!((length(&b) - length(&a) - 12.0).abs() < 1e-6, "{family}: {} → {}", length(&a), length(&b));
+}
+
 #[test]
 fn own_chars_need_the_same_setting_and_each_character_in_its_cluster() {
     // بَبَب right to left: final beh (cluster 8), fatha and medial beh (cluster 4), fatha and
@@ -540,6 +609,8 @@ fn duplicate_authored_glyphs_keep_occurrence_order() {
         carets: Vec::new(),
         width: 0.0,
         width_start: 0.0,
+        warichu: None,
+        warichu_line: 0.0,
     };
     let before = TextLayout { glyphs: vec![glyph(0), glyph(1)], ..TextLayout::default() };
     assert_eq!(assert_kashida_ownership(&text, &before, &before, &red(), "duplicate glyphs", false), 0);

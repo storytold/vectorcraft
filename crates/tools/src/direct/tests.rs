@@ -40,7 +40,7 @@ fn a_press_where_a_mask_hides_a_selected_object_drags_it() {
 #[test]
 fn direct_and_group_selection_pick_ruler_guides() {
     let (mut d, id) = doc_with_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(true, 100.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 100.0));
     let (s, p) = (Selection::default(), paint());
     let c = cx(&d, &s, &p);
     let down = |t: &mut DirectSelectionTool, y: f64| t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, y));
@@ -62,7 +62,7 @@ fn direct_and_group_selection_pick_ruler_guides() {
 #[test]
 fn a_cmd_shift_double_click_releases_the_guide_under_the_pointer() {
     let (mut d, id) = doc_with_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(false, 300.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 300.0));
     let Some(NodeKind::Path { guide, .. }) = d.node_mut(id).map(|n| &mut n.kind) else { panic!("the rectangle is a path") };
     *guide = true;
     let (s, p) = (Selection::default(), paint());
@@ -634,6 +634,33 @@ fn snap_to_pixel_wins_over_snap_to_last_location_for_a_path_moved_by_its_anchor(
     assert!(labels.is_empty(), "{labels:?}");
 }
 
+/// Pixel Snapping Options › While Moving off: a direct-selected anchor dragged with Snap to Pixel
+/// on keeps its fractional offset; with the option on it lands on whole pixels.
+#[test]
+fn an_anchor_drag_follows_the_while_moving_option() {
+    use crate::PixelSnap;
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(100.3, 100.4, 200.3, 200.4));
+    d.insert(Some(l), 0, vectorcraft_doc::Node::path(id, square, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let s = anchors_of(id, &[(0, 0)]);
+    let p = paint();
+    let moved = |pixel_snap: PixelSnap| {
+        let c = ToolContext { snap_to_pixel: true, pixel_snap, smart_guides: false, snap_to_point: false, ..cx(&d, &s, &p) };
+        let mut t = DirectSelectionTool::new(false);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.3, 100.4));
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 106.3, 105.4));
+        let Some(Action::Preview(command, v)) = a.last() else { panic!("{a:?}") };
+        assert_eq!(command, "path.moveAnchors");
+        Vec2::new(v["dx"].as_f64().unwrap_or(f64::NAN), v["dy"].as_f64().unwrap_or(f64::NAN))
+    };
+    let m = moved(PixelSnap { moving: false, ..PixelSnap::default() });
+    assert!((m - Vec2::new(6.0, 5.0)).hypot() < 1e-9, "{m:?}");
+    let m = moved(PixelSnap { drawing: false, scaling: false, moving: true });
+    assert!((m - Vec2::new(5.7, 4.6)).hypot() < 1e-9, "{m:?}");
+}
+
 /// A click (no drag) on an anchor that is selected with others, whether the whole path is or
 /// some of its anchors, selects that anchor alone, as in Illustrator: a press keeps the
 /// selection so a drag moves it all, the release without a drag narrows it. Shift still
@@ -848,7 +875,7 @@ fn crossed_segments_match_testing_a_path_for_each_segment() {
 #[test]
 fn marquee_selects_ruler_guides() {
     let (mut d, id) = doc_with_rect();
-    d.guides.push(vectorcraft_doc::Guide::new(false, 80.0));
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 80.0));
     let s = Selection::default();
     let p = paint();
     let cx = cx(&d, &s, &p);

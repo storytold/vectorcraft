@@ -34,6 +34,9 @@ pub struct DocState {
     /// Select › Start Global Edit: the objects edited together until Stop Global Edit or Escape
     /// ([`cmd::globaledit`]). Editing state: not saved, not undoable.
     pub global_edit: Option<cmd::globaledit::GlobalEdit>,
+    /// The objects Start Global Edit would take, highlighted before it starts
+    /// ([`cmd::globaledit::similar`]), as of a revision. Not saved, not undoable.
+    pub(crate) similar_outlines: cmd::globaledit::SimilarCache,
     /// What leaving symbol editing mode goes back to ([`cmd::symboledit`]).
     pub(crate) symbol_edit_return: cmd::symboledit::Return,
     pub interaction: Option<Interaction>,
@@ -52,6 +55,11 @@ pub struct DocState {
     pub recalled_selection: RecalledSelection,
     /// Process-unique id of this open document (tab indices shift when tabs close).
     pub uid: u64,
+    /// How many times File → Revert replaced the document's content in its tab
+    /// ([`Session::replace_document`]). Work started for the document (a file read for Place, a
+    /// pasted bitmap) is dropped when this has changed by the time it finishes; edits do not
+    /// change it, and a batch that fails puts it back with the document.
+    pub reverts: u64,
     /// Preferences › User Interface › Open Documents As Tabs when the document opened: cleared,
     /// the UI opens it in a floating window of its own.
     pub opened_as_tab: bool,
@@ -110,6 +118,9 @@ pub struct DocState {
     /// paths the document links to are looked at within them later too, when the Links panel
     /// asks about a link outside any caller's scope.
     pub opened_by: Option<Arc<file_access::AutomationRoots>>,
+    /// The live-effect plug-in stages deferred while the document is drawn on screen, and the time
+    /// budget of its first view ([`vectorcraft_plugins::deferred`]). Not saved.
+    pub plugin_effects: vectorcraft_plugins::deferred::Deferrals,
     /// What [`DocState::any_empty_artboards`] last measured. Not saved.
     empty_artboards: std::cell::RefCell<EmptyArtboards>,
     /// What [`DocState::any_art_to_fit`] last measured. Not saved.
@@ -299,6 +310,7 @@ impl DocState {
             variables_highlight: None,
             isolation: None,
             global_edit: None,
+            similar_outlines: Default::default(),
             symbol_edit_return: Default::default(),
             interaction: None,
             undo_group: None,
@@ -306,6 +318,7 @@ impl DocState {
             last_selection_cmd: None,
             recalled_selection: RecalledSelection::default(),
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            reverts: 0,
             opened_as_tab: true,
             mask_view: None,
             spelling_ignored: Default::default(),
@@ -326,6 +339,7 @@ impl DocState {
             last_perspective: None,
             opened_by: file_access::current(),
             empty_artboards: Default::default(),
+            plugin_effects: Default::default(),
             art_to_fit: Default::default(),
         }
     }

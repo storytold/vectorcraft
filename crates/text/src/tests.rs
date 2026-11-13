@@ -3,6 +3,7 @@ use kurbo::{Affine, Shape};
 use vectorcraft_doc::{CharStyle, Justify, TextKind, TextRun};
 use vectorcraft_geom::PathData;
 
+mod aki;
 mod alternates;
 mod axes;
 mod bidi;
@@ -13,12 +14,14 @@ mod composite;
 mod devanagari;
 mod embed;
 mod fit;
+mod glyph_alternates;
 mod hang;
 mod harakat;
 mod inline;
 mod joiners;
 mod justify;
 mod kept_layouts;
+mod kerning_before;
 mod ligature_carets;
 mod path_joins;
 mod ruby;
@@ -32,6 +35,7 @@ mod variable;
 mod versions;
 mod vertical;
 mod vietnamese;
+mod warichu;
 
 /// The bundled fonts only: what these tests measure doesn't change with the fonts installed.
 fn db() -> &'static FontDb {
@@ -223,6 +227,177 @@ fn tracking_and_scale() {
     let l = layout(db(), &point("x", CharStyle { baseline_shift: 5.0, ..style(10.0) }));
     let b = l.glyphs[0].outline.bounding_box();
     assert!(b.y1 < -4.0, "shifted up: {b:?}");
+}
+
+/// In horizontally scaled type, tracking and manual kerning are thousandths of the em as the scale
+/// draws it (`spacing_scale`): at 50% they add half the space they add at 100%, after every
+/// character, as the page of users' `.ai` files spaces such type.
+#[test]
+fn tracking_and_manual_kerning_take_the_horizontal_scale() {
+    let laid =
+        |h_scale: f64, tracking: f64, kerning: Option<f64>| layout(db(), &point("Wave", CharStyle { h_scale, tracking, kerning, ..style(20.0) }));
+    let advances = |l: &TextLayout| l.glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
+    let line = |l: &TextLayout| l.lines[0].x1 - l.lines[0].x0;
+    // 200/1000 of a 20 pt em: 4 pt after each character at 100%, 2 pt at 50%.
+    for (h_scale, extra) in [(100.0, 4.0), (50.0, 2.0)] {
+        for (name, plain, spaced) in [
+            ("tracking", laid(h_scale, 0.0, None), laid(h_scale, 200.0, None)),
+            ("manual kerning", laid(h_scale, 0.0, Some(0.0)), laid(h_scale, 0.0, Some(200.0))),
+        ] {
+            let (a, b) = (advances(&plain), advances(&spaced));
+            assert_eq!(a.len(), 4, "{name}: {a:?}");
+            assert_eq!(a.len(), b.len(), "{name}");
+            for (p, s) in a.iter().zip(&b) {
+                assert!((s - p - extra).abs() < 1e-9, "{name} at {h_scale}%: {extra} pt more after each character: {a:?} {b:?}");
+            }
+            let longer = line(&spaced) - line(&plain);
+            assert!((longer - 4.0 * extra).abs() < 1e-9, "{name} at {h_scale}%: the line is {} pt longer, not {longer}", 4.0 * extra);
+        }
+    }
+}
+
+/// A centred or right-aligned line is as wide as its characters without the tracking after the
+/// last one, as the page of users' `.ai` files aligns tracked lines: centred half that tracking
+/// right of a line measured with it, right-aligned the whole tracking right, so the last glyph's
+/// own advance ends on the anchor or the frame's edge. The tracking is still in the last glyph's
+/// advance (the caret after it, and a selection of it, keep it).
+#[test]
+fn an_aligned_line_leaves_its_last_characters_tracking_out_of_its_width() {
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    // 200/1000 of a 20 pt em: 4 pt after each character, also at 50% Horizontal Scale with 400.
+    for (tracking, h_scale, after) in [(200.0, 100.0, 4.0), (-100.0, 100.0, -2.0), (400.0, 50.0, 4.0)] {
+        let st = CharStyle { tracking, h_scale, ..style(20.0) };
+        let mut t = point("Wave", st.clone());
+        let w = width(&t);
+        let start = |t: &TextObject| layout(db(), t).glyphs[0].origin.x;
+        let end = |t: &TextObject| {
+            let l = layout(db(), t);
+            let last = l.glyphs.last().unwrap();
+            last.origin.x + last.advance
+        };
+        assert!(near(start(&t), 0.0), "left aligned point type starts at its anchor");
+        t.para.justify = Justify::Center;
+        assert!(near(start(&t), -(w - after) / 2.0), "{tracking} at {h_scale}%: centred from {}, not {}", -(w - after) / 2.0, start(&t));
+        t.para.justify = Justify::Right;
+        assert!(near(end(&t) - after, 0.0), "{tracking} at {h_scale}%: right aligned, the last glyph ends {} past the anchor", end(&t) - after);
+        let plain = layout(db(), &TextObject { runs: vec![TextRun::new("Wave", CharStyle { tracking: 0.0, ..st.clone() })], ..t.clone() });
+        let tracked = layout(db(), &t);
+        let last_advance = |l: &TextLayout| l.glyphs.last().unwrap().advance;
+        assert!(near(last_advance(&tracked) - last_advance(&plain), after), "{tracking}: the last glyph keeps its tracking");
+        // Area type: the same in its frame.
+        let frame = Rect::new(0.0, 0.0, 300.0, 100.0);
+        let centred = area("Wave", st.clone(), frame, Justify::Center);
+        assert!(near(start(&centred), (300.0 - (w - after)) / 2.0), "{tracking}: centred area type starts at {}", start(&centred));
+        let right = area("Wave", st.clone(), frame, Justify::Right);
+        assert!(near(end(&right) - after, 300.0), "{tracking}: right aligned area type ends {} past its edge", end(&right) - after - 300.0);
+        // A line that ends in a space keeps its last letter's tracking: the space comes after it.
+        let spaced = area("Wave ", st, frame, Justify::Right);
+        let l = layout(db(), &spaced);
+        let e = l.glyphs.iter().find(|g| g.byte == 3).unwrap();
+        assert!(near(e.origin.x + e.advance, 300.0), "{tracking}: before a space the line ends at {}", e.origin.x + e.advance);
+    }
+}
+
+/// Right-aligned area type with a tab sets the text after its last tab as it sets a right-aligned
+/// line: the last glyph's advance, less the tracking after it, ends on the frame's edge.
+#[test]
+fn the_text_after_the_last_tab_of_right_aligned_type_leaves_its_last_tracking_out() {
+    let frame = Rect::new(0.0, 0.0, 336.0, 100.0);
+    let lay = layout(db(), &area("Item\t24.00", CharStyle { tracking: 200.0, ..style(13.0) }, frame, Justify::Right));
+    assert!(lay.glyphs[0].origin.x.abs() < 1e-6, "the item starts at the left edge: {}", lay.glyphs[0].origin.x);
+    let last = lay.glyphs.last().unwrap();
+    let after = 200.0 / 1000.0 * 13.0;
+    let end = last.origin.x + last.advance - after;
+    assert!((end - 336.0).abs() < 1e-6, "the price ends at {end}, not on the edge");
+}
+
+/// Which lines leave the tracking after their last character out of their width
+/// (`LineInfo::trailing`): those a paragraph's end, a forced line break or a wrap ends, also a
+/// wrap at a space (the space hangs past the line). Spaces typed before a paragraph's end or a
+/// forced line break end the line themselves, and the letter before them keeps its tracking. So
+/// do a line a hyphen ends, one whose last character hangs (burasagari, Optical Margin
+/// Alignment), a justified line, right-to-left lines and lines ending in a right-to-left run,
+/// vertical type and type on a path.
+#[test]
+fn which_lines_leave_the_tracking_after_their_last_character_out() {
+    let st = CharStyle { tracking: 200.0, ..style(20.0) };
+    // 200/1000 of a 20 pt em.
+    let t = 4.0;
+    let trailing = |o: &TextObject| layout(db(), o).lines.iter().map(|l| l.trailing).collect::<Vec<_>>();
+    let centred = |text: &str| {
+        let mut o = point(text, st.clone());
+        o.para.justify = Justify::Center;
+        o
+    };
+    let narrow = Rect::new(0.0, 0.0, 90.0, 300.0);
+    assert_eq!(trailing(&area("Wave Wave", st.clone(), narrow, Justify::Center)), [t, t], "a wrap at a space");
+    assert_eq!(trailing(&area("Wave-Wave", st.clone(), narrow, Justify::Center)), [t, t], "a wrap after a hyphen");
+    assert_eq!(trailing(&centred("Wave\u{2028}Wave")), [t, t], "a forced line break");
+    assert_eq!(trailing(&centred("Wave \u{2028}Wave")), [0.0, t], "a space typed before a forced line break");
+    assert_eq!(trailing(&centred("Wave \nWave")), [0.0, t], "a space typed before a paragraph's end");
+    // Hyphenated: the hyphen ends the line, and has no tracking.
+    let mut hyphenated = area("internationalization", st.clone(), Rect::new(0.0, 0.0, 120.0, 300.0), Justify::Right);
+    hyphenated.para.hyphenate = true;
+    hyphenated.para.composer = vectorcraft_doc::Composer::SingleLine;
+    let lay = layout(db(), &hyphenated);
+    assert!(lay.lines.len() > 1 && lay.lines[0].end < "internationalization".len(), "the word is hyphenated: {:?}", lay.lines);
+    assert_eq!(lay.lines[0].trailing, 0.0, "a hyphenated line");
+    // Justified: justification counts it (only the paragraph's last line is aligned).
+    assert_eq!(trailing(&area("Wave Wave", st.clone(), narrow, Justify::JustifyLeft)), [0.0, t], "a justified line");
+    // A last character that hangs.
+    let mut hanging = area("あいう。", st.clone(), Rect::new(0.0, 0.0, 300.0, 100.0), Justify::Center);
+    hanging.para.burasagari = vectorcraft_doc::Burasagari::Forced;
+    assert_eq!(trailing(&hanging), [0.0], "a full stop burasagari hangs");
+    let mut optical = area("Wave.", st.clone(), Rect::new(0.0, 0.0, 300.0, 100.0), Justify::Right);
+    optical.optical_margin = true;
+    assert_eq!(trailing(&optical), [0.0], "a full stop Optical Margin Alignment hangs");
+    optical.runs = vec![TextRun::new("Wave", st.clone())];
+    assert_eq!(trailing(&optical), [t], "a letter that doesn't hang");
+    // Right to left: a right-to-left paragraph ending in Latin, a Latin one ending in Hebrew.
+    assert_eq!(trailing(&centred("שלום abc")), [0.0], "a right-to-left paragraph");
+    assert_eq!(trailing(&centred("abc שלום")), [0.0], "a right-to-left run ending the line");
+    // Vertical type.
+    let mut vertical = centred("Wave");
+    vertical.vertical = true;
+    assert_eq!(trailing(&vertical), [0.0], "vertical type");
+    // Type on a path, centred: as wide as all its advances.
+    let mut on_path = centred("Wave");
+    let w = width(&on_path);
+    let mut line = kurbo::BezPath::new();
+    line.move_to((0.0, 50.0));
+    line.line_to((500.0, 50.0));
+    on_path.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let lay = layout(db(), &on_path);
+    assert_eq!(lay.lines[0].trailing, 0.0, "type on a path");
+    assert!((lay.glyphs[0].origin.x - (500.0 - w) / 2.0).abs() < 1e-6, "{}", lay.glyphs[0].origin.x);
+}
+
+/// Justification… Desired Glyph Scaling scales each glyph's advance with the tracking in it: an
+/// aligned line leaves out its last character's tracking as scaled.
+#[test]
+fn an_aligned_line_leaves_out_its_last_tracking_as_glyph_scaling_sets_it() {
+    let mut t = point("Wave", CharStyle { tracking: 400.0, ..style(20.0) });
+    t.para.justify = Justify::Center;
+    t.para.justification.glyph_scaling = [80.0, 90.0, 110.0];
+    let lay = layout(db(), &t);
+    let w: f64 = lay.glyphs.iter().map(|g| g.advance).sum();
+    // 400/1000 of a 20 pt em, at 90%.
+    let left_out = 8.0 * 0.9;
+    assert!((lay.lines[0].trailing - left_out).abs() < 1e-9, "{}", lay.lines[0].trailing);
+    assert!((lay.glyphs[0].origin.x + (w - left_out) / 2.0).abs() < 1e-6, "centred from {}", lay.glyphs[0].origin.x);
+}
+
+/// The factor tracking and manual kerning take from the Horizontal Scale: the scale in horizontal
+/// type, 1 in vertical type and for a scale that isn't a positive number.
+#[test]
+fn spacing_scale_is_the_horizontal_scale_of_horizontal_type() {
+    let at = |h_scale: f64, vertical: bool| spacing_scale(&CharStyle { h_scale, ..style(20.0) }, vertical);
+    assert_eq!(at(50.0, false), 0.5);
+    assert_eq!(at(250.0, false), 2.5);
+    assert_eq!(at(50.0, true), 1.0, "vertical type keeps the em");
+    for junk in [0.0, -50.0, f64::NAN, f64::INFINITY] {
+        assert_eq!(at(junk, false), 1.0, "{junk}");
+    }
 }
 
 #[test]
@@ -2342,6 +2517,142 @@ fn thai_loanwords_stay_whole() {
     // No line ends inside the word, whatever the Thai font's widths put beside it.
     let word = text.find("โปรแกรม").unwrap();
     assert!(l.lines.iter().all(|ln| ln.end <= word || ln.end >= word + "โปรแกรม".len()), "{lines:?}");
+}
+
+/// Korean Line Break Anywhere (a paragraph attribute): off, a Korean word that does not fit moves
+/// to the next line whole, with either composer and in vertical type; on, the line breaks between
+/// its syllables. Each paragraph follows its own setting.
+#[test]
+fn korean_words_stay_whole_unless_line_break_anywhere_is_on() {
+    let text = "가나다 라마바";
+    let first = "가나다 ".len();
+    let measure = |vertical: bool| {
+        let mut t = point("가나다 라", style(20.0));
+        t.vertical = vertical;
+        layout(db(), &t).glyphs.iter().map(|g| g.advance).sum::<f64>()
+    };
+    let ends = |t: &TextObject| layout(db(), t).lines.iter().map(|l| l.end).collect::<Vec<_>>();
+    for vertical in [false, true] {
+        let fits = measure(vertical);
+        let frame = if vertical { Rect::new(0.0, 0.0, 400.0, fits + 1.0) } else { Rect::new(0.0, 0.0, fits + 1.0, 400.0) };
+        for composer in [Composer::SingleLine, Composer::EveryLine] {
+            let mut t = area(text, style(20.0), frame, Justify::Left);
+            (t.vertical, t.para.composer) = (vertical, composer);
+            assert_eq!(ends(&t), [first, text.len()], "{composer:?} vertical {vertical}: off");
+            t.para.korean_line_break_anywhere = true;
+            let on = ends(&t);
+            assert!(on.iter().any(|&e| e != first && e != text.len()), "{composer:?} vertical {vertical}: on {on:?}");
+        }
+    }
+    // Per paragraph: the first breaks between syllables, the second between words.
+    let fits = measure(false);
+    let mut t = area(&format!("{text}\n{text}"), style(20.0), Rect::new(0.0, 0.0, fits + 1.0, 400.0), Justify::Left);
+    t.para.composer = Composer::SingleLine;
+    let anywhere = vectorcraft_doc::ParaStyle { korean_line_break_anywhere: true, ..t.para.clone() };
+    t.set_paragraph_styles(vec![anywhere, t.para.clone()]);
+    let second = text.len() + 1;
+    assert_eq!(ends(&t), ["가나다 라".len(), text.len(), second + first, second + text.len()]);
+}
+
+/// Bunri-Kinshi (a paragraph attribute): on, two em dashes that do not both fit move to the next
+/// line together, with either composer and in vertical type; off, or with kinsoku None, the line
+/// breaks between them. Each paragraph follows its own setting.
+#[test]
+fn bunri_kinshi_keeps_two_em_dashes_on_one_line() {
+    let text = "あいう——え";
+    let (split, kept) = ("あいう—".len(), "あいう".len());
+    let measure = |vertical: bool| {
+        let mut t = point("あいう—", style(20.0));
+        t.vertical = vertical;
+        layout(db(), &t).glyphs.iter().map(|g| g.advance).sum::<f64>()
+    };
+    let ends = |t: &TextObject| layout(db(), t).lines.iter().map(|l| l.end).collect::<Vec<_>>();
+    for vertical in [false, true] {
+        let fits = measure(vertical);
+        let frame = if vertical { Rect::new(0.0, 0.0, 400.0, fits + 1.0) } else { Rect::new(0.0, 0.0, fits + 1.0, 400.0) };
+        for composer in [Composer::SingleLine, Composer::EveryLine] {
+            let mut t = area(text, style(20.0), frame, Justify::Left);
+            (t.vertical, t.para.composer) = (vertical, composer);
+            assert_eq!(ends(&t), [split, text.len()], "{composer:?} vertical {vertical}: off");
+            t.para.bunri_kinshi = true;
+            assert_eq!(ends(&t), [kept, text.len()], "{composer:?} vertical {vertical}: on");
+            t.para.kinsoku = vectorcraft_doc::Kinsoku::None;
+            assert_eq!(ends(&t), [split, text.len()], "{composer:?} vertical {vertical}: kinsoku None");
+        }
+    }
+    let fits = measure(false);
+    let mut t = area(&format!("{text}\n{text}"), style(20.0), Rect::new(0.0, 0.0, fits + 1.0, 400.0), Justify::Left);
+    t.para.composer = Composer::SingleLine;
+    let on = vectorcraft_doc::ParaStyle { bunri_kinshi: true, ..t.para.clone() };
+    t.set_paragraph_styles(vec![on, t.para.clone()]);
+    let second = text.len() + 1;
+    assert_eq!(ends(&t), [kept, text.len(), second + split, second + text.len()]);
+}
+
+/// Bunri-Kinshi: a justified line spreads its room over the gaps between its CJK characters but not
+/// over the gap inside a vertical kana repeat mark, and still fills its width.
+#[test]
+fn bunri_kinshi_adds_no_justification_space_inside_a_pair() {
+    let text = "あ〳〵いう";
+    let upper = "あ".len();
+    let natural = layout(db(), &point(text, style(20.0))).glyphs.iter().find(|g| g.byte == upper).map(|g| g.advance).unwrap();
+    let frame = Rect::new(0.0, 0.0, 300.0, 400.0);
+    let set = |bunri: bool| {
+        let mut t = area(text, style(20.0), frame, Justify::JustifyAll);
+        t.para.bunri_kinshi = bunri;
+        let l = layout(db(), &t);
+        assert!((l.lines[0].x1 - frame.x1).abs() < 1e-6, "{bunri}: {:?}", l.lines[0]);
+        l.glyphs.iter().find(|g| g.byte == upper).map(|g| g.advance).unwrap()
+    };
+    assert!(set(false) > natural + 1.0, "off: the gap after 〳 widens");
+    assert!((set(true) - natural).abs() < 1e-6, "on: the pair keeps its spacing");
+    // Nor does a Maximum Letter Spacing widen the gap between two em dashes on a line with spaces.
+    let text = "ab——cd ef";
+    let dash = "ab".len();
+    let natural = layout(db(), &point(text, style(20.0))).glyphs.iter().find(|g| g.byte == dash).map(|g| g.advance).unwrap();
+    let set = |bunri: bool| {
+        let mut t = area(text, style(20.0), frame, Justify::JustifyAll);
+        t.para.justification.letter_spacing = [0.0, 0.0, 100.0];
+        t.para.bunri_kinshi = bunri;
+        let l = layout(db(), &t);
+        l.glyphs.iter().find(|g| g.byte == dash).map(|g| g.advance).unwrap()
+    };
+    assert!(set(false) > natural + 1.0, "off: letter spacing widens the gap after the first dash");
+    assert!((set(true) - natural).abs() < 1e-6, "on: the dashes keep their spacing");
+    // A Desired Letter Spacing adds no space inside the pair on a ragged line either.
+    let desired = |bunri: bool| {
+        let mut t = area(text, style(20.0), frame, Justify::Left);
+        t.para.justification.letter_spacing = [0.0, 50.0, 100.0];
+        t.para.bunri_kinshi = bunri;
+        let l = layout(db(), &t);
+        let adv = |b: usize| l.glyphs.iter().find(|g| g.byte == b).map(|g| g.advance).unwrap();
+        (adv(dash), adv(0))
+    };
+    let (off, _) = desired(false);
+    assert!(off > natural + 1.0, "off: Desired spacing widens the gap after the first dash");
+    let (on, a) = desired(true);
+    assert!((on - natural).abs() < 1e-6, "on: the dashes keep their spacing");
+    assert!(a > layout(db(), &point(text, style(20.0))).glyphs[0].advance + 1.0, "on: other letters still take Desired spacing");
+    // Single Word Justification's Full Justify, right to left: the second dash's cluster (the dash
+    // and a combining mark) is drawn before the first dash, and the mark's gap, which opens next
+    // to the first dash, takes no space. The other gaps of the word still do.
+    let text = "אב——\u{301}גד";
+    let (first, second) = ("אב".len(), "אב—".len());
+    let width = |l: &TextLayout, b: usize| l.glyphs.iter().filter(|g| g.byte == b).map(|g| g.advance).sum::<f64>();
+    let natural = layout(db(), &point(text, style(20.0)));
+    assert!(natural.glyphs.iter().filter(|g| g.byte == second).count() > 1, "the dash and its mark are one cluster");
+    let set = |bunri: bool| {
+        let mut t = area(text, style(20.0), frame, Justify::JustifyAll);
+        t.para.bunri_kinshi = bunri;
+        let l = layout(db(), &t);
+        assert!((l.lines[0].x1 - frame.x1).abs() < 1e-6, "{bunri}: {:?}", l.lines[0]);
+        (width(&l, first), width(&l, second))
+    };
+    let (_, off) = set(false);
+    assert!(off > width(&natural, second) + 1.0, "off: Full Justify widens the gap between the dashes");
+    let (dash, on) = set(true);
+    assert!((on - width(&natural, second)).abs() < 1e-6, "on: the pair keeps its spacing right to left");
+    assert!(dash > width(&natural, first) + 1.0, "on: the gap on the pair's other side still widens");
 }
 
 /// No Break (Character panel menu) keeps the marked words on one line, where the same text wraps

@@ -205,6 +205,10 @@ pub struct Structure {
     pub warped_type: super::envelope::WarpedType,
     /// The document's graphic styles are those of the file's style list, in place of the defaults.
     pub styles_read: bool,
+    /// The patterns that paint the text document's characters, placed in the document, by the
+    /// name of the art style that gives each: the styles that are one paint, a pattern this read
+    /// (see `ate::Texts::with_patterns`).
+    pub text_patterns: HashMap<String, Paint>,
     /// The file's `%AI24_LargeCanvasScale` (1 when it declares none), applied or not.
     pub canvas_scale: f64,
     /// The objects by their XML id (`AI10_ArtUID`), a text object by its slot's id: `None` for an
@@ -479,6 +483,9 @@ struct Reader<'a> {
     /// a global process colour, so these make swatches only for names no colour operator defines.
     stop_spots: Vec<Named>,
     raster: Option<Raster>,
+    /// The samples of the image being read are on `%_` lines (`%_%%BeginData`): it is the copy of
+    /// a styled object there, as the other objects on those lines are.
+    image_hidden: bool,
     /// The file `XG` names for the image after it (`XF`), until an image is read.
     image_link: Option<String>,
     /// The placed file being read (`%AI5_BeginPlace` … `~`).
@@ -732,6 +739,7 @@ impl<'a> Reader<'a> {
             spots: Vec::new(),
             stop_spots: Vec::new(),
             raster: None,
+            image_hidden: false,
             image_link: None,
             place: None,
             foreign_data: None,
@@ -842,7 +850,7 @@ impl<'a> Reader<'a> {
                     self.op(w, hidden)?;
                 }
                 Tok::Comment(c) => self.comment(c, hidden)?,
-                Tok::Data(d) => self.image(d)?,
+                Tok::Data(d) => self.image(d, hidden)?,
                 Tok::Preview(d) => {
                     if let Some(p) = self.place.as_mut() {
                         p.preview = preview_png(d);

@@ -28,7 +28,14 @@ pub(super) fn preview(bytes: &[u8], ps: &[u8], frame: Rect) -> Option<Preview> {
     epsi(ps).and_then(|img| image_doc(img, frame)).map(|document| Preview { document, what: IMAGE })
 }
 
+/// Most pixels a TIFF preview may have: its RGBA copy is four bytes each besides the decoded image.
+const MAX_PREVIEW_PIXELS: u64 = 1 << 26;
+
 fn tiff_rgba(tiff: &[u8]) -> Option<image::RgbaImage> {
+    let size = image::ImageReader::with_format(std::io::Cursor::new(tiff), image::ImageFormat::Tiff).into_dimensions();
+    if size.is_ok_and(|(w, h)| u64::from(w) * u64::from(h) > MAX_PREVIEW_PIXELS) {
+        return None;
+    }
     match image::load_from_memory_with_format(tiff, image::ImageFormat::Tiff) {
         Ok(img) => Some(img.to_rgba8()),
         Err(_) => crate::tiff::palette_rgba(tiff),

@@ -11,7 +11,7 @@ use serde_json::json;
 
 use super::super::{Result, Session, bad};
 #[cfg(not(target_arch = "wasm32"))]
-use super::super::{bool_or, find_command, str_param};
+use super::super::{check_switches, find_command, switch_or, text_param};
 
 #[cfg(target_arch = "wasm32")]
 pub(super) fn action_batch(_: &mut Session, _: &Value) -> Result<Value> {
@@ -68,12 +68,24 @@ pub(super) fn action_batch(s: &mut Session, p: &Value) -> Result<Value> {
             ));
         }
     }
-    let source = str_param(p, "source").unwrap_or("folder");
-    let destination = str_param(p, "destination").unwrap_or("none");
+    // Every option is checked before the destination folder is made.
+    let source = text_param(p, "source", C)?.unwrap_or("folder");
+    if !matches!(source, "folder" | "datasets") {
+        return Err(bad(C, "`source` must be `folder` or `datasets`"));
+    }
+    let destination = text_param(p, "destination", C)?.unwrap_or("none");
     if !matches!(destination, "none" | "saveAndClose" | "folder") {
         return Err(bad(C, "`destination` must be `none`, `saveAndClose` or `folder`"));
     }
-    let dest_folder = str_param(p, "destinationFolder").map(absolute_path);
+    let dest_folder = text_param(p, "destinationFolder", C)?.map(absolute_path);
+    text_param(p, "folder", C)?;
+    let label = text_param(p, "label", C)?.unwrap_or("Batch").to_string();
+    let dataset_file_naming = text_param(p, "datasetFileNaming", C)?.unwrap_or("fileDataSetName");
+    let override_open = switch_or(p, "overrideOpen", true, C)?;
+    let stop_on_error = switch_or(p, "stopOnError", true, C)?;
+    let override_save = switch_or(p, "overrideSave", true, C)?;
+    let override_export = switch_or(p, "overrideExport", true, C)?;
+    check_switches(p, &["includeSubdirs"], C)?;
     if destination == "folder" {
         let Some(ref folder) = dest_folder else {
             return Err(bad(C, "`destinationFolder` is required when destination is `folder`"));
@@ -81,17 +93,15 @@ pub(super) fn action_batch(s: &mut Session, p: &Value) -> Result<Value> {
         may_write(folder)?;
         std::fs::create_dir_all(folder).map_err(|e| bad(C, format!("{folder}: {e}")))?;
     }
-    let label = str_param(p, "label").unwrap_or("Batch").to_string();
-    let override_open = bool_or(p, "overrideOpen", true);
     let run = Run {
         label: &label,
         steps: cmds,
-        stop_on_error: bool_or(p, "stopOnError", true),
-        override_save: bool_or(p, "overrideSave", true),
-        override_export: bool_or(p, "overrideExport", true),
+        stop_on_error,
+        override_save,
+        override_export,
         destination,
         dest_folder: dest_folder.as_deref(),
-        dataset_file_naming: p.get("datasetFileNaming").map_or("fileDataSetName", |v| v.as_str().unwrap_or("")),
+        dataset_file_naming,
     };
     match source {
         "folder" => batch_folder(s, C, p, override_open, &run),
@@ -186,9 +196,9 @@ fn retargeting_save(c: &Value, redirected: bool) -> bool {
 fn batch_folder(s: &mut Session, cmd: &str, p: &Value, override_open: bool, run: &Run<'_>) -> Result<Value> {
     use super::{absolute_path, may_read};
 
-    let folder = str_param(p, "folder").map(absolute_path).ok_or_else(|| bad(cmd, "missing `folder`"))?;
+    let folder = text_param(p, "folder", cmd)?.map(absolute_path).ok_or_else(|| bad(cmd, "missing `folder`"))?;
     may_read(&folder)?;
-    let include_subdirs = bool_or(p, "includeSubdirs", false);
+    let include_subdirs = switch_or(p, "includeSubdirs", false, cmd)?;
     let files = collect_files(&folder, include_subdirs, 0)?;
     if files.len() > MAX_BATCH_FILES {
         return Err(bad(cmd, format!("more than {MAX_BATCH_FILES} files")));
@@ -526,6 +536,7 @@ fn dataset_output_extensions(run: &Run<'_>, doc: &vectorcraft_doc::Document, def
                                 | "dxf"
                                 | "emf"
                                 | "wmf"
+                                | "hpgl"
                                 | "ai"
                         )
                 };
@@ -716,6 +727,11 @@ fn collect_files(folder: &str, include_subdirs: bool, depth: usize) -> Result<Ve
         }
     }
     files.sort();
+    // Names that are not valid text come back lossily, so different names can give one path: each
+    // folder is listed once.
+    files.dedup();
+    subdirs.sort();
+    subdirs.dedup();
     for sub in subdirs {
         let mut nested = collect_files(&sub, true, depth + 1)?;
         files.append(&mut nested);
@@ -747,6 +763,22 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn folders_whose_names_alias_after_lossy_conversion_are_listed_once() {
+        use std::os::unix::ffi::OsStrExt;
+        let root = tmp("alias");
+        // `a\u{FFFD}` is a real folder; two others with bytes that aren't text give the same name.
+        let real = root.join("a\u{FFFD}");
+        std::fs::create_dir_all(&real).unwrap();
+        write_svg(&real, "x.svg", "red");
+        for bad in [b"a\xFF", b"a\xFE"] {
+            let _ = std::fs::create_dir_all(root.join(std::ffi::OsStr::from_bytes(bad)));
+        }
+        let files = collect_files(&root.to_string_lossy(), true, 0).unwrap();
+        assert_eq!(files.len(), 1, "{files:?}");
     }
 
     fn write_svg(dir: &std::path::Path, name: &str, fill: &str) -> std::path::PathBuf {
@@ -787,6 +819,46 @@ mod tests {
         assert_eq!(r["failed"], 0);
         assert!(dest.join("a.svg").is_file(), "a.svg written");
         assert!(dest.join("b.svg").is_file(), "b.svg written");
+    }
+
+    #[test]
+    fn batch_refuses_options_of_the_wrong_type_before_it_writes() {
+        let src = tmp("types-src");
+        let dest = tmp("types-dest");
+        write_svg(&src, "a.svg", "#f00");
+        let mut s = Session::new();
+        let cases = [
+            ("stopOnError", json!("false"), "`stopOnError` must be true or false"),
+            ("overrideOpen", json!(0), "`overrideOpen` must be true or false"),
+            ("overrideSave", json!("true"), "`overrideSave` must be true or false"),
+            ("overrideExport", json!([]), "`overrideExport` must be true or false"),
+            ("includeSubdirs", json!(1), "`includeSubdirs` must be true or false"),
+            ("source", json!(1), "`source` must be a string"),
+            ("source", json!("files"), "`source` must be `folder` or `datasets`"),
+            ("destination", json!(true), "`destination` must be a string"),
+            ("folder", json!(5), "`folder` must be a string"),
+            ("label", json!(5), "`label` must be a string"),
+            ("datasetFileNaming", json!(3), "`datasetFileNaming` must be a string"),
+        ];
+        for (key, value, message) in cases {
+            let out = dest.join(key);
+            let mut p = json!({
+                "folder": src.to_string_lossy(),
+                "destination": "folder",
+                "destinationFolder": out.to_string_lossy(),
+                "commands": [{"command": "object.unlockAll", "params": {}}],
+            });
+            p[key] = value;
+            let e = s.execute("action.batch", &p).unwrap_err().to_string();
+            assert!(e.contains(message), "{key}: {e}");
+            assert!(!out.exists(), "{key}: the destination folder was created");
+        }
+        let e = s
+            .execute("action.batch", &json!({"folder": src.to_string_lossy(), "destination": "folder", "destinationFolder": 7, "commands": [{"command": "object.unlockAll"}]}))
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("`destinationFolder` must be a string"), "{e}");
+        assert!(s.active().is_none(), "no file was opened");
     }
 
     #[cfg(unix)]
@@ -1012,6 +1084,65 @@ mod tests {
         assert_eq!(r["failed"], 0, "{r}");
         assert_eq!(file_names(&dest), ["a", "a-2"], "{r}");
         for (folder, fill) in [("a", "#ff0000"), ("a-2", "#00ff00")] {
+            assert_eq!(file_names(&dest.join(folder)), ["Artboard-1.svg"], "{r}");
+            let svg = std::fs::read_to_string(dest.join(folder).join("Artboard-1.svg")).unwrap();
+            assert!(svg.contains(fill), "{folder}: {svg}");
+        }
+    }
+
+    /// Source file names that differ only in case (`a.svg` and `sub/A.svg`) get Export for Screens
+    /// folders of their own: names are compared without case, so the second folder is numbered,
+    /// since Windows and macOS would make `a` and `A` one folder.
+    #[test]
+    fn batch_override_export_numbers_folders_that_differ_only_in_case() {
+        let src = tmp("screens-case-src");
+        std::fs::create_dir_all(src.join("sub")).unwrap();
+        write_svg(&src, "a.svg", "#f00");
+        write_svg(&src.join("sub"), "A.svg", "#0f0");
+        let dest = tmp("screens-case-out");
+        let mut s = Session::new();
+        let r = s
+            .execute(
+                "action.batch",
+                &json!({
+                    "folder": src.to_string_lossy(),
+                    "includeSubdirs": true,
+                    "destinationFolder": dest.to_string_lossy(),
+                    "commands": [{"command": "document.exportForScreens", "params": {"formats": [{"format": "svg"}]}}]
+                }),
+            )
+            .unwrap();
+        assert_eq!(r["failed"], 0, "{r}");
+        assert_eq!(file_names(&dest), ["A-2", "a"], "{r}");
+        for (folder, fill) in [("a", "#ff0000"), ("A-2", "#00ff00")] {
+            assert_eq!(file_names(&dest.join(folder)), ["Artboard-1.svg"], "{r}");
+            let svg = std::fs::read_to_string(dest.join(folder).join("Artboard-1.svg")).unwrap();
+            assert!(svg.contains(fill), "{folder}: {svg}");
+        }
+    }
+
+    /// A source file with nothing left of its name without its extension (` .svg`) gets the folder
+    /// `file`, numbered before a source file named `file.svg` takes it.
+    #[test]
+    fn batch_override_export_names_the_folder_of_an_empty_name_file() {
+        let src = tmp("screens-empty-src");
+        write_svg(&src, " .svg", "#f00");
+        write_svg(&src, "file.svg", "#0f0");
+        let dest = tmp("screens-empty-out");
+        let mut s = Session::new();
+        let r = s
+            .execute(
+                "action.batch",
+                &json!({
+                    "folder": src.to_string_lossy(),
+                    "destinationFolder": dest.to_string_lossy(),
+                    "commands": [{"command": "document.exportForScreens", "params": {"formats": [{"format": "svg"}]}}]
+                }),
+            )
+            .unwrap();
+        assert_eq!(r["failed"], 0, "{r}");
+        assert_eq!(file_names(&dest), ["file", "file-2"], "{r}");
+        for (folder, fill) in [("file", "#ff0000"), ("file-2", "#00ff00")] {
             assert_eq!(file_names(&dest.join(folder)), ["Artboard-1.svg"], "{r}");
             let svg = std::fs::read_to_string(dest.join(folder).join("Artboard-1.svg")).unwrap();
             assert!(svg.contains(fill), "{folder}: {svg}");
@@ -1296,6 +1427,42 @@ mod tests {
         assert_eq!(r["failed"], 0, "{r}");
         let written: Vec<_> = std::fs::read_dir(&dest).unwrap().filter_map(|e| e.ok()).map(|e| e.file_name()).collect();
         assert_eq!(written.len(), 2, "{written:?}");
+    }
+
+    /// A Data Sets batch whose Save step has no path saves the document's own file. When that file is
+    /// outside the client's read and write roots, each row's error keeps the write root and names the
+    /// file by its file name, with Stop on Error on and off. A source folder the client gives stays
+    /// whole in the error.
+    #[test]
+    fn dataset_batch_step_error_hides_document_path() {
+        use crate::file_access::{AutomationRoots, confine};
+
+        let base = tmp("roots-error");
+        let (inside, outside) = (base.join("in"), base.join("kept-out"));
+        for f in [&inside, &outside] {
+            std::fs::create_dir_all(f).unwrap();
+        }
+        let mut s = with_data_sets(&["Alpha", "Beta"]);
+        let own = outside.join("doc.vectorcraft").to_string_lossy().into_owned();
+        s.execute("document.save", &json!({"path": own})).unwrap();
+        let roots = AutomationRoots::new(&[inside.as_path()], &[inside.as_path()]).unwrap();
+        let root = crate::cmd::findfiles::plain(std::fs::canonicalize(&inside).unwrap()).display().to_string();
+        let hidden = outside.to_string_lossy().into_owned();
+        for (stop, rows) in [(true, 1), (false, 2)] {
+            let p = json!({"source": "datasets", "stopOnError": stop, "commands": [{"command": "document.save", "params": {}}]});
+            let r = confine(roots.as_ref(), || s.execute("action.batch", &p)).unwrap();
+            assert_eq!((r["failed"].as_u64(), r["processed"].as_array().map(Vec::len)), (Some(rows), Some(rows as usize)), "{r}");
+            for row in r["processed"].as_array().unwrap() {
+                let e = row["error"].as_str().unwrap_or_default();
+                let want = format!("batch step 0 (`document.save`) failed: automation path rejected: outside the write root {root}: doc.vectorcraft");
+                assert_eq!(e, want, "{r}");
+            }
+            assert!(!r.to_string().contains(&hidden), "{r}");
+        }
+        let p = json!({"source": "folder", "folder": hidden, "commands": [{"command": "object.unlockAll", "params": {}}]});
+        let e = confine(roots.as_ref(), || s.execute("action.batch", &p)).unwrap_err().to_string();
+        assert!(e.contains(&hidden), "{e}");
+        let _ = std::fs::remove_dir_all(base);
     }
 
     /// The names of the files in `dir`, sorted.

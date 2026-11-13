@@ -105,8 +105,8 @@ fn write(app: &mut VectorcraftApp, store: &Arc<dyn RecoveryStore>, pick: impl Fn
     let mut started = 0;
     for job in jobs {
         let (uid, label, title) = (job.uid, format!("Saving recovery data for {}", job.title), job.title.clone());
-        let (done, store) = (job.clone(), store.clone());
-        let work = move |_: Writer| job.write(store.as_ref());
+        let done = job.clone();
+        let work = move |_: Writer| job.write();
         let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
             let r = r?;
             done.finish(&mut app.session);
@@ -133,7 +133,7 @@ pub fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         match app.run(id, json!({ "file": file })) {
             Ok(r) => {
                 if let Some(restored) = r["restored"].as_array().and_then(|v| v.first()) {
-                    crate::dialogs::missing_links::after_open(app, restored);
+                    crate::dialogs::missing_links::after_open(app, restored, Vec::new());
                 }
                 done.push(r);
             }

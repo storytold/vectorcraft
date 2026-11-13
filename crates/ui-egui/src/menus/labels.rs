@@ -123,9 +123,9 @@ fn command_label(app: &VectorcraftApp, id: &str, label: &str) -> Option<String> 
 
 /// Does the menu item `id` show a name that is user, file or system data rather than an interface
 /// label: a recent file, a saved view, a font, a user library or preset, a custom workspace, a
-/// plug-in, an SVG filter? Such names are shown as they are, never translated (a workspace the user calls
-/// "Layers" stays "Layers").
-pub(super) fn shows_a_name(id: &str, label: &str) -> bool {
+/// plug-in, an SVG filter, a script of the Scripts folder? Such names are shown as they are, never
+/// translated (a workspace the user calls "Layers" stays "Layers").
+pub(crate) fn shows_a_name(id: &str, label: &str) -> bool {
     const SLOTS: [&str; 8] = [
         "file.openRecent",
         "view.goto",
@@ -138,7 +138,10 @@ pub(super) fn shows_a_name(id: &str, label: &str) -> bool {
     ];
     SLOTS.iter().any(|s| id.starts_with(s))
         || saved_selection_slot(id).is_some()
-        || matches!(id, "text.setStyle" | "plugin.dialog" | "file.openWith" | "window.toolbar.custom" | "svgFilter.apply")
+        || matches!(
+            id,
+            "text.setStyle" | "plugin.dialog" | "file.openWith" | "window.toolbar.custom" | "svgFilter.apply" | crate::scripts_menu::COMMAND
+        )
         || vectorcraft_engine::cmd::plugin::is_command_id(id)
         || (id == "window.workspace" && !crate::workspaces::is_builtin(label))
         || (matches!(id, "effect.apply" | "effect.dialog") && vectorcraft_effects::plugin_effects().iter().any(|e| e.label == label))
@@ -328,12 +331,12 @@ pub(crate) fn holds_plugin_commands(children: &[Item]) -> bool {
 
 /// Every English string the menus, the command palette, the panel registry, the toolbar and the
 /// Preferences dialog can show: what a complete language catalog has to cover. Names that are user
-/// data (fonts, recent files, saved views, libraries, installed plug-ins), the point sizes and the
-/// view angles are left out.
+/// data (fonts, recent files, saved views, libraries, installed plug-ins, the scripts and subfolders
+/// of the Scripts folder), the point sizes and the view angles are left out.
 pub fn menu_strings() -> std::collections::BTreeSet<String> {
     use std::collections::BTreeSet;
     fn user_data(id: &str, params: &Value) -> bool {
-        hidden_when_disabled(id) || id.starts_with("type.recentFont") || lists_plugin(id, params)
+        hidden_when_disabled(id) || id.starts_with("type.recentFont") || lists_plugin(id, params) || id == crate::scripts_menu::COMMAND
     }
     fn walk(items: &[Item], under: &str, out: &mut BTreeSet<String>) {
         for it in items {
@@ -354,8 +357,8 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
                 Item::Todo(l, _) | Item::Header(l) => {
                     out.insert(l.to_string());
                 }
-                // A plug-in's submenu is named after the plug-in.
-                Item::Sub(_, children) if holds_plugin_commands(children) => walk(children, under, out),
+                // A plug-in's submenu is named after the plug-in, and a subfolder's after the folder.
+                Item::Sub(_, children) if holds_plugin_commands(children) || crate::scripts_menu::is_folder(children) => walk(children, under, out),
                 Item::Sub(l, children) => {
                     out.insert(l.to_string());
                     // Type › Font lists the installed families: names, not UI text.
@@ -375,6 +378,7 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
     out.extend(crate::native_menu::MAC_LABELS.iter().map(|s| s.to_string()));
     out.extend(DYNAMIC_LABELS.iter().map(|s| s.to_string()));
     out.extend(CONTEXT_LABELS.iter().map(|s| s.to_string()));
+    out.extend(crate::scripts_menu::LABELS.iter().map(|s| s.to_string()));
     out.extend(UI_COMMANDS.iter().map(|c| c.1.to_string()));
     for c in vectorcraft_engine::cmd::command_specs() {
         out.insert(c.label.to_string());

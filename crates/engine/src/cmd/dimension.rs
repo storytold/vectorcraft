@@ -3,7 +3,9 @@ use super::{CommandSpec, EngineError, Result, Session, cmd, has_doc};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::dimension::{ArrowStyle, Dimension, DimensionMode, DimensionOptions, DimensionSource, LineType, TextAlignment, TextPosition};
+use vectorcraft_doc::dimension::{
+    ArrowStyle, Dimension, DimensionMode, DimensionOptions, DimensionSource, LineType, Orientation, TextAlignment, TextPosition,
+};
 use vectorcraft_doc::{Appearance, Arrowhead, CharStyle, ColorMode, Dash, Document, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Vec2};
 
@@ -14,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Dimension",
             [],
             None,
-            "{mode?: linear|angular|radius|diameter, a?: [x,y], b?: [x,y], vertex?: [x,y], source?: {kind: segment, edge: {node,subpath,segment}}|{kind: angle, first: edge, second: edge}|{kind: circle, node}|{kind: arc, edge}|{kind: points, a?, b?, vertex?: {node,subpath,anchor}}, offset?: pt, options?: {units: in|mm|pt|pc|px|cm|m|ft|yd, precision: 0-6, scale: drawing:real, hideUnits, lineWeight, lineType: solid|dashed|dotted, lineColor: [r,g,b], arrowStyle: filled|open|tick|none, arrowScale: %, extensionWeight, extensionType, extensionColor, extensionOffset, extensionLength, hideExtensions, fontFamily, fontStyle, fontSize, textColor, textPosition: away|between, textAlignment: left|center|right, textOffset}} → {id,label}; linked measurements follow source edits",
+            "{mode?: linear|angular|radius|diameter, a?: [x,y], b?: [x,y], vertex?: [x,y], source?: {kind: segment, edge: {node,subpath,segment}}|{kind: angle, first: edge, second: edge}|{kind: circle, node}|{kind: arc, edge}|{kind: points, a?, b?, vertex?: {node,subpath,anchor}, freeA?, freeB?: a point that is not an anchor, {kind: onSegment, edge: {node,subpath,segment}, t: 0..1 (curve parameter)}|{kind: anchors, node, anchors: [{subpath,anchor,part?: point|in|out (the anchor, default, or its in or out handle),weight}] (2 or 3 points of one path whose weights add up to 1), across?: (2 anchors only: times the first-to-second anchor vector (x,y) turned to (-y,x), which points down when the vector points right)} (an end is an anchor or a free point, not both)}, orientation?: aligned|horizontal|vertical (linear only: the distance between the points, or only its horizontal or vertical part; default aligned), offset?: pt (the line's distance from the first point: along the left normal of a → b when aligned, downward when horizontal, leftward when vertical; negative goes the other way), options?: {units: in|mm|pt|pc|px|cm|m|ft|yd, precision: 0-6, scale: drawing:real, hideUnits, lineWeight, lineType: solid|dashed|dotted, lineColor: [r,g,b], arrowStyle: filled|open|tick|none, arrowScale: %, extensionWeight, extensionType, extensionColor, extensionOffset, extensionLength, hideExtensions, fontFamily, fontStyle, fontSize, textColor, textPosition: away|between, textAlignment: left|center|right, textOffset}} → {id,label}; linked measurements follow source edits",
             has_doc,
             create
         ),
@@ -23,7 +25,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update Dimensions",
             [],
             None,
-            "{ids?: [dimension ids] (default selection), options?: dimension options, offset?: pt} restyle or move existing dimensions → {ids}",
+            "{ids?: [dimension ids] (default selection), options?: dimension options, orientation?: aligned|horizontal|vertical (linear dimensions only; the line stays on the side of the points it was on), offset?: pt (as in dimension.create)} restyle, turn or move existing dimensions → {ids}",
             has_doc,
             update
         ),
@@ -92,9 +94,34 @@ fn recipe(s: &Session, p: &Value) -> Result<Dimension> {
     } else {
         Point::ZERO
     };
-    let mut d = Dimension { mode, a, b, vertex, offset: distance(p, 30.0)?, length: a.distance(b), options: options(s, p)?, source, moved: None };
+    let orientation = orientation(p, mode)?.unwrap_or_default();
+    let mut d = Dimension {
+        mode,
+        a,
+        b,
+        vertex,
+        offset: distance(p, 30.0)?,
+        length: a.distance(b),
+        options: options(s, p)?,
+        source,
+        orientation,
+        moved: None,
+    };
+    if mode == DimensionMode::Linear {
+        d.length = d.measured();
+    }
     d.resolve(&s.doc()?.doc).map_err(error)?;
     Ok(d)
+}
+
+/// The `orientation` param, if given: only a linear dimension is horizontal or vertical.
+fn orientation(p: &Value, mode: DimensionMode) -> Result<Option<Orientation>> {
+    let Some(v) = p.get("orientation") else { return Ok(None) };
+    let orientation: Orientation = serde_json::from_value(v.clone()).map_err(|_| error("Unknown dimension orientation"))?;
+    if orientation != Orientation::Aligned && mode != DimensionMode::Linear {
+        return Err(error("Only linear dimensions are horizontal or vertical"));
+    }
+    Ok(Some(orientation))
 }
 
 fn insert(doc: &mut Document, parent: Option<NodeId>, dim: Dimension) -> Result<NodeId> {
@@ -134,21 +161,38 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(error("Select dimensions to update"));
     }
     let o = if p.get("options").is_some() { Some(options(s, p)?) } else { None };
-    s.edit("Update Dimensions", |doc, _| {
+    // Every dimension is checked before anything changes, and an update that changes none of
+    // them records no undo step.
+    let mut next = Vec::with_capacity(ids.len());
+    {
+        let doc = &s.doc()?.doc;
         for id in &ids {
             if !doc.is_editable(*id) {
                 return Err(error("Dimension is locked or hidden"));
             }
-            let mut dim = dimension_of(doc, *id)?;
+            let old = dimension_of(doc, *id)?;
+            let mut dim = old.clone();
             if let Some(o) = &o {
                 dim.options = o.clone();
             }
+            if let Some(orientation) = orientation(p, dim.mode)? {
+                dim.set_orientation(orientation);
+            }
             dim.offset = distance(p, dim.offset)?;
             dim.resolve(doc).map_err(error)?;
-            replace(doc, *id, dim)?;
+            if dim != old {
+                next.push((*id, dim));
+            }
         }
-        Ok(())
-    })?;
+    }
+    if !next.is_empty() {
+        s.edit("Update Dimensions", |doc, _| {
+            for (id, dim) in next {
+                replace(doc, id, dim)?;
+            }
+            Ok(())
+        })?;
+    }
     Ok(json!({"ids":ids}))
 }
 
@@ -187,9 +231,10 @@ fn apply_to_all(s: &mut Session, p: &Value) -> Result<Value> {
 fn replace(doc: &mut Document, id: NodeId, dim: Dimension) -> Result<()> {
     let old: Vec<NodeId> = doc.node(id).and_then(Node::children).map(|ch| ch.iter().map(|n| n.id).collect()).unwrap_or_default();
     let children = artwork(doc, &dim, &old)?;
+    let name = format!("Dimension · {}", dim.label().map_err(error)?);
     if let Some(n) = doc.node_mut(id) {
         n.kind = NodeKind::Group { children, clip: false };
-        n.name = Some(format!("Dimension · {}", dim.label().map_err(error)?));
+        n.name = Some(name);
         n.extras_mut().dimension = Some(Box::new(dim));
     }
     Ok(())
@@ -227,8 +272,9 @@ impl EndedLink {
 }
 
 /// The [`reached`] dimensions become plain groups, whose art does not redraw or follow what it
-/// measured. A command that replaces art calls this before it changes anything, since replacing
-/// the art a dimension measures would remove the dimension, and then [`restore_unchanged`].
+/// measured. A command that replaces art calls this before it changes anything and
+/// [`restore_unchanged`] after, so that a dimension whose own art the command changed stays a
+/// plain group.
 pub(crate) fn end_links(doc: &mut Document, roots: &[NodeId]) -> Vec<EndedLink> {
     let mut ended = Vec::new();
     for id in reached(doc, roots) {
@@ -241,16 +287,154 @@ pub(crate) fn end_links(doc: &mut Document, roots: &[NodeId]) -> Vec<EndedLink> 
     ended
 }
 
-/// The dimensions in `ended` whose art is as it was are live again.
-pub(crate) fn restore_unchanged(doc: &mut Document, ended: Vec<EndedLink>) {
+/// The dimensions in `ended` whose own art is as it was are live again. One whose measured art the
+/// command changed from `before` so that the art no longer fits its link stays where it was, no
+/// longer linked, as [`refresh`] leaves a dimension whose art was deleted.
+pub(crate) fn restore_unchanged(before: &Document, doc: &mut Document, ended: Vec<EndedLink>) {
     for e in ended {
-        if doc.node(e.id).and_then(Node::children).is_some_and(|art| *art == e.art)
-            && let Some(n) = doc.node_mut(e.id)
-        {
-            n.extras_mut().dimension = Some(Box::new(e.recipe));
+        if !doc.node(e.id).and_then(Node::children).is_some_and(|art| *art == e.art) {
+            continue;
+        }
+        let recipe = if e.source_kept(before, doc) { e.recipe } else { unlinked(&e.recipe) };
+        if let Some(n) = doc.node_mut(e.id) {
+            n.extras_mut().dimension = Some(Box::new(recipe));
             doc.dimensions = true;
         }
     }
+}
+
+/// `old` where it was, no longer linked. A move it had on its own and not yet drawn is kept when
+/// the moved dimension is valid.
+fn unlinked(old: &Dimension) -> Dimension {
+    let mut unlinked = old.clone();
+    unlinked.source = None;
+    unlinked.moved = None;
+    if let Some(v) = old.moved {
+        let mut shifted = unlinked.clone();
+        (shifted.a, shifted.b, shifted.vertex) = (shifted.a + v, shifted.b + v, shifted.vertex + v);
+        if shifted.validate().is_ok() {
+            unlinked = shifted;
+        }
+    }
+    unlinked
+}
+
+/// The whole dimensions under `roots` that are selected together with art they measure (art under
+/// `roots`), each one a root or held by groups without fills, strokes or effects of their own.
+/// Object › Expand, Object › Expand Appearance and Object › Path › Outline Stroke leave their
+/// lines and label as they are. A group with an appearance of its own changes everything it holds
+/// when it expands, its dimensions included.
+pub(crate) fn with_their_art(doc: &Document, roots: &[NodeId]) -> Vec<NodeId> {
+    if !doc.dimensions {
+        return Vec::new();
+    }
+    let mut found = Vec::new();
+    for root in roots {
+        let Some(n) = doc.node(*root) else { continue };
+        n.walk(&mut |c| {
+            if let Some(source) = c.extras().dimension.as_ref().and_then(|d| d.source.as_ref()) {
+                found.push((*root, c.id, source.nodes()));
+            }
+        });
+    }
+    let under_roots = |id: NodeId| doc.ancestry(id).is_some_and(|a| a.iter().any(|a| roots.contains(a)));
+    found
+        .into_iter()
+        .filter(|(root, id, _)| {
+            let Some(ancestry) = doc.ancestry(*id) else { return false };
+            let from = ancestry.iter().position(|a| a == root).unwrap_or(ancestry.len());
+            ancestry.get(from..ancestry.len().saturating_sub(1)).unwrap_or_default().iter().all(|a| doc.node(*a).is_some_and(plain_group))
+        })
+        .filter(|(_, _, measured)| measured.iter().any(|m| under_roots(*m)))
+        .map(|(_, id, _)| id)
+        .collect()
+}
+
+/// A group or layer without fills, strokes or effects of its own.
+fn plain_group(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && n.appearance.items.is_empty() && n.appearance.effects.is_empty()
+}
+
+/// A dimension [`lift`] took out of the document, with its place, the export assets that list it or
+/// its parts (with their places in the asset list) and its parts' variable bindings.
+pub(crate) struct Lifted {
+    parent: Option<NodeId>,
+    index: usize,
+    node: Arc<Node>,
+    assets: Vec<(usize, vectorcraft_doc::assets::ExportAsset)>,
+    bindings: Vec<(NodeId, std::collections::BTreeSet<String>)>,
+}
+
+impl Lifted {
+    pub(crate) fn id(&self) -> NodeId {
+        self.node.id
+    }
+}
+
+/// Takes the [`with_their_art`] dimensions under `roots` out of `doc`, so a command that replaces
+/// art does not reach them; [`put_back`] puts them back.
+pub(crate) fn lift(doc: &mut Document, roots: &[NodeId]) -> Vec<Lifted> {
+    let mut lifted = Vec::new();
+    for id in with_their_art(doc, roots) {
+        let Some((parent, index, _)) = doc.position(id) else { continue };
+        let mut parts = std::collections::BTreeSet::new();
+        if let Some(n) = doc.node(id) {
+            n.walk(&mut |c| {
+                parts.insert(c.id);
+            });
+        }
+        let assets = doc.assets.iter().enumerate().filter(|(_, a)| a.nodes.iter().any(|n| parts.contains(n))).map(|(i, a)| (i, a.clone())).collect();
+        let bindings = doc.variables.bindings.iter().filter(|(n, _)| parts.contains(n)).map(|(n, b)| (*n, b.clone())).collect();
+        if let Ok(node) = doc.remove(id) {
+            lifted.push(Lifted { parent, index, node, assets, bindings });
+        }
+    }
+    lifted
+}
+
+/// Each dimension [`lift`] took out, as it was, back in its place in `doc`, with its parts back in
+/// the export assets that listed them and their variable bindings back: edits made while it was out
+/// let go of them. A dimension whose group is gone goes on top of the first layer.
+pub(crate) fn put_back(doc: &mut Document, lifted: Vec<Lifted>) {
+    for l in lifted.into_iter().rev() {
+        let parent = if doc.children(l.parent).is_some() { l.parent } else { doc.layers.first().map(|layer| layer.id) };
+        let Ok(ch) = doc.children_mut(parent) else { continue };
+        let i = if parent == l.parent { l.index.min(ch.len()) } else { ch.len() };
+        ch.insert(i, l.node);
+        doc.dimensions = true;
+        for (at, saved) in l.assets {
+            let there: Vec<NodeId> = saved.nodes.iter().copied().filter(|n| doc.node(*n).is_some()).collect();
+            if let Some(a) = doc.assets.iter_mut().find(|a| a.id == saved.id) {
+                for (k, n) in there.iter().enumerate() {
+                    if !a.nodes.contains(n) {
+                        let k = k.min(a.nodes.len());
+                        a.nodes.insert(k, *n);
+                    }
+                }
+            } else if !there.is_empty() {
+                let at = at.min(doc.assets.len());
+                doc.assets.insert(at, vectorcraft_doc::assets::ExportAsset { nodes: there, ..saved });
+            }
+        }
+        for (n, b) in l.bindings {
+            doc.variables.bindings.entry(n).or_insert(b);
+        }
+    }
+}
+
+/// `doc` without the [`with_their_art`] dimensions under `roots`, to see what a command that leaves
+/// them alone would change: `doc` itself when there are none.
+pub(crate) fn without_kept<'a>(doc: &'a Document, roots: &[NodeId]) -> std::borrow::Cow<'a, Document> {
+    let ids = with_their_art(doc, roots);
+    if ids.is_empty() {
+        return std::borrow::Cow::Borrowed(doc);
+    }
+    let mut view = doc.clone();
+    for id in ids {
+        // A dimension already gone (inside another one removed) needs nothing more.
+        let _ = view.remove(id);
+    }
+    std::borrow::Cow::Owned(view)
 }
 
 /// Called inside every edit, so dimensions and their undo history stay in step with the art they
@@ -271,17 +455,27 @@ pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<bool> {
         let mut next = old.clone();
         let moved = next.moved.take();
         if next.source.as_ref().is_some_and(|s| s.topology_changed(before, doc)) || next.resolve(doc).is_err() {
-            // A deleted/degenerate source has no valid measurement. Remove its annotation in
-            // this same undo step instead of keeping a silently wrong number.
-            doc.remove(id)?;
+            // The art it measured was deleted, or rebuilt with other anchors, or no longer fits
+            // (an ellipse that was a circle): it stays where it was, no longer linked, in this
+            // same undo step, rather than attaching to a different edge.
+            if replace(doc, id, unlinked(&old)).is_err()
+                && let Some(n) = doc.node_mut(id)
+            {
+                // Its recipe cannot be drawn again: its art stays as it is, as a plain group.
+                n.extras_mut().dimension = None;
+            }
             changed = true;
             continue;
+        }
+        next.keep_gap(&old);
+        if let Some(xf) = next.source.as_ref().and_then(|s| s.reflection(before, doc)) {
+            next.mirror_line(&old, xf * old.handle());
         }
         // Moved on its own (the art it measures stayed put): it keeps its new place.
         if let Some(v) = moved
             && (next.a, next.b, next.vertex) == (old.a, old.b, old.vertex)
         {
-            next.place(next.handle() + v);
+            next.place(old.handle() + v);
             if next.resolve(doc).is_err() {
                 next = old.clone();
                 next.moved = None;
@@ -374,7 +568,7 @@ fn appearance(o: &DimensionOptions, mode: ColorMode, ext: bool, arrows: bool) ->
                 ArrowStyle::Tick => Some(Arrowhead::Slash),
                 ArrowStyle::None => None,
             };
-            st.start_arrow = head;
+            st.start_arrow = head.clone();
             st.end_arrow = head;
             st.arrow_scale = (o.arrow_scale, o.arrow_scale);
             st.arrow_align = vectorcraft_doc::appearance::ArrowAlign::Tip;
@@ -424,17 +618,19 @@ fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<
         text_at = d.vertex + dir * if away { r + gap } else { (r - gap).max(o.font_size * 0.5) };
     } else {
         let delta = d.b - d.a;
-        let u = delta / delta.hypot();
+        // A linear dimension measures along its direction (a → b, or the horizontal or vertical axis).
+        let u = if d.mode == DimensionMode::Linear { d.direction() } else { delta / delta.hypot() };
         let n = Vec2::new(-u.y, u.x);
         let (a, b) = match d.mode {
             DimensionMode::Radius => (d.a, d.b),
             DimensionMode::Diameter => (d.a - delta, d.b),
-            _ => (d.a + n * d.offset, d.b + n * d.offset),
+            _ => d.line_ends(),
         };
-        // The side of the line facing away from the object.
+        // The side of the line facing away from the object: the side the line is on, seen from
+        // the middle of the measured points.
         let outward = match d.mode {
             DimensionMode::Linear => {
-                if d.offset < 0.0 {
+                if (a.midpoint(b) - d.a.midpoint(d.b)).dot(n) < 0.0 {
                     -n
                 } else {
                     n
@@ -443,8 +639,16 @@ fn artwork(doc: &mut Document, d: &Dimension, old: &[NodeId]) -> Result<Vec<Arc<
             _ => n,
         };
         if d.mode == DimensionMode::Linear && !o.hide_extensions {
+            // Each extension line runs from its point toward the dimension line, which can lie on
+            // different sides of the two points of a horizontal or vertical dimension.
             for (p, q) in [(d.a, a), (d.b, b)] {
-                paths.push((line(p + outward * o.extension_offset, q + outward * o.extension_length), appearance(o, mode, true, false)));
+                let side = (q - p).dot(n);
+                let toward = match side {
+                    s if s < 0.0 => -n,
+                    s if s > 0.0 => n,
+                    _ => outward,
+                };
+                paths.push((line(p + toward * o.extension_offset, q + toward * o.extension_length), appearance(o, mode, true, false)));
             }
         }
         angle = u.atan2();

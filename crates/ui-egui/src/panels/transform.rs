@@ -223,7 +223,7 @@ pub(crate) fn selected_guides(app: &VectorcraftApp) -> Option<(Option<f64>, Opti
         return None;
     }
     let least = |vertical: bool| {
-        st.selection.guides.iter().filter_map(|i| st.doc.guides.get(*i)).filter(|g| g.vertical == vertical).map(|g| g.pos).min_by(f64::total_cmp)
+        st.selection.guides.iter().filter_map(|i| st.doc.ruler_guide(*i)).filter(|g| g.vertical == vertical).map(|g| g.pos).min_by(f64::total_cmp)
     };
     Some((least(true), least(false)))
 }
@@ -580,6 +580,13 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let glyphs = app.session.prefs.type_glyph_bounds;
     if menu_item(ui, tl!("Measure Type by Glyph Bounds"), true, glyphs) {
         set_pref(app, "typeGlyphBounds", !glyphs);
+    }
+    // The active document's Align New Objects to Pixel Grid (`document.setup`).
+    let align_new = app.session.active().map(|st| st.doc.setup.align_new_objects_to_pixel_grid);
+    if menu_item(ui, tl!("Align New Objects to Pixel Grid"), align_new.is_some(), align_new == Some(true))
+        && let Err(e) = app.run("document.setup", json!({"alignNewObjectsToPixelGrid": align_new != Some(true)}))
+    {
+        app.status(e);
     }
     ui.separator();
     // What the panel transforms (Transform Object Only / Pattern Only / Both), one checked.

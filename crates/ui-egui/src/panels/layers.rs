@@ -11,17 +11,24 @@
 //! - The selection column selects a row's art (`layer.selectAll`, Shift adds or removes); a row
 //!   whose art is selected shows a square in its layer's colour, and dragging that square onto
 //!   another row moves the selected art there (Alt copies it).
-//! - The eye and lock columns toggle a row (`layer.setProps`); dragging down a column sets every
-//!   row it passes to the same state, in one undo step. Ctrl/Cmd-click an eye switches the layer
-//!   between Preview and Outline. Alt-click an eye hides the other layers (`layer.hideOthers`), or
-//!   shows every layer when they are hidden (`layer.showAll`); Alt-click a lock does the same with
-//!   `layer.lockOthers` and `layer.unlockAll`. Ctrl/Cmd+Alt-click an eye switches the other layers
-//!   to Outline and the row's layer to Preview (`layer.outlineOthers`), or switches every layer to
-//!   Preview when the others are in Outline (`layer.previewAll`).
+//! - The eye and lock columns toggle a row (`layer.setProps`), a ruler guide's row included;
+//!   dragging down a column sets every row it passes to the same state, in one undo step.
+//!   Ctrl/Cmd-click a layer's eye switches it between Preview and Outline. Alt-click an eye hides
+//!   the other layers (`layer.hideOthers`), or shows every layer when they are hidden
+//!   (`layer.showAll`); Alt-click a lock does the same with `layer.lockOthers` and
+//!   `layer.unlockAll`. Ctrl/Cmd+Alt-click an eye switches the other layers to Outline and the
+//!   row's layer to Preview (`layer.outlineOthers`), or switches every layer to Preview when the
+//!   others are in Outline (`layer.previewAll`).
+//! - A ruler guide's row selects the guide (`guide.select`) and leaves no row highlighted, so
+//!   Delete then deletes the guide; dragged onto another layer's row the guide goes there
+//!   (`guide.setLayer`), and onto the trash it is deleted (`guide.remove`).
 //! - Dragging rows moves them above, below or into a layer or group (`layer.move`, a drop line or
-//!   a box shows where); Alt copies them. A dimmed copy of the row follows the pointer. Layers
+//!   a box shows where); Alt copies them. A dimmed copy of the row follows the pointer, and rows
+//!   held near the top or bottom edge of the list scroll it, faster nearer the edge. Layers
 //!   dropped in the empty space under the last row go below the bottom layer. Dropped on the trash
 //!   they are deleted, on New Layer duplicated.
+//! - Deleting rows from the panel (the trash, rows dropped on it, Delete Selection, Delete and
+//!   Backspace) asks first when a layer or sublayer among them holds art ([`delete`]).
 //! - The triangle opens or closes a row; Alt-click does the same to everything inside it.
 //! - Double-clicking a name renames it; double-clicking elsewhere on a row opens its options.
 //! - A target circle targets its layer, group or object (`layer.target`); dragging it onto another
@@ -60,7 +67,7 @@ mod rows;
 mod thumbs;
 
 use controls::{bottom_bar, filter_button};
-pub use controls::{expand, menu, set_filter};
+pub use controls::{delete, expand, menu, set_filter};
 pub(crate) use model::shown_name;
 pub use model::{Filter, ObjectKind, RowState};
 #[cfg(test)]
@@ -132,7 +139,7 @@ enum LayersDrag {
     /// The selected-art square: the selected objects go to the row it is dropped on.
     Art,
     /// Ruler guide rows (indexes into the document's guides): they go to the layer of the row
-    /// they are dropped on.
+    /// they are dropped on, or are deleted when dropped on the trash.
     Guides(Vec<usize>),
 }
 
@@ -151,8 +158,10 @@ struct View<'a> {
     /// Where the row thumbnails come from.
     thumbs: ThumbSource<'a>,
     sel: HashSet<NodeId>,
-    /// The selected ruler guides.
+    /// The selected ruler guides, as indexes into [`Self::ruler_guides`].
     guides: Vec<usize>,
+    /// The document's ruler guides ([`Document::ruler_guides`]).
+    ruler_guides: Vec<vectorcraft_doc::Guide>,
     target: Option<NodeId>,
     current: Option<NodeId>,
     rows: Vec<NodeId>,
@@ -262,7 +271,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         doc: &doc,
         thumbs: ThumbSource::of(app, st, &doc),
         sel: st.selection.objects.iter().copied().collect(),
-        guides: st.selection.guides.clone(),
+        guides: vectorcraft_engine::cmd::guide_indexes(&doc, &st.selection.guides),
+        ruler_guides: doc.ruler_guides(),
         target: st.selection.target,
         current: st.current_layer(),
         rows,
@@ -298,6 +308,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
                 for r in list.get(range).unwrap_or_default() {
                     row(ui, &view, r, &mut out);
+                }
+                // Rows held near the list's top or bottom edge scroll it, so a row out of view can
+                // take the drop.
+                if egui::DragAndDrop::payload::<LayersDrag>(ui.ctx()).is_some_and(|d| matches!(*d, LayersDrag::Rows(_)))
+                    && ui.input(|i| i.pointer.primary_down())
+                {
+                    super::scroll_at_edges(ui);
                 }
             },
         )
@@ -378,7 +395,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         && ui.ctx().memory(|m| m.focused().is_none())
         && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete) || i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace))
     {
-        out.actions.push(("layer.delete".into(), json!({})));
+        out.actions.push(("ui.layerDelete".into(), json!({})));
     }
     bottom_bar(app, ui, &view, &doc, &mut out.actions);
     for (c, p) in out.actions {
@@ -468,7 +485,8 @@ fn listed_when_opened(doc: &Document, open: &OpenRows, opts: &PanelOptions, quer
         open.set(*a, true);
     }
     let mut rows = vec![];
-    push_rows(layer, 0, false, (Color32::PLACEHOLDER, true), (&open, opts, query, filter, doc), &mut rows);
+    // Only object rows are looked for, so the guide rows are left out.
+    push_rows(layer, 0, false, (Color32::PLACEHOLDER, true), (&open, opts, query, filter, &[]), &mut rows);
     rows.iter().any(|r| r.node.id == id && r.guide.is_none() && !r.spine)
 }
 

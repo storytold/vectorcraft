@@ -23,12 +23,22 @@ pub fn open(app: &mut VectorcraftApp, set: usize, action: usize) -> Result<Value
     if a.steps.iter().enumerate().all(|(i, _)| a.excluded_steps.contains(&i)) {
         return Err("the action has no included steps".into());
     }
-    if crate::panels::actions::has_stop(&a.included_commands()) {
-        return Err("Batch cannot play an action with a stop".into());
-    }
+    refuse_steps(&a.included_commands())?;
     let name = a.name.clone();
     app.ui.dialog = Some(Dialog::new(KIND, initial_fields(set, action, &name)));
     Ok(Value::Null)
+}
+
+/// Err when the included steps `commands` hold a step that Batch does not play: a stop, or a View
+/// menu step, which acts on a document window ([`crate::panels::actions::is_ui_step`]).
+fn refuse_steps(commands: &[Value]) -> Result<(), String> {
+    if crate::panels::actions::has_stop(commands) {
+        return Err("Batch cannot play an action with a stop".into());
+    }
+    if commands.iter().any(crate::panels::actions::is_ui_step) {
+        return Err("Batch cannot play an action with a View menu step".into());
+    }
+    Ok(())
 }
 
 fn initial_fields(set: usize, action: usize, name: &str) -> Value {
@@ -66,14 +76,6 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         form::check(ui, d, "includeSubdirs", "Include All Subdirectories");
     } else {
         ui.label(egui::RichText::new(tl!("Uses every data set of the open document.")).size(11.5).color(t.text_dim));
-        form::choice(
-            ui,
-            d,
-            "datasetFileNaming",
-            "File Name:",
-            (LABEL, 200.0),
-            &[("fileNumber", "File + Number"), ("fileDataSetName", "File + Data Set Name"), ("dataSetName", "Data Set Name")],
-        );
     }
     ui.add_space(8.0);
 
@@ -85,6 +87,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 crate::picks::folder_field(app, d, "destinationFolder");
             }
         });
+    }
+    if names_data_set_files(d) {
+        form::choice(
+            ui,
+            d,
+            "datasetFileNaming",
+            "File Name:",
+            (LABEL, 200.0),
+            &[("fileNumber", "File + Number"), ("fileDataSetName", "File + Data Set Name"), ("dataSetName", "Data Set Name")],
+        );
     }
     ui.add_space(6.0);
     widgets::subheader(ui, tl!("Overrides"));
@@ -117,9 +129,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if commands.is_empty() {
         return Err("the action has no included steps".into());
     }
-    if crate::panels::actions::has_stop(&commands) {
-        return Err("Batch cannot play an action with a stop".into());
-    }
+    refuse_steps(&commands)?;
     let source = d.str("source");
     if source == "folder" && d.str("folder").trim().is_empty() {
         return Err("choose a source folder".into());
@@ -160,7 +170,8 @@ fn params(d: &Dialog, action_name: &str, commands: Vec<Value>) -> Value {
     });
     if source == "folder" {
         params["folder"] = json!(d.str("folder"));
-    } else if source == "datasets" {
+    }
+    if names_data_set_files(d) {
         params["datasetFileNaming"] = json!(d.str("datasetFileNaming"));
     }
     if destination == "folder" {
@@ -169,14 +180,22 @@ fn params(d: &Dialog, action_name: &str, commands: Vec<Value>) -> Value {
     params
 }
 
+/// Whether the File Name choice names the batch's output: a Data Sets source with a
+/// destination folder. With None or Save and Close the dialog sends no folder, so no file
+/// takes the data set's name.
+fn names_data_set_files(d: &Dialog) -> bool {
+    d.str("source") == "datasets" && d.str("destination") == "folder"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use vectorcraft_engine::Session;
 
-    fn shown(source: &str) -> Vec<String> {
+    fn shown(source: &str, destination: &str) -> Vec<String> {
         let mut d = Dialog::new(KIND, initial_fields(0, 0, "Test"));
         d.fields["source"] = json!(source);
+        d.fields["destination"] = json!(destination);
         render(&mut d)
     }
 
@@ -205,11 +224,35 @@ mod tests {
         labels
     }
 
+    /// The File Name row's caption and its selected choice (the dropdown shows only that one).
+    const NAMING: [&str; 2] = ["File Name:", "File + Number"];
+
     #[test]
-    fn file_name_choice_shows_only_for_data_sets() {
-        assert!(shown("datasets").iter().any(|label| label == "File Name:"));
-        assert!(shown("datasets").iter().any(|label| label == "File + Number"));
-        assert!(!shown("folder").iter().any(|label| label == "File Name:"));
+    fn file_name_choice_shows_only_for_data_sets_into_a_folder() {
+        for source in ["folder", "datasets"] {
+            for destination in ["none", "saveAndClose", "folder"] {
+                let labels = shown(source, destination);
+                let expected = source == "datasets" && destination == "folder";
+                for text in NAMING {
+                    assert_eq!(labels.iter().any(|label| label == text), expected, "{source} to {destination}, {text}: {labels:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn file_name_choice_comes_back_after_another_destination() {
+        let mut d = Dialog::new(KIND, initial_fields(0, 0, "Test"));
+        d.fields["source"] = json!("datasets");
+        d.fields["datasetFileNaming"] = json!("dataSetName");
+        for (destination, shown) in [("folder", true), ("none", false), ("saveAndClose", false), ("folder", true)] {
+            d.fields["destination"] = json!(destination);
+            let labels = render(&mut d);
+            assert_eq!(labels.iter().any(|label| label == "File Name:"), shown, "{destination}: {labels:?}");
+            assert_eq!(labels.iter().any(|label| label == "Data Set Name"), shown, "{destination}: {labels:?}");
+            assert_eq!(d.str("datasetFileNaming"), "dataSetName", "{destination}");
+        }
+        assert_eq!(params(&d, "Test", vec![])["datasetFileNaming"], "dataSetName");
     }
 
     /// Batch plays an action recorded with a key its command no longer reads, as Play does.
@@ -240,6 +283,14 @@ mod tests {
             d.fields["datasetFileNaming"] = json!(choice);
             assert_eq!(params(&d, "Test", vec![])["datasetFileNaming"], choice);
         }
+        d.fields["datasetFileNaming"] = json!("dataSetName");
+        for destination in ["none", "saveAndClose"] {
+            d.fields["destination"] = json!(destination);
+            let p = params(&d, "Test", vec![]);
+            assert!(p.get("datasetFileNaming").is_none(), "{destination}: {p}");
+            assert!(p.get("destinationFolder").is_none(), "{destination}: {p}");
+        }
+        d.fields["destination"] = json!("folder");
         d.fields["source"] = json!("folder");
         assert!(params(&d, "Test", vec![]).get("datasetFileNaming").is_none());
     }

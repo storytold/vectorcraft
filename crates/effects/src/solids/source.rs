@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeKind};
-use vectorcraft_geom::{FillRule, PathData, Rect};
+use vectorcraft_geom::{FillRule, PathData, Point, Rect, SubPath};
 use vectorcraft_pathops as po;
 
 use super::{MAX_MEMBERS, Scope, geometry, is_container, members, profile, region, reshape_members, solid_paints};
@@ -23,6 +23,19 @@ const MAX_DEPTH: usize = 64;
 /// repeats that symbol's art at every level, so art with few visible objects can still take this
 /// many steps.
 pub(super) const MAX_WORK: usize = 1 << 18;
+
+/// The most times resolving one 3D effect's art may cut an image's frame to a clipping path to
+/// learn whether the clip shows any of it ([`Resolver::hidden`]).
+pub(super) const MAX_IMAGE_CUTS: usize = 1024;
+
+/// The area, in square points, under which what a clip shows of an image's frame counts as nothing:
+/// the sliver left where the frame only touches the clipping path.
+const SHOWN_AREA: f64 = 1e-9;
+
+/// The precision an image's frame is cut to a clipping path with: the cut drops pieces narrower
+/// than this, so it is far below [`po::DEFAULT_PRECISION`], and a strip of the image much
+/// narrower than a hundredth of a point still counts as shown.
+const CUT_PRECISION: f64 = 1e-6;
 
 /// The error for an image a 3D effect is asked to build from.
 pub(crate) fn image_refusal(label: &str) -> String {
@@ -55,7 +68,7 @@ fn needs(n: &Node) -> bool {
 /// a clipping path too complex to cut the art with. `label` is the effect's name. The art is cut
 /// for the solid effect `n` carries ([`resolve_for`]).
 pub(crate) fn resolve<'a>(doc: Option<&Document>, n: &'a Node, label: &str) -> Result<Cow<'a, Node>, String> {
-    let every_fill = super::solid(&n.appearance.effects).is_some_and(|(_, fx)| fx.id == super::ROTATE);
+    let every_fill = super::solid(&n.appearance.effects).is_some_and(|(_, fx)| super::is_plane(&fx.id));
     resolve_for(doc, n, label, every_fill)
 }
 
@@ -66,7 +79,7 @@ pub(crate) fn resolve_for<'a>(doc: Option<&Document>, n: &'a Node, label: &str, 
     if !needs(n) {
         return Ok(Cow::Borrowed(n));
     }
-    let mut r = Resolver { doc, label, every_fill, leaves: 0, work: 0, shown: None };
+    let mut r = Resolver { doc, label, every_fill, leaves: 0, work: 0, cuts: 0, shown: None };
     let children = r.content(n, 0);
     #[cfg(test)]
     WORK.with(|w| w.set(r.work));
@@ -90,8 +103,18 @@ struct Resolver<'a> {
     leaves: usize,
     /// The objects visited or made so far, counted against [`MAX_WORK`].
     work: usize,
-    /// Inside clipping groups, the box of what their clipping paths show together.
-    shown: Option<Rect>,
+    /// The image frames cut to clipping paths so far, counted against [`MAX_IMAGE_CUTS`].
+    cuts: usize,
+    /// Inside clipping groups, what their clipping paths show together.
+    shown: Option<Shown>,
+}
+
+/// The clipping paths around the art being listed, outermost first, with the box of what they
+/// show together.
+#[derive(Clone)]
+struct Shown {
+    bounds: Rect,
+    clips: Vec<Arc<(PathData, FillRule)>>,
 }
 
 impl Resolver<'_> {
@@ -111,13 +134,50 @@ impl Resolver<'_> {
     /// `f` run on the art of `c`. The effects of an object or group can move its art into a clip,
     /// so inside one with effects no image is left out for lying outside the clip ([`Self::shown`]).
     fn inside<T>(&mut self, c: &Node, f: impl FnOnce(&mut Self) -> Result<T, String>) -> Result<T, String> {
-        let outer = self.shown;
-        if has_effects(c) {
-            self.shown = None;
+        if !has_effects(c) {
+            return f(self);
         }
+        let outer = self.shown.take();
         let out = f(self);
         self.shown = outer;
         out
+    }
+
+    /// Does the plain image `c` lie wholly outside what the clips around it show together, each
+    /// clipping path with its own fill rule? Its frame, the pixel rectangle as its transform places
+    /// it, is cut to each clip in turn until nothing is left. An error when a cut fails or the cuts
+    /// pass [`MAX_IMAGE_CUTS`]: the image may show, so it can't be left out.
+    fn hidden(&mut self, c: &Node) -> Result<bool, String> {
+        let Some(shown) = &self.shown else { return Ok(false) };
+        let NodeKind::Image(im) = &c.kind else { return Ok(false) };
+        let Some(b) = c.visual_bounds() else { return Ok(true) };
+        if b.intersect(shown.bounds).area() <= 0.0 {
+            return Ok(true);
+        }
+        let (w, h) = (f64::from(im.width), f64::from(im.height));
+        let corners = [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)].map(|(x, y)| im.xf * Point::new(x, y));
+        if corners.iter().any(|p| !p.x.is_finite() || !p.y.is_finite()) {
+            return Err(image_refusal(self.label));
+        }
+        let clips = shown.clips.clone();
+        let mut left = PathData::single(SubPath::polyline(&corners, true));
+        for clip in clips {
+            let Some(here) = clip.0.bounds() else { return Ok(true) };
+            if left.bounds().is_none_or(|l| l.intersect(here).area() <= 0.0) {
+                return Ok(true);
+            }
+            self.cuts += 1;
+            if self.cuts > MAX_IMAGE_CUTS {
+                return Err(self.too_much_work());
+            }
+            self.spend(1)?;
+            left =
+                po::try_boolean(&left, FillRule::NonZero, &clip.0, clip.1, po::BoolOp::Intersect, CUT_PRECISION).map_err(|_| self.too_complex())?;
+            if left.subpaths.iter().all(|s| s.area().abs() <= SHOWN_AREA) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// The art `n`, a symbol instance, a blend, a clipping group or layer, or a group holding one,
@@ -162,11 +222,15 @@ impl Resolver<'_> {
                 if clip_nested_past(first, MAX_DEPTH.saturating_sub(depth)) {
                     return Err(self.too_deep());
                 }
-                let clip = clip_area(first);
-                // An image wholly outside every clip around it shows nothing and is left out.
-                let outer = self.shown;
+                let clip = Arc::new(clip_area(first));
+                // An image wholly outside what the clips around it show together draws nothing and
+                // is left out.
                 let here = clip.0.bounds().unwrap_or(Rect::ZERO);
-                self.shown = Some(outer.map_or(here, |o| o.intersect(here)));
+                let outer = self.shown.take();
+                let mut inner_shown = outer.clone().unwrap_or(Shown { bounds: here, clips: vec![] });
+                inner_shown.bounds = inner_shown.bounds.intersect(here);
+                inner_shown.clips.push(clip.clone());
+                self.shown = Some(inner_shown);
                 let listed = self.list(rest, depth + 1);
                 self.shown = outer;
                 let (inner, _) = listed?;
@@ -191,15 +255,14 @@ impl Resolver<'_> {
         let mut changed = false;
         for c in children {
             self.spend(1)?;
-            if !c.visible || matches!(c.kind, NodeKind::Path { guide: true, .. }) {
+            if !c.visible || c.is_guide() {
                 continue;
             }
             if matches!(c.kind, NodeKind::Image(_)) {
                 // Only an image with no effects or fills and strokes of its own is measured by its
                 // frame; any other one may draw inside the clip.
                 let plain = !has_effects(c) && c.appearance.items.iter().all(|i| !i.visible());
-                let hidden = plain && self.shown.is_some_and(|k| c.visual_bounds().is_none_or(|b| b.intersect(k).area() <= 0.0));
-                if hidden {
+                if plain && self.hidden(c)? {
                     changed = true;
                     continue;
                 }
@@ -279,7 +342,7 @@ impl Resolver<'_> {
                 kids = nest(n, cut, 0);
             } else {
                 for c in n.children().into_iter().flatten() {
-                    if !c.visible || matches!(c.kind, NodeKind::Path { guide: true, .. }) {
+                    if !c.visible || c.is_guide() {
                         continue;
                     }
                     if let Some(c) = self.clipped(c, clip, depth + 1)? {
@@ -350,25 +413,22 @@ fn clip_area(first: &Node) -> (PathData, FillRule) {
 }
 
 /// `pieces`, each with the [`Scope`]s of the groups it was in, back in groups of `n`'s id with
-/// those groups' opacity and blending mode: consecutive pieces sharing the scope at `level` go into
-/// one group, so its transparency applies to them together. `level` stays below the nesting the
-/// pieces came from ([`nested_past`]).
+/// those groups' opacity, blending mode and opacity mask: consecutive pieces sharing the scope at
+/// `level` go into one group, so its transparency applies to them together. `level` stays below the
+/// nesting the pieces came from ([`nested_past`]).
 fn nest(n: &Node, pieces: Vec<(Vec<Scope>, Node)>, level: usize) -> Vec<Arc<Node>> {
     let mut out = vec![];
     let mut run: Vec<(Vec<Scope>, Node)> = vec![];
-    let mut key = None;
+    let mut key: Option<Scope> = None;
     let close = |run: &mut Vec<(Vec<Scope>, Node)>, scope: Option<Scope>, out: &mut Vec<Arc<Node>>| {
         let Some(scope) = scope else { return };
-        let mut g = Node::group(n.id, nest(n, std::mem::take(run), level + 1));
-        g.opacity = scope.opacity;
-        g.blend = scope.blend;
-        out.push(Arc::new(g));
+        out.push(Arc::new(scope.group(n.id, nest(n, std::mem::take(run), level + 1))));
     };
     for (scopes, piece) in pieces {
-        let here = scopes.get(level).copied();
-        if here.map(|s| s.key) != key.map(|s: Scope| s.key) {
-            close(&mut run, key, &mut out);
-            key = here;
+        let here = scopes.get(level).cloned();
+        if here.as_ref().map(|s| s.key) != key.as_ref().map(|s| s.key) {
+            close(&mut run, key.take(), &mut out);
+            key = here.clone();
         }
         match here {
             Some(_) => run.push((scopes, piece)),
@@ -437,12 +497,15 @@ fn shape(n: &Node, path: PathData, rule: FillRule, items: Vec<AppearanceItem>) -
     piece
 }
 
-/// A plain group of `children` with `n`'s id, visibility, opacity and blending mode.
+/// A plain group of `children` with `n`'s id, visibility, opacity, blending mode and opacity mask.
 fn wrap(n: &Node, children: Vec<Arc<Node>>) -> Node {
     let mut g = Node::group(n.id, children);
     g.name = n.name.clone();
     g.opacity = n.opacity;
     g.blend = n.blend;
+    if let Some(mask) = &n.extras().mask {
+        g.extras_mut().mask = Some(mask.clone());
+    }
     g
 }
 

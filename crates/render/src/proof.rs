@@ -10,7 +10,8 @@
 //!   Registration swatch print their tint on every plate, spot plates included.
 //!   Placed raster images show their pixels' process inks the same way ([`plate_image`]): a CMYK
 //!   image its own inks, an RGB one its pixels separated through the color settings. They carry
-//!   no spot ink; a colorized image takes its color's plates, as a fill of it does.
+//!   no spot ink; a colorized image takes its color's plates, as a fill of it does. An image
+//!   placed from a DCS file shows its own plates, spot plates included ([`plates_shown`]).
 //! * **Overprint Preview** (and Separations Preview, which implies it): fills and strokes that
 //!   overprint ([`vectorcraft_doc::FillLayer::overprint`], characters' too) are drawn with
 //!   Darken, which approximates their inks printing over the inks below: a zero ink lets the
@@ -82,6 +83,10 @@ fn plate_color(doc: &Document, c: &Cms, proof: &ProofSetup, visible: &[String], 
 /// profiles. Each table is made when an image first needs it.
 pub(crate) struct PlateLut {
     proof: ProofSetup,
+    /// The document's solid swatches: name, whether it is a spot color, and its color. An image
+    /// placed from a DCS file shows a spot plate on its own ink only when it is one of the spot
+    /// ones, in that swatch's color, and else as the swatch of its name ([`plates_shown`]).
+    swatches: Vec<(String, bool, Color)>,
     cms: Arc<Cms>,
     /// [`cms::profiles_generation`].
     profiles: u64,
@@ -107,20 +112,29 @@ static PLATE_LUTS: Mutex<Vec<Arc<PlateLut>>> = Mutex::new(Vec::new());
 /// The last [`PlateLut::generation`] handed out.
 static PLATE_GENERATION: AtomicU64 = AtomicU64::new(0);
 
-/// The tables placed images show Separations Preview's visible plates through with `opts`, or
-/// `None` when it is off.
-pub(crate) fn plate_lut(opts: &RenderOptions) -> Option<Arc<PlateLut>> {
+/// The tables the placed images of `doc` show Separations Preview's visible plates through with
+/// `opts`, or `None` when it is off.
+pub(crate) fn plate_lut(opts: &RenderOptions, doc: &Document) -> Option<Arc<PlateLut>> {
     let proof = opts.proof.as_ref().filter(|p| p.separations.is_some())?;
     let (c, profiles) = (cms::active(), cms::profiles_generation());
+    // The spot ones are the spot plates of `vectorcraft_doc::inks::plates`; their colors are part
+    // of the tables' identity, so a swatch edit shows.
+    let swatches: Vec<(String, bool, Color)> = doc
+        .swatches_iter()
+        .filter_map(|s| match &s.paint {
+            vectorcraft_color::Paint::Solid { color, .. } => Some((s.name.clone(), s.spot, doc.linked_color(*color, s.spot))),
+            _ => None,
+        })
+        .collect();
     let mut luts = PLATE_LUTS.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(l) = luts.iter().find(|l| Arc::ptr_eq(&l.cms, &c) && l.profiles == profiles && l.proof == *proof) {
+    if let Some(l) = luts.iter().find(|l| Arc::ptr_eq(&l.cms, &c) && l.profiles == profiles && l.proof == *proof && l.swatches == swatches) {
         return Some(l.clone());
     }
     if luts.len() >= 4 {
         luts.remove(0);
     }
     let generation = PLATE_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
-    let l = Arc::new(PlateLut { proof: proof.clone(), cms: c, profiles, generation, rgb: OnceLock::new(), cmyk: OnceLock::new() });
+    let l = Arc::new(PlateLut { proof: proof.clone(), swatches, cms: c, profiles, generation, rgb: OnceLock::new(), cmyk: OnceLock::new() });
     luts.push(l.clone());
     Some(l)
 }
@@ -133,6 +147,11 @@ pub(crate) fn plate_image(lut: &PlateLut, key: &ImageKey, pm: &Pixmap, blob: Opt
     let want = ImageKey { plates: lut.generation, ..key.clone() };
     if let Some(p) = lookup(&want, touch) {
         return (want, p);
+    }
+    // An image placed from a DCS file shows its own plates, spot plates included.
+    if let Some(s) = blob.filter(|b| crate::ink::shows_own_inks(key) && b.is_separated()).and_then(ImageBlob::separated) {
+        let out = images::store().insert(want.clone(), Arc::new(plates_shown(lut, &s, pm)));
+        return (want, out);
     }
     let size = (u32::from(pm.width()), u32::from(pm.height()));
     let raw = crate::ink::key_inks(key, blob).filter(|i| (i.width, i.height) == size);
@@ -163,6 +182,117 @@ pub(crate) fn plate_image(lut: &PlateLut, key: &ImageKey, pm: &Pixmap, blob: Opt
     }
     let out = images::store().insert(want.clone(), Arc::new(out));
     (want, out)
+}
+
+/// The visible plates of separated image `s` drawn at the size of `pm` (each pixel the mean of the
+/// plate pixels it covers, [`Fit`]): with one spot plate visible its ink as a grey, else the
+/// visible process inks through `lut` with the visible spot inks multiplied on top, each in the
+/// color of the document's spot swatch of its ink. A spot plate whose ink the document has no spot
+/// swatch for shows on the process plates as it prints
+/// ([`vectorcraft_doc::separated::Separated::coverage_as`]): as the document's swatch of its name
+/// when there is one, else as the process equivalent its file gives.
+fn plates_shown(lut: &PlateLut, s: &vectorcraft_doc::separated::Separated, pm: &Pixmap) -> Pixmap {
+    let visible = lut.proof.separations.as_deref().unwrap_or_default();
+    let shown = |name: &str| visible.iter().any(|v| v == name);
+    let swatch = |name: &str| lut.swatches.iter().find(|(n, ..)| n == name);
+    let own = |name: &str| swatch(name).is_some_and(|(_, spot, _)| *spot);
+    let (w, h) = (usize::from(pm.width()).max(1), usize::from(pm.height()).max(1));
+    let fit = Fit::new(((s.width as usize).max(1), (s.height as usize).max(1)), (w, h));
+    let alone = match visible {
+        [one] if !PROCESS_PLATES.contains(&one.as_str()) => Some(s.plates.iter().find(|p| p.name == *one && own(&p.name))),
+        _ => None,
+    };
+    let spots: Vec<(&[u8], [f32; 3])> = s
+        .spots()
+        .filter(|p| own(&p.name) && shown(&p.name))
+        .map(|p| (p.data.as_slice(), swatch(&p.name).map_or_else(|| lut.cms.cmyk_to_srgb(p.cmyk, false), |(.., c)| lut.cms.display_rgb(c))))
+        .collect();
+    // The plates that print on the process plates, each with the process inks it stands for.
+    let process: Vec<(&[u8], [f32; 4])> = s
+        .plates
+        .iter()
+        .filter(|p| !p.spot() || !own(&p.name))
+        .map(|p| {
+            let inks = match swatch(&p.name) {
+                Some((.., c)) if p.spot() => lut.cms.to_cmyk(c, lut.proof.intent),
+                _ => p.cmyk,
+            };
+            (p.data.as_slice(), inks)
+        })
+        .collect();
+    let t = lut.cmyk.get_or_init(|| {
+        CmykLut::build(|inks| {
+            let [x, y, z] = lab::srgb_to_xyz(lut.shown(inks));
+            [x, y, z, 0.0]
+        })
+    });
+    let mut out = pm.clone();
+    for (at, o) in out.data_mut().iter_mut().enumerate() {
+        let ink = |data: &[u8]| fit.ink(data, at);
+        let rgb = match alone {
+            Some(p) => [1.0 - p.map_or(0.0, |p| ink(&p.data)); 3],
+            None => {
+                let mut clear = [1.0f32; 4];
+                for (data, inks) in &process {
+                    let a = ink(data);
+                    for (c, e) in clear.iter_mut().zip(inks) {
+                        *c *= 1.0 - a * e;
+                    }
+                }
+                let [x, y, z, _] = t.apply(clear.map(|c| 1.0 - c));
+                let mut rgb = lab::xyz_to_srgb([x, y, z]);
+                for (data, c) in &spots {
+                    let a = ink(data);
+                    for (v, c) in rgb.iter_mut().zip(c) {
+                        *v *= 1.0 - a * (1.0 - c);
+                    }
+                }
+                rgb
+            }
+        };
+        let [r, g, b] = rgb.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+        *o = PremulRgba8 { r, g, b, a: 255 };
+    }
+    out
+}
+
+/// Plates of `from` (width, height) pixels drawn at `to` pixels: each pixel the mean of the plate
+/// pixels it covers, so a reduced image (a smaller mip level) keeps the coverage the plate has; the
+/// nearest plate pixel when it covers less than one. It keeps only the spans of each column and
+/// row, not a copy of any plate.
+struct Fit {
+    /// The plate's width.
+    sw: usize,
+    /// The shown width.
+    w: usize,
+    /// The plate columns each shown column covers, `start..end`.
+    columns: Vec<(usize, usize)>,
+    /// The plate rows each shown row covers, `start..end`.
+    rows: Vec<(usize, usize)>,
+}
+
+impl Fit {
+    fn new((sw, sh): (usize, usize), (w, h): (usize, usize)) -> Self {
+        // The plate pixels each shown column or row covers: at least one.
+        // In 64 bits: a plate's width times the shown width may not fit 32 (the web build).
+        let span = |i: usize, n: usize, of: usize| {
+            let at = |i: usize| usize::try_from(i as u64 * of as u64 / n as u64).unwrap_or(of);
+            let start = at(i).min(of - 1);
+            (start, at(i + 1).clamp(start + 1, of))
+        };
+        Self { sw, w, columns: (0..w).map(|x| span(x, w, sw)).collect(), rows: (0..h).map(|y| span(y, h, sh)).collect() }
+    }
+
+    /// The ink of plate `data` at shown pixel `at` (row by row), from 0 to 1.
+    fn ink(&self, data: &[u8], at: usize) -> f32 {
+        let (Some(&(x0, x1)), Some(&(y0, y1))) = (self.columns.get(at % self.w), self.rows.get(at / self.w)) else { return 0.0 };
+        let mut sum = 0u64;
+        for row in y0..y1 {
+            sum += data.get(row * self.sw + x0..row * self.sw + x1).map_or(0, |r| r.iter().map(|&v| u64::from(v)).sum());
+        }
+        let n = ((y1 - y0) * (x1 - x0)) as u64;
+        sum as f32 / n as f32 / 255.0
+    }
 }
 
 /// The art a renderer drew with Overprint Preview or Separations Preview, kept for its next frame

@@ -2,13 +2,16 @@
 //! gamut checks and soft-proof transforms.
 //!
 //! * **RGB working spaces** are ICC matrix/shaper profiles via [`moxcms`] (sRGB, Wide Gamut RGB
-//!   (1998 primaries), Display P3, ProPhoto RGB) or user `.icc` files. Display output is sRGB.
+//!   (1998 primaries), Display P3, ProPhoto RGB) or user `.icc` files. Display output is sRGB;
+//!   the desktop canvas converts it into the display's own profile last ([`display`]).
 //! * **CMYK spaces:** [`GENERIC_CMYK`] is our own documented parametric press model
 //!   ([`generic`]); [`DEVICE_CMYK`] is the old profile-free formula (kept for exact legacy numbers);
 //!   any CMYK `.icc` the user loads goes through `moxcms` (LUT-based profiles).
-//! * The **active settings** (Edit → Color Settings) are process-wide; [`crate::Color::to_rgb`]
-//!   uses them. Code that needs deterministic numbers builds its own [`Cms`] with [`Cms::new`].
+//! * The **active settings** are process-wide: the working settings (Edit → Color Settings), with
+//!   the profiles [`use_document_profiles`] last put in place of the working spaces;
+//!   [`crate::Color::to_rgb`] uses them. Code that needs deterministic numbers builds its own [`Cms`] with [`Cms::new`].
 
+pub mod display;
 pub mod generic;
 pub mod icc;
 pub mod lab;
@@ -320,6 +323,9 @@ pub struct Cms {
     settings: ColorSettings,
     rgb: RgbSpace,
     cmyk: CmykSpace,
+    /// The working settings, when a document's assigned profiles take the place of their spaces
+    /// ([`use_document_profiles`]): a [`ProofTarget::WorkingCmyk`] proof simulates their CMYK space.
+    working: Option<Arc<Cms>>,
 }
 
 impl std::fmt::Debug for Cms {
@@ -330,7 +336,7 @@ impl std::fmt::Debug for Cms {
 
 impl Default for Cms {
     fn default() -> Self {
-        Self { settings: ColorSettings::default(), rgb: RgbSpace::Srgb, cmyk: CmykSpace::Generic(generic()) }
+        Self { settings: ColorSettings::default(), rgb: RgbSpace::Srgb, cmyk: CmykSpace::Generic(generic()), working: None }
     }
 }
 
@@ -338,7 +344,7 @@ impl Cms {
     /// Profiles named by a legacy name are stored under their current name.
     pub fn new(settings: &ColorSettings) -> Result<Self, CmsError> {
         let settings = ColorSettings { rgb: canonical_name(&settings.rgb).into(), cmyk: canonical_name(&settings.cmyk).into(), ..settings.clone() };
-        Ok(Self { rgb: rgb_space(&settings.rgb)?, cmyk: cmyk_space(&settings.cmyk)?, settings })
+        Ok(Self { rgb: rgb_space(&settings.rgb)?, cmyk: cmyk_space(&settings.cmyk)?, settings, working: None })
     }
     pub fn settings(&self) -> &ColorSettings {
         &self.settings
@@ -527,7 +533,7 @@ impl Cms {
         }
     }
 
-    /// Gamut warning: can this colour be printed in the working CMYK space?
+    /// Gamut warning: can this color be printed in this context's CMYK space?
     pub fn out_of_gamut(&self, c: &Color) -> bool {
         self.gamut_error(c) > GAMUT_THRESHOLD
     }
@@ -542,8 +548,9 @@ impl Cms {
             ProofTarget::Deuteranopia => simulate_cvd(srgb, &DEUTERANOPIA),
             ProofTarget::Tritanopia => TRITANOPIA.simulate(srgb),
             ProofTarget::WorkingCmyk => {
-                let cmyk = self.srgb_to_cmyk(srgb, proof.intent);
-                self.cmyk_to_srgb(cmyk, proof.simulate_paper)
+                let working = self.working_cms();
+                let cmyk = working.srgb_to_cmyk(srgb, proof.intent);
+                working.cmyk_to_srgb(cmyk, proof.simulate_paper)
             }
             ProofTarget::Cmyk(name) => match cmyk_space(name) {
                 Ok(sp) => {
@@ -555,20 +562,29 @@ impl Cms {
         }
     }
 
-    /// Display sRGB of CMYK inks in the proof's CMYK space (the working space for RGB targets).
+    /// Display sRGB of CMYK inks in the proof's CMYK space (this context's CMYK space for RGB
+    /// targets).
     pub fn proof_cmyk_to_srgb(&self, cmyk: [f32; 4], proof: &ProofSetup) -> [f32; 3] {
         match &proof.target {
             ProofTarget::Cmyk(name) => match cmyk_space(name) {
                 Ok(sp) => Self::cmyk_to_srgb_in(&sp, cmyk, proof.simulate_paper, self.settings.bpc),
                 Err(_) => self.cmyk_to_srgb(cmyk, proof.simulate_paper),
             },
+            ProofTarget::WorkingCmyk => self.working_cms().cmyk_to_srgb(cmyk, proof.simulate_paper),
             _ => self.cmyk_to_srgb(cmyk, proof.simulate_paper),
         }
     }
 
+    /// The context of the working settings: the one [`use_document_profiles`] put a document's
+    /// profiles in place of, else this one.
+    fn working_cms(&self) -> &Cms {
+        self.working.as_deref().unwrap_or(self)
+    }
+
     /// A cached 3-D lookup table implementing [`Cms::proof_srgb`] for 8-bit pixels.
     pub fn proof_lut(&self, proof: &ProofSetup) -> Arc<ProofLut> {
-        let key = format!("{:?}|{:?}|{:?}|{}", self.settings, proof.target, proof.intent, proof.simulate_paper);
+        let working = self.working.as_ref().map(|w| &w.settings);
+        let key = format!("{:?}|{working:?}|{:?}|{:?}|{}", self.settings, proof.target, proof.intent, proof.simulate_paper);
         let mut cache = PROOF_CACHE.lock().unwrap_or_else(|e| e.into_inner());
         if let Some((_, l)) = cache.iter().find(|(k, _)| *k == key) {
             return l.clone();
@@ -890,10 +906,12 @@ impl CmykLut {
 // ---------- the active (process-wide) settings ----------
 
 static ACTIVE: RwLock<Option<Arc<Cms>>> = RwLock::new(None);
+static WORKING: RwLock<Option<Arc<Cms>>> = RwLock::new(None);
 static RGB_IS_SRGB: AtomicBool = AtomicBool::new(true);
 static CMYK_IS_DEVICE: AtomicBool = AtomicBool::new(false);
 
-/// The active colour-management context (Edit → Color Settings).
+/// The active color-management context: the working settings, with the profiles
+/// [`use_document_profiles`] last put in place of the working spaces.
 pub fn active() -> Arc<Cms> {
     if let Some(c) = ACTIVE.read().unwrap_or_else(|e| e.into_inner()).as_ref() {
         return c.clone();
@@ -906,13 +924,62 @@ pub fn active_settings() -> ColorSettings {
     active().settings.clone()
 }
 
-/// Replace the active settings (fails, leaving them unchanged, if a profile is unknown).
+/// The color-management context of Edit → Color Settings (the working spaces, intent and black
+/// point compensation), as [`set_active`] last set them, whatever profiles a document is assigned.
+pub fn working() -> Arc<Cms> {
+    if let Some(c) = WORKING.read().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        return c.clone();
+    }
+    let mut w = WORKING.write().unwrap_or_else(|e| e.into_inner());
+    w.get_or_insert_with(|| Arc::new(Cms::default())).clone()
+}
+
+/// The settings of [`working`].
+pub fn working_settings() -> ColorSettings {
+    working().settings.clone()
+}
+
+/// Replace the working settings (Edit → Color Settings) and make them the active settings (fails,
+/// leaving both unchanged, if a profile is unknown).
 pub fn set_active(settings: &ColorSettings) -> Result<(), CmsError> {
-    let cms = Cms::new(settings)?;
+    let cms = Arc::new(Cms::new(settings)?);
+    *WORKING.write().unwrap_or_else(|e| e.into_inner()) = Some(cms.clone());
+    install(cms);
+    Ok(())
+}
+
+/// Make the working settings the active settings, with the profiles a document is assigned
+/// (`None`: none) in place of the working spaces. An assigned profile that is not available, or
+/// is not of its model, leaves the working space. The working settings stay as they are. True when
+/// the active settings changed.
+pub fn use_document_profiles(rgb: Option<&str>, cmyk: Option<&str>) -> bool {
+    let working = working();
+    let mut st = working.settings.clone();
+    if let Some(p) = rgb.and_then(profile).filter(|p| p.kind == ProfileKind::Rgb) {
+        st.rgb = p.name;
+    }
+    if let Some(p) = cmyk.and_then(profile).filter(|p| p.kind == ProfileKind::Cmyk) {
+        st.cmyk = p.name;
+    }
+    if st == active().settings {
+        return false;
+    }
+    if st == working.settings {
+        install(working);
+        return true;
+    }
+    // The working settings were checked when they were set; a working profile removed since then
+    // leaves the active settings as they are.
+    let Ok(mut cms) = Cms::new(&st) else { return false };
+    cms.working = Some(working);
+    install(Arc::new(cms));
+    true
+}
+
+fn install(cms: Arc<Cms>) {
     RGB_IS_SRGB.store(cms.rgb_is_srgb(), Ordering::Relaxed);
     CMYK_IS_DEVICE.store(matches!(cms.cmyk, CmykSpace::Device), Ordering::Relaxed);
-    *ACTIVE.write().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(cms));
-    Ok(())
+    *ACTIVE.write().unwrap_or_else(|e| e.into_inner()) = Some(cms);
 }
 
 /// Fast path for [`Color::to_rgb`]: RGB colours need no conversion while the working space is sRGB.

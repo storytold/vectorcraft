@@ -1,5 +1,6 @@
 //! The document walk: each visible object becomes DXF entities on its layer's DXF layer, in paint
-//! order. Fills are their outlines then solid hatches (the outlines alone in R12), strokes
+//! order. Fills are their outlines then solid hatches (the outlines alone in R12 or with
+//! hatches left out), placed images are linked image files unless left out, strokes
 //! polylines (with bulges for circular arcs) and cubic splines with a lineweight and dashes, or
 //! filled outlines where the look needs them.
 
@@ -28,6 +29,8 @@ const NO_TRUE_COLOR: &str = "true colour needs DXF 2004 or later: colours are wr
 const NO_TRANSPARENCY: &str = "transparency needs DXF 2004 or later: transparent objects are written opaque";
 const NO_FILLS: &str = "DXF R12 has no fills: filled areas are written as their outlines";
 const NO_IMAGES: &str = "DXF R12 has no images: placed images are left out";
+const IMAGES_OFF: &str = "placed images are left out (Include Placed Images is off)";
+const HATCHES_OFF: &str = "fill hatches are left out: filled areas are written as their outlines (Include Fill Hatches is off)";
 const WIDE_LINES: &str =
     "lines wider than 2.11 mm (the widest lineweight) are written at 2.11 mm: Alter Paths for Appearance writes their true width";
 const STROKE_EXTRAS: &str = "stroke alignment, width profiles, arrowheads and brushes are left out (Maximize Editability writes strokes as lines)";
@@ -339,6 +342,32 @@ fn subpaths(bp: &BezPath) -> Vec<Sub> {
     out
 }
 
+/// `bp` with each open subpath that can enclose an area closed, as a fill closes it: two or more
+/// segments, or one curve. A single straight segment stays open.
+fn closed_fill(bp: &BezPath) -> BezPath {
+    let mut out = BezPath::new();
+    let (mut segs, mut curved) = (0usize, false);
+    let close = |out: &mut BezPath, segs: usize, curved: bool| {
+        if segs >= 2 || (segs == 1 && curved) {
+            out.close_path();
+        }
+    };
+    for el in bp.elements() {
+        match *el {
+            PathEl::MoveTo(_) => {
+                close(&mut out, segs, curved);
+                (segs, curved) = (0, false);
+            }
+            PathEl::ClosePath => (segs, curved) = (0, false),
+            PathEl::LineTo(_) => segs += 1,
+            PathEl::QuadTo(..) | PathEl::CurveTo(..) => (segs, curved) = (segs + 1, true),
+        }
+        out.push(*el);
+    }
+    close(&mut out, segs, curved);
+    out
+}
+
 /// The most pixels of an image written (it is held decoded, as RGBA and encoded at once).
 const MAX_IMAGE_PIXELS: u64 = 64 << 20;
 
@@ -491,6 +520,8 @@ pub(crate) struct Scene<'a> {
     /// Image keys → index into `images` (`None`: left out).
     by_key: HashMap<String, Option<usize>>,
     warnings: Vec<String>,
+    /// What was left out because an option asked for it ([`DxfOutput::setting_notes`]).
+    setting_notes: Vec<String>,
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
     extents: Option<[f64; 4]>,
     /// The opacity of the containers around the current object.
@@ -525,6 +556,7 @@ impl<'a> Scene<'a> {
             files: vec![],
             by_key: HashMap::new(),
             warnings: vec![],
+            setting_notes: vec![],
             brushes: None,
             extents: None,
             opacity: 1.0,
@@ -559,12 +591,21 @@ impl<'a> Scene<'a> {
             metric: matches!(self.o.unit, Unit::Millimeters | Unit::Centimeters | Unit::Meters),
             next: self.next,
         };
-        DxfOutput { bytes: drawing.write().into_bytes(), images: self.files, warnings: self.warnings }
+        DxfOutput { bytes: drawing.write().into_bytes(), images: self.files, warnings: self.warnings, setting_notes: self.setting_notes }
     }
 
+    /// Note `w`, once, about something of the document that the drawing leaves out or that reaches
+    /// it changed. A note about an option goes to [`Self::note_setting`].
     fn warn(&mut self, w: &str) {
         if !self.warnings.iter().any(|x| x == w) {
             self.warnings.push(w.to_string());
+        }
+    }
+
+    /// Note `w`, once, about something left out because an option turns it off.
+    fn note_setting(&mut self, w: &str) {
+        if !self.setting_notes.iter().any(|x| x == w) {
+            self.setting_notes.push(w.to_string());
         }
     }
 
@@ -583,7 +624,8 @@ impl<'a> Scene<'a> {
     }
 
     fn node(&mut self, n: &Node, force: bool) {
-        if let NodeKind::Layer { template: true, .. } = n.kind {
+        // Ruler guides draw on screen only: no entity and no loss warning.
+        if n.is_ruler_guide() || n.is_template() {
             return;
         }
         // Symbols that hold symbols are written in full for each instance: depth alone doesn't
@@ -630,7 +672,7 @@ impl<'a> Scene<'a> {
                 self.shape(n, &bp, *rule);
             }
             NodeKind::Text(t) => self.text(n, t),
-            NodeKind::Image(im) => self.image(im),
+            NodeKind::Image(im) => self.image(&self.doc.shown_image(n, im)),
             NodeKind::SymbolInstance { symbol, xf } => {
                 let doc = self.doc;
                 if self.symbol_nodes >= vectorcraft_doc::MAX_SYMBOL_NODES {
@@ -676,6 +718,8 @@ impl<'a> Scene<'a> {
                     self.node(c, false);
                 }
             }
+            // Ruler guides draw on screen only.
+            NodeKind::RulerGuide { .. } => {}
         }
         self.opacity = opacity;
     }
@@ -875,13 +919,13 @@ impl<'a> Scene<'a> {
         Some(vectorcraft_brush::stroke_pieces(doc, b, bp, st))
     }
 
-    /// A filled area as its outlines followed by a solid hatch (R12: the outlines alone). Laser
-    /// and cutter software reads the outlines and skips hatches. `clean`: the path has no
+    /// A filled area as its outlines followed by a solid hatch (R12, or with hatches left out: the
+    /// outlines alone). Laser and cutter software reads the outlines and skips hatches. `clean`: the path has no
     /// overlaps, so the hatch's even-odd rule reads it as it is.
     fn area(&mut self, bp: &BezPath, rule: FillRule, style: &EntityStyle, clean: bool) {
         if !self.o.version.handles() {
             self.warn(NO_FILLS);
-            self.lines(bp, style, 0.0);
+            self.lines(&closed_fill(bp), style, 0.0);
             return;
         }
         let several = bp.elements().iter().filter(|e| matches!(e, PathEl::MoveTo(_))).count() > 1;
@@ -890,11 +934,17 @@ impl<'a> Scene<'a> {
             .flatten()
             .map(|p| p.to_bezpath());
         let outline = normalized.as_ref().unwrap_or(bp);
+        // A fill with no loop of three points or more encloses no area: no outline and no hatch.
         let loops: Vec<Vec<Point>> = polygons(outline).into_iter().filter(|p| p.len() >= 3).collect();
         if loops.is_empty() {
             return;
         }
-        self.lines(outline, style, 0.0);
+        // The outlines close as the fill does, so an open path's fill keeps its closing edge.
+        self.lines(&closed_fill(outline), style, 0.0);
+        if !self.o.include_hatches {
+            self.note_setting(HATCHES_OFF);
+            return;
+        }
         let h = self.handle();
         let layer = self.layer.clone();
         self.e.entity("HATCH", h, fixed::MODEL_RECORD, &layer, style, "AcDbHatch");
@@ -1280,6 +1330,10 @@ impl<'a> Scene<'a> {
     fn image(&mut self, im: &ImageObject) {
         if !self.o.version.handles() {
             self.warn(NO_IMAGES);
+            return;
+        }
+        if !self.o.include_images {
+            self.note_setting(IMAGES_OFF);
             return;
         }
         let Some(i) = self.image_def(im) else { return };

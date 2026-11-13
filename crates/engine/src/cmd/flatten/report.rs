@@ -12,7 +12,9 @@ pub(super) fn target_roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     let mut ids = vec![];
     for id in targets(s, p)? {
         match d.node(id) {
-            Some(n) if n.is_layer() => ids.extend(n.children().into_iter().flatten().map(|c| c.id)),
+            // Ruler guides are not art: they stay where they are.
+            Some(n) if n.is_layer() => ids.extend(n.children().into_iter().flatten().filter(|c| !c.is_ruler_guide()).map(|c| c.id)),
+            Some(n) if n.is_ruler_guide() => {}
             Some(_) => ids.push(id),
             None => {}
         }

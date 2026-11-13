@@ -28,7 +28,7 @@
 //! Direct Selection also edits a blend's spine: drag its points (Shift-click picks several, which
 //! drag together; a key object on a point moves with it) and, once a point is clicked, its
 //! handles; and the points of selected gradient meshes
-//! and mesh envelopes and their handles ([`MeshEdit`]): Shift-clicks and the marquee pick several,
+//! and of mesh and warp envelopes and their handles ([`MeshEdit`]): Shift-clicks and the marquee pick several,
 //! a click on a gradient mesh's line picks its two ends and one inside a patch the four points
 //! around it, a drag of picked points moves them all, the arrow keys nudge them, and a solid fill
 //! colour or the Transparency panel's opacity goes to a gradient mesh's picked points. Dragging a
@@ -66,7 +66,7 @@ use crate::meshedit::{MeshEdit, grid_of};
 use crate::pathtype::{self, BracketDrag, near_bracket};
 use crate::rulerguide::GuideEdit;
 use crate::select::{MoveSnap, hit_center, hold_point, is_area_type, is_path_type, matrix_json, release_guide_at, selection_bounds};
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
+use crate::{Action, Cursor, Mods, Overlay, PixelOp, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Clone, Debug)]
 enum State {
@@ -492,7 +492,7 @@ fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, us
             break;
         }
         if let Some(pd) = cx.doc.node(id).and_then(editable_path)
-            && let Some((si, ai, a)) = nearest_anchor(&pd, p, tol)
+            && let Some((si, ai, a)) = nearest_anchor(&pd, p, tol, cx.selection.partial(id))
         {
             return Some((id, si, ai, a));
         }
@@ -524,7 +524,7 @@ fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, us
             return None;
         }
         let pd = cx.doc.node(id).and_then(editable_path)?;
-        nearest_anchor(&pd, p, tol).map(|(si, ai, a)| (id, si, ai, a))
+        nearest_anchor(&pd, p, tol, None).map(|(si, ai, a)| (id, si, ai, a))
     })
 }
 
@@ -535,9 +535,14 @@ fn over_path_type_anchor(cx: &ToolContext, p: Point) -> bool {
     hit_anchor(cx, p, cx.point_tol()).is_some_and(|(id, ..)| cx.doc.node(id).is_some_and(is_path_type))
 }
 
-/// The anchor of `pd` within `tol` of `p` nearest to it: (subpath, anchor, where it is).
-fn nearest_anchor(pd: &PathData, p: Point, tol: f64) -> Option<(usize, usize, Point)> {
-    pd.anchors().map(|(si, ai, a)| (si, ai, a.p)).filter(|(.., a)| a.distance(p) <= tol).min_by(|x, y| x.2.distance(p).total_cmp(&y.2.distance(p)))
+/// The anchor of `pd` within `tol` of `p` nearest to it: (subpath, anchor, where it is). Of anchors
+/// on top of each other, such as the two ends a cut leaves, one in `picked` comes first.
+fn nearest_anchor(pd: &PathData, p: Point, tol: f64, picked: Option<&BTreeSet<AnchorRef>>) -> Option<(usize, usize, Point)> {
+    let unpicked = |si: usize, ai: usize| !picked.is_some_and(|set| set.contains(&(si, ai)));
+    pd.anchors()
+        .map(|(si, ai, a)| (si, ai, a.p))
+        .filter(|(.., a)| a.distance(p) <= tol)
+        .min_by(|x, y| x.2.distance(p).total_cmp(&y.2.distance(p)).then_with(|| unpicked(x.0, x.1).cmp(&unpicked(y.0, y.1))))
 }
 
 /// An edge of an area type frame under `p`, topmost first: (text, the edge's two anchors).
@@ -1145,7 +1150,7 @@ fn hovered_anchor_with_hit(cx: &ToolContext, p: Point, hit: Option<&Hit>) -> Opt
     let under = hit.map(|h| cx.doc.node(h.leaf).and_then(|n| compound_part_at(n, p, tol)).unwrap_or(h.leaf));
     cx.selection.objects.iter().copied().filter(|id| in_scope(cx.doc, cx.isolation, *id)).chain(under).find_map(|id| {
         let path = cx.doc.node(id).and_then(editable_path)?;
-        nearest_anchor(&path, p, tol).map(|(.., a)| (id, a))
+        nearest_anchor(&path, p, tol, None).map(|(.., a)| (id, a))
     })
 }
 
@@ -1460,11 +1465,11 @@ impl DirectSelectionTool {
             }
             out.push(Action::Begin("Move".into()));
             self.state = State::MoveAnchors { start, grab, began: true, segment };
-            self.anchor_snap = Some(PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
+            self.anchor_snap = Some(PointSnap::moving(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
             self.line_end = line_end_leave(cx, grab);
             // A segment held by a point along it lands its anchors on the grid (the box round
             // them, an edge on a gridline on each axis), not that point (#3835).
-            let grid = segment && (cx.snap_to_grid || cx.snap_to_pixel);
+            let grid = segment && (cx.snap_to_grid || cx.snaps_to_pixel(PixelOp::Moving));
             self.partial_grid =
                 grid.then(|| MoveSnap::grid_only(vectorcraft_effects::preview::anchor_bounds_with(cx.selection, cx.doc, cx.bounds_measure())));
         }
@@ -1500,8 +1505,8 @@ impl DirectSelectionTool {
             // them and the objects selected whole (`path.moveAnchors`), as an anchor drag
             // does, while Alt is up; the other anchors of a partly selected path stay in
             // place. The history names the move or the copy at the end.
-            self.partial_snap = (!cx.selection.anchors.is_empty()).then(|| PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
-            let grid = self.partial_snap.is_some() && grab.is_none() && (cx.snap_to_grid || cx.snap_to_pixel);
+            self.partial_snap = (!cx.selection.anchors.is_empty()).then(|| PointSnap::moving(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
+            let grid = self.partial_snap.is_some() && grab.is_none() && (cx.snap_to_grid || cx.snaps_to_pixel(PixelOp::Moving));
             self.partial_grid =
                 grid.then(|| MoveSnap::grid_only(vectorcraft_effects::preview::anchor_bounds_with(cx.selection, cx.doc, cx.bounds_measure())));
             let copy = ev.mods.alt && self.partial_snap.is_none();
@@ -1509,8 +1514,8 @@ impl DirectSelectionTool {
             self.state = State::MoveObject { start, grab, hold, began: true, deselect: None };
             if grab.is_some() {
                 // Alt can go down or up at any time: gather both while nothing has moved.
-                self.anchor_snap = Some(PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
-                self.copy_snap = Some(PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, &Selection::default())));
+                self.anchor_snap = Some(PointSnap::moving(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
+                self.copy_snap = Some(PointSnap::moving(cx, || Targets::for_anchor_drag(cx.doc, &Selection::default())));
                 // As a move with the Selection tool does ([`MoveSnap::new`]).
                 let back = cx.smart_guides && !cx.snap_to_grid && cx.snap_to_last_location;
                 self.last_location = back.then(|| (Targets::last_location(cx), selection_bounds(cx)));

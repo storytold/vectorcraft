@@ -15,8 +15,8 @@
 //! commands a command runs, the steps of a `command.batch` or an `action.batch` included: a
 //! misspelled `widht` no longer runs the command with its default. So are the `params` of an
 //! effect (#1592): `effect.apply` and
-//! `effect.setParams` answer a key the effect doesn't take, or a value of another type than its
-//! default, with a parameter error ([`check_effect_params`]).
+//! `effect.setParams` answer a key the effect doesn't take, or a value of another type than the
+//! effect reads, with a parameter error ([`check_effect_params`]).
 //!
 //! A command with a parameter schema (`CommandSpec::schema`) is also checked against the schema
 //! before it runs ([`crate::schemas::check`]): the schema refuses a value of the wrong type or out
@@ -51,7 +51,7 @@ pub struct ParamKeys<'a> {
 
 /// The text between the braces of the object `doc` starts with and what follows it, or why it
 /// has none.
-fn object_body(doc: &str) -> std::result::Result<(&str, &str), String> {
+pub(crate) fn object_body(doc: &str) -> std::result::Result<(&str, &str), String> {
     // (Named, not written in the `Err`: these are for the tests of the descriptions, not messages
     // the app shows, which the message catalogs would have to translate.)
     let (no_object, not_closed) = ("the description doesn't start with the params object `{…}`", "the params object `{…}` isn't closed");
@@ -78,7 +78,7 @@ fn object_body(doc: &str) -> std::result::Result<(&str, &str), String> {
 }
 
 /// `s` split at each `sep` that is outside brackets, quotes and backticks.
-fn split_top(s: &str, sep: char) -> Vec<&str> {
+pub(crate) fn split_top(s: &str, sep: char) -> Vec<&str> {
     let (mut out, mut depth, mut quote, mut start) = (Vec::new(), 0usize, None, 0);
     for (i, c) in s.char_indices() {
         match (quote, c) {
@@ -98,7 +98,7 @@ fn split_top(s: &str, sep: char) -> Vec<&str> {
     out
 }
 
-fn is_key(s: &str) -> bool {
+pub(crate) fn is_key(s: &str) -> bool {
     let mut chars = s.chars();
     chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_') && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
@@ -170,6 +170,13 @@ fn accepted(doc: &'static str, depth: usize) -> Option<Vec<&'static str>> {
         }
     }
     Some(keys)
+}
+
+/// Every key the description `doc` takes, those of the commands its `…` entries name included, or
+/// `None` when that isn't known: it doesn't parse, a `…` entry names no command, or one names a
+/// command in [`UNCHECKED`].
+pub(crate) fn accepted_keys(doc: &'static str) -> Option<Vec<&'static str>> {
+    accepted(doc, 0)
 }
 
 /// Does the description `doc` name `key` as a parameter (its own keys, and those of the commands
@@ -263,15 +270,15 @@ pub(crate) fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError 
 }
 
 /// `params` of built-in effect `effect`, as command `id` was given them (#1592): only keys the
-/// effect takes (those of its dialog defaults and of its params description), each of its
-/// default's type, a `color` the effect can draw ([`check_effect_color`]) and a Levels or Curves
-/// `channel` the effect has ([`check_effect_channel`]). Numbers out of range pass: the effect
-/// clamps them when it draws. An effect plug-in resolves its own against its manifest, and an
-/// unknown effect is the command's to report.
+/// effect takes (those of its dialog defaults and of its params description), each of the type
+/// the effect reads ([`check_effect_types`]), a `color` the effect can draw ([`check_effect_color`])
+/// and a Levels or Curves `channel` the effect has ([`check_effect_channel`]). Numbers out of range
+/// pass: the effect clamps them when it draws. An installed effect plug-in's are checked against its
+/// manifest, and an unknown effect is the command's to report.
 pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()> {
     let Value::Object(given) = params else { return Ok(()) };
     if effect.starts_with(vectorcraft_plugins::effect::PREFIX) {
-        return Ok(());
+        return check_effect_types(id, effect, params);
     }
     let Some(info) = vectorcraft_render::effects::effect_info(effect) else { return Ok(()) };
     let defaults = info.defaults.as_object();
@@ -282,18 +289,10 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
             keys.push(key);
         }
     }
-    for (key, v) in given {
-        if !keys.contains(&key.as_str()) {
-            return Err(unknown(id, key, &keys));
-        }
-        match defaults.and_then(|d| d.get(key)) {
-            Some(Value::Number(_)) if !v.is_number() => return Err(bad(id, format!("`{key}` must be a number"))),
-            Some(Value::Bool(_)) if !v.is_boolean() => return Err(bad(id, format!("`{key}` must be true or false"))),
-            // (A colour is also taken as `[r, g, b]` or as a colour object.)
-            Some(Value::String(_)) if v.is_number() || v.is_boolean() => return Err(bad(id, format!("`{key}` must be a string"))),
-            _ => {}
-        }
+    if let Some(key) = given.keys().find(|k| !keys.contains(&k.as_str())) {
+        return Err(unknown(id, key, &keys));
     }
+    check_effect_types(id, effect, params)?;
     // An SVG filter's XML is one drawable <filter> element.
     if effect == vectorcraft_render::effects::SVG_FILTER
         && let Some(xml) = given.get("xml")
@@ -317,8 +316,69 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
     if effect == vectorcraft_render::effects::SVG_FILTER && given.contains_key("name") && !given.contains_key("xml") {
         return Err(bad(id, "an SVG filter is named by its id: give `xml` with `name`"));
     }
+    // A Warp's map is one this build draws: 0, the earlier map, or its style's Bézier net.
+    let newest = vectorcraft_render::effects::WARP_NET;
+    if effect.starts_with("warp.")
+        && let Some(v) = given.get("version")
+        && vectorcraft_render::effects::warp_version(v).is_none()
+    {
+        return Err(bad(id, format!("`version` must be 0 or {newest}")));
+    }
     check_effect_color(id, effect, params)?;
     check_effect_channel(id, effect, params)
+}
+
+/// The type of the values in `params` of effect `effect`, as command `id` was given them: a key
+/// the effect has a dialog default for takes a value of its default's type, a key only the
+/// effect's params description names takes the type the effect reads ([`undefaulted_type`]), and
+/// an installed effect plug-in's take the types its manifest gives them. The `style` of Crop Marks
+/// is `roman` or `japanese`. A number given as text (`"10 pt"`), `true` for a number, `1` for a
+/// switch and `null` for either are refused.
+fn check_effect_types(id: &str, effect: &str, params: &Value) -> Result<()> {
+    let Value::Object(given) = params else { return Ok(()) };
+    if effect.starts_with(vectorcraft_plugins::effect::PREFIX) {
+        return match vectorcraft_plugins::effect::installed(effect) {
+            Some(plugin) => plugin.manifest().resolve_params(params).map(drop).map_err(|why| bad(id, why.to_string())),
+            None => Ok(()),
+        };
+    }
+    let Some(info) = vectorcraft_render::effects::effect_info(effect) else { return Ok(()) };
+    for (key, v) in given {
+        let want = info.defaults.get(key).cloned().or_else(|| undefaulted_type(effect, key));
+        match want {
+            Some(Value::Number(_)) if !v.is_number() => return Err(bad(id, format!("`{key}` must be a number"))),
+            Some(Value::Bool(_)) if !v.is_boolean() => return Err(bad(id, format!("`{key}` must be true or false"))),
+            // (A colour is also taken as `[r, g, b]` or as a colour object.)
+            Some(Value::String(_)) if v.is_number() || v.is_boolean() => return Err(bad(id, format!("`{key}` must be a string"))),
+            _ => {}
+        }
+    }
+    // Crop Marks draw one of two styles.
+    if effect == vectorcraft_render::effects::CROP_MARKS
+        && let Some(style) = given.get("style")
+        && style.as_str().and_then(vectorcraft_doc::marks::MarkStyle::parse).is_none()
+    {
+        return Err(bad(id, "`style` must be roman or japanese"));
+    }
+    Ok(())
+}
+
+/// A value of the type effect `effect` reads for `key`, a parameter its params description names
+/// without a dialog default: the earlier 3D Perspective and light (`perspective`, `lightAzimuth`,
+/// `lightElevation`) and Scribble `variation` are numbers, an Outline Stroke's `width` is a number
+/// and a Gaussian Blur's `linear` is true or false. A Glass or Texturizer `textureImage`, an SVG
+/// filter's `name` and `xml`, a Warp's `version` and the `style` of Crop Marks have checks of their
+/// own; they aren't listed.
+pub(crate) fn undefaulted_type(effect: &str, key: &str) -> Option<Value> {
+    use vectorcraft_render::effects;
+    let number = || Some(Value::from(0.0));
+    match key {
+        "perspective" | "lightAzimuth" | "lightElevation" if effects::is_three_d(effect) => number(),
+        "variation" if effect == "stylize.scribble" => number(),
+        "width" if effect == "path.outlineStroke" => number(),
+        "linear" if effect == "blur.gaussian" => Some(Value::Bool(false)),
+        _ => None,
+    }
 }
 
 /// Can an effect read `v` as its `color`: a string [`Color::from_hex`] reads (`#rrggbb`, `#rgb`,
@@ -720,9 +780,7 @@ fn check_export_options(id: &str, params: &Value) -> Result<()> {
             NO_SAVE_FORMAT
         }
         "document.export" | "document.exportSelection" | "document.serialize" => {
-            // `richBlack` is Appearance of Black's setting for a raster export, and `params` an
-            // exporter plug-in's own.
-            keys.extend(["includeArtboardFill", "selectedOnly", "richBlack", "params"]);
+            keys.extend(super::fileio::EXPORT_PARAMS);
             keys.extend(FORMATS.iter().filter(|f| f.write).flat_map(|f| f.options).map(|o| o.name));
             NO_FORMAT
         }

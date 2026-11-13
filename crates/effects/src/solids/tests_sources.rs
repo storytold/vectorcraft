@@ -317,6 +317,86 @@ fn images_are_refused_alone_and_in_a_group_with_image_trace_named() {
     }
 }
 
+/// A clipping group: `art` inside a clipping path of `path` filled under `rule`.
+fn shaped_clip_group(id: u64, path: PathData, rule: FillRule, art: Vec<Node>) -> Node {
+    let mut clipping = Node::path(NodeId(id + 1), path, Appearance::default());
+    if let NodeKind::Path { clipping: c, rule: r, .. } = &mut clipping.kind {
+        *c = true;
+        *r = rule;
+    }
+    let children = std::iter::once(clipping).chain(art).map(Arc::new).collect();
+    Node::new(NodeId(id), NodeKind::Group { children, clip: true })
+}
+
+/// An image `width` by `height` pixels placed by `xf`.
+fn placed(id: u64, width: u32, height: u32, xf: Affine) -> Node {
+    let mut img = image(id);
+    if let NodeKind::Image(i) = &mut img.kind {
+        i.width = width;
+        i.height = height;
+        i.xf = xf;
+    }
+    img
+}
+
+#[test]
+fn an_image_inside_a_clips_box_but_outside_its_shape_is_left_out() {
+    let d = document();
+    let circle = || shapes::ellipse(Rect::new(100.0, 100.0, 200.0, 200.0));
+    let square = || shapes::rectangle(Rect::new(100.0, 100.0, 150.0, 150.0));
+    let at = |x: f64, y: f64| Affine::translate((x, y));
+    // Two circles inside each other's clips: they show together only the lens between them.
+    let lens = |art: Vec<Node>| {
+        let inner = shaped_clip_group(70, shapes::ellipse(Rect::new(120.0, 100.0, 220.0, 200.0)), FillRule::NonZero, art);
+        shaped_clip_group(80, shapes::ellipse(Rect::new(80.0, 100.0, 180.0, 200.0)), FillRule::NonZero, vec![inner])
+    };
+    let mut ring = shapes::rectangle(Rect::new(100.0, 100.0, 200.0, 200.0));
+    ring.subpaths.extend(shapes::rectangle(Rect::new(130.0, 130.0, 170.0, 170.0)).subpaths);
+    // Turned 45° about its center at (156, 156): its box reaches into the square's corner, and its
+    // frame does not.
+    let turned = at(156.0, 156.0) * Affine::rotate(std::f64::consts::FRAC_PI_4) * at(-5.0, -5.0);
+    // A shown rectangle and an image `w` by `h` at `xf` inside the clipping path `path`.
+    let clipped = |path: PathData, rule: FillRule, shown: Rect, (w, h, xf): (u32, u32, Affine)| {
+        shaped_clip_group(60, path, rule, vec![rect(62, shown.x0, shown.y0, shown.x1, shown.y1, 0.0), placed(63, w, h, xf)])
+    };
+    let middle = Rect::new(140.0, 140.0, 160.0, 160.0);
+    let band = Rect::new(100.0, 100.0, 110.0, 200.0);
+    let left_out = [
+        // In the corner of the circle's box, outside the circle.
+        ("a circle's corner", clipped(circle(), FillRule::NonZero, middle, (10, 10, at(100.0, 100.0)))),
+        ("a turned frame", clipped(square(), FillRule::NonZero, Rect::new(110.0, 110.0, 140.0, 140.0), (10, 10, turned))),
+        // Above the lens: inside each circle, outside both at once.
+        ("two clips' shared area", lens(vec![rect(62, 145.0, 140.0, 155.0, 160.0, 0.0), placed(63, 8, 3, at(146.0, 100.0))])),
+        ("an even-odd hole", clipped(ring.clone(), FillRule::EvenOdd, band, (10, 10, at(140.0, 140.0)))),
+    ];
+    let shown = [
+        ("part of the circle", clipped(circle(), FillRule::NonZero, middle, (10, 10, at(145.0, 145.0)))),
+        ("a non-zero hole", clipped(ring, FillRule::NonZero, band, (10, 10, at(140.0, 140.0)))),
+        // A strip 0.005 pt wide inside the square still shows.
+        ("a narrow strip", clipped(square(), FillRule::NonZero, Rect::new(110.0, 110.0, 140.0, 140.0), (10, 10, at(149.995, 120.0)))),
+        ("the lens", lens(vec![rect(62, 145.0, 140.0, 155.0, 160.0, 0.0), placed(63, 8, 3, at(146.0, 108.0))])),
+    ];
+    for id in TYPES {
+        for (what, g) in &left_out {
+            let n = with(g.clone(), id, json!({}));
+            assert_eq!(validate_three_d_in(Some(&d), &n, id, &json!({})), Ok(()), "{id}: {what}");
+            assert!(art(&d, &n, id).is_some(), "{id}: {what} draws");
+            assert!(three_d_meshes_in(Some(&d), &n).is_ok_and(|m| !m.is_empty()), "{id}: {what} exports");
+        }
+        for (what, g) in &shown {
+            let n = with(g.clone(), id, json!({}));
+            assert!(validate_three_d_in(Some(&d), &n, id, &json!({})).is_err_and(|e| e.contains("Image Trace")), "{id}: {what}");
+            assert!(art(&d, &n, id).is_none(), "{id}: {what}");
+        }
+    }
+    // Each frame cut to a clip counts: past the limit the art is refused, never left out unchecked.
+    let many: Vec<Node> = std::iter::once(rect(62, 140.0, 140.0, 160.0, 160.0, 0.0))
+        .chain((0..=source::MAX_IMAGE_CUTS as u64).map(|i| placed(100 + i, 10, 10, at(100.0, 100.0))))
+        .collect();
+    let n = with(shaped_clip_group(60, circle(), FillRule::NonZero, many), ROTATE, front());
+    assert!(validate_three_d_in(Some(&d), &n, ROTATE, &json!({})).is_err_and(|e| e.contains("too many objects")));
+}
+
 /// Symbols `L0` to `L{levels}`: `L0` holds `leaf`, each later one `fan` instances of the one
 /// before it.
 fn nested_symbols(levels: usize, fan: usize, leaf: Node) -> Document {
@@ -460,6 +540,113 @@ fn empty_sources_and_sources_inside_sources_build_or_refuse_cleanly() {
     let placed = with(instance(30, "Clipped", Affine::translate((200.0, 0.0))), ROTATE, front());
     let cut = with(Node::group(NodeId(30), vec![Arc::new(rect(31, 200.0, 0.0, 250.0, 100.0, 0.0))]), ROTATE, front());
     assert!(close(bounds(&solid_art_in(Some(&d), &placed).unwrap()), bounds(&solid_art(&cut).unwrap()), 0.01));
+}
+
+/// The id of the art of [`masked_by`]'s opacity masks.
+const MASK_ART: NodeId = NodeId(900);
+
+/// `n` with an opacity mask of white art covering `r`.
+fn masked_by(mut n: Node, r: Rect) -> Node {
+    let art = Node::path(MASK_ART, shapes::rectangle(r), Appearance::basic(Paint::solid(Color::WHITE), Paint::None, 0.0));
+    n.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true)));
+    n
+}
+
+/// The faces (paths) of `art`, and how many of them are inside an object [`masked_by`] masks with
+/// a mask that is not disabled.
+fn masked_faces(art: &Node) -> (usize, usize) {
+    fn walk(n: &Node, masked: bool, out: &mut (usize, usize)) {
+        let masked = masked || n.extras().mask.as_ref().is_some_and(|m| m.art.id == MASK_ART && !m.disabled);
+        match n.children() {
+            Some(children) => children.iter().for_each(|c| walk(c, masked, out)),
+            None => {
+                out.0 += 1;
+                out.1 += usize::from(masked);
+            }
+        }
+    }
+    let mut out = (0, 0);
+    walk(art, false, &mut out);
+    out
+}
+
+#[test]
+fn an_opacity_mask_on_a_member_or_a_group_in_a_three_d_group_masks_its_solids() {
+    let d = document();
+    let mask = Rect::new(0.0, 0.0, 400.0, 400.0);
+    let mut members = vec![("a path", rect(1, 100.0, 100.0, 150.0, 200.0, 2.0))];
+    members.extend(sources());
+    for (what, member) in members {
+        let other = || Arc::new(rect(91, 600.0, 600.0, 650.0, 650.0, 0.0));
+        let in_group = Node::group(NodeId(80), vec![Arc::new(member.clone())]);
+        let cases = [
+            ("masked", Node::group(NodeId(90), vec![Arc::new(masked_by(member.clone(), mask)), other()])),
+            ("in a masked group", Node::group(NodeId(90), vec![Arc::new(masked_by(in_group, mask)), other()])),
+        ];
+        for (how, g) in cases {
+            for id in TYPES {
+                let g = with(g.clone(), id, json!({}));
+                let (faces, masked) = masked_faces(&art(&d, &g, id).expect("drawn"));
+                assert!(masked > 0, "{id}: the faces of {what} {how} are masked");
+                assert!(masked < faces, "{id}: the other member's faces are not ({masked} of {faces})");
+            }
+        }
+        // A disabled mask masks nothing.
+        let mut off = masked_by(member.clone(), mask);
+        if let Some(m) = off.extras_mut().mask.as_mut() {
+            m.disabled = true;
+        }
+        for id in TYPES {
+            let g = with(Node::group(NodeId(90), vec![Arc::new(off.clone()), other()]), id, json!({}));
+            assert_eq!(masked_faces(&art(&d, &g, id).expect("drawn")).1, 0, "{id}: {what} with a disabled mask");
+        }
+    }
+}
+
+/// The leaf faces of `art` that draw something, each with its visual bounds and whether it is drawn
+/// inside a group with blending mode `mode`.
+fn faces_in_mode(art: &Node, mode: BlendMode) -> Vec<(Rect, bool)> {
+    fn walk(n: &Node, inside: bool, mode: BlendMode, out: &mut Vec<(Rect, bool)>) {
+        let inside = inside || (n.children().is_some() && n.blend == mode);
+        match n.children() {
+            Some(children) => children.iter().for_each(|c| walk(c, inside, mode, out)),
+            None => out.extend(n.visual_bounds().map(|b| (b, inside))),
+        }
+    }
+    let mut out = Vec::new();
+    walk(art, false, mode, &mut out);
+    out
+}
+
+#[test]
+fn a_blending_mode_on_a_member_or_a_group_in_a_three_d_group_applies_to_its_solids() {
+    let d = document();
+    let mode = |mut n: Node, mode: BlendMode| {
+        n.blend = mode;
+        n
+    };
+    let other = || Arc::new(rect(91, 600.0, 600.0, 650.0, 650.0, 0.0));
+    let member = || rect(1, 100.0, 100.0, 150.0, 200.0, 2.0);
+    let cases = [
+        ("a multiplied member", Node::group(NodeId(90), vec![Arc::new(mode(member(), BlendMode::Multiply)), other()])),
+        (
+            "a member of a multiplied group",
+            Node::group(NodeId(90), vec![Arc::new(mode(Node::group(NodeId(80), vec![Arc::new(member())]), BlendMode::Multiply)), other()]),
+        ),
+    ];
+    for (what, g) in cases {
+        for id in TYPES {
+            let g = with(g.clone(), id, json!({}));
+            // The member spans y 100 to 200 and the other member y 600 to 650, and every type keeps
+            // its faces near those heights (Revolve turns them around a vertical axis): a face whose
+            // center is above y 400 belongs to the member.
+            let (mine, others): (Vec<_>, Vec<_>) =
+                faces_in_mode(&art(&d, &g, id).expect("drawn"), BlendMode::Multiply).into_iter().partition(|(b, _)| b.center().y < 400.0);
+            assert!(!mine.is_empty() && !others.is_empty(), "{id}: both members draw faces ({} and {})", mine.len(), others.len());
+            assert!(mine.iter().all(|(_, m)| *m), "{id}: every face of {what} is drawn in Multiply");
+            assert!(others.iter().all(|(_, m)| !m), "{id}: no face of the other member is drawn in Multiply");
+        }
+    }
 }
 
 #[test]

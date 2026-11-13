@@ -12,6 +12,7 @@ use vectorcraft_geom::{Affine, PathData, Point, Rect, shapes};
 use crate::*;
 
 mod import;
+mod pict;
 
 /// Add `n` (with a fresh id) on top of `d`'s first layer.
 pub(crate) fn add(d: &mut Document, mut n: Node) {

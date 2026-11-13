@@ -3,6 +3,7 @@
 
 use serde_json::{Value, json};
 
+use super::TempFolder;
 use crate::{Backend, Headless, call_tool};
 
 fn text(r: &crate::ToolResult) -> Value {
@@ -39,18 +40,28 @@ fn an_option_no_format_takes_is_an_error() {
             assert!(e.contains(named), "{method}: {e}");
         }
     }
-    // One object can still carry several formats' options.
+    // One object can still carry several formats' options; the warnings name those the file
+    // doesn't read.
     let r = call_tool(&mut h, "export", &json!({"format": "pdf", "options": {"quality": 80, "styling": "style"}}));
     assert!(!r.is_error, "{r:?}");
+    let warnings = text(&r)["warnings"].clone();
+    for key in ["quality", "styling"] {
+        assert!(warnings.as_array().unwrap().contains(&json!(format!("`{key}` was not used: PDF files don't read it"))), "{warnings}");
+    }
+    // `app.export` and `file.export` give the same warning.
+    let params = json!({"format": "pdf", "quality": 80});
+    let note = json!("`quality` was not used: PDF files don't read it");
+    let r = h.call("app.export", params.clone()).unwrap();
+    assert!(r["warnings"].as_array().unwrap().contains(&note), "app.export: {r}");
+    let r = h.call("engine.execute", json!({"command": "file.export", "params": params})).unwrap();
+    assert!(r["warnings"].as_array().unwrap().contains(&note), "file.export: {r}");
 }
 
 /// `app.save`, `file.save` and `file.exportForScreens` refuse a key no format takes before they
 /// write anything.
 #[test]
 fn a_save_or_screens_option_no_format_takes_is_an_error() {
-    let dir = std::env::temp_dir().join(format!("vc-mcp-save-options-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = TempFolder::new("save-options");
     let mut h = Headless::new();
     h.call("engine.execute", json!({"command": "file.new", "params": {"width": 50, "height": 30}})).unwrap();
     let pdf = dir.join("a.pdf").to_string_lossy().into_owned();
@@ -71,9 +82,8 @@ fn a_save_or_screens_option_no_format_takes_is_an_error() {
         let e = h.call("engine.execute", json!({"command": "file.exportForScreens", "params": params})).unwrap_err();
         assert!(e.contains(named), "file.exportForScreens: {e}");
     }
-    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0, "nothing was written");
+    assert_eq!(std::fs::read_dir(&*dir).unwrap().count(), 0, "nothing was written");
     h.call("app.save", json!({"path": pdf})).unwrap();
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -97,8 +107,7 @@ fn raster_export_uses_document_resolution_unless_overridden() {
 #[test]
 fn export_with_a_range_writes_one_file_per_artboard() {
     let mut h = three_boards();
-    let dir = std::env::temp_dir().join(format!("vectorcraft-mcp-exportas-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = TempFolder::new("exportas");
     let path = dir.join("icon.png").to_string_lossy().to_string();
     let args = json!({"path": path, "range": "1, 3", "options": {"useArtboards": true, "ppi": 144, "background": "white"}});
     let r = text(&call_tool(&mut h, "export", &args));
@@ -120,5 +129,4 @@ fn export_with_a_range_writes_one_file_per_artboard() {
         let r = text(&call_tool(&mut h, "export", &json!({"format": format, "range": "1, 3"})));
         assert_eq!(r["files"].as_array().map(Vec::len), Some(2), "{format}: {r}");
     }
-    let _ = std::fs::remove_dir_all(dir);
 }

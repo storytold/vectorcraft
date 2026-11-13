@@ -41,7 +41,10 @@
 //!
 //! Colour layers are traced either *abutting* (each colour's own area; shapes share edges) or
 //! *overlapping* (stacked: each layer also covers the layers above it within the areas that hold
-//! its own color, so no hairline gaps).
+//! its own color, so no hairline gaps). With Fills and without Create Strokes, an overlapping shape
+//! is filled whole: the area of other colors that it encloses is traced on its own and drawn above
+//! it, so each enclosed outline is fitted once. An area that holds a transparent pixel or a color
+//! left out stays a hole.
 #![forbid(unsafe_code)]
 
 mod centerline;
@@ -51,6 +54,7 @@ mod gradient;
 mod group;
 mod logo;
 mod mosaic;
+mod opaque;
 mod quantize;
 mod shapes;
 mod smooth;
@@ -64,6 +68,7 @@ use vectorcraft_geom::PathData;
 pub use contour::{Component, Loop, trace_mask};
 pub use gradient::TracedGradient;
 pub use mosaic::mosaic;
+pub use opaque::{ALPHA_MAX_DECODE_BYTES, OUTLINE_MAX_ANCHORS, OUTLINE_MAX_PIXELS, decode_alpha, opaque_outline};
 pub use quantize::{FULL_TONE_MAX, Quantized, TRANSPARENT, denoise, quantize};
 pub use shapes::TracedShape;
 use subpixel::Crack;

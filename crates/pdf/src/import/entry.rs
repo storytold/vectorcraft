@@ -171,14 +171,22 @@ pub const INVISIBLE_TEXT_NOTE: &str = "invisible text (such as a scanned page's 
 /// Warning: glyphs that differ from the installed font of their name were kept as outlines.
 pub const UNMATCHED_GLYPHS_NOTE: &str = "text whose glyphs differ from the installed font of the same name was kept as outlines";
 
+/// Warning: type in a script whose letters reorder and join (Indic scripts) that, set again from
+/// its characters, wouldn't draw the glyphs where the file drew them was kept as outlines (#5235).
+pub const RESHAPED_TEXT_NOTE: &str =
+    "text that would not look as it does in the file if set as type (a script whose letters join) was kept as outlines";
+
 /// The end of the warning that glyphs whose characters the file doesn't name were kept as
 /// outlines, after "text in" and the font's name.
 pub const UNNAMED_CHARACTERS_NOTE: &str = "whose characters the file doesn't name (U+FFFD) was kept as outlines";
 
 /// Is `note` one of the warnings that glyphs were kept as outlines ([`OUTLINED_TEXT_NOTE`],
-/// [`UNMATCHED_GLYPHS_NOTE`], [`UNNAMED_CHARACTERS_NOTE`])?
+/// [`UNMATCHED_GLYPHS_NOTE`], [`RESHAPED_TEXT_NOTE`], [`UNNAMED_CHARACTERS_NOTE`])?
 pub fn is_outlines_note(note: &str) -> bool {
-    note == OUTLINED_TEXT_NOTE || note == UNMATCHED_GLYPHS_NOTE || note.starts_with("text in ") && note.ends_with(UNNAMED_CHARACTERS_NOTE)
+    note == OUTLINED_TEXT_NOTE
+        || note == UNMATCHED_GLYPHS_NOTE
+        || note == RESHAPED_TEXT_NOTE
+        || note.starts_with("text in ") && note.ends_with(UNNAMED_CHARACTERS_NOTE)
 }
 
 /// Is `n` glyphs kept as outlines (a path the import names `<Text Outlines>`)?
@@ -375,6 +383,7 @@ fn read_opened(
             show_video_safe_areas: false,
             video_ruler_pixel_aspect_ratio: 1.0,
             color: None,
+            guide_label: None,
         });
         let page_layer = |b: &mut Builder<'_>, art: Vec<Arc<Node>>, shown: bool| {
             let name = if shown { format!("Page {}", number + 1) } else { format!("Page {} (unsorted)", number + 1) };

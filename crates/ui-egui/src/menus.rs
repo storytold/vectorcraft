@@ -64,18 +64,18 @@ pub(crate) use bar::{home_key, home_showing};
 #[cfg(test)]
 use bar::{menu_body, pointer_reaches_title};
 pub use context::{context_items, context_menu_body, ruler_menu_body, ruler_unit_items};
-pub use entries::{MenuEntry, Row, context_entries, entry, menu_entries, pretty_shortcut, shown_shortcut};
+pub use entries::{
+    InsertableItem, MenuEntry, Row, context_entries, entry, insertable, insertable_items, menu_entries, plays_in_app, pretty_shortcut, shown_shortcut,
+};
 pub(crate) use invoke::graph_dialog;
 #[cfg(test)]
 pub(crate) use invoke::with_held_keys;
 pub use invoke::{click_target, invoke, invoke_from_system_menu};
-#[cfg(test)]
 pub(crate) use labels::lists_plugin;
-#[cfg(test)]
-use labels::shows_a_name;
+pub(crate) use labels::shows_a_name;
 pub use labels::{CONTEXT_LABELS, DYNAMIC_LABELS, display_label, dynamic_label, item_shortcut, menu_strings};
 pub use run::{check_params, run_ui_command};
-pub(crate) use run::{normalize_panel, opt_bool};
+pub(crate) use run::{normalize_panel, opt_bool, opt_index, opt_number};
 #[cfg(test)]
 use slots::RECENT_FONT_IDS;
 pub use state::{checked, enabled, plugin_revision, shortcut_of, shown_state};
