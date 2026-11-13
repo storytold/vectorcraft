@@ -4091,6 +4091,7 @@ theme	Appearance	Erscheinungsbild
 # (`untranslated_report` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	keine Bibliothek `{id}`
+@msg	the library has another item of that kind named `{name}`	die Bibliothek hat bereits ein anderes Element dieser Art namens `{name}`
 @msg	select some type first	wählen Sie zuerst Text aus
 @msg	kerning must be a number, "auto", or "optical"	kerning muss eine Zahl, „auto“ oder „optical“ sein
 @msg	the selection has no gradient fill	die Auswahl hat keinen Flächenverlauf
@@ -5125,6 +5126,8 @@ theme	Appearance	Erscheinungsbild
 	Rename Library Group	Bibliotheksgruppe umbenennen
 	Delete Library Group	Bibliotheksgruppe löschen
 	Move Library Item to Group	Bibliothekselement in Gruppe verschieben
+	Rename Library Item	Bibliothekselement umbenennen
+	Add to Character Styles	Zu Zeichenformaten hinzufügen
 	Import Library	Bibliothek importieren
 	Export Library	Bibliothek exportieren
 	New Group	Neue Gruppe
