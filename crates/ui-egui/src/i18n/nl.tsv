@@ -1789,6 +1789,8 @@ digits	Malayalam	Malayalam
 	Modified since it was read: {path}	Gewijzigd sinds het is ingelezen: {path}
 	No Thumbnails	Geen miniaturen
 	Nothing matches the Show filter.	Niets komt overeen met het weergavefilter.
+	Show DCS Transparency Interactions	DCS-transparantie-interacties weergeven
+	Transparent, or overlaps transparent objects: check its separations	Transparant of overlapt transparante objecten: controleer de scheidingen
 	PPI	PPI
 	Relink…	Opnieuw koppelen…
 	Find Linked Files	Gekoppelde bestanden zoeken
@@ -6054,6 +6056,13 @@ axis	Y Axis	Y-as
 @msg	Batch cannot play an action with a stop	Batch kan geen actie met een stop afspelen
 	Insert Menu Item…	Menu-item invoegen…
 	Insert Menu Item	Menu-item invoegen
+	Insert Select Path	Pad selecteren invoegen
+	Select Path	Pad selecteren
+@msg	select one whole path or compound path	selecteer één volledig pad of samengesteld pad
+@msg	select only one path	selecteer slechts één pad
+@msg	the path is hidden or locked, or cannot be selected here	het pad is verborgen of vergrendeld, of kan hier niet worden geselecteerd
+@msg	object {value} is not the stored path: it changed, or the document is another one	object {value} is niet het opgeslagen pad: het is gewijzigd, of het document is een ander
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` moet "v1:" zijn, gevolgd door 16 hexadecimale cijfers in kleine letters
 	Select Object…	Object selecteren…
 	Select Object	Object selecteren
 	Set Selection	Selectie instellen
