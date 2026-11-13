@@ -3,6 +3,9 @@ use super::{canvas, cursors, render_worker};
 /// Cached canvas raster.
 pub struct CanvasCache {
     pub renderer: vectorcraft_render::Renderer,
+    /// The text caret shown last (its ends' coordinates' bits) and when it got there (seconds,
+    /// egui's input time): it blinks from that moment (`blink_caret` in the canvas's overlays).
+    pub caret: Option<([u64; 4], f64)>,
     pub texture: Option<egui::TextureHandle>,
     pub key: Option<CacheKey>,
     /// The document the frame shown was rendered from, and the options it was rendered with, with

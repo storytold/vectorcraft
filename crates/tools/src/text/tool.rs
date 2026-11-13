@@ -671,12 +671,12 @@ impl Tool for TypeTool {
                 _ => {
                     let at = pe.range.start + pe.active.as_ref().map_or(pe.range.len(), |r| r.start);
                     let (p, q) = vectorcraft_text::caret_position(&lay, at.min(len));
-                    o.push(Overlay::Line { a: t.xf * p, b: t.xf * q, color: [0, 0, 0], dashed: false });
+                    o.push(Overlay::Caret { a: t.xf * p, b: t.xf * q });
                 }
             }
         } else if a == b {
             let (p, q) = vectorcraft_text::caret_position(&lay, self.caret.min(len));
-            o.push(Overlay::Line { a: t.xf * p, b: t.xf * q, color: [0, 0, 0], dashed: false });
+            o.push(Overlay::Caret { a: t.xf * p, b: t.xf * q });
         } else {
             for q in vectorcraft_text::selection_quads(&lay, a, b) {
                 o.push(Overlay::Highlight { quad: q.map(|p| t.xf * p), color: [60, 120, 255, 90] });

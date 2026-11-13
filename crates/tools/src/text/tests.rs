@@ -652,6 +652,30 @@ fn double_and_triple_click_select_word_and_paragraph() {
     assert_eq!(tool.sel(), (0, 10), "paragraph");
 }
 
+/// While editing with no text selected the caret is its own overlay, which the canvas blinks
+/// (#6406), at the caret's place; with text selected there is none.
+#[test]
+fn the_caret_is_an_overlay_of_its_own() {
+    let (d, id, mut tool) = editing("Blink");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let t = TypeTool::text(&c, id).unwrap().clone();
+    let lay = vectorcraft_text::layout(FontDb::global(), &t);
+    let (top, bot) = vectorcraft_text::caret_position(&lay, tool.sel().0);
+    let o = tool.overlays(&c);
+    let carets: Vec<_> = o.iter().filter(|o| matches!(o, Overlay::Caret { .. })).collect();
+    assert_eq!(carets, [&Overlay::Caret { a: t.xf * top, b: t.xf * bot }], "{o:?}");
+    assert!(!o.iter().any(|o| matches!(o, Overlay::Line { color: [0, 0, 0], .. })), "no black line besides it: {o:?}");
+    let (a, b) = (t.xf * top.midpoint(bot), {
+        let (p, q) = vectorcraft_text::caret_position(&lay, 3);
+        t.xf * p.midpoint(q)
+    });
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, a.x + 0.1, a.y));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, b.x + 0.1, b.y));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Up, b.x + 0.1, b.y));
+    assert!(!tool.overlays(&c).iter().any(|o| matches!(o, Overlay::Caret { .. })), "a selection has no caret");
+}
+
 #[test]
 fn drag_selects_and_overlay_highlights() {
     let (d, id, mut tool) = editing("Select me please");
