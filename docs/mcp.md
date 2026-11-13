@@ -4629,6 +4629,14 @@ tip, has more than 65,536 anchors in its art or in the shapes it paints, has sha
 or has more than 4,096 anchors once united is listed in `skipped`. `stroke.arrowheads.list` returns each head's `name`, `reach` and `halfWidth`, the `file`
 path, the `skipped` symbols and any read `error`.
 
+Under automation read roots (see the automation roots section above), the arrowheads file counts as a path the client
+did not give. `stroke.arrowheads.list` returns `file` as `null` when the file is outside the read roots, and its
+`error` names the file by its file name; the heads, `skipped` and the reason stay. `stroke.arrowheads.edit` and
+`stroke.arrowheads.reload` refuse a file outside the read roots with the root-check error, naming the file by its file
+name: `edit` then makes no folder or file and neither opens the file nor brings it to the front, and `reload` does not
+read it. Inside the read roots, `edit` opens the file under the client's roots. The Stroke panel menu's Edit
+Arrowheads… is not confined.
+
 `stroke.set {endArrow: {"custom": name}}` puts a custom head on a stroke. The stroke keeps a copy of the head's art,
 so the document draws it, saves it and exports it to SVG and PDF the same way without the arrowheads file.
 `document.inspect` reports such a head as `{"Custom": {name, path}}`, which `stroke.set` takes back unchanged. It
