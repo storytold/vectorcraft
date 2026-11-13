@@ -480,6 +480,8 @@ pub const LP_SELECT_WIDTH_RANGE: (f64, f64) = (1.0, 20.0);
 /// Select Strokes off, Alt-click selects the face under the pointer as a click does and a marquee
 /// takes no edges; with Select Fills off, a click selects the edge nearest the pointer as Alt-click
 /// does and a marquee takes no faces; with both off, a click or a marquee selects no face or edge.
+/// The pointer shows what a click at that point selects ([`LivePaintSelectionTool::pick_at`]): a
+/// face, an edge, or nothing. From the press to the release it keeps the look it had at the press.
 pub struct LivePaintSelectionTool {
     pub(super) cache: RegionCache,
     pub(super) hover: LpHover,
@@ -502,6 +504,8 @@ struct LpDrag {
     shift: bool,
     /// The face or edge under the press, which a click selects (or with Shift toggles).
     hit: Option<NodeId>,
+    /// The cursor at the press, which the drag keeps.
+    cursor: Cursor,
 }
 
 impl LpDrag {
@@ -537,6 +541,22 @@ impl LivePaintSelectionTool {
             (false, true) => Some(true),
             (false, false) => None,
         }
+    }
+
+    /// The face or edge a click at `p` selects, Alt held or not, with its cursor: the visible part of
+    /// the kind [`LivePaintSelectionTool::picks_edge`] asks for, of a Live Paint group the tool takes
+    /// ([`lp_part_at`], [`lp_selectable`]), and [`Cursor::LivePaintSelectFace`] or
+    /// [`Cursor::LivePaintSelectEdge`]; None and [`Cursor::LivePaintSelectOutside`] where a click
+    /// selects no face or edge.
+    fn pick_at(&self, cx: &ToolContext, p: Point, alt: bool) -> (Option<NodeId>, Cursor) {
+        let Some(edge) = self.picks_edge(alt) else { return (None, Cursor::LivePaintSelectOutside) };
+        let hit = lp_part_at(cx.doc, p, cx.tol(4.0), edge, &|id| lp_selectable(cx, id)).and_then(|(_, part)| part).map(|n| n.id);
+        let cursor = match (hit, edge) {
+            (None, _) => Cursor::LivePaintSelectOutside,
+            (Some(_), true) => Cursor::LivePaintSelectEdge,
+            (Some(_), false) => Cursor::LivePaintSelectFace,
+        };
+        (hit, cursor)
     }
 }
 
@@ -592,9 +612,8 @@ impl Tool for LivePaintSelectionTool {
                 vec![]
             }
             PointerKind::Down => {
-                let part = edge.and_then(|e| lp_part_at(cx.doc, p, cx.tol(4.0), e, &|id| lp_selectable(cx, id)));
-                let hit = part.and_then(|(_, part)| part).map(|n| n.id);
-                self.drag = Some(LpDrag { start: p, cur: p, shift: ev.mods.shift, hit });
+                let (hit, cursor) = self.pick_at(cx, p, ev.mods.alt);
+                self.drag = Some(LpDrag { start: p, cur: p, shift: ev.mods.shift, hit, cursor });
                 vec![]
             }
             PointerKind::Drag => {
@@ -652,8 +671,11 @@ impl Tool for LivePaintSelectionTool {
         lp_overlays(&self.hover, &self.cache, self.color, self.width as f32, self.width as f32)
     }
 
-    fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
-        Cursor::Arrow
+    fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
+        match &self.drag {
+            Some(d) => d.cursor,
+            None => self.pick_at(cx, p, m.alt).1,
+        }
     }
 
     fn options(&self) -> Value {

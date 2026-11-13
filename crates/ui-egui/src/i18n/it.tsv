@@ -629,6 +629,8 @@ font-technology	Variable	Variabili
 	Convert to Artboards	Converti in tavole da disegno
 	Convert to CMYK	Converti in CMYK
 	Convert to Grayscale	Converti in scala di grigi
+	Convert to Indexed Color	Converti in colore indicizzato
+	Convert to Indexed Color…	Converti in colore indicizzato…
 	Convert To Outlines	Converti in contorni
 	Convert To Point Type	Converti in testo per punti
 	Convert to RGB	Converti in RGB
@@ -2743,6 +2745,11 @@ digits	Malayalam	Malayalam
 	Rating:	Valutazione:
 	Real World:	Mondo reale:
 	Real-time Drawing and Editing	Disegno e modifica in tempo reale
+	Use Monitor Profile for Canvas	Usa il profilo del monitor per l'area di disegno
+	The canvas is drawn in sRGB.	L'area di disegno è visualizzata in sRGB.
+	Canvas display profile:	Profilo del display per l'area di disegno:
+	The system matches the window to the display's colors.	Il sistema adatta la finestra ai colori del display.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nessun profilo del display utilizzabile trovato: l'area di disegno è visualizzata in sRGB.
 	Rearrange All Artboards	Ridisponi tutte le tavole da disegno
 	Rearrange	Ridisponi
 	Select All Artboards	Seleziona tutte le tavole da disegno
@@ -4397,6 +4404,9 @@ axis	Both	Entrambi
 @msg	Couldn't open {name}: {e}	Impossibile aprire {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Impossibile inserire {name}: il documento su cui è stato rilasciato è stato chiuso
 @msg	Couldn't place {name}: the document it was placed in was closed	Impossibile inserire {name}: il documento in cui veniva inserito è stato chiuso
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Impossibile inserire {name}: il documento su cui è stato rilasciato è stato ripristinato
+@msg	Couldn't place {name}: the document it was placed in was reverted	Impossibile inserire {name}: il documento in cui veniva inserito è stato ripristinato
+@msg	Couldn't paste: the document it was pasted in was reverted	Impossibile incollare: il documento in cui si incollava è stato ripristinato
 @msg	Couldn't read {name}: {e}	Impossibile leggere {name}: {e}
 @msg	Couldn't save recovery data: {e}	Impossibile salvare i dati di recupero: {e}
 @msg	Create Outlines: select text objects	Crea contorni: seleziona oggetti di testo
@@ -5944,7 +5954,9 @@ axis	Y Axis	Asse Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` si applica ai riempimenti sfumati (paint.setFill)
 @msg	`dither` must be true or false	`dither` deve essere true o false
 	Perceptual	Percettivo
-@msg	`method` must be classic or perceptual	`method` deve essere classic o perceptual
+	Hue Clockwise	Tonalità in senso orario
+	Hue Counterclockwise	Tonalità in senso antiorario
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` deve essere classic, perceptual, hue-clockwise o hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` deve essere pad, repeat o reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` deve essere un numero intero da 1 a {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` si applica alle sfumature lineari, radiali, coniche e a rombo
@@ -6187,6 +6199,7 @@ axis	Y Axis	Asse Y
 	Continue	Continua
 	Continue Action	Continua azione
 	Delete Action Step	Elimina passaggio dell’azione
+	Move Action Step	Sposta passaggio dell’azione
 	Press Play Current Selection in the Actions panel to go on.	Per continuare, premi Esegui selezione corrente nel pannello Azioni.
 	Stop: {message}	Interruzione: {message}
 @msg	no action is waiting at a stop	nessuna azione è in attesa a un'interruzione
@@ -6358,6 +6371,22 @@ axis	Y Axis	Asse Y
 	Graphite Pencil	Matita di grafite
 	Wax Crayon	Pastello a cera
 	Charcoal Dust	Polvere di carboncino
+	Notched Ribbon	Nastro dentellato
+	Double Line	Doppia linea
+	Wave	Onda
+	Teardrop	Goccia
+	Striped Ribbon	Nastro a righe
+	Fine Nib	Pennino fine
+	Broad Nib	Pennino largo
+	Chisel	Scalpello
+	Round Pen	Penna tonda
+	Pressure Pen	Penna a pressione
+	Beads	Perline
+	Dash Dot	Tratto-punto
+	Scallops	Smerlo
+	Stars	Stelle
+	Triangles	Triangoli
+	Sparkles	Scintille
 	Save Brush Library…	Salva libreria pennelli…
 @msg	`{_1}` has no brushes to apply	`{_1}` non ha pennelli da applicare
 @msg	missing `library` (see brush.libraries)	manca `library` (vedi brush.libraries)

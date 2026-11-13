@@ -653,7 +653,7 @@ fn loading_the_working_rgb_profile_again_takes_effect_at_once() {
         bytes
     };
     let name = "Reload RGB";
-    let dir = vectorcraft_testkit::temp_dir("reload-working-rgb");
+    let dir = vectorcraft_testkit::TempDir::new("reload-working-rgb");
     let load = |s: &mut Session, builtin: &str| {
         let path = dir.join(format!("{}.icc", builtin.len()));
         std::fs::write(&path, renamed(builtin, name)).unwrap();
@@ -734,11 +734,9 @@ impl Drop for ProofReset {
     }
 }
 
-/// A folder of its own for the test `tag`, empty.
-fn fresh_dir(tag: &str) -> std::path::PathBuf {
-    let dir = vectorcraft_testkit::temp_dir(&format!("color-settings-{tag}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
+/// A folder of its own for the test `tag`, empty, removed when dropped.
+fn fresh_dir(tag: &str) -> vectorcraft_testkit::TempDir {
+    vectorcraft_testkit::TempDir::new(&format!("color-settings-{tag}"))
 }
 
 /// An ICC file of an RGB profile named `name` (a built-in one with its description replaced by a
@@ -785,7 +783,8 @@ fn color_settings_come_back_in_the_next_session() {
     let root = fresh_dir("color-settings");
     let (profiles, file) = (root.join("Color Profiles"), root.join("Color Settings.json"));
     let loaded = "StoreRGB-6";
-    let icc = vectorcraft_testkit::temp_dir("store-color-settings").join("loaded.icc");
+    let icc_dir = vectorcraft_testkit::TempDir::new("store-color-settings");
+    let icc = icc_dir.join("loaded.icc");
     let _reset = ColorSettingsReset { profile: Some(loaded), paths: vec![root.clone(), icc.clone()] };
     std::fs::write(&icc, icc_named(loaded)).unwrap();
 

@@ -103,6 +103,8 @@
 	Blend Vertically	Stopi okomito
 	Convert to CMYK	Pretvori u CMYK
 	Convert to Grayscale	Pretvori u nijanse sive
+	Convert to Indexed Color	Pretvori u indeksirane boje
+	Convert to Indexed Color…	Pretvori u indeksirane boje…
 	Convert to RGB	Pretvori u RGB
 	Invert Colors	Obrni boje
 	Overprint Black…	Pretisak crne…
@@ -3833,6 +3835,11 @@ theme	Appearance	Izgled
 	Primary	Primarno
 	Printing / Exporting	Štampanje / izvoz
 	Real-time Drawing and Editing	Crtanje i uređivanje u stvarnom vremenu
+	Use Monitor Profile for Canvas	Koristi profil monitora za platno
+	The canvas is drawn in sRGB.	Platno se iscrtava u sRGB-u.
+	Canvas display profile:	Profil ekrana za platno:
+	The system matches the window to the display's colors.	Sistem prilagođava boje prozora ekranu.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nije pronađen upotrebljiv profil ekrana: platno se iscrtava u sRGB-u.
 	Render Threads (-1 = Automatic)	Niti iscrtavanja (-1 = automatski)
 	Reset Preferences	Vrati postavke na početne
 	Export Preferences…	Izvezi postavke…
@@ -4498,6 +4505,9 @@ imageTrace	Outline	Obris
 @msg	Couldn't open {name}: {e}	Nije moguće otvoriti {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Nije moguće postaviti {name}: dokument na koji je ispušten je zatvoren
 @msg	Couldn't place {name}: the document it was placed in was closed	Nije moguće postaviti {name}: dokument u koji je postavljen je zatvoren
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Nije moguće postaviti {name}: dokument na koji je ispušten je vraćen na sačuvano
+@msg	Couldn't place {name}: the document it was placed in was reverted	Nije moguće postaviti {name}: dokument u koji je postavljen je vraćen na sačuvano
+@msg	Couldn't paste: the document it was pasted in was reverted	Nije moguće zalijepiti: dokument u koji se lijepilo je vraćen na sačuvano
 @msg	Couldn't read {name}: {e}	Nije moguće pročitati {name}: {e}
 @msg	Couldn't save recovery data: {e}	Nije moguće sačuvati podatke za oporavak: {e}
 @msg	Create Outlines: select text objects	Kreiraj obrise: odaberite tekstualne objekte
@@ -5507,6 +5517,8 @@ imageTrace	Outline	Obris
 	Vivid	Živo
 	Spectrum	Spektar
 	Perceptual	Perceptivno
+	Hue Clockwise	Nijansa u smjeru kazaljke na satu
+	Hue Counterclockwise	Nijansa suprotno od kazaljke na satu
 	Relative Colorimetric	Relativna kolorimetrija
 	Absolute Colorimetric	Apsolutna kolorimetrija
 	Exact	Tačno
@@ -5998,7 +6010,7 @@ axis	Y Axis	Y osa
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` se primjenjuje na gradijentne ispune (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` se primjenjuje na gradijentne ispune (paint.setFill)
 @msg	`dither` must be true or false	`dither` mora biti true ili false
-@msg	`method` must be classic or perceptual	`method` mora biti classic ili perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` mora biti classic, perceptual, hue-clockwise ili hue-counterclockwise
 	Install “{name}”, which asks for a heavy budget?	Instalirati „{name}”, koji traži veliki budžet?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Svako pokretanje može trajati do {minutes} minuta i obaviti {times} puta više posla nego drugi dodaci. Radi u pozadini i možete ga otkazati.
 	It may take minutes, so it runs in the background, where you can cancel it.	Može trajati minutama, pa radi u pozadini, gdje ga možete otkazati.
@@ -6062,6 +6074,7 @@ axis	Y Axis	Y osa
 	Continue	Nastavi
 	Continue Action	Nastavi akciju
 	Delete Action Step	Izbriši korak akcije
+	Move Action Step	Premjesti korak akcije
 	Press Play Current Selection in the Actions panel to go on.	Za nastavak pritisnite „Reprodukuj trenutni odabir“ na panelu Akcije.
 	Stop: {message}	Zaustavljanje: {message}
 @msg	no action is waiting at a stop	nijedna akcija ne čeka na zaustavljanju
@@ -6233,6 +6246,22 @@ axis	Y Axis	Y osa
 	Graphite Pencil	Grafitna olovka
 	Wax Crayon	Voštana bojica
 	Charcoal Dust	Ugljena prašina
+	Notched Ribbon	Zarezana traka
+	Double Line	Dvostruka linija
+	Wave	Talas
+	Teardrop	Suza
+	Striped Ribbon	Prugasta traka
+	Fine Nib	Tanki vrh
+	Broad Nib	Široki vrh
+	Chisel	Dlijeto
+	Round Pen	Okruglo pero
+	Pressure Pen	Pero na pritisak
+	Beads	Perle
+	Dash Dot	Crta-tačka
+	Scallops	Festoni
+	Stars	Zvijezde
+	Triangles	Trouglovi
+	Sparkles	Iskrice
 	Save Brush Library…	Sačuvaj biblioteku četkica…
 @msg	`{_1}` has no brushes to apply	`{_1}` nema četkica za primjenu
 @msg	missing `library` (see brush.libraries)	nedostaje `library` (pogledajte brush.libraries)

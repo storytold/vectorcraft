@@ -630,6 +630,8 @@ font-technology	Variable	Variables
 	Convert to Artboards	Convertir en plans de travail
 	Convert to CMYK	Convertir en CMJN
 	Convert to Grayscale	Convertir en niveaux de gris
+	Convert to Indexed Color	Convertir en couleurs indexées
+	Convert to Indexed Color…	Convertir en couleurs indexées…
 	Convert To Outlines	Vectoriser
 	Convert To Point Type	Convertir en texte de point
 	Convert to RGB	Convertir en RVB
@@ -2693,6 +2695,11 @@ digits	Malayalam	Malayalam
 	Rating:	Classement :
 	Real World:	Monde réel :
 	Real-time Drawing and Editing	Dessin et édition en temps réel
+	Use Monitor Profile for Canvas	Utiliser le profil du moniteur pour la zone de travail
+	The canvas is drawn in sRGB.	La zone de travail est affichée en sRGB.
+	Canvas display profile:	Profil d’affichage de la zone de travail :
+	The system matches the window to the display's colors.	Le système adapte la fenêtre aux couleurs de l’écran.
+	No usable display profile was found: the canvas is drawn in sRGB.	Aucun profil d’affichage utilisable n’a été trouvé : la zone de travail est affichée en sRGB.
 	Rearrange All Artboards	Réorganiser tous les plans de travail
 	Rearrange	Réorganiser
 	Select All Artboards	Sélectionner tous les plans de travail
@@ -4334,6 +4341,9 @@ axis	Both	Les deux
 @msg	Couldn't open {name}: {e}	Impossible d’ouvrir {name} : {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Impossible d’importer {name} : le document sur lequel il a été déposé a été fermé
 @msg	Couldn't place {name}: the document it was placed in was closed	Impossible d’importer {name} : le document dans lequel il était importé a été fermé
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Impossible d’importer {name} : le document sur lequel il a été déposé a été rétabli à la version précédente
+@msg	Couldn't place {name}: the document it was placed in was reverted	Impossible d’importer {name} : le document dans lequel il était importé a été rétabli à la version précédente
+@msg	Couldn't paste: the document it was pasted in was reverted	Impossible de coller, car le document de destination a été rétabli à la version précédente
 @msg	Couldn't read {name}: {e}	Impossible de lire {name} : {e}
 @msg	Couldn't save recovery data: {e}	Impossible d’enregistrer les données de récupération : {e}
 @msg	Create Outlines: select text objects	Vectoriser : sélectionnez des objets texte
@@ -5784,6 +5794,8 @@ lighting	Light	Lumière
 	Pen	Plume
 	Pentagram	Pentagramme
 	Perceptual	Perceptif
+	Hue Clockwise	Teinte en sens horaire
+	Hue Counterclockwise	Teinte en sens antihoraire
 	Phone 360×800	Téléphone 360×800
 	Phone 375×667	Téléphone 375×667
 	Phone 375×812	Téléphone 375×812
@@ -6313,7 +6325,7 @@ axis	Y Axis	Axe Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` s’applique aux fonds en dégradé (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` s’applique aux fonds en dégradé (paint.setFill)
 @msg	`dither` must be true or false	`dither` doit valoir true ou false
-@msg	`method` must be classic or perceptual	`method` doit être classic ou perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` doit être classic, perceptual, hue-clockwise ou hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` doit être pad, repeat ou reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` doit être un nombre entier de 1 à {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` s’applique aux dégradés linéaires, radiaux, coniques et en losange
@@ -6556,6 +6568,7 @@ axis	Y Axis	Axe Y
 	Continue	Continuer
 	Continue Action	Continuer le script
 	Delete Action Step	Supprimer l’étape du script
+	Move Action Step	Déplacer l’étape du script
 	Press Play Current Selection in the Actions panel to go on.	Pour continuer, cliquez sur Exécuter la sélection actuelle dans le panneau Scripts.
 	Stop: {message}	Arrêt : {message}
 @msg	no action is waiting at a stop	aucun script n’attend à un arrêt
@@ -6727,6 +6740,22 @@ axis	Y Axis	Axe Y
 	Graphite Pencil	Crayon graphite
 	Wax Crayon	Craie grasse
 	Charcoal Dust	Poussière de fusain
+	Notched Ribbon	Ruban cranté
+	Double Line	Double ligne
+	Wave	Vague
+	Teardrop	Goutte
+	Striped Ribbon	Ruban rayé
+	Fine Nib	Plume fine
+	Broad Nib	Plume large
+	Chisel	Ciseau
+	Round Pen	Plume ronde
+	Pressure Pen	Plume à pression
+	Beads	Perles
+	Dash Dot	Tiret-point
+	Scallops	Festons
+	Stars	Étoiles
+	Triangles	Triangles
+	Sparkles	Étincelles
 	Save Brush Library…	Enregistrer la bibliothèque de formes…
 @msg	`{_1}` has no brushes to apply	`{_1}` n'a aucune forme à appliquer
 @msg	missing `library` (see brush.libraries)	`library` manquant (voir brush.libraries)

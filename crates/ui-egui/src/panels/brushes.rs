@@ -637,9 +637,15 @@ impl LibraryKind for BrushLibraries {
     fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
         app.session.brush_libraries.path(id).map(str::to_string)
     }
-    fn rows<'a>(lib: &'a Self::Lib, query: &str) -> Vec<Row<'a, LibBrush>> {
-        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
+    /// Find matches a brush's name as shown and as stored.
+    fn rows<'a>(lib: &'a Self::Lib, id: &str, query: &str) -> Vec<Row<'a, LibBrush>> {
+        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query) || Self::label(id, n).to_lowercase().contains(query);
         lib.iter().filter(|b| found(b.name())).map(|b| Row { name: b.name(), item: Some(b) }).collect()
+    }
+    /// A built-in library's brush in the UI language; a User Defined or loaded library's brush as
+    /// it is named.
+    fn label<'a>(id: &str, name: &'a str) -> &'a str {
+        super::label_or_name(name, brushlib::BUILTIN.iter().any(|b| b.id == id))
     }
     /// The brush's stroke preview, drawn with the library's resources.
     fn draw(_: &VectorcraftApp, ui: &Ui, r: egui::Rect, b: &LibBrush, selected: bool, hovered: bool) {

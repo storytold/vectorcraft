@@ -47,6 +47,10 @@
 //!   rasterised in SVG
 //!   (<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-gradients/control-perceptual-interpolation-in-gradients.html>).
 //!   On characters they are written as linear gradients through stops on the perceptual curve.
+//! * **Gradients mixed around the hue wheel** (Hue Clockwise and Hue Counterclockwise,
+//!   VectorCraft's own methods) fill or stroke objects as an `<image>` of the gradient too, at the
+//!   document's raster effects resolution. On characters they are written as gradients through
+//!   stops on their way around the wheel.
 //! * **Symbol instances** the shared `<symbol>` would paint differently from the canvas (stained,
 //!   scaled with strokes, turned or scaled with effects, brushes or live objects, or holding
 //!   pattern paints or unlinked masks, which stay on the page) are written as their own art.

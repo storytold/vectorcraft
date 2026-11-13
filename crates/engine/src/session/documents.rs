@@ -271,6 +271,9 @@ impl Session {
         for tree in text_trees_mut(doc) {
             each_text_where(tree, &mut uncached, &mut cmd::typecmd::refresh_bounds_for_first_frame);
         }
+        // The symbols' type is measured now: the inline graphics showing those symbols take their
+        // art's measured size, a symbol's type before the type that shows that symbol inline.
+        doc.resolve_inline_art_with(&mut cmd::typecmd::refresh_bounds_for_first_frame);
     }
 
     /// Measure the type in open document `index` that `stale` picks (in its trees as
@@ -288,12 +291,9 @@ impl Session {
                 each_text_where(tree, &mut stale, &mut cmd::typecmd::refresh_bounds_for_first_frame);
             }
             // Inline graphics take their size from their symbols' art, whose type may just have
-            // been measured again: the text holding one whose size changed is measured again too.
-            if !doc.resolve_inline_art().is_empty() {
-                for tree in text_trees_mut(doc) {
-                    each_text_where(tree, &mut |t| t.cached_bounds.is_none(), &mut cmd::typecmd::refresh_bounds_for_first_frame);
-                }
-            }
+            // been measured again: the text holding one whose size changed is measured again too,
+            // a symbol's type before the type that shows that symbol inline.
+            doc.resolve_inline_art_with(&mut cmd::typecmd::refresh_bounds_for_first_frame);
         });
     }
 
@@ -371,6 +371,8 @@ impl Session {
         st.history.limit = old.history.limit;
         // Same open document (caches keyed by uid stay valid); a new revision redraws it.
         st.uid = old.uid;
+        // Work started for the content being thrown away is dropped when it finishes.
+        st.reverts = old.reverts + 1;
         st.opened_as_tab = old.opened_as_tab;
         st.revision = old.revision + 1;
         st.format = old.format;
@@ -405,17 +407,28 @@ impl Session {
         true
     }
 
+    /// Close the document in tab `index` (`file.close`). Closing a tab other than the current one
+    /// keeps the current document current, and its tool keeps its state: no document is switched
+    /// to. Closing the current document makes the tab now at `index` current, or the last tab when
+    /// it was the last one. False, changing nothing, when `index` is past the last document.
     pub fn close_document(&mut self, index: usize) -> bool {
         if index >= self.docs.len() {
             return false;
         }
-        self.reset_tool_for_doc_switch();
+        let front = self.active().map(|d| d.uid).filter(|_| self.active != Some(index));
+        if front.is_none() {
+            self.reset_tool_for_doc_switch();
+        }
         // Closed (saved or discarded): nothing left to recover.
         let uid = self.docs[index].uid;
         cmd::recovery::forget(self, uid);
         let old = self.docs.remove(index);
         if let Some(stash) = &mut self.batch_stash {
             stash.push(old);
+        }
+        if let Some(uid) = front {
+            self.active = self.docs.iter().position(|d| d.uid == uid);
+            return true;
         }
         self.active = if self.docs.is_empty() { None } else { Some(index.min(self.docs.len() - 1)) };
         self.sync_front_composite_fonts();

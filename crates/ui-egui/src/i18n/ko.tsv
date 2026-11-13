@@ -175,6 +175,8 @@ digits	Malayalam	말라얄람어
 	Blend Vertically	세로 혼합
 	Convert to CMYK	CMYK로 변환
 	Convert to Grayscale	회색조로 변환
+	Convert to Indexed Color	인덱스 색상으로 변환
+	Convert to Indexed Color…	인덱스 색상으로 변환…
 	Convert to RGB	RGB로 변환
 	Invert Colors	색상 반전
 	Overprint Black…	검정 겹쳐찍기…
@@ -2781,6 +2783,11 @@ mark-style	Japanese	일본식
 	Rating:	평점:
 	Real World:	실제 크기:
 	Real-time Drawing and Editing	실시간 그리기 및 편집
+	Use Monitor Profile for Canvas	캔버스에 모니터 프로필 사용
+	The canvas is drawn in sRGB.	캔버스는 sRGB로 그려집니다.
+	Canvas display profile:	캔버스 디스플레이 프로필:
+	The system matches the window to the display's colors.	시스템이 창을 디스플레이 색상에 맞춥니다.
+	No usable display profile was found: the canvas is drawn in sRGB.	사용할 수 있는 디스플레이 프로필이 없습니다. 캔버스는 sRGB로 그려집니다.
 	Rearrange All Artboards	모든 아트보드 재정렬
 	Rearrange	재정렬
 	Select All Artboards	모든 아트보드 선택
@@ -5113,6 +5120,9 @@ theme	Appearance	외관
 @msg	no user library folder here	여기에는 사용자 라이브러리 폴더가 없습니다
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name}을(를) 가져올 수 없습니다: 놓은 문서가 닫혔습니다
 @msg	Couldn't place {name}: the document it was placed in was closed	{name}을(를) 가져올 수 없습니다: 가져오던 문서가 닫혔습니다
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name}을(를) 가져올 수 없습니다: 놓은 문서가 되돌려졌습니다
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name}을(를) 가져올 수 없습니다: 가져오던 문서가 되돌려졌습니다
+@msg	Couldn't paste: the document it was pasted in was reverted	붙여넣을 수 없습니다: 붙여넣던 문서가 되돌려졌습니다
 @msg	no files to place	가져올 파일이 없습니다
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}`은(는) VectorCraft 문서, PDF 또는 PDF 호환 .ai 파일이 아닙니다
 @msg	paths: give at least one file	paths: 파일을 하나 이상 지정하세요
@@ -5905,7 +5915,9 @@ axis	Y Axis	Y축
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither`는 그레이디언트 칠에 적용됩니다 (paint.setFill)
 @msg	`dither` must be true or false	`dither`은(는) true 또는 false여야 합니다
 	Perceptual	지각적
-@msg	`method` must be classic or perceptual	`method`는 classic 또는 perceptual이어야 합니다
+	Hue Clockwise	색조 시계 방향
+	Hue Counterclockwise	색조 시계 반대 방향
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method`는 classic, perceptual, hue-clockwise 또는 hue-counterclockwise여야 합니다
 @msg	`spread` must be pad, repeat or reflect	`spread`는 pad, repeat 또는 reflect여야 합니다
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats`는 1에서 {MAX_REPEATS} 사이의 정수여야 합니다
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread`는 선형, 방사형, 원뿔형 및 다이아몬드 그레이디언트에 적용됩니다
@@ -6148,6 +6160,7 @@ axis	Y Axis	Y축
 	Continue	계속
 	Continue Action	액션 계속
 	Delete Action Step	액션 단계 삭제
+	Move Action Step	액션 단계 이동
 	Press Play Current Selection in the Actions panel to go on.	계속하려면 액션 패널에서 현재 선택 항목 재생을 누르세요.
 	Stop: {message}	중지: {message}
 @msg	no action is waiting at a stop	중지에서 대기 중인 액션이 없습니다
@@ -6319,6 +6332,22 @@ axis	Y Axis	Y축
 	Graphite Pencil	흑연 연필
 	Wax Crayon	왁스 크레용
 	Charcoal Dust	목탄 가루
+	Notched Ribbon	노치 리본
+	Double Line	이중선
+	Wave	물결
+	Teardrop	눈물방울
+	Striped Ribbon	줄무늬 리본
+	Fine Nib	가는 펜촉
+	Broad Nib	넓은 펜촉
+	Chisel	끌
+	Round Pen	둥근 펜
+	Pressure Pen	필압 펜
+	Beads	구슬
+	Dash Dot	일점쇄선
+	Scallops	스캘럽
+	Stars	별
+	Triangles	삼각형
+	Sparkles	반짝임
 	Save Brush Library…	브러시 라이브러리 저장…
 @msg	`{_1}` has no brushes to apply	`{_1}`에 적용할 브러시가 없습니다
 @msg	missing `library` (see brush.libraries)	`library`가 없습니다(brush.libraries 참조)

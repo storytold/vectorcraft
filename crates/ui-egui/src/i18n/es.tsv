@@ -629,6 +629,8 @@ font-technology	Variable	Variables
 	Convert to Artboards	Convertir en mesas de trabajo
 	Convert to CMYK	Convertir a CMYK
 	Convert to Grayscale	Convertir a escala de grises
+	Convert to Indexed Color	Convertir a color indexado
+	Convert to Indexed Color…	Convertir a color indexado…
 	Convert To Outlines	Convertir en contornos
 	Convert To Point Type	Convertir en texto de punto
 	Convert to RGB	Convertir a RGB
@@ -2701,6 +2703,11 @@ digits	Malayalam	Malayálam
 	Rating:	Clasificación:
 	Real World:	Mundo real:
 	Real-time Drawing and Editing	Dibujo y edición en tiempo real
+	Use Monitor Profile for Canvas	Usar perfil del monitor para el lienzo
+	The canvas is drawn in sRGB.	El lienzo se dibuja en sRGB.
+	Canvas display profile:	Perfil de pantalla del lienzo:
+	The system matches the window to the display's colors.	El sistema ajusta la ventana a los colores de la pantalla.
+	No usable display profile was found: the canvas is drawn in sRGB.	No se encontró ningún perfil de pantalla utilizable: el lienzo se dibuja en sRGB.
 	Rearrange All Artboards	Reorganizar todas las mesas de trabajo
 	Rearrange	Reorganizar
 	Select All Artboards	Seleccionar todas las mesas de trabajo
@@ -4345,6 +4352,9 @@ axis	Both	Ambos
 @msg	Couldn't open {name}: {e}	No se pudo abrir {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	No se pudo colocar {name}: se cerró el documento en el que se soltó
 @msg	Couldn't place {name}: the document it was placed in was closed	No se pudo colocar {name}: se cerró el documento en el que se estaba colocando
+@msg	Couldn't place {name}: the document it was dropped on was reverted	No se pudo colocar {name}: se revirtió el documento en el que se soltó
+@msg	Couldn't place {name}: the document it was placed in was reverted	No se pudo colocar {name}: se revirtió el documento en el que se estaba colocando
+@msg	Couldn't paste: the document it was pasted in was reverted	No se pudo pegar: se revirtió el documento en el que se estaba pegando
 @msg	Couldn't read {name}: {e}	No se pudo leer {name}: {e}
 @msg	Couldn't save recovery data: {e}	No se pudieron guardar los datos de recuperación: {e}
 @msg	Create Outlines: select text objects	Crear contornos: selecciona objetos de texto
@@ -5634,6 +5644,8 @@ effect	Regular	Regular
 	High Contrast 3	Alto contraste 3
 	Pentagram	Pentagrama
 	Perceptual	Perceptual
+	Hue Clockwise	Tono en sentido horario
+	Hue Counterclockwise	Tono en sentido antihorario
 	Relative Colorimetric	Colorimétrico relativo
 	Absolute Colorimetric	Colorimétrico absoluto
 	Exact	Exacto
@@ -6261,7 +6273,7 @@ axis	Y Axis	Eje Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` se aplica a rellenos de degradado (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` se aplica a rellenos de degradado (paint.setFill)
 @msg	`dither` must be true or false	`dither` debe ser true o false
-@msg	`method` must be classic or perceptual	`method` debe ser classic o perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` debe ser classic, perceptual, hue-clockwise o hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` debe ser pad, repeat o reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` debe ser un número entero de 1 a {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` se aplica a los degradados lineales, radiales, cónicos y de rombo
@@ -6504,6 +6516,7 @@ axis	Y Axis	Eje Y
 	Continue	Continuar
 	Continue Action	Continuar acción
 	Delete Action Step	Eliminar paso de la acción
+	Move Action Step	Mover paso de la acción
 	Press Play Current Selection in the Actions panel to go on.	Para continuar, pulse Reproducir la selección actual en el panel Acciones.
 	Stop: {message}	Parada: {message}
 @msg	no action is waiting at a stop	ninguna acción está esperando en una parada
@@ -6675,6 +6688,22 @@ axis	Y Axis	Eje Y
 	Graphite Pencil	Lápiz de grafito
 	Wax Crayon	Cera de colores
 	Charcoal Dust	Polvo de carboncillo
+	Notched Ribbon	Cinta dentada
+	Double Line	Línea doble
+	Wave	Onda
+	Teardrop	Lágrima
+	Striped Ribbon	Cinta a rayas
+	Fine Nib	Plumilla fina
+	Broad Nib	Plumilla ancha
+	Chisel	Cincel
+	Round Pen	Pluma redonda
+	Pressure Pen	Pluma de presión
+	Beads	Cuentas
+	Dash Dot	Raya y punto
+	Scallops	Festones
+	Stars	Estrellas
+	Triangles	Triángulos
+	Sparkles	Destellos
 	Save Brush Library…	Guardar biblioteca de pinceles…
 @msg	`{_1}` has no brushes to apply	`{_1}` no tiene pinceles para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)

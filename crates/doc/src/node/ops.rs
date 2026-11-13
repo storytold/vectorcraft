@@ -716,6 +716,37 @@ impl Node {
         out
     }
 
+    /// As a piece of a mesh-warped image ([`crate::NodeExtras::warp_piece`]), the art whose area is its
+    /// knockout shape at full coverage: the art of its opacity mask (on and not inverted), or the
+    /// clipping path of its clip group. `None` for other objects, whose knockout shape is what they
+    /// paint.
+    pub fn knockout_outline(&self) -> Option<&Arc<Node>> {
+        let e = self.extras();
+        if !e.warp_piece {
+            return None;
+        }
+        if let Some(m) = e.mask.as_deref() {
+            return (!m.disabled && !m.invert).then_some(&m.art);
+        }
+        match &self.kind {
+            NodeKind::Group { children, clip: true } => children.first(),
+            _ => None,
+        }
+    }
+
+    /// The image a piece of a mesh-warped image draws ([`Self::knockout_outline`]): the piece itself
+    /// when an opacity mask cuts it, else the image its clip group clips. `None` for other objects.
+    pub fn warp_piece_image(&self) -> Option<&Node> {
+        if !self.extras().warp_piece {
+            return None;
+        }
+        match &self.kind {
+            NodeKind::Image(_) => Some(self),
+            NodeKind::Group { children, clip: true } => children.get(1).map(|c| &**c).filter(|c| matches!(c.kind, NodeKind::Image(_))),
+            _ => None,
+        }
+    }
+
     /// Whether this is a clip group or a layer with a clipping mask: its first child clips the rest.
     /// A layer whose first child is a ruler guide holds no art, so a guide never clips it.
     pub fn clips(&self) -> bool {
