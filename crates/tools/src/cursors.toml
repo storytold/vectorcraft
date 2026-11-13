@@ -599,14 +599,14 @@ look = "PencilStraight's badge with a small filled square at the line's lower en
 [[cursor]]
 id = "Paintbrush"
 group = "Drawing and editing tools"
-shown_when = ["The Paintbrush tool: draws a brushed freeform path (with pen pressure), continuing a selected path from its end; Alt closes it."]
+shown_when = ["The Paintbrush tool: draws a brushed freeform path (with pen pressure), continuing a selected path from its end; Alt closes it, except that Alt held at the press with a path selected that the Smooth tool can act on smooths that path (see Smooth)."]
 hotspot = "The bristle tip."
 
 [[cursor]]
 id = "PaintbrushClose"
 group = "Drawing and editing tools"
 shown_when = [
-    "The Paintbrush tool with Alt held, before a press and while drawing: releasing the mouse button with Alt still held closes the path.",
+    "The Paintbrush tool with Alt held while drawing, or before a press when no path is selected that the Smooth tool can act on (with one selected, Smooth shows): releasing the mouse button with Alt still held closes the path.",
     "The Paintbrush tool while a stroke is drawn back to within Close Paths When Ends Are Within of its start: releasing the mouse button there closes the path.",
 ]
 hotspot = "The bristle tip."
@@ -632,6 +632,8 @@ group = "Drawing and editing tools"
 shown_when = [
     "The Smooth tool: a drag along a selected path smooths it.",
     "The Pencil tool with Alt key toggles to Smooth Tool on: with Alt held before a stroke begins to draw, and through a drag that smooths.",
+    "The Paintbrush tool with Alt held before a press while a path is selected that the Smooth tool can act on (an editable path, not a guide, with three or more anchors on one of its subpaths), and through a drag that smooths.",
+    "The Blob Brush tool with Alt held before a press, or before the drag has moved from the press point, and through a drag that smooths.",
 ]
 hotspot = "The tip."
 
