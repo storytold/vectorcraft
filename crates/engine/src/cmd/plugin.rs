@@ -677,6 +677,35 @@ thread_local! {
     /// Tests: runs once in the next `plugin.install` on this thread after its checks and before it
     /// installs, as another session changing the plug-ins in between would.
     pub(crate) static BEFORE_INSTALL: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+    /// Tests: runs once in the next `plugin.install` on this thread right after it reads the grant
+    /// held for the id.
+    pub(crate) static AFTER_GRANT_READ: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+    /// Tests: runs once in the next `plugin.install` on this thread after it installs and before it
+    /// writes the store.
+    pub(crate) static BEFORE_STORE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+    /// Tests: runs once on this thread when [`hold_plugin_changes`] finds the lock held and waits.
+    pub(crate) static WHILE_WAITING: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Held by `plugin.install` from its first read of the grant until the store holds what it
+/// installed, and throughout by `plugin.remove`, by loads of the stored plug-ins
+/// ([`Session::load_stored_plugins`]) and by loads of a plug-ins folder: these run one after the
+/// other across sessions.
+static PLUGIN_CHANGES: Mutex<()> = Mutex::new(());
+
+/// Takes [`PLUGIN_CHANGES`], waiting while another session holds it.
+pub(crate) fn hold_plugin_changes() -> std::sync::MutexGuard<'static, ()> {
+    match PLUGIN_CHANGES.try_lock() {
+        Ok(held) => held,
+        Err(std::sync::TryLockError::Poisoned(e)) => e.into_inner(),
+        Err(std::sync::TryLockError::WouldBlock) => {
+            #[cfg(test)]
+            if let Some(waiting) = WHILE_WAITING.take() {
+                waiting();
+            }
+            PLUGIN_CHANGES.lock().unwrap_or_else(|e| e.into_inner())
+        }
+    }
 }
 
 /// `plugin.install`: loads and checks the module, refuses `grant` and `allowHeavy` that neither an
@@ -688,7 +717,8 @@ thread_local! {
 /// the module's hash and installs it ([`registry::install_checked`]), and only then keeps both for
 /// the next start → its `plugin.list` entry. A refused install changes neither the plug-in store
 /// nor the plug-ins and grants of the process. A module that lists no permissions ends any grant
-/// held for its id.
+/// held for its id. A `plugin.remove` in another session waits until the install has written the
+/// store.
 fn install(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "plugin.install";
     // One use: spent whatever this install does.
@@ -706,9 +736,16 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     {
         return Err(bad(C, "the module doesn't have the SHA-256 `hash` gives: nothing was installed"));
     }
-    // The grant the checks below count on. The install checks it again, with the plug-in installed
-    // under the id, before anything is stored: another session may change either in between.
+    // A removal in another session waits until the store holds what this install wrote.
+    let _held = hold_plugin_changes();
+    // The grant the checks below count on, the approval included. The install checks it again,
+    // with the plug-in installed under the id, before anything is stored: another session may
+    // change either in between.
     let seen_grant = registry::granted(plugin.id());
+    #[cfg(test)]
+    if let Some(between) = AFTER_GRANT_READ.take() {
+        between();
+    }
     let installed_already = || bad(C, format!("a plug-in with id {:?} is already installed", plugin.id()));
     let taken_over = || {
         let name = permissions::display_text(&plugin.manifest().name, permissions::MAX_SHOWN_NAME);
@@ -773,7 +810,12 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         )
     };
     let granted_here = grant.as_ref().is_some_and(|g| wanted.iter().all(|w| g.contains(w)));
-    if !s.plugin_approved(&plugin) && !granted_here {
+    // Without a plug-in store, the grant read above approves the module or doesn't.
+    let approved = match s.plugin_dir {
+        None => !m.asks_permissions() || seen_grant.as_ref().is_some_and(|g| g.covers(&m.id, plugin.hash(), &wanted)),
+        Some(_) => s.plugin_approved(&plugin),
+    };
+    if !approved && !granted_here {
         return Err(needs_approval());
     }
     let needs_approval = needs_approval();
@@ -803,6 +845,10 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     // The plug-in gets the settings and cache kept for its id. A module without permissions takes
     // the id over, so nothing the user approved for the id applies any more.
     let installed = registry::install_checked(plugin, update, check, || s.attach_plugin_storage(&id), err)?;
+    #[cfg(test)]
+    if let Some(between) = BEFORE_STORE.take() {
+        between();
+    }
     // Installed plug-ins stay installed after a restart (#2541). The module is written first and its
     // grant only once it is there; when the grant can't be written, the store gets the module it
     // held back. A failed write of that module is only logged: the store then holds the new module,
@@ -946,6 +992,8 @@ fn load_folder(s: &Session, folder: &str) -> Value {
         None if crate::file_access::current().is_none() => Ok(()),
         None => Err(format!("automation path rejected: {} isn't valid text", f.display())),
     };
+    // A `plugin.install` in another session finishes writing the store first.
+    let _held = hold_plugin_changes();
     match registry::load_folder_where(std::path::Path::new(folder), allow, s.plugin_folder_approver()) {
         Ok(r) => {
             for id in &r.loaded {
@@ -1116,6 +1164,8 @@ fn info(_: &mut Session, p: &Value) -> Result<Value> {
 
 fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     let id = str_param(p, "id").ok_or_else(|| bad("plugin.remove", "missing `id`"))?;
+    // An install in another session finishes its store writes first.
+    let _held = hold_plugin_changes();
     let installed = registry::get(id).is_some();
     // Settings and cache the store keeps for an id that isn't installed are deleted too.
     let stored = !installed && vectorcraft_plugins::manifest::valid_id(id) && s.has_plugin_storage(id);
