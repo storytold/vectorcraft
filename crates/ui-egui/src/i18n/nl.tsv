@@ -2058,6 +2058,11 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Tate-chu-yoko-instellingen…
 	Tate-chu-yoko Settings	Tate-chu-yoko-instellingen
+	Warichu	Warichu
+	Warichu Settings…	Warichu-instellingen…
+	Warichu Settings	Warichu-instellingen
+	Lines:	Regels:
+	Line Gap:	Regelafstand:
 	Composite Fonts…	Samengestelde lettertypen…
 	Composite Fonts	Samengestelde lettertypen
 	Export Composite Fonts	Samengestelde lettertypen exporteren
@@ -4124,6 +4129,11 @@ theme	Appearance	Vormgeving
 	Primary	Primair
 	Printing / Exporting	Afdrukken / exporteren
 	Real-time Drawing and Editing	Tekenen en bewerken in realtime
+	Use Monitor Profile for Canvas	Monitorprofiel gebruiken voor canvas
+	The canvas is drawn in sRGB.	Het canvas wordt in sRGB getekend.
+	Canvas display profile:	Weergaveprofiel van het canvas:
+	The system matches the window to the display's colors.	Het systeem stemt het venster af op de kleuren van het scherm.
+	No usable display profile was found: the canvas is drawn in sRGB.	Geen bruikbaar weergaveprofiel gevonden: het canvas wordt in sRGB getekend.
 	Render Threads (-1 = Automatic)	Renderthreads (-1 = automatisch)
 	Reset Preferences	Voorkeuren herstellen
 	Export Preferences…	Voorkeuren exporteren…
@@ -5348,6 +5358,7 @@ imageTrace	Outline	Contour
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} hersteld document verworpen|{n} herstelde documenten verworpen
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} hersteld document teruggezet: sla het op om het te behouden|{n} herstelde documenten teruggezet: sla ze op om ze te behouden
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Geopend met {n} opmerking: {first}|Geopend met {n} opmerkingen: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Geopend met {n} opmerking: {first}|{notice}. Geopend met {n} opmerkingen: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} opgeslagen met {n} opmerking: {first}|{path} opgeslagen met {n} opmerkingen: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} afbeelding ingesloten; {missing} ontbreken: koppel ze eerst opnieuw|{n} afbeeldingen ingesloten; {missing} ontbreken: koppel ze eerst opnieuw
 @msgplural	Embedded {n} image|Embedded {n} images	{n} afbeelding ingesloten|{n} afbeeldingen ingesloten
@@ -6936,6 +6947,8 @@ anchor	Points:	Punten:
 	Anchor Inspector	Ankerpuntinspecteur
 	Add Points at Crossings	Punten toevoegen bij kruisingen
 	Split at Crossings	Splitsen bij kruisingen
+	Trim at Crossings Tool	Afsnijden bij kruisingen-gereedschap
+	Trim at Crossings	Afsnijden bij kruisingen
 	Extend Path	Pad verlengen
 	Measure & Inspect	Meten en inspecteren
 	Set Anchor	Ankerpunt instellen

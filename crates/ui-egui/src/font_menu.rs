@@ -1642,18 +1642,20 @@ pub(crate) fn render_sample_for_test(family: &str, text: &str, px: u32) -> Optio
 }
 
 /// Waits for the samples rendering on this thread's behalf and keeps them, so the next frame
-/// draws them.
+/// draws them. Returns `false` when no sample was rendering.
 #[cfg(all(test, not(target_arch = "wasm32")))]
-pub(crate) fn wait_for_samples(ctx: &egui::Context) {
+pub(crate) fn wait_for_samples(ctx: &egui::Context) -> bool {
     SAMPLES.with(|s| {
         let mut s = s.borrow_mut();
         let pending: Vec<_> = s.pending.drain().collect();
+        let waited = !pending.is_empty();
         for (key, rx) in pending {
             let tex =
                 rx.recv().ok().flatten().map(|img| ctx.load_texture(format!("font-sample-{}-{}", key.0, key.3), img, egui::TextureOptions::LINEAR));
             s.ready.insert(key, tex);
         }
-    });
+        waited
+    })
 }
 
 // ---------- applying a pick ----------
