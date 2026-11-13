@@ -26,14 +26,18 @@ impl Metrics {
     pub(super) fn max(g: &[SGlyph]) -> Option<Self> {
         let mut it = g.iter();
         let first = Self::of(it.next()?);
-        Some(it.fold(first, |m, g| Self {
-            asc: m.asc.max(g.ascent),
-            desc: m.desc.max(g.descent),
-            lead: m.lead.max(g.leading),
-            cap: m.cap.max(g.cap),
-            xh: m.xh.max(g.xh),
-            top: m.top.max(Self::of(g).top),
-        }))
+        Some(it.fold(first, |m, g| m.union(Self::of(g))))
+    }
+    /// The larger of each of the metrics of `self` and `o`: those of a line holding both.
+    pub(super) fn union(self, o: Self) -> Self {
+        Self {
+            asc: self.asc.max(o.asc),
+            desc: self.desc.max(o.desc),
+            lead: self.lead.max(o.lead),
+            cap: self.cap.max(o.cap),
+            xh: self.xh.max(o.xh),
+            top: self.top.max(o.top),
+        }
     }
     /// Distance from the frame top to the first baseline.
     pub(super) fn first_baseline(&self, fb: FirstBaseline, min: f64) -> f64 {
@@ -67,6 +71,9 @@ pub(super) struct Pen<'r> {
     /// Baseline steps still allowed over all the frame's cells and placements (shared by this pen's
     /// copies): see [`MAX_TOTAL_STEPS`].
     pub(super) steps_left: std::rc::Rc<std::cell::Cell<usize>>,
+    /// What is left of the every-line composer's search over the frame's paragraphs (shared by
+    /// this pen's copies): see [`super::shaped::Budget`].
+    pub(super) search: std::rc::Rc<super::shaped::Budget>,
 }
 
 /// The largest number of steps layout takes to move a line down a frame cell to find room for it:
@@ -841,6 +848,7 @@ fn a_pen_out_of_baseline_steps_finds_no_room() {
         next_top: None,
         no_room_for: f64::INFINITY,
         steps_left: std::rc::Rc::new(std::cell::Cell::new(steps)),
+        search: Default::default(),
     };
     assert!(pen(MAX_TOTAL_STEPS).place(est, 0.0, 0.0, 0.0).is_some());
     assert!(pen(0).place(est, 0.0, 0.0, 0.0).is_none());
