@@ -941,27 +941,10 @@ pub fn remove_anchor(sp: &mut SubPath, index: usize) -> bool {
         return false;
     }
     if (sp.closed || (index > 0 && index + 1 < n)) && n >= 3 {
-        let (pi, ni) = ((index + n - 1) % n, (index + 1) % n);
-        if !(sp.segment_is_line(pi) && sp.segment_is_line(index)) {
-            let (left, right) = (sp.segment(pi), sp.segment(index));
-            const N: usize = 16;
-            let mut pts = Vec::with_capacity(2 * N + 1);
-            sample(&left, N, &mut pts, true);
-            sample(&right, N, &mut pts, false);
-            let (t0, t1) = (start_tangent(&left), end_tangent(&right));
-            // The new curve passes the removed point at some parameter k: the left samples sit
-            // at k·i/N, the right ones at k + (1 − k)·i/N. Search k for the closest fit.
-            let fit = |k: f64| {
-                let u = (0..=N).map(|i| k * i as f64 / N as f64).chain((1..=N).map(|i| k + (1.0 - k) * i as f64 / N as f64)).collect();
-                fit_single_from(&pts, u, t0, t1)
-            };
-            let (c, _, _) = golden_min(fit, 0.0, 1.0);
-            if c.p1.is_finite() && c.p2.is_finite() {
-                sp.anchors[pi].h_out = c.p1;
-                sp.anchors[ni].h_in = c.p2;
-            }
-        }
+        refit_across(&mut sp.anchors, (index + n - 1) % n, index, (index + 1) % n);
     }
+    #[cfg(test)]
+    tests::count_moves(n - index - 1);
     sp.anchors.remove(index);
     if !sp.closed {
         // A new end has nothing beyond it.
@@ -976,6 +959,101 @@ pub fn remove_anchor(sp: &mut SubPath, index: usize) -> bool {
         sp.closed = sp.closed && sp.anchors.len() == 2 && sp.anchors.iter().any(|a| a.has_in() || a.has_out());
     }
     true
+}
+
+/// Refit the facing handles of anchors `pi` and `ni` so one cubic follows the two segments that
+/// meet at anchor `index` between them ([`remove_anchor`]). Two straight segments are left as
+/// they are, and so are the handles when the fit is not finite.
+fn refit_across(anchors: &mut [Anchor], pi: usize, index: usize, ni: usize) {
+    let (Some(&a), Some(&b), Some(&c)) = (anchors.get(pi), anchors.get(index), anchors.get(ni)) else { return };
+    let line = |a: &Anchor, b: &Anchor| !a.has_out() && !b.has_in();
+    if line(&a, &b) && line(&b, &c) {
+        return;
+    }
+    let (left, right) = (CubicBez::new(a.p, a.h_out, b.h_in, b.p), CubicBez::new(b.p, b.h_out, c.h_in, c.p));
+    const N: usize = 16;
+    let mut pts = Vec::with_capacity(2 * N + 1);
+    sample(&left, N, &mut pts, true);
+    sample(&right, N, &mut pts, false);
+    let (t0, t1) = (start_tangent(&left), end_tangent(&right));
+    // The new curve passes the removed point at some parameter k: the left samples sit at k·i/N,
+    // the right ones at k + (1 − k)·i/N. Search k for the closest fit.
+    let fit = |k: f64| {
+        let u = (0..=N).map(|i| k * i as f64 / N as f64).chain((1..=N).map(|i| k + (1.0 - k) * i as f64 / N as f64)).collect();
+        fit_single_from(&pts, u, t0, t1)
+    };
+    let (curve, _, _) = golden_min(fit, 0.0, 1.0);
+    if curve.p1.is_finite() && curve.p2.is_finite() {
+        anchors[pi].h_out = curve.p1;
+        anchors[ni].h_in = curve.p2;
+    }
+}
+
+/// [`remove_anchor`] for each of `indexes`, the last first, with the same result, moving each
+/// anchor that stays at most once: removing many anchors from a long subpath one at a time shifts
+/// the rest of it each time. Indexes out of range and repeats are skipped. Returns how many
+/// anchors were removed.
+pub fn remove_anchors(sp: &mut SubPath, indexes: &[usize]) -> usize {
+    let total = sp.anchors.len();
+    let mut targets: Vec<usize> = indexes.iter().copied().filter(|&i| i < total).collect();
+    targets.sort_unstable_by(|a, b| b.cmp(a));
+    targets.dedup();
+    if targets.is_empty() {
+        return 0;
+    }
+    // Every anchor below the one being removed is still there, so it keeps its index, the one
+    // before it is `index - 1` and the first one left is anchor 0 until anchor 0 itself goes.
+    let mut gone = vec![false; total];
+    let mut len = total;
+    let mut last = total - 1;
+    // The lowest anchor removed so far and the first one left after it.
+    let (mut lowest, mut after_lowest) = (total, None);
+    for &index in &targets {
+        let next = if index + 1 < lowest { Some(index + 1) } else { after_lowest };
+        if (sp.closed || (index > 0 && next.is_some())) && len >= 3 {
+            let pi = if index > 0 { index - 1 } else { last };
+            refit_across(&mut sp.anchors, pi, index, next.unwrap_or(0));
+        }
+        gone[index] = true;
+        len -= 1;
+        (lowest, after_lowest) = (index, next);
+        if next.is_none() {
+            last = index.saturating_sub(1);
+        }
+        if len == 0 {
+            continue;
+        }
+        let first = if index > 0 { 0 } else { next.unwrap_or(0) };
+        if !sp.closed {
+            // A new end has nothing beyond it.
+            if let Some(a) = sp.anchors.get_mut(first) {
+                a.h_in = a.p;
+            }
+            if let Some(a) = sp.anchors.get_mut(last) {
+                a.h_out = a.p;
+            }
+        }
+        if len < 3 {
+            let ends = [first, last].map(|i| sp.anchors.get(i).is_some_and(|a| a.has_in() || a.has_out()));
+            sp.closed = sp.closed && len == 2 && (ends[0] || ends[1]);
+        }
+    }
+    if len == 0 {
+        sp.closed = false;
+    }
+    let mut kept = 0;
+    for (i, &g) in gone.iter().enumerate() {
+        if !g {
+            if kept != i {
+                sp.anchors[kept] = sp.anchors[i];
+                #[cfg(test)]
+                tests::count_moves(1);
+            }
+            kept += 1;
+        }
+    }
+    sp.anchors.truncate(kept);
+    targets.len()
 }
 
 /// The fit `f` (curve, error, worst point) with the least error for an argument in `[a, b]`, by a
@@ -1187,6 +1265,129 @@ fn end_point(sp: &SubPath, last: bool) -> Option<Point> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    std::thread_local! {
+        /// Anchors moved within a subpath's anchor list by [`remove_anchor`] and [`remove_anchors`].
+        static MOVES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    pub(super) fn count_moves(n: usize) {
+        MOVES.set(MOVES.get() + n);
+    }
+
+    /// A subpath of `n` anchors from `seed`: corners, smooth points and points with one handle.
+    fn random_subpath(seed: &mut u64, n: usize, closed: bool) -> SubPath {
+        let mut rnd = || {
+            *seed ^= *seed << 13;
+            *seed ^= *seed >> 7;
+            *seed ^= *seed << 17;
+            *seed
+        };
+        let anchors = (0..n)
+            .map(|i| {
+                let p = Point::new(i as f64 * 20.0 + (rnd() % 100) as f64 / 10.0, (rnd() % 400) as f64 / 4.0);
+                let off = Vec2::new((rnd() % 300) as f64 / 10.0 - 15.0, (rnd() % 300) as f64 / 10.0 - 15.0);
+                match rnd() % 4 {
+                    0 => Anchor::corner(p),
+                    1 => Anchor::smooth(p, p + off),
+                    2 => Anchor::with_handles(p, p, p + off),
+                    _ => Anchor::with_handles(p, p - off, p),
+                }
+            })
+            .collect();
+        SubPath::new(anchors, closed)
+    }
+
+    /// `sp` with [`remove_anchor`] run for each of `indexes`, the last first.
+    fn one_at_a_time(sp: &SubPath, indexes: &[usize]) -> SubPath {
+        let mut order = indexes.to_vec();
+        order.sort_unstable_by(|a, b| b.cmp(a));
+        order.dedup();
+        let mut out = sp.clone();
+        for i in order {
+            remove_anchor(&mut out, i);
+        }
+        out
+    }
+
+    fn assert_same_bits(got: &SubPath, want: &SubPath, what: &str) {
+        let bits = |sp: &SubPath| -> Vec<[u64; 6]> {
+            sp.anchors.iter().map(|a| [a.p.x, a.p.y, a.h_in.x, a.h_in.y, a.h_out.x, a.h_out.y].map(f64::to_bits)).collect()
+        };
+        assert_eq!(got.closed, want.closed, "closed: {what}");
+        assert_eq!(bits(got), bits(want), "{what}");
+        assert_eq!(got.anchors.iter().map(|a| a.kind).collect::<Vec<_>>(), want.anchors.iter().map(|a| a.kind).collect::<Vec<_>>(), "{what}");
+    }
+
+    #[test]
+    fn removing_anchors_together_gives_what_removing_them_one_at_a_time_gives() {
+        let mut seed = 0x9e37_79b9_7f4a_7c15_u64;
+        for case in 0..600 {
+            let n = case % 40 + 1;
+            let closed = case % 2 == 0;
+            let sp = random_subpath(&mut seed, n, closed);
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            // Up to n + 2 picks over 0..n + 2: runs of neighbors, both ends, everything, repeats
+            // and indexes past the end.
+            let picks = (seed % (n as u64 + 3)) as usize;
+            let mut indexes: Vec<usize> = (0..picks).map(|k| ((seed >> (k % 48)) as usize).wrapping_add(k * 7) % (n + 2)).collect();
+            if case % 5 == 0 {
+                indexes = (0..n).collect();
+            }
+            let mut got = sp.clone();
+            let removed = remove_anchors(&mut got, &indexes);
+            let want = one_at_a_time(&sp, &indexes);
+            let what = format!("case {case}: {n} anchors, closed {closed}, removing {indexes:?}");
+            assert_same_bits(&got, &want, &what);
+            assert_eq!(removed, sp.anchors.len() - want.anchors.len(), "{what}");
+        }
+    }
+
+    #[test]
+    fn removing_anchors_together_keeps_each_step_of_one_at_a_time() {
+        let curve = |p: Point, d: f64| Anchor::smooth(p, p + Vec2::new(d, 25.0));
+        let pts = [Point::new(0.0, 0.0), Point::new(50.0, 40.0), Point::new(100.0, 0.0), Point::new(150.0, 40.0), Point::new(200.0, 0.0)];
+        let cases: Vec<(SubPath, Vec<usize>)> = vec![
+            // A refit at one removal makes the next segment curved, which the next removal refits.
+            (
+                SubPath::new(
+                    vec![Anchor::corner(pts[0]), Anchor::corner(pts[1]), curve(pts[2], 20.0), Anchor::corner(pts[3]), Anchor::corner(pts[4])],
+                    false,
+                ),
+                vec![1, 2, 3],
+            ),
+            // The last anchor of an open path goes, then the one before it becomes the end.
+            (SubPath::new(pts.iter().map(|&p| curve(p, 15.0)).collect(), false), vec![2, 3, 4]),
+            // The first anchor of a closed path refits across the wrap.
+            (SubPath::new(pts.iter().map(|&p| curve(p, -10.0)).collect(), true), vec![0, 4]),
+            // A closed path down to two anchors stays closed with a handle, and opens without one.
+            (SubPath::new(pts.iter().map(|&p| curve(p, 10.0)).collect(), true), vec![1, 2, 3]),
+            (SubPath::polyline(&pts, true), vec![1, 2, 3]),
+            (SubPath::polyline(&pts, true), vec![0, 1, 2, 3]),
+            (SubPath::polyline(&pts[..1], false), vec![0]),
+            (SubPath::new(vec![], true), vec![0]),
+        ];
+        for (sp, indexes) in cases {
+            let mut got = sp.clone();
+            remove_anchors(&mut got, &indexes);
+            assert_same_bits(&got, &one_at_a_time(&sp, &indexes), &format!("{sp:?} removing {indexes:?}"));
+        }
+    }
+
+    #[test]
+    fn removing_anchors_together_moves_each_anchor_left_at_most_once() {
+        let n = 2001;
+        let pts: Vec<Point> = (0..n).map(|i| Point::new(i as f64, (i % 2) as f64)).collect();
+        let mut sp = SubPath::polyline(&pts, false);
+        let every_other: Vec<usize> = (1..n).step_by(2).collect();
+        MOVES.set(0);
+        assert_eq!(remove_anchors(&mut sp, &every_other), n / 2);
+        assert_eq!(sp.anchors.len(), n - n / 2);
+        let moves = MOVES.get();
+        assert!(moves < n, "{moves} anchors moved to remove {} of {n}", n / 2);
+    }
 
     /// The samples Object › Path › Smooth at `level` smooths for `sp`, a subpath with no corner,
     /// and the spread it smooths them with.
