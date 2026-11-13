@@ -2238,6 +2238,8 @@ file-filter	Templates	Vorlagen
 	Normal Screen Mode	Normaler Bildschirmmodus
 	Note:	Notiz:
 	Nothing matches the Show filter.	Nichts entspricht dem Filter „Anzeigen“.
+	Show DCS Transparency Interactions	DCS-Transparenzinteraktionen anzeigen
+	Transparent, or overlaps transparent objects: check its separations	Transparent oder überlappt transparente Objekte: Separationen prüfen
 	Nothing to print	Nichts zu drucken
 	Nudge	Schrittweise verschieben
 	Nudge in Perspective	In Perspektive schrittweise verschieben

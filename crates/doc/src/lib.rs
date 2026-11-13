@@ -62,6 +62,7 @@ pub mod rastersettings;
 mod reach;
 pub mod recolor;
 pub mod selection;
+pub mod separated;
 pub mod setup;
 pub mod shaper;
 pub mod slices;

@@ -2215,6 +2215,8 @@ font-technology	Variable	Variabla
 	Normal Screen Mode	Normalt skärmläge
 	Note:	Obs:
 	Nothing matches the Show filter.	Inget matchar filtret Visa.
+	Show DCS Transparency Interactions	Visa DCS-genomskinlighetsinteraktioner
+	Transparent, or overlaps transparent objects: check its separations	Genomskinlig eller överlappar genomskinliga objekt: kontrollera dess separationer
 	Nothing to print	Inget att skriva ut
 	Nudge	Flytta stegvis
 	Nudge in Perspective	Flytta stegvis i perspektiv

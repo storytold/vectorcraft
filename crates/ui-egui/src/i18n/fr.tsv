@@ -2268,6 +2268,8 @@ font-technology	Variable	Variables
 	Normal Screen Mode	Mode Écran normal
 	Note:	Remarque :
 	Nothing matches the Show filter.	Aucun élément ne correspond au filtre Afficher.
+	Show DCS Transparency Interactions	Afficher les interactions de transparence DCS
+	Transparent, or overlaps transparent objects: check its separations	Transparent ou superposé à des objets transparents : vérifiez ses séparations
 	Nothing to print	Rien à imprimer
 	Nudge	Décaler
 	Nudge in Perspective	Décaler en perspective

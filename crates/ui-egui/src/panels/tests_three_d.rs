@@ -613,6 +613,42 @@ fn a_geometry_effect_after_the_3d_effect_hides_the_graphics_handles() {
 }
 
 #[test]
+fn a_hidden_fill_shows_no_handles_for_its_graphics() {
+    let (mut app, ctx) = materials_app();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    // The 3D effect, with its graphic, moves onto the square's fill.
+    let fill = {
+        let st = app.session.active_mut().unwrap();
+        let id = st.selection.objects[0];
+        let n = std::sync::Arc::make_mut(&mut st.doc).node_mut(id).unwrap();
+        let fx = n.appearance.effects.remove(0);
+        let fill = n.appearance.items.iter().position(|i| matches!(i, vectorcraft_doc::AppearanceItem::Fill(_))).unwrap();
+        n.appearance.effects_mut(Some(fill)).unwrap().push(fx);
+        fill
+    };
+    let shown = |app: &VectorcraftApp| {
+        let mut shown = false;
+        ctx.run_ui(egui::RawInput::default(), |ui| {
+            crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
+            shown = super::graphic_handles(app, ui.ctx()).is_some_and(|(_, _, handles)| !handles.is_empty());
+        })
+        .textures_delta
+        .clear();
+        shown
+    };
+    assert!(shown(&app), "the visible fill's graphic has a handle");
+    {
+        let st = app.session.active_mut().unwrap();
+        let id = st.selection.objects[0];
+        let n = std::sync::Arc::make_mut(&mut st.doc).node_mut(id).unwrap();
+        if let Some(vectorcraft_doc::AppearanceItem::Fill(f)) = n.appearance.items.get_mut(fill) {
+            f.visible = false;
+        }
+    }
+    assert!(!shown(&app), "the hidden fill draws no graphic, so it has no handle");
+}
+
+#[test]
 fn a_press_that_closes_the_context_menu_does_not_grab_a_graphics_handle() {
     let (mut app, ctx) = materials_app();
     app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
