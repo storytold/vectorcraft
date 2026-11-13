@@ -2662,6 +2662,53 @@ fn pixel_preview_shows_the_document_pixels() {
     assert!(w > 600 && !hard, "zoomed out: the screen's pixels");
 }
 
+/// Preferences › Performance › Use Monitor Profile for Canvas: with a display profile read, the
+/// art is drawn converted into it, and drawn again when the profile or the preference changes.
+#[test]
+fn the_canvas_is_drawn_through_the_display_profile_while_the_preference_is_on() {
+    use crate::display_profile::{Found, Reading};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
+    app.session.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    app.canvas.worker_started = true; // render on this thread
+    assert!(app.session.prefs.monitor_profile_display, "on by default");
+    let ctx = egui::Context::default();
+    // How many pixels of the art's raster one frame uploads are `c`, None when it was not re-rendered.
+    let count = |app: &mut VectorcraftApp, c: egui::Color32| -> Option<usize> {
+        let (_, mut delta) = frame_output(app, &ctx);
+        let art = app.canvas.texture.as_ref().unwrap().id();
+        let n = delta.set.iter().find(|e| e.0.eq(&art)).and_then(|e| e.1.last()).map(|d| {
+            let egui::ImageData::Color(img) = &d.image;
+            img.pixels.iter().filter(|p| **p == c).count()
+        });
+        delta.clear();
+        n
+    };
+    let red = egui::Color32::RED;
+    let srgb = count(&mut app, red).expect("the first frame");
+    assert!(srgb > 1000, "the rectangle in sRGB: {srgb}");
+    let p3 = crate::display_profile::tests::p3();
+    let t = vectorcraft_color::cms::display::DisplayTransform::from_icc(&p3).unwrap();
+    let [r, g, b] = t.apply8([255, 0, 0]);
+    let shown = egui::Color32::from_rgb(r, g, b);
+    assert_ne!(shown, red, "sRGB red is less saturated on a wide-gamut display");
+    let reading = |found| Reading { display: Some("DP-1".into()), found };
+    assert!(app.display_profile.report(reading(Found::Profile { icc: p3.clone(), from: "test".into() })));
+    assert_eq!(count(&mut app, shown), Some(srgb), "drawn again, converted");
+    // The same profile again: nothing is drawn again.
+    assert!(!app.display_profile.report(reading(Found::Profile { icc: p3, from: "test".into() })));
+    assert_eq!(count(&mut app, shown), None);
+    // Off: drawn again in sRGB.
+    app.session.prefs.monitor_profile_display = false;
+    assert_eq!(count(&mut app, red), Some(srgb));
+    // On again, then the system takes over: sRGB.
+    app.session.prefs.monitor_profile_display = true;
+    assert_eq!(count(&mut app, shown), Some(srgb));
+    app.display_profile.report(reading(Found::System("test".into())));
+    assert_eq!(count(&mut app, red), Some(srgb));
+}
+
 /// View › Hide Template (#2000): a template layer's art leaves the canvas, and Show Template
 /// draws it again, dimmed as before; each re-renders at once.
 #[test]
@@ -7319,6 +7366,48 @@ fn cmd_space_zooms_and_space_pans_whatever_the_tool() {
     assert!((after.center.x - (before.center.x - 30.0 / before.zoom)).abs() < 1e-6, "{before:?} → {after:?}");
 }
 
+/// While the Type tool edits text, Space types a space: held, it shows no hand and a drag with it
+/// does not pan the view. Cmd+Space still zooms.
+#[test]
+fn space_types_a_space_while_editing_text_and_does_not_pan() {
+    use egui::{CursorIcon, Event, Modifiers};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    let ctx = egui::Context::default();
+    let id = start_typing(&mut app, &ctx);
+    let at = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(Point::new(100.0, 100.0));
+    let space = |pressed, modifiers| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers };
+    let button = |pos, pressed, modifiers| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+    // The cursor the canvas sets over a window without the focus, as in
+    // `the_rotate_cursor_shows_for_space_shift_and_the_rotate_view_tool`.
+    let shown = |app: &mut VectorcraftApp| {
+        let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect, focused: false, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.cursor_icon
+    };
+    typing_frame(&mut app, &ctx, vec![Event::Text("a".into())]);
+    typing_frame(&mut app, &ctx, vec![Event::PointerMoved(at), space(true, Modifiers::NONE), Event::Text(" ".into())]);
+    assert_eq!(plain(&app, id), "a ", "Space types a space");
+    assert_ne!(shown(&mut app), CursorIcon::Grab, "held while editing, Space shows no hand");
+    let before = *app.view().unwrap();
+    typing_frame(&mut app, &ctx, vec![button(at, true, Modifiers::NONE)]);
+    typing_frame(&mut app, &ctx, vec![Event::PointerMoved(at + vec2(30.0, 0.0))]);
+    typing_frame(&mut app, &ctx, vec![button(at + vec2(30.0, 0.0), false, Modifiers::NONE)]);
+    let after = *app.view().unwrap();
+    assert_eq!((after.center, after.zoom, after.rotation), (before.center, before.zoom, before.rotation), "a drag with Space held does not pan");
+    assert!(app.session.tool_wants_text(), "editing goes on");
+    typing_frame(&mut app, &ctx, vec![space(false, Modifiers::NONE)]);
+    // Cmd+Space still lends the Zoom tool.
+    typing_frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::COMMAND), space(true, Modifiers::COMMAND), Event::PointerMoved(at)]);
+    assert_eq!(shown(&mut app), CursorIcon::ZoomIn, "Cmd+Space shows the magnifier");
+    typing_frame(&mut app, &ctx, vec![button(at, true, Modifiers::COMMAND)]);
+    typing_frame(&mut app, &ctx, vec![button(at, false, Modifiers::COMMAND)]);
+    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(before.zoom, true), "Cmd+Space click zooms in");
+    typing_frame(&mut app, &ctx, vec![space(false, Modifiers::COMMAND), Event::ModifiersChanged(Modifiers::NONE)]);
+    assert_eq!(plain(&app, id), "a ", "the text is as typed");
+}
+
 #[test]
 fn space_shift_drag_rotates_the_view_whatever_the_tool() {
     use egui::{Event, Modifiers};
@@ -11787,6 +11876,7 @@ fn pan_job(doc: &std::sync::Arc<vectorcraft_doc::Document>, key: &CacheKey, (dx,
         effects: Default::default(),
         may_copy: true,
         may_keep: true,
+        display: None,
     }
 }
 

@@ -3741,6 +3741,11 @@ antiAlias	Sharp	शार्प
 	Real name	वास्तविक नाम
 	Real World:	रियल वर्ल्ड:
 	Real-time Drawing and Editing	रियल टाइम ड्राइंग और संपादन
+	Use Monitor Profile for Canvas	कैनवास के लिए मॉनिटर प्रोफ़ाइल का उपयोग करें
+	The canvas is drawn in sRGB.	कैनवास sRGB में बनाया जाता है।
+	Canvas display profile:	कैनवास की डिस्प्ले प्रोफ़ाइल:
+	The system matches the window to the display's colors.	सिस्टम विंडो को डिस्प्ले के रंगों से मिलाता है।
+	No usable display profile was found: the canvas is drawn in sRGB.	कोई उपयोगी डिस्प्ले प्रोफ़ाइल नहीं मिली: कैनवास sRGB में बनाया जाता है।
 	Rearrange	फिर से व्यवस्थित करें
 	Select All Artboards	सभी आर्टबोर्ड सिलेक्ट करें
 	Switch Orientation	ओरिएंटेशन स्विच करें
@@ -4766,6 +4771,8 @@ antiAlias	Sharp	शार्प
 	Split at Anchors	एंकर पर विभाजित
 	Split at Anchors…	एंकर पर विभाजित…
 	Split at Crossings	क्रॉसिंग में विभाजित
+	Trim at Crossings Tool	क्रॉसिंग पर ट्रिम टूल
+	Trim at Crossings	क्रॉसिंग पर ट्रिम करें
 	Split at Cursor	कर्सर में विभाजित
 	Split Complementary	स्प्लिट कॉम्प्लेमेंटरी
 	Split Freeform Line	स्प्लिट फ्रीफॉर्म लाइन
@@ -4990,6 +4997,11 @@ antiAlias	Sharp	शार्प
 	Target:	लक्ष्य:
 	Tate-chu-yoko	ताते-चू-योको
 	Tate-chu-yoko Settings	ताते-चू-योको सेटिंग्स
+	Warichu	वारिचू
+	Warichu Settings…	वारिचू सेटिंग्स…
+	Warichu Settings	वारिचू सेटिंग्स
+	Lines:	पंक्तियाँ:
+	Line Gap:	पंक्ति गैप:
 	Tate-chu-yoko Settings…	ताते-चू-योको सेटिंग्स…
 	Composite Fonts…	कंपोज़िट फ़ॉन्ट…
 	Composite Fonts	कंपोज़िट फ़ॉन्ट
@@ -8543,6 +8555,7 @@ antiAlias	Sharp	शार्प
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	डॉक्यूमेंट एक ब्लीड सेट करता है जिसे यह PDF/X फ़ाइल छोड़ देती है: "डॉक्यूमेंट की ब्लीड सेटिंग्स उपयोग करें" चालू करें
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} एक्सपोर्ट हुआ, {n} नोट के साथ: {first}|{what} एक्सपोर्ट हुआ, {n} नोट्स के साथ: {first}
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	{n} नोट के साथ खुला: {first}|{n} नोट्स के साथ खुला: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}। {n} नोट के साथ खुला: {first}|{notice}। {n} नोट्स के साथ खुला: {first}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{folder} में {n} फ़ाइल ({note}) पैकेज हुई|{folder} में {n} फ़ाइलें ({note}) पैकेज हुईं
 @msgplural	Packaged {n} file {note}|Packaged {n} files {note}	{n} फ़ाइल पैकेज हुई {note}|{n} फ़ाइलें पैकेज हुईं {note}
 @msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{folder} में {n} फ़ाइल पैकेज हुई|{folder} में {n} फ़ाइलें पैकेज हुईं

@@ -2,8 +2,8 @@
 //! the Extend Path tool's extension, the Measure & Inspect tool's readouts, the Anchor Inspector's
 //! anchor edits, Split / Add Points at Crossings, Slide Anchor Along Path, the Corner Tool's corners
 //! ([`corners`]), the Parametric Shape Tool's shapes ([`shape`]), the Shared Edge Merge Tool's
-//! merges with Keep Shared Points Together ([`shared_edge`]), Divide into Dashes and Expand Dashes
-//! into Paths.
+//! merges with Keep Shared Points Together ([`shared_edge`]), Divide into Dashes, Expand Dashes
+//! into Paths and Trim at Crossings ([`trim`]).
 //! Its tools, panels and submenu (Object › Plug-ins › Path Precision Tools) are the tools crate's
 //! and the UI's.
 
@@ -14,6 +14,7 @@ mod shape;
 mod shared_edge;
 #[cfg(test)]
 mod tests;
+mod trim;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -143,7 +144,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Points at Crossings",
             ["Object", "Plug-ins", "Path Precision Tools"],
             None,
-            "{cut?: bool (false: add anchors where the paths cross; true: also cut them there), selfCrossings?: bool (false: where a path crosses itself too), ids?: [id…] (default: the selection)} where the paths under the objects cross one another, as one undo step; at most 10000 segments → {ids, crossings (anchors placed)}",
+            "{cut?: bool (false: add anchors where the paths cross; true: also cut them there), selfCrossings?: bool (false: where a path crosses itself too, a curved segment that loops over itself included), ids?: [id…] (default: the selection)} where the paths under the objects cross one another, as one undo step; at most 10000 segments → {ids, crossings (anchors placed)}",
             has_selection,
             crossings
         ),
@@ -178,6 +179,7 @@ pub fn specs() -> Vec<CommandSpec> {
     v.extend(shape::specs());
     v.extend(corners::specs());
     v.extend(shared_edge::specs());
+    v.extend(trim::specs());
     v
 }
 

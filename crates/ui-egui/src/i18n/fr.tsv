@@ -2695,6 +2695,11 @@ digits	Malayalam	Malayalam
 	Rating:	Classement :
 	Real World:	Monde réel :
 	Real-time Drawing and Editing	Dessin et édition en temps réel
+	Use Monitor Profile for Canvas	Utiliser le profil du moniteur pour la zone de travail
+	The canvas is drawn in sRGB.	La zone de travail est affichée en sRGB.
+	Canvas display profile:	Profil d’affichage de la zone de travail :
+	The system matches the window to the display's colors.	Le système adapte la fenêtre aux couleurs de l’écran.
+	No usable display profile was found: the canvas is drawn in sRGB.	Aucun profil d’affichage utilisable n’a été trouvé : la zone de travail est affichée en sRGB.
 	Rearrange All Artboards	Réorganiser tous les plans de travail
 	Rearrange	Réorganiser
 	Select All Artboards	Sélectionner tous les plans de travail
@@ -3630,6 +3635,11 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Paramètres Tate-chu-yoko…
 	Tate-chu-yoko Settings	Paramètres Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Paramètres Warichu…
+	Warichu Settings	Paramètres Warichu
+	Lines:	Lignes :
+	Line Gap:	Écart entre les lignes :
 	Composite Fonts…	Polices composites…
 	Composite Fonts	Polices composites
 	Export Composite Fonts	Exporter des polices composites
@@ -5019,6 +5029,7 @@ axis	Both	Les deux
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} document récupéré supprimé|{n} documents récupérés supprimés
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} document récupéré restauré : enregistrez-le pour le conserver|{n} documents récupérés restaurés : enregistrez-les pour les conserver
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Ouvert avec {n} remarque : {first}|Ouvert avec {n} remarques : {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Ouvert avec {n} remarque : {first}|{notice}. Ouvert avec {n} remarques : {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} enregistré avec {n} remarque : {first}|{path} enregistré avec {n} remarques : {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} image incorporée ; il en manque {missing} : rétablissez d’abord leurs liens|{n} images incorporées ; il en manque {missing} : rétablissez d’abord leurs liens
 @msgplural	Embedded {n} image|Embedded {n} images	{n} image incorporée|{n} images incorporées
@@ -6855,6 +6866,8 @@ anchor	Points:	Points :
 	Anchor Inspector	Inspecteur de points d’ancrage
 	Add Points at Crossings	Ajouter des points aux croisements
 	Split at Crossings	Scinder aux croisements
+	Trim at Crossings Tool	Outil Rogner aux croisements
+	Trim at Crossings	Rogner aux croisements
 	Extend Path	Prolonger le tracé
 	Measure & Inspect	Mesurer et inspecter
 	Set Anchor	Définir le point d’ancrage

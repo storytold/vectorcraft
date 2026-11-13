@@ -1,6 +1,6 @@
 use serde_json::json;
 use vectorcraft_doc::color::Color;
-use vectorcraft_doc::{Document, NodeId};
+use vectorcraft_doc::{Document, NodeId, StrokeLayer};
 use vectorcraft_geom::{Affine, BezPath};
 
 use super::*;

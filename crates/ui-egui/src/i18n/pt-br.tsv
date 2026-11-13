@@ -2260,6 +2260,11 @@ digits	Malayalam	Malaiala
 	Rating:	Avaliação:
 	Real World:	Mundo Real:
 	Real-time Drawing and Editing	Desenho e Edição em Tempo Real
+	Use Monitor Profile for Canvas	Usar Perfil do Monitor para a Tela
+	The canvas is drawn in sRGB.	A tela é desenhada em sRGB.
+	Canvas display profile:	Perfil do monitor para a tela:
+	The system matches the window to the display's colors.	O sistema ajusta a janela às cores do monitor.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nenhum perfil de monitor utilizável foi encontrado: a tela é desenhada em sRGB.
 	Rearrange All Artboards	Reorganizar Todas as Mesas de Trabalho
 	Rearrange	Reorganizar
 	Select All Artboards	Selecionar Todas as Mesas de Trabalho
@@ -4487,6 +4492,7 @@ axis	Both	Ambos
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} documento recuperado descartado|{n} documentos recuperados descartados
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} documento recuperado restaurado: salve-o para mantê-lo|{n} documentos recuperados restaurados: salve-os para mantê-los
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Aberto com {n} observação: {first}|Aberto com {n} observações: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Aberto com {n} observação: {first}|{notice}. Aberto com {n} observações: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} salvo com {n} observação: {first}|{path} salvo com {n} observações: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} imagem incorporada; faltam {missing}: revincule-as primeiro|{n} imagens incorporadas; faltam {missing}: revincule-as primeiro
 @msgplural	Embedded {n} image|Embedded {n} images	{n} imagem incorporada|{n} imagens incorporadas
@@ -5186,6 +5192,11 @@ axis	Both	Ambos
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Configurações de Tate-chu-yoko…
 	Tate-chu-yoko Settings	Configurações de Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Configurações de Warichu…
+	Warichu Settings	Configurações de Warichu
+	Lines:	Linhas:
+	Line Gap:	Distância entre linhas:
 	Composite Fonts…	Fontes compostas…
 	Composite Fonts	Fontes compostas
 	Export Composite Fonts	Exportar fontes compostas
@@ -6775,6 +6786,8 @@ anchor	Points:	Pontos:
 	Anchor Inspector	Inspetor de Pontos de Ancoragem
 	Add Points at Crossings	Adicionar Pontos nos Cruzamentos
 	Split at Crossings	Dividir nos Cruzamentos
+	Trim at Crossings Tool	Ferramenta Aparar nos Cruzamentos
+	Trim at Crossings	Aparar nos Cruzamentos
 	Extend Path	Estender Caminho
 	Measure & Inspect	Medir e Inspecionar
 	Set Anchor	Definir Ponto de Ancoragem
