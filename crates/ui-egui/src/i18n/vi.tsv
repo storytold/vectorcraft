@@ -721,6 +721,8 @@ font-technology	Variable	Biến thiên
 	Convert to Artboards	Chuyển thành bảng vẽ
 	Convert to CMYK	Chuyển sang CMYK
 	Convert to Grayscale	Chuyển sang thang xám
+	Convert to Indexed Color	Chuyển sang màu chỉ mục
+	Convert to Indexed Color…	Chuyển sang màu chỉ mục…
 	Convert To Outlines	Chuyển thành đường bao
 	Convert To Point Type	Chuyển sang chữ điểm
 	Convert to RGB	Chuyển sang RGB
@@ -3049,6 +3051,11 @@ mark-style	Japanese	Kiểu Nhật
 	Real name	Tên thật
 	Real World:	Thực tế:
 	Real-time Drawing and Editing	Vẽ và chỉnh sửa theo thời gian thực
+	Use Monitor Profile for Canvas	Dùng hồ sơ màn hình cho vùng vẽ
+	The canvas is drawn in sRGB.	Vùng vẽ được hiển thị ở sRGB.
+	Canvas display profile:	Hồ sơ màn hình của vùng vẽ:
+	The system matches the window to the display's colors.	Hệ thống điều chỉnh cửa sổ theo màu của màn hình.
+	No usable display profile was found: the canvas is drawn in sRGB.	Không tìm thấy hồ sơ màn hình dùng được: vùng vẽ được hiển thị ở sRGB.
 	Rearrange	Sắp xếp lại
 	Select All Artboards	Chọn tất cả các bảng vẽ
 	Switch Orientation	Chuyển hướng
@@ -4805,6 +4812,9 @@ theme	Appearance	Giao diện
 @msg	Couldn't paste: the document it was pasted in was closed	Không thể dán: tài liệu mà nó được dán vào đã đóng
 @msg	Couldn't place {name}: the document it was dropped on was closed	Không thể đặt {name}: tài liệu mà nó được thả vào đã đóng
 @msg	Couldn't place {name}: the document it was placed in was closed	Không thể đặt {name}: tài liệu mà nó được đặt vào đã đóng
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Không thể đặt {name}: tài liệu mà nó được thả vào đã được hoàn về
+@msg	Couldn't place {name}: the document it was placed in was reverted	Không thể đặt {name}: tài liệu mà nó được đặt vào đã được hoàn về
+@msg	Couldn't paste: the document it was pasted in was reverted	Không thể dán: tài liệu mà nó được dán vào đã được hoàn về
 @msg	Couldn't place {name}: {e}	Không thể đặt {name}: {e}
 @msg	Couldn't read {name}: {e}	Không thể đọc {name}: {e}
 @msg	Couldn't save recovery data: {e}	Không thể lưu dữ liệu phục hồi: {e}

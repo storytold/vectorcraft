@@ -820,6 +820,8 @@ font-technology	Variable	Változó
 	Convert to destination (preserve numbers)	Átalakítás a célprofilra (az értékek megőrzésével)
 	Convert to Global	Átalakítás globálissá
 	Convert to Grayscale	Átalakítás szürkeárnyalatossá
+	Convert to Indexed Color	Átalakítás indexelt színűvé
+	Convert to Indexed Color…	Átalakítás indexelt színűvé…
 	Convert To Outlines	Átalakítás útvonallá
 	Convert To Point Type	Átalakítás pontszöveggé
 	Convert to RGB	Átalakítás RGB-re
@@ -3263,6 +3265,11 @@ mark-style	Japanese	Japán
 	Real name	Valódi név
 	Real World:	Valós méret:
 	Real-time Drawing and Editing	Valós idejű rajzolás és szerkesztés
+	Use Monitor Profile for Canvas	Monitorprofil használata a vászonhoz
+	The canvas is drawn in sRGB.	A vászon sRGB-ben jelenik meg.
+	Canvas display profile:	A vászon kijelzőprofilja:
+	The system matches the window to the display's colors.	A rendszer a kijelző színeihez igazítja az ablakot.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nem található használható kijelzőprofil: a vászon sRGB-ben jelenik meg.
 	Rearrange	Átrendezés
 	Select All Artboards	Összes rajztábla kijelölése
 	Switch Orientation	Tájolás váltása
@@ -5149,6 +5156,9 @@ imageTrace	Outline	Körvonal
 @msg	Couldn't paste: the document it was pasted in was closed	Nem sikerült beilleszteni: a dokumentumot, amelybe a beillesztés történt, bezárták
 @msg	Couldn't place {name}: the document it was dropped on was closed	Nem sikerült elhelyezni: {name}; a céldokumentumot bezárták
 @msg	Couldn't place {name}: the document it was placed in was closed	Nem sikerült elhelyezni: {name}; a dokumentumot, amelybe került volna, bezárták
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Nem sikerült elhelyezni: {name}; a céldokumentumot visszaállították a mentett változatra
+@msg	Couldn't place {name}: the document it was placed in was reverted	Nem sikerült elhelyezni: {name}; a dokumentumot, amelybe került volna, visszaállították a mentett változatra
+@msg	Couldn't paste: the document it was pasted in was reverted	Nem sikerült beilleszteni: a dokumentumot, amelybe a beillesztés történt, visszaállították a mentett változatra
 @msg	Couldn't place {name}: {e}	Nem sikerült elhelyezni: {name}: {e}
 @msg	Couldn't read {name}: {e}	Nem sikerült beolvasni: {name}: {e}
 @msg	Couldn't save recovery data: {e}	Nem sikerült menteni a helyreállítási adatokat: {e}

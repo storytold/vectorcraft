@@ -111,6 +111,8 @@
 	Blend Vertically	Przejście w pionie
 	Convert to CMYK	Konwertuj na CMYK
 	Convert to Grayscale	Konwertuj na skalę szarości
+	Convert to Indexed Color	Konwertuj na kolory indeksowane
+	Convert to Indexed Color…	Konwertuj na kolory indeksowane…
 	Convert to RGB	Konwertuj na RGB
 	Invert Colors	Odwróć kolory
 	Overprint Black…	Nadruk czerni…
@@ -3752,6 +3754,11 @@ theme	Appearance	Wygląd
 	Primary	Główny
 	Printing / Exporting	Drukowanie / eksportowanie
 	Real-time Drawing and Editing	Rysowanie i edycja w czasie rzeczywistym
+	Use Monitor Profile for Canvas	Użyj profilu monitora dla płótna
+	The canvas is drawn in sRGB.	Płótno jest rysowane w sRGB.
+	Canvas display profile:	Profil wyświetlacza płótna:
+	The system matches the window to the display's colors.	System dopasowuje okno do kolorów wyświetlacza.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nie znaleziono użytecznego profilu wyświetlacza: płótno jest rysowane w sRGB.
 	Render Threads (-1 = Automatic)	Wątki renderowania (-1 = automatycznie)
 	Reset Preferences	Resetuj preferencje
 	Export Preferences…	Eksportuj preferencje…
@@ -4475,6 +4482,9 @@ imageTrace	Outline	Kontur
 @msg	Couldn't open {name}: {e}	Nie udało się otworzyć {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Nie udało się umieścić {name}: dokument, na który go upuszczono, został zamknięty
 @msg	Couldn't place {name}: the document it was placed in was closed	Nie udało się umieścić {name}: dokument, w którym był umieszczany, został zamknięty
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Nie udało się umieścić {name}: dokument, na który go upuszczono, został przywrócony
+@msg	Couldn't place {name}: the document it was placed in was reverted	Nie udało się umieścić {name}: dokument, w którym był umieszczany, został przywrócony
+@msg	Couldn't paste: the document it was pasted in was reverted	Nie udało się wkleić: dokument, do którego wklejano, został przywrócony
 @msg	Couldn't read {name}: {e}	Nie udało się odczytać {name}: {e}
 @msg	Couldn't save recovery data: {e}	Nie udało się zapisać danych odzyskiwania: {e}
 @msg	Create Outlines: select text objects	Utwórz kontury: zaznacz obiekty tekstowe

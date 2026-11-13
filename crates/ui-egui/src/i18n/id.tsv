@@ -96,6 +96,8 @@
 	Blend Vertically	Blend vertikal
 	Convert to CMYK	Konversi ke CMYK
 	Convert to Grayscale	Konversi ke skala kelabu
+	Convert to Indexed Color	Konversi ke warna terindeks
+	Convert to Indexed Color…	Konversi ke warna terindeks…
 	Convert to RGB	Konversi ke RGB
 	Invert Colors	Balikkan warna
 	Overprint Black…	Overprint hitam…
@@ -3606,6 +3608,11 @@ theme	Appearance	Tampilan
 	Primary	Utama
 	Printing / Exporting	Pencetakan / Ekspor
 	Real-time Drawing and Editing	Penggambaran dan pengeditan waktu nyata
+	Use Monitor Profile for Canvas	Gunakan profil monitor untuk kanvas
+	The canvas is drawn in sRGB.	Kanvas digambar dalam sRGB.
+	Canvas display profile:	Profil layar kanvas:
+	The system matches the window to the display's colors.	Sistem menyesuaikan jendela dengan warna layar.
+	No usable display profile was found: the canvas is drawn in sRGB.	Tidak ditemukan profil layar yang dapat digunakan: kanvas digambar dalam sRGB.
 	Render Threads (-1 = Automatic)	Utas render (-1 = Otomatis)
 	Reset Preferences	Atur ulang preferensi
 	Export Preferences…	Ekspor preferensi…
@@ -4246,6 +4253,9 @@ imageTrace	Outline	Kontur
 @msg	Couldn't open {name}: {e}	Tidak dapat membuka {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Tidak dapat menempatkan {name}: dokumen tempatnya dijatuhkan sudah ditutup
 @msg	Couldn't place {name}: the document it was placed in was closed	Tidak dapat menempatkan {name}: dokumen tempatnya ditempatkan sudah ditutup
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Tidak dapat menempatkan {name}: dokumen tempatnya dijatuhkan sudah dikembalikan
+@msg	Couldn't place {name}: the document it was placed in was reverted	Tidak dapat menempatkan {name}: dokumen tempatnya ditempatkan sudah dikembalikan
+@msg	Couldn't paste: the document it was pasted in was reverted	Tidak dapat menempel: dokumen tempatnya ditempel sudah dikembalikan
 @msg	Couldn't read {name}: {e}	Tidak dapat membaca {name}: {e}
 @msg	Couldn't save recovery data: {e}	Tidak dapat menyimpan data pemulihan: {e}
 @msg	Create Outlines: select text objects	Buat kontur: pilih objek teks

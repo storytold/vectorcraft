@@ -623,6 +623,8 @@ font-technology	Variable	Варіативні
 	Convert to Artboards	Перетворити на монтажні області
 	Convert to CMYK	Перетворити на CMYK
 	Convert to Grayscale	Перетворити на відтінки сірого
+	Convert to Indexed Color	Перетворити на індексовані кольори
+	Convert to Indexed Color…	Перетворити на індексовані кольори…
 	Convert To Outlines	Перетворити на контури
 	Convert To Point Type	Перетворити на точковий текст
 	Convert to RGB	Перетворити на RGB
@@ -2735,6 +2737,11 @@ digits	Malayalam	Малаялам
 	Rating:	Рейтинг:
 	Real World:	Реальний світ:
 	Real-time Drawing and Editing	Малювання та редагування у реальному часі
+	Use Monitor Profile for Canvas	Використовувати профіль монітора для полотна
+	The canvas is drawn in sRGB.	Полотно відображається в sRGB.
+	Canvas display profile:	Профіль дисплея для полотна:
+	The system matches the window to the display's colors.	Система узгоджує кольори вікна з дисплеєм.
+	No usable display profile was found: the canvas is drawn in sRGB.	Придатний профіль дисплея не знайдено: полотно відображається в sRGB.
 	Rearrange All Artboards	Переставити всі монтажні області
 	Rearrange	Переставити
 	Select All Artboards	Виділити всі монтажні області
@@ -4377,6 +4384,9 @@ axis	Both	Обидві
 @msg	Couldn't open {name}: {e}	Не вдалося відкрити {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Не вдалося помістити {name}: документ, у який його перетягли, було закрито
 @msg	Couldn't place {name}: the document it was placed in was closed	Не вдалося помістити {name}: документ, у який його поміщали, було закрито
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Не вдалося помістити {name}: документ, у який його перетягли, було повернуто до збереженої версії
+@msg	Couldn't place {name}: the document it was placed in was reverted	Не вдалося помістити {name}: документ, у який його поміщали, було повернуто до збереженої версії
+@msg	Couldn't paste: the document it was pasted in was reverted	Не вдалося вставити: документ, у який виконувалося вставлення, було повернуто до збереженої версії
 @msg	Couldn't read {name}: {e}	Неможливо прочитати {name}: {e}
 @msg	Couldn't save recovery data: {e}	Не вдалося зберегти дані відновлення: {e}
 @msg	Create Outlines: select text objects	Створення контурів: виділіть текстові об’єкти

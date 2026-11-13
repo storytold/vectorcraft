@@ -1600,3 +1600,54 @@ fn expand_info_counts_two_fills_but_not_a_plain_rectangle() {
     run(&mut s, "appearance.addFill", json!({}));
     assert_eq!(run(&mut s, "object.expand.info", json!({}))["appearance"], json!(true), "two fills");
 }
+
+/// A Transform effect left out past the effect budget (its result over 8 million lines drawn)
+/// leaves the art where it is, and Expand, Expand Appearance and Outline Stroke keep the drop
+/// shadow before it with its own offset and blur, as the canvas draws it: the object's, the fill's
+/// and the stroke's.
+#[test]
+fn a_shadow_before_a_skipped_transform_expands_with_its_own_offset() {
+    use vectorcraft_doc::{Appearance, Effect};
+    use vectorcraft_geom::{Anchor, PathData, Point, SubPath};
+    let anchors = (0..=30_000)
+        .map(|i| {
+            let x = 2.0 * f64::from(i);
+            Anchor::with_handles(Point::new(x, 0.0), Point::new(x - 0.5, -20.0), Point::new(x + 0.5, 20.0))
+        })
+        .collect();
+    let path = PathData::single(SubPath::new(anchors, true));
+    let bounds = path.bounds().unwrap();
+    let effects = || {
+        vec![
+            Effect { id: "stylize.dropShadow".into(), params: json!({"x": 10, "y": 5, "blur": 4}), visible: true },
+            Effect { id: "distort.transform".into(), params: json!({"scaleH": 100000, "scaleV": 100000}), visible: true },
+        ]
+    };
+    let shadow = |effects: &[Effect]| match vectorcraft_render::effects::raster_effects(effects).first() {
+        Some(vectorcraft_render::effects::RasterFx::DropShadow { dx, dy, blur, .. }) => (*dx, *dy, *blur),
+        other => panic!("expected a drop shadow, got {other:?}"),
+    };
+    let mut d = vectorcraft_doc::Document::new(200.0, 200.0);
+    let basic = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 2.0);
+    let mut object = Node::path(NodeId(1), path.clone(), basic.clone());
+    object.appearance.effects = effects();
+    let m = crate::cmd::expand::reshaped(&d, &object).unwrap();
+    assert_eq!(m.geometric_bounds(), Some(bounds), "the art stays where it is");
+    assert_eq!(shadow(&m.appearance.effects), (10.0, 5.0, 4.0), "the object's shadow");
+    let mut fill = Node::path(NodeId(2), path.clone(), basic.clone());
+    *fill.appearance.items[0].effects_mut() = effects();
+    let (_, _, _, moved) = crate::cmd::expand::fill_shape(&d, &fill, &fill.appearance.items[0], &path, bounds).unwrap();
+    assert_eq!(shadow(moved.effects()), (10.0, 5.0, 4.0), "the fill's shadow");
+    let mut stroke = Node::path(NodeId(3), path.clone(), basic);
+    *stroke.appearance.items[1].effects_mut() = effects();
+    let outlined = crate::cmd::pathops::outline_strokes(&mut d, &[], &stroke).unwrap();
+    let mut drawn = vec![];
+    outlined.walk(&mut |n| {
+        for item in &n.appearance.items {
+            if !vectorcraft_render::effects::raster_effects(item.effects()).is_empty() {
+                drawn.push(shadow(item.effects()));
+            }
+        }
+    });
+    assert_eq!(drawn, [(10.0, 5.0, 4.0)], "the stroke's shadow");
+}

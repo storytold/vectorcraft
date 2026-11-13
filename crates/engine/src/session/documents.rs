@@ -270,6 +270,9 @@ impl Session {
         for tree in text_trees_mut(doc) {
             each_text_where(tree, &mut uncached, &mut cmd::typecmd::refresh_bounds_for_first_frame);
         }
+        // The symbols' type is measured now: the inline graphics showing those symbols take their
+        // art's measured size, a symbol's type before the type that shows that symbol inline.
+        doc.resolve_inline_art_with(&mut cmd::typecmd::refresh_bounds_for_first_frame);
     }
 
     /// Measure the type in open document `index` that `stale` picks (in its trees as
@@ -287,12 +290,9 @@ impl Session {
                 each_text_where(tree, &mut stale, &mut cmd::typecmd::refresh_bounds_for_first_frame);
             }
             // Inline graphics take their size from their symbols' art, whose type may just have
-            // been measured again: the text holding one whose size changed is measured again too.
-            if !doc.resolve_inline_art().is_empty() {
-                for tree in text_trees_mut(doc) {
-                    each_text_where(tree, &mut |t| t.cached_bounds.is_none(), &mut cmd::typecmd::refresh_bounds_for_first_frame);
-                }
-            }
+            // been measured again: the text holding one whose size changed is measured again too,
+            // a symbol's type before the type that shows that symbol inline.
+            doc.resolve_inline_art_with(&mut cmd::typecmd::refresh_bounds_for_first_frame);
         });
     }
 
@@ -370,6 +370,8 @@ impl Session {
         st.history.limit = old.history.limit;
         // Same open document (caches keyed by uid stay valid); a new revision redraws it.
         st.uid = old.uid;
+        // Work started for the content being thrown away is dropped when it finishes.
+        st.reverts = old.reverts + 1;
         st.opened_as_tab = old.opened_as_tab;
         st.revision = old.revision + 1;
         st.format = old.format;

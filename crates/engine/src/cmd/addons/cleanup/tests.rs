@@ -389,6 +389,150 @@ fn the_scope_is_the_selection_or_the_document() {
     }
 }
 
+/// The ids of the first layer's objects, bottom to top.
+fn layer_ids(s: &Session) -> Vec<NodeId> {
+    match &s.doc().unwrap().doc.layers[0].kind {
+        NodeKind::Layer { children, .. } => children.iter().map(|c| c.id).collect(),
+        other => panic!("not a layer: {other:?}"),
+    }
+}
+
+/// A plain group of the one object `id`.
+fn group(s: &mut Session, id: NodeId) -> NodeId {
+    wrap(s, id, |children| NodeKind::Group { children, clip: false })
+}
+
+#[test]
+fn unwrapping_selected_groups_keeps_their_places_and_order() {
+    let mut s = session();
+    let c1 = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    let a = rect(&mut s, 40.0, 10.0, 20.0, 20.0);
+    let g1 = group(&mut s, a);
+    let c2 = rect(&mut s, 70.0, 10.0, 20.0, 20.0);
+    let empty = s
+        .edit("t", |d, _| {
+            let (parent, i, _) = d.position(c2).unwrap();
+            let g = d.alloc_id();
+            Ok(d.insert(parent, i + 1, Node::new(g, NodeKind::Group { children: vec![], clip: false }))?)
+        })
+        .unwrap();
+    let c3 = rect(&mut s, 100.0, 10.0, 20.0, 20.0);
+    let b = rect(&mut s, 130.0, 10.0, 20.0, 20.0);
+    let inner = group(&mut s, b);
+    let outer = group(&mut s, inner);
+    let c4 = rect(&mut s, 160.0, 10.0, 20.0, 20.0);
+    let x = rect(&mut s, 190.0, 10.0, 20.0, 20.0);
+    let unselected = group(&mut s, x);
+    assert_eq!(layer_ids(&s), [c1, g1, c2, empty, c3, outer, c4, unselected]);
+    select(&mut s, &[c1, g1, c2, empty, c3, outer, c4]);
+    let check = s.execute("addon.cleanup.check", &json!({"kinds": ["needlessGroups"], "scope": "selection"})).unwrap();
+    let r = s.execute("addon.cleanup.fix", &json!({"kinds": ["needlessGroups"], "scope": "selection"})).unwrap();
+    // The inner group is found only once its outer group is gone: on a later pass, as a root.
+    assert_eq!(r["fixed"]["needlessGroups"], 4, "{r}");
+    assert_eq!(check["total"], 4, "the check finds what Fix fixes: {check}");
+    let mut listed: Vec<u64> = check["findings"][0]["ids"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    listed.sort_unstable();
+    let mut gone: Vec<u64> = [g1, empty, outer, inner].iter().map(|i| i.0).collect();
+    gone.sort_unstable();
+    assert_eq!(listed, gone);
+    assert_eq!(layer_ids(&s), [c1, a, c2, c3, b, c4, unselected], "each member takes its group's place");
+    for id in [g1, empty, outer, inner] {
+        assert!(node(&s, id).is_none(), "{id:?} unwrapped");
+    }
+}
+
+#[test]
+fn fix_all_reaches_the_members_of_unwrapped_selected_groups() {
+    let mut s = session();
+    rect(&mut s, 200.0, 20.0, 80.0, 60.0);
+    let below = rect(&mut s, 20.0, 150.0, 30.0, 30.0);
+    let copy = s
+        .edit("t", |d, _| {
+            let mut copy = d.node(below).unwrap().clone();
+            copy.id = d.alloc_id();
+            let (parent, i, _) = d.position(below).unwrap();
+            Ok(d.insert(parent, i + 1, copy)?)
+        })
+        .unwrap();
+    let g = group(&mut s, copy);
+    select(&mut s, &[below, g]);
+    // The copy sits apart from the object it doubles until its group is unwrapped.
+    assert_eq!(found(&mut s, "duplicateObjects", "selection"), 0);
+    assert_eq!(found(&mut s, "needlessGroups", "selection"), 1);
+    let r = s.execute("addon.cleanup.fix", &json!({"scope": "selection"})).unwrap();
+    assert_eq!((r["fixed"]["needlessGroups"].as_u64(), r["fixed"]["duplicateObjects"].as_u64()), (Some(1), Some(1)), "{r}");
+    assert!(node(&s, g).is_none() && node(&s, copy).is_none());
+    assert!(node(&s, below).is_some());
+}
+
+#[test]
+fn replacing_roots_takes_each_found_object_at_its_first_place() {
+    use super::checks::replace_roots;
+    let n = |id: u64| Node::new(NodeId(id), NodeKind::Group { children: vec![], clip: false });
+    let ids = |v: &[u64]| v.iter().map(|i| NodeId(*i)).collect::<Vec<_>>();
+    let roots = ids(&[1, 2, 1, 3]);
+    assert_eq!(replace_roots(&roots, &[(NodeId(1), vec![n(10), n(11)])]), ids(&[10, 11, 2, 1, 3]));
+    assert_eq!(replace_roots(&roots, &[(NodeId(1), vec![]), (NodeId(1), vec![])]), ids(&[2, 3]), "listed twice: both places");
+    assert_eq!(replace_roots(&roots, &[(NodeId(3), vec![]), (NodeId(2), vec![n(20)])]), ids(&[1, 20, 1]));
+    // A found object inside a root leaves the roots as they are.
+    assert_eq!(replace_roots(&roots, &[(NodeId(7), vec![n(70)])]), roots);
+    assert_eq!(replace_roots(&[], &[(NodeId(7), vec![])]), ids(&[]));
+}
+
+/// How many scope roots fixing `n` selected stray points above `n` selected clean objects looks at.
+fn roots_seen_removing(n: usize) -> usize {
+    use super::checks::ROOTS_SEEN;
+    let mut s = session();
+    let mut ids: Vec<NodeId> = (0..n).map(|i| rect(&mut s, (i % 20) as f64 * 15.0, (i / 20) as f64 * 15.0, 10.0, 10.0)).collect();
+    ids.extend((0..n).map(|i| path(&mut s, json!([{"x": i % 300, "y": i / 300}]), false)));
+    select(&mut s, &ids);
+    ROOTS_SEEN.set(0);
+    let r = s.execute("addon.cleanup.fix", &json!({"kinds": ["strayPoints"], "scope": "selection"})).unwrap();
+    assert_eq!(r["total"].as_u64(), Some(n as u64));
+    assert_eq!(layer_ids(&s), ids[..n]);
+    ROOTS_SEEN.get()
+}
+
+#[test]
+fn removing_many_selected_objects_looks_at_each_root_once_a_pass() {
+    let (small, large) = (roots_seen_removing(150), roots_seen_removing(300));
+    assert_eq!(small, 300, "one pass over the 300 roots");
+    assert!(large <= 2 * small, "{small} roots looked at for 150 removals, {large} for 300");
+}
+
+#[test]
+fn deleting_many_empty_artboards_walks_the_artboards_and_guides_once() {
+    use super::checks::ARTBOARD_PASSES;
+    let mut s = session();
+    rect(&mut s, 200.0, 20.0, 80.0, 60.0);
+    let (keep, gone) = s
+        .edit("t", |d, _| {
+            let first = d.artboards[0].id;
+            let keep = d.add_ruler_guide(&vectorcraft_doc::Guide { artboard: Some(first), ..vectorcraft_doc::Guide::new(true, 100.0) });
+            let mut gone = vec![];
+            for i in 0..40 {
+                let mut a = d.artboards[0].clone();
+                a.id = d.next_artboard_id();
+                let x = 1000.0 + i as f64 * 200.0;
+                a.rect = Rect::new(x, 1000.0, x + 100.0, 1100.0);
+                gone.push(d.add_ruler_guide(&vectorcraft_doc::Guide { artboard: Some(a.id), ..vectorcraft_doc::Guide::new(true, x + 50.0) }));
+                d.artboards.push(a);
+            }
+            Ok((keep, gone))
+        })
+        .unwrap();
+    let first = s.doc().unwrap().doc.artboards[0].clone();
+    ARTBOARD_PASSES.set(0);
+    let r = s.execute("addon.cleanup.fix", &json!({"kinds": ["emptyArtboards"], "scope": "document"})).unwrap();
+    assert_eq!(r["total"].as_u64(), Some(40), "{r}");
+    assert_eq!(ARTBOARD_PASSES.get(), 2, "one walk over the artboards and one over the guides");
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.artboards, vec![first]);
+    let left: Vec<Option<NodeId>> = d.ruler_guides().into_iter().map(|g| g.id).collect();
+    assert_eq!(left, vec![Some(keep)]);
+    assert!(gone.iter().all(|id| !left.contains(&Some(*id))));
+}
+
 #[test]
 fn show_selects_the_objects_with_the_issue() {
     let mut s = session();

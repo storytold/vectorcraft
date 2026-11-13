@@ -362,6 +362,10 @@ pub struct Document {
     /// The ruler guides as [`Document::ruler_guides`] lists them: a cache, never saved.
     #[serde(skip)]
     guide_cache: document_guides::GuideCache,
+    /// The symbols that show themselves inline ([`Document::inline_art_bounds`]): a cache, never
+    /// saved.
+    #[serde(skip)]
+    inline_cycles: inline::InlineCycles,
 }
 
 fn ppi72() -> f64 {

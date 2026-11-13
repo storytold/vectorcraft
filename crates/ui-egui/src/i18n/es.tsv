@@ -629,6 +629,8 @@ font-technology	Variable	Variables
 	Convert to Artboards	Convertir en mesas de trabajo
 	Convert to CMYK	Convertir a CMYK
 	Convert to Grayscale	Convertir a escala de grises
+	Convert to Indexed Color	Convertir a color indexado
+	Convert to Indexed Color…	Convertir a color indexado…
 	Convert To Outlines	Convertir en contornos
 	Convert To Point Type	Convertir en texto de punto
 	Convert to RGB	Convertir a RGB
@@ -2701,6 +2703,11 @@ digits	Malayalam	Malayálam
 	Rating:	Clasificación:
 	Real World:	Mundo real:
 	Real-time Drawing and Editing	Dibujo y edición en tiempo real
+	Use Monitor Profile for Canvas	Usar perfil del monitor para el lienzo
+	The canvas is drawn in sRGB.	El lienzo se dibuja en sRGB.
+	Canvas display profile:	Perfil de pantalla del lienzo:
+	The system matches the window to the display's colors.	El sistema ajusta la ventana a los colores de la pantalla.
+	No usable display profile was found: the canvas is drawn in sRGB.	No se encontró ningún perfil de pantalla utilizable: el lienzo se dibuja en sRGB.
 	Rearrange All Artboards	Reorganizar todas las mesas de trabajo
 	Rearrange	Reorganizar
 	Select All Artboards	Seleccionar todas las mesas de trabajo
@@ -4341,6 +4348,9 @@ axis	Both	Ambos
 @msg	Couldn't open {name}: {e}	No se pudo abrir {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	No se pudo colocar {name}: se cerró el documento en el que se soltó
 @msg	Couldn't place {name}: the document it was placed in was closed	No se pudo colocar {name}: se cerró el documento en el que se estaba colocando
+@msg	Couldn't place {name}: the document it was dropped on was reverted	No se pudo colocar {name}: se revirtió el documento en el que se soltó
+@msg	Couldn't place {name}: the document it was placed in was reverted	No se pudo colocar {name}: se revirtió el documento en el que se estaba colocando
+@msg	Couldn't paste: the document it was pasted in was reverted	No se pudo pegar: se revirtió el documento en el que se estaba pegando
 @msg	Couldn't read {name}: {e}	No se pudo leer {name}: {e}
 @msg	Couldn't save recovery data: {e}	No se pudieron guardar los datos de recuperación: {e}
 @msg	Create Outlines: select text objects	Crear contornos: selecciona objetos de texto
