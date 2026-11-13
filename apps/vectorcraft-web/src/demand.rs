@@ -110,6 +110,21 @@ mod tests {
         assert!(d.start(&[1], 1e12).is_empty());
     }
 
+    /// While a face is fetched again after a failure, neither the interface asking for its script
+    /// again nor the retry timer starts a second fetch of it.
+    #[test]
+    fn a_face_being_fetched_again_is_not_fetched_twice_at_once() {
+        let mut d = Demand::default();
+        d.start(&[0], 0.0);
+        assert_eq!(d.finished(0, false, 0.0), Some(RETRY_MS));
+        let retry = f64::from(RETRY_MS);
+        assert_eq!(d.start(&[0, 0], retry), [0], "one fetch for a face wanted twice");
+        assert!(d.start(&[0], retry + 1.0).is_empty(), "the interface asking again");
+        assert!(d.start(&[0], retry + 1_000.0).is_empty(), "the retry timer");
+        assert_eq!(d.finished(0, true, retry + 2_000.0), None);
+        assert!(d.start(&[0], 1e12).is_empty(), "loaded");
+    }
+
     /// A clock that reads earlier than the failure (one set back meanwhile) does not hold the
     /// retry back: the timer that asks for it has waited already.
     #[test]

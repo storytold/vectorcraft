@@ -71,6 +71,9 @@ pub(crate) struct UiFonts {
     /// The faces covering the characters being looked for (native: looked for on a thread).
     #[cfg(not(target_arch = "wasm32"))]
     pending: Option<std::sync::mpsc::Receiver<Found>>,
+    /// The search thread can't be created (tests).
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    spawn_fails: bool,
 }
 
 impl UiFonts {
@@ -93,14 +96,18 @@ impl UiFonts {
         #[cfg(target_arch = "wasm32")]
         let idle = true;
         // A font added since (a web face fetched for them) may cover them now.
-        if idle && !self.uncovered.is_empty() && db.generation() != self.searched {
-            missing.extend(self.uncovered.drain());
+        let retry: Vec<char> =
+            if idle && !self.uncovered.is_empty() && db.generation() != self.searched { self.uncovered.drain().collect() } else { vec![] };
+        if !retry.is_empty() {
+            missing.extend_from_slice(&retry);
             missing.sort_unstable();
             missing.dedup();
         }
         if missing.is_empty() {
             return;
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        let looked_for = missing.clone();
         let find = move || search(db, missing, FontDb::face_covering);
         // Native: the installed fonts are read off the UI thread. Characters met meanwhile wait for
         // the next search (they aren't marked seen until then).
@@ -108,18 +115,35 @@ impl UiFonts {
         {
             let (tx, rx) = std::sync::mpsc::channel();
             let repaint = ctx.clone();
-            let spawned = std::thread::Builder::new().name("ui-font-fallback".into()).spawn(move || {
+            let spawned = self.spawn_search(move || {
                 // The receiver is gone only when the app is.
                 let _ = tx.send(find());
                 repaint.request_repaint();
             });
             if spawned.is_ok() {
                 self.pending = Some(rx);
+            } else {
+                // Not looked for: the characters met this frame are looked for when painted again,
+                // and the ones no font covered wait for the fonts to change again.
+                for c in looked_for.iter().filter(|c| !retry.contains(c)) {
+                    self.seen.remove(c);
+                }
+                self.uncovered.extend(retry);
             }
         }
         // The web has only the loaded fonts to look through: quick, on this thread.
         #[cfg(target_arch = "wasm32")]
         self.found(ctx, find(), report);
+    }
+
+    /// Run `search` on a thread of its own.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn spawn_search(&self, search: impl FnOnce() + Send + 'static) -> std::io::Result<()> {
+        #[cfg(test)]
+        if self.spawn_fails {
+            return Err(std::io::Error::other("no thread for the font search"));
+        }
+        std::thread::Builder::new().name("ui-font-fallback".into()).spawn(search).map(|_| ())
     }
 
     /// Add the faces a search found, and keep (and report) the characters it found no face for.
@@ -538,6 +562,34 @@ mod tests {
         // Painted before: the character is looked for again only because the fonts changed.
         fonts.seen.insert(PRIVATE_USE_CHAR);
         let text = format!("Layer {PRIVATE_USE_CHAR}");
+        frame_in(&ctx, &mut fonts, &text, db);
+        frame_in(&ctx, &mut fonts, &text, db);
+        assert!(has_glyph(&ctx, PRIVATE_USE_CHAR), "the added face draws the character");
+        assert!(fonts.uncovered.is_empty());
+    }
+
+    /// A search whose thread can't be created leaves its characters to be looked for later: a
+    /// character painted for the first time is looked for when it is painted again, and one no font
+    /// covered stays waiting for the fonts to change.
+    #[test]
+    fn a_search_that_cannot_start_keeps_its_characters() {
+        use vectorcraft_text::test_fonts::{PRIVATE_USE_CHAR, private_use_font};
+        let db: &'static FontDb = Box::leak(Box::new(FontDb::with_font_dirs(vec![])));
+        db.families();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut fonts = UiFonts { spawn_fails: true, ..UiFonts::default() };
+        let text = format!("Layer {PRIVATE_USE_CHAR}");
+        frame_in(&ctx, &mut fonts, &text, db);
+        assert!(fonts.pending.is_none() && !fonts.seen.contains(&PRIVATE_USE_CHAR), "not looked for yet");
+        fonts.spawn_fails = false;
+        frame_in(&ctx, &mut fonts, &text, db);
+        assert!(fonts.uncovered.contains(&PRIVATE_USE_CHAR), "looked for when painted again");
+        db.add_font(private_use_font().expect("the test face builds"));
+        fonts.spawn_fails = true;
+        frame_in(&ctx, &mut fonts, &text, db);
+        assert!(fonts.uncovered.contains(&PRIVATE_USE_CHAR), "still waiting to be looked for again");
+        fonts.spawn_fails = false;
         frame_in(&ctx, &mut fonts, &text, db);
         frame_in(&ctx, &mut fonts, &text, db);
         assert!(has_glyph(&ctx, PRIVATE_USE_CHAR), "the added face draws the character");
