@@ -563,7 +563,8 @@ pub fn warp_grid(n: &Node) -> Option<GradientMesh> {
     if !matches!(**kind, EnvelopeKind::Warp { .. }) {
         return None;
     }
-    let inputs = TYPE_INK.get().map_or(0, |(_, inputs)| inputs());
+    // `None` until a measure is registered, so a grid kept before then is built again after.
+    let inputs = TYPE_INK.get().map(|(_, inputs)| inputs());
     let key: Vec<usize> = content.iter().map(|c| Arc::as_ptr(c) as usize).collect();
     let same = |k: &KeptGrid| k.kind == **kind && k.frame == **frame && k.options == *options && k.inputs == inputs;
     if let Some(grid) = WARP_GRIDS_KEPT.with_borrow(|kept| kept.get(&key).filter(|k| same(k)).map(|k| k.grid.clone())) {
@@ -593,7 +594,7 @@ struct KeptGrid {
     kind: EnvelopeKind,
     frame: Affine,
     options: EnvelopeOptions,
-    inputs: u64,
+    inputs: Option<u64>,
     grid: Option<GradientMesh>,
 }
 
