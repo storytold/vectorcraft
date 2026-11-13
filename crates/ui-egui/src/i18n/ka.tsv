@@ -1713,6 +1713,8 @@ digits	Malayalam	მალაიალამური
 	Modified since it was read: {path}	შეიცვალა წაკითხვის შემდეგ: {path}
 	No Thumbnails	ესკიზების გარეშე
 	Nothing matches the Show filter.	„ჩვენების“ ფილტრს არაფერი შეესაბამება.
+	Show DCS Transparency Interactions	DCS-ის გამჭვირვალობის ურთიერთქმედებების ჩვენება
+	Transparent, or overlaps transparent objects: check its separations	გამჭვირვალეა ან გადაფარავს გამჭვირვალე ობიექტებს: შეამოწმეთ მისი სეპარაციები
 	PPI	PPI
 	Relink…	ხელახლა დაკავშირება…
 	Select an image to see its Link Info.	ბმულის ინფორმაციის სანახავად მონიშნეთ გამოსახულება.
