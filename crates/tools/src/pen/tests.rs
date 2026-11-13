@@ -773,6 +773,48 @@ fn anchors_snap_to_smart_guides() {
     assert_eq!(a[1], Action::Preview("path.create".into(), json!({"anchors": [{"x": 100.0, "y": 100.0}]})));
 }
 
+/// With Enable Rubber Band off, the preview segment is hidden but Measurement Labels still shows
+/// the D / Angle / dX / dY readout at the snapped point before the next click.
+#[test]
+fn measurement_label_shows_with_the_rubber_band_off() {
+    let (d, id, s) = drawing(vectorcraft_geom::SubPath::polyline(&[Point::new(10.0, 300.0), Point::new(60.0, 300.0)], false));
+    let p = paint();
+    let on = cx(&d, &s, &p);
+    let off = ToolContext { pen_rubber_band: false, ..cx(&d, &s, &p) };
+    let from = Point::new(60.0, 300.0);
+    let to = Point::new(150.0, 318.0);
+    let measure =
+        |o: &[Overlay]| o.iter().filter_map(|o| if let Overlay::Measure { text, .. } = o { Some(text.clone()) } else { None }).collect::<Vec<_>>();
+    let preview = |o: &[Overlay]| {
+        o.iter().any(|o| matches!(o, Overlay::Path { path, .. } if path.elements().first().and_then(|e| e.end_point()) == Some(from)))
+    };
+    let mut t = PenTool { drawing: true, ..PenTool::default() };
+    t.pointer(&off, &PointerEvent::new(PointerKind::Move, 152.0, 318.0));
+    let o = t.overlays(&off);
+    assert_eq!(measure(&o), vec![off.segment_measure_label(from, to)], "{o:?}");
+    assert!(!preview(&o), "{o:?}");
+    // The rubber band on still shows both.
+    let o = t.overlays(&on);
+    assert_eq!(measure(&o), vec![on.segment_measure_label(from, to)], "{o:?}");
+    assert!(preview(&o), "{o:?}");
+    // Measurement Labels off shows no readout either way.
+    for band in [true, false] {
+        let quiet = ToolContext { pen_rubber_band: band, measurement_labels: false, ..cx(&d, &s, &p) };
+        assert!(measure(&t.overlays(&quiet)).is_empty());
+    }
+    // The click places the same anchor as with the rubber band on.
+    let a = click(&mut t, &off, 152.0, 318.0, Mods::default());
+    assert_eq!(a[1], Action::Preview("path.appendAnchor".into(), json!({"id": id.0, "x": 150.0, "y": 318.0, "subpath": 0})));
+    // Hovering exactly on the last anchor measures no segment.
+    let mut t = PenTool { drawing: true, ..PenTool::default() };
+    t.pointer(&off, &PointerEvent::new(PointerKind::Move, 60.0, 300.0));
+    assert!(measure(&t.overlays(&off)).is_empty());
+    // With no path being drawn there is nothing to measure from.
+    let mut t = PenTool::default();
+    t.pointer(&off, &PointerEvent::new(PointerKind::Move, 152.0, 318.0));
+    assert!(measure(&t.overlays(&off)).is_empty());
+}
+
 #[test]
 fn alt_over_a_shown_handle_or_an_anchor_converts() {
     // The middle anchor is smooth: handles at (150, 100) and (250, 100) round (200, 100).
