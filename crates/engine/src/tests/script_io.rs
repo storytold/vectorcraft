@@ -1108,6 +1108,25 @@ fn script_files_in_a_folder_above_the_settings_folder_do_not_reach_it() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A script run from the settings folder itself reads its own file there, but no other file in the
+/// settings folder.
+#[test]
+fn script_files_in_the_settings_folder_do_not_reach_it() {
+    let base = folder("insettings");
+    let mut s = Session::new();
+    s.attach_script_data(base.join("main/Script Data"));
+    write(&base.join("main/Script Grants.json"), b"{\"version\": 1, \"grants\": []}");
+    let r = run_in(
+        &mut s,
+        &base,
+        "var a = new File('main.jsx'), g = new File('Script Grants.json');\n\
+         var out = [a.open('r'), a.read().length > 0]; a.close(); out.push(g.open('r'), g.error, g.exists); vc.log(out);",
+    )
+    .unwrap();
+    assert_eq!(r["log"], json!([[true, true, false, DENIED, false]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// The settings folder is kept out of every grant also before it has been made.
 #[test]
 fn script_file_grants_never_reach_a_settings_folder_not_made_yet() {

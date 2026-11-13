@@ -79,7 +79,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use vectorcraft_js::{Data, HostError, HostItem, Realm, RunError};
 
 use super::{Host, bump};
-use crate::file_access::{ScriptRead, ScriptScope};
+use crate::file_access::{ScriptRead, ScriptScope, path_inside};
 
 /// The most bytes of one file a script opens.
 pub const MAX_FILE_BYTES: usize = 8 << 20;
@@ -331,7 +331,13 @@ impl Disk {
             let _ = d.saw(hash);
         }
         if let Some(f) = fenced {
-            let own = d.scope.roots().to_vec();
+            // A script's folder inside the settings folder stays open; the settings folder itself
+            // does not, only the script's own file there.
+            let roots = d.scope.roots();
+            let mut own: Vec<std::path::PathBuf> = roots.iter().filter(|r| !path_inside(&f, r)).cloned().collect();
+            if roots.iter().any(|r| path_inside(r, &f) && path_inside(&f, r)) {
+                own.extend(d.script.as_ref().map(|(p, _)| p.clone()));
+            }
             d.scope.fence(f.clone(), &own);
             d.writes.fence(f, &[]);
         }
