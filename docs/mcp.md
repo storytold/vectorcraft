@@ -1,6 +1,6 @@
 # VectorCraft MCP server
 
-> **Last updated:** 2026-11-11 · **Change:** Save location-refusal error (#6146); existing response shapes retained.
+> **Last updated:** 2026-11-13 · **Change:** Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained. Previously: Save location-refusal error (#6146); existing response shapes retained.
 
 `vectorcraft-cli mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio
 (newline-delimited JSON-RPC 2.0; see [Protocol](#protocol) for version negotiation). Agents use it to
@@ -9517,7 +9517,12 @@ outline. On a tie, the anchor met first along the outline in the order it was dr
 Without such an anchor, the corner is the outline's point nearest the box corner, moved onto the anchor at the end of
 its segment when within 0.5% of the segment's parameter. Each piece of a side between anchors and corners takes a
 share of the content's width or height in proportion to the length of its control polygon, spread along the piece by
-its curve parameter, so content spreads evenly along a segment without handles. An envelope opened from an `.ai` file
+its curve parameter, so content spreads evenly along a segment without handles. A side whose pieces, from corner to
+corner, are all one cubic curve split at anchors (each within 0.02 pt of that curve's piece) follows that curve's
+parameter instead, so splitting such a side's curve without changing its shape (Add Anchor Points, or a file that
+saves a curve in pieces) leaves how the side shares out the content as it was. Corners found from the outline can
+still move, since one at the outline's nearest point snaps onto an anchor within 0.5% of its segment's parameter. A
+side only partly made of one curve keeps the polygon shares. An envelope opened from an `.ai` file
 keeps the corners the file saves, and they stay on the same anchors when the envelope is moved, rotated or
 reflected. These are VectorCraft's own rules, and existing top-object envelopes redraw by them.
 A warp bends the content's bounds as one Bézier patch. The style sets the patch's control points from the bend and
@@ -10999,4 +11004,5 @@ the error text. The interactive fallback applies only to ordinary File > Save, n
 
 | Date | Change |
 |---|---|
+| 2026-11-13 | Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097). |
 | 2026-11-11 | Document READ_ONLY_LOCATION for saves (#6146); no response-shape change. |
