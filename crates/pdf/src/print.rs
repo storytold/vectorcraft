@@ -81,7 +81,10 @@ pub struct PrintOptions {
 pub struct PrintReport {
     pub bytes: Vec<u8>,
     pub pages: usize,
+    /// What the job leaves out of the document or prints differently.
     pub warnings: Vec<String>,
+    /// Notes on the options: one the job didn't apply or applied another way.
+    pub setting_notes: Vec<String>,
 }
 
 /// One page of a job, as [`preview`] lists it (one copy).
@@ -129,7 +132,12 @@ pub struct PrintPreview {
     pub tiles: Vec<TileGrid>,
     /// The inks of a separation (empty for composite output).
     pub inks: Vec<PrintInk>,
+    /// What the job leaves out of the document or prints differently.
     pub warnings: Vec<String>,
+    /// Notes on the options: one the job doesn't apply or applies another way. They aren't
+    /// serialized: a reply lists them in `warnings`, after what the job leaves out.
+    #[serde(skip)]
+    pub setting_notes: Vec<String>,
 }
 
 /// A laid-out job.
@@ -144,7 +152,10 @@ struct Job<'a> {
     plates: Vec<usize>,
     /// One copy's pages: (layout, plate).
     sheets: Vec<(usize, Option<usize>)>,
+    /// What the job leaves out of the document or prints differently.
     warnings: Vec<String>,
+    /// Notes on the options: one the job doesn't apply or applies another way.
+    setting_notes: Vec<String>,
 }
 
 /// Keep the layers of `nodes` that print as `which` says, shown (hidden ones print with All),
@@ -223,11 +234,11 @@ impl<'a> Job<'a> {
     fn new(doc: &'a Document, set: &PrintSettings, postscript: bool) -> Result<Self, PdfError> {
         set.check()?;
         let doc = printed_document(doc, set);
-        let mut warnings = vec![];
-        let (layouts, tiles) = layout::layout(&doc, set, &mut warnings)?;
+        let (mut warnings, mut setting_notes) = (vec![], vec![]);
+        let (layouts, tiles) = layout::layout(&doc, set, &mut warnings, &mut setting_notes)?;
         let separations = set.output.mode == OutputMode::Separations;
         let (inks, more) = if separations { print_inks(&doc, set) } else { Default::default() };
-        warnings.extend(more);
+        setting_notes.extend(more);
         let plates: Vec<usize> = (0..inks.len()).filter(|i| inks[*i].print).collect();
         let printed: Vec<Option<usize>> = if separations { (0..plates.len()).map(Some).collect() } else { vec![None] };
         if printed.is_empty() {
@@ -245,18 +256,18 @@ impl<'a> Job<'a> {
             warnings.push("the document is RGB: separations convert its colours to CMYK with the colour settings".into());
         }
         if !postscript && separations && set.output.inks.iter().any(|i| i.frequency.is_some() || i.angle.is_some()) {
-            warnings.push("ink frequencies and angles are not written as halftone screens yet: the output device's screens apply".into());
+            setting_notes.push("ink frequencies and angles are not written as halftone screens yet: the output device's screens apply".into());
         }
         if separations && set.advanced.print_as_bitmap {
-            warnings.push("Print as Bitmap is for composite output: separations print the art as it is".into());
+            setting_notes.push("Print as Bitmap is for composite output: separations print the art as it is".into());
         }
         if separations && cms::profile(set.color.profile.trim()).is_some_and(|p| p.kind != ProfileKind::Cmyk) {
-            warnings.push("separations separate with a CMYK profile: the RGB printer profile is left out".into());
+            setting_notes.push("separations separate with a CMYK profile: the RGB printer profile is left out".into());
         }
         if !postscript && !set.graphics.auto_flatness {
-            warnings.push("a fixed flatness is not written yet: the output device flattens curves".into());
+            setting_notes.push("a fixed flatness is not written yet: the output device flattens curves".into());
         }
-        Ok(Self { doc, layouts, tiles, inks, plates, sheets, warnings })
+        Ok(Self { doc, layouts, tiles, inks, plates, sheets, warnings, setting_notes })
     }
 
     /// The ink of plate `plate` (`None`: composite).
@@ -303,7 +314,14 @@ pub fn preview(doc: &Document, set: &PrintSettings) -> Result<PrintPreview, PdfE
             })
         })
         .collect();
-    Ok(PrintPreview { pages: job.sheets.len() * set.copies.max(1) as usize, sheets, tiles: job.tiles, inks: job.inks, warnings: job.warnings })
+    Ok(PrintPreview {
+        pages: job.sheets.len() * set.copies.max(1) as usize,
+        sheets,
+        tiles: job.tiles,
+        inks: job.inks,
+        warnings: job.warnings,
+        setting_notes: job.setting_notes,
+    })
 }
 
 /// One sheet of a laid-out job, ready for a writer (PDF here, PostScript in the EPS writer).
@@ -371,7 +389,10 @@ pub struct PrintPlan<'a> {
     pub title: String,
     /// When the job ran (Unix seconds, UTC).
     pub created: Option<i64>,
+    /// What the job leaves out of the document or prints differently.
     pub warnings: Vec<String>,
+    /// Notes on the options: one the job doesn't apply or applies another way.
+    pub setting_notes: Vec<String>,
 }
 
 /// Lay out printing `doc` as `opts` say, for a writer to draw.
@@ -415,7 +436,7 @@ pub fn plan<'a>(doc: &'a Document, opts: &PrintOptions) -> Result<PrintPlan<'a>,
         })
         .collect();
     let order = job.order(set);
-    Ok(PrintPlan { plates, sheets, order, title, created, warnings: job.warnings, doc: job.doc })
+    Ok(PrintPlan { plates, sheets, order, title, created, warnings: job.warnings, setting_notes: job.setting_notes, doc: job.doc })
 }
 
 /// Landscape sheet `s` upright on the paper ([`PrintOptions::for_printer`]): a page wider than
@@ -473,12 +494,18 @@ fn print_inner(doc: &Document, opts: &PrintOptions, left_out: &mut HashSet<Strin
     let (bytes, more, settings) = w.finish(left_out, false)?;
     let bytes = crate::forms::finish(bytes, doc, &pdf, false, overprinted, invisible)?;
     let mut warnings = plan.warnings;
-    for m in more.into_iter().chain(settings) {
+    for m in more {
         if !warnings.contains(&m) {
             warnings.push(m);
         }
     }
-    Ok(PrintReport { bytes, pages: plan.order.len(), warnings })
+    let mut setting_notes: Vec<String> = vec![];
+    for m in plan.setting_notes.into_iter().chain(settings) {
+        if !warnings.contains(&m) && !setting_notes.contains(&m) {
+            setting_notes.push(m);
+        }
+    }
+    Ok(PrintReport { bytes, pages: plan.order.len(), warnings, setting_notes })
 }
 
 /// The printer's marks of page `l` (`None` without marks), with its page information: the
