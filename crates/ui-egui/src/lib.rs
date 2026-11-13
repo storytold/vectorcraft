@@ -43,6 +43,7 @@ pub mod font_menu;
 mod frame_rate;
 mod free_transform;
 pub mod graphics;
+pub mod hang_beacon;
 pub mod i18n;
 pub mod icon_data;
 pub mod icons;
@@ -80,6 +81,7 @@ pub mod toolbar;
 mod tools_float;
 pub mod touch;
 pub mod trace_runs;
+pub mod troubleshooting;
 mod ui_fonts;
 pub mod unsaved;
 pub mod updates_ui;
@@ -114,13 +116,14 @@ mod clock;
 mod services;
 
 pub use app::MAX_RECENT_FONTS;
-pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PrintTilingCache, SliceCache};
+pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PlacedKey, PrintTilingCache, SliceCache};
 pub use clock::{now_ms, now_secs};
 pub use craft_ui::docking::Monitor as DockMonitor;
 #[cfg(test)]
 pub(crate) use services::browsable_url;
 pub use services::{
-    DownloadFn, ExistsFn, FileFilter, FilePick, Inbox, NativeInputHook, OpenUrlFn, PickOpen, PickSave, ReadFn, RevealFn, Services, WriteFn,
+    DownloadFn, ExistsFn, FileFilter, FilePick, Inbox, NativeInputHook, OpenUrlFn, PickOpen, PickSave, PickedInbox, ReadFn, RevealFn, SaveStreamFn,
+    SaveWriteFn, Services, WriteFn,
 };
 use state::{GeometryStamp, InputGeneration, PendingScreenshot, QueuedScreenshot};
 pub(crate) use state::{InputFrame, take_frame_once};
@@ -133,6 +136,12 @@ pub struct VectorcraftApp {
     /// [`VectorcraftApp::sync_views`], which puts the views back with their documents after
     /// `document.move` reorders them (#5663).
     pub(crate) view_uids: Vec<u64>,
+    /// The thread that checks the system clipboard for `system_paste` instead
+    /// ([`Services::clipboard_probe`]). It is declared before `services` so that it is dropped
+    /// first: on X11 the last clipboard handle alive hands what the app copied to the clipboard
+    /// manager, and that must be the app's own handle in `services`, dropped on the UI thread
+    /// before the process exits.
+    clipboard_probe: Option<clipboard_probe::Probe>,
     pub services: Services,
     pub canvas: CanvasCache,
     pub perf: Perf,
@@ -188,6 +197,10 @@ pub struct VectorcraftApp {
     frame_rate: frame_rate::FrameRate,
     /// Canvas rect of the last frame (screen points), for control-channel coordinate mapping.
     pub canvas_rect: Option<egui::Rect>,
+    /// The UI zoom (egui's zoom factor, set by Preferences › User Interface › UI Scaling) of the
+    /// frame that laid out [`Self::canvas_rect`]; 1.0 before the first one. [`Self::canvas_xf`]
+    /// maps the document to that rect with it.
+    pub(crate) canvas_ui_zoom: f32,
     /// An unfinished control-channel Rotate View gesture, kept only for this app instance.
     pub(crate) control_rotate_press: Option<control::RotateViewPress>,
     /// Hover position in document coordinates.
@@ -222,6 +235,9 @@ pub struct VectorcraftApp {
     /// The graphics adapter the window renders with ("name (backend)"), as the host reports it:
     /// shown in Help › About and `ui.inspect` for GPU bug reports. `None` when unknown.
     pub graphics_adapter: Option<String>,
+    /// Where [`Self::run`] marks each command for the desktop app's hang report:
+    /// [`hang_beacon::BEACON`], or a test's own.
+    pub(crate) beacon: &'static hang_beacon::Beacon,
     /// File → Place: picked files, the place cursor's thumbnails, the Control bar's image details.
     pub place: place::PlaceState,
     /// The Paste commands can paste from the system clipboard alone: it holds something to paste
@@ -234,9 +250,6 @@ pub struct VectorcraftApp {
     pub(crate) clipboard_image_request: Option<egui::Modifiers>,
     /// When `system_paste` was last checked in line (app time, s; at most once per frame).
     system_paste_at: f64,
-    /// The thread that checks the system clipboard for `system_paste` instead
-    /// ([`Services::clipboard_probe`]).
-    clipboard_probe: Option<clipboard_probe::Probe>,
     /// File dialogs shown off the UI thread and what runs again with their answers.
     pub(crate) picks: picks::Picks,
     /// The screen color sampler shown and not answered yet, and where its color goes.

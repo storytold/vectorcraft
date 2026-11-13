@@ -20,6 +20,8 @@ fn synthetic_glyphs(specs: &[(usize, usize, f64, char)]) -> Vec<SGlyph> {
             dx: 0.0,
             dy: 0.0,
             kern_shift: 0.0,
+            aki_shift: 0.0,
+            aki: 0.0,
             sx: 1.0,
             sy: 1.0,
             bshift: 0.0,
@@ -33,6 +35,8 @@ fn synthetic_glyphs(specs: &[(usize, usize, f64, char)]) -> Vec<SGlyph> {
             tcy: None,
             inline: None,
             word_end: false,
+            keeps_word: false,
+            keeps_next: false,
             lead: 0.0,
             proportional: false,
             vpal: None,
@@ -92,14 +96,15 @@ fn indic_hyphenation_reaches_both_composers_without_splitting_marks() {
             KinsokuShoriType::PushOutOnly,
             false,
             false,
+            &[],
         );
         assert_eq!((end, hyphen), (4, true), "{tag}");
         let params = Params { justify_last: false, ragged: true, tolerance: 1.0, uniform_from: 0, hyphen_limit: 0 };
-        let lines = compose(&glyphs, &|_| 4.5, &|_| 0.0, &cands, &[], &params).expect("every-line composition");
+        let lines = compose(&glyphs, &|_| 4.5, &|_| 0.0, &|_| 0.0, &cands, &[], &params).expect("every-line composition");
         assert!(lines.iter().any(|(_, hyphen)| *hyphen), "{tag}");
         assert!(lines.iter().all(|(end, _)| end % 2 == 0), "{tag}: {lines:?}");
         let limited = Params { hyphen_limit: 1, ..params };
-        if let Some(lines) = compose(&glyphs, &|_| 4.5, &|_| 0.0, &cands, &[], &limited) {
+        if let Some(lines) = compose(&glyphs, &|_| 4.5, &|_| 0.0, &|_| 0.0, &cands, &[], &limited) {
             assert!(lines.windows(2).all(|pair| !pair[0].1 || !pair[1].1), "{tag}: {lines:?}");
         }
     }
@@ -164,7 +169,7 @@ fn greedy_wrap_keeps_an_oversized_first_cluster_and_its_source_range() {
     let glyphs = synthetic_glyphs(&[(0, 4, 2.0, 'ب'), (0, 4, 2.0, 'ب'), (4, 2, 1.0, 'ت')]);
 
     let (end, hyphenated) =
-        break_line(text, &glyphs, 0, 3.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushOutOnly, false, false);
+        break_line(text, &glyphs, 0, 3.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushOutOnly, false, false, &[]);
 
     assert!(!hyphenated);
     assert_eq!(end, 2, "oversized base-plus-mark cluster must stay together");
@@ -178,12 +183,12 @@ fn greedy_wrap_keeps_an_oversized_cluster_after_a_line_start_atomic() {
     let glyphs = synthetic_glyphs(&[(0, 4, 1.0, 'ب'), (4, 4, 2.0, 'ت'), (4, 4, 2.0, 'ت'), (8, 2, 1.0, 'ث')]);
 
     let (first_end, _) =
-        break_line(text, &glyphs, 0, 3.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushOutOnly, false, false);
+        break_line(text, &glyphs, 0, 3.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushOutOnly, false, false, &[]);
     assert_eq!(first_end, 1);
     assert_eq!(source_range(&glyphs, 0, first_end), 0..4);
 
     let (second_end, hyphenated) =
-        break_line(text, &glyphs, first_end, 3.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushOutOnly, false, false);
+        break_line(text, &glyphs, first_end, 3.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushOutOnly, false, false, &[]);
 
     assert!(!hyphenated);
     assert_eq!(second_end, 3, "oversized cluster at the next line start must stay together");
@@ -239,7 +244,7 @@ fn no_break_keeps_marked_characters_on_one_line() {
     let text = "A B";
     let plain = synthetic_glyphs(&[(0, 1, 10.0, 'A'), (1, 1, 4.0, ' '), (2, 1, 10.0, 'B')]);
     let (end, hyphen) =
-        break_line(text, &plain, 0, 16.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false);
+        break_line(text, &plain, 0, 16.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[]);
     assert!(!hyphen);
     assert_eq!(end, 2, "without the mark the line ends after the space");
 
@@ -248,7 +253,7 @@ fn no_break_keeps_marked_characters_on_one_line() {
         g.no_break = true;
     }
     let (end, hyphen) =
-        break_line(text, &marked, 0, 16.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false);
+        break_line(text, &marked, 0, 16.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[]);
     assert!(!hyphen);
     assert_eq!(end, 3, "the marked words stay together even though they are wider than the line");
 
@@ -257,13 +262,58 @@ fn no_break_keeps_marked_characters_on_one_line() {
     let mut glyphs = synthetic_glyphs(&[(0, 1, 8.0, 'A'), (1, 1, 2.0, ' '), (2, 3, 10.0, '日'), (5, 3, 10.0, '本')]);
     glyphs[2].no_break = true;
     glyphs[3].no_break = true;
-    let (end, _) = break_line(text, &glyphs, 0, 22.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false);
+    let (end, _) =
+        break_line(text, &glyphs, 0, 22.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[]);
     assert_eq!(end, 2, "the marked pair moves to the next line together");
-    let (end, _) = break_line(text, &glyphs, end, 15.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false);
+    let (end, _) =
+        break_line(text, &glyphs, end, 15.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[]);
     assert_eq!(end, 4, "on its own line the pair stays together even when it is wider than the line");
 
     let breaks = candidates(text, &glyphs, None, Kinsoku::None);
     assert!(breaks.iter().all(|b| b.end != 3), "no break between the marked characters: {breaks:?}");
+}
+
+/// A soft hyphen inside a No Break run is not a place a line may break, so the word is measured
+/// across it, as wide as [`break_line`] keeps it.
+#[test]
+fn word_width_measures_across_a_soft_hyphen_inside_a_no_break_run() {
+    let mut glyphs = synthetic_glyphs(&[(0, 1, 10.0, 'A'), (1, 2, 0.0, '\u{00ad}'), (3, 1, 10.0, 'B'), (4, 1, 10.0, 'C')]);
+    // The hyphen a soft hyphen adds comes from the face, scaled to well under 10 pt.
+    for g in &mut glyphs {
+        g.sx = 0.001;
+    }
+    let plain = breaking::word_width(&glyphs, 0, &[], Kinsoku::None);
+    assert!(plain < 30.0, "without the mark the word ends at the soft hyphen: {plain}");
+    for g in &mut glyphs {
+        g.no_break = true;
+    }
+    let marked = breaking::word_width(&glyphs, 0, &[], Kinsoku::None);
+    assert!((marked - 30.0).abs() < 1e-9, "the marked run is measured whole: {marked}");
+}
+
+/// A forced line break ends the word [`breaking::word_width`] measures, inside a No Break run too,
+/// and a soft hyphen just before it adds no hyphen, as [`break_line`] sets the line.
+#[test]
+fn word_width_stops_at_a_forced_line_break() {
+    let mut glyphs = synthetic_glyphs(&[(0, 1, 10.0, 'A'), (1, 3, 5.0, '\u{2028}'), (4, 1, 10.0, 'B'), (5, 1, 10.0, 'C')]);
+    for g in &mut glyphs {
+        g.no_break = true;
+    }
+    let marked = breaking::word_width(&glyphs, 0, &[], Kinsoku::None);
+    assert!((marked - 10.0).abs() < 1e-9, "the marked run ends at the forced line break: {marked}");
+
+    let mut glyphs = synthetic_glyphs(&[(0, 1, 10.0, 'A'), (1, 2, 0.0, '\u{00ad}'), (3, 3, 5.0, '\u{2028}'), (6, 1, 10.0, 'B')]);
+    // The hyphen a soft hyphen adds comes from the face, scaled to well under 10 pt.
+    for g in &mut glyphs {
+        g.sx = 0.001;
+    }
+    let plain = breaking::word_width(&glyphs, 0, &[], Kinsoku::None);
+    assert!((plain - 10.0).abs() < 1e-9, "no hyphen before the forced line break: {plain}");
+    for g in &mut glyphs {
+        g.no_break = true;
+    }
+    let marked = breaking::word_width(&glyphs, 0, &[], Kinsoku::None);
+    assert!((marked - 10.0).abs() < 1e-9, "the marked run ends at the forced line break: {marked}");
 }
 
 /// Synthetic full-width characters `text`, each 10 pt wide on a 10 pt em.
@@ -286,7 +336,7 @@ fn full_width(text: &str) -> Vec<SGlyph> {
 fn kinsoku_shori_type_pushes_a_closing_bracket_in_or_out() {
     use KinsokuShoriType::{PushInFirst, PushOutFirst, PushOutOnly};
     let hung = |text: &str, width: f64, kinsoku: Kinsoku, ty: KinsokuShoriType, hanging: bool| {
-        break_line(text, &full_width(text), 0, width, &[], 0.0, None, Burasagari::None, kinsoku, ty, hanging, false).0
+        break_line(text, &full_width(text), 0, width, &[], 0.0, None, Burasagari::None, kinsoku, ty, hanging, false, &[]).0
     };
     let end = |text: &str, width: f64, kinsoku: Kinsoku, ty: KinsokuShoriType| hung(text, width, kinsoku, ty, false);
     let text = "一二三四五六七八九十一二三四五」六";
@@ -351,7 +401,8 @@ fn kinsoku_shori_type_counts_the_gaps_that_close() {
     let mixed = "一二三א五六七八九十一二三四五」六";
     let mut glyphs = full_width(mixed);
     glyphs[3].level = unicode_bidi::Level::rtl();
-    let mixed_end = |ty: KinsokuShoriType| break_line(mixed, &glyphs, 0, 150.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, ty, false, false).0;
+    let mixed_end =
+        |ty: KinsokuShoriType| break_line(mixed, &glyphs, 0, 150.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, ty, false, false, &[]).0;
     assert_eq!(mixed_end(PushInFirst), 14, "right-to-left text on the line: 五 is pushed out with 」");
     assert_eq!(mixed_end(PushOutOnly), 14);
 
@@ -362,7 +413,8 @@ fn kinsoku_shori_type_counts_the_gaps_that_close() {
     for g in &mut glyphs {
         g.sy *= 2.0;
     }
-    let tall_end = |ty: KinsokuShoriType| break_line(tall, &glyphs, 0, 50.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, ty, false, false).0;
+    let tall_end =
+        |ty: KinsokuShoriType| break_line(tall, &glyphs, 0, 50.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, ty, false, false, &[]).0;
     assert_eq!(tall_end(PushInFirst), 4, "Vertical Scale does not widen the gaps: 五 is pushed out with 」");
 
     // No gap closes inside a shaped cluster. 二 is two glyphs here, so the line has five gaps to
@@ -371,7 +423,296 @@ fn kinsoku_shori_type_counts_the_gaps_that_close() {
     glyphs[1].adv = 5.0;
     let half = glyphs[1].clone();
     glyphs.insert(2, half);
-    let split_end = |width: f64| break_line(tall, &glyphs, 0, width, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushInFirst, false, false).0;
+    let split_end =
+        |width: f64| break_line(tall, &glyphs, 0, width, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushInFirst, false, false, &[]).0;
     assert_eq!(split_end(54.0), 5, "五 is pushed out with 」");
     assert_eq!(split_end(55.0), 7, "five gaps close by 5 pt: 」 is pushed in");
+}
+
+/// A zero-width joiner between two CJK characters takes no gap of its own: the layout closes the
+/// one gap between the characters on either side, so the push-in counts five gaps (5 pt), short of
+/// the 6 pt the line overflows by.
+#[test]
+fn kinsoku_shori_type_counts_no_gap_at_a_format_control() {
+    let text = "一二\u{200D}三四五」六";
+    let mut glyphs = full_width(text);
+    glyphs[2].adv = 0.0;
+    let end = |width: f64| {
+        break_line(text, &glyphs, 0, width, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushInFirst, false, false, &[]).0
+    };
+    assert_eq!(end(54.0), 5, "五 is pushed out with 」");
+    assert_eq!(end(55.0), 7, "five gaps close by 5 pt: 」 is pushed in");
+}
+
+/// Mojikumi: the greedy breaker measures a line as it is set, with its last character narrowed
+/// (`line_end`): 」 set half width ends a measure of three and a half characters. Only the last
+/// glyph of the last cluster counts, and only where the line may end.
+#[test]
+fn greedy_wrap_counts_the_narrower_line_end() {
+    use KinsokuShoriType::{PushInFirst, PushOutFirst, PushOutOnly};
+    let text = "一二三」四五六";
+    let glyphs = full_width(text);
+    let mut credit = vec![0.0; glyphs.len()];
+    credit[3] = 5.0;
+    let end = |glyphs: &[SGlyph], width: f64, burasagari: Burasagari, line_end: &[f64]| {
+        break_line(text, glyphs, 0, width, &[], 0.0, None, burasagari, Kinsoku::Hard, PushOutOnly, false, false, line_end).0
+    };
+    assert_eq!(end(&glyphs, 35.0, Burasagari::None, &credit), 4, "」 half width fits");
+    assert_eq!(end(&glyphs, 35.0, Burasagari::None, &[]), 2, "」 full width does not: 三 goes with it");
+    assert_eq!(end(&glyphs, 34.0, Burasagari::None, &credit), 2, "half width is still too wide");
+    // A credit that isn't finite counts for nothing, and one larger than the glyph for its advance.
+    assert_eq!(end(&glyphs, 35.0, Burasagari::None, &[0.0, 0.0, 0.0, f64::INFINITY]), 2);
+    assert_eq!(end(&glyphs, 35.0, Burasagari::None, &[0.0, 0.0, 0.0, f64::NAN]), 2);
+    assert_eq!(end(&glyphs, 30.0, Burasagari::None, &[0.0, 0.0, 0.0, 100.0]), 4, "at most 10 pt off");
+    assert_eq!(end(&glyphs, 29.0, Burasagari::None, &[0.0, 0.0, 0.0, 100.0]), 2);
+
+    // The line may not end after 三 (、 follows it): its credit does not keep it on the line, so 、
+    // does not hang after a line already wider than the measure.
+    let comma = "一二三、";
+    let glyphs = full_width(comma);
+    let end = |line_end: &[f64]| {
+        break_line(comma, &glyphs, 0, 25.0, &[], 0.0, None, Burasagari::Standard, Kinsoku::Hard, PushOutOnly, false, false, line_end).0
+    };
+    assert_eq!(end(&[0.0, 0.0, 5.0, 0.0]), 2);
+
+    // Kinsoku Shori Type measures both lines as they are set. Pushing 。 in leaves the line 5 pt
+    // wider than the measure with 。 half width, which its five gaps close.
+    let pushed = "一二三四」。六";
+    let glyphs = full_width(pushed);
+    let end = |ty: KinsokuShoriType, line_end: &[f64]| {
+        break_line(pushed, &glyphs, 0, 50.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, ty, false, false, line_end).0
+    };
+    let stop = [0.0, 0.0, 0.0, 0.0, 0.0, 5.0, 0.0];
+    assert_eq!(end(PushInFirst, &stop), 6, "。 is pushed in");
+    assert_eq!(end(PushInFirst, &[]), 3, "full width, the gaps can't close enough");
+    // Push Out First: pushing out to after 」, set half width, leaves the line 15 pt short, more
+    // than an em, so 四 is pushed in.
+    let pushed = format!("{}二」「四", "一".repeat(10));
+    let glyphs = full_width(&pushed);
+    let end = |line_end: &[f64]| {
+        break_line(&pushed, &glyphs, 0, 130.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushOutFirst, false, false, line_end).0
+    };
+    let mut bracket = vec![0.0; glyphs.len()];
+    bracket[11] = 5.0;
+    assert_eq!(end(&bracket), 14, "四 is pushed in");
+    assert_eq!(end(&[]), 12, "full width, pushing out leaves the line one em short: 「四 go on");
+
+    // 三 is two glyphs of one cluster: the credit of its first glyph does not count.
+    let text = "一二三";
+    let mut glyphs = full_width(text);
+    glyphs[2].adv = 5.0;
+    let half = glyphs[2].clone();
+    glyphs.insert(3, half);
+    let end =
+        |line_end: &[f64]| break_line(text, &glyphs, 0, 26.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, PushOutOnly, false, false, line_end).0;
+    assert_eq!(end(&[0.0, 0.0, 4.0, 0.0]), 2, "the cluster stays whole and goes to the next line");
+    assert_eq!(end(&[0.0, 0.0, 0.0, 4.0]), 4, "its last glyph's credit keeps it on the line");
+}
+
+/// Mojikumi: the every-line composer measures each candidate line with its last character narrowed
+/// (`end_credit`), never by more than that glyph's advance, and a line ending in a hyphen ends with
+/// the hyphen.
+#[test]
+fn composition_counts_the_narrower_line_end() {
+    let text = "一二三」四五六";
+    let glyphs = full_width(text);
+    let cands = candidates(text, &glyphs, None, Kinsoku::Hard);
+    let params = Params { justify_last: false, ragged: true, tolerance: f64::INFINITY, uniform_from: 0, hyphen_limit: 0 };
+    let lines =
+        |width: f64, end_credit: &dyn Fn(usize) -> f64, cands: &[Breakpoint]| compose(&glyphs, &|_| width, &|_| 0.0, end_credit, cands, &[], &params);
+    let half = |t: usize| if t == 4 { 5.0 } else { 0.0 };
+    assert_eq!(lines(35.0, &half, &cands), Some(vec![(4, false), (7, false)]));
+    let solid = lines(35.0, &|_| 0.0, &cands).expect("composed");
+    assert!(solid.iter().all(|&(end, _)| end != 4), "」 full width does not end the first line: {solid:?}");
+    // At most the glyph's advance; a credit that isn't finite counts for nothing.
+    assert_eq!(lines(30.0, &|t| if t == 4 { 100.0 } else { 0.0 }, &cands).and_then(|l| l.first().copied()), Some((4, false)));
+    assert!(lines(35.0, &|_| f64::NAN, &cands).is_some_and(|l| l.iter().all(|&(end, _)| end != 4)));
+    // No credit for a line ending in a hyphen.
+    let hyphenated = [Breakpoint { end: 4, hyphen: 1.0 }];
+    assert_eq!(lines(38.0, &half, &hyphenated), None);
+    assert_eq!(lines(38.0, &half, &[Breakpoint { end: 4, hyphen: 0.0 }]), Some(vec![(4, false), (7, false)]));
+}
+
+/// The glyphs of `text`, each 10 pt wide, with Korean words kept whole unless `anywhere` (Korean
+/// Line Break Anywhere on).
+fn korean(text: &str, anywhere: bool) -> Vec<SGlyph> {
+    let mut glyphs = full_width(text);
+    if !anywhere {
+        crate::shape::keep_korean_words(&mut glyphs);
+    }
+    glyphs
+}
+
+/// Korean Line Break Anywhere off: both composers break a Korean word only at its spaces, so a
+/// word that doesn't fit moves to the next line whole; on, they break between its syllables.
+#[test]
+fn korean_words_break_at_spaces_unless_line_break_anywhere() {
+    use KinsokuShoriType::PushOutOnly;
+    let text = "가나다 라마바";
+    let greedy =
+        |g: &[SGlyph], width: f64| break_line(text, g, 0, width, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushOutOnly, false, false, &[]).0;
+    let ends = |g: &[SGlyph]| candidates(text, g, None, Kinsoku::Hard).iter().map(|b| b.end).collect::<Vec<_>>();
+    // 50 pt holds "가나다 라" and not "가나다 라마".
+    assert_eq!(greedy(&korean(text, false), 50.0), 4, "off: the line ends at the space");
+    assert_eq!(greedy(&korean(text, true), 50.0), 5, "on: the line ends after 라");
+    assert_eq!(ends(&korean(text, false)), [4]);
+    assert_eq!(ends(&korean(text, true)), [1, 2, 4, 5, 6]);
+    let params = Params { justify_last: false, ragged: true, tolerance: f64::INFINITY, uniform_from: 0, hyphen_limit: 0 };
+    let off = korean(text, false);
+    let cands = candidates(text, &off, None, Kinsoku::Hard);
+    assert_eq!(compose(&off, &|_| 50.0, &|_| 0.0, &|_| 0.0, &cands, &[], &params), Some(vec![(4, false), (7, false)]));
+    // The first word is measured whole, as the line loop measures it.
+    assert_eq!(breaking::word_width(&off, 0, &[], Kinsoku::Hard), 30.0);
+    assert_eq!(breaking::word_width(&korean(text, true), 0, &[], Kinsoku::Hard), 10.0);
+    // A word wider than the line still breaks, at the syllable that overflows.
+    assert_eq!(greedy(&korean("가나다라마바", false), 25.0), 2);
+    // A soft return still ends the line.
+    let soft = "가나\u{2028}다라";
+    assert_eq!(
+        break_line(soft, &korean(soft, false), 0, 100.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushOutOnly, false, false, &[]).0,
+        3
+    );
+}
+
+/// Korean Line Break Anywhere off keeps the Han, kana and full-width letters of a Korean word with
+/// it, lets the line break after East Asian punctuation in it (as kinsoku allows), and leaves
+/// text without Hangul its own breaks. On, No Break still keeps its characters together.
+#[test]
+fn korean_words_keep_their_letters_and_break_after_punctuation() {
+    let ends = |text: &str, anywhere: bool| candidates(text, &korean(text, anywhere), None, Kinsoku::Hard).iter().map(|b| b.end).collect::<Vec<_>>();
+    assert_eq!(ends("漢字한국 ab", false), [5], "Han in a Korean word stays with it");
+    assert_eq!(ends("日本語 한국어", false), [1, 2, 4], "Japanese keeps its breaks");
+    assert_eq!(ends("가나。다라", false), [3], "after the full stop");
+    assert_eq!(ends("「가나」다", false), [4], "after the closing bracket, not the opening one");
+    assert_eq!(ends("가나ＡＢ다", false), Vec::<usize>::new(), "full-width letters stay with it");
+    let text = "가나다라";
+    let mut glyphs = korean(text, true);
+    for g in &mut glyphs[1..3] {
+        g.no_break = true;
+    }
+    let end = break_line(text, &glyphs, 0, 25.0, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, KinsokuShoriType::PushOutOnly, false, false, &[]).0;
+    assert_eq!(end, 1, "No Break keeps 나다 together");
+}
+
+/// Hyphenation adds no hyphen to a Korean word, even where a hyphenation exception marks one: the
+/// word that overflows breaks without one, and the every-line composer is offered no hyphenated
+/// break in it.
+#[test]
+fn korean_words_take_no_hyphen() {
+    let opts = HyphenationOptions { words_longer_than: 0, after_first: 1, before_last: 1, ..Default::default() };
+    let text = "가나다라";
+    crate::hyphen::with_hyphenation_exceptions_for_test("가나-다라", || {
+        let glyphs = korean(text, false);
+        let line = break_line(
+            text,
+            &glyphs,
+            0,
+            25.0,
+            &[],
+            0.0,
+            Some((&opts, 0.0)),
+            Burasagari::None,
+            Kinsoku::Hard,
+            KinsokuShoriType::PushOutOnly,
+            false,
+            false,
+            &[],
+        );
+        assert_eq!(line, (2, false));
+        assert!(candidates(text, &glyphs, Some(&opts), Kinsoku::Hard).iter().all(|b| b.hyphen == 0.0));
+    });
+    // Nor between the Latin letters of a word that also holds Hangul.
+    let text = "가나foobar";
+    crate::hyphen::with_hyphenation_exceptions_for_test("가나foo-bar", || {
+        let hyphens =
+            |anywhere: bool| candidates(text, &korean(text, anywhere), Some(&opts), Kinsoku::Hard).iter().filter(|b| b.hyphen > 0.0).count();
+        assert_eq!(hyphens(false), 0);
+        assert_eq!(hyphens(true), 1, "on, the word's Latin letters hyphenate as before");
+    });
+}
+
+/// The glyphs of `text`, each 10 pt wide, with its inseparable pairs kept together when `bunri`
+/// (Bunri-Kinshi on).
+fn pairs(text: &str, bunri: bool) -> Vec<SGlyph> {
+    let mut glyphs = full_width(text);
+    if bunri {
+        crate::shape::keep_inseparable_pairs(text, &mut glyphs);
+    }
+    glyphs
+}
+
+/// Bunri-Kinshi: both composers never break inside two em dashes, two ellipses, two two-dot
+/// leaders or a vertical kana repeat mark, nor inside a chain of em dashes; off, the line may break
+/// between them where it could before. Unlike neighbors and characters on either side of a forced
+/// line break are not a pair.
+#[test]
+fn bunri_kinshi_keeps_jlreq_pairs_in_both_composers() {
+    use KinsokuShoriType::PushOutOnly;
+    let ends = |text: &str, bunri: bool| candidates(text, &pairs(text, bunri), None, Kinsoku::Hard).iter().map(|b| b.end).collect::<Vec<_>>();
+    let text = "あい——う〳〵え";
+    assert_eq!(ends(text, false), [1, 2, 3, 4, 5, 6, 7]);
+    assert_eq!(ends(text, true), [1, 2, 4, 5, 7]);
+    assert_eq!(ends("———あ", false), [1, 2, 3]);
+    assert_eq!(ends("———あ", true), [3], "a chain stays together");
+    assert_eq!(ends("あ〴〵い", true), [1, 3]);
+    assert_eq!(ends("—…あ", true), ends("—…あ", false), "unlike neighbors are not a pair");
+    for text in ["あ……い", "あ‥‥い"] {
+        assert!(!ends(text, true).contains(&2), "{text}");
+    }
+    let marked = |text: &str| pairs(text, true).iter().filter(|g| g.keeps_next).count();
+    assert_eq!((marked("……‥‥〳〵〴〵"), marked("—\u{2028}—"), marked("—〵"), marked("〵〳")), (4, 0, 0, 0));
+    // 35 pt holds "あい—" and not "あい——".
+    let greedy =
+        |g: &[SGlyph], width: f64| break_line(text, g, 0, width, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushOutOnly, false, false, &[]).0;
+    assert_eq!(greedy(&pairs(text, false), 35.0), 3, "off: the line ends between the dashes");
+    assert_eq!(greedy(&pairs(text, true), 35.0), 2, "on: both dashes go to the next line");
+    assert_eq!(breaking::word_width(&pairs("——あ", true), 0, &[], Kinsoku::Hard), 20.0);
+    assert_eq!(breaking::word_width(&pairs("——あ", false), 0, &[], Kinsoku::Hard), 10.0);
+    let params = Params { justify_last: false, ragged: true, tolerance: f64::INFINITY, uniform_from: 0, hyphen_limit: 0 };
+    let on = pairs("あい——う", true);
+    let cands = candidates("あい——う", &on, None, Kinsoku::Hard);
+    assert_eq!(compose(&on, &|_| 35.0, &|_| 0.0, &|_| 0.0, &cands, &[], &params), Some(vec![(2, false), (5, false)]));
+}
+
+/// Bunri-Kinshi: a pair wider than the line stays whole on it and the next line starts after it;
+/// every Kinsoku Shori Type and both kinsoku sets leave pairs whole at every width, and each line
+/// moves on. No Break and a pair next to it stay together as one run.
+#[test]
+fn bunri_kinshi_progresses_with_an_overlong_pair_and_no_break() {
+    use KinsokuShoriType::{PushInFirst, PushOutFirst, PushOutOnly};
+    let line = |text: &str, g: &[SGlyph], i: usize, width: f64, kinsoku: Kinsoku, ty: KinsokuShoriType| {
+        break_line(text, g, i, width, &[], 0.0, None, Burasagari::None, kinsoku, ty, false, false, &[]).0
+    };
+    let text = "——あ";
+    assert_eq!(line(text, &pairs(text, true), 0, 15.0, Kinsoku::Hard, PushOutOnly), 2, "the pair overflows the line whole");
+    assert_eq!(line(text, &pairs(text, true), 2, 15.0, Kinsoku::Hard, PushOutOnly), 3);
+    assert_eq!(line(text, &pairs(text, false), 0, 15.0, Kinsoku::Hard, PushOutOnly), 1);
+    let text = "あい——」う〳〵」え";
+    let glyphs = pairs(text, true);
+    for kinsoku in [Kinsoku::Hard, Kinsoku::Soft] {
+        for ty in [PushInFirst, PushOutFirst, PushOutOnly] {
+            for width in (10..=90).step_by(5).map(f64::from) {
+                let mut i = 0;
+                while i < glyphs.len() {
+                    let end = line(text, &glyphs, i, width, kinsoku, ty);
+                    assert!(end > i, "{kinsoku:?} {ty:?} {width}: no progress at {i}");
+                    assert!(end != 3 && end != 7, "{kinsoku:?} {ty:?} {width}: a pair split at {end}");
+                    i = end;
+                }
+            }
+        }
+    }
+    let text = "あ——い";
+    let mut on = pairs(text, true);
+    let mut off = pairs(text, false);
+    for g in on[..2].iter_mut().chain(off[..2].iter_mut()) {
+        g.no_break = true;
+    }
+    assert_eq!(line(text, &on, 0, 25.0, Kinsoku::Hard, PushOutOnly), 3, "No Break and the pair are one run");
+    assert_eq!(line(text, &off, 0, 25.0, Kinsoku::Hard, PushOutOnly), 2);
+    // Push In First closes each gap by up to 1 pt here: 」 needs 3.5 pt, which the four gaps give
+    // and the three outside the pair do not, so on, い moves to the next line with 」.
+    let text = "あ〳〵い」";
+    assert_eq!(line(text, &pairs(text, false), 0, 46.5, Kinsoku::Hard, PushInFirst), 5);
+    assert_eq!(line(text, &pairs(text, true), 0, 46.5, Kinsoku::Hard, PushInFirst), 3);
 }

@@ -9,9 +9,9 @@ use vectorcraft_geom::{Affine, Point, Vec2};
 
 use super::clipboard::SwatchChoices;
 use super::{
-    CommandSpec, Result, Session, always, bad, bool_or, can_clear_history, can_redo, can_undo, checked_ids_param, clock_date, cmd, date_param,
-    f64_or, f64_req, finite_numbers, has_clipboard, has_doc, has_selection, has_selection_guides_or_artboard_tool, has_selection_or_guides, id_param,
-    index, ok, point_param, str_param, switch_or,
+    CommandSpec, Result, Session, always, bad, can_clear_history, can_redo, can_undo, check_numbers, checked_ids_param, clock_date, cmd, date_param,
+    f64_req, finite_numbers, has_clipboard, has_doc, has_selection, has_selection_guides_or_artboard_tool, has_selection_or_guides, index, number_or,
+    object_param, ok, point_param, str_param, switch_or,
 };
 use crate::{Clipboard, EngineError, inspect};
 
@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New…",
             ["File"],
             None,
-            "{preset?: a name from file.newPresets (start from it; the other params change it), name?|title?: document name (default Untitled-N), width?: pt=612|\"210 mm\", height?: pt=792, units?: \"Pixels\"|\"Points\"|\"Picas\"|\"Inches\"|\"Millimeters\"|\"Centimeters\"|\"Feet\"|\"Yards\"|\"Meters\"|\"Feet & Inches\" (default: prefs unitsGeneral, as print presets; screen presets: Pixels), orientation?: \"portrait\"|\"landscape\" (swaps width and height to match), artboards?: n (1–1000), artboardLayout?: {layout?: \"gridByRow\"|\"gridByColumn\"|\"row\"|\"column\", columns?: n (default: all in one row), spacing?: pt=20, rightToLeft?: bool}, bleed?: pt|[top, bottom, left, right]|{top?, …} (0–72 pt), backgroundContents?: \"transparent\"|\"white\" (a white artboard background, not an object), colorMode?: \"rgb\"|\"cmyk\" (a CMYK document starts with CMYK swatches and stores the colours applied to it as CMYK), rasterEffectsPpi?: 72|150|300 (1–2400), previewMode?: \"default\"|\"pixel\"|\"overprint\" (overprint turns Overprint Preview on, pixel Pixel Preview in the app; default leaves both), created?: Unix seconds|null (File Info's created date; default now, recorded in the journal so a replay matches), size?: a preset's size label (a preset file.newPresets lists can be passed back; ignored)} → {index, previewMode}; the size is remembered in file.newPresets' Recent",
+            "{preset?: a name from file.newPresets (start from it; the other params change it), name?|title?: document name (default Untitled-N), width?: pt=612|\"210 mm\", height?: pt=792 (each more than 0 and at most 3,999,856 pt, as artboard.new takes them), units?: \"Pixels\"|\"Points\"|\"Picas\"|\"Inches\"|\"Millimeters\"|\"Centimeters\"|\"Feet\"|\"Yards\"|\"Meters\"|\"Feet & Inches\" (default: prefs unitsGeneral, as print presets; screen presets: Pixels), orientation?: \"portrait\"|\"landscape\" (swaps width and height to match), artboards?: n (1–1000), artboardLayout?: {layout?: \"gridByRow\"|\"gridByColumn\"|\"row\"|\"column\", columns?: n (default: all in one row), spacing?: pt=20, rightToLeft?: bool}, bleed?: pt|[top, bottom, left, right]|{top?, …} (0–72 pt), backgroundContents?: \"transparent\"|\"white\" (a white artboard background, not an object), colorMode?: \"rgb\"|\"cmyk\" (a CMYK document starts with CMYK swatches and stores the colours applied to it as CMYK), rasterEffectsPpi?: 72|150|300 (1–2400), previewMode?: \"default\"|\"pixel\"|\"overprint\" (overprint turns Overprint Preview on, pixel Pixel Preview in the app; default leaves both), alignNewObjectsToPixelGrid?: bool (Advanced Options › Align New Objects to Pixel Grid: paths drawn in the document are pixel-aligned; default on for the Mobile and Web presets, else off; document.setup changes it later), profile?: a category of file.newPresets|null (the New Document profile the document starts from, see file.newProfiles; default: a built-in preset's category, kept by the saved and Recent presets made from it; null or no preset: the defaults), created?: Unix seconds|null (File Info's created date; default now, recorded in the journal so a replay matches), size?: a preset's size label (a preset file.newPresets lists can be passed back; ignored)} → {index, previewMode, profile?: the profile applied, profileError?: {profile, reason} (its file could not be read, was larger than 64 MiB or is not a native document, or the request may not read the profiles folder: the document has the defaults)}; the size is remembered in file.newPresets' Recent",
             always,
             super::newdoc::file_new
         ),
@@ -38,7 +38,7 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             doc_move
         ),
-        cmd!(query "document.inspect", "Inspect Document", [], None, "{depth?, childLimit?, ids?: [id…] (list just these nodes, of any level, in this order, under `nodes` in place of `layers`; an unknown id is an error; at most 10000), kind?: panel label such as Layer; Group; Path; Type or Image (exact, ignoring case; list every such node under `nodes`, each with `path`, its ancestor ids with the layer first, searching the subtrees of `ids` when given), limit?: at most this many entries of the list, offset?: entries skipped first (default 0; with `ids`, `kind`, `limit` or `offset` the reply adds `total`, the entries before paging)} → layer tree (each node: id, name, kind, visible, locked, bounds, opacity (0–1) and opacityPct (0–100 %, the scale object.setProps takes) when below 1, blend when not Normal, fill, stroke and strokeWidth of objects and compound paths; a compound path's members have compoundMember: true instead of paint, which is the compound's), artboards, selection, history (a sliced tree reports childCount); without the scope options the reply is the whole layer tree", has_doc, doc_inspect),
+        cmd!(query "document.inspect", "Inspect Document", [], None, "{depth?, childLimit?, ids?: [id…] (list just these nodes, of any level, in this order, under `nodes` in place of `layers`; an unknown id is an error; at most 10000), kind?: panel label such as Layer; Group; Path; Type or Image (exact, ignoring case; list every such node under `nodes`, each with `path`, its ancestor ids with the layer first, searching the subtrees of `ids` when given), limit?: at most this many entries of the list, offset?: entries skipped first (default 0; with `ids`, `kind`, `limit` or `offset` the reply adds `total`, the entries before paging)} → path (the document's file; null when automation read roots are in force and the file is outside them), layer tree (each node: id, name, kind, visible, locked, bounds, opacity (0–1) and opacityPct (0–100 %, the scale object.setProps takes) when below 1, blend when not Normal, fill, stroke and strokeWidth of objects and compound paths; a compound path's members have compoundMember: true instead of paint, which is the compound's), artboards, selection, history (a sliced tree reports childCount); without the scope options the reply is the whole layer tree", has_doc, doc_inspect),
         cmd!(query "document.node", "Inspect Object", [], None, "{id, summary?: compact summary, depth?: child levels in the summary (default all), childLimit?: children shown per node (default all; a level that shows fewer reports childCount)} → one object", has_doc, doc_node),
         cmd!(query "document.find", "Find Objects", [], None, "{name?: substring of the Layers panel name, kind?: panel label such as Group; Path; Type or Image (exact), text?: substring of type content, within?: [x, y, width, height] (an object's geometric bounds inside this rectangle, edges included; document points as document.inspect's bounds; layers never match this or the size filters), intersects?: [x, y, width, height] (bounds touching or overlapping it), minWidth?, maxWidth?, minHeight?, maxHeight?: pt (the bounds' size), minThickness?, maxThickness?: pt (the smaller of the bounds' width and height), minArea?, maxArea?: pt² (the bounds' width × height), minAnchors?, maxAnchors?: anchor points of a path (a compound path's members together; other objects never match), select?: bool (also select the matches, leaving out hidden and locked ones, those inside another match, and a compound path's members unless the compound path is isolated; Select > Reselect repeats it), limit?: max matches listed (default 100, 0 counts only)} → {matches: [{id, name, kind, path}], total, selected (with select: the count selected)}; at least one filter, all of them matching", has_doc, doc_find),
         cmd!(
@@ -50,7 +50,11 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             doc_compare
         ),
-        cmd!(query "document.json", "Document JSON", [], None, "{} → complete document model", has_doc, |s, _| Ok(serde_json::to_value(&*s.doc()?.doc).unwrap_or(Value::Null))),
+        cmd!(query "document.json", "Document JSON", [], None, "{} → complete document model (with automation read roots, a linked or placed file outside them is named by its file name alone, without its relative path, size or date, in brush art too, and so are a data set's image value and a linked JavaScript file in svg_scripts outside them (a URL is kept); a relative path that leads outside them is left out; a stored brush entry that does not read as a brush is left out; a folder outside them is left out of export_settings)", has_doc, |s, _| {
+            let st = s.doc()?;
+            let d = super::links::with_hidden_paths_named(&st.doc, super::links::LinkBase::of(st));
+            Ok(serde_json::to_value(&*d).unwrap_or(Value::Null))
+        }),
         cmd!(
             "document.setUnits",
             "Units",
@@ -237,7 +241,7 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 fn file_close(s: &mut Session, p: &Value) -> Result<Value> {
-    let i = p.get("index").and_then(Value::as_u64).map(index).or(s.active_index()).ok_or(EngineError::NoDocument)?;
+    let i = opt_u64(p, "file.close", "index")?.map(index).or(s.active_index()).ok_or(EngineError::NoDocument)?;
     if !s.close_document(i) {
         return Err(bad("file.close", "no such document"));
     }
@@ -267,9 +271,9 @@ fn doc_move(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn doc_node(s: &mut Session, p: &Value) -> Result<Value> {
-    let id = id_param(p, "id").ok_or_else(|| bad("document.node", "missing id"))?;
+    let id = object_param(p, "id", "document.node")?.ok_or_else(|| bad("document.node", "missing id"))?;
     let mut opts = slice_opts(p, "document.node")?;
-    let summary = bool_or(p, "summary", false);
+    let summary = switch_or(p, "summary", false, "document.node")?;
     if !summary && (opts.depth.is_some() || opts.child_limit.is_some()) {
         // The full object JSON is never truncated: a slice without `summary` would
         // otherwise silently return the whole subtree.
@@ -663,7 +667,8 @@ fn undo_group_begin(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn undo_group_end(s: &mut Session, p: &Value) -> Result<Value> {
-    s.end_undo_group(bool_or(p, "cancel", false));
+    let cancel = switch_or(p, "cancel", false, "edit.undoGroup.end")?;
+    s.end_undo_group(cancel);
     ok()
 }
 
@@ -672,10 +677,14 @@ fn undo_group_end(s: &mut Session, p: &Value) -> Result<Value> {
 /// the step before. As any new edit it ends the steps to redo, so Redo never swaps the document
 /// under an interaction that would then preview on, or cancel to, the document from before (#1719).
 /// A typing session also ends in the Type tool, whose caret and marked text (IME) must follow the
-/// document.
+/// document. A preview that Real-time Drawing off left unapplied is applied first, as the tool's own
+/// commit applies it; when it fails, the interaction is canceled.
 pub(crate) fn settle_interaction(s: &mut Session) -> Result<()> {
     let typing = typing_in_progress(s);
-    s.commit_interaction()?;
+    match s.unapplied_interaction_preview().filter(|_| !s.previewing) {
+        Some((cmd, p)) if s.preview(&cmd, &p).is_err() => s.cancel_interaction()?,
+        _ => s.commit_interaction()?,
+    }
     if typing {
         s.set_tool_option("endTyping", &Value::Bool(true));
     }
@@ -1231,6 +1240,9 @@ impl PasteMode {
 
 fn paste(s: &mut Session, p: &Value, mode: PasteMode) -> Result<Value> {
     let choices = SwatchChoices::parse(mode.label(), p)?;
+    if mode == PasteMode::Offset {
+        check_numbers(p, &["dx", "dy"], "edit.paste")?;
+    }
     // Taken out of the session for the edit (and put back whatever happens).
     let clip = std::mem::take(&mut s.clipboard);
     let r = paste_clip(s, p, mode, &clip, &choices);
@@ -1385,7 +1397,7 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         (_, Some((_, dv))) => vec![Affine::translate(dv)],
         (PasteMode::Offset | PasteMode::Library | PasteMode::Drag, None) => vec![match point_param(p, "center") {
             Some(c) => clip.bounds().map_or(Affine::IDENTITY, |b| Affine::translate(c - b.center())),
-            None => Affine::translate((f64_or(p, "dx", off), f64_or(p, "dy", off))),
+            None => Affine::translate((number_or(p, "dx", off, mode.label())?, number_or(p, "dy", off, mode.label())?)),
         }],
         (PasteMode::AllArtboards, None) => {
             let src = clip.source_artboard.or_else(|| st.doc.artboards.first().map(|a| a.rect)).map(|r| r.origin()).unwrap_or_default();
@@ -1560,8 +1572,8 @@ fn layer_named(d: &mut Document, name: &str) -> NodeId {
 
 fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
-    let dx = f64_or(p, "dx", 0.0);
-    let dy = f64_or(p, "dy", 0.0);
+    let dx = number_or(p, "dx", 0.0, "edit.duplicate")?;
+    let dy = number_or(p, "dy", 0.0, "edit.duplicate")?;
     let ids = s.edit("Duplicate", |d, sel| duplicate_in(d, sel, &roots, Affine::translate((dx, dy))))?;
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }

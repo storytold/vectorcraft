@@ -77,6 +77,7 @@ fn export_tool_lists_engine_formats_and_options() {
             "eps",
             "emf",
             "wmf",
+            "hpgl",
             "tga",
             "psd"
         ])
@@ -356,6 +357,29 @@ fn save_file_waits_for_the_file_in_the_app() {
             want["wait"] = json!(true);
         }
         assert_eq!(params, &want, "has_ui: {ui}");
+    }
+}
+
+#[test]
+fn readonly_save_file_keeps_the_stable_error_prefix() {
+    struct Refused(bool);
+    impl Backend for Refused {
+        fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
+            assert_eq!(method, "app.save");
+            assert_eq!(params.get("wait").and_then(Value::as_bool), self.0.then_some(true));
+            Err(vectorcraft_engine::EngineError::ReadOnlyLocation("Poster.svg: injected refusal".into()).to_string())
+        }
+        fn has_ui(&self) -> bool {
+            self.0
+        }
+        fn describe(&self) -> String {
+            "injected save refusal".into()
+        }
+    }
+    for desktop in [false, true] {
+        let r = call_tool(&mut Refused(desktop), "save_file", &json!({}));
+        assert!(r.is_error);
+        assert_eq!(r.content[0]["text"], "save_file: READ_ONLY_LOCATION: Poster.svg: injected refusal");
     }
 }
 

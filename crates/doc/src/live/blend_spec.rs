@@ -107,12 +107,58 @@ pub struct BlendSpec {
     /// on anchor points); `None`: chosen so closed shapes don't twist.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub starts: Vec<Option<u32>>,
+    /// The blend was made without a spine (Create Spine › Never): it has no spine to show, edit,
+    /// reverse or release, and no easing. Its steps still sit on the straight lines between the
+    /// key centers. Replace Spine gives it one.
+    #[serde(default, rename = "noSpine", skip_serializing_if = "is_false", deserialize_with = "lenient_bool")]
+    pub no_spine: bool,
 }
 
 impl BlendSpec {
     /// The start anchor of key `i` (see [`Self::starts`]).
     pub fn start(&self, i: usize) -> Option<usize> {
         self.starts.get(i).copied().flatten().map(|a| a as usize)
+    }
+
+    /// Whether [`Self::ease`] moves the steps: the blend has a spine ([`Self::no_spine`] is off)
+    /// and a replaced spine or Align to Path, the cases where the steps are placed along it.
+    pub fn eases_along_spine(&self) -> bool {
+        !self.no_spine && (self.spine.is_some() || self.orientation == BlendOrientation::AlignToPath)
+    }
+}
+
+/// The Blend panel's Create Spine setting: whether a new blend gets a spine.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BlendSpineMode {
+    /// The usual rule: every new blend gets a spine, the straight lines between its key centers.
+    #[default]
+    Auto,
+    /// Every new blend gets a spine, whatever its key objects are.
+    Always,
+    /// New blends get no spine.
+    Never,
+}
+
+impl BlendSpineMode {
+    /// Every mode, in the order the Blend panel lists them.
+    pub const ALL: [Self; 3] = [Self::Auto, Self::Always, Self::Never];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Always => "always",
+            Self::Never => "never",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|m| m.id() == id)
+    }
+
+    /// Whether a new blend made with this mode gets a spine.
+    pub fn creates_spine(self) -> bool {
+        self != Self::Never
     }
 }
 
@@ -123,6 +169,29 @@ pub struct BlendDefaults {
     pub spacing: BlendSpacing,
     #[serde(default)]
     pub orientation: BlendOrientation,
+    /// Create Spine (`object.blend.createSpine`).
+    #[serde(default, rename = "createSpine", skip_serializing_if = "is_auto", deserialize_with = "spine_mode")]
+    pub create_spine: BlendSpineMode,
+}
+
+fn is_false(v: &bool) -> bool {
+    !*v
+}
+
+fn is_auto(v: &BlendSpineMode) -> bool {
+    *v == BlendSpineMode::Auto
+}
+
+/// Reading a native file never fails over a `noSpine` that is not a boolean: the blend keeps its
+/// spine.
+fn lenient_bool<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    Ok(serde_json::Value::deserialize(d)?.as_bool().unwrap_or(false))
+}
+
+/// Reading the preferences never fails over an unknown Create Spine value: it becomes Auto.
+fn spine_mode<'de, D: serde::Deserializer<'de>>(d: D) -> Result<BlendSpineMode, D::Error> {
+    let v = serde_json::Value::deserialize(d)?;
+    Ok(v.as_str().and_then(BlendSpineMode::from_id).unwrap_or_default())
 }
 
 /// Reading a native file never fails over one bad blend number: out-of-range values clamp,

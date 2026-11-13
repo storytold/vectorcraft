@@ -17,7 +17,7 @@ mod wrap;
 
 pub use area::{AreaFit, AreaOptions, PathAlign, PathEffect, TextFlow, TextWrap, VerticalAlign, WrapShape};
 use char_style::yes;
-pub use char_style::{CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, GlyphChoice, ScriptMetrics};
+pub use char_style::{CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, GlyphChoice, MAX_AKI, ScriptMetrics};
 pub use composite::{
     COMPOSITE_BASELINE, COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, COMPOSITE_SCALE, COMPOSITE_SIZE, CharClass, CompositeFont, CompositePart,
     CompositeParts,
@@ -52,7 +52,7 @@ pub struct TextObject {
     /// the object, so the runs (and their styles) stay the text itself.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ruby: Vec<RubySpan>,
-    #[serde(default)]
+    #[serde(default = "ParaStyle::omitted")]
     pub para: ParaStyle,
     /// Per-paragraph attributes (see the type's docs); empty = every paragraph uses `para`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

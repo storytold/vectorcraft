@@ -433,14 +433,19 @@ impl Exporter<'_> {
     /// Is `p` a paint PDF has no paint for when it paints a fill (`fill`) or a stroke, which
     /// [`Self::area`] draws as art: a pattern swatch or a gradient drawn as pixels
     /// ([`vectorcraft_color::GradientPaint::draws_as_pixels`]), but not a Perceptual one of spot
-    /// inks ([`Self::perceptual_spot`]), or a conic gradient that can't be a sweep shading (in
-    /// PDF/A, or with more than [`super::paint::MAX_SWEEP_STOPS`] stops)?
+    /// inks ([`Self::perceptual_spot`]), a conic gradient that can't be a sweep shading (in
+    /// PDF/A, or with more than [`super::paint::MAX_SWEEP_STOPS`] stops), a diamond gradient
+    /// (four linear gradients, [`Self::diamond`]), or a linear or radial gradient that repeats or
+    /// reflects (its stops repeated over the area, [`Self::padded`])?
     pub(super) fn area_paint(&self, p: &Paint, fill: bool) -> bool {
         match p {
             Paint::Pattern { pattern, .. } => self.doc.pattern(pattern).is_some(),
             Paint::Gradient(g) => {
                 let sweep_unwritable = || !self.sweeps || g.gradient.expanded().nth(super::paint::MAX_SWEEP_STOPS).is_some();
-                (g.draws_as_pixels(fill) && !self.perceptual_spot(g, fill)) || (g.gradient.kind == GradientKind::Conic && sweep_unwritable())
+                (g.draws_as_pixels(fill) && !self.perceptual_spot(g, fill))
+                    || (g.gradient.kind == GradientKind::Conic && sweep_unwritable())
+                    || g.gradient.kind == GradientKind::Diamond
+                    || (g.gradient.is_spread() && matches!(g.gradient.kind, GradientKind::Linear | GradientKind::Radial))
             }
             _ => false,
         }
@@ -448,9 +453,11 @@ impl Exporter<'_> {
 
     /// Paint the area `clip` (filled by `rule`; bounds `area`) with `p` at `transparency` (opacity,
     /// blend mode) when it is an [area paint](Self::area_paint) of a fill (`fill`) or a stroke: a
-    /// pattern's [tiling pattern](Self::tiling) (else its tile instances covering it), or an image
-    /// of a gradient drawn as pixels placed on `bounds` (the painted object's box, as on the
-    /// canvas), clipped to it. False (nothing drawn) for other paints.
+    /// pattern's [tiling pattern](Self::tiling) (else its tile instances covering it), a diamond
+    /// gradient's four linear gradients, a repeating or reflecting linear or radial gradient's
+    /// stops repeated over `area`, or an image of a gradient drawn as pixels, placed on
+    /// `bounds` (the painted object's box, as on the canvas), clipped to it. False (nothing drawn)
+    /// for other paints.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn area(
         &mut self,
@@ -498,7 +505,14 @@ impl Exporter<'_> {
                         }
                     }
                 }
-                Paint::Gradient(g) => self.field_image(s, g, bounds, area, fill),
+                Paint::Gradient(g) => {
+                    let pixels = g.draws_as_pixels(fill) && !self.perceptual_spot(g, fill);
+                    // A linear or radial gradient that repeats or reflects is drawn by `padded`.
+                    let drawn = !pixels && self.padded(s, g, bounds, area);
+                    if !drawn && (pixels || g.gradient.kind != GradientKind::Diamond || !self.diamond(s, g, bounds, area)) {
+                        self.field_image(s, g, bounds, area, fill);
+                    }
+                }
                 _ => {}
             }
         }

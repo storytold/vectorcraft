@@ -180,7 +180,8 @@ fn inline_transform_width(ui: &Ui, t: &Tokens) -> f32 {
     labels + fields + crate::panels::transform::CONSTRAIN_LINK_SIZE + ui.spacing().item_spacing.x * items as f32
 }
 
-/// The size of the Control bar's Align, Distribute and area type vertical alignment buttons.
+/// The size of the Control bar's Align, Distribute and area type vertical alignment buttons, and
+/// the height of its Align To menu.
 const BUTTON: f32 = 24.0;
 
 /// The space ahead of the separator that ends a group of the Control bar's controls.
@@ -219,9 +220,9 @@ fn separator_width(ui: &Ui) -> f32 {
 
 /// The room the controls at the end of the Control bar need: the Transform link, or Document Setup
 /// and Preferences with nothing selected, or none while the panel menu has that group off. The
-/// groups ahead of them (the Paragraph section, area type's vertical alignment, the Align and
-/// Distribute buttons) show only while it is left, so the bar trims them from its right end
-/// (#5372), after the inline X/Y/W/H fields.
+/// groups ahead of them (the Paragraph section, area type's vertical alignment, the Align buttons,
+/// the Align To menu and the Distribute buttons) show only while it is left, so the bar trims them
+/// from its right end (#5372), after the inline X/Y/W/H fields.
 fn end_width(app: &VectorcraftApp, ui: &Ui, nothing_selected: bool) -> f32 {
     if nothing_selected {
         if group_on(app, "documentOptions") { DOCUMENT_SETUP_WIDTH + ui.spacing().item_spacing.x + PREFERENCES_WIDTH } else { 0.0 }
@@ -235,10 +236,10 @@ fn end_width(app: &VectorcraftApp, ui: &Ui, nothing_selected: bool) -> f32 {
 /// Draws the Control bar's groups between its Character controls and the Transform link, and
 /// returns whether the Transform link and X/Y/W/H follow (false: nothing is selected, and Document
 /// Setup and Preferences, drawn here, end the bar, or the Transform group is off). The groups are
-/// the Paragraph section and area type's vertical alignment (#3759), then the Align buttons and, for
-/// two or more objects, the
-/// Distribute buttons (a single object keeps the bar as it was); each shows only while the end of
-/// the bar keeps its room. Groups the panel menu has off are left out, and take no room.
+/// the Paragraph section and area type's vertical alignment (#3759), then the Align buttons, the
+/// Align To menu and, for two or more objects, the Distribute buttons (a single object keeps the bar
+/// as it was); each shows only while the end of the bar keeps its room. Groups the panel menu has
+/// off are left out, and take no room.
 fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize) -> bool {
     let nothing = objects == 0;
     let end = end_width(app, ui, nothing);
@@ -267,15 +268,39 @@ fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize
     let end = if transform { separator_width(ui) + end } else { 0.0 };
     if group_on(app, "alignDistribute") && ui.available_width() >= buttons_width(ui, 7) + end {
         crate::panels::align::align_buttons(app, ui, BUTTON);
-        if objects > 1 && ui.available_width() >= GROUP_GAP + buttons_width(ui, 6) + end {
-            ui.add_space(GROUP_GAP);
-            crate::panels::align::distribute_buttons(app, ui, BUTTON);
+        if ui.available_width() >= crate::panels::align::align_to_menu_width(BUTTON) + ui.spacing().item_spacing.x + end {
+            crate::panels::align::align_to_menu(app, ui, BUTTON);
+            if objects > 1 && ui.available_width() >= GROUP_GAP + buttons_width(ui, 6) + end {
+                ui.add_space(GROUP_GAP);
+                crate::panels::align::distribute_buttons(app, ui, BUTTON);
+            }
         }
         if transform {
             separator(ui);
         }
     }
     transform
+}
+
+/// Draws the Control bar's Align group after the artboard controls, with the Artboard tool in use:
+/// the Align buttons, the Align To menu and, while they can space the selected artboards
+/// ([`crate::panels::align::artboards_distribute`]), the Distribute buttons. They align and
+/// distribute the selected artboards
+/// ([`crate::panels::align::run_button`]). Each shows only while the bar has room for it, and none
+/// while the panel menu has the group off.
+fn artboard_align_group(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if !group_on(app, "alignDistribute") || app.session.active().is_none() || ui.available_width() < separator_width(ui) + buttons_width(ui, 7) {
+        return;
+    }
+    separator(ui);
+    crate::panels::align::align_buttons(app, ui, BUTTON);
+    if ui.available_width() >= crate::panels::align::align_to_menu_width(BUTTON) + ui.spacing().item_spacing.x {
+        crate::panels::align::align_to_menu(app, ui, BUTTON);
+        if crate::panels::align::artboards_distribute(app) && ui.available_width() >= GROUP_GAP + buttons_width(ui, 6) {
+            ui.add_space(GROUP_GAP);
+            crate::panels::align::distribute_buttons(app, ui, BUTTON);
+        }
+    }
 }
 
 /// The edges of the window the Control bar docks to (`window.control.dock {edge}`): the top, then
@@ -512,6 +537,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 // of the object controls.
                 let (artboard_options, transform) = (group_on(app, "artboardOptions"), group_on(app, "transform"));
                 if crate::panels::artboards::control_bar(app, ui, artboard_options, transform) {
+                    artboard_align_group(app, ui);
                     return;
                 }
                 if anchors != AnchorControls::None && group_on(app, "anchors") {

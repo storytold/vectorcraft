@@ -1,18 +1,21 @@
 //! Paragraph Style Options fields shared by editing and creating a paragraph style: General, Basic
-//! Paragraph Formats (alignment, indents and spacing), Composition (composer and Roman Hanging
-//! Punctuation), Hyphenation and Justification.
+//! Paragraph Formats (alignment, indents and spacing), Tabs (the style's tab stops), Composition
+//! (composer and Roman Hanging Punctuation), Hyphenation, Justification and East Asian Composition
+//! Settings (Bunri-Kinshi and Korean Line Break Anywhere).
 //!
 //! Each field is unset (empty, or a checkbox in its unset state) or set, and an unset field leaves
 //! its attribute out of the style. Distances are shown and typed in the General unit and kept in
 //! points. The Hyphenation and Justification options are one attribute each (`hyphenation`,
 //! `justification`): when any of their fields is set, a field left empty takes its default value.
-//! A field still as it opened keeps the style's stored value as it is.
+//! The `tabs` field is unset (null) or a list of stops, an empty list included, and is the `tabs`
+//! attribute. A field still as it opened keeps the style's stored value as it is.
 //!
 //! Behavior reference (public documentation):
 //! <https://helpx.adobe.com/illustrator/using/character-paragraph-styles.html>.
 
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::{HyphenationOptions, JustificationOptions, Unit};
+use vectorcraft_doc::text::DEFAULT_TAB_INTERVAL;
+use vectorcraft_doc::{HyphenationOptions, JustificationOptions, TabAlign, TabStop, Unit};
 
 use super::{DialogSpec, form};
 use crate::VectorcraftApp;
@@ -21,7 +24,11 @@ use crate::state::Dialog;
 pub const KIND: &str = "paraStyleOptions";
 
 /// The section ids, in the order the section list shows them.
-pub(crate) const SECTIONS: [&str; 5] = ["general", "basic", "composition", "hyphenation", "justification"];
+pub(crate) const SECTIONS: [&str; 7] = ["general", "basic", "tabs", "composition", "hyphenation", "justification", "eastAsian"];
+/// The alignments of a tab stop with the names the `tabs` field gives them, in the Tabs panel's
+/// order.
+const TAB_ALIGNS: [(TabAlign, &str); 4] =
+    [(TabAlign::Left, "left"), (TabAlign::Center, "center"), (TabAlign::Right, "right"), (TabAlign::Decimal, "decimal")];
 /// The distance fields of Basic Paragraph Formats, which are also the attributes they set.
 const DISTANCES: [&str; 5] = ["left_indent", "right_indent", "first_line_indent", "space_before", "space_after"];
 /// The range of the indents, the space before and after, and the Hyphenation Zone (pt), as
@@ -98,6 +105,9 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
             "glyph_max",
             "auto_leading",
             "single_word",
+            "bunri_kinshi",
+            "korean_line_break_anywhere",
+            "tabs",
             "section",
         ]
     },
@@ -112,6 +122,7 @@ pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
     let doc = &app.session.active().ok_or("no document open")?.doc;
     let def = doc.para_styles.iter().find(|s| s.name == name).ok_or_else(|| format!("no style `{name}`"))?;
     let mut fields = form_fields(&def.attrs, unit);
+    fields.insert("__vertical".into(), json!(vertical_text(app)));
     fields.insert("name".into(), json!(name));
     fields.insert("__style".into(), json!(name));
     fields.insert("section".into(), json!("general"));
@@ -127,6 +138,76 @@ pub(crate) fn form_fields(attrs: &Map<String, Value>, unit: Unit) -> Map<String,
     fields.insert("__attrs".into(), Value::Object(attrs.clone()));
     fields.insert("__unit".into(), json!(unit.key()));
     fields
+}
+
+/// Whether the first selected text is vertical type, where the Tabs section names a stop's
+/// position Y and its Left and Right alignments Top and Bottom.
+pub(crate) fn vertical_text(app: &VectorcraftApp) -> bool {
+    crate::panels::character::first_selected_text(app).is_some_and(|t| t.vertical)
+}
+
+/// The `tabs` field for a style's `tabs` attribute: unset (null) when the style leaves it out,
+/// otherwise one entry per stop ([`stop_field`]).
+fn tabs_field(value: Option<&Value>, unit: Unit) -> Value {
+    let Some(stops) = value.and_then(Value::as_array) else { return Value::Null };
+    Value::Array(stops.iter().filter_map(|s| serde_json::from_value::<TabStop>(s.clone()).ok()).map(|s| stop_field(&s, unit)).collect())
+}
+
+/// A tab stop's entry in the `tabs` field: its position as text in `unit`, its alignment, leader
+/// and Align On character, and the position in points it shows (`__pt`), which a position still as
+/// it shows keeps exactly.
+fn stop_field(s: &TabStop, unit: Unit) -> Value {
+    let align = TAB_ALIGNS.iter().find(|(a, _)| *a == s.align).map_or("left", |(_, key)| *key);
+    json!({"position": unit.format(s.position), "align": align, "leader": s.leader, "alignOn": s.align_on.to_string(), "__pt": s.position})
+}
+
+/// The position in points of a `tabs` entry: its `__pt` while its text is as that shows in `unit`,
+/// else the text read in `unit`; `None` when the text is not a distance.
+fn stop_position(row: &Value, unit: Unit) -> Option<f64> {
+    let text = row.get("position").and_then(Value::as_str).map_or("", str::trim);
+    row.get("__pt").and_then(Value::as_f64).filter(|pt| pt.is_finite() && unit.format(*pt) == text).or_else(|| unit.parse(text))
+}
+
+/// The tab stop a `tabs` entry sets, or why it sets none: its position must be a distance from 0 to
+/// 100000 pt (`label` names the field), its alignment one of [`TAB_ALIGNS`], its leader text of at
+/// most eight characters and its Align On character one character. A leader or Align On character
+/// left out is none or a period.
+fn read_stop(row: &Value, unit: Unit, label: &str) -> Result<TabStop, String> {
+    let position = stop_position(row, unit).ok_or_else(|| format!("{label} must be a number"))?;
+    if !(0.0..=TabStop::MAX_POSITION).contains(&position) {
+        let (min, max) = (unit.format(0.0), unit.format(TabStop::MAX_POSITION));
+        return Err(format!("{label} must be a number from {min} to {max}"));
+    }
+    let other = match row.get("align") {
+        None | Some(Value::Null) => "left",
+        Some(v) => v.as_str().unwrap_or(""),
+    };
+    let align = TAB_ALIGNS.iter().find(|(_, key)| *key == other).map(|(a, _)| *a).ok_or_else(|| format!("unknown align `{other}`"))?;
+    let leader = match row.get("leader") {
+        None | Some(Value::Null) => "",
+        Some(Value::String(s)) => s.as_str(),
+        Some(_) => {
+            let key = "leader";
+            return Err(format!("`{key}` must be a string"));
+        }
+    };
+    let (label, max) = (caption(tl!("Leader:")), TabStop::MAX_LEADER);
+    if leader.chars().count() > max {
+        return Err(format!("{label} must be at most {max} characters"));
+    }
+    let label = caption(tl!("Align On:"));
+    let align_on = match row.get("alignOn") {
+        None | Some(Value::Null) => '.',
+        Some(Value::String(s)) => {
+            let mut chars = s.chars();
+            match (chars.next(), chars.next()) {
+                (Some(c), None) => c,
+                _ => return Err(format!("{label} must be one character")),
+            }
+        }
+        Some(_) => return Err(format!("{label} must be one character")),
+    };
+    Ok(TabStop { position, align, leader: leader.into(), align_on })
 }
 
 /// A distance in points as its field shows it in `unit`.
@@ -154,7 +235,7 @@ pub(crate) fn fields_from_attrs(attrs: &Map<String, Value>, unit: Unit) -> Map<S
         fields.insert(key.into(), distance_field(attrs.get(key), unit));
     }
     fields.insert("composer".into(), attrs.get("composer").filter(|v| v.is_string()).cloned().unwrap_or(Value::Null));
-    for key in ["roman_hanging", "hyphenate"] {
+    for key in ["roman_hanging", "hyphenate", "bunri_kinshi", "korean_line_break_anywhere"] {
         fields.insert(key.into(), attrs.get(key).filter(|v| v.is_boolean()).cloned().unwrap_or(Value::Null));
     }
     let hyphenation = attrs.get("hyphenation");
@@ -174,6 +255,7 @@ pub(crate) fn fields_from_attrs(attrs: &Map<String, Value>, unit: Unit) -> Map<S
     }
     fields.insert("auto_leading".into(), number_field(justification.and_then(|j| j.get("auto_leading"))));
     fields.insert("single_word".into(), justification.and_then(|j| j.get("single_word")).filter(|v| v.is_string()).cloned().unwrap_or(Value::Null));
+    fields.insert("tabs".into(), tabs_field(attrs.get("tabs"), unit));
     fields
 }
 
@@ -292,7 +374,63 @@ pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
     let same = JUSTIFICATION_FIELDS.iter().all(|key| unchanged(key, "__resetJustification"));
     let value = if same { None } else { justification(d, &original, &original_fields)? };
     keep_or(&mut attrs, "justification", same, value);
+
+    let same = unchanged("tabs", "__resetTabs");
+    let value = if same { None } else { tab_stops(d, &original, unit)? };
+    keep_or(&mut attrs, "tabs", same, value);
+
+    for key in ["bunri_kinshi", "korean_line_break_anywhere"] {
+        let same = unchanged(key, "__resetEastAsian");
+        keep_or(&mut attrs, key, same, switch(key));
+    }
     Ok(attrs)
+}
+
+/// The `tabs` attribute the Tabs section sets: none while the list is unset; otherwise its stops
+/// sorted by position. Of stops within 1e-6 pt of each other, the one edited last (`__tabEdited`)
+/// is kept, else the first in the list. A stop as the style has it is kept without a check, and any
+/// other is read by [`read_stop`]. An error when the list has more than 256 stops and more than the
+/// style has.
+fn tab_stops(d: &Dialog, original: &Map<String, Value>, unit: Unit) -> Result<Option<Value>, String> {
+    let rows = match d.fields.get("tabs") {
+        None | Some(Value::Null) => return Ok(None),
+        Some(Value::Array(rows)) => rows,
+        Some(_) => {
+            let key = "tabs";
+            return Err(format!("`{key}` must be an array"));
+        }
+    };
+    let kept: Vec<TabStop> =
+        original.get("tabs").and_then(Value::as_array).into_iter().flatten().filter_map(|s| serde_json::from_value(s.clone()).ok()).collect();
+    let max = TabStop::MAX_STOPS;
+    if rows.len() > max.max(kept.len()) {
+        return Err(format!("at most {max} tab stops"));
+    }
+    let label = caption(if d.bool("__vertical") { tl!("Y:") } else { tl!("X:") });
+    let kept_rows: Vec<Value> = kept.iter().map(|s| stop_field(s, unit)).collect();
+    let mut stops = Vec::with_capacity(rows.len());
+    for row in rows {
+        match kept_rows.iter().position(|k| k == row) {
+            Some(i) => stops.push(kept[i].clone()),
+            None => stops.push(read_stop(row, unit, label)?),
+        }
+    }
+    let edited = d.fields.get("__tabEdited").and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok());
+    let mut order: Vec<usize> = (0..stops.len()).collect();
+    order.sort_by(|&a, &b| stops[a].position.total_cmp(&stops[b].position).then(a.cmp(&b)));
+    let mut keep: Vec<usize> = Vec::with_capacity(order.len());
+    for i in order {
+        match keep.last_mut() {
+            Some(last) if (stops[*last].position - stops[i].position).abs() < 1e-6 => {
+                if Some(i) == edited {
+                    *last = i;
+                }
+            }
+            _ => keep.push(i),
+        }
+    }
+    let stops: Vec<TabStop> = keep.into_iter().map(|i| stops[i].clone()).collect();
+    Ok(Some(serde_json::to_value(stops).map_err(|e| e.to_string())?))
 }
 
 /// The `hyphenation` attribute the Hyphenation fields set: none when every field is empty or
@@ -416,18 +554,36 @@ fn reset_justification(d: &mut Dialog) {
     }
 }
 
+/// Reset Panel in Tabs: the tab stops become unset, which leaves `tabs` out of the style.
+fn reset_tabs(d: &mut Dialog) {
+    d.fields.insert("__resetTabs".into(), json!(true));
+    d.fields.insert("tabs".into(), Value::Null);
+    d.fields.remove("__tabEdited");
+    d.fields.insert("__tabSel".into(), json!(0));
+}
+
+/// Reset Panel in East Asian Composition Settings: Bunri-Kinshi and Korean Line Break Anywhere
+/// become unset.
+fn reset_east_asian(d: &mut Dialog) {
+    d.fields.insert("__resetEastAsian".into(), json!(true));
+    d.fields.insert("bunri_kinshi".into(), Value::Null);
+    d.fields.insert("korean_line_break_anywhere".into(), Value::Null);
+}
+
 /// Whether the section `d` shows has a Reset Panel: every section but General.
 pub(crate) fn can_reset(d: &Dialog) -> bool {
-    ["basic", "composition", "hyphenation", "justification"].contains(&d.str("section").as_str())
+    ["basic", "tabs", "composition", "hyphenation", "justification", "eastAsian"].contains(&d.str("section").as_str())
 }
 
 /// Reset Panel: clear the settings of the section `d` shows.
 pub(crate) fn reset_section(d: &mut Dialog) {
     match d.str("section").as_str() {
         "basic" => reset_basic(d),
+        "tabs" => reset_tabs(d),
         "composition" => reset_composition(d),
         "hyphenation" => reset_hyphenation(d),
         "justification" => reset_justification(d),
+        "eastAsian" => reset_east_asian(d),
         _ => {}
     }
 }
@@ -449,9 +605,16 @@ pub fn reset_panel(app: &mut VectorcraftApp) -> Result<Value, String> {
 /// The section list of Paragraph Style Options and New Paragraph Style.
 pub(crate) fn section_list(ui: &mut egui::Ui, d: &mut Dialog) {
     ui.vertical(|ui| {
-        for (id, label) in
-            SECTIONS.into_iter().zip([tl!("General"), tl!("Basic Paragraph Formats"), tl!("Composition"), tl!("Hyphenation"), tl!("Justification")])
-        {
+        let labels = [
+            tl!("General"),
+            tl!("Basic Paragraph Formats"),
+            tl!("Tabs"),
+            tl!("Composition"),
+            tl!("Hyphenation"),
+            tl!("Justification"),
+            tl!("East Asian Composition Settings"),
+        ];
+        for (id, label) in SECTIONS.into_iter().zip(labels) {
             if ui.selectable_label(d.str("section") == id, label).clicked() {
                 d.fields.insert("section".into(), json!(id));
             }
@@ -529,6 +692,156 @@ pub(crate) fn basic_body(ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
+/// The editing fields of the selected tab stop, with the `tabs` entry key each one shows.
+const TAB_EDITORS: [(&str, &str); 3] = [("__tabPosition", "position"), ("__tabLeader", "leader"), ("__tabAlignOn", "alignOn")];
+
+/// Tabs: the selected stop's Alignment, X (Y in vertical type), Leader and Align On, which only a
+/// decimal stop uses; Add ([`add_tab`]), Delete Tab ([`delete_tab`]) and Clear All Tabs
+/// ([`clear_tabs`]); and the list of stops, one row each, a click on which selects its stop, which
+/// scrolls when it is taller than 160 points. A change to a field makes its stop the one edited last.
+pub(crate) fn tabs_body(ui: &mut egui::Ui, d: &mut Dialog) {
+    let vertical = d.bool("__vertical");
+    let (mut rows, mut sel, _) = tab_rows(d);
+    let mut changed = false;
+    let has = sel < rows.len();
+    let shown = TAB_EDITORS.map(|(_, key)| rows.get(sel).and_then(|r| r.get(key)).and_then(Value::as_str).unwrap_or("").to_string());
+    for ((field, _), text) in TAB_EDITORS.iter().zip(&shown) {
+        d.fields.insert((*field).into(), json!(text));
+    }
+    let align = rows.get(sel).and_then(|r| r.get("align")).and_then(Value::as_str).unwrap_or("left").to_string();
+    egui::Grid::new("paragraph-style-tabs").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
+        let row = ui.label(tl!("Alignment:"));
+        let names: Vec<&str> = TAB_ALIGNS.iter().map(|(a, _)| crate::panels::tabs::align_name(*a, vertical)).collect();
+        let shown = TAB_ALIGNS.iter().position(|(_, key)| *key == align).and_then(|i| names.get(i).copied()).unwrap_or("");
+        ui.add_enabled_ui(has, |ui| {
+            ui.label_inputs_by(row.id, |ui| {
+                if let Some(i) = crate::widgets::dropdown(ui, (KIND, "tab_align"), shown, &names, 190.0)
+                    && let (Some(r), Some((_, key))) = (rows.get_mut(sel).and_then(Value::as_object_mut), TAB_ALIGNS.get(i))
+                {
+                    r.insert("align".into(), json!(key));
+                    changed = true;
+                }
+            });
+        });
+        ui.end_row();
+        field_row(ui, d, "__tabPosition", if vertical { tl!("Y:") } else { tl!("X:") }, "", has);
+        field_row(ui, d, "__tabLeader", tl!("Leader:"), "", has);
+        field_row(ui, d, "__tabAlignOn", tl!("Align On:"), "", has && align == "decimal");
+    });
+    for ((field, key), was) in TAB_EDITORS.iter().zip(&shown) {
+        let typed = d.str(field);
+        if let Some(r) = rows.get_mut(sel).and_then(Value::as_object_mut)
+            && typed != *was
+        {
+            r.insert((*key).into(), json!(typed));
+            changed = true;
+        }
+    }
+    if changed {
+        d.fields.insert("tabs".into(), Value::Array(rows.clone()));
+        d.fields.insert("__tabEdited".into(), json!(sel));
+    }
+    ui.add_space(6.0);
+    let (mut add, mut delete, mut clear) = (false, false, false);
+    let can_add = new_tab_position(&rows, unit_of(d)).is_some();
+    ui.horizontal(|ui| {
+        add = ui.add_enabled(can_add, egui::Button::new(tl!("Add"))).clicked();
+        delete = ui.add_enabled(has, egui::Button::new(tl!("Delete Tab"))).clicked();
+        clear = ui.add_enabled(!rows.is_empty(), egui::Button::new(tl!("Clear All Tabs"))).clicked();
+    });
+    ui.add_space(4.0);
+    let reveal = d.fields.remove("__tabScroll").is_some();
+    egui::ScrollArea::vertical().id_salt("paragraph-style-tab-list").max_height(160.0).auto_shrink([false, true]).show(ui, |ui| {
+        for (i, r) in rows.iter().enumerate() {
+            let a = r.get("align").and_then(Value::as_str).and_then(|key| TAB_ALIGNS.iter().find(|(_, k)| *k == key)).map(|(a, _)| *a);
+            let name = a.map_or("", |a| crate::panels::tabs::align_name(a, vertical));
+            let mut text = format!("{}    {name}", r.get("position").and_then(Value::as_str).unwrap_or(""));
+            if let Some(leader) = r.get("leader").and_then(Value::as_str).filter(|l| !l.is_empty()) {
+                text += &format!("    {leader}");
+            }
+            let row = ui.selectable_label(i == sel, text);
+            if reveal && i == sel {
+                ui.scroll_to_rect_animation(row.rect, None, egui::style::ScrollAnimation::none());
+            }
+            if row.clicked() {
+                sel = i;
+            }
+        }
+    });
+    d.fields.insert("__tabSel".into(), json!(sel));
+    if add {
+        add_tab(d);
+    } else if delete {
+        delete_tab(d);
+    } else if clear {
+        clear_tabs(d);
+    }
+}
+
+/// The `tabs` entries of `d` (none while unset), the selected one's index (`__tabSel`, at most the
+/// last) and the index of the one edited last (`__tabEdited`).
+fn tab_rows(d: &Dialog) -> (Vec<Value>, usize, Option<usize>) {
+    let rows: Vec<Value> = d.fields.get("tabs").and_then(Value::as_array).cloned().unwrap_or_default();
+    let index = |key: &str| d.fields.get(key).and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok());
+    let sel = index("__tabSel").unwrap_or(0).min(rows.len().saturating_sub(1));
+    (rows, sel, index("__tabEdited"))
+}
+
+/// The position (pt) Add gives a new stop among `rows`: half an inch past the furthest stop that
+/// reads, half an inch when none does, and at most 100000 pt. `None` while the list holds 256 stops
+/// or when a stop already sits at that position.
+fn new_tab_position(rows: &[Value], unit: Unit) -> Option<f64> {
+    if rows.len() >= TabStop::MAX_STOPS {
+        return None;
+    }
+    let positions: Vec<f64> = rows.iter().filter_map(|r| stop_position(r, unit)).collect();
+    let furthest = positions.iter().copied().filter(|pt| (0.0..=TabStop::MAX_POSITION).contains(pt)).reduce(f64::max);
+    let position = furthest.map_or(DEFAULT_TAB_INTERVAL, |pt| pt + DEFAULT_TAB_INTERVAL).min(TabStop::MAX_POSITION);
+    (!positions.iter().any(|pt| (pt - position).abs() < 1e-6)).then_some(position)
+}
+
+/// Add in Tabs: a left stop at [`new_tab_position`], which becomes the selected and last edited
+/// stop and is scrolled into view in the list. Nothing when that gives no position.
+pub(crate) fn add_tab(d: &mut Dialog) {
+    let unit = unit_of(d);
+    let (mut rows, _, _) = tab_rows(d);
+    let Some(position) = new_tab_position(&rows, unit) else { return };
+    rows.push(stop_field(&TabStop { position, align: TabAlign::Left, leader: String::new(), align_on: '.' }, unit));
+    let at = rows.len() - 1;
+    d.fields.insert("tabs".into(), Value::Array(rows));
+    d.fields.insert("__tabSel".into(), json!(at));
+    d.fields.insert("__tabEdited".into(), json!(at));
+    d.fields.insert("__tabScroll".into(), json!(true));
+}
+
+/// Delete Tab in Tabs: remove the selected stop; the next one (or the last) becomes selected.
+pub(crate) fn delete_tab(d: &mut Dialog) {
+    let (mut rows, sel, edited) = tab_rows(d);
+    if sel >= rows.len() {
+        return;
+    }
+    rows.remove(sel);
+    match edited {
+        Some(e) if e == sel => {
+            d.fields.remove("__tabEdited");
+        }
+        Some(e) if e > sel => {
+            d.fields.insert("__tabEdited".into(), json!(e - 1));
+        }
+        _ => {}
+    }
+    d.fields.insert("__tabSel".into(), json!(sel.min(rows.len().saturating_sub(1))));
+    d.fields.insert("tabs".into(), Value::Array(rows));
+    d.fields.insert("__tabScroll".into(), json!(true));
+}
+
+/// Clear All Tabs in Tabs: an empty list of stops, which the style then sets.
+pub(crate) fn clear_tabs(d: &mut Dialog) {
+    d.fields.insert("tabs".into(), json!([]));
+    d.fields.insert("__tabSel".into(), json!(0));
+    d.fields.remove("__tabEdited");
+}
+
 /// Composition: the Single-line or Every-line Composer, and Roman Hanging Punctuation.
 pub(crate) fn composition_body(ui: &mut egui::Ui, d: &mut Dialog) {
     egui::Grid::new("paragraph-style-composition").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
@@ -597,6 +910,18 @@ pub(crate) fn justification_body(ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
+/// East Asian Composition Settings: Bunri-Kinshi, and Korean Composition Settings › Korean Line
+/// Break Anywhere.
+pub(crate) fn east_asian_body(ui: &mut egui::Ui, d: &mut Dialog) {
+    egui::Grid::new("paragraph-style-bunri-kinshi").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
+        switch(ui, d, "bunri_kinshi", tl!("Bunri-Kinshi"), true);
+    });
+    ui.strong(tl!("Korean Composition Settings"));
+    egui::Grid::new("paragraph-style-east-asian").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
+        switch(ui, d, "korean_line_break_anywhere", tl!("Korean Line Break Anywhere"), true);
+    });
+}
+
 /// The heading of a spacing column, for the accessible name of its field.
 fn column_name(column: &str) -> &'static str {
     match column {
@@ -624,9 +949,11 @@ pub(crate) fn general_body(ui: &mut egui::Ui, d: &mut Dialog) {
 pub(crate) fn section_body(ui: &mut egui::Ui, d: &mut Dialog) {
     match d.str("section").as_str() {
         "basic" => basic_body(ui, d),
+        "tabs" => tabs_body(ui, d),
         "composition" => composition_body(ui, d),
         "hyphenation" => hyphenation_body(ui, d),
         "justification" => justification_body(ui, d),
+        "eastAsian" => east_asian_body(ui, d),
         _ => general_body(ui, d),
     }
 }

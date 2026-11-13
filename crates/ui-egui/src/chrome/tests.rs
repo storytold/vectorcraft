@@ -461,6 +461,65 @@ fn a_clipped_status_message_shows_in_full_on_hover() {
     assert_eq!(hovered.iter().filter(|t| t.text.starts_with("Saved")).count(), 1, "a message that fits has no tooltip: {hovered:?}");
 }
 
+/// The status message of an open with several notes lists them all on hover, and screen readers
+/// receive them after the message, while the status bar shows that message. A later message
+/// leaves the list out, and so does an open with one note.
+#[test]
+fn the_message_of_an_open_with_several_notes_lists_them_on_hover() {
+    let (mut app, ctx) = status_readout_app();
+    ctx.enable_accesskit();
+    let notes = vec!["the file's layers weren't read".to_string(), "a brush wasn't read".to_string()];
+    app.ui.status = crate::io::opened_with_notes(2, &notes[0]);
+    app.ui.status_notes = Some((app.ui.status.clone(), notes));
+    let listed = "• the file's layers weren't read\n• a brush wasn't read";
+    let full = format!("{}\n{listed}", app.ui.status);
+    let (texts, nodes, hovered) = bar_hover(&mut app, &ctx, 1400.0, "Opened", super::status_bar);
+    assert!(!status_text(&texts, "Opened").elided);
+    assert!(nodes.iter().any(|n| n.value() == Some(full.as_str())), "screen readers receive the notes: {nodes:?}");
+    assert!(hovered.iter().any(|t| t.text == full), "the tooltip lists the notes: {hovered:?}");
+
+    app.ui.status = "Saved recovery data for Untitled-1".to_owned();
+    let (_, nodes, hovered) = bar_hover(&mut app, &ctx, 1400.0, "Saved", super::status_bar);
+    assert!(!nodes.iter().any(|n| n.value().is_some_and(|v| v.contains("• "))), "{nodes:?}");
+    assert_eq!(hovered.iter().filter(|t| t.text.starts_with("Saved")).count(), 1, "no tooltip: {hovered:?}");
+
+    // One note is the message itself: no list.
+    app.ui.status = crate::io::opened_with_notes(1, "a brush wasn't read");
+    app.ui.status_notes = Some((app.ui.status.clone(), vec!["a brush wasn't read".to_string()]));
+    let (_, nodes, hovered) = bar_hover(&mut app, &ctx, 1400.0, "Opened", super::status_bar);
+    assert!(!nodes.iter().any(|n| n.value().is_some_and(|v| v.contains("• "))), "{nodes:?}");
+    assert_eq!(hovered.iter().filter(|t| t.text.starts_with("Opened")).count(), 1, "no tooltip: {hovered:?}");
+}
+
+/// The list has at most 30 notes, then how many more there are.
+#[test]
+fn the_hover_lists_thirty_notes_and_counts_the_rest() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let notes: Vec<String> = (1..=32).map(|i| format!("note {i}")).collect();
+    let listed = super::status_bar::listed_notes(&notes, usize::MAX);
+    let lines: Vec<&str> = listed.lines().collect();
+    assert_eq!((lines.len(), lines[0], lines[29], lines[30]), (31, "• note 1", "• note 30", "… (+2)"));
+    assert_eq!(super::status_bar::listed_notes(&notes[..2], usize::MAX), "• note 1\n• note 2");
+    assert_eq!(super::status_bar::listed_notes(&notes[..3], 1), "• note 1\n… (+2)");
+}
+
+/// A hover with more long notes than the window can show lists the ones that fit and how many
+/// more there are, inside the window. A window 300 points tall is shorter than the main window's
+/// smallest size (500 points) at UI Scaling 1.5.
+#[test]
+fn the_hover_of_many_notes_stays_inside_a_small_window() {
+    let (mut app, ctx) = status_readout_app();
+    let notes: Vec<String> = (1..=32).map(|i| format!("note {i}: {}", "this file's PostScript couldn't be read ".repeat(3))).collect();
+    app.ui.status = crate::io::opened_with_notes(notes.len(), &notes[0]);
+    app.ui.status_notes = Some((app.ui.status.clone(), notes));
+    let (_, _, hovered) = bar_hover(&mut app, &ctx, 700.0, "Opened", super::status_bar);
+    let tip: Vec<_> = hovered.iter().filter(|t| t.text.contains("\n• note 1:")).collect();
+    let [tip] = &tip[..] else { panic!("one tooltip lists the notes: {hovered:?}") };
+    assert!(tip.bounds.top() >= 0.0 && tip.bounds.bottom() <= 300.0 && tip.bounds.right() <= 700.0, "{tip:?}");
+    let last = tip.text.lines().last().unwrap_or_default();
+    assert!(last.starts_with("… (+") && !tip.text.contains("• note 30:"), "{last:?}");
+}
+
 /// The Help Bar's hint ends in an ellipsis when it is wider than the window and shows in full on
 /// hover, in a tooltip that wraps within the window (#6622). The Dimension tool's hint is wider
 /// than the smallest main window (800 points); 400 points is that window at UI Scaling 2.0.
@@ -2610,6 +2669,53 @@ fn menus_stop_above_a_control_bar_docked_at_the_bottom() {
     assert!(f < bar_top - 1.0, "the status and hint bars show above the Control bar: menus stop above them, {f}");
 }
 
+/// With the Artboard tool in use, the Control bar shows the Align buttons after the artboard
+/// controls while it has room, and the Distribute buttons for two or more selected artboards with
+/// Align to Artboard and three or more with Align to Selection. A
+/// click aligns the selected artboards as the Align panel's button does. The group is left out
+/// while the panel menu has it off.
+#[test]
+fn the_control_bar_aligns_the_selected_artboards_with_the_artboard_tool() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("artboard.new", json!({"x": 150, "y": 40, "width": 60, "height": 80})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(2400.0, 300.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    let button = |app: &mut crate::VectorcraftApp, name: &str| {
+        frame(app, vec![]);
+        let nodes = frame(app, vec![]);
+        let n = nodes.iter().find(|(_, n)| n.label() == Some(name)).map(|(_, n)| n)?;
+        n.bounds().map(|b| egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)))
+    };
+    app.session.set_tool_option("selected", &json!([1]));
+    assert!(button(&mut app, "Vertical Align Top").is_some(), "one artboard: the Align buttons");
+    assert!(button(&mut app, "Horizontal Distribute Left").is_none(), "one artboard: no Distribute buttons");
+    app.session.set_tool_option("selected", &json!([1, 0]));
+    assert!(button(&mut app, "Horizontal Distribute Left").is_none(), "two artboards, Align to Selection: no Distribute buttons");
+    app.ui.align_to = crate::panels::align::AlignTo::Artboard;
+    assert!(button(&mut app, "Horizontal Distribute Left").is_some(), "two artboards, Align to Artboard: the Distribute buttons");
+    app.ui.align_to = crate::panels::align::AlignTo::Selection;
+    let r = button(&mut app, "Vertical Align Top").expect("Vertical Align Top");
+    let press =
+        |pressed| egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    for events in [vec![egui::Event::PointerMoved(r.center()), press(true)], vec![press(false)]] {
+        frame(&mut app, events);
+    }
+    let tops: Vec<f64> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect.y0).collect();
+    assert_eq!(tops, [0.0, 0.0], "{}", app.ui.status);
+    app.run("window.control.options", json!({"group": "alignDistribute", "visible": false})).unwrap();
+    assert!(button(&mut app, "Vertical Align Top").is_none(), "the group is off");
+}
+
 /// Two or more selected objects show all six Distribute Objects buttons in the Control bar;
 /// a single object keeps the bar as it was. A click distributes as the Align panel's button does.
 #[test]
@@ -2661,6 +2767,109 @@ fn the_control_bar_shows_the_distribute_buttons_for_two_or_more_objects() {
         app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().x0
     };
     assert_eq!((left(&app, &a), left(&app, &b), left(&app, &c)), (10.0, 105.0, 200.0), "{}", app.ui.status);
+}
+
+/// The Control bar's Align To menu follows its Align buttons. It shows the Align panel's Align To
+/// choice (Artboard for one object, which the buttons align to the artboard) and screen readers
+/// get it as the value of a combo box named "Align To:". Its menu checks that choice, has Align to
+/// Key Object off while no key object can be made, and a pick chooses as the Align panel does:
+/// Artboard and Selection are stored with the UI state and let go of the key object, and Key
+/// Object makes the topmost selected object the key, keeping the stored choice. The Align
+/// buttons then align to the choice.
+#[test]
+fn the_control_bar_align_to_menu_chooses_what_align_aligns_to() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 40, "width": 30, "height": 20})).unwrap()["id"].clone()
+    };
+    let (a, b) = (rect(&mut app, 50.0), rect(&mut app, 150.0));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    type Nodes = Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>;
+    // A control by its name; a menu row's name follows its check column.
+    let find = |nodes: &Nodes, name: &str| {
+        nodes.iter().find(|(_, n)| n.label().is_some_and(|l| l.trim_start_matches(['✓', ' ']) == name)).map(|(_, n)| n.clone())
+    };
+    let center = |n: &egui::accesskit::Node| {
+        let b = n.bounds().unwrap_or_else(|| panic!("{n:?}"));
+        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
+    };
+    let click = |app: &mut crate::VectorcraftApp, at: egui::Pos2| {
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(app, vec![press(false)]);
+        frame(app, vec![]);
+        frame(app, vec![])
+    };
+    let menu = |app: &mut crate::VectorcraftApp| {
+        frame(app, vec![]);
+        let nodes = frame(app, vec![]);
+        find(&nodes, "Align To:").unwrap_or_else(|| panic!("the Control bar has the Align To menu"))
+    };
+    // Opens the menu, checks its rows and picks `pick`, or closes it with Escape.
+    let choose = |app: &mut crate::VectorcraftApp, checked: &str, key_on: bool, pick: Option<&str>| {
+        let at = center(&menu(app));
+        let nodes = click(app, at);
+        for name in ["Align to Selection", "Align to Key Object", "Align to Artboard"] {
+            let row = find(&nodes, name).unwrap_or_else(|| panic!("the menu lists {name}"));
+            assert_eq!(row.label().is_some_and(|l| l.starts_with('✓')), name == checked, "{name} checked");
+            assert_eq!(row.is_disabled(), name == "Align to Key Object" && !key_on, "{name} off");
+        }
+        let nodes = match pick {
+            Some(pick) => click(app, center(&find(&nodes, pick).unwrap_or_else(|| panic!("{pick}")))),
+            None => {
+                let escape =
+                    |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+                frame(app, vec![escape(true)]);
+                frame(app, vec![escape(false)]);
+                frame(app, vec![])
+            }
+        };
+        assert!(find(&nodes, "Align to Artboard").is_none(), "the menu closes");
+    };
+    let key = |app: &crate::VectorcraftApp| app.session.active().unwrap().selection.key;
+    let x0 = |app: &crate::VectorcraftApp, id: &serde_json::Value| {
+        app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().x0
+    };
+
+    // One object: the buttons align it to the artboard, and Align to Key Object is off.
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    let m = menu(&mut app);
+    assert_eq!(m.role(), egui::accesskit::Role::ComboBox);
+    assert_eq!(m.value(), Some("Align to Artboard"), "one object shows Artboard");
+    choose(&mut app, "Align to Artboard", false, None);
+    assert_eq!(key(&app), None);
+
+    // Two objects: the stored choice, Selection.
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert_eq!(menu(&mut app).value(), Some("Align to Selection"));
+    choose(&mut app, "Align to Selection", true, Some("Align to Artboard"));
+    assert_eq!(app.ui.align_to, crate::panels::align::AlignTo::Artboard, "the choice the Align panel shows");
+    assert_eq!(menu(&mut app).value(), Some("Align to Artboard"));
+    let left = find(&frame(&mut app, vec![]), "Horizontal Align Left").unwrap_or_else(|| panic!("Horizontal Align Left"));
+    click(&mut app, center(&left));
+    assert_eq!((x0(&app, &a), x0(&app, &b)), (0.0, 0.0), "aligned to the artboard: {}", app.ui.status);
+
+    // Key Object makes the topmost the key and keeps the stored choice.
+    choose(&mut app, "Align to Artboard", true, Some("Align to Key Object"));
+    assert_eq!(key(&app), Some(vectorcraft_doc::NodeId(b.as_u64().unwrap())), "the topmost object is the key");
+    assert_eq!(app.ui.align_to, crate::panels::align::AlignTo::Artboard, "the stored choice stays");
+    assert_eq!(menu(&mut app).value(), Some("Align to Key Object"));
+
+    // Selection lets go of the key and is stored.
+    choose(&mut app, "Align to Key Object", true, Some("Align to Selection"));
+    assert_eq!(key(&app), None, "the key object is let go");
+    assert_eq!(app.ui.align_to, crate::panels::align::AlignTo::Selection);
+    assert_eq!(menu(&mut app).value(), Some("Align to Selection"));
 }
 
 /// The Control bar shows the Global Edit Options dropdown while Start Global Edit can run. Its
@@ -2765,7 +2974,8 @@ fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
         crate::theme::install_fonts(&ctx);
         let mut seen = false;
         let mut menu_seen = false;
-        // The Align group, then for two objects the Distribute group (#5372): each by its controls.
+        // The Align group and the Align To menu, then for two objects the Distribute group (#5372):
+        // each by its controls.
         let mut groups: Vec<(&str, Vec<&str>)> = vec![(
             "Align",
             vec![
@@ -2778,6 +2988,7 @@ fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
                 "Vertical Align Bottom",
             ],
         )];
+        groups.push(("Align To", vec!["Align To:"]));
         if count == 2 {
             groups.push((
                 "Distribute",

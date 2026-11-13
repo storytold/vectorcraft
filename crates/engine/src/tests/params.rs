@@ -400,6 +400,141 @@ fn stroke_set_refuses_an_unknown_key() {
     }
 }
 
+/// An object id given as something other than a whole number (`"5"`, `-1`) is refused as such,
+/// naming its key, not as a missing id; an id left out is still a missing one.
+#[test]
+fn a_malformed_object_id_is_not_reported_as_missing() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = undo(&s);
+    let points = json!([[0, 0], [10, 10], [20, 0]]);
+    for bad in [json!("5"), json!(-1)] {
+        let id = || json!({ "id": bad });
+        let with = |extra: serde_json::Value| {
+            let mut p = id();
+            p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+            p
+        };
+        for (cmd, p, key) in [
+            ("stroke.widthPoint.set", id(), "id"),
+            ("stroke.widthPoint.copy", id(), "id"),
+            ("stroke.widthPoint.remove", id(), "id"),
+            ("path.curvatureEdit", id(), "id"),
+            ("path.removeAnchor", id(), "id"),
+            ("path.convertAnchor", id(), "id"),
+            ("path.reshapeSegment", id(), "id"),
+            ("path.split", id(), "id"),
+            ("path.appendAnchor", id(), "id"),
+            ("path.close", id(), "id"),
+            ("path.setHandle", id(), "id"),
+            ("path.moveAnchor", id(), "id"),
+            ("path.setAnchors", id(), "id"),
+            ("path.reshape", id(), "id"),
+            ("path.insertAnchor", id(), "id"),
+            ("path.freehand", json!({"points": points, "extend": {"id": bad}}), "id"),
+            ("path.freehand", json!({"points": points, "redraw": {"id": bad}}), "id"),
+            ("document.node", id(), "id"),
+            ("layer.target", id(), "id"),
+            ("layer.setCurrent", id(), "id"),
+            ("layer.selectAll", id(), "id"),
+            ("layer.move", with(json!({"target": 1})), "id"),
+            ("layer.move", json!({"ids": [1], "target": bad}), "target"),
+            ("node.move", id(), "id"),
+            ("node.move", json!({"id": 1, "parent": bad}), "parent"),
+            ("text.reshapeArea", with(json!({"anchors": []})), "id"),
+            ("text.reshapeArea", json!({"items": [{"id": bad, "anchors": []}]}), "id"),
+            ("text.reshapePath", id(), "id"),
+            ("text.setPathHandle", id(), "id"),
+            ("text.editRange", id(), "id"),
+            ("text.startList", id(), "id"),
+            ("text.getRange", id(), "id"),
+            ("text.setGlyphAlternate", id(), "id"),
+            ("text.glyphAlternates", id(), "id"),
+            ("text.touchType", id(), "id"),
+            ("text.discardEmpty", id(), "id"),
+            ("text.createInPath", json!({"path": bad}), "path"),
+            ("object.envelope.setMeshPoint", id(), "id"),
+            ("object.mesh.setPointColor", with(json!({"index": 0})), "id"),
+            ("object.mesh.movePoint", with(json!({"index": 0, "x": 0, "y": 0})), "id"),
+            ("object.mesh.movePoints", json!({"items": [{"id": bad, "index": 0}]}), "id"),
+            ("object.mesh.addLine", with(json!({"x": 0, "y": 0})), "id"),
+            ("object.mesh.deletePoint", with(json!({"index": 0})), "id"),
+            ("object.slice.setRect", id(), "id"),
+            ("appearance.transfer", json!({"source": bad, "target": 1}), "source"),
+            ("appearance.transfer", json!({"source": 1, "target": bad}), "target"),
+            ("appearance.copyFrom", json!({"source": bad}), "source"),
+            ("livePaint.strokeEdge", json!({"point": [0, 0], "group": bad}), "group"),
+            ("livePaint.fill", json!({"point": [0, 0], "group": bad}), "group"),
+            ("livePaint.info", json!({"group": bad}), "group"),
+            ("livePaint.info", id(), "id"),
+            ("select.magicWand", id(), "id"),
+        ] {
+            let e = s.execute(cmd, &p).unwrap_err().to_string();
+            // `layer.move` checks an `id` that stands in for `ids` before it runs.
+            let named = e.contains(&format!("`{key}` must be a whole number")) || (cmd == "layer.move" && e.contains("invalid object id"));
+            assert!(named, "{cmd} {p}: {e}");
+        }
+    }
+    for cmd in ["path.close", "layer.target", "text.reshapePath", "object.mesh.movePoint", "select.magicWand"] {
+        let e = s.execute(cmd, &json!({})).unwrap_err().to_string();
+        assert!(e.contains("missing"), "{cmd}: {e}");
+    }
+    assert_eq!(undo(&s), before);
+}
+
+/// A required number given as something other than a number (`"40"`, `true`, `[]`, `{}`) is refused
+/// as the wrong type, naming its key and showing the value as given, not as a missing number; one left
+/// out or given as null is still a missing number. Neither changes the document or records an undo step.
+#[test]
+fn a_malformed_required_number_is_not_reported_as_missing() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let with = |base: &serde_json::Value, key: &str, v: Option<serde_json::Value>| {
+        let mut p = base.clone();
+        let o = p.as_object_mut().unwrap();
+        match v {
+            Some(v) => o.insert(key.into(), v),
+            None => o.remove(key),
+        };
+        p
+    };
+    let cases = [
+        ("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}), "x"),
+        ("edit.colors.saturate", json!({"intensity": 40}), "intensity"),
+        ("object.envelope.setMeshPoint", json!({"id": 1, "index": 0, "x": 0, "y": 0}), "index"),
+        ("object.envelope.setMeshPoint", json!({"id": 1, "index": 0, "x": 0, "y": 0}), "x"),
+        ("object.mesh.movePoint", json!({"id": 1, "index": 0, "x": 0, "y": 0}), "y"),
+        ("guide.add", json!({"pos": 40}), "pos"),
+    ];
+    for (cmd, base, key) in &cases {
+        for (v, shown) in [(json!("40"), "\"40\""), (json!(true), "true"), (json!([]), "[]"), (json!({}), "{}")] {
+            let p = with(base, key, Some(v));
+            match s.execute(cmd, &p) {
+                Err(EngineError::BadParams { cmd: c, msg }) => {
+                    assert_eq!((c.as_str(), msg), (*cmd, format!("`{key}` must be a number, not {shown}")), "{p}");
+                }
+                other => panic!("{cmd} {p}: {other:?}"),
+            }
+        }
+        for p in [with(base, key, None), with(base, key, Some(json!(null)))] {
+            match s.execute(cmd, &p) {
+                Err(EngineError::BadParams { cmd: c, msg }) => assert_eq!((c.as_str(), msg), (*cmd, format!("missing number `{key}`")), "{p}"),
+                other => panic!("{cmd} {p}: {other:?}"),
+            }
+        }
+    }
+    assert_eq!(s.doc().unwrap().doc, doc);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    // A whole JSON number is a number for a fractional parameter.
+    s.execute("guide.add", &json!({"pos": 40})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+}
+
 /// A command that takes the keys of one that isn't checked yet isn't checked either.
 #[test]
 fn a_reference_to_an_unchecked_command_is_unchecked() {

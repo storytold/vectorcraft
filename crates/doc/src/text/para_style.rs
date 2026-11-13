@@ -237,6 +237,10 @@ pub struct ParaStyle {
     /// Kinsoku Shori Type (Paragraph panel menu): how a line keeps those characters off its start
     /// and end, by pushing them in onto the line or out to the next one. No effect without kinsoku.
     pub kinsoku_type: KinsokuShoriType,
+    /// Bunri-Kinshi (Paragraph panel menu): a line never breaks inside an inseparable pair (two em
+    /// dashes, two ellipses, two two-dot leaders, a vertical kana repeat mark's two halves). Kept
+    /// with kinsoku None, where it has no effect. Off by default.
+    pub bunri_kinshi: bool,
     /// Roman Hanging Punctuation (Paragraph panel menu): quotation marks, hyphens, full stops and
     /// commas starting or ending a line hang outside the margin, and asterisks, tildes, ellipses,
     /// dashes, colons and semicolons hang by half. East Asian punctuation hangs by burasagari.
@@ -244,9 +248,21 @@ pub struct ParaStyle {
     /// Insert Kashidas (Paragraph panel): justified lines lengthen their Arabic words with
     /// kashidas before they widen their word spaces.
     pub kashida: Kashida,
+    /// Korean Line Break Anywhere (Paragraph panel menu): a line may break between any two Hangul
+    /// syllables. Off, a Korean word (the characters between spaces, when any of them is Hangul)
+    /// breaks only at its spaces and punctuation, or where it is wider than the line. New type and
+    /// imported text have it off; paragraphs saved before it existed open with it on, the line
+    /// breaks they were laid out with.
+    pub korean_line_break_anywhere: bool,
 }
 
 impl ParaStyle {
+    /// The attributes a text object saved without `para` reads with: the defaults, with Korean
+    /// Line Break Anywhere on, as a saved paragraph without that field reads.
+    pub(crate) fn omitted() -> Self {
+        Self { korean_line_break_anywhere: true, ..Self::default() }
+    }
+
     /// Keeps the indents and the space before and after to -[`crate::MAX_COORD`] to
     /// [`crate::MAX_COORD`], and the tab stop positions to 0 to 100,000 pt, the range
     /// `text.tabs.set` takes. A value outside its range becomes the nearer end, and one that is
@@ -327,9 +343,15 @@ struct ParaStyleFile {
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     kinsoku_type: KinsokuShoriType,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    bunri_kinshi: bool,
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     roman_hanging: bool,
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     kashida: Kashida,
+    /// Written only when off: a paragraph saved without it was laid out breaking between Hangul
+    /// syllables.
+    #[serde(default = "crate::yes", skip_serializing_if = "crate::skip::is_true")]
+    korean_line_break_anywhere: bool,
 }
 
 impl From<ParaStyle> for ParaStyleFile {
@@ -359,8 +381,10 @@ impl From<ParaStyle> for ParaStyleFile {
             burasagari,
             kinsoku,
             kinsoku_type,
+            bunri_kinshi,
             roman_hanging,
             kashida,
+            korean_line_break_anywhere,
             ..
         } = p;
         Self {
@@ -384,8 +408,10 @@ impl From<ParaStyle> for ParaStyleFile {
             burasagari,
             kinsoku,
             kinsoku_type,
+            bunri_kinshi,
             roman_hanging,
             kashida,
+            korean_line_break_anywhere,
         }
     }
 }
@@ -413,8 +439,10 @@ impl From<ParaStyleFile> for ParaStyle {
             burasagari,
             kinsoku,
             kinsoku_type,
+            bunri_kinshi,
             roman_hanging,
             kashida,
+            korean_line_break_anywhere,
             ..
         } = f;
         Self {
@@ -437,8 +465,10 @@ impl From<ParaStyleFile> for ParaStyle {
             burasagari,
             kinsoku,
             kinsoku_type,
+            bunri_kinshi,
             roman_hanging,
             kashida,
+            korean_line_break_anywhere,
         }
     }
 }

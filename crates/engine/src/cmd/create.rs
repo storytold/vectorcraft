@@ -109,7 +109,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, rotation?: deg clockwise about x, y (0: level), vertical?: bool = false, size?: pt, font?: family, style? (default Regular, or the family's closest style when it has no Regular), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText|block, fitMinPercent?, wordGap?, lineGap? (as text.areaOptions)}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits), warning?: text (the font or style given isn't available: the type is drawn in the fallback font or the family's closest style)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
+            "{x, y, text, rotation?: deg clockwise about x, y (0: level), vertical?: bool = false, size?: pt 0.1..1296 (outside it: an error, and no type is made), font?: family, style? (default Regular, or the family's closest style when it has no Regular), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText|block, fitMinPercent?, wordGap?, lineGap? (as text.areaOptions)}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits), warning?: text (the font or style given isn't available: the type is drawn in the fallback font or the family's closest style)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
             has_doc,
             text_create
         ),
@@ -162,7 +162,8 @@ fn constrained_turn(s: &Session, rotation: f64) -> f64 {
     }
 }
 
-/// [`insert_look`] with the new object's bounding box turned to `bbox_angle`.
+/// [`insert_look`] with the new object's bounding box turned to `bbox_angle`. A new path or
+/// compound path is pixel-aligned while the document's Align New Objects to Pixel Grid is on.
 fn insert_look_turned(
     s: &mut Session,
     label: &str,
@@ -180,6 +181,7 @@ fn insert_look_turned(
         let id = d.alloc_id();
         let mut n = Node::new(id, kind);
         look.apply(d, &mut n);
+        super::object::align_new_object(d, &mut n);
         n.name = name;
         n.bbox_angle = bbox_angle;
         let mut into = None;
@@ -512,6 +514,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
                 n.name = Some(name.into());
                 n.blend = BlendMode::Screen;
                 n.opacity = op;
+                super::object::align_new_object(d, &mut n);
                 std::sync::Arc::new(n)
             })
             .collect();
@@ -603,6 +606,7 @@ fn grid_group(s: &mut Session, label: &str, (paths, bbox_angle): (Vec<PathData>,
                     Node::path(d.alloc_id(), pd, Appearance::default())
                 };
                 look.apply(d, &mut n);
+                super::object::align_new_object(d, &mut n);
                 n.bbox_angle = bbox_angle;
                 std::sync::Arc::new(n)
             })
@@ -735,7 +739,7 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
         check_numbers(a, &["width", "height"], "text.create")?;
     }
     let text = str_param(p, "text").unwrap_or("");
-    let mut t = TextObject::point(Point::new(x, y), text, new_type_style(s, p));
+    let mut t = TextObject::point(Point::new(x, y), text, new_type_style(s, p, "text.create")?);
     // Turned about the point (the first baseline's start, an area's top-left corner): type set
     // along a Constrain Angle.
     let rotation = if p.get("rotation").is_some() { f64_req(p, "rotation", "text.create")? } else { 0.0 };
@@ -779,12 +783,14 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The paragraph attributes new type gets (the Type tools, `text.create`): aligned to the start of
 /// each paragraph's direction (left, right for Hebrew and Arabic), Japanese punctuation composed
-/// with Line-end Punctuation Half Width and Standard burasagari. Imported text keeps its own.
+/// with Line-end Punctuation Half Width and Standard burasagari, and Korean words kept whole
+/// (Korean Line Break Anywhere off). Imported text keeps its own.
 pub(crate) fn new_type_para() -> vectorcraft_doc::ParaStyle {
     vectorcraft_doc::ParaStyle {
         justify: vectorcraft_doc::Justify::Auto,
         mojikumi: vectorcraft_doc::Mojikumi::LineEndHalf,
         burasagari: vectorcraft_doc::Burasagari::Standard,
+        korean_line_break_anywhere: false,
         ..Default::default()
     }
 }
@@ -842,11 +848,11 @@ pub(crate) fn new_area_fit(s: &Session, p: &Value, c: &str, t: &mut TextObject) 
 /// The character style new type gets: `size`, `font`, `style` and `color` from `p` (an RGB
 /// `color` in a CMYK document as [`super::paint::new_color`] stores it), else the defaults,
 /// filled with the current fill unless that is None or white (black then), in the document's
-/// language.
-pub(crate) fn new_type_style(s: &Session, p: &Value) -> CharStyle {
+/// language. A `size` outside [`super::typecmd::TYPE_SIZES`] is an error.
+pub(crate) fn new_type_style(s: &Session, p: &Value, cmd: &str) -> Result<CharStyle> {
     let mut style = CharStyle::default();
     if let Some(sz) = p.get("size").and_then(Value::as_f64) {
-        style.size = sz.clamp(0.1, 1296.0);
+        style.size = super::typecmd::given_type_size(sz, cmd)?;
     }
     if let Some(f) = str_param(p, "font") {
         style.font_family = f.to_string();
@@ -867,5 +873,5 @@ pub(crate) fn new_type_style(s: &Session, p: &Value) -> CharStyle {
     let chosen = |name: &str| vectorcraft_doc::setup::char_language(name).ok().flatten();
     let document = s.doc().ok().and_then(|d| chosen(&d.doc.setup.language));
     style.language = document.or_else(|| chosen(&s.prefs.hyphenation_language)).map(str::to_string);
-    style
+    Ok(style)
 }

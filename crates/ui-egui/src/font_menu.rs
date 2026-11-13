@@ -6,9 +6,12 @@
 //! back. The Glyphs panel and Find Font only pick a font ([`picked`]): nothing is previewed on the
 //! document. A star marks a favourite family, and the ★ filter lists only those. The Font
 //! Technology filter's Variable lists only variable font families. Preferences › Type › Enable
-//! in-menu font previews and Font Preview Size turn the samples off or size the rows. Recently
-//! used families appear first, in the order they were last applied, within the same search and
-//! filters as the remaining families. In the Character and Properties panels and the Control bar,
+//! in-menu font previews and Font Preview Size turn the samples off or size the rows. The menu lays
+//! out its filters on the same four rows wherever it opens. However narrow its field, it opens at
+//! least wide enough for those rows and for a family name up to 220 points wide with its sample
+//! beside it, up to 60% of the window; each sample fills its row's height. Recently used families
+//! appear first, in the order they were last applied, within the same search and filters as the
+//! remaining families. In the Character and Properties panels and the Control bar,
 //! the mouse wheel turned over the closed field applies the next family (or previous one) to the
 //! selected text, one undo step per notch. The menu's order at the first turn stays fixed until the
 //! pointer leaves the field or the text selection changes; steps stop at its first and last family.
@@ -132,10 +135,29 @@ impl<'a> MenuLook<'a> {
 const ROW: f32 = 24.0;
 /// Width of the star at the end of a family's row.
 const STAR: f32 = 18.0;
-/// The share of a row the family's name takes; the sample fills the rest.
+/// The least share of a row the family's name takes when the row is too narrow for the widest
+/// name and [`SAMPLE_W`]; the sample fills the rest.
 const NAME_SHARE: f32 = 0.5;
+/// Size of a family's name in its row.
+const NAME_SIZE: f32 = 12.0;
+/// The widest name the menu widens itself for. A longer name takes more of a row only in a menu
+/// wider than that.
+pub(crate) const NAME_MAX: f32 = 220.0;
+/// Space between a family's name and its sample.
+const NAME_GAP: f32 = 8.0;
+/// How much wider than the sum of its characters' advances a name may lay out once shaped
+/// (kerning, ligatures, contextual forms), as a share of that sum.
+const SHAPING: f32 = 0.1;
+/// The room the menu keeps for a sample beside the widest name.
+const SAMPLE_W: f32 = 150.0;
+/// The greatest share of the window's width the menu takes.
+const WINDOW_SHARE: f32 = 0.6;
+/// Size of the filters' labels.
+const FILTER_SIZE: f32 = 11.0;
 /// Width of the disclosure triangle of a family with several styles.
 const DISCLOSURE: f32 = 14.0;
+/// How far a family's style rows are indented past the triangle.
+const STYLE_INDENT: f32 = 12.0;
 /// The list's greatest height, under the search field and filters.
 const LIST_HEIGHT: f32 = 600.0;
 /// Samples rendered (or asked for) per frame, across every menu, so a long list doesn't stall the UI.
@@ -289,6 +311,8 @@ struct MenuState {
     rows_key: Option<RowsKey>,
     /// The height of the search field and filters last frame.
     header: f32,
+    /// The width of the widest row of filters without wrapping, last frame.
+    filters: f32,
     /// The families the wheel steps through, listed at its first notch over the closed field and
     /// kept for that text selection while the pointer stays on it: each step makes its family a recent one, which would
     /// otherwise move it in the order.
@@ -321,7 +345,11 @@ pub fn font_menu(
     // of families.
     let (field, shown) = widgets::combo_menu_field(ui, &id, current, width, |menu| {
         menu.height(height).show_rows_with_header(
-            |ui| header(ui, state_id, state, current, look),
+            |ui| {
+                // Wider than a narrow field, so the filters keep their rows and long names show.
+                ui.set_min_width(menu_width(ui, state, look));
+                header(ui, state_id, state, current, look)
+            },
             look.row,
             |h| h.rows.len(),
             |ui, range, h| rows(ui, range, h, sample, look),
@@ -957,42 +985,7 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
         ui.memory_mut(|m| m.request_focus(field.with("edit")));
     }
     let query = widgets::search_field(ui, field, tl!("Search")).to_lowercase();
-    // The filters: script, then kind, then font technology.
-    let mut refilter = false;
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = vec2(4.0, 2.0);
-        for i in 0..SCRIPTS {
-            if ui.selectable_label(st.script == i, egui::RichText::new(script_label(i)).size(11.0)).clicked() {
-                st.script = i;
-                refilter = true;
-            }
-        }
-    });
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = vec2(4.0, 2.0);
-        if ui.selectable_label(st.favorites_only, egui::RichText::new("★").size(11.0)).on_hover_text(tl!("Favorites")).clicked() {
-            st.favorites_only = !st.favorites_only;
-            refilter = true;
-        }
-        if ui.selectable_label(st.class.is_none(), egui::RichText::new(tl!("Any Kind")).size(11.0)).clicked() {
-            st.class = None;
-            refilter = true;
-        }
-        for c in FontClass::ALL {
-            if ui.selectable_label(st.class == Some(c), egui::RichText::new(class_label(c)).size(11.0)).clicked() {
-                st.class = if st.class == Some(c) { None } else { Some(c) };
-                refilter = true;
-            }
-        }
-    });
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = vec2(4.0, 2.0);
-        ui.label(egui::RichText::new(tl!("Font Technology")).size(11.0).color(t.text_dim));
-        if ui.selectable_label(st.variable_only, egui::RichText::new(variable_label()).size(11.0)).clicked() {
-            st.variable_only = !st.variable_only;
-            refilter = true;
-        }
-    });
+    let refilter = filters(ui, st, &t);
     let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
     let db = vectorcraft_text::FontDb::global();
     // The current family by its own name (a document may name it in Japanese: ヒラギノ角ゴシック),
@@ -1064,6 +1057,149 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
     Listed { st, rows, current: current.to_string(), enter, keyed, opening }
 }
 
+/// One of the filters' chips.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Chip {
+    /// A script ([`SCRIPTS`]).
+    Script(usize),
+    Favorites,
+    AnyKind,
+    Class(FontClass),
+    /// The Font Technology label, which filters nothing.
+    Technology,
+    Variable,
+}
+
+/// The filters, row by row, the same wherever the menu opens: the scripts; favorites, any kind
+/// and the first three kinds; the other kinds; font technology.
+fn filter_rows() -> [Vec<Chip>; 4] {
+    let (first, rest) = FontClass::ALL.split_at(3);
+    [
+        (0..SCRIPTS).map(Chip::Script).collect(),
+        [Chip::Favorites, Chip::AnyKind].into_iter().chain(first.iter().copied().map(Chip::Class)).collect(),
+        rest.iter().copied().map(Chip::Class).collect(),
+        vec![Chip::Technology, Chip::Variable],
+    ]
+}
+
+/// The filters on their rows ([`filter_rows`]): a row wraps only where the menu is narrower than
+/// it. Records in `st` the width of the widest row unwrapped; whether a filter changed.
+fn filters(ui: &mut Ui, st: &mut MenuState, t: &Tokens) -> bool {
+    let mut refilter = false;
+    let mut widest = 0.0_f32;
+    for row in filter_rows() {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(4.0, 2.0);
+            let gap = ui.spacing().item_spacing.x;
+            let text = |s: &str| egui::RichText::new(s).size(FILTER_SIZE);
+            let mut width = -gap;
+            for chip in row {
+                let resp = match chip {
+                    Chip::Script(i) => ui.selectable_label(st.script == i, text(script_label(i))),
+                    Chip::Favorites => ui.selectable_label(st.favorites_only, text("★")).on_hover_text(tl!("Favorites")),
+                    Chip::AnyKind => ui.selectable_label(st.class.is_none(), text(tl!("Any Kind"))),
+                    Chip::Class(c) => ui.selectable_label(st.class == Some(c), text(class_label(c))),
+                    Chip::Technology => ui.label(text(tl!("Font Technology")).color(t.text_dim)),
+                    Chip::Variable => ui.selectable_label(st.variable_only, text(variable_label())),
+                };
+                width += resp.rect.width() + gap;
+                if !resp.clicked() {
+                    continue;
+                }
+                match chip {
+                    Chip::Script(i) => st.script = i,
+                    Chip::Favorites => st.favorites_only = !st.favorites_only,
+                    Chip::AnyKind => st.class = None,
+                    Chip::Class(c) => st.class = if st.class == Some(c) { None } else { Some(c) },
+                    Chip::Technology => continue,
+                    Chip::Variable => st.variable_only = !st.variable_only,
+                }
+                refilter = true;
+            }
+            widest = widest.max(width);
+        });
+    }
+    st.filters = widest;
+    refilter
+}
+
+/// The width the open menu takes at least: the widest row of filters last frame, and the widest
+/// name up to [`NAME_MAX`] with room for its sample, the star and the scroll bar beside it, within
+/// [`WINDOW_SHARE`] of the window. The menu is never narrower than its field.
+fn menu_width(ui: &Ui, st: &MenuState, look: MenuLook) -> f32 {
+    let sample = if look.samples { SAMPLE_W } else { 0.0 };
+    let names = name_width(ui, look.english_names, &st.rows).min(NAME_MAX);
+    let row = DISCLOSURE + names + NAME_GAP + sample + STAR + 2.0 + widgets::list_scroll_style().allocated_width();
+    // Rounding in the chips' widths must not wrap the widest row.
+    let filters = if st.filters > 0.0 { st.filters.ceil() + 1.0 } else { 0.0 };
+    filters.max(row).min(ui.ctx().content_rect().width() * WINDOW_SHARE)
+}
+
+/// The width of the widest name the menu lists after the disclosure triangle: the family names as
+/// Show Font Names in English shows them, and the style names among `rows` after their indent.
+fn name_width(ui: &Ui, english: bool, rows: &[Row]) -> f32 {
+    let font = egui::FontId::proportional(NAME_SIZE);
+    let measure = |name: &str| ui.painter().layout_no_wrap(name.to_string(), font.clone(), Color32::WHITE).size().x;
+    let styles = rows.iter().filter_map(Row::style).map(|s| STYLE_INDENT + measure(s)).fold(0.0, f32::max);
+    family_name_width(ui, english).max(styles)
+}
+
+/// What the widest family name was measured for: the font list's generation, Show Font Names in
+/// English, and the number of fonts the interface draws with, which grows as faces for other
+/// scripts are added to it.
+fn family_name_key(ui: &Ui, english: bool) -> (u64, bool, usize) {
+    let faces = ui.ctx().fonts(|f| f.definitions().font_data.len());
+    (vectorcraft_text::FontDb::global().generation(), english, faces)
+}
+
+/// The id under which the widest family name's width is kept with its [`family_name_key`].
+fn family_name_id() -> egui::Id {
+    egui::Id::unique("font-menu-name-width")
+}
+
+/// The width of the widest family name the menu lists, labeled as Show Font Names in English
+/// (`english`) labels it; worked out again only when its [`family_name_key`] changes.
+fn family_name_width(ui: &Ui, english: bool) -> f32 {
+    let key = family_name_key(ui, english);
+    if let Some((k, w)) = ui.data(|d| d.get_temp::<((u64, bool, usize), f32)>(family_name_id()))
+        && k == key
+    {
+        return w;
+    }
+    let db = vectorcraft_text::FontDb::global();
+    let w = widest_label(ui, db.menu_family_list().iter().map(|f| db.family_display_name(f, english)).collect());
+    ui.data_mut(|d| d.insert_temp(family_name_id(), (key, w)));
+    w
+}
+
+/// The width of the widest of `labels` laid out at the names' size. Each label's characters'
+/// advances are added up, and the labels are laid out widest sum first, until no sum left could
+/// reach the widest layout, allowing [`SHAPING`] for shaping.
+fn widest_label(ui: &Ui, labels: Vec<String>) -> f32 {
+    let font = egui::FontId::proportional(NAME_SIZE);
+    let mut sums: Vec<(f32, String)> =
+        ui.ctx().fonts_mut(|f| labels.into_iter().map(|l| (l.chars().map(|c| f.glyph_width(&font, c)).sum(), l)).collect());
+    sums.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let mut w = 0.0_f32;
+    for (sum, label) in sums {
+        if sum * (1.0 + SHAPING) + 1.0 <= w {
+            break;
+        }
+        w = w.max(ui.painter().layout_no_wrap(label, font.clone(), Color32::WHITE).size().x);
+    }
+    w
+}
+
+/// Where a row `width` wide puts its sample, after the name column: room for the widest name
+/// (`widest`) and a gap, as far as that leaves [`SAMPLE_W`] and the star for the sample or
+/// [`NAME_SHARE`] of the row for the name. Without samples the name runs to the star.
+fn name_column(width: f32, widest: f32, samples: bool) -> f32 {
+    if !samples {
+        return width - STAR;
+    }
+    (DISCLOSURE + widest + NAME_GAP).min((width - STAR - 2.0 - SAMPLE_W).max(width * NAME_SHARE))
+}
+
 /// The disclosure triangle of a family with several styles; whether the pointer is on it.
 fn disclosure(p: &egui::Painter, resp: &egui::Response, tri: egui::Rect, open: bool, t: &Tokens) -> bool {
     p.text(tri.center(), egui::Align2::CENTER_CENTER, if open { "▾" } else { "▸" }, egui::FontId::proportional(11.0), t.text_dim);
@@ -1101,6 +1237,7 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
     let t = Tokens::get(ui.ctx());
     let db = vectorcraft_text::FontDb::global();
     let favorite = |f: &str| look.favorites.iter().any(|x| x.eq_ignore_ascii_case(f));
+    let widest = name_width(ui, look.english_names, &rows);
     if rows.is_empty() {
         // A filter or a font rescan can remove the row whose font was previewed.
         // Do not leave that font applied while the list has no candidate to highlight.
@@ -1166,8 +1303,8 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
                 starred = Some(f.clone());
             }
         }
-        let indent = if row.style().is_some() { DISCLOSURE + 12.0 } else { DISCLOSURE };
-        let name_w = rect.width() * NAME_SHARE;
+        let indent = if row.style().is_some() { DISCLOSURE + STYLE_INDENT } else { DISCLOSURE };
+        let name_w = name_column(rect.width(), widest, look.samples);
         let name_rect = egui::Rect::from_min_max(rect.min + vec2(indent, 0.0), egui::pos2(rect.min.x + name_w - 4.0, rect.max.y));
         // Family rows follow Show Font Names in English; style rows keep the style name (#394).
         let name = match row {
@@ -1175,8 +1312,9 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
             Row::Family(f) => db.family_display_name(f, look.english_names),
             Row::Heading(_) => continue,
         };
-        ui.painter_at(name_rect).text(name_rect.left_center(), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(12.0), t.text);
-        let sample_rect = egui::Rect::from_min_max(rect.min + vec2(name_w, 2.0), rect.max - vec2(STAR + 2.0, 2.0));
+        ui.painter_at(name_rect).text(name_rect.left_center(), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(NAME_SIZE), t.text);
+        // The sample takes the row's whole height.
+        let sample_rect = egui::Rect::from_min_max(rect.min + vec2(name_w, 0.0), rect.max - vec2(STAR + 2.0, 0.0));
         if !look.samples {
         } else if let Some(tex) = sample_texture(ui.ctx(), family, row.style(), sample, sample_rect.height()) {
             paint_sample(ui, sample_rect, &tex, t.text);
@@ -1374,6 +1512,21 @@ fn render_sample(family: &str, style: &str, text: &str, px: u32) -> Option<egui:
 #[cfg(test)]
 pub(crate) fn render_sample_for_test(family: &str, text: &str, px: u32) -> Option<egui::ColorImage> {
     render_sample(family, "Regular", text, px)
+}
+
+/// Waits for the samples rendering on this thread's behalf and keeps them, so the next frame
+/// draws them.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) fn wait_for_samples(ctx: &egui::Context) {
+    SAMPLES.with(|s| {
+        let mut s = s.borrow_mut();
+        let pending: Vec<_> = s.pending.drain().collect();
+        for (key, rx) in pending {
+            let tex =
+                rx.recv().ok().flatten().map(|img| ctx.load_texture(format!("font-sample-{}-{}", key.0, key.3), img, egui::TextureOptions::LINEAR));
+            s.ready.insert(key, tex);
+        }
+    });
 }
 
 // ---------- applying a pick ----------

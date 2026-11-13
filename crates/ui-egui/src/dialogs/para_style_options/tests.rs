@@ -157,14 +157,17 @@ fn invalid_values_keep_the_dialog_open() {
 fn reset_panel_clears_only_its_section() {
     let mut app = app();
     let all = json!({"justify": "Center", "space_after": 6.0, "composer": "singleLine", "roman_hanging": true, "hyphenate": true,
-        "hyphenation": {"words_longer_than": 8}, "justification": {"auto_leading": 150.0}, "tabs": [{"position": 20.0}]});
+        "hyphenation": {"words_longer_than": 8}, "justification": {"auto_leading": 150.0}, "tabs": [{"position": 20.0}],
+        "korean_line_break_anywhere": true, "bunri_kinshi": true});
     app.run("paraStyle.new", json!({"name": "Body", "attrs": all})).unwrap();
     let stored = def(&app, "Body");
     for (section, cleared) in [
         ("basic", &["justify", "space_after"][..]),
+        ("tabs", &["tabs"]),
         ("composition", &["composer", "roman_hanging"]),
         ("hyphenation", &["hyphenate", "hyphenation"]),
         ("justification", &["justification"]),
+        ("eastAsian", &["korean_line_break_anywhere", "bunri_kinshi"]),
     ] {
         app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
         assert!(app.run("ui.paraStyleOptions.resetPanel", json!({})).is_err(), "General has no Reset Panel");
@@ -239,7 +242,15 @@ fn new_paragraph_style_offers_the_sections() {
         set(&mut app, "section", json!(section));
         texts += &crate::tests_labels::painted_text(&mut app, |app, ui| super::super::show(app, ui.ctx()));
     }
-    for label in ["Basic Paragraph Formats", "Composition", "First-line Left Indent", "Hyphenate Capitalized Words", "Single Word Justification:"] {
+    for label in [
+        "Basic Paragraph Formats",
+        "Tabs",
+        "Composition",
+        "First-line Left Indent",
+        "Align On:",
+        "Hyphenate Capitalized Words",
+        "Single Word Justification:",
+    ] {
         assert!(texts.contains(label), "{label} is drawn: {texts}");
     }
     set(&mut app, "section", json!("basic"));
@@ -257,6 +268,283 @@ fn new_paragraph_style_offers_the_sections() {
     assert_eq!(paras(&app, id)[0].justify, Justify::Center);
 }
 
+/// East Asian Composition Settings › Korean Line Break Anywhere sets the style's attribute, which
+/// its paragraphs take; unset, the style leaves it out and the paragraphs keep their own.
+#[test]
+fn korean_line_break_anywhere_is_set_by_the_east_asian_section() {
+    let mut app = app();
+    let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "가나 다라"})).unwrap()["id"].as_u64().unwrap();
+    app.run("paraStyle.new", json!({"name": "Body", "attrs": {}})).unwrap();
+    app.run("paraStyle.apply", json!({"name": "Body", "id": id})).unwrap();
+    assert!(!paras(&app, id)[0].korean_line_break_anywhere);
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    assert!(app.ui.dialog.as_ref().unwrap().fields["korean_line_break_anywhere"].is_null());
+    set(&mut app, "section", json!("eastAsian"));
+    set(&mut app, "korean_line_break_anywhere", json!(true));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(def(&app, "Body").get("korean_line_break_anywhere"), Some(&json!(true)));
+    assert!(paras(&app, id)[0].korean_line_break_anywhere, "the style's paragraphs take it");
+}
+
+/// East Asian Composition Settings › Bunri-Kinshi sets the style's attribute, which its paragraphs
+/// take; set off again, the style holds it off, and unset, the style leaves it out.
+#[test]
+fn bunri_kinshi_is_set_by_the_east_asian_section() {
+    let mut app = app();
+    let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "あ——い"})).unwrap()["id"].as_u64().unwrap();
+    app.run("paraStyle.new", json!({"name": "Body", "attrs": {}})).unwrap();
+    app.run("paraStyle.apply", json!({"name": "Body", "id": id})).unwrap();
+    assert!(!paras(&app, id)[0].bunri_kinshi);
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    assert!(app.ui.dialog.as_ref().unwrap().fields["bunri_kinshi"].is_null());
+    set(&mut app, "section", json!("eastAsian"));
+    set(&mut app, "bunri_kinshi", json!(true));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(def(&app, "Body").get("bunri_kinshi"), Some(&json!(true)));
+    assert!(paras(&app, id)[0].bunri_kinshi, "the style's paragraphs take it");
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["bunri_kinshi"], json!(true));
+    set(&mut app, "bunri_kinshi", json!(false));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(def(&app, "Body").get("bunri_kinshi"), Some(&json!(false)));
+    assert!(!paras(&app, id)[0].bunri_kinshi);
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    set(&mut app, "bunri_kinshi", Value::Null);
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(def(&app, "Body").get("bunri_kinshi"), None);
+}
+
+/// The rows of the `tabs` field of the open dialog.
+fn tab_rows(app: &VectorcraftApp) -> Vec<Value> {
+    app.ui.dialog.as_ref().unwrap().fields["tabs"].as_array().cloned().unwrap_or_default()
+}
+
+/// Tabs shows a style's stops in the General unit with their alignment, leader and Align On
+/// character; a stop left as it was keeps its position exactly, a changed one is read in the unit,
+/// and the stops are stored sorted by position. Add puts a left stop half an inch past the furthest
+/// stop, Delete Tab removes the selected stop and Clear All Tabs leaves the style an empty list.
+#[test]
+fn tabs_section_edits_the_style_stops() {
+    let mut app = app();
+    let stops = json!([{"position": 36.0, "align": "right"}, {"position": 72.123456, "align": "decimal", "leader": ".", "alignOn": ","}]);
+    app.run("paraStyle.new", json!({"name": "Body", "attrs": {"left_indent": 3.0, "tabs": stops}})).unwrap();
+    let stored = def(&app, "Body");
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    let rows = tab_rows(&app);
+    let shown: Vec<(&str, &str, &str, &str)> = rows
+        .iter()
+        .map(|r| (r["position"].as_str().unwrap(), r["align"].as_str().unwrap(), r["leader"].as_str().unwrap(), r["alignOn"].as_str().unwrap()))
+        .collect();
+    assert_eq!(shown, [("36 pt", "right", "", "."), ("72.123 pt", "decimal", ".", ",")]);
+    assert_eq!(edited_attrs(app.ui.dialog.as_ref().unwrap()).unwrap(), stored, "nothing changed");
+
+    // The first stop moves past the second and turns centered; the second keeps its exact position.
+    let mut rows = rows;
+    rows[0]["position"] = json!("1.5 in");
+    rows[0]["align"] = json!("center");
+    set(&mut app, "tabs", Value::from(rows));
+    let a = edited_attrs(app.ui.dialog.as_ref().unwrap()).unwrap();
+    assert_eq!(
+        a["tabs"],
+        json!([{"position": 72.123456, "align": "decimal", "leader": ".", "alignOn": ","}, {"position": 108.0, "align": "center", "alignOn": "."}])
+    );
+    assert_eq!(a["left_indent"], json!(3.0), "other attributes stay");
+
+    let d = app.ui.dialog.as_mut().unwrap();
+    add_tab(d);
+    assert_eq!((tab_rows(&app).len(), app.ui.dialog.as_ref().unwrap().fields["__tabSel"].clone()), (3, json!(2)));
+    let a = edited_attrs(app.ui.dialog.as_ref().unwrap()).unwrap();
+    assert_eq!(a["tabs"][2], json!({"position": 144.0, "align": "left", "alignOn": "."}), "half an inch past the furthest");
+    set(&mut app, "__tabSel", json!(0));
+    delete_tab(app.ui.dialog.as_mut().unwrap());
+    let a = edited_attrs(app.ui.dialog.as_ref().unwrap()).unwrap();
+    assert_eq!(a["tabs"].as_array().unwrap().iter().map(|s| s["position"].clone()).collect::<Vec<_>>(), [json!(72.123456), json!(144.0)]);
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(def(&app, "Body")["tabs"].as_array().map(Vec::len), Some(2));
+
+    // Clear All Tabs leaves an empty list set, which Reset Panel removes; a new stop on a style
+    // without stops goes at half an inch.
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    clear_tabs(app.ui.dialog.as_mut().unwrap());
+    assert_eq!(edited_attrs(app.ui.dialog.as_ref().unwrap()).unwrap()["tabs"], json!([]));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(def(&app, "Body")["tabs"], json!([]), "an empty list is stored");
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    set(&mut app, "section", json!("tabs"));
+    app.run("ui.paraStyleOptions.resetPanel", json!({})).unwrap();
+    let a = edited_attrs(app.ui.dialog.as_ref().unwrap()).unwrap();
+    assert!(!a.contains_key("tabs") && a["left_indent"] == json!(3.0), "{a:?}");
+    add_tab(app.ui.dialog.as_mut().unwrap());
+    assert_eq!(edited_attrs(app.ui.dialog.as_ref().unwrap()).unwrap()["tabs"], json!([{"position": 36.0, "align": "left", "alignOn": "."}]));
+}
+
+/// Of stops typed at one position, the one edited last is kept; with none edited, the first in the
+/// list is.
+#[test]
+fn a_repeated_tab_position_keeps_the_stop_edited_last() {
+    let mut app = app();
+    app.run("paraStyle.new", json!({"name": "Body", "attrs": {}})).unwrap();
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    let rows = json!([{"position": "36", "align": "right"}, {"position": "0.5 in", "align": "center"}, {"position": "10", "align": "left"}]);
+    set(&mut app, "tabs", rows);
+    let kept = |app: &VectorcraftApp| edited_attrs(app.ui.dialog.as_ref().unwrap()).unwrap()["tabs"].clone();
+    assert_eq!(kept(&app), json!([{"position": 10.0, "align": "left", "alignOn": "."}, {"position": 36.0, "align": "right", "alignOn": "."}]));
+    set(&mut app, "__tabEdited", json!(1));
+    assert_eq!(kept(&app)[1]["align"], json!("center"));
+}
+
+/// The list of stops scrolls, so a style with 256 stops keeps the Tabs section short enough for the
+/// dialog's buttons to stay on screen.
+#[test]
+fn a_long_tab_list_scrolls() {
+    let mut app = app();
+    let stops: Vec<Value> = (0..256).map(|i| json!({"position": 36.0 * f64::from(i + 1), "align": "left"})).collect();
+    app.run("paraStyle.new", json!({"name": "Body", "attrs": {"tabs": stops}})).unwrap();
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut height = f32::INFINITY;
+    let mut out = ctx.run_ui(Default::default(), |ui| {
+        let top = ui.cursor().top();
+        tabs_body(ui, d);
+        height = ui.cursor().top() - top;
+    });
+    out.textures_delta.clear();
+    assert!(height < 400.0, "the Tabs section is {height} points tall");
+}
+
+/// The stop Add puts at the end of a long list is scrolled into view: its row in the list is drawn
+/// inside the list's visible area.
+#[test]
+fn an_added_tab_stop_is_scrolled_into_view() {
+    let mut app = app();
+    let stops: Vec<Value> = (0..100).map(|i| json!({"position": 36.0 * f64::from(i + 1), "align": "left"})).collect();
+    app.run("paraStyle.new", json!({"name": "Body", "attrs": {"tabs": stops}})).unwrap();
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let draw = |d: &mut Dialog| {
+        let mut out = ctx.run_ui(Default::default(), |ui| tabs_body(ui, d));
+        out.textures_delta.clear();
+        out.shapes.iter().any(|c| match &c.shape {
+            egui::Shape::Text(t) => t.galley.text().starts_with("3636 pt    ") && c.clip_rect.intersects(t.visual_bounding_rect()),
+            _ => false,
+        })
+    };
+    draw(d);
+    add_tab(d);
+    let shown: Vec<bool> = (0..3).map(|_| draw(d)).collect();
+    assert_eq!(shown.last(), Some(&true), "{shown:?}");
+}
+
+/// Add does not put a stop where one already is: with a stop at 100000 pt, the largest position,
+/// it adds nothing and the Add button is disabled, so the existing stop keeps its settings.
+#[test]
+fn add_leaves_a_stop_at_the_largest_position_alone() {
+    let mut app = app();
+    let stops = json!([{"position": 100000.0, "align": "right", "leader": "-"}]);
+    app.run("paraStyle.new", json!({"name": "Body", "attrs": {"tabs": stops}})).unwrap();
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    let before = tab_rows(&app);
+    add_tab(app.ui.dialog.as_mut().unwrap());
+    assert_eq!(tab_rows(&app), before, "no stop is added");
+    assert!(new_tab_position(&before, Unit::Points).is_none(), "Add is disabled");
+    assert_eq!(edited_attrs(app.ui.dialog.as_ref().unwrap()).unwrap(), def(&app, "Body"), "the stop is kept");
+}
+
+/// A tab position out of range or not a distance, an unknown alignment, a leader of more than eight
+/// characters, an Align On entry that is not one character, more than 256 stops, a `tabs` value that
+/// is not a list and a stop that is not an object are errors that keep the dialog open and the style
+/// as it was. Vertical type names the position Y.
+#[test]
+fn invalid_tab_stops_keep_the_dialog_open() {
+    let mut app = app();
+    app.run("paraStyle.new", json!({"name": "Body", "attrs": {}})).unwrap();
+    let stop = |key: &str, value: Value| {
+        let mut stop = json!({"position": "36", "align": "decimal", "leader": "", "alignOn": "."});
+        stop[key] = value;
+        json!([stop])
+    };
+    let many = Value::from((0..257).map(|i| json!({"position": format!("{i}"), "align": "left"})).collect::<Vec<_>>());
+    for (tabs, why) in [
+        (stop("position", json!("-1")), "X must be a number from 0 pt to 100000 pt"),
+        (stop("position", json!("100001 pt")), "X must be a number from 0 pt to 100000 pt"),
+        (stop("position", json!("far")), "X must be a number"),
+        (stop("align", json!("diagonal")), "unknown align `diagonal`"),
+        (stop("leader", json!("123456789")), "Leader must be at most 8 characters"),
+        (stop("alignOn", json!("")), "Align On must be one character"),
+        (stop("alignOn", json!(",.")), "Align On must be one character"),
+        (many, "at most 256 tab stops"),
+        (json!("36"), "`tabs` must be an array"),
+        (json!({"position": "36"}), "`tabs` must be an array"),
+        (json!([5]), "X must be a number"),
+    ] {
+        app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+        set(&mut app, "tabs", tabs.clone());
+        assert_eq!(edited_attrs(app.ui.dialog.as_ref().unwrap()).unwrap_err(), why, "{tabs}");
+        assert!(super::super::confirm(&mut app).is_err());
+        assert!(app.ui.dialog.is_some());
+        super::super::cancel(&mut app);
+        assert_eq!(def(&app, "Body"), Map::new());
+    }
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    set(&mut app, "__vertical", json!(true));
+    set(&mut app, "tabs", stop("position", json!("far")));
+    assert_eq!(edited_attrs(app.ui.dialog.as_ref().unwrap()).unwrap_err(), "Y must be a number");
+    // Stops a style read from a file holds out of range stay while another stop is added.
+    super::super::cancel(&mut app);
+    let doc = std::sync::Arc::make_mut(&mut app.session.doc_mut().unwrap().doc);
+    let held = json!([{"position": 200000.0, "align": "left", "leader": "123456789", "alignOn": "."}]);
+    doc.para_styles.iter_mut().find(|d| d.name == "Body").unwrap().attrs.insert("tabs".into(), held.clone());
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    add_tab(app.ui.dialog.as_mut().unwrap());
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(def(&app, "Body")["tabs"][1], held[0]);
+}
+
+/// Preview shows a style's new stops on the paragraphs that use it, and Cancel puts the document
+/// and its history back. OK sets them in one undo step, a paragraph whose stops the Tabs panel set
+/// keeps its own, and Undo and Redo restore both. Saving and opening the document keeps the stops.
+#[test]
+fn tabs_preview_cancel_and_ok_update_the_paragraphs_in_one_undo_step() {
+    let mut app = app();
+    let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "a\tb\nc\td"})).unwrap()["id"].as_u64().unwrap();
+    app.run("paraStyle.new", json!({"name": "Body", "attrs": {"tabs": [{"position": 36.0}]}})).unwrap();
+    app.run("paraStyle.apply", json!({"name": "Body", "id": id})).unwrap();
+    app.run("text.tabs.set", json!({"ids": [id], "start": 4, "end": 4, "stops": [{"position": 50.0}]})).unwrap();
+    let before = app.session.doc().unwrap().doc.clone();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let new_stops = json!([{"position": "20", "align": "right", "leader": "."}, {"position": "80", "align": "decimal", "alignOn": ","}]);
+    let positions = |app: &VectorcraftApp| paras(app, id).iter().map(|p| p.tabs.iter().map(|t| t.position).collect::<Vec<_>>()).collect::<Vec<_>>();
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    set(&mut app, "section", json!("tabs"));
+    set(&mut app, "tabs", new_stops.clone());
+    frame(&mut app);
+    assert_eq!(positions(&app), [vec![20.0, 80.0], vec![50.0]], "Preview shows the change");
+    super::super::cancel(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, before);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    set(&mut app, "tabs", new_stops);
+    frame(&mut app);
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(positions(&app), [vec![20.0, 80.0], vec![50.0]]);
+    let p = paras(&app, id);
+    assert_eq!((p[0].tabs[0].leader.as_str(), p[0].tabs[1].align_on), (".", ','));
+    let changed = app.session.doc().unwrap().doc.clone();
+    let saved = vectorcraft_format::load(&vectorcraft_format::save(&changed, false)).unwrap();
+    let def_of = |d: &vectorcraft_doc::Document| d.para_styles.iter().find(|s| s.name == "Body").map(|s| s.attrs.clone());
+    assert_eq!(def_of(&saved), def_of(&changed));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc, before);
+    app.run("edit.redo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc, changed);
+}
+
 /// The section list, Reset Panel and both buttons are drawn in every section, and the Hyphenation
 /// options are drawn whether or not Hyphenation is on.
 #[test]
@@ -269,9 +557,12 @@ fn every_section_draws_its_fields() {
     for (section, label) in [
         ("general", "Style Name:"),
         ("basic", "Space After Paragraph"),
+        ("tabs", "Clear All Tabs"),
         ("composition", "Roman Hanging Punctuation"),
         ("hyphenation", "Hyphenation Zone:"),
         ("justification", "Glyph Scaling:"),
+        ("eastAsian", "Korean Line Break Anywhere"),
+        ("eastAsian", "Bunri-Kinshi"),
     ] {
         set(&mut app, "section", json!(section));
         let mut texts = String::new();
@@ -282,7 +573,7 @@ fn every_section_draws_its_fields() {
             out.textures_delta.clear();
             texts = crate::tests_labels::shapes_text(&out);
         }
-        for shown in [label, "General", "Basic Paragraph Formats", "Justification", "Reset Panel", "OK", "Cancel"] {
+        for shown in [label, "General", "Basic Paragraph Formats", "Tabs", "Justification", "Reset Panel", "OK", "Cancel"] {
             assert!(texts.contains(shown), "{shown} is drawn in {section}: {texts}");
         }
     }

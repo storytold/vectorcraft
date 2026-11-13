@@ -10,8 +10,8 @@ use vectorcraft_geom::{Affine, PathData, Vec2};
 use super::edit::selected_roots;
 use super::pathops::{length_given, number_given, shape_node};
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, id_param, index, number_or, ok,
-    str_param, switch_or, targets, text_param,
+    CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, index, number_or, object_param,
+    ok, str_param, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -138,7 +138,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", …] OpenType, featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", \"salt=2\", …] OpenType (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_style
         ),
@@ -715,6 +715,20 @@ pub(crate) fn text_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<Node
     Ok(t)
 }
 
+/// The type sizes a command takes, in points.
+pub(crate) const TYPE_SIZES: (f64, f64) = (0.1, 1296.0);
+
+/// A type size `size` that a command was given: an error naming the range when it is outside
+/// [`TYPE_SIZES`].
+pub(crate) fn given_type_size(size: f64, cmd: &str) -> Result<f64> {
+    let (lo, hi) = TYPE_SIZES;
+    if !(lo..=hi).contains(&size) {
+        let key = "size";
+        return Err(bad(cmd, format!("`{key}` must be from {lo} to {hi}")));
+    }
+    Ok(size)
+}
+
 /// Clamp in the units shown to the user, then compensate the text's affine. Clamping
 /// the local result would make small sizes impossible after enlarging an object.
 pub(crate) fn local_type_value(t: &TextObject, value: f64, limits: (f64, f64), horizontal: bool, cmd: &str) -> Result<f64> {
@@ -820,10 +834,7 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setStyle";
     let font = text_param(p, "font", C)?.map(str::to_string);
     let style = text_param(p, "style", C)?.map(str::to_string);
-    let size = length_given(p, "size", C)?;
-    if size.is_some_and(|v| v <= 0.0) {
-        return Err(bad(C, "size must be positive"));
-    }
+    let size = length_given(p, "size", C)?.map(|v| given_type_size(v, C)).transpose()?;
     let leading = match p.get("leading") {
         None | Some(Value::Null) => None,
         Some(Value::String(a)) if a.eq_ignore_ascii_case("auto") => Some(None),
@@ -1273,7 +1284,7 @@ fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let mut items = Vec::with_capacity(raw.len());
     for it in raw {
-        let id = id_param(it, "id").ok_or_else(|| bad(C, "missing id"))?;
+        let id = object_param(it, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
         let mut refs = super::select::checked_refs(it.get("anchors"), C)?;
         refs.sort_unstable();
         refs.dedup();
@@ -1304,7 +1315,7 @@ fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn reshape_path(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.reshapePath";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let mut refs = super::select::checked_refs(p.get("anchors"), C)?;
     refs.sort_unstable();
     refs.dedup();
@@ -1335,7 +1346,7 @@ fn reshape_path(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setPathHandle";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let si = super::draw2::usize_opt(p, "subpath", C)?.unwrap_or(0);
     let ai = p.get("anchor").and_then(Value::as_u64).map(index).ok_or_else(|| bad(C, "missing anchor"))?;
     let out = super::object::choice(p, C, "which", &["in", "out"])? != Some("in");
@@ -1365,6 +1376,7 @@ fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
 #[cfg(test)]
 mod area_tests;
 mod block;
+pub(crate) use block::needed_room;
 #[cfg(test)]
 mod block_tests;
 

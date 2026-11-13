@@ -32,7 +32,7 @@ fn fill_gradient(s: &Session, id: NodeId) -> GradientPaint {
 
 #[test]
 fn new_gradient_defaults_follow_the_cmyk_document_mode() {
-    for kind in ["linear", "radial", "conic", "freeform"] {
+    for kind in ["linear", "radial", "conic", "diamond", "freeform"] {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width":200,"height":200,"colorMode":"cmyk"})).unwrap();
         let id = rect(&mut s, 10.0, 10.0, 100.0, 100.0);
@@ -586,7 +586,7 @@ fn a_conic_gradient_is_set_edited_transformed_and_saved() {
         assert_eq!(fill_gradient(&s, id).gradient.kind, GradientKind::Conic, "{name}");
     }
     let e = s.execute("paint.editGradient", &json!({"kind": "spiral"})).unwrap_err().to_string();
-    assert!(e.contains("(linear, radial, conic, freeform)"), "{e}");
+    assert!(e.contains("(linear, radial, conic, diamond, freeform)"), "{e}");
     // Placed, an angle turns the vector about the center.
     s.execute("paint.setGradientGeom", &json!({"start": [200, 150], "end": [260, 150], "aspect": 50})).unwrap();
     s.execute("paint.editGradient", &json!({"angle": 90})).unwrap();
@@ -746,4 +746,269 @@ fn making_a_gradient_conic_is_one_undo_step() {
     assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(fill_gradient(&s, id), before);
+}
+
+/// A diamond gradient through `paint.setFill`, the Gradient panel's edits, transforms, the params
+/// agents and swatches read, and the native format.
+#[test]
+fn a_diamond_gradient_is_set_edited_transformed_and_saved() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "diamond"}})).unwrap();
+    let g = fill_gradient(&s, id);
+    assert_eq!(g.gradient.kind, GradientKind::Diamond);
+    // Unplaced, it runs from the box's center out to a square whose edges pass through the box's
+    // corners.
+    let geom = g.resolve(node(&s, id).geometric_bounds().unwrap());
+    assert_eq!((geom.start, geom.end), (Point::new(200.0, 150.0), Point::new(350.0, 150.0)));
+    for (p, t) in [
+        (Point::new(300.0, 200.0), 1.0),
+        (Point::new(100.0, 100.0), 1.0),
+        (Point::new(250.0, 150.0), 1.0 / 3.0),
+        (Point::new(200.0, 175.0), 1.0 / 6.0),
+    ] {
+        assert!((geom.param_at(GradientKind::Diamond, p) - t).abs() < 1e-9, "{p:?}");
+    }
+    s.execute("paint.editGradient", &json!({"kind": "linear"})).unwrap();
+    s.execute("paint.editGradient", &json!({"kind": "DIAMOND"})).unwrap();
+    assert_eq!(fill_gradient(&s, id).gradient.kind, GradientKind::Diamond);
+    let e = s.execute("paint.editGradient", &json!({"kind": "spiral"})).unwrap_err().to_string();
+    assert!(e.contains("(linear, radial, conic, diamond, freeform)"), "{e}");
+    // Placed, an angle turns the vector about the center.
+    s.execute("paint.setGradientGeom", &json!({"start": [200, 150], "end": [260, 150], "aspect": 50})).unwrap();
+    s.execute("paint.editGradient", &json!({"angle": 90})).unwrap();
+    let g = fill_geom(&s, id);
+    assert!(g.start.distance(Point::new(200.0, 150.0)) < 1e-9 && g.end.distance(Point::new(200.0, 90.0)) < 1e-9, "{g:?}");
+    // A reflection keeps each point's color.
+    let p = Point::new(230.0, 170.0);
+    let before = g.param_at(GradientKind::Diamond, p);
+    s.execute("object.reflect", &json!({"axis": "vertical"})).unwrap();
+    let m = fill_geom(&s, id);
+    assert!(m.aspect > 0.0, "{m:?}");
+    assert!((m.param_at(GradientKind::Diamond, Point::new(170.0, 170.0)) - before).abs() < 1e-9);
+    // A rotation carries it along.
+    let before = m.param_at(GradientKind::Diamond, p);
+    s.execute("object.rotate", &json!({"angle": 30, "origin": [200, 150]})).unwrap();
+    let r = vectorcraft_geom::Affine::rotate_about(-30f64.to_radians(), Point::new(200.0, 150.0));
+    let after = fill_geom(&s, id).param_at(GradientKind::Diamond, r * p);
+    assert!((after - before).abs() < 1e-9, "{before} vs {after}");
+    // The params give it back, and the native format keeps it.
+    s.execute("paint.editGradient", &json!({"aspect": 60})).unwrap();
+    let want = fill_gradient(&s, id);
+    let params = vectorcraft_tools::params::gradient_params(&want);
+    assert_eq!((params["kind"].as_str(), params["aspect"].as_f64()), (Some("diamond"), Some(60.0)));
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
+    s.execute("paint.setFill", &json!({ "gradient": params })).unwrap();
+    let got = fill_gradient(&s, id);
+    assert_eq!((&got.gradient, got.geom), (&want.gradient, want.geom));
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Paint::Gradient(g) = back.node(id).unwrap().appearance.fill_paint() else { panic!("the gradient is lost") };
+    assert_eq!((g.gradient.kind, g.geom), (GradientKind::Diamond, want.geom));
+}
+
+/// A diamond refuses a negative aspect and a focal point, from every command that gives one, and
+/// the gradient stays as it was; a null focal point is allowed.
+#[test]
+fn a_diamond_refuses_a_negative_aspect_and_a_focal_point() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "diamond", "start": [200, 150], "end": [260, 150], "aspect": 50}})).unwrap();
+    let before = fill_gradient(&s, id);
+    for p in [
+        json!({"gradient": {"kind": "diamond", "aspect": -50}}),
+        json!({"gradient": {"kind": "diamond", "start": [0, 0], "end": [10, 0], "aspect": -50}}),
+    ] {
+        assert!(s.execute("paint.setFill", &p).unwrap_err().to_string().contains("aspect"), "{p}");
+    }
+    assert!(s.execute("paint.editGradient", &json!({"aspect": -50})).is_err());
+    assert!(s.execute("paint.setGradientGeom", &json!({"aspect": -50})).is_err());
+    assert!(s.execute("paint.editGradient", &json!({"kind": "radial", "aspect": -50})).is_err());
+    let e = s.execute("paint.setFill", &json!({"gradient": {"kind": "diamond", "start": [200, 150], "end": [260, 150], "focal": [210, 150]}}));
+    assert!(e.unwrap_err().to_string().contains("focal"));
+    assert!(s.execute("paint.setGradientGeom", &json!({"focal": [210, 150]})).unwrap_err().to_string().contains("focal"));
+    assert_eq!(fill_gradient(&s, id), before);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "diamond", "start": [200, 150], "end": [260, 150], "focal": null}})).unwrap();
+    assert_eq!(fill_gradient(&s, id).geom.unwrap().focal, None);
+}
+
+/// A free distort that is not affine moves a diamond by the warp near its center, as it moves a
+/// radial gradient.
+#[test]
+fn a_warp_moves_a_diamond_by_its_center() {
+    let warped = |kind: &str| {
+        let mut s = session();
+        let id = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+        s.execute("paint.setFill", &json!({"gradient": {"kind": kind, "start": [20, 30], "end": [90, 30], "aspect": 60}})).unwrap();
+        s.execute("object.distort", &json!({"corners": [[0, 0], [100, 0], [140, 130], [-20, 100]]})).unwrap();
+        fill_geom(&s, id)
+    };
+    let (diamond, radial) = (warped("diamond"), warped("radial"));
+    assert!(diamond.start.distance(radial.start) < 1e-9, "{diamond:?} vs {radial:?}");
+}
+
+/// Saved as `.ai`, as PDF with its editing data and as SVG with its editing data, then opened, a
+/// turned, squashed diamond comes back as it was.
+#[test]
+fn a_diamond_survives_saving_as_ai_pdf_and_svg() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "diamond", "start": [180, 140], "end": [240, 110], "aspect": 60}})).unwrap();
+    let want = fill_gradient(&s, id);
+    for format in ["ai", "pdf", "svg"] {
+        let r = s.execute("file.saveCopy", &json!({"format": format, "preserveEditing": true})).unwrap();
+        let mut back = session();
+        back.execute("document.open", &json!({"name": format!("t.{format}"), "dataBase64": r["dataBase64"]})).unwrap();
+        let mut found = None;
+        back.doc().unwrap().doc.walk(|n| {
+            if let (None, Paint::Gradient(g)) = (&found, n.appearance.fill_paint()) {
+                found = Some(*g.clone());
+            }
+        });
+        let got = found.unwrap_or_else(|| panic!("{format}: the gradient is lost"));
+        assert_eq!((got.gradient.kind, got.geom), (GradientKind::Diamond, want.geom), "{format}");
+    }
+}
+
+/// Turning a gradient diamond is one undo step, and undoing it gives the gradient back as it was.
+#[test]
+fn making_a_gradient_diamond_is_one_undo_step() {
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "radial"}})).unwrap();
+    let (before, steps) = (fill_gradient(&s, id), s.doc().unwrap().history.undo.len());
+    s.execute("paint.editGradient", &json!({"kind": "diamond", "angle": 45})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(fill_gradient(&s, id), before);
+}
+
+/// `paint.setFill` and `paint.editGradient` take a spread and a count for each kind of gradient
+/// that has ends; the params give them back, the native format keeps them, and a change is one
+/// undo step while an edit that changes nothing records none.
+#[test]
+fn a_gradient_takes_a_spread_and_a_count() {
+    use vectorcraft_color::GradientSpread;
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    for kind in ["linear", "radial", "conic", "diamond"] {
+        s.execute("paint.setFill", &json!({"gradient": {"kind": kind, "spread": "Reflect", "repeats": 4}})).unwrap();
+        let g = fill_gradient(&s, id);
+        assert_eq!((g.gradient.spread, g.gradient.repeats), (GradientSpread::Reflect, 4), "{kind}");
+        let params = vectorcraft_tools::params::gradient_params(&g);
+        assert_eq!((params["spread"].as_str(), params["repeats"].as_u64()), (Some("reflect"), Some(4)), "{kind}");
+        s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
+        assert_eq!(fill_gradient(&s, id).gradient.spread, GradientSpread::Pad, "a new gradient pads");
+        s.execute("paint.setFill", &json!({ "gradient": params })).unwrap();
+        assert_eq!(fill_gradient(&s, id).gradient, g.gradient, "{kind}");
+    }
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("paint.editGradient", &json!({"spread": "repeat", "repeats": 2})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "one step");
+    let g = fill_gradient(&s, id);
+    assert_eq!((g.gradient.spread, g.gradient.repeats), (GradientSpread::Repeat, 2));
+    s.execute("paint.editGradient", &json!({"spread": "repeat", "repeats": 2})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "nothing changed: no step");
+    s.execute("paint.editGradient", &json!({"spread": "pad"})).unwrap();
+    assert_eq!(fill_gradient(&s, id).gradient.repeats, 2, "Pad keeps the count for later");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(fill_gradient(&s, id), g);
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Paint::Gradient(saved) = back.node(id).unwrap().appearance.fill_paint() else { panic!("the gradient is lost") };
+    assert_eq!((saved.gradient.spread, saved.gradient.repeats), (GradientSpread::Repeat, 2));
+    // The params of a gradient that pads give back the count it keeps.
+    s.execute("paint.editGradient", &json!({"spread": "pad"})).unwrap();
+    let params = vectorcraft_tools::params::gradient_params(&fill_gradient(&s, id));
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
+    s.execute("paint.setFill", &json!({ "gradient": params })).unwrap();
+    assert_eq!((fill_gradient(&s, id).gradient.spread, fill_gradient(&s, id).gradient.repeats), (GradientSpread::Pad, 2), "{params}");
+}
+
+/// A spread or count a gradient can't take is an error, from every command that sets one, and the
+/// gradient stays as it was: an unknown spread, a count that is not a whole number from 1 to 100,
+/// and a spread other than pad on a freeform gradient.
+#[test]
+fn a_bad_spread_or_count_is_refused() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "radial", "spread": "repeat", "repeats": 3}})).unwrap();
+    let before = fill_gradient(&s, id);
+    let steps = s.doc().unwrap().history.undo.len();
+    for bad in [json!({"spread": "mirror"}), json!({"spread": 1}), json!({"spread": true})] {
+        let e = s.execute("paint.editGradient", &bad).unwrap_err().to_string();
+        assert!(e.contains("`spread` must be pad, repeat or reflect"), "{bad}: {e}");
+    }
+    for n in [json!(0), json!(-2), json!(1.5), json!(101), json!(1e9), json!("3"), json!(f64::MAX)] {
+        let e = s.execute("paint.editGradient", &json!({ "repeats": n })).unwrap_err().to_string();
+        assert!(e.contains("`repeats` must be a whole number from 1 to 100"), "{n}: {e}");
+        let e = s.execute("paint.setFill", &json!({"gradient": {"kind": "linear", "repeats": n}})).unwrap_err().to_string();
+        assert!(e.contains("`repeats`"), "{n}: {e}");
+    }
+    let freeform = json!({"kind": "freeform", "spread": "reflect"});
+    let e = s.execute("paint.editGradient", &freeform).unwrap_err().to_string();
+    assert!(e.contains("`spread` applies to linear, radial, conic and diamond gradients"), "{e}");
+    let e = s.execute("paint.setFill", &json!({ "gradient": freeform })).unwrap_err().to_string();
+    assert!(e.contains("`spread` applies to"), "{e}");
+    assert_eq!(fill_gradient(&s, id), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    // Pad on a freeform gradient is allowed (it has nothing to spread), and 100 is the most.
+    s.execute("paint.editGradient", &json!({"repeats": 100})).unwrap();
+    s.execute("paint.editGradient", &json!({"kind": "freeform", "spread": "pad"})).unwrap();
+    // A repeating gradient turned freeform: its params, which carry no spread, set it again.
+    s.execute("paint.editGradient", &json!({"kind": "radial", "spread": "reflect"})).unwrap();
+    s.execute("paint.editGradient", &json!({"kind": "freeform"})).unwrap();
+    let params = vectorcraft_tools::params::gradient_params(&fill_gradient(&s, id));
+    assert!(params.get("spread").is_none(), "{params}");
+    s.execute("paint.setFill", &json!({ "gradient": params })).unwrap();
+}
+
+/// A spread for a selected gradient applies while the gradient used last, the default, is a
+/// freeform one, which keeps no spread.
+#[test]
+fn a_spread_for_a_selected_gradient_leaves_a_freeform_default_alone() {
+    use vectorcraft_color::GradientSpread;
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
+    rect(&mut s, 200.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "freeform"}})).unwrap();
+    s.execute("paint.editGradient", &json!({"ids": [a.0], "spread": "repeat", "repeats": 3})).unwrap();
+    let g = fill_gradient(&s, a);
+    assert_eq!((g.gradient.spread, g.gradient.repeats), (GradientSpread::Repeat, 3));
+}
+
+/// A preset keeps its spread and count: saved from a gradient, applied to another object.
+#[test]
+fn a_gradient_preset_keeps_its_spread() {
+    use vectorcraft_color::GradientSpread;
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "conic", "spread": "reflect", "repeats": 5}})).unwrap();
+    s.execute("gradient.presets.save", &json!({"name": "Fan"})).unwrap();
+    let b = rect(&mut s, 200.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
+    s.execute("gradient.presets.apply", &json!({"name": "Fan"})).unwrap();
+    let g = fill_gradient(&s, b);
+    assert_eq!((g.gradient.kind, g.gradient.spread, g.gradient.repeats), (GradientKind::Conic, GradientSpread::Reflect, 5));
+    assert_eq!(fill_gradient(&s, a).gradient.repeats, 5);
+}
+
+/// A gradient set back to Pad keeps its count for later, and still matches a saved preset and a
+/// swatch of the same gradient; while it repeats, the spread tells them apart.
+#[test]
+fn a_padding_gradient_matches_whatever_count_it_keeps() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let ramp = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]});
+    s.execute("paint.setFill", &json!({ "gradient": ramp })).unwrap();
+    s.execute("gradient.presets.save", &json!({"name": "Plain"})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Plain", "paint": {"gradient": ramp}})).unwrap();
+    let unused = |s: &mut Session| s.execute("swatch.unused", &json!({})).unwrap()["names"].as_array().unwrap().contains(&json!("Plain"));
+    assert!(!unused(&mut s));
+    s.execute("paint.editGradient", &json!({"spread": "repeat", "repeats": 5})).unwrap();
+    assert_eq!(s.active_saved_gradient_preset(), None, "a repeating gradient is another ramp");
+    assert!(unused(&mut s), "nothing paints the swatch's gradient");
+    s.execute("paint.editGradient", &json!({"spread": "pad"})).unwrap();
+    assert_eq!(fill_gradient(&s, a).gradient.repeats, 5);
+    assert_eq!(s.active_saved_gradient_preset(), Some("Plain"));
+    assert!(!unused(&mut s), "the gradient paints as the swatch does");
 }

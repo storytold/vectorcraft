@@ -257,6 +257,9 @@ fn reshaped(src: &Node, n: &Node, doc: Option<&Document>) -> Node {
         if carry.moves(&m.appearance) {
             carry.apply(&mut m.appearance);
         }
+        // So do the raster effects of its fills and strokes, by `n`'s Transform effects
+        // ([`crate::follow_items`]).
+        crate::raster::follow_items_of(&mut m, &n.appearance.effects);
     }
     without_geometry_effects(&mut m);
     m
@@ -265,7 +268,7 @@ fn reshaped(src: &Node, n: &Node, doc: Option<&Document>) -> Node {
 fn without_geometry_effects(n: &mut Node) {
     if n.appearance.effects.iter().any(|e| crate::is_geometry(&e.id)) {
         let mut ap = (*n.appearance).clone();
-        ap.effects.retain(|e| !crate::is_geometry(&e.id));
+        ap.effects = crate::raster::without_geometry(&ap.effects);
         n.appearance = ap.into();
     }
 }
@@ -686,7 +689,7 @@ pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRul
 }
 
 /// A path node of `id` on `path` (filled under `rule`) painted by `ap`.
-fn shape_node(id: NodeId, path: PathData, rule: FillRule, ap: Appearance) -> Node {
+pub(crate) fn shape_node(id: NodeId, path: PathData, rule: FillRule, ap: Appearance) -> Node {
     let mut n = Node::path(id, path, ap);
     if let NodeKind::Path { rule: r, .. } = &mut n.kind {
         *r = rule;
@@ -794,7 +797,8 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
             carry.apply(&mut m.appearance);
         }
     }
-    m.appearance.effects.retain(|e| !is_pathfinder(&e.id) && !crate::is_geometry(&e.id));
+    m.appearance.effects = crate::raster::without_geometry(&m.appearance.effects);
+    m.appearance.effects.retain(|e| !is_pathfinder(&e.id));
     if paint {
         let shapes = member_shapes(doc, &m);
         let bounds = m.geometric_bounds();

@@ -207,6 +207,7 @@ antiAlias	Sharp	锐利
 	Asset Export Settings	资源导出设置
 	Assets	资源
 	Assign	指定
+	Assign Profile	指定配置文件
 	Assign Profile…	指定配置文件…
 	Assign:	指定：
 	Attach to Active Plane	附加到活动平面
@@ -645,6 +646,15 @@ antiAlias	Sharp	锐利
 	Created:	创建时间：
 	Crop	裁剪
 	Crop Image	裁剪图像
+	Image Tools	图像工具
+	Remove Background…	移除背景…
+	Remove Background	移除背景
+	Background	背景
+	Edge Color	边缘颜色
+	Picked Colors	选取的颜色
+	Corner Color	转角颜色
+	Contiguous	连续
+	Each Channel	每个通道
 	Edit Path	编辑路径
 	Mask	蒙版
 	Crop Marks	裁切标记
@@ -826,6 +836,17 @@ antiAlias	Sharp	锐利
 	The selected character's font is not available.	所选字符的字体不可用。
 	No alternates for the selected character.	所选字符没有替代字。
 	Double-click to replace	双击以替换
+	Select one character with the Type tool first.	请先用文字工具选择一个字符。
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} 是 {font} 的字形，不是所选文本所用字体（{text_font}）的字形。
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} 属于 {base}（U+{base_code}）{place}；您选择的是 {sel}（U+{code}）。
+	at the start of a word	位于词首
+	in the middle of a word	位于词中
+	at the end of a word	位于词尾
+	standing alone	单独出现时
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} 不是 {sel}（U+{code}）在其单词中所处位置的替代字。
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	双击以改为插入 {base}（U+{code}）：表现形式不会连接，字母会连接。
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	已插入 {base}（U+{code}）以代替表现形式：字体会按位置将其与相邻字符连接。
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	没有任何 OpenType 功能会在此处绘制该字形，因此它会替换该字符的字形，并且可能无法与相邻字符连接。
 	Double-click to insert	双击以插入
 	Double-click to rename	双击以重命名
 	Double-click to target the contents	双击以指定内容
@@ -1085,6 +1106,8 @@ antiAlias	Sharp	锐利
 	Extrude & Bevel…	突出与斜角…
 	3D (Classic)	3D (经典)
 	Extrude & Bevel (Classic)…	突出与斜角 (经典)…
+	Revolve (Classic)…	回转 (经典)…
+	Rotate (Classic)…	旋转 (经典)…
 	Surface	表面
 	Wireframe	线框
 	No Shading	无底纹
@@ -1394,6 +1417,14 @@ file-filter	Templates	模板
 	Hair Space	极细空格
 	Hand Tool	抓手工具
 	Hand-Drawn	手绘
+	Painted and Sketched	绘画与素描
+	Washed Blue	水洗蓝
+	Bristle Ochre	干刷土黄
+	Pastel Heather	粉彩淡紫
+	Charcoal Shade	炭笔阴影
+	Ink Contour	墨线轮廓
+	Wet Ink	湿墨
+	Fine Pen	细笔
 	Handles	手柄
 	Hard Light	强光
 	Hard Mix	实色混合
@@ -1613,6 +1644,7 @@ file-filter	Templates	模板
 	Include Hidden Layers	包含隐藏图层
 	Include Linked Files	包含链接文件
 	Include Metadata	包含元数据
+	Include Variable Data	包含变量数据
 	Include non-printing layers	包含非打印图层
 	Write pages longer than 200 in at full size in points	以实际尺寸（点）写入长于 200 in 的页面
 	Include SVG Code	包含 SVG 代码
@@ -1884,6 +1916,8 @@ file-filter	Templates	模板
 	Metallic Gradients	金属渐变
 	Meters	米
 	Method:	方法：
+	Pad	延伸
+	Repeats	重复次数
 	Millimeters	毫米
 	Minify	压缩
 	Minimal	最少
@@ -1936,6 +1970,7 @@ file-filter	Templates	模板
 	Move Slices	移动切片
 	Move Spine Point	移动脊线点
 	Reshape Spine Segment	整形脊线线段
+	Blend Easing	渐变缓动
 @msg	select a blend or give `id`	请选择一个混合对象，或给出 `id`
 @msg	not a blend	不是混合对象
 @msg	the blend has no spine	混合对象没有脊线
@@ -2040,6 +2075,7 @@ file-filter	Templates	模板
 	Art Brush	艺术画笔
 	Bristle Brush	鬃毛画笔
 	Pattern Brush	图案画笔
+	missing from the Brushes panel	“画笔”面板中没有
 	Select art to make a scatter, art or pattern brush.	选择图稿以创建散布画笔、艺术画笔或图案画笔。
 	Brush Art	画笔图稿
 	New Calligraphic Brush	新建书法画笔
@@ -2235,12 +2271,21 @@ file-filter	Templates	模板
 	Optical	视觉
 	Optical Margin Alignment	视觉边界对齐
 	Dynamic Text	动态文本
+	Dynamic Text Presets	动态文本预设
+	Arch	拱形
+@msg	select point type or type on a path	请选择点文字或路径文字
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	串接文本中的路径文字不能使用动态文本：{frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	开放路径或复合路径上的路径文字无法在顶部或底部居中：{open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	路径没有长度或没有高度时，其路径文字无法居中：{flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	串接文本中的路径文字无法在顶部或底部居中：{frames}
+@msg	select type on a closed path	请选择闭合路径上的路径文字
 	Optimize for fast web view	优化快速 Web 查看
 	Optimized	优化
 	Options	选项
 	Options:	选项：
 	Options…	选项…
+	Organic Fades	自然渐隐
+	Holographic	全息
 	or more spaces with a tab	或多个空格加一个制表符
 	Order:	顺序：
 	Ordinals	序数字
@@ -2433,6 +2478,7 @@ diagnostics	ui	界面
 	Presets:	预设：
 	Press 	按 
 	Preview	预览
+	Preview:	预览：
 	Preview in Browser	在浏览器中预览
 	Preview in Browser needs the desktop app (the web downloads files instead)	在浏览器中预览需要桌面版应用程序 (网页版会改为下载文件)
 	Preview Mode	预览模式
@@ -2477,6 +2523,8 @@ font-script	Japanese	汉字
 	Proof Setup	校样设置
 	Properties	属性
 	Proportional Metrics	比例度量
+	Insert Aki Left	在前方插入空白
+	Insert Aki Right	在后方插入空白
 	Character Direction	字符方向
 	Digits	数字
 	Arabic	阿拉伯数字
@@ -2516,6 +2564,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Radial Glows	径向光晕
 	Radial Gradient	径向渐变
 	Conic Gradient	圆锥渐变
+	Diamond Gradient	菱形渐变
 	Radius 1	半径 1
 	Radius 2	半径 2
 	Radius1	半径1
@@ -2528,6 +2577,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Range:	范围：
 	Raster Effects	栅格效果
 	Raster File Format:	栅格文件格式：
+	Include Placed Images	包含置入的图像
+	Include Fill Hatches	包含填色的图案填充
 	Raster Sample Size:	栅格取样大小：
 	Raster/Vector Balance:	栅格/矢量平衡：
 	Rasterize	栅格化
@@ -2707,6 +2758,10 @@ digits	Malayalam	马拉雅拉姆数字
 	Replace Font	替换字体
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	将其替换为其他文件，或忽略：其图像继续显示随文档保存的预览。
 	Replace Spine	替换脊线
+	Create Spine	创建脊线
+	Create Spine:	创建脊线：
+	Always	始终
+	Never	从不
 	Replace Symbol	替换符号
 	Reset Transformation	重置变换
 	Replace With Font	替换为字体
@@ -2735,9 +2790,15 @@ digits	Malayalam	马拉雅拉姆数字
 	Search Preferences	搜索首选项
 	No settings found	未找到设置
 	Reset Profiles	重置配置文件
+	Arrowheads	箭头
+	Edit Arrowheads	编辑箭头
+	Edit Arrowheads…	编辑箭头…
+	Reload Arrowheads	重新载入箭头
 	Reset Rotate View	重置旋转视图
 	Rotate View to Selection	按所选对象旋转视图
 	Reset the rows to the artwork's colors	将各行重置为图稿的颜色
+	Color Theme Picker	色彩主题拾取器
+	Click or drag across the art to pick its colors; Shift adds more	单击或拖过图稿以拾取其颜色；按住 Shift 可添加更多
 	Reset to Default	恢复默认
 	Reset to White, Black	重置为白、黑
 	Reset with Mesh	以网格重置
@@ -2784,12 +2845,17 @@ digits	Malayalam	马拉雅拉姆数字
 	Rise…	上升…
 	Roman Baseline	罗马基线
 	Roman Hanging Punctuation	西文悬挂标点
+	Korean Line Break Anywhere	韩文任意位置换行
+	Bunri-Kinshi	分离禁止
+	East Asian Composition Settings	东亚排版设置
+	Korean Composition Settings	韩文排版设置
 	Rotate	旋转
 	Rotate 90° CW	顺时针旋转 90°
 	Rotate Tool	旋转工具
 	Rotate View Tool	旋转视图工具
 	Trackpad Gesture to Rotate View	使用触控板手势旋转视图
 	Hold a Tool Shortcut to Use the Tool Temporarily	按住工具快捷键以临时使用该工具
+	Show Bounding Box While Moving and Drawing	移动和绘制时显示定界框
 	Rotate…	旋转…
 	Rotation	旋转
 	Roughen…	粗糙效果…
@@ -3035,6 +3101,15 @@ digits	Malayalam	马拉雅拉姆数字
 	Stun Pulse	眩晕
 	Stealth Fade	隐身
 	Shield Buff	护盾
+	Textures	纹理
+	Fine Grain	细颗粒
+	Canvas Weave	帆布纹
+	Burlap Sack	麻布袋
+	Cracked Glaze	裂纹釉
+	Mosaic Floor	马赛克地面
+	Quilted Squares	绗缝方格
+	Leaded Glass	铅条玻璃
+	Damp Paper	湿纸
 	Shape	形状
 	Shape Builder	形状生成器
 	Shape Builder Regions	形状生成器区域
@@ -3095,6 +3170,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Show Modified	显示已修改
 	Show Note	显示注解
 	Show Options	显示选项
+	Show Recent Colors	显示最近使用的颜色
+	Toggle RGB Percent	切换 RGB 百分比显示
 	Show Original Path	显示原始路径
 	Open this dialog with these settings next time	下次以这些设置打开此对话框
 	Auto-Simplify	自动简化
@@ -3234,6 +3311,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Split Path	分割路径
 	spot	专色
 	Spot Color	专色
+	Spot Color Objects	使用专色的对象
+	Pattern Objects	使用图案的对象
+	Gradient Objects	使用渐变的对象
 	Spot Colors	专色
 	Spot Colors…	专色…
 	Spread:	扩散：
@@ -3399,6 +3479,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Scale at Center	从中心缩放
 	Up/Down:	上/下：
 	Left/Right:	左/右：
+	Tate-chu-yoko Up/Down	纵中横上/下
+	Tate-chu-yoko Left/Right	纵中横左/右
 	Temperature	色温
 	Temperature/Tint…	色温/色调…
 	Template	模板
@@ -3467,6 +3549,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Toolbar: Single/Double Column	工具列：单列/双列
 	Toolbar: Add Tool	工具栏：添加工具
 	Toolbar: Remove Tool	工具栏：移除工具
+	Add Tool…	添加工具…
+	Remove Tool	移除工具
 	Toolbar: Reset	工具栏：重置
 	Toolbars	工具栏
 	Tools	工具
@@ -3540,6 +3624,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Type on a Path	路径文字
 	Type on a Path Options	路径文字选项
 	Type on a Path Options…	路径文字选项…
+	Center on Top	在顶部居中
+	Center on Bottom	在底部居中
 	Type on a Path Tool	路径文字工具
 	Type Orientation	文字方向
 	Type stays text, and every stroke is a line with its lineweight and dashes.	文字维持为文字，每个描边都是带有线宽与虚线的线条。
@@ -3749,6 +3835,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Windows	Windows
 	Working CMYK	工作 CMYK
 	Working CMYK (don't tag)	工作 CMYK (不加标签)
+	Working RGB (don't tag)	工作 RGB (不加标签)
 	Workspace	工作区
 	Workspace {i}	工作区 {i}
 	Wrinkle Tool	褶皱工具
@@ -4072,13 +4159,14 @@ imageTrace	Outline	轮廓
 @msg	`preserve` must be an object	`preserve` 必须是对象
 @msg	`globalAdjust` must be an object	`globalAdjust` 必须是对象
 @msg	`stops` must be an array	`stops` 必须是数组
+@msg	`{key}` must be an array	`{key}` 必须是数组
 @msg	`{k}` must be [x, y]	`{k}` 必须是 [x, y]
 @msg	a gradient needs at least two stops	渐变至少需要两个色标
 @msg	give both `start` and `end` [x, y] (or neither)	请同时给出 `start` 和 `end` [x, y] (或都不给出)
 @msg	stop {i} needs `offset`	色标 {i} 需要 `offset`
 @msg	stop {i} needs a valid `color`	色标 {i} 需要有效的 `color`
 @msg	stop {i}: `{k}` must be a number	色标 {i}：`{k}` 必须是数字
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	未知的渐变类型 `{k}` (linear、radial、conic、freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	未知的渐变类型 `{k}` (linear、radial、conic、diamond、freeform)
 @msg	the art could not be sampled	无法对图稿取样
 @msg	the art is too light for any dots	图稿太浅，无法生成任何网点
 @msg	the document has no symbols	文档中没有符号
@@ -4170,6 +4258,7 @@ imageTrace	Outline	轮廓
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` 必须是 `auto` 或语言代码，例如 `en` 或 `zh-hant`
 @msg	`{key}` must be a #rrggbb colour	`{key}` 必须是 #rrggbb 颜色
 @msg	`{key}` must be a string	`{key}` 必须是字符串
+@msg	`{key}` must be a profile name or null	`{key}` 必须是配置文件名称或 null
 @msg	`{key}` must be a whole number	`{key}` 必须是整数
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` 必须是介于 {min} 和 {max} 之间的整数 (实际为 {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` 必须介于 {min} 和 {max} 之间 (实际为 {x})
@@ -4238,6 +4327,7 @@ imageTrace	Outline	轮廓
 @msg	nothing to distort	没有可扭曲的内容
 @msg	unknown option `{path}.{k}`	未知选项 `{path}.{k}`
 @msg	command `{0}` is not available right now: {1}	命令 `{0}` 当前不可用：{1}
+@msg	command `{id}` is not available right now	命令 `{id}` 当前不可用
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	`{cmd}` 中出现内部错误：{msg} (文档保持原样；请报告此错误)
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` 的参数无效：{msg}
 @msg	no active document	没有活动文档
@@ -4348,6 +4438,8 @@ imageTrace	Outline	轮廓
 @msg	the image's pixels don't match its size	图像的像素与其尺寸不符
 @msg	{bpp}-bit bitmaps can't be read	无法读取 {bpp} 位位图
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 文件
+@msg	not an HP-GL file	不是 HP-GL 文件
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 必须是由 1 到 255 个 #rrggbb 格式颜色组成的数组
 @msg	its layers use {_1}, which aren't read yet	其图层使用了 {_1}，尚不能读取
 @msg	the EMF header is damaged	EMF 文件头已损坏
 @msg	damaged	已损坏
@@ -4364,6 +4456,7 @@ imageTrace	Outline	轮廓
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：它以 UserUnit {unit} 写入，因此忽略 UserUnit 的应用会将其显示为缩小相应倍数
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：{label} 页面不带 UserUnit，以点为单位写入，遵守上限的应用会将页面裁切为 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 没有 UserUnit，而长于 14,400 pt (200 in) 的页面需要它来保持尺寸：文件将以 PDF 1.6 写入
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 没有 UserUnit，而长于 14,400 pt (200 in) 的页面需要它来保持在 PDF/A-2 的 14,400 单位页面上限之内：文件将以 PDF 1.6 写入
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	画板 {n} 的页面为 {size}，对 PDF 3 至 14,400 单位的页面边长而言过长过窄：以 UserUnit {unit} 写入，使短边保持 3 单位以上，遵守上限的应用会把长边裁到 14,400 单位
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label} 文件的实数最大为 {max}，而画板 {n} 的页面长 {side} pt，需要更大的数：请选择不带 PDF/X 标准的 PDF 1.6 或更高版本，或使用更小的画板
 @msg	page {0} does not exist (the PDF has {1})	页面 {0} 不存在 (该 PDF 有 {1} 页)
@@ -4420,6 +4513,8 @@ imageTrace	Outline	轮廓
 @msg	the Smooth slider is not open	平滑滑块未打开
 @msg	the screen color sampler is already open	屏幕取色器已打开
 @msg	this system has no screen color sampler	此系统没有屏幕取色器
+@msg	the screen color sampler did not answer	屏幕取色器没有响应
+@msg	the screen color sampler failed	屏幕取色器出错
 @msg	Corners edits the corners of a path	转角用于编辑路径的转角
 @msg	give corners of the path: anchors where its sides meet at an angle	请给出路径的转角：其各边以一定角度相交处的锚点
 @msg	select one path, or give its `id`	请选择一条路径，或给出其 `id`
@@ -4501,6 +4596,7 @@ imageTrace	Outline	轮廓
 @msg	give only one of onto, below and above	onto、below 和 above 只能给出一个
 @msg	column must be true or a number from 1	column 必须是 true 或从 1 开始的数字
 @msg	unknown panel `{raw}`	未知面板 `{raw}`
+@msg	panels can't be shown in Presentation Mode	演示模式下无法显示面板
 @msg	x and y must both be numbers	x 和 y 都必须是数字
 @msg	Downloaded {what}	已下载 {what}
 @msg	Imported {what}: {_1}	已导入 {what}：{_1}
@@ -4552,6 +4648,14 @@ imageTrace	Outline	轮廓
 @msg	no such view	没有此视图
 @msg	printing isn't available here	此处无法打印
 @msg	select an image	请选择一个图像
+@msg	`background` must be edges, corners or colors	`background` 必须为 edges、corners 或 colors
+@msg	`match` must be distance or channels	`match` 必须为 distance 或 channels
+@msg	`{key}` must be from 0 to 100	`{key}` 必须介于 0 到 100 之间
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` 必须列出 1 到 16 种颜色，每种写为十六进制（#rrggbb 或 #rgb）或 black、white、red、green、blue
+@msg	the linked image shows its preview: embed or relink it first	链接图像显示的是预览：请先嵌入或重新链接
+@msg	a CMYK image has no transparency to set	CMYK 图像没有可设置的透明度
+@msg	every pixel matches the background: no image would be left	每个像素都与背景匹配：不会留下任何图像
+@msg	an image of {w} × {h} pixels is too large to change	{w} × {h} 像素的图像过大，无法更改
 @msg	the document has no artboards	文档没有画板
 @msg	tool (a tool id) is required	需要 tool (工具 id)
 @msg	unknown tool `{t}`	未知工具 `{t}`
@@ -4605,6 +4709,85 @@ imageTrace	Outline	轮廓
 @msg	the script's run is no longer available	脚本运行已不可用
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	失败的命令更改了无法恢复的撤销步骤，因此脚本已停止
 @msg	a recovery copy could not be written, so the script was not run	无法写入恢复副本，因此未运行脚本
+@msg	Script file access denied	脚本文件访问被拒绝
+@msg	Script file exceeds 8 MiB	脚本文件超过 8 MiB
+@msg	Script file is not open	脚本文件未打开
+@msg	Script file cannot be decoded	无法解码脚本文件
+@msg	Script file is not a regular file	脚本文件不是常规文件
+@msg	Script file does not exist	脚本文件不存在
+@msg	Script file could not be read	无法读取脚本文件
+@msg	Script folder has more than 2,048 entries	脚本文件夹的条目超过 2,048 个
+@msg	Script file open mode must be r, w, e or a	脚本文件的打开模式必须是 r、w、e 或 a
+@msg	Script file writing is not available	脚本文件写入不可用
+@msg	Script file dialogs are not available	脚本文件对话框不可用
+@msg	Script files cannot be opened in another application	脚本文件无法在其他应用程序中打开
+@msg	Script file access is unavailable on the web	网页版无法访问脚本文件
+@msg	Script has 256 files open	脚本已打开 256 个文件
+@msg	Script file path exceeds 32,767 characters	脚本文件路径超过 32,767 个字符
+@msg	Script folder mask takes too many steps to match	脚本文件夹掩码匹配所需步骤过多
+@msg	the script opened more file data than one run may open (32 MiB)	脚本打开的文件数据超过了单次运行可打开的上限（32 MiB）
+@msg	File.seek: takes a position and a mode	File.seek：接受一个位置和一个模式
+@msg	vc.run: give a command id, as a string	vc.run：请以字符串形式提供命令 ID
+@msg	vc.run: takes a command id and an object of parameters	vc.run：接受一个命令 ID 和一个参数对象
+@msg	vc.run: the parameters must be an object	vc.run：参数必须是对象
+@msg	vc.run: the result{place} is too large for a script	vc.run：结果{place}对脚本来说过大
+@msg	$.evalFile requires a file path	$.evalFile 需要文件路径
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile：超时必须是 0 或更大的有限毫秒数
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile：接受一个文件路径和一个超时值
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（抛出）
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}：第 {line} 行，第 {column} 列：{e}（抛出）
+@msg	{name}: {e} (thrown)	{name}：{e}（抛出）
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（限制）
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}：第 {line} 行，第 {column} 列：{e}（限制）
+@msg	{name}: {e} (limit)	{name}：{e}（限制）
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（语法错误）
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}：第 {line} 行，第 {column} 列：{e}（语法错误）
+@msg	{name}: {e} (syntax)	{name}：{e}（语法错误）
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（已停止）
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}：第 {line} 行，第 {column} 列：{e}（已停止）
+@msg	{name}: {e} (stopped)	{name}：{e}（已停止）
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（内部错误）
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}：第 {line} 行，第 {column} 列：{e}（内部错误）
+@msg	{name}: {e} (internal)	{name}：{e}（内部错误）
+@msg	{e} (these files stay written: {paths})	{e}（这些文件保持已写入状态：{paths}）
+@msg	$.{name}: give a name, as a string	$.{name}：请以字符串形式提供名称
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale：请提供 "en" 或 "de_DE" 之类的区域设置，或用 null 表示界面的区域设置
+@msg	$.localize: give true or false	$.localize：请提供 true 或 false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags：只能设置 512（开启本地化）或 0
+@msg	$.flags: give a number	$.flags：请提供一个数字
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding：此处脚本只读写 UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding：请以字符串形式提供编码名称
+@msg	$.memCache: the memory cache size cannot be set	$.memCache：无法设置内存缓存大小
+@msg	$.setenv: give a value, as a string	$.setenv：请以字符串形式提供值
+@msg	$.setenv: only {_1} can be set	$.setenv：只能设置 {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv：值最多包含 {MAX_ENV_BYTES} 个字母、数字和 _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep：请提供 0 到 {MAX_SLEEP_MS} 之间的毫秒数
+@msg	$.sleep: give a number of milliseconds	$.sleep：请提供毫秒数
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep：运行不能在内置函数的回调、getter、转换或 $.evalFile 运行的文件中等待；请从脚本自身的代码中调用
+@msg	$.bp: scripts here have no debugger	$.bp：此处脚本没有调试器
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker：脚本目前还不能显示对话框
+@msg	{name}: give a message	{name}：请提供消息
+@msg	{name}: give the text the field starts with	{name}：请提供字段的初始文本
+@msg	{name}: the message is longer than 16 KiB	{name}：消息超过 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}：标题超过 256 字节
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}：字段的初始文本超过 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}：对话框不能在内置函数的回调、getter、转换或 $.evalFile 运行的文件中打开；请从脚本自身的代码中调用
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}：`answers` 中的下一个回答是给 {_1} 的，而不是给 {name} 的
+@msg	{name}: `answers` has no answer left for this dialog	{name}：`answers` 中已没有此对话框的回答
+@msg	vc.document{place} is too large for a script	vc.document{place}对脚本来说过大
+@msg	vc.log: the log of this run is full	vc.log：本次运行的日志已满
+@msg	this function's script run has ended	此函数的脚本运行已结束
+@msg	the script made more host calls than one run may make	脚本进行的主机调用超过了一次运行允许的数量
+@msg	the script passed more data to and from commands than one run may pass	脚本与命令之间传递的数据超过了一次运行允许的数量
+@msg	the script added more objects and data to the documents than one run may add	脚本向文档添加的对象和数据超过了一次运行允许的数量
+@msg	{what}: the object is not a File or a Folder	{what}：该对象既不是 File 也不是 Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}：数量必须是 0 或更大的有限数
+@msg	File.seek: the position must be a finite number	File.seek：位置必须是有限数
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek：模式必须是 0, 1 或 2
+@msg	script file is compiled: {value}	脚本文件已编译：{value}
+@msg	`name` must be the name of a script engine	`name` 必须是脚本引擎的名称
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	主脚本引擎在每次运行时都是新的，从不保留，因此无法丢弃
+@msg	there is no script engine named {name}	没有名为 {name} 的脚本引擎
 @msg	Running a script	正在运行脚本
 @msg	Copied the script report	已复制脚本报告
 @msg	Exported {path}	已导出 {path}
@@ -4822,7 +5005,7 @@ imageTrace	Outline	轮廓
 @msg	span must be "object" or "selection", got {v}	span 必须是 "object" 或 "selection"，实际为 {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" 放置的是 `gradient`，而不是色板
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" 放置渐变：请给出 `gradient`
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" 放置线性、径向或圆锥渐变，而不是任意形状渐变
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" 放置线性、径向、圆锥或菱形渐变，而不是任意形状渐变
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" 自行放置渐变：请省略 `start` 和 `end` (它们已按文档坐标放置渐变)
 @msg	Batch: {count} processed	批处理：已处理 {count} 个
 @msg	Batch: {count} processed, {failed} failed	批处理：已处理 {count} 个，失败 {failed} 个
@@ -5598,6 +5781,11 @@ lighting	Light	光源
 	Softness	柔和度
 	Ambient Light	环境光
 	Light behind the object	光源位于对象后方
+	Shadows	阴影
+	Distance from Object	与对象的距离
+	Shadow Bounds	阴影边界
+	Behind Object	对象后方
+	Below Object	对象下方
 	3D Lighting Preset	3D 光照预设
 	Standard	标准
 	Diffuse	漫射
@@ -5809,7 +5997,9 @@ lighting	Light	光源
 	Ruby…	注音…
 	Ruby	注音
 	Geometric Guides	几何参考线
+	Optical Effects	光学效果
 	Geometric Patterns	几何图案
+	Grit Textures	颗粒纹理
 	Ease In	缓入
 	Ease Out	缓出
 	Ease In Out	缓入缓出
@@ -5851,6 +6041,9 @@ axis	Y Axis	Y 轴
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` 适用于渐变填色 (paint.setFill)
 @msg	`dither` must be true or false	`dither` 必须是 true 或 false
 @msg	`method` must be classic or perceptual	`method` 必须是 classic 或 perceptual
+@msg	`spread` must be pad, repeat or reflect	`spread` 必须是 pad、repeat 或 reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 必须是 1 到 {MAX_REPEATS} 之间的整数
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` 适用于线性、径向、圆锥和菱形渐变
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	要安装需要大量计算预算的“{name}”吗？
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	每次运行最多可能需要 {minutes} 分钟，并可完成其他插件所允许工作量的 {times} 倍。它在后台运行，可以随时取消。
@@ -5863,12 +6056,118 @@ axis	Y Axis	Y 轴
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	实时效果在绘制文档时运行，因此不能为 `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	导出增效工具始终使用导出的预算：请省略 `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”需要大量计算预算（每次运行最多 {minutes} 分钟，指令数为通常的 {times} 倍）：需要有人在桌面应用中批准，或在以 --allow-plugin-grants 启动的会话中传入 `allowHeavy: true`
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	`name` 必须是 1-64 个可打印字符
+@msg	`version`, `description` or `author` is too long	`version`、`description` 或 `author` 太长
+@msg	`warnings` must be a list of strings	`warnings` 必须是字符串列表
+@msg	`{k}` must be one of {_1}	`{k}` 必须是 {_1} 之一
+@msg	`{k}` must be {what}	`{k}` 必须是 {what}
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	导出增效工具声明 1 到 {MAX_EXTENSIONS} 个 `extensions`
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	组外最多 {MAX_UNGROUPED} 个参数：请为其余参数指定 `group`
+@msg	can't encode the input	无法编码输入
+@msg	expected {"dataBase64"}	应为 {"dataBase64"}
+@msg	expected {"objects"}	应为 {"objects"}
+@msg	export `{name}`: {e}	模块导出 `{name}`：{e}
+@msg	extension {e} is listed twice	扩展名 {e} 列出了两次
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	扩展名 {e}：请使用 1-16 个小写字母和数字，不带点
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	无效的 ID {_1}：请使用 1-64 个 A-Z a-z 0-9 . _ - 中的字符
+@msg	invalid parameter name {k}	无效的参数名称 {k}
+@msg	manifest is not UTF-8	清单不是 UTF-8 编码
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	清单太长（上限 {MAX_MANIFEST_BYTES} 字节）
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	清单为 {_1} 字节（上限 {MAX_MANIFEST_BYTES}）
+@msg	module is {_1} bytes (limit {_2})	模块为 {_1} 字节（上限 {_2}）
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	需要批准：它请求 {0}，用户单独安装它时授予这些权限
+@msg	not JSON: {e}	不是 JSON：{e}
+@msg	not a WebAssembly binary (missing \0asm header)	不是 WebAssembly 二进制文件（缺少 \0asm 头）
+@msg	parameter `{k}`: {what}	参数 `{k}`：{what}
+@msg	parameter `{name}`: {what}	参数 `{name}`：{what}
+@msg	plug-in parameters must be a JSON object	增效工具参数必须是 JSON 对象
+@msg	the module must export its linear memory as `memory`	模块必须将其线性内存导出为 `memory`
+@msg	the objects to change are no longer in the document	要更改的对象已不在文档中
+@msg	the runtime panicked	运行时崩溃
+@msg	unexpected host trap	宿主发生意外的 trap
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version 返回了 {v}；此宿主实现的是版本 {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc 返回了 0（内存不足）
+@msg	vc_alloc returned a block outside memory	vc_alloc 返回了内存之外的块
+@msg	vc_run returned error code {packed}	vc_run 返回了错误代码 {packed}
+@msg	{_1} is not a file	{_1} 不是文件
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} 为 {_2} 字节（上限 {_3}）
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} 个对象（上限 {MAX_OBJECTS}）
+@msg	{at}: {msg}	{at}：{msg}
+@msg	{what} points outside memory	{what} 指向内存之外
+@msg	`angle` must be a number	`angle` 必须是数字
+@msg	`aspect` must be from 0.01 to 100	`aspect` 必须在 0.01 到 100 之间
+@msg	`cap` must be "butt", "round" or "square"	`cap` 必须是 "butt"、"round" 或 "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` 必须是 "nonzero" 或 "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` 必须是不超过 {MAX_HELP_URL} 字节的 https:// 地址
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` 必须是 1-{MAX_HELP} 个可打印字符
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` 必须是 1-{MAX_EFFECT_ID} 字节的效果 ID
+@msg	`id` must be the id of an input object	`id` 必须是某个输入对象的 ID
+@msg	`join` must be "miter", "round" or "bevel"	`join` 必须是 "miter"、"round" 或 "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` 和 `group` 必须是 1-{MAX_LABEL} 个可打印字符
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` 必须是 1-{MAX_TEXT}，且默认值不能更长
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` 和 `maxItems` 必须是 0-{MAX_LIST}，`maxItems` 至少为 1，且默认值的项数在此范围内
+@msg	`name` must be a string	`name` 必须是字符串
+@msg	`opacity` must be a number	`opacity` 必须是数字
+@msg	`type` must be "path" or "compound"	`type` 必须是 "path" 或 "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` 必须是 1-{MAX_UNIT} 个可打印字符
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` 必须为 `{other}` 列出 1 到 {MAX_CONDITION_VALUES} 个值
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` 指定了 `{other}`，但它不是在此参数之前声明的参数
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` 最多指定 {MAX_CONDITIONS} 个参数
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` 接受 `{other}` 的值，该参数须为复选框或选项
+@msg	`visible` must be true or false	`visible` 必须是 true 或 false
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` 必须是 {_1} 到 {_2} 之间的数字
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` 必须是最多 {MAX_ITEMS} 项的数组
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	颜色默认值必须是颜色对象或 "#3a7bd5" 这样的十六进制字符串
+@msg	a color object or a hex string such as "#3a7bd5"	颜色对象或 "#3a7bd5" 这样的十六进制字符串
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	任意形状渐变最多包含 {MAX_ITEMS} 个点和线
+@msg	a freeform gradient line names a point it doesn't have	任意形状渐变的一条线指定了渐变中没有的点
+@msg	a gradient needs 1-{MAX_ITEMS} stops	渐变需要 1-{MAX_ITEMS} 个色标
+@msg	a list of numbers	数字列表
+@msg	a list of {min_items} to {max_items} numbers	包含 {min_items} 到 {max_items} 个数字的列表
+@msg	a new object needs a `path`	新对象需要 `path`
+@msg	a number	数字
+@msg	a painted live effect returns only `objects`	绘制型实时效果只返回 `objects`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	绘制型实时效果的片段只有 `path`、`fillRule`、`fills` 和 `strokes`
+@msg	a read-only object was left out	漏掉了一个只读对象
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	漏掉了一个只读对象：请以单独的 {"id"} 或原样返回它
+@msg	a string	字符串
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	描边只有 `paint`、`width`、`join`、`cap` 和 `miterLimit`
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	描边必须是 {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} 形式
+@msg	an effect must be {"id", "params"?, "visible"?}	效果必须是 {"id", "params"?, "visible"?} 形式
+@msg	an effect on a fill returns only `fills`	填色上的效果只返回 `fills`
+@msg	an effect on a stroke returns only `strokes`	描边上的效果只返回 `strokes`
+@msg	an object must be a JSON object	对象必须是 JSON 对象
+@msg	bad range	范围无效
+@msg	choices must be 1-64 non-empty, printable strings	选项必须是 1-64 个非空的可打印字符串
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	坐标超出范围（上限 ±{MAX_COORD} pt）
+@msg	default is not one of the options	默认值不是选项之一
+@msg	each piece needs a `path`	每个片段都需要 `path`
+@msg	is listed twice	列出了两次
+@msg	pattern transform out of range	图案变换超出范围
+@msg	read-only field '{field}' changed	只读字段 '{field}' 已更改
+@msg	stops must be in order of `offset`	色标必须按 `offset` 排序
+@msg	the document has no pattern {pattern}	文档中没有图案 {pattern}
+@msg	the document has no swatch {n}	文档中没有色板 {n}
+@msg	the output	输出
+@msg	the path has no anchor points	路径没有锚点
+@msg	too many anchor points (limit {MAX_ANCHORS})	锚点过多（上限 {MAX_ANCHORS}）
+@msg	true or false	true 或 false
+@msg	unknown key `{k}`; the keys here are {_1}	未知键 `{k}`；此处可用的键：{_1}
+@msg	{_1} is listed twice	{_1} 列出了两次
+@msg	{_1} is not the id of an input object	{_1} 不是输入对象的 ID
+@msg	{_1} is read-only	{_1} 为只读
+@msg	{what} must be from {lo} to {hi}	{what} 必须在 {lo} 到 {hi} 之间
+@msg	a color component	颜色分量
+@msg	a plate	印版
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	要安装需要这些权限的“{name}”吗？
 	ID: {id}	ID：{id}
 	Version: {version}	版本：{version}
 	Install “{name}” in place of the plug-in with the same ID?	要安装“{name}”来替换具有相同 ID 的插件吗？
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	此文件不是之前以此 ID 安装的插件。它将获得为该 ID 保存的设置和缓存。
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	自动化请求安装此增效工具。要安装它，请自行选择“对象 › 增效工具 › 安装增效工具…”。
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	自动化请求安装此增效工具。要安装它，请自行选择“对象 › 增效工具 › 安装增效工具…”。
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}”与 ID 为 {_1} 的插件是不同的模块，并会获得为其保存的设置和缓存：请在用户同意后使用 `replace: true` 安装
 	File SHA-256: {hash}	文件 SHA-256：{hash}
 	Read the objects it is given	读取交给它的对象
@@ -5914,6 +6213,11 @@ axis	Y Axis	Y 轴
 @msg	`inputs` needs the permission `doc.read`	`inputs` 需要权限 `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	内存预算（对象 {_1} 需要 {size} 字节的输入，剩余 {left}）
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	对象预算（超过 {MAX_OBJECTS} 个只读对象）
+@msg	instruction budget	指令预算
+@msg	time budget	时间预算
+@msg	memory budget (the selection is too large to hand over)	内存预算（所选内容太大，无法传递）
+@msg	output size ({what} is {len} bytes, limit {max})	输出大小（{what} 为 {len} 字节，上限 {max}）
+@msg	the plug-in's grant can't be removed from the plug-in store	无法从增效工具存储中移除该增效工具的授权
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	权限 `{shown}` 保留给以后的增效工具 API；此主机不授予该权限
 @msg	unknown permission `{shown}`	未知权限 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}”需要权限 {asked}：需要有人在桌面应用中批准，或在以 --allow-plugin-grants 启动的会话中传入 `grant`
@@ -5926,6 +6230,12 @@ axis	Y Axis	Y 轴
 @msg	command {name}: `label` must be 1-64 printable characters	命令 {name}：`label` 必须是 1-64 个可打印字符
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	命令 {name}：请使用由 a-z 0-9 _ 组成、以字母开头的 1-{MAX_COMMAND_ID} 个字符的 ID
 @msg	command {name}: {e}	命令 {name}：{e}
+@msg	manifest: {e}	清单：{e}
+@msg	manifest: {e} at line {line} column {column}	清单：{e}（第 {line} 行，第 {column} 列）
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` 必须是命令列表，每个命令都有 `id` 和 `label`
+@msg	command {name} must be an object with an `id` and a `label`	命令 {name} 必须是包含 `id` 和 `label` 的对象
+@msg	missing field `{key}`	缺少字段 `{key}`
+@msg	duplicate field `{key}`	字段 `{key}` 重复
 @msg	only a filter or a live effect declares `commands`	只有滤镜或实时效果才能声明 `commands`
 @msg	“{name}” › {label}: {e}	“{name}” › {label}：{e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	模块的 SHA-256 与 `hash` 给出的不符：未安装任何内容
@@ -5950,6 +6260,16 @@ axis	Y Axis	Y 轴
 @msg	message must be text	message 必须是文本
 @msg	allowContinue must be true or false	allowContinue 必须是 true 或 false
 @msg	Batch cannot play an action with a stop	批处理无法播放含有停止的动作
+	Insert Menu Item…	插入菜单项…
+	Insert Menu Item	插入菜单项
+	Menu Item:	菜单项：
+	No menu item matches.	没有匹配的菜单项。
+	Several menu items match. Choose one from the list.	有多个菜单项匹配。请从列表中选择一个。
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	未列出会打开对话框的项目，以及“文件”“窗口”和“帮助”菜单中的项目。
+@msg	command must be text	command 必须是文本
+@msg	no menu item that can be inserted runs this command	没有可插入的菜单项运行此命令
+@msg	the action already has 10,000 steps	该动作已有 10,000 个步骤
+@msg	the action set would be larger than 8 MiB	动作组将超过 8 MiB
 	Playback Options	播放选项
 	Accelerated	加速
 	Step by Step	逐步
@@ -6053,6 +6373,11 @@ axis	Y Axis	Y 轴
 	User Brush Library 9	用户画笔库 9
 	User Brush Library 10	用户画笔库 10
 	Art Ribbons	艺术丝带
+	Ink and Wash	水墨淡彩
+	Tapered Ink	渐细墨线
+	Brush Pen	软头笔
+	Soft Wash	柔和淡彩
+	Pooling Wash	积色淡彩
 	Zigzag	锯齿
 	Burst Ray	冲击射线
 	Dash Trail	虚线轨迹
@@ -6064,8 +6389,24 @@ axis	Y Axis	Y 轴
 	Charge Wave	充能波
 	Spark Trail	火花尾迹
 	Calligraphic Nibs	书法笔尖
+	Bristle Brushes	鬃毛画笔集
+	Fine Liner	细勾线笔
+	Pointed Flat	尖头平笔
+	Stubby Round	短圆笔
+	Dry Scrub	干擦
+	Soft Dome	柔和圆顶
+	Filbert	榛形笔
+	Angled Round	斜圆笔
+	Angled Flat	斜平笔
+	Fan Blender	混色扇形笔
+	Grass Fan	画草扇形笔
 	Pattern Borders	图案边框
 	Scatter Shapes	散布形状
+	Dry Media	干性画材
+	Chalk Grain	粉笔颗粒
+	Graphite Pencil	石墨铅笔
+	Wax Crayon	蜡笔
+	Charcoal Dust	炭粉
 	Save Brush Library…	保存画笔库…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中没有可应用的画笔
 @msg	missing `library` (see brush.libraries)	缺少 `library`（请参阅 brush.libraries）
@@ -6276,6 +6617,10 @@ anchor	Points:	点：
 @msg	features lists at most {max} tags	features 最多包含 {max} 个标签
 @msg	unknown OpenType feature `{t}`	未知的 OpenType 特性 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 必须是大于 0 且不超过 {max} 的数字
+@msg	{label} must be at most {max} characters	{label} 最多 {max} 个字符
+@msg	{label} must be one character	{label} 必须是一个字符
+@msg	at most {max} tab stops	最多 {max} 个制表位
+@msg	unknown align `{other}`	未知的对齐方式 `{other}`
 @msg	no character style `{name}`	找不到字符样式 `{name}`
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6437,6 +6782,12 @@ breakText	Glyphs	字形
 	Delete the selected brushes?	删除选中的画笔吗？
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	有描边使用了其中一个或多个画笔。要从这些描边移除画笔并删除画笔吗？
 	Remove Strokes	移除描边
+	Place Brush Art	置入画笔图稿
+	Replace Brush Art	替换画笔图稿
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	有描边使用了此画笔。要将新图稿应用到这些描边，还是保留描边不变并添加一个使用新图稿的画笔副本？
+	Apply to Strokes	应用于描边
+	Leave Strokes	保留描边
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` 没有图稿 (只有散布画笔、艺术画笔和图案画笔有图稿)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	排列工具
 	Arrange in Grid…	按网格排列…
@@ -6632,6 +6983,11 @@ breakText	Glyphs	字形
 @msg	only an exporter or an importer declares `extensions`	只有导出或导入增效工具才声明 `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	导入增效工具始终获得导入的预算：请省略 `budget`
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	复制故障排除信息
+@msg	Copied the troubleshooting info	已复制故障排除信息
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	上次的 VectorCraft 会话在关闭前停止了响应。帮助 › 复制故障排除信息 可复制用于错误报告的详细信息
+
 # Safe Mode
 	Safe Mode…	安全模式…
 	Safe Mode	安全模式
@@ -6652,6 +7008,7 @@ breakText	Glyphs	字形
 
 # Align to Pixel Grid
 	Align to Pixel Grid	对齐像素网格
+	Align New Objects to Pixel Grid	将新对象对齐像素网格
 	Not Aligned to Pixel Grid	未对齐像素网格
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路径和复合路径可以对齐像素网格
 @msg	side is left or right, not `{s}`	side 应为 left 或 right，而不是 `{s}`
@@ -6680,8 +7037,40 @@ breakText	Glyphs	字形
 @plural	{n} line cut|{n} lines cut	已截断 {n} 行
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` 和 `last` 必须是控制台保留的行号，且 `first` 不能在 `last` 之后
 
+# Learn panel
+	Learn	学习
+	Explore tutorials	浏览教程
+	For you	为你推荐
+	Skills	技能
+	Get started	入门
+	Quick skill guide	快速技能指南
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	针对基本工具的简短实操教程，按技能分组。选择一项技能即可查看其教程。
+	List Tutorials	列出教程
+	Show Tutorial	显示教程
+	Show Tool Location	显示工具位置
+	Show where this tool is	显示此工具的位置
+@msg	missing `tutorial` (see learn.list)	缺少 `tutorial` (请参阅 learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	未知教程 `{id}` (请参阅 learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	刷新延迟的效果
 	Deferred Effects	延迟的效果
 @msg	no plug-in effect is deferred	没有延迟的增效工具效果
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	打开时延迟了 {n} 个增效工具效果。效果 › 刷新延迟的效果可运行它们。
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	切割工具
+	Stencil Bridges…	镂空版连接桥…
+	Stencil Bridges	镂空版连接桥
+	Shortest Crossing	最短跨越
+	Direction	方向
+@msg	The selected art has no islands to bridge	所选图稿没有需要连接的孤岛
+@msg	No bridge of this width fits across the selected art	此宽度的连接桥无法放入所选图稿
+@msg	Some islands could not be joined to the area around the art	部分孤岛无法连接到图稿周围的区域
+@msg	`width` must be from {lo} to {hi} pt	`width` 必须介于 {lo} 到 {hi} pt 之间
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必须是 1 到 {MAX_BRIDGES_PER_ISLAND} 之间的整数
+	Weed Box and Lines…	除废框和除废线…
+	Weed Box and Lines	除废框和除废线
+	Margin	边距
+	Box	框
+	Swatch	色板

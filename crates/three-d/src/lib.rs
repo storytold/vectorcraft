@@ -8,7 +8,10 @@
 
 mod solid;
 mod visibility;
-pub use solid::{Bevel, BevelShape, Extrude, Facet, Inflate, View, extrude, inflate, inflate_together, plane};
+pub use solid::{
+    Bevel, BevelShape, Extrude, FaceMap, Facet, Inflate, PlanarFace, View, extrude, extrude_face_map, inflate, inflate_together, plane,
+    plane_face_map,
+};
 pub use visibility::{VisibleFace, visible_faces};
 mod shading;
 pub use shading::{ClassicShading, ClassicSurface, LightGradient, RgbGradient, ShadeGradient};
@@ -17,6 +20,8 @@ pub use lights::{Light, Lights, MAX_LIGHTS};
 mod caps;
 mod mesh;
 pub use mesh::{Mesh, extrude_mesh, inflate_meshes, plane_mesh, revolve_mesh};
+mod shadow;
+pub use shadow::{MAX_SHADOW_FACES, Shadow, ShadowCaster, ShadowPlane, ShadowPosition, TOO_COMPLEX_SHADOW};
 
 use vectorcraft_geom::{BezPath, FillRule, ParamCurve, PathData, Point, Rect, Shape, Vec2, kurbo::ParamCurveDeriv};
 
@@ -339,6 +344,9 @@ impl Revolve {
 pub struct Face {
     pub points: Vec<Point>,
     pub depth: f64,
+    /// The face's unit normal in view space (x right, y down, z toward the viewer), turned to the
+    /// side the viewer sees.
+    pub normal: [f64; 3],
     pub brightness: f64,
     pub gradient: Option<ShadeGradient>,
     /// RGB illumination and its unclipped smooth ramp, independent of the legacy white ramp.
@@ -451,6 +459,7 @@ fn project_face(vertices: &[V3], normals: Option<&[V3]>, o: Revolve, origin: Poi
     Ok(Some(Face {
         points,
         depth: vertices.iter().map(|v| v.2).sum::<f64>() / vertices.len() as f64,
+        normal: [normal.0, normal.1, normal.2],
         brightness,
         gradient,
         illumination,
@@ -466,6 +475,12 @@ fn project_face(vertices: &[V3], normals: Option<&[V3]>, o: Revolve, origin: Poi
 /// Invalid or excessively complex inputs return an error, never a partial surface.
 pub fn revolve(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Face>, String> {
     revolve_faces(path, FillRule::NonZero, bounds, options, None)
+}
+
+/// [`revolve`]'s faces as facets, back to front, for the classic surfaces: each keeps its
+/// view-space normal, and its brightness and illumination are those of `options`.
+pub fn revolve_facets(path: &PathData, bounds: Rect, options: Revolve) -> Result<Vec<Facet>, String> {
+    Ok(revolve(path, bounds, options)?.into_iter().map(Facet::of_face).collect())
 }
 
 const TOO_COMPLEX_PROFILE: &str = "Revolve profile is too complex";
@@ -672,6 +687,19 @@ impl HoleSearch {
     }
 }
 
+/// How sanitized Revolve options `o` project a profile with `bounds`: about the axis at the
+/// profile's middle height, with the eye as far as the swept radius or the height needs.
+fn revolve_projection(bounds: Rect, o: Revolve) -> shadow::Projection {
+    let axis = match o.edge {
+        Edge::Left => bounds.x0 - o.offset,
+        Edge::Right => bounds.x1 + o.offset,
+    };
+    let center_y = (bounds.y0 + bounds.y1) * 0.5;
+    let radius = (bounds.x0 - axis).abs().max((bounds.x1 - axis).abs());
+    let eye = eye_distance(o.perspective, radius.max(bounds.height().abs()).max(1.0));
+    shadow::Projection { view: o, origin: Point::new(axis, center_y), eye }
+}
+
 /// [`revolve`], or with `mesh` the surface's faces before projection, kept there instead of drawn,
 /// each turned out of the region `rule` fills.
 fn revolve_faces(
@@ -697,13 +725,7 @@ fn revolve_faces(
     if ![bounds.x0, bounds.y0, bounds.x1, bounds.y1].iter().all(|v| v.is_finite() && v.abs() <= 1e8) {
         return Err("Revolve requires finite profile coordinates within 100 million points".into());
     }
-    let axis = match o.edge {
-        Edge::Left => bounds.x0 - o.offset,
-        Edge::Right => bounds.x1 + o.offset,
-    };
-    let center_y = (bounds.y0 + bounds.y1) * 0.5;
-    let radius = (bounds.x0 - axis).abs().max((bounds.x1 - axis).abs());
-    let eye = eye_distance(o.perspective, radius.max(bounds.height().abs()).max(1.0));
+    let shadow::Projection { origin: Point { x: axis, y: center_y }, eye, .. } = revolve_projection(bounds, o);
     let steps = o.steps();
     let sweep = o.angle.to_radians();
     let smooth = o.shade && o.smooth_shading;

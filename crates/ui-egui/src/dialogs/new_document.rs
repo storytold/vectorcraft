@@ -4,11 +4,13 @@
 //! Close and Create. More Settings opens a pop-up over the dialog with the artboard layout, spacing
 //! and columns, editing the same fields. Save Preset turns the top of Preset Details into the
 //! preset's name, Cancel and Save, and hides Close and Create until the preset is saved or canceled;
-//! the rows under it stay editable and are what the preset stores.
+//! the rows under it stay editable and are what the preset stores. Manage Profiles opens a pop-up
+//! listing the New Document profiles (`file.newProfiles`), each with Edit, which closes the dialog
+//! and opens the profile as a document, and Reset, which brings back the shipped profile.
 //!
 //! Fields: `file.new`'s params (`preset`, `name`, `width`, `height` (pt), `units`, `artboards`,
 //! `artboardLayout`, `bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi`,
-//! `previewMode`), plus `category` (the tab), `advanced` (Advanced Options open), `bleedLinked` and
+//! `previewMode`, `alignNewObjectsToPixelGrid`, `profile`), plus `category` (the tab), `advanced` (Advanced Options open), `bleedLinked` and
 //! `presetName` (Save Preset's name). Setting `preset` fills the fields from that preset; changing
 //! any of them afterwards makes the settings custom.
 
@@ -24,12 +26,14 @@ use crate::{VectorcraftApp, widgets};
 pub(super) const KIND: &str = "newDocument";
 /// New Document with its More Settings pop-up open.
 pub(super) const MORE: &str = "newDocumentMore";
+/// New Document with its Manage Profiles pop-up open.
+pub(super) const PROFILES: &str = "newDocumentProfiles";
 
 pub(super) const SPEC: DialogSpec = DialogSpec { inputs: |_| &["presetName"], ..DialogSpec::window(show, confirm) };
 pub(super) const MORE_SPEC: DialogSpec = SPEC;
 
 /// The fields `file.new` takes.
-const PARAMS: [&str; 12] = [
+const PARAMS: [&str; 14] = [
     "preset",
     "name",
     "width",
@@ -42,6 +46,8 @@ const PARAMS: [&str; 12] = [
     "colorMode",
     "rasterEffectsPpi",
     "previewMode",
+    "alignNewObjectsToPixelGrid",
+    "profile",
 ];
 /// The preset the fields were last filled from, as `apply` set them; a Recent or Saved card keeps
 /// its own units here, which the units chosen in Preset Details don't change.
@@ -138,10 +144,19 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     }
     let p = params(app, d);
     let r = app.run("file.new", Value::Object(p));
-    if r.is_ok() {
+    if let Ok(r) = &r {
         app.ui.dialog = None;
+        report_profile(app, r);
     }
     r
+}
+
+/// Say in the status bar when `file.new`'s result `r` reports a profile it could not read.
+fn report_profile(app: &mut VectorcraftApp, r: &Value) {
+    if let Some(e) = r.get("profileError") {
+        let (name, reason) = (e["profile"].as_str().unwrap_or_default(), e["reason"].as_str().unwrap_or_default());
+        app.status(format!("The {name} profile could not be read, so the new document has the default settings: {reason}"));
+    }
 }
 
 /// New Without Dialog (`file.newWithoutDialog`, Cmd+Alt+N): create the document [`open`] would
@@ -152,7 +167,11 @@ pub fn create_without_dialog(app: &mut VectorcraftApp) -> Result<Value, String> 
     let offered = app.ui.dialog.take();
     app.ui.dialog = shown;
     let p = offered.map(|d| params(app, &d)).unwrap_or_default();
-    app.run("file.new", Value::Object(p))
+    let r = app.run("file.new", Value::Object(p));
+    if let Ok(r) = &r {
+        report_profile(app, r);
+    }
+    r
 }
 
 /// The `file.new` params of the fields.
@@ -193,15 +212,15 @@ fn window(ctx: &egui::Context, id: &str, margin: i8, add: impl FnOnce(&mut egui:
     super::modal::show(ctx, id, egui::Id::unique(("dialog", id)), -20.0, margin, add);
 }
 
-/// Whether More Settings' pop-up is open over New Document.
+/// Whether More Settings' or Manage Profiles' pop-up is open over New Document.
 pub(crate) fn popup_open(d: &Dialog) -> bool {
-    d.kind == MORE
+    d.kind == MORE || d.kind == PROFILES
 }
 
-/// Close New Document's More Settings pop-up, or else leave its Save Preset, keeping the fields.
-/// False when neither is showing, or `d` is another dialog.
+/// Close New Document's More Settings or Manage Profiles pop-up, or else leave its Save Preset,
+/// keeping the fields. False when none is showing, or `d` is another dialog.
 pub(super) fn close_popup(d: &mut Dialog) -> bool {
-    if d.kind != KIND && d.kind != MORE {
+    if d.kind != KIND && !popup_open(d) {
         return false;
     }
     if popup_open(d) {
@@ -460,12 +479,14 @@ fn details(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, b: &mut 
     if saving {
         return;
     }
+    ui.add_space(6.0);
+    b.close |= manage_profiles(app, ui, d);
     // Close and Create at the bottom right.
     ui.add_space((HEIGHT - (ui.cursor().top() - top) - 28.0).max(12.0));
     ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), 28.0), egui::Layout::right_to_left(egui::Align::Center), |ui| {
         b.create |= widgets::primary_button(ui, tl!("Create")).clicked();
         ui.add_space(8.0);
-        b.close = widgets::secondary_button(ui, tl!("Close")).clicked();
+        b.close |= widgets::secondary_button(ui, tl!("Close")).clicked();
     });
 }
 
@@ -562,7 +583,60 @@ fn more_settings(ui: &mut egui::Ui, d: &mut Dialog) {
         .align(egui::RectAlign::TOP_END)
         .accessible_name(tl!("More Settings"))
         .show(|ui| done = more_settings_popup(ui, opening, d));
-    d.kind = if open && !done { MORE } else { KIND }.into();
+    if open && !done {
+        d.kind = MORE.into();
+    } else if d.kind == MORE {
+        d.kind = KIND.into();
+    }
+}
+
+/// The Manage Profiles button and its pop-up: a row per New Document profile with Edit, which opens
+/// the profile as a document and closes New Document (true then), and Reset, which deletes an edited
+/// profile's file so the shipped profile applies again. A click outside it and Escape close it.
+fn manage_profiles(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
+    let button = widgets::flat_button(ui, tl!("Manage Profiles"), DETAILS);
+    let mut open = (d.kind == PROFILES) != button.clicked();
+    let mut chosen: Option<(&str, &str)> = None;
+    let has_folder = app.session.new_doc_profile_dir().is_some();
+    egui::Popup::from_response(&button)
+        .open_bool(&mut open)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .align(egui::RectAlign::TOP_END)
+        .accessible_name(tl!("Manage Profiles"))
+        .show(|ui| {
+            ui.set_width(MORE_WIDTH);
+            let t = Tokens::get(ui.ctx());
+            ui.label(egui::RichText::new(tl!("NEW DOCUMENT PROFILES")).font(theme::semibold(11.0)).color(t.text_dim));
+            ui.add_space(6.0);
+            for name in newdoc::profile_names() {
+                let customized = app.session.new_doc_profile_customized(name);
+                ui.horizontal(|ui| {
+                    ui.label(tl!(name));
+                    ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), 24.0), egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add_enabled_ui(customized, |ui| widgets::secondary_button(ui, tl!("Reset"))).inner.clicked() {
+                            chosen = Some(("file.newProfiles.reset", name));
+                        }
+                        // Without a profiles folder (the web, runs without preferences) there is nothing to edit.
+                        if ui.add_enabled_ui(has_folder, |ui| widgets::secondary_button(ui, tl!("Edit"))).inner.clicked() {
+                            chosen = Some(("file.newProfiles.edit", name));
+                        }
+                    });
+                });
+            }
+        });
+    if open {
+        d.kind = PROFILES.into();
+    } else if d.kind == PROFILES {
+        d.kind = KIND.into();
+    }
+    let Some((cmd, name)) = chosen else { return false };
+    match app.run(cmd, json!({ "name": name })) {
+        Ok(_) => cmd == "file.newProfiles.edit",
+        Err(e) => {
+            app.status(e);
+            false
+        }
+    }
 }
 
 /// More Settings' pop-up. True when Done (or Enter) finished with it.
@@ -694,7 +768,8 @@ fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, options: &[(Value, Strin
     }
 }
 
-/// The collapsible Advanced Options: Color Mode, Raster Effects and Preview Mode.
+/// The collapsible Advanced Options: Color Mode, Raster Effects, Preview Mode and Align New Objects
+/// to Pixel Grid.
 fn advanced(ui: &mut egui::Ui, d: &mut Dialog, label: f32, field: f32) {
     let open = d.bool("advanced");
     if widgets::section_toggle(ui, tl!("Advanced Options"), open) {
@@ -713,6 +788,25 @@ fn advanced(ui: &mut egui::Ui, d: &mut Dialog, label: f32, field: f32) {
         ("previewMode", tl!("Preview Mode"), &previews),
     ] {
         widgets::label_row(ui, name, label, |ui| choice(ui, d, key, options, field));
+    }
+    wrapping_check(ui, d, "alignNewObjectsToPixelGrid", tl!("Align New Objects to Pixel Grid"));
+}
+
+/// A checkbox for the boolean field `key` whose `label` (already translated) wraps within the
+/// column; a click on the box or the label toggles the field.
+fn wrapping_check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
+    let t = Tokens::get(ui.ctx());
+    let on = d.bool(key);
+    let toggled = ui
+        .horizontal_top(|ui| {
+            let boxed = widgets::check_box(ui, label, on, true);
+            let text = egui::RichText::new(label).font(egui::FontId::proportional(12.5)).color(t.text);
+            let clicked = ui.add(egui::Label::new(text).wrap().sense(egui::Sense::click())).clicked();
+            boxed || clicked
+        })
+        .inner;
+    if toggled {
+        d.fields.insert(key.into(), json!(!on));
     }
 }
 
@@ -1433,6 +1527,60 @@ mod tests {
         assert!(h.state().session.documents().is_empty());
     }
 
+    /// Advanced Options › Align New Objects to Pixel Grid is checked for a Web preset and unchecked
+    /// for Letter; the checkbox changes it and makes the settings custom, Save Preset keeps it, and
+    /// Create makes the document with it.
+    #[test]
+    fn align_new_objects_checkbox_follows_the_preset_and_reaches_the_document() {
+        const KEY: &str = "alignNewObjectsToPixelGrid";
+        const LABEL: &str = "Align New Objects to Pixel Grid";
+        let mut h = big();
+        assert_eq!((field(h.state(), "preset"), field(h.state(), KEY)), (json!("Letter"), json!(false)));
+        set(h.state_mut(), "category", json!("Web"));
+        set(h.state_mut(), "preset", json!("Web 1920×1080"));
+        set(h.state_mut(), "advanced", json!(true));
+        h.run_steps(3);
+        assert_eq!(field(h.state(), KEY), json!(true));
+        h.get_by_role_and_label(egui::accesskit::Role::CheckBox, LABEL).click();
+        h.run_steps(3);
+        assert_eq!((field(h.state(), "preset"), field(h.state(), KEY)), (json!(""), json!(false)), "custom settings");
+        set(h.state_mut(), "category", json!("Print"));
+        set(h.state_mut(), "preset", json!("Letter"));
+        h.run_steps(3);
+        assert_eq!(field(h.state(), KEY), json!(false));
+        h.get_by_role_and_label(egui::accesskit::Role::Label, LABEL).click();
+        h.run_steps(3);
+        assert_eq!(field(h.state(), KEY), json!(true), "a click on the label toggles it too");
+        h.get_by_label("Save Preset").click();
+        h.run_steps(4);
+        set(h.state_mut(), "presetName", json!("Pixel Letter"));
+        h.run_steps(2);
+        h.get_by_label("Save").click();
+        h.run_steps(3);
+        let saved = h.state().session.prefs.new_doc_presets.iter().find(|p| p.name == "Pixel Letter").expect("saved");
+        assert!(saved.align_new_objects_to_pixel_grid);
+        assert_eq!((field(h.state(), "preset"), field(h.state(), KEY)), (json!("Pixel Letter"), json!(true)));
+        h.get_by_label("Create").click();
+        h.run_steps(3);
+        assert!(h.state().ui.dialog.is_none());
+        assert!(h.state().session.active().unwrap().doc.setup.align_new_objects_to_pixel_grid);
+    }
+
+    /// A long translation of Align New Objects to Pixel Grid wraps inside the Preset Details column.
+    #[test]
+    fn align_new_objects_label_wraps_inside_the_details_column() {
+        const LABEL: &str = "Στοίχιση νέων αντικειμένων στο πλέγμα εικονοστοιχείων";
+        crate::i18n::set_current(crate::i18n::Lang::from_code("el").unwrap());
+        let mut h = big();
+        set(h.state_mut(), "advanced", json!(true));
+        h.run_steps(3);
+        let boxed = h.get_by_role_and_label(egui::accesskit::Role::CheckBox, LABEL).rect();
+        let text = h.get_by_role_and_label(egui::accesskit::Role::Label, LABEL).rect();
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert!(text.right() <= boxed.left() + super::DETAILS + 0.5, "{boxed:?} {text:?}");
+        assert!(text.height() > boxed.height(), "the label takes two lines: {text:?}");
+    }
+
     /// In a small window the pop-up stays on screen, and its button stays in view under rows that scroll.
     #[test]
     fn the_popup_stays_inside_a_small_window() {
@@ -1442,5 +1590,46 @@ mod tests {
         for label in ["Number of Artboards:", "Done"] {
             assert!(screen.contains_rect(h.get_by_label(label).rect()), "{label} is off screen");
         }
+    }
+
+    /// Manage Profiles lists a row per profile; Reset is off until a profile has been edited, Escape
+    /// closes only the pop-up, and Edit opens the profile as a document and closes New Document.
+    #[test]
+    fn manage_profiles_edits_and_resets_the_profiles() {
+        let dir = std::env::temp_dir().join(format!("vc-ui-newdoc-profiles-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut h = big();
+        // Without a profiles folder Edit is off too.
+        h.get_by_label("Manage Profiles").click();
+        h.run_steps(4);
+        assert!(h.get_all_by_label("Edit").all(|b| b.accesskit_node().is_disabled()));
+        h.key_press(egui::Key::Escape);
+        h.run_steps(3);
+        h.state_mut().session.attach_new_doc_profiles(dir.clone());
+        h.get_by_label("Manage Profiles").click();
+        h.run_steps(4);
+        assert_eq!(kind(&h), super::PROFILES);
+        assert_eq!(h.get_all_by_label("Edit").count(), 7);
+        assert!(h.get_all_by_label("Reset").all(|b| b.accesskit_node().is_disabled()));
+        h.key_press(egui::Key::Escape);
+        h.run_steps(3);
+        assert_eq!(kind(&h), super::KIND, "Escape closes only the pop-up");
+        // An edited profile's Reset deletes its file.
+        h.state_mut().run("file.newProfiles.edit", json!({"name": "Web"})).unwrap();
+        h.state_mut().run("file.newDialog", json!({})).unwrap();
+        h.run_steps(3);
+        h.get_by_label("Manage Profiles").click();
+        h.run_steps(4);
+        assert_eq!(h.get_all_by_label("Reset").filter(|b| !b.accesskit_node().is_disabled()).count(), 1);
+        h.get_all_by_label("Reset").find(|b| !b.accesskit_node().is_disabled()).unwrap().click();
+        h.run_steps(3);
+        assert!(!dir.join("Web.vectorcraft").exists());
+        // Edit on the third row (Print).
+        h.get_all_by_label("Edit").nth(2).unwrap().click();
+        h.run_steps(3);
+        assert!(h.state().ui.dialog.is_none(), "{:?}", h.state().ui.status);
+        assert_eq!(h.state().session.active().unwrap().doc.title, "Print");
+        assert!(dir.join("Print.vectorcraft").is_file());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

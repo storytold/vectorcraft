@@ -237,6 +237,7 @@ font-technology	Variable	Variabel
 	Asset Export Settings	Einstellungen für den Asset-Export
 	Assets	Assets
 	Assign	Zuweisen
+	Assign Profile	Profil zuweisen
 	Assign Profile…	Profil zuweisen…
 	Assign:	Zuweisen:
 	Attach to Active Plane	An aktiver Perspektivebene anbringen
@@ -679,6 +680,15 @@ font-technology	Variable	Variabel
 	Created:	Erstellt:
 	Crop	Schnittmengenfläche
 	Crop Image	Bild beschneiden
+	Image Tools	Bildwerkzeuge
+	Remove Background…	Hintergrund entfernen…
+	Remove Background	Hintergrund entfernen
+	Background	Hintergrund
+	Edge Color	Randfarbe
+	Picked Colors	Ausgewählte Farben
+	Corner Color	Eckfarbe
+	Contiguous	Zusammenhängend
+	Each Channel	Jeder Kanal
 	Edit Path	Pfad bearbeiten
 	Mask	Maske
 	Crop Marks	Schnittmarken
@@ -798,6 +808,14 @@ font-technology	Variable	Variabel
 	Disable Auto Add/Delete	Automatisches Hinzufügen/Löschen deaktivieren
 	Disable Opacity Mask	Deckkraftmaske deaktivieren
 	Discard	Verwerfen
+	Preserve	Beibehalten
+	TIFF (Black & White)	TIFF (Schwarzweiß)
+	TIFF (8-bit Color)	TIFF (8-Bit-Farbe)
+	High Resolution	Hohe Auflösung
+	Medium Resolution	Mittlere Auflösung
+	Low Resolution	Niedrige Auflösung
+	Language Level 2	Sprachebene 2
+	Language Level 3	Sprachebene 3
 	Discard Empty Type	Leeren Text verwerfen
 	Discard Recovered Documents	Wiederhergestellte Dokumente verwerfen
 	Discard White Overprint in Output	Weißes Überdrucken in der Ausgabe verwerfen
@@ -863,6 +881,17 @@ font-technology	Variable	Variabel
 	The selected character's font is not available.	Die Schrift des ausgewählten Zeichens ist nicht verfügbar.
 	No alternates for the selected character.	Keine Alternativen für das ausgewählte Zeichen.
 	Double-click to replace	Doppelklicken zum Ersetzen
+	Select one character with the Type tool first.	Wählen Sie zuerst mit dem Text-Werkzeug ein Zeichen aus.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} ist eine Glyphe von {font}, nicht der Schrift, in der der ausgewählte Text gesetzt ist ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} gehört zu {base} (U+{base_code}) {place}; Ihre Auswahl ist {sel} (U+{code}).
+	at the start of a word	am Wortanfang
+	in the middle of a word	in der Wortmitte
+	at the end of a word	am Wortende
+	standing alone	allein stehend
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} ist keine Alternative zu {sel} (U+{code}), so wie es in seinem Wort steht.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Doppelklicken, um stattdessen {base} (U+{code}) einzufügen: Eine Darstellungsform verbindet sich nicht, der Buchstabe schon.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) statt einer Darstellungsform eingefügt: Die Schrift verbindet es je nach Position mit den Nachbarn.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Keine OpenType-Funktion zeichnet diese Glyphe hier, daher ersetzt sie die Glyphe des Zeichens und verbindet sich möglicherweise nicht mit den Nachbarzeichen.
 	Double-click to insert	Doppelklicken zum Einfügen
 	Double-click to rename	Doppelklicken zum Umbenennen
 	Double-click to target the contents	Doppelklicken, um den Inhalt als Ziel auszuwählen
@@ -1115,6 +1144,8 @@ font-technology	Variable	Variabel
 	Extrude & Bevel…	Extrudieren und abgeflachte Kante…
 	3D (Classic)	3D (klassisch)
 	Extrude & Bevel (Classic)…	Extrudieren und abgeflachte Kante (klassisch)…
+	Revolve (Classic)…	Kreiseln (klassisch)…
+	Rotate (Classic)…	Drehen (klassisch)…
 	Surface	Oberfläche
 	Wireframe	Drahtmodell
 	No Shading	Keine Schattierung
@@ -1427,6 +1458,14 @@ file-filter	Templates	Vorlagen
 	Hair Space	Haarspatium
 	Hand Tool	Hand-Werkzeug
 	Hand-Drawn	Handgezeichnet
+	Painted and Sketched	Gemalt und skizziert
+	Washed Blue	Verwaschenes Blau
+	Bristle Ochre	Borstenocker
+	Pastel Heather	Pastellheide
+	Charcoal Shade	Kohleschatten
+	Ink Contour	Tuschekontur
+	Wet Ink	Nasse Tusche
+	Fine Pen	Feine Feder
 	Handles	Griffe
 	Hard Light	Hartes Licht
 	Hard Mix	Hart mischen
@@ -1655,6 +1694,7 @@ file-filter	Templates	Vorlagen
 	Include Hidden Layers	Ausgeblendete Ebenen einschließen
 	Include Linked Files	Verknüpfte Dateien einschließen
 	Include Metadata	Metadaten einschließen
+	Include Variable Data	Variablendaten einschließen
 	Include non-printing layers	Nicht druckende Ebenen einschließen
 	Write pages longer than 200 in at full size in points	Seiten über 200 in in voller Größe in Punkt schreiben
 	Include SVG Code	SVG-Code einschließen
@@ -1973,6 +2013,8 @@ file-filter	Templates	Vorlagen
 	Metallic Gradients	Metallic-Verläufe
 	Meters	Meter
 	Method:	Methode:
+	Pad	Fortsetzen
+	Repeats	Wiederholungen
 	Millimeters	Millimeter
 	Minify	Minifizieren
 	Minimal	Minimal
@@ -2040,6 +2082,7 @@ file-filter	Templates	Vorlagen
 	Move Slices	Slices verschieben
 	Move Spine Point	Achsenpunkt verschieben
 	Reshape Spine Segment	Achsensegment umformen
+	Blend Easing	Beschleunigung der Angleichung
 	Move Brush	Pinsel verschieben
 	Move Swatch	Farbfeld verschieben
 	Move Up	Nach oben verschieben
@@ -2095,6 +2138,7 @@ file-filter	Templates	Vorlagen
 	Art Brush	Bildpinsel
 	Bristle Brush	Borstenpinsel
 	Pattern Brush	Musterpinsel
+	missing from the Brushes panel	fehlt im Bedienfeld „Pinsel“
 	Select art to make a scatter, art or pattern brush.	Wählen Sie eine Grafik aus, um einen Spezial-, Bild- oder Musterpinsel zu erstellen.
 	Brush Art	Pinselgrafik
 	New Calligraphic Brush	Neuer Kalligrafiepinsel
@@ -2291,13 +2335,22 @@ file-filter	Templates	Vorlagen
 	Optical	Optisch
 	Optical Margin Alignment	Optischer Randausgleich
 	Dynamic Text	Dynamischer Text
+	Dynamic Text Presets	Vorgaben für dynamischen Text
+	Arch	Rundbogen
+@msg	select point type or type on a path	wählen Sie Punkttext oder Pfadtext aus
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	Pfadtext in verkettetem Text kann keinen dynamischen Text verwenden: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	Pfadtext auf einem offenen oder zusammengesetzten Pfad lässt sich nicht oben oder unten zentrieren: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	Pfadtext auf einem Pfad ohne Länge oder ohne Höhe lässt sich nicht zentrieren: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	Pfadtext in verkettetem Text lässt sich nicht oben oder unten zentrieren: {frames}
+@msg	select type on a closed path	wählen Sie Pfadtext auf einem geschlossenen Pfad aus
 	Optimize for fast web view	Für schnelle Webanzeige optimieren
 	Optimized	Optimiert
 	Options	Optionen
 	Options for Selection…	Optionen für Auswahl…
 	Options:	Optionen:
 	Options…	Optionen…
+	Organic Fades	Organische Verläufe
+	Holographic	Holografisch
 	or more spaces with a tab	oder mehr Leerzeichen durch einen Tabulator
 	Order:	Reihenfolge:
 	Ordinals	Ordinalzahlen
@@ -2491,6 +2544,7 @@ diagnostics	ui	Oberfläche
 	Presets:	Vorgaben:
 	Press 	Mit 
 	Preview	Vorschau
+	Preview:	Vorschau:
 	Preview All Layers	Vorschau aller Ebenen
 	Preview in Browser	Vorschau im Browser
 	Preview in Browser needs the desktop app (the web downloads files instead)	„Vorschau im Browser“ erfordert die Desktop-App (im Web werden stattdessen Dateien heruntergeladen)
@@ -2534,6 +2588,8 @@ mark-style	Japanese	Japanisch
 	Proof Setup	Proof einrichten
 	Properties	Eigenschaften
 	Proportional Metrics	Proportionale Metrik
+	Insert Aki Left	Aki links einfügen
+	Insert Aki Right	Aki rechts einfügen
 	Character Direction	Zeichenrichtung
 	Digits	Ziffern
 	Arabic	Arabisch
@@ -2572,6 +2628,7 @@ digits	Malayalam	Malayalam
 	Radial Glows	Radiale Leuchteffekte
 	Radial Gradient	Radialer Verlauf
 	Conic Gradient	Konischer Verlauf
+	Diamond Gradient	Rautenverlauf
 	Radius 1	Radius 1
 	Radius 2	Radius 2
 	Radius1	Radius1
@@ -2584,6 +2641,8 @@ digits	Malayalam	Malayalam
 	Range:	Bereich:
 	Raster Effects	Rastereffekte
 	Raster File Format:	Pixelbild-Dateiformat:
+	Include Placed Images	Platzierte Bilder einschließen
+	Include Fill Hatches	Füllschraffuren einschließen
 	Raster Sample Size:	Aufnahmebereich in Pixelbildern:
 	Raster/Vector Balance:	Pixelbild-Vektor-Abgleich:
 	Rasterize	In Pixelbild umwandeln
@@ -2765,6 +2824,10 @@ digits	Malayalam	Malayalam
 	Replace Font	Schrift ersetzen
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Ersetzen Sie sie durch eine andere Datei oder ignorieren Sie sie: Ihre Bilder zeigen weiterhin die mit dem Dokument gespeicherte Vorschau.
 	Replace Spine	Achse ersetzen
+	Create Spine	Achse erstellen
+	Create Spine:	Achse erstellen:
+	Always	Immer
+	Never	Nie
 	Replace Symbol	Symbol ersetzen
 	Reset Transformation	Transformation zurücksetzen
 	Replace With Font	Durch Schrift ersetzen
@@ -2793,10 +2856,16 @@ digits	Malayalam	Malayalam
 	Search Preferences	Voreinstellungen durchsuchen
 	No settings found	Keine Einstellungen gefunden
 	Reset Profiles	Profile zurücksetzen
+	Arrowheads	Pfeilspitzen
+	Edit Arrowheads	Pfeilspitzen bearbeiten
+	Edit Arrowheads…	Pfeilspitzen bearbeiten…
+	Reload Arrowheads	Pfeilspitzen neu laden
 	Rotate View	Ansicht drehen
 	Reset Rotate View	Ansichtsdrehung zurücksetzen
 	Rotate View to Selection	Ansicht nach Auswahl drehen
 	Reset the rows to the artwork's colors	Zeilen auf die Farben der Grafik zurücksetzen
+	Color Theme Picker	Farbthema-Auswahl
+	Click or drag across the art to pick its colors; Shift adds more	Klicken oder ziehen Sie über die Grafik, um ihre Farben aufzunehmen; Umschalt fügt weitere hinzu
 	Reset to Default	Auf Standard zurücksetzen
 	Reset to White, Black	Auf Weiß, Schwarz zurücksetzen
 	Reset with Mesh	Mit Gitter zurücksetzen
@@ -2844,12 +2913,17 @@ digits	Malayalam	Malayalam
 	Rise…	Ansteigend…
 	Roman Baseline	Lateinische Grundlinie
 	Roman Hanging Punctuation	Hängende Interpunktion (lateinisch)
+	Korean Line Break Anywhere	Koreanischer Zeilenumbruch überall
+	Bunri-Kinshi	Bunri-Kinshi
+	East Asian Composition Settings	Einstellungen für ostasiatischen Satz
+	Korean Composition Settings	Einstellungen für koreanischen Satz
 	Rotate	Drehen
 	Rotate 90° CW	Um 90° im Uhrzeigersinn drehen
 	Rotate Tool	Drehen-Werkzeug
 	Rotate View Tool	Ansichtdrehung-Werkzeug
 	Trackpad Gesture to Rotate View	Ansicht mit Trackpad-Geste drehen
 	Hold a Tool Shortcut to Use the Tool Temporarily	Werkzeug-Tastaturbefehl gedrückt halten, um das Werkzeug vorübergehend zu verwenden
+	Show Bounding Box While Moving and Drawing	Begrenzungsrahmen beim Verschieben und Zeichnen einblenden
 	Rotate…	Drehen…
 	Rotation	Drehung
 	Roughen…	Aufrauen…
@@ -3129,6 +3203,15 @@ digits	Malayalam	Malayalam
 	Stun Pulse	Betäubung
 	Stealth Fade	Schleichen
 	Shield Buff	Schild
+	Textures	Texturen
+	Fine Grain	Feine Körnung
+	Canvas Weave	Leinwandgewebe
+	Burlap Sack	Jutesack
+	Cracked Glaze	Craquelé-Glasur
+	Mosaic Floor	Mosaikboden
+	Quilted Squares	Gesteppte Quadrate
+	Leaded Glass	Bleiglas
+	Damp Paper	Feuchtes Papier
 	Shape	Form
 	Shape Builder	Formerstellung
 	Shape Builder Regions	Formerstellungsbereiche
@@ -3191,6 +3274,8 @@ digits	Malayalam	Malayalam
 	Show Modified	Geänderte einblenden
 	Show Note	Notiz einblenden
 	Show Options	Optionen einblenden
+	Show Recent Colors	Zuletzt verwendete Farben einblenden
+	Toggle RGB Percent	RGB in Prozent umschalten
 	Show Original Path	Originalpfad einblenden
 	Open this dialog with these settings next time	Dieses Dialogfeld nächstes Mal mit diesen Einstellungen öffnen
 	Auto-Simplify	Automatisch vereinfachen
@@ -3331,6 +3416,9 @@ effect	Points	Punkte
 	Split Path	Pfad teilen
 	spot	Vollton
 	Spot Color	Volltonfarbe
+	Spot Color Objects	Objekte mit Volltonfarben
+	Pattern Objects	Objekte mit Mustern
+	Gradient Objects	Objekte mit Verläufen
 	Spot Colors	Volltonfarben
 	Spot Colors…	Volltonfarben…
 	Spread:	Ausbreitung:
@@ -3479,6 +3567,8 @@ effect	Points	Punkte
 	Scale at Center	Von der Mitte aus skalieren
 	Up/Down:	Oben/Unten:
 	Left/Right:	Links/Rechts:
+	Tate-chu-yoko Up/Down	Tate-chu-yoko oben/unten
+	Tate-chu-yoko Left/Right	Tate-chu-yoko links/rechts
 	Temperature	Temperatur
 	Temperature/Tint…	Temperatur/Farbstich…
 	Template	Vorlage
@@ -3549,6 +3639,8 @@ effect	Points	Punkte
 	Toolbar: Single/Double Column	Werkzeugleiste: ein-/zweispaltig
 	Toolbar: Add Tool	Werkzeugleiste: Werkzeug hinzufügen
 	Toolbar: Remove Tool	Werkzeugleiste: Werkzeug entfernen
+	Add Tool…	Werkzeug hinzufügen…
+	Remove Tool	Werkzeug entfernen
 	Toolbar: Reset	Werkzeugleiste: Zurücksetzen
 	Toolbars	Werkzeugleisten
 	Tools	Werkzeuge
@@ -3620,6 +3712,8 @@ effect	Points	Punkte
 	Type on a Path	Pfadtext
 	Type on a Path Options	Pfadtextoptionen
 	Type on a Path Options…	Pfadtextoptionen…
+	Center on Top	Oben zentrieren
+	Center on Bottom	Unten zentrieren
 	Type on a Path Tool	Pfadtext-Werkzeug
 	Type Orientation	Textrichtung
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Text bleibt Text, und jede Kontur ist eine Linie mit ihrer Linienstärke und ihren Strichen.
@@ -3778,6 +3872,7 @@ effect	Points	Punkte
 	Windows	Windows
 	Working CMYK	CMYK-Arbeitsfarbraum
 	Working CMYK (don't tag)	CMYK-Arbeitsfarbraum (nicht kennzeichnen)
+	Working RGB (don't tag)	RGB-Arbeitsfarbraum (nicht kennzeichnen)
 	Workspace	Arbeitsbereich
 	Workspace {i}	Arbeitsbereich {i}
 	Wrinkle Tool	Zerknittern-Werkzeug
@@ -4046,6 +4141,85 @@ theme	Appearance	Erscheinungsbild
 @msg	the script's run is no longer available	der Lauf des Skripts ist nicht mehr verfügbar
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	ein fehlgeschlagener Befehl hat Rückgängig-Schritte geändert, die nicht wiederhergestellt werden konnten, daher wurde das Skript angehalten
 @msg	a recovery copy could not be written, so the script was not run	eine Wiederherstellungskopie konnte nicht geschrieben werden, daher wurde das Skript nicht ausgeführt
+@msg	Script file access denied	Zugriff auf die Skriptdatei verweigert
+@msg	Script file exceeds 8 MiB	Die Skriptdatei ist größer als 8 MiB
+@msg	Script file is not open	Die Skriptdatei ist nicht geöffnet
+@msg	Script file cannot be decoded	Die Skriptdatei kann nicht dekodiert werden
+@msg	Script file is not a regular file	Die Skriptdatei ist keine reguläre Datei
+@msg	Script file does not exist	Die Skriptdatei existiert nicht
+@msg	Script file could not be read	Die Skriptdatei konnte nicht gelesen werden
+@msg	Script folder has more than 2,048 entries	Der Skriptordner hat mehr als 2.048 Einträge
+@msg	Script file open mode must be r, w, e or a	Der Öffnungsmodus der Skriptdatei muss r, w, e oder a sein
+@msg	Script file writing is not available	Das Schreiben von Skriptdateien ist nicht verfügbar
+@msg	Script file dialogs are not available	Dateidialoge für Skripte sind nicht verfügbar
+@msg	Script files cannot be opened in another application	Skriptdateien können nicht in einer anderen Anwendung geöffnet werden
+@msg	Script file access is unavailable on the web	Der Zugriff auf Skriptdateien ist im Web nicht verfügbar
+@msg	Script has 256 files open	Das Skript hat 256 Dateien geöffnet
+@msg	Script file path exceeds 32,767 characters	Der Pfad der Skriptdatei ist länger als 32.767 Zeichen
+@msg	Script folder mask takes too many steps to match	Der Abgleich der Maske des Skriptordners braucht zu viele Schritte
+@msg	the script opened more file data than one run may open (32 MiB)	das Skript hat mehr Dateidaten geöffnet, als ein Lauf öffnen darf (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: nimmt eine Position und einen Modus
+@msg	vc.run: give a command id, as a string	vc.run: Geben Sie eine Befehls-ID als Zeichenfolge an
+@msg	vc.run: takes a command id and an object of parameters	vc.run: nimmt eine Befehls-ID und ein Objekt mit Parametern
+@msg	vc.run: the parameters must be an object	vc.run: Die Parameter müssen ein Objekt sein
+@msg	vc.run: the result{place} is too large for a script	vc.run: Das Ergebnis{place} ist zu groß für ein Skript
+@msg	$.evalFile requires a file path	$.evalFile erfordert einen Dateipfad
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: Die Zeitüberschreitung muss eine endliche Anzahl von Millisekunden sein, 0 oder mehr
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: nimmt einen Dateipfad und eine Zeitüberschreitung
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: Zeile {line}, Spalte {column} in {file}: {e} (ausgelöst)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: Zeile {line}, Spalte {column}: {e} (ausgelöst)
+@msg	{name}: {e} (thrown)	{name}: {e} (ausgelöst)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: Zeile {line}, Spalte {column} in {file}: {e} (Grenze)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: Zeile {line}, Spalte {column}: {e} (Grenze)
+@msg	{name}: {e} (limit)	{name}: {e} (Grenze)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: Zeile {line}, Spalte {column} in {file}: {e} (Syntaxfehler)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: Zeile {line}, Spalte {column}: {e} (Syntaxfehler)
+@msg	{name}: {e} (syntax)	{name}: {e} (Syntaxfehler)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: Zeile {line}, Spalte {column} in {file}: {e} (gestoppt)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: Zeile {line}, Spalte {column}: {e} (gestoppt)
+@msg	{name}: {e} (stopped)	{name}: {e} (gestoppt)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: Zeile {line}, Spalte {column} in {file}: {e} (interner Fehler)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: Zeile {line}, Spalte {column}: {e} (interner Fehler)
+@msg	{name}: {e} (internal)	{name}: {e} (interner Fehler)
+@msg	{e} (these files stay written: {paths})	{e} (diese Dateien bleiben geschrieben: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: Geben Sie einen Namen als Zeichenfolge an
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: Geben Sie ein Gebietsschema wie "en" oder "de_DE" an, oder null für das der Oberfläche
+@msg	$.localize: give true or false	$.localize: Geben Sie true oder false an
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: Nur 512, das die Lokalisierung einschaltet, oder 0 kann gesetzt werden
+@msg	$.flags: give a number	$.flags: Geben Sie eine Zahl an
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: Skripte lesen und schreiben hier nur UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: Geben Sie den Namen einer Kodierung als Zeichenfolge an
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: Die Größe des Speichercaches kann nicht gesetzt werden
+@msg	$.setenv: give a value, as a string	$.setenv: Geben Sie einen Wert als Zeichenfolge an
+@msg	$.setenv: only {_1} can be set	$.setenv: Nur {_1} können gesetzt werden
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: Ein Wert hat höchstens {MAX_ENV_BYTES} Buchstaben, Ziffern und _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: Geben Sie eine Anzahl von Millisekunden von 0 bis {MAX_SLEEP_MS} an
+@msg	$.sleep: give a number of milliseconds	$.sleep: Geben Sie eine Anzahl von Millisekunden an
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: Ein Lauf kann nicht in einem Callback einer integrierten Funktion, einem Getter, einer Umwandlung oder einer Datei warten, die $.evalFile ausführt; rufen Sie es aus dem eigenen Code des Skripts auf
+@msg	$.bp: scripts here have no debugger	$.bp: Skripte haben hier keinen Debugger
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: Skripte können noch keinen Dialog anzeigen
+@msg	{name}: give a message	{name}: Geben Sie eine Meldung an
+@msg	{name}: give the text the field starts with	{name}: Geben Sie den Text an, mit dem das Feld beginnt
+@msg	{name}: the message is longer than 16 KiB	{name}: Die Meldung ist länger als 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: Der Titel ist länger als 256 Byte
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: Der Text, mit dem das Feld beginnt, ist länger als 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: Ein Dialog kann sich nicht in einem Callback einer integrierten Funktion, einem Getter, einer Umwandlung oder einer Datei öffnen, die $.evalFile ausführt; rufen Sie ihn aus dem eigenen Code des Skripts auf
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: Die nächste Antwort in `answers` ist für {_1}, nicht für {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` hat keine Antwort mehr für diesen Dialog
+@msg	vc.document{place} is too large for a script	vc.document{place} ist zu groß für ein Skript
+@msg	vc.log: the log of this run is full	vc.log: Das Protokoll dieses Laufs ist voll
+@msg	this function's script run has ended	der Skriptlauf dieser Funktion ist beendet
+@msg	the script made more host calls than one run may make	das Skript hat mehr Host-Aufrufe ausgeführt, als ein Lauf ausführen darf
+@msg	the script passed more data to and from commands than one run may pass	das Skript hat mehr Daten an Befehle und von Befehlen übergeben, als ein Lauf übergeben darf
+@msg	the script added more objects and data to the documents than one run may add	das Skript hat den Dokumenten mehr Objekte und Daten hinzugefügt, als ein Lauf hinzufügen darf
+@msg	{what}: the object is not a File or a Folder	{what}: Das Objekt ist weder ein File noch ein Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: Die Anzahl muss eine endliche Zahl sein, 0 oder mehr
+@msg	File.seek: the position must be a finite number	File.seek: Die Position muss eine endliche Zahl sein
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: Der Modus muss 0, 1 oder 2 sein
+@msg	script file is compiled: {value}	die Skriptdatei ist kompiliert: {value}
+@msg	`name` must be the name of a script engine	`name` muss der Name einer Skript-Engine sein
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	die Hauptskript-Engine ist für jeden Lauf neu und wird nie behalten, daher kann sie nicht verworfen werden
+@msg	there is no script engine named {name}	es gibt keine Skript-Engine namens {name}
 @msg	Running a script	Skript wird ausgeführt
 @msg	Copied the script report	Skriptbericht kopiert
 @msg	Corners edits the corners of a path	„Ecken“ bearbeitet die Ecken eines Pfads
@@ -4131,6 +4305,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`globalAdjust` must be an object	`globalAdjust` muss ein Objekt sein
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` muss 1, 3 oder 5 sein
 @msg	`stops` must be an array	`stops` muss ein Array sein
+@msg	`{key}` must be an array	`{key}` muss ein Array sein
 @msg	`svg` must be an object of SVG options (see document.formats)	`svg` muss ein Objekt mit SVG-Optionen sein (siehe document.formats)
 @msg	`{_1}` is no save command	`{_1}` ist kein Speicherbefehl
 @msg	`{area}` is no recovery area name	`{area}` ist kein Name eines Wiederherstellungsbereichs
@@ -4144,6 +4319,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`{key}` must be a number, not {v}	`{key}` muss eine Zahl sein, nicht {v}
 @msg	{key} must be Unix seconds (an integer) or null	{key} muss eine Unix-Zeit in Sekunden (eine ganze Zahl) oder null sein
 @msg	`{key}` must be a string	`{key}` muss eine Zeichenfolge sein
+@msg	`{key}` must be a profile name or null	`{key}` muss ein Profilname oder null sein
 @msg	`{key}` must be a whole number	`{key}` muss eine ganze Zahl sein
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` muss eine ganze Zahl zwischen {min} und {max} sein (erhalten: {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` muss zwischen {min} und {max} liegen (erhalten: {x})
@@ -4236,6 +4412,8 @@ theme	Appearance	Erscheinungsbild
 @msg	the Smooth slider is not open	der Regler „Glätten“ ist nicht geöffnet
 @msg	the screen color sampler is already open	die Farbaufnahme vom Bildschirm ist bereits geöffnet
 @msg	this system has no screen color sampler	dieses System hat keine Farbaufnahme vom Bildschirm
+@msg	the screen color sampler did not answer	die Farbaufnahme vom Bildschirm hat nicht geantwortet
+@msg	the screen color sampler failed	die Farbaufnahme vom Bildschirm ist fehlgeschlagen
 @msg	bad colour `{hex}` (#rrggbb)	ungültige Farbe `{hex}` (#rrggbb)
 @msg	bad page tree	fehlerhafter Seitenbaum
 @msg	bad shortcut	ungültiger Tastaturbefehl
@@ -4265,6 +4443,7 @@ theme	Appearance	Erscheinungsbild
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ist keine Farbe wie "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: höchstens {MAX_TABLE} Farben
 @msg	command `{0}` is not available right now: {1}	der Befehl `{0}` ist derzeit nicht verfügbar: {1}
+@msg	command `{id}` is not available right now	der Befehl `{id}` ist derzeit nicht verfügbar
 @msg	compound paths can only contain paths	zusammengesetzte Pfade können nur Pfade enthalten
 @msg	compressed (RLE) bitmaps can't be read yet	komprimierte Bitmaps (RLE) können noch nicht gelesen werden
 @msg	damaged	beschädigt
@@ -4296,6 +4475,7 @@ theme	Appearance	Erscheinungsbild
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	die Seite der Zeichenfläche {n} ist {size} groß und damit länger als die PDF-Seitengrenze von 14.400 pt (200 in): sie wird mit einer UserUnit von {unit} geschrieben, daher zeigen Apps, die UserUnit ignorieren, sie entsprechend oft kleiner an
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	die Seite der Zeichenfläche {n} ist {size} groß und damit länger als die PDF-Seitengrenze von 14.400 pt (200 in): {label}-Seiten werden ohne UserUnit in Punkt geschrieben, und Apps, die die Grenze einhalten, schneiden die Seite auf 200 in ab
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 hat keine UserUnit, die eine Seite länger als 14.400 pt (200 in) braucht, um ihre Größe zu behalten: die Datei wird als PDF 1.6 geschrieben
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 hat keine UserUnit, die eine Seite länger als 14.400 pt (200 in) braucht, um innerhalb der PDF/A-2-Seitengrenze von 14.400 Einheiten zu bleiben: die Datei wird als PDF 1.6 geschrieben
 @msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	die Seite der Zeichenfläche {n} ist {size} groß und damit zu lang und schmal für PDF-Seitenlängen von 3 bis 14.400 Einheiten: sie wird mit einer UserUnit von {unit} geschrieben, die die kurze Seite bei mindestens 3 Einheiten hält, und Apps, die die Grenze einhalten, schneiden die lange Seite auf 14.400 Einheiten ab
 @msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label}-Dateien fassen reelle Zahlen bis {max}, und die Seite der Zeichenfläche {n} mit {side} pt Länge braucht größere: wählen Sie PDF 1.6 oder höher ohne PDF/X-Standard oder eine kleinere Zeichenfläche
 @msg	invalid image data for `{0}`	ungültige Bilddaten für `{0}`
@@ -4445,6 +4625,8 @@ theme	Appearance	Erscheinungsbild
 @msg	not a stored central record	kein gespeicherter zentraler Eintrag
 @msg	not a valid plug-in module: {0}	kein gültiges Plug-in-Modul: {0}
 @msg	not an EMF or WMF file	keine EMF- oder WMF-Datei
+@msg	not an HP-GL file	keine HP-GL-Datei
+@msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` muss ein Array von 1 bis 255 Farben der Form #rrggbb sein
 @msg	not found	nicht gefunden
 @msg	not in pattern editing mode	nicht im Musterbearbeitungsmodus
 @msg	finish editing the pattern first	beenden Sie zuerst die Bearbeitung des Musters
@@ -4524,6 +4706,14 @@ theme	Appearance	Erscheinungsbild
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	diese Nachzeichnung würde mehr als {max} Ankerpunkte erzeugen, mehr als das Dokument flüssig darstellen kann: Erhöhen Sie „Rauschen“, verringern Sie „Pfade“ oder „Farben“ oder wählen Sie eine Vorgabe mit geringerer Genauigkeit
 @msg	select an envelope	wählen Sie eine Hülle aus
 @msg	select an image	wählen Sie ein Bild aus
+@msg	`background` must be edges, corners or colors	`background` muss edges, corners oder colors sein
+@msg	`match` must be distance or channels	`match` muss distance oder channels sein
+@msg	`{key}` must be from 0 to 100	`{key}` muss von 0 bis 100 sein
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` muss 1 bis 16 Farben enthalten, jede hexadezimal (#rrggbb oder #rgb) oder als black, white, red, green oder blue
+@msg	the linked image shows its preview: embed or relink it first	das verknüpfte Bild zeigt seine Vorschau: Betten Sie es zuerst ein oder verknüpfen Sie es neu
+@msg	a CMYK image has no transparency to set	ein CMYK-Bild hat keine Transparenz, die festgelegt werden kann
+@msg	every pixel matches the background: no image would be left	jedes Pixel entspricht dem Hintergrund: Es würde kein Bild übrig bleiben
+@msg	an image of {w} × {h} pixels is too large to change	ein Bild mit {w} × {h} Pixeln ist zu groß, um geändert zu werden
 @msg	select an object in perspective	wählen Sie ein Objekt in der Perspektive aus
 @msg	select artwork (or a colour group) to recolor	wählen Sie eine Grafik (oder eine Farbgruppe) zum Neufärben aus
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Neufärben abgeschlossen; unverändert: {locked} und {hidden}
@@ -4630,11 +4820,12 @@ theme	Appearance	Erscheinungsbild
 @msg	unknown format	unbekanntes Format
 @msg	unknown format `{f}` (Save writes {_1})	unbekanntes Format `{f}` („Speichern“ schreibt {_1})
 @msg	unknown freeform mode `{m}` (points, lines)	unbekannter Freiformmodus `{m}` (points, lines)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, freeform)	unbekannte Verlaufsart `{k}` (linear, radial, conic, freeform)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	unbekannte Verlaufsart `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	unbekannte Hervorhebung `{h}`
 @msg	unknown option `{path}.{k}`	unbekannte Option `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	unbekannter Wert für overprints `{o}` (preserve, simulate oder discard)
 @msg	unknown panel `{raw}`	unbekanntes Bedienfeld `{raw}`
+@msg	panels can't be shown in Presentation Mode	im Präsentationsmodus können keine Bedienfelder angezeigt werden
 @msg	unknown preference `{key}`	unbekannte Voreinstellung `{key}`
 @msg	Preferences imported.	Voreinstellungen importiert.
 @msg	not a preferences file: {e}	keine Voreinstellungsdatei: {e}
@@ -5301,6 +5492,11 @@ effect	Soft	Weich
 	Softness	Weichheit
 	Ambient Light	Umgebungslicht
 	Light behind the object	Licht hinter dem Objekt
+	Shadows	Schatten
+	Distance from Object	Abstand vom Objekt
+	Shadow Bounds	Schattenbegrenzung
+	Behind Object	Hinter dem Objekt
+	Below Object	Unter dem Objekt
 	3D Lighting Preset	3D-Beleuchtungsvorgabe
 	Standard	Standard
 	Diffuse	Diffus
@@ -5368,7 +5564,7 @@ effect	Soft	Weich
 @msg	span must be "object" or "selection", got {v}	span muss "object" oder "selection" sein, nicht {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" platziert einen `gradient`, kein Farbfeld
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" platziert einen Verlauf: geben Sie `gradient` an
-@msg	span: "selection" places a linear, radial or conic gradient, not a freeform one	span: "selection" platziert einen linearen, radialen oder konischen Verlauf, keinen Freiform-Verlauf
+@msg	span: "selection" places a linear, radial, conic or diamond gradient, not a freeform one	span: "selection" platziert einen linearen, radialen, konischen oder Rautenverlauf, keinen Freiform-Verlauf
 @msg	span: "selection" places the gradient itself: leave out `start` and `end` (they already place it in document coordinates)	span: "selection" platziert den Verlauf selbst: lassen Sie `start` und `end` weg (sie platzieren ihn bereits in Dokumentkoordinaten)
 	Make Image Dynamic	Bild dynamisch machen
 	Import Data Sets…	Datensätze importieren…
@@ -5553,7 +5749,9 @@ effect	Soft	Weich
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Geometrische Hilfslinien
+	Optical Effects	Optische Effekte
 	Geometric Patterns	Geometrische Muster
+	Grit Textures	Körnige Texturen
 	Ease In	Langsam starten
 	Ease Out	Langsam enden
 	Ease In Out	Langsam starten und enden
@@ -5596,6 +5794,9 @@ axis	Y Axis	Y-Achse
 @msg	`dither` must be true or false	`dither` muss true oder false sein
 	Perceptual	Perzeptiv
 @msg	`method` must be classic or perceptual	`method` muss classic oder perceptual sein
+@msg	`spread` must be pad, repeat or reflect	`spread` muss pad, repeat oder reflect sein
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` muss eine ganze Zahl von 1 bis {MAX_REPEATS} sein
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gilt für lineare, radiale, konische Verläufe und Rautenverläufe
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	„{name}“ installieren, das ein großes Rechenbudget verlangt?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Jede Ausführung kann bis zu {minutes} Minuten dauern und {times}-mal so viel Arbeit leisten, wie andere Plug-ins dürfen. Sie läuft im Hintergrund, und Sie können sie abbrechen.
@@ -5608,12 +5809,118 @@ axis	Y Axis	Y-Achse
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ein Live-Effekt läuft, während das Dokument gezeichnet wird, daher kann er nicht `heavy` sein
 @msg	an exporter always gets an export's budget: leave `budget` out	ein Export-Plug-in erhält immer das Budget eines Exports: Lassen Sie `budget` weg
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}“ verlangt ein großes Rechenbudget (jede Ausführung bis zu {minutes} Minuten und {times}-mal so viele Anweisungen wie üblich): Eine Person muss es in der Desktop-App genehmigen, oder übergeben Sie `allowHeavy: true` in einer mit --allow-plugin-grants gestarteten Sitzung
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	`name` muss 1-64 druckbare Zeichen haben
+@msg	`version`, `description` or `author` is too long	`version`, `description` oder `author` ist zu lang
+@msg	`warnings` must be a list of strings	`warnings` muss eine Liste von Zeichenketten sein
+@msg	`{k}` must be one of {_1}	`{k}` muss einer der folgenden Werte sein: {_1}
+@msg	`{k}` must be {what}	`{k}` muss {what} sein
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	ein Export-Plug-in gibt 1 bis {MAX_EXTENSIONS} `extensions` an
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	höchstens {MAX_UNGROUPED} Parameter außerhalb von Gruppen: Geben Sie den anderen eine `group`
+@msg	can't encode the input	die Eingabe kann nicht codiert werden
+@msg	expected {"dataBase64"}	erwartet: {"dataBase64"}
+@msg	expected {"objects"}	erwartet: {"objects"}
+@msg	export `{name}`: {e}	Modulexport `{name}`: {e}
+@msg	extension {e} is listed twice	die Dateiendung {e} ist doppelt aufgeführt
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	Dateiendung {e}: Verwenden Sie 1-16 Kleinbuchstaben und Ziffern, ohne Punkt
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	ungültige ID {_1}: Verwenden Sie 1-64 Zeichen aus A-Z a-z 0-9 . _ -
+@msg	invalid parameter name {k}	ungültiger Parametername {k}
+@msg	manifest is not UTF-8	das Manifest ist nicht in UTF-8 codiert
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	das Manifest ist zu lang (Grenze {MAX_MANIFEST_BYTES} Byte)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	das Manifest ist {_1} Byte groß (Grenze {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	das Modul ist {_1} Byte groß (Grenze {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	muss genehmigt werden: Es verlangt {0}, was der Benutzer gewährt, wenn er es einzeln installiert
+@msg	not JSON: {e}	kein JSON: {e}
+@msg	not a WebAssembly binary (missing \0asm header)	keine WebAssembly-Binärdatei (der Header \0asm fehlt)
+@msg	parameter `{k}`: {what}	Parameter `{k}`: {what}
+@msg	parameter `{name}`: {what}	Parameter `{name}`: {what}
+@msg	plug-in parameters must be a JSON object	die Plug-in-Parameter müssen ein JSON-Objekt sein
+@msg	the module must export its linear memory as `memory`	das Modul muss seinen linearen Speicher als `memory` exportieren
+@msg	the objects to change are no longer in the document	die zu ändernden Objekte sind nicht mehr im Dokument
+@msg	the runtime panicked	die Laufzeitumgebung ist abgestürzt
+@msg	unexpected host trap	unerwarteter Abbruch (Trap) im Host
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version hat {v} zurückgegeben; dieser Host unterstützt Version {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc hat 0 zurückgegeben (kein Speicher mehr)
+@msg	vc_alloc returned a block outside memory	vc_alloc hat einen Block außerhalb des Speichers zurückgegeben
+@msg	vc_run returned error code {packed}	vc_run hat den Fehlercode {packed} zurückgegeben
+@msg	{_1} is not a file	{_1} ist keine Datei
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} ist {_2} Byte groß (Grenze {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} Objekte (Grenze {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what} zeigt außerhalb des Speichers
+@msg	`angle` must be a number	`angle` muss eine Zahl sein
+@msg	`aspect` must be from 0.01 to 100	`aspect` muss zwischen 0.01 und 100 liegen
+@msg	`cap` must be "butt", "round" or "square"	`cap` muss "butt", "round" oder "square" sein
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` muss "nonzero" oder "evenodd" sein
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` muss eine https://-Adresse mit höchstens {MAX_HELP_URL} Byte sein
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` muss 1-{MAX_HELP} druckbare Zeichen haben
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` muss eine Effekt-ID mit 1-{MAX_EFFECT_ID} Byte sein
+@msg	`id` must be the id of an input object	`id` muss die ID eines Eingabeobjekts sein
+@msg	`join` must be "miter", "round" or "bevel"	`join` muss "miter", "round" oder "bevel" sein
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` und `group` müssen 1-{MAX_LABEL} druckbare Zeichen haben
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` muss 1-{MAX_TEXT} sein, und der Standardwert darf nicht länger sein
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` und `maxItems` müssen 0-{MAX_LIST} sein, `maxItems` mindestens 1, und der Standardwert muss so viele Einträge haben
+@msg	`name` must be a string	`name` muss eine Zeichenkette sein
+@msg	`opacity` must be a number	`opacity` muss eine Zahl sein
+@msg	`type` must be "path" or "compound"	`type` muss "path" oder "compound" sein
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` muss 1-{MAX_UNIT} druckbare Zeichen haben
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` muss 1 bis {MAX_CONDITION_VALUES} Werte für `{other}` nennen
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` nennt `{other}`, aber das ist kein Parameter, der vor diesem deklariert ist
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` darf höchstens {MAX_CONDITIONS} Parameter nennen
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` nimmt die Werte von `{other}` an, die eines Kontrollkästchens oder einer Auswahl
+@msg	`visible` must be true or false	`visible` muss true oder false sein
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` muss eine Zahl von {_1} bis {_2} sein
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` muss ein Array mit höchstens {MAX_ITEMS} Einträgen sein
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	ein Farb-Standardwert muss ein Farbobjekt oder ein Hex-String wie "#3a7bd5" sein
+@msg	a color object or a hex string such as "#3a7bd5"	ein Farbobjekt oder ein Hex-String wie "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	ein Freiform-Verlauf enthält höchstens {MAX_ITEMS} Punkte und Linien
+@msg	a freeform gradient line names a point it doesn't have	eine Linie des Freiform-Verlaufs nennt einen Punkt, den der Verlauf nicht hat
+@msg	a gradient needs 1-{MAX_ITEMS} stops	ein Verlauf braucht 1-{MAX_ITEMS} Farbstopps
+@msg	a list of numbers	eine Liste von Zahlen
+@msg	a list of {min_items} to {max_items} numbers	eine Liste von {min_items} bis {max_items} Zahlen
+@msg	a new object needs a `path`	ein neues Objekt braucht einen `path`
+@msg	a number	eine Zahl
+@msg	a painted live effect returns only `objects`	ein malender Live-Effekt gibt nur `objects` zurück
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ein Teil eines malenden Live-Effekts hat nur `path`, `fillRule`, `fills` und `strokes`
+@msg	a read-only object was left out	ein schreibgeschütztes Objekt wurde weggelassen
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	ein schreibgeschütztes Objekt wurde weggelassen: Geben Sie es zurück, als {"id"} allein oder so, wie es übergeben wurde
+@msg	a string	eine Zeichenkette
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	eine Kontur hat nur `paint`, `width`, `join`, `cap` und `miterLimit`
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	eine Kontur muss {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} sein
+@msg	an effect must be {"id", "params"?, "visible"?}	ein Effekt muss {"id", "params"?, "visible"?} sein
+@msg	an effect on a fill returns only `fills`	ein Effekt auf einer Fläche gibt nur `fills` zurück
+@msg	an effect on a stroke returns only `strokes`	ein Effekt auf einer Kontur gibt nur `strokes` zurück
+@msg	an object must be a JSON object	ein Objekt muss ein JSON-Objekt sein
+@msg	bad range	ungültiger Bereich
+@msg	choices must be 1-64 non-empty, printable strings	die Auswahlwerte müssen 1-64 nicht leere, druckbare Zeichenketten sein
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	Koordinate außerhalb des Bereichs (Grenze ±{MAX_COORD} pt)
+@msg	default is not one of the options	der Standardwert ist keine der Optionen
+@msg	each piece needs a `path`	jedes Teil braucht einen `path`
+@msg	is listed twice	ist doppelt aufgeführt
+@msg	pattern transform out of range	Mustertransformation außerhalb des Bereichs
+@msg	read-only field '{field}' changed	das schreibgeschützte Feld '{field}' wurde geändert
+@msg	stops must be in order of `offset`	die Farbstopps müssen nach `offset` geordnet sein
+@msg	the document has no pattern {pattern}	das Dokument hat kein Muster {pattern}
+@msg	the document has no swatch {n}	das Dokument hat kein Farbfeld {n}
+@msg	the output	die Ausgabe
+@msg	the path has no anchor points	der Pfad hat keine Ankerpunkte
+@msg	too many anchor points (limit {MAX_ANCHORS})	zu viele Ankerpunkte (Grenze {MAX_ANCHORS})
+@msg	true or false	true oder false
+@msg	unknown key `{k}`; the keys here are {_1}	unbekannter Schlüssel `{k}`; die Schlüssel hier sind {_1}
+@msg	{_1} is listed twice	{_1} ist doppelt aufgeführt
+@msg	{_1} is not the id of an input object	{_1} ist nicht die ID eines Eingabeobjekts
+@msg	{_1} is read-only	{_1} ist schreibgeschützt
+@msg	{what} must be from {lo} to {hi}	{what} muss zwischen {lo} und {hi} liegen
+@msg	a color component	eine Farbkomponente
+@msg	a plate	eine Druckplatte
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	„{name}“ installieren, das diese Berechtigungen verlangt?
 	ID: {id}	ID: {id}
 	Version: {version}	Version: {version}
 	Install “{name}” in place of the plug-in with the same ID?	„{name}“ anstelle des Plug-ins mit derselben ID installieren?
 	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Diese Datei ist nicht das Plug-in, das vorher mit dieser ID installiert war. Sie erhält die Einstellungen und den Cache, die für diese ID gespeichert sind.
+	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Eine Automatisierung hat angefordert, dieses Plug-in zu installieren. Um es zu installieren, wählen Sie selbst „Objekt › Plug-ins › Plug-in installieren…“.
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Eine Automatisierung hat angefordert, dieses Plug-in zu installieren. Um es zu installieren, wählen Sie selbst „Objekt › Plug-ins › Plug-in installieren…“.
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}“ ist ein anderes Modul als das Plug-in mit der ID {_1} und würde die dafür gespeicherten Einstellungen und den Cache erhalten: Installieren Sie es mit `replace: true`, sobald der Benutzer zustimmt
 	File SHA-256: {hash}	Datei-SHA-256: {hash}
 	Read the objects it is given	Die Objekte lesen, die es erhält
@@ -5659,6 +5966,11 @@ axis	Y Axis	Y-Achse
 @msg	`inputs` needs the permission `doc.read`	`inputs` erfordert die Berechtigung `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	Speicherbudget (Objekt {_1} benötigt {size} Byte Eingabe, {left} verbleiben)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	Objektbudget (mehr als {MAX_OBJECTS} schreibgeschützte Objekte)
+@msg	instruction budget	Anweisungsbudget
+@msg	time budget	Zeitbudget
+@msg	memory budget (the selection is too large to hand over)	Speicherbudget (die Auswahl ist zu groß zum Übergeben)
+@msg	output size ({what} is {len} bytes, limit {max})	Ausgabegröße ({what} ist {len} Byte groß, Grenze {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	die Berechtigung des Plug-ins kann nicht aus dem Plug-in-Speicher entfernt werden
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	die Berechtigung `{shown}` ist für eine spätere Plug-in-API reserviert; dieser Host gewährt sie nicht
 @msg	unknown permission `{shown}`	unbekannte Berechtigung `{shown}`
 @msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	„{name}“ verlangt die Berechtigungen {asked}: Eine Person muss sie in der Desktop-App genehmigen, oder übergeben Sie `grant` in einer mit --allow-plugin-grants gestarteten Sitzung
@@ -5671,6 +5983,12 @@ axis	Y Axis	Y-Achse
 @msg	command {name}: `label` must be 1-64 printable characters	Befehl {name}: `label` muss 1-64 druckbare Zeichen haben
 @msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	Befehl {name}: Verwenden Sie eine ID aus 1-{MAX_COMMAND_ID} Zeichen aus a-z 0-9 _, die mit einem Buchstaben beginnt
 @msg	command {name}: {e}	Befehl {name}: {e}
+@msg	manifest: {e}	Manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	Manifest: {e} (Zeile {line}, Spalte {column})
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` muss eine Liste von Befehlen sein, jeder mit `id` und `label`
+@msg	command {name} must be an object with an `id` and a `label`	der Befehl {name} muss ein Objekt mit `id` und `label` sein
+@msg	missing field `{key}`	fehlendes Feld `{key}`
+@msg	duplicate field `{key}`	doppeltes Feld `{key}`
 @msg	only a filter or a live effect declares `commands`	nur ein Filter oder ein Live-Effekt deklariert `commands`
 @msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	das Modul hat nicht den SHA-256-Wert aus `hash`: Es wurde nichts installiert
@@ -5695,6 +6013,16 @@ axis	Y Axis	Y-Achse
 @msg	message must be text	message muss Text sein
 @msg	allowContinue must be true or false	allowContinue muss true oder false sein
 @msg	Batch cannot play an action with a stop	Die Stapelverarbeitung kann keine Aktion mit einem Stopp abspielen
+	Insert Menu Item…	Menübefehl einfügen…
+	Insert Menu Item	Menübefehl einfügen
+	Menu Item:	Menübefehl:
+	No menu item matches.	Kein Menübefehl passt.
+	Several menu items match. Choose one from the list.	Mehrere Menübefehle passen. Wählen Sie einen aus der Liste.
+	Items that open a dialog, and File, Window and Help menu items, are not listed.	Befehle, die ein Dialogfeld öffnen, sowie Befehle der Menüs „Datei“, „Fenster“ und „Hilfe“ werden nicht aufgeführt.
+@msg	command must be text	command muss Text sein
+@msg	no menu item that can be inserted runs this command	kein einfügbarer Menübefehl führt diesen Befehl aus
+@msg	the action already has 10,000 steps	die Aktion hat bereits 10.000 Schritte
+@msg	the action set would be larger than 8 MiB	der Aktionssatz wäre größer als 8 MiB
 	Playback Options	Wiedergabeoptionen
 	Accelerated	Beschleunigt
 	Step by Step	Schrittweise
@@ -5798,6 +6126,11 @@ axis	Y Axis	Y-Achse
 	User Brush Library 9	Benutzer-Pinsel-Bibliothek 9
 	User Brush Library 10	Benutzer-Pinsel-Bibliothek 10
 	Art Ribbons	Bildbänder
+	Ink and Wash	Tusche und Lavur
+	Tapered Ink	Spitz zulaufende Tusche
+	Brush Pen	Pinselstift
+	Soft Wash	Weiche Lavur
+	Pooling Wash	Lavur mit Farbrand
 	Zigzag	Zickzack
 	Burst Ray	Stoßstrahl
 	Dash Trail	Strichelspur
@@ -5809,8 +6142,24 @@ axis	Y Axis	Y-Achse
 	Charge Wave	Ladewelle
 	Spark Trail	Funkenspur
 	Calligraphic Nibs	Kalligrafie-Federn
+	Bristle Brushes	Borstenpinsel-Set
+	Fine Liner	Feiner Liner
+	Pointed Flat	Spitzer Flachpinsel
+	Stubby Round	Kurzer Rundpinsel
+	Dry Scrub	Trockenes Schrubben
+	Soft Dome	Weiche Kuppel
+	Filbert	Katzenzunge
+	Angled Round	Schräger Rundpinsel
+	Angled Flat	Schräger Flachpinsel
+	Fan Blender	Fächer zum Verblenden
+	Grass Fan	Grasfächer
 	Pattern Borders	Musterbordüren
 	Scatter Shapes	Streuformen
+	Dry Media	Trockene Medien
+	Chalk Grain	Kreidekorn
+	Graphite Pencil	Graphitstift
+	Wax Crayon	Wachsmalstift
+	Charcoal Dust	Kohlestaub
 	Save Brush Library…	Pinsel-Bibliothek speichern…
 @msg	`{_1}` has no brushes to apply	`{_1}` hat keine Pinsel zum Anwenden
 @msg	missing `library` (see brush.libraries)	`library` fehlt (siehe brush.libraries)
@@ -6021,6 +6370,10 @@ anchor	Points:	Punkte:
 @msg	features lists at most {max} tags	features enthält höchstens {max} Tags
 @msg	unknown OpenType feature `{t}`	unbekannte OpenType-Funktion `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} muss eine Zahl über 0 und höchstens {max} sein
+@msg	{label} must be at most {max} characters	{label} darf höchstens {max} Zeichen lang sein
+@msg	{label} must be one character	{label} muss genau ein Zeichen sein
+@msg	at most {max} tab stops	höchstens {max} Tabstopps
+@msg	unknown align `{other}`	unbekannte Ausrichtung `{other}`
 @msg	no character style `{name}`	Zeichenformat `{name}` nicht gefunden
 
 # Color Effects add-on: Duotone (Effect › Color Effects) and Print Ink Fixes (Object › Plug-ins › Color Effects).
@@ -6183,6 +6536,12 @@ breakText	Glyphs	Glyphen
 	Delete the selected brushes?	Ausgewählte Pinsel löschen?
 	Strokes use one or more of these brushes. Take the brushes off those strokes and delete the brushes?	Konturen verwenden einen oder mehrere dieser Pinsel. Pinsel von diesen Konturen entfernen und die Pinsel löschen?
 	Remove Strokes	Konturen entfernen
+	Place Brush Art	Pinselgrafik platzieren
+	Replace Brush Art	Pinselgrafik ersetzen
+	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturen verwenden diesen Pinsel. Die neue Grafik auf diese Konturen anwenden oder sie unverändert lassen und eine Kopie des Pinsels mit der neuen Grafik hinzufügen?
+	Apply to Strokes	Auf Konturen anwenden
+	Leave Strokes	Konturen beibehalten
+@msg	`{name}` has no art (only scatter, art and pattern brushes do)	`{name}` hat keine Grafik (nur Spezial-, Bild- und Musterpinsel haben eine)
 # Arrange Tools add-on (Object › Plug-ins › Arrange Tools).
 	Arrange Tools	Anordnungswerkzeuge
 	Arrange in Grid…	In Raster anordnen…
@@ -6378,6 +6737,11 @@ breakText	Glyphs	Glyphen
 @msg	only an exporter or an importer declares `extensions`	nur ein Export- oder Import-Plug-in gibt `extensions` an
 @msg	an importer always gets an import's budget: leave `budget` out	ein Import-Plug-in erhält immer das Budget eines Imports: Lassen Sie `budget` weg
 
+# Copy Troubleshooting Info
+	Copy Troubleshooting Info	Informationen zur Fehlerbehebung kopieren
+@msg	Copied the troubleshooting info	Informationen zur Fehlerbehebung kopiert
+@msg	The last session of VectorCraft stopped responding before it closed. Help › Copy Troubleshooting Info copies the details for a bug report	Die letzte VectorCraft-Sitzung reagierte nicht mehr, bevor sie geschlossen wurde. Hilfe › Informationen zur Fehlerbehebung kopieren kopiert die Details für einen Fehlerbericht
+
 # Safe Mode
 	Safe Mode…	Abgesicherter Modus…
 	Safe Mode	Abgesicherter Modus
@@ -6398,6 +6762,7 @@ breakText	Glyphs	Glyphen
 
 # Align to Pixel Grid
 	Align to Pixel Grid	Am Pixelraster ausrichten
+	Align New Objects to Pixel Grid	Neue Objekte am Pixelraster ausrichten
 	Not Aligned to Pixel Grid	Nicht am Pixelraster ausgerichtet
 @msg	only paths and compound paths can be aligned to the pixel grid	nur Pfade und zusammengesetzte Pfade können am Pixelraster ausgerichtet werden
 @msg	side is left or right, not `{s}`	side ist left oder right, nicht `{s}`
@@ -6429,8 +6794,40 @@ breakText	Glyphs	Glyphen
 @plural	{n} line cut|{n} lines cut	{n} Zeile gekürzt|{n} Zeilen gekürzt
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` und `last` müssen Nummern von Zeilen sein, die die Konsole enthält, `first` vor `last`
 
+# Learn panel
+	Learn	Lernen
+	Explore tutorials	Lernprogramme entdecken
+	For you	Für Sie
+	Skills	Fertigkeiten
+	Get started	Erste Schritte
+	Quick skill guide	Kurzanleitung zu Fertigkeiten
+	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Kurze praktische Lernprogramme zu den wichtigsten Werkzeugen, nach Fertigkeiten geordnet. Wählen Sie eine Fertigkeit, um ihre Lernprogramme zu sehen.
+	List Tutorials	Lernprogramme auflisten
+	Show Tutorial	Lernprogramm anzeigen
+	Show Tool Location	Position des Werkzeugs anzeigen
+	Show where this tool is	Zeigen, wo sich dieses Werkzeug befindet
+@msg	missing `tutorial` (see learn.list)	`tutorial` fehlt (siehe learn.list)
+@msg	unknown tutorial `{id}` (see learn.list)	unbekanntes Lernprogramm `{id}` (siehe learn.list)
+
 # Deferred plug-in effects
 	Refresh Deferred Effects	Zurückgestellte Effekte aktualisieren
 	Deferred Effects	Zurückgestellte Effekte
 @msg	no plug-in effect is deferred	kein Plug-in-Effekt ist zurückgestellt
 @msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Mit {n} zurückgestelltem Plug-in-Effekt geöffnet. Effekt › Zurückgestellte Effekte aktualisieren führt ihn aus.|Mit {n} zurückgestellten Plug-in-Effekten geöffnet. Effekt › Zurückgestellte Effekte aktualisieren führt sie aus.
+
+# Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
+	Cutting Tools	Schneidwerkzeuge
+	Stencil Bridges…	Schablonenstege…
+	Stencil Bridges	Schablonenstege
+	Shortest Crossing	Kürzeste Querung
+	Direction	Richtung
+@msg	The selected art has no islands to bridge	Das ausgewählte Bildmaterial hat keine Inseln zum Verbinden
+@msg	No bridge of this width fits across the selected art	Kein Steg dieser Breite passt über das ausgewählte Bildmaterial
+@msg	Some islands could not be joined to the area around the art	Einige Inseln konnten nicht mit der Fläche um das Bildmaterial verbunden werden
+@msg	`width` must be from {lo} to {hi} pt	`width` muss zwischen {lo} und {hi} pt liegen
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` muss eine ganze Zahl von 1 bis {MAX_BRIDGES_PER_ISLAND} sein
+	Weed Box and Lines…	Entgitterrahmen und -linien…
+	Weed Box and Lines	Entgitterrahmen und -linien
+	Margin	Rand
+	Box	Rahmen
+	Swatch	Farbfeld

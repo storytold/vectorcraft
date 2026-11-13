@@ -54,6 +54,12 @@ pub(super) fn item_effects(item: &AppearanceItem) -> &[Effect] {
     }
 }
 
+/// The effects of `item`, a fill or stroke of `n`, that its raster effects are drawn from: each
+/// one following `n`'s Transform effects as well ([`effects::item_effects_in`]).
+pub(super) fn item_raster<'a>(n: &Node, item: &'a AppearanceItem) -> std::borrow::Cow<'a, [Effect]> {
+    effects::item_effects_in(&n.appearance.effects, item_effects(item))
+}
+
 /// Visual bounds including geometry effects, stroke outsets and shadows/glows (symbol instances
 /// measured by their art from `symbols`).
 pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
@@ -81,7 +87,7 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
 /// `r`, the art of `n` with its strokes, grown by how far the raster effects of `n`'s fills and
 /// strokes and then `n`'s own paint past it.
 fn with_raster_reach(symbols: &SymbolBoxes, n: &Node, r: Rect) -> Rect {
-    let r = n.appearance.items.iter().filter(|i| paints(i)).map(|i| spread(symbols, item_effects(i), r)).fold(r, |acc, b| acc.union(b));
+    let r = n.appearance.items.iter().filter(|i| paints(i)).map(|i| spread(symbols, &item_raster(n, i), r)).fold(r, |acc, b| acc.union(b));
     let o = outset(symbols, &n.appearance.effects, r);
     r.inflate(o, o)
 }
@@ -109,7 +115,7 @@ pub(crate) fn drawn_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     }
     let b = art_bounds(symbols, n)?;
     let items = n.appearance.items.iter().filter(|i| paints(i) && !effects::raster_effects(item_effects(i)).is_empty());
-    Some(items.map(|i| spread(symbols, item_effects(i), item_bounds(symbols.document(), n, i).unwrap_or(b))).fold(b, |acc, r| acc.union(r)))
+    Some(items.map(|i| spread(symbols, &item_raster(n, i), item_bounds(symbols.document(), n, i).unwrap_or(b))).fold(b, |acc, r| acc.union(r)))
 }
 
 /// The bounds of what `item`, a fill or stroke of the path or compound path `n`, paints: the path
@@ -505,15 +511,29 @@ fn glyphs_box(t: &vectorcraft_doc::TextObject, outset: f64) -> Option<Rect> {
 
 /// How far the content of live object `n` (a blend, envelope or repeat) can paint past its visual
 /// bounds: for each object in it, how far the effects in a symbol instance's art paint past that
-/// art ([`art_effects_reach`]) and how far brush art can paint ([`crate::brush_fx::pad`]), on the
-/// farthest side. 0 for any other kind of object.
+/// art ([`art_effects_reach`]), how far brush art can paint ([`crate::brush_fx::pad`]) and how far
+/// a path's own effects paint past it ([`path_effects_reach`]), on the farthest side. 0 for any
+/// other kind of object.
 fn live_content_reach(symbols: &SymbolBoxes, n: &Node) -> f64 {
     if !vectorcraft_doc::live::is_live(n) {
         return 0.0;
     }
     let mut reach = 0.0f64;
-    n.walk(&mut |c| reach = reach.max(art_effects_reach(symbols, c) + crate::brush_fx::pad(symbols, c)));
+    n.walk(&mut |c| reach = reach.max(art_effects_reach(symbols, c).max(path_effects_reach(symbols, c)) + crate::brush_fx::pad(symbols, c)));
     reach
+}
+
+/// How far the effects of path or compound path `n` (a drop shadow, a glow, a geometry effect)
+/// paint past its visual bounds, on its farthest side ([`visual_bounds`]): 0 when it has no
+/// visible effects, and for any other kind of object.
+fn path_effects_reach(symbols: &SymbolBoxes, n: &Node) -> f64 {
+    if !has_fx(n) {
+        return 0.0;
+    }
+    match (visual_bounds(symbols, n), n.visual_bounds_with(symbols)) {
+        (Some(c), Some(v)) => [v.x0 - c.x0, v.y0 - c.y0, c.x1 - v.x1, c.y1 - v.y1].into_iter().fold(0.0, f64::max),
+        _ => 0.0,
+    }
 }
 
 /// How far the effects in the art of symbol instance `n` (and in the art of the symbols the

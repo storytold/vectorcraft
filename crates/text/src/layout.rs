@@ -99,14 +99,17 @@ fn takes_cell(g: &SGlyph) -> bool {
 ///
 /// It stands in glyph space as it stands in vertical point type's line space: a quarter turn
 /// counterclockwise from horizontal path type's pose about the center of its cell, a baseline shift
-/// kept across the column and a leading space taken off moving it along the path, then moved across
+/// kept across the column and a leading space taken off (or the space before a column's first
+/// character) moving it along the path, then moved across
 /// the path as a glyph lying on its side is.
 fn upright_path_turn(g: &SGlyph, em: f64, pre: Affine, local: Affine, unturned: Affine, angle: f64, advance: f64) -> (Affine, f64) {
     let cell = if takes_cell(g) { upright_cell(g) } else { advance };
     let (shift, unshift) = (Affine::translate((0.0, -g.bshift)), Affine::translate((0.0, g.bshift)));
     let about = Point::new(cell * 0.5, -upright_centre(g, cell, em));
-    let mut turn =
-        Affine::translate((-g.lead, g.face.ideographic_centre() * em)) * shift * Affine::rotate_about(-std::f64::consts::FRAC_PI_2, about) * unshift;
+    let mut turn = Affine::translate((g.kern_shift - g.lead, g.face.ideographic_centre() * em))
+        * shift
+        * Affine::rotate_about(-std::f64::consts::FRAC_PI_2, about)
+        * unshift;
     // The effects that keep the glyph's axes fixed (Stair Step) leave its top toward the path's end on
     // a path that runs to the left: it turns half a turn about its cell's center.
     let tangent = Vec2::new(angle.cos(), angle.sin());
@@ -238,7 +241,7 @@ impl Ctx<'_> {
     /// Layout on or Fractional Widths off, whole-point advances.
     fn finish_shaping<'s>(&self, v: &mut [SGlyph], style: impl Fn(&SGlyph) -> &'s CharStyle) {
         if self.vertical {
-            tate_chu_yoko(v, |g| {
+            tate_chu_yoko(v, self.system_layout || !self.fractional_widths, |g| {
                 let st = style(g);
                 TcyStyle { size: st.size, marked: st.tate_chu_yoko, up: st.tcy_up_down, right: st.tcy_left_right }
             });
@@ -315,6 +318,8 @@ impl Ctx<'_> {
         tab.dx = 0.0;
         tab.dy = 0.0;
         tab.kern_shift = 0.0;
+        tab.aki_shift = 0.0;
+        tab.aki = 0.0;
         tab.tcy = None;
         tab.vpal = None;
         let left = para.laid_out_left_indent();
@@ -330,6 +335,19 @@ impl Ctx<'_> {
         let n = marker.len();
         sg.splice(0..0, marker);
         n
+    }
+
+    /// Does glyph `g`'s own width start where its placement sets it ([`PositionedGlyph::width_start`])?
+    /// Not for an inline graphic, nor in vertical type for an upright or tate-chu-yoko glyph, which
+    /// start their cell at the start of their advance.
+    fn places_own_width(&self, g: &SGlyph) -> bool {
+        g.inline.is_none() && !(self.vertical && (g.tcy.is_some() || (takes_cell(g) && stands_upright(g))))
+    }
+
+    /// How far glyph `g`'s own width moves when the glyph is drawn `shift` further along its
+    /// advance: `shift` when its placement sets where that width starts, otherwise 0.
+    fn own_width_shift(&self, g: &SGlyph, shift: f64) -> f64 {
+        if self.places_own_width(g) { shift } else { 0.0 }
     }
 
     fn emit(&mut self, g: &SGlyph, pre: Affine, origin: Point, angle: f64, advance: f64, line: usize) {
@@ -359,19 +377,20 @@ impl Ctx<'_> {
         } else {
             self.db.outline(&g.face, g.gid)
         };
-        // A glyph whose leading space was taken off (mojikumi) is drawn that much earlier: an
-        // upright one in vertical type by moving it up the column once it stands upright.
+        // A glyph whose leading space was taken off (mojikumi) is drawn that much earlier, and one
+        // moved along the line by manual kerning ([`SGlyph::kern_shift`]) that much later: an
+        // upright one in vertical type by moving it along the column once it stands upright.
         let upright = self.vertical && g.tcy.is_none() && stands_upright(g) && !(self.on_path && g.inline.is_some());
-        let lead = if upright { 0.0 } else { g.lead };
+        let (lead, kern_shift) = if upright { (0.0, 0.0) } else { (g.lead, g.kern_shift) };
         let local = match &g.inline {
             // Inline graphics: art space to glyph space (no font outline), moved along the line by
             // right-to-left manual kerning as a glyph is.
-            Some(ib) => Affine::translate((g.kern_shift - lead, -g.bshift)) * ib.xf,
+            Some(ib) => Affine::translate((kern_shift - lead, -g.bshift)) * ib.xf,
             // Baseline shift moves the glyph across its line, and Character Rotation then turns it
             // about its shifted pen position, so the shift is across the line at any rotation.
             // Manual kerning and composition trim move that pen position along the line.
             None => {
-                Affine::translate((g.kern_shift - lead, -g.bshift))
+                Affine::translate((kern_shift - lead, -g.bshift))
                     * Affine::rotate(-g.rotation.to_radians())
                     * Affine::translate((g.dx, g.dy))
                     * Affine::scale_non_uniform(g.sx, g.sy)
@@ -379,7 +398,7 @@ impl Ctx<'_> {
         };
         // The turning point in font units, which later moves of the glyph's transform keep.
         let pivot = match local.determinant() {
-            det if det != 0.0 && det.is_finite() => local.inverse() * Point::new(g.kern_shift - lead, -g.bshift),
+            det if det != 0.0 && det.is_finite() => local.inverse() * Point::new(kern_shift - lead, -g.bshift),
             _ => Point::ZERO,
         };
         let unturned = if g.inline.is_none() && g.rotation != 0.0 && g.sx != 0.0 && g.sy != 0.0 {
@@ -490,9 +509,10 @@ impl Ctx<'_> {
                 // space after the cell, and must not push the glyph off the centre line).
                 let em = self.style_at(g.byte).size;
                 let cell = if takes_cell(g) { upright_cell(g) } else { advance };
-                // A leading space taken off moves it up the column after the turn (moving the
-                // turning point instead would move it across the column too).
-                let turn = Affine::translate((-g.lead, 0.0))
+                // A leading space taken off moves it up the column after the turn, and the space
+                // before a column's first character down it (moving the turning point instead
+                // would move it across the column too).
+                let turn = Affine::translate((g.kern_shift - g.lead, 0.0))
                     * Affine::rotate_about(-std::f64::consts::FRAC_PI_2, Point::new(origin.x + cell * 0.5, origin.y - upright_centre(g, cell, em)));
                 m = shift * turn * unshift * m;
                 // Its own advance across, from where the cell centres it: where the shaper set the
@@ -527,10 +547,16 @@ impl Ctx<'_> {
         };
         // Where its own width starts along its advance: the shaper's placement, a leading space
         // taken off and right-to-left manual kerning move the glyph along the line. An upright or
-        // tate-chu-yoko glyph in vertical type starts its cell at the start of its advance.
-        let width_start = if g.inline.is_none() && !upright && !(self.vertical && g.tcy.is_some()) {
+        // tate-chu-yoko glyph in vertical type starts its cell at the start of its advance, an
+        // upright one after the space before a column's first character.
+        let along = {
             let [a, b, ..] = pre.as_coeffs();
-            Some((g.kern_shift + g.dx - g.lead) * a.hypot(b)).filter(|s| s.is_finite()).unwrap_or(0.0)
+            a.hypot(b)
+        };
+        let width_start = if self.places_own_width(g) {
+            Some((g.kern_shift + g.dx - g.lead) * along).filter(|s| s.is_finite()).unwrap_or(0.0)
+        } else if upright {
+            Some(g.kern_shift * along).filter(|s| s.is_finite()).unwrap_or(0.0)
         } else {
             0.0
         };
@@ -606,6 +632,8 @@ impl Ctx<'_> {
         k.dx = 0.0;
         k.dy = 0.0;
         k.kern_shift = 0.0;
+        k.aki_shift = 0.0;
+        k.aki = 0.0;
         k.len = 0;
         k.lead = 0.0;
         k.ch = kashida::TATWEEL;
@@ -663,6 +691,8 @@ mod emit_kashida_mark_last {
             dx: 0.0,
             dy: 0.0,
             kern_shift: 0.0,
+            aki_shift: 0.0,
+            aki: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,
@@ -676,6 +706,8 @@ mod emit_kashida_mark_last {
             tcy: None,
             inline: None,
             word_end: false,
+            keeps_word: false,
+            keeps_next: false,
             lead: 0.0,
             proportional: false,
             vpal: None,
@@ -724,6 +756,8 @@ mod emit_kashida_mark_last {
             dx: 0.0,
             dy: 0.0,
             kern_shift: 0.0,
+            aki_shift: 0.0,
+            aki: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,
@@ -737,6 +771,8 @@ mod emit_kashida_mark_last {
             tcy: None,
             inline: None,
             word_end: false,
+            keeps_word: false,
+            keeps_next: false,
             lead: 0.0,
             proportional: false,
             vpal: None,

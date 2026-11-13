@@ -873,8 +873,9 @@ impl<'s> Parser<'s> {
     }
 
     /// An assignment's, `++`'s, `--`'s or `for-in`'s target: an identifier (in strict code
-    /// neither `eval` nor `arguments`), a property, or outside strict mode code a call (assigning
-    /// to its result fails at run time, as ECMA-262 2015 Annex B and web browsers have it).
+    /// neither `eval` nor `arguments`), a property, an E4X name standing alone (`@a`, `ns::a`;
+    /// ECMA-357 section 11.1), or outside strict mode code a call (assigning to its result fails
+    /// at run time, as ECMA-262 2015 Annex B and web browsers have it).
     fn check_target(&self, expr: ExprId, message: &str) -> Result<()> {
         let inner = self.ast.unparenthesized(expr);
         match self.ast.expr(inner) {
@@ -884,7 +885,7 @@ impl<'s> Parser<'s> {
                 }
                 Ok(())
             }
-            Some(Expr::Member { .. } | Expr::Index { .. }) => Ok(()),
+            Some(Expr::Member { .. } | Expr::Index { .. } | Expr::XmlScopeName(_)) => Ok(()),
             Some(Expr::Call { .. }) if !self.ctx.strict => Ok(()),
             _ => Err(self.error_at_offset(self.ast.expr_span(expr).start, message)),
         }

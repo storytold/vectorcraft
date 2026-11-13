@@ -98,6 +98,69 @@ fn export_writes_the_sheet_and_rasterized_art() {
     assert!(s.execute("css.export", &json!({})).is_err(), "nothing selected: nothing to export");
 }
 
+#[test]
+fn export_refuses_a_scope_or_path_that_is_not_a_string() {
+    let mut s = session();
+    run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 40}));
+    run(&mut s, "shape.ellipse", json!({"x": 60, "y": 0, "width": 40, "height": 40}));
+    let refused = |s: &mut Session, p: Value, key: &str| {
+        let e = s.execute("css.export", &p).expect_err(&p.to_string()).to_string();
+        assert_eq!(e, format!("invalid parameters for `css.export`: `{key}` must be a string"), "{p}");
+    };
+    for scope in [json!(5), json!(true), json!(["all"]), Value::Null] {
+        refused(&mut s, json!({"scope": scope}), "scope");
+    }
+    for path in [json!(5), Value::Null] {
+        refused(&mut s, json!({"path": path}), "path");
+        refused(&mut s, json!({"path": path, "scope": "all"}), "path");
+    }
+    // Left out, each keeps its default: the selection (the ellipse), and the CSS as data.
+    let r = run(&mut s, "css.export", json!({}));
+    assert_eq!((r["rules"].clone(), r["data"].is_string()), (json!(1), true), "{r}");
+    assert_eq!(run(&mut s, "css.export", json!({"scope": "all"}))["rules"], json!(2));
+    let e = s.execute("css.export", &json!({"scope": "page"})).unwrap_err().to_string();
+    assert!(e.contains("scope must be selection or all (got page)"), "{e}");
+}
+
+#[test]
+fn every_object_refuses_malformed_ids_it_does_not_use() {
+    let mut s = session();
+    let rect = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 40}))["id"].as_u64().unwrap();
+    run(&mut s, "shape.ellipse", json!({"x": 60, "y": 0, "width": 40, "height": 40}));
+    for (cmd, base) in [("css.generate", json!({})), ("css.export", json!({"scope": "all"}))] {
+        for (key, value, says) in [
+            ("ids", json!("abc"), "`ids` must be an array of object ids, not \"abc\""),
+            ("ids", json!([1.5]), "object ids are non-negative integers, not 1.5"),
+            ("id", json!(-1), "object ids are non-negative integers, not -1"),
+            ("id", json!("$step"), "`id` is the step reference \"$step\""),
+        ] {
+            let mut p = base.clone();
+            p[key] = value;
+            let e = s.execute(cmd, &p).expect_err(&format!("{cmd} {p}")).to_string();
+            assert!(e.contains(says), "{cmd} {p}: {e}");
+        }
+        // Well-formed ids are still not used: every object.
+        let mut p = base.clone();
+        p["ids"] = json!([rect]);
+        let rules = run(&mut s, cmd, p)["rules"].clone();
+        let count = rules.as_array().map_or(rules.as_u64(), |r| Some(r.len() as u64));
+        assert_eq!(count, Some(2), "{cmd}: {rules}");
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn export_with_a_scope_that_is_not_a_string_writes_nothing() {
+    let mut s = session();
+    run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 40, "height": 40}));
+    let dir = std::env::temp_dir().join(format!("vc-css-scope-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("site.css");
+    assert!(s.execute("css.export", &json!({"path": path.to_string_lossy(), "scope": 5})).is_err());
+    assert!(!path.exists(), "no file for a refused scope");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn export_to_a_path_puts_the_pictures_next_to_the_sheet() {

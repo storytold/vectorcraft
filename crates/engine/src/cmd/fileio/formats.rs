@@ -1,6 +1,7 @@
 use super::super::unique_name;
 use super::{
-    Result, Session, TEMPLATE_FORMATS, UNSUPPORTED, Unsupported, Value, bad, dxf, eps, json, metafile, native, pdf, screens, svg, text, unsupported,
+    Result, Session, TEMPLATE_FORMATS, UNSUPPORTED, Unsupported, Value, bad, dxf, eps, hpgl, json, metafile, native, pdf, screens, svg, text,
+    unsupported,
 };
 
 /// One option a format's encoder reads from the export params.
@@ -479,6 +480,17 @@ pub const FORMATS: &[Format] = &[
     },
     Format { id: "emf", label: "EMF", extensions: &["emf"], mime: "image/emf", read: true, write: true, raster: false, options: metafile::OPTIONS },
     Format { id: "wmf", label: "WMF", extensions: &["wmf"], mime: "image/wmf", read: true, write: true, raster: false, options: metafile::OPTIONS },
+    // HP-GL/2 plot files, read by `vectorcraft_cad::hpgl` into paths and written as pen moves.
+    Format {
+        id: "hpgl",
+        label: "HP-GL",
+        extensions: &["plt", "hpgl", "hgl", "hpg"],
+        mime: "application/vnd.hp-hpgl",
+        read: true,
+        write: true,
+        raster: false,
+        options: hpgl::OPTIONS,
+    },
     Format {
         id: "tga",
         label: "Targa",
@@ -552,6 +564,10 @@ pub const OPEN_EXTS: &[&str] = &[
     "dxf",
     "emf",
     "wmf",
+    "plt",
+    "hpgl",
+    "hgl",
+    "hpg",
     "eps",
     "epsf",
     "ps",
@@ -565,9 +581,10 @@ pub const OPEN_EXTS: &[&str] = &[
 /// `.epsf`, `.ps`, Targa, PCX, Pixar, JPEG 2000, HEIC/HEIF or JPEG XL type, nor one for the `.pns`, `.dib` and `.rle` names of
 /// PNG and BMP files (File › Open and Place still read them all). On Linux the desktop entry's EPS
 /// type (shared-mime-info's) also covers `.epsf`, so file managers offer VectorCraft for it.
+/// The packaging declares no type for HP-GL plot files either.
 pub const UNASSOCIATED_EXTS: &[&str] = &[
     "psd", "pdd", "psb", "epsf", "ps", "pns", "dib", "rle", "tga", "vda", "icb", "vst", "pcx", "pxr", "jpf", "jpx", "jp2", "j2k", "j2c", "jpc",
-    "heic", "heif", "jxl",
+    "heic", "heif", "jxl", "plt", "hpgl", "hgl", "hpg",
 ];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
@@ -641,6 +658,10 @@ pub const PLACE_EXTS: &[&str] = &[
     "dxf",
     "emf",
     "wmf",
+    "plt",
+    "hpgl",
+    "hgl",
+    "hpg",
     "eps",
     "epsf",
     "ps",
@@ -761,9 +782,9 @@ pub fn open_extensions() -> &'static [&'static str] {
 
 /// File › Open's filters: "All readable files" first, then one per readable format, then one per
 /// importer plug-in (under its name, with the extensions [`open_extensions`] takes from it), then
-/// swatch libraries (which open in the library panel), Libraries panel libraries, flattener, PDF,
-/// print and export presets (imported), scripts (checked without running them) and plug-ins
-/// (installed).
+/// swatch and graphic style libraries (which open in their library panels), Libraries panel
+/// libraries, flattener, PDF, print, perspective grid and export presets and composite fonts
+/// (imported), shortcut sets, scripts (checked without running them) and plug-ins (installed).
 pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
     let (all, importers) = importer_open_part();
     std::iter::once(("All readable files", all)).chain(format_filters()).chain(importers).chain(other_open_filters())
@@ -776,14 +797,17 @@ pub fn builtin_open_filters() -> impl Iterator<Item = (&'static str, &'static [&
     std::iter::once(("All readable files", OPEN_EXTS)).chain(format_filters()).chain(other_open_filters())
 }
 
-/// The open-dialog filters after the document formats: swatch libraries, Libraries panel
-/// libraries, presets, composite fonts, shortcut sets, scripts and plug-ins.
+/// The open-dialog filters after the document formats: swatch and graphic style libraries,
+/// Libraries panel libraries, presets (perspective grid presets among them), composite fonts,
+/// shortcut sets, scripts and plug-ins.
 fn other_open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
     std::iter::once(("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS))
+        .chain(std::iter::once(("Graphic Style Libraries", std::slice::from_ref(&vectorcraft_doc::style_libs::STYLES_EXT))))
         .chain(std::iter::once(("Libraries", crate::cmd::library::LIBRARY_EXTS)))
         .chain(std::iter::once(("Flattener presets", crate::cmd::flatten::PRESET_EXTS)))
         .chain(std::iter::once(("PDF presets", crate::cmd::pdfcmds::PRESET_EXTS)))
         .chain(std::iter::once(("Print presets", crate::cmd::printpresets::PRESET_EXTS)))
+        .chain(std::iter::once(("Perspective grid presets", crate::cmd::perspgrid::PRESET_EXTS)))
         .chain(std::iter::once(("Export presets", screens::PRESET_FILE_EXTS)))
         .chain(std::iter::once(("Composite fonts", crate::cmd::compositefonts::EXTS)))
         .chain(std::iter::once(("Shortcut sets", crate::cmd::shortcutset::EXTS)))
@@ -794,13 +818,13 @@ fn other_open_filters() -> impl Iterator<Item = (&'static str, &'static [&'stati
 /// Open-dialog filters for Swatch Libraries and Graphic Style Libraries Other Library… and Locate
 /// Library…. The library formats come first so Linux file portals (which grey out files that don't
 /// match the default filter) still list `.ase` and the other library extensions; then the same
-/// filters as [`builtin_open_filters`] so a document can be picked for its swatches or graphic
-/// styles.
+/// filters as [`builtin_open_filters`], without a second copy of the library filter, so a document
+/// can be picked for its swatches or graphic styles.
 pub fn library_open_filters(
     library_label: &'static str,
     library_exts: &'static [&'static str],
 ) -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
-    std::iter::once((library_label, library_exts)).chain(builtin_open_filters())
+    std::iter::once((library_label, library_exts)).chain(builtin_open_filters().filter(move |f| *f != (library_label, library_exts)))
 }
 
 /// File → Place dialog filters: "All placeable files", then one per placeable format, then text,
@@ -909,13 +933,20 @@ pub(crate) fn import_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
 /// (the title PDF, PNG and SVG metadata carry). A title of its own stays, and native files keep
 /// the stored title.
 pub fn has_own_title(doc: &vectorcraft_doc::Document) -> bool {
-    !doc.title.trim().is_empty() && !doc.title.strip_prefix("Untitled-").is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+    is_own_title(doc.info_title())
+}
+
+/// Is `title` one a person or a file gave, not blank and not the Untitled-N name New gives?
+pub(crate) fn is_own_title(title: &str) -> bool {
+    !title.trim().is_empty() && !title.strip_prefix("Untitled-").is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
 pub fn titled_for_export(doc: &vectorcraft_doc::Document, path: Option<&str>, format: &str) -> Option<vectorcraft_doc::Document> {
     let path = path.filter(|_| !has_own_title(doc) && !matches!(format, "vectorcraft" | "template" | "ai"))?;
     let mut d = doc.clone();
     d.title = file_stem(path);
+    // A File Info title that is no title of its own (blank, or an Untitled-N name) would hide it.
+    d.metadata.title = None;
     Some(d)
 }
 

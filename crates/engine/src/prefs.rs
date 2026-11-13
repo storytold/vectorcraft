@@ -71,6 +71,11 @@ pub struct Prefs {
     /// A single-key tool shortcut held down chooses its tool until the key is let go, and then the
     /// tool active before comes back; a quick press chooses the tool for good.
     pub hold_tool_keys: bool,
+    /// With View › Show Bounding Box on, the bounding box stays visible while a drag moves the
+    /// selection, and the shape tools that show it draw it around the shape being drawn. Off (the
+    /// default), it hides during a move and while a shape is drawn, except that a Selection tool
+    /// move with Real-time Drawing off still moves the box.
+    pub bounding_box_while_moving_and_drawing: bool,
     /// Offset for Paste / duplicate (Illustrator pastes to the view centre; we offset by this).
     pub paste_offset: f64,
     // Selection & Anchor Display
@@ -401,6 +406,7 @@ impl Default for Prefs {
             scrub_numeric_fields: true,
             trackpad_rotate_view: true,
             hold_tool_keys: true,
+            bounding_box_while_moving_and_drawing: false,
             paste_offset: 10.0,
             selection_tolerance: 3.0,
             marquee_selection: "touching".into(),

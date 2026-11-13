@@ -345,7 +345,7 @@ fn thumbnails_are_embedded_on_every_page() {
     assert_eq!(import(&r.bytes).unwrap().artboards.len(), 3);
     // Asked for without the pages drawn: none, with a warning. Thumbnails too large are refused.
     let r = export_with_report(&d, &options(json!({"thumbnails": true}))).unwrap();
-    assert!(r.warnings.iter().any(|w| w.contains("thumbnails")) && crate::lab_spot::find(&r.bytes, b"/Thumb", 0).is_none());
+    assert!(r.setting_notes.iter().any(|w| w.contains("thumbnails")) && crate::lab_spot::find(&r.bytes, b"/Thumb", 0).is_none());
     o.thumbnails[1] = thumb(107, 20, 0);
     assert!(matches!(export(&d, &o), Err(PdfError::BadSetting(_))));
 }

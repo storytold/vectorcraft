@@ -84,6 +84,11 @@ fn the_cnc_preset_sets_the_options_that_are_not_given() {
             true
         )
     );
+    assert_eq!((o.include_images, o.include_hatches), (false, false), "CNC / CAM leaves out images and fill hatches");
+    let given = dxf::options(&json!({"dxfPreset": "cnc", "includeImages": true, "includeHatches": true})).unwrap();
+    assert_eq!((given.include_images, given.include_hatches), (true, true), "the options given override it");
+    let custom = dxf::options(&json!({})).unwrap();
+    assert_eq!((custom.include_images, custom.include_hatches), (true, true), "Custom keeps both");
     assert_eq!(dxf::options(&json!({})).unwrap().version, vectorcraft_cad::DxfVersion::R2018, "custom by default");
     let e = s.execute("document.exportDxf", &json!({"dxfPreset": "laser"})).unwrap_err().to_string();
     assert!(e.contains("custom or cnc"), "{e}");
@@ -151,6 +156,59 @@ fn placed_images_come_back_as_linked_files() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// `includeImages` and `includeHatches` leave out placed images (with their files) and fill
+/// hatches, each on its own, through both commands, with and without a path; CNC / CAM leaves
+/// out both, and the options given override it.
+#[test]
+fn placed_images_and_fill_hatches_can_be_left_out() {
+    let mut s = super::tests_svg::image_session();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 1, "height": 1})).unwrap();
+    let counts = |r: &Value| {
+        let e = entities(&text(r));
+        let n = |k: &str| e.iter().filter(|x| *x == k).count();
+        (n("LWPOLYLINE"), n("HATCH"), n("IMAGE"), r.get("linked").and_then(Value::as_array).map_or(0, Vec::len))
+    };
+    let warned = |r: &Value, w: &str| r["warnings"].as_array().unwrap().iter().any(|x| x.as_str().is_some_and(|x| x.starts_with(w)));
+    let all = s.execute("document.export", &json!({"format": "dxf"})).unwrap();
+    assert_eq!(counts(&all), (1, 1, 1, 1));
+    let r = s.execute("document.export", &json!({"format": "dxf", "includeImages": false})).unwrap();
+    assert_eq!(counts(&r), (1, 1, 0, 0));
+    assert!(warned(&r, "placed images are left out") && !warned(&r, "fill hatches"), "{r}");
+    let r = s.execute("document.exportDxf", &json!({"includeHatches": false})).unwrap();
+    assert_eq!(counts(&r), (1, 0, 1, 1));
+    assert!(warned(&r, "fill hatches are left out") && !warned(&r, "placed images"), "{r}");
+    let r = s.execute("document.exportDxf", &json!({"dxfPreset": "cnc"})).unwrap();
+    assert_eq!(counts(&r), (1, 0, 0, 0));
+    let r = s.execute("document.export", &json!({"format": "dxf", "dxfPreset": "cnc", "includeImages": true})).unwrap();
+    assert_eq!(counts(&r), (1, 0, 1, 1));
+    // With a path, no image file is written next to the drawing.
+    let dir = std::env::temp_dir().join(format!("vc-dxf-out-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("cut.dxf").to_string_lossy().to_string();
+    let r = s.execute("document.exportDxf", &json!({"path": path, "dxfPreset": "cnc"})).unwrap();
+    assert!(r.get("linked").is_none(), "{r}");
+    let files: Vec<String> = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_string()).collect();
+    assert_eq!(files, ["cut.dxf"]);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The reply gives what the drawings lose before a note on the options, across the files: the
+/// first artboard's drawing notes the fill hatches that `includeHatches: false` leaves out, and
+/// the second's also has a see-through rectangle that DXF 2000 writes opaque.
+#[test]
+fn what_the_drawings_lose_comes_before_what_an_option_left_out() {
+    let mut s = two_boards();
+    s.execute("object.setProps", &json!({"opacity": 50})).unwrap();
+    let r = s.execute("document.export", &json!({"format": "dxf", "version": "2000", "includeHatches": false, "useArtboards": true})).unwrap();
+    let warnings: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    let Some((option, losses)) = warnings.split_last() else { panic!("no notes") };
+    assert!(option.starts_with("fill hatches are left out"), "{warnings:?}");
+    assert!(losses.iter().any(|w| w.starts_with("transparency needs DXF 2004")), "{warnings:?}");
+    assert!(!losses.iter().any(|w| w.starts_with("fill hatches")), "each note once: {warnings:?}");
+}
+
 /// Two placed images whose pixel data can't be decoded are left out of the drawing and get no
 /// linked file, and `warnings` holds the note raster exports give, once, without naming either
 /// image's key.
@@ -181,6 +239,8 @@ fn bad_dxf_options_are_refused() {
         json!({"rasterFormat": "gif"}),
         json!({"preserve": "both"}),
         json!({"alterPaths": "yes"}),
+        json!({"includeImages": "no"}),
+        json!({"includeHatches": 0}),
     ] {
         let e = s.execute("document.exportDxf", &p).unwrap_err().to_string();
         assert!(e.contains("DXF"), "{p}: {e}");
@@ -203,6 +263,8 @@ fn formats_list_dxf_and_what_can_not_be_written() {
         "scaleLineweights",
         "colors",
         "rasterFormat",
+        "includeImages",
+        "includeHatches",
         "preserve",
         "alterPaths",
         "outlineText",

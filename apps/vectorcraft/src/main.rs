@@ -30,6 +30,9 @@ mod control_server;
 mod cursor_theme;
 #[cfg(feature = "wgpu")]
 mod gpu;
+mod hang_watch;
+#[cfg(target_os = "linux")]
+mod linux_screen_color;
 #[cfg(target_os = "linux")]
 mod linux_stylus;
 mod logging;
@@ -123,6 +126,8 @@ struct App {
     held_files: Vec<String>,
     /// The time and UI zoom of the last monitor list ([`window::monitors_due`]).
     monitors_listed: Option<(f64, f32)>,
+    /// When this frame's input hook started, for the hang report's frame times (`hang_watch`).
+    frame_start: Option<std::time::Instant>,
 }
 
 /// `vectorcraft --help`. Headless work (convert, run, MCP) is `vectorcraft-cli`'s.
@@ -293,6 +298,11 @@ fn main() -> std::process::ExitCode {
             None => logger.no_file(),
         }
     }
+    // The report a session left when it was closed while it did not answer (`hang_watch`).
+    let previous_hang = log_dir().filter(|_| prefs_enabled()).and_then(|dir| hang_watch::take_previous(&dir));
+    if let Some(report) = &previous_hang {
+        log::warn!("the last session was closed while it did not answer; its report:\n{}", report.trim_end());
+    }
     // The roots confine the control channel: a bad one keeps the app from starting rather than
     // leaving agents unconfined. Without a control port there is nothing to confine.
     let roots = if control_port.is_none() {
@@ -437,6 +447,9 @@ fn main() -> std::process::ExitCode {
     open_documents::install();
     #[cfg(feature = "wgpu")]
     let created = startup.clone();
+    // For the hang report (`hang_watch`).
+    #[cfg(feature = "wgpu")]
+    let requested_surface = options.wgpu_options.surface;
     // A panic that ends the window (egui-wgpu's own, #502) is caught here: never a crash.
     let run = |options: eframe::NativeOptions, app_creator: eframe::AppCreator<'_>| {
         #[cfg(target_os = "linux")]
@@ -465,6 +478,7 @@ fn main() -> std::process::ExitCode {
                 prefs_dir::attach_plugin_store(&mut session);
                 // File › Scripts lists the scripts of the Scripts folder next to the preferences.
                 prefs_dir::attach_scripts_dir(&mut session);
+                prefs_dir::attach_new_doc_profiles(&mut session);
                 let mut app = VectorcraftApp::new(session, services(cc.winit_window().cloned(), cc.egui_ctx.clone()));
                 app.set_startup_update_check(true);
                 load_prefs(&mut app, saved);
@@ -474,6 +488,8 @@ fn main() -> std::process::ExitCode {
                 prefs_dir::attach_pdf_preset_store(&mut app.session);
                 // The custom dictionary's words, kept in their own file next to the preferences.
                 prefs_dir::attach_custom_dictionary(&mut app.session);
+                // The custom arrowheads, kept in their own file next to the preferences.
+                prefs_dir::attach_arrowheads(&mut app.session);
                 // Fit the window to its monitor, or put it back where it was (still hidden).
                 let winit_window = cc.winit_window().cloned();
                 if let Some(w) = &winit_window {
@@ -537,6 +553,36 @@ fn main() -> std::process::ExitCode {
                     let (loss, ctx) = (graphics_loss.clone(), cc.egui_ctx.clone());
                     rs.device.set_device_lost_callback(move |reason, msg| loss.report(&ctx, format!("{reason:?}: {msg}")));
                 }
+                // The hang report and Help › Copy Troubleshooting Info (`hang_watch`).
+                // The surface settings the options asked for; the driver resolves the present mode.
+                #[cfg(feature = "wgpu")]
+                let surface = cc
+                    .wgpu_render_state
+                    .as_ref()
+                    .map(|_| (format!("{:?}", requested_surface.present_mode), requested_surface.desired_maximum_frame_latency));
+                #[cfg(not(feature = "wgpu"))]
+                let surface = None;
+                let hang = std::sync::Arc::new(hang_watch::Shared {
+                    facts: hang_watch::Facts::new(
+                        |name| std::env::var(name).ok(),
+                        std::path::Path::new("/.flatpak-info").exists(),
+                        hang_watch::window_system(winit_window.as_deref()),
+                        app.graphics_adapter.clone(),
+                        hang_watch::surface(surface),
+                    ),
+                    started: std::time::Instant::now(),
+                    last: std::sync::Mutex::new(None),
+                    previous: previous_hang.clone(),
+                });
+                vectorcraft_ui_egui::hang_beacon::watch_input(&vectorcraft_ui_egui::hang_beacon::BEACON, &cc.egui_ctx);
+                hang_watch::start(log_dir().filter(|_| prefs_enabled()), hang.clone());
+                app.services.troubleshooting = Some(Box::new(move || {
+                    hang_watch::troubleshooting(&hang, &vectorcraft_ui_egui::hang_beacon::BEACON, std::time::SystemTime::now())
+                }));
+                // A message about the graphics processor, or a stopped plug-in, comes first.
+                if previous_hang.is_some() && app.ui.status.is_empty() {
+                    vectorcraft_ui_egui::troubleshooting::last_session_stopped(&mut app);
+                }
                 app.titlebar_from_env = titlebar_from_env();
                 app.custom_titlebar = custom_titlebar;
                 app.desktop_frame = !custom_titlebar;
@@ -583,6 +629,7 @@ fn main() -> std::process::ExitCode {
                     maximize_tries: 8,
                     held_files,
                     monitors_listed: None,
+                    frame_start: None,
                 }))
             }),
         )
