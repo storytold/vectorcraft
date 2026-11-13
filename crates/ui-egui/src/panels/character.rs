@@ -42,14 +42,21 @@ pub(crate) fn text_style(app: &VectorcraftApp) -> Option<(CharStyle, vectorcraft
 
 /// The first selected text descendant, shared by Character and Paragraph controls.
 pub(crate) fn first_selected_text(app: &VectorcraftApp) -> Option<&vectorcraft_doc::TextObject> {
+    match &first_selected_text_node(app)?.kind {
+        NodeKind::Text(t) => Some(t.as_ref()),
+        _ => None,
+    }
+}
+
+/// The node of [`first_selected_text`]: the first text object among the selected objects and
+/// their descendants, in selection order, then paint order within each selected object.
+pub(crate) fn first_selected_text_node(app: &VectorcraftApp) -> Option<&vectorcraft_doc::Node> {
     let st = app.session.active()?;
     for node in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
         let mut text = None;
         node.walk(&mut |n| {
-            if text.is_none()
-                && let NodeKind::Text(t) = &n.kind
-            {
-                text = Some(t.as_ref());
+            if text.is_none() && matches!(n.kind, NodeKind::Text(_)) {
+                text = Some(n);
             }
         });
         if text.is_some() {
@@ -922,8 +929,13 @@ fn set_anti_alias(app: &mut VectorcraftApp, m: TypeAntiAlias) {
 /// The Font Size combo (Character and Properties panels, Control bar): typed, stepped, scrubbed or
 /// picked from the presets, in the type unit, blank where the selected text's sizes differ.
 pub(crate) fn size_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, width: f32) {
+    size_field_named(app, ui, id, None, width);
+}
+
+/// [`size_field`] named `name` for screen readers, where no label stands beside it.
+fn size_field_named(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, name: Option<&str>, width: f32) {
     let size = shared_effective(app, |s| s.size);
-    if let Some(v) = widgets::spin_field(ui, id, size, app.session.type_unit(), width, 1.0, 0.1, &SIZE_PRESETS) {
+    if let Some(v) = widgets::spin_field_named(ui, id, name, size, app.session.type_unit(), width, 1.0, 0.1, &SIZE_PRESETS) {
         style(app, json!({"size": v}));
     }
 }
@@ -940,15 +952,89 @@ const FONT_HEIGHT_REFERENCES: [(vectorcraft_doc::FontHeightReference, &str); 4] 
     (vectorcraft_doc::FontHeightReference::IcfBox, "icfBox"),
 ];
 
+/// The size of the icon before each name in the Set Font Height Reference dropdown.
+const FONT_HEIGHT_ICON: f32 = 16.0;
+
 /// The Set Font Height Reference dropdown, `width` wide: the height of the font that the Font Size
-/// measures, blank where the characters the panel acts on differ.
+/// measures, blank where the characters the panel acts on differ. Each reference shows an icon of
+/// the height it measures before its name ([`paint_font_height_icon`], #6304).
 fn font_height_reference(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
     // The labels of [`FONT_HEIGHT_REFERENCES`], in its order.
     let labels = [tl!("Em Box"), tl!("Cap Height"), tl!("x-Height"), tl!("ICF Box")];
     let current = shared(app, |s| s.font_height_reference);
-    let shown = FONT_HEIGHT_REFERENCES.iter().zip(labels).find(|(r, _)| Some(r.0) == current).map_or("", |(_, l)| l);
-    if let Some((_, key)) = widgets::dropdown_names(ui, "ch-font-height", shown, &labels, width).and_then(|i| FONT_HEIGHT_REFERENCES.get(i)) {
+    let shown = FONT_HEIGHT_REFERENCES.iter().position(|(r, _)| Some(*r) == current);
+    let accent = Tokens::get(ui.ctx()).accent;
+    let icon = |ui: &Ui, rect: egui::Rect, i: usize, ink: egui::Color32, highlighted: bool| {
+        // On the highlighted row the selection fill is accent-tinted, so the measure takes the
+        // name's colour there to keep its contrast.
+        let mark = if highlighted { ink } else { accent };
+        if let Some((r, _)) = FONT_HEIGHT_REFERENCES.get(i) {
+            paint_font_height_icon(ui.painter(), rect, *r, ink, mark);
+        }
+    };
+    let picked = widgets::dropdown_icon_names(ui, "ch-font-height", shown, &labels, width, FONT_HEIGHT_ICON, icon);
+    if let Some((_, key)) = picked.and_then(|i| FONT_HEIGHT_REFERENCES.get(i)) {
         format(app, json!({"fontHeightReference": key}));
+    }
+}
+
+/// Paints the icon of font height reference `r` into the square `rect` (#6304): a letter drawn in
+/// `ink` on a baseline, and in `mark` the height the reference measures. Em Box frames the whole
+/// square around an "A"; Cap Height puts a bar from the baseline to the top of a capital "A"
+/// beside it; x-Height a bar from the baseline to the top of a lowercase "x"; ICF Box frames a
+/// square inset in the faint em square around an ideograph-like cross, as the ideographic
+/// character face sits inside the em box. The drawings are VectorCraft's own.
+fn paint_font_height_icon(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    r: vectorcraft_doc::FontHeightReference,
+    ink: egui::Color32,
+    mark: egui::Color32,
+) {
+    use vectorcraft_doc::FontHeightReference as R;
+    // A point at (x, y) in the unit square mapped onto `rect`.
+    let p = |x: f32, y: f32| rect.lerp_inside(vec2(x, y));
+    let glyph = egui::Stroke::new(1.3, ink);
+    let measure = egui::Stroke::new(1.2, mark);
+    let line = |a: (f32, f32), b: (f32, f32), stroke: egui::Stroke| painter.line_segment([p(a.0, a.1), p(b.0, b.1)], stroke);
+    let frame = |min: f32, max: f32, stroke: egui::Stroke| {
+        painter.rect_stroke(egui::Rect::from_min_max(p(min, min), p(max, max)), 0.0, stroke, egui::StrokeKind::Middle);
+    };
+    // A capital A from `left` to `right`, its apex at `top` and its feet on `base`.
+    let capital = |left: f32, right: f32, top: f32, base: f32| {
+        let mid = (left + right) / 2.0;
+        painter.add(egui::Shape::line(vec![p(left, base), p(mid, top), p(right, base)], glyph));
+        let bar = top + (base - top) * 0.62;
+        let inset = (right - left) * 0.5 * 0.62;
+        line((mid - inset, bar), (mid + inset, bar), glyph);
+    };
+    // A vertical measure from `top` to `base` at `x`, with ticks at its ends.
+    let height_bar = |x: f32, top: f32, base: f32| {
+        line((x, top), (x, base), measure);
+        line((x - 0.1, top), (x + 0.1, top), measure);
+        line((x - 0.1, base), (x + 0.1, base), measure);
+    };
+    let (base, cap_top, x_top) = (0.86, 0.16, 0.46);
+    match r {
+        R::EmBox => {
+            frame(0.06, 0.94, measure);
+            capital(0.26, 0.74, 0.26, 0.76);
+        }
+        R::CapHeight => {
+            capital(0.06, 0.6, cap_top, base);
+            height_bar(0.82, cap_top, base);
+        }
+        R::XHeight => {
+            line((0.1, x_top), (0.54, base), glyph);
+            line((0.54, x_top), (0.1, base), glyph);
+            height_bar(0.82, x_top, base);
+        }
+        R::IcfBox => {
+            frame(0.06, 0.94, egui::Stroke::new(1.0, ink.gamma_multiply(0.4)));
+            frame(0.2, 0.8, measure);
+            line((0.33, 0.5), (0.67, 0.5), glyph);
+            line((0.5, 0.31), (0.5, 0.69), glyph);
+        }
     }
 }
 
@@ -962,7 +1048,7 @@ pub(crate) fn font_pickers(app: &mut VectorcraftApp, ui: &mut Ui, s: &CharStyle,
         "cb-font" => Some(crate::font_menu::WheelOwner::Control),
         _ => None,
     };
-    font_pickers_owned(app, ui, s, ids, widths, wheel_owner);
+    font_pickers_owned(app, ui, s, ids, widths, wheel_owner, (None, None));
 }
 
 fn font_pickers_owned(
@@ -972,16 +1058,17 @@ fn font_pickers_owned(
     ids: (&str, &str),
     widths: (f32, f32),
     wheel_owner: Option<crate::font_menu::WheelOwner>,
+    a11y: (Option<&str>, Option<&str>),
 ) {
     crate::font_menu::sync_wheel_target(app, ui.ctx(), ui.ctx().viewport_id());
     let sample = crate::font_menu::sample_text(app);
-    let look = crate::font_menu::MenuLook { wheel: true, wheel_owner, ..crate::font_menu::MenuLook::of(app) };
+    let look = crate::font_menu::MenuLook { wheel: true, wheel_owner, name: a11y.0, ..crate::font_menu::MenuLook::of(app) };
     if let Some(pick) = crate::font_menu::font_menu(ui, ids.0, &s.font_family, widths.0, sample.as_deref(), look) {
         crate::font_menu::apply(app, ui.ctx(), pick);
     }
     let styles = vectorcraft_text::FontDb::global().styles(&s.font_family);
     let names: Vec<&str> = styles.iter().map(String::as_str).collect();
-    if let Some(name) = widgets::dropdown_names(ui, ids.1, &s.font_style, &names, widths.1).and_then(|i| names.get(i)) {
+    if let Some(name) = widgets::dropdown_names_named(ui, ids.1, a11y.1, &s.font_style, &names, widths.1).and_then(|i| names.get(i)) {
         style(app, json!({"style": name}));
     }
 }
@@ -1076,6 +1163,35 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     crate::chrome::group_separator(ui);
 }
 
+/// The Contextual Task Bar's widths of the font family menu, the font style dropdown and the
+/// Font Size combo.
+pub(crate) const TASK_BAR_WIDTHS: [f32; 3] = [140.0, 90.0, 76.0];
+
+/// The smallest share of [`TASK_BAR_WIDTHS`] the Contextual Task Bar's type controls narrow to.
+const TASK_BAR_MIN_SCALE: f32 = 0.4;
+
+/// The gaps between the Contextual Task Bar's type controls.
+fn task_bar_gaps() -> f32 {
+    6.0 * (TASK_BAR_WIDTHS.len() - 1) as f32
+}
+
+/// The narrowest room the Contextual Task Bar's type controls fit in, with their spacing.
+pub(crate) fn task_bar_min_room() -> f32 {
+    TASK_BAR_MIN_SCALE * TASK_BAR_WIDTHS.iter().sum::<f32>() + task_bar_gaps()
+}
+
+/// The Contextual Task Bar's type controls while type is selected or edited: the font family and
+/// style menus and the Font Size combo, as the Control bar has them, named for screen readers.
+/// They narrow, down to 40% of their widths, to fit in `room` points with their spacing.
+pub(crate) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, room: f32) {
+    let Some((s, _)) = text_style(app) else { return };
+    let k = ((room - task_bar_gaps()) / TASK_BAR_WIDTHS.iter().sum::<f32>()).clamp(TASK_BAR_MIN_SCALE, 1.0);
+    let [family, style, size] = TASK_BAR_WIDTHS.map(|w| w * k);
+    let owner = Some(crate::font_menu::WheelOwner::TaskBar);
+    font_pickers_owned(app, ui, &s, ("tb-font", "tb-font-style"), (family, style), owner, (Some(tl!("Font Family")), Some(tl!("Style"))));
+    size_field_named(app, ui, "tb-font-size", Some(tl!("Font Size")), size);
+}
+
 /// The panel state key of the panel menu's Show Snap to Glyph Options.
 const SNAP_TO_GLYPH_OPTIONS: &str = "ch-snap-to-glyph-options";
 /// Set when Show Snap to Glyph Options is chosen: the next frame scrolls the panel to the options,
@@ -1146,7 +1262,7 @@ fn attributes(app: &mut VectorcraftApp, ui: &mut Ui, owner: crate::font_menu::Wh
     if let Some(f) = app.character_focus {
         widgets::arm_field_focus(ui.ctx(), f.salt());
     }
-    font_pickers_owned(app, ui, &s, ("ch-font", "ch-style"), (w - 4.0, w - 4.0), Some(owner));
+    font_pickers_owned(app, ui, &s, ("ch-font", "ch-style"), (w - 4.0, w - 4.0), Some(owner), (None, None));
     variable_font(app, ui, &s, w - 4.0);
     ui.add_space(2.0);
     let hidden = pstate::<bool>(ui.ctx(), "ch-hide-options");

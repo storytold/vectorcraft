@@ -264,6 +264,9 @@ pub struct Prefs {
     /// Character panel › Show Snap to Glyph Options: which guides View › Snap to Glyph gives
     /// (`view.snapToGlyph.options`; a preference group, see [`cmd::prefscmds::PREF_GROUPS`]).
     pub glyph_snap: vectorcraft_tools::GlyphSnap,
+    /// Pixel Snapping Options: whether View › Snap to Pixel snaps drawing, moving and scaling
+    /// (`view.snapToPixel.options`; a preference group, see [`cmd::prefscmds::PREF_GROUPS`]).
+    pub pixel_snap: vectorcraft_tools::PixelSnap,
     /// Edit → Transparency Flattener Presets: the user's presets (the built-in ones aren't stored).
     /// Not a `prefs.set` key or group (resetting the preferences keeps them): `flattener.presets.*`
     /// edit it.
@@ -528,6 +531,7 @@ impl Default for Prefs {
             eyedropper: Default::default(),
             pathfinder: Default::default(),
             glyph_snap: Default::default(),
+            pixel_snap: Default::default(),
             flattener_presets: vec![],
             trace_presets: vec![],
             gradient_presets: vec![],

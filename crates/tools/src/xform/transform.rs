@@ -238,8 +238,11 @@ impl Tool for TransformTool {
                         return out;
                     }
                     d.began = true;
-                    // The selection moves, so only the other objects are targets.
-                    self.snap = Some(PointSnap::new(cx, || Targets::collect(cx.doc, &cx.selection.objects, None)));
+                    // The selection moves, so only the other objects are targets. The Scale tool's
+                    // drag scales; the others move the art about the reference point.
+                    let targets = || Targets::collect(cx.doc, &cx.selection.objects, None);
+                    self.snap =
+                        Some(if self.kind == TransformKind::Scale { PointSnap::scaling(cx, targets) } else { PointSnap::moving(cx, targets) });
                     out.push(Action::Begin(self.kind.label().into()));
                 }
                 let (p, guides) = self.snap.as_ref().map_or((p, vec![]), |s| s.snap(cx, p));

@@ -30,6 +30,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::links::{Align, Preserve, hash_bytes};
 use vectorcraft_doc::{
     Appearance, DataValue, Document, ImageBlob, ImageObject, LinkInfo, Node, NodeId, NodeKind, PageBox, PlacedDocument, PlacementOptions,
+    StoredPlace, StoredRoot,
 };
 use vectorcraft_geom::{Affine, FillRule, PathData, Rect, shapes};
 
@@ -43,7 +44,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Check Links",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: every linked image and placed document)} where each linked file is and whether it changed since it was read → {links: [{name, path?, status: ok|modified|missing, ids, found?: path (found away from its path: relative to the document, or by name in its folder), preview: true (showing the low-resolution preview, not the file), refused?: why the path is not followed (another computer, a device or a URL: it counts as missing)}], missing, modified}; under automation read roots, path and found are left out when the file they name is outside the roots",
+            "{ids?: [image or placed document ids] (default: every linked image and placed document, in the layers and in opacity-mask art, symbols, graph designs and patterns)} where each linked file is and whether it changed since it was read → {links: [{name, path?, status: ok|modified|missing, ids, found?: path (found away from its path: relative to the document, or by name in its folder), preview: true (showing the low-resolution preview, not the file), refused?: why the path is not followed (another computer, a device or a URL: it counts as missing)}], missing, modified}; under automation read roots, path and found are left out when the file they name is outside the roots",
             has_doc,
             check
         ),
@@ -52,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update Links",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: the linked images whose file was modified or is showing its preview, and placed documents whose file was modified)} read their linked files again; each keeps its bounds. The images and placed documents inside symbols, graph designs, patterns and opacity masks that show the same content are read again too (by default also those only that art shows); they have no ids to list. One undo step → {updated: [ids], missing: [ids], warnings?: [a DCS file's spot plate whose ink a swatch of the document already names, as file.place warns]}",
+            "{ids?: [image or placed document ids] (default: the linked images whose file was modified or is showing its preview, and placed documents whose file was modified)} read their linked files again; each keeps its bounds. Images and placed documents inside symbols, graph designs, patterns and opacity masks have ids of their own, as links.list gives them; those that show the same content as one read again are read again too. One undo step → {updated: [ids], missing: [ids], warnings?: [a DCS file's spot plate whose ink a swatch of the document already names, as file.place warns]}",
             has_doc,
             update
         ),
@@ -70,7 +71,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Relink",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, scope?: selected (default: ids) | all (ids and every other object in the layers linked to the same file as one of them) | missingInFolder (with path: ids, then every other missing link whose file name is in path's folder, each to the file of its name there; names not there are in notFound; with copy, only images are looked for) | each (with paths), paths?: [{ids, path}] (with scope each, in place of ids, path and folder: each link to its own file; an id in two entries is an error), copy?: false (with path or paths, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used; an error for a DCS file that reads plate files of its own), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard or page of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy; to is the file name alone when the document's folder is outside the automation read roots), warnings?: (as links.update's)}",
+            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, scope?: selected (default: ids) | all (ids and every other object linked to the same file as one of them, in the layers, opacity-mask art, symbols, graph designs and patterns) | missingInFolder (with path: ids, then every other missing link whose file name is in path's folder, each to the file of its name there; names not there are in notFound; with copy, only images are looked for) | each (with paths), paths?: [{ids, path}] (with scope each, in place of ids, path and folder: each link to its own file; an id in two entries is an error), copy?: false (with path or paths, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used; an error for a DCS file that reads plate files of its own), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard or page of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy; to is the file name alone when the document's folder is outside the automation read roots), warnings?: (as links.update's)}",
             has_doc,
             relink
         ),
@@ -79,7 +80,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Links",
             [],
             None,
-            "{show?: all (default)|missing|modified|embedded, sort?: name|kind (file format)|status (missing, modified, ok, embedded); default: stacking order; top first, dcsTransparency?: false (Show DCS Transparency Interactions: mark the images placed from DCS files that are transparent, themselves or a group or layer holding them, or that overlap a visible object with its own transparency; it looks at every object, so it takes longer)} every image object and placed document in the layers, as the Links panel lists them → {links: [{id, name, linked, status: ok|modified|missing|embedded, format (DCS for an image placed from a DCS file), pixelWidth, pixelHeight, path?, found?: path (found away from its path), page?, preview?: true (showing the saved preview), note?: said of an image past the decode allowance (shown at reduced size, or too large to draw), document?: true (a placed document: pageWidth and pageHeight in pt instead of pixels), dcsTransparency?: true (with dcsTransparency)}], missing, modified, embedded}; under automation read roots, path and found are left out when the file they name is outside the roots",
+            "{show?: all (default)|missing|modified|embedded, sort?: name|kind (file format)|status (missing, modified, ok, embedded); default: stacking order; top first, dcsTransparency?: false (Show DCS Transparency Interactions: mark the images placed from DCS files that are transparent, themselves or a group or layer holding them, or that overlap a visible object with its own transparency; it looks at every object, so it takes longer)} every image object and placed document the document stores, as the Links panel lists them: those in the layers, then those in opacity-mask art and in the art of symbols, graph designs and patterns (one row per stored object, never one per symbol instance or pattern tile) → {links: [{id, name, linked, status: ok|modified|missing|embedded, format (DCS for an image placed from a DCS file), pixelWidth, pixelHeight, path?, found?: path (found away from its path), page?, preview?: true (showing the saved preview), note?: said of an image past the decode allowance (shown at reduced size, or too large to draw), document?: true (a placed document: pageWidth and pageHeight in pt instead of pixels), dcsTransparency?: true (with dcsTransparency), owner?: {kind: layers|symbol|graphDesign|pattern, name? (of the symbol, graph design or pattern), maskOf?: id (in the opacity-mask art of that object)} (an object outside the layer tree)}], missing, modified, embedded}; under automation read roots, path and found are left out when the file they name is outside the roots",
             has_doc,
             list
         ),
@@ -88,7 +89,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Go To Link",
             [],
             None,
-            "{id?} select image or placed document `id` (default: the first selected one); the Links panel scrolls it into view → {id, bounds: [x0, y0, x1, y1]}",
+            "{id?} select image or placed document `id` (default: the first selected one); the Links panel scrolls it into view → {id, bounds: [x0, y0, x1, y1], onCanvas: true}; one in opacity-mask art or in the art of a symbol, graph design or pattern has no place of its own on the canvas: the selection is cleared → {id, onCanvas: false, owner} (owner as links.list gives it)",
             has_doc,
             go_to
         ),
@@ -156,7 +157,8 @@ impl Status {
 struct Group {
     link: LinkInfo,
     key: String,
-    /// The objects in the layers (images in symbols and patterns share the content, not an id).
+    /// The stored objects showing it: in the layers, in opacity-mask art and in the art of symbols,
+    /// graph designs and patterns ([`Document::visit_stored`]), each once.
     ids: Vec<NodeId>,
     /// Placed documents: what they show.
     document: Option<Shown>,
@@ -177,8 +179,9 @@ fn linked(n: &Node) -> Option<(&LinkInfo, &str, Option<Shown>)> {
     }
 }
 
-/// Every linked file of `d` with the ids of the objects showing it (for [`crate::link_watch`]): an
-/// image placed from a DCS file has its plate files of their own too, beside its file.
+/// Every linked file of `d` with the ids of the objects showing it, wherever they are stored (for
+/// [`crate::link_watch`]): an image placed from a DCS file has its plate files of their own too,
+/// beside its file.
 pub(crate) fn linked_groups(d: &Document) -> Vec<(String, Vec<u64>)> {
     let mut out = vec![];
     for g in groups(d, None).into_iter().filter(|g| !g.ids.is_empty()) {
@@ -190,8 +193,10 @@ pub(crate) fn linked_groups(d: &Document) -> Vec<(String, Vec<u64>)> {
     out
 }
 
-/// The linked images and placed documents of `d` by file and content: those in the layers (only `ids` when
-/// given), then, without `ids`, the ones only symbols and patterns show.
+/// The linked images and placed documents of `d` by file and content, wherever they are stored
+/// (only `ids` when given), in [`Document::visit_stored`] order. An object whose id an object
+/// visited before it has (art being edited on a layer and its definition) counts once, by its
+/// first place; without `ids` its content is still grouped.
 fn groups(d: &Document, ids: Option<&[NodeId]>) -> Vec<Group> {
     let mut out: Vec<Group> = vec![];
     let mut index: BTreeMap<(String, String, bool), usize> = BTreeMap::new();
@@ -210,22 +215,46 @@ fn groups(d: &Document, ids: Option<&[NodeId]>) -> Vec<Group> {
             g.ids.push(id);
         }
     };
-    d.walk(|n| {
-        if let Some((l, key, document)) = linked(n)
-            && wanted.as_ref().is_none_or(|ids| ids.contains(&n.id))
-        {
+    let mut seen = std::collections::HashSet::new();
+    d.visit_stored(|n, _| {
+        let Some((l, key, document)) = linked(n) else { return };
+        // Id 0 names no object.
+        let first = n.id.0 != 0 && seen.insert(n.id);
+        if first && wanted.as_ref().is_none_or(|ids| ids.contains(&n.id)) {
             add(l, key, document, Some(n.id));
+        } else if ids.is_none() {
+            add(l, key, document, None);
         }
     });
-    if ids.is_none() {
-        d.visit_images(|_, im| {
-            if let Some(l) = &im.link {
-                add(l, &im.key, None, None);
-            }
-        });
-        d.visit_placed(|_, p| add(&p.link, &p.key, Some((p.bounding, p.page_box)), None));
-    }
     out
+}
+
+/// Stored object `id` of `d` ([`Document::stored_node`]).
+fn stored(d: &Document, id: NodeId) -> Option<&Node> {
+    d.stored_node(id).map(|(n, _)| &**n)
+}
+
+/// Of `ids`, the objects of `d` outside the layer tree (where [`Document::node`] finds none).
+fn nested_ids(d: &Document, ids: &[NodeId]) -> std::collections::HashSet<NodeId> {
+    ids.iter().copied().filter(|id| d.node(*id).is_none()).collect()
+}
+
+/// `links.list`'s `owner` of an object stored at `place` of `d`, when it is not in the layer tree
+/// itself: `{kind: layers|symbol|graphDesign|pattern, name?, maskOf?}`.
+fn owner_json(d: &Document, place: StoredPlace) -> Option<Value> {
+    if place.in_layers() {
+        return None;
+    }
+    let mut owner = match place.root {
+        StoredRoot::Layer(_) => json!({ "kind": "layers" }),
+        StoredRoot::Symbol(i) => json!({ "kind": "symbol", "name": d.symbols.get(i).map(|s| s.name.as_str()) }),
+        StoredRoot::GraphDesign(i) => json!({ "kind": "graphDesign", "name": d.graph_designs.get(i).map(|g| g.name.as_str()) }),
+        StoredRoot::Pattern { pattern, .. } => json!({ "kind": "pattern", "name": d.patterns.get(pattern).map(|p| p.name.as_str()) }),
+    };
+    if let Some(m) = place.mask_of {
+        owner["maskOf"] = json!(m.0);
+    }
+    Some(owner)
 }
 
 /// A linked file where it was found.
@@ -493,8 +522,8 @@ pub(crate) fn full_linked_images<'a>(d: &'a Document, base: LinkBase) -> (Cow<'a
 }
 
 /// The linked files of the open document `st` that `links.findFiles` looks for, each with the
-/// objects in the layers that show it: the files of objects `ids` whatever their status, else the
-/// files that can't be found.
+/// stored objects that show it: the files of objects `ids` whatever their status, else the files
+/// that can't be found.
 pub(crate) fn files_to_find(st: &crate::DocState, ids: Option<&[NodeId]>) -> Vec<(LinkInfo, Vec<NodeId>)> {
     groups(&st.doc, ids)
         .into_iter()
@@ -708,7 +737,7 @@ fn clip_to(
 type Remake<'a> = dyn FnMut(&Node, Option<(&PathData, FillRule)>) -> (Node, ClipTo) + 'a;
 
 /// Remakes the linked objects outside the layer tree (in symbols, graph designs, patterns and
-/// opacity masks, where [`Document::node`] finds no ids) that `pick` holds for.
+/// opacity masks, where [`Document::node`] does not find them) that `pick` holds for.
 struct Nested<'a> {
     pick: &'a dyn Fn(&Node) -> bool,
     make: &'a mut Remake<'a>,
@@ -854,10 +883,10 @@ impl Nested<'_> {
     }
 }
 
-/// Placed documents `ids` show `src`, read from the file `link` points at, each placed as its
-/// Placement Options say (`force`: as that Preserve choice says, whatever they say); with `also`
-/// (a file's path and the content shown), so do the placed documents outside the layer tree that
-/// show that content.
+/// Placed documents `ids` (in the layers or outside them) show `src`, read from the file `link`
+/// points at, each placed as its Placement Options say (`force`: as that Preserve choice says,
+/// whatever they say); with `also` (a file's path and the content shown), so do the placed
+/// documents outside the layer tree that show that content.
 fn install_document(
     d: &mut Document,
     ids: &[NodeId],
@@ -872,8 +901,10 @@ fn install_document(
         let o = PlacementOptions { preserve: force.unwrap_or(p.placement.preserve), ..p.placement };
         placed_xf(p.xf, (p.width, p.height), (1.0, 1.0), (w, h), (1.0, 1.0), o)
     };
-    if let Some(also) = also {
-        let pick = |n: &Node| shows(n, also, true);
+    let nested = nested_ids(d, ids);
+    if also.is_some() || !nested.is_empty() {
+        let pick =
+            |n: &Node| matches!(n.kind, NodeKind::PlacedDocument(_)) && (nested.contains(&n.id) || also.is_some_and(|also| shows(n, also, true)));
         let mut make = |n: &Node, _: Option<(&PathData, FillRule)>| {
             let mut n = n.clone();
             let mut clip = ClipTo::Keep;
@@ -1037,26 +1068,39 @@ pub(crate) fn set_image_from_path(d: &mut Document, id: NodeId, path: &str, doc_
     install(d, &[id], read, Some(Preserve::Bounds), None)
 }
 
-/// Image objects `ids` show the file read for `link` (`img`), each placed as its Placement
-/// Options say (`force`: as that Preserve choice says, whatever they say); with `also` (a file's
-/// path and the content shown), so do the images outside the layer tree that show that content.
+/// Image objects `ids` (in the layers or outside them) show the file read for `link` (`img`), each
+/// placed as its Placement Options say (`force`: as that Preserve choice says, whatever they say);
+/// with `also` (a file's path and the content shown), so do the images outside the layer tree that
+/// show that content.
 fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Option<Preserve>, also: Option<(&str, &str)>) -> Result<()> {
     let new_pt = super::place::pt_per_px(img.ppi);
     let mut clips = vec![];
-    if let Some(also) = also {
-        // Every image picked shows content `also.1`, so one resolution serves them all.
-        let old_pt = file_pt(d, also.1);
-        let pick = |n: &Node| shows(n, also, false);
-        // The clipping path the old content's DCS file drew it through.
-        let old_clip = d.images.get(also.1).and_then(ImageBlob::separated_clip);
+    let nested = nested_ids(d, ids);
+    if also.is_some() || !nested.is_empty() {
+        let pick = |n: &Node| matches!(n.kind, NodeKind::Image(_)) && (nested.contains(&n.id) || also.is_some_and(|also| shows(n, also, false)));
+        // The resolution of each content the images picked show, and the clipping path its DCS file
+        // drew it through, looked up once each.
+        let mut old: BTreeMap<String, ((f64, f64), Option<PathData>)> = BTreeMap::new();
+        d.visit_stored(|n, _| {
+            if let NodeKind::Image(im) = &n.kind
+                && pick(n)
+                && !old.contains_key(&im.key)
+            {
+                old.insert(im.key.clone(), (file_pt(d, &im.key), d.images.get(&im.key).and_then(ImageBlob::separated_clip)));
+            }
+        });
         let mut make = |n: &Node, held: Option<(&PathData, FillRule)>| {
             let mut n = n.clone();
             let mut clip = ClipTo::Keep;
             if let NodeKind::Image(im) = &mut n.kind {
                 let o = PlacementOptions { preserve: force.unwrap_or(im.placement.preserve), ..im.placement };
                 let size = |w: u32, h: u32| (w as f64, h as f64);
+                let (old_pt, old_clip) = match old.get(&im.key) {
+                    Some((pt, clip)) => (*pt, clip.as_ref()),
+                    None => (super::place::pt_per_px(None), None),
+                };
                 let (xf, c) = placed_xf(im.xf, size(im.width, im.height), old_pt, size(img.width, img.height), new_pt, o);
-                clip = clip_to(im.xf, old_clip.as_ref(), c, &img, xf, held);
+                clip = clip_to(im.xf, old_clip, c, &img, xf, held);
                 (im.key, im.width, im.height, im.xf, im.link) = (img.key.clone(), img.width, img.height, xf, Some(link.clone()));
             }
             (n, clip)
@@ -1267,7 +1311,7 @@ pub fn resolve(d: &mut Document, base: LinkBase, update: bool, low_res_proxy_eps
         }
     }
     // The objects in symbols, graph designs, patterns and opacity masks that show the same file and
-    // content, which have no ids here, whatever else their links hold.
+    // content, whatever else their links hold, those whose id an earlier object has included.
     if !moved.is_empty() {
         let mut by_path: BTreeMap<String, Vec<(String, bool, LinkInfo)>> = BTreeMap::new();
         for (path, key, document, new) in moved {
@@ -1302,12 +1346,24 @@ fn link_mut(n: &mut Node) -> Option<&mut LinkInfo> {
     }
 }
 
-/// Linked image objects (or placed documents) `ids` link to `link`.
+/// Linked image objects (or placed documents) `ids`, in the layers or outside them, link to `link`.
 fn set_links(d: &mut Document, ids: &[NodeId], link: &LinkInfo) {
-    for id in ids {
+    let nested = nested_ids(d, ids);
+    for id in ids.iter().filter(|id| !nested.contains(id)) {
         if let Some(l) = d.node_mut(*id).and_then(link_mut) {
             *l = link.clone();
         }
+    }
+    if !nested.is_empty() {
+        let pick = |n: &Node| nested.contains(&n.id) && linked(n).is_some();
+        let mut make = |n: &Node, _: Option<(&PathData, FillRule)>| {
+            let mut out = n.clone();
+            if let Some(l) = link_mut(&mut out) {
+                *l = link.clone();
+            }
+            (out, ClipTo::Keep)
+        };
+        Nested { pick: &pick, make: &mut make, next: 0 }.run(d);
     }
 }
 
@@ -1540,7 +1596,7 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
 /// Update Links in the active document of `s` for objects `ids` (default: the linked files that
 /// changed or show their preview), or with `path`, for the placed documents of the file at `path`
 /// whatever their status. The objects in symbols, graph designs, patterns and opacity masks that
-/// show the same content are read again too, and have no ids to report.
+/// show the same content are read again too.
 fn update_where(s: &mut Session, ids: Option<Vec<NodeId>>, path: Option<&str>) -> Result<Value> {
     let st = s.doc()?;
     let (mut reads, mut missing) = (vec![], vec![]);
@@ -1606,7 +1662,7 @@ enum Scope {
     Each,
     /// The objects given or selected.
     Selected,
-    /// Every object in the layers linked to the same file as one given or selected.
+    /// Every stored object linked to the same file as one given or selected.
     All,
     /// The objects given or selected, then every other missing link whose file name is in the new
     /// file's folder.
@@ -1690,7 +1746,7 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // An image or a placed document, with its link.
     let image = |id: &NodeId| {
-        st.doc.node(*id).and_then(|n| match &n.kind {
+        stored(&st.doc, *id).and_then(|n| match &n.kind {
             NodeKind::Image(im) => Some(im.link.as_ref()),
             NodeKind::PlacedDocument(p) => Some(Some(&p.link)),
             _ => None,
@@ -1715,22 +1771,23 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad(C, "select the images to relink, or pass ids"));
     }
-    // All Instances: the other objects in the layers linked to the same files.
+    // All Instances: the other stored objects linked to the same files, each once.
     if scope == Scope::All {
         let paths: BTreeSet<&str> = ids.iter().filter_map(|id| image(id).flatten()).map(|l| l.path.as_str()).collect();
-        let given: BTreeSet<NodeId> = ids.iter().copied().collect();
+        let mut given: BTreeSet<NodeId> = ids.iter().copied().collect();
         let mut more = vec![];
-        st.doc.walk(|n| {
+        st.doc.visit_stored(|n, _| {
             if let Some((l, _, _)) = linked(n)
                 && paths.contains(l.path.as_str())
-                && !given.contains(&n.id)
+                && n.id.0 != 0
+                && given.insert(n.id)
             {
                 more.push(n.id);
             }
         });
         ids.extend(more);
     }
-    if copy_to.is_some() && ids.iter().any(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::PlacedDocument(_)))) {
+    if copy_to.is_some() && ids.iter().any(|id| matches!(stored(&st.doc, *id).map(|n| &n.kind), Some(NodeKind::PlacedDocument(_)))) {
         return Err(bad(C, "copy takes images only: relink placed documents where their files are"));
     }
     // (ids, the file) per file to read.
@@ -1766,7 +1823,7 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
         let mut images = vec![];
         let mut documents: Vec<((u32, bool, PageBox), Vec<NodeId>)> = vec![];
         for id in ids {
-            match st.doc.node(id).map(|n| &n.kind) {
+            match stored(&st.doc, id).map(|n| &n.kind) {
                 Some(NodeKind::PlacedDocument(pl)) => {
                     let k = (pl.page(), pl.bounding, pl.page_box);
                     match documents.iter_mut().find(|(e, _)| *e == k) {
@@ -1916,9 +1973,9 @@ fn copy_into_folder(_: &str, _: &[u8], _: &Path) -> Result<(String, bool)> {
 
 // ---------- the Links panel ----------
 
-/// Image object `id` of `d`.
+/// Image object `id` of `d`, wherever it is stored.
 fn image_of(d: &Document, id: NodeId) -> Option<&ImageObject> {
-    match &d.node(id)?.kind {
+    match &stored(d, id)?.kind {
         NodeKind::Image(im) => Some(im),
         _ => None,
     }
@@ -1936,7 +1993,7 @@ fn image_param(st: &crate::DocState, p: &Value, cmd: &str) -> Result<NodeId> {
         .ok_or_else(|| bad(cmd, "select an image, or pass id"))?;
     match image_of(&st.doc, id) {
         Some(_) => Ok(id),
-        None if st.doc.node(id).is_none() => Err(crate::EngineError::NoNode(id)),
+        None if stored(&st.doc, id).is_none() => Err(crate::EngineError::NoNode(id)),
         None => Err(bad(cmd, format!("object {} is not an image", id.0))),
     }
 }
@@ -1950,9 +2007,9 @@ fn placement_mut(n: &mut Node) -> Option<&mut PlacementOptions> {
     }
 }
 
-/// The Placement Options of image or placed document `id` of `d`.
+/// The Placement Options of image or placed document `id` of `d`, wherever it is stored.
 fn placement_of(d: &Document, id: NodeId) -> Option<PlacementOptions> {
-    match &d.node(id)?.kind {
+    match &stored(d, id)?.kind {
         NodeKind::Image(im) => Some(im.placement),
         NodeKind::PlacedDocument(p) => Some(p.placement),
         _ => None,
@@ -1965,12 +2022,12 @@ fn linked_param(st: &crate::DocState, p: &Value, cmd: &str) -> Result<NodeId> {
     let id = object_param(p, "id", cmd)?.or_else(first).ok_or_else(|| bad(cmd, "select an image, or pass id"))?;
     match placement_of(&st.doc, id) {
         Some(_) => Ok(id),
-        None if st.doc.node(id).is_none() => Err(crate::EngineError::NoNode(id)),
+        None if stored(&st.doc, id).is_none() => Err(crate::EngineError::NoNode(id)),
         None => Err(bad(cmd, format!("object {} is not an image or a linked file", id.0))),
     }
 }
 
-/// Per linked image in the layers of `st`: its file's status, where it was found when away from
+/// Per linked image or placed document of `st`, wherever it is stored: its file's status, where it was found when away from
 /// its path, and whether the image shows its preview (each file probed once).
 pub(crate) fn statuses(st: &crate::DocState) -> BTreeMap<NodeId, (Status, Option<String>, bool)> {
     let mut out = BTreeMap::new();
@@ -2071,17 +2128,20 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let interactions = if switch_or(p, "dcsTransparency", false, C)? { dcs_transparency(&st.doc) } else { BTreeSet::new() };
     let statuses = statuses(st);
-    let mut objects = vec![];
-    st.doc.walk(|n| {
-        if matches!(n.kind, NodeKind::Image(_) | NodeKind::PlacedDocument(_)) {
-            objects.push(n);
+    // The layer tree's objects, top first as the Layers panel lists them, then the others in the
+    // order they are stored (opacity-mask art, symbols, graph designs, patterns), each once.
+    let (mut objects, mut nested) = (vec![], vec![]);
+    let mut seen = std::collections::HashSet::new();
+    st.doc.visit_stored(|n, place| {
+        if matches!(n.kind, NodeKind::Image(_) | NodeKind::PlacedDocument(_)) && n.id.0 != 0 && seen.insert(n.id) {
+            if place.in_layers() { objects.push((n, place)) } else { nested.push((n, place)) }
         }
     });
-    // Top first, as the Layers panel lists them.
     objects.reverse();
+    objects.extend(nested);
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
     let mut rows = vec![];
-    for n in objects {
+    for (n, place) in objects {
         let (status, found, preview) = match statuses.get(&n.id) {
             Some((s, f, p)) => (s.as_str(), f.as_deref(), *p),
             None => ("embedded", None, false),
@@ -2124,6 +2184,9 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
         if preview {
             row["preview"] = json!(true);
         }
+        if let Some(owner) = owner_json(&st.doc, place) {
+            row["owner"] = owner;
+        }
         if interactions.contains(&n.id) {
             row["dcsTransparency"] = json!(true);
         }
@@ -2144,15 +2207,21 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
 fn go_to(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let id = linked_param(st, p, "links.goTo")?;
+    // An object in mask art or a definition has no place of its own on the canvas: the selection
+    // is cleared, and the reply names what holds it.
+    if let Some(owner) = st.doc.stored_node(id).and_then(|(_, place)| owner_json(&st.doc, place)) {
+        s.select(|_, sel| sel.set([]))?;
+        return Ok(json!({ "id": id.0, "onCanvas": false, "owner": owner }));
+    }
     let b = st.doc.node(id).and_then(Node::geometric_bounds).unwrap_or_default();
     s.select(|_, sel| sel.set([id]))?;
-    Ok(json!({ "id": id.0, "bounds": [b.x0, b.y0, b.x1, b.y1] }))
+    Ok(json!({ "id": id.0, "bounds": [b.x0, b.y0, b.x1, b.y1], "onCanvas": true }))
 }
 
 fn embed(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "links.embed";
     let st = s.doc()?;
-    let kind = |id: &NodeId| st.doc.node(*id).map(|n| &n.kind);
+    let kind = |id: &NodeId| stored(&st.doc, *id).map(|n| &n.kind);
     let linked = |id: &NodeId| match kind(id) {
         Some(NodeKind::Image(im)) => im.link.is_some(),
         Some(NodeKind::PlacedDocument(_)) => true,
@@ -2210,7 +2279,7 @@ fn embed(s: &mut Session, p: &Value) -> Result<Value> {
                 install(d, &ids, read, Some(Preserve::Bounds), None)?;
             }
             for id in &done {
-                if let Some(Node { kind: NodeKind::Image(im), .. }) = d.node_mut(*id) {
+                if let Some(Node { kind: NodeKind::Image(im), .. }) = d.stored_node_mut(*id) {
                     im.link = None;
                 }
             }
@@ -2238,7 +2307,7 @@ fn unembed(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "links.unembed";
     let st = s.doc()?;
     let id = image_param(st, p, C)?;
-    let n = st.doc.node(id).ok_or(crate::EngineError::NoNode(id))?;
+    let n = stored(&st.doc, id).ok_or(crate::EngineError::NoNode(id))?;
     let im = image_of(&st.doc, id).ok_or_else(|| bad(C, format!("object {} is not an image", id.0)))?;
     if im.link.is_some() {
         return Err(bad(C, format!("image {} is linked already", id.0)));
@@ -2324,7 +2393,7 @@ fn scale_rotation(xf: Affine, (px, py): (f64, f64)) -> (Value, Value) {
 
 /// Link Info of placed document `id`.
 fn placed_info(st: &crate::DocState, id: NodeId) -> Result<Value> {
-    let n = st.doc.node(id).ok_or(crate::EngineError::NoNode(id))?;
+    let n = stored(&st.doc, id).ok_or(crate::EngineError::NoNode(id))?;
     let NodeKind::PlacedDocument(pl) = &n.kind else { return Err(bad("links.info", format!("object {} is not a placed document", id.0))) };
     let size = n.geometric_bounds().unwrap_or_default();
     let (scale, rotation) = scale_rotation(pl.xf, (1.0, 1.0));
@@ -2404,7 +2473,7 @@ fn placement_options(s: &mut Session, p: &Value) -> Result<Value> {
     };
     s.edit("Placement Options", |d, _| {
         for id in &ids {
-            if let Some(o) = d.node_mut(*id).and_then(placement_mut) {
+            if let Some(o) = d.stored_node_mut(*id).and_then(placement_mut) {
                 set(o);
             }
         }

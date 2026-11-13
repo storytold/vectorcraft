@@ -1512,6 +1512,8 @@ font-technology	Variable	Μεταβλητές
 	Objects on Path Tool	Αντικείμενα σε διαδρομή (Objects on Path Tool)
 	Attach Objects on Path	Προσάρτηση αντικειμένων σε διαδρομή
 	Expand Objects on Path	Επέκταση αντικειμένων σε διαδρομή
+	Detach	Αποσύνδεση
+	Detach Object from Path	Αποσύνδεση αντικειμένου από διαδρομή
 	Release Live Paint	Αποδέσμευση δυναμικής βαφής
 	Release Repeat	Αποδέσμευση επανάληψης
 	Release Slice	Αποδέσμευση τομής
@@ -2746,6 +2748,8 @@ lighting	Light	Φως
 	Oval	Οβάλ
 	Pen	Πένα (Pen Tool)
 	Perceptual	Αντιληπτικό
+	Hue Clockwise	Απόχρωση δεξιόστροφα
+	Hue Counterclockwise	Απόχρωση αριστερόστροφα
 	Pixel	Εικονοστοιχείο
 	Points:	Σημεία:
 	Preserve	Διατήρηση
@@ -4727,6 +4731,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	paths contain invalid coordinates	οι διαδρομές περιέχουν μη έγκυρες συντεταγμένες
 @msg	paths: give at least one file	διαδρομές: δώστε τουλάχιστον ένα αρχείο
 @msg	replace: the object to replace was changed or deleted	αντικατάσταση: το αντικείμενο προς αντικατάσταση άλλαξε ή διαγράφηκε
+@msg	the document it was prepared for is no longer active	το έγγραφο για το οποίο προετοιμάστηκε δεν είναι πλέον ενεργό
 @msg	pattern missing	λείπει το μοτίβο
 @msg	patterns nested too deeply are filled with mid-grey	τα πολύ βαθιά ένθετα μοτίβα γεμίζονται με μέτριο γκρι
 @msg	percent must be above 0 and at most 6400, not {p}	το percent πρέπει να είναι μεγαλύτερο από 0 και έως 6400, όχι {p}
@@ -5080,6 +5085,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	every numbered name for it is taken in the Fonts folder	όλα τα αριθμημένα ονόματά του χρησιμοποιούνται ήδη στον φάκελο γραμματοσειρών
 @msg	every numbered name for {name} is taken in the document's folder	όλα τα αριθμημένα ονόματα για το {name} χρησιμοποιούνται ήδη στον φάκελο εγγράφου
 @msg	No linked files to look for	Δεν υπάρχουν συνδεδεμένα αρχεία για αναζήτηση
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Ο σύνδεσμος βρίσκεται μέσα σε σύμβολο, σχεδιασμό γραφήματος, μοτίβο ή μάσκα αδιαφάνειας και δεν έχει θέση στον καμβά
 	Hide VectorCraft	Απόκρυψη VectorCraft
 	Bring All to Front	Μεταφορά όλων στο προσκήνιο
 	Break Link	Κατάργηση σύνδεσης
@@ -5323,7 +5329,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	`{GRAPHICS}` face must be front or back	το face του `{GRAPHICS}` πρέπει να είναι front ή back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	το {key} του `{GRAPHICS}` πρέπει να είναι αριθμός από {lo} έως {hi}
 @msg	`{GRAPHICS}` must be an array	το `{GRAPHICS}` πρέπει να είναι πίνακας
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Τα γραφικά αντιστοιχίζονται σε επίπεδες όψεις: χρησιμοποιήστε τον τύπο αντικειμένου Εξώθηση ή Επίπεδο
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Τα γραφικά αντιστοιχίζονται στους τύπους αντικειμένου Επίπεδο, Εξώθηση και Περιστροφή γύρω από άξονα
+@msg	Revolve maps graphics onto its side: map them onto the front	Η Περιστροφή γύρω από άξονα αντιστοιχίζει τα γραφικά στην πλευρική της επιφάνεια: αντιστοιχίστε τα στην μπροστινή όψη
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Τα γραφικά είναι πολύ σύνθετα για αυτή την επιφάνεια: απλοποιήστε το σχέδιο των συμβόλων ή μειώστε τα Τμήματα
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	το `{GRAPHICS}` δέχεται το πολύ {MAX_GRAPHICS} γραφικά
 @msg	A plane has one face: map its graphics onto the front	Ένα επίπεδο έχει μία όψη: αντιστοιχίστε τα γραφικά του στην μπροστινή όψη
 @msg	The graphics are too complex: simplify the symbols' art	Τα γραφικά είναι πολύ σύνθετα: απλοποιήστε το σχέδιο των συμβόλων
@@ -6042,6 +6050,7 @@ effect	Points	Σημεία
 @msg	no bound object reports a value (locked objects and embedded images report none)	κανένα συνδεδεμένο αντικείμενο δεν αναφέρει τιμή (τα κλειδωμένα αντικείμενα και οι ενσωματωμένες εικόνες δεν αναφέρουν καμία)
 @msg	select an Intertwine group	επιλέξτε μια ομάδα διαπλοκής
 @msg	select an Objects on Path group	επιλέξτε μια ομάδα αντικειμένων σε διαδρομή
+@msg	choose the object to detach with its Select/Move widget	επιλέξτε το αντικείμενο προς αποσύνδεση με το στοιχείο ελέγχου Επιλογή/Μετακίνηση
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	μια διαδρομή μέσα σε σύνθετη διαδρομή, ανάμειξη, περίβλημα, επανάληψη ή ομάδα διαπλοκής δεν μπορεί να δεχτεί αντικείμενα
 @msg	a clipping path can't take objects	μια διαδρομή αποκοπής δεν μπορεί να δεχτεί αντικείμενα
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	τα αντικείμενα μέσα σε ανάμειξη, περίβλημα, επανάληψη ή ομάδα διαπλοκής δεν μπορούν να προσαρτηθούν σε διαδρομή
@@ -6261,7 +6270,7 @@ axis	Y Axis	Άξονας Y
 @msg	`dither` applies to gradient fills (stroke: false)	Το `dither` ισχύει για γεμίσματα ντεγκραντέ (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	Το `dither` ισχύει για γεμίσματα ντεγκραντέ (paint.setFill)
 @msg	`dither` must be true or false	Το `dither` πρέπει να είναι true ή false
-@msg	`method` must be classic or perceptual	Το `method` πρέπει να είναι classic ή perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	Το `method` πρέπει να είναι classic, perceptual, hue-clockwise ή hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	Το `spread` πρέπει να είναι pad, repeat ή reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	Το `repeats` πρέπει να είναι ακέραιος από 1 έως {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	Το `spread` ισχύει για γραμμικά, ακτινικά, κωνικά και ρομβοειδή ντεγκραντέ
@@ -6504,6 +6513,7 @@ axis	Y Axis	Άξονας Y
 	Continue	Συνέχεια
 	Continue Action	Συνέχεια ενέργειας
 	Delete Action Step	Διαγραφή βήματος ενέργειας
+	Move Action Step	Μετακίνηση βήματος ενέργειας
 	Press Play Current Selection in the Actions panel to go on.	Για να συνεχίσετε, πατήστε «Αναπαραγωγή τρέχουσας επιλογής» στο πάνελ Ενέργειες.
 	Stop: {message}	Διακοπή: {message}
 @msg	no action is waiting at a stop	καμία ενέργεια δεν περιμένει σε διακοπή
@@ -6675,6 +6685,22 @@ axis	Y Axis	Άξονας Y
 	Graphite Pencil	Μολύβι γραφίτη
 	Wax Crayon	Κηρομπογιά
 	Charcoal Dust	Σκόνη κάρβουνου
+	Notched Ribbon	Οδοντωτή κορδέλα
+	Double Line	Διπλή γραμμή
+	Wave	Κύμα
+	Teardrop	Δάκρυ
+	Striped Ribbon	Ριγέ κορδέλα
+	Fine Nib	Λεπτή πένα
+	Broad Nib	Φαρδιά πένα
+	Chisel	Σμίλη
+	Round Pen	Στρογγυλή πένα
+	Pressure Pen	Πένα πίεσης
+	Beads	Χάντρες
+	Dash Dot	Παύλα-τελεία
+	Scallops	Φεστόνια
+	Stars	Αστέρια
+	Triangles	Τρίγωνα
+	Sparkles	Σπίθες
 	Save Brush Library…	Αποθήκευση βιβλιοθήκης πινέλων…
 @msg	`{_1}` has no brushes to apply	Η `{_1}` δεν έχει πινέλα για εφαρμογή
 @msg	missing `library` (see brush.libraries)	λείπει το `library` (δείτε brush.libraries)
@@ -6694,6 +6720,13 @@ axis	Y Axis	Άξονας Y
 	Area Text	Κείμενο περιοχής
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Μέτρηση κειμένου με βάση τα όρια γλυφής
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Επιλογές προσκόλλησης σε εικονοστοιχείο
+	Pixel Snapping Options…	Επιλογές προσκόλλησης σε εικονοστοιχείο…
+	Snap to Pixel While Drawing	Προσκόλληση σε εικονοστοιχείο κατά τη σχεδίαση
+	Snap to Pixel While Moving	Προσκόλληση σε εικονοστοιχείο κατά τη μετακίνηση
+	Snap to Pixel While Scaling	Προσκόλληση σε εικονοστοιχείο κατά την αλλαγή κλίμακας
+	These options take effect when View › Snap to Pixel is on.	Αυτές οι επιλογές ισχύουν όταν είναι ενεργή η επιλογή Προβολή › Προσκόλληση σε εικονοστοιχείο.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Εμφάνιση επιλογών προσκόλλησης σε γλυφή
 	Hide Snap to Glyph Options	Απόκρυψη επιλογών προσκόλλησης σε γλυφή

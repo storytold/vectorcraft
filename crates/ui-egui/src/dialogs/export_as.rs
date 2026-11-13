@@ -177,9 +177,14 @@ fn options_or_write(
             Ok(Value::Null)
         }
         _ => {
-            let mut params = json!({ "format": f.id, "path": path, "useArtboards": use_artboards });
-            if use_artboards {
-                params["range"] = json!(range);
+            let mut params = json!({ "format": f.id, "path": path });
+            // A format that holds the whole document (a template) has no Use Artboards: the
+            // export is not given the option, which its warnings would name as not used.
+            if plugin.is_some() || f.options.iter().any(|o| o.name == "useArtboards") {
+                params["useArtboards"] = json!(use_artboards);
+                if use_artboards {
+                    params["range"] = json!(range);
+                }
             }
             if let Some(plugin) = plugin.filter(|p| !p.manifest().params.is_empty()) {
                 plugin::open_export(app, &plugin, params);

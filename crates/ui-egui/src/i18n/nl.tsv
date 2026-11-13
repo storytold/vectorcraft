@@ -185,6 +185,7 @@
 @msg	node {_1} is on a locked artboard	knooppunt {_1} staat op een vergrendeld tekengebied
 @msg	thumbnail: no page {n} (the file has 1)	miniatuur: geen pagina {n} (het bestand heeft er 1)
 @msg	select an Objects on Path group	selecteer een groep Objecten op pad
+@msg	choose the object to detach with its Select/Move widget	kies het object dat je wilt loskoppelen met zijn widget Selecteren/verplaatsen
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	een pad binnen een samengesteld pad, mengsel, omvorming, herhaling of verstrengelingsgroep kan geen objecten opnemen
 @msg	a clipping path can't take objects	een knippad kan geen objecten opnemen
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objecten binnen een mengsel, omvorming, herhaling of verstrengelingsgroep kunnen niet aan een pad worden gekoppeld
@@ -5133,6 +5134,7 @@ imageTrace	Outline	Contour
 @msg	paths contain invalid coordinates	paden bevatten ongeldige coördinaten
 @msg	paths: give at least one file	paden: geef minstens één bestand
 @msg	replace: the object to replace was changed or deleted	vervangen: het te vervangen object is gewijzigd of verwijderd
+@msg	the document it was prepared for is no longer active	het document waarvoor het is voorbereid, is niet langer actief
 @msg	pattern missing	patroon ontbreekt
 @msg	patterns nested too deeply are filled with mid-grey	patronen die te diep genest zijn, worden gevuld met middelgrijs
 @msg	percent must be above 0 and at most 6400, not {p}	percent moet boven 0 en maximaal 6400 zijn, niet {p}
@@ -5696,6 +5698,8 @@ imageTrace	Outline	Contour
 	Vivid	Levendig
 	Spectrum	Spectrum
 	Perceptual	Perceptueel
+	Hue Clockwise	Tint met de klok mee
+	Hue Counterclockwise	Tint tegen de klok in
 	Relative Colorimetric	Relatief colorimetrisch
 	Absolute Colorimetric	Absoluut colorimetrisch
 	Exact	Exact
@@ -5909,6 +5913,9 @@ mark-style	Japanese	Japans
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} in `{GRAPHICS}` moet een getal van {lo} tot {hi} zijn
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` moet een array zijn
 @msg	Graphics map onto planar faces: use the Extrude or Plane object type	Illustraties worden op platte vlakken geplaatst: gebruik het objecttype Extruderen of Vlak
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Illustraties worden op de objecttypen Vlak, Extruderen en Draaien geplaatst
+@msg	Revolve maps graphics onto its side: map them onto the front	Draaien plaatst illustraties op de zijkant: plaats ze op de voorkant
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	De illustraties zijn te complex voor dit oppervlak: vereenvoudig de illustraties van de symbolen of verlaag Segmenten
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` neemt maximaal {MAX_GRAPHICS} illustraties op
 @msg	A plane has one face: map its graphics onto the front	Een vlak heeft één zijde: plaats de illustraties ervan op de voorkant
 @msg	The graphics are too complex: simplify the symbols' art	De illustraties zijn te complex: vereenvoudig de illustraties van de symbolen
@@ -6416,6 +6423,8 @@ swatch	Bright Violet	Felviolet
 	Objects on Path Tool	Objecten-op-pad-gereedschap
 	Attach Objects on Path	Objecten aan pad koppelen
 	Expand Objects on Path	Objecten op pad uitbreiden
+	Detach	Loskoppelen
+	Detach Object from Path	Object van pad loskoppelen
 	Release Live Paint	Live Paint vrijgeven
 	Release Repeat	Herhaling vrijgeven
 	Release Slice	Slice vrijgeven
@@ -6606,7 +6615,7 @@ axis	Y Axis	Y-as
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` geldt voor verloopvullingen (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` geldt voor verloopvullingen (paint.setFill)
 @msg	`dither` must be true or false	`dither` moet true of false zijn
-@msg	`method` must be classic or perceptual	`method` moet classic of perceptual zijn
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` moet classic, perceptual, hue-clockwise of hue-counterclockwise zijn
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	„{name}” installeren, dat om een groot rekenbudget vraagt?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Elke run kan tot {minutes} minuten duren en {times} keer zoveel werk doen als andere plug-ins mogen. Hij draait op de achtergrond en je kunt hem annuleren.
@@ -6647,6 +6656,7 @@ axis	Y Axis	Y-as
 	Continue	Doorgaan
 	Continue Action	Actie voortzetten
 	Delete Action Step	Actiestap verwijderen
+	Move Action Step	Actiestap verplaatsen
 	Press Play Current Selection in the Actions panel to go on.	Druk in het paneel Acties op Huidige selectie afspelen om door te gaan.
 	Stop: {message}	Stop: {message}
 @msg	no action is waiting at a stop	geen actie wacht bij een stop
@@ -6807,6 +6817,22 @@ axis	Y Axis	Y-as
 	Graphite Pencil	Grafietpotlood
 	Wax Crayon	Waskrijt
 	Charcoal Dust	Houtskoolstof
+	Notched Ribbon	Gekerfd lint
+	Double Line	Dubbele lijn
+	Wave	Golf
+	Teardrop	Traan
+	Striped Ribbon	Gestreept lint
+	Fine Nib	Fijne penpunt
+	Broad Nib	Brede penpunt
+	Chisel	Beitel
+	Round Pen	Ronde pen
+	Pressure Pen	Drukpen
+	Beads	Kralen
+	Dash Dot	Streep-punt
+	Scallops	Schulprand
+	Stars	Sterren
+	Triangles	Driehoeken
+	Sparkles	Fonkelingen
 	Save Brush Library…	Penseelbibliotheek opslaan…
 @msg	no empty artboards to delete	geen lege tekengebieden om te verwijderen
 	Scale Presets	Schaalvoorinstellingen
@@ -6818,6 +6844,13 @@ axis	Y Axis	Y-as
 	Area Text	Vlaktekst
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Tekst meten op glyphbegrenzing
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opties voor uitlijnen op pixel
+	Pixel Snapping Options…	Opties voor uitlijnen op pixel…
+	Snap to Pixel While Drawing	Uitlijnen op pixel bij tekenen
+	Snap to Pixel While Moving	Uitlijnen op pixel bij verplaatsen
+	Snap to Pixel While Scaling	Uitlijnen op pixel bij schalen
+	These options take effect when View › Snap to Pixel is on.	Deze opties werken wanneer Beeld › Uitlijnen op pixel is ingeschakeld.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Opties voor uitlijnen op glyph tonen
 	Hide Snap to Glyph Options	Opties voor uitlijnen op glyph verbergen

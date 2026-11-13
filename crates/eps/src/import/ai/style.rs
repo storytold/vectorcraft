@@ -193,6 +193,10 @@ pub(super) struct ArtStyle {
     /// the effects any object takes that don't move the outline: what a path or compound path is
     /// read with when each gradient is placed as its drawn look has it (`read::ops`' `styled`).
     pub stacked: bool,
+    /// It is one Warp on the whole object, under fills and strokes that paint nothing and have no
+    /// effects of their own: what an image is read with when its live warp draws as its drawn look
+    /// (`read::ops`' `styled`).
+    pub image_warp: bool,
     /// Its fills and strokes, bottom first.
     pub items: Vec<StyleItem>,
     /// Each item's own visibility, transparency and effects, in the order of [`Self::items`].
@@ -1778,6 +1782,10 @@ fn style(filters: &[Filter]) -> ArtStyle {
         && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Gradient { .. } | StyleItem::Stroke { brush: None, .. }))
         && st.looks.iter().all(|l| l.effects.is_empty())
         && st.effects.iter().all(any_object_takes);
+    st.image_warp = st.plain
+        && matches!(st.effects.as_slice(), [e] if e.id.starts_with("warp."))
+        && st.items.iter().all(|i| matches!(i, StyleItem::Fill(p) | StyleItem::Stroke { paint: p, .. } if p.is_none()))
+        && st.looks.iter().all(|l| l.effects.is_empty());
     st
 }
 

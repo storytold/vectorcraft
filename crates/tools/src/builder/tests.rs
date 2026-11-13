@@ -1636,6 +1636,84 @@ fn live_paint_selection_click_outside_the_faces_selects_the_edge_it_highlights()
     assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 106.0, 50.0)), vec![Action::Exec("select.none".into(), json!({}))]);
 }
 
+/// The Live Paint Selection pointer shows what a click at the point selects, from the point and
+/// the modifier keys alone (no move first): a face, an edge, or nothing. Groups the tool does not
+/// take (locked, hidden, outside isolation) show nothing to select. A press keeps its look until
+/// the release.
+#[test]
+fn live_paint_selection_cursor_shows_what_a_click_selects() {
+    let mut d = Document::new(500.0, 500.0);
+    let (g, _) = live_square(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0));
+    let (other, _) = live_square(&mut d, Rect::new(200.0, 0.0, 300.0, 100.0));
+    let s = Selection::default();
+    let p = paint();
+    let plain = Mods::default();
+    let alt = Mods { alt: true, ..Default::default() };
+    let (face, edge, out) = (Cursor::LivePaintSelectFace, Cursor::LivePaintSelectEdge, Cursor::LivePaintSelectOutside);
+    let at = |t: &LivePaintSelectionTool, cx: &ToolContext, x: f64, m: Mods| t.cursor(cx, Point::new(x, 50.0), m);
+    let mut t = LivePaintSelectionTool::default();
+    {
+        let cx = cx(&d, &s, &p);
+        // Both options on: a face inside the square; with Alt the side within reach, inside or
+        // outside the face; nothing away from the groups or from every side.
+        assert_eq!(
+            [at(&t, &cx, 50.0, plain), at(&t, &cx, 98.5, plain), at(&t, &cx, 102.0, plain), at(&t, &cx, 150.0, plain)],
+            [face, face, out, out]
+        );
+        assert_eq!([at(&t, &cx, 98.5, alt), at(&t, &cx, 102.0, alt), at(&t, &cx, 50.0, alt), at(&t, &cx, 150.0, alt)], [edge, edge, out, out]);
+        // The cursor agrees with what a click there selects.
+        let face_id = faces(d.node(g).unwrap())[0].id;
+        assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 50.0, 50.0)), vec![Action::Exec("select.set".into(), json!({ "ids": [face_id.0] }))]);
+        assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 50.0, 50.0).with_mods(alt)), vec![Action::Exec("select.none".into(), json!({}))]);
+        // Select Fills off: a side without Alt too, never a face.
+        t.set_option("selectFills", &json!(false));
+        assert_eq!([at(&t, &cx, 98.5, plain), at(&t, &cx, 50.0, plain), at(&t, &cx, 98.5, alt)], [edge, out, edge]);
+        // Select Strokes off: the face with Alt too, never a side.
+        t.set_option("selectFills", &json!(true));
+        t.set_option("selectStrokes", &json!(false));
+        assert_eq!([at(&t, &cx, 98.5, alt), at(&t, &cx, 102.0, alt)], [face, out]);
+        // Both off: nothing.
+        t.set_option("selectFills", &json!(false));
+        assert_eq!([at(&t, &cx, 50.0, plain), at(&t, &cx, 98.5, alt)], [out, out]);
+    }
+    let mut t = LivePaintSelectionTool::default();
+    // A locked group shows nothing to select; the other group still does.
+    d.node_mut(g).unwrap().locked = true;
+    {
+        let cx = cx(&d, &s, &p);
+        assert_eq!([at(&t, &cx, 50.0, plain), at(&t, &cx, 98.5, alt), at(&t, &cx, 250.0, plain)], [out, out, face]);
+    }
+    d.node_mut(g).unwrap().locked = false;
+    // In isolation mode, a group outside the isolated art shows nothing to select.
+    {
+        let cx = ToolContext { isolation: Some(other), ..cx(&d, &s, &p) };
+        assert_eq!([at(&t, &cx, 50.0, plain), at(&t, &cx, 250.0, plain)], [out, face]);
+    }
+    // A hidden group shows nothing to select.
+    d.node_mut(g).unwrap().visible = false;
+    {
+        let cx = cx(&d, &s, &p);
+        assert_eq!([at(&t, &cx, 50.0, plain), at(&t, &cx, 98.5, alt)], [out, out]);
+    }
+    d.node_mut(g).unwrap().visible = true;
+    // A press keeps its look while the drag goes elsewhere, and the release lets it follow again.
+    let cx = cx(&d, &s, &p);
+    t.pointer(&cx, &ev(PointerKind::Down, 50.0, 50.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 150.0, 50.0));
+    assert_eq!(at(&t, &cx, 150.0, plain), face);
+    t.pointer(&cx, &ev(PointerKind::Up, 150.0, 50.0));
+    assert_eq!(at(&t, &cx, 150.0, plain), out);
+    t.pointer(&cx, &ev(PointerKind::Down, 150.0, 50.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 50.0, 50.0));
+    assert_eq!(at(&t, &cx, 50.0, plain), out);
+    t.key(&cx, ToolKey::Escape, plain);
+    assert_eq!(at(&t, &cx, 50.0, plain), face, "Escape ends the press");
+    for c in [face, edge, out] {
+        assert_eq!(c.precise(), Cursor::Crosshair, "{c:?}");
+        assert_eq!(c.stand_in(), None, "{c:?} is drawn");
+    }
+}
+
 /// Presses at `from` with `m`, drags to `to` and releases there; returns what the release does
 /// (the press and the drag do nothing).
 fn lp_drag(t: &mut LivePaintSelectionTool, cx: &ToolContext, from: (f64, f64), to: (f64, f64), m: Mods) -> Vec<Action> {

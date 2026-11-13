@@ -505,7 +505,10 @@ fn graphics_are_checked() {
     }
     assert!(check(ROTATE, json!([{"symbol": "Mark", "face": "back"}])).is_err());
     assert!(check(INFLATE, json!([{"symbol": "Mark"}])).is_err());
-    assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark"}]})).is_err());
+    // Revolve takes graphics on its side, named the front; Revolve (Classic) takes none.
+    assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark"}]})).is_ok());
+    assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark", "face": "back"}]})).is_err());
+    assert!(validate_three_d_params(crate::CLASSIC_REVOLVE, &json!({"graphics": [{"symbol": "Mark"}]})).is_err());
     // A loaded file's invalid entries are left out when drawn.
     assert_eq!(mapped_graphics(&json!({"graphics": [{"symbol": "Mark"}, {"face": "back"}, 3]})).len(), 1);
 }
@@ -795,4 +798,73 @@ fn a_symbol_instance_in_a_graphic_draws_as_the_canvas_shows_it() {
     let pieces = pieces_of(&d, d.symbols.iter().find(|s| s.name == "WideShaded").unwrap()).unwrap();
     let area: f64 = pieces.iter().map(|p| p.path.to_bezpath().area().abs()).sum();
     assert!((area - 30_000.0).abs() < 1e-3, "{area}");
+}
+
+#[test]
+fn curves_are_cut_one_at_a_time_and_the_work_stops_at_the_limit() {
+    let ellipse = shapes::ellipse(Rect::new(0.0, 0.0, 10.0, 6.0)).to_bezpath();
+    // Cut curve by curve, a path gives the points it gives cut whole.
+    for scale in [1.0, 100.0, 10_000.0] {
+        let placed = Affine::scale(scale) * ellipse.clone();
+        let mut whole = vec![];
+        vectorcraft_geom::kurbo::flatten(placed.iter(), SURFACE_TOLERANCE, |el| {
+            if let PathEl::MoveTo(p) | PathEl::LineTo(p) = el {
+                whole.push(p);
+            }
+        });
+        let mut points = 0;
+        let cut: Vec<Point> = straight_pieces(&placed, &mut points).unwrap().into_iter().flatten().collect();
+        assert_eq!(points, cut.len());
+        assert_eq!(cut.len(), whole.len(), "{scale}");
+        assert!(cut.iter().zip(&whole).all(|(a, b)| a.distance(*b) < 1e-9), "{scale}");
+    }
+    // Past the limit no further curve is cut: of 1,000 ellipses that each take more than 3,000
+    // points, the count stops within one curve of the limit.
+    let mut many = BezPath::new();
+    (0..1000).for_each(|_| many.extend(Affine::scale(10_000.0) * ellipse.clone()));
+    let mut points = 0;
+    assert!(straight_pieces(&many, &mut points).is_none());
+    assert!(points > MAX_ELEMENTS && points < MAX_ELEMENTS + 2000, "{points}");
+    // A curve that reaches farther than any surface, or to no finite point, is not cut at all.
+    for scale in [1e12, f64::INFINITY] {
+        let mut points = 0;
+        assert!(straight_pieces(&(Affine::scale(scale) * ellipse.clone()), &mut points).is_none());
+        assert!(points <= 1, "{scale}: {points}");
+    }
+}
+
+#[test]
+fn a_line_that_reaches_farther_than_any_surface_is_not_cut() {
+    let triangle = |far: f64| {
+        let mut b = BezPath::new();
+        b.move_to((0.0, 0.0));
+        b.line_to((far, 0.0));
+        b.line_to((0.0, 1.0));
+        b.close_path();
+        b
+    };
+    assert!(straight_pieces(&triangle(1e7), &mut 0).is_some());
+    for far in [1e12, 1e300] {
+        assert!(straight_pieces(&triangle(far), &mut 0).is_none(), "{far}");
+        assert!(straight_pieces(&(Affine::translate((far, 0.0)) * triangle(1.0)), &mut 0).is_none(), "{far}");
+    }
+}
+
+#[test]
+fn only_an_opaque_part_on_revolve_takes_a_seam_stroke() {
+    let piece = |paint: Paint, opacity: f32, blend: BlendMode| Unrolled {
+        polygons: vec![],
+        boxes: vec![],
+        bounds: Rect::ZERO,
+        rule: FillRule::NonZero,
+        paint,
+        opacity,
+        blend,
+        place: Affine::IDENTITY,
+    };
+    assert!(takes_seam(&piece(Paint::solid(red()), 1.0, BlendMode::Normal)));
+    assert!(!takes_seam(&piece(Paint::solid(red()), 0.5, BlendMode::Normal)));
+    assert!(!takes_seam(&piece(Paint::solid(red()), 1.0, BlendMode::Multiply)));
+    // A pattern's tile may hold transparent art, which the overlap would show.
+    assert!(!takes_seam(&piece(Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }, 1.0, BlendMode::Normal)));
 }
