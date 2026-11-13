@@ -227,6 +227,10 @@ pub struct VectorcraftApp {
     /// Windows and Linux: the window has no OS decorations, so the app bar is the title bar (drag,
     /// double-click to maximize, caption buttons) and invisible edge zones resize the window.
     pub custom_titlebar: bool,
+    /// Where the caption buttons go on the app bar while [`Self::custom_titlebar`] is on: the
+    /// desktop's window-button layout on Linux and the BSDs where the desktop leaves the frame to the
+    /// app, all three at the right otherwise.
+    pub caption_layout: titlebar::CaptionLayout,
     /// The window has the desktop's own title bar: the OS or the window manager draws its frame,
     /// icon and title. Set by the desktop app when it opens the window; `false` for embedders
     /// without a window of their own.

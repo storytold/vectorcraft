@@ -346,9 +346,16 @@ Tile Edge Color: Object → Pattern → Tile Edge Color… (`ui.tileEdgeColor`) 
 A `color` with an alpha part (`#rrggbbaa` or `#rgba`) is an error, and the preference does not change.
 
 Window title bar: on Windows and Linux the window has no OS decorations and the app bar is the title bar. Its
-caption buttons (Minimize, Maximize/Restore, Close) sit at the bar's right end, 46 pt each; they are window chrome,
-not commands, so drive them with `ui.click` if needed. Close runs `app.quit` (the same `saveChanges` questions for
-modified documents), and empty bar space and the 5 pt window edges move and resize the window. Preferences › User
+caption buttons (Minimize, Maximize/Restore, Close) are 46 pt each. By default all three sit at the bar's right end.
+On Linux and the BSDs, when the desktop leaves the window's frame to the app (a Wayland session without server-side
+decorations, such as GNOME), the window is not opened through XWayland and `VECTORCRAFT_TITLEBAR` is unset, they
+follow the `button-layout` key of `org.gnome.desktop.wm.preferences`, read when the app starts: each button the key
+names goes to the end it is listed on, in the listed order (the first one leftmost), and the buttons it does not name
+are not drawn. When `gsettings` is missing or fails, or the key names none of `minimize`, `maximize` and `close`, all
+three stay at the right end. An app frame turned on by `VECTORCRAFT_TITLEBAR=app` or by VectorCraft Title Bar on Every
+Desktop also keeps all three at the right end. The buttons are window chrome, not commands, so drive them with
+`ui.click` if needed. Close runs `app.quit` (the same `saveChanges` questions for modified documents), and empty bar
+space and the 5 pt window edges move and resize the window. Preferences › User
 Interface › System Title Bar (`systemTitleBar`, read when the app starts) gives the window its OS decorations back
 instead: the OS title then shows the active document (`*name — VectorCraft` with unsaved changes) and the app bar
 drops its brand mark. On Linux the app bar also drops its brand mark whenever the desktop draws the window's frame, with
