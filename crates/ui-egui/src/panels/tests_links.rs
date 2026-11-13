@@ -178,6 +178,24 @@ fn a_link_inside_a_symbol_is_listed_and_picked_in_the_panel() {
     assert!(selected(&app).is_empty(), "the image in the layers is no longer selected");
 }
 
+/// The tooltip of a row outside the layer tree says where the image is stored, so two rows of the
+/// same file in different symbols or masks can be told apart.
+#[test]
+fn a_nested_rows_tooltip_names_what_holds_it() {
+    let tip = |owner: serde_json::Value, mask: Option<&str>| {
+        let row = json!({"id": 9, "name": "a.png", "status": "ok", "path": "/x/a.png", "owner": owner});
+        super::links::status_tip(&row, mask.map(str::to_string))
+    };
+    assert_eq!(tip(json!({"kind": "symbol", "name": "Mark"}), None), "/x/a.png\nSymbols: Mark");
+    assert_eq!(tip(json!({"kind": "pattern", "name": "Dots"}), None), "/x/a.png\nPattern: Dots");
+    assert_eq!(tip(json!({"kind": "graphDesign", "name": "Bar"}), None), "/x/a.png\nGraph Design: Bar");
+    assert_eq!(tip(json!({"kind": "layers", "maskOf": 7}), Some("<Ellipse>")), "/x/a.png\nOpacity Mask: <Ellipse>");
+    assert_eq!(tip(json!({"kind": "symbol", "name": "Mark", "maskOf": 7}), None), "/x/a.png\nSymbols: Mark\nOpacity Mask: 7");
+    // A row in the layers says only its file.
+    let row = json!({"id": 9, "name": "a.png", "status": "ok", "path": "/x/a.png"});
+    assert_eq!(super::links::status_tip(&row, None), "/x/a.png");
+}
+
 #[test]
 fn an_empty_document_shows_how_to_add_images() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

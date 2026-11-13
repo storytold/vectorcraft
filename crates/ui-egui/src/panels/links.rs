@@ -344,7 +344,31 @@ fn badge(ui: &Ui, r: egui::Rect, status: &str) {
     }
 }
 
-fn status_tip(r: &Value) -> String {
+/// The tooltip of row `r`. A row outside the layer tree also names where it is stored
+/// (`links.list`'s `owner`): the symbol, graph design or pattern whose art holds it, and the object
+/// whose opacity mask holds it, by `mask` (that object's name) or else by its id.
+pub(super) fn status_tip(r: &Value, mask: Option<String>) -> String {
+    let tip = file_tip(r);
+    let owner = &r["owner"];
+    let name = owner["name"].as_str().unwrap_or_default();
+    let art = match owner["kind"].as_str() {
+        Some("symbol") => Some(tl!("Symbols")),
+        Some("graphDesign") => Some(tl!("Graph Design")),
+        Some("pattern") => Some(tl!("Pattern")),
+        _ => None,
+    };
+    let tip = match art {
+        Some(kind) => format!("{tip}\n{kind}: {name}"),
+        None => tip,
+    };
+    match owner["maskOf"].as_u64() {
+        Some(id) => format!("{tip}\n{}: {}", tl!("Opacity Mask"), mask.unwrap_or_else(|| id.to_string())),
+        None => tip,
+    }
+}
+
+/// The file, status and notes part of [`status_tip`].
+fn file_tip(r: &Value) -> String {
     let path = r["found"].as_str().or(r["path"].as_str()).unwrap_or_default();
     let tip = match r["status"].as_str().unwrap_or_default() {
         "missing" => crate::i18n::fmt(tl!("Missing: {path}"), &[("path", path)]),
@@ -495,7 +519,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     egui::FontId::proportional(12.5),
                     t.text,
                 );
-                let resp = resp.on_hover_text(status_tip(r));
+                let mask = r["owner"]["maskOf"]
+                    .as_u64()
+                    .and_then(|m| doc.stored_node(NodeId(m)))
+                    .map(|(n, _)| n)
+                    .map(|n| super::layers::shown_name(app, n, crate::i18n::current()));
+                let resp = resp.on_hover_text(status_tip(r, mask));
                 if resp.double_clicked() {
                     clicked = Some((id, egui::Modifiers::NONE, true));
                 } else if resp.clicked() {
