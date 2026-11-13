@@ -415,3 +415,53 @@ fn replace_missing_fonts_reaches_the_type_in_symbols() {
     s.execute("symbol.exitEditing", &json!({})).unwrap();
     assert_eq!(crate::cmd::fonts::substitution_warning(&s.doc().unwrap().doc), None);
 }
+
+/// Replace Missing Fonts reaches the type in opacity masks (of a hidden object, disabled, in a
+/// symbol's art) and in a pattern swatch nothing paints with, and the export warning, the missing
+/// fonts list and Find Font name that type's font until it is replaced.
+#[test]
+fn replace_missing_fonts_reaches_the_type_in_masks_and_patterns() {
+    let mut s = session();
+    let mask = |s: &mut Session, owner: NodeId, art: NodeId| {
+        s.edit("Mask", |d, _| {
+            let art = d.remove(art)?;
+            d.node_mut(owner).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new((*art).clone(), true)));
+            Ok(())
+        })
+        .unwrap();
+    };
+    let lost = |s: &mut Session| text(s, json!({"x": 40, "y": 60, "text": "Lost", "size": 20, "font": "No Such Font Family"}));
+    let rect =
+        |s: &mut Session| NodeId(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    let (hidden, disabled, in_symbol) = (rect(&mut s), rect(&mut s), rect(&mut s));
+    for owner in [hidden, disabled, in_symbol] {
+        let t = lost(&mut s);
+        mask(&mut s, owner, t);
+    }
+    s.execute("select.set", &json!({"ids": [hidden.0]})).unwrap();
+    s.execute("object.hide", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [disabled.0]})).unwrap();
+    s.execute("transparency.disableOpacityMask", &json!({})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [in_symbol.0]})).unwrap();
+    let t = lost(&mut s);
+    s.execute("object.pattern.make", &json!({"ids": [t.0], "name": "Unused", "edit": false})).unwrap();
+    select(&mut s, &[t]);
+    s.execute("edit.clear", &json!({})).unwrap();
+    let mut on_layers = 0;
+    s.doc().unwrap().doc.walk(|n| on_layers += usize::from(matches!(n.kind, NodeKind::Text(_))));
+    assert_eq!(on_layers, 0, "the type is only in masks, a symbol and a pattern");
+    let missing = |s: &Session| crate::cmd::fontfiles::missing_fonts(&s.doc().unwrap().doc).into_iter().map(|f| f.family).collect::<Vec<_>>();
+    assert_eq!(missing(&s), ["No Such Font Family"]);
+    assert!(crate::cmd::fonts::substitution_warning(&s.doc().unwrap().doc).is_some_and(|w| w.contains("No Such Font Family")));
+    let listed = s.execute("text.fonts", &json!({})).unwrap();
+    assert_eq!((listed[0]["family"].as_str(), listed[0]["objects"].as_u64()), (Some("No Such Font Family"), Some(4)), "{listed}");
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+    let r = s.execute("addon.cleanup.replaceFonts", &json!({})).unwrap();
+    assert_eq!(r["runs"].as_u64(), Some(4), "{r}");
+    assert_eq!(steps(&s), before + 1);
+    assert!(missing(&s).is_empty());
+    assert_eq!(crate::cmd::fonts::substitution_warning(&s.doc().unwrap().doc), None);
+    assert_eq!(other(s.execute("addon.cleanup.replaceFonts", &json!({}))), "No fonts are missing");
+    assert_eq!(steps(&s), before + 1);
+}

@@ -21,7 +21,7 @@
 //! side; the canvas's centre, 8191.5, is the centre of the file's `%AI3_TemplateBox`. A story without
 //! a layout has its point type's anchor at its frame's point. See [`Story::place`].
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use kurbo::{BezPath, CubicBez, ParamCurve, ParamCurveArclen};
 use vectorcraft_color::{Color, Paint};
@@ -461,6 +461,11 @@ struct Style {
     v_scale: f64,
     fill: Option<Color>,
     stroke: Option<Color>,
+    /// The pattern that paints the fill or the stroke in place of its colour: the one the art
+    /// style named by key 5 of its paint gives ([`Texts::with_patterns`]), placed in the document.
+    /// `None` for any other paint, which keeps its colour.
+    fill_pattern: Option<Paint>,
+    stroke_pattern: Option<Paint>,
     stroke_width: f64,
     /// Key 61, the stroke's cap: 0 butt, 1 round, 2 projecting (square).
     stroke_cap: LineCap,
@@ -491,9 +496,23 @@ pub(super) struct Texts {
     /// attributes (key 5) and the paragraph style it is based on (key 6, an index into these).
     para_sheets: Vec<Val>,
     frames: Vec<Val>,
+    /// The patterns that paint characters, by the name of the art style that gives each
+    /// ([`Self::with_patterns`]).
+    patterns: HashMap<String, Paint>,
 }
 
 impl Texts {
+    /// The text document with its characters painted by `patterns`: the patterns of the editing
+    /// data's art styles that paint with one, each placed in the document, by the style's name.
+    /// A run's fill or stroke (key 53 or 54) is a paint whose key 0 is a colour and whose key 5
+    /// names the art style that paints it. In users' files (used locally, never committed), such a
+    /// style is one paint: a colour, which key 0 already has, or a pattern, whose key 0 is black
+    /// (`/0 0 /1 [ 1 0 ]`). The pattern's matrix is in art space, as a path's pattern fill has it:
+    /// the files' own pages tile the type with the matrix a path's fill would get there.
+    pub(super) fn with_patterns(self, patterns: HashMap<String, Paint>) -> Texts {
+        Texts { patterns, ..self }
+    }
+
     /// The text document in the editing copy `data`, if it has one that can be read.
     pub(super) fn read(data: &[u8]) -> Option<Texts> {
         fn find(h: &[u8], n: &[u8], from: usize) -> Option<usize> {
@@ -540,6 +559,7 @@ impl Texts {
             char_sheets: sheets("5"),
             para_sheets: sheets("6"),
             frames: doc.get("0")?.get("8")?.get("0")?.list().to_vec(),
+            patterns: HashMap::new(),
         })
     }
 
@@ -747,6 +767,8 @@ impl Texts {
         let on = |k: &str| !matches!(pick(k), Some(Val::Bool(false)));
         let font = num("0").and_then(|i| self.fonts.get(i as usize)).filter(|f| !f.is_empty()).cloned();
         let size = num("1").filter(|v| *v > 0.0 && *v < 1e5).unwrap_or(12.0);
+        // Key 5 of a paint names the art style that paints it ([`Self::with_patterns`]).
+        let pattern = |k: &str| pick(k).and_then(|p| p.get("5")).and_then(Val::str).and_then(|name| self.patterns.get(name)).cloned();
         Style {
             font,
             size,
@@ -757,6 +779,8 @@ impl Texts {
             v_scale: num("7").filter(|v| *v > 0.0 && *v < 100.0).unwrap_or(1.0),
             fill: if on("56") { Some(pick("53").and_then(paint).unwrap_or(Color::BLACK)) } else { None },
             stroke: if matches!(pick("57"), Some(Val::Bool(true))) { pick("54").and_then(paint) } else { None },
+            fill_pattern: pattern("53"),
+            stroke_pattern: pattern("54"),
             stroke_width: num("63").filter(|v| *v >= 0.0 && *v < 1e4).unwrap_or(1.0),
             // Numbered as PostScript's `setlinecap` and `setlinejoin` operators number them
             // (PostScript Language Reference, 3rd ed.): in users' files the page strokes type with
@@ -1109,6 +1133,10 @@ impl Story {
         // The text document measures in the art's units too: the document's scale carries its
         // sizes and spacings onto the page (a Large Canvas copy is written at 1:10; #2031).
         let scale = scale * art_scale(to_doc);
+        // Patterns stay where the document has them, wherever the type's text space is (`xf`'s
+        // determinant is 1, so it can be inverted; a pattern that still doesn't map to finite
+        // numbers keeps its colour, see `char_style`).
+        let to_text = xf.inverse();
         let chars: Vec<char> = text.chars().collect();
         let mut runs = vec![];
         let mut from = 0usize;
@@ -1119,13 +1147,13 @@ impl Story {
             if piece.is_empty() {
                 continue;
             }
-            runs.push(TextRun::new(piece, char_style(st, scale)));
+            runs.push(TextRun::new(piece, char_style(st, scale, to_text)));
         }
         if from < chars.len() {
             let last = self.runs.last().map(|r| &r.1)?;
-            runs.push(TextRun::new(chars.get(from..).unwrap_or_default().iter().collect::<String>(), char_style(last, scale)));
+            runs.push(TextRun::new(chars.get(from..).unwrap_or_default().iter().collect::<String>(), char_style(last, scale, to_text)));
         }
-        let first = self.runs.first().map(|r| char_style(&r.1, scale))?;
+        let first = self.runs.first().map(|r| char_style(&r.1, scale, to_text))?;
         let mut t = TextObject::point(Point::ZERO, "", first);
         if !runs.is_empty() {
             t.runs = runs;
@@ -1295,10 +1323,20 @@ fn para_style(p: &Para, scale: f64) -> ParaStyle {
 }
 
 /// The character style of character attributes `s`: its font from the fonts the app has, its
-/// lengths (size, leading, baseline shift, stroke width) scaled by `scale`.
-fn char_style(s: &Style, scale: f64) -> CharStyle {
+/// lengths (size, leading, baseline shift, stroke width) scaled by `scale`, and its patterns placed
+/// in the type's text space by `to_text` (the document → its text space), where they stay as the
+/// document has them.
+fn char_style(s: &Style, scale: f64, to_text: Affine) -> CharStyle {
     let (family, style) = s.font.as_deref().map_or_else(|| (CharStyle::default().font_family, "Regular".to_string()), crate::family_style);
     let family = vectorcraft_text::FontDb::global().find_family(&family).unwrap_or(family);
+    // A fill or stroke that is on takes its pattern in place of its colour.
+    let paint = |color: Option<Color>, pattern: &Option<Paint>| match (color, pattern) {
+        // A pattern that can't be placed (the type's text space out of range) keeps the colour.
+        (Some(_), Some(Paint::Pattern { pattern, xf })) if (to_text * *xf).is_finite() => {
+            Paint::Pattern { pattern: pattern.clone(), xf: to_text * *xf }
+        }
+        (color, _) => color.map_or(Paint::None, Paint::solid),
+    };
     // Type without a stroke keeps the stroke's defaults, as its weight is 0.
     let (stroke_cap, stroke_join, stroke_miter_limit) =
         if s.stroke.is_some() { (s.stroke_cap, s.stroke_join, s.stroke_miter_limit) } else { (LineCap::Butt, LineJoin::Miter, 10.0) };
@@ -1314,8 +1352,8 @@ fn char_style(s: &Style, scale: f64) -> CharStyle {
         baseline_shift: s.baseline_shift * scale,
         h_scale: s.h_scale * 100.0,
         v_scale: s.v_scale * 100.0,
-        fill: s.fill.map_or(Paint::None, Paint::solid),
-        stroke: s.stroke.map_or(Paint::None, Paint::solid),
+        fill: paint(s.fill, &s.fill_pattern),
+        stroke: paint(s.stroke, &s.stroke_pattern),
         stroke_width: if s.stroke.is_some() { s.stroke_width * scale } else { 0.0 },
         stroke_cap,
         stroke_join,
@@ -1350,6 +1388,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![],
+            patterns: HashMap::new(),
         };
         let justify = |own: &[u8]| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).justify;
         // Right to left from the document's defaults, or the paragraph's own.
@@ -1373,6 +1412,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![],
+            patterns: HashMap::new(),
         };
         let auto = |own: &[u8]| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).justification.auto_leading;
         assert_eq!(auto(b""), JustificationOptions::default().auto_leading);
@@ -1395,6 +1435,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![],
+            patterns: HashMap::new(),
         };
         let options = |own: &[u8], scale: f64| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), scale).hyphenation;
         let want = HyphenationOptions { words_longer_than: 6, after_first: 2, before_last: 2, hyphen_limit: 0, zone: 36.0, capitalized: true };
@@ -1412,6 +1453,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![],
+            patterns: HashMap::new(),
         };
         let own = |own: &[u8]| para_style(&bare.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).hyphenation;
         assert_eq!(own(b""), d);
@@ -1431,6 +1473,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![],
+            patterns: HashMap::new(),
         };
         let tabs = |own: &[u8], scale: f64| {
             para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), scale)
@@ -1497,6 +1540,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![],
+            patterns: HashMap::new(),
         }
         .para(None);
         let mut s = story(" 80 mm ", &[0.0], &para);
@@ -1544,6 +1588,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: cases.iter().map(|c| frame(c)).collect(),
+            patterns: HashMap::new(),
         };
         let vertical: Vec<bool> = (0..cases.len() + 1).map(|i| texts.frame_vertical(i)).collect();
         assert_eq!(vertical, [true, false, false, false, false, false, false, false, false, false, false]);
@@ -1561,6 +1606,7 @@ mod tests {
             char_sheets: vec![read(b"/0 ([Normal Character Style]) /6 << >>").unwrap(), read(b"/0 (Block) /6 << /35 3 >>").unwrap()],
             para_sheets: vec![],
             frames: vec![],
+            patterns: HashMap::new(),
         };
         let tcy = |run: &[u8]| texts.style(Some(&read(run).unwrap())).tate_chu_yoko;
         assert!(tcy(b"/6 << /35 3 >>"), "the run's own");
@@ -1584,6 +1630,7 @@ mod tests {
             char_sheets: vec![read(b"/0 ([Normal Character Style]) /6 << >>").unwrap(), read(b"/0 (Rotated) /6 << /35 2 >>").unwrap()],
             para_sheets: vec![],
             frames: vec![],
+            patterns: HashMap::new(),
         };
         let roman = |defaults: &[u8], run: &[u8]| texts(defaults).style(Some(&read(run).unwrap())).standard_vertical_roman;
         assert!(roman(b"/35 1", b"/6 << >>"), "the document's defaults");
@@ -1614,9 +1661,10 @@ mod tests {
             char_sheets: vec![read(b"/0 ([Normal Character Style]) /6 << >>").unwrap(), read(b"/0 (Rounded) /6 << /61 1 /62 1 >>").unwrap()],
             para_sheets: vec![],
             frames: vec![],
+            patterns: HashMap::new(),
         };
         let stroke = |run: &[u8]| {
-            let s = char_style(&texts.style(Some(&read(run).unwrap())), 1.0);
+            let s = char_style(&texts.style(Some(&read(run).unwrap())), 1.0, Affine::IDENTITY);
             (s.stroke_cap, s.stroke_join, s.stroke_miter_limit)
         };
         assert_eq!(stroke(b"/6 << /61 2 /62 2 /64 2.5 >>"), (LineCap::Square, LineJoin::Bevel, 2.5), "the run's own");
@@ -1638,6 +1686,88 @@ mod tests {
         assert_eq!(stroke(b"/5 1 /6 << /57 false >>"), (LineCap::Butt, LineJoin::Miter, 10.0), "no stroke");
     }
 
+    /// The pattern "Dots", its tile's corner at `at`.
+    fn dots_at(at: (f64, f64)) -> Paint {
+        Paint::Pattern { pattern: "Dots".into(), xf: Affine::translate(at) }
+    }
+
+    /// Texts whose characters may name the art style "Anon 1", which paints with "Dots" at (10, 20)
+    /// in the document, and "Solid", which isn't a pattern.
+    fn patterned_texts() -> Texts {
+        let patterns = HashMap::from([("Anon 1".to_string(), dots_at((10.0, 20.0))), ("Solid".to_string(), Paint::solid(Color::WHITE))]);
+        Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: Val::Dict(BTreeMap::new()),
+            char_sheets: vec![],
+            para_sheets: vec![],
+            frames: vec![],
+            patterns: HashMap::new(),
+        }
+        .with_patterns(patterns)
+    }
+
+    /// Key 5 of a run's fill or stroke names the art style that paints it: one that paints with a
+    /// pattern gives the run that pattern in place of the colour of key 0 (black), placed in the
+    /// type's text space where the document has it. A fill or stroke that is off stays off, and a
+    /// key 5 that isn't the name of such a style, or isn't a name at all, keeps the colour.
+    #[test]
+    fn a_run_painted_by_a_patterns_art_style_takes_the_pattern() {
+        // GUARDS: type a pattern paints came in black, the colour key 0 keeps for it.
+        let texts = patterned_texts();
+        let black_paint = Paint::solid(Color::gray(1.0));
+        let to_text = Affine::translate((-4.0, -5.0));
+        let paints = |run: &str| {
+            let s = char_style(&texts.style(Some(&read(run.as_bytes()).unwrap())), 1.0, to_text);
+            (s.fill, s.stroke)
+        };
+        let black = |style: &str| format!("<< /99 /CAITextPaint /0 << /0 0 /1 [ 1.0 0.0 ] >> {style} >>");
+        let fill = |style: &str| paints(&format!("/6 << /53 {} >>", black(style)));
+        assert_eq!(fill("/5 (Anon 1)"), (dots_at((6.0, 15.0)), Paint::None));
+        let stroke = paints(&format!("/6 << /53 {} /57 true /54 {} >>", black(""), black("/5 (Anon 1)")));
+        assert_eq!(stroke, (black_paint.clone(), dots_at((6.0, 15.0))));
+        // Off.
+        assert_eq!(paints(&format!("/6 << /56 false /53 {} >>", black("/5 (Anon 1)"))), (Paint::None, Paint::None));
+        assert_eq!(paints(&format!("/6 << /57 false /54 {} >>", black("/5 (Anon 1)"))).1, Paint::None);
+        // A stroke whose colour can't be read paints nothing, pattern or not, as before.
+        assert_eq!(paints("/6 << /57 true /54 << /0 << /0 9 /1 [ 1.0 ] >> /5 (Anon 1) >> >>").1, Paint::None);
+        for other in ["", "/5 (Anon 2)", "/5 (Solid)", "/5 ()", "/5 /Anon", "/5 1", "/5 [ (Anon 1) ]", "/5 << /0 (Anon 1) >>", "/5 true"] {
+            assert_eq!(fill(other), (black_paint.clone(), Paint::None), "{other}");
+        }
+        // A text space the pattern can't be placed in keeps the colour.
+        let run = read(format!("/6 << /53 {} >>", black("/5 (Anon 1)")).as_bytes()).unwrap();
+        for to_text in [Affine::new([1e308, 0.0, 0.0, 1e308, 0.0, 0.0]), Affine::new([f64::NAN, 0.0, 0.0, 1.0, 0.0, 0.0])] {
+            assert_eq!(char_style(&texts.style(Some(&run)), 1.0, to_text).fill, black_paint.clone(), "{to_text:?}");
+        }
+    }
+
+    /// A run's pattern stays where the document has it whatever the type's own text space: turned
+    /// and moved point type, and area type, whose text space is the document's.
+    #[test]
+    fn a_runs_pattern_stays_where_the_document_has_it() {
+        let to_doc = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 100.0]);
+        for frame in [
+            FrameKind::Point([0.0, 1.0, -1.0, 0.0, 30.0, 40.0]),
+            FrameKind::Point([2.0, 0.0, 0.0, 2.0, -7.0, 3.0]),
+            FrameKind::Area(area_segments(), AreaFrame::default()),
+        ] {
+            let mut st = story("type", &[0.0], &Para::default());
+            st.frames = vec![frame.clone()];
+            st.runs[0].1.fill_pattern = Some(dots_at((10.0, 20.0)));
+            st.runs[0].1.stroke = Some(Color::BLACK);
+            st.runs[0].1.stroke_pattern = Some(dots_at((-3.0, 8.0)));
+            let node = st.node(NodeId(1), 0, (0.0, 0.0), to_doc).unwrap();
+            let NodeKind::Text(t) = node.kind else { panic!("not type") };
+            for (paint, at) in [(&t.runs[0].style.fill, Point::new(10.0, 20.0)), (&t.runs[0].style.stroke, Point::new(-3.0, 8.0))] {
+                let Paint::Pattern { pattern, xf } = paint else { panic!("{paint:?}") };
+                assert_eq!(pattern, "Dots");
+                let corner = t.xf * *xf * Point::ZERO;
+                assert!((corner - at).hypot() < 1e-9, "{frame:?}: {corner:?}");
+            }
+        }
+    }
+
     /// A right-to-left paragraph is laid out right to left even when it has no right-to-left
     /// letters (a dimension's label " 120.5 mm " reads "mm 120.5"); a left-to-right one, or one
     /// that doesn't say, goes by its letters.
@@ -1651,6 +1781,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![],
+            patterns: HashMap::new(),
         };
         let direction = |own: &[u8]| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).direction;
         assert_eq!(direction(b"/0 2"), Some(ParaDirection::RightToLeft), "from the document's defaults");
@@ -1698,6 +1829,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![read(doc.as_bytes()).unwrap()],
+            patterns: HashMap::new(),
         };
         texts.frame(0)
     }
@@ -1904,6 +2036,8 @@ mod tests {
                     v_scale: 1.0,
                     fill: Some(Color::BLACK),
                     stroke: None,
+                    fill_pattern: None,
+                    stroke_pattern: None,
                     stroke_width: 1.0,
                     stroke_cap: LineCap::Butt,
                     stroke_join: LineJoin::Miter,
@@ -2352,6 +2486,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![read(doc.as_bytes()).unwrap()],
+            patterns: HashMap::new(),
         };
         texts.frame(0).unwrap()
     }

@@ -78,12 +78,28 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let label = super::label_or_name(label, !named.contains(&k));
                 if value.is_empty() {
                     widgets::dim_name(ui, label);
+                } else if s["id"] == "brushes" {
+                    row(ui, label, brush_value(value).into());
                 } else {
                     row(ui, label, value.into());
                 }
             }
         }
     });
+}
+
+/// A Brushes row's value in the interface language: the brush's type (`Art Brush`), or that the
+/// Brushes panel does not hold the brush. `document.info` and the text report keep them in English.
+fn brush_value(value: &str) -> &str {
+    match value {
+        "Calligraphic Brush" => tl!("Calligraphic Brush"),
+        "Scatter Brush" => tl!("Scatter Brush"),
+        "Art Brush" => tl!("Art Brush"),
+        "Pattern Brush" => tl!("Pattern Brush"),
+        "Bristle Brush" => tl!("Bristle Brush"),
+        "missing from the Brushes panel" => tl!("missing from the Brushes panel"),
+        _ => value,
+    }
 }
 
 /// The rows of Document Info section `id` labelled by a name (an artboard, a style, a swatch, a
@@ -294,5 +310,31 @@ mod tests {
         // The command takes the category too; an unknown one is an error and writes nothing.
         let err = app.run("docInfo.save", json!({"path": "/tmp/info.txt", "category": "colors"})).unwrap_err();
         assert!(err.contains("category `colors`"), "{err}");
+    }
+
+    /// Brushes shows each brush's type, and a brush the Brushes panel does not hold, in the
+    /// interface language; the saved report keeps them in English.
+    #[test]
+    fn brush_types_show_in_the_interface_language() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let r = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+        app.session.execute("brush.apply", &json!({"ids": [r], "name": "Charcoal"})).unwrap();
+        let brushes = |app: &mut VectorcraftApp| {
+            crate::tests_labels::painted_text(app, |app, ui| {
+                set_pstate(ui.ctx(), "docinfo-category", "brushes".to_string());
+                show(app, ui);
+            })
+        };
+        let english = brushes(&mut app);
+        assert!(english.contains("Charcoal") && english.contains("Art Brush"), "{english}");
+        let Some(de) = crate::i18n::Lang::from_code("de") else { panic!("no German catalog") };
+        crate::i18n::set_current(de);
+        let (german, missing) = (brushes(&mut app), brush_value("missing from the Brushes panel").to_string());
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert!(german.contains("Charcoal") && german.contains("Bildpinsel") && !german.contains("Art Brush"), "{german}");
+        assert_eq!(missing, "fehlt im Bedienfeld „Pinsel“");
+        let report = app.session.execute("document.info", &json!({"category": "brushes", "format": "text"})).unwrap()["text"].to_string();
+        assert!(report.contains("Charcoal: Art Brush"), "{report}");
     }
 }

@@ -194,6 +194,21 @@ fn placed_images_and_fill_hatches_can_be_left_out() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// The reply gives what the drawings lose before a note on the options, across the files: the
+/// first artboard's drawing notes the fill hatches that `includeHatches: false` leaves out, and
+/// the second's also has a see-through rectangle that DXF 2000 writes opaque.
+#[test]
+fn what_the_drawings_lose_comes_before_what_an_option_left_out() {
+    let mut s = two_boards();
+    s.execute("object.setProps", &json!({"opacity": 50})).unwrap();
+    let r = s.execute("document.export", &json!({"format": "dxf", "version": "2000", "includeHatches": false, "useArtboards": true})).unwrap();
+    let warnings: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    let Some((option, losses)) = warnings.split_last() else { panic!("no notes") };
+    assert!(option.starts_with("fill hatches are left out"), "{warnings:?}");
+    assert!(losses.iter().any(|w| w.starts_with("transparency needs DXF 2004")), "{warnings:?}");
+    assert!(!losses.iter().any(|w| w.starts_with("fill hatches")), "each note once: {warnings:?}");
+}
+
 /// Two placed images whose pixel data can't be decoded are left out of the drawing and get no
 /// linked file, and `warnings` holds the note raster exports give, once, without naming either
 /// image's key.

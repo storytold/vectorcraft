@@ -280,7 +280,7 @@ fn no_heads_borrows_the_path_and_closed_paths_get_none() {
 #[test]
 fn tip_mode_shortens_the_stroke_by_the_head_and_puts_the_tip_on_the_end_point() {
     for kind in Arrowhead::ALL {
-        let st = arrows(kind, ArrowAlign::Tip, LineCap::Butt);
+        let st = arrows(kind.clone(), ArrowAlign::Tip, LineCap::Butt);
         let l = line(0.0, 100.0);
         let p = stroke_pieces(&l, &st);
         let [h] = &p.heads[..] else { panic!("one head") };
@@ -335,7 +335,7 @@ fn extend_mode_keeps_the_path_and_overhangs_by_the_inset() {
 #[test]
 fn hollow_heads_are_rings_and_the_stroke_stays_out_of_the_hole() {
     for (kind, cap) in [(Arrowhead::CircleOpen, LineCap::Round), (Arrowhead::SquareOpen, LineCap::Square), (Arrowhead::TriangleOpen, LineCap::Butt)] {
-        let st = arrows(kind, ArrowAlign::Tip, cap);
+        let st = arrows(kind.clone(), ArrowAlign::Tip, cap);
         let l = line(0.0, 100.0);
         let p = stroke_pieces(&l, &st);
         let h = &p.heads[0];
@@ -361,7 +361,7 @@ fn hollow_heads_are_rings_and_the_stroke_stays_out_of_the_hole() {
 fn round_caps_never_poke_past_the_tip() {
     for kind in Arrowhead::ALL {
         for scale in [10.0, 100.0, 300.0] {
-            let mut st = arrows(kind, ArrowAlign::Tip, LineCap::Round);
+            let mut st = arrows(kind.clone(), ArrowAlign::Tip, LineCap::Round);
             st.arrow_scale = (scale, scale);
             let l = line(0.0, 100.0);
             let p = stroke_pieces(&l, &st);
@@ -403,8 +403,8 @@ fn degenerate_paths_and_patterns_neither_panic_nor_hang() {
                     for pat in patterns {
                         for off in [0.0, -7.0, 1e12, f64::INFINITY] {
                             let st = stroke(2.0, |s| {
-                                s.start_arrow = Some(kind);
-                                s.end_arrow = Some(kind);
+                                s.start_arrow = Some(kind.clone());
+                                s.end_arrow = Some(kind.clone());
                                 s.arrow_align = align;
                                 s.cap = cap;
                                 s.dash = Some(dashed(pat, off));

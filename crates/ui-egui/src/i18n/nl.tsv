@@ -1512,6 +1512,8 @@ lighting	Light	Licht
 	Leading	Regelafstand
 	No Break	Niet afbreken
 	Proportional Metrics	Proportionele metingen
+	Insert Aki Left	Aki links invoegen
+	Insert Aki Right	Aki rechts invoegen
 	Character Direction	Tekenrichting
 	Digits	Cijfers
 	Arabic	Arabisch
@@ -1531,6 +1533,7 @@ digits	Malayalam	Malayalam
 	Select a text object to edit its character attributes.	Selecteer een tekstobject om de tekenkenmerken ervan te bewerken.
 	Show Options	Opties tonen
 	Show Recent Colors	Recente kleuren tonen
+	Toggle RGB Percent	RGB in procenten wisselen
 	Small Caps	Kleine kapitalen
 	Small Caps (on the roadmap)	Kleine kapitalen (op de roadmap)
 	Standard Vertical Roman Alignment	Standaard verticale Romeinse uitlijning
@@ -2676,6 +2679,8 @@ digits	Malayalam	Malayalam
 	Randomly change saturation and brightness	Verzadiging en helderheid willekeurig wijzigen
 	Recolor this row	Deze rij opnieuw kleuren
 	Reset the rows to the artwork's colors	De rijen herstellen naar de kleuren van de artwork
+	Color Theme Picker	Kleurthemakiezer
+	Click or drag across the art to pick its colors; Shift adds more	Klik of sleep over het artwork om de kleuren ervan op te nemen; Shift voegt er meer toe
 	Separate colors into rows	Kleuren over rijen verdelen
 	Unlink harmony colors	Harmoniekleuren ontkoppelen
 	1 Color Job	Opdracht in 1 kleur
@@ -3125,6 +3130,7 @@ theme	Appearance	Vormgeving
 	Art Brush	Artpenseel
 	Bristle Brush	Borstelpenseel
 	Pattern Brush	Patroonpenseel
+	missing from the Brushes panel	ontbreekt in het deelvenster Penselen
 	Select art to make a scatter, art or pattern brush.	Selecteer illustratie om een verspreidings-, art- of patroonpenseel te maken.
 	Brush Art	Penseelillustratie
 	New Symbol	Nieuw symbool
@@ -3689,6 +3695,10 @@ theme	Appearance	Vormgeving
 	Add to Profiles	Aan profielen toevoegen
 	Delete Profile	Profiel verwijderen
 	Reset Profiles	Profielen opnieuw instellen
+	Arrowheads	Pijlpunten
+	Edit Arrowheads	Pijlpunten bewerken
+	Edit Arrowheads…	Pijlpunten bewerken…
+	Reload Arrowheads	Pijlpunten opnieuw laden
 	Stroke Options	Lijnopties
 	Width Profiles	Breedteprofielen
 	Apply Graphic Style	Grafische stijl toepassen
@@ -6769,6 +6779,8 @@ breakText	Glyphs	Glyphs
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Korte praktische tutorials voor de belangrijkste gereedschappen, gegroepeerd per vaardigheid. Kies een vaardigheid om de tutorials ervan te zien.
 	List Tutorials	Tutorials weergeven
 	Show Tutorial	Tutorial tonen
+	Show Tool Location	Locatie van gereedschap tonen
+	Show where this tool is	Tonen waar dit gereedschap zich bevindt
 @msg	missing `tutorial` (see learn.list)	`tutorial` ontbreekt (zie learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	onbekende tutorial `{id}` (zie learn.list)
 

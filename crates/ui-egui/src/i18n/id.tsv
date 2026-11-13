@@ -1498,6 +1498,8 @@ lighting	Light	Cahaya
 	Leading	Leading
 	No Break	Tanpa pemenggalan
 	Proportional Metrics	Metrik proporsional
+	Insert Aki Left	Sisipkan aki kiri
+	Insert Aki Right	Sisipkan aki kanan
 	Character Direction	Arah karakter
 	Digits	Digit
 	Arabic	Arab
@@ -1517,6 +1519,7 @@ digits	Malayalam	Malayalam
 	Select a text object to edit its character attributes.	Pilih objek teks untuk mengedit atribut karakternya.
 	Show Options	Tampilkan opsi
 	Show Recent Colors	Tampilkan warna terbaru
+	Toggle RGB Percent	Alihkan RGB dalam persen
 	Small Caps	Kapital kecil
 	Small Caps (on the roadmap)	Kapital kecil (masih dalam roadmap)
 	Standard Vertical Roman Alignment	Perataan Romawi vertikal standar
@@ -2662,6 +2665,8 @@ digits	Malayalam	Malayalam
 	Randomly change saturation and brightness	Ubah saturasi dan kecerahan secara acak
 	Recolor this row	Warnai ulang baris ini
 	Reset the rows to the artwork's colors	Setel ulang baris ke warna karya seni
+	Color Theme Picker	Pemilih tema warna
+	Click or drag across the art to pick its colors; Shift adds more	Klik atau seret melintasi karya seni untuk mengambil warnanya; Shift menambahkan lagi
 	Separate colors into rows	Pisahkan warna ke dalam baris
 	Unlink harmony colors	Lepaskan tautan warna harmoni
 	1 Color Job	Pekerjaan 1 warna
@@ -3111,6 +3116,7 @@ theme	Appearance	Tampilan
 	Art Brush	Kuas seni
 	Bristle Brush	Kuas bristle
 	Pattern Brush	Kuas pola
+	missing from the Brushes panel	tidak ada di panel Kuas
 	Select art to make a scatter, art or pattern brush.	Pilih karya seni untuk membuat kuas sebar, seni, atau pola.
 	Brush Art	Karya seni kuas
 	New Symbol	Simbol baru
@@ -3675,6 +3681,10 @@ theme	Appearance	Tampilan
 	Add to Profiles	Tambahkan ke profil
 	Delete Profile	Hapus profil
 	Reset Profiles	Atur ulang profil
+	Arrowheads	Mata panah
+	Edit Arrowheads	Edit mata panah
+	Edit Arrowheads…	Edit mata panah…
+	Reload Arrowheads	Muat ulang mata panah
 	Stroke Options	Opsi goresan
 	Width Profiles	Profil lebar
 	Apply Graphic Style	Terapkan gaya grafis
@@ -6718,6 +6728,8 @@ breakText	Glyphs	Glif
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutorial praktik singkat untuk alat-alat utama, dikelompokkan menurut keterampilan. Pilih keterampilan untuk melihat tutorialnya.
 	List Tutorials	Daftar tutorial
 	Show Tutorial	Tampilkan tutorial
+	Show Tool Location	Tampilkan lokasi alat
+	Show where this tool is	Tampilkan letak alat ini
 @msg	missing `tutorial` (see learn.list)	`tutorial` tidak ada (lihat learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial `{id}` tidak dikenal (lihat learn.list)
 

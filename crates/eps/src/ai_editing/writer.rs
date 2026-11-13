@@ -1037,10 +1037,11 @@ impl<'a> Writer<'a> {
             AppearanceItem::Fill(f) => self.fill_object(path, rule, f, xy),
             AppearanceItem::Stroke(s) if self.direct_stroke(s) => self.path_object(path, rule, None, Some(s), xy),
             AppearanceItem::Stroke(s) => {
-                // In a drawn look a brushed stroke is kept by the object's art style, which is written
-                // only when the reader reads the brush back from it; a styled group's members are
-                // written again after the look, and warn there.
-                if !(self.in_look && s.brush.is_some()) {
+                // In a styled path's or compound path's drawn look the stroke, brushed or not, is kept
+                // by the object's art style, which is written only when the reader reads the object's
+                // appearance (and its brush) back from it. A styled group's style holds no fills or
+                // strokes: its members are written again after the look, and warn there.
+                if !self.in_look {
                     self.warn(STROKES);
                 }
                 self.wrote_fixed = true;
