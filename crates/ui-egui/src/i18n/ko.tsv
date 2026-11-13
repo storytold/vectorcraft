@@ -44,6 +44,8 @@ font-technology	Variable	가변
 	x-Height	x 높이
 	ICF Box	ICF 박스
 	Proportional Metrics	비례 메트릭
+	Insert Aki Left	앞 아키 삽입
+	Insert Aki Right	뒤 아키 삽입
 	Character Direction	문자 방향
 	Digits	숫자
 	Arabic	아라비아어
@@ -2410,6 +2412,7 @@ antiAlias	Sharp	날카롭게
 	Art Brush	아트 브러시
 	Bristle Brush	강모 브러시
 	Pattern Brush	패턴 브러시
+	missing from the Brushes panel	브러시 패널에 없음
 	Select art to make a scatter, art or pattern brush.	흩뿌리기, 아트 또는 패턴 브러시를 만들려면 아트웍을 선택하세요.
 	Brush Art	브러시 아트
 	New Calligraphic Brush	새 캘리그래피 브러시

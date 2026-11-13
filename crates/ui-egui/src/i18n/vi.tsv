@@ -2801,6 +2801,7 @@ digits	Hindi	Hindi
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Đường dẫn: {paths}    Điểm neo: {anchors}    Màu: {colors}
 	Pattern	Họa tiết
 	Pattern Brush	Cọ họa tiết
+	missing from the Brushes panel	không có trong bảng Cọ
 	Pattern Brush Options	Tùy chọn cọ họa tiết
 	Pattern Editing	Chỉnh sửa họa tiết
 	Pattern Options	Tùy chọn họa tiết
@@ -2961,6 +2962,8 @@ mark-style	Japanese	Kiểu Nhật
 	Proof Setup	Thiết lập thử nghiệm
 	Properties	Thuộc tính
 	Proportional Metrics	Số liệu theo tỷ lệ
+	Insert Aki Left	Chèn aki bên trái
+	Insert Aki Right	Chèn aki bên phải
 	Proportional Lining	Số tỷ lệ đứng
 	Position:	Vị trí:
 	Default Position	Vị trí mặc định

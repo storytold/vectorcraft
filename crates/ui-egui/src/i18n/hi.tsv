@@ -3356,6 +3356,7 @@ antiAlias	Sharp	शार्प
 	Pattern	पैटर्न
 	Pattern Borders	पैटर्न सीमा
 	Pattern Brush	पैटर्न ब्रश
+	missing from the Brushes panel	ब्रश पैनल में अनुपलब्ध
 	Pattern Brush Options	पैटर्न ब्रश ऑप्शन्स
 	Pattern Editing	पैटर्न संपादन
 	Pattern Options	पैटर्न ऑप्शन्स
@@ -3607,6 +3608,8 @@ antiAlias	Sharp	शार्प
 	Properties	प्रॉपर्टीज़
 	Proportional Lining	आनुपातिक लाइनिंग
 	Proportional Metrics	आनुपातिक मीट्रिक
+	Insert Aki Left	बाईं ओर आकी जोड़ें
+	Insert Aki Right	दाईं ओर आकी जोड़ें
 	Proportional Oldstyle	आनुपातिक ओल्डस्टाइल
 	Protect Corners	कॉर्नर को सुरक्षित रखें
 	Proximity Guides	निकटता गाइड

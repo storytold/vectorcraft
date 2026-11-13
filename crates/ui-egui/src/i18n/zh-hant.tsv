@@ -3177,6 +3177,7 @@ file-filter	Templates	範本
 	Art Brush	藝術筆刷
 	Bristle Brush	鬃毛筆刷
 	Pattern Brush	圖樣筆刷
+	missing from the Brushes panel	「筆刷」面板中沒有
 	Select art to make a scatter, art or pattern brush.	選取圖稿以製作散佈筆刷、藝術筆刷或圖樣筆刷。
 	Brush Art	筆刷圖稿
 	New Calligraphic Brush	新增書法筆刷
@@ -3630,6 +3631,8 @@ font-script	Japanese	漢字
 	Proof Setup	校樣設定
 	Properties	內容
 	Proportional Metrics	比例度量
+	Insert Aki Left	在前方插入空白
+	Insert Aki Right	在後方插入空白
 	Character Direction	字元方向
 	Digits	數字
 	Arabic	阿拉伯數字

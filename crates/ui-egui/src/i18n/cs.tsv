@@ -1586,6 +1586,8 @@ lighting	Light	Světlo
 	Leading	Proklad
 	No Break	Nezalamovat
 	Proportional Metrics	Proporcionální metrika
+	Insert Aki Left	Vložit aki vlevo
+	Insert Aki Right	Vložit aki vpravo
 	Character Direction	Směr znaků
 	Digits	Číslice
 	Arabic	Arabské
@@ -3372,6 +3374,7 @@ theme	Appearance	Motiv
 	Art Brush	Obrazový štětec
 	Bristle Brush	Štětinový štětec
 	Pattern Brush	Vzorkový štětec
+	missing from the Brushes panel	chybí v panelu Štětce
 	Select art to make a scatter, art or pattern brush.	Vyberte kresbu, abyste mohli vytvořit rozptylový, obrazový nebo vzorkový štětec.
 	Brush Art	Kresba štětce
 	New Symbol	Nový symbol

@@ -2984,6 +2984,7 @@ file-filter	Templates	Sablonok
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Útvonalak: {paths}    Horgonypontok: {anchors}    Színek: {colors}
 	Pattern	Mintázat
 	Pattern Brush	Mintázatecset
+	missing from the Brushes panel	hiányzik az Ecsetek panelről
 	Pattern Brush Options	Mintázatecset beállításai
 	Pattern Editing	Mintázatszerkesztés
 	Pattern Options	Mintázat beállításai
@@ -3170,6 +3171,8 @@ mark-style	Japanese	Japán
 	Proof Setup	Színpróba beállítása
 	Properties	Tulajdonságok
 	Proportional Metrics	Arányos metrika
+	Insert Aki Left	Aki beszúrása balra
+	Insert Aki Right	Aki beszúrása jobbra
 	Proportional Lining	Arányos modern
 	Position:	Pozíció:
 	Default Position	Alapértelmezett pozíció

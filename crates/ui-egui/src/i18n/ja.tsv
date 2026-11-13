@@ -50,6 +50,8 @@ font-technology	Variable	バリアブル
 	x-Height	x ハイト
 	ICF Box	平均字面
 	Proportional Metrics	プロポーショナルメトリクス
+	Insert Aki Left	前にアキを挿入
+	Insert Aki Right	後ろにアキを挿入
 	Character Direction	文字の方向
 	Digits	数字
 	Arabic	アラビア数字
@@ -2420,6 +2422,7 @@ antiAlias	Sharp	シャープ
 	Art Brush	アートブラシ
 	Bristle Brush	剛毛ブラシ
 	Pattern Brush	パターンブラシ
+	missing from the Brushes panel	ブラシパネルにありません
 	Select art to make a scatter, art or pattern brush.	散布ブラシ、アートブラシ、パターンブラシを作成するには、アートを選択します。
 	Brush Art	ブラシのアート
 	New Calligraphic Brush	新規絵筆ブラシ

@@ -2137,6 +2137,7 @@ file-filter	Templates	Vorlagen
 	Art Brush	Bildpinsel
 	Bristle Brush	Borstenpinsel
 	Pattern Brush	Musterpinsel
+	missing from the Brushes panel	fehlt im Bedienfeld „Pinsel“
 	Select art to make a scatter, art or pattern brush.	Wählen Sie eine Grafik aus, um einen Spezial-, Bild- oder Musterpinsel zu erstellen.
 	Brush Art	Pinselgrafik
 	New Calligraphic Brush	Neuer Kalligrafiepinsel
@@ -2586,6 +2587,8 @@ mark-style	Japanese	Japanisch
 	Proof Setup	Proof einrichten
 	Properties	Eigenschaften
 	Proportional Metrics	Proportionale Metrik
+	Insert Aki Left	Aki links einfügen
+	Insert Aki Right	Aki rechts einfügen
 	Character Direction	Zeichenrichtung
 	Digits	Ziffern
 	Arabic	Arabisch

@@ -1814,6 +1814,7 @@ font-technology	Variable	Μεταβλητές
 	Art Brush	Πινέλο σχεδίου
 	Bristle Brush	Πινέλο με τρίχες
 	Pattern Brush	Πινέλο μοτίβου
+	missing from the Brushes panel	λείπει από τον πίνακα Πινέλα
 	Select art to make a scatter, art or pattern brush.	Επιλέξτε σχέδιο για να δημιουργήσετε πινέλο διασποράς, σχεδίου ή μοτίβου.
 	Brush Art	Σχέδιο πινέλου
 	New Layer…	Νέο επίπεδο…
@@ -3284,6 +3285,8 @@ theme	Appearance	Εμφάνιση
 	Profile inclusion:	Συμπερίληψη προφίλ:
 	Projecting Cap	Προεξέχον άκρο
 	Proportional Metrics	Αναλογικές μετρικές
+	Insert Aki Left	Εισαγωγή aki αριστερά
+	Insert Aki Right	Εισαγωγή aki δεξιά
 	Arabic	Αραβικά
 	Hindi	Χίντι
 	Farsi	Περσικά

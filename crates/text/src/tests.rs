@@ -3,6 +3,7 @@ use kurbo::{Affine, Shape};
 use vectorcraft_doc::{CharStyle, Justify, TextKind, TextRun};
 use vectorcraft_geom::PathData;
 
+mod aki;
 mod alternates;
 mod axes;
 mod bidi;

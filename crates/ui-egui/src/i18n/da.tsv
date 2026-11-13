@@ -1494,6 +1494,8 @@ lighting	Light	Lys
 	Leading	Linjeafstand
 	No Break	Ingen ombrydning
 	Proportional Metrics	Proportionale metrikker
+	Insert Aki Left	Indsæt aki til venstre
+	Insert Aki Right	Indsæt aki til højre
 	Character Direction	Tegnretning
 	Digits	Cifre
 	Arabic	Arabisk
@@ -3107,6 +3109,7 @@ theme	Appearance	Udseende
 	Art Brush	Grafikpensel
 	Bristle Brush	Børstepensel
 	Pattern Brush	Mønsterpensel
+	missing from the Brushes panel	mangler i panelet Pensler
 	Select art to make a scatter, art or pattern brush.	Markér grafik for at oprette en spredningspensel, grafikpensel eller mønsterpensel.
 	Brush Art	Penselgrafik
 	New Symbol	Nyt symbol

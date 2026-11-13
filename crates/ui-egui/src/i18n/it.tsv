@@ -2213,6 +2213,7 @@ file-filter	Templates	Modelli
 	Art Brush	Pennello artistico
 	Bristle Brush	Pennello a setole
 	Pattern Brush	Pennello motivo
+	missing from the Brushes panel	mancante nel pannello Pennelli
 	Select art to make a scatter, art or pattern brush.	Seleziona la grafica per creare un pennello a dispersione, artistico o motivo.
 	Brush Art	Grafica del pennello
 	New Calligraphic Brush	Nuovo pennello calligrafico
@@ -2662,6 +2663,8 @@ mark-style	Japanese	Giapponese
 	Proof Setup	Impostazione prova
 	Properties	Proprietà
 	Proportional Metrics	Metrica proporzionale
+	Insert Aki Left	Inserisci aki a sinistra
+	Insert Aki Right	Inserisci aki a destra
 	Character Direction	Direzione caratteri
 	Digits	Cifre
 	Arabic	Arabe

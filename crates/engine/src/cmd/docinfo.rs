@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts, images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient with a stop above opacity 0, at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else Linear gradient, Radial gradient or Freeform gradient; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient with a stop above opacity 0, at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else Linear gradient, Radial gradient or Freeform gradient; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone",
             has_doc,
             info
         ),
@@ -627,16 +627,22 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             }
         });
     }
+    // The document's fonts include those of the type in opacity masks and in the art of its
+    // symbols and patterns, as Find Font lists them.
+    if !selection_only {
+        fonts.extend(super::fonts::art_texts_of(d).into_iter().flat_map(|(_, t, _)| t.runs.iter().map(|r| super::fonts::font_of(&r.style))));
+    }
     let font_names: Vec<String> = fonts.iter().map(super::fonts::font_label).collect();
     // Each brush the art uses with its type, found by name in the Brushes panel as the renderer finds it (the last of two
-    // brushes with one name); a brush the panel does not hold draws as a plain stroke and has no type.
+    // brushes with one name); a brush the panel does not hold draws as a plain stroke and has no type. A row names the type
+    // as the New Brush dialog does (`Art Brush`), and the panel translates these values when it shows them.
     let kinds: HashMap<&str, &vectorcraft_brush::BrushKind> = library.iter().map(|b| (b.name.as_str(), &b.kind)).collect();
     let brush_entries: Vec<Value> =
         brushes.iter().map(|name| json!({ "name": name, "type": kinds.get(name.as_str()).map(|k| k.type_id()) })).collect();
     let brush_rows: Vec<(String, String)> = brushes
         .iter()
         .map(|name| {
-            (name.clone(), kinds.get(name.as_str()).map_or_else(|| "missing from the Brushes panel".to_string(), |k| format!("{} brush", k.label())))
+            (name.clone(), kinds.get(name.as_str()).map_or_else(|| "missing from the Brushes panel".to_string(), |k| format!("{} Brush", k.label())))
         })
         .collect();
     let mut out = json!({
@@ -755,6 +761,40 @@ mod tests {
         assert!(i["objects"]["textObjects"].is_null() && i["objects"]["paths"] == 1);
     }
 
+    /// Document Info's fonts include the type in an opacity mask, in a symbol's art and in a
+    /// pattern swatch that nothing paints with; with `selectionOnly`, only the selected type's.
+    #[test]
+    fn info_fonts_include_masks_symbols_and_patterns() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        let id = |v: Value| NodeId(v["id"].as_u64().unwrap());
+        let text = |s: &mut Session, font: &str| id(s.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi", "font": font})).unwrap());
+        let rect = |s: &mut Session| id(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap());
+        let (masked, in_symbol) = (rect(&mut s), rect(&mut s));
+        for (owner, font) in [(masked, "Mask Family"), (in_symbol, "Symbol Mask Family")] {
+            let t = text(&mut s, font);
+            s.edit("Mask", |d, _| {
+                let art = d.remove(t)?;
+                d.node_mut(owner).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new((*art).clone(), true)));
+                Ok(())
+            })
+            .unwrap();
+        }
+        s.execute("symbol.new", &json!({"name": "Mark", "ids": [in_symbol.0]})).unwrap();
+        let t = text(&mut s, "Pattern Family");
+        s.execute("object.pattern.make", &json!({"ids": [t.0], "name": "Unused", "edit": false})).unwrap();
+        s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let plain = text(&mut s, "Source Sans 3");
+        let fonts = |s: &mut Session, p: Value| s.execute("document.info", &p).unwrap()["fonts"].clone();
+        assert_eq!(
+            fonts(&mut s, json!({})),
+            json!(["Mask Family Regular", "Pattern Family Regular", "Source Sans 3 Regular", "Symbol Mask Family Regular"])
+        );
+        s.execute("select.set", &json!({"ids": [plain.0]})).unwrap();
+        assert_eq!(fonts(&mut s, json!({"selectionOnly": true})), json!(["Source Sans 3 Regular"]));
+    }
+
     /// Document Info › Objects gives the paths' total length in the document's units (#1958): an
     /// open line, a closed rectangle's perimeter and a compound path's pieces count, a guide doesn't.
     #[test]
@@ -805,10 +845,10 @@ mod tests {
         let i = brushes(&mut s, json!({"category": "brushes"}));
         assert_eq!(i["brushNames"], json!(["Charcoal", "Dots"]));
         assert_eq!(i["brushes"], json!([{"name": "Charcoal", "type": "art"}, {"name": "Dots", "type": "scatter"}]));
-        assert_eq!(i["sections"][0]["rows"], json!([["Charcoal", "Art brush"], ["Dots", "Scatter brush"]]));
+        assert_eq!(i["sections"][0]["rows"], json!([["Charcoal", "Art Brush"], ["Dots", "Scatter Brush"]]));
         assert!(panel.contains(&json!("3 pt. Round")) && i["panelBrushNames"] == json!(panel));
         let text = brushes(&mut s, json!({"category": "brushes", "format": "text"}))["text"].as_str().unwrap().to_string();
-        assert!(text.contains("\nBRUSHES\nCharcoal: Art brush\nDots: Scatter brush\n") && !text.contains("3 pt. Round"), "{text}");
+        assert!(text.contains("\nBRUSHES\nCharcoal: Art Brush\nDots: Scatter Brush\n") && !text.contains("3 pt. Round"), "{text}");
         assert!(!text.contains("OBJECTS"), "{text}");
         // Selection Only: the brushes the selected objects' strokes use.
         let selected = |s: &mut Session| brushes(s, json!({"selectionOnly": true, "category": "brushes"}));
@@ -818,10 +858,10 @@ mod tests {
         let i = selected(&mut s);
         assert_eq!(
             (i["brushes"].clone(), i["sections"][0]["rows"].clone()),
-            (json!([{"name": "Dots", "type": "scatter"}]), json!([["Dots", "Scatter brush"]]))
+            (json!([{"name": "Dots", "type": "scatter"}]), json!([["Dots", "Scatter Brush"]]))
         );
         let text = brushes(&mut s, json!({"selectionOnly": true, "category": "brushes", "format": "text"}))["text"].as_str().unwrap().to_string();
-        assert!(text.contains("\nBRUSHES\nDots: Scatter brush\n") && !text.contains("Charcoal"), "{text}");
+        assert!(text.contains("\nBRUSHES\nDots: Scatter Brush\n") && !text.contains("Charcoal"), "{text}");
         // A stroke without a brush lists none.
         let plain = s.execute("shape.rectangle", &json!({"x": 60, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
         s.execute("select.set", &json!({"ids": [plain]})).unwrap();

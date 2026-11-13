@@ -547,7 +547,11 @@ change nothing; an omitted or null `id` keeps the default. Commands that need an
 `text.createInPath`) refuse a value that is not a non-negative integer with "`id` must be a whole number", naming the
 key, and report a key left out or null as missing. The optional `group` of `livePaint.fill` and `parent` of
 `node.move` are refused the same way when given; left out, they keep their defaults. `livePaint.info` reads `id` when
-`group` is left out or null, and reports a missing group only when both are left out. A command that leaves out an object selected inside a
+`group` is left out or null, and reports a missing group only when both are left out. A command that needs a number
+(`x` of `shape.rectangle`, `pos` of `guide.add`, `index`, `x` and `y` of the `object.mesh.*` and
+`object.envelope.setMeshPoint` point commands, and the others like them) refuses a value that is not a number with
+`` `x` must be a number, not "40" ``, naming the key and showing the value as given, and reports a key left out or null
+as `` missing number `x` ``; it changes nothing either way. A command that leaves out an object selected inside a
 selected group also leaves it out when `ids` list it together with a group that holds it. Every command that takes
 `ids` (or `slices`, for the slice commands) refuses a list with an entry that is not a non-negative integer, or a value
 that is not a list, and changes nothing; it does not act on the other entries. The error for an entry names the key,
@@ -955,7 +959,11 @@ Export As goes through `options` too: for PNG, JPEG and WebP `useArtboards: true
 or `range`), named `<file>-<artboard>.<ext>`, and returns `{path, files}` (a PDF keeps them as pages of one file; an
 SVG writes one file per artboard of a `range`); `useArtboards: false` exports the bounds of the visible art with what
 its effects paint, the effects of groups, type and images included. `artboard.fitToArt` measures the art the same
-way.
+way. `document.exportPdf {useArtboards: false}` writes that one page as well, and ignores `artboard`, `artboards` and
+`range`. A PDF of that page, from either command, carries no Preserve Editing data; when Preserve Editing is on (as it
+is in VectorCraft Default), the export comes back with a warning that says so.
+Export As PDF continues in the Save PDF dialog with Use Artboards on or off; with it off, the dialog has no
+Artboards section and the page is the bounds of the visible art.
 
 Raster exports default to the document's raster effects resolution. An explicit `scale` sets pixels per
 point (72 times that value in ppi); `options.ppi` wins over either scale option. CLI `run --export` and
@@ -3428,6 +3436,30 @@ checked as that effect's. It is one undo step. Any other `threeDType` value, or 
 {"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"threeDType":"inflate","params":{"volume":70}}}}
 ```
 
+## 3D graphics
+
+`threeD.addGraphic {name?, ids?|id?}` keeps the selected art as a new document symbol (default name `Graphic`, made
+unique) and leaves the art as it is: the 3D and Materials panel's Add as Single Graphic. It returns `{name}`. A
+`name` that is not a string or is empty, or any other key, is refused.
+
+`threeD.mapGraphic {symbol, face?, x?, y?, scale?, rotation?, index?, item?, ids?|id?}` adds a graphic to the 3D
+effect of each selected object, in one undo step: `face` is `front` (default) or `back`, `x` and `y` are the
+offset in points of the graphic's center from the center of the object's bounds in the face's plane, `scale` is a
+percentage of the symbol's size (1..10000; omitted, 100 or less so the graphic fits inside the object) and
+`rotation` is in degrees counterclockwise (-360..360). Without `index` each object's first 3D effect takes it, and `item` is refused.
+Every object's 3D effect must be Extrude & Bevel with Cap on (front only at a depth of 0) or Rotate (the Plane type,
+front only), and `symbol` must name a document symbol; otherwise the command is refused and nothing changes. It returns `{ids, graphic}`.
+
+The graphics are the `graphics` parameter of `threeD.extrude` and `threeD.rotate`, which `effect.setParams` also
+edits: an array of up to 64 `{symbol, face, x, y, scale, rotation}` objects, drawn on the face turned,
+foreshortened and shaded with it and clipped to it ([Map artworks on 3D object](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/map-artwork-on-3d-objects.html)).
+A graphic naming a symbol the document does not have is refused, unless the effect already holds a graphic of it.
+The drawing rules are VectorCraft's own; see [three-d.md](three-d.md#graphics).
+
+```json
+{"name":"run_command","arguments":{"command":"threeD.mapGraphic","params":{"symbol":"Graphic","face":"front","x":10,"scale":80,"rotation":15}}}
+```
+
 ## Expand as Wireframes
 
 `effect.expandAsWireframes {ids?}` (**Window › 3D and Materials** › Quick Actions › Expand as Wireframes) replaces
@@ -3564,7 +3596,8 @@ For `edit.colors.*`, `fill: false` leaves colorized image fills unchanged. `reco
 with one gray channel, so a PDF writes it in gray.
 `includePatterns: false` leaves patterns out. The Blend commands also grade gradient meshes, which keep their shading.
 `edit.colors.saturate` needs `intensity`, a number from -100 to 100 (a number outside the range counts as its nearest
-end). Without one, or with a value that is not a number, it answers `` missing number `intensity` `` and changes nothing.
+end). Without one, or with `null`, it answers `` missing number `intensity` ``; with a value that is not a number, such as
+`"40"`, it answers `` `intensity` must be a number, not "40" ``. Either way it changes nothing.
 The `edit.colors.*` commands, `edit.colors.overprintBlack` and `addon.color.filter` answer a `fill`, `stroke`,
 `includeImages`, `includePatterns`, `convert`, `remove`, `includeCmyBlacks` or `includeSpotBlacks` that is not true or
 false with `` `fill` must be true or false ``, naming the key, a `percentage` that is not a number with
@@ -6593,12 +6626,14 @@ result carries the same files as a zip (`{name: "<name>.zip", dataBase64}`, entr
 
 `document.info {selectionOnly?, category?, format?: "text"}` adds `sections` (`[{id, title, rows: [[label, value]]}]`:
 document, objects, graphicStyles, brushes, spotColors, patterns, gradients, symbols, fonts, fontDetails, linkedImages,
-embeddedImages, repeats), `brushNames` (the brushes the art's strokes use, each once, hidden strokes, strokes at an opacity of 0, strokes with no
+embeddedImages, repeats), `fonts` (the fonts the document's type uses, the type in opacity masks and in the art of
+its symbols and pattern swatches included, which the fonts and fontDetails categories list; with `selectionOnly`, the
+fonts of the selected type), `brushNames` (the brushes the art's strokes use, each once, hidden strokes, strokes at an opacity of 0, strokes with no
 paint or width, guides, paths with no segment, type that draws no characters, a group's or layer's own strokes, a compound path member's own strokes and an image's strokes without a
 shape left out; with `selectionOnly`, the brushes the selected
 objects' strokes use), `brushes` (`[{name, type}]`: those brushes with their types, `calligraphic`, `scatter`, `art`,
 `pattern` or `bristle`, and `null` for a brush the Brushes panel does not hold; the brushes category's rows give each
-name with its type, such as `Art brush`, or `missing from the Brushes panel`), `panelBrushNames` (the Brushes panel's brushes, whether art uses them or not), `repeatObjects` (`[{id, name, type, instances, rows?, cols?}]`: every Repeat object, those in
+name with its type, such as `Art Brush`, or `missing from the Brushes panel`, in English; the Document Info panel shows them in the interface language), `panelBrushNames` (the Brushes panel's brushes, whether art uses them or not), `repeatObjects` (`[{id, name, type, instances, rows?, cols?}]`: every Repeat object, those in
 groups and in other repeats included, with its type `radial`, `grid` or `mirror` and the number of instances it makes,
 and a grid's `rows` and `cols`; with `selectionOnly`, the Repeat objects in the selection), `patternObjects`
 (`[{id, name, patterns}]`: every object filled or stroked with a pattern, once each, those in groups and type objects
@@ -7885,6 +7920,29 @@ dialog open.
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":4,"tateChuYoko":true,"tcyUpDown":2,"tcyLeftRight":-1}}}
 ```
 
+## Insert Aki
+
+`text.setFormat` and `text.setRangeStyle {akiLeft?, akiRight?}` set Insert Aki Left and Insert Aki Right of the
+characters: space added before and after each character, in thousandths of an em from 0 to 1000, measured as tracking
+is ([the help page](https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html)). 250 adds a quarter of
+a full-width space and 500 half of one. Left is the space before the character in reading order and Right the space
+after it: above and below the character in vertical type, and on the right and left of it in right-to-left type. The
+space stays the same width when a line is justified and when Optical kerning measures the characters. A ligature, a
+letter with its marks and a tate-chu-yoko block take the values of their first character. Setting one value leaves the other as it is. Both are 0
+by default and saved only when not 0, and character styles carry them (`charStyle.new`, `charStyle.setAttrs` and
+`charStyle.edit` refuse a value outside the range). A value that is not a number is refused with `` `akiLeft` must be a number ``, and one outside
+the range with `` `akiLeft` must be from 0 to 1000 ``, naming the key. One undo step. With Show East Asian Options on,
+the Character panel shows both fields, blank where the selected characters differ, with 0, 250, 500 and 1000 in their
+menus, and a value typed past 1000 sets 1000; Reset Panel sets both to 0. Character Style Options shows both fields
+in Advanced Character Formats. With Fractional Widths off or System Layout on, each side is set in whole points, and
+justification keeps that width. Live SVG text places each character the space moves, and type on a path with
+Insert Aki is written as outlines. An SVG saved without Preserve Editing (`preserveEditing`) reopens without the
+Insert Aki values; save it with Preserve Editing to keep them editable.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"akiRight":500}}}
+```
+
 ## Composite Fonts
 
 A composite font sets each class of character in a font of its own
@@ -8587,13 +8645,15 @@ attribute map in one undo step. `to` is trimmed and must be unique. The command 
 while preserving local overrides; Undo/Redo restores the definition and its users. The `charStyleOptions`
 dialog exposes `name`, `font_family`, `font_style`, `size`, `leading`, `kerning`, `tracking`, `case`,
 `position`, `underline`, `strikethrough`, `charAlign`, `h_scale`, `v_scale`, `baseline_shift`, `tcyUpDown`,
-`tcyLeftRight`, `rotation`, `language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
+`tcyLeftRight`, `rotation`, `akiLeft`, `akiRight`, `language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
 `ot_figure`, `ot_position`, `ot_liga`, `ot_calt`, `ot_dlig`, `ot_swsh`, `ot_salt`, `ot_titl`, `ot_ordn`, `ot_frac`,
 `ot_sets`, `section` (`general`, `basic`, `advanced`, `color` or `opentype`), and `preview`. An empty field leaves its
 attribute unset. `leading` and `kerning` also accept `Auto` to store an explicit automatic value.
 Advanced Character Formats holds `h_scale` and `v_scale` (percent, 1 to 10000),
 `baseline_shift` (points, -1296 to 1296), the Tate-chu-yoko Settings `tcyUpDown` and `tcyLeftRight` (points,
--1296 to 1296, as `text.setRangeStyle` takes them; an explicit 0 stays distinct from unset), `rotation` (degrees, stored from -180 to 180) and `language` (a name or tag from Document
+-1296 to 1296, as `text.setRangeStyle` takes them; an explicit 0 stays distinct from unset), `rotation` (degrees, stored from -180 to 180), Insert Aki Left and Right `akiLeft` and `akiRight` (thousandths of
+an em, with the Character panel's 0, 250, 500 and 1000 in their menus; a value typed below 0 or past 1000 sets 0 or
+1000) and `language` (a name or tag from Document
 Setup's languages; English: USA stores the explicit default `null`, and a tag not in the list that the style
 already has is kept). Language sets the language the characters are shaped in; it does not change hyphenation
 or spelling.
@@ -8946,9 +9006,10 @@ itself when its window comes to the front and a font folder changed meanwhile.
 {"name":"run_command","arguments":{"command":"text.rescanFonts","params":{}}}
 ```
 
-`text.missingFonts` lists the fonts that the active document's type uses, in its layers and its symbols, and that aren't
-available as named: `{fonts: [{family, style, status, resolved}], count, fontsNextToDocument?}`. `status` is `missing` or
-`substitute`, as in `text.fonts`. CSS generic families such as `sans-serif`, which no font file provides, and names
+`text.missingFonts` lists the fonts that the active document's type uses, in its layers, its symbols and its pattern
+swatches, the type in opacity masks included, and that aren't available as named:
+`{fonts: [{family, style, status, resolved}], count, fontsNextToDocument?}`. `status` is `missing` or `substitute`, as
+in `text.fonts`. CSS generic families such as `sans-serif`, which no font file provides, and names
 longer than 256 bytes are left out. `fontsNextToDocument` is the `Fonts` folder next to the saved document
 (File › Package writes it), when there is one and a search may start there. `text.findFontFiles {folder}` looks for
 the fonts' files in an absolute folder and its subfolders on separate threads and returns at once with
@@ -9759,7 +9820,8 @@ glyph of its first character lands where it was drawn.
   size and the centre of its text. With `scale: true` the horizontal scale goes too, the object's and each character's.
 - `addon.cleanup.replaceFonts {font?}` sets every character of the document's type whose font family isn't available
   in `font` (by default the default type font, Source Sans 3), in that family's style closest to the one it had. The
-  type in the art of the document's symbols is replaced too.
+  type in the art of the document's symbols and pattern swatches and in opacity masks is replaced too, including
+  hidden or locked type and the type in disabled masks.
 
 In the panel, the Text row (which the panel can hide) runs them: Shift-click Lines to break into paragraphs, and
 Alt-click Reset Transform to reset the horizontal scale too. Recovering live text from outlines, combining vertical

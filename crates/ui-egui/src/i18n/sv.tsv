@@ -2114,6 +2114,7 @@ font-technology	Variable	Variabla
 	Art Brush	Konstpensel
 	Bristle Brush	Borstpensel
 	Pattern Brush	Mönsterpensel
+	missing from the Brushes panel	saknas i panelen Penslar
 	Select art to make a scatter, art or pattern brush.	Markera grafik för att skapa en spridnings-, konst- eller mönsterpensel.
 	Brush Art	Penselgrafik
 	New Calligraphic Brush	Ny kalligrafisk pensel
@@ -2557,6 +2558,8 @@ font-technology	Variable	Variabla
 	Proof Setup	Provtrycksinställningar
 	Properties	Egenskaper
 	Proportional Metrics	Proportionella mått
+	Insert Aki Left	Infoga aki till vänster
+	Insert Aki Right	Infoga aki till höger
 	Character Direction	Teckenriktning
 	Digits	Siffror
 	Arabic	Arabiska

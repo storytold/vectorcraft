@@ -86,6 +86,10 @@ fn paint_refs(p: &Paint, f: Visit) {
 }
 
 fn appearance_refs(a: &Appearance, f: Visit) {
+    // The graphics mapped onto the faces of its 3D effects name symbols.
+    for s in vectorcraft_render::effects::appearance_graphic_symbols(a) {
+        f(Ref::Name(Res::Symbol, &s));
+    }
     for it in &a.items {
         paint_refs(it.paint(), f);
         if let AppearanceItem::Stroke(l) = it
@@ -620,6 +624,17 @@ impl Relink {
                 }
             }
         }
+        // A 3D effect's mapped graphics follow their symbols' names in the document. Each name is
+        // looked up once, so renames that chain (A to B, B to C) do not apply twice.
+        let items = a.items.iter_mut().flat_map(|i| i.effects_mut().iter_mut());
+        for e in a.effects.iter_mut().chain(items).filter(|e| vectorcraft_render::effects::takes_graphics(&e.id)) {
+            let list = e.params.get_mut(vectorcraft_render::effects::GRAPHICS).and_then(Value::as_array_mut);
+            for g in list.into_iter().flatten() {
+                if let Some(Value::String(s)) = g.get_mut("symbol") {
+                    self.name(Res::Symbol, s);
+                }
+            }
+        }
         for it in &mut a.items {
             self.paint(it.paint_mut());
             if let AppearanceItem::Stroke(l) = it
@@ -697,15 +712,6 @@ fn same_brush(r: &Relink, ours: &Brush, theirs: &Brush) -> bool {
     relinked(&Relink::default(), ours) == relinked(r, theirs)
 }
 
-/// Does brush `b`'s art show symbols or patterns?
-fn shows_definitions(b: &Brush) -> bool {
-    let mut found = false;
-    for a in b.art() {
-        node_refs(a, &mut |r| found |= matches!(r, Ref::Name(Res::Symbol | Res::Pattern, _)));
-    }
-    found
-}
-
 /// A symbol's Symbol Options, which its document keeps by symbol name: copied with the symbol and
 /// given to it under the name pasting adds it as.
 #[derive(Clone, Debug, PartialEq)]
@@ -739,7 +745,7 @@ impl SymbolOptions {
 }
 
 /// A character or paragraph style, symbol (with the Symbol Options copied with it), pattern or
-/// brush (placed with the others only when they are placed in use order) to place
+/// brush to place
 /// ([`Clipboard::import_used`]).
 #[derive(Clone, Copy)]
 enum Def<'c> {
@@ -1055,49 +1061,40 @@ impl Clipboard {
     }
 
     /// Add the resources the objects use to `d` (inside the paste's undo step) and work out how
-    /// pasted copies relink to them. An error, with `d` unchanged, when a pasted SVG filter finds no
-    /// free name ([`Self::filter_links`]).
+    /// pasted copies relink to them. Each style, symbol, pattern and brush is placed after those it
+    /// uses, as [`import_text_styles`] places them, so that a style that paints with a pattern added
+    /// under a free name ("Dots 2") is compared and added with that name. An error, with `d`
+    /// unchanged, when a pasted SVG filter finds no free name ([`Self::filter_links`]).
     pub(crate) fn import_into(&self, d: &mut Document, choices: &SwatchChoices, same_doc: bool) -> Result<Imported> {
-        self.import_used(d, &self.used(), choices, same_doc, false)
+        self.import_used(d, &self.used(), choices, same_doc)
     }
 
-    /// [`Self::import_into`] for the resources `used` names. The character and paragraph styles
-    /// come before the symbols and patterns, whose art may set type in them; with `in_use_order`,
-    /// each style, symbol, pattern and brush comes after the styles, symbols, patterns and brushes it uses
-    /// ([`use_order`]), so that it is compared and relinked with their names here, and each loop
-    /// of definitions that use each other is matched on its own ([`loop_groups`]).
-    fn import_used(&self, d: &mut Document, used: &Used, choices: &SwatchChoices, same_doc: bool, in_use_order: bool) -> Result<Imported> {
+    /// [`Self::import_into`] for the resources `used` names. Each style, symbol, pattern and brush
+    /// comes after the styles, symbols, patterns and brushes it uses ([`use_order`]), so that it is
+    /// compared and relinked with their names here, and each loop of definitions that use each
+    /// other is matched on its own ([`loop_groups`]). Pasted back into its own document
+    /// (`same_doc`), each definition of a loop is the document's of its name.
+    fn import_used(&self, d: &mut Document, used: &Used, choices: &SwatchChoices, same_doc: bool) -> Result<Imported> {
         let mut out = Imported::default();
         out.relink.filters = self.filter_links(d, same_doc)?;
         self.import_images(d, used, same_doc, &mut out);
         self.import_swatches(d, used, choices, same_doc, &mut out);
-        // Brushes whose art shows no symbols or patterns, before the symbols and patterns whose art
-        // they may brush; the others once those are in. With `in_use_order`, the brushes are
-        // placed in use order with the others.
-        let mut added_brushes: HashSet<String> =
-            if in_use_order { HashSet::new() } else { self.import_brushes(d, used, same_doc, false, &mut out).into_iter().collect() };
         let mut defs: Vec<Def<'_>> = vec![];
         for (r, list) in [(Res::CharStyle, &self.char_styles), (Res::ParaStyle, &self.para_styles)] {
             defs.extend(list.iter().filter(|s| used.has(r, &s.name)).map(|s| Def::Style(r, s)));
         }
         defs.extend(self.symbols.iter().filter(|s| used.has(Res::Symbol, &s.name)).map(|s| Def::Symbol(s, self.symbol_options.get(&s.name))));
         defs.extend(self.patterns.iter().filter(|p| used.has(Res::Pattern, &p.name)).map(Def::Pattern));
-        if in_use_order {
-            defs.extend(self.brushes.iter().filter(|b| used.has(Res::Brush, &b.name)).map(Def::Brush));
-        }
+        defs.extend(self.brushes.iter().filter(|b| used.has(Res::Brush, &b.name)).map(Def::Brush));
         // Groups to place in order; true for a loop of definitions that use each other.
-        let groups: Vec<(Vec<Def<'_>>, bool)> = if in_use_order {
-            let (order, rest) = use_order(defs);
-            let loops = loop_groups(&rest).into_iter().map(|(at, looped)| (at.into_iter().filter_map(|i| rest.get(i).copied()).collect(), looped));
-            std::iter::once((order, false)).chain(loops).collect()
-        } else {
-            vec![(defs, false)]
-        };
-        // Styles (their colors relinked first), symbols and patterns (compared once relinked,
-        // symbols with their options too). The symbols and patterns added are relinked at the end,
-        // when every new name and graphic style id is known; with `in_use_order`, so are the
-        // styles added, which a loop of uses may place before a pattern they paint with.
-        let (mut added_symbols, mut added_patterns, mut added_styles) = (HashSet::new(), HashSet::new(), vec![]);
+        let (order, rest) = use_order(defs);
+        let loops = loop_groups(&rest).into_iter().map(|(at, looped)| (at.into_iter().filter_map(|i| rest.get(i).copied()).collect(), looped));
+        let groups: Vec<(Vec<Def<'_>>, bool)> = std::iter::once((order, false)).chain(loops).collect();
+        // Styles (their colors relinked first), symbols, patterns and brushes (compared once
+        // relinked, symbols with their options too). The styles, symbols, patterns and brushes
+        // added are relinked at the end, when every new name and graphic style id is known: a loop
+        // of uses may place one before a definition it uses.
+        let (mut added_symbols, mut added_patterns, mut added_brushes, mut added_styles) = (HashSet::new(), HashSet::new(), HashSet::new(), vec![]);
         // Each definition, whether it is in a loop, and the loop it starts.
         let steps = groups
             .iter()
@@ -1107,8 +1104,8 @@ impl Clipboard {
         let mut fresh = false;
         // The names in the document of the loop being placed, when it has them all at once.
         let mut matched: BTreeMap<(Res, String), String> = BTreeMap::new();
-        // The document's brush library, read the first time a brush is placed in use order and
-        // stored again after each brush added; nothing else in the loop changes it.
+        // The document's brush library, read the first time a brush is placed and stored again
+        // after each brush added; nothing else in the loop changes it.
         let mut library: Option<Vec<Brush>> = None;
         for (def, looped, starts) in steps {
             fresh &= looped;
@@ -1116,8 +1113,9 @@ impl Clipboard {
                 matched.clear();
             }
             // A loop of uses that the document has all at once is known under those names before
-            // its definitions are compared.
-            if let Some(group) = starts {
+            // its definitions are compared. In its own document, each definition is the
+            // document's of its name, as outside a loop.
+            if let Some(group) = starts.filter(|_| !same_doc) {
                 matched.clear();
                 match names_of_loop(d, group, &out.relink) {
                     Some(names) => {
@@ -1146,7 +1144,7 @@ impl Clipboard {
                     out.relink.attrs(&mut s.attrs);
                     let theirs = if r == Res::CharStyle { &mut d.char_styles } else { &mut d.para_styles };
                     let p = place(theirs, &s, same_doc, |a, b| !fresh && a == b);
-                    if in_use_order && let Some(name) = p.new_name(&def.name) {
+                    if let Some(name) = p.new_name(&def.name) {
                         added_styles.push((r, name, def));
                     }
                     out.placed(r, &def.name, &p);
@@ -1199,9 +1197,6 @@ impl Clipboard {
                     out.placed(Res::Brush, &b.name, &p);
                 }
             }
-        }
-        if !in_use_order {
-            added_brushes.extend(self.import_brushes(d, used, same_doc, true, &mut out));
         }
         self.import_graphic_styles(d, used, same_doc, &mut out);
         for (r, name, def) in added_styles {
@@ -1323,28 +1318,6 @@ impl Clipboard {
         }
     }
 
-    /// The brushes whose art shows symbols or patterns (`late`), or the others: each one the
-    /// document has (its art compared once relinked) is used, the others are added. → the names of
-    /// those added, whose art is relinked at the end.
-    fn import_brushes(&self, d: &mut Document, used: &Used, same_doc: bool, late: bool, out: &mut Imported) -> Vec<String> {
-        let brushes: Vec<&Brush> = self.brushes.iter().filter(|b| used.has(Res::Brush, &b.name) && shows_definitions(b) == late).collect();
-        if brushes.is_empty() {
-            return vec![];
-        }
-        let mut lib = vectorcraft_brush::library(d);
-        let mut added = vec![];
-        for b in brushes {
-            let r = &out.relink;
-            let p = place(&mut lib, b, same_doc, |ours, theirs| same_brush(r, ours, theirs));
-            added.extend(p.new_name(&b.name));
-            out.placed(Res::Brush, &b.name, &p);
-        }
-        if !added.is_empty() {
-            vectorcraft_brush::store(d, &lib);
-        }
-        added
-    }
-
     /// Global and spot colours (a name conflict merges or adds as `choices` say), then the tint
     /// swatches of the tints used and the gradient swatches.
     fn import_swatches(&self, d: &mut Document, used: &Used, choices: &SwatchChoices, same_doc: bool, out: &mut Imported) {
@@ -1429,7 +1402,7 @@ pub(crate) fn import_text_styles(src: &Document, d: &mut Document, chars: bool, 
     let used = Used::of_text_styles(&Defs::of(src, &library), chars, paras);
     let clip = Clipboard::with_used(src, &used, &library, vec![]);
     let before = [&d.char_styles, &d.para_styles].map(|l| l.iter().map(|s| s.name.clone()).collect::<BTreeSet<_>>());
-    let out = clip.import_used(d, &used, &SwatchChoices::default(), false, true)?;
+    let out = clip.import_used(d, &used, &SwatchChoices::default(), false)?;
     let mut placed: Vec<LoadedStyle> = vec![];
     for (para, r, list) in [(false, Res::CharStyle, &clip.char_styles), (true, Res::ParaStyle, &clip.para_styles)] {
         for s in list {

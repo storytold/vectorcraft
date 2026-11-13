@@ -1431,6 +1431,8 @@ lighting	Light	სინათლე
 	Leading	სტრიქონთა დაშორება
 	No Break	გადატანის გარეშე
 	Proportional Metrics	პროპორციული მეტრიკა
+	Insert Aki Left	აკის ჩასმა მარცხნივ
+	Insert Aki Right	აკის ჩასმა მარჯვნივ
 	Character Direction	სიმბოლოების მიმართულება
 	Digits	ციფრები
 	Arabic	არაბული
@@ -2950,6 +2952,7 @@ theme	Appearance	იერსახე
 	Art Brush	მხატვრული ფუნჯი
 	Bristle Brush	ჯაგრის ფუნჯი
 	Pattern Brush	პატერნის ფუნჯი
+	missing from the Brushes panel	ფუნჯების პანელში არ არის
 	Select art to make a scatter, art or pattern brush.	მონიშნეთ ნახატი გაფანტვის, მხატვრული ან პატერნის ფუნჯის შესაქმნელად.
 	Brush Art	ფუნჯის ნახატი
 	New Symbol	ახალი სიმბოლო
