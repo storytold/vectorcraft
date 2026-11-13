@@ -1122,6 +1122,132 @@ fn dragging_a_row_onto_another_row_reorders_the_artboards() {
     assert_eq!(names(&app), ["Artboard 1", "Artboard 2", "Artboard 3"]);
 }
 
+/// The panel drawn in a 240 × 400 pt window, for the row menu's tests.
+struct RowMenuWindow {
+    ctx: egui::Context,
+    time: f64,
+}
+
+impl RowMenuWindow {
+    fn new() -> Self {
+        RowMenuWindow { ctx: egui::Context::default(), time: 0.0 }
+    }
+
+    /// One frame of the panel with `events`; the texts drawn and where.
+    fn frame(&mut self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+        self.time += 0.5;
+        let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
+        let raw = egui::RawInput { events, time: Some(self.time), screen_rect: screen, ..Default::default() };
+        let mut out = self.ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => Some((t.galley.text().trim_start().to_string(), t.visual_bounding_rect())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Where the text `label` is drawn now, if it is.
+    fn find(&mut self, app: &mut VectorcraftApp, label: &str) -> Option<egui::Pos2> {
+        self.frame(app, vec![]).into_iter().find(|(t, _)| t == label).map(|(_, r)| r.center())
+    }
+
+    /// A click with `button` at `at`.
+    fn click(&mut self, app: &mut VectorcraftApp, at: egui::Pos2, button: egui::PointerButton) {
+        let b = |pressed| egui::Event::PointerButton { pos: at, button, pressed, modifiers: Default::default() };
+        self.frame(app, vec![egui::Event::PointerMoved(at), b(true), b(false)]);
+        self.frame(app, vec![]);
+    }
+
+    /// A right-click on the row named `row`, then a click on its menu's Rename.
+    fn rename_from_row_menu(&mut self, app: &mut VectorcraftApp, row: &str) {
+        let at = self.find(app, row).expect("the row");
+        self.click(app, at, egui::PointerButton::Secondary);
+        let item = self.find(app, "Rename").expect("the row menu's Rename");
+        self.click(app, item, egui::PointerButton::Primary);
+    }
+}
+
+/// A right-click on an Artboards panel row opens a menu with Rename, which opens the Rename dialog
+/// and renames nothing until OK: on a row of the selection, the dialog takes every selected
+/// artboard and OK numbers the name in one undo step; on a row that isn't selected, that row's
+/// artboard becomes the only selected one and the dialog takes it alone, and Cancel keeps its name.
+#[test]
+fn the_row_menus_rename_opens_the_rename_dialog_for_the_selected_artboards() {
+    let mut app = menu_app(4);
+    select(&mut app, 2);
+    app.session.set_tool_option("selected", &json!([2, 1]));
+    let mut window = RowMenuWindow::new();
+    let steps = undo_steps(&app);
+    window.rename_from_row_menu(&mut app, "Artboard 2");
+    let d = app.ui.dialog.as_ref().expect("the Rename dialog");
+    assert_eq!(d.kind, crate::dialogs::rename_artboards::KIND);
+    assert_eq!((d.str("name").as_str(), &d.fields["indices"]), ("", &json!([1, 2])), "the dialog takes both selected artboards");
+    assert_eq!(picked(&app, 4), [1, 2], "the selection stays");
+    assert_eq!(board_names(&app), ["Artboard 1", "Artboard 2", "Artboard 3", "Artboard 4"], "nothing is renamed before OK");
+    assert_eq!(undo_steps(&app), steps);
+    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Page"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(board_names(&app), ["Artboard 1", "Page-1", "Page-2", "Artboard 4"]);
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+
+    window.rename_from_row_menu(&mut app, "Artboard 4");
+    let d = app.ui.dialog.as_ref().expect("the Rename dialog");
+    assert_eq!((d.str("name").as_str(), &d.fields["indices"]), ("Artboard 4", &json!([3])), "the dialog takes the row's artboard alone");
+    assert_eq!((picked(&app, 4), selected(&app, 4)), (vec![3], 3), "the row's artboard is the only one selected");
+    crate::dialogs::cancel(&mut app);
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(board_names(&app), ["Artboard 1", "Page-1", "Page-2", "Artboard 4"]);
+    assert_eq!(undo_steps(&app), steps + 1, "Cancel records no undo step");
+}
+
+/// Without the Artboard tool the row menu's Rename takes the right-clicked row's artboard, which
+/// becomes the active one; a locked artboard can be renamed too. A menu closed without a choice
+/// opens no dialog.
+#[test]
+fn the_row_menu_renames_the_right_clicked_artboard_with_any_tool() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 50, "units": "Points", "artboards": 3})).unwrap();
+    app.session.execute("artboard.setProps", &json!({"index": 2, "locked": true})).unwrap();
+    select(&mut app, 0);
+    let mut window = RowMenuWindow::new();
+    let at = window.find(&mut app, "Artboard 2").expect("the row");
+    window.click(&mut app, at, egui::PointerButton::Secondary);
+    assert!(window.find(&mut app, "Rename").is_some(), "the row menu is open");
+    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    window.frame(&mut app, vec![escape]);
+    window.frame(&mut app, vec![]);
+    assert!(window.find(&mut app, "Rename").is_none(), "Escape closes the menu");
+    assert!(app.ui.dialog.is_none(), "and opens no dialog");
+    assert_eq!(selected(&app, 3), 1, "the right-clicked artboard is active");
+
+    window.rename_from_row_menu(&mut app, "Artboard 3");
+    let d = app.ui.dialog.as_ref().expect("the Rename dialog");
+    assert_eq!((d.str("name").as_str(), &d.fields["indices"]), ("Artboard 3", &json!([2])));
+    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Back"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(board_names(&app), ["Artboard 1", "Artboard 2", "Back"], "the locked artboard is renamed");
+}
+
+/// A row dragged with the right button reorders nothing; the primary button still drags rows.
+#[test]
+fn a_right_button_drag_does_not_move_a_row() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 3})).unwrap();
+    let mut window = RowMenuWindow::new();
+    let (first, last) = (window.find(&mut app, "Artboard 1").unwrap(), window.find(&mut app, "Artboard 3").unwrap());
+    let below = last + vec2(0.0, 8.0);
+    let button = |at, pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed, modifiers: Default::default() };
+    window.frame(&mut app, vec![egui::Event::PointerMoved(first), button(first, true)]);
+    window.frame(&mut app, vec![egui::Event::PointerMoved(first + vec2(0.0, 12.0))]);
+    window.frame(&mut app, vec![egui::Event::PointerMoved(below)]);
+    window.frame(&mut app, vec![button(below, false)]);
+    window.frame(&mut app, vec![]);
+    assert_eq!(board_names(&app), ["Artboard 1", "Artboard 2", "Artboard 3"]);
+}
+
 /// A click in a row's lock column locks its artboard and shows the lock next to the name, a
 /// second click unlocks it, and each click is one undo step. Delete Artboard leaves a locked
 /// artboard.
