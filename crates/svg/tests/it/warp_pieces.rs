@@ -72,6 +72,52 @@ fn a_half_transparent_image_is_half_transparent_where_its_warp_pieces_overlap() 
     }
 }
 
+/// An image whose left half is opaque and whose right half is at half alpha, cut into 4 × 4 cells:
+/// its opaque pixels stay opaque on the pieces' antialiased edges, away from the partly
+/// transparent pixels, and the right half stays half transparent.
+#[test]
+fn opaque_pixels_stay_opaque_where_warp_pieces_overlap() {
+    let img = image::RgbaImage::from_fn(16, 16, |x, _| image::Rgba([255, 0, 0, if x < 8 { 255 } else { 128 }]));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    for masked in [false, true] {
+        let mut d = Document::new(100.0, 100.0);
+        d.images.insert("pic".into(), ImageBlob::png(png.clone()));
+        let im = ImageObject {
+            key: "pic".into(),
+            width: 16,
+            height: 16,
+            xf: Affine::translate((10.0, 10.0)) * Affine::scale(5.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        let n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im.clone())));
+        let g = mesh_warp_image(&n, &im, &|p| p, 4, false, masked);
+        d.insert(d.default_layer(), 0, g).unwrap();
+        let svg = export_full(&d, &ExportOptions::default(), None).svg;
+        let tree = resvg::usvg::Tree::from_str(&svg, &resvg::usvg::Options::default()).unwrap();
+        let mut pixmap = resvg::tiny_skia::Pixmap::new(400, 400).unwrap();
+        resvg::render(&tree, resvg::tiny_skia::Transform::from_scale(4.0, 4.0), &mut pixmap.as_mut());
+        let alpha = |x0: u32, x1: u32| {
+            let mut range = (255u8, 0u8);
+            for y in 48..352 {
+                for x in x0..x1 {
+                    let a = pixmap.pixel(x, y).unwrap().alpha();
+                    range = (range.0.min(a), range.1.max(a));
+                }
+            }
+            range
+        };
+        // The first column of cells and its seam with the second, (12, 12)–(29.75, 88).
+        let opaque = alpha(48, 119);
+        assert!(opaque.0 >= 253, "masked {masked}: {opaque:?}");
+        // The right half, (62, 12)–(88, 88).
+        let half = alpha(248, 352);
+        assert!(half.0 >= 104 && half.1 <= 134, "masked {masked}: {half:?}");
+    }
+}
+
 /// Pieces of an opaque image are drawn one over another without knockout masks; a colorize paint
 /// draws a gray image's light pixels partly transparent, so its pieces take them.
 #[test]

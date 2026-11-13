@@ -118,7 +118,8 @@ impl Exporter<'_> {
     /// elements of a knockout group ([`vectorcraft_effects::warp_pieces_translucent`]). Each piece
     /// is drawn through one soft mask of where the pieces above it that reach its box don't cover
     /// ([`vectorcraft_effects::knockout_silhouette`]): only neighbors overlap, so each mask holds a
-    /// few triangles and no mask nests in another.
+    /// few triangles and no mask nests in another. A piece above that overlaps it only over opaque
+    /// pixels ([`vectorcraft_effects::WarpSeams`]) is left out of its mask.
     fn warp_pieces(&mut self, s: &mut Surface, elements: &[(&std::sync::Arc<Node>, Measured)], page: Rect) {
         // Each piece's triangle and its box: a piece paints inside its triangle only.
         let silhouette = |c: &Node| {
@@ -126,11 +127,18 @@ impl Exporter<'_> {
             Some((vectorcraft_effects::knockout_silhouette(c, vectorcraft_doc::color::Color::WHITE)?, b))
         };
         let silhouettes: Vec<Option<(Node, Rect)>> = elements.iter().map(|(c, _)| silhouette(c)).collect();
+        let pieces: Vec<&Node> = elements.iter().map(|(c, _)| &***c).collect();
+        let seams = vectorcraft_effects::WarpSeams::new(self.doc, &pieces);
         for (i, (c, measured)) in elements.iter().enumerate() {
             let Some((_, reach)) = &silhouettes[i] else { continue };
             let reach = reach.inflate(1.0, 1.0);
-            let shapes: Vec<(&Node, Option<&Measured>)> =
-                silhouettes[i + 1..].iter().flatten().filter(|(_, b)| rects_overlap(*b, reach)).map(|(n, _)| (n, None)).collect();
+            let shapes: Vec<(&Node, Option<&Measured>)> = silhouettes
+                .iter()
+                .enumerate()
+                .skip(i + 1)
+                .filter_map(|(j, s)| s.as_ref().filter(|(_, b)| rects_overlap(*b, reach) && seams.shows_through(i, j)))
+                .map(|(n, _)| (n, None))
+                .collect();
             if shapes.is_empty() {
                 self.measured_node(s, c, page, false, Some(measured));
                 continue;

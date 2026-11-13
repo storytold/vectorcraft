@@ -272,6 +272,14 @@ impl ImageBlob {
         self.decoded().is_some_and(|img| img.pixels().any(|p| p.0[3] < 255))
     }
 
+    /// The alpha of each pixel, row by row from the top: the width, the height and one byte a
+    /// pixel. `None` when the image can't be decoded. The last image decoded is kept, as for
+    /// [`Self::sample`].
+    pub fn alpha(&self) -> Option<(u32, u32, Vec<u8>)> {
+        let img = self.decoded()?;
+        Some((img.width(), img.height(), img.pixels().map(|p| p.0[3]).collect()))
+    }
+
     /// The decoded pixels (the last image decoded is kept for the next sample).
     fn decoded(&self) -> Option<Arc<image::RgbaImage>> {
         thread_local! {

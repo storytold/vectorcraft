@@ -638,6 +638,8 @@ impl Writer<'_> {
     /// through one mask of where the pieces above it that reach it don't cover
     /// (their triangles, [`vectorcraft_effects::knockout_silhouette`], black over white):
     /// only neighbors overlap, so each mask holds a few triangles and no mask nests in another.
+    /// A piece above that overlaps it only over opaque pixels ([`vectorcraft_effects::WarpSeams`])
+    /// is left out of its mask.
     fn warp_pieces(&mut self, elements: &[&std::sync::Arc<Node>]) {
         // Each piece's triangle and its box: a piece paints inside its triangle only.
         let silhouette = |c: &Node| {
@@ -645,11 +647,19 @@ impl Writer<'_> {
             Some((vectorcraft_effects::knockout_silhouette(c, vectorcraft_doc::color::Color::BLACK)?, b))
         };
         let silhouettes: Vec<Option<(Node, Rect)>> = elements.iter().map(|c| silhouette(c)).collect();
+        let pieces: Vec<&Node> = elements.iter().map(|c| &***c).collect();
+        let seams = vectorcraft_effects::WarpSeams::new(self.doc, &pieces);
         for (i, c) in elements.iter().enumerate() {
             let Some((own, reach)) = &silhouettes[i] else { continue };
             let reach = reach.inflate(1.0, 1.0);
             let overlaps = |b: &Rect| b.x0 <= reach.x1 && reach.x0 <= b.x1 && b.y0 <= reach.y1 && reach.y0 <= b.y1;
-            let above: Vec<&Node> = silhouettes[i + 1..].iter().flatten().filter(|(_, b)| overlaps(b)).map(|(n, _)| n).collect();
+            let above: Vec<&Node> = silhouettes
+                .iter()
+                .enumerate()
+                .skip(i + 1)
+                .filter_map(|(j, s)| s.as_ref().filter(|(_, b)| overlaps(b) && seams.shows_through(i, j)))
+                .map(|(n, _)| n)
+                .collect();
             if above.is_empty() {
                 self.node(c);
                 continue;
