@@ -6538,6 +6538,132 @@ fn effects_in_a_styled_objects_mask_are_warned_about() {
     assert!(shown(&out.program).contains("\n1 (Anon 1) XW\n"));
 }
 
+/// A 200 × 100 document of an image whose opacity mask doesn't clip, of the art `art` makes.
+fn masked_image(art: impl FnOnce(&mut Document) -> Node) -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut im = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), Affine::new([60.0, 0.0, 0.0, 40.0, 10.0, 10.0]), None);
+    let art = art(&mut doc);
+    im.extras_mut().mask = Some(OpacityMask { art: Arc::new(art), clip: false, invert: false, disabled: false, linked: true }.into());
+    doc.insert(Some(layer), usize::MAX, im).unwrap();
+    doc
+}
+
+/// The opacity mask art of the first image in `doc` that has one.
+fn image_mask_art(doc: &Document) -> Arc<Node> {
+    let mut art = None;
+    doc.walk(|n| {
+        if matches!(n.kind, NodeKind::Image(_))
+            && art.is_none()
+            && let Some(m) = n.extras().mask.as_ref()
+        {
+            art = Some(m.art.clone());
+        }
+    });
+    art.expect("an image with an opacity mask")
+}
+
+/// How many of the artboard's pixels `a` and `b` draw differently.
+fn pixels_apart(a: &Document, b: &Document) -> usize {
+    let (a, b) = (vectorcraft_testkit::raster::render_artboard(a), vectorcraft_testkit::raster::render_artboard(b));
+    assert_eq!((a.width, a.height), (b.width, b.height));
+    (0..a.height).flat_map(|y| (0..a.width).map(move |x| (x, y))).filter(|&(x, y)| a.pixel(x, y) != b.pixel(x, y)).count()
+}
+
+/// An opacity mask's art keeps its live effects as an art style: an image masked by a black path
+/// with Offset Path (hiding the image under it) reads back with the effect live on the mask's path,
+/// alone or as a member of a group of two, and draws as it did.
+#[test]
+fn a_masked_image_with_live_offset_path_round_trips() {
+    let offset = fx("path.offsetPath", serde_json::json!({"offset": 8.0, "joins": "miter", "miterLimit": 4.0}));
+    let black = solid(Color::rgb(0.0, 0.0, 0.0));
+    for members in [1, 2] {
+        let made = |effects: Vec<vectorcraft_doc::Effect>| {
+            masked_image(|doc| {
+                let grown = styled_rect(doc, "Grown", Rect::new(60.0, 30.0, 110.0, 70.0), black.clone(), Paint::None, effects);
+                if members == 1 {
+                    return grown;
+                }
+                let plain = square(doc, Rect::new(130.0, 30.0, 170.0, 70.0), Color::rgb(0.0, 0.0, 0.0));
+                group(doc, vec![grown, plain], false)
+            })
+        };
+        let doc = made(vec![offset.clone()]);
+        assert!(pixels_apart(&doc, &made(vec![])) > 0, "{members}: the effect draws nothing");
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS), "{members}: {:?}", out.warnings);
+        let back = read_back(&doc);
+        let art = image_mask_art(&back);
+        let grown = if members == 1 {
+            art.clone()
+        } else {
+            assert!(art.appearance.effects.is_empty(), "the group took the effect: {:?}", art.appearance.effects);
+            let children = art.children().expect("a group of the mask's art");
+            assert_eq!(children.len(), 2);
+            assert!(children[1].appearance.effects.is_empty());
+            children[0].clone()
+        };
+        assert!(matches!(grown.kind, NodeKind::Path { .. }), "{members}: {:?}", grown.kind);
+        let [e] = grown.appearance.effects.as_slice() else { panic!("{members}: {:?}", grown.appearance.effects) };
+        assert_eq!(e.id, "path.offsetPath");
+        assert_eq!(e.params.get("offset").and_then(serde_json::Value::as_f64), Some(8.0), "{:?}", e.params);
+        assert_eq!(pixels_apart(&doc, &back), 0, "{members}");
+    }
+}
+
+/// The art of a mask keeps Offset Path live when its root is hidden (the canvas draws it all the
+/// same) and when it is the art of a mask inside another mask's art (that clips).
+#[test]
+fn hidden_and_nested_mask_art_keep_live_offset_path() {
+    let offset = fx("path.offsetPath", serde_json::json!({"offset": 6.0}));
+    let grown = |doc: &mut Document, effects, gray: f32| {
+        styled_rect(doc, "Grown", Rect::new(60.0, 30.0, 110.0, 70.0), solid(Color::rgb(gray, gray, gray)), Paint::None, effects)
+    };
+    let hidden = |effects| {
+        masked_image(|doc| {
+            let mut art = grown(doc, effects, 0.0);
+            art.visible = false;
+            art
+        })
+    };
+    let nested = |effects| {
+        masked_image(|doc| {
+            let mut outer = square(doc, Rect::new(20.0, 15.0, 180.0, 85.0), Color::rgb(0.0, 0.0, 0.0));
+            let inner = grown(doc, effects, 1.0);
+            outer.extras_mut().mask = Some(OpacityMask { art: Arc::new(inner), clip: true, invert: false, disabled: false, linked: true }.into());
+            outer
+        })
+    };
+    for (case, made) in [("hidden", &hidden as &dyn Fn(Vec<vectorcraft_doc::Effect>) -> Document), ("nested", &nested)] {
+        let doc = made(vec![offset.clone()]);
+        assert!(pixels_apart(&doc, &made(vec![])) > 0, "{case}: the effect draws nothing");
+        let back = read_back(&doc);
+        let mut art = image_mask_art(&back);
+        if case == "nested" {
+            art = art.extras().mask.as_ref().expect("the mask inside the mask's art").art.clone();
+        }
+        let ids: Vec<&str> = art.appearance.effects.iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(ids, ["path.offsetPath"], "{case}");
+        assert_eq!(pixels_apart(&doc, &back), 0, "{case}");
+    }
+}
+
+/// A geometry effect on an opacity mask's art that no art style holds (Roughen) is applied to the
+/// art written, so the mask reads back drawing what it drew, but for pixels on its edge that the
+/// written points' rounding moves.
+#[test]
+fn a_masks_art_with_an_effect_no_style_holds_is_written_as_it_draws() {
+    let rough = fx("distort.roughen", serde_json::json!({"size": 6.0, "relative": false, "points": "corner"}));
+    let black = solid(Color::rgb(0.0, 0.0, 0.0));
+    let rect = |doc: &mut Document, effects| styled_rect(doc, "Rough", Rect::new(60.0, 30.0, 140.0, 70.0), black.clone(), Paint::None, effects);
+    let doc = masked_image(|doc| rect(doc, vec![rough]));
+    assert!(pixels_apart(&doc, &masked_image(|doc| rect(doc, vec![]))) > 0, "the effect draws nothing");
+    let back = read_back(&doc);
+    assert!(image_mask_art(&back).appearance.effects.is_empty());
+    let apart = pixels_apart(&doc, &back);
+    assert!(apart <= 4, "{apart} pixels differ");
+}
+
 /// On a large canvas no art style is written (the reader scales the styles of a large canvas):
 /// objects with effects are written as their vector art with their geometry effects applied, with a
 /// warning.
@@ -7756,6 +7882,13 @@ fn a_link_to_a_twist_style_is_kept_where_the_reader_reads_it() {
         n.appearance = ap.into();
         n
     };
+    let frame = |doc: &mut Document, ap: Appearance| {
+        let outer = Node::path(doc.alloc_id(), square(), Appearance::default());
+        let inner = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(30.0, 20.0, 70.0, 50.0)), Appearance::default());
+        let mut n = Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(inner)], rule: FillRule::NonZero });
+        n.appearance = ap.into();
+        n
+    };
     // A group of a filled square and `second`.
     let group = |second: fn(&mut Document) -> Node| {
         move |doc: &mut Document, ap: Appearance| {
@@ -7780,7 +7913,12 @@ fn a_link_to_a_twist_style_is_kept_where_the_reader_reads_it() {
     for (what, doc, kept) in [
         ("a twisted curve", twisted(45.0, filled(), path(oval())), true),
         ("a curve twisted a quarter turn back", twisted(-90.0, filled(), path(oval())), true),
-        ("a square twisted three quarters of a turn", twisted(270.0, filled(), path(square())), true),
+        ("a square twisted half a turn", twisted(180.0, filled(), path(square())), true),
+        ("a square twisted half a turn back", twisted(-180.0, filled(), path(square())), true),
+        ("a square twisted three quarters of a turn", twisted(270.0, filled(), path(square())), false),
+        ("a square twisted three quarters of a turn back", twisted(-270.0, filled(), path(square())), false),
+        ("a straight compound path twisted half a turn", twisted(180.0, filled(), frame), true),
+        ("a straight compound path twisted a full turn", twisted(360.0, filled(), frame), false),
         ("a curve twisted past a quarter turn", twisted(120.0, filled(), path(oval())), false),
         ("a stroked curve", twisted(45.0, Appearance::basic(black_fill(), red.clone(), 2.0), path(oval())), false),
         ("a curved compound path", twisted(-60.0, filled(), ring), true),
@@ -7895,8 +8033,8 @@ fn a_style_that_isnt_written_defines_no_gradient() {
     assert!(p.contains("%%BeginSetup\n0 Bn\n"), "{p}");
 }
 
-/// An object in a plain group, a sublayer or a clipping group by a path keeps its style there. One
-/// in a symbol's art, in an opacity mask or in art cut to a clipping object other than a path is
+/// An object in a plain group, a sublayer, a clipping group by a path or an opacity mask keeps its
+/// style there. One in a symbol's art or in art cut to a clipping object other than a path is
 /// written as its drawn look, with a warning.
 #[test]
 fn where_a_styled_object_keeps_its_style() {
@@ -7953,8 +8091,17 @@ fn where_a_styled_object_keeps_its_style() {
     n.extras_mut().mask = Some(OpacityMask { art: Arc::new(art), clip: true, invert: false, disabled: false, linked: true }.into());
     put(&mut doc, n);
     let out = export_ai_editing(&doc, &opts()).unwrap();
-    assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
-    assert!(!shown(&out.program).contains("(Anon 1) XW"));
+    assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let mut art = None;
+    back.walk(|n| {
+        if let Some(m) = n.extras().mask.as_ref() {
+            art = Some(m.art.clone());
+        }
+    });
+    let art = art.expect("the opacity mask");
+    assert_eq!(art.name.as_deref(), Some("Inside"));
+    assert_eq!(art.appearance.effects.len(), 1);
     // In art cut to a clipping object other than a path: type.
     let mut doc = Document::new(200.0, 100.0);
     let t = vectorcraft_doc::TextObject::point(
@@ -8676,8 +8823,9 @@ fn brushes_the_reader_cant_read_are_left_out() {
     }
     left_out(vec![Brush { name: "A/B".into(), ..keep.clone() }], "slash");
     left_out(vec![Brush { kind: BrushKind::Bristle(Bristle::default()), ..keep.clone() }], "a second brush of the name");
-    // A Pattern brush named "X" is left out, so a Calligraphic brush named "X" after it comes back. A
-    // path with "X" is drawn with the Pattern brush, so it comes back as its drawn look.
+    // A Pattern brush named "X" is left out, so a Calligraphic brush named "X" after it comes back,
+    // as "X 2", the name the library gives it when it is read. A path with "X" is drawn with the
+    // Pattern brush, so it comes back as its drawn look.
     let mut doc = Document::new(300.0, 200.0);
     let x = Brush { name: "X".into(), ..keep.clone() };
     vectorcraft_brush::store(&mut doc, &[Brush { name: "X".into(), kind: BrushKind::Pattern(PatternBrush::default()) }, x.clone()]);
@@ -8685,7 +8833,7 @@ fn brushes_the_reader_cant_read_are_left_out() {
     let out = export_ai_editing(&doc, &opts()).unwrap();
     assert!(out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
     let back = read_back(&doc);
-    assert_eq!(vectorcraft_brush::library(&back), [x]);
+    assert_eq!(vectorcraft_brush::library(&back), [Brush { name: "X 2".into(), ..x }]);
     let n = &back.layers[0].children().unwrap()[0];
     assert!(n.appearance.stroke().is_none_or(|s| s.brush.is_none()), "not with the other brush of the name: {n:#?}");
 }

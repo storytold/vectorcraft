@@ -2,9 +2,9 @@
 //! rule, equalise handles, add evenly spaced anchors, close), what its live path effects add to them
 //! ([`add_anchors`], [`smooth_anchors`], [`split_at_anchors`]), the readouts the Measure & Inspect
 //! tool shows over a path, open paths lengthened or shortened at an end ([`extend`]), the places
-//! where paths cross ([`crossings`]), anchors slid along their path ([`slide`]), touching edges
-//! merged ([`shared_edge`]), paths divided into dashes ([`divide_dashes`]) and the Parametric Shape
-//! Tool's shapes ([`shapes`]).
+//! where paths cross ([`crossings`]), the stretches between them ([`spans`]), anchors slid along
+//! their path ([`slide`]), touching edges merged ([`shared_edge`]), paths divided into dashes
+//! ([`divide_dashes`]) and the Parametric Shape Tool's shapes ([`shapes`]).
 
 mod crossings;
 mod dashes;
@@ -14,19 +14,21 @@ mod shared_edge;
 mod slide;
 #[cfg(test)]
 mod tests;
+mod trim;
 
 use std::collections::BTreeSet;
 
 use kurbo::{CubicBez, ParamCurve, ParamCurveArclen, ParamCurveNearest, Point, Vec2};
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, SubPath};
 
-pub use crossings::{MAX_CROSSING_SEGMENTS, crossings, insert_at};
+pub use crossings::{MAX_CROSSED_BY_SEGMENTS, MAX_CROSSING_SEGMENTS, Place, Work, crossings, crossings_on, crossings_on_within, insert_at};
 pub use dashes::{DashSpec, Piece, divide_dashes};
 pub use extend::{ExtendMode, extend_length_to, extend_open};
 pub use shared_edge::{
     COINCIDENCE, EndSide, Follow, MAX_COINCIDENCE, MergePlan, MergePreview, Stretch, apply_merge, ends_at, merge_preview, stretches_at,
 };
 pub use slide::{MAX_SLIDE, slide_anchor, slide_stops, slide_t_at};
+pub use trim::{Span, slice, span_at, spans, without_spans};
 
 use crate::fit::{end_tangent, start_tangent};
 

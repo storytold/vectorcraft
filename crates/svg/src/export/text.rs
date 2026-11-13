@@ -82,7 +82,8 @@ impl Writer<'_> {
         let heights = vectorcraft_text::FontDb::global().font_heights_resolved(&resolved);
         let t = &*heights;
         let inline = t.runs.iter().any(|r| r.inline.is_some());
-        // Ruby is written as outlines with its base text: a reader's <text> can't place it. So are
+        // Ruby is written as outlines with its base text: a reader's <text> can't place it. So is
+        // type with warichu, whose stacked lines a reader's <text> can't place either. So are
         // small capitals, superscript and subscript and tab leaders, which SVG text doesn't draw (#3869),
         // and a glyph chosen for a character, which a reader's <text> draws with the default glyph. So
         // is type in one of the document's composite fonts, which a reader can't find by its name.
@@ -92,8 +93,12 @@ impl Writer<'_> {
                 || r.style.glyph_alternate.is_some()
                 || vectorcraft_doc::CompositeFont::named(&doc.composite_fonts, &r.style.font_family).is_some()
         }) || std::iter::once(&t.para).chain(&t.paras).any(|p| p.tabs.iter().any(|tab| !tab.leader.is_empty()));
-        let outlined =
-            self.opts.outline_text || t.vertical || !t.ruby.is_empty() || (inline && matches!(t.kind, TextKind::OnPath { .. })) || unwritable;
+        let outlined = self.opts.outline_text
+            || t.vertical
+            || !t.ruby.is_empty()
+            || t.stacks_warichu()
+            || (inline && matches!(t.kind, TextKind::OnPath { .. }))
+            || unwritable;
         let chars = |w: &mut Self, n: &Node| if outlined { w.text_outlines(n, t) } else { w.text(n, t) };
         let painted = n.appearance.items.iter().any(|i| i.visible() && !i.paint().is_none());
         // Live type with an inside or outside character stroke writes that stroke apart from the

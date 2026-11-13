@@ -47,7 +47,7 @@ pub(super) use variables::{ACTIVE, BINDINGS, LIMITS, VALUES};
 /// How deep symbols, live objects and pattern tiles may nest in one another (deeper art is left
 /// out). Groups and layers need no limit of their own: a document is never deeper than
 /// [`vectorcraft_doc::MAX_DEPTH`].
-const MAX_NEST: u32 = 8;
+pub(super) const MAX_NEST: u32 = 8;
 
 pub(super) const TYPE: &str = "type in opacity masks, pattern tiles, symbols and art cut to a clipping object, mirrored type, area type and type on a path that is turned or unevenly scaled or whose frame or path has several parts, area type in an open frame, type on an open path whose ends meet, area type that flows around a text wrap, type of only white space, threads of type on a path, threads whose frames differ in orientation or hold a frame written as outlines, type of sizes past what the reader reads, stories past what the reader reads (1,048,576 bytes a story, 16,777,216 bytes in all, and the size of text document it reads), and type with inline graphics, ruby, gradient or pattern paint, or fills, strokes, effects or an opacity mask of the object's own, is written as its outlines in the editing data for other apps";
 pub(super) const PATTERNS: &str = "pattern fills whose tiles aren't a grid or whose art reaches past the tile, pattern fills in another pattern's tile or in a symbol, and pattern fills nested more than 8 deep are written as their tiles cut to the shape in the editing data for other apps";
@@ -200,6 +200,9 @@ pub(super) struct Writer<'a> {
     /// How many parts of the data written on `%_` lines (opacity masks' art, patterns' tiles) the
     /// art being written is in.
     hidden: u32,
+    /// The `hidden` and `nest` values at which the objects of the opacity mask's art being written
+    /// are written: objects there may be written with their art styles.
+    mask_level: Option<(u32, u32)>,
     /// The image just written was written as a placed file.
     placed: bool,
     /// The type just written was written as type, not as its outlines.
@@ -298,6 +301,7 @@ impl<'a> Writer<'a> {
             canvas_origin: origin,
             payloads: vec![],
             hidden: 0,
+            mask_level: None,
             placed: false,
             typed: false,
             bound: vec![],
@@ -631,10 +635,10 @@ impl<'a> Writer<'a> {
         if self.in_symbol {
             self.wrote_fixed |= symbols::redrawn(n);
         }
-        // On the layers, outside art cut to a clipping object: with its art style, when it has one.
+        // On the layers or in an opacity mask's art, outside art cut to a clipping object: with its
+        // art style, when it has one.
         if !self.in_look
-            && self.hidden == 0
-            && self.nest == 0
+            && ((self.hidden == 0 && self.nest == 0) || self.mask_level == Some((self.hidden, self.nest)))
             && self.clip.is_none()
             && !self.in_symbol
             && let Some(orig) = self.styled.get(&n.id).cloned()
@@ -878,21 +882,27 @@ impl<'a> Writer<'a> {
         };
         // A plain group of two or more objects, or of none, is the group the art is read into. A group
         // of one object is written as a group, because the reader makes one shown object the art.
+        // A group that may be written with its art style is written as one object.
         let plain = matches!(art.kind, NodeKind::Group { clip: false, .. })
             && Xy::of(art) == Xy::PLAIN
             && art.visible
             && !art.locked
             && art.name.as_deref().is_none_or(str::is_empty)
-            && art.extras().mask.is_none();
+            && art.extras().mask.is_none()
+            && !self.styled.contains_key(&art.id);
         let members = match art.children() {
             Some(c) if plain && c.len() != 1 => c.as_slice(),
             _ => std::slice::from_ref(art),
         };
         self.nest += 1;
         self.hidden += 1;
+        // The art's objects (not those inside its symbols, live objects or pattern tiles, which are
+        // deeper) may be written with their art styles.
+        let level = self.mask_level.replace((self.hidden, self.nest));
         for c in members {
             self.node(c);
         }
+        self.mask_level = level;
         self.hidden -= 1;
         self.nest -= 1;
         let lines = std::mem::replace(&mut self.body, outer);

@@ -39,8 +39,9 @@ pub(in crate::ai_editing) fn style_links(doc: &Document) -> usize {
     doc.layers.iter().map(|l| count(l)).sum::<usize>() + doc.symbols.iter().map(|s| count(&s.art)).sum::<usize>()
 }
 
-/// The objects of `doc`'s layers that may be written with an art style ([`Writer::styled_object`]),
-/// by id: paths and compound paths with points and groups, with live effects, linked to a graphic
+/// The objects of `doc`'s layers and of their opacity masks' art that may be written with an art
+/// style ([`Writer::styled_object`]), by id (a mask's art root shown, as [`Writer::mask`] writes
+/// it): paths and compound paths with points and groups, with live effects, linked to a graphic
 /// style or (paths and compound paths) with a brush on a stroke, and embedded images with one Warp
 /// ([`warped_image`]), without Opacity & Mask Define
 /// Knockout Shape (the reader takes an object's transparency
@@ -51,6 +52,13 @@ pub(in crate::ai_editing) fn styled_objects(doc: &Document) -> HashMap<NodeId, A
         for n in nodes {
             if candidate(n) {
                 out.insert(n.id, n.clone());
+            }
+            if let Some(m) = n.extras().mask.as_ref() {
+                let mut art = m.art.clone();
+                if !art.visible {
+                    Arc::make_mut(&mut art).visible = true;
+                }
+                walk(std::slice::from_ref(&art), out);
             }
             // A group's members are written with a style of their own only when the group is written
             // without one. Baking a container with effects of its own changes its members, which
