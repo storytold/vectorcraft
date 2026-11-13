@@ -3943,6 +3943,78 @@ fn korean_line_break_anywhere_is_reported_only_for_korean_paragraphs() {
     }
 }
 
+/// The text document holds no Mojikumi set: a paragraph with any of the predefined sets other
+/// than None is reported as left out, and reads back without the set; None and Line-end
+/// Punctuation Half Width are not reported.
+#[test]
+fn predefined_mojikumi_sets_are_reported_as_left_out() {
+    use vectorcraft_doc::{Mojikumi, TextObject};
+    for (set, reported) in [
+        (Mojikumi::None, false),
+        (Mojikumi::LineEndHalf, false),
+        (Mojikumi::YakumonoHankaku, true),
+        (Mojikumi::GyomatsuYakumonoHankaku, true),
+        (Mojikumi::GyomatsuYakumonoZenkaku, true),
+        (Mojikumi::YakumonoZenkaku, true),
+    ] {
+        let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "「かな」。", style(14.0, Color::BLACK));
+        t.para.mojikumi = set;
+        let mut doc = Document::new(200.0, 200.0);
+        let layer = doc.layers[0].id;
+        let n = text_node(&mut doc, t);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(!out.warnings.is_empty(), reported, "{set:?}: {:?}", out.warnings);
+        let mut all = vec![];
+        paths(&read_back(&doc).layers, &mut all);
+        let sets: Vec<Mojikumi> = all
+            .iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Text(t) => Some(t.para_at(0).mojikumi),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(sets.len(), 1, "{set:?}");
+        assert!(matches!(sets[0], Mojikumi::None | Mojikumi::LineEndHalf), "{set:?} reads back as {:?}", sets[0]);
+    }
+}
+
+/// The text document has no Bunri-Kinshi: a paragraph with it on and an inseparable pair in it is
+/// reported as left out, and comes back off; with it off, or with no pair, nothing is reported.
+#[test]
+fn bunri_kinshi_is_reported_only_for_paragraphs_with_a_pair() {
+    use vectorcraft_doc::TextObject;
+    for (text, on, reported) in [
+        ("Wait——now", true, true),
+        ("Wait——now", false, false),
+        ("Wait—now", true, false),
+        ("Wait……now", true, true),
+        ("Wait‥‥now", true, true),
+        ("あ〳〵い", true, true),
+        ("あ〴〵い", true, true),
+        ("あ〵〳い", true, false),
+    ] {
+        let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), text, style(14.0, Color::BLACK));
+        t.para.bunri_kinshi = on;
+        let mut doc = Document::new(200.0, 200.0);
+        let layer = doc.layers[0].id;
+        let n = text_node(&mut doc, t);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(!out.warnings.is_empty(), reported, "{text} {on}: {:?}", out.warnings);
+        let mut all = vec![];
+        paths(&read_back(&doc).layers, &mut all);
+        let paras: Vec<bool> = all
+            .iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Text(t) => Some(t.para_at(0).bunri_kinshi),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(paras, [false], "{text} {on}");
+    }
+}
+
 #[test]
 fn type_is_written_again_as_the_same_bytes() {
     let doc = typed();
@@ -4387,7 +4459,7 @@ fn type_attributes_the_data_cant_hold_are_reported() {
     let back = read_back(&doc);
     assert!(matches!(back.layers[0].children().unwrap()[0].kind, NodeKind::Text(_)));
     // Any other attribute the text document doesn't hold is reported too: No Break, a paragraph's
-    // left-to-right direction set on it, Optical Margin Alignment, a font version, a font that isn't
+    // left-to-right direction set on it, Optical Margin Alignment, a font that isn't
     // installed whose name doesn't come back (a hyphen in its family), a Lab color,
     // small capitals at another size, right-to-left letters aligned to the start of a paragraph
     // without a direction of its own, tracking that isn't a whole number.
@@ -4396,7 +4468,6 @@ fn type_attributes_the_data_cant_hold_are_reported() {
         |t| t.runs[0].style.tracking = 12.5,
         |t| t.para.direction = Some(vectorcraft_doc::ParaDirection::LeftToRight),
         |t| t.optical_margin = true,
-        |t| t.runs[0].style.font_version = Some("2.0".into()),
         |t| t.runs[0].style.font_family = "my-missing font".into(),
         |t| t.runs[0].style.fill = Paint::solid(MINT),
         |t| t.runs[0].style.small_caps = Some(80.0),
@@ -4419,9 +4490,128 @@ fn type_attributes_the_data_cant_hold_are_reported() {
         missing.runs[0].style.font_family = "Missing Sans Probe".into();
         missing.runs[0].style.font_style = "Bold Italic".into();
         assert!(with(missing).is_empty());
+        // A version that isn't installed draws in the face the font resolves to, and comes back in it.
+        let mut uninstalled = t.clone();
+        uninstalled.runs[0].style.font_version = Some("2.0".into());
+        assert!(with(uninstalled).is_empty());
         edit(&mut t);
         assert_eq!(with(t), [writer::TYPE_ATTRIBUTES]);
     }
+}
+
+/// Installs the copies of each font `copies` lists, the first of each loaded first.
+fn install_copies(copies: &[(bool, vectorcraft_text::test_fonts::CopyNames<'_>)]) {
+    for (inter, names) in copies {
+        let font = vectorcraft_text::test_fonts::named_copy(*inter, *names).unwrap();
+        assert_eq!(vectorcraft_text::FontDb::global().add_font(font), 1, "{names:?}");
+    }
+}
+
+/// A run's text, font family and font version, as [`fonts_saved`] reads them back.
+type SavedRun = (String, String, Option<String>);
+
+/// A 200 × 100 document of point type whose runs are `runs` (text, family, version).
+fn runs_doc(runs: &[(&str, &str, Option<&str>)]) -> Document {
+    use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut t = TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "", style(18.0, Color::BLACK));
+    t.runs = runs
+        .iter()
+        .map(|(text, family, version)| {
+            let st = CharStyle { font_family: (*family).into(), font_version: version.map(Into::into), ..style(18.0, Color::BLACK) };
+            TextRun::new(*text, st)
+        })
+        .collect();
+    let n = text_node(&mut doc, t);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    doc
+}
+
+/// [`runs_doc`] saved and read back: the save's warnings, and the runs read back.
+fn fonts_saved(runs: &[(&str, &str, Option<&str>)]) -> (Vec<String>, Vec<SavedRun>) {
+    let doc = runs_doc(runs);
+    let warnings = export_ai_editing(&doc, &opts()).unwrap().warnings;
+    let back = read_back(&doc);
+    let NodeKind::Text(t) = &back.layers[0].children().unwrap()[0].kind else { panic!("type comes back as type") };
+    (warnings, t.runs.iter().map(|r| (r.text.clone(), r.style.font_family.clone(), r.style.font_version.clone())).collect())
+}
+
+/// How many fonts the font set of [`runs_doc`] names, the hidden characters' font aside.
+fn fonts_written(runs: &[(&str, &str, Option<&str>)]) -> usize {
+    text_document(&program(&runs_doc(runs))).matches("/CoolTypeFont").count() - 1
+}
+
+/// Type in a font installed beside a family spelled alike but for case and punctuation
+/// (`Sample/Ink`, PostScript name `SampleInk`, beside `SAMPLE INK`), or beside a copy whose
+/// PostScript name differs only in case (the type naming its version), is written under its
+/// PostScript name and read back in its own family and version, so nothing about its font is
+/// reported lost.
+#[test]
+fn type_in_a_font_beside_a_family_spelled_alike_keeps_its_font() {
+    install_copies(&[
+        (true, ("SAVETEST INK", "Regular", "Version 1.000", "SAVETESTINK-Regular")),
+        (false, ("Savetest/Ink", "Regular", "Version 1.000", "SavetestInk")),
+        (true, ("CASESAVE INK", "Regular", "Version 1.000", "CASESAVEINK")),
+        (false, ("Casesave Ink", "Regular", "Version 2.000", "CasesaveInk")),
+    ]);
+    let (warnings, back) = fonts_saved(&[("Kept", "Savetest/Ink", None)]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(back, [("Kept".to_string(), "Savetest/Ink".to_string(), None)]);
+    let (warnings, back) = fonts_saved(&[("Kept", "Casesave Ink", Some("Version 2.000"))]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(back, [("Kept".to_string(), "Casesave Ink".to_string(), Some("Version 2.000".to_string()))]);
+}
+
+/// Type in a static font's version that the family and style don't resolve to (two installed
+/// copies of one PostScript name, family and style) is written with that version (`/5`) and comes
+/// back in it, without a note; two runs in two versions are two fonts of the set.
+#[test]
+fn type_in_another_version_of_a_static_font_keeps_it() {
+    install_copies(&[(true, ("Rttest Ink", "Regular", "1.0", "RttestInk-Regular")), (false, ("Rttest Ink", "Regular", "1.1", "RttestInk-Regular"))]);
+    let (warnings, back) = fonts_saved(&[("Kept", "Rttest Ink", Some("1.1"))]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(back, [("Kept".to_string(), "Rttest Ink".to_string(), Some("1.1".to_string()))]);
+    let (warnings, back) = fonts_saved(&[("Old", "Rttest Ink", None), ("New", "Rttest Ink", Some("1.1"))]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(back, [("Old".to_string(), "Rttest Ink".to_string(), None), ("New".to_string(), "Rttest Ink".to_string(), Some("1.1".to_string()))]);
+    // A run naming the version its family and style resolve to anyway, or one that isn't
+    // installed, is in the same face as a run naming none: one font of the set, and no note.
+    let (warnings, back) = fonts_saved(&[("Same", "Rttest Ink", Some("1.0")), ("Gone", "Rttest Ink", Some("9.9")), ("Plain", "Rttest Ink", None)]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert!(back.iter().all(|(_, family, version)| family == "Rttest Ink" && version.is_none()), "{back:?}");
+    assert_eq!(fonts_written(&[("Same", "Rttest Ink", Some("1.0")), ("Gone", "Rttest Ink", Some("9.9")), ("Plain", "Rttest Ink", None)]), 1);
+}
+
+/// Type in the copy of a font that its family names, beside a copy of the same PostScript name in
+/// another family that the name alone gives first, is written with its version (`/5`), so it comes
+/// back in its own copy and family, without a note.
+#[test]
+fn type_in_a_copy_its_postscript_name_alone_doesnt_give_keeps_it() {
+    install_copies(&[
+        (true, ("RvdupsaveInk", "Regular", "2.0", "RvdupsaveInk-Regular")),
+        (false, ("Rvdupsave Ink", "Regular", "1.0", "RvdupsaveInk-Regular")),
+    ]);
+    let (warnings, back) = fonts_saved(&[("Kept", "Rvdupsave Ink", None)]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(back.iter().map(|r| r.1.as_str()).collect::<Vec<_>>(), ["Rvdupsave Ink"]);
+    let (warnings, back) = fonts_saved(&[("Kept", "RvdupsaveInk", None)]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(back.iter().map(|r| r.1.as_str()).collect::<Vec<_>>(), ["RvdupsaveInk"]);
+}
+
+/// A version string longer than the reader takes (256 bytes) isn't one it can pick a copy by: type
+/// in such a copy, which its name alone doesn't give back, is reported as losing its font.
+#[test]
+fn a_version_longer_than_the_reader_takes_is_reported() {
+    let long = "9".repeat(300);
+    install_copies(&[
+        (true, ("Longtest Ink", "Regular", "1.0", "LongtestInk-Regular")),
+        (false, ("Longtest Ink", "Regular", &long, "LongtestInk-Regular")),
+    ]);
+    let (warnings, back) = fonts_saved(&[("Long", "Longtest Ink", Some(&long))]);
+    assert_eq!(warnings, [writer::TYPE_ATTRIBUTES]);
+    assert_eq!(back, [("Long".to_string(), "Longtest Ink".to_string(), None)]);
 }
 
 /// On a large canvas, area type, threaded frames and type on a path stay type: the frames and
@@ -6722,6 +6912,70 @@ fn every_effect_setting_written_on_an_object_is_read_back() {
     assert!(matches!(&spot.appearance.fill().unwrap().paint, Paint::Solid { swatch: Some(s), .. } if s == "Ink"), "{spot:?}");
 }
 
+/// A drawn look's strokes warn only where its art style leaves them out: a path with a drop shadow and
+/// a stroke with a width profile is written with a style that holds the profile, and doesn't warn;
+/// a group with a drop shadow whose member has a stroke inside the path still warns.
+#[test]
+fn a_drawn_looks_strokes_warn_only_where_its_style_leaves_them_out() {
+    let profile = vectorcraft_doc::WidthProfile { points: vec![(0.0, 1.0, 0.5), (0.5, 0.25, 0.75), (1.0, 0.0, 1.0)] };
+    let (n, warnings, p) = read_one(|doc| {
+        let mut stroke = StrokeLayer::new(black_fill(), 4.0);
+        stroke.profile = Some(profile.clone());
+        let ap = Appearance { items: vec![AppearanceItem::Stroke(stroke)], effects: vec![drop_shadow()], contents_index: None };
+        Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap)
+    });
+    assert!(p.contains("%AI9_BeginArtStyles"), "{p}");
+    assert!(!warnings.iter().any(|w| w == writer::STROKES), "{warnings:?}");
+    assert_eq!(n.appearance.stroke().and_then(|s| s.profile.clone()), Some(profile));
+    let (_, warnings, p) = read_one(|doc| {
+        let mut n =
+            Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), Appearance::basic(Paint::None, black_fill(), 2.0));
+        n.appearance.stroke_mut().unwrap().align = vectorcraft_doc::StrokeAlign::Inside;
+        let mut g = group(doc, vec![n], false);
+        g.appearance.effects = vec![drop_shadow()];
+        g
+    });
+    assert!(p.contains("%AI9_BeginArtStyles"), "{p}");
+    assert!(warnings.iter().any(|w| w == writer::STROKES), "{warnings:?}");
+}
+
+/// A path linked to a graphic style with a drop shadow and a stroke with a width profile is written
+/// with that style, which holds the profile, and doesn't warn; it reads back linked, with its
+/// profile. A linked path whose fill is half opaque in Screen mode isn't written with its style, which
+/// the reader reads on no object, and warns that the fill's transparency is left out.
+#[test]
+fn a_linked_paths_drawn_look_warns_only_for_what_its_style_leaves_out() {
+    let profile = vectorcraft_doc::WidthProfile { points: vec![(0.0, 1.0, 0.5), (0.5, 0.25, 0.75), (1.0, 0.0, 1.0)] };
+    let linked = |doc: &mut Document, fill: FillLayer| {
+        let mut stroke = StrokeLayer::new(black_fill(), 4.0);
+        stroke.profile = Some(profile.clone());
+        let ap = Appearance {
+            items: vec![AppearanceItem::Fill(fill), AppearanceItem::Stroke(stroke)],
+            effects: vec![drop_shadow()],
+            contents_index: None,
+        };
+        let mut g = vectorcraft_doc::GraphicStyle::new("Linked", ap.clone());
+        g.id = 7;
+        doc.graphic_styles.push(g);
+        let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap);
+        n.extras_mut().graphic_style = Some(7);
+        n
+    };
+    let (n, warnings, p) = read_one(|doc| linked(doc, FillLayer::new(solid(Color::rgb(0.2, 0.2, 0.9)))));
+    assert!(p.contains("1 (Linked) XW"), "{warnings:?}");
+    assert!(!warnings.iter().any(|w| w == writer::STROKES), "{warnings:?}");
+    assert!(n.extras().graphic_style.is_some(), "{n:?}");
+    assert_eq!(n.appearance.stroke().and_then(|s| s.profile.clone()), Some(profile.clone()));
+    let (_, warnings, p) = read_one(|doc| {
+        let mut fill = FillLayer::new(solid(Color::rgb(0.2, 0.2, 0.9)));
+        fill.opacity = 0.5;
+        fill.blend = BlendMode::Screen;
+        linked(doc, fill)
+    });
+    assert!(!p.contains("1 (Linked) XW"), "{p}");
+    assert!(warnings.iter().any(|w| w == writer::ITEM_TRANSPARENCY), "{warnings:?}");
+}
+
 /// Each effect a graphic style can hold, in a style of its own, reads back with its settings, whatever
 /// the writer's conversions to the file's units.
 #[test]
@@ -7023,6 +7277,81 @@ fn a_linked_object_past_the_object_limit_warns_that_its_link_is_left_out() {
     let out = export_within(&doc, &opts(), room).unwrap();
     for w in [writer::OBJECT_LIMIT, writer::STYLE_LINKS] {
         assert!(out.warnings.iter().any(|x| x == w), "{w}: {:?}", out.warnings);
+    }
+}
+
+/// A link to a graphic style with Twist is kept where the reader reads Twist: on a curve, a curved
+/// compound path or a group with nothing stroked up to a quarter turn, and on a path with straight
+/// segments at any angle. A stroked curve, a group with a stroked member or a guide, or a curve,
+/// compound path or group twisted further, is written without the link and warns.
+#[test]
+fn a_link_to_a_twist_style_is_kept_where_the_reader_reads_it() {
+    // A document with the object `make` builds from its appearance, `ap` with Twist at `angle`,
+    // linked to a graphic style of that appearance.
+    fn twisted(angle: f64, ap: Appearance, make: impl FnOnce(&mut Document, Appearance) -> Node) -> Document {
+        let mut doc = Document::new(200.0, 100.0);
+        let ap = Appearance { effects: vec![fx("distort.twist", serde_json::json!({"angle": angle}))], ..ap };
+        let mut g = vectorcraft_doc::GraphicStyle::new("Twisted", ap.clone());
+        g.id = 9;
+        doc.graphic_styles.push(g);
+        let mut n = make(&mut doc, ap);
+        n.extras_mut().graphic_style = Some(9);
+        put(&mut doc, n);
+        doc
+    }
+    let oval = || shapes::ellipse(Rect::new(10.0, 10.0, 90.0, 60.0));
+    let square = || shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 60.0));
+    let red = solid(Color::rgb(1.0, 0.0, 0.0));
+    let filled = || Appearance::basic(black_fill(), Paint::None, 0.0);
+    let path = |p: PathData| move |doc: &mut Document, ap: Appearance| Node::path(doc.alloc_id(), p, ap);
+    let ring = |doc: &mut Document, ap: Appearance| {
+        let outer = Node::path(doc.alloc_id(), oval(), Appearance::default());
+        let inner = Node::path(doc.alloc_id(), shapes::ellipse(Rect::new(30.0, 20.0, 70.0, 50.0)), Appearance::default());
+        let mut n = Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(inner)], rule: FillRule::NonZero });
+        n.appearance = ap.into();
+        n
+    };
+    // A group of a filled square and `second`.
+    let group = |second: fn(&mut Document) -> Node| {
+        move |doc: &mut Document, ap: Appearance| {
+            let first = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 40.0, 40.0)), filled());
+            let second = second(doc);
+            let mut n = Node::group(doc.alloc_id(), vec![Arc::new(first), Arc::new(second)]);
+            n.appearance = ap.into();
+            n
+        }
+    };
+    let curve = |doc: &mut Document| {
+        Node::path(doc.alloc_id(), shapes::ellipse(Rect::new(50.0, 10.0, 90.0, 60.0)), Appearance::basic(black_fill(), Paint::None, 0.0))
+    };
+    let stroked_curve = |doc: &mut Document| {
+        let ap = Appearance::basic(black_fill(), solid(Color::rgb(1.0, 0.0, 0.0)), 2.0);
+        Node::path(doc.alloc_id(), shapes::ellipse(Rect::new(50.0, 10.0, 90.0, 60.0)), ap)
+    };
+    let guide = |doc: &mut Document| {
+        let path = shapes::rectangle(Rect::new(50.0, 10.0, 90.0, 60.0));
+        Node::new(doc.alloc_id(), NodeKind::Path { path, rule: FillRule::NonZero, live: None, clipping: false, guide: true })
+    };
+    for (what, doc, kept) in [
+        ("a twisted curve", twisted(45.0, filled(), path(oval())), true),
+        ("a curve twisted a quarter turn back", twisted(-90.0, filled(), path(oval())), true),
+        ("a square twisted three quarters of a turn", twisted(270.0, filled(), path(square())), true),
+        ("a curve twisted past a quarter turn", twisted(120.0, filled(), path(oval())), false),
+        ("a stroked curve", twisted(45.0, Appearance::basic(black_fill(), red.clone(), 2.0), path(oval())), false),
+        ("a curved compound path", twisted(-60.0, filled(), ring), true),
+        ("a curved compound path twisted past a quarter turn", twisted(120.0, filled(), ring), false),
+        ("a twisted group", twisted(90.0, Appearance::default(), group(curve)), true),
+        ("a group twisted past a quarter turn", twisted(135.0, Appearance::default(), group(curve)), false),
+        ("a group with a stroked member", twisted(45.0, Appearance::default(), group(stroked_curve)), false),
+        ("a group with a guide", twisted(45.0, Appearance::default(), group(guide)), false),
+    ] {
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(out.warnings.iter().any(|w| w == writer::STYLE_LINKS), !kept, "{what}: {:?}", out.warnings);
+        let back = read_back(&doc);
+        let n = &back.layers[0].children().unwrap()[0];
+        let style = n.extras().graphic_style.and_then(|id| back.graphic_style_by_id(id)).map(|g| g.name.as_str());
+        assert_eq!(style, kept.then_some("Twisted"), "{what}: {n:?}");
+        assert_eq!(n.appearance.effects.iter().any(|e| e.id == "distort.twist"), kept, "{what}: {n:?}");
     }
 }
 

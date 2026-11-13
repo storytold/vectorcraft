@@ -31,6 +31,8 @@ impl Session {
             }
             // Pixel-aligned objects the edit changed go back on the pixel grid.
             cmd::refresh_pixel_aligned(&before, doc);
+            // Color masks of images whose own pixels the edit replaced are made for the new ones.
+            cmd::refresh_color_masks(Some(&*before), doc);
             let placed = cmd::objects_on_path::refresh(&before, doc);
             // Pixel-aligned members that placing moved go back on the pixel grid.
             cmd::keep_aligned_in(doc, &placed);
@@ -288,7 +290,10 @@ impl Session {
                 st.revision += 1;
             }
             st.doc = it.doc.clone();
-            let restore_paint = cmd == "command.batch" || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch");
+            // A batch, or a preview that changed the new-art paints (a pattern rename), started from
+            // the paints the interaction began with.
+            let restore_paint =
+                cmd == "command.batch" || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch") || it.color_mode_paints.is_some();
             let paint = it.paint.clone();
             it.preview_paint = None;
             it.color_mode_paints = None;
@@ -421,7 +426,7 @@ impl Session {
         if let Some(paint) = self
             .active()
             .and_then(|st| st.interaction.as_ref())
-            .filter(|it| it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch"))
+            .filter(|it| it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch") || it.color_mode_paints.is_some())
             .map(|it| it.paint.clone())
         {
             self.paint = paint;
@@ -431,6 +436,9 @@ impl Session {
         st.undo_interaction();
         // Guides locked and slices locked or hidden during the interaction stay deselected.
         deselect_hidden(&menu, &st.doc, &mut st.selection);
+        // With New Art Has Basic Appearance off, new art takes the appearance of the selection as
+        // the document has it again, not as a preview left it.
+        self.inherit_new_art();
         Ok(())
     }
 

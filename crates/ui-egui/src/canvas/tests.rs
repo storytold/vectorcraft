@@ -966,6 +966,88 @@ fn two_finger_tap_undoes_and_three_finger_tap_redoes() {
     assert_eq!(count(&app), 2, "off: the first finger draws as the pointer, and nothing is undone");
 }
 
+/// In the Touch workspace a two-finger tap switches between the Selection tool and the drawing tool
+/// chosen last, and undoes nothing; three fingers still redo. Outside it, two fingers undo again.
+#[test]
+fn two_finger_tap_in_touch_switches_selection_and_drawing_modes() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 40, "height": 40})).unwrap();
+    crate::workspaces::switch(&mut app.ui, crate::workspaces::TOUCH).unwrap();
+    app.select_tool("rectangle");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let count = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers[0].children().unwrap().len();
+    let c = app.canvas_rect.unwrap().center();
+    let touch = |n: u64, phase, pos| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(n), phase, pos, force: None };
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let tap = |app: &mut VectorcraftApp, fingers: u64| {
+        let at = |n: u64| c + vec2(n as f32 * 50.0, 0.0);
+        frame(app, &ctx, vec![touch(0, egui::TouchPhase::Start, at(0)), egui::Event::PointerMoved(at(0)), button(at(0), true)]);
+        frame(app, &ctx, vec![touch(0, egui::TouchPhase::Move, at(0) + vec2(6.0, 6.0)), egui::Event::PointerMoved(at(0) + vec2(6.0, 6.0))]);
+        frame(app, &ctx, (1..fingers).map(|n| touch(n, egui::TouchPhase::Start, at(n))).collect());
+        frame(app, &ctx, vec![touch(0, egui::TouchPhase::End, at(0)), button(at(0) + vec2(6.0, 6.0), false), egui::Event::PointerGone]);
+        frame(app, &ctx, (1..fingers).map(|n| touch(n, egui::TouchPhase::End, at(n))).collect());
+        frame(app, &ctx, vec![]);
+    };
+    tap(&mut app, 2);
+    assert_eq!((app.session.tool_id(), count(&app)), ("selection", 1), "selection mode, nothing undone or drawn");
+    tap(&mut app, 2);
+    assert_eq!((app.session.tool_id(), count(&app)), ("rectangle", 1), "back to the drawing tool");
+    // A tool chosen by hand becomes the drawing tool a switch returns to.
+    app.select_tool("ellipse");
+    tap(&mut app, 2);
+    tap(&mut app, 2);
+    assert_eq!((app.session.tool_id(), count(&app)), ("ellipse", 1));
+    // The switches added no undo step: undo still takes the rectangle away, and three fingers redo it.
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(count(&app), 0);
+    tap(&mut app, 3);
+    assert_eq!(count(&app), 1, "three fingers redo in Touch too");
+    // Presentation Mode runs neither.
+    app.ui.screen_mode = 3;
+    frame(&mut app, &ctx, vec![]);
+    tap(&mut app, 2);
+    assert_eq!(app.session.tool_id(), "ellipse", "Presentation Mode: no switch");
+    app.ui.screen_mode = 0;
+    // Enable Touch Gestures off: no switch.
+    app.session.prefs.touch_gestures = false;
+    app.select_tool("selection");
+    frame(&mut app, &ctx, vec![]);
+    tap(&mut app, 2);
+    assert_eq!(app.session.tool_id(), "selection", "off: no switch");
+    app.session.prefs.touch_gestures = true;
+    // Another workspace: two fingers undo again and switch no tool.
+    crate::workspaces::switch(&mut app.ui, crate::workspaces::ESSENTIALS).unwrap();
+    app.select_tool("rectangle");
+    frame(&mut app, &ctx, vec![]);
+    let before = count(&app);
+    tap(&mut app, 2);
+    assert_eq!(app.session.tool_id(), "rectangle");
+    assert_eq!(count(&app), before - 1, "Essentials: undone");
+}
+
+/// Switch Selection and Drawing Modes from the command: Pencil when no drawing tool was chosen yet,
+/// a view tool is left for Selection without becoming the drawing tool, and every selection tool
+/// switches to drawing mode.
+#[test]
+fn switch_selection_and_drawing_modes_command() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    assert!(app.ui.touch_drawing_tool.is_none());
+    app.select_tool("selection");
+    let r = app.run(crate::touch::TOGGLE_MODE, json!({})).unwrap();
+    assert_eq!((r, app.session.tool_id()), (json!({"tool": "pencil"}), "pencil"), "no drawing tool chosen yet: Pencil");
+    app.select_tool("hand");
+    assert_eq!(app.run(crate::touch::TOGGLE_MODE, json!({})).unwrap(), json!({"tool": "selection"}));
+    assert_eq!(app.run(crate::touch::TOGGLE_MODE, json!({})).unwrap(), json!({"tool": "pencil"}), "the Hand tool is no drawing tool");
+    app.select_tool("pen");
+    for id in ["directSelection", "groupSelection", "magicWand", "lasso"] {
+        app.select_tool(id);
+        assert_eq!(app.run(crate::touch::TOGGLE_MODE, json!({})).unwrap(), json!({"tool": "pen"}), "{id}");
+    }
+}
+
 /// The Artboard tool's label holds the artboard's name (never translated); the tools' own
 /// labels are interface text.
 #[test]
@@ -2856,13 +2938,10 @@ fn cached_frames_keep_their_scale_during_resize_rotation_and_dpi_changes() {
                 "{old_rot}° -> {new_rot}°, DPI {old_ppp} -> {new_ppp}, pixel={pixel}: {vertex:?}"
             );
         }
-        // Deliver the actual replacement and verify that it replaces the cached key. The frame
-        // reports a slow render: when a parallel test makes a placed document's bitmap, the key's
-        // process-wide `placed` generation moves, and the next frame goes to the controlled worker
-        // instead of rendering over the delivered frame on this thread.
+        // Deliver the actual replacement and verify that it replaces the cached key.
         let img = app.canvas.renderer.render(&job.doc, job.w, job.h, job.view, &job.opts);
         let expected = job.key.clone();
-        completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 50.0, moved: 0, reused: false }).unwrap();
+        completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 1.0, moved: 0, reused: false }).unwrap();
         frame(&mut app, size, new_ppp);
         assert_eq!(app.canvas.key.as_ref(), Some(&expected), "the worker's frame arrived");
     }
@@ -2942,21 +3021,6 @@ fn a_turned_view_draws_the_last_frame_turned_until_its_own_arrives() {
 /// fill is dropped.
 #[test]
 fn a_pan_fills_the_area_the_last_frame_leaves_until_the_worker_frame_arrives() {
-    // The canvas key holds the global placed-document bitmap clock, which tests on other threads
-    // move: a frame whose key changed by more than the view drops the fill. An attempt that fails
-    // while the clock moved runs again; one that fails while it stood still is a real failure.
-    for _ in 0..20 {
-        let clock = vectorcraft_render::placed_document::generation();
-        match std::panic::catch_unwind(pan_fills_the_area_the_last_frame_leaves) {
-            Ok(()) => return,
-            Err(_) if vectorcraft_render::placed_document::generation() != clock => {}
-            Err(e) => std::panic::resume_unwind(e),
-        }
-    }
-    pan_fills_the_area_the_last_frame_leaves();
-}
-
-fn pan_fills_the_area_the_last_frame_leaves() {
     let ctx = egui::Context::default();
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
@@ -3183,6 +3247,200 @@ fn the_canvas_waits_only_while_the_view_of_a_slow_frame_changes() {
     assert_eq!(still_wait(&mut still, Some(&shown_pixels), &pixels, true, 13.0), Some(STILL_SECS), "Pixel Preview, moved");
     assert_eq!(still_wait(&mut still, None, &moved, true, 14.0), None, "no frame shown");
     assert_eq!(still_wait(&mut still, Some(&shown), &shown, true, 15.0), None, "the frame shown");
+}
+
+/// A bitmap made in the background for a file that only another document holds leaves this
+/// document's canvas key as it is. Without a render worker (the web build's setting), a pan of a
+/// heavy canvas keeps drawing the frame shown until the view is still. A light canvas renders the
+/// pan at once, and its key differs from the frame shown only in the view: the pan fill and the
+/// worker's pixel copy ask for that.
+#[test]
+fn a_bitmap_made_for_another_documents_file_leaves_a_pan_waiting() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
+    app.canvas.worker_started = true; // no worker, as in the web build
+    app.canvas.waits_for_still = true;
+    // Another window's document places a file, which its canvas asks a bitmap of.
+    let mut other = VectorcraftApp::new(Session::new(), Default::default());
+    other.canvas.worker_started = true; // render on this thread
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 70, "height": 40})).unwrap();
+    src.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 70, "height": 40})).unwrap();
+    let dir = std::env::temp_dir().join(format!("vectorcraft-placed-pan-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("badge.vectorcraft");
+    std::fs::write(&path, vectorcraft_format::save_file(&src.active().unwrap().doc)).unwrap();
+    other.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    other.session.execute("file.place", &json!({"path": path.to_string_lossy(), "at": [100, 100]})).unwrap();
+    let ctx = egui::Context::default();
+    let frame = |app: &mut VectorcraftApp| {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    frame(&mut app); // the first frame fits the view to the artboard
+    frame(&mut app);
+    app.canvas.last_ms = 1.0;
+    app.view_mut().unwrap().center.x += 10.0;
+    frame(&mut app);
+    let shown = app.canvas.key.clone().unwrap();
+    // The other canvas asks for the bitmap, and it is made: the generation changes before the
+    // bitmap stops being pending.
+    let generation = vectorcraft_render::placed_document::generation();
+    shapes(&mut other, &egui::Context::default());
+    while vectorcraft_render::placed_document::busy() {
+        std::thread::yield_now();
+    }
+    assert_ne!(vectorcraft_render::placed_document::generation(), generation, "a bitmap was made");
+    app.canvas.last_ms = 50.0;
+    app.view_mut().unwrap().center.x += 10.0;
+    frame(&mut app);
+    assert_eq!(app.canvas.key.as_ref(), Some(&shown), "a heavy canvas is not rendered while the view moves");
+    app.canvas.last_ms = 1.0;
+    app.view_mut().unwrap().center.x += 10.0;
+    frame(&mut app);
+    let next = app.canvas.key.clone().unwrap();
+    assert_eq!(next.cx, app.view().unwrap().center.x, "a light canvas renders at once");
+    assert!(super::cursor::only_view_differs(&shown, &next), "only the view differs: {shown:?} {next:?}");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// A document's [`CacheKey::placed`] moves to the current placed-document bitmap generation only
+/// when a bitmap of a file it shows in a placed document was made, or when the files made are no
+/// longer known and it shows a placed document. A bitmap of another document's file, or of a file
+/// it keeps only for Undo, leaves it, so a pan of a heavy
+/// document keeps waiting for the view to stop. Each change keeps the value before it and the
+/// last generation that value was checked at. A closed document's value is dropped.
+#[test]
+fn a_documents_placed_key_moves_only_for_bitmaps_of_its_own_files() {
+    let mut session = Session::new();
+    session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    let plain = session.active().unwrap().uid;
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 60, "height": 30})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 60, "height": 30})).unwrap();
+    let dir = std::env::temp_dir().join(format!("vectorcraft-placed-key-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("card.vectorcraft");
+    std::fs::write(&path, vectorcraft_format::save_file(&src.active().unwrap().doc)).unwrap();
+    session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let r = session.execute("file.place", &json!({"path": path.to_string_lossy(), "at": [60, 50]})).unwrap();
+    let st = session.active().unwrap();
+    let placing = st.uid;
+    let file = match &st.doc.node(vectorcraft_doc::NodeId(r["ids"][0].as_u64().unwrap())).unwrap().kind {
+        vectorcraft_doc::NodeKind::PlacedDocument(p) => p.key.clone(),
+        other => panic!("a placed document: {other:?}"),
+    };
+    type Made<'a> = &'a dyn Fn(u64, u64) -> Option<std::collections::HashSet<String>>;
+    fn key(keys: &mut std::collections::HashMap<u64, crate::PlacedKey>, session: &Session, uid: u64, now: u64, made: Made<'_>) -> u64 {
+        let st = session.documents().iter().find(|d| d.uid == uid).unwrap();
+        placed_key_at(keys, session, st, now, made)
+    }
+    let files = |names: &[&str]| Some(names.iter().map(|n| n.to_string()).collect::<std::collections::HashSet<_>>());
+    let unasked = |_: u64, _: u64| -> Option<std::collections::HashSet<String>> { panic!("no bitmaps to look up") };
+    let mut keys = std::collections::HashMap::new();
+    assert_eq!(key(&mut keys, &session, placing, 5, &unasked), 5, "checked for the first time");
+    assert_eq!(key(&mut keys, &session, placing, 5, &unasked), 5, "no bitmap made since");
+    let other = |from: u64, to: u64| {
+        assert_eq!((from, to), (5, 6), "the bitmaps made since the last check");
+        files(&["another document's file"])
+    };
+    assert_eq!(key(&mut keys, &session, placing, 6, &other), 5, "another document's file");
+    assert_eq!(key(&mut keys, &session, placing, 7, &|_, _| files(&["another document's file", file.as_str()])), 7, "its own file");
+    assert_eq!(keys[&placing], crate::PlacedKey { checked: 7, key: 7, before: (5, 6) });
+    assert_eq!(key(&mut keys, &session, placing, 8, &|_, _| None), 8, "files no longer known");
+    assert_eq!(keys[&placing].before, (7, 7));
+    assert_eq!(key(&mut keys, &session, plain, 8, &unasked), 8, "the other document, checked for the first time");
+    assert_eq!(key(&mut keys, &session, plain, 9, &|_, _| None), 8, "no images: files no longer known");
+    assert_eq!(key(&mut keys, &session, plain, 10, &|_, _| files(&[file.as_str()])), 8, "no images: a file another document holds");
+    // The same document holding an image and showing no placed document.
+    let mut raster = session.documents().iter().find(|d| d.uid == plain).unwrap().clone();
+    let blob = vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Default::default(), proxy: None };
+    std::sync::Arc::make_mut(&mut raster.doc).images.insert("an image".into(), blob);
+    assert_eq!(placed_key_at(&mut keys, &session, &raster, 11, |_, _| None), 8, "an image and no placed document: files no longer known");
+    assert_eq!(keys.len(), 2);
+    let index = session.documents().iter().position(|d| d.uid == plain).unwrap();
+    session.execute("file.close", &json!({"index": index})).unwrap();
+    assert_eq!(key(&mut keys, &session, placing, 12, &|_, _| files(&[])), 8, "no bitmaps of its files");
+    assert_eq!(keys.keys().copied().collect::<Vec<_>>(), [placing], "the closed document's value is dropped");
+    // The placed document deleted: its file stays in the images for Undo, and no longer shows.
+    assert_eq!(session.active().unwrap().uid, placing);
+    session.execute("edit.clear", &json!({"ids": [r["ids"][0]]})).unwrap();
+    assert!(session.active().unwrap().doc.images.contains_key(&file), "kept for Undo");
+    assert_eq!(key(&mut keys, &session, placing, 13, &|_, _| files(&[file.as_str()])), 8, "a file kept only for Undo");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// The canvas key takes the document's value from [`placed_key`], which a bitmap made for a test
+/// running beside this one does not move: this document holds no images.
+#[test]
+fn the_canvas_key_takes_the_documents_placed_value() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
+    app.canvas.worker_started = true; // render on this thread
+    let uid = app.session.active().unwrap().uid;
+    let generation = vectorcraft_render::placed_document::generation();
+    let marked = generation.wrapping_add(1000);
+    app.canvas.placed_keys.insert(uid, crate::PlacedKey { checked: generation, key: marked, before: (marked, generation) });
+    shapes(&mut app, &egui::Context::default());
+    assert_eq!(app.canvas.key.as_ref().map(|k| k.placed), Some(marked));
+}
+
+/// A frame shown at one [`CacheKey::placed`] value and drawn again at the next looks at the
+/// bitmaps made since the last check before the change: those made earlier were of other
+/// documents' files, and past 256 bitmaps they are no longer known ([`placed_since`]).
+#[test]
+fn a_frame_drawn_again_after_one_change_of_its_placed_value_looks_at_the_bitmaps_since_the_last_check() {
+    let entry = crate::PlacedKey { checked: 400, key: 400, before: (5, 399) };
+    assert_eq!(placed_since(Some(&entry), 5, 400), 399, "the value changed once since the frame shown");
+    assert_eq!(placed_since(Some(&entry), 3, 400), 3, "it changed more than once");
+    assert_eq!(placed_since(Some(&entry), 5, 401), 5, "a value the document no longer has");
+    assert_eq!(placed_since(None, 5, 400), 5, "a document not checked");
+}
+
+/// A frame drawn again at a new [`CacheKey::placed`] value draws again where the document shows
+/// the files whose bitmaps were made after [`placed_since`]. After one change of the value, the
+/// bitmaps made before the last check of the old value are not looked up: past 256 bitmaps they
+/// are no longer known, and the whole frame would render. At the same value nothing is looked up.
+#[test]
+fn a_frame_drawn_again_at_a_new_placed_value_draws_where_the_bitmaps_since_the_last_check_show() {
+    let mut session = Session::new();
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 60, "height": 30})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 60, "height": 30})).unwrap();
+    let dir = std::env::temp_dir().join(format!("vectorcraft-placed-changes-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("card.vectorcraft");
+    std::fs::write(&path, vectorcraft_format::save_file(&src.active().unwrap().doc)).unwrap();
+    session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let r = session.execute("file.place", &json!({"path": path.to_string_lossy(), "at": [60, 50]})).unwrap();
+    session.execute("shape.rectangle", &json!({"x": 250, "y": 200, "width": 40, "height": 30})).unwrap();
+    let doc = &session.active().unwrap().doc;
+    let placed = doc.node(vectorcraft_doc::NodeId(r["ids"][0].as_u64().unwrap())).unwrap();
+    let file = match &placed.kind {
+        vectorcraft_doc::NodeKind::PlacedDocument(p) => p.key.clone(),
+        other => panic!("a placed document: {other:?}"),
+    };
+    let bounds = placed.geometric_bounds().unwrap();
+    let entry = crate::PlacedKey { checked: 400, key: 400, before: (5, 399) };
+    // Only the bitmaps made after generation 399 are known: one of the placed file.
+    let made = |from: u64, to: u64| (from >= 399 && to == 400).then(|| std::collections::HashSet::from([file.clone()]));
+    let unasked = |_: u64, _: u64| -> Option<std::collections::HashSet<String>> { panic!("no bitmaps to look up") };
+    assert_eq!(placed_changes(Some(&entry), 400, 400, doc, unasked), Some(vectorcraft_render::Changed::Nothing), "the same value");
+    match placed_changes(Some(&entry), 5, 400, doc, made) {
+        Some(vectorcraft_render::Changed::Area(a)) => {
+            assert!(a.x0 <= bounds.x0 && a.y0 <= bounds.y0 && a.x1 >= bounds.x1 && a.y1 >= bounds.y1, "{a:?} holds {bounds:?}");
+            assert!(a.x1 < 250.0, "{a:?}: not the rectangle");
+        }
+        other => panic!("the placed document's part: {other:?}"),
+    }
+    assert_eq!(placed_changes(Some(&entry), 3, 400, doc, made), None, "the value changed more than once: no longer known");
+    let none = |_: u64, _: u64| Some(std::collections::HashSet::new());
+    assert_eq!(placed_changes(Some(&entry), 5, 400, doc, none), Some(vectorcraft_render::Changed::Nothing), "no bitmaps since");
+    std::fs::remove_dir_all(&dir).ok();
 }
 
 /// File Handling › Display Bitmaps as Anti-aliased Images in Pixel Preview (#394): off, Pixel
@@ -11744,31 +12002,11 @@ fn a_pan_over_art_the_frame_size_decides_renders_whole() {
     }
 }
 
-/// Runs `test`, whose canvas key holds the global placed-document bitmap clock, which tests on
-/// other threads move: a frame whose key changed by more than the view renders whole. An attempt
-/// that fails while the clock moved runs again; one that fails while it stood still is a real
-/// failure.
-fn while_the_placed_clock_stands_still(test: fn()) {
-    for _ in 0..20 {
-        let clock = vectorcraft_render::placed_document::generation();
-        match std::panic::catch_unwind(test) {
-            Ok(()) => return,
-            Err(_) if vectorcraft_render::placed_document::generation() != clock => {}
-            Err(e) => std::panic::resume_unwind(e),
-        }
-    }
-    test();
-}
-
 /// The canvas asks the worker for a frame that may copy pixels when the view moves, keeps the whole
 /// frame's time, and renders the frame whole once the view has been still for STILL_SECS, not
 /// before and only once.
 #[test]
 fn a_frame_with_copied_pixels_renders_whole_once_the_view_stops() {
-    while_the_placed_clock_stands_still(frame_with_copied_pixels_renders_whole_once_the_view_stops);
-}
-
-fn frame_with_copied_pixels_renders_whole_once_the_view_stops() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.canvas.worker_started = true;
@@ -11815,10 +12053,6 @@ fn frame_with_copied_pixels_renders_whole_once_the_view_stops() {
 /// first step of the next pan copies from it. The jobs are the ones the canvas asks for.
 #[test]
 fn a_pan_after_the_settling_frame_copies() {
-    while_the_placed_clock_stands_still(pan_after_the_settling_frame_copies);
-}
-
-fn pan_after_the_settling_frame_copies() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.canvas.worker_started = true;
@@ -11930,9 +12164,7 @@ fn a_documents_first_frame_renders_on_the_worker() {
     let job = jobs.try_recv().expect("the first frame is queued on the worker");
     assert!(app.canvas.texture.is_none(), "not rendered on the UI thread");
     frame(&mut app);
-    // A placed document of a test running beside this one moves the process-wide generation in
-    // the key: that makes a new frame, not this one again.
-    assert!(jobs.try_iter().all(|j| j.key.placed != job.key.placed), "not queued again while it renders");
+    assert!(jobs.try_recv().is_err(), "not queued again while it renders");
     assert!(app.canvas.texture.is_none());
 
     done_tx.send(finished(&job)).unwrap();

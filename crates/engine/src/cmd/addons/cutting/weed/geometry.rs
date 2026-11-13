@@ -723,12 +723,13 @@ pub(super) fn lines(region: &Region, outline: &[Segment], frame: Rect, n: Counts
             continue;
         }
         // The lines (0-based) each outline segment comes within `gap` of: lines k (1-based) lie at
-        // v0 + k·step.
+        // v0 + k·step. The range is widened by a small tolerance so that a line whose position
+        // rounds just past a segment's end is still measured; `near` drops lines the segment misses.
         let reach = |&(a, b): &Segment| {
             let (va, vb) = (uv(a, vertical).1, uv(b, vertical).1);
             let (lo, hi) = (va.min(vb) - gap, va.max(vb) + gap);
-            let first = ((lo - v0) / step).ceil().max(1.0);
-            let last = ((hi - v0) / step).floor().min(count as f64);
+            let first = ((lo - v0) / step - 1e-9).ceil().max(1.0);
+            let last = ((hi - v0) / step + 1e-9).floor().min(count as f64);
             if step > 0.0 && first <= last { (first as usize - 1)..(last as usize) } else { 0..0 }
         };
         // The outlines near each line, found once for all of them, by index into `outline`.

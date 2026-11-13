@@ -200,7 +200,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste Remembers Layers",
             ["Window", "Layers"],
             None,
-            "{on?} (default: toggle) the document option: on, the Paste commands put objects back into the layers they were copied from (by name; a missing one is made on top), off into the current layer; one undo step when it changes (document.inspect → pasteRemembersLayers) → {on}",
+            "{on?} (default: toggle) the document option: on, the Paste commands put objects back into the layers or sublayers they were copied from (in that document while they are still there, else by the names of the layer and the layers around it, the topmost match first; a missing sublayer is made inside its layer, a missing top-level layer on top; a hidden or locked one is an error and nothing is pasted), off into the current layer; one undo step when it changes (document.inspect → pasteRemembersLayers) → {on}",
             has_doc,
             paste_remembers_layers
         ),
@@ -850,12 +850,21 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-fn rect_from(p: &Value, default: Rect) -> Rect {
+/// The rectangle from `x`, `y`, `width` and `height`, each defaulting to `default`'s. Sides are kept as given.
+fn rect_unclamped(p: &Value, default: Rect) -> Rect {
     let x = f64_or(p, "x", default.x0);
     let y = f64_or(p, "y", default.y0);
-    let w = f64_or(p, "width", default.width()).max(1.0);
-    let h = f64_or(p, "height", default.height()).max(1.0);
+    let w = f64_or(p, "width", default.width());
+    let h = f64_or(p, "height", default.height());
     Rect::new(x, y, x + w, y + h)
+}
+
+/// [`rect_unclamped`] with each supplied side raised to at least 1 pt, as `artboard.setProps` uses it.
+/// A side left out keeps `default`'s, even below 1 pt.
+fn rect_from(p: &Value, default: Rect) -> Rect {
+    let r = rect_unclamped(p, default);
+    let floor = |key: &str, side: f64| if p.get(key).and_then(Value::as_f64).is_some() { side.max(1.0) } else { side };
+    Rect::new(r.x0, r.y0, r.x0 + floor("width", r.width()), r.y0 + floor("height", r.height()))
 }
 
 /// An artboard command's `color` param, its background color: None when absent, `Some(None)` for
@@ -942,7 +951,7 @@ fn artboard_new(s: &mut Session, p: &Value) -> Result<Value> {
             src + side.offset(src)
         }
         None if p.get("beside").is_some_and(|v| !v.is_null()) => return Err(bad("artboard.new", "`beside` needs `side`")),
-        None => rect_from(p, def),
+        None => rect_unclamped(p, def),
     };
     // A size taken from another artboard (`side`, or width or height left out) keeps to the limit too.
     if !super::newdoc::side_in_range(r.width()) || !super::newdoc::side_in_range(r.height()) {

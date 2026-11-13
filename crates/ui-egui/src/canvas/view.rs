@@ -532,7 +532,8 @@ pub(super) fn wheel(
 
 /// Enable Touch Gestures: this frame's finger contacts on the canvas ([`crate::touch`]). A second
 /// finger drops the press the first one began (its tool interaction rolled back; the rest of the
-/// gesture presses nothing), and a tap of two fingers undoes, one of three redoes.
+/// gesture presses nothing), and a tap of two fingers undoes, one of three redoes. In the Touch
+/// workspace a tap of two fingers switches between selection and drawing modes instead.
 pub(super) fn touch_gestures(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, view: vectorcraft_engine::ViewInfo) {
     if !app.session.prefs.touch_gestures {
         return;
@@ -564,12 +565,12 @@ pub(super) fn touch_gestures(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect
                 drop_press(app, ui, view);
                 ui.data_mut(|d| d.insert_temp(drag_id(), Drag::Gesture));
             }
-            Some(crate::touch::Touch::Tap(n)) => tap = crate::touch::tap_command(n),
+            Some(crate::touch::Touch::Tap(n)) => tap = crate::touch::tap_command(n, app.ui.workspace == crate::workspaces::TOUCH),
             None => {}
         }
     }
     ui.data_mut(|d| d.insert_temp(key, taps));
-    // In Presentation Mode a tap of two or three fingers undoes or redoes nothing.
+    // In Presentation Mode a tap of two or three fingers runs nothing.
     if let Some(cmd) = tap
         && app.ui.screen_mode < 3
     {

@@ -2,7 +2,7 @@
 //! artboard, after a central file of the whole document for EPS with two or more when art shows,
 //! or one page each in a PDF); without artboards the export covers the visible art. OK
 //! picks the file, then the format's options dialog follows (PNG/JPEG/WebP/PNG-8/GIF Options, SVG
-//! Options, Text Export Options, DXF Options, EPS Options, and Save PDF for artboards as pages),
+//! Options, Text Export Options, DXF Options, EPS Options, and Save PDF),
 //! else the file is written. DWG is listed, greyed out, with what to use instead. The formats of
 //! installed exporter plug-ins come after the built-in ones: they write the whole document, and one
 //! with parameters asks for them before writing (`plugin::open_export`).
@@ -169,8 +169,9 @@ fn options_or_write(
             }
             Ok(Value::Null)
         }
-        // Artboards as pages go on in Save PDF; the art's bounds are written straight away.
+        // Save PDF writes the artboards as pages, or one page of the art's bounds.
         "pdf" if use_artboards => save_pdf::open(app, &json!({ "path": path, "range": (!all).then_some(range) })),
+        "pdf" => save_pdf::open(app, &json!({ "path": path, "useArtboards": false })),
         "txt" => {
             text_export::open(app, &path);
             Ok(Value::Null)

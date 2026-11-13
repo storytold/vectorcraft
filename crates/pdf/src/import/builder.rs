@@ -800,7 +800,8 @@ impl<'p> Builder<'p> {
     }
 
     /// Glyph `o` as type: added to the line being gathered (or starting one). `false`: it keeps
-    /// its outline (no Unicode text, mirrored, or not type mode). No `paint`: invisible text,
+    /// its outline (no Unicode text, mirrored, not type mode, or in a span whose ActualText is
+    /// empty). No `paint`: invisible text,
     /// type with neither fill nor stroke.
     pub(super) fn type_glyph(
         &mut self,
@@ -811,7 +812,7 @@ impl<'p> Builder<'p> {
         stroke: Option<&StrokeProps>,
         overprint: bool,
     ) -> bool {
-        if self.text_as != TextAs::Text || self.nested > 0 {
+        if self.text_as != TextAs::Text || self.nested > 0 || self.actual.textless() {
             return false;
         }
         let authored = self.actual.active();

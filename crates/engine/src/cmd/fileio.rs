@@ -13,10 +13,10 @@
 //!   per-format options (`file.formatOptions`); [`save_with`] is the one save path of every frontend.
 //! - `pdf`: PDF settings and presets for every PDF export, `document.exportPdf`.
 //! - `pdfimport`: the PDF pages, box and password `document.open` and Place read, `document.pdfInfo`.
-//! - `dxf`: DXF export options, `document.exportDxf`, and the formats that can't be written (DWG, PICT).
+//! - `dxf`: DXF export options, `document.exportDxf`, and the formats that can't be written (DWG, PageMaker).
 //! - `eps`: EPS export options (flattened transparency, previews, the embedded document), `document.exportEps`.
 //! - `dxfimport`: the DXF options `document.open` and Place read, `document.dxfInfo`.
-//! - `metafile`: EMF and WMF export, open and place.
+//! - `metafile`: EMF and WMF export, open and place; PICT open and place.
 //! - `hpgl`: HP-GL export options and plots.
 //! - `importer`: files that importer plug-ins open (`document.open {importer}`, and extensions no
 //!   built-in format reads).
@@ -66,7 +66,7 @@ use serde_json::{Value, json};
 
 pub use action_batch::batch_overwrites_one_file;
 pub use dxf::{UNSUPPORTED, Unsupported, unsupported};
-pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, encode, encode_all, encode_with_warnings};
+pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, Note, NoteKind, encode, encode_all, encode_with_notes, encode_with_warnings, note_texts};
 pub(crate) use encode::{anti_alias, background, with_single_artboard};
 pub(crate) use export::with_artboard_fills;
 pub(crate) use export::{export_crop, isolated};
@@ -217,6 +217,8 @@ mod tests_dxfimport;
 mod tests_hpgl;
 #[cfg(test)]
 mod tests_metafile;
+#[cfg(test)]
+mod tests_pict;
 
 #[cfg(test)]
 mod tests_pdfoutput;

@@ -72,6 +72,9 @@ pub struct NodeExtras {
     /// Transform panel › Align to Pixel Grid: the path's or compound path's horizontal and vertical
     /// segments stay on the pixel grid when it is transformed.
     pub pixel_aligned: bool,
+    /// Image Tools › Color Mask: the colors an image hides while its pixels stay as they are
+    /// ([`crate::color_mask`]).
+    pub color_mask: Option<Box<crate::color_mask::ColorMask>>,
 }
 
 /// No extras: what [`Node::extras`] gives for a node without any.
@@ -99,6 +102,7 @@ pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
     symbol_overrides: Vec::new(),
     envelope_edit_margin: None,
     pixel_aligned: false,
+    color_mask: None,
 };
 
 /// A node's [`NodeExtras`], if it has any ([`Node::extras`]). Extras that are all unset equal

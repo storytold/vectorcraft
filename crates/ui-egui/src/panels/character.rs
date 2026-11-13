@@ -22,6 +22,9 @@ pub const SIZE_PRESETS: [f64; 15] = [6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0,
 /// The Kerning and Tracking dropdowns' presets in 1/1000 em.
 pub const TRACKING_PRESETS: [f64; 14] = [-100.0, -75.0, -50.0, -25.0, -10.0, -5.0, 0.0, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0, 200.0];
 pub const SCALE_PRESETS: [f64; 8] = [25.0, 50.0, 75.0, 90.0, 100.0, 110.0, 125.0, 150.0];
+/// Insert Aki Left and Right presets, in thousandths of an em: none, a quarter, half and a whole
+/// full-width space.
+pub const AKI_PRESETS: [f64; 4] = [0.0, 250.0, 500.0, 1000.0];
 
 /// The stored character style: the selected range's (or the caret's) while the Type
 /// tool edits text, else the first selected text object's first run (including groups). With it, the paragraph
@@ -450,10 +453,10 @@ impl Field {
 /// Type tool edits, the panel shows, nothing takes the focus and the command fails. → `{field}`.
 pub(crate) fn highlight(app: &mut VectorcraftApp, field: Field) -> Result<Value, String> {
     // `window.panel` would hide a floating panel in front of its window, or an open flyout.
-    if crate::panel_docking::showing(&app.ui, "character") {
+    if crate::panel_docking::visible(&app.ui, "character") {
         app.run("window.panel.activate", json!({"panel": "character"}))?;
     } else {
-        app.run("window.panel", json!({"panel": "character"}))?;
+        crate::panel_docking::reveal_panel(app, "character")?;
     }
     if text_style(app).is_none() {
         app.character_focus = None;
@@ -766,7 +769,8 @@ fn cell(ui: &mut Ui, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
 
 /// The Character panel's grid of fields, `w` wide: Font Size, Leading, Kerning and Tracking,
 /// then with `more` the scales, Baseline Shift and Character Rotation, and a row with the
-/// Anti-aliasing Method dropdown under Character Rotation (`s`: the style shown). With Show Font
+/// Anti-aliasing Method dropdown under Character Rotation (`s`: the style shown), and with Show East
+/// Asian Options on a row with Insert Aki Left and Right. With Show Font
 /// Height Options on, a row under Font Size holds the Set Font Height Reference dropdown. The
 /// Properties panel shows its first rows.
 pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &CharStyle, w: f32, more: bool) {
@@ -847,6 +851,22 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
         ui.label("");
         cell(ui, "aa", tl!("Anti-aliasing Method"), |ui| anti_alias_method(app, ui, fw));
         ui.end_row();
+        // Insert Aki Left and Right, with the East Asian options: space before and after each
+        // character, in thousandths of an em.
+        if app.session.prefs.show_east_asian_options {
+            for (field, label, key, icon) in
+                [("ch-aki-left", tl!("Insert Aki Left"), "akiLeft", "↔A"), ("ch-aki-right", tl!("Insert Aki Right"), "akiRight", "A↔")]
+            {
+                cell(ui, icon, label, |ui| {
+                    let value = shared(app, |s| if key == "akiLeft" { s.aki_left } else { s.aki_right });
+                    if let Some(v) = widgets::spin_plain(ui, field, value, "", 0, fw, 10.0, 0.0, &AKI_PRESETS) {
+                        // The field stops at the largest value the command takes.
+                        format(app, json!({ key: v.min(vectorcraft_doc::text::MAX_AKI) }));
+                    }
+                });
+            }
+            ui.end_row();
+        }
     });
 }
 
@@ -1445,7 +1465,7 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// kerning, no baseline shift, 100% scales, no rotation, no underline or strikethrough, All Caps
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
 /// character alignment, Proportional Metrics, Tate-chu-yoko, Standard Vertical Roman Alignment and
-/// No Break off, Tate-chu-yoko Settings Up/Down and Left/Right 0, the Default character direction,
+/// No Break off, Tate-chu-yoko Settings Up/Down and Left/Right 0, Insert Aki Left and Right 0, the Default character direction,
 /// Kashidas on, the Default digits and the Em Box font height reference, whether or not Show East Asian
 /// Options, Show Indic Options and Show Font Height Options are on. Inside an undo group that is
 /// already open, the reset is part of that group's step.
@@ -1464,7 +1484,7 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "kerning": "auto", "baselineShift": 0, "hScale": 100, "vScale": 100, "rotation": 0, "underline": false, "strikethrough": false,
             "allCaps": false, "smallCaps": d.small_caps.is_some(), "position": d.position.id(), "charAlign": d.char_align,
             "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko,
-            "tcyUpDown": d.tcy_up_down, "tcyLeftRight": d.tcy_left_right,
+            "tcyUpDown": d.tcy_up_down, "tcyLeftRight": d.tcy_left_right, "akiLeft": d.aki_left, "akiRight": d.aki_right,
             "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default", "kashidas": d.kashidas,
             "digits": d.digits, "fontHeightReference": d.font_height_reference
         }),

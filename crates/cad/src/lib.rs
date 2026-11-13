@@ -410,6 +410,9 @@ pub struct DxfOutput {
     pub images: Vec<DxfImage>,
     /// What was approximated or left out.
     pub warnings: Vec<String>,
+    /// What was left out because an option turns it off (Include Placed Images or Include Fill
+    /// Hatches off).
+    pub setting_notes: Vec<String>,
 }
 
 /// The smallest and largest `scale` (drawing units per unit).

@@ -199,6 +199,10 @@
 	Corner Color	Warna sudut
 	Contiguous	Bersambung
 	Each Channel	Setiap kanal
+	Color Mask…	Masker warna…
+	Color Mask	Masker warna
+	Remove Color Mask	Hapus masker warna
+	Apply Color Mask	Terapkan masker warna
 	Edit Path	Edit jalur
 	Mask	Masker
 	Rasterize…	Rasterisasi…
@@ -1494,6 +1498,8 @@ lighting	Light	Cahaya
 	Leading	Leading
 	No Break	Tanpa pemenggalan
 	Proportional Metrics	Metrik proporsional
+	Insert Aki Left	Sisipkan aki kiri
+	Insert Aki Right	Sisipkan aki kanan
 	Character Direction	Arah karakter
 	Digits	Digit
 	Arabic	Arab
@@ -1513,6 +1519,7 @@ digits	Malayalam	Malayalam
 	Select a text object to edit its character attributes.	Pilih objek teks untuk mengedit atribut karakternya.
 	Show Options	Tampilkan opsi
 	Show Recent Colors	Tampilkan warna terbaru
+	Toggle RGB Percent	Alihkan RGB dalam persen
 	Small Caps	Kapital kecil
 	Small Caps (on the roadmap)	Kapital kecil (masih dalam roadmap)
 	Standard Vertical Roman Alignment	Perataan Romawi vertikal standar
@@ -1768,6 +1775,8 @@ digits	Malayalam	Malayalam
 	Modified since it was read: {path}	Diubah sejak terakhir dibaca: {path}
 	No Thumbnails	Tanpa thumbnail
 	Nothing matches the Show filter.	Tidak ada yang cocok dengan filter Tampilkan.
+	Show DCS Transparency Interactions	Tampilkan Interaksi Transparansi DCS
+	Transparent, or overlaps transparent objects: check its separations	Transparan, atau menimpa objek transparan: periksa separasinya
 	PPI	PPI
 	Relink…	Tautkan ulang…
 	Find Linked Files	Temukan file tertaut
@@ -1830,6 +1839,10 @@ digits	Malayalam	Malayalam
 	Long	Panjang
 	Stylistic	Stilistik
 	Mojikumi Set	Set Mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Set Kinsoku
 	Kinsoku Shori Type	Jenis Kinsoku Shori
 	Push In First	Dorong masuk dahulu
@@ -1840,6 +1853,7 @@ digits	Malayalam	Malayalam
 	Right-to-Left Paragraph Direction	Arah paragraf kanan ke kiri
 	Roman Hanging Punctuation	Tanda baca gantung Romawi
 	Korean Line Break Anywhere	Putus baris Korea di mana saja
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Pengaturan komposisi Asia Timur
 	Korean Composition Settings	Pengaturan komposisi Korea
 	Select a text object to edit its paragraph attributes.	Pilih objek teks untuk mengedit atribut paragrafnya.
@@ -1964,6 +1978,8 @@ digits	Malayalam	Malayalam
 	Weight:	Ketebalan:
 	Art using a deleted global swatch keeps its colour.	Karya seni yang memakai swatch global terhapus tetap mempertahankan warnanya.
 	Color Group: {name}	Grup warna: {name}
+	Delete the selected items and their artwork?	Hapus item yang dipilih beserta karya seninya?
+	Delete this layer and its artwork?	Hapus lapisan ini beserta karya seninya?
 	Delete “{name}”?	Hapus “{name}”?
 	Document Swatches	Swatch dokumen
 	Edit or Apply Color Group	Edit atau terapkan grup warna
@@ -2657,6 +2673,8 @@ digits	Malayalam	Malayalam
 	Randomly change saturation and brightness	Ubah saturasi dan kecerahan secara acak
 	Recolor this row	Warnai ulang baris ini
 	Reset the rows to the artwork's colors	Setel ulang baris ke warna karya seni
+	Color Theme Picker	Pemilih tema warna
+	Click or drag across the art to pick its colors; Shift adds more	Klik atau seret melintasi karya seni untuk mengambil warnanya; Shift menambahkan lagi
 	Separate colors into rows	Pisahkan warna ke dalam baris
 	Unlink harmony colors	Lepaskan tautan warna harmoni
 	1 Color Job	Pekerjaan 1 warna
@@ -2910,6 +2928,7 @@ antiAlias	Sharp	Tajam
 	Hide Code	Sembunyikan kode
 	Images:	Gambar:
 	Include Metadata	Sertakan metadata
+	Include Variable Data	Sertakan data variabel
 	Internal CSS	CSS internal
 	Layer Names	Nama lapisan
 	Minify	Minify
@@ -3105,6 +3124,7 @@ theme	Appearance	Tampilan
 	Art Brush	Kuas seni
 	Bristle Brush	Kuas bristle
 	Pattern Brush	Kuas pola
+	missing from the Brushes panel	tidak ada di panel Kuas
 	Select art to make a scatter, art or pattern brush.	Pilih karya seni untuk membuat kuas sebar, seni, atau pola.
 	Brush Art	Karya seni kuas
 	New Symbol	Simbol baru
@@ -3502,9 +3522,11 @@ theme	Appearance	Tampilan
 	Enable Background Export	Aktifkan ekspor di latar belakang
 	Enable Background Save	Aktifkan penyimpanan di latar belakang
 	Enable in-menu font previews	Aktifkan pratinjau font dalam menu
+	Show samples on white	Tampilkan sampel di atas putih
 	Enable Missing Glyph Protection	Aktifkan perlindungan glyph yang hilang
 	Enable Rubber Band for	Aktifkan rubber band untuk
 	Enable Touch Gestures	Aktifkan gestur sentuh
+	Switch Selection and Drawing Modes	Beralih antara mode seleksi dan menggambar
 	Enable Touch Workspace	Aktifkan ruang kerja sentuh
 	English: UK	Inggris: UK
 	Every (minutes)	Setiap (menit)
@@ -3669,6 +3691,10 @@ theme	Appearance	Tampilan
 	Add to Profiles	Tambahkan ke profil
 	Delete Profile	Hapus profil
 	Reset Profiles	Atur ulang profil
+	Arrowheads	Mata panah
+	Edit Arrowheads	Edit mata panah
+	Edit Arrowheads…	Edit mata panah…
+	Reload Arrowheads	Muat ulang mata panah
 	Stroke Options	Opsi goresan
 	Width Profiles	Profil lebar
 	Apply Graphic Style	Terapkan gaya grafis
@@ -4283,6 +4309,7 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` harus berupa bilangan bulat antara {min} dan {max} (diperoleh {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` harus di antara {min} dan {max} (diperoleh {x})
 @msg	`{key}` must be one of {_1}	`{key}` harus salah satu dari {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` harus salah satu dari {_1}, bukan {got}
 @msg	`{key}` must be true or false	`{key}` harus true atau false
 @msg	`{k}` must be [x, y]	`{k}` harus [x, y]
 @msg	`{name}` has no options	`{name}` tidak memiliki opsi
@@ -5987,6 +6014,23 @@ axis	Y Axis	Sumbu Y
 @msg	Batch cannot play an action with a stop	Batch tidak dapat memutar tindakan dengan titik henti
 	Insert Menu Item…	Sisipkan item menu…
 	Insert Menu Item	Sisipkan item menu
+	Insert Select Path	Sisipkan pemilihan jalur
+	Select Path	Pilih jalur
+@msg	select one whole path or compound path	pilih satu jalur utuh atau jalur majemuk
+@msg	select only one path	pilih hanya satu jalur
+@msg	the path is hidden or locked, or cannot be selected here	jalur tersembunyi atau terkunci, atau tidak dapat dipilih di sini
+@msg	object {value} is not the stored path: it changed, or the document is another one	objek {value} bukan jalur yang disimpan: jalur itu berubah, atau dokumennya berbeda
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` harus berupa "v1:" dan 16 digit heksadesimal huruf kecil
+	Select Object…	Pilih objek…
+	Select Object	Pilih objek
+	Set Selection	Atur seleksi
+	Case Sensitive	Peka huruf besar/kecil
+	Whole Word	Seluruh kata
+	Select Object: {note}	Pilih objek: {note}
+	Select by Note	Pilih berdasarkan catatan
+@msg	the note is empty	catatan kosong
+@msg	the note is longer than 1,024 bytes	catatan lebih panjang dari 1.024 byte
+@msg	no object that can be selected has a note matching “{query}”	tidak ada objek yang dapat dipilih dengan catatan yang cocok dengan “{query}”
 	Menu Item:	Item menu:
 	No menu item matches.	Tidak ada item menu yang cocok.
 	Several menu items match. Choose one from the list.	Beberapa item menu cocok. Pilih salah satu dari daftar.
@@ -6712,6 +6756,8 @@ breakText	Glyphs	Glif
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutorial praktik singkat untuk alat-alat utama, dikelompokkan menurut keterampilan. Pilih keterampilan untuk melihat tutorialnya.
 	List Tutorials	Daftar tutorial
 	Show Tutorial	Tampilkan tutorial
+	Show Tool Location	Tampilkan lokasi alat
+	Show where this tool is	Tampilkan letak alat ini
 @msg	missing `tutorial` (see learn.list)	`tutorial` tidak ada (lihat learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial `{id}` tidak dikenal (lihat learn.list)
 

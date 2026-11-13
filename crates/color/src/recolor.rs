@@ -485,6 +485,88 @@ pub fn cluster(colors: &[Color], weights: &[f32], n: usize) -> Vec<Vec<usize>> {
     rows
 }
 
+/// The distinct colors [`theme_palette`] clusters, at most.
+const THEME_CANDIDATES: usize = 4096;
+
+/// The color palette of the weighted colors `samples` (color, weight), for Recolor Artwork's Color
+/// Theme Picker: at most `n` colors. The same color given twice counts once with both weights,
+/// and past [`THEME_CANDIDATES`] distinct colors, colors close in Lab merge into the heaviest of
+/// them first.
+/// The colors are grouped as [`cluster`] groups them, each group shows its heaviest color (a color
+/// of `samples`, in its own model; on a tie the one given first), and the heaviest group comes
+/// first (on a tie the group whose first color was given first). Samples without a positive,
+/// finite weight are left out, so no samples give no colors.
+pub fn theme_palette(samples: &[(Color, f32)], n: usize) -> Vec<Color> {
+    let mut index: std::collections::HashMap<ColorKey, usize> = std::collections::HashMap::new();
+    let mut colors: Vec<Color> = vec![];
+    let mut weights: Vec<f32> = vec![];
+    for (c, w) in samples {
+        if !(w.is_finite() && *w > 0.0) {
+            continue;
+        }
+        let i = *index.entry(ColorKey::of(c)).or_insert_with(|| {
+            colors.push(*c);
+            weights.push(0.0);
+            colors.len() - 1
+        });
+        weights[i] += w;
+    }
+    if colors.is_empty() || n == 0 {
+        return vec![];
+    }
+    // At most THEME_CANDIDATES colors are clustered: past that, colors in the same cube of Lab
+    // space merge into the heaviest of them, the cubes doubling in size until few enough remain.
+    if colors.len() > THEME_CANDIDATES {
+        let labs: Vec<[f32; 3]> = colors
+            .iter()
+            .map(|c| {
+                let l = c.to_lab();
+                [l.l, l.a, l.b]
+            })
+            .collect();
+        let mut side = 2.0f32;
+        loop {
+            let mut cube: std::collections::HashMap<[i32; 3], usize> = std::collections::HashMap::new();
+            let (mut top, mut sum): (Vec<usize>, Vec<f32>) = (vec![], vec![]);
+            for (i, lab) in labs.iter().enumerate() {
+                let k = lab.map(|v| (v / side).floor() as i32);
+                match cube.get(&k) {
+                    Some(&j) => {
+                        sum[j] += weights[i];
+                        if weights[i] > weights[top[j]] {
+                            top[j] = i;
+                        }
+                    }
+                    None => {
+                        cube.insert(k, top.len());
+                        top.push(i);
+                        sum.push(weights[i]);
+                    }
+                }
+            }
+            if top.len() <= THEME_CANDIDATES {
+                colors = top.iter().map(|&i| colors[i]).collect();
+                weights = sum;
+                break;
+            }
+            side *= 2.0;
+        }
+    }
+    let mut groups: Vec<(f32, usize, Color)> = cluster(&colors, &weights, n)
+        .into_iter()
+        .filter_map(|g| {
+            let total: f32 = g.iter().map(|&i| weights[i]).sum();
+            let top = g.iter().copied().fold(None::<usize>, |best, i| match best {
+                Some(b) if weights[b] >= weights[i] => Some(b),
+                _ => Some(i),
+            })?;
+            Some((total, *g.first()?, colors[top]))
+        })
+        .collect();
+    groups.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
+    groups.into_iter().map(|g| g.2).collect()
+}
+
 /// A set of colours to snap to (Limit to Library), with their Lab values cached.
 #[derive(Clone, Debug, Default)]
 pub struct Palette(Vec<(Color, Lab)>);
@@ -689,6 +771,39 @@ mod tests {
         assert_eq!(cluster(&colors, &[1.0; 5], 1), vec![vec![0, 1, 2, 3, 4]]);
         assert_eq!(cluster(&[Color::WHITE, Color::WHITE], &[1.0, 1.0], 2).len(), 1, "identical colours share a row");
         assert!(cluster(&[], &[], 3).is_empty());
+    }
+
+    /// The Color Theme Picker's palette: similar colors merge, each group shows its heaviest
+    /// color in its own model, and the heaviest group comes first.
+    #[test]
+    fn theme_palette_takes_the_heaviest_color_of_each_group_heaviest_first() {
+        let red = Color::rgb(1.0, 0.0, 0.0);
+        let pink = Color::rgb(1.0, 0.2, 0.2);
+        let blue = Color::cmyk(1.0, 0.8, 0.0, 0.0);
+        let navy = Color::cmyk(1.0, 0.9, 0.0, 0.3);
+        let samples = [(pink, 1.0), (blue, 2.0), (red, 3.0), (navy, 2.5), (red, 0.5)];
+        // Blue and navy weigh 4.5, and so do red (3 + 0.5, its two samples add up) and pink.
+        assert_eq!(theme_palette(&samples, 2), vec![red, navy], "a tie: the group given first");
+        let samples = [(pink, 1.0), (blue, 2.0), (red, 3.0), (navy, 1.0)];
+        assert_eq!(theme_palette(&samples, 2), vec![red, blue], "heaviest group first, its heaviest color");
+        assert_eq!(theme_palette(&samples, 9).len(), 4, "never more colors than given");
+        assert_eq!(theme_palette(&samples, 1), vec![red]);
+        assert!(theme_palette(&samples, 0).is_empty());
+        assert!(theme_palette(&[(red, 0.0), (blue, f32::NAN), (pink, -1.0)], 3).is_empty(), "no weight, no colors");
+        assert!(theme_palette(&[], 3).is_empty());
+    }
+
+    /// Past 4,096 distinct colors, close colors merge before clustering: the palette still keeps
+    /// a heavy color apart from thousands of light ones.
+    #[test]
+    fn theme_palette_merges_close_colors_past_its_candidate_limit() {
+        let mut samples: Vec<(Color, f32)> = (0..20_000).map(|i| (Color::rgb(0.0, 0.0, 0.3 + 0.7 * i as f32 / 20_000.0), 0.001)).collect();
+        samples.extend((0..20_000).map(|i| (Color::rgb(1.0, 0.8 * i as f32 / 20_000.0, 0.0), 0.0001)));
+        samples.push((Color::rgb(0.0, 1.0, 0.0), 50.0));
+        let p = theme_palette(&samples, 3);
+        assert_eq!(p.len(), 3);
+        assert_eq!(p[0], Color::rgb(0.0, 1.0, 0.0), "the heavy green first, exactly as given");
+        assert!(p[1].to_hsb()[0] > 180.0 && p[2].to_hsb()[0] < 90.0, "then the blues, then the reds and oranges: {p:?}");
     }
 
     #[test]

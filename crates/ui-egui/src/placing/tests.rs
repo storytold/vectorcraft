@@ -587,7 +587,8 @@ fn a_deferred_swatch_paste_rejects_a_changed_token_or_closed_document() {
                 &crate::control::ControlRequest::new("ui.dialog.set", json!({"field": "__deferredPaste", "value": 999999})).0,
             );
             let crate::control::Outcome::Done(result) = result else { panic!("expected dialog result") };
-            assert_eq!(result["ok"], true, "{result}");
+            assert_eq!(result["error"], "the `swatchConflict` dialog cannot set protected field `__deferredPaste`", "{result}");
+            app.ui.dialog.as_mut().unwrap().fields.insert("__deferredPaste".into(), json!(999999));
         }
         let error = crate::dialogs::confirm(&mut app).unwrap_err();
         assert!(

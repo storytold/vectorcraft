@@ -29,12 +29,13 @@ pub(crate) fn with_held_keys(target: (String, Value), held: egui::Modifiers) -> 
 
 /// The dialog of command `id` that shows the selection's current values (its query): its heading
 /// and the queried values it doesn't show. Type on a Path Options leaves the brackets where they
-/// are.
+/// are. Color Mask opens on the selected image's mask settings (the defaults without one).
 fn queried_dialog(id: &str) -> Option<(&'static str, &'static [&'static str])> {
     Some(match id {
         // Whether the text overflows, and Shrink Text's factor, are read-only facts.
         "text.areaOptions" => ("Area Type Options", &["overflow", "fitScale"]),
         "type.pathOptions" => ("Type on a Path Options", &["start", "end"]),
+        crate::addons::image::COLOR_MASK => ("Color Mask", &["masked"]),
         _ => return None,
     })
 }
