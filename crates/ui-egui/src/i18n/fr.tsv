@@ -7755,12 +7755,9 @@ breakText	Glyphs	Glyphes
 @msg	`{KEY}` takes at most {MAX_PARAGRAPH_INDENTS} entries (got {_1})	`{KEY}` accepte au plus {MAX_PARAGRAPH_INDENTS} entrées (reçu : {_1})
 @msg	`{KEY}` takes no `{other}` beside it	`{KEY}` n’accepte pas `{other}` à côté de lui
 @msg	`{_1}` can't be edited or removed	`{_1}` ne peut être ni modifié ni supprimé
-@msg	`{_1}` can't name a composite font	`{_1}` ne peut pas nommer une police composite
 @msg	`{_1}` is built in and always listed	`{_1}` est intégré et toujours listé
 @msg	`{_1}` is not a font file the last text.findFontFiles search found	`{_1}` n’est pas un fichier de police trouvé par la dernière recherche text.findFontFiles
-@msg	`{_1}` is the name of an installed font	`{_1}` est le nom d’une police installée
 @msg	`{_1}` would be overwritten by the package: choose a different folder or name	`{_1}` serait écrasé par l’assemblage : choisissez un autre dossier ou un autre nom
-@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}` : {_2} est composé en `{font}`, une police composite
 @msg	`{base}` is larger than {_1} MB	`{base}` dépasse {_1} Mo
 @msg	`{base}` is not in the DCS file's folder	`{base}` n’est pas dans le dossier du fichier DCS
 @msg	`{file}` has no art to place	`{file}` ne contient aucune illustration à importer
@@ -7830,12 +7827,6 @@ breakText	Glyphs	Glyphes
 @msg	`{name}` is a working space: choose another with edit.colorSettings first	`{name}` est un espace de travail colorimétrique : choisissez-en d’abord un autre avec edit.colorSettings
 @msg	`{name}` is built in and stays	`{name}` est intégré et ne peut pas être retiré
 @msg	`{name}` takes a paint of its own kind (colour, gradient or pattern)	`{name}` accepte une peinture de son propre type (couleur, dégradé ou motif)
-@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}` : le minimum ne doit pas dépasser la valeur souhaitée, ni la valeur souhaitée le maximum
-@msg	`{name}`: give the kanji part	`{name}` : indiquez la partie kanji
-@msg	`{name}`: parts must be an object	`{name}` : les parties doivent être un objet
-@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}` : classe inconnue `{k}` ; les classes sont kanji, kana, punctuation, symbols, roman et numerals
-@msg	`{name}`: unknown key `{k}` in {_1}	`{name}` : clé inconnue `{k}` dans {_1}
-@msg	`{name}`: {_1} must be an object	`{name}` : {_1} doit être un objet
 @msg	`{name}`: {_1}: {e}	`{name}` : {_1} : {e}
 @msg	`{n}` can't be deleted	`{n}` ne peut pas être supprimé
 @msg	`{n}` can't be merged	`{n}` ne peut pas être fusionné
@@ -7844,7 +7835,6 @@ breakText	Glyphs	Glyphes
 @msg	`{n}` isn't a solid colour	`{n}` n’est pas une couleur unie
 @msg	`{n}`: colour groups hold solid colours only	`{n}` : les groupes de couleurs ne contiennent que des couleurs unies
 @msg	`{other}` doesn't trace an image	`{other}` ne vectorise pas une image
-@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` ne peut pas nommer une police composite (de 1 à {COMPOSITE_NAME_MAX} caractères, sans caractères de contrôle)
 @msg	`{s}`: the step's references copy in more than {_1} MB of values	`{s}` : les références de l’étape copient plus de {_1} Mo de valeurs
 @msg	`{tag}` is not an axis tag: a tag is four characters, such as "wght"	`{tag}` n’est pas une balise d’axe : une balise compte quatre caractères, comme "wght"
 @msg	`{to}` is empty or already used	`{to}` est vide ou déjà utilisé
@@ -7866,7 +7856,6 @@ breakText	Glyphs	Glyphes
 @msg	a design needs a name	un motif nécessite un nom
 @msg	a dictionary grew too large	un dictionnaire est devenu trop grand
 @msg	a document holds at most {_1} SVG filters	un document contient au plus {_1} filtres SVG
-@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	un document conserve au plus {COMPOSITE_FONTS_MAX} polices composites
 @msg	a document keeps at most {_1} graph designs	un document conserve au plus {_1} motifs de graphe
 @msg	a document keeps at most {_1} saved selections	un document conserve au plus {_1} sélections enregistrées
 @msg	a document keeps at most {_1} views	un document conserve au plus {_1} vues
@@ -8103,7 +8092,6 @@ breakText	Glyphs	Glyphes
 @msg	data set `{name}` holds two values for `{var}`	le jeu de données `{name}` contient deux valeurs pour `{var}`
 @msg	data set `{name}` is declared twice	le jeu de données `{name}` est déclaré deux fois
 @msg	data takes at most {MAX_DATA} keys at once	data accepte au plus {MAX_DATA} clés à la fois
-@msg	dataBase64 is not base64	dataBase64 n’est pas du base64
 @msg	dataset `{name}` already exists	le jeu de données `{name}` existe déjà
 @msg	dataset `{to}` already exists	le jeu de données `{to}` existe déjà
 @msg	date `{d}`: YYYY-MM-DD	date `{d}` : AAAA-MM-JJ
@@ -8119,8 +8107,6 @@ breakText	Glyphs	Glyphes
 @msg	dxf scale must be a positive number up to {_1}, not {s}	l’échelle dxf doit être un nombre positif d’au plus {_1}, pas {s}
 @msg	dxf unit `{u}`: a unit such as mm, cm, in or pt	unité dxf `{u}` : une unité comme mm, cm, in ou pt
 @msg	dxf: {e}	dxf : {e}
-@msg	each font must be {name, parts}	chaque police doit être {name, parts}
-@msg	each font needs a name	chaque police nécessite un nom
 @msg	each format is an object {format, scale?, suffix?}	chaque format est un objet {format, scale?, suffix?}
 @msg	each item needs an id	chaque élément nécessite un identifiant
 @msg	each match needs `kind`	chaque correspondance nécessite `kind`
@@ -8164,7 +8150,6 @@ breakText	Glyphs	Glyphes
 @msg	folders deeper than {MAX_DEPTH} levels	dossiers de plus de {MAX_DEPTH} niveaux de profondeur
 @msg	font family `{family}` is not available	la famille de polices `{family}` n’est pas disponible
 @msg	font family `{tf}` is not available	la famille de polices `{tf}` n’est pas disponible
-@msg	fonts must be a list of composite fonts	fonts doit être une liste de polices composites
 @msg	format `{f}`: pdf or postscript	format `{f}` : pdf ou postscript
 @msg	format `{f}`: text or json	format `{f}` : text ou json
 @msg	format is `{format}`	le format est `{format}`
@@ -8210,7 +8195,6 @@ breakText	Glyphs	Glyphes
 @msg	give dataBase64	indiquez dataBase64
 @msg	give either at (a click) or area (a path drawn around the overlaps)	indiquez soit at (un clic), soit area (un tracé dessiné autour des chevauchements)
 @msg	give exactly one of `path`, `data` and `dataBase64`	indiquez exactement un paramètre parmi `path`, `data` et `dataBase64`
-@msg	give fonts: [{name, parts}…]	indiquez fonts: [{name, parts}…]
 @msg	give formats or a preset, not both	indiquez formats ou un paramètre prédéfini, pas les deux
 @msg	give index or indexes, not both	indiquez index ou indexes, pas les deux
 @msg	give newName or delete	indiquez newName ou delete
@@ -8218,7 +8202,6 @@ breakText	Glyphs	Glyphes
 @msg	give one <filter> element	indiquez un seul élément <filter>
 @msg	give one of `to`, `rect` or `at`	indiquez l’un des paramètres `to`, `rect` ou `at`
 @msg	give one of assets, layers, selection or fullDocument	indiquez l’un des paramètres assets, layers, selection ou fullDocument
-@msg	give one of path, data or dataBase64	indiquez l’un des paramètres path, data ou dataBase64
 @msg	give only one of onto, above, below, icon and a column place	indiquez un seul paramètre parmi onto, above, below, icon et un emplacement de colonne
 @msg	give opacity or blend	indiquez opacity ou blend
 @msg	give origin: [x, y], or reset: true	indiquez origin: [x, y], ou reset: true
@@ -8428,9 +8411,7 @@ breakText	Glyphs	Glyphes
 @msg	name (a toolbar's name) must be a string	name (le nom d’une barre d’outils) doit être une chaîne
 @msg	name must be a toolbar's name	name doit être le nom d’une barre d’outils
 @msg	names is empty	names est vide
-@msg	names must be a list of names	names doit être une liste de noms
 @msg	names must be an array of symbol names	names doit être une liste de noms de symboles
-@msg	names must be strings	names doit contenir des chaînes
 @msg	need `anchor` or `segment` + `t`	`anchor` ou `segment` + `t` nécessaire
 @msg	need at least one anchor	au moins un point d’ancrage est nécessaire
 @msg	need at least one point	au moins un point est nécessaire
@@ -8464,9 +8445,6 @@ breakText	Glyphs	Glyphes
 @msg	no colour	aucune couleur
 @msg	no colour group `{group}`	aucun groupe de couleurs `{group}`
 @msg	no colour group `{name}`	aucun groupe de couleurs `{name}`
-@msg	no composite font	aucune police composite
-@msg	no composite font named `{n}`	aucune police composite nommée `{n}`
-@msg	no composite fonts to export	aucune police composite à exporter
 @msg	no custom arrowhead {name} (see stroke.arrowheads.list)	aucune pointe de flèche personnalisée {name} (voir stroke.arrowheads.list)
 @msg	no data sets	aucun jeu de données
 @msg	no dataset named `{from}`	aucun jeu de données nommé `{from}`
@@ -8573,8 +8551,6 @@ breakText	Glyphs	Glyphes
 @msg	not a Word document: its main part is not a WordprocessingML document	ce n’est pas un document Word : sa partie principale n’est pas un document WordprocessingML
 @msg	not a Word document: its package has no main document part	ce n’est pas un document Word : son package n’a pas de partie de document principale
 @msg	not a closed path	ce n’est pas un tracé fermé
-@msg	not a composite fonts file: no compositeFonts list	ce n’est pas un fichier de polices composites : aucune liste compositeFonts
-@msg	not a composite fonts file: {e}	ce n’est pas un fichier de polices composites : {e}
 @msg	not a flattener presets file (format `{_1}`)	ce n’est pas un fichier de paramètres prédéfinis d’aplatissement (format `{_1}`)
 @msg	not a flattener presets file: {e}	ce n’est pas un fichier de paramètres prédéfinis d’aplatissement : {e}
 @msg	not a layer or group	ce n’est ni un calque ni un groupe
@@ -8679,7 +8655,6 @@ breakText	Glyphs	Glyphes
 @msg	passwords can have up to {MAX_PASSWORD} bytes	les mots de passe peuvent compter jusqu’à {MAX_PASSWORD} octets
 @msg	path chunks must share their boundary point	les fragments de tracé doivent partager leur point de jonction
 @msg	path has no open end	le tracé n’a pas d’extrémité ouverte
-@msg	path is empty	path est vide
 @msg	paths must be strings	paths doit contenir des chaînes
 @msg	pdfCompatible: false needs every artboard to keep the editable artwork	pdfCompatible: false nécessite que chaque plan de travail conserve l’illustration modifiable
 @msg	pdfCompatible: false needs the artboards to keep the editable artwork when useArtboards is false	pdfCompatible: false nécessite que les plans de travail conservent l’illustration modifiable quand useArtboards vaut false
@@ -8759,7 +8734,6 @@ breakText	Glyphs	Glyphes
 @msg	select a graph	sélectionnez un graphe
 @msg	select a group or layer with visible, unlocked members	sélectionnez un groupe ou un calque dont les membres sont visibles et déverrouillés
 @msg	select a layer	sélectionnez un calque
-@msg	select a path	sélectionnez un tracé
 @msg	select a text object	sélectionnez un objet texte
 @msg	select an SVG filter	sélectionnez un filtre SVG
 @msg	select an image (or an Image Trace group)	sélectionnez une image (ou un groupe de vectorisation de l’image)
@@ -8915,11 +8889,7 @@ breakText	Glyphs	Glyphes
 @msg	the entities the document declares expand to too much text	les entités déclarées par le document se développent en trop de texte
 @msg	the envelope's content has no bounds	le contenu de l’enveloppe n’a pas de limites
 @msg	the envelope's mesh is malformed	le filet de l’enveloppe est mal formé
-@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	le fichier contient plus de {COMPOSITE_FONTS_MAX} polices composites
 @msg	the file holds no `variableSets` element	le fichier ne contient aucun élément `variableSets`
-@msg	the file holds no composite fonts	le fichier ne contient aucune police composite
-@msg	the file holds two composite fonts named `{_1}`	le fichier contient deux polices composites nommées `{_1}`
-@msg	the file is larger than 4 MB	le fichier dépasse 4 Mo
 @msg	the file is larger than {_1} MB	le fichier dépasse {_1} Mo
 @msg	the file is too large	le fichier est trop volumineux
 @msg	the file isn't valid SVG: {e}	le fichier n’est pas un SVG valide : {e}
@@ -9072,7 +9042,6 @@ breakText	Glyphs	Glyphes
 @msg	toolbar (a toolbar's name) must be a string	toolbar (le nom d’une barre d’outils) doit être une chaîne
 @msg	toolbar name can't be empty	le nom de la barre d’outils ne peut pas être vide
 @msg	transparentImages {v}: "flatten" (the default) or "omit"	transparentImages {v} : "flatten" (par défaut) ou "omit"
-@msg	two composite fonts are named `{_1}`	deux polices composites sont nommées `{_1}`
 @msg	two saved selections would be named `{_1}`	deux sélections enregistrées seraient nommées `{_1}`
 @msg	type dimension cannot be represented with this text transform	la dimension du texte ne peut pas être représentée avec cette transformation de texte
 @msg	type dimension must be finite	la dimension du texte doit être finie
@@ -9109,7 +9078,6 @@ breakText	Glyphs	Glyphes
 @msg	unknown intent `{i}`	mode de rendu inconnu `{i}`
 @msg	unknown issue kind {id}	type de problème inconnu {id}
 @msg	unknown issue kind {v}	type de problème inconnu {v}
-@msg	unknown key `{k}`; a font takes name and parts	clé inconnue `{k}` ; une police accepte name et parts
 @msg	unknown knockout state {k}	état de masquage inconnu {k}
 @msg	unknown language `{language}` (one of {_1})	langue inconnue `{language}` (l’une de ces valeurs : {_1})
 @msg	unknown language `{l}` (one of {_1})	langue inconnue `{l}` (l’une de ces valeurs : {_1})
@@ -9249,14 +9217,8 @@ breakText	Glyphs	Glyphes
 @msg	{k}: a custom arrowhead's path needs an area to fill and at most {most} anchors and {most} subpaths, each anchor within {far} head units of its tip	{k} : le tracé d’une pointe de flèche personnalisée nécessite une zone à remplir et au plus {most} points d’ancrage et {most} sous-tracés, chaque point d’ancrage à moins de {far} unités de pointe de son extrémité
 @msg	{k}: bad custom arrowhead path: {e}	{k} : tracé de pointe de flèche personnalisée incorrect : {e}
 @msg	{k}: bad custom arrowhead: {e}	{k} : pointe de flèche personnalisée incorrecte : {e}
-@msg	{k}: baseline must be {_1} to {_2}%	{k} : la ligne de base doit être comprise entre {_1} et {_2} %
 @msg	{k}: can't read `{s}` as a length	{k} : impossible de lire `{s}` comme une longueur
 @msg	{k}: custom must be a name	{k} : custom doit être un nom
-@msg	{k}: give a font	{k} : indiquez une police
-@msg	{k}: only kana can be scaled at the center	{k} : seuls les kana peuvent être mis à l’échelle au centre
-@msg	{k}: only kana, roman and numerals can be scaled	{k} : seuls les kana, les caractères romains et les chiffres peuvent être mis à l’échelle
-@msg	{k}: scale must be {_1} to {_2}%	{k} : l’échelle doit être comprise entre {_1} et {_2} %
-@msg	{k}: size must be {_1} to {_2}%	{k} : la taille doit être comprise entre {_1} et {_2} %
 @msg	{label} must be a number at most {max}	{label} doit être un nombre d’au plus {max}
 @msg	{label} must be a number from -1296 to 1296	{label} doit être un nombre compris entre -1296 et 1296
 @msg	{label} must be a number from 1 to 10000	{label} doit être un nombre compris entre 1 et 10000
