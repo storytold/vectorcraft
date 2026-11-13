@@ -1030,7 +1030,10 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
             .map(|item| item.1);
         advance += kashida.unwrap_or(0.0);
         let y = line.position.baseline - align_shift(glyph, cx.style_at(glyph.byte).char_align, line_em, cx.vertical);
-        let transform = if scale != 1.0 { Affine::translate((x, y)) * Affine::scale_non_uniform(scale, 1.0) } else { Affine::translate((x, y)) };
+        // A glyph scaled to fill the line keeps its Insert Aki before it at its width.
+        let aki = if scale != 1.0 && glyph.aki_shift.is_finite() { glyph.aki_shift * (1.0 - scale) } else { 0.0 };
+        let transform =
+            if scale != 1.0 { Affine::translate((x + aki, y)) * Affine::scale_non_uniform(scale, 1.0) } else { Affine::translate((x, y)) };
         if glyph_index < paragraph.marker {
             let at = cx.out.glyphs.len();
             marker_glyphs = Some(marker_glyphs.map_or(at..at + 1, |range: Range<usize>| range.start.min(at)..range.end.max(at + 1)));
@@ -1039,8 +1042,11 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
             }
         }
         cx.emit(glyph, transform, Point::new(x, y), 0.0, advance, line_index);
+        // Its own width starts where the glyph is drawn, with the Aki kept at its width.
+        let own_shift = cx.own_width_shift(glyph, aki);
         if let Some(out) = cx.out.glyphs.last_mut() {
             out.scale = paragraph.flex.get(glyph_index).map_or(1.0, |flex| flex.scale) * scale;
+            out.width_start += own_shift;
         }
         if !leader.is_empty() {
             // The leader belongs to the tab's glyph: the gap stays one character for the

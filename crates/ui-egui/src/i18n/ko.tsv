@@ -44,6 +44,8 @@ font-technology	Variable	가변
 	x-Height	x 높이
 	ICF Box	ICF 박스
 	Proportional Metrics	비례 메트릭
+	Insert Aki Left	앞 아키 삽입
+	Insert Aki Right	뒤 아키 삽입
 	Character Direction	문자 방향
 	Digits	숫자
 	Arabic	아라비아어

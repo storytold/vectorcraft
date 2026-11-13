@@ -2522,6 +2522,8 @@ font-script	Japanese	汉字
 	Proof Setup	校样设置
 	Properties	属性
 	Proportional Metrics	比例度量
+	Insert Aki Left	在前方插入空白
+	Insert Aki Right	在后方插入空白
 	Character Direction	字符方向
 	Digits	数字
 	Arabic	阿拉伯数字
