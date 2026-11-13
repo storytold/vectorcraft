@@ -5766,8 +5766,8 @@ antiAlias	Sharp	शार्प
 @msg	`{_1}` has no brushes to apply	`{_1}` को लागू करने के लिए कोई ब्रश नहीं है
 @msg	`{_1}` has no symbols to place	`{_1}` के पास कोई सिंबल नहीं है
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` `{_2}` प्रकार का प्लग-इन है, निर्यातक नहीं
-@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect"}"}}	`{_1}` एक लाइव इफ़ेक्ट है: इसे effect.apply {{"effect"}"}} के साथ लागू करें
-@msg	`{_1}` is an exporter: export with document.export {{"format"}"}}	`{_1}` एक एक्सपोर्टर है: document.export {{"format"}"}} से एक्सपोर्ट करें
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` एक लाइव इफ़ेक्ट है: इसे effect.apply {{"effect": "{_2}"}} के साथ लागू करें
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` एक एक्सपोर्टर है: document.export {{"format": "{_2}"}} से एक्सपोर्ट करें
 @msg	`{_1}` is built in and always listed	`{_1}` बनाया गया है और हमेशा सूचीबद्ध है
 @msg	`{_1}` is no save command	`{_1}` कोई बचत आदेश नहीं है
 @msg	`{_1}` is not a font file the last text.findFontFiles search found	`{_1}` पिछली text.findFontFiles सर्च में मिली फ़ॉन्ट फ़ाइल नहीं है
@@ -7388,7 +7388,6 @@ antiAlias	Sharp	शार्प
 @msg	not an export presets file: {e}	एक निर्यात प्रीसेट फ़ाइल नहीं: {e}
 @msg	not an image VectorCraft reads (see document.formats)	यह ऐसी इमेज नहीं है जिसे VectorCraft पढ़ सके (document.formats देखें)
 @msg	not an RTF file: it doesn't start with {\\rtf	RTF फ़ाइल नहीं: यह {\rtf के साथ शुरू नहीं होता है
-@msg	not an RTF file: it doesn't start with not an RTF file: it doesn't start with {\rtf	RTF फ़ाइल: यह एक RTF फ़ाइल के साथ शुरू नहीं होता है: यह {\rtf के साथ शुरू नहीं होता है
 @msg	not area type (text in a frame) outside perspective	नहीं क्षेत्र के प्रकार (एक फ्रेम में टेक्स्ट) बाहर पर्सपेक्टिव
 @msg	not editing an opacity mask	एक opacity मास्क संपादित न करें
 @msg	not found	नहीं मिला
@@ -8651,7 +8650,7 @@ theme	Appearance	अपीयरेंस
 @msg	`importer` must be a plug-in format id (see document.formats)	`importer` किसी प्लग-इन का फ़ॉर्मेट id होना चाहिए (document.formats देखें)
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” {_1} फ़ाइलें खोलता है, `{_2}` नहीं
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` `{_2}` प्रकार का प्लग-इन है, इंपोर्टर नहीं
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` एक इंपोर्टर है: document.open {{"importer"}"}} से फ़ाइल खोलें
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` एक इंपोर्टर है: document.open {{"importer": "{_2}"}} से फ़ाइल खोलें
 @msg	the importer returned no objects	इंपोर्टर ने कोई ऑब्जेक्ट नहीं लौटाया
 @msg	an importer returns `objects` and `warnings`, not `{key}`	इंपोर्टर `objects` और `warnings` लौटाता है, `{key}` नहीं
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	फ़ाइल उन {MAX_INPUT_BYTES} बाइट्स से बड़ी है जो इंपोर्टर पढ़ता है

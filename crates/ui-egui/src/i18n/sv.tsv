@@ -7334,8 +7334,8 @@ digits	Hindi	Hindi
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} skulle skrivas ut på fler än {MAX_TILES} rutor: skala ned det
 @msg	`{_1}` can't be edited or removed	`{_1}` kan inte redigeras eller tas bort
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` är ett plugin av typen `{_2}`, inte en exportfunktion
-@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect"}"}}	`{_1}` är en live-effekt: använd den med effect.apply {{"effect"}"}}
-@msg	`{_1}` is an exporter: export with document.export {{"format"}"}}	`{_1}` är en exportfunktion: exportera med document.export {{"format"}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` är en live-effekt: använd den med effect.apply {{"effect": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` är en exportfunktion: exportera med document.export {{"format": "{_2}"}}
 @msg	`{_1}` is built in and always listed	`{_1}` är inbyggd och listas alltid
 @msg	`{_1}` is not a font file the last text.findFontFiles search found	`{_1}` är inte en typsnittsfil som den senaste sökningen med text.findFontFiles hittade
 @msg	`{_1}` would be overwritten by the package: choose a different folder or name	`{_1}` skulle skrivas över av paketet: välj en annan mapp eller ett annat namn
@@ -8173,7 +8173,6 @@ digits	Hindi	Hindi
 @msg	not a Word document: its package has no main document part	inte ett Word-dokument: dess paket saknar huvuddokumentdel
 @msg	not a Word document: its WordDocument stream doesn't start with a file information block	inte ett Word-dokument: dess WordDocument-ström börjar inte med ett filinformationsblock
 @msg	not an image VectorCraft reads (see document.formats)	inte en bild som VectorCraft kan läsa (se document.formats)
-@msg	not an RTF file: it doesn't start with not an RTF file: it doesn't start with {\rtf	inte en RTF-fil: den börjar inte med inte en RTF-fil: den börjar inte med {\rtf
 @msg	not area type (text in a frame) outside perspective	inte områdestext (text i en ram) utanför perspektivet
 @msg	not editing an opacity mask	redigerar inte en opacitetsmask
 @msg	not JSON: {e}	inte JSON: {e}
@@ -8668,7 +8667,7 @@ digits	Hindi	Hindi
 @msg	`importer` must be a plug-in format id (see document.formats)	`importer` måste vara ett formatid för ett plugin (se document.formats)
 @msg	“{shown}” opens {_1} files, not `{_2}`	”{shown}” öppnar {_1}-filer, inte `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` är ett plugin av typen `{_2}`, inte en importfunktion
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` är en importfunktion: öppna en fil med document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` är en importfunktion: öppna en fil med document.open {{"importer": "{_2}"}}
 @msg	the importer returned no objects	importfunktionen returnerade inga objekt
 @msg	an importer returns `objects` and `warnings`, not `{key}`	en importfunktion returnerar `objects` och `warnings`, inte `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	filen är större än de {MAX_INPUT_BYTES} byte som en importfunktion läser
