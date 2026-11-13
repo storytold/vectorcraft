@@ -1763,6 +1763,8 @@ fn rename(host: &Host, a: &[Data]) -> Result<Data, HostError> {
             file.target = Some(if rest.as_os_str().is_empty() { to.clone() } else { to.join(rest) });
         }
     }
+    // The old path no longer holds the file, so the report names it as well as the new one.
+    disk.wrote(&from);
     disk.wrote(&to);
     Ok(Data::Object(vec![("fs".into(), Data::String(new))]))
 }

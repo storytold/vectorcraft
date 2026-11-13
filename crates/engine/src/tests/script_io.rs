@@ -513,6 +513,29 @@ fn script_files_write_in_the_temporary_and_data_folders() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `rename` of a file an earlier run wrote names both its old and its new path in `written`.
+#[test]
+fn a_renamed_file_names_its_old_and_new_paths_in_written() {
+    let base = folder("renamed");
+    let mut s = with_data(&base);
+    let first = run_in(&mut s, &base, "var u = new File(Folder.userData.fsName + '/old.txt'); u.open('w'); u.write('x'); vc.log(u.close());");
+    assert_eq!(first.unwrap()["log"], json!([true]));
+    let r = run_in(
+        &mut s,
+        &base,
+        "var u = new File(Folder.userData.fsName + '/old.txt'); var before = u.fsName;\n\
+         vc.log(u.rename('new.txt')); vc.log(before); vc.log(u.fsName);",
+    )
+    .unwrap();
+    assert_eq!(r["log"][0], json!(true));
+    let written: Vec<&str> = r["written"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    for at in [1, 2] {
+        let path = r["log"][at].as_str().unwrap();
+        assert!(written.contains(&path), "{path} in {written:?}");
+    }
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// The open modes, the encodings that cannot hold a character, `copy` over a file, `remove` of a
 /// folder only when it is empty, `rename` refusing a name in use, `create`, and setting `length` and
 /// `readonly`.
