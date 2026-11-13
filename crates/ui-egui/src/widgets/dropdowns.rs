@@ -147,6 +147,18 @@ pub(crate) fn combo_menu_field<R>(
     width: f32,
     menu: impl FnOnce(craft_ui::combo::Menu<'_>) -> Option<R>,
 ) -> (Response, Option<R>) {
+    combo_menu_field_named(ui, id, None, current, width, menu)
+}
+
+/// [`combo_menu_field`] for a field whose visible label is not an adjacent label widget.
+pub(crate) fn combo_menu_field_named<R>(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    name: Option<&str>,
+    current: &str,
+    width: f32,
+    menu: impl FnOnce(craft_ui::combo::Menu<'_>) -> Option<R>,
+) -> (Response, Option<R>) {
     let t = Tokens::get(ui.ctx());
     let label = take_previous_label(ui);
     egui::Frame::NONE
@@ -155,7 +167,7 @@ pub(crate) fn combo_menu_field<R>(
         .corner_radius(CornerRadius::same(3))
         .show(ui, |ui| {
             let armed = take_armed_focus(ui, &id);
-            let resp = combo_field(ui, id_with(ui.scope_id(), id), label, None, current, width - 4.0);
+            let resp = combo_field(ui, id_with(ui.scope_id(), id), label, name, current, width - 4.0);
             if armed {
                 egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&resp));
                 ui.memory_mut(|m| m.stop_text_input());
