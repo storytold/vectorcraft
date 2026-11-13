@@ -28,7 +28,7 @@ Chinese by `imachus`). Only Georgian is recorded as reviewed by a native speaker
 |---|---|---|---|---|---|---|---|
 | English | `en` | source, 100% | all | Latin | — | full | — |
 | Simplified Chinese (Mandarin) | `zh-hans` | 5,102 rows, 791 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted | all | CJK UI font from craft-fonts (BIZ UDPGothic) when embedded, else a system font; IME with marked text at the caret; vertical type partial ([type-parity.md](type-parity.md)) | no | full | — (review) |
-| Spanish | `es` | 4,009 / 4,020 (99.7%) | all (604 messages) | Latin | no | full | — (review) |
+| Spanish | `es` | 4,009 / 4,020 (99.7%) | all (3,460 `@msg` and 48 `@msgplural` rows, counted 2026-11-13; the untranslated report lists two messages whose placeholders sit side by side, which no catalog row can match) | Latin | no | full | — (review) |
 | Hindi | `hi` | 8,782 rows (2026-11-13): 3,014 `@msg`, 47 `@msgplural`, 41 `@plural`; no gaps in the untranslated report | menus, dialogs, tooltips and scanned messages; contributor-approved loanword terminology; agent wording pass | UI and document text shape with HarfRust; installed desktop Devanagari fallback, or a `Deva` craft-fonts face; web font still needed | contributor terminology review; 2026-11-13 wording pass on messages and longer labels, with a glossary-term test; wider proofread welcome | complete catalog, machine-assisted draft | native review, layout and web font |
 | Arabic | `ar` | 0 | none | document text: bidi layout and Paragraph Direction; interface: no right-to-left layout, no Arabic shaping in egui | no | none | 25–40 |
 | French | `fr` | 4,020 / 4,020 (100%) | all | Latin | no | full | — (review) |
