@@ -2515,9 +2515,38 @@ fn control_bar_drag_escape_restores_placement() {
         control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, k as f32 / 4.0))]);
     }
     assert!(super::control_bar_moving(&ctx), "the drag goes on");
-    let mut out = ctx.run_ui(egui::RawInput { events: vec![press_at(to, false)], screen_rect: Some(DOCK_SCREEN), ..Default::default() }, |_| {});
-    out.textures_delta.clear();
+    for events in [vec![press_at(to, false)], vec![]] {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(DOCK_SCREEN), ..Default::default() }, |_| {});
+        out.textures_delta.clear();
+    }
     assert!(!super::control_bar_moving(&ctx), "released with the bar hidden, the drag is over");
+}
+
+/// An Escape in the same frame as the gripper's release is the drag's: the frame's shortcuts, which
+/// run before the bar is drawn, still see the drag, and the bar stays where it was.
+#[test]
+fn control_bar_drag_escape_on_release_frame_is_the_drags() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let (from, to) = (docked_grip(false), egui::pos2(400.0, 150.0));
+    control_bar_frame(&mut app, &ctx, vec![]);
+    control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), press_at(from, true)]);
+    for k in 1..=4 {
+        control_bar_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, k as f32 / 4.0))]);
+    }
+    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    let mut moving = None;
+    let input = egui::RawInput { events: vec![escape, press_at(to, false)], screen_rect: Some(DOCK_SCREEN), ..Default::default() };
+    let mut out = ctx.run_ui(input, |ui| {
+        moving = Some(super::control_bar_moving(ui.ctx()));
+        super::control_bar(&mut app, ui);
+    });
+    out.textures_delta.clear();
+    assert_eq!(moving, Some(true), "the release frame's shortcuts see the drag");
+    assert!(!app.ui.control_bar_floating && !app.ui.control_bar_bottom, "the canceled drag leaves the bar at the top");
+    control_bar_frame(&mut app, &ctx, vec![]);
+    assert!(!super::control_bar_moving(&ctx), "the drag is over");
 }
 
 /// A gripper drag released outside the window leaves the bar where it was.

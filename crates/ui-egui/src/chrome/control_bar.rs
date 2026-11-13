@@ -392,15 +392,17 @@ const FLOAT_WIDTH: f32 = 800.0;
 const DOCK_ZONE: f32 = 24.0;
 
 /// The key of a gripper drag in progress: where the pointer holds the bar from its top-left
-/// corner.
+/// corner, and the gripper's widget id.
 fn move_id() -> egui::Id {
     egui::Id::unique("control_bar_gripper_move")
 }
 
-/// Is the Control bar's gripper being dragged? An Escape then cancels the drag, and nothing else.
-/// A drag left over from a bar hidden while the button was held ends with the button.
+/// Is the Control bar's gripper being dragged, the frame that releases it included? An Escape then
+/// cancels the drag, and nothing else. A drag left over from a bar hidden while the button was held
+/// ends with the button.
 pub fn control_bar_moving(ctx: &egui::Context) -> bool {
-    ctx.input(|i| i.pointer.primary_down()) && ctx.data(|d| d.get_temp::<egui::Vec2>(move_id()).is_some())
+    let Some((_, gripper)) = ctx.data(|d| d.get_temp::<(egui::Vec2, egui::Id)>(move_id())) else { return false };
+    ctx.input(|i| i.pointer.primary_down()) || ctx.drag_stopped_id() == Some(gripper)
 }
 
 /// Where a gripper release puts the Control bar.
@@ -545,18 +547,18 @@ fn gripper(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, d
     if resp.drag_started()
         && let Some(press) = ctx.input(|i| i.pointer.press_origin())
     {
-        ctx.data_mut(|d| d.insert_temp(move_id(), press - bar.min));
+        ctx.data_mut(|d| d.insert_temp(move_id(), (press - bar.min, resp.id)));
     }
-    let Some(grab) = ctx.data(|d| d.get_temp::<egui::Vec2>(move_id())) else { return };
+    let Some((grab, _)) = ctx.data(|d| d.get_temp::<(egui::Vec2, egui::Id)>(move_id())) else { return };
     let canceled = ctx.input(|i| i.key_pressed(egui::Key::Escape) || !i.focused);
     if canceled || !(resp.dragged() || resp.drag_stopped()) {
-        ctx.data_mut(|d| d.remove::<egui::Vec2>(move_id()));
+        ctx.data_mut(|d| d.remove::<(egui::Vec2, egui::Id)>(move_id()));
         return;
     }
     let window = ctx.content_rect();
     let target = ctx.input(|i| i.pointer.latest_pos()).and_then(|at| release_at(at, grab, dock_room, window));
     if resp.drag_stopped() {
-        ctx.data_mut(|d| d.remove::<egui::Vec2>(move_id()));
+        ctx.data_mut(|d| d.remove::<(egui::Vec2, egui::Id)>(move_id()));
         match target {
             Some(Release::Edge(bottom)) if app.ui.control_bar_floating || bottom != app.ui.control_bar_bottom => {
                 dock(app, CONTROL_BAR_EDGES[usize::from(bottom)]);
