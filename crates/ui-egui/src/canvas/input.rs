@@ -1,8 +1,8 @@
 use super::artboards::{artboard_name_at, begin_artboard_name_edit, name_press_id, select_named_artboard};
 use super::drag::{
     FrameMove, HoverContext, apply_requests, backquote_at_release, backquote_seen, dispatch, drag_art_out, drag_id, drag_layer_id, drag_pos_id,
-    drop_press, mods, move_pose, on_canvas, pen_pose, pen_pressure, tool_drag_doc_id, tool_drag_mods_changed, tool_drag_moved, tool_frame_moves,
-    tool_holds, tool_press_doc_id,
+    drop_press, mods, move_pose, on_canvas, pen_pose, pen_pressure, space_lends_view_tools, tool_drag_doc_id, tool_drag_mods_changed,
+    tool_drag_moved, tool_frame_moves, tool_holds, tool_press_doc_id,
 };
 use super::view::{
     HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, pan_pixels, rotate_about, scroll_view, touch_gestures, trackpad_turn,
@@ -238,6 +238,7 @@ fn wheel_view(
             wheel(i, &app.session.prefs, wheel_zooms, animate, line, rect.height(), &mut turn),
         )
     });
+    let space = space_lends_view_tools(app, m, space);
     // A zoom glide still running when a modal dialog opens stops.
     if muted {
         turn.glide = 0.0;
@@ -298,7 +299,8 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
     let Pointing { resp, rect, m, space, xf, v, view, .. } = *f;
     let tool = app.session.tool_id();
     // Held, Space is the Hand tool for the moment, Space+Shift is the Rotate View tool and
-    // Cmd+Space is the Zoom tool (with Alt, zooming out), whatever the tool.
+    // Cmd+Space is the Zoom tool (with Alt, zooming out), whatever the tool. While the Type tool
+    // edits text, only Cmd+Space does ([`space_lends_view_tools`]).
     let zoom_mode = if space { m.command } else { tool == "zoom" };
     let rotate_mode = if space { m.shift && !m.command } else { tool == "rotateView" };
     let pan_mode = if space { !m.command && !m.shift } else { tool == "hand" };
