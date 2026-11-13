@@ -6450,6 +6450,85 @@ antiAlias	Sharp	शार्प
 @msg	the script's run is no longer available	स्क्रिप्ट का रन अब उपलब्ध नहीं है
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	एक विफल कमांड ने पूर्ववत चरण बदल दिए जिन्हें वापस नहीं रखा जा सका, इसलिए स्क्रिप्ट रोक दी गई
 @msg	a recovery copy could not be written, so the script was not run	रिकवरी प्रति नहीं लिखी जा सकी, इसलिए स्क्रिप्ट नहीं चलाई गई
+@msg	Script file access denied	स्क्रिप्ट फ़ाइल तक पहुँच अस्वीकृत
+@msg	Script file exceeds 8 MiB	स्क्रिप्ट फ़ाइल 8 MiB से बड़ी है
+@msg	Script file is not open	स्क्रिप्ट फ़ाइल खुली नहीं है
+@msg	Script file cannot be decoded	स्क्रिप्ट फ़ाइल को डिकोड नहीं किया जा सकता
+@msg	Script file is not a regular file	स्क्रिप्ट फ़ाइल सामान्य फ़ाइल नहीं है
+@msg	Script file does not exist	स्क्रिप्ट फ़ाइल मौजूद नहीं है
+@msg	Script file could not be read	स्क्रिप्ट फ़ाइल पढ़ी नहीं जा सकी
+@msg	Script folder has more than 2,048 entries	स्क्रिप्ट फ़ोल्डर में 2,048 से अधिक प्रविष्टियाँ हैं
+@msg	Script file open mode must be r, w, e or a	स्क्रिप्ट फ़ाइल खोलने का मोड r, w, e या a होना चाहिए
+@msg	Script file writing is not available	स्क्रिप्ट फ़ाइल लिखना उपलब्ध नहीं है
+@msg	Script file dialogs are not available	स्क्रिप्ट फ़ाइल संवाद उपलब्ध नहीं हैं
+@msg	Script files cannot be opened in another application	स्क्रिप्ट फ़ाइलें किसी अन्य ऐप्लिकेशन में नहीं खोली जा सकतीं
+@msg	Script file access is unavailable on the web	वेब पर स्क्रिप्ट फ़ाइल पहुँच उपलब्ध नहीं है
+@msg	Script has 256 files open	स्क्रिप्ट ने 256 फ़ाइलें खोल रखी हैं
+@msg	Script file path exceeds 32,767 characters	स्क्रिप्ट फ़ाइल का पथ 32,767 वर्णों से अधिक है
+@msg	Script folder mask takes too many steps to match	स्क्रिप्ट फ़ोल्डर मास्क के मिलान में बहुत अधिक चरण लगते हैं
+@msg	the script opened more file data than one run may open (32 MiB)	स्क्रिप्ट ने एक रन में खोले जा सकने वाले फ़ाइल डेटा से अधिक डेटा खोला (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: एक स्थिति और एक मोड लेता है
+@msg	vc.run: give a command id, as a string	vc.run: कमांड id स्ट्रिंग के रूप में दें
+@msg	vc.run: takes a command id and an object of parameters	vc.run: एक कमांड id और पैरामीटर का एक ऑब्जेक्ट लेता है
+@msg	vc.run: the parameters must be an object	vc.run: पैरामीटर एक ऑब्जेक्ट होने चाहिए
+@msg	vc.run: the result{place} is too large for a script	vc.run: परिणाम{place} स्क्रिप्ट के लिए बहुत बड़ा है
+@msg	$.evalFile requires a file path	$.evalFile के लिए फ़ाइल पथ आवश्यक है
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: टाइमआउट मिलीसेकंड की एक सीमित संख्या होनी चाहिए, 0 या अधिक
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: एक फ़ाइल पथ और एक टाइमआउट लेता है
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file} की लाइन {line}, कॉलम {column}: {e} (थ्रो किया गया)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: लाइन {line}, कॉलम {column}: {e} (थ्रो किया गया)
+@msg	{name}: {e} (thrown)	{name}: {e} (थ्रो किया गया)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: {file} की लाइन {line}, कॉलम {column}: {e} (सीमा)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: लाइन {line}, कॉलम {column}: {e} (सीमा)
+@msg	{name}: {e} (limit)	{name}: {e} (सीमा)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: {file} की लाइन {line}, कॉलम {column}: {e} (सिंटैक्स त्रुटि)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: लाइन {line}, कॉलम {column}: {e} (सिंटैक्स त्रुटि)
+@msg	{name}: {e} (syntax)	{name}: {e} (सिंटैक्स त्रुटि)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: {file} की लाइन {line}, कॉलम {column}: {e} (रोका गया)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: लाइन {line}, कॉलम {column}: {e} (रोका गया)
+@msg	{name}: {e} (stopped)	{name}: {e} (रोका गया)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: {file} की लाइन {line}, कॉलम {column}: {e} (आंतरिक त्रुटि)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: लाइन {line}, कॉलम {column}: {e} (आंतरिक त्रुटि)
+@msg	{name}: {e} (internal)	{name}: {e} (आंतरिक त्रुटि)
+@msg	{e} (these files stay written: {paths})	{e} (ये फ़ाइलें लिखी हुई रहती हैं: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: एक नाम स्ट्रिंग के रूप में दें
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: "en" या "de_DE" जैसी कोई लोकेल दें, या इंटरफ़ेस की लोकेल के लिए null दें
+@msg	$.localize: give true or false	$.localize: true या false दें
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: केवल 512, जो स्थानीयकरण चालू करता है, या 0 सेट किया जा सकता है
+@msg	$.flags: give a number	$.flags: एक संख्या दें
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: यहाँ स्क्रिप्ट केवल UTF-8 पढ़ती और लिखती हैं
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: किसी एन्कोडिंग का नाम स्ट्रिंग के रूप में दें
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: मेमोरी कैश का आकार सेट नहीं किया जा सकता
+@msg	$.setenv: give a value, as a string	$.setenv: एक मान स्ट्रिंग के रूप में दें
+@msg	$.setenv: only {_1} can be set	$.setenv: केवल {_1} सेट किए जा सकते हैं
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: किसी मान में अधिकतम {MAX_ENV_BYTES} अक्षर, अंक और _ . - @ होते हैं
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: 0 से {MAX_SLEEP_MS} तक मिलीसेकंड की संख्या दें
+@msg	$.sleep: give a number of milliseconds	$.sleep: मिलीसेकंड की संख्या दें
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: कोई रन किसी बिल्ट-इन फ़ंक्शन के कॉलबैक, getter, रूपांतरण या $.evalFile द्वारा चलाई गई फ़ाइल के भीतर प्रतीक्षा नहीं कर सकता; इसे स्क्रिप्ट के अपने कोड से कॉल करें
+@msg	$.bp: scripts here have no debugger	$.bp: यहाँ स्क्रिप्ट के लिए कोई डीबगर नहीं है
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: स्क्रिप्ट अभी डायलॉग नहीं दिखा सकतीं
+@msg	{name}: give a message	{name}: एक संदेश दें
+@msg	{name}: give the text the field starts with	{name}: वह टेक्स्ट दें जिससे फ़ील्ड शुरू होता है
+@msg	{name}: the message is longer than 16 KiB	{name}: संदेश 16 KiB से लंबा है
+@msg	{name}: the title is longer than 256 bytes	{name}: शीर्षक 256 बाइट से लंबा है
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: जिस टेक्स्ट से फ़ील्ड शुरू होता है वह 16 KiB से लंबा है
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: कोई डायलॉग किसी बिल्ट-इन फ़ंक्शन के कॉलबैक, getter, रूपांतरण या $.evalFile द्वारा चलाई गई फ़ाइल के भीतर नहीं खुल सकता; इसे स्क्रिप्ट के अपने कोड से कॉल करें
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: `answers` में अगला उत्तर {_1} के लिए है, {name} के लिए नहीं
+@msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` में इस डायलॉग के लिए कोई उत्तर नहीं बचा है
+@msg	vc.document{place} is too large for a script	vc.document{place} स्क्रिप्ट के लिए बहुत बड़ा है
+@msg	vc.log: the log of this run is full	vc.log: इस रन का लॉग भर गया है
+@msg	this function's script run has ended	इस फ़ंक्शन का स्क्रिप्ट रन समाप्त हो गया है
+@msg	the script made more host calls than one run may make	स्क्रिप्ट ने एक रन में अनुमत से अधिक होस्ट कॉल किए
+@msg	the script passed more data to and from commands than one run may pass	स्क्रिप्ट ने कमांड को और कमांड से एक रन में अनुमत से अधिक डेटा भेजा
+@msg	the script added more objects and data to the documents than one run may add	स्क्रिप्ट ने दस्तावेज़ों में एक रन में अनुमत से अधिक ऑब्जेक्ट और डेटा जोड़े
+@msg	{what}: the object is not a File or a Folder	{what}: ऑब्जेक्ट न File है न Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: गिनती एक सीमित संख्या होनी चाहिए, 0 या अधिक
+@msg	File.seek: the position must be a finite number	File.seek: स्थिति एक सीमित संख्या होनी चाहिए
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: मोड 0, 1 या 2 होना चाहिए
+@msg	script file is compiled: {value}	स्क्रिप्ट फ़ाइल कंपाइल की हुई है: {value}
+@msg	`name` must be the name of a script engine	`name` किसी स्क्रिप्ट इंजन का नाम होना चाहिए
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	मुख्य स्क्रिप्ट इंजन हर रन के लिए नया होता है और कभी रखा नहीं जाता, इसलिए इसे हटाया नहीं जा सकता
+@msg	there is no script engine named {name}	{name} नाम का कोई स्क्रिप्ट इंजन नहीं है
 @msg	Running a script	स्क्रिप्ट चल रही है
 @msg	Copied the script report	Copied स्क्रिप्ट रिपोर्ट
 @msg	copy needs path: the file to copy into the document's folder	copy: प्रतिलिपि की जरूरत है पाथ: फ़ाइल को डॉक्यूमेंट के फ़ोल्डर में कॉपी करने के लिए
