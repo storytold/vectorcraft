@@ -4269,7 +4269,10 @@ document's raster effects resolution (shadows and outer glows under the art; a b
 the object with the image). Type with a geometry effect (Outline Object included) or with fills and strokes of its own
 is outlined; type that has no fills or strokes of its own and whose only effects are shadows or outer glows stays
 type, with the image under it. A group's or layer's own fills and strokes become objects among its members, and its
-members are expanded too. The result is `{ids}`; when an image in the art can't be decoded, the images made from
+members are expanded too. A symbol instance whose topmost fill or topmost stroke is visible, has an opacity above 0
+and has a geometry effect becomes a group of its art: that fill's effects reshape the filled shapes of the art and that
+stroke's effects reshape its stroked shapes, which keep their colors, as the canvas draws them (VectorCraft's own
+rule); the instance's other fills and strokes are dropped. The result is `{ids}`; when an image in the art can't be decoded, the images made from
 raster effects do not show it, and the result also carries the `warning` that Flatten Transparency gives.
 A path's strokes stay strokes, as the
 [Expand objects](https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/expand-objects.html) help
