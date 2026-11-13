@@ -42,14 +42,21 @@ pub(crate) fn text_style(app: &VectorcraftApp) -> Option<(CharStyle, vectorcraft
 
 /// The first selected text descendant, shared by Character and Paragraph controls.
 pub(crate) fn first_selected_text(app: &VectorcraftApp) -> Option<&vectorcraft_doc::TextObject> {
+    match &first_selected_text_node(app)?.kind {
+        NodeKind::Text(t) => Some(t.as_ref()),
+        _ => None,
+    }
+}
+
+/// The node of [`first_selected_text`]: the first text object among the selected objects and
+/// their descendants, in selection order, then paint order within each selected object.
+pub(crate) fn first_selected_text_node(app: &VectorcraftApp) -> Option<&vectorcraft_doc::Node> {
     let st = app.session.active()?;
     for node in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
         let mut text = None;
         node.walk(&mut |n| {
-            if text.is_none()
-                && let NodeKind::Text(t) = &n.kind
-            {
-                text = Some(t.as_ref());
+            if text.is_none() && matches!(n.kind, NodeKind::Text(_)) {
+                text = Some(n);
             }
         });
         if text.is_some() {
