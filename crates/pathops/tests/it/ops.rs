@@ -317,6 +317,24 @@ fn offset_of_an_open_path_whose_ends_meet_is_the_closed_shape_offset() {
 }
 
 #[test]
+fn a_negative_offset_outlines_an_open_path_as_a_positive_one_does() {
+    // Issue #6427 (A4): an inset of an open path was empty. Open subpaths are outlined with a
+    // stroke of width 2|delta| whichever way the offset goes.
+    let line = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(100.0, 0.0)], false));
+    for delta in [2.0, -2.0] {
+        let o = offset_path(&line, delta, Join::Miter, 4.0);
+        assert!(close(ar(&o), 400.0, 1e-6), "delta {delta}: {}", ar(&o));
+        assert_eq!(o.subpaths.len(), 1, "delta {delta}");
+    }
+    // With a closed shape beside it, the shape is inset and the line still outlined.
+    let mut both = rect(0.0, 0.0, 20.0, 10.0);
+    both.subpaths.push(SubPath::polyline(&[Point::new(100.0, 0.0), Point::new(150.0, 0.0)], false));
+    let o = offset_path(&both, -2.0, Join::Miter, 4.0);
+    assert!(close(ar(&o), 16.0 * 6.0 + 50.0 * 4.0, 1e-6), "{}", ar(&o));
+    assert_eq!(o.subpaths.len(), 2);
+}
+
+#[test]
 fn outline_stroke_of_line() {
     let l = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(30.0, 40.0)], false));
     let o = outline_stroke(&l, 4.0, Cap::Butt, Join::Miter, 4.0);

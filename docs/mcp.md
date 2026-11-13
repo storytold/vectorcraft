@@ -3428,6 +3428,30 @@ checked as that effect's. It is one undo step. Any other `threeDType` value, or 
 {"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"threeDType":"inflate","params":{"volume":70}}}}
 ```
 
+## 3D graphics
+
+`threeD.addGraphic {name?, ids?|id?}` keeps the selected art as a new document symbol (default name `Graphic`, made
+unique) and leaves the art as it is: the 3D and Materials panel's Add as Single Graphic. It returns `{name}`. A
+`name` that is not a string or is empty, or any other key, is refused.
+
+`threeD.mapGraphic {symbol, face?, x?, y?, scale?, rotation?, index?, item?, ids?|id?}` adds a graphic to the 3D
+effect of each selected object, in one undo step: `face` is `front` (default) or `back`, `x` and `y` are the
+offset in points of the graphic's center from the center of the object's bounds in the face's plane, `scale` is a
+percentage of the symbol's size (1..10000; omitted, 100 or less so the graphic fits inside the object) and
+`rotation` is in degrees counterclockwise (-360..360). Without `index` each object's first 3D effect takes it, and `item` is refused.
+Every object's 3D effect must be Extrude & Bevel with Cap on (front only at a depth of 0) or Rotate (the Plane type,
+front only), and `symbol` must name a document symbol; otherwise the command is refused and nothing changes. It returns `{ids, graphic}`.
+
+The graphics are the `graphics` parameter of `threeD.extrude` and `threeD.rotate`, which `effect.setParams` also
+edits: an array of up to 64 `{symbol, face, x, y, scale, rotation}` objects, drawn on the face turned,
+foreshortened and shaded with it and clipped to it ([Map artworks on 3D object](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/map-artwork-on-3d-objects.html)).
+A graphic naming a symbol the document does not have is refused, unless the effect already holds a graphic of it.
+The drawing rules are VectorCraft's own; see [three-d.md](three-d.md#graphics).
+
+```json
+{"name":"run_command","arguments":{"command":"threeD.mapGraphic","params":{"symbol":"Graphic","face":"front","x":10,"scale":80,"rotation":15}}}
+```
+
 ## Expand as Wireframes
 
 `effect.expandAsWireframes {ids?}` (**Window › 3D and Materials** › Quick Actions › Expand as Wireframes) replaces
@@ -6598,7 +6622,7 @@ paint or width, guides, paths with no segment, type that draws no characters, a 
 shape left out; with `selectionOnly`, the brushes the selected
 objects' strokes use), `brushes` (`[{name, type}]`: those brushes with their types, `calligraphic`, `scatter`, `art`,
 `pattern` or `bristle`, and `null` for a brush the Brushes panel does not hold; the brushes category's rows give each
-name with its type, such as `Art brush`, or `missing from the Brushes panel`), `panelBrushNames` (the Brushes panel's brushes, whether art uses them or not), `repeatObjects` (`[{id, name, type, instances, rows?, cols?}]`: every Repeat object, those in
+name with its type, such as `Art Brush`, or `missing from the Brushes panel`, in English; the Document Info panel shows them in the interface language), `panelBrushNames` (the Brushes panel's brushes, whether art uses them or not), `repeatObjects` (`[{id, name, type, instances, rows?, cols?}]`: every Repeat object, those in
 groups and in other repeats included, with its type `radial`, `grid` or `mirror` and the number of instances it makes,
 and a grid's `rows` and `cols`; with `selectionOnly`, the Repeat objects in the selection), `patternObjects`
 (`[{id, name, patterns}]`: every object filled or stroked with a pattern, once each, those in groups and type objects

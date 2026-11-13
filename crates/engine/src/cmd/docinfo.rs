@@ -629,14 +629,15 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let font_names: Vec<String> = fonts.iter().map(super::fonts::font_label).collect();
     // Each brush the art uses with its type, found by name in the Brushes panel as the renderer finds it (the last of two
-    // brushes with one name); a brush the panel does not hold draws as a plain stroke and has no type.
+    // brushes with one name); a brush the panel does not hold draws as a plain stroke and has no type. A row names the type
+    // as the New Brush dialog does (`Art Brush`), and the panel translates these values when it shows them.
     let kinds: HashMap<&str, &vectorcraft_brush::BrushKind> = library.iter().map(|b| (b.name.as_str(), &b.kind)).collect();
     let brush_entries: Vec<Value> =
         brushes.iter().map(|name| json!({ "name": name, "type": kinds.get(name.as_str()).map(|k| k.type_id()) })).collect();
     let brush_rows: Vec<(String, String)> = brushes
         .iter()
         .map(|name| {
-            (name.clone(), kinds.get(name.as_str()).map_or_else(|| "missing from the Brushes panel".to_string(), |k| format!("{} brush", k.label())))
+            (name.clone(), kinds.get(name.as_str()).map_or_else(|| "missing from the Brushes panel".to_string(), |k| format!("{} Brush", k.label())))
         })
         .collect();
     let mut out = json!({
@@ -805,10 +806,10 @@ mod tests {
         let i = brushes(&mut s, json!({"category": "brushes"}));
         assert_eq!(i["brushNames"], json!(["Charcoal", "Dots"]));
         assert_eq!(i["brushes"], json!([{"name": "Charcoal", "type": "art"}, {"name": "Dots", "type": "scatter"}]));
-        assert_eq!(i["sections"][0]["rows"], json!([["Charcoal", "Art brush"], ["Dots", "Scatter brush"]]));
+        assert_eq!(i["sections"][0]["rows"], json!([["Charcoal", "Art Brush"], ["Dots", "Scatter Brush"]]));
         assert!(panel.contains(&json!("3 pt. Round")) && i["panelBrushNames"] == json!(panel));
         let text = brushes(&mut s, json!({"category": "brushes", "format": "text"}))["text"].as_str().unwrap().to_string();
-        assert!(text.contains("\nBRUSHES\nCharcoal: Art brush\nDots: Scatter brush\n") && !text.contains("3 pt. Round"), "{text}");
+        assert!(text.contains("\nBRUSHES\nCharcoal: Art Brush\nDots: Scatter Brush\n") && !text.contains("3 pt. Round"), "{text}");
         assert!(!text.contains("OBJECTS"), "{text}");
         // Selection Only: the brushes the selected objects' strokes use.
         let selected = |s: &mut Session| brushes(s, json!({"selectionOnly": true, "category": "brushes"}));
@@ -818,10 +819,10 @@ mod tests {
         let i = selected(&mut s);
         assert_eq!(
             (i["brushes"].clone(), i["sections"][0]["rows"].clone()),
-            (json!([{"name": "Dots", "type": "scatter"}]), json!([["Dots", "Scatter brush"]]))
+            (json!([{"name": "Dots", "type": "scatter"}]), json!([["Dots", "Scatter Brush"]]))
         );
         let text = brushes(&mut s, json!({"selectionOnly": true, "category": "brushes", "format": "text"}))["text"].as_str().unwrap().to_string();
-        assert!(text.contains("\nBRUSHES\nDots: Scatter brush\n") && !text.contains("Charcoal"), "{text}");
+        assert!(text.contains("\nBRUSHES\nDots: Scatter Brush\n") && !text.contains("Charcoal"), "{text}");
         // A stroke without a brush lists none.
         let plain = s.execute("shape.rectangle", &json!({"x": 60, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
         s.execute("select.set", &json!({"ids": [plain]})).unwrap();
