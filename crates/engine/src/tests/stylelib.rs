@@ -41,10 +41,11 @@ fn builtin_libraries_are_listed_with_original_styles_using_catalogued_effects() 
     let mut s = session();
     let list = run(&mut s, "graphicStyle.libraries", json!({}));
     let libs = list["libraries"].as_array().unwrap();
-    assert!(libs.len() >= 8 && libs.iter().all(|l| l["category"] == "builtIn"), "{libs:?}");
+    assert!(libs.len() >= 9 && libs.iter().all(|l| l["category"] == "builtIn"), "{libs:?}");
     assert!(libs.iter().any(|l| l["id"] == "game-hud" && l["name"] == "Game HUD"), "{libs:?}");
     assert!(libs.iter().any(|l| l["id"] == "status-effects" && l["name"] == "Status Effects"), "{libs:?}");
     assert!(libs.iter().any(|l| l["id"] == "textures" && l["name"] == "Textures" && l["count"] == 8), "{libs:?}");
+    assert!(libs.iter().any(|l| l["id"] == "rarity-tiers" && l["name"] == "Rarity Tiers"), "{libs:?}");
     for l in libs {
         let id = l["id"].as_str().unwrap();
         let g = run(&mut s, "graphicStyle.library", json!({"library": id}));
@@ -69,6 +70,9 @@ fn builtin_libraries_are_listed_with_original_styles_using_catalogued_effects() 
     let texture_names: Vec<&str> = textures["styles"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
     let expected = ["Fine Grain", "Canvas Weave", "Burlap Sack", "Cracked Glaze", "Mosaic Floor", "Quilted Squares", "Leaded Glass", "Damp Paper"];
     assert_eq!(texture_names, expected);
+    let rarity = run(&mut s, "graphicStyle.library", json!({"library": "rarity-tiers"}));
+    let rarity_names: Vec<&str> = rarity["styles"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
+    assert_eq!(rarity_names, ["Common Fill", "Rare Glow", "Epic Edge", "Legendary Aura", "Mythic Pulse", "Unique Shine"]);
     let id = rect(&mut s, 10.0, 20.0, 40.0, 30.0);
     let r = run(&mut s, "graphicStyle.addFromLibrary", json!({"library": "game-hud", "name": "Mana Glow", "apply": true, "ids": [id.0]}));
     assert_eq!((names(&r["added"]), r["applied"].as_str()), (vec!["Mana Glow"], Some("Mana Glow")));
@@ -82,6 +86,12 @@ fn builtin_libraries_are_listed_with_original_styles_using_catalogued_effects() 
     let node2 = doc(&s).node(id2).unwrap();
     assert_eq!(node2.appearance.fill_paint(), Paint::solid(vectorcraft_color::Color::from_hex("#2ecc71").unwrap()));
     assert_eq!(node2.appearance.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["stylize.outerGlow"]);
+    let id3 = rect(&mut s, 110.0, 20.0, 40.0, 30.0);
+    let r3 = run(&mut s, "graphicStyle.addFromLibrary", json!({"library": "rarity-tiers", "name": "Rare Glow", "apply": true, "ids": [id3.0]}));
+    assert_eq!((names(&r3["added"]), r3["applied"].as_str()), (vec!["Rare Glow"], Some("Rare Glow")));
+    let node3 = doc(&s).node(id3).unwrap();
+    assert_eq!(node3.appearance.fill_paint(), Paint::solid(vectorcraft_color::Color::from_hex("#3498db").unwrap()));
+    assert_eq!(node3.appearance.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["stylize.outerGlow"]);
     // By name in any case.
     assert_eq!(run(&mut s, "graphicStyle.library", json!({"library": "shadows and glows"}))["id"], "shadows-glows");
     assert!(s.execute("graphicStyle.library", &json!({"library": "nope"})).is_err());
