@@ -63,6 +63,36 @@ fn hindi_rows_use_the_glossary_term_for_what_their_english_names() {
     assert!(wrong.is_empty(), "{} Hindi rows use the wrong term:\n{}", wrong.len(), wrong.join("\n"));
 }
 
+/// Every Hindi row that names a variable says वेरिएबल, never चर, परिवर्तनीय or वैरिएबल, and joining
+/// paths, points, type or lines is जोड़ें, never शामिल हों, which stays for joining the community.
+#[test]
+fn hindi_rows_use_one_term_for_a_variable_and_for_joining_paths() {
+    let hi = Lang::from_code("hi").expect("hi registered");
+    let (entries, _) = parse_entries(hi.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in &entries {
+        let english = src.to_lowercase();
+        let words: Vec<&str> = english.split(|c: char| !c.is_ascii_alphabetic()).collect();
+        let hindi: Vec<&str> = translation.split(|c: char| c.is_whitespace() || c.is_ascii_punctuation() || "।…".contains(c)).collect();
+        let names = |list: &[&str]| words.iter().any(|w| list.contains(w));
+        let other_variable = hindi.iter().any(|w| ["चर", "चरों", "परिवर्तनीय"].contains(w)) || translation.contains("वैरिएबल");
+        if names(&["variable", "variables"]) && (other_variable || !translation.contains("वेरिएबल")) {
+            wrong.push(format!("variable in {src:?} -> {translation:?}"));
+        }
+        if names(&["join", "joining"]) && !names(&["discord"]) && translation.contains("शामिल") {
+            wrong.push(format!("join in {src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Hindi rows use the wrong term:\n{}", wrong.len(), wrong.join("\n"));
+    assert_eq!(tr(hi, "Variable"), "वेरिएबल");
+    assert_eq!(tr(hi, "Load Variable Library…"), "वेरिएबल लाइब्रेरी लोड करें…");
+    assert_eq!(tr(hi, "Join"), "जोड़ें");
+    assert_eq!(tr(hi, "Close or Join"), "बंद करें या जोड़ें");
+    assert_eq!(message(hi, "join needs open paths"), "जोड़ने के लिए खुले पाथ चाहिए");
+    assert_eq!(message(hi, "Join: a subpath went missing"), "जोड़ते समय एक सबपाथ नहीं मिला");
+    assert_eq!(tr(hi, "Join our Discord"), "हमारे डिसकॉर्ड में शामिल हों");
+}
+
 /// Hindi messages and labels keep the condition, quantity and clauses of their English.
 #[test]
 fn hindi_rows_keep_the_meaning_of_their_english() {
