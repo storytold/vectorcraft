@@ -2634,6 +2634,8 @@ digits	Malayalam	Malaiàlam
 	Move in Perspective	Mou en perspectiva
 	Move Library Group	Mou el grup de la biblioteca
 	Move Library Item to Group	Mou l’element de la biblioteca al grup
+	Rename Library Item	Canvia el nom de l’element de la biblioteca
+	Add to Character Styles	Afegeix als estils de caràcter
 	Move Locked and Hidden Artwork with Artboard	Mou la il·lustració bloquejada i oculta amb el tauler
 	Move Mesh Point	Mou el punt de malla
 	Move Mesh Points	Mou els punts de malla
@@ -3615,6 +3617,9 @@ digits	Malayalam	Malaiàlam
 	Reset the rows to the artwork's colors	Restableix les files als colors de l’obra
 	Color Theme Picker	Selector de tema de colors
 	Click or drag across the art to pick its colors; Shift adds more	Feu clic o arrossegueu sobre l’obra per agafar-ne els colors; Maj n’afegeix més
+	Prominent Colors	Colors predominants
+	Save All Colors	Desa tots els colors
+	Save Prominent Colors	Desa els colors predominants
 	Reset to Default	Restableix el valor predeterminat
 	Reset to default	Restableix el valor predeterminat
 	Reset to Defaults	Restableix els valors predeterminats
@@ -4065,6 +4070,7 @@ digits	Malayalam	Malaiàlam
 @msg	message must be text	message ha de ser text
 @msg	allowContinue must be true or false	allowContinue ha de ser true o false
 @msg	Batch cannot play an action with a stop	Lot no pot reproduir una acció amb una aturada
+@msg	Batch cannot play an action with a View menu step	Lot no pot reproduir una acció amb un pas del menú Visualitza
 	Insert Menu Item…	Insereix un element de menú…
 	Insert Menu Item	Insereix un element de menú
 	Insert Select Path	Insereix una selecció de traçat
@@ -5746,6 +5752,7 @@ digits	Malayalam	Malaiàlam
 @msg	no interaction in progress	no hi ha cap interacció en curs
 @msg	no key object	no hi ha objecte clau
 @msg	no library `{id}`	no hi ha la biblioteca `{id}`
+@msg	the library has another item of that kind named `{name}`	la biblioteca ja té un altre element d’aquest tipus anomenat `{name}`
 @msg	no library `{key}` (see {list})	no hi ha la biblioteca `{key}` (vegeu {list})
 @msg	No linked files to look for	No hi ha fitxers enllaçats per buscar
 @msg	no Live Paint edge near that point	no hi ha cap aresta de pintura interactiva a prop d’aquell punt
@@ -7337,6 +7344,19 @@ breakText	Glyphs	Glifs
 	Show where this tool is	Mostra on és aquesta eina
 @msg	missing `tutorial` (see learn.list)	falta `tutorial` (vegeu learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial desconegut `{id}` (vegeu learn.list)
+	View more	Mostra’n més
+	Finish tutorial	Acaba el tutorial
+	Next Up	A continuació
+	You finished the last tutorial in this skill.	Heu acabat l’últim tutorial d’aquesta habilitat.
+	Back to skills	Torna a les habilitats
+	Open Tutorial Sample	Obre la mostra del tutorial
+	Finish Tutorial	Acaba el tutorial
+	Next Tutorial	Tutorial següent
+	Back to Skills	Torna a les habilitats
+@msg	tutorial `{id}` has no practice sample	el tutorial `{id}` no té cap mostra de pràctica
+@msg	open the practice sample of `{id}` first (see learn.openSample)	obriu primer la mostra de pràctica de `{id}` (vegeu learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	acabeu primer `{id}` (vegeu learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` és l’últim tutorial de la seva habilitat
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualitza els efectes ajornats

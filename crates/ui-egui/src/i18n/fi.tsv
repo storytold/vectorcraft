@@ -2835,6 +2835,9 @@ digits	Malayalam	Malajalam
 	Reset the rows to the artwork's colors	Palauta rivit kuvituksen väreihin
 	Color Theme Picker	Väriteeman valitsin
 	Click or drag across the art to pick its colors; Shift adds more	Napsauta tai vedä kuvituksen yli poimiaksesi sen värit; Vaihto lisää useampia
+	Prominent Colors	Hallitsevat värit
+	Save All Colors	Tallenna kaikki värit
+	Save Prominent Colors	Tallenna hallitsevat värit
 	Separate colors into rows	Erottele värit riveille
 	Unlink harmony colors	Poista harmoniavärien linkitys
 	1 Color Job	1 värin työ
@@ -3542,6 +3545,8 @@ theme	Appearance	Ulkoasu
 	Rename Library Group	Nimeä kirjastoryhmä uudelleen
 	Delete Library Group	Poista kirjastoryhmä
 	Move Library Item to Group	Siirrä kirjaston kohde ryhmään
+	Rename Library Item	Nimeä kirjaston kohde uudelleen
+	Add to Character Styles	Lisää merkkityyleihin
 	Rename Library	Nimeä kirjasto uudelleen
 	Show Library	Näytä kirjasto
 	Use Library Item	Käytä kirjaston kohdetta
@@ -4392,6 +4397,7 @@ imageTrace	Outline	Ääriviiva
 @plural	{n} step|{n} steps	{n} vaihe|{n} vaihetta
 @plural	{n} stroke|{n} strokes	{n} viiva|{n} viivaa
 @msg	no library `{id}`	ei kirjastoa `{id}`
+@msg	the library has another item of that kind named `{name}`	kirjastossa on jo toinen samanlainen kohde nimeltä `{name}`
 @msg	select some type first	valitse ensin tekstiä
 @msg	kerning must be a number, "auto", or "optical"	kerning-arvon on oltava luku, ”auto” tai ”optical”
 @msg	the selection has no gradient fill	valinnalla ei ole liukuväritäyttöä
@@ -6560,6 +6566,7 @@ axis	Y Axis	Y-akseli
 @msg	message must be text	message on oltava tekstiä
 @msg	allowContinue must be true or false	allowContinue on oltava true tai false
 @msg	Batch cannot play an action with a stop	Erä ei voi toistaa toimintoa, jossa on pysäytys
+@msg	Batch cannot play an action with a View menu step	Erä ei voi toistaa toimintoa, jossa on Näytä-valikon vaihe
 	Insert Menu Item…	Lisää valikkokohta…
 	Insert Menu Item	Lisää valikkokohta
 	Insert Select Path	Lisää polun valinta
@@ -7391,6 +7398,19 @@ breakText	Glyphs	Merkit
 	Show where this tool is	Näytä, missä tämä työkalu on
 @msg	missing `tutorial` (see learn.list)	`tutorial` puuttuu (ks. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tuntematon opetusohjelma `{id}` (ks. learn.list)
+	View more	Näytä lisää
+	Finish tutorial	Viimeistele opetusohjelma
+	Next Up	Seuraavaksi
+	You finished the last tutorial in this skill.	Viimeistelit tämän taidon viimeisen opetusohjelman.
+	Back to skills	Takaisin taitoihin
+	Open Tutorial Sample	Avaa opetusohjelman harjoitustiedosto
+	Finish Tutorial	Viimeistele opetusohjelma
+	Next Tutorial	Seuraava opetusohjelma
+	Back to Skills	Takaisin taitoihin
+@msg	tutorial `{id}` has no practice sample	opetusohjelmalla `{id}` ei ole harjoitustiedostoa
+@msg	open the practice sample of `{id}` first (see learn.openSample)	avaa ensin opetusohjelman `{id}` harjoitustiedosto (ks. learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	viimeistele ensin `{id}` (ks. learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` on taitonsa viimeinen opetusohjelma
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Päivitä lykätyt tehosteet

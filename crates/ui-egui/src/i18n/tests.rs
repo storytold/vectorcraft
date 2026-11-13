@@ -32,6 +32,59 @@ fn hindi_resolves_locales_and_uses_zero_one_plurals() {
     }
 }
 
+/// Every Hindi row uses the terms `docs/localization-hi.md` sets for what its English names:
+/// सेव for saving, स्वॉच for a swatch, क्रॉप for cropping, रिज़ॉल्यूशन for a resolution and पाथ for
+/// a path, never पाठ (a reading), and a number of points is a number (संख्या) in points (पॉइंट).
+#[test]
+fn hindi_rows_use_the_glossary_term_for_what_their_english_names() {
+    let hi = Lang::from_code("hi").expect("hi registered");
+    let (entries, _) = parse_entries(hi.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in &entries {
+        let english = src.to_lowercase();
+        let names = |words: &[&str]| english.split(|c: char| !c.is_ascii_alphabetic()).any(|w| words.contains(&w));
+        let banned: [(bool, &[&str]); 6] = [
+            (names(&["save", "saves", "saved", "saving"]), &["बचा", "सहेज"]),
+            (names(&["swatch", "swatches"]), &["घड़ी"]),
+            (names(&["crop"]), &["फसल"]),
+            (names(&["resolution", "resolutions"]), &["संकल्प"]),
+            (names(&["path", "paths"]), &["पथ"]),
+            (true, &["पाठ", "कई अंक"]),
+        ];
+        for (applies, words) in banned {
+            if let Some(word) = words.iter().find(|w| applies && translation.contains(**w)) {
+                wrong.push(format!("{word} in {src:?} -> {translation:?}"));
+            }
+        }
+        if english.contains("number of points") && !(translation.contains("संख्या") && translation.contains("पॉइंट")) {
+            wrong.push(format!("no number in points in {src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Hindi rows use the wrong term:\n{}", wrong.len(), wrong.join("\n"));
+}
+
+/// Hindi messages and labels keep the condition, quantity and clauses of their English.
+#[test]
+fn hindi_rows_keep_the_meaning_of_their_english() {
+    let hi = Lang::from_code("hi").expect("hi registered");
+    assert_eq!(message(hi, "`shift` must be a number of points"), "`shift` पॉइंट में एक संख्या होनी चाहिए");
+    assert_eq!(
+        message(hi, "`spacing` must be a number of points, 0 or more, or \"auto\""),
+        "`spacing` पॉइंट में 0 या उससे बड़ी संख्या, या \"auto\" होनी चाहिए"
+    );
+    assert_eq!(tr(hi, "Check an artboard to save."), "सेव करने के लिए किसी आर्टबोर्ड पर चेक लगाएँ।");
+    assert_eq!(tr(hi, "Save the applied preferences to a JSON file"), "लागू प्रेफ़रेंसेज़ को JSON फ़ाइल में सेव करें");
+    assert_eq!(message(hi, "the script is not UTF-8 text"), "स्क्रिप्ट UTF-8 टेक्स्ट नहीं है");
+    assert_eq!(message(hi, "only solid-colour swatches can be spot colours"), "केवल ठोस रंग वाले स्वॉच स्पॉट रंग हो सकते हैं");
+    assert_eq!(message(hi, "select area type"), "एरिया टाइप सिलेक्ट करें");
+    assert_eq!(message(hi, "12 MB of images, at most 10 MB"), "इमेज के 12 MB, अधिकतम 10 MB");
+    let all =
+        message(hi, "SVG keeps 1 of the document's 3 artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.");
+    assert!(all.contains("3 आर्टबोर्ड में से 1") && all.contains("सभी आर्टबोर्ड रखने के लिए"), "{all}");
+    let left_out = message(hi, "the file was read up to an error (bad xref): what follows it was left out");
+    assert!(left_out.contains("उसके बाद का हिस्सा छोड़ दिया गया"), "{left_out}");
+}
+
 /// Locale tags name their language by region or script (in either case, with an encoding or
 /// modifier), and a tag that names no language resolves to none.
 #[test]
@@ -3641,6 +3694,7 @@ fn translated_messages_keep_the_command_ids_their_english_names() {
 /// the messages each one lacks.
 const COMPLETE_MESSAGES: &[&str] = &[
     "cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr", "ca",
+    "nl",
 ];
 
 /// Crates whose error and status messages reach the status bar.

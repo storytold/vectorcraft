@@ -696,10 +696,11 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     bottom::<K>(app, ui, id);
 }
 
-/// An item of library `id` dragged out of its tile or row `resp` carries what `K` says it does.
+/// An item of library `id` dragged out of its tile or row `resp` with the primary button carries
+/// what `K` says it does.
 fn drag_out<K: LibraryKind>(ui: &Ui, resp: &egui::Response, id: &str, row: &Row<K::Item>) {
     if row.item.is_some()
-        && resp.drag_started()
+        && resp.drag_started_by(egui::PointerButton::Primary)
         && let Some(drag) = K::drag(id, row.name)
     {
         egui::DragAndDrop::set_payload(ui.ctx(), drag);

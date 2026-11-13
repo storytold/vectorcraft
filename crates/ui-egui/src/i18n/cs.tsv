@@ -2891,6 +2891,9 @@ digits	Malayalam	Malajálamské
 	Reset the rows to the artwork's colors	Obnovit řádky na barvy kresby
 	Color Theme Picker	Výběr barevného motivu
 	Click or drag across the art to pick its colors; Shift adds more	Klepnutím nebo tažením přes kresbu převezmete její barvy; Shift přidá další
+	Prominent Colors	Převládající barvy
+	Save All Colors	Uložit všechny barvy
+	Save Prominent Colors	Uložit převládající barvy
 	Separate colors into rows	Rozdělit barvy do řádků
 	Unlink harmony colors	Zrušit propojení barev harmonie
 	1 Color Job	Zakázka s 1 barvou
@@ -3604,6 +3607,8 @@ theme	Appearance	Motiv
 	Rename Library Group	Přejmenovat skupinu knihovny
 	Delete Library Group	Odstranit skupinu knihovny
 	Move Library Item to Group	Přesunout položku knihovny do skupiny
+	Rename Library Item	Přejmenovat položku knihovny
+	Add to Character Styles	Přidat do stylů znaků
 	Rename Library	Přejmenovat knihovnu
 	Show Library	Zobrazit knihovnu
 	Use Library Item	Použít položku knihovny
@@ -4477,6 +4482,7 @@ imageTrace	Outline	Obrys
 
 # Status and error messages
 @msg	no library `{id}`	knihovna `{id}` neexistuje
+@msg	the library has another item of that kind named `{name}`	knihovna už má jinou položku tohoto druhu s názvem `{name}`
 @msg	select some type first	nejprve vyberte text
 @msg	kerning must be a number, "auto", or "optical"	kerning musí být číslo, „auto“ nebo „optical“
 @msg	the selection has no gradient fill	výběr nemá přechodovou výplň
@@ -6530,6 +6536,7 @@ axis	Y Axis	osa Y
 @msg	message must be text	message musí být text
 @msg	allowContinue must be true or false	allowContinue musí být true nebo false
 @msg	Batch cannot play an action with a stop	Dávka nemůže přehrát akci se zastavením
+@msg	Batch cannot play an action with a View menu step	Dávka nemůže přehrát akci s krokem z nabídky Zobrazení
 	Insert Menu Item…	Vložit položku nabídky…
 	Insert Menu Item	Vložit položku nabídky
 	Insert Select Path	Vložit výběr cesty
@@ -7356,6 +7363,19 @@ breakText	Glyphs	Glyfy
 	Show where this tool is	Zobrazit, kde je tento nástroj
 @msg	missing `tutorial` (see learn.list)	chybí `tutorial` (viz learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	neznámý výukový kurz `{id}` (viz learn.list)
+	View more	Zobrazit více
+	Finish tutorial	Dokončit výukový kurz
+	Next Up	Další
+	You finished the last tutorial in this skill.	Dokončili jste poslední výukový kurz této dovednosti.
+	Back to skills	Zpět na dovednosti
+	Open Tutorial Sample	Otevřít ukázku výukového kurzu
+	Finish Tutorial	Dokončit výukový kurz
+	Next Tutorial	Další výukový kurz
+	Back to Skills	Zpět na dovednosti
+@msg	tutorial `{id}` has no practice sample	výukový kurz `{id}` nemá cvičnou ukázku
+@msg	open the practice sample of `{id}` first (see learn.openSample)	nejprve otevřete cvičnou ukázku kurzu `{id}` (viz learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	nejprve dokončete `{id}` (viz learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` je poslední výukový kurz své dovednosti
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Obnovit odložené efekty
