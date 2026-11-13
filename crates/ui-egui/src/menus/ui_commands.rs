@@ -1325,7 +1325,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "file.exportAs",
         "Export As…",
         "",
-        "{format?, useArtboards?, range?} opens Export As (then the format's options); with {path, …document.export options} writes the file(s) → {path, warnings, files?}",
+        "{format?, useArtboards?, range?} opens Export As (then the format's options); with {path, …document.export options} writes the file(s) → {path, warnings, files?}; under automation read roots, an SVG or SVGZ is refused while the document links a JavaScript file outside them, as document.export refuses it",
     ),
     (
         "ui.fileInfoDialog",
