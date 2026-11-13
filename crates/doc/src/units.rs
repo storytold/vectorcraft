@@ -139,6 +139,19 @@ impl Unit {
     pub fn format(self, pt: f64) -> String {
         format!("{} {}", self.number(pt), self.suffix())
     }
+    /// Format an area in square points into this unit (e.g. `12.5 mm²`, `4.5 in²`, `100 pt²`).
+    pub fn format_area(self, pt2: f64) -> String {
+        if !pt2.is_finite() || pt2 <= 0.0 {
+            return format!("0 {}²", self.suffix());
+        }
+        let side = self.from_pt(1.0);
+        let val = pt2 * side * side;
+        let decimals = if matches!(self, Unit::Points | Unit::Pixels | Unit::Picas | Unit::Q | Unit::Ha) { 3 } else { 4 };
+        let s = format!("{:.*}", decimals, val);
+        let s = s.trim_end_matches('0').trim_end_matches('.');
+        let s = if s == "-0" || s.is_empty() { "0" } else { s };
+        format!("{s} {}²", self.suffix())
+    }
     /// [`Unit::format`] without the suffix (`12.5`), for narrow fields.
     pub fn number(self, pt: f64) -> String {
         // Three decimals for the small units (`595.276 pt`), four for the large ones (`8.2677 in`,
