@@ -5177,6 +5177,13 @@ round, such as a rectangle, stays as it is. Closed paths stay closed and open pa
 {"name":"run_command","arguments":{"command":"object.path.smooth","params":{"level":80}}}
 ```
 
+`path.smoothRegion` (the Smooth tool) keeps the end points of an open path where they are. When the stretch it refits
+reaches the first or last anchor of an open path, the curve there leaves or arrives along the smoothed path within
+`radius` of that end rather than along the first or last segment, so a jagged end turns with the rest of the path; it
+keeps the segment's direction when the smoothed path there turns back by 90° or more. Where the stretch ends inside a
+path, the curve keeps the direction of the part outside the drag. `object.path.smooth` and Simplify keep each end's
+direction.
+
 In the desktop app, Object › Path › Smooth and the canvas context menu's Smooth… (listed while the selection holds a
 path) open the slider (`ui.menuDialog {command: "object.path.smooth"}`, dialog `smoothSlider` with field `level`) at
 the Auto-Smooth level, and the slider previews the result until `ui.dialog.confirm`; `ui.smoothAuto` moves the open
