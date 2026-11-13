@@ -1534,12 +1534,21 @@ fn a_style_of_one_paint_reads_as_the_fill_and_stroke_its_xd_turns_on() {
     // Only what `Xd` turns on; nothing when it turns on neither.
     assert!(matches!(one(&format!("0 0 1 0 k\n{stroke}1 0 Xd\n")), Some(Ok(i)) if matches!(i.as_slice(), [StyleItem::Stroke { .. }])));
     assert_eq!(one(&format!("0 0 1 0 k\n{stroke}0 0 Xd\n")), Some(Ok(vec![])));
-    // Not read: no `Xd`, a gradient or pattern fill, a pattern stroke, a paint turned on with no color.
+    // The last paint of each one counts: a solid color after a pattern or a gradient replaces it.
+    let solid_fill = |before: &str| one(&format!("{before}\n0 0 1 0 k\n0 1 Xd\n"));
+    for before in ["(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p", "0 Bb\n2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB"] {
+        assert!(matches!(solid_fill(before), Some(Ok(i)) if matches!(i.as_slice(), [StyleItem::Fill(_)])), "{before}");
+    }
+    let solid_stroke = one("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] P\n0 1 1 0 K\n1 0 Xd\n");
+    assert!(matches!(solid_stroke, Some(Ok(i)) if matches!(i.as_slice(), [StyleItem::Stroke { .. }])));
+    // Not read: no `Xd`, a gradient or pattern fill, a pattern stroke, a gradient stroke after a solid one, a paint
+    // turned on with no color.
     for paint in [
         format!("0 0 1 0 k\n{stroke}"),
         "0 Bb\n2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n".to_string(),
         "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n0 1 Xd\n".to_string(),
         "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] P\n1 0 Xd\n".to_string(),
+        "0 R\n0 1 1 0 K\nBb\n0 0 0 0 Bh\n2 (Ramp) 0 0 90 1 1 0 0 1 0 0 1 Bg\n0 BB\n2 w\n1 0 Xd\n".to_string(),
         "0 0 1 0 k\n1 1 Xd\n".to_string(),
     ] {
         assert_eq!(one(&paint), Some(Err(())), "{paint}");

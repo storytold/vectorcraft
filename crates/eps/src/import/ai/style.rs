@@ -776,15 +776,25 @@ struct OnePaint {
     paint: Filter,
     /// Its `stroke fill Xd` was read.
     xd: bool,
-    /// It strokes with a pattern (`P`).
-    stroke_pattern: bool,
+    /// Its last fill paint is a pattern (`p`) or may be a gradient (`Bg`).
+    fill_unread: bool,
+    /// Its last stroke paint is a pattern (`P`) or may be a gradient (`Bg`).
+    stroke_unread: bool,
 }
 
 impl OnePaint {
     fn op(&mut self, op: &str, vals: &[V], names: &mut Names) {
         match op {
             "Xd" => self.xd |= vals.iter().filter_map(V::num).count() >= 2,
-            "P" => self.stroke_pattern = true,
+            "p" => self.fill_unread = true,
+            "P" => self.stroke_unread = true,
+            // Read as either one's, since its operands don't say which it paints.
+            "Bg" => (self.fill_unread, self.stroke_unread) = (true, true),
+            // A color replaces what came before it; one that isn't read leaves none.
+            "Xa" | "k" | "g" | "x" | "Xx" | "Xk" | "Xs" | "Xz" | "xa" | "xx" | "xk" | "xs" | "xz" => {
+                (self.fill_unread, self.paint.fill) = (false, None);
+            }
+            "XA" | "K" | "G" | "X" | "XX" | "XK" | "XS" | "XZ" => (self.stroke_unread, self.paint.stroke) = (false, None),
             _ => {}
         }
         paint_op(&mut self.paint, op, vals, names);
@@ -800,13 +810,13 @@ impl OnePaint {
         let mut items = vec![];
         if filled {
             match &f.fill {
-                Some(p) if !f.gradient && f.pattern.is_none() => items.push(StyleItem::Fill(p.clone())),
+                Some(p) if !self.fill_unread => items.push(StyleItem::Fill(p.clone())),
                 _ => return Err(()),
             }
         }
         if stroked {
             match &f.stroke {
-                Some(p) if !self.stroke_pattern => items.push(StyleItem::Stroke {
+                Some(p) if !self.stroke_unread => items.push(StyleItem::Stroke {
                     paint: p.clone(),
                     width: f.width,
                     cap: f.cap,
