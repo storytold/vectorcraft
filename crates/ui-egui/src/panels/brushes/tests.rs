@@ -821,3 +821,27 @@ fn previews_follow_the_swatches_images_and_pattern_options_their_art_uses() {
         assert_eq!(change(&mut app, what, f), (brushes, symbols, what.to_string()));
     }
 }
+
+/// Of two brushes with one name, both rows preview and drag the first, the one `brush.get` gives
+/// and a stroke that names it draws with.
+#[test]
+fn rows_of_two_brushes_with_one_name_show_the_first() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.session
+        .edit("Brushes", |d, _| {
+            let mut lib = vectorcraft_brush::library(d);
+            let kinds: Vec<_> = ["Charcoal", "Dots"].iter().map(|n| lib.iter().find(|b| b.name == *n).unwrap().kind.clone()).collect();
+            lib.extend(kinds.into_iter().map(|kind| Brush { name: "Twin".into(), kind }));
+            vectorcraft_brush::store(d, &lib);
+            Ok(())
+        })
+        .unwrap();
+    let twins: Vec<String> = brushes(&mut app).0.into_iter().filter(|b| b.0 == "Twin").map(|b| b.1).collect();
+    assert_eq!(twins, ["art", "scatter"], "the panel lists both");
+    let got = app.run("brush.get", json!({"name": "Twin"})).unwrap();
+    let memo = document_brushes(app.session.active().unwrap());
+    let shown = by_name(&memo)["Twin"];
+    assert_eq!(shown.ty, "art");
+    assert_eq!(shown.def, got, "the row shows and drags what brush.get gives");
+}
