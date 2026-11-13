@@ -200,7 +200,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-13 | minor | M4: PDF import (#5235, #6906): Indic type keeps its marks on their line, and a line whose type would not draw as the file does keeps the file's glyphs as outlines (opaque, alike-stroked ones share a path; translucent ones keep their own). Scores and estimates unchanged. Evidence: `crates/pdf/src/tests/reshaped.rs`. |
+| 2026-11-13 | minor | M4: PDF import (#5235, #6906): Indic type keeps its marks on their line, and a line whose type would not draw as the file does keeps the file's glyphs as outlines (opaque, alike-stroked ones share a path except under a soft mask, where each glyph keeps its own path and mask; translucent ones keep their own). Scores and estimates unchanged. Evidence: `crates/pdf/src/tests/reshaped.rs`. |
 | 2026-11-12 | minor | Explicit editing-data import keeps a single artboard beyond a capped 14,400 pt PDF page (#6865), with a warning; automatic mode stays unchanged. Scores and estimates unchanged. |
 | 2026-11-12 | minor | M7: Glyphs panel applies feature-valued alternates and unencoded glyphs while keeping Arabic joining (#5514). Scores and estimates unchanged. |
 | 2026-11-12 | minor | M14: numeric fields keep the caret when a focus click is released more than 1 pt from its press; a tap within 1 pt still selects all (#6659, follow-up to #1326); estimates unchanged. |
