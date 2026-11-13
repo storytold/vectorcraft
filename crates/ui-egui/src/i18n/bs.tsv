@@ -5119,6 +5119,9 @@ imageTrace	Outline	Obris
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Odbačen {n} oporavljeni dokument|Odbačena {n} oporavljena dokumenta|Odbačeno {n} oporavljenih dokumenata
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Vraćen {n} oporavljeni dokument; sačuvajte ga da ga zadržite|Vraćena {n} oporavljena dokumenta; sačuvajte ih da ih zadržite|Vraćeno {n} oporavljenih dokumenata; sačuvajte ih da ih zadržite
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Otvoreno s {n} bilješkom: {first}|Otvoreno s {n} bilješke: {first}|Otvoreno s {n} bilješki: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Kopirano s {n} bilješkom: {first}|Kopirano s {n} bilješke: {first}|Kopirano s {n} bilješki: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Izrezano s {n} bilješkom: {first}|Izrezano s {n} bilješke: {first}|Izrezano s {n} bilješki: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Slika praćena s {n} bilješkom: {first}|Slika praćena s {n} bilješke: {first}|Slika praćena s {n} bilješki: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Sačuvano {path} s {n} bilješkom: {first}|Sačuvano {path} s {n} bilješke: {first}|Sačuvano {path} s {n} bilješki: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Ugrađena je {n} slika; nedostaje {missing}: prvo ih ponovo povežite|Ugrađene su {n} slike; nedostaje {missing}: prvo ih ponovo povežite|Ugrađeno je {n} slika; nedostaje {missing}: prvo ih ponovo povežite
 @msgplural	Embedded {n} image|Embedded {n} images	Ugrađena je {n} slika|Ugrađene su {n} slike|Ugrađeno je {n} slika

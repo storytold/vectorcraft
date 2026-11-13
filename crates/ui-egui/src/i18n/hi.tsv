@@ -8491,6 +8491,9 @@ antiAlias	Sharp	शार्प
 @msgplural	Relinked {n} image|Relinked {n} images	{n} इमेज दोबारा लिंक हुई|{n} इमेज दोबारा लिंक हुईं
 @msgplural	Replaced {n} image|Replaced {n} images	{n} इमेज बदली गई|{n} इमेज बदली गईं
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} रिकवर किया डॉक्यूमेंट बहाल हुआ: रखने के लिए उसे सेव करें|{n} रिकवर किए डॉक्यूमेंट बहाल हुए: रखने के लिए उन्हें सेव करें
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	कॉपी किया गया, {n} नोट के साथ: {first}|कॉपी किया गया, {n} नोट्स के साथ: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	काटा गया, {n} नोट के साथ: {first}|काटा गया, {n} नोट्स के साथ: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	इमेज ट्रेस किया गया, {n} नोट के साथ: {first}|इमेज ट्रेस किया गया, {n} नोट्स के साथ: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} सेव किया गया, {n} नोट के साथ: {first}|{path} सेव किया गया, {n} नोट्स के साथ: {first}
 @msgplural	Selected {n} embedded image|Selected {n} embedded images	{n} एम्बेड की गई इमेज सिलेक्टेड|{n} एम्बेड की गई इमेज सिलेक्टेड
 @msgplural	Selected {n} image|Selected {n} images	{n} इमेज सिलेक्टेड|{n} इमेज सिलेक्टेड

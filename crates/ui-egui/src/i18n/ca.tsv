@@ -5955,6 +5955,9 @@ digits	Malayalam	Malaiàlam
 @msg	Saved to User Defined: {_1}	Desat a User Defined: {_1}
 @msg	Saved {n} files beside {path}	S’han desat {n} fitxers al costat de {path}
 @msg	Saved {path}	Desat {path}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	S’ha copiat amb {n} nota: {first}|S’ha copiat amb {n} notes: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	S’ha retallat amb {n} nota: {first}|S’ha retallat amb {n} notes: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	S’ha traçat la imatge amb {n} nota: {first}|S’ha traçat la imatge amb {n} notes: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	S’ha desat {path} amb {n} nota: {first}|S’ha desat {path} amb {n} notes: {first}
 @msg	Saving	S’està desant
 @msg	Saving recovery data for {_1}	S’estan desant les dades de recuperació de {_1}

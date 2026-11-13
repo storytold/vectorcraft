@@ -4455,6 +4455,9 @@ axis	Both	Ambos
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} documento recuperado descartado|{n} documentos recuperados descartados
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} documento recuperado restaurado: salve-o para mantê-lo|{n} documentos recuperados restaurados: salve-os para mantê-los
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Aberto com {n} observação: {first}|Aberto com {n} observações: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Copiado com {n} observação: {first}|Copiado com {n} observações: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Recortado com {n} observação: {first}|Recortado com {n} observações: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Imagem rastreada com {n} observação: {first}|Imagem rastreada com {n} observações: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} salvo com {n} observação: {first}|{path} salvo com {n} observações: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} imagem incorporada; faltam {missing}: revincule-as primeiro|{n} imagens incorporadas; faltam {missing}: revincule-as primeiro
 @msgplural	Embedded {n} image|Embedded {n} images	{n} imagem incorporada|{n} imagens incorporadas

@@ -4816,6 +4816,9 @@ imageTrace	Outline	Contour
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} hersteld document verworpen|{n} herstelde documenten verworpen
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} hersteld document teruggezet: sla het op om het te behouden|{n} herstelde documenten teruggezet: sla ze op om ze te behouden
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Geopend met {n} opmerking: {first}|Geopend met {n} opmerkingen: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Gekopieerd met {n} opmerking: {first}|Gekopieerd met {n} opmerkingen: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Geknipt met {n} opmerking: {first}|Geknipt met {n} opmerkingen: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Afbeelding getraceerd met {n} opmerking: {first}|Afbeelding getraceerd met {n} opmerkingen: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} opgeslagen met {n} opmerking: {first}|{path} opgeslagen met {n} opmerkingen: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} afbeelding ingesloten; {missing} ontbreken: koppel ze eerst opnieuw|{n} afbeeldingen ingesloten; {missing} ontbreken: koppel ze eerst opnieuw
 @msgplural	Embedded {n} image|Embedded {n} images	{n} afbeelding ingesloten|{n} afbeeldingen ingesloten

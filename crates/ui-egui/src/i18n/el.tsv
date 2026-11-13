@@ -4947,6 +4947,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Απορρίφθηκε {n} ανακτημένο έγγραφο|Απορρίφθηκαν {n} ανακτημένα έγγραφα
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Επαναφέρθηκε {n} ανακτημένο έγγραφο: αποθηκεύστε το για να διατηρηθεί|Επαναφέρθηκαν {n} ανακτημένα έγγραφα: αποθηκεύστε τα για να διατηρηθούν
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Άνοιξε με {n} σημείωση: {first}|Άνοιξε με {n} σημειώσεις: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Αντιγράφηκε με {n} σημείωση: {first}|Αντιγράφηκε με {n} σημειώσεις: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Αποκόπηκε με {n} σημείωση: {first}|Αποκόπηκε με {n} σημειώσεις: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Η εικόνα ανιχνεύτηκε με {n} σημείωση: {first}|Η εικόνα ανιχνεύτηκε με {n} σημειώσεις: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Αποθηκεύτηκε το {path} με {n} σημείωση: {first}|Αποθηκεύτηκε το {path} με {n} σημειώσεις: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Ενσωματώθηκε {n} εικόνα· λείπουν {missing}: επανασυνδέστε τις πρώτα|Ενσωματώθηκαν {n} εικόνες· λείπουν {missing}: επανασυνδέστε τις πρώτα
 @msgplural	Embedded {n} image|Embedded {n} images	Ενσωματώθηκε {n} εικόνα|Ενσωματώθηκαν {n} εικόνες

@@ -254,9 +254,7 @@ impl VectorcraftApp {
         {
             self.last_pathfinder = Some(op.to_string());
         }
-        if r.is_ok() && matches!(id, "edit.copy" | "edit.cut" | "artboard.copy" | "artboard.cut") {
-            self.publish_clipboard();
-        }
+        let copied = r.is_ok() && self.publish_copy(id);
         self.sync_views();
         self.refresh_replace_font_warning(false);
         // File › Revert replaces the document in its tab, keeps the tab's view and starts the tool afresh.
@@ -264,11 +262,8 @@ impl VectorcraftApp {
         match &r {
             Err(e) => self.ui.status = e.clone(),
             Ok(v) => {
-                // Image Trace's notes (a large image traces more slowly, or was scaled down).
-                if id.starts_with("imageTrace.make")
-                    && let Some(w) = v["warnings"].as_array().and_then(|w| w.first()).and_then(Value::as_str)
-                {
-                    self.ui.status = w.to_string();
+                if matches!(id, "imageTrace.make" | "imageTrace.makeAndExpand") {
+                    self.show_trace_notes(v);
                 }
                 if id == "file.new" {
                     self.ui.status.clear();
@@ -312,7 +307,32 @@ impl VectorcraftApp {
                 }
             }
         }
+        // The message the Copy or Cut leaves is the one its clipboard formats' notes may replace.
+        if copied {
+            self.clipboard_publishing.ran_with_status(&self.ui.status);
+        }
         r
+    }
+
+    /// After a Copy or Cut `id` that ran: offer what it copied to other apps
+    /// ([`Self::publish_clipboard`]) → whether `id` is one.
+    fn publish_copy(&mut self, id: &str) -> bool {
+        let copy = matches!(id, "edit.copy" | "edit.cut" | "artboard.copy" | "artboard.cut");
+        if copy {
+            self.publish_clipboard(matches!(id, "edit.cut" | "artboard.cut"));
+        }
+        copy
+    }
+
+    /// Image Trace's notes in `reply` (a large image traces more slowly, or was scaled down): the
+    /// first of them and how many there are, with the rest for the message's hover. Without notes
+    /// the status bar keeps its message.
+    fn show_trace_notes(&mut self, reply: &Value) {
+        let notes = io::notes_of(reply);
+        if let Some(first) = notes.first() {
+            let status = crate::trace_runs::traced_with_notes(notes.len(), first);
+            io::show_with_notes(self, status, notes);
+        }
     }
 
     fn set_command_warning(&mut self, id: &str, warning: &str) {

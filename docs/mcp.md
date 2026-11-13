@@ -6689,7 +6689,9 @@ area). Each one has a query command:
 (a one-page PDF, the page the objects' visual bounds) and `clipboard.exportPng {scale?}` (cropped to the objects,
 transparent around them). As in `document.export`, the PDF's and the PNG's replies list their notes in `warnings`
 (type written in the fallback font…; the PNG's also say when an image couldn't be decoded). After Copy or Cut the app
-shows the first note of the PDF and PNG it offers in the status bar.
+shows the first note of the PDF and PNG it offers in the status bar and how many there are, and hovering the message lists
+them all, unless another message has replaced the Copy or Cut's while the formats were made. The `clipboard.export*`
+replies still list every note.
 
 What other apps copied goes into the clipboard with `clipboard.importSvg`, `clipboard.importPdf {dataBase64, page?,
 password?, editingData?}` (the page's objects; with `editingData: true` the data is a `.ai` or `.ait` file, and every

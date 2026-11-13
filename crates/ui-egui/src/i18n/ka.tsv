@@ -4653,6 +4653,9 @@ font-technology	Variable	ცვლადი
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	უარყოფილია აღდგენილი დოკუმენტები: {n}
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	აღდგენილია დოკუმენტები: {n}: შესანარჩუნებლად შეინახეთ ისინი
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	გაიხსნა, შენიშვნები: {n}: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	კოპირებულია, შენიშვნები: {n}: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	ამოჭრილია, შენიშვნები: {n}: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	გამოსახულება ვექტორიზებულია, შენიშვნები: {n}: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	შენახულია {path}, შენიშვნები: {n}: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	ჩაშენებულია გამოსახულებები: {n}; აკლია {missing}: ჯერ ხელახლა მიაბით
 @msgplural	Embedded {n} image|Embedded {n} images	ჩაშენებულია გამოსახულებები: {n}

@@ -4804,6 +4804,9 @@ imageTrace	Outline	Kontur
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} dokumen hasil pemulihan dibuang
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} dokumen hasil pemulihan dipulihkan: simpan agar tidak hilang
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Dibuka dengan {n} catatan: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Disalin dengan {n} catatan: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Dipotong dengan {n} catatan: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Gambar dilacak dengan {n} catatan: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} disimpan dengan {n} catatan: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} gambar tersemat; {missing} hilang: tautkan ulang dulu
 @msgplural	Embedded {n} image|Embedded {n} images	{n} gambar tersemat

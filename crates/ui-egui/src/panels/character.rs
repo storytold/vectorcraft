@@ -545,7 +545,8 @@ static CTX: OnceLock<egui::Context> = OnceLock::new();
 static CLIP: Mutex<String> = Mutex::new(String::new());
 static CLIP_RUNS: Mutex<Option<Value>> = Mutex::new(None);
 
-fn text_copy(app: &mut VectorcraftApp) -> bool {
+/// Copy the Type tool's selected text (with `cut`, for a Cut, whose caller then deletes it).
+fn text_copy(app: &mut VectorcraftApp, cut: bool) -> bool {
     let Some((id, a, b)) = text_editing(app) else { return false };
     let story = text_story(app);
     // An empty selection has nothing to copy, unless the story's text is in the other frames.
@@ -573,7 +574,7 @@ fn text_copy(app: &mut VectorcraftApp) -> bool {
         // plain-text copy would replace its formats, so let the publisher provide both text and
         // rich art. Paste on the canvas can then keep the runs after Type editing ends.
         if app.services.system_clipboard.is_some() {
-            app.publish_clipboard();
+            app.publish_clipboard(cut);
             return true;
         }
     }
@@ -644,10 +645,10 @@ pub(crate) fn intercept_text_command(app: &mut VectorcraftApp, id: &str) -> Opti
     }
     match id {
         "edit.copy" => {
-            text_copy(app);
+            text_copy(app, false);
         }
         "edit.cut" => {
-            if text_copy(app) {
+            if text_copy(app, true) {
                 text_key(app, ToolKey::Delete, Mods::default());
             }
         }
@@ -738,10 +739,10 @@ pub(crate) fn apply_type_input(app: &mut VectorcraftApp, t: TextInput) {
     match t {
         TextInput::Key(k, m) => text_key(app, k, m),
         TextInput::Copy => {
-            text_copy(app);
+            text_copy(app, false);
         }
         TextInput::Cut => {
-            if text_copy(app) {
+            if text_copy(app, true) {
                 text_key(app, ToolKey::Delete, Mods::default());
             }
         }

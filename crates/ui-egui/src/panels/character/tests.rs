@@ -1427,7 +1427,7 @@ fn copy_and_cut_take_a_story_that_left_the_edited_frame() {
             // A story that holds no text has nothing to copy, so Cut does not run its delete.
             app.run("select.all", json!({})).unwrap();
             assert_eq!(text_story(&app).map(|frames| frames.len()), Some(3));
-            assert!(!text_copy(&mut app));
+            assert!(!text_copy(&mut app, false));
         }
     }
 }

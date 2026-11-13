@@ -4925,6 +4925,9 @@ theme	Appearance	Erscheinungsbild
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} wiederhergestelltes Dokument verworfen|{n} wiederhergestellte Dokumente verworfen
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} wiederhergestelltes Dokument geöffnet: Speichern Sie es, um es zu behalten|{n} wiederhergestellte Dokumente geöffnet: Speichern Sie sie, um sie zu behalten
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Mit {n} Hinweis geöffnet: {first}|Mit {n} Hinweisen geöffnet: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Mit {n} Hinweis kopiert: {first}|Mit {n} Hinweisen kopiert: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Mit {n} Hinweis ausgeschnitten: {first}|Mit {n} Hinweisen ausgeschnitten: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Mit {n} Hinweis nachgezeichnet: {first}|Mit {n} Hinweisen nachgezeichnet: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} mit {n} Hinweis gespeichert: {first}|{path} mit {n} Hinweisen gespeichert: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} Bild eingebettet; {missing} fehlen: Verknüpfen Sie sie zuerst neu|{n} Bilder eingebettet; {missing} fehlen: Verknüpfen Sie sie zuerst neu
 @msgplural	Embedded {n} image|Embedded {n} images	{n} Bild eingebettet|{n} Bilder eingebettet

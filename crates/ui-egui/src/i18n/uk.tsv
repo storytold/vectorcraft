@@ -5035,6 +5035,9 @@ axis	Both	Обидві
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Скасовано {n} відновлений документ|Скасовано {n} відновлені документи|Скасовано {n} відновлених документів
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Відновлено {n} документ: збережіть його, щоб залишити|Відновлено {n} документи: збережіть їх, щоб залишити|Відновлено {n} документів: збережіть їх, щоб залишити
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Відкрито з {n} приміткою: {first}|Відкрито з {n} примітками: {first}|Відкрито з {n} примітками: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Скопійовано з {n} приміткою: {first}|Скопійовано з {n} примітками: {first}|Скопійовано з {n} примітками: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Вирізано з {n} приміткою: {first}|Вирізано з {n} примітками: {first}|Вирізано з {n} примітками: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Зображення трасовано з {n} приміткою: {first}|Зображення трасовано з {n} примітками: {first}|Зображення трасовано з {n} примітками: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Збережено: {path} з {n} приміткою: {first}|Збережено: {path} з {n} примітками: {first}|Збережено: {path} з {n} примітками: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Вбудовано {n} зображення; відсутніх: {missing}. Спочатку відновіть їхні зв’язки|Вбудовано {n} зображення; відсутніх: {missing}. Спочатку відновіть їхні зв’язки|Вбудовано {n} зображень; відсутніх: {missing}. Спочатку відновіть їхні зв’язки
 @msgplural	Embedded {n} image|Embedded {n} images	Вбудовано {n} зображення|Вбудовано {n} зображення|Вбудовано {n} зображень

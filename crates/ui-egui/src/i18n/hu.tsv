@@ -5519,6 +5519,9 @@ imageTrace	Outline	Körvonal
 @msg	Saved to User Defined: {_1}	Mentve a felhasználóiak közé: {_1}
 @msg	Saved {n} files beside {path}	Mentett fájlok: {n}, a következő mellett: {path}
 @msg	Saved {path}	Mentve: {path}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Másolva; megjegyzések: {n}, az első: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Kivágva; megjegyzések: {n}, az első: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Kép vektorizálva; megjegyzések: {n}, az első: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Mentve: {path}; megjegyzések: {n}, az első: {first}
 @msg	Saving	Mentés
 @msg	Saving recovery data for {_1}	Helyreállítási adatok mentése: {_1}
