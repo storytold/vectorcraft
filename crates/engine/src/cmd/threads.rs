@@ -135,6 +135,7 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
         let mut story: Vec<TextRun> = vec![];
         let mut sources: Vec<TextObject> = vec![];
         let mut later_wins = vec![];
+        let mut earlier_wins = vec![];
         let mut live = vec![];
         for id in &thread {
             match (text_of(doc, *id), text_of(before, *id)) {
@@ -143,6 +144,9 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
                     // A frame whose first paragraph was just restyled gives the paragraph it
                     // shares with the frame before it that style.
                     later_wins.push(old.is_some_and(|o| o.para_at(0) != t.para_at(0)));
+                    // A frame whose last paragraph was just restyled keeps that style in the
+                    // paragraph it shares with the frame after it, even when it is empty.
+                    earlier_wins.push(old.is_some_and(|o| o.para_at(o.paragraph_count() - 1) != t.para_at(t.paragraph_count() - 1)));
                     sources.push(t.clone());
                     live.push(*id);
                 }
@@ -151,6 +155,7 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
                 (None, Some(old)) => {
                     story.extend(old.runs.iter().cloned());
                     later_wins.push(false);
+                    earlier_wins.push(false);
                     sources.push(old.clone());
                 }
                 (None, None) => {}
@@ -160,7 +165,7 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
             continue;
         }
         let source_refs: Vec<&TextObject> = sources.iter().collect();
-        let paras = vectorcraft_text::thread::story_paras(&source_refs, &later_wins);
+        let paras = vectorcraft_text::thread::story_paras_restyled(&source_refs, &later_wins, &earlier_wins);
         vectorcraft_text::edit::normalize(&mut story);
         if live.len() >= 2 {
             // Threaded frames keep their size: Auto Size is off for them (as in Illustrator).

@@ -23,16 +23,26 @@ pub fn story(frames: &[&TextObject]) -> Vec<TextRun> {
 /// the earlier frame's part of the paragraph is empty (its slice ends with a paragraph break).
 /// An empty frame that was just restyled keeps its style against unedited empty frames after it.
 pub fn story_paras(frames: &[&TextObject], later_wins: &[bool]) -> Vec<ParaStyle> {
+    story_paras_restyled(frames, later_wins, &[])
+}
+
+/// [`story_paras`] that also knows which frames' last paragraph was just restyled
+/// (`earlier_wins[k]`, read for frames with text). Such a frame's last paragraph keeps its style
+/// against the unedited first paragraph of the frame after it, and of frames after unedited empty
+/// frames, even when the frame ends with a paragraph break. When the later frame's first paragraph
+/// was restyled too (`later_wins`), the later frame's style wins.
+pub fn story_paras_restyled(frames: &[&TextObject], later_wins: &[bool], earlier_wins: &[bool]) -> Vec<ParaStyle> {
     let mut out: Vec<ParaStyle> = vec![];
     let mut prev_empty_tail = true;
     let mut empty_tail_restyled = false;
+    let mut tail_restyled = false;
     for (k, f) in frames.iter().enumerate() {
         let text = f.plain_text();
         let restyled = later_wins.get(k).copied().unwrap_or(false);
         let mut styles = f.paragraph_styles().into_iter();
         if k > 0
             && let Some(first) = styles.next()
-            && (restyled || (prev_empty_tail && !(text.is_empty() && empty_tail_restyled)))
+            && (restyled || (prev_empty_tail && !tail_restyled && !(text.is_empty() && empty_tail_restyled)))
             && let Some(last) = out.last_mut()
         {
             *last = first;
@@ -43,6 +53,7 @@ pub fn story_paras(frames: &[&TextObject], later_wins: &[bool]) -> Vec<ParaStyle
         if !text.is_empty() {
             prev_empty_tail = text.ends_with('\n') || out.is_empty();
             empty_tail_restyled = false;
+            tail_restyled = earlier_wins.get(k).copied().unwrap_or(false);
         } else if restyled {
             empty_tail_restyled = true;
         }
