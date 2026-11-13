@@ -1136,7 +1136,12 @@ fn mesh_points_move_and_colour_together() {
         assert!(s.execute("object.mesh.movePoints", &p).is_err(), "{p}");
     }
     assert!(s.execute("object.mesh.setPointColor", &json!({"id": a.0, "points": [0, 9], "color": "#000000"})).is_err());
-    assert_eq!(((mesh_of(&s, a), mesh_of(&s, b)), undo_len(&s)), (before, n), "nothing changed");
+    assert_eq!(((mesh_of(&s, a), mesh_of(&s, b)), undo_len(&s)), (before.clone(), n), "nothing changed");
+    // A call that changes no point records no undo step.
+    s.execute("object.mesh.movePoints", &json!({"id": a.0, "points": [], "dx": 1, "dy": 1})).unwrap();
+    s.execute("object.mesh.movePoints", &json!({"id": a.0, "points": [0, 1], "dx": 0, "dy": 0})).unwrap();
+    s.execute("object.mesh.setPointColor", &json!({"id": a.0, "points": [2, 6], "color": "#0000ff", "opacity": 0.25})).unwrap();
+    assert_eq!(((mesh_of(&s, a), mesh_of(&s, b)), undo_len(&s)), (before, n), "no change, no undo step");
 }
 
 #[test]

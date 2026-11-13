@@ -815,6 +815,8 @@ font-technology	Variable	Variables
 	Delete Width Point	Supprimer le point de largeur
 	Delete Workspace	Supprimer l’espace de travail
 	Delete {kind} Style	Supprimer le style de {kind}
+	Delete the selected items and their artwork?	Supprimer les éléments sélectionnés et leur illustration ?
+	Delete this layer and its artwork?	Supprimer ce calque et son illustration ?
 	Delete “{name}”?	Supprimer « {name} » ?
 	Depth:	Profondeur :
 	Description	Description
@@ -1027,12 +1029,14 @@ font-technology	Variable	Variables
 	Enable Contextual Task Bar	Activer la barre des tâches contextuelle
 	Enable copying of text, images and other content	Autoriser la copie de texte, d’images et d’autres contenus
 	Enable in-menu font previews	Activer l’aperçu des polices dans les menus
+	Show samples on white	Afficher les échantillons sur fond blanc
 	Enable Missing Glyph Protection	Activer la protection des glyphes manquants
 	Enable Opacity Mask	Activer le masque d’opacité
 	Enable plaintext metadata	Activer les métadonnées en texte brut
 	Enable Rubber Band for	Activer l’élastique pour
 	Enable text access for screen readers	Autoriser l’accès au texte pour les lecteurs d’écran
 	Enable Touch Gestures	Activer les gestes tactiles
+	Switch Selection and Drawing Modes	Basculer entre les modes sélection et dessin
 	Enable Touch Workspace	Activer l’espace de travail tactile
 	Encoding	Codage
 	Encoding:	Codage :
@@ -2035,6 +2039,10 @@ font-technology	Variable	Variables
 	Long	Longue
 	Stylistic	Stylistique
 	Mojikumi Set	Jeu de mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Jeu de kinsoku
 	Kinsoku Shori Type	Type de kinsoku shori
 	Push In First	D’abord vers l’intérieur
@@ -4695,6 +4703,7 @@ axis	Both	Les deux
 @msg	not a valid plug-in module: {0}	ce n’est pas un module de plug-in valide : {0}
 @msg	not an EMF or WMF file	ce n’est pas un fichier EMF ou WMF
 @msg	not an HP-GL file	ce n’est pas un fichier HP-GL
+@msg	not a PICT file	ce n’est pas un fichier PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` doit être une liste de 1 à 255 couleurs #rrggbb
 @msg	not found	introuvable
 @msg	not in pattern editing mode	pas en mode d’édition de motif
@@ -5075,6 +5084,7 @@ axis	Both	Les deux
 @msg	choose the font files to add	choisissez les fichiers de polices à ajouter
 @msg	not a file	n’est pas un fichier
 @msg	not a font file	n’est pas un fichier de police
+@msg	the active document changed while the question was open; nothing was deleted	le document actif a changé pendant que la question était ouverte ; rien n’a été supprimé
 @msg	that document is no longer open	ce document n’est plus ouvert
 @msg	larger than 256 MB	plus de 256 Mo
 @msg	the files come to more than 1 GB: add fewer at a time	les fichiers dépassent 1 Go : ajoutez-en moins à la fois
@@ -6379,6 +6389,35 @@ axis	Y Axis	Axe Y
 @msg	the path has no anchor points	le tracé n’a aucun point d’ancrage
 @msg	too many anchor points (limit {MAX_ANCHORS})	trop de points d’ancrage (limite {MAX_ANCHORS})
 @msg	true or false	true ou false
+@msg	a number >= {_1}	un nombre >= {_1}
+@msg	a number > {_1}	un nombre > {_1}
+@msg	a number <= {_1}	un nombre <= {_1}
+@msg	a number < {_1}	un nombre < {_1}
+@msg	a number {_1} to {_2}	un nombre de {_1} à {_2}
+@msg	a number >= {_1} and < {_2}	un nombre >= {_1} et < {_2}
+@msg	a number > {_1} and <= {_2}	un nombre > {_1} et <= {_2}
+@msg	a number > {_1} and < {_2}	un nombre > {_1} et < {_2}
+@msg	a number ({_1})	un nombre ({_1})
+@msg	a number >= {_1} ({_2})	un nombre >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	un nombre > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	un nombre <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	un nombre < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	un nombre de {_1} à {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	un nombre >= {_1} et < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	un nombre > {_1} et <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	un nombre > {_1} et < {_2} ({_3})
+@msg	an integer	un entier
+@msg	an integer >= {_1}	un entier >= {_1}
+@msg	an integer <= {_1}	un entier <= {_1}
+@msg	an integer {_1} to {_2}	un entier de {_1} à {_2}
+@msg	one of {_1}	l’une des valeurs {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` doit être l’une des valeurs {_1}, pas {got}
+@msg	an object id (a non-negative integer)	un identifiant d’objet (un entier positif ou nul)
+@msg	a list of object ids	une liste d’identifiants d’objet
+@msg	a color (a string, [r, g, b] or an object)	une couleur (une chaîne, [r, g, b] ou un objet)
+@msg	[x, y] (two numbers)	[x, y] (deux nombres)
+@msg	an object	un objet
+@msg	a list	une liste
 @msg	unknown key `{k}`; the keys here are {_1}	clé inconnue `{k}` ; les clés ici sont {_1}
 @msg	{_1} is listed twice	{_1} figure deux fois
 @msg	{_1} is not the id of an input object	{_1} n’est pas l’identifiant d’un objet d’entrée
@@ -7215,7 +7254,9 @@ breakText	Glyphs	Glyphes
 @msg	“{shown}” opens {_1} files, not `{_2}`	« {shown} » ouvre les fichiers {_1}, pas `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` est un module externe de type `{_2}`, pas un module externe d’importation
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` est un module externe de type `{_2}`, pas un module externe d’exportation
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` est un module externe d’importation : ouvrez un fichier avec document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` est un module externe d’importation : ouvrez un fichier avec document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` est un module externe d’exportation : exportez avec document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` est un effet dynamique : appliquez-le avec effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	le module externe d’importation n’a renvoyé aucun objet
 @msg	an importer returns `objects` and `warnings`, not `{key}`	un module externe d’importation renvoie `objects` et `warnings`, pas `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	le fichier dépasse les {MAX_INPUT_BYTES} octets qu’un module externe d’importation lit

@@ -1955,6 +1955,10 @@ digits	Malayalam	Malajalam
 	Long	Długi
 	Stylistic	Stylistyczny
 	Mojikumi Set	Zestaw mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Zestaw kinsoku
 	Kinsoku Shori Type	Typ kinsoku shori
 	Push In First	Najpierw wciągaj
@@ -2090,6 +2094,8 @@ digits	Malayalam	Malajalam
 	Weight:	Grubość:
 	Art using a deleted global swatch keeps its colour.	Kompozycja używająca usuniętej próbki globalnej zachowa swój kolor.
 	Color Group: {name}	Grupa kolorów: {name}
+	Delete the selected items and their artwork?	Usunąć zaznaczone elementy razem z grafiką?
+	Delete this layer and its artwork?	Usunąć tę warstwę razem z grafiką?
 	Delete “{name}”?	Usunąć „{name}”?
 	Document Swatches	Próbki dokumentu
 	Edit or Apply Color Group	Edytuj lub zastosuj grupę kolorów
@@ -3660,9 +3666,11 @@ theme	Appearance	Wygląd
 	Enable Background Export	Włącz eksport w tle
 	Enable Background Save	Włącz zapis w tle
 	Enable in-menu font previews	Włącz podgląd czcionek w menu
+	Show samples on white	Pokaż próbki na białym tle
 	Enable Missing Glyph Protection	Włącz ochronę przed brakującymi glifami
 	Enable Rubber Band for	Włącz gumkę podglądu dla
 	Enable Touch Gestures	Włącz gesty dotykowe
+	Switch Selection and Drawing Modes	Przełącz tryby zaznaczania i rysowania
 	Enable Touch Workspace	Włącz dotykowy obszar roboczy
 	English: UK	Angielski: Wielka Brytania
 	Every (minutes)	Co (minuty)
@@ -4839,6 +4847,7 @@ imageTrace	Outline	Kontur
 @msg	not a valid plug-in module: {0}	nieprawidłowy moduł wtyczki: {0}
 @msg	not an EMF or WMF file	to nie jest plik EMF ani WMF
 @msg	not an HP-GL file	to nie jest plik HP-GL
+@msg	not a PICT file	to nie jest plik PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` musi być tablicą od 1 do 255 kolorów #rrggbb
 @msg	not found	nie znaleziono
 @msg	not in pattern editing mode	nie jest w trybie edycji wzorka
@@ -5222,6 +5231,7 @@ imageTrace	Outline	Kontur
 @msg	choose the font files to add	wybierz pliki czcionek do dodania
 @msg	not a file	to nie jest plik
 @msg	not a font file	to nie jest plik czcionki
+@msg	the active document changed while the question was open; nothing was deleted	aktywny dokument zmienił się, gdy pytanie było otwarte; nic nie zostało usunięte
 @msg	that document is no longer open	ten dokument nie jest już otwarty
 @msg	larger than 256 MB	większy niż 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	pliki przekraczają łącznie 1 GB: dodawaj mniej naraz
@@ -6238,6 +6248,35 @@ axis	Y Axis	Oś Y
 @msg	the path has no anchor points	ścieżka nie ma punktów kontrolnych
 @msg	too many anchor points (limit {MAX_ANCHORS})	za dużo punktów kontrolnych (limit {MAX_ANCHORS})
 @msg	true or false	true lub false
+@msg	a number >= {_1}	liczbą >= {_1}
+@msg	a number > {_1}	liczbą > {_1}
+@msg	a number <= {_1}	liczbą <= {_1}
+@msg	a number < {_1}	liczbą < {_1}
+@msg	a number {_1} to {_2}	liczbą od {_1} do {_2}
+@msg	a number >= {_1} and < {_2}	liczbą >= {_1} i < {_2}
+@msg	a number > {_1} and <= {_2}	liczbą > {_1} i <= {_2}
+@msg	a number > {_1} and < {_2}	liczbą > {_1} i < {_2}
+@msg	a number ({_1})	liczbą ({_1})
+@msg	a number >= {_1} ({_2})	liczbą >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	liczbą > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	liczbą <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	liczbą < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	liczbą od {_1} do {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	liczbą >= {_1} i < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	liczbą > {_1} i <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	liczbą > {_1} i < {_2} ({_3})
+@msg	an integer	liczbą całkowitą
+@msg	an integer >= {_1}	liczbą całkowitą >= {_1}
+@msg	an integer <= {_1}	liczbą całkowitą <= {_1}
+@msg	an integer {_1} to {_2}	liczbą całkowitą od {_1} do {_2}
+@msg	one of {_1}	jedną z wartości {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` musi być jedną z wartości {_1}, a nie {got}
+@msg	an object id (a non-negative integer)	identyfikatorem obiektu (nieujemną liczbą całkowitą)
+@msg	a list of object ids	listą identyfikatorów obiektów
+@msg	a color (a string, [r, g, b] or an object)	kolorem (ciągiem znaków, [r, g, b] lub obiektem)
+@msg	[x, y] (two numbers)	[x, y] (dwiema liczbami)
+@msg	an object	obiektem
+@msg	a list	listą
 @msg	unknown key `{k}`; the keys here are {_1}	nieznany klucz `{k}`; klucze w tym miejscu to {_1}
 @msg	{_1} is listed twice	{_1} występuje dwa razy
 @msg	{_1} is not the id of an input object	{_1} nie jest identyfikatorem obiektu wejściowego
@@ -7076,7 +7115,9 @@ breakText	Glyphs	Glify
 @msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}” otwiera pliki {_1}, a nie `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` to wtyczka rodzaju `{_2}`, a nie wtyczka importu
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` to wtyczka rodzaju `{_2}`, a nie wtyczka eksportu
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` to wtyczka importu: otwórz plik za pomocą document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` to wtyczka importu: otwórz plik za pomocą document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` to wtyczka eksportu: eksportuj za pomocą document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` to efekt na żywo: zastosuj go za pomocą effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	wtyczka importu nie zwróciła żadnych obiektów
 @msg	an importer returns `objects` and `warnings`, not `{key}`	wtyczka importu zwraca `objects` i `warnings`, a nie `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	plik jest większy niż {MAX_INPUT_BYTES} bajtów, które odczytuje wtyczka importu

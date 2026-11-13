@@ -576,6 +576,42 @@ fn update_links_reads_files_again_inside_symbols_patterns_and_masks() {
     assert!(images(&s).iter().all(|(_, _, _, size)| *size == (20, 10)), "{:?}", images(&s));
 }
 
+/// An image that Placement Options clip, alone in a group the user made, goes into a new clip group
+/// inside that group when its file grows, in the layers and in a symbol's art; the user's group
+/// stays a plain group.
+#[test]
+fn placement_options_clip_an_image_alone_in_a_group_inside_that_group() {
+    let dir = Folder::new("clip-in-group");
+    let photo = dir.file("photo.png");
+    write(&photo, &png(20, 10, RED));
+    let mut s = session();
+    let mut groups = vec![];
+    for _ in 0..2 {
+        let id = place(&mut s, &photo);
+        s.execute("links.placementOptions", &json!({"ids": [id.0], "preserve": "fill", "clip": true})).unwrap();
+        let g = NodeId(s.execute("object.group", &json!({"ids": [id.0]})).unwrap()["id"].as_u64().unwrap());
+        groups.push((g, id));
+    }
+    let (in_symbol, _) = groups[1];
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [in_symbol.0]})).unwrap();
+    write(&photo, &png(60, 20, BLUE));
+    s.execute("links.update", &json!({})).unwrap();
+    // A plain group holding just a clip group of a clipping path and an image.
+    let plain_of_clip = |n: &vectorcraft_doc::Node| match &n.kind {
+        NodeKind::Group { children, clip: false } => matches!(&children[..], [c] if matches!(&c.kind,
+            NodeKind::Group { children, clip: true } if matches!(&children[..], [p, im]
+                if matches!(p.kind, NodeKind::Path { clipping: true, .. }) && matches!(im.kind, NodeKind::Image(_))))),
+        _ => false,
+    };
+    let d = &s.doc().unwrap().doc;
+    let (g, id) = groups[0];
+    assert!(plain_of_clip(d.node(g).unwrap()), "{:?}", d.node(g));
+    assert_ne!(d.parent_of(id), Some(g), "the image is in a new clip group");
+    let mut found = false;
+    d.symbols[0].art.walk(&mut |n| found |= plain_of_clip(n));
+    assert!(found, "{:?}", d.symbols[0].art);
+}
+
 #[test]
 fn a_missing_link_renders_its_preview_and_relinks() {
     let dir = Folder::new("missing");

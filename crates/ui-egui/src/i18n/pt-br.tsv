@@ -725,6 +725,8 @@ antiAlias	Sharp	Nítido
 	Delete theme	Excluir tema
 	Delete this saved preset	Excluir este predefinido salvo
 	Delete {kind} Style	Excluir Estilo de {kind}
+	Delete the selected items and their artwork?	Excluir os itens selecionados e suas ilustrações?
+	Delete this layer and its artwork?	Excluir esta camada e sua ilustração?
 	Delete “{name}”?	Excluir “{name}”?
 	Depth:	Profundidade:
 	Description	Descrição
@@ -929,9 +931,11 @@ antiAlias	Sharp	Nítido
 	Enable Opacity Mask	Habilitar Máscara de Opacidade
 	Enable Rubber Band for	Habilitar Elástico para
 	Enable Touch Gestures	Habilitar Gestos de Toque
+	Switch Selection and Drawing Modes	Alternar Modos de Seleção e Desenho
 	Enable Touch Workspace	Habilitar Espaço de Trabalho de Toque
 	Enable copying of text, images and other content	Habilitar cópia de texto, imagens e outro conteúdo
 	Enable in-menu font previews	Habilitar visualizações de fonte no menu
+	Show samples on white	Mostrar amostras sobre branco
 	Enable plaintext metadata	Habilitar metadados de texto simples
 	Enable text access for screen readers	Habilitar acesso a texto para leitores de tela
 	Encoding	Codificação
@@ -3562,6 +3566,10 @@ font-technology	Variable	Variáveis
 	Long	Longo
 	Stylistic	Estilístico
 	Mojikumi Set	Conjunto Mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Conjunto Kinsoku
 	Kinsoku Shori Type	Tipo de Kinsoku Shori
 	Push In First	Primeiro para dentro
@@ -4163,6 +4171,7 @@ axis	Both	Ambos
 @msg	not a valid plug-in module: {0}	não é um módulo de plug-in válido: {0}
 @msg	not an EMF or WMF file	não é um arquivo EMF ou WMF
 @msg	not an HP-GL file	não é um arquivo HP-GL
+@msg	not a PICT file	não é um arquivo PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` deve ser uma matriz de 1 a 255 cores #rrggbb
 @msg	not found	não encontrado
 @msg	not in pattern editing mode	não está no modo de edição de padrão
@@ -4537,6 +4546,7 @@ axis	Both	Ambos
 @msg	choose the font files to add	escolha os arquivos de fonte a adicionar
 @msg	not a file	não é um arquivo
 @msg	not a font file	não é um arquivo de fonte
+@msg	the active document changed while the question was open; nothing was deleted	o documento ativo mudou enquanto a pergunta estava aberta; nada foi excluído
 @msg	that document is no longer open	esse documento não está mais aberto
 @msg	larger than 256 MB	maior que 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	os arquivos somam mais de 1 GB: adicione menos por vez
@@ -6299,6 +6309,35 @@ axis	Y Axis	Eixo Y
 @msg	the path has no anchor points	o caminho não tem pontos de ancoragem
 @msg	too many anchor points (limit {MAX_ANCHORS})	pontos de ancoragem demais (limite {MAX_ANCHORS})
 @msg	true or false	true ou false
+@msg	a number >= {_1}	um número >= {_1}
+@msg	a number > {_1}	um número > {_1}
+@msg	a number <= {_1}	um número <= {_1}
+@msg	a number < {_1}	um número < {_1}
+@msg	a number {_1} to {_2}	um número de {_1} a {_2}
+@msg	a number >= {_1} and < {_2}	um número >= {_1} e < {_2}
+@msg	a number > {_1} and <= {_2}	um número > {_1} e <= {_2}
+@msg	a number > {_1} and < {_2}	um número > {_1} e < {_2}
+@msg	a number ({_1})	um número ({_1})
+@msg	a number >= {_1} ({_2})	um número >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	um número > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	um número <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	um número < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	um número de {_1} a {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	um número >= {_1} e < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	um número > {_1} e <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	um número > {_1} e < {_2} ({_3})
+@msg	an integer	um inteiro
+@msg	an integer >= {_1}	um inteiro >= {_1}
+@msg	an integer <= {_1}	um inteiro <= {_1}
+@msg	an integer {_1} to {_2}	um inteiro de {_1} a {_2}
+@msg	one of {_1}	um de {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` deve ser um de {_1}, não {got}
+@msg	an object id (a non-negative integer)	um ID de objeto (um inteiro não negativo)
+@msg	a list of object ids	uma lista de IDs de objeto
+@msg	a color (a string, [r, g, b] or an object)	uma cor (uma string, [r, g, b] ou um objeto)
+@msg	[x, y] (two numbers)	[x, y] (dois números)
+@msg	an object	um objeto
+@msg	a list	uma lista
 @msg	unknown key `{k}`; the keys here are {_1}	chave desconhecida `{k}`; as chaves aqui são {_1}
 @msg	{_1} is listed twice	{_1} aparece duas vezes
 @msg	{_1} is not the id of an input object	{_1} não é o id de um objeto de entrada
@@ -7293,7 +7332,9 @@ swatch	Yellow Green	Verde-amarelado
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” abre arquivos {_1}, não `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` é um plug-in do tipo `{_2}`, não um plug-in de importação
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` é um plug-in do tipo `{_2}`, não um plug-in de exportação
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` é um plug-in de importação: abra um arquivo com document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` é um plug-in de importação: abra um arquivo com document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` é um plug-in de exportação: exporte com document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` é um efeito dinâmico: aplique-o com effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	o plug-in de importação não retornou nenhum objeto
 @msg	an importer returns `objects` and `warnings`, not `{key}`	um plug-in de importação retorna `objects` e `warnings`, não `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	o arquivo é maior que os {MAX_INPUT_BYTES} bytes que um plug-in de importação lê

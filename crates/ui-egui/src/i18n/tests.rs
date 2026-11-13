@@ -1786,6 +1786,81 @@ fn templates_that_start_with_text_match_first() {
     assert_eq!(c.message("a.wasm is 9 bytes (limit 8)").map(|(f, _)| f), Some("sized {_1}"));
 }
 
+/// `{{` and `}}` in a message row are literal braces, in the English source and in the
+/// translation, as in a Rust format string; only the other `{name}` are placeholders.
+#[test]
+fn message_rows_read_doubled_braces_as_literal_braces() {
+    let c = Catalog::parse(concat!(
+        "@msg\t`{_1}` runs with plugin.run {{\"id\": \"{_2}\"}}\t`{_1}`: plugin.run {{\"id\": \"{_2}\"}} (fr)\n",
+        "@msg\tbraces {{}} and {_1}\tbraces {{}} with {_1}\n",
+        "@msg\tonly {{literal}} braces\tliteral {{braces}}\n",
+        "@msg\tnot an RTF file: it doesn't start with {\\\\rtf\tno RTF: {\\\\rtf\n",
+    ));
+    let (form, caps) = c.message(r#"`a.b` runs with plugin.run {"id": "plugin:a.b"}"#).expect("matches");
+    assert_eq!(caps, [("_1", "a.b"), ("_2", "plugin:a.b")]);
+    assert_eq!(fill_once(form, &caps), r#"`a.b`: plugin.run {"id": "plugin:a.b"} (fr)"#);
+    assert!(c.message(r#"`a.b` runs with plugin.run {{"id": "plugin:a.b"}}"#).is_none());
+    let (form, caps) = c.message("braces {} and x").expect("matches");
+    assert_eq!(fill_once(form, &caps), "braces {} with x");
+    let (form, caps) = c.message("only {literal} braces").expect("matches");
+    assert_eq!(fill_once(form, &caps), "literal {braces}");
+    // A `{` with no `}` after it is literal text too.
+    assert_eq!(c.message(r"not an RTF file: it doesn't start with {\rtf").map(|(f, _)| f), Some(r"no RTF: {\rtf"));
+    assert_eq!(placeholders(r#"{{"id": "{_2}"}} {{x}} {n}"#), ["_2", "n"]);
+}
+
+/// A format string's `{{` and `}}` stay literal braces in its catalog key, and only its real
+/// placeholders are numbered.
+#[test]
+fn message_keys_keep_doubled_braces() {
+    assert_eq!(
+        as_template(r#"`{}` is an importer: open a file with document.open {{"importer": "{}"}}"#),
+        r#"`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}"#
+    );
+    assert_eq!(as_template("{k} must be {{size?, position?}}"), "{k} must be {{size?, position?}}");
+    assert_eq!(as_template(r"it doesn't start with {\rtf"), r"it doesn't start with {\rtf");
+}
+
+/// `plugin.run` of an importer, an exporter or a live effect names the command that runs it with
+/// the JSON that picks it, and every complete-message catalog translates that error with the
+/// plug-in's id and the JSON kept.
+#[test]
+fn plugin_run_of_another_kind_is_translated_with_its_json() {
+    use serde_json::json;
+    use vectorcraft_plugins::wat as tpl;
+    let mut s = vectorcraft_engine::Session::new();
+    let plugins = [
+        ("test.i18n.reader", tpl::importer("test.i18n.reader", r#"["ti18n"]"#, "{}"), "is an importer"),
+        ("test.i18n.writer", tpl::exporter("test.i18n.writer", r#"["ti18n"]"#, "{}"), "is an exporter"),
+        ("test.i18n.effect", tpl::manifest("test.i18n.effect", "effect", "{}"), "is a live effect"),
+    ];
+    for (_, manifest, _) in &plugins {
+        let wasm = wat::parse_str(tpl::module(manifest, tpl::ECHO, "", 1)).unwrap();
+        s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm)})).unwrap();
+    }
+    s.execute("file.new", &json!({})).unwrap();
+    let errors: Vec<(String, &str, &str)> =
+        plugins.iter().map(|(id, _, english)| (s.execute("plugin.run", &json!({"id": id})).unwrap_err().to_string(), *id, *english)).collect();
+    for (id, _, _) in &plugins {
+        s.execute("plugin.remove", &json!({"id": id})).unwrap();
+    }
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, id, english) in &errors {
+            assert!(e.contains(english), "{e}");
+            let json = &e[e.rfind('{').unwrap()..];
+            assert!(json.ends_with('}') && json.contains(id), "{e}");
+            let shown = message(lang, e);
+            assert!(!shown.contains(english) && shown.contains(json) && shown.contains(&format!("`{id}`")), "{code}: {e} -> {shown}");
+        }
+    }
+    assert!(
+        message(de(), &errors[0].0).ends_with(r#"Öffnen Sie eine Datei mit document.open {"importer": "plugin.test.i18n.reader"}"#),
+        "{}",
+        message(de(), &errors[0].0)
+    );
+}
+
 /// A `@msgplural` row translates both English forms of a message with a count, and the count
 /// picks the language's form.
 #[test]
@@ -1983,7 +2058,7 @@ fn three_d_refusals_translate_with_their_values() {
         vectorcraft_engine::EngineError::BadParams { cmd: "effect.apply".into(), msg: e }.to_string()
     };
     let errors = [
-        (refuse(vectorcraft_effects::validate_three_d_at(&group, EXTRUDE, &json!({}), Some((0, 0)))), "goes on the group itself", vec![]),
+        (refuse(vectorcraft_effects::validate_three_d_at(&group, EXTRUDE, &json!({}), (Some(0), 0))), "goes on the group itself", vec![]),
         (
             refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"lights": [{"intensity": 500}]}))),
             "must be a number from",
@@ -2840,6 +2915,14 @@ fn parameter_schema_errors_are_translated() {
     s.execute("file.new", &json!({})).unwrap();
     let errors = [
         (s.execute("view.saved.new", &json!({"center": [0, 0], "zoom": -1})).unwrap_err().to_string(), "`zoom`", "must be", "-1"),
+        (s.execute("view.saved.new", &json!({"center": [0, 0], "zoom": -1})).unwrap_err().to_string(), "`zoom`", "a number > 0", "-1"),
+        (s.execute("view.saved.new", &json!({"center": 5, "zoom": 1})).unwrap_err().to_string(), "`center`", "two numbers", "5"),
+        (
+            s.execute("view.saved.new", &json!({"center": [0, 0], "zoom": 1, "rotation": "x"})).unwrap_err().to_string(),
+            "`rotation`",
+            "a number (deg)",
+            "\"x\"",
+        ),
         (s.execute("view.saved.new", &json!({"center": [0, 0]})).unwrap_err().to_string(), "`zoom`", "missing", ""),
         (s.execute("view.saved.list", &json!(5)).unwrap_err().to_string(), "5", "must be", ""),
     ];
@@ -2857,6 +2940,152 @@ fn parameter_schema_errors_are_translated() {
         for (e, kept) in &nested {
             let shown = message(lang, e);
             assert!(shown.contains(kept) && !shown.contains("unknown parameter") && !shown.contains("must be"), "{code}: {shown}");
+        }
+    }
+}
+
+/// The phrases a parameter schema's error uses for what a value must be, as `@msg` sources: one
+/// for each type, and for a number each range and unit form.
+const SCHEMA_PHRASES: &[&str] = &[
+    "a number",
+    "a number >= {_1}",
+    "a number > {_1}",
+    "a number <= {_1}",
+    "a number < {_1}",
+    "a number {_1} to {_2}",
+    "a number >= {_1} and < {_2}",
+    "a number > {_1} and <= {_2}",
+    "a number > {_1} and < {_2}",
+    "a number ({_1})",
+    "a number >= {_1} ({_2})",
+    "a number > {_1} ({_2})",
+    "a number <= {_1} ({_2})",
+    "a number < {_1} ({_2})",
+    "a number {_1} to {_2} ({_3})",
+    "a number >= {_1} and < {_2} ({_3})",
+    "a number > {_1} and <= {_2} ({_3})",
+    "a number > {_1} and < {_2} ({_3})",
+    "an integer",
+    "an integer >= {_1}",
+    "an integer <= {_1}",
+    "an integer {_1} to {_2}",
+    "true or false",
+    "a string",
+    "one of {_1}",
+    "an object id (a non-negative integer)",
+    "a list of object ids",
+    "a color (a string, [r, g, b] or an object)",
+    "[x, y] (two numbers)",
+    "an object",
+    "a list",
+];
+
+/// What a value of each parameter type must be is translated in every language that translates
+/// every message, for every range and unit of a number: the matched row's placeholders take the
+/// bounds, the unit and the names exactly as the English gives them, and the whole error keeps
+/// the parameter's path and the refused value.
+#[test]
+fn parameter_schema_expected_phrases_are_translated() {
+    use serde_json::{Value, json};
+    use vectorcraft_apischema::{Bound, Param, ParamSchema, Problem, Type};
+    let number = |min, max, unit| Type::Number { min, max, unit };
+    let (incl, excl) = (|x| Some(Bound::Inclusive(x)), |x| Some(Bound::Exclusive(x)));
+    // (type, a value it refuses, the placeholder values of the phrase's row)
+    let cases: Vec<(Type, Value, Vec<&str>)> = vec![
+        (Type::NUMBER, json!("x"), vec![]),
+        (number(incl(-2.5), None, None), json!(-3), vec!["-2.5"]),
+        (number(excl(0.0), None, None), json!(0), vec!["0"]),
+        (number(None, incl(1.5), None), json!(2), vec!["1.5"]),
+        (number(None, excl(100.0), None), json!(100), vec!["100"]),
+        (number(incl(-1.0), incl(1.0), None), json!(2), vec!["-1", "1"]),
+        (number(incl(0.0), excl(360.0), None), json!(360), vec!["0", "360"]),
+        (number(excl(0.0), incl(1.0), None), json!(0), vec!["0", "1"]),
+        (number(excl(-0.5), excl(0.5), None), json!(1), vec!["-0.5", "0.5"]),
+        (number(None, None, Some("deg")), json!("x"), vec!["deg"]),
+        (number(incl(0.25), None, Some("pt")), json!(0), vec!["0.25", "pt"]),
+        (number(excl(0.0), None, Some("pt")), json!(0), vec!["0", "pt"]),
+        (number(None, incl(-1.0), Some("mm")), json!(0), vec!["-1", "mm"]),
+        (number(None, excl(10.0), Some("px")), json!(10), vec!["10", "px"]),
+        (number(incl(0.0), incl(100.0), Some("%")), json!(101), vec!["0", "100", "%"]),
+        (number(incl(-180.0), excl(180.0), Some("deg")), json!(180), vec!["-180", "180", "deg"]),
+        (number(excl(0.0), incl(1000.0), Some("pt")), json!(0), vec!["0", "1000", "pt"]),
+        (number(excl(-1.0), excl(1.0), Some("in")), json!(1), vec!["-1", "1", "in"]),
+        (Type::Integer { min: None, max: None }, json!(1.5), vec![]),
+        (Type::Integer { min: Some(1), max: None }, json!(0), vec!["1"]),
+        (Type::Integer { min: None, max: Some(-1) }, json!(0), vec!["-1"]),
+        (Type::Integer { min: Some(1), max: Some(25) }, json!(26), vec!["1", "25"]),
+        (Type::Boolean, json!(1), vec![]),
+        (Type::String, json!(1), vec![]),
+        (Type::Enum(&["left", "center", "right"]), json!("top"), vec![r#""left", "center", "right""#]),
+        (Type::Enum(&["only"]), json!("other"), vec![r#""only""#]),
+        (Type::Id, json!(-1), vec![]),
+        (Type::Ids, json!(5), vec![]),
+        (Type::Color, json!(5), vec![]),
+        (Type::Point, json!(5), vec![]),
+        (Type::Object(&[]), json!(5), vec![]),
+        (Type::Array(&Type::NUMBER), json!(5), vec![]),
+    ];
+    let one = |name: &'static str, ty: Type| ParamSchema::new(Box::leak(Box::new([Param::new(name, ty)])), "");
+    let inner: &'static [Param] = Box::leak(Box::new([Param::new("zoom", number(excl(0.0), None, None))]));
+    let nested = one("edits", Type::Array(Box::leak(Box::new(Type::Object(inner)))));
+    let mut errors: Vec<_> = cases.iter().map(|(ty, bad, caps)| (one("x", *ty).validate(&json!({ "x": bad })), caps.clone())).collect();
+    errors.push((nested.validate(&json!({"edits": [{"zoom": 1}, {"zoom": -1}]})), vec!["0"]));
+    let mut seen = std::collections::BTreeSet::new();
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        for phrase in SCHEMA_PHRASES {
+            assert!(entries.iter().any(|(ctx, src, _)| ctx == "@msg" && src == phrase), "{code}: no row for {phrase:?}");
+        }
+        for (result, caps) in &errors {
+            let Err(e) = result else { panic!("accepted: {result:?}") };
+            let Problem::WrongType { expected, got } = &e.problem else { panic!("{e}") };
+            seen.insert(expected.clone());
+            let (_, matched) = lang.catalog().message(expected).unwrap_or_else(|| panic!("{code}: no row matches {expected:?}"));
+            let values: Vec<&str> = matched.iter().map(|(_, v)| *v).collect();
+            assert_eq!(&values, caps, "{code}: {expected:?}");
+            let phrase = message(lang, expected);
+            assert_ne!(&phrase, expected, "{code}");
+            let mut from = 0;
+            for value in caps {
+                let at = phrase[from..].find(value).unwrap_or_else(|| panic!("{code}: {value:?} in {expected:?} -> {phrase:?}"));
+                from += at + value.len();
+            }
+            let shown = message(lang, &e.to_string());
+            let path = format!("`{}`", e.path);
+            let kept = caps.iter().all(|value| shown.contains(value));
+            assert!(kept && shown.contains(&path) && shown.contains(got.as_str()), "{code}: {shown}");
+            assert!(!holds_word(&shown, expected) && !shown.contains("must be") && !shown.contains(", not "), "{code}: {shown}");
+        }
+    }
+    // A catalog's `{key}` must be one of {_1}` row would take `"a", "b", not "c"` as its list.
+    let enum_error = one("x", Type::Enum(&["a", "b"])).validate(&json!({"x": "c"})).map_or_else(|e| e.to_string(), |_| String::new());
+    assert_eq!(enum_error, r#"`x` must be one of "a", "b", not "c""#);
+    for lang in Lang::all().filter(|l| l.code() != Lang::EN.code() && !l.0.source.is_empty()) {
+        let shown = message(lang, &enum_error);
+        assert!(!shown.contains(", not ") && shown.contains(r#""a", "b""#) && shown.contains(r#""c""#), "{}: {shown}", lang.code());
+    }
+    for phrase in
+        ["a number > -0.5 and < 0.5", "a number 0 to 100 (%)", "an integer 1 to 25", r#"one of "left", "center", "right""#, "[x, y] (two numbers)"]
+    {
+        assert!(seen.contains(phrase), "{phrase:?} not in {seen:?}");
+    }
+}
+
+/// A JSON object or array inside a translated message stays as it is, and an exact message that
+/// starts with a bracket is still translated.
+#[test]
+fn bracketed_message_parts_translate_only_as_exact_messages() {
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let point = message(lang, "[x, y] (two numbers)");
+        assert_ne!(point, "[x, y] (two numbers)", "{code}");
+        assert!(point.contains("[x, y]"), "{code}: {point}");
+        for got in ["[1]", "[1, 2, 3]", r#"{"objects": [1]}"#, r#"[{"a": 1}, "b: c", …"#] {
+            let shown = message(lang, &format!("`center` must be [x, y] (two numbers), not {got}"));
+            assert!(shown.contains(&point) && shown.contains(got), "{code}: {shown}");
+            let shown = message(lang, &format!("`p` must be an object, not {got}"));
+            assert!(shown.contains(got) && !shown.contains("an object"), "{code}: {shown}");
         }
     }
 }
@@ -3666,7 +3895,8 @@ fn string_literal(s: &str) -> Option<String> {
     }
 }
 
-/// A format string as a catalog template (see [`message_literals`]).
+/// A format string as a catalog template (see [`message_literals`]). `{{` and `}}` stay as they
+/// are, the catalogs' literal braces.
 fn as_template(s: &str) -> String {
     let mut out = String::new();
     let mut unnamed = 0;
@@ -3674,7 +3904,15 @@ fn as_template(s: &str) -> String {
     while let Some(a) = rest.find('{') {
         out.push_str(&rest[..a]);
         let after = &rest[a + 1..];
-        let Some(b) = after.find('}') else { break };
+        if let Some(escaped) = after.strip_prefix('{') {
+            out.push_str("{{");
+            rest = escaped;
+            continue;
+        }
+        let Some(b) = after.find('}') else {
+            out.push_str(&rest[a..]);
+            return out;
+        };
         let name = after[..b].split(':').next().unwrap_or("");
         if name.is_empty() {
             unnamed += 1;

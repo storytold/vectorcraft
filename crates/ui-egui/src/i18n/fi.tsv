@@ -1998,6 +1998,10 @@ digits	Malayalam	Malajalam
 	Long	Pitkä
 	Stylistic	Tyylitelty
 	Mojikumi Set	Mojikumi-joukko
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-joukko
 	Kinsoku Shori Type	Kinsoku Shori -tyyppi
 	Push In First	Ensin sisään
@@ -2133,6 +2137,8 @@ digits	Malayalam	Malajalam
 	Weight:	Paksuus:
 	Art using a deleted global swatch keeps its colour.	Poistettua globaalia värimallia käyttävä kuvitus säilyttää värinsä.
 	Color Group: {name}	Väriryhmä: {name}
+	Delete the selected items and their artwork?	Poistetaanko valitut kohteet ja niiden kuvitus?
+	Delete this layer and its artwork?	Poistetaanko tämä taso ja sen kuvitus?
 	Delete “{name}”?	Poistetaanko ”{name}”?
 	Document Swatches	Asiakirjan värimallit
 	Edit or Apply Color Group	Muokkaa tai käytä väriryhmää
@@ -3721,9 +3727,11 @@ theme	Appearance	Ulkoasu
 	Enable Background Export	Ota taustavienti käyttöön
 	Enable Background Save	Ota taustatallennus käyttöön
 	Enable in-menu font previews	Ota fonttien esikatselu valikoissa käyttöön
+	Show samples on white	Näytä mallit valkoisella pohjalla
 	Enable Missing Glyph Protection	Ota puuttuvien merkkien suojaus käyttöön
 	Enable Rubber Band for	Ota kumilankavalinta käyttöön kohteelle
 	Enable Touch Gestures	Ota kosketuseleet käyttöön
+	Switch Selection and Drawing Modes	Vaihda valinta- ja piirtotilan välillä
 	Enable Touch Workspace	Ota kosketustyötila käyttöön
 	English: UK	Englanti: UK
 	Every (minutes)	Välein (minuuttia)
@@ -4920,6 +4928,7 @@ imageTrace	Outline	Ääriviiva
 @msg	not a valid plug-in module: {0}	ei kelvollinen laajennusmoduuli: {0}
 @msg	not an EMF or WMF file	ei EMF- tai WMF-tiedosto
 @msg	not an HP-GL file	ei HP-GL-tiedosto
+@msg	not a PICT file	ei PICT-tiedosto
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` on oltava 1–255 #rrggbb-värin taulukko
 @msg	not found	ei löytynyt
 @msg	not in pattern editing mode	ei kuvion muokkaustilassa
@@ -5296,6 +5305,7 @@ imageTrace	Outline	Ääriviiva
 @msg	choose the font files to add	valitse lisättävät fonttitiedostot
 @msg	not a file	ei tiedosto
 @msg	not a font file	ei fonttitiedosto
+@msg	the active document changed while the question was open; nothing was deleted	aktiivinen asiakirja vaihtui kysymyksen ollessa auki; mitään ei poistettu
 @msg	that document is no longer open	kyseinen asiakirja ei ole enää auki
 @msg	larger than 256 MB	suurempi kuin 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	tiedostojen koko on yli 1 GB: lisää vähemmän kerrallaan
@@ -6414,6 +6424,35 @@ axis	Y Axis	Y-akseli
 @msg	the path has no anchor points	polulla ei ole ankkuripisteitä
 @msg	too many anchor points (limit {MAX_ANCHORS})	liian monta ankkuripistettä (raja {MAX_ANCHORS})
 @msg	true or false	true tai false
+@msg	a number >= {_1}	luku >= {_1}
+@msg	a number > {_1}	luku > {_1}
+@msg	a number <= {_1}	luku <= {_1}
+@msg	a number < {_1}	luku < {_1}
+@msg	a number {_1} to {_2}	luku, joka on vähintään {_1} ja enintään {_2}
+@msg	a number >= {_1} and < {_2}	luku >= {_1} ja < {_2}
+@msg	a number > {_1} and <= {_2}	luku > {_1} ja <= {_2}
+@msg	a number > {_1} and < {_2}	luku > {_1} ja < {_2}
+@msg	a number ({_1})	luku ({_1})
+@msg	a number >= {_1} ({_2})	luku >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	luku > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	luku <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	luku < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	luku, joka on vähintään {_1} ja enintään {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	luku >= {_1} ja < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	luku > {_1} ja <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	luku > {_1} ja < {_2} ({_3})
+@msg	an integer	kokonaisluku
+@msg	an integer >= {_1}	kokonaisluku >= {_1}
+@msg	an integer <= {_1}	kokonaisluku <= {_1}
+@msg	an integer {_1} to {_2}	kokonaisluku, joka on vähintään {_1} ja enintään {_2}
+@msg	one of {_1}	jokin arvoista {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` on oltava jokin arvoista {_1}, ei {got}
+@msg	an object id (a non-negative integer)	objektitunnus (ei-negatiivinen kokonaisluku)
+@msg	a list of object ids	objektitunnusten luettelo
+@msg	a color (a string, [r, g, b] or an object)	väri (merkkijono, [r, g, b] tai objekti)
+@msg	[x, y] (two numbers)	[x, y] (kaksi lukua)
+@msg	an object	objekti
+@msg	a list	luettelo
 @msg	unknown key `{k}`; the keys here are {_1}	tuntematon avain `{k}`; tässä käytettävät avaimet ovat {_1}
 @msg	{_1} is listed twice	{_1} on luettelossa kahdesti
 @msg	{_1} is not the id of an input object	{_1} ei ole syöteobjektin tunnus
@@ -7255,7 +7294,9 @@ breakText	Glyphs	Merkit
 @msg	“{shown}” opens {_1} files, not `{_2}`	”{shown}” avaa {_1}-tiedostoja, ei `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` on lajin `{_2}` laajennus, ei tuontilaajennus
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` on lajin `{_2}` laajennus, ei vientilaajennus
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` on tuontilaajennus: avaa tiedosto komennolla document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` on tuontilaajennus: avaa tiedosto komennolla document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` on vientilaajennus: vie komennolla document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` on live-tehoste: käytä sitä komennolla effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	tuontilaajennus ei palauttanut objekteja
 @msg	an importer returns `objects` and `warnings`, not `{key}`	tuontilaajennus palauttaa `objects` ja `warnings`, ei `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	tiedosto on suurempi kuin tuontilaajennuksen lukemat {MAX_INPUT_BYTES} tavua
