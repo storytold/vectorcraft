@@ -459,7 +459,8 @@ fn spend_tabs(tabs: &mut Vec<TabStop>, budget: &mut usize) -> bool {
 
 #[derive(Clone, Debug)]
 struct Style {
-    font: Option<String>,
+    /// The font its record names, as the fonts the app has set it ([`DocFont::font`]).
+    font: Option<Font>,
     size: f64,
     /// `None`: auto.
     leading: Option<f64>,
@@ -490,10 +491,44 @@ struct Style {
     standard_vertical_roman: bool,
 }
 
+/// The longest font version string read from a font record: name ID 5 strings are short (`Version
+/// 7.200`, or with the tools that built the font, some 80 characters).
+const MAX_FONT_VERSION: usize = 256;
+
+/// The version a font record's key 5 gives `v`, as the reader takes it: `None` when it is empty or
+/// longer than [`MAX_FONT_VERSION`] bytes. The `.ai` save checks a record it writes against this.
+pub(crate) fn record_version(v: &str) -> Option<&str> {
+    (!v.is_empty() && v.len() <= MAX_FONT_VERSION).then_some(v)
+}
+
+/// A font as type is set in it: family, style and the version it names
+/// ([`super::text::document_font`]).
+type Font = (String, String, Option<String>);
+
+/// A font of a text document's font list, as its record (a `CoolTypeFont`) names it.
+#[derive(Debug, Default)]
+struct DocFont {
+    /// Key 0: the PostScript name.
+    name: String,
+    /// Key 5, when the record keeps it: the font's version string (name ID 5), which tells installed
+    /// copies of one font apart.
+    version: Option<String>,
+    /// [`Self::font`]'s answer, found once for every run that names the record.
+    font: std::sync::OnceLock<Font>,
+}
+
+impl DocFont {
+    /// The font type set in this record's font takes: the installed copy it names
+    /// ([`super::text::document_font`]).
+    fn font(&self) -> &Font {
+        self.font.get_or_init(|| super::text::document_font(&self.name, self.version.as_deref()))
+    }
+}
+
 /// The text document of an editing copy.
 pub(super) struct Texts {
     stories: Vec<Val>,
-    fonts: Vec<String>,
+    fonts: Vec<DocFont>,
     /// The character and paragraph styles a story starts from.
     defaults: Val,
     para_defaults: Val,
@@ -552,7 +587,15 @@ impl Texts {
             .get("0")?
             .list()
             .iter()
-            .map(|f| f.get("0").and_then(|f| f.get("0")).and_then(|f| f.get("0")).and_then(Val::str).unwrap_or_default().to_string())
+            .map(|f| {
+                let record = f.get("0").and_then(|f| f.get("0"));
+                let text = |k: &str| record.and_then(|r| r.get(k)).and_then(Val::str);
+                DocFont {
+                    name: text("0").unwrap_or_default().to_string(),
+                    version: text("5").and_then(record_version).map(str::to_string),
+                    font: std::sync::OnceLock::new(),
+                }
+            })
             .collect();
         let main = doc.get("1")?;
         let sheets = |key: &str| -> Vec<Val> {
@@ -774,12 +817,12 @@ impl Texts {
         let pick = |k: &str| chain.iter().find_map(|s| s.get(k)).or_else(|| self.defaults.get(k));
         let num = |k: &str| pick(k).and_then(Val::num);
         let on = |k: &str| !matches!(pick(k), Some(Val::Bool(false)));
-        let font = num("0").and_then(|i| self.fonts.get(i as usize)).filter(|f| !f.is_empty()).cloned();
+        let font = num("0").and_then(|i| self.fonts.get(i as usize)).filter(|f| !f.name.is_empty());
         let size = num("1").filter(|v| *v > 0.0 && *v < 1e5).unwrap_or(12.0);
         // Key 5 of a paint names the art style that paints it ([`Self::with_patterns`]).
         let pattern = |k: &str| pick(k).and_then(|p| p.get("5")).and_then(Val::str).and_then(|name| self.patterns.get(name)).cloned();
         Style {
-            font,
+            font: font.map(|f| f.font().clone()),
             size,
             leading: if on("4") { None } else { num("5").filter(|v| *v > 0.0 && *v < 1e5) },
             tracking: num("8").filter(|v| v.abs() < 1e5).unwrap_or(0.0),
@@ -1386,13 +1429,12 @@ fn para_style(p: &Para, scale: f64) -> ParaStyle {
     }
 }
 
-/// The character style of character attributes `s`: its font from the fonts the app has, its
-/// lengths (size, leading, baseline shift, stroke width) scaled by `scale`, and its patterns placed
-/// in the type's text space by `to_text` (the document → its text space), where they stay as the
-/// document has them.
+/// The character style of character attributes `s`: its font from the fonts the app has (the
+/// installed copy its font record names, [`DocFont::font`]), its lengths (size, leading, baseline
+/// shift, stroke width) scaled by `scale`, and its patterns placed in the type's text space by
+/// `to_text` (the document → its text space), where they stay as the document has them.
 fn char_style(s: &Style, scale: f64, to_text: Affine) -> CharStyle {
-    let (family, style) = s.font.as_deref().map_or_else(|| (CharStyle::default().font_family, "Regular".to_string()), crate::family_style);
-    let family = vectorcraft_text::FontDb::global().find_family(&family).unwrap_or(family);
+    let (family, style, version) = s.font.clone().unwrap_or_else(|| (CharStyle::default().font_family, "Regular".to_string(), None));
     // A fill or stroke that is on takes its pattern in place of its colour.
     let paint = |color: Option<Color>, pattern: &Option<Paint>| match (color, pattern) {
         // A pattern that can't be placed (the type's text space out of range) keeps the colour.
@@ -1407,6 +1449,7 @@ fn char_style(s: &Style, scale: f64, to_text: Affine) -> CharStyle {
     CharStyle {
         font_family: family,
         font_style: style,
+        font_version: version,
         size: s.size * scale,
         // Auto leading stays auto: the layout gives each line the paragraph's share of the largest
         // type on it, as the file's own layout does ("The largest leading value in a line of type

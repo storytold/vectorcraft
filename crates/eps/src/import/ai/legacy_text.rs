@@ -508,10 +508,16 @@ impl Reader<'_> {
                         None => (full.as_str(), None),
                     };
                     st.cmap = cmap;
-                    let (family, style) = super::super::super::text::family_style(name);
+                    // The installed face of that PostScript name, as type from a text document
+                    // takes it; else the name split into a family and style.
+                    let text = super::super::super::text::named_font(name, None);
+                    let (family, style, version) = text.unwrap_or_else(|| {
+                        let (family, style) = super::super::super::text::family_style(name);
+                        (family, style, None)
+                    });
                     st.style.font_family = family;
                     st.style.font_style = style;
-                    st.style.font_version = None;
+                    st.style.font_version = version;
                 }
                 if let Some(size) = vals.get(at + 1).and_then(V::num).filter(|s| s.is_finite() && *s > 0.0) {
                     st.style.size = size.min(MAX_SIZE);

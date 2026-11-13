@@ -5988,6 +5988,13 @@ axis	Y Axis	Y ос
 @msg	Batch cannot play an action with a stop	Пакет не може да изпълни действие със спиране
 	Insert Menu Item…	Вмъкване на елемент от меню…
 	Insert Menu Item	Вмъкване на елемент от меню
+	Insert Select Path	Вмъкване на избор на път
+	Select Path	Избор на път
+@msg	select one whole path or compound path	изберете един цял път или съставен път
+@msg	select only one path	изберете само един път
+@msg	the path is hidden or locked, or cannot be selected here	пътят е скрит или заключен, или не може да бъде избран тук
+@msg	object {value} is not the stored path: it changed, or the document is another one	обект {value} не е запазеният път: той е променен или документът е друг
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` трябва да е "v1:" и 16 шестнадесетични цифри с малки букви
 	Select Object…	Избиране на обект…
 	Select Object	Избиране на обект
 	Set Selection	Задаване на селекция
