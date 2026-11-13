@@ -627,6 +627,8 @@ font-technology	Variable	Вариативные
 	Convert to Artboards	Преобразовать в монтажные области
 	Convert to CMYK	Преобразовать в CMYK
 	Convert to Grayscale	Преобразовать в оттенки серого
+	Convert to Indexed Color	Преобразовать в индексированные цвета
+	Convert to Indexed Color…	Преобразовать в индексированные цвета…
 	Convert To Outlines	Преобразовать в контуры
 	Convert To Point Type	Преобразовать в точечный текст
 	Convert to RGB	Преобразовать в RGB
