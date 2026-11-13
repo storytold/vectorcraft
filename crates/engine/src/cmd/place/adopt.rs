@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use vectorcraft_brush::{Brush, BrushKind};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{AppearanceItem, Document, Node, NodeKind};
+use vectorcraft_doc::{AppearanceItem, Document, Node, NodeKind, PatternDef, Symbol};
 
 use super::unique_name;
 
@@ -118,11 +118,12 @@ impl Used {
 type Renames = BTreeMap<String, (Option<String>, bool)>;
 
 /// Names in `dst` for the `used` definitions of `src` (`def`): the same name when `dst` has none
-/// (copied) or an equal one (shared), else a free variant (`taken`, copied).
-fn names<T: PartialEq>(
+/// (copied) or one that is the `same` (shared), else a free variant (`taken`, copied).
+fn names<T>(
     used: &[String],
     def: impl Fn(&str) -> Option<T>,
     existing: impl Fn(&str) -> Option<T>,
+    same: impl Fn(&T, &T) -> bool,
     taken: impl Fn(&str) -> bool,
 ) -> Renames {
     let mut out = Renames::new();
@@ -130,7 +131,7 @@ fn names<T: PartialEq>(
         let Some(d) = def(name) else { continue };
         let entry = match existing(name) {
             None => (Some(name.clone()), true),
-            Some(e) if e == d => (Some(name.clone()), false),
+            Some(e) if same(&e, &d) => (Some(name.clone()), false),
             Some(_) => {
                 (Some(unique_name(name, |c| taken(c) || used.iter().any(|u| u == c) || out.values().any(|(n, _)| n.as_deref() == Some(c)))), true)
             }
@@ -138,6 +139,65 @@ fn names<T: PartialEq>(
         out.insert(name.clone(), entry);
     }
     out
+}
+
+/// `n` as `dst` would copy it in ([`Document::reid`]), with the ids a document of its own gives it:
+/// art copied in once, which differs from the file's only in its ids, compares equal to the file's.
+fn canon(dst: &Document, n: &Node) -> Node {
+    let mut own = Document::new(0.0, 0.0);
+    // Pixels the art carries take a key `dst` doesn't use for other pixels, as they do in `dst`.
+    let mut keys = vec![];
+    vectorcraft_doc::swatches::walk_with_masks(n, &mut |c| {
+        if let NodeKind::Image(im) = &c.kind
+            && im.pixels.is_some()
+        {
+            keys.push(im.key.clone());
+        }
+    });
+    for (k, blob) in &dst.images {
+        if keys.iter().any(|key| k == key || k.strip_prefix(key.as_str()).is_some_and(|rest| rest.starts_with('-'))) {
+            own.images.insert(k.clone(), blob.clone());
+        }
+    }
+    own.reid(n)
+}
+
+/// Do symbols `a` and `b` draw the same, whatever ids their art has ([`canon`])?
+fn same_symbol(dst: &Document, a: &Symbol, b: &Symbol) -> bool {
+    let own = |s: &Symbol| Symbol { art: Arc::new(canon(dst, &s.art)), ..s.clone() };
+    own(a) == own(b)
+}
+
+/// Do patterns `a` and `b` draw the same, whatever ids their art has ([`canon`])?
+fn same_pattern(dst: &Document, a: &PatternDef, b: &PatternDef) -> bool {
+    let bare = |p: &PatternDef| PatternDef { art: vec![], ..p.clone() };
+    bare(a) == bare(b) && a.art.len() == b.art.len() && a.art.iter().zip(&b.art).all(|(x, y)| canon(dst, x) == canon(dst, y))
+}
+
+/// Does art `a` use a resource that `m` (images, symbols, patterns, brushes, swatches) gives
+/// another name, or a swatch whose link `m` drops?
+fn uses_moved(a: &Node, m: [&Renames; 5]) -> bool {
+    let moved = |map: &Renames, k: &str| map.get(k).is_some_and(|(new, _)| new.as_deref() != Some(k));
+    let (mut a, mut any) = (a.clone(), false);
+    refs(&mut a, &mut |r| {
+        any |= match r {
+            Ref::Image(k) => moved(m[0], k),
+            Ref::Symbol(k) => moved(m[1], k),
+            Ref::Pattern(k) => moved(m[2], k),
+            Ref::Brush(k) => moved(m[3], k),
+            Ref::Swatch(link) => link.as_deref().is_some_and(|k| moved(m[4], k)),
+        }
+    });
+    any
+}
+
+/// Copy each of `shared` in `map` under a free name, as [`names`] does for a definition `dst`
+/// holds differently.
+fn unshare(map: &mut Renames, shared: &[String], used: &[String], taken: impl Fn(&str) -> bool) {
+    for name in shared {
+        let free = unique_name(name, |c| taken(c) || used.iter().any(|u| u == c) || map.values().any(|(n, _)| n.as_deref() == Some(c)));
+        map.insert(name.clone(), (Some(free), true));
+    }
 }
 
 /// The renamed resources whose definitions are copied: (name in `src`, name in `dst`).
@@ -194,14 +254,17 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
         }
     }
 
-    let images = names(&used.images, |k| src.images.get(k), |k| dst.images.get(k), |c| dst.images.contains_key(c));
-    let symbols = names(
+    let images = names(&used.images, |k| src.images.get(k), |k| dst.images.get(k), |a, b| a == b, |c| dst.images.contains_key(c));
+    // Symbol and pattern art copied in takes ids of `dst`, so their art is compared by what it
+    // draws: placing the same file again shares what the first placement brought.
+    let mut symbols = names(
         &used.symbols,
         |n| src.symbols.iter().find(|s| s.name == n),
         |n| dst.symbols.iter().find(|s| s.name == n),
+        |a, b| same_symbol(dst, a, b),
         |c| dst.symbols.iter().any(|s| s.name == c),
     );
-    let patterns = names(&used.patterns, |n| src.pattern(n), |n| dst.pattern(n), |c| dst.pattern(c).is_some());
+    let mut patterns = names(&used.patterns, |n| src.pattern(n), |n| dst.pattern(n), |a, b| same_pattern(dst, a, b), |c| dst.pattern(c).is_some());
     // A swatch the document defines differently isn't renamed (that would add look-alike swatches):
     // the colours linked to it keep their look, unlinked.
     let swatches: Renames = used
@@ -236,12 +299,33 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
         any
     };
     let mut dst_brushes = vectorcraft_brush::library(dst);
-    let brushes = names(
+    let mut brushes = names(
         &used.brushes,
         |n| src_brushes.iter().find(|b| b.name == n).map(|b| (b, moves_art(b))),
         |n| dst_brushes.iter().find(|b| b.name == n).map(|b| (b, false)),
+        |a, b| a == b,
         |c| dst_brushes.iter().any(|b| b.name == c),
     );
+    // Likewise a symbol, pattern or brush whose art uses a resource that moves isn't the
+    // document's of that name: it is copied under a free name, which can move what uses it in turn.
+    loop {
+        let maps = [&images, &symbols, &patterns, &brushes, &swatches];
+        let shared = |map: &Renames| map.iter().filter(|(_, (_, copy))| !*copy).map(|(k, _)| k.clone()).collect::<Vec<_>>();
+        let sym: Vec<String> =
+            shared(&symbols).into_iter().filter(|n| src.symbols.iter().any(|s| s.name == *n && uses_moved(&s.art, maps))).collect();
+        let pat: Vec<String> =
+            shared(&patterns).into_iter().filter(|n| src.pattern(n).is_some_and(|p| p.art.iter().any(|a| uses_moved(a, maps)))).collect();
+        let bru: Vec<String> = shared(&brushes)
+            .into_iter()
+            .filter(|n| src_brushes.iter().find(|b| b.name == *n).is_some_and(|b| brush_art(&mut b.clone()).into_iter().any(|a| uses_moved(a, maps))))
+            .collect();
+        if sym.is_empty() && pat.is_empty() && bru.is_empty() {
+            break;
+        }
+        unshare(&mut symbols, &sym, &used.symbols, |c| dst.symbols.iter().any(|s| s.name == c));
+        unshare(&mut patterns, &pat, &used.patterns, |c| dst.pattern(c).is_some());
+        unshare(&mut brushes, &bru, &used.brushes, |c| dst_brushes.iter().any(|b| b.name == c));
+    }
 
     let mut rename = |r: Ref| {
         let (map, k) = match r {
