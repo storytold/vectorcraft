@@ -761,8 +761,15 @@ outline, so these commands do not store a stroke paint or weight for a series th
 `paint.swap`, they still store a stroke opacity and blend mode set on a band, and the band's outline takes them. Graph
 designs keep their own paint. A row that had no
 paint before the command and has none after it does not change the paint the graph stores. `paint.setFill`,
-`paint.setStroke`, `paint.none` and the commands that apply one paint kind to the other store the topmost row of the kind
-even when it is hidden, and store a stroke set on a band.
+`paint.setStroke`, `paint.none`, `addon.color.fillToStroke` and `addon.color.strokeToFill` follow the same rules, and so
+does `library.use` when it applies a gradient or pattern. They write the topmost row of the kind; `paint.setFill` and
+`paint.setStroke` write the row `item` names instead, and without ids the three `paint.*` commands write the active
+row of the Appearance panel when it is of that kind. The graph stores only the paint of the topmost visible row of the
+kind, and only when the command wrote that row or changed its paint or weight. A paint written to a hidden row or to a
+row under the topmost visible one is not stored, also when that row shows through a translucent row above it, and the
+mark loses it when the graph is drawn again. A mark whose row
+already has the paint counts as written, so its paint replaces the one another mark of the series left on the graph.
+When one of these commands writes several paths of a series, the frontmost of them sets what the graph stores.
 
 `appearance.addFill`, `appearance.addStroke`, `appearance.setItem`, `appearance.removeItem`,
 `appearance.duplicateItem`, `appearance.moveItem`, `appearance.clear`, `appearance.reduceToBasic`,
@@ -808,6 +815,22 @@ it sets for each kind of label it reaches (value axis numbers, category labels, 
 kind takes them when the graph is drawn again. The graph saves the paragraph attributes as `valuesPara`,
 `categoriesPara` and `legendPara` in its label styles, and still sets each label's alignment for its place. The legend
 leaves room for a legend label's stored indents, spacing and leading.
+
+The `appearance.*` commands, `graphicStyle.apply` and `graphicStyle.redefine`, and the paint, stroke, gradient and
+transparency commands given an `item` (or the Appearance panel's active row) store a graph label's object rows for its
+kind of label: the paint, weight, opacity and blend mode of its topmost visible fill and stroke row, their order and
+their place relative to the Characters row, and the label's object opacity and blend mode. They store them even when the
+label already showed them. `transparency.set` without an `item`, `object.setProps` with an opacity or blend mode, and
+an `appearance.copyFrom` (Eyedropper) pick of transparency store only the label's object opacity and blend mode;
+`appearance.copyFrom` with `append` stores the rows. When the graph is drawn again, every label of that kind gets what
+is stored, with a placed gradient fitted to each label, and the graph saves it as `valuesRows`, `categoriesRows` and
+`legendRows` in its label styles. Rows below the topmost one of each kind, a row's effects, other stroke options (caps,
+joins, dashes) and effects applied with `effect.*` are not stored. When labels of one kind are edited together, the
+last one in the order of the targets (`ids` as given, otherwise paint order) sets what the kind keeps.
+`appearance.copyFrom` onto the whole text of a label also stores the character attributes it applies and, from type,
+the paragraph attributes. `paint.setFill` and `paint.setStroke` store a character fill or stroke when the paint goes to
+the label's characters (the whole label, or all of its text highlighted with the Type tool), and the row when it goes to
+a row. A stored character gradient also fits each label.
 
 `effect.apply {"effect": "path.outlineObject"}` (Effect › Path › Outline Object) takes no parameters. Type that carries
 it is drawn, exported and expanded as its glyph outlines and stays editable type, and the effects after it reshape
