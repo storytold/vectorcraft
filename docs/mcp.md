@@ -9973,8 +9973,9 @@ the Selection and Blend tools show the same values as widgets
 16 px above and below the spine's halfway point (where the boxes of three or more other visible objects hold that
 spot, a widget moves out in 16 px steps, up to 144 px, joined to the halfway point by a line): the upper one sets
 `colorShift` and the lower one, shown only when the steps follow the spine as `ramp` needs, sets `ramp`, by one per screen pixel dragged along the spine and by one per arrow key
-during the drag (ten with Shift). Each drag is one undo step, and `press_key` Escape or a switch to another tool
-during it puts the value back:
+during the drag (ten with Shift). A blend made without a spine shows the upper widget alone, placed against the
+straight lines between its key centers that its steps are laid out along, which are not drawn. Each drag is one undo
+step, and `press_key` Escape or a switch to another tool during it puts the value back:
 
 ```json
 {"name":"run_command","arguments":{"command":"object.blend.setEasing","params":{"id":40,"ramp":35}}}
