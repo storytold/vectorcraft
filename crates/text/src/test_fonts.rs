@@ -453,7 +453,7 @@ pub fn vertical_punctuation_font(alternates: bool) -> Option<Vec<u8>> {
 pub const FULL_WIDTH_FAMILY: &str = "Fullwidthtest Sans";
 
 /// The ideographs and Japanese punctuation [`full_width_font`] sets one em wide.
-pub const FULL_WIDTH_CHARS: &str = "一二三四五六「」、。";
+pub const FULL_WIDTH_CHARS: &str = "一二三四五六「」、。・";
 
 /// A test-only cmap over bundled Source Sans 3: [`FULL_WIDTH_CHARS`] use the one-em-wide glyph of
 /// U+2318, so Japanese composition is tested without OS fonts; Latin letters and the space keep

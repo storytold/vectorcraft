@@ -107,6 +107,45 @@ fn paragraph_mixed_kinsoku_and_mojikumi_show_blank_dropdowns() {
     assert_eq!(shared_para(&app, |p| p.mojikumi), Some(Mojikumi::LineEndHalf));
 }
 
+/// The Mojikumi Set menu lists None, the four other predefined sets and Line-end Punctuation Half
+/// Width, each under its own label in every interface language. Each entry sets the selected
+/// paragraphs' set in one undo step and is shown as the current set; paragraphs with different
+/// sets show a blank menu, and Reset Panel gives them Line-end Punctuation Half Width.
+#[test]
+fn mojikumi_menu_offers_and_sets_every_predefined_set() {
+    let keys: Vec<&str> = mojikumi_sets().iter().map(|s| s.2).collect();
+    assert_eq!(keys, ["none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku", "lineEndHalf"]);
+    for lang in crate::i18n::Lang::all() {
+        crate::i18n::set_current(lang);
+        let labels: std::collections::BTreeSet<&str> = mojikumi_sets().iter().map(|s| s.0).collect();
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(labels.len(), 6, "{}: {labels:?}", lang.code());
+    }
+    let (mut app, id) = editing_text("「あ」。\nい、");
+    app.session.prefs.show_east_asian_options = true;
+    app.session.set_tool_option("selectAll", &json!(true));
+    let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    for (_, set, key) in mojikumi_sets() {
+        app.session.set_tool_option("selectAll", &json!(true));
+        let before = (shared_para(&app, |p| p.mojikumi), steps(&app));
+        format(&mut app, json!({"mojikumi": key}));
+        assert_eq!(shared_para(&app, |p| p.mojikumi), Some(set), "{key}");
+        if before.0 == Some(set) {
+            continue;
+        }
+        assert_eq!(steps(&app), before.1 + 1, "{key}: one undo step");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(shared_para(&app, |p| p.mojikumi), before.0, "{key}: undone");
+        app.run("edit.redo", json!({})).unwrap();
+    }
+    app.run("text.setFormat", json!({"id": id, "start": 0, "end": 0, "mojikumi": "yakumonoHankaku"})).unwrap();
+    app.run("text.setFormat", json!({"id": id, "start": 13, "end": 13, "mojikumi": "gyomatsuYakumonoZenkaku"})).unwrap();
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(shared_para(&app, |p| p.mojikumi), None, "mixed sets");
+    reset_panel(&mut app);
+    assert_eq!(shared_para(&app, |p| p.mojikumi), Some(Mojikumi::LineEndHalf), "Reset Panel");
+}
+
 /// Kinsoku Shori Type: the menu's item sets the type of the paragraphs the Type tool's selection
 /// touches in one undo step, and none is checked while the selected paragraphs differ.
 #[test]

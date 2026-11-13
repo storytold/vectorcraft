@@ -5345,6 +5345,10 @@ font-technology	Variable	可变
 	Long	长
 	Stylistic	风格化
 	Mojikumi Set	标点挤压集
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku 集
 	Kinsoku Shori Type	Kinsoku 处理方式
 	Push In First	先推入

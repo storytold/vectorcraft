@@ -71,12 +71,16 @@ digits	Malayalam	マラヤーラム数字
 	Flip	反転
 	Japanese	日本語
 	Join Our Discord	Discord に参加
-	Line-end Punctuation Half Width	行末約物半角
+	Line-end Punctuation Half Width	行末・連続約物半角
 	Insert Kashidas	カシーダを挿入
 	Kashidas	カシーダ
 	Long	長い
 	Stylistic	スタイリスティック
 	Mojikumi Set	文字組み
+	YakumonoHankaku	約物半角
+	GyomatsuYakumonoHankaku	行末約物半角
+	GyomatsuYakumonoZenkaku	行末約物全角
+	YakumonoZenkaku	約物全角
 	Kinsoku Set	禁則処理
 	Kinsoku Shori Type	禁則調整方式
 	Push In First	追い込み優先

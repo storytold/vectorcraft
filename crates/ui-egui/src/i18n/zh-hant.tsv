@@ -3111,6 +3111,10 @@ file-filter	Templates	範本
 	Long	長
 	Stylistic	風格化
 	Mojikumi Set	標點間距
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku 集
 	Kinsoku Shori Type	Kinsoku 處理方式
 	Push In First	先推入

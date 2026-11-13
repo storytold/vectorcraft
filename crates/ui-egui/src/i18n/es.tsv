@@ -2041,6 +2041,10 @@ font-technology	Variable	Variables
 	Long	Larga
 	Stylistic	Estilística
 	Mojikumi Set	Conjunto de mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Conjunto de kinsoku
 	Kinsoku Shori Type	Tipo de kinsoku shori
 	Push In First	Primero hacia dentro

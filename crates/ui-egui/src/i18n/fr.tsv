@@ -2035,6 +2035,10 @@ font-technology	Variable	Variables
 	Long	Longue
 	Stylistic	Stylistique
 	Mojikumi Set	Jeu de mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Jeu de kinsoku
 	Kinsoku Shori Type	Type de kinsoku shori
 	Push In First	D’abord vers l’intérieur
