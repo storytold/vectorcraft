@@ -19,7 +19,8 @@
 //!   to Outline and the row's layer to Preview (`layer.outlineOthers`), or switches every layer to
 //!   Preview when the others are in Outline (`layer.previewAll`).
 //! - Dragging rows moves them above, below or into a layer or group (`layer.move`, a drop line or
-//!   a box shows where); Alt copies them. A dimmed copy of the row follows the pointer. Layers
+//!   a box shows where); Alt copies them. A dimmed copy of the row follows the pointer, and rows
+//!   held near the top or bottom edge of the list scroll it, faster nearer the edge. Layers
 //!   dropped in the empty space under the last row go below the bottom layer. Dropped on the trash
 //!   they are deleted, on New Layer duplicated.
 //! - Deleting rows from the panel (the trash, rows dropped on it, Delete Selection, Delete and
@@ -303,6 +304,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
                 for r in list.get(range).unwrap_or_default() {
                     row(ui, &view, r, &mut out);
+                }
+                // Rows held near the list's top or bottom edge scroll it, so a row out of view can
+                // take the drop.
+                if egui::DragAndDrop::payload::<LayersDrag>(ui.ctx()).is_some_and(|d| matches!(*d, LayersDrag::Rows(_)))
+                    && ui.input(|i| i.pointer.primary_down())
+                {
+                    super::scroll_at_edges(ui);
                 }
             },
         )

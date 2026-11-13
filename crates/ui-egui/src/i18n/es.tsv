@@ -3465,6 +3465,19 @@ digits	Malayalam	Malayálam
 	Spot Color Objects	Objetos con tintas planas
 	Pattern Objects	Objetos con motivos
 	Gradient Objects	Objetos con degradados
+	Font Details	Detalles de fuentes
+	Linked Images	Imágenes vinculadas
+	Embedded Images	Imágenes incrustadas
+	Compound Paths	Trazados compuestos
+	Text Objects	Objetos de texto
+	Placed Documents	Documentos colocados
+	Symbol Instances	Instancias de símbolo
+	Gradient Meshes	Mallas de degradado
+	Blends	Fusiones
+	Envelopes	Envolventes
+	Intertwine Groups	Grupos entrelazados
+	Opacity Masks	Máscaras de opacidad
+	Objects with Effects	Objetos con efectos
 	Spot Colors	Tintas planas
 	Spot Colors…	Tintas planas…
 	Spread:	Extensión:
@@ -4155,6 +4168,10 @@ axis	Both	Ambos
 	Dock Panel	Anclar panel
 	Dock to Top	Anclar arriba
 	Dock to Bottom	Anclar abajo
+	Dock to Left	Anclar a la izquierda
+	Dock to Right	Anclar a la derecha
+	Dock Toolbar	Anclar barra de herramientas
+	Float Toolbar	Hacer flotar la barra de herramientas
 	Control Bar Options	Opciones de la barra de control
 	Tool Options	Opciones de herramienta
 	Object Options	Opciones de objeto
@@ -5110,6 +5127,7 @@ axis	Both	Ambos
 @msg	every numbered name for it is taken in the Fonts folder	todos los nombres numerados para él ya existen en la carpeta Fonts
 @msg	every numbered name for {name} is taken in the document's folder	todos los nombres numerados para {name} ya existen en la carpeta del documento
 @msg	No linked files to look for	No hay archivos vinculados que buscar
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	El vínculo está dentro de un símbolo, un diseño de gráfico, un motivo o una máscara de opacidad y no tiene lugar en el lienzo
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Servicios
@@ -6662,6 +6680,13 @@ axis	Y Axis	Eje Y
 	Area Text	Texto de área
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Medir el texto por los límites del glifo
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opciones de ajuste a píxel
+	Pixel Snapping Options…	Opciones de ajuste a píxel…
+	Snap to Pixel While Drawing	Ajustar a píxel al dibujar
+	Snap to Pixel While Moving	Ajustar a píxel al mover
+	Snap to Pixel While Scaling	Ajustar a píxel al escalar
+	These options take effect when View › Snap to Pixel is on.	Estas opciones se aplican cuando Ver › Ajustar a píxel está activado.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostrar opciones de ajuste a glifo
 	Hide Snap to Glyph Options	Ocultar opciones de ajuste a glifo

@@ -3497,6 +3497,19 @@ digits	Malayalam	Малаялам
 	Spot Color Objects	Объекты с плашечными цветами
 	Pattern Objects	Объекты с узорами
 	Gradient Objects	Объекты с градиентами
+	Font Details	Сведения о шрифтах
+	Linked Images	Связанные изображения
+	Embedded Images	Внедрённые изображения
+	Compound Paths	Составные контуры
+	Text Objects	Текстовые объекты
+	Placed Documents	Размещённые документы
+	Symbol Instances	Экземпляры символов
+	Gradient Meshes	Градиентные сетки
+	Blends	Переходы
+	Envelopes	Оболочки
+	Intertwine Groups	Группы переплетения
+	Opacity Masks	Непрозрачные маски
+	Objects with Effects	Объекты с эффектами
 	Spot Colors	Плашечные цвета
 	Spot Colors…	Плашечные цвета…
 	Spread:	Разворот:
@@ -4192,6 +4205,10 @@ axis	Both	Оба
 	Dock Panel	Прикрепить панель
 	Dock to Top	Прикрепить сверху
 	Dock to Bottom	Прикрепить снизу
+	Dock to Left	Прикрепить слева
+	Dock to Right	Прикрепить справа
+	Dock Toolbar	Прикрепить панель инструментов
+	Float Toolbar	Сделать панель инструментов плавающей
 	Control Bar Options	Параметры панели управления
 	Tool Options	Параметры инструмента
 	Object Options	Параметры объекта
@@ -5147,6 +5164,7 @@ axis	Both	Оба
 @msg	every numbered name for it is taken in the Fonts folder	все нумерованные имена для него уже заняты в папке Fonts
 @msg	every numbered name for {name} is taken in the document's folder	все нумерованные имена для {name} уже заняты в папке документа
 @msg	No linked files to look for	Нет связанных файлов для поиска
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Связь находится внутри символа, дизайна диаграммы, узора или непрозрачной маски и не имеет места на холсте
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Службы
@@ -6697,6 +6715,13 @@ theme	Appearance	Оформление
 	Area Text	Текст в области
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Измерять текст по границам глифа
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Параметры привязки к пикселю
+	Pixel Snapping Options…	Параметры привязки к пикселю…
+	Snap to Pixel While Drawing	Привязать к пикселю при рисовании
+	Snap to Pixel While Moving	Привязать к пикселю при перемещении
+	Snap to Pixel While Scaling	Привязать к пикселю при масштабировании
+	These options take effect when View › Snap to Pixel is on.	Эти параметры действуют, когда включено Просмотр › Привязать к пикселю.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Показать параметры привязки к глифу
 	Hide Snap to Glyph Options	Скрыть параметры привязки к глифу

@@ -332,6 +332,8 @@ impl Session {
             self.paint = paint.clone();
         }
         self.pending_paint = None;
+        // The previous preview's Assign Profile is undone with it.
+        self.sync_front_profiles();
         let rw = cmd::distortcmds::perspective_rewrite(self, cmd, params).or_else(|| cmd::bounds_rewrite(self, cmd, params));
         let (cmd, params) = rw.as_ref().map_or((cmd, params), |(c, p)| (c.as_str(), p));
         // A selected object's converted appearance must not replace the current paints while
@@ -457,6 +459,8 @@ impl Session {
         st.undo_interaction();
         // Guides locked and slices locked or hidden during the interaction stay deselected.
         deselect_hidden(&menu, &st.doc, &mut st.selection);
+        // A canceled preview's Assign Profile is undone with it.
+        self.sync_front_profiles();
         // With New Art Has Basic Appearance off, new art takes the appearance of the selection as
         // the document has it again, not as a preview left it.
         self.inherit_new_art();

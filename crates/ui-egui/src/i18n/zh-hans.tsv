@@ -3326,6 +3326,19 @@ digits	Malayalam	马拉雅拉姆数字
 	Spot Color Objects	使用专色的对象
 	Pattern Objects	使用图案的对象
 	Gradient Objects	使用渐变的对象
+	Font Details	字体详细信息
+	Linked Images	链接的图像
+	Embedded Images	嵌入的图像
+	Compound Paths	复合路径
+	Text Objects	文本对象
+	Placed Documents	置入的文档
+	Symbol Instances	符号实例
+	Gradient Meshes	渐变网格
+	Blends	混合
+	Envelopes	封套
+	Intertwine Groups	交织编组
+	Opacity Masks	不透明度蒙版
+	Objects with Effects	使用效果的对象
 	Spot Colors	专色
 	Spot Colors…	专色…
 	Spread:	扩散：
@@ -4913,6 +4926,7 @@ imageTrace	Outline	轮廓
 @msg	every numbered name for it is taken in the Fonts folder	字体文件夹中所有带编号的名称均已被占用
 @msg	every numbered name for {name} is taken in the document's folder	文档所在文件夹中 {name} 的所有带编号的名称均已被占用
 @msg	No linked files to look for	没有要查找的链接文件
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	该链接位于符号、图表设计、图案或不透明度蒙版中，在画布上没有位置
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` 是步骤引用 {r}，只有 `run` 和 `command_batch` 能解析它
 @msg	`ids` must be an array of object ids, not {v}	`ids` 必须是由对象 id 组成的数组，而不是 {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` 必须是由颜色组成的数组，而不是 {v}
@@ -5443,6 +5457,10 @@ axis	Both	两者
 	Dock Panel	停放面板
 	Dock to Top	停放到顶部
 	Dock to Bottom	停放到底部
+	Dock to Left	停放到左侧
+	Dock to Right	停放到右侧
+	Dock Toolbar	停放工具栏
+	Float Toolbar	浮动工具栏
 	Control Bar Options	控制栏选项
 	Tool Options	工具选项
 	Object Options	对象选项
@@ -6558,6 +6576,13 @@ axis	Y Axis	Y 轴
 	Area Text	区域文字
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	按字形边界度量文字
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	对齐像素选项
+	Pixel Snapping Options…	对齐像素选项…
+	Snap to Pixel While Drawing	绘制时对齐像素
+	Snap to Pixel While Moving	移动时对齐像素
+	Snap to Pixel While Scaling	缩放时对齐像素
+	These options take effect when View › Snap to Pixel is on.	这些选项在“视图 › 对齐像素”打开时生效。
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	显示靠齐字符选项
 	Hide Snap to Glyph Options	隐藏靠齐字符选项

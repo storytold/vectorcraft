@@ -3286,6 +3286,19 @@ digits	Malayalam	Malayalam
 	Spot Color Objects	Spot Renkli Nesneler
 	Pattern Objects	Desenli Nesneler
 	Gradient Objects	Degradeli Nesneler
+	Font Details	Yazı Tipi Ayrıntıları
+	Linked Images	Bağlantılı Görseller
+	Embedded Images	Gömülü Görseller
+	Compound Paths	Bileşik Yollar
+	Text Objects	Metin Nesneleri
+	Placed Documents	Yerleştirilen Belgeler
+	Symbol Instances	Sembol Örnekleri
+	Gradient Meshes	Degrade Örgüler
+	Blends	Karışımlar
+	Envelopes	Zarflar
+	Intertwine Groups	İç İçe Geçme Grupları
+	Opacity Masks	Opaklık Maskeleri
+	Objects with Effects	Efektli Nesneler
 	Spot Colors	Nokta Renkleri
 	Spot Colors…	Nokta Renkleri…
 	Spread:	Yayılma:
@@ -3955,6 +3968,10 @@ axis	Both	Her İkisi
 	Dock Panel	Bağlantı İstasyonu Paneli
 	Dock to Top	Üste yerleştir
 	Dock to Bottom	Alta yerleştir
+	Dock to Left	Sola yerleştir
+	Dock to Right	Sağa yerleştir
+	Dock Toolbar	Araç çubuğunu yerleştir
+	Float Toolbar	Araç Çubuğunu Yüzer Yap
 	Control Bar Options	Kontrol Çubuğu Seçenekleri
 	Tool Options	Araç Seçenekleri
 	Object Options	Nesne Seçenekleri
@@ -4843,6 +4860,7 @@ axis	Both	Her İkisi
 @msg	every numbered name for it is taken in the Fonts folder	bunun için numaralandırılmış her ad Yazı Tipleri klasöründe alınır
 @msg	every numbered name for {name} is taken in the document's folder	{name} için numaralandırılmış her ad belgenin klasöründe alınır
 @msg	No linked files to look for	Aranacak bağlantılı dosya yok
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Bağlantı bir sembolün, grafik tasarımının, desenin veya opaklık maskesinin içinde ve tuvalde yeri yok
 	Services	Hizmetler
 	Hide VectorCraft	VectorCraft'ı gizle
 	Zoom	Yakınlaştır
@@ -6676,6 +6694,13 @@ axis	Y Axis	Y ekseni
 	Area Text	Alan Metni
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Yazıyı Glif Sınırlarına Göre Ölç
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Piksel'e Yapışma Seçenekleri
+	Pixel Snapping Options…	Piksel'e Yapışma Seçenekleri…
+	Snap to Pixel While Drawing	Çizerken Piksel'e Yapış
+	Snap to Pixel While Moving	Taşırken Piksel'e Yapış
+	Snap to Pixel While Scaling	Ölçeklerken Piksel'e Yapış
+	These options take effect when View › Snap to Pixel is on.	Bu seçenekler Görünüm › Piksel'e Yapış açıkken etkili olur.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Glif'e Yapışma Seçeneklerini Göster
 	Hide Snap to Glyph Options	Glif'e Yapışma Seçeneklerini Gizle

@@ -969,7 +969,11 @@ SVG writes one file per artboard of a `range`); `useArtboards: false` exports th
 its effects paint, the effects of groups, type and images included. `artboard.fitToArt` measures the art the same
 way. `document.exportPdf {useArtboards: false}` writes that one page as well, and ignores `artboard`, `artboards` and
 `range`. A PDF of that page, from either command, carries no Preserve Editing data; when Preserve Editing is on (as it
-is in VectorCraft Default), the export comes back with a warning that says so.
+is in VectorCraft Default), the export comes back with a warning that says so. A `.ai` export with
+`useArtboards: false` writes that one page too, without the native document and without the editing copy for other
+apps (`editingData`), and always comes back with the warning `Preserve editing was left out: an .ai file of the art's
+bounds would replace the document's artboards when reopened`; with `pdfCompatible: false` it is refused, whatever
+`editingData` says. A legacy version 7 `.ai` (`aiVersion: "7"`) of the art's bounds is written as before.
 Export As PDF continues in the Save PDF dialog with Use Artboards on or off; with it off, the dialog has no
 Artboards section and the page is the bounds of the visible art.
 
@@ -1434,8 +1438,10 @@ preferences (the folder the desktop app uses, so both see the same ones; `VECTOR
   start, after the profiles above are registered (#6335). Saved settings that name a profile that is no longer
   there, or a damaged file, leave the defaults (logged), and the next change writes over the file.
   `edit.assignProfile` tags the document only: colors show and convert through the profiles it assigns, and the
-  working spaces and the file stay as they are. The `workingCmyk` target of `view.proofSetup` simulates the working
-  CMYK space in such a document too.
+  working spaces and the file stay as they are. The profiles in use are those of the document in front, after
+  `file.new`, `document.open`, `document.activate`, `file.close`, `file.revert`, `edit.undo`, `edit.redo` and a
+  failed `command.batch` too; with none assigned, or no document open, the working spaces are. The `workingCmyk`
+  target of `view.proofSetup` simulates the working CMYK space in such a document too.
 
 Not remembered: the document, anything else. Nothing is read or written when
 `VECTORCRAFT_NO_PREFS` is set, and a server confined with `--automation-read-root` or
@@ -1777,7 +1783,7 @@ vectorcraft-cli run --cmd file.new --params '{"width":600,"height":200}'   --cmd
 ### Parameter schemas
 
 Some commands have a machine-readable parameter schema: at present a small set including `view.capsLock`, `view.saved.new`,
-`view.saved.edit`, `view.saved.list`, `view.transparencyGrid`, `view.snapToGlyph.options` and `engine.apiReference`
+`view.saved.edit`, `view.saved.list`, `view.transparencyGrid`, `view.snapToGlyph.options`, `view.snapToPixel.options` and `engine.apiReference`
 (most of the catalogue still documents params in prose only; schemas grow command by command). The engine's
 `engine.commands` list gives such a command a `schema` field: an object schema in the shape of JSON Schema 2020-12
 (https://json-schema.org/draft/2020-12). Its root has `$schema` (the 2020-12 dialect), `description` when the
@@ -1830,9 +1836,10 @@ as the English gives them.
 
 An omitted value with a `default` takes it (`rotation` 0 in `view.saved.new`); the journal keeps the params as they
 were given. Saved steps played from a journal or an action keep a key the schema does not name, unless its value nests
-more than 16 levels deep, and the values of the parameters it names are checked as in a new call. The schemas of built-in commands belong to API level 3
+more than 16 levels deep, and the values of the parameters it names are checked as in a new call. The schemas of built-in commands belong to API level 4
 (`vectorcraft_engine::schemas::API_VERSION`); a change to any of them raises the level. Level 2 added
-`engine.apiReference`; level 3 says that `rotation` in `view.saved.new` and `view.saved.list` turns clockwise. Commands that plug-ins add have no schema here.
+`engine.apiReference`; level 3 says that `rotation` in `view.saved.new` and `view.saved.list` turns clockwise; level 4
+adds `view.snapToPixel.options`. Commands that plug-ins add have no schema here.
 
 `engine.apiReference {}` → `{markdown}` returns the command API reference, written from these schemas each time it
 runs; no file of it is kept. It needs no open document and changes nothing. The reference has a `##` section for each
@@ -2675,6 +2682,43 @@ kept with the workspace, and built-in workspaces and workspaces saved without it
 
 ```json
 {"name":"invoke_menu","arguments":{"command":"window.toolsBesideCanvas","params":{"on":true}}}
+```
+
+## Docking toolbars made with New Toolbar
+
+A toolbar made with New Toolbar floats when it is made. `window.toolbar.dock {name, side?, order?}` (Dock to Left and
+Dock to Right in the context menu of the toolbar's title bar, remote mode, `invoke_menu`) docks it in a lane along the
+window's left or right edge. On the left, the lane is right of the Tools panel when the Tools panel is docked at the
+window's edge. With Keep Tools Beside the Canvas on and the Tools panel docked on the left, the lane is right of the
+Tools panel beside the canvas, and dropping a title bar on the Tools panel or on the lane docks the toolbar there. `side` is `left` or `right` (`start` and `end` also work); without it, the toolbar docks at the edge it
+docked at last, or at the left the first time. Toolbars docked at one edge stack from the top. `order` is the
+toolbar's place in that stack, 0 at the top, from 0 to the number of other toolbars docked there; without it, the
+toolbar goes at the end, or stays where it is when it is already docked at that edge. Each toolbar takes an equal
+share of the lane's height and its tools scroll in it, and the lane is as wide as its widest toolbar. When the lane
+is too short to give each toolbar 88 points of height, the stack wraps into more columns, left to right, and the lane
+widens, so no toolbar covers another. A lane takes at most half the width the canvas and panels would have (beside
+the canvas, it also leaves the canvas at least 200 points, and the canvas keeps room for one column); when that
+many columns still give a toolbar less than 88 points, the toolbars in those columns show only their title bars, which
+still float, dock and show the context menu. A column too short for all of its title bars shows as many as fit, and
+the mouse wheel over the column scrolls through the others, one toolbar per notch.
+`window.toolbar.float {name, x?, y?}` (Float Toolbar in the same menu) floats it with its top-left corner at `x`, `y`
+in screen points, or where it floated last when both are omitted. Both commands answer
+`{toolbar, floating, side, order, pos}`: `side` is the edge the toolbar docks at (while it floats, the edge it docked
+at last), `order` its place in that edge's stack (null while it floats) and `pos` where it floats (while it is docked,
+where it floated last). A missing or unknown name, a `side` other than left or right, an `order` that is not a whole
+number in range, or only one of `x` and `y` is an error and changes nothing. `window.toolbar.list` reports `floating`,
+`side` and `order` for each toolbar.
+
+With the pointer, dropping a floating toolbar's title bar on the window's left or right edge, or on that edge's lane,
+docks it at the end of that edge's stack; the target lights up while the title bar is dragged over it. Dragging a
+docked toolbar's title bar out of its lane floats it under the pointer. Escape, or the window losing focus, during
+the drag puts the toolbar back where it was. Hiding a docked toolbar keeps its place, renaming it keeps its place, a
+copy made with Manage Toolbars' + floats, and deleting one closes up the stack. Placement is kept with the workspace.
+Toolbars saved before docking existed load floating. The lanes, the edge targets and the stacking are VectorCraft's
+own layout rules.
+
+```json
+{"name":"invoke_menu","arguments":{"command":"window.toolbar.dock","params":{"name":"Toolbar 1","side":"left","order":0}}}
 ```
 
 ## Learn panel
@@ -5447,8 +5491,12 @@ the selected artboards (those the Artboard tool has selected, else the active on
 `artboard.fitToSelection` calls it runs without `index`. Both include MCP's `run_command` calls in remote mode. The
 Artboards panel menu's Fit to Artwork Bounds also passes the selected artboards. A batch passes its `artboard` on to
 each of their steps that names no `index`, as the step's `index`. When the document a step runs in has no artboard at
-that index, the step gets that document's last artboard. An action recorded in the Actions panel leaves `index` and
-`indices` out of these steps, and they resize the artboard that is active when the action plays.
+that index, the step gets that document's last artboard. An `artboard.fitToArt` step that names neither `index` nor
+`indices`, while the Artboard tool is chosen with several artboards selected when the step runs, gets those artboards
+as its `indices` instead, and the batch's journal entry records them, so a replay of the journal fits the same
+artboards. A step's own `index` or `indices` is kept. An action recorded in the Actions panel leaves `index` and
+`indices` out of these steps: when the action plays, Fit to Artwork Bounds resizes the artboards the Artboard tool then
+has selected (two or more), else the active artboard, and Fit to Selected Art resizes the active artboard.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.align","params":{"horizontal":"left","to":"artboard","artboard":1}}}
@@ -5710,6 +5758,23 @@ know or a value that isn't a boolean is refused and changes nothing.
 {"name":"run_command","arguments":{"command":"view.snapToGlyph.options","params":{"angular":false,"anchors":false}}}
 ```
 
+The Pixel Snapping Options (the desktop app's Control bar › Snapping menu › Pixel Snapping Options…, described on the
+help page,
+<https://helpx.adobe.com/illustrator/desktop/measure-and-align/grids-and-guides/draw-pixel-perfect-art.html>):
+`view.snapToPixel.options {drawing?, moving?,
+scaling?}` (or `prefs.get`/`prefs.set` with key `pixelSnap`, a partial object) reads and sets which edits View › Snap to
+Pixel lands on whole pixels. All three are on by default, which is VectorCraft's own default. `drawing` covers the
+points the drawing tools place, the rulers' origin and measured points; `moving` covers the selection, its anchors and
+segments, artboards and ruler guides moved by dragging, and the Rotate, Reflect and Shear tools' drags; `scaling`
+covers the edges a bounding-box, Free Transform, artboard or slice handle drags, and the Scale tool's drag. An edit
+whose option is off snaps as it does with Snap to Pixel off. With Snap to Pixel off, the options do nothing. `{}` reads
+them; a key it doesn't know or a value that isn't a boolean is refused and changes nothing. Align New Objects to Pixel
+Grid and the objects' pixel-aligned property (see Align to Pixel Grid) do not depend on these options.
+
+```json
+{"name":"run_command","arguments":{"command":"view.snapToPixel.options","params":{"scaling":false}}}
+```
+
 With Smart Guides on, a bounding-box handle dragged with the Selection or Free Transform tool (`mods.shift`
 proportional, `mods.alt` from the centre) lands on another object's anchor or centre (labelled "anchor" or
 "center"), else its corners and side line up with the edges and centres of the other objects and the artboards (a
@@ -5937,8 +6002,8 @@ Preferences. `prefs.reset` resets the preferences at once, without the question.
 
 `prefs.export {path?}` writes the preferences as a JSON file, `{"format": "vectorcraft-preferences", "version": 1,
 "prefs": {…}}`, and replies `{path, count}`; without `path` it replies `{data, count}` with the file's text. The file
-holds every preference `prefs.list` lists and the `eyedropper`, `perspectiveWidget`, `pathfinder` and `glyphSnap`
-groups. It leaves out the folder preferences (`fontsFolder`, `pluginsFolder`, `recoveryFolder`, `templatesFolder`) and
+holds every preference `prefs.list` lists and the `eyedropper`, `perspectiveWidget`, `pathfinder`, `glyphSnap` and
+`pixelSnap` groups. It leaves out the folder preferences (`fontsFolder`, `pluginsFolder`, `recoveryFolder`, `templatesFolder`) and
 saved presets. An export over 1 MB, the most `prefs.import` reads, is an error and writes nothing.
 `prefs.import {path | data}` applies such a file and replies `{imported}`, the number of preferences it
 set. It checks every value first, as `prefs.set` does: a file over 1 MB, malformed JSON, another `format`, a newer
@@ -6626,8 +6691,8 @@ path isn't followed) when it isn't. The desktop app also checks the active docum
 comes back to the front, following the same preference. `links.check` reports every link's `status` (`ok`, `modified`,
 `missing`), `links.update {ids?}` reads modified files again and `links.relink {ids?, path | folder}` points images at
 another file (or each at the file of its name in a folder); images keep their bounds, one undo step each.
-`links.relink`'s `scope` picks which links take the new file (Relink's Replace choice): `selected` (the default) relinks `ids`; `all` also relinks every other object in the layers linked to the same file as
-one of them; `missingInFolder` relinks `ids` to `path`, then every other missing link to the file of its name in
+`links.relink`'s `scope` picks which links take the new file (Relink's Replace choice): `selected` (the default) relinks `ids`; `all` also relinks every other stored object linked to the same file as
+one of them, in the layers, opacity-mask art, symbols, graph designs and patterns; `missingInFolder` relinks `ids` to `path`, then every other missing link to the file of its name in
 `path`'s folder, and lists the names not there in `notFound` (with `copy`, only missing images are looked for); `each` takes `paths: [{ids, path}]` in place of `ids`,
 `path` and `folder` and relinks each link to its own file. An unknown scope, `paths` without `each`, `each` with `ids`,
 `path` or `folder`, an entry without `path` or `ids`, an id in two entries and `missingInFolder` with `folder` are
@@ -6635,8 +6700,10 @@ errors, and nothing is relinked. Each call is one undo step. The Links panel's R
 (`ui.relinkDialog`) with a Replace menu of these four choices. A PNG, JPEG,
 another file (or each at the file of its name in a folder); images keep their bounds, one undo step each.
 `links.update`, and `document.open` when it reads a modified file, also read the file again for the images and placed
-documents inside symbols, graph designs, patterns and opacity masks that show the same content (by default also for
-those that only that art shows); they have no ids, so the results do not list them. Saving a document also reads it
+documents inside symbols, graph designs, patterns and opacity masks that show the same content. Those objects have ids
+of their own: `links.list`, `links.check`, `links.findFiles`, the `missingLinks`, `modifiedLinks` and `updatedLinks`
+rows and the link watch list them, and every `links.*` command takes their ids. Opening a document gives an object
+there whose id is 0 or already used by another object a new id, and the next save writes it. Saving a document also reads it
 again for the placed documents of it inside that art in the other open documents. A PNG, JPEG,
 GIF or WebP file whose pixels can't be read is not shown: `links.relink` fails with "the image's pixels can't be
 read", and `links.update`, or `document.open` when it reads the file, lists it as missing, its images keeping what they
@@ -6876,8 +6943,11 @@ listed in `warnings`. Binary DXF and DWG files answer an error saying to save th
 ## Links panel
 
 `links.list {show?: all|missing|modified|embedded, sort?: name|kind|status}` lists every image in the layers, top
-first, as the Links panel does: `{id, name, linked, status: ok|modified|missing|embedded, format, pixelWidth,
-pixelHeight, path?, found?, page?, preview?, note?}` (`note`: the image takes more than the decode allowance, 2 GiB
+first, as the Links panel does, then every image and placed document in opacity-mask art and in the art of symbols,
+graph designs and patterns, one row per stored object (never one per symbol instance or pattern tile): `{id, name,
+linked, status: ok|modified|missing|embedded, format, pixelWidth, pixelHeight, path?, found?, page?, preview?, note?,
+owner?}` (`owner`, for an object outside the layer tree: `{kind: layers|symbol|graphDesign|pattern, name?, maskOf?}`,
+`maskOf` naming the object whose opacity mask holds it; `note`: the image takes more than the decode allowance, 2 GiB
 or 512 MiB in the web app, as RGBA or as decoded, and it is drawn at the largest size within the allowance ("shown at
 reduced size"; the document keeps the whole file) or, when it can't be read that way or has more pixels than the
 allowance has bytes, drawn as a crossed gray box on the canvas and left out of exports ("too large to draw"); `document.open` and `file.place` say the same in their `warnings`). `links.info {id?}` is the Link Info: `image.info`'s fields plus
@@ -6894,7 +6964,8 @@ bounds of another visible object that has one of those or a gradient with a tran
 a character's fill or stroke); a DCS image with transparency of its own counts as such an object. Bounds are cut to the
 bounds of the clipping paths of the clip groups and clipping layers holding an object. The check looks at
 every object in the layers each time the list is read. A `dcsTransparency` that is not true or false is an error.
-`links.goTo {id}` selects an image; `links.embed {ids?}` keeps linked files' pixels in the document (an image whose
+`links.goTo {id}` selects an image (`onCanvas: true`); for an object outside the layer tree it clears the selection and
+returns `{id, onCanvas: false, owner}`, and the panel says the link has no place on the canvas. `links.embed {ids?}` keeps linked files' pixels in the document (an image whose
 file is missing stays linked: relink it first); `links.unembed {id, path}` writes an embedded image to a file
 (another extension converts it) and links to it, and without `path` returns `{name, dataBase64}`.
 `links.placementOptions {ids?, preserve?: transforms|bounds|fileDimensions|fit|fill, align?: topLeft…bottomRight,

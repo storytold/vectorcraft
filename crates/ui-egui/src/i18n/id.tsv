@@ -853,6 +853,10 @@
 	Dock Panel	Tambatkan panel
 	Dock to Top	Tambatkan ke atas
 	Dock to Bottom	Tambatkan ke bawah
+	Dock to Left	Tambatkan ke kiri
+	Dock to Right	Tambatkan ke kanan
+	Dock Toolbar	Tambatkan bilah alat
+	Float Toolbar	Mengambangkan bilah alat
 	Control Bar Options	Opsi bilah kontrol
 	Tool Options	Opsi alat
 	Object Options	Opsi objek
@@ -3734,6 +3738,19 @@ theme	Appearance	Tampilan
 	Spot Color Objects	Objek dengan Warna Spot
 	Pattern Objects	Objek dengan Pola
 	Gradient Objects	Objek dengan Gradien
+	Font Details	Detail Font
+	Linked Images	Gambar Tertaut
+	Embedded Images	Gambar Tersemat
+	Compound Paths	Jalur Majemuk
+	Text Objects	Objek Teks
+	Placed Documents	Dokumen yang Ditempatkan
+	Symbol Instances	Instans Simbol
+	Gradient Meshes	Mesh Gradien
+	Blends	Blend
+	Envelopes	Amplop
+	Intertwine Groups	Grup Jalinan
+	Opacity Masks	Mask Opasitas
+	Objects with Effects	Objek dengan Efek
 	Spot Colors	Warna spot
 	Spot Colors (0)	Warna spot (0)
 	Swatch Options	Opsi sampel
@@ -6183,6 +6200,13 @@ axis	Y Axis	Sumbu Y
 	Area Text	Teks area
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Ukur teks menurut batas glif
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opsi snap ke piksel
+	Pixel Snapping Options…	Opsi snap ke piksel…
+	Snap to Pixel While Drawing	Snap ke piksel saat menggambar
+	Snap to Pixel While Moving	Snap ke piksel saat memindahkan
+	Snap to Pixel While Scaling	Snap ke piksel saat menskalakan
+	These options take effect when View › Snap to Pixel is on.	Opsi ini berlaku saat Tampilan › Snap ke piksel aktif.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Tampilkan opsi snap ke glif
 	Hide Snap to Glyph Options	Sembunyikan opsi snap ke glif

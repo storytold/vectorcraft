@@ -1367,6 +1367,37 @@ fn smooth_tool_reduces_jagged_path() {
     assert_eq!(p.subpaths[0].anchors[0].p, Point::new(100.0, 200.0));
 }
 
+/// A drag of the Smooth tool along a line jagged by up to 6 pt leaves no corner between a curve and
+/// a line: every anchor between the path's ends turns by at most 1°.
+#[test]
+fn smooth_tool_leaves_no_corner_where_a_curve_meets_a_line() {
+    let mut s = session();
+    let mut seed = 7u64;
+    let anchors: Vec<_> = (0..=60)
+        .map(|i| {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            let noise = ((seed >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0;
+            json!({"x": 100.0 + f64::from(i) * 5.0, "y": 200.0 + 6.0 * noise})
+        })
+        .collect();
+    let r = s.execute("path.create", &json!({"anchors": anchors})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let drag_points: Vec<(f64, f64)> = (0..=64).map(|i| (90.0 + f64::from(i) * 5.0, 200.0)).collect();
+    drag(&mut s, "smooth", &drag_points, Mods::default());
+    let p = path(&s, id);
+    let sp = &p.subpaths[0];
+    assert!(sp.anchors.len() < 61, "the path is smoothed: {}", sp.anchors.len());
+    let dir = |v: kurbo::Vec2, w: kurbo::Vec2, chord: kurbo::Vec2| [v, w, chord].into_iter().find(|d| d.hypot() > 1e-9).unwrap_or(chord);
+    for i in 1..sp.segment_count() {
+        let (prev, next) = (sp.segment(i - 1), sp.segment(i));
+        let arrive = dir(prev.p3 - prev.p2, prev.p3 - prev.p1, prev.p3 - prev.p0);
+        let leave = dir(next.p1 - next.p0, next.p2 - next.p0, next.p3 - next.p0);
+        let turn = arrive.cross(leave).atan2(arrive.dot(leave)).abs().to_degrees();
+        let kinds = (sp.segment_is_line(i - 1), sp.segment_is_line(i));
+        assert!(turn <= 1.0, "anchor {i} turns {turn}° (lines before and after: {kinds:?}): {:?}", sp.anchors[i]);
+    }
+}
+
 /// Smoothing a path with direct-selected anchors leaves the path selected whole: the selection no
 /// longer names anchors by indices into the anchors the smooth replaced. A selected path the drag
 /// does not reach keeps its anchors selected, and undo brings the old selection back.
@@ -2716,6 +2747,49 @@ fn remove_anchor_points_selects_one_next_anchor_per_subpath_and_per_path() {
     assert_eq!(anchor_points(&s, id), original);
     assert_eq!(selected_anchors(&s, id), [(0, 0), (1, 1), (1, 2)]);
     assert_eq!(selected_anchors(&s, other), [(0, 0)]);
+}
+
+#[test]
+fn remove_anchor_points_on_many_paths_and_subpaths_matches_removing_one_at_a_time() {
+    // Many anchors over many subpaths and paths, curved and straight, open and closed: each
+    // subpath ends as removing its anchors one at a time, the last first, leaves it. Paths left
+    // with nothing go, the rest stay selected in order, and one undo step brings all back.
+    let mut s = session();
+    let curvy = "M0 0 C10 20 30 20 40 0 C50 -20 70 -20 80 0 C90 20 110 20 120 0 C130 -20 150 -20 160 0 Z \
+                 M0 100 L40 120 C60 140 80 80 100 100 L140 90 L180 110 L220 100";
+    let ids: Vec<NodeId> = (0..4).map(|i| path_from(&mut s, if i == 2 { "M0 0 L10 0 L20 5" } else { curvy })).collect();
+    let picks: [&[(usize, usize)]; 4] =
+        [&[(0, 0), (0, 2), (0, 3), (1, 1), (1, 2), (1, 5)], &[(0, 1), (1, 0), (1, 6)], &[(0, 0), (0, 1)], &[(0, 3), (1, 3), (1, 4)]];
+    for (k, (&id, &anchors)) in ids.iter().zip(&picks).enumerate() {
+        let mode = if k == 0 { "set" } else { "add" };
+        s.execute("select.anchors", &json!({"id": id.0, "anchors": anchors, "mode": mode})).unwrap();
+    }
+    let before: Vec<PathData> = ids.iter().map(|&id| path(&s, id)).collect();
+    assert_eq!(s.execute("path.removeAnchors", &json!({})).unwrap()["removedObjects"], 1);
+    for (k, &id) in ids.iter().enumerate() {
+        let mut want = before[k].clone();
+        let mut order = picks[k].to_vec();
+        order.sort_unstable_by(|a, b| b.cmp(a));
+        for (si, ai) in order {
+            vectorcraft_pathops::remove_anchor(&mut want.subpaths[si], ai);
+        }
+        want.subpaths.retain(|sp| sp.anchors.len() >= 2);
+        if want.subpaths.is_empty() {
+            assert!(s.doc().unwrap().doc.node(id).is_none(), "path {k} goes");
+        } else {
+            assert_eq!(path(&s, id).subpaths, want.subpaths, "path {k}");
+        }
+    }
+    let kept = [ids[0], ids[1], ids[3]];
+    assert_eq!(s.doc().unwrap().selection.objects, kept);
+    s.execute("edit.undo", &json!({})).unwrap();
+    for (k, &id) in ids.iter().enumerate() {
+        assert_eq!(path(&s, id), before[k]);
+        assert_eq!(selected_anchors(&s, id), picks[k]);
+    }
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(ids[2]).is_none());
+    assert_eq!(s.doc().unwrap().selection.objects, kept);
 }
 
 #[test]

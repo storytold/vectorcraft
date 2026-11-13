@@ -1368,6 +1368,10 @@
 	Dock Panel	Paneel dokken
 	Dock to Top	Bovenaan dokken
 	Dock to Bottom	Onderaan dokken
+	Dock to Left	Links dokken
+	Dock to Right	Rechts dokken
+	Dock Toolbar	Werkbalk dokken
+	Float Toolbar	Werkbalk laten zweven
 	Control Bar Options	Opties voor bedieningsbalk
 	Tool Options	Gereedschapsopties
 	Object Options	Objectopties
@@ -4249,6 +4253,19 @@ theme	Appearance	Vormgeving
 	Spot Color Objects	Objecten met spotkleuren
 	Pattern Objects	Objecten met patronen
 	Gradient Objects	Objecten met verlopen
+	Font Details	Lettertypedetails
+	Linked Images	Gekoppelde afbeeldingen
+	Embedded Images	Ingesloten afbeeldingen
+	Compound Paths	Samengestelde paden
+	Text Objects	Tekstobjecten
+	Placed Documents	Geplaatste documenten
+	Symbol Instances	Symboolinstanties
+	Gradient Meshes	Verlooprasters
+	Blends	Vermengingen
+	Envelopes	Omvormingen
+	Intertwine Groups	Verstrengelingsgroepen
+	Opacity Masks	Dekkingmaskers
+	Objects with Effects	Objecten met effecten
 	Spot Colors	Spotkleuren
 	Spot Colors (0)	Spotkleuren (0)
 	Swatch Options	Kleurstaalopties
@@ -6796,6 +6813,13 @@ axis	Y Axis	Y-as
 	Area Text	Vlaktekst
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Tekst meten op glyphbegrenzing
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opties voor uitlijnen op pixel
+	Pixel Snapping Options…	Opties voor uitlijnen op pixel…
+	Snap to Pixel While Drawing	Uitlijnen op pixel bij tekenen
+	Snap to Pixel While Moving	Uitlijnen op pixel bij verplaatsen
+	Snap to Pixel While Scaling	Uitlijnen op pixel bij schalen
+	These options take effect when View › Snap to Pixel is on.	Deze opties werken wanneer Beeld › Uitlijnen op pixel is ingeschakeld.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Opties voor uitlijnen op glyph tonen
 	Hide Snap to Glyph Options	Opties voor uitlijnen op glyph verbergen
