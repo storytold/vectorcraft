@@ -505,8 +505,9 @@ fn steps(o: &Extrude) -> Vec<Step> {
     } else {
         out.push(Step { inset: 0.0, t: 0.0, face: 1.0 });
     }
-    // Twist and taper bend the walls: cut them into slices.
-    let slices = if o.twist != 0.0 || o.taper != 1.0 { ((o.twist.abs() / 6.0).ceil() as usize).clamp(8, 64) } else { 1 };
+    // A twist bends the walls: cut them into slices. A taper alone keeps each wall flat (its edge
+    // only scales toward the center as it goes back), so it needs none.
+    let slices = if o.twist != 0.0 { ((o.twist.abs() / 6.0).ceil() as usize).clamp(8, 64) } else { 1 };
     let back_height = if bevel.is_some_and(|b| b.both_sides) { height } else { 0.0 };
     let (t0, t1) = (height / d, 1.0 - back_height / d);
     for k in 0..=slices {

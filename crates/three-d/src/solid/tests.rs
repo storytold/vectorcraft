@@ -154,6 +154,50 @@ fn taper_shrinks_the_back_and_twist_turns_it() {
     assert!(open.len() > 2 * 8, "{}", open.len());
 }
 
+/// A taper only scales each wall's far edge toward the center, so the wall stays one flat face;
+/// cut into slices, each joint between them showed a light tick. A twist bends the walls, which
+/// are still cut into slices.
+#[test]
+fn a_tapered_wall_is_one_flat_face_and_a_twisted_one_is_sliced() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let v = View { rotation_x: -35.0, rotation_y: 25.0, ..front() };
+    // Every side facet, the ones turned away included.
+    let sides = |o: Extrude, v: View| -> Vec<Facet> {
+        extrude(&p, FillRule::NonZero, b, Extrude { hidden: true, ..o }, v).unwrap().into_iter().filter(|f| f.side).collect()
+    };
+    let o = Extrude { depth: 40.0, taper: 0.475, ..Extrude::default() };
+    let walls = sides(o, v);
+    assert_eq!(walls.len(), 4, "one face for each of a square's four walls");
+    for f in &walls {
+        let [ring] = &f.view[..] else { panic!("{} contours", f.view.len()) };
+        let n = super::build::newell(std::slice::from_ref(ring));
+        let len = n.0.hypot(n.1).hypot(n.2);
+        let off = |q: &V3| ((q.0 - ring[0].0) * n.0 + (q.1 - ring[0].1) * n.1 + (q.2 - ring[0].2) * n.2) / len;
+        assert!(ring.iter().all(|q| off(q).abs() < 1e-9), "a flat wall: {:?}", ring.iter().map(off).collect::<Vec<_>>());
+    }
+    // Beveled, in perspective or hollow, a taper adds no faces either.
+    let bevel = Bevel { width: 8.0, height: 8.0, ..Bevel::default() };
+    let perspective = View { perspective: 60.0, ..v };
+    for (o, v) in [
+        (Extrude { bevel: Some(bevel), ..o }, v),
+        (Extrude { bevel: Some(Bevel { both_sides: true, ..bevel }), ..o }, v),
+        (Extrude { bevel: Some(Bevel { inside: true, shape: BevelShape::Step, ..bevel }), ..o }, v),
+        (o, perspective),
+        (Extrude { cap: false, ..o }, perspective),
+    ] {
+        assert_eq!(sides(o, v).len(), sides(Extrude { taper: 1.0, ..o }, v).len(), "{o:?} {v:?}");
+    }
+    // A curved outline's walls take one band each too: a taper adds no faces to a circle's.
+    let (cp, cb) = shape(&circle(Point::new(50.0, 50.0), 50.0));
+    let round = |o: Extrude| extrude(&cp, FillRule::NonZero, cb, Extrude { hidden: true, ..o }, v).unwrap().into_iter().filter(|f| f.side).count();
+    assert_eq!(round(o), round(Extrude { taper: 1.0, ..o }), "a tapered circle's walls");
+    // A twist still cuts each wall into at least 8 slices, tapered or not.
+    for taper in [1.0, o.taper] {
+        let twisted = sides(Extrude { twist: 30.0, taper, ..o }, v).len();
+        assert!(twisted >= 4 * 8, "{twisted} faces for a twisted square's walls");
+    }
+}
+
 #[test]
 fn a_bevel_inside_shrinks_the_cap_and_outside_grows_the_walls() {
     let (p, b) = shape(&square(0.0, 0.0, 100.0));
