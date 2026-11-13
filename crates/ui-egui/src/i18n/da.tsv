@@ -4614,6 +4614,7 @@ imageTrace	Outline	Kontur
 @msg	paths contain invalid coordinates	stierne indeholder ugyldige koordinater
 @msg	paths: give at least one file	stier: angiv mindst én fil
 @msg	replace: the object to replace was changed or deleted	erstat: objektet, der skulle erstattes, er ændret eller slettet
+@msg	the document it was prepared for is no longer active	dokumentet, det blev forberedt til, er ikke længere aktivt
 @msg	pattern missing	mønster mangler
 @msg	patterns nested too deeply are filled with mid-grey	mønstre, der er indlejret for dybt, udfyldes med mellemgrå
 @msg	percent must be above 0 and at most 6400, not {p}	percent skal være over 0 og højst 6400, ikke {p}
@@ -5177,6 +5178,8 @@ imageTrace	Outline	Kontur
 	Vivid	Intens
 	Spectrum	Spektrum
 	Perceptual	Perceptuel
+	Hue Clockwise	Farvetone med uret
+	Hue Counterclockwise	Farvetone mod uret
 	Relative Colorimetric	Relativ kolorimetrisk
 	Absolute Colorimetric	Absolut kolorimetrisk
 	Exact	Eksakt
@@ -5842,6 +5845,8 @@ swatch	Bright Violet	Kraftig violet
 	Objects on Path Tool	Objekter på kurve-værktøj
 	Attach Objects on Path	Tilknyt objekter til kurve
 	Expand Objects on Path	Udvid objekter på kurve
+	Detach	Frigør
+	Detach Object from Path	Frigør objekt fra kurve
 	Release Live Paint	Frigør live-maling
 	Release Repeat	Frigør gentagelse
 	Release Slice	Frigør udsnit
@@ -5989,7 +5994,7 @@ axis	Y Axis	Y-akse
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` gælder for gradientfyld (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gælder for gradientfyld (paint.setFill)
 @msg	`dither` must be true or false	`dither` skal være true eller false
-@msg	`method` must be classic or perceptual	`method` skal være classic eller perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` skal være classic, perceptual, hue-clockwise eller hue-counterclockwise
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Installér »{name}«, som beder om et stort beregningsbudget?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Hver kørsel kan tage op til {minutes} minutter og udføre {times} gange så meget arbejde, som andre plug-ins må. Den kører i baggrunden, og du kan annullere den.
@@ -6030,6 +6035,7 @@ axis	Y Axis	Y-akse
 	Continue	Fortsæt
 	Continue Action	Fortsæt handling
 	Delete Action Step	Slet handlingstrin
+	Move Action Step	Flyt handlingstrin
 	Press Play Current Selection in the Actions panel to go on.	Tryk på Afspil aktuel markering i panelet Handlinger for at fortsætte.
 	Stop: {message}	Stop: {message}
 @msg	no action is waiting at a stop	ingen handling venter ved et stop
@@ -6190,6 +6196,22 @@ axis	Y Axis	Y-akse
 	Graphite Pencil	Grafitblyant
 	Wax Crayon	Vokskridt
 	Charcoal Dust	Kulstøv
+	Notched Ribbon	Takket bånd
+	Double Line	Dobbelt linje
+	Wave	Bølge
+	Teardrop	Dråbe
+	Striped Ribbon	Stribet bånd
+	Fine Nib	Fin pen
+	Broad Nib	Bred pen
+	Chisel	Mejsel
+	Round Pen	Rund pen
+	Pressure Pen	Trykpen
+	Beads	Perler
+	Dash Dot	Streg-prik
+	Scallops	Bølgekant
+	Stars	Stjerner
+	Triangles	Trekanter
+	Sparkles	Gnister
 	Save Brush Library…	Gem penselbibliotek…
 @msg	no empty artboards to delete	ingen tomme tegneflader at slette
 	Scale Presets	Skaleringsforudindstillinger

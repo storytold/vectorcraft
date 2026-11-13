@@ -3,8 +3,6 @@
 //! the Links panel's Show DCS Transparency Interactions (`links.list` with `dcsTransparency`).
 //! The files are made from scratch as http://www.telegraphics.net/doc/DCS.txt describes them.
 
-use std::path::PathBuf;
-
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Node, NodeKind};
@@ -17,12 +15,9 @@ fn session() -> Session {
     s
 }
 
-/// A fresh scratch folder for one test.
-fn temp_dir(name: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("vc-dcs-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+/// A fresh scratch folder for one test, removed when dropped.
+fn temp_dir(name: &str) -> vectorcraft_testkit::TempDir {
+    vectorcraft_testkit::TempDir::new(&format!("dcs-{name}"))
 }
 
 /// A plate program: one 2 × 2 grayscale image (`gray`, row by row) on a 20 × 10 pt page.

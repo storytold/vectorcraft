@@ -1259,7 +1259,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.smoothAuto",
         "Auto-Smooth",
         "",
-        "{} the open Smooth slider (Object › Path › Smooth opens it: dialog `smoothSlider` with field `level` 0..100, object.path.smooth's level, opening at the level object.path.smooth {auto: true} picks, previewed on the canvas until ui.dialog.confirm keeps it as one undo step) moves to the level object.path.smooth {auto: true} picks and previews it → {level}; an error when the slider isn't open",
+        "{} the open Smooth slider (Object › Path › Smooth and the canvas context menu's Smooth… open it: dialog `smoothSlider` with field `level` 0..100, object.path.smooth's level, opening at the level object.path.smooth {auto: true} picks, previewed on the canvas until ui.dialog.confirm keeps it as one undo step) moves to the level object.path.smooth {auto: true} picks and previews it → {level}; an error when the slider isn't open",
     ),
     (
         "ui.simplifyMoreOptions",
@@ -1478,13 +1478,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::panels::actions::START_RECORDING,
         "Begin Recording",
         "",
-        "{set?: index} begin recording an automatically named Action N in the Actions panel's set at set (0 is the top set), by default the current set or the first set; with no sets, make Set 1. The set becomes current, and ui.action.stop adds the recorded action after that set's existing actions. An explicit invalid set, an existing recording, or a set where the new action would give it more than 1,000 actions or an action set file larger than 8 MiB is an error and changes nothing. While an action records, a recorded command whose step would give the action more than 10,000 steps or its set's action set file more than 8 MiB is an error and does not run, and the recording goes on. A recorded command whose step passes a limit only as it runs, from values it adds to its step, keeps its edit and result; the status bar names the limit, later recorded commands are an error and do not run, and ui.action.stop leaves its step out → {set, name}",
+        "{set?: index, action?: index, after?: index} begin recording an automatically named Action N in the Actions panel's set at set (0 is the top set), by default the current set or the first set; with no sets, make Set 1. The set becomes current, and ui.action.stop adds the recorded action after that set's existing actions. With action, record into the action at action in set instead: ui.action.stop puts the recorded steps after step after of that action, else after its last step, and the steps after them keep whether they are excluded. The panel's Begin Recording button passes the selected action and its selected step. action without set, after without action, an index past the last set, action or step, an explicit invalid set, an existing recording, or a set where the new action would give it more than 1,000 actions or an action set file larger than 8 MiB is an error and changes nothing. While an action records, a recorded command whose step would give the action more than 10,000 steps or its set's action set file more than 8 MiB is an error and does not run, and the recording goes on. A recorded command whose step passes a limit only as it runs, from values it adds to its step, keeps its edit and result; the status bar names the limit, later recorded commands are an error and do not run, and ui.action.stop leaves its step out → {set, name}, or with action {set, action, name}",
     ),
     (
         crate::panels::actions::STOP_RECORDING,
         "Stop Playing/Recording",
         "",
-        "{} end the Actions panel's recording and keep its steps, in the action ui.action.new made for it, else in a new action after the last action of its set, as the panel's Stop Playing/Recording button does. It also ends an action playing step by step or with pauses, or one waiting at a stop, whose message box closes: the steps played stay and the rest do not run. Recorded steps still past 10,000 in the action, or past 8 MiB in its set's action set file, are left out, and the status bar names the limit. With nothing recording or playing it changes nothing → {stopped}",
+        "{} end the Actions panel's recording and keep its steps, in the action ui.action.new made for it or the action ui.action.record named, at the place it named, else in a new action after the last action of its set, as the panel's Stop Playing/Recording button does. It also ends an action playing step by step or with pauses, or one waiting at a stop, whose message box closes: the steps played stay and the rest do not run. Recorded steps still past 10,000 in the action, or past 8 MiB in its set's action set file, are left out, and the status bar names the limit. With nothing recording or playing it changes nothing → {stopped}",
     ),
     (
         crate::panels::actions::INSERT_STOP,
@@ -1521,6 +1521,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Delete Action Step",
         "",
         "{set: index, action: index, step: index} delete one step, a stop or a command, of the Actions panel's action at action in set (0 is the top set, action or step). The steps after it keep whether they are excluded, and no step of that action stays selected. A Record Stop dialog open on that step closes, and one open on a later step of the action follows it up. A missing or invalid index is an error and changes nothing. Undo does not bring the step back. The panel's Delete Selection runs this for the selected step → {set, action, step}",
+    ),
+    (
+        crate::panels::actions::MOVE_STEP,
+        "Move Action Step",
+        "",
+        "{set: index, action: index, step: index, toSet?: index, toAction?: index, before: index} move one step, a stop or a command, of the Actions panel's action at action in set (0 is the top set, action or step) into the action at toAction in toSet (default: the same set and action), before the step at index before there, or after its last step when before is its number of steps; before counts the steps as they are before the move. The step keeps its params and whether it is excluded, and the other steps keep theirs. A selected step stays selected, and a moved selected step makes its new action the selected one and its set the current one. A Record Stop dialog open on a step follows the step, and the steps that the recording in progress adds to either action stay after the steps that were before them. A step put back just before or just after itself does not move. A missing or invalid index, or a move that would give the action more than 10,000 steps or its set's file more than 8 MiB, counting the steps that the recording in progress adds to the set, is an error and changes nothing. Undo does not move the step back. Dragging a step row in the panel runs this → {set, action, step, moved}",
     ),
     (
         "ui.batchDialog",

@@ -1586,6 +1586,8 @@ font-technology	Variable	Variables
 	Objects on Path Tool	Outil Objets sur tracé
 	Attach Objects on Path	Attacher des objets au tracé
 	Expand Objects on Path	Décomposer les objets sur tracé
+	Detach	Détacher
+	Detach Object from Path	Détacher l’objet du tracé
 	Release Live Paint	Annuler la peinture dynamique
 	Release Repeat	Annuler la répétition
 	Release Slice	Annuler la tranche
@@ -4757,6 +4759,7 @@ axis	Both	Les deux
 @msg	paths contain invalid coordinates	les tracés contiennent des coordonnées non valides
 @msg	paths: give at least one file	paths : indiquez au moins un fichier
 @msg	replace: the object to replace was changed or deleted	replace : l’objet à remplacer a été modifié ou supprimé
+@msg	the document it was prepared for is no longer active	le document pour lequel il a été préparé n’est plus actif
 @msg	pattern missing	motif manquant
 @msg	patterns nested too deeply are filled with mid-grey	les motifs imbriqués trop profondément sont remplis de gris moyen
 @msg	percent must be above 0 and at most 6400, not {p}	percent doit être supérieur à 0 et au plus égal à 6400, pas {p}
@@ -4792,6 +4795,7 @@ axis	Both	Les deux
 @msg	select a repeat	sélectionnez une répétition
 @msg	select an Intertwine group	sélectionnez un groupe entrelacé
 @msg	select an Objects on Path group	sélectionnez un groupe d’objets sur tracé
+@msg	choose the object to detach with its Select/Move widget	choisissez l’objet à détacher avec sa commande Sélectionner/Déplacer
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	un tracé à l’intérieur d’un tracé transparent, d’un dégradé de formes, d’une enveloppe, d’une répétition ou d’un groupe entrelacé ne peut pas recevoir d’objets
 @msg	a clipping path can't take objects	un tracé d’écrêtage ne peut pas recevoir d’objets
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	les objets à l’intérieur d’un dégradé de formes, d’une enveloppe, d’une répétition ou d’un groupe entrelacé ne peuvent pas être attachés à un tracé
@@ -5530,7 +5534,9 @@ lighting	Light	Lumière
 @msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` doit valoir front ou back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` doit être un nombre de {lo} à {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` doit être un tableau
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Les graphiques s'appliquent sur des faces planes : utilisez le type d'objet Extrusion ou Plan
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Les graphiques s'appliquent aux types d'objet Plan, Extrusion et Révolution
+@msg	Revolve maps graphics onto its side: map them onto the front	Révolution applique les graphiques sur sa face latérale : appliquez-les sur la face avant
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Les graphiques sont trop complexes pour cette surface : simplifiez l'illustration des symboles ou réduisez Segments
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` accepte au plus {MAX_GRAPHICS} graphiques
 @msg	A plane has one face: map its graphics onto the front	Un plan n'a qu'une face : appliquez ses graphiques sur la face avant
 @msg	The graphics are too complex: simplify the symbols' art	Les graphiques sont trop complexes : simplifiez l'illustration des symboles
@@ -5772,6 +5778,8 @@ lighting	Light	Lumière
 	Pen	Plume
 	Pentagram	Pentagramme
 	Perceptual	Perceptif
+	Hue Clockwise	Teinte en sens horaire
+	Hue Counterclockwise	Teinte en sens antihoraire
 	Phone 360×800	Téléphone 360×800
 	Phone 375×667	Téléphone 375×667
 	Phone 375×812	Téléphone 375×812
@@ -6301,7 +6309,7 @@ axis	Y Axis	Axe Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` s’applique aux fonds en dégradé (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` s’applique aux fonds en dégradé (paint.setFill)
 @msg	`dither` must be true or false	`dither` doit valoir true ou false
-@msg	`method` must be classic or perceptual	`method` doit être classic ou perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` doit être classic, perceptual, hue-clockwise ou hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` doit être pad, repeat ou reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` doit être un nombre entier de 1 à {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` s’applique aux dégradés linéaires, radiaux, coniques et en losange
@@ -6544,6 +6552,7 @@ axis	Y Axis	Axe Y
 	Continue	Continuer
 	Continue Action	Continuer le script
 	Delete Action Step	Supprimer l’étape du script
+	Move Action Step	Déplacer l’étape du script
 	Press Play Current Selection in the Actions panel to go on.	Pour continuer, cliquez sur Exécuter la sélection actuelle dans le panneau Scripts.
 	Stop: {message}	Arrêt : {message}
 @msg	no action is waiting at a stop	aucun script n’attend à un arrêt
@@ -6715,6 +6724,22 @@ axis	Y Axis	Axe Y
 	Graphite Pencil	Crayon graphite
 	Wax Crayon	Craie grasse
 	Charcoal Dust	Poussière de fusain
+	Notched Ribbon	Ruban cranté
+	Double Line	Double ligne
+	Wave	Vague
+	Teardrop	Goutte
+	Striped Ribbon	Ruban rayé
+	Fine Nib	Plume fine
+	Broad Nib	Plume large
+	Chisel	Ciseau
+	Round Pen	Plume ronde
+	Pressure Pen	Plume à pression
+	Beads	Perles
+	Dash Dot	Tiret-point
+	Scallops	Festons
+	Stars	Étoiles
+	Triangles	Triangles
+	Sparkles	Étincelles
 	Save Brush Library…	Enregistrer la bibliothèque de formes…
 @msg	`{_1}` has no brushes to apply	`{_1}` n'a aucune forme à appliquer
 @msg	missing `library` (see brush.libraries)	`library` manquant (voir brush.libraries)

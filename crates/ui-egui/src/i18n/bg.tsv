@@ -1537,6 +1537,8 @@ font-technology	Variable	Променливи
 	Objects on Path Tool	Инструмент „Обекти по пътя“
 	Attach Objects on Path	Прикрепяне на обекти към пътя
 	Expand Objects on Path	Разширяване на обекти по пътя
+	Detach	Откачване
+	Detach Object from Path	Откачване на обект от пътя
 	Release Live Paint	Освобождаване на динамично оцветяване
 	Release Repeat	Освобождаване на повторение
 	Release Slice	Освобождаване на отрязък
@@ -4514,6 +4516,7 @@ axis	Both	И двете
 @msg	paths contain invalid coordinates	пътищата съдържат невалидни координати
 @msg	paths: give at least one file	пътища: посочете поне един файл
 @msg	replace: the object to replace was changed or deleted	замяна: обектът за замяна е променен или изтрит
+@msg	the document it was prepared for is no longer active	документът, за който е подготвено, вече не е активен
 @msg	pattern missing	липсва мостра
 @msg	patterns nested too deeply are filled with mid-grey	мострите, вложени прекалено дълбоко, се запълват със средно сиво
 @msg	percent must be above 0 and at most 6400, not {p}	percent трябва да е над 0 и най-много 6400, а не {p}
@@ -5404,6 +5407,8 @@ lighting	Light	Светлина
 	Pen	Перо
 	Pentagram	Петограм
 	Perceptual	Перцептивен
+	Hue Clockwise	Оттенък по часовниковата стрелка
+	Hue Counterclockwise	Оттенък обратно на часовниковата стрелка
 	Phone 360×800	Телефон 360×800
 	Phone 375×667	Телефон 375×667
 	Phone 375×812	Телефон 375×812
@@ -5973,7 +5978,7 @@ axis	Y Axis	Y ос
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` се прилага към градиентни запълки (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` се прилага към градиентни запълки (paint.setFill)
 @msg	`dither` must be true or false	`dither` трябва да бъде true или false
-@msg	`method` must be classic or perceptual	`method` трябва да е classic или perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` трябва да е classic, perceptual, hue-clockwise или hue-counterclockwise
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Да се инсталира ли „{name}“, който иска голям изчислителен бюджет?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Всяко изпълнение може да продължи до {minutes} минути и да свърши {times} пъти повече работа, отколкото е позволено на другите приставки. То се изпълнява във фонов режим и можете да го откажете.
@@ -6014,6 +6019,7 @@ axis	Y Axis	Y ос
 	Continue	Продължаване
 	Continue Action	Продължаване на действието
 	Delete Action Step	Изтриване на стъпка от действието
+	Move Action Step	Преместване на стъпка от действието
 	Press Play Current Selection in the Actions panel to go on.	За да продължите, натиснете „Изпълнение на текущия избор“ в панела „Действия“.
 	Stop: {message}	Спиране: {message}
 @msg	no action is waiting at a stop	няма действие, което чака при спиране
@@ -6174,6 +6180,22 @@ axis	Y Axis	Y ос
 	Graphite Pencil	Графитен молив
 	Wax Crayon	Восъчен пастел
 	Charcoal Dust	Въглен прах
+	Notched Ribbon	Назъбена лента
+	Double Line	Двойна линия
+	Wave	Вълна
+	Teardrop	Сълза
+	Striped Ribbon	Раирана лента
+	Fine Nib	Тънък писец
+	Broad Nib	Широк писец
+	Chisel	Длето
+	Round Pen	Кръгло перо
+	Pressure Pen	Перо с натиск
+	Beads	Мъниста
+	Dash Dot	Тире-точка
+	Scallops	Фестони
+	Stars	Звезди
+	Triangles	Триъгълници
+	Sparkles	Искри
 	Save Brush Library…	Запази библиотека с четки…
 @msg	no empty artboards to delete	няма празни работни области за изтриване
 	Scale Presets	Пресети за мащаб

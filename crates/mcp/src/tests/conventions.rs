@@ -313,6 +313,84 @@ fn window_captures_take_max_side() {
     assert!(r["content"][0]["text"].as_str().unwrap().contains("`scale`"), "{r}");
 }
 
+/// The path an app from before `ui.screenshot {data}` was sent, with the mode of the folder holding
+/// it on unix (`None` elsewhere).
+type SeenPaths = std::sync::Arc<std::sync::Mutex<Vec<(String, Option<u32>)>>>;
+
+/// An app from before `ui.screenshot {data}`: it writes `png` (nothing when `None`) to the `path`
+/// it is sent, keeps the path in `seen` and answers `reply`. A capture without a path is answered
+/// with its size alone.
+struct OldWindow {
+    png: Option<Vec<u8>>,
+    reply: Result<Value, String>,
+    seen: SeenPaths,
+}
+impl Backend for OldWindow {
+    fn call(&mut self, method: &str, p: Value) -> Result<Value, String> {
+        if method != "ui.screenshot" {
+            return Err(format!("unexpected {method}"));
+        }
+        // Without a path it ignores `data` and sends the size alone.
+        let Some(path) = p["path"].as_str().map(str::to_owned) else { return Ok(json!({"width": 2, "height": 1})) };
+        #[cfg(unix)]
+        let mode = {
+            use std::os::unix::fs::PermissionsExt as _;
+            std::path::Path::new(&path).parent().and_then(|d| std::fs::metadata(d).ok()).map(|m| m.permissions().mode() & 0o777)
+        };
+        #[cfg(not(unix))]
+        let mode = None;
+        self.seen.lock().unwrap().push((path.clone(), mode));
+        if let Some(png) = &self.png {
+            std::fs::write(&path, png).map_err(|e| format!("{path}: {e}"))?;
+        }
+        self.reply.clone()
+    }
+    fn has_ui(&self) -> bool {
+        true
+    }
+    fn describe(&self) -> String {
+        "old window".into()
+    }
+}
+
+/// An app without `ui.screenshot {data}` writes the window capture to a file in a new folder of its
+/// own inside the system's temporary folder (owner-only on unix), never to a fixed name in the
+/// shared folder itself. The folder is removed after the capture is read, and also when the app
+/// fails after writing it or the file can't be read.
+#[test]
+fn an_old_app_captures_the_window_in_a_new_private_folder() {
+    let temp = std::env::temp_dir();
+    let png = b"window capture".to_vec();
+    let size = json!({"width": 2, "height": 1});
+    let mut folders = Vec::new();
+    for (written, reply, ok) in [
+        (Some(png.clone()), Ok(size.clone()), true),
+        (Some(png.clone()), Ok(size.clone()), true),
+        (Some(png.clone()), Err("the capture failed".to_string()), false),
+        (None, Ok(size.clone()), false),
+    ] {
+        let seen = SeenPaths::default();
+        let mut s = Server::new(Box::new(OldWindow { png: written, reply, seen: seen.clone() }));
+        let r = call(&mut s, "screenshot", json!({"window": true}));
+        assert_eq!(r["isError"], !ok, "{r}");
+        if ok {
+            assert_eq!(vectorcraft_format::base64_decode(r["content"][0]["data"].as_str().unwrap()).unwrap(), png, "{r}");
+        }
+        let seen = seen.lock().unwrap().clone();
+        let [(path, mode)] = seen.as_slice() else { panic!("one capture: {seen:?}") };
+        let dir = std::path::Path::new(path).parent().unwrap().to_path_buf();
+        assert_eq!(dir.parent(), Some(temp.as_path()), "{path} is in a folder of its own inside {}", temp.display());
+        assert!(!dir.exists(), "{} is removed", dir.display());
+        if cfg!(unix) {
+            assert_eq!(*mode, Some(0o700), "{path}");
+        }
+        folders.push(dir);
+    }
+    folders.sort();
+    folders.dedup();
+    assert_eq!(folders.len(), 4, "each capture has a new folder: {folders:?}");
+}
+
 /// Each tool with another name for the same call names it in its description.
 #[test]
 fn alias_tools_name_their_pair() {

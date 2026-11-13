@@ -1982,6 +1982,8 @@ antiAlias	Sharp	날카롭게
 	Objects on Path Tool	패스 위 개체 도구
 	Attach Objects on Path	패스 위 개체 부착
 	Expand Objects on Path	패스 위 개체 확장
+	Detach	분리
+	Detach Object from Path	패스에서 개체 분리
 	Release Live Paint	라이브 페인트 해제
 	Release Repeat	반복 해제
 	Release Slice	분할 해제
@@ -4504,6 +4506,7 @@ theme	Appearance	외관
 @msg	select a repeat	반복을 선택하세요
 @msg	select an Intertwine group	교차 그룹을 선택하세요
 @msg	select an Objects on Path group	패스 위 개체 그룹을 선택하세요
+@msg	choose the object to detach with its Select/Move widget	분리할 개체를 선택/이동 위젯으로 고르세요
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	컴파운드 패스, 블렌드, 엔벨로프, 반복 또는 교차 그룹 안의 패스에는 개체를 부착할 수 없습니다
 @msg	a clipping path can't take objects	클리핑 패스에는 개체를 부착할 수 없습니다
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	블렌드, 엔벨로프, 반복 또는 교차 그룹 안의 개체는 패스에 부착할 수 없습니다
@@ -5110,6 +5113,7 @@ theme	Appearance	외관
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}`은(는) VectorCraft 문서, PDF 또는 PDF 호환 .ai 파일이 아닙니다
 @msg	paths: give at least one file	paths: 파일을 하나 이상 지정하세요
 @msg	replace: the object to replace was changed or deleted	replace: 바꿀 개체가 변경되었거나 삭제되었습니다
+@msg	the document it was prepared for is no longer active	준비한 문서가 더 이상 활성 상태가 아닙니다
 @msg	Couldn't place {name}: {e}	{name}을(를) 가져올 수 없습니다: {e}
 @msg	no print service	인쇄 서비스가 없습니다
 @msg	the print job has no data	인쇄 작업에 데이터가 없습니다
@@ -5539,7 +5543,9 @@ lighting	Light	광원
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`의 face는 front 또는 back이어야 합니다
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`의 {key}은(는) {lo}에서 {hi} 사이의 숫자여야 합니다
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}`은(는) 배열이어야 합니다
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	그래픽은 평평한 면에 매핑됩니다. 돌출 또는 평면 개체 유형을 사용하십시오
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	그래픽은 평면, 돌출, 회전체 개체 유형에 매핑됩니다
+@msg	Revolve maps graphics onto its side: map them onto the front	회전체는 그래픽을 옆면에 매핑합니다. 앞면에 매핑하십시오
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	그래픽이 이 표면에 비해 너무 복잡합니다. 심볼의 아트를 단순화하거나 세그먼트를 줄이십시오
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}`에는 그래픽을 최대 {MAX_GRAPHICS}개까지 넣을 수 있습니다
 @msg	A plane has one face: map its graphics onto the front	평면에는 면이 하나뿐입니다. 그래픽을 앞면에 매핑하십시오
 @msg	The graphics are too complex: simplify the symbols' art	그래픽이 너무 복잡합니다. 심볼의 아트를 단순화하십시오
@@ -5893,7 +5899,9 @@ axis	Y Axis	Y축
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither`는 그레이디언트 칠에 적용됩니다 (paint.setFill)
 @msg	`dither` must be true or false	`dither`은(는) true 또는 false여야 합니다
 	Perceptual	지각적
-@msg	`method` must be classic or perceptual	`method`는 classic 또는 perceptual이어야 합니다
+	Hue Clockwise	색조 시계 방향
+	Hue Counterclockwise	색조 시계 반대 방향
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method`는 classic, perceptual, hue-clockwise 또는 hue-counterclockwise여야 합니다
 @msg	`spread` must be pad, repeat or reflect	`spread`는 pad, repeat 또는 reflect여야 합니다
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats`는 1에서 {MAX_REPEATS} 사이의 정수여야 합니다
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread`는 선형, 방사형, 원뿔형 및 다이아몬드 그레이디언트에 적용됩니다
@@ -6136,6 +6144,7 @@ axis	Y Axis	Y축
 	Continue	계속
 	Continue Action	액션 계속
 	Delete Action Step	액션 단계 삭제
+	Move Action Step	액션 단계 이동
 	Press Play Current Selection in the Actions panel to go on.	계속하려면 액션 패널에서 현재 선택 항목 재생을 누르세요.
 	Stop: {message}	중지: {message}
 @msg	no action is waiting at a stop	중지에서 대기 중인 액션이 없습니다
@@ -6307,6 +6316,22 @@ axis	Y Axis	Y축
 	Graphite Pencil	흑연 연필
 	Wax Crayon	왁스 크레용
 	Charcoal Dust	목탄 가루
+	Notched Ribbon	노치 리본
+	Double Line	이중선
+	Wave	물결
+	Teardrop	눈물방울
+	Striped Ribbon	줄무늬 리본
+	Fine Nib	가는 펜촉
+	Broad Nib	넓은 펜촉
+	Chisel	끌
+	Round Pen	둥근 펜
+	Pressure Pen	필압 펜
+	Beads	구슬
+	Dash Dot	일점쇄선
+	Scallops	스캘럽
+	Stars	별
+	Triangles	삼각형
+	Sparkles	반짝임
 	Save Brush Library…	브러시 라이브러리 저장…
 @msg	`{_1}` has no brushes to apply	`{_1}`에 적용할 브러시가 없습니다
 @msg	missing `library` (see brush.libraries)	`library`가 없습니다(brush.libraries 참조)

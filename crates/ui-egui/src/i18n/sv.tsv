@@ -1550,6 +1550,8 @@ font-technology	Variable	Variabla
 	Objects on Path Tool	Verktyg för objekt på bana
 	Attach Objects on Path	Fäst objekt på bana
 	Expand Objects on Path	Expandera objekt på bana
+	Detach	Lossa
+	Detach Object from Path	Lossa objekt från bana
 	Release Live Paint	Släpp direktmålning
 	Release Repeat	Släpp upprepning
 	Release Slice	Släpp skiva
@@ -4669,6 +4671,7 @@ axis	Both	Båda
 @msg	paths contain invalid coordinates	banorna innehåller ogiltiga koordinater
 @msg	paths: give at least one file	paths: ange minst en fil
 @msg	replace: the object to replace was changed or deleted	replace: objektet som skulle ersättas har ändrats eller tagits bort
+@msg	the document it was prepared for is no longer active	dokumentet som det förbereddes för är inte längre aktivt
 @msg	pattern missing	mönster saknas
 @msg	patterns nested too deeply are filled with mid-grey	mönster som är kapslade för djupt fylls med mellangrått
 @msg	percent must be above 0 and at most 6400, not {p}	percent måste vara över 0 och högst 6400, inte {p}
@@ -5431,7 +5434,9 @@ lighting	Light	Ljus
 @msg	`{GRAPHICS}` face must be front or back	face i `{GRAPHICS}` måste vara front eller back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} i `{GRAPHICS}` måste vara ett tal från {lo} till {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` måste vara en matris
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafik placeras på plana sidor: använd objekttypen Extrudera eller Plan
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafik placeras på objekttyperna Plan, Extrudera och Rotera runt axel
+@msg	Revolve maps graphics onto its side: map them onto the front	Rotera runt axel placerar grafik på sin mantelyta: placera den på framsidan
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiken är för komplex för den här ytan: förenkla symbolernas teckning eller minska Segment
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` tar högst {MAX_GRAPHICS} grafiker
 @msg	A plane has one face: map its graphics onto the front	Ett plan har en sida: placera dess grafik på framsidan
 @msg	The graphics are too complex: simplify the symbols' art	Grafiken är för komplex: förenkla symbolernas teckning
@@ -5673,6 +5678,8 @@ lighting	Light	Ljus
 	Pen	Penna
 	Pentagram	Pentagram
 	Perceptual	Perceptuell
+	Hue Clockwise	Nyans medurs
+	Hue Counterclockwise	Nyans moturs
 	Phone 360×800	Telefon 360×800
 	Phone 375×667	Telefon 375×667
 	Phone 375×812	Telefon 375×812
@@ -6041,6 +6048,7 @@ theme	Appearance	Utseende
 @msg	no bound object reports a value (locked objects and embedded images report none)	inget bundet objekt rapporterar ett värde (låsta objekt och inbäddade bilder rapporterar inget)
 @msg	select an Intertwine group	markera en sammanflätningsgrupp
 @msg	select an Objects on Path group	markera en grupp med objekt på bana
+@msg	choose the object to detach with its Select/Move widget	välj objektet som ska lossas med dess Markera/Flytta-reglage
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	en bana inuti en sammansatt bana, en blandning, ett kuvert, en upprepning eller en sammanflätningsgrupp kan inte ta emot objekt
 @msg	a clipping path can't take objects	en klippbana kan inte ta emot objekt
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objekt inuti en blandning, ett kuvert, en upprepning eller en sammanflätningsgrupp kan inte fästas på en bana
@@ -6328,7 +6336,7 @@ axis	Y Axis	Y-axel
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` gäller gradientfyllningar (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gäller gradientfyllningar (paint.setFill)
 @msg	`dither` must be true or false	`dither` måste vara true eller false
-@msg	`method` must be classic or perceptual	`method` måste vara classic eller perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` måste vara classic, perceptual, hue-clockwise eller hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` måste vara pad, repeat eller reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` måste vara ett heltal från 1 till {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gäller för linjära, radiella och koniska gradienter och rombgradienter
@@ -6530,6 +6538,7 @@ axis	Y Axis	Y-axel
 	Continue	Fortsätt
 	Continue Action	Fortsätt åtgärd
 	Delete Action Step	Radera åtgärdssteg
+	Move Action Step	Flytta åtgärdssteg
 	Press Play Current Selection in the Actions panel to go on.	Fortsätt genom att trycka på Spela upp aktuell markering i panelen Åtgärder.
 	Stop: {message}	Stopp: {message}
 @msg	no action is waiting at a stop	ingen åtgärd väntar vid ett stopp
@@ -6701,6 +6710,22 @@ axis	Y Axis	Y-axel
 	Graphite Pencil	Grafitpenna
 	Wax Crayon	Vaxkrita
 	Charcoal Dust	Koldamm
+	Notched Ribbon	Hackat band
+	Double Line	Dubbellinje
+	Wave	Våg
+	Teardrop	Droppe
+	Striped Ribbon	Randigt band
+	Fine Nib	Fin spets
+	Broad Nib	Bred spets
+	Chisel	Mejsel
+	Round Pen	Rund penna
+	Pressure Pen	Tryckpenna
+	Beads	Pärlor
+	Dash Dot	Streck-punkt
+	Scallops	Bågkant
+	Stars	Stjärnor
+	Triangles	Trianglar
+	Sparkles	Gnistor
 	Save Brush Library…	Spara penselbibliotek…
 @msg	`{_1}` has no brushes to apply	`{_1}` har inga penslar att använda
 @msg	missing `library` (see brush.libraries)	`library` saknas (se brush.libraries)

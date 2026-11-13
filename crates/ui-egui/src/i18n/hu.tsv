@@ -2003,6 +2003,8 @@ file-filter	Templates	Sablonok
 	Objects on Path Tool	Objektumok útvonalon
 	Attach Objects on Path	Objektumok csatolása útvonalhoz
 	Expand Objects on Path	Objektumok útvonalon kibontása
+	Detach	Leválasztás
+	Detach Object from Path	Objektum leválasztása az útvonalról
 	Release Live Paint	Élő festés megszüntetése
 	Release Repeat	Ismétlés megszüntetése
 	Release Slice	Szelet megszüntetése
@@ -3030,6 +3032,8 @@ file-filter	Templates	Sablonok
 	per slice	szeletenként
 	Percent:	Százalék:
 	Perceptual	Észlelési
+	Hue Clockwise	Színárnyalat az óramutató járásával megegyezően
+	Hue Counterclockwise	Színárnyalat az óramutató járásával ellentétesen
 	Perceptual Scales	Észlelési skálák
 	Performance	Teljesítmény
 diagnostics	render	renderelés
@@ -5479,6 +5483,7 @@ imageTrace	Outline	Körvonal
 @msg	paths contain invalid coordinates	az útvonalakban érvénytelen koordináták vannak
 @msg	paths: give at least one file	paths: legalább egy fájlt adj meg
 @msg	replace: the object to replace was changed or deleted	replace: a cserélendő objektumot módosították vagy törölték
+@msg	the document it was prepared for is no longer active	az a dokumentum, amelyhez előkészítették, már nem aktív
 @msg	pattern missing	hiányzik a mintázat
 @msg	patterns nested too deeply are filled with mid-grey	a túl mélyen egymásba ágyazott mintázatok helyén középszürke kitöltés áll
 @msg	PDF settings are not an object	a PDF-beállítások nem objektumot alkotnak
@@ -5561,6 +5566,7 @@ imageTrace	Outline	Körvonal
 @msg	select a repeat	jelölj ki egy ismétlést
 @msg	select an Intertwine group	jelölj ki egy összefonási csoportot
 @msg	select an Objects on Path group	jelölj ki egy Objektumok útvonalon csoportot
+@msg	choose the object to detach with its Select/Move widget	válaszd ki a leválasztandó objektumot a Kijelölés/Mozgatás vezérlőjével
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	összetett útvonalban, összemosásban, burkolóban, ismétlésben vagy összefonási csoportban lévő útvonalhoz nem csatolhatók objektumok
 @msg	a clipping path can't take objects	vágóútvonalhoz nem csatolhatók objektumok
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	összemosásban, burkolóban, ismétlésben vagy összefonási csoportban lévő objektumok nem csatolhatók útvonalhoz
@@ -5943,7 +5949,9 @@ imageTrace	Outline	Körvonal
 @msg	`{GRAPHICS}` face must be front or back	a `{GRAPHICS}` face értéke front vagy back lehet
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	a `{GRAPHICS}` {key} értéke {lo} és {hi} közötti szám lehet
 @msg	`{GRAPHICS}` must be an array	a `{GRAPHICS}` értéke tömb kell legyen
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	A grafikák sík lapokra kerülnek: használja a Kihúzás vagy a Sík objektumtípust
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	A grafikák a Sík, a Kihúzás és a Forgatás tengely körül objektumtípusra kerülnek
+@msg	Revolve maps graphics onto its side: map them onto the front	A Forgatás tengely körül a grafikákat a palástjára helyezi: az elülső oldalra helyezze őket
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	A grafikák túl összetettek ehhez a felülethez: egyszerűsítse a szimbólumok rajzát, vagy csökkentse a Szakaszok értékét
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	a `{GRAPHICS}` legfeljebb {MAX_GRAPHICS} grafikát fogad
 @msg	A plane has one face: map its graphics onto the front	A síknak egy oldala van: a grafikáit az elülső oldalra helyezze
 @msg	The graphics are too complex: simplify the symbols' art	A grafikák túl összetettek: egyszerűsítse a szimbólumok rajzát
@@ -6289,7 +6297,7 @@ axis	Y Axis	Y tengely
 @msg	`dither` applies to gradient fills (stroke: false)	A `dither` színátmenetes kitöltésekre vonatkozik (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	A `dither` színátmenetes kitöltésekre vonatkozik (paint.setFill)
 @msg	`dither` must be true or false	`dither`: true vagy false kell
-@msg	`method` must be classic or perceptual	a `method` értéke classic vagy perceptual lehet
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	a `method` értéke classic, perceptual, hue-clockwise vagy hue-counterclockwise lehet
 @msg	`spread` must be pad, repeat or reflect	a `spread` értéke pad, repeat vagy reflect lehet
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	a `repeats` értéke 1 és {MAX_REPEATS} közötti egész szám lehet
 @msg	`spread` applies to linear, radial, conic and diamond gradients	a `spread` a lineáris, sugaras, kúpos és rombusz színátmenetekre vonatkozik
@@ -6532,6 +6540,7 @@ axis	Y Axis	Y tengely
 	Continue	Folytatás
 	Continue Action	Művelet folytatása
 	Delete Action Step	Műveletlépés törlése
+	Move Action Step	Műveletlépés áthelyezése
 	Press Play Current Selection in the Actions panel to go on.	A folytatáshoz nyomja meg a Műveletek panelen a Kijelölt művelet lejátszása gombot.
 	Stop: {message}	Megállás: {message}
 @msg	no action is waiting at a stop	egyetlen művelet sem várakozik megállásnál
@@ -6703,6 +6712,22 @@ axis	Y Axis	Y tengely
 	Graphite Pencil	Grafitceruza
 	Wax Crayon	Zsírkréta
 	Charcoal Dust	Szénpor
+	Notched Ribbon	Csipkézett szalag
+	Double Line	Dupla vonal
+	Wave	Hullám
+	Teardrop	Csepp
+	Striped Ribbon	Csíkos szalag
+	Fine Nib	Finom tollhegy
+	Broad Nib	Széles tollhegy
+	Chisel	Véső
+	Round Pen	Kerek toll
+	Pressure Pen	Nyomásérzékeny toll
+	Beads	Gyöngyök
+	Dash Dot	Pont-vonal
+	Scallops	Hullámos szegély
+	Stars	Csillagok
+	Triangles	Háromszögek
+	Sparkles	Szikrák
 	Save Brush Library…	Ecsetkönyvtár mentése…
 @msg	`{_1}` has no brushes to apply	A(z) `{_1}` nem tartalmaz alkalmazható ecsetet
 @msg	missing `library` (see brush.libraries)	hiányzik a `library` (lásd: brush.libraries)

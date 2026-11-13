@@ -1381,6 +1381,14 @@ pub fn blend_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Op
     layout_spine(keys, spec)
 }
 
+/// The line the steps of a blend of `keys` are placed along: [`blend_spine`]'s path for a blend
+/// with a spine, and the straight lines between the key centers, in key order, for a blend made
+/// without one ([`BlendSpec::no_spine`]). For a blend without a spine the line places the steps
+/// only; it is not a spine and is not drawn as one. `None` with fewer than two keys.
+pub fn blend_layout_line(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<PathData> {
+    layout_spine(keys, spec).map(|(path, _)| path)
+}
+
 /// The spine `spec` stores, unless the blend was made without one.
 fn stored_spine(spec: &BlendSpec) -> Option<&PathData> {
     spec.spine.as_ref().filter(|_| !spec.no_spine)
@@ -1850,6 +1858,28 @@ mod tests {
         let pinned = BlendSpec { spine: Some(path), key_anchors: vec![0, 1, 2], ..Default::default() };
         let (moved, _) = blend_spine(&[key(0.0), key(100.0), key(300.0)], &pinned).unwrap();
         assert_eq!(moved.subpaths[0].anchors[2].p, Point::new(305.0, 5.0));
+    }
+
+    #[test]
+    fn a_blend_without_a_spine_has_a_layout_line_through_its_key_centers() {
+        let at =
+            |x: f64, y: f64| Arc::new(Node::path(NodeId(1), shapes::rectangle(Rect::new(x - 5.0, y - 5.0, x + 5.0, y + 5.0)), Appearance::default()));
+        let line_of = |path: &PathData| path.subpaths.iter().flat_map(|s| s.anchors.iter().map(|a| a.p)).collect::<Vec<_>>();
+        // A stored spine is ignored once the blend is made without one.
+        let stored = PathData::single(SubPath::polyline(&[Point::new(0.0, 50.0), Point::new(300.0, 50.0)], false));
+        let spec = BlendSpec { no_spine: true, spine: Some(stored), ..Default::default() };
+        for keys in [vec![at(10.0, 20.0), at(110.0, 20.0)], vec![at(10.0, 20.0), at(110.0, 20.0), at(110.0, 220.0), at(-40.0, 0.0)]] {
+            assert!(blend_spine(&keys, &spec).is_none(), "still no spine");
+            let line = blend_layout_line(&keys, &spec).unwrap();
+            assert_eq!(line.subpaths.len(), 1);
+            assert!(!line.subpaths[0].closed);
+            let centers: Vec<Point> = keys.iter().map(|k| center_of(k)).collect();
+            assert_eq!(line_of(&line), centers, "in key order");
+        }
+        // With a spine, the layout line is the spine.
+        let keys = vec![key(0.0), key(100.0), key(300.0)];
+        assert_eq!(blend_layout_line(&keys, &BlendSpec::default()), blend_spine(&keys, &BlendSpec::default()).map(|(p, _)| p));
+        assert!(blend_layout_line(&keys[..1], &spec).is_none(), "one key");
     }
 
     #[test]
