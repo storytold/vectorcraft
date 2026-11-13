@@ -4475,6 +4475,9 @@ imageTrace	Outline	Kontur
 @msg	Couldn't open {name}: {e}	Nie udało się otworzyć {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Nie udało się umieścić {name}: dokument, na który go upuszczono, został zamknięty
 @msg	Couldn't place {name}: the document it was placed in was closed	Nie udało się umieścić {name}: dokument, w którym był umieszczany, został zamknięty
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Nie udało się umieścić {name}: dokument, na który go upuszczono, został przywrócony
+@msg	Couldn't place {name}: the document it was placed in was reverted	Nie udało się umieścić {name}: dokument, w którym był umieszczany, został przywrócony
+@msg	Couldn't paste: the document it was pasted in was reverted	Nie udało się wkleić: dokument, do którego wklejano, został przywrócony
 @msg	Couldn't read {name}: {e}	Nie udało się odczytać {name}: {e}
 @msg	Couldn't save recovery data: {e}	Nie udało się zapisać danych odzyskiwania: {e}
 @msg	Create Outlines: select text objects	Utwórz kontury: zaznacz obiekty tekstowe
@@ -5566,6 +5569,8 @@ imageTrace	Outline	Kontur
 	High Contrast 3	Wysoki kontrast 3
 	Pentagram	Pentagram
 	Perceptual	Percepcyjna
+	Hue Clockwise	Barwa zgodnie z ruchem wskazówek zegara
+	Hue Counterclockwise	Barwa przeciwnie do ruchu wskazówek zegara
 	Relative Colorimetric	Kolorymetryczna względna
 	Absolute Colorimetric	Kolorymetryczna bezwzględna
 	Exact	Dokładne
@@ -6166,7 +6171,7 @@ axis	Y Axis	Oś Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` dotyczy wypełnień gradientem (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` dotyczy wypełnień gradientem (paint.setFill)
 @msg	`dither` must be true or false	`dither` musi mieć wartość true lub false
-@msg	`method` must be classic or perceptual	`method` musi mieć wartość classic lub perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` musi mieć wartość classic, perceptual, hue-clockwise lub hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` musi mieć wartość pad, repeat lub reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` musi być liczbą całkowitą od 1 do {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` dotyczy gradientów liniowych, radialnych, stożkowych i rombowych
@@ -6409,6 +6414,7 @@ axis	Y Axis	Oś Y
 	Continue	Kontynuuj
 	Continue Action	Kontynuuj operację
 	Delete Action Step	Usuń krok operacji
+	Move Action Step	Przenieś krok operacji
 	Press Play Current Selection in the Actions panel to go on.	Aby kontynuować, naciśnij Odtwórz bieżące zaznaczenie w panelu Operacje.
 	Stop: {message}	Zatrzymanie: {message}
 @msg	no action is waiting at a stop	żadna operacja nie czeka na zatrzymaniu
@@ -6580,6 +6586,22 @@ axis	Y Axis	Oś Y
 	Graphite Pencil	Ołówek grafitowy
 	Wax Crayon	Kredka woskowa
 	Charcoal Dust	Pył węglowy
+	Notched Ribbon	Wstęga z nacięciami
+	Double Line	Podwójna linia
+	Wave	Fala
+	Teardrop	Łza
+	Striped Ribbon	Wstęga w paski
+	Fine Nib	Cienka stalówka
+	Broad Nib	Szeroka stalówka
+	Chisel	Dłuto
+	Round Pen	Okrągłe pióro
+	Pressure Pen	Pióro z naciskiem
+	Beads	Koraliki
+	Dash Dot	Kreska-kropka
+	Scallops	Feston
+	Stars	Gwiazdy
+	Triangles	Trójkąty
+	Sparkles	Iskry
 	Save Brush Library…	Zapisz bibliotekę pędzli…
 @msg	`{_1}` has no brushes to apply	`{_1}` nie ma pędzli do zastosowania
 @msg	missing `library` (see brush.libraries)	brak `library` (zobacz brush.libraries)

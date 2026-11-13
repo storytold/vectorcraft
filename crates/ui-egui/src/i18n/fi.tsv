@@ -4565,6 +4565,9 @@ imageTrace	Outline	Ääriviiva
 @msg	Couldn't open {name}: {e}	Tiedostoa {name} ei voitu avata: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Kohdetta {name} ei voitu sijoittaa: asiakirja, johon se pudotettiin, on suljettu
 @msg	Couldn't place {name}: the document it was placed in was closed	Kohdetta {name} ei voitu sijoittaa: asiakirja, johon sitä sijoitettiin, on suljettu
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Kohdetta {name} ei voitu sijoittaa: asiakirja, johon se pudotettiin, on palautettu tallennettuun versioon
+@msg	Couldn't place {name}: the document it was placed in was reverted	Kohdetta {name} ei voitu sijoittaa: asiakirja, johon sitä sijoitettiin, on palautettu tallennettuun versioon
+@msg	Couldn't paste: the document it was pasted in was reverted	Liittäminen ei onnistunut: asiakirja, johon liitettiin, on palautettu tallennettuun versioon
 @msg	Couldn't read {name}: {e}	Tiedostoa {name} ei voitu lukea: {e}
 @msg	Couldn't save recovery data: {e}	Palautustietoja ei voitu tallentaa: {e}
 @msg	Create Outlines: select text objects	Muunna ääriviivoiksi: valitse tekstiobjekteja
@@ -5606,6 +5609,8 @@ imageTrace	Outline	Ääriviiva
 	Vivid	Eloisa
 	Spectrum	Spektri
 	Perceptual	Havainnollinen
+	Hue Clockwise	Sävy myötäpäivään
+	Hue Counterclockwise	Sävy vastapäivään
 	Relative Colorimetric	Suhteellinen kolorimetrinen
 	Absolute Colorimetric	Absoluuttinen kolorimetrinen
 	Exact	Tarkka
@@ -6341,7 +6346,7 @@ axis	Y Axis	Y-akseli
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` koskee liukuväritäyttöjä (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` koskee liukuväritäyttöjä (paint.setFill)
 @msg	`dither` must be true or false	`dither` on oltava true tai false
-@msg	`method` must be classic or perceptual	`method` on oltava classic tai perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` on oltava classic, perceptual, hue-clockwise tai hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` on oltava pad, repeat tai reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` on oltava kokonaisluku väliltä 1–{MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` koskee lineaarisia, säteittäisiä ja kartiomaisia liukuvärejä sekä vinoneliöliukuvärejä
@@ -6584,6 +6589,7 @@ axis	Y Axis	Y-akseli
 	Continue	Jatka
 	Continue Action	Jatka toimintoa
 	Delete Action Step	Poista toiminnon vaihe
+	Move Action Step	Siirrä toiminnon vaihe
 	Press Play Current Selection in the Actions panel to go on.	Jatka valitsemalla Toiminnot-paneelista Toista nykyinen valinta.
 	Stop: {message}	Pysäytys: {message}
 @msg	no action is waiting at a stop	mikään toiminto ei odota pysäytyksessä
@@ -6755,6 +6761,22 @@ axis	Y Axis	Y-akseli
 	Graphite Pencil	Grafiittikynä
 	Wax Crayon	Vahaliitu
 	Charcoal Dust	Hiilipöly
+	Notched Ribbon	Lovettu nauha
+	Double Line	Kaksoisviiva
+	Wave	Aalto
+	Teardrop	Pisara
+	Striped Ribbon	Raidallinen nauha
+	Fine Nib	Ohut kärki
+	Broad Nib	Leveä kärki
+	Chisel	Taltta
+	Round Pen	Pyöreä kynä
+	Pressure Pen	Painekynä
+	Beads	Helmet
+	Dash Dot	Viiva-piste
+	Scallops	Kaarireunus
+	Stars	Tähdet
+	Triangles	Kolmiot
+	Sparkles	Kipinät
 	Save Brush Library…	Tallenna sivellinkirjasto…
 @msg	`{_1}` has no brushes to apply	Kohteessa `{_1}` ei ole käytettäviä siveltimiä
 @msg	missing `library` (see brush.libraries)	`library` puuttuu (katso brush.libraries)

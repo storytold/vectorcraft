@@ -40,9 +40,21 @@ fn an_option_no_format_takes_is_an_error() {
             assert!(e.contains(named), "{method}: {e}");
         }
     }
-    // One object can still carry several formats' options.
+    // One object can still carry several formats' options; the warnings name those the file
+    // doesn't read.
     let r = call_tool(&mut h, "export", &json!({"format": "pdf", "options": {"quality": 80, "styling": "style"}}));
     assert!(!r.is_error, "{r:?}");
+    let warnings = text(&r)["warnings"].clone();
+    for key in ["quality", "styling"] {
+        assert!(warnings.as_array().unwrap().contains(&json!(format!("`{key}` was not used: PDF files don't read it"))), "{warnings}");
+    }
+    // `app.export` and `file.export` give the same warning.
+    let params = json!({"format": "pdf", "quality": 80});
+    let note = json!("`quality` was not used: PDF files don't read it");
+    let r = h.call("app.export", params.clone()).unwrap();
+    assert!(r["warnings"].as_array().unwrap().contains(&note), "app.export: {r}");
+    let r = h.call("engine.execute", json!({"command": "file.export", "params": params})).unwrap();
+    assert!(r["warnings"].as_array().unwrap().contains(&note), "file.export: {r}");
 }
 
 /// `app.save`, `file.save` and `file.exportForScreens` refuse a key no format takes before they

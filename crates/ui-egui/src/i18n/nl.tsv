@@ -4762,6 +4762,9 @@ imageTrace	Outline	Contour
 @msg	Couldn't open {name}: {e}	Kon {name} niet openen: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Kon {name} niet plaatsen: het document waarop het werd neergezet, is gesloten
 @msg	Couldn't place {name}: the document it was placed in was closed	Kon {name} niet plaatsen: het document waarin het werd geplaatst, is gesloten
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Kon {name} niet plaatsen: het document waarop het werd neergezet, is teruggezet
+@msg	Couldn't place {name}: the document it was placed in was reverted	Kon {name} niet plaatsen: het document waarin het werd geplaatst, is teruggezet
+@msg	Couldn't paste: the document it was pasted in was reverted	Kon niet plakken: het document waarin werd geplakt, is teruggezet
 @msg	Couldn't read {name}: {e}	Kon {name} niet lezen: {e}
 @msg	Couldn't save recovery data: {e}	Kon herstelgegevens niet opslaan: {e}
 @msg	Create Outlines: select text objects	Contouren maken: selecteer tekstobjecten
@@ -5693,6 +5696,8 @@ imageTrace	Outline	Contour
 	Vivid	Levendig
 	Spectrum	Spectrum
 	Perceptual	Perceptueel
+	Hue Clockwise	Tint met de klok mee
+	Hue Counterclockwise	Tint tegen de klok in
 	Relative Colorimetric	Relatief colorimetrisch
 	Absolute Colorimetric	Absoluut colorimetrisch
 	Exact	Exact
@@ -6608,7 +6613,7 @@ axis	Y Axis	Y-as
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` geldt voor verloopvullingen (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` geldt voor verloopvullingen (paint.setFill)
 @msg	`dither` must be true or false	`dither` moet true of false zijn
-@msg	`method` must be classic or perceptual	`method` moet classic of perceptual zijn
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` moet classic, perceptual, hue-clockwise of hue-counterclockwise zijn
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	„{name}” installeren, dat om een groot rekenbudget vraagt?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Elke run kan tot {minutes} minuten duren en {times} keer zoveel werk doen als andere plug-ins mogen. Hij draait op de achtergrond en je kunt hem annuleren.
@@ -6649,6 +6654,7 @@ axis	Y Axis	Y-as
 	Continue	Doorgaan
 	Continue Action	Actie voortzetten
 	Delete Action Step	Actiestap verwijderen
+	Move Action Step	Actiestap verplaatsen
 	Press Play Current Selection in the Actions panel to go on.	Druk in het paneel Acties op Huidige selectie afspelen om door te gaan.
 	Stop: {message}	Stop: {message}
 @msg	no action is waiting at a stop	geen actie wacht bij een stop
@@ -6809,6 +6815,22 @@ axis	Y Axis	Y-as
 	Graphite Pencil	Grafietpotlood
 	Wax Crayon	Waskrijt
 	Charcoal Dust	Houtskoolstof
+	Notched Ribbon	Gekerfd lint
+	Double Line	Dubbele lijn
+	Wave	Golf
+	Teardrop	Traan
+	Striped Ribbon	Gestreept lint
+	Fine Nib	Fijne penpunt
+	Broad Nib	Brede penpunt
+	Chisel	Beitel
+	Round Pen	Ronde pen
+	Pressure Pen	Drukpen
+	Beads	Kralen
+	Dash Dot	Streep-punt
+	Scallops	Schulprand
+	Stars	Sterren
+	Triangles	Driehoeken
+	Sparkles	Fonkelingen
 	Save Brush Library…	Penseelbibliotheek opslaan…
 @msg	no empty artboards to delete	geen lege tekengebieden om te verwijderen
 	Scale Presets	Schaalvoorinstellingen
