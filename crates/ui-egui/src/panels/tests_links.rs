@@ -196,6 +196,39 @@ fn a_nested_rows_tooltip_names_what_holds_it() {
     assert_eq!(super::links::status_tip(&row, None), "/x/a.png");
 }
 
+/// The tooltip of an image in the opacity mask of an object inside a symbol names that object,
+/// which the panel finds among the objects it collected with the list.
+#[test]
+fn a_mask_rows_tooltip_names_its_object_inside_a_symbol() {
+    let dir = Folder::new("mask-owner");
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let rect = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 60, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    let mask = dir.file("mask.png", &png(20, 20));
+    let mask = app.run("file.place", json!({"path": mask, "at": [40, 40]})).unwrap()["ids"][0].as_u64().unwrap();
+    app.run("transparency.makeOpacityMask", json!({"ids": [rect, mask]})).unwrap();
+    app.run("symbol.new", json!({"name": "Mark", "ids": [rect]})).unwrap();
+    app.run("edit.clear", json!({"ids": selected(&app)})).unwrap();
+    let list = app.run("links.list", json!({})).unwrap();
+    let row = list["links"].as_array().unwrap().iter().find(|r| r["name"] == "mask.png").unwrap_or_else(|| panic!("{list}")).clone();
+    assert_eq!(row["owner"]["kind"], "symbol", "{list}");
+    let owner = vectorcraft_doc::NodeId(row["owner"]["maskOf"].as_u64().unwrap_or_else(|| panic!("{list}")));
+    let doc = app.session.active().unwrap().doc.clone();
+    assert!(doc.node(owner).is_none(), "the masked object is outside the layer tree");
+    let name = super::layers::shown_name(&app, doc.stored_node(owner).unwrap().0, crate::i18n::current());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>, time: f64| {
+        super::tests_appearance::frame_raw(&ctx, app, egui::RawInput { events, time: Some(time), ..Default::default() }, super::links::show)
+    };
+    let at = super::tests_appearance::text_rect(&frame(&mut app, vec![], 1.0), "mask.png").center();
+    frame(&mut app, vec![egui::Event::PointerMoved(at)], 2.0);
+    frame(&mut app, vec![], 4.0);
+    let text: Vec<String> = frame(&mut app, vec![], 4.1).into_iter().map(|(t, _)| t).collect();
+    let want = format!("Opacity Mask: {name}");
+    assert!(text.iter().any(|t| t.contains(&want)), "{want} in {text:?}");
+}
+
 #[test]
 fn an_empty_document_shows_how_to_add_images() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

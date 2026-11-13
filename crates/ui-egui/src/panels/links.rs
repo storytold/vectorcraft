@@ -60,8 +60,16 @@ struct Cache {
     at: f64,
     list: Value,
     info: Option<(u64, Value)>,
-    /// The objects of the rows outside the layer tree, by id, for their thumbnails.
+    /// The objects outside the layer tree, by id: those of the rows, for their thumbnails, and
+    /// those whose opacity masks hold a row's image, for the tooltip.
     nested: Vec<(u64, std::sync::Arc<vectorcraft_doc::Node>)>,
+}
+
+impl Cache {
+    /// Object `id` outside the layer tree, as [`cached`] collected it.
+    fn nested_node(&self, id: u64) -> Option<&std::sync::Arc<vectorcraft_doc::Node>> {
+        self.nested.binary_search_by_key(&id, |(n, _)| *n).ok().and_then(|i| self.nested.get(i)).map(|(_, n)| n)
+    }
 }
 
 fn options(ctx: &egui::Context) -> Options {
@@ -86,9 +94,16 @@ fn cached(app: &mut VectorcraftApp, ctx: &egui::Context, o: &Options) -> Option<
     if stale {
         c.list = app.session.execute("links.list", &json!({ "show": o.show, "sort": o.sort, "dcsTransparency": o.dcs })).ok()?;
         (c.key, c.at) = (key, now);
-        // One pass over the stored art for the rows outside the layer tree, not one per frame.
-        let mut want: std::collections::HashSet<u64> =
-            c.list["links"].as_array().into_iter().flatten().filter(|r| nested_row(r)).filter_map(|r| r["id"].as_u64()).collect();
+        // One pass over the stored art for the rows outside the layer tree and the objects whose
+        // opacity masks hold them, not one per frame.
+        let mut want: std::collections::HashSet<u64> = c.list["links"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|r| nested_row(r))
+            .flat_map(|r| [r["id"].as_u64(), r["owner"]["maskOf"].as_u64()])
+            .flatten()
+            .collect();
         c.nested.clear();
         if !want.is_empty()
             && let Some(st) = app.session.active()
@@ -477,16 +492,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 if o.thumb > 0.0 {
                     let tr = egui::Rect::from_min_size(egui::pos2(x, rect.center().y - o.thumb / 2.0), vec2(o.thumb, o.thumb));
                     ui.painter().rect_filled(tr, 0.0, egui::Color32::WHITE);
-                    let node = if nested_row(r) {
-                        cache
-                            .nested
-                            .binary_search_by_key(&id, |(n, _)| *n)
-                            .ok()
-                            .and_then(|i| cache.nested.get(i))
-                            .map(|(_, n)| std::sync::Arc::clone(n))
-                    } else {
-                        super::layers::node_arc(&doc, NodeId(id))
-                    };
+                    let node =
+                        if nested_row(r) { cache.nested_node(id).map(std::sync::Arc::clone) } else { super::layers::node_arc(&doc, NodeId(id)) };
                     if let Some(n) = node {
                         super::layers::real_thumb(ui, &thumbs, &n, tr);
                     }
@@ -519,10 +526,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     egui::FontId::proportional(12.5),
                     t.text,
                 );
+                // The mask's object by the layer tree's index or from the cache: no walk of the
+                // stored art each frame.
                 let mask = r["owner"]["maskOf"]
                     .as_u64()
-                    .and_then(|m| doc.stored_node(NodeId(m)))
-                    .map(|(n, _)| n)
+                    .and_then(|m| doc.node(NodeId(m)).or_else(|| cache.nested_node(m).map(|n| &**n)))
                     .map(|n| super::layers::shown_name(app, n, crate::i18n::current()));
                 let resp = resp.on_hover_text(status_tip(r, mask));
                 if resp.double_clicked() {
