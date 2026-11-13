@@ -270,6 +270,9 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "freeTransformWidget": crate::free_transform::rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
         "view": app.view().map(|v| serde_json::to_value(v).unwrap_or_default()),
         "canvasRect": app.canvas_rect.map(|c| json!([c.left(), c.top(), c.width(), c.height()])),
+        // The display profile the canvas is drawn through, or why none (Preferences ›
+        // Performance › Use Monitor Profile for Canvas).
+        "displayProfile": app.display_profile.status(app.session.prefs.monitor_profile_display),
         // Window › Arrange › Tile (not saved, so not in `ui`) and the panes the last frame drew:
         // each one's document index, view number (Window › New Window) and rect. Canvas
         // coordinates map to the current window's pane, inside its rulers and scroll bars
@@ -1233,7 +1236,8 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
 }
 
 /// Hides in `reply` the libraries hidden now and in `before`, and the paths outside the read root that
-/// `sent`, the request's params, holds ([`handle`]). The `path` and `files` entries of the reply's
+/// `sent`, the request's params, holds ([`handle`]), and the recovery folders outside the read root
+/// that are in use or that a failure message named. The `path` and `files` entries of the reply's
 /// `result`, at any depth, that name a file the request gave inside the write roots, the file it
 /// wrote, stay as given ([`written_paths`]).
 fn hide_in_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value, before: Hiding) {
@@ -1247,6 +1251,11 @@ fn hide_in_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value, before: 
     hiding.merge(before);
     let mut paths = Vec::new();
     sent_paths(sent, &mut paths);
+    // The status text of a recovery copy that failed names the recovery folder it went to.
+    let current = vectorcraft_engine::cmd::recovery::folder(&app.session).map(|(f, _)| f);
+    for folder in app.recovery.named.iter().chain(current.as_ref()) {
+        collect_sent_paths(&json!(folder), true, &mut paths);
+    }
     hiding.set_hidden(paths, cfg!(windows));
     hide_library_ids(reply, &hiding);
     restore_written_paths(reply, kept);

@@ -68,11 +68,8 @@ pub fn specs() -> Vec<CommandSpec> {
 fn has_thread_selection(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
     let st = s.active().ok_or("no document open")?;
-    if st.selection.objects.iter().any(|id| st.doc.text_threads.iter().any(|t| t.contains(id))) {
-        Ok(())
-    } else {
-        Err("no threaded text selected".into())
-    }
+    let selected: Ids = st.selection.objects.iter().copied().collect();
+    if st.doc.text_threads.iter().flatten().any(|id| selected.contains(id)) { Ok(()) } else { Err("no threaded text selected".into()) }
 }
 
 /// The text object `id` when it can be a frame of a thread: area type or type on a path.
@@ -87,6 +84,43 @@ fn text_of(d: &Document, id: NodeId) -> Option<&TextObject> {
 thread_local! {
     /// Tests: how many threads' stories [`reflow`] copied on this thread.
     static COPIED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Tests: how many frames [`leave_threads`] passed to [`continued_marks`] on this thread.
+    static MARK_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Tests: how many lookups and insertions [`Ids`] made on this thread.
+    static ID_LOOKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// A set of node ids, for the threaded-text commands to test whether a frame is selected, already
+/// listed or in a thread in the same time however many ids the set holds.
+#[derive(Clone, Default)]
+struct Ids(std::collections::HashSet<NodeId>);
+
+impl Ids {
+    fn contains(&self, id: &NodeId) -> bool {
+        #[cfg(test)]
+        ID_LOOKS.with(|c| c.set(c.get() + 1));
+        self.0.contains(id)
+    }
+
+    /// Add `id` to the set; whether it was not in it already.
+    fn insert(&mut self, id: NodeId) -> bool {
+        #[cfg(test)]
+        ID_LOOKS.with(|c| c.set(c.get() + 1));
+        self.0.insert(id)
+    }
+}
+
+impl FromIterator<NodeId> for Ids {
+    fn from_iter<I: IntoIterator<Item = NodeId>>(ids: I) -> Self {
+        Self(ids.into_iter().collect())
+    }
+}
+
+/// [`vectorcraft_text::thread::continued`] for the frames of a thread that [`leave_threads`] marks.
+fn continued_marks(frames: &[&TextObject]) -> Vec<bool> {
+    #[cfg(test)]
+    MARK_VISITS.with(|c| c.set(c.get() + frames.len()));
+    vectorcraft_text::thread::continued(frames)
 }
 
 /// Re-flow every thread with a frame that changed between `before` and `doc` (structural sharing
@@ -361,20 +395,74 @@ pub(crate) fn mark_continued(doc: &mut Document) {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many times [`story_of`] and [`ThreadIndex::of`] went through the document's
+    /// threads on this thread.
+    static THREAD_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Tests: how many times [`story_of`] and [`ThreadIndex::of`] have gone through the document's
+/// threads on this thread.
+#[cfg(test)]
+pub(crate) fn thread_scans() -> usize {
+    THREAD_SCANS.with(std::cell::Cell::get)
+}
+
 /// The frames of the thread that `id` is a frame of, in thread order, each area type or type on a
 /// path; empty when `id` is in no thread or the thread has fewer than two such frames.
 pub(crate) fn story_of(d: &Document, id: NodeId) -> Vec<NodeId> {
+    #[cfg(test)]
+    THREAD_SCANS.with(|c| c.set(c.get() + 1));
     let Some(thread) = d.text_threads.iter().find(|t| t.contains(&id)) else { return vec![] };
+    story_in(d, thread, id)
+}
+
+/// [`story_of`] for `id` in `thread`, the first of the document's threads that lists it.
+pub(crate) fn story_in(d: &Document, thread: &[NodeId], id: NodeId) -> Vec<NodeId> {
     let frames: Vec<NodeId> = thread.iter().copied().filter(|f| text_of(d, *f).is_some()).collect();
     if frames.len() >= 2 && frames.contains(&id) { frames } else { vec![] }
 }
 
+/// A document's text threads looked up by frame, built in one pass over them, for a command that
+/// asks [`ThreadIndex::threaded`] of each of many objects.
+pub(crate) struct ThreadIndex<'a> {
+    doc: &'a Document,
+    /// Each object the threads list, with the index of the first thread that lists it.
+    first: std::collections::HashMap<NodeId, usize>,
+    /// Each thread's count of entries that are area type or type on a path.
+    live: Vec<usize>,
+}
+
+impl<'a> ThreadIndex<'a> {
+    pub(crate) fn of(doc: &'a Document) -> Self {
+        #[cfg(test)]
+        THREAD_SCANS.with(|c| c.set(c.get() + 1));
+        let mut first = std::collections::HashMap::new();
+        let mut live = Vec::with_capacity(doc.text_threads.len());
+        for (i, thread) in doc.text_threads.iter().enumerate() {
+            for id in thread {
+                first.entry(*id).or_insert(i);
+            }
+            live.push(thread.iter().filter(|id| text_of(doc, **id).is_some()).count());
+        }
+        Self { doc, first, live }
+    }
+
+    /// Whether `id` is a frame of a thread: [`story_of`] is not empty for it.
+    pub(crate) fn threaded(&self, id: NodeId) -> bool {
+        self.first.get(&id).and_then(|i| self.live.get(*i)).is_some_and(|n| *n >= 2) && text_of(self.doc, id).is_some()
+    }
+}
+
 /// `ids` followed by the other frames of the threads they are in, each once, in thread order.
 pub(crate) fn with_threads(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
+    let given: Ids = ids.iter().copied().collect();
+    let mut listed = given.clone();
     let mut out = ids.to_vec();
-    for thread in d.text_threads.iter().filter(|t| t.iter().any(|id| ids.contains(id))) {
+    for thread in d.text_threads.iter().filter(|t| t.iter().any(|id| given.contains(id))) {
         for id in thread {
-            if !out.contains(id) && text_of(d, *id).is_some() {
+            if text_of(d, *id).is_some() && listed.insert(*id) {
                 out.push(*id);
             }
         }
@@ -399,13 +487,14 @@ pub(crate) fn frames(d: &Document) -> Vec<(NodeId, TextObject)> {
 /// threaded and the frames before it end inside one. A threaded frame whose mark changes lays out
 /// its first line again, so its thread re-flows after the edit.
 pub(crate) fn leave_threads(d: &mut Document, was: &[(NodeId, TextObject)]) {
-    let gone: Vec<(NodeId, &TextObject, Option<NodeId>)> =
-        was.iter().filter(|(id, _)| text_of(d, *id).is_none()).map(|(id, t)| (*id, t, kept_type(d, *id))).collect();
+    // Each frame that left, with the type that takes its place.
+    let gone: std::collections::HashMap<NodeId, (&TextObject, Option<NodeId>)> =
+        was.iter().filter(|(id, _)| text_of(d, *id).is_none()).map(|(id, t)| (*id, (t, kept_type(d, *id)))).collect();
     if gone.is_empty() {
         return;
     }
-    let find = |id: &NodeId| gone.iter().find(|(g, _, _)| g == id);
-    let mut stayed = vec![];
+    let find = |id: &NodeId| gone.get(id);
+    let mut changed = vec![];
     for i in 0..d.text_threads.len() {
         let thread = d.text_threads[i].clone();
         if !thread.iter().any(|id| find(id).is_some()) {
@@ -414,28 +503,33 @@ pub(crate) fn leave_threads(d: &mut Document, was: &[(NodeId, TextObject)]) {
         let keep: Vec<NodeId> = thread
             .iter()
             .filter_map(|id| match find(id) {
-                Some((_, _, kept)) => *kept,
+                Some((_, kept)) => *kept,
                 None => Some(*id),
             })
             .collect();
-        if let (Some((_, last, None)), Some(stay)) = (thread.last().and_then(find), keep.last()) {
+        if let (Some((last, None)), Some(stay)) = (thread.last().and_then(find), keep.last()) {
             take_overflow(d, *stay, last);
         }
-        stayed.extend(keep.iter().copied());
+        changed.push(keep.clone());
         d.text_threads[i] = keep;
     }
     d.text_threads.retain(|t| t.len() >= 2);
-    let marks: Vec<(NodeId, bool)> = stayed
-        .iter()
-        .map(|id| {
-            let on = d.text_threads.iter().find(|t| t.contains(id)).is_some_and(|t| {
-                let live: Vec<(NodeId, &TextObject)> = t.iter().filter_map(|i| Some((*i, text_of(d, *i)?))).collect();
-                let frames: Vec<&TextObject> = live.iter().map(|(_, f)| *f).collect();
-                live.iter().zip(vectorcraft_text::thread::continued(&frames)).any(|((i, _), on)| on && i == id)
-            });
-            (*id, on)
-        })
-        .collect();
+    // One pass over each changed thread: a frame left alone continues nothing, and the area type and
+    // type on a path of a thread that stays take their marks in thread order.
+    let mut marks: Vec<(NodeId, bool)> = vec![];
+    for keep in &changed {
+        if keep.len() < 2 {
+            marks.extend(keep.iter().map(|id| (*id, false)));
+            continue;
+        }
+        let live: Vec<(NodeId, &TextObject)> = keep.iter().filter_map(|i| Some((*i, text_of(d, *i)?))).collect();
+        let frames: Vec<&TextObject> = live.iter().map(|(_, f)| *f).collect();
+        let mut on: std::collections::HashMap<NodeId, bool> = std::collections::HashMap::new();
+        for ((id, _), mark) in live.iter().zip(continued_marks(&frames)) {
+            *on.entry(*id).or_default() |= mark;
+        }
+        marks.extend(keep.iter().map(|id| (*id, on.get(id).copied().unwrap_or(false))));
+    }
     for (id, on) in marks {
         if text_of(d, id).is_some_and(|t| t.first_para_continues != on)
             && let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind)
@@ -450,21 +544,23 @@ pub(crate) fn leave_threads(d: &mut Document, was: &[(NodeId, TextObject)]) {
 /// thread with frames outside `art`, to the text it shows. When such a frame leaves its thread,
 /// [`leave_threads`] puts the text it has no room for after the text of the last frame that stays.
 pub(crate) fn keep_shown_text(d: &Document, art: &mut Node) {
-    let mut inside = vec![];
-    art.walk(&mut |n| inside.push(n.id));
-    let last: Vec<NodeId> = d
+    let mut inside = Ids::default();
+    art.walk(&mut |n| {
+        inside.insert(n.id);
+    });
+    let last: Ids = d
         .text_threads
         .iter()
         .filter(|t| t.iter().any(|id| !inside.contains(id)))
         .filter_map(|t| t.last().copied().filter(|id| inside.contains(id)))
         .collect();
-    if !last.is_empty() {
+    if !last.0.is_empty() {
         cut_to_shown(art, &last);
     }
 }
 
 /// Cut the area type and type on a path `ids` in `n` to the text each one shows.
-fn cut_to_shown(n: &mut Node, ids: &[NodeId]) {
+fn cut_to_shown(n: &mut Node, ids: &Ids) {
     if ids.contains(&n.id)
         && let NodeKind::Text(t) = &mut n.kind
         && !matches!(t.kind, TextKind::Point)
@@ -567,21 +663,35 @@ fn create(s: &mut Session, _: &Value) -> Result<Value> {
                 *d.node_mut(*id).ok_or(EngineError::NoNode(*id))? = f;
             }
         }
-        // Existing threads containing any of these frames merge into the new one, keeping order.
+        // Existing threads containing any of these frames merge into the new one, keeping order:
+        // each frame takes in the first thread not yet taken in that lists it.
+        let mut threads: Vec<Option<Vec<NodeId>>> = std::mem::take(&mut d.text_threads).into_iter().map(Some).collect();
+        let mut listing: std::collections::HashMap<NodeId, Vec<usize>> = std::collections::HashMap::new();
+        for (i, t) in threads.iter().enumerate() {
+            for id in t.iter().flatten() {
+                listing.entry(*id).or_default().push(i);
+            }
+        }
         let mut order: Vec<NodeId> = vec![];
+        let mut listed = Ids::default();
         for id in &ids {
-            match d.text_threads.iter().position(|t| t.contains(id)) {
-                Some(i) => {
-                    for x in d.text_threads.remove(i) {
-                        if !order.contains(&x) {
+            let thread = listing.get(id).and_then(|at| at.iter().find_map(|i| threads[*i].take()));
+            match thread {
+                Some(thread) => {
+                    for x in thread {
+                        if listed.insert(x) {
                             order.push(x);
                         }
                     }
                 }
-                None if !order.contains(id) => order.push(*id),
-                None => {}
+                None => {
+                    if listed.insert(*id) {
+                        order.push(*id);
+                    }
+                }
             }
         }
+        d.text_threads = threads.into_iter().flatten().collect();
         d.text_threads.push(order);
         // Force a re-flow of the new thread on this edit.
         touch(d, ids[0]);
@@ -706,11 +816,12 @@ fn touch(d: &mut Document, id: NodeId) {
 }
 
 fn release(s: &mut Session, _: &Value) -> Result<Value> {
-    let ids = selected_roots(s)?;
+    let ids: Ids = selected_roots(s)?.into_iter().collect();
     s.edit("Release Threaded Text", |d, _| {
         // The released frames' text joins the rest of the story (they become empty).
-        for thread in d.text_threads.clone() {
-            let (out, keep): (Vec<NodeId>, Vec<NodeId>) = thread.iter().partition(|i| ids.contains(i));
+        for i in 0..d.text_threads.len() {
+            let thread = d.text_threads[i].clone();
+            let (out, keep): (Vec<NodeId>, Vec<NodeId>) = thread.iter().partition(|id| ids.contains(id));
             if out.is_empty() {
                 continue;
             }
@@ -750,7 +861,6 @@ fn release(s: &mut Session, _: &Value) -> Result<Value> {
                 t.first_para_continues = false;
                 refresh_bounds(t);
             }
-            let i = d.text_threads.iter().position(|t| *t == thread).unwrap_or(0);
             d.text_threads[i] = keep;
         }
         d.text_threads.retain(|t| t.len() >= 2);
@@ -760,7 +870,7 @@ fn release(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 fn remove(s: &mut Session, _: &Value) -> Result<Value> {
-    let ids = selected_roots(s)?;
+    let ids: Ids = selected_roots(s)?.into_iter().collect();
     s.edit("Remove Threading", |d, _| {
         let (gone, kept): (Vec<Vec<NodeId>>, Vec<Vec<NodeId>>) =
             std::mem::take(&mut d.text_threads).into_iter().partition(|t| t.iter().any(|i| ids.contains(i)));

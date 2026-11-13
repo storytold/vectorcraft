@@ -2131,6 +2131,29 @@ font-technology	Variable	Variabla
 	Bristle Brush	Borstpensel
 	Pattern Brush	Mönsterpensel
 	missing from the Brushes panel	saknas i panelen Penslar
+	built in	inbyggt
+	embedding not allowed	inbäddning inte tillåten
+	embedding for editing	inbäddning för redigering
+	embedding for preview and print	inbäddning för förhandsvisning och utskrift
+	embedding allowed	inbäddning tillåten
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	ersatt: visas med {family} {style} ({detail})
+	missing: shown in {family} {style}	saknas: visas med {family} {style}
+	missing	saknas
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Linjär gradient
+	Radial gradient	Radiell gradient
+	Conic gradient	Konisk gradient
+	Diamond gradient	Rombgradient
+	Freeform gradient	Fri gradient
+@plural	{n} instance|{n} instances	{n} instans|{n} instanser
+@plural	{n} row|{n} rows	{n} rad|{n} rader
+@plural	{n} column|{n} columns	{n} kolumn|{n} kolumner
 	Select art to make a scatter, art or pattern brush.	Markera grafik för att skapa en spridnings-, konst- eller mönsterpensel.
 	Brush Art	Penselgrafik
 	New Calligraphic Brush	Ny kalligrafisk pensel
@@ -2640,6 +2663,11 @@ digits	Malayalam	Malayalam
 	Rating:	Betyg:
 	Real World:	Verkligt mått:
 	Real-time Drawing and Editing	Ritning och redigering i realtid
+	Use Monitor Profile for Canvas	Använd skärmprofil för arbetsytan
+	The canvas is drawn in sRGB.	Arbetsytan ritas i sRGB.
+	Canvas display profile:	Arbetsytans skärmprofil:
+	The system matches the window to the display's colors.	Systemet anpassar fönstret till skärmens färger.
+	No usable display profile was found: the canvas is drawn in sRGB.	Ingen användbar skärmprofil hittades: arbetsytan ritas i sRGB.
 	Rearrange All Artboards	Ordna om alla ritytor
 	Rearrange	Ordna om
 	Select All Artboards	Markera alla ritytor
@@ -3560,6 +3588,11 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Inställningar för Tate-chu-yoko…
 	Tate-chu-yoko Settings	Inställningar för Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Inställningar för Warichu…
+	Warichu Settings	Inställningar för Warichu
+	Lines:	Rader:
+	Line Gap:	Radavstånd:
 	Composite Fonts…	Sammansatta typsnitt…
 	Composite Fonts	Sammansatta typsnitt
 	Export Composite Fonts	Exportera sammansatta typsnitt
@@ -4258,6 +4291,10 @@ axis	Both	Båda
 @msg	Couldn't paste: the document it was pasted in was reverted	Kunde inte klistra in: dokumentet det klistrades in i har återgått till sparad version
 @msg	Couldn't read {name}: {e}	Kunde inte läsa {name}: {e}
 @msg	Couldn't save recovery data: {e}	Kunde inte spara återställningsdata: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kunde inte spara återställningsdata för {title}: {e}. Kopiorna sparas i {folder}, standardmappen för återställning; om du vill använda en annan mapp anger du Inställningar → Filhantering → Dataåterställning → Mapp (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kunde inte spara återställningsdata för {title}: {e}. Kopiorna sparas i {folder}, mappen som angetts i Inställningar; om du vill använda en annan mapp anger du Inställningar → Filhantering → Dataåterställning → Mapp (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kunde inte spara återställningsdata: {e}. Kopiorna sparas i {folder}, standardmappen för återställning; om du vill använda en annan mapp anger du Inställningar → Filhantering → Dataåterställning → Mapp (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kunde inte spara återställningsdata: {e}. Kopiorna sparas i {folder}, mappen som angetts i Inställningar; om du vill använda en annan mapp anger du Inställningar → Filhantering → Dataåterställning → Mapp (recoveryFolder)
 @msg	Create Outlines: select text objects	Skapa konturer: markera textobjekt
 @msg	Create from Guides: the document has no artboard	Skapa från stödlinjer: dokumentet har ingen rityta
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Skapa från stödlinjer: stödlinjerna ger fler än {MAX_PIECES} skivor
@@ -4343,6 +4380,9 @@ axis	Both	Båda
 @msg	`{keep}` is not a side of this axis	`{keep}` är inte en sida av den här axeln
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` måste vara `auto` eller en språkkod som `en` eller `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` måste vara en färg i formatet #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` måste vara en färg i formatet #rrggbb eller namnet på en lagerfärg
+@msg	unknown Live Paint option `{key}`	okänt alternativ för direktmålning `{key}`
+@msg	unknown Shape Builder option `{key}`	okänt alternativ för formbyggaren `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` måste vara en färg i formatet #rrggbb
 @msg	`{key}` must be a number	`{key}` måste vara ett tal
 @msg	`{key}` must be a number, not {v}	`{key}` måste vara ett tal, inte {v}
@@ -4493,6 +4533,7 @@ axis	Both	Båda
 @msg	internal error: {msg} (please report this bug)	internt fel: {msg} (rapportera gärna felet)
 @msg	invalid PDF setting: {0}	ogiltig PDF-inställning: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	sidan för rityta {n} är {size}, längre än PDF:s sidgräns på 14 400 pt (200 in): den skrivs med en UserUnit på {unit}, så appar som ignorerar UserUnit visar den så många gånger mindre
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	sidan för rityta {n} är {size}, längre än PDF:s sidgräns på 14 400 pt (200 in): den skrivs med en UserUnit på {unit}, så appar som ignorerar UserUnit visar den så många gånger mindre: slå på ”Skriv sidor längre än 200 in i full storlek i punkter”
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	sidan för rityta {n} är {size}, längre än PDF:s sidgräns på 14 400 pt (200 in): {label}-sidor skrivs utan UserUnit, i punkter, och appar som håller sig till gränsen beskär sidan till 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 har ingen UserUnit, som en sida längre än 14 400 pt (200 in) behöver för att behålla sin storlek: filen skrivs som PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 har ingen UserUnit, som en sida längre än 14 400 pt (200 in) behöver för att hålla sig inom PDF/A-2:s sidgräns på 14 400 enheter: filen skrivs som PDF 1.6
@@ -4926,6 +4967,7 @@ axis	Both	Båda
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kastade {n} återställt dokument|Kastade {n} återställda dokument
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Återställde {n} återskapat dokument: spara det för att behålla det|Återställde {n} återskapade dokument: spara dem för att behålla dem
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Öppnad med {n} anteckning: {first}|Öppnad med {n} anteckningar: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Öppnad med {n} anteckning: {first}|{notice}. Öppnad med {n} anteckningar: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Sparade {path} med {n} anteckning: {first}|Sparade {path} med {n} anteckningar: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Bäddade in {n} bild; {missing} saknas: länka om dem först|Bäddade in {n} bilder; {missing} saknas: länka om dem först
 @msgplural	Embedded {n} image|Embedded {n} images	Bäddade in {n} bild|Bäddade in {n} bilder
@@ -6841,6 +6883,8 @@ anchor	Points:	Punkter:
 	Anchor Inspector	Ankarpunktsgranskare
 	Add Points at Crossings	Lägg till punkter vid korsningar
 	Split at Crossings	Dela vid korsningar
+	Trim at Crossings Tool	Trimma vid korsningar-verktyget
+	Trim at Crossings	Trimma vid korsningar
 	Extend Path	Förläng bana
 	Measure & Inspect	Mät och granska
 	Set Anchor	Ange ankarpunkt
@@ -8914,3 +8958,9 @@ digits	Hindi	Hindi
 	Stroke Weight Up	Öka konturtjocklek
 	The selected objects have different graphics.	De markerade objekten har olika grafik.
 	Word Gap	Ordmellanrum
+	Banner Hems and Grommets…	Bannerfållar och öljetter…
+	Banner Hems and Grommets	Bannerfållar och öljetter
+	Hem	Fåll
+	Grommets	Öljetter
+	Grommet Inset	Öljetternas avstånd från kanten
+	Diameter	Diameter
