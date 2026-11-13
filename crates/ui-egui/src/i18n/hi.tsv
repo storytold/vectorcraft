@@ -6614,7 +6614,7 @@ antiAlias	Sharp	शार्प
 @msg	Script file name is already in use	स्क्रिप्ट फ़ाइल का नाम पहले से उपयोग में है
 @msg	Script file name must be a name without a folder	स्क्रिप्ट फ़ाइल का नाम बिना फ़ोल्डर वाला नाम होना चाहिए
 @msg	Script file permission can be kept only for a script run from a file	फ़ाइल अनुमति केवल फ़ाइल से चलाई गई स्क्रिप्ट के लिए रखी जा सकती है
-@msg	Script file permission could not be saved	स्क्रिप्ट की फ़ाइल अनुमति सहेजी नहीं जा सकी
+@msg	Script file permission could not be saved	स्क्रिप्ट की फ़ाइल अनुमति सेव नहीं की जा सकी
 @msg	Script folder is not empty	स्क्रिप्ट फ़ोल्डर खाली नहीं है
 @msg	Script files cannot make aliases	स्क्रिप्ट फ़ाइलें उपनाम नहीं बना सकतीं
 @msg	Script file hidden setting cannot be changed	स्क्रिप्ट फ़ाइल की छिपी सेटिंग बदली नहीं जा सकती
@@ -6622,7 +6622,7 @@ antiAlias	Sharp	शार्प
 @msg	the script wrote more file data than one run may write (32 MiB)	स्क्रिप्ट ने एक रन में लिखे जा सकने वाले फ़ाइल डेटा से अधिक लिखा (32 MiB)
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	स्क्रिप्ट के फ़ाइल डायलॉग के लिए `answer` इनमें से एक होना चाहिए: once, always, deny, stop
 @msg	choose a file or folder first, or deny	पहले कोई फ़ाइल या फ़ोल्डर चुनें, या अस्वीकार करें
-@msg	the script file permissions could not be saved: {e}	स्क्रिप्ट की फ़ाइल अनुमतियाँ सहेजी नहीं जा सकीं: {e}
+@msg	the script file permissions could not be saved: {e}	स्क्रिप्ट की फ़ाइल अनुमतियाँ सेव नहीं की जा सकीं: {e}
 @msg	this script's file access can be allowed only once	इस स्क्रिप्ट की फ़ाइल पहुँच केवल एक बार दी जा सकती है
 @msg	Only the person at the keyboard can allow a script's file access	किसी स्क्रिप्ट को फ़ाइल पहुँच केवल कीबोर्ड पर मौजूद व्यक्ति दे सकता है
 @msg	A script is given at most 2,048 files: the files picked after them were left out	किसी स्क्रिप्ट को अधिकतम 2,048 फ़ाइलें दी जाती हैं: उनके बाद चुनी गई फ़ाइलें छोड़ दी गईं
