@@ -5735,7 +5735,10 @@ desktop app) instead and undoes nothing ([the help page](https://helpx.adobe.com
 From the Selection, Direct Selection, Group Selection, Magic Wand, Lasso or Perspective Selection tool it chooses the
 drawing tool chosen last in the window, or the Pencil tool when none has been chosen yet; from any other tool it
 chooses the Selection tool, and the tool left becomes the drawing tool unless it is the Hand, Rotate View, Zoom or Print
-Tiling tool. It returns `{tool}` and adds no undo step. Pencil as the first drawing tool and the list of selection tools
+Tiling tool. It returns `{tool}` and adds no undo step. When the tool cannot be chosen it returns the error, the tool
+and the drawing tool stay as they were, and it adds no undo step; `tool.select`, `ui.cropImage`,
+`addon.pathtools.cornerTool` and `addon.pathtools.sharedEdgeTool` also return the error when their tool cannot be
+chosen. Pencil as the first drawing tool and the list of selection tools
 are VectorCraft's own rules. A tap in Presentation Mode runs nothing.
 
 `gridlineEvery` (72 pt by default) and `gridSubdivisions` (8 by default) set the document grid that View › Show Grid

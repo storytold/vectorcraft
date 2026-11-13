@@ -339,6 +339,10 @@ pub struct VectorcraftApp {
     /// can be driven one simulated frame at a time (production always leaves this `None`).
     #[cfg(test)]
     pub(crate) now_override: Option<f64>,
+    /// An error the next tool choice returns before the engine sees it ([`Self::try_select_tool`]),
+    /// so tests can drive a failed switch (production has no such field).
+    #[cfg(test)]
+    pub(crate) fail_next_tool_choice: Option<String>,
     /// The host iteration [`Self::tick`] ran in (`None`: never): once per iteration, never per pass.
     tick_iteration: Option<u64>,
     /// The context, viewport and frame whose UI-phase input was already taken in this host
