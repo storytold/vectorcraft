@@ -1,5 +1,6 @@
 //! Shadings: axial and radial ones become gradients (their stops sampled from the shading
-//! function in its own colour model; an end that doesn't extend clips the painted area), a
+//! function in its own color model, sharp steps between colors kept where they are; an end that
+//! doesn't extend clips the painted area), a
 //! function-based one whose color changes along one axis a linear gradient, one whose color
 //! turns around the origin of its space a conic gradient, and one whose color is the same along
 //! each square about that origin a diamond gradient (else its average color; all of them
@@ -41,13 +42,21 @@ pub(crate) fn shading_gradient(sp: &ShadingPattern, colors: &mut Colors<'_>, ink
         let [r, g, b, _] = cs.to_rgba(&at(t)?, 1.0, false).components();
         Some(Color::rgb(round3(r), round3(g), round3(b)))
     };
-    // Sample densely, then drop samples that linear interpolation reproduces.
+    // Sample densely, halving each span between samples where its middle strays from the line
+    // between them (so a sharp step between two colors, as repeated stops make, is found to
+    // within [`EDGE_DEPTH`] halvings), then drop samples that linear interpolation reproduces.
     const N: usize = 64;
     let mut pts: Vec<(f32, [f32; 3])> = Vec::with_capacity(N + 1);
     for i in 0..=N {
         let t = i as f32 / N as f32;
-        pts.push((t, sample(t)?.to_rgb()));
-        // An ink that paints only at samples dropped below is still a spot swatch.
+        let rgb = sample(t)?.to_rgb();
+        if let Some(&(t0, c0)) = pts.last() {
+            refine(&sample, (t0, c0), (t, rgb), 0, &mut pts);
+        }
+        pts.push((t, rgb));
+    }
+    // An ink that paints only at samples dropped below is still a spot swatch.
+    for &(t, _) in &pts {
         if let Some(v) = at(t) {
             colors.mark_inks(space, &v);
         }
@@ -90,6 +99,37 @@ fn shading_stop(colors: &mut Colors<'_>, space: Space, comps: Option<&[f32]>, of
         Some(Native { color, link: None }) => GradientStop::new(offset, color),
         None => GradientStop::new(offset, rgb),
     }
+}
+
+/// How many times [`refine`] halves a span of an axial or radial shading's samples: to 1/64 ×
+/// 2^-14 of the axis.
+const EDGE_DEPTH: u32 = 14;
+/// The most samples of one axial or radial shading [`refine`] takes.
+const MAX_EDGE_SAMPLES: usize = 16_384;
+/// Where in a span [`refine`] looks a second time when the span's middle lies on the line: at
+/// the golden section, which no whole number of repeated steps across the span puts on the same
+/// place in a step as the ends.
+const SECOND_LOOK: f32 = 0.381_966;
+
+/// Samples of `sample` between `a` and `b` (offset, RGB), pushed onto `out` in order: the span's
+/// middle where it, or the point [`SECOND_LOOK`] along the span, strays from the line between
+/// them by more than 1.5 levels, and the samples of each half the same way, at most
+/// [`EDGE_DEPTH`] halvings deep and [`MAX_EDGE_SAMPLES`] in all. The second look finds steps that
+/// repeat a whole number of times across the span, which put its ends and its middle at the same
+/// place in a step.
+fn refine(sample: &dyn Fn(f32) -> Option<Color>, a: (f32, [f32; 3]), b: (f32, [f32; 3]), depth: u32, out: &mut Vec<(f32, [f32; 3])>) {
+    if depth >= EDGE_DEPTH || out.len() >= MAX_EDGE_SAMPLES {
+        return;
+    }
+    let on_line = |u: f32, c: [f32; 3]| (0..3).all(|k| (a.1[k] + (b.1[k] - a.1[k]) * u - c[k]).abs() <= 1.5 / 255.0);
+    let t = (a.0 + b.0) / 2.0;
+    let Some(c) = sample(t).map(|c| c.to_rgb()) else { return };
+    if on_line(0.5, c) && sample(a.0 + (b.0 - a.0) * SECOND_LOOK).is_none_or(|p| on_line(SECOND_LOOK, p.to_rgb())) {
+        return;
+    }
+    refine(sample, a, (t, c), depth + 1, out);
+    out.push((t, c));
+    refine(sample, (t, c), b, depth + 1, out);
 }
 
 /// The samples of `pts` (offset, RGB; at least one) a gradient keeps as stops: the first, the

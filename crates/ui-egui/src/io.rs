@@ -160,6 +160,23 @@ mod tests {
         assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
     }
 
+    /// An export whose encoder notes an option it didn't apply (lossy WebP) before what the file
+    /// loses (type in a font that isn't installed): the status bar names what the file loses, and
+    /// the hover lists it first.
+    #[test]
+    fn an_export_names_what_the_file_loses_before_a_note_on_the_options() {
+        let (mut app, _) = app();
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("text.create", json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
+        let r = export(&mut app, Some("webp"), Some("/out/d.webp".into()), &json!({"lossless": false})).unwrap();
+        let notes = notes_of(&r);
+        assert_eq!(notes.len(), 2, "{r}");
+        assert!(notes[0].contains("Nonexistent Sans Probe"), "{r}");
+        assert!(notes[1].starts_with("lossy WebP"), "{r}");
+        assert_eq!(app.ui.status, exported_with_notes("/out/d.webp", 2, &notes[0]));
+        assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
+    }
+
     /// #1685: a save or an export that can't write its file says so in a dialog that names the
     /// file and the reason and stays until it is closed; the document stays modified and keeps
     /// the file it had. An agent's request only gets the error, and a message that arrives while

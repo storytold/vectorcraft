@@ -116,7 +116,7 @@ mod clock;
 mod services;
 
 pub use app::MAX_RECENT_FONTS;
-pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PrintTilingCache, SliceCache};
+pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PlacedKey, PrintTilingCache, SliceCache};
 pub use clock::{now_ms, now_secs};
 pub use craft_ui::docking::Monitor as DockMonitor;
 #[cfg(test)]
@@ -197,6 +197,10 @@ pub struct VectorcraftApp {
     frame_rate: frame_rate::FrameRate,
     /// Canvas rect of the last frame (screen points), for control-channel coordinate mapping.
     pub canvas_rect: Option<egui::Rect>,
+    /// The UI zoom (egui's zoom factor, set by Preferences › User Interface › UI Scaling) of the
+    /// frame that laid out [`Self::canvas_rect`]; 1.0 before the first one. [`Self::canvas_xf`]
+    /// maps the document to that rect with it.
+    pub(crate) canvas_ui_zoom: f32,
     /// An unfinished control-channel Rotate View gesture, kept only for this app instance.
     pub(crate) control_rotate_press: Option<control::RotateViewPress>,
     /// Hover position in document coordinates.

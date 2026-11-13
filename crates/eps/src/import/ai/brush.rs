@@ -563,3 +563,127 @@ pub(super) fn without_frame(art: Node) -> Node {
     }
     out
 }
+
+/// The plug-in name the objects of brushes of kind `kind` have, for writers.
+pub(crate) fn plugin_name(kind: &BrushKind) -> &'static str {
+    let tool = match kind {
+        BrushKind::Calligraphic(_) => Tool::Calligraphic,
+        BrushKind::Scatter(_) => Tool::Scatter,
+        BrushKind::Art(_) => Tool::Art,
+        BrushKind::Pattern(_) => Tool::Pattern,
+        BrushKind::Bristle(_) => Tool::Bristle,
+    };
+    TOOLS.iter().find(|(_, t)| *t == tool).map_or("", |(n, _)| *n)
+}
+
+/// The plug-in name of the brush manager's order, for writers.
+pub(crate) const MANAGER_NAME: &str = MANAGER;
+
+/// A brush object as the reader reads it, for writers that check a brush before they write it.
+#[derive(Clone, Debug)]
+pub(crate) struct BrushRead {
+    /// The brush the Brushes panel gets.
+    pub brush: Brush,
+    /// A path whose art style names the brush, at the brush's own settings, opens with the brush on
+    /// its stroke: a Calligraphic brush, or an Art brush whose art an Art brush draws as the file
+    /// does ([`art_bends`]) and whose numbers are those of a brush that stretches its art along the
+    /// path, unflipped, at 100% in Tints.
+    pub live: bool,
+}
+
+/// The brush named `name` whose object has the plug-in name `plugin` and the parameters `params`,
+/// with `art` as the art its parameters name (as the reader reads that art), as the reader reads
+/// it: `None` when the reader doesn't make a brush of it.
+pub(crate) fn read_brush_object(plugin: &str, name: &str, params: &str, art: Option<&Node>) -> Option<BrushRead> {
+    let draft = parse_tool_object(tool(plugin)?, name, params).ok()?;
+    let mut sections = HashMap::new();
+    if let (DraftKind::Scatter { art: section, .. } | DraftKind::Art { art: section, .. }, Some(a)) = (&draft.kind, art) {
+        sections.insert(section.clone(), a.clone());
+    }
+    let drafts = [draft];
+    let live = kept(&drafts, &sections).first().copied().unwrap_or(false)
+        && match &drafts[0].kind {
+            DraftKind::Calligraphic(_) => true,
+            DraftKind::Art { plain: true, art: section, .. } => bending_art(&drafts, &sections).contains(section),
+            _ => false,
+        };
+    let [draft] = drafts;
+    let (mut brushes, _) = finish_brushes(vec![draft], &sections, None);
+    Some(BrushRead { brush: brushes.pop()?, live })
+}
+
+/// Which of the brush objects `brushes` (plug-in name, name, parameters, the art each names as the
+/// reader reads it) the reader makes into brushes when one file holds them all: not one it can't read,
+/// nor one past the art the reader copies into one file's brushes ([`kept`]).
+pub(crate) fn brushes_kept(brushes: &[(&str, &str, &str, Option<&Node>)]) -> Vec<bool> {
+    let mut drafts = vec![];
+    let mut at = vec![];
+    let mut sections = HashMap::new();
+    for (i, (plugin, name, params, art)) in brushes.iter().enumerate() {
+        let Some(d) = tool(plugin).and_then(|t| parse_tool_object(t, name, params).ok()) else { continue };
+        if let (DraftKind::Scatter { art: s, .. } | DraftKind::Art { art: s, .. }, Some(a)) = (&d.kind, art) {
+            sections.insert(s.clone(), (*a).clone());
+        }
+        drafts.push(d);
+        at.push(i);
+    }
+    let mut out = vec![false; brushes.len()];
+    for (i, k) in at.into_iter().zip(kept(&drafts, &sections)) {
+        if let Some(slot) = out.get_mut(i) {
+            *slot = k;
+        }
+    }
+    out
+}
+
+/// Brush objects a writer writes, as the reader reads them together from one file, for checking
+/// the art styles that name them ([`Self::style_reads`]).
+pub(crate) struct BrushesRead {
+    drafts: Vec<BrushDraft>,
+    /// The brush a stroke that names a brush is drawn with, by name: the first one kept
+    /// ([`kept`]), as an index in [`Self::drafts`].
+    by_name: HashMap<String, usize>,
+    /// The art an Art brush draws as the file does ([`bending_art`]).
+    bending: HashSet<String>,
+}
+
+impl BrushesRead {
+    /// `brushes`: the brush objects written (plug-in name, name, parameters) and the art each names,
+    /// as the reader reads it.
+    pub(crate) fn new(brushes: &[(&str, &str, &str, Option<&Node>)]) -> Self {
+        let mut drafts = vec![];
+        let mut sections = HashMap::new();
+        for (plugin, name, params, art) in brushes {
+            let Some(d) = tool(plugin).and_then(|t| parse_tool_object(t, name, params).ok()) else { continue };
+            if let (DraftKind::Scatter { art: s, .. } | DraftKind::Art { art: s, .. }, Some(a)) = (&d.kind, art) {
+                sections.insert(s.clone(), (*a).clone());
+            }
+            drafts.push(d);
+        }
+        let mut by_name = HashMap::new();
+        for (i, (d, k)) in drafts.iter().zip(kept(&drafts, &sections)).enumerate() {
+            if k {
+                by_name.entry(d.name.clone()).or_insert(i);
+            }
+        }
+        let bending = bending_art(&drafts, &sections);
+        Self { drafts, by_name, bending }
+    }
+
+    /// Does the reader read every stroke of art style `style` in `section` (the text between
+    /// `%AI9_BeginArtStyles` and its end) that names a brush with that brush on it, at the brush's
+    /// own settings? A style the reader doesn't read, or that names a brush no object gives, or an
+    /// Art brush in a style with effects, isn't read so.
+    pub(crate) fn style_reads(&self, section: &[u8], style: &str) -> bool {
+        use super::style::StyleItem;
+        let styles = super::style::art_styles(section);
+        let Some(st) = styles.get(style).filter(|st| st.plain) else { return false };
+        st.items.iter().all(|item| match item {
+            StyleItem::Stroke { brush: Some((name, settings)), .. } => {
+                let Some(draft) = self.by_name.get(name).and_then(|i| self.drafts.get(*i)) else { return false };
+                draws_as(draft, settings, &self.bending) && !(matches!(settings, PathBrush::Art) && !st.effects.is_empty())
+            }
+            _ => true,
+        })
+    }
+}

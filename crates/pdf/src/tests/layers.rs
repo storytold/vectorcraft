@@ -212,15 +212,15 @@ fn without_pdf_layers_the_layers_are_plain_page_content() {
         oc_properties(&r.bytes, None, |props, _| has = props.is_some());
         assert_eq!(has, v["createLayers"] == json!(true) && warning.is_none(), "{v}");
         match warning {
-            Some(w) => assert!(r.warnings.iter().any(|x| x.contains(w)), "{v}: {:?}", r.warnings),
-            None => assert!(r.warnings.is_empty(), "{v}: {:?}", r.warnings),
+            Some(w) => assert!(r.setting_notes.iter().any(|x| x.contains(w)), "{v}: {:?}", r.setting_notes),
+            None => assert!(r.warnings.is_empty() && r.setting_notes.is_empty(), "{v}: {:?} {:?}", r.warnings, r.setting_notes),
         }
     }
     // A knockout page group draws objects, not layers.
     d.page_knockout = true;
     let r = export(&d, json!({"createLayers": true}));
     oc_properties(&r.bytes, None, |props, _| assert!(props.is_none()));
-    assert!(r.warnings.iter().any(|w| w.contains("knockout page group")), "{:?}", r.warnings);
+    assert!(r.setting_notes.iter().any(|w| w.contains("knockout page group")), "{:?}", r.setting_notes);
 }
 
 #[test]

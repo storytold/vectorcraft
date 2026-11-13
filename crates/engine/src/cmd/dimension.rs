@@ -568,7 +568,7 @@ fn appearance(o: &DimensionOptions, mode: ColorMode, ext: bool, arrows: bool) ->
                 ArrowStyle::Tick => Some(Arrowhead::Slash),
                 ArrowStyle::None => None,
             };
-            st.start_arrow = head;
+            st.start_arrow = head.clone();
             st.end_arrow = head;
             st.arrow_scale = (o.arrow_scale, o.arrow_scale);
             st.arrow_align = vectorcraft_doc::appearance::ArrowAlign::Tip;
