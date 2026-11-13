@@ -512,6 +512,45 @@ fn absolutely_placed_chunks_use_their_own_rtl_anchor() {
     }
 }
 
+/// A right-to-left chunk of several characters is anchored by its visual edges: its first
+/// character is drawn at its right, so the chunk runs left from that character's right edge.
+#[test]
+fn absolutely_placed_rtl_chunks_of_several_characters_anchor_by_their_visual_edges() {
+    // (markup, share of the right-to-left chunk's advance left of x = 200)
+    for (body, share) in [
+        (r#"<text x="80 200" y="40" font-size="20">a<tspan direction="rtl">אב</tspan></text>"#, 1.0),
+        (r#"<text x="80 200" y="40" font-size="20">a<tspan direction="rtl" text-anchor="middle">אב</tspan></text>"#, 0.5),
+        (r#"<text x="80 200" y="40" font-size="20">a<tspan direction="rtl" text-anchor="end">אב</tspan></text>"#, 0.0),
+        (r#"<text x="80 200" y="40" font-size="20">a<tspan text-anchor="end">אב</tspan></text>"#, 1.0),
+        // A digit is not a strong character: the text still runs left to right.
+        (r#"<text x="80 200" y="40" font-size="20">1<tspan direction="rtl" text-anchor="end">אב</tspan></text>"#, 0.0),
+        // The chunk starts a line, and another line holds absolutely placed characters.
+        (r#"<text y="40" font-size="20"><tspan x="200" direction="rtl">אב</tspan><tspan x="50 100" dy="30">ab</tspan></text>"#, 1.0),
+        (
+            r#"<text y="40" font-size="20"><tspan x="200" direction="rtl" text-anchor="middle">אב</tspan><tspan x="50 100" dy="30">ab</tspan></text>"#,
+            0.5,
+        ),
+        (
+            r#"<text y="40" font-size="20"><tspan x="200" direction="rtl" text-anchor="end">אב</tspan><tspan x="50 100" dy="30">ab</tspan></text>"#,
+            0.0,
+        ),
+    ] {
+        let d = open(body);
+        let t = only_text(&d);
+        let lay = layout(FontDb::global(), t);
+        let chunk: Vec<_> = lay.glyphs.iter().filter(|g| g.rtl).collect();
+        assert_eq!(chunk.len(), 2, "{body}");
+        assert!(chunk.iter().all(|g| g.advance > 1.0), "{body}: both letters have an advance");
+        let left = chunk.iter().map(|g| (t.xf * g.origin).x).fold(f64::INFINITY, f64::min);
+        let right = chunk.iter().map(|g| (t.xf * g.origin).x + g.advance).fold(f64::NEG_INFINITY, f64::max);
+        let want = 200.0 - share * (right - left);
+        assert!(close(left, want, 0.05), "{body}: the chunk spans {left}..{right}, so it does not start at {want}");
+        // The first character is the right one of the two.
+        let first = lay.glyphs.iter().filter(|g| g.rtl).min_by_key(|g| g.byte).map(|g| (t.xf * g.origin).x);
+        assert!(first.is_some_and(|x| x > left + 1.0), "{body}: the first character starts at {first:?}, the chunk at {left}");
+    }
+}
+
 #[test]
 fn a_small_line_gap_in_tiny_type_keeps_its_leading() {
     // 0.0085 against an auto leading of 0.006 differs by less than 0.01 but is not a whole multiple of it.
