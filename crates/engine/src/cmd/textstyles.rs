@@ -506,6 +506,13 @@ pub(crate) fn style_attrs(d: &Document, para: bool, name: &str) -> Option<Map<St
     if para { Kind::Para } else { Kind::Char }.attrs(d, name)
 }
 
+/// `attrs` in the form `charStyle.new` (`para`: `paraStyle.new`) stores them in `d`, or `None`
+/// when they don't pass its checks.
+pub(crate) fn stored_style_attrs(d: &Document, para: bool, attrs: &Map<String, Value>) -> Option<Map<String, Value>> {
+    let kind = if para { Kind::Para } else { Kind::Char };
+    attrs_param(d, &json!({ "attrs": attrs }), kind, "new", None).ok().flatten()
+}
+
 /// The name `charStyle.new` (`para`: `paraStyle.new`) gives a style when it is given none: the
 /// first "Character Style N" ("Paragraph Style N") that no character style (paragraph style) of the
 /// document has.
