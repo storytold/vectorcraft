@@ -182,6 +182,113 @@ fn separations_preview_shows_the_image_on_its_spot_plate() {
     assert!(off[..3].iter().all(|v| *v >= 250), "the process plates show paper, got {off:?}");
 }
 
+/// Separations Preview shows an image placed from a DCS file through its own plates: its spot
+/// plate on that ink's plate only, its cyan plate on the cyan plate only. Without the preview it
+/// shows its composite, the spot ink mixed in.
+#[test]
+fn separations_preview_shows_a_dcs_image_through_its_own_plates() {
+    use vectorcraft_doc::separated::{InkPlate, Separated};
+    // Two pixels: the spot ink solid on the left, cyan solid on the right.
+    let plates = vec![
+        InkPlate { name: "Cyan".into(), cmyk: [0.0; 4], data: vec![0, 255] },
+        InkPlate { name: "Ink".into(), cmyk: [0.0, 1.0, 1.0, 0.0], data: vec![255, 0] },
+    ];
+    let s = Separated::new(2, 1, plates).unwrap();
+    let mut d = Document::new_with_mode(40.0, 20.0, vectorcraft_doc::ColorMode::Cmyk);
+    d.swatches.push(vectorcraft_color::Swatch { name: "Ink".into(), paint: Paint::solid(Color::cmyk(0.0, 1.0, 1.0, 0.0)), global: true, spot: true });
+    d.images.insert("pic".into(), ImageBlob::separated_tiff(&s, None, &[]).unwrap());
+    let im = ImageObject { key: "pic".into(), width: 2, height: 1, xf: Affine::scale(20.0), link: None, placement: Default::default(), pixels: None };
+    let (layer, id) = (d.layers[0].id, d.alloc_id());
+    d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
+    let shown = |plates: &[&str]| {
+        let out = Renderer::new().render(&d, 40, 20, Affine::IDENTITY, &separations(plates));
+        (out.pixel(10, 10), out.pixel(30, 10))
+    };
+    let (left, right) = shown(&["Ink"]);
+    assert!(left[..3].iter().all(|v| *v < 20), "the Ink plate shows the spot plate as solid ink, got {left:?}");
+    assert!(right[..3].iter().all(|v| *v >= 250), "and nothing of cyan, got {right:?}");
+    let (left, right) = shown(&["Cyan"]);
+    assert!(left[..3].iter().all(|v| *v >= 250), "the Cyan plate shows nothing of the spot ink, got {left:?}");
+    assert!(right[..3].iter().all(|v| *v < 20), "and the cyan plate as solid ink, got {right:?}");
+    let (left, _) = shown(&["Cyan", "Magenta", "Yellow", "Black"]);
+    assert!(left[..3].iter().all(|v| *v >= 250), "the process plates show paper where only the spot ink prints, got {left:?}");
+    let (left, _) = shown(&["Cyan", "Magenta", "Yellow", "Black", "Ink"]);
+    assert!(left[0] > 150 && left[1] < 100 && left[2] < 100, "with every plate the spot ink shows red, got {left:?}");
+    let composite = Renderer::new().render(&d, 40, 20, Affine::IDENTITY, &RenderOptions { smooth_images: false, ..Default::default() }).pixel(10, 10);
+    assert!(composite[0] > 150 && composite[1] < 100, "the composite mixes the spot ink in, got {composite:?}");
+    // Without a spot swatch of the ink, the job prints no plate for it: it shows on the process
+    // plates as its process equivalent, as it prints.
+    d.swatches.retain(|s| s.name != "Ink");
+    let process = Renderer::new().render(&d, 40, 20, Affine::IDENTITY, &separations(&["Cyan", "Magenta", "Yellow", "Black"])).pixel(10, 10);
+    assert!(process[0] > 150 && process[1] < 100 && process[2] < 100, "the ink's magenta and yellow show, got {process:?}");
+    let magenta = Renderer::new().render(&d, 40, 20, Affine::IDENTITY, &separations(&["Magenta"])).pixel(10, 10);
+    assert!(magenta[..3].iter().all(|v| *v < 20), "the Magenta plate alone shows it as solid ink, got {magenta:?}");
+}
+
+/// A document of 40 × 20 pt holding separated image `s` (2 × 1 pixels) at 20 pt a pixel.
+fn separated_doc(s: &vectorcraft_doc::separated::Separated) -> Document {
+    let mut d = Document::new_with_mode(40.0, 20.0, vectorcraft_doc::ColorMode::Cmyk);
+    d.images.insert("pic".into(), ImageBlob::separated_tiff(s, None, &[]).unwrap());
+    let im = ImageObject {
+        key: "pic".into(),
+        width: s.width,
+        height: s.height,
+        xf: Affine::scale(40.0 / f64::from(s.width)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let (layer, id) = (d.layers[0].id, d.alloc_id());
+    d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
+    d
+}
+
+/// A DCS spot plate shows in the color of the document's swatch of its ink, as the art on that ink
+/// does, and follows an edit of the swatch.
+#[test]
+fn separations_preview_colors_a_dcs_spot_plate_by_the_documents_swatch() {
+    use vectorcraft_doc::separated::{InkPlate, Separated};
+    // The file says the ink is red; the document's swatch of it is cyan.
+    let s = Separated::new(2, 1, vec![InkPlate { name: "Ink".into(), cmyk: [0.0, 1.0, 1.0, 0.0], data: vec![255, 0] }]).unwrap();
+    let mut d = separated_doc(&s);
+    d.swatches.push(vectorcraft_color::Swatch { name: "Ink".into(), paint: Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)), global: true, spot: true });
+    let all = ["Cyan", "Magenta", "Yellow", "Black", "Ink"];
+    let left = |d: &Document, plates: &[&str]| Renderer::new().render(d, 40, 20, Affine::IDENTITY, &separations(plates)).pixel(10, 10);
+    let p = left(&d, &all);
+    assert!(p[0] < 100 && p[2] > 150, "the swatch's cyan, not the file's red, got {p:?}");
+    // The swatch edited to yellow: the image follows.
+    if let Some(w) = d.swatches.iter_mut().find(|w| w.name == "Ink") {
+        w.paint = Paint::solid(Color::cmyk(0.0, 0.0, 1.0, 0.0));
+    }
+    let p = left(&d, &all);
+    assert!(p[0] > 150 && p[2] < 100, "the edited swatch's yellow, got {p:?}");
+    // A process swatch of the ink's name: the plate shows on the process plates as that swatch.
+    if let Some(w) = d.swatches.iter_mut().find(|w| w.name == "Ink") {
+        (w.paint, w.spot) = (Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)), false);
+    }
+    let p = left(&d, &all[..4]);
+    assert!(p[0] < 100 && p[2] > 150, "the process swatch's cyan, got {p:?}");
+}
+
+/// A DCS image drawn reduced (from a smaller mip level) shows the coverage its plate has there,
+/// the mean of the plate pixels each reduced pixel covers.
+#[test]
+fn separations_preview_keeps_a_reduced_dcs_plates_coverage() {
+    use vectorcraft_doc::separated::{InkPlate, Separated};
+    // 64 × 64 pixels, the spot ink solid on every other column: 50% coverage.
+    let data: Vec<u8> = (0..64 * 64).map(|i| if i % 2 == 0 { 255 } else { 0 }).collect();
+    let s = Separated::new(64, 64, vec![InkPlate { name: "Ink".into(), cmyk: [0.0, 1.0, 1.0, 0.0], data }]).unwrap();
+    let mut d = Document::new_with_mode(64.0, 64.0, vectorcraft_doc::ColorMode::Cmyk);
+    d.swatches.push(vectorcraft_color::Swatch { name: "Ink".into(), paint: Paint::solid(Color::cmyk(0.0, 1.0, 1.0, 0.0)), global: true, spot: true });
+    d.images.insert("pic".into(), ImageBlob::separated_tiff(&s, None, &[]).unwrap());
+    let im = ImageObject { key: "pic".into(), width: 64, height: 64, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+    let (layer, id) = (d.layers[0].id, d.alloc_id());
+    d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
+    let opts = RenderOptions { image_mips: true, ..separations(&["Ink"]) };
+    let p = Renderer::new().render(&d, 16, 16, Affine::scale(0.25), &opts).pixel(8, 8);
+    assert!(p[..3].iter().all(|v| (100..=160).contains(v)), "half the ink, got {p:?}");
+}
+
 /// Separations Preview showing `plates`, as the canvas draws it.
 fn separations(plates: &[&str]) -> RenderOptions {
     let proof = proof::ProofSetup { separations: Some(plates.iter().map(|p| p.to_string()).collect()), ..Default::default() };

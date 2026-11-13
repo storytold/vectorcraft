@@ -275,11 +275,8 @@ fn an_artboard_that_does_not_fit_prints_one_copy_per_sheet() {
     let d = doc(700.0, 900.0, &[(Rect::new(0.0, 0.0, 700.0, 900.0), rgb(0.0, 0.0, 1.0))]);
     let r = job(&d, json!({"copiesPerSheet": true}));
     assert_eq!(r.pages, 1);
-    assert!(
-        r.warnings.iter().any(|w| w == "Artboard 1 with its bleed and marks doesn't fit the imageable area: it prints one copy per sheet"),
-        "{:?}",
-        r.warnings
-    );
+    // A note on the options; the art that doesn't print is what the job loses.
+    assert_eq!(r.setting_notes, ["Artboard 1 with its bleed and marks doesn't fit the imageable area: it prints one copy per sheet"]);
     assert!(r.warnings.iter().any(|w| w.contains("larger than the imageable area")), "{:?}", r.warnings);
     assert_eq!(r.bytes, job(&d, json!({})).bytes, "printed as without copies per sheet");
     assert!(preview(&d, &settings(json!({"copiesPerSheet": true}))).unwrap().sheets[0].copies.is_empty());
