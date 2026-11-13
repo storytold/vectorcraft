@@ -230,6 +230,10 @@ the suite) keep the agent to the folders you give it:
   value and a linked JavaScript file in `svg_scripts` outside them by its file name alone (a JavaScript file given
   as a URL is kept), and leaves out the `folder` of `export_settings` (the settings Export
   for Screens last used) when that folder is outside them. The document itself is not changed.
+- `svgInteractivity.info`, `svgInteractivity.addFile` and `svgInteractivity.removeFile` name a linked JavaScript
+  file outside the read roots by its file name alone in `files`, as `document.json` does, and `removeFile` takes that
+  name for it (see SVG interactivity). In a frame a request drives, the JavaScript Files dialog lists such a file by
+  its file name, and `ui_inspect` gives the file selected in the dialog the same way.
 - `plugin.list`, `plugin.safeMode`, `file.recovery.*` and `ui_inspect`'s `scriptReport` leave out the paths
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
   folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`
@@ -3860,11 +3864,32 @@ with one gray channel, so a PDF writes it in gray.
 `edit.colors.saturate` needs `intensity`, a number from -100 to 100 (a number outside the range counts as its nearest
 end). Without one, or with `null`, it answers `` missing number `intensity` ``; with a value that is not a number, such as
 `"40"`, it answers `` `intensity` must be a number, not "40" ``. Either way it changes nothing.
-The `edit.colors.*` commands, `edit.colors.overprintBlack` and `addon.color.filter` answer a `fill`, `stroke`,
-`includeImages`, `includePatterns`, `convert`, `remove`, `includeCmyBlacks` or `includeSpotBlacks` that is not true or
-false with `` `fill` must be true or false ``, naming the key, a `percentage` that is not a number with
-`` `percentage` must be a number ``, and a `mode` that is not a string with `` `mode` must be a string ``. They change
-nothing and record no undo step. A null counts as a key left out.
+The `edit.colors.*` commands other than `edit.colors.toIndexed`, `edit.colors.overprintBlack` and
+`addon.color.filter` answer a `fill`, `stroke`, `includeImages`, `includePatterns`, `convert`, `remove`,
+`includeCmyBlacks` or `includeSpotBlacks` that is not true or false with `` `fill` must be true or false ``, naming the
+key, a `percentage` that is not a number with `` `percentage` must be a number ``, and a `mode` that is not a string
+with `` `mode` must be a string ``. They change nothing and record no undo step. A null counts as a key left out.
+
+`edit.colors.toIndexed` (Edit › Edit Colors › Convert to Indexed Color…) stores each embedded image in the selection (or
+`ids`), in groups too, as an indexed-color PNG: a palette of at most 256 RGB colors, with each pixel the index of one.
+`reduction` chooses the palette: `selective` (the default), `perceptual`, `adaptive`, `web`, `gray` and `blackWhite`
+choose it as a PNG-8 export does; `uniform` takes evenly spaced levels of red, green and blue (2 to 6 levels, the most
+whose cube fits in `colors` with one entry left for transparency); `document` takes the colors of the document's
+swatches (at most 255). `colors` (2 to 256, default 256) is the most palette entries, the transparent one included;
+`uniform` needs at least 9, and `blackWhite` and `document` refuse it. `dither` is `diffusion` (the default), `pattern`,
+`noise` or `none`, and `ditherAmount` is 0 to 100 (default 100). Reduction and dither ids are read as a PNG-8 export
+reads them, ignoring case. Pixels under half opacity become one transparent entry and the others become opaque in their
+own color. Linked images, colorized image fills and the images of color glyphs in outlined type keep their pixels. Each
+image that changes becomes a new image, in one undo step for all of them. An image that is already an indexed PNG and
+would show the same pixels is left as it is, and no undo step is recorded when no image changes. `notChanged` counts the
+locked and hidden objects Select All left out that hold an image that is not an indexed PNG yet. An image of more than
+134,217,728 pixels (33,554,432 in the web app) is refused with an error, read from the file's header before any pixel is
+decoded, and nothing changes. A value out of range or of the wrong type, such as `"colors": "8"`, is refused with an
+error and changes nothing.
+
+```json
+{"name":"run_command","arguments":{"command":"edit.colors.toIndexed","params":{"reduction":"adaptive","colors":32,"dither":"pattern"}}}
+```
 
 The reply of `recolor.apply` and of every command above except the Blend commands has `notChanged: {locked, hidden}`.
 When the selection is exactly what `select.all` takes (in isolation mode, what it takes inside the isolated group), it
@@ -4883,7 +4908,12 @@ files) and `eventNames` (the 19 events the panel lists, from `onfocusin` to `ons
 event's script where they have one (an empty `script` removes it); `svgInteractivity.removeEvent {event, ids?}` and
 `svgInteractivity.clearEvents {ids?}` remove one event or all of them. Each is one undo step.
 `svgInteractivity.addFile {file}` and `svgInteractivity.removeFile {file}` link and unlink a JavaScript file (a path
-or a URL, kept as given without surrounding spaces); a document links at most 64 files. `ui.javascriptFilesDialog {}`
+or a URL, kept as given without surrounding spaces); a document links at most 64 files. `addFile` takes a file as
+already linked only when the same text is linked. With automation read roots in force, `info`, `addFile` and
+`removeFile` name a linked file outside them by its file name alone in `files` (a relative path is taken from the
+document's folder, and a URL is kept), and `removeFile` also unlinks such a file by that name. When the name fits
+more than one linked file (two such files, or such a file and a file linked as that name), `removeFile` returns an
+error and unlinks nothing. `ui.javascriptFilesDialog {}`
 opens the JavaScript Files dialog, whose Choose… puts a picked file in as a `file:///` URL. SVG export writes each event
 as an event attribute on the object's element (`onclick="…"`; with the SVG Tiny 1.2 profile it leaves them out with a
 warning) and each file as `<script xlink:href>`. SVG import reads the event attributes the panel lists and the
@@ -5795,7 +5825,9 @@ From the Selection, Direct Selection, Group Selection, Magic Wand, Lasso or Pers
 drawing tool chosen last in the window, or the Pencil tool when none has been chosen yet; from any other tool it
 chooses the Selection tool, and the tool left becomes the drawing tool unless it is the Hand, Rotate View, Zoom or Print
 Tiling tool. It returns `{tool}` and adds no undo step. Pencil as the first drawing tool and the list of selection tools
-are VectorCraft's own rules. A tap in Presentation Mode runs nothing.
+are VectorCraft's own rules. A tap in Presentation Mode runs nothing. Under VectorCraft's own rule, a tap on the canvas
+while a modal dialog is open runs nothing, and fingers already down when it opens make no tap when they lift, during
+the dialog or after it closes.
 
 `gridlineEvery` (72 pt by default) and `gridSubdivisions` (8 by default) set the document grid that View › Show Grid
 draws, and View › Snap to Grid snaps to its subdivisions. Changing either sets the grid of every open document.
@@ -7148,6 +7180,10 @@ color, even one of the same color, and Registration are not spot colors; the spo
 Color Objects and `objects.spots` counts them; spot swatches no art uses are not listed; with `selectionOnly`, those
 in the selection), `spotColorNames` and `spotColors` (the spot colors those objects use) and `pathLength` (pt: the total length of the paths, compound paths' pieces included and guides left
 out, which objects lists as Path Length in the document's units, say for a cut line or an LED strip along the letters);
+`brushNames`, `brushes`, `spotObjects`, `patternObjects` and `gradientObjects` leave out hidden objects, objects at an
+opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0, their characters' paints and
+colorized images included, and so does `selectionOnly` for an object selected inside such a group or layer, while
+`objects` still counts them as paths, groups and the other kinds;
 `format: "text"` returns the plain-text report Document Info › Save… (`docInfo.save {path?, selectionOnly?, category?}`:
 only `category` when given, else every category) and the package report write.
 

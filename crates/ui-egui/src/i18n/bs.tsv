@@ -103,6 +103,8 @@
 	Blend Vertically	Stopi okomito
 	Convert to CMYK	Pretvori u CMYK
 	Convert to Grayscale	Pretvori u nijanse sive
+	Convert to Indexed Color	Pretvori u indeksirane boje
+	Convert to Indexed Color…	Pretvori u indeksirane boje…
 	Convert to RGB	Pretvori u RGB
 	Invert Colors	Obrni boje
 	Overprint Black…	Pretisak crne…
@@ -4494,6 +4496,9 @@ imageTrace	Outline	Obris
 @msg	Couldn't open {name}: {e}	Nije moguće otvoriti {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Nije moguće postaviti {name}: dokument na koji je ispušten je zatvoren
 @msg	Couldn't place {name}: the document it was placed in was closed	Nije moguće postaviti {name}: dokument u koji je postavljen je zatvoren
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Nije moguće postaviti {name}: dokument na koji je ispušten je vraćen na sačuvano
+@msg	Couldn't place {name}: the document it was placed in was reverted	Nije moguće postaviti {name}: dokument u koji je postavljen je vraćen na sačuvano
+@msg	Couldn't paste: the document it was pasted in was reverted	Nije moguće zalijepiti: dokument u koji se lijepilo je vraćen na sačuvano
 @msg	Couldn't read {name}: {e}	Nije moguće pročitati {name}: {e}
 @msg	Couldn't save recovery data: {e}	Nije moguće sačuvati podatke za oporavak: {e}
 @msg	Create Outlines: select text objects	Kreiraj obrise: odaberite tekstualne objekte

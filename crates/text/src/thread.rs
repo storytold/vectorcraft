@@ -262,28 +262,76 @@ impl<'a> Rest<'a> {
 }
 
 /// How many bytes of `rest` fit in `frame`, measured as `probe` makes the frame for some runs (with
-/// their paragraph styles, the list counts and the continuation mark).
+/// their paragraph styles, the list counts and the continuation mark). `no_rtl`: no paragraph of
+/// the rest resolves right to left on its own (no character [`crate::layout::starts_bidi`] holds
+/// and no right-to-left Character Direction).
 ///
-/// Area type without Shrink Text to Fit whose lines align to the top is first measured with the
-/// whole paragraphs of the rest that end at or after byte `want`, and then with twice as many bytes
-/// each time, while the rest goes on past them. The layout places lines in order and stops at the
-/// first line that does not fit, and each paragraph is shaped and broken on its own text. So when
-/// that line starts before the last paragraph break measured, the frame holds the same bytes with
-/// the whole rest. Other type, and a rest that ends first, is measured with the whole rest.
-fn fit_rest(db: &FontDb, probe: impl Fn(Vec<TextRun>) -> TextObject, frame: &TextObject, rest: Rest<'_>, mut want: usize) -> usize {
-    let by_paragraph = matches!(frame.kind, TextKind::Area { .. })
-        && frame.area.fit.min_scale().is_none()
-        && frame.area.vertical_align == vectorcraft_doc::VerticalAlign::Top;
+/// Area type without Shrink Text to Fit is first measured with the whole paragraphs of the rest
+/// that end at or after byte `want`, and then with twice as many bytes each time, while the rest
+/// goes on past them. The layout places lines in order and stops at the first line that does not
+/// fit, and each paragraph is shaped and broken on its own text. So when that line starts before
+/// the last paragraph break measured, the frame holds the same bytes with the whole rest. Lines
+/// aligned to the center, the bottom or justified vertically move by the space the placed lines
+/// leave, and a frame that is not a plain rectangle flows them again from there. A pass that places
+/// less text than the one before is undone, so no pass places more text than the final layout; when
+/// that layout stops before the last paragraph break measured, every pass stopped at the same line
+/// as with the whole rest.
+///
+/// Type on a path is measured the same way when its line starts at the start bracket whatever text
+/// follows: no Dynamic Text, Optical Margin Alignment or Roman Hanging Punctuation, the first
+/// paragraph aligned Left, Justify Left or Auto, and no right-to-left text (`no_rtl`, and the first
+/// paragraph's direction not right to left) unless the type is vertical. Each glyph's step along the
+/// path then depends only on the glyphs before it, so when the first glyph that does not fit comes
+/// before the last paragraph break measured, the path holds the same bytes with the whole rest.
+///
+/// Other type, and a rest that ends first, is measured with the whole rest.
+fn fit_rest(db: &FontDb, probe: impl Fn(Vec<TextRun>) -> TextObject, frame: &TextObject, rest: Rest<'_>, mut want: usize, no_rtl: bool) -> usize {
+    let on_path = matches!(frame.kind, TextKind::OnPath { .. });
+    let by_paragraph = match frame.kind {
+        TextKind::Area { .. } => frame.area.fit.min_scale().is_none(),
+        TextKind::OnPath { .. } => path_starts_at_bracket(&probe(Vec::new()), no_rtl),
+        _ => false,
+    };
     if by_paragraph {
         while let Some(end) = rest.break_after(want.saturating_sub(1)).filter(|&end| end < rest.len) {
             let (n, unplaced) = fit(db, &probe(rest.before(end)));
-            if unplaced.is_some_and(|u| u + 1 < end) {
+            let first_out = if on_path { Some(n) } else { unplaced };
+            if first_out.is_some_and(|u| u + 1 < end) {
                 return n;
             }
             want = end.saturating_mul(2);
         }
     }
     fit(db, &probe(rest.all())).0
+}
+
+/// Whether type on a path made as `head` (the frame with its first paragraph's style) places its
+/// line from the start bracket, glyph by glyph, whatever text follows: see [`fit_rest`].
+fn path_starts_at_bracket(head: &TextObject, no_rtl: bool) -> bool {
+    use vectorcraft_doc::{Justify, ParaDirection};
+    let para = head.para_at(0);
+    !head.dynamic_text
+        && !head.optical_margin
+        && !para.roman_hanging
+        && matches!(para.justify, Justify::Auto | Justify::Left | Justify::JustifyLeft)
+        && (head.vertical || (no_rtl && para.direction != Some(ParaDirection::RightToLeft)))
+}
+
+/// The end of the last character of `runs` that makes its paragraph resolve right to left
+/// ([`crate::layout::starts_bidi`], or a run with the right-to-left Character Direction); 0 when
+/// there is none.
+fn rtl_end(runs: &[TextRun]) -> usize {
+    let mut off = 0;
+    let mut end = 0;
+    for r in runs {
+        if r.style.char_direction == Some(vectorcraft_doc::ParaDirection::RightToLeft) && !r.text.is_empty() {
+            end = off + r.text.len();
+        } else if let Some((i, c)) = r.text.char_indices().rev().find(|&(_, c)| crate::layout::starts_bidi(c)) {
+            end = off + i + c.len_utf8();
+        }
+        off += r.text.len();
+    }
+    end
 }
 
 /// A frame's share of a story: its runs, its paragraphs' styles (one per paragraph) and the
@@ -379,7 +427,10 @@ pub fn distribute_continuing_levels(
     continued: bool,
     mut counts: ListCounts,
 ) -> Vec<Slice> {
-    let mut story_rest = Rest { runs, run: 0, skip: 0, raw: true, len: runs_len(runs) };
+    let story_len = runs_len(runs);
+    let mut story_rest = Rest { runs, run: 0, skip: 0, raw: true, len: story_len };
+    // Where the story's right-to-left text ends ([`rtl_end`]), read once, for type on a path.
+    let story_rtl_end = std::cell::OnceCell::new();
     // Once the story is used up, what is left is one empty run with the style there.
     let mut used_up: Option<TextRun> = None;
     let mut out = Vec::with_capacity(frames.len());
@@ -415,7 +466,12 @@ pub fn distribute_continuing_levels(
                 probe.first_para_continues = continues;
                 probe
             };
-            fit_rest(db, probe, f, rest, want)
+            // The rest is the story after its first `story_len - len` bytes.
+            let no_rtl = len == 0
+                || (matches!(f.kind, TextKind::OnPath { .. })
+                    && !f.vertical
+                    && *story_rtl_end.get_or_init(|| rtl_end(runs)) <= story_len.saturating_sub(len));
+            fit_rest(db, probe, f, rest, want, no_rtl)
         };
         want = n.saturating_mul(2).max(MIN_MEASURE);
         let mut head = rest.slice(0, n);

@@ -96,6 +96,8 @@
 	Blend Vertically	Bland lodret
 	Convert to CMYK	Konvertér til CMYK
 	Convert to Grayscale	Konvertér til gråtoner
+	Convert to Indexed Color	Konvertér til indekserede farver
+	Convert to Indexed Color…	Konvertér til indekserede farver…
 	Convert to RGB	Konvertér til RGB
 	Invert Colors	Invertér farver
 	Overprint Black…	Overprint sort…
@@ -4246,6 +4248,9 @@ imageTrace	Outline	Kontur
 @msg	Couldn't open {name}: {e}	Kunne ikke åbne {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Kunne ikke placere {name}: dokumentet, den blev sluppet på, var lukket
 @msg	Couldn't place {name}: the document it was placed in was closed	Kunne ikke placere {name}: dokumentet, den blev placeret i, var lukket
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Kunne ikke placere {name}: dokumentet, den blev sluppet på, blev gendannet
+@msg	Couldn't place {name}: the document it was placed in was reverted	Kunne ikke placere {name}: dokumentet, den blev placeret i, blev gendannet
+@msg	Couldn't paste: the document it was pasted in was reverted	Kunne ikke indsætte: dokumentet, der blev indsat i, blev gendannet
 @msg	Couldn't read {name}: {e}	Kunne ikke læse {name}: {e}
 @msg	Couldn't save recovery data: {e}	Kunne ikke gemme gendannelsesdata: {e}
 @msg	Create Outlines: select text objects	Opret konturer: markér tekstobjekter

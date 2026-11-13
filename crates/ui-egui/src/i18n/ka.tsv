@@ -107,6 +107,8 @@
 	Blend Vertically	ვერტიკალურად შერევა
 	Convert to CMYK	CMYK-ად გარდაქმნა
 	Convert to Grayscale	ნაცრისფერ ტონებად გარდაქმნა
+	Convert to Indexed Color	ინდექსირებულ ფერებად გარდაქმნა
+	Convert to Indexed Color…	ინდექსირებულ ფერებად გარდაქმნა…
 	Convert to RGB	RGB-ად გარდაქმნა
 	Invert Colors	ფერების ინვერსია
 	Overprint Black…	შავის ზედდაბეჭდვა…
@@ -4045,6 +4047,9 @@ font-technology	Variable	ცვლადი
 @msg	Couldn't open {name}: {e}	{name} ვერ გაიხსნა: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} ვერ განთავსდა: დოკუმენტი, რომელზეც ის ჩამოაგდეს, დაიხურა
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} ვერ განთავსდა: დოკუმენტი, რომელშიც ის თავსდებოდა, დაიხურა
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} ვერ განთავსდა: დოკუმენტი, რომელზეც ის ჩამოაგდეს, წინა ვერსიაზე დაბრუნდა
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} ვერ განთავსდა: დოკუმენტი, რომელშიც ის თავსდებოდა, წინა ვერსიაზე დაბრუნდა
+@msg	Couldn't paste: the document it was pasted in was reverted	ჩასმა ვერ მოხერხდა: დოკუმენტი, რომელშიც ის ჩაისმებოდა, წინა ვერსიაზე დაბრუნდა
 @msg	Couldn't read {name}: {e}	{name} ვერ წაიკითხა: {e}
 @msg	Couldn't save recovery data: {e}	აღდგენის მონაცემები ვერ შეინახა: {e}
 @msg	Create Outlines: select text objects	კონტურების შექმნა: მონიშნეთ ტექსტური ობიექტები

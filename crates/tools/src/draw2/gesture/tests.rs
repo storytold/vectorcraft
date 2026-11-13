@@ -1037,6 +1037,439 @@ fn pencil_alt_smooths_within_the_smooth_tools_radius() {
     }
 }
 
+/// The dashed paths among the overlays.
+fn bands(t: &GestureTool, cx: &ToolContext) -> Vec<vectorcraft_geom::BezPath> {
+    t.overlays(cx).into_iter().filter_map(|o| if let Overlay::Path { path, dashed: true, .. } = o { Some(path) } else { None }).collect()
+}
+
+/// How far `q` is from the polyline through `pts`.
+fn dist_to_drag(q: Point, pts: &[Point]) -> f64 {
+    pts.windows(2)
+        .map(|w| {
+            let ab = w[1] - w[0];
+            let t = if ab.hypot2() > 0.0 { ((q - w[0]).dot(ab) / ab.hypot2()).clamp(0.0, 1.0) } else { 0.0 };
+            q.distance(w[0] + ab * t)
+        })
+        .fold(f64::INFINITY, f64::min)
+}
+
+/// Check the band a smoothing drag through the tool's points shows at radius `r`: one dashed path,
+/// every point of which is `r` from the drag, around an area that holds every point nearer than `r`
+/// and none farther. Returns the path.
+fn check_band(t: &GestureTool, cx: &ToolContext, r: f64) -> vectorcraft_geom::BezPath {
+    use vectorcraft_geom::kurbo::Shape;
+    let pts = &t.points;
+    let found = bands(t, cx);
+    let [outline] = found.as_slice() else { panic!("one band, got {found:?}") };
+    for seg in outline.segments() {
+        for s in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            let q = seg.eval(s);
+            let dq = dist_to_drag(q, pts);
+            assert!((dq - r).abs() < 0.02 * r, "{q:?} on the outline is {dq} from the drag, radius {r}");
+        }
+    }
+    let kept = t.band.take();
+    let areas: Vec<_> = kept.iter().flat_map(|b| b.tiles.values().map(|t| t.area.to_bezpath())).collect();
+    t.band.set(kept);
+    let b = outline.bounding_box();
+    let mut probes = 0;
+    for i in 0..=80 {
+        for j in 0..=80 {
+            let q = Point::new(b.x0 - r + (b.width() + 2.0 * r) * f64::from(i) / 80.0, b.y0 - r + (b.height() + 2.0 * r) * f64::from(j) / 80.0);
+            let dq = dist_to_drag(q, pts);
+            let inside = areas.iter().any(|a| a.contains(q));
+            if dq < 0.97 * r {
+                assert!(inside, "{q:?} {dq} from the drag is inside the band, radius {r}");
+                probes += 1;
+            } else if dq > 1.03 * r {
+                assert!(!inside, "{q:?} {dq} from the drag is outside the band, radius {r}");
+            }
+        }
+    }
+    assert!(probes > 100, "{probes}");
+    outline.clone()
+}
+
+/// While a smoothing drag has a selected path to smooth, it shows dashed the band its release smooths:
+/// everything within the radius it sends of the drag, round at both ends, around the drag's thin
+/// line. Alt smoothing with the Pencil, Paintbrush and Blob Brush shows it too; a drag with nothing
+/// selected and a Blob Brush stroke that paints do not.
+#[test]
+fn smoothing_drag_shows_the_band_it_smooths() {
+    use vectorcraft_geom::kurbo::{ParamCurveArclen, Shape};
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let none = Selection::default();
+    let p = paint();
+    let alt = Mods { alt: true, ..Default::default() };
+    let pts = [(50.0, 150.0), (150.0, 150.0)];
+    for zoom in [1.0, 2.0, 0.5, 200.0] {
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        cx.zoom = zoom;
+        let r = match drag(&mut GestureTool::new("smooth"), &cx, &pts, Mods::default()).last().and_then(|a| a.first()) {
+            Some(Action::Exec(c, v)) if c == "path.smoothRegion" => v["radius"].as_f64().unwrap_or(0.0),
+            a => panic!("expected path.smoothRegion, got: {a:?}"),
+        };
+        for (id, alt_smooth, m) in [("smooth", false, Mods::default()), ("pencil", true, alt), ("paintbrush", false, alt), ("blobBrush", false, alt)]
+        {
+            let mut t = GestureTool::new(id);
+            t.set_option("altSmooth", &json!(alt_smooth));
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1).with_mods(m));
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, pts[1].0, pts[1].1).with_mods(m));
+            let band = check_band(&t, &cx, r);
+            let b = band.bounding_box();
+            let near = |a: f64, w: f64| (a - w).abs() < 0.02 * r;
+            assert!(near(b.x0, 50.0 - r) && near(b.x1, 150.0 + r) && near(b.y0, 150.0 - r) && near(b.y1, 150.0 + r), "{id} at zoom {zoom}: {b:?}");
+            // The whole outline shows: two sides and two half circles.
+            let length: f64 = band.segments().map(|s| s.arclen(1e-6 * r)).sum();
+            let want = 200.0 + 2.0 * std::f64::consts::PI * r;
+            assert!((length - want).abs() < 0.02 * want, "{id} at zoom {zoom}: outline {length}, band {want}");
+            assert!(
+                t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Path { width, dashed: false, .. } if *width == 1.0)),
+                "{id}: the drag's line"
+            );
+        }
+        // Nothing selected: the release smooths nothing, so no band shows.
+        let mut empty = crate::testutil::cx(&d, &none, &p);
+        empty.zoom = zoom;
+        let mut t = GestureTool::new("smooth");
+        t.pointer(&empty, &PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1));
+        t.pointer(&empty, &PointerEvent::new(PointerKind::Drag, pts[1].0, pts[1].1));
+        assert!(bands(&t, &empty).is_empty());
+        // A Blob Brush stroke that paints shows its own area, not the band.
+        let mut t = GestureTool::new("blobBrush");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, pts[1].0, pts[1].1));
+        assert!(bands(&t, &cx).is_empty());
+    }
+}
+
+/// The band shown while a long drag goes on, grown step by step, is one outline that holds every
+/// point within the radius of the drag and none farther, whether the drag crosses itself or runs
+/// on across the page; a zoom change mid-drag with the pointer still asks for frames until the band
+/// covers the whole drag at the new radius, and the next drag does not keep the last one's band.
+#[test]
+fn smoothing_band_follows_a_long_drag() {
+    use vectorcraft_geom::kurbo::Shape;
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    // A curve that crosses itself, and one that runs on across the page.
+    let crossing: Vec<Point> =
+        (0..240).map(|i| f64::from(i) * 0.05).map(|a| Point::new(250.0 + 80.0 * (a * 1.3).sin(), 250.0 + 60.0 * (a * 0.7).cos())).collect();
+    let across: Vec<Point> =
+        (0..900).map(f64::from).map(|i| Point::new(20.0 + 0.5 * i, 250.0 + 100.0 * (i * 0.05).sin() + 30.0 * (i * 0.37).sin())).collect();
+    for pts in [crossing, across] {
+        cx.zoom = 1.0;
+        let mut t = GestureTool::new("smooth");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, pts[0].x, pts[0].y));
+        for q in &pts[1..] {
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, q.x, q.y));
+            assert_eq!(bands(&t, &cx).len(), 1);
+        }
+        check_band(&t, &cx, cx.tol(12.0));
+        assert!(!t.overlays_pending(), "the band covers the drag");
+        // The view zooms in mid-drag while the pointer holds still: the tool asks for frames until
+        // the band covers the whole drag at the new radius.
+        cx.zoom = 2.0;
+        let mut frames = 1;
+        bands(&t, &cx);
+        while t.overlays_pending() {
+            assert!(frames <= pts.len(), "the band reaches the whole drag");
+            bands(&t, &cx);
+            frames += 1;
+        }
+        let n = t.points.len();
+        assert_eq!(frames, (n - 1).div_ceil(BAND_STEP * BAND_STEPS_PER_CALL), "frames for {n} points");
+        check_band(&t, &cx, cx.tol(12.0));
+        assert!(!t.overlays_pending());
+        let last = pts[pts.len() - 1];
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, last.x, last.y));
+        // The next drag shows only its own band.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 400.0, 450.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 420.0, 450.0));
+        let b = check_band(&t, &cx, cx.tol(12.0)).bounding_box();
+        assert!(b.x0 > 390.0 && b.y0 > 440.0, "{b:?}");
+    }
+}
+
+/// A segment of a drag too long for the squares at the current zoom (a jump drawn zoomed out,
+/// viewed zoomed in, or one reaching far off the page) shows as the two sides of its band, and the
+/// band goes on past it: the parts dragged before and after it show, and nothing stays pending.
+/// Two such segments that cross show no edge inside each other's band, and one that runs back
+/// along another shows its sides once.
+#[test]
+fn smoothing_band_shows_a_segment_too_long_for_its_squares() {
+    use vectorcraft_geom::kurbo::{ParamCurveArclen, Shape};
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    let before = [Point::new(100.0, 100.0), Point::new(130.0, 100.0)];
+    let after = [Point::new(20_100.0, 100.0), Point::new(20_100.0, 130.0), Point::new(20_130.0, 130.0)];
+    let far = [Point::new(1e17, 100.0)];
+    let crossing = [(100.0, 100.0), (30_100.0, 100.0), (30_100.0, 130.0), (15_100.0, -20_000.0), (15_130.0, -20_000.0)].map(Point::from);
+    let back = [(100.0, 100.0), (30_100.0, 100.0), (130.0, 100.0)].map(Point::from);
+    for (case, pts) in [
+        ("jump", [&before[..], &after[..]].concat()),
+        ("far", [&before[..], &far[..], &after[..]].concat()),
+        ("crossing", crossing.to_vec()),
+        ("back", back.to_vec()),
+    ] {
+        // Drawn zoomed out, where the jump is about 42 half squares, then viewed at 1,000%, where
+        // it is more than 4,096.
+        cx.zoom = 0.1;
+        let mut t = GestureTool::new("smooth");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, pts[0].x, pts[0].y));
+        for q in &pts[1..] {
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, q.x, q.y));
+            bands(&t, &cx);
+        }
+        cx.zoom = 10.0;
+        let r = cx.tol(12.0);
+        let mut frames = 0;
+        let mut found = bands(&t, &cx);
+        while t.overlays_pending() {
+            assert!(frames < pts.len(), "{case}: the band reaches the whole drag");
+            found = bands(&t, &cx);
+            frames += 1;
+        }
+        let [outline] = found.as_slice() else { panic!("{case}: one band, got {found:?}") };
+        for seg in outline.segments() {
+            for s in [0.0, 0.25, 0.5, 0.75, 1.0] {
+                let q = seg.eval(s);
+                let dq = dist_to_drag(q, &pts);
+                assert!((dq - r).abs() < 0.02 * r, "{case}: {q:?} on the outline is {dq} from the drag, radius {r}");
+            }
+        }
+        // The band of each long segment shows on both of its sides, as far as the release reaches,
+        // except where the band of another part of the drag holds the side (on the page: a point
+        // on a segment to 1e17 resolves only to about 10 units).
+        let on_outline = |q: Point| {
+            outline.segments().any(|seg| {
+                (0..=8).any(|k| seg.eval(f64::from(k) / 8.0).distance(q) < 0.02 * r) || dist_to_drag(q, &[seg.start(), seg.end()]) < 0.02 * r
+            })
+        };
+        for w in pts.windows(2).filter(|w| w[0].distance(w[1]) > 10_000.0 && w[0].x < 1e6 && w[1].x < 1e6) {
+            let d = w[1] - w[0];
+            let n = vectorcraft_geom::kurbo::Vec2::new(-d.y, d.x) * (r / d.hypot());
+            for k in 1..40 {
+                for q in [w[0].lerp(w[1], f64::from(k) / 40.0) + n, w[0].lerp(w[1], f64::from(k) / 40.0) - n] {
+                    if dist_to_drag(q, &pts) > 0.98 * r {
+                        assert!(on_outline(q), "{case}: {q:?} on a side of {w:?} shows");
+                    }
+                }
+            }
+        }
+        if case == "back" {
+            // Running back along the jump draws its sides once: two sides and two half circles.
+            let length: f64 = outline.segments().map(|s| s.arclen(1e-6 * r)).sum();
+            let want = 2.0 * 30_000.0 + 2.0 * std::f64::consts::PI * r;
+            assert!((length - want).abs() < 0.01 * want, "{case}: outline {length}, band {want}");
+        }
+        let kept = t.band.take();
+        let areas: Vec<_> = kept.iter().flat_map(|b| b.tiles.values().map(|t| t.area.to_bezpath())).collect();
+        t.band.set(kept);
+        // Every point near each short part dragged on either side of a long segment is in the band.
+        for w in pts.windows(2).filter(|w| w[0].distance(w[1]) < 1_000.0) {
+            for q in (0..=20).map(|k| w[0].lerp(w[1], f64::from(k) / 20.0)) {
+                for (dx, dy) in [(0.0, 0.0), (0.9, 0.0), (-0.9, 0.0), (0.0, 0.9), (0.0, -0.9)] {
+                    let probe = q + vectorcraft_geom::kurbo::Vec2::new(dx * r, dy * r);
+                    assert!(areas.iter().any(|a| a.contains(probe)), "{case}: {probe:?} near the drag is in the band");
+                }
+            }
+        }
+    }
+}
+
+/// A drag drawn zoomed out whose every segment is too long for the squares once the view zooms in,
+/// and whose segments all cross one another, is outlined over several calls: no call does more
+/// than about [`BAND_WORK_PER_CALL`] of work on the long segments, and the band then shows in full.
+#[test]
+fn smoothing_band_of_many_long_segments_is_made_in_bounded_calls() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    // A star whose chords nearly all pass through its middle, 4,000 units each.
+    let step = std::f64::consts::PI * (1.0 - 1.0 / 40.3);
+    let pts: Vec<Point> = (0..161).map(|k| f64::from(k) * step).map(|a| Point::new(5000.0 + 2000.0 * a.cos(), 5000.0 + 2000.0 * a.sin())).collect();
+    cx.zoom = 0.05;
+    let mut t = GestureTool::new("smooth");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, pts[0].x, pts[0].y));
+    for q in &pts[1..] {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, q.x, q.y));
+        bands(&t, &cx);
+    }
+    cx.zoom = 640.0;
+    let r = cx.tol(SMOOTH_RADIUS);
+    let work = |t: &GestureTool| {
+        let kept = t.band.take();
+        let w = kept.as_ref().map_or(0, |b| b.work);
+        t.band.set(kept);
+        w
+    };
+    let mut found = bands(&t, &cx);
+    let mut frames = 1;
+    let mut most = work(&t);
+    while t.overlays_pending() {
+        assert!(frames < 10_000, "the band reaches the whole drag");
+        found = bands(&t, &cx);
+        most = most.max(work(&t));
+        frames += 1;
+    }
+    assert!(most <= 2 * BAND_WORK_PER_CALL, "{most} work in one call");
+    assert!(frames > 2, "{frames} calls");
+    let kept = t.band.take();
+    let long = kept.as_ref().map_or(0, |b| b.long.len());
+    t.band.set(kept);
+    assert_eq!(long, pts.len() - 1, "every segment is long");
+    let [outline] = found.as_slice() else { panic!("one band, got {}", found.len()) };
+    for seg in outline.segments().step_by(7) {
+        for s in [0.0, 0.5, 1.0] {
+            let q = seg.eval(s);
+            let dq = dist_to_drag(q, &pts);
+            assert!((dq - r).abs() < 0.02 * r, "{q:?} on the outline is {dq} from the drag, radius {r}");
+        }
+    }
+}
+
+/// The band is kept in squares; a straight drag whose band edge runs along a side of a square, or
+/// just inside or outside it, still shows that edge, and the sides between two squares the band
+/// fills do not show.
+#[test]
+fn smoothing_band_shows_an_edge_along_a_square_side() {
+    use vectorcraft_geom::kurbo::{ParamCurveArclen, Shape};
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    for zoom in [1.0, 3.0] {
+        cx.zoom = zoom;
+        let r = cx.tol(SMOOTH_RADIUS);
+        let side = BAND_TILE_RADII * r;
+        // A side of the squares near 230 (across and down: the grid is square).
+        let at = (BAND_TILE_OFFSET + (230.0 / side - BAND_TILE_OFFSET).round()) * side;
+        let eps = 1e-3 * r;
+        for off in [0.0, 0.5 * eps, -0.5 * eps, 1.5 * eps, -1.5 * eps] {
+            for (edge, upright) in [(-r, false), (r, false), (-r, true), (r, true)] {
+                let c = at + edge + off;
+                let ends = if upright {
+                    [Point::new(c, 100.0), Point::new(c, 100.0 + 2.5 * side)]
+                } else {
+                    [Point::new(100.0, c), Point::new(100.0 + 2.5 * side, c)]
+                };
+                let mut t = GestureTool::new("smooth");
+                t.pointer(&cx, &PointerEvent::new(PointerKind::Down, ends[0].x, ends[0].y));
+                for i in 1..=20 {
+                    let q = ends[0].lerp(ends[1], f64::from(i) / 20.0);
+                    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, q.x, q.y));
+                }
+                let band = check_band(&t, &cx, r);
+                // Two sides and two half circles, each shown once.
+                let length: f64 = band.segments().map(|s| s.arclen(1e-6 * r)).sum();
+                let want = 2.0 * 2.5 * side + 2.0 * std::f64::consts::PI * r;
+                assert!(
+                    (length - want).abs() < 0.02 * want,
+                    "zoom {zoom}, edge {edge}, off {off}, upright {upright}: outline {length}, band {want}, {:?}",
+                    band.bounding_box()
+                );
+            }
+        }
+    }
+}
+
+/// A drag whose band edge runs along a side of a square and then turns across it shows the edge
+/// up to the turn and no line where the band goes on across the side.
+#[test]
+fn smoothing_band_shows_no_seam_where_it_turns_across_a_square_side() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    for zoom in [1.0, 3.0] {
+        cx.zoom = zoom;
+        let r = cx.tol(SMOOTH_RADIUS);
+        let side = BAND_TILE_RADII * r;
+        let at = (BAND_TILE_OFFSET + (230.0 / side - BAND_TILE_OFFSET).round()) * side;
+        let eps = 1e-3 * r;
+        for off in [0.0, 0.5 * eps, -0.5 * eps] {
+            for (edge, upright) in [(-r, false), (r, false), (-r, true), (r, true)] {
+                let c = at + edge + off;
+                // Along the side, then across it.
+                let turn = 100.0 + 1.5 * side;
+                let corners = [(100.0, c), (turn, c), (turn, c - edge.signum() * 2.0 * side)];
+                let pts: Vec<Point> = corners.into_iter().map(|(u, v)| if upright { Point::new(v, u) } else { Point::new(u, v) }).collect();
+                let mut t = GestureTool::new("smooth");
+                t.pointer(&cx, &PointerEvent::new(PointerKind::Down, pts[0].x, pts[0].y));
+                for w in pts.windows(2) {
+                    for i in 1..=12 {
+                        let q = w[0].lerp(w[1], f64::from(i) / 12.0);
+                        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, q.x, q.y));
+                    }
+                }
+                check_band(&t, &cx, r);
+            }
+        }
+    }
+}
+
+/// One straight piece of a square's outline along a side, where the band goes on across only part
+/// of it, shows only the part with nothing across.
+#[test]
+fn smoothing_band_square_shows_only_the_open_part_of_a_side() {
+    use vectorcraft_geom::kurbo::{ParamCurveArclen, Shape};
+    let mut band = SmoothBand::new(Point::ZERO, 10.0);
+    let r = band.tile_rect((0, 0));
+    let (x, y) = (r.x0, r.y1);
+    let area = |x0: f64, y0: f64, x1: f64, y1: f64| vectorcraft_geom::shapes::rectangle(Rect::new(x0, y0, x1, y1));
+    let tile = |area| BandTile { area, outline: vectorcraft_geom::BezPath::new(), near_long: vec![], cut: vectorcraft_geom::BezPath::new() };
+    // Along the bottom side from 10 to 60, with the band across it from 40 to 60.
+    band.tiles.insert((0, 0), tile(area(x + 10.0, y - 20.0, x + 60.0, y)));
+    band.tiles.insert((0, 1), tile(area(x + 40.0, y, x + 60.0, y + 20.0)));
+    let outline = band.tile_outline((0, 0));
+    let along: f64 = outline.segments().filter(|s| s.bounding_box().height() < 1e-9 && (s.start().y - y).abs() < 1e-9).map(|s| s.arclen(1e-9)).sum();
+    assert!((along - 30.0).abs() < 1e-6, "{along} of the side shows: {}", outline.to_svg());
+    for s in outline.segments() {
+        assert!(!((s.start().y - y).abs() < 1e-9 && (s.end().y - y).abs() < 1e-9 && s.start().x.max(s.end().x) > x + 40.0 + 1e-9), "{s:?}");
+    }
+}
+
+/// A selection with no path the Smooth tool can change (a two-anchor line) shows no band.
+#[test]
+fn smoothing_drag_shows_no_band_without_a_path_it_smooths() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let line = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(vec![
+        vectorcraft_geom::PathEl::MoveTo(Point::new(300.0, 300.0)),
+        vectorcraft_geom::PathEl::LineTo(Point::new(400.0, 300.0)),
+    ]));
+    d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, line, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = GestureTool::new("smooth");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 300.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 400.0, 300.0));
+    let o = t.overlays(&cx);
+    assert!(!o.iter().any(|o| matches!(o, Overlay::Path { dashed: true, .. })), "{o:?}");
+}
+
 /// An Alt smoothing drag uses the Smooth tool's Fidelity for Pencil, Paintbrush and Blob Brush.
 #[test]
 fn alt_smoothing_uses_the_smooth_tools_fidelity() {
@@ -1665,7 +2098,7 @@ fn the_eraser_sends_its_tip_and_shows_the_area_it_covers() {
 /// The Blob Brush's Angle and Roundness (Blob Brush Tool Options, 0° and 100% by default) go with
 /// its stroke, kept within −180–180° and 0–100%; while it drags, a tip that is not round shows the
 /// outline of the area it covers with the length label, and an Alt drag that smooths shows the
-/// Smooth tool's thin line.
+/// Smooth tool's thin line and the dashed band it smooths.
 #[test]
 fn the_blob_brush_sends_its_tip_and_shows_the_area_it_covers() {
     let (d, id) = doc_with_rect();
@@ -1704,7 +2137,7 @@ fn the_blob_brush_sends_its_tip_and_shows_the_area_it_covers() {
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 150.0).with_mods(alt));
     t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 150.0).with_mods(alt));
     let o = t.overlays(&cx);
-    let [Overlay::Path { path, width, .. }] = &o[..] else { panic!("{o:?}") };
+    let [Overlay::Path { dashed: true, .. }, Overlay::Path { path, width, dashed: false, .. }] = &o[..] else { panic!("{o:?}") };
     assert_eq!(*width, 1.0);
     assert!(vectorcraft_geom::Shape::bounding_box(path).height() < 0.1, "{o:?}");
 }

@@ -116,6 +116,8 @@
 	Blend Vertically	Sulauta pystysuunnassa
 	Convert to CMYK	Muunna CMYK:ksi
 	Convert to Grayscale	Muunna harmaasävyiseksi
+	Convert to Indexed Color	Muunna indeksoiduiksi väreiksi
+	Convert to Indexed Color…	Muunna indeksoiduiksi väreiksi…
 	Convert to RGB	Muunna RGB:ksi
 	Invert Colors	Käännä värit
 	Overprint Black…	Päällepainata musta…
@@ -4565,6 +4567,9 @@ imageTrace	Outline	Ääriviiva
 @msg	Couldn't open {name}: {e}	Tiedostoa {name} ei voitu avata: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Kohdetta {name} ei voitu sijoittaa: asiakirja, johon se pudotettiin, on suljettu
 @msg	Couldn't place {name}: the document it was placed in was closed	Kohdetta {name} ei voitu sijoittaa: asiakirja, johon sitä sijoitettiin, on suljettu
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Kohdetta {name} ei voitu sijoittaa: asiakirja, johon se pudotettiin, on palautettu tallennettuun versioon
+@msg	Couldn't place {name}: the document it was placed in was reverted	Kohdetta {name} ei voitu sijoittaa: asiakirja, johon sitä sijoitettiin, on palautettu tallennettuun versioon
+@msg	Couldn't paste: the document it was pasted in was reverted	Liittäminen ei onnistunut: asiakirja, johon liitettiin, on palautettu tallennettuun versioon
 @msg	Couldn't read {name}: {e}	Tiedostoa {name} ei voitu lukea: {e}
 @msg	Couldn't save recovery data: {e}	Palautustietoja ei voitu tallentaa: {e}
 @msg	Create Outlines: select text objects	Muunna ääriviivoiksi: valitse tekstiobjekteja

@@ -137,8 +137,8 @@ pub trait Tool: Send {
         vec![]
     }
     /// Did the last [`Tool::overlays`] leave part of its overlays for later calls (the outline of a
-    /// long Blob Brush or Eraser drag)? The host then draws again on the next frame, even when the
-    /// pointer holds still.
+    /// long Blob Brush or Eraser drag, the band of a long smoothing drag outlined again after a
+    /// zoom change)? The host then draws again on the next frame, even when the pointer holds still.
     fn overlays_pending(&self) -> bool {
         false
     }

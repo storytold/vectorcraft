@@ -108,6 +108,8 @@
 	Blend Vertically	Prolnout svisle
 	Convert to CMYK	Převést na CMYK
 	Convert to Grayscale	Převést na stupně šedi
+	Convert to Indexed Color	Převést na indexované barvy
+	Convert to Indexed Color…	Převést na indexované barvy…
 	Convert to RGB	Převést na RGB
 	Invert Colors	Invertovat barvy
 	Overprint Black…	Přetisknout černou…
@@ -4651,6 +4653,9 @@ imageTrace	Outline	Obrys
 @msg	Couldn't open {name}: {e}	{name} nelze otevřít: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} nelze umístit: dokument, na který byl přetažen, byl zavřen
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} nelze umístit: dokument, do kterého se umísťoval, byl zavřen
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} nelze umístit: dokument, na který byl přetažen, byl vrácen k uložené verzi
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} nelze umístit: dokument, do kterého se umísťoval, byl vrácen k uložené verzi
+@msg	Couldn't paste: the document it was pasted in was reverted	Nelze vložit: dokument, do kterého se vkládalo, byl vrácen k uložené verzi
 @msg	Couldn't read {name}: {e}	{name} nelze přečíst: {e}
 @msg	Couldn't save recovery data: {e}	Data pro obnovení nelze uložit: {e}
 @msg	Create Outlines: select text objects	Převést na křivky: vyberte textové objekty

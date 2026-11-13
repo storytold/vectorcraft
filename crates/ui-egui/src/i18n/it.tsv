@@ -629,6 +629,8 @@ font-technology	Variable	Variabili
 	Convert to Artboards	Converti in tavole da disegno
 	Convert to CMYK	Converti in CMYK
 	Convert to Grayscale	Converti in scala di grigi
+	Convert to Indexed Color	Converti in colore indicizzato
+	Convert to Indexed Color…	Converti in colore indicizzato…
 	Convert To Outlines	Converti in contorni
 	Convert To Point Type	Converti in testo per punti
 	Convert to RGB	Converti in RGB
@@ -4393,6 +4395,9 @@ axis	Both	Entrambi
 @msg	Couldn't open {name}: {e}	Impossibile aprire {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Impossibile inserire {name}: il documento su cui è stato rilasciato è stato chiuso
 @msg	Couldn't place {name}: the document it was placed in was closed	Impossibile inserire {name}: il documento in cui veniva inserito è stato chiuso
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Impossibile inserire {name}: il documento su cui è stato rilasciato è stato ripristinato
+@msg	Couldn't place {name}: the document it was placed in was reverted	Impossibile inserire {name}: il documento in cui veniva inserito è stato ripristinato
+@msg	Couldn't paste: the document it was pasted in was reverted	Impossibile incollare: il documento in cui si incollava è stato ripristinato
 @msg	Couldn't read {name}: {e}	Impossibile leggere {name}: {e}
 @msg	Couldn't save recovery data: {e}	Impossibile salvare i dati di recupero: {e}
 @msg	Create Outlines: select text objects	Crea contorni: seleziona oggetti di testo
