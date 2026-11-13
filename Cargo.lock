@@ -6477,6 +6477,7 @@ dependencies = [
  "vectorcraft-text",
  "vectorcraft-three-d",
  "vectorcraft-trace",
+ "wat",
 ]
 
 [[package]]
@@ -6665,6 +6666,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "siphasher",
  "skrifa 0.47.0",
  "smallvec",
  "thiserror 2.0.21",
