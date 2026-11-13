@@ -9,8 +9,8 @@
 mod solid;
 mod visibility;
 pub use solid::{
-    Bevel, BevelShape, Extrude, FaceMap, Facet, Inflate, PlanarFace, View, extrude, extrude_face_map, inflate, inflate_together, plane,
-    plane_face_map,
+    Bevel, BevelShape, Extrude, FaceMap, Facet, Inflate, PlanarFace, TOO_COMPLEX_SOLID, View, extrude, extrude_face_map, inflate, inflate_each,
+    inflate_together, plane, plane_face_map,
 };
 pub use visibility::{VisibleFace, visible_faces};
 mod shading;
@@ -32,6 +32,9 @@ const MAX_FACES: usize = 32768;
 const MAX_REVOLVE_FACES: usize = 163_840;
 /// Most faces Extrude & Bevel and Inflate build for one solid, as many as Revolve's.
 const MAX_SOLID_FACES: usize = MAX_REVOLVE_FACES;
+/// Most faces the Extrude & Bevel or Inflate solids of one effect on one object keep together: the
+/// solid of its fill and those of its strokes, a group's members' all counted, as many as one solid's.
+pub const MAX_OBJECT_FACES: usize = MAX_SOLID_FACES;
 /// Samples a curved profile segment takes, and the fewest it takes on a surface over its budget.
 const CURVE_SAMPLES: usize = 16;
 const MIN_CURVE_SAMPLES: usize = 4;

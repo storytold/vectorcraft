@@ -109,6 +109,22 @@ fn an_extruded_mesh_is_as_deep_as_the_effect() {
     assert!((hi[2] - lo[2] - 30.0).abs() < 1e-9 && (hi[0] - lo[0] - 100.0).abs() < 1e-9, "{lo:?} {hi:?}");
 }
 
+/// Extrude & Bevel (Classic) exports the solid it draws: its bevel as wide as it is high.
+#[test]
+fn a_classic_extrusion_exports_its_own_bevel() {
+    let mut n = square_node(1, 100.0);
+    n.appearance.items.truncate(1);
+    let params = json!({ "bevel": "classic", "bevelHeight": 10.0 });
+    n.appearance.effects.push(fx(CLASSIC_EXTRUDE, params.clone()));
+    let meshes = three_d_meshes(&n).unwrap();
+    let p = crate::merged_params(CLASSIC_EXTRUDE, &params);
+    let path = profile(&n).unwrap().0;
+    let bounds = path.bounds().unwrap();
+    let own = vectorcraft_three_d::extrude_mesh(&path, FillRule::NonZero, bounds, classic_extrude_options(&p), view_options(&p)).unwrap();
+    assert_eq!(meshes.len(), 1);
+    assert_eq!(meshes[0].mesh, own);
+}
+
 #[test]
 fn revolve_gives_a_mesh_in_the_top_fill() {
     let mut b = BezPath::new();
