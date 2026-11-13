@@ -1672,6 +1672,40 @@ fn twist_fixes_the_outer_circle_and_rotates_inside() {
     assert!((a.y - 50.0).abs() > 1.0, "near-centre points rotate: {a:?}");
 }
 
+/// #7069: a 20 pt line twisted 400° is one smooth spiral. Its handles follow the twisted curve, so
+/// every point the line is split at is smooth (its handles in line, not a corner of up to 16°) and
+/// the curve stays within 0.01 pt of the exact twist (it was 0.09 pt off).
+#[test]
+fn twist_of_a_line_is_a_smooth_spiral() {
+    let line = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(20.0, 0.0)], false));
+    let out = run("distort.twist", json!({"angle": 400}), &line);
+    let sp = &out.subpaths[0];
+    assert!(sp.anchors.len() > 10, "{}", sp.anchors.len());
+    for (i, a) in sp.anchors.iter().enumerate().take(sp.anchors.len() - 1).skip(1) {
+        let (h_in, h_out) = (a.p - a.h_in, a.h_out - a.p);
+        let turn = h_in.cross(h_out).atan2(h_in.dot(h_out)).abs().to_degrees();
+        assert!(turn < 1e-3 && a.kind == vectorcraft_geom::AnchorKind::Smooth, "anchor {i} turns {turn}° ({:?})", a.kind);
+    }
+    // The exact twist of the line: centre (10, 0), radius 10, 400° at the centre.
+    let exact: Vec<Point> = (0..=4000)
+        .map(|k| {
+            let x = 20.0 * k as f64 / 4000.0 - 10.0;
+            let a = 400f64.to_radians() * (1.0 - x.abs() / 10.0);
+            Point::new(10.0 + x * a.cos(), x * a.sin())
+        })
+        .collect();
+    let off = (0..sp.segment_count())
+        .flat_map(|i| (0..=20).map(move |k| vectorcraft_geom::kurbo::ParamCurve::eval(&sp.segment(i), k as f64 / 20.0)))
+        .map(|q| {
+            exact
+                .windows(2)
+                .map(|w| vectorcraft_geom::kurbo::ParamCurveNearest::nearest(&vectorcraft_geom::Line::new(w[0], w[1]), q, 1e-9).distance_sq.sqrt())
+                .fold(f64::INFINITY, f64::min)
+        })
+        .fold(0.0, f64::max);
+    assert!(off < 0.01, "{off} pt from the exact twist");
+}
+
 #[test]
 fn scribble_does_not_cross_holes() {
     // #1648: a U (opening at the top, the notch x 30..70, y 0..60). Rows (y 2.5, 7.5, ...) through the prongs have

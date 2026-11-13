@@ -71,7 +71,7 @@ pub fn seg_cubic(sp: &SubPath, i: usize) -> CubicBez {
 
 /// Non-linear path mapping (shared with live envelopes in `vectorcraft-doc`), and the split of
 /// segments into pieces within an anchor budget.
-pub use vectorcraft_doc::live::{fit_piece, map_nonlinear_within, pieces};
+pub use vectorcraft_doc::live::{fit_piece, map_nonlinear_tangents_within, map_nonlinear_within, pieces};
 
 /// About how many lines the renderer flattens `path` into at 1 px/pt: one for a straight
 /// segment, and for a curve the count Wang's formula gives at vello's tolerance of 0.25 px,

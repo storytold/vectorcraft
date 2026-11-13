@@ -5,7 +5,10 @@ use vectorcraft_geom::kurbo::ParamCurveArclen;
 use vectorcraft_geom::{Affine, Anchor, ParamCurve, PathData, Point, Rect, SubPath, Vec2};
 use vectorcraft_pathops::addons::pathtools::insert_at;
 
-use crate::util::{catmull_rom, fit_piece, flag, map_nonlinear_within, mean_size, noise, normal_at, num, pieces, seed, seg_cubic, smooth_points};
+use crate::util::{
+    catmull_rom, fit_piece, flag, map_nonlinear_tangents_within, map_nonlinear_within, mean_size, noise, normal_at, num, pieces, seed, seg_cubic,
+    smooth_points,
+};
 
 fn diag(b: Rect) -> f64 {
     b.width().hypot(b.height()).max(1e-6)
@@ -325,8 +328,9 @@ pub fn tweak(path: &PathData, b: Rect, p: &Value) -> PathData {
 }
 
 /// Twist: rotation that is strongest at the centre and fades to zero at the bounding circle,
-/// clockwise on the page for a positive `angle`, making at most `max` anchors
-/// ([`map_nonlinear_within`]).
+/// clockwise on the page for a positive `angle`, making at most `max` anchors. Handles follow the
+/// twisted curve's tangents ([`map_nonlinear_tangents_within`]), so the points a segment is split
+/// at stay smooth however far it turns (#7069).
 pub fn twist(path: &PathData, b: Rect, angle: f64, max: usize) -> PathData {
     let ang = angle.clamp(-3600.0, 3600.0).to_radians();
     if ang == 0.0 {
@@ -343,7 +347,7 @@ pub fn twist(path: &PathData, b: Rect, angle: f64, max: usize) -> PathData {
         c + Vec2::new(d.x * co - d.y * s, d.x * s + d.y * co)
     };
     let piece = (r / 8.0).min(r / (1.0 + ang.abs() * 2.0));
-    map_nonlinear_within(path, piece, max, f)
+    map_nonlinear_tangents_within(path, piece, max, f)
 }
 
 const ZIGZAG_ARCLEN_ACCURACY: f64 = 1e-4;

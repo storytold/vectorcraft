@@ -497,6 +497,36 @@ pub fn map_nonlinear(path: &PathData, max_piece: f64, f: impl Fn(Point) -> Point
 /// where pieces of `max_piece` would make more, the pieces grow until they don't ([`fit_piece`]),
 /// a coarser approximation of the image curve. Geometry effects map within their anchor budget.
 pub fn map_nonlinear_within(path: &PathData, max_piece: f64, max: usize, f: impl Fn(Point) -> Point) -> PathData {
+    map_pieces_within(path, max_piece, max, false, f)
+}
+
+/// [`map_nonlinear_within`] whose handles follow the image curve's tangents: each handle is its
+/// direction mapped through the derivative of `f` where it starts, instead of its end mapped
+/// through `f`. The points a segment is split at stay smooth (their handles in line) however
+/// strongly `f` bends between them, and each piece is the image curve's cubic Hermite
+/// approximation, O(h⁴) instead of O(h²). For maps that turn the path a lot over a short length,
+/// such as Twist, where mapped handle ends make a corner at every split point (#7069).
+pub fn map_nonlinear_tangents_within(path: &PathData, max_piece: f64, max: usize, f: impl Fn(Point) -> Point) -> PathData {
+    map_pieces_within(path, max_piece, max, true, f)
+}
+
+/// Step, as a fraction of a handle, of the one-sided difference that maps a handle through the
+/// derivative of a map ([`map_nonlinear_tangents_within`]).
+const TANGENT_STEP: f64 = 1e-5;
+
+/// The handle from `at` (mapped to `fa`) to `h`, mapped through the derivative of `f` at `at`
+/// along the handle; `f(h)` where that is not finite or the handle has no length.
+fn tangent_handle(f: &impl Fn(Point) -> Point, at: Point, fa: Point, h: Point) -> Point {
+    let v = h - at;
+    if v.hypot2() == 0.0 {
+        return fa;
+    }
+    let q = fa + (f(at + v * TANGENT_STEP) - fa) / TANGENT_STEP;
+    if q.is_finite() { q } else { f(h) }
+}
+
+/// [`map_nonlinear_within`], with handles mapped through the derivative of `f` when `tangents`.
+fn map_pieces_within(path: &PathData, max_piece: f64, max: usize, tangents: bool, f: impl Fn(Point) -> Point) -> PathData {
     let mut max_piece = max_piece.max(1e-3);
     // Each segment adds one anchor per piece past its first.
     let room = max.saturating_sub(path.anchor_count());
@@ -505,6 +535,8 @@ pub fn map_nonlinear_within(path: &PathData, max_piece: f64, max: usize, f: impl
         let lens: Vec<f64> = path.subpaths.iter().flat_map(|sp| (0..sp.segment_count()).map(|i| poly_len(&seg_cubic(sp, i)))).collect();
         max_piece = fit_piece(&lens, max_piece, MAX_PIECES, room);
     }
+    // A handle of the anchor at `at` (mapped to `fa`) ending at `h`.
+    let handle = |at: Point, fa: Point, h: Point| if tangents { tangent_handle(&f, at, fa, h) } else { f(h) };
     let mut subs = Vec::with_capacity(path.subpaths.len());
     for sp in &path.subpaths {
         let n = sp.anchors.len();
@@ -516,20 +548,35 @@ pub fn map_nonlinear_within(path: &PathData, max_piece: f64, max: usize, f: impl
         let mut pending_in: Option<Point> = None;
         for i in 0..n {
             let a = &sp.anchors[i];
-            let h_in = pending_in.take().unwrap_or_else(|| f(a.h_in));
-            res.push(Anchor { p: f(a.p), h_in, h_out: f(a.h_out), kind: a.kind });
+            let p = f(a.p);
+            let h_in = pending_in.take().unwrap_or_else(|| handle(a.p, p, a.h_in));
+            res.push(Anchor { p, h_in, h_out: handle(a.p, p, a.h_out), kind: a.kind });
             if i < segs {
                 let c = seg_cubic(sp, i);
                 let k = pieces(poly_len(&c), max_piece, MAX_PIECES);
                 for j in 0..k {
                     let sub = c.subsegment((j as f64 / k as f64)..((j + 1) as f64 / k as f64));
-                    if let Some(last) = res.last_mut() {
-                        last.h_out = f(sub.p1);
+                    // With tangents, a split point's handle out was set with its handle in.
+                    if (j == 0 || !tangents)
+                        && let Some(last) = res.last_mut()
+                    {
+                        last.h_out = handle(sub.p0, last.p, sub.p1);
                     }
+                    let end = f(sub.p3);
                     if j + 1 < k {
-                        res.push(Anchor { p: f(sub.p3), h_in: f(sub.p2), h_out: f(sub.p3), kind: Default::default() });
+                        // A split point: its handles are in line before the map (equal pieces of
+                        // the parameter make them equal and opposite), so with tangents both come
+                        // from one central difference and stay in line after it.
+                        let (h_in, h_out) = if tangents {
+                            let w = sub.p3 - sub.p2;
+                            let d = (f(sub.p3 + w * TANGENT_STEP) - f(sub.p3 - w * TANGENT_STEP)) / (2.0 * TANGENT_STEP);
+                            if d.is_finite() { (end - d, end + d) } else { (f(sub.p2), f(sub.p3 + w)) }
+                        } else {
+                            (f(sub.p2), end)
+                        };
+                        res.push(Anchor { p: end, h_in, h_out, kind: Default::default() });
                     } else {
-                        pending_in = Some(f(sub.p2));
+                        pending_in = Some(handle(sub.p3, end, sub.p2));
                     }
                 }
             }
