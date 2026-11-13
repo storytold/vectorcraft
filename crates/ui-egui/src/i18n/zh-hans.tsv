@@ -2808,6 +2808,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Reset the rows to the artwork's colors	将各行重置为图稿的颜色
 	Color Theme Picker	色彩主题拾取器
 	Click or drag across the art to pick its colors; Shift adds more	单击或拖过图稿以拾取其颜色；按住 Shift 可添加更多
+	Prominent Colors	主要颜色
+	Save All Colors	存储所有颜色
+	Save Prominent Colors	存储主要颜色
 	Reset to Default	恢复默认
 	Reset to White, Black	重置为白、黑
 	Reset with Mesh	以网格重置
@@ -3444,6 +3447,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Rename Library Group	重命名库组
 	Delete Library Group	删除库组
 	Move Library Item to Group	将库项目移到组
+	Rename Library Item	重命名库项目
+	Add to Character Styles	添加到字符样式
 	Library	库
 	Rename Library	重命名库
 	Show Library	显示库
@@ -4195,6 +4200,7 @@ imageTrace	Outline	轮廓
 @msg	the layer to flatten into is hidden	要拼合到的图层已隐藏
 @msg	there are no objects to release	没有可释放的对象
 @msg	no library `{id}`	没有库 `{id}`
+@msg	the library has another item of that kind named `{name}`	库中已有另一个同类项目名为 `{name}`
 @msg	{path}: not a file	{path}：不是文件
 @msg	{path}: {e}	{path}：{e}
 @msg	can't write .{ext} images	无法写入 .{ext} 图像
@@ -6394,6 +6400,7 @@ axis	Y Axis	Y 轴
 @msg	message must be text	message 必须是文本
 @msg	allowContinue must be true or false	allowContinue 必须是 true 或 false
 @msg	Batch cannot play an action with a stop	批处理无法播放含有停止的动作
+@msg	Batch cannot play an action with a View menu step	批处理无法播放含有视图菜单步骤的动作
 	Insert Menu Item…	插入菜单项…
 	Insert Menu Item	插入菜单项
 	Insert Select Path	插入选择路径
@@ -7204,6 +7211,19 @@ breakText	Glyphs	字形
 	Show where this tool is	显示此工具的位置
 @msg	missing `tutorial` (see learn.list)	缺少 `tutorial` (请参阅 learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	未知教程 `{id}` (请参阅 learn.list)
+	View more	查看更多
+	Finish tutorial	完成教程
+	Next Up	下一个
+	You finished the last tutorial in this skill.	你已完成此技能的最后一个教程。
+	Back to skills	返回技能
+	Open Tutorial Sample	打开教程示例
+	Finish Tutorial	完成教程
+	Next Tutorial	下一个教程
+	Back to Skills	返回技能
+@msg	tutorial `{id}` has no practice sample	教程 `{id}` 没有练习示例
+@msg	open the practice sample of `{id}` first (see learn.openSample)	请先打开 `{id}` 的练习示例 (请参阅 learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	请先完成 `{id}` (请参阅 learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` 是其技能的最后一个教程
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	刷新延迟的效果

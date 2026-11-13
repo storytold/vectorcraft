@@ -149,6 +149,11 @@ pub(crate) fn unturn(mut path: PathData) -> PathData {
     path
 }
 
+/// A point of turned input, turned back.
+pub(crate) fn unturn_point(p: kurbo::Point) -> kurbo::Point {
+    UNTURN * p
+}
+
 #[cfg(test)]
 mod tests {
     use kurbo::{Join, Stroke, StrokeOpts};
@@ -249,6 +254,39 @@ mod tests {
         let short = outline(&zigzag(1, 40, 0.0, &mut rng, false));
         assert!(segments(&short) < MIN_SEGMENTS);
         assert_eq!(turns_during(|| drop(stroke_region(std::slice::from_ref(&short)))), 0);
+    }
+
+    #[test]
+    fn offset_path_sweeps_a_long_low_path_turned_with_the_result_of_the_path_on_end() {
+        let mut rng = Rng(17);
+        // Grown past the zigzag's bends, where the stroker leaves loops whose faces are dropped by
+        // the distance test; grown a little; and inset.
+        for (closed, delta) in [(false, 1.5), (true, 0.5), (true, -0.3)] {
+            let what = format!("closed {closed}, offset {delta}");
+            let low = zigzag(3, 300, 0.4, &mut rng, closed);
+            let tall = upright(&low);
+            let offset = |p: &PathData| crate::try_offset_path(p, delta, Join::Round, 4.0).unwrap();
+            let mut turned = PathData::default();
+            assert_eq!(turns_during(|| turned = offset(&low)), 1, "{what}: low");
+            let mut on_end = PathData::default();
+            assert_eq!(turns_during(|| on_end = offset(&tall)), 0, "{what}: tall");
+            assert!(!turned.is_empty(), "{what}: empty");
+            assert_same_region(&turned, &upright(&on_end), &what);
+        }
+        // A long plate with a row of round holes: growing it by 1 closes the narrow holes, which
+        // the distance test drops, and keeps the wide ones.
+        use kurbo::Shape;
+        let mut plate = kurbo::Rect::new(0.0, 0.0, 4000.0, 20.0).to_path(0.1);
+        for i in 0..200u32 {
+            let r = if i % 2 == 0 { 0.8 } else { 4.0 };
+            plate.extend(kurbo::Circle::new((10.0 + 20.0 * f64::from(i), 10.0), r).to_path(0.01).reverse_subpaths());
+        }
+        let plate = PathData::from_bezpath(&plate);
+        let grow = |p: &PathData| crate::try_offset_path(p, 1.0, Join::Round, 4.0).unwrap();
+        let mut grown = PathData::default();
+        assert_eq!(turns_during(|| grown = grow(&plate)), 1, "plate");
+        assert_eq!(grown.subpaths.len(), 1 + 100, "plate");
+        assert_same_region(&grown, &upright(&grow(&upright(&plate))), "plate");
     }
 
     #[test]

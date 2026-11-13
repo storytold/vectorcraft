@@ -27,6 +27,7 @@ mod longstroke;
 mod memory;
 mod movedstroke;
 mod objectfx;
+mod paintedbrush;
 mod placed_document;
 mod rasterize;
 mod setup;

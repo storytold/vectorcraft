@@ -290,6 +290,9 @@ pub struct Session {
     /// While the active tool's actions run: their commands aren't "a command from outside the
     /// tool" ([`Session::after_command`]).
     pub(crate) in_tool_actions: bool,
+    /// The warnings of the previews that settling an interaction applied, while a top-level command
+    /// or the tool's actions collect them ([`Session::collect_settled_warnings`]).
+    settled_warnings: Option<Vec<String>>,
     /// While [`Session::preview`] runs its command: its edits are the interaction's own.
     previewing: bool,
     /// The images Remove Background decoded during the interaction's preview steps, emptied when

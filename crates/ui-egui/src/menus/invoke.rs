@@ -178,10 +178,7 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     // Object → Align aligns to what the align buttons align to, unless the call names `to`. With
     // anchors selected (Direct Selection) it sends its params unchanged, and the points align to
     // their own bounds.
-    let follows_align_to = id == "object.align"
-        && p.as_object().is_some_and(|o| !o.contains_key("to"))
-        && app.session.active().is_some_and(|st| st.selection.anchors.is_empty());
-    let p = if follows_align_to { crate::panels::align::with_align_to(app, p) } else { p };
+    let p = if id == "object.align" { crate::panels::align::menu_align_params(app, p) } else { p };
     // Image Trace traces off the UI thread, with its progress (#3098).
     if matches!(id, "imageTrace.make" | "imageTrace.makeAndExpand") {
         if let Err(e) = crate::trace_runs::start(app, id, p, false) {

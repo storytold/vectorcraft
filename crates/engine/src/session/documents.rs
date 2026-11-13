@@ -117,6 +117,7 @@ impl Session {
             screens_hand_off: None,
             recovery: Default::default(),
             in_tool_actions: false,
+            settled_warnings: None,
             previewing: false,
             decoded_images: Default::default(),
             envelope_defaults: None,

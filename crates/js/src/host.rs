@@ -74,6 +74,21 @@ pub enum HostError {
 /// A function the host gives a script, with its arguments converted.
 pub type HostFunction = Rc<dyn Fn(Vec<Data>) -> Result<Data, HostError>>;
 
+/// The place in the script's code that reads a [`HostItem::SiteGetter`] property: the source tag
+/// of that code, as [`crate::Realm::error_tag`] gives one, and the line and column there, counted
+/// from 1. A function an earlier script defined keeps its script's tag; code that `eval` or
+/// `Function` compiled has [`crate::UNKNOWN_SOURCE`]. A read with none of the script's code
+/// running has [`crate::UNKNOWN_SOURCE`] and line and column 0.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CallSite {
+    pub source: u32,
+    pub line: u32,
+    pub column: u32,
+}
+
+/// A getter the host gives a script that is told where the code reading it is.
+pub type SiteFunction = Rc<dyn Fn(CallSite) -> Result<Data, HostError>>;
+
 /// How one argument of a [`HostItem::Converted`] function is read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Arg {
@@ -96,6 +111,8 @@ pub(crate) enum ArgRead {
     Text,
     /// One by one as the list says; those past its end are not read.
     Each(Rc<[Arg]>),
+    /// None: the function is given the [`CallSite`] of the code that calls it, as three numbers.
+    Site,
 }
 
 /// A member of an object the host adds to the global environment.
@@ -114,6 +131,9 @@ pub enum HostItem {
     /// A property whose value the function gives each time it is read, frozen as
     /// [`HostItem::Value`] gives its value.
     FrozenGetter(HostFunction),
+    /// A property whose value the function gives each time it is read, given the [`CallSite`] of
+    /// the code that reads it.
+    SiteGetter(SiteFunction),
     /// A property whose value `get` gives each time it is read, and that `set` is given each value
     /// assigned to it, as its one argument; an error from `set` is thrown to the script.
     Property {
@@ -357,7 +377,10 @@ impl Interp {
     /// Calls host function `f`: reads its arguments as `how` says, runs it, and gives its result to
     /// the script.
     pub(crate) fn call_data(&mut self, f: &crate::heap::DataFn, name: &Rc<str>, args: &[Value], how: &ArgRead) -> JsResult<Value> {
-        let data = self.read_args(name, args, how)?;
+        let data = match how {
+            ArgRead::Site => site_data(self.call_site()),
+            _ => self.read_args(name, args, how)?,
+        };
         // Only the script's own code, in a run that can pause, can wait for a result.
         let can_wait = self.in_slice && self.reentry == 0;
         self.can_wait.set(can_wait);
@@ -372,6 +395,18 @@ impl Interp {
             }
             Err(HostError::Wait) => Err(Abrupt::Internal(format!("{name} waited for its result where the run cannot pause"))),
             Err(e) => Err(self.host_error(e)?),
+        }
+    }
+
+    /// Where the innermost frame of the script's code is: its source's tag and the line and column
+    /// of the instruction it is running.
+    fn call_site(&self) -> CallSite {
+        match self.script_frames().last() {
+            Some((code, pc, _)) => {
+                let (line, column) = code.line_column(pc.saturating_sub(1));
+                CallSite { source: code.source.tag, line, column }
+            }
+            None => CallSite { source: crate::UNKNOWN_SOURCE, line: 0, column: 0 },
         }
     }
 
@@ -447,7 +482,7 @@ impl Interp {
         for (i, a) in args.iter().enumerate() {
             reading.path.push(Step::Index(u32::try_from(i).unwrap_or(u32::MAX)));
             let d = match how {
-                ArgRead::Data | ArgRead::Frozen => self.read_data(a, &mut reading),
+                ArgRead::Data | ArgRead::Frozen | ArgRead::Site => self.read_data(a, &mut reading),
                 ArgRead::Text => self.read_text(a, &mut reading),
                 ArgRead::Each(list) => match list.get(i) {
                     Some(Arg::TextOrUndefined) if matches!(a, Value::Undefined) => Ok(Data::Undefined),
@@ -536,6 +571,10 @@ impl Interp {
             HostItem::Value(d) => Prop::Data { value: self.write_data(d, 0, true)?, flags: ENUMERABLE },
             HostItem::Getter(f) => Prop::Accessor { get: Some(self.host_function(f, &full, ArgRead::Data)), set: None, flags: ENUMERABLE },
             HostItem::FrozenGetter(f) => Prop::Accessor { get: Some(self.host_function(f, &full, ArgRead::Frozen)), set: None, flags: ENUMERABLE },
+            HostItem::SiteGetter(f) => {
+                let get: HostFunction = Rc::new(move |data| f(read_site(&data)));
+                Prop::Accessor { get: Some(self.host_function(get, &full, ArgRead::Site)), set: None, flags: ENUMERABLE }
+            }
             HostItem::Property { get, set } => Prop::Accessor {
                 get: Some(self.host_function(get, &full, ArgRead::Data)),
                 set: Some(self.host_function(set, &full, ArgRead::Data)),
@@ -581,4 +620,19 @@ impl Interp {
 enum Slot {
     Index(usize),
     Name(String),
+}
+
+/// `site` as the three numbers [`ArgRead::Site`] gives its function.
+fn site_data(site: CallSite) -> Vec<Data> {
+    vec![Data::Number(f64::from(site.source)), Data::Number(f64::from(site.line)), Data::Number(f64::from(site.column))]
+}
+
+/// The [`CallSite`] that [`site_data`] gave as `data`.
+fn read_site(data: &[Data]) -> CallSite {
+    let at = |i: usize, missing: u32| match data.get(i) {
+        // Each number is a `u32` that `site_data` gave, so the conversion is exact.
+        Some(Data::Number(n)) => *n as u32,
+        _ => missing,
+    };
+    CallSite { source: at(0, crate::UNKNOWN_SOURCE), line: at(1, 0), column: at(2, 0) }
 }
