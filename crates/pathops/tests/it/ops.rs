@@ -462,6 +462,32 @@ fn simplify_turns_a_curve_into_a_line_only_where_the_joins_stay_smooth() {
     assert!(!has_curves(&s), "{s:?}");
 }
 
+/// A smoothed loop with no corner is fitted across its start, and the join there also turns by at
+/// most 0.5°. Each loop is a flat side that bends by 0.6° at the loop's start, closed by an arc of
+/// `n` lines `height` tall, with `inner` anchors along each half of the side.
+#[test]
+fn simplify_keeps_the_join_at_the_start_of_a_smoothed_loop_smooth() {
+    for (half, height, n, inner, tolerance, smooth) in
+        [(40.0, 20.0, 8, 3, 2.5, 2.0), (80.0, 60.0, 8, 3, 5.0, 0.5), (160.0, 200.0, 24, 3, 10.0, 2.0), (160.0, 20.0, 24, 8, 10.0, 5.0)]
+    {
+        let rise = half * 0.3f64.to_radians().tan();
+        let along = |i: i32| Point::new(half * f64::from(i) / f64::from(inner), -rise * f64::from(i.abs()) / f64::from(inner));
+        let mut pts: Vec<Point> = (0..=inner).map(along).collect();
+        pts.extend((1..n).map(|i| {
+            let a = f64::from(i) / f64::from(n) * PI;
+            Point::new(half * a.cos(), -rise - height * a.sin())
+        }));
+        pts.extend((-inner..0).map(along));
+        let path = PathData::single(SubPath::polyline(&pts, true));
+        let s = simplify_with(&path, &SimplifyOptions { tolerance, corner_angle_deg: 179.0, smooth, ..Default::default() });
+        let sp = &s.subpaths[0];
+        assert!(sp.closed && sp.anchors.len() < pts.len(), "{tolerance} pt: {s:?}");
+        assert!(sp.segment_is_line(0), "{tolerance} pt: the first segment is a curve: {s:?}");
+        let turn = largest_join_turn(sp);
+        assert!(turn <= 0.5 + 1e-9, "{tolerance} pt: an anchor turns {turn}°: {s:?}");
+    }
+}
+
 #[test]
 fn simplify_straight_lines_option() {
     let c = dense_circle(50.0, 200);

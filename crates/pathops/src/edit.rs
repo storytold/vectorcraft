@@ -329,12 +329,18 @@ fn refit_part(part: &[(&Seg, usize)], opts: &SimplifyOptions, tol: f64, ends: Op
     // The fit may be `tol * 0.98` from the lines between the samples, those lines may be
     // `SAMPLE_GAP` of `tol` from the path, and the curve the test below turns into a line moves by up
     // to 1.5% of `tol`: 3/4 of how far its handles may be from the line. The fitted curves join
-    // smoothly, so a curve becomes a line only when the line keeps both of its joins smooth.
+    // smoothly, so a curve becomes a line only when the line keeps both of its joins smooth. The last
+    // curve of a loop fitted across its start leaves along the loop's first segment.
     let (t0, t1) = ends.map_or((start_tangent(&first.c), end_tangent(&last.c)), |d| (d, d));
     let fitted = fit_cubics(&pts, t0, t1, tol * 0.98);
+    let from = result.len();
     let mut arrive = t0;
     for (k, &c) in fitted.iter().enumerate() {
-        let leave = fitted.get(k + 1).map_or(t1, start_tangent);
+        let leave = match fitted.get(k + 1) {
+            Some(next) => start_tangent(next),
+            None if ends.is_some() => result.get(from).map_or(t1, |s| start_tangent(&s.c)),
+            None => t1,
+        };
         let line = is_straight(&c, tol * 0.02) && line_keeps_joins(&c, arrive, leave);
         arrive = if line { unit(c.p3 - c.p0).unwrap_or(arrive) } else { end_tangent(&c) };
         result.push(if line { Seg::line(c.p0, c.p3) } else { Seg { c, line } });
