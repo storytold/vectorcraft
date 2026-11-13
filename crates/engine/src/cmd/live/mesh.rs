@@ -122,9 +122,14 @@ fn with_mesh<T>(s: &mut Session, p: &Value, cmd: &str, label: &str, envelopes: b
 /// Run `f` on the gradient mesh `id` of `d`; with `envelopes`, a mesh envelope's grid too (its
 /// points and handles are written back: editing fills in the handles).
 fn edit_grid<T>(d: &mut Document, id: NodeId, cmd: &str, envelopes: bool, f: impl FnOnce(&mut GradientMesh) -> Result<T>) -> Result<T> {
-    match d.node_mut(id).map(|n| &mut n.kind) {
-        Some(NodeKind::Mesh(m)) => f(m),
-        Some(NodeKind::Envelope { kind, .. }) if envelopes && matches!(**kind, EnvelopeKind::Mesh { .. }) => {
+    edit_kind(&mut d.node_mut(id).ok_or(EngineError::NoNode(id))?.kind, cmd, envelopes, f)
+}
+
+/// [`edit_grid`] on a node's kind.
+fn edit_kind<T>(k: &mut NodeKind, cmd: &str, envelopes: bool, f: impl FnOnce(&mut GradientMesh) -> Result<T>) -> Result<T> {
+    match k {
+        NodeKind::Mesh(m) => f(m),
+        NodeKind::Envelope { kind, .. } if envelopes && matches!(**kind, EnvelopeKind::Mesh { .. }) => {
             let EnvelopeKind::Mesh { rows, cols, points, handles } = &mut **kind else {
                 return Err(bad(cmd, "not a gradient mesh or mesh envelope"));
             };
@@ -135,8 +140,7 @@ fn edit_grid<T>(d: &mut Document, id: NodeId, cmd: &str, envelopes: bool, f: imp
             *handles = m.points.iter().map(|q| q.handles).collect();
             Ok(r)
         }
-        Some(_) => Err(bad(cmd, if envelopes { "not a gradient mesh or mesh envelope" } else { "not a gradient mesh" })),
-        None => Err(EngineError::NoNode(id)),
+        _ => Err(bad(cmd, if envelopes { "not a gradient mesh or mesh envelope" } else { "not a gradient mesh" })),
     }
 }
 
@@ -281,11 +285,37 @@ pub(super) fn mesh_add_line(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["tolerance"], C)?;
     let tol = f64_or(p, "tolerance", 0.0).max(0.0);
     let color = color_param(p, "color", C)?.map(|c| crate::cmd::paint::new_color(s, p, c));
-    let index = with_mesh(s, p, C, "Add Mesh Line", true, |m| {
+    let add = move |m: &mut GradientMesh| {
         let i = m.add_lines_at(q, tol).ok_or_else(|| bad(C, "point is outside the mesh"))?;
         if let Some(c) = color {
             m.points[i].color = c;
         }
+        Ok(i)
+    };
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
+    if s.script_running() {
+        return Err(EngineError::Busy);
+    }
+    // The lines are added to a copy of the object. A point that is already a mesh point adds none:
+    // when its color stays too, nothing changes and no undo step is recorded. The grid is compared,
+    // not the node: a mesh envelope stored without handles takes them in any edit.
+    let orig = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?.kind.clone();
+    let mut kind = orig.clone();
+    let (i, same) = edit_kind(&mut kind, C, true, |m| {
+        let before = m.clone();
+        let i = add(m)?;
+        Ok((i, *m == before))
+    })?;
+    if same {
+        return Ok(json!({ "index": i }));
+    }
+    let index = s.edit("Add Mesh Line", move |d, _| {
+        let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
+        // Settling typed values before the edit may have changed the object: add the lines again.
+        if n.kind != orig {
+            return edit_kind(&mut n.kind, C, true, add);
+        }
+        n.kind = kind;
         Ok(i)
     })?;
     Ok(json!({ "index": index }))

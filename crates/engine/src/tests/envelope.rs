@@ -123,6 +123,25 @@ fn reset_with_warp_and_mesh_switch_the_kind_and_keep_the_content() {
     assert!(s.execute("object.envelope.resetWithMesh", &json!({})).is_err());
 }
 
+/// `object.mesh.addLine` at a point a mesh envelope already has (one stored without handles) adds
+/// no line and records no undo step; a point between its lines adds them as one step.
+#[test]
+fn mesh_envelope_add_line_at_a_mesh_point_records_no_undo_step() {
+    let mut s = session();
+    let (_, e) = enveloped(&mut s, "object.envelope.makeWithMesh", json!({"rows": 2, "cols": 2}));
+    let before = kind(&s, e);
+    assert!(matches!(&before, EnvelopeKind::Mesh { handles, .. } if handles.is_empty()), "{before:?}");
+    let undo_len = |s: &Session| s.doc().unwrap().history.undo.len();
+    let n = undo_len(&s);
+    for (x, y) in [(100.0, 100.0), (300.0, 200.0), (200.0, 150.0), (300.0, 150.0)] {
+        s.execute("object.mesh.addLine", &json!({"id": e.0, "x": x, "y": y})).unwrap();
+        assert_eq!((kind(&s, e), undo_len(&s)), (before.clone(), n), "({x}, {y}): nothing changed");
+    }
+    s.execute("object.mesh.addLine", &json!({"id": e.0, "x": 150, "y": 125})).unwrap();
+    assert!(matches!(kind(&s, e), EnvelopeKind::Mesh { rows: 3, cols: 3, .. }), "{:?}", kind(&s, e));
+    assert_eq!(undo_len(&s), n + 1);
+}
+
 /// A new warp envelope bends with its style's Bézier net (`version` [`live::WARP_NET`]) and keeps
 /// it through Reset with Warp. One saved before the version existed keeps the earlier map when its
 /// warp or its options change.
