@@ -231,6 +231,9 @@ pub(super) fn option_fields(ui: &mut egui::Ui, d: &mut Dialog, screens: bool) {
     check(ui, d, "embedFonts", tl!("Embed Fonts (Glyphs Used)"), !d.bool("outlineText") && !tiny);
     check(ui, d, "fewerTspans", tl!("Fewer <tspan> Elements"), !d.bool("outlineText"));
     check(ui, d, "metadata", tl!("Include Metadata"), true);
+    if !screens {
+        check(ui, d, "variableData", tl!("Include Variable Data"), true);
+    }
 }
 
 /// Use Artboards: all of them or a range; off = the bounds of all art.
@@ -445,6 +448,24 @@ mod tests {
         assert!(app.ui.dialog.as_ref().unwrap().fields.get("artboard").is_none());
         super::super::confirm(&mut app).unwrap();
         assert_eq!((written.borrow().len(), written.borrow()[1].0.as_str()), (2, "/tmp/doc.svg"));
+    }
+
+    /// Include Variable Data starts off, draws in the dialog, and writes the text variables and
+    /// data sets into the saved SVG when it is on.
+    #[test]
+    fn include_variable_data_reaches_the_file() {
+        let (mut app, written) = app("/tmp/vars.svg");
+        let id = app.run("text.create", json!({"x": 10, "y": 60, "text": "Alice"})).unwrap()["id"].clone();
+        app.run("variable.define", json!({"name": "Name", "kind": "text"})).unwrap();
+        app.run("variable.bind", json!({"variable": "Name", "ids": [id]})).unwrap();
+        app.run("dataset.new", json!({"name": "Row", "values": {"Name": "Bob"}})).unwrap();
+        app.run("file.saveAs", Value::Null).unwrap();
+        assert!(!app.ui.dialog.as_ref().unwrap().bool("variableData"), "off at first");
+        frame(&mut app);
+        app.ui.dialog.as_mut().unwrap().fields.insert("variableData".into(), json!(true));
+        super::super::confirm(&mut app).unwrap();
+        let svg = text(&written, 0);
+        assert!(svg.contains("<variable varName=\"Name\"") && svg.contains("dataSetName=\"Row\"") && svg.contains("<p>Bob</p>"), "{svg}");
     }
 
     #[test]

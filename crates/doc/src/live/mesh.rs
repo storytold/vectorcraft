@@ -530,6 +530,10 @@ pub(super) const MAX_BORDER_LINES: usize = 256;
 /// The most rounds of new lines a mesh made from a path takes to keep its border on the outline.
 const MAX_BORDER_ROUNDS: usize = 64;
 
+/// A point this close (in points) to a mesh's outline is on it, for [`GradientMesh::locate_within`]
+/// with any tolerance.
+const ON_OUTLINE: f64 = 1e-6;
+
 /// An anchor whose directions in and out differ by more than this (radians) is a corner: a border
 /// edge that can't follow the outline takes a mesh line through its sharpest corner first.
 const SHARP_TURN: f64 = 0.01;
@@ -1436,17 +1440,23 @@ impl GradientMesh {
     }
 
     /// As [`Self::locate`], and for a point outside the mesh within `tol` of its outline, the
-    /// patch and local (u, v) of the nearest point of the mesh's edge.
+    /// patch and local (u, v) of the nearest point of the mesh's edge. A point on the outline
+    /// (within [`ON_OUTLINE`]) locates on its edge on every side, with any `tol`.
     pub fn locate_within(&self, p: Point, tol: f64) -> Option<(usize, usize, f64, f64)> {
-        if !self.is_valid() {
+        if !self.is_valid() || !p.is_finite() {
             return None;
         }
-        let bp = self.outline().to_bezpath();
-        if bp.winding(p) == 0 {
+        // A point on the outline takes the nearest point of the edge on every side: the nonzero
+        // winding number counts a point on some edges as outside (a rectangle's bottom and right
+        // edges) and on the others as inside.
+        if let Some((_, r, c, u, v)) = self.nearest_edge(p, ON_OUTLINE).filter(|e| e.0 <= ON_OUTLINE * ON_OUTLINE) {
+            return Some((r, c, u, v));
+        }
+        if self.outline().to_bezpath().winding(p) == 0 {
             if tol.is_nan() || tol <= 0.0 {
                 return None;
             }
-            return self.nearest_edge(p).filter(|e| e.0 <= tol * tol).map(|(_, r, c, u, v)| (r, c, u, v));
+            return self.nearest_edge(p, tol).filter(|e| e.0 <= tol * tol).map(|(_, r, c, u, v)| (r, c, u, v));
         }
         const N: usize = 16;
         let mut best = (f64::INFINITY, 0, 0, 0.0, 0.0);
@@ -1484,12 +1494,20 @@ impl GradientMesh {
     }
 
     /// The point of the mesh's outer edge nearest `p`: its squared distance from `p`, and its
-    /// boundary patch and local (u, v).
-    fn nearest_edge(&self, p: Point) -> Option<(f64, usize, usize, f64, f64)> {
+    /// boundary patch and local (u, v). Edges whose control points all lie farther than `within`
+    /// from `p` are skipped, so `None` means no edge is within `within`.
+    fn nearest_edge(&self, p: Point, within: f64) -> Option<(f64, usize, usize, f64, f64)> {
         use vectorcraft_geom::kurbo::ParamCurveNearest;
         let (rows, cols) = (self.rows as usize, self.cols as usize);
         let mut best: Option<(f64, usize, usize, f64, f64)> = None;
         let mut take = |e: CubicBez, at: (usize, usize, Option<f64>, Option<f64>)| {
+            // The edge lies inside its control points' box, so a box farther than `within` holds
+            // no point of the edge within it.
+            let b = Rect::from_points(e.p0, e.p1).union_pt(e.p2).union_pt(e.p3);
+            let (dx, dy) = ((b.x0 - p.x).max(p.x - b.x1).max(0.0), (b.y0 - p.y).max(p.y - b.y1).max(0.0));
+            if dx * dx + dy * dy > within * within {
+                return;
+            }
             let n = e.nearest(p, 1e-9);
             if best.is_none_or(|b| n.distance_sq < b.0) {
                 let (r, c, u, v) = at;

@@ -128,6 +128,41 @@ pub fn variable_font() -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family of [`unlisted_variable_font`].
+pub const UNLISTED_VARIABLE_FAMILY: &str = "Unlisted Varitest Sans";
+
+/// A variable face with no GSUB: `a.a` is an unencoded alternate named for `a`, but the Glyphs
+/// panel has no listed alternates. The weight axis comes from [`variable_font`].
+pub fn unlisted_variable_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+
+    let bytes = variable_font()?;
+    let font = skrifa::FontRef::new(&bytes).ok()?;
+    let mappings = [' ', 'a', 'l']
+        .into_iter()
+        .map(|c| Some((c, write_fonts::types::GlyphId::new(font.charmap().map(c)?.to_u32()))))
+        .collect::<Option<Vec<_>>>()?;
+    let cmap = Cmap::from_mappings(mappings).ok()?;
+    let name = name_table(&[
+        (1, UNLISTED_VARIABLE_FAMILY),
+        (2, "Regular"),
+        (4, "Unlisted Varitest Sans Regular"),
+        (5, "Version 1.000"),
+        (6, "UnlistedVaritestSans-Regular"),
+        (256, "Weight"),
+    ])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    builder.add_table(&cmap).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if tag != Tag::new(b"GSUB") && !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`two_axis_font`].
 pub const TWO_AXIS_FAMILY: &str = "Biaxtest Sans";
 
@@ -418,7 +453,7 @@ pub fn vertical_punctuation_font(alternates: bool) -> Option<Vec<u8>> {
 pub const FULL_WIDTH_FAMILY: &str = "Fullwidthtest Sans";
 
 /// The ideographs and Japanese punctuation [`full_width_font`] sets one em wide.
-pub const FULL_WIDTH_CHARS: &str = "一二三四五六「」、。";
+pub const FULL_WIDTH_CHARS: &str = "一二三四五六「」、。・";
 
 /// A test-only cmap over bundled Source Sans 3: [`FULL_WIDTH_CHARS`] use the one-em-wide glyph of
 /// U+2318, so Japanese composition is tested without OS fonts; Latin letters and the space keep
@@ -782,6 +817,211 @@ pub fn alternates_font(aalt: bool) -> Option<Vec<u8>> {
     let indices = (0..records.len() as u16).collect();
     let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), Script::new(Some(LangSys::new(indices)), vec![]))]);
     builder.add_table(&Gsub::new(scripts, FeatureList::new(records), lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family of [`capped_candidates_font`].
+pub const CAPPED_CANDIDATES_FAMILY: &str = "Captest Sans";
+
+/// The bundled Source Sans 3 Regular, its `cmap` kept, with a `GSUB` table for `a` of an `aalt`
+/// alternate substitution that lists `b` 512 times (the longest set read: 512 values to try) and a
+/// `salt` single substitution that gives `c`. Family [`CAPPED_CANDIDATES_FAMILY`]. `None` when it
+/// can't be built.
+pub fn capped_candidates_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::gsub::{
+        AlternateSet, AlternateSubstFormat1, Gsub, SingleSubst, SingleSubstFormat2, SubstitutionLookup, SubstitutionLookupList,
+    };
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let name =
+        name_table(&[(1, CAPPED_CANDIDATES_FAMILY), (2, "Regular"), (4, "Captest Sans Regular"), (5, "Version 1.000"), (6, "CaptestSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    let gid = |c| Some(GlyphId16::new(u16::try_from(charmap.map(c)?.to_u32()).ok()?));
+    let a = gid('a')?;
+    let cover = || CoverageFormat1::new(vec![a]);
+    let alternates = AlternateSubstFormat1::new(cover().into(), vec![AlternateSet::new(vec![gid('b')?; 512])]);
+    let salt = SingleSubst::from(SingleSubstFormat2::new(cover().into(), vec![gid('c')?]));
+    let lookups = SubstitutionLookupList::new(vec![
+        SubstitutionLookup::Alternate(Lookup::new(Default::default(), vec![alternates])),
+        SubstitutionLookup::Single(Lookup::new(Default::default(), vec![salt])),
+    ]);
+    let records =
+        vec![FeatureRecord::new(Tag::new(b"aalt"), Feature::new(None, vec![0])), FeatureRecord::new(Tag::new(b"salt"), Feature::new(None, vec![1]))];
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), Script::new(Some(LangSys::new(vec![0, 1])), vec![]))]);
+    builder.add_table(&Gsub::new(scripts, FeatureList::new(records), lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family of [`joining_alternates_font`].
+pub const JOINING_ALTERNATES_FAMILY: &str = "Jointest Sans";
+
+/// Beh, teh, noon and alef: the letters [`joining_alternates_font`] maps.
+pub const JOINING_LETTERS: [char; 4] = ['\u{0628}', '\u{062A}', '\u{0646}', '\u{0627}'];
+
+/// A test-only Arabic font over the bundled Source Sans 3, whose glyphs stand for the positional
+/// forms of beh, teh, noon and alef ([`JOINING_LETTERS`]), each a Latin letter's outline: isolated
+/// b t n I, initial B T N, medial v u m, final V U M A (alef joins to the right only). Its `arab`
+/// `GSUB` has `init`, `medi` and `fina` single substitutions from the isolated glyphs, `salt`
+/// alternate substitutions of the medial teh u (w, x, y: three alternates), of the final teh U
+/// (W, X), of the isolated teh t (E) and of the medial beh v (z), and `ss01` single substitutions
+/// u to w, U to W, t to E and v to z. A set differs by position, as in a font that draws each
+/// letter's alternates for the position they join in. `cv01` gives the medial noon m the glyph d,
+/// an alternate that has no style tag. Family [`JOINING_ALTERNATES_FAMILY`]. `None` when it can't
+/// be built.
+pub fn joining_alternates_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+    use write_fonts::tables::gsub::{
+        AlternateSet, AlternateSubstFormat1, Gsub, SingleSubst, SingleSubstFormat2, SubstitutionLookup, SubstitutionLookupList,
+    };
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    let font = skrifa::FontRef::new(SOURCE_SANS).ok()?;
+    let charmap = font.charmap();
+    let gid = |c: char| Some(GlyphId16::new(u16::try_from(charmap.map(c)?.to_u32()).ok()?));
+    let family = JOINING_ALTERNATES_FAMILY;
+    let full = format!("{family} Regular");
+    let postscript = format!("{}-Regular", family.replace(' ', ""));
+    let name = name_table(&[(1, family), (2, "Regular"), (4, &full), (5, "Version 1.000"), (6, &postscript)])?;
+    let mapping = [(JOINING_LETTERS[0], 'b'), (JOINING_LETTERS[1], 't'), (JOINING_LETTERS[2], 'n'), (JOINING_LETTERS[3], 'I'), (' ', ' ')];
+    let mappings = mapping.into_iter().map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
+    let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&cmap).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    // A single substitution by (glyph, replacement) pairs, sorted by glyph id as coverage needs.
+    let single = |pairs: &[(char, char)]| {
+        let mut ids = pairs.iter().map(|(from, to)| Some((gid(*from)?, gid(*to)?))).collect::<Option<Vec<_>>>()?;
+        ids.sort_by_key(|p| p.0.to_u16());
+        let from = ids.iter().map(|p| p.0).collect();
+        let to = ids.iter().map(|p| p.1).collect();
+        Some(SubstitutionLookup::Single(Lookup::new(
+            Default::default(),
+            vec![SingleSubst::from(SingleSubstFormat2::new(CoverageFormat1::new(from).into(), to))],
+        )))
+    };
+    let alternates = |sets: &[(char, &[char])]| {
+        let mut ids = sets
+            .iter()
+            .map(|(from, set)| Some((gid(*from)?, set.iter().map(|c| gid(*c)).collect::<Option<Vec<_>>>()?)))
+            .collect::<Option<Vec<_>>>()?;
+        ids.sort_by_key(|p| p.0.to_u16());
+        let from = ids.iter().map(|p| p.0).collect();
+        let sets = ids.into_iter().map(|p| AlternateSet::new(p.1)).collect();
+        Some(SubstitutionLookup::Alternate(Lookup::new(
+            Default::default(),
+            vec![AlternateSubstFormat1::new(CoverageFormat1::new(from).into(), sets)],
+        )))
+    };
+    // Lookups: 0 init, 1 medi, 2 fina, 3 salt, 4 ss01, 5 cv01.
+    let lookups = SubstitutionLookupList::new(vec![
+        single(&[('b', 'B'), ('t', 'T'), ('n', 'N')])?,
+        single(&[('b', 'v'), ('t', 'u'), ('n', 'm')])?,
+        single(&[('b', 'V'), ('t', 'U'), ('n', 'M'), ('I', 'A')])?,
+        alternates(&[('u', &['w', 'x', 'y']), ('U', &['W', 'X']), ('t', &['E']), ('v', &['z'])])?,
+        single(&[('u', 'w'), ('U', 'W'), ('t', 'E'), ('v', 'z')])?,
+        single(&[('m', 'd')])?,
+    ]);
+    // Features sorted by tag, as OpenType requires: cv01, fina, init, medi, salt, ss01.
+    let records: Vec<FeatureRecord> = [(b"cv01", 5), (b"fina", 2), (b"init", 0), (b"medi", 1), (b"salt", 3), (b"ss01", 4)]
+        .into_iter()
+        .map(|(tag, lookup)| FeatureRecord::new(Tag::new(tag), Feature::new(None, vec![lookup])))
+        .collect();
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"arab"), Script::new(Some(LangSys::new(vec![0, 1, 2, 3, 4, 5])), vec![]))]);
+    builder.add_table(&Gsub::new(scripts, FeatureList::new(records), lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family of [`aliased_joining_font`].
+pub const ALIASED_JOINING_FAMILY: &str = "Alias Jointest Sans";
+
+/// [`joining_alternates_font`] with Latin `B` and the Arabic initial beh presentation form
+/// U+FE91 both mapped to beh's initial glyph. Only the presentation form should insert beh.
+pub fn aliased_joining_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+
+    let bytes = joining_alternates_font()?;
+    let font = skrifa::FontRef::new(&bytes).ok()?;
+    let source = skrifa::FontRef::new(SOURCE_SANS).ok()?;
+    let initial = write_fonts::types::GlyphId::new(source.charmap().map('B')?.to_u32());
+    let mut mappings =
+        font.charmap().mappings().filter_map(|(c, g)| Some((char::from_u32(c)?, write_fonts::types::GlyphId::new(g.to_u32())))).collect::<Vec<_>>();
+    mappings.extend([('B', initial), ('\u{FE91}', initial)]);
+    let cmap = Cmap::from_mappings(mappings).ok()?;
+    let name = name_table(&[
+        (1, ALIASED_JOINING_FAMILY),
+        (2, "Regular"),
+        (4, "Alias Jointest Sans Regular"),
+        (5, "Version 1.000"),
+        (6, "AliasJointestSans-Regular"),
+    ])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    builder.add_table(&cmap).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family and private-use character of [`contextual_fallback_font`].
+pub const CONTEXTUAL_FALLBACK_FAMILY: &str = "Contextual Fallbacktest Sans";
+pub const CONTEXTUAL_FALLBACK_CHAR: char = '\u{F6084}';
+
+/// A fallback fixture with coverage no bundled face shares: `ccmp` draws its private-use
+/// character (n) as m, whose `cv01` alternate d has no applicable character-style feature.
+pub fn contextual_fallback_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::gsub::{Gsub, SingleSubst, SingleSubstFormat2, SubstitutionLookup, SubstitutionLookupList};
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    let base = remapped_source_sans(
+        CONTEXTUAL_FALLBACK_FAMILY,
+        "ContextualFallbacktestSans-Regular",
+        &[(CONTEXTUAL_FALLBACK_CHAR, 'n'), ('a', 'a'), (' ', ' ')],
+    )?;
+    let font = skrifa::FontRef::new(&base).ok()?;
+    let [n, m, d] = source_sans_gids(['n', 'm', 'd'])?;
+    let single = |from, to| {
+        SubstitutionLookup::Single(Lookup::new(
+            Default::default(),
+            vec![SingleSubst::from(SingleSubstFormat2::new(CoverageFormat1::new(vec![GlyphId16::new(from)]).into(), vec![GlyphId16::new(to)]))],
+        ))
+    };
+    let lookups = SubstitutionLookupList::new(vec![single(n, m), single(m, d)]);
+    let features = FeatureList::new(vec![
+        FeatureRecord::new(Tag::new(b"ccmp"), Feature::new(None, vec![0])),
+        FeatureRecord::new(Tag::new(b"cv01"), Feature::new(None, vec![1])),
+    ]);
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), Script::new(Some(LangSys::new(vec![0, 1])), vec![]))]);
+    let mut builder = FontBuilder::new();
+    builder.add_table(&Gsub::new(scripts, features, lookups)).ok()?;
     for r in font.table_directory.table_records() {
         let tag = Tag::new(&r.tag().to_be_bytes());
         if !builder.contains(tag) {
@@ -1343,6 +1583,30 @@ pub fn twin_font(newer: bool) -> Option<Vec<u8>> {
     let font = skrifa::FontRef::new(if newer { NEWER } else { OLDER }).ok()?;
     let version = TWIN_VERSIONS[usize::from(newer)];
     let name = name_table(&[(1, TWIN_FAMILY), (2, "Regular"), (4, "Twintest Sans Regular"), (5, version), (6, "TwintestSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The names of a [`named_copy`]: family, style, version string and PostScript name.
+pub type CopyNames<'a> = (&'a str, &'a str, &'a str, &'a str);
+
+/// The bundled Source Sans 3 Regular or, `inter`, the bundled Inter Regular (glyphs of other
+/// widths) under `names`, as an installed copy of a font: a font library can keep copies whose
+/// names differ only in case or punctuation, or whose family and style are one but whose PostScript
+/// names or versions differ. `None` when it can't be built.
+pub fn named_copy(inter: bool, (family, style, version, postscript): CopyNames<'_>) -> Option<Vec<u8>> {
+    const SOURCE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    const INTER: &[u8] = include_bytes!("../../../assets/fonts/Inter-Regular.ttf");
+    let font = skrifa::FontRef::new(if inter { INTER } else { SOURCE }).ok()?;
+    let full = format!("{family} {style}");
+    let name = name_table(&[(1, family), (2, style), (4, &full), (5, version), (6, postscript)])?;
     let mut builder = FontBuilder::new();
     builder.add_raw(Tag::new(b"name"), name);
     for r in font.table_directory.table_records() {

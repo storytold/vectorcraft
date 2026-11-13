@@ -463,7 +463,7 @@ fn pdf_a_keeps_its_own_output_intent() {
     let r = pdf(&d, json!({"standard": "pdfA2b", "output": {"outputIntent": GENERIC_CMYK, "trapped": true}}));
     let text = String::from_utf8_lossy(&r.bytes);
     assert!(text.contains("GTS_PDFA1") && !text.contains("GTS_PDFX") && !text.contains("/Trapped"));
-    assert!(r.warnings.iter().any(|w| w.contains("PDF/A")), "{:?}", r.warnings);
+    assert!(r.setting_notes.iter().any(|w| w.contains("PDF/A")), "{:?}", r.setting_notes);
 }
 
 #[test]

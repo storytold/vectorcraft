@@ -44,8 +44,12 @@ const SPOT_GRADIENTS_SHARED: &str = "gradients whose spot inks can't share a Dev
 const SPOT_GRADIENTS_PERCEPTUAL: &str = "Perceptual gradients of spot colors are written in process colors";
 const CONIC_WEDGES: &str = "conic gradients are written as solid wedges (EPS has no conic shading)";
 const DIAMOND_QUADRANTS: &str = "diamond gradients are written as four linear gradients (EPS has no diamond shading)";
+const SPREAD_CAPPED: &str =
+    "gradients that repeat or reflect are written with at most 256 runs of their stops (at most 16384 stops); they pad past those";
 /// Wedges a conic gradient is written as: one a degree.
 const CONIC_WEDGE_COUNT: usize = 360;
+/// Decimals of a smooth shading's stitching function bounds (stop offsets, 0 to 1).
+const BOUNDS_PLACES: u32 = 7;
 /// The most colorants a DeviceN color space may have (PostScript's limit).
 const MAX_DEVICE_N: usize = 32;
 const MISSING_PATTERN: &str = "missing patterns are written as mid-grey";
@@ -363,6 +367,8 @@ impl<'a> Scene<'a> {
             }
             NodeKind::Text(t) => self.text(n, t),
             NodeKind::Image(im) => {
+                let shown = self.doc.shown_image(n, im);
+                let im = &*shown;
                 let blob = self.doc.image_blob(im);
                 match n.extras().colorize.as_deref() {
                     Some(p @ Paint::Solid { .. }) if blob.is_none_or(|b| b.gray_source().is_some()) => {
@@ -940,6 +946,23 @@ impl<'a> Scene<'a> {
     /// both levels; a diamond: four linear gradients, [`Self::diamond_quadrants`]).
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect, area: Rect) {
         let geom = g.resolve(bounds);
+        // A linear, radial or diamond gradient that repeats or reflects: PostScript's shadings
+        // pad past their ends, so its stops are repeated as many times as the area needs.
+        if let Some(padded) = g.gradient.padded_over(&geom, area) {
+            if padded.capped {
+                self.warn(SPREAD_CAPPED);
+            }
+            let geom = padded.geom;
+            let paint = GradientPaint { gradient: padded.gradient, geom: Some(geom), angle: geom.angle_deg(), ..g.clone() };
+            return self.gradient(&paint, bounds, area);
+        }
+        // One whose levels over the area are not finite (a vector of no length): its stops
+        // repeated along the vector, padding past it.
+        if g.gradient.is_spread() && g.gradient.kind != GradientKind::Conic {
+            self.warn(SPREAD_CAPPED);
+            let paint = GradientPaint { gradient: g.gradient.unrolled().into_owned(), ..g.clone() };
+            return self.gradient(&paint, bounds, area);
+        }
         let (space, stops) = self.gradient_stops(&g.gradient);
         if !stops.windows(2).any(|w| w[1].0 > w[0].0) {
             if let Some((_, c)) = stops.first() {
@@ -951,7 +974,7 @@ impl<'a> Scene<'a> {
         let space = &space;
         let smooth = self.o.level == Level::Three && !self.o.compatible_gradients;
         match g.gradient.kind {
-            GradientKind::Conic => self.conic_steps(&geom, area, space, &stops),
+            GradientKind::Conic => self.conic_steps(&geom, area, space, &stops, &g.gradient),
             GradientKind::Diamond => self.diamond_quadrants(&geom, area, space, &stops, smooth),
             GradientKind::Radial => {
                 let r = geom.length().max(1e-6);
@@ -984,15 +1007,24 @@ impl<'a> Scene<'a> {
     /// A conic gradient as [`CONIC_WEDGE_COUNT`] solid wedges about its center covering `area`
     /// (PostScript has no conic shading), each running on to the seam under the next, so no
     /// hairline shows between neighbors ([`vectorcraft_color::GradientGeom::conic_wedges`]).
-    fn conic_steps(&mut self, geom: &vectorcraft_color::GradientGeom, area: Rect, space: &GradientSpace, stops: &[(f64, Vec<f32>)]) {
+    /// Stops of `g` that repeat or reflect get that many wedges for each time they run around.
+    fn conic_steps(
+        &mut self,
+        geom: &vectorcraft_color::GradientGeom,
+        area: Rect,
+        space: &GradientSpace,
+        stops: &[(f64, Vec<f32>)],
+        g: &vectorcraft_color::Gradient,
+    ) {
         self.warn(CONIC_WEDGES);
+        let spread = g.spreader();
         let at = |t: f64| match stops.windows(2).find(|w| t <= w[1].0) {
             Some(w) if w[1].0 > w[0].0 => mix(&w[0].1, &w[1].1, ((t - w[0].0) / (w[1].0 - w[0].0)).clamp(0.0, 1.0) as f32),
             Some(w) => w[1].1.clone(),
             None => stops.last().map_or_else(Vec::new, |s| s.1.clone()),
         };
-        for (pts, t) in geom.conic_wedges(area, CONIC_WEDGE_COUNT, true) {
-            self.set_comps(space, &at(t));
+        for (pts, t) in geom.conic_wedges(area, g.conic_wedge_count(CONIC_WEDGE_COUNT), true) {
+            self.set_comps(space, &at(spread(t)));
             for (i, p) in pts.iter().enumerate() {
                 push_nums(&mut self.body, &[p.x, p.y]);
                 self.line(if i == 0 { "newpath moveto" } else { "lineto" });
@@ -1059,8 +1091,12 @@ impl<'a> Scene<'a> {
                     f.push('\n');
                 }
                 f.push_str("] /Bounds [");
-                let bounds: Vec<f64> = many.iter().skip(1).map(|w| w[0].0).collect();
-                push_nums(&mut f, &bounds);
+                // Seven decimals: a gradient's stops repeated hundreds or thousands of times
+                // (`Gradient::padded_over`) keep their places in each run.
+                for w in many.iter().skip(1) {
+                    ps::push_num_places(&mut f, w[0].0, BOUNDS_PLACES);
+                    f.push(' ');
+                }
                 f.push_str("] /Encode [");
                 f.push_str(&"0 1 ".repeat(many.len()));
                 f.push_str("] >>");

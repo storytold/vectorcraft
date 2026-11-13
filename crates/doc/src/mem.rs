@@ -261,6 +261,10 @@ fn node_bytes(n: &Node, other: Option<&Node>, counted: &mut HashSet<usize>) -> u
         b += ALLOC + size_of::<NodeExtras>();
         b += boxed(&e.mask) + boxed(&e.graph) + boxed(&e.shaper) + boxed(&e.attrs) + boxed(&e.slice) + boxed(&e.perspective);
         b += boxed(&e.dimension) + boxed(&e.live_paint_gaps) + boxed(&e.colorize);
+        b += e
+            .color_mask
+            .as_deref()
+            .map_or(0, |m| ALLOC + size_of::<crate::color_mask::ColorMask>() + m.key.capacity() + m.from.capacity() + m.colors.capacity() * 3);
         b += e.trace.as_ref().map_or(0, |t| ALLOC + size_of::<Value>() + json_bytes(t));
         b += e.intertwine.as_deref().map_or(0, |a| ALLOC + size_of::<PathData>() + path_bytes(a));
         if e.intertwine_tiers.capacity() > 0 {

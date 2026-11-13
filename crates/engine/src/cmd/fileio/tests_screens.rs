@@ -507,6 +507,22 @@ fn type_in_a_missing_family_is_named_once_for_every_format() {
     assert!(fallback[0].contains("Nonexistent Sans Probe"), "{fallback:?}");
 }
 
+/// What a later file loses comes before a note on the options that an earlier file gave: the
+/// first artboard's WebP gives only the lossy WebP note, the second's also says its type doesn't
+/// fit.
+#[test]
+fn what_any_file_loses_comes_before_the_notes_on_the_options() {
+    let mut s = session(2);
+    let second = s.doc().unwrap().doc.artboards[1].rect;
+    let area = json!({"width": 30, "height": 8});
+    s.execute("text.create", &json!({"x": second.x0 + 2.0, "y": second.y0 + 2.0, "size": 12, "area": area, "text": "Ab\nCd\nEf\nGh"})).unwrap();
+    let r = export(&mut s, json!({"formats": [{"format": "webp", "lossless": false}]}));
+    let warnings: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert_eq!(warnings.len(), 2, "{warnings:?}");
+    assert!(warnings[0].contains("doesn't fit its frame"), "{warnings:?}");
+    assert!(warnings[1].starts_with("lossy WebP"), "{warnings:?}");
+}
+
 #[test]
 fn full_document_gives_one_file_per_format() {
     let mut s = session(3);
@@ -733,6 +749,81 @@ fn a_refused_export_into_a_presets_folder_outside_the_read_root_names_it_by_its_
     let root = crate::cmd::findfiles::plain(inside.canonicalize().unwrap()).display().to_string();
     let name = tmp.0.file_name().unwrap().to_string_lossy().into_owned();
     assert!(e.contains(&format!("root {root}: {name}")), "{e}");
+}
+
+/// A prepared export into the folder an export preset keeps, prepared for a client whose read roots
+/// don't hold that folder and written later outside that client's scope (as on the background
+/// thread): its reply leaves out the ZIP's path and names the files relative to the folder, and a
+/// refused write names the folder by its name. A folder inside the read roots, and one the client
+/// gives, stay whole.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_prepared_export_into_a_presets_folder_outside_the_read_root_leaves_it_out() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let mut s = session(1);
+    let tmp = Folder::new("prepared-roots");
+    let (inside, out) = (tmp.0.join("in"), tmp.0.join("kept-out"));
+    for f in [&inside, &out] {
+        std::fs::create_dir_all(f).unwrap();
+    }
+    let folder = out.to_string_lossy().replace('\\', "/");
+    let settings = json!({"formats": [{"format": "png", "folder": "1x"}], "subfolders": true, "folder": folder});
+    s.execute("document.exportPresets.save", &json!({"name": "Kept", "settings": settings})).unwrap();
+    let write_only = AutomationRoots::new(&[inside.as_path()], &[out.as_path()]).unwrap();
+    let both = AutomationRoots::new(&[inside.as_path(), out.as_path()], &[out.as_path()]).unwrap();
+    let prepare = |s: &mut Session, roots: &Option<std::sync::Arc<AutomationRoots>>, p: Value| {
+        confine(roots.as_ref(), || s.prepare_screen_export("document.exportForScreens", &p)).unwrap()
+    };
+
+    let (r, files) = write_prepared(prepare(&mut s, &write_only, json!({"exportPreset": "Kept"})));
+    assert_eq!(r["files"], json!(["1x/Artboard-1.png"]), "{r}");
+    assert!(files.contains_key(&format!("{folder}/1x/Artboard-1.png")), "the files are written into the folder");
+    let (r, _) = write_prepared(prepare(&mut s, &write_only, json!({"exportPreset": "Kept", "zip": true})));
+    assert_eq!((r.get("path"), &r["files"]), (None, &json!(["1x/Artboard-1.png"])), "{r}");
+    assert!(!r.to_string().contains(&folder), "{r}");
+    // A refused write names the folder by its name.
+    let refused = prepare(&mut s, &write_only, json!({"exportPreset": "Kept"}));
+    let e = refused.write(&mut |path, _| Err(crate::EngineError::Other(format!("{path}: access denied")))).unwrap_err().to_string();
+    assert!(e.contains("kept-out/1x/Artboard-1.png: access denied") && !e.contains(&folder), "{e}");
+    // Inside the read roots, or given by the client: whole.
+    let (r, _) = write_prepared(prepare(&mut s, &both, json!({"exportPreset": "Kept"})));
+    assert_eq!(r["files"], json!([format!("{folder}/1x/Artboard-1.png")]), "{r}");
+    let (r, _) = write_prepared(prepare(&mut s, &write_only, json!({"exportPreset": "Kept", "folder": folder, "zip": true})));
+    assert!(r["path"].as_str().is_some_and(|p| p.starts_with(&format!("{folder}/")) && p.ends_with(".zip")), "{r}");
+    let given = prepare(&mut s, &write_only, json!({"exportPreset": "Kept", "folder": folder}));
+    let e = given.write(&mut |path, _| Err(crate::EngineError::Other(format!("{path}: access denied")))).unwrap_err().to_string();
+    assert!(e.contains(&folder), "{e}");
+}
+
+/// [`Session::screen_export_folder`]: the client's folder, else the one the export preset keeps,
+/// with its own name when the request's read roots don't hold it; none without a folder, for an
+/// unknown preset or for `assets.export`, which takes no preset.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn the_export_folder_is_the_clients_else_the_presets() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let mut s = session(1);
+    let tmp = Folder::new("export-folder");
+    let (inside, out) = (tmp.0.join("in"), tmp.0.join("kept-out"));
+    for f in [&inside, &out] {
+        std::fs::create_dir_all(f).unwrap();
+    }
+    let folder = out.to_string_lossy().replace('\\', "/");
+    let settings = json!({"formats": [{"format": "png"}], "folder": folder});
+    s.execute("document.exportPresets.save", &json!({"name": "Kept", "settings": settings})).unwrap();
+    let confined = AutomationRoots::new(&[inside.as_path()], &[inside.as_path()]).unwrap();
+    let ask = |id: &str, p: Value| confine(confined.as_ref(), || s.screen_export_folder(id, &p));
+
+    let screens = "document.exportForScreens";
+    assert_eq!(ask(screens, json!({"exportPreset": "Kept"})), Some((folder.clone(), Some("kept-out".to_string()))));
+    assert_eq!(ask(screens, json!({"exportPreset": "Kept", "folder": "/x/y"})), Some(("/x/y".to_string(), None)));
+    assert_eq!(ask(screens, json!({"exportPreset": "Kept", "folder": ""})), None);
+    assert_eq!(ask(screens, json!({"exportPreset": "Nope"})), None);
+    assert_eq!(ask(screens, json!({})), None);
+    assert_eq!(ask("assets.export", json!({"exportPreset": "Kept"})), None);
+    assert_eq!(s.screen_export_folder(screens, &json!({"exportPreset": "Kept"})), Some((folder, None)), "unconfined: whole");
 }
 
 /// The export settings the document keeps and the saved presets, read by a client whose read roots
