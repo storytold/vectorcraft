@@ -446,7 +446,9 @@ impl Region {
                 // count.
                 let pieces = if *off > 0.0 { ((bottom - top) * 4.0 / off).ceil().clamp(1.0, INVERT_WRAP_PIECES) } else { 1.0 };
                 let mut cuts: Vec<f64> = (0..=pieces as usize).map(|k| top + (bottom - top) * k as f64 / pieces).collect();
-                if *off > 0.0 {
+                // A band of no height stays one piece: no anchor lies strictly inside it, and
+                // removing the repeated cut would leave no piece.
+                if *off > 0.0 && bottom > top {
                     let mut anchors: Vec<f64> =
                         polys.iter().flatten().flat_map(|p| [p.y - off, p.y + off]).filter(|&y| y > top && y < bottom).collect();
                     anchors.sort_by(f64::total_cmp);
@@ -615,6 +617,11 @@ fn a_line_stays_clear_of_a_wrap_object_that_reaches_into_its_band() {
     let path = PathData::from_bezpath(&closed(&[upper, lower]));
     let wrap = vectorcraft_doc::WrapShape { path, wrap: vectorcraft_doc::TextWrap { offset: 5.0, invert: true } };
     assert!(Region::cells(&frame, &LayoutOptions::default(), &[wrap])[0].spans(40.0, 60.0).is_empty());
+    // A band of no height keeps Invert Wrap and its offset.
+    let strip: &[(f64, f64)] = &[(20.0, 0.0), (40.0, 0.0), (40.0, 100.0), (20.0, 100.0)];
+    let path = PathData::from_bezpath(&closed(&[strip]));
+    let wrap = vectorcraft_doc::WrapShape { path, wrap: vectorcraft_doc::TextWrap { offset: 5.0, invert: true } };
+    assert_spans(&Region::cells(&frame, &LayoutOptions::default(), &[wrap])[0].spans(50.0, 50.0), &[(15.0, 45.0)]);
 }
 
 /// A hole that starts and ends inside a line's band splits the line, and a band below the hole, or
