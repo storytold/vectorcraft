@@ -77,7 +77,7 @@ object is where the art was.
 |---|---|
 | Depth | 0–2,000 pt. At 0 the object is flat (the art turned like Rotate). |
 | Twist | 0° to 360°: the back face turned against the front, the walls following in slices. |
-| Taper | 1–100 %: the back face's size against the front's. |
+| Taper | 1–100 %: the back face's size against the front's. Without a twist, each wall (and each bevel band) stays flat, so it is one face, not cut into slices. |
 | Cap | **Solid** closes the front and back; **Hollow** leaves them open, showing the insides of the walls. |
 | Bevel Shape | **None**, **Classic** (a straight chamfer), **Rounded** (convex quarter round), **Cove** (concave), **Step** (two steps) or **Ogee** (an S curve). Our own cross-sections. |
 | Width, Height | How far the bevel reaches across the face and along the depth (0–1,000 pt each). The height is limited to the depth (half of it on each side with Bevel both sides). |
@@ -493,6 +493,7 @@ Release measurements and a repeatable CLI scene are in [3D lighting performance]
 
 | Date | Change |
 |---|---|
+| 2026-11-13 | Extrude & Bevel cuts its walls into slices only for a twist. A taper alone keeps each wall flat, so it is one face, without the light ticks at the joints between slices or the light line down a wall (#7019). Inflate still slices its sides for a taper. |
 | 2026-11-12 | The seams of Extrude & Bevel, Inflate and Rotate under a white light, and of the faces of Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic), went from miter to round joins (the seams of Revolve and of colored lights, and 3D (Classic) Wireframe edges, were already round): no thorns on edge-on facets, and facets with no neighbor now have rounded convex corners ([Seams](#seams)). |
 | 2026-11-08 | Contours that cross, touch or overlap are merged by vectorcraft-pathops before Extrude & Bevel, Inflate and Rotate build a solid, sharing its limits; others are built as drawn. |
 | 2026-11-06 | Extrude & Bevel, Inflate and Rotate apply to groups and layers: every path, compound path and type in them turns about one shared axis (#4506). |

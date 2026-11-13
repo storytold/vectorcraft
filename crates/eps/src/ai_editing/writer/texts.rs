@@ -208,6 +208,7 @@ pub(in crate::ai_editing) fn holds(n: &Node, t: &TextObject) -> bool {
     shape_ok
         && t.wrap.is_empty()
         && t.ruby.is_empty()
+        && !t.stacks_warichu()
         && t.runs.iter().any(|r| r.text.chars().any(|c| !c.is_whitespace()))
         && runs_held(t)
         && plain(n)
@@ -964,6 +965,7 @@ impl TextDoc {
                         && t.wrap.is_empty()
                         && plain(n)
                         && t.ruby.is_empty()
+                        && !t.stacks_warichu()
                         && runs_held(t)
                         && (story_scale(t) / scale - 1.0).abs() <= 1e-9
                         && within_reader(t, scale)
