@@ -508,7 +508,10 @@ fn the_add_tool_menu_fills_a_new_toolbar_without_a_drag() {
     assert_eq!(slots(&app), shipped, "the Tools panel's toolbar is untouched");
     assert!(!app.ui.tools_drawer, "no drawer opened");
     let list = app.run("window.toolbar.list", json!({})).unwrap();
-    assert_eq!(list, json!([{"name": "Mine", "shown": true, "double": false, "slots": [["lasso"]]}]));
+    assert_eq!(
+        list,
+        json!([{"name": "Mine", "shown": true, "double": false, "slots": [["lasso"]], "floating": true, "side": "left", "order": null}])
+    );
     // A second tool goes after the first.
     let shown = open(&mut app, 19.0);
     click(&mut app, &ctx, 20.0, items(&shown, "Magic Wand Tool")[0].0);

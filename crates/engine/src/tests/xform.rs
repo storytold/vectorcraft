@@ -600,6 +600,35 @@ fn free_transform_distort_mode_via_pointer() {
     assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("object.distort"));
 }
 
+/// With Constrain on, a Free Distort corner keeps to the diagonal through the opposite corner, in
+/// one undo step that undoes and redoes whole.
+#[test]
+fn free_transform_constrained_distort_keeps_the_corner_on_its_diagonal() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    let v = ViewInfo::default();
+    s.select_tool("freeTransform", v).unwrap();
+    s.set_tool_option("mode", &json!("distort"));
+    s.set_tool_option("constrain", &json!(true));
+    let before = undo_len(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 300.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 320.0, 230.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 340.0, 260.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 340.0, 260.0), v).unwrap();
+    let pts = |s: &Session| -> Vec<Point> { s.doc().unwrap().doc.node(a).unwrap().path_data().unwrap().anchors().map(|(_, _, an)| an.p).collect() };
+    let has_all = |pts: &[Point], want: [(f64, f64); 4]| want.iter().all(|&(x, y)| pts.iter().any(|q| q.distance(Point::new(x, y)) < 1e-6));
+    // (40, 60) along the diagonal (200, 100) is 0.28 of it, (56, 28).
+    let distorted = [(100.0, 100.0), (300.0, 100.0), (356.0, 228.0), (100.0, 200.0)];
+    let original = [(100.0, 100.0), (300.0, 100.0), (300.0, 200.0), (100.0, 200.0)];
+    assert!(has_all(&pts(&s), distorted), "{:?}", pts(&s));
+    assert_eq!(undo_len(&s), before + 1);
+    assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("object.distort"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(has_all(&pts(&s), original), "{:?}", pts(&s));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(has_all(&pts(&s), distorted), "{:?}", pts(&s));
+}
+
 #[test]
 fn free_transform_cmd_held_once_a_corner_drag_started_distorts_in_one_step() {
     let mut s = session();

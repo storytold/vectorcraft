@@ -60,6 +60,7 @@ pub mod graphic_style_options;
 pub mod halftone;
 pub mod hyphenation;
 pub mod import_pdf;
+pub mod indexed_color;
 pub mod javascript_files;
 pub mod justification;
 pub mod layer_options;
@@ -88,6 +89,7 @@ pub mod perspective_grid;
 pub mod perspective_options;
 pub mod perspective_plane;
 pub mod perspective_presets;
+pub mod pixel_snap_options;
 pub mod place;
 pub mod placement_options;
 pub mod plugin;
@@ -347,6 +349,7 @@ registry! {
     ColorGuideOptions: [color_guide_options::KIND] => color_guide_options::SPEC,
     ColorBalance: [color_balance::KIND] => color_balance::SPEC,
     Saturate: [saturate::KIND] => saturate::SPEC,
+    IndexedColor: [indexed_color::KIND] => indexed_color::SPEC,
     SaveSwatchLibrary: [save_swatch_library::KIND] => save_swatch_library::SPEC,
     TileEdgeColor: [tile_edge_color::KIND] => tile_edge_color::SPEC,
     EyedropperOptions: [eyedropper::KIND] => eyedropper::SPEC,
@@ -454,6 +457,7 @@ registry! {
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
     NavigatorPanelOptions: [navigator_panel_options::KIND] => navigator_panel_options::SPEC,
     PathfinderOptions: [pathfinder_options::KIND] => pathfinder_options::SPEC,
+    PixelSnapOptions: [pixel_snap_options::KIND] => pixel_snap_options::SPEC,
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
     RenameArtboards: [rename_artboards::KIND] => rename_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,

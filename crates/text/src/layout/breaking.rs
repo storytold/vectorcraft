@@ -27,14 +27,18 @@ impl Metrics {
     pub(super) fn max(g: &[SGlyph]) -> Option<Self> {
         let mut it = g.iter();
         let first = Self::of(it.next()?);
-        Some(it.fold(first, |m, g| Self {
-            asc: m.asc.max(g.ascent),
-            desc: m.desc.max(g.descent),
-            lead: m.lead.max(g.leading),
-            cap: m.cap.max(g.cap),
-            xh: m.xh.max(g.xh),
-            top: m.top.max(Self::of(g).top),
-        }))
+        Some(it.fold(first, |m, g| m.union(Self::of(g))))
+    }
+    /// The larger of each of the metrics of `self` and `o`: those of a line holding both.
+    pub(super) fn union(self, o: Self) -> Self {
+        Self {
+            asc: self.asc.max(o.asc),
+            desc: self.desc.max(o.desc),
+            lead: self.lead.max(o.lead),
+            cap: self.cap.max(o.cap),
+            xh: self.xh.max(o.xh),
+            top: self.top.max(o.top),
+        }
     }
     /// Distance from the frame top to the first baseline.
     pub(super) fn first_baseline(&self, fb: FirstBaseline, min: f64) -> f64 {
@@ -68,6 +72,9 @@ pub(super) struct Pen<'r> {
     /// Baseline steps still allowed over all the frame's cells and placements (shared by this pen's
     /// copies): see [`MAX_TOTAL_STEPS`].
     pub(super) steps_left: std::rc::Rc<std::cell::Cell<usize>>,
+    /// What is left of the every-line composer's search over the frame's paragraphs (shared by
+    /// this pen's copies): see [`super::shaped::Budget`].
+    pub(super) search: std::rc::Rc<super::shaped::Budget>,
 }
 
 /// The largest number of steps layout takes to move a line down a frame cell to find room for it:
@@ -104,9 +111,24 @@ impl Pen<'_> {
             let b = self.prev.map_or(0.0, |b| self.next_baseline(b, est));
             return Some((b, f64::NEG_INFINITY, f64::INFINITY, false));
         };
-        if !self.queued.is_empty() {
+        // A further span was measured across the height of the line set before it on its baseline.
+        // This line gets the part of it that is free across its own height: a taller line can
+        // reach a wrap object the line before it stayed clear of. A span with no such part is
+        // left empty, and so is a part the line's height made narrower than `min`.
+        while !self.queued.is_empty() {
             let (b, x0, x1) = self.queued.remove(0);
-            return Some((b, x0, x1, true));
+            let Some(r) = regions.get(self.ri) else { return Some((b, x0, x1, true)) };
+            let mut free = r.spans(b - est.asc, b + est.desc).into_iter().filter_map(|(s, e)| {
+                let (s, e) = (s.max(x0), e.min(x1));
+                let room = e - s - ind_l - ind_r;
+                let narrowed = s > x0 + EPS || e < x1 - EPS;
+                (room > est.asc.max(1.0) && (!narrowed || room + EPS >= min)).then_some((s, e))
+            });
+            let Some((s, e)) = free.next() else { continue };
+            // An object inside the span splits it: the parts after the first stay queued.
+            let rest: Vec<_> = free.map(|(s, e)| (b, s, e)).collect();
+            self.queued.splice(0..0, rest);
+            return Some((b, s, e, true));
         }
         loop {
             let r = regions.get(self.ri)?;
@@ -844,6 +866,7 @@ fn a_pen_out_of_baseline_steps_finds_no_room() {
         next_top: None,
         no_room_for: f64::INFINITY,
         steps_left: std::rc::Rc::new(std::cell::Cell::new(steps)),
+        search: Default::default(),
     };
     assert!(pen(MAX_TOTAL_STEPS).place(est, 0.0, 0.0, 0.0).is_some());
     assert!(pen(0).place(est, 0.0, 0.0, 0.0).is_none());

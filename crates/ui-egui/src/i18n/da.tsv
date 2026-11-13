@@ -96,6 +96,8 @@
 	Blend Vertically	Bland lodret
 	Convert to CMYK	Konvertér til CMYK
 	Convert to Grayscale	Konvertér til gråtoner
+	Convert to Indexed Color	Konvertér til indekserede farver
+	Convert to Indexed Color…	Konvertér til indekserede farver…
 	Convert to RGB	Konvertér til RGB
 	Invert Colors	Invertér farver
 	Overprint Black…	Overprint sort…
@@ -853,6 +855,10 @@
 	Dock Panel	Dok panel
 	Dock to Top	Dok øverst
 	Dock to Bottom	Dok nederst
+	Dock to Left	Dok til venstre
+	Dock to Right	Dok til højre
+	Dock Toolbar	Dok værktøjslinjen
+	Float Toolbar	Flydende værktøjslinje
 	Control Bar Options	Indstillinger for kontrollinjen
 	Tool Options	Værktøjsindstillinger
 	Object Options	Objektindstillinger
@@ -2680,6 +2686,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	Nulstil rækkerne til grafikkens farver
 	Color Theme Picker	Farvetemavælger
 	Click or drag across the art to pick its colors; Shift adds more	Klik eller træk hen over grafikken for at hente dens farver; Skift tilføjer flere
+	Prominent Colors	Fremtrædende farver
+	Save All Colors	Gem alle farver
+	Save Prominent Colors	Gem fremtrædende farver
 	Separate colors into rows	Opdel farver i rækker
 	Unlink harmony colors	Fjern sammenkædning af harmonifarver
 	1 Color Job	1-farvejob
@@ -3736,6 +3745,19 @@ theme	Appearance	Udseende
 	Spot Color Objects	Objekter med spotfarver
 	Pattern Objects	Objekter med mønstre
 	Gradient Objects	Objekter med gradienter
+	Font Details	Skrifttypedetaljer
+	Linked Images	Linkede billeder
+	Embedded Images	Indlejrede billeder
+	Compound Paths	Sammensatte kurver
+	Text Objects	Tekstobjekter
+	Placed Documents	Placerede dokumenter
+	Symbol Instances	Symbolforekomster
+	Gradient Meshes	Gradientnet
+	Blends	Blandinger
+	Envelopes	Konvolutter
+	Intertwine Groups	Sammenfletningsgrupper
+	Opacity Masks	Opacitetsmasker
+	Objects with Effects	Objekter med effekter
 	Spot Colors	Spotfarver
 	Spot Colors (0)	Spotfarver (0)
 	Swatch Options	Indstillinger for farveprøve
@@ -4231,6 +4253,9 @@ imageTrace	Outline	Kontur
 @msg	Couldn't open {name}: {e}	Kunne ikke åbne {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Kunne ikke placere {name}: dokumentet, den blev sluppet på, var lukket
 @msg	Couldn't place {name}: the document it was placed in was closed	Kunne ikke placere {name}: dokumentet, den blev placeret i, var lukket
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Kunne ikke placere {name}: dokumentet, den blev sluppet på, blev gendannet
+@msg	Couldn't place {name}: the document it was placed in was reverted	Kunne ikke placere {name}: dokumentet, den blev placeret i, blev gendannet
+@msg	Couldn't paste: the document it was pasted in was reverted	Kunne ikke indsætte: dokumentet, der blev indsat i, blev gendannet
 @msg	Couldn't read {name}: {e}	Kunne ikke læse {name}: {e}
 @msg	Couldn't save recovery data: {e}	Kunne ikke gemme gendannelsesdata: {e}
 @msg	Create Outlines: select text objects	Opret konturer: markér tekstobjekter
@@ -4599,6 +4624,7 @@ imageTrace	Outline	Kontur
 @msg	paths contain invalid coordinates	stierne indeholder ugyldige koordinater
 @msg	paths: give at least one file	stier: angiv mindst én fil
 @msg	replace: the object to replace was changed or deleted	erstat: objektet, der skulle erstattes, er ændret eller slettet
+@msg	the document it was prepared for is no longer active	dokumentet, det blev forberedt til, er ikke længere aktivt
 @msg	pattern missing	mønster mangler
 @msg	patterns nested too deeply are filled with mid-grey	mønstre, der er indlejret for dybt, udfyldes med mellemgrå
 @msg	percent must be above 0 and at most 6400, not {p}	percent skal være over 0 og højst 6400, ikke {p}
@@ -5161,6 +5187,8 @@ imageTrace	Outline	Kontur
 	Vivid	Intens
 	Spectrum	Spektrum
 	Perceptual	Perceptuel
+	Hue Clockwise	Farvetone med uret
+	Hue Counterclockwise	Farvetone mod uret
 	Relative Colorimetric	Relativ kolorimetrisk
 	Absolute Colorimetric	Absolut kolorimetrisk
 	Exact	Eksakt
@@ -5826,6 +5854,8 @@ swatch	Bright Violet	Kraftig violet
 	Objects on Path Tool	Objekter på kurve-værktøj
 	Attach Objects on Path	Tilknyt objekter til kurve
 	Expand Objects on Path	Udvid objekter på kurve
+	Detach	Frigør
+	Detach Object from Path	Frigør objekt fra kurve
 	Release Live Paint	Frigør live-maling
 	Release Repeat	Frigør gentagelse
 	Release Slice	Frigør udsnit
@@ -5973,7 +6003,7 @@ axis	Y Axis	Y-akse
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` gælder for gradientfyld (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gælder for gradientfyld (paint.setFill)
 @msg	`dither` must be true or false	`dither` skal være true eller false
-@msg	`method` must be classic or perceptual	`method` skal være classic eller perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` skal være classic, perceptual, hue-clockwise eller hue-counterclockwise
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Installér »{name}«, som beder om et stort beregningsbudget?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Hver kørsel kan tage op til {minutes} minutter og udføre {times} gange så meget arbejde, som andre plug-ins må. Den kører i baggrunden, og du kan annullere den.
@@ -6014,12 +6044,14 @@ axis	Y Axis	Y-akse
 	Continue	Fortsæt
 	Continue Action	Fortsæt handling
 	Delete Action Step	Slet handlingstrin
+	Move Action Step	Flyt handlingstrin
 	Press Play Current Selection in the Actions panel to go on.	Tryk på Afspil aktuel markering i panelet Handlinger for at fortsætte.
 	Stop: {message}	Stop: {message}
 @msg	no action is waiting at a stop	ingen handling venter ved et stop
 @msg	message must be text	message skal være tekst
 @msg	allowContinue must be true or false	allowContinue skal være true eller false
 @msg	Batch cannot play an action with a stop	Batch kan ikke afspille en handling med et stop
+@msg	Batch cannot play an action with a View menu step	Batch kan ikke afspille en handling med et trin fra menuen Vis
 	Insert Menu Item…	Indsæt menupunkt…
 	Insert Menu Item	Indsæt menupunkt
 	Insert Select Path	Indsæt kurvemarkering
@@ -6173,6 +6205,22 @@ axis	Y Axis	Y-akse
 	Graphite Pencil	Grafitblyant
 	Wax Crayon	Vokskridt
 	Charcoal Dust	Kulstøv
+	Notched Ribbon	Takket bånd
+	Double Line	Dobbelt linje
+	Wave	Bølge
+	Teardrop	Dråbe
+	Striped Ribbon	Stribet bånd
+	Fine Nib	Fin pen
+	Broad Nib	Bred pen
+	Chisel	Mejsel
+	Round Pen	Rund pen
+	Pressure Pen	Trykpen
+	Beads	Perler
+	Dash Dot	Streg-prik
+	Scallops	Bølgekant
+	Stars	Stjerner
+	Triangles	Trekanter
+	Sparkles	Gnister
 	Save Brush Library…	Gem penselbibliotek…
 @msg	no empty artboards to delete	ingen tomme tegneflader at slette
 	Scale Presets	Skaleringsforudindstillinger
@@ -6184,6 +6232,13 @@ axis	Y Axis	Y-akse
 	Area Text	Områdetekst
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mål tekst efter glyfafgrænsning
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Indstillinger for fastgørelse til pixel
+	Pixel Snapping Options…	Indstillinger for fastgørelse til pixel…
+	Snap to Pixel While Drawing	Fastgør til pixel ved tegning
+	Snap to Pixel While Moving	Fastgør til pixel ved flytning
+	Snap to Pixel While Scaling	Fastgør til pixel ved skalering
+	These options take effect when View › Snap to Pixel is on.	Disse indstillinger virker, når Vis › Fastgør til pixel er slået til.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Vis indstillinger for fastgørelse til tegn
 	Hide Snap to Glyph Options	Skjul indstillinger for fastgørelse til tegn
@@ -6768,6 +6823,19 @@ breakText	Glyphs	Glyffer
 	Show where this tool is	Vis, hvor dette værktøj er
 @msg	missing `tutorial` (see learn.list)	`tutorial` mangler (se learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	ukendt vejledning `{id}` (se learn.list)
+	View more	Vis mere
+	Finish tutorial	Afslut vejledning
+	Next Up	Næste
+	You finished the last tutorial in this skill.	Du har afsluttet den sidste vejledning i denne færdighed.
+	Back to skills	Tilbage til færdigheder
+	Open Tutorial Sample	Åbn eksempel til vejledning
+	Finish Tutorial	Afslut vejledning
+	Next Tutorial	Næste vejledning
+	Back to Skills	Tilbage til færdigheder
+@msg	tutorial `{id}` has no practice sample	vejledningen `{id}` har intet øvelseseksempel
+@msg	open the practice sample of `{id}` first (see learn.openSample)	åbn først øvelseseksemplet til `{id}` (se learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	afslut først `{id}` (se learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` er den sidste vejledning i sin færdighed
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Opdatér udskudte effekter

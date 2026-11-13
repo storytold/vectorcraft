@@ -107,6 +107,8 @@
 	Blend Vertically	ვერტიკალურად შერევა
 	Convert to CMYK	CMYK-ად გარდაქმნა
 	Convert to Grayscale	ნაცრისფერ ტონებად გარდაქმნა
+	Convert to Indexed Color	ინდექსირებულ ფერებად გარდაქმნა
+	Convert to Indexed Color…	ინდექსირებულ ფერებად გარდაქმნა…
 	Convert to RGB	RGB-ად გარდაქმნა
 	Invert Colors	ფერების ინვერსია
 	Overprint Black…	შავის ზედდაბეჭდვა…
@@ -816,6 +818,10 @@
 	Dock Panel	პანელის მიმაგრება
 	Dock to Top	ზემოთ მიმაგრება
 	Dock to Bottom	ქვემოთ მიმაგრება
+	Dock to Left	მარცხნივ მიმაგრება
+	Dock to Right	მარჯვნივ მიმაგრება
+	Dock Toolbar	ხელსაწყოთა ზოლის მიმაგრება
+	Float Toolbar	მცურავი ხელსაწყოთა ზოლი
 	Control Bar Options	მართვის ზოლის პარამეტრები
 	Tool Options	ხელსაწყოს პარამეტრები
 	Object Options	ობიექტის პარამეტრები
@@ -2596,6 +2602,9 @@ digits	Malayalam	მალაიალამური
 	Reset the rows to the artwork's colors	სტრიქონებისთვის ნახატის ფერების დაბრუნება
 	Color Theme Picker	ფერთა თემის ამრჩევი
 	Click or drag across the art to pick its colors; Shift adds more	დააწკაპუნეთ ან გადაატარეთ ნახატზე მისი ფერების ასაღებად; Shift ამატებს კიდევ
+	Prominent Colors	გამოკვეთილი ფერები
+	Save All Colors	ყველა ფერის შენახვა
+	Save Prominent Colors	გამოკვეთილი ფერების შენახვა
 	Separate colors into rows	ფერების სტრიქონებად დაყოფა
 	Unlink harmony colors	ჰარმონიის ფერების კავშირის გაწყვეტა
 	1 Color Job	1-ფერიანი ბეჭდვა
@@ -3575,6 +3584,19 @@ theme	Appearance	იერსახე
 	Spot Color Objects	ობიექტები სპოტ-ფერებით
 	Pattern Objects	ობიექტები პატერნებით
 	Gradient Objects	ობიექტები გრადიენტებით
+	Font Details	შრიფტების დეტალები
+	Linked Images	დაკავშირებული გამოსახულებები
+	Embedded Images	ჩაშენებული გამოსახულებები
+	Compound Paths	შედგენილი ტრაექტორიები
+	Text Objects	ტექსტური ობიექტები
+	Placed Documents	განთავსებული დოკუმენტები
+	Symbol Instances	სიმბოლოს ეგზემპლარები
+	Gradient Meshes	გრადიენტული ბადეები
+	Blends	გადასვლები
+	Envelopes	გარსები
+	Intertwine Groups	გადახლართვის ჯგუფები
+	Opacity Masks	გაუმჭვირვალობის ნიღბები
+	Objects with Effects	ობიექტები ეფექტებით
 	Spot Colors	სპოტ-ფერები
 	Swatch Options	ფერის ნიმუშის პარამეტრები
 	Ungroup Color Group	ფერების ჯგუფის დაშლა
@@ -4030,6 +4052,9 @@ font-technology	Variable	ცვლადი
 @msg	Couldn't open {name}: {e}	{name} ვერ გაიხსნა: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} ვერ განთავსდა: დოკუმენტი, რომელზეც ის ჩამოაგდეს, დაიხურა
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} ვერ განთავსდა: დოკუმენტი, რომელშიც ის თავსდებოდა, დაიხურა
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} ვერ განთავსდა: დოკუმენტი, რომელზეც ის ჩამოაგდეს, წინა ვერსიაზე დაბრუნდა
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} ვერ განთავსდა: დოკუმენტი, რომელშიც ის თავსდებოდა, წინა ვერსიაზე დაბრუნდა
+@msg	Couldn't paste: the document it was pasted in was reverted	ჩასმა ვერ მოხერხდა: დოკუმენტი, რომელშიც ის ჩაისმებოდა, წინა ვერსიაზე დაბრუნდა
 @msg	Couldn't read {name}: {e}	{name} ვერ წაიკითხა: {e}
 @msg	Couldn't save recovery data: {e}	აღდგენის მონაცემები ვერ შეინახა: {e}
 @msg	Create Outlines: select text objects	კონტურების შექმნა: მონიშნეთ ტექსტური ობიექტები
@@ -4428,6 +4453,7 @@ font-technology	Variable	ცვლადი
 @msg	paths contain invalid coordinates	ტრაექტორიებში არასწორი კოორდინატებია
 @msg	paths: give at least one file	paths: მიუთითეთ ერთი ფაილი მაინც
 @msg	replace: the object to replace was changed or deleted	replace: ჩასანაცვლებელი ობიექტი შეიცვალა ან წაიშალა
+@msg	the document it was prepared for is no longer active	დოკუმენტი, რომლისთვისაც მომზადდა, აღარ არის აქტიური
 @msg	pattern missing	პატერნი აკლია
 @msg	patterns nested too deeply are filled with mid-grey	ზედმეტად ღრმად ჩადგმული პატერნები საშუალო ნაცრისფრით ივსება
 @msg	percent must be above 0 and at most 6400, not {p}	percent უნდა იყოს 0-ზე მეტი და არაუმეტეს 6400-ისა და არა {p}
@@ -5009,6 +5035,8 @@ font-technology	Variable	ცვლადი
 	High Contrast 3	მაღალი კონტრასტი 3
 	Pentagram	პენტაგრამა
 	Perceptual	აღქმითი
+	Hue Clockwise	ფერის ტონი საათის ისრის მიმართულებით
+	Hue Counterclockwise	ფერის ტონი საათის ისრის საწინააღმდეგოდ
 	Relative Colorimetric	ფარდობითი კოლორიმეტრიული
 	Absolute Colorimetric	აბსოლუტური კოლორიმეტრიული
 	Exact	ზუსტი
@@ -5130,6 +5158,7 @@ font-technology	Variable	ცვლადი
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	მათზე არსებული ნახატი გვერდისგან {_1}%-ით განსხვავდება: მიუხედავად ამისა, ისინი რედაქტირების მონაცემებიდან აიღება
 @msg	every numbered name for {name} is taken in the document's folder	დოკუმენტის საქაღალდეში {name}-ის ყველა დანომრილი სახელი დაკავებულია
 @msg	No linked files to look for	მოსაძებნი დაკავშირებული ფაილები არ არის
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	ბმული სიმბოლოში, დიაგრამის დიზაინში, პატერნში ან გაუმჭვირვალობის ნიღაბშია და ტილოზე ადგილი არ აქვს
 	Ruler Origin	სახაზავების სათავე
 	Reset Ruler Origin	სახაზავების სათავის ჩამოყრა
 	Artistic	მხატვრული
@@ -5231,7 +5260,9 @@ font-technology	Variable	ცვლადი
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`-ის face უნდა იყოს front ან back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-ის {key} უნდა იყოს რიცხვი {lo}-დან {hi}-მდე
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` უნდა იყოს მასივი
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	გრაფიკა ბრტყელ წახნაგებზე თავსდება: გამოიყენეთ ობიექტის ტიპი „ამოწევა“ ან „სიბრტყე“
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	გრაფიკა თავსდება ობიექტის ტიპებზე „სიბრტყე“, „ამოწევა“ და „ბრუნვა“
+@msg	Revolve maps graphics onto its side: map them onto the front	ბრუნვა გრაფიკას თავის გვერდით ზედაპირზე ათავსებს: განათავსეთ ისინი წინა მხარეზე
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	გრაფიკა ზედმეტად რთულია ამ ზედაპირისთვის: გაამარტივეთ სიმბოლოების ნახატი ან შეამცირეთ სეგმენტები
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` იღებს მაქსიმუმ {MAX_GRAPHICS} გრაფიკას
 @msg	A plane has one face: map its graphics onto the front	სიბრტყეს ერთი მხარე აქვს: მისი გრაფიკა წინა მხარეზე განათავსეთ
 @msg	The graphics are too complex: simplify the symbols' art	გრაფიკა ზედმეტად რთულია: გაამარტივეთ სიმბოლოების ნახატი
@@ -5720,6 +5751,7 @@ imageTrace	Outline	კონტური
 	Arrange Intertwine Area	გადახლართვის არის დალაგება
 @msg	select an Intertwine group	მონიშნეთ გადახლართვის ჯგუფი
 @msg	select an Objects on Path group	მონიშნეთ ტრაექტორიაზე ობიექტების ჯგუფი
+@msg	choose the object to detach with its Select/Move widget	მოსახსნელი ობიექტი აირჩიეთ მისი არჩევა/გადატანის ვიჯეტით
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	შედგენილ ტრაექტორიაში, გადასვლაში, გარსში, გამეორებაში ან გადახლართვის ჯგუფში მყოფ ტრაექტორიაზე ობიექტების მიმაგრება ვერ ხერხდება
 @msg	a clipping path can't take objects	მომჭრელ ტრაექტორიაზე ობიექტების მიმაგრება ვერ ხერხდება
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	გადასვლაში, გარსში, გამეორებაში ან გადახლართვის ჯგუფში მყოფი ობიექტების ტრაექტორიაზე მიმაგრება ვერ ხერხდება
@@ -5982,6 +6014,8 @@ imageTrace	Outline	კონტური
 	Objects on Path Tool	ტრაექტორიაზე ობიექტების ხელსაწყო
 	Attach Objects on Path	ობიექტების ტრაექტორიაზე მიმაგრება
 	Expand Objects on Path	ტრაექტორიაზე ობიექტების გაშლა
+	Detach	მოხსნა
+	Detach Object from Path	ობიექტის ტრაექტორიიდან მოხსნა
 	Release Live Paint	ცოცხალი შეღებვის მოხსნა
 	Release Repeat	გამეორების მოხსნა
 	Release Slice	ნაჭრის მოხსნა
@@ -6240,7 +6274,7 @@ axis	Y Axis	Y ღერძი
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` ვრცელდება გრადიენტულ შევსებებზე (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` ვრცელდება გრადიენტულ შევსებებზე (paint.setFill)
 @msg	`dither` must be true or false	`dither` უნდა იყოს true ან false
-@msg	`method` must be classic or perceptual	`method` უნდა იყოს classic ან perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` უნდა იყოს classic, perceptual, hue-clockwise ან hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` უნდა იყოს pad, repeat ან reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` უნდა იყოს მთელი რიცხვი 1-დან {MAX_REPEATS}-მდე
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` ეხება წრფივ, რადიალურ, კონუსურ და რომბულ გრადიენტებს
@@ -6483,12 +6517,14 @@ axis	Y Axis	Y ღერძი
 	Continue	გაგრძელება
 	Continue Action	მოქმედების გაგრძელება
 	Delete Action Step	მოქმედების ნაბიჯის წაშლა
+	Move Action Step	მოქმედების ნაბიჯის გადატანა
 	Press Play Current Selection in the Actions panel to go on.	გასაგრძელებლად მოქმედებების პანელზე დააჭირეთ „მიმდინარე მონიშნულის შესრულებას“.
 	Stop: {message}	გაჩერება: {message}
 @msg	no action is waiting at a stop	გაჩერებაზე არცერთი მოქმედება არ ელოდება
 @msg	message must be text	message უნდა იყოს ტექსტი
 @msg	allowContinue must be true or false	allowContinue უნდა იყოს true ან false
 @msg	Batch cannot play an action with a stop	პაკეტურ დამუშავებას არ შეუძლია გაჩერების მქონე მოქმედების შესრულება
+@msg	Batch cannot play an action with a View menu step	პაკეტურ დამუშავებას არ შეუძლია ხედის მენიუს ნაბიჯის მქონე მოქმედების შესრულება
 	Insert Menu Item…	მენიუს ელემენტის ჩასმა…
 	Insert Menu Item	მენიუს ელემენტის ჩასმა
 	Insert Select Path	ტრაექტორიის მონიშვნის ჩასმა
@@ -6653,6 +6689,22 @@ axis	Y Axis	Y ღერძი
 	Graphite Pencil	გრაფიტის ფანქარი
 	Wax Crayon	ცვილის ფანქარი
 	Charcoal Dust	ნახშირის მტვერი
+	Notched Ribbon	დაკბილული ლენტი
+	Double Line	ორმაგი ხაზი
+	Wave	ტალღა
+	Teardrop	წვეთი
+	Striped Ribbon	ზოლიანი ლენტი
+	Fine Nib	წვრილი წვერი
+	Broad Nib	განიერი წვერი
+	Chisel	საჭრეთელი
+	Round Pen	მრგვალი კალამი
+	Pressure Pen	დაწოლის კალამი
+	Beads	მძივები
+	Dash Dot	ტირე-წერტილი
+	Scallops	ფესტონები
+	Stars	ვარსკვლავები
+	Triangles	სამკუთხედები
+	Sparkles	ნაპერწკლები
 	Save Brush Library…	ფუნჯების ბიბლიოთეკის შენახვა…
 @msg	`{_1}` has no brushes to apply	`{_1}`-ში გამოსაყენებელი ფუნჯები არ არის
 @msg	missing `library` (see brush.libraries)	`library` აკლია (იხ. brush.libraries)
@@ -6745,6 +6797,13 @@ swatch	Bright Violet	კაშკაშა იისფერი
 	Area Text	არის ტექსტი
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	ტექსტის გაზომვა გლიფის საზღვრებით
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	პიქსელზე მიბმის პარამეტრები
+	Pixel Snapping Options…	პიქსელზე მიბმის პარამეტრები…
+	Snap to Pixel While Drawing	პიქსელზე მიბმა ხატვისას
+	Snap to Pixel While Moving	პიქსელზე მიბმა გადაადგილებისას
+	Snap to Pixel While Scaling	პიქსელზე მიბმა მასშტაბირებისას
+	These options take effect when View › Snap to Pixel is on.	ეს პარამეტრები მოქმედებს, როცა ხედი › პიქსელზე მიბმა ჩართულია.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	გლიფზე მიბმის პარამეტრების ჩვენება
 	Hide Snap to Glyph Options	გლიფზე მიბმის პარამეტრების დამალვა
@@ -7462,6 +7521,19 @@ font-script	Japanese	იაპონური
 	Show where this tool is	ამ ხელსაწყოს მდებარეობის ჩვენება
 @msg	missing `tutorial` (see learn.list)	აკლია `tutorial` (იხ. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	უცნობი გაკვეთილი `{id}` (იხ. learn.list)
+	View more	მეტის ნახვა
+	Finish tutorial	გაკვეთილის დასრულება
+	Next Up	შემდეგი
+	You finished the last tutorial in this skill.	თქვენ დაასრულეთ ამ უნარის ბოლო გაკვეთილი.
+	Back to skills	უნარებზე დაბრუნება
+	Open Tutorial Sample	გაკვეთილის ნიმუშის გახსნა
+	Finish Tutorial	გაკვეთილის დასრულება
+	Next Tutorial	შემდეგი გაკვეთილი
+	Back to Skills	უნარებზე დაბრუნება
+@msg	tutorial `{id}` has no practice sample	გაკვეთილს `{id}` არ აქვს სავარჯიშო ნიმუში
+@msg	open the practice sample of `{id}` first (see learn.openSample)	ჯერ გახსენით `{id}` გაკვეთილის სავარჯიშო ნიმუში (იხ. learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	ჯერ დაასრულეთ `{id}` (იხ. learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` თავისი უნარის ბოლო გაკვეთილია
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	გადადებული ეფექტების განახლება

@@ -413,6 +413,7 @@ pub(crate) fn transaction(s: &mut Session, label: &str, f: impl FnOnce(&mut Sess
                 st.interaction = None;
             }
             saved.restore(s);
+            s.sync_front_profiles();
             Err(e)
         }
     }

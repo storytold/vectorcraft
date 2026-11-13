@@ -24,9 +24,15 @@ fn pushes_in(para: &ParaStyle) -> bool {
 /// Paragraphs longer than this (glyphs) are always broken line by line.
 const MAX_COMPOSE_GLYPHS: usize = 200_000;
 
+/// Whether every line of area type in `regions` is as wide however tall it is and wherever it is set:
+/// rectangular cells without text wrap.
+fn constant_width(regions: Option<&[Region]>) -> bool {
+    regions.is_some_and(|r| r.iter().all(|r| (r.rect || r.polys.is_empty()) && r.wraps.is_empty()))
+}
+
 /// Every-line composition of paragraph glyphs `sg` if applicable (area text, justified or ragged,
-/// with uniform line metrics or in rectangular cells without text wrap); `None` falls back to the
-/// greedy single-line composer. With `continued`, the paragraph continues from the frame before,
+/// in any frame shape, with or without text wrap); `None` falls back to the greedy single-line
+/// composer. With `continued`, the paragraph continues from the frame before,
 /// and its first composed line is not its first line. `line_end` is how much narrower a line
 /// ending with each glyph is set ([`ParagraphData::line_end`]).
 #[allow(clippy::too_many_arguments)]
@@ -66,14 +72,11 @@ fn compose_para(
     let m = Metrics::of(&sg[0]);
     // Line widths are independent of the breaks when every line has the same metrics, or when
     // a line's width does not depend on how far down the frame it is set: rectangular cells
-    // without text wrap. Then a paragraph whose characters differ in line metrics (type size,
-    // font, leading, vertical scale, an inline graphic taller than the text) is composed too. In
-    // other shapes, or with text wrap, a taller line can move the lines below it to where the
-    // frame is narrower, so such a paragraph is broken line by line.
-    let plain = pen.regions.is_some_and(|r| r.iter().all(|r| (r.rect || r.polys.is_empty()) && r.wraps.is_empty()));
-    if !plain && sg.iter().any(|g| Metrics::of(g) != m) {
-        return None;
-    }
+    // without text wrap. In other shapes, or with text wrap, a paragraph whose characters differ
+    // in line metrics (type size, font, leading, vertical scale, an inline graphic taller than
+    // the text) can have a taller line move the lines below it to where the frame is narrower:
+    // each line the composer tries is then placed after the lines it follows (`shaped::Shaped`).
+    let shaped = !constant_width(pen.regions) && sg.iter().any(|g| Metrics::of(g) != m);
     let total: f64 = sg.iter().map(|g| g.adv).sum();
     // The same rule as the line loop below: an opening bracket starting a wrapped line gives up
     // the space before it.
@@ -86,7 +89,7 @@ fn compose_para(
     let mut acc = 0.0;
     // A line's width and placement depend on the sum of its indents alone, which the mirrored
     // indents of a right-to-left list ([`line_indents`]) keep.
-    while widths.len() < sg.len() {
+    while !shaped && widths.len() < sg.len() {
         let first = widths.is_empty();
         let ind_l = para.laid_out_left_indent() + if first && !continued { para.first_line_indent } else { 0.0 };
         // Only the first line's first word is known here. Later lines are placed as the composed
@@ -103,7 +106,11 @@ fn compose_para(
             break;
         }
     }
-    let last = *widths.last()?;
+    let last = match widths.last() {
+        Some(&last) => last,
+        None if shaped => 0.0,
+        None => return None,
+    };
     let width = |k: usize| widths.get(k).copied().unwrap_or(last);
     // Lines from `uniform_from` on are interchangeable (same width).
     let uniform_from = widths.iter().rposition(|&w| (w - last).abs() > EPS).map_or(0, |k| k + 1);
@@ -119,6 +126,14 @@ fn compose_para(
     let (strict, loose) = (1.0, f64::INFINITY);
     // A line's last character is set narrower, as the line loop sets it.
     let end_credit = |end: usize| end.checked_sub(1).and_then(|k| line_end.get(k)).copied().unwrap_or(0.0);
+    if shaped {
+        // Both passes share the placements tried and one search budget.
+        let mirror = mirrors_indents(para, rtl, cx.vertical);
+        let mut measure = super::shaped::Shaped::new(sg, line_end, para, &start_credit, continued, mirror, pen);
+        let mut pass = |p: &Params| crate::composer::compose_with(sg, &mut measure, &start_credit, &end_credit, &cands, flex, p);
+        let lines = pass(&params(strict));
+        return lines.or_else(|| pass(&params(loose)));
+    }
     let pass = |p: &Params| compose(sg, &width, &start_credit, &end_credit, &cands, flex, p);
     pass(&params(strict)).or_else(|| pass(&params(loose)))
 }
@@ -142,7 +157,7 @@ fn mirrors_indents(para: &ParaStyle, rtl: bool, vertical: bool) -> bool {
 /// the right and the right indent from the left: the bullet of a right-to-left list hangs at the
 /// right, and the lines it wraps to line up with the text after the bullet. A list level past the
 /// first adds to the left indent ([`ParaStyle::laid_out_left_indent`]), mirrored with it.
-fn line_indents(para: &ParaStyle, first: bool, mirror: bool) -> (f64, f64) {
+pub(super) fn line_indents(para: &ParaStyle, first: bool, mirror: bool) -> (f64, f64) {
     let start = para.laid_out_left_indent() + if first { para.first_line_indent } else { 0.0 };
     if mirror { (para.right_indent, start) } else { (start, para.right_indent) }
 }
@@ -162,6 +177,7 @@ pub(super) fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, reg
         next_top: None,
         no_room_for: f64::INFINITY,
         steps_left: std::rc::Rc::new(std::cell::Cell::new(super::breaking::MAX_TOTAL_STEPS)),
+        search: Default::default(),
     };
     let markers = list_markers(t, paras);
     for (pi, pr) in paras.iter().enumerate() {
@@ -394,6 +410,12 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
     }
     // The line's first word, as narrow as the line sets it at both ends.
     let word = word_width(sg, *i, line_end, para.kinsoku);
+    // A composed line in a frame whose lines are not all as wide is placed at its own tallest
+    // metrics, as the composer placed it (`shaped::Shaped`): its room is the room across its height.
+    let est = match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
+        Some(&(end, _)) if end > *i && !constant_width(pen.regions) => sg.get(*i..end).and_then(Metrics::max).unwrap_or(est),
+        _ => est,
+    };
     // Place, break, then settle the baseline on the line's real metrics (moving on to the
     // next row/column if it no longer fits).
     loop {
@@ -496,6 +518,9 @@ struct LineJustification {
     /// The tracking after the line's last character that its alignment leaves out of its width:
     /// [`LineGeometry::trailing`] for a line that isn't justified, 0 for one that is.
     trailing: f64,
+    /// The glyphs justification leaves at their natural advance, by offset from the line's first
+    /// glyph: on a line with a tab, those drawn up to its last tab ([`tab_fixed_glyphs`]).
+    fixed: Vec<bool>,
 }
 
 fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut paragraph: ParagraphData<'_, '_>) -> bool {
@@ -810,10 +835,48 @@ pub(super) fn is_letter_gap(glyph: usize, held: &[usize], after: &[Option<usize>
     }
 }
 
-// A space that takes a share of a justified line's room: not a zero-width space, which is a line
-// break opportunity but not a word separator.
-fn is_justified_space(g: &SGlyph) -> bool {
-    g.is_space() && !is_format_control(g.ch)
+// The glyphs of a justified line that keep their natural advance, by offset from the line's first
+// glyph: on a line with a tab of its own (not a list marker's), every glyph drawn up to and
+// including the last such tab, so the tabs keep their stops and leaders. Justification spreads the
+// line's room over the glyphs drawn after that tab. Empty on a line without such a tab.
+fn tab_fixed_glyphs(paragraph: &ParagraphData<'_, '_>, line: &LineGeometry) -> Vec<bool> {
+    let sg = &paragraph.sg;
+    let Some(last) = line.drawn.iter().rposition(|&j| j >= paragraph.marker && sg.get(j).is_some_and(|g| g.ch == '\t' && g.len > 0)) else {
+        return Vec::new();
+    };
+    let mut fixed = vec![false; line.body.saturating_sub(line.index)];
+    for &j in line.drawn.iter().take(last + 1) {
+        if let Some(slot) = j.checked_sub(line.index).and_then(|k| fixed.get_mut(k)) {
+            *slot = true;
+        }
+    }
+    fixed
+}
+
+// Does justification leave glyph `glyph` of the line starting at `index` at its natural advance
+// (see [`tab_fixed_glyphs`])?
+fn is_tab_fixed(fixed: &[bool], index: usize, glyph: usize) -> bool {
+    glyph.checked_sub(index).and_then(|k| fixed.get(k)).copied().unwrap_or(false)
+}
+
+// The natural width of justified area type `line` with a tab, as [`emit_flow_line`] draws it from
+// the line's start: its glyphs in drawing order, each tab up to its stop from where the glyphs
+// drawn before it end, then the line's hyphen.
+fn tabbed_natural_width(paragraph: &ParagraphData<'_, '_>, line: &LineGeometry, fixed: &[bool]) -> f64 {
+    let sg = &paragraph.sg;
+    let start = line.ax0 - line.opt_l;
+    let mut x = start;
+    for &j in &line.drawn {
+        let Some(g) = sg.get(j) else { continue };
+        x += if g.ch == '\t' && g.len > 0 && is_tab_fixed(fixed, line.index, j) {
+            tab_advance(&paragraph.para.tabs, line.position.x0, x + line.opt_l, sg.get(j + 1..line.trimmed).unwrap_or_default()).0
+        } else if j + 1 == line.trimmed {
+            g.adv - line.end_trim
+        } else {
+            g.adv
+        };
+    }
+    x - start + line.hyphen.as_ref().map_or(0.0, |h| h.adv)
 }
 
 // May a pushed-in line close a CJK gap after `g`? Not after a list marker or an inline graphic,
@@ -859,7 +922,11 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
         Justify::JustifyAll => (0, true),
     };
     justify &= paragraph.regions.is_some();
-    let spaces = (line.index..line.body).filter(|&j| j >= paragraph.marker && is_justified_space(&sg[j])).count();
+    // A tab keeps its stop: the glyphs drawn up to a line's last tab keep their advances, and the
+    // ones after it take the line's room.
+    let fixed = tab_fixed_glyphs(paragraph, line);
+    let free = |j: usize| !is_tab_fixed(&fixed, line.index, j);
+    let spaces = (line.index..line.body).filter(|&j| j >= paragraph.marker && free(j) && is_word_space(&sg[j])).count();
     // A gap that justification adds between two glyphs goes into the advance of the one
     // drawn first: `drawn_after(j)` is the glyph drawn right after glyph `j`, which in a
     // right-to-left line comes before it in the text.
@@ -869,10 +936,10 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
             *slot = Some(b);
         }
     }
-    let cjk_gaps = (line.index..line.body).filter(|&j| is_cjk_gap(j, held, &after, line.index, sg)).count();
+    let cjk_gaps = (line.index..line.body).filter(|&j| free(j) && is_cjk_gap(j, held, &after, line.index, sg)).count();
     // Single Word Justification: a justified line holding one word (no word space) is
-    // spread between its letters (Full Justify) or aligned.
-    let single_word = justify && spaces == 0 && cjk_gaps == 0;
+    // spread between its letters (Full Justify) or aligned. A tab separates two words.
+    let single_word = justify && fixed.is_empty() && spaces == 0 && cjk_gaps == 0;
     (align, justify) = match (single_word, para.justification.single_word) {
         (false, _) | (true, SingleWordJustify::FullJustify) => (align, justify),
         (true, SingleWordJustify::AlignLeft) => (0, false),
@@ -881,12 +948,24 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
     };
     // Insert Kashidas: the Arabic words of a horizontal line take its room on kashidas,
     // and the word spaces and gaps take what is left.
-    let kashidas = if justify && !cx.vertical && room > line.render_width + EPS {
-        kashida::plan(cx.text, sg, line.index..line.body, para.kashida, room - line.render_width, |byte| cx.style_at(byte).kashidas)
+    // On a line with a tab, the kashidas go in the text after its last tab, when that text is one
+    // run of characters.
+    let kashida_range = if fixed.is_empty() {
+        Some(line.index..line.body)
+    } else {
+        let start = (line.index..line.body).find(|&j| free(j)).unwrap_or(line.body);
+        let end = (line.index..line.body).rev().find(|&j| free(j)).map_or(start, |j| j + 1);
+        (start..end).all(free).then_some(start..end)
+    };
+    // A justified line with a tab is as wide as it is drawn: in a right-to-left line its tabs are
+    // drawn in another order than the one the line was measured in.
+    let natural = if justify && !fixed.is_empty() { tabbed_natural_width(paragraph, line, &fixed) } else { line.render_width };
+    let kashidas = if let Some(range) = kashida_range.filter(|r| justify && !cx.vertical && !r.is_empty() && room > natural + EPS) {
+        kashida::plan(cx.text, sg, range, para.kashida, room - natural, |byte| cx.style_at(byte).kashidas)
     } else {
         Vec::new()
     };
-    let width = line.render_width + kashidas.iter().map(|k| k.1).sum::<f64>();
+    let width = natural + kashidas.iter().map(|k| k.1).sum::<f64>();
     let (mut per_space, mut per_gap, mut per_cjk) = (0.0, 0.0, 0.0);
     let mut fit = LineFit::default();
     let mut squeeze = 0.0;
@@ -896,13 +975,17 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
     let pushed_in = line.position.pushed_in && paragraph.regions.is_some() && cjk_gaps > 0 && width > room + EPS;
     if pushed_in {
         let ems: f64 = (line.index..line.body)
-            .filter(|&j| is_cjk_gap(j, held, &after, line.index, sg) && may_squeeze(&sg[j]))
+            .filter(|&j| free(j) && is_cjk_gap(j, held, &after, line.index, sg) && may_squeeze(&sg[j]))
             .map(|j| squeeze_em(&sg[j], cx.vertical))
             .sum();
         if ems > EPS {
             squeeze = ((room - width) / ems).max(-PUSH_IN_SQUEEZE);
         }
     } else if justify && (room - width).abs() > EPS {
+        // What justification may change of each glyph: nothing of one drawn up to the last tab.
+        let line_flex = || -> Vec<Flex> {
+            (line.index..line.body).map(|j| if free(j) { flow_line_flex(j, &paragraph.flex, held, hung) } else { Flex::default() }).collect()
+        };
         if cjk_gaps > 0 && room > width {
             // Spread over the CJK gaps and the word spaces alike.
             per_space = (room - width) / (cjk_gaps + spaces) as f64;
@@ -910,18 +993,20 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
         } else if spaces > 0 {
             // Word spacing, letter spacing and glyph scaling within their ranges, then the
             // word spaces alone; composed lines may shrink word spaces (never below zero).
-            let flex: Vec<Flex> = (line.index..line.body).map(|j| flow_line_flex(j, &paragraph.flex, held, hung)).collect();
-            let floor =
-                (line.index..line.body).filter(|&j| j >= paragraph.marker && is_justified_space(&sg[j])).map(|j| sg[j].adv).fold(f64::MAX, f64::min);
+            let flex = line_flex();
+            let floor = (line.index..line.body)
+                .filter(|&j| j >= paragraph.marker && free(j) && is_word_space(&sg[j]))
+                .map(|j| sg[j].adv)
+                .fold(f64::MAX, f64::min);
             fit = fit_line(&flex, room - width, spaces, floor);
         } else if room > width {
             // One word: its letter spacing and glyph scaling, then the gaps between its glyphs.
-            let flex: Vec<Flex> = (line.index..line.body).map(|j| flow_line_flex(j, &paragraph.flex, held, hung)).collect();
+            let flex = line_flex();
             fit = fit_line(&flex, room - width, 0, 0.0);
             let used: f64 = flex.iter().map(|f| fit.letter(f) + fit.glyph(f)).sum();
             let rest = room - width - used;
             let hyphen = line.hyphen.is_some();
-            let gaps = (line.index..line.body).filter(|&j| is_letter_gap(j, held, &after, line.index, sg, hyphen)).count();
+            let gaps = (line.index..line.body).filter(|&j| free(j) && is_letter_gap(j, held, &after, line.index, sg, hyphen)).count();
             if gaps > 0 && rest > EPS {
                 per_gap = rest / gaps as f64;
             }
@@ -953,7 +1038,7 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
             _ => line.ax1 + line.opt_r - width,
         }
     };
-    LineJustification { per_space, per_gap, per_cjk, squeeze, fit, start_x, after, kashidas, last_tab, trailing }
+    LineJustification { per_space, per_gap, per_cjk, squeeze, fit, start_x, after, kashidas, last_tab, trailing, fixed }
 }
 
 /// The advance and leader of tab `glyph_index` of `line`, at pen position `x`: up to its stop
@@ -1069,22 +1154,20 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
         let mut leader = "";
         if glyph.ch == '\t' {
             (advance, leader) = tab_glyph(paragraph, line, justification, glyph_index, x, (tab_origin, tab_shift), advance);
-        } else if glyph_index < body {
+        } else if glyph_index < body && !is_tab_fixed(&justification.fixed, index, glyph_index) {
             let flex = flow_line_flex(glyph_index, &paragraph.flex, &line.held, &line.hung);
             if is_word_space(glyph) {
-                advance += justification.fit.space(&flex);
+                advance += justification.fit.space(&flex) + justification.per_space;
             } else {
                 advance += justification.fit.letter(&flex) + justification.fit.glyph(&flex);
                 scale = justification.fit.glyph_scale(&flex);
-            }
-            if is_justified_space(glyph) {
-                advance += justification.per_space;
-            } else if justification.per_cjk != 0.0 || justification.squeeze != 0.0 {
-                if is_cjk_gap(glyph_index, &line.held, &justification.after, index, sg) {
-                    advance += justification.per_cjk + squeeze_after(glyph, justification.squeeze, cx.vertical);
+                if justification.per_cjk != 0.0 || justification.squeeze != 0.0 {
+                    if is_cjk_gap(glyph_index, &line.held, &justification.after, index, sg) {
+                        advance += justification.per_cjk + squeeze_after(glyph, justification.squeeze, cx.vertical);
+                    }
+                } else if is_letter_gap(glyph_index, &line.held, &justification.after, index, sg, line.hyphen.is_some()) {
+                    advance += justification.per_gap;
                 }
-            } else if is_letter_gap(glyph_index, &line.held, &justification.after, index, sg, line.hyphen.is_some()) {
-                advance += justification.per_gap;
             }
         }
         // The kashida before a cluster in the text is drawn at the cluster's right, between

@@ -616,6 +616,8 @@ font-technology	Variable	Variabla
 	Convert to Artboards	Konvertera till ritytor
 	Convert to CMYK	Konvertera till CMYK
 	Convert to Grayscale	Konvertera till gråskala
+	Convert to Indexed Color	Konvertera till indexerade färger
+	Convert to Indexed Color…	Konvertera till indexerade färger…
 	Convert To Outlines	Konvertera till konturbanor
 	Convert To Point Type	Konvertera till punkttext
 	Convert to RGB	Konvertera till RGB
@@ -1550,6 +1552,8 @@ font-technology	Variable	Variabla
 	Objects on Path Tool	Verktyg för objekt på bana
 	Attach Objects on Path	Fäst objekt på bana
 	Expand Objects on Path	Expandera objekt på bana
+	Detach	Lossa
+	Detach Object from Path	Lossa objekt från bana
 	Release Live Paint	Släpp direktmålning
 	Release Repeat	Släpp upprepning
 	Release Slice	Släpp skiva
@@ -2848,6 +2852,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	Återställ raderna till teckningens färger
 	Color Theme Picker	Färgtemaväljare
 	Click or drag across the art to pick its colors; Shift adds more	Klicka eller dra över teckningen för att hämta dess färger; Skift lägger till fler
+	Prominent Colors	Framträdande färger
+	Save All Colors	Spara alla färger
+	Save Prominent Colors	Spara framträdande färger
 	Reset to Default	Återställ till standard
 	Reset to White, Black	Återställ till vitt, svart
 	Reset with Mesh	Återställ med nät
@@ -3384,6 +3391,19 @@ digits	Malayalam	Malayalam
 	Spot Color Objects	Objekt med dekorfärger
 	Pattern Objects	Objekt med mönster
 	Gradient Objects	Objekt med gradienter
+	Font Details	Typsnittsdetaljer
+	Linked Images	Länkade bilder
+	Embedded Images	Inbäddade bilder
+	Compound Paths	Sammansatta banor
+	Text Objects	Textobjekt
+	Placed Documents	Placerade dokument
+	Symbol Instances	Symbolinstanser
+	Gradient Meshes	Gradientnät
+	Blends	Blandningar
+	Envelopes	Kuvert
+	Intertwine Groups	Sammanflätningsgrupper
+	Opacity Masks	Opacitetsmasker
+	Objects with Effects	Objekt med effekter
 	Spot Colors	Dekorfärger
 	Spot Colors…	Dekorfärger…
 	Spread:	Spridning:
@@ -4073,6 +4093,10 @@ axis	Both	Båda
 	Dock Panel	Docka panel
 	Dock to Top	Docka överst
 	Dock to Bottom	Docka nederst
+	Dock to Left	Docka till vänster
+	Dock to Right	Docka till höger
+	Dock Toolbar	Docka verktygsfältet
+	Float Toolbar	Gör verktygsfältet flytande
 	Control Bar Options	Alternativ för kontrollfältet
 	Tool Options	Verktygsalternativ
 	Object Options	Objektalternativ
@@ -4234,6 +4258,9 @@ axis	Both	Båda
 @msg	Couldn't open {name}: {e}	Kunde inte öppna {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Kunde inte placera {name}: dokumentet det släpptes på har stängts
 @msg	Couldn't place {name}: the document it was placed in was closed	Kunde inte placera {name}: dokumentet det placerades i har stängts
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Kunde inte placera {name}: dokumentet det släpptes på har återgått till sparad version
+@msg	Couldn't place {name}: the document it was placed in was reverted	Kunde inte placera {name}: dokumentet det placerades i har återgått till sparad version
+@msg	Couldn't paste: the document it was pasted in was reverted	Kunde inte klistra in: dokumentet det klistrades in i har återgått till sparad version
 @msg	Couldn't read {name}: {e}	Kunde inte läsa {name}: {e}
 @msg	Couldn't save recovery data: {e}	Kunde inte spara återställningsdata: {e}
 @msg	Create Outlines: select text objects	Skapa konturer: markera textobjekt
@@ -4654,6 +4681,7 @@ axis	Both	Båda
 @msg	paths contain invalid coordinates	banorna innehåller ogiltiga koordinater
 @msg	paths: give at least one file	paths: ange minst en fil
 @msg	replace: the object to replace was changed or deleted	replace: objektet som skulle ersättas har ändrats eller tagits bort
+@msg	the document it was prepared for is no longer active	dokumentet som det förbereddes för är inte längre aktivt
 @msg	pattern missing	mönster saknas
 @msg	patterns nested too deeply are filled with mid-grey	mönster som är kapslade för djupt fylls med mellangrått
 @msg	percent must be above 0 and at most 6400, not {p}	percent måste vara över 0 och högst 6400, inte {p}
@@ -5007,6 +5035,7 @@ axis	Both	Båda
 @msg	every numbered name for it is taken in the Fonts folder	alla numrerade namn för den är upptagna i mappen Typsnitt
 @msg	every numbered name for {name} is taken in the document's folder	alla numrerade namn för {name} är upptagna i dokumentets mapp
 @msg	No linked files to look for	Inga länkade filer att leta efter
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Länken finns i en symbol, en diagramdesign, ett mönster eller en opacitetsmask och har ingen plats på arbetsytan
 	Services	Tjänster
 	Hide VectorCraft	Göm VectorCraft
 	Zoom	Zoom
@@ -5414,7 +5443,9 @@ lighting	Light	Ljus
 @msg	`{GRAPHICS}` face must be front or back	face i `{GRAPHICS}` måste vara front eller back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} i `{GRAPHICS}` måste vara ett tal från {lo} till {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` måste vara en matris
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafik placeras på plana sidor: använd objekttypen Extrudera eller Plan
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafik placeras på objekttyperna Plan, Extrudera och Rotera runt axel
+@msg	Revolve maps graphics onto its side: map them onto the front	Rotera runt axel placerar grafik på sin mantelyta: placera den på framsidan
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiken är för komplex för den här ytan: förenkla symbolernas teckning eller minska Segment
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` tar högst {MAX_GRAPHICS} grafiker
 @msg	A plane has one face: map its graphics onto the front	Ett plan har en sida: placera dess grafik på framsidan
 @msg	The graphics are too complex: simplify the symbols' art	Grafiken är för komplex: förenkla symbolernas teckning
@@ -5656,6 +5687,8 @@ lighting	Light	Ljus
 	Pen	Penna
 	Pentagram	Pentagram
 	Perceptual	Perceptuell
+	Hue Clockwise	Nyans medurs
+	Hue Counterclockwise	Nyans moturs
 	Phone 360×800	Telefon 360×800
 	Phone 375×667	Telefon 375×667
 	Phone 375×812	Telefon 375×812
@@ -6024,6 +6057,7 @@ theme	Appearance	Utseende
 @msg	no bound object reports a value (locked objects and embedded images report none)	inget bundet objekt rapporterar ett värde (låsta objekt och inbäddade bilder rapporterar inget)
 @msg	select an Intertwine group	markera en sammanflätningsgrupp
 @msg	select an Objects on Path group	markera en grupp med objekt på bana
+@msg	choose the object to detach with its Select/Move widget	välj objektet som ska lossas med dess Markera/Flytta-reglage
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	en bana inuti en sammansatt bana, en blandning, ett kuvert, en upprepning eller en sammanflätningsgrupp kan inte ta emot objekt
 @msg	a clipping path can't take objects	en klippbana kan inte ta emot objekt
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objekt inuti en blandning, ett kuvert, en upprepning eller en sammanflätningsgrupp kan inte fästas på en bana
@@ -6311,7 +6345,7 @@ axis	Y Axis	Y-axel
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` gäller gradientfyllningar (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` gäller gradientfyllningar (paint.setFill)
 @msg	`dither` must be true or false	`dither` måste vara true eller false
-@msg	`method` must be classic or perceptual	`method` måste vara classic eller perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` måste vara classic, perceptual, hue-clockwise eller hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` måste vara pad, repeat eller reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` måste vara ett heltal från 1 till {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gäller för linjära, radiella och koniska gradienter och rombgradienter
@@ -6513,12 +6547,14 @@ axis	Y Axis	Y-axel
 	Continue	Fortsätt
 	Continue Action	Fortsätt åtgärd
 	Delete Action Step	Radera åtgärdssteg
+	Move Action Step	Flytta åtgärdssteg
 	Press Play Current Selection in the Actions panel to go on.	Fortsätt genom att trycka på Spela upp aktuell markering i panelen Åtgärder.
 	Stop: {message}	Stopp: {message}
 @msg	no action is waiting at a stop	ingen åtgärd väntar vid ett stopp
 @msg	message must be text	message måste vara text
 @msg	allowContinue must be true or false	allowContinue måste vara true eller false
 @msg	Batch cannot play an action with a stop	Batch kan inte spela upp en åtgärd med ett stopp
+@msg	Batch cannot play an action with a View menu step	Batch kan inte spela upp en åtgärd med ett steg från menyn Visa
 	Insert Menu Item…	Infoga menyalternativ…
 	Insert Menu Item	Infoga menyalternativ
 	Insert Select Path	Infoga markering av bana
@@ -6683,6 +6719,22 @@ axis	Y Axis	Y-axel
 	Graphite Pencil	Grafitpenna
 	Wax Crayon	Vaxkrita
 	Charcoal Dust	Koldamm
+	Notched Ribbon	Hackat band
+	Double Line	Dubbellinje
+	Wave	Våg
+	Teardrop	Droppe
+	Striped Ribbon	Randigt band
+	Fine Nib	Fin spets
+	Broad Nib	Bred spets
+	Chisel	Mejsel
+	Round Pen	Rund penna
+	Pressure Pen	Tryckpenna
+	Beads	Pärlor
+	Dash Dot	Streck-punkt
+	Scallops	Bågkant
+	Stars	Stjärnor
+	Triangles	Trianglar
+	Sparkles	Gnistor
 	Save Brush Library…	Spara penselbibliotek…
 @msg	`{_1}` has no brushes to apply	`{_1}` har inga penslar att använda
 @msg	missing `library` (see brush.libraries)	`library` saknas (se brush.libraries)
@@ -6702,6 +6754,13 @@ axis	Y Axis	Y-axel
 	Area Text	Områdestext
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mät text efter glyfgränser
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Alternativ för fäst mot pixel
+	Pixel Snapping Options…	Alternativ för fäst mot pixel…
+	Snap to Pixel While Drawing	Fäst mot pixel vid ritning
+	Snap to Pixel While Moving	Fäst mot pixel vid flyttning
+	Snap to Pixel While Scaling	Fäst mot pixel vid skalning
+	These options take effect when View › Snap to Pixel is on.	De här alternativen gäller när Visa › Fäst mot pixel är på.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Visa alternativ för fäst mot glyf
 	Hide Snap to Glyph Options	Dölj alternativ för fäst mot glyf
@@ -8787,6 +8846,19 @@ digits	Hindi	Hindi
 	Show where this tool is	Visa var det här verktyget finns
 @msg	missing `tutorial` (see learn.list)	`tutorial` saknas (se learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	okänd självstudie `{id}` (se learn.list)
+	View more	Visa mer
+	Finish tutorial	Slutför självstudien
+	Next Up	Nästa
+	You finished the last tutorial in this skill.	Du har slutfört den sista självstudien i den här färdigheten.
+	Back to skills	Tillbaka till färdigheter
+	Open Tutorial Sample	Öppna övningsexempel för självstudie
+	Finish Tutorial	Slutför självstudie
+	Next Tutorial	Nästa självstudie
+	Back to Skills	Tillbaka till färdigheter
+@msg	tutorial `{id}` has no practice sample	självstudien `{id}` har inget övningsexempel
+@msg	open the practice sample of `{id}` first (see learn.openSample)	öppna först övningsexemplet för `{id}` (se learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	slutför först `{id}` (se learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` är den sista självstudien i sin färdighet
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Uppdatera uppskjutna effekter

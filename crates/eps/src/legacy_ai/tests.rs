@@ -198,6 +198,46 @@ fn many_repeats_are_written_within_the_stops_the_reader_reads() {
     assert_eq!(stops, Some(written), "every stop written is read");
 }
 
+/// The format's gradients mix their stops' colors directly: a gradient mixed around the hue wheel
+/// is written with the colors on its way around the wheel as stops, no more than the reader
+/// reads, with a warning, and opens with the colors it had.
+#[test]
+fn hue_wheel_gradients_are_written_with_the_stops_on_their_curve() {
+    use vectorcraft_color::GradientMethod;
+    for (method, middle) in [(GradientMethod::HueCounterclockwise, [0.0, 1.0, 0.0]), (GradientMethod::HueClockwise, [1.0, 0.0, 1.0])] {
+        let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+        let g = GradientPaint::new(Gradient { method, ..Gradient::new(GradientKind::Linear, stops) });
+        let want = g.gradient.clone();
+        let mut doc = Document::new(200.0, 100.0);
+        let n = shape(&mut doc, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Paint::Gradient(Box::new(g)), Paint::None);
+        let l = doc.layers[0].id;
+        doc.insert(Some(l), 0, n).unwrap();
+        let out = write(&doc);
+        assert!(out.warnings.iter().any(|w| w == HUE_STOPS), "{method:?}: {:?}", out.warnings);
+        let text = String::from_utf8_lossy(&out.bytes).into_owned();
+        let def = text.split("%AI5_BeginGradient: (Gradient)\n").nth(1).and_then(|d| d.split("%AI5_EndGradient").next()).unwrap();
+        let written = def.matches(" %_Bs\n").count();
+        // The two ends and each sixth of the wheel between them, where the way turns in RGB.
+        assert!((3..=crate::import::MAX_GRADIENT_STOPS).contains(&written), "{method:?}: {written} stops");
+        let read = crate::import(&out.bytes).unwrap().document;
+        let mut back = None;
+        read.walk(|n| {
+            if let (None, Paint::Gradient(g)) = (&back, n.appearance.fill_paint()) {
+                back = Some(g.gradient.clone());
+            }
+        });
+        let back = back.unwrap();
+        assert!(back.method.is_classic(), "{method:?}");
+        let mid = back.sample(0.5).0.to_rgb();
+        assert!(mid.iter().zip(middle).all(|(a, b)| (a - b).abs() < 0.03), "{method:?}: the middle is {mid:?}");
+        for k in 0..=100 {
+            let t = k as f32 / 100.0;
+            let (a, b) = (want.sample(t).0.to_rgb(), back.sample(t).0.to_rgb());
+            assert!(a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.03), "{method:?} at {t}: {a:?} vs {b:?}");
+        }
+    }
+}
+
 /// A radial gradient repeated out from a center far from the shape is written with its ramp points
 /// (percent) to five decimals, so its runs keep their places hundreds of runs out.
 #[test]

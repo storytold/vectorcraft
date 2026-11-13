@@ -534,6 +534,241 @@ fn composition_counts_the_narrower_line_end() {
     assert_eq!(lines(38.0, &half, &[Breakpoint { end: 4, hyphen: 0.0 }]), Some(vec![(4, false), (7, false)]));
 }
 
+/// A line measure for `compose_with`: every line is `width` wide, its state is the glyph it starts
+/// at, and the search stops once `calls` lines were measured.
+struct Measured {
+    width: f64,
+    calls: usize,
+    /// A line from a start past this one finds the frame full.
+    full_after: usize,
+}
+
+impl crate::composer::Measure for Measured {
+    type State = usize;
+    fn first(&mut self) -> usize {
+        0
+    }
+    fn line(&mut self, &start: &usize, _: usize, end: usize) -> Result<Option<(f64, usize)>, crate::composer::Exhausted> {
+        if self.calls == 0 {
+            return Err(crate::composer::Exhausted);
+        }
+        self.calls -= 1;
+        Ok((start <= self.full_after).then_some((self.width, end)))
+    }
+}
+
+/// The every-line composer with a line measure that follows the lines above: it breaks as with
+/// fixed widths when the widths are the same, finds no composition when the frame is full before
+/// the paragraph ends, and gives up when the measure's search stops.
+#[test]
+fn composition_with_a_measure_from_the_lines_above() {
+    let text = "가나다 라마바";
+    let glyphs = korean(text, false);
+    let cands = candidates(text, &glyphs, None, Kinsoku::Hard);
+    let params = Params { justify_last: false, ragged: true, tolerance: f64::INFINITY, uniform_from: 0, hyphen_limit: 0 };
+    let with = |calls: usize, full_after: usize| {
+        let mut measure = Measured { width: 50.0, calls, full_after };
+        crate::composer::compose_with(&glyphs, &mut measure, &|_| 0.0, &|_| 0.0, &cands, &[], &params)
+    };
+    let fixed = compose(&glyphs, &|_| 50.0, &|_| 0.0, &|_| 0.0, &cands, &[], &params);
+    assert_eq!(fixed, Some(vec![(4, false), (7, false)]));
+    assert_eq!(with(usize::MAX, usize::MAX), fixed);
+    assert_eq!(with(usize::MAX, 0), None, "no room for a second line");
+    assert_eq!(with(1, usize::MAX), None, "the search stopped");
+}
+
+/// A line measure for `compose_with` whose lines are `narrow` wide, and `wide` wide when they reach
+/// past glyph `from` (a line made taller there, and set lower in a frame that widens).
+struct Widening {
+    narrow: f64,
+    wide: f64,
+    from: usize,
+}
+
+impl crate::composer::Measure for Widening {
+    type State = usize;
+    fn first(&mut self) -> usize {
+        0
+    }
+    fn line(&mut self, _: &usize, _: usize, end: usize) -> Result<Option<(f64, usize)>, crate::composer::Exhausted> {
+        Ok(Some((if end > self.from { self.wide } else { self.narrow }, end)))
+    }
+    fn may_widen(&mut self, _: &usize, _: usize, end: usize) -> bool {
+        end <= self.from
+    }
+}
+
+/// A line too long for its room does not end the composer's search from its start while a longer
+/// line may get more room: the longer line is tried and set.
+#[test]
+fn composition_tries_a_longer_line_that_gets_more_room() {
+    let text = "가나다 라마바";
+    let glyphs = korean(text, false);
+    let cands = candidates(text, &glyphs, None, Kinsoku::Hard);
+    let params = Params { justify_last: false, ragged: true, tolerance: f64::INFINITY, uniform_from: 0, hyphen_limit: 0 };
+    // "가나다" is 30 wide and does not fit 25; the whole paragraph reaches past glyph 4 and fits 100.
+    let mut measure = Widening { narrow: 25.0, wide: 100.0, from: 4 };
+    let lines = crate::composer::compose_with(&glyphs, &mut measure, &|_| 0.0, &|_| 0.0, &cands, &[], &params);
+    assert_eq!(lines, Some(vec![(7, false)]));
+}
+
+/// A line measure for `compose_with` whose lines can't be set until they reach past glyph `from`
+/// (a line made taller there steps down the frame by its own leading, to a band the shorter
+/// line's steps miss), and are `wide` wide from there.
+struct Unplaced {
+    wide: f64,
+    from: usize,
+}
+
+impl crate::composer::Measure for Unplaced {
+    type State = usize;
+    fn first(&mut self) -> usize {
+        0
+    }
+    fn line(&mut self, _: &usize, _: usize, end: usize) -> Result<Option<(f64, usize)>, crate::composer::Exhausted> {
+        Ok((end > self.from).then_some((self.wide, end)))
+    }
+    fn may_widen(&mut self, _: &usize, _: usize, end: usize) -> bool {
+        end <= self.from
+    }
+}
+
+/// A line that can't be set does not end the composer's search from its start while a longer line
+/// may be placed elsewhere: the longer line is tried and set.
+#[test]
+fn composition_tries_a_longer_line_after_one_that_cannot_be_set() {
+    let text = "가나다 라마바";
+    let glyphs = korean(text, false);
+    let cands = candidates(text, &glyphs, None, Kinsoku::Hard);
+    let params = Params { justify_last: false, ragged: true, tolerance: f64::INFINITY, uniform_from: 0, hyphen_limit: 0 };
+    // "가나다" finds no room; the whole paragraph reaches past glyph 4 and fits 100.
+    let mut measure = Unplaced { wide: 100.0, from: 4 };
+    let lines = crate::composer::compose_with(&glyphs, &mut measure, &|_| 0.0, &|_| 0.0, &cands, &[], &params);
+    assert_eq!(lines, Some(vec![(7, false)]));
+}
+
+/// A further span beside a wrap object goes to the line set in it with the room across that line's
+/// own height. A line taller than the one before it on the baseline keeps clear of an object the
+/// shorter line did not reach, and moves down when the span has no room for it.
+#[test]
+fn a_further_span_is_measured_across_the_height_of_its_line() {
+    use std::cell::Cell;
+    use std::rc::Rc;
+    let frame = Rect::new(0.0, 0.0, 400.0, 400.0).to_path(0.1);
+    let wrap = |r: Rect| vectorcraft_doc::WrapShape {
+        path: PathData::from_bezpath(&r.to_path(0.1)),
+        wrap: vectorcraft_doc::TextWrap { offset: 0.0, invert: false },
+    };
+    let small = breaking::Metrics { asc: 10.0, desc: 3.0, lead: 14.0, cap: 7.0, xh: 5.0, top: 10.0 };
+    let tall = breaking::Metrics { asc: 30.0, desc: 9.0, lead: 42.0, cap: 21.0, xh: 15.0, top: 30.0 };
+    // An object down the middle of the frame splits every line in two, and `above` lies right of
+    // it over y 20 to 40. A small line after a baseline of 50 is set at 64, over y 54 to 67, clear
+    // of `above`; a tall line in the span right of it on that baseline covers y 34 to 73.
+    // The tall line starts with a word `word` wide.
+    let set = |above: Rect, word: f64| {
+        let regions = region::Region::cells(&frame, &LayoutOptions::default(), &[wrap(Rect::new(180.0, 0.0, 220.0, 400.0)), wrap(above)]);
+        let mut pen = breaking::Pen {
+            regions: Some(&regions),
+            ri: 0,
+            prev: Some(50.0),
+            pending: 0.0,
+            fb: FirstBaseline::Ascent,
+            fb_min: 0.0,
+            queued: vec![],
+            model: LeadingModel::RomanBaseline,
+            next_top: None,
+            no_room_for: f64::INFINITY,
+            steps_left: Rc::new(Cell::new(breaking::MAX_TOTAL_STEPS)),
+            search: Default::default(),
+        };
+        let left = pen.place(small, 0.0, 0.0, 0.0);
+        pen.settled(64.0, small);
+        let right = pen.place(tall, 0.0, 0.0, word);
+        (left, right)
+    };
+    let near = |got: Option<(f64, f64, f64, bool)>, want: (f64, f64, f64, bool)| {
+        got.is_some_and(|g| (g.0 - want.0).abs() < 0.01 && (g.1 - want.1).abs() < 0.01 && (g.2 - want.2).abs() < 0.01 && g.3 == want.3)
+    };
+    // `above` covers the right end of the span: the tall line gets the part left of it.
+    let (left, right) = set(Rect::new(300.0, 20.0, 400.0, 40.0), 0.0);
+    assert!(near(left, (64.0, 0.0, 180.0, false)), "{left:?}");
+    assert!(near(right, (64.0, 220.0, 300.0, true)), "{right:?}");
+    // That part is 80 wide: a tall line that starts with a wider word goes on the next baseline.
+    let (_, right) = set(Rect::new(300.0, 20.0, 400.0, 40.0), 100.0);
+    assert!(near(right, (106.0, 0.0, 180.0, false)), "{right:?}");
+    // `above` covers the whole span: the tall line goes on the next baseline, left of the object.
+    let (left, right) = set(Rect::new(220.0, 20.0, 400.0, 40.0), 0.0);
+    assert!(near(left, (64.0, 0.0, 180.0, false)), "{left:?}");
+    assert!(near(right, (106.0, 0.0, 180.0, false)), "{right:?}");
+    // `above` lies below the tall line: the span is as wide for it as for the small line, and it
+    // takes the span whatever its first word, as a further span always did.
+    let (_, right) = set(Rect::new(300.0, 300.0, 400.0, 320.0), 200.0);
+    assert!(near(right, (64.0, 220.0, 400.0, true)), "{right:?}");
+}
+
+/// The every-line composer's searches for the paragraphs of one frame share one budget: each takes
+/// the lines it tried and the baseline steps it spent from it, the layout's own steps stay as they
+/// were, and once the budget runs out the next paragraph's search stops (it is broken line by line).
+#[test]
+fn shaped_composition_searches_share_the_frame_budget() {
+    use super::shaped::{Budget, Shaped};
+    use std::cell::Cell;
+    use std::rc::Rc;
+    let text = "aa bb cc dd ee ff gg hh ii jj";
+    let mut glyphs = full_width(text);
+    glyphs[3].ascent = 30.0;
+    let cands = candidates(text, &glyphs, None, Kinsoku::Hard);
+    // 60 pt wide down to 40 pt, and 30 pt wide below.
+    let frame = BezPath::from_vec(vec![
+        PathEl::MoveTo((0.0, 0.0).into()),
+        PathEl::LineTo((60.0, 0.0).into()),
+        PathEl::LineTo((60.0, 40.0).into()),
+        PathEl::LineTo((30.0, 40.0).into()),
+        PathEl::LineTo((30.0, 400.0).into()),
+        PathEl::LineTo((0.0, 400.0).into()),
+        PathEl::ClosePath,
+    ]);
+    let regions = region::Region::cells(&frame, &LayoutOptions::default(), &[]);
+    let para = ParaStyle::default();
+    let params = Params { justify_last: false, ragged: true, tolerance: f64::INFINITY, uniform_from: 0, hyphen_limit: 0 };
+    let pen = |search: Rc<Budget>| breaking::Pen {
+        regions: Some(&regions),
+        ri: 0,
+        prev: None,
+        pending: 0.0,
+        fb: FirstBaseline::Ascent,
+        fb_min: 0.0,
+        queued: vec![],
+        model: LeadingModel::default(),
+        next_top: None,
+        no_room_for: f64::INFINITY,
+        steps_left: Rc::new(Cell::new(breaking::MAX_TOTAL_STEPS)),
+        search,
+    };
+    let compose = |pen: &breaking::Pen<'_>| {
+        let mut measure = Shaped::new(&glyphs, &[], &para, &|_| 0.0, false, false, pen);
+        crate::composer::compose_with(&glyphs, &mut measure, &|_| 0.0, &|_| 0.0, &cands, &[], &params)
+    };
+    // One paragraph's search, with room to spare.
+    let one = pen(Rc::new(Budget::default()));
+    let before = one.search.left();
+    let lines = compose(&one);
+    assert!(lines.is_some());
+    let after = one.search.left();
+    let (probes, steps) = (before.0 - after.0, before.1 - after.1);
+    assert!(probes > 0 && steps > 0, "{probes} lines tried, {steps} steps");
+    assert_eq!(one.steps_left.get(), breaking::MAX_TOTAL_STEPS, "the layout's own steps");
+    // A budget of three such searches: three paragraphs are composed, the fourth is not.
+    let three = pen(Rc::new(Budget::new(3 * probes, 3 * steps)));
+    for k in 0..3 {
+        assert_eq!(compose(&three), lines, "paragraph {k}");
+    }
+    assert_eq!(three.search.left(), (0, 0));
+    assert_eq!(compose(&three), None, "the budget ran out");
+    assert_eq!(three.search.left(), (0, 0));
+    assert_eq!(three.steps_left.get(), breaking::MAX_TOTAL_STEPS, "the layout's own steps");
+}
+
 /// The glyphs of `text`, each 10 pt wide, with Korean words kept whole unless `anywhere` (Korean
 /// Line Break Anywhere on).
 fn korean(text: &str, anywhere: bool) -> Vec<SGlyph> {

@@ -65,24 +65,62 @@ pub enum GradientMethod {
     /// Mixed in a perceptual colour space (OKLab), so the steps look even to the eye: blue to
     /// yellow passes through a light blue-grey rather than a dull mid grey.
     Perceptual,
+    /// Mixed around the hue wheel, clockwise as the color wheels draw it: the hue angle falls
+    /// from each stop to the next (red, magenta, blue, cyan, green, yellow, red), and saturation
+    /// and brightness change evenly ([`hue_mix`]).
+    HueClockwise,
+    /// Mixed around the hue wheel the other way: the hue angle rises from each stop to the next
+    /// (red, yellow, green, cyan, blue, magenta, red).
+    HueCounterclockwise,
 }
 
 impl GradientMethod {
-    /// Parse a method name (`classic`, `perceptual`; any case).
+    /// Every method, in the order the Gradient panel lists them.
+    pub const ALL: [GradientMethod; 4] = [Self::Classic, Self::Perceptual, Self::HueClockwise, Self::HueCounterclockwise];
+    /// Parse a method name (`classic`, `perceptual`, `hue-clockwise`, `hue-counterclockwise`;
+    /// any case, and the hyphen may be a space or an underscore, or left out). Any other text,
+    /// one with a separator elsewhere included, is `None`.
     pub fn parse(s: &str) -> Option<Self> {
-        [Self::Classic, Self::Perceptual].into_iter().find(|m| m.label().eq_ignore_ascii_case(s))
+        let name = s.to_ascii_lowercase();
+        Self::ALL.into_iter().find(|m| ["-", " ", "_", ""].iter().any(|sep| m.id().replace('-', sep) == name))
     }
     pub fn label(self) -> &'static str {
         match self {
             Self::Classic => "Classic",
             Self::Perceptual => "Perceptual",
+            Self::HueClockwise => "Hue Clockwise",
+            Self::HueCounterclockwise => "Hue Counterclockwise",
+        }
+    }
+    /// The method's name in command params (`classic`, `perceptual`, `hue-clockwise`,
+    /// `hue-counterclockwise`).
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Classic => "classic",
+            Self::Perceptual => "perceptual",
+            Self::HueClockwise => "hue-clockwise",
+            Self::HueCounterclockwise => "hue-counterclockwise",
         }
     }
     pub fn is_classic(&self) -> bool {
         *self == Self::Classic
     }
-    /// `a` and `b` mixed at `t` (0..1): in display RGB (Classic), or in OKLab (Perceptual: an
-    /// RGB colour between the two).
+    /// Does it mix around the hue wheel (Hue Clockwise or Hue Counterclockwise)? The colors
+    /// between two stops then are not mixes of the stops' inks.
+    pub fn is_hue(&self) -> bool {
+        matches!(self, Self::HueClockwise | Self::HueCounterclockwise)
+    }
+    /// The method that mixes `b` to `a` through the colors this one mixes `a` to `b` through: a
+    /// hue method turned the other way, Classic and Perceptual as they are.
+    pub fn mirrored(self) -> Self {
+        match self {
+            Self::HueClockwise => Self::HueCounterclockwise,
+            Self::HueCounterclockwise => Self::HueClockwise,
+            m => m,
+        }
+    }
+    /// `a` and `b` mixed at `t` (0..1): in display RGB (Classic), in OKLab (Perceptual: an
+    /// RGB colour between the two), or around the hue wheel ([`hue_mix`]: an RGB colour).
     pub fn mix(self, a: &Color, b: &Color, t: f32) -> Color {
         match self {
             Self::Classic => Color::lerp(a, b, t),
@@ -93,8 +131,66 @@ impl GradientMethod {
                 let c = |v: f64| if v.is_finite() { v.clamp(0.0, 1.0) as f32 } else { 0.0 };
                 Color::rgb(c(r), c(g), c(bl))
             }
+            Self::HueClockwise => hue_mix(a, b, t, false),
+            Self::HueCounterclockwise => hue_mix(a, b, t, true),
         }
     }
+}
+
+/// The brightness (0..1) at or below which a color is black for [`hue_mix`], and the spread
+/// between its largest and smallest RGB numbers (saturation × brightness) at or below which it
+/// has no hue of its own: under half a color level.
+const NO_HUE: f32 = 0.4 / 255.0;
+
+/// The hue difference (degrees) that moves an RGB number by half a color level in a color whose
+/// largest and smallest RGB numbers are 1 apart; a color with a smaller spread takes
+/// proportionally more degrees. [`hue_mix`] counts two hues closer than this as one hue.
+const SAME_HUE: f32 = 60.0 * 0.5 / 255.0;
+
+/// `a` and `b` mixed at `t` (0..1) around the hue wheel, as display RGB: hue (degrees),
+/// saturation and brightness each change evenly from `a`'s to `b`'s. The hue angle only rises
+/// (`rising`) or only falls, by the fixed-direction rules of
+/// <https://www.w3.org/TR/css-color-4/#hue-interpolation>, and two equal hues stay where they are.
+/// Two hues that differ by less than half a color level ([`SAME_HUE`]) count as equal and take the
+/// short way, so a color and a tint or shade of it, whose computed hues differ by rounding, do
+/// not turn the whole wheel. A color whose RGB numbers are less than half a color level apart
+/// ([`NO_HUE`]) has no hue and takes the other color's; black has no saturation either and takes
+/// the other color's too. Two colors without a hue mix as grays. A `t` that is not a number
+/// gives `a`.
+pub fn hue_mix(a: &Color, b: &Color, t: f32, rising: bool) -> Color {
+    let t = if t.is_nan() { 0.0 } else { t.clamp(0.0, 1.0) };
+    let ([mut h0, mut s0, v0], [mut h1, mut s1, v1]) = (a.to_hsb(), b.to_hsb());
+    let (black0, black1) = (v0 <= NO_HUE, v1 <= NO_HUE);
+    // The spread between each color's own largest and smallest RGB numbers.
+    let (spread0, spread1) = (s0 * v0, s1 * v1);
+    // Black takes the other color's saturation, so it darkens that color rather than graying it.
+    if black0 && !black1 {
+        s0 = s1;
+    } else if black1 && !black0 {
+        s1 = s0;
+    }
+    let (gray0, gray1) = (black0 || spread0 <= NO_HUE, black1 || spread1 <= NO_HUE);
+    match (gray0, gray1) {
+        (true, _) => h0 = h1,
+        (false, true) => h1 = h0,
+        (false, false) => {
+            // The short way from the first hue to the second, -180..180.
+            let short = (h1 - h0 + 180.0).rem_euclid(360.0) - 180.0;
+            h1 = if short.abs() * spread0.min(spread1) <= SAME_HUE {
+                h0 + short
+            } else if rising {
+                h0 + short.rem_euclid(360.0)
+            } else {
+                h0 + short.rem_euclid(360.0) - 360.0
+            };
+        }
+    }
+    let at = |p: f32, q: f32| p + (q - p) * t;
+    let (h, s, v) = (at(h0, h1), at(s0, s1), at(v0, v1));
+    if !(h.is_finite() && s.is_finite() && v.is_finite()) {
+        return Color::rgb(0.0, 0.0, 0.0);
+    }
+    Color::from_hsb(h.rem_euclid(360.0), s.clamp(0.0, 1.0), v.clamp(0.0, 1.0))
 }
 
 /// What a linear, radial, conic or diamond gradient paints past the ends of its stops (the
@@ -192,10 +288,11 @@ const MAX_INK_TINTS: usize = 4096;
 const INK_MIX_STEPS: u32 = 64;
 
 /// The mix positions (0..1, after `v0`, before `v1`) between which display RGB mixed linearly
-/// stays within [`PERCEPTUAL_TOLERANCE`] of the perceptual mix of `a` and `b`: the span halved
-/// where a straight line strays, at most [`PERCEPTUAL_DEPTH`] times, in order.
-fn perceptual_steps(a: &Color, b: &Color, (v0, v1): (f32, f32), depth: u32, out: &mut Vec<f32>) {
-    let at = |v: f32| GradientMethod::Perceptual.mix(a, b, v).to_rgb();
+/// stays within [`PERCEPTUAL_TOLERANCE`] of `method`'s mix of `a` and `b` (Perceptual, or around
+/// the hue wheel): the span halved where a straight line strays, at most [`PERCEPTUAL_DEPTH`]
+/// times, in order.
+fn perceptual_steps(method: GradientMethod, a: &Color, b: &Color, (v0, v1): (f32, f32), depth: u32, out: &mut Vec<f32>) {
+    let at = |v: f32| method.mix(a, b, v).to_rgb();
     let (c0, c1) = (at(v0), at(v1));
     let stray = [0.25, 0.5, 0.75]
         .into_iter()
@@ -206,19 +303,20 @@ fn perceptual_steps(a: &Color, b: &Color, (v0, v1): (f32, f32), depth: u32, out:
         .fold(0.0, f32::max);
     if depth < PERCEPTUAL_DEPTH && stray > PERCEPTUAL_TOLERANCE {
         let m = (v0 + v1) / 2.0;
-        perceptual_steps(a, b, (v0, m), depth + 1, out);
+        perceptual_steps(method, a, b, (v0, m), depth + 1, out);
         out.push(m);
-        perceptual_steps(a, b, (m, v1), depth + 1, out);
+        perceptual_steps(method, a, b, (m, v1), depth + 1, out);
     }
 }
 
-/// The mix positions (`v`, 0..1) of the stops a Perceptual gradient's curve has between stops `a`
-/// and `b`, in order: [`perceptual_steps`] on either side of the midpoint, and the midpoint (½).
-fn perceptual_mixes(a: &GradientStop, b: &GradientStop) -> Vec<f32> {
+/// The mix positions (`v`, 0..1) of the stops the curve of a gradient mixed by `method`
+/// (Perceptual, or around the hue wheel) has between stops `a` and `b`, in order:
+/// [`perceptual_steps`] on either side of the midpoint, and the midpoint (½).
+fn perceptual_mixes(method: GradientMethod, a: &GradientStop, b: &GradientStop) -> Vec<f32> {
     let mut vs = Vec::new();
-    perceptual_steps(&a.color, &b.color, (0.0, 0.5), 1, &mut vs);
+    perceptual_steps(method, &a.color, &b.color, (0.0, 0.5), 1, &mut vs);
     vs.push(0.5);
-    perceptual_steps(&a.color, &b.color, (0.5, 1.0), 1, &mut vs);
+    perceptual_steps(method, &a.color, &b.color, (0.5, 1.0), 1, &mut vs);
     vs
 }
 
@@ -512,10 +610,11 @@ impl Gradient {
                 };
                 (t, c, o, Some(s.midpoint), None)
             });
-            // Perceptual: stops along the mix (`v`) where a straight line would stray from it, the
-            // midpoint (v = ½) among them, placed through the midpoint as [`Self::sample`] maps them.
+            // Perceptual and the hue methods: stops along the mix (`v`) where a straight line would
+            // stray from it, the midpoint (v = ½) among them, placed through the midpoint as
+            // [`Self::sample`] maps them.
             let perceptual = next.filter(|_| !self.method.is_classic()).map(|n| {
-                perceptual_mixes(s, n).into_iter().map(move |v| {
+                perceptual_mixes(self.method, s, n).into_iter().map(move |v| {
                     let mid = v == 0.5;
                     let t = curve_offset(s, n, v);
                     let o = s.opacity + (n.opacity - s.opacity) * v;
@@ -571,11 +670,12 @@ impl Gradient {
     /// position itself when the two colors' lightness differs by less than
     /// [`MIN_INK_LIGHTNESS_SPAN`], or when the display RGB mix's lightness turns back somewhere
     /// on the way from one color's lightness to the other's (checked at [`INK_MIX_STEPS`] even
-    /// steps), as from red to blue. `None` for a Classic gradient, and when the curve has more
-    /// than [`MAX_INK_TINTS`] stops ([`Self::fits_ink_tints`]).
+    /// steps), as from red to blue. `None` for a Classic gradient, for one mixed around the hue
+    /// wheel (its colors between two stops are not mixes of the stops' inks), and when the curve
+    /// has more than [`MAX_INK_TINTS`] stops ([`Self::fits_ink_tints`]).
     pub fn ink_mixes(&self) -> Option<Vec<(f32, usize, f32, f32)>> {
         use crate::libraries::srgb_to_oklab;
-        if self.method.is_classic() || !self.fits_ink_tints() {
+        if self.method != GradientMethod::Perceptual || !self.fits_ink_tints() {
             return None;
         }
         let lightness = |c: &Color| srgb_to_oklab(c.to_rgb())[0];
@@ -592,7 +692,7 @@ impl Gradient {
                     .collect::<Vec<_>>()
                     .windows(2)
                     .all(|w| (w[1] - w[0]) * (l1 - l0) >= 0.0);
-            for v in perceptual_mixes(s, n) {
+            for v in perceptual_mixes(self.method, s, n) {
                 let weight = if by_position {
                     v
                 } else {
@@ -650,8 +750,10 @@ impl Gradient {
         Some(Ramp { stops })
     }
     /// The same ramp the other way round: the stops in reverse order at mirrored offsets, each
-    /// segment's midpoint mirrored with it.
+    /// segment's midpoint mirrored with it, and a hue method turned the other way (red to blue
+    /// through magenta, reversed, is blue to red through magenta).
     pub fn reverse(&mut self) {
+        self.method = self.method.mirrored();
         self.stops.reverse();
         for i in 0..self.stops.len() {
             // A midpoint belongs to the segment after its stop: reversed, stop i's segment is the
@@ -665,6 +767,13 @@ impl Gradient {
     }
     pub fn sort(&mut self) {
         self.stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
+    }
+    /// The gradient's colors as a Classic gradient: its curve's stops ([`Self::expanded_stops`]) as
+    /// stops of their own, mixed in display RGB, within [`PERCEPTUAL_TOLERANCE`] of it. The stops
+    /// keep no swatch links, tints or process plates.
+    pub fn as_classic_curve(&self) -> Gradient {
+        let stops = self.expanded().map(|(t, color, opacity, _)| GradientStop { opacity, ..GradientStop::new(t, color) }).collect();
+        Gradient { kind: self.kind, stops, dither: self.dither, method: GradientMethod::Classic, spread: self.spread, repeats: self.repeats }
     }
     /// The part of the gradient from `from` to `to` (0..1, either way round) as a linear gradient
     /// of its own running 0 → 1: the same colours (midpoints become stops, as in
@@ -1261,8 +1370,9 @@ impl GradientPaint {
     }
     /// Is this gradient drawn as pixels rather than as a vector gradient when it paints a fill
     /// (`fill`) or a stroke (SVG and PDF draw such gradients as images): a freeform gradient, a
-    /// dithered fill (dither applies to fills only), or a Perceptual one (its colours don't mix
-    /// linearly between the stops, as SVG's and PDF's gradients do)?
+    /// dithered fill (dither applies to fills only), or a Perceptual one or one mixed around the
+    /// hue wheel (its colours don't mix linearly between the stops, as SVG's and PDF's gradients
+    /// do)?
     pub fn draws_as_pixels(&self, fill: bool) -> bool {
         self.gradient.kind == GradientKind::Freeform || (fill && self.gradient.dither) || !self.gradient.method.is_classic()
     }
