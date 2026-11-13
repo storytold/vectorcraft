@@ -3128,6 +3128,73 @@ fn type_from_the_text_document_takes_its_character_styles_attributes() {
     assert_eq!(style(2), (solid(Color::cmyk(0.0, 1.0, 0.0, 0.0)), Some(18.0)), "the run's own colour");
 }
 
+/// The PostScript name and version of the face that type from a text document whose font record is
+/// `record` (in place of `/0 (Helvetica)`) is set in.
+fn face_set_from(record: &str) -> (String, String) {
+    let doc = text_document(&[("Hamburg\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]).replacen("/0 (Helvetica)", record, 1);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{record}: {:?}", r.warnings);
+    let face = vectorcraft_text::FontDb::global().style_face(&texts[0].runs[0].style).unwrap();
+    (face.postscript_name(), face.version.clone())
+}
+
+/// Installs the copies of each font `copies` lists, the first of each loaded first.
+fn install(copies: &[(bool, vectorcraft_text::test_fonts::CopyNames<'_>)]) {
+    for (inter, names) in copies {
+        let font = vectorcraft_text::test_fonts::named_copy(*inter, *names).unwrap();
+        assert_eq!(vectorcraft_text::FontDb::global().add_font(font), 1, "{names:?}");
+    }
+}
+
+/// Type from the text document is set in the installed face of exactly the PostScript name its
+/// font record gives, whatever other installed copies answer to that name too: one whose family
+/// is spelled alike but for case and punctuation (`SAMPLE INK` beside `Sample/Ink`, PostScript name
+/// `SampleInk`), one whose PostScript name differs only in case or punctuation (in its own family or
+/// another), or another copy of the same family and style under another PostScript name (an older
+/// build of the font: the type names its version). Those copies set the type at other widths.
+#[test]
+fn type_from_the_text_document_takes_the_face_of_its_exact_postscript_name() {
+    install(&[
+        (true, ("FUZZTEST INK", "Regular", "Version 1.000", "FUZZTESTINK-Regular")),
+        (false, ("Fuzztest/Ink", "Regular", "Version 1.000", "FuzztestInk")),
+        (true, ("CASETEST INK", "Regular", "Version 1.000", "CASETESTINK")),
+        (false, ("Casetest Ink", "Regular", "Version 2.000", "CasetestInk")),
+        (true, ("Copytest Ink", "Regular", "Version 1.000", "CopytestInk-Light")),
+        (false, ("Copytest Ink", "Regular", "Version 2.000", "CopytestInk-Regular")),
+        (true, ("NeuetestInk", "Bold", "Version 1.000", "NeuetestInkBold")),
+        (false, ("Neuetest Ink", "Bold", "Version 1.000", "NeuetestInk-Bold")),
+    ]);
+    assert_eq!(face_set_from("/0 (FuzztestInk)").0, "FuzztestInk", "not the family spelled alike");
+    assert_eq!(face_set_from("/0 (FUZZTESTINK-Regular)").0, "FUZZTESTINK-Regular");
+    assert_eq!(face_set_from("/0 (CasetestInk)").0, "CasetestInk", "not the name in other case, loaded first");
+    assert_eq!(face_set_from("/0 (CASETESTINK)").0, "CASETESTINK");
+    assert_eq!(face_set_from("/0 (CopytestInk-Regular)"), ("CopytestInk-Regular".to_string(), "Version 2.000".to_string()));
+    assert_eq!(face_set_from("/0 (CopytestInk-Light)"), ("CopytestInk-Light".to_string(), "Version 1.000".to_string()));
+    assert_eq!(face_set_from("/0 (NeuetestInk-Bold)").0, "NeuetestInk-Bold", "not the name without its hyphen, in another family");
+    // A name in a case no installed face has still finds the font.
+    assert_eq!(face_set_from("/0 (casetestink)").0, "CASETESTINK");
+}
+
+/// A font record may keep the font's version string (key 5, name ID 5): of two installed copies
+/// with one PostScript name, family and style, the type is set in that version, also when the
+/// record spells the name with other punctuation. A version that isn't installed, or a record
+/// without one, gives the copy the family and style resolve to.
+#[test]
+fn type_from_the_text_document_takes_the_version_its_font_record_keeps() {
+    install(&[(true, ("Vertest Ink", "Regular", "1.0", "VertestInk-Regular")), (false, ("Vertest Ink", "Regular", "1.1", "VertestInk-Regular"))]);
+    let version = |record: &str| face_set_from(record).1;
+    assert_eq!(version("/0 (VertestInk-Regular) /5 (1.1)"), "1.1");
+    assert_eq!(version("/0 (VertestInk-Regular) /5 (1.0)"), "1.0");
+    assert_eq!(version("/0 (VertestInk-Regular)"), "1.0");
+    assert_eq!(version("/0 (VertestInk-Regular) /5 (9.9)"), "1.0");
+    assert_eq!(version("/0 (VertestInk-Regular) /5 ()"), "1.0");
+    // A record whose name differs from the copies' in punctuation alone still picks its version.
+    assert_eq!(version("/0 (Vertest-Ink-Regular) /5 (1.1)"), "1.1");
+    assert_eq!(version("/0 (Vertest-Ink-Regular)"), "1.0");
+}
+
 /// A story with no runs, and a run or paragraph that names no style, is set in `[Normal Character
 /// Style]` and `[Normal Paragraph Style]` before the text document's base attributes. A Large
 /// Canvas copy (1:10) writes the styles at the art's scale (1.2 for 12 points, 0.6 for a 6-point
@@ -3429,6 +3496,25 @@ fn type_painted_with_a_pattern_takes_it_from_the_art_style_its_paint_names() {
     expected.extend("efghijklmnopq".chars().map(|c| want(c, "black", "none")));
     assert_eq!(chars, expected);
     assert_eq!(r.document.pattern("Dots").map(|p| p.tile.height()), Some(4.0));
+}
+
+#[test]
+fn type_keeps_its_manual_kerning() {
+    // GUARDS: the text document's manual kerning (key 8 of a story's text: runs of characters, each
+    // with its value or none) wasn't read, so type the file kerns by hand came in spaced by the
+    // font alone and drifted from the page from each kerned pair on. "Wave": "W" kerned by -140,
+    // "av" automatic, "e" by 60.
+    let doc = text_document(&[("Wave\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let run = "<< /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 /53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /1 5 >>";
+    assert!(doc.contains(run));
+    let kerns = "/8 << /0 [ << /0 << /0 -140 >> /1 1 >> << /0 << >> /1 2 >> << /0 << /0 60 >> /1 1 >> << /0 << >> /1 1 >> ] >>";
+    let doc = doc.replacen(run, &format!("{run} ] >> {kerns}"), 1).replacen(&format!("{kerns} ] >> >>"), &format!("{kerns} >>"), 1);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    let runs: Vec<(String, Option<f64>)> = texts[0].runs.iter().map(|r| (r.text.clone(), r.style.kerning)).collect();
+    assert_eq!(runs, [("W".to_string(), Some(-140.0)), ("av".to_string(), None), ("e".to_string(), Some(60.0))]);
 }
 
 #[test]

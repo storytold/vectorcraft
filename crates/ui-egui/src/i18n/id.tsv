@@ -199,6 +199,10 @@
 	Corner Color	Warna sudut
 	Contiguous	Bersambung
 	Each Channel	Setiap kanal
+	Color Mask…	Masker warna…
+	Color Mask	Masker warna
+	Remove Color Mask	Hapus masker warna
+	Apply Color Mask	Terapkan masker warna
 	Edit Path	Edit jalur
 	Mask	Masker
 	Rasterize…	Rasterisasi…
@@ -1776,6 +1780,8 @@ digits	Malayalam	Malayalam
 	Modified since it was read: {path}	Diubah sejak terakhir dibaca: {path}
 	No Thumbnails	Tanpa thumbnail
 	Nothing matches the Show filter.	Tidak ada yang cocok dengan filter Tampilkan.
+	Show DCS Transparency Interactions	Tampilkan Interaksi Transparansi DCS
+	Transparent, or overlaps transparent objects: check its separations	Transparan, atau menimpa objek transparan: periksa separasinya
 	PPI	PPI
 	Relink…	Tautkan ulang…
 	Find Linked Files	Temukan file tertaut
@@ -1838,6 +1844,10 @@ digits	Malayalam	Malayalam
 	Long	Panjang
 	Stylistic	Stilistik
 	Mojikumi Set	Set Mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Set Kinsoku
 	Kinsoku Shori Type	Jenis Kinsoku Shori
 	Push In First	Dorong masuk dahulu
@@ -1973,6 +1983,8 @@ digits	Malayalam	Malayalam
 	Weight:	Ketebalan:
 	Art using a deleted global swatch keeps its colour.	Karya seni yang memakai swatch global terhapus tetap mempertahankan warnanya.
 	Color Group: {name}	Grup warna: {name}
+	Delete the selected items and their artwork?	Hapus item yang dipilih beserta karya seninya?
+	Delete this layer and its artwork?	Hapus lapisan ini beserta karya seninya?
 	Delete “{name}”?	Hapus “{name}”?
 	Document Swatches	Swatch dokumen
 	Edit or Apply Color Group	Edit atau terapkan grup warna
@@ -3515,6 +3527,7 @@ theme	Appearance	Tampilan
 	Enable Background Export	Aktifkan ekspor di latar belakang
 	Enable Background Save	Aktifkan penyimpanan di latar belakang
 	Enable in-menu font previews	Aktifkan pratinjau font dalam menu
+	Show samples on white	Tampilkan sampel di atas putih
 	Enable Missing Glyph Protection	Aktifkan perlindungan glyph yang hilang
 	Enable Rubber Band for	Aktifkan rubber band untuk
 	Enable Touch Gestures	Aktifkan gestur sentuh
@@ -6004,6 +6017,23 @@ axis	Y Axis	Sumbu Y
 @msg	Batch cannot play an action with a stop	Batch tidak dapat memutar tindakan dengan titik henti
 	Insert Menu Item…	Sisipkan item menu…
 	Insert Menu Item	Sisipkan item menu
+	Insert Select Path	Sisipkan pemilihan jalur
+	Select Path	Pilih jalur
+@msg	select one whole path or compound path	pilih satu jalur utuh atau jalur majemuk
+@msg	select only one path	pilih hanya satu jalur
+@msg	the path is hidden or locked, or cannot be selected here	jalur tersembunyi atau terkunci, atau tidak dapat dipilih di sini
+@msg	object {value} is not the stored path: it changed, or the document is another one	objek {value} bukan jalur yang disimpan: jalur itu berubah, atau dokumennya berbeda
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` harus berupa "v1:" dan 16 digit heksadesimal huruf kecil
+	Select Object…	Pilih objek…
+	Select Object	Pilih objek
+	Set Selection	Atur seleksi
+	Case Sensitive	Peka huruf besar/kecil
+	Whole Word	Seluruh kata
+	Select Object: {note}	Pilih objek: {note}
+	Select by Note	Pilih berdasarkan catatan
+@msg	the note is empty	catatan kosong
+@msg	the note is longer than 1,024 bytes	catatan lebih panjang dari 1.024 byte
+@msg	no object that can be selected has a note matching “{query}”	tidak ada objek yang dapat dipilih dengan catatan yang cocok dengan “{query}”
 	Menu Item:	Item menu:
 	No menu item matches.	Tidak ada item menu yang cocok.
 	Several menu items match. Choose one from the list.	Beberapa item menu cocok. Pilih salah satu dari daftar.

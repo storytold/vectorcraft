@@ -365,6 +365,41 @@ fn members_with_their_own_blending_get_graphics_of_their_own() {
     assert_eq!(blended, 1);
 }
 
+#[test]
+fn a_graphic_stays_under_a_solid_painted_after_its_own() {
+    let d = document();
+    let member = |id: u64, r: Rect, color: Color, opacity: f32| {
+        let mut n = square(id, r, Paint::solid(color));
+        if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+            f.opacity = opacity;
+        }
+        Arc::new(n)
+    };
+    let gray = Color::rgb(0.5, 0.5, 0.5);
+    // A and C share their fill's opacity; B, painted between them, has its own and covers part of A.
+    let a = member(1, Rect::new(0.0, 0.0, 60.0, 100.0), gray, 1.0);
+    let b = member(2, Rect::new(40.0, 0.0, 100.0, 100.0), Color::rgb(0.0, 0.0, 1.0), 0.5);
+    let c = member(4, Rect::new(200.0, 0.0, 260.0, 100.0), gray, 1.0);
+    let mut group = Node::group(NodeId(3), vec![a, b, c]);
+    let p = json!({"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0, "shade": false, "graphics": [{"symbol": "Mark", "scale": 3000.0}]});
+    group.appearance.effects.push(crate::new_effect(EXTRUDE, &p).unwrap());
+    let art = solid_art_in(Some(&d), &group).unwrap();
+    // In drawing order: 'G' for a graphic, 'B' for a face of B's solid.
+    let mut order = String::new();
+    art.walk(&mut |n| {
+        if matches!(n.kind, NodeKind::Group { clip: true, .. }) && !graphics_in(n).is_empty() {
+            order.push('G');
+        } else if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first()
+            && f.paint.color().is_some_and(|c| c.to_rgb()[2] > 0.9 && c.to_rgb()[0] < 0.1)
+        {
+            order.push('B');
+        }
+    });
+    // A's graphic is drawn right after A, under B; C's is drawn after B.
+    assert_eq!(graphics_in(&art).len(), 3, "{order}");
+    assert!(order.starts_with('G'), "{order}");
+}
+
 /// [`document`] with symbol "Dense" too: a red polygon of 30,000 sides, straight or `curved`.
 fn dense_document(curved: bool) -> Document {
     let mut d = document();

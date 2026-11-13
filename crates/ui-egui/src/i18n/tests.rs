@@ -1786,6 +1786,81 @@ fn templates_that_start_with_text_match_first() {
     assert_eq!(c.message("a.wasm is 9 bytes (limit 8)").map(|(f, _)| f), Some("sized {_1}"));
 }
 
+/// `{{` and `}}` in a message row are literal braces, in the English source and in the
+/// translation, as in a Rust format string; only the other `{name}` are placeholders.
+#[test]
+fn message_rows_read_doubled_braces_as_literal_braces() {
+    let c = Catalog::parse(concat!(
+        "@msg\t`{_1}` runs with plugin.run {{\"id\": \"{_2}\"}}\t`{_1}`: plugin.run {{\"id\": \"{_2}\"}} (fr)\n",
+        "@msg\tbraces {{}} and {_1}\tbraces {{}} with {_1}\n",
+        "@msg\tonly {{literal}} braces\tliteral {{braces}}\n",
+        "@msg\tnot an RTF file: it doesn't start with {\\\\rtf\tno RTF: {\\\\rtf\n",
+    ));
+    let (form, caps) = c.message(r#"`a.b` runs with plugin.run {"id": "plugin:a.b"}"#).expect("matches");
+    assert_eq!(caps, [("_1", "a.b"), ("_2", "plugin:a.b")]);
+    assert_eq!(fill_once(form, &caps), r#"`a.b`: plugin.run {"id": "plugin:a.b"} (fr)"#);
+    assert!(c.message(r#"`a.b` runs with plugin.run {{"id": "plugin:a.b"}}"#).is_none());
+    let (form, caps) = c.message("braces {} and x").expect("matches");
+    assert_eq!(fill_once(form, &caps), "braces {} with x");
+    let (form, caps) = c.message("only {literal} braces").expect("matches");
+    assert_eq!(fill_once(form, &caps), "literal {braces}");
+    // A `{` with no `}` after it is literal text too.
+    assert_eq!(c.message(r"not an RTF file: it doesn't start with {\rtf").map(|(f, _)| f), Some(r"no RTF: {\rtf"));
+    assert_eq!(placeholders(r#"{{"id": "{_2}"}} {{x}} {n}"#), ["_2", "n"]);
+}
+
+/// A format string's `{{` and `}}` stay literal braces in its catalog key, and only its real
+/// placeholders are numbered.
+#[test]
+fn message_keys_keep_doubled_braces() {
+    assert_eq!(
+        as_template(r#"`{}` is an importer: open a file with document.open {{"importer": "{}"}}"#),
+        r#"`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}"#
+    );
+    assert_eq!(as_template("{k} must be {{size?, position?}}"), "{k} must be {{size?, position?}}");
+    assert_eq!(as_template(r"it doesn't start with {\rtf"), r"it doesn't start with {\rtf");
+}
+
+/// `plugin.run` of an importer, an exporter or a live effect names the command that runs it with
+/// the JSON that picks it, and every complete-message catalog translates that error with the
+/// plug-in's id and the JSON kept.
+#[test]
+fn plugin_run_of_another_kind_is_translated_with_its_json() {
+    use serde_json::json;
+    use vectorcraft_plugins::wat as tpl;
+    let mut s = vectorcraft_engine::Session::new();
+    let plugins = [
+        ("test.i18n.reader", tpl::importer("test.i18n.reader", r#"["ti18n"]"#, "{}"), "is an importer"),
+        ("test.i18n.writer", tpl::exporter("test.i18n.writer", r#"["ti18n"]"#, "{}"), "is an exporter"),
+        ("test.i18n.effect", tpl::manifest("test.i18n.effect", "effect", "{}"), "is a live effect"),
+    ];
+    for (_, manifest, _) in &plugins {
+        let wasm = wat::parse_str(tpl::module(manifest, tpl::ECHO, "", 1)).unwrap();
+        s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm)})).unwrap();
+    }
+    s.execute("file.new", &json!({})).unwrap();
+    let errors: Vec<(String, &str, &str)> =
+        plugins.iter().map(|(id, _, english)| (s.execute("plugin.run", &json!({"id": id})).unwrap_err().to_string(), *id, *english)).collect();
+    for (id, _, _) in &plugins {
+        s.execute("plugin.remove", &json!({"id": id})).unwrap();
+    }
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, id, english) in &errors {
+            assert!(e.contains(english), "{e}");
+            let json = &e[e.rfind('{').unwrap()..];
+            assert!(json.ends_with('}') && json.contains(id), "{e}");
+            let shown = message(lang, e);
+            assert!(!shown.contains(english) && shown.contains(json) && shown.contains(&format!("`{id}`")), "{code}: {e} -> {shown}");
+        }
+    }
+    assert!(
+        message(de(), &errors[0].0).ends_with(r#"Öffnen Sie eine Datei mit document.open {"importer": "plugin.test.i18n.reader"}"#),
+        "{}",
+        message(de(), &errors[0].0)
+    );
+}
+
 /// A `@msgplural` row translates both English forms of a message with a count, and the count
 /// picks the language's form.
 #[test]
@@ -1894,6 +1969,142 @@ fn plugin_error_reasons_are_translated_with_the_error() {
     assert_eq!(message(de(), &errors[0].0), "Plug-in-Manifest: Parameter `r`: ungültiger Bereich");
     assert_eq!(message(de(), &errors[2].0), "Plug-in-Parameter: `angles` muss eine Liste von Zahlen sein");
     assert!(message(de(), &errors[3].0).ends_with("objects[0]: `opacity` muss eine Zahl sein"), "{}", message(de(), &errors[3].0));
+}
+
+/// The 3D effects' source files under `crates/effects/src`. Their refusals reach the status bar
+/// through the effect commands, and every `format!` text in them outside tests is a refusal.
+const THREE_D_SOURCES: &[&str] = &[
+    "solids.rs",
+    "solids/classic.rs",
+    "solids/graphics.rs",
+    "solids/shadow.rs",
+    "solids/source.rs",
+    "solids/wireframe.rs",
+    "revolve.rs",
+    "revolve/classic.rs",
+    "lighting.rs",
+];
+
+/// The values 3D refusals put in their templates that are messages of their own: the name of an
+/// effect that has no 3D type of its own, and the objects a group's 3D effect can't build from.
+const THREE_D_PARTS: &[&str] = &["This effect", "clipping paths", "other objects"];
+
+/// The 3D effects' refusals as catalog templates: the messages of [`THREE_D_SOURCES`] that
+/// [`source_messages`] finds, and the `format!` texts their helpers return.
+fn three_d_refusals() -> std::collections::BTreeSet<String> {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../effects/src");
+    let texts: Vec<String> = THREE_D_SOURCES.iter().map(|f| std::fs::read_to_string(dir.join(f)).expect("a 3D source file")).collect();
+    let mut consts = std::collections::BTreeMap::new();
+    for text in &texts {
+        for (name, value) in str_consts(without_test_module(text)) {
+            consts.entry(name).or_insert_with(Vec::new).push(value);
+        }
+    }
+    texts.iter().flat_map(|text| source_messages(without_test_module(text), &[("format!(", 0)], &consts)).collect()
+}
+
+/// The names 3D refusals give their effect (`{label}`): each 3D effect's menu label without its
+/// ellipsis, and [`THREE_D_PARTS`].
+fn three_d_parts() -> Vec<String> {
+    let labels = vectorcraft_effects::effect_catalog().into_iter().filter(|e| vectorcraft_effects::is_three_d(e.id));
+    labels.map(|e| e.label.trim_end_matches('…').to_string()).chain(THREE_D_PARTS.iter().map(|p| p.to_string())).collect()
+}
+
+/// The 3D effects' refusals, and the effect names and objects they name, have an `@msg` row in
+/// every complete-message catalog.
+#[test]
+fn three_d_refusals_are_translated_in_every_complete_catalog() {
+    let refusals = three_d_refusals();
+    assert!(refusals.len() > 55, "scan found only {} 3D refusals", refusals.len());
+    let helper_made = [
+        "{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.",
+        "{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep",
+        "the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)",
+    ];
+    for m in helper_made {
+        assert!(refusals.contains(m), "the scan reads helpers' texts and constants: {m}");
+    }
+    let parts = three_d_parts();
+    for label in ["Extrude & Bevel", "Revolve", "Inflate", "Rotate", "Extrude & Bevel (Classic)", "Revolve (Classic)", "Rotate (Classic)"] {
+        assert!(parts.iter().any(|p| p == label), "{label} is a 3D effect's name");
+    }
+    let mut missing = vec![];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        let rows: std::collections::BTreeSet<&str> = entries.iter().filter(|(ctx, _, _)| ctx == "@msg").map(|(_, src, _)| src.as_str()).collect();
+        missing.extend(refusals.iter().chain(&parts).filter(|m| !rows.contains(m.as_str())).map(|m| format!("{code}: {m}")));
+    }
+    assert!(missing.is_empty(), "{} 3D messages have no @msg row:\n{}", missing.len(), missing.join("\n"));
+}
+
+/// A 3D effect's refusal shows in the interface language whole, with the effect's translated
+/// name, and with its numbers, the parameter keys it names and a symbol's name as given; the
+/// error the command returns stays English.
+#[test]
+fn three_d_refusals_translate_with_their_values() {
+    use serde_json::json;
+    use std::sync::Arc;
+    use vectorcraft_doc::{Node, NodeId, NodeKind};
+    use vectorcraft_effects::{CLASSIC_EXTRUDE, EXTRUDE};
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let id = s.execute("path.create", &json!({"d": "M10 10L60 10L60 60L10 60Z"})).unwrap()["id"].as_u64().unwrap();
+    let rect = s.active().unwrap().doc.node(NodeId(id)).unwrap().clone();
+    let group = Node::group(NodeId(id + 1), vec![Arc::new(rect.clone())]);
+    let instance = Node::new(NodeId(id + 2), NodeKind::SymbolInstance { symbol: "Mine 7".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    let refuse = |r: Result<(), String>| {
+        let e = r.expect_err("refused");
+        vectorcraft_engine::EngineError::BadParams { cmd: "effect.apply".into(), msg: e }.to_string()
+    };
+    let errors = [
+        (refuse(vectorcraft_effects::validate_three_d_at(&group, EXTRUDE, &json!({}), Some((0, 0)))), "goes on the group itself", vec![]),
+        (
+            refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"lights": [{"intensity": 500}]}))),
+            "must be a number from",
+            vec!["0", "100"],
+        ),
+        (
+            refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"graphics": [{"symbol": "S", "face": "side"}]}))),
+            "must be front or back",
+            vec!["`graphics`", "front", "back"],
+        ),
+        (refuse(vectorcraft_effects::validate_three_d(&rect, CLASSIC_EXTRUDE, &json!({"depth": "deep"}))), "must be a number", vec!["`depth`"]),
+        (refuse(vectorcraft_effects::validate_three_d(&instance, EXTRUDE, &json!({}))), "the symbol's art isn't available", vec!["Mine 7"]),
+        (refuse(vectorcraft_effects::three_d_wireframe_in(None, &rect).map(drop)), "has no 3D effect", vec![]),
+    ];
+    for (e, english, _) in &errors {
+        assert!(e.starts_with("invalid parameters for `effect.apply`: ") && e.contains(english), "{e}");
+        assert_eq!(message(Lang::EN, e), *e);
+    }
+    assert!(errors[1].0.contains("light intensity must be a number from 0 to 100"), "{}", errors[1].0);
+    assert!(errors[4].0.contains("Extrude & Bevel can't build a solid from the instance of symbol \"Mine 7\""), "{}", errors[4].0);
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, english, kept) in &errors {
+            let shown = message(lang, e);
+            assert!(!shown.contains(english) && shown.contains("`effect.apply`"), "{code}: {e} -> {shown}");
+            assert!(kept.iter().all(|k| shown.contains(k)), "{code}: {e} -> {shown}");
+        }
+        let symbol = message(lang, &errors[4].0);
+        let label = message(lang, "Extrude & Bevel");
+        assert!(label != "Extrude & Bevel" && symbol.contains(&label), "{code}: the effect's name is translated: {symbol}");
+    }
+    assert_eq!(message(de(), &errors[1].0), "ungültige Parameter für `effect.apply`: Licht: intensity muss eine Zahl von 0 bis 100 sein");
+}
+
+/// A value a message quotes is a name and is shown as written, even when a catalog row translates
+/// the same text: a symbol called Rotate stays Rotate while the effect's name is translated.
+#[test]
+fn quoted_values_in_a_message_stay_as_written() {
+    let s = "Extrude & Bevel can't build a solid from the instance of symbol \"Rotate\": the symbol's art isn't available";
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let shown = message(lang, s);
+        let rotate = message(lang, "Rotate");
+        assert!(rotate != "Rotate" && shown.contains("Rotate") && !shown.contains(&rotate), "{code}: {shown}");
+        assert!(shown.contains(&message(lang, "Extrude & Bevel")), "{code}: {shown}");
+    }
 }
 
 /// The Gamut Check status line names a count of 1 in the singular and other counts in the plural,
@@ -3108,6 +3319,7 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("axis must be \"vertical\", \"horizontal\" or an angle in degrees, not `{v}`", &["axis"]),
     ("balance must be between 0 and 100", &["balance"]),
     ("before must name a panel", &["before"]),
+    ("bevel must be none or one of {_1}", &["bevel", "none"]),
     ("brightness must be dark|mediumDark|mediumLight|light", &["brightness", "dark", "mediumDark", "mediumLight", "light"]),
     ("clip must be true or false", &["clip"]),
     ("collapsed must be true or false", &["collapsed"]),
@@ -3127,6 +3339,10 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("kerning must be a number, \"auto\", or \"optical\"", &["kerning"]),
     ("lang must be one of {_1}", &["lang"]),
     ("layers must be true or false", &["layers"]),
+    ("light behind must be true or false", &["behind"]),
+    ("light color must use opaque #rrggbb", &["color"]),
+    ("lightColor must be an opaque RGB color in #rrggbb form", &["lightColor"]),
+    ("lights must contain one to ten lights", &["lights"]),
     ("member is for order front, forward, backward or back", &["member", "order", "front", "forward", "backward", "back"]),
     ("mode is set, add or toggle, not `{other}`", &["mode", "set", "add", "toggle"]),
     ("names is empty", &["names"]),
@@ -3141,18 +3357,28 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("plane must be left, right or ground", &["plane", "left", "right", "ground"]),
     ("precision must be from 0.001 to 10 pt", &["precision"]),
     ("rect is [x, y, width, height] in points", &["rect"]),
+    ("Revolve cap must be a boolean", &["cap"]),
+    ("Revolve edge must be left or right", &["edge", "left", "right"]),
     ("scale must be a number from {_1} to {_2}, not {_3}", &["scale"]),
     ("scale must be a number from {_1} to {_2}, not {s}", &["scale"]),
+    ("shadow must be true or false", &["shadow"]),
+    ("shadowPosition must be behind or below", &["shadowPosition", "behind", "below"]),
     ("show must be true or false", &["show"]),
     ("span: \"selection\" places a linear, radial, conic or diamond gradient, not a freeform one", &["span"]),
     ("thickness must be from 0.01 to 5000 pt", &["thickness"]),
     ("title can't be empty", &["title"]),
+    (
+        "unknown light setting: use color, intensity, rotation, height, softness or behind",
+        &["color", "intensity", "rotation", "height", "softness", "behind"],
+    ),
     ("view is required", &["view"]),
     ("width must be positive", &["width"]),
     ("zone must be a string", &["zone"]),
     ("zone must be tab, center, left, right, top or bottom", &["zone", "tab", "center", "left", "right", "top", "bottom"]),
     ("`dither` applies to gradient fills (stroke: false)", &["stroke"]),
     ("`strokeMode` applies to strokes (stroke: true)", &["stroke"]),
+    ("`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`", &["symbol", "face", "x", "y", "scale", "rotation"]),
+    ("`{GRAPHICS}` face must be front or back", &["face", "front", "back"]),
 ];
 
 /// Every catalog's translation of a [`NAMED_KEYS`] message keeps each name the table lists, as
@@ -3515,7 +3741,8 @@ fn string_literal(s: &str) -> Option<String> {
     }
 }
 
-/// A format string as a catalog template (see [`message_literals`]).
+/// A format string as a catalog template (see [`message_literals`]). `{{` and `}}` stay as they
+/// are, the catalogs' literal braces.
 fn as_template(s: &str) -> String {
     let mut out = String::new();
     let mut unnamed = 0;
@@ -3523,7 +3750,15 @@ fn as_template(s: &str) -> String {
     while let Some(a) = rest.find('{') {
         out.push_str(&rest[..a]);
         let after = &rest[a + 1..];
-        let Some(b) = after.find('}') else { break };
+        if let Some(escaped) = after.strip_prefix('{') {
+            out.push_str("{{");
+            rest = escaped;
+            continue;
+        }
+        let Some(b) = after.find('}') else {
+            out.push_str(&rest[a..]);
+            return out;
+        };
         let name = after[..b].split(':').next().unwrap_or("");
         if name.is_empty() {
             unnamed += 1;

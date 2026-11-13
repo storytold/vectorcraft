@@ -59,7 +59,7 @@ pub struct Raster {
 /// The pixels the first frame of GIF `bytes` declares in its image descriptor, which the decoder
 /// allocates for before it crops the frame to the logical screen the dimension check reads. `None`
 /// when the bytes aren't a GIF or hold no frame header.
-fn gif_first_frame_pixels(bytes: &[u8]) -> Option<u64> {
+pub(crate) fn gif_first_frame_pixels(bytes: &[u8]) -> Option<u64> {
     if !bytes.starts_with(b"GIF8") {
         return None;
     }

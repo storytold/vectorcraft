@@ -82,7 +82,7 @@ pub mod rasterfx;
 mod recolor;
 pub mod recovery;
 pub mod scripts;
-mod select;
+pub(crate) mod select;
 pub(crate) mod shaper;
 pub mod shortcutset;
 pub(crate) mod slices;
@@ -777,7 +777,7 @@ pub(crate) fn unique_name_from(base: &str, next: &mut std::collections::HashMap<
 /// The most presets one presets file imports: each is looked up among the saved ones.
 pub(crate) const MAX_IMPORTED_PRESETS: usize = 1000;
 
-pub(crate) use addons::DecodedImages;
+pub(crate) use addons::{DecodedImages, refresh_color_masks};
 pub use docmenu::guide_indexes;
 pub(crate) use edit::{settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;

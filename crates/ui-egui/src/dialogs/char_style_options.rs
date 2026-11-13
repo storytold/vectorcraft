@@ -942,27 +942,23 @@ pub(crate) fn opentype_body(ui: &mut egui::Ui, d: &mut Dialog) {
     }
 }
 
-/// The key under which the dialog keeps its footer's height for the next frame: the dialog's own
-/// id, so the stored value is found on every frame.
-fn footer_id(ui: &egui::Ui) -> egui::Id {
-    ui.layer_id().id.with("char-style-footer")
+/// The key under which the dialog keeps the height its section content was drawn at, for the next
+/// frame.
+fn content_id(ui: &egui::Ui) -> egui::Id {
+    ui.layer_id().id.with("char-style-content")
 }
 
-/// The dialog's body: the section list beside the selected section's content, which scrolls when it
-/// is taller than the window (General lists every attribute of the style and OpenType every
-/// feature), and the footer below it - Reset Panel, the Preview checkbox and an invalid value's
-/// error. The content's height is the space the footer leaves, measured last frame, so the buttons
-/// stay on screen at any interface scale; the section list is outside the scroll area and stays put
-/// while the content scrolls. Returns whether the dialog asks to be cancelled (never: Cancel comes
-/// from the button row in `dialogs::show`).
+/// The dialog's body: the section list beside the selected section's content, and below them
+/// Reset Panel, the Preview checkbox and an invalid value's error. The content is at most 420 points
+/// tall, and scrolls when it is taller than that or than the screen less the rest of the window
+/// (as drawn last frame). The section list stays put while the content scrolls. Returns whether
+/// the dialog asks to be canceled (never: Cancel comes from the button row in `dialogs::show`).
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    // The content scrolls inside a shorter window: General lists every attribute of the style and
-    // OpenType every feature, so the window stays within the screen and its buttons stay visible.
-    // The footer was measured last frame, so the room left for the content keeps it on screen at any
-    // interface scale; the section list stays put while the content scrolls.
-    let footer = ui.ctx().data(|m| m.get_temp::<f32>(footer_id(ui)).unwrap_or(120.0));
-    let room = (ui.available_height() - footer - 8.0).clamp(0.0, 420.0);
-    ui.horizontal(|ui| {
+    let window = ui.ctx().memory(|m| m.area_rect(ui.layer_id().id)).map_or(0.0, |r| r.height());
+    let content = ui.ctx().data(|m| m.get_temp::<f32>(content_id(ui))).unwrap_or(0.0);
+    let rest = (window - content).max(0.0);
+    let room = (ui.ctx().content_rect().height() - rest - 2.0 * super::EDGE_GAP).clamp(0.0, 420.0);
+    let drawn = ui.horizontal(|ui| {
         section_list(ui, d);
         ui.separator();
         // The section list handles a click before this frame's content is laid out, so the section
@@ -971,9 +967,13 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         let content_w = ui.available_width();
         // Long sections scroll both ways: at a large interface scale the window has fewer points, and
         // a wide row (a character-format grid) must stay inside it rather than widen the window.
-        egui::ScrollArea::both().id_salt(("char-style-sections", section)).max_height(room).max_width(content_w).auto_shrink([false, true]).show(
-            ui,
-            |ui| {
+        let shown = egui::ScrollArea::both()
+            .id_salt(("char-style-sections", section))
+            .max_height(room)
+            .min_scrolled_height(room)
+            .max_width(content_w)
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
                 ui.vertical(|ui| {
                     if d.str("section") == "basic" {
                         basic_body(ui, d);
@@ -996,27 +996,23 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                         }
                     }
                 });
-            },
-        );
+            });
+        // `inner_rect` is the height offered before a short section shrinks the area to its content.
+        shown.inner_rect.height().min(shown.content_size.y)
     });
-    let footer_h = ui
-        .scope(|ui| {
-            reset_button(ui, d);
-            match edited_attrs(d) {
-                Ok(attrs) => {
-                    let params = json!({"name": d.str("__style"), "to": d.str("name"), "attrs": attrs});
-                    form::preview(app, ui, d, tl!("Character Style Options"), "charStyle.edit", params);
-                }
-                Err(why) => attrs_error(ui, &why),
-            }
-        })
-        .response
-        .rect
-        .height();
-    let was = ui.ctx().data(|m| m.get_temp::<f32>(footer_id(ui)));
-    ui.ctx().data_mut(|m| m.insert_temp(footer_id(ui), footer_h));
-    if was != Some(footer_h) {
+    let content_h = drawn.inner;
+    let was = ui.ctx().data(|m| m.get_temp::<f32>(content_id(ui)));
+    ui.ctx().data_mut(|m| m.insert_temp(content_id(ui), content_h));
+    if was.is_none_or(|was| (was - content_h).abs() > 0.5) {
         ui.ctx().request_repaint();
+    }
+    reset_button(ui, d);
+    match edited_attrs(d) {
+        Ok(attrs) => {
+            let params = json!({"name": d.str("__style"), "to": d.str("name"), "attrs": attrs});
+            form::preview(app, ui, d, tl!("Character Style Options"), "charStyle.edit", params);
+        }
+        Err(why) => attrs_error(ui, &why),
     }
     false
 }
@@ -1127,6 +1123,98 @@ mod tests {
         let basic = ctx.memory(|m| m.area_rect(dialog)).expect("the dialog is drawn").width();
         assert!((basic - width).abs() < 0.5, "the width does not change with the section: {width} -> {basic}");
     }
+
+    /// On a 1920 by 1080 screen the dialog opens with its content 420 points tall when the General
+    /// list is longer than that: the first frame that draws it, with no input, already has the full
+    /// height, and later frames keep it.
+    #[test]
+    fn the_sections_open_at_their_full_height_without_input() {
+        let mut app = app();
+        app.run(
+            "charStyle.new",
+            json!({"name": "Body", "attrs": {
+                "font_family": "Source Sans 3", "font_style": "Regular", "size": 24.0, "leading": 30.0,
+                "kerning": 0.0, "tracking": 5.0, "all_caps": false, "small_caps": null,
+                "position": {"kind": "normal", "size": 100.0, "position": 0.0}, "underline": false,
+                "strikethrough": false, "standardVerticalRoman": false, "charAlign": "romanBaseline",
+                "h_scale": 100.0, "v_scale": 100.0, "baseline_shift": 0.0, "rotation": 0.0,
+                "language": "English: USA", "overprint_fill": false, "overprint_stroke": false,
+                "stroke_width": 0.0, "features": ["liga", "calt", "dlig", "swsh", "salt", "titl", "ordn", "frac"]
+            }}),
+        )
+        .unwrap();
+        open(&mut app, "Body").unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1920.0, 1080.0));
+        let mut drawn = 0;
+        for _ in 0..6 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
+            let texts = texts_of(&out);
+            let top = |label: &str| texts.iter().find(|(text, _)| text == label).map(|r| r.1.top());
+            // The first frame only measures the window and draws no text.
+            let (Some(reset), Some(general)) = (top("Reset Panel"), top("General")) else { continue };
+            drawn += 1;
+            let content = reset - general;
+            assert!(content >= 410.0, "the content is 420 points tall in drawn frame {drawn}: {content}");
+        }
+        assert!(drawn >= 4, "the dialog is drawn: {drawn} frames");
+        // On the smallest window the buttons are on the screen in the first frame that draws them.
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 500.0));
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
+            let texts = texts_of(&out);
+            let Some(ok) = texts.iter().find(|(text, _)| text == "OK").map(|r| r.1) else { continue };
+            let cancel = texts.iter().find(|(text, _)| text == "Cancel").expect("Cancel is drawn with OK").1;
+            assert!(ok.bottom() <= 501.0 && cancel.bottom() <= 501.0, "the buttons are on an 800 by 500 screen when first drawn: {ok:?} {cancel:?}");
+            return;
+        }
+        panic!("the dialog is drawn on an 800 by 500 screen");
+    }
+
+    /// Going back to the long General list from a shorter section keeps OK and Cancel on a small
+    /// screen in the first frame after the switch, not only once the window has measured itself again.
+    #[test]
+    fn switching_to_a_long_section_keeps_the_buttons_on_a_small_screen() {
+        let mut app = app();
+        app.run(
+            "charStyle.new",
+            json!({"name": "Body", "attrs": {
+                "font_family": "Source Sans 3", "font_style": "Regular", "size": 24.0, "leading": 30.0,
+                "kerning": 0.0, "tracking": 5.0, "all_caps": false, "small_caps": null,
+                "position": {"kind": "normal", "size": 100.0, "position": 0.0}, "underline": false,
+                "strikethrough": false, "standardVerticalRoman": false, "charAlign": "romanBaseline",
+                "h_scale": 100.0, "v_scale": 100.0, "baseline_shift": 0.0, "rotation": 0.0,
+                "language": "English: USA", "overprint_fill": false, "overprint_stroke": false,
+                "stroke_width": 0.0, "features": ["liga", "calt", "dlig", "swsh", "salt", "titl", "ordn", "frac"]
+            }}),
+        )
+        .unwrap();
+        open(&mut app, "Body").unwrap();
+        for h in [560.0, 640.0, 720.0] {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, h));
+            for section in ["basic", "advanced", "color", "opentype"] {
+                app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!(section));
+                let _ = frame_texts_in(&ctx, &mut app, 900.0, h);
+                app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!("general"));
+                let mut out =
+                    ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(&mut app, ui.ctx()));
+                out.textures_delta.clear();
+                let texts = texts_of(&out);
+                for label in ["OK", "Cancel"] {
+                    let r = texts.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn")).1;
+                    assert!(r.bottom() <= h + 1.0, "{label} stays on a {h}-point screen going from {section} to General: {r:?}");
+                }
+            }
+        }
+    }
+
     /// The dialog stays usable in the smallest window the app allows (800 by 500 points): in every
     /// section the section list, OK and Cancel are on the screen.
     #[test]

@@ -126,6 +126,302 @@ fn a_symbol_instance_fill_with_no_opacity_keeps_swatch_links_when_expanded() {
     assert!(linked > 0, "the expanded art keeps the Brand swatch link");
 }
 
+/// The square of [`square`] made a symbol, its instance selected, with a new fill (`fill`) or
+/// stroke on top that has no paint: it neither stains nor strokes the art. Returns the instance and
+/// the new row's index.
+fn instance_with_row(s: &mut Session, name: &str, fill: bool) -> (NodeId, usize) {
+    square(s);
+    let id = NodeId(run(s, "symbol.new", json!({"name": name}))["id"].as_u64().unwrap());
+    run(s, if fill { "appearance.addFill" } else { "appearance.addStroke" }, json!({"ids": [id.0]}));
+    let row = node(s, id).appearance.items.len() - 1;
+    run(s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    (id, row)
+}
+
+fn offset_row(s: &mut Session, id: NodeId, row: usize, offset: f64) {
+    run(s, "effect.apply", json!({"ids": [id.0], "item": row, "effect": "path.offsetPath", "params": {"offset": offset}}));
+}
+
+fn near(p: [u8; 4], q: [u8; 4]) -> bool {
+    p.iter().zip(q.iter()).all(|(x, y)| x.abs_diff(*y) <= 24)
+}
+
+const WHITE: [u8; 4] = [255, 255, 255, 255];
+const RED: [u8; 4] = [255, 0, 0, 255];
+const BLUE: [u8; 4] = [0, 0, 255, 255];
+
+/// No object in `n` keeps an effect of its own or on a fill or stroke.
+fn no_effects_left(n: &Node) {
+    n.walk(&mut |part| {
+        assert!(part.appearance.effects.is_empty(), "{:?} keeps object effects", part.id);
+        assert!(part.appearance.items.iter().all(|i| i.effects().is_empty()), "{:?} keeps fill or stroke effects", part.id);
+    });
+}
+
+/// An effect on a symbol instance's fill reshapes the filled shapes of its art, keeping their
+/// colors, and leaves their strokes where they were; Expand Appearance bakes the same look into
+/// editable art in one undo step.
+#[test]
+fn a_symbol_instance_fill_effect_reshapes_its_filled_art_and_expands() {
+    let mut s = session();
+    let (id, row) = instance_with_row(&mut s, "Square", true);
+    assert!(!expandable(&s));
+    let plain = render(&s);
+    assert!(near(plain.pixel(44, 100), WHITE));
+    offset_row(&mut s, id, row, 10.0);
+    assert!(expandable(&s), "the fill's effect can be expanded");
+    let before = render(&s);
+    assert!(near(before.pixel(44, 100), RED), "the art's red fill grows by the offset: {:?}", before.pixel(44, 100));
+    assert!(near(before.pixel(50, 100), BLUE), "the blue stroke stays on the square: {:?}", before.pixel(50, 100));
+
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let n = node(&s, id);
+    assert!(!matches!(n.kind, NodeKind::SymbolInstance { .. }));
+    no_effects_left(&n);
+    let mut paints = (0, 0);
+    n.walk(&mut |part| {
+        if part.appearance.fill().is_some_and(|f| f.paint.color().is_some_and(|c| c.to_hex() == "#ff0000")) {
+            paints.0 += 1;
+        }
+        if part.appearance.stroke().is_some_and(|st| st.paint.color().is_some_and(|c| c.to_hex() == "#0000ff")) {
+            paints.1 += 1;
+        }
+    });
+    assert!(paints.0 > 0 && paints.1 > 0, "the art keeps its red fill and blue stroke: {paints:?}");
+    let after = render(&s);
+    assert!(differing(&before, &after, 8) < 200, "expanding changed {} pixels", differing(&before, &after, 8));
+
+    run(&mut s, "edit.undo", json!({}));
+    let n = node(&s, id);
+    assert!(matches!(n.kind, NodeKind::SymbolInstance { .. }), "one undo gives the instance back");
+    assert!(n.appearance.items[row].effects().iter().any(|e| e.id == "path.offsetPath"));
+}
+
+/// Export bakes a symbol instance's fill effect into its art as the canvas draws it.
+#[test]
+fn export_bakes_a_symbol_instance_fill_effect() {
+    let mut s = session();
+    let (id, row) = instance_with_row(&mut s, "Square", true);
+    offset_row(&mut s, id, row, 10.0);
+    let doc = s.doc().unwrap().doc.clone();
+    let baked = vectorcraft_render::effects::bake_document(&doc).expect("the instance is baked");
+    let n = baked.node(id).expect("the baked art keeps the instance's id").clone();
+    assert!(!matches!(n.kind, NodeKind::SymbolInstance { .. }));
+    no_effects_left(&n);
+    let b = n.geometric_bounds().expect("the baked art has bounds");
+    assert!((b.x0 - 40.0).abs() < 1.0 && (b.x1 - 160.0).abs() < 1.0, "the fill grows by the offset: {b:?}");
+}
+
+/// An effect on a symbol instance's stroke reshapes the stroked shapes of its art and leaves
+/// their fills where they were.
+#[test]
+fn a_symbol_instance_stroke_effect_reshapes_its_stroked_art_and_expands() {
+    let mut s = session();
+    let (id, row) = instance_with_row(&mut s, "Square", false);
+    assert!(near(render(&s).pixel(40, 100), WHITE));
+    offset_row(&mut s, id, row, 10.0);
+    assert!(expandable(&s));
+    let before = render(&s);
+    assert!(near(before.pixel(40, 100), BLUE), "the stroke moves out with the offset: {:?}", before.pixel(40, 100));
+    assert!(near(before.pixel(45, 100), WHITE), "the fill keeps its shape: {:?}", before.pixel(45, 100));
+    assert!(near(before.pixel(100, 100), RED));
+
+    run(&mut s, "effect.expandAppearance", json!({"ids": [id.0]}));
+    let n = node(&s, id);
+    assert!(!matches!(n.kind, NodeKind::SymbolInstance { .. }));
+    no_effects_left(&n);
+    let after = render(&s);
+    assert!(differing(&before, &after, 8) < 200, "expanding changed {} pixels", differing(&before, &after, 8));
+}
+
+/// A dynamic symbol's instance that paints a stroke of its own on art without one: the instance's
+/// stroke effect reshapes that stroke, and its bounds take in where the stroke is drawn.
+#[test]
+fn a_stroke_effect_reshapes_a_stroke_a_dynamic_instance_adds() {
+    let mut s = session();
+    square(&mut s);
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Art", "type": "dynamic"}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addStroke", json!({"ids": [id.0]}));
+    let row = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    let blue = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0));
+    s.edit("paint", |d, _| {
+        let o = vectorcraft_doc::symbol_overrides::SymbolOverride { path: vec![], stroke: Some(blue), ..Default::default() };
+        d.node_mut(id).ok_or(EngineError::NoNode(id))?.extras_mut().symbol_overrides.push(o);
+        Ok(())
+    })
+    .unwrap();
+    // The 1 pt stroke's center moves to x = 30.5, so it covers the pixel column from 30 to 31.
+    offset_row(&mut s, id, row, 19.5);
+    assert!(near(render(&s).pixel(30, 100), BLUE), "the added stroke moves out with the offset: {:?}", render(&s).pixel(30, 100));
+    let doc = s.doc().unwrap().doc.clone();
+    let b = vectorcraft_render::painted_bounds(&doc, doc.node(id).unwrap()).expect("the instance has bounds");
+    assert!(b.x0 <= 31.0 && b.x1 >= 169.0, "the bounds take in the offset stroke: {b:?}");
+    let drawn = vectorcraft_render::drawn_bounds(&doc, doc.node(id).unwrap()).expect("the instance is drawn");
+    assert!(drawn.x0 <= 31.0 && drawn.x1 >= 169.0, "the drawn bounds take in the offset stroke: {drawn:?}");
+}
+
+/// A group in the symbol's art with a fill of its own: the instance's fill effect reshapes what
+/// that fill paints, and the instance's bounds take it in.
+#[test]
+fn a_fill_effect_reshapes_the_fill_of_a_group_in_the_art() {
+    let mut s = session();
+    square(&mut s);
+    run(&mut s, "paint.setFill", json!({"none": true}));
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addFill", json!({"ids": [g.0]}));
+    run(&mut s, "paint.setFill", json!({"ids": [g.0], "item": 0, "color": "#ff0000"}));
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Group"}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addFill", json!({"ids": [id.0]}));
+    let row = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    offset_row(&mut s, id, row, 20.0);
+    assert!(near(render(&s).pixel(35, 100), RED), "the group's fill grows by the offset: {:?}", render(&s).pixel(35, 100));
+    let doc = s.doc().unwrap().doc.clone();
+    let b = vectorcraft_render::painted_bounds(&doc, doc.node(id).unwrap()).expect("the instance has bounds");
+    assert!(b.x0 <= 31.0 && b.x1 >= 169.0, "the bounds take in the group's grown fill: {b:?}");
+    let drawn = vectorcraft_render::drawn_bounds(&doc, doc.node(id).unwrap()).expect("the instance is drawn");
+    assert!(drawn.x0 <= 31.0 && drawn.x1 >= 169.0, "the drawn bounds take in the group's grown fill: {drawn:?}");
+
+    let before = render(&s);
+    run(&mut s, "effect.expandAppearance", json!({}));
+    no_effects_left(&node(&s, id));
+    let after = render(&s);
+    assert!(differing(&before, &after, 8) < 200, "expanding changed {} pixels", differing(&before, &after, 8));
+}
+
+/// Of several fills, only the topmost one's effects reach the art, and only while it is visible.
+#[test]
+fn only_the_topmost_visible_instance_fill_reshapes_the_art() {
+    let mut s = session();
+    let (id, lower) = instance_with_row(&mut s, "Square", true);
+    offset_row(&mut s, id, lower, 30.0);
+    run(&mut s, "appearance.addFill", json!({"ids": [id.0]}));
+    let top = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": top, "none": true}));
+    assert!(!expandable(&s), "a lower fill's effect does not reach the art");
+    offset_row(&mut s, id, top, 10.0);
+    let both = render(&s);
+    assert!(near(both.pixel(44, 100), RED), "the top fill's offset shows");
+    assert!(near(both.pixel(25, 100), WHITE), "the lower fill's offset does not: {:?}", both.pixel(25, 100));
+
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": top, "visible": false}));
+    assert!(near(render(&s).pixel(44, 100), WHITE), "a hidden top fill reshapes nothing");
+    assert!(!expandable(&s));
+
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": top, "visible": true}));
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let after = render(&s);
+    assert!(differing(&both, &after, 8) < 200, "expanding changed {} pixels", differing(&both, &after, 8));
+    let n = node(&s, id);
+    no_effects_left(&n);
+}
+
+/// An instance inside a symbol's art passes the outer instance's fill effect on to its own art.
+#[test]
+fn a_nested_symbol_instance_takes_the_outer_fill_effect() {
+    let mut s = session();
+    square(&mut s);
+    run(&mut s, "symbol.new", json!({"name": "Inner"}));
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Outer"}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addFill", json!({"ids": [id.0]}));
+    let row = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    offset_row(&mut s, id, row, 40.0);
+    let before = render(&s);
+    assert!(near(before.pixel(20, 100), RED), "the inner art grows by the offset: {:?}", before.pixel(20, 100));
+    assert!(expandable(&s));
+    // A view that shows only the grown part, right of the square: the instance is still drawn.
+    let doc = s.doc().unwrap().doc.clone();
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let right = vectorcraft_render::Renderer::new().render(&doc, 200, 200, vectorcraft_geom::Affine::translate((-155.0, 0.0)), &opts);
+    assert!(near(right.pixel(20, 100), RED), "the grown art past the square's box is drawn: {:?}", right.pixel(20, 100));
+    let b = vectorcraft_render::painted_bounds(&doc, doc.node(id).unwrap()).expect("the instance has bounds");
+    assert!(b.x0 <= 11.0 && b.x1 >= 189.0, "the bounds take in the inner art's offset: {b:?}");
+
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let n = node(&s, id);
+    assert!(!matches!(n.kind, NodeKind::SymbolInstance { .. }));
+    n.walk(&mut |part| assert!(!matches!(part.kind, NodeKind::SymbolInstance { .. }), "the inner instance is expanded too"));
+    no_effects_left(&n);
+    let after = render(&s);
+    assert!(differing(&before, &after, 8) < 200, "expanding changed {} pixels", differing(&before, &after, 8));
+}
+
+/// A symbol whose art holds an instance of itself draws, exports and expands without running away.
+/// The engine keeps no such document after an edit, so Expand Appearance refuses it and the
+/// instance stays as it was.
+#[test]
+fn a_fill_effect_on_an_instance_of_a_symbol_that_holds_itself_ends() {
+    let mut s = session();
+    let (id, row) = instance_with_row(&mut s, "Square", true);
+    offset_row(&mut s, id, row, 4.0);
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let inst = d.node(id).unwrap().clone();
+        let sym = d.symbols.iter_mut().find(|sy| sy.name == "Square").unwrap();
+        sym.art = std::sync::Arc::new(Node::group(NodeId(90_000), vec![sym.art.clone(), std::sync::Arc::new(inst)]));
+    }
+    let doc = s.doc().unwrap().doc.clone();
+    assert!(vectorcraft_render::effects::bake_document(&doc).is_some(), "export bakes the instance");
+    assert!(vectorcraft_render::painted_bounds(&doc, doc.node(id).unwrap()).is_some(), "the instance is measured");
+    render(&s);
+    assert!(expandable(&s));
+    let e = s.execute("effect.expandAppearance", &json!({})).expect_err("the symbol nests without end");
+    assert!(e.to_string().contains(crate::TOO_DEEP), "{e}");
+    assert!(matches!(node(&s, id).kind, NodeKind::SymbolInstance { .. }), "the instance stays as it was");
+}
+
+/// A clip group's clipping path in the art keeps its shape, a compound one included, while the art
+/// it clips takes the instance's fill effect.
+#[test]
+fn a_compound_clipping_path_in_the_art_keeps_its_shape() {
+    let mut s = session();
+    let (id, row) = instance_with_row(&mut s, "Square", true);
+    offset_row(&mut s, id, row, 10.0);
+    let red = || {
+        let mut ap = vectorcraft_doc::Appearance::default();
+        ap.items.push(vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(vectorcraft_color::Paint::solid(
+            vectorcraft_color::Color::rgb(1.0, 0.0, 0.0),
+        ))));
+        ap
+    };
+    let square = |id: u64, x: f64| {
+        let rect = vectorcraft_geom::Rect::new(x, 50.0, x + 100.0, 150.0);
+        std::sync::Arc::new(Node::path(NodeId(id), vectorcraft_geom::shapes::rectangle(rect), red()))
+    };
+    let mut clip = Node::new(NodeId(90_001), NodeKind::Compound { children: vec![square(90_002, 40.0)], rule: Default::default() });
+    clip.appearance = red().into();
+    let group = Node::new(NodeId(90_003), NodeKind::Group { children: vec![std::sync::Arc::new(clip), square(90_004, 50.0)], clip: true });
+    let doc = {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let sym = d.symbols.iter_mut().find(|sy| sy.name == "Square").unwrap();
+        sym.art = std::sync::Arc::new(group);
+        d.clone()
+    };
+    let inst = doc.node(id).unwrap();
+    let art = doc.symbols.iter().find(|sy| sy.name == "Square").unwrap().art.clone();
+    let out = vectorcraft_render::effects::outline_art(Some(&doc), inst, Some(&art)).expect("the instance's art");
+    let mut seen = (false, false);
+    out.walk(&mut |part| {
+        let offset = part.appearance.items.iter().any(|i| i.effects().iter().any(|e| e.id == "path.offsetPath"));
+        match part.id.0 {
+            90_001 => {
+                seen.0 = true;
+                assert!(!offset, "the compound clipping path keeps its shape");
+            }
+            90_004 => {
+                seen.1 = true;
+                assert!(offset, "the clipped square takes the fill effect");
+            }
+            _ => {}
+        }
+    });
+    assert_eq!(seen, (true, true));
+}
+
 #[test]
 fn two_fills_and_an_offset_stroke_become_three_paths_that_look_the_same() {
     let mut s = session();

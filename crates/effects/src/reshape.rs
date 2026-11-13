@@ -10,12 +10,13 @@
 //! inline graphics whose own fills or strokes have geometry effects is outlined too: each of those
 //! effects reshapes the whole outline that its fill or stroke paints. An image's own fills and
 //! strokes paint only the shape that a Convert to Shape or Outline Object effect on them gives
-//! them ([`image_rows`]).
+//! them ([`image_rows`]): Outline Object follows the outline of the image's opaque area
+//! ([`opaque_area`]).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError, Weak};
 
 use vectorcraft_doc::live::Hooks;
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, ImageObject, Node, NodeId, NodeKind};
@@ -130,16 +131,139 @@ pub fn has_painted_effects(n: &Node) -> bool {
 }
 
 /// Is `n` type without inline graphics that has a fill or stroke of its own that paints and has a
-/// visible geometry effect, or an image with a fill or stroke of its own that paints a shape
-/// ([`image_rows`])? On type, such an effect reshapes the whole outline that its fill or stroke
-/// paints ([`outline_text`], which leaves inline graphics out).
+/// visible geometry effect, an image with a fill or stroke of its own that paints a shape
+/// ([`image_rows`]), or a symbol instance whose active fill or stroke has a visible geometry effect
+/// ([`active_fill`], [`active_stroke`])? On type, such an effect reshapes the whole outline that its
+/// fill or stroke paints ([`outline_text`], which leaves inline graphics out). On a symbol
+/// instance, it reshapes the fills or strokes of the art it places ([`add_instance_row_effects`]).
 pub fn has_item_geometry(n: &Node) -> bool {
     match &n.kind {
         NodeKind::Text(t) => {
             t.runs.iter().all(|r| r.inline.is_none()) && n.appearance.items.iter().any(|i| crate::paints(i) && crate::has_geometry(i.effects()))
         }
         NodeKind::Image(_) => n.appearance.items.iter().any(shapes_image),
+        NodeKind::SymbolInstance { .. } => {
+            active_fill(n).is_some_and(|f| crate::has_geometry(&f.effects)) || active_stroke(n).is_some_and(|s| crate::has_geometry(&s.effects))
+        }
         _ => false,
+    }
+}
+
+/// The fill of symbol instance `n` whose effects its art takes: its topmost fill, the one that
+/// stains the art, when it is visible and its opacity is above 0. A lower fill's effects do not
+/// reach the art.
+fn active_fill(n: &Node) -> Option<&vectorcraft_doc::FillLayer> {
+    n.appearance.fill().filter(|f| f.visible && f.opacity > 0.0)
+}
+
+/// The stroke of symbol instance `n` whose effects its art takes: its topmost stroke, when it is
+/// visible and its opacity is above 0.
+fn active_stroke(n: &Node) -> Option<&vectorcraft_doc::StrokeLayer> {
+    n.appearance.stroke().filter(|s| s.visible && s.opacity > 0.0)
+}
+
+/// The visible geometry effects in `fx`, in order.
+fn geometry_of(fx: &[Effect]) -> Vec<Effect> {
+    fx.iter().filter(|e| e.visible && is_geometry(&e.id)).cloned().collect()
+}
+
+/// `art`, the art symbol instance `n` places, with the visible geometry effects of `n`'s active
+/// fill added after the effects of every fill in it that paints, and those of its active stroke
+/// after the effects of every stroke in it that paints ([`active_fill`], [`active_stroke`]). Each
+/// fill or stroke keeps its paint, and the others keep their shapes. Live objects in it that are
+/// reached are evaluated first (with the symbols of `doc`), so the effects reshape what they draw.
+/// Clip groups' clipping paths, guides and the art of opacity masks keep their shapes. A symbol
+/// instance in the art takes the effects on its own active fill or stroke, or on a new fill or
+/// stroke without paint when it has none, and passes them on to its own art in turn; an instance
+/// of a symbol whose art (in `doc`) holds an instance of `n`'s symbol, at any depth, keeps its
+/// appearance, so the effects never pass round a symbol that holds itself. Without `doc`, no
+/// instance in the art takes them.
+fn add_instance_row_effects(doc: Option<&Document>, n: &Node, art: &mut Node) {
+    let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return };
+    let fill = active_fill(n).map_or(vec![], |f| geometry_of(&f.effects));
+    let stroke = active_stroke(n).map_or(vec![], |s| geometry_of(&s.effects));
+    if !fill.is_empty() || !stroke.is_empty() {
+        add_row_effects(doc, symbol, art, &fill, &stroke);
+    }
+}
+
+/// Does the art of the symbol named `from` in `doc` hold an instance of the symbol named `to`, at
+/// any depth of the symbols placed in it? `seen` holds the symbols already looked into.
+fn places_symbol(doc: &Document, from: &str, to: &str, seen: &mut HashSet<String>) -> bool {
+    if !seen.insert(from.to_string()) {
+        return false;
+    }
+    let Some(sym) = doc.symbols.iter().find(|s| s.name == from) else { return false };
+    let mut names = vec![];
+    sym.art.walk(&mut |c| {
+        if let NodeKind::SymbolInstance { symbol, .. } = &c.kind {
+            names.push(symbol.clone());
+        }
+    });
+    names.iter().any(|name| name == to || places_symbol(doc, name, to, seen))
+}
+
+/// [`add_instance_row_effects`] of `fill` and `stroke` to `n` and the art in it, the art of an
+/// instance of the symbol named `outer`.
+fn add_row_effects(doc: Option<&Document>, outer: &str, n: &mut Node, fill: &[Effect], stroke: &[Effect]) {
+    match &n.kind {
+        NodeKind::Path { clipping: true, .. } | NodeKind::Path { guide: true, .. } | NodeKind::RulerGuide { .. } => return,
+        NodeKind::SymbolInstance { symbol, .. } => {
+            if let Some(d) = doc
+                && !places_symbol(d, symbol, outer, &mut HashSet::new())
+            {
+                add_to_instance(n, fill, stroke);
+            }
+            return;
+        }
+        _ if vectorcraft_doc::live::is_live(n) => *n = evaluated(doc, n),
+        _ => {}
+    }
+    let takes = |i: &AppearanceItem| {
+        crate::paints(i) && !matches!(i, AppearanceItem::Fill(_) if fill.is_empty()) && !matches!(i, AppearanceItem::Stroke(_) if stroke.is_empty())
+    };
+    if n.appearance.items.iter().any(takes) {
+        for item in n.appearance.items.iter_mut().filter(|i| takes(i)) {
+            let fx = if matches!(item, AppearanceItem::Fill(_)) { fill } else { stroke };
+            item.effects_mut().extend_from_slice(fx);
+        }
+    }
+    // A compound path paints its members with its own fills and strokes.
+    if matches!(n.kind, NodeKind::Compound { .. }) {
+        return;
+    }
+    // A clip group's first member is its clipping path, whatever its kind.
+    let clips = n.clips();
+    for (i, c) in n.children_mut().into_iter().flatten().enumerate() {
+        if !(clips && i == 0) {
+            add_row_effects(doc, outer, Arc::make_mut(c), fill, stroke);
+        }
+    }
+}
+
+/// Add `fill` to the effects of symbol instance `n`'s active fill and `stroke` to those of its
+/// active stroke ([`active_fill`], [`active_stroke`]); without one, to a new topmost fill or stroke
+/// without paint, which neither stains nor strokes its art.
+fn add_to_instance(n: &mut Node, fill: &[Effect], stroke: &[Effect]) {
+    if !fill.is_empty() {
+        match n.appearance.fill_mut().filter(|f| f.visible && f.opacity > 0.0) {
+            Some(f) => f.effects.extend_from_slice(fill),
+            None => {
+                let mut f = vectorcraft_doc::FillLayer::new(vectorcraft_doc::color::Paint::None);
+                f.effects = fill.to_vec();
+                n.appearance.items.push(AppearanceItem::Fill(f));
+            }
+        }
+    }
+    if !stroke.is_empty() {
+        match n.appearance.stroke_mut().filter(|s| s.visible && s.opacity > 0.0) {
+            Some(s) => s.effects.extend_from_slice(stroke),
+            None => {
+                let mut s = vectorcraft_doc::StrokeLayer::new(vectorcraft_doc::color::Paint::None, 0.0);
+                s.effects = stroke.to_vec();
+                n.appearance.items.push(AppearanceItem::Stroke(s));
+            }
+        }
     }
 }
 
@@ -164,8 +288,8 @@ pub fn gives_image_shape(effects: &[Effect]) -> bool {
 
 /// The fills and strokes of `items` (an image's own) that paint something ([`shapes_image`]), each
 /// without the effects before its first Convert to Shape or Outline Object. Convert to Shape sizes
-/// its shape from the image's box, and Outline Object gives the image's frame. The others paint
-/// nothing.
+/// its shape from the image's box, and Outline Object gives the outline of the image's opaque
+/// area ([`opaque_area`]), or its frame when it has no transparency. The others paint nothing.
 fn image_rows(items: &[AppearanceItem]) -> Vec<AppearanceItem> {
     items
         .iter()
@@ -180,11 +304,109 @@ fn image_rows(items: &[AppearanceItem]) -> Vec<AppearanceItem> {
         .collect()
 }
 
+/// Does `item`, one of [`image_rows`], start from the outline of the image's opaque area (is its
+/// first effect Outline Object rather than Convert to Shape)?
+fn follows_opaque_area(item: &AppearanceItem) -> bool {
+    item.effects().first().is_some_and(|e| e.id == "path.outlineObject")
+}
+
+/// Is `n` an image with a fill or stroke of its own that follows the outline of the image's opaque
+/// area ([`image_rows`], [`opaque_area`])? The shape that fill or stroke paints then changes with
+/// the image's pixels in the document while `n` stays the same.
+pub fn follows_image_pixels(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Image(_))
+        && n.appearance
+            .items
+            .iter()
+            .any(|i| shapes_image(i) && i.effects().iter().find(|e| gives_shape(e)).is_some_and(|e| e.id == "path.outlineObject"))
+}
+
+/// The outline of a set of pixels' opaque area, in the pixel space they decode to, with that size
+/// ([`traced_opaque_area`]). `None` for pixels that have no transparency or could not be traced.
+type Traced = Option<(Arc<PathData>, (u32, u32))>;
+
+/// One of [`Outlines`]' entries: the pixels, held weakly, and their outline once it is traced.
+type Entry = (Weak<Vec<u8>>, Arc<OnceLock<Traced>>);
+
+/// The outlines [`opaque_area`] has traced, by the address of the pixels each was traced from.
+struct Outlines {
+    /// Each outline with its pixels. An entry does not keep its pixels, and while it is kept no
+    /// other pixels can take their address. Entries whose pixels are gone are dropped before a
+    /// new outline is traced and every [`PRUNE_EVERY`] lookups.
+    kept: BTreeMap<usize, Entry>,
+    /// The lookups since the last pruning.
+    lookups: usize,
+}
+
+static OUTLINES: Mutex<Outlines> = Mutex::new(Outlines { kept: BTreeMap::new(), lookups: 0 });
+
+/// How many lookups [`OUTLINES`] takes between two prunings of its entries for pixels that are gone.
+const PRUNE_EVERY: usize = 256;
+
+#[cfg(test)]
+thread_local! {
+    /// The outlines [`traced_opaque_area`] has traced on this thread.
+    pub(crate) static TRACES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Does [`OUTLINES`] keep an entry for `pixels`?
+#[cfg(test)]
+pub(crate) fn keeps_outline(pixels: &Weak<Vec<u8>>) -> bool {
+    OUTLINES.lock().unwrap_or_else(PoisonError::into_inner).kept.values().any(|(w, _)| w.ptr_eq(pixels))
+}
+
+/// The outline of the opaque area of the image `im` in the document
+/// ([`vectorcraft_trace::opaque_outline`]: its pixels that are at least half opaque, outlined with
+/// fitted curves), its pixels taken from `im` itself or from the first of `docs` that holds them.
+/// `None` when the image has no transparency, its pixels can't be read or are too large to read
+/// ([`vectorcraft_trace::decode_alpha`]), or its outline would be too complex: Outline Object then
+/// follows the image's frame. The outline is traced once for each set of pixels and kept while
+/// those pixels are: a caller that asks while another thread traces the same pixels waits for that
+/// trace.
+pub(crate) fn opaque_area(docs: &[Option<&Document>], im: &ImageObject) -> Option<PathData> {
+    let blob = im.pixels.as_deref().or_else(|| docs.iter().flatten().find_map(|d| d.images.get(&im.key)))?;
+    let bytes = &blob.bytes;
+    let cell = {
+        let mut o = OUTLINES.lock().unwrap_or_else(PoisonError::into_inner);
+        o.lookups += 1;
+        if o.lookups >= PRUNE_EVERY {
+            o.lookups = 0;
+            o.kept.retain(|_, (w, _)| w.strong_count() > 0);
+        }
+        let key = Arc::as_ptr(bytes).addr();
+        match o.kept.get(&key) {
+            Some((_, cell)) => Arc::clone(cell),
+            None => {
+                o.kept.retain(|_, (w, _)| w.strong_count() > 0);
+                let cell = Arc::new(OnceLock::new());
+                o.kept.insert(key, (Arc::downgrade(bytes), Arc::clone(&cell)));
+                cell
+            }
+        }
+    };
+    // Traced without the lock: another image's outline need not wait for this one.
+    let (path, (w, h)) = cell.get_or_init(|| traced_opaque_area(bytes)).clone()?;
+    let to_image = Affine::scale_non_uniform(f64::from(im.width) / f64::from(w.max(1)), f64::from(im.height) / f64::from(h.max(1)));
+    Some(path.transformed(im.xf * to_image))
+}
+
+/// [`opaque_area`]'s outline of the encoded image `bytes`. An image whose format has no alpha is
+/// not decoded.
+fn traced_opaque_area(bytes: &[u8]) -> Traced {
+    #[cfg(test)]
+    TRACES.with(|t| t.set(t.get() + 1));
+    let (w, h, alpha) = vectorcraft_trace::decode_alpha(bytes).ok()??;
+    let outline = vectorcraft_trace::opaque_outline(w, h, alpha).ok()??;
+    Some((Arc::new(outline), (w, h)))
+}
+
 /// The shapes that the image `n`'s own fills and strokes paint ([`image_rows`]), each with its fill
-/// rule and the fill or stroke that paints it: the paths (or compound paths) along its frame that
-/// [`reshape`] makes, with each fill's or stroke's geometry effects applied as the renderer applies
-/// them. Empty for anything but an image with such fills or strokes. The swatches and patterns that
-/// live-effect plug-ins painting their pieces name are looked up in `doc`.
+/// rule and the fill or stroke that paints it: the paths (or compound paths) that [`reshape`]
+/// makes along its frame or, for those whose first effect is Outline Object, along the outline of
+/// its opaque area ([`opaque_area`]), with each fill's or stroke's geometry effects applied as the
+/// renderer applies them. Empty for anything but an image with such fills or strokes. The swatches
+/// and patterns that live-effect plug-ins painting their pieces name are looked up in `doc`, and
+/// the image's pixels in `doc` when the image does not hold them.
 pub fn image_paint(doc: Option<&Document>, n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
     if !matches!(n.kind, NodeKind::Image(_)) || !has_item_geometry(n) {
         return vec![];
@@ -302,7 +524,9 @@ fn with_id(art: &Node, id: NodeId) -> Node {
 /// `n` as plain art that geometry effects can reshape, without its transparency and object
 /// effects: type outlined ([`outline_text`]), live objects evaluated (type inside them outlined),
 /// a symbol instance as `symbol_art` (the symbol's art, stained as the caller draws it) placed by
-/// the instance's transform (through the symbol's 9-slice guides in `doc`, when it has them).
+/// the instance's transform (through the symbol's 9-slice guides in `doc`, when it has them), its
+/// fills and strokes carrying the geometry effects of the instance's active fill and stroke
+/// ([`add_instance_row_effects`]).
 /// `None` for other kinds (images, paths, containers), and for an instance whose art placed
 /// through the guides could hold more than [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects. A Repeat counts the Repeats in the art of
 /// `doc`'s symbols that its instances show toward its instance budget.
@@ -351,6 +575,9 @@ fn outline_art_with(
         _ => return None,
     };
     outline_nested_text(paint_doc, &mut art, false);
+    if matches!(n.kind, NodeKind::SymbolInstance { .. }) {
+        add_instance_row_effects(symbols, n, &mut art);
+    }
     art.opacity = 1.0;
     art.blend = Default::default();
     art.isolate = false;
@@ -480,9 +707,10 @@ pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping
 /// `n` (see [`needs_outline`]) with its object-level geometry effects and its perspective applied:
 /// its [`outline_art`] reshaped as one piece, or for an image the image clipped by its reshaped
 /// frame. Type's own fills and strokes keep their effects on its whole outline. An image's own
-/// fills and strokes that paint a shape ([`image_rows`]) become paths along its frame below and
-/// above it, reshaped with it, and keep their effects from their first Convert to Shape or Outline
-/// Object on. The result is a group with `n`'s id, name, visibility, transparency, opacity mask
+/// fills and strokes that paint a shape ([`image_rows`]) become paths below and above it, along
+/// its frame or, from Outline Object, along the outline of its opaque area ([`opaque_area`]),
+/// reshaped with it, and keep their effects from their first Convert to Shape or Outline Object
+/// on. The result is a group with `n`'s id, name, visibility, transparency, opacity mask
 /// and remaining (raster) effects; `None` when `n` has no visible geometry effect, no perspective
 /// and is not type or an image with a fill or stroke of its own that [`has_item_geometry`] counts,
 /// or has no art (a symbol instance without `symbol_art`). A path with [`has_transform_art`] is
@@ -497,8 +725,10 @@ pub fn reshape(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> O
 
 /// `n` (see [`needs_outline`], or a path with [`has_transform_art`]) as plain art for Expand
 /// Appearance: [`reshape`]d when it has
-/// geometry effects, else type with fills or strokes of its own outlined, or an image with fills
-/// or strokes of its own that paint a shape, in the same form. `None` when it has none of these.
+/// geometry effects, else type with fills or strokes of its own outlined, an image with fills or
+/// strokes of its own that paint a shape, or a symbol instance's art reshaped by the geometry
+/// effects of its active fill or stroke ([`has_item_geometry`]), in the same form. `None` when it
+/// has none of these.
 pub fn expand_outlined(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
     // A path whose Transform effect copies it, or scales its strokes or moves its patterns: each
     // copy an object of its own with the path's fills and strokes, the copies of each Transform
@@ -552,12 +782,13 @@ fn as_art_opts(
         NodeKind::Image(im) => {
             let frame = shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf);
             let mut image = Node::new(n.id, n.kind.clone());
-            // Its pixels draw as the image's do: colorized by a grayscale image's fill color, and
-            // smoothed or not.
+            // Its pixels draw as the image's do: colorized by a grayscale image's fill color,
+            // smoothed or not, and with its color mask's masked pixels.
             {
                 let mut e = image.extras_mut();
                 e.colorize = n.extras().colorize.clone();
                 e.pixelated = n.extras().pixelated;
+                e.color_mask = n.extras().color_mask.clone();
             }
             let clipped = || {
                 let mut clip = Node::path(n.id, frame.clone(), Appearance::default());
@@ -566,15 +797,33 @@ fn as_art_opts(
                 }
                 Node::new(n.id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(image.clone())], clip: true })
             };
-            // The fills and strokes that paint a shape, as paths along the frame below and above
-            // the image.
+            // The fills and strokes that paint a shape, as paths below and above the image: along
+            // the frame, or for those whose first effect is Outline Object along the outline of
+            // the image's opaque area (traced only when one of them needs it). A run of either
+            // kind is one path; a fill or stroke whose outline is empty (an image with no opaque
+            // pixel) paints nothing.
             let (below, above) = n.appearance.split_contents();
             let (below, above) = (image_rows(below), image_rows(above));
             if below.is_empty() && above.is_empty() {
                 clipped()
             } else {
+                let opaque = std::cell::OnceCell::new();
                 let rows = |items: Vec<AppearanceItem>| {
-                    (!items.is_empty()).then(|| Arc::new(Node::path(n.id, frame.clone(), Appearance { items, ..Default::default() })))
+                    let mut out = vec![];
+                    let mut items = items.into_iter().peekable();
+                    while let Some(first) = items.next() {
+                        let follows = follows_opaque_area(&first);
+                        let mut run = vec![first];
+                        while let Some(next) = items.next_if(|i| follows_opaque_area(i) == follows) {
+                            run.push(next);
+                        }
+                        let path = if follows { opaque.get_or_init(|| opaque_area(&[symbols, paint_doc], im)).as_ref() } else { None };
+                        let path = path.unwrap_or(&frame);
+                        if !path.is_empty() {
+                            out.push(Arc::new(Node::path(n.id, path.clone(), Appearance { items: run, ..Default::default() })));
+                        }
+                    }
+                    out
                 };
                 // Without geometry effects, the image is not clipped.
                 let image = if fx.is_empty() { image.clone() } else { clipped() };
