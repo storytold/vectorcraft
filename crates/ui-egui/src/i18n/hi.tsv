@@ -1306,7 +1306,7 @@ antiAlias	Sharp	शार्प
 	Description:	विवरण:
 	Deselect	डीसिलेक्ट करें
 	Design…	डिजाइन…
-	Desired	देसी
+	Desired	वांछित
 	Destination Folder:	गंतव्य फ़ोल्डर:
 	Destination:	गंतव्य:
 	Detail	डिटेल
@@ -2802,7 +2802,7 @@ antiAlias	Sharp	शार्प
 	Minimize	छोटा करें
 	Minimum	न्यूनतम
 	Minimum angle	न्यूनतम कोण
-	Minimum must not exceed Desired, nor Desired Maximum.	न्यूनतम से अधिक नहीं होना चाहिए, न ही अधिकतम होना चाहिए।
+	Minimum must not exceed Desired, nor Desired Maximum.	न्यूनतम मान वांछित मान से अधिक नहीं होना चाहिए, और न ही वांछित मान अधिकतम मान से।
 	Minimum:	न्यूनतम:
 	Minus Back	पीछे वाला घटाएँ
 	Minus Front	सामने वाला घटाएँ
@@ -5901,7 +5901,7 @@ antiAlias	Sharp	शार्प
 @msg	`{name}` is no recovery entry name	`{name}` कोई वसूली प्रविष्टि नाम नहीं है
 @msg	`{name}` isn't a colour swatch	`{name}` is not a color swatch
 @msg	`{name}` takes a paint of its own kind (colour, gradient or pattern)	`{name}` अपने खुद के प्रकार (रंग, ग्रेडिएंट या पैटर्न) का एक रंग लेता है।
-@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: न्यूनतम इच्छा से अधिक नहीं होना चाहिए, न ही इच्छा अधिकतम
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: न्यूनतम मान वांछित मान से अधिक नहीं होना चाहिए, और न ही वांछित मान अधिकतम मान से
 @msg	`{other}` doesn't trace an image	`{other}` एक इमेज का पता नहीं लगा
 @msg	`{path}` must be a bool or an object of bools	`{path}` एक bool होना चाहिए या एक ऑब्जेक्ट होना चाहिए।
 @msg	`{s}` is not a colour (#rrggbb or a preset name)	`{s}` एक रंग नहीं है (#rrggbb या एक पूर्व निर्धारित नाम)

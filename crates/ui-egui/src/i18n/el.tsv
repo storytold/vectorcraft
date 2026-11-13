@@ -6152,6 +6152,7 @@ effect	Points	Σημεία
 	Single Word Justification:	Στοίχιση μεμονωμένης λέξης:
 	Full Justify	Στοίχιση και στα δύο άκρα
 	Minimum must not exceed Desired, nor Desired Maximum.	Το ελάχιστο δεν πρέπει να υπερβαίνει το επιθυμητό, ούτε το επιθυμητό το μέγιστο.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: το ελάχιστο δεν πρέπει να υπερβαίνει το επιθυμητό, ούτε το επιθυμητό το μέγιστο
 	Justification	Πλήρης στοίχιση
 	Add filters from the list above	Προσθέστε φίλτρα από τη λίστα παραπάνω
 	Add to Stack	Προσθήκη στη στοίβα

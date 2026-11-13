@@ -5866,6 +5866,7 @@ lighting	Light	ライト
 	Single Word Justification:	単語のみの行の揃え:
 	Full Justify	両端揃え
 	Minimum must not exceed Desired, nor Desired Maximum.	最小値は最適値を、最適値は最大値を超えることはできません。
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: 最小値は最適値を、最適値は最大値を超えることはできません
 	Minimum	最小
 	Justification	文字組み
 	Add filters from the list above	上のリストからフィルターを追加

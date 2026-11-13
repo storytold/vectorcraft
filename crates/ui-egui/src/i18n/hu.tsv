@@ -6184,6 +6184,7 @@ imageTrace	Outline	Körvonal
 	Single Word Justification:	Egyetlen szó igazítása:
 	Full Justify	Teljes sorkizárás
 	Minimum must not exceed Desired, nor Desired Maximum.	A minimum nem haladhatja meg a kívánt értéket, sem a kívánt érték a maximumot.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: a minimum nem haladhatja meg a kívánt értéket, sem a kívánt érték a maximumot
 	Justification	Sorkizárás
 	Add filters from the list above	Adjon hozzá szűrőket a fenti listából
 	Add to Stack	Hozzáadás a veremhez

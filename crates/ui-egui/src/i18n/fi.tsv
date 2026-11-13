@@ -6164,6 +6164,7 @@ mark-style	Japanese	Japanilainen
 	Single Word Justification:	Yksittäisen sanan tasaus:
 	Full Justify	Täysi tasaus
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimi ei saa ylittää haluttua arvoa eikä haluttu arvo maksimia.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: minimi ei saa ylittää haluttua arvoa eikä haluttu arvo maksimia
 	Justification	Tasaus
 	Add filters from the list above	Lisää suodattimia yllä olevasta luettelosta
 	Add to Stack	Lisää pinoon

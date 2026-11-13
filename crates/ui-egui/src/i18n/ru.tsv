@@ -5809,6 +5809,7 @@ lighting	Light	Свет
 	Single Word Justification:	Выключка одного слова:
 	Full Justify	Полная выключка
 	Minimum must not exceed Desired, nor Desired Maximum.	Минимум не может превышать желательное значение, а желательное — максимум.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: минимум не может превышать желательное значение, а желательное — максимум
 	Minimum	Минимум
 	Justification	Выключка
 	Add filters from the list above	Добавьте фильтры из списка выше

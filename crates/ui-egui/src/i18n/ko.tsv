@@ -5784,6 +5784,7 @@ lighting	Light	광원
 	Single Word Justification:	단일 단어 정렬:
 	Full Justify	강제 양쪽 정렬
 	Minimum must not exceed Desired, nor Desired Maximum.	최소값은 희망값을, 희망값은 최대값을 넘을 수 없습니다.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: 최소값은 희망값을, 희망값은 최대값을 넘을 수 없습니다
 	Minimum	최소
 	Justification	양끝 맞춤
 	Add filters from the list above	위 목록에서 필터 추가

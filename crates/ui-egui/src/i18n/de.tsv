@@ -5789,6 +5789,7 @@ effect	Soft	Weich
 	Single Word Justification:	Ausrichtung einzelner Wörter:
 	Full Justify	Blocksatz
 	Minimum must not exceed Desired, nor Desired Maximum.	Das Minimum darf den optimalen Wert nicht übersteigen, der optimale Wert nicht das Maximum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Das Minimum darf den optimalen Wert nicht übersteigen, der optimale Wert nicht das Maximum
 	Minimum	Minimum
 	Justification	Abstände
 	Add filters from the list above	Filter aus der Liste oben hinzufügen

@@ -5804,6 +5804,7 @@ theme	Appearance	Giao diện
 	Single Word Justification:	Căn đều một từ:
 	Full Justify	Căn đều hoàn toàn
 	Minimum must not exceed Desired, nor Desired Maximum.	Giá trị tối thiểu không được vượt quá giá trị mong muốn, và giá trị mong muốn không được vượt quá tối đa.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: giá trị tối thiểu không được vượt quá giá trị mong muốn, và giá trị mong muốn không được vượt quá tối đa
 	Minimum	Tối thiểu
 	Justification	Căn đều
 	Add filters from the list above	Thêm bộ lọc từ danh sách phía trên

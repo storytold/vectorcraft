@@ -5803,6 +5803,7 @@ lighting	Light	Світло
 	Single Word Justification:	Вирівнювання одного слова:
 	Full Justify	Повне вирівнювання
 	Minimum must not exceed Desired, nor Desired Maximum.	Мінімум не може перевищувати бажане значення, а бажане — максимум.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: мінімум не може перевищувати бажане значення, а бажане — максимум
 	Minimum	Мінімум
 	Justification	Вирівнювання за шириною
 	Add filters from the list above	Додайте фільтри зі списку вище

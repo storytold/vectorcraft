@@ -6055,6 +6055,7 @@ mark-style	Japanese	Japońskie
 	Single Word Justification:	Justowanie pojedynczego wyrazu:
 	Full Justify	Pełne justowanie
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum nie może przekraczać wartości optymalnej, a wartość optymalna maksimum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: minimum nie może przekraczać wartości optymalnej, a wartość optymalna maksimum
 	Justification	Justowanie
 	Add filters from the list above	Dodaj filtry z listy powyżej
 	Add to Stack	Dodaj do stosu

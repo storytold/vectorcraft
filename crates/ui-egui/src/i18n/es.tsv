@@ -6143,6 +6143,7 @@ mark-style	Japanese	Japonesas
 	Single Word Justification:	Justificación de una sola palabra:
 	Full Justify	Justificar completamente
 	Minimum must not exceed Desired, nor Desired Maximum.	El mínimo no puede superar el deseado, ni el deseado el máximo.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: el mínimo no puede superar el deseado, ni el deseado el máximo
 	Justification	Justificación
 	Add filters from the list above	Añada filtros de la lista de arriba
 	Add to Stack	Añadir a la pila
