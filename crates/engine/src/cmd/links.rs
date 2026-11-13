@@ -28,7 +28,9 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::links::{Align, Preserve, hash_bytes};
-use vectorcraft_doc::{Appearance, Document, ImageBlob, ImageObject, LinkInfo, Node, NodeId, NodeKind, PageBox, PlacedDocument, PlacementOptions};
+use vectorcraft_doc::{
+    Appearance, DataValue, Document, ImageBlob, ImageObject, LinkInfo, Node, NodeId, NodeKind, PageBox, PlacedDocument, PlacementOptions,
+};
 use vectorcraft_geom::{Affine, PathData, Rect, shapes};
 
 use super::fileio::{self, RasterImage, absolute_path, file_created, file_stamp, read_file, write_file};
@@ -68,7 +70,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Relink",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, scope?: selected (default: ids) | all (ids and every other object in the layers linked to the same file as one of them) | missingInFolder (with path: ids, then every other missing link whose file name is in path's folder, each to the file of its name there; names not there are in notFound; with copy, only images are looked for) | each (with paths), paths?: [{ids, path}] (with scope each, in place of ids, path and folder: each link to its own file; an id in two entries is an error), copy?: false (with path or paths, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard or page of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy)}",
+            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, scope?: selected (default: ids) | all (ids and every other object in the layers linked to the same file as one of them) | missingInFolder (with path: ids, then every other missing link whose file name is in path's folder, each to the file of its name there; names not there are in notFound; with copy, only images are looked for) | each (with paths), paths?: [{ids, path}] (with scope each, in place of ids, path and folder: each link to its own file; an id in two entries is an error), copy?: false (with path or paths, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard or page of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy; to is the file name alone when the document's folder is outside the automation read roots)}",
             has_doc,
             relink
         ),
@@ -1058,6 +1060,8 @@ pub fn resolve(d: &mut Document, base: LinkBase, update: bool, low_res_proxy_eps
         };
         Nested { pick: &pick, make: &mut make, next: 0 }.run(d);
     }
+    // Color masks of images whose files were read again are made for the new pixels.
+    super::refresh_color_masks(None, d);
     out
 }
 
@@ -1193,6 +1197,83 @@ pub(crate) fn with_found_paths(d: &mut Document, base: LinkBase) {
             l.relative = relative.clone();
         }
     });
+}
+
+/// `d`, a document saved at `doc_path`, as a reply to the caller asking now may show it: without
+/// read roots in force, `d` itself; with them, a copy in which each link [`path_shown`] does not
+/// allow names its file alone, without its relative path or the size and date kept of its file,
+/// and each data set's image value and linked JavaScript file (`svg_scripts`) it does not allow
+/// names its file alone too, while a JavaScript file given as a URL stays as it is. The folder Export
+/// for Screens last wrote to is left out of the export settings when it is outside the read roots.
+/// A link whose path is allowed but whose relative path leads outside the read roots loses its
+/// relative path. Links in the layers, symbols, graph designs, patterns, the pattern being edited
+/// as it was before, opacity masks and the art of the stored brushes are all checked. A stored
+/// brush entry that does not read as a brush is left out of the copy, since its links cannot be
+/// checked, and a stored brush library that is not a list becomes an empty one.
+pub(crate) fn with_hidden_paths_named<'a>(d: &'a Document, base: LinkBase) -> Cow<'a, Document> {
+    if crate::file_access::current().is_none() {
+        return Cow::Borrowed(d);
+    }
+    let doc_path = base.doc;
+    // A stored relative path is followed from the folder of the file the document was read from,
+    // and a link is also looked for from the document's own folder: it is shown only when both
+    // places it names are inside the read roots.
+    let relative_hidden = |r: &str| [base.relative, base.doc].into_iter().any(|from| !path_shown(r, from));
+    let mut d = d.clone();
+    // The pattern being edited as it was before is checked as one more pattern, then put back.
+    let original = d.pattern_edit.as_mut().and_then(|e| e.original.take());
+    let edited = original.is_some();
+    d.patterns.extend(original);
+    // The art of each stored brush is checked as more layers, then put back.
+    let stored = d.unknown.get(vectorcraft_brush::DOC_KEY).map(|v| v.as_array().cloned().unwrap_or_default());
+    let mut brushes: Vec<vectorcraft_brush::Brush> =
+        stored.iter().flatten().filter_map(|raw| vectorcraft_brush::Brush::from_json(raw.clone()).ok()).collect();
+    let layers = d.layers.len();
+    d.layers.extend(brushes.iter().flat_map(|b| b.art()).map(|n| Arc::new(n.clone())));
+    d.update_links_where(
+        |l| !path_shown(&l.path, base.doc) || l.relative.as_deref().is_some_and(relative_hidden),
+        |l| {
+            if path_shown(&l.path, base.doc) {
+                l.relative = None;
+            } else {
+                let name = l.name().to_string();
+                *l = LinkInfo { path: name, relative: None, modified: None, size: None, ..l.clone() };
+            }
+        },
+    );
+    let mut checked = d.layers.split_off(layers).into_iter();
+    if edited && let (Some(def), Some(e)) = (d.patterns.pop(), d.pattern_edit.as_mut()) {
+        e.original = Some(def);
+    }
+    if stored.is_some() {
+        // Each brush is written as it reads, so fields it does not read are left out too.
+        let mut kept = vec![];
+        for b in &mut brushes {
+            for (slot, art) in b.art_mut().into_iter().zip(&mut checked) {
+                *slot = Arc::unwrap_or_clone(art);
+            }
+            kept.extend(serde_json::to_value(&*b).ok());
+        }
+        d.unknown.insert(vectorcraft_brush::DOC_KEY.into(), Value::Array(kept));
+    }
+    if d.export_settings.get("folder").and_then(Value::as_str).is_some_and(|f| crate::file_access::check_read(f).is_err()) {
+        d.export_settings.remove("folder");
+    }
+    let hidden = |v: &DataValue| matches!(v, DataValue::Image(path) if !path_shown(path, doc_path));
+    if d.variables.datasets.iter().any(|set| set.values.values().any(hidden)) {
+        for v in d.variables.datasets.iter_mut().flat_map(|set| set.values.values_mut()) {
+            if hidden(&*v)
+                && let DataValue::Image(path) = v
+            {
+                *path = LinkInfo::new(path.as_str()).name().to_string();
+            }
+        }
+    }
+    let script_hidden = |f: &str| !path_shown(f, doc_path) && !matches!(fileio::document_path(f, doc_path), Err(craft_docpath::Refused::Url));
+    for f in d.svg_scripts.iter_mut().filter(|f| script_hidden(f)) {
+        *f = LinkInfo::new(f.as_str()).name().to_string();
+    }
+    Cow::Owned(d)
 }
 
 // ---------- commands ----------
@@ -1337,7 +1418,9 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
         (true, false) => return Err(bad(C, "copy needs path: the file to copy into the document's folder")),
         (true, true) => {
             let doc = st.path.as_deref().map(absolute_path).ok_or_else(|| bad(C, "save the document first: copy puts the file in its folder"))?;
-            Some(Path::new(&doc).parent().map(Path::to_path_buf).ok_or_else(|| bad(C, format!("{doc} has no folder")))?)
+            // The document's path is not the client's: the error names it as the request may see it.
+            let no_folder = || fileio::naming_in_error(bad(C, format!("{doc} has no folder")), &doc);
+            Some(Path::new(&doc).parent().map(Path::to_path_buf).ok_or_else(no_folder)?)
         }
     };
     // An image or a placed document, with its link.
@@ -1472,6 +1555,12 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     not_found.dedup();
     let mut out = json!({ "relinked": relinked, "notFound": not_found });
     if copy_to.is_some() {
+        // The copies are in the document's folder, which the client did not give.
+        for pair in copied.iter_mut().chain(kept.iter_mut()) {
+            if let Some(to) = pair.get("to").and_then(Value::as_str).map(str::to_string) {
+                pair["to"] = json!(fileio::shown_path(&to));
+            }
+        }
         out["copied"] = json!(copied);
         out["kept"] = json!(kept);
     }
@@ -1521,9 +1610,14 @@ fn copy_into_folder(from: &str, bytes: &[u8], dir: &Path) -> Result<(String, boo
     use std::io::Write as _;
     let source = Path::new(from);
     let name = source.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    // Each name it takes is checked against the automation roots in force.
+    // Each name it takes is checked against the automation roots in force. The folder is the
+    // document's, so a refusal names it and the file as the request may see them.
     let create = |to: &Path| {
-        crate::file_access::check_write(&to.to_string_lossy()).map_err(|e| std::io::Error::new(std::io::ErrorKind::PermissionDenied, e))?;
+        let to_text = to.to_string_lossy();
+        crate::file_access::check_write(&to_text).map_err(|e| {
+            let e = fileio::naming_in_error(EngineError::Other(e), &to_text);
+            std::io::Error::new(std::io::ErrorKind::PermissionDenied, e.to_string())
+        })?;
         vectorcraft_format::write_new_with(to, |f| f.write_all(bytes))
     };
     // A file there that automation may not read isn't taken for the same file.
@@ -1534,7 +1628,10 @@ fn copy_into_folder(from: &str, bytes: &[u8], dir: &Path) -> Result<(String, boo
         Ok(Some(fileio::Placed::Copied(to))) => Ok((to.to_string_lossy().into_owned(), true)),
         Ok(Some(fileio::Placed::Kept(to))) => Ok((to.to_string_lossy().into_owned(), false)),
         Ok(None) => Err(EngineError::Other(format!("every numbered name for {name} is taken in the document's folder"))),
-        Err(e) => Err(EngineError::Other(format!("{}: {e}", dir.display()))),
+        Err(e) => {
+            let dir = dir.to_string_lossy();
+            Err(fileio::naming_in_error(EngineError::Other(format!("{dir}: {e}")), &dir))
+        }
     }
 }
 

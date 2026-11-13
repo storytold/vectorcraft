@@ -191,6 +191,72 @@ fn a_fitted_gradient_turned_by_a_transform_expands_as_the_canvas_draws_it() {
     }
 }
 
+/// A Transform effect after a drop shadow, on the object or on the fill, scales and turns the
+/// shadow on the canvas; Object › Expand of the gradient fill keeps the shadow the canvas drew.
+#[test]
+fn a_shadow_before_a_transform_expands_as_the_canvas_draws_it() {
+    for item in [json!(null), json!(0)] {
+        let mut s = session();
+        let id = gradient_rect(&mut s, Rect::new(80.0, 80.0, 120.0, 120.0), white_black(), false);
+        for (effect, params) in [
+            ("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 100})),
+            ("distort.transform", json!({"scaleH": 200, "scaleV": 200, "rotate": 90})),
+        ] {
+            run(&mut s, "effect.apply", json!({"effect": effect, "params": params, "ids": [id.0], "item": item}));
+        }
+        let before = render(&s);
+        run(&mut s, "object.expand", json!({"object": false, "stroke": false, "steps": 64}));
+        let after = render(&s);
+        let diff = differing(&before, &after, 64);
+        assert_eq!(diff, 0, "item {item}: {diff} pixels differ");
+    }
+}
+
+/// The object's Transform effect scales and turns the drop shadow of its gradient fill on the
+/// canvas; Object › Expand of the fill keeps the shadow the canvas drew.
+#[test]
+fn a_fills_shadow_under_the_objects_transform_expands_as_the_canvas_draws_it() {
+    let mut s = session();
+    let id = gradient_rect(&mut s, Rect::new(80.0, 80.0, 120.0, 120.0), white_black(), false);
+    for (effect, params, item) in [
+        ("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 100}), json!(0)),
+        ("distort.transform", json!({"scaleH": 200, "scaleV": 100, "rotate": 90}), json!(null)),
+    ] {
+        run(&mut s, "effect.apply", json!({"effect": effect, "params": params, "ids": [id.0], "item": item}));
+    }
+    let before = render(&s);
+    run(&mut s, "object.expand", json!({"object": false, "stroke": false, "steps": 64}));
+    let after = render(&s);
+    let diff = differing(&before, &after, 64);
+    assert_eq!(diff, 0, "{diff} pixels differ");
+}
+
+/// A group's Transform effect scales and turns its member's drop shadow on the canvas, and an
+/// object's scales and turns its fill's, with Scale Strokes & Effects off or on; Expand Appearance
+/// keeps the shadows the canvas drew.
+#[test]
+fn shadows_under_a_groups_or_an_objects_transform_expand_appearance_as_the_canvas_draws_them() {
+    let shadow = json!({"x": 10, "y": 0, "blur": 0, "opacity": 100});
+    for strokes in [false, true] {
+        let transform = json!({"scaleH": 200, "scaleV": 100, "rotate": 90, "strokes": strokes});
+        for group in [false, true] {
+            let mut s = session();
+            let id = gradient_rect(&mut s, Rect::new(80.0, 80.0, 120.0, 120.0), white_black(), false);
+            let item = if group { json!(null) } else { json!(0) };
+            run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "params": shadow, "ids": [id.0], "item": item}));
+            if group {
+                run(&mut s, "object.group", json!({}));
+            }
+            run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": transform}));
+            let before = render(&s);
+            run(&mut s, "effect.expandAppearance", json!({}));
+            let after = render(&s);
+            let diff = differing(&before, &after, 64);
+            assert_eq!(diff, 0, "group {group}, Scale Strokes & Effects {strokes}: {diff} pixels differ");
+        }
+    }
+}
+
 #[test]
 fn a_placed_gradient_moved_by_a_warp_expands_as_the_canvas_draws_it() {
     // The object's own effect, and the fill's (the first appearance item).
@@ -505,6 +571,42 @@ fn a_spread_gradient_expands_into_whole_bands_for_each_run() {
             let after = render(&s);
             assert!(mean_diff(&before, &after) < 2.0, "{kind} {spread}: {}", mean_diff(&before, &after));
         }
+    }
+}
+
+/// A gradient that repeats across a box in more runs than are written (700 runs of 0.2 pt) is not
+/// expanded into its first runs and a flat last color: the fill stays a gradient, and the rest of
+/// the object (its stroke) still expands. `object.expand.info` reports no gradient or fill to
+/// expand, and Expand with only Fill on reports nothing to expand; the same gradient in 70 runs
+/// (10 repeats) reports both.
+#[test]
+fn a_spread_gradient_with_more_runs_than_written_stays_a_gradient() {
+    let gradient = |repeats: u32| {
+        json!({"kind": "linear", "spread": "repeat", "repeats": repeats, "start": [30, 100], "end": [50, 100],
+            "stops": [{"offset": 0, "color": "#ffff00"}, {"offset": 1, "color": "#004080"}]})
+    };
+    for (repeats, expands) in [(10, true), (100, false)] {
+        let mut s = session();
+        gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), gradient(repeats), true);
+        let info = s.execute("object.expand.info", &json!({})).unwrap();
+        assert_eq!(
+            (info["gradient"].clone(), info["fill"].clone(), info["stroke"].clone()),
+            (json!(expands), json!(expands), json!(true)),
+            "{repeats}"
+        );
+        let only_fill = s.execute("object.expand", &json!({"object": false, "stroke": false}));
+        assert_eq!(only_fill.is_ok(), expands, "{repeats}: {only_fill:?}");
+    }
+    for to in [json!({"steps": 240}), json!({"gradient": "mesh"})] {
+        let mut s = session();
+        gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), gradient(100), true);
+        let before = render(&s);
+        run(&mut s, "object.expand", to.clone());
+        let after = render(&s);
+        assert!(mean_diff(&before, &after) < 2.0, "{to}: {}", mean_diff(&before, &after));
+        let mut gradients = 0;
+        s.doc().unwrap().doc.walk(|n| gradients += usize::from(matches!(n.appearance.fill_paint(), Paint::Gradient(_))));
+        assert_eq!(gradients, 1, "{to}");
     }
 }
 

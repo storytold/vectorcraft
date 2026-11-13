@@ -484,6 +484,57 @@ fn a_malformed_object_id_is_not_reported_as_missing() {
     assert_eq!(undo(&s), before);
 }
 
+/// A required number given as something other than a number (`"40"`, `true`, `[]`, `{}`) is refused
+/// as the wrong type, naming its key and showing the value as given, not as a missing number; one left
+/// out or given as null is still a missing number. Neither changes the document or records an undo step.
+#[test]
+fn a_malformed_required_number_is_not_reported_as_missing() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let with = |base: &serde_json::Value, key: &str, v: Option<serde_json::Value>| {
+        let mut p = base.clone();
+        let o = p.as_object_mut().unwrap();
+        match v {
+            Some(v) => o.insert(key.into(), v),
+            None => o.remove(key),
+        };
+        p
+    };
+    let cases = [
+        ("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}), "x"),
+        ("edit.colors.saturate", json!({"intensity": 40}), "intensity"),
+        ("object.envelope.setMeshPoint", json!({"id": 1, "index": 0, "x": 0, "y": 0}), "index"),
+        ("object.envelope.setMeshPoint", json!({"id": 1, "index": 0, "x": 0, "y": 0}), "x"),
+        ("object.mesh.movePoint", json!({"id": 1, "index": 0, "x": 0, "y": 0}), "y"),
+        ("guide.add", json!({"pos": 40}), "pos"),
+    ];
+    for (cmd, base, key) in &cases {
+        for (v, shown) in [(json!("40"), "\"40\""), (json!(true), "true"), (json!([]), "[]"), (json!({}), "{}")] {
+            let p = with(base, key, Some(v));
+            match s.execute(cmd, &p) {
+                Err(EngineError::BadParams { cmd: c, msg }) => {
+                    assert_eq!((c.as_str(), msg), (*cmd, format!("`{key}` must be a number, not {shown}")), "{p}");
+                }
+                other => panic!("{cmd} {p}: {other:?}"),
+            }
+        }
+        for p in [with(base, key, None), with(base, key, Some(json!(null)))] {
+            match s.execute(cmd, &p) {
+                Err(EngineError::BadParams { cmd: c, msg }) => assert_eq!((c.as_str(), msg), (*cmd, format!("missing number `{key}`")), "{p}"),
+                other => panic!("{cmd} {p}: {other:?}"),
+            }
+        }
+    }
+    assert_eq!(s.doc().unwrap().doc, doc);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    // A whole JSON number is a number for a fractional parameter.
+    s.execute("guide.add", &json!({"pos": 40})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+}
+
 /// A command that takes the keys of one that isn't checked yet isn't checked either.
 #[test]
 fn a_reference_to_an_unchecked_command_is_unchecked() {

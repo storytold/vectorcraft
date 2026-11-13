@@ -9,6 +9,7 @@
 
 pub mod addons;
 pub mod bbox;
+pub mod blendwidget;
 pub mod builder;
 pub mod catalog;
 pub mod corners;

@@ -148,11 +148,12 @@ fn radial_and_diamond_gradients_pad_in_rings_from_their_first_level() {
     }
 }
 
-/// A run of the stops far too short for the area, or a gradient of many stops, is written with at
-/// most so many runs and stops, and pads past them; a conic, a padding gradient and one without
-/// stops have nothing to pad.
+/// A run of the stops far too short for the area is written with at most so many runs, and pads
+/// past them; a gradient of many stops is written with every run the area needs, each run
+/// without the stops that change its colors least, within so many stops; a conic, a padding
+/// gradient and one without stops have nothing to pad.
 #[test]
-fn far_repeats_and_many_stops_are_capped() {
+fn far_repeats_are_capped_and_many_stops_are_sampled() {
     let geom = GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(0.01, 0.0), aspect: 1.0, focal: None };
     let g = Gradient { spread: GradientSpread::Repeat, repeats: MAX_REPEATS, ..Gradient::new(GradientKind::Linear, black_white()) };
     let p = g.padded_over(&geom, Rect::new(0.0, 0.0, 100.0, 1.0)).unwrap();
@@ -162,7 +163,13 @@ fn far_repeats_and_many_stops_are_capped() {
     let g = Gradient { spread: GradientSpread::Reflect, repeats: 50, ..Gradient::new(GradientKind::Linear, many) };
     let wide = GradientGeom { end: Point::new(100.0, 0.0), ..geom };
     let p = g.padded_over(&wide, Rect::new(0.0, 0.0, 100.0, 1.0)).unwrap();
-    assert!(p.capped && p.gradient.stops.len() <= MAX_SPREAD_STOPS, "{}", p.gradient.stops.len());
+    assert!(!p.capped && p.runs == 50 && p.gradient.stops.len() <= MAX_SPREAD_STOPS, "{} {}", p.runs, p.gradient.stops.len());
+    for x in [0.7, 33.3, 66.1, 99.5] {
+        let q = Point::new(x, 0.5);
+        let want = g.sample(g.spread_param(wide.param_at(GradientKind::Linear, q)) as f32).0.to_rgb();
+        let got = p.gradient.sample(p.geom.param_at(GradientKind::Linear, q) as f32).0.to_rgb();
+        assert!(want.iter().zip(got).all(|(a, b)| (a - b).abs() < 2e-3), "{x}: {want:?} vs {got:?}");
+    }
     assert!(g.unrolled().stops.len() <= MAX_SPREAD_STOPS);
     assert!(p.gradient.padded_over(&p.geom, Rect::new(0.0, 0.0, 1.0, 1.0)).is_none(), "it pads");
     assert!(spread(GradientKind::Conic, GradientSpread::Repeat, 3).padded_over(&wide, Rect::new(0.0, 0.0, 1.0, 1.0)).is_none());
@@ -323,6 +330,111 @@ fn unrolled_and_cycle_stops() {
     assert_eq!(repeat.cycle().unwrap().1, 1);
     assert!(Gradient::default().cycle().is_none());
     assert!(matches!(Gradient::default().unrolled(), std::borrow::Cow::Borrowed(_)));
+}
+
+/// A gradient of more stops than [`MAX_SPREAD_STOPS`] allows for all its runs keeps every run
+/// when unrolled, each run without the stops that change its colors least: its last run ends on
+/// its last color instead of the rest padding with it.
+#[test]
+fn unrolled_many_stops_keep_every_run() {
+    let stops: Vec<GradientStop> = (0..200).map(|i| GradientStop::new(i as f32 / 199.0, Color::gray(i as f32 / 199.0))).collect();
+    let g = Gradient { spread: GradientSpread::Repeat, repeats: MAX_REPEATS, ..Gradient::new(GradientKind::Linear, stops) };
+    let u = g.unrolled();
+    assert!(u.stops.len() <= MAX_SPREAD_STOPS, "{}", u.stops.len());
+    for t in [0.005, 0.5051, 0.9149, 0.9951] {
+        let want = g.sample(g.spread_param(t) as f32).0.to_rgb();
+        let got = u.sample(t as f32).0.to_rgb();
+        assert!(want.iter().zip(got).all(|(a, b)| (a - b).abs() < 2e-3), "{t}: {want:?} vs {got:?}");
+    }
+    // A padding gradient fitted to fewer stops keeps its ends.
+    let pad = Gradient::new(GradientKind::Linear, g.stops.clone());
+    let fitted = pad.fitted(16);
+    assert_eq!(fitted.stops.len(), 16);
+    for (stop, want) in [(&fitted.stops[0], Color::gray(0.0)), (&fitted.stops[15], Color::gray(1.0))] {
+        assert!(stop.color.to_rgb().iter().zip(want.to_rgb()).all(|(a, b)| (a - b).abs() < 1e-5), "{:?}", stop.color);
+    }
+    assert!(matches!(pad.fitted(500), std::borrow::Cow::Borrowed(_)));
+}
+
+/// One run of more stops than the limit (255 inside it, and a copy of each end color at 0 and 1)
+/// is written within the limit, every run the area needs included.
+#[test]
+fn a_run_over_the_stop_limit_is_written_within_it() {
+    let stops: Vec<GradientStop> = (1..=255).map(|i| GradientStop::new(i as f32 / 256.0, Color::gray(i as f32 / 256.0))).collect();
+    let g = Gradient { spread: GradientSpread::Repeat, repeats: 2, ..Gradient::new(GradientKind::Linear, stops) };
+    let geom = GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(20.0, 0.0), aspect: 1.0, focal: None };
+    let p = g.padded_within(&geom, Rect::new(0.0, 0.0, 20.0, 1.0), 256).unwrap();
+    assert!(!p.capped && p.runs == 2 && p.gradient.stops.len() <= 256, "{} {} {}", p.capped, p.runs, p.gradient.stops.len());
+    assert!(g.unrolled_within(256).stops.len() <= 256);
+}
+
+/// Fitting a run to fewer stops keeps a narrow band between two sharp steps, a stop linked to a
+/// swatch, and each kept stop's link and tint, where sampling at evenly spaced places would lose
+/// them.
+#[test]
+fn fitting_keeps_sharp_steps_and_swatch_links() {
+    let mut stops: Vec<GradientStop> = (0..300).map(|i| GradientStop::new(i as f32 / 299.0, Color::gray(i as f32 / 299.0))).collect();
+    let red = Color::rgb(1.0, 0.0, 0.0);
+    // A band of red from 0.5003 to 0.5013, with a sharp step at each side.
+    for (offset, color) in [(0.5003, None), (0.5003, Some(red)), (0.5013, Some(red)), (0.5013, None)] {
+        let gray = Color::gray(offset);
+        stops.push(GradientStop::new(offset, color.unwrap_or(gray)));
+    }
+    let spot = GradientStop { swatch: Some("Ink".into()), tint: 0.4, ..GradientStop::new(0.25, Color::gray(0.25)) };
+    stops.push(spot.clone());
+    // Three stops of one ink that look alike but print at different tints.
+    for (offset, tint) in [(0.8, 0.2), (0.81, 0.9), (0.82, 0.2)] {
+        stops.push(GradientStop { swatch: Some("Ink2".into()), tint, ..GradientStop::new(offset, Color::gray(offset)) });
+    }
+    // A span shaped by an off-center midpoint.
+    if let Some(s) = stops.iter_mut().find(|s| (s.offset - 0.6).abs() < 2e-3) {
+        s.midpoint = 0.13;
+    }
+    stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
+    let g = Gradient::new(GradientKind::Linear, stops);
+    let fitted = g.fitted(32);
+    assert!(fitted.stops.len() <= 32, "{}", fitted.stops.len());
+    let red_at = |t: f32| fitted.sample(t).0.to_rgb();
+    assert_eq!(red_at(0.5008), [1.0, 0.0, 0.0], "the band stays");
+    assert!(red_at(0.499)[1] > 0.4 && red_at(0.503)[1] > 0.4, "the band stays narrow");
+    assert!(fitted.stops.iter().any(|s| s.swatch.as_deref() == Some("Ink") && s.tint == 0.4 && s.offset == 0.25), "{:?}", fitted.stops);
+    assert!(fitted.stops.iter().any(|s| s.swatch.as_deref() == Some("Ink2") && s.tint == 0.9), "the tint change stays");
+    assert!(fitted.stops.iter().any(|s| s.midpoint == 0.13), "the shaped span stays");
+    // Of a stop that changes only its ink's tint and one that the colors' line nearly gives, the
+    // first stays. (The stop before an ink starts stays as well: leaving it out would blend the
+    // ink in sooner.)
+    let ink = |offset: f32, tint: f32| GradientStop { swatch: Some("Ink2".into()), tint, ..GradientStop::new(offset, Color::gray(0.5)) };
+    let few = vec![
+        GradientStop::new(0.0, Color::gray(0.0)),
+        GradientStop::new(0.2, Color::gray(0.17)),
+        GradientStop::new(0.3, Color::gray(0.3)),
+        ink(0.4, 0.2),
+        ink(0.5, 0.9),
+        ink(0.6, 0.2),
+        GradientStop::new(1.0, Color::gray(1.0)),
+    ];
+    let fitted = Gradient::new(GradientKind::Linear, few).fitted(6).into_owned();
+    let offsets: Vec<f32> = fitted.stops.iter().map(|s| s.offset).collect();
+    assert_eq!(offsets, [0.0, 0.3, 0.4, 0.5, 0.6, 1.0]);
+    // A Perceptual gradient leaves out the stop its own mixing gives, not the one the RGB line
+    // gives.
+    let (blue, yellow, gray) = (Color::rgb(0.0, 0.0, 1.0), Color::rgb(1.0, 1.0, 0.0), Color::rgb(0.5, 0.5, 0.5));
+    let on_curve = GradientMethod::Perceptual.mix(&gray, &yellow, 0.5);
+    let stops = vec![GradientStop::new(0.0, blue), GradientStop::new(0.5, gray), GradientStop::new(0.75, on_curve), GradientStop::new(1.0, yellow)];
+    let perceptual = Gradient { method: GradientMethod::Perceptual, ..Gradient::new(GradientKind::Linear, stops) };
+    let fitted = perceptual.fitted(3).into_owned();
+    let offsets: Vec<f32> = fitted.stops.iter().map(|s| s.offset).collect();
+    assert_eq!(offsets, [0.0, 0.5, 1.0]);
+    // A black of other inks between blacks that look the same prints differently: it stays.
+    let k = |offset: f32| GradientStop::new(offset, Color::Cmyk { c: 1.0, m: 1.0, y: 1.0, k: 1.0 });
+    let rich = GradientStop::new(0.5, Color::Cmyk { c: 0.6, m: 0.4, y: 0.4, k: 1.0 });
+    let blacks = vec![k(0.0), k(0.4), rich, k(0.6), k(1.0)];
+    let fitted = Gradient::new(GradientKind::Linear, blacks).fitted(3).into_owned();
+    let offsets: Vec<f32> = fitted.stops.iter().map(|s| s.offset).collect();
+    assert_eq!(offsets, [0.0, 0.5, 1.0]);
+    let spread = Gradient { spread: GradientSpread::Repeat, repeats: 4, ..g.clone() };
+    let u = spread.unrolled_within(128);
+    assert_eq!(u.stops.iter().filter(|s| s.swatch.as_deref() == Some("Ink")).count(), 4, "one linked stop a run");
 }
 
 /// Pixels (what the canvas draws a diamond, dithered or Perceptual gradient as, and what SVG and

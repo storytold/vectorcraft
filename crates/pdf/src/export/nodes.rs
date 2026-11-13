@@ -249,8 +249,9 @@ impl Exporter<'_> {
                 self.shape(s, n, &bp, *rule, page);
             }
             NodeKind::Text(t) => self.text(s, n, t, page),
-            NodeKind::Image(im) => match n.extras().colorize.as_deref() {
-                Some(p @ Paint::Solid { .. }) if self.doc.image_blob(im).is_none_or(vectorcraft_doc::ImageBlob::takes_colorize) => {
+            NodeKind::Image(im) => match (n.extras().colorize.as_deref(), self.doc.shown_image(n, im)) {
+                (Some(p @ Paint::Solid { .. }), im) if self.doc.image_blob(&im).is_none_or(vectorcraft_doc::ImageBlob::takes_colorize) => {
+                    let im = &*im;
                     if writable(s, im.xf, Rect::new(0.0, 0.0, im.width.max(1).into(), im.height.max(1).into())) {
                         if let Some(colorized) = self.colorized_image(im, p, !n.extras().pixelated) {
                             self.image(s, im, Some(colorized), n.extras().pixelated);
@@ -263,7 +264,7 @@ impl Exporter<'_> {
                         self.warn(super::exporter::UNWRITABLE_IMAGE);
                     }
                 }
-                _ => self.image(s, im, alpha, n.extras().pixelated),
+                (_, im) => self.image(s, &im, alpha, n.extras().pixelated),
             },
             NodeKind::SymbolInstance { symbol, xf } => {
                 // Within the objects a frame may draw of symbol instances, as on screen: nested

@@ -213,7 +213,7 @@ impl<'a> Scene<'a> {
                     self.node(&o, true);
                 }
             }
-            NodeKind::Image(im) => self.image(im),
+            NodeKind::Image(im) => self.image(&self.doc.shown_image(n, im)),
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST

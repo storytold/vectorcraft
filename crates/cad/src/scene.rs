@@ -520,6 +520,8 @@ pub(crate) struct Scene<'a> {
     /// Image keys → index into `images` (`None`: left out).
     by_key: HashMap<String, Option<usize>>,
     warnings: Vec<String>,
+    /// What was left out because an option asked for it ([`DxfOutput::setting_notes`]).
+    setting_notes: Vec<String>,
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
     extents: Option<[f64; 4]>,
     /// The opacity of the containers around the current object.
@@ -554,6 +556,7 @@ impl<'a> Scene<'a> {
             files: vec![],
             by_key: HashMap::new(),
             warnings: vec![],
+            setting_notes: vec![],
             brushes: None,
             extents: None,
             opacity: 1.0,
@@ -588,12 +591,21 @@ impl<'a> Scene<'a> {
             metric: matches!(self.o.unit, Unit::Millimeters | Unit::Centimeters | Unit::Meters),
             next: self.next,
         };
-        DxfOutput { bytes: drawing.write().into_bytes(), images: self.files, warnings: self.warnings }
+        DxfOutput { bytes: drawing.write().into_bytes(), images: self.files, warnings: self.warnings, setting_notes: self.setting_notes }
     }
 
+    /// Note `w`, once, about something of the document that the drawing leaves out or that reaches
+    /// it changed. A note about an option goes to [`Self::note_setting`].
     fn warn(&mut self, w: &str) {
         if !self.warnings.iter().any(|x| x == w) {
             self.warnings.push(w.to_string());
+        }
+    }
+
+    /// Note `w`, once, about something left out because an option turns it off.
+    fn note_setting(&mut self, w: &str) {
+        if !self.setting_notes.iter().any(|x| x == w) {
+            self.setting_notes.push(w.to_string());
         }
     }
 
@@ -660,7 +672,7 @@ impl<'a> Scene<'a> {
                 self.shape(n, &bp, *rule);
             }
             NodeKind::Text(t) => self.text(n, t),
-            NodeKind::Image(im) => self.image(im),
+            NodeKind::Image(im) => self.image(&self.doc.shown_image(n, im)),
             NodeKind::SymbolInstance { symbol, xf } => {
                 let doc = self.doc;
                 if self.symbol_nodes >= vectorcraft_doc::MAX_SYMBOL_NODES {
@@ -930,7 +942,7 @@ impl<'a> Scene<'a> {
         // The outlines close as the fill does, so an open path's fill keeps its closing edge.
         self.lines(&closed_fill(outline), style, 0.0);
         if !self.o.include_hatches {
-            self.warn(HATCHES_OFF);
+            self.note_setting(HATCHES_OFF);
             return;
         }
         let h = self.handle();
@@ -1321,7 +1333,7 @@ impl<'a> Scene<'a> {
             return;
         }
         if !self.o.include_images {
-            self.warn(IMAGES_OFF);
+            self.note_setting(IMAGES_OFF);
             return;
         }
         let Some(i) = self.image_def(im) else { return };

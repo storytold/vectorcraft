@@ -20,6 +20,8 @@ fn synthetic_glyphs(specs: &[(usize, usize, f64, char)]) -> Vec<SGlyph> {
             dx: 0.0,
             dy: 0.0,
             kern_shift: 0.0,
+            aki_shift: 0.0,
+            aki: 0.0,
             sx: 1.0,
             sy: 1.0,
             bshift: 0.0,
@@ -34,6 +36,7 @@ fn synthetic_glyphs(specs: &[(usize, usize, f64, char)]) -> Vec<SGlyph> {
             inline: None,
             word_end: false,
             keeps_word: false,
+            keeps_next: false,
             lead: 0.0,
             proportional: false,
             vpal: None,
@@ -626,4 +629,90 @@ fn korean_words_take_no_hyphen() {
         assert_eq!(hyphens(false), 0);
         assert_eq!(hyphens(true), 1, "on, the word's Latin letters hyphenate as before");
     });
+}
+
+/// The glyphs of `text`, each 10 pt wide, with its inseparable pairs kept together when `bunri`
+/// (Bunri-Kinshi on).
+fn pairs(text: &str, bunri: bool) -> Vec<SGlyph> {
+    let mut glyphs = full_width(text);
+    if bunri {
+        crate::shape::keep_inseparable_pairs(text, &mut glyphs);
+    }
+    glyphs
+}
+
+/// Bunri-Kinshi: both composers never break inside two em dashes, two ellipses, two two-dot
+/// leaders or a vertical kana repeat mark, nor inside a chain of em dashes; off, the line may break
+/// between them where it could before. Unlike neighbors and characters on either side of a forced
+/// line break are not a pair.
+#[test]
+fn bunri_kinshi_keeps_jlreq_pairs_in_both_composers() {
+    use KinsokuShoriType::PushOutOnly;
+    let ends = |text: &str, bunri: bool| candidates(text, &pairs(text, bunri), None, Kinsoku::Hard).iter().map(|b| b.end).collect::<Vec<_>>();
+    let text = "あい——う〳〵え";
+    assert_eq!(ends(text, false), [1, 2, 3, 4, 5, 6, 7]);
+    assert_eq!(ends(text, true), [1, 2, 4, 5, 7]);
+    assert_eq!(ends("———あ", false), [1, 2, 3]);
+    assert_eq!(ends("———あ", true), [3], "a chain stays together");
+    assert_eq!(ends("あ〴〵い", true), [1, 3]);
+    assert_eq!(ends("—…あ", true), ends("—…あ", false), "unlike neighbors are not a pair");
+    for text in ["あ……い", "あ‥‥い"] {
+        assert!(!ends(text, true).contains(&2), "{text}");
+    }
+    let marked = |text: &str| pairs(text, true).iter().filter(|g| g.keeps_next).count();
+    assert_eq!((marked("……‥‥〳〵〴〵"), marked("—\u{2028}—"), marked("—〵"), marked("〵〳")), (4, 0, 0, 0));
+    // 35 pt holds "あい—" and not "あい——".
+    let greedy =
+        |g: &[SGlyph], width: f64| break_line(text, g, 0, width, &[], 0.0, None, Burasagari::None, Kinsoku::Hard, PushOutOnly, false, false, &[]).0;
+    assert_eq!(greedy(&pairs(text, false), 35.0), 3, "off: the line ends between the dashes");
+    assert_eq!(greedy(&pairs(text, true), 35.0), 2, "on: both dashes go to the next line");
+    assert_eq!(breaking::word_width(&pairs("——あ", true), 0, &[], Kinsoku::Hard), 20.0);
+    assert_eq!(breaking::word_width(&pairs("——あ", false), 0, &[], Kinsoku::Hard), 10.0);
+    let params = Params { justify_last: false, ragged: true, tolerance: f64::INFINITY, uniform_from: 0, hyphen_limit: 0 };
+    let on = pairs("あい——う", true);
+    let cands = candidates("あい——う", &on, None, Kinsoku::Hard);
+    assert_eq!(compose(&on, &|_| 35.0, &|_| 0.0, &|_| 0.0, &cands, &[], &params), Some(vec![(2, false), (5, false)]));
+}
+
+/// Bunri-Kinshi: a pair wider than the line stays whole on it and the next line starts after it;
+/// every Kinsoku Shori Type and both kinsoku sets leave pairs whole at every width, and each line
+/// moves on. No Break and a pair next to it stay together as one run.
+#[test]
+fn bunri_kinshi_progresses_with_an_overlong_pair_and_no_break() {
+    use KinsokuShoriType::{PushInFirst, PushOutFirst, PushOutOnly};
+    let line = |text: &str, g: &[SGlyph], i: usize, width: f64, kinsoku: Kinsoku, ty: KinsokuShoriType| {
+        break_line(text, g, i, width, &[], 0.0, None, Burasagari::None, kinsoku, ty, false, false, &[]).0
+    };
+    let text = "——あ";
+    assert_eq!(line(text, &pairs(text, true), 0, 15.0, Kinsoku::Hard, PushOutOnly), 2, "the pair overflows the line whole");
+    assert_eq!(line(text, &pairs(text, true), 2, 15.0, Kinsoku::Hard, PushOutOnly), 3);
+    assert_eq!(line(text, &pairs(text, false), 0, 15.0, Kinsoku::Hard, PushOutOnly), 1);
+    let text = "あい——」う〳〵」え";
+    let glyphs = pairs(text, true);
+    for kinsoku in [Kinsoku::Hard, Kinsoku::Soft] {
+        for ty in [PushInFirst, PushOutFirst, PushOutOnly] {
+            for width in (10..=90).step_by(5).map(f64::from) {
+                let mut i = 0;
+                while i < glyphs.len() {
+                    let end = line(text, &glyphs, i, width, kinsoku, ty);
+                    assert!(end > i, "{kinsoku:?} {ty:?} {width}: no progress at {i}");
+                    assert!(end != 3 && end != 7, "{kinsoku:?} {ty:?} {width}: a pair split at {end}");
+                    i = end;
+                }
+            }
+        }
+    }
+    let text = "あ——い";
+    let mut on = pairs(text, true);
+    let mut off = pairs(text, false);
+    for g in on[..2].iter_mut().chain(off[..2].iter_mut()) {
+        g.no_break = true;
+    }
+    assert_eq!(line(text, &on, 0, 25.0, Kinsoku::Hard, PushOutOnly), 3, "No Break and the pair are one run");
+    assert_eq!(line(text, &off, 0, 25.0, Kinsoku::Hard, PushOutOnly), 2);
+    // Push In First closes each gap by up to 1 pt here: 」 needs 3.5 pt, which the four gaps give
+    // and the three outside the pair do not, so on, い moves to the next line with 」.
+    let text = "あ〳〵い」";
+    assert_eq!(line(text, &pairs(text, false), 0, 46.5, Kinsoku::Hard, PushInFirst), 5);
+    assert_eq!(line(text, &pairs(text, true), 0, 46.5, Kinsoku::Hard, PushInFirst), 3);
 }
