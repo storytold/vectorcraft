@@ -682,6 +682,29 @@ fn many_frames_measure_about_the_text_they_take() {
     assert!(measured <= bound, "measured {measured} bytes for {placed} placed in {} frames (at most {bound})", frames.len());
 }
 
+/// Frames that already hold text and take a story over several measurements each: each frame's own
+/// text is copied once to measure it, not once for each measurement.
+#[test]
+fn frames_with_text_copy_it_once_to_measure_it() {
+    let db = FontDb::global();
+    let text = paragraphs(600);
+    let story = vec![TextRun::new(text.clone(), CharStyle::default())];
+    let mut frames: Vec<TextObject> = (0..4).map(|k| sized(400.0 * k as f64, 300.0, 600.0)).collect();
+    for f in &mut frames {
+        f.runs = vec![TextRun::new("Old text. ".repeat(500), CharStyle::default())];
+    }
+    let refs: Vec<&TextObject> = frames.iter().collect();
+    let (fit_before, copied_before) = (fit_bytes(), probe_copied());
+    let parts = distribute(db, &refs, &story, &[]);
+    let (measured, copied) = (fit_bytes() - fit_before, probe_copied() - copied_before);
+    let joined: String = parts.iter().flat_map(|p| &p.runs).map(|r| r.text.as_str()).collect();
+    assert_eq!(joined, text, "no character lost or duplicated");
+    let first = runs_len(&parts[0].runs);
+    assert!(measured > 2 * first, "the first frame is measured more than once: {measured} bytes for {first}");
+    let own: usize = frames[..frames.len() - 1].iter().map(|f| runs_len(&f.runs)).sum();
+    assert_eq!(copied, own, "each frame before the last copies its own text once to measure it");
+}
+
 #[test]
 fn short_story_leaves_later_frames_empty_with_a_style() {
     let db = FontDb::global();

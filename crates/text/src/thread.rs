@@ -96,6 +96,25 @@ fn fit_bytes() -> usize {
     FIT_BYTES.get()
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The bytes of frames' own text copied on this thread to measure them ([`probe_copied`]).
+    static PROBE_COPIED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The bytes of frames' own text copied on this thread to measure them.
+#[cfg(test)]
+fn probe_copied() -> usize {
+    PROBE_COPIED.get()
+}
+
+/// A copy of `frame` to measure text in, its own text counted as copied ([`probe_copied`]).
+fn copy_to_measure(frame: &TextObject) -> TextObject {
+    #[cfg(test)]
+    PROBE_COPIED.set(PROBE_COPIED.get() + runs_len(&frame.runs));
+    frame.clone()
+}
+
 /// The fewest bytes of story a frame is measured with before the measured text grows.
 const MIN_MEASURE: usize = 512;
 
@@ -372,8 +391,12 @@ pub fn distribute_continuing_levels(
         let n = if i + 1 == frames.len() {
             len
         } else {
+            // The frame without its own text, copied once and then for each measurement.
+            let mut base = copy_to_measure(f);
+            base.runs = Vec::new();
+            base.paras = Vec::new();
             let probe = |runs: Vec<TextRun>| {
-                let mut probe = (*f).clone();
+                let mut probe = copy_to_measure(&base);
                 let styles = slice_paras(paras, first_para, &runs);
                 probe.runs = runs;
                 probe.set_paragraph_styles(styles);
