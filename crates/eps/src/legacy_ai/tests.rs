@@ -1527,6 +1527,27 @@ fn manual_kerning_and_soft_hyphens_are_written_and_read_back() {
     );
 }
 
+/// Manual kerning of 0 is written as `0 0 Tk` and reads back as manual kerning, not as the
+/// automatic kerning of a pair with no `Tk`.
+#[test]
+fn manual_kerning_of_zero_is_written_and_read_back() {
+    use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+    let plain = style(12.0, Paint::solid(Color::BLACK));
+    let zero = CharStyle { kerning: Some(0.0), ..plain.clone() };
+    let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "AV", zero);
+    t.runs.push(TextRun::new("To", plain));
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = write(&doc);
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    assert!(text.contains("(A) Tx\n0 0 Tk\n(V) Tx\n0 0 Tk\n"), "{text}");
+    let read = texts(&crate::import(&out.bytes).unwrap().document);
+    let runs: Vec<(String, Option<f64>)> = read[0].1.runs.iter().map(|r| (r.text.clone(), r.style.kerning)).collect();
+    assert_eq!(runs, [("AV".to_string(), Some(0.0)), ("To".to_string(), None)]);
+}
+
 /// Type whose font size measures the cap height is written at the em size it is drawn at, with
 /// no warning: 14 pt measuring a 0.7 em cap height reads back as 20 pt type.
 #[test]

@@ -853,9 +853,9 @@ impl<'a> Writer<'a> {
                     self.kern(run.style.kerning_before);
                 }
                 line_start = false;
-                // Manual kerning after each character, a soft hyphen as a discretionary hyphen
-                // (§15.4.10.1).
-                let kerning = run.style.kerning.filter(|k| *k != 0.0);
+                // Manual kerning after each character (0 included, which differs from automatic
+                // kerning), a soft hyphen as a discretionary hyphen (§15.4.10.1).
+                let kerning = run.style.kerning;
                 let mut bytes = vec![];
                 for c in piece.chars() {
                     if c == '\u{ad}' {
