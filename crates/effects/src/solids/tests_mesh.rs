@@ -59,6 +59,20 @@ fn the_meshes_of_one_object_share_one_triangle_budget() {
     assert!(meshes_for(effect, &shapes, &mut total, MAX_MESH_TRIANGLES).is_err_and(|e| e.contains("too complex")));
 }
 
+/// A mesh past the budget stops the export before the solids after it are built.
+#[test]
+fn the_solids_after_a_mesh_past_the_budget_are_not_built() {
+    let mut n = square_node(1, 100.0);
+    n.appearance.effects.push(fx(EXTRUDE, json!({})));
+    let first = three_d_meshes(&n).unwrap()[0].mesh.triangles.len();
+    let shapes = [Profile { path: profile(&n).unwrap().0, rule: FillRule::NonZero, items: solid_paints(&n), opacity: 1.0, scopes: vec![] }];
+    let Some(effect) = n.appearance.effects.first() else { panic!("no effect") };
+    let mut total = MAX_MESH_TRIANGLES - first + 1;
+    SOLIDS_BUILT.with(|b| b.set(0));
+    assert!(meshes_for(effect, &shapes, &mut total, MAX_MESH_TRIANGLES).is_err_and(|e| e.contains("too complex")));
+    assert_eq!(SOLIDS_BUILT.with(std::cell::Cell::get), 1, "the stroke's solid is never built");
+}
+
 #[test]
 fn revolve_stops_at_the_first_mesh_past_the_budget() {
     // The fill revolves into a mesh; the stroke's profile, copied 1000 times, is too complex to

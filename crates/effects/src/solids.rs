@@ -1449,8 +1449,8 @@ fn meshes_for(fx: &Effect, shapes: &[Profile], total: &mut usize, limit: usize) 
     }
     let (parts, bounds) = solid_parts(shapes, b);
     // The solids the art draws, past the limits of the object's solids together as it is
-    // ([`built_solids`]), each solid's faces dropped once counted.
-    let drawn: Vec<bool> = built_solids(&fx.id, &p, &parts, bounds, MAX_OBJECT_FACES).map(|r| r.map(|f| f.is_some())).collect::<Result<_, _>>()?;
+    // ([`built_solids`]), each built and its faces counted as the loop reaches it, then dropped.
+    let drawn = built_solids(&fx.id, &p, &parts, bounds, MAX_OBJECT_FACES).map(|r| r.map(|f| f.is_some()));
     // Inflate lays out every puff at once (they share one eye); each Inflate and Extrude & Bevel
     // solid and its mesh are built as the loop reaches them.
     let mut inflated = (fx.id == INFLATE).then(|| {
@@ -1460,7 +1460,7 @@ fn meshes_for(fx: &Effect, shapes: &[Profile], total: &mut usize, limit: usize) 
     let extrude = if fx.id == CLASSIC_EXTRUDE { classic_extrude_options(&p) } else { extrude_options(&p) };
     for ((item, member, area, rule, _, _), drawn) in parts.iter().zip(drawn) {
         let item: &AppearanceItem = item;
-        if !drawn {
+        if !drawn? {
             // A stroke the art leaves out is left out of the meshes too; Inflate's next puff
             // still belongs to the next part.
             if let Some(built) = inflated.as_mut() {
