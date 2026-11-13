@@ -15,7 +15,7 @@ translation never fails a test or a build: the interface shows the English text 
 `cargo xtask ci` prints the untranslated report (`cargo xtask i18n-report` alone), which lists per language the
 strings missing from each catalog with the `complete_menus` flag and the messages missing from each language in
 the `COMPLETE_MESSAGES` list. Every non-English language marked "full" has the flag, and all of them except
-Bulgarian, Danish, Indonesian and Dutch are in the list. No language has help content: there is no translated (or
+Bulgarian, Danish and Indonesian are in the list. No language has help content: there is no translated (or
 English) in-app help, and the docs are English.
 
 **Native review:** every catalog was written clean-room from the English meaning, most of it by agents
@@ -29,7 +29,7 @@ Chinese by `imachus`). Only Georgian is recorded as reviewed by a native speaker
 | English | `en` | source, 100% | all | Latin | — | full | — |
 | Simplified Chinese (Mandarin) | `zh-hans` | 5,102 rows, 791 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted | all | CJK UI font from craft-fonts (BIZ UDPGothic) when embedded, else a system font; IME with marked text at the caret; vertical type partial ([type-parity.md](type-parity.md)) | no | full | — (review) |
 | Spanish | `es` | 4,009 / 4,020 (99.7%) | all (604 messages) | Latin | no | full | — (review) |
-| Hindi | `hi` | 7,877 rows (2026-11-06): 2,537 `@msg`, 45 `@msgplural`, 38 `@plural`; no gaps in the untranslated report | menus, dialogs, tooltips and scanned messages; contributor-approved loanword terminology; agent wording pass | UI and document text shape with HarfRust; installed desktop Devanagari fallback, or a `Deva` craft-fonts face; web font still needed | contributor terminology review; wider proofread welcome | complete catalog, machine-assisted draft | native review, layout and web font |
+| Hindi | `hi` | 8,732 rows (2026-11-13): 3,003 `@msg`, 47 `@msgplural`, 41 `@plural`; no gaps in the untranslated report | menus, dialogs, tooltips and scanned messages; contributor-approved loanword terminology; agent wording pass | UI and document text shape with HarfRust; installed desktop Devanagari fallback, or a `Deva` craft-fonts face; web font still needed | contributor terminology review; 2026-11-13 wording pass on messages and longer labels, with a glossary-term test; wider proofread welcome | complete catalog, machine-assisted draft | native review, layout and web font |
 | Arabic | `ar` | 0 | none | document text: bidi layout and Paragraph Direction; interface: no right-to-left layout, no Arabic shaping in egui | no | none | 25–40 |
 | French | `fr` | 4,020 / 4,020 (100%) | all | Latin | no | full | — (review) |
 | Portuguese | `pt-br` | 6,106 catalog entries (counted 2026-10-31 on `main` at `d26dd933a`): menus, `tl!` literals and messages complete when counted; one/other plurals | all | Latin | contributor is a Brazilian Portuguese speaker; further native review welcome | full | — (review) |
@@ -51,7 +51,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 |---|---|---|---|
 | Traditional Chinese (Taiwan) | `zh-hant` | 4,892 rows, 790 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted (80% overall) | partial |
 | Italian | `it` | 4,011 / 4,020 | full |
-| Dutch | `nl` | 5,317 rows, 777 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial; one/other plurals | full |
+| Dutch | `nl` | 7,299 rows, 1,609 of them `@msg` and 47 `@msgplural` (counted 2026-11-13 on `main` at `9a1a158a3`): in `COMPLETE_MESSAGES`, and the untranslated report lists the same missing messages for it as for German; one/other plurals | full |
 | Danish | `da` | 5,279 rows, 750 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial; one/other plurals | full |
 | Russian | `ru` | 4,009 / 4,020 | full |
 | Ukrainian | `uk` | 4,009 / 4,020 (one/few/many plurals) | full |
