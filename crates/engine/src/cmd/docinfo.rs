@@ -431,6 +431,38 @@ fn applied_brushes(d: &Document, n: &Node, members: &HashSet<*const Node>) -> Ve
     if follows { used } else { vec![] }
 }
 
+/// Filled area of a path's closed subpaths under its fill rule (holes subtracted; open subpaths left out).
+fn closed_path_area(path: &vectorcraft_geom::PathData, rule: vectorcraft_geom::FillRule) -> f64 {
+    let closed = vectorcraft_geom::PathData { subpaths: path.subpaths.iter().filter(|s| s.closed).cloned().collect() };
+    if closed.subpaths.is_empty() {
+        return 0.0;
+    }
+    let a = vectorcraft_pathops::area(&closed, rule);
+    if a.is_finite() && a > 0.0 { a } else { 0.0 }
+}
+
+/// Recursively collects non-guide subpaths from a node and its descendants for compound path area calculation.
+fn collect_compound_subpaths(n: &Node, subs: &mut Vec<vectorcraft_geom::SubPath>) {
+    if n.is_guide() {
+        return;
+    }
+    match &n.kind {
+        NodeKind::Path { path, guide: false, .. } => {
+            subs.extend(path.subpaths.clone());
+        }
+        NodeKind::Compound { children, .. } => {
+            for c in children {
+                collect_compound_subpaths(c, subs);
+            }
+        }
+        _ => {
+            if let Some((pd, _)) = super::pathops::node_path(n) {
+                subs.extend(pd.subpaths);
+            }
+        }
+    }
+}
+
 fn info(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.info";
     let category = str_param(p, "category");
@@ -501,6 +533,19 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             members.extend(children.iter().map(|c| std::ptr::from_ref(&**c)));
         }
     });
+    // The members of the compound paths that the roots contain. Only these leave their area to the compound.
+    let mut compound_members: HashSet<*const Node> = HashSet::new();
+    for r in &roots {
+        r.walk(&mut |n| {
+            if let NodeKind::Compound { children, .. } = &n.kind {
+                for c in children {
+                    c.walk(&mut |descendant| {
+                        compound_members.insert(std::ptr::from_ref(descendant));
+                    });
+                }
+            }
+        });
+    }
     for r in roots {
         r.walk(&mut |n| {
             if !seen.insert(std::ptr::from_ref(n)) {
@@ -512,18 +557,26 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 NodeKind::Group { clip: true, .. } => Some("clipGroups"),
                 NodeKind::Group { .. } => Some("groups"),
                 NodeKind::Path { guide: true, .. } => Some("guides"),
-                NodeKind::Path { path, .. } => {
+                NodeKind::Path { path, rule, .. } => {
                     let l = path.length();
                     if l.is_finite() {
                         path_length += l;
                     }
-                    let a: f64 = path.subpaths.iter().filter(|s| s.closed).map(|s| s.area().abs()).filter(|a| a.is_finite()).sum();
-                    if a.is_finite() {
-                        path_area += a;
+                    if !compound_members.contains(&std::ptr::from_ref(n)) {
+                        path_area += closed_path_area(path, *rule);
                     }
                     Some("paths")
                 }
-                NodeKind::Compound { .. } => Some("compoundPaths"),
+                NodeKind::Compound { children, rule } => {
+                    if !compound_members.contains(&std::ptr::from_ref(n)) {
+                        let mut subs = Vec::new();
+                        for c in children {
+                            collect_compound_subpaths(c, &mut subs);
+                        }
+                        path_area += closed_path_area(&vectorcraft_geom::PathData::new(subs), *rule);
+                    }
+                    Some("compoundPaths")
+                }
                 NodeKind::Text(t) => {
                     for run in &t.runs {
                         fonts.insert((run.style.font_family.clone(), run.style.font_style.clone(), run.style.font_version.clone()));
@@ -857,6 +910,19 @@ mod tests {
         s.execute("select.set", &json!({"ids": [rect, other]})).unwrap();
         s.execute("object.compoundPath.make", &json!({})).unwrap();
         assert!((area(&mut s, json!({"selectionOnly": true})) - 225.0).abs() < 1e-6);
+        // A compound path (a 10x10 outer contour with a 6x6 inner hole) subtracts the hole:
+        let mut s2 = Session::new();
+        s2.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points"})).unwrap();
+        let outer = s2.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap()["id"].clone();
+        let inner = s2.execute("shape.rectangle", &json!({"x": 12, "y": 12, "width": 6, "height": 6})).unwrap()["id"].clone();
+        s2.execute("select.set", &json!({"ids": [outer, inner]})).unwrap();
+        let cp1 = s2.execute("object.compoundPath.make", &json!({})).unwrap()["id"].clone();
+        assert!((area(&mut s2, json!({"selectionOnly": true})) - 64.0).abs() < 1e-6);
+        // A nested compound path (cp1 compounded with another disjoint 5x5 rectangle) does not double-count cp1:
+        let extra = s2.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 5, "height": 5})).unwrap()["id"].clone();
+        s2.execute("select.set", &json!({"ids": [cp1, extra]})).unwrap();
+        s2.execute("object.compoundPath.make", &json!({})).unwrap();
+        assert!((area(&mut s2, json!({"selectionOnly": true})) - 89.0).abs() < 1e-6);
         // A guide path is left out.
         let guide = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
         let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
@@ -864,6 +930,19 @@ mod tests {
             *g = true;
         }
         s.execute("select.set", &json!({"ids": [guide]})).unwrap();
+        assert_eq!(area(&mut s, json!({"selectionOnly": true})), 0.0);
+        // A compound path whose members are guides is left out.
+        let g1 = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        let g2 = s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        if let NodeKind::Path { guide: g, .. } = &mut d.node_mut(NodeId(g1)).unwrap().kind {
+            *g = true;
+        }
+        if let NodeKind::Path { guide: g, .. } = &mut d.node_mut(NodeId(g2)).unwrap().kind {
+            *g = true;
+        }
+        s.execute("select.set", &json!({"ids": [g1, g2]})).unwrap();
+        s.execute("object.compoundPath.make", &json!({})).unwrap();
         assert_eq!(area(&mut s, json!({"selectionOnly": true})), 0.0);
         // Nothing with no paths, and no area row.
         s.execute("select.none", &json!({})).unwrap();
