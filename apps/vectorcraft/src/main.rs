@@ -28,6 +28,7 @@ mod clipboard;
 mod compositor_gpu;
 mod control_server;
 mod cursor_theme;
+mod display_profile;
 #[cfg(feature = "wgpu")]
 mod gpu;
 mod hang_watch;
@@ -126,6 +127,8 @@ struct App {
     held_files: Vec<String>,
     /// The time and UI zoom of the last monitor list ([`window::monitors_due`]).
     monitors_listed: Option<(f64, f32)>,
+    /// Reads the profile of the display that shows the main window, for the canvas.
+    display_profile: display_profile::Reader,
     /// When this frame's input hook started, for the hang report's frame times (`hang_watch`).
     frame_start: Option<std::time::Instant>,
 }
@@ -629,6 +632,7 @@ fn main() -> std::process::ExitCode {
                     maximize_tries: 8,
                     held_files,
                     monitors_listed: None,
+                    display_profile: Default::default(),
                     frame_start: None,
                 }))
             }),

@@ -3443,6 +3443,11 @@ theme	Appearance	იერსახე
 	Primary	ძირითადი
 	Printing / Exporting	ბეჭდვა / ექსპორტირება
 	Real-time Drawing and Editing	რეალურ დროში ხატვა და რედაქტირება
+	Use Monitor Profile for Canvas	მონიტორის პროფილის გამოყენება ტილოსთვის
+	The canvas is drawn in sRGB.	ტილო sRGB-ში იხატება.
+	Canvas display profile:	ტილოს ეკრანის პროფილი:
+	The system matches the window to the display's colors.	სისტემა ფანჯარას ეკრანის ფერებს უსადაგებს.
+	No usable display profile was found: the canvas is drawn in sRGB.	გამოსაყენებელი ეკრანის პროფილი ვერ მოიძებნა: ტილო sRGB-ში იხატება.
 	Render Threads (-1 = Automatic)	ნაკადები (-1 = ავტომატური)
 	Reset Preferences	პარამეტრების ჩამოყრა
 	Export Preferences…	პარამეტრების ექსპორტირება…

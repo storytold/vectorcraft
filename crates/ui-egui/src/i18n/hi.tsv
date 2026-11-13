@@ -3713,6 +3713,11 @@ antiAlias	Sharp	शार्प
 	Real name	वास्तविक नाम
 	Real World:	रियल वर्ल्ड:
 	Real-time Drawing and Editing	रियल टाइम ड्राइंग और संपादन
+	Use Monitor Profile for Canvas	कैनवास के लिए मॉनिटर प्रोफ़ाइल का उपयोग करें
+	The canvas is drawn in sRGB.	कैनवास sRGB में बनाया जाता है।
+	Canvas display profile:	कैनवास की डिस्प्ले प्रोफ़ाइल:
+	The system matches the window to the display's colors.	सिस्टम विंडो को डिस्प्ले के रंगों से मिलाता है।
+	No usable display profile was found: the canvas is drawn in sRGB.	कोई उपयोगी डिस्प्ले प्रोफ़ाइल नहीं मिली: कैनवास sRGB में बनाया जाता है।
 	Rearrange	फिर से व्यवस्थित करें
 	Select All Artboards	सभी आर्टबोर्ड सिलेक्ट करें
 	Switch Orientation	ओरिएंटेशन स्विच करें

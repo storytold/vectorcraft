@@ -3599,6 +3599,11 @@ theme	Appearance	Tampilan
 	Primary	Utama
 	Printing / Exporting	Pencetakan / Ekspor
 	Real-time Drawing and Editing	Penggambaran dan pengeditan waktu nyata
+	Use Monitor Profile for Canvas	Gunakan profil monitor untuk kanvas
+	The canvas is drawn in sRGB.	Kanvas digambar dalam sRGB.
+	Canvas display profile:	Profil layar kanvas:
+	The system matches the window to the display's colors.	Sistem menyesuaikan jendela dengan warna layar.
+	No usable display profile was found: the canvas is drawn in sRGB.	Tidak ditemukan profil layar yang dapat digunakan: kanvas digambar dalam sRGB.
 	Render Threads (-1 = Automatic)	Utas render (-1 = Otomatis)
 	Reset Preferences	Atur ulang preferensi
 	Export Preferences…	Ekspor preferensi…

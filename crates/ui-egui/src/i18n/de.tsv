@@ -2665,6 +2665,11 @@ digits	Malayalam	Malayalam
 	Rating:	Bewertung:
 	Real World:	Reale Welt:
 	Real-time Drawing and Editing	Zeichnen und Bearbeiten in Echtzeit
+	Use Monitor Profile for Canvas	Monitorprofil für Arbeitsfläche verwenden
+	The canvas is drawn in sRGB.	Die Arbeitsfläche wird in sRGB dargestellt.
+	Canvas display profile:	Bildschirmprofil der Arbeitsfläche:
+	The system matches the window to the display's colors.	Das System passt das Fenster an die Farben des Bildschirms an.
+	No usable display profile was found: the canvas is drawn in sRGB.	Kein verwendbares Bildschirmprofil gefunden: Die Arbeitsfläche wird in sRGB dargestellt.
 	Rearrange All Artboards	Alle Zeichenflächen neu anordnen
 	Rearrange	Neu anordnen
 	Select All Artboards	Alle Zeichenflächen auswählen

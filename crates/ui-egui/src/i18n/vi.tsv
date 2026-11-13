@@ -3043,6 +3043,11 @@ mark-style	Japanese	Kiểu Nhật
 	Real name	Tên thật
 	Real World:	Thực tế:
 	Real-time Drawing and Editing	Vẽ và chỉnh sửa theo thời gian thực
+	Use Monitor Profile for Canvas	Dùng hồ sơ màn hình cho vùng vẽ
+	The canvas is drawn in sRGB.	Vùng vẽ được hiển thị ở sRGB.
+	Canvas display profile:	Hồ sơ màn hình của vùng vẽ:
+	The system matches the window to the display's colors.	Hệ thống điều chỉnh cửa sổ theo màu của màn hình.
+	No usable display profile was found: the canvas is drawn in sRGB.	Không tìm thấy hồ sơ màn hình dùng được: vùng vẽ được hiển thị ở sRGB.
 	Rearrange	Sắp xếp lại
 	Select All Artboards	Chọn tất cả các bảng vẽ
 	Switch Orientation	Chuyển hướng

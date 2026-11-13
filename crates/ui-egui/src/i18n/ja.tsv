@@ -2789,6 +2789,11 @@ mark-style	Japanese	日本式
 	Rating:	評価:
 	Real World:	実寸:
 	Real-time Drawing and Editing	リアルタイム描画および編集
+	Use Monitor Profile for Canvas	キャンバスにモニタープロファイルを使用
+	The canvas is drawn in sRGB.	キャンバスは sRGB で描画されます。
+	Canvas display profile:	キャンバスのディスプレイプロファイル:
+	The system matches the window to the display's colors.	システムがウィンドウをディスプレイのカラーに合わせます。
+	No usable display profile was found: the canvas is drawn in sRGB.	使用できるディスプレイプロファイルが見つかりません。キャンバスは sRGB で描画されます。
 	Rearrange All Artboards	すべてのアートボードを再配置
 	Rearrange	再配置
 	Select All Artboards	すべてのアートボードを選択

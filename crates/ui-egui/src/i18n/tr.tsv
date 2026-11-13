@@ -2507,6 +2507,11 @@ digits	Malayalam	Malayalam
 	Rating:	Değerlendirme:
 	Real World:	Gerçek Dünya:
 	Real-time Drawing and Editing	Gerçek Zamanlı Çizim ve Düzenleme
+	Use Monitor Profile for Canvas	Tuval için Monitör Profilini Kullan
+	The canvas is drawn in sRGB.	Tuval sRGB olarak çizilir.
+	Canvas display profile:	Tuvalin ekran profili:
+	The system matches the window to the display's colors.	Sistem pencereyi ekranın renklerine uyarlar.
+	No usable display profile was found: the canvas is drawn in sRGB.	Kullanılabilir ekran profili bulunamadı: tuval sRGB olarak çizilir.
 	Rearrange All Artboards	Tüm Çalışma Yüzeylerini Yeniden Düzenleme
 	Rearrange	Yeniden Düzenle
 	Select All Artboards	Tüm Çalışma Yüzeylerini Seç
