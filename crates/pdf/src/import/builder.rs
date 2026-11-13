@@ -558,7 +558,7 @@ impl<'p> Builder<'p> {
 
     /// Read a soft mask, pattern cell or type 3 glyph (`read`) on its own: its art, in the
     /// coordinates `page` has. `None` when nested too deeply.
-    pub(super) fn nested(&mut self, page: Rect, read: impl FnOnce(&mut Self)) -> Option<Vec<Arc<Node>>> {
+    pub(super) fn nested(&mut self, page: Rect, blend: BlendMode, read: impl FnOnce(&mut Self)) -> Option<Vec<Arc<Node>>> {
         if self.nested >= MAX_NESTED {
             return None;
         }
@@ -567,7 +567,7 @@ impl<'p> Builder<'p> {
         let saved = Saved {
             stack: std::mem::replace(&mut self.stack, vec![Frame::new(FrameKind::Root)]),
             root_groups: std::mem::take(&mut self.root_groups),
-            blend: std::mem::replace(&mut self.blend, BlendMode::Normal),
+            blend: std::mem::replace(&mut self.blend, blend),
             mask: self.mask.take(),
             page: std::mem::replace(&mut self.page, page),
             type3_run: outer_type3,
@@ -589,7 +589,7 @@ impl<'p> Builder<'p> {
         }
         let page = self.page;
         let saved = std::mem::replace(&mut self.white_images, m.mask_type() == MaskType::Alpha);
-        let art = self.nested(page, |b| m.interpret(b));
+        let art = self.nested(page, BlendMode::Normal, |b| m.interpret(b));
         self.white_images = saved;
         let spec = match art {
             Some(art) => {
@@ -653,7 +653,7 @@ impl<'p> Builder<'p> {
         // A swatch is shared with uses outside an alpha mask, and pattern paints keep their
         // colours there: its images are read as they are.
         let white = std::mem::take(&mut self.white_images);
-        let art = self.nested(Rect::ZERO, |b| {
+        let art = self.nested(Rect::ZERO, BlendMode::Normal, |b| {
             // A cell whose content can't be decoded is empty.
             let _ = t.interpret(b, Affine::IDENTITY, stroke);
         });

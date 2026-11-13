@@ -94,14 +94,7 @@ impl Builder<'_> {
     }
 
     /// A Type 3 glyph under an active ActualText span.
-    pub(super) fn actual_type3_glyph(
-        &mut self,
-        key: u128,
-        at: Placement,
-        look: Look,
-        opacity: f32,
-        advance: f64,
-    ) -> bool {
+    pub(super) fn actual_type3_glyph(&mut self, key: u128, at: Placement, look: Look, opacity: f32, advance: f64) -> bool {
         self.flush_glyphs();
         self.flush_type3();
         if let (Some(stroke), Some(line)) = (&look.stroke, &mut self.text)
@@ -115,9 +108,7 @@ impl Builder<'_> {
             Some(text) if !text.is_empty() => TextContent::Actual(text),
             _ => TextContent::Pen,
         };
-        let place = |line: &mut TextLine| {
-            line.push_content(&look, at, opacity, advance, content)
-        };
+        let place = |line: &mut TextLine| line.push_content(&look, at, opacity, advance, content);
         if !self.text.as_mut().is_some_and(place) {
             self.flush_text();
             let mut line = TextLine::new(at, opacity);
