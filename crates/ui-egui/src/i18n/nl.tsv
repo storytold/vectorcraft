@@ -242,6 +242,18 @@
 @msg	the HEIC or HEIF file can't be read	het HEIC- of HEIF-bestand kan niet worden gelezen
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	het HEIC- of HEIF-bestand bevat een soort afbeelding die niet kan worden gelezen
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- en HEIF-afbeeldingen kunnen in deze build niet worden geopend
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	tekeningen uit CDR {version} kunnen niet worden geopend: VectorCraft leest versies 1 tot en met 27
+@msg	this CDR drawing can't be read ({why})	deze CDR-tekening kan niet worden gelezen ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	CDR-tekst, bitmaps, vermengingen, omtrekken, penseelstreken en andere objecten die VectorCraft nog niet leest, zijn weggelaten
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR-verloop-, patroon-, textuur- en PostScript-vullingen zijn weggelaten
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	kleuren in CDR-kleurmodellen die VectorCraft niet leest, zijn als zwart geopend
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	CDR-bibliotheekkleuren die de tekening alleen als nummer opslaat, zijn als zwarte steunkleuren geopend
+@msg	CDR outline arrowheads were left out	pijlpunten van CDR-contouren zijn weggelaten
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR-enveloppen zijn niet toegepast, en de vormen eronder behouden hun omtrek
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR-lenzen en objecttransparantie zijn niet toegepast, en de objecten waarop ze liggen, worden dekkend weergegeven
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	delen van de tekening die te diep genest zijn of buiten de importlimieten vallen, zijn weggelaten
+@msg	damaged parts of the drawing were left out	beschadigde delen van de tekening zijn weggelaten
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	CDR-pagina’s langer dan 163.830 pt zijn op die lengte geopend, en illustraties bij de randen ervan liggen buiten het tekengebied
 @msg	the JPEG XL file is cut short	het JPEG XL-bestand is afgebroken
 @msg	the JPEG XL container is too large to read	de JPEG XL-container is te groot om te lezen
 @msg	CMYK JPEG XL images can't be read	CMYK-afbeeldingen in JPEG XL kunnen niet worden gelezen
