@@ -4669,7 +4669,9 @@ and those of the object shape the outline of the clip group, the gradient fits t
 box, as the canvas paints the fill; the expanded art does not keep them. With `fill: false` gradient and pattern fills
 stay live. `object.expand.info` answers which options have something to expand in the selection
 (`{object, fill, stroke, gradient, appearance, symbolArt?}`; `gradient` says whether Fill has a gradient fill, which Expand
-Gradient To applies to; `appearance` whether the selection has appearance attributes Expand Appearance expands first,
+Gradient To applies to, that it turns into art: it is false when every such fill repeats or reflects in more than 256
+runs across the box it fills, which for type, symbol art included, is the box of each outline Object makes of a character,
+ruby character, underline or strikethrough; `appearance` whether the selection has appearance attributes Expand Appearance expands first,
 for which Object → Expand… is dimmed in the menus; `symbolArt: {fill, stroke, gradient}`, present when the selection
 holds symbol instances that `object` expands, whether only their art holds it, which Fill and Stroke reach only with
 `object` on), and `object.mesh.create` on a gradient-filled object colours the
