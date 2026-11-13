@@ -717,3 +717,26 @@ fn bunri_kinshi_progresses_with_an_overlong_pair_and_no_break() {
     assert_eq!(line(text, &pairs(text, false), 0, 46.5, Kinsoku::Hard, PushInFirst), 5);
     assert_eq!(line(text, &pairs(text, true), 0, 46.5, Kinsoku::Hard, PushInFirst), 3);
 }
+
+/// Justification adds no gap between two glyphs of one warichu block, whichever of them is drawn
+/// first: right to left, the block's first glyph (the one that starts it) is drawn after the
+/// others. Between glyphs of two blocks, the gap stays.
+#[test]
+fn justification_adds_no_gap_inside_a_warichu_block_drawn_right_to_left() {
+    let block = |g: &mut SGlyph, start: usize, pen: f64| {
+        g.wari = Some(crate::shape::Wari { start, pen, along: 0.0, across: 0.0, advance: g.adv, em: 10.0 });
+    };
+    // Glyph 1 is drawn first, then glyph 0, which starts the block.
+    let after = [None, Some(0)];
+    for (first, second) in [('א', 'ב'), ('漢', 'א')] {
+        let mut glyphs = synthetic_glyphs(&[(0, 2, 10.0, first), (2, 2, 0.0, second)]);
+        block(&mut glyphs[0], 0, 0.0);
+        block(&mut glyphs[1], 0, 10.0);
+        assert!(!flow::is_letter_gap(1, &[], &after, 0, &glyphs, false), "{first}{second}");
+        assert!(!flow::is_cjk_gap(1, &[], &after, 0, &glyphs), "{first}{second}");
+        // The same two glyphs as the first glyphs of two blocks.
+        block(&mut glyphs[1], 2, 0.0);
+        assert!(flow::is_letter_gap(1, &[], &after, 0, &glyphs, false), "{first}{second}");
+        assert_eq!(flow::is_cjk_gap(1, &[], &after, 0, &glyphs), first == '漢', "{first}{second}");
+    }
+}

@@ -753,12 +753,24 @@ fn gap_pair<'a>(glyph: usize, held: &[usize], after: &[Option<usize>], index: us
     visible_after(index, glyph, after, sg).and_then(|next| sg.get(next)).map(|b| (a, b))
 }
 
+// Are `a` and `b` glyphs of the same warichu block? Right to left, the bidi order can draw a
+// block's first glyph after the others, so the glyph drawn second need not continue the block.
+fn same_warichu_block(a: &SGlyph, b: &SGlyph) -> bool {
+    a.wari.zip(b.wari).is_some_and(|(first, second)| first.start == second.start)
+}
+
 // Japanese (and Chinese) lines are justified between their characters (JLREQ 3.8): the
 // gaps next to a CJK character, not inside a Latin word, a tate-chu-yoko or warichu block or a
 // shaped cluster.
-fn is_cjk_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph]) -> bool {
+pub(super) fn is_cjk_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph]) -> bool {
     gap_pair(glyph, held, after, index, sg).is_some_and(|(a, b)| {
-        a.byte != b.byte && !a.is_space() && !b.is_space() && !b.continues_block() && a.ch != '\t' && (is_cjk(a.ch) || is_cjk(b.ch))
+        a.byte != b.byte
+            && !a.is_space()
+            && !b.is_space()
+            && !b.continues_block()
+            && !same_warichu_block(a, b)
+            && a.ch != '\t'
+            && (is_cjk(a.ch) || is_cjk(b.ch))
     }) && !in_pair(glyph, index, after, sg)
 }
 
@@ -788,12 +800,12 @@ fn in_pair(glyph: usize, index: usize, after: &[Option<usize>], sg: &[SGlyph]) -
 // warichu block (set as one piece), a shaped cluster, whose glyphs (a letter and its combining marks, a conjunct and its matra) stay
 // together, or an inseparable pair. On a line that ends in a drawn hyphen, the gap before the
 // hyphen counts too: it follows the line's last visible glyph.
-fn is_letter_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph], hyphen: bool) -> bool {
+pub(super) fn is_letter_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph], hyphen: bool) -> bool {
     if held.contains(&glyph) || sg.get(glyph).is_none_or(|a| is_format_control(a.ch)) || in_pair(glyph, index, after, sg) {
         return false;
     }
     match gap_pair(glyph, held, after, index, sg) {
-        Some((a, b)) => a.byte != b.byte && !b.continues_block(),
+        Some((a, b)) => a.byte != b.byte && !b.continues_block() && !same_warichu_block(a, b),
         None => hyphen,
     }
 }
