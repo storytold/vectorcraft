@@ -1435,7 +1435,9 @@ preferences (the folder the desktop app uses, so both see the same ones; `VECTOR
   there, or a damaged file, leave the defaults (logged), and the next change writes over the file.
   `edit.assignProfile` tags the document only: colors show and convert through the profiles it assigns, and the
   working spaces and the file stay as they are. The `workingCmyk` target of `view.proofSetup` simulates the working
-  CMYK space in such a document too.
+  CMYK space in such a document too. `color.convert`'s `outOfGamut` and `deltaE`, `color.gamutCheck`, and the
+  out-of-gamut warning of the Color panel and Color Picker check against the assigned CMYK profile, else the
+  working CMYK space; the warning updates when either changes.
 
 Not remembered: the document, anything else. Nothing is read or written when
 `VECTORCRAFT_NO_PREFS` is set, and a server confined with `--automation-read-root` or
