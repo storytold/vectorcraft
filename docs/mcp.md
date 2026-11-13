@@ -9787,7 +9787,22 @@ adds a row and a column where it clicks inside. `object.mesh.addLine`, and `obje
 the mesh's outline (within a millionth of a point) on any side without `tolerance`; a point outside needs `tolerance`. `object.mesh.addLine` at a point that is already a mesh
 point adds no line and records no undo step unless its `color` changes a gradient mesh's point (a mesh envelope's points
 have no color). `press_key` Escape during a drag of a point or handle of a mesh
-envelope or a gradient mesh cancels it: the point goes back and no undo step is added. The Control bar shows Edit Envelope / Edit Contents, the warp's
+envelope or a gradient mesh cancels it: the point goes back and no undo step is added.
+
+A warp envelope's points can be edited the same way, with the same commands. Its points are those of its surface
+sampled on 4×4 patches, with handles along it; where 4×4 patches draw more than 0.1% of the warp's diagonal away from
+the warp, on 8×8 or 16×16 patches (these sizes and the 0.1% are VectorCraft's own values). The canvas shows those
+points on a selected warp. The first point or handle moved, or the first line added or deleted, makes the warp a mesh
+envelope on that grid and applies the edit, as one undo step: Undo, or Escape during the drag, gives back the warp
+with its style and bend. From then on the Control bar shows the mesh's rows and columns, Reset with Mesh with Maintain
+Shape keeps the edited shape, and Reset with Warp replaces it with the chosen warp style. Release gives back the
+edited mesh as the envelope's shape, and Expand keeps the edited distortion. A warp that no grid of up to 16×16
+patches follows that closely (some warps saved before the Bézier warp net existed, `version: 0`) shows no points, and
+editing it fails with "this warp's points can't be edited: use Reset with Mesh first" and changes nothing. The help
+page on reshaping envelopes:
+https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/distort-objects-with-envelopes.html
+
+The Control bar shows Edit Envelope / Edit Contents, the warp's
 style, orientation, bend and distortions (or the mesh's rows and columns), Reset (an unbent warp, a flat mesh) and
 Envelope Options.
 
@@ -9813,7 +9828,8 @@ Color panel, Swatches or the Eyedropper) recolours just the picked points, and w
 `object.mesh.movePoints {id, points: [index…], dx, dy}` (or `{items: [{id, points}…], dx, dy}` over several meshes)
 moves points by (dx, dy), their handles with them; `object.mesh.setPointColor` takes `points` or `items` the same
 way to colour or fade several points at once. An index out of range, an index that is not a whole number ≥ 0, or a
-move past the coordinate range fails and changes nothing.
+move past the coordinate range fails and changes nothing. A call that changes no point (no points named, a move by
+(0, 0), the colour a point already has) changes nothing and records no undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.mesh.movePoints","params":{"id":12,"points":[0,4],"dx":10,"dy":-5}}}

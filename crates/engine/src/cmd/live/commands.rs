@@ -244,7 +244,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Envelope Mesh Point",
             [],
             None,
-            "{id, index, x, y, handle?: 0 right|1 left|2 down|3 up} move a point of a mesh envelope (its handles follow), or with `handle` place that handle end at (x, y); object.mesh.movePoint, addLine and deletePoint edit mesh envelopes too",
+            "{id, index, x, y, handle?: 0 right|1 left|2 down|3 up} move a point of a mesh or warp envelope (its handles follow), or with `handle` place that handle end at (x, y); a warp's points are those of its grid (4×4 patches, or 8×8 or 16×16 where 4×4 draws more than 0.1% of its diagonal away from the warp), and its first edit makes it a mesh envelope on that grid in the same undo step (a warp no such grid follows is refused: Reset with Mesh first); object.mesh.movePoint, movePoints, addLine and deletePoint edit mesh and warp envelopes too",
             has_doc,
             env_set_mesh_point
         ),
@@ -263,7 +263,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Mesh Point Color",
             [],
             None,
-            "{id, index | points: [index…] | items: [{id, index | points}…], color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1} colour and/or opacity of gradient mesh points (one undo step; an index out of range changes nothing)",
+            "{id, index | points: [index…] | items: [{id, index | points}…], color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1} colour and/or opacity of gradient mesh points (one undo step; an index out of range changes nothing, and so does a call that changes no point, with no undo step)",
             has_doc,
             mesh_set_color
         ),
@@ -272,7 +272,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Mesh Point",
             [],
             None,
-            "{id, index, x, y, handle?: 0 right|1 left|2 down|3 up} move a point of a gradient mesh or mesh envelope (its handles follow), or with `handle` place that handle end at (x, y)",
+            "{id, index, x, y, handle?: 0 right|1 left|2 down|3 up} move a point of a gradient mesh or a mesh or warp envelope (its handles follow; a warp becomes a mesh envelope, see object.envelope.setMeshPoint), or with `handle` place that handle end at (x, y)",
             has_doc,
             mesh_move_point
         ),
@@ -281,7 +281,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Mesh Points",
             [],
             None,
-            "{id, points: [index…] | items: [{id, index | points}…], dx, dy} move points of gradient meshes or mesh envelopes by (dx, dy), their handles with them (one undo step; an index out of range changes nothing)",
+            "{id, points: [index…] | items: [{id, index | points}…], dx, dy} move points of gradient meshes or mesh or warp envelopes by (dx, dy), their handles with them (warps become mesh envelopes, see object.envelope.setMeshPoint; one undo step; an index out of range changes nothing, and so does a call that moves no point, with no undo step)",
             has_doc,
             mesh_move_points
         ),
@@ -290,7 +290,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Mesh Line",
             [],
             None,
-            "{id, x, y, color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), tolerance?: pt (0)} add a row and a column through (x, y), inside or on the edge, to a gradient mesh (new point in `color`) or a mesh envelope; a point outside within `tolerance` of the edge adds them through the nearest point of the edge; at a point that is already a mesh point it adds no line, and records no undo step unless `color` changes a gradient mesh's point (a mesh envelope's points have no color) → {index}",
+            "{id, x, y, color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), tolerance?: pt (0)} add a row and a column through (x, y), inside or on the edge, to a gradient mesh (new point in `color`) or a mesh or warp envelope (a warp becomes a mesh envelope, see object.envelope.setMeshPoint); a point outside within `tolerance` of the edge adds them through the nearest point of the edge; at a point that is already a mesh point it adds no line, and records no undo step unless `color` changes a gradient mesh's point (an envelope's points have no color) → {index}",
             has_doc,
             mesh_add_line
         ),
@@ -299,7 +299,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Mesh Point",
             [],
             None,
-            "{id, index} delete the mesh lines through a point of a gradient mesh or mesh envelope",
+            "{id, index} delete the mesh lines through a point of a gradient mesh or a mesh or warp envelope (a warp becomes a mesh envelope, see object.envelope.setMeshPoint)",
             has_doc,
             mesh_delete_point
         ),

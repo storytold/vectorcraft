@@ -119,29 +119,87 @@ fn with_mesh<T>(s: &mut Session, p: &Value, cmd: &str, label: &str, envelopes: b
     s.edit(label, move |d, _| edit_grid(d, id, cmd, envelopes, f))
 }
 
-/// Run `f` on the gradient mesh `id` of `d`; with `envelopes`, a mesh envelope's grid too (its
-/// points and handles are written back: editing fills in the handles).
-fn edit_grid<T>(d: &mut Document, id: NodeId, cmd: &str, envelopes: bool, f: impl FnOnce(&mut GradientMesh) -> Result<T>) -> Result<T> {
-    edit_kind(&mut d.node_mut(id).ok_or(EngineError::NoNode(id))?.kind, cmd, envelopes, f)
+/// The grid an edit of envelope `n`'s points starts from: a mesh envelope's own grid, or a warp's
+/// grid ([`live::warp_grid`]), which the edit turns into a mesh envelope. `None` for other nodes.
+pub(super) fn envelope_edit_grid(n: &Node, cmd: &str) -> Option<Result<GradientMesh>> {
+    let NodeKind::Envelope { kind, .. } = &n.kind else { return None };
+    match &**kind {
+        EnvelopeKind::Mesh { rows, cols, points, handles } => {
+            Some(live::envelope_grid(*rows, *cols, points, handles).ok_or_else(|| bad(cmd, "the envelope's mesh is malformed")))
+        }
+        EnvelopeKind::Warp { .. } => {
+            Some(live::warp_grid(n).ok_or_else(|| bad(cmd, "this warp's points can't be edited: use Reset with Mesh first")))
+        }
+        EnvelopeKind::TopObject { .. } => None,
+    }
 }
 
-/// [`edit_grid`] on a node's kind.
-fn edit_kind<T>(k: &mut NodeKind, cmd: &str, envelopes: bool, f: impl FnOnce(&mut GradientMesh) -> Result<T>) -> Result<T> {
-    match k {
-        NodeKind::Mesh(m) => f(m),
-        NodeKind::Envelope { kind, .. } if envelopes && matches!(**kind, EnvelopeKind::Mesh { .. }) => {
-            let EnvelopeKind::Mesh { rows, cols, points, handles } = &mut **kind else {
-                return Err(bad(cmd, "not a gradient mesh or mesh envelope"));
-            };
-            let mut m = live::envelope_grid(*rows, *cols, points, handles).ok_or_else(|| bad(cmd, "the envelope's mesh is malformed"))?;
-            let r = f(&mut m)?;
-            (*rows, *cols) = (m.rows, m.cols);
-            *points = m.points.iter().map(|q| q.p).collect();
-            *handles = m.points.iter().map(|q| q.handles).collect();
-            Ok(r)
-        }
-        _ => Err(bad(cmd, if envelopes { "not a gradient mesh or mesh envelope" } else { "not a gradient mesh" })),
+/// The mesh envelope kind of grid `m`, with its points' handles.
+pub(super) fn mesh_envelope(m: &GradientMesh) -> EnvelopeKind {
+    EnvelopeKind::Mesh {
+        rows: m.rows,
+        cols: m.cols,
+        points: m.points.iter().map(|q| q.p).collect(),
+        handles: m.points.iter().map(|q| q.handles).collect(),
     }
+}
+
+/// Does placing point `index` of warp envelope `id` of `d`, or that point's `handle` end, at `q`
+/// leave it where it is? Such a placement is no edit. `false` for other objects and for an index
+/// out of range, whose edits run as before.
+pub(super) fn warp_point_stays(d: &Document, id: NodeId, index: usize, handle: Option<usize>, q: Point, cmd: &str) -> Result<bool> {
+    let Some(n) = d.node(id).filter(|n| matches!(&n.kind, NodeKind::Envelope { kind, .. } if matches!(**kind, EnvelopeKind::Warp { .. }))) else {
+        return Ok(false);
+    };
+    let grid = envelope_grid_to_edit(n, cmd, true)?;
+    Ok(grid.points.get(index).is_some_and(|pt| match handle {
+        Some(h) => pt.handles.get(h).is_some_and(|v| *v == q - pt.p),
+        None => pt.p == q,
+    }))
+}
+
+/// The grid of envelope `n` that [`edit_grid`] edits (only `envelopes`), or the error it fails with.
+fn envelope_grid_to_edit(n: &Node, cmd: &str, envelopes: bool) -> Result<GradientMesh> {
+    match envelope_edit_grid(n, cmd).filter(|_| envelopes) {
+        Some(grid) => grid,
+        None => Err(bad(cmd, if envelopes { "not a gradient mesh or mesh envelope" } else { "not a gradient mesh" })),
+    }
+}
+
+/// The grid of mesh `id` of `d` that [`edit_grid`] edits, as it is now.
+fn grid_to_edit(d: &Document, id: NodeId, cmd: &str, envelopes: bool) -> Result<GradientMesh> {
+    match d.node(id) {
+        Some(Node { kind: NodeKind::Mesh(m), .. }) => Ok(m.clone()),
+        Some(n) => envelope_grid_to_edit(n, cmd, envelopes),
+        None => Err(EngineError::NoNode(id)),
+    }
+}
+
+/// Run `f` on the gradient mesh `id` of `d`; with `envelopes`, a warp or mesh envelope's grid too
+/// (see [`edit_node`]).
+fn edit_grid<T>(d: &mut Document, id: NodeId, cmd: &str, envelopes: bool, f: impl FnOnce(&mut GradientMesh) -> Result<T>) -> Result<T> {
+    edit_node(d.node_mut(id).ok_or(EngineError::NoNode(id))?, cmd, envelopes, f)
+}
+
+/// [`edit_grid`] on a node: with `envelopes`, a warp or mesh envelope's grid
+/// ([`envelope_edit_grid`]) is edited too, and its points and handles are written back as a mesh
+/// envelope (editing fills in the handles, and makes a warp a mesh envelope).
+fn edit_node<T>(n: &mut Node, cmd: &str, envelopes: bool, f: impl FnOnce(&mut GradientMesh) -> Result<T>) -> Result<T> {
+    if let NodeKind::Mesh(m) = &mut n.kind {
+        return f(m);
+    }
+    let start = envelope_grid_to_edit(n, cmd, envelopes)?;
+    let mut m = start.clone();
+    let r = f(&mut m)?;
+    // A warp stays a warp when the edit changed nothing.
+    let warp = matches!(&n.kind, NodeKind::Envelope { kind, .. } if matches!(**kind, EnvelopeKind::Warp { .. }));
+    if warp && m == start {
+        return Ok(r);
+    }
+    if let NodeKind::Envelope { kind, .. } = &mut n.kind {
+        **kind = mesh_envelope(&m);
+    }
+    Ok(r)
 }
 
 /// Most mesh points one command names, over all its meshes.
@@ -178,7 +236,8 @@ fn point_items(p: &Value, cmd: &str) -> Result<Vec<(NodeId, BTreeSet<usize>)>> {
 }
 
 /// Run `f` on each mesh point `items` names, as one undo step `label` (an index out of range
-/// fails it, changing nothing); with `envelopes`, on mesh envelopes' points too.
+/// fails it, changing nothing); with `envelopes`, on warp and mesh envelopes' points too. When `f`
+/// changes no point, nothing changes and no undo step is recorded.
 fn with_points(
     s: &mut Session,
     items: &[(NodeId, BTreeSet<usize>)],
@@ -187,6 +246,20 @@ fn with_points(
     envelopes: bool,
     mut f: impl FnMut(&mut live::MeshPoint) -> Result<()>,
 ) -> Result<()> {
+    let doc = &s.doc()?.doc;
+    let mut changes = false;
+    for (id, points) in items {
+        let mut m = grid_to_edit(doc, *id, cmd, envelopes)?;
+        for i in points {
+            let q = m.points.get_mut(*i).ok_or_else(|| bad(cmd, "index out of range"))?;
+            let before = q.clone();
+            f(q)?;
+            changes |= *q != before;
+        }
+    }
+    if !changes {
+        return Ok(());
+    }
     s.edit(label, |d, _| {
         for (id, points) in items {
             edit_grid(d, *id, cmd, envelopes, |m| {
@@ -255,6 +328,10 @@ pub(super) fn mesh_move_point(s: &mut Session, p: &Value) -> Result<Value> {
     let index = index_param(p, "index", C)?;
     let q = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
     let handle = handle_param(p, C)?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
+    if warp_point_stays(&s.doc()?.doc, id, index, handle, q, C)? {
+        return ok();
+    }
     with_mesh(s, p, C, "Move Mesh Point", true, |m| {
         let pt = m.points.get_mut(index).ok_or_else(|| bad(C, "index out of range"))?;
         match handle {
@@ -298,12 +375,12 @@ pub(super) fn mesh_add_line(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // The lines are added to a copy of the object. A point that is already a mesh point adds none:
     // when its color stays too, nothing changes and no undo step is recorded. The grid is compared,
-    // not the node: a mesh envelope stored without handles takes them in any edit, and keeps no
-    // colors, so only its points and handles count.
-    let orig = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?.kind.clone();
-    let colored = matches!(orig, NodeKind::Mesh(_));
-    let mut kind = orig.clone();
-    let (i, same) = edit_kind(&mut kind, C, true, |m| {
+    // not the node: a mesh envelope stored without handles takes them in any edit, a warp becomes
+    // a mesh envelope, and neither keeps colors, so only their points and handles count.
+    let orig = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?.clone();
+    let colored = matches!(orig.kind, NodeKind::Mesh(_));
+    let mut node = orig.clone();
+    let (i, same) = edit_node(&mut node, C, true, |m| {
         let before = m.clone();
         let i = add(m)?;
         let shape = |g: &GradientMesh| (g.rows, g.cols, g.points.iter().map(|q| (q.p, q.handles)).collect::<Vec<_>>());
@@ -315,10 +392,10 @@ pub(super) fn mesh_add_line(s: &mut Session, p: &Value) -> Result<Value> {
     let index = s.edit("Add Mesh Line", move |d, _| {
         let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
         // Settling typed values before the edit may have changed the object: add the lines again.
-        if n.kind != orig {
-            return edit_kind(&mut n.kind, C, true, add);
+        if n.kind != orig.kind {
+            return edit_node(n, C, true, add);
         }
-        n.kind = kind;
+        n.kind = node.kind;
         Ok(i)
     })?;
     Ok(json!({ "index": index }))

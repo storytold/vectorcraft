@@ -151,6 +151,215 @@ fn mesh_handles_turn_with_the_envelope_and_round_trip() {
     assert!(matches!(n.kind, NodeKind::Envelope { kind, .. } if matches!(&*kind, EnvelopeKind::Mesh { handles, .. } if handles.is_empty())));
 }
 
+/// The kind of envelope `e`.
+fn kind(s: &Session, e: NodeId) -> EnvelopeKind {
+    match node(s, e).kind {
+        NodeKind::Envelope { kind, .. } => *kind,
+        k => panic!("{k:?}"),
+    }
+}
+
+fn undo_len(s: &Session) -> usize {
+    s.doc().unwrap().history.undo.len()
+}
+
+/// Moving a point of a warp envelope makes it a mesh envelope on the warp's grid with that point
+/// moved, as one undo step: the other points and every handle stay where the warp had them, and
+/// the shape away from the moved point stays the warp's. Undo gives back the warp, Redo the edit.
+#[test]
+fn moving_a_warp_point_makes_it_a_mesh_envelope_in_one_step() {
+    let mut s = session();
+    let (_, e) = enveloped(&mut s, "object.envelope.makeWithWarp", json!({"style": "arc", "bend": 50}));
+    let warp = node(&s, e);
+    let grid = live::warp_grid(&warp).unwrap();
+    assert_eq!((grid.rows, grid.cols), (4, 4));
+    let before = EnvelopeMap::of(&warp).unwrap();
+    let n = undo_len(&s);
+    // An interior point.
+    s.execute("object.mesh.movePoint", &json!({"id": e.0, "index": 6, "x": 160, "y": 120})).unwrap();
+    assert_eq!(undo_len(&s), n + 1, "one undo step");
+    let (rows, cols, points, handles) = mesh(&s, e);
+    assert_eq!((rows, cols, points.len(), handles.len()), (4, 4, 25, 25));
+    for (i, q) in grid.points.iter().enumerate() {
+        let want = if i == 6 { Point::new(160.0, 120.0) } else { q.p };
+        assert!(points[i].distance(want) < 1e-9, "point {i}: {:?} vs {want:?}", points[i]);
+        assert_eq!(handles[i], q.handles, "handles of point {i}");
+    }
+    let moved = node(&s, e);
+    let after = EnvelopeMap::of(&moved).unwrap();
+    let b = before.src();
+    let tol = b.width().hypot(b.height()) * 1e-3;
+    for (u, v) in [(0.9, 0.9), (0.6, 0.875), (1.0, 0.5), (0.0, 1.0)] {
+        assert!(after.at(u, v).distance(before.at(u, v)) <= tol, "({u}, {v}): {:?} vs {:?}", after.at(u, v), before.at(u, v));
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(node(&s, e), warp, "Undo gives back the warp, style and bend included");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(mesh(&s, e).2[6], Point::new(160.0, 120.0));
+    // A corner of a warp, and a handle with object.envelope.setMeshPoint.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("object.mesh.movePoints", &json!({"id": e.0, "points": [0], "dx": -10, "dy": -5})).unwrap();
+    assert!(mesh(&s, e).2[0].distance(grid.points[0].p + Vec2::new(-10.0, -5.0)) < 1e-9);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let end = grid.points[12].p + Vec2::new(30.0, -30.0);
+    s.execute("object.envelope.setMeshPoint", &json!({"id": e.0, "index": 12, "x": end.x, "y": end.y, "handle": 0})).unwrap();
+    let (_, _, points, handles) = mesh(&s, e);
+    assert!((points[12] + handles[12][live::H_RIGHT]).distance(end) < 1e-9);
+    assert_eq!(handles[12][live::H_LEFT], grid.points[12].handles[live::H_LEFT]);
+    assert_eq!(undo_len(&s), n + 1);
+}
+
+/// After a warp's point is edited, the envelope keeps its content, options and fidelity; it saves
+/// and opens again as it is; Reset with Mesh with Maintain Shape keeps the edited shape and Reset
+/// with Warp gives the chosen style; Release gives back the edited mesh as its shape and Expand
+/// keeps the edited distortion.
+#[test]
+fn an_edited_warp_saves_resets_releases_and_expands_as_edited() {
+    let mut s = session();
+    let (_, e) = enveloped(&mut s, "object.envelope.makeWithWarp", json!({"style": "flag", "bend": 40}));
+    s.execute("object.envelope.options", &json!({"fidelity": 80, "distortAppearance": false})).unwrap();
+    let warp = node(&s, e);
+    // The middle of the bottom edge, 30 down.
+    s.execute("object.mesh.movePoints", &json!({"id": e.0, "points": [22], "dx": 0, "dy": 30})).unwrap();
+    let edited = node(&s, e);
+    let (NodeKind::Envelope { content: c0, options: o0, fidelity: f0, .. }, NodeKind::Envelope { content: c1, options: o1, fidelity: f1, .. }) =
+        (&warp.kind, &edited.kind)
+    else {
+        panic!("envelopes")
+    };
+    assert_eq!((c0, o0, f0), (c1, o1, f1), "content, options and fidelity stay");
+    let d = s.doc().unwrap().doc.clone();
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&d, false)).unwrap();
+    assert_eq!(back.node(e), d.node(e), "a save opens again as edited");
+    // Reset with Mesh, keeping the shape: the edited points.
+    let (_, _, points, _) = mesh(&s, e);
+    s.execute("object.envelope.resetWithMesh", &json!({"maintainShape": true})).unwrap();
+    let (rows, cols, kept, _) = mesh(&s, e);
+    assert_eq!((rows, cols), (4, 4));
+    for (p, q) in points.iter().zip(&kept) {
+        assert!(p.distance(*q) < 1e-6, "{p:?} vs {q:?}");
+    }
+    // Reset with Warp: the chosen style replaces the edit.
+    s.execute("object.envelope.resetWithWarp", &json!({"style": "bulge", "bend": 30})).unwrap();
+    assert!(matches!(kind(&s, e), EnvelopeKind::Warp { style, bend, .. } if style == "bulge" && bend == 30.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(node(&s, e), edited);
+    // Release: the content and the edited mesh as the envelope's shape.
+    s.execute("select.set", &json!({"ids": [e.0]})).unwrap();
+    let ids = s.execute("object.envelope.release", &json!({})).unwrap();
+    let ids: Vec<NodeId> = ids["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    let shape = ids.iter().find_map(|id| match node(&s, *id).kind {
+        NodeKind::Mesh(m) => Some(m),
+        _ => None,
+    });
+    let shape = shape.expect("the envelope's shape");
+    assert_eq!(shape.points.iter().map(|q| q.p).collect::<Vec<_>>(), points);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Expand: the distorted content follows the moved point, unlike the warp's.
+    let expanded = |s: &mut Session| {
+        s.execute("select.set", &json!({"ids": [e.0]})).unwrap();
+        s.execute("object.envelope.expand", &json!({})).unwrap();
+        let b = node(s, e).geometric_bounds().unwrap();
+        s.execute("edit.undo", &json!({})).unwrap();
+        b
+    };
+    let edited_bounds = expanded(&mut s);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let warp_bounds = expanded(&mut s);
+    assert!(edited_bounds.y1 > warp_bounds.y1 + 5.0, "{edited_bounds:?} vs {warp_bounds:?}");
+}
+
+/// An edit of a warp's points that fails (an index out of range, here on the second of two
+/// warps) changes neither warp and adds no undo step; a warp that no grid follows closely enough
+/// shows no points and is refused, and so is a top object envelope.
+#[test]
+fn a_warp_point_edit_that_fails_changes_nothing() {
+    let mut s = session();
+    let (_, e) = enveloped(&mut s, "object.envelope.makeWithWarp", json!({"style": "arc", "bend": 50}));
+    let (_, f) = enveloped(&mut s, "object.envelope.makeWithWarp", json!({"style": "wave", "bend": 50}));
+    let (we, wf, n) = (node(&s, e), node(&s, f), undo_len(&s));
+    let r = s.execute("object.mesh.movePoints", &json!({"items": [{"id": e.0, "points": [0]}, {"id": f.0, "points": [3, 99999]}], "dx": 5, "dy": 5}));
+    assert!(r.is_err(), "{r:?}");
+    let r = s.execute("object.envelope.setMeshPoint", &json!({"id": e.0, "index": 25, "x": 0, "y": 0}));
+    assert!(r.is_err(), "{r:?}");
+    assert_eq!((node(&s, e), node(&s, f), undo_len(&s)), (we, wf, n), "nothing changed");
+    // The old point map's fisheye: no grid of up to 16×16 patches follows it.
+    let (_, g) = enveloped(&mut s, "object.envelope.makeWithWarp", json!({"style": "fisheye", "bend": 100, "version": 0}));
+    let old = node(&s, g);
+    assert!(live::warp_grid(&old).is_none());
+    assert!(live::envelope_overlay(&old).unwrap().1.is_none(), "no points show");
+    let n = undo_len(&s);
+    for (cmd, p) in [
+        ("object.mesh.movePoint", json!({"id": g.0, "index": 0, "x": 0, "y": 0})),
+        ("object.envelope.setMeshPoint", json!({"id": g.0, "index": 0, "x": 0, "y": 0})),
+        ("object.mesh.addLine", json!({"id": g.0, "x": 200, "y": 150})),
+    ] {
+        let r = s.execute(cmd, &p);
+        assert!(
+            matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "this warp's points can't be edited: use Reset with Mesh first"),
+            "{cmd}: {r:?}"
+        );
+    }
+    assert_eq!((node(&s, g), undo_len(&s)), (old, n));
+}
+
+/// An edit that moves no point of a warp (no points named, a move by nothing, a point placed where
+/// it is, a line added through one of its points) leaves it a warp and records no undo step.
+#[test]
+fn a_warp_edit_that_moves_nothing_leaves_the_warp() {
+    let mut s = session();
+    let (_, e) = enveloped(&mut s, "object.envelope.makeWithWarp", json!({"style": "arc", "bend": 50}));
+    let (warp, n) = (node(&s, e), undo_len(&s));
+    let grid = live::warp_grid(&warp).unwrap();
+    s.execute("object.mesh.movePoints", &json!({"id": e.0, "points": [], "dx": 10, "dy": 0})).unwrap();
+    s.execute("object.mesh.movePoints", &json!({"id": e.0, "points": [3, 6], "dx": 0, "dy": 0})).unwrap();
+    assert_eq!((node(&s, e), undo_len(&s)), (warp.clone(), n));
+    let q = grid.points[6].clone();
+    s.execute("object.mesh.movePoint", &json!({"id": e.0, "index": 6, "x": q.p.x, "y": q.p.y})).unwrap();
+    s.execute("object.envelope.setMeshPoint", &json!({"id": e.0, "index": 6, "x": q.p.x, "y": q.p.y})).unwrap();
+    // A line added through a point of the warp's grid adds none.
+    let r = s.execute("object.mesh.addLine", &json!({"id": e.0, "x": q.p.x, "y": q.p.y})).unwrap();
+    assert_eq!(r["index"], json!(6));
+    assert_eq!((node(&s, e), undo_len(&s)), (warp, n));
+    // An unknown mesh still fails.
+    assert!(s.execute("object.mesh.movePoints", &json!({"id": 99999, "points": [], "dx": 1, "dy": 0})).is_err());
+}
+
+/// With Direct Selection, a selected warp's point drags as `object.mesh.movePoint`: the preview
+/// makes it a mesh envelope, Escape gives back the warp with no undo step, and a finished drag is
+/// one undo step. While its contents are edited, its points don't take the press.
+#[test]
+fn direct_selection_drags_a_warps_point_and_escape_gives_it_back() {
+    let mut s = session();
+    let (_, e) = enveloped(&mut s, "object.envelope.makeWithWarp", json!({"style": "arc", "bend": 50}));
+    let warp = node(&s, e);
+    let corner = live::warp_grid(&warp).unwrap().points[24].p;
+    s.execute("select.set", &json!({"ids": [e.0]})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("directSelection", v).unwrap();
+    let n = undo_len(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, corner.x, corner.y), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, corner.x + 20.0, corner.y + 10.0), v).unwrap();
+    assert!(mesh(&s, e).2[24].distance(corner + Vec2::new(20.0, 10.0)) < 1e-9, "the preview moves the point");
+    s.tool_key(vectorcraft_tools::ToolKey::Escape, vectorcraft_tools::Mods::default(), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, corner.x + 20.0, corner.y + 10.0), v).unwrap();
+    assert_eq!((node(&s, e), undo_len(&s)), (warp.clone(), n), "Escape gives back the warp");
+    s.pointer(&PointerEvent::new(PointerKind::Down, corner.x, corner.y), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, corner.x + 20.0, corner.y + 10.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, corner.x + 20.0, corner.y + 10.0), v).unwrap();
+    assert_eq!(undo_len(&s), n + 1);
+    assert!(mesh(&s, e).2[24].distance(corner + Vec2::new(20.0, 10.0)) < 1e-9);
+    // Edit Contents: the press doesn't take the envelope's point.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("object.envelope.editContents", &json!({"editing": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [e.0]})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, corner.x, corner.y), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, corner.x + 20.0, corner.y + 10.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, corner.x + 20.0, corner.y + 10.0), v).unwrap();
+    assert!(matches!(kind(&s, e), EnvelopeKind::Warp { .. }), "{:?}", kind(&s, e));
+}
+
 #[test]
 fn reset_with_mesh_keeps_the_warp_shape_along_the_grid() {
     let mut s = session();
