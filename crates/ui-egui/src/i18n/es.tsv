@@ -2914,6 +2914,9 @@ digits	Malayalam	Malayálam
 	Reset the rows to the artwork's colors	Restablecer las filas a los colores de la ilustración
 	Color Theme Picker	Selector de tema de color
 	Click or drag across the art to pick its colors; Shift adds more	Haga clic o arrastre sobre la ilustración para tomar sus colores; Mayús añade más
+	Prominent Colors	Colores destacados
+	Save All Colors	Guardar todos los colores
+	Save Prominent Colors	Guardar colores destacados
 	Reset to Default	Restablecer valores predeterminados
 	Reset to White, Black	Restablecer a blanco, negro
 	Reset with Mesh	Restablecer con malla
@@ -6478,6 +6481,7 @@ axis	Y Axis	Eje Y
 @msg	message must be text	message debe ser texto
 @msg	allowContinue must be true or false	allowContinue debe ser true o false
 @msg	Batch cannot play an action with a stop	Lote no puede reproducir una acción con una parada
+@msg	Batch cannot play an action with a View menu step	Lote no puede reproducir una acción con un paso del menú Ver
 	Insert Menu Item…	Insertar elemento de menú…
 	Insert Menu Item	Insertar elemento de menú
 	Insert Select Path	Insertar selección de trazado
@@ -7289,6 +7293,19 @@ breakText	Glyphs	Glifos
 	Show where this tool is	Mostrar dónde está esta herramienta
 @msg	missing `tutorial` (see learn.list)	falta `tutorial` (consulta learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial desconocido `{id}` (consulta learn.list)
+	View more	Ver más
+	Finish tutorial	Terminar tutorial
+	Next Up	A continuación
+	You finished the last tutorial in this skill.	Has terminado el último tutorial de esta habilidad.
+	Back to skills	Volver a las habilidades
+	Open Tutorial Sample	Abrir muestra del tutorial
+	Finish Tutorial	Terminar tutorial
+	Next Tutorial	Tutorial siguiente
+	Back to Skills	Volver a las habilidades
+@msg	tutorial `{id}` has no practice sample	el tutorial `{id}` no tiene muestra de práctica
+@msg	open the practice sample of `{id}` first (see learn.openSample)	abre primero la muestra de práctica de `{id}` (consulta learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	termina primero `{id}` (consulta learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` es el último tutorial de su habilidad
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualizar efectos aplazados

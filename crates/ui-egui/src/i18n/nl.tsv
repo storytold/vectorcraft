@@ -3191,6 +3191,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	De rijen herstellen naar de kleuren van de artwork
 	Color Theme Picker	Kleurthemakiezer
 	Click or drag across the art to pick its colors; Shift adds more	Klik of sleep over het artwork om de kleuren ervan op te nemen; Shift voegt er meer toe
+	Prominent Colors	Prominente kleuren
+	Save All Colors	Alle kleuren opslaan
+	Save Prominent Colors	Prominente kleuren opslaan
 	Separate colors into rows	Kleuren over rijen verdelen
 	Unlink harmony colors	Harmoniekleuren ontkoppelen
 	1 Color Job	Opdracht in 1 kleur
@@ -6631,6 +6634,7 @@ axis	Y Axis	Y-as
 @msg	message must be text	message moet tekst zijn
 @msg	allowContinue must be true or false	allowContinue moet true of false zijn
 @msg	Batch cannot play an action with a stop	Batch kan geen actie met een stop afspelen
+@msg	Batch cannot play an action with a View menu step	Batch kan geen actie met een stap uit het menu Beeld afspelen
 	Insert Menu Item…	Menu-item invoegen…
 	Insert Menu Item	Menu-item invoegen
 	Insert Select Path	Pad selecteren invoegen
@@ -7379,6 +7383,19 @@ breakText	Glyphs	Glyphs
 	Show where this tool is	Tonen waar dit gereedschap zich bevindt
 @msg	missing `tutorial` (see learn.list)	`tutorial` ontbreekt (zie learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	onbekende tutorial `{id}` (zie learn.list)
+	View more	Meer weergeven
+	Finish tutorial	Tutorial voltooien
+	Next Up	Hierna
+	You finished the last tutorial in this skill.	Je hebt de laatste tutorial van deze vaardigheid voltooid.
+	Back to skills	Terug naar vaardigheden
+	Open Tutorial Sample	Oefenbestand van tutorial openen
+	Finish Tutorial	Tutorial voltooien
+	Next Tutorial	Volgende tutorial
+	Back to Skills	Terug naar vaardigheden
+@msg	tutorial `{id}` has no practice sample	tutorial `{id}` heeft geen oefenbestand
+@msg	open the practice sample of `{id}` first (see learn.openSample)	open eerst het oefenbestand van `{id}` (zie learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	voltooi eerst `{id}` (zie learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` is de laatste tutorial van zijn vaardigheid
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Uitgestelde effecten vernieuwen

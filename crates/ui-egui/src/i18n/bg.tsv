@@ -2835,6 +2835,9 @@ digits	Malayalam	Малаялам
 	Reset the rows to the artwork's colors	Нулиране на редовете към цветовете на илюстрацията
 	Color Theme Picker	Избор на цветова тема
 	Click or drag across the art to pick its colors; Shift adds more	Щракнете или плъзнете през илюстрацията, за да вземете цветовете ѝ; Shift добавя още
+	Prominent Colors	Преобладаващи цветове
+	Save All Colors	Запази всички цветове
+	Save Prominent Colors	Запази преобладаващите цветове
 	Reset to Default	Връщане към стандартните
 	Reset to White, Black	Нулиране към бяло, черно
 	Reset with Mesh	Нулиране с мрежа
@@ -6000,6 +6003,7 @@ axis	Y Axis	Y ос
 @msg	message must be text	message трябва да бъде текст
 @msg	allowContinue must be true or false	allowContinue трябва да бъде true или false
 @msg	Batch cannot play an action with a stop	Пакет не може да изпълни действие със спиране
+@msg	Batch cannot play an action with a View menu step	Пакет не може да изпълни действие със стъпка от менюто Изглед
 	Insert Menu Item…	Вмъкване на елемент от меню…
 	Insert Menu Item	Вмъкване на елемент от меню
 	Insert Select Path	Вмъкване на избор на път
@@ -6749,6 +6753,19 @@ breakText	Glyphs	Глифи
 	Show where this tool is	Показване къде е този инструмент
 @msg	missing `tutorial` (see learn.list)	липсва `tutorial` (вижте learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	непознат урок `{id}` (вижте learn.list)
+	View more	Вижте повече
+	Finish tutorial	Завършване на урока
+	Next Up	Следващ
+	You finished the last tutorial in this skill.	Завършихте последния урок в това умение.
+	Back to skills	Обратно към уменията
+	Open Tutorial Sample	Отваряне на примерния файл на урока
+	Finish Tutorial	Завършване на урок
+	Next Tutorial	Следващ урок
+	Back to Skills	Обратно към уменията
+@msg	tutorial `{id}` has no practice sample	урокът `{id}` няма примерен файл за упражнение
+@msg	open the practice sample of `{id}` first (see learn.openSample)	първо отворете примерния файл за упражнение на `{id}` (вижте learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	първо завършете `{id}` (вижте learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` е последният урок в своето умение
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Обновяване на отложените ефекти

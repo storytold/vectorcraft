@@ -604,7 +604,7 @@ pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool 
             crate::menus::invoke(app, cmd, json!({}));
         }
     }
-    ui.separator();
+    crate::chrome::group_separator(ui);
     true
 }
 

@@ -2857,6 +2857,9 @@ digits	Malayalam	Malajalam
 	Reset the rows to the artwork's colors	Vrati redove na boje crteža
 	Color Theme Picker	Birač teme boja
 	Click or drag across the art to pick its colors; Shift adds more	Kliknite ili prevucite preko crteža da uzmete njegove boje; Shift dodaje još
+	Prominent Colors	Istaknute boje
+	Save All Colors	Sačuvaj sve boje
+	Save Prominent Colors	Sačuvaj istaknute boje
 	Separate colors into rows	Razdvoji boje u redove
 	Unlink harmony colors	Prekini vezu boja harmonije
 	1 Color Job	Posao s 1 bojom
@@ -6043,6 +6046,7 @@ axis	Y Axis	Y osa
 @msg	message must be text	message mora biti tekst
 @msg	allowContinue must be true or false	allowContinue mora biti true ili false
 @msg	Batch cannot play an action with a stop	Paketna obrada ne može reprodukovati akciju sa zaustavljanjem
+@msg	Batch cannot play an action with a View menu step	Paketna obrada ne može reprodukovati akciju s korakom iz menija Prikaz
 	Insert Menu Item…	Umetni stavku menija…
 	Insert Menu Item	Umetni stavku menija
 	Insert Select Path	Umetni odabir putanje
@@ -6804,6 +6808,19 @@ shape	Open	Otvoren
 	Show where this tool is	Prikaži gdje je ovaj alat
 @msg	missing `tutorial` (see learn.list)	nedostaje `tutorial` (vidi learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	nepoznat tutorijal `{id}` (vidi learn.list)
+	View more	Prikaži više
+	Finish tutorial	Završi tutorijal
+	Next Up	Sljedeće
+	You finished the last tutorial in this skill.	Završili ste posljednji tutorijal u ovoj vještini.
+	Back to skills	Nazad na vještine
+	Open Tutorial Sample	Otvori uzorak tutorijala
+	Finish Tutorial	Završi tutorijal
+	Next Tutorial	Sljedeći tutorijal
+	Back to Skills	Nazad na vještine
+@msg	tutorial `{id}` has no practice sample	tutorijal `{id}` nema uzorak za vježbu
+@msg	open the practice sample of `{id}` first (see learn.openSample)	prvo otvorite uzorak za vježbu tutorijala `{id}` (vidi learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	prvo završite `{id}` (vidi learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` je posljednji tutorijal u svojoj vještini
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Osvježi odgođene efekte
