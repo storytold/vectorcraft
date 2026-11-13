@@ -850,6 +850,29 @@ impl Host {
         placed.unwrap_or_else(|| ("[unknown]".to_string(), 0))
     }
 
+    /// `$.fileName` read by the code at `site`: the file that code is in, by the source map of the
+    /// source it came from (this run's script, a file `$.evalFile` gave, or code an earlier run of
+    /// the named engine compiled), so a function keeps the file it was defined in. Code from a file
+    /// `#include` inserted is in that file. A script given as text has no name, and neither has
+    /// code whose map the named engine no longer keeps. Code that `eval` or `Function` compiled has
+    /// no map, and is given the file being run now.
+    fn file_name_at(&self, site: vectorcraft_js::CallSite) -> String {
+        let name = |m: &include::SourceMap| m.locate(site.line, site.column).1.to_string();
+        let tag = site.source;
+        if tag == vectorcraft_js::UNKNOWN_SOURCE {
+            return self.files.borrow().file_name();
+        }
+        let script = self.script_tag.get();
+        match tag.checked_sub(script).filter(|_| script != vectorcraft_js::UNKNOWN_SOURCE) {
+            Some(0) => name(&self.script_map.borrow()),
+            Some(n) => self.eval_maps.borrow().get(n as usize - 1).map(name).unwrap_or_default(),
+            None => {
+                let kept = self.kept_maps.as_ref().map(|k| k.borrow());
+                kept.as_ref().and_then(|k| k.get(tag)).map(|k| name(&k.map)).unwrap_or_default()
+            }
+        }
+    }
+
     /// Adds a line to the run's console and, during a slice, to the session's.
     fn line(&self, entry: console::Entry, cut: bool) {
         let line = console::ConsoleLine { run: self.run, name: self.name.clone(), entry };
@@ -1282,9 +1305,9 @@ fn each_line(text: &str, mut done: impl FnMut(String, bool)) {
 
 /// The `$` object: `$.write(...values)` writes the values to the Script Console as `String(value)`
 /// gives them, one after another, and `$.writeln(...values)` does the same and ends the line.
-/// `$.evalFile(path[, timeout])` runs a file and gives its last value, `$.fileName` is the file
-/// being run and `$.includePath` the `#includepath` list. Its other members are
-/// [`dollar::members`].
+/// `$.evalFile(path[, timeout])` runs a file and gives its last value, `$.fileName` is the file the
+/// code reading it is in ([`Host::file_name_at`]) and `$.includePath` the `#includepath` list. Its
+/// other members are [`dollar::members`].
 fn dollar_object(link: &Link, info: dollar::RunInfo, localization: &Rc<vectorcraft_js::Localization>) -> Vec<(String, HostItem)> {
     let writer = |end: bool| {
         let l = link.clone();
@@ -1306,6 +1329,15 @@ fn dollar_object(link: &Link, info: dollar::RunInfo, localization: &Rc<vectorcra
             Ok(Data::String(text))
         }))
     };
+    let file_name = {
+        let l = link.clone();
+        HostItem::SiteGetter(Rc::new(move |site| {
+            let h = current(&l)?;
+            let text = h.file_name_at(site);
+            h.charge_call(text.len() as u64 + 2)?;
+            Ok(Data::String(text))
+        }))
+    };
     let eval_file = {
         let (l, end, strict) = (link.clone(), link.clone(), link.clone());
         HostItem::Evaluator {
@@ -1322,7 +1354,7 @@ fn dollar_object(link: &Link, info: dollar::RunInfo, localization: &Rc<vectorcra
         ("write".into(), writer(false)),
         ("writeln".into(), writer(true)),
         ("evalFile".into(), eval_file),
-        ("fileName".into(), getter(include::Files::file_name)),
+        ("fileName".into(), file_name),
         ("includePath".into(), getter(include::Files::include_path)),
     ];
     items.extend(dollar::members(link, info, localization));

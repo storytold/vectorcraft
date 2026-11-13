@@ -1367,6 +1367,28 @@ fn smooth_tool_reduces_jagged_path() {
     assert_eq!(p.subpaths[0].anchors[0].p, Point::new(100.0, 200.0));
 }
 
+/// Smoothing a path with direct-selected anchors leaves the path selected whole: the selection no
+/// longer names anchors by indices into the anchors the smooth replaced. A selected path the drag
+/// does not reach keeps its anchors selected, and undo brings the old selection back.
+#[test]
+fn smoothing_a_path_drops_its_direct_selected_anchors() {
+    let mut s = session();
+    let anchors: Vec<_> = (0..=40).map(|i| json!({"x": 100.0 + i as f64 * 5.0, "y": 200.0 + if i % 2 == 0 { 0.0 } else { 1.5 }})).collect();
+    let r = s.execute("path.create", &json!({"anchors": anchors})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let other = line(&mut s, 100.0, 500.0, 300.0, 500.0);
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 38]], "mode": "set"})).unwrap();
+    s.execute("select.anchors", &json!({"id": other.0, "anchors": [[0, 1]], "mode": "add"})).unwrap();
+    drag(&mut s, "smooth", &[(90.0, 200.0), (200.0, 200.0), (310.0, 200.0)], Mods::default());
+    assert!(path(&s, id).anchor_count() < 20, "the path is smoothed");
+    let sel = s.doc().unwrap().selection.clone();
+    assert!(sel.contains(id) && sel.contains(other), "{sel:?}");
+    assert!(!sel.anchors.contains_key(&id) && !sel.segments.contains_key(&id), "{sel:?}");
+    assert_eq!(sel.anchors.get(&other), Some(&[(0, 1)].into()), "the path out of reach keeps its anchor");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.anchors.get(&id), Some(&[(0, 38)].into()));
+}
+
 /// #1512: a short drag over a small bump smooths the stretch of path under it. The long straight
 /// sides next to the bump stay straight lines from their far ends, which keep their place.
 #[test]
@@ -1388,6 +1410,169 @@ fn a_short_smooth_drag_leaves_the_rest_of_long_segments_alone() {
     for x in &a[1..a.len() - 1] {
         assert!((182.0..=218.0).contains(&x.p.x) && (190.0..=201.0).contains(&x.p.y), "{x:?}");
     }
+}
+
+/// A selected path through `anchors` (x, y, and the in and out handles when given).
+fn smooth_test_path(s: &mut Session, anchors: &[serde_json::Value], closed: bool) -> NodeId {
+    let r = s.execute("path.create", &json!({"anchors": anchors, "closed": closed})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    id
+}
+
+/// `path.smoothRegion` along `drag` with the Smooth tool's reach (12 pt at 100%) and default Fidelity.
+fn smooth_pass(s: &mut Session, drag: &[Point]) {
+    let pts: Vec<_> = drag.iter().map(|p| json!([p.x, p.y])).collect();
+    s.execute("path.smoothRegion", &json!({"points": pts, "radius": 12, "fidelity": 2.5})).unwrap();
+}
+
+/// Points 1/32 of a segment apart along every segment of `p`.
+fn smooth_test_samples(p: &PathData) -> Vec<Point> {
+    use kurbo::ParamCurve;
+    let mut v = vec![];
+    for sp in &p.subpaths {
+        for i in 0..sp.segment_count() {
+            let c = sp.segment(i);
+            v.extend((0..32).map(|k| c.eval(f64::from(k) / 32.0)));
+        }
+    }
+    v
+}
+
+/// How much `p` turns along its length, in radians: a wobbly path turns much more than a smooth one.
+fn total_turning(p: &PathData) -> f64 {
+    let pts = smooth_test_samples(p);
+    pts.windows(3)
+        .map(|w| (w[1] - w[0], w[2] - w[1]))
+        .filter(|(u, v)| u.hypot() > 1e-9 && v.hypot() > 1e-9)
+        .map(|(u, v)| u.cross(v).atan2(u.dot(v)).abs())
+        .sum()
+}
+
+/// Deterministic noise in -1..1.
+fn smooth_noise(seed: &mut u64) -> f64 {
+    *seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+    (*seed >> 11) as f64 / (1u64 << 53) as f64 * 2.0 - 1.0
+}
+
+/// A drag along y = `y` from x = `x0` to `x1`, one point every 5 pt.
+fn smooth_drag_along(y: f64, x0: f64, x1: f64) -> Vec<Point> {
+    let n = ((x1 - x0) / 5.0).ceil() as usize;
+    (0..=n).map(|i| Point::new(x0 + (x1 - x0) * i as f64 / n as f64, y)).collect()
+}
+
+/// Each drag of the Smooth tool smooths the path under it, and a second drag over the same place
+/// smooths it further, as the help page describes
+/// (https://helpx.adobe.com/illustrator/using/tool-techniques/smooth-tool.html): a curve that wobbles
+/// 4 pt either side of its line every 12 pt, with an anchor at each crest, wobbles less after each drag.
+#[test]
+fn each_smooth_drag_smooths_a_wobble_larger_than_fidelity_further() {
+    let mut s = session();
+    let anchors: Vec<_> = (0..=20)
+        .map(|k| {
+            let (x, y) = (100.0 + 12.0 * f64::from(k), if k % 2 == 0 { 196.0 } else { 204.0 });
+            json!({"x": x, "y": y, "in": [x - 4.4, y], "out": [x + 4.4, y]})
+        })
+        .collect();
+    let id = smooth_test_path(&mut s, &anchors, false);
+    let drag = smooth_drag_along(200.0, 90.0, 350.0);
+    let wobble =
+        |p: &PathData| smooth_test_samples(p).iter().filter(|q| (130.0..=310.0).contains(&q.x)).map(|q| (q.y - 200.0).abs()).fold(0.0, f64::max);
+    let mut before = path(&s, id);
+    for pass in 1..=2 {
+        smooth_pass(&mut s, &drag);
+        let after = path(&s, id);
+        assert_ne!(after, before, "pass {pass} changes the path");
+        let (t0, t1) = (total_turning(&before), total_turning(&after));
+        assert!(t1 < 0.9 * t0, "pass {pass}: turning {t0} -> {t1}");
+        let (w0, w1) = (wobble(&before), wobble(&after));
+        assert!(w1 < 0.8 * w0, "pass {pass}: wobble {w0} -> {w1}");
+        let (a, b) = (before.subpaths[0].anchors[0].p, after.subpaths[0].anchors[0].p);
+        assert_eq!(a, b, "pass {pass}: the path keeps its start");
+        before = after;
+    }
+}
+
+/// Smoothing a line with up to 1 pt of noise again and again, over all of it or over its middle,
+/// keeps it close to the line under the noise: each refit stays near the path it smooths.
+#[test]
+fn repeated_smooth_drags_stay_close_to_the_line_under_the_noise() {
+    let off = |p: &PathData| {
+        let d: Vec<f64> = smooth_test_samples(p).iter().map(|q| (q.y - 200.0).abs()).collect();
+        (d.iter().sum::<f64>() / d.len() as f64, d.iter().copied().fold(0.0, f64::max))
+    };
+    for (x0, x1) in [(90.0, 410.0), (150.0, 350.0)] {
+        let mut s = session();
+        let mut seed = 7u64;
+        let anchors: Vec<_> = (0..=60).map(|i| json!({"x": 100.0 + 5.0 * f64::from(i), "y": 200.0 + smooth_noise(&mut seed)})).collect();
+        let id = smooth_test_path(&mut s, &anchors, false);
+        let drag = smooth_drag_along(200.0, x0, x1);
+        let (mean0, _) = off(&path(&s, id));
+        for pass in 1..=5 {
+            smooth_pass(&mut s, &drag);
+            let (mean, max) = off(&path(&s, id));
+            assert!(
+                mean <= 1.1 * mean0 && max <= 1.5,
+                "drag {x0}-{x1}, pass {pass}: {mean} on average and {max} at most from the line, {mean0} before"
+            );
+        }
+    }
+}
+
+/// A drag over the whole of a noisy closed path leaves no corner where the path starts.
+#[test]
+fn smoothing_a_whole_closed_path_leaves_no_kink_at_its_start() {
+    let mut s = session();
+    let mut seed = 5u64;
+    let (c, r) = (Point::new(300.0, 300.0), 80.0);
+    let anchors: Vec<_> = (0..64)
+        .map(|i| {
+            let a = f64::from(i) / 64.0 * std::f64::consts::TAU;
+            let rr = r + 2.5 * smooth_noise(&mut seed);
+            json!({"x": c.x + rr * a.cos(), "y": c.y + rr * a.sin()})
+        })
+        .collect();
+    let id = smooth_test_path(&mut s, &anchors, true);
+    let ring: Vec<Point> = (0..=128).map(|i| f64::from(i) / 128.0 * std::f64::consts::TAU).map(|a| c + r * kurbo::Vec2::from_angle(a)).collect();
+    smooth_pass(&mut s, &ring);
+    let p = path(&s, id);
+    let sp = &p.subpaths[0];
+    assert!(sp.closed && sp.anchors.len() < 64, "{} anchors", sp.anchors.len());
+    let (last, first) = (sp.segment(sp.segment_count() - 1), sp.segment(0));
+    let tin = if last.p3.distance(last.p2) > 1e-9 { last.p3 - last.p2 } else { last.p3 - last.p1 };
+    let tout = if first.p1.distance(first.p0) > 1e-9 { first.p1 - first.p0 } else { first.p2 - first.p0 };
+    let kink = tin.cross(tout).atan2(tin.dot(tout)).abs().to_degrees();
+    assert!(kink <= 1.0, "a {kink}° corner at the start");
+}
+
+/// A drag over the whole of a closed path smooths a bump at its first anchor as much as the same
+/// bump on the far side of it.
+#[test]
+fn smoothing_a_whole_closed_path_smooths_a_bump_at_its_start() {
+    let mut s = session();
+    let (c, r) = (Point::new(300.0, 300.0), 80.0);
+    let anchors: Vec<_> = (0..64)
+        .map(|i| {
+            let a = f64::from(i) / 64.0 * std::f64::consts::TAU;
+            let rr = if i % 32 == 0 { r + 6.0 } else { r };
+            json!({"x": c.x + rr * a.cos(), "y": c.y + rr * a.sin()})
+        })
+        .collect();
+    let id = smooth_test_path(&mut s, &anchors, true);
+    let ring: Vec<Point> = (0..=128).map(|i| f64::from(i) / 128.0 * std::f64::consts::TAU).map(|a| c + r * kurbo::Vec2::from_angle(a)).collect();
+    // A Fidelity of 0.5 pt, so the refit follows the smoothed path closely on both sides.
+    let pts: Vec<_> = ring.iter().map(|p| json!([p.x, p.y])).collect();
+    s.execute("path.smoothRegion", &json!({"points": pts, "radius": 12, "fidelity": 0.5})).unwrap();
+    let p = path(&s, id);
+    use std::f64::consts::{PI, TAU};
+    // How far the path rises above the circle within 0.3 radians of the angle `near`.
+    let bump = |near: f64| {
+        let off = |q: &Point| (((q.y - c.y).atan2(q.x - c.x) - near + PI).rem_euclid(TAU) - PI).abs();
+        smooth_test_samples(&p).iter().filter(|q| off(q) < 0.3).map(|q| q.distance(c) - r).fold(0.0, f64::max)
+    };
+    let (start, far) = (bump(0.0), bump(PI));
+    assert!(far < 5.0, "the far bump stays {far} pt high");
+    assert!(start <= far + 0.5, "the bump at the start stays {start} pt high, the far one {far} pt");
 }
 
 #[test]

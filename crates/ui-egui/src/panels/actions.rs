@@ -220,13 +220,17 @@ pub fn default_sets() -> Vec<ActionSet> {
 
 /// Plays an action at the speed [`UiState::action_playback`](crate::UiState::action_playback) sets.
 /// Accelerated runs every included step at once as a single undoable batch → what `command.batch`
-/// returns. Step by Step and Pause For run the first step now, each as its own undo step, and leave
-/// the rest to [`tick_playback`] → {results: [the first step's result], pending: the steps left}.
-/// While a paced playback is in progress, another action does not play.
+/// returns, {results}. Step by Step and Pause For run the first step now, each as its own undo step,
+/// and leave the rest to [`tick_playback`] → {results: [the first step's result], pending: the steps
+/// left}. While a paced playback is in progress, another action does not play.
 ///
 /// An action with an included stop ([`STOP_STEP`]) plays up to the stop and waits there at any speed
 /// ([`continue_playback`]). At Accelerated, the steps between two stops are one undo step. → {results:
 /// [the results of the steps run], pending: the steps left, stops included, atStop: true when it waits}
+///
+/// A View menu step ([`is_ui_step`]) runs on its own at every speed, in its place among the steps, and
+/// adds no undo step ([`run_steps`]). At Accelerated the steps before it and the steps after it are
+/// then one undo step each.
 pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, String> {
     let Some(a) = app.ui.action_sets.get(set).and_then(|s| s.actions.get(idx)).cloned() else { return Err("no such action".into()) };
     let commands = a.included_commands();
@@ -241,7 +245,7 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
         return play_with_stops(app, a.name, commands, options);
     }
     if options.speed == PlaybackSpeed::Accelerated {
-        return app.replay("command.batch", json!({"label": a.name, "commands": commands}));
+        return Ok(json!({"results": run_steps(app, &a.name, commands)?}));
     }
     let mut steps: std::collections::VecDeque<Value> = commands.into();
     let Some(first) = steps.pop_front() else { return Err("the action has no included steps".into()) };
@@ -259,10 +263,59 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
     Ok(json!({"results": [result], "pending": pending}))
 }
 
-/// Runs one step of a paced playback as its own undo step, named `label` → the step's result.
+/// Runs one step of a paced playback as its own undo step, named `label`, or a View menu step with
+/// no undo step ([`run_steps`]) → the step's result.
 fn play_step(app: &mut VectorcraftApp, label: &str, step: Value) -> Result<Value, String> {
-    let r = app.replay("command.batch", json!({"label": label, "commands": [step]}))?;
-    Ok(r.get("results").and_then(|r| r.get(0)).cloned().unwrap_or(Value::Null))
+    Ok(run_steps(app, label, vec![step])?.into_iter().next().unwrap_or(Value::Null))
+}
+
+/// Whether a step as [`Action::included_commands`] gives it is a View menu command that the app runs
+/// itself ([`crate::menus::plays_in_app`]), which `command.batch` does not run.
+pub(crate) fn is_ui_step(step: &Value) -> bool {
+    step.get("command").and_then(Value::as_str).is_some_and(crate::menus::plays_in_app)
+}
+
+/// Runs `steps` in order, as saved steps ([`VectorcraftApp::replay`]) → their results. The steps
+/// between two View menu steps ([`is_ui_step`]) run as one `command.batch` named `label`, which is one
+/// undo step; a View menu step runs on its own ([`play_ui_step`]). A step that fails ends the run with
+/// its error: the batch it is in changes nothing, and the steps before that batch stay done.
+fn run_steps(app: &mut VectorcraftApp, label: &str, steps: Vec<Value>) -> Result<Vec<Value>, String> {
+    fn batch(app: &mut VectorcraftApp, label: &str, run: Vec<Value>, results: &mut Vec<Value>) -> Result<(), String> {
+        if run.is_empty() {
+            return Ok(());
+        }
+        let r = app.replay("command.batch", json!({"label": label, "commands": run}))?;
+        results.extend(r.get("results").and_then(Value::as_array).cloned().unwrap_or_default());
+        Ok(())
+    }
+    let mut results = Vec::with_capacity(steps.len());
+    let mut run = vec![];
+    for step in steps {
+        if is_ui_step(&step) {
+            batch(app, label, std::mem::take(&mut run), &mut results)?;
+            results.push(play_ui_step(app, &step)?);
+        } else {
+            run.push(step);
+        }
+    }
+    batch(app, label, run, &mut results)?;
+    Ok(results)
+}
+
+/// Runs a View menu step as its menu item runs it, which adds no undo step → its result. While an
+/// action records, the step goes into the recording too, as a stop does, unless it does not fit in
+/// the action ([`recording_room`]): then the status bar shows the reason.
+fn play_ui_step(app: &mut VectorcraftApp, step: &Value) -> Result<Value, String> {
+    let command = step.get("command").and_then(Value::as_str).unwrap_or_default().to_string();
+    let params = step.get("params").filter(|p| !p.is_null()).cloned().unwrap_or_else(|| json!({}));
+    let r = app.replay(&command, params.clone())?;
+    if app.ui.recording.is_some() {
+        match recording_room(app, &command, &params) {
+            Ok(()) => app.session.journal.push((command, params)),
+            Err(e) => app.status(e),
+        }
+    }
+    Ok(r)
 }
 
 /// [`play`] for an action with a stop: runs what comes before the first stop, or at Step by Step and
@@ -271,16 +324,10 @@ fn play_with_stops(app: &mut VectorcraftApp, label: String, commands: Vec<Value>
     let mut steps: std::collections::VecDeque<Value> = commands.into();
     let run = next_run(&mut steps, options.speed);
     let ran = !run.is_empty();
-    let results = if ran { play_steps(app, &label, run)? } else { vec![] };
+    let results = if ran { run_steps(app, &label, run)? } else { vec![] };
     app.ui.action_playing = Some(Playing { label, steps, options, next_at: None, hold: false, doc: None, played_in: None, stop: None });
     after_run(app, ran);
     Ok(playback_result(app, results))
-}
-
-/// Runs steps of a playback as one undo step, named `label` → the steps' results.
-fn play_steps(app: &mut VectorcraftApp, label: &str, steps: Vec<Value>) -> Result<Vec<Value>, String> {
-    let r = app.run("command.batch", json!({"label": label, "commands": steps}))?;
-    Ok(r.get("results").and_then(Value::as_array).cloned().unwrap_or_default())
 }
 
 /// Takes the steps that run next as one undo step off the front of `steps`: at Accelerated all of
@@ -429,7 +476,7 @@ pub fn continue_playback(app: &mut VectorcraftApp, _: &Value) -> Result<Value, S
     }
     close_stop_message(app);
     let ran = !run.is_empty();
-    let results = if ran { play_steps(app, &label, run).inspect_err(|_| app.ui.action_playing = None)? } else { vec![] };
+    let results = if ran { run_steps(app, &label, run).inspect_err(|_| app.ui.action_playing = None)? } else { vec![] };
     after_run(app, ran);
     Ok(playback_result(app, results))
 }
@@ -927,10 +974,15 @@ pub const INSERT_MENU_ITEM: &str = "ui.action.insertMenuItem";
 /// `ui.action.insertMenuItem {set?, action?, step?, command, params?}`: inserts the command of a
 /// menu item as a step, without running it. `command` and `params` (default: `{}`) are those of a
 /// menu item that can be a step ([`crate::menus::insertable_items`]); the step plays as the item
-/// runs. The place is as [`insert_stop`] takes it, and the step is selected as a stop is. A command
-/// and params that no such item has, a param of another type, params that are not an object, or a
-/// place [`insert_stop`] refuses is an error, and then nothing changes. Insert Menu Item's OK runs
-/// this. → {set, action, step}, or {recording: true}
+/// runs. An Object › Align item's step holds the params that clicking the item sends now
+/// ([`crate::panels::align::menu_align_params`]): with whole objects selected, the `to` of the key
+/// object, the artboard or the selection, so a later Align To choice does not change the step, and a
+/// step that aligns to the key object fails in playback when there is none then. A View menu item that the app runs itself
+/// ([`crate::menus::plays_in_app`]) plays on its own, with no undo step ([`play`]). The place is as
+/// [`insert_stop`] takes it, and the step is selected as a stop is. A command and params that no such
+/// item has, a param of another type, params that are not an object, or a place [`insert_stop`]
+/// refuses is an error, and then nothing changes. Insert Menu Item's OK runs this. → {set, action,
+/// step}, or {recording: true}
 pub fn insert_menu_item(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if !p.is_object() {
         return Err("`params` must be an object".into());
@@ -945,6 +997,7 @@ pub fn insert_menu_item(app: &mut VectorcraftApp, p: &Value) -> Result<Value, St
     if !items.iter().any(|item| item.command == command && item.params == params) {
         return Err("no menu item that can be inserted runs this command".into());
     }
+    let params = if command == "object.align" { super::align::menu_align_params(app, params) } else { params };
     insert(app, p, (command.to_string(), params))
 }
 
@@ -3184,7 +3237,7 @@ mod tests {
             (json!(long.to_string()), "an action in the action set file has more than 10,000 steps"),
             (json!(" ".repeat(files::MAX_SET_FILE + 1)), "the action set file is larger than 8 MiB"),
             (
-                json!("{\"format\": \"vcactions\", \"version\": 6, \"name\": \"S\", \"actions\": []}"),
+                json!("{\"format\": \"vcactions\", \"version\": 7, \"name\": \"S\", \"actions\": []}"),
                 "the action set file needs a later version of VectorCraft",
             ),
         ] {
@@ -4494,6 +4547,152 @@ mod tests {
         assert!(selected.is_some() && selected != rect, "the group step ran and selected the new group");
     }
 
+    /// [`app_with_three_moves`] with View › Outline inserted after the first move: the moves of 1,
+    /// Outline, then the moves of 2 and 4.
+    fn app_with_a_view_step() -> (VectorcraftApp, impl Fn(&VectorcraftApp) -> f64) {
+        let (mut app, x) = app_with_three_moves();
+        let doc = app.session.active().unwrap().doc.clone();
+        let r = app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "step": 0, "command": "view.outline"})).unwrap();
+        assert_eq!(r, json!({"set": 0, "action": 0, "step": 1}));
+        assert!(!app.outline_view(), "inserting runs nothing");
+        assert!(std::sync::Arc::ptr_eq(&app.session.active().unwrap().doc, &doc));
+        assert_eq!(app.ui.action_sets[0].actions[0].steps[1], ("view.outline".to_string(), json!({})));
+        (app, x)
+    }
+
+    /// At Accelerated a View menu step plays in its place: the steps before it are one undo step,
+    /// the View step adds none, and the steps after it are one more.
+    #[test]
+    fn an_inserted_view_item_plays_in_its_place_at_accelerated() {
+        let (mut app, x) = app_with_a_view_step();
+        let before = undo_steps(&app);
+        let r = play(&mut app, 0, 0).unwrap();
+        assert_eq!(r["results"].as_array().map(Vec::len), Some(4), "{r}");
+        assert_eq!(r["results"][1], json!(true), "Outline turned on: {r}");
+        assert!(app.outline_view());
+        assert_eq!(x(&app), 7.0);
+        assert_eq!(undo_steps(&app), before + 2, "the moves on each side of Outline are one undo step each");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(x(&app), 1.0, "Undo takes back the moves after Outline");
+        assert!(app.outline_view(), "and leaves the view as it is");
+    }
+
+    /// A step that fails after a View menu step ends the playback: the steps before it stay done and
+    /// the batch it is in changes nothing.
+    #[test]
+    fn a_failing_step_after_a_view_item_keeps_what_played_before_it() {
+        let (mut app, x) = app_with_a_view_step();
+        app.ui.action_sets[0].actions[0].steps.insert(3, ("object.align".into(), json!({})));
+        assert!(play(&mut app, 0, 0).is_err());
+        assert!(app.outline_view(), "Outline played");
+        assert_eq!(x(&app), 1.0, "the move before Outline stays, and the move of 2 in the failing batch is taken back");
+    }
+
+    /// At Step by Step and Pause For a View menu step is one step of the playback and adds no undo
+    /// step.
+    #[test]
+    fn an_inserted_view_item_plays_step_by_step_and_with_pauses() {
+        for speed in ["step", "pause"] {
+            let (mut app, x) = app_with_a_view_step();
+            app.run(PLAYBACK_OPTIONS, json!({"speed": speed})).unwrap();
+            let before = undo_steps(&app);
+            let r = play(&mut app, 0, 0).unwrap();
+            assert_eq!(r["pending"], json!(3), "{speed}: {r}");
+            assert!(!app.outline_view(), "{speed}: Outline waits its turn");
+            let mut now = 0.0;
+            for _ in 0..40 {
+                if app.ui.action_playing.is_none() {
+                    break;
+                }
+                now += 2.0;
+                frame(&mut app, now);
+            }
+            assert!(app.ui.action_playing.is_none(), "{speed}: the playback ended");
+            assert!(app.outline_view(), "{speed}");
+            assert_eq!(x(&app), 7.0, "{speed}");
+            assert_eq!(undo_steps(&app), before + 3, "{speed}: each move its own undo step, Outline none");
+        }
+    }
+
+    /// A View menu step before a stop plays before the playback waits there, and the steps after the
+    /// stop play on Continue.
+    #[test]
+    fn an_inserted_view_item_plays_up_to_a_stop() {
+        let (mut app, x) = app_with_a_view_step();
+        app.run(INSERT_STOP, json!({"set": 0, "action": 0, "step": 1})).unwrap();
+        let r = play(&mut app, 0, 0).unwrap();
+        assert_eq!(r["atStop"], json!(true), "{r}");
+        assert!(app.outline_view());
+        assert_eq!(x(&app), 1.0);
+        app.run(CONTINUE_PLAYBACK, json!({})).unwrap();
+        assert_eq!(x(&app), 7.0);
+        assert!(app.outline_view(), "Outline did not play again");
+    }
+
+    /// Playing an action with a View menu step while another records keeps the View step in the
+    /// recording, between the batches of the steps around it.
+    #[test]
+    fn a_view_step_played_while_recording_is_recorded() {
+        let (mut app, _) = app_with_a_view_step();
+        app.run(START_RECORDING, json!({})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        app.run(STOP_RECORDING, json!({})).unwrap();
+        let recorded = &app.ui.action_sets[0].actions.last().unwrap().steps;
+        let ids: Vec<&str> = recorded.iter().map(|(c, _)| c.as_str()).collect();
+        assert_eq!(ids, ["command.batch", "view.outline", "command.batch"]);
+        assert_eq!(recorded[1].1, json!({}));
+    }
+
+    /// Batch… refuses an action with an included View menu step, which acts on a document window,
+    /// and plays one whose View menu step is excluded.
+    #[test]
+    fn batch_refuses_an_action_with_a_view_step() {
+        let (mut app, _) = app_with_a_view_step();
+        assert_eq!(crate::dialogs::action_batch::open(&mut app, 0, 0).unwrap_err(), "Batch cannot play an action with a View menu step");
+        assert!(app.ui.dialog.is_none());
+        app.ui.action_sets[0].actions[0].excluded_steps.insert(1);
+        crate::dialogs::action_batch::open(&mut app, 0, 0).unwrap();
+    }
+
+    /// An action set with a View menu step saves as version 6 and loads back with the step; one whose
+    /// View menu step has params that are not an object is not an action set file. A View menu step
+    /// in a recorded batch counts too, since playback runs it as its own step.
+    #[test]
+    fn a_saved_view_step_survives_as_version_6() {
+        let (app, _) = app_with_a_view_step();
+        let saved = files::write_set(&app.ui.action_sets[0]);
+        let file: Value = serde_json::from_str(&saved).unwrap();
+        assert_eq!(file["version"], json!(6), "older builds must refuse a View menu step");
+        let loaded = files::read_set(&saved, "Test").unwrap();
+        assert_eq!(loaded.actions[0].steps, app.ui.action_sets[0].actions[0].steps);
+        for params in [json!(5), json!([1]), json!(null)] {
+            let step = json!({"command": "view.zoomIn", "params": params});
+            for step in [step.clone(), json!({"command": "command.batch", "params": {"commands": [step]}})] {
+                let bad = json!({"format": "vcactions", "version": 6, "name": "Bad", "actions": [{"name": "A", "steps": [step]}]});
+                assert_eq!(files::read_set(&bad.to_string(), "Test").unwrap_err(), "not an action set file", "{step}");
+            }
+        }
+        let nested = json!({"commands": [{"command": "view.outline", "params": {}}]});
+        let set = ActionSet::new("Nested", vec![Action::new("A", vec![("command.batch".into(), nested)])]);
+        assert_eq!(serde_json::from_str::<Value>(&files::write_set(&set)).unwrap()["version"], json!(6), "a step in a recorded batch counts");
+    }
+
+    /// At Accelerated, the steps up to a stop play as saved steps, as they do without a stop: a key
+    /// their command no longer reads, recorded by an older version, is taken.
+    #[test]
+    fn steps_before_a_stop_play_with_a_key_no_longer_read() {
+        let (mut app, _) = app_with_three_moves();
+        let old = json!({"x": 10, "y": 50, "width": 20, "height": 20, "cornerStyle": "round"});
+        assert!(app.run("shape.rectangle", old.clone()).is_err());
+        let stop = (STOP_STEP.to_string(), json!({"message": "", "allowContinue": false}));
+        app.ui.action_sets[0].actions[0].steps = vec![("shape.rectangle".into(), old), stop];
+        let shapes = app.session.active().unwrap().doc.layers[0].children().unwrap().len();
+        let r = play(&mut app, 0, 0).unwrap();
+        assert_eq!(r["atStop"], json!(true), "{r}");
+        assert_eq!(app.session.active().unwrap().doc.layers[0].children().unwrap().len(), shapes + 1);
+        assert!(!app.session.replaying());
+    }
+
     #[test]
     fn insert_menu_item_refuses_what_no_menu_item_runs_and_changes_nothing() {
         let (mut app, _) = app_with_three_moves();
@@ -4515,11 +4714,15 @@ mod tests {
             (place(json!({"command": "file.save"})), none),
             (place(json!({"command": "object.move"})), none),
             (place(json!({"command": "object.move", "params": {"dx": 1, "dy": 0}})), none),
-            (place(json!({"command": "view.zoomIn"})), none),
             (place(json!({"command": INSERT_MENU_ITEM})), none),
             (place(json!({"command": "edit.paste"})), none),
-            // Align, whose menu items add the Align To choice when clicked.
-            (place(json!({"command": "object.align", "params": {"horizontal": "left"}})), none),
+            // The app's own commands outside the View menu, a saved-view slot and the View menu's New
+            // View…, which asks for a name first.
+            (place(json!({"command": "window.panel", "params": {"panel": "layers", "toggle": true}})), none),
+            (place(json!({"command": "view.goto1"})), none),
+            (place(json!({"command": "view.saved.new"})), none),
+            // Align To is the step's own: only the menu item's params are taken.
+            (place(json!({"command": "object.align", "params": {"horizontal": "left", "to": "selection"}})), none),
             // Image Trace, whose menu items trace off the UI thread with progress and Cancel.
             (place(json!({"command": "imageTrace.make", "params": {"preset": "Default"}})), none),
             (place(json!({"command": "imageTrace.makeAndExpand", "params": {"preset": "Default"}})), none),
@@ -4547,17 +4750,72 @@ mod tests {
     }
 
     /// A listed menu item runs from the menu what its step runs in playback: the click opens no
-    /// dialog, and it journals the item's own command with the item's own params.
+    /// dialog, and it journals the item's own command with the params its step holds. An Object ›
+    /// Align item's step holds the Align To choice that the click sends, and the app adds the active
+    /// artboard to both.
     #[test]
     fn every_listed_menu_item_runs_from_the_menu_what_its_step_holds() {
         for item in crate::menus::insertable_items(false) {
             let (mut app, _) = app_with_three_moves();
+            app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "command": item.command, "params": item.params})).unwrap();
+            let held = app.ui.action_sets[0].actions[0].steps[3].1.clone();
             let start = app.session.journal.len();
             crate::menus::invoke(&mut app, item.command, item.params.clone());
             assert!(app.ui.dialog.is_none(), "{item:?} opens a dialog");
             let ran = app.session.journal_for_action(start);
-            assert!(ran.iter().all(|(c, p)| c != item.command || *p == item.params), "{item:?} ran {ran:?}");
+            let without_artboard = |p: &Value| {
+                let mut p = p.clone();
+                if let Some(o) = p.as_object_mut() {
+                    o.remove("artboard");
+                }
+                p
+            };
+            assert!(ran.iter().all(|(c, p)| c != item.command || without_artboard(p) == held), "{item:?} ran {ran:?}, its step holds {held}");
         }
+    }
+
+    /// Object › Align items can be inserted, and the step keeps the Align To that the click sends at
+    /// insertion: a later Align To choice does not change it.
+    #[test]
+    fn an_inserted_align_item_keeps_the_align_to_of_its_insertion() {
+        let (mut app, _, ids) = app_with_two_rectangles();
+        app.run("select.set", json!({ "ids": ids })).unwrap();
+        app.ui.align_to = super::super::align::AlignTo::Artboard;
+        app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "command": "object.align", "params": {"horizontal": "left"}})).unwrap();
+        app.ui.align_to = super::super::align::AlignTo::Selection;
+        app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "command": "object.align", "params": {"horizontal": "left"}})).unwrap();
+        let steps = &app.ui.action_sets[0].actions[0].steps;
+        assert_eq!(steps[3], ("object.align".to_string(), json!({"horizontal": "left", "to": "artboard"})));
+        assert_eq!(steps[4], ("object.align".to_string(), json!({"horizontal": "left", "to": "selection"})));
+    }
+
+    /// With anchor points selected, an Object › Align item sends its params unchanged, and the points
+    /// align to their own bounds: its step holds the same params, without the Align To choice.
+    #[test]
+    fn an_inserted_align_item_with_anchors_selected_keeps_the_menu_params() {
+        let (mut app, _, [first, _]) = app_with_two_rectangles();
+        app.ui.align_to = super::super::align::AlignTo::Artboard;
+        app.run("select.anchors", json!({"id": first, "anchors": [[0, 0], [0, 1]]})).unwrap();
+        assert!(!app.session.active().unwrap().selection.anchors.is_empty());
+        app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "command": "object.align", "params": {"horizontal": "left"}})).unwrap();
+        assert_eq!(app.ui.action_sets[0].actions[0].steps[3], ("object.align".to_string(), json!({"horizontal": "left"})));
+    }
+
+    /// A step that aligns to the key object fails in playback when the selection has no key then:
+    /// it does not align to the selection or the artboard instead, and the steps after it do not run.
+    #[test]
+    fn an_align_step_to_the_key_object_fails_without_a_key() {
+        let (mut app, _, [first, second]) = app_with_two_rectangles();
+        app.run("select.set", json!({"ids": [first, second]})).unwrap();
+        app.run("select.key", json!({"id": second})).unwrap();
+        app.ui.action_sets[0].actions[0].steps.clear();
+        app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "command": "object.align", "params": {"horizontal": "left"}})).unwrap();
+        assert_eq!(app.ui.action_sets[0].actions[0].steps[0].1["to"], json!("key"));
+        app.ui.action_sets[0].actions[0].steps.push(("object.move".into(), json!({"dx": 5, "dy": 0})));
+        app.run("select.set", json!({"ids": [first, second]})).unwrap();
+        let before = (left_of(&app, first), left_of(&app, second));
+        assert!(play(&mut app, 0, 0).unwrap_err().contains("no key object"));
+        assert_eq!((left_of(&app, first), left_of(&app, second)), before, "nothing moved");
     }
 
     #[test]
@@ -5789,7 +6047,7 @@ mod tests {
                 json!({"format": "vcactions", "version": version, "name": "Old", "actions": [{"name": "A", "steps": [{"command": "object.move"}]}]});
             assert_eq!(files::read_set(&old.to_string(), "Test").unwrap().actions[0].steps.len(), 1, "version {version}");
         }
-        let later = json!({"format": "vcactions", "version": 6, "name": "New", "actions": []});
+        let later = json!({"format": "vcactions", "version": 7, "name": "New", "actions": []});
         assert_eq!(files::read_set(&later.to_string(), "Test").unwrap_err(), "the action set file needs a later version of VectorCraft");
         for params in [json!({"message": 5}), json!({"allowContinue": "yes"}), json!(42)] {
             let stop = json!({"command": "action.stop", "params": params});

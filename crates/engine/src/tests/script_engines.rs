@@ -202,6 +202,52 @@ fn an_error_in_code_an_earlier_run_kept_is_at_that_runs_file_and_line() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `$.fileName` in code an earlier run of a named engine kept names the file that code is in: that
+/// run's script, a file it included or a file `$.evalFile` gave, not the file of the run that calls
+/// it. Code from a script given as text, and code whose place the engine no longer keeps, has no
+/// name; a dropped engine takes its functions with it.
+#[test]
+fn a_kept_function_reads_the_file_name_of_the_file_it_is_in() {
+    let base: PathBuf = std::env::temp_dir().join(format!("vc-script-engines-file-name-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    for dir in ["a", "b"] {
+        std::fs::create_dir_all(base.join(dir)).unwrap();
+    }
+    std::fs::write(base.join("a/inc.jsxinc"), "function fromInclude() { return $.fileName; }").unwrap();
+    std::fs::write(base.join("a/ev.jsxinc"), "\nfunction fromEval() { return $.fileName; }").unwrap();
+    let def = base.join("a/def.jsx");
+    std::fs::write(&def, "#targetengine e\nfunction where() { return $.fileName; }\n#include \"inc.jsxinc\"\n$.evalFile('ev.jsxinc');").unwrap();
+    let caller = base.join("b/caller.jsx");
+    let call = |s: &mut Session, text: &str| -> Vec<String> {
+        std::fs::write(&caller, text).unwrap();
+        let r = s.execute("script.run", &json!({"path": caller.to_string_lossy()})).unwrap();
+        r["log"][0].as_array().unwrap().iter().map(|v| v.as_str().unwrap().replace('\\', "/")).collect()
+    };
+    let mut s = Session::new();
+    s.execute("script.run", &json!({"path": def.to_string_lossy()})).unwrap();
+    let from_file = call(&mut s, "#targetengine e\nvc.log([where(), fromInclude(), fromEval(), $.fileName]);");
+    let from_text = log(&mut s, "#targetengine e\nvc.log([where(), $.fileName, eval('where()'), eval('$.fileName')]);");
+    run(&mut s, "#targetengine e\nfunction fromText() { return $.fileName; }").unwrap();
+    let text_kept = call(&mut s, "#targetengine e\nvc.log([fromText(), $.fileName]);");
+    // Each run's own place takes the room of the ones before, so def.jsx's places go.
+    TEST_KEPT_MAP_BYTES.with(|b| b.set(Some(300)));
+    for _ in 0..20 {
+        run(&mut s, "#targetengine e\nvar x = 1;").unwrap();
+    }
+    let evicted = call(&mut s, "#targetengine e\nvc.log([where(), fromEval(), $.fileName]);");
+    TEST_KEPT_MAP_BYTES.with(|b| b.set(None));
+    s.execute("script.engine.drop", &json!({"name": "e"})).unwrap();
+    let dropped = log(&mut s, "#targetengine e\nvc.log(typeof where);");
+    let _ = std::fs::remove_dir_all(&base);
+    let ends = |names: &[String], ends: &[&str]| names.len() == ends.len() && names.iter().zip(ends).all(|(n, e)| n.ends_with(e));
+    assert!(ends(&from_file, &["a/def.jsx", "a/inc.jsxinc", "a/ev.jsxinc", "b/caller.jsx"]), "{from_file:?}");
+    let shown: Vec<String> = from_text[0].as_array().unwrap().iter().map(|v| v.as_str().unwrap().replace('\\', "/")).collect();
+    assert!(ends(&shown, &["a/def.jsx", "", "a/def.jsx", ""]) && shown[1].is_empty() && shown[3].is_empty(), "{shown:?}");
+    assert!(text_kept[0].is_empty() && text_kept[1].ends_with("b/caller.jsx"), "{text_kept:?}");
+    assert!(evicted[0].is_empty() && evicted[1].is_empty() && evicted[2].ends_with("b/caller.jsx"), "{evicted:?}");
+    assert_eq!(dropped, json!(["undefined"]));
+}
+
 /// A named engine keeps the places of its earlier runs' code within its budget, the oldest going
 /// first, and the code still runs once its place is gone.
 #[test]
