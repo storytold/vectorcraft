@@ -6705,7 +6705,8 @@ DCS Transparency Interactions, off by default) adds `dcsTransparency: true` to t
 and the panel shows a warning mark on them. VectorCraft's rule for it: the image, or a group or layer holding it, has
 an opacity below 100%, a blend mode other than Normal, an opacity mask or an effect, or its bounds overlap the
 bounds of another visible object that has one of those or a gradient with a transparent stop (in a fill, a stroke or
-a character's fill or stroke); a DCS image with transparency of its own counts as such an object. The check looks at
+a character's fill or stroke); a DCS image with transparency of its own counts as such an object. Bounds are cut to the
+bounds of the clipping paths of the clip groups and clipping layers holding an object. The check looks at
 every object in the layers each time the list is read. A `dcsTransparency` that is not true or false is an error.
 `links.goTo {id}` selects an image; `links.embed {ids?}` keeps linked files' pixels in the document (an image whose
 file is missing stays linked: relink it first); `links.unembed {id, path}` writes an embedded image to a file

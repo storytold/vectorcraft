@@ -658,6 +658,32 @@ fn dcs_transparency_marks_transparent_and_overlapped_dcs_images() {
 }
 
 #[test]
+fn dcs_transparency_looks_only_at_the_part_of_an_image_its_clipping_path_shows() {
+    let dir = temp_dir("transparency-clipped");
+    let path = write(&dir, "pic.eps", &two_plates());
+    let mut s = session();
+    let r = s.execute("file.place", &json!({ "path": path, "at": [100, 100] })).unwrap();
+    let group = NodeId(r["ids"][0].as_u64().unwrap());
+    let image = image_of(&s, &r["ids"][0]).id;
+    let (clip, all) = {
+        let doc = &s.doc().unwrap().doc;
+        let NodeKind::Group { children, clip: true } = &doc.node(group).unwrap().kind else { panic!("a clipping group") };
+        (children[0].geometric_bounds().unwrap(), doc.node(image).unwrap().geometric_bounds().unwrap())
+    };
+    assert!(all.x1 - clip.x1 > 2.0, "the file's clipping path shows the left half: {clip:?} of {all:?}");
+    // A half-transparent square over the part of the image the clipping path hides.
+    let x = (clip.x1 + all.x1) / 2.0 - 1.0;
+    let over = s.execute("shape.rectangle", &json!({"x": x, "y": all.y0, "width": 2, "height": 2})).unwrap()["id"].as_u64().unwrap();
+    s.execute("transparency.set", &json!({"ids": [over], "opacity": 50})).unwrap();
+    let marked = |s: &mut Session| s.execute("links.list", &json!({ "dcsTransparency": true })).unwrap()["links"][0]["dcsTransparency"] == true;
+    assert!(!marked(&mut s), "the square is over the hidden part only");
+    s.execute("transparency.set", &json!({"ids": [over], "opacity": 100})).unwrap();
+    let shown = s.execute("shape.rectangle", &json!({"x": clip.x0, "y": all.y0, "width": 2, "height": 2})).unwrap()["id"].as_u64().unwrap();
+    s.execute("transparency.set", &json!({"ids": [shown], "opacity": 50})).unwrap();
+    assert!(marked(&mut s), "a square over the part that shows");
+}
+
+#[test]
 fn dcs_transparency_counts_a_transparent_dcs_image_over_another() {
     let dir = temp_dir("transparency-two");
     let path = write(&dir, "pic.eps", &two_plates());
