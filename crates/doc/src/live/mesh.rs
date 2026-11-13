@@ -362,7 +362,9 @@ fn control_polygon(c: &CubicBez) -> f64 {
 /// between them, when each control point of each piece lies within [`ONE_CURVE`] of the matching
 /// piece of that curve; `None` otherwise. Split at parameter `t`, a curve's handles on either side
 /// of the split lie in line, their lengths in proportion to the spans of its parameter the two
-/// pieces take. Those proportions give each piece's span, and the curve follows from the first
+/// pieces take; split where the curve stops (a cusp), both handles lie on the anchor, and the
+/// pieces' second derivatives there, in proportion to the squares of the spans, give the proportion
+/// instead. Those proportions give each piece's span, and the curve follows from the first
 /// piece's start and its handle, and the last piece's end and its handle, scaled up by their spans.
 /// Every piece is then checked against that curve's piece over its span, so error can't build up
 /// from one split to the next (the first piece's start and handle, and the last piece's end and
@@ -377,8 +379,18 @@ fn one_curve(pieces: &[CubicBez]) -> Option<CubicBez> {
     for pair in pieces.windows(2) {
         let [a, b] = pair else { return None };
         let (into, out) = (a.p3.distance(a.p2), b.p0.distance(b.p1));
-        let next = spans.last().copied().unwrap_or(1.0) * out / into;
-        if !(into > 0.0 && out > 0.0 && next.is_finite() && next > 0.0) {
+        let ratio = if into.max(out) <= ONE_CURVE {
+            // Split where the curve stops (a cusp), both handles lie on the anchor and say nothing
+            // of the spans; how far each piece bends away from its anchor, in proportion to the
+            // squares of the spans, says it instead.
+            let bend_in = ((a.p3 - a.p2) - (a.p2 - a.p1)).hypot();
+            let bend_out = ((b.p2 - b.p1) - (b.p1 - b.p0)).hypot();
+            (bend_out / bend_in).sqrt()
+        } else {
+            out / into
+        };
+        let next = spans.last().copied().unwrap_or(1.0) * ratio;
+        if !(next.is_finite() && next > 0.0) {
             return None;
         }
         spans.push(next);
